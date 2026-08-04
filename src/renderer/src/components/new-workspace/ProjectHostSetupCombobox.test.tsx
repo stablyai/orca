@@ -61,7 +61,7 @@ const needsSetupOption: NeedsSetupProjectHostOption = {
   projectId: 'project-1',
   hostId: 'ssh:builder',
   label: 'Builder',
-  detail: 'Project not set up on this host',
+  detail: 'Project location not set',
   isAvailable: true,
   attention: false
 }
@@ -129,7 +129,7 @@ describe('ProjectHostSetupCombobox', () => {
     expect(
       container.querySelector<HTMLButtonElement>('[data-command-value="needs-setup:ssh:builder"]')
     ).toBeNull()
-    expect(container.textContent).not.toContain('Project not set up on this host')
+    expect(container.textContent).not.toContain('Project location not set')
     expect(onValueChange).not.toHaveBeenCalled()
   })
 

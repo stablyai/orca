@@ -567,12 +567,14 @@ async function importValidatedCookies(
 
   for (const cookie of cookies) {
     try {
+      // Why: Chromium rejects __Host- cookies unless they omit domain and use path=/.
+      const isHostPrefixed = cookie.name.startsWith('__Host-')
       await targetSession.cookies.set({
         url: cookie.url,
         name: cookie.name,
         value: stripNonPrintable(cookie.value),
-        domain: cookie.domain,
-        path: cookie.path,
+        ...(isHostPrefixed ? {} : { domain: cookie.domain }),
+        path: isHostPrefixed ? '/' : cookie.path,
         secure: cookie.secure,
         httpOnly: cookie.httpOnly,
         sameSite: cookie.sameSite,

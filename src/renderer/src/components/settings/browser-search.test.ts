@@ -1,12 +1,25 @@
-import { describe, expect, it } from 'vitest'
-import { getBrowserLinkRoutingDescription, getBrowserPaneSearchEntries } from './browser-search'
+import { beforeEach, describe, expect, it } from 'vitest'
+
+import ko from '@/i18n/locales/ko.json'
+import { i18n } from '@/i18n/i18n'
+import { getBrowserPaneSearchEntries } from './browser-search'
 import {
+  getBrowserLinkRoutingDescription,
+  getBrowserLinkRoutingShortcutLabel,
   getLinkRoutingModifierDescription,
   getLinkRoutingModifierTitle
-} from './browser-link-routing-modifier-copy'
+} from './browser-link-routing-copy'
 
 describe('browser settings search copy', () => {
-  it('uses macOS shortcut keywords for Link Routing search metadata', () => {
+  it('uses macOS shortcut symbols for Link Routing copy and search metadata', () => {
+    expect(getBrowserLinkRoutingShortcutLabel({ isMac: true })).toBe('⇧⌘-click')
+
+    const description = getBrowserLinkRoutingDescription({ isMac: true })
+    expect(description).toContain('⇧⌘-click')
+    expect(description).not.toContain('Cmd/Ctrl')
+    // The copy is translated: a leaked `{{...}}` means the interpolation name drifted from the catalog.
+    expect(description).not.toMatch(/\{\{.+?\}\}/)
+
     const linkRoutingEntry = getBrowserPaneSearchEntries({ isMac: true }).find(
       (entry) => entry.title === 'Link Routing'
     )
@@ -20,7 +33,14 @@ describe('browser settings search copy', () => {
     expect(defaultZoomEntry?.keywords).toContain('zoom')
   })
 
-  it('uses Ctrl shortcut keywords for Link Routing search metadata off macOS', () => {
+  it('uses Ctrl shortcut text for Link Routing copy and search metadata off macOS', () => {
+    expect(getBrowserLinkRoutingShortcutLabel({ isMac: false })).toBe('Shift+Ctrl+click')
+
+    const description = getBrowserLinkRoutingDescription({ isMac: false })
+    expect(description).toContain('Shift+Ctrl+click')
+    expect(description).not.toContain('Cmd/Ctrl')
+    expect(description).not.toMatch(/\{\{.+?\}\}/)
+
     const linkRoutingEntry = getBrowserPaneSearchEntries({ isMac: false }).find(
       (entry) => entry.title === 'Link Routing'
     )
@@ -100,5 +120,63 @@ describe('browser link routing modifier copy', () => {
   it('indexes both titles so the row is findable in either routing state', () => {
     const entry = getBrowserPaneSearchEntries({ isMac: true })[4]
     expect(entry?.keywords).toContain(getLinkRoutingModifierTitle(true))
+  })
+})
+
+// The bug this file guards: the Link Routing description was a bare template
+// literal, so it stayed English in every locale. Asserting only "no {{...}} leaked"
+// cannot catch that — the English literal has no placeholder either.
+describe('Link Routing description localization', () => {
+  const KEY = 'auto.components.settings.BrowserLinkRoutingSetting.description'
+  const BASE_KEY = 'auto.components.settings.BrowserLinkRoutingSetting.descriptionBase'
+
+  beforeEach(async () => {
+    await i18n.changeLanguage('en')
+  })
+
+  it('renders the Korean copy with the shortcut interpolated', async () => {
+    const koCopy = (
+      ko.auto.components.settings.BrowserLinkRoutingSetting as unknown as Record<string, string>
+    )['description']
+    expect(koCopy).toBeTruthy()
+    expect(koCopy).toContain('{{shortcut}}')
+
+    i18n.addResourceBundle('ko', 'translation', ko, true, true)
+    await i18n.changeLanguage('ko')
+
+    const description = getBrowserLinkRoutingDescription({ isMac: true })
+    expect(description).toBe(koCopy.replace('{{shortcut}}', '⇧⌘-click'))
+    expect(description).not.toMatch(/\{\{.+?\}\}/)
+    // Fails when the copy is a hardcoded English literal.
+    expect(description).not.toContain("Orca's built-in browser")
+
+    // The entry title is localized too, so match on the description instead.
+    const entry = getBrowserPaneSearchEntries({ isMac: true }).find(
+      (item) => item.description === description
+    )
+    expect(entry).toBeDefined()
+
+    await i18n.changeLanguage('en')
+    expect(getBrowserLinkRoutingDescription({ isMac: true })).toContain("Orca's built-in browser")
+  })
+
+  it('renders the Korean copy for the invert-on variant', async () => {
+    const koBase = (
+      ko.auto.components.settings.BrowserLinkRoutingSetting as unknown as Record<string, string>
+    )['descriptionBase']
+    expect(koBase).toBeTruthy()
+
+    i18n.addResourceBundle('ko', 'translation', ko, true, true)
+    await i18n.changeLanguage('ko')
+
+    const description = getBrowserLinkRoutingDescription({ isMac: true }, true)
+    expect(description).toBe(koBase)
+    // Fails when the invert-on branch regresses to a hardcoded English literal.
+    expect(description).not.toContain("Orca's built-in browser")
+  })
+
+  it('uses the catalog key rather than an inline literal', () => {
+    expect(i18n.exists(KEY)).toBe(true)
+    expect(i18n.exists(BASE_KEY)).toBe(true)
   })
 })

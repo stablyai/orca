@@ -15,11 +15,12 @@ import {
 // (Moved here from agent-status.ts so the evidence resolvers below and the
 // aggregate consumers share one gate without an import cycle.)
 export function isExplicitAgentStatusFresh(
-  entry: Pick<AgentStatusEntry, 'updatedAt'>,
+  entry: Pick<AgentStatusEntry, 'updatedAt' | 'restoredUnconfirmed'>,
   now: number,
   staleAfterMs: number
 ): boolean {
-  return now - entry.updatedAt <= staleAfterMs
+  // Why: an unconfirmed hydrated row may describe a turn that ended while no receiver was up; never fresh.
+  return entry.restoredUnconfirmed !== true && now - entry.updatedAt <= staleAfterMs
 }
 
 /**

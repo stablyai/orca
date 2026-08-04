@@ -6,12 +6,18 @@ import type { FileWithMtime } from './session-scanner-types'
 import type { AntigravityWorkspaceResolver } from './session-scanner-antigravity-history'
 
 export type RemoteScannerContext = {
-  provider: IFilesystemProvider
+  provider: RemoteSessionFilesystemProvider
   executionHostId: ExecutionHostId
   hostPlatform: RemoteHostPlatform
+  signal?: AbortSignal
   titleCaches: Map<string, Promise<Map<string, string>>>
   antigravityWorkspaceResolver: AntigravityWorkspaceResolver
 }
+
+export type RemoteSessionFilesystemProvider = Pick<
+  IFilesystemProvider,
+  'readDir' | 'readFile' | 'stat'
+>
 
 export type RemoteParserOptions = {
   executionHostId: ExecutionHostId

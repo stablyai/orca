@@ -2,8 +2,12 @@ import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalBoolean, OptionalString, requiredString } from '../schemas'
 import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../../../../shared/orchestration-run-pagination'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import type {
+  OrcaRuntimeService,
+  OrchestrationCompatibilityCallerAuthority
+} from '../../orca-runtime'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
+import { assertCallerHandleMatchesEvidence } from './orchestration-run-scope'
 
 const RunCreateParams = z.object({
   objective: requiredString('Missing --objective'),
@@ -23,8 +27,15 @@ const RunListParams = z.object({
 })
 const RunShowParams = z.object({ id: requiredString('Missing --id'), from: OptionalString })
 
-function requireCallerPane(runtime: OrcaRuntimeService, handle: string): string {
-  const paneKey = runtime.getTerminalPaneKey(handle)
+function requireCallerPane(
+  runtime: OrcaRuntimeService,
+  handle: string,
+  callerAuthority?: OrchestrationCompatibilityCallerAuthority
+): string {
+  const paneKey =
+    callerAuthority?.terminalHandle === handle
+      ? callerAuthority.paneKey
+      : runtime.getTerminalPaneKey(handle)
   if (!paneKey) {
     throw new OrchestrationError(
       'stable_pane_required',
@@ -38,7 +49,8 @@ export const ORCHESTRATION_RUN_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.runCreate',
     params: RunCreateParams,
-    handler: (params, { runtime }) => {
+    handler: (params, { orchestrationCompatibilityEvidence, runtime }) => {
+      assertCallerHandleMatchesEvidence(runtime, params.from, orchestrationCompatibilityEvidence)
       const paneKey = requireCallerPane(runtime, params.from)
       const db = runtime.getOrchestrationDb()
       const priorRun = db.getCurrentRunForPane(paneKey)
@@ -61,10 +73,11 @@ export const ORCHESTRATION_RUN_METHODS: RpcMethod[] = [
       {
         runtime,
         legacyCoordinatorAuthority,
+        orchestrationCompatibilityEvidence,
         orchestrationCompatibilityCallerAuthority: callerAuthority
       }
     ) => {
-      const paneKey = requireCallerPane(runtime, params.from)
+      const paneKey = requireCallerPane(runtime, params.from, callerAuthority)
       if (
         params.takeoverLegacy &&
         (callerAuthority?.terminalHandle !== params.from || callerAuthority.paneKey !== paneKey)
@@ -75,6 +88,7 @@ export const ORCHESTRATION_RUN_METHODS: RpcMethod[] = [
           { effectsApplied: false }
         )
       }
+      assertCallerHandleMatchesEvidence(runtime, params.from, orchestrationCompatibilityEvidence)
       const db = runtime.getOrchestrationDb()
       const priorRun = db.getCurrentRunForPane(paneKey)
       const run = db.bindRun({
@@ -100,7 +114,8 @@ export const ORCHESTRATION_RUN_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.runCurrent',
     params: RunCurrentParams,
-    handler: (params, { runtime }) => {
+    handler: (params, { orchestrationCompatibilityEvidence, runtime }) => {
+      assertCallerHandleMatchesEvidence(runtime, params.from, orchestrationCompatibilityEvidence)
       const paneKey = requireCallerPane(runtime, params.from)
       return { run: runtime.getOrchestrationDb().getCurrentRunForPane(paneKey) ?? null }
     }

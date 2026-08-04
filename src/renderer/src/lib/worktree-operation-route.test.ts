@@ -241,6 +241,98 @@ describe('resolveWorktreeOperationRouteResult', () => {
     })
   })
 
+  describe('active workspace host selection', () => {
+    it('keeps the HUB transport when the paired SSH worktree is the active workspace', () => {
+      expect(
+        resolveWorktreeOperationRouteResult(
+          {
+            activeWorktreeId: WORKTREE_ID,
+            activeWorkspaceExecutionHostId: 'ssh:hub-private-target',
+            worktreesByRepo: { 'repo-1': [worktree('ssh:hub-private-target', 'hub-a')] }
+          },
+          WORKTREE_ID
+        )
+      ).toEqual({
+        kind: 'resolved',
+        route: { executionHostId: 'ssh:hub-private-target', runtimeEnvironmentId: 'hub-a' }
+      })
+    })
+
+    it('recovers the HUB transport from the repo for an active mixed-version SSH publication', () => {
+      expect(
+        resolveWorktreeOperationRouteResult(
+          {
+            activeWorktreeId: WORKTREE_ID,
+            activeWorkspaceExecutionHostId: 'ssh:hub-private-target',
+            repos: [
+              {
+                id: 'repo-1',
+                connectionId: 'hub-private-target',
+                executionHostId: 'runtime:hub-a'
+              }
+            ],
+            detectedWorktreesByRepo: {
+              'repo-1': { worktrees: [worktree('ssh:hub-private-target')] }
+            }
+          },
+          WORKTREE_ID
+        )
+      ).toEqual({
+        kind: 'resolved',
+        route: { executionHostId: 'ssh:hub-private-target', runtimeEnvironmentId: 'hub-a' }
+      })
+    })
+
+    it('keeps the selected host authoritative when the same ID exists on two hosts', () => {
+      expect(
+        resolveWorktreeOperationRouteResult(
+          {
+            activeWorktreeId: WORKTREE_ID,
+            activeWorkspaceExecutionHostId: 'runtime:hub-a',
+            worktreesByRepo: { 'repo-1': [worktree('local'), worktree('runtime:hub-a')] }
+          },
+          WORKTREE_ID
+        )
+      ).toEqual({
+        kind: 'resolved',
+        route: { executionHostId: 'runtime:hub-a', runtimeEnvironmentId: 'hub-a' }
+      })
+    })
+
+    it('drops the HUB transport when two HUBs project the active SSH worktree', () => {
+      expect(
+        resolveWorktreeOperationRouteResult(
+          {
+            activeWorktreeId: WORKTREE_ID,
+            activeWorkspaceExecutionHostId: 'ssh:same-private-target',
+            worktreesByRepo: {
+              'repo-1': [
+                worktree('ssh:same-private-target', 'hub-a'),
+                worktree('ssh:same-private-target', 'hub-b')
+              ]
+            }
+          },
+          WORKTREE_ID
+        )
+      ).toEqual({
+        kind: 'resolved',
+        route: { executionHostId: 'ssh:same-private-target', runtimeEnvironmentId: null }
+      })
+    })
+
+    it('keeps an unknown active worktree on its selected host', () => {
+      expect(
+        resolveWorktreeOperationRouteResult(
+          { activeWorktreeId: WORKTREE_ID, activeWorkspaceExecutionHostId: 'ssh:ssh-1' },
+          WORKTREE_ID
+        )
+      ).toEqual({
+        kind: 'resolved',
+        route: { executionHostId: 'ssh:ssh-1', runtimeEnvironmentId: null }
+      })
+    })
+  })
+
   describe('folder workspaces', () => {
     const FOLDER_WORKSPACE_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
     const FOLDER_KEY = `folder:${FOLDER_WORKSPACE_ID}`

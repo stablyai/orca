@@ -6,6 +6,7 @@ import type { TerminalTab } from '../../../../shared/types'
 const mocks = vi.hoisted(() => ({
   storeState: {
     pendingStartupByTabId: {} as Record<string, unknown>,
+    runtimeStatusByEnvironmentId: new Map(),
     settings: {} as Record<string, unknown>,
     terminalLayoutsByTabId: {} as Record<string, { ptyIdsByLeafId?: Record<string, string> }>
   },
@@ -75,6 +76,34 @@ describe('useTerminalTabColdParking measure-clock contract', () => {
     mocks.exemptTabIds = new Set()
     mocks.exemptSelectCalls = 0
     mocks.storeState.terminalLayoutsByTabId = {}
+    mocks.storeState.runtimeStatusByEnvironmentId = new Map()
+  })
+
+  it('parks paired-runtime tabs only when their exact host advertises restore', () => {
+    const environmentId = 'paired-env'
+    const remoteArgs = {
+      ...hookArgs(false),
+      terminalTabs: [
+        { ...terminalTab('tab-1'), ptyId: `remote:${environmentId}@@term-1` },
+        { ...terminalTab('tab-2'), ptyId: `remote:${environmentId}@@term-2` }
+      ]
+    }
+    for (const [advertisedEnvironmentId, expected] of [
+      [environmentId, new Set(['tab-2'])],
+      ['other-env', new Set()]
+    ] as const) {
+      mocks.storeState.runtimeStatusByEnvironmentId = new Map([
+        [advertisedEnvironmentId, { status: { capabilities: ['terminal.paired-parking.v1'] } }]
+      ])
+      const { result, unmount } = renderHook(() => useTerminalTabColdParking(remoteArgs))
+
+      act(() => {
+        vi.advanceTimersByTime(TERMINAL_TAB_HOT_RETAIN_MS + 1)
+      })
+
+      expect(result.current).toEqual(expected)
+      unmount()
+    }
   })
 
   // Why: the worktree layer preserves hiddenSince through a background-measure

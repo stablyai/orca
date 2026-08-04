@@ -1,4 +1,4 @@
-import type { FolderWorkspace, FolderWorkspaceLinkedTask, ProjectGroup } from './types'
+import type { FolderWorkspace, ProjectGroup } from './types'
 import { isTuiAgent } from './tui-agent-config'
 import { normalizeStoredTaskSourceContext } from './task-source-context'
 import { normalizeWorkspaceLinkedItem } from './workspace-linked-item'
@@ -10,12 +10,6 @@ export function normalizeFolderWorkspaceName(
 ): string {
   const trimmed = typeof name === 'string' ? name.trim() : ''
   return trimmed.length > 0 ? trimmed : fallback
-}
-
-export function normalizeFolderWorkspaceLinkedTask(
-  value: unknown
-): FolderWorkspaceLinkedTask | null {
-  return normalizeWorkspaceLinkedItem(value)
 }
 
 export function normalizeFolderWorkspaces(

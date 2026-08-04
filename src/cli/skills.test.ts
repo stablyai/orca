@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { delimiter } from 'node:path'
 import type * as CodexCliCommandModule from '../shared/node-cli-command-resolution'
+import { WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL } from '../shared/windows-batch-spawn'
 
 const {
   detectCommandsMock,
@@ -689,6 +690,26 @@ describe('orca skills CLI', () => {
     expect(spawnMock).not.toHaveBeenCalled()
     expect(process.exitCode).toBe(1)
     expect(String(errorSpy.mock.calls[0]?.[0])).toContain('cmd.exe would reinterpret')
+    // Why: remediation advice that names the wrong characters is unactionable.
+    expect(String(errorSpy.mock.calls[0]?.[0])).toContain(WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL)
+  })
+
+  it('runs npx from a Program Files (x86) install instead of refusing it', async () => {
+    const child = createFakeChild()
+    spawnMock.mockReturnValue(child)
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    vi.stubEnv('ComSpec', 'C:\\Windows\\System32\\cmd.exe')
+    const npx = 'C:\\Program Files (x86)\\nodejs\\npx.cmd'
+    resolveCliCommandMock.mockReturnValue(npx)
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+
+    const resultPromise = main(['skills', 'install', '--skill', 'alpha'], '/tmp/repo')
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled())
+    child.emit('exit', 0, null)
+    await resultPromise
+
+    expect(spawnMock.mock.calls[0]?.[0]).toBe('C:\\Windows\\System32\\cmd.exe')
+    expect(spawnMock.mock.calls[0]?.[1]?.slice(0, 3)).toEqual(['/d', '/c', npx])
   })
 
   it('never puts the current directory on the child PATH when npx is unresolvable', async () => {

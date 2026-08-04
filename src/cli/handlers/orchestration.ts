@@ -79,6 +79,16 @@ const TASK_STATUS_VALUES = [
   'blocked'
 ] as const
 
+// Why: mirrors WorkerTerminalListState (orchestration/types.ts) so a bad --terminal-state fails before the RPC.
+const WORKER_TERMINAL_LIST_STATES = [
+  'active',
+  'reclaimable',
+  'retained',
+  'release_pending',
+  'release_unknown',
+  'released'
+] as const
+
 type LifecycleSendRejection = {
   action: 'rejected'
   code: string
@@ -422,6 +432,33 @@ function formatWorkerTranscriptMessage(message: NativeChatMessage): string {
   return `[${message.role}] ${blocks.join('\n')}`.trimEnd()
 }
 
+type WorkerReleaseReceipt = {
+  dispatchId: string
+  state: string
+  reason?: string
+  processAction: string
+  archive: { source: string | null; status: string | null } | null
+  recovery?: string
+  lastError?: string
+}
+
+function formatWorkerRelease(value: WorkerReleaseReceipt): string {
+  const head = `Worker ${value.dispatchId} terminal [${value.state}]`
+  const lines = [
+    `${head}${value.reason ? ` reason=${value.reason}` : ''} process=${value.processAction}`
+  ]
+  if (value.archive) {
+    lines.push(`archive ${value.archive.source ?? 'none'} [${value.archive.status ?? 'unknown'}]`)
+  }
+  if (value.lastError) {
+    lines.push(value.lastError)
+  }
+  if (value.recovery) {
+    lines.push(value.recovery)
+  }
+  return lines.join('\n')
+}
+
 function safeJson(value: unknown): string {
   try {
     return JSON.stringify(value)
@@ -527,7 +564,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       throwNoActiveSenderTerminal()
     }
 
-    // Why: lifecycle senders keep ORCA_TERMINAL_HANDLE verbatim — no liveness probe (worker_done must survive the mid-restart window) and no remint (older runtimes require from === the stale assignee_handle).
+    // Why: lifecycle senders preserve ORCA_TERMINAL_HANDLE across restarts for older runtimes.
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
     const sendParams = {
       from,
@@ -930,6 +967,79 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     )
   },
 
+  'orchestration worker-release': async ({ flags, client, json }) => {
+    const result = await callMutation<WorkerReleaseReceipt>(
+      client,
+      flags,
+      'orchestration.workerRelease',
+      { dispatch: getRequiredStringFlag(flags, 'dispatch') }
+    )
+    // Why: only an unprovable close is a failure; retained/pending/already-released are settled answers.
+    if (result.result.state === 'release_unknown') {
+      process.exitCode = 1
+    }
+    printResult(result, json, formatWorkerRelease)
+  },
+
+  'orchestration worker-retain': async ({ flags, client, json }) => {
+    const result = await callMutation<WorkerReleaseReceipt>(
+      client,
+      flags,
+      'orchestration.workerRetain',
+      { dispatch: getRequiredStringFlag(flags, 'dispatch') }
+    )
+    if (result.result.state === 'release_unknown') {
+      process.exitCode = 1
+    }
+    printResult(result, json, formatWorkerRelease)
+  },
+
+  'orchestration worker-list': async ({ flags, client, json }) => {
+    const terminalState = getOptionalStringFlag(flags, 'terminal-state')
+    if (
+      terminalState &&
+      !WORKER_TERMINAL_LIST_STATES.includes(
+        terminalState as (typeof WORKER_TERMINAL_LIST_STATES)[number]
+      )
+    ) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        `invalid --terminal-state '${terminalState}', expected one of: ${WORKER_TERMINAL_LIST_STATES.join(', ')}`
+      )
+    }
+    const result = await client.call<{
+      workers: {
+        dispatchId: string
+        taskId: string
+        runId: string
+        workerState: string
+        dispatchStatus: string
+        agentTerminalHandle: string | null
+        terminalState: string | null
+        resource: unknown
+      }[]
+      counts: Record<string, number>
+    }>('orchestration.workerList', {
+      run: getOptionalStringFlag(flags, 'run'),
+      terminalState
+    })
+    printResult(result, json, (r) => {
+      if (r.workers.length === 0) {
+        return 'No workers found.'
+      }
+      const rows = r.workers
+        .map(
+          (w) =>
+            `${w.dispatchId} task=${w.taskId} [${w.workerState}] terminal=${w.terminalState ?? 'none'}`
+        )
+        .join('\n')
+      const counts = Object.entries(r.counts)
+        .map(([state, count]) => `${state}=${count}`)
+        .join(' ')
+      return counts ? `${rows}\nTerminals: ${counts}` : rows
+    })
+  },
+
   'orchestration dispatch': async ({ flags, client, cwd, json }) => {
     const from = await resolveCoordinatorTerminalHandle(flags, cwd, client)
     const dryRun = flags.has('dry-run') ? true : undefined
@@ -1093,13 +1203,15 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     )
   },
 
-  'orchestration gate-create': async ({ flags, client, json }) => {
+  'orchestration gate-create': async ({ flags, client, cwd, json }) => {
     const result = await callMutation<{
       gate: { id: string; task_id: string; status: string }
     }>(client, flags, 'orchestration.gateCreate', {
       task: getRequiredStringFlag(flags, 'task'),
       question: getRequiredStringFlag(flags, 'question'),
-      options: getOptionalStringFlag(flags, 'options')
+      options: getOptionalStringFlag(flags, 'options'),
+      // Why: gates are Run-scoped, so the coordinator handle is the caller identity the runtime authorizes against.
+      from: await resolveCoordinatorTerminalHandle(flags, cwd, client)
     })
     printResult(
       result,
@@ -1108,23 +1220,30 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     )
   },
 
-  'orchestration gate-resolve': async ({ flags, client, json }) => {
+  'orchestration gate-resolve': async ({ flags, client, cwd, json }) => {
     const result = await callMutation<{
       gate: { id: string; task_id: string; status: string; resolution: string }
     }>(client, flags, 'orchestration.gateResolve', {
       id: getRequiredStringFlag(flags, 'id'),
-      resolution: getRequiredStringFlag(flags, 'resolution')
+      resolution: getRequiredStringFlag(flags, 'resolution'),
+      from: await resolveCoordinatorTerminalHandle(flags, cwd, client)
     })
     printResult(result, json, (r) => `Gate ${r.gate.id} resolved: ${r.gate.resolution}`)
   },
 
-  'orchestration gate-list': async ({ flags, client, json }) => {
+  'orchestration gate-list': async ({ flags, client, cwd, json }) => {
+    const run = getOptionalStringFlag(flags, 'run')
+    // Why: named runs remain inspectable without a pane; only implicit runs resolve identity.
+    const from = run ? undefined : await resolveCoordinatorTerminalHandle(flags, cwd, client)
     const result = await client.call<{
       gates: { id: string; task_id: string; question: string; status: string }[]
       count: number
+      runId?: string
     }>('orchestration.gateList', {
       task: getOptionalStringFlag(flags, 'task'),
-      status: getOptionalStringFlag(flags, 'status')
+      status: getOptionalStringFlag(flags, 'status'),
+      run,
+      from
     })
     printResult(result, json, (r) => {
       if (r.gates.length === 0) {

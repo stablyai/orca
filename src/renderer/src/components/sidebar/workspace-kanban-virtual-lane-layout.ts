@@ -44,6 +44,16 @@ export function registerWorkspaceKanbanVirtualLaneLayout(args: {
   }
 }
 
+/**
+ * The lane's item ids in the index space `resolveWorkspaceKanbanVirtualLaneDropIndex`
+ * reports — every item in the lane view, not just the mounted virtual window.
+ */
+export function getWorkspaceKanbanVirtualLaneItemIds(
+  scrollElement: HTMLElement
+): readonly string[] | null {
+  return virtualLaneLayouts.get(scrollElement)?.getItemIds() ?? null
+}
+
 export function getWorkspaceKanbanVirtualLaneItemRects(
   scrollElement: HTMLElement
 ): WorkspaceKanbanVirtualLaneItemRect[] | null {

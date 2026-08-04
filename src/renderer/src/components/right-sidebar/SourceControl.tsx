@@ -149,7 +149,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { BaseRefPicker } from '@/components/settings/BaseRefPicker'
-import { useConfirmationDialog } from '@/components/confirmation-dialog'
+import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { formatDiffComment, formatDiffComments } from '@/lib/diff-comments-format'
 import { getDiffCommentLineLabel, getDiffCommentSource } from '@/lib/diff-comment-compat'
 import { DiffNotesSendMenu } from '@/components/editor/DiffNotesSendMenu'
@@ -1721,7 +1721,10 @@ function SourceControlInner(): React.JSX.Element {
       linkedBitbucketPR,
       linkedAzureDevOpsPR,
       linkedGiteaPR,
-      staleWhileRevalidate: true
+      staleWhileRevalidate: true,
+      // Why: scoped to the active worktree, so it earns the host's fast
+      // re-check tier instead of the O(N) card pacing (#11532).
+      active: true
     })
     // Why: keep the GitHub cache refresh behind the coordinator so Source Control doesn't bypass pacing.
     enqueueGitHubPRRefresh(activeWorktreeId, 'swr', 30)

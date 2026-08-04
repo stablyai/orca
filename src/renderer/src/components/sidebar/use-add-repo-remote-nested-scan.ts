@@ -7,7 +7,7 @@ export function useAddRepoRemoteNestedScan({
   setActiveNestedScanId,
   showNestedRepoReview
 }: {
-  setActiveNestedScanId: (scanId: string | null) => void
+  setActiveNestedScanId: (scanId: string | null, runtimeEnvironmentId?: string | null) => void
   showNestedRepoReview: (options: {
     scan: NestedRepoScanResult
     selectedPath: string
@@ -16,6 +16,7 @@ export function useAddRepoRemoteNestedScan({
     runtimeKind: 'ssh'
     inProgress: boolean
     scanId: string | null
+    runtimeEnvironmentId?: string | null
   }) => void
 }) {
   const showRemoteNestedRepoReview = useCallback(
@@ -27,7 +28,7 @@ export function useAddRepoRemoteNestedScan({
       inProgress: boolean,
       scanId: string | null
     ) => {
-      setActiveNestedScanId(inProgress ? scanId : null)
+      setActiveNestedScanId(inProgress ? scanId : null, null)
       showNestedRepoReview({
         scan,
         selectedPath,
@@ -35,7 +36,8 @@ export function useAddRepoRemoteNestedScan({
         attemptId,
         runtimeKind: 'ssh',
         inProgress,
-        scanId
+        scanId,
+        runtimeEnvironmentId: null
       })
     },
     [setActiveNestedScanId, showNestedRepoReview]

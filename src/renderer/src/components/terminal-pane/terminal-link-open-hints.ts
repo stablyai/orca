@@ -1,3 +1,5 @@
+import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
+
 export function isMacPlatform(): boolean {
   return navigator.userAgent.includes('Mac')
 }
@@ -25,8 +27,10 @@ export type TerminalUrlOpenHintOptions = {
   modifierInverts?: boolean
 }
 
-// Why: openHttpLink only routes to Orca when the source is local, so a remote runtime
-// pins every link to the system browser and inverting cannot reach Orca there.
+// Why: openHttpLink only routes to Orca when the source is local, so a remote pane
+// pins every link to the system browser and inverting cannot reach Orca there. The
+// clicked pane's owner decides that, not the global active runtime — a workspace-bound
+// remote pane is remote even when no runtime is globally active.
 export function terminalUrlOpenHintOptionsFor(
   settings:
     | {
@@ -35,13 +39,15 @@ export function terminalUrlOpenHintOptionsFor(
         activeRuntimeEnvironmentId?: string | null
       }
     | null
-    | undefined
+    | undefined,
+  sourceOwner?: HttpLinkSourceOwner
 ): TerminalUrlOpenHintOptions {
+  const sourceIsLocal = sourceOwner
+    ? sourceOwner.kind === 'local'
+    : !settings?.activeRuntimeEnvironmentId?.trim()
   return {
     openLinksInApp: settings?.openLinksInApp === true,
-    modifierInverts:
-      settings?.openLinksInAppModifierInverts === true &&
-      !settings?.activeRuntimeEnvironmentId?.trim()
+    modifierInverts: settings?.openLinksInAppModifierInverts === true && sourceIsLocal
   }
 }
 

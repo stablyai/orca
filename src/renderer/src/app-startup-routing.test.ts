@@ -139,6 +139,10 @@ describe('renderer startup runtime routing', () => {
       'window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()',
       servicesIndex
     )
+    const capabilityRefreshIndex = source.indexOf(
+      'refreshTerminalProviderSnapshotCapabilities(',
+      preReconnectRecoveryIndex
+    )
     const reconnectIndex = source.indexOf(
       'actions.reconnectPersistedTerminals(abortController.signal)',
       preReconnectRecoveryIndex
@@ -150,8 +154,38 @@ describe('renderer startup runtime routing', () => {
 
     expect(servicesIndex).toBeGreaterThanOrEqual(0)
     expect(preReconnectRecoveryIndex).toBeGreaterThan(servicesIndex)
-    expect(reconnectIndex).toBeGreaterThan(preReconnectRecoveryIndex)
+    expect(capabilityRefreshIndex).toBeGreaterThan(preReconnectRecoveryIndex)
+    expect(reconnectIndex).toBeGreaterThan(capabilityRefreshIndex)
     expect(postReconnectRecoveryIndex).toBeGreaterThan(reconnectIndex)
+  })
+
+  it('refreshes terminal snapshot capability before degraded reconnect', () => {
+    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
+    const degradedStart = source.indexOf(
+      '[startup] Workspace session hydration failed; leaving disk state untouched:'
+    )
+    const servicesIndex = source.indexOf(
+      'await window.api.app.awaitFirstWindowStartupServices()',
+      degradedStart
+    )
+    const recoveryIndex = source.indexOf(
+      'window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()',
+      servicesIndex
+    )
+    const capabilityRefreshIndex = source.indexOf(
+      'refreshTerminalProviderSnapshotCapabilities(',
+      recoveryIndex
+    )
+    const reconnectIndex = source.indexOf(
+      'actions.reconnectPersistedTerminals(abortController.signal)',
+      recoveryIndex
+    )
+
+    expect(degradedStart).toBeGreaterThanOrEqual(0)
+    expect(servicesIndex).toBeGreaterThan(degradedStart)
+    expect(recoveryIndex).toBeGreaterThan(servicesIndex)
+    expect(capabilityRefreshIndex).toBeGreaterThan(recoveryIndex)
+    expect(reconnectIndex).toBeGreaterThan(capabilityRefreshIndex)
   })
 
   it('keeps the persisted Automations view from starting its own bootstrap worktree scan', () => {
@@ -257,6 +291,17 @@ describe('renderer startup runtime routing', () => {
     expect(source).toContain('<WorkspacePortScanner enabled={workspaceSessionReady} />')
   })
 
+  it('prefetches terminal snapshot capabilities before reconnect unlocks cold activation', () => {
+    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
+    const capabilityIndex = source.indexOf(
+      "timeRendererStartupStep('terminal-provider-snapshot-capabilities'"
+    )
+    const reconnectIndex = source.indexOf("timeRendererStartupStep('reconnect-terminals'")
+
+    expect(capabilityIndex).toBeGreaterThanOrEqual(0)
+    expect(reconnectIndex).toBeGreaterThan(capabilityIndex)
+  })
+
   it('does not load the terminal workbench on the no-workspace landing path', () => {
     const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
 
@@ -326,6 +371,18 @@ describe('renderer startup runtime routing', () => {
     expect(sidebarSource).toContain(
       "activeModal === 'confirm-remove-folder' ? <RemoveFolderDialog /> : null"
     )
+  })
+
+  it('loads Linear agent setup implementation only after the prompt opens it', () => {
+    const source = readFileSync(
+      join(process.cwd(), 'src/renderer/src/components/sidebar/LinearAgentSkillSetupPrompt.tsx'),
+      'utf8'
+    )
+
+    expect(source).toContain("() => import('./LinearAgentSkillSetupDialog')")
+    expect(source).not.toContain("from './LinearAgentSkillSetupDialog'")
+    expect(source).toContain('const setupDialog = setupDialogOpen ? (')
+    expect(source).toContain('<Suspense fallback={null}>')
   })
 
   it('does not eagerly import optional status-bar segments on startup', () => {
@@ -420,7 +477,7 @@ describe('renderer startup runtime routing', () => {
     expect(checkpointBlock).toContain(
       'buildWorkspaceSessionHostSnapshots(buildWorkspaceSessionPayload(freshState), freshState)'
     )
-    expect(checkpointBlock).toContain('window.api.app.persistBeforeUnloadSync({')
+    expect(checkpointBlock).toContain('window.api.app.stageBeforeUnloadSync({')
     expect(checkpointBlock).toContain('sessions: sessionSnapshots')
     expect(checkpointBlock).toContain('ui: buildActiveViewUnloadPatch(freshState)')
     expect(source).toContain(

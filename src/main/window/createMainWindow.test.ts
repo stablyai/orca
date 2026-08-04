@@ -248,6 +248,7 @@ describe('createMainWindow', () => {
     expect(allowBlankPrefs).toMatchObject({
       disableHtmlFullscreenWindowResize: true,
       partition: 'persist:orca-browser',
+      preload: expect.stringMatching(/browser-window-close-preload\.js$/),
       sandbox: true
     })
 
@@ -262,6 +263,27 @@ describe('createMainWindow', () => {
     const guest = { marker: 'guest' }
     windowHandlers['did-attach-webview']({} as never, guest as never)
     expect(attachGuestPoliciesMock).toHaveBeenCalledWith(guest)
+
+    const untrustedPreloadParams = {
+      src: 'data:text/html,',
+      preload: 'file:///tmp/untrusted-preload.js'
+    }
+    const hardenedPrefs = {
+      partition: 'persist:orca-browser',
+      preload: '/tmp/untrusted-preload.js'
+    }
+    windowHandlers['will-attach-webview'](
+      { preventDefault: vi.fn() } as never,
+      hardenedPrefs as never,
+      untrustedPreloadParams as never
+    )
+    expect(untrustedPreloadParams.preload).toBeUndefined()
+    expect(hardenedPrefs.preload).toMatch(/browser-window-close-preload\.js$/)
+    expect(hardenedPrefs.preload).not.toContain('untrusted-preload')
+
+    const secondGuest = { marker: 'second-guest' }
+    windowHandlers['did-attach-webview']({} as never, secondGuest as never)
+    expect(attachGuestPoliciesMock).toHaveBeenLastCalledWith(secondGuest)
   })
 
   it('sets platform-specific titlebar and frame options for every desktop platform', () => {

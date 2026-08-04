@@ -899,6 +899,7 @@ export default function WorkspaceKanbanDrawer({
             className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden scrollbar-sleek"
           >
             <WorkspaceKanbanLaneGrid
+              laneScrollerRef={laneScrollerRef}
               statuses={workspaceStatuses}
               laneViews={laneViews}
               laneFullWorktreeIds={laneFullWorktreeIds}

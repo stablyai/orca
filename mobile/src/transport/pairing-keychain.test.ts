@@ -246,7 +246,7 @@ describe('pairing keychain', () => {
     expect(secureStoreMock.getItemAsync).toHaveBeenCalledTimes(1)
   })
 
-  it('does not return a stale older value when a recorded current item decrypts as null', async () => {
+  it('self-heals to absent, never a stale older value, when a recorded item decrypts as null', async () => {
     generationRecord = '1'
     let presenceRecord: string | null = null
     asyncStorageMock.getItem.mockImplementation(async (key: string) => {
@@ -263,6 +263,11 @@ describe('pairing keychain', () => {
         presenceRecord = raw
       }
     })
+    asyncStorageMock.removeItem.mockImplementation(async (key: string) => {
+      if (key === TOKEN_PRESENCE_KEY) {
+        presenceRecord = null
+      }
+    })
 
     await writePairingKeychainItem(TOKEN_KEY, 'rotated-token')
     expect(presenceRecord).toBe('1')
@@ -275,8 +280,15 @@ describe('pairing keychain', () => {
       serviceOf(options) === undefined ? 'legacy-token' : null
     )
 
-    await expect(readPairingKeychainItem(TOKEN_KEY)).rejects.toThrow(/recorded generation/)
+    // Why: Android cannot distinguish absent from undecryptable, and a throw here left every
+    // caller's orphan cleanup unreachable; absent is the only self-healing answer.
+    await expect(readPairingKeychainItem(TOKEN_KEY)).resolves.toBeNull()
     expect(secureStoreMock.getItemAsync).toHaveBeenCalledTimes(1)
+
+    // Why: clearing the presence record would let the next read walk back to 'legacy-token'.
+    expect(presenceRecord).toBe('1')
+    await expect(readPairingKeychainItem(TOKEN_KEY)).resolves.toBeNull()
+    expect(secureStoreMock.getItemAsync).toHaveBeenCalledTimes(2)
   })
 
   it('reads an older value while a newly recorded alias has no item yet', async () => {
