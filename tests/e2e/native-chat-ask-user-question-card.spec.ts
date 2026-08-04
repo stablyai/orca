@@ -104,7 +104,7 @@ function pendingAskTranscript(args: { sessionId: string; userText: string }): st
 test.describe('Desktop chat AskUserQuestion card (#11761)', () => {
   test('renders the answerable question card from the transcript when live status carries no ask', async ({
     orcaPage
-  }, testInfo) => {
+  }) => {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
