@@ -1689,6 +1689,141 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     })
   })
 
+  it('tells the renderer when retiring the transport closes its streaming subscription', async () => {
+    // Why: disconnect advances the transport generation before closing sockets.
+    // Gating the terminal 'close' on that generation stranded the renderer with a
+    // handle it believed was open, so every later subscribe wrote into a socket
+    // main no longer owned — blank, wedged remote terminals after a reconnect.
+    registerRuntimeEnvironmentHandlers(store as never)
+    let transportCallbacks: {
+      onResponse: (response: Record<string, unknown>) => void
+      onClose: () => void
+    } | null = null
+    const close = vi.fn(() => {
+      transportCallbacks?.onClose()
+    })
+    subscribeRemoteRuntimeRequestMock.mockImplementation(
+      async (
+        _environment: unknown,
+        _method: string,
+        _params: unknown,
+        _timeoutMs: number,
+        callbacks: NonNullable<typeof transportCallbacks>
+      ) => {
+        transportCallbacks = callbacks
+        return { requestId: 'multiplex-1', close, sendBinary: vi.fn() }
+      }
+    )
+
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
+
+    const senderSend = vi.fn()
+    const subscribe = handler<
+      { selector: string; method: string; params?: unknown; subscriptionId?: string },
+      { subscriptionId: string; requestId: string }
+    >('runtimeEnvironments:subscribe')
+    const subscribed = await subscribe(
+      {
+        sender: {
+          id: 1,
+          isDestroyed: () => false,
+          send: senderSend,
+          once: vi.fn(),
+          removeListener: vi.fn()
+        }
+      },
+      {
+        selector: added.environment.id,
+        method: 'terminal.multiplex',
+        params: {},
+        subscriptionId: 'multiplex-sub'
+      }
+    )
+
+    const disconnect = handler<{ selector: string }, { disconnected: { id: string } }>(
+      'runtimeEnvironments:disconnect'
+    )
+    disconnect(null, { selector: added.environment.id })
+
+    const closeEvents = senderSend.mock.calls.filter(
+      (call) =>
+        call[0] === 'runtimeEnvironments:subscriptionEvent' &&
+        (call[1] as { type?: string }).type === 'close'
+    )
+    expect(closeEvents).toEqual([
+      [
+        'runtimeEnvironments:subscriptionEvent',
+        { subscriptionId: subscribed.subscriptionId, type: 'close' }
+      ]
+    ])
+  })
+
+  it('suppresses stale payloads from a retired transport but never re-sends its close', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    let transportCallbacks: {
+      onResponse: (response: Record<string, unknown>) => void
+      onClose: () => void
+    } | null = null
+    subscribeRemoteRuntimeRequestMock.mockImplementation(
+      async (
+        _environment: unknown,
+        _method: string,
+        _params: unknown,
+        _timeoutMs: number,
+        callbacks: NonNullable<typeof transportCallbacks>
+      ) => {
+        transportCallbacks = callbacks
+        return { requestId: 'multiplex-2', close: vi.fn(), sendBinary: vi.fn() }
+      }
+    )
+
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
+
+    const senderSend = vi.fn()
+    const subscribe = handler<
+      { selector: string; method: string; params?: unknown; subscriptionId?: string },
+      { subscriptionId: string; requestId: string }
+    >('runtimeEnvironments:subscribe')
+    await subscribe(
+      {
+        sender: {
+          id: 1,
+          isDestroyed: () => false,
+          send: senderSend,
+          once: vi.fn(),
+          removeListener: vi.fn()
+        }
+      },
+      {
+        selector: added.environment.id,
+        method: 'terminal.multiplex',
+        params: {},
+        subscriptionId: 'multiplex-stale'
+      }
+    )
+
+    invalidateRuntimeEnvironmentTransport(added.environment.id)
+    senderSend.mockClear()
+    // A late frame from the retired socket must not reach the renderer...
+    transportCallbacks!.onResponse({
+      id: 'r1',
+      ok: true,
+      result: {},
+      _meta: { runtimeId: 'runtime-a' }
+    })
+    // ...and its late close must not re-fire after the retirement already sent one.
+    transportCallbacks!.onClose()
+    expect(senderSend).not.toHaveBeenCalled()
+  })
+
   it('rejects cross-window streaming subscription control', async () => {
     registerRuntimeEnvironmentHandlers(store as never)
     const close = vi.fn()

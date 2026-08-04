@@ -25,6 +25,7 @@ type RetainedRemoteRuntimeSubscription = RemoteRuntimeSubscription & {
   environmentId: string
   ownerWebContentsId: number
   removeDestroyedListener: () => void
+  notifyClosed: () => void
 }
 const remoteRuntimeSubscriptions = new Map<string, RetainedRemoteRuntimeSubscription>()
 const getUserDataPath = (): string => app.getPath('userData')
@@ -37,6 +38,8 @@ function closeSubscriptionsForEnvironment(environmentId: string): void {
     }
     remoteRuntimeSubscriptions.delete(subscriptionId)
     subscription.close()
+    // Why: a shared-control logical close never calls back, so notify directly.
+    subscription.notifyClosed()
   }
 }
 export function invalidateRuntimeEnvironmentTransport(environmentId: string): void {
@@ -120,6 +123,15 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
         removeDestroyedListener()
         subscription?.close()
       }
+      // Why: the renderer treats close as terminal and drops its handle, so send it once.
+      let closeNotified = false
+      const notifyClosed = (): void => {
+        if (closeNotified || sender.isDestroyed()) {
+          return
+        }
+        closeNotified = true
+        sender.send('runtimeEnvironments:subscriptionEvent', { subscriptionId, type: 'close' })
+      }
       sender.once('destroyed', closeSubscription)
       destroyedListenerAttached = true
       try {
@@ -131,6 +143,12 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
           args.timeoutMs,
           {
             onEvent: (payload) => {
+              if (payload.type === 'close') {
+                // Why: retirement advances the generation before closing, so gating
+                // close on it stranded the renderer with a dead subscription.
+                notifyClosed()
+                return
+              }
               if (transportIsCurrent() && !sender.isDestroyed()) {
                 sender.send('runtimeEnvironments:subscriptionEvent', {
                   subscriptionId,
@@ -172,6 +190,7 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
         environmentId: environment.id,
         ownerWebContentsId,
         removeDestroyedListener,
+        notifyClosed,
         sendBinary: (bytes) => subscription?.sendBinary(bytes) ?? false,
         close: () => {
           removeDestroyedListener()
