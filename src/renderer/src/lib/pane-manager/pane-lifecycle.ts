@@ -243,6 +243,14 @@ export function disposePane(
     /* ignore */
   }
   try {
+    // Why: recovery remount replaces the xterm instance while the old canvas
+    // can still paint a selection highlight; clear before dispose so Cmd/Ctrl+C
+    // is not a silent no-op against an empty new instance (#12517).
+    pane.terminal.clearSelection()
+  } catch {
+    /* ignore */
+  }
+  try {
     pane.terminal.dispose()
   } catch {
     /* ignore */
