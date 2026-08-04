@@ -169,6 +169,7 @@ describe('restored editor owner reparent', () => {
       activeTabId: movedTabId,
       tabOrder: [movedTabId]
     })
+    expect(next.tabBarOrderByWorktree[TARGET]).toEqual([result.fileId])
     expect(next.activeFileIdByWorktree[SOURCE]).toBeNull()
     expect(next.activeFileIdByWorktree[TARGET]).toBe(result.fileId)
     expect(next.activeWorktreeId).toBe(TARGET)
@@ -181,6 +182,16 @@ describe('restored editor owner reparent', () => {
       worktreeId: TARGET
     })
     expect(next.pendingExplorerReveal?.worktreeId).toBe(TARGET)
+  })
+
+  it('does not retarget an explorer reveal owned by another workspace', () => {
+    const oldId = openRestoredSource()
+    useAppStore.setState({
+      pendingExplorerReveal: { worktreeId: 'other-workspace', filePath: FILE_PATH, requestId: 1 }
+    })
+
+    expect(reparent(oldId).ok).toBe(true)
+    expect(useAppStore.getState().pendingExplorerReveal?.worktreeId).toBe('other-workspace')
   })
 
   it('commits active reparenting through the complete workspace activation projection', () => {
@@ -451,6 +462,7 @@ describe('restored editor owner reparent', () => {
   it('unsubscribes the source watch once and subscribes the destination once', async () => {
     const watchWorktree = vi.fn().mockResolvedValue(undefined)
     const unwatchWorktree = vi.fn().mockResolvedValue(undefined)
+    const previousApi = (window as unknown as { api?: unknown }).api
     ;(window as unknown as { api: unknown }).api = {
       fs: {
         watchWorktree,
@@ -486,6 +498,7 @@ describe('restored editor owner reparent', () => {
 
     await act(async () => root.unmount())
     container.remove()
+    ;(window as unknown as { api?: unknown }).api = previousApi
   })
 
   it('reparents into a folder workspace with local save and watch authority', () => {

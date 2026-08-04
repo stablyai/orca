@@ -93,6 +93,9 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         }
 
         if (liveFile.pendingOwnerMigration === true) {
+          if (trigger === 'autosave') {
+            return
+          }
           throw new Error('This file is still restoring its workspace owner. Try saving again.')
         }
 

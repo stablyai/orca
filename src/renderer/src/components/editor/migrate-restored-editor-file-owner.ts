@@ -9,10 +9,9 @@ import {
   type EditorFileOperationProvenance
 } from '@/lib/editor-file-operation-owner'
 import { requestEditorSaveQuiesce } from './editor-autosave'
+import type { RestoredEditorOwnerResult } from '@/store/slices/editor'
 
-export type RestoredEditorOwnerMigrationResult =
-  | { ok: true; fileId: string }
-  | { ok: false; reason: 'collision' | 'owner-changed' | 'stale' }
+export type RestoredEditorOwnerMigrationResult = RestoredEditorOwnerResult
 
 export async function migrateRestoredEditorFileOwner(
   fileId: string,

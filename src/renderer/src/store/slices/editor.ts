@@ -2696,19 +2696,21 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     }),
 
   setRestoredEditorOwnerMigrationPending: (fileId, pending) => {
-    let found = false
-    set((s) => ({
-      openFiles: s.openFiles.map((file) => {
-        if (file.id !== fileId) {
-          return file
-        }
-        found = true
-        return file.pendingOwnerMigration === pending
-          ? file
-          : { ...file, pendingOwnerMigration: pending || undefined }
-      })
-    }))
-    return found
+    let changed = false
+    set((s) => {
+      const file = s.openFiles.find((candidate) => candidate.id === fileId)
+      const next = pending || undefined
+      if (!file || file.pendingOwnerMigration === next) {
+        return s
+      }
+      changed = true
+      return {
+        openFiles: s.openFiles.map((candidate) =>
+          candidate.id === fileId ? { ...candidate, pendingOwnerMigration: next } : candidate
+        )
+      }
+    })
+    return changed
   },
 
   reparentRestoredEditorFileOwner: (args) => {
@@ -2800,6 +2802,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         movedTabs.map((tab) => [tab.id, migrations.get(tab.id) ?? tab.id])
       )
       const mappedMovedTabIds = movedTabs.map((tab) => tabIdMigration.get(tab.id) ?? tab.id)
+      const mappedMovedTabBarIds = movedTabs.map(
+        (tab) => migrations.get(tab.entityId) ?? tab.entityId
+      )
       const targetGroups = s.groupsByWorktree[targetWorktreeId] ?? []
       const targetGroupId =
         s.activeGroupIdByWorktree[targetWorktreeId] ?? targetGroups[0]?.id ?? createBrowserUuid()
@@ -2894,9 +2899,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       ).filter((id) => !movedFileIds.has(id) && !movedTabIds.has(id))
       nextTabBarOrderByWorktree[targetWorktreeId] = [
         ...(nextTabBarOrderByWorktree[targetWorktreeId] ?? []).filter(
-          (id) => id !== newFileId && !mappedMovedTabIds.includes(id)
+          (id) => !mappedMovedTabBarIds.includes(id)
         ),
-        ...mappedMovedTabIds
+        ...mappedMovedTabBarIds
       ]
       const nextActiveGroupIdByWorktree = { ...s.activeGroupIdByWorktree }
       if (sourceGroupState.groups.length > 0) {
@@ -2981,7 +2986,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                 }
               }
             : {}),
-          ...(s.pendingExplorerReveal?.filePath === source.filePath
+          ...(s.pendingExplorerReveal?.filePath === source.filePath &&
+          s.pendingExplorerReveal.worktreeId === sourceWorktreeId
             ? {
                 pendingExplorerReveal: {
                   ...s.pendingExplorerReveal,

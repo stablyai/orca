@@ -122,6 +122,32 @@ describe('restored editor owner save lifecycle', () => {
     expect(mocks.writeRuntimeFile.mock.calls[2]?.[2]).toBe('autosave destination')
   })
 
+  it('rejects a concurrent migration without clearing the active migration gate', async () => {
+    const oldId = seed()
+    const firstWrite = deferred()
+    mocks.writeRuntimeFile.mockReturnValueOnce(firstWrite.promise)
+    detach = attachEditorAutosaveController(useAppStore)
+    useAppStore.getState().setEditorDraft(oldId, 'source save')
+    useAppStore.getState().markFileDirty(oldId, true)
+
+    const sourceSave = requestEditorFileSave({ fileId: oldId })
+    await vi.waitFor(() => expect(mocks.writeRuntimeFile).toHaveBeenCalledTimes(1))
+    const route = { worktreeId: TARGET, relativePath: 'file.md', executionHostId: 'local' as const }
+    const firstMigration = migrateRestoredEditorFileOwner(oldId, route, null)
+    await Promise.resolve()
+    expect(useAppStore.getState().openFiles[0]?.pendingOwnerMigration).toBe(true)
+
+    await expect(migrateRestoredEditorFileOwner(oldId, route, null)).resolves.toEqual({
+      ok: false,
+      reason: 'stale'
+    })
+    expect(useAppStore.getState().openFiles[0]?.pendingOwnerMigration).toBe(true)
+
+    firstWrite.resolve()
+    await sourceSave
+    await expect(firstMigration).resolves.toMatchObject({ ok: true })
+  })
+
   it('fails closed when the sibling workspace disappears during save quiescence', async () => {
     const oldId = seed()
     const firstWrite = deferred()
@@ -256,5 +282,6 @@ describe('restored editor owner save lifecycle', () => {
       id: oldId,
       worktreeId: SOURCE
     })
+    expect(useAppStore.getState().openFiles[0]?.pendingOwnerMigration).toBeUndefined()
   })
 })
