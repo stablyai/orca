@@ -5,6 +5,7 @@ const LOCALIZED_PROSE_TERM_KEYS = new Set([
   'auto.components.right.sidebar.ChecksPanel.ed3f79c031',
   'auto.components.right.sidebar.ChecksPanel.f273f2271c',
   'auto.components.sidebar.AddRemoteHostDialog.sshPersistenceDefault',
+  'auto.components.settings.RepositoryIconPicker.emojiTooLongForRepoIcon',
   'auto.hooks.useMacosTccPromptNotice.description',
   'auto.components.settings.DeveloperPermissionsPane.7ca17b62c8'
 ])
@@ -14,6 +15,10 @@ const LOCALIZABLE_PROSE_TERMS = new Set([
   'Agents',
   'agent',
   'agents',
+  'Repo',
+  'Repos',
+  'repo',
+  'repos',
   'Terminal',
   'Terminals',
   'terminal',

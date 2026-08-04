@@ -14,6 +14,7 @@ const SSH_PERSISTENCE_DESCRIPTION =
 const SSH_ADVANCED = 'auto.components.sidebar.AddRemoteHostDialog.advanced'
 const REVIEW_AGENT_PROMPT = 'auto.components.right.sidebar.ChecksPanel.ed3f79c031'
 const REVIEW_AGENT_RESULT = 'auto.components.right.sidebar.ChecksPanel.f273f2271c'
+const REPO_ICON_EMOJI = 'auto.components.settings.RepositoryIconPicker.emojiTooLongForRepoIcon'
 
 describe('Continue action vs Continue agent', () => {
   it('translates the bare Continue button instead of preserving the brand', () => {
@@ -132,5 +133,16 @@ describe('localized prose introduced on main', () => {
   it('keeps the exact Add Remote Host advanced labels from main', () => {
     expect(repair('ja', SSH_ADVANCED, 'Advanced', '詳細')).toBe('詳細')
     expect(repair('zh', SSH_ADVANCED, 'Advanced', 'Advanced')).toBe('Advanced')
+  })
+
+  it('keeps localized repo terminology in newly added explanatory copy', () => {
+    expect(
+      repair(
+        'zh',
+        REPO_ICON_EMOJI,
+        'This emoji cannot be used as a repo icon.',
+        '此表情符号无法用作仓库图标。'
+      )
+    ).toBe('此表情符号无法用作仓库图标。')
   })
 })
