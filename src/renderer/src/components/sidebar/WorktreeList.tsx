@@ -5821,6 +5821,16 @@ const WorktreeList = React.memo(function WorktreeList({
       workspaceHostScope
     ]
   )
+  const setSidebarVisibleGroupKeys = useAppStore((s) => s.setSidebarVisibleGroupKeys)
+  const visibleGroupHeaderKeys = useMemo(
+    () => sectionRows.filter((row) => row.type === 'header').map((row) => row.key),
+    [sectionRows]
+  )
+  // Publish rendered header keys so the sidebar header's collapse-all toggle
+  // knows what to fold without rebuilding rows.
+  useEffect(() => {
+    setSidebarVisibleGroupKeys(visibleGroupHeaderKeys)
+  }, [visibleGroupHeaderKeys, setSidebarVisibleGroupKeys])
   const renderedSidebarRowKeys = useMemo(() => {
     const keys = new Set<string>()
     for (const row of sectionRows) {

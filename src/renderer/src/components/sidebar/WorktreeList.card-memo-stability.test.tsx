@@ -228,6 +228,7 @@ function setFlatWorktreeState(): void {
     tabsByWorktree: {},
     terminalLayoutsByTabId: {},
     toggleCollapsedGroup: vi.fn(),
+    setSidebarVisibleGroupKeys: vi.fn(),
     updateRepo: vi.fn(),
     updateWorktreeMeta: vi.fn(),
     updateWorktreesMeta: vi.fn(),

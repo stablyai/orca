@@ -36,6 +36,7 @@ import {
   normalizeManualRepoOrder
 } from '../../../../shared/manual-repo-order'
 import { isTopLevelView } from '../../../../shared/top-level-view'
+import { toggleAllSectionsCollapsed } from '../../../../shared/workspace-group-collapse'
 import { isReleaseChannel, type ReleaseChannel } from '../../../../shared/release-channel'
 import type { UsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
 import {
@@ -882,6 +883,10 @@ export type UISlice = {
   setFilterRepoIds: (ids: string[]) => void
   collapsedGroups: Set<string>
   toggleCollapsedGroup: (key: string) => void
+  // Header keys currently rendered by the sidebar list; feeds the bulk collapse toggle.
+  sidebarVisibleGroupKeys: string[]
+  setSidebarVisibleGroupKeys: (keys: string[]) => void
+  toggleAllCollapsedGroups: () => void
   worktreeCardProperties: WorktreeCardProperty[]
   _worktreeCardModeDefaulted: boolean
   setWorktreeCardMode: (mode: WorktreeCardMode) => void
@@ -2102,6 +2107,31 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       }
       window.api.ui.set({ collapsedGroups: [...next] }).catch(console.error)
       return { collapsedGroups: next }
+    }),
+
+  sidebarVisibleGroupKeys: [],
+  setSidebarVisibleGroupKeys: (keys) =>
+    set((s) => {
+      const prev = s.sidebarVisibleGroupKeys
+      if (prev.length === keys.length && prev.every((key, i) => key === keys[i])) {
+        return s
+      }
+      return { sidebarVisibleGroupKeys: keys }
+    }),
+  toggleAllCollapsedGroups: () =>
+    set((s) => {
+      if (s.sidebarVisibleGroupKeys.length === 0) {
+        return s
+      }
+      const next = toggleAllSectionsCollapsed(
+        s.collapsedGroups,
+        s.sidebarVisibleGroupKeys,
+        // Row-scoped keys survive bulk expand: lineage disclosure ('lineage:',
+        // worktree-list-groups.ts) and host sections ('host:', host-section-rows.ts).
+        ['lineage:', 'host:']
+      )
+      window.api.ui.set({ collapsedGroups: next }).catch(console.error)
+      return { collapsedGroups: new Set(next) }
     }),
 
   worktreeCardProperties: [...DEFAULT_WORKTREE_CARD_PROPERTIES],

@@ -1,7 +1,9 @@
 import type { Worktree } from './workspace-list-types'
 
+export const MOBILE_WORKSPACE_LINEAGE_KEY_PREFIX = 'workspace-lineage:'
+
 export function getMobileWorkspaceLineageGroupKey(worktreeId: string): string {
-  return `workspace-lineage:${encodeURIComponent(worktreeId)}`
+  return `${MOBILE_WORKSPACE_LINEAGE_KEY_PREFIX}${encodeURIComponent(worktreeId)}`
 }
 
 function hasValidLineageParent(worktree: Worktree, parent: Worktree): boolean {
