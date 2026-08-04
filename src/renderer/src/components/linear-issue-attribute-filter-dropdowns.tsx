@@ -76,9 +76,14 @@ export default function LinearIssueAttributeFilterDropdowns({
 }: Props): React.JSX.Element {
   const [popoverOpen, setPopoverOpen] = useState(false)
   const [openSection, setOpenSection] = useState<LinearIssueFilterSectionKey | null>(null)
+  const shouldLoadMetadata =
+    popoverOpen ||
+    value.stateIds.length > 0 ||
+    value.labelIds.length > 0 ||
+    value.assignee?.kind === 'user'
 
   const activeTeamIds = useMemo(() => {
-    if (!popoverOpen || isAllWorkspaces) {
+    if (!shouldLoadMetadata || isAllWorkspaces) {
       return [] as string[]
     }
     return resolveLinearIssueAttributeFilterTeamIds({
@@ -86,10 +91,12 @@ export default function LinearIssueAttributeFilterDropdowns({
       availableTeams,
       primaryTeamId: primaryTeam?.id ?? null
     })
-  }, [popoverOpen, isAllWorkspaces, selectedTeamIds, availableTeams, primaryTeam?.id])
+  }, [shouldLoadMetadata, isAllWorkspaces, selectedTeamIds, availableTeams, primaryTeam?.id])
 
   const concreteWorkspaceId =
-    popoverOpen && !isAllWorkspaces && workspaceId && workspaceId !== 'all' ? workspaceId : null
+    shouldLoadMetadata && !isAllWorkspaces && workspaceId && workspaceId !== 'all'
+      ? workspaceId
+      : null
 
   // Why: multi-team / All teams must union filter options across every selected team (#8739).
   const states = useTeamsStates(activeTeamIds, settings, concreteWorkspaceId)
