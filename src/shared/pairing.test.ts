@@ -38,6 +38,7 @@ describe('pairing offer', () => {
   it('rejects malformed padding consistently across Node and browser runtimes', () => {
     const url = encodePairingOffer(offer)
     const code = new URLSearchParams(url.slice(url.indexOf('?') + 1)).get('code')!
+    expect(code.length % 4).toBe(2)
     const malformedCode = `${code}=`
     const nodeDecoded = parsePairingCode(malformedCode)
     const nodeBuffer = Buffer
@@ -58,6 +59,7 @@ describe('pairing offer', () => {
   it('accepts canonical base64 padding', () => {
     const url = encodePairingOffer(offer)
     const code = new URLSearchParams(url.slice(url.indexOf('?') + 1)).get('code')!
+    expect(code.length % 4).toBe(2)
 
     expect(parsePairingCode(`${code}==`)).toEqual(offer)
   })

@@ -1,4 +1,5 @@
 import { PairingOfferSchema, type PairingOffer } from './types'
+import { normalizePairingBase64 } from '../../../src/shared/mobile-pairing-base64'
 
 // Why: this file mirrors src/shared/pairing.ts (which is covered by CI
 // vitest) but uses atob/btoa because Metro/Hermes don't ship Node's
@@ -70,15 +71,6 @@ export function parsePairingCode(input: string): PairingOffer | null {
 function decodePairingBase64(base64url: string): PairingOffer {
   // Why: desktop intentionally strips base64 padding from QR payloads. Some
   // mobile JS runtimes reject unpadded atob input, so restore it before decode.
-  const base64 = padBase64(base64url.replace(/-/g, '+').replace(/_/g, '/'))
-  const json = atob(base64)
+  const json = atob(normalizePairingBase64(base64url))
   return PairingOfferSchema.parse(JSON.parse(json))
-}
-
-function padBase64(base64: string): string {
-  const remainder = base64.length % 4
-  if (remainder === 0) {
-    return base64
-  }
-  return `${base64}${'='.repeat(4 - remainder)}`
 }

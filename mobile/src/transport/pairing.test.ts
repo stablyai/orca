@@ -63,6 +63,15 @@ describe('pairing deep links', () => {
     expect(parsePairingCode(code)).toEqual(offer)
   })
 
+  it('rejects malformed padding without rejecting canonical padding', () => {
+    const paddedOffer = { ...offer, endpoint: `${offer.endpoint}/a` }
+    const code = encodeOffer(paddedOffer)
+    expect(code.length % 4).toBe(2)
+
+    expect(parsePairingCode(`${code}=`)).toBeNull()
+    expect(parsePairingCode(`${code}==`)).toEqual(paddedOffer)
+  })
+
   it('preserves a TLS reverse-proxy endpoint with an explicit port and path', () => {
     const proxiedOffer = {
       ...offer,

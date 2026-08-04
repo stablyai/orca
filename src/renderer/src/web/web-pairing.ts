@@ -1,4 +1,5 @@
 import type { DeviceScope } from '../../../shared/runtime-types'
+import { normalizePairingBase64 } from '../../../shared/mobile-pairing-base64'
 
 const PAIRING_OFFER_VERSION = 2
 
@@ -135,9 +136,7 @@ function extractPairingCodeFromUrl(url: string): string | null {
 }
 
 function base64UrlToBytes(value: string): Uint8Array {
-  const base64 = value.replace(/-/g, '+').replace(/_/g, '/')
-  const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=')
-  const binary = globalThis.atob(padded)
+  const binary = globalThis.atob(normalizePairingBase64(value))
   const bytes = new Uint8Array(binary.length)
   for (let index = 0; index < binary.length; index += 1) {
     bytes[index] = binary.charCodeAt(index)

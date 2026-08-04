@@ -25,6 +25,15 @@ describe('web pairing input', () => {
     expect(parseWebPairingInput(`orca://pair#${encodeOffer()}`)).toEqual(offer)
   })
 
+  it('rejects malformed padding without rejecting canonical padding', () => {
+    const paddedOffer = { ...offer, endpoint: `${offer.endpoint}/` }
+    const code = encodeOffer(paddedOffer)
+    expect(code.length % 4).toBe(2)
+
+    expect(parseWebPairingInput(`${code}=`)).toBeNull()
+    expect(parseWebPairingInput(`${code}==`)).toEqual(paddedOffer)
+  })
+
   it('preserves optional device scope metadata', () => {
     expect(parseWebPairingInput(`orca://pair?code=${encodeOffer({ scope: 'mobile' })}`)).toEqual({
       ...offer,
