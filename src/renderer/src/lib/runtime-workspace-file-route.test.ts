@@ -90,6 +90,93 @@ describe('findRuntimeWorkspaceFileRoute', () => {
     expect(findRuntimeWorkspaceFileRoute(state(), 'runtime-a', '/srv/notes')).toBeNull()
   })
 
+  it('routes duplicate worktree ids through their exact execution host', () => {
+    const duplicateState = state()
+    duplicateState.repos = [
+      { id: 'shared-repo', executionHostId: 'local' },
+      { id: 'shared-repo', connectionId: 'ssh-1', executionHostId: 'ssh:ssh-1' }
+    ] as never
+    duplicateState.worktreesByRepo = {
+      sharedRepo: [
+        {
+          id: 'shared-worktree',
+          repoId: 'shared-repo',
+          path: '/local/shared-repo',
+          hostId: 'local'
+        },
+        {
+          id: 'shared-worktree',
+          repoId: 'shared-repo',
+          path: '/srv/shared-repo',
+          hostId: 'ssh:ssh-1'
+        }
+      ]
+    } as never
+    duplicateState.folderWorkspaces = []
+
+    expect(
+      findWorkspaceFileRoute(duplicateState, 'local', '/local/shared-repo/src/local.ts')
+    ).toEqual({
+      worktreeId: 'shared-worktree',
+      relativePath: 'src/local.ts',
+      executionHostId: 'local'
+    })
+    expect(
+      findWorkspaceFileRoute(duplicateState, 'ssh:ssh-1', '/srv/shared-repo/src/remote.ts')
+    ).toEqual({
+      worktreeId: 'shared-worktree',
+      relativePath: 'src/remote.ts',
+      executionHostId: 'ssh:ssh-1'
+    })
+    expect(
+      findWorkspaceFileRoute(duplicateState, 'local', '/srv/shared-repo/src/remote.ts')
+    ).toBeNull()
+    expect(
+      findWorkspaceFileRoute(duplicateState, 'ssh:ssh-1', '/local/shared-repo/src/local.ts')
+    ).toBeNull()
+  })
+
+  it('routes paired duplicate ids through their logical runtime owner', () => {
+    const duplicateState = state()
+    duplicateState.repos = [
+      { id: 'shared-repo', executionHostId: 'local' },
+      {
+        id: 'shared-repo',
+        connectionId: 'builder',
+        executionHostId: 'runtime:runtime-a'
+      }
+    ] as never
+    duplicateState.worktreesByRepo = {
+      sharedRepo: [
+        {
+          id: 'shared-worktree',
+          repoId: 'shared-repo',
+          path: '/local/shared-repo',
+          hostId: 'local'
+        },
+        {
+          id: 'shared-worktree',
+          repoId: 'shared-repo',
+          path: '/srv/shared-repo',
+          hostId: 'ssh:builder',
+          runtimeOwnerEnvironmentId: 'runtime-a'
+        }
+      ]
+    } as never
+    duplicateState.folderWorkspaces = []
+
+    expect(
+      findRuntimeWorkspaceFileRoute(duplicateState, 'runtime-a', '/srv/shared-repo/src/remote.ts')
+    ).toEqual({
+      worktreeId: 'shared-worktree',
+      relativePath: 'src/remote.ts',
+      executionHostId: 'runtime:runtime-a'
+    })
+    expect(
+      findRuntimeWorkspaceFileRoute(duplicateState, 'runtime-a', '/local/shared-repo/src/local.ts')
+    ).toBeNull()
+  })
+
   it('routes direct SSH siblings only on the exact SSH host', () => {
     const sshState = state()
     sshState.repos = [
