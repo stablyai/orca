@@ -11,6 +11,10 @@ export type RemoteRuntimePtyRecoveryPhase =
 // Why: system resume / network online need to advance pending pane backoffs without a second coordinator.
 const scheduledRecoveries = new Set<RemoteRuntimePtyRecoveryState>()
 
+export function getScheduledRemoteRuntimePtyRecoveryCountForTests(): number {
+  return scheduledRecoveries.size
+}
+
 export function retryAllRemoteRuntimePtyRecoveriesNow(): number {
   let advanced = 0
   // Why: a synchronous retry failure can schedule the same state again.
