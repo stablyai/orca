@@ -6,23 +6,9 @@ import {
 import type { MobileRelayRpcSession } from './mobile-relay-rpc-session'
 import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel'
 import { RelayOuterError } from './mobile-relay-e2ee-link'
+import { RELAY_STABLE_CONNECTION_MS, RelayRetryDelays } from './mobile-relay-retry-delays'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ConnectionState } from './types'
-
-// Why: relay resume closes and silent cellular NAT rebinds otherwise cause
-// immediate re-dials that ping-pong the phone between connected and disconnected.
-const RELAY_BACKOFF_MIN_MS = 250
-const RELAY_BACKOFF_BASE_MS = 500
-const RELAY_BACKOFF_CEILING_MS = 30_000
-const RELAY_STABLE_CONNECTION_MS = RELAY_BACKOFF_CEILING_MS
-const RELAY_HOST_OFFLINE_RETRY_MIN_MS = 5_000
-const RELAY_HOST_OFFLINE_RETRY_MAX_MS = 15_000
-// Why: gates must slow recovery down, never end it — a relay-only phone has no
-// direct path to refresh credentials, so a timerless gate is a permanent outage.
-// The cadence escalates and jitters so a permanently revoked device is not a
-// forever one-minute beacon and a fleet-wide gating event cannot phase-align.
-const RELAY_GATE_REPROBE_BASE_MS = 60_000
-const RELAY_GATE_REPROBE_CEILING_MS = 15 * 60_000
 
 export type RelayReconnectDependencies = {
   now: () => number
@@ -43,11 +29,14 @@ export class RelayReconnectController {
   private gateReprobePending = false
   private gateReprobeStreak = 0
   private readonly rejectedCredentialVersions = new Set<number>()
+  private readonly delays: RelayRetryDelays
 
   constructor(
     private readonly dependencies: RelayReconnectDependencies,
     private readonly onRetry: (forceReplacement?: boolean) => void
-  ) {}
+  ) {
+    this.delays = new RelayRetryDelays(dependencies.randomBytes)
+  }
 
   handleForeground(logical: StableLogicalRpcClient, wasForeground: boolean): void {
     if (!wasForeground) {
@@ -156,10 +145,17 @@ export class RelayReconnectController {
       this.scheduleGateReprobe()
       return
     }
+    if (this.recoveryGate) {
+      // Why: under a held gate the tick must mint its pass token — a plain
+      // cooldown tick bounces off shouldDefer and doubles the effective cadence.
+      this.clearTimer()
+      this.scheduleGateReprobe()
+      return
+    }
     // Why: a merely missing or expired bundle must not enter the credential
     // gate — that gate forces a rotation on the next direct connect. A plain
     // cooldown retries the read on the same escalating cadence.
-    const delay = this.gateReprobeDelayMs()
+    const delay = this.delays.gateReprobeDelayMs(this.gateReprobeStreak)
     this.nextAttemptAt = this.dependencies.now() + delay
     this.clearTimer()
     this.scheduleReprobeTick(delay, false)
@@ -219,9 +215,12 @@ export class RelayReconnectController {
       this.recoveryGate === 'fresh-credential' ||
       (this.recoveryGate === 'external-signal' && recovery?.kind !== 'disable-relay-credential')
     ) {
-      // Why: a failed reprobe stays gated, but the slow cadence must keep going.
+      // Why: a failed reprobe stays gated, but the slow cadence must keep going
+      // — unless the supervisor is backgrounded/stopped; resume re-arms it.
       this.clearTimer()
-      this.scheduleGateReprobe()
+      if (scheduleRetry) {
+        this.scheduleGateReprobe()
+      }
       return
     }
     const now = this.dependencies.now()
@@ -236,7 +235,9 @@ export class RelayReconnectController {
     this.activeRelayConnectedAt = null
     this.consecutiveFailures += 1
     const delay =
-      recovery?.kind === 'retry-after-host-offline' ? this.hostOfflineDelayMs() : this.delayMs()
+      recovery?.kind === 'retry-after-host-offline'
+        ? this.delays.hostOfflineDelayMs()
+        : this.delays.transportDelayMs(this.consecutiveFailures)
     this.nextAttemptAt = now + delay
     if (error instanceof MobileE2EEAuthenticationError) {
       // Why: an E2EE rejection is usually pairing revocation, but it also fires
@@ -244,7 +245,9 @@ export class RelayReconnectController {
       // reprobe slowly instead of waiting forever for a UI nudge.
       this.recoveryGate = 'external-signal'
       this.clearTimer()
-      this.scheduleGateReprobe()
+      if (scheduleRetry) {
+        this.scheduleGateReprobe()
+      }
       return
     }
     if (recovery?.kind === 'disable-relay-credential') {
@@ -252,7 +255,9 @@ export class RelayReconnectController {
       // alive — the caller re-reads durable state before each gated attempt.
       this.recoveryGate = 'fresh-credential'
       this.clearTimer()
-      this.scheduleGateReprobe()
+      if (scheduleRetry) {
+        this.scheduleGateReprobe()
+      }
       return
     }
     if (recovery?.kind === 'retry-after-host-offline') {
@@ -316,7 +321,7 @@ export class RelayReconnectController {
   }
 
   private scheduleGateReprobe(): void {
-    this.scheduleReprobeTick(this.gateReprobeDelayMs(), true)
+    this.scheduleReprobeTick(this.delays.gateReprobeDelayMs(this.gateReprobeStreak), true)
   }
 
   private scheduleReprobeTick(delay: number, mintToken: boolean): void {
@@ -337,14 +342,6 @@ export class RelayReconnectController {
     }, delay)
   }
 
-  private gateReprobeDelayMs(): number {
-    const base = Math.min(
-      RELAY_GATE_REPROBE_CEILING_MS,
-      RELAY_GATE_REPROBE_BASE_MS * 2 ** Math.min(this.gateReprobeStreak, 8)
-    )
-    return Math.floor(base * (0.75 + 0.5 * this.jitterFraction()))
-  }
-
   // Why: clearing a gate must also drop its timer, pending tick, and cadence —
   // an orphaned reprobe timer would otherwise swallow the next fast backoff.
   private liftGate(): void {
@@ -352,22 +349,5 @@ export class RelayReconnectController {
     this.gateReprobePending = false
     this.gateReprobeStreak = 0
     this.clearTimer()
-  }
-
-  private delayMs(): number {
-    const exponent = Math.max(0, this.consecutiveFailures - 1)
-    const cap = Math.min(RELAY_BACKOFF_CEILING_MS, RELAY_BACKOFF_BASE_MS * 2 ** exponent)
-    // Full jitter (uniform in [0, cap)), floored so retries never busy-loop.
-    return Math.max(RELAY_BACKOFF_MIN_MS, Math.floor(cap * this.jitterFraction()))
-  }
-
-  private hostOfflineDelayMs(): number {
-    const range = RELAY_HOST_OFFLINE_RETRY_MAX_MS - RELAY_HOST_OFFLINE_RETRY_MIN_MS
-    return RELAY_HOST_OFFLINE_RETRY_MIN_MS + Math.floor(range * this.jitterFraction())
-  }
-
-  private jitterFraction(): number {
-    const [high, low] = this.dependencies.randomBytes(2)
-    return (((high ?? 0) << 8) | (low ?? 0)) / 0x1_00_00
   }
 }

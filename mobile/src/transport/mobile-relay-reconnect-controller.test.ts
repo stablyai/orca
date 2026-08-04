@@ -111,6 +111,48 @@ describe('relay reconnect controller', () => {
     expect(onRetry).toHaveBeenCalledTimes(3)
   })
 
+  it('mints the gate pass when arming a no-bundle reprobe under a held gate', () => {
+    // Why: an external-signal gate never records rejected versions, so the
+    // no-dialable-bundle path must still mint the tick's pass token — a plain
+    // cooldown tick bounces off shouldDefer and doubles the effective cadence.
+    const onRetry = vi.fn()
+    const reconnect = createController(onRetry)
+
+    reconnect.registerFailure(new MobileE2EEAuthenticationError())
+    expect(reconnect.shouldDefer()).toBe(true)
+    vi.advanceTimersByTime(60_000)
+    expect(onRetry).toHaveBeenCalledTimes(1)
+    expect(reconnect.shouldDefer()).toBe(false)
+    // The gated attempt finds no dialable credential at all and re-arms.
+    reconnect.armCredentialReprobe()
+
+    vi.advanceTimersByTime(120_000)
+    expect(onRetry).toHaveBeenCalledTimes(2)
+    expect(reconnect.shouldDefer()).toBe(false)
+  })
+
+  it('does not arm a gate reprobe timer when the supervisor declined retries', () => {
+    // Why: scheduleRetry=false means background or stopped — a tick firing
+    // there wakes nothing useful, and the next foreground resume re-arms.
+    const onRetry = vi.fn()
+    const reconnect = createController(onRetry)
+    const logical = { getState: () => 'disconnected' } as never
+
+    reconnect.registerFailure(new MobileE2EEAuthenticationError(), false)
+    expect(vi.getTimerCount()).toBe(0)
+    reconnect.registerFailure(new RelayOuterError(4401), false)
+    expect(vi.getTimerCount()).toBe(0)
+    reconnect.registerFailure(new RelayOuterError(4429), false)
+    expect(vi.getTimerCount()).toBe(0)
+    vi.runAllTimers()
+    expect(onRetry).not.toHaveBeenCalled()
+
+    // Resume restores the gated cadence instead of stalling forever.
+    reconnect.handleForeground(logical, false)
+    expect(reconnect.shouldDefer()).toBe(true)
+    expect(vi.getTimerCount()).toBe(1)
+  })
+
   it('does not let an orphaned reprobe timer swallow the next fast backoff', () => {
     const onRetry = vi.fn()
     const reconnect = createController(onRetry)

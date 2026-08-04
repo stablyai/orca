@@ -265,8 +265,11 @@ export class MobileEndpointSupervisor {
       // Why: rotate against the resume credential's expiry, never the hello's
       // leaseExpiresAt — that field is the cell's ~10s attach-reservation
       // deadline, and using it forced a session replacement every second.
+      // Why: renewed=false means a re-resume provably returns the same
+      // unchanged deadline — rotating then just churns one replacement per
+      // clamp floor until a fresh credential arrives over direct or disk.
       this.leaseRotation.scheduleFromLease(
-        this.stopped || !this.foreground
+        this.stopped || !this.foreground || confirmation?.renewed === false
           ? null
           : (confirmation?.resumeExpiresAt ?? session.getResumeExpiresAt())
       )
