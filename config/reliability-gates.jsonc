@@ -6763,8 +6763,8 @@
         "evidence": "First local deterministic run only; focused CI and soak history are not yet available."
       },
       "redGreenEvidence": {
-        "status": "partial",
-        "evidence": "Exact PR head 4aa66b62e3 deterministically allowed a ready worker to reuse a release-requested terminal and then let the old Dispatch close it. The follow-up rejects that ordering before prompt delivery; saved CI intentional-disable evidence is still pending."
+        "status": "complete",
+        "evidence": "The byte-identical 56-test oracle produced 12 deterministic failures and 44 passes with production restored to exact PR head 4aa66b62e3, including ready reuse during release, unsafe migration, stale archives, mutable transcript output, host/identity close gaps, and mutation replay loss. Candidate 457bc4edd1 passed all 56; restoring the same five production files to 4aa66b62e3 reproduced the same red state."
       },
       "performanceBudget": {
         "required": true,
