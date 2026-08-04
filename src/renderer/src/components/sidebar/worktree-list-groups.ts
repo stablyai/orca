@@ -890,7 +890,8 @@ function getRenderedNaturalAnchorRepoIds({
   collapsedGroups,
   workspaceStatuses,
   settings,
-  projectGrouping
+  projectGrouping,
+  issueCache
 }: {
   groupBy: WorktreeGroupBy
   worktrees: readonly Worktree[]
@@ -900,6 +901,7 @@ function getRenderedNaturalAnchorRepoIds({
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
   settings?: AppState['settings']
   projectGrouping?: ProjectGroupingModel
+  issueCache?: Record<string, { data?: { title?: string | null } | null }> | null
 }): Set<string> {
   const renderedRepoIds = new Set<string>()
   if (groupBy === 'none') {
@@ -924,7 +926,8 @@ function getRenderedNaturalAnchorRepoIds({
       prCache,
       workspaceStatuses,
       settings,
-      projectGrouping
+      projectGrouping,
+      issueCache
     )
     if (groupKey && !collapsedGroups.has(groupKey)) {
       renderedRepoIds.add(worktree.repoId)
@@ -1609,7 +1612,8 @@ export function getGroupKeyForWorktree(
   prCache: Record<string, unknown> | null,
   workspaceStatuses: readonly WorkspaceStatusDefinition[] = cloneDefaultWorkspaceStatuses(),
   settings?: AppState['settings'],
-  projectGrouping?: ProjectGroupingModel
+  projectGrouping?: ProjectGroupingModel,
+  issueCache?: Record<string, { data?: { title?: string | null } | null }> | null
 ): string | null {
   if (groupBy === 'none') {
     return ALL_GROUP_KEY
@@ -1618,7 +1622,7 @@ export function getGroupKeyForWorktree(
     return getWorkspaceStatusGroupKey(getWorkspaceStatus(worktree, workspaceStatuses))
   }
   if (groupBy === 'issue') {
-    return getIssueGroupInfo(worktree).key
+    return getIssueGroupInfo(worktree, issueCache, repoMap, settings).key
   }
   if (groupBy === 'repo') {
     return getProjectGroupingForRepo(
@@ -1638,7 +1642,8 @@ export function getGroupKeysForWorktree(
   workspaceStatuses: readonly WorkspaceStatusDefinition[] = cloneDefaultWorkspaceStatuses(),
   settings?: AppState['settings'],
   projectGroups: readonly ProjectGroup[] = [],
-  projectGrouping?: ProjectGroupingModel
+  projectGrouping?: ProjectGroupingModel,
+  issueCache?: Record<string, { data?: { title?: string | null } | null }> | null
 ): string[] {
   const groupKey = getGroupKeyForWorktree(
     groupBy,
@@ -1647,7 +1652,8 @@ export function getGroupKeysForWorktree(
     prCache,
     workspaceStatuses,
     settings,
-    projectGrouping
+    projectGrouping,
+    issueCache
   )
   if (!groupKey) {
     return []
