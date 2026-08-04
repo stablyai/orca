@@ -126,7 +126,13 @@ afterAll(async () => {
 
 type DuplicateRun = { status: number | null; markers: string[]; ownerSawArgv: string[] }
 
-async function launchDuplicate(termination: string, argv: string[]): Promise<DuplicateRun> {
+// Why: only the activation case needs the owner's notification, so the exit-contract cases do not
+// hang on it — they are about the duplicate's own process, which has already terminated by here.
+async function launchDuplicate(
+  termination: string,
+  argv: string[],
+  awaitOwnerNotification = false
+): Promise<DuplicateRun> {
   const name = `duplicate-${Math.random().toString(36).slice(2)}`
   const dir = writeFixture(root, name, buildDuplicateMain(termination))
   const marker = join(root, `${name}.log`)
@@ -143,17 +149,18 @@ async function launchDuplicate(termination: string, argv: string[]): Promise<Dup
     }
   )
   expect(result.error).toBeUndefined()
-  await waitFor(
-    () => readForwardedArgvLines().length > seen,
-    'the owner to receive the second-instance notification'
-  )
+  if (awaitOwnerNotification) {
+    await waitFor(
+      () => readForwardedArgvLines().length > seen,
+      'the owner to receive the second-instance notification'
+    )
+  }
 
-  const forwarded = readForwardedArgvLines()
-  const latest = forwarded.at(-1)
+  const latest = readForwardedArgvLines().at(-1)
   return {
     status: result.status,
     markers: readLines(marker),
-    ownerSawArgv: JSON.parse((latest ?? '').slice(SECOND_INSTANCE_ARGV.length)) as string[]
+    ownerSawArgv: latest ? (JSON.parse(latest.slice(SECOND_INSTANCE_ARGV.length)) as string[]) : []
   }
 }
 
@@ -173,11 +180,11 @@ describe('#11935 duplicate headless serve against a live owner', () => {
   }, 90_000)
 
   it('hands the owner a real argv that suppresses desktop activation only for serve', async () => {
-    const serveRun = await launchDuplicate(readLockLossTermination(), ['--serve'])
+    const serveRun = await launchDuplicate(readLockLossTermination(), ['--serve'], true)
     expect(serveRun.ownerSawArgv).toContain('--serve')
     expect(shouldActivateDesktopForSecondInstance(serveRun.ownerSawArgv)).toBe(false)
 
-    const desktopRun = await launchDuplicate(readLockLossTermination(), [])
+    const desktopRun = await launchDuplicate(readLockLossTermination(), [], true)
     expect(desktopRun.ownerSawArgv).not.toContain('--serve')
     expect(shouldActivateDesktopForSecondInstance(desktopRun.ownerSawArgv)).toBe(true)
   }, 90_000)
