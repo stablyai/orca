@@ -41,6 +41,7 @@ import { DevinHookService } from '../devin/hook-service'
 import { DroidHookService } from '../droid/hook-service'
 import { KimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
+import { QwenHookService } from '../qwen/hook-service'
 import { createAgentHookMemorySftp as createFakeSftp } from './agent-hook-memory-sftp.test-fixture'
 
 const REMOTE_HOME = '/home/dev'
@@ -108,6 +109,12 @@ const JSON_INSTALLERS = [
     timeout: MANAGED_HOOK_TIMEOUT_SECONDS,
     configPath: `${REMOTE_HOME}/.config/devin/config.json`,
     install: (sftp: SFTPWrapper) => new DevinHookService().installRemote(sftp, REMOTE_HOME)
+  },
+  {
+    agent: 'qwen',
+    timeout: MANAGED_HOOK_TIMEOUT_MILLISECONDS,
+    configPath: `${REMOTE_HOME}/.qwen/settings.json`,
+    install: (sftp: SFTPWrapper) => new QwenHookService().installRemote(sftp, REMOTE_HOME)
   }
 ] as const
 

@@ -2453,6 +2453,11 @@ function hasExplicitUserPrompt(
   resolvedPromptText: string,
   hasTranscriptPromptEvidence = false
 ): boolean {
+  // Why: Qwen also fires UserPromptSubmit for tool-result continuation sends; only a
+  // `submitted_prompt` (resolved by the dispatch override) proves a user submit.
+  if (source === 'qwen-code' && eventName === 'UserPromptSubmit') {
+    return resolvedPromptText.trim().length > 0
+  }
   if (
     source === 'command-code' &&
     (eventName === 'PreToolUse' || eventName === 'Stop') &&
@@ -3050,18 +3055,29 @@ function normalizeQwenEvent(
   const toolName = readString(hookPayload, 'tool_name')
   // Why: ask_user_question emits PreToolUse (not PermissionRequest) while awaiting an answer; treat as waiting.
   const isUserInputTool = isAskUserQuestionTool(toolName)
+  // Why: Qwen fires UserPromptSubmit for tool-result/hook continuation sends too; only a
+  // real user submit carries `submitted_prompt`, and `prompt` there is model-bound text
+  // that must not reset the turn or replace the cached user prompt.
+  const submittedPrompt = readString(hookPayload, 'submitted_prompt')
+  const isQwenUserSubmit = eventName === 'UserPromptSubmit' && submittedPrompt !== undefined
+  // Why: Qwen reports Esc-interrupted tools via is_interrupt on PostToolUseFailure (its
+  // Stop carries no is_interrupt); map to done so a fresh `working` row cannot veto
+  // tui-idle heuristics until the status goes stale.
+  const isQwenInterrupt =
+    hookPayload['is_interrupt'] === true &&
+    (eventName === 'PostToolUseFailure' || eventName === 'Stop')
 
   let stateName: 'working' | 'waiting' | 'done' | null = null
   if (
     eventName === 'UserPromptSubmit' ||
     eventName === 'PostToolUse' ||
-    eventName === 'PostToolUseFailure' ||
+    (eventName === 'PostToolUseFailure' && !isQwenInterrupt) ||
     (eventName === 'PreToolUse' && !isUserInputTool)
   ) {
     stateName = 'working'
   } else if (eventName === 'PermissionRequest' || (eventName === 'PreToolUse' && isUserInputTool)) {
     stateName = 'waiting'
-  } else if (eventName === 'Stop' || eventName === 'StopFailure') {
+  } else if (eventName === 'Stop' || eventName === 'StopFailure' || isQwenInterrupt) {
     stateName = 'done'
   }
 
@@ -3073,22 +3089,23 @@ function normalizeQwenEvent(
     state,
     paneKey,
     extractToolFields('qwen-code', eventName, hookPayload),
-    { resetOnNewTurn: isNewTurnEvent('qwen-code', eventName) }
+    { resetOnNewTurn: isQwenUserSubmit }
   )
 
-  const interrupted =
-    eventName === 'Stop' && hookPayload['is_interrupt'] === true ? true : undefined
+  // Why: a continuation UserPromptSubmit must keep the cached prompt; a real submit
+  // uses `submitted_prompt` verbatim (the dispatch override already resolves it).
+  const qwenPromptText = eventName === 'UserPromptSubmit' && !isQwenUserSubmit ? '' : promptText
 
   return normalizeAgentStatusPayload({
     state: stateName,
-    prompt: resolvePrompt(state, paneKey, promptText, {
-      resetOnNewTurn: isNewTurnEvent('qwen-code', eventName)
+    prompt: resolvePrompt(state, paneKey, qwenPromptText, {
+      resetOnNewTurn: isQwenUserSubmit
     }),
     agentType: 'qwen-code',
     toolName: snapshot.toolName,
     toolInput: snapshot.toolInput,
     lastAssistantMessage: snapshot.lastAssistantMessage,
-    interrupted
+    interrupted: isQwenInterrupt ? true : undefined
   })
 }
 
@@ -4338,7 +4355,13 @@ export function normalizeHookPayload(
       payload = normalizeKimiEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
     case 'qwen-code':
-      payload = normalizeQwenEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      // Why: continuation UserPromptSubmit sends carry model-bound `prompt`; only
+      // `submitted_prompt` proves a real user submit, so explicit-prompt telemetry
+      // and the cached prompt track the genuine submission alone.
+      if (eventName === 'UserPromptSubmit') {
+        resolvedPromptText = readString(hookPayloadRecord, 'submitted_prompt') ?? ''
+      }
+      payload = normalizeQwenEvent(state, eventName, resolvedPromptText, paneKey, hookPayloadRecord)
       break
   }
 

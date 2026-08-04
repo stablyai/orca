@@ -16500,8 +16500,9 @@ export class OrcaRuntimeService {
   // Why: tail/title idle heuristics (ready prompts, explicit idle titles) sample
   // a screen that can lag the agent's real state — TUIs redraw after keystrokes
   // and retained tail lines can briefly outlive the transition into work. A fresh
-  // explicit working/permission state (hooks first, OSC titles second) is
-  // authoritative and vetoes heuristic idle resolution for the handle.
+  // explicit working/permission state (retained hook status, then agent-status
+  // snapshot entries) is authoritative and vetoes heuristic idle resolution for
+  // the handle.
   private explicitAgentStateBlocksTuiIdleHeuristic(handle: string): boolean {
     const explicit = this.getFreshExplicitAgentStatusForHandle(handle)
     return explicit !== null && explicit.status !== 'idle'

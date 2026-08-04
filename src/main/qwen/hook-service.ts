@@ -98,8 +98,8 @@ function getManagedScript(): string {
   ].join('\n')
 }
 
-// Why: Qwen's command-hook `timeout` is in milliseconds (cap 60000), unlike the
-// seconds Kimi's TOML uses — the shared seconds constant would be a 10ms cutoff.
+// Why: Qwen's command-hook `timeout` is in milliseconds (default 60000), unlike
+// the seconds Kimi's TOML uses — the shared seconds constant would be a 10ms cutoff.
 function buildQwenManagedCommandHook(command: string) {
   return buildManagedCommandHook(command, MANAGED_HOOK_TIMEOUT_MILLISECONDS)
 }

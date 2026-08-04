@@ -878,6 +878,10 @@ describe('formatAgentTypeLabel', () => {
     expect(formatAgentTypeLabel('trae')).toBe('Trae')
   })
 
+  it("maps 'qwen-code' to 'Qwen Code'", () => {
+    expect(formatAgentTypeLabel('qwen-code')).toBe('Qwen Code')
+  })
+
   it('passes through arbitrary custom agent names as-is', () => {
     expect(formatAgentTypeLabel('weirdo')).toBe('weirdo')
   })

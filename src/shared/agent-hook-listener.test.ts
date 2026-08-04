@@ -1648,6 +1648,99 @@ describe('shared agent-hook-listener', () => {
     })
   })
 
+  it('keeps the cached prompt and tool snapshot on Qwen continuation UserPromptSubmit', () => {
+    const submitted = normalizeHookPayload(
+      state,
+      'qwen-code',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'UserPromptSubmit',
+          session_id: 'session_qwen_1',
+          prompt: 'list the files here',
+          submitted_prompt: 'list the files here'
+        }
+      },
+      'production'
+    )
+    const tool = normalizeHookPayload(
+      state,
+      'qwen-code',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          session_id: 'session_qwen_1',
+          tool_name: 'run_shell_command',
+          tool_input: { command: 'ls' }
+        }
+      },
+      'production'
+    )
+    // Why: Qwen re-fires UserPromptSubmit on tool-result continuation sends; its
+    // `prompt` field is model-bound text there, not user input.
+    const continuation = normalizeHookPayload(
+      state,
+      'qwen-code',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'UserPromptSubmit',
+          session_id: 'session_qwen_1',
+          prompt: '[tool_result] total 4\ndrwxr-xr-x 2 liu wheel'
+        }
+      },
+      'production'
+    )
+
+    expect(submitted?.hasExplicitPrompt).toBe(true)
+    expect(tool?.payload).toMatchObject({ agentType: 'qwen-code', toolName: 'run_shell_command' })
+    expect(continuation?.payload).toMatchObject({
+      agentType: 'qwen-code',
+      state: 'working',
+      prompt: 'list the files here',
+      toolName: 'run_shell_command'
+    })
+    expect(continuation?.hasExplicitPrompt).toBe(false)
+  })
+
+  it('maps Qwen Esc-interrupted PostToolUseFailure to done + interrupted', () => {
+    const interrupted = normalizeHookPayload(
+      state,
+      'qwen-code',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PostToolUseFailure',
+          session_id: 'session_qwen_1',
+          tool_name: 'run_shell_command',
+          is_interrupt: true
+        }
+      },
+      'production'
+    )
+    const plainFailure = normalizeHookPayload(
+      state,
+      'qwen-code',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PostToolUseFailure',
+          session_id: 'session_qwen_1',
+          tool_name: 'run_shell_command'
+        }
+      },
+      'production'
+    )
+
+    expect(interrupted?.payload).toMatchObject({
+      agentType: 'qwen-code',
+      state: 'done',
+      interrupted: true
+    })
+    expect(plainFailure?.payload).toMatchObject({ agentType: 'qwen-code', state: 'working' })
+  })
+
   it('normalizes MiMo Code OpenCode-compatible lifecycle events as mimo-code status', () => {
     const message = normalizeHookPayload(
       state,
