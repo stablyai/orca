@@ -1,28 +1,33 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const netFetchMock = vi.hoisted(() => vi.fn())
-const fsState = vi.hoisted<{ credentials: string | null; readError: Error | null }>(() => ({
+const fsState = vi.hoisted<{
+  credentials: string | null
+  readError: Error | null
+  readPaths: string[]
+}>(() => ({
   credentials: null,
-  readError: null
+  readError: null,
+  readPaths: []
 }))
 
 vi.mock('electron', () => ({
   net: { fetch: netFetchMock }
 }))
 
-vi.mock('node:fs', () => ({
-  existsSync: () => fsState.credentials !== null,
-  readFileSync: () => {
+vi.mock('node:fs/promises', () => ({
+  readFile: async (path: string) => {
+    fsState.readPaths.push(String(path))
     if (fsState.readError) {
       throw fsState.readError
     }
     if (fsState.credentials === null) {
-      throw new Error('ENOENT')
+      const error = new Error('ENOENT: no such file or directory') as NodeJS.ErrnoException
+      error.code = 'ENOENT'
+      throw error
     }
     return fsState.credentials
-  },
-  writeFileSync: () => {},
-  renameSync: () => {}
+  }
 }))
 
 vi.mock('node:os', () => ({ homedir: () => '/home/test' }))
@@ -60,6 +65,7 @@ describe('fetchKimiRateLimits', () => {
     netFetchMock.mockReset()
     fsState.credentials = null
     fsState.readError = null
+    fsState.readPaths = []
   })
 
   afterEach(() => {
@@ -141,6 +147,71 @@ describe('fetchKimiRateLimits', () => {
     expect(result.status).toBe('error')
     expect(result.error).toMatch(/expired/i)
     expect(result.error).toMatch(/run kimi on the computer running Orca/i)
+    expect(result.usageMetadata).toEqual({
+      failureKind: 'delegated-refresh-required',
+      source: 'oauth'
+    })
+    expect(netFetchMock).not.toHaveBeenCalled()
+  })
+
+  it('reads host credentials from ~/.kimi-code by default', async () => {
+    fsState.credentials = freshCredentials()
+    netFetchMock.mockResolvedValueOnce(jsonResponse(USAGE_RESPONSE))
+
+    const result = await fetchKimiRateLimits()
+
+    expect(result.status).toBe('ok')
+    expect(fsState.readPaths).toEqual(['/home/test/.kimi-code/credentials/kimi-code.json'])
+  })
+
+  it('honors KIMI_CODE_HOME when no home path override is given', async () => {
+    vi.stubEnv('KIMI_CODE_HOME', '/custom/kimi-home')
+    fsState.credentials = freshCredentials()
+    netFetchMock.mockResolvedValueOnce(jsonResponse(USAGE_RESPONSE))
+
+    const result = await fetchKimiRateLimits()
+
+    expect(result.status).toBe('ok')
+    expect(fsState.readPaths).toEqual(['/custom/kimi-home/credentials/kimi-code.json'])
+  })
+
+  it('reads credentials over the UNC path when given a WSL home', async () => {
+    fsState.credentials = freshCredentials()
+    netFetchMock.mockResolvedValueOnce(jsonResponse(USAGE_RESPONSE))
+
+    const result = await fetchKimiRateLimits({
+      kimiHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\cengiz\\.kimi-code'
+    })
+
+    expect(result.status).toBe('ok')
+    expect(fsState.readPaths).toEqual([
+      '\\\\wsl.localhost\\Ubuntu\\home\\cengiz\\.kimi-code\\credentials\\kimi-code.json'
+    ])
+  })
+
+  it('reports unavailable when the WSL home has no credentials file', async () => {
+    const result = await fetchKimiRateLimits({
+      kimiHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\cengiz\\.kimi-code'
+    })
+
+    expect(result.status).toBe('unavailable')
+    expect(result.error).toMatch(/Not signed in/)
+    expect(fsState.readPaths).toEqual([
+      '\\\\wsl.localhost\\Ubuntu\\home\\cengiz\\.kimi-code\\credentials\\kimi-code.json'
+    ])
+    expect(netFetchMock).not.toHaveBeenCalled()
+  })
+
+  it('points at the WSL distro when the WSL-side token is expired', async () => {
+    fsState.credentials = JSON.stringify({ access_token: 'tok-old', expires_at: 1 })
+
+    const result = await fetchKimiRateLimits({
+      kimiHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\cengiz\\.kimi-code'
+    })
+
+    expect(result.status).toBe('error')
+    expect(result.error).toMatch(/expired/i)
+    expect(result.error).toMatch(/WSL distro Ubuntu/)
     expect(result.usageMetadata).toEqual({
       failureKind: 'delegated-refresh-required',
       source: 'oauth'

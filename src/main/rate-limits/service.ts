@@ -21,6 +21,7 @@ import {
 } from '../claude-accounts/runtime-selection'
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 import { fetchKimiRateLimits } from './kimi-fetcher'
+import type { KimiHomePathResolution } from './kimi-home-path'
 import { fetchGrokRateLimits } from './grok-fetcher'
 import { readGrokAuthSession } from './grok-auth'
 import { hasMiniMaxSessionCookie } from '../minimax/minimax-cookie-store'
@@ -38,6 +39,7 @@ export type InactiveCodexAccountInfo = {
 }
 
 type CodexHomePathResolver = (target?: CodexAccountSelectionTarget) => string | null
+type KimiHomePathResolver = () => KimiHomePathResolution
 type ClaudeAuthPreparationResolver = (
   target?: ClaudeAccountSelectionTarget
 ) => Promise<ClaudeRuntimeAuthPreparation>
@@ -218,6 +220,7 @@ export class RateLimitService {
   private lastOpencodeConfigHash = ''
   private lastMiniMaxConfigHash = ''
   private codexHomePathResolver: CodexHomePathResolver | null = null
+  private kimiHomePathResolver: KimiHomePathResolver | null = null
   private codexFetchTarget: NormalizedCodexAccountSelectionTarget = {
     runtime: 'host',
     wslDistro: null
@@ -254,6 +257,10 @@ export class RateLimitService {
 
   setCodexHomePathResolver(resolver: CodexHomePathResolver): void {
     this.codexHomePathResolver = resolver
+  }
+
+  setKimiHomePathResolver(resolver: KimiHomePathResolver): void {
+    this.kimiHomePathResolver = resolver
   }
 
   setCodexFetchTarget(target?: CodexAccountSelectionTarget): void {
@@ -1294,6 +1301,22 @@ export class RateLimitService {
     }
   }
 
+  private getMissingWslKimiHomeResult(
+    resolution: KimiHomePathResolution
+  ): ProviderRateLimits | null {
+    if (resolution.runtime !== 'wsl' || resolution.homePath) {
+      return null
+    }
+    return {
+      provider: 'kimi',
+      session: null,
+      weekly: null,
+      updatedAt: Date.now(),
+      error: `WSL Kimi home unavailable for ${resolution.wslDistro ?? 'default distro'}`,
+      status: 'error'
+    }
+  }
+
   private async fetchCodexResetResultState(
     target: NormalizedCodexAccountSelectionTarget,
     codexHomePath: string | null,
@@ -1626,6 +1649,14 @@ export class RateLimitService {
     const missingWslCodexHome = codexHomePath
       ? null
       : this.getMissingWslCodexHomeResult(codexTarget)
+    // Why: Kimi has no account switcher, so its runtime target is re-resolved
+    // from settings on every poll instead of being tracked like codexFetchTarget.
+    const kimiHomePathResolution = this.kimiHomePathResolver?.() ?? {
+      runtime: 'host' as const,
+      wslDistro: null,
+      homePath: null
+    }
+    const missingWslKimiHome = this.getMissingWslKimiHomeResult(kimiHomePathResolution)
     const grokResultPromise = fetchGrokRateLimits({
       signal,
       authReadResult: grokAuthReadResult
@@ -1661,7 +1692,8 @@ export class RateLimitService {
           workspaceIdOverride || undefined,
           this.networkProxySettingsResolver?.()
         ),
-        fetchKimiRateLimits(),
+        missingWslKimiHome ??
+          fetchKimiRateLimits({ kimiHomePath: kimiHomePathResolution.homePath }),
         miniMaxConfigResult.error
           ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
           : fetchMiniMaxRateLimits({

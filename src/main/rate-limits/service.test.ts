@@ -1450,6 +1450,49 @@ describe('RateLimitService', () => {
     )
   })
 
+  it('passes the resolved WSL Kimi home into rate-limit fetches', async () => {
+    const service = new RateLimitService()
+    const wslKimiHome = '\\\\wsl.localhost\\Ubuntu\\home\\cengiz\\.kimi-code'
+    service.setKimiHomePathResolver(() => ({
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu',
+      homePath: wslKimiHome
+    }))
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 0, Date.now()))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 0, Date.now()))
+
+    await serviceInternals(service).fetchAll()
+
+    expect(fetchKimiRateLimits).toHaveBeenCalledWith({ kimiHomePath: wslKimiHome })
+  })
+
+  it('surfaces an error instead of fetching when the WSL Kimi home is unavailable', async () => {
+    const service = new RateLimitService()
+    service.setKimiHomePathResolver(() => ({
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu',
+      homePath: null
+    }))
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 0, Date.now()))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 0, Date.now()))
+
+    await serviceInternals(service).fetchAll()
+
+    expect(fetchKimiRateLimits).not.toHaveBeenCalled()
+    expect(service.getState().kimi?.status).toBe('error')
+    expect(service.getState().kimi?.error).toMatch(/WSL Kimi home unavailable for Ubuntu/)
+  })
+
+  it('fetches Kimi with the host default when no home path resolver is set', async () => {
+    const service = new RateLimitService()
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 0, Date.now()))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 0, Date.now()))
+
+    await serviceInternals(service).fetchAll()
+
+    expect(fetchKimiRateLimits).toHaveBeenCalledWith({ kimiHomePath: null })
+  })
+
   it('reuses a caller-provided idempotency key when consuming a Codex reset credit', async () => {
     const service = new RateLimitService()
     const idempotencyKey = '11111111-1111-4111-8111-111111111111'

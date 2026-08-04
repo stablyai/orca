@@ -177,6 +177,7 @@ import { RateLimitService } from './rate-limits/service'
 import { readMiniMaxSessionCookie } from './minimax/minimax-cookie-store'
 import { getInitialClaudeRateLimitTarget } from './rate-limits/claude-rate-limit-target'
 import { getInitialCodexRateLimitTarget } from './rate-limits/codex-rate-limit-target'
+import { resolveKimiHomePath } from './rate-limits/kimi-home-path'
 import { createAccountRuntimeTargetSettingsSync } from './rate-limits/account-runtime-target-sync'
 import {
   attachMainWindowServices,
@@ -2196,6 +2197,9 @@ void app.whenReady().then(async () => {
   rateLimits.setCodexHomePathResolver((target) =>
     codexRuntimeHome!.prepareForRateLimitFetch(target)
   )
+  // Why: Kimi Code running inside WSL rotates the WSL-side credentials file, so
+  // quota polls must read the configured runtime target's home, not the host's.
+  rateLimits.setKimiHomePathResolver(() => resolveKimiHomePath(store!.getSettings()))
   rateLimits.setCodexFetchTarget(getInitialCodexRateLimitTarget(store.getSettings()))
   rateLimits.setClaudeFetchTarget(getInitialClaudeRateLimitTarget(store.getSettings()))
   const syncAccountRuntimeTargets = createAccountRuntimeTargetSettingsSync(
