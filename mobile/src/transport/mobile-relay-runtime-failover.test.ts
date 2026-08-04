@@ -81,9 +81,10 @@ class FakeRelaySession extends FakeSession implements MobileRelayRpcSession {
   ) {
     super(state)
   }
-  // Mirrors production: leaseExpiresAt is the cell's short attach deadline.
-  getLeaseExpiresAt = () => Date.now() + 10_000
-  getResumeExpiresAt = () => Date.now() + 120_000
+  // Why: production-realistic constants — fictional fake values hid three
+  // live defects in this subsystem (latch, churn, int32 timer overflow).
+  getAttachDeadlineAt = () => Date.now() + 10_000
+  getResumeExpiresAt = () => Date.now() + 30 * 24 * 3_600_000
   getResumeConfirmation = () => null
   getFailure = () => this.failure
 }
@@ -329,12 +330,8 @@ describe('relay runtime recovery without direct connectivity', () => {
     // Why: the relay-hello's leaseExpiresAt is a ~10s attach deadline. Keying
     // rotation off it replaced the session every second, killing any RPC
     // slower than the cycle (the field symptom: "Worktree list unavailable").
-    class LongResumeRelaySession extends FakeRelaySession {
-      override getLeaseExpiresAt = () => Date.now() + 10_000
-      override getResumeExpiresAt = () => Date.now() + 7 * 24 * 3_600_000
-    }
     const logical = new FakeLogicalClient('disconnected', 'lan')
-    const openRelay = vi.fn(() => new LongResumeRelaySession('connected'))
+    const openRelay = vi.fn(() => new FakeRelaySession('connected'))
     // Direct stays unreachable, as in the field — return probes must not
     // confuse the churn measurement by migrating back to direct.
     const openDirect = vi.fn(() => new FakeSession('disconnected'))

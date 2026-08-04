@@ -165,7 +165,13 @@ export class MobileEndpointSupervisor {
       })
       this.bundle = selection.bundle
       if (selection.credentials.length === 0) {
-        this.logRelay('no dialable relay credential; slow reprobe armed')
+        // Why: "expired" vs "missing" separates a sleep-past-expiry phone
+        // (needs re-pair or LAN) from a Keychain failure in field reports.
+        this.logRelay(
+          selection.bundle
+            ? 'relay credential expired or rejected; slow reprobe armed'
+            : 'no relay credential bundle; slow reprobe armed'
+        )
         this.relayReconnect.armCredentialReprobe()
         return
       }

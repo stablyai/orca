@@ -19,9 +19,9 @@ type PendingRequest = {
 }
 
 export type MobileRelayRpcSession = RpcClient & {
-  getLeaseExpiresAt(): number | null
-  // Why: leaseExpiresAt is the cell's attach-reservation deadline (~10s), NOT a
-  // session lease — rotation must key off the resume credential's expiry.
+  // The cell's attach-reservation deadline (~10s). Diagnostics only — never
+  // schedule anything from it; rotation keys off getResumeExpiresAt().
+  getAttachDeadlineAt(): number | null
   getResumeExpiresAt(): number | null
   getResumeConfirmation(): DeviceResumeConfirmed | null
   getFailure(): Error | null
@@ -43,7 +43,7 @@ export function connectMobileRelayRpcSession(args: {
   let state: ConnectionState = 'connecting'
   let requestCounter = 0
   let lastConnectedAt: number | null = null
-  let leaseExpiresAt: number | null = null
+  let attachDeadlineAt: number | null = null
   let resumeExpiresAt: number | null = null
   let resumeConfirmation: DeviceResumeConfirmed | null = null
   let failure: Error | null = null
@@ -69,7 +69,7 @@ export function connectMobileRelayRpcSession(args: {
         fail(new Error('relay resume credential version mismatch'))
         return
       }
-      leaseExpiresAt = hello.leaseExpiresAt
+      attachDeadlineAt = hello.leaseExpiresAt
       resumeExpiresAt = hello.resumeExpiresAt
       publishState('handshaking')
     },
@@ -114,7 +114,7 @@ export function connectMobileRelayRpcSession(args: {
       streams.clear()
       publishState('disconnected')
     },
-    getLeaseExpiresAt: () => leaseExpiresAt,
+    getAttachDeadlineAt: () => attachDeadlineAt,
     getResumeExpiresAt: () => resumeExpiresAt,
     getResumeConfirmation: () => resumeConfirmation,
     getFailure: () => failure
