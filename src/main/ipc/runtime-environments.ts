@@ -39,14 +39,20 @@ function closeSubscriptionsForEnvironment(environmentId: string): void {
     remoteRuntimeSubscriptions.delete(subscriptionId)
     // Why: one failing teardown must not abandon this environment's other
     // sockets -- that strands exactly the dead handles this sweep exists to
-    // retire. notifyClosed never throws, so it always runs.
+    // retire. Guard the two steps independently so neither can skip the other,
+    // and so the isolation stays structural rather than resting on a claim that
+    // nothing inside notifyClosed will ever throw.
     try {
       subscription.close()
     } catch (error) {
       console.warn('[runtime-environments] subscription close failed during retirement:', error)
     }
-    // Why: a shared-control logical close never calls back, so notify directly.
-    subscription.notifyClosed()
+    try {
+      // Why: a shared-control logical close never calls back, so notify directly.
+      subscription.notifyClosed()
+    } catch (error) {
+      console.warn('[runtime-environments] subscription close notice failed:', error)
+    }
   }
 }
 export function invalidateRuntimeEnvironmentTransport(environmentId: string): void {

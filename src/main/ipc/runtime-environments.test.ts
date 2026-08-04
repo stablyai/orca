@@ -1906,6 +1906,81 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     expect(deliveredCloses).toEqual(['surviving-sub'])
   })
 
+  it('retires remaining subscriptions when a liveness probe inside notifyClosed throws', async () => {
+    // Why: notifyClosed guards its own send, but the sweep must not depend on
+    // everything else inside it staying throw-free -- that is how the abandoned
+    // -siblings defect comes back the next time a line is added there.
+    registerRuntimeEnvironmentHandlers(store as never)
+    const closedStreams: string[] = []
+    let streamCount = 0
+    subscribeRemoteRuntimeRequestMock.mockImplementation(async () => {
+      streamCount += 1
+      const requestId = `stream-${streamCount}`
+      return {
+        requestId,
+        close: () => closedStreams.push(requestId),
+        sendBinary: vi.fn()
+      }
+    })
+
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
+
+    const deliveredCloses: string[] = []
+    const senderSend = vi.fn(
+      (_channel: string, payload: { subscriptionId: string; type: string }) => {
+        if (payload.type === 'close') {
+          deliveredCloses.push(payload.subscriptionId)
+        }
+      }
+    )
+    let probeShouldThrow = false
+    const subscribe = handler<
+      { selector: string; method: string; params?: unknown; subscriptionId?: string },
+      { subscriptionId: string; requestId: string }
+    >('runtimeEnvironments:subscribe')
+    const sender = {
+      sender: {
+        id: 1,
+        isDestroyed: () => {
+          if (probeShouldThrow) {
+            throw new Error('WebContents liveness probe exploded')
+          }
+          return false
+        },
+        send: senderSend,
+        once: vi.fn(),
+        removeListener: vi.fn()
+      }
+    }
+    await subscribe(sender, {
+      selector: added.environment.id,
+      method: 'terminal.multiplex',
+      params: {},
+      subscriptionId: 'probe-throws-sub'
+    })
+    await subscribe(sender, {
+      selector: added.environment.id,
+      method: 'browser.screencast',
+      params: {},
+      subscriptionId: 'surviving-sub'
+    })
+    // Why: arm only after subscribe, whose own isDestroyed checks must succeed.
+    probeShouldThrow = true
+
+    const disconnect = handler<{ selector: string }, { disconnected: { id: string } }>(
+      'runtimeEnvironments:disconnect'
+    )
+    expect(() => disconnect(null, { selector: added.environment.id })).not.toThrow()
+
+    // Both transports still closed even though every notifyClosed probe threw.
+    expect(closedStreams).toEqual(['stream-1', 'stream-2'])
+    expect(deliveredCloses).toEqual([])
+  })
+
   it('suppresses stale payloads from a retired transport but never re-sends its close', async () => {
     registerRuntimeEnvironmentHandlers(store as never)
     let transportCallbacks: {
