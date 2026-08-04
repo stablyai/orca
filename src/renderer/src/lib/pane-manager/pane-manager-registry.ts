@@ -10,6 +10,7 @@ type RegisteredPaneManager = {
   getPanes?: (limit?: number) => { id: number; terminal: unknown }[]
   getPaneCount?: () => number
   isVisibleForAtlasRecovery?: () => boolean
+  scheduleRevealPresent?: () => void
 }
 
 const liveManagers = new Set<RegisteredPaneManager>()
@@ -74,6 +75,28 @@ export function resetAndRefreshAllTerminalWebglAtlases(reason?: string): void {
     } catch {
       // Why: a pane can unmount between atlas reset and repaint; later
       // managers still need to repaint from their xterm buffers.
+    }
+  }
+}
+
+/**
+ * Re-presents every live pane from its xterm buffer without touching the shared
+ * glyph atlas.
+ *
+ * Why: the de-escalated recovery step. A wipe rebuilds every same-config
+ * terminal's render model; a present only asks the compositor for a fresh frame,
+ * so a busy TUI can keep recovering stale pixels without the global churn.
+ */
+export function presentAllTerminalPanesWithoutAtlasClear(): void {
+  for (const manager of liveManagers) {
+    if (manager.isVisibleForAtlasRecovery?.() === false) {
+      continue
+    }
+    try {
+      manager.scheduleRevealPresent?.()
+    } catch {
+      // Why: best-effort during teardown; one disposed manager must not block
+      // sibling terminals from re-presenting.
     }
   }
 }

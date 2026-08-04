@@ -4,6 +4,7 @@ import {
   unregisterLivePaneManager
 } from '@/lib/pane-manager/pane-manager-registry'
 import {
+  resetTerminalWebglAtlasRecoveryBudgetForTesting,
   scheduleImagePasteWebglAtlasRecovery,
   scheduleTabRevealWebglAtlasRecovery,
   scheduleTerminalWebglAtlasRecovery,
@@ -16,10 +17,12 @@ describe('terminal WebGL atlas recovery', () => {
   function registerManager(): {
     resetWebglTextureAtlases: Mock<() => void>
     refreshAllPanes: Mock<() => void>
+    scheduleRevealPresent: Mock<() => void>
   } {
     const manager = {
       resetWebglTextureAtlases: vi.fn<() => void>(),
-      refreshAllPanes: vi.fn<() => void>()
+      refreshAllPanes: vi.fn<() => void>(),
+      scheduleRevealPresent: vi.fn<() => void>()
     }
     registerLivePaneManager(manager)
     registeredManagers.push(manager)
@@ -36,6 +39,7 @@ describe('terminal WebGL atlas recovery', () => {
     vi.clearAllTimers()
     vi.useRealTimers()
     vi.unstubAllGlobals()
+    resetTerminalWebglAtlasRecoveryBudgetForTesting()
   })
 
   it('clears atlases and refreshes panes through the post-paste redraw window', () => {
@@ -270,6 +274,147 @@ describe('terminal WebGL atlas recovery', () => {
       expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
       expect(manager.refreshAllPanes).toHaveBeenCalledTimes(1)
     }
+  })
+
+  it('caps shared-atlas wipes under a sustained alt-screen redraw cadence', () => {
+    // Field regression (F0BMLFAFWF7 on 1.4.167): 442 full shared-glyph-atlas
+    // wipes in 6.2 minutes. A TUI redrawing just slower than the quiet window
+    // clears the debounce on every parse, so the trailing edge fires each time
+    // — the debounce bounds nothing at this cadence.
+    vi.useFakeTimers()
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn((callback: FrameRequestCallback) => {
+        callback(0)
+        return 1
+      })
+    )
+    const manager = registerManager()
+
+    for (let elapsed = 0; elapsed < 60_000; elapsed += 300) {
+      scheduleTerminalWebglAtlasRecovery()
+      vi.advanceTimersByTime(300)
+    }
+
+    expect(manager.resetWebglTextureAtlases.mock.calls.length).toBeLessThanOrEqual(30)
+  })
+
+  it('keeps the wipe gap bounded under a sustained redraw cadence, not burst-then-starve', () => {
+    // Review regression: a fixed count over a rolling 60s window spends its whole
+    // allowance in the first 30s and then starves for 33s. The over-budget path
+    // only re-presents the buffers — it never rebuilds the glyph atlas — so a
+    // vim-style rewrite stayed garbled for half a minute. The refill must be
+    // continuous so the worst-case gap degrades to the refill interval.
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn((callback: FrameRequestCallback) => {
+        callback(0)
+        return 1
+      })
+    )
+    const wipeTimes: number[] = []
+    const manager = {
+      resetWebglTextureAtlases: vi.fn(() => wipeTimes.push(Date.now())),
+      refreshAllPanes: vi.fn(),
+      scheduleRevealPresent: vi.fn()
+    }
+    registerLivePaneManager(manager)
+    registeredManagers.push(manager)
+
+    // Five minutes of the field cadence (F0BMLFAFWF7 ran ~1 redraw/s for hours).
+    for (let elapsed = 0; elapsed < 300_000; elapsed += 300) {
+      scheduleTerminalWebglAtlasRecovery()
+      vi.advanceTimersByTime(300)
+    }
+
+    const gaps = wipeTimes.slice(1).map((at, index) => at - wipeTimes[index]!)
+    expect(Math.max(...gaps)).toBeLessThanOrEqual(6_500)
+    // Still a large cut from the unbounded ~200 wipes/min the debounce allowed.
+    expect(wipeTimes.length).toBeLessThanOrEqual(75)
+  })
+
+  it('presents from the live buffers when a settle is over the wipe budget', () => {
+    // De-escalation: a suppressed settle must still recover stale pixels, just
+    // without wiping the atlas shared by every same-config terminal.
+    vi.useFakeTimers()
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn((callback: FrameRequestCallback) => {
+        callback(0)
+        return 1
+      })
+    )
+    const manager = registerManager()
+
+    scheduleTerminalWebglAtlasRecovery()
+    vi.advanceTimersByTime(TERMINAL_OUTPUT_RECOVERY_QUIET_MS)
+    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
+    expect(manager.scheduleRevealPresent).not.toHaveBeenCalled()
+
+    // Second settle lands inside the minimum interval → present, no wipe.
+    scheduleTerminalWebglAtlasRecovery()
+    vi.advanceTimersByTime(TERMINAL_OUTPUT_RECOVERY_QUIET_MS)
+    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
+    expect(manager.scheduleRevealPresent).toHaveBeenCalledTimes(1)
+  })
+
+  it('recovers the wipe budget when the wall clock steps backwards', () => {
+    // Sleep/resume, NTP correction and SSH host-clock skew can move Date.now()
+    // backwards; the bucket must not wedge until the clock catches up.
+    vi.useFakeTimers()
+    vi.setSystemTime(600_000)
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn((callback: FrameRequestCallback) => {
+        callback(0)
+        return 1
+      })
+    )
+    const manager = registerManager()
+
+    scheduleTerminalWebglAtlasRecovery()
+    vi.advanceTimersByTime(TERMINAL_OUTPUT_RECOVERY_QUIET_MS)
+    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
+
+    vi.setSystemTime(60_000)
+    scheduleTerminalWebglAtlasRecovery()
+    vi.advanceTimersByTime(TERMINAL_OUTPUT_RECOVERY_QUIET_MS)
+    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps paste and reveal recovery immediate after the streaming budget is spent', () => {
+    // Reveal/paste are one-shot user-visible events; the streaming rate cap must
+    // never defer or downgrade them.
+    vi.useFakeTimers()
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn((callback: FrameRequestCallback) => {
+        callback(0)
+        return 1
+      })
+    )
+    const manager = registerManager()
+
+    for (let elapsed = 0; elapsed < 60_000; elapsed += 300) {
+      scheduleTerminalWebglAtlasRecovery()
+      vi.advanceTimersByTime(300)
+    }
+    manager.resetWebglTextureAtlases.mockClear()
+    manager.refreshAllPanes.mockClear()
+
+    scheduleTabRevealWebglAtlasRecovery()
+    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
+    vi.advanceTimersByTime(500)
+    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(3)
+    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(3)
+
+    manager.resetWebglTextureAtlases.mockClear()
+    scheduleImagePasteWebglAtlasRecovery()
+    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
+    vi.advanceTimersByTime(500)
+    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(3)
   })
 
   it('coalesces the terminal-output callers onto one shared timer while paste stays immediate', () => {
