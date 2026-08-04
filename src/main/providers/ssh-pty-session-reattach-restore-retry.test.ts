@@ -84,6 +84,7 @@ describe('SSH PTY session reattach restore retry', () => {
     })
 
     expect(request).toHaveBeenCalledTimes(1)
+    expect(rollback).toHaveBeenCalledTimes(1)
     expect(result.sourceRecovery).toMatchObject({ status: 'restoreRequired' })
   })
 
