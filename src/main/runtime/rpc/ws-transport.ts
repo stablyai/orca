@@ -252,7 +252,11 @@ export class WebSocketTransport implements RpcTransport {
   // Why: WS connections are long-lived and multiplex many RPCs by `id`; auth and dispatch are delegated to the message handler.
   private handleConnection(ws: WebSocket): void {
     let finalized = false
-    const onPong = (): void => {
+    // Why: a client-initiated ping is proof of life too. Clients run their own liveness probe
+    // (remote-runtime-socket-liveness pings every 10s), and without this handler those frames are
+    // invisible to the reaper, so a client that is demonstrably alive - merely slow to answer our
+    // probe - still counts as silent and is terminated.
+    const onPeerProbe = (): void => {
       this.heartbeat.noteAlive(ws)
     }
     const onMessage = (data: WebSocket.RawData, isBinary: boolean): void => {
@@ -285,7 +289,8 @@ export class WebSocketTransport implements RpcTransport {
         return
       }
       finalized = true
-      ws.off('pong', onPong)
+      ws.off('pong', onPeerProbe)
+      ws.off('ping', onPeerProbe)
       ws.off('message', onMessage)
       ws.off('close', finalizeConnection)
       ws.off('error', onError)
@@ -312,7 +317,8 @@ export class WebSocketTransport implements RpcTransport {
     }
     this.preAuthTimers.set(ws, preAuthTimer)
 
-    ws.on('pong', onPong)
+    ws.on('pong', onPeerProbe)
+    ws.on('ping', onPeerProbe)
     ws.on('message', onMessage)
 
     // Why: clean up connection-scoped state (e.g. mobile-fit overrides) so a dropped phone doesn't leave orphaned phone-fit on desktop.
