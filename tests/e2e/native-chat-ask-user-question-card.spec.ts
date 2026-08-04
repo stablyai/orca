@@ -136,28 +136,24 @@ test.describe('Desktop chat AskUserQuestion card (#11761)', () => {
         timeout: 15_000
       })
       await expect(orcaPage.getByText(userText)).toBeVisible({ timeout: 30_000 })
-      // Settle the transcript render before capturing, so the shot is not a
-      // half-hydrated frame on either side of the comparison.
-      await orcaPage.waitForTimeout(2_000)
 
-      const label = process.env.ORCA_PROOF_LABEL ?? 'capture'
-      // Capture before asserting: the pre-fix run must still yield an image.
-      await orcaPage.screenshot({ path: path.join(screenshotDir, `${label}.png`) })
-
+      // The pre-fix build leaves the composer mounted here and never renders a
+      // card, so this assertion is what actually gates the regression.
       await expect(orcaPage.getByText(QUESTION)).toBeVisible({ timeout: 10_000 })
       await expect(orcaPage.getByRole('button', { name: /Spaces/ })).toBeVisible()
+      await orcaPage.screenshot({ path: path.join(screenshotDir, '01-question-card.png') })
 
       // The submit button reads "Skip" until an option is chosen; picking one is
       // what proves the card is answerable rather than merely rendered.
       await orcaPage.getByRole('button', { name: /Spaces/ }).click()
       await expect(orcaPage.getByRole('button', { name: 'Send answer' })).toBeVisible()
-      await orcaPage.screenshot({ path: path.join(screenshotDir, `${label}-option-selected.png`) })
+      await orcaPage.screenshot({ path: path.join(screenshotDir, '02-option-selected.png') })
 
       await orcaPage.getByRole('button', { name: 'Send answer' }).click()
       // The card owns the composer slot, so its disappearance is the visible
       // signal that the answer was accepted and chat input came back.
       await expect(orcaPage.getByText(QUESTION)).toHaveCount(0, { timeout: 20_000 })
-      await orcaPage.screenshot({ path: path.join(screenshotDir, `${label}-answered.png`) })
+      await orcaPage.screenshot({ path: path.join(screenshotDir, '03-answered.png') })
     } finally {
       rmSync(scratchDir, { recursive: true, force: true })
     }
