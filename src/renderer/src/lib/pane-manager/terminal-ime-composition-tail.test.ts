@@ -84,7 +84,12 @@ describe('terminal IME composition tail', () => {
     await write(terminal, CURSOR_BACK_3_SYLLABLES)
 
     const buffer = terminal.buffer.active
-    expect(buffer.getLine(buffer.cursorY)?.getCell(buffer.cursorX)?.getChars()).toBe('다')
+    expect(
+      buffer
+        .getLine(buffer.baseY + buffer.cursorY)
+        ?.getCell(buffer.cursorX)
+        ?.getChars()
+    ).toBe('다')
 
     compositionEvent(textarea, 'compositionstart')
     compositionEvent(textarea, 'compositionupdate', '바')
@@ -94,6 +99,20 @@ describe('terminal IME composition tail', () => {
     const tail = tailOf(container)
     expect(tail.textContent).toBe('다라마')
     expect(tail.style.display).toBe('block')
+  })
+
+  it('repaints the cursor row after the buffer has scrolled', async () => {
+    const { container, terminal, textarea } = openTerminal()
+    // Push the cursor row past the scrollback origin so cursorY no longer indexes it.
+    await write(terminal, 'scrolled away\r\n'.repeat(10))
+    await write(terminal, '가나다라마')
+    await write(terminal, CURSOR_BACK_3_SYLLABLES)
+    expect(terminal.buffer.active.baseY).toBeGreaterThan(0)
+
+    compositionEvent(textarea, 'compositionstart')
+    compositionEvent(textarea, 'compositionupdate', '바')
+
+    expect(tailOf(container).textContent).toBe('다라마')
   })
 
   it('stays hidden when the cursor is at the end of the row', async () => {
@@ -184,15 +203,18 @@ describe('terminal IME composition tail', () => {
     expect(tailOf(container).style.backgroundColor).toMatch(/#112233|rgb\(17, 34, 51\)/)
   })
 
-  it('rejects a see-through theme background that would double-expose the cells', async () => {
-    const { container, terminal, textarea } = openTerminal({ background: 'rgba(20, 20, 20, 0.5)' })
-    await write(terminal, '가나다라마')
-    await write(terminal, CURSOR_BACK_3_SYLLABLES)
+  it.each(['rgba(20, 20, 20, 0.5)', 'rgb(20 20 20 / 50%)', 'hsla(0, 0%, 8%, 0.5)'])(
+    'rejects the see-through theme background %s that would double-expose the cells',
+    async (background) => {
+      const { container, terminal, textarea } = openTerminal({ background })
+      await write(terminal, '가나다라마')
+      await write(terminal, CURSOR_BACK_3_SYLLABLES)
 
-    compositionEvent(textarea, 'compositionstart')
+      compositionEvent(textarea, 'compositionstart')
 
-    expect(tailOf(container).style.backgroundColor).not.toContain('0.5')
-  })
+      expect(tailOf(container).style.backgroundColor).not.toBe(background)
+    }
+  )
 
   it('removes its element and listeners on cleanup', async () => {
     const { container, terminal, textarea } = openTerminal()

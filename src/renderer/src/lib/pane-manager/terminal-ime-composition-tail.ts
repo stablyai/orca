@@ -1,17 +1,38 @@
-import type { Terminal } from '@xterm/xterm'
+import type { IBufferLine, Terminal } from '@xterm/xterm'
 import { measureTerminalStringColumns } from '../../../../shared/terminal-unicode-provider'
+
+/** Null when the color carries no alpha channel at all; otherwise 0..1. */
+function readFunctionalAlpha(argumentList: string): number | null {
+  const slash = argumentList.lastIndexOf('/')
+  const legacy = argumentList.split(',')
+  const raw = slash >= 0 ? argumentList.slice(slash + 1) : legacy.length === 4 ? legacy[3] : null
+  if (raw == null) {
+    return null
+  }
+  const trimmed = raw.trim()
+  const percent = trimmed.endsWith('%')
+  const alpha = Number.parseFloat(percent ? trimmed.slice(0, -1) : trimmed)
+  if (!Number.isFinite(alpha)) {
+    // `none`, custom properties: assume see-through rather than mask with an unknown.
+    return 0
+  }
+  return percent ? alpha / 100 : alpha
+}
 
 /** The tail masks the cells it repaints, so a see-through color would double-expose them. */
 function isOpaqueColor(color: string | undefined): boolean {
-  if (!color || color === 'transparent') {
+  const value = color?.trim().toLowerCase()
+  if (!value || value === 'transparent') {
     return false
   }
-  const rgba = /^rgba?\([^)]*?(?:,|\/)\s*(\d*\.?\d+)\s*\)$/.exec(color)
-  if (rgba) {
-    return Number.parseFloat(rgba[1]) >= 1
+  // Covers rgb/rgba/hsl/hsla/hwb/lab/oklch in both the legacy comma and the slash-alpha forms.
+  const functional = /^[a-z]+\(([^()]*)\)$/.exec(value)
+  if (functional) {
+    const alpha = readFunctionalAlpha(functional[1])
+    return alpha == null || alpha >= 1
   }
-  if (color.startsWith('#')) {
-    return color.length !== 5 && color.length !== 9
+  if (value.startsWith('#')) {
+    return value.length !== 5 && value.length !== 9
   }
   return true
 }
@@ -92,13 +113,17 @@ export function installTerminalImeCompositionTail(terminal: Terminal): (() => vo
     tailElement.style.display = 'none'
   }
 
-  const readRowTail = (): string => {
+  // cursorY is viewport-relative; getLine indexes the whole buffer, scrollback included.
+  const readCursorLine = (): IBufferLine | undefined => {
     const buffer = terminal.buffer.active
     if (buffer.cursorY < 0 || buffer.cursorY >= terminal.rows) {
-      return ''
+      return undefined
     }
-    return buffer.getLine(buffer.cursorY)?.translateToString(true, buffer.cursorX) ?? ''
+    return buffer.getLine(buffer.baseY + buffer.cursorY)
   }
+
+  const readRowTail = (): string =>
+    readCursorLine()?.translateToString(true, terminal.buffer.active.cursorX) ?? ''
 
   /**
    * Lay the tail out cell by cell. A plain text node advances on the font's own
@@ -111,7 +136,7 @@ export function installTerminalImeCompositionTail(terminal: Terminal): (() => vo
       return
     }
     const buffer = terminal.buffer.active
-    const line = buffer.getLine(buffer.cursorY)
+    const line = readCursorLine()
     if (!line) {
       tailElement.textContent = rowTail
       return
