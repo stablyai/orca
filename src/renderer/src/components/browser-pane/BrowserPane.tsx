@@ -2624,6 +2624,10 @@ function RemoteBrowserPagePane({
                   size="icon"
                   variant="ghost"
                   className="h-7 w-7"
+                  aria-label={translate(
+                    'auto.components.browser.pane.BrowserPane.0e080d820e',
+                    'Reload'
+                  )}
                   onPointerDown={(e) => {
                     if (e.button === 0) {
                       e.preventDefault()
@@ -5220,6 +5224,10 @@ function BrowserPagePane({
                     size="icon"
                     variant="ghost"
                     className="h-7 w-7"
+                    aria-label={translate(
+                      'auto.components.browser.pane.BrowserPane.0e080d820e',
+                      'Reload'
+                    )}
                     onPointerDown={(e) => {
                       if (e.button === 0) {
                         e.preventDefault()
