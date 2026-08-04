@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { isCodexAuthError } from '../../../../shared/codex-auth-errors'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
-import {
-  codexRateLimitTargetMatchesAccountRuntime,
-  getCodexAccountAuthWarning
-} from './codex-account-auth-warning'
+import { getCodexAccountAuthWarning } from './codex-account-auth-warning'
+import { rateLimitTargetMatchesAccountRuntime } from './rate-limit-target-match'
 
 function codexLimits(error: string | null, status: ProviderRateLimits['status'] = 'error') {
   return {
@@ -134,7 +132,7 @@ describe('codex account auth warning', () => {
 
   it('allows a WSL default account location to receive the active WSL target warning', () => {
     expect(
-      codexRateLimitTargetMatchesAccountRuntime(
+      rateLimitTargetMatchesAccountRuntime(
         { runtime: 'wsl', wslDistro: 'Ubuntu' },
         { runtime: 'wsl', wslDistro: null }
       )

@@ -33,6 +33,8 @@ import {
   X
 } from 'lucide-react'
 import { useAppStore } from '../../store'
+import { InlineUsageBars, InlineUsageSkeleton } from '../status-bar/inline-usage-bars'
+import { resolveClaudeRowUsage } from './claude-account-usage'
 import {
   ClaudeIcon,
   GeminiIcon,
@@ -70,6 +72,7 @@ import {
   DialogTitle
 } from '../ui/dialog'
 import { getCodexAccountAuthWarning } from './codex-account-auth-warning'
+import { rateLimitTargetMatchesAccountRuntime } from './rate-limit-target-match'
 import { getCodexConfigSyncWarning } from './codex-config-sync-warning'
 import type { CodexConfigSyncStatus } from '../../../../shared/codex-config-sync-types'
 import {
@@ -327,6 +330,10 @@ export function AccountsPane({
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const codexRateLimits = useAppStore((s) => s.rateLimits.codex)
   const codexRateLimitTarget = useAppStore((s) => s.rateLimits.codexTarget)
+  const claudeRateLimits = useAppStore((s) => s.rateLimits.claude)
+  const claudeRateLimitTarget = useAppStore((s) => s.rateLimits.claudeTarget)
+  const inactiveClaudeAccounts = useAppStore((s) => s.rateLimits.inactiveClaudeAccounts)
+  const fetchInactiveClaudeAccountUsage = useAppStore((s) => s.fetchInactiveClaudeAccountUsage)
   const miniMaxRateLimits = useAppStore((s) => s.rateLimits.minimax)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
@@ -414,6 +421,19 @@ export function AccountsPane({
   const visibleClaudeAccounts = claudeAccounts.accounts.filter((account) =>
     providerAccountMatchesView(account, accountRuntime, accountVisibilityOptions)
   )
+  // Why: same remote gate the Codex auth warning uses below. The desktop's
+  // rate-limit poll says nothing about accounts owned by a remote runtime.
+  const claudeUsageVisible = !isRemoteAccountScope
+  const activeClaudeAccountId = getProviderAccountActiveIdForView(claudeAccounts, accountRuntime)
+  const claudeUsageTargetMatches = rateLimitTargetMatchesAccountRuntime(
+    claudeRateLimitTarget,
+    accountRuntime
+  )
+  // Why: re-run the inactive fetch when the roster or the active account moves;
+  // selecting an account leaves the outgoing one with no cache entry.
+  const claudeUsageRosterKey = `${activeClaudeAccountId ?? 'system'}|${visibleClaudeAccounts
+    .map((account) => account.id)
+    .join(',')}`
   const visibleCodexAccounts = codexAccounts.accounts.filter((account) =>
     providerAccountMatchesView(account, accountRuntime, accountVisibilityOptions)
   )
@@ -451,6 +471,27 @@ export function AccountsPane({
   // Why: the mirror keeps serving the last synced settings when ~/.codex is
   // unusable, so without this the user only sees their edits being ignored.
   const [codexConfigSync, setCodexConfigSync] = useState<CodexConfigSyncStatus | null>(null)
+  // Why: without a settled flag a row whose account never gets a cache entry
+  // would show the loading skeleton for the life of the pane.
+  const [claudeUsageFetchSettled, setClaudeUsageFetchSettled] = useState(false)
+  useEffect(() => {
+    // Why: mirrors the switcher's fetch-on-open (StatusBar) so opening this pane
+    // fills inactive-account usage. The service debounces, so a revisit is cheap.
+    if (!claudeUsageVisible) {
+      return
+    }
+    let cancelled = false
+    setClaudeUsageFetchSettled(false)
+    void fetchInactiveClaudeAccountUsage().finally(() => {
+      if (!cancelled) {
+        setClaudeUsageFetchSettled(true)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [claudeUsageVisible, claudeUsageRosterKey, fetchInactiveClaudeAccountUsage])
+
   useEffect(() => {
     // Why: the status resolves the host's own ~/.codex and shared runtime home.
     // A WSL or remote scope mirrors different homes entirely, so showing it there
@@ -1003,6 +1044,15 @@ export function AccountsPane({
                 )
                 const isReauthing = claudeAction === `reauth:${account.id}`
                 const isBusy = claudeAction !== 'idle' || accountRuntimeUnavailable
+                const usage = resolveClaudeRowUsage({
+                  accountId: account.id,
+                  isActive,
+                  visible: claudeUsageVisible,
+                  targetMatchesRuntime: claudeUsageTargetMatches,
+                  activeLimits: claudeRateLimits,
+                  inactiveAccounts: inactiveClaudeAccounts,
+                  inactiveFetchSettled: claudeUsageFetchSettled
+                })
 
                 return (
                   <div
@@ -1014,49 +1064,70 @@ export function AccountsPane({
                     }`}
                   >
                     <div className="flex w-full items-center justify-between gap-3 max-md:flex-col max-md:items-start">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const accountRuntimeView = getProviderAccountRuntime(account)
-                          void runClaudeAccountAction(
-                            `select:${account.id}`,
-                            () =>
-                              selectClaudeProviderAccount(settings, {
-                                accountId: account.id,
-                                ...accountRuntimeView
-                              }),
-                            accountRuntimeView
-                          )
-                        }}
-                        disabled={isBusy}
-                        className="flex min-w-0 flex-1 flex-col gap-0.5 text-left disabled:cursor-default"
-                      >
-                        <div className="flex min-w-0 items-center gap-2">
-                          <span className="truncate text-sm font-medium">{account.email}</span>
-                          <Badge
-                            variant="outline"
-                            className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/70"
-                          >
-                            {getClaudeAccountRuntimeLabel(account, accountRuntime.label)}
-                          </Badge>
-                          {isActive ? (
+                      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const accountRuntimeView = getProviderAccountRuntime(account)
+                            void runClaudeAccountAction(
+                              `select:${account.id}`,
+                              () =>
+                                selectClaudeProviderAccount(settings, {
+                                  accountId: account.id,
+                                  ...accountRuntimeView
+                                }),
+                              accountRuntimeView
+                            )
+                          }}
+                          disabled={isBusy}
+                          className="flex min-w-0 flex-col gap-0.5 text-left disabled:cursor-default"
+                        >
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className="truncate text-sm font-medium">{account.email}</span>
                             <Badge
                               variant="outline"
-                              className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/80"
+                              className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/70"
                             >
-                              {translate(
-                                'auto.components.settings.AccountsPane.e74831fb6b',
-                                'Active'
-                              )}
+                              {getClaudeAccountRuntimeLabel(account, accountRuntime.label)}
                             </Badge>
-                          ) : null}
-                        </div>
-                        <span className="truncate text-[11px] text-muted-foreground">
-                          {account.organizationName
-                            ? `${account.organizationName} · ${formatAccountTimestamp(account.lastAuthenticatedAt)}`
-                            : formatAccountTimestamp(account.lastAuthenticatedAt)}
-                        </span>
-                      </button>
+                            {isActive ? (
+                              <Badge
+                                variant="outline"
+                                className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/80"
+                              >
+                                {translate(
+                                  'auto.components.settings.AccountsPane.e74831fb6b',
+                                  'Active'
+                                )}
+                              </Badge>
+                            ) : null}
+                          </div>
+                          <span className="truncate text-[11px] text-muted-foreground">
+                            {account.organizationName
+                              ? `${account.organizationName} · ${formatAccountTimestamp(account.lastAuthenticatedAt)}`
+                              : formatAccountTimestamp(account.lastAuthenticatedAt)}
+                          </span>
+                        </button>
+                        {usage.kind === 'hidden' ? null : (
+                          <div className="mt-1 w-full max-w-xs">
+                            {usage.kind === 'ready' ? (
+                              <InlineUsageBars
+                                limits={usage.limits}
+                                isFetching={usage.isFetching}
+                              />
+                            ) : usage.kind === 'loading' ? (
+                              <InlineUsageSkeleton />
+                            ) : (
+                              <span className="text-[10px] text-muted-foreground">
+                                {translate(
+                                  'auto.components.settings.AccountsPane.3f6c8d220e',
+                                  'Usage unavailable'
+                                )}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
                       <div className="flex shrink-0 items-center justify-end gap-1 max-md:w-full max-md:flex-wrap">
                         <Button
                           variant="ghost"
