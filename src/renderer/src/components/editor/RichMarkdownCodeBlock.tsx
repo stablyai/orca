@@ -270,12 +270,10 @@ export function RichMarkdownCodeBlock({
       <NodeViewContent<'pre'> as="pre" />
       {/* Why: mermaid diagrams render as a live SVG preview below the editable
           source so users can see the result while editing. The code block stays
-          editable — the diagram is read-only output. This preview also goes
-          through MermaidBlock's sanitized SVG path, so it must opt out of
-          Mermaid HTML labels just like markdown preview to keep labels visible. */}
+          editable — the diagram is read-only output. */}
       {isMermaid && node.textContent.trim() && (
         <div contentEditable={false} className="mermaid-preview">
-          <MermaidBlock content={node.textContent.trim()} isDark={isDark} htmlLabels={false} />
+          <MermaidBlock content={node.textContent.trim()} isDark={isDark} />
         </div>
       )}
     </NodeViewWrapper>
