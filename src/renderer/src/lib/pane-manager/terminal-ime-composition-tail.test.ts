@@ -235,6 +235,24 @@ describe('terminal IME composition tail', () => {
     expect(tailOf(container).style.display).toBe('none')
   })
 
+  it('hides when the viewport leaves the cursor row mid-composition', async () => {
+    const { container, screenElement, terminal, textarea } = openTerminal()
+    mockCellGrid(screenElement)
+    await write(terminal, '\r\n'.repeat(20))
+    await write(terminal, '가나다라마')
+    await write(terminal, CURSOR_BACK_3_SYLLABLES)
+
+    compositionEvent(textarea, 'compositionstart')
+    expect(tailOf(container).style.display).toBe('block')
+
+    // Scrolling away without ending the composition must not leave the snapshot on screen.
+    parkViewportAtScrollbackOrigin(terminal)
+    compositionEvent(textarea, 'compositionupdate', '바')
+
+    expect(tailOf(container).style.display).toBe('none')
+    expect(tailOf(container).textContent).toBe('')
+  })
+
   it('re-measures the cell grid when the terminal resizes mid-composition', async () => {
     const { container, screenElement, terminal, textarea } = openTerminal()
     mockCellGrid(screenElement)

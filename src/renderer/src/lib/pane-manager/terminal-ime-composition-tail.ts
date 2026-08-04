@@ -60,13 +60,8 @@ function findOpaqueSurface(start: Element): string {
   return '#000'
 }
 
-/**
- * What the covered cells actually sit on. A translucent terminal background —
- * `terminalBackgroundOpacity` bakes the alpha into `theme.background`, and
- * xterm then leaves the viewport translucent too — is layered over the first
- * opaque surface behind it rather than swapped for one, so the mask matches the
- * row it replaces instead of falling back to a black block on a light theme.
- */
+// A translucent theme background is layered over the surface behind it, not swapped for one,
+// or the mask drops a black block onto a light theme.
 function resolveBackdrop(
   terminal: Terminal,
   surfaceProbe: Element
@@ -198,13 +193,8 @@ export function installTerminalImeCompositionTail(terminal: Terminal): (() => vo
     tailElement.replaceChildren(...cells)
   }
 
-  /**
-   * Place the tail off the cell grid rather than off `.composition-view`. xterm
-   * only assigns that element's geometry from `compositionupdate`, so reading it
-   * on `compositionstart` would place the first composition of a terminal at the
-   * top-left corner; measuring its box would also inherit the bidi marks xterm
-   * wraps the preedit in and leave a ragged gap.
-   */
+  // Off the cell grid, not off .composition-view: xterm only positions that element from
+  // compositionupdate, so the first composition would land in the top-left corner.
   const resolveTailGeometry = (): { left: number; top: string; height: string } => {
     const buffer = terminal.buffer.active
     const preeditColumns = measureTerminalStringColumns(terminal, preedit) ?? preedit.length
@@ -267,9 +257,11 @@ export function installTerminalImeCompositionTail(terminal: Terminal): (() => vo
     resnapshotAndPaint()
   }
 
+  // Re-read rather than paint: a viewport moved since compositionstart leaves rowTail stale,
+  // and renderTailCells would repaint it over an unrelated row.
   const handleCompositionUpdate = (event: Event): void => {
     preedit = (event as CompositionEvent).data ?? ''
-    paint()
+    resnapshotAndPaint()
   }
 
   const handleCompositionEnd = (): void => {
