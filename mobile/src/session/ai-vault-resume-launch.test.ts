@@ -5,6 +5,8 @@ import {
   buildMobileAiVaultResumeLaunch,
   buildMobileAiVaultResumeCommand,
   createMobileAiVaultResumeMutationRegistry,
+  MOBILE_AI_VAULT_HOST_AUTHORITY_RESUME_CAPABILITY,
+  readMobileRuntimeCapabilities,
   readMobileRuntimeHostPlatform,
   readMobileRuntimeTerminalWindowsShell,
   resolveMobileAiVaultResumePlatform,
@@ -184,6 +186,12 @@ describe('buildMobileAiVaultResumeLaunch', () => {
     )
     expect(launch.env).toEqual({ ANTHROPIC_BASE_URL: 'http://localhost:3000' })
     expect(launch.launchAgent).toBe('claude')
+    expect(launch.providerSession).toEqual({
+      key: 'session_id',
+      id: 'abc 123',
+      transcriptPath: '/Users/ada/.claude/session.jsonl'
+    })
+    expect(launch.startupCwd).toBe('/Users/ada/repo')
     expect(launch.launchConfig).toEqual({
       agentCommand: "claude-dev '--model' 'opus'",
       agentArgs: '--model opus',
@@ -191,6 +199,29 @@ describe('buildMobileAiVaultResumeLaunch', () => {
     })
     // Only bare real-home Codex resumes request env deletion.
     expect(launch.envToDelete).toBeUndefined()
+  })
+
+  it('keeps host-readable WSL transcript paths separate from execution paths', () => {
+    const transcriptPath =
+      '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.pi\\agent\\sessions\\session.jsonl'
+    const launch = buildMobileAiVaultResumeLaunch({
+      session: session({
+        agent: 'pi',
+        sessionId: 'pi-1',
+        cwd: '/home/ada/repo',
+        filePath: transcriptPath
+      }),
+      hostPlatform: 'linux',
+      runtimeHostPlatform: 'win32'
+    })
+
+    expect(launch.command).toContain("'--session' '/home/ada/.pi/agent/sessions/session.jsonl'")
+    expect(launch.providerSession).toEqual({
+      key: 'session_id',
+      id: 'pi-1',
+      transcriptPath
+    })
+    expect(launch.hostAuthorityEligible).toBe(false)
   })
 
   it('deletes inherited Codex homes when resuming a real-home session like desktop', () => {
@@ -223,6 +254,123 @@ describe('buildMobileAiVaultResumeLaunch', () => {
 })
 
 describe('resumeAiVaultSessionInTerminal', () => {
+  it('uses host-authority resume and activates its tab when the host publishes identity', async () => {
+    const sendRequest = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        result: {
+          disposition: 'created',
+          terminal: { handle: 'term-1', tabId: 'tab-1', title: 'Codex' }
+        }
+      })
+      .mockResolvedValueOnce({ ok: true, result: {} })
+    const launch = buildMobileAiVaultResumeLaunch({
+      session: session({ agent: 'codex', sessionId: 'codex-1' }),
+      hostPlatform: 'linux'
+    })
+
+    await expect(
+      resumeAiVaultSessionInTerminal({ sendRequest }, 'worktree-1', launch, {
+        hostCapabilities: [MOBILE_AI_VAULT_HOST_AUTHORITY_RESUME_CAPABILITY]
+      })
+    ).resolves.toEqual({ id: 'tab-1', terminal: 'term-1', title: 'Codex' })
+    expect(sendRequest).toHaveBeenNthCalledWith(
+      1,
+      'terminal.ensureAgentSession',
+      expect.objectContaining({
+        kind: 'explicit',
+        worktree: 'id:worktree-1',
+        agent: 'codex',
+        providerSession: {
+          key: 'session_id',
+          id: 'codex-1',
+          transcriptPath: '/Users/ada/.claude/session.jsonl'
+        },
+        startupCwd: '/Users/ada/repo',
+        presentation: 'background'
+      }),
+      { timeoutMs: RESUME_RPC_TIMEOUT_MS }
+    )
+    expect(sendRequest).toHaveBeenNthCalledWith(
+      2,
+      'session.tabs.activate',
+      {
+        worktree: 'id:worktree-1',
+        tabId: 'tab-1',
+        notifyClients: false,
+        navigation: 'caller'
+      },
+      { timeoutMs: RESUME_RPC_TIMEOUT_MS }
+    )
+    expect(sendRequest).not.toHaveBeenCalledWith('terminal.send', expect.anything())
+  })
+
+  it('falls back only when host authority proves no resume side effect began', async () => {
+    const sendRequest = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        error: { code: 'agent_session_legacy_required', message: 'legacy required' }
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        result: { tab: { type: 'terminal', id: 'tab-1', terminal: 'pty-1' } }
+      })
+      .mockResolvedValueOnce({ ok: true, result: { send: { accepted: true } } })
+    const launch = buildMobileAiVaultResumeLaunch({
+      session: session({ agent: 'codex', sessionId: 'codex-1' }),
+      hostPlatform: 'linux'
+    })
+
+    await expect(
+      resumeAiVaultSessionInTerminal({ sendRequest }, 'worktree-1', launch, {
+        hostCapabilities: [MOBILE_AI_VAULT_HOST_AUTHORITY_RESUME_CAPABILITY]
+      })
+    ).resolves.toMatchObject({ id: 'tab-1', terminal: 'pty-1' })
+    expect(sendRequest.mock.calls.map((call) => call[0])).toEqual([
+      'terminal.ensureAgentSession',
+      'session.tabs.createTerminal',
+      'terminal.send'
+    ])
+  })
+
+  it('keeps Windows-hosted WSL resumes on the platform-correct legacy path', async () => {
+    const sendRequest = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        result: { tab: { type: 'terminal', id: 'tab-1', terminal: 'pty-1' } }
+      })
+      .mockResolvedValueOnce({ ok: true, result: { send: { accepted: true } } })
+    const launch = buildMobileAiVaultResumeLaunch({
+      session: session({
+        agent: 'codex',
+        sessionId: 'codex-wsl-1',
+        cwd: '/home/ada/repo',
+        filePath:
+          '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.codex\\sessions\\2026\\08\\04\\rollout-codex-wsl-1.jsonl',
+        codexHome: '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.codex'
+      }),
+      hostPlatform: 'linux',
+      runtimeHostPlatform: 'win32'
+    })
+
+    await resumeAiVaultSessionInTerminal({ sendRequest }, 'worktree-1', launch, {
+      hostCapabilities: [MOBILE_AI_VAULT_HOST_AUTHORITY_RESUME_CAPABILITY]
+    })
+
+    expect(sendRequest.mock.calls.map((call) => call[0])).toEqual([
+      'session.tabs.createTerminal',
+      'terminal.send'
+    ])
+    expect(sendRequest).not.toHaveBeenCalledWith(
+      'terminal.ensureAgentSession',
+      expect.anything(),
+      expect.anything()
+    )
+  })
+
   it('creates a fresh terminal and sends the command with Enter', async () => {
     const sendRequest = vi
       .fn()
@@ -366,6 +514,12 @@ describe('resume platform helpers', () => {
       'wsl.exe'
     )
     expect(readMobileRuntimeTerminalWindowsShell({ terminalWindowsShell: '' })).toBeNull()
+  })
+
+  it('fails closed when status.get capabilities are malformed', () => {
+    expect(readMobileRuntimeCapabilities({ capabilities: ['aiVault.v1'] })).toEqual(['aiVault.v1'])
+    expect(readMobileRuntimeCapabilities({ capabilities: ['aiVault.v1', 42] })).toEqual([])
+    expect(readMobileRuntimeCapabilities({ capabilities: 'aiVault.v1' })).toEqual([])
   })
 
   it('uses Linux/POSIX construction for SSH targets and host platform for local targets', () => {

@@ -129,6 +129,10 @@ const ExplicitEnsure = z
     worktree: WorktreeSelector,
     agent: z.enum(RESUMABLE_TUI_AGENTS),
     providerSession: ProviderSession,
+    startupCwd: StrictNonEmptyString(
+      MAX_WORKTREE_SELECTOR_LENGTH,
+      'Invalid startup directory'
+    ).optional(),
     ompResumeFilePath: OmpResumeFilePath.optional(),
     agentArgs: AgentArgs.optional(),
     launchPreferences: LaunchPreferences.optional(),

@@ -5,8 +5,11 @@ import {
   realHomeCodexResumeEnvDeletion
 } from '../../../src/shared/ai-vault-resume-command'
 import { RESUME_RPC_TIMEOUT_MS } from './ai-vault-resume-preparation'
-import { isResumableTuiAgent } from '../../../src/shared/agent-session-resume'
-import type { SleepingAgentLaunchConfig } from '../../../src/shared/agent-session-resume'
+import {
+  isResumableTuiAgent,
+  type AgentProviderSessionMetadata,
+  type SleepingAgentLaunchConfig
+} from '../../../src/shared/agent-session-resume'
 import { buildAgentResumeStartupPlan } from '../../../src/shared/tui-agent-startup'
 import {
   resolveTuiAgentLaunchArgs,
@@ -14,7 +17,6 @@ import {
 } from '../../../src/shared/tui-agent-launch-defaults'
 import { normalizeAiVaultResumeFilePath } from '../../../src/shared/ai-vault-resume-path'
 import type { TuiAgent } from '../../../src/shared/types'
-import { parseWslUncPath } from '../../../src/shared/wsl-paths'
 import { resolveWindowsShellStartupFamily } from '../../../src/shared/windows-terminal-shell'
 import type { RpcClient } from '../transport/rpc-client'
 import {
@@ -22,21 +24,17 @@ import {
   readMobileReviewTerminalSendAccepted,
   type MobileReviewTerminalTab
 } from './mobile-diff-review-rpc'
-import type { MobileAiVaultResumeTargetStatus } from '../agent-history/agent-history-resume-target'
-
-const NODE_PLATFORMS = new Set<NodeJS.Platform>([
-  'aix',
-  'android',
-  'darwin',
-  'freebsd',
-  'haiku',
-  'linux',
-  'openbsd',
-  'sunos',
-  'win32',
-  'cygwin',
-  'netbsd'
-])
+import { tryHostAuthorityAiVaultResume } from './ai-vault-host-authority-resume'
+import { normalizeMobileAiVaultCodexHome } from './ai-vault-resume-platform'
+export {
+  MOBILE_AI_VAULT_HOST_AUTHORITY_RESUME_CAPABILITY,
+  readMobileRuntimeCapabilities
+} from './ai-vault-host-authority-resume'
+export {
+  readMobileRuntimeHostPlatform,
+  readMobileRuntimeTerminalWindowsShell,
+  resolveMobileAiVaultResumePlatform
+} from './ai-vault-resume-platform'
 
 export function buildMobileAiVaultResumeCommand(args: {
   session: Pick<AiVaultSession, 'agent' | 'sessionId' | 'cwd' | 'codexHome'> &
@@ -60,7 +58,7 @@ export function buildMobileAiVaultResumeCommand(args: {
     cwd: args.session.cwd,
     platform: args.hostPlatform,
     commandOverride: args.commandOverride,
-    codexHome: getMobileAiVaultResumeCodexHome(args.session.codexHome, args.hostPlatform),
+    codexHome: normalizeMobileAiVaultCodexHome(args.session.codexHome, args.hostPlatform),
     shell
   })
 }
@@ -77,12 +75,16 @@ export type MobileAiVaultResumeLaunch = {
   envToDelete?: string[]
   launchConfig?: SleepingAgentLaunchConfig
   launchAgent?: TuiAgent
+  providerSession?: AgentProviderSessionMetadata
+  startupCwd?: string
+  hostAuthorityEligible?: boolean
 }
 
 export function buildMobileAiVaultResumeLaunch(args: {
   session: Pick<AiVaultSession, 'agent' | 'sessionId' | 'cwd' | 'codexHome'> &
     Partial<Pick<AiVaultSession, 'filePath'>>
   hostPlatform: NodeJS.Platform
+  runtimeHostPlatform?: NodeJS.Platform | null
   hostTerminalWindowsShell?: string | null
   settings?: MobileAiVaultResumeSettings | null
 }): MobileAiVaultResumeLaunch {
@@ -90,16 +92,26 @@ export function buildMobileAiVaultResumeLaunch(args: {
     args.hostPlatform === 'win32'
       ? resolveWindowsShellStartupFamily(args.hostTerminalWindowsShell)
       : undefined
-  const codexHome = getMobileAiVaultResumeCodexHome(args.session.codexHome, args.hostPlatform)
+  const codexHome = normalizeMobileAiVaultCodexHome(args.session.codexHome, args.hostPlatform)
   const cmdOverrides = normalizeMobileAiVaultResumeCommandOverrides(
     args.settings?.agentCmdOverrides
   )
   const commandOverride = cmdOverrides[args.session.agent] ?? null
+  const hostTranscriptPath = args.session.filePath?.trim() || undefined
   const resumeFilePath = normalizeAiVaultResumeFilePath(args.session.filePath, args.hostPlatform)
   if (isResumableTuiAgent(args.session.agent)) {
+    const providerSession: AgentProviderSessionMetadata = {
+      key: 'session_id',
+      id: args.session.sessionId,
+      ...(hostTranscriptPath ? { transcriptPath: hostTranscriptPath } : {})
+    }
+    const executionProviderSession =
+      resumeFilePath && resumeFilePath !== hostTranscriptPath
+        ? { ...providerSession, transcriptPath: resumeFilePath }
+        : providerSession
     const startupPlan = buildAgentResumeStartupPlan({
       agent: args.session.agent,
-      providerSession: { key: 'session_id', id: args.session.sessionId },
+      providerSession: executionProviderSession,
       cmdOverrides,
       platform: args.hostPlatform,
       shell,
@@ -134,7 +146,13 @@ export function buildMobileAiVaultResumeLaunch(args: {
         // real-home override must strip Codex homes at pane spawn like desktop.
         ...realHomeCodexResumeEnvDeletion(args.session),
         launchConfig: startupPlan.launchConfig,
-        launchAgent: startupPlan.agent
+        launchAgent: startupPlan.agent,
+        providerSession,
+        ...(args.session.cwd?.trim() ? { startupCwd: args.session.cwd.trim() } : {}),
+        // Windows-hosted WSL resumes still need execution-owner Codex/Pi home
+        // provenance; keep the proven legacy command path until that contract exists.
+        hostAuthorityEligible:
+          args.runtimeHostPlatform == null || args.runtimeHostPlatform === args.hostPlatform
       }
     }
   }
@@ -167,8 +185,18 @@ function normalizeMobileAiVaultResumeCommandOverrides(
 export async function resumeAiVaultSessionInTerminal(
   client: Pick<RpcClient, 'sendRequest'>,
   worktreeId: string,
-  launch: MobileAiVaultResumeLaunch & { clientMutationId?: string }
+  launch: MobileAiVaultResumeLaunch & { clientMutationId?: string },
+  options: { hostCapabilities?: readonly string[] } = {}
 ): Promise<MobileReviewTerminalTab> {
+  const hostAuthorityTerminal = await tryHostAuthorityAiVaultResume(
+    client,
+    worktreeId,
+    launch,
+    options.hostCapabilities
+  )
+  if (hostAuthorityTerminal) {
+    return hostAuthorityTerminal
+  }
   const created = await client.sendRequest(
     'session.tabs.createTerminal',
     {
@@ -235,58 +263,4 @@ export function createMobileAiVaultResumeMutationRegistry(
       bySessionId.delete(sessionId)
     }
   }
-}
-
-export function readMobileRuntimeHostPlatform(statusResult: unknown): NodeJS.Platform | null {
-  if (!statusResult || typeof statusResult !== 'object') {
-    return null
-  }
-  const hostPlatform = (statusResult as { hostPlatform?: unknown }).hostPlatform
-  return typeof hostPlatform === 'string' && NODE_PLATFORMS.has(hostPlatform as NodeJS.Platform)
-    ? (hostPlatform as NodeJS.Platform)
-    : null
-}
-
-export function readMobileRuntimeTerminalWindowsShell(statusResult: unknown): string | null {
-  if (!statusResult || typeof statusResult !== 'object') {
-    return null
-  }
-  const shell = (statusResult as { terminalWindowsShell?: unknown }).terminalWindowsShell
-  return typeof shell === 'string' && shell.trim().length > 0 ? shell : null
-}
-
-export function resolveMobileAiVaultResumePlatform(
-  targetStatus: MobileAiVaultResumeTargetStatus,
-  hostPlatform: NodeJS.Platform | null,
-  workspacePath?: string | null,
-  terminalPlatform?: NodeJS.Platform | null
-): NodeJS.Platform | null {
-  if (targetStatus === 'ssh') {
-    // Why: desktop builds SSH resume commands for the remote POSIX execution
-    // host instead of the phone or local desktop platform.
-    return 'linux'
-  }
-  if (targetStatus === 'local') {
-    if (terminalPlatform === 'linux' && hostPlatform === 'win32') {
-      // Why: Windows-hosted WSL project terminals run a POSIX shell even when
-      // the visible workspace path is a normal Windows path.
-      return 'linux'
-    }
-    if (workspacePath && parseWslUncPath(workspacePath)) {
-      // Why: a WSL UNC workspace on a Windows host runs in a Linux shell.
-      return 'linux'
-    }
-    return hostPlatform
-  }
-  return null
-}
-
-function getMobileAiVaultResumeCodexHome(
-  codexHome: string | null,
-  platform: NodeJS.Platform
-): string | null {
-  if (!codexHome || platform !== 'linux') {
-    return codexHome
-  }
-  return parseWslUncPath(codexHome)?.linuxPath ?? codexHome
 }

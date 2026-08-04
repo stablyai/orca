@@ -11,6 +11,7 @@ import { getWorktreeLabel } from '../session/worktree-label'
 import {
   buildMobileAiVaultResumeLaunch,
   createMobileAiVaultResumeMutationRegistry,
+  readMobileRuntimeCapabilities,
   readMobileRuntimeHostPlatform,
   readMobileRuntimeTerminalWindowsShell,
   resolveMobileAiVaultResumePlatform,
@@ -130,15 +131,8 @@ export function MobileAgentSessionHistoryPanel({
     [sessions, query, scope, scopeFilterPaths, activeWorktreePath]
   )
 
-  const hostPlatform = useMemo(
-    () => readMobileRuntimeHostPlatform(hostStatusResult),
-    [hostStatusResult]
-  )
-  const hostTerminalWindowsShell = useMemo(
-    () => readMobileRuntimeTerminalWindowsShell(hostStatusResult),
-    [hostStatusResult]
-  )
-
+  const hostPlatform = readMobileRuntimeHostPlatform(hostStatusResult)
+  const hostTerminalWindowsShell = readMobileRuntimeTerminalWindowsShell(hostStatusResult)
   const resumeActionStateBySessionId = useMemo(
     () => buildMobileAgentHistoryResumeActionState(sessions, resumingSessionId),
     [resumingSessionId, sessions]
@@ -204,13 +198,19 @@ export function MobileAgentSessionHistoryPanel({
         const launch = buildMobileAiVaultResumeLaunch({
           session: preparedSession,
           hostPlatform: platform,
+          runtimeHostPlatform: hostPlatform,
           hostTerminalWindowsShell,
           settings
         })
-        await resumeAiVaultSessionInTerminal(client, target.worktreeId, {
-          ...launch,
-          clientMutationId: resumeMutationRegistryRef.current.claim(session.id)
-        })
+        await resumeAiVaultSessionInTerminal(
+          client,
+          target.worktreeId,
+          {
+            ...launch,
+            clientMutationId: resumeMutationRegistryRef.current.claim(session.id)
+          },
+          { hostCapabilities: readMobileRuntimeCapabilities(hostStatusResult) }
+        )
         resumeMutationRegistryRef.current.releaseOnSuccess(session.id)
         triggerSuccess()
         setResumeMessage('Agent session queued.')
@@ -232,6 +232,7 @@ export function MobileAgentSessionHistoryPanel({
       connState,
       hostId,
       hostPlatform,
+      hostStatusResult,
       hostTerminalWindowsShell,
       router,
       worktreeId,

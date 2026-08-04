@@ -13152,6 +13152,61 @@ describe('OrcaRuntimeService', () => {
     expect(internals.ptysById.has('pty-exited-during-start')).toBe(false)
   })
 
+  it('publishes a structured Codex resume identity before the first hook arrives', async () => {
+    const providerSession = {
+      key: 'session_id' as const,
+      id: 'codex-provider-session-1',
+      transcriptPath: '/trusted/codex/sessions/2026/08/04/rollout-codex-provider-session-1.jsonl'
+    }
+    const spawn = vi.fn(async (options) => ({
+      id: 'pty-codex-resume',
+      agentSessionEnsure: {
+        disposition: 'created' as const,
+        owner: {
+          claim: options.agentSessionEnsure!.claim,
+          generation: 'generation-codex-1',
+          phase: 'live' as const,
+          ptyId: 'pty-codex-resume',
+          surface: options.agentSessionEnsure!.surface
+        }
+      }
+    }))
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.ensureAgentSession({
+      kind: 'explicit',
+      worktree: `id:${TEST_WORKTREE_ID}`,
+      agent: 'codex',
+      providerSession,
+      startupCwd: `${TEST_WORKTREE_PATH}/packages/app`
+    })
+
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: expect.stringMatching(/\bresume\b.*codex-provider-session-1/),
+        cwd: `${TEST_WORKTREE_PATH}/packages/app`,
+        resumeProviderSession: providerSession
+      })
+    )
+    await expect(runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).resolves.toMatchObject({
+      tabs: [
+        expect.objectContaining({
+          launchAgent: 'codex',
+          agentStatus: expect.objectContaining({
+            agentType: 'codex',
+            providerSession
+          })
+        })
+      ]
+    })
+  })
+
   it('adopts repeated structured OMP resumes while preserving the exact file locator', async () => {
     let canonicalOwner:
       | {
@@ -13192,7 +13247,11 @@ describe('OrcaRuntimeService', () => {
       kind: 'explicit' as const,
       worktree: `id:${TEST_WORKTREE_ID}`,
       agent: 'omp' as const,
-      providerSession: { key: 'session_id' as const, id: 'provider-session-1' },
+      providerSession: {
+        key: 'session_id' as const,
+        id: 'provider-session-1',
+        transcriptPath: '/custom/omp/project/session.jsonl'
+      },
       ompResumeFilePath: '/custom/omp/project/session.jsonl'
     }
     const first = await runtime.ensureAgentSession(request)
@@ -13209,11 +13268,22 @@ describe('OrcaRuntimeService', () => {
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
         command: expect.stringContaining("'--resume' '/custom/omp/project/session.jsonl'"),
+        resumeProviderSession: request.providerSession,
         agentSessionEnsure: expect.objectContaining({
           claim: expect.objectContaining({ agent: 'omp' })
         })
       })
     )
+    await expect(runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).resolves.toMatchObject({
+      tabs: [
+        expect.objectContaining({
+          agentStatus: expect.objectContaining({
+            agentType: 'omp',
+            providerSession: request.providerSession
+          })
+        })
+      ]
+    })
   })
 
   it('builds structured fresh drafts with supported launch preferences on the host', async () => {

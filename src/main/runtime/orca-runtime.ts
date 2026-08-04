@@ -1310,6 +1310,7 @@ type RuntimePtyWorktreeRecord = {
   launchConfig: SleepingAgentLaunchConfig | null
   launchToken: string | null
   launchAgent: TuiAgent | null
+  providerSession: AgentProviderSessionMetadata | null
   foregroundAgent: TuiAgent | null
   connected: boolean
   disconnectedAt: number | null
@@ -10459,6 +10460,7 @@ export class OrcaRuntimeService {
       pty.lastAgentStatusObservedLive = false
       pty.lastAgentStatusStartedAtEpochMs = null
       pty.lastAgentStatusRichInvalidatedAtEpochMs = Date.now()
+      pty.providerSession = null
       pty.managementTitle = null
       pty.managementTitleAt = null
     }
@@ -25188,11 +25190,14 @@ export class OrcaRuntimeService {
     if (_caller.signal?.aborted) {
       throw new Error('client_disconnected')
     }
+    const startupCwd = this.resolveWorkspaceTerminalStartupCwd(workspace, request.startupCwd)
     const terminal = await this.createTerminal(`id:${workspace.id}`, {
       command: startup.launchCommand,
+      ...(startupCwd ? { cwd: startupCwd } : {}),
       env: startup.env,
       launchConfig: startup.launchConfig,
       launchAgent: request.agent,
+      resumeProviderSession: identity.providerSession,
       presentation: request.presentation ?? 'background',
       tabId: request.placement?.tabId,
       leafId: request.placement?.leafId,
@@ -25721,6 +25726,9 @@ export class OrcaRuntimeService {
               : null
             pty.launchToken = launchToken ?? null
             pty.launchAgent = launchOpts.launchAgent ?? null
+          }
+          if (launchOpts.resumeProviderSession) {
+            pty.providerSession = launchOpts.resumeProviderSession
           }
           pty.tabId = tabId
           pty.paneKey = paneKey
@@ -29218,6 +29226,7 @@ export class OrcaRuntimeService {
         launchConfig: null,
         launchToken: null,
         launchAgent: null,
+        providerSession: null,
         foregroundAgent: null,
         connected: state.connected ?? true,
         disconnectedAt: state.connected === false ? Date.now() : null,
@@ -30506,13 +30515,15 @@ export class OrcaRuntimeService {
       )
       const hookSessionMatchesRenderer =
         !rendererStatusAgent || !hookSessionAgent || rendererStatusAgent === hookSessionAgent
+      const launchProviderSession =
+        liveLeafPty?.providerSession ?? mobileStatusPty?.providerSession ?? null
       const hookProviderSession =
         hookAgentStatus?.providerSession &&
         hookSessionMatchesRenderer &&
         (!tab.agentStatus?.providerSession ||
           (hookAgentStatus.providerSessionReceivedAt ?? -1) >= tab.agentStatus.updatedAt)
           ? hookAgentStatus.providerSession
-          : tab.agentStatus?.providerSession
+          : (tab.agentStatus?.providerSession ?? launchProviderSession)
       const statusPty = liveLeafPty ?? mobileStatusPty
       const normalizedTabAgentStatus = this.renewMobileAgentStatusFromPtyTitle(
         tab.agentStatus
@@ -30737,20 +30748,25 @@ export class OrcaRuntimeService {
     getHookRowsForPane: (paneKey: string) => AgentStatusIpcPayload[]
   ): { agentStatus: AgentStatusEntry } | Record<string, never> {
     const paneKey = this.getMobileTerminalPaneKey(tab)
-    // Why: neither the OSC-retained row nor a title-derived status can carry a
-    // provider session — only the hook payload does, and headless serve has no
-    // renderer to publish `tab.agentStatus`. Without it mobile native chat has no
-    // transcript to address and sits on the empty state forever.
+    // Why: OSC/title status cannot carry a provider session. Prefer the hook,
+    // then the launch identity that host-authority resume bound before spawn.
     const hookRow = this.getHookAgentRowForPane(getHookRowsForPane(paneKey))
     // Why: the hook row is evidence in its own right. Returning early on a missing
     // PTY status/retained row put this check ahead of the only headless carrier, so
     // an agent that reported its session but never emitted a recognized title got no
     // `agentStatus` at all — exactly the hook-only case the fallback exists for.
-    if (!pty?.lastAgentStatus && !retained && !hookRow.agentType && !hookRow.providerSession) {
+    if (
+      !pty?.lastAgentStatus &&
+      !retained &&
+      !hookRow.agentType &&
+      !hookRow.providerSession &&
+      !pty?.providerSession
+    ) {
       return {}
     }
-    const providerSession = hookRow.providerSession
-      ? { providerSession: hookRow.providerSession }
+    const resolvedProviderSession = hookRow.providerSession ?? pty?.providerSession
+    const providerSession = resolvedProviderSession
+      ? { providerSession: resolvedProviderSession }
       : {}
     const leaf = this.leaves.get(this.getLeafKey(tab.parentTabId, tab.leafId)) ?? null
     const trackerOnlyTitle = this.getUnpersistedTrackedTitleForPty(
@@ -30782,7 +30798,10 @@ export class OrcaRuntimeService {
         // that reports over HTTP need never set a title this gate would recognize.
         // Scoped to panes with no PTY status at all, so it cannot revive a spinner:
         // this branch publishes `done`. It only keeps the transcript addressable.
-        (!pty?.lastAgentStatus && (hookRow.agentType != null || hookRow.providerSession != null))
+        (!pty?.lastAgentStatus &&
+          (hookRow.agentType != null ||
+            hookRow.providerSession != null ||
+            pty?.providerSession != null))
       if (!hasLiveHookSignal) {
         return {}
       }

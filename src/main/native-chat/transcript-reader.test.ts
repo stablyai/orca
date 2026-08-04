@@ -192,6 +192,46 @@ describe('readNativeChatTranscript (claude)', () => {
 })
 
 describe('readNativeChatTranscript (codex)', () => {
+  it('renders response API input_text and output_text message blocks', async () => {
+    const filePath = await writeFixture('orca-native-chat-codex-response-text-', [
+      {
+        type: 'session_meta',
+        timestamp: '2026-08-04T10:00:00.000Z',
+        payload: { id: 'codex-response-text', cwd: '/repo' }
+      },
+      {
+        type: 'response_item',
+        timestamp: '2026-08-04T10:00:01.000Z',
+        payload: {
+          type: 'message',
+          role: 'user',
+          content: [{ type: 'input_text', text: 'Resume this conversation' }]
+        }
+      },
+      {
+        type: 'response_item',
+        timestamp: '2026-08-04T10:00:02.000Z',
+        payload: {
+          type: 'message',
+          role: 'assistant',
+          content: [{ type: 'output_text', text: 'The restored answer is visible' }]
+        }
+      }
+    ])
+
+    const result = await readNativeChatTranscript('codex', 'codex-response-text', { filePath })
+
+    expect(result).toMatchObject({
+      messages: [
+        { role: 'user', blocks: [{ type: 'text', text: 'Resume this conversation' }] },
+        {
+          role: 'assistant',
+          blocks: [{ type: 'text', text: 'The restored answer is visible' }]
+        }
+      ]
+    })
+  })
+
   it('maps tool calls and results to tool-call/tool-result blocks', async () => {
     const filePath = await writeFixture('orca-native-chat-codex-', [
       {
