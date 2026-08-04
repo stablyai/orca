@@ -7,6 +7,16 @@
       "webDescription": "웹 클라이언트를 다시 시도하거나 페어링된 런타임에 다시 연결하세요."
     }
   },
+  "browser": {
+    "javascriptDialog": {
+      "confirmTitle": "페이지 확인",
+      "promptTitle": "페이지 입력 요청",
+      "alertTitle": "페이지 알림",
+      "promptLabel": "응답",
+      "cancel": "취소",
+      "ok": "확인"
+    }
+  },
   "settings": {
     "appearance": {
       "language": {

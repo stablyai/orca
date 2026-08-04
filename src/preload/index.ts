@@ -102,6 +102,11 @@ import type {
   WorktreeSetupLaunch
 } from '../shared/types'
 import type { PtyModelRestoreNeededEvent } from '../shared/pty-model-restore-marker'
+import type {
+  BrowserJavaScriptDialogClosedEvent,
+  BrowserJavaScriptDialogOpenedEvent,
+  BrowserJavaScriptDialogResponse
+} from '../shared/browser-javascript-dialog'
 import type { PtyListedSession } from '../shared/pty-listed-session'
 import type {
   PtyRendererDeliveryHealthReply,
@@ -2464,6 +2469,36 @@ const api = {
 
     unregisterGuest: (args: { browserPageId: string }): Promise<void> =>
       ipcRenderer.invoke('browser:unregisterGuest', args),
+
+    getJavaScriptDialog: (args: {
+      browserPageId: string
+    }): Promise<BrowserJavaScriptDialogOpenedEvent | null> =>
+      ipcRenderer.invoke('browser:getJavaScriptDialog', args),
+
+    respondJavaScriptDialog: (args: BrowserJavaScriptDialogResponse): Promise<boolean> =>
+      ipcRenderer.invoke('browser:respondJavaScriptDialog', args),
+
+    onJavaScriptDialogOpened: (
+      callback: (event: BrowserJavaScriptDialogOpenedEvent) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: BrowserJavaScriptDialogOpenedEvent
+      ): void => callback(data)
+      ipcRenderer.on('browser:javascript-dialog-opened', listener)
+      return () => ipcRenderer.removeListener('browser:javascript-dialog-opened', listener)
+    },
+
+    onJavaScriptDialogClosed: (
+      callback: (event: BrowserJavaScriptDialogClosedEvent) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: BrowserJavaScriptDialogClosedEvent
+      ): void => callback(data)
+      ipcRenderer.on('browser:javascript-dialog-closed', listener)
+      return () => ipcRenderer.removeListener('browser:javascript-dialog-closed', listener)
+    },
 
     openDevTools: (args: { browserPageId: string }): Promise<boolean> =>
       ipcRenderer.invoke('browser:openDevTools', args),

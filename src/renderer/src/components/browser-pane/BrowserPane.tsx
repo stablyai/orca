@@ -195,6 +195,8 @@ import {
   createBrowserPageGuestRecovery
 } from './browser-page-guest-recovery'
 import { subscribeBrowserSystemResume } from './browser-system-resume'
+import { BrowserJavaScriptDialogOverlay } from './browser-javascript-dialog-overlay'
+import { useBrowserJavaScriptDialog } from './use-browser-javascript-dialog'
 
 type BrowserTabPageState = Partial<
   Pick<
@@ -2915,6 +2917,7 @@ function BrowserPagePane({
   const contextMenuRef = useRef<HTMLDivElement>(null)
   const [findOpen, setFindOpen] = useState(false)
   const grab = useGrabMode(browserTab.id)
+  const javaScriptDialog = useBrowserJavaScriptDialog(browserTab.id)
 
   const markup = useMarkupMode({
     getCaptureContext: useCallback((): MarkupCaptureContext | null => {
@@ -5647,6 +5650,15 @@ function BrowserPagePane({
                 onClose={() => setFindOpen(false)}
                 webviewRef={webviewRef}
               />
+              {javaScriptDialog.dialog ? (
+                <BrowserJavaScriptDialogOverlay
+                  key={javaScriptDialog.dialog.dialogId}
+                  dialog={javaScriptDialog.dialog}
+                  isActive={isActive}
+                  busy={javaScriptDialog.responding}
+                  onRespond={javaScriptDialog.respond}
+                />
+              ) : null}
               {showFailureOverlay && browserTab.loadError ? (
                 <BrowserLoadFailureOverlay
                   loadError={browserTab.loadError}

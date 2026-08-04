@@ -1,4 +1,5 @@
 /* oxlint-disable max-lines */
+import { EventEmitter } from 'node:events'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -136,6 +137,148 @@ describe('browserManager', () => {
 
     expect(shellOpenExternalMock).toHaveBeenCalledTimes(1)
     expect(shellOpenExternalMock).toHaveBeenCalledWith('http://localhost:3000/')
+  })
+
+  it('scopes JavaScript dialogs to their registered browser page', () => {
+    const rendererSendMock = vi.fn()
+    const nativeDialogListener = vi.fn()
+    const dialogCallback = vi.fn()
+    const guestEvents = new EventEmitter()
+    const debuggerEvents = new EventEmitter()
+    guestEvents.on('-run-dialog', nativeDialogListener)
+    const guest = Object.assign(guestEvents, {
+      id: 109,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      openDevTools: guestOpenDevToolsMock,
+      debugger: Object.assign(debuggerEvents, {
+        isAttached: vi.fn(() => true),
+        attach: vi.fn(),
+        sendCommand: vi.fn().mockResolvedValue(undefined)
+      })
+    })
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === guest.id) {
+        return guest
+      }
+      if (id === rendererWebContentsId) {
+        return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
+      }
+      return null
+    })
+
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'browser-dialog-page',
+      worktreeId: 'worktree-1',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+    guestEvents.emit(
+      '-run-dialog',
+      {
+        frame: {
+          origin: 'https://example.com',
+          url: 'https://example.com/private?token=secret'
+        },
+        dialogType: 'confirm',
+        messageText: 'Continue?',
+        defaultPromptText: ''
+      },
+      dialogCallback
+    )
+
+    expect(nativeDialogListener).not.toHaveBeenCalled()
+    const opened = rendererSendMock.mock.calls.find(
+      ([channel]) => channel === 'browser:javascript-dialog-opened'
+    )?.[1]
+    expect(opened).toMatchObject({
+      browserPageId: 'browser-dialog-page',
+      dialogType: 'confirm',
+      message: 'Continue?',
+      origin: 'https://example.com'
+    })
+    expect(opened.origin).not.toContain('token')
+    expect(browserManager.getJavaScriptDialog('browser-dialog-page', 9999)).toBeNull()
+    expect(
+      browserManager.respondToJavaScriptDialog(
+        {
+          browserPageId: 'browser-dialog-page',
+          dialogId: opened.dialogId,
+          accept: true
+        },
+        9999
+      )
+    ).toBe(false)
+    expect(dialogCallback).not.toHaveBeenCalled()
+    expect(
+      browserManager.getJavaScriptDialog('browser-dialog-page', rendererWebContentsId)
+    ).toEqual(opened)
+
+    expect(
+      browserManager.respondToJavaScriptDialog(
+        {
+          browserPageId: 'browser-dialog-page',
+          dialogId: opened.dialogId,
+          accept: false
+        },
+        rendererWebContentsId
+      )
+    ).toBe(true)
+    expect(dialogCallback).toHaveBeenCalledWith(false, '')
+    expect(rendererSendMock).toHaveBeenCalledWith('browser:javascript-dialog-closed', {
+      browserPageId: 'browser-dialog-page',
+      dialogId: opened.dialogId
+    })
+
+    const fileDialogCallback = vi.fn()
+    guestEvents.emit(
+      '-run-dialog',
+      {
+        frame: { origin: 'file://', url: 'file:///tmp/page.html?token=secret' },
+        dialogType: 'alert',
+        messageText: 'Local page',
+        defaultPromptText: ''
+      },
+      fileDialogCallback
+    )
+    const fileOpened = rendererSendMock.mock.calls.findLast(
+      ([channel]) => channel === 'browser:javascript-dialog-opened'
+    )?.[1]
+    expect(fileOpened.origin).not.toContain('token')
+    expect(
+      browserManager.respondToJavaScriptDialog(
+        {
+          browserPageId: 'browser-dialog-page',
+          dialogId: fileOpened.dialogId,
+          accept: true
+        },
+        rendererWebContentsId
+      )
+    ).toBe(true)
+    expect(fileDialogCallback).toHaveBeenCalledWith(true, '')
+
+    const automationCallback = vi.fn()
+    guestEvents.emit(
+      '-run-dialog',
+      {
+        frame: { origin: 'https://example.com', url: 'https://example.com' },
+        dialogType: 'prompt',
+        messageText: 'Name?',
+        defaultPromptText: 'Draft'
+      },
+      automationCallback
+    )
+    expect(
+      browserManager.respondToPendingJavaScriptDialog(
+        'browser-dialog-page',
+        true,
+        'Automated response'
+      )
+    ).toBe(true)
+    expect(automationCallback).toHaveBeenCalledWith(true, 'Automated response')
   })
 
   it('allows registered safe popup URLs as Electron child windows', () => {

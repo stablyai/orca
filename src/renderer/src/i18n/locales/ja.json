@@ -7,6 +7,16 @@
       "webDescription": "Web クライアントを再試行するか、ペアリングされたランタイムに再接続します。"
     }
   },
+  "browser": {
+    "javascriptDialog": {
+      "confirmTitle": "ページの確認",
+      "promptTitle": "ページからの入力要求",
+      "alertTitle": "ページの警告",
+      "promptLabel": "応答",
+      "cancel": "キャンセル",
+      "ok": "OK"
+    }
+  },
   "settings": {
     "appearance": {
       "language": {

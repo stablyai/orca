@@ -17,6 +17,11 @@ import type {
   BrowserPopupEvent
 } from '../../shared/browser-guest-events'
 import type {
+  BrowserJavaScriptDialogClosedEvent,
+  BrowserJavaScriptDialogOpenedEvent,
+  BrowserJavaScriptDialogResponse
+} from '../../shared/browser-javascript-dialog'
+import type {
   BrowserGrabCancelReason,
   BrowserGrabPayload,
   BrowserGrabRect,
@@ -58,6 +63,11 @@ import {
   BrowserCertificateTrustController,
   type ManagedBrowserGuestContext
 } from './browser-certificate-trust-controller'
+import {
+  installBrowserJavaScriptDialogController,
+  type BrowserJavaScriptDialogController,
+  type BrowserJavaScriptDialogRequest
+} from './browser-javascript-dialog-controller'
 
 const AUTOMATION_VISIBILITY_ACQUIRE_TIMEOUT_MS = 2_000
 
@@ -250,6 +260,11 @@ export class BrowserManager {
   >()
   private readonly pendingPermissionEventsByGuestId = new Map<number, PendingPermissionEvent[]>()
   private readonly pendingPopupEventsByGuestId = new Map<number, PendingPopupEvent[]>()
+  private readonly javascriptDialogControllersByGuestId = new Map<
+    number,
+    BrowserJavaScriptDialogController
+  >()
+  private readonly javascriptDialogPageIdByGuestId = new Map<number, string>()
   private readonly pendingDownloadIdsByGuestId = new Map<number, string[]>()
   private readonly downloadsById = new Map<string, ActiveDownload>()
   private readonly grabSessionController = new BrowserGrabSessionController()
@@ -640,6 +655,17 @@ export class BrowserManager {
 
     // Why: bot detectors probe APIs that differ in Electron webviews; inject overrides each load so manual browsing passes.
     const disposeAntiDetection = this.injectAntiDetection(guest)
+    const javascriptDialogController =
+      !inheritedOwnerContext && guest.getType() === 'webview'
+        ? installBrowserJavaScriptDialogController(guest, {
+            onOpened: (dialog) => this.forwardJavaScriptDialogOpened(guest.id, dialog),
+            onClosed: (dialog) => this.forwardJavaScriptDialogClosed(guest.id, dialog)
+          })
+        : null
+    if (javascriptDialogController) {
+      this.javascriptDialogControllersByGuestId.set(guest.id, javascriptDialogController)
+    }
+
     // Why: disable throttling so background screenshots still get frames; else the compositor stalls and capture returns empty.
     guest.setBackgroundThrottling(false)
     const installClickedLinkRouting = (): void => {
@@ -880,6 +906,9 @@ export class BrowserManager {
 
     // Why: store cleanup so unregisterGuest can drop these listeners on teardown and let the WebContents wrapper GC.
     this.policyCleanupByGuestId.set(guest.id, () => {
+      javascriptDialogController?.dispose()
+      this.javascriptDialogControllersByGuestId.delete(guest.id)
+      this.javascriptDialogPageIdByGuestId.delete(guest.id)
       disposeAntiDetection()
       try {
         guest.off('destroyed', handleDestroyed)
@@ -1033,6 +1062,7 @@ export class BrowserManager {
     this.flushPendingLoadFailure(browserTabId, webContentsId)
     this.flushPendingPermissionEvents(browserTabId, webContentsId)
     this.flushPendingPopupEvents(browserTabId, webContentsId)
+    this.flushPendingJavaScriptDialog(browserTabId, webContentsId)
     this.flushPendingDownloadRequests(browserTabId, webContentsId)
     return true
   }
@@ -1146,6 +1176,8 @@ export class BrowserManager {
     this.clearedLoadErrorsByGuestId.clear()
     this.pendingPermissionEventsByGuestId.clear()
     this.pendingPopupEventsByGuestId.clear()
+    this.javascriptDialogControllersByGuestId.clear()
+    this.javascriptDialogPageIdByGuestId.clear()
     this.pendingDownloadIdsByGuestId.clear()
     this.mouseWheelZoomCleanupByTabId.clear()
     this.annotationViewportBridgeOpsByTabId.clear()
@@ -1161,6 +1193,59 @@ export class BrowserManager {
 
   getWorktreeIdForTab(browserTabId: string): string | undefined {
     return this.worktreeIdByTabId.get(browserTabId)
+  }
+
+  getJavaScriptDialog(
+    browserPageId: string,
+    rendererWebContentsId: number
+  ): BrowserJavaScriptDialogOpenedEvent | null {
+    if (this.rendererWebContentsIdByTabId.get(browserPageId) !== rendererWebContentsId) {
+      return null
+    }
+    const guestWebContentsId = this.webContentsIdByTabId.get(browserPageId)
+    const dialog =
+      guestWebContentsId === undefined
+        ? null
+        : this.javascriptDialogControllersByGuestId.get(guestWebContentsId)?.getPending()
+    if (!dialog || guestWebContentsId === undefined) {
+      return null
+    }
+    return this.toJavaScriptDialogEvent(browserPageId, dialog)
+  }
+
+  respondToJavaScriptDialog(
+    response: BrowserJavaScriptDialogResponse,
+    rendererWebContentsId: number
+  ): boolean {
+    if (this.rendererWebContentsIdByTabId.get(response.browserPageId) !== rendererWebContentsId) {
+      return false
+    }
+    return this.respondToPendingJavaScriptDialog(
+      response.browserPageId,
+      response.accept,
+      response.promptText,
+      response.dialogId
+    )
+  }
+
+  // Trusted main-process automation only. Renderer IPC must use
+  // respondToJavaScriptDialog so page ownership is validated first.
+  respondToPendingJavaScriptDialog(
+    browserPageId: string,
+    accept: boolean,
+    promptText?: string,
+    expectedDialogId?: string
+  ): boolean {
+    const guestWebContentsId = this.webContentsIdByTabId.get(browserPageId)
+    if (guestWebContentsId === undefined) {
+      return false
+    }
+    const controller = this.javascriptDialogControllersByGuestId.get(guestWebContentsId)
+    const dialog = controller?.getPending()
+    if (!controller || !dialog || (expectedDialogId && dialog.dialogId !== expectedDialogId)) {
+      return false
+    }
+    return controller.respond(dialog.dialogId, accept, promptText)
   }
 
   getSessionProfileIdForTab(browserTabId: string): string | null {
@@ -1837,6 +1922,65 @@ export class BrowserManager {
       browserPageId: browserTabId,
       ...event
     } satisfies BrowserPopupEvent)
+  }
+
+  private toJavaScriptDialogEvent(
+    browserPageId: string,
+    dialog: BrowserJavaScriptDialogRequest
+  ): BrowserJavaScriptDialogOpenedEvent {
+    const originSource = dialog.frameOrigin === 'file://' ? dialog.frameUrl : dialog.frameOrigin
+    return {
+      browserPageId,
+      dialogId: dialog.dialogId,
+      dialogType: dialog.dialogType,
+      message: dialog.message,
+      defaultPromptText: dialog.defaultPromptText,
+      origin: safeOrigin(originSource)
+    }
+  }
+
+  private forwardJavaScriptDialogOpened(
+    guestWebContentsId: number,
+    dialog: BrowserJavaScriptDialogRequest
+  ): void {
+    const browserPageId = this.tabIdByWebContentsId.get(guestWebContentsId)
+    if (!browserPageId) {
+      return
+    }
+    this.javascriptDialogPageIdByGuestId.set(guestWebContentsId, browserPageId)
+    this.resolveRendererForBrowserTab(browserPageId)?.send(
+      'browser:javascript-dialog-opened',
+      this.toJavaScriptDialogEvent(browserPageId, dialog)
+    )
+  }
+
+  private forwardJavaScriptDialogClosed(
+    guestWebContentsId: number,
+    dialog: BrowserJavaScriptDialogRequest
+  ): void {
+    const browserPageId =
+      this.javascriptDialogPageIdByGuestId.get(guestWebContentsId) ??
+      this.tabIdByWebContentsId.get(guestWebContentsId)
+    this.javascriptDialogPageIdByGuestId.delete(guestWebContentsId)
+    if (!browserPageId) {
+      return
+    }
+    this.resolveRendererForBrowserTab(browserPageId)?.send('browser:javascript-dialog-closed', {
+      browserPageId,
+      dialogId: dialog.dialogId
+    } satisfies BrowserJavaScriptDialogClosedEvent)
+  }
+
+  private flushPendingJavaScriptDialog(browserPageId: string, guestWebContentsId: number): void {
+    const dialog = this.javascriptDialogControllersByGuestId.get(guestWebContentsId)?.getPending()
+    if (!dialog) {
+      return
+    }
+    this.javascriptDialogPageIdByGuestId.set(guestWebContentsId, browserPageId)
+    this.resolveRendererForBrowserTab(browserPageId)?.send(
+      'browser:javascript-dialog-opened',
+      this.toJavaScriptDialogEvent(browserPageId, dialog)
+    )
   }
 
   private bindDownloadToTab(downloadId: string, browserTabId: string): void {

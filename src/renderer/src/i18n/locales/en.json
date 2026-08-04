@@ -32,6 +32,14 @@
     "guestRecovery": {
       "title": "Browser page stopped",
       "failed": "The browser page stopped unexpectedly. Retry to restore it."
+    },
+    "javascriptDialog": {
+      "confirmTitle": "Page confirmation",
+      "promptTitle": "Page prompt",
+      "alertTitle": "Page alert",
+      "promptLabel": "Response",
+      "cancel": "Cancel",
+      "ok": "OK"
     }
   },
   "settings": {

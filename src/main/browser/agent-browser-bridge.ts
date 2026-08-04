@@ -1295,6 +1295,10 @@ export class AgentBrowserBridge {
   // ── Dialog commands ──
 
   async dialogAccept(text?: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
+    const target = this.resolveCommandTarget(worktreeId, browserPageId)
+    if (this.browserManager.respondToPendingJavaScriptDialog(target.browserPageId, true, text)) {
+      return { browserPageId: target.browserPageId, handled: true }
+    }
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
       const args = ['dialog', 'accept']
       if (text) {
@@ -1305,6 +1309,10 @@ export class AgentBrowserBridge {
   }
 
   async dialogDismiss(worktreeId?: string, browserPageId?: string): Promise<unknown> {
+    const target = this.resolveCommandTarget(worktreeId, browserPageId)
+    if (this.browserManager.respondToPendingJavaScriptDialog(target.browserPageId, false)) {
+      return { browserPageId: target.browserPageId, handled: true }
+    }
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
       return await this.execAgentBrowser(sessionName, ['dialog', 'dismiss'])
     })

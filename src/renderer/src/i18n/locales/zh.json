@@ -7,6 +7,16 @@
       "webDescription": "重试 Web 客户端或重新连接到配对的运行时。"
     }
   },
+  "browser": {
+    "javascriptDialog": {
+      "confirmTitle": "页面确认",
+      "promptTitle": "页面输入请求",
+      "alertTitle": "页面提醒",
+      "promptLabel": "回复",
+      "cancel": "取消",
+      "ok": "确定"
+    }
+  },
   "settings": {
     "appearance": {
       "language": {

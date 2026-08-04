@@ -84,6 +84,7 @@ function mockBrowserManager(
     getGuestWebContentsId: vi.fn(() => null),
     getBrowserPageLoadError: vi.fn(() => null),
     getBrowserPageCertificateFailure: vi.fn(() => null),
+    respondToPendingJavaScriptDialog: vi.fn(() => false),
     unregisterGuest: vi.fn(),
     ensureWebviewVisible: vi.fn(async () => () => {}),
     acquireAutomationVisibility: vi.fn(async () => () => {}),
@@ -353,6 +354,37 @@ describe('AgentBrowserBridge', () => {
       expect(args).toContain('--cdp')
       expect(args[args.indexOf('--cdp') + 1]).toBe('9222')
     }
+  })
+
+  it('answers Orca-owned dialogs without starting an agent-browser session', async () => {
+    const respondToPendingJavaScriptDialog = vi.fn(() => true)
+    bridge = new AgentBrowserBridge(
+      mockBrowserManager(undefined, undefined, { respondToPendingJavaScriptDialog })
+    )
+
+    await expect(bridge.dialogAccept('Approved', undefined, 'tab-1')).resolves.toEqual({
+      browserPageId: 'tab-1',
+      handled: true
+    })
+    expect(respondToPendingJavaScriptDialog).toHaveBeenCalledWith('tab-1', true, 'Approved')
+    expect(execFileMock).not.toHaveBeenCalled()
+
+    await expect(bridge.dialogDismiss(undefined, 'tab-1')).resolves.toEqual({
+      browserPageId: 'tab-1',
+      handled: true
+    })
+    expect(respondToPendingJavaScriptDialog).toHaveBeenLastCalledWith('tab-1', false)
+  })
+
+  it('falls back to agent-browser when Orca does not own the dialog', async () => {
+    succeedWith({ ok: true })
+
+    await bridge.dialogDismiss(undefined, 'tab-1')
+
+    const dialogCall = execFileMock.mock.calls.find((call: unknown[]) =>
+      (call[1] as string[]).includes('dialog')
+    )
+    expect(dialogCall?.[1]).toContain('dismiss')
   })
 
   it('fails closed when stale agent-browser session ownership cannot be reset', async () => {

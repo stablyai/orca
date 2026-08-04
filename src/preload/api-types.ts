@@ -349,6 +349,11 @@ import type {
   BrowserPermissionDeniedEvent,
   BrowserPopupEvent
 } from '../shared/browser-guest-events'
+import type {
+  BrowserJavaScriptDialogClosedEvent,
+  BrowserJavaScriptDialogOpenedEvent,
+  BrowserJavaScriptDialogResponse
+} from '../shared/browser-javascript-dialog'
 import type { ElectronAPI } from '@electron-toolkit/preload'
 import type { BrowserSetAnnotationViewportBridgeArgs } from '../shared/browser-annotation-viewport-bridge'
 import type { CliInstallStatus } from '../shared/cli-install-types'
@@ -564,6 +569,16 @@ export type BrowserApi = {
     webContentsId: number
   }) => Promise<boolean>
   unregisterGuest: (args: { browserPageId: string }) => Promise<void>
+  getJavaScriptDialog: (args: {
+    browserPageId: string
+  }) => Promise<BrowserJavaScriptDialogOpenedEvent | null>
+  respondJavaScriptDialog: (args: BrowserJavaScriptDialogResponse) => Promise<boolean>
+  onJavaScriptDialogOpened: (
+    callback: (event: BrowserJavaScriptDialogOpenedEvent) => void
+  ) => () => void
+  onJavaScriptDialogClosed: (
+    callback: (event: BrowserJavaScriptDialogClosedEvent) => void
+  ) => () => void
   openDevTools: (args: { browserPageId: string }) => Promise<boolean>
   setViewportOverride: (args: {
     browserPageId: string

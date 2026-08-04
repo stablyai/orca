@@ -34,6 +34,10 @@ import {
   isValidBrowserAnnotationViewportBridgeToken,
   type BrowserSetAnnotationViewportBridgeArgs
 } from '../../shared/browser-annotation-viewport-bridge'
+import {
+  BROWSER_JAVASCRIPT_DIALOG_PROMPT_MAX_CHARS,
+  type BrowserJavaScriptDialogResponse
+} from '../../shared/browser-javascript-dialog'
 
 let trustedBrowserRendererWebContentsId: number | null = null
 let agentBrowserBridgeRef: AgentBrowserBridge | null = null
@@ -208,6 +212,8 @@ export function registerBrowserHandlers(): void {
   ipcMain.removeHandler('browser:isGuestRegistered')
   ipcMain.removeHandler('browser:repairGuestRegistration')
   ipcMain.removeHandler('browser:unregisterGuest')
+  ipcMain.removeHandler('browser:getJavaScriptDialog')
+  ipcMain.removeHandler('browser:respondJavaScriptDialog')
   ipcMain.removeHandler('browser:openDevTools')
   ipcMain.removeHandler('browser:setViewportOverride')
   ipcMain.removeHandler('browser:setAnnotationViewportBridge')
@@ -318,6 +324,34 @@ export function registerBrowserHandlers(): void {
     grabModeOperationByPageId.delete(args.browserPageId)
     return true
   })
+
+  ipcMain.handle('browser:getJavaScriptDialog', (event, args: { browserPageId?: unknown }) => {
+    if (!isTrustedBrowserRenderer(event.sender) || typeof args?.browserPageId !== 'string') {
+      return null
+    }
+    return browserManager.getJavaScriptDialog(args.browserPageId, event.sender.id)
+  })
+
+  ipcMain.handle(
+    'browser:respondJavaScriptDialog',
+    (event, args: Partial<BrowserJavaScriptDialogResponse>) => {
+      if (
+        !isTrustedBrowserRenderer(event.sender) ||
+        typeof args?.browserPageId !== 'string' ||
+        typeof args.dialogId !== 'string' ||
+        typeof args.accept !== 'boolean' ||
+        (args.promptText !== undefined &&
+          (typeof args.promptText !== 'string' ||
+            args.promptText.length > BROWSER_JAVASCRIPT_DIALOG_PROMPT_MAX_CHARS))
+      ) {
+        return false
+      }
+      return browserManager.respondToJavaScriptDialog(
+        args as BrowserJavaScriptDialogResponse,
+        event.sender.id
+      )
+    }
+  )
 
   ipcMain.handle(
     'browser:proceedCertificate',

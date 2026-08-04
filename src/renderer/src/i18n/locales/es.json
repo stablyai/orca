@@ -7,6 +7,16 @@
       "webDescription": "Vuelva a cargar el cliente web o vuelva a conectarse al servidor Orca vinculado."
     }
   },
+  "browser": {
+    "javascriptDialog": {
+      "confirmTitle": "Confirmación de la página",
+      "promptTitle": "Solicitud de la página",
+      "alertTitle": "Alerta de la página",
+      "promptLabel": "Respuesta",
+      "cancel": "Cancelar",
+      "ok": "Aceptar"
+    }
+  },
   "settings": {
     "appearance": {
       "language": {
