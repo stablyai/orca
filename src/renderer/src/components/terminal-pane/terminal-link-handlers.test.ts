@@ -15,6 +15,10 @@ import {
   openDetectedFilePath
 } from './terminal-link-handlers'
 import { TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES } from './terminal-path-exists-cache'
+import {
+  resetTerminalWorktreePathIndexForTests,
+  seedTerminalWorktreePathIndexForTests
+} from './terminal-worktree-path-index'
 import { handleOscLink } from './terminal-osc-link-routing'
 import { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
 import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
@@ -103,6 +107,7 @@ async function flushDoubleRaf(): Promise<void> {
 
 beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
+  resetTerminalWorktreePathIndexForTests()
   vi.clearAllMocks()
   runtimeEnvironmentTransportCallMock.mockReset()
   runtimeEnvironmentTransportCallMock.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
@@ -1514,6 +1519,42 @@ describe('createFilePathLinkProvider range bounds', () => {
     links[0]!.hover?.({} as MouseEvent, links[0]!.text)
 
     expect(linkTooltip.textContent).toBe('/repo/CLAUDE.md (⌘+click to open in Orca)')
+  })
+
+  it('uses worktree listing as positive-only evidence and skips pathExists IPC (#11975)', async () => {
+    seedTerminalWorktreePathIndexForTests('wt-1', '/repo', ['listed.ts'])
+    const pathExistsCache = new Map<string, boolean>()
+    const shellPathExists = vi.mocked(window.api.shell.pathExists)
+    shellPathExists.mockClear()
+    shellPathExists.mockResolvedValue(false)
+
+    const pane = makePane([makeBufferLine('listed.ts unknown.ts')])
+    const managerRef = {
+      current: { getPanes: () => [pane] } as unknown as PaneManager
+    }
+    const provider = createFilePathLinkProvider(
+      1,
+      {
+        worktreeId: 'wt-1',
+        worktreePath: '/repo',
+        startupCwd: '/repo',
+        managerRef,
+        linkProviderDisposablesRef: { current: new Map<number, IDisposable>() },
+        pathExistsCache
+      },
+      { textContent: '', style: { display: '' } } as unknown as HTMLElement,
+      getTerminalFileOpenHint()
+    )
+
+    const links = await new Promise<ILink[]>((resolve) => {
+      provider.provideLinks(1, (provided) => resolve(provided ?? []))
+    })
+
+    expect(links.map((link) => link.text)).toEqual(['listed.ts'])
+    // Why: listed.ts resolved from the index without IPC; unknown.ts still probed.
+    expect(shellPathExists).toHaveBeenCalledWith('/repo/unknown.ts')
+    expect(shellPathExists).not.toHaveBeenCalledWith('/repo/listed.ts')
+    expect(pathExistsCache.get('active\0/repo/listed.ts')).toBe(true)
   })
 
   it('bounds the terminal path-exists cache while preserving recent probes', async () => {

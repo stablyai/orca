@@ -5,12 +5,12 @@ import {
   resolveTerminalFileLink
 } from '@/lib/terminal-links'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { isRemoteRuntimeFileOperation, runtimePathExists } from '@/runtime/runtime-file-client'
 import {
   buildCandidateLogicalLinesForBufferPosition,
   dedupeLogicalLines,
   openFilePathLinkAtBufferPosition
 } from './terminal-file-link-hit-testing'
+import { resolveTerminalFilePathExists } from './terminal-file-path-exists'
 import {
   getTerminalFileContext,
   isHtmlFilePath,
@@ -24,11 +24,6 @@ import {
   rangeForParsedFileLink,
   type WrappedLogicalLine
 } from './wrapped-terminal-link-ranges'
-import {
-  getTerminalPathExistsCacheKey,
-  readTerminalPathExistsCache,
-  writeTerminalPathExistsCache
-} from './terminal-path-exists-cache'
 import {
   getTerminalHtmlFileOpenHint,
   getTerminalOrcaFileOpenHint,
@@ -147,13 +142,6 @@ export function createFilePathLinkProvider(
                 worktreePath,
                 runtimeEnvironmentId
               )
-              const isRemoteRuntimePath = isRemoteRuntimeFileOperation(fileContext, mappedPath)
-              const cacheKey = getTerminalPathExistsCacheKey({
-                absolutePath: mappedPath,
-                connectionId: fileContext.connectionId,
-                isRemoteRuntimePath,
-                runtimeEnvironmentId
-              })
               const worktreeRootLink = resolveKnownWorktreeRootPathLink(mappedPath)
               if (/[\\/]$/.test(parsed.pathText) && !worktreeRootLink) {
                 return null
@@ -161,13 +149,14 @@ export function createFilePathLinkProvider(
               // Why: exact known workspace roots must stay clickable for SSH or
               // stale local paths even when filesystem probing says "missing".
               if (!worktreeRootLink) {
-                const cachedExists = readTerminalPathExistsCache(pathExistsCache, cacheKey)
-                const exists =
-                  cachedExists ??
-                  (fileContext.connectionId || isRemoteRuntimePath
-                    ? await runtimePathExists(fileContext, mappedPath)
-                    : await window.api.shell.pathExists(mappedPath))
-                writeTerminalPathExistsCache(pathExistsCache, cacheKey, exists)
+                const exists = await resolveTerminalFilePathExists({
+                  mappedPath,
+                  worktreeId,
+                  worktreePath,
+                  fileContext,
+                  runtimeEnvironmentId,
+                  pathExistsCache
+                })
                 if (!exists) {
                   return null
                 }

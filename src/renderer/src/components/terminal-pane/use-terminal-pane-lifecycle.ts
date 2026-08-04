@@ -32,6 +32,16 @@ import {
   getTerminalUrlOpenHint,
   installFilePathLinkClickFallback
 } from './terminal-link-handlers'
+import {
+  primeTerminalWorktreePathIndex,
+  releaseTerminalWorktreePathIndexLease,
+  terminalWorktreePathIndexOwnerKey
+} from './terminal-worktree-path-index'
+import { cancelRuntimeFileList, listRuntimeFiles } from '@/runtime/runtime-file-client'
+import {
+  getFileExplorerOperationOwner,
+  getFileExplorerOperationRoute
+} from '@/components/right-sidebar/file-explorer-operation-owner'
 import { terminalUrlOpenHintOptionsFor } from './terminal-link-open-hints'
 import { createTerminalHandleLinkProvider } from './terminal-handle-links'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
@@ -742,6 +752,39 @@ export function useTerminalPaneLifecycle({
       getRuntimeEnvironmentIdForPane: (paneId) => {
         const sourceOwner = getHttpLinkSourceOwnerForPane(paneId)
         return sourceOwner.kind === 'runtime' ? sourceOwner.runtimeEnvironmentId : null
+      }
+    }
+    // Why: warm positive-only worktree path index so hover linkify can skip
+    // per-candidate shell:pathExists IPC for in-repo files (#11975). Never
+    // awaited — miss degrades to the existing stat path. Use the worktree's
+    // file-explorer owner (not global runtime focus) and cancel on teardown
+    // so abandoned full-tree scans cannot stack on SSH/relay (#7721).
+    let pathIndexOwnerKey: string | null = null
+    if (worktreeId && worktreePath) {
+      const operationOwner = getFileExplorerOperationOwner(worktreeId)
+      const operationRoute = getFileExplorerOperationRoute(operationOwner)
+      if (operationRoute) {
+        pathIndexOwnerKey = terminalWorktreePathIndexOwnerKey({
+          connectionId: operationRoute.connectionId,
+          runtimeEnvironmentId: operationRoute.settings.activeRuntimeEnvironmentId
+        })
+        const fileContext = {
+          settings: operationRoute.settings,
+          worktreeId,
+          worktreePath,
+          connectionId: operationRoute.connectionId
+        }
+        primeTerminalWorktreePathIndex({
+          worktreeId,
+          worktreePath,
+          ownerKey: pathIndexOwnerKey,
+          listRelativePaths: (requestToken) =>
+            listRuntimeFiles(fileContext, {
+              rootPath: worktreePath,
+              requestToken
+            }),
+          cancelLoad: (requestToken) => cancelRuntimeFileList(fileContext, requestToken)
+        })
       }
     }
     let resizeRaf: number | null = null
@@ -1692,6 +1735,9 @@ export function useTerminalPaneLifecycle({
     return () => {
       window.removeEventListener(SPLIT_TERMINAL_PANE_EVENT, onCliSplitPane)
       window.removeEventListener(CLOSE_TERMINAL_PANE_EVENT, onCliClosePane)
+      if (pathIndexOwnerKey && worktreeId && worktreePath) {
+        releaseTerminalWorktreePathIndexLease(worktreeId, worktreePath, pathIndexOwnerKey)
+      }
       const currentWorktreeTabs = useAppStore.getState().tabsByWorktree[worktreeId]
       const tabStillExists = Boolean(
         currentWorktreeTabs?.some((candidate) => candidate.id === tabId)
