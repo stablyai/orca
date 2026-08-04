@@ -117,63 +117,6 @@ export function getIssueGroupInfo(
     return { key: `issue:${identifier}`, label }
   }
 
-  const branchStr = typeof w.branch === 'string' ? branchName(w.branch) : ''
-  const textToSearch = `${w.displayName || ''} ${branchStr} ${w.comment || ''}`
-  const issueKeyMatch = textToSearch.match(/\b([A-Za-z][A-Za-z0-9_]*-\d+)\b/)
-  if (issueKeyMatch) {
-    const identifier = issueKeyMatch[1].toUpperCase()
-    // Why: branch names often take the form "issue-5199" or "issue/5199". If the matched identifier is ISSUE-123 and w.linkedIssue matches 123, resolve as numeric GitHub issue #123.
-    const numericMatch = identifier.match(/^ISSUE-(\d+)$/)
-    if (numericMatch) {
-      const num = Number.parseInt(numericMatch[1], 10)
-      const numIdentifier = `#${num}`
-      let title: string | undefined
-      if (issueCache && repoMap) {
-        const repo = repoMap.get(w.repoId)
-        if (repo) {
-          const issueKey = getIssueCacheKey(
-            repo.path,
-            repo.id,
-            num,
-            settings,
-            repo.connectionId,
-            repo.executionHostId,
-            true
-          )
-          title = issueCache[issueKey]?.data?.title?.trim()
-        }
-      }
-      const label = title ? `${numIdentifier}: ${title}` : numIdentifier
-      return { key: `issue:${numIdentifier}`, label }
-    }
-    return { key: `issue:${identifier}`, label: identifier }
-  }
-
-  const genericIssueMatch =
-    textToSearch.match(/\b(?:issue|ticket)[/-]?(\d+)\b/i) ?? textToSearch.match(/#(\d+)\b/)
-  if (genericIssueMatch) {
-    const num = Number.parseInt(genericIssueMatch[1], 10)
-    const identifier = `#${num}`
-    let title: string | undefined
-    if (issueCache && repoMap) {
-      const repo = repoMap.get(w.repoId)
-      if (repo) {
-        const issueKey = getIssueCacheKey(
-          repo.path,
-          repo.id,
-          num,
-          settings,
-          repo.connectionId,
-          repo.executionHostId,
-          true
-        )
-        title = issueCache[issueKey]?.data?.title?.trim()
-      }
-    }
-    const label = title ? `${identifier}: ${title}` : identifier
-    return { key: `issue:${identifier}`, label }
-  }
-
   return {
     key: 'issue:none',
     label: translate('auto.components.sidebar.worktree.list.groups.noIssue', 'No issue')

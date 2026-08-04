@@ -4295,27 +4295,15 @@ describe('buildRows pending creations', () => {
       })
     })
 
-    it('converts issue-5199 branch pattern to numeric issue #5199', () => {
+    it('falls back to No issue when worktree has no explicitly linked issue, ignoring branch name text', () => {
       const wt: Worktree = {
         ...worktree,
         displayName: 'feat/issue-5199-custom-groups',
         branch: 'feat/issue-5199-custom-groups'
       }
       expect(getIssueGroupInfo(wt)).toEqual({
-        key: 'issue:#5199',
-        label: '#5199'
-      })
-    })
-
-    it('extracts issue key from branch name when no linked issue', () => {
-      const wt: Worktree = {
-        ...worktree,
-        displayName: 'feature/PROJ-456-something',
-        branch: 'feature/PROJ-456-something'
-      }
-      expect(getIssueGroupInfo(wt)).toEqual({
-        key: 'issue:PROJ-456',
-        label: 'PROJ-456'
+        key: 'issue:none',
+        label: 'No issue'
       })
     })
 
