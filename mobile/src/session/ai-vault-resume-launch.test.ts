@@ -299,11 +299,47 @@ describe('resumeAiVaultSessionInTerminal', () => {
         worktree: 'id:worktree-1',
         tabId: 'tab-1',
         notifyClients: false,
-        navigation: 'caller'
+        navigation: 'caller',
+        intent: 'user'
       },
       { timeoutMs: RESUME_RPC_TIMEOUT_MS }
     )
-    expect(sendRequest).not.toHaveBeenCalledWith('terminal.send', expect.anything())
+    expect(sendRequest.mock.calls.map((call) => call[0])).toEqual([
+      'terminal.ensureAgentSession',
+      'session.tabs.activate'
+    ])
+  })
+
+  it('reports partial success when the resumed session tab cannot be activated', async () => {
+    const sendRequest = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        result: {
+          disposition: 'created',
+          terminal: { handle: 'term-1', tabId: 'tab-1', title: 'Codex' }
+        }
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        error: { code: 'tab_not_found', message: 'Tab is unavailable' }
+      })
+    const launch = buildMobileAiVaultResumeLaunch({
+      session: session({ agent: 'codex', sessionId: 'codex-1' }),
+      hostPlatform: 'linux'
+    })
+
+    await expect(
+      resumeAiVaultSessionInTerminal({ sendRequest }, 'worktree-1', launch, {
+        hostCapabilities: [MOBILE_AI_VAULT_HOST_AUTHORITY_RESUME_CAPABILITY]
+      })
+    ).rejects.toThrow(
+      'Agent session started, but its tab could not be activated: Tab is unavailable'
+    )
+    expect(sendRequest.mock.calls.map((call) => call[0])).toEqual([
+      'terminal.ensureAgentSession',
+      'session.tabs.activate'
+    ])
   })
 
   it('falls back only when host authority proves no resume side effect began', async () => {
@@ -513,7 +549,9 @@ describe('resume platform helpers', () => {
     expect(readMobileRuntimeTerminalWindowsShell({ terminalWindowsShell: 'wsl.exe' })).toBe(
       'wsl.exe'
     )
+    expect(readMobileRuntimeTerminalWindowsShell({ terminalWindowsShell: '  pwsh  ' })).toBe('pwsh')
     expect(readMobileRuntimeTerminalWindowsShell({ terminalWindowsShell: '' })).toBeNull()
+    expect(readMobileRuntimeTerminalWindowsShell({ terminalWindowsShell: '   ' })).toBeNull()
   })
 
   it('fails closed when status.get capabilities are malformed', () => {

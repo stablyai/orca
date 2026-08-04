@@ -82,6 +82,34 @@ describe('agent session RPC methods', () => {
   })
 
   it.each([
+    ['empty', ''],
+    ['surrounding whitespace', ' /repo/packages/app '],
+    ['oversized', 'a'.repeat(32_768 + 1)]
+  ])(
+    'rejects %s explicit startup directories before runtime mutation',
+    async (_label, startupCwd) => {
+      const runtime = runtimeStub()
+      const dispatcher = new RpcDispatcher({
+        runtime: runtime as unknown as OrcaRuntimeService,
+        methods: AGENT_SESSION_METHODS
+      })
+
+      const response = await dispatcher.dispatch(
+        request('terminal.ensureAgentSession', {
+          kind: 'explicit',
+          worktree: 'id:worktree-1',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'provider-session-1' },
+          startupCwd
+        })
+      )
+
+      expect(response).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+      expect(runtime.ensureAgentSession).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each([
     {
       method: 'terminal.createAgentSession',
       params: {

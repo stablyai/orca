@@ -30,7 +30,11 @@ export function readMobileRuntimeTerminalWindowsShell(statusResult: unknown): st
     return null
   }
   const shell = (statusResult as { terminalWindowsShell?: unknown }).terminalWindowsShell
-  return typeof shell === 'string' && shell.trim().length > 0 ? shell : null
+  if (typeof shell !== 'string') {
+    return null
+  }
+  const trimmed = shell.trim()
+  return trimmed.length > 0 ? trimmed : null
 }
 
 export function resolveMobileAiVaultResumePlatform(

@@ -1,5 +1,5 @@
 import type { TabActivationIntent } from '../../../src/shared/tab-activation-intent'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient, SendRequestOptions } from '../transport/rpc-client'
 import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import type { RpcResponse } from '../transport/types'
 import {
@@ -84,10 +84,14 @@ export function focusMobileTerminal(
 
 export function activateMobileSessionTab(
   client: ActivationClient,
-  params: MobileSessionTabActivationParams
+  params: MobileSessionTabActivationParams,
+  options?: SendRequestOptions
 ): Promise<RpcResponse> {
   return retryIdempotentActivationAfterCutover(
-    () => client.sendRequest('session.tabs.activate', params),
+    () =>
+      options
+        ? client.sendRequest('session.tabs.activate', params, options)
+        : client.sendRequest('session.tabs.activate', params),
     'session.tabs.activate',
     params.tabId
   )

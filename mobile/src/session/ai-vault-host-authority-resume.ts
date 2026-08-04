@@ -7,6 +7,7 @@ import { AI_VAULT_HOST_AUTHORITY_RESUME_RUNTIME_CAPABILITY } from '../../../src/
 import type { RpcClient } from '../transport/rpc-client'
 import { RESUME_RPC_TIMEOUT_MS } from './ai-vault-resume-preparation'
 import type { MobileReviewTerminalTab } from './mobile-diff-review-rpc'
+import { activateMobileSessionTab } from './mobile-session-tab-activation'
 
 export const MOBILE_AI_VAULT_HOST_AUTHORITY_RESUME_CAPABILITY =
   AI_VAULT_HOST_AUTHORITY_RESUME_RUNTIME_CAPABILITY
@@ -66,18 +67,26 @@ export async function tryHostAuthorityAiVaultResume(
   if (!terminal) {
     throw new Error('Ensured terminal response was invalid')
   }
-  const activated = await client.sendRequest(
-    'session.tabs.activate',
-    {
-      worktree: `id:${worktreeId}`,
-      tabId: terminal.id,
-      notifyClients: false,
-      navigation: 'caller'
-    },
-    { timeoutMs: RESUME_RPC_TIMEOUT_MS }
-  )
+  let activated
+  try {
+    activated = await activateMobileSessionTab(
+      client,
+      {
+        worktree: `id:${worktreeId}`,
+        tabId: terminal.id,
+        notifyClients: false,
+        navigation: 'caller',
+        intent: 'user'
+      },
+      { timeoutMs: RESUME_RPC_TIMEOUT_MS }
+    )
+  } catch (error) {
+    const detail = error instanceof Error ? `: ${error.message}` : ''
+    throw new Error(`Agent session started, but its tab could not be activated${detail}`)
+  }
   if (!activated.ok) {
-    throw new Error(activated.error?.message || 'Failed to activate resumed terminal')
+    const detail = activated.error?.message ? `: ${activated.error.message}` : ''
+    throw new Error(`Agent session started, but its tab could not be activated${detail}`)
   }
   return terminal
 }

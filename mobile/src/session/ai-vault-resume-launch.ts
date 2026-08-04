@@ -149,8 +149,9 @@ export function buildMobileAiVaultResumeLaunch(args: {
         launchAgent: startupPlan.agent,
         providerSession,
         ...(args.session.cwd?.trim() ? { startupCwd: args.session.cwd.trim() } : {}),
-        // Windows-hosted WSL resumes still need execution-owner Codex/Pi home
-        // provenance; keep the proven legacy command path until that contract exists.
+        // Why: Windows-hosted WSL still needs execution-owner Codex/Pi home provenance,
+        // while an unknown runtime platform can safely let host authority reject before
+        // side effects and fall back to the proven legacy command path.
         hostAuthorityEligible:
           args.runtimeHostPlatform == null || args.runtimeHostPlatform === args.hostPlatform
       }
