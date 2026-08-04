@@ -64,7 +64,8 @@ export class BrowserRecorderPageSource {
                 typeof (field as { label?: unknown }).label === 'string' &&
                 typeof (field as { value?: unknown }).value === 'string'
             )
-          : []
+          : [],
+        bodyText: typeof parsed.bodyText === 'string' ? parsed.bodyText : undefined
       }
       if (!this.lastFingerprint) {
         this.lastFingerprint = fingerprint

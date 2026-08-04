@@ -75,6 +75,7 @@ describe('formatBrowserRecorderStepSummary', () => {
                 interactiveDelta: 0,
                 inputsChanged: true,
                 inputChanges: [{ label: '#email', before: '', after: 'user@example.com' }],
+                textChange: null,
                 changed: ['inputs']
               }
             }

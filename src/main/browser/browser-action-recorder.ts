@@ -240,7 +240,8 @@ export class BrowserActionRecorder {
         title: typeof parsed.title === 'string' ? parsed.title : '',
         textLength: typeof parsed.textLength === 'number' ? parsed.textLength : 0,
         interactive: typeof parsed.interactive === 'number' ? parsed.interactive : 0,
-        inputsDetail: parseInputsDetail(parsed.inputsDetail)
+        inputsDetail: parseInputsDetail(parsed.inputsDetail),
+        bodyText: typeof parsed.bodyText === 'string' ? parsed.bodyText : undefined
       }
     } catch {
       // Page mid-navigation or debugger busy — fingerprint is best-effort.

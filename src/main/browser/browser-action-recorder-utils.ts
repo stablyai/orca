@@ -186,7 +186,10 @@ export function diffFingerprints(
     changed.push('title')
   }
   const textLengthDelta = after.textLength - before.textLength
-  if (textLengthDelta !== 0) {
+  const textChange = diffBodyText(before.bodyText, after.bodyText)
+  // Why: both the length delta and the text snippet describe the same change
+  // kind — report 'text' once so the compact log does not show duplicates.
+  if (textLengthDelta !== 0 || textChange) {
     changed.push('text')
   }
   const interactiveDelta = after.interactive - before.interactive
@@ -205,7 +208,44 @@ export function diffFingerprints(
     interactiveDelta,
     inputsChanged,
     inputChanges,
+    textChange,
     changed
+  }
+}
+
+/**
+ * Lifts the changed region of the visible body text out of the full
+ * before/after snapshots: trims the common prefix/suffix, then caps each side
+ * to the log budget so a tiny edit in a large page stays readable. Returns
+ * null when both snapshots are absent, equal, or the trimmed region is empty.
+ */
+function diffBodyText(
+  before: string | undefined,
+  after: string | undefined
+): { before: string; after: string } | null {
+  if (!before || !after || before === after) {
+    return null
+  }
+  let start = 0
+  const maxStart = Math.min(before.length, after.length)
+  while (start < maxStart && before[start] === after[start]) {
+    start += 1
+  }
+  let beforeEnd = before.length
+  let afterEnd = after.length
+  while (beforeEnd > start && afterEnd > start && before[beforeEnd - 1] === after[afterEnd - 1]) {
+    beforeEnd -= 1
+    afterEnd -= 1
+  }
+  const beforeSnippet = before.slice(start, beforeEnd)
+  const afterSnippet = after.slice(start, afterEnd)
+  if (beforeSnippet.length === 0 && afterSnippet.length === 0) {
+    return null
+  }
+  const max = BROWSER_RECORDER_BUDGET.textChangeMaxLength
+  return {
+    before: capText(beforeSnippet, max),
+    after: capText(afterSnippet, max)
   }
 }
 

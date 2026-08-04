@@ -250,6 +250,7 @@ describe('BrowserActionRecorder.capture', () => {
       interactiveDelta: 0,
       inputsChanged: false,
       inputChanges: [],
+      textChange: null,
       changed: []
     })
     recorder.setEnabled(false)

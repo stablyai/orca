@@ -13587,7 +13587,9 @@
             "d101b4ca91": "Copied",
             "5d4bb3794d": "Copy Log",
             "0b9a88486c": "Clear recorded log",
-            "f23f6712a2": "Clear log"
+            "f23f6712a2": "Clear log",
+            "collapse": "Collapse log",
+            "expand": "Expand log"
           }
         }
       },
