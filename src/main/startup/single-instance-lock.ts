@@ -10,6 +10,8 @@ export const SINGLE_INSTANCE_LOCK_BYPASS_MESSAGE =
 // Why: stable "another process owns this profile" contract that systemd RestartPreventExitStatus= keys off; changing it silently un-fixes #11935.
 export const SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE = 3
 
+// Why: `serve` is a CLI subcommand, never Electron argv — an AppImage launched as `orca serve` exits
+// at the CLI redirect before requesting the lock, and the CLI re-spawns the Electron child with `--serve`.
 const SERVE_MODE_ARG = '--serve'
 
 // Why: a duplicate `orca serve` is a supervisor artifact, not a user asking for a window; fail open when argv is unavailable.
