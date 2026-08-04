@@ -763,7 +763,9 @@ export async function initDaemonPtyProvider(
         ? new DegradedDaemonPtyProvider({
             current: newAdapter,
             legacy: legacyAdapters,
-            fallback: getLocalPtyProvider()
+            fallback: getLocalPtyProvider(),
+            probeCurrentDaemonSpawn: async () =>
+              (await checkDaemonHealth(info.socketPath, info.tokenPath)) === 'healthy'
           })
         : legacyAdapters.length > 0
           ? new DaemonPtyRouter({

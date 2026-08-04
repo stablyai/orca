@@ -15,6 +15,7 @@ import type { SshPtyRecoveryActivationLease } from '../providers/ssh-pty-notific
 import { isSshPtyIdentityMismatchError, isSshPtyNotFoundError } from '../providers/ssh-pty-errors'
 import { toAppSshPtyId, toRelaySshPtyId } from '../providers/ssh-pty-id'
 import { SshFilesystemProvider } from '../providers/ssh-filesystem-provider'
+import { isMethodNotFoundError } from './ssh-filesystem-stream-reader'
 import { SshGitProvider } from '../providers/ssh-git-provider'
 import { agentHookServer } from '../agent-hooks/server'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
@@ -80,12 +81,18 @@ import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { DEFAULT_PTY_SOURCE_WINDOW_SU } from '../../shared/pty-source-credit-contract'
 import { PTY_CONSUMER_STALE_OWNER_RECOVERY_ERROR } from '../../shared/pty-consumer-session'
+import { retrySshOwnerRecoveryWhileBlocked } from './ssh-owner-recovery-retry'
 import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
 import {
   acknowledgeRemoteOrcaCliPostOutput,
   parseRemoteOrcaCliPostOutput
 } from './ssh-remote-orchestration-post-output'
 import { toSshExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
+import {
+  SSH_AI_VAULT_LIST_SESSIONS_METHOD,
+  SSH_AI_VAULT_LIST_SESSIONS_TIMEOUT_MS,
+  type SshAiVaultRelayListParams
+} from '../../shared/ssh-ai-vault-relay'
 import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
 import {
@@ -272,6 +279,7 @@ export class SshRelaySession {
   private currentConnection: SshConnection | null = null
   private hostPlatform: RemoteHostPlatform | null = null
   private remoteCliBridgeEnv: RemoteCliBridgeEnv | null = null
+  private aiVaultListMethodSupported: boolean | null = null
   private pendingPtyReattaches = new Map<string, PendingPtyReattach>()
   private readonly ptyRecoveryRetention = new SshPtyRecoveryRetentionBudget()
   private activePtyProviderGeneration: number | null = null
@@ -377,6 +385,33 @@ export class SshRelaySession {
     }
   }
 
+  async requestAiVaultSessionList(
+    params: SshAiVaultRelayListParams,
+    options: { signal?: AbortSignal; timeoutMs?: number } = {}
+  ): Promise<unknown | null> {
+    if (this.aiVaultListMethodSupported === false) {
+      return null
+    }
+    const mux = this.mux
+    if (!mux || mux.isDisposed() || this._state !== 'ready') {
+      throw new Error('SSH relay is not ready')
+    }
+    try {
+      const result = await mux.request(SSH_AI_VAULT_LIST_SESSIONS_METHOD, params, {
+        signal: options.signal,
+        timeoutMs: options.timeoutMs ?? SSH_AI_VAULT_LIST_SESSIONS_TIMEOUT_MS
+      })
+      this.aiVaultListMethodSupported = true
+      return result
+    } catch (error) {
+      if (isMethodNotFoundError(error)) {
+        this.aiVaultListMethodSupported = false
+        return null
+      }
+      throw error
+    }
+  }
+
   getPortScanner(): PortScanner | null {
     return this.portScanner
   }
@@ -395,6 +430,7 @@ export class SshRelaySession {
       throw new Error(`Cannot establish relay session in state: ${this._state}`)
     }
     this._state = 'deploying'
+    this.aiVaultListMethodSupported = null
     this.currentConnection = conn
 
     try {
@@ -528,6 +564,7 @@ export class SshRelaySession {
     this.abortController = abortController
 
     this._state = 'reconnecting'
+    this.aiVaultListMethodSupported = null
     this.currentConnection = conn
 
     // Why: stop scanning before teardownProviders so the poll timer can't fire against a disposed multiplexer.
@@ -991,17 +1028,24 @@ export class SshRelaySession {
       outputFlowControl: { requestedWindowSu: DEFAULT_PTY_SOURCE_WINDOW_SU }
     }
     try {
-      return await openSshPtyConsumerSession(mux, {
-        ...options,
-        ...(previousOwner
-          ? {
-              resume: {
-                ownerGeneration: previousOwner.ownerGeneration,
-                ownerLease: previousOwner.ownerLease
-              }
-            }
-          : {})
-      })
+      return await retrySshOwnerRecoveryWhileBlocked(
+        () =>
+          openSshPtyConsumerSession(mux, {
+            ...options,
+            ...(previousOwner
+              ? {
+                  resume: {
+                    ownerGeneration: previousOwner.ownerGeneration,
+                    ownerLease: previousOwner.ownerLease
+                  }
+                }
+              : {})
+          }),
+        {
+          isCurrent: () => ownsAttempt() && !mux.isDisposed(),
+          onClosed: (listener) => mux.onDispose(listener)
+        }
+      )
     } catch (error) {
       if (
         !previousOwner ||
@@ -1010,26 +1054,36 @@ export class SshRelaySession {
         throw error
       }
       const recovery = getSshPtyConsumerRecovery(this.targetId)
-      if (recovery) {
-        delete recovery.owner
-        recovery.checkpointsByAppPtyId.clear()
-        for (const [ptyId, migration] of recovery.modelMigrationsByAppPtyId) {
-          recovery.modelMigrationsByAppPtyId.set(
-            ptyId,
-            migration.then(() =>
-              Object.freeze({
-                status: 'checkpoint-unavailable' as const,
-                reason: 'completion-failed' as const
-              })
+      // Why identity-guarded: the record is target-scoped and its clientInstanceId is shared by every
+      // session for that target, so only a record still describing the owner this attempt tried to
+      // resume is ours to drop — otherwise a loser wipes the winner's checkpoints.
+      const ownsRecoveryRecord =
+        ownsAttempt() &&
+        (!recovery?.owner ||
+          (recovery.owner.ownerGeneration === previousOwner.ownerGeneration &&
+            recovery.owner.ownerLease === previousOwner.ownerLease))
+      if (ownsRecoveryRecord) {
+        if (recovery) {
+          delete recovery.owner
+          recovery.checkpointsByAppPtyId.clear()
+          for (const [ptyId, migration] of recovery.modelMigrationsByAppPtyId) {
+            recovery.modelMigrationsByAppPtyId.set(
+              ptyId,
+              migration.then(() =>
+                Object.freeze({
+                  status: 'checkpoint-unavailable' as const,
+                  reason: 'completion-failed' as const
+                })
+              )
             )
-          )
+          }
         }
+        await removeSshPtyConsumerOwnerRecovery(
+          this.targetId,
+          this.ptyConsumerClientInstanceId,
+          this.store
+        )
       }
-      await removeSshPtyConsumerOwnerRecovery(
-        this.targetId,
-        this.ptyConsumerClientInstanceId,
-        this.store
-      )
       if (!ownsAttempt()) {
         throw new Error('Session disposed during establish')
       }

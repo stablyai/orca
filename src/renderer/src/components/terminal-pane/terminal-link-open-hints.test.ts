@@ -86,4 +86,43 @@ describe('terminalUrlOpenHintOptionsFor', () => {
       modifierInverts: false
     })
   })
+
+  // Why: a workspace-bound remote pane routes externally even with no globally
+  // active runtime, so the global setting alone would advertise an impossible
+  // "open in Orca" destination.
+  it.each([
+    ['runtime', { kind: 'runtime', runtimeEnvironmentId: 'env-1' }] as const,
+    ['ssh', { kind: 'ssh', connectionId: 'conn-1' }] as const,
+    ['unknown', { kind: 'unknown' }] as const
+  ])('drops inversion for a %s-owned pane without an active runtime', (_kind, sourceOwner) => {
+    stubPlatform(true)
+    const options = terminalUrlOpenHintOptionsFor(
+      {
+        openLinksInApp: false,
+        openLinksInAppModifierInverts: true,
+        activeRuntimeEnvironmentId: null
+      },
+      sourceOwner
+    )
+
+    expect(options.modifierInverts).toBe(false)
+    expect(getTerminalUrlOpenHint(options)).toContain('for system browser')
+  })
+
+  // Why: the clicked pane's owner wins over the global runtime — a local pane
+  // can still reach Orca while some other pane's runtime is active.
+  it('keeps inversion for a local pane while a remote runtime is active', () => {
+    stubPlatform(true)
+    const options = terminalUrlOpenHintOptionsFor(
+      {
+        openLinksInApp: false,
+        openLinksInAppModifierInverts: true,
+        activeRuntimeEnvironmentId: 'remote-1'
+      },
+      { kind: 'local' }
+    )
+
+    expect(options.modifierInverts).toBe(true)
+    expect(getTerminalUrlOpenHint(options)).toContain('to open in Orca')
+  })
 })

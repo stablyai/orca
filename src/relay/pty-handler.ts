@@ -50,6 +50,7 @@ import {
 } from '../shared/pty-startup-ingress'
 import { resolvePtyOwnerBackend, type PtyOwnerBackend } from '../shared/pty-owner-backend'
 import { RecentPtyOutputBuffer } from '../main/runtime/recent-pty-output-buffer'
+import { expandWindowsPathEnvironmentVariables } from '../shared/windows-environment-expansion'
 import {
   agentSessionOwnerBindingsEqual,
   ClaimedAgentPtyOwnerRegistry
@@ -68,6 +69,7 @@ import {
   isAgentSessionSurfaceBinding,
   type AgentSessionOwnerBinding
 } from '../shared/agent-session-host-authority'
+import { createPtySlaveEchoProbe, readPtySlavePath } from '../shared/pty-slave-line-discipline-echo'
 
 // Why: only Linux compiles node-pty (no prebuilt), so the build-tools remedy is a closable setup gap
 // there and wrong advice anywhere node-pty ships one. The relay only sees an unloadable binding, never
@@ -263,6 +265,10 @@ const ALLOWED_WINDOWS_SHELL_OVERRIDES = new Set([
   'cmd',
   'wsl.exe',
   'wsl',
+  // Why: both spellings classify as a POSIX startup family, so rejecting them here made the relay
+  // the one host that hard-failed a setting the local and daemon PTYs accept.
+  'bash.exe',
+  'bash',
   WINDOWS_GIT_BASH_SHELL
 ])
 
@@ -609,6 +615,7 @@ export class PtyHandler {
     if (!result.TERM) {
       result.TERM = 'xterm-256color'
     }
+    expandWindowsPathEnvironmentVariables(result)
     return result
   }
 
@@ -683,11 +690,13 @@ export class PtyHandler {
           : {}
       )
     }
+    const echoProbe = createPtySlaveEchoProbe(readPtySlavePath(managed.pty))
     managed.startupIngress ??= new PtyStartupIngress({
       ...(managed.startupIngressIntent ? { intent: managed.startupIngressIntent } : {}),
       ownerBackend: managed.ownerBackend,
       write: (data) => managed.pty.write(data),
-      onEmission: emitIngressData
+      onEmission: emitIngressData,
+      ...(echoProbe ? { echoProbe } : {})
     })
     managed.pty.onData((data: string) => {
       const startup = managed.startupCommand

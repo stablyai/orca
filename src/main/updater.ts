@@ -1,13 +1,22 @@
 /* eslint-disable max-lines */
 import { app, BrowserWindow, powerMonitor } from 'electron'
 import { is } from '@electron-toolkit/utils'
-import type { UpdateCheckOptions, UpdateSource, UpdateStatus } from '../shared/types'
+import type {
+  LinuxPackageInstallInstructions,
+  LinuxPackageInstallRecovery,
+  UpdateCheckOptions,
+  UpdateSource,
+  UpdateStatus
+} from '../shared/types'
 import type {
   RemoteServerUpdateInstallResult,
   RemoteServerUpdaterSnapshot,
   RemoteServerUpdateSupport
 } from '../shared/remote-server-update'
-import { isWindowsSignatureCheckUnavailableFailure } from '../shared/updater-windows-signature-check'
+import {
+  isWindowsSignatureCheckUnavailableFailure,
+  isWindowsSignatureMismatchFailure
+} from '../shared/updater-windows-signature-check'
 import { killAllPty } from './ipc/pty'
 import { withUpdaterSpan } from './observability/instrumentation'
 import { loadElectronAutoUpdater, type ElectronAutoUpdater } from './electron-updater-loader'
@@ -25,6 +34,25 @@ import {
 } from './update-install-exit-watchdog'
 import { registerAutoUpdaterHandlers } from './updater-events'
 import { recordUpdaterLifecycle } from './updater-lifecycle-diagnostics'
+import { getLinuxRootPackageType } from './linux-update-package-type'
+import {
+  beginLinuxPackageInstallDiagnosticCapture,
+  createUpdaterDiagnosticLogger,
+  endLinuxPackageInstallDiagnosticCapture,
+  getLinuxPackageInstallDiagnostic,
+  parseLinuxPackageInstallExitCode,
+  redactLinuxPackageInstallText,
+  type LinuxPackageInstallDiagnostic
+} from './linux-package-install-diagnostic'
+import {
+  clearTrackedLinuxPackageArtifact,
+  getTrackedLinuxPackageArtifact,
+  resolveLinuxPackageInstallInstructions,
+  revalidateLinuxPackageForInstall,
+  revealLinuxPackage,
+  type LinuxPackageArtifact,
+  type LinuxPackageRecoveryUnavailableReason
+} from './linux-package-update-recovery'
 import {
   compareVersions,
   isBenignCheckFailure,
@@ -48,6 +76,7 @@ import { listReleaseBuilds, resolveTargetBuild } from './updater-release-builds'
 import {
   hasDedicatedReleaseRepo,
   isChannelSupportedOnPlatform,
+  RELEASE_CHANNEL_LABELS,
   type ReleaseBuild,
   type ReleaseChannel
 } from '../shared/release-channel'
@@ -100,12 +129,17 @@ let autoUpdateCheckTimer: ReturnType<typeof setTimeout> | null = null
 let nudgeCheckTimer: ReturnType<typeof setTimeout> | null = null
 let pendingQuitAndInstallTimer: ReturnType<typeof setTimeout> | null = null
 let quitAndInstallInProgress = false
+// Why: the pre-install digest re-proof streams the whole package, so a second install request can
+// arrive while it runs — after the quit timer was cleared but before the handoff owns the process.
+let linuxPackageRevalidationInFlight = false
 let updateInstallMode: UpdateInstallMode = 'interactive'
 let lastInstallDeferralVersion = { download: null as string | null, install: null as string | null }
 // Why: once install has committed, late 'error' events must not clear quittingForUpdate — that would re-enable dock activate mid-installer.
 let updateInstallCommitted = false
 // Why: recovery must only run after the native quitAndInstall call; pre-native errors must not clear quittingForUpdate or look like install recovery.
 let quitAndInstallNativeInvoked = false
+// Why: a synchronous throw out of quitAndInstall ends diagnostic capture before the catch runs, so stash the redacted text for it.
+let lastInstallAttemptDiagnostic: LinuxPackageInstallDiagnostic | null = null
 let persistLastUpdateCheckAt: ((timestamp: number) => void) | null = null
 let _getLastUpdateCheckAt: (() => number | null) | null = null
 let backgroundCheckLaunchPending = false
@@ -242,7 +276,8 @@ function decorateStatusWithActiveNudge(status: UpdateStatus): UpdateStatus {
   return { ...status, activeNudgeId: activeUpdateNudgeId }
 }
 
-function sendStatus(status: UpdateStatus): void {
+/** `force` re-delivers a status the renderer must not miss even when it repeats the current one. */
+function sendStatus(status: UpdateStatus, options?: { force?: boolean }): void {
   const pendingUserInitiatedCheckVariant = pendingUserInitiatedCheckAfterInFlight
   const shouldLaunchPendingUserInitiatedCheck =
     pendingUserInitiatedCheckVariant !== null &&
@@ -308,10 +343,15 @@ function sendStatus(status: UpdateStatus): void {
     downloadInFlight = false
   }
   if (shouldLaunchPendingUserInitiatedCheck) {
+    // Why: a forced status must still land before the queued check restarts the cycle.
+    if (options?.force) {
+      currentStatus = decoratedStatus
+      mainWindowRef?.webContents.send('updater:status', decoratedStatus)
+    }
     launchPendingUserInitiatedCheckAfterInFlight(pendingUserInitiatedCheckVariant)
     return
   }
-  if (statusesEqual(currentStatus, decoratedStatus)) {
+  if (!options?.force && statusesEqual(currentStatus, decoratedStatus)) {
     return
   }
   currentStatus = decoratedStatus
@@ -661,7 +701,7 @@ function clearPrereleaseFallbackContextIfSettled(): void {
 }
 
 async function performQuitAndInstall(): Promise<void> {
-  if (quitAndInstallInProgress) {
+  if (quitAndInstallInProgress || linuxPackageRevalidationInFlight) {
     recordUpdaterLifecycle('quit_and_install_ignored', { reason: 'already-in-progress' })
     return
   }
@@ -673,6 +713,17 @@ async function performQuitAndInstall(): Promise<void> {
 
   const pendingVersion = getPendingInstallVersion()
   if (deferHeadlessServeInstall('install', pendingVersion)) {
+    return
+  }
+  // Why: the retained .deb/.rpm sits on a user-writable path that a root package manager is about
+  // to read, and nothing re-checks it after download. Re-prove it here — before any teardown — so a
+  // swapped or vanished package aborts instead of being installed as root. The synchronous guard
+  // keeps every non-Linux install on its existing timing.
+  if (getTrackedLinuxPackageArtifact() && !(await proveRetainedLinuxPackage(pendingVersion))) {
+    // Why: the renderer armed its restart before invoking, and it infers the abort from the error
+    // status — which a stale-cycle verdict deliberately withholds. Signal the abandon here, where
+    // it cannot depend on that decision, or the window keeps skipping its unsaved-work prompt.
+    mainWindowRef?.webContents.send('updater:quitAndInstallAborted')
     return
   }
   quitAndInstallInProgress = true
@@ -715,6 +766,8 @@ async function performQuitAndInstall(): Promise<void> {
           true
         )
         resetQuitForUpdateState()
+        // Why: a bare return would exit this span Success and hide the aborted install from tracing.
+        span.fail('Could not persist the supervised serve update handoff')
         return
       }
 
@@ -729,12 +782,34 @@ async function performQuitAndInstall(): Promise<void> {
       quitAndInstallNativeInvoked = true
       // Why: invoke before killAllPty/removing close listeners so a sync 'error' (the "no filepath" path) can recover while windows and PTYs are intact.
       const supervisorOwnsRelaunch = updateInstallMode === 'supervised-headless-serve'
-      getAutoUpdater().quitAndInstall(supervisorOwnsRelaunch, !supervisorOwnsRelaunch)
+      // Why: BaseUpdater logs child stderr but drops it from the 'error' event, so retain it for the span of this call.
+      beginLinuxPackageInstallDiagnosticCapture(getTrackedLinuxPackageArtifact()?.path ?? null)
+      try {
+        getAutoUpdater().quitAndInstall(supervisorOwnsRelaunch, !supervisorOwnsRelaunch)
+      } finally {
+        const diagnostic = endLinuxPackageInstallDiagnosticCapture()
+        // Why: a synchronous 'error' already consumed and reset this attempt; re-stashing would leak it into the next one.
+        lastInstallAttemptDiagnostic = quitAndInstallInProgress ? diagnostic : null
+      }
       span.addEvent('native_quit_and_install_invoked')
 
       // Why: quitAndInstall can synchronously clear quitAndInstallInProgress via recovery (Win/Linux dispatchError); skip destructive prep if it already ran.
       if (!quitAndInstallInProgress) {
+        // Why: recovery already wrote the reason to currentStatus; a bare return would exit this span Success.
+        span.fail(
+          currentStatus.state === 'error'
+            ? currentStatus.message
+            : 'quitAndInstall returned without invoking the installer'
+        )
         return
+      }
+
+      // Why: DebUpdater/RpmUpdater install through spawnSync, so a normal return already means the
+      // package is installed. Commit here or a throw in the cleanup below is reported as an install
+      // failure — offering a recovery card, and stale stderr, for an update that actually succeeded.
+      if (getLinuxRootPackageType() !== null) {
+        updateInstallCommitted = true
+        armUpdateInstallExitWatchdog()
       }
 
       killAllPty()
@@ -748,13 +823,33 @@ async function performQuitAndInstall(): Promise<void> {
       })
 
       // Why: committed installs keep quittingForUpdate so dock activate can't reopen the old process; macOS without Squirrel stays uncommitted so late native errors can still recover.
-      if (process.platform !== 'darwin' || isMacInstallerReady()) {
+      if (!updateInstallCommitted && (process.platform !== 'darwin' || isMacInstallerReady())) {
         updateInstallCommitted = true
         // Why: past commit the installer waits for this process to exit; a wedged async shutdown would strand the user with no app and no update (#4438).
         armUpdateInstallExitWatchdog()
       }
     })
   } catch (error) {
+    // Why: on Linux the package is already installed once quitAndInstall returns, and the installer is
+    // waiting for this process to exit. Tearing down here would disarm the exit watchdog (#4438), clear
+    // quittingForUpdate mid-quit, and tell the user an install failed that actually succeeded.
+    if (updateInstallCommitted) {
+      recordUpdaterLifecycle(
+        'post_commit_cleanup_failed',
+        { errorType: error instanceof Error ? error.name : typeof error },
+        {
+          level: 'warn',
+          message: 'Update install cleanup failed after commit; install already applied'
+        }
+      )
+      return
+    }
+    // Why: a pre-native cleanup/tracing exception is not a package install failure and must not be labelled as one.
+    const quitAndInstallNativeInvokedBeforeReset = quitAndInstallNativeInvoked
+    const recoveryStatus =
+      quitAndInstallNativeInvokedBeforeReset && !updateInstallCommitted
+        ? buildLinuxPackageInstallFailureStatus(error)
+        : null
     failServeUpdateHandoff('Could not invoke the native updater.')
     resetQuitForUpdateState()
     recordUpdaterLifecycle(
@@ -765,8 +860,15 @@ async function performQuitAndInstall(): Promise<void> {
         message: 'Could not start update install'
       }
     )
-    sendErrorStatus(
-      'Could not restart to install the update. Quit and reopen Orca, then try again.'
+    sendInstallFailureStatus(
+      recoveryStatus ?? {
+        state: 'error',
+        // Why: past the native invoke this is the same pre-commit failure the event path reports, so it gets the same copy; only a pre-native exception can be helped by a restart.
+        // A synchronous throw out of quitAndInstall carries the same installer text the 'error' event would have.
+        message: quitAndInstallNativeInvokedBeforeReset
+          ? withInstallFailureCause(getPreCommitInstallFailureMessage(), error)
+          : 'Could not restart to install the update. Quit and reopen Orca, then try again.'
+      }
     )
   }
 }
@@ -776,22 +878,127 @@ function resetQuitForUpdateState(): void {
   quittingForUpdate = false
   updateInstallCommitted = false
   quitAndInstallNativeInvoked = false
+  lastInstallAttemptDiagnostic = null
   disarmUpdateInstallExitWatchdog()
   resetMacInstallState()
 }
 
+/**
+ * On macOS a pre-commit failure means Squirrel rejected the staged update, and quitting does re-stage
+ * it — so keep that advice there. Everywhere else a restart is not known to help.
+ */
+function getPreCommitInstallFailureMessage(): string {
+  return process.platform === 'darwin'
+    ? 'Could not restart to install the update. Quit and reopen Orca, then try again.'
+    : 'Could not start the update installer. Orca remains open.'
+}
+
+/**
+ * Sends an install-failure status even when it repeats the current one. "Try Automatic Install
+ * Again" usually fails identically, and a deduped status would never reach the preload abort relay,
+ * leaving the renderer stuck in its restart checkpoint.
+ */
+function sendInstallFailureStatus(status: UpdateStatus): void {
+  sendStatus(status, { force: true })
+}
+
+const INSTALL_FAILURE_CAUSE_MAX_LENGTH = 200
+
+/**
+ * Appends the updater's own text to the generic install-failure copy. Without it the only record of
+ * why the install never started is destroyed — on Linux that text carries the exact `dpkg -i <path>`
+ * command the user has to run by hand, and remote clients get nothing but "it didn't come back".
+ */
+function withInstallFailureCause(baseMessage: string, error: unknown): string {
+  const raw = error instanceof Error ? error.message : typeof error === 'string' ? error : ''
+  // Why: the retained-package card runs its text through this same sanitizer, so a home directory,
+  // user name, or terminal escape must not reach the card merely because no artifact was tracked.
+  const redacted =
+    redactLinuxPackageInstallText(raw, getTrackedLinuxPackageArtifact()?.path ?? null) ?? ''
+  const cause = redacted.slice(0, INSTALL_FAILURE_CAUSE_MAX_LENGTH)
+  if (!cause || cause === 'Unknown error') {
+    return baseMessage
+  }
+  // Why: UpdateCard picks the whole card off this string, so a signature verdict must not be prefixed by contradictory restart advice.
+  if (
+    isWindowsSignatureCheckUnavailableFailure(cause) ||
+    isWindowsSignatureMismatchFailure(cause)
+  ) {
+    return cause
+  }
+  return `${baseMessage} (${cause})`
+}
+
+/**
+ * The recovery status for a failed `.deb`/`.rpm` install, or null when no retained package can
+ * recover it. Must run before `resetQuitForUpdateState()` clears the attempt diagnostic.
+ */
+function buildLinuxPackageInstallFailureStatus(error: unknown): UpdateStatus | null {
+  const artifact = getTrackedLinuxPackageArtifact()
+  if (!artifact) {
+    return null
+  }
+  const pendingVersion = getPendingInstallVersion()
+  if (pendingVersion && pendingVersion !== artifact.version) {
+    return null
+  }
+  const diagnostic = getLinuxPackageInstallDiagnostic() ?? lastInstallAttemptDiagnostic
+  // Why: the reason was classified from the original output, before redaction could rewrite a match.
+  const reason = diagnostic?.reason ?? 'package-install-failed'
+  // Durable data carries classification only — never the package path, home path, command, or stderr.
+  const exitCode = parseLinuxPackageInstallExitCode(error)
+  recordUpdaterLifecycle(
+    'linux_package_install_failed',
+    {
+      packageType: artifact.packageType,
+      reason,
+      // Omitted rather than null when the child status could not be parsed.
+      ...(exitCode === null ? {} : { exitCode }),
+      version: artifact.version,
+      errorType: error instanceof Error ? error.name : typeof error
+    },
+    { level: 'warn', message: 'Linux package install failed; cached package retained' }
+  )
+  // Why: this text is shown in the card, so it gets the same redaction as retained stderr.
+  const message =
+    diagnostic?.message ??
+    (error instanceof Error ? redactLinuxPackageInstallText(error.message, artifact.path) : null) ??
+    'The system package installer did not start.'
+  return {
+    state: 'error',
+    message,
+    recovery: {
+      kind: 'linux-package-install',
+      packageType: artifact.packageType,
+      reason,
+      version: artifact.version
+    }
+  }
+}
+
 // Why: quitAndInstall failures arrive via 'error'; recover only after native invoke and before commit, else clearing quittingForUpdate lets dock activate reopen the old process mid-installer.
-function handleQuitAndInstallFailure(): boolean {
+function handleQuitAndInstallFailure(error?: unknown): boolean {
   if (!quitAndInstallInProgress || !quitAndInstallNativeInvoked || updateInstallCommitted) {
     return false
   }
+  const recoveryStatus = buildLinuxPackageInstallFailureStatus(error)
   failServeUpdateHandoff('The native updater rejected the install request.')
   resetQuitForUpdateState()
-  recordUpdaterLifecycle('quit_and_install_failed_via_event', undefined, {
-    level: 'warn',
-    message: 'Update install could not start; recovered app state'
-  })
-  sendErrorStatus('Could not restart to install the update. Quit and reopen Orca, then try again.')
+  // Durable data carries classification only — the cause text stays on the status the user can read.
+  recordUpdaterLifecycle(
+    'quit_and_install_failed_via_event',
+    { errorType: error instanceof Error ? error.name : typeof error },
+    {
+      level: 'warn',
+      message: 'Update install could not start; recovered app state'
+    }
+  )
+  sendInstallFailureStatus(
+    recoveryStatus ?? {
+      state: 'error',
+      message: withInstallFailureCause(getPreCommitInstallFailureMessage(), error)
+    }
+  )
   return true
 }
 
@@ -1534,7 +1741,7 @@ async function checkForPinnedBuild(channel: ReleaseChannel, tag: string): Promis
   if (!isChannelSupportedOnPlatform(channel, process.platform)) {
     sendStatus({
       state: 'error',
-      message: `${channel} builds are produced only for macOS.`,
+      message: `${RELEASE_CHANNEL_LABELS[channel]} builds are produced only for macOS.`,
       userInitiated: true
     })
     return
@@ -1592,14 +1799,233 @@ export function isQuittingForUpdate(): boolean {
   return quittingForUpdate
 }
 
+function getActiveLinuxPackageRecovery(): LinuxPackageInstallRecovery | null {
+  if (currentStatus.state !== 'error') {
+    return null
+  }
+  return currentStatus.recovery?.kind === 'linux-package-install' ? currentStatus.recovery : null
+}
+
+const LINUX_PACKAGE_RECOVERY_MESSAGES: Record<LinuxPackageRecoveryUnavailableReason, string> = {
+  missing:
+    'The downloaded package is no longer in the update cache. Download the update again, or get it from the official release page.',
+  // Why: this reason also covers a path that left the cache (traversal or symlinked parent), so the copy must not promise the file merely changed type.
+  'not-regular':
+    'The downloaded package is no longer a valid file in the update cache. Download the update again, or get it from the official release page.',
+  'hash-mismatch':
+    'The downloaded package no longer matches the verified release, so Orca will not hand it to a package manager. Download the update again, or get it from the official release page.',
+  'read-failed':
+    'Orca could not read the downloaded package. Download the update again, or get it from the official release page.',
+  'no-sudo':
+    'No sudo command was found in the system directories, so Orca cannot build a safe install command. Show the package and install it with your package manager.',
+  'no-package-manager':
+    'No supported package manager was found in the system directories, so Orca cannot build a safe install command. Show the package and install it with your package manager.',
+  // Defensive: capture only ever tracks absolute cache paths, so this reports a bug rather than a machine state.
+  'invalid-package-path':
+    'The downloaded package is not at a usable path, so Orca cannot build a safe install command. Show the package and install it with your package manager.'
+}
+
+// Why: clearing the artifact alone would leave the renderer's actions enabled; the status must lose its recovery too.
+const RECOVERY_CLEARING_REASONS: LinuxPackageRecoveryUnavailableReason[] = [
+  'missing',
+  'not-regular',
+  'hash-mismatch'
+]
+
+function recordLinuxPackageRecoveryUnavailable(
+  recovery: LinuxPackageInstallRecovery,
+  reason: LinuxPackageRecoveryUnavailableReason
+): void {
+  recordUpdaterLifecycle(
+    'linux_package_recovery_unavailable',
+    { reason, packageType: recovery.packageType, version: recovery.version },
+    { level: 'warn', message: 'Linux package recovery action unavailable' }
+  )
+}
+
+function failLinuxPackageRecovery(
+  recovery: LinuxPackageInstallRecovery,
+  reason: LinuxPackageRecoveryUnavailableReason
+): never {
+  recordLinuxPackageRecoveryUnavailable(recovery, reason)
+  const message = LINUX_PACKAGE_RECOVERY_MESSAGES[reason]
+  // Why: hashing 160 MB takes long enough for a new cycle to land. Acting on a stale verdict would
+  // destroy the newer artifact and clobber whatever card replaced this one.
+  const active = getActiveLinuxPackageRecovery()
+  const stillCurrent =
+    active?.version === recovery.version && active?.packageType === recovery.packageType
+  if (stillCurrent && RECOVERY_CLEARING_REASONS.includes(reason)) {
+    clearTrackedLinuxPackageArtifact()
+    sendStatus({ state: 'error', message })
+  }
+  throw new Error(message)
+}
+
+/**
+ * Identifies the update cycle an install belongs to, so a verdict produced by a multi-second hash
+ * can be dropped when a newer cycle already replaced the card it would otherwise overwrite.
+ */
+function getInstallCycleSignature(): string {
+  const recovery = getActiveLinuxPackageRecovery()
+  if (recovery) {
+    return `recovery:${recovery.packageType}:${recovery.version}`
+  }
+  return currentStatus.state === 'downloaded'
+    ? `downloaded:${currentStatus.version}`
+    : `state:${currentStatus.state}`
+}
+
+/**
+ * Re-proves the retained package before the install starts. Returns false when the install must be
+ * abandoned; the artifact is only re-read here, so callers still own every teardown decision.
+ */
+async function proveRetainedLinuxPackage(pendingVersion: string): Promise<boolean> {
+  const artifact = getTrackedLinuxPackageArtifact()
+  if (!artifact) {
+    return true
+  }
+  // Why: an artifact retained from another cycle says nothing about the file electron-updater is
+  // about to install, so proving it would block a legitimate install on an unrelated digest.
+  if (pendingVersion && pendingVersion !== artifact.version) {
+    return true
+  }
+  const recovery = getActiveLinuxPackageRecovery()
+  const cycle = getInstallCycleSignature()
+  const reason = await revalidateRetainedLinuxPackage(artifact)
+  if (!reason) {
+    return true
+  }
+  reportLinuxPackageRevalidationFailure({ artifact, recovery, reason, cycle })
+  return false
+}
+
+/** The failing reason, or null when the retained package still matches its release digest. */
+async function revalidateRetainedLinuxPackage(
+  artifact: LinuxPackageArtifact
+): Promise<LinuxPackageRecoveryUnavailableReason | null> {
+  linuxPackageRevalidationInFlight = true
+  try {
+    const verdict = await revalidateLinuxPackageForInstall(artifact)
+    return verdict.ok ? null : verdict.reason
+  } catch (error) {
+    recordUpdaterLifecycle(
+      'linux_package_revalidation_errored',
+      { errorType: error instanceof Error ? error.name : typeof error },
+      { level: 'warn', message: 'Could not re-verify the retained update package' }
+    )
+    // Why: fail closed — bytes we could not read are bytes we cannot hand to a root installer.
+    return 'read-failed'
+  } finally {
+    // Why: the invariant every install path depends on — a wedged flag would make quitAndInstall
+    // early-return for the rest of the session.
+    linuxPackageRevalidationInFlight = false
+  }
+}
+
+function reportLinuxPackageRevalidationFailure({
+  artifact,
+  recovery,
+  reason,
+  cycle
+}: {
+  artifact: LinuxPackageArtifact
+  recovery: LinuxPackageInstallRecovery | null
+  reason: LinuxPackageRecoveryUnavailableReason
+  cycle: string
+}): void {
+  recordUpdaterLifecycle(
+    'linux_package_revalidation_failed',
+    {
+      action: recovery ? 'retry-automatic' : 'restart-to-install',
+      packageType: artifact.packageType,
+      version: artifact.version,
+      reason
+    },
+    { level: 'warn', message: 'Retained update package failed its pre-install digest check' }
+  )
+  // Why: a package proven bad must not stay tracked, but a download that landed during the hash
+  // owns the slot now and destroying it would force a needless 160 MB redownload.
+  const clearsArtifact = RECOVERY_CLEARING_REASONS.includes(reason)
+  if (clearsArtifact && getTrackedLinuxPackageArtifact() === artifact) {
+    clearTrackedLinuxPackageArtifact()
+  }
+  // Why: same reasoning as failLinuxPackageRecovery — a verdict from a cycle that has since been
+  // replaced must not clobber whatever card the user is looking at now.
+  if (getInstallCycleSignature() !== cycle) {
+    return
+  }
+  sendInstallFailureStatus({
+    state: 'error',
+    message: LINUX_PACKAGE_RECOVERY_MESSAGES[reason],
+    // Why: an unreadable file is not evidence the bytes changed, so the recovery card and its
+    // Copy/Show actions survive a transient I/O failure exactly as they do elsewhere.
+    ...(recovery && !clearsArtifact ? { recovery } : {})
+  })
+}
+
+export async function getLinuxPackageInstallInstructions(): Promise<LinuxPackageInstallInstructions> {
+  const recovery = getActiveLinuxPackageRecovery()
+  if (!recovery) {
+    throw new Error('No package install recovery is available.')
+  }
+  recordUpdaterLifecycle('linux_package_recovery_requested', {
+    action: 'copy-command',
+    packageType: recovery.packageType,
+    version: recovery.version
+  })
+  const result = await resolveLinuxPackageInstallInstructions(recovery)
+  if (!result.ok) {
+    // Why: the renderer must distinguish "this machine has no package manager" (keep the card, promote
+    // Show Package) from "the artifact is gone" (recovery is cleared and the card unmounts).
+    if (result.reason === 'no-sudo' || result.reason === 'no-package-manager') {
+      recordLinuxPackageRecoveryUnavailable(recovery, result.reason)
+      return {
+        ok: false,
+        reason: result.reason,
+        message: LINUX_PACKAGE_RECOVERY_MESSAGES[result.reason]
+      }
+    }
+    failLinuxPackageRecovery(recovery, result.reason)
+  }
+  return { ok: true, command: result.command, packageFileName: result.packageFileName }
+}
+
+export async function showLinuxPackage(): Promise<void> {
+  const recovery = getActiveLinuxPackageRecovery()
+  if (!recovery) {
+    throw new Error('No package install recovery is available.')
+  }
+  recordUpdaterLifecycle('linux_package_recovery_requested', {
+    action: 'show-package',
+    packageType: recovery.packageType,
+    version: recovery.version
+  })
+  const result = await revealLinuxPackage(recovery)
+  if (!result.ok) {
+    failLinuxPackageRecovery(recovery, result.reason)
+  }
+}
+
 export function quitAndInstall(): void {
   if (
     localBuildSelectionInProgress ||
     pinnedBuildSelectionInProgress ||
     pendingQuitAndInstallTimer ||
-    quitAndInstallInProgress
+    quitAndInstallInProgress ||
+    // Why: the quit timer is already cleared while the pre-install digest re-proof streams, so
+    // without this a second click would schedule a parallel install of the same package.
+    linuxPackageRevalidationInFlight
   ) {
     return
+  }
+
+  const retriedRecovery = getActiveLinuxPackageRecovery()
+  if (retriedRecovery) {
+    recordUpdaterLifecycle('linux_package_recovery_requested', {
+      action: 'retry-automatic',
+      packageType: retriedRecovery.packageType,
+      version: retriedRecovery.version
+    })
   }
 
   if (deferHeadlessServeInstall('install', getPendingInstallVersion())) {
@@ -1760,17 +2186,15 @@ export function setupAutoUpdater(
     autoUpdater.disableDifferentialDownload = false
   }
   // Why: supervised serve installs require an explicit handoff; ordinary service quits must never install implicitly.
-  autoUpdater.autoInstallOnAppQuit = updateInstallMode === 'interactive'
+  // Root Linux packages also opt out: an implicit quit-time escalation would fail after the UI is gone, leaving no recovery surface.
+  autoUpdater.autoInstallOnAppQuit =
+    updateInstallMode === 'interactive' && getLinuxRootPackageType() === null
   // Why: MacUpdater ignores quitAndInstall arguments; the surviving CLI supervisor must be the only serve relaunch owner.
   autoUpdater.autoRunAppAfterInstall = updateInstallMode === 'interactive'
 
   // Why: our only on-machine window into electron-updater; otherwise an unexpected update-not-available or failed fetch is invisible.
-  autoUpdater.logger = {
-    info: (m: unknown) => console.info('[autoUpdater]', m),
-    warn: (m: unknown) => console.warn('[autoUpdater]', m),
-    error: (m: unknown) => console.error('[autoUpdater]', m),
-    debug: (m: unknown) => console.debug('[autoUpdater]', m)
-  } as never
+  // The adapter also retains the redacted child stderr that BaseUpdater logs but drops from the 'error' event.
+  autoUpdater.logger = createUpdaterDiagnosticLogger() as never
 
   // Security: never re-add a verifyUpdateCodeSignature override — a no-op disables electron-updater's built-in Authenticode check and accepts any installer.
 

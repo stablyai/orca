@@ -36,6 +36,7 @@ describe('resolveMobileNativeChatWorktreePath', () => {
       .mockResolvedValueOnce({
         ok: true,
         result: {
+          worktree: 'sibling-worktree',
           exists: true,
           isDirectory: false,
           openTarget: { kind: 'worktree-file', relativePath: 'src/app.ts' }
@@ -51,7 +52,7 @@ describe('resolveMobileNativeChatWorktreePath', () => {
     })
 
     expect(sendRequest).toHaveBeenLastCalledWith('files.open', {
-      worktree: 'id:worktree',
+      worktree: 'id:sibling-worktree',
       relativePath: 'src/app.ts'
     })
   })

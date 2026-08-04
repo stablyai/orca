@@ -104,7 +104,7 @@ async function parseSessionForFullFirstUserPrompt(args: {
     }
   }
 
-  const file = await fileWithMtimeForPath(args.filePath)
+  const file = await fileWithMtimeForPath(args.filePath, args.agent)
   if (!file) {
     return null
   }
@@ -119,10 +119,14 @@ async function parseSessionForFullFirstUserPrompt(args: {
   )
 }
 
-async function fileWithMtimeForPath(filePath: string): Promise<FileWithMtime | null> {
+async function fileWithMtimeForPath(
+  filePath: string,
+  agent: AiVaultAgent
+): Promise<FileWithMtime | null> {
   // OpenCode SQLite candidates use a synthetic `dbPath#sessionId` path that is
   // not a real filesystem object; parsers that need it accept the path as-is.
-  if (filePath.includes('#')) {
+  // `#` is legal in real filenames, so gate on the agent and the synthetic shape.
+  if (agent === 'opencode' && splitOpenCodeSqliteCandidate(filePath)) {
     return {
       path: filePath,
       mtimeMs: 0,

@@ -18,12 +18,60 @@ describe('prepareRendererForAppRestart', () => {
     await expect(
       prepareRendererForAppRestart(eventTarget, {
         startedEventName: 'restart-started',
-        abortedEventName: 'restart-aborted'
+        abortedEventName: 'restart-aborted',
+        awaitCheckpoint: () => Promise.resolve()
       })
     ).rejects.toThrow('Renderer shutdown checkpoint was not completed.')
 
     expect(started).toHaveBeenCalledTimes(1)
     expect(checkpoint).toHaveBeenCalledTimes(1)
+    expect(aborted).toHaveBeenCalledTimes(1)
+  })
+
+  it('waits for the durable checkpoint write before the restart proceeds', async () => {
+    const eventTarget = new EventTarget()
+    const order: string[] = []
+    let releaseCheckpoint!: () => void
+    eventTarget.addEventListener('beforeunload', () => order.push('staged'))
+
+    const prepared = prepareRendererForAppRestart(eventTarget, {
+      startedEventName: 'restart-started',
+      abortedEventName: 'restart-aborted',
+      awaitCheckpoint: () =>
+        new Promise<void>((resolve) => {
+          order.push('awaiting-flush')
+          releaseCheckpoint = () => {
+            order.push('flushed')
+            resolve()
+          }
+        })
+    })
+    let settled = false
+    void prepared.then(() => {
+      settled = true
+    })
+
+    await Promise.resolve()
+    expect(settled).toBe(false)
+
+    releaseCheckpoint()
+    await prepared
+    expect(order).toEqual(['staged', 'awaiting-flush', 'flushed'])
+  })
+
+  it('aborts the restart when the staged state cannot be persisted', async () => {
+    const eventTarget = new EventTarget()
+    const aborted = vi.fn()
+    eventTarget.addEventListener('restart-aborted', aborted)
+
+    await expect(
+      prepareRendererForAppRestart(eventTarget, {
+        startedEventName: 'restart-started',
+        abortedEventName: 'restart-aborted',
+        awaitCheckpoint: () => Promise.reject(new Error('Failed to persist renderer state.'))
+      })
+    ).rejects.toThrow('Failed to persist renderer state.')
+
     expect(aborted).toHaveBeenCalledTimes(1)
   })
 })
@@ -38,6 +86,27 @@ describe('createUpdaterQuitAbortRelay', () => {
 
     relay.handleStatus({ state: 'error', message: 'install failed' } satisfies UpdateStatus)
     relay.handleStatus({ state: 'error', message: 'duplicate failure' } satisfies UpdateStatus)
+
+    expect(aborted).toHaveBeenCalledTimes(1)
+  })
+
+  it('resets a prepared restart on a linux package-install recovery status', () => {
+    const eventTarget = new EventTarget()
+    const aborted = vi.fn()
+    eventTarget.addEventListener('update-restart-aborted', aborted)
+    const relay = createUpdaterQuitAbortRelay(eventTarget, 'update-restart-aborted')
+    relay.markPrepared()
+
+    relay.handleStatus({
+      state: 'error',
+      message: 'No authentication agent found.',
+      recovery: {
+        kind: 'linux-package-install',
+        packageType: 'deb',
+        reason: 'authentication-agent-unavailable',
+        version: '1.0.61'
+      }
+    } satisfies UpdateStatus)
 
     expect(aborted).toHaveBeenCalledTimes(1)
   })

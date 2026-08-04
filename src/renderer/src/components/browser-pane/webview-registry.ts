@@ -20,6 +20,15 @@ let dragListenersAttached = false
 let nativeDragPassthroughRelease: (() => void) | null = null
 const dragPassthroughTokens = new Set<symbol>()
 const dragPassthroughPreviousPointerEvents = new Map<Electron.WebviewTag, string>()
+const rendererRecoveryPendingPageIds = new Set<string>()
+const webviewLifecycleListeners = new Map<
+  string,
+  {
+    webview: Electron.WebviewTag
+    onRendererGone: EventListener
+    onRendererReady: EventListener
+  }
+>()
 
 type DragListenerRegistry = {
   dragstart: () => void
@@ -70,6 +79,10 @@ function ensureDragListeners(): void {
   // when the registry empties keeps browserless sessions free of global hooks.
   listenerHost[DRAG_LISTENER_KEY] = { dragstart, dragend, drop }
   dragListenersAttached = true
+}
+
+export function hasLiveBrowserGuest(browserPageId: string): boolean {
+  return webviewRegistry.has(browserPageId)
 }
 
 export function getBrowserWebviewMemoryProfile(): BrowserWebviewMemoryProfile {
@@ -143,6 +156,23 @@ export function registerPersistentWebview(
   browserTabId: string,
   webview: Electron.WebviewTag
 ): void {
+  const previousListeners = webviewLifecycleListeners.get(browserTabId)
+  if (previousListeners) {
+    previousListeners.webview.removeEventListener(
+      'render-process-gone',
+      previousListeners.onRendererGone
+    )
+    previousListeners.webview.removeEventListener('dom-ready', previousListeners.onRendererReady)
+  }
+  const onRendererGone = (): void => {
+    rendererRecoveryPendingPageIds.add(browserTabId)
+  }
+  const onRendererReady = (): void => {
+    rendererRecoveryPendingPageIds.delete(browserTabId)
+  }
+  webview.addEventListener('render-process-gone', onRendererGone)
+  webview.addEventListener('dom-ready', onRendererReady)
+  webviewLifecycleListeners.set(browserTabId, { webview, onRendererGone, onRendererReady })
   webviewRegistry.set(browserTabId, webview)
   applyCurrentDragPassthroughToWebview(webview)
   ensureDragListeners()
@@ -150,6 +180,16 @@ export function registerPersistentWebview(
 
 export function unregisterPersistentWebview(browserTabId: string): void {
   const webview = webviewRegistry.get(browserTabId)
+  const lifecycleListeners = webviewLifecycleListeners.get(browserTabId)
+  if (lifecycleListeners) {
+    lifecycleListeners.webview.removeEventListener(
+      'render-process-gone',
+      lifecycleListeners.onRendererGone
+    )
+    lifecycleListeners.webview.removeEventListener('dom-ready', lifecycleListeners.onRendererReady)
+    webviewLifecycleListeners.delete(browserTabId)
+  }
+  rendererRecoveryPendingPageIds.delete(browserTabId)
   if (webview) {
     dragPassthroughPreviousPointerEvents.delete(webview)
   }
@@ -157,6 +197,10 @@ export function unregisterPersistentWebview(browserTabId: string): void {
   if (webviewRegistry.size === 0) {
     removeDragListeners()
   }
+}
+
+export function isBrowserPageRendererRecoveryPending(browserTabId: string): boolean {
+  return rendererRecoveryPendingPageIds.has(browserTabId)
 }
 
 function moveFocusToRendererIfWebviewOwnsFocus(webview: Electron.WebviewTag): boolean {
@@ -189,24 +233,49 @@ export function moveFocusToRendererBeforeWebviewDetach(webview: Electron.Webview
   moveFocusToRendererIfWebviewOwnsFocus(webview)
 }
 
-export function destroyPersistentWebview(browserTabId: string): void {
+function removePersistentWebview(
+  browserTabId: string,
+  { preserveViewport, preserveZoom }: { preserveViewport: boolean; preserveZoom: boolean }
+): Promise<void> {
   const webview = webviewRegistry.get(browserTabId)
-  // The guest is gone, so its user-applied zoom must not be inherited by a
-  // later tab that reuses the id.
-  forgetExplicitBrowserPageZoomLevel(browserTabId)
+  if (!preserveZoom) {
+    // The guest is gone, so its user-applied zoom must not be inherited by a later tab that reuses the id.
+    forgetExplicitBrowserPageZoomLevel(browserTabId)
+  }
   if (!webview) {
     // Why: the viewport can outlive a missing webview entry; tear it down on
     // explicit close paths so overlay slots do not leak parked shells.
-    removeBrowserPageViewport(browserTabId)
+    if (!preserveViewport) {
+      removeBrowserPageViewport(browserTabId)
+    }
     registeredWebContentsIds.delete(browserTabId)
     clearLiveBrowserUrl(browserTabId)
-    return
+    return Promise.resolve()
   }
-  void window.api.browser.unregisterGuest({ browserPageId: browserTabId })
+  const unregisterGuest = Promise.resolve(
+    window.api.browser.unregisterGuest({ browserPageId: browserTabId })
+  ).catch(() => {})
   moveFocusToRendererBeforeWebviewDetach(webview)
   webview.remove()
   unregisterPersistentWebview(browserTabId)
-  removeBrowserPageViewport(browserTabId)
+  if (!preserveViewport) {
+    removeBrowserPageViewport(browserTabId)
+  }
   registeredWebContentsIds.delete(browserTabId)
   clearLiveBrowserUrl(browserTabId)
+  return unregisterGuest
+}
+
+export function destroyPersistentWebview(browserTabId: string): Promise<void> {
+  return removePersistentWebview(browserTabId, {
+    preserveViewport: false,
+    preserveZoom: false
+  })
+}
+
+export function replacePersistentWebview(
+  browserTabId: string,
+  { preserveViewport = false }: { preserveViewport?: boolean } = {}
+): Promise<void> {
+  return removePersistentWebview(browserTabId, { preserveViewport, preserveZoom: true })
 }

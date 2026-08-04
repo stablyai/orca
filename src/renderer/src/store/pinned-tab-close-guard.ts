@@ -23,6 +23,13 @@ export function isUnifiedTabPinned(state: AppState, worktreeId: string, tabId: s
   )
 }
 
+/** Whether a pinned close will actually raise the pin dialog. Callers that let the pin
+ *  prompt supersede another confirmation must know this: with the setting off the pin
+ *  has nothing to say, so it must not swallow the other prompt (#10142). */
+export function shouldConfirmPinnedTabClose(state: AppState): boolean {
+  return state.settings?.confirmClosePinnedTab ?? true
+}
+
 /** Routes a pinned-tab close attempt through the confirmation dialog when the
  *  setting is on. Non-pinned tabs (and pinned tabs when the setting is off)
  *  close immediately. Keeping every close path behind this single helper is why
@@ -40,8 +47,7 @@ export function guardPinnedTabClose(params: {
   }
 
   const state = useAppStore.getState()
-  const shouldConfirm = state.settings?.confirmClosePinnedTab ?? true
-  if (!shouldConfirm) {
+  if (!shouldConfirmPinnedTabClose(state)) {
     onClose()
     return
   }

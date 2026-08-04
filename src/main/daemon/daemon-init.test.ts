@@ -689,6 +689,29 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(adapterInstances[0].listProcesses).toHaveBeenCalled()
   })
 
+  it('rechecks the preserved daemon endpoint before recovering fresh-spawn routing', async () => {
+    const mod = await importFresh()
+    ensureRunningOverrides.push(async () => ({
+      socketPath: '/fake/degraded-socket',
+      tokenPath: '/fake/degraded-token',
+      mode: 'degraded-new-pty-fallback'
+    }))
+    await mod.initDaemonPtyProvider()
+    checkDaemonHealthMock.mockClear()
+
+    const { DegradedDaemonPtyProvider } = await import('./degraded-daemon-pty-provider')
+    const provider = mod.getDaemonProvider()
+    expect(provider).toBeInstanceOf(DegradedDaemonPtyProvider)
+    const degradedProvider = provider as InstanceType<typeof DegradedDaemonPtyProvider>
+
+    await expect(degradedProvider.recoverFreshSpawnRouting()).resolves.toBe(true)
+    expect(checkDaemonHealthMock).toHaveBeenCalledWith(
+      '/fake/degraded-socket',
+      '/fake/degraded-token'
+    )
+    expect(degradedProvider.routesFreshSpawnsToLocalProvider).toBeUndefined()
+  })
+
   it('fans pty:exit for every active session *before* unbinding listeners, and killedCount is captured pre-fanout', async () => {
     const mod = await importFresh()
     await mod.initDaemonPtyProvider()

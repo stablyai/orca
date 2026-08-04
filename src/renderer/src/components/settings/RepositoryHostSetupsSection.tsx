@@ -80,6 +80,7 @@ export function RepositoryHostSetupsSection({
       buildExecutionHostRegistry({
         repos,
         settings,
+        hostSource: 'configured-only',
         sshTargetLabels,
         sshConnectionStates,
         runtimeEnvironments,

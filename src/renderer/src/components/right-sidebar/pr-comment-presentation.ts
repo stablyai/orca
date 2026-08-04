@@ -209,7 +209,8 @@ export function getPRCommentPresentationClasses(
     groupStandalone: '',
     groupThread: '',
     commentRow: 'group/comment',
-    commentRowReply: `border-t ${COMMENT_CARD_DIVIDER} bg-muted/25 dark:bg-muted/10`,
+    // Why: nest replies under the root like GitHub threads (indent + left rail), not full-width siblings.
+    commentRowReply: `border-t ${COMMENT_CARD_DIVIDER} bg-muted/25 pl-3 dark:bg-muted/10`,
     commentHeader: `flex flex-col gap-1 border-b ${COMMENT_CARD_DIVIDER} ${CARD_COMMENT_HEADER_PADDING}`,
     commentHeaderReply: `flex min-w-0 items-center gap-2 ${CARD_COMMENT_HEADER_PADDING}`,
     commentBody: `${CARD_COMMENT_BODY_PADDING} ${CARD_COMMENT_BODY_SIZE} text-foreground`,
@@ -224,7 +225,7 @@ export function getPRCommentPresentationClasses(
     pathBadge: 'min-w-0 max-w-full truncate font-mono text-muted-foreground',
     time: 'shrink-0 text-[11px] text-muted-foreground',
     resolvedContainer: 'opacity-60',
-    repliesContainer: 'flex flex-col',
+    repliesContainer: 'ml-3 flex flex-col border-l-2 border-border/50',
     resolvedSection: 'mt-1 border-t border-border pt-1',
     resolvedSectionTrigger: RESOLVED_SECTION_TRIGGER,
     resolvedSectionContent: 'flex flex-col gap-2 pb-1 pt-1',

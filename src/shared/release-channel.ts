@@ -4,6 +4,13 @@ export type ReleaseChannel = 'stable' | 'rc' | 'hourly' | 'adhoc'
 
 export const RELEASE_CHANNELS: readonly ReleaseChannel[] = ['stable', 'rc', 'hourly', 'adhoc']
 
+export const RELEASE_CHANNEL_LABELS: Readonly<Record<ReleaseChannel, string>> = {
+  stable: 'Stable',
+  rc: 'RC',
+  hourly: 'Hourly',
+  adhoc: 'Adhoc'
+}
+
 /** Dev builds live in their own repos so their tags never enter the main
  *  releases atom feed, which only exposes the 10 newest entries — 24 hourly
  *  tags a day would evict every stable/RC entry and strand real users. */

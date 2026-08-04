@@ -38,6 +38,7 @@ import {
   __resetLocalGitConfigSignatureCacheForTests,
   readLocalGitConfigSignature
 } from './local-git-config-signature'
+import { GITHUB_SEARCH_RESULT_WINDOW_ERROR_PATTERN } from '../../shared/github-work-items-query-bounds'
 
 describe('github owner/repo resolution', () => {
   beforeEach(() => {
@@ -806,5 +807,18 @@ describe('gh error classification', () => {
       type: 'issues_disabled',
       message: 'Issues are disabled on this repository.'
     })
+  })
+
+  // Why: the renderer detects the Search API 1000-result window by matching
+  // GITHUB_SEARCH_RESULT_WINDOW_ERROR_PATTERN against this message (#11485) —
+  // trimming the raw stderr out of the validation_error copy, or drifting the
+  // pattern off GitHub's real wording, would silently downgrade every window
+  // 422 to a generic failure. The stderr stays verbatim so this pins both ends.
+  it('keeps the search-window phrase in validation_error list messages', () => {
+    const stderr =
+      'Command failed: gh api --hostname github.com search/issues\nValidation Failed: Only the first 1000 search results are available (HTTP 422)'
+    const classified = classifyListIssuesError(stderr)
+    expect(classified.type).toBe('validation_error')
+    expect(classified.message).toMatch(GITHUB_SEARCH_RESULT_WINDOW_ERROR_PATTERN)
   })
 })

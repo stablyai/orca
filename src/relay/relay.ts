@@ -10,7 +10,15 @@
 
 import { createServer, createConnection, type Socket, type Server } from 'node:net'
 import { join } from 'node:path'
-import { unlinkSync, existsSync, statSync, readFileSync, chmodSync } from 'node:fs'
+import {
+  unlinkSync,
+  existsSync,
+  statSync,
+  readFileSync,
+  chmodSync,
+  closeSync,
+  openSync
+} from 'node:fs'
 import {
   RELAY_SENTINEL,
   FrameDecoder,
@@ -32,6 +40,7 @@ import { ExternalAutomationsHandler } from './external-automations-handler'
 import { PortScanHandler } from './port-scan-handler'
 import { AgentExecHandler } from './agent-exec-handler'
 import { WorkspaceSessionHandler } from './workspace-session-handler'
+import { AiVaultHandler } from './ai-vault-handler'
 import { endpointDirForRelaySocket, RelayAgentHookServer } from './agent-hook-server'
 import { PluginOverlayManager } from './plugin-overlay'
 import {
@@ -596,6 +605,31 @@ async function main(): Promise<void> {
         }
         stdoutDrainWaiters.add(cb)
         return () => stdoutDrainWaiters.delete(cb)
+      },
+      close: () => {
+        stdoutAlive = false
+        flushStdoutDrainWaiters()
+        // Why close then re-pin: the SSH peer must see EOF, but a long-lived daemon that
+        // frees fds 0/1 lets accept()/open() recycle them while Node still treats
+        // process.stdin/stdout as those numbers — corrupting socket clients and shutdown.
+        for (const fd of [process.stdin.fd, process.stdout.fd]) {
+          try {
+            closeSync(fd)
+          } catch {
+            // Already closed by the peer.
+          }
+        }
+        const devNull = process.platform === 'win32' ? 'NUL' : '/dev/null'
+        try {
+          openSync(devNull, 'r')
+        } catch {
+          /* best-effort pin of the lowest free fd (normally 0) */
+        }
+        try {
+          openSync(devNull, 'w')
+        } catch {
+          /* best-effort pin of the next free fd (normally 1) */
+        }
       }
     },
     undefined,
@@ -662,6 +696,9 @@ async function main(): Promise<void> {
 
   const _workspaceSessionHandler = new WorkspaceSessionHandler(dispatcher)
   void _workspaceSessionHandler
+
+  const _aiVaultHandler = new AiVaultHandler(dispatcher)
+  void _aiVaultHandler
 
   // Why: relay-hosted plugin provisioning is a later phase. Register the
   // enforcement boundary now with no consented identities or runtime services.

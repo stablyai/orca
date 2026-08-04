@@ -8,16 +8,25 @@ import {
 import type { MacNativeTextInputSourceFeatures } from './terminal-ime-input-source'
 
 const CJK_FEATURES = {
+  forwardHangulJamo: false,
+  forwardAsciiPunctuation: true,
+  forwardShortTextReplacements: false
+} satisfies MacNativeTextInputSourceFeatures
+
+const KOREAN_FEATURES = {
+  forwardHangulJamo: true,
   forwardAsciiPunctuation: true,
   forwardShortTextReplacements: false
 } satisfies MacNativeTextInputSourceFeatures
 
 const VIETNAMESE_FEATURES = {
+  forwardHangulJamo: false,
   forwardAsciiPunctuation: false,
   forwardShortTextReplacements: true
 } satisfies MacNativeTextInputSourceFeatures
 
 const DISABLED_FEATURES = {
+  forwardHangulJamo: false,
   forwardAsciiPunctuation: false,
   forwardShortTextReplacements: false
 } satisfies MacNativeTextInputSourceFeatures
@@ -66,6 +75,23 @@ describe('isImeNativeTextKeydownCandidate', () => {
         DISABLED_FEATURES
       )
     ).toBe(true)
+  })
+
+  it('returns initial Korean jamo keydowns to the native IME', () => {
+    for (const key of ['ㅎ', 'ㅏ', 'ㄴ', 'ᄀ', 'ﾡ']) {
+      expect(isImeNativeTextKeydownCandidate(keyEvent({ key }), false, KOREAN_FEATURES)).toBe(true)
+      expect(isImeNativeTextKeydownCandidate(keyEvent({ key }), false, CJK_FEATURES)).toBe(false)
+    }
+  })
+
+  it('keeps Korean jamo modifier chords in terminal shortcut handling', () => {
+    expect(
+      isImeNativeTextKeydownCandidate(
+        keyEvent({ key: 'ㅎ', metaKey: true }),
+        false,
+        KOREAN_FEATURES
+      )
+    ).toBe(false)
   })
 
   // Why: macOS Korean sources emit ₩ from Backquote, and a DefaultKeyBinding.dict
