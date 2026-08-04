@@ -3690,6 +3690,7 @@ export default function SessionScreen() {
     getActiveWorktreeConnectionId,
     beforeTerminalSend: flushPendingLiveInputBeforeAttachmentSend,
     nativeChatBaseSend: nativeChatController.handleNativeChatSendWithOutcome,
+    runNativeChatWrite: nativeChatController.runNativeChatWrite,
     readSeededLaunchDraft: nativeChatController.readSeededLaunchDraft,
     showToast,
     onNativeChatSendError: nativeChatSendError.show,

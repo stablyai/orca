@@ -2,6 +2,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type { MobileImageSource } from './mobile-image-source-picker'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
+import type { MobileNativeChatWriteAction } from './use-mobile-native-chat-writer-gate'
 import { useMobileImageAttachment } from './use-mobile-image-attachment'
 import {
   useMobileNativeChatImageAttachments,
@@ -29,8 +30,13 @@ type Args = {
   readonly nativeChatBaseSend: (
     text: string,
     images?: string[],
-    deadline?: number
+    deadline?: number,
+    owner?: MobileNativeChatWriteAction
   ) => Promise<MobileNativeChatSendOutcome>
+  readonly runNativeChatWrite: <Result>(
+    write: (action: MobileNativeChatWriteAction | null) => Promise<Result>,
+    staleResult: Result
+  ) => Promise<Result>
   /** Launch-context text parked on the agent's TUI input line, or null — sizes
    *  the image paste's leading clear so a multi-line draft cannot ride along. */
   readonly readSeededLaunchDraft: () => string | null
@@ -57,6 +63,7 @@ export function useMobileSessionImageAttachments({
   getActiveWorktreeConnectionId,
   beforeTerminalSend,
   nativeChatBaseSend,
+  runNativeChatWrite,
   readSeededLaunchDraft,
   showToast,
   onNativeChatSendError,
@@ -90,6 +97,7 @@ export function useMobileSessionImageAttachments({
     showToast,
     onSendError: onNativeChatSendError,
     baseSend: nativeChatBaseSend,
+    runWrite: runNativeChatWrite,
     readSeededLaunchDraft,
     onAttachSuccess: onSuccess,
     onError

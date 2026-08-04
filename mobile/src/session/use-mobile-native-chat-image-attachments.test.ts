@@ -70,6 +70,7 @@ function baseArgs(overrides: Partial<HookArgs> & Pick<HookArgs, 'client'>): Hook
     showToast: vi.fn(),
     onSendError: vi.fn(),
     baseSend: vi.fn().mockResolvedValue('accepted'),
+    runWrite: async (write) => write(null),
     readSeededLaunchDraft: () => null,
     sleep: async () => {},
     ...overrides
@@ -490,11 +491,6 @@ describe('useMobileNativeChatImageAttachments', () => {
     await act(async () => {
       await hook!.attachImage('library')
     })
-    let overlappingAccepted = true
-    await act(async () => {
-      overlappingAccepted = await hook!.sendNativeChat('too soon')
-    })
-    expect(overlappingAccepted).toBe(false)
     expect(baseSend).not.toHaveBeenCalled()
     expect(client.calls.filter((call) => call.method === 'terminal.send')).toHaveLength(2)
 
