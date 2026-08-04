@@ -1068,8 +1068,8 @@
         {
           "file": "src/main/ipc/runtime-environments.test.ts",
           "assertions": [
-            "tells the renderer when retiring the transport closes its streaming subscription",
-            "suppresses stale payloads from a retired transport but never re-sends its close"
+            "tells the renderer when retiring the transport closes its streaming subscription (the load-bearing repro; red with the fix reverted)",
+            "suppresses stale payloads from a retired transport but never re-sends its close (forward guard on the retained generation gate, not a repro)"
           ]
         },
         {

@@ -9,6 +9,11 @@
  * the echo paint live. "Paints only after switching to another terminal and
  * back" is the failure, so each scenario records both.
  *
+ * The decoy tabs are load-bearing, not scenery: the renderer only discards a
+ * multiplexer once no stream holds it (closeIfIdle), so a sibling stream is what
+ * keeps a wedged one alive and the pre-fix state red. Keep at least one decoy
+ * mounted across the reveal, or a closeIfIdle change silently turns this green.
+ *
  * Run:
  *   pnpm exec playwright test \
  *     tests/e2e/paired-remote-terminal-parked-reveal-interactivity.spec.ts \
