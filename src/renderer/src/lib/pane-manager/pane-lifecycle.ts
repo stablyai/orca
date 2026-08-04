@@ -16,6 +16,7 @@ import { attachWebgl, cancelPendingWebglRefresh, disposeWebgl } from './pane-web
 import { configureLazyArabicShapingJoiner } from './terminal-arabic-shaping-joiner'
 import { TerminalLigaturesAddon } from './terminal-ligatures-addon'
 import { installTerminalImeCandidateAnchor } from './terminal-ime-candidate-anchor'
+import { installTerminalImeCompositionTail } from './terminal-ime-composition-tail'
 
 // ---------------------------------------------------------------------------
 // Pane creation, terminal open/close, addon management
@@ -86,6 +87,7 @@ export function openTerminal(pane: ManagedPaneInternal): void {
 
   // Store so disposePane() can remove it and avoid a memory leak.
   pane.compositionHandler = installTerminalImeCandidateAnchor(terminal)
+  pane.imeCompositionTailCleanup = installTerminalImeCompositionTail(terminal)
 
   pane.focusClassSyncCleanup = attachDomRendererFocusClassSync(terminal.element)
 
@@ -199,6 +201,8 @@ export function disposePane(
     pane.terminal.element?.removeEventListener('compositionupdate', pane.compositionHandler)
     pane.compositionHandler = null
   }
+  pane.imeCompositionTailCleanup?.()
+  pane.imeCompositionTailCleanup = null
   try {
     clearPendingSplitScrollRestore(pane)
   } catch {

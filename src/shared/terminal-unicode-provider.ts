@@ -5,6 +5,7 @@ type XtermTerminalWithUnicodeCore = {
   _core?: {
     unicodeService?: {
       _providers?: Record<string, IUnicodeVersionProvider>
+      getStringCellWidth?: (value: string) => number
     }
   }
 }
@@ -50,6 +51,19 @@ class OrcaUnicodeProvider implements IUnicodeVersionProvider {
 
     return this.baseProvider.charProperties(codepoint, preceding)
   }
+}
+
+/**
+ * Columns `value` occupies under the terminal's active width tables — the same
+ * budget the renderer lays cells out on. Null when the emulator has not exposed
+ * its unicode service (no DOM yet, or a future xterm without it).
+ */
+export function measureTerminalStringColumns(
+  terminal: XtermTerminalWithUnicodeCore,
+  value: string
+): number | null {
+  const columns = terminal._core?.unicodeService?.getStringCellWidth?.(value)
+  return typeof columns === 'number' ? columns : null
 }
 
 export function activateOrcaTerminalUnicodeProvider(terminal: XtermTerminalWithUnicodeCore): void {

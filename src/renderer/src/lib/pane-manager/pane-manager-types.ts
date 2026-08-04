@@ -167,6 +167,8 @@ export type ManagedPaneInternal = {
   paneDragCleanup?: (() => void) | null
   // Stored so disposePane() can remove it and avoid a memory leak.
   compositionHandler: (() => void) | null
+  // Stored so disposePane() can remove the IME preedit tail overlay.
+  imeCompositionTailCleanup?: (() => void) | null
   // Stored so disposePane() can remove DOM-renderer focus synchronization.
   focusClassSyncCleanup?: (() => void) | null
   // Stored so disposePane() can remove user-scroll intent listeners.

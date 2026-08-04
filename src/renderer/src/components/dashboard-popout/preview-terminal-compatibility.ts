@@ -6,6 +6,7 @@ import { installWindowsCtrlAltChordRepair } from '@/lib/pane-manager/terminal-wi
 import { attachTerminalMouseWheelMultiplier } from '@/lib/pane-manager/pane-terminal-mouse-wheel'
 import { configureLazyArabicShapingJoiner } from '@/lib/pane-manager/terminal-arabic-shaping-joiner'
 import { installTerminalImeCandidateAnchor } from '@/lib/pane-manager/terminal-ime-candidate-anchor'
+import { installTerminalImeCompositionTail } from '@/lib/pane-manager/terminal-ime-composition-tail'
 import { normalizeTerminalTuiMouseWheelMultiplier } from '@/lib/pane-manager/pane-terminal-tui-wheel-reports'
 import { installPreviewTerminalLinks } from './preview-terminal-links'
 import { syncPreviewTerminalLigatures } from './preview-terminal-ligatures'
@@ -13,7 +14,8 @@ import { syncPreviewTerminalLigatures } from './preview-terminal-ligatures'
 /**
  * Brings the preview's emulator up to a pane's: Orca's Unicode 11 width shim,
  * Windows Ctrl+Alt chord classification, clickable links, ligatures, the TUI
- * wheel multiplier, lazy Arabic shaping, and the IME candidate anchor.
+ * wheel multiplier, lazy Arabic shaping, and the IME candidate anchor plus
+ * preedit tail overlay.
  *
  * Returns a disposer for everything bound to the terminal's DOM element, which
  * must run before that terminal is disposed or replaced.
@@ -40,12 +42,14 @@ export function installPreviewTerminalCompatibility(
   // and has no WebGL glyph atlas to compensate for.
   const disposeArabicShapingJoiner = configureLazyArabicShapingJoiner(terminal, () => false)
   const imeAnchorHandler = installTerminalImeCandidateAnchor(terminal)
+  const disposeImeCompositionTail = installTerminalImeCompositionTail(terminal)
 
   return () => {
     if (imeAnchorHandler && terminal.element) {
       terminal.element.removeEventListener('compositionstart', imeAnchorHandler)
       terminal.element.removeEventListener('compositionupdate', imeAnchorHandler)
     }
+    disposeImeCompositionTail?.()
     disposeArabicShapingJoiner()
   }
 }
