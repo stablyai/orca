@@ -69,7 +69,7 @@ describe('QwenHookService', () => {
       expect(managedCommands(settings, event).some((c) => c.includes('qwen-code-hook.sh'))).toBe(
         true
       )
-      // Why: Qwen's command-hook timeout is milliseconds (cap 60000).
+      // Why: Qwen's command-hook timeout is milliseconds (default 60000).
       const managed = (settings.hooks?.[event] ?? [])
         .flatMap((definition) => definition.hooks ?? [])
         .find((hook) => hook.command?.includes('qwen-code-hook.sh'))
