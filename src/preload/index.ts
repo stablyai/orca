@@ -290,6 +290,17 @@ import {
   registerRendererRestartIpcRelays
 } from './renderer-restart-wiring'
 
+// Why: the sync checkpoint only stages; this joins its durable write so a
+// navigating path can abort instead of losing the staged session.
+async function awaitBeforeUnloadCheckpoint(): Promise<void> {
+  const result = (await ipcRenderer.invoke('app:await-before-unload-checkpoint')) as {
+    ok?: unknown
+  }
+  if (result?.ok !== true) {
+    throw new Error('Failed to persist renderer state before unload.')
+  }
+}
+
 type NativeFileDropCallback = (data: NativeFileDropPayload) => void
 
 const nativeFileDropCallbacks: NativeFileDropCallback[] = []
@@ -479,7 +490,8 @@ const api = {
     restart: async (): Promise<void> => {
       await prepareRendererForAppRestart(window, {
         startedEventName: ORCA_APP_RESTART_STARTED_EVENT,
-        abortedEventName: ORCA_APP_RESTART_ABORTED_EVENT
+        abortedEventName: ORCA_APP_RESTART_ABORTED_EVENT,
+        awaitCheckpoint: awaitBeforeUnloadCheckpoint
       })
       try {
         return await ipcRenderer.invoke('app:restart')
@@ -2982,8 +2994,11 @@ const api = {
     showLinuxPackage: () => ipcRenderer.invoke('updater:showLinuxPackage'),
     listBuilds: (channel) => ipcRenderer.invoke('updater:listBuilds', channel),
     quitAndInstall: (): Promise<void> =>
-      prepareAndInvokeUpdaterInstall(window, updaterQuitAbortRelay, () =>
-        ipcRenderer.invoke('updater:quitAndInstall')
+      prepareAndInvokeUpdaterInstall(
+        window,
+        updaterQuitAbortRelay,
+        () => ipcRenderer.invoke('updater:quitAndInstall'),
+        awaitBeforeUnloadCheckpoint
       ),
 
     onStatus: (callback) => {

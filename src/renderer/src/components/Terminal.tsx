@@ -1176,7 +1176,7 @@ function Terminal(): React.JSX.Element | null {
   // and terminal panes/watchers/capture contracts are untouched. A revisit
   // rebuilds guests from store state.
   useEffect(() => {
-    if (!renderedActiveWorktreeId || !browserGuestRetentionBudgetEnabled) {
+    if (!renderedActiveWorktreeId) {
       return
     }
     const recency = browserGuestWorktreeRecencyRef.current
@@ -1186,6 +1186,11 @@ function Terminal(): React.JSX.Element | null {
       if (!surfaceIds.has(recency[index])) {
         recency.splice(index, 1)
       }
+    }
+    // Why after the bookkeeping: recency must track activation order even while
+    // the kill switch is off, or re-enabling would evict by worktree-list order.
+    if (!browserGuestRetentionBudgetEnabled) {
+      return
     }
     const state = useAppStore.getState()
     // Why appended: a mounted worktree missing from recency (background mount) ranks oldest.

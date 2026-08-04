@@ -8523,6 +8523,7 @@ describe('registerWorktreeHandlers', () => {
 
     expect(killAllProcessesForWorktreeMock).toHaveBeenCalledWith(worktreeId, {
       runtime: runtimeStub,
+      resolvedWorktreeId: worktreeId,
       localProvider: ptyProvider,
       onPtyStopped: clearProviderPtyStateMock
     })
@@ -8534,6 +8535,36 @@ describe('registerWorktreeHandlers', () => {
     expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(worktreeId)
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
       repoId: 'repo-folder'
+    })
+  })
+
+  // Folder projects can be SSH-backed, and folder workspace ids are `repoId::path::workspace:<uuid>`
+  // — reusable across hosts — so the sweep must name the owning connection.
+  it('fences an SSH folder workspace PTY sweep to the owning connection', async () => {
+    const sshPtyProvider = { id: 'ssh-pty-provider' } as never
+    const worktreeId = 'repo-folder::/remote/folder::workspace:child-1'
+    store.getRepo.mockReturnValue({
+      id: 'repo-folder',
+      path: '/remote/folder',
+      displayName: 'folder',
+      badgeColor: '#000',
+      addedAt: 0,
+      kind: 'folder',
+      connectionId: 'conn-1'
+    })
+    getSshPtyProviderMock.mockReturnValue(sshPtyProvider)
+
+    await handlers['worktrees:remove'](null, { worktreeId })
+
+    expect(getSshPtyProviderMock).toHaveBeenCalledWith('conn-1')
+    expect(killAllProcessesForWorktreeMock).toHaveBeenCalledWith(worktreeId, {
+      runtime: runtimeStub,
+      resolvedWorktreeId: worktreeId,
+      resolvedConnectionId: 'conn-1',
+      localProvider: sshPtyProvider,
+      onPtyStopped: clearProviderPtyStateMock,
+      includeProviderInventory: true,
+      includeLocalRegistry: false
     })
   })
 
@@ -10159,6 +10190,70 @@ describe('registerWorktreeHandlers', () => {
     )
     expect(removeWorktreeMock).toHaveBeenCalled()
     expect(callOrder).toEqual(['preflight', 'kill', 'git'])
+  })
+
+  // Regression: `repoId::path` ids repeat across hosts, so an SSH delete used to reach the
+  // runtime's same-id local (or other-connection) terminals and stop them.
+  it('fences an SSH worktree delete PTY sweep to the owning connection', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: null
+    }
+    const sshPtyProvider = { id: 'ssh-pty-provider' } as never
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue({
+      listWorktrees: vi.fn().mockResolvedValue([
+        { path: '/remote/repo', head: 'main', branch: 'main', isBare: false, isMainWorktree: true },
+        {
+          path: '/remote/feature-wt',
+          head: 'feature',
+          branch: 'feature',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ]),
+      removeWorktree: vi.fn().mockResolvedValue({}),
+      worktreeIsClean: vi.fn().mockResolvedValue({ clean: true })
+    })
+    getSshPtyProviderMock.mockReturnValue(sshPtyProvider)
+    getEffectiveHooksFromConfigMock.mockReturnValue(null)
+
+    await handlers['worktrees:remove'](null, { worktreeId: 'repo-ssh::/remote/feature-wt' })
+
+    expect(killAllProcessesForWorktreeMock).toHaveBeenCalledWith('repo-ssh::/remote/feature-wt', {
+      runtime: runtimeStub,
+      resolvedWorktreeId: 'repo-ssh::/remote/feature-wt',
+      resolvedConnectionId: 'conn-1',
+      localProvider: sshPtyProvider,
+      onPtyStopped: clearProviderPtyStateMock,
+      requirePhysicalStop: true,
+      includeLocalRegistry: false
+    })
+  })
+
+  // The local counterpart still identifies itself by exact id so a selector that resolves
+  // two hosts can no longer decide which workspace loses its terminals.
+  it('pins a local worktree delete PTY sweep to the exact worktree id', async () => {
+    mockKnownFeatureWorktree()
+    getEffectiveHooksMock.mockReturnValue(null)
+    removeWorktreeMock.mockResolvedValue({})
+
+    await handlers['worktrees:remove'](null, { worktreeId: 'repo-1::/workspace/feature-wt' })
+
+    expect(killAllProcessesForWorktreeMock).toHaveBeenCalledWith(
+      'repo-1::/workspace/feature-wt',
+      expect.objectContaining({ resolvedWorktreeId: 'repo-1::/workspace/feature-wt' })
+    )
+    expect(killAllProcessesForWorktreeMock).toHaveBeenCalledWith(
+      'repo-1::/workspace/feature-wt',
+      expect.not.objectContaining({ resolvedConnectionId: expect.anything() })
+    )
   })
 
   // Why (#11960): the PTY gate previously had no escape hatch at all, so a

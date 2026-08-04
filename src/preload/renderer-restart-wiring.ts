@@ -26,11 +26,13 @@ export function registerRendererRestartIpcRelays(
 export async function prepareAndInvokeUpdaterInstall(
   eventTarget: EventTarget,
   relay: Pick<UpdaterQuitAbortRelay, 'markPrepared' | 'abort'>,
-  invoke: () => Promise<void>
+  invoke: () => Promise<void>,
+  awaitCheckpoint: () => Promise<void>
 ): Promise<void> {
   await prepareRendererForAppRestart(eventTarget, {
     startedEventName: ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT,
-    abortedEventName: ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT
+    abortedEventName: ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT,
+    awaitCheckpoint
   })
   relay.markPrepared()
   try {

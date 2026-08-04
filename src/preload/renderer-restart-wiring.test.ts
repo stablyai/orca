@@ -44,10 +44,27 @@ describe('renderer restart wiring', () => {
       throw new Error('IPC failed')
     })
 
-    await expect(prepareAndInvokeUpdaterInstall(eventTarget, relay, invoke)).rejects.toThrow(
-      'IPC failed'
-    )
+    await expect(
+      prepareAndInvokeUpdaterInstall(eventTarget, relay, invoke, async () => {
+        calls.push('checkpoint-flushed')
+      })
+    ).rejects.toThrow('IPC failed')
 
-    expect(calls).toEqual(['prepared', 'marked', 'invoked', 'aborted'])
+    expect(calls).toEqual(['prepared', 'checkpoint-flushed', 'marked', 'invoked', 'aborted'])
+  })
+
+  it('never installs the update when the shutdown checkpoint fails to persist', async () => {
+    const eventTarget = new EventTarget()
+    const invoke = vi.fn(() => Promise.resolve())
+    const relay = { markPrepared: vi.fn(), abort: vi.fn() }
+
+    await expect(
+      prepareAndInvokeUpdaterInstall(eventTarget, relay, invoke, () =>
+        Promise.reject(new Error('Failed to persist renderer state before unload.'))
+      )
+    ).rejects.toThrow('Failed to persist renderer state before unload.')
+
+    expect(invoke).not.toHaveBeenCalled()
+    expect(relay.markPrepared).not.toHaveBeenCalled()
   })
 })

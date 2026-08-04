@@ -49,12 +49,16 @@ function waitForRefusedNavigation(win: Window): RefusedNavigationWait {
 
 /** Resolves only if the navigation is refused; a landed reload destroys this document. */
 export async function requestLazyChunkRecoveryReload(
-  win: Window
+  win: Window,
+  // Hosts without a preload bridge stage durably in-process; nothing to join.
+  awaitCheckpoint: () => Promise<void> = () =>
+    window.api?.app?.awaitBeforeUnloadCheckpoint?.() ?? Promise.resolve()
 ): Promise<LazyChunkRecoveryReloadOutcome> {
   try {
     await prepareRendererForAppRestart(win, {
       startedEventName: ORCA_APP_RESTART_STARTED_EVENT,
-      abortedEventName: ORCA_APP_RESTART_ABORTED_EVENT
+      abortedEventName: ORCA_APP_RESTART_ABORTED_EVENT,
+      awaitCheckpoint
     })
   } catch {
     // Never reload over editor buffers that could not be backed up.

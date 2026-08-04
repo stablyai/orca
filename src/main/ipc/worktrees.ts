@@ -169,6 +169,11 @@ async function stopPtysForDestructiveWorktreeRemoval(
   }
   const teardownResult = await killAllProcessesForWorktree(worktreeId, {
     runtime,
+    // Why: `repoId::path` ids repeat across hosts, so an unfenced sweep stops a same-id
+    // workspace's terminals on another connection — and the selector lookup this replaces
+    // throws `selector_ambiguous` the moment two hosts own the id.
+    resolvedWorktreeId: worktreeId,
+    ...(connectionId ? { resolvedConnectionId: connectionId } : {}),
     localProvider: provider,
     onPtyStopped: clearProviderPtyState,
     requirePhysicalStop: true,
@@ -2308,10 +2313,30 @@ export function registerWorktreeHandlers(
             }
             // Why: folder workspaces share one root, so there's no Git remove step to close shells; sweep PTYs before dropping metadata.
             await withWorktreeRemoveStageSpan('pty_sweep', 'folder', async () => {
+              // Folder projects can be SSH-backed, so fence the sweep to the owning host exactly
+              // like the git paths — the local inventory must never reach a remote workspace's id.
+              const ownerHost = parseExecutionHostId(
+                resolveWorktreeRemovalOwnerHostId(store, args.worktreeId, repo, args.hostId)
+              )
+              const sshPtyProvider =
+                ownerHost?.kind === 'ssh' ? getSshPtyProvider(ownerHost.targetId) : undefined
+              const externalHost = ownerHost?.kind === 'ssh' || ownerHost?.kind === 'runtime'
               await killAllProcessesForWorktree(args.worktreeId, {
                 runtime,
-                localProvider: getLocalPtyProvider(),
-                onPtyStopped: clearProviderPtyState
+                resolvedWorktreeId: args.worktreeId,
+                ...(ownerHost?.kind === 'ssh' ? { resolvedConnectionId: ownerHost.targetId } : {}),
+                ...(ownerHost?.kind === 'runtime'
+                  ? { resolvedRuntimeEnvironmentId: ownerHost.environmentId }
+                  : {}),
+                localProvider: sshPtyProvider ?? getLocalPtyProvider(),
+                onPtyStopped: clearProviderPtyState,
+                ...(externalHost
+                  ? {
+                      includeProviderInventory:
+                        ownerHost?.kind === 'ssh' && Boolean(sshPtyProvider),
+                      includeLocalRegistry: false
+                    }
+                  : {})
               }).catch((err) => {
                 console.warn(`[worktree-teardown] failed for ${args.worktreeId}:`, err)
               })

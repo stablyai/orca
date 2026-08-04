@@ -991,6 +991,9 @@ export type AppApi = {
     sessions: { state: WorkspaceSessionState; hostId?: ExecutionHostId }[]
     ui: Partial<PersistedUIState>
   }) => void
+  /** Resolves once the last staged checkpoint is durably written; rejects if that
+   *  write failed, so a reload/restart can abort instead of losing the snapshot. */
+  awaitBeforeUnloadCheckpoint: () => Promise<void>
   /** Resolves when the daemon PTY provider and hook receiver have either
    *  started or failed open for the first BrowserWindow. */
   awaitFirstWindowStartupServices: () => Promise<void>

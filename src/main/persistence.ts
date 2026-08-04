@@ -7291,11 +7291,13 @@ export class Store {
     return this.flushCurrentStateAsync(false, undefined, false).catch(() => {})
   }
 
-  flushPendingOrThrowAsync(options: { signal?: AbortSignal } = {}): Promise<void> {
+  flushPendingOrThrowAsync(
+    options: { signal?: AbortSignal; drainToStableGeneration?: boolean } = {}
+  ): Promise<void> {
     if (this.writesFrozen || this.quitFlushStarted) {
       return Promise.reject(new Error('Cannot flush while persistence is finalized'))
     }
-    return this.flushCurrentStateAsync(false, options.signal)
+    return this.flushCurrentStateAsync(false, options.signal, options.drainToStableGeneration)
   }
 
   // Async twin of flushOrThrow: durable state only. Active-view and GitHub sidecars are

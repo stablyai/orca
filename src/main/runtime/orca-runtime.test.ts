@@ -5923,6 +5923,66 @@ describe('OrcaRuntimeService', () => {
     expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(`${TEST_REPO_ID}::/remote/feature`)
   })
 
+  // Regression: `repoId::path` ids repeat across hosts, so the SSH delete's runtime sweep used to
+  // stop the same-id local workspace's terminals too.
+  it('leaves a same-id local terminal running when the SSH copy is removed', async () => {
+    const remoteRepo = {
+      id: TEST_REPO_ID,
+      path: '/remote/repo',
+      displayName: 'repo',
+      badgeColor: 'blue',
+      addedAt: 1,
+      connectionId: 'ssh-1'
+    }
+    const remoteStore = { ...store, getRepos: () => [remoteRepo], getRepo: () => remoteRepo }
+    const gitProvider = {
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/repo',
+          head: 'main',
+          branch: 'refs/heads/main',
+          isBare: false,
+          isMainWorktree: true
+        },
+        {
+          path: '/remote/feature',
+          head: 'abc',
+          branch: 'feature/foo',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ]),
+      removeWorktree: vi.fn().mockResolvedValue(undefined)
+    }
+    registerSshGitProvider('ssh-1', gitProvider as never)
+    const ptyProvider = {
+      listProcesses: vi.fn().mockResolvedValue([]),
+      shutdown: vi.fn().mockResolvedValue(undefined)
+    }
+    const runtime = new OrcaRuntimeService(remoteStore as never, undefined, {
+      getSshProvider: () => ptyProvider as never
+    })
+    const stopAndWait = vi.fn(async () => true)
+    runtime.setPtyController({
+      write: () => true,
+      kill: vi.fn(() => true),
+      stopAndWait,
+      getForegroundProcess: async () => null
+    })
+    syncSinglePty(runtime, null)
+    runtime.registerPty('pty-remote', `${TEST_REPO_ID}::/remote/feature`, 'ssh-1')
+    runtime.registerPty('pty-local-same-id', `${TEST_REPO_ID}::/remote/feature`, null)
+
+    try {
+      await runtime.removeManagedWorktree('path:/remote/feature', true, false)
+    } finally {
+      unregisterSshGitProvider('ssh-1')
+    }
+
+    expect(stopAndWait).toHaveBeenCalledWith('pty-remote', expect.anything())
+    expect(stopAndWait).not.toHaveBeenCalledWith('pty-local-same-id', expect.anything())
+  })
+
   it('rejects SSH-backed runtime removal of the main worktree before provider deletion', async () => {
     const remoteStore = {
       ...store,
@@ -34493,6 +34553,31 @@ describe('OrcaRuntimeService', () => {
       })
     ).resolves.toEqual({ stopped: 0 })
     expect(kill).not.toHaveBeenCalled()
+  })
+
+  it('stops only the owning connection when one worktree id lives on two hosts', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const kill = vi.fn(() => true)
+    runtime.setPtyController({
+      write: () => true,
+      kill,
+      stopAndWait: vi.fn(async () => true),
+      getForegroundProcess: async () => null
+    })
+    syncSinglePty(runtime, null)
+    // The store keeps one `repoId::path` per host, so deleting the SSH copy must leave the
+    // local copy's terminals running — the fence the destructive removal paths now supply.
+    runtime.registerPty('pty-ssh', TEST_WORKTREE_ID, 'ssh-1')
+    runtime.registerPty('pty-local', TEST_WORKTREE_ID, null)
+
+    await expect(
+      runtime.stopTerminalsForWorktree(TEST_WORKTREE_ID, {
+        resolvedWorktreeId: TEST_WORKTREE_ID,
+        resolvedConnectionId: 'ssh-1'
+      })
+    ).resolves.toEqual({ stopped: 1 })
+    expect(kill).toHaveBeenCalledWith('pty-ssh')
+    expect(kill).not.toHaveBeenCalledWith('pty-local')
   })
 
   it('awaits physical PTY stop when destructive teardown supplies shared dedupe', async () => {

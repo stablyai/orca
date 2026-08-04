@@ -2974,8 +2974,10 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             serialized: serialized?.data,
             oscLinks: serialized?.oscLinks,
             cwd: serialized?.cwd,
-            cols: serialized?.cols ?? size?.cols,
-            rows: serialized?.rows ?? size?.rows,
+            // Why: an empty snapshot with no PTY size must still report the dims the fit
+            // will produce — dimless frames re-armed the mobile fit loop (STA-3337).
+            cols: serialized?.cols ?? size?.cols ?? params.viewport?.cols,
+            rows: serialized?.rows ?? size?.rows ?? params.viewport?.rows,
             displayMode,
             seq
           })
@@ -3381,8 +3383,10 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         })
         const snapshotStats = sendSnapshotFrames(sendFrame, {
           kind: 'scrollback',
-          cols: serialized?.cols ?? size?.cols ?? 80,
-          rows: serialized?.rows ?? size?.rows ?? 24,
+          // Why: prefer the subscriber's viewport over the 80x24 stopgap when the PTY has
+          // no size yet — the mismatch made mobile burn its resubscribe budget (STA-3337).
+          cols: serialized?.cols ?? size?.cols ?? params.viewport?.cols ?? 80,
+          rows: serialized?.rows ?? size?.rows ?? params.viewport?.rows ?? 24,
           displayMode,
           seq: snapshotFrameSeq,
           cwd: serialized?.cwd,

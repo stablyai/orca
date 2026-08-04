@@ -2724,7 +2724,12 @@ export class OrcaRuntimeService {
   // resend (or stale) and is skipped without touching the stored entry.
   private acceptedRendererMobileSnapshotByWorktree = new Map<
     string,
-    { publicationEpoch: string; rendererVersion: number }
+    {
+      publicationEpoch: string
+      rendererVersion: number
+      rendererTabCount: number
+      rendererTabIdentityKeys: ReadonlySet<string>
+    }
   >()
   private clientSessionTabSelections = new ClientSessionTabSelectionStore()
   // Why: idempotency map for mobile terminal creation — a retried create with the
@@ -3382,6 +3387,10 @@ export class OrcaRuntimeService {
     }
     const teardownResult = await killAllProcessesForWorktree(worktreeId, {
       runtime: this,
+      // Why: `repoId::path` ids repeat across hosts, so an unfenced sweep stops a same-id
+      // workspace's terminals on another connection (mirrors the IPC removal path).
+      resolvedWorktreeId: worktreeId,
+      ...(connectionId ? { resolvedConnectionId: connectionId } : {}),
       localProvider: provider,
       onPtyStopped: this.onPtyStopped ?? undefined,
       requirePhysicalStop: true,
@@ -5381,7 +5390,12 @@ export class OrcaRuntimeService {
     const previousLeaves = this.leaves
     this.tabs = new Map(graph.tabs.map((tab) => [tab.tabId, tab]))
     const lifecycleLeaves = this.reconcileMobileSessionRetirementFences(graph.leaves)
-    const changedMobileWorktrees = this.syncMobileSessionTabs(graph.mobileSessionTabs)
+    const mobileSessionResyncWorktrees = new Set<string>()
+    const changedMobileWorktrees = this.syncMobileSessionTabs(
+      graph.mobileSessionTabs,
+      graph.unchangedMobileSessionWorktrees,
+      mobileSessionResyncWorktrees
+    )
     const nextLeaves = new Map<string, RuntimeLeafRecord>()
     const graphSyncedAt = this.nextTitleObservationSequence()
 
@@ -5557,7 +5571,10 @@ export class OrcaRuntimeService {
     return {
       ...this.getStatus(),
       ...(agentOrchestrationByPaneKey ? { agentOrchestrationByPaneKey } : {}),
-      ...(nativeChatLaunchDraftResolutions.length > 0 ? { nativeChatLaunchDraftResolutions } : {})
+      ...(nativeChatLaunchDraftResolutions.length > 0 ? { nativeChatLaunchDraftResolutions } : {}),
+      ...(mobileSessionResyncWorktrees.size > 0
+        ? { mobileSessionResyncWorktrees: [...mobileSessionResyncWorktrees] }
+        : {})
     }
   }
 
@@ -23207,6 +23224,7 @@ export class OrcaRuntimeService {
       store.removeWorktreeMeta(worktreeId)
     }
     this.mobileSessionTabsByWorktree.delete(worktreeId)
+    this.acceptedRendererMobileSnapshotByWorktree.delete(worktreeId)
     advertisedUrlWatcher.forgetWorktree(worktreeId)
     deleteWorktreeHistoryDir(worktreeId)
     this.closeHeadlessBrowserPagesForWorktree(worktreeId)
@@ -23424,14 +23442,34 @@ export class OrcaRuntimeService {
               'Cannot delete the project root workspace. Remove the folder project instead.'
             )
           }
-          const localProvider = this.getLocalProvider()
-          if (localProvider) {
+          // Folder projects can be SSH-backed, so resolve the owner before sweeping.
+          const folderHost = parseExecutionHostId(
+            store.getWorktreeMeta(removalTarget.id)?.hostId ?? getRepoExecutionHostId(repo)
+          )
+          const folderSshPtyProvider =
+            folderHost?.kind === 'ssh' ? this.getSshProviderFn?.(folderHost.targetId) : undefined
+          const externalFolderHost = folderHost?.kind === 'ssh' || folderHost?.kind === 'runtime'
+          const folderPtyProvider = folderSshPtyProvider ?? this.getLocalProvider()
+          if (folderPtyProvider) {
             // Why: folder workspace deletion has no Git removal phase where PTYs
             // would otherwise be swept; tear them down before hiding the workspace.
             await killAllProcessesForWorktree(removalTarget.id, {
               runtime: this,
-              localProvider,
-              onPtyStopped: this.onPtyStopped ?? undefined
+              // External host inventories must never sweep a same-id local workspace.
+              resolvedWorktreeId: removalTarget.id,
+              ...(folderHost?.kind === 'ssh' ? { resolvedConnectionId: folderHost.targetId } : {}),
+              ...(folderHost?.kind === 'runtime'
+                ? { resolvedRuntimeEnvironmentId: folderHost.environmentId }
+                : {}),
+              localProvider: folderPtyProvider,
+              onPtyStopped: this.onPtyStopped ?? undefined,
+              ...(externalFolderHost
+                ? {
+                    includeProviderInventory:
+                      folderHost?.kind === 'ssh' && Boolean(folderSshPtyProvider),
+                    includeLocalRegistry: false
+                  }
+                : {})
             }).catch((err) => {
               console.warn(`[worktree-teardown] failed for ${removalTarget.id}:`, err)
             })
@@ -28849,7 +28887,9 @@ export class OrcaRuntimeService {
   // Returns the worktrees whose stored snapshot object changed during this
   // sync, so the caller can fan out only actually-changed worktrees.
   private syncMobileSessionTabs(
-    snapshots: RuntimeMobileSessionTabsSnapshot[] | undefined
+    snapshots: RuntimeMobileSessionTabsSnapshot[] | undefined,
+    unchangedWorktreeIds?: string[],
+    resyncWorktreeIds: Set<string> = new Set()
   ): Set<string> {
     const changedWorktreeIds = new Set<string>()
     if (snapshots === undefined) {
@@ -28884,6 +28924,38 @@ export class OrcaRuntimeService {
       })
     }
     const nextWorktrees = new Set<string>()
+    const incomingWorktreeIds = new Set(snapshots.map((snapshot) => snapshot.worktree))
+    // Why: the renderer withholds unchanged snapshots to keep the graph payload
+    // small, so these worktrees are still live and must not fall into the prune
+    // below. Ask for a republish when main no longer holds that accepted renderer
+    // publication or a formerly-preserved runtime tab has gone stale.
+    for (const worktreeId of unchangedWorktreeIds ?? []) {
+      const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
+      const accepted = this.acceptedRendererMobileSnapshotByWorktree.get(worktreeId)
+      if (existing) {
+        nextWorktrees.add(worktreeId)
+      }
+      if (
+        existing &&
+        accepted &&
+        (existing.publicationEpoch === accepted.publicationEpoch ||
+          existing.publicationEpoch.startsWith(`${accepted.publicationEpoch}:headless-merge:`)) &&
+        existing.tabs.length >= accepted.rendererTabCount &&
+        (existing.tabs.length === accepted.rendererTabCount ||
+          !this.storedMobileSnapshotHasStalePreservedTab(
+            existing,
+            accepted.rendererTabIdentityKeys
+          ))
+      ) {
+        continue
+      }
+      if (!incomingWorktreeIds.has(worktreeId)) {
+        resyncWorktreeIds.add(worktreeId)
+      }
+      // Why: the accept gate compares against the renderer's last accepted pair,
+      // which outlives the dropped snapshot and would reject the republish.
+      this.acceptedRendererMobileSnapshotByWorktree.delete(worktreeId)
+    }
     for (const snapshot of snapshots) {
       nextWorktrees.add(snapshot.worktree)
       const existing = this.mobileSessionTabsByWorktree.get(snapshot.worktree)
@@ -28908,7 +28980,7 @@ export class OrcaRuntimeService {
         !(
           existing &&
           snapshot.snapshotVersion === accepted.rendererVersion &&
-          this.storedMobileSnapshotHasStalePreservedTab(existing, snapshot)
+          this.storedMobileSnapshotHasStalePreservedTab(existing, accepted.rendererTabIdentityKeys)
         )
       ) {
         continue
@@ -28932,7 +29004,11 @@ export class OrcaRuntimeService {
       )
       this.acceptedRendererMobileSnapshotByWorktree.set(snapshot.worktree, {
         publicationEpoch: snapshot.publicationEpoch,
-        rendererVersion: snapshot.snapshotVersion
+        rendererVersion: snapshot.snapshotVersion,
+        rendererTabCount: fencedSnapshot.tabs.length,
+        rendererTabIdentityKeys: new Set(
+          fencedSnapshot.tabs.flatMap((tab) => this.getMobileSessionSnapshotTabIdentityKeys(tab))
+        )
       })
     }
     for (const [worktreeId, existing] of [...this.mobileSessionTabsByWorktree.entries()]) {
@@ -29054,22 +29130,19 @@ export class OrcaRuntimeService {
   }
 
   // Why: the accepted-revision no-op gate must not fossilize preserved runtime
-  // tabs. A stored merged snapshot's tabs that are absent from the incoming
-  // renderer publication exist only via preservation; if any such tab no longer
+  // tabs. A stored merged snapshot's tabs absent from the accepted renderer
+  // publication exist only via preservation; if any such tab no longer
   // passes the preservation predicate (binding removed from the live PTY table
-  // and persisted session, or browser page closed), the stored snapshot is
-  // stale even though the renderer revision is unchanged.
+  // and persisted session, or browser page closed), the stored snapshot is stale.
   private storedMobileSnapshotHasStalePreservedTab(
     existing: RuntimeMobileSessionTabsSnapshot,
-    incoming: RuntimeMobileSessionTabsSnapshot
+    rendererTabIdentityKeys: ReadonlySet<string>
   ): boolean {
-    const incomingIds = new Set(
-      incoming.tabs.flatMap((tab) => this.getMobileSessionSnapshotTabIdentityKeys(tab))
-    )
     return existing.tabs.some(
       (tab) =>
-        !this.getMobileSessionSnapshotTabIdentityKeys(tab).some((id) => incomingIds.has(id)) &&
-        !this.shouldPreserveHeadlessMobileSessionTab(existing, tab)
+        !this.getMobileSessionSnapshotTabIdentityKeys(tab).some((id) =>
+          rendererTabIdentityKeys.has(id)
+        ) && !this.shouldPreserveHeadlessMobileSessionTab(existing, tab)
     )
   }
 
