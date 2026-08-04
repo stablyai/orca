@@ -176,7 +176,7 @@ describe('Windows CLI launcher', () => {
         pathKeys: ['PATH', 'Path']
       })
     } finally {
-      rmSync(appRoot, { recursive: true, force: true })
+      removeFixtureTree(appRoot)
     }
   })
 })
