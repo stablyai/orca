@@ -43,9 +43,6 @@ export function readClaudeSessionOptionsFromTerminalScreen(
     return null
   }
   const result: Record<string, SessionOptionValue> = { model: model.id }
-  if (model.options.some((option) => option.id === 'context1m')) {
-    result.context1m = /\(1M context\)/i.test(header)
-  }
   const effortLabel = header.match(
     /\bwith\s+(low|medium|high|extra high|xhigh|max)\s+effort\b/i
   )?.[1]

@@ -16,9 +16,7 @@ describe('tui agent startup session options', () => {
       sessionOptions: { model: 'opus', effort: 'xhigh', fastMode: true },
       agentArgs: '--model haiku'
     })
-    expect(plan?.launchCommand).toBe(
-      "claude '--model' 'opus[1m]' '--effort' 'xhigh' '--model' 'haiku'"
-    )
+    expect(plan?.launchCommand).toBe("claude '--model' 'opus' '--effort' 'xhigh' '--model' 'haiku'")
     expect(plan?.sessionOptions).toBeUndefined()
   })
 
@@ -32,7 +30,7 @@ describe('tui agent startup session options', () => {
       sessionOptions: { model: 'opus', effort: 'xhigh' },
       agentArgs: '--effort low'
     })
-    expect(plan?.sessionOptions).toEqual({ model: 'opus', context1m: true })
+    expect(plan?.sessionOptions).toEqual({ model: 'opus' })
   })
 
   it('recognizes a long Codex model flag overriding the generated short flag', () => {
@@ -84,8 +82,8 @@ describe('tui agent startup session options', () => {
       platform: 'linux',
       sessionOptions: { model: 'opus', effort: 'high' }
     })
-    expect(plan?.launchCommand).toContain("claude '--model' 'opus[1m]' '--effort' 'high'")
-    expect(plan?.sessionOptions).toEqual({ model: 'opus', effort: 'high', context1m: true })
+    expect(plan?.launchCommand).toContain("claude '--model' 'opus' '--effort' 'high'")
+    expect(plan?.sessionOptions).toEqual({ model: 'opus', effort: 'high' })
   })
 
   it('never injects session options into resume commands', () => {

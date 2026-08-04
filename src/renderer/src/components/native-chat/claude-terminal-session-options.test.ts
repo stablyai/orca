@@ -10,12 +10,11 @@ describe('Claude terminal session option detection', () => {
 
     expect(readClaudeSessionOptionsFromTerminalScreen(screen)).toEqual({
       model: 'opus',
-      context1m: false,
       effort: 'high'
     })
   })
 
-  it('distinguishes the 1M-context Opus header from plain Opus', () => {
+  it('reads a long-context header as the same model it composes from', () => {
     const screen =
       '\u001b[1mClaude Code\u001b[0m v2.1.220\r\n' +
       '\u001b[38;2;102;102;102mOpus 5 (1M context) with high effort · Claude Max\r\n' +
@@ -23,7 +22,6 @@ describe('Claude terminal session option detection', () => {
 
     expect(readClaudeSessionOptionsFromTerminalScreen(screen)).toEqual({
       model: 'opus',
-      context1m: true,
       effort: 'high'
     })
   })
@@ -36,7 +34,6 @@ describe('Claude terminal session option detection', () => {
 
     expect(readClaudeSessionOptionsFromTerminalScreen(screen)).toEqual({
       model: 'claude-opus-4-6',
-      context1m: false,
       effort: 'medium'
     })
   })

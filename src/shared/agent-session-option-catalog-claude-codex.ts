@@ -66,33 +66,12 @@ const CLAUDE_FAST_MODE: CatalogOption = {
   apply: { midSession: { kind: 'toggle-command', command: '/fast' } }
 }
 
-/** Claude spells the long-context variant as a `[1m]` suffix on the model id
- * rather than a separate model, so it composes instead of doubling the list. */
-const CLAUDE_LONG_CONTEXT: CatalogOption = {
-  id: 'context1m',
-  label: '1M context',
-  category: 'model_config',
-  // Why: models that expose the option are the ones that benefit from it, so
-  // new sessions launch long-context and opt out rather than in.
-  kind: { type: 'boolean', defaultValue: true },
-  apply: { composedIntoModel: true }
-}
-
-/** Every current Claude model runs a 1M window except Haiku, so the toggle
- * rides along with effort on all of them. */
-function longContextOptions(extras: readonly CatalogOption[] = []): CatalogOption[] {
-  return [claudeEffort(true), CLAUDE_LONG_CONTEXT, ...extras]
-}
-
 export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   // Why: labels double as the match keys for
   // `readClaudeSessionOptionsFromTerminalScreen`, which recovers the live model
   // by substring-matching Claude's TUI header. Keep them verbatim header text.
   models: [
     {
-      // Why: Fable's 1M window is both default and maximum, so the CLI drops a
-      // `[1m]` suffix on it — offering the toggle would claim a state we can
-      // never read back from the header.
       id: 'fable',
       label: 'Fable 5',
       options: [claudeEffort(true)]
@@ -101,11 +80,9 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
       id: 'opus',
       label: 'Opus 5',
       isDefault: true,
-      options: longContextOptions([CLAUDE_FAST_MODE])
+      options: [claudeEffort(true), CLAUDE_FAST_MODE]
     },
     {
-      // Why: Sonnet's long-context variant is gated behind a separate usage
-      // entitlement, so the picker stays on the standard 200K window.
       id: 'sonnet',
       label: 'Sonnet 5',
       options: [claudeEffort(true)]
@@ -120,17 +97,17 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     {
       id: 'claude-opus-4-8',
       label: 'Opus 4.8',
-      options: longContextOptions([CLAUDE_FAST_MODE])
+      options: [claudeEffort(true), CLAUDE_FAST_MODE]
     },
     {
       id: 'claude-opus-4-7',
       label: 'Opus 4.7',
-      options: longContextOptions()
+      options: [claudeEffort(true)]
     },
     {
       id: 'claude-opus-4-6',
       label: 'Opus 4.6',
-      options: longContextOptions()
+      options: [claudeEffort(true)]
     },
     {
       id: 'claude-sonnet-4-6',
@@ -149,8 +126,7 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
       // actual prompt so ordinary model changes stay in native chat.
       detectAgentInteraction: 'claude-model-switch-confirmation'
     }
-  },
-  composeModelValue: (modelId, values) => (values.context1m === true ? `${modelId}[1m]` : modelId)
+  }
 }
 
 const CODEX_EFFORT_CHOICES = [
