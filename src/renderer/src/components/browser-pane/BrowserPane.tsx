@@ -928,6 +928,9 @@ function RemoteBrowserPagePane({
   const [remoteError, setRemoteError] = useState<string | null>(null)
   const [contextMenu, setContextMenu] = useState<RemoteBrowserContextMenu | null>(null)
   const [busy, setBusy] = useState(false)
+  const [reloadMenuOpen, setReloadMenuOpen] = useState(false)
+  const remoteReloadShortcut = useShortcutLabel('browser.reload')
+  const remoteHardReloadShortcut = useShortcutLabel('browser.hardReload')
   const contextMenuRef = useRef<HTMLDivElement>(null)
   const remotePageIdRef = useRef<string | null>(null)
   const remoteViewportSizeRef = useRef<RemoteBrowserViewportSize | null>(null)
@@ -2613,18 +2616,49 @@ function RemoteBrowserPagePane({
         >
           <ArrowRight className="size-4" />
         </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-7 w-7"
-          onClick={() => void runRemoteNavigation('browser.reload')}
-        >
-          {busy || browserTab.loading ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <RefreshCw className="size-4" />
-          )}
-        </Button>
+        <DropdownMenu open={reloadMenuOpen} onOpenChange={setReloadMenuOpen}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7"
+                  onPointerDown={(e) => {
+                    if (e.button === 0) {
+                      e.preventDefault()
+                    }
+                  }}
+                  onClick={() => void runRemoteNavigation('browser.reload')}
+                  onContextMenu={(e) => {
+                    e.preventDefault()
+                    setReloadMenuOpen(true)
+                  }}
+                >
+                  {busy || browserTab.loading ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="size-4" />
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={4}>
+              {translate('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
+              {remoteReloadShortcut ? ` · ${remoteReloadShortcut}` : ''}
+            </TooltipContent>
+          </Tooltip>
+          <DropdownMenuContent align="start" alignOffset={-4}>
+            <DropdownMenuItem onClick={() => void runRemoteNavigation('browser.reload')}>
+              {translate('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
+              <DropdownMenuShortcut>{remoteReloadShortcut}</DropdownMenuShortcut>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => void runRemoteNavigation('browser.reload')}>
+              {translate('auto.components.browser.pane.BrowserPane.a1f3c2e4b5', 'Hard Reload')}
+              <DropdownMenuShortcut>{remoteHardReloadShortcut}</DropdownMenuShortcut>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <BrowserAddressBar
           value={addressBarValue}
           onChange={setAddressBarValue}
@@ -2879,6 +2913,9 @@ function BrowserPagePane({
     getExplicitBrowserPageZoomLevel(browserTab.id) ?? normalizedBrowserDefaultZoomLevel
   )
   const grabElementShortcut = useShortcutLabel('browser.grabElement')
+  const reloadShortcut = useShortcutLabel('browser.reload')
+  const hardReloadShortcut = useShortcutLabel('browser.hardReload')
+  const [reloadMenuOpen, setReloadMenuOpen] = useState(false)
   const faviconUrlRef = useRef<string | null>(browserTab.faviconUrl)
   const initialBrowserUrlRef = useRef(browserTab.url)
   const browserTabUrlRef = useRef(browserTab.url)
@@ -5175,35 +5212,66 @@ function BrowserPagePane({
           >
             <ArrowRight className="size-4" />
           </Button>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-7 w-7"
-            onClick={() => {
-              const webview = webviewRef.current
-              if (!webview) {
-                return
-              }
-              if (browserTab.loading) {
-                webview.stop()
-              } else if (browserTab.loadError) {
-                if (browserTab.loadError.code === BROWSER_GUEST_RECOVERY_ERROR_CODE) {
-                  onUpdatePageStateRef.current(browserTab.id, { loading: true })
-                  retryGuestRecoveryRef.current()
-                } else {
-                  retryBrowserTabLoad(webview, browserTab, onUpdatePageStateRef.current)
-                }
-              } else {
-                webview.reload()
-              }
-            }}
-          >
-            {browserTab.loading ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <RefreshCw className="size-4" />
-            )}
-          </Button>
+          <DropdownMenu open={reloadMenuOpen} onOpenChange={setReloadMenuOpen}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7"
+                    onPointerDown={(e) => {
+                      if (e.button === 0) {
+                        e.preventDefault()
+                      }
+                    }}
+                    onClick={() => {
+                      const webview = webviewRef.current
+                      if (!webview) {
+                        return
+                      }
+                      if (browserTab.loading) {
+                        webview.stop()
+                      } else if (browserTab.loadError) {
+                        if (browserTab.loadError.code === BROWSER_GUEST_RECOVERY_ERROR_CODE) {
+                          onUpdatePageStateRef.current(browserTab.id, { loading: true })
+                          retryGuestRecoveryRef.current()
+                        } else {
+                          retryBrowserTabLoad(webview, browserTab, onUpdatePageStateRef.current)
+                        }
+                      } else {
+                        webview.reload()
+                      }
+                    }}
+                    onContextMenu={(e) => {
+                      e.preventDefault()
+                      setReloadMenuOpen(true)
+                    }}
+                  >
+                    {browserTab.loading ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="size-4" />
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={4}>
+                {translate('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
+                {reloadShortcut ? ` · ${reloadShortcut}` : ''}
+              </TooltipContent>
+            </Tooltip>
+            <DropdownMenuContent align="start" alignOffset={-4}>
+              <DropdownMenuItem onClick={() => webviewRef.current?.reload()}>
+                {translate('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
+                <DropdownMenuShortcut>{reloadShortcut}</DropdownMenuShortcut>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => webviewRef.current?.reloadIgnoringCache()}>
+                {translate('auto.components.browser.pane.BrowserPane.a1f3c2e4b5', 'Hard Reload')}
+                <DropdownMenuShortcut>{hardReloadShortcut}</DropdownMenuShortcut>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           <BrowserAddressBar
             value={addressBarValue}
