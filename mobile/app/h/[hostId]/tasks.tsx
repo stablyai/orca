@@ -156,6 +156,8 @@ import {
   githubProjectHost,
   githubProjectIdentityKey as githubProjectKey
 } from '../../../../src/shared/github-project-identity'
+import { getTaskPresetQuery, scopeGitHubTaskSearch } from '../../../../src/shared/github-task-query'
+import { resolveMobileGitHubTaskKind } from '../../../src/tasks/mobile-github-task-kind'
 
 type RepoSummary = {
   id: string
@@ -881,22 +883,6 @@ function formatUpdatedAt(value: string): string {
   return `${Math.floor(hours / 24)}d`
 }
 
-function getTaskPresetQuery(preset: GitHubPreset): string {
-  switch (preset) {
-    case 'my-issues':
-      return 'assignee:@me is:issue is:open'
-    case 'prs':
-      return 'is:pr is:open'
-    case 'my-prs':
-      return 'author:@me is:pr is:open'
-    case 'review':
-      return 'review-requested:@me is:pr is:open'
-    case 'issues':
-    default:
-      return 'is:issue is:open'
-  }
-}
-
 function isTaskProvider(value: unknown): value is TaskProvider {
   return value === 'github' || value === 'gitlab' || value === 'linear'
 }
@@ -915,18 +901,6 @@ function normalizeLinearFilter(value: unknown): LinearFilter {
   return value === 'assigned' || value === 'created' || value === 'completed' || value === 'all'
     ? value
     : 'all'
-}
-
-function githubKindFromQuery(query: string, fallbackPreset: GitHubPreset): GitHubTaskKind {
-  if (/\bis:pr\b/i.test(query)) {
-    return 'prs'
-  }
-  if (/\bis:issue\b/i.test(query)) {
-    return 'issues'
-  }
-  return fallbackPreset === 'prs' || fallbackPreset === 'my-prs' || fallbackPreset === 'review'
-    ? 'prs'
-    : 'issues'
 }
 
 function projectRowType(row: GitHubProjectRow): 'issue' | 'pr' | null {
@@ -996,17 +970,6 @@ function projectRowStatusLabel(row: GitHubProjectRow): string {
     return 'Closed'
   }
   return 'Open'
-}
-
-function scopeGitHubTaskSearch(query: string, kind: GitHubTaskKind): string {
-  const trimmed = query.trim()
-  if (!trimmed) {
-    return getTaskPresetQuery(kind === 'prs' ? 'prs' : 'issues')
-  }
-  if (/\bis:(?:issue|pr)\b/i.test(trimmed)) {
-    return trimmed
-  }
-  return `${kind === 'prs' ? 'is:pr' : 'is:issue'} ${trimmed}`
 }
 
 function gitHubStatusLabel(item: GitHubWorkItem): string {
@@ -2997,7 +2960,7 @@ export default function MobileTasksScreen() {
         nextProvider === 'github' ? githubQuery : nextProvider === 'linear' ? nextLinearQuery : ''
       const nextAppliedQuery =
         nextProvider === 'github'
-          ? scopeGitHubTaskSearch(githubQuery, githubKindFromQuery(githubQuery, preset))
+          ? scopeGitHubTaskSearch(githubQuery, resolveMobileGitHubTaskKind(githubQuery, preset))
           : nextQuery
 
       setVisibleProviders(nextVisibleProviders)
@@ -3005,7 +2968,7 @@ export default function MobileTasksScreen() {
       setGithubMode(resume.githubMode === 'project' ? 'project' : 'items')
       setDefaultGitHubPreset(defaultPreset)
       setGithubPreset(preset)
-      setGithubKind(githubKindFromQuery(githubQuery, preset))
+      setGithubKind(resolveMobileGitHubTaskKind(githubQuery, preset))
       setLinearFilter(nextLinearFilter)
       setGithubProjectSettings(settings.githubProjects ?? EMPTY_GITHUB_PROJECT_SETTINGS)
       setQuery(nextQuery)
@@ -9806,7 +9769,7 @@ export default function MobileTasksScreen() {
               resume.githubItemsPreset === null
                 ? (resume.githubItemsQuery ?? '')
                 : getTaskPresetQuery(preset)
-            const nextKind = githubKindFromQuery(nextQuery, preset)
+            const nextKind = resolveMobileGitHubTaskKind(nextQuery, preset)
             setGithubPreset(preset)
             setGithubKind(nextKind)
             setQuery(nextQuery)

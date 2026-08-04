@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { getTaskPresetQuery, scopeGitHubTaskSearch } from './github-task-query'
 import {
   parseTaskQuery,
   serializeTaskQuery,
@@ -6,6 +7,45 @@ import {
   tokenizeSearchQuery,
   withQualifier
 } from './task-query'
+
+describe('GitHub task queries', () => {
+  it.each([
+    ['all', 'is:issue is:open'],
+    ['issues', 'is:issue is:open'],
+    ['my-issues', 'assignee:@me is:issue is:open'],
+    ['prs', 'is:pr is:open'],
+    ['my-prs', 'author:@me is:pr is:open'],
+    ['review', 'review-requested:@me is:pr is:open'],
+    [null, 'is:issue is:open']
+  ] as const)('maps %s to its preset query', (preset, expected) => {
+    expect(getTaskPresetQuery(preset)).toBe(expected)
+  })
+
+  it.each([
+    ['is:issue bug', 'prs'],
+    ['is:pr bug', 'issues'],
+    ['is:pull-request bug', 'issues']
+  ] as const)('preserves the %s scope alias', (query, kind) => {
+    expect(scopeGitHubTaskSearch(query, kind)).toBe(query)
+  })
+
+  it.each([
+    ['"is:issue"', 'prs', 'is:pr "is:issue"'],
+    ['label:"is:issue"', 'prs', 'is:pr label:"is:issue"'],
+    ["'is:pull-request'", 'issues', "is:issue 'is:pull-request'"]
+  ] as const)(
+    'does not treat quoted scope text in %s as an explicit scope',
+    (query, kind, expected) => {
+      expect(scopeGitHubTaskSearch(query, kind)).toBe(expected)
+    }
+  )
+
+  it('infers pull requests from PR-only qualifiers', () => {
+    expect(scopeGitHubTaskSearch('review-requested:@me', 'issues')).toBe(
+      'is:pr review-requested:@me'
+    )
+  })
+})
 
 describe('tokenizeSearchQuery', () => {
   it('splits on whitespace', () => {
@@ -55,6 +95,13 @@ describe('parseTaskQuery', () => {
     const parsed = parseTaskQuery('is:pull-request is:open')
     expect(parsed.scope).toBe('pr')
     expect(parsed.state).toBe('open')
+  })
+
+  it('keeps quoted scope text out of the parsed scope', () => {
+    const parsed = parseTaskQuery('"is:issue" label:"is:pr"')
+    expect(parsed.scope).toBe('all')
+    expect(parsed.labels).toEqual(['is:pr'])
+    expect(parsed.freeText).toBe('"is:issue"')
   })
 
   it('widens scope to all when both is:issue and is:pr are present', () => {

@@ -1,3 +1,5 @@
+export type GitHubTaskKind = 'issues' | 'prs'
+
 export type ParsedTaskQuery = {
   scope: 'all' | 'issue' | 'pr'
   state: 'open' | 'closed' | 'all' | 'merged' | null
@@ -72,12 +74,13 @@ export function parseTaskQuery(rawQuery: string): ParsedTaskQuery {
   let sawPRScope = false
   for (const { value: token, raw } of tokenizeSearchQueryWithRaw(rawQuery.trim())) {
     const normalized = token.toLowerCase()
-    if (normalized === 'is:issue') {
+    const isBareToken = raw === token
+    if (isBareToken && normalized === 'is:issue') {
       sawIssueScope = true
       query.scope = sawPRScope ? 'all' : 'issue'
       continue
     }
-    if (normalized === 'is:pr' || normalized === 'is:pull-request') {
+    if (isBareToken && (normalized === 'is:pr' || normalized === 'is:pull-request')) {
       sawPRScope = true
       query.scope = sawIssueScope ? 'all' : 'pr'
       continue
@@ -160,6 +163,24 @@ export function parseTaskQuery(rawQuery: string): ParsedTaskQuery {
   }
   query.freeText = freeTextTokens.join(' ').trim()
   return query
+}
+
+/** Return the explicit, unquoted GitHub work-item scope in a task query. */
+export function getExplicitTaskQueryScope(rawQuery: string): ParsedTaskQuery['scope'] | null {
+  let sawIssueScope = false
+  let sawPRScope = false
+  for (const { value, raw } of tokenizeSearchQueryWithRaw(rawQuery.trim())) {
+    if (raw !== value) {
+      continue
+    }
+    const normalized = value.toLowerCase()
+    sawIssueScope ||= normalized === 'is:issue'
+    sawPRScope ||= normalized === 'is:pr' || normalized === 'is:pull-request'
+  }
+  if (sawIssueScope && sawPRScope) {
+    return 'all'
+  }
+  return sawIssueScope ? 'issue' : sawPRScope ? 'pr' : null
 }
 
 function quoteIfNeeded(value: string): string {
