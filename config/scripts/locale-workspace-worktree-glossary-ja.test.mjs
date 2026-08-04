@@ -18,11 +18,13 @@ describe('locale-translation-policy ja workspace/worktree glossary', () => {
         'ワークスペースを削除'
       )
     ).toContain(WORKTREE)
-    expect(repairJa(
-      'auto.components.settings.WorktreeHooksSection.ff082fe7c6',
-      'Worktree hooks',
-      'ワークスペース フック'
-    )).toContain(WORKTREE)
+    expect(
+      repairJa(
+        'auto.components.settings.WorktreeHooksSection.ff082fe7c6',
+        'Worktree hooks',
+        'ワークスペース フック'
+      )
+    ).toContain(WORKTREE)
   })
 
   it('does not promote a workspace to a worktree', () => {

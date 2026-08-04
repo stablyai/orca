@@ -58,12 +58,10 @@ describe('locale-translation-policy zh workspace/worktree glossary', () => {
   })
 
   it('fixes bare primary badge from 主要 to 主', () => {
-    expect(
-      repairZh('auto.components.WorktreeJumpPalette.739bda980c', 'primary', '主要')
-    ).toBe('主')
-    expect(
-      repairZh('auto.components.sidebar.WorktreeCard.7d517f82e2', 'primary', '主要')
-    ).toBe('主')
+    expect(repairZh('auto.components.WorktreeJumpPalette.739bda980c', 'primary', '主要')).toBe('主')
+    expect(repairZh('auto.components.sidebar.WorktreeCard.7d517f82e2', 'primary', '主要')).toBe(
+      '主'
+    )
   })
 
   it('leaves 主工作树 untouched for compound primary-worktree strings', () => {
