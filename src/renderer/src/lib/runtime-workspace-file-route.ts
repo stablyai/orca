@@ -57,7 +57,7 @@ export function findWorkspaceFileRoute(
   }
 
   const owner = findRuntimeWorkspaceFileOwner(roots, absolutePath, executionHostId)
-  return owner
+  return owner && owner.relativePath !== ''
     ? { worktreeId: owner.workspaceId, relativePath: owner.relativePath, executionHostId }
     : null
 }

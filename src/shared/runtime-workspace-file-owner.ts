@@ -24,7 +24,7 @@ export function findRuntimeWorkspaceFileOwner(
       continue
     }
     const relativePath = relativePathInsideRoot(root.rootPath, absolutePath)
-    if (relativePath === null || relativePath === '') {
+    if (relativePath === null) {
       continue
     }
     const rootLength = normalizeRuntimePathForComparison(root.rootPath).length

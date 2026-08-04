@@ -932,6 +932,46 @@ describe('RuntimeFileCommands', () => {
       })
     })
 
+    it('resolves an exact local sibling workspace root as a directory without a grant', async () => {
+      const sibling = {
+        id: 'wt-2',
+        repoId: 'repo-2',
+        path: '/sibling',
+        git: {
+          path: '/sibling',
+          head: '',
+          branch: '',
+          isBare: false,
+          isMainWorktree: true
+        }
+      }
+      const resolveKnownWorkspaceFileTarget = vi.fn(async () => ({
+        worktree: sibling,
+        relativePath: ''
+      }))
+      const hasRecentTerminalOutputPath = vi.fn(() => true)
+      const { commands } = createRuntimeFileCommands({
+        path: '/repo',
+        resolveKnownWorkspaceFileTarget,
+        hasRecentTerminalOutputPath
+      })
+      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+      statMock.mockResolvedValue({ isDirectory: () => true })
+
+      const result = await resolveTerminalArtifactPath(commands, '/sibling')
+
+      expect(resolveKnownWorkspaceFileTarget).toHaveBeenCalledWith('/sibling', 'local')
+      expect(result).toEqual({
+        worktree: 'wt-2',
+        relativePath: '',
+        absolutePath: '/sibling',
+        exists: true,
+        isDirectory: true,
+        openTarget: undefined
+      })
+      expect(hasRecentTerminalOutputPath).not.toHaveBeenCalled()
+    })
+
     it('stats a sibling SSH workspace through its owning provider', async () => {
       const sibling = {
         id: 'wt-2',
@@ -973,6 +1013,51 @@ describe('RuntimeFileCommands', () => {
         exists: true,
         openTarget: { provider: 'ssh' }
       })
+    })
+
+    it('stats an exact SSH sibling root as a directory through its owning provider', async () => {
+      const sibling = {
+        id: 'wt-2',
+        repoId: 'repo-2',
+        path: '/sibling',
+        hostId: 'ssh:ssh-1',
+        git: {
+          path: '/sibling',
+          head: '',
+          branch: '',
+          isBare: false,
+          isMainWorktree: true
+        }
+      }
+      const resolveKnownWorkspaceFileTarget = vi.fn(async () => ({
+        worktree: sibling,
+        connectionId: 'ssh-1',
+        relativePath: ''
+      }))
+      const hasRecentTerminalOutputPath = vi.fn(() => true)
+      const { commands, store } = createRuntimeFileCommands({
+        path: '/repo',
+        resolveKnownWorkspaceFileTarget,
+        hasRecentTerminalOutputPath
+      })
+      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+      const remoteStat = vi.fn().mockResolvedValue({ type: 'directory', size: 0, mtime: 3 })
+      vi.mocked(getSshFilesystemProvider).mockReturnValue({ stat: remoteStat } as never)
+
+      const result = await resolveTerminalArtifactPath(commands, '/sibling')
+
+      expect(resolveKnownWorkspaceFileTarget).toHaveBeenCalledWith('/sibling', 'ssh:ssh-1')
+      expect(remoteStat).toHaveBeenCalledWith('/sibling')
+      expect(statMock).not.toHaveBeenCalled()
+      expect(result).toEqual({
+        worktree: 'wt-2',
+        relativePath: '',
+        absolutePath: '/sibling',
+        exists: true,
+        isDirectory: true,
+        openTarget: undefined
+      })
+      expect(hasRecentTerminalOutputPath).not.toHaveBeenCalled()
     })
 
     it('scopes sibling lookup to the selected worktree execution host', async () => {
@@ -1059,14 +1144,44 @@ describe('RuntimeFileCommands', () => {
       expect(result).toMatchObject({ relativePath: 'docs/readme.md', exists: true })
     })
 
-    it('reports a directory', async () => {
+    it('reports directories including the workspace root', async () => {
       const { commands } = createRuntimeFileCommands({ path: '/repo' })
       resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
       statMock.mockResolvedValue({ isDirectory: () => true })
 
-      const result = await commands.resolveTerminalPath('id:wt-1', '/repo/src')
+      const nestedResult = await commands.resolveTerminalPath('id:wt-1', '/repo/src')
+      const rootResult = await commands.resolveTerminalPath('id:wt-1', '/repo')
 
-      expect(result).toMatchObject({ relativePath: 'src', isDirectory: true, exists: true })
+      expect(nestedResult).toMatchObject({ relativePath: 'src', isDirectory: true, exists: true })
+      expect(rootResult).toMatchObject({
+        relativePath: '',
+        isDirectory: true,
+        exists: true,
+        openTarget: undefined
+      })
+    })
+
+    it('keeps an exact selected nested root instead of resolving it to a parent workspace', async () => {
+      const resolveKnownWorkspaceFileTarget = vi.fn(async () => ({
+        worktree: { id: 'wt-parent', repoId: 'repo-parent', path: '/repo' },
+        relativePath: 'nested'
+      }))
+      const { commands } = createRuntimeFileCommands({
+        path: '/repo/nested',
+        resolveKnownWorkspaceFileTarget
+      })
+      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+      statMock.mockResolvedValue({ isDirectory: () => true })
+
+      const result = await commands.resolveTerminalPath('id:wt-1', '/repo/nested')
+
+      expect(resolveKnownWorkspaceFileTarget).not.toHaveBeenCalled()
+      expect(result).toMatchObject({
+        worktree: 'wt-1',
+        relativePath: '',
+        isDirectory: true,
+        openTarget: undefined
+      })
     })
 
     it('returns an absolute open target for an existing local temp path outside the worktree', async () => {

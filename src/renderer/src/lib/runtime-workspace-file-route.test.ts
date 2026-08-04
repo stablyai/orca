@@ -85,6 +85,11 @@ describe('findRuntimeWorkspaceFileRoute', () => {
     expect(findRuntimeWorkspaceFileRoute(state(), 'runtime-a', '/etc/passwd')).toBeNull()
   })
 
+  it('does not route workspace directories as editor files', () => {
+    expect(findRuntimeWorkspaceFileRoute(state(), 'runtime-a', '/srv/repo-b')).toBeNull()
+    expect(findRuntimeWorkspaceFileRoute(state(), 'runtime-a', '/srv/notes')).toBeNull()
+  })
+
   it('routes direct SSH siblings only on the exact SSH host', () => {
     const sshState = state()
     sshState.repos = [

@@ -35,6 +35,15 @@ describe('findRuntimeWorkspaceFileOwner', () => {
     })
   })
 
+  it('uses an exact nested workspace root instead of its parent', () => {
+    expect(
+      findRuntimeWorkspaceFileOwner(roots, '/srv/repo-b/docs', 'runtime:host-a')
+    ).toMatchObject({
+      workspaceId: 'repo-b-docs',
+      relativePath: ''
+    })
+  })
+
   it('does not cross execution-host boundaries', () => {
     expect(
       findRuntimeWorkspaceFileOwner(roots, '/srv/repo-b/src/index.ts', 'runtime:host-b')

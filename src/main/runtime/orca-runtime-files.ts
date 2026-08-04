@@ -758,7 +758,7 @@ export class RuntimeFileCommands {
     })
     const relativePath = relativePathInsideRoot(worktree.path, absolutePath)
     const knownWorkspaceTarget =
-      relativePath === null || relativePath === ''
+      relativePath === null
         ? await this.host.resolveKnownWorkspaceFileTarget?.(
             absolutePath,
             getRuntimeFileTargetExecutionHostId(target)
@@ -771,8 +771,7 @@ export class RuntimeFileCommands {
     try {
       if (
         ownedRelativePath !== null &&
-        ownedRelativePath !== '' &&
-        isSafeMobileRelativePath(ownedRelativePath)
+        (ownedRelativePath === '' || isSafeMobileRelativePath(ownedRelativePath))
       ) {
         const stats = ownedConnectionId
           ? await this.statRemoteTerminalPath(absolutePath, ownedConnectionId)
