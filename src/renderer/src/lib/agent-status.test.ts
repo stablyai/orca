@@ -496,6 +496,7 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('Qwen - ~/projects/ready')).toBe('Qwen Code')
     expect(getAgentLabel('Qwen - opencode')).toBe('Qwen Code')
     expect(getAgentLabel('Qwen - codex')).toBe('Qwen Code')
+    expect(getAgentLabel('Qwen - gemini')).toBe('Qwen Code')
     // Why: Claude-owned titles can mention qwen in task text; prefix/braille identity wins.
     expect(getAgentLabel('claude qwen integration notes')).toBe('Claude Code')
     expect(getAgentLabel('⠋ Compare Qwen vs Claude APIs')).toBe('Claude Code')

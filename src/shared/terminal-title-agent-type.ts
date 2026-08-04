@@ -51,6 +51,11 @@ export function isGeminiTerminalTitle(title: string): boolean {
   if (isPiAgentTitle(title)) {
     return false
   }
+  // Why: the static Qwen frame owns its title; a `gemini` directory token
+  // must not re-route ownership.
+  if (isQwenNativeTitle(title)) {
+    return false
+  }
   return titleHasAgentName(title, 'gemini')
 }
 
