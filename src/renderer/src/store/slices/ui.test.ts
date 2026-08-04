@@ -1107,8 +1107,8 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(setUI).toHaveBeenCalledWith({ groupBy: 'none', collapsedGroups: [] })
   })
 
-  it('toggles every visible sidebar group collapsed, then expands preserving row-scoped keys', () => {
-    const setUI = vi.fn(() => Promise.resolve())
+  it('collapses every visible sidebar group, then expands preserving row-scoped keys', () => {
+    const setUI = vi.fn((_payload: Partial<PersistedUIState>) => Promise.resolve())
     vi.stubGlobal('window', { api: { ui: { set: setUI } } })
     const store = createUIStore()
 
@@ -1119,7 +1119,8 @@ describe('createUISlice hydratePersistedUI', () => {
         'host:ssh-1',
         'workspace-status:done'
       ]),
-      sidebarVisibleGroupKeys: ['pinned', 'project:p1', 'project:p2']
+      sidebarVisibleGroupKeys: ['pinned', 'project:p1', 'project:p2'],
+      sidebarVisibleGroupsAllCollapsed: false
     })
 
     store.getState().toggleAllCollapsedGroups()
@@ -1134,19 +1135,37 @@ describe('createUISlice hydratePersistedUI', () => {
         'project:p2'
       ])
     )
-    const collapsePayload = setUI.mock.calls.at(-1)?.[0] as unknown as {
-      collapsedGroups: string[]
-    }
-    expect(new Set(collapsePayload.collapsedGroups)).toEqual(store.getState().collapsedGroups)
+    const collapsePayload = setUI.mock.calls.at(-1)?.[0]
+    expect(new Set(collapsePayload?.collapsedGroups)).toEqual(store.getState().collapsedGroups)
 
+    // The list republishes the verdict after rows re-render; simulate that here.
+    store.setState({ sidebarVisibleGroupsAllCollapsed: true })
     store.getState().toggleAllCollapsedGroups()
 
     // Expand clears section keys (visible, hidden, stale) but keeps lineage + host state.
     expect(store.getState().collapsedGroups).toEqual(new Set(['lineage:wt-1', 'host:ssh-1']))
-    const expandPayload = setUI.mock.calls.at(-1)?.[0] as unknown as {
-      collapsedGroups: string[]
-    }
-    expect(new Set(expandPayload.collapsedGroups)).toEqual(store.getState().collapsedGroups)
+    const expandPayload = setUI.mock.calls.at(-1)?.[0]
+    expect(new Set(expandPayload?.collapsedGroups)).toEqual(store.getState().collapsedGroups)
+  })
+
+  it('follows the published effective verdict even when persisted keys disagree', () => {
+    const setUI = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    // Forced-reveal scenario: every key is persisted-collapsed, but the list
+    // renders one group open and publishes allCollapsed=false — the toggle
+    // must collapse (re-assert), not expand.
+    store.setState({
+      collapsedGroups: new Set(['project:p1', 'project:p2']),
+      sidebarVisibleGroupKeys: ['project:p1', 'project:p2'],
+      sidebarVisibleGroupsAllCollapsed: false
+    })
+
+    store.getState().toggleAllCollapsedGroups()
+
+    expect(store.getState().collapsedGroups).toEqual(new Set(['project:p1', 'project:p2']))
+    expect(setUI).toHaveBeenCalledTimes(1)
   })
 
   it('ignores the bulk group toggle when no groups are visible', () => {
@@ -1164,13 +1183,18 @@ describe('createUISlice hydratePersistedUI', () => {
   it('keeps sidebar visible group key identity when contents are unchanged', () => {
     const store = createUIStore()
 
-    store.getState().setSidebarVisibleGroupKeys(['pinned', 'project:p1'])
+    store.getState().setSidebarGroupCollapseState(['pinned', 'project:p1'], false)
     const before = store.getState().sidebarVisibleGroupKeys
-    store.getState().setSidebarVisibleGroupKeys(['pinned', 'project:p1'])
+    store.getState().setSidebarGroupCollapseState(['pinned', 'project:p1'], false)
 
     expect(store.getState().sidebarVisibleGroupKeys).toBe(before)
 
-    store.getState().setSidebarVisibleGroupKeys(['pinned'])
+    // A verdict flip alone keeps the key array reference.
+    store.getState().setSidebarGroupCollapseState(['pinned', 'project:p1'], true)
+    expect(store.getState().sidebarVisibleGroupKeys).toBe(before)
+    expect(store.getState().sidebarVisibleGroupsAllCollapsed).toBe(true)
+
+    store.getState().setSidebarGroupCollapseState(['pinned'], true)
     expect(store.getState().sidebarVisibleGroupKeys).toEqual(['pinned'])
   })
 

@@ -331,7 +331,7 @@ function setLineageState(
     tabsByWorktree: {},
     terminalLayoutsByTabId: {},
     toggleCollapsedGroup: vi.fn(),
-    setSidebarVisibleGroupKeys: vi.fn(),
+    setSidebarGroupCollapseState: vi.fn(),
     updateRepo: vi.fn(),
     updateWorktreeMeta: mockStore.updateWorktreeMeta,
     updateWorktreesMeta: vi.fn(),

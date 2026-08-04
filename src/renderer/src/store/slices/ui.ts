@@ -36,7 +36,7 @@ import {
   normalizeManualRepoOrder
 } from '../../../../shared/manual-repo-order'
 import { isTopLevelView } from '../../../../shared/top-level-view'
-import { toggleAllSectionsCollapsed } from '../../../../shared/workspace-group-collapse'
+import { collapseAllSections, expandAllSections } from '../../../../shared/workspace-group-collapse'
 import { isReleaseChannel, type ReleaseChannel } from '../../../../shared/release-channel'
 import type { UsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
 import {
@@ -883,9 +883,11 @@ export type UISlice = {
   setFilterRepoIds: (ids: string[]) => void
   collapsedGroups: Set<string>
   toggleCollapsedGroup: (key: string) => void
-  // Header keys currently rendered by the sidebar list; feeds the bulk collapse toggle.
+  // Collapsible header keys the sidebar list currently renders, plus the
+  // effective all-collapsed verdict; feeds the bulk collapse toggle.
   sidebarVisibleGroupKeys: string[]
-  setSidebarVisibleGroupKeys: (keys: string[]) => void
+  sidebarVisibleGroupsAllCollapsed: boolean
+  setSidebarGroupCollapseState: (keys: string[], allCollapsed: boolean) => void
   toggleAllCollapsedGroups: () => void
   worktreeCardProperties: WorktreeCardProperty[]
   _worktreeCardModeDefaulted: boolean
@@ -2110,26 +2112,31 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     }),
 
   sidebarVisibleGroupKeys: [],
-  setSidebarVisibleGroupKeys: (keys) =>
+  sidebarVisibleGroupsAllCollapsed: false,
+  setSidebarGroupCollapseState: (keys, allCollapsed) =>
     set((s) => {
       const prev = s.sidebarVisibleGroupKeys
-      if (prev.length === keys.length && prev.every((key, i) => key === keys[i])) {
+      const sameKeys = prev.length === keys.length && prev.every((key, i) => key === keys[i])
+      if (sameKeys && s.sidebarVisibleGroupsAllCollapsed === allCollapsed) {
         return s
       }
-      return { sidebarVisibleGroupKeys: keys }
+      return {
+        sidebarVisibleGroupKeys: sameKeys ? prev : keys,
+        sidebarVisibleGroupsAllCollapsed: allCollapsed
+      }
     }),
   toggleAllCollapsedGroups: () =>
     set((s) => {
       if (s.sidebarVisibleGroupKeys.length === 0) {
         return s
       }
-      const next = toggleAllSectionsCollapsed(
-        s.collapsedGroups,
-        s.sidebarVisibleGroupKeys,
-        // Row-scoped keys survive bulk expand: lineage disclosure ('lineage:',
-        // worktree-list-groups.ts) and host sections ('host:', host-section-rows.ts).
-        ['lineage:', 'host:']
-      )
+      // Direction follows the effective (rendered) verdict published by the list,
+      // so a forced-open reveal can't invert the action. Row-scoped keys survive
+      // bulk expand: lineage disclosure ('lineage:', worktree-list-groups.ts) and
+      // host sections ('host:', host-section-rows.ts).
+      const next = s.sidebarVisibleGroupsAllCollapsed
+        ? expandAllSections(s.collapsedGroups, ['lineage:', 'host:'])
+        : collapseAllSections(s.collapsedGroups, s.sidebarVisibleGroupKeys)
       window.api.ui.set({ collapsedGroups: next }).catch(console.error)
       return { collapsedGroups: new Set(next) }
     }),

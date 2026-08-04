@@ -2,7 +2,6 @@ import React from 'react'
 import { ChevronsDownUp, ChevronsUpDown, FolderPlus, Plus } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
-import { areAllSectionsCollapsed } from '../../../../shared/workspace-group-collapse'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import SidebarWorkspaceOptionsMenu from './SidebarWorkspaceOptionsMenu'
@@ -23,9 +22,7 @@ const SidebarHeader = React.memo(function SidebarHeader({
   const canCreateWorkspace = useAppStore((s) => s.repos.length > 0)
   const sidebarTitle = groupBy === 'repo' ? 'Projects' : 'Workspaces'
   const hasCollapsibleGroups = useAppStore((s) => s.sidebarVisibleGroupKeys.length > 0)
-  const allGroupsCollapsed = useAppStore((s) =>
-    areAllSectionsCollapsed(s.collapsedGroups, s.sidebarVisibleGroupKeys)
-  )
+  const allGroupsCollapsed = useAppStore((s) => s.sidebarVisibleGroupsAllCollapsed)
   const toggleAllCollapsedGroups = useAppStore((s) => s.toggleAllCollapsedGroups)
   const collapseToggleLabel = allGroupsCollapsed
     ? translate('auto.components.sidebar.SidebarHeader.ae1097f309', 'Expand All Groups')

@@ -26,7 +26,13 @@ export function WorkspaceSectionHeader({
     return null
   }
   return (
-    <Pressable style={styles.sectionHeader} onPress={() => onToggle(section.key)}>
+    <Pressable
+      style={styles.sectionHeader}
+      onPress={() => onToggle(section.key)}
+      accessibilityRole="button"
+      accessibilityLabel={section.title}
+      accessibilityState={{ expanded: !collapsed }}
+    >
       {collapsed ? (
         <ChevronRight size={12} color={colors.textMuted} style={styles.sectionIcon} />
       ) : (

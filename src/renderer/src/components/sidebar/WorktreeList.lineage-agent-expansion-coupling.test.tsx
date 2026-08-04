@@ -292,7 +292,7 @@ function setAgentLineageState(options: {
       }
       mockStore.state.collapsedGroups = set
     }),
-    setSidebarVisibleGroupKeys: vi.fn(),
+    setSidebarGroupCollapseState: vi.fn(),
 
     // ── worktree list plumbing ──
     activeModal: '',

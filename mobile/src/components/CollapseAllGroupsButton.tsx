@@ -9,7 +9,6 @@ type CollapseAllGroupsButtonProps = {
   style?: StyleProp<ViewStyle>
 }
 
-// One-tap fold/unfold for every group header in the workspace list.
 export function CollapseAllGroupsButton({
   allCollapsed,
   disabled = false,

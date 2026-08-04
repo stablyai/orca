@@ -91,9 +91,11 @@ import {
   getProjectGroupHeaderKey,
   getGroupKeysForWorktree,
   getLineageGroupKey,
+  isCollapsibleGroupHeaderRow,
   getPinnedWorktreeDisplayPolicy,
   type PinnedWorktreeDisplayPolicy
 } from './worktree-list-groups'
+import { areAllSectionsCollapsed } from '../../../../shared/workspace-group-collapse'
 import {
   buildLineageRowRekeyMap,
   estimateRenderRowSize,
@@ -4196,13 +4198,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   projectGroupPathStatus.reason === 'ambiguous-connection')
               const projectGroupDepth = row.projectGroupDepth ?? 0
               const isHeaderCollapsed = collapsedGroups.has(row.key)
-              // Why: repo/project/status/pinned share compact section chrome; flat "All" stays a simple label.
-              const showHeaderCollapseAffordance =
-                row.count > 0 &&
-                (isRepoHeader ||
-                  isProjectGroupHeader ||
-                  headerWorkspaceStatus !== null ||
-                  isPinnedHeader)
+              const showHeaderCollapseAffordance = isCollapsibleGroupHeaderRow(
+                row,
+                groupBy,
+                workspaceStatuses
+              )
               // Why: non-project headers like "All" are flat-list labels; don't reserve project hierarchy indent.
               const headerPaddingLeft =
                 isRepoHeader || isProjectGroupHeader
@@ -5821,16 +5821,27 @@ const WorktreeList = React.memo(function WorktreeList({
       workspaceHostScope
     ]
   )
-  const setSidebarVisibleGroupKeys = useAppStore((s) => s.setSidebarVisibleGroupKeys)
-  const visibleGroupHeaderKeys = useMemo(
-    () => sectionRows.filter((row) => row.type === 'header').map((row) => row.key),
-    [sectionRows]
+  const setSidebarGroupCollapseState = useAppStore((s) => s.setSidebarGroupCollapseState)
+  const visibleGroupHeaderKeys = useMemo(() => {
+    const keys: string[] = []
+    for (const row of sectionRows) {
+      if (row.type === 'header' && isCollapsibleGroupHeaderRow(row, groupBy, workspaceStatuses)) {
+        keys.push(row.key)
+      }
+    }
+    return keys
+  }, [sectionRows, groupBy, workspaceStatuses])
+  // Why: judge "all collapsed" on the same effective state the rows render with,
+  // so a forced-open reveal can't invert the toggle's direction.
+  const visibleGroupsAllCollapsed = areAllSectionsCollapsed(
+    effectiveCollapsedGroups,
+    visibleGroupHeaderKeys
   )
-  // Publish rendered header keys so the sidebar header's collapse-all toggle
-  // knows what to fold without rebuilding rows.
+  // Publish rendered collapsible header keys so the sidebar header's collapse-all
+  // toggle knows what to fold without rebuilding rows.
   useEffect(() => {
-    setSidebarVisibleGroupKeys(visibleGroupHeaderKeys)
-  }, [visibleGroupHeaderKeys, setSidebarVisibleGroupKeys])
+    setSidebarGroupCollapseState(visibleGroupHeaderKeys, visibleGroupsAllCollapsed)
+  }, [setSidebarGroupCollapseState, visibleGroupHeaderKeys, visibleGroupsAllCollapsed])
   const renderedSidebarRowKeys = useMemo(() => {
     const keys = new Set<string>()
     for (const row of sectionRows) {
