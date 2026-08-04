@@ -25,6 +25,13 @@ import type { WorktreeReasonCode } from './audited-worktree-types'
 import type { ExecutionReasonCode, ExecutionRunStatus } from './audited-execution-types'
 import type { CodeAuditReasonCode, CodeAuditRunStatus } from './audited-code-audit-types'
 import type { CommitAdvisoryCode, CommitReasonCode } from './audited-commit-types'
+import {
+  canRetryReviewRequest,
+  type PublishAdvisoryCode,
+  type PublishReasonCode
+} from './audited-publish-types'
+import type { PublishAttemptStatus } from './audited-workflow-types'
+import type { HostedReviewProvider } from './hosted-review'
 import { MAX_PLAN_ROUNDS } from './audited-plan-artifact-types'
 import type { PlanReviewReasonCode, PlanReviewRunStatus } from './audited-plan-artifact-types'
 
@@ -61,6 +68,19 @@ export type ProjectionSourceTask = {
   // can only accompany a DURABLE commit.
   commitReasonCode: CommitReasonCode | null
   commitAdvisoryCode: CommitAdvisoryCode | null
+  // Phase 9 publish lane. publishedSha is the FULL sha and is shortened here; it
+  // never crosses in full, exactly like committedSha.
+  publishAttemptStatus: PublishAttemptStatus | null
+  publishedSha: string | null
+  publishReasonCode: PublishReasonCode | null
+  publishAdvisoryCode: PublishAdvisoryCode | null
+  reviewProvider: HostedReviewProvider | null
+  reviewNumber: number | null
+  // True only when the task's LATEST commit attempt is `completed` AND its
+  // created_commit_sha equals committed_sha. Resolved by the repository in the
+  // same query authorizePublishAttempt uses, so what the UI offers and what the
+  // transaction permits cannot diverge.
+  commitAttemptPublishable: boolean
   // True only when the task's CURRENT candidate is the one the code audit
   // approved, by both id and tree OID. Resolved by the repository in the same
   // query grantApproval uses, so the UI and the transaction cannot diverge.
@@ -156,6 +176,31 @@ export function buildAuditedTaskProjection(
       source.auditApprovedForCurrentCandidate &&
       source.approvalPendingAndValid &&
       source.candidateStatus === 'current',
+    publishAttemptStatus: source.publishAttemptStatus,
+    publishedShaShort: shortenCandidateId(source.publishedSha),
+    publishReasonCode: source.publishReasonCode,
+    publishAdvisoryCode: source.publishAdvisoryCode,
+    reviewProvider: source.reviewProvider,
+    reviewNumber: source.reviewNumber,
+    reviewAvailable: source.reviewNumber !== null,
+    // Publish requires a durable Phase 8 commit whose attempt is `completed` and
+    // bound to the exact committed_sha. Deliberately excludes `authorized`: while
+    // an attempt is live the outcome is unconfirmed, and offering Publish then
+    // would risk a duplicate push.
+    publishReady:
+      source.state === 'committed' &&
+      source.committedSha !== null &&
+      source.commitAttemptPublishable &&
+      source.publishAttemptStatus !== 'authorized',
+    // The ONLY action offered while an outcome is unknown. Mutually exclusive
+    // with publishReady by construction — both test publishAttemptStatus against
+    // 'authorized' in opposite directions.
+    publishRecheckAvailable: source.publishAttemptStatus === 'authorized',
+    // Whether the SEPARATE creation retry exists at all is a server decision:
+    // an unsupported provider offers none, and a stale renderer cannot invent one.
+    reviewRequestRetryAvailable:
+      source.publishAttemptStatus === 'completed' &&
+      canRetryReviewRequest(source.publishAdvisoryCode),
     reconcileClass: source.reconcileClass,
     reconcileReasonCode: source.reconcileReasonCode,
     // Ready requires ALL THREE: provenance (a worktree was finalized), a
@@ -304,5 +349,21 @@ export const AUDITED_PROJECTION_FORBIDDEN_KEYS = [
   'verifiedTreeOid',
   'candidateStorePath',
   'storeBytes',
-  'reservationId'
+  'reservationId',
+  // Phase 9 publish internals. The remote URL can carry a self-hosted host name
+  // and, in a misconfigured repo, embedded credentials; the review URL likewise
+  // names a host. The lease and the intended/pushed shas are full 40-hex identity
+  // values — only publishedShaShort crosses. Provider error text is free text
+  // produced by gh/glab and is dropped at the adapter boundary.
+  'remoteName',
+  'remoteUrl',
+  'reviewUrl',
+  'pushedSha',
+  'publishedSha',
+  'expectedRemoteSha',
+  'intendedSha',
+  'leaseValue',
+  'pushStderr',
+  'providerPayload',
+  'providerError'
 ] as const

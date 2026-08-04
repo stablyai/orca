@@ -39,6 +39,13 @@ function baseSource(overrides: Partial<ProjectionSourceTask> = {}): ProjectionSo
     commitAttemptStatus: null,
     commitReasonCode: null,
     commitAdvisoryCode: null,
+    publishAttemptStatus: null,
+    publishedSha: null,
+    publishReasonCode: null,
+    publishAdvisoryCode: null,
+    reviewProvider: null,
+    reviewNumber: null,
+    commitAttemptPublishable: false,
     auditApprovedForCurrentCandidate: false,
     approvalPendingAndValid: false,
     reconcileClass: null,
@@ -258,5 +265,104 @@ describe('code-audit projection never leaks candidate identity', () => {
       })
     )
     expect(projection.planApprovalReady).toBe(true)
+  })
+})
+
+describe('Phase 9 publish authorities', () => {
+  it('offers Publish only for a committed task with a publishable commit attempt', () => {
+    const ready = buildAuditedTaskProjection(
+      baseSource({
+        state: 'committed',
+        committedSha: 'c'.repeat(40),
+        commitAttemptPublishable: true
+      })
+    )
+    expect(ready.publishReady).toBe(true)
+    expect(ready.publishRecheckAvailable).toBe(false)
+  })
+
+  it.each([
+    ['not committed', { state: 'awaiting_human_approval' as const }],
+    ['no committed sha', { committedSha: null }],
+    ['commit attempt not publishable', { commitAttemptPublishable: false }]
+  ])('withholds Publish when %s', (_label, overrides) => {
+    const projection = buildAuditedTaskProjection(
+      baseSource({
+        state: 'committed',
+        committedSha: 'c'.repeat(40),
+        commitAttemptPublishable: true,
+        ...overrides
+      })
+    )
+    expect(projection.publishReady).toBe(false)
+  })
+
+  it('offers ONLY Recheck while an attempt is authorized (mutually exclusive)', () => {
+    const projection = buildAuditedTaskProjection(
+      baseSource({
+        state: 'committed',
+        committedSha: 'c'.repeat(40),
+        commitAttemptPublishable: true,
+        publishAttemptStatus: 'authorized'
+      })
+    )
+    expect(projection.publishRecheckAvailable).toBe(true)
+    expect(projection.publishReady).toBe(false)
+  })
+
+  it('never offers Publish and Recheck at the same time, for any status', () => {
+    for (const status of [
+      null,
+      'authorized',
+      'completed',
+      'failed_no_effect',
+      'failed_ambiguous',
+      'abandoned'
+    ] as const) {
+      const projection = buildAuditedTaskProjection(
+        baseSource({
+          state: 'committed',
+          committedSha: 'c'.repeat(40),
+          commitAttemptPublishable: true,
+          publishAttemptStatus: status
+        })
+      )
+      expect(projection.publishReady && projection.publishRecheckAvailable).toBe(false)
+    }
+  })
+
+  it('offers the review-request retry only for a retryable advisory on a completed publish', () => {
+    const retryable = buildAuditedTaskProjection(
+      baseSource({
+        state: 'committed',
+        publishAttemptStatus: 'completed',
+        publishAdvisoryCode: 'review_request_auth_required'
+      })
+    )
+    expect(retryable.reviewRequestRetryAvailable).toBe(true)
+
+    const terminal = buildAuditedTaskProjection(
+      baseSource({
+        state: 'committed',
+        publishAttemptStatus: 'completed',
+        publishAdvisoryCode: 'review_request_unsupported_provider'
+      })
+    )
+    expect(terminal.reviewRequestRetryAvailable).toBe(false)
+  })
+
+  it('shortens the published sha and never projects the full value', () => {
+    const full = 'c'.repeat(40)
+    const projection = buildAuditedTaskProjection(baseSource({ publishedSha: full }))
+    expect(projection.publishedShaShort).toBe(full.slice(0, 12))
+    expect(JSON.stringify(projection)).not.toContain(full)
+  })
+
+  it('projects a review number as available', () => {
+    const projection = buildAuditedTaskProjection(
+      baseSource({ reviewNumber: 42, reviewProvider: 'gitlab' })
+    )
+    expect(projection.reviewAvailable).toBe(true)
+    expect(projection.reviewNumber).toBe(42)
   })
 })

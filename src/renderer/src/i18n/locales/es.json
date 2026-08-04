@@ -13920,6 +13920,52 @@
           "undo": "Deshacer",
           "widthOption": "{{value0}} px"
         }
+      },
+      "auditedWorkflow": {
+        "advisories": {
+          "reviewAmbiguous": "Published. It is unclear whether a review request was created — trying again is safe and will reuse one if it exists.",
+          "reviewAuthRequired": "Published. Sign in to the hosting service to open a review request, then try creating it again.",
+          "reviewCreated": "Published, and a review request was opened.",
+          "reviewDeferred": "Published. The review request could not be created just now — you can try again.",
+          "reviewExists": "Published. An existing review request for this branch was reused.",
+          "reviewUnsupported": "Published. This remote does not support review requests, so none was created.",
+          "reviewValidationFailed": "Published. The hosting service rejected the review request details — correct them, then try again."
+        },
+        "errors": {
+          "publishAmbiguous": "The remote is in an unexpected state, so this task is paused for review. Nothing was changed automatically.",
+          "publishAttemptIncomplete": "The commit has not finished recording. Try again in a moment.",
+          "publishAuthFailed": "The remote rejected the credentials. Sign in for this remote, then publish again.",
+          "publishBranchMoved": "The branch moved off the committed change, so nothing was published.",
+          "publishBranchNotSymbolic": "The workspace is not on its expected branch, so nothing was published.",
+          "publishFailed": "Publishing failed and nothing was changed on the remote.",
+          "publishHeadMoved": "The workspace moved off the committed change, so nothing was published.",
+          "publishHostUnsupported": "Publishing is only supported for local repositories.",
+          "publishIllegalTransition": "This task is not ready to publish.",
+          "publishInterrupted": "Publishing was interrupted and did not complete. You can try again.",
+          "publishLockContended": "Another action is already running for this task. Try again in a moment.",
+          "publishNetworkUnavailable": "The remote could not be reached. Nothing was published.",
+          "publishNoRemote": "This repository has no remote configured to publish to.",
+          "publishNonFastForward": "The remote branch has newer commits, so nothing was overwritten.",
+          "publishNotCommitted": "This task has no committed change to publish yet.",
+          "publishRemoteRefUnreadable": "The remote could not be reached. Nothing was published — check your connection and try again.",
+          "publishRemoteUnreadable": "The remote configuration could not be read, so nothing was published.",
+          "publishShaMismatch": "The commit changed since it was recorded. Review the task before publishing.",
+          "publishShaMissing": "The commit record is incomplete, so there is nothing safe to publish.",
+          "publishStaleLease": "The remote branch was changed by someone else, so nothing was overwritten. Review the remote before publishing again.",
+          "publishWorktreeChanged": "The workspace changed while preparing to publish. Nothing was sent.",
+          "publishWorktreeUnverified": "The workspace could not be verified, so nothing was published."
+        },
+        "publish": {
+          "action": "Publish",
+          "createReviewAction": "Create review request",
+          "outcomeUnknown": "The change was sent, but the result has not been confirmed.",
+          "recheckAction": "Recheck outcome",
+          "recheckAmbiguous": "The remote is in an unexpected state, so this task is paused for review.",
+          "recheckNoEffect": "The change never reached the remote. You can publish again.",
+          "recheckPublished": "The change is on the remote.",
+          "recheckUnknown": "The remote is still unreachable, so the result is still unconfirmed.",
+          "title": "Publish"
+        }
       }
     },
     "i18n": {

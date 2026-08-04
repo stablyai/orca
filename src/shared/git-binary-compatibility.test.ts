@@ -201,4 +201,91 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
       expect(supports(2, 31)).toBe(false)
     }
   })
+  // Phase 9 publish lane. Every command here long predates 2.25, so there is no
+  // capability probe and no fallback — but the SEMANTICS the design depends on
+  // must be identical across the matrix, because a difference would silently
+  // change how an outcome is classified.
+  it('supports the explicit force-with-lease push and rejects a stale lease', async () => {
+    const remotePath = await mkdtemp(join(tmpdir(), 'orca-git-compat-remote-'))
+    try {
+      await runGit(['init', '-q', '--bare', remotePath])
+      await runGit(['remote', 'add', 'lease-origin', remotePath])
+      const branch = 'compat-lease'
+      await runGit(['branch', '-f', branch, 'HEAD'])
+      const first = (await runGit(['rev-parse', branch])).stdout.trim()
+
+      // Create-only: the EMPTY lease publishes a branch that does not exist yet.
+      await expect(
+        runGit([
+          'push',
+          `--force-with-lease=refs/heads/${branch}:`,
+          '--',
+          'lease-origin',
+          `${first}:refs/heads/${branch}`
+        ])
+      ).resolves.toBeDefined()
+
+      // ls-remote reports a PRESENT ref on stdout with exit 0.
+      const present = await runGit(['ls-remote', '--', 'lease-origin', `refs/heads/${branch}`])
+      expect(present.stdout).toContain(first)
+
+      // ls-remote reports a MISSING ref as exit 0 with EMPTY stdout. This is the
+      // classification-critical behavior: absence must never look like a
+      // transport failure.
+      const missing = await runGit(['ls-remote', '--', 'lease-origin', 'refs/heads/compat-absent'])
+      expect(missing.stdout.trim()).toBe('')
+
+      // A matching explicit lease pushes.
+      await writeFile(join(repoPath, 'lease.txt'), 'second\n')
+      await runGit(['add', 'lease.txt'])
+      await runGit(['commit', '-q', '-m', 'lease second'])
+      const second = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
+      await expect(
+        runGit([
+          'push',
+          `--force-with-lease=refs/heads/${branch}:${first}`,
+          '--',
+          'lease-origin',
+          `${second}:refs/heads/${branch}`
+        ])
+      ).resolves.toBeDefined()
+
+      // A STALE lease is rejected loudly, leaving the remote untouched.
+      await writeFile(join(repoPath, 'lease.txt'), 'third\n')
+      await runGit(['add', 'lease.txt'])
+      await runGit(['commit', '-q', '-m', 'lease third'])
+      const third = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
+      await expect(
+        runGit([
+          'push',
+          `--force-with-lease=refs/heads/${branch}:${first}`,
+          '--',
+          'lease-origin',
+          `${third}:refs/heads/${branch}`
+        ])
+      ).rejects.toBeDefined()
+
+      const afterRejection = await runGit([
+        'ls-remote',
+        '--',
+        'lease-origin',
+        `refs/heads/${branch}`
+      ])
+      expect(afterRejection.stdout).toContain(second)
+      expect(afterRejection.stdout).not.toContain(third)
+
+      // The empty lease also refuses when the ref exists at a different value.
+      await expect(
+        runGit([
+          'push',
+          `--force-with-lease=refs/heads/${branch}:`,
+          '--',
+          'lease-origin',
+          `${third}:refs/heads/${branch}`
+        ])
+      ).rejects.toBeDefined()
+    } finally {
+      await rm(remotePath, { recursive: true, force: true })
+    }
+  })
 })

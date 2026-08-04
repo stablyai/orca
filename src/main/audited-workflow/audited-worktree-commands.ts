@@ -41,9 +41,30 @@ const ALLOWED_SUBCOMMANDS = new Set([
   'update-ref',
   'rev-list',
   'pack-objects',
-  'unpack-objects'
+  'unpack-objects',
+  // Phase 9. The ONLY network subcommands, admissible ONLY through
+  // runAuditedGitPublish. `fetch`, `pull`, `clone`, and `submodule` remain
+  // rejected — see the network-free note above, which now holds for every path
+  // EXCEPT the narrowly screened publish one.
+  'push',
+  'ls-remote',
+  // Read-only remote topology, needed to resolve the push target truthfully.
+  'config',
+  'remote'
 ])
 const ALLOWED_WORKTREE_VERBS = new Set(['add', 'list'])
+
+// Phase 9. The two network subcommands, admissible ONLY through
+// runAuditedGitPublish. Kept separate from the allowlist so the read path and the
+// publish path can be told apart structurally rather than by convention.
+export const PUBLISH_NETWORK_SUBCOMMANDS = new Set(['push', 'ls-remote'])
+
+// Phase 9 read-only remote topology. `config` is admitted ONLY in the
+// `config --get <key>` form and `remote` ONLY as the bare listing form: every
+// other shape (`--add`, `--unset`, `remote add|set-url|update|prune`) either
+// mutates configuration or reaches the network, so both are screened by arity
+// below rather than trusted.
+const REMOTE_TOPOLOGY_SUBCOMMANDS = new Set(['config', 'remote'])
 
 // The three subcommands that may create Git objects. Kept separate from the
 // allowlist so the read path and the candidate path can be told apart
@@ -128,6 +149,22 @@ export function assertAuditedGitArgvShape(argv: readonly string[]): void {
       throw new AuditedGitCommandShapeError(`disallowed worktree verb: ${verb ?? '<none>'}`)
     }
   }
+  if (subcommand === 'config') {
+    // Exactly `config --get <key>`. Any other form could write configuration.
+    const configIndex = argv.indexOf('config')
+    const rest = argv.slice(configIndex)
+    if (rest.length !== 3 || rest[1] !== '--get') {
+      throw new AuditedGitCommandShapeError('audited config must be exactly `config --get <key>`')
+    }
+  }
+  if (subcommand === 'remote') {
+    // Exactly the bare listing form. `remote update` reaches the network and
+    // `remote add|set-url|remove` mutates configuration.
+    const remoteIndex = argv.indexOf('remote')
+    if (argv.slice(remoteIndex).length !== 1) {
+      throw new AuditedGitCommandShapeError('audited remote must be the bare listing form')
+    }
+  }
   if (argv.includes('-B')) {
     throw new AuditedGitCommandShapeError('-B is never permitted: it resets an existing branch')
   }
@@ -152,6 +189,17 @@ export function isReadOnlyAuditedArgv(argv: readonly string[]): boolean {
   }
   if (subcommand !== null && CANDIDATE_STORE_READ_SUBCOMMANDS.has(subcommand)) {
     return false
+  }
+  // Phase 9: `push` mutates a remote ref and `ls-remote` reaches the network, so
+  // neither may reach the read path, which applies no lease screen and no
+  // BatchMode env. runAuditedGitPublish is the only admissible route.
+  if (subcommand !== null && PUBLISH_NETWORK_SUBCOMMANDS.has(subcommand)) {
+    return false
+  }
+  // `config --get` / bare `remote` genuinely are read-only and network-free once
+  // screened above, so they stay on the read path.
+  if (subcommand !== null && REMOTE_TOPOLOGY_SUBCOMMANDS.has(subcommand)) {
+    return true
   }
   return subcommand !== null && ALLOWED_SUBCOMMANDS.has(subcommand)
 }
@@ -416,3 +464,5 @@ export async function runAuditedWorktreeAdd(
 // this file stays within its line budget; re-exported so every audited Git call
 // site still imports from one place.
 export * from './audited-commit-commands'
+// Phase 9's builders and the single network spawn policy, likewise.
+export * from './audited-publish-commands'

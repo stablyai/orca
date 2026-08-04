@@ -40,6 +40,10 @@ import {
   resolveApprovalState
 } from './audited-approval-repository'
 import { getLatestCommitAttempt } from './audited-commit-attempt-repository'
+import {
+  getLatestPublishAttempt,
+  resolvePublishableCommitAttempt
+} from './audited-publish-attempt-repository'
 import { MAX_FIX_ROUNDS } from '../../shared/audited-code-audit-types'
 import type Database from '../sqlite/sync-database'
 import type {
@@ -124,6 +128,8 @@ function taskRowToProjectionSource(row: AuditedTaskRow): ProjectionSourceTask {
   const nowMs = Date.now()
   const approval = getLatestApproval(db, row.id)
   const commitAttempt = getLatestCommitAttempt(db, row.id)
+  // Phase 9: the publish lane's latest attempt.
+  const publishAttempt = getLatestPublishAttempt(db, row.id)
   return {
     taskId: row.id,
     repoId: row.repoId,
@@ -152,6 +158,19 @@ function taskRowToProjectionSource(row: AuditedTaskRow): ProjectionSourceTask {
     // Deliberately separate from the failure code: a task may be `committed` with
     // a valid SHA and still carry a drift advisory.
     commitAdvisoryCode: commitAttempt?.postCommitAdvisory ?? null,
+    // Phase 9: the publish lane's durable state. publishedSha is the FULL sha and
+    // is shortened by the builder; the remote name, the remote URL, the review
+    // URL, and the lease never reach the source at all.
+    publishAttemptStatus: publishAttempt?.status ?? null,
+    publishedSha: publishAttempt?.pushedSha ?? null,
+    publishReasonCode: publishAttempt?.reasonCode ?? null,
+    publishAdvisoryCode: publishAttempt?.publishAdvisory ?? null,
+    reviewProvider: publishAttempt?.reviewProvider ?? null,
+    reviewNumber: publishAttempt?.reviewNumber ?? null,
+    // The SAME query authorizePublishAttempt uses, so what the UI offers and what
+    // the transaction permits cannot diverge.
+    commitAttemptPublishable:
+      resolvePublishableCommitAttempt(db, row.id, row.committedSha) !== null,
     auditApprovedForCurrentCandidate: isAuditApprovedForCurrentCandidate(db, row.id),
     approvalPendingAndValid: hasValidPendingApproval(db, row.id, nowMs),
     reconcileClass: null,

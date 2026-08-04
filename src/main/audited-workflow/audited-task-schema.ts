@@ -5,6 +5,7 @@
 import {
   AUDITED_TASK_STATES,
   COMMIT_ATTEMPT_STATUSES,
+  PUBLISH_ATTEMPT_STATUSES,
   TASK_SOURCES,
   RISK_LEVELS,
   TASK_ACTORS,
@@ -33,6 +34,7 @@ import {
   PHASE_8_TASK_COLUMNS,
   createCommitTables
 } from './audited-commit-schema'
+import { PHASE_9_TASK_COLUMNS, createPublishTables } from './audited-publish-schema'
 import type Database from '../sqlite/sync-database'
 
 // Schema versions: v1 initial (audited_tasks, audited_transitions). v2 (Phase 2)
@@ -76,7 +78,14 @@ import type Database from '../sqlite/sync-database'
 // declared since Phase 1, so audited_tasks' state CHECK is unchanged and NO
 // table rebuild is required. audited_transitions.event_type is unconstrained
 // TEXT, so the new commit_* event types need no migration either.
-export const SCHEMA_VERSION = 8
+// v9 (Phase 9) adds audited_publish_attempts plus four audited_tasks columns
+// (publish_attempt_status, published_sha, review_provider, review_number) —
+// FULLY ADDITIVE, like v8. Phase 9 introduces NO task state: a task stays in
+// `committed` for the whole publish lane, precisely so a failed or ambiguous push
+// can never make the local commit look undone. audited_tasks' state CHECK is
+// therefore unchanged and no table rebuild is required, and the landing/landed
+// states plus landed_sha stay unwritten for a future local-integration phase.
+export const SCHEMA_VERSION = 9
 
 export function createAuditedWorkflowTables(db: Database.Database): void {
   const stateList = AUDITED_TASK_STATES.map((s) => `'${s}'`).join(', ')
@@ -91,6 +100,7 @@ export function createAuditedWorkflowTables(db: Database.Database): void {
   const worktreeReasonList = WORKTREE_REASON_CODES.map((r) => `'${r}'`).join(', ')
   const verdictList = REVIEW_VERDICTS.map((v) => `'${v}'`).join(', ')
   const commitAttemptStatusList = COMMIT_ATTEMPT_STATUSES.map((s) => `'${s}'`).join(', ')
+  const publishAttemptStatusList = PUBLISH_ATTEMPT_STATUSES.map((s) => `'${s}'`).join(', ')
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS audited_tasks (
@@ -154,6 +164,14 @@ export function createAuditedWorkflowTables(db: Database.Database): void {
       -- Phase 8. The latest commit attempt's status, projected as-is. The
       -- detailed CommitReasonCode lives on the attempt row, not here.
       commit_attempt_status       TEXT CHECK(commit_attempt_status IS NULL OR commit_attempt_status IN (${commitAttemptStatusList})),
+      -- Phase 9. The latest publish attempt's status and the sha proven present
+      -- on the remote. The detailed PublishReasonCode and the advisory live on
+      -- the attempt row, not here. published_sha is deliberately separate from
+      -- landed_sha: publishing to a remote is not landing into the source repo.
+      publish_attempt_status      TEXT CHECK(publish_attempt_status IS NULL OR publish_attempt_status IN (${publishAttemptStatusList})),
+      published_sha               TEXT,
+      review_provider             TEXT,
+      review_number               INTEGER,
       created_at_ms                INTEGER NOT NULL,
       updated_at_ms                INTEGER NOT NULL
     );
@@ -230,6 +248,7 @@ export function createAuditedWorkflowTables(db: Database.Database): void {
   createPlanCoverageTable(db)
   createCodeAuditTables(db)
   createCommitTables(db)
+  createPublishTables(db)
 }
 
 // Phase 3 columns added to a pre-existing audited_tasks table, with their
@@ -370,6 +389,22 @@ export function migrateAuditedWorkflowSchema(db: Database.Database): void {
         }
       }
       createCommitTables(db)
+    }
+    if (current < 9) {
+      // Phase 9: one new table plus four additive audited_tasks columns. FULLY
+      // ADDITIVE — no CHECK change on any existing table and no rebuild, because
+      // Phase 9 introduces no task state (the publish lane rests in `committed`
+      // throughout). Created here rather than relying on
+      // createAuditedWorkflowTables having run, for the same reason as v4-v8:
+      // this function is also called directly against a legacy DB, and a
+      // migration that silently depends on another call would leave that path
+      // without the table.
+      for (const [column, type] of PHASE_9_TASK_COLUMNS) {
+        if (!columnExists(db, 'audited_tasks', column)) {
+          db.exec(`ALTER TABLE audited_tasks ADD COLUMN ${column} ${type}`)
+        }
+      }
+      createPublishTables(db)
     }
     db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`)
     db.exec('COMMIT')

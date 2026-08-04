@@ -23,6 +23,11 @@ import type {
   PlanRevisionReasonCode
 } from './audited-plan-artifact-types'
 import type { CodeAuditReasonCode } from './audited-code-audit-types'
+import type {
+  PublishAdvisoryCode,
+  PublishClassification,
+  PublishReasonCode
+} from './audited-publish-types'
 import type { CommitReasonCode } from './audited-commit-types'
 
 export type AuditedWorkflowListTasksParams = { repoId?: string }
@@ -196,6 +201,39 @@ export type CommitCommandResult =
   // spawned; display-only, exactly like the plan-review lane's worktree arm.
   | { ok: false; kind: 'worktree'; reasonCode: WorktreeReasonCode }
 export type AuditedWorkflowCommitResult = CommitCommandResult
+
+// Phase 9 publish lane. The renderer supplies ONLY a taskId (plus an optional
+// draft flag): no sha, branch, remote, provider, classification, or URL crosses
+// inward, so a client can never influence publish identity or dictate an outcome.
+export type AuditedWorkflowPublishParams = { taskId: string; draft?: boolean }
+export type AuditedWorkflowPublishResult =
+  // `advisory` describes the REVIEW REQUEST on a durable publish; the push
+  // itself succeeded whenever ok is true.
+  | { ok: true; advisory: PublishAdvisoryCode | null }
+  | { ok: false; kind: 'publish'; reasonCode: PublishReasonCode }
+  | { ok: false; kind: 'worktree'; reasonCode: WorktreeReasonCode }
+
+export type AuditedWorkflowRecheckPublishParams = { taskId: string }
+/**
+ * The READ-ONLY recovery command. It constructs only ls-remote and can never
+ * push, so `ok: true` reports what the remote actually shows — including
+ * `unknown_remote`, which means the outcome is still unconfirmed and the attempt
+ * remains live.
+ */
+export type AuditedWorkflowRecheckPublishResult =
+  | { ok: true; classification: PublishClassification; advisory: PublishAdvisoryCode | null }
+  | { ok: false; kind: 'publish'; reasonCode: PublishReasonCode }
+
+export type AuditedWorkflowCreateReviewRequestParams = { taskId: string; draft?: boolean }
+/**
+ * `ok: true` with an advisory such as review_request_auth_required is NOT a
+ * contradiction: the command completed and recorded a truthful outcome, and the
+ * publish stays `completed` throughout. Only genuine command-level failures use
+ * the ok:false arm.
+ */
+export type AuditedWorkflowCreateReviewRequestResult =
+  | { ok: true; advisory: PublishAdvisoryCode }
+  | { ok: false; kind: 'publish'; reasonCode: PublishReasonCode }
 
 export type AuditedWorkflowResumeAttemptParams = { taskId: string }
 export type AuditedWorkflowResumeAttemptResult = { resumed: boolean; reasonCode: string }

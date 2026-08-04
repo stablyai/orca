@@ -10,6 +10,9 @@ import type { PlanReviewReasonCode, PlanReviewRunStatus } from './audited-plan-a
 import type { CodeAuditReasonCode, CodeAuditRunStatus } from './audited-code-audit-types'
 // Type-only, so the cycle with audited-commit-types.ts is erased at compile time.
 import type { CommitAdvisoryCode, CommitReasonCode } from './audited-commit-types'
+// Type-only, so the cycle with audited-publish-types.ts is erased at compile time.
+import type { PublishAdvisoryCode, PublishReasonCode } from './audited-publish-types'
+import type { HostedReviewProvider } from './hosted-review'
 
 export const AUDITED_TASK_STATES = [
   'selected',
@@ -74,6 +77,21 @@ export const COMMIT_ATTEMPT_STATUSES = [
 ] as const
 export type CommitAttemptStatus = (typeof COMMIT_ATTEMPT_STATUSES)[number]
 
+// Phase 9. Same split-failure doctrine as COMMIT_ATTEMPT_STATUSES: a push whose
+// outcome could not be read is precisely the partial-evidence case that must stay
+// guarded, so there is no bare `failed`. `authorized` additionally doubles as the
+// resting state for an UNKNOWN outcome — the attempt stays live until an
+// evidence read (startup sweep or the user's Recheck) can classify it, which is
+// what stops a lost acknowledgement from becoming a duplicate push.
+export const PUBLISH_ATTEMPT_STATUSES = [
+  'authorized',
+  'completed',
+  'failed_no_effect',
+  'failed_ambiguous',
+  'abandoned'
+] as const
+export type PublishAttemptStatus = (typeof PUBLISH_ATTEMPT_STATUSES)[number]
+
 export const TASK_SOURCES = ['roadmap', 'custom'] as const
 export type AuditedTaskSource = (typeof TASK_SOURCES)[number]
 
@@ -120,6 +138,10 @@ export const BLOCK_REASON_CODES = [
   // is persisted separately on the attempt row — blockedReasonCode stays narrow,
   // exactly as the worktree lane's two codes do.
   'commit_process_failed',
+  // Phase 9: the publish lane's generic block code, reached ONLY by ambiguous
+  // push evidence. The detailed PublishReasonCode is persisted separately on the
+  // attempt row — blockedReasonCode stays narrow, as every other lane's does.
+  'publish_process_failed',
   'claude_not_found',
   'codex_not_found',
   'agent_timeout',
@@ -309,6 +331,24 @@ export type AuditedTaskStatusProjection = {
   // an approve or commit affordance.
   commitApprovalReady: boolean
   commitReady: boolean
+  // Phase 9 publish lane. The task REMAINS in `committed` throughout: a failed or
+  // ambiguous push must never make the local commit look undone, so publishing is
+  // tracked here rather than by a task state.
+  publishAttemptStatus: PublishAttemptStatus | null
+  publishedShaShort: string | null
+  publishReasonCode: PublishReasonCode | null
+  // ALWAYS a PublishAdvisoryCode, never a PublishReasonCode: once the push is
+  // confirmed on the remote, every review-request outcome is advisory-only.
+  publishAdvisoryCode: PublishAdvisoryCode | null
+  reviewProvider: HostedReviewProvider | null
+  reviewNumber: number | null
+  reviewAvailable: boolean
+  // Server-computed authorities. publishReady and publishRecheckAvailable are
+  // MUTUALLY EXCLUSIVE by construction, which is what stops the renderer from
+  // ever offering Publish for an outcome that has not been confirmed.
+  publishReady: boolean
+  publishRecheckAvailable: boolean
+  reviewRequestRetryAvailable: boolean
   reconcileClass: ReconcileClass | null
   reconcileReasonCode: ReconcileReasonCode | null
   // Phase 3: the ONLY worktree facts that cross the boundary. Never a path,

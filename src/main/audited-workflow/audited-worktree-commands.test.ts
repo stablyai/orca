@@ -44,16 +44,42 @@ describe('assertAuditedGitArgvShape', () => {
     expect(() => assertAuditedGitArgvShape(buildRevParseCommitArgv('HEAD'))).not.toThrow()
   })
 
+  // Phase 9 admits exactly two network subcommands (push, ls-remote) through
+  // runAuditedGitPublish and nothing else. Everything below STAYS rejected.
   it.each([
     ['fetch', ['fetch', 'origin']],
     ['pull', ['pull']],
-    ['push', ['push', 'origin', 'main']],
     ['clone', ['clone', 'url']],
-    ['ls-remote', ['ls-remote', 'origin']],
-    ['remote', ['remote', 'update']],
     ['submodule', ['submodule', 'update', '--remote']]
   ])('rejects the network subcommand %s', (_label, argv) => {
     expect(() => assertAuditedGitArgvShape(argv)).toThrow(/disallowed git subcommand/)
+  })
+
+  // `remote` is allowlisted only as the bare listing form, so the mutating and
+  // network-reaching verbs are refused by arity rather than by the allowlist.
+  it('rejects remote update, which reaches the network', () => {
+    expect(() => assertAuditedGitArgvShape(['remote', 'update'])).toThrow(/bare listing form/)
+  })
+
+  it('rejects a config write, admitting only `config --get`', () => {
+    expect(() => assertAuditedGitArgvShape(['config', 'remote.origin.url', 'x'])).toThrow(
+      /config --get/
+    )
+    expect(() => assertAuditedGitArgvShape(['config', '--unset', 'remote.origin.url'])).toThrow(
+      /config --get/
+    )
+  })
+
+  // Admitted by the allowlist, but never through the READ path: that path applies
+  // no lease screen and no BatchMode env.
+  it.each([
+    [
+      'push',
+      ['push', '--force-with-lease=refs/heads/b:', '--', 'origin', `${'a'.repeat(40)}:refs/heads/b`]
+    ],
+    ['ls-remote', ['ls-remote', '--exit-code=0', '--', 'origin', 'refs/heads/b']]
+  ])('excludes the network subcommand %s from the read path', (_label, argv) => {
+    expect(isReadOnlyAuditedArgv(argv)).toBe(false)
   })
 
   it.each([['remove'], ['prune'], ['repair'], ['move']])(

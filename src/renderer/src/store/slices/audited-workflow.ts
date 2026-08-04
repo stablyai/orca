@@ -17,12 +17,14 @@ import type {
 import type { AppState } from '../types'
 import { getTaskListErrorMessage } from '../../components/audited-workflow/audited-workflow-error-messages'
 import { createAuditedCommitActions, type AuditedCommitActions } from './audited-commit-actions'
+import { createAuditedPublishActions, type AuditedPublishActions } from './audited-publish-actions'
 import {
   createAuditedPlanReviewActions,
   type AuditedPlanReviewActions
 } from './audited-plan-review-actions'
 
 export type AuditedWorkflowSlice = AuditedCommitActions &
+  AuditedPublishActions &
   AuditedPlanReviewActions & {
     auditedTasks: AuditedTaskStatusProjection[]
     auditedTasksLoading: boolean
@@ -205,6 +207,7 @@ export const createAuditedWorkflowSlice: StateCreator<AppState, [], [], AuditedW
   },
 
   ...createAuditedCommitActions(set),
+  ...createAuditedPublishActions(set),
   ...createAuditedPlanReviewActions(set),
 
   // Phase 7. A separate pending id from the plan lane: the two lanes are never

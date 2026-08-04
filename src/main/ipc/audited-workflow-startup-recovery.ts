@@ -18,6 +18,7 @@ import { reconcilePlanArtifactFilesOnStartup } from '../audited-workflow/audited
 import { reconcileAuditedWorktreesOnStartup } from '../audited-workflow/audited-worktree-service'
 import { sweepCandidateStoresOnStartup } from '../audited-workflow/audited-candidate-store-gc'
 import { recoverInterruptedCommitAttempts } from '../audited-workflow/audited-commit-run-recovery'
+import { recoverInterruptedPublishAttempts } from '../audited-workflow/audited-publish-run-recovery'
 
 export function runAuditedWorkflowStartupRecovery(): void {
   // Why: runs once per registration (i.e. once per app process lifetime —
@@ -93,6 +94,32 @@ export function runAuditedWorkflowStartupRecovery(): void {
       })
   } catch (error) {
     console.error('[auditedWorkflow] Commit attempt recovery failed to start:', error)
+  }
+
+  // Phase 9 publish-attempt recovery. Reads the REMOTE (ls-remote) and NEVER
+  // pushes: recovery classifies, it does not act, because a network mutation at
+  // startup would have no human intent behind it. An attempt whose remote cannot
+  // be read is left `authorized` on purpose — that is what stops a second push
+  // from starting before the user's explicit Recheck resolves it.
+  //
+  // The try/catch wraps the SYNCHRONOUS setup too, not just the promise:
+  // resolving the repository can itself throw, and a bare `.catch()` would not
+  // see that.
+  try {
+    void recoverInterruptedPublishAttempts(getAuditedTaskRepository().getDatabase(), Date.now())
+      .then((recovered) => {
+        for (const { taskId } of recovered) {
+          const projection = getTaskProjection(taskId)
+          if (projection) {
+            broadcastAuditedTaskChanged(projection)
+          }
+        }
+      })
+      .catch((error) => {
+        console.error('[auditedWorkflow] Publish attempt recovery failed:', error)
+      })
+  } catch (error) {
+    console.error('[auditedWorkflow] Publish attempt recovery failed to start:', error)
   }
 
   // Read-only, network-free, Git-mutation-free. Fire-and-forget so handler

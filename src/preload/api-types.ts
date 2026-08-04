@@ -47,6 +47,12 @@ import type {
   AuditedWorkflowCodeAuditParams,
   AuditedWorkflowCommitParams,
   AuditedWorkflowCommitResult,
+  AuditedWorkflowPublishParams,
+  AuditedWorkflowPublishResult,
+  AuditedWorkflowRecheckPublishParams,
+  AuditedWorkflowRecheckPublishResult,
+  AuditedWorkflowCreateReviewRequestParams,
+  AuditedWorkflowCreateReviewRequestResult,
   AuditedWorkflowRevokeApprovalParams,
   AuditedWorkflowRevokeApprovalResult,
   AuditedWorkflowCodeAuditResult,
@@ -2569,6 +2575,16 @@ export type PreloadApi = {
       params: AuditedWorkflowRevokeApprovalParams
     ) => Promise<AuditedWorkflowRevokeApprovalResult>
     commit: (params: AuditedWorkflowCommitParams) => Promise<AuditedWorkflowCommitResult>
+    // Phase 9 publish lane. `publish` is the only one that can mutate a remote;
+    // `recheckPublish` is strictly read-only and `createReviewRequest` never
+    // touches Git.
+    publish: (params: AuditedWorkflowPublishParams) => Promise<AuditedWorkflowPublishResult>
+    recheckPublish: (
+      params: AuditedWorkflowRecheckPublishParams
+    ) => Promise<AuditedWorkflowRecheckPublishResult>
+    createReviewRequest: (
+      params: AuditedWorkflowCreateReviewRequestParams
+    ) => Promise<AuditedWorkflowCreateReviewRequestResult>
     // The plan BODY. Fetched on demand rather than projected — it is the
     // largest, highest-risk field in the feature, and the handler re-verifies
     // that artifactId belongs to taskId before any read.

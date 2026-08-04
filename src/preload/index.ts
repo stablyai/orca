@@ -42,6 +42,12 @@ import type {
   AuditedWorkflowCodeAuditParams,
   AuditedWorkflowCommitParams,
   AuditedWorkflowCommitResult,
+  AuditedWorkflowPublishParams,
+  AuditedWorkflowPublishResult,
+  AuditedWorkflowRecheckPublishParams,
+  AuditedWorkflowRecheckPublishResult,
+  AuditedWorkflowCreateReviewRequestParams,
+  AuditedWorkflowCreateReviewRequestResult,
   AuditedWorkflowRevokeApprovalParams,
   AuditedWorkflowRevokeApprovalResult,
   AuditedWorkflowCodeAuditResult,
@@ -2452,6 +2458,16 @@ const api = {
       ipcRenderer.invoke('auditedWorkflow:revokeApproval', params),
     commit: (params: AuditedWorkflowCommitParams): Promise<AuditedWorkflowCommitResult> =>
       ipcRenderer.invoke('auditedWorkflow:commit', params),
+    publish: (params: AuditedWorkflowPublishParams): Promise<AuditedWorkflowPublishResult> =>
+      ipcRenderer.invoke('auditedWorkflow:publish', params),
+    recheckPublish: (
+      params: AuditedWorkflowRecheckPublishParams
+    ): Promise<AuditedWorkflowRecheckPublishResult> =>
+      ipcRenderer.invoke('auditedWorkflow:recheckPublish', params),
+    createReviewRequest: (
+      params: AuditedWorkflowCreateReviewRequestParams
+    ): Promise<AuditedWorkflowCreateReviewRequestResult> =>
+      ipcRenderer.invoke('auditedWorkflow:createReviewRequest', params),
     getPlanArtifact: (
       params: AuditedWorkflowGetPlanArtifactParams
     ): Promise<AuditedWorkflowGetPlanArtifactResult> =>
