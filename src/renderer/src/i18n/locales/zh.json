@@ -1517,7 +1517,7 @@
         "b227d88520": "找到 {{value0}} 文件",
         "995be8ea22": "复制",
         "cf144856dc": "已复制",
-        "344f8a48dd": "在运行 Quick Open 扫描的主机上，以启用快速、遵循 gitignore 的文件列表："
+        "344f8a48dd": "在运行 Quick Open 扫描的主机上启用快速、遵循 gitignore 的文件列表："
       },
       "SelectedTextCopyMenu": {
         "9b40d7b018": "复制"
