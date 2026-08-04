@@ -1354,10 +1354,10 @@ export function createRemoteRuntimePtyTransport(
           }
           // Why: one reattach per spent window, so a handle that really is dead is not retried on every host snapshot.
           autoRecoveryWindowSpent = false
-          recovery.begin()
+          const reattachEpoch = recovery.begin()
           clearPublishedHandleWait()
           const reusedPtyId = remotePtyId
-          void subscribeToHandle(recovery.currentEpoch, true).catch((error) => {
+          void subscribeToHandle(reattachEpoch, true).catch((error) => {
             if (!recoverAfterSubscribeFailure(error, previousHandle, reusedPtyId)) {
               handleRemoteTerminalError(error)
             }

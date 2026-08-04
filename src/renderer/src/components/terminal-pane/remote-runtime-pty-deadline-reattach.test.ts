@@ -368,9 +368,11 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
       await vi.advanceTimersByTimeAsync(66_000)
       expect(transport.getRecoveryState?.().phase).toBe('disconnected')
 
+      const callsBeforeRetry = runtimeCall.mock.calls.length
       // The attach wait is single-shot and the cutoff already settled it; replaying it would spin the banner with no RPC in flight.
       expect(retryAllRemoteRuntimePtyRecoveriesNow()).toBe(0)
       expect(transport.getRecoveryState?.().phase).toBe('disconnected')
+      expect(runtimeCall.mock.calls.length).toBe(callsBeforeRetry)
       transport.destroy?.()
     } finally {
       vi.useRealTimers()
