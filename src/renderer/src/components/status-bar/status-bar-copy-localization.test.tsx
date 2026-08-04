@@ -94,11 +94,16 @@ describe('status-bar copy under a non-English UI language', () => {
       })
     ).toEqual([
       {
+        id: 'summary',
         text: 'リソースマネージャー - 512 MB - 2 件のターミナルセッション',
         emphasized: false
       },
-      { text: '容量スキャンの準備完了', emphasized: true },
-      { text: 'ターミナルセッションはワークスペースごとにグループ化されます。', emphasized: false }
+      { id: 'space-scan', text: '容量スキャンの準備完了', emphasized: true },
+      {
+        id: 'sessions-hint',
+        text: 'ターミナルセッションはワークスペースごとにグループ化されます。',
+        emphasized: false
+      }
     ])
   })
 
@@ -122,10 +127,11 @@ describe('status-bar copy under a non-English UI language', () => {
       getResourceManagerTooltipLines({ memoryLabel: '—', sessionCount: 0, spaceScanReady: false })
     ).toEqual([
       {
+        id: 'summary',
         text: 'リソースマネージャー - メモリ情報を取得できません - 0 件のターミナルセッション',
         emphasized: false
       },
-      { text: 'ターミナルセッションはまだありません。', emphasized: false }
+      { id: 'sessions-hint', text: 'ターミナルセッションはまだありません。', emphasized: false }
     ])
   })
 

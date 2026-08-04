@@ -25,8 +25,16 @@ function spaceScanReadyLabel(): string {
  * `emphasized` marks the space-scan row the tooltip tints. The segment used to
  * recognize that row by comparing it against the English text, which stops
  * matching the moment the copy comes from the catalog.
+ *
+ * `id` names the row's role. Each role appears at most once per tooltip, so it is
+ * a unique React key that survives locale switches and memory/count updates —
+ * unlike the translated text, which locales are free to duplicate across rows.
  */
-export type ResourceManagerTooltipLine = { text: string; emphasized: boolean }
+export type ResourceManagerTooltipLine = {
+  id: 'summary' | 'space-scan' | 'sessions-hint'
+  text: string
+  emphasized: boolean
+}
 
 export function getResourceManagerTooltipLines(args: {
   memoryLabel: string
@@ -45,6 +53,7 @@ export function getResourceManagerTooltipLines(args: {
   // its separators, so it can't be concatenated from translated fragments here.
   const lines: ResourceManagerTooltipLine[] = [
     {
+      id: 'summary',
       text: translate(
         'auto.components.status.bar.resource.manager.terminal.copy.tooltipSummary',
         'Resource Manager - {{memory}} - {{sessions}}',
@@ -55,10 +64,11 @@ export function getResourceManagerTooltipLines(args: {
   ]
 
   if (args.spaceScanReady) {
-    lines.push({ text: spaceScanReadyLabel(), emphasized: true })
+    lines.push({ id: 'space-scan', text: spaceScanReadyLabel(), emphasized: true })
   }
 
   lines.push({
+    id: 'sessions-hint',
     text:
       args.sessionCount > 0
         ? translate(

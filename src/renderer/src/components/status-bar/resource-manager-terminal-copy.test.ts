@@ -27,8 +27,12 @@ describe('resource manager terminal copy', () => {
         spaceScanReady: false
       })
     ).toEqual([
-      { text: 'Resource Manager - 512 MB · Σ RSS - 2 terminal sessions', emphasized: false },
-      { text: 'Terminal sessions are grouped by workspace.', emphasized: false }
+      {
+        id: 'summary',
+        text: 'Resource Manager - 512 MB · Σ RSS - 2 terminal sessions',
+        emphasized: false
+      },
+      { id: 'sessions-hint', text: 'Terminal sessions are grouped by workspace.', emphasized: false }
     ])
   })
 
@@ -40,9 +44,13 @@ describe('resource manager terminal copy', () => {
         spaceScanReady: true
       })
     ).toEqual([
-      { text: 'Resource Manager - memory unavailable - 0 terminal sessions', emphasized: false },
-      { text: 'Space scan ready', emphasized: true },
-      { text: 'No terminal sessions yet.', emphasized: false }
+      {
+        id: 'summary',
+        text: 'Resource Manager - memory unavailable - 0 terminal sessions',
+        emphasized: false
+      },
+      { id: 'space-scan', text: 'Space scan ready', emphasized: true },
+      { id: 'sessions-hint', text: 'No terminal sessions yet.', emphasized: false }
     ])
   })
 
@@ -58,6 +66,21 @@ describe('resource manager terminal copy', () => {
     expect(lines.filter((line) => line.emphasized).map((line) => line.text)).toEqual([
       'Space scan ready'
     ])
+  })
+
+  // Why: the tooltip keys rows by id, so a repeated id would silently drop a row.
+  it('gives every tooltip row a unique id to key on', () => {
+    for (const spaceScanReady of [false, true]) {
+      for (const sessionCount of [0, 1, 4]) {
+        const ids = getResourceManagerTooltipLines({
+          memoryLabel: '512 MB',
+          sessionCount,
+          spaceScanReady
+        }).map((line) => line.id)
+
+        expect(new Set(ids).size).toBe(ids.length)
+      }
+    }
   })
 
   it('keeps the trigger label descriptive for screen readers', () => {

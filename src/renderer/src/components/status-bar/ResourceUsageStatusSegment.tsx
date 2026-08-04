@@ -1184,8 +1184,8 @@ export function ResourceUsageStatusSegment({
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={6}>
           <div className="space-y-0.5">
-            {resourceManagerTooltipLines.map((line, index) => (
-              <div key={`${index}:${line.text}`} className={line.emphasized ? 'text-primary' : ''}>
+            {resourceManagerTooltipLines.map((line) => (
+              <div key={line.id} className={line.emphasized ? 'text-primary' : ''}>
                 {line.text}
               </div>
             ))}
