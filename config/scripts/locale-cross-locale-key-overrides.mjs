@@ -1,4 +1,9 @@
 export const CROSS_LOCALE_KEY_OVERRIDES = {
+  // Keep the translations introduced on main instead of applying the generic Advanced override.
+  'auto.components.sidebar.AddRemoteHostDialog.advanced': {
+    zh: 'Advanced',
+    ja: '詳細'
+  },
   'auto.components.GitLabItemDialog.4168eb2c51': {
     zh: '解决',
     ja: '解決'

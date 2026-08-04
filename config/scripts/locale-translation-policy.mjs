@@ -462,9 +462,12 @@ function phraseFixMatchesEnglish(enValue, fix) {
   return enValue.toLowerCase().includes(fix.whenEnIncludes.toLowerCase())
 }
 
-function applyPhraseFixes(enValue, localeValue, locale) {
+function applyPhraseFixes(enValue, localeValue, locale, key = '') {
   let result = localeValue
   for (const fix of LOCALE_PHRASE_FIXES[locale] ?? []) {
+    if (isLocalizedProseTermContext(fix.whenEnIncludes, key)) {
+      continue
+    }
     if (!phraseFixMatchesEnglish(enValue, fix)) {
       continue
     }
@@ -476,7 +479,7 @@ function applyPhraseFixes(enValue, localeValue, locale) {
 // Brand → MT phrase soup → product glossary → CJK spacing. Glossary is last so domain terms win.
 function applyPolicyRepairs(enValue, localeValue, locale, key) {
   let result = applyBrandMistranslationFixes(enValue, localeValue, locale, key)
-  result = applyPhraseFixes(enValue, result, locale)
+  result = applyPhraseFixes(enValue, result, locale, key)
   result = applyWorkspaceWorktreeGlossary(enValue, result, locale)
   if (['zh', 'ja', 'ko'].includes(locale)) {
     result = applyCjkLatinTermSpacing(result, locale)
