@@ -337,6 +337,12 @@ describe('worktree.ps on a degraded repo scan', () => {
       expect(restored?.hostId).toBe(LOCAL_EXECUTION_HOST_ID)
       // Why: no git answered, so a restored row must not claim a branch it cannot have verified.
       expect(restored?.branch).toBe('')
+      // Why: `worktree.ps` summaries carry no head, so pin the blank head on the resolved row the restore path actually builds.
+      const resolved = await advancePastRepoScanBudget(
+        runtime.showManagedWorktree(`id:${WORKTREE_ID}`)
+      )
+      expect(resolved.head).toBe('')
+      expect(resolved.git.head).toBe('')
     } finally {
       vi.useRealTimers()
     }
