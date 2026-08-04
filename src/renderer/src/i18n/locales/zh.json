@@ -4350,19 +4350,6 @@
           "folderPathIdentity": "分支 / 文件夹路径",
           "cli": "Orca CLI"
         },
-        "SshDisconnectedDialog": {
-          "ca4a7892af": "正在连接...",
-          "89385db176": "关闭",
-          "656368f3a2": "重连失败",
-          "376bed88e5": "与远程主机的连接遇到错误。",
-          "4afcca1d24": "重新连接",
-          "11552bf786": "SSH 已断开",
-          "cb5938ae79": "正在重新连接...",
-          "disconnected": "此 SSH 主机未连接。",
-          "reconnecting": "正在重新连接远程主机...",
-          "reconnectionFailed": "重新连接到远程主机失败。",
-          "authFailed": "远程主机身份验证失败。"
-        },
         "SshTargetRow": {
           "4677394048": "正在连接…",
           "75ad429b5d": "连接"
@@ -14405,6 +14392,14 @@
             }
           }
         }
+      }
+    },
+    "ssh": {
+      "sshConnectVerb": {
+        "connect": "连接",
+        "connecting": "正在连接…",
+        "reconnect": "重新连接",
+        "retry": "重试"
       }
     }
   },

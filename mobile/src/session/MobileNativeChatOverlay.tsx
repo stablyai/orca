@@ -1,7 +1,10 @@
+import { useMemo } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
+import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 import type { MobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
+import { useMobileNativeChatStreamingBubble } from './use-mobile-native-chat-streaming-bubble'
 
 type Props = {
   controller: MobileNativeChatController
@@ -22,7 +25,9 @@ type Props = {
 }
 
 /** Keeps the terminal mounted underneath chat so its PTY subscription survives
- *  view toggles while the native surface owns the visible composer. */
+ *  view toggles while the native surface owns the visible composer. Also owns
+ *  the streaming gate: this component stays mounted across those toggles, while
+ *  the chat list below it does not. */
 export function MobileNativeChatOverlay({
   controller,
   images,
@@ -36,19 +41,27 @@ export function MobileNativeChatOverlay({
   onClearSendError,
   keyboardInset
 }: Props): React.JSX.Element | null {
+  const session = controller.nativeChatSession
+  const folded = useMemo(() => foldMobileNativeChatMessages(session.messages), [session.messages])
+  const streaming = useMobileNativeChatStreamingBubble(
+    folded,
+    controller.nativeChatStreamingText,
+    controller.nativeChatStreamScopeKey,
+    controller.nativeChatStreamLive
+  )
   if (!controller.showNativeChat) {
     return null
   }
-  const session = controller.nativeChatSession
   return (
     <View style={styles.overlay}>
       <MobileNativeChatView
         messages={session.messages}
+        folded={folded}
         status={session.status}
         error={session.error}
         agent={controller.nativeChatAgent}
         agentWorking={controller.nativeChatAgentWorking}
-        streamingText={controller.nativeChatStreamingText}
+        streaming={streaming}
         onStop={controller.handleNativeChatStop}
         ask={controller.nativeChatAsk}
         onAnswerAsk={controller.handleNativeChatAnswerAsk}

@@ -22,10 +22,7 @@ import { SshTargetStatusRow } from './SshTargetStatusRow'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime-shared-control-types'
 import { connectRuntimeHostForNavigation } from './runtime-host-navigation-connect'
 import { connectRuntimeEnvironmentAndRecordStatus } from './runtime-environment-explicit-connect'
-
-function isConnecting(status: SshConnectionStatus): boolean {
-  return ['connecting', 'deploying-relay', 'reconnecting'].includes(status)
-}
+import { isConnectingSshStatus } from '@/ssh/ssh-connection-recoverability'
 
 type HostStatus = 'connected' | 'disconnected' | 'connecting'
 
@@ -71,7 +68,7 @@ function sshStatusForOverall(status: SshConnectionStatus): HostStatus {
   if (status === 'connected') {
     return 'connected'
   }
-  return isConnecting(status) ? 'connecting' : 'disconnected'
+  return isConnectingSshStatus(status) ? 'connecting' : 'disconnected'
 }
 
 function runtimeHostConnectionState({

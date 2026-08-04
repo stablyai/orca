@@ -19,6 +19,11 @@ vi.mock('./mobile-native-chat-stale-input', () => ({
 }))
 
 import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'
+import {
+  acquireMobileNativeChatTerminalWrite,
+  releaseMobileNativeChatTerminalWrite,
+  resetMobileNativeChatTerminalWritesForTests
+} from './mobile-native-chat-terminal-write-lock'
 import { buildAgentTuiClearInputForText } from '../../../src/shared/agent-tui-input-clear'
 
 type Send = ReturnType<typeof useMobileNativeChatMessageSend>
@@ -28,6 +33,7 @@ const DRAFT = 'Linked Linear issue: ABC-123\nhttps://linear.app/x/issue/ABC-123'
 describe('useMobileNativeChatMessageSend', () => {
   let renderer: ReactTestRenderer | null = null
   let api: Send | null = null
+  let onSendError = vi.fn()
 
   const mount = (
     readSeededLaunchDraftSeed: () => { text: string; createdAt: number | null } | null
@@ -44,7 +50,7 @@ describe('useMobileNativeChatMessageSend', () => {
         restoreRejectedDraft: () => {},
         acceptSend: () => {},
         holdUnconfirmedSend: () => {},
-        onSendError: () => {}
+        onSendError
       })
       return null
     }
@@ -70,6 +76,8 @@ describe('useMobileNativeChatMessageSend', () => {
     sendWithOutcome.mockResolvedValue('accepted')
     clearInputWrite.mockReset()
     clearInputWrite.mockResolvedValue(true)
+    onSendError = vi.fn()
+    resetMobileNativeChatTerminalWritesForTests()
   })
   afterEach(() => {
     act(() => {
@@ -172,5 +180,28 @@ describe('useMobileNativeChatMessageSend', () => {
       await api!.answerQuestion('1')
     })
     expect(sentArgs().resolvedLaunchDraft).toBeUndefined()
+  })
+
+  it('rejects a question answer while another composed write holds the terminal', async () => {
+    mount(() => null)
+    // An image paste sequence is mid-flight into the same PTY.
+    expect(acquireMobileNativeChatTerminalWrite('term')).toBe(true)
+
+    let result: boolean | undefined
+    await act(async () => {
+      result = await api!.answerQuestion('1')
+    })
+    expect(result).toBe(false)
+    expect(sendWithOutcome).not.toHaveBeenCalled()
+    expect(onSendError).toHaveBeenCalledWith('Answer not sent')
+
+    releaseMobileNativeChatTerminalWrite('term')
+    await act(async () => {
+      result = await api!.answerQuestion('1')
+    })
+    expect(result).toBe(true)
+    // The answer released its own hold on the way out.
+    expect(acquireMobileNativeChatTerminalWrite('term')).toBe(true)
+    releaseMobileNativeChatTerminalWrite('term')
   })
 })

@@ -43,7 +43,7 @@ describe('useWorktreeIssueLink', () => {
     } as never)
 
     const { result } = renderHook(() =>
-      useWorktreeIssueLink({ worktreeId: 'wt-1', issueInput: '42' })
+      useWorktreeIssueLink({ worktreeId: 'wt-1', issueInput: '42', issueProvider: 'github' })
     )
 
     await act(async () => {

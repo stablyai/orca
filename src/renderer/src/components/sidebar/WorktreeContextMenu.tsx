@@ -598,6 +598,9 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const handleRename = useCallback(() => {
     openModal('edit-meta', {
       worktreeId: worktree.id,
+      // Why: the same workspace ID can exist under two hosts. Naming the owner
+      // keeps the dialog on this row instead of the ambiguous lookup.
+      repoId: worktree.repoId,
       currentDisplayName: worktree.displayName,
       currentIssue: worktree.linkedIssue,
       currentPR: worktree.linkedPR,
@@ -606,6 +609,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     })
   }, [
     worktree.id,
+    worktree.repoId,
     worktree.displayName,
     worktree.linkedIssue,
     worktree.linkedPR,

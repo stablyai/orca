@@ -271,6 +271,7 @@
           "4a18052018": "Local {{value0}} is behind {{value1}}",
           "903b51c2ed": "Workspace created from {{value0}}, but Orca could not fast-forward local {{value1}} because {{value2}}",
           "0216895fb5": "Failed to delete branch",
+          "c6cf133786": "This workspace is no longer available.",
           "19db0085fb": "Local branch deleted",
           "2b0afc7f14": "Could not keep local {{value0}} up to date",
           "670864ab52": "Keeping local {{value0}} up to date",
@@ -280,7 +281,8 @@
           "3b57982bf6": "Git could not safely delete branch \"{{value0}}\" after deleting workspace \"{{value1}}\", so Orca kept it to avoid losing local commits.",
           "81f13f48d2": "Git could not safely delete branch \"{{value0}}\" after deleting worktree \"{{value1}}\", so Orca kept it to avoid losing local commits.",
           "runtimeScopeForbiddenTitle": "This connection has limited (mobile) access",
-          "runtimeScopeForbiddenDescription": "Workspaces are unavailable on a mobile-scope pairing. Reconnect using the browser access link from Settings → Runtime Environments → Share this Orca server."
+          "runtimeScopeForbiddenDescription": "Workspaces are unavailable on a mobile-scope pairing. Reconnect using the browser access link from Settings → Runtime Environments → Share this Orca server.",
+          "a17f4d2e93": "Could not update this workspace."
         },
         "repos": {
           "2975400634": "Update Orca server to open non-Git folders on this runtime.",
@@ -4448,19 +4450,6 @@
           "folderPathIdentity": "Branch / folder path",
           "cli": "Orca CLI"
         },
-        "SshDisconnectedDialog": {
-          "ca4a7892af": "Connecting...",
-          "89385db176": "Dismiss",
-          "656368f3a2": "Reconnection failed",
-          "376bed88e5": "The connection to the remote host encountered an error.",
-          "4afcca1d24": "Reconnect",
-          "11552bf786": "SSH Disconnected",
-          "cb5938ae79": "Reconnecting...",
-          "disconnected": "This SSH host is not connected.",
-          "reconnecting": "Reconnecting to the remote host...",
-          "reconnectionFailed": "Reconnection to the remote host failed.",
-          "authFailed": "Authentication to the remote host failed."
-        },
         "SshTargetRow": {
           "4677394048": "Connecting…",
           "75ad429b5d": "Connect"
@@ -4694,7 +4683,8 @@
           "65770ad0f0": "Edit GitHub links and notes for this workspace.",
           "382fd11a3e": "Edit Worktree Details",
           "2174f17011": "Save",
-          "61d6f612cf": "Saving..."
+          "61d6f612cf": "Saving...",
+          "a0d191b7a7": "Edit issue links, pull request links, and notes for this workspace."
         },
         "WorktreeOpenInMenu": {
           "localOnly": "Local only",
@@ -5156,6 +5146,39 @@
           "3b7ea51793": "Clear search",
           "7f1c2e94a5": "Search text is too long — the board is unfiltered",
           "9a4d0f6b21": "Too long"
+        },
+        "WorktreeIssueLinkField": {
+          "25852bfc59": "Linear",
+          "5b440069e6": "GitHub",
+          "161b2d053a": "Open linked issue",
+          "d4785f9954": "Issue links are set when a folder workspace is created and can't be changed here yet.",
+          "964d9bc00a": "Not a Linear issue key or linear.app issue URL.",
+          "0a7a2c6efd": "Not a GitHub issue number or issue URL.",
+          "72486800ff": "Saving unlinks {{first}} and {{second}} — a workspace tracks one issue.",
+          "2c245ac134": "Saving unlinks {{link}} — a workspace tracks one issue.",
+          "d8c8a30d1f": "Couldn't open that issue. Check the identifier and your Linear connection.",
+          "269198eeda": "Couldn't open that issue. Check the number and your GitHub connection.",
+          "f047887705": "Paste a GitHub or Linear URL, or enter a number. Leave blank to remove the link.",
+          "ad78f9bee2": "Issue",
+          "662ae142f8": "Issue #, or a GitHub or Linear URL",
+          "929c98d05a": "Issue provider"
+        },
+        "worktreeIssueDisplacement": {
+          "3f61c0a8d2": "Linear {{value}}",
+          "9c4b7e1f60": "GitHub #{{value}}"
+        },
+        "WorktreeCardSshHostControl": {
+          "connectFailed": "SSH connection failed",
+          "removedTooltip": "SSH host removed — reconnect unavailable",
+          "removedName": "SSH host {{value0}} was removed",
+          "connectedTooltip": "Project on SSH host",
+          "connectedName": "Project on SSH host {{value0}}",
+          "connectingName": "Connecting to SSH host {{value0}}",
+          "authFailedName": "Reconnect SSH host {{value0}} — authentication failed",
+          "retryName": "Retry SSH connection to {{value0}}",
+          "connectName": "Connect to SSH host {{value0}}",
+          "authFailedTooltip": "{{value0}} · authentication failed",
+          "failedTooltip": "{{value0}} · connection failed"
         }
       },
       "shared": {
@@ -13944,7 +13967,20 @@
           "a21f6c33ad": "Automation source refreshed.",
           "53f06f0ad5": "Retry source",
           "pendingAutomationMissing": "Automation no longer available.",
-          "pendingAutomationRunMissing": "Run history no longer available."
+          "pendingAutomationRunMissing": "Run history no longer available.",
+          "noSearchMatches": "No automations match your search.",
+          "paused": "Paused",
+          "runCount": "{{count}} runs",
+          "runCount_one": "{{count}} run",
+          "runCount_other": "{{count}} runs",
+          "projectDefaultBaseRef": "project default",
+          "createFromBaseRef": "Create from {{baseRef}}",
+          "missingWorkspace": "Missing workspace",
+          "runUsageSummary": "{{cost}} est. · {{tokens}} tokens",
+          "usageUnavailable": "Usage unavailable",
+          "noRunUsageYet": "No run usage yet",
+          "noWorkspace": "No workspace",
+          "latestSavedOutput": "Latest saved output"
         },
         "CreateFromPicker": {
           "f061f49e3f": "Search repo branches...",
@@ -14057,6 +14093,13 @@
           "5a7863909c": "Run setup for each new workspace",
           "18f000ad4e": "Advanced",
           "874b72195b": "When this automation creates a workspace, prepare it the same way creating a worktree by hand does — run the project's setup and open its terminal tabs."
+        },
+        "AutomationListSearchField": {
+          "tooLong": "Search text is too long — list is unfiltered",
+          "label": "Search automations",
+          "placeholder": "Search by name, project, or prompt",
+          "tooLongShort": "Too long",
+          "clear": "Clear search"
         }
       },
       "agent": {
@@ -14619,6 +14662,14 @@
             }
           }
         }
+      }
+    },
+    "ssh": {
+      "sshConnectVerb": {
+        "reconnect": "Reconnect",
+        "retry": "Retry",
+        "connect": "Connect",
+        "connecting": "Connecting…"
       }
     }
   },

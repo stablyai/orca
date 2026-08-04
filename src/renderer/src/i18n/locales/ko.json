@@ -4338,19 +4338,6 @@
           "folderPathIdentity": "브랜치 / 폴더 경로",
           "cli": "Orca CLI"
         },
-        "SshDisconnectedDialog": {
-          "ca4a7892af": "연결 중...",
-          "89385db176": "닫기",
-          "656368f3a2": "재연결 실패",
-          "376bed88e5": "원격 호스트 연결에 오류가 발생했습니다.",
-          "4afcca1d24": "다시 연결",
-          "11552bf786": "SSH 연결 끊김",
-          "cb5938ae79": "다시 연결하는 중...",
-          "disconnected": "이 SSH 호스트는 연결되어 있지 않습니다.",
-          "reconnecting": "원격 호스트에 다시 연결하는 중...",
-          "reconnectionFailed": "원격 호스트에 다시 연결하지 못했습니다.",
-          "authFailed": "원격 호스트 인증에 실패했습니다."
-        },
         "SshTargetRow": {
           "4677394048": "연결 중…",
           "75ad429b5d": "연결"
@@ -14396,6 +14383,14 @@
             }
           }
         }
+      }
+    },
+    "ssh": {
+      "sshConnectVerb": {
+        "connect": "연결",
+        "connecting": "연결 중…",
+        "reconnect": "다시 연결",
+        "retry": "재시도"
       }
     }
   },

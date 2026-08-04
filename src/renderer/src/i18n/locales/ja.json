@@ -4338,19 +4338,6 @@
           "folderPathIdentity": "ブランチ / フォルダパス",
           "cli": "Orca CLI"
         },
-        "SshDisconnectedDialog": {
-          "ca4a7892af": "接続中...",
-          "89385db176": "閉じる",
-          "656368f3a2": "再接続に失敗しました",
-          "376bed88e5": "リモート ホストへの接続でエラーが発生しました。",
-          "4afcca1d24": "再接続",
-          "11552bf786": "SSH が切断されました",
-          "cb5938ae79": "再接続中...",
-          "disconnected": "This remote repository is not connected.",
-          "reconnecting": "リモートホストに再接続中...",
-          "reconnectionFailed": "リモートホストへの再接続に失敗しました。",
-          "authFailed": "リモートホストへの認証に失敗しました。"
-        },
         "SshTargetRow": {
           "4677394048": "接続中…",
           "75ad429b5d": "接続"
@@ -14385,6 +14372,14 @@
             }
           }
         }
+      }
+    },
+    "ssh": {
+      "sshConnectVerb": {
+        "connect": "接続",
+        "connecting": "接続中…",
+        "reconnect": "再接続",
+        "retry": "再試行"
       }
     }
   },
