@@ -113,6 +113,11 @@ type StatusBarProps = {
 const PetStatusSegment = lazyWithRetry(() =>
   import('./PetStatusSegment').then((module) => ({ default: module.PetStatusSegment }))
 )
+const DefaultAgentStatusSegment = lazyWithRetry(() =>
+  import('./DefaultAgentStatusSegment').then((module) => ({
+    default: module.DefaultAgentStatusSegment
+  }))
+)
 const ResourceUsageStatusSegment = lazyWithRetry(() =>
   import('./ResourceUsageStatusSegment').then((module) => ({
     default: module.ResourceUsageStatusSegment
@@ -2353,6 +2358,8 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
         <SkillUpdateStatusSegment iconOnly={iconOnly} />
         <UpdateStatusSegment compact={compact} iconOnly={iconOnly} />
         <React.Suspense fallback={null}>
+          {/* Why: always on (not statusBarItems) so switching default agent is one click, matching Settings > Agents without a dig through the pane. */}
+          <DefaultAgentStatusSegment iconOnly={iconOnly} />
           {petEnabled ? <PetStatusSegment /> : null}
           {showResourceUsage ? (
             <ResourceUsageStatusSegment compact={compact} iconOnly={iconOnly} />

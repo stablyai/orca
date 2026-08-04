@@ -3493,6 +3493,15 @@
                 "rssDescription": "Summed resident set size (RSS). Shared or aliased pages can appear in more than one process."
               }
             }
+          },
+          "DefaultAgentStatusSegment": {
+            "auto": "Auto",
+            "blank": "Blank",
+            "ariaLabel": "Default agent: {{value0}}",
+            "tooltip": "Default agent — {{value0}}",
+            "title": "Default Agent",
+            "blankTerminal": "No agent (blank terminal)",
+            "settings": "Agent settings…"
           }
         }
       },

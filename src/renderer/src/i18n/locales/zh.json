@@ -3448,6 +3448,15 @@
             "stoppingLabel": "Stopping update",
             "stoppingTooltip": "Stopping the skill update…",
             "stoppingAria": "Stopping the skill update. Click to open details."
+          },
+          "DefaultAgentStatusSegment": {
+            "auto": "Auto",
+            "blank": "Blank",
+            "ariaLabel": "Default agent: {{value0}}",
+            "tooltip": "Default agent — {{value0}}",
+            "title": "Default Agent",
+            "blankTerminal": "No agent (blank terminal)",
+            "settings": "Agent settings…"
           }
         }
       },
