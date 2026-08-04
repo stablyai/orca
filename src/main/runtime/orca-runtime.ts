@@ -27879,7 +27879,7 @@ export class OrcaRuntimeService {
       if (meta.hostId ? meta.hostId !== expectedHostId : repoOwnerCount > 1) {
         continue
       }
-      // Why: mirror worktrees:list's disconnected-SSH fallback — keep persisted rows while a scan is unreachable or stalled instead of zero rows.
+      // Why: keep persisted rows for any repo kind while its scan is unreachable or stalled, instead of zero rows (worktrees:list does the same for disconnected SSH).
       byWorktreeId.set(worktreeId, {
         path: parsed.worktreePath,
         head: '',
