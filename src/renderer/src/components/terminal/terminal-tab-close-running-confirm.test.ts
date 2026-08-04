@@ -152,7 +152,7 @@ describe('closeTerminalTab running-process confirmation', () => {
   })
 
   it('stays fully synchronous for a tab with no live pty', () => {
-    getStateMock.mockReturnValue(busyTabState({ ptyIdsByTabId: {} }))
+    getStateMock.mockReturnValue(busyTabState({ ptyIdsByTabId: {}, terminalLayoutsByTabId: {} }))
 
     closeTerminalTab('tab-busy')
 

@@ -2,6 +2,7 @@ import { useAppStore } from '@/store'
 import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
 import { useRunningTerminalCloseConfirmStore } from '@/store/running-terminal-close-confirm'
 import type { TerminalTabCloseReason } from '@/store/slices/terminal-tab-retirement'
+import type { AppState } from '@/store/types'
 import { resolveBusyPtyCloseCopyKind } from './terminal-close-copy-kind'
 
 export type RunningTerminalCloseGuardOptions = {
@@ -37,6 +38,30 @@ export function shouldConfirmRunningTerminalClose(
   return isUserReason(options?.reason) && isUserReason(options?.hostCloseReason)
 }
 
+/** Every PTY the tab could still own. `ptyIdsByTabId` is the liveness map the rest of the
+ *  app reads, but a mounting pane is bound into the layout before the map catches up, and
+ *  the store's own teardown collector unions both for exactly that reason — reading only
+ *  the map would let a close slip through the window with no prompt. A stale id costs
+ *  nothing: its probe fails and the guard falls open. */
+function collectTabPtyIds(
+  state: Pick<AppState, 'ptyIdsByTabId' | 'terminalLayoutsByTabId'>,
+  terminalTabId: string
+): string[] {
+  const ptyIds = new Set<string>()
+  for (const ptyId of state.ptyIdsByTabId?.[terminalTabId] ?? []) {
+    if (ptyId) {
+      ptyIds.add(ptyId)
+    }
+  }
+  const ptyIdsByLeafId = state.terminalLayoutsByTabId?.[terminalTabId]?.ptyIdsByLeafId ?? {}
+  for (const ptyId of Object.values(ptyIdsByLeafId)) {
+    if (typeof ptyId === 'string' && ptyId) {
+      ptyIds.add(ptyId)
+    }
+  }
+  return [...ptyIds]
+}
+
 /**
  * Routes an interactive terminal-tab close through the running-process confirmation.
  * Closes immediately when nothing is running, so idle tabs keep today's behavior.
@@ -50,10 +75,10 @@ export function guardRunningTerminalClose(params: {
   const { terminalTabId, tabLabel, onClose, onCancel } = params
   const state = useAppStore.getState()
   const settings = state.settings
-  const ptyIds = state.ptyIdsByTabId?.[terminalTabId] ?? []
-  // Why: no live PTY id means there is nothing to probe (parked/hibernated tab, or an SSH
-  // drop that already zeroed the map), and the opt-out setting means the answer is already
-  // known. Both keep the close fully synchronous.
+  const ptyIds = collectTabPtyIds(state, terminalTabId)
+  // Why: no PTY at all means there is nothing to probe (parked/hibernated tab, or a
+  // teardown that already cleared both maps), and the opt-out setting means the answer is
+  // already known. Both keep the close fully synchronous.
   if (ptyIds.length === 0 || settings?.skipCloseTerminalWithRunningProcessConfirm === true) {
     onClose()
     return

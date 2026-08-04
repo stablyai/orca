@@ -1,4 +1,3 @@
-import { useRef } from 'react'
 import { useAppStore } from '@/store'
 import { useRunningTerminalCloseConfirmStore } from '@/store/running-terminal-close-confirm'
 import CloseTerminalDialog from './CloseTerminalDialog'
@@ -23,20 +22,14 @@ export default function RunningTerminalCloseDialog(): React.JSX.Element {
   // so both can be pending at once. Wait rather than stack two modal overlays and focus traps.
   const pinnedRequest = useAppStore((state) => state.pinnedTabCloseConfirm)
 
-  // Why: a queued request reuses the open dialog, so remount on tab change to clear the
-  // previous tab's "don't ask again" tick. Held across close so the exit animation keeps
-  // the same element.
-  const dialogKeyRef = useRef('idle')
-  if (request) {
-    dialogKeyRef.current = request.terminalTabId
-  }
-
   return (
     <CloseTerminalDialog
-      key={dialogKeyRef.current}
       open={request !== null && pinnedRequest === null}
       copyKind={request?.copyKind ?? 'command'}
       {...(request?.tabLabel ? { tabLabel: request.tabLabel } : {})}
+      // Why: a queued request swaps tabs in the already-open dialog, so the reopen reset
+      // never runs; naming the subject is what clears the previous tab's opt-out tick.
+      {...(request ? { subjectKey: request.terminalTabId } : {})}
       onCancel={dismissClose}
       onConfirm={(dontAskAgain) => {
         if (dontAskAgain) {

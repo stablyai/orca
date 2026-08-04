@@ -91,13 +91,34 @@ describe('guardRunningTerminalClose', () => {
   })
 
   it('closes synchronously and never probes when the tab has no live pty', () => {
-    setState({ ptyIdsByTabId: {} })
+    setState({ ptyIdsByTabId: {}, terminalLayoutsByTabId: {} })
     const onClose = vi.fn()
 
     guard(onClose)
 
     expect(onClose).toHaveBeenCalledTimes(1)
     expect(inspectRuntimeTerminalProcessMock).not.toHaveBeenCalled()
+  })
+
+  // Why: a mounting pane is bound into the layout before ptyIdsByTabId catches up. Reading
+  // only the liveness map would let a close slip through that window with no prompt.
+  it('prompts for a pane the layout has bound but the liveness map has not', async () => {
+    setState({ ptyIdsByTabId: { 'tab-1': [] } })
+    const onClose = vi.fn()
+
+    guard(onClose)
+    await settleProbe()
+
+    expect(inspectRuntimeTerminalProcessMock).toHaveBeenCalledWith(expect.anything(), 'pty-a')
+    expect(onClose).not.toHaveBeenCalled()
+    expect(visibleRequest()).toMatchObject({ terminalTabId: 'tab-1' })
+  })
+
+  it('probes each pty once when the map and the layout name the same one', async () => {
+    guard()
+    await settleProbe()
+
+    expect(inspectRuntimeTerminalProcessMock).toHaveBeenCalledTimes(1)
   })
 
   it('closes without probing when the user turned the prompt off', () => {
@@ -370,16 +391,19 @@ describe('guardRunningTerminalClose', () => {
     expect(visibleRequest()).toBeNull()
   })
 
-  // Why: an SSH drop zeroes ptyIdsByTabId while the remote command keeps running. We
-  // accept the silent close (there is nothing left to probe) rather than blocking closes
-  // on a dead link — documented here so the behavior is a decision, not an accident.
-  it('closes a reconnecting ssh tab whose pty ids were already zeroed', () => {
+  // Why: an SSH drop zeroes ptyIdsByTabId while the layout still names the pane. The stale
+  // binding is probed, that probe fails on the dead link, and the close falls open — so a
+  // reconnecting tab stays closable instead of being blocked behind a prompt for a pty
+  // nobody can reach. Documented so the behavior is a decision, not an accident.
+  it('closes a reconnecting ssh tab whose pty ids were already zeroed', async () => {
     setState({ ptyIdsByTabId: { 'tab-1': [] } })
+    inspectRuntimeTerminalProcessMock.mockRejectedValue(new Error('ssh_disconnected'))
     const onClose = vi.fn()
 
     guard(onClose)
+    await settleProbe()
 
     expect(onClose).toHaveBeenCalledTimes(1)
-    expect(inspectRuntimeTerminalProcessMock).not.toHaveBeenCalled()
+    expect(visibleRequest()).toBeNull()
   })
 })

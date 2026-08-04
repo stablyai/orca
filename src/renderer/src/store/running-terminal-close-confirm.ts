@@ -50,9 +50,23 @@ export const useRunningTerminalCloseConfirmStore = create<RunningTerminalCloseCo
   get
 ) => {
   const queuedRequests: RunningTerminalCloseConfirmRequest[] = []
+  // Why: a queued request replaces the visible one in place, so a double-click or held
+  // Enter meant for the tab the user was looking at would land on the next tab's prompt and
+  // kill a second running process unseen. Matches the sibling pinned-tab confirmation.
+  const INTER_REQUEST_ACTION_GUARD_MS = 350
+  let nextRequestActionAllowedAt = 0
 
-  const advanceRequest = (): void => {
-    set({ runningTerminalCloseConfirm: queuedRequests.shift() ?? null })
+  /** Reveals the next queued request, and reports whether one took the visible slot. */
+  const advanceRequest = (): boolean => {
+    const next = queuedRequests.shift() ?? null
+    set({ runningTerminalCloseConfirm: next })
+    return next !== null
+  }
+
+  const guardNextAction = (revealedNextRequest: boolean): void => {
+    if (revealedNextRequest) {
+      nextRequestActionAllowedAt = Date.now() + INTER_REQUEST_ACTION_GUARD_MS
+    }
   }
 
   return {
@@ -84,18 +98,22 @@ export const useRunningTerminalCloseConfirmStore = create<RunningTerminalCloseCo
 
     confirmRunningTerminalClose: () => {
       const request = get().runningTerminalCloseConfirm
-      if (!request) {
+      if (!request || Date.now() < nextRequestActionAllowedAt) {
         return
       }
       // Why: advance before running onConfirm so a re-entrant close queues behind the
       // next real request instead of seeing the stale one.
-      advanceRequest()
+      guardNextAction(advanceRequest())
       request.onConfirm()
     },
 
     confirmAllRunningTerminalCloses: () => {
+      if (Date.now() < nextRequestActionAllowedAt) {
+        return
+      }
       const pending = [get().runningTerminalCloseConfirm, ...queuedRequests.splice(0)]
       set({ runningTerminalCloseConfirm: null })
+      // No guard to arm: the queue is empty, so there is no next prompt to mis-click.
       for (const request of pending) {
         request?.onConfirm()
       }
@@ -103,10 +121,10 @@ export const useRunningTerminalCloseConfirmStore = create<RunningTerminalCloseCo
 
     dismissRunningTerminalClose: () => {
       const request = get().runningTerminalCloseConfirm
-      if (!request) {
+      if (!request || Date.now() < nextRequestActionAllowedAt) {
         return
       }
-      advanceRequest()
+      guardNextAction(advanceRequest())
       // Why: callers such as the tab-group model resume their own cleanup on cancel.
       request.onCancel?.()
     }

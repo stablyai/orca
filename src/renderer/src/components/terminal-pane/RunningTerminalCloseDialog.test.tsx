@@ -14,6 +14,14 @@ import RunningTerminalCloseDialog from './RunningTerminalCloseDialog'
 const initialState = useAppStore.getInitialState()
 const mountedRoots: Root[] = []
 
+// The store holds off any action for 350 ms after a queued request replaces the visible
+// one, so these tests drive a clock instead of racing it.
+let clock = 1_000
+
+function advancePastGuard(): void {
+  clock += 400
+}
+
 async function renderDialog(
   request: Partial<RunningTerminalCloseConfirmRequest> & { onConfirm: () => void },
   updateSettings: AppState['updateSettings']
@@ -57,12 +65,18 @@ function getCheckbox(): HTMLButtonElement {
 describe('RunningTerminalCloseDialog', () => {
   beforeEach(() => {
     useAppStore.setState(initialState, true)
+    // Monotonic across tests: the store is a singleton, so winding the clock back would
+    // leave a previous test's guard deadline in the future and block every action.
+    clock += 10_000
+    vi.spyOn(Date, 'now').mockImplementation(() => clock)
   })
 
   afterEach(async () => {
     while (useRunningTerminalCloseConfirmStore.getState().runningTerminalCloseConfirm !== null) {
+      advancePastGuard()
       useRunningTerminalCloseConfirmStore.getState().dismissRunningTerminalClose()
     }
+    vi.mocked(Date.now).mockRestore()
     await act(async () => {
       for (const root of mountedRoots.splice(0)) {
         root.unmount()
@@ -160,6 +174,7 @@ describe('RunningTerminalCloseDialog', () => {
     expect(document.body.textContent).toContain('build watcher')
     expect(getCheckbox().getAttribute('data-state')).toBe('unchecked')
 
+    advancePastGuard()
     await act(async () => {
       getButton('Stop and Close').click()
     })
@@ -222,6 +237,7 @@ describe('RunningTerminalCloseDialog', () => {
     expect(onConfirm).not.toHaveBeenCalled()
     expect(document.body.textContent).toContain('build watcher')
 
+    advancePastGuard()
     await act(async () => {
       getButton('Stop and Close').click()
     })
