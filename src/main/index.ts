@@ -2,7 +2,7 @@
 import { existsSync, statSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
 import os from 'node:os'
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, type Tray } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, powerMonitor, type Tray } from 'electron'
 import { initTccPromptNotice, stopTccPromptNotice } from './macos-tcc-prompt-notice'
 import { electronApp, is } from '@electron-toolkit/utils'
 import {
@@ -2897,6 +2897,9 @@ void app.whenReady().then(async () => {
         provisionRelay: (context, params) => relayService.provisionRelay(context, params)
       })
       relayService.start()
+      // Why: sleeping past relay-token expiry kills the broker with no retry
+      // timer; resume is the moment that state becomes recoverable.
+      powerMonitor.on('resume', () => desktopRelayService?.ensureLive())
     } catch (error) {
       console.warn(
         '[relay] Desktop relay startup unavailable:',
