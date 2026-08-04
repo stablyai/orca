@@ -675,4 +675,32 @@ describe('GitLab IPC handlers', () => {
       localGitOptions
     )
   })
+
+  // Regression for #7732: raw CI traces routinely exceed the 1 MB runtime transport
+  // frame cap, so the Checks panel opts into a main-side excerpt.
+  it('bounds the job trace in main when the caller asks for a log excerpt', async () => {
+    const noisyTrace = [
+      'section_start:1699000000:build\r\u001b[0K$ pnpm build',
+      ...Array.from({ length: 400 }, (_, index) => `line ${index}`),
+      '\u001b[0;31mERROR: Job failed: exit code 1\u001b[0m'
+    ].join('\n')
+    getJobTraceMock.mockResolvedValue({ ok: true, trace: noisyTrace })
+    registerGitLabHandlers(storeWithRepos([repo()]) as Store)
+
+    const raw = (await ipcHandlers.get('gitlab:jobTrace')?.(null, {
+      repoPath: '/local/orca',
+      jobId: 99
+    })) as { ok: true; trace: string }
+    const excerpt = (await ipcHandlers.get('gitlab:jobTrace')?.(null, {
+      repoPath: '/local/orca',
+      jobId: 99,
+      logExcerpt: true
+    })) as { ok: true; trace: string }
+
+    expect(raw.trace).toBe(noisyTrace)
+    expect(excerpt.trace).toContain('ERROR: Job failed: exit code 1')
+    expect(excerpt.trace).not.toContain('section_start')
+    expect(excerpt.trace).not.toContain('line 0\n')
+    expect(excerpt.trace.length).toBeLessThan(noisyTrace.length)
+  })
 })

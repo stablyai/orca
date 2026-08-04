@@ -556,6 +556,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
         }
         writeJson(UI_STORAGE_KEY, mergeWebUIState(readLocalWebUIState(), ui))
       },
+      // Staging already wrote through to browser storage, so there is nothing left to join.
+      awaitBeforeUnloadCheckpoint: () => Promise.resolve(),
       awaitFirstWindowStartupServices: () => Promise.resolve(),
       recoverLegacyWorkerTerminalsForRendererStartup: () => Promise.resolve(),
       startupDiagnostic: () => Promise.resolve(),
@@ -1530,6 +1532,10 @@ function createAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault']> {
         executionHostId
       })
     },
+    // Why: the runtime RPC transport has no cancel verb, so the in-flight scan
+    // settles on its own timeout. The renderer's refreshId guard already drops
+    // the late result; this only means web pays for a scan nobody reads.
+    cancelListSessions: () => Promise.resolve(),
     prepareSessionResume: (args: AiVaultPrepareSessionResumeArgs) =>
       callRuntimeResult<AiVaultPrepareSessionResumeResult>('aiVault.prepareSessionResume', args),
     // Why: no server-side RPC for subagent transcript listing yet, so report an empty (not erroring) result.
@@ -2196,6 +2202,8 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
 function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> {
   return {
     registerGuest: () => Promise.resolve(false),
+    isGuestRegistered: () => Promise.resolve(false),
+    repairGuestRegistration: () => Promise.resolve(false),
     unregisterGuest: () => Promise.resolve(),
     openDevTools: () => Promise.resolve(false),
     setViewportOverride: () => Promise.resolve(false),
@@ -3244,6 +3252,15 @@ function createSshApi(): NonNullable<Partial<PreloadApi>['ssh']> {
       Promise.reject(new Error('SSH target management is unavailable in the web client.')),
     removeTarget: () => Promise.resolve(),
     importConfig: () => Promise.resolve({ targets: [], repoReadoptions: [] }),
+    listConfigHosts: () =>
+      Promise.resolve({
+        hosts: [],
+        totalHostCount: 0,
+        newHostCount: 0,
+        matchCount: 0,
+        hasMore: false
+      }),
+    resolveConfigHost: () => Promise.resolve(null),
     connect: async (args) => {
       const { state } = await callRuntimeResult<{ state: SshConnectionState | null }>(
         'ssh.connect',

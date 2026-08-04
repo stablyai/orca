@@ -1,4 +1,8 @@
 import { execFile, execFileSync } from 'node:child_process'
+import {
+  expandWindowsEnvironmentVariables,
+  expandWindowsPathEnvironmentVariables
+} from '../../shared/windows-environment-expansion'
 import { getRegExePath } from '../win32-utils'
 
 type ExecFile = typeof execFile
@@ -42,14 +46,6 @@ function parseRegistryPathValue(output: string, valueName: string): string | nul
     }
   }
   return null
-}
-
-function expandWindowsEnvironmentVariables(value: string, env: NodeJS.ProcessEnv): string {
-  return value.replace(/%([^%]+)%/g, (match, rawName: string) => {
-    const name = rawName.toLowerCase()
-    const envKey = Object.keys(env).find((key) => key.toLowerCase() === name)
-    return envKey && env[envKey] ? env[envKey] : match
-  })
 }
 
 function getPathDelimiter(platform: NodeJS.Platform): string {
@@ -240,15 +236,43 @@ export function __resetPersistedWindowsPathCacheForTests(): void {
   pendingPersistedWindowsPathRefresh = undefined
 }
 
+/** Resolves the first PATH key a Windows child reads from an env block. */
+export function resolvePathEnvKey(
+  env: NodeJS.ProcessEnv | Record<string, string | undefined>,
+  platform: NodeJS.Platform,
+  hostEnv: NodeJS.ProcessEnv = process.env
+): string {
+  if (platform !== 'win32') {
+    return 'PATH'
+  }
+  // Why: the daemon receives a sparse env patch and re-merges its own block underneath it;
+  // matching the block's spelling stops that merge from resurrecting the other one.
+  return firstWindowsPathEnvKey(env) ?? firstWindowsPathEnvKey(hostEnv) ?? 'Path'
+}
+
+// Why: Win32 resolves the first case-insensitive key, and object order preserves block order.
+function firstWindowsPathEnvKey(
+  env: NodeJS.ProcessEnv | Record<string, string | undefined>
+): string | undefined {
+  for (const key of Object.keys(env)) {
+    if (key.toLowerCase() === 'path' && env[key] !== undefined) {
+      return key
+    }
+  }
+  return undefined
+}
+
 function mergeWindowsPathSegments(
   env: NodeJS.ProcessEnv,
   persistedSegments: string[],
   platform: NodeJS.Platform,
   sourceEnv: NodeJS.ProcessEnv
 ): void {
-  const pathKey = env.Path !== undefined ? 'Path' : env.PATH !== undefined ? 'PATH' : 'Path'
+  expandWindowsPathEnvironmentVariables(env, platform)
+  const pathKey = resolvePathEnvKey(env, platform, sourceEnv)
   const pathDelimiter = getPathDelimiter(platform)
-  const currentPath = env[pathKey] ?? sourceEnv.PATH ?? sourceEnv.Path ?? ''
+  const currentPath =
+    env[pathKey] ?? expandWindowsEnvironmentVariables(sourceEnv[pathKey] ?? '', sourceEnv)
   const currentSegments = splitPathSegments(currentPath, pathDelimiter)
   const existing = new Set(currentSegments.map((segment) => segment.toLowerCase()))
   const missing = persistedSegments.filter((segment) => {

@@ -224,6 +224,25 @@ describe('LocalPtyProvider', () => {
       expect(typeof result.id).toBe('string')
     })
 
+    it('expands variables in PATH before spawning a Windows shell', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\repo',
+        env: {
+          ORCA_AGENT_TEAMS_TEAM_ID: 'team-test',
+          ORCA_PATH_ROOT: 'C:\\Users\\orca\\AppData\\Local',
+          PATH: '%orca_path_root%\\agy\\bin;C:\\Windows'
+        }
+      })
+
+      expect(spawnMock.mock.calls.at(-1)?.[2].env.PATH).toBe(
+        'C:\\Users\\orca\\AppData\\Local\\agy\\bin;C:\\Windows'
+      )
+    })
+
     it('reattaches to an existing caller-supplied session id without spawning', async () => {
       const first = await provider.spawn({ cols: 80, rows: 24, sessionId: 'serve-session-1' })
       spawnMock.mockClear()
@@ -236,6 +255,55 @@ describe('LocalPtyProvider', () => {
         isReattach: true
       })
       expect(mockProc.resize).toHaveBeenCalledWith(120, 40)
+      expect(spawnMock).not.toHaveBeenCalled()
+    })
+
+    it('attaches only to an existing stable session', async () => {
+      await provider.spawn({ cols: 80, rows: 24, sessionId: 'stable-pane-session' })
+      spawnMock.mockClear()
+
+      const result = await provider.spawn({
+        cols: 120,
+        rows: 40,
+        sessionId: 'stable-pane-session',
+        attachOnly: true
+      })
+
+      expect(result).toMatchObject({ id: 'stable-pane-session', isReattach: true })
+      expect(spawnMock).not.toHaveBeenCalled()
+    })
+
+    it('does not create when an attach-only stable session is absent', async () => {
+      await expect(
+        provider.spawn({
+          cols: 80,
+          rows: 24,
+          sessionId: 'missing-stable-pane-session',
+          attachOnly: true
+        })
+      ).rejects.toThrow('Session not found: missing-stable-pane-session')
+      expect(spawnMock).not.toHaveBeenCalled()
+    })
+
+    it('attaches only to an existing numeric provider session', async () => {
+      const first = await provider.spawn({ cols: 80, rows: 24 })
+      spawnMock.mockClear()
+
+      const result = await provider.spawn({
+        cols: 120,
+        rows: 40,
+        sessionId: first.id,
+        attachOnly: true
+      })
+
+      expect(result).toMatchObject({ id: first.id, isReattach: true })
+      expect(spawnMock).not.toHaveBeenCalled()
+    })
+
+    it('does not create when a numeric attach-only provider session is absent', async () => {
+      await expect(
+        provider.spawn({ cols: 80, rows: 24, sessionId: '404', attachOnly: true })
+      ).rejects.toThrow('Session not found: 404')
       expect(spawnMock).not.toHaveBeenCalled()
     })
 
@@ -735,6 +803,31 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[1]).toEqual(['-l'])
       expect(spawnCall[2].env.ZDOTDIR).toMatch(/shell-ready[\\/]zsh/)
       expect(spawnCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
+    })
+
+    it('promotes the agent-teams shim onto the Windows `Path` spelling', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      provider.configure({
+        buildSpawnEnv: (_id, env) => {
+          // Why: attribution collapses Windows PATH onto `Path` and prepends its own shim dir.
+          delete env.PATH
+          env.Path = `/tmp/orca-attribution:${env.Path ?? ''}`
+          return env
+        }
+      })
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        env: {
+          Path: '/tmp/orca-agent-teams-bin:/usr/bin',
+          ORCA_AGENT_TEAMS_TEAM_ID: 'team-test'
+        }
+      })
+
+      const spawnEnv = spawnMock.mock.calls.at(-1)![2].env
+      expect(Object.keys(spawnEnv).filter((key) => /^path$/i.test(key))).toEqual(['Path'])
+      expect(spawnEnv.Path.split(':')[0]).toBe('/tmp/orca-agent-teams-bin')
     })
 
     it('does not pass a Windows Codex home into WSL terminals', async () => {

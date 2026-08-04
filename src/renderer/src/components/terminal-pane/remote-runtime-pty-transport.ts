@@ -187,6 +187,9 @@ export function createRemoteRuntimePtyTransport(
   let recoveryReplacementPolicy: HostHandleReplacementPolicy = 'reuse'
   let recoveryReplacementPolicyHandle: string | null = null
   let stopWaitingForPublishedHandle: (() => void) | null = null
+  let publishedHandleWaitEpoch: number | null = null
+  // Why: a spent auto-recovery window is the evidence that licenses reattaching the fenced handle; explicit retries must not erase it.
+  let autoRecoveryWindowSpent = false
   let settleHostSessionAttachRetry: ((retry: boolean) => void) | null = null
   let resubscribeInventoryEpoch: number | null = null
   let resubscribeInventoryWindows = 0
@@ -236,11 +239,17 @@ export function createRemoteRuntimePtyTransport(
   }
 
   const recovery = new RemoteRuntimePtyRecoveryState(() => {
-    if (recovery.currentPhase === 'disconnected') {
+    if (recovery.currentPhase === 'disposed') {
       clearPublishedHandleWait()
+    }
+    if (recovery.currentPhase === 'disconnected') {
+      autoRecoveryWindowSpent = true
       // Why: cached pixels may remain, but no stream from the exhausted epoch may keep delivering or accepting terminal traffic.
       subscriptionGeneration += 1
       closeMultiplexedStream()
+    }
+    if (recovery.currentPhase === 'idle') {
+      autoRecoveryWindowSpent = false
     }
     if (
       recovery.currentPhase === 'disconnected' ||
@@ -430,7 +439,7 @@ export function createRemoteRuntimePtyTransport(
     result: RemoteAgentSessionLaunchResult,
     environmentId: string
   ): boolean {
-    if (result.disposition !== undefined) {
+    if (result.disposition !== undefined || result.terminal.isReattach === true) {
       // Why: every structured launch is host-owned; provisional teardown must
       // never close its canonical terminal while snapshot reconciliation catches up.
       return true
@@ -562,11 +571,16 @@ export function createRemoteRuntimePtyTransport(
         if (settleHostSessionAttachRetry === settle) {
           settleHostSessionAttachRetry = null
         }
+        // Why: this wait is single-shot, so replaying it after the cutoff would strand the pane in 'recovering' with no RPC in flight.
+        recovery.discardPendingRetry(scheduledRetry)
         resolve(retry)
+      }
+      const scheduledRetry = (): void => {
+        settle(true)
       }
       settleHostSessionAttachRetry?.(false)
       settleHostSessionAttachRetry = settle
-      if (!recovery.schedule(recoveryEpoch, () => settle(true))) {
+      if (!recovery.schedule(recoveryEpoch, scheduledRetry)) {
         settle(false)
       }
     })
@@ -1257,6 +1271,7 @@ export function createRemoteRuntimePtyTransport(
   function clearPublishedHandleWait(): void {
     stopWaitingForPublishedHandle?.()
     stopWaitingForPublishedHandle = null
+    publishedHandleWaitEpoch = null
   }
 
   function isCurrentRemoteTerminal(targetHandle: string, targetPtyId: string | null): boolean {
@@ -1329,8 +1344,29 @@ export function createRemoteRuntimePtyTransport(
           retireRemoteTerminalId()
           return
         }
-        if (!update.terminalHandle || update.terminalHandle === previousHandle) {
+        if (!update.terminalHandle) {
           return
+        }
+        if (update.terminalHandle === previousHandle) {
+          // Why: once the auto-recovery window is spent, a host still publishing this surface is evidence the fenced handle outlived the stale error.
+          if (!autoRecoveryWindowSpent || getCurrentMultiplexedStream(previousHandle)) {
+            return
+          }
+          // Why: one reattach per spent window, so a handle that really is dead is not retried on every host snapshot.
+          autoRecoveryWindowSpent = false
+          const reattachEpoch = recovery.begin()
+          clearPublishedHandleWait()
+          const reusedPtyId = remotePtyId
+          void subscribeToHandle(reattachEpoch, true).catch((error) => {
+            if (!recoverAfterSubscribeFailure(error, previousHandle, reusedPtyId)) {
+              handleRemoteTerminalError(error)
+            }
+          })
+          return
+        }
+        if (recovery.currentPhase === 'disconnected') {
+          // Why: without a live epoch a failed resubscribe is swallowed as already-latched, leaving a pane with no handle and no way back.
+          recovery.begin()
         }
         rebindRemoteTerminalHandle(update.terminalHandle)
         const reboundHandle = handle
@@ -1440,6 +1476,13 @@ export function createRemoteRuntimePtyTransport(
             code: 'remote_runtime_unavailable'
           })
         }
+        // Why: liveness is unknown, so auto-retry stops here; keep an unarmed retry parked for online/resume/reconnect to fire.
+        recovery.parkRetryForExternalTrigger(recoveryEpoch, (nextEpoch) => {
+          scheduleResubscribeAfterTransportClose(
+            handle ? getRecoveryReplacementPolicy(handle) : 'reuse',
+            nextEpoch
+          )
+        })
         return
       }
       if (!nextHandle) {
@@ -1507,8 +1550,12 @@ export function createRemoteRuntimePtyTransport(
       clearPendingViewportClaim()
     }
     strengthenRecoveryReplacementPolicy(handle, replacementPolicy)
-    if (replacementPolicy === 'require-replacement' && stopWaitingForPublishedHandle) {
-      // Why: once recovery is handed to accepted snapshots, repeated sends to the stale handle must not re-arm inventory RPCs.
+    if (
+      replacementPolicy === 'require-replacement' &&
+      stopWaitingForPublishedHandle &&
+      // Why: only the epoch that handed recovery to accepted snapshots is blocked; a newer epoch is a fresh attempt, not a repeated stale send.
+      publishedHandleWaitEpoch === recoveryEpoch
+    ) {
       return
     }
     if (resubscribeEpoch === recoveryEpoch) {
@@ -1529,6 +1576,7 @@ export function createRemoteRuntimePtyTransport(
     if (tabId && isWebTerminalSurfaceTabId(tabId)) {
       // Why: subscribe before polling so a fresh host snapshot can't land in the gap between the inventory loop and its event-driven fallback.
       waitForPublishedHostSessionHandle(toHostSessionTabId(tabId), resubscribeHandle)
+      publishedHandleWaitEpoch = recoveryEpoch
     }
     resubscribeEpoch = recoveryEpoch
     resubscribeRequestedHandle = null
@@ -1968,6 +2016,9 @@ export function createRemoteRuntimePtyTransport(
         }
         handle = createdTerminal.handle
 
+        if (createdTerminal.isReattach === true) {
+          storedCallbacks.onReattachDetermined?.()
+        }
         remotePtyId = toRemoteRuntimePtyId(handle, currentRuntimeEnvironmentId)
         registerShutdownHandlers(remotePtyId)
         connected = true
@@ -1975,7 +2026,9 @@ export function createRemoteRuntimePtyTransport(
           cols: options.cols ?? 80,
           rows: options.rows ?? 24
         }
-        onPtySpawn?.(remotePtyId)
+        if (createdTerminal.isReattach !== true) {
+          onPtySpawn?.(remotePtyId)
+        }
         emitRecoveryState()
 
         try {
@@ -1991,7 +2044,8 @@ export function createRemoteRuntimePtyTransport(
 
         return {
           id: remotePtyId,
-          replay: ''
+          replay: '',
+          ...(createdTerminal.isReattach === true ? { isReattach: true } : {})
         } satisfies PtyConnectResult
       } catch (error) {
         if (!destroyed && lifecycleEpoch === connectLifecycleEpoch) {

@@ -1,5 +1,6 @@
 import { encodePowerShellCommand } from './powershell-command-encoding'
 import {
+  nativeWindowsPathToPosixShellPath,
   resolveSetupRunnerCommand,
   type SetupRunnerCommandPlatform,
   type SetupRunnerCommandShell,
@@ -41,12 +42,20 @@ export function createSequencedSetupAgentCommands(args: {
 }): SequencedSetupAgentCommands {
   const nonce = args.nonce ?? createSetupAgentSequenceNonce()
   const resolution = resolveSetupRunnerCommand(args.runnerScriptPath, args.platform, args.shell)
+  // Why: the gate is typed into the terminal pane and `startupCommand` is already quoted for that
+  // pane, so a batch runner launched from a Git Bash pane still needs the bash gate — PowerShell's
+  // `Invoke-Expression` cannot parse the POSIX `'\''` escaping the pane's quoting produces. The
+  // runner itself still launches through `resolution.command`, never through bash.
+  const posixGateForWindowsRunner = resolution.shell === 'windows' && args.shell?.family === 'posix'
+  const markerBasePath = posixGateForWindowsRunner
+    ? nativeWindowsPathToPosixShellPath(resolution.runnerScriptPathForShell)
+    : resolution.runnerScriptPathForShell
   // Why: overlapping gated launches of the same setup runner must not race on
   // a shared completion marker.
-  const markerPath = `${resolution.runnerScriptPathForShell}.${nonce}.done`
+  const markerPath = `${markerBasePath}.${nonce}.done`
   const waitTimeoutSeconds = args.waitTimeoutSeconds ?? DEFAULT_WAIT_TIMEOUT_SECONDS
 
-  if (resolution.shell === 'windows') {
+  if (resolution.shell === 'windows' && !posixGateForWindowsRunner) {
     return {
       setupCommand: buildWindowsSetupCommand(
         resolution.runnerScriptPathForShell,

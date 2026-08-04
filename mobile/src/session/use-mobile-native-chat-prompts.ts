@@ -19,15 +19,18 @@ export function useMobileNativeChatPrompts(args: {
 }): MobileNativeChatPrompts {
   const { enabled, status, messages } = args
   const blocked = status?.state === 'waiting' || status?.state === 'blocked'
+  // Both permission paths sit inside the paused gate: an approval envelope can
+  // outlive its answer (the host keeps it sticky), so only a waiting/blocked
+  // agent may surface it — never a working or done one (STA-3144).
   const permission =
-    (blocked && status
-      ? detectAgentPermission({
+    blocked && status
+      ? (detectAgentPermission({
           state: status.state,
           lastAssistantMessage: status.lastAssistantMessage,
           toolName: status.toolName,
           toolInput: status.toolInput
-        })
-      : null) ?? parseApprovalFromStatus(status?.interactivePrompt)
+        }) ?? parseApprovalFromStatus(status.interactivePrompt))
+      : null
   const question =
     blocked && status && !permission ? parseAgentQuestion(status.lastAssistantMessage ?? '') : null
   const askFromStatus = useMemo(

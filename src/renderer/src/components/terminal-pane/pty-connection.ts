@@ -5,6 +5,7 @@ import type { IBuffer, IDisposable } from '@xterm/xterm'
 import { resolveCursorAgentImeAnchor } from '@/lib/pane-manager/terminal-ime-anchor'
 import { installTerminalImeCompositionRoute } from './terminal-ime-composition-route'
 import { detectAgentStatusFromTitle, agentTypeToIconAgent, isClaudeAgent } from '@/lib/agent-status'
+import { reportWorkerTerminalUserInput } from '@/lib/worker-terminal-takeover-report'
 import { resolvePaneTitleDecision } from './terminal-title-evidence'
 import { blocksCodexPaneInput } from '../codex-restart-notice-state'
 import { resolveLiveAgentStatusConnectionRouting } from '@/lib/agent-status-connection-ownership'
@@ -122,7 +123,7 @@ import {
   POST_REPLAY_REATTACH_RESET,
   RESET_KITTY_KEYBOARD_PROTOCOL,
   RESET_TERMINAL_CURSOR_STYLE
-} from './layout-serialization'
+} from '../../../../shared/terminal-mode-reset-profiles'
 import { buildFreshShellViewportBlankingSequence } from './terminal-restored-viewport'
 import { createShellReadyMarkerScanState, scanForShellReadyMarker } from './shell-ready-marker-scan'
 import { shouldUseShellReadyStartupDelivery } from '../../../../shared/codex-startup-delivery'
@@ -1267,6 +1268,8 @@ export function connectPanePty(
     })
     startupDraftDeliveryClaimed = false
   }
+  // Why: reserve before deferred connect so the creation sidecar cannot time out during setup and strand this pane's live scanner.
+  const ownsStartupDraftPaste = claimStartupDraftPasteDelivery()
   if (paneStartup?.launchConfig) {
     useAppStore.getState().registerAgentLaunchConfig(cacheKey, paneStartup.launchConfig, {
       agentType: paneStartup.launchAgent ?? paneStartup.initialAgentStatus?.agent,
@@ -1950,6 +1953,8 @@ export function connectPanePty(
     questionAnsweredInference.observeSentTerminalInput(data)
   }
   let pendingTerminalInputWrite: Promise<void> | null = null
+  let sequencedInterruptStatusBaseline: AgentStatusEntry | null | undefined
+  let interruptStatusBaselineSequence = 0
   const setPendingTerminalInputWrite = (promise: Promise<void>): void => {
     pendingTerminalInputWrite = promise
     void promise.finally(() => {
@@ -3007,7 +3012,7 @@ export function connectPanePty(
   // rings the bell. This is specific to terminals with cross-restart
   // persistence (as we have); our fix is to reset 1004 and friends after
   // scrollback replay so the mode state matches the fresh shell
-  // underneath. See POST_REPLAY_MODE_RESET in layout-serialization.ts.
+  // underneath. See POST_REPLAY_MODE_RESET in shared/terminal-mode-reset-profiles.ts.
   const onBell = (): void => {
     // Why: restored Claude Code sessions have been observed to emit a real
     // standalone BEL some time after daemon snapshot reattach, even when Orca
@@ -3684,9 +3689,14 @@ export function connectPanePty(
   // "input after done" forever. The core user-input signal fires only for real
   // input, so hibernation activity records from it; onData recording remains
   // solely as the fallback when the internal API is unavailable.
+  const recordRealUserTerminalInput = (): void => {
+    recordTerminalInputForHibernation()
+    // Takeover must never fire from the onData fallback below: it mixes in auto-replies.
+    reportWorkerTerminalUserInput(cacheKey, runtimeEnvironmentId)
+  }
   const userInputActivityDisposable = subscribeToTerminalUserInput(
     pane.terminal,
-    recordTerminalInputForHibernation
+    recordRealUserTerminalInput
   )
   const recordTerminalInputForHibernationFallback = (): void => {
     if (userInputActivityDisposable === null) {
@@ -4053,6 +4063,13 @@ export function connectPanePty(
     // excluded because those transports do not expose sendInputAccepted.
     const acknowledgedIntent = intent ?? inferIntentFromExactTerminalInput(data)
     if (acknowledgedIntent && transport.sendInputAccepted) {
+      const interruptStatusBaseline = useAppStore.getState().agentStatusByPaneKey[cacheKey] ?? null
+      // Why: equal snapshots retain double-Escape semantics while older snapshots lose ack races.
+      if (sequencedInterruptStatusBaseline !== interruptStatusBaseline) {
+        sequencedInterruptStatusBaseline = interruptStatusBaseline
+        interruptStatusBaselineSequence += 1
+      }
+      const capturedBaselineSequence = interruptStatusBaselineSequence
       claimViewportForUserActivity()
       if (acknowledgedIntent === 'ctrl-c') {
         // Why: the accepted-write callback is async; let the next command be
@@ -4068,7 +4085,11 @@ export function connectPanePty(
             markAcceptedTerminalInputSent()
             observeAcceptedShellCommandInput(data)
             observeAcceptedTerminalInput(data, acknowledgedIntent)
-            interruptInference.observeInputIntent(acknowledgedIntent)
+            interruptInference.observeInputIntent(
+              acknowledgedIntent,
+              interruptStatusBaseline,
+              capturedBaselineSequence
+            )
             observeTitleOnlyInterrupt()
           } else {
             // Why: Esc/Ctrl+C are the first keys users press on a frozen pane;
@@ -4700,7 +4721,6 @@ export function connectPanePty(
       }
       schedulePendingStartupCommandDelivery()
     }
-    const ownsStartupDraftPaste = claimStartupDraftPasteDelivery()
     const startupDraftReadyScanner = ownsStartupDraftPaste
       ? createDraftPasteReadyScanner(
           startupDraftAgentConfig?.draftPasteReadySignal ?? 'render-quiet-after-bracketed-paste'
@@ -5167,6 +5187,7 @@ export function connectPanePty(
       const trackedPromise: Promise<string | null> = Promise.resolve(spawnedRaw)
         .then(async (spawnedPtyId) => {
           if (outputCallbacks.generation !== transportStreamGeneration) {
+            finishReattachLiveDataDeferral(false, outputCallbacks.generation)
             const gen = await preSignalPromise
             if (typeof gen === 'number') {
               void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
@@ -5180,7 +5201,29 @@ export function connectPanePty(
                 ? spawnedPtyId
                 : transport.getPtyId()
           if (resolvedPtyId && !claimCapturedDirectSshRetryPty(resolvedPtyId)) {
+            finishReattachLiveDataDeferral(false, outputCallbacks.generation)
             return null
+          }
+          const connectResult =
+            spawnedPtyId && typeof spawnedPtyId === 'object' && 'id' in spawnedPtyId
+              ? spawnedPtyId
+              : null
+          if (connectResult?.isReattach) {
+            pendingStartupCommand = null
+            const accepted = await handleReattachResult(
+              connectResult,
+              null,
+              coldRestoreOverride,
+              outputCallbacks.generation
+            )
+            finishReattachLiveDataDeferral(accepted, outputCallbacks.generation)
+            const gen = await preSignalPromise
+            if (accepted && resolvedPtyId && typeof gen === 'number') {
+              void window.api.pty.settlePaneSerializer(cacheKey, gen).catch(() => {})
+            } else if (typeof gen === 'number') {
+              void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
+            }
+            return accepted ? resolvedPtyId : null
           }
           if (spawnedPtyId && typeof spawnedPtyId === 'object' && 'id' in spawnedPtyId) {
             registerEffectiveLaunchConfig(spawnedPtyId.launchConfig, {
@@ -5251,9 +5294,11 @@ export function connectPanePty(
           if (resolvedPtyId && connectionId) {
             schedulePendingStartupCommandDelivery()
           }
+          finishReattachLiveDataDeferral(Boolean(resolvedPtyId), outputCallbacks.generation)
           return resolvedPtyId
         })
         .catch(async () => {
+          finishReattachLiveDataDeferral(false, outputCallbacks.generation)
           if (paneStartup?.launchConfig || (startupOverride && 'launchConfig' in startupOverride)) {
             clearRegisteredStartupLaunchConfig()
           }
@@ -5447,7 +5492,15 @@ export function connectPanePty(
       })
     }
 
-    const reattachReplayResetSequence = (payload: string): string => {
+    const reattachReplayResetSequence = (payload: string, ownerProcessEnded = false): string => {
+      // Why a cold restore overrides the agent signal: liveness is read from the
+      // pane's status and title, both of which are persisted, so after a cold
+      // restore they describe the process that died. Preserving "its" modes arms
+      // mouse, focus and paste reporting against the fresh shell that replaces it,
+      // which then prints the reports as junk at the prompt (#12101).
+      if (ownerProcessEnded) {
+        return POST_REPLAY_MODE_RESET
+      }
       return shouldPreserveAgentReattachModes()
         ? buildPostReplayLiveAgentReattachReset(payload)
         : POST_REPLAY_REATTACH_RESET
@@ -5683,6 +5736,11 @@ export function connectPanePty(
       return {
         generation,
         callbacks: {
+          onReattachDetermined: (): void => {
+            if (isCurrent()) {
+              beginReattachLiveDataDeferralIfUnowned(generation)
+            }
+          },
           onConnect: (): void => {
             if (isCurrent()) {
               reportRemoteRendererSerializerReady()
@@ -7591,6 +7649,14 @@ export function connectPanePty(
       }
     }
 
+    const beginReattachLiveDataDeferralIfUnowned = (
+      ownerGeneration = transportStreamGeneration
+    ): void => {
+      if (!deferredReattachLiveDataOwners.has(ownerGeneration)) {
+        beginReattachLiveDataDeferral(ownerGeneration)
+      }
+    }
+
     const finishReattachLiveDataDeferral = (
       deliver: boolean,
       acceptedGeneration = transportStreamGeneration
@@ -7878,8 +7944,10 @@ export function connectPanePty(
           // Why: re-arm the kitty keyboard mirror from the snapshot preamble so Option chords keep their encoding after a window reload.
           kittyKeyboardModes.scanReplay(connectResult.snapshot)
           writeReplayData(connectResult.snapshot)
-          // Snapshot reattach keeps a live session, so drop only renderer-owned state instead of the broader mode reset.
-          writeReplayData(reattachReplayResetSequence(connectResult.snapshot))
+          // Snapshot reattach keeps a live session, so drop only renderer-owned state instead of the broader mode reset — unless this is a cold restore, whose owner is gone.
+          writeReplayData(
+            reattachReplayResetSequence(connectResult.snapshot, Boolean(connectResult.coldRestore))
+          )
           if (connectResult.pendingEscapeTailAnsi) {
             // Why last: re-arm the dangling mid-escape after the reset (whose ESC would abort it) so the live continuation completes it (#7329).
             writeReplayData(connectResult.pendingEscapeTailAnsi)
@@ -7932,7 +8000,9 @@ export function connectPanePty(
             for (const replayChunk of buildMainModelSnapshotReplayWrites(modelSnapshot)) {
               writeReplayData(replayChunk)
             }
-            writeReplayData(reattachReplayResetSequence(modelData))
+            writeReplayData(
+              reattachReplayResetSequence(modelData, Boolean(connectResult?.coldRestore))
+            )
             if (modelSnapshot.pendingEscapeTailAnsi) {
               // Why last: re-arm the dangling mid-escape after the reset so the live continuation completes it (#7329).
               writeReplayData(modelSnapshot.pendingEscapeTailAnsi)
@@ -7951,7 +8021,9 @@ export function connectPanePty(
             // Why: raw relay replay may contain the app's own kitty pushes; re-arm with set semantics so redelivery can't grow the stack.
             kittyKeyboardModes.scanReplay(connectResult.replay)
             writeReplayData(connectResult.replay)
-            writeReplayData(reattachReplayResetSequence(connectResult.replay))
+            writeReplayData(
+              reattachReplayResetSequence(connectResult.replay, Boolean(connectResult.coldRestore))
+            )
             sendFocusedReattachFocusInAfterReplay(ptyId, attemptGeneration)
             if (connectResult.coldRestore) {
               if (!isRemoteRuntimePtyId(ptyId)) {

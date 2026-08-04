@@ -1,5 +1,6 @@
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { terminalProviderHasAuthoritativeSnapshot } from '../terminal/terminal-provider-snapshot-capability'
 import {
   TERMINAL_WORKTREE_COLD_PARK_DELAY_MS,
   isSnapshotBackedTerminalPty,
@@ -41,10 +42,9 @@ export function hasPendingRetentionSpawnWork(
   return Boolean(tab.pendingActivationSpawn && (!tab.ptyId || !isRemoteRuntimePtyId(tab.ptyId)))
 }
 
-// Why: an eviction-exempt pty is a live local one a remount could not reattach
-// (daemon-fail-open separator-less ids, ptys minted under another worktree) — a
-// fresh spawn would orphan the live shell. Its TAB keeps its mounted pane when
-// the worktree force-parks (per-tab exclusion, mirroring Activity portals).
+// Why: an eviction-exempt pty is a live local one a remount cannot restore
+// faithfully (daemon-fail-open/foreign ids or a preserved legacy daemon). Its
+// TAB keeps its mounted pane when the worktree force-parks.
 // Per-PTY, not per-tab: the coverage veto that makes a worktree a retention
 // candidate walks every split pane, so the exemption must too (see
 // isEvictionExemptTerminalTab).
@@ -55,7 +55,10 @@ export function isEvictionExemptTerminalPty(
   if (!ptyId || isRemoteRuntimePtyId(ptyId) || parseAppSshPtyId(ptyId)) {
     return false
   }
-  return !isSnapshotBackedTerminalPty(ptyId, worktreeId)
+  return (
+    !isSnapshotBackedTerminalPty(ptyId, worktreeId) ||
+    !terminalProviderHasAuthoritativeSnapshot(ptyId)
+  )
 }
 
 export type TerminalWorktreeRetentionCandidate = {

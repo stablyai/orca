@@ -1,5 +1,9 @@
 import type { IPtyProvider } from '../providers/types'
-import { UNSTOPPED_PTY_REMOVAL_PREFIX } from '../../shared/worktree-removal'
+import {
+  UNSTOPPED_PTY_DETAIL_SEPARATOR,
+  UNSTOPPED_PTY_LIVE_DETAIL_PREFIX,
+  UNSTOPPED_PTY_REMOVAL_PREFIX
+} from '../../shared/worktree-removal'
 import { settleBeforeDeadline } from './settle-before-deadline'
 
 // Floor for the verification window when the sweep ran on a very short budget.
@@ -60,9 +64,21 @@ export function describeUnstoppedPtys(
 ): string {
   const detail =
     verdict.status === 'live'
-      ? `still live: ${verdict.ptyIds.join(', ')}`
+      ? `${UNSTOPPED_PTY_LIVE_DETAIL_PREFIX} ${verdict.ptyIds.join(', ')}`
       : `could not verify these exited: ${failedPtyIds.join(', ')} (${verdict.reason})`
-  return `${UNSTOPPED_PTY_REMOVAL_PREFIX} ${worktreeId} — ${detail}`
+  return `${UNSTOPPED_PTY_REMOVAL_PREFIX} ${worktreeId}${UNSTOPPED_PTY_DETAIL_SEPARATOR}${detail}`
+}
+
+/**
+ * Words a sweep that never produced a per-PTY verdict — a wedged daemon, a dropped SSH
+ * channel — as the unstopped-PTY failure it is.
+ *
+ * Why (#11960): this rejection carried only the provider's own wording, which the force
+ * classifier cannot recognise, so the wedge the escape hatch exists for was the one case
+ * that never got offered it. The provider's message stays in the text; only the shape changes.
+ */
+export function describeFailedPtySweep(worktreeId: string, error: unknown): string {
+  return `${UNSTOPPED_PTY_REMOVAL_PREFIX} ${worktreeId}${UNSTOPPED_PTY_DETAIL_SEPARATOR}the terminal sweep failed: ${describeError(error)}`
 }
 
 export function describeError(error: unknown): string {

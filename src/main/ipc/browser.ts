@@ -87,6 +87,14 @@ function isLiveBrowserWebContentsId(webContentsId: number | null | undefined): b
   return Boolean(guest && !guest.isDestroyed())
 }
 
+type BrowserGuestRegistrationArgs = {
+  browserPageId: string
+  workspaceId: string
+  worktreeId: string
+  sessionProfileId?: string | null
+  webContentsId: number
+}
+
 function hasRegisteredTabForWorktree(worktreeId: string): boolean {
   for (const [browserPageId, webContentsId] of browserManager.getWebContentsIdByTabId()) {
     if (
@@ -197,6 +205,8 @@ export function registerBrowserHandlers(): void {
   // Why: a stale in-flight chain from a prior registration would block new operations forever.
   grabModeOperationByPageId.clear()
   ipcMain.removeHandler('browser:registerGuest')
+  ipcMain.removeHandler('browser:isGuestRegistered')
+  ipcMain.removeHandler('browser:repairGuestRegistration')
   ipcMain.removeHandler('browser:unregisterGuest')
   ipcMain.removeHandler('browser:openDevTools')
   ipcMain.removeHandler('browser:setViewportOverride')
@@ -211,46 +221,84 @@ export function registerBrowserHandlers(): void {
   ipcMain.removeHandler('browser:activeTabChanged')
   ipcMain.removeHandler('browser:proceedCertificate')
 
+  const registerGuest = (
+    event: Electron.IpcMainInvokeEvent,
+    args: BrowserGuestRegistrationArgs,
+    repairPolicies: boolean
+  ): boolean => {
+    if (!isTrustedBrowserRenderer(event.sender)) {
+      return false
+    }
+    if (
+      !args ||
+      typeof args.browserPageId !== 'string' ||
+      typeof args.workspaceId !== 'string' ||
+      typeof args.worktreeId !== 'string' ||
+      typeof args.webContentsId !== 'number'
+    ) {
+      return false
+    }
+    if (repairPolicies) {
+      const guest = webContents.fromId(args.webContentsId)
+      if (
+        !guest ||
+        guest.isDestroyed() ||
+        guest.getType() !== 'webview' ||
+        guest.hostWebContents?.id !== event.sender.id
+      ) {
+        return false
+      }
+      browserManager.attachGuestPolicies(guest)
+    }
+    // Why: when Chromium swaps a guest's renderer process (navigation,
+    // crash recovery), the renderer re-registers the same browserPageId
+    // with a new webContentsId. The bridge must destroy the old session's
+    // proxy (its webContents is gone) and let the next command recreate it.
+    const previousWcId = browserManager.getGuestWebContentsId(args.browserPageId)
+    const registered = browserManager.registerGuest({
+      ...args,
+      rendererWebContentsId: event.sender.id
+    })
+    if (!registered) {
+      return false
+    }
+    if (agentBrowserBridgeRef && previousWcId !== null && previousWcId !== args.webContentsId) {
+      agentBrowserBridgeRef.onProcessSwap(args.browserPageId, args.webContentsId, previousWcId)
+    }
+    const pendingResolves = pendingTabRegistrations.get(args.browserPageId)
+    pendingTabRegistrations.delete(args.browserPageId)
+    resolvePendingRegistrations(pendingResolves)
+    const pendingWorktreeResolves = pendingWorktreeTabRegistrations.get(args.worktreeId)
+    pendingWorktreeTabRegistrations.delete(args.worktreeId)
+    resolvePendingRegistrations(pendingWorktreeResolves)
+    const pendingAnyResolves = new Set(pendingAnyTabRegistrations)
+    pendingAnyTabRegistrations.clear()
+    resolvePendingRegistrations(pendingAnyResolves)
+    return true
+  }
+
+  ipcMain.handle('browser:registerGuest', (event, args: BrowserGuestRegistrationArgs) =>
+    registerGuest(event, args, false)
+  )
+
+  ipcMain.handle('browser:repairGuestRegistration', (event, args: BrowserGuestRegistrationArgs) =>
+    registerGuest(event, args, true)
+  )
+
   ipcMain.handle(
-    'browser:registerGuest',
-    (
-      event,
-      args: {
-        browserPageId: string
-        workspaceId: string
-        worktreeId: string
-        sessionProfileId?: string | null
-        webContentsId: number
-      }
-    ) => {
-      if (!isTrustedBrowserRenderer(event.sender)) {
+    'browser:isGuestRegistered',
+    (event, args: { browserPageId?: unknown; webContentsId?: unknown }): boolean => {
+      if (
+        !isTrustedBrowserRenderer(event.sender) ||
+        typeof args?.browserPageId !== 'string' ||
+        typeof args.webContentsId !== 'number'
+      ) {
         return false
       }
-      // Why: when Chromium swaps a guest's renderer process (navigation,
-      // crash recovery), the renderer re-registers the same browserPageId
-      // with a new webContentsId. The bridge must destroy the old session's
-      // proxy (its webContents is gone) and let the next command recreate it.
-      const previousWcId = browserManager.getGuestWebContentsId(args.browserPageId)
-      const registered = browserManager.registerGuest({
-        ...args,
-        rendererWebContentsId: event.sender.id
-      })
-      if (!registered) {
-        return false
-      }
-      if (agentBrowserBridgeRef && previousWcId !== null && previousWcId !== args.webContentsId) {
-        agentBrowserBridgeRef.onProcessSwap(args.browserPageId, args.webContentsId, previousWcId)
-      }
-      const pendingResolves = pendingTabRegistrations.get(args.browserPageId)
-      pendingTabRegistrations.delete(args.browserPageId)
-      resolvePendingRegistrations(pendingResolves)
-      const pendingWorktreeResolves = pendingWorktreeTabRegistrations.get(args.worktreeId)
-      pendingWorktreeTabRegistrations.delete(args.worktreeId)
-      resolvePendingRegistrations(pendingWorktreeResolves)
-      const pendingAnyResolves = new Set(pendingAnyTabRegistrations)
-      pendingAnyTabRegistrations.clear()
-      resolvePendingRegistrations(pendingAnyResolves)
-      return true
+      return (
+        browserManager.getGuestWebContentsId(args.browserPageId) === args.webContentsId &&
+        isLiveBrowserWebContentsId(args.webContentsId)
+      )
     }
   )
 

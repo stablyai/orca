@@ -9,6 +9,8 @@ export default defineConfig({
   oxc: vitestOxcConfig,
   test: {
     environment: 'node',
-    include: ['src/**/*.test.ts']
+    // .tsx too: component tests exist (react-test-renderer + mocked react-native) and were
+    // silently never collected, so render-level regressions shipped untested.
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx']
   }
 })

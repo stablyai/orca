@@ -56,7 +56,11 @@ import { forgetAgentHibernationTabOutput } from '@/lib/agent-hibernation-output-
 import { forgetForegroundTerminalTabs } from '@/lib/foreground-terminal-tabs'
 import { forgetAgentStartupDeliveriesForTabs } from '@/lib/agent-startup-delivery-guards'
 import { clearTransientTerminalState, emptyLayoutSnapshot } from './terminal-helpers'
-import { pushClosedTerminalTabSnapshot, pushRecentlyClosedTabKind } from './recently-closed-tabs'
+import {
+  getRecentlyClosedTabPosition,
+  pushClosedTerminalTabSnapshot,
+  pushRecentlyClosedTabKind
+} from './recently-closed-tabs'
 import { isClaudeAgent } from '@/lib/agent-status'
 import { recordTerminalInputActivity } from '@/lib/terminal-input-activity-coalescing'
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
@@ -1651,6 +1655,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         }
       }
       // Why: only explicit user closes feed the Cmd+Shift+T reopen stack; cleanup/PTY-exit closes must not pollute undo history.
+      const closedPosition =
+        closedWorktreeId && closedTab
+          ? getRecentlyClosedTabPosition(s, closedWorktreeId, closedTab.id)
+          : undefined
       const capturedSnapshot =
         closeReason === 'user' &&
         opts?.captureRecentlyClosed !== false &&
@@ -1660,7 +1668,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
               ...(closedTab.startupCwd ? { startupCwd: closedTab.startupCwd } : {}),
               ...(closedTab.shellOverride ? { shellOverride: closedTab.shellOverride } : {}),
               ...(closedTab.customTitle ? { customTitle: closedTab.customTitle } : {}),
-              ...(closedTab.color ? { color: closedTab.color } : {})
+              ...(closedTab.color ? { color: closedTab.color } : {}),
+              ...(closedPosition ? { position: closedPosition } : {})
             }
           : null
       const nextExpanded = { ...s.expandedPaneByTabId }

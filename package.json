@@ -1,6 +1,6 @@
 {
   "name": "orca",
-  "version": "1.4.165-rc.0",
+  "version": "1.4.168-rc.1",
   "description": "Next-gen IDE for parallel agentic development",
   "homepage": "https://github.com/stablyai/orca",
   "author": "stablyai",
@@ -116,7 +116,11 @@
     "bench:multi-workspace-typing": "pnpm run ensure:electron-runtime && node config/scripts/run-multi-workspace-typing-bench.mjs",
     "bench:cold-park-reveal": "pnpm run ensure:electron-runtime && node tests/tools/benchmarks/terminal-cold-park-reveal-bench.mjs",
     "bench:cold-park-resource": "pnpm run ensure:electron-runtime && node tests/tools/benchmarks/terminal-cold-park-resource-bench.mjs",
-    "bench:compare": "node config/scripts/compare-benchmark-artifacts.mjs"
+    "bench:compare": "node config/scripts/compare-benchmark-artifacts.mjs",
+    "test:e2e:remote-bulk-open-freeze": "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/remote-session-bulk-open-freeze-repro.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+    "test:e2e:ssh-docker-bulk-open-freeze": "node config/scripts/run-ssh-docker-bulk-open-freeze-e2e.mjs",
+    "repro:live-remote-bulk-open-freeze": "node config/scripts/live-remote-bulk-open-freeze-repro.mjs",
+    "repro:live-remote-realistic-freeze": "node config/scripts/live-remote-realistic-freeze-repro.mjs"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
@@ -205,7 +209,7 @@
     "lowlight": "^3.3.0",
     "lucide-react": "^0.577.0",
     "marked": "^17.0.1",
-    "mermaid": "^11.15.0",
+    "mermaid": "^11.16.0",
     "monaco-editor": "^0.55.1",
     "oxfmt": "^0.52.0",
     "oxlint": "^1.75.0",

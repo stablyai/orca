@@ -22,7 +22,7 @@ import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeSyncWindowGraph
 } from '../../../shared/runtime-types'
-import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
+import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { isClaudeManagementTitle } from '../../../shared/agent-detection'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
@@ -31,6 +31,7 @@ import type {
   TabGroup,
   TabGroupLayoutNode,
   TerminalLayoutSnapshot,
+  TerminalPaneLayoutNode,
   TerminalTab
 } from '../../../shared/types'
 import { resolveTerminalTabTitle } from '../../../shared/tab-title-resolution'
@@ -79,6 +80,76 @@ type AgentStatusProjectionCache = {
   entries: Map<string, AgentStatusProjectionCacheEntry>
   projection: string
 }
+type MobileSessionAgentStatusByWorktree = ReadonlyMap<
+  string,
+  ReadonlyMap<string, AppState['agentStatusByPaneKey'][string]>
+>
+/** Slices shared by every worktree in one publication; derived from `AppState` exactly once. */
+type MobileSessionPublicationInputs = {
+  browserTabsByWorktree: AppState['browserTabsByWorktree']
+  openFileIndexes: OpenFileIndexes
+  editorDraftVersionByFileId: ReadonlyMap<string, string>
+  agentStatusByWorktreeId: MobileSessionAgentStatusByWorktree
+  generatedTitlesEnabled: boolean
+  terminalTheme: RuntimeMobileTerminalTheme | undefined
+}
+/**
+ * Live PaneManager/DOM reads for one mounted terminal tab, captured once per
+ * publication.
+ *
+ * Why: builders read this instead of the registry, so live state the memo
+ * cannot witness is unrepresentable — mounted worktrees memoize like the rest
+ * instead of rebuilding on every publication.
+ */
+type MountedTerminalSurfaceCapture = {
+  paneLeafIds: readonly string[]
+  hasLiveActivePane: boolean
+  liveActiveLeafId: string | null
+  liveLayoutRoot: TerminalPaneLayoutNode | null
+  numericPaneIdByLeafId: ReadonlyMap<string, number | null>
+  ptyIdByNumericPaneId: ReadonlyMap<number, string | null>
+}
+/**
+ * One worktree's complete mobile-snapshot input set.
+ *
+ * Why: every builder below takes this instead of `AppState`, so the compiler —
+ * not a reviewer — proves what a worktree's snapshot actually depends on.
+ */
+type MobileSessionWorktreeInputs = {
+  worktreeId: string
+  terminalTabs: AppState['tabsByWorktree'][string]
+  browserWorkspaces: AppState['browserTabsByWorktree'][string]
+  unifiedTabs: AppState['unifiedTabsByWorktree'][string]
+  groups: AppState['groupsByWorktree'][string]
+  tabBarOrder: AppState['tabBarOrderByWorktree'][string] | undefined
+  activeGroupId: string | null
+  tabGroupLayout: TabGroupLayoutNode | undefined
+  openFilesById: ReadonlyMap<string, AppState['openFiles'][number]> | undefined
+  openFileIds: readonly string[]
+  terminalLayoutByTabId: ReadonlyMap<string, AppState['terminalLayoutsByTabId'][string]>
+  paneTitlesByTabId: ReadonlyMap<string, AppState['runtimePaneTitlesByTabId'][string]>
+  launchDraftByTabId: ReadonlyMap<
+    string,
+    NonNullable<AppState['nativeChatLaunchDraftByTabId']>[string]
+  >
+  agentStatusByPaneKey: ReadonlyMap<string, AppState['agentStatusByPaneKey'][string]>
+  editorDraftVersionByFileId: ReadonlyMap<string, string>
+  pagesByBrowserWorkspaceId: ReadonlyMap<
+    string,
+    NonNullable<AppState['browserPagesByWorkspace']>[string]
+  >
+  certificateFailureByBrowserPageId: ReadonlyMap<
+    string,
+    NonNullable<AppState['browserCertificateFailuresByPageId']>[string]
+  >
+  activeEditorFileId: string | null
+  activeEditorTabType: AppState['activeTabType'] | null
+  activeTerminalTabId: string | null
+  activeBrowserWorkspaceId: string | null
+  generatedTitlesEnabled: boolean
+  terminalTheme: RuntimeMobileTerminalTheme | undefined
+  mountedSurfaceCaptureByTabId: ReadonlyMap<string, MountedTerminalSurfaceCapture>
+}
 
 const registeredTabs = new Map<string, RegisteredTerminalTab>()
 // Why: registration time suppresses the "no live transport" warning during the async PTY-connect window; after the grace period it's a real stuck state.
@@ -104,7 +175,11 @@ let mobileSessionSnapshotVersion = 0
 // unchanged, and bump the version only for worktrees that actually changed.
 const mobileSessionSnapshotCacheByWorktree = new Map<
   string,
-  { content: unknown; snapshot: RuntimeMobileSessionTabsSnapshot }
+  {
+    inputs: MobileSessionWorktreeInputs
+    content: unknown
+    snapshot: RuntimeMobileSessionTabsSnapshot
+  }
 >()
 
 // Structural equality under JSON-serialization semantics (undefined-valued
@@ -145,7 +220,22 @@ let cachedOpenFileIndexesSource: AppState['openFiles'] | null = null
 let cachedOpenFileIndexes: OpenFileIndexes | null = null
 let cachedEditorDraftsSource: AppState['editorDrafts'] | null = null
 let cachedEditorDraftVersionByFileId: Map<string, string> | null = null
+let cachedMobileTerminalThemeSettings: AppState['settings'] | null = null
+let cachedMobileTerminalThemeSystemPrefersDark: boolean | null = null
+let cachedMobileTerminalTheme: RuntimeMobileTerminalTheme | undefined
+let hasCachedMobileTerminalTheme = false
+const EMPTY_NARROWED_BY_KEY: ReadonlyMap<string, never> = new Map<string, never>()
+// Why: absent per-worktree slices must resolve to one shared value, or every empty
+// worktree would present a fresh `[]` and never compare equal to its last publication.
+const EMPTY_WORKTREE_TERMINAL_TABS: AppState['tabsByWorktree'][string] = []
+const EMPTY_WORKTREE_BROWSER_WORKSPACES: AppState['browserTabsByWorktree'][string] = []
+const EMPTY_WORKTREE_UNIFIED_TABS: AppState['unifiedTabsByWorktree'][string] = []
+const EMPTY_WORKTREE_TAB_GROUPS: AppState['groupsByWorktree'][string] = []
+const EMPTY_WORKTREE_OPEN_FILE_IDS: readonly string[] = []
 const mobileSessionPublicationEpoch = `renderer:${createBrowserUuid()}`
+// Why: the snapshot object main last acknowledged per worktree; anything still
+// identical is withheld from the graph payload instead of re-cloned across IPC.
+const publishedMobileSessionSnapshotByWorktree = new Map<string, RuntimeMobileSessionTabsSnapshot>()
 
 export function setRuntimeGraphStoreStateGetter(getter: (() => AppState) | null): void {
   getStoreState = getter
@@ -627,10 +717,13 @@ async function syncRuntimeGraph(): Promise<void> {
       .map((tab) => [tab.id, tab])
   )
   const generatedTitlesEnabled = state.settings?.tabAutoGenerateTitle === true
+  const mobileSessionTabs = buildMobileSessionTabSnapshots(state, systemPrefersDark)
+  const publication = partitionMobileSessionPublication(mobileSessionTabs)
   const graph: RuntimeSyncWindowGraph = {
     tabs: [],
     leaves: [],
-    mobileSessionTabs: buildMobileSessionTabSnapshots(state, systemPrefersDark)
+    mobileSessionTabs: publication.changed,
+    unchangedMobileSessionWorktrees: publication.unchangedWorktrees
   }
 
   for (const [tabId, registeredTab] of registeredTabs) {
@@ -638,7 +731,7 @@ async function syncRuntimeGraph(): Promise<void> {
     if (!tab) {
       continue
     }
-    if (isWebOnlyMirroredTerminalTab(state, tab)) {
+    if (isWebOnlyMirroredTerminalTab(tab, state.terminalLayoutsByTabId[tabId])) {
       continue
     }
 
@@ -691,10 +784,10 @@ async function syncRuntimeGraph(): Promise<void> {
   // Why: inactive automation tabs never mount a TerminalPane; publish their leaf+ptyId from persisted layout (gated on a live buffer) or the live PTY looks orphaned.
   for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
     for (const tab of tabs) {
-      if (registeredTabs.has(tab.id) || isWebOnlyMirroredTerminalTab(state, tab)) {
+      const layout = state.terminalLayoutsByTabId[tab.id]
+      if (registeredTabs.has(tab.id) || isWebOnlyMirroredTerminalTab(tab, layout)) {
         continue
       }
-      const layout = state.terminalLayoutsByTabId[tab.id]
       const savedPtyIdsByLeafId = layout?.ptyIdsByLeafId
       if (!savedPtyIdsByLeafId) {
         continue
@@ -740,6 +833,9 @@ async function syncRuntimeGraph(): Promise<void> {
 
   try {
     const result = await window.api.runtime.syncWindowGraph(graph)
+    // Why: only an acknowledged publication may be treated as delivered. A throw
+    // leaves the memo behind, so the retry resends every worktree in full.
+    commitMobileSessionPublication(mobileSessionTabs, result?.mobileSessionResyncWorktrees)
     const currentState = getStoreState()
     currentState?.setRuntimeAgentOrchestrationByPaneKey?.(result?.agentOrchestrationByPaneKey ?? {})
     for (const resolution of result?.nativeChatLaunchDraftResolutions ?? []) {
@@ -750,9 +846,353 @@ async function syncRuntimeGraph(): Promise<void> {
         })
       }
     }
+    if (result?.mobileSessionResyncWorktrees?.length) {
+      scheduleRuntimeGraphSync()
+    }
   } catch (error) {
     console.error('[runtime] Failed to sync renderer graph:', error)
   }
+}
+
+function partitionMobileSessionPublication(snapshots: RuntimeMobileSessionTabsSnapshot[]): {
+  changed: RuntimeMobileSessionTabsSnapshot[]
+  unchangedWorktrees: string[]
+} {
+  const changed: RuntimeMobileSessionTabsSnapshot[] = []
+  const unchangedWorktrees: string[] = []
+  for (const snapshot of snapshots) {
+    // Why: buildMobileSessionTabSnapshots returns the cached object for a worktree
+    // it did not rebuild, so identity — not a deep compare — settles this.
+    if (publishedMobileSessionSnapshotByWorktree.get(snapshot.worktree) === snapshot) {
+      unchangedWorktrees.push(snapshot.worktree)
+    } else {
+      changed.push(snapshot)
+    }
+  }
+  return { changed, unchangedWorktrees }
+}
+
+function commitMobileSessionPublication(
+  snapshots: RuntimeMobileSessionTabsSnapshot[],
+  resyncWorktrees: string[] | undefined
+): void {
+  const published = new Set<string>()
+  for (const snapshot of snapshots) {
+    published.add(snapshot.worktree)
+    publishedMobileSessionSnapshotByWorktree.set(snapshot.worktree, snapshot)
+  }
+  for (const worktreeId of publishedMobileSessionSnapshotByWorktree.keys()) {
+    if (!published.has(worktreeId)) {
+      publishedMobileSessionSnapshotByWorktree.delete(worktreeId)
+    }
+  }
+  // Why: main dropped these after acknowledging them, so forget the delivery and
+  // let the scheduled resync republish them in full.
+  for (const worktreeId of resyncWorktrees ?? []) {
+    publishedMobileSessionSnapshotByWorktree.delete(worktreeId)
+  }
+}
+
+function narrowRecordByKeys<T>(
+  source: Record<string, T> | undefined,
+  keys: readonly string[]
+): ReadonlyMap<string, T> {
+  if (!source || keys.length === 0) {
+    return EMPTY_NARROWED_BY_KEY
+  }
+  let narrowed: Map<string, T> | null = null
+  for (const key of keys) {
+    const value = source[key]
+    if (value === undefined) {
+      continue
+    }
+    narrowed ??= new Map<string, T>()
+    narrowed.set(key, value)
+  }
+  return narrowed ?? EMPTY_NARROWED_BY_KEY
+}
+
+function narrowMapByKeys<T>(
+  source: ReadonlyMap<string, T>,
+  keys: readonly string[]
+): ReadonlyMap<string, T> {
+  if (source.size === 0 || keys.length === 0) {
+    return EMPTY_NARROWED_BY_KEY
+  }
+  let narrowed: Map<string, T> | null = null
+  for (const key of keys) {
+    if (!source.has(key)) {
+      continue
+    }
+    narrowed ??= new Map<string, T>()
+    narrowed.set(key, source.get(key) as T)
+  }
+  return narrowed ?? EMPTY_NARROWED_BY_KEY
+}
+
+function getMobileTerminalTheme(
+  state: AppState,
+  systemPrefersDark: boolean
+): RuntimeMobileTerminalTheme | undefined {
+  // Why: resolving per terminal tab allocated a fresh theme per surface; one instance per publication is byte-identical downstream.
+  if (
+    hasCachedMobileTerminalTheme &&
+    cachedMobileTerminalThemeSettings === state.settings &&
+    cachedMobileTerminalThemeSystemPrefersDark === systemPrefersDark
+  ) {
+    return cachedMobileTerminalTheme
+  }
+  cachedMobileTerminalTheme = resolveMobileTerminalTheme(state, systemPrefersDark)
+  cachedMobileTerminalThemeSettings = state.settings
+  cachedMobileTerminalThemeSystemPrefersDark = systemPrefersDark
+  hasCachedMobileTerminalTheme = true
+  return cachedMobileTerminalTheme
+}
+
+function buildMobileSessionAgentStatusByWorktree(
+  agentStatusByPaneKey: AppState['agentStatusByPaneKey'],
+  tabsByWorktree: AppState['tabsByWorktree']
+): MobileSessionAgentStatusByWorktree {
+  const byWorktreeId = new Map<string, Map<string, AppState['agentStatusByPaneKey'][string]>>()
+  const paneKeys = Object.keys(agentStatusByPaneKey)
+  if (paneKeys.length === 0) {
+    return byWorktreeId
+  }
+  const worktreeIdByTabId = new Map<string, string>()
+  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
+    for (const tab of tabs) {
+      worktreeIdByTabId.set(tab.id, worktreeId)
+    }
+  }
+  for (const paneKey of paneKeys) {
+    // Why: every key a builder can look up is makePaneKey output, so an unparseable key is unreachable state, not a missed input.
+    const tabId = parsePaneKey(paneKey)?.tabId
+    const worktreeId = tabId === undefined ? undefined : worktreeIdByTabId.get(tabId)
+    if (worktreeId === undefined) {
+      continue
+    }
+    let bucket = byWorktreeId.get(worktreeId)
+    if (!bucket) {
+      bucket = new Map()
+      byWorktreeId.set(worktreeId, bucket)
+    }
+    bucket.set(paneKey, agentStatusByPaneKey[paneKey])
+  }
+  return byWorktreeId
+}
+
+function buildMobileSessionWorktreeInputs(
+  state: AppState,
+  worktreeId: string,
+  publication: MobileSessionPublicationInputs
+): MobileSessionWorktreeInputs {
+  const terminalTabs = state.tabsByWorktree[worktreeId] ?? EMPTY_WORKTREE_TERMINAL_TABS
+  const terminalTabIds = terminalTabs.map((tab) => tab.id)
+  const browserWorkspaces =
+    publication.browserTabsByWorktree[worktreeId] ?? EMPTY_WORKTREE_BROWSER_WORKSPACES
+  const pagesByBrowserWorkspaceId = narrowRecordByKeys(
+    state.browserPagesByWorkspace,
+    browserWorkspaces.map((workspace) => workspace.id)
+  )
+  const browserPageIds: string[] = []
+  for (const pages of pagesByBrowserWorkspaceId.values()) {
+    for (const page of pages) {
+      browserPageIds.push(page.id)
+    }
+  }
+  const openFilesById = publication.openFileIndexes.byWorktreeAndId.get(worktreeId)
+  const openFileIds =
+    publication.openFileIndexes.idsByWorktree.get(worktreeId) ?? EMPTY_WORKTREE_OPEN_FILE_IDS
+  // Why: the global activeFileId/activeTabType fallbacks only matter when the active file lives here, so resolve them per worktree.
+  const resolvedActiveFileId = state.activeFileIdByWorktree?.[worktreeId] ?? state.activeFileId
+  const activeEditorFileId =
+    resolvedActiveFileId && openFilesById?.has(resolvedActiveFileId) ? resolvedActiveFileId : null
+  const activeTabId = state.activeTabId
+  return {
+    worktreeId,
+    terminalTabs,
+    browserWorkspaces,
+    unifiedTabs: state.unifiedTabsByWorktree[worktreeId] ?? EMPTY_WORKTREE_UNIFIED_TABS,
+    groups: state.groupsByWorktree[worktreeId] ?? EMPTY_WORKTREE_TAB_GROUPS,
+    tabBarOrder: state.tabBarOrderByWorktree[worktreeId],
+    activeGroupId: state.activeGroupIdByWorktree[worktreeId] ?? null,
+    tabGroupLayout: (state.layoutByWorktree ?? EMPTY_LAYOUT_BY_WORKTREE)[worktreeId],
+    openFilesById,
+    openFileIds,
+    terminalLayoutByTabId: narrowRecordByKeys(state.terminalLayoutsByTabId, terminalTabIds),
+    paneTitlesByTabId: narrowRecordByKeys(state.runtimePaneTitlesByTabId, terminalTabIds),
+    launchDraftByTabId: narrowRecordByKeys(state.nativeChatLaunchDraftByTabId, terminalTabIds),
+    agentStatusByPaneKey:
+      publication.agentStatusByWorktreeId.get(worktreeId) ?? EMPTY_NARROWED_BY_KEY,
+    editorDraftVersionByFileId: narrowMapByKeys(
+      publication.editorDraftVersionByFileId,
+      openFileIds
+    ),
+    pagesByBrowserWorkspaceId,
+    certificateFailureByBrowserPageId: narrowRecordByKeys(
+      state.browserCertificateFailuresByPageId,
+      browserPageIds
+    ),
+    activeEditorFileId,
+    activeEditorTabType: activeEditorFileId
+      ? (state.activeTabTypeByWorktree?.[worktreeId] ?? state.activeTabType)
+      : null,
+    activeTerminalTabId:
+      activeTabId !== null && terminalTabIds.includes(activeTabId) ? activeTabId : null,
+    activeBrowserWorkspaceId: state.activeBrowserTabIdByWorktree?.[worktreeId] ?? null,
+    generatedTitlesEnabled: publication.generatedTitlesEnabled,
+    terminalTheme: publication.terminalTheme,
+    mountedSurfaceCaptureByTabId: captureMountedTerminalSurfaces(
+      terminalTabs,
+      state.terminalLayoutsByTabId
+    )
+  }
+}
+
+function captureMountedTerminalSurfaces(
+  terminalTabs: AppState['tabsByWorktree'][string],
+  terminalLayoutsByTabId: AppState['terminalLayoutsByTabId']
+): ReadonlyMap<string, MountedTerminalSurfaceCapture> {
+  let captures: Map<string, MountedTerminalSurfaceCapture> | null = null
+  for (const tab of terminalTabs) {
+    const registered = registeredTabs.get(tab.id)
+    if (!registered) {
+      continue
+    }
+    captures ??= new Map()
+    captures.set(tab.id, captureMountedTerminalSurface(registered, terminalLayoutsByTabId[tab.id]))
+  }
+  return captures ?? EMPTY_NARROWED_BY_KEY
+}
+
+function captureMountedTerminalSurface(
+  registered: RegisteredTerminalTab,
+  savedLayout: AppState['terminalLayoutsByTabId'][string] | undefined
+): MountedTerminalSurfaceCapture {
+  const manager = registered.getManager()
+  const paneLeafIds = manager?.getPanes().map((pane) => pane.leafId) ?? []
+  const activePane = manager?.getActivePane() ?? null
+  const firstChild = registered.getContainer()?.firstElementChild
+  // Why: mirrors getRuntimeLeafIdsForTerminal so every leaf the builder resolves has a captured pane id.
+  const effectiveLeafIds =
+    paneLeafIds.length > 0
+      ? paneLeafIds
+      : collectLeafIdsInOrder(savedLayout?.root).filter(isTerminalLeafId)
+  const numericPaneIdByLeafId = new Map<string, number | null>()
+  const ptyIdByNumericPaneId = new Map<number, string | null>()
+  for (const leafId of effectiveLeafIds) {
+    const numericPaneId = manager?.getNumericIdForLeaf(leafId) ?? null
+    numericPaneIdByLeafId.set(leafId, numericPaneId)
+    if (numericPaneId !== null) {
+      ptyIdByNumericPaneId.set(numericPaneId, registered.getPtyIdForPane(numericPaneId))
+    }
+  }
+  return {
+    paneLeafIds,
+    hasLiveActivePane: activePane !== null,
+    liveActiveLeafId: activePane !== null ? (manager?.getLeafId(activePane.id) ?? null) : null,
+    liveLayoutRoot: serializePaneTree(
+      typeof HTMLElement !== 'undefined' && firstChild instanceof HTMLElement ? firstChild : null
+    ),
+    numericPaneIdByLeafId,
+    ptyIdByNumericPaneId
+  }
+}
+
+function mountedTerminalSurfaceCaptureEquals(
+  a: MountedTerminalSurfaceCapture,
+  b: MountedTerminalSurfaceCapture
+): boolean {
+  return (
+    a.hasLiveActivePane === b.hasLiveActivePane &&
+    a.liveActiveLeafId === b.liveActiveLeafId &&
+    a.paneLeafIds.length === b.paneLeafIds.length &&
+    a.paneLeafIds.every((leafId, index) => b.paneLeafIds[index] === leafId) &&
+    narrowedEntriesEqual(a.numericPaneIdByLeafId, b.numericPaneIdByLeafId) &&
+    narrowedEntriesEqual(a.ptyIdByNumericPaneId, b.ptyIdByNumericPaneId) &&
+    // Why: serialization allocates a fresh tree per capture, so it compares by content.
+    jsonContentEquals(a.liveLayoutRoot, b.liveLayoutRoot)
+  )
+}
+
+function mountedSurfaceCapturesEqual(
+  a: ReadonlyMap<string, MountedTerminalSurfaceCapture>,
+  b: ReadonlyMap<string, MountedTerminalSurfaceCapture>
+): boolean {
+  if (a === b) {
+    return true
+  }
+  if (a.size !== b.size) {
+    return false
+  }
+  for (const [tabId, capture] of a) {
+    const other = b.get(tabId)
+    if (!other || !mountedTerminalSurfaceCaptureEquals(capture, other)) {
+      return false
+    }
+  }
+  return true
+}
+
+function narrowedEntriesEqual<K, T>(a: ReadonlyMap<K, T>, b: ReadonlyMap<K, T>): boolean {
+  if (a === b) {
+    return true
+  }
+  if (a.size !== b.size) {
+    return false
+  }
+  for (const [key, value] of a) {
+    if (b.get(key) !== value) {
+      return false
+    }
+  }
+  return true
+}
+
+/**
+ * True when a worktree's snapshot can be reused without rebuilding its content.
+ *
+ * Every field of `MobileSessionWorktreeInputs` is compared, so a missed input
+ * is a compile error rather than a stale publication to paired clients.
+ */
+function canReuseMobileSessionSnapshot(
+  previous: MobileSessionWorktreeInputs,
+  next: MobileSessionWorktreeInputs
+): boolean {
+  return (
+    previous.worktreeId === next.worktreeId &&
+    previous.terminalTabs === next.terminalTabs &&
+    previous.browserWorkspaces === next.browserWorkspaces &&
+    previous.unifiedTabs === next.unifiedTabs &&
+    previous.groups === next.groups &&
+    previous.tabBarOrder === next.tabBarOrder &&
+    previous.activeGroupId === next.activeGroupId &&
+    previous.tabGroupLayout === next.tabGroupLayout &&
+    previous.openFilesById === next.openFilesById &&
+    previous.openFileIds === next.openFileIds &&
+    previous.activeEditorFileId === next.activeEditorFileId &&
+    previous.activeEditorTabType === next.activeEditorTabType &&
+    previous.activeTerminalTabId === next.activeTerminalTabId &&
+    previous.activeBrowserWorkspaceId === next.activeBrowserWorkspaceId &&
+    previous.generatedTitlesEnabled === next.generatedTitlesEnabled &&
+    previous.terminalTheme === next.terminalTheme &&
+    narrowedEntriesEqual(previous.terminalLayoutByTabId, next.terminalLayoutByTabId) &&
+    narrowedEntriesEqual(previous.paneTitlesByTabId, next.paneTitlesByTabId) &&
+    narrowedEntriesEqual(previous.launchDraftByTabId, next.launchDraftByTabId) &&
+    narrowedEntriesEqual(previous.agentStatusByPaneKey, next.agentStatusByPaneKey) &&
+    narrowedEntriesEqual(previous.editorDraftVersionByFileId, next.editorDraftVersionByFileId) &&
+    narrowedEntriesEqual(previous.pagesByBrowserWorkspaceId, next.pagesByBrowserWorkspaceId) &&
+    narrowedEntriesEqual(
+      previous.certificateFailureByBrowserPageId,
+      next.certificateFailureByBrowserPageId
+    ) &&
+    // Why: live DOM/PaneManager state is invisible to store references; the
+    // capture makes it comparable instead of forcing mounted worktrees to rebuild.
+    mountedSurfaceCapturesEqual(
+      previous.mountedSurfaceCaptureByTabId,
+      next.mountedSurfaceCaptureByTabId
+    )
+  )
 }
 
 export function buildMobileSessionTabSnapshots(
@@ -761,7 +1201,18 @@ export function buildMobileSessionTabSnapshots(
 ): RuntimeMobileSessionTabsSnapshot[] {
   // Why: high-frequency title ticks fire mobile sync; cache indexes/hashes by store-slice ref to skip rescanning editor state.
   const openFileIndexes = getOpenFileIndexes(state.openFiles)
-  const editorDraftVersionByFileId = getEditorDraftVersionByFileId(state.editorDrafts)
+  const browserTabsByWorktree = getBrowserTabsByWorktree(state)
+  const publicationInputs: MobileSessionPublicationInputs = {
+    browserTabsByWorktree,
+    openFileIndexes,
+    editorDraftVersionByFileId: getEditorDraftVersionByFileId(state.editorDrafts),
+    agentStatusByWorktreeId: buildMobileSessionAgentStatusByWorktree(
+      state.agentStatusByPaneKey ?? EMPTY_AGENT_STATUS_BY_PANE_KEY,
+      state.tabsByWorktree
+    ),
+    generatedTitlesEnabled: state.settings?.tabAutoGenerateTitle === true,
+    terminalTheme: getMobileTerminalTheme(state, systemPrefersDark)
+  }
   const liveFolderWorkspaceIds = new Set(
     (state.folderWorkspaces ?? []).map((workspace) => workspace.id)
   )
@@ -769,7 +1220,7 @@ export function buildMobileSessionTabSnapshots(
     ...Object.keys(state.tabsByWorktree),
     ...Object.keys(state.groupsByWorktree),
     ...Object.keys(state.unifiedTabsByWorktree),
-    ...Object.keys(getBrowserTabsByWorktree(state)),
+    ...Object.keys(browserTabsByWorktree),
     ...state.openFiles.map((file) => file.worktreeId)
   ])
 
@@ -783,28 +1234,32 @@ export function buildMobileSessionTabSnapshots(
       mobileSessionSnapshotCacheByWorktree.delete(worktreeId)
       continue
     }
-    const activeGroupId = state.activeGroupIdByWorktree[worktreeId] ?? null
-    const terminalTabByIdForWorktree = new Map(
-      (state.tabsByWorktree[worktreeId] ?? []).map((tab) => [tab.id, tab])
-    )
+    const inputs = buildMobileSessionWorktreeInputs(state, worktreeId, publicationInputs)
+    const cached = mobileSessionSnapshotCacheByWorktree.get(worktreeId)
+    // Why: invalidate before computing — building the maps, projection, and tab
+    // array first made the cache save the fanout but none of the per-worktree work.
+    if (cached && canReuseMobileSessionSnapshot(cached.inputs, inputs)) {
+      snapshots.push(cached.snapshot)
+      continue
+    }
+    const activeGroupId = inputs.activeGroupId
+    const terminalTabByIdForWorktree = new Map(inputs.terminalTabs.map((tab) => [tab.id, tab]))
     const browserWorkspaceByIdForWorktree = new Map(
-      (getBrowserTabsByWorktree(state)[worktreeId] ?? []).map((workspace) => [
-        workspace.id,
-        workspace
-      ])
+      inputs.browserWorkspaces.map((workspace) => [workspace.id, workspace])
     )
-    const unifiedTabByIdForWorktree = new Map(
-      (state.unifiedTabsByWorktree[worktreeId] ?? []).map((tab) => [tab.id, tab])
-    )
-    const openFilesForWorktree = openFileIndexes.byWorktreeAndId.get(worktreeId)
-    const editorIds = (openFileIndexes.idsByWorktree.get(worktreeId) ?? []).filter((fileId) => {
+    const unifiedTabByIdForWorktree = new Map(inputs.unifiedTabs.map((tab) => [tab.id, tab]))
+    const openFilesForWorktree = inputs.openFilesById
+    const editorIds = inputs.openFileIds.filter((fileId) => {
       const file = openFilesForWorktree?.get(fileId)
       return file ? isMobilePublishableOpenFile(file) : false
     })
     const publishableTerminalIds = [...terminalTabByIdForWorktree.values()]
-      .filter((terminal) => !isWebOnlyMirroredTerminalTab(state, terminal))
+      .filter(
+        (terminal) =>
+          !isWebOnlyMirroredTerminalTab(terminal, inputs.terminalLayoutByTabId.get(terminal.id))
+      )
       .map((terminal) => terminal.id)
-    const groupProjection = buildMobileSessionGroupProjection(state, worktreeId, {
+    const groupProjection = buildMobileSessionGroupProjection(inputs, {
       terminalIds: publishableTerminalIds,
       editorIds,
       browserIds: [...browserWorkspaceByIdForWorktree.keys()]
@@ -819,27 +1274,17 @@ export function buildMobileSessionTabSnapshots(
         if (!terminal) {
           continue
         }
-        if (isWebOnlyMirroredTerminalTab(state, terminal)) {
+        if (isWebOnlyMirroredTerminalTab(terminal, inputs.terminalLayoutByTabId.get(terminal.id))) {
           continue
         }
-        tabs.push(
-          ...buildMobileTerminalSurfaceTabs(
-            state,
-            terminal,
-            worktreeId,
-            systemPrefersDark,
-            item.tabId
-          )
-        )
+        tabs.push(...buildMobileTerminalSurfaceTabs(inputs, terminal, item.tabId))
       } else if (item.type === 'editor') {
         const file = openFilesForWorktree?.get(item.id)
         if (!file || !isMobilePublishableOpenFile(file)) {
           continue
         }
         const markdown = buildMobileMarkdownTab(
-          state,
-          openFileIndexes.byWorktreeAndId,
-          editorDraftVersionByFileId,
+          inputs,
           file,
           item.tabId ? unifiedTabByIdForWorktree.get(item.tabId) : undefined
         )
@@ -848,7 +1293,7 @@ export function buildMobileSessionTabSnapshots(
         } else {
           tabs.push(
             buildMobileFileTab(
-              state,
+              inputs,
               file,
               item.tabId ? unifiedTabByIdForWorktree.get(item.tabId) : undefined
             )
@@ -863,7 +1308,7 @@ export function buildMobileSessionTabSnapshots(
         }
         tabs.push(
           buildMobileBrowserTab(
-            state,
+            inputs,
             workspace,
             item.tabId ? unifiedTabByIdForWorktree.get(item.tabId) : undefined
           )
@@ -874,7 +1319,7 @@ export function buildMobileSessionTabSnapshots(
     // Why: split-group projection can miss plain editor files during hydration; publish them so mobile/web still mirror.
     const fallbackEditorTabs: FallbackEditorTabTarget[] = []
     if (openFilesForWorktree) {
-      const unifiedEditorTabs = getEditorUnifiedTabsForWorktree(state, worktreeId)
+      const unifiedEditorTabs = getEditorUnifiedTabsForWorktree(inputs)
       const unifiedEditorFileIds = new Set(unifiedEditorTabs.map((tab) => tab.entityId))
       for (const unifiedTab of unifiedEditorTabs) {
         if (emittedEditorTabIds.has(unifiedTab.id)) {
@@ -884,14 +1329,8 @@ export function buildMobileSessionTabSnapshots(
         if (!file || !isMobilePublishableOpenFile(file)) {
           continue
         }
-        const markdown = buildMobileMarkdownTab(
-          state,
-          openFileIndexes.byWorktreeAndId,
-          editorDraftVersionByFileId,
-          file,
-          unifiedTab
-        )
-        const fallbackTab = markdown ?? buildMobileFileTab(state, file, unifiedTab)
+        const markdown = buildMobileMarkdownTab(inputs, file, unifiedTab)
+        const fallbackTab = markdown ?? buildMobileFileTab(inputs, file, unifiedTab)
         tabs.push(fallbackTab)
         fallbackEditorTabs.push({
           tabId: fallbackTab.id,
@@ -910,13 +1349,8 @@ export function buildMobileSessionTabSnapshots(
           emittedEditorFileIds.add(file.id)
           continue
         }
-        const markdown = buildMobileMarkdownTab(
-          state,
-          openFileIndexes.byWorktreeAndId,
-          editorDraftVersionByFileId,
-          file
-        )
-        const fallbackTab = markdown ?? buildMobileFileTab(state, file)
+        const markdown = buildMobileMarkdownTab(inputs, file)
+        const fallbackTab = markdown ?? buildMobileFileTab(inputs, file)
         tabs.push(fallbackTab)
         fallbackEditorTabs.push({
           tabId: fallbackTab.id,
@@ -929,17 +1363,14 @@ export function buildMobileSessionTabSnapshots(
     const active = tabs.find((tab) => tab.isActive) ?? null
     const tabGroups = appendFallbackEditorTabsToGroups(
       groupProjection.tabGroups,
-      state.groupsByWorktree[worktreeId] ?? [],
+      inputs.groups,
       activeGroupId,
       fallbackEditorTabs,
       active?.id ?? null
     )
     const tabGroupLayout =
       tabGroups && tabGroups.length > 0
-        ? pruneTabGroupLayout(
-            (state.layoutByWorktree ?? EMPTY_LAYOUT_BY_WORKTREE)[worktreeId],
-            new Set(tabGroups.map((group) => group.id))
-          )
+        ? pruneTabGroupLayout(inputs.tabGroupLayout, new Set(tabGroups.map((group) => group.id)))
         : groupProjection.tabGroupLayout
     const content = {
       activeGroupId,
@@ -950,12 +1381,16 @@ export function buildMobileSessionTabSnapshots(
       tabs
     }
     // Why: main suppresses per-worktree fanout on an unchanged (epoch, version)
-    // pair, so reuse the cached version for structurally-identical content. The
-    // global counter still advances per worktree per build (as before caching)
-    // so a changed worktree's fresh version stays ahead of main's +1 bumps.
+    // pair, so reuse the cached version for structurally-identical content —
+    // the backstop for inputs that churn by reference without changing output.
+    // The counter only ever advances, so a later real change still outranks it.
     const candidateVersion = ++mobileSessionSnapshotVersion
-    const cached = mobileSessionSnapshotCacheByWorktree.get(worktreeId)
     if (cached && jsonContentEquals(cached.content, content)) {
+      mobileSessionSnapshotCacheByWorktree.set(worktreeId, {
+        inputs,
+        content,
+        snapshot: cached.snapshot
+      })
       snapshots.push(cached.snapshot)
       continue
     }
@@ -965,7 +1400,7 @@ export function buildMobileSessionTabSnapshots(
       snapshotVersion: candidateVersion,
       ...content
     }
-    mobileSessionSnapshotCacheByWorktree.set(worktreeId, { content, snapshot })
+    mobileSessionSnapshotCacheByWorktree.set(worktreeId, { inputs, content, snapshot })
     snapshots.push(snapshot)
   }
 
@@ -984,18 +1419,16 @@ function isEditorSurfaceTab(tab: Pick<Tab, 'contentType'>): boolean {
 }
 
 function getEditorUnifiedTabsForWorktree(
-  state: Pick<AppState, 'unifiedTabsByWorktree'>,
-  worktreeId: string
+  inputs: Pick<MobileSessionWorktreeInputs, 'unifiedTabs'>
 ): Tab[] {
-  return (state.unifiedTabsByWorktree[worktreeId] ?? []).filter(isEditorSurfaceTab)
+  return inputs.unifiedTabs.filter(isEditorSurfaceTab)
 }
 
 function applyUnifiedEditorTabIdsToLegacyOrder(
   order: readonly VisibleTabRef[],
-  state: Pick<AppState, 'unifiedTabsByWorktree'>,
-  worktreeId: string
+  inputs: Pick<MobileSessionWorktreeInputs, 'unifiedTabs'>
 ): VisibleTabRef[] {
-  const unifiedEditorTabs = getEditorUnifiedTabsForWorktree(state, worktreeId)
+  const unifiedEditorTabs = getEditorUnifiedTabsForWorktree(inputs)
   if (unifiedEditorTabs.length === 0) {
     return [...order]
   }
@@ -1101,13 +1534,13 @@ function isRemoteRuntimePtyId(ptyId: string | null | undefined): boolean {
 }
 
 function isWebOnlyMirroredTerminalTab(
-  state: Pick<AppState, 'terminalLayoutsByTabId'>,
-  tab: Pick<NonNullable<AppState['tabsByWorktree'][string]>[number], 'id' | 'ptyId'>
+  tab: Pick<NonNullable<AppState['tabsByWorktree'][string]>[number], 'id' | 'ptyId'>,
+  layout: AppState['terminalLayoutsByTabId'][string] | undefined
 ): boolean {
   if (!isWebTerminalSurfaceTabId(tab.id)) {
     return false
   }
-  const layoutPtyIds = Object.values(state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId ?? {})
+  const layoutPtyIds = Object.values(layout?.ptyIdsByLeafId ?? {})
   const ptyIds = [tab.ptyId, ...layoutPtyIds].filter(
     (ptyId): ptyId is string => typeof ptyId === 'string' && ptyId.length > 0
   )
@@ -1202,9 +1635,24 @@ function getOrderedTabGroups(
   return ordered
 }
 
+// Why: getActiveTabNavOrder only reads the [worktreeId] entry of each slice, so a single-key view keeps this path off AppState.
+function buildLegacyNavOrderView(
+  inputs: MobileSessionWorktreeInputs
+): Parameters<typeof getActiveTabNavOrder>[0] {
+  const { worktreeId } = inputs
+  return {
+    activeGroupIdByWorktree: inputs.activeGroupId ? { [worktreeId]: inputs.activeGroupId } : {},
+    groupsByWorktree: { [worktreeId]: inputs.groups },
+    unifiedTabsByWorktree: { [worktreeId]: inputs.unifiedTabs },
+    tabBarOrderByWorktree: inputs.tabBarOrder ? { [worktreeId]: inputs.tabBarOrder } : {},
+    tabsByWorktree: { [worktreeId]: inputs.terminalTabs },
+    openFiles: inputs.openFilesById ? [...inputs.openFilesById.values()] : [],
+    browserTabsByWorktree: { [worktreeId]: inputs.browserWorkspaces }
+  }
+}
+
 function buildMobileSessionGroupProjection(
-  state: AppState,
-  worktreeId: string,
+  inputs: MobileSessionWorktreeInputs,
   ids: {
     terminalIds: string[]
     editorIds: string[]
@@ -1215,15 +1663,14 @@ function buildMobileSessionGroupProjection(
   tabGroups?: RuntimeMobileSessionTabGroup[]
   tabGroupLayout?: TabGroupLayoutNode | null
 } {
-  const groups = state.groupsByWorktree[worktreeId] ?? []
+  const groups = inputs.groups
   if (groups.length === 0) {
     return {
       order: applyUnifiedEditorTabIdsToLegacyOrder(
-        getActiveTabNavOrder(state, worktreeId, {
+        getActiveTabNavOrder(buildLegacyNavOrderView(inputs), inputs.worktreeId, {
           editorIds: ids.editorIds
         }),
-        state,
-        worktreeId
+        inputs
       )
     }
   }
@@ -1231,12 +1678,11 @@ function buildMobileSessionGroupProjection(
   const terminalIds = new Set(ids.terminalIds)
   const editorIds = new Set(ids.editorIds)
   const browserIds = new Set(ids.browserIds)
-  const tabs = state.unifiedTabsByWorktree[worktreeId] ?? []
+  const tabs = inputs.unifiedTabs
   const order: VisibleTabRef[] = []
   const tabGroups: RuntimeMobileSessionTabGroup[] = []
 
-  const layoutByWorktree = state.layoutByWorktree ?? {}
-  for (const group of getOrderedTabGroups(groups, layoutByWorktree[worktreeId])) {
+  for (const group of getOrderedTabGroups(groups, inputs.tabGroupLayout)) {
     const groupTabs = tabs.filter((tab) => tab.groupId === group.id)
     const visibleOrder = getGroupVisibleTabOrder(
       group,
@@ -1267,7 +1713,7 @@ function buildMobileSessionGroupProjection(
   return {
     order,
     tabGroups,
-    tabGroupLayout: pruneTabGroupLayout(layoutByWorktree[worktreeId], validGroupIds)
+    tabGroupLayout: pruneTabGroupLayout(inputs.tabGroupLayout, validGroupIds)
   }
 }
 
@@ -1343,16 +1789,16 @@ function resolveMobileTerminalTheme(
   return { mode: appearance.mode, theme: theme as RuntimeMobileTerminalTheme['theme'] }
 }
 
-function getRuntimeLeafIdsForTerminal(tabId: string, state: AppState): string[] {
-  const registered = registeredTabs.get(tabId)
-  const manager = registered?.getManager()
-  const liveLeafIds = manager?.getPanes().map((pane) => pane.leafId) ?? []
+function getRuntimeLeafIdsForTerminal(
+  capture: MountedTerminalSurfaceCapture | undefined,
+  savedLayout: AppState['terminalLayoutsByTabId'][string] | undefined
+): readonly string[] {
+  const liveLeafIds = capture?.paneLeafIds ?? []
   if (liveLeafIds.length > 0) {
     return liveLeafIds
   }
 
-  const layout = state.terminalLayoutsByTabId[tabId]
-  const persistedLeafIds = collectLeafIdsInOrder(layout?.root).filter(isTerminalLeafId)
+  const persistedLeafIds = collectLeafIdsInOrder(savedLayout?.root).filter(isTerminalLeafId)
   if (persistedLeafIds.length > 0) {
     return persistedLeafIds
   }
@@ -1362,38 +1808,29 @@ function getRuntimeLeafIdsForTerminal(tabId: string, state: AppState): string[] 
 }
 
 function buildMobileTerminalSurfaceTabs(
-  state: AppState,
+  inputs: MobileSessionWorktreeInputs,
   terminal: NonNullable<AppState['tabsByWorktree'][string]>[number],
-  worktreeId: string,
-  systemPrefersDark: boolean,
   unifiedTabId?: string
 ): RuntimeMobileSessionSnapshotTab[] {
-  const registered = registeredTabs.get(terminal.id)
+  const capture = inputs.mountedSurfaceCaptureByTabId.get(terminal.id)
   const isDesktopTabActive = unifiedTabId
-    ? state.groupsByWorktree[worktreeId]?.some(
-        (group) =>
-          group.id === state.activeGroupIdByWorktree[worktreeId] &&
-          group.activeTabId === unifiedTabId
-      ) === true
-    : state.activeTabId === terminal.id
-  const manager = registered?.getManager()
-  const liveActivePaneId = manager?.getActivePane()?.id ?? null
-  const leafIds = getRuntimeLeafIdsForTerminal(terminal.id, state)
-  const activeLeafId =
-    liveActivePaneId !== null
-      ? (manager?.getLeafId(liveActivePaneId) ?? null)
-      : (state.terminalLayoutsByTabId[terminal.id]?.activeLeafId ?? leafIds[0] ?? null)
-  const paneTitles = state.runtimePaneTitlesByTabId[terminal.id] ?? {}
-  const generatedTitlesEnabled = state.settings?.tabAutoGenerateTitle === true
-  const savedLayout = state.terminalLayoutsByTabId[terminal.id]
+    ? isUnifiedTabActiveInActiveGroup(inputs, unifiedTabId)
+    : inputs.activeTerminalTabId === terminal.id
+  const savedLayout = inputs.terminalLayoutByTabId.get(terminal.id)
+  const leafIds = getRuntimeLeafIdsForTerminal(capture, savedLayout)
+  const activeLeafId = capture?.hasLiveActivePane
+    ? capture.liveActiveLeafId
+    : (savedLayout?.activeLeafId ?? leafIds[0] ?? null)
+  const paneTitles = inputs.paneTitlesByTabId.get(terminal.id) ?? {}
+  const generatedTitlesEnabled = inputs.generatedTitlesEnabled
   const sanitizedSavedLayout = savedLayout
     ? sanitizeTerminalLayoutPaneTitles(savedLayout, terminal)
     : undefined
   const savedPtyIdsByLeafId = sanitizedSavedLayout?.ptyIdsByLeafId ?? {}
-  const terminalTheme = resolveMobileTerminalTheme(state, systemPrefersDark)
+  const terminalTheme = inputs.terminalTheme
   // Agent-matched like the desktop consumer: a pane whose agent changed keeps its
   // tab id, so an unmatched seed would prefill the new agent's chat with stale text.
-  const seededLaunchDraft = state.nativeChatLaunchDraftByTabId?.[terminal.id]
+  const seededLaunchDraft = inputs.launchDraftByTabId.get(terminal.id)
   const launchDraftEntry =
     seededLaunchDraft &&
     !seededLaunchDraft.resolved &&
@@ -1401,11 +1838,7 @@ function buildMobileTerminalSurfaceTabs(
       ? seededLaunchDraft
       : null
   const publishedLaunchDraft = launchDraftEntry?.text.trim() ? launchDraftEntry : null
-  const container = registered?.getContainer()
-  const firstChild = container?.firstElementChild
-  const liveLayoutRoot = serializePaneTree(
-    typeof HTMLElement !== 'undefined' && firstChild instanceof HTMLElement ? firstChild : null
-  )
+  const liveLayoutRoot = capture?.liveLayoutRoot ?? null
   const parentLayout = normalizeTerminalLayoutSnapshot({
     // Why: live DOM tree is authoritative when mounted, else the saved tree; synthesize only as a last resort, never re-guess.
     root: resolveTerminalLayoutRoot({
@@ -1425,11 +1858,11 @@ function buildMobileTerminalSurfaceTabs(
       : {})
   } satisfies TerminalLayoutSnapshot).snapshot
   return leafIds.map((leafId) => {
-    const numericPaneId = manager?.getNumericIdForLeaf(leafId) ?? null
+    const numericPaneId = capture?.numericPaneIdByLeafId.get(leafId) ?? null
     const ptyId =
       numericPaneId === null
         ? (savedPtyIdsByLeafId[leafId] ?? (leafIds.length === 1 ? terminal.ptyId : null))
-        : (registered?.getPtyIdForPane(numericPaneId) ?? savedPtyIdsByLeafId[leafId] ?? null)
+        : (capture?.ptyIdByNumericPaneId.get(numericPaneId) ?? savedPtyIdsByLeafId[leafId] ?? null)
     const legacyPaneId = numericPaneId === null ? /^pane:(\d+)$/.exec(leafId)?.[1] : null
     const paneTitle =
       numericPaneId !== null
@@ -1446,7 +1879,7 @@ function buildMobileTerminalSurfaceTabs(
     const agentStatusTitle = paneTitle ?? terminal.title ?? ''
     const agentStatus =
       paneKey && !isClaudeManagementTitle(agentStatusTitle)
-        ? state.agentStatusByPaneKey?.[paneKey]
+        ? inputs.agentStatusByPaneKey.get(paneKey)
         : undefined
     return {
       type: 'terminal' as const,
@@ -1476,9 +1909,7 @@ function buildMobileTerminalSurfaceTabs(
 }
 
 function buildMobileMarkdownTab(
-  state: AppState,
-  openFileByWorktreeAndId: OpenFileByWorktreeAndId,
-  editorDraftVersionByFileId: ReadonlyMap<string, string>,
+  inputs: MobileSessionWorktreeInputs,
   file: AppState['openFiles'][number],
   unifiedTab?: Tab
 ): RuntimeMobileSessionMarkdownTab | null {
@@ -1491,10 +1922,9 @@ function buildMobileMarkdownTab(
 
   const sourceFile =
     file.mode === 'markdown-preview' && file.markdownPreviewSourceFileId
-      ? (openFileByWorktreeAndId.get(file.worktreeId)?.get(file.markdownPreviewSourceFileId) ??
-        file)
+      ? (inputs.openFilesById?.get(file.markdownPreviewSourceFileId) ?? file)
       : file
-  const draftVersion = editorDraftVersionByFileId.get(sourceFile.id)
+  const draftVersion = inputs.editorDraftVersionByFileId.get(sourceFile.id)
   const title = file.relativePath.split(/[\\/]/).pop() || file.relativePath || 'Markdown'
   const unifiedTabId = unifiedTab?.id
 
@@ -1508,8 +1938,8 @@ function buildMobileMarkdownTab(
     mode: file.mode,
     isDirty: file.isDirty || sourceFile.isDirty,
     isActive: unifiedTabId
-      ? isUnifiedTabActiveInActiveGroup(state, file.worktreeId, unifiedTabId)
-      : isFileActiveEditorSurface(state, file),
+      ? isUnifiedTabActiveInActiveGroup(inputs, unifiedTabId)
+      : isFileActiveEditorSurface(inputs, file),
     sourceFileId: sourceFile.id,
     sourceFilePath: sourceFile.filePath,
     sourceRelativePath: sourceFile.relativePath,
@@ -1520,7 +1950,7 @@ function buildMobileMarkdownTab(
 }
 
 function buildMobileFileTab(
-  state: AppState,
+  inputs: MobileSessionWorktreeInputs,
   file: AppState['openFiles'][number],
   unifiedTab?: Tab
 ): RuntimeMobileSessionFileTab {
@@ -1541,23 +1971,16 @@ function buildMobileFileTab(
     color: unifiedTab?.color ?? null,
     isPinned: unifiedTab?.isPinned === true,
     isActive: unifiedTabId
-      ? isUnifiedTabActiveInActiveGroup(state, file.worktreeId, unifiedTabId)
-      : isFileActiveEditorSurface(state, file)
+      ? isUnifiedTabActiveInActiveGroup(inputs, unifiedTabId)
+      : isFileActiveEditorSurface(inputs, file)
   }
 }
 
 function isFileActiveEditorSurface(
-  state: Pick<
-    AppState,
-    'activeFileId' | 'activeFileIdByWorktree' | 'activeTabType' | 'activeTabTypeByWorktree'
-  >,
-  file: Pick<AppState['openFiles'][number], 'id' | 'worktreeId'>
+  inputs: Pick<MobileSessionWorktreeInputs, 'activeEditorFileId' | 'activeEditorTabType'>,
+  file: Pick<AppState['openFiles'][number], 'id'>
 ): boolean {
-  const activeType = state.activeTabTypeByWorktree?.[file.worktreeId] ?? state.activeTabType
-  return (
-    activeType === 'editor' &&
-    (state.activeFileIdByWorktree?.[file.worktreeId] ?? state.activeFileId) === file.id
-  )
+  return inputs.activeEditorTabType === 'editor' && inputs.activeEditorFileId === file.id
 }
 
 function isMobileFileDiffSource(
@@ -1582,12 +2005,13 @@ function isMobilePublishableOpenFile(file: AppState['openFiles'][number]): boole
   return !isMobileUnsupportedCombinedDiffSource(file.diffSource)
 }
 
+// Why: the store buckets a workspace under its own worktreeId, so this worktree's scoped inputs are the workspace's own scope.
 function buildMobileBrowserTab(
-  state: AppState,
+  inputs: MobileSessionWorktreeInputs,
   workspace: NonNullable<AppState['browserTabsByWorktree'][string]>[number],
   unifiedTab?: Tab
 ): RuntimeMobileSessionBrowserTab {
-  const pages = state.browserPagesByWorkspace[workspace.id] ?? []
+  const pages = inputs.pagesByBrowserWorkspaceId.get(workspace.id) ?? []
   const activePage = pages.find((page) => page.id === workspace.activePageId) ?? pages[0] ?? null
   const title =
     activePage?.title || workspace.title || activePage?.url || workspace.url || 'Browser'
@@ -1606,26 +2030,22 @@ function buildMobileBrowserTab(
     // Why: null means the active page cleared its failure; ?? would resurrect a stale workspace-level error.
     loadError: activePage ? activePage.loadError : workspace.loadError,
     certificateFailure: activePage
-      ? (state.browserCertificateFailuresByPageId?.[activePage.id] ?? null)
+      ? (inputs.certificateFailureByBrowserPageId.get(activePage.id) ?? null)
       : null,
     color: unifiedTab?.color ?? null,
     isPinned: unifiedTab?.isPinned === true,
     isActive: unifiedTabId
-      ? isUnifiedTabActiveInActiveGroup(state, workspace.worktreeId, unifiedTabId)
-      : state.activeBrowserTabIdByWorktree[workspace.worktreeId] === workspace.id
+      ? isUnifiedTabActiveInActiveGroup(inputs, unifiedTabId)
+      : inputs.activeBrowserWorkspaceId === workspace.id
   }
 }
 
 function isUnifiedTabActiveInActiveGroup(
-  state: AppState,
-  worktreeId: string,
+  inputs: Pick<MobileSessionWorktreeInputs, 'groups' | 'activeGroupId'>,
   unifiedTabId: string
 ): boolean {
-  const activeGroupId = state.activeGroupIdByWorktree[worktreeId]
-  return (
-    state.groupsByWorktree[worktreeId]?.some(
-      (group) => group.id === activeGroupId && group.activeTabId === unifiedTabId
-    ) === true
+  return inputs.groups.some(
+    (group) => group.id === inputs.activeGroupId && group.activeTabId === unifiedTabId
   )
 }
 

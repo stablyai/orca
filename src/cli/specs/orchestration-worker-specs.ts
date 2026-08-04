@@ -67,5 +67,39 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
       'orca orchestration worker-abandon --dispatch <dispatch_id> [--retry-request <id>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'dispatch', 'retry-request'],
     notes: ['Retains all possibly-live resources and performs no process or filesystem action.']
+  },
+  {
+    path: ['orchestration', 'worker-release'],
+    summary: 'Release the terminal of one settled supervised worker',
+    usage:
+      'orca orchestration worker-release --dispatch <dispatch_id> [--retry-request <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'dispatch', 'retry-request'],
+    notes: [
+      'Post-completion cleanup for a settled (succeeded or failed) worker; closes only the exact coordinator-owned agent terminal of that worker.',
+      'An inspectable output archive is preserved before the terminal closes, so worker-read still returns output afterwards.',
+      'Never closes setup terminals, configured tabs, reused or pre-existing terminals, user-taken-over terminals, or unproven identities.',
+      'Idempotent: repeating the call reports already_released. Only release_unknown exits 1; retained, release_pending, and already_released exit 0.'
+    ]
+  },
+  {
+    path: ['orchestration', 'worker-retain'],
+    summary: 'Keep one supervised worker terminal live for debugging',
+    usage:
+      'orca orchestration worker-retain --dispatch <dispatch_id> [--retry-request <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'dispatch', 'retry-request'],
+    notes: [
+      'Records a durable user-requested exception; a later explicit worker-release clears it and releases the terminal.',
+      'Performs no process or filesystem action.'
+    ]
+  },
+  {
+    path: ['orchestration', 'worker-list'],
+    summary: 'List supervised worker terminal resource accounting',
+    usage:
+      'orca orchestration worker-list [--run <run_id>] [--terminal-state <active|reclaimable|retained|release_pending|release_unknown|released>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'run', 'terminal-state'],
+    notes: [
+      'Terminal state is process accounting and is reported separately from Task status; a completed Task can still own a live terminal.'
+    ]
   }
 ]

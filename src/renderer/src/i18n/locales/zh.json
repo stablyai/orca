@@ -4220,7 +4220,9 @@
           "ee240a39eb": "编辑筛选条件",
           "automationCreated": "隐藏自动化创建的工作区",
           "cliCreated": "Hide CLI-created",
-          "detachedHead": "隐藏分离 HEAD"
+          "detachedHead": "隐藏分离 HEAD",
+          "keepDefaultBranch": "默认分支除外",
+          "keepDefaultBranchAria": "隐藏休眠工作区时仍显示默认分支"
         },
         "SidebarHeader": {
           "92154beb7e": "新工作区",
@@ -4285,7 +4287,9 @@
           "82594419ba": "筛选条件",
           "automationCreated": "隐藏自动化创建的工作区",
           "cliCreated": "Hide CLI-created",
-          "detachedHead": "隐藏分离 HEAD"
+          "detachedHead": "隐藏分离 HEAD",
+          "keepDefaultBranch": "默认分支除外",
+          "keepDefaultBranchAria": "隐藏休眠工作区时仍显示默认分支"
         },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "智能体活动布局",
@@ -4956,7 +4960,8 @@
           "failedSetParent": "无法设置父工作树",
           "current": "当前",
           "searchPlaceholder": "搜索工作树...",
-          "empty": "没有匹配的可用工作树。"
+          "empty": "没有匹配的可用工作树。",
+          "setParentFor": "为以下工作树设置父级"
         },
         "WorktreeCardStatusSlot": {
           "branchIdentity": "分支"
@@ -5024,8 +5029,6 @@
           "sshImportAlreadySynced": "~/.ssh/config 已同步。",
           "sshImportSynced": "已同步 {{value0}} 个主机{{value1}}。",
           "sshImportFailed": "导入 SSH 配置失败。",
-          "importing": "正在导入...",
-          "importSshConfig": "导入 ~/.ssh/config",
           "sshPersistenceDefault": "此主机上的远程终端会保持运行，直到你结束它们或重置中继。",
           "advanced": "Advanced",
           "linkDestination": "链接目标",
@@ -6477,7 +6480,10 @@
           "f79972271a": "找不到此仓库的 GitHub 远程。",
           "4d039317f4": "网站图标",
           "acf31559a0": "输入有效的网站 URL。",
-          "868c5c9b56": "无法导入仓库图标"
+          "868c5c9b56": "无法导入仓库图标",
+          "emojiTooLongForRepoIcon": "此表情符号无法用作仓库图标。",
+          "currentEmojiSelection": "当前：{{value0}}",
+          "searchEmojiPlaceholder": "搜索表情符号"
         },
         "RepositoryPane": {
           "15a99d9b9f": "相对路径从该项目根解析。",
@@ -10090,10 +10096,10 @@
             "653c105ecc": "更多 PR 操作",
             "f316a8ca2b": "未选择未解决的评论。",
             "d00ebdc402": "使用 AI 解决 {{value0}} 评论",
-            "ed3f79c031": "启动智能体前请检查提示词。启动后，选中的线程会被标记为已解决。",
-            "f273f2271c": "已启动智能体。已标记 {{value0}} 个为已解决，跳过 {{value1}} 个，失败 {{value2}} 个。",
-            "aa95b81a3a": "已启动智能体。已标记 {{value0}} 个为已解决，跳过 {{value1}} 个，失败 {{value2}} 个。",
-            "495b2f8c4b": "已启动智能体，但无法将选中的评论标记为已解决。",
+            "ed3f79c031": "启动 agent 前请检查提示词。提示词送达后，Orca 会回复选中的评论，并在可能时解决主机上的讨论串。",
+            "f273f2271c": "已启动智能体。已标记 {{value0}} 个为已解决，回复 {{value1}} 个，跳过 {{value2}} 个，失败 {{value3}} 个。{{value4}}",
+            "aa95b81a3a": "已启动智能体。已标记 {{value0}} 个为已解决，回复 {{value1}} 个，跳过 {{value2}} 个，失败 {{value3}} 个。",
+            "495b2f8c4b": "已启动智能体，但无法解决或回复选中的评论。",
             "3c3ad3a1d2": "已启动智能体。选中的评论中没有可在托管平台上标记为已解决的评论。",
             "review": {
               "auto_retry": "Orca 将在 {{time}} 重试。",
@@ -10103,7 +10109,8 @@
             "sync": {
               "pending": "Syncing…",
               "branch": "Sync Branch"
-            }
+            },
+            "7e4b2a19c0": "无法确定要回复的 GitHub PR。"
           },
           "CreatePullRequestDialog": {
             "2bc1b4345e": "取消",
@@ -10648,7 +10655,6 @@
                 "fd46a70f1a": "开始",
                 "a54ae21c6f": "状态：",
                 "e4e3af15ee": "查看完整详细信息",
-                "2524d1fb83": "日志尾部提供完整详细信息。",
                 "a2fb3f4408": "显示前 100 个作业",
                 "df137989b3": "显示前 20 个注释",
                 "1f2b980522": "正在加载检查详细信息...",
@@ -10701,7 +10707,8 @@
                 "5e6e5a13fa": "查看",
                 "actionRequiredHint": "此检查需要在 GitHub 上执行手动操作（例如批准工作流运行）后才能解除合并阻止。",
                 "b3195cba33": "取消将作者标记为机器人",
-                "f588b46a6c": "将作者标记为机器人"
+                "f588b46a6c": "将作者标记为机器人",
+                "checkDetailsLoadFailed": "加载检查详细信息失败。"
               },
               "empty": {
                 "state": {
@@ -11345,6 +11352,14 @@
           },
           "activityBar": {
             "error": "错误"
+          },
+          "AiVaultSessionLimitMenu": {
+            "historyDepth": "历史记录数量：{{value0}}",
+            "performanceWarning": "加载更多历史记录可能会拖慢整个应用，尤其是在远程主机上。无限制模式会扫描所有可用历史记录。",
+            "recommended": "推荐",
+            "mayBeSlower": "可能较慢",
+            "slowest": "最慢",
+            "unlimited": "无限制"
           }
         }
       },
@@ -14352,6 +14367,11 @@
       },
       "webRuntimeSession": {
         "remoteHostDisconnected": "The workspace is not connected to a remote Orca host."
+      },
+      "gitlabJobTraceClient": {
+        "loadFailed": "加载 GitLab 作业日志失败。",
+        "emptyTrace": "此 GitLab 作业没有可用的日志。",
+        "timedOut": "加载 GitLab 作业日志超时。"
       }
     }
   },
