@@ -913,7 +913,13 @@ export class DaemonPtyAdapter implements IPtyProvider {
     if (result.isNew) {
       // Why: a pre-v31 daemon ignores attachOnly; retire its accidental spawn
       // instead of publishing a fresh shell as an attach.
-      await this.client.request('kill', { sessionId: id, immediate: true }).catch(() => {})
+      await this.client.request('kill', { sessionId: id, immediate: true }).catch((error) => {
+        // Why surface, not swallow: a failed retire leaves an untracked orphan shell.
+        console.warn('[daemon] attach-only retire of accidental legacy spawn failed', {
+          sessionId: id,
+          error
+        })
+      })
       throw new SessionNotFoundError(id)
     }
     this.clearSessionAwaitingDaemonRecovery(id)

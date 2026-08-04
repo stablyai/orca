@@ -116,10 +116,7 @@ function createDaemonProviderModel(opts: { snapshotCapable: boolean }) {
   }
 }
 
-function setupNeverAttachedDaemonSession(opts: {
-  snapshotCapable: boolean
-  screen?: string
-}): {
+function setupNeverAttachedDaemonSession(opts: { snapshotCapable: boolean; screen?: string }): {
   runtime: OrcaRuntimeService
   model: ReturnType<typeof createDaemonProviderModel>
   handle: string
@@ -157,26 +154,30 @@ function startMultiplex(runtime: OrcaRuntimeService, connectionId = 'conn-deskto
     method: 'terminal.multiplex',
     params: {}
   }
-  const dispatchPromise = dispatcher.dispatchStreaming(request, (msg) => {
-    messages.push(JSON.parse(msg))
-  }, {
-    connectionId,
-    sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => {
-      binaryFrames.push(bytes)
-      return true
+  const dispatchPromise = dispatcher.dispatchStreaming(
+    request,
+    (msg) => {
+      messages.push(JSON.parse(msg))
     },
-    registerBinaryStreamHandler: (
-      streamId: number,
-      handler: (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
-    ) => {
-      handlers.set(streamId, handler)
-      return () => {
-        if (handlers.get(streamId) === handler) {
-          handlers.delete(streamId)
+    {
+      connectionId,
+      sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => {
+        binaryFrames.push(bytes)
+        return true
+      },
+      registerBinaryStreamHandler: (
+        streamId: number,
+        handler: (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
+      ) => {
+        handlers.set(streamId, handler)
+        return () => {
+          if (handlers.get(streamId) === handler) {
+            handlers.delete(streamId)
+          }
         }
       }
     }
-  })
+  )
   return { messages, binaryFrames, handlers, dispatchPromise }
 }
 
@@ -222,8 +223,7 @@ async function waitForSubscribed(
   await vi.waitFor(() =>
     expect(
       harness.messages.some(
-        (message) =>
-          message.result?.type === 'subscribed' && message.result?.streamId === streamId
+        (message) => message.result?.type === 'subscribed' && message.result?.streamId === streamId
       )
     ).toBe(true)
   )
@@ -346,14 +346,34 @@ describe('subscriber-driven daemon attach (never-activated tab)', () => {
     await Promise.resolve()
     expect(model.sessions.has(absentPtyId)).toBe(false)
     expect(model.emitData(absentPtyId, 'ghost')).toBe(false)
-    expect(
-      harness.messages.some((message) => message.result?.type === 'error')
-    ).toBe(false)
+    expect(harness.messages.some((message) => message.result?.type === 'error')).toBe(false)
 
     // Unrelated live sessions are untouched by another pty's subscribers.
     expect(model.sessions.get(PTY_ID)?.attached).toBe(false)
     expect(model.attachCalls).not.toContain(PTY_ID)
     expect(model.resizeCalls).toEqual([])
+  })
+
+  it('retries a refused attach for a later subscriber once the daemon learns the session', async () => {
+    const { runtime, model, handle } = setupNeverAttachedDaemonSession({ snapshotCapable: false })
+    // Degraded-daemon shape: main knows the record, the daemon does not own the
+    // id yet, and the controller answers false rather than a no-op success.
+    model.sessions.delete(PTY_ID)
+
+    const harness = startMultiplex(runtime)
+    await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
+    sendSubscribe(harness, 1, handle, 'client-a')
+    await waitForSubscribed(harness, 1)
+    await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID]))
+    // A refused attach must not pin sticky success while the stream is blank.
+    expect(model.emitData(PTY_ID, 'ghost')).toBe(false)
+
+    model.sessions.set(PTY_ID, { cols: 100, rows: 30, attached: false, screen: '' })
+    sendSubscribe(harness, 2, handle, 'client-b')
+    await waitForSubscribed(harness, 2)
+    await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID, PTY_ID]))
+    expect(model.emitData(PTY_ID, 'late daemon hello\r\n')).toBe(true)
+    await vi.waitFor(() => expect(outputText(harness)).toContain('late daemon hello'))
   })
 
   it('does not subscriber-attach or provider-read a session this app already spawned', async () => {

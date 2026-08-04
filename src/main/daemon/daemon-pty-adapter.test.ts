@@ -1714,6 +1714,41 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         ensureConnectedSpy.mockRestore()
       }
     })
+
+    it('surfaces a failed retire of the accidental legacy spawn instead of swallowing it', async () => {
+      const ensureConnectedSpy = vi
+        .spyOn(DaemonClient.prototype, 'ensureConnected')
+        .mockResolvedValue()
+      const requestSpy = vi
+        .spyOn(DaemonClient.prototype, 'request')
+        .mockImplementation(async (type: string) => {
+          if (type === 'getSize') {
+            return { size: { cols: 100, rows: 30 } } as never
+          }
+          if (type === 'createOrAttach') {
+            return { isNew: true, pid: 77, shellState: 'unsupported', snapshot: null } as never
+          }
+          throw new Error('kill transport lost')
+        })
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 30 })
+      try {
+        await expect(legacy.attach('orphaned-legacy-session')).rejects.toThrow(
+          'Session not found: orphaned-legacy-session'
+        )
+
+        // The orphaned replacement is at least diagnosable.
+        expect(warnSpy).toHaveBeenCalledWith(
+          '[daemon] attach-only retire of accidental legacy spawn failed',
+          expect.objectContaining({ sessionId: 'orphaned-legacy-session' })
+        )
+      } finally {
+        legacy.dispose()
+        warnSpy.mockRestore()
+        requestSpy.mockRestore()
+        ensureConnectedSpy.mockRestore()
+      }
+    })
   })
 
   describe('listProcesses', () => {
