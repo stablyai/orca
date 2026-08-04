@@ -273,6 +273,29 @@ describe('project-host workspace target resolution', () => {
     })
   })
 
+  it('does not fall back to another host when only a host is selected', () => {
+    const localRepo = makeRepo('orca-local')
+    const remoteRepo = makeRepo('orca-ssh', { connectionId: 'builder' })
+    const projects = [makeProject('github:stablyai/orca', ['orca-local', 'orca-ssh'])]
+    const projectHostSetups = [
+      makeSetup('orca-local', 'github:stablyai/orca', 'local', 'orca-local')
+    ]
+
+    expect(
+      resolveWorkspaceCreationTarget({
+        eligibleRepos: [localRepo, remoteRepo],
+        projects,
+        projectHostSetups,
+        draftRepoId: 'orca-local',
+        hostId: 'ssh:builder',
+        actionableHostIds: new Set(['local', 'ssh:builder'])
+      })
+    ).toEqual({
+      status: 'unavailable',
+      reason: 'project-not-set-up-on-host'
+    })
+  })
+
   it('reports setup-not-ready when the selected host has pending setup metadata', () => {
     const repo = makeRepo('orca')
     const projects = [makeProject('github:stablyai/orca', ['orca'])]
@@ -316,6 +339,76 @@ describe('project-host workspace target resolution', () => {
     ).toEqual({
       status: 'unavailable',
       reason: 'setup-not-ready'
+    })
+  })
+
+  it('does not resolve workspace creation through a removed host', () => {
+    const remoteRepo = makeRepo('remote-repo', { connectionId: 'removed' })
+    const projects = [makeProject('repo:remote', ['remote-repo'])]
+    const projectHostSetups = [
+      makeSetup('removed-setup', 'repo:remote', 'ssh:removed', 'remote-repo')
+    ]
+
+    expect(
+      resolveWorkspaceCreationTarget({
+        eligibleRepos: [remoteRepo],
+        projects,
+        projectHostSetups,
+        draftRepoId: remoteRepo.id,
+        projectHostSetupId: 'removed-setup',
+        actionableHostIds: new Set(['local'])
+      })
+    ).toEqual({ status: 'unavailable', reason: 'setup-not-found' })
+  })
+
+  it('does not silently switch an explicit setup id to an actionable sibling host', () => {
+    const remoteRepo = makeRepo('remote-repo', { connectionId: 'removed' })
+    const localRepo = makeRepo('local-repo')
+    const projects = [makeProject('repo:orca', ['remote-repo', 'local-repo'])]
+    const projectHostSetups = [
+      makeSetup('removed-setup', 'repo:orca', 'ssh:removed', 'remote-repo'),
+      makeSetup('local-setup', 'repo:orca', 'local', 'local-repo')
+    ]
+
+    expect(
+      resolveWorkspaceCreationTarget({
+        eligibleRepos: [remoteRepo, localRepo],
+        projects,
+        projectHostSetups,
+        draftRepoId: remoteRepo.id,
+        projectHostSetupId: 'removed-setup',
+        actionableHostIds: new Set(['local'])
+      })
+    ).toEqual({ status: 'unavailable', reason: 'setup-not-found' })
+  })
+
+  it('routes a stale duplicate-id repo selection to the actionable host repo', () => {
+    const remoteRepo = makeRepo('orca', {
+      path: '/remote/orca',
+      connectionId: 'removed'
+    })
+    const localRepo = makeRepo('orca', { path: '/local/orca' })
+    const project = makeProject('repo:orca', ['orca'])
+    const projectHostSetups = [
+      makeSetup('remote-setup', project.id, 'ssh:removed', 'orca'),
+      makeSetup('local-setup', project.id, 'local', 'orca')
+    ]
+
+    expect(
+      resolveWorkspaceCreationTarget({
+        eligibleRepos: [remoteRepo, localRepo],
+        projects: [project],
+        projectHostSetups,
+        draftRepoId: 'orca',
+        actionableHostIds: new Set(['local'])
+      })
+    ).toMatchObject({
+      status: 'ready',
+      target: {
+        projectHostSetupId: 'local-setup',
+        hostId: 'local',
+        repo: { path: '/local/orca' }
+      }
     })
   })
 

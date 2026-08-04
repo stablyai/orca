@@ -3,6 +3,10 @@ import { ipcMain, powerMonitor, type BrowserWindow } from 'electron'
 import { appendFileSync } from 'node:fs'
 import type { Store } from '../persistence'
 import { SshConnectionStore } from '../ssh/ssh-connection-store'
+import {
+  listUserSshConfigHostSummaries,
+  resolveUserSshConfigHost
+} from '../ssh/ssh-config-host-picker'
 import type { SshConnectionCallbacks } from '../ssh/ssh-connection'
 import { SshConnectionManager } from '../ssh/ssh-connection-manager'
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
@@ -13,6 +17,7 @@ import type {
   DetectedPort,
   EnrichedDetectedPort,
   SavedPortForward,
+  SshConfigHostListArgs,
   SshRepoReadoption,
   SshTarget,
   SshConnectionStatus,
@@ -71,6 +76,8 @@ const SSH_IPC_CHANNELS = [
   'ssh:updateTarget',
   'ssh:removeTarget',
   'ssh:importConfig',
+  'ssh:listConfigHosts',
+  'ssh:resolveConfigHost',
   'ssh:connect',
   'ssh:disconnect',
   'ssh:terminateSessions',
@@ -981,6 +988,21 @@ export function registerSshHandlers(
     const targets = sshStore!.importFromSshConfig(args)
     const repoReadoptions = takeRepoReadoptions()
     return { targets, repoReadoptions }
+  })
+
+  // Why: add-host dialog picks one config entry to prefill the form; does not
+  // mutate the target store (bulk sync stays on Settings → Import).
+  ipcMain.handle('ssh:listConfigHosts', (_event, args?: SshConfigHostListArgs) => {
+    return listUserSshConfigHostSummaries(
+      sshStore!.listTargets(),
+      args?.query,
+      sshStore!.listSuppressedSshConfigAliases(),
+      { refresh: args?.refresh === true }
+    )
+  })
+
+  ipcMain.handle('ssh:resolveConfigHost', (_event, args: { alias: string }) => {
+    return resolveUserSshConfigHost(args.alias)
   })
 
   // ── Connection lifecycle ───────────────────────────────────────────

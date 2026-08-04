@@ -3250,6 +3250,15 @@ function createSshApi(): NonNullable<Partial<PreloadApi>['ssh']> {
       Promise.reject(new Error('SSH target management is unavailable in the web client.')),
     removeTarget: () => Promise.resolve(),
     importConfig: () => Promise.resolve({ targets: [], repoReadoptions: [] }),
+    listConfigHosts: () =>
+      Promise.resolve({
+        hosts: [],
+        totalHostCount: 0,
+        newHostCount: 0,
+        matchCount: 0,
+        hasMore: false
+      }),
+    resolveConfigHost: () => Promise.resolve(null),
     connect: async (args) => {
       const { state } = await callRuntimeResult<{ state: SshConnectionState | null }>(
         'ssh.connect',

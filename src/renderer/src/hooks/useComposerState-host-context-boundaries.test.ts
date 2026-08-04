@@ -284,6 +284,9 @@ describe('useComposerState host-context boundaries', () => {
       'const selectedRepoIsGit'
     )
     expect(targetSection).toContain('selectedTargetSeed ??')
+    expect(targetSection).toContain('actionableHostIds')
+    expect(targetSection).toContain('projectId: initialTargetSeed?.projectId')
+    expect(targetSection).toContain('hostId: initialTargetSeed?.hostId')
     expect(targetSection).toContain('projectHostSetupId: initialTargetSeed?.projectHostSetupId')
 
     const changeSection = sourceBetween(
