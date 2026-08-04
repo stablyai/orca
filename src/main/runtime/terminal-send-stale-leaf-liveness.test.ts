@@ -270,12 +270,13 @@ function makeOrchestrationDbStub(toHandle: () => string) {
 describe('push-on-idle orchestration delivery absence gate', () => {
   async function makeIdleLeafWithoutPtyRecord(options: {
     probePtyLiveness: (ptyId: string) => Promise<boolean | null>
+    hasPty?: (ptyId: string) => boolean | null
   }) {
     const { runtime, handle, write } = await makeRuntimeWithLeafHandle(options)
     const stub = makeOrchestrationDbStub(() => handle)
     runtime.setOrchestrationDb(stub.db as never)
-    // Title transitions mark the leaf idle; the provider never knew this id
-    // (no controller hasPty), modeling a leaf restored from a prior process.
+    // Title transitions mark the leaf idle; without a hasPty answering true the
+    // provider never knew this id, modeling a leaf restored from a prior process.
     runtime.onPtyData(STALE_PTY_ID, '\x1b]0;Codex working\x07', 100)
     runtime.onPtyData(STALE_PTY_ID, '\x1b]0;Codex done\x07', 101)
     return { runtime, handle, write, stub }
@@ -307,38 +308,100 @@ describe('push-on-idle orchestration delivery absence gate', () => {
     expect(write).toHaveBeenCalledWith(STALE_PTY_ID, expect.stringContaining('Subject: hello'))
   })
 
-  // Why: delivered_at stamps after the delayed Enter, so a second continuation
-  // would re-read the same unread rows and inject the payload twice.
-  it('delivers once when concurrent triggers arrive during one in-flight probe', async () => {
-    let resolveProbe!: (value: boolean | null) => void
-    const { runtime, handle, write, stub } = await makeIdleLeafWithoutPtyRecord({
-      probePtyLiveness: () =>
-        new Promise<boolean | null>((resolve) => {
-          resolveProbe = resolve
-        })
-    })
-    stub.insert('exactly once')
+  // Why: delivered_at stamps only in the delayed-Enter callback, so the whole
+  // write→settle span — not just the probe — must be single-flight; a trigger
+  // landing inside the 500ms window would re-read the same un-stamped rows.
+  it('delivers once across concurrent probe triggers and an in-window re-trigger, then flushes parked rows', async () => {
+    vi.useFakeTimers()
+    try {
+      let resolveProbe!: (value: boolean | null) => void
+      const { runtime, handle, write, stub } = await makeIdleLeafWithoutPtyRecord({
+        probePtyLiveness: () =>
+          new Promise<boolean | null>((resolve) => {
+            resolveProbe = resolve
+          })
+      })
+      stub.insert('exactly once')
 
-    runtime.deliverPendingMessagesForHandle(handle)
-    runtime.deliverPendingMessagesForHandle(handle)
-    runtime.deliverPendingMessagesForHandle(handle)
-    resolveProbe(null)
-    await new Promise((resolve) => setTimeout(resolve, 0))
+      runtime.deliverPendingMessagesForHandle(handle)
+      runtime.deliverPendingMessagesForHandle(handle)
+      runtime.deliverPendingMessagesForHandle(handle)
+      resolveProbe(null)
+      await vi.advanceTimersByTimeAsync(0)
 
-    const payloadWrites = write.mock.calls.filter(
-      ([, data]) => typeof data === 'string' && data.includes('Subject: exactly once')
-    )
-    expect(payloadWrites).toHaveLength(1)
+      const firstSubjectWrites = () =>
+        write.mock.calls.filter(
+          ([, data]) => typeof data === 'string' && data.includes('Subject: exactly once')
+        )
+      expect(firstSubjectWrites()).toHaveLength(1)
 
-    // A later trigger after the probe settles must still be able to deliver
-    // newly queued messages (the single-flight guard is per-probe, not sticky).
-    stub.insert('second message')
-    runtime.deliverPendingMessagesForHandle(handle)
-    resolveProbe(null)
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    const secondWrites = write.mock.calls.filter(
-      ([, data]) => typeof data === 'string' && data.includes('Subject: second message')
-    )
-    expect(secondWrites).toHaveLength(1)
+      // Re-trigger INSIDE the 500ms Enter window: the first batch is written but
+      // not yet stamped, so a fresh probe cycle would re-inject it. (On the
+      // fixed code no new probe is armed — the trigger parks; resolveProbe then
+      // re-resolves the settled first probe, a no-op.)
+      stub.insert('second message')
+      runtime.deliverPendingMessagesForHandle(handle)
+      resolveProbe(null)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(firstSubjectWrites()).toHaveLength(1)
+
+      // Enter fires, delivered_at stamps, the flight settles, and the parked
+      // trigger re-runs on its own — arming a fresh probe for the new row.
+      await vi.advanceTimersByTimeAsync(500)
+      resolveProbe(null)
+      await vi.advanceTimersByTimeAsync(0)
+
+      const secondSubjectWrites = write.mock.calls.filter(
+        ([, data]) => typeof data === 'string' && data.includes('Subject: second message')
+      )
+      expect(secondSubjectWrites).toHaveLength(1)
+      expect(firstSubjectWrites()).toHaveLength(1)
+
+      await vi.advanceTimersByTimeAsync(500)
+      expect(stub.rows.every((row) => row.delivered_at !== null)).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('sync-path double-trigger inside the Enter window delivers the first batch once and parks the rest', async () => {
+    vi.useFakeTimers()
+    try {
+      const probe = vi.fn(async () => null)
+      const { runtime, handle, write, stub } = await makeIdleLeafWithoutPtyRecord({
+        probePtyLiveness: probe,
+        // Provider knows the id: delivery takes the pure synchronous path.
+        hasPty: (ptyId) => ptyId === STALE_PTY_ID
+      })
+      stub.insert('first')
+
+      runtime.deliverPendingMessagesForHandle(handle)
+      stub.insert('second')
+      runtime.deliverPendingMessagesForHandle(handle)
+
+      const firstSubjectWrites = () =>
+        write.mock.calls.filter(
+          ([, data]) => typeof data === 'string' && data.includes('Subject: first')
+        )
+      expect(firstSubjectWrites()).toHaveLength(1)
+      expect(probe).not.toHaveBeenCalled()
+
+      // Settle flushes the parked trigger; the second row delivers alone —
+      // its batch must not re-contain the already-stamped first row.
+      await vi.advanceTimersByTimeAsync(500)
+      const secondOnlyWrites = write.mock.calls.filter(
+        ([, data]) =>
+          typeof data === 'string' &&
+          data.includes('Subject: second') &&
+          !data.includes('Subject: first')
+      )
+      expect(secondOnlyWrites).toHaveLength(1)
+      expect(firstSubjectWrites()).toHaveLength(1)
+
+      await vi.advanceTimersByTimeAsync(500)
+      expect(stub.rows.every((row) => row.delivered_at !== null)).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

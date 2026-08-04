@@ -31311,6 +31311,23 @@ export class OrcaRuntimeService {
     return null
   }
 
+  // Why: delivered_at for Claude targets stamps only in the delayed-Enter
+  // callback, so the whole write→settle span must be single-flight per pty —
+  // a second read inside it would re-inject the same unread rows. Triggers
+  // landing mid-flight park the latest leaf and re-run once on settle.
+  private readonly messageDeliveryInFlightPtyIds = new Set<string>()
+  private readonly parkedMessageRedeliveryLeavesByPtyId = new Map<string, RuntimeLeafRecord>()
+
+  private settlePendingMessageDelivery(ptyId: string): void {
+    this.messageDeliveryInFlightPtyIds.delete(ptyId)
+    const parkedLeaf = this.parkedMessageRedeliveryLeavesByPtyId.get(ptyId)
+    if (!parkedLeaf) {
+      return
+    }
+    this.parkedMessageRedeliveryLeavesByPtyId.delete(ptyId)
+    this.deliverPendingMessages(parkedLeaf)
+  }
+
   // Why: push-on-idle delivery is event-driven (no polling) because the runtime owns both the message store and terminal status detection.
   private deliverPendingMessages(leaf: RuntimeLeafRecord, skipAbsenceProbe = false): void {
     if (!this._orchestrationDb) {
@@ -31319,6 +31336,12 @@ export class OrcaRuntimeService {
 
     const handle = this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId))
     if (!handle) {
+      return
+    }
+
+    // Why before reading rows: rows read mid-flight are the not-yet-stamped ones.
+    if (leaf.ptyId && this.messageDeliveryInFlightPtyIds.has(leaf.ptyId)) {
+      this.parkedMessageRedeliveryLeavesByPtyId.set(leaf.ptyId, leaf)
       return
     }
 
@@ -31361,41 +31384,57 @@ export class OrcaRuntimeService {
       return
     }
 
-    const payload = formatMessagesForInjection(unread)
-    const wrote = this.ptyController?.write(leaf.ptyId, payload) ?? false
-    if (!wrote) {
-      return
-    }
-
-    // The active coordinator prompt is user-owned input, so push-on-idle must not synthesize Enter.
-    if (this._orchestrationDb.getActiveCoordinatorRun()?.coordinator_handle === handle) {
-      this._orchestrationDb.markAsDelivered(unread.map((m) => m.id))
-      return
-    }
-
-    const tabTitle = this.tabs.get(leaf.tabId)?.title
-    if (isCursorAgentOrchestrationTarget(leaf, tabTitle)) {
-      // Why: Cursor Agent treats injected PTY text as editable prompt input, so submitting must stay under user control.
-      this._orchestrationDb.markAsDelivered(unread.map((m) => m.id))
-      return
-    }
-
-    // Why: Claude Code treats a large PTY write as a paste and swallows a \r in the same write; send Enter separately after a delay, stamping delivered_at only once \r is confirmed.
-    // Important (design doc §3.2, feedback #2): stamp delivered_at, not read — read means "a check-caller consumed this"; flipping it would hide the message from check --unread.
-    const ptyId = leaf.ptyId
-    setTimeout(() => {
-      try {
-        if (!leaf.writable) {
-          return
-        }
-        const submitted = this.ptyController?.write(ptyId, '\r') ?? false
-        if (submitted) {
-          this._orchestrationDb?.markAsDelivered(unread.map((m) => m.id))
-        }
-      } catch {
-        // Terminal may have closed during the delay — messages stay queued (delivered_at NULL) and re-deliver on next idle.
+    const deliveryPtyId = leaf.ptyId
+    this.messageDeliveryInFlightPtyIds.add(deliveryPtyId)
+    // Why: every sync outcome — failed write, sync-stamped branch, or a throw —
+    // must end the flight here, or a leaked flag parks this pty's deliveries
+    // forever. Only an armed Enter hands settling to its own callback.
+    let settlesInEnterCallback = false
+    try {
+      const payload = formatMessagesForInjection(unread)
+      const wrote = this.ptyController?.write(deliveryPtyId, payload) ?? false
+      if (!wrote) {
+        return
       }
-    }, 500)
+
+      // The active coordinator prompt is user-owned input, so push-on-idle must not synthesize Enter.
+      if (this._orchestrationDb.getActiveCoordinatorRun()?.coordinator_handle === handle) {
+        this._orchestrationDb.markAsDelivered(unread.map((m) => m.id))
+        return
+      }
+
+      const tabTitle = this.tabs.get(leaf.tabId)?.title
+      if (isCursorAgentOrchestrationTarget(leaf, tabTitle)) {
+        // Why: Cursor Agent treats injected PTY text as editable prompt input, so submitting must stay under user control.
+        this._orchestrationDb.markAsDelivered(unread.map((m) => m.id))
+        return
+      }
+
+      // Why: Claude Code treats a large PTY write as a paste and swallows a \r in the same write; send Enter separately after a delay, stamping delivered_at only once \r is confirmed.
+      // Important (design doc §3.2, feedback #2): stamp delivered_at, not read — read means "a check-caller consumed this"; flipping it would hide the message from check --unread.
+      setTimeout(() => {
+        try {
+          if (!leaf.writable) {
+            return
+          }
+          const submitted = this.ptyController?.write(deliveryPtyId, '\r') ?? false
+          if (submitted) {
+            this._orchestrationDb?.markAsDelivered(unread.map((m) => m.id))
+          }
+        } catch {
+          // Terminal may have closed during the delay — messages stay queued (delivered_at NULL) and re-deliver on next idle.
+        } finally {
+          // Why finally: every outcome — submit, refusal, throw — ends the flight,
+          // and settle re-runs any trigger parked during it so nothing strands.
+          this.settlePendingMessageDelivery(deliveryPtyId)
+        }
+      }, 500)
+      settlesInEnterCallback = true
+    } finally {
+      if (!settlesInEnterCallback) {
+        this.settlePendingMessageDelivery(deliveryPtyId)
+      }
+    }
   }
 
   private resolveWaiter(waiter: TerminalWaiter, result: RuntimeTerminalWait): void {
