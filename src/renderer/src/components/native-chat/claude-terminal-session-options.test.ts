@@ -48,7 +48,6 @@ describe('Claude terminal session option detection', () => {
 
     expect(readClaudeSessionOptionsFromTerminalScreen(screen)).toEqual({
       model: 'sonnet',
-      context1m: false,
       effort: 'medium'
     })
   })
@@ -61,7 +60,6 @@ describe('Claude terminal session option detection', () => {
 
     expect(readClaudeSessionOptionsFromTerminalScreen(screen)).toEqual({
       model: 'sonnet',
-      context1m: false,
       effort: 'medium'
     })
   })

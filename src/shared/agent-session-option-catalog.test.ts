@@ -156,8 +156,8 @@ describe('agent session option catalog', () => {
     const defaults = resolveNativeChatSessionOptionDefaults(persisted, 'claude')
 
     expect(resolveAgentSessionOptionLaunch('claude', defaults)).toEqual({
-      args: ['--model', 'sonnet[1m]', '--effort', 'high'],
-      appliedValues: { model: 'sonnet', effort: 'high', context1m: true }
+      args: ['--model', 'sonnet', '--effort', 'high'],
+      appliedValues: { model: 'sonnet', effort: 'high' }
     })
   })
 })

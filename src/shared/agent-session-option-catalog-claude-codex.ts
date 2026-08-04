@@ -104,9 +104,11 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
       options: longContextOptions([CLAUDE_FAST_MODE])
     },
     {
+      // Why: Sonnet's long-context variant is gated behind a separate usage
+      // entitlement, so the picker stays on the standard 200K window.
       id: 'sonnet',
       label: 'Sonnet 5',
-      options: longContextOptions()
+      options: [claudeEffort(true)]
     },
     {
       id: 'haiku',
@@ -133,7 +135,7 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     {
       id: 'claude-sonnet-4-6',
       label: 'Sonnet 4.6',
-      options: longContextOptions()
+      options: [claudeEffort(true)]
     }
   ],
   modelApply: {
