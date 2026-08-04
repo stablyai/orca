@@ -4786,6 +4786,12 @@ const api = {
       ipcRenderer.invoke('speech:saveOpenAiApiKey', apiKey),
     clearOpenAiApiKey: (): Promise<{ configured: boolean }> =>
       ipcRenderer.invoke('speech:clearOpenAiApiKey'),
+    getDeepgramApiKeyStatus: (): Promise<{ configured: boolean }> =>
+      ipcRenderer.invoke('speech:getDeepgramApiKeyStatus'),
+    saveDeepgramApiKey: (apiKey: string): Promise<{ configured: boolean }> =>
+      ipcRenderer.invoke('speech:saveDeepgramApiKey', apiKey),
+    clearDeepgramApiKey: (): Promise<{ configured: boolean }> =>
+      ipcRenderer.invoke('speech:clearDeepgramApiKey'),
     downloadModel: (modelId: string): Promise<void> =>
       ipcRenderer.invoke('speech:downloadModel', modelId),
     cancelDownload: (modelId: string): Promise<void> =>

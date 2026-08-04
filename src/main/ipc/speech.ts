@@ -10,6 +10,11 @@ import {
   hasOpenAiSpeechApiKey,
   saveOpenAiSpeechApiKey
 } from '../speech/openai-api-key-store'
+import {
+  clearDeepgramSpeechApiKey,
+  hasDeepgramSpeechApiKey,
+  saveDeepgramSpeechApiKey
+} from '../speech/deepgram-api-key-store'
 import type { Store } from '../persistence'
 
 export function registerSpeechHandlers(store: Store): void {
@@ -32,6 +37,20 @@ export function registerSpeechHandlers(store: Store): void {
 
   ipcMain.handle('speech:clearOpenAiApiKey', async () => {
     clearOpenAiSpeechApiKey()
+    return { configured: false }
+  })
+
+  ipcMain.handle('speech:getDeepgramApiKeyStatus', async () => {
+    return { configured: hasDeepgramSpeechApiKey() }
+  })
+
+  ipcMain.handle('speech:saveDeepgramApiKey', async (_event, apiKey: string) => {
+    saveDeepgramSpeechApiKey(apiKey)
+    return { configured: true }
+  })
+
+  ipcMain.handle('speech:clearDeepgramApiKey', async () => {
+    clearDeepgramSpeechApiKey()
     return { configured: false }
   })
 

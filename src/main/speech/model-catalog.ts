@@ -143,6 +143,16 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     language: 'multilingual',
     sampleRate: 16000,
     streaming: false
+  },
+  {
+    id: 'deepgram-nova-3',
+    label: 'Deepgram Nova-3',
+    description: 'Cloud transcription optimized for Korean. Requires a Deepgram API key.',
+    type: 'deepgram',
+    provider: 'deepgram',
+    language: 'ko',
+    sampleRate: 16000,
+    streaming: false
   }
 ]
 

@@ -45,4 +45,17 @@ describe('SPEECH_MODEL_CATALOG', () => {
     expect(model?.downloadFiles).toHaveLength(2)
     expect(model?.downloadFiles?.map(({ name }) => name)).toEqual(['model.int8.onnx', 'tokens.txt'])
   })
+
+  it('registers Deepgram Nova-3 as a Korean cloud model', () => {
+    const model = getCatalogModel('deepgram-nova-3')
+
+    expect(model).toMatchObject({
+      id: 'deepgram-nova-3',
+      type: 'deepgram',
+      provider: 'deepgram',
+      language: 'ko',
+      sampleRate: 16000,
+      streaming: false
+    })
+  })
 })

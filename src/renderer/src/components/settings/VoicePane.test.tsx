@@ -60,6 +60,9 @@ function installWindowApi(
         getOpenAiApiKeyStatus: vi.fn(async () => ({ configured: false })),
         saveOpenAiApiKey: vi.fn(async () => ({ configured: true })),
         clearOpenAiApiKey: vi.fn(async () => ({ configured: false })),
+        getDeepgramApiKeyStatus: vi.fn(async () => ({ configured: false })),
+        saveDeepgramApiKey: vi.fn(async () => ({ configured: true })),
+        clearDeepgramApiKey: vi.fn(async () => ({ configured: false })),
         onDownloadProgress: vi.fn(() => () => {}),
         downloadModel: vi.fn()
       }
@@ -144,6 +147,16 @@ describe('VoicePane', () => {
 
     expect(window.api.speech.getCatalog).toHaveBeenCalledTimes(1)
     expect(refreshModelStates).toHaveBeenCalledTimes(1)
+  })
+
+  it('loads Deepgram key status for cloud model readiness', async () => {
+    const { root } = await renderVoicePane({
+      markFeatureTipsSeen: vi.fn(),
+      updateSettings: vi.fn()
+    })
+    root.unmount()
+
+    expect(window.api.speech.getDeepgramApiKeyStatus).toHaveBeenCalledTimes(1)
   })
 
   it('clicking the switch marks the voice tip seen before disabling voice settings', async () => {

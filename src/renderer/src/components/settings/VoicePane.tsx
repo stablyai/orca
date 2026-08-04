@@ -7,6 +7,8 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { OpenAiTranscriptionKeyDialog } from './OpenAiTranscriptionKeyDialog'
 import { OpenAiTranscriptionSettingsRow } from './OpenAiTranscriptionSettingsRow'
+import { DeepgramTranscriptionKeyDialog } from './DeepgramTranscriptionKeyDialog'
+import { DeepgramTranscriptionSettingsRow } from './DeepgramTranscriptionSettingsRow'
 import { handleVoiceDictationToggle } from './voice-dictation-toggle'
 import { VoiceDictationSettingsSection } from './VoiceDictationSettingsSection'
 import { VoiceSpeechModelSection } from './VoiceSpeechModelSection'
@@ -35,6 +37,10 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
   const [openAiApiKeyDraft, setOpenAiApiKeyDraft] = useState('')
   const [openAiKeyPending, setOpenAiKeyPending] = useState(false)
   const [pendingCloudModelId, setPendingCloudModelId] = useState<string | null>(null)
+  const [deepgramDialogOpen, setDeepgramDialogOpen] = useState(false)
+  const [deepgramApiKeyDraft, setDeepgramApiKeyDraft] = useState('')
+  const [deepgramKeyPending, setDeepgramKeyPending] = useState(false)
+  const [pendingDeepgramModelId, setPendingDeepgramModelId] = useState<string | null>(null)
   const mountedRef = useRef(true)
 
   const handlePaneRef = useCallback((node: HTMLDivElement | null): void => {
@@ -73,10 +79,24 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
         }
       })
       .catch(() => {})
+    void window.api.speech
+      .getDeepgramApiKeyStatus()
+      .then((status) => {
+        if (!cancelled && status.configured !== voiceSettings.deepgramApiKeyConfigured) {
+          updateVoiceSettings({ deepgramApiKeyConfigured: status.configured })
+          refreshModelStates()
+        }
+      })
+      .catch(() => {})
     return () => {
       cancelled = true
     }
-  }, [refreshModelStates, updateVoiceSettings, voiceSettings.openAiApiKeyConfigured])
+  }, [
+    refreshModelStates,
+    updateVoiceSettings,
+    voiceSettings.deepgramApiKeyConfigured,
+    voiceSettings.openAiApiKeyConfigured
+  ])
 
   useEffect(() => {
     const cleanup = window.api.speech.onDownloadProgress(() => {
@@ -131,6 +151,8 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
     selectedModel?.provider === 'openai' ||
     (settingsSearchQuery.trim() !== '' &&
       matchesSettingsSearch(settingsSearchQuery, getOpenaiTranscriptionSearchEntry()))
+  const showDeepgramSettingsRow =
+    voiceSettings.deepgramApiKeyConfigured || selectedModel?.provider === 'deepgram'
 
   const openOpenAiDialog = (modelId: string | null = null): void => {
     setPendingCloudModelId(modelId)
@@ -200,6 +222,56 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
     }
   }
 
+  const openDeepgramDialog = (modelId: string | null = null): void => {
+    setPendingDeepgramModelId(modelId)
+    setDeepgramApiKeyDraft('')
+    setDeepgramDialogOpen(true)
+  }
+
+  const saveDeepgramApiKey = async (): Promise<void> => {
+    setDeepgramKeyPending(true)
+    try {
+      await window.api.speech.saveDeepgramApiKey(deepgramApiKeyDraft)
+      updateVoiceSettings({
+        deepgramApiKeyConfigured: true,
+        sttModel: pendingDeepgramModelId ?? voiceSettings.sttModel
+      })
+      await refreshModelStates()
+      setDeepgramDialogOpen(false)
+      setDeepgramApiKeyDraft('')
+      setPendingDeepgramModelId(null)
+      toast.success('Deepgram API key saved')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save Deepgram API key')
+    } finally {
+      if (mountedRef.current) {
+        setDeepgramKeyPending(false)
+      }
+    }
+  }
+
+  const clearDeepgramApiKey = async (): Promise<void> => {
+    setDeepgramKeyPending(true)
+    try {
+      await window.api.speech.clearDeepgramApiKey()
+      updateVoiceSettings({
+        deepgramApiKeyConfigured: false,
+        sttModel: selectedModel?.provider === 'deepgram' ? '' : voiceSettings.sttModel
+      })
+      await refreshModelStates()
+      setDeepgramDialogOpen(false)
+      setDeepgramApiKeyDraft('')
+      setPendingDeepgramModelId(null)
+      toast.success('Deepgram API key cleared')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to clear Deepgram API key')
+    } finally {
+      if (mountedRef.current) {
+        setDeepgramKeyPending(false)
+      }
+    }
+  }
+
   return (
     <div ref={handlePaneRef} className="space-y-1">
       <VoiceDictationSettingsSection
@@ -214,7 +286,13 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
         catalog={catalog}
         modelStates={modelStates}
         onUpdateVoiceSettings={updateVoiceSettings}
-        onOpenOpenAiDialog={openOpenAiDialog}
+        onOpenCloudDialog={(manifest) => {
+          if (manifest.provider === 'deepgram') {
+            openDeepgramDialog(manifest.id)
+            return
+          }
+          openOpenAiDialog(manifest.id)
+        }}
         onRefreshModelStates={refreshModelStates}
       />
 
@@ -230,6 +308,18 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
         </>
       )}
 
+      {showDeepgramSettingsRow && (
+        <>
+          <Separator />
+          <DeepgramTranscriptionSettingsRow
+            configured={voiceSettings.deepgramApiKeyConfigured}
+            disabled={deepgramKeyPending}
+            onConfigure={() => openDeepgramDialog(null)}
+            onClear={() => void clearDeepgramApiKey()}
+          />
+        </>
+      )}
+
       <OpenAiTranscriptionKeyDialog
         open={openAiDialogOpen}
         configured={voiceSettings.openAiApiKeyConfigured}
@@ -239,6 +329,16 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
         onApiKeyDraftChange={setOpenAiApiKeyDraft}
         onSave={() => void saveOpenAiApiKey()}
         onClear={() => void clearOpenAiApiKey()}
+      />
+      <DeepgramTranscriptionKeyDialog
+        open={deepgramDialogOpen}
+        configured={voiceSettings.deepgramApiKeyConfigured}
+        apiKeyDraft={deepgramApiKeyDraft}
+        pending={deepgramKeyPending}
+        onOpenChange={setDeepgramDialogOpen}
+        onApiKeyDraftChange={setDeepgramApiKeyDraft}
+        onSave={() => void saveDeepgramApiKey()}
+        onClear={() => void clearDeepgramApiKey()}
       />
     </div>
   )
