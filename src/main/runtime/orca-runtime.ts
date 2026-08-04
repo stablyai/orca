@@ -938,6 +938,12 @@ import {
   shouldModelAnswerHiddenPtyQueries
 } from './terminal-model-query-authority'
 import {
+  notePtyColorSchemeScanGap,
+  observePtyMode2031Decision,
+  observePtyOutputForColorSchemeProtocol,
+  setPtyColorSchemeScanDelegated
+} from './pty-color-scheme-reply-write-gate'
+import {
   getTerminalViewAttributes,
   getTerminalViewColorQueryReplyColors,
   registerTerminalViewAttributesApplier
@@ -9393,6 +9399,9 @@ export class OrcaRuntimeService {
     // `Network: https://local.example.com:3001/`) so the workspace ports
     // panel can surface them in place of the kernel bind address.
     advertisedUrlWatcher.ingest(ptyId, data, at)
+    // Why: the stale-reply write gate scans raw bytes at ingestion — ahead of
+    // every reply route and independent of fact consumers or reply ownership.
+    observePtyOutputForColorSchemeProtocol(ptyId, data)
     // Why: reply ownership is captured per chunk, here at ingestion — the
     // same module state and tick as the hidden-gate drop sites — and rides
     // the writeChain link. A mark/setting/subscriber flip before the queued
@@ -9755,6 +9764,9 @@ export class OrcaRuntimeService {
   ): void {
     const entry = this.getOrCreatePtyTitleTrackerEntry(ptyId)
     entry.tracker.setTransientFactScanningSuppressed(delegated)
+    // Why: delivered bytes may be gapped while delegated — the write gate's raw
+    // scan stands down and the daemon's relayed 2031 facts feed it instead.
+    setPtyColorSchemeScanDelegated(ptyId, delegated)
     if (!delegated && scanSeedAnsi) {
       // Prime the freshly reset scanner carry with the emulator's dangling
       // incomplete escape at the handoff position — a sequence split across
@@ -9815,6 +9827,7 @@ export class OrcaRuntimeService {
     }
     this.oscTitleScanTailByPtyId.delete(ptyId)
     this.osc7ScanTailByPtyId.delete(ptyId)
+    notePtyColorSchemeScanGap(ptyId)
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
     this.disposeHeadlessTerminal(ptyId)
   }
@@ -9822,6 +9835,15 @@ export class OrcaRuntimeService {
   /** Record one derived side-effect fact: batched per chunk while applying
    *  bytes, emitted immediately for between-chunk facts (stale-title timer). */
   private recordTerminalSideEffectFact(ptyId: string, fact: TerminalSideEffectFact): void {
+    // Why: the stale-reply write gate needs ingestion-fresh subscription state
+    // even when no fact consumer is attached — a queued CSI 997 reply can cross
+    // the write boundary at any time (#9993). Covers byte-scanned decisions and
+    // daemon-relayed facts alike.
+    if (fact.kind === '2031-subscribe') {
+      observePtyMode2031Decision(ptyId, 'subscribed')
+    } else if (fact.kind === '2031-unsubscribe') {
+      observePtyMode2031Decision(ptyId, 'unsubscribed')
+    }
     if (!this.terminalSideEffectConsumerAvailable) {
       return
     }

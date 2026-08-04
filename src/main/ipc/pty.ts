@@ -184,6 +184,10 @@ import {
   isNativeWindowsLocalPtySpawn,
   markNativeWindowsConptyPty
 } from '../runtime/terminal-model-query-authority'
+import {
+  clearPtyColorSchemeReplyGate,
+  shouldDropStalePtyColorSchemeReply
+} from '../runtime/pty-color-scheme-reply-write-gate'
 import { setTerminalViewAttributes } from '../runtime/terminal-view-attribute-store'
 import { validateTerminalViewAttributes } from '../../shared/terminal-view-attributes'
 import type { PtyModelRestoreReason } from '../../shared/pty-model-restore-marker'
@@ -1877,6 +1881,9 @@ export function clearProviderPtyState(
   providerSnapshotRequiredPtys.delete(id)
   // Why: the Phase-5 ConPTY DA1 spawn record must not leak onto a reused id.
   clearNativeWindowsConptyPty(id)
+  // Why: stale-reply gate state belongs to the dead stream — a reused id must
+  // start ungated, not inherit an unsubscribed verdict.
+  clearPtyColorSchemeReplyGate(id)
   const paneKey = ptyPaneKey.get(id)
   const stillOwnsPaneKey = paneKey ? paneKeyPtyId.get(paneKey) === id : false
   // Why: drop the memory-collector registration so a dead PTY doesn't resolve its dead pid on every snapshot; no-op for never-registered (SSH-owned) PTYs.
@@ -5060,6 +5067,11 @@ export function registerPtyHandlers(
       }
     },
     write: (ptyId, data) => {
+      // Why: the runtime funnel carries remote-client and main-emulator query
+      // replies — the same stale CSI 997 race as renderer writes (#9993).
+      if (shouldDropStalePtyColorSchemeReply(ptyId, data)) {
+        return true
+      }
       try {
         getProviderForPty(ptyId).write(ptyId, data)
         return true
@@ -6453,6 +6465,13 @@ export function registerPtyHandlers(
     id: string,
     data: string
   ): boolean | Promise<boolean> => {
+    // Why: a CSI 997 reply decided from an older chunk can arrive after a newer
+    // chunk withdrew the mode-2031 subscription — main ingests output ahead of
+    // every reply route, so drop the stale report here instead of letting it
+    // land as the next reader's stdin (#9993).
+    if (shouldDropStalePtyColorSchemeReply(id, data)) {
+      return true
+    }
     try {
       const tooLarge = isTerminalInputTooLargeWithDeferredMeasurement(data)
       if (typeof tooLarge === 'boolean') {
