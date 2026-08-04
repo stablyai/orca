@@ -21,6 +21,10 @@ import { runAuditedCodex, type PlanAuditLaunchContext } from './audited-plan-aud
 import { writeExecutionOutput } from './audited-execution-output-store'
 import { decidePlanReviewOutcome } from './audited-plan-review-outcome'
 import { getLastMessagePath, getPlanReviewRunDir } from './audited-plan-review-paths'
+import { reconcileCoverage } from './audited-plan-coverage-reconcile'
+import { MAX_COVERAGE_NOTE_CHARS } from '../../shared/audited-plan-artifact-types'
+import type { CoverageRow } from '../../shared/audited-plan-artifact-types'
+import type { AuditedAcceptanceCriterion } from '../../shared/audited-workflow-types'
 
 function broadcastIfProjectable(taskId: string): void {
   const projection = getTaskProjection(taskId)
@@ -34,7 +38,13 @@ function broadcastIfProjectable(taskId: string): void {
  */
 export async function launchAndFinalizeReview(
   context: PlanAuditLaunchContext,
-  sanitizationContext: PlanSanitizationContext
+  sanitizationContext: PlanSanitizationContext,
+  /**
+   * The authoritative criteria this run was launched against — the SAME array
+   * that built the prompt, so what Codex was asked about and what its answer is
+   * reconciled against cannot differ.
+   */
+  acceptanceCriteria: readonly AuditedAcceptanceCriterion[]
 ): Promise<void> {
   const repo = getAuditedTaskRepository()
   const userDataPath = app.getPath('userData')
@@ -73,7 +83,17 @@ export async function launchAndFinalizeReview(
   const decision = decidePlanReviewOutcome({
     outcome,
     driftReasonCode: verified.ok ? null : verified.reasonCode,
-    parsed
+    parsed,
+    // Reconciled against durable criteria, then redacted with the SAME trusted
+    // context as the summary — notes are model-authored text that reaches the
+    // renderer, so they get identical treatment.
+    coverage:
+      parsed !== null && parsed.ok
+        ? sanitizeCoverageNotes(
+            reconcileCoverage(acceptanceCriteria, parsed.coverage),
+            sanitizationContext
+          )
+        : []
   })
 
   finalizePlanReviewRun(
@@ -97,6 +117,7 @@ export async function launchAndFinalizeReview(
       preBlockState: decision.preBlockState,
       blockedPhase: decision.blockedPhase,
       eventType: decision.eventType,
+      coverage: decision.coverage,
       counters: {
         stdoutBytes: counters.stdoutBytes,
         stderrBytes: counters.stderrBytes,
@@ -111,6 +132,28 @@ export async function launchAndFinalizeReview(
   // unrelated read observe a verdict that no run owns.
   removeLastMessageFile(lastMessagePath)
   broadcastIfProjectable(context.taskId)
+}
+
+/**
+ * Redacts and bounds each note before it can reach storage.
+ *
+ * A note that sanitizes to nothing becomes null rather than an empty string, so
+ * the renderer has exactly one representation of "no note". The length cap is
+ * applied AFTER redaction — truncating first could leave a half-redacted path.
+ */
+function sanitizeCoverageNotes(
+  rows: readonly CoverageRow[],
+  sanitizationContext: PlanSanitizationContext
+): CoverageRow[] {
+  return rows.map((row) => {
+    if (row.note === null) {
+      return row
+    }
+    const redacted = sanitizeReviewSummary(row.note, sanitizationContext)
+      .slice(0, MAX_COVERAGE_NOTE_CHARS)
+      .trim()
+    return { ...row, note: redacted.length > 0 ? redacted : null }
+  })
 }
 
 function readAndParseVerdict(path: string): ReturnType<typeof parsePlanAuditVerdict> {

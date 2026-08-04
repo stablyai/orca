@@ -23,16 +23,50 @@ export const MAX_LAST_MESSAGE_BYTES = 256 * 1024
 // The ONE verdict vocabulary. z.enum over REVIEW_VERDICTS means a value like
 // 'accepted' or 'changes_requested' — the vocabulary this feature deliberately
 // does NOT use — fails validation rather than being silently mapped.
+//
+// `coverage` (Phase 6) is OPTIONAL, and that is load-bearing: a response with no
+// coverage array must still parse as a valid verdict. Requiring it would turn
+// every previously-succeeding audit — including one from a model that ignores the
+// new instruction — into `verdict_unparseable`, i.e. a blocked task. Coverage is
+// bookkeeping; it must never be able to fail a verdict. Absent and empty are
+// therefore both legal and both mean "the model said nothing about coverage",
+// which reconcileCoverage renders as all-uncovered rather than as covered.
 const VerdictSchema = z.object({
   verdict: z.enum(REVIEW_VERDICTS),
   summary: z.string().optional(),
+  coverage: z
+    .array(
+      z
+        .object({
+          id: z.string().trim().min(1).max(64),
+          covered: z.boolean(),
+          note: z.string().trim().max(500).optional()
+        })
+        .strict()
+    )
+    .max(20)
+    .optional(),
   findings: z
     .array(z.object({ severity: z.string().optional(), text: z.string().optional() }))
     .optional()
 })
 
+/** One raw, still-unreconciled coverage claim from the model. */
+export type ParsedCoverageEntry = {
+  id: string
+  covered: boolean
+  note: string | null
+}
+
 export type PlanAuditVerdictParseResult =
-  | { ok: true; verdict: ReviewVerdict; summary: string; findingCount: number }
+  | {
+      ok: true
+      verdict: ReviewVerdict
+      summary: string
+      findingCount: number
+      /** Empty when the model reported none. NOT yet reconciled or sanitized. */
+      coverage: ParsedCoverageEntry[]
+    }
   | { ok: false; reasonCode: 'verdict_unparseable' }
 
 const UNPARSEABLE: PlanAuditVerdictParseResult = { ok: false, reasonCode: 'verdict_unparseable' }
@@ -64,7 +98,14 @@ export function parsePlanAuditVerdict(lastMessageText: string): PlanAuditVerdict
       ok: true,
       verdict: validated.data.verdict,
       summary: typeof validated.data.summary === 'string' ? validated.data.summary : '',
-      findingCount: validated.data.findings?.length ?? 0
+      findingCount: validated.data.findings?.length ?? 0,
+      coverage: (validated.data.coverage ?? []).map((entry) => ({
+        id: entry.id,
+        covered: entry.covered,
+        // Normalize "" (a note that trimmed to nothing) to null here so every
+        // downstream consumer sees one representation of "no note".
+        note: entry.note !== undefined && entry.note.length > 0 ? entry.note : null
+      }))
     }
   }
 

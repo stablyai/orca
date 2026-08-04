@@ -208,4 +208,62 @@ describe('audited-task-service', () => {
       expect(projection?.blockedReasonCode).toBeNull()
     })
   })
+
+  // R13. Phase 6 wires the long-declared acceptanceCriteria field, which was
+  // hardcoded to [] since Phase 1. The key property: with no audit yet, criteria
+  // are visible but coverage reads as UNKNOWN, not as "nothing covered".
+  describe('acceptance-criteria projection', () => {
+    function seedTriagedTask(repo: AuditedTaskRepository): string {
+      const { taskId } = selectTask(baseInput())
+      const started = repo.startTriageRun(taskId)
+      if (!started.ok) {
+        throw new Error('expected ok')
+      }
+      repo.finalizeTriageRunSucceeded({
+        runId: started.runId,
+        taskId,
+        decision: 'plan',
+        reasonCode: null,
+        rationale: 'x',
+        acceptanceCriteria: [
+          { id: 'ac1', text: 'The parser rejects an unknown verdict.', covered: false },
+          { id: 'ac2', text: 'A cancelled run leaves no orphan process.', covered: false }
+        ],
+        nextStepPrompt: 'x'
+      })
+      return taskId
+    }
+
+    it('projects the triage criteria once triage has succeeded', () => {
+      const repo = useInMemoryRepository()
+      const taskId = seedTriagedTask(repo)
+
+      const projection = getTaskProjection(taskId)
+
+      expect(projection?.acceptanceCriteria).toEqual([
+        { id: 'ac1', text: 'The parser rejects an unknown verdict.', covered: false },
+        { id: 'ac2', text: 'A cancelled run leaves no orphan process.', covered: false }
+      ])
+    })
+
+    // The unknown-vs-uncovered distinction, which `covered` alone cannot express.
+    it('reports coverage unavailable when no audit has run', () => {
+      const repo = useInMemoryRepository()
+      const taskId = seedTriagedTask(repo)
+
+      expect(getTaskProjection(taskId)?.coverageAvailable).toBe(false)
+    })
+
+    // Matches pre-Phase-6 behaviour exactly: a task with no succeeded triage run
+    // has no criteria to show.
+    it('projects no criteria and no coverage before triage', () => {
+      useInMemoryRepository()
+      const { taskId } = selectTask(baseInput())
+
+      const projection = getTaskProjection(taskId)
+
+      expect(projection?.acceptanceCriteria).toEqual([])
+      expect(projection?.coverageAvailable).toBe(false)
+    })
+  })
 })

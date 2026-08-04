@@ -131,6 +131,7 @@ describe('AuditedWorkflowPage', () => {
       commitAttemptStatus: null,
       reconcileClass: null,
       reconcileReasonCode: null,
+      coverageAvailable: false,
       acceptanceCriteria: [],
       timings: [],
       createdAt: 1,

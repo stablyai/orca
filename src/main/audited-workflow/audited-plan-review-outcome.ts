@@ -10,6 +10,7 @@ import type {
 import type { WorktreeReasonCode } from '../../shared/audited-worktree-types'
 import type { CodexProcessOutcome } from './audited-codex-process'
 import type { PlanAuditVerdictParseResult } from './audited-plan-audit-verdict'
+import type { CoverageRow } from '../../shared/audited-plan-artifact-types'
 
 export type PlanReviewOutcomeDecision = {
   status: Exclude<PlanReviewRunStatus, 'running'>
@@ -22,6 +23,13 @@ export type PlanReviewOutcomeDecision = {
   preBlockState: AuditedTaskState | null
   blockedPhase: string | null
   eventType: string
+  /**
+   * Reconciled coverage (Phase 6). Empty on every path that produced no verdict:
+   * a run that timed out, drifted, or was cancelled observed nothing about any
+   * criterion, and recording all-uncovered there would assert a judgement that
+   * was never made.
+   */
+  coverage: readonly CoverageRow[]
 }
 
 export type DecidePlanReviewOutcomeArgs = {
@@ -30,6 +38,11 @@ export type DecidePlanReviewOutcomeArgs = {
   driftReasonCode: WorktreeReasonCode | null
   /** Null when the process never reached a clean exit worth parsing. */
   parsed: PlanAuditVerdictParseResult | null
+  /**
+   * Coverage already reconciled against the authoritative criteria and
+   * sanitized by the caller. Attached ONLY to a verdict-producing outcome.
+   */
+  coverage: readonly CoverageRow[]
 }
 
 function blocked(
@@ -46,7 +59,8 @@ function blocked(
     blockedReasonCode,
     preBlockState: 'awaiting_plan_review',
     blockedPhase: 'planReview',
-    eventType: 'plan_review_blocked'
+    eventType: 'plan_review_blocked',
+    coverage: []
   }
 }
 
@@ -59,6 +73,10 @@ function blocked(
  * A verdict is produced ONLY on a clean exit with a successfully parsed
  * last-message file. Every other path — including a zero exit with an
  * unreadable or malformed result — fails closed.
+ *
+ * Coverage follows the verdict exactly: it is attached on the three verdict
+ * paths and empty everywhere else, so drift, timeout, and cancellation record no
+ * judgement about any criterion.
  */
 export function decidePlanReviewOutcome(
   args: DecidePlanReviewOutcomeArgs
@@ -92,7 +110,8 @@ export function decidePlanReviewOutcome(
         blockedReasonCode: null,
         preBlockState: null,
         blockedPhase: null,
-        eventType: 'plan_review_cancelled'
+        eventType: 'plan_review_cancelled',
+        coverage: []
       }
     case 'exit':
       break
@@ -124,7 +143,11 @@ export function decidePlanReviewOutcome(
       blockedReasonCode: 'plan_review_process_failed',
       preBlockState: 'awaiting_plan_review',
       blockedPhase: 'planReview',
-      eventType: 'plan_review_blocked_verdict'
+      eventType: 'plan_review_blocked_verdict',
+      // A `blocked` verdict is still a JUDGEMENT Codex made against the criteria,
+      // so its matrix is recorded like any other. Only non-verdict outcomes are
+      // coverage-free.
+      coverage: args.coverage
     }
   }
 
@@ -139,7 +162,10 @@ export function decidePlanReviewOutcome(
       blockedReasonCode: null,
       preBlockState: null,
       blockedPhase: null,
-      eventType: 'plan_review_fixes_requested'
+      eventType: 'plan_review_fixes_requested',
+      // The case coverage matters MOST: a partial matrix is precisely what the
+      // operator needs before deciding whether to request a revision.
+      coverage: args.coverage
     }
   }
 
@@ -156,6 +182,7 @@ export function decidePlanReviewOutcome(
     blockedReasonCode: null,
     preBlockState: null,
     blockedPhase: null,
-    eventType: 'plan_review_approved_verdict'
+    eventType: 'plan_review_approved_verdict',
+    coverage: args.coverage
   }
 }

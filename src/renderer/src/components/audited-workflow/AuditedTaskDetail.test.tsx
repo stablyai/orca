@@ -82,6 +82,7 @@ function baseTask(
     planReviewFindingCount: null,
     planApprovalReady: false,
     planRevisionAvailable: false,
+    coverageAvailable: false,
     acceptanceCriteria: [],
     timings: [],
     createdAt: 1,

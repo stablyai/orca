@@ -84,6 +84,7 @@ function makeProjection(taskId: string, updatedAt: number): AuditedTaskStatusPro
     planReviewFindingCount: null,
     planApprovalReady: false,
     planRevisionAvailable: false,
+    coverageAvailable: false,
     acceptanceCriteria: [],
     timings: [],
     createdAt: updatedAt,

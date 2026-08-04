@@ -205,7 +205,10 @@ export async function startPlanAudit(taskId: string): Promise<PlanReviewCommandR
     // so it is redacted against the SAME trusted identity values the plan body
     // was. Every value comes from the REFRESHED durable task row — never from
     // renderer input, which supplies only a taskId.
-    buildSanitizationContext(task)
+    buildSanitizationContext(task),
+    // The SAME criteria array the prompt was built from, so the question Codex
+    // was asked and the set its answer is reconciled against are identical.
+    criteria.criteria
   )
   return { ok: true }
 }

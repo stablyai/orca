@@ -19,8 +19,11 @@ export type PlanAuditPromptArgs = {
 }
 
 export function buildPlanAuditPrompt(args: PlanAuditPromptArgs): string {
+  // Prefixed with the criterion's real id (not a positional number) so the
+  // coverage entries the model returns can be matched back to durable criteria.
+  // An id it invents anyway is dropped by reconcileCoverage.
   const criteria = args.acceptanceCriteria.length
-    ? args.acceptanceCriteria.map((c, i) => `${i + 1}. ${c.text}`).join('\n')
+    ? args.acceptanceCriteria.map((c) => `- [${c.id}] ${c.text}`).join('\n')
     : '(none recorded)'
 
   return [
@@ -47,7 +50,10 @@ export function buildPlanAuditPrompt(args: PlanAuditPromptArgs): string {
     '',
     '## Required output',
     'Your FINAL message must be exactly one JSON object and nothing else:',
-    '{"verdict":"approved|fixes_requested|blocked","summary":"<one paragraph>","findings":[{"severity":"low|medium|high","text":"<finding>"}]}',
+    '{"verdict":"approved|fixes_requested|blocked","summary":"<one paragraph>","coverage":[{"id":"<criterion id>","covered":true|false,"note":"<at most one sentence>"}],"findings":[{"severity":"low|medium|high","text":"<finding>"}]}',
+    '',
+    'Include one coverage entry per acceptance criterion, using the exact ids shown above.',
+    'Mark a criterion covered only if the plan actually addresses it.',
     '',
     'Use "approved" only if the plan is safe to implement as written.',
     'Use "fixes_requested" if it needs changes you can describe.',

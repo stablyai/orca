@@ -15,6 +15,7 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { AuditedTaskStatusProjection } from '../../../../shared/audited-workflow-types'
 import { AuditedPlanArtifactView } from './AuditedPlanArtifactView'
+import { AuditedCoverageChecklist } from './AuditedCoverageChecklist'
 import {
   getPlanApprovalErrorMessage,
   getPlanReviewErrorMessage,
@@ -145,6 +146,8 @@ export function AuditedPlanReviewPanel({ task }: Props): React.JSX.Element | nul
           ) : null}
         </div>
       ) : null}
+
+      <AuditedCoverageChecklist task={task} />
 
       <PlanReviewActions
         task={task}

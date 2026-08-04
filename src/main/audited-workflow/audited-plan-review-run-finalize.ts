@@ -9,7 +9,8 @@
 //
 //   B — FRESHNESS: is the run's artifact still the task's current one (by id AND
 //       hash), and is the task still awaiting_plan_review?
-//       Authorizes writing THE TASK — its state, last_verdict, and a transition.
+//       Authorizes writing THE TASK — its state, last_verdict, a transition, and
+//       (Phase 6) the run's per-criterion coverage rows.
 //
 // So: permission A is checked before ANY write; permission B is checked before
 // any TASK write. When A holds but B does not, the review row is finalized
@@ -28,7 +29,9 @@ import type {
   PlanReviewRunStatus,
   PlanReviewVerdict
 } from '../../shared/audited-plan-artifact-types'
+import type { CoverageRow } from '../../shared/audited-plan-artifact-types'
 import { getPlanReviewRun } from './audited-plan-review-run-repository'
+import { insertCoverageRows } from './audited-plan-coverage-repository'
 import {
   validateAuditedTransition,
   validateBlockTransition
@@ -60,6 +63,16 @@ export type FinalizePlanReviewArgs = {
   blockedPhase: string | null
   eventType: string
   counters: PlanReviewOutputCounters
+  /**
+   * Reconciled, sanitized per-criterion coverage (Phase 6). Empty for every
+   * outcome that did not produce a verdict.
+   *
+   * Written under PERMISSION B, not A: coverage describes the plan that was
+   * audited, so a run whose artifact is no longer current must not record it for
+   * the same reason it must not record a verdict — a matrix that no longer refers
+   * to the current plan is exactly what a later bug could mistake for evidence.
+   */
+  coverage: readonly CoverageRow[]
 }
 
 export type FinalizePlanReviewResult =
@@ -68,6 +81,31 @@ export type FinalizePlanReviewResult =
       ok: false
       reasonCode: 'task_not_found' | 'lock_contended'
     }
+
+/**
+ * The coverage summary carried by the EXISTING finalization transition.
+ *
+ * Phase 6 adds no transition row and no event type. This function exists so
+ * coverage rides in `detail_json` — previously NULL on every insert path here —
+ * keeping exactly ONE transition per finalize. Several suites assert an exact
+ * `COUNT(*) FROM audited_transitions` as a "nothing extra was written"
+ * invariant; a second event would break them to add a strictly redundant record,
+ * since the immutable audited_plan_coverage rows and the run row already ARE the
+ * audit history.
+ *
+ * Counts only — never criterion ids, note text, or the matrix itself. The
+ * transition log says that coverage was recorded and how much of it; the table
+ * says what it was.
+ */
+function coverageDetailJson(coverage: readonly CoverageRow[]): string | null {
+  if (coverage.length === 0) {
+    return null
+  }
+  return JSON.stringify({
+    covered: coverage.filter((row) => row.covered).length,
+    total: coverage.length
+  })
+}
 
 /**
  * Resolves the state-machine command authorizing a review-driven task move, so
@@ -180,11 +218,18 @@ export function finalizePlanReviewRun(
           db.exec('ROLLBACK')
           return { ok: false, reasonCode: 'lock_contended' }
         }
+        // Coverage BEFORE the transition, so the transition's counts describe
+        // rows already written in this same atomic unit.
+        insertCoverageRows(
+          db,
+          { runId: args.runId, taskId: args.taskId, coverage: args.coverage },
+          nowMs
+        )
         db.prepare(
           `INSERT INTO audited_transitions
              (task_id, from_state, to_state, actor, event_type, reason_code, detail_json, at_ms)
-           VALUES (?, 'awaiting_plan_review', 'awaiting_plan_review', 'codex', ?, NULL, NULL, ?)`
-        ).run(args.taskId, args.eventType, nowMs)
+           VALUES (?, 'awaiting_plan_review', 'awaiting_plan_review', 'codex', ?, NULL, ?, ?)`
+        ).run(args.taskId, args.eventType, coverageDetailJson(args.coverage), nowMs)
       }
       db.exec('COMMIT')
       return { ok: true, taskWritten: args.verdict !== null }
@@ -218,10 +263,16 @@ export function finalizePlanReviewRun(
       return { ok: false, reasonCode: 'lock_contended' }
     }
 
+    insertCoverageRows(
+      db,
+      { runId: args.runId, taskId: args.taskId, coverage: args.coverage },
+      nowMs
+    )
+
     db.prepare(
       `INSERT INTO audited_transitions
          (task_id, from_state, to_state, actor, event_type, reason_code, detail_json, at_ms)
-       VALUES (?, ?, ?, ?, ?, ?, NULL, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       args.taskId,
       fromState,
@@ -229,6 +280,7 @@ export function finalizePlanReviewRun(
       args.toState === 'blocked' ? 'control' : 'codex',
       args.eventType,
       args.reasonCode,
+      coverageDetailJson(args.coverage),
       nowMs
     )
 

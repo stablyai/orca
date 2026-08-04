@@ -39,6 +39,7 @@ import { setAuditedCodexRunnerForTests } from './audited-plan-audit-launcher'
 import { startPlanAudit } from './audited-plan-review-orchestration'
 import { getLatestPlanReviewRun } from './audited-plan-review-run-repository'
 import { seedTriagedTask, startRun } from './audited-execution-test-fixtures'
+import { MAX_COVERAGE_NOTE_CHARS } from '../../shared/audited-plan-artifact-types'
 
 let repository: AuditedTaskRepository
 
@@ -208,6 +209,76 @@ describe('review summary redaction along the full path', () => {
 
     const projection = getTaskProjection(taskId)!
     expect(projection.planReviewSummary).not.toContain('sk-abcdefghijklmnopqrstuvwxyz012345')
+  })
+})
+
+// R16. A coverage NOTE is the second piece of model-authored free text to reach
+// the renderer, and it travels the same path as the summary — so it gets the same
+// treatment at the same point: redacted BEFORE storage, never on the way out.
+describe('coverage note redaction along the full path', () => {
+  /** Drives a full audit whose reply carries a leaky note on criterion ac1. */
+  async function runAuditWithNote(taskId: string, note: string): Promise<void> {
+    setAuditedCodexRunnerForTests(async (args) => {
+      const { writeFileSync, mkdirSync } = await import('node:fs')
+      mkdirSync(join(args.lastMessagePath, '..'), { recursive: true })
+      writeFileSync(
+        args.lastMessagePath,
+        JSON.stringify({
+          verdict: 'fixes_requested',
+          summary: 'A safe summary.',
+          coverage: [{ id: 'ac1', covered: true, note }]
+        }),
+        'utf8'
+      )
+      return { kind: 'exit', exitCode: 0, stdout: 'banner', stderr: '' }
+    })
+    await startPlanAudit(taskId)
+  }
+
+  function storedNote(taskId: string): string | null {
+    const row = repository
+      .getDatabase()
+      .prepare(`SELECT note FROM audited_plan_coverage WHERE task_id = ? AND criterion_id = 'ac1'`)
+      .get(taskId) as { note: string | null } | undefined
+    return row?.note ?? null
+  }
+
+  it('redacts every identity value in the PERSISTED note', async () => {
+    const taskId = seedReviewableTask()
+    await runAuditWithNote(taskId, LEAKY_SUMMARY)
+
+    const note = storedNote(taskId)
+    expect(note).not.toBeNull()
+    for (const leak of LEAKY_SUBSTRINGS) {
+      expect(note, `stored note must not contain "${leak}"`).not.toContain(leak)
+    }
+  })
+
+  it('redacts the note on the PROJECTION the renderer receives', async () => {
+    const taskId = seedReviewableTask()
+    await runAuditWithNote(taskId, LEAKY_SUMMARY)
+
+    const criterion = getTaskProjection(taskId)!.acceptanceCriteria.find((c) => c.id === 'ac1')
+    expect(criterion?.note).toBeDefined()
+    for (const leak of LEAKY_SUBSTRINGS) {
+      expect(criterion?.note, `projected note must not contain "${leak}"`).not.toContain(leak)
+    }
+  })
+
+  it('redacts a credential the model echoed into a note', async () => {
+    const taskId = seedReviewableTask()
+    await runAuditWithNote(taskId, 'Covered by sk-abcdefghijklmnopqrstuvwxyz012345.')
+
+    expect(storedNote(taskId)).not.toContain('sk-abcdefghijklmnopqrstuvwxyz012345')
+  })
+
+  // The cap is applied AFTER redaction: truncating first could sever a path
+  // mid-token and leave the head of it behind.
+  it('bounds the stored note length', async () => {
+    const taskId = seedReviewableTask()
+    await runAuditWithNote(taskId, 'x'.repeat(500))
+
+    expect(storedNote(taskId)!.length).toBeLessThanOrEqual(MAX_COVERAGE_NOTE_CHARS)
   })
 })
 

@@ -21,6 +21,7 @@ import { REVIEW_VERDICTS } from '../../shared/audited-workflow-types'
 // budget and each phase's schema reviews as its own unit.
 import { createExecutionRunsTable } from './audited-execution-schema'
 import { PHASE_5_TASK_COLUMNS, createPlanReviewTables } from './audited-plan-review-schema'
+import { createPlanCoverageTable } from './audited-plan-coverage-schema'
 import type Database from '../sqlite/sync-database'
 
 // Schema versions: v1 initial (audited_tasks, audited_transitions). v2 (Phase 2)
@@ -39,7 +40,16 @@ import type Database from '../sqlite/sync-database'
 // audited_tasks' state CHECK is unchanged. Artifact-file write failures reuse the
 // EXISTING `spawn_failed` execution reason rather than adding a code, so
 // audited_execution_runs' CHECK is untouched and v5 needs no table rebuild.
-export const SCHEMA_VERSION = 5
+// v6 (Phase 6) adds audited_plan_coverage — ALSO FULLY ADDITIVE, and the most
+// additive yet: it adds NO audited_tasks column at all. Current coverage is
+// DERIVED from the latest succeeded plan-review run still bound to the task's
+// current artifact, so unlike current_plan_artifact_id there is no denormalized
+// pointer that could disagree with the rows. Phase 6 introduces no task state, no
+// state-machine command, and no new PLAN_REVIEW_REASON_CODES member, so the state
+// CHECK and audited_plan_review_runs' reason_code CHECK are both unchanged. It
+// also adds no transition event type: coverage rides in the EXISTING finalization
+// transition's previously-unused detail_json as a {covered,total} count.
+export const SCHEMA_VERSION = 6
 
 export function createAuditedWorkflowTables(db: Database.Database): void {
   const stateList = AUDITED_TASK_STATES.map((s) => `'${s}'`).join(', ')
@@ -174,6 +184,7 @@ export function createAuditedWorkflowTables(db: Database.Database): void {
 
   createExecutionRunsTable(db)
   createPlanReviewTables(db)
+  createPlanCoverageTable(db)
 }
 
 // Phase 3 columns added to a pre-existing audited_tasks table, with their
@@ -251,6 +262,14 @@ export function migrateAuditedWorkflowSchema(db: Database.Database): void {
         }
       }
       createPlanReviewTables(db)
+    }
+    if (current < 6) {
+      // Phase 6 is a pure table addition — no task column, no CHECK change, no
+      // rebuild. Created here rather than relying on createAuditedWorkflowTables
+      // having run, for the same reason as v4/v5: this function is also called
+      // directly against a legacy DB, and a migration that silently depends on
+      // another call would leave that path without the table.
+      createPlanCoverageTable(db)
     }
     db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`)
     db.exec('COMMIT')

@@ -29,7 +29,11 @@ import {
   getLatestPlanReviewRun,
   hasApprovedVerdictForCurrentArtifact
 } from './audited-plan-review-run-repository'
+import { resolveAcceptanceCriteria } from './audited-plan-audit-criteria'
+import { getCurrentCoverage } from './audited-plan-coverage-repository'
+import type Database from '../sqlite/sync-database'
 import type {
+  AuditedAcceptanceCriterion,
   AuditedTaskState,
   AuditedTaskStatusProjection
 } from '../../shared/audited-workflow-types'
@@ -52,6 +56,42 @@ export function setAuditedTaskRepositoryForTests(repo: AuditedTaskRepository | u
   repository = repo
 }
 
+/**
+ * The criteria the renderer sees, with the latest qualifying audit's coverage
+ * applied (Phase 6).
+ *
+ * The criteria themselves come from the SAME authoritative resolver the Codex
+ * audit judges against, re-validated from the succeeded triage run — so the
+ * checklist and the audit can never be looking at different requirements. When
+ * that resolver fails closed (missing, blank, or contract-violating stored JSON)
+ * this yields `[]`, exactly matching the behaviour before Phase 6.
+ *
+ * `available` and the coverage map come from ONE repository call, so a criterion
+ * can never be flagged from one run while availability reports another.
+ */
+function resolveProjectedCriteria(
+  db: Database.Database,
+  taskId: string
+): { criteria: AuditedAcceptanceCriterion[]; coverageAvailable: boolean } {
+  const resolved = resolveAcceptanceCriteria(db, taskId)
+  if (!resolved.ok) {
+    return { criteria: [], coverageAvailable: false }
+  }
+  const coverage = getCurrentCoverage(db, taskId)
+  return {
+    criteria: resolved.criteria.map((criterion) => {
+      const row = coverage.byCriterionId.get(criterion.id)
+      return {
+        id: criterion.id,
+        text: criterion.text,
+        covered: row?.covered ?? false,
+        ...(row?.note ? { note: row.note } : {})
+      }
+    }),
+    coverageAvailable: coverage.available
+  }
+}
+
 function taskRowToProjectionSource(row: AuditedTaskRow): ProjectionSourceTask {
   // Phase 4: the latest run supplies the three projected execution facts. Only
   // status, reason code, and the truncation flag — never counters' content,
@@ -64,6 +104,9 @@ function taskRowToProjectionSource(row: AuditedTaskRow): ProjectionSourceTask {
   // the transaction permits cannot diverge.
   const artifact = row.currentPlanArtifactId ? getPlanArtifact(db, row.currentPlanArtifactId) : null
   const review = getLatestPlanReviewRun(db, row.id)
+  // Phase 6: the first writer of the long-declared acceptanceCriteria field,
+  // which was hardcoded to [] from Phase 1 until now.
+  const coverage = resolveProjectedCriteria(db, row.id)
   return {
     taskId: row.id,
     repoId: row.repoId,
@@ -103,7 +146,8 @@ function taskRowToProjectionSource(row: AuditedTaskRow): ProjectionSourceTask {
     planReviewSummary: review?.summary ?? null,
     planReviewFindingCount: review?.findingCount ?? null,
     planReviewApprovedForCurrentArtifact: hasApprovedVerdictForCurrentArtifact(db, row.id),
-    acceptanceCriteria: [],
+    coverageAvailable: coverage.coverageAvailable,
+    acceptanceCriteria: coverage.criteria,
     timings: [],
     createdAt: row.createdAt,
     updatedAt: row.updatedAt

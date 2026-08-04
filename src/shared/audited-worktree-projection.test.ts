@@ -48,6 +48,7 @@ function source(overrides: Partial<ProjectionSourceTask> = {}): ProjectionSource
     executionRunStatus: null,
     executionReasonCode: null,
     executionOutputTruncated: false,
+    coverageAvailable: false,
     acceptanceCriteria: [],
     timings: [],
     createdAt: 1,

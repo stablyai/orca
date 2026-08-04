@@ -173,3 +173,19 @@ export const MAX_PLAN_ROUNDS = 3
 // The verdict a Codex plan review produced. Re-exported as a named alias so
 // call sites read intently without inventing a parallel union.
 export type PlanReviewVerdict = ReviewVerdict
+
+// Phase 6. Bounds the model-authored coverage note AFTER redaction, so a
+// pathological one-sentence-please response cannot be persisted as a large blob
+// or pushed through the projection. Deliberately far below the 4KB summary cap:
+// a note annotates ONE criterion in a checklist row.
+export const MAX_COVERAGE_NOTE_CHARS = 200
+
+// Phase 6. One criterion's judgement from one plan-audit run, already reconciled
+// against the authoritative triage criteria and sanitized. This is the shape
+// written to audited_plan_coverage — never a raw model entry.
+export type CoverageRow = {
+  criterionId: string
+  covered: boolean
+  /** Null when the model gave no note, or gave one that sanitized to nothing. */
+  note: string | null
+}

@@ -84,6 +84,10 @@ export type ProjectionSourceTask = {
   // bound to the task's current artifact by both id and hash. Computed by the
   // repository inside its read, not re-derived here.
   planReviewApprovedForCurrentArtifact: boolean
+  // Phase 6. True only when a succeeded review run bound to the CURRENT artifact
+  // exists. Resolved by the repository in the SAME call that produced the
+  // criteria's covered flags, so the two can never describe different runs.
+  coverageAvailable: boolean
   acceptanceCriteria: AuditedAcceptanceCriterion[]
   timings: AuditedPhaseTiming[]
   createdAt: number
@@ -151,6 +155,9 @@ export function buildAuditedTaskProjection(
     // round cap — the cap binds when STARTING a revision, nowhere else.
     planRevisionAvailable:
       source.state === 'plan_fixes_requested' && source.planRound < MAX_PLAN_ROUNDS,
+    // Deliberately NOT folded into planApprovalReady: Phase 6 is bookkeeping, so
+    // an incomplete matrix must not withhold an approval Codex already granted.
+    coverageAvailable: source.coverageAvailable,
     acceptanceCriteria: source.acceptanceCriteria,
     timings: source.timings,
     createdAt: source.createdAt,
@@ -211,5 +218,12 @@ export const AUDITED_PROJECTION_FORBIDDEN_KEYS = [
   'auditPrompt',
   'lastMessagePath',
   'reviewStdout',
-  'reviewStderr'
+  'reviewStderr',
+  // Phase 6 coverage internals. Only the per-criterion covered/note pair and the
+  // coverageAvailable boolean may cross; the run that produced them is an
+  // internal identifier with no renderer use, and the raw stored blob shape is
+  // not a projection contract.
+  'coverageJson',
+  'coverageRunId',
+  'criterionRunId'
 ] as const

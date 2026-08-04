@@ -4,6 +4,7 @@
 import { describe, expect, it } from 'vitest'
 import { decidePlanReviewOutcome } from './audited-plan-review-outcome'
 import type { CodexProcessOutcome } from './audited-codex-process'
+import type { PlanAuditVerdictParseResult } from './audited-plan-audit-verdict'
 
 const CLEAN_EXIT: CodexProcessOutcome = {
   kind: 'exit',
@@ -12,7 +13,13 @@ const CLEAN_EXIT: CodexProcessOutcome = {
   stderr: ''
 }
 
-const APPROVED = { ok: true, verdict: 'approved', summary: 'ok', findingCount: 0 } as const
+const APPROVED: PlanAuditVerdictParseResult = {
+  ok: true,
+  verdict: 'approved',
+  summary: 'ok',
+  findingCount: 0,
+  coverage: []
+}
 
 describe('decidePlanReviewOutcome — process failures', () => {
   it.each([
@@ -23,6 +30,7 @@ describe('decidePlanReviewOutcome — process failures', () => {
     const decision = decidePlanReviewOutcome({
       outcome: { kind } as CodexProcessOutcome,
       driftReasonCode: null,
+      coverage: [],
       parsed: null
     })
     expect(decision).toMatchObject({
@@ -39,6 +47,7 @@ describe('decidePlanReviewOutcome — process failures', () => {
     const decision = decidePlanReviewOutcome({
       outcome: { kind: 'timeout', stdout: '', stderr: '' },
       driftReasonCode: null,
+      coverage: [],
       parsed: null
     })
     expect(decision).toMatchObject({ reasonCode: 'timeout', blockedReasonCode: 'agent_timeout' })
@@ -48,6 +57,7 @@ describe('decidePlanReviewOutcome — process failures', () => {
     const decision = decidePlanReviewOutcome({
       outcome: { kind: 'output_too_large', stdout: '', stderr: '' },
       driftReasonCode: null,
+      coverage: [],
       parsed: null
     })
     expect(decision).toMatchObject({
@@ -60,6 +70,7 @@ describe('decidePlanReviewOutcome — process failures', () => {
     const decision = decidePlanReviewOutcome({
       outcome: { kind: 'cancelled', stdout: '', stderr: '' },
       driftReasonCode: null,
+      coverage: [],
       parsed: null
     })
     expect(decision).toMatchObject({
@@ -74,6 +85,7 @@ describe('decidePlanReviewOutcome — process failures', () => {
     const decision = decidePlanReviewOutcome({
       outcome: { kind: 'exit', exitCode: 3, stdout: '', stderr: '' },
       driftReasonCode: null,
+      coverage: [],
       parsed: null
     })
     expect(decision).toMatchObject({ reasonCode: 'exit_nonzero', toState: 'blocked' })
@@ -85,6 +97,7 @@ describe('decidePlanReviewOutcome — fail-closed verdict handling', () => {
     const decision = decidePlanReviewOutcome({
       outcome: CLEAN_EXIT,
       driftReasonCode: 'head_moved_from_base_commit',
+      coverage: [],
       parsed: APPROVED
     })
     expect(decision).toMatchObject({
@@ -98,6 +111,7 @@ describe('decidePlanReviewOutcome — fail-closed verdict handling', () => {
     const decision = decidePlanReviewOutcome({
       outcome: CLEAN_EXIT,
       driftReasonCode: null,
+      coverage: [],
       parsed: null
     })
     expect(decision).toMatchObject({
@@ -112,6 +126,7 @@ describe('decidePlanReviewOutcome — fail-closed verdict handling', () => {
     const decision = decidePlanReviewOutcome({
       outcome: CLEAN_EXIT,
       driftReasonCode: null,
+      coverage: [],
       parsed: { ok: false, reasonCode: 'verdict_unparseable' }
     })
     expect(decision).toMatchObject({ reasonCode: 'verdict_unparseable', verdict: null })
@@ -123,6 +138,7 @@ describe('decidePlanReviewOutcome — verdicts', () => {
     const decision = decidePlanReviewOutcome({
       outcome: CLEAN_EXIT,
       driftReasonCode: null,
+      coverage: [],
       parsed: APPROVED
     })
     // Codex authorizes; only the explicit human click reaches ready_to_implement.
@@ -138,7 +154,8 @@ describe('decidePlanReviewOutcome — verdicts', () => {
     const decision = decidePlanReviewOutcome({
       outcome: CLEAN_EXIT,
       driftReasonCode: null,
-      parsed: { ok: true, verdict: 'fixes_requested', summary: 's', findingCount: 3 }
+      coverage: [],
+      parsed: { ok: true, verdict: 'fixes_requested', summary: 's', findingCount: 3, coverage: [] }
     })
     expect(decision).toMatchObject({
       status: 'succeeded',
@@ -152,7 +169,8 @@ describe('decidePlanReviewOutcome — verdicts', () => {
     const decision = decidePlanReviewOutcome({
       outcome: CLEAN_EXIT,
       driftReasonCode: null,
-      parsed: { ok: true, verdict: 'blocked', summary: 's', findingCount: 1 }
+      coverage: [],
+      parsed: { ok: true, verdict: 'blocked', summary: 's', findingCount: 1, coverage: [] }
     })
     expect(decision).toMatchObject({
       status: 'succeeded',

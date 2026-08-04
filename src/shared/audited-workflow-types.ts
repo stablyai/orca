@@ -226,7 +226,17 @@ export type ReconcileReasonCode = (typeof RECONCILE_REASON_CODES)[number]
 export type AuditedAcceptanceCriterion = {
   id: string
   text: string
+  /**
+   * Whether the latest qualifying plan audit recorded this criterion as covered.
+   *
+   * `false` means "not recorded as covered", NOT "an audit judged it uncovered" —
+   * the two are distinguished by the projection's `coverageAvailable`, never by
+   * overloading this flag. Rendering `false` as a judgement when no audit has run
+   * would assert an observation nobody made.
+   */
   covered: boolean
+  /** Sanitized, bounded rationale. Absent when the audit gave none. */
+  note?: string
 }
 
 export type AuditedPhaseTiming = {
@@ -302,6 +312,11 @@ export type AuditedTaskStatusProjection = {
   // them, so a renderer bug cannot manufacture an approve affordance.
   planApprovalReady: boolean
   planRevisionAvailable: boolean
+  // Whether a succeeded plan audit bound to the task's CURRENT artifact exists.
+  // Distinguishes "not yet audited" from "audited and found uncovered", which the
+  // per-criterion `covered` flag alone cannot express. Server-computed; a false
+  // here means the UI must not present any coverage count as a judgement.
+  coverageAvailable: boolean
   acceptanceCriteria: AuditedAcceptanceCriterion[]
   timings: AuditedPhaseTiming[]
   createdAt: number

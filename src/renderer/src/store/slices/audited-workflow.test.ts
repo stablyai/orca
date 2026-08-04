@@ -47,6 +47,7 @@ function makeTask(taskId: string): AuditedTaskStatusProjection {
     commitAttemptStatus: null,
     reconcileClass: null,
     reconcileReasonCode: null,
+    coverageAvailable: false,
     acceptanceCriteria: [],
     timings: [],
     createdAt: 1,

@@ -74,6 +74,7 @@ function task(overrides: Partial<AuditedTaskStatusProjection> = {}): AuditedTask
     planReviewFindingCount: null,
     planApprovalReady: false,
     planRevisionAvailable: false,
+    coverageAvailable: false,
     acceptanceCriteria: [],
     timings: [],
     createdAt: 1,

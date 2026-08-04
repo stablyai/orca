@@ -265,6 +265,9 @@ describe('finalization permissions', () => {
     preBlockState: null,
     blockedPhase: null,
     eventType: 'plan_review_fixes_requested',
+    // Phase 6. Empty here so these Phase 5 races keep asserting exactly what they
+    // always did; the coverage write path has its own suite.
+    coverage: [],
     counters: COUNTERS
   }
 
@@ -419,6 +422,7 @@ describe('approvePlan authorization', () => {
         preBlockState: null,
         blockedPhase: null,
         eventType: 'plan_review_verdict',
+        coverage: [],
         counters: COUNTERS
       },
       2_000

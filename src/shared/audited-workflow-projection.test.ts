@@ -45,6 +45,7 @@ function baseSource(overrides: Partial<ProjectionSourceTask> = {}): ProjectionSo
     executionRunStatus: null,
     executionReasonCode: null,
     executionOutputTruncated: false,
+    coverageAvailable: false,
     acceptanceCriteria: [],
     timings: [],
     createdAt: 1000,
@@ -111,5 +112,52 @@ describe('buildAuditedTaskProjection', () => {
     const projection = buildAuditedTaskProjection(baseSource())
     expect(projection.candidateIdShort).toBeNull()
     expect(projection.committedShaShort).toBeNull()
+  })
+})
+
+// R14. Phase 6 is BOOKKEEPING. Coverage is displayed, never enforced — so an
+// incomplete matrix must not withhold an approval Codex already granted, and a
+// complete one must not manufacture an approval it did not. If a future phase
+// decides to gate on coverage, this suite is the thing that must change first,
+// deliberately.
+describe('coverage never gates approval', () => {
+  const approvable = {
+    state: 'awaiting_plan_review' as const,
+    planArtifactId: 'plan_1',
+    planArtifactStatus: 'current',
+    planReviewApprovedForCurrentArtifact: true
+  }
+
+  it.each([
+    ['fully covered', true, [{ id: 'ac1', text: 'a', covered: true }]],
+    ['partially covered', true, [{ id: 'ac1', text: 'a', covered: false }]],
+    ['audited with no criteria', true, []],
+    ['never audited', false, [{ id: 'ac1', text: 'a', covered: false }]]
+  ])('stays approvable when %s', (_label, coverageAvailable, acceptanceCriteria) => {
+    const projection = buildAuditedTaskProjection(
+      baseSource({ ...approvable, coverageAvailable, acceptanceCriteria })
+    )
+    expect(projection.planApprovalReady).toBe(true)
+  })
+
+  it('does not make an unapproved plan approvable just because coverage is complete', () => {
+    const projection = buildAuditedTaskProjection(
+      baseSource({
+        ...approvable,
+        planReviewApprovedForCurrentArtifact: false,
+        coverageAvailable: true,
+        acceptanceCriteria: [{ id: 'ac1', text: 'a', covered: true }]
+      })
+    )
+    expect(projection.planApprovalReady).toBe(false)
+  })
+
+  it('passes coverageAvailable through untouched', () => {
+    expect(
+      buildAuditedTaskProjection(baseSource({ coverageAvailable: true })).coverageAvailable
+    ).toBe(true)
+    expect(
+      buildAuditedTaskProjection(baseSource({ coverageAvailable: false })).coverageAvailable
+    ).toBe(false)
   })
 })

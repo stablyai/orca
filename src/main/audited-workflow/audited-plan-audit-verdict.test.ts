@@ -30,11 +30,15 @@ describe('parsePlanAuditVerdict', () => {
     const result = parsePlanAuditVerdict(
       '{"verdict":"approved","summary":"Looks right","findings":[]}'
     )
+    // `coverage: []` on a payload that never mentioned coverage is the Phase 6
+    // no-regression guarantee in its smallest form: a pre-Phase-6 response shape
+    // still parses as a valid verdict rather than becoming verdict_unparseable.
     expect(result).toEqual({
       ok: true,
       verdict: 'approved',
       summary: 'Looks right',
-      findingCount: 0
+      findingCount: 0,
+      coverage: []
     })
   })
 
@@ -46,7 +50,8 @@ describe('parsePlanAuditVerdict', () => {
       ok: true,
       verdict: 'fixes_requested',
       summary: 'Two gaps',
-      findingCount: 2
+      findingCount: 2,
+      coverage: []
     })
   })
 
@@ -152,6 +157,70 @@ describe('readLastMessageFile', () => {
     // A different run id resolves to a different directory, so the stale file is
     // simply not found.
     expect(readLastMessageFile(join(dir, 'rev_new', 'last-message.txt'))).toEqual({
+      ok: false,
+      reasonCode: 'verdict_unparseable'
+    })
+  })
+})
+
+// Phase 6. The governing rule: coverage is BOOKKEEPING and must never be able to
+// fail a verdict. Anything wrong with the coverage array either parses to a safe
+// value or, when the array itself is malformed, falls back to the same
+// verdict_unparseable every other malformed payload already yields — never to a
+// silently-covered criterion.
+describe('parsePlanAuditVerdict coverage', () => {
+  const withCoverage = (coverage: string): string =>
+    `{"verdict":"approved","summary":"s","coverage":${coverage}}`
+
+  it('parses entries and normalizes a missing note to null', () => {
+    const result = parsePlanAuditVerdict(
+      withCoverage('[{"id":"ac1","covered":true,"note":"Step 3"},{"id":"ac2","covered":false}]')
+    )
+    expect(result).toEqual({
+      ok: true,
+      verdict: 'approved',
+      summary: 's',
+      findingCount: 0,
+      coverage: [
+        { id: 'ac1', covered: true, note: 'Step 3' },
+        { id: 'ac2', covered: false, note: null }
+      ]
+    })
+  })
+
+  it('normalizes a whitespace-only note to null', () => {
+    const result = parsePlanAuditVerdict(withCoverage('[{"id":"ac1","covered":true,"note":"   "}]'))
+    expect(result.ok && result.coverage).toEqual([{ id: 'ac1', covered: true, note: null }])
+  })
+
+  it('accepts an explicitly empty coverage array', () => {
+    const result = parsePlanAuditVerdict(withCoverage('[]'))
+    expect(result.ok && result.coverage).toEqual([])
+  })
+
+  // R2. A malformed coverage array fails the WHOLE verdict rather than being
+  // dropped: a payload this broken is not one whose verdict field can be trusted
+  // either, and the fail-closed default must be "no approval", not "approved with
+  // coverage quietly discarded".
+  it.each([
+    ['a non-boolean covered', '[{"id":"ac1","covered":"yes"}]'],
+    ['a missing id', '[{"covered":true}]'],
+    ['a blank id', '[{"id":"  ","covered":true}]'],
+    ['an extra key', '[{"id":"ac1","covered":true,"evil":1}]'],
+    ['a non-array', '{"ac1":true}'],
+    [
+      'more than 20 entries',
+      `[${Array.from({ length: 21 }, (_, i) => `{"id":"a${i}","covered":true}`).join(',')}]`
+    ]
+  ])('rejects the whole verdict for %s', (_label, coverage) => {
+    expect(parsePlanAuditVerdict(withCoverage(coverage))).toEqual({
+      ok: false,
+      reasonCode: 'verdict_unparseable'
+    })
+  })
+
+  it('never yields approved from a coverage array alone', () => {
+    expect(parsePlanAuditVerdict('{"coverage":[{"id":"ac1","covered":true}]}')).toEqual({
       ok: false,
       reasonCode: 'verdict_unparseable'
     })
