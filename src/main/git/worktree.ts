@@ -2,11 +2,11 @@
 import { readFile, stat } from 'node:fs/promises'
 import { isAbsolute, join, posix, resolve, win32 } from 'node:path'
 import {
-  branchHasNoUnmergedChangesOnAnyTarget,
-  getBranchCleanupTargetRefs,
-  refreshBranchCleanupTargetRefs
+  branchHasNoUnmergedChangesWithLazyTargetRefresh,
+  getBranchCleanupTargetRefs
 } from '../../shared/git-branch-cleanup'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
+import { withSpan } from '../observability/tracer'
 import type {
   GitWorktreeInfo,
   LocalBaseRefRefreshResult,
@@ -682,10 +682,10 @@ export async function listWorktreeGraph(
   }
 }
 
-// Why: cold start triggers many concurrent `git worktree list` spawns per repo (expensive on Windows, #7225); share the in-flight promise to collapse duplicates.
+// Why: share concurrent `git worktree list` scans, which are expensive on Windows.
 const inFlightWorktreeScans = new Map<string, Promise<GitWorktreeInfo[]>>()
 
-// Why: a listing after a mutation must not join a scan that predates it; bumping the generation on mutation retires older in-flight scans from sharing.
+// Why: mutation generations prevent listings from joining stale scans.
 const worktreeScanGenerations = new Map<string, number>()
 
 function hasInFlightWorktreeScanForRepo(repoPath: string): boolean {
@@ -1157,6 +1157,19 @@ async function performRemoveWorktree(
     return {}
   }
 
+  // Why its own span: branch cleanup can reach the network (`fetch --prune`), so a stall here reads as
+  // `git worktree remove` being slow unless it is timed separately.
+  return withSpan('worktree.remove.branch_delete', () =>
+    deleteBranchAfterWorktreeRemoval(repoPath, branchName, branchHead, options)
+  )
+}
+
+async function deleteBranchAfterWorktreeRemoval(
+  repoPath: string,
+  branchName: string,
+  branchHead: string,
+  options: RemoveWorktreeOptions
+): Promise<RemoveWorktreeResult> {
   try {
     // Why: also drop the now-orphaned branch so delete-worktree leaves none; `-d` (not `-D`) preserves
     // unmerged work, and forceBranchDelete opts into `-D` for failed-creation rollback.
@@ -1253,10 +1266,9 @@ async function deleteAlreadyMergedBranchAfterSafeDeleteFailure(
       ...(execOptions?.stdin !== undefined ? { stdin: execOptions.stdin } : {})
     })
   const targetRefs = await getBranchCleanupTargetRefs(runGit, branchName)
-  await refreshBranchCleanupTargetRefs(runGit, targetRefs)
   // Why: squash merges rewrite commit IDs, so `branch -d` rejects already-merged branches; delete only when Git proves no unmerged tree changes.
   if (
-    !(await branchHasNoUnmergedChangesOnAnyTarget(
+    !(await branchHasNoUnmergedChangesWithLazyTargetRefresh(
       runGit,
       branchName,
       targetRefs,
@@ -1349,23 +1361,32 @@ export async function assertWorktreeCleanForRemoval(
       timeout: gitOptions.timeout ?? WORKTREE_REMOVAL_PREFLIGHT_TIMEOUT_MS
     }
   )
-  if (
-    useNullTerminatedStatus
-      ? hasOnlyIgnoredUntrackedStatus(stdout, ignoredUntrackedPaths)
-      : !stdout.trim()
-  ) {
+  // Why one parse feeds both: the clean verdict and the error text must never
+  // disagree about which entries block removal.
+  const blockingEntries = useNullTerminatedStatus
+    ? getBlockingUntrackedStatusEntries(stdout, ignoredUntrackedPaths)
+    : null
+  if (blockingEntries ? blockingEntries.length === 0 : !stdout.trim()) {
     return
   }
 
   const error = new Error('Worktree has uncommitted or untracked changes.')
-  ;(error as Error & { stdout?: string }).stdout = stdout
+  // Why not the raw stdout: `-z` output is NUL-delimited and `.trim()` leaves
+  // interior NULs, so attaching it verbatim put raw control bytes into the
+  // user-facing removal error — and listed the tolerated shared link, the one
+  // entry that is not the user's work and cannot be committed away.
+  ;(error as Error & { stdout?: string }).stdout = blockingEntries
+    ? blockingEntries.join('\n')
+    : stdout
   throw error
 }
 
-function hasOnlyIgnoredUntrackedStatus(
+/** The `git status --porcelain -z` entries that genuinely block removal:
+ *  everything except the untracked shared links the caller tolerates. */
+function getBlockingUntrackedStatusEntries(
   status: string,
   ignoredUntrackedPaths: readonly string[]
-): boolean {
+): string[] {
   const ignored = new Set(
     ignoredUntrackedPaths
       .map((entry) =>
@@ -1379,7 +1400,9 @@ function hasOnlyIgnoredUntrackedStatus(
   return status
     .split('\0')
     .filter(Boolean)
-    .every((entry) => entry.startsWith('?? ') && ignored.has(entry.slice(3).replace(/\\/g, '/')))
+    .filter(
+      (entry) => !(entry.startsWith('?? ') && ignored.has(entry.slice(3).replace(/\\/g, '/')))
+    )
 }
 
 function translateWorktreePath(
@@ -1436,16 +1459,22 @@ async function resolveGitCommonDir(gitDir: string): Promise<string> {
 // `config.worktree`; later files override earlier ones, matching git's config precedence.
 async function isSparseCheckoutEnabled(gitDir: string): Promise<boolean> {
   const commonDir = await resolveGitCommonDir(gitDir)
-  const sharedFlag = await readCoreSparseCheckoutFlag(join(commonDir, 'config'))
-  const worktreeFlag = await readCoreSparseCheckoutFlag(join(gitDir, 'config.worktree'))
-  return worktreeFlag ?? sharedFlag ?? false
+  const sharedConfig = await readGitConfigText(join(commonDir, 'config'))
+  const sharedFlag = parseCoreSparseCheckoutFlag(sharedConfig)
+  // Git reads `config.worktree` only while extensions.worktreeConfig is on; without that gate a
+  // stale worktree config left behind by an earlier sparse checkout overrides the real repo value.
+  if (parseGitConfigFlag(sharedConfig, 'extensions', 'worktreeconfig') !== true) {
+    return sharedFlag ?? false
+  }
+  const worktreeConfig = await readGitConfigText(join(gitDir, 'config.worktree'))
+  return parseCoreSparseCheckoutFlag(worktreeConfig) ?? sharedFlag ?? false
 }
 
-async function readCoreSparseCheckoutFlag(configPath: string): Promise<boolean | undefined> {
+async function readGitConfigText(configPath: string): Promise<string> {
   try {
-    return parseCoreSparseCheckoutFlag(await readFile(configPath, 'utf-8'))
+    return await readFile(configPath, 'utf-8')
   } catch {
-    return undefined
+    return ''
   }
 }
 
@@ -1454,23 +1483,38 @@ async function readCoreSparseCheckoutFlag(configPath: string): Promise<boolean |
 // git-config parsing edge cases can be unit tested without touching the filesystem. Only the last
 // assignment wins, and a `[core "subsection"]` header is intentionally not treated as `[core]`.
 export function parseCoreSparseCheckoutFlag(configContent: string): boolean | undefined {
-  let inCoreSection = false
+  return parseGitConfigFlag(configContent, 'core', 'sparsecheckout')
+}
+
+// A section header may be followed on the same line by further headers and then one assignment
+// (`[core] sparseCheckout = true` is legal git config); the value runs to end of line, so at most
+// one assignment can share a line and the last header before it decides the section.
+const GIT_CONFIG_SECTION_HEADER = /^\[\s*([A-Za-z0-9.-]+)(\s+"(?:[^"\\]|\\.)*")?\s*\]/
+const GIT_CONFIG_ASSIGNMENT = /^([A-Za-z][A-Za-z0-9-]*)\s*(?:=\s*(.*))?$/
+
+// `section` and `key` must be lowercase: git config names are case-insensitive.
+function parseGitConfigFlag(
+  configContent: string,
+  section: string,
+  key: string
+): boolean | undefined {
+  let inSection = false
   let value: boolean | undefined
   for (const rawLine of configContent.split(/\r?\n/)) {
-    const line = stripGitConfigComment(rawLine).trim()
-    if (line.length === 0) {
+    let rest = stripGitConfigComment(rawLine).trim()
+    for (
+      let header = rest.match(GIT_CONFIG_SECTION_HEADER);
+      header;
+      header = rest.match(GIT_CONFIG_SECTION_HEADER)
+    ) {
+      inSection = header[1].toLowerCase() === section && header[2] === undefined
+      rest = rest.slice(header[0].length).trim()
+    }
+    if (!inSection || rest.length === 0) {
       continue
     }
-    const sectionHeader = line.match(/^\[\s*([A-Za-z0-9.-]+)(\s+"(?:[^"\\]|\\.)*")?\s*\]$/)
-    if (sectionHeader) {
-      inCoreSection = sectionHeader[1].toLowerCase() === 'core' && sectionHeader[2] === undefined
-      continue
-    }
-    if (!inCoreSection) {
-      continue
-    }
-    const assignment = line.match(/^([A-Za-z][A-Za-z0-9-]*)\s*(?:=\s*(.*))?$/)
-    if (!assignment || assignment[1].toLowerCase() !== 'sparsecheckout') {
+    const assignment = rest.match(GIT_CONFIG_ASSIGNMENT)
+    if (!assignment || assignment[1].toLowerCase() !== key) {
       continue
     }
     value = parseGitConfigBoolean(assignment[2])

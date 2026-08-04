@@ -104,7 +104,13 @@ const mockApi = {
 // @ts-expect-error -- mock
 globalThis.window = { api: mockApi }
 
-import { createTestStore, makeOpenFile, makeTabGroup, makeUnifiedTab } from './store-test-helpers'
+import {
+  createTestStore,
+  makeOpenFile,
+  makeTabGroup,
+  makeUnifiedTab,
+  makeWorktree
+} from './store-test-helpers'
 
 const WT = 'repo1::/tmp/feature'
 
@@ -1401,6 +1407,46 @@ describe('TabsSlice', () => {
     })
   })
 
+  // ─── closeTabsToLeft ──────────────────────────────────────────────
+
+  describe('closeTabsToLeft', () => {
+    it('closes unpinned tabs to the left of target', () => {
+      const t1 = store.getState().createUnifiedTab(WT, 'terminal')
+      const t2 = store.getState().createUnifiedTab(WT, 'terminal')
+      const t3 = store.getState().createUnifiedTab(WT, 'terminal')
+      const t4 = store.getState().createUnifiedTab(WT, 'terminal')
+
+      store.getState().pinTab(t2.id)
+
+      const closed = store.getState().closeTabsToLeft(t4.id)
+
+      expect(closed).toEqual([t1.id, t3.id])
+      const tabs = store.getState().unifiedTabsByWorktree[WT]
+      expect(tabs.map((t) => t.id)).toEqual([t2.id, t4.id])
+    })
+
+    it('returns empty when target is the leftmost tab', () => {
+      const t1 = store.getState().createUnifiedTab(WT, 'terminal')
+      store.getState().createUnifiedTab(WT, 'terminal')
+
+      const closed = store.getState().closeTabsToLeft(t1.id)
+
+      expect(closed).toEqual([])
+      expect(store.getState().unifiedTabsByWorktree[WT]).toHaveLength(2)
+    })
+
+    it('activates target if active tab was closed', () => {
+      store.getState().createUnifiedTab(WT, 'terminal')
+      const t2 = store.getState().createUnifiedTab(WT, 'terminal')
+      const t3 = store.getState().createUnifiedTab(WT, 'terminal')
+      store.getState().activateTab(t2.id)
+
+      store.getState().closeTabsToLeft(t3.id)
+
+      expect(store.getState().groupsByWorktree[WT][0].activeTabId).toBe(t3.id)
+    })
+  })
+
   // ─── getActiveTab / getTab ────────────────────────────────────────
 
   describe('getActiveTab / getTab', () => {
@@ -1742,6 +1788,158 @@ describe('TabsSlice', () => {
       })
 
       expect(store.getState().unifiedTabsByWorktree).toEqual({})
+    })
+
+    it('replaces only explicitly scoped worktree tab chrome', () => {
+      const siblingWorktreeId = 'repo2::/tmp/sibling'
+      const targetGroup = makeTabGroup({
+        id: 'group-target',
+        worktreeId: WT,
+        activeTabId: 'target-old',
+        tabOrder: ['target-old']
+      })
+      const siblingGroup = makeTabGroup({
+        id: 'group-sibling',
+        worktreeId: siblingWorktreeId,
+        activeTabId: 'sibling-tab',
+        tabOrder: ['sibling-tab']
+      })
+      const siblingTabs = [
+        makeUnifiedTab({
+          id: 'sibling-tab',
+          worktreeId: siblingWorktreeId,
+          groupId: siblingGroup.id
+        })
+      ]
+      const siblingGroups = [siblingGroup]
+      store.setState({
+        worktreesByRepo: {
+          repo1: [makeWorktree({ id: WT, repoId: 'repo1' })],
+          repo2: [makeWorktree({ id: siblingWorktreeId, repoId: 'repo2' })]
+        },
+        unifiedTabsByWorktree: {
+          [WT]: [makeUnifiedTab({ id: 'target-old', worktreeId: WT, groupId: targetGroup.id })],
+          [siblingWorktreeId]: siblingTabs
+        },
+        groupsByWorktree: {
+          [WT]: [targetGroup],
+          [siblingWorktreeId]: siblingGroups
+        },
+        activeGroupIdByWorktree: {
+          [WT]: targetGroup.id,
+          [siblingWorktreeId]: siblingGroup.id
+        },
+        layoutByWorktree: {
+          [WT]: { type: 'leaf', groupId: targetGroup.id },
+          [siblingWorktreeId]: { type: 'leaf', groupId: siblingGroup.id }
+        }
+      })
+      const targetNew = makeUnifiedTab({
+        id: 'target-new',
+        worktreeId: WT,
+        groupId: targetGroup.id,
+        label: 'Remote target'
+      })
+
+      store.getState().hydrateTabsSession(
+        {
+          activeRepoId: 'repo1',
+          activeWorktreeId: WT,
+          activeTabId: targetNew.id,
+          tabsByWorktree: {},
+          terminalLayoutsByTabId: {},
+          unifiedTabs: {
+            [WT]: [targetNew],
+            [siblingWorktreeId]: [
+              makeUnifiedTab({
+                id: 'sibling-replaced',
+                worktreeId: siblingWorktreeId,
+                groupId: siblingGroup.id
+              })
+            ]
+          },
+          tabGroups: {
+            [WT]: [{ ...targetGroup, activeTabId: targetNew.id, tabOrder: [targetNew.id] }],
+            [siblingWorktreeId]: [
+              { ...siblingGroup, activeTabId: 'sibling-replaced', tabOrder: ['sibling-replaced'] }
+            ]
+          }
+        },
+        { replaceWorkspaceKeys: [WT] }
+      )
+
+      expect(store.getState().unifiedTabsByWorktree[WT]).toEqual([targetNew])
+      expect(store.getState().unifiedTabsByWorktree[siblingWorktreeId]).toBe(siblingTabs)
+      expect(store.getState().groupsByWorktree[siblingWorktreeId]).toBe(siblingGroups)
+    })
+
+    it('deletes omitted target chrome while preserving sibling references', () => {
+      const siblingWorktreeId = 'repo2::/tmp/sibling'
+      const targetGroup = makeTabGroup({
+        id: 'group-target',
+        worktreeId: WT,
+        activeTabId: 'target-tab',
+        tabOrder: ['target-tab']
+      })
+      const siblingGroup = makeTabGroup({
+        id: 'group-sibling',
+        worktreeId: siblingWorktreeId,
+        activeTabId: 'sibling-tab',
+        tabOrder: ['sibling-tab']
+      })
+      const siblingTabs = [
+        makeUnifiedTab({
+          id: 'sibling-tab',
+          worktreeId: siblingWorktreeId,
+          groupId: siblingGroup.id
+        })
+      ]
+      const siblingGroups = [siblingGroup]
+      const siblingLayout = { type: 'leaf' as const, groupId: siblingGroup.id }
+      store.setState({
+        worktreesByRepo: {
+          repo1: [makeWorktree({ id: WT, repoId: 'repo1' })],
+          repo2: [makeWorktree({ id: siblingWorktreeId, repoId: 'repo2' })]
+        },
+        unifiedTabsByWorktree: {
+          [WT]: [makeUnifiedTab({ id: 'target-tab', worktreeId: WT, groupId: targetGroup.id })],
+          [siblingWorktreeId]: siblingTabs
+        },
+        groupsByWorktree: {
+          [WT]: [targetGroup],
+          [siblingWorktreeId]: siblingGroups
+        },
+        activeGroupIdByWorktree: {
+          [WT]: targetGroup.id,
+          [siblingWorktreeId]: siblingGroup.id
+        },
+        layoutByWorktree: {
+          [WT]: { type: 'leaf', groupId: targetGroup.id },
+          [siblingWorktreeId]: siblingLayout
+        }
+      })
+
+      store.getState().hydrateTabsSession(
+        {
+          activeRepoId: 'repo1',
+          activeWorktreeId: WT,
+          activeTabId: null,
+          tabsByWorktree: {},
+          terminalLayoutsByTabId: {},
+          unifiedTabs: {},
+          tabGroups: {}
+        },
+        { replaceWorkspaceKeys: [WT] }
+      )
+
+      const state = store.getState()
+      expect(state.unifiedTabsByWorktree).not.toHaveProperty(WT)
+      expect(state.groupsByWorktree).not.toHaveProperty(WT)
+      expect(state.activeGroupIdByWorktree).not.toHaveProperty(WT)
+      expect(state.layoutByWorktree).not.toHaveProperty(WT)
+      expect(state.unifiedTabsByWorktree[siblingWorktreeId]).toBe(siblingTabs)
+      expect(state.groupsByWorktree[siblingWorktreeId]).toBe(siblingGroups)
+      expect(state.layoutByWorktree[siblingWorktreeId]).toBe(siblingLayout)
     })
   })
 

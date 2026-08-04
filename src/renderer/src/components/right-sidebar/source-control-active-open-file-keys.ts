@@ -4,10 +4,6 @@ const EMPTY_OPEN_ROW_KEYS: ReadonlySet<string> = new Set()
 
 const SIGNATURE_SEPARATOR = '::'
 
-// Why: a plain edit tab carries no diff source, so it is matched against
-// visible pending rows by path instead of a specific diff side.
-export type ActiveOpenFileDiffSource = DiffSource | 'edit'
-
 /**
  * Build the stable string that identifies the active editor file for highlight
  * matching: `${diffSource}::${relativePath}`. Kept as a primitive so the zustand

@@ -69,7 +69,7 @@ process.stdin.on('data', (chunk) => {
     cleanup()
   }
 
-  pending += chunk
+  pending += chunk.toString()
   let match
   let lastIndex = 0
   let reportsInChunk = 0

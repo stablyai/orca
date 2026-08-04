@@ -1,10 +1,10 @@
 import { useEffect } from 'react'
 import { isLinuxUserAgent, isMacUserAgent } from '@/components/terminal-pane/pane-helpers'
 import {
+  consumePrimarySelectionNativePasteSuppression,
   readPrimarySelectionText,
   setPrimarySelectionEnabled,
-  setPrimarySelectionText,
-  shouldSuppressPrimarySelectionNativePaste
+  setPrimarySelectionText
 } from '@/lib/primary-selection'
 import {
   findEditablePrimarySelectionPasteTarget,
@@ -110,9 +110,10 @@ export function usePrimarySelectionPaste(enabled: boolean): void {
       // a pending DOM target, so honor its armed window to swallow the follow-up
       // native paste event that xterm would otherwise forward to the PTY — but
       // only for the terminal's own surface, never unrelated document pastes.
+      // Consuming leaves the window disarmed so a later real paste survives.
       if (
         isTerminalNativePasteTarget(event.target) &&
-        shouldSuppressPrimarySelectionNativePaste()
+        consumePrimarySelectionNativePasteSuppression()
       ) {
         suppressEvent(event)
       }

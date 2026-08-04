@@ -96,10 +96,15 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     event
   ) => {
     const modifierClick = !event.triggeredByAccelerator
+    const localBuild = isMac && modifierClick && event.altKey === true
     const includePerfPrerelease =
-      modifierClick && (isMac ? event.metaKey === true : event.ctrlKey === true)
-    const includePrerelease = modifierClick && event.shiftKey === true
-    onCheckForUpdates({ includePrerelease, includePerfPrerelease })
+      !localBuild && modifierClick && (isMac ? event.metaKey === true : event.ctrlKey === true)
+    const includePrerelease = !localBuild && modifierClick && event.shiftKey === true
+    onCheckForUpdates({
+      includePrerelease,
+      includePerfPrerelease,
+      ...(localBuild ? { localBuild: true } : {})
+    })
   }
 
   const checkForUpdatesItem: Electron.MenuItemConstructorOptions = {

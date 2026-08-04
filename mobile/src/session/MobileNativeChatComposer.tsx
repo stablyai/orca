@@ -215,7 +215,9 @@ export function MobileNativeChatComposer({
           placeholderTextColor={colors.textMuted}
           selectionColor={colors.accentBlue}
           multiline
-          editable={!disabled}
+          // Why: never revoke `editable` — iOS resigns first responder on a focused
+          // field, so a transient lock would yank the keyboard mid-typing (#10681).
+          // The lock gates sending; the draft survives and rides the next send.
           textAlignVertical="top"
         />
         {onMicPress ? (

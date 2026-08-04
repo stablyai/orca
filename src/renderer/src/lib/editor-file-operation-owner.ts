@@ -102,6 +102,9 @@ function resolveCurrentEditorRoute(
   worktreeId: string,
   provenance: EditorFileOperationProvenance
 ): WorktreeOperationRoute | null {
+  if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+    return { executionHostId: 'local', runtimeEnvironmentId: null }
+  }
   const explicitResolution = resolveExplicitWorktreeOperationRouteResult(state, worktreeId)
   if (explicitResolution.kind === 'resolved') {
     return explicitResolution.route

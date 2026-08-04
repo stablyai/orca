@@ -58,8 +58,17 @@ import {
   WatcherChildCapacityError
 } from './parcel-watcher-child-registry'
 import { acquireWatcherRemovalGate } from './watcher-removal-gate'
+import { WATCH_BATCH_TRAILING_MS } from '../../shared/filesystem-watch-batch-window'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => Promise<unknown> | unknown>
+
+/** Remote fs:changed rides the shared debounce window, so drain it before asserting sends. */
+const emitRemote = async (onEvents: (e: unknown[]) => void, events: unknown[]) => {
+  onEvents(events)
+  await (vi.isFakeTimers()
+    ? vi.advanceTimersByTimeAsync(WATCH_BATCH_TRAILING_MS)
+    : new Promise((resolve) => setTimeout(resolve, WATCH_BATCH_TRAILING_MS + 25)))
+}
 
 describe('registerFilesystemWatcherHandlers', () => {
   const handlers: HandlerMap = {}
@@ -118,7 +127,7 @@ describe('registerFilesystemWatcherHandlers', () => {
     const heldReservations = Array.from({ length: MAX_PHYSICAL_WATCHER_CHILDREN }, () =>
       reserveWatcherChild()
     )
-    vi.mocked(createWslWatcher).mockImplementation(async () => {
+    vi.mocked(createWslWatcher).mockImplementation(async (_rootKey, worktreePath) => {
       const release = reserveWatcherChild()
       if (!release) {
         throw new WatcherChildCapacityError()
@@ -126,7 +135,8 @@ describe('registerFilesystemWatcherHandlers', () => {
       return {
         subscription: { unsubscribe: vi.fn(async () => release()) },
         listeners: new Map(),
-        batch: { events: [], overflowed: false, timer: null, firstEventAt: 0 }
+        batch: { events: [], overflowed: false, timer: null, firstEventAt: 0 },
+        rootPath: worktreePath
       }
     })
     const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
@@ -233,7 +243,7 @@ describe('registerFilesystemWatcherHandlers', () => {
       onTerminalError: expect.any(Function)
     })
     const onEvents = watchMock.mock.calls[0][1]
-    onEvents([{ path: '/home/me/repo/file.txt', type: 'update' }])
+    await emitRemote(onEvents, [{ path: '/home/me/repo/file.txt', type: 'update' }])
     expect(sendMock).toHaveBeenCalledWith('fs:changed', {
       worktreePath: '/home/me/repo',
       events: [{ path: '/home/me/repo/file.txt', type: 'update' }]
@@ -328,7 +338,7 @@ describe('registerFilesystemWatcherHandlers', () => {
 
     expect(watchMock).toHaveBeenCalledTimes(2)
     const recoveredEvents = watchMock.mock.calls[1][1] as (events: unknown[]) => void
-    recoveredEvents([{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }])
+    await emitRemote(recoveredEvents, [{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }])
     expect(senderOne.send).not.toHaveBeenCalled()
     expect(senderTwo.send).toHaveBeenCalledWith('fs:changed', {
       worktreePath: '/home/me/repo',
@@ -368,7 +378,7 @@ describe('registerFilesystemWatcherHandlers', () => {
     )
 
     const reinstalledEvents = watchMock.mock.calls[1][1] as (events: unknown[]) => void
-    reinstalledEvents([{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }])
+    await emitRemote(reinstalledEvents, [{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }])
     expect(sender.send).toHaveBeenCalledWith('fs:changed', {
       worktreePath: '/home/me/repo',
       events: [{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }]
@@ -551,7 +561,7 @@ describe('registerFilesystemWatcherHandlers', () => {
 
     expect(watchMock).toHaveBeenCalledTimes(1)
     const onEvents = watchMock.mock.calls[0][1]
-    onEvents([{ path: '/home/me/repo/file.txt', type: 'update' }])
+    await emitRemote(onEvents, [{ path: '/home/me/repo/file.txt', type: 'update' }])
     expect(sendOne).toHaveBeenCalledTimes(1)
     expect(sendTwo).toHaveBeenCalledTimes(1)
 
@@ -620,7 +630,7 @@ describe('registerFilesystemWatcherHandlers', () => {
       events: [{ kind: 'overflow', absolutePath: '/home/me/repo' }]
     })
     const replacementEvents = watchMock.mock.calls[1][1] as (events: unknown[]) => void
-    replacementEvents([{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }])
+    await emitRemote(replacementEvents, [{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }])
     expect(sender.send).toHaveBeenLastCalledWith('fs:changed', {
       worktreePath: '/home/me/repo',
       events: [{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }]
@@ -715,7 +725,7 @@ describe('registerFilesystemWatcherHandlers', () => {
       'still watched by another client'
     )
     const onEvents = watchMock.mock.calls[0][1]
-    onEvents([{ path: '/home/me/repo/file.txt', type: 'update' }])
+    await emitRemote(onEvents, [{ path: '/home/me/repo/file.txt', type: 'update' }])
     expect(sendOne).toHaveBeenCalledTimes(1)
 
     await handlers['fs:watchWorktree'](
@@ -723,7 +733,7 @@ describe('registerFilesystemWatcherHandlers', () => {
       { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
     )
     expect(watchMock).toHaveBeenCalledTimes(1)
-    onEvents([{ path: '/home/me/repo/file-2.txt', type: 'update' }])
+    await emitRemote(onEvents, [{ path: '/home/me/repo/file-2.txt', type: 'update' }])
     expect(sendOne).toHaveBeenCalledTimes(2)
     expect(sendTwo).toHaveBeenCalledTimes(1)
 
@@ -762,7 +772,7 @@ describe('registerFilesystemWatcherHandlers', () => {
     await Promise.all([firstWatch, secondWatch])
 
     const onEvents = watchMock.mock.calls[0][1]
-    onEvents([{ path: '/home/me/repo/file.txt', type: 'update' }])
+    await emitRemote(onEvents, [{ path: '/home/me/repo/file.txt', type: 'update' }])
     expect(sendOne).toHaveBeenCalledTimes(1)
     expect(sendTwo).toHaveBeenCalledTimes(1)
 
@@ -808,7 +818,7 @@ describe('registerFilesystemWatcherHandlers', () => {
     await Promise.all([firstWatch, secondWatch])
 
     const onEvents = watchMock.mock.calls[0][1]
-    onEvents([{ path: '/home/me/repo/file.txt', type: 'update' }])
+    await emitRemote(onEvents, [{ path: '/home/me/repo/file.txt', type: 'update' }])
     expect(sendOne).toHaveBeenCalledTimes(1)
     expect(sendTwo).not.toHaveBeenCalled()
 
@@ -854,7 +864,7 @@ describe('registerFilesystemWatcherHandlers', () => {
 
     expect(unwatchMock).toHaveBeenCalledTimes(1)
     const onEvents = watchMock.mock.calls[0][1]
-    onEvents([{ path: '/home/me/repo/file.txt', type: 'update' }])
+    await emitRemote(onEvents, [{ path: '/home/me/repo/file.txt', type: 'update' }])
     expect(sender.send).not.toHaveBeenCalled()
   })
 
@@ -885,7 +895,7 @@ describe('registerFilesystemWatcherHandlers', () => {
     await Promise.all([firstWatch, secondWatch])
 
     const onEvents = watchMock.mock.calls[0][1]
-    onEvents([{ path: '/home/me/repo/file.txt', type: 'update' }])
+    await emitRemote(onEvents, [{ path: '/home/me/repo/file.txt', type: 'update' }])
     expect(senderOne.send).not.toHaveBeenCalled()
     expect(senderTwo.send).toHaveBeenCalledTimes(1)
 

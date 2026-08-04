@@ -13,7 +13,7 @@ export type MobileRelayLeg = 'host-control' | 'host-data' | 'phone-invite' | 'ph
 
 export type MobileRelayRecovery =
   | { kind: 'disable-relay-credential'; directUnaffected: true }
-  | { kind: 'wait-for-host-revival' }
+  | { kind: 'retry-after-host-offline'; fullJitter: true }
   | { kind: 'reconnect-fresh-e2ee'; fullJitter: true }
   | { kind: 'resolve-invite-through-director-ws'; requireStrictlyNewerEpoch: true }
   | { kind: 'resolve-resume-through-director-post' }
@@ -29,7 +29,7 @@ export function mobileRelayRecoveryFor(
     case MOBILE_RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL:
       return { kind: 'disable-relay-credential', directUnaffected: true }
     case MOBILE_RELAY_CLOSE_CODE.HOST_OFFLINE:
-      return { kind: 'wait-for-host-revival' }
+      return { kind: 'retry-after-host-offline', fullJitter: true }
     case MOBILE_RELAY_CLOSE_CODE.PEER_DROPPED:
       return { kind: 'reconnect-fresh-e2ee', fullJitter: true }
     case MOBILE_RELAY_CLOSE_CODE.WRONG_CELL:

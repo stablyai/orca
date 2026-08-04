@@ -53,19 +53,38 @@ function endsWithHttpSchemePrefixFragment(value: string): string {
   return ''
 }
 
-function getPotentialGitHubPRCarry(value: string): string {
-  const schemeIndex = Math.max(...HTTP_SCHEME_PREFIXES.map((prefix) => value.lastIndexOf(prefix)))
-  if (schemeIndex !== -1) {
-    const tailLength = value.length - schemeIndex
-    if (tailLength > MAX_CARRY_LENGTH) {
-      return ''
+function lastIndexOfHttpScheme(value: string, fromIndex?: number): number {
+  let lastIndex = -1
+  for (const prefix of HTTP_SCHEME_PREFIXES) {
+    const candidate =
+      fromIndex === undefined ? value.lastIndexOf(prefix) : value.lastIndexOf(prefix, fromIndex)
+    if (candidate > lastIndex) {
+      lastIndex = candidate
     }
+  }
+  return lastIndex
+}
+
+function getPotentialGitHubPRCarry(value: string): string {
+  // Why bounded: carry is always a suffix of at most MAX_CARRY_LENGTH, so a scheme
+  // further back can only ever be dropped — scanning to it is O(chunk) per PTY write.
+  const windowStart = value.length > MAX_CARRY_LENGTH ? value.length - MAX_CARRY_LENGTH : 0
+  const tailWindow = windowStart === 0 ? value : value.slice(windowStart)
+  const schemeIndexInWindow = lastIndexOfHttpScheme(tailWindow)
+  if (schemeIndexInWindow !== -1) {
+    const schemeIndex = windowStart + schemeIndexInWindow
     return hasTerminalUrlWhitespace(value, schemeIndex, value.length)
       ? ''
       : value.slice(schemeIndex)
   }
 
-  return endsWithHttpSchemePrefixFragment(value)
+  const fragment = endsWithHttpSchemePrefixFragment(tailWindow)
+  if (fragment === '' || windowStart === 0) {
+    return fragment
+  }
+  // Why look behind: an older scheme means the URL already overran the cap, so the
+  // carry is abandoned rather than restarted from this fragment.
+  return lastIndexOfHttpScheme(value, windowStart - 1) === -1 ? fragment : ''
 }
 
 function hasTerminalUrlWhitespace(value: string, start: number, end: number): boolean {

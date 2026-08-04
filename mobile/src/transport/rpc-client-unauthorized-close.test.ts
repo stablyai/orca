@@ -89,9 +89,10 @@ describe('unauthorized close-code mapping (silent 4001)', () => {
 
     // A desktop with a regenerated keypair can't send a decryptable e2ee_error —
     // the phone only ever sees the 4001 close. Three of those must latch.
+    // Why 1_000: failed handshakes grow the backoff since issue #10119.
     for (let i = 0; i < 3; i++) {
       if (i > 0) {
-        await vi.advanceTimersByTimeAsync(500)
+        await vi.advanceTimersByTimeAsync(1_000)
       }
       const socket = lastSocket()
       socket.open()
@@ -130,9 +131,10 @@ describe('unauthorized close-code mapping (silent 4001)', () => {
   it('shares one budget between decrypted e2ee_error rejections and 4001 closes', async () => {
     const client = connect('ws://desktop.invalid', 'token', 'server-key')
 
+    // Why 1_000: failed handshakes grow the backoff since issue #10119.
     for (let i = 0; i < 3; i++) {
       if (i > 0) {
-        await vi.advanceTimersByTimeAsync(500)
+        await vi.advanceTimersByTimeAsync(1_000)
       }
       const socket = lastSocket()
       socket.open()

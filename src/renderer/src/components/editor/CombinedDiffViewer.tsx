@@ -79,6 +79,7 @@ import {
   beginCombinedDiffScrollbarDrag,
   type CombinedDiffScrollbarDragCleanup
 } from './combined-diff-scrollbar-drag'
+import { shouldRequestCombinedDiffSectionLoad } from './combined-diff-section-load-state'
 import { translate } from '@/i18n/i18n'
 
 type CachedCombinedDiffViewState = {
@@ -977,6 +978,14 @@ export default function CombinedDiffViewer({
     }
     retrySectionRef.current(index)
   }, [])
+  const ensureCombinedDiffSectionLoaded = useCallback((index: number): void => {
+    const section = sectionsRef.current[index]
+    if (!shouldRequestCombinedDiffSectionLoad(section, loadingIndicesRef.current.has(index))) {
+      return
+    }
+    loadedIndicesRef.current.delete(index)
+    loadSchedulerRef.current.request(index)
+  }, [])
   const [activeTreeSectionState, setActiveTreeSectionState] = useState<{
     entrySignature: string
     key: string | null
@@ -1000,6 +1009,7 @@ export default function CombinedDiffViewer({
         sections: sectionsRef.current,
         sectionIndexByKey,
         toggleSection,
+        loadSection: ensureCombinedDiffSectionLoaded,
         scrollToIndex: (index) => {
           scrollAnchorRef.current = null
           latestDomScrollAnchorRef.current = null
@@ -1013,8 +1023,6 @@ export default function CombinedDiffViewer({
         }
       })
       if (navigatedIndex !== null) {
-        // Why: re-selecting an already-loaded row must refetch — the file or git index may have changed while it stayed mounted.
-        requestCombinedDiffSectionReload(navigatedIndex)
         setActiveTreeSectionState({
           entrySignature,
           key: sectionsRef.current[navigatedIndex]?.key ?? null
@@ -1022,9 +1030,9 @@ export default function CombinedDiffViewer({
       }
     },
     [
+      ensureCombinedDiffSectionLoaded,
       entrySignature,
       markDirectScrollInput,
-      requestCombinedDiffSectionReload,
       sectionIndexByKey,
       toggleSection,
       treeMode,

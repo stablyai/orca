@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import { getUpdateCheckClickOptions, getUpdateCheckHint } from './update-check-click-options'
 
-function clickEvent(overrides: Partial<Pick<MouseEvent, 'ctrlKey' | 'metaKey' | 'shiftKey'>>) {
+function clickEvent(
+  overrides: Partial<Pick<MouseEvent, 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey'>>
+) {
   return {
+    altKey: false,
     ctrlKey: false,
     metaKey: false,
     shiftKey: false,
     ...overrides
-  } as Pick<MouseEvent, 'ctrlKey' | 'metaKey' | 'shiftKey'>
+  } as Pick<MouseEvent, 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey'>
 }
 
 describe('getUpdateCheckClickOptions', () => {
@@ -42,9 +45,19 @@ describe('getUpdateCheckClickOptions', () => {
     })
   })
 
+  it('gives local build selection precedence over release channel modifiers', () => {
+    expect(
+      getUpdateCheckClickOptions(clickEvent({ altKey: true, shiftKey: true, metaKey: true }), true)
+    ).toEqual({ localBuild: true })
+    expect(getUpdateCheckClickOptions(clickEvent({ altKey: true }), false)).toEqual({
+      includePrerelease: false,
+      includePerfPrerelease: false
+    })
+  })
+
   it('formats the tooltip hint by platform', () => {
     expect(getUpdateCheckHint(true)).toBe(
-      '⇧+click checks the latest RC; ⌘+click checks the latest perf build.'
+      '⇧+click checks the latest RC; ⌘+click checks the latest perf build. ⌥+click chooses a local macOS build.'
     )
     expect(getUpdateCheckHint(false)).toBe(
       'Shift+click checks the latest RC; Ctrl+click checks the latest perf build.'

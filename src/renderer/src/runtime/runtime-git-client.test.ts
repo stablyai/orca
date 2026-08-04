@@ -8,6 +8,7 @@ import {
   fastForwardRuntimeGit,
   fetchRuntimeGit,
   generateRuntimeCommitMessage,
+  generateRuntimePullRequestFields,
   getRuntimeGitDiff,
   getRuntimeGitHistory,
   getRuntimeGitIgnoredPaths,
@@ -36,6 +37,7 @@ const gitFastForward = vi.fn()
 const gitPush = vi.fn()
 const gitRebaseFromBase = vi.fn()
 const gitGenerateCommitMessage = vi.fn()
+const gitGeneratePullRequestFields = vi.fn()
 const gitDiscoverCommitMessageModels = vi.fn()
 const gitCancelGenerateCommitMessage = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
@@ -59,6 +61,7 @@ beforeEach(() => {
   gitPush.mockReset()
   gitRebaseFromBase.mockReset()
   gitGenerateCommitMessage.mockReset()
+  gitGeneratePullRequestFields.mockReset()
   gitDiscoverCommitMessageModels.mockReset()
   gitCancelGenerateCommitMessage.mockReset()
   runtimeEnvironmentCall.mockReset()
@@ -84,6 +87,7 @@ beforeEach(() => {
         push: gitPush,
         rebaseFromBase: gitRebaseFromBase,
         generateCommitMessage: gitGenerateCommitMessage,
+        generatePullRequestFields: gitGeneratePullRequestFields,
         discoverCommitMessageModels: gitDiscoverCommitMessageModels,
         cancelGenerateCommitMessage: gitCancelGenerateCommitMessage
       },
@@ -691,6 +695,7 @@ describe('runtime git client', () => {
 
     expect(gitGenerateCommitMessage).toHaveBeenCalledWith({
       worktreePath: '/repo',
+      worktreeId: 'repo-1::/repo',
       repoId: 'repo-1',
       connectionId: undefined,
       sourceControlAiResolvedParams
@@ -732,5 +737,43 @@ describe('runtime git client', () => {
       timeoutMs: 75_000
     })
     expect(gitDiscoverCommitMessageModels).not.toHaveBeenCalled()
+  })
+
+  it('passes the raw worktree id to local generation IPC', async () => {
+    // Why: the meta key keeps the `::workspace:<uuid>` suffix that the cwd path strips.
+    const workspaceId = '123e4567-e89b-12d3-a456-426614174000'
+    const worktreeId = `folder-repo::/home/user::workspace:${workspaceId}`
+    const context = {
+      settings: { activeRuntimeEnvironmentId: null },
+      worktreeId,
+      worktreePath: `/home/user::workspace:${workspaceId}`
+    }
+
+    await generateRuntimeCommitMessage(context)
+    await generateRuntimePullRequestFields(context, {
+      base: 'main',
+      title: '',
+      body: '',
+      draft: false
+    })
+
+    expect(gitGenerateCommitMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ worktreeId, worktreePath: '/home/user' })
+    )
+    expect(gitGeneratePullRequestFields).toHaveBeenCalledWith(
+      expect.objectContaining({ worktreeId, worktreePath: '/home/user' })
+    )
+  })
+
+  it('omits worktreeId from local generation IPC when the context has none', async () => {
+    const context = {
+      settings: { activeRuntimeEnvironmentId: null },
+      worktreeId: null,
+      worktreePath: '/repo'
+    }
+
+    await generateRuntimeCommitMessage(context)
+
+    expect(gitGenerateCommitMessage.mock.calls[0][0]).not.toHaveProperty('worktreeId')
   })
 })

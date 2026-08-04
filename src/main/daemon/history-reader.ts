@@ -1,39 +1,56 @@
 import { join } from 'node:path'
 import { existsSync, opendirSync } from 'node:fs'
 import { stat } from 'node:fs/promises'
-import type { SessionMeta } from './history-manager'
-import type { TerminalCheckpointFile, TerminalModes } from './types'
-import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
+import type { TerminalCheckpointFile } from './types'
 import { getHistorySessionDirName } from './history-paths'
 import { decodeTerminalHistoryLog, LOG_HEADER_BYTES } from './terminal-history-log'
 import { HeadlessEmulator } from './headless-emulator'
 import { PrioritySemaphore } from './priority-semaphore'
 import { ColdRestoreReplayWriter } from './cold-restore-replay-writer'
-import {
-  readTerminalHistoryBufferAsync,
-  readTerminalHistoryJson,
-  readTerminalHistoryJsonAsync
-} from './terminal-history-file-reader'
+import { readTerminalHistoryBufferAsync } from './terminal-history-file-reader'
 import { detectColdRestoreFromLegacyScrollback } from './terminal-history-legacy-scrollback-restore'
-import {
-  TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES,
-  TERMINAL_HISTORY_LOG_MAX_BYTES,
-  TERMINAL_HISTORY_META_MAX_BYTES
-} from './terminal-history-file-limits'
+import { TERMINAL_HISTORY_LOG_MAX_BYTES } from './terminal-history-file-limits'
 import {
   retainNewestRestorableTerminalHistorySessions,
   type RestorableTerminalHistorySession
 } from './terminal-history-restorable-retention'
+import {
+  hasTerminalHistoryRecoveryProtection,
+  isTerminalHistoryQuarantineEntry
+} from './terminal-history-recovery-quarantine'
+import { isTerminalHistoryPendingDeleteEntry } from './terminal-history-session-tombstone'
+import {
+  readTerminalHistoryMeta,
+  type SessionMeta,
+  type SessionMetaRead
+} from './terminal-history-metadata'
+import {
+  coldRestoreInfoFromSnapshot,
+  type ColdRestoreInfo
+} from './terminal-history-cold-restore-info'
+import { readTerminalHistoryCheckpoint } from './terminal-history-checkpoint-reader'
+import { isValidTerminalHistorySize } from './terminal-history-dimensions'
 
-export type ColdRestoreInfo = {
-  snapshotAnsi: string
-  scrollbackAnsi: string
-  oscLinks?: TerminalOscLinkRange[]
-  rehydrateSequences: string
-  cwd: string
-  cols: number
-  rows: number
-  modes: TerminalModes
+export type { ColdRestoreInfo } from './terminal-history-cold-restore-info'
+
+export type RestorableHistoryProbe =
+  | { status: 'none' }
+  | { status: 'restorable'; sessionId: string }
+  | { status: 'unreadable'; sessionId: string }
+
+export type ColdRestoreDetection =
+  | { status: 'none' }
+  | {
+      status: 'restored'
+      sessionId: string
+      restoreInfo: ColdRestoreInfo
+      hasUnreadableRecovery: boolean
+    }
+  | { status: 'unreadable'; sessionId: string }
+
+type IncrementalLogRestore = {
+  restoreInfo: ColdRestoreInfo | null
+  readFailed: boolean
 }
 
 // Why: parallel pane mounts should interleave with main-process work without multiplying replay slices per turn.
@@ -50,41 +67,60 @@ export class HistoryReader {
   // deciding to pay detectColdRestore's full checkpoint+log replay. Reads only
   // the small meta.json, using the same unclean-shutdown test detectColdRestore
   // starts with.
+  probeRestorableHistory(sessionId: string): RestorableHistoryProbe {
+    if (hasTerminalHistoryRecoveryProtection(this.basePath, sessionId)) {
+      return { status: 'unreadable', sessionId }
+    }
+    const metaRead = this.readMetaState(sessionId)
+    if (metaRead.status === 'unreadable') {
+      return { status: 'unreadable', sessionId }
+    }
+    if (metaRead.status === 'missing' || metaRead.meta.endedAt !== null) {
+      return { status: 'none' }
+    }
+    return { status: 'restorable', sessionId }
+  }
+
   hasRestorableHistory(sessionId: string): boolean {
-    const meta = this.readMeta(sessionId)
-    return meta !== null && meta.endedAt === null
+    return this.probeRestorableHistory(sessionId).status !== 'none'
   }
 
   async detectColdRestore(
     sessionId: string,
     opts?: { ignoreCleanEnd?: boolean; wslDistro?: string }
   ): Promise<ColdRestoreInfo | null> {
-    const meta = this.readMeta(sessionId)
-    if (!meta) {
-      return null
+    const detection = await this.detectColdRestoreState(sessionId, opts)
+    return detection.status === 'restored' ? detection.restoreInfo : null
+  }
+
+  async detectColdRestoreState(
+    sessionId: string,
+    opts?: { ignoreCleanEnd?: boolean; wslDistro?: string }
+  ): Promise<ColdRestoreDetection> {
+    if (hasTerminalHistoryRecoveryProtection(this.basePath, sessionId)) {
+      return { status: 'unreadable', sessionId }
     }
+    const metaRead = this.readMetaState(sessionId)
+    if (metaRead.status === 'missing') {
+      return { status: 'none' }
+    }
+    if (metaRead.status === 'unreadable') {
+      return { status: 'unreadable', sessionId }
+    }
+    const meta = metaRead.meta
     // Why ignoreCleanEnd: in the spawn probe race, the dying session's exit
     // event can write endedAt between the aliveness probe and the post-spawn
     // fallback detect. The caller established restore eligibility before the
     // probe, so the just-written clean end must not downgrade the restore.
     if (meta.endedAt !== null && !opts?.ignoreCleanEnd) {
-      return null
+      return { status: 'none' }
     }
 
     const sessionDir = join(this.basePath, getHistorySessionDirName(sessionId))
     const checkpointPath = join(sessionDir, 'checkpoint.json')
-    const checkpointExists = existsSync(checkpointPath)
-    let checkpoint: TerminalCheckpointFile | null = null
-    if (checkpointExists) {
-      try {
-        checkpoint = await readTerminalHistoryJsonAsync<TerminalCheckpointFile>(
-          checkpointPath,
-          TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES
-        )
-      } catch {
-        checkpoint = null
-      }
-    }
+    const checkpointRead = await readTerminalHistoryCheckpoint(checkpointPath)
+    const checkpoint = checkpointRead.status === 'readable' ? checkpointRead.checkpoint : null
+    const checkpointReadFailed = checkpointRead.status === 'unreadable'
 
     // Why log replay is preferred over the checkpoint alone: the log carries
     // byte-exact output up to ~5s before the crash (up to the full-snapshot
@@ -96,17 +132,44 @@ export class HistoryReader {
       checkpoint,
       opts?.wslDistro
     )
-    if (logRestore) {
-      return logRestore
+    if (logRestore.restoreInfo) {
+      return {
+        status: 'restored',
+        sessionId,
+        restoreInfo: logRestore.restoreInfo,
+        hasUnreadableRecovery: checkpointReadFailed || logRestore.readFailed
+      }
     }
 
     if (!checkpoint) {
       // Why: backward compatibility with pre-checkpoint sessions, and corrupt
       // checkpoints — the old scrollback.bin is the best remaining data.
-      return await detectColdRestoreFromLegacyScrollback(this.basePath, sessionId, meta)
+      const legacyPath = join(sessionDir, 'scrollback.bin')
+      const legacyExists = existsSync(legacyPath)
+      const legacyRestore = await detectColdRestoreFromLegacyScrollback(
+        this.basePath,
+        sessionId,
+        meta
+      )
+      if (legacyRestore) {
+        return {
+          status: 'restored',
+          sessionId,
+          restoreInfo: legacyRestore,
+          hasUnreadableRecovery: checkpointReadFailed || logRestore.readFailed
+        }
+      }
+      return checkpointReadFailed || logRestore.readFailed || legacyExists
+        ? { status: 'unreadable', sessionId }
+        : { status: 'none' }
     }
 
-    return this.coldRestoreInfoFromSnapshot(checkpoint, checkpoint.cwd, meta)
+    return {
+      status: 'restored',
+      sessionId,
+      restoreInfo: coldRestoreInfoFromSnapshot(checkpoint, checkpoint.cwd, meta),
+      hasUnreadableRecovery: logRestore.readFailed
+    }
   }
 
   listRestorable(): string[] {
@@ -131,6 +194,12 @@ export class HistoryReader {
           return
         }
         if (!entry.isDirectory()) {
+          continue
+        }
+        if (
+          isTerminalHistoryQuarantineEntry(entry.name) ||
+          isTerminalHistoryPendingDeleteEntry(entry.name)
+        ) {
           continue
         }
         let sessionId: string
@@ -174,15 +243,15 @@ export class HistoryReader {
     meta: SessionMeta,
     checkpoint: TerminalCheckpointFile | null,
     wslDistro?: string
-  ): Promise<ColdRestoreInfo | null> {
+  ): Promise<IncrementalLogRestore> {
     const logPath = join(sessionDir, 'output.log')
     try {
       // Why: final checkpoints leave a header-only log; they need no scarce replay slot and must not queue sleep teardown behind startup restores.
       if ((await stat(logPath)).size <= LOG_HEADER_BYTES) {
-        return null
+        return { restoreInfo: null, readFailed: false }
       }
     } catch {
-      return null
+      return { restoreInfo: null, readFailed: existsSync(logPath) }
     }
     const release = await coldRestoreReplaySemaphore.acquire(0)
     try {
@@ -190,11 +259,11 @@ export class HistoryReader {
       try {
         logBuffer = await readTerminalHistoryBufferAsync(logPath, TERMINAL_HISTORY_LOG_MAX_BYTES)
       } catch {
-        return null
+        return { restoreInfo: null, readFailed: true }
       }
       const log = decodeTerminalHistoryLog(logBuffer)
       if (!log || log.batches.length === 0) {
-        return null
+        return { restoreInfo: null, readFailed: true }
       }
       // Generation mismatch means the log does not continue this checkpoint
       // (e.g. crash between checkpoint rename and log reset, or a pre-log
@@ -202,10 +271,10 @@ export class HistoryReader {
       // garble content; the checkpoint alone is consistent.
       if (checkpoint) {
         if (typeof checkpoint.generation !== 'number' || log.generation !== checkpoint.generation) {
-          return null
+          return { restoreInfo: null, readFailed: false }
         }
       } else if (log.generation !== 0) {
-        return null
+        return { restoreInfo: null, readFailed: true }
       }
 
       const emulator = new HeadlessEmulator({
@@ -219,19 +288,26 @@ export class HistoryReader {
           if (
             !(await replay.write(checkpoint.scrollbackAnsi ?? '')) ||
             !(await replay.write(checkpoint.rehydrateSequences)) ||
-            !(await replay.write(checkpoint.snapshotAnsi))
+            !(await replay.write(checkpoint.snapshotAnsi)) ||
+            !(await replay.write(checkpoint.pendingEscapeTailAnsi ?? ''))
           ) {
-            return null
+            return { restoreInfo: null, readFailed: true }
           }
           emulator.setRestoredOscLinks(checkpoint.oscLinks)
+          if (checkpoint.lastTitle) {
+            emulator.setLastTitle(checkpoint.lastTitle)
+          }
         }
         for (const batch of log.batches) {
           for (const record of batch.records) {
             if (record.kind === 'output') {
               if (!(await replay.write(record.data))) {
-                return null
+                return { restoreInfo: null, readFailed: true }
               }
             } else if (record.kind === 'resize') {
+              if (!isValidTerminalHistorySize(record.cols, record.rows)) {
+                return { restoreInfo: null, readFailed: true }
+              }
               await replay.resize(record.cols, record.rows)
             } else {
               await replay.clearScrollback()
@@ -239,15 +315,18 @@ export class HistoryReader {
           }
         }
         const snapshot = emulator.getSnapshot()
-        return this.coldRestoreInfoFromSnapshot(
-          snapshot,
-          snapshot.cwd ?? checkpoint?.cwd ?? meta.cwd,
-          meta
-        )
+        return {
+          restoreInfo: coldRestoreInfoFromSnapshot(
+            snapshot,
+            snapshot.cwd ?? checkpoint?.cwd ?? meta.cwd,
+            meta
+          ),
+          readFailed: log.truncatedTail
+        }
       } catch {
         // Why: a replay failure must degrade to checkpoint-only restore, never
         // surface as a failed spawn.
-        return null
+        return { restoreInfo: null, readFailed: true }
       } finally {
         emulator.dispose()
       }
@@ -256,44 +335,12 @@ export class HistoryReader {
     }
   }
 
-  private coldRestoreInfoFromSnapshot(
-    snapshot: {
-      snapshotAnsi: string
-      scrollbackAnsi: string
-      oscLinks?: TerminalOscLinkRange[]
-      rehydrateSequences: string
-      cols: number
-      rows: number
-      modes: TerminalModes
-    },
-    cwd: string | null,
-    meta: SessionMeta
-  ): ColdRestoreInfo {
-    // Why: legacy normal snapshots stored their buffer only in snapshotAnsi;
-    // current alt snapshots carry their normal buffer in scrollbackAnsi.
-    const scrollbackAnsi =
-      snapshot.scrollbackAnsi || (snapshot.modes?.alternateScreen ? '' : snapshot.snapshotAnsi)
-    return {
-      snapshotAnsi: snapshot.snapshotAnsi,
-      scrollbackAnsi,
-      oscLinks: snapshot.oscLinks,
-      rehydrateSequences: snapshot.rehydrateSequences,
-      cwd: cwd ?? meta.cwd,
-      cols: snapshot.cols,
-      rows: snapshot.rows,
-      modes: snapshot.modes
-    }
+  private readMeta(sessionId: string): SessionMeta | null {
+    const metaRead = this.readMetaState(sessionId)
+    return metaRead.status === 'readable' ? metaRead.meta : null
   }
 
-  private readMeta(sessionId: string): SessionMeta | null {
-    const metaPath = join(this.basePath, getHistorySessionDirName(sessionId), 'meta.json')
-    if (!existsSync(metaPath)) {
-      return null
-    }
-    try {
-      return readTerminalHistoryJson<SessionMeta>(metaPath, TERMINAL_HISTORY_META_MAX_BYTES)
-    } catch {
-      return null
-    }
+  private readMetaState(sessionId: string): SessionMetaRead {
+    return readTerminalHistoryMeta(this.basePath, sessionId)
   }
 }

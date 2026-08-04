@@ -5,10 +5,10 @@ import { queryWindowsProcessRowsFresh } from './providers/windows-foreground-pro
  * subtree membership, not root identity: a recycled PID that lands on any other
  * Orca descendant also reads `own`. It bounds the blast radius of a bad
  * `taskkill /T /F` to our own tree; it does not prove we spawned this PTY.
- * - `own`: ancestry reaches us, so the tree is ours to kill.
+ * - `own`: ancestry reaches us, so the tree is eligible for guarded teardown.
  * - `absent`: the PID is gone; `taskkill` would no-op anyway.
  * - `foreign`: the PID resolves to a process we did not start (PID recycle).
- * - `unknown`: no usable evidence; callers keep their prior behavior.
+ * - `unknown`: no usable evidence; callers must not force-kill the tree.
  */
 export type WindowsTreeKillTarget = 'own' | 'absent' | 'foreign' | 'unknown'
 
@@ -28,11 +28,12 @@ export type WindowsProcessLinkReader = () => Promise<readonly ProcessLink[] | nu
  * so it resolves `foreign` and must never reach `taskkill /T /F`. Ambiguous
  * tables resolve `unknown` because ambiguity is not evidence of ownership.
  *
- * Known limit: a recycle that lands on one of our OWN descendants — another
- * pane's shell, an agent CLI, a `git.exe` we spawned — still reads `own`. That
- * is not remote during teardown, when Orca is itself the process allocating
- * pids. Closing it needs real identity (a `Win32_Process.CreationDate` baseline,
- * the analogue of the POSIX `lstart` check, or an inherited handle/Job Object).
+ * Known limit (#10680): a recycle that lands on one of our OWN descendants —
+ * another pane's shell, an agent CLI, a `git.exe` we spawned — still reads
+ * `own`. That is not remote during teardown, when Orca is itself the process
+ * allocating pids. Closing it needs real identity (a `Win32_Process.CreationDate`
+ * baseline, the analogue of the POSIX `lstart` check, or an inherited handle /
+ * Job Object).
  */
 export function classifyWindowsTreeKillTarget(
   rootPid: number,
@@ -110,7 +111,7 @@ function readLinksBeforeDeadline(
  * Verify that `rootPid` still identifies the PTY root this process started,
  * before a `taskkill /T /F` that would otherwise force-kill a recycled PID and
  * its whole descendant tree. Never rejects: an unavailable or slow process query
- * resolves `unknown` so teardown keeps its pre-guard behavior.
+ * resolves `unknown`, which is not permission to force-kill the tree.
  */
 export async function verifyWindowsTreeKillTarget(
   rootPid: number,

@@ -60,6 +60,13 @@ import {
   resolveMobileSyntaxLanguage
 } from '../../../src/session/mobile-file-syntax'
 import { buildGitHubCheckSummary } from '../../../src/tasks/github-check-summary'
+import { buildGitLabCheckSummary } from '../../../src/tasks/gitlab-check-summary'
+import {
+  getHostedMergeLabel,
+  getHostedReviewLabel,
+  getHostedReviewSignalTone,
+  getHostedChecksLabel
+} from '../../../src/tasks/mobile-hosted-check-status'
 import { buildTaskWorkspaceCreateParams } from '../../../src/tasks/workspace-create-params'
 import { MOBILE_TASKS_CAPABILITY } from '../../../src/tasks/mobile-tasks-capability'
 import {
@@ -106,11 +113,9 @@ import {
 } from '../../../src/tasks/setup-hook-trust'
 import { colors, radii, spacing, typography } from '../../../src/theme/mobile-theme'
 import { triggerMediumImpact } from '../../../src/platform/haptics'
-import type {
-  GitHubProjectSortDirection,
-  GitHubProjectTable as SharedGitHubProjectTable
-} from '../../../src/tasks/mobile-github-project-group-sort'
 import {
+  type GitHubProjectSortDirection,
+  type GitHubProjectTable as SharedGitHubProjectTable,
   groupRows,
   isIterationCurrent,
   sortRows,
@@ -140,11 +145,13 @@ import {
 import type {
   BaseRefSearchResult,
   GitHubOwnerRepo,
+  ProviderCheckSummary,
   PersistedTrustedOrcaHooks,
   SparsePreset,
   TuiAgent
 } from '../../../../src/shared/types'
 import type { SshConnectionState } from '../../../../src/shared/ssh-types'
+import type { HostedReviewDecision } from '../../../../src/shared/hosted-review'
 import {
   githubProjectHost,
   githubProjectIdentityKey as githubProjectKey
@@ -183,31 +190,20 @@ type GitHubWorkItem = {
   reviewDecision?: string | null
   reviewRequests?: GitHubAssignableUser[]
   latestReviews?: GitHubPRReviewSummary[]
-  checksSummary?: GitHubPRCheckSummary
+  checksSummary?: ProviderCheckSummary
   mergeable?: GitHubPRMergeableState
   mergeStateStatus?: string | null
 }
-
 type GitHubAssignableUser = {
   login: string
   name?: string | null
   avatarUrl?: string | null
 }
-
 type GitHubPRReviewSummary = {
   login: string
   state?: string | null
   avatarUrl?: string | null
 }
-
-type GitHubPRCheckSummary = {
-  state: 'success' | 'failure' | 'pending' | 'none'
-  total: number
-  passed: number
-  failed: number
-  pending: number
-}
-
 type GitHubPRMergeableState = 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN'
 
 type GitHubPRReviewerRow = {
@@ -216,13 +212,11 @@ type GitHubPRReviewerRow = {
   avatarUrl?: string | null
   stateLabel: string
 }
-
 type GitHubRepoSources = {
   issues: GitHubOwnerRepo | null
   prs: GitHubOwnerRepo | null
   upstreamCandidate: GitHubOwnerRepo | null
 }
-
 type TaskRuntimeStatus = {
   capabilities?: string[]
 }
@@ -231,7 +225,6 @@ type TasksSupportState =
   | { kind: 'unknown'; client: RpcClient | null }
   | { kind: 'supported'; client: RpcClient }
   | { kind: 'unsupported'; client: RpcClient }
-
 type GitLabWorkItem = {
   id: string
   type: 'issue' | 'mr'
@@ -246,6 +239,10 @@ type GitLabWorkItem = {
   baseRefName?: string
   isCrossRepository?: boolean
   projectRef?: { host: string; path: string }
+  checksSummary?: ProviderCheckSummary
+  mergeable?: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN'
+  reviewDecision?: HostedReviewDecision
+  reviewerCount?: number
   repoId: string
   repoName: string
 }
@@ -1264,23 +1261,6 @@ function hostedBranchSummary(item: TaskItem): { head: string; base: string } | n
   return null
 }
 
-function getGitHubChecksLabel(item: GitHubWorkItem): string {
-  const summary = item.checksSummary
-  if (!summary) {
-    return 'Checks'
-  }
-  if (summary.total === 0) {
-    return 'No checks'
-  }
-  if (summary.failed > 0) {
-    return `${summary.failed} failing`
-  }
-  if (summary.pending > 0) {
-    return `${summary.pending} pending`
-  }
-  return `${summary.passed}/${summary.total} passed`
-}
-
 function getGitHubMergeLabel(item: GitHubWorkItem): string {
   if (item.mergeable === undefined && item.mergeStateStatus === undefined) {
     return 'Merge'
@@ -1382,46 +1362,6 @@ function getHostedStateConfirmMessage(pending: PendingHostedStateChange): string
 function getHostedStateConfirmLabel(pending: PendingHostedStateChange): string {
   const target = hostedStateChangeTarget(pending)
   return `${hostedStateChangeAction(pending.nextState)} ${target.labelTarget}`
-}
-
-function getGitHubPRSignalTone(
-  item: GitHubWorkItem,
-  signal: 'review' | 'checks' | 'merge'
-): 'neutral' | 'success' | 'warning' | 'danger' {
-  if (signal === 'review') {
-    if (item.reviewDecision === 'APPROVED') {
-      return 'success'
-    }
-    if (item.reviewDecision === 'CHANGES_REQUESTED') {
-      return 'danger'
-    }
-    if (item.reviewRequests && item.reviewRequests.length > 0) {
-      return 'warning'
-    }
-    return 'neutral'
-  }
-  if (signal === 'checks') {
-    if (item.checksSummary?.state === 'success') {
-      return 'success'
-    }
-    if (item.checksSummary?.state === 'failure') {
-      return 'danger'
-    }
-    if (item.checksSummary?.state === 'pending') {
-      return 'warning'
-    }
-    return 'neutral'
-  }
-  if (item.mergeable === 'CONFLICTING' || item.mergeStateStatus === 'BLOCKED') {
-    return 'danger'
-  }
-  if (item.mergeStateStatus === 'BEHIND' || item.checksSummary?.state === 'pending') {
-    return 'warning'
-  }
-  if (item.mergeable === 'MERGEABLE' || item.mergeStateStatus === 'CLEAN') {
-    return 'success'
-  }
-  return 'neutral'
 }
 
 function mergeGitHubAssignableUsers(
@@ -4347,7 +4287,7 @@ export default function MobileTasksScreen() {
         const details = response.result as {
           body?: string
           comments?: DetailComment[]
-          item?: { labels?: string[] }
+          item?: { labels?: string[]; mergeable?: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN' }
           assignees?: string[]
           pipelineJobs?: Array<{
             id?: number
@@ -4357,6 +4297,8 @@ export default function MobileTasksScreen() {
             webUrl?: string | null
             duration?: number | null
           }>
+          reviewers?: unknown[]
+          approvalState?: { approvalsRequired: number | null; approvalsLeft: number | null }
         } | null
         if (!details) {
           throw new Error('Details not found')
@@ -4370,6 +4312,44 @@ export default function MobileTasksScreen() {
             assignees: details.assignees ?? [],
             pipelineJobs: details.pipelineJobs ?? []
           })
+          const checksSummary = buildGitLabCheckSummary(details.pipelineJobs ?? [])
+          const reviewDecision: Exclude<HostedReviewDecision, null> | undefined =
+            details.approvalState?.approvalsRequired && details.approvalState.approvalsLeft === 0
+              ? 'approved'
+              : details.approvalState?.approvalsLeft && details.approvalState.approvalsLeft > 0
+                ? 'review_required'
+                : undefined
+          const hydratedStatus = {
+            ...(details.item?.mergeable !== undefined ? { mergeable: details.item.mergeable } : {}),
+            ...(reviewDecision !== undefined ? { reviewDecision } : {}),
+            ...(details.reviewers !== undefined ? { reviewerCount: details.reviewers.length } : {})
+          }
+          setActionItem((current) =>
+            current?.provider === 'gitlab' && current.source.id === actionItem.source.id
+              ? {
+                  ...current,
+                  source: {
+                    ...current.source,
+                    checksSummary,
+                    ...hydratedStatus
+                  }
+                }
+              : current
+          )
+          setItems((current) =>
+            current.map((candidate) =>
+              candidate.provider === 'gitlab' && candidate.source.id === actionItem.source.id
+                ? {
+                    ...candidate,
+                    source: {
+                      ...candidate.source,
+                      checksSummary,
+                      ...hydratedStatus
+                    }
+                  }
+                : candidate
+            )
+          )
         }
         return
       }
@@ -9691,6 +9671,7 @@ export default function MobileTasksScreen() {
             const item = entry.item
             const repo = taskRepositoryMeta(item, reposById)
             const isGitHubPr = item.provider === 'github' && item.source.type === 'pr'
+            const isGitLabMr = item.provider === 'gitlab' && item.source.type === 'mr'
             const githubPrDelta = isGitHubPr ? formatGitHubPRDelta(item.source) : null
             const branchSummary = hostedBranchSummary(item)
             return (
@@ -9736,45 +9717,53 @@ export default function MobileTasksScreen() {
                       </Text>
                     </View>
                   ) : null}
-                  {isGitHubPr ? (
+                  {isGitHubPr || isGitLabMr ? (
                     <View style={styles.prSignalRow}>
-                      {githubPrDelta ? (
+                      {isGitHubPr && githubPrDelta ? (
                         <View style={styles.prSignalChip}>
                           <Text style={styles.prSignalText} numberOfLines={1}>
                             {githubPrDelta}
                           </Text>
                         </View>
                       ) : null}
+                      {isGitHubPr || isGitLabMr ? (
+                        <View
+                          style={[
+                            styles.prSignalChip,
+                            getPrSignalToneStyle(getHostedReviewSignalTone(item.source, 'review'))
+                          ]}
+                        >
+                          <Text style={styles.prSignalText} numberOfLines={1}>
+                            {isGitHubPr
+                              ? getGitHubReviewSummary(item.source)
+                              : getHostedReviewLabel(item.source)}
+                          </Text>
+                        </View>
+                      ) : null}
                       <View
                         style={[
                           styles.prSignalChip,
-                          getPrSignalToneStyle(getGitHubPRSignalTone(item.source, 'review'))
+                          getPrSignalToneStyle(getHostedReviewSignalTone(item.source, 'checks'))
                         ]}
                       >
                         <Text style={styles.prSignalText} numberOfLines={1}>
-                          {getGitHubReviewSummary(item.source)}
+                          {getHostedChecksLabel(item.source)}
                         </Text>
                       </View>
-                      <View
-                        style={[
-                          styles.prSignalChip,
-                          getPrSignalToneStyle(getGitHubPRSignalTone(item.source, 'checks'))
-                        ]}
-                      >
-                        <Text style={styles.prSignalText} numberOfLines={1}>
-                          {getGitHubChecksLabel(item.source)}
-                        </Text>
-                      </View>
-                      <View
-                        style={[
-                          styles.prSignalChip,
-                          getPrSignalToneStyle(getGitHubPRSignalTone(item.source, 'merge'))
-                        ]}
-                      >
-                        <Text style={styles.prSignalText} numberOfLines={1}>
-                          {getGitHubMergeLabel(item.source)}
-                        </Text>
-                      </View>
+                      {isGitHubPr || isGitLabMr ? (
+                        <View
+                          style={[
+                            styles.prSignalChip,
+                            getPrSignalToneStyle(getHostedReviewSignalTone(item.source, 'merge'))
+                          ]}
+                        >
+                          <Text style={styles.prSignalText} numberOfLines={1}>
+                            {isGitHubPr
+                              ? getGitHubMergeLabel(item.source)
+                              : getHostedMergeLabel(item.source)}
+                          </Text>
+                        </View>
+                      ) : null}
                     </View>
                   ) : null}
                 </View>

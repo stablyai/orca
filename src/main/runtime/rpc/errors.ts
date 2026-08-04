@@ -60,7 +60,43 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
 const COMPUTER_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(Object.values(COMPUTER_ERROR_CODES))
 const LINEAR_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(LINEAR_ERROR_CODES)
 const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
-  'worktree_id_requires_full_path'
+  'worktree_id_requires_full_path',
+  'run_not_found',
+  'run_required',
+  'stable_pane_required',
+  'consumer_fenced',
+  'task_not_found',
+  'task_not_startable',
+  'dispatch_not_found',
+  'dispatch_run_mismatch',
+  'dispatch_inactive',
+  'worker_identity_changed',
+  'cursor_invalid',
+  'cursor_dispatch_mismatch',
+  'source_changed',
+  'transcript_required',
+  'server_required',
+  'worktree_not_found_on_server',
+  'resource_server_mismatch',
+  'peer_changed',
+  'remote_runtime_unavailable',
+  'runtime_timeout',
+  'invalid_runtime_response',
+  'capability_unsupported',
+  'relay_quota_exceeded',
+  'dispatch_capability_invalid',
+  'agent_unconfigured',
+  'terminal_worktree_mismatch',
+  'request_mismatch',
+  'mutation_ledger_full',
+  'legacy_read_only',
+  'orchestration_migration_required',
+  'operation_unknown',
+  'question_not_found',
+  'answer_conflict',
+  'stale_delivery',
+  'waiter_exists',
+  'invalid_argument'
 ])
 
 export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {

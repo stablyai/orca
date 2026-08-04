@@ -14,6 +14,7 @@ import { HistoryReader } from './history-reader'
 import { getHistorySessionDirName } from './history-paths'
 import {
   TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES,
+  TERMINAL_HISTORY_LEGACY_SCROLLBACK_MAX_BYTES,
   TERMINAL_HISTORY_LOG_MAX_BYTES,
   TERMINAL_HISTORY_META_MAX_BYTES
 } from './terminal-history-file-limits'
@@ -62,6 +63,8 @@ function checkpoint(overrides?: Record<string, unknown>): string {
       applicationCursor: false,
       alternateScreen: false
     },
+    scrollbackLines: 0,
+    checkpointedAt: '2026-01-01T00:00:00.000Z',
     ...overrides
   })
 }
@@ -103,9 +106,12 @@ describe('terminal history restore memory limits', () => {
     expect(() =>
       readTerminalHistoryJson(oversizedCheckpoint, TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES)
     ).toThrow(/File too large/)
-    expect(
-      await new HistoryReader(checkpointSession.basePath).detectColdRestore('oversized-checkpoint')
-    ).toBeNull()
+    const checkpointReader = new HistoryReader(checkpointSession.basePath)
+    expect(await checkpointReader.detectColdRestoreState('oversized-checkpoint')).toEqual({
+      status: 'unreadable',
+      sessionId: 'oversized-checkpoint'
+    })
+    expect(await checkpointReader.detectColdRestore('oversized-checkpoint')).toBeNull()
 
     const metadataSession = createSession('oversized-metadata')
     createSparseFile(
@@ -114,7 +120,22 @@ describe('terminal history restore memory limits', () => {
     )
     expect(
       new HistoryReader(metadataSession.basePath).hasRestorableHistory('oversized-metadata')
-    ).toBe(false)
+    ).toBe(true)
+  })
+
+  it('reports an oversized legacy scrollback as unreadable recovery', async () => {
+    const { basePath, sessionPath } = createSession('oversized-legacy-scrollback')
+    createSparseFile(
+      join(sessionPath, 'scrollback.bin'),
+      TERMINAL_HISTORY_LEGACY_SCROLLBACK_MAX_BYTES + 1
+    )
+
+    expect(
+      await new HistoryReader(basePath).detectColdRestoreState('oversized-legacy-scrollback')
+    ).toEqual({
+      status: 'unreadable',
+      sessionId: 'oversized-legacy-scrollback'
+    })
   })
 
   // Why: the retired 1M-structural-token pre-scan was reachable by ordinary content —

@@ -1,5 +1,4 @@
-import type { CommandSpec } from './args'
-import { specPaths } from './args'
+import { specPaths, type CommandSpec } from './command-spec'
 
 // Why: rank the live registry so typo recovery cannot drift from accepted paths.
 

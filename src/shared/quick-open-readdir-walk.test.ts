@@ -392,7 +392,8 @@ describe('quick-open readdir walk', () => {
     ).rejects.toThrow('File listing exceeded')
   })
 
-  it('keeps the default safety cap for a very large collapsed directory', async () => {
+  it('supports more than 10,000 files while keeping the default safety cap', async () => {
+    expect(QUICK_OPEN_READDIR_MAX_FILES).toBeGreaterThan(10_000)
     const root = await makeTempRoot()
     await mkdirRel(root, 'dist')
     opendirMock.mockResolvedValueOnce({
@@ -416,7 +417,7 @@ describe('quick-open readdir walk', () => {
         gitPaths: [],
         directoryPaths: ['dist/']
       })
-    ).rejects.toThrow('File listing exceeded 10000 files')
+    ).rejects.toThrow(`File listing exceeded ${QUICK_OPEN_READDIR_MAX_FILES} files`)
   })
 
   it('identifies budget errors so callers can translate only those to install-rg guidance', () => {

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
+import { useNativeChatLaunchDraftSignal } from './use-native-chat-launch-draft-adoption'
 import type { NativeChatSession } from '../../../../shared/native-chat-types'
 import { useNativeChatLiveSession } from './use-native-chat-live-session'
 import { selectNativeChatViewState } from './native-chat-view-state'
@@ -140,6 +141,15 @@ function NativeChatResolvedView({
   const launchPrompt = useAppStore((s) => s.nativeChatLaunchPromptByTabId[terminalTabId] ?? null)
   const clearNativeChatLaunchPrompt = useAppStore((s) => s.clearNativeChatLaunchPrompt)
   const paneLaunchPrompt = launchPrompt?.agent === agent ? launchPrompt : null
+  // Launch context prefilled into the TUI input as an unsent draft; the
+  // composer adopts it so the GUI view shows the same context as the TUI.
+  // Shape matches NativeChatComposer's two launch-draft props, so it spreads.
+  const launchDraftSignal = useNativeChatLaunchDraftSignal({
+    terminalTabId,
+    agent,
+    messages: session.messages,
+    transcriptLoading: session.readPhase === 'loading'
+  })
   // The live-session merge reconciles hooks with replayable transcript turn
   // boundaries; all working consumers must use that one lifecycle decision.
   const liveWorking = session.status === 'working'
@@ -442,6 +452,7 @@ function NativeChatResolvedView({
           onSlashCommand={onSlashCommand}
           onSwitchToTerminal={onSwitchToTerminal}
           readTerminalScreen={readTerminalScreen}
+          {...launchDraftSignal}
         />
       )}
       {contextMenu.menu}

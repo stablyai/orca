@@ -297,116 +297,6 @@ describe('Electron runtime package contract', () => {
     expect(releaseMacWorkflowText).not.toContain('SIGNPATH_')
   })
 
-  it('preflights SignPath module install before Windows signing side effects', () => {
-    const releaseWorkflow = readFileSync(
-      join(projectDir, '.github/workflows/release-cut.yml'),
-      'utf8'
-    )
-    const parsedWorkflow = parse(releaseWorkflow)
-    const steps = parsedWorkflow.jobs.build.steps
-    const stepNames = steps.map((step) => step.name)
-    const installStepIndexes = stepNames.flatMap((name, index) =>
-      name === 'Install SignPath PowerShell module' ? [index] : []
-    )
-    const buildIndex = stepNames.indexOf('Build Windows release artifacts')
-    const verifyNodePtyIndex = stepNames.indexOf('Verify Windows node-pty ConPTY runtime')
-    const uploadIndex = stepNames.indexOf('Upload unsigned Windows installer for SignPath')
-    const downloadIndex = stepNames.indexOf('Download signed Windows installer from SignPath')
-
-    expect(verifyNodePtyIndex).toBe(buildIndex + 1)
-    expect(installStepIndexes).toEqual([verifyNodePtyIndex + 1])
-    expect(installStepIndexes[0]).toBeLessThan(uploadIndex)
-
-    expect(steps[verifyNodePtyIndex].run).toContain(
-      'dist/win-unpacked/resources/node_modules/node-pty/build/Release'
-    )
-    expect(steps[verifyNodePtyIndex].run).toContain('conpty/conpty.dll')
-
-    const uploadThroughDownloadScript = steps
-      .slice(uploadIndex, downloadIndex + 1)
-      .map((step) => step.run ?? '')
-      .join('\n')
-
-    expect(uploadThroughDownloadScript).not.toContain('Install-Module -Name SignPath')
-
-    const installStep = steps[installStepIndexes[0]]
-    const installRun = installStep.run
-    const sleepSeconds = [...installRun.matchAll(/Start-Sleep -Seconds (\d+)/g)].map(
-      ([, seconds]) => seconds
-    )
-
-    expect(installStep.if).toBe("matrix.platform == 'win'")
-    expect(installStep.shell).toBe('pwsh')
-    expect(installRun).toContain(
-      'if ($null -eq (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue))'
-    )
-    expect(installRun).toContain('Register-PSRepository -Default -InstallationPolicy Trusted')
-    expect(installRun).toContain('Set-PSRepository -Name PSGallery -InstallationPolicy Trusted')
-    expect(installRun).toMatch(/\$env:PSModulePath -split \[System\.IO\.Path\]::PathSeparator/)
-    expect(installRun).toContain(
-      "$signPathModulePath = Join-Path -Path $currentUserModuleRoot -ChildPath 'SignPath'"
-    )
-    expect(installRun).toMatch(/for \(\$attempt = 1; \$attempt -le 3; \$attempt\+\+\)/)
-    expect(sleepSeconds).toEqual(['15', '30'])
-    expect(installRun).toContain(
-      'Install-Module -Name SignPath -Repository PSGallery -MinimumVersion 4.0.0 -MaximumVersion 4.999.999 -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop'
-    )
-    expect(installRun).toContain('Import-Module SignPath')
-    expect(installRun).toContain(
-      'Get-Command -Name Get-SignedArtifact -Module SignPath -ErrorAction Stop'
-    )
-    expect(installRun).toContain('Remove-Item -LiteralPath $signPathModulePath -Recurse -Force')
-    expect(installRun).not.toContain('SignPath*')
-    expect(installRun.indexOf('if ($attempt -eq 3)')).toBeLessThan(
-      installRun.indexOf('Remove-Item -LiteralPath $signPathModulePath')
-    )
-    expect(installRun).toMatch(/if \(\$attempt -eq 3\) {\s+throw\s+}/)
-    expect(installRun).not.toMatch(/throw\s+\$_/)
-  })
-
-  it('verifies Windows inner binary signatures fail-open before publishing', () => {
-    const releaseWorkflow = readFileSync(
-      join(projectDir, '.github/workflows/release-cut.yml'),
-      'utf8'
-    )
-    const parsedWorkflow = parse(releaseWorkflow)
-    const steps = parsedWorkflow.jobs.build.steps
-    const stepNames = steps.map((step) => step.name)
-    const outerVerifyIndex = stepNames.indexOf('Verify signed Windows installer')
-    const innerVerifyIndex = stepNames.indexOf('Verify Windows inner binary signatures')
-    const evidenceIndex = stepNames.indexOf('Upload Windows inner signing evidence')
-    const publishIndex = stepNames.indexOf('Publish signed Windows release artifacts')
-
-    expect(outerVerifyIndex).toBeGreaterThan(-1)
-    expect(innerVerifyIndex).toBe(outerVerifyIndex + 1)
-    expect(evidenceIndex).toBe(innerVerifyIndex + 1)
-    expect(publishIndex).toBe(evidenceIndex + 1)
-
-    // Why fail-open: unsigned inner binaries must warn, not block, until the
-    // flow is proven on a real release (issue #7785). Flip this to 'true'
-    // together with the workflow env to make the gate required.
-    expect(steps[innerVerifyIndex].env.ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED).toBe('false')
-
-    // Why: every step in the inner-signing chain must be unable to fail the
-    // release — a SignPath outage or timeout falls through to today's
-    // unsigned-inner flow instead of blocking the cut.
-    const innerChainStepNames = [
-      'Stage unsigned inner PE files for signing',
-      'Upload unsigned inner binaries for SignPath',
-      'Submit inner binaries signing request',
-      'Notify Slack that inner-binary signing is waiting for approval',
-      'Download signed inner binaries from SignPath',
-      'Restore signed inner binaries into unpacked app',
-      'Replace cached elevate.exe with the signed copy',
-      'Rebuild NSIS installer from signed unpacked app'
-    ]
-    for (const stepName of innerChainStepNames) {
-      const step = steps[stepNames.indexOf(stepName)]
-      expect(step, stepName).toBeDefined()
-      expect(step['continue-on-error'], stepName).toBe(true)
-    }
-  })
-
   it('publishes both Linux release matrix entries', () => {
     const releaseWorkflow = readFileSync(
       join(projectDir, '.github/workflows/release-cut.yml'),
@@ -527,7 +417,7 @@ describe('Electron runtime package contract', () => {
   it('installs the Electron package binary in PR checks without changing native module ABI', () => {
     const prWorkflow = readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8')
     const parsedWorkflow = parse(prWorkflow)
-    const installStep = parsedWorkflow.jobs.verify.steps.find(
+    const installStep = parsedWorkflow.jobs.test.steps.find(
       (step) => step.name === 'Install Electron package binary for tests'
     )
 
@@ -537,7 +427,7 @@ describe('Electron runtime package contract', () => {
   it('smokes the packaged CLI from outside the checkout in PR checks', () => {
     const prWorkflow = readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8')
     const parsedWorkflow = parse(prWorkflow)
-    const smokeStep = parsedWorkflow.jobs.verify.steps.find(
+    const smokeStep = parsedWorkflow.jobs.package.steps.find(
       (step) => step.name === 'Smoke packaged CLI'
     )
 
@@ -597,7 +487,7 @@ describe('Electron runtime package contract', () => {
     expect(uploadStep.with.path).toBe('${{ env.ORCA_E2E_TERMINAL_PERF_REPORT_PATH }}')
   })
 
-  it('keeps terminal rendering regressions in the fast golden E2E gate', () => {
+  it('keeps terminal rendering regressions in the manual golden E2E workflow', () => {
     const packageScripts = packageJson.scripts
     const goldenWorkflow = parse(
       readFileSync(join(projectDir, '.github/workflows/golden-e2e-experiment.yml'), 'utf8')
@@ -621,7 +511,6 @@ describe('Electron runtime package contract', () => {
 
       return steps.find((step) => step.name === `Run golden E2E tests on ${label}`)
     })
-    const pullRequestPaths = goldenWorkflow.on.pull_request.paths
     const releaseGoldenJob = releaseWorkflow.jobs['terminal-rendering-golden']
     const releaseEvidenceJob = releaseWorkflow.jobs['terminal-rendering-release-evidence']
     const releaseBuildNeeds = releaseWorkflow.jobs.build.needs
@@ -650,11 +539,8 @@ describe('Electron runtime package contract', () => {
     for (const runStep of goldenRunSteps) {
       expect(runStep?.run).toContain('pnpm run test:e2e:terminal-rendering-golden')
     }
-    expect(pullRequestPaths).toContain('tests/e2e/terminal-raw-emoji-table-scroll-restore.spec.ts')
-    expect(pullRequestPaths).toContain('tests/e2e/terminal-webgl-atlas-budget.spec.ts')
-    expect(pullRequestPaths).toContain('config/patches/@xterm__addon-webgl@0.20.0-beta.286.patch')
-    expect(pullRequestPaths).toContain('tests/e2e/fixtures/terminal-emoji-table.md')
-    expect(pullRequestPaths).toContain('src/renderer/src/lib/pane-manager/**')
+    expect(goldenWorkflow.on.pull_request).toBeUndefined()
+    expect(goldenWorkflow.on.workflow_dispatch).toBeDefined()
     expect(releaseBuildNeeds).not.toContain('terminal-rendering-golden')
     expect(releaseBuildNeeds).not.toContain('terminal-rendering-release-evidence')
     expect(publishReleaseNeeds).toContain('terminal-rendering-golden')

@@ -1,8 +1,31 @@
+import { isBuiltin } from 'node:module'
 import { resolve } from 'node:path'
-import { defineConfig } from 'electron-vite'
+import { defineConfig, type UserConfig } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { createBootstrapFatalExitBanner } from './build-plugins/bootstrap-fatal-exit-banner'
 import { createPlainNodeEntryGuardPlugin } from './build-plugins/plain-node-entry-guard'
+import packageJson from './package.json' with { type: 'json' }
+
+const BUNDLED_MAIN_DEPENDENCIES = new Set([
+  '@xterm/headless',
+  '@xterm/addon-serialize',
+  // Why: Windows NSIS deploys app.asar before external resources; bootstrap must
+  // not race the later resources/node_modules copy.
+  'zod'
+])
+const EXTERNAL_MAIN_DEPENDENCIES = Object.keys(packageJson.dependencies).filter(
+  (dependency) => !BUNDLED_MAIN_DEPENDENCIES.has(dependency)
+)
+
+function isExternalMainModule(source: string): boolean {
+  if (isBuiltin(source) || source === 'electron' || source.startsWith('electron/')) {
+    return true
+  }
+  return EXTERNAL_MAIN_DEPENDENCIES.some(
+    (dependency) => source === dependency || source.startsWith(`${dependency}/`)
+  )
+}
 
 // Why: the telemetry transport is gated by two compile-time constants that
 // only the official CI release workflow sets. Contributor / `pnpm dev` /
@@ -148,37 +171,45 @@ function createStartupDiagnosticsBanner(chunkName: string): string {
 `
 }
 
-function createStartupDiagnosticsBootstrapPlugin() {
+function createMainBootstrapPlugin() {
   return {
-    name: 'orca-startup-diagnostics-bootstrap',
+    name: 'orca-main-bootstrap',
     generateBundle(_options, bundle) {
       const mainChunk = bundle['index.js']
       if (!mainChunk || mainChunk.type !== 'chunk') {
         return
       }
 
-      // Why: source-level startup diagnostics run after Rollup's generated
-      // prelude and require() list. Mutate the final emitted chunk so macOS
-      // launch failures can identify the earliest JS boundary reached.
-      mainChunk.code = createStartupDiagnosticsBanner(mainChunk.fileName) + mainChunk.code
+      // Why: source guards and diagnostics run after Rollup's generated require
+      // prelude, too late to handle a missing bootstrap dependency.
+      mainChunk.code =
+        createBootstrapFatalExitBanner() +
+        createStartupDiagnosticsBanner(mainChunk.fileName) +
+        mainChunk.code
     }
   }
 }
 
-export default defineConfig({
+export const electronViteConfig: UserConfig = {
   main: {
     build: {
       // Why: daemon-entry.js is asar-unpacked so child_process.fork() can
       // execute it from disk. Node's module resolution from the unpacked
-      // directory cannot reach into app.asar, so pure-JS dependencies used
-      // by the daemon must be bundled rather than externalized.
+      // directory cannot reach into app.asar; startup-critical pure JS must
+      // also survive a partially copied Windows resources tree.
       externalizeDeps: {
-        exclude: ['@xterm/headless', '@xterm/addon-serialize']
+        exclude: [...BUNDLED_MAIN_DEPENDENCIES]
       },
       rollupOptions: {
+        // Why: native dependencies must resolve from packaged node_modules,
+        // while the unpacked daemon needs its pure-JS xterm graph bundled.
+        external: isExternalMainModule,
         input: {
           index: resolve('src/main/index.ts'),
+          // Why: sandboxed webview preloads cannot load Rollup helper chunks.
+          'browser-window-close-preload': resolve('src/preload/browser-window-close.ts'),
           'daemon-entry': resolve('src/main/daemon/daemon-entry.ts'),
+          'plugin-host-entry': resolve('src/main/plugins/plugin-host-entry.ts'),
           'computer-sidecar': resolve('src/main/computer/sidecar-entry.ts'),
           'stt-worker': resolve('src/main/speech/stt-worker.ts'),
           'warp-theme-parser-worker': resolve('src/main/warp-themes/warp-theme-parser-worker.ts'),
@@ -188,6 +219,11 @@ export default defineConfig({
           // Why: forked with ELECTRON_RUN_AS_NODE so @parcel/watcher faults
           // can't take down the main process (issue #7547).
           'parcel-watcher-process-entry': resolve('src/main/ipc/parcel-watcher-process-entry.ts'),
+          // Why: a worker thread survives the macOS 26 AppKit main-thread deadlock
+          // without paying for another Electron process.
+          'main-thread-hang-watchdog-entry': resolve(
+            'src/main/hang-watchdog/main-thread-hang-watchdog-entry.ts'
+          ),
           // Why: run under ELECTRON_RUN_AS_NODE while the caller blocks on
           // spawnSync — codex app-server trust grants need a live event loop
           // but must finish before a Codex pane launch proceeds.
@@ -198,9 +234,18 @@ export default defineConfig({
           // this path for `orca agent hooks ...`, so it must survive rebuilds.
           'agent-hooks/managed-agent-hook-controls': resolve(
             'src/main/agent-hooks/managed-agent-hook-controls.ts'
-          )
+          ),
+          // Why: account import mutates the user's macOS Keychain from the CLI.
+          'claude-accounts/keychain': resolve('src/main/claude-accounts/keychain.ts')
         },
-        plugins: [createStartupDiagnosticsBootstrapPlugin(), createPlainNodeEntryGuardPlugin()]
+        // Why: Rolldown's SSR default is ESM, but Electron and sidecar launchers
+        // consume these stable CommonJS paths.
+        output: {
+          format: 'cjs',
+          entryFileNames: '[name].js',
+          chunkFileNames: 'chunks/[name]-[hash].js'
+        },
+        plugins: [createMainBootstrapPlugin(), createPlainNodeEntryGuardPlugin()]
       }
     },
     // Why: compile-time substitution for the telemetry gate. See the block
@@ -241,17 +286,26 @@ export default defineConfig({
       format: 'es'
     },
     build: {
+      manifest: true,
+      modulePreload: { polyfill: true },
+      target: 'es2020',
       // Why: the pop-out dashboard is a second top-level window with its own
       // React root. It gets its own HTML entry so it can boot independently of
       // the main window while reusing the same preload/window.api. `index` must
       // stay listed — overriding input otherwise drops electron-vite's default
       // renderer entry.
       rollupOptions: {
+        // Why: shared chunks must never import an HTML entry whose module mounts
+        // a different React root.
+        preserveEntrySignatures: 'strict',
         input: {
           index: resolve('src/renderer/index.html'),
-          popout: resolve('src/renderer/popout.html')
+          popout: resolve('src/renderer/popout.html'),
+          web: resolve('src/renderer/web-index.html')
         }
       }
     }
   }
-})
+}
+
+export default defineConfig(electronViteConfig)

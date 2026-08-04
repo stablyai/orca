@@ -12,7 +12,8 @@ import {
   formatTerminalList,
   formatTerminalRead,
   formatWorktreeList,
-  printResult
+  printResult,
+  reportCliError
 } from './format'
 import type { ComputerActionResult, RuntimeWorktreeRecord } from '../shared/runtime-types'
 import type { Automation } from '../shared/automations-types'
@@ -115,6 +116,38 @@ describe('formatCliError', () => {
         'Next step: Retry with --no-parent to create without lineage.'
       ].join('\n')
     )
+  })
+
+  it('preserves orchestration migration recovery in human and JSON errors', () => {
+    const error = new RuntimeRpcFailureError({
+      id: 'req_migration',
+      ok: false,
+      error: {
+        code: 'orchestration_migration_required',
+        message: 'No effects were applied.',
+        data: {
+          effectsApplied: false,
+          nextCommandArgs: ['skills', 'get', 'orchestration', '--full'],
+          nextSteps: ['Using this same Orca CLI executable, run: skills get orchestration --full']
+        }
+      },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+
+    expect(formatCliError(error)).toContain(
+      'Next step: Using this same Orca CLI executable, run: skills get orchestration --full'
+    )
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    reportCliError(error, true)
+    expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toMatchObject({
+      error: {
+        code: 'orchestration_migration_required',
+        data: {
+          effectsApplied: false,
+          nextCommandArgs: ['skills', 'get', 'orchestration', '--full']
+        }
+      }
+    })
   })
 })
 

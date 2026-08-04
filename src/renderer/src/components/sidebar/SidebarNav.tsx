@@ -60,8 +60,9 @@ export function shouldShowAutomationsButton(
   return settings?.showAutomationsButton !== false
 }
 
-const DASHBOARD_BUCKET_DOT_CLASS: Record<'working' | 'idle', string> = {
+const DASHBOARD_BUCKET_DOT_CLASS: Record<'working' | 'done' | 'idle', string> = {
   working: 'bg-yellow-500',
+  done: 'bg-emerald-500',
   idle: 'bg-neutral-500/50'
 }
 
@@ -71,17 +72,23 @@ function dashboardBucketLabel(bucket: DashboardBucket): string {
       return translate('dashboardPopout.bucket.attention', 'Needs You')
     case 'working':
       return translate('dashboardPopout.bucket.working', 'Working')
+    case 'done':
+      return translate('dashboardPopout.bucket.done', 'Done')
     case 'idle':
       return translate('dashboardPopout.bucket.idle', 'Idle')
   }
 }
 
 function DashboardBucketCounts({
-  counts
+  counts,
+  showIdle
 }: {
   counts: Record<DashboardBucket, number>
+  showIdle: boolean
 }): React.JSX.Element | null {
-  const active = DASHBOARD_BUCKET_ORDER.filter((bucket) => counts[bucket] > 0)
+  const active = DASHBOARD_BUCKET_ORDER.filter(
+    (bucket) => counts[bucket] > 0 && (bucket !== 'idle' || showIdle)
+  )
   if (active.length === 0) {
     return null
   }
@@ -109,6 +116,7 @@ function DashboardBucketCounts({
 // agent-status churn only updates this opt-in row, not the full navigation.
 function AgentDashboardSidebarEntry(): React.JSX.Element {
   const dashboardBucketCounts = useAgentBucketCounts()
+  const showIdle = useAppStore((s) => s.settings?.experimentalAgentDashboardShowIdle === true)
   const openAsPopout = useAppStore((s) => isAgentDashboardPopoutMode(s.settings))
   const drawerOpen = useAppStore((s) => s.agentDashboardDrawerOpen)
   const setAgentDashboardDrawerOpen = useAppStore((s) => s.setAgentDashboardDrawerOpen)
@@ -135,7 +143,7 @@ function AgentDashboardSidebarEntry(): React.JSX.Element {
         strokeWidth={1.75}
       />
       <span className="flex-1">{translate('dashboard.sidebar.label', 'Agent Dashboard')}</span>
-      <DashboardBucketCounts counts={dashboardBucketCounts} />
+      <DashboardBucketCounts counts={dashboardBucketCounts} showIdle={showIdle} />
     </button>
   )
 }

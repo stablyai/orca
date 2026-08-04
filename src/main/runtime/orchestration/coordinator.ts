@@ -26,8 +26,14 @@ export type CoordinatorRuntime = {
     behind: number
     recentSubjects: string[]
   } | null>
-  // Why: optional so lightweight runtime fakes keep compiling; when present, dispatch records the assignee's remint-stable pane identity.
+  // Why: pane-only fallback preserves reservation identity for lightweight runtime fakes.
   getTerminalPaneKey?(handle: string): string | null
+  // Why: automatic dispatch persists the same authenticated pane/process tuple as manual dispatch.
+  getOrchestrationDispatchAuthority?(handle: string): {
+    paneKey: string | null
+    processIncarnation: string | null
+    launchTokenHash: string | null
+  } | null
   // Why: Windows can host native and WSL workers at once, so the worker pane (not the coordinator) picks the packaged CLI name.
   getTerminalOrchestrationCliCommand?(handle: string): 'orca' | 'orca-ide'
 }
@@ -242,6 +248,7 @@ export class Coordinator {
         case 'dispatch':
         case 'handoff':
         case 'merge_ready':
+        case 'question':
           break
       }
     }
@@ -255,6 +262,10 @@ export class Coordinator {
       if (!this.state.completedTasks.includes(result.taskId)) {
         this.state.completedTasks.push(result.taskId)
       }
+      return
+    }
+    if (result.action === 'failed' && !this.state.failedTasks.includes(result.taskId)) {
+      this.state.failedTasks.push(result.taskId)
     }
   }
 
@@ -362,7 +373,7 @@ export class Coordinator {
         terminals.push(created.handle)
         this.opts.onLog(`Created worker terminal ${created.handle}`)
       } catch (err) {
-        this.opts.onLog(`Failed to create terminal: ${err}`)
+        this.opts.onLog(`Failed to create terminal: ${String(err)}`)
         return
       }
     }
@@ -378,7 +389,7 @@ export class Coordinator {
       try {
         await this.dispatchTask(task, targetHandle)
       } catch (err) {
-        this.opts.onLog(`Failed to dispatch task ${task.id}: ${err}`)
+        this.opts.onLog(`Failed to dispatch task ${task.id}: ${String(err)}`)
       }
     }
   }
@@ -414,10 +425,19 @@ export class Coordinator {
       }
     }
 
+    const dispatchAuthority = this.runtime.getOrchestrationDispatchAuthority?.(targetHandle)
+    const assigneePaneKey =
+      dispatchAuthority?.paneKey ?? this.runtime.getTerminalPaneKey?.(targetHandle) ?? undefined
+    const processIncarnation =
+      dispatchAuthority?.paneKey && dispatchAuthority.processIncarnation
+        ? dispatchAuthority.processIncarnation
+        : undefined
     const dispatch = this.db.createDispatchContext(
       task.id,
       targetHandle,
-      this.runtime.getTerminalPaneKey?.(targetHandle) ?? undefined
+      assigneePaneKey,
+      dispatchAuthority?.launchTokenHash ?? undefined,
+      processIncarnation
     )
 
     // Why: dispatched agents use orca-dev in dev mode to reach the dev runtime's socket, not production (Section 6.4).

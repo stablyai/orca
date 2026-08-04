@@ -56,6 +56,59 @@ describe('relay HTTP client', () => {
     expect(fetch.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal)
   })
 
+  it('declares reconnection in the assignment body when hinted', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(async () =>
+      Response.json({
+        v: 1,
+        cellUrl: 'https://relay-c1.example',
+        assignmentEpoch: 4,
+        lease: 'lease-jwt'
+      })
+    )
+    await expect(
+      requestRelayAssignment({
+        directorUrl: 'https://relay.example',
+        relayToken: 'scoped-token',
+        relayHostId: 'AbCdEf0123_-xyZ9',
+        reconnect: true,
+        fetch
+      })
+    ).resolves.toMatchObject({ assignmentEpoch: 4 })
+    expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body))).toEqual({
+      v: 1,
+      relayHostId: 'AbCdEf0123_-xyZ9',
+      reconnect: true
+    })
+  })
+
+  it('retries once unhinted when a rolled-back director rejects the hint', async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(Response.json({ error: 'invalid_request' }, { status: 400 }))
+      .mockResolvedValueOnce(
+        Response.json({
+          v: 1,
+          cellUrl: 'https://relay-c1.example',
+          assignmentEpoch: 4,
+          lease: 'lease-jwt'
+        })
+      )
+    await expect(
+      requestRelayAssignment({
+        directorUrl: 'https://relay.example',
+        relayToken: 'scoped-token',
+        relayHostId: 'AbCdEf0123_-xyZ9',
+        reconnect: true,
+        fetch
+      })
+    ).resolves.toMatchObject({ assignmentEpoch: 4 })
+    expect(fetch).toHaveBeenCalledTimes(2)
+    expect(JSON.parse(String(fetch.mock.calls[1]?.[1]?.body))).toEqual({
+      v: 1,
+      relayHostId: 'AbCdEf0123_-xyZ9'
+    })
+  })
+
   it('aborts a blackholed assignment request so recovery can retry', async () => {
     const fetch = vi.fn<typeof globalThis.fetch>(
       async (_url, init) =>
@@ -146,5 +199,39 @@ describe('relay HTTP client', () => {
       })
     ).rejects.toThrow()
     expect(cancelledBodies).toBe(2)
+  })
+
+  it('preserves a bounded Retry-After hint on assignment overload', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(
+      async () => new Response(null, { status: 503, headers: { 'retry-after': '30' } })
+    )
+
+    await expect(
+      requestRelayAssignment({
+        directorUrl: 'https://relay.example',
+        relayToken: 'scoped-token',
+        relayHostId: 'AbCdEf0123_-xyZ9',
+        fetch
+      })
+    ).rejects.toMatchObject({
+      operation: 'assignment',
+      statusCode: 503,
+      retryAfterMs: 30_000
+    })
+  })
+
+  it('caps an excessive Retry-After hint at five minutes', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(
+      async () => new Response(null, { status: 503, headers: { 'retry-after': '999999' } })
+    )
+
+    await expect(
+      requestRelayAssignment({
+        directorUrl: 'https://relay.example',
+        relayToken: 'scoped-token',
+        relayHostId: 'AbCdEf0123_-xyZ9',
+        fetch
+      })
+    ).rejects.toMatchObject({ retryAfterMs: 5 * 60_000 })
   })
 })

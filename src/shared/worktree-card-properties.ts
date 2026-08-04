@@ -7,13 +7,18 @@ import type {
 
 const FIXED_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = ['status', 'unread']
 
-export const TASK_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = ['issue', 'linear-issue']
+export const TASK_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = [
+  'issue',
+  'linear-issue',
+  'jira-issue'
+]
 
 export const DEFAULT_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = [
   ...FIXED_WORKTREE_CARD_PROPERTIES,
   ...TASK_WORKTREE_CARD_PROPERTIES,
   'pr',
   'automation',
+  'cli',
   'comment',
   'ports',
   // Why: agent activity is the primary reason users opt into the feature, so
@@ -38,26 +43,30 @@ const LEGACY_NORMALIZED_COMPACT_WORKTREE_CARD_PROPERTIES_WITH_AUTOMATION: Worktr
   'automation'
 ]
 
-const WORKTREE_CARD_PROPERTY_ORDER: WorktreeCardProperty[] = [
+/** Every card property, in canonical render order. Client schemas derive their
+ *  accepted value domain from this so a new property cannot drift out of them. */
+export const WORKTREE_CARD_PROPERTIES = [
   'status',
   'unread',
   'ci',
   'branch',
   'issue',
   'linear-issue',
+  'jira-issue',
   'pr',
   'automation',
+  'cli',
   'comment',
   'ports',
   'inline-agents'
-]
+] as const satisfies readonly WorktreeCardProperty[]
 
 export function normalizeWorktreeCardProperties(
   properties: readonly unknown[] | null | undefined
 ): WorktreeCardProperty[] {
   const normalized: WorktreeCardProperty[] = [...FIXED_WORKTREE_CARD_PROPERTIES]
   const source = properties ?? DEFAULT_WORKTREE_CARD_PROPERTIES
-  for (const property of WORKTREE_CARD_PROPERTY_ORDER) {
+  for (const property of WORKTREE_CARD_PROPERTIES) {
     if (source.includes(property) && !normalized.includes(property)) {
       normalized.push(property)
     }

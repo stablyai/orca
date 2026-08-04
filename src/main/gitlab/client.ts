@@ -25,7 +25,9 @@ import { derivePipelineStatus, mapIssueToWorkItem, mapMRInfo, mapMRToWorkItem } 
 import {
   acquire,
   classifyGlabError,
+  classifyJobLogError,
   classifyListIssuesError,
+  isMissingJobLogError,
   getGlabKnownHosts,
   getProjectRef,
   getProjectRefForRemote,
@@ -39,6 +41,7 @@ import {
   type LocalGitExecOptions,
   type ProjectRef
 } from './gl-utils'
+import { rememberGlabKnownHosts } from './gitlab-known-host-probe'
 import type { IssueListState } from './issues'
 import {
   hasHostedReviewLocalGitOptions,
@@ -100,6 +103,8 @@ export async function diagnoseAuth(): Promise<GitLabAuthDiagnostic> {
     })
     const output = `${stdout}\n${stderr}`
     const hosts = parseGlabAuthStatusHosts(output)
+    // Why: refreshing auth must advance the provider cache key past a stale null result.
+    rememberGlabKnownHosts(hosts)
     return {
       glabAvailable: true,
       authenticated:
@@ -1233,7 +1238,12 @@ export async function getJobTrace(
         return { ok: true, trace: stdout }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        return { ok: false, error: classifyGlabError(msg).message }
+        // A job with no log is an empty log, not a failure: surfacing the 404 would
+        // pin an error on the Checks row for a job canceled before it started.
+        if (isMissingJobLogError(msg)) {
+          return { ok: true, trace: '' }
+        }
+        return { ok: false, error: classifyJobLogError(msg).message }
       } finally {
         release()
       }

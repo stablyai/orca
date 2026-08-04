@@ -3,6 +3,7 @@ import type { MarkdownDocument } from '../../../../shared/types'
 
 export type RichMarkdownEditorProps = {
   fileId: string
+  viewStateId: string
   content: string
   filePath: string
   worktreeId: string

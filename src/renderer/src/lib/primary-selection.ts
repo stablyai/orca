@@ -63,8 +63,14 @@ export function armPrimarySelectionNativePasteSuppression(now: number = Date.now
   nativePasteSuppressionUntil = now + PRIMARY_SELECTION_NATIVE_PASTE_SUPPRESSION_MS
 }
 
-export function shouldSuppressPrimarySelectionNativePaste(now: number = Date.now()): boolean {
-  return enabled && now <= nativePasteSuppressionUntil
+// Why: single-shot — the arm owes exactly one follow-up paste, so clearing the
+// deadline on consume keeps a real keyboard paste inside the same 750ms alive.
+export function consumePrimarySelectionNativePasteSuppression(now: number = Date.now()): boolean {
+  if (!enabled || nativePasteSuppressionUntil === 0 || now > nativePasteSuppressionUntil) {
+    return false
+  }
+  nativePasteSuppressionUntil = 0
+  return true
 }
 
 export function isPrimarySelectionEnabled(): boolean {

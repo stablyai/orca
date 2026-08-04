@@ -467,7 +467,7 @@ describe('killWithDescendantSweep', () => {
     expect(killRoot).toHaveBeenCalledOnce()
   })
 
-  it('on Windows still taskkills when identity is unknown, keeping orphan cleanup', async () => {
+  it('on Windows skips taskkill when identity is unknown', async () => {
     const killWindowsTree = vi.fn(async () => {})
     const killRoot = vi.fn()
     await killWithDescendantSweep(4242, killRoot, {
@@ -475,11 +475,11 @@ describe('killWithDescendantSweep', () => {
       killWindowsTree,
       verifyTreeKillTarget: async () => 'unknown'
     })
-    expect(killWindowsTree).toHaveBeenCalledWith(4242)
+    expect(killWindowsTree).not.toHaveBeenCalled()
     expect(killRoot).toHaveBeenCalledOnce()
   })
 
-  it('on Windows still taskkills when the identity probe throws', async () => {
+  it('on Windows skips taskkill when the identity probe throws', async () => {
     const killWindowsTree = vi.fn(async () => {})
     const killRoot = vi.fn()
     await killWithDescendantSweep(4242, killRoot, {
@@ -489,7 +489,7 @@ describe('killWithDescendantSweep', () => {
         throw new Error('probe exploded')
       }
     })
-    expect(killWindowsTree).toHaveBeenCalledWith(4242)
+    expect(killWindowsTree).not.toHaveBeenCalled()
     expect(killRoot).toHaveBeenCalledOnce()
   })
 

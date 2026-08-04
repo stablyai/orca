@@ -20,6 +20,12 @@ describe('renderer startup runtime routing', () => {
     const localReposIndex = indexInStartupBlock(
       "actions.fetchReposForAllHosts({ remoteHosts: 'skip' })"
     )
+    const repoCatalogSettlementIndex = indexInStartupBlock(
+      "timeRendererStartupStep('repo-catalog-settlement'"
+    )
+    const finalRepoCatalogSettlementIndex = indexInStartupBlock(
+      "timeRendererStartupStep('repo-catalog-final-settlement'"
+    )
     const localGroupsIndex = indexInStartupBlock(
       "actions.fetchProjectGroupsForAllHosts({ remoteHosts: 'skip' })"
     )
@@ -39,6 +45,10 @@ describe('renderer startup runtime routing', () => {
     expect(settingsIndex).toBeLessThan(uiGetIndex)
     expect(uiGetIndex).toBeLessThan(hydrateUiIndex)
     expect(hydrateUiIndex).toBeLessThan(localReposIndex)
+    expect(localReposIndex).toBeLessThan(repoCatalogSettlementIndex)
+    expect(repoCatalogSettlementIndex).toBeLessThan(sessionIndex)
+    expect(sessionIndex).toBeLessThan(finalRepoCatalogSettlementIndex)
+    expect(finalRepoCatalogSettlementIndex).toBeLessThan(startupBlockEnd)
     // The local catalog chain stays internally ordered (folders merge against project groups).
     expect(localReposIndex).toBeLessThan(localGroupsIndex)
     expect(localGroupsIndex).toBeLessThan(localFoldersIndex)
@@ -75,6 +85,7 @@ describe('renderer startup runtime routing', () => {
     // The catalog and selective hydration chains overlap, but both settle before recovery or hydration.
     const joinStart = indexInStartupBlock('await Promise.allSettled([')
     expect(joinStart).toBeGreaterThan(hydrateUiIndex)
+    expect(joinStart).toBeLessThan(finalRepoCatalogSettlementIndex)
     const joinBlock = source.slice(joinStart, startupBlockEnd)
     expect(joinBlock).toContain('hydrationSessionChain')
     expect(joinBlock).toContain('localCatalogChain')
@@ -123,11 +134,58 @@ describe('renderer startup runtime routing', () => {
 
   it('waits for first-window startup services before terminal reconnect', () => {
     const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
-    const reconnectIndex = source.indexOf('await actions.reconnectPersistedTerminals')
     const servicesIndex = source.indexOf('await window.api.app.awaitFirstWindowStartupServices()')
+    const preReconnectRecoveryIndex = source.indexOf(
+      'window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()',
+      servicesIndex
+    )
+    const capabilityRefreshIndex = source.indexOf(
+      'refreshTerminalProviderSnapshotCapabilities(',
+      preReconnectRecoveryIndex
+    )
+    const reconnectIndex = source.indexOf(
+      'actions.reconnectPersistedTerminals(abortController.signal)',
+      preReconnectRecoveryIndex
+    )
+    const postReconnectRecoveryIndex = source.indexOf(
+      'window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()',
+      reconnectIndex
+    )
 
     expect(servicesIndex).toBeGreaterThanOrEqual(0)
-    expect(servicesIndex).toBeLessThan(reconnectIndex)
+    expect(preReconnectRecoveryIndex).toBeGreaterThan(servicesIndex)
+    expect(capabilityRefreshIndex).toBeGreaterThan(preReconnectRecoveryIndex)
+    expect(reconnectIndex).toBeGreaterThan(capabilityRefreshIndex)
+    expect(postReconnectRecoveryIndex).toBeGreaterThan(reconnectIndex)
+  })
+
+  it('refreshes terminal snapshot capability before degraded reconnect', () => {
+    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
+    const degradedStart = source.indexOf(
+      '[startup] Workspace session hydration failed; leaving disk state untouched:'
+    )
+    const servicesIndex = source.indexOf(
+      'await window.api.app.awaitFirstWindowStartupServices()',
+      degradedStart
+    )
+    const recoveryIndex = source.indexOf(
+      'window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()',
+      servicesIndex
+    )
+    const capabilityRefreshIndex = source.indexOf(
+      'refreshTerminalProviderSnapshotCapabilities(',
+      recoveryIndex
+    )
+    const reconnectIndex = source.indexOf(
+      'actions.reconnectPersistedTerminals(abortController.signal)',
+      recoveryIndex
+    )
+
+    expect(degradedStart).toBeGreaterThanOrEqual(0)
+    expect(servicesIndex).toBeGreaterThan(degradedStart)
+    expect(recoveryIndex).toBeGreaterThan(servicesIndex)
+    expect(capabilityRefreshIndex).toBeGreaterThan(recoveryIndex)
+    expect(reconnectIndex).toBeGreaterThan(capabilityRefreshIndex)
   })
 
   it('keeps the persisted Automations view from starting its own bootstrap worktree scan', () => {
@@ -233,6 +291,17 @@ describe('renderer startup runtime routing', () => {
     expect(source).toContain('<WorkspacePortScanner enabled={workspaceSessionReady} />')
   })
 
+  it('prefetches terminal snapshot capabilities before reconnect unlocks cold activation', () => {
+    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
+    const capabilityIndex = source.indexOf(
+      "timeRendererStartupStep('terminal-provider-snapshot-capabilities'"
+    )
+    const reconnectIndex = source.indexOf("timeRendererStartupStep('reconnect-terminals'")
+
+    expect(capabilityIndex).toBeGreaterThanOrEqual(0)
+    expect(reconnectIndex).toBeGreaterThan(capabilityIndex)
+  })
+
   it('does not load the terminal workbench on the no-workspace landing path', () => {
     const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
 
@@ -304,6 +373,18 @@ describe('renderer startup runtime routing', () => {
     )
   })
 
+  it('loads Linear agent setup implementation only after the prompt opens it', () => {
+    const source = readFileSync(
+      join(process.cwd(), 'src/renderer/src/components/sidebar/LinearAgentSkillSetupPrompt.tsx'),
+      'utf8'
+    )
+
+    expect(source).toContain("() => import('./LinearAgentSkillSetupDialog')")
+    expect(source).not.toContain("from './LinearAgentSkillSetupDialog'")
+    expect(source).toContain('const setupDialog = setupDialogOpen ? (')
+    expect(source).toContain('<Suspense fallback={null}>')
+  })
+
   it('does not eagerly import optional status-bar segments on startup', () => {
     const source = readFileSync(
       join(process.cwd(), 'src/renderer/src/components/status-bar/StatusBar.tsx'),
@@ -365,6 +446,20 @@ describe('renderer startup runtime routing', () => {
     expect(source).not.toContain("window.addEventListener('blur', handleBlur)")
   })
 
+  it('arms the OSC 52 default-on notice behind a statically mounted Toaster (#10567)', () => {
+    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
+
+    // Why pin the call site: the hook is the only caller, so deleting this line silences
+    // the migration notice on desktop with every unit suite still green.
+    expect(source).toContain('useOsc52ClipboardDefaultOnNotice(persistedUIReady)')
+    // Why pin the static import and the unconditional mount: sonner drops a toast enqueued
+    // before any Toaster subscribes, and never replays it — a lazy Toaster would burn the
+    // profile's one notice with its callbacks never firing, so it could never re-arm.
+    expect(source).toContain("import { Toaster } from '@/components/ui/sonner'")
+    expect(source).not.toContain("import('@/components/ui/sonner')")
+    expect(source).toContain('<Toaster closeButton')
+  })
+
   it('checkpoints activeView and all session snapshots through one beforeunload handler (#9002)', () => {
     const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
     const checkpointStart = source.indexOf(
@@ -382,7 +477,7 @@ describe('renderer startup runtime routing', () => {
     expect(checkpointBlock).toContain(
       'buildWorkspaceSessionHostSnapshots(buildWorkspaceSessionPayload(freshState), freshState)'
     )
-    expect(checkpointBlock).toContain('window.api.app.persistBeforeUnloadSync({')
+    expect(checkpointBlock).toContain('window.api.app.stageBeforeUnloadSync({')
     expect(checkpointBlock).toContain('sessions: sessionSnapshots')
     expect(checkpointBlock).toContain('ui: buildActiveViewUnloadPatch(freshState)')
     expect(source).toContain(

@@ -36,6 +36,14 @@ describe('classifyWindowsTreeKillTarget', () => {
     expect(classifyWindowsTreeKillTarget(4242, rows, ORCA_PID)).toBe('own')
   })
 
+  it('documents that a recycled PID under another Orca pane still classifies as own', () => {
+    // Dead PTY root 4242 recycled as a tool under a different pane's agent tree.
+    // Ancestry still reaches us, so taskkill is allowed — wrong process, own tree.
+    // Closing this needs spawn-time CreationDate / Job Object (#10680).
+    const rows = [link(ORCA_PID, 900), link(7000, ORCA_PID), link(7100, 7000), link(4242, 7100)]
+    expect(classifyWindowsTreeKillTarget(4242, rows, ORCA_PID)).toBe('own')
+  })
+
   it('rejects a recycled pid whose ancestry never reaches this process', () => {
     const rows = [...SYSTEM_CHAIN, link(ORCA_PID, 900), link(4242, 900)]
     expect(classifyWindowsTreeKillTarget(4242, rows, ORCA_PID)).toBe('foreign')
@@ -100,21 +108,21 @@ describe('verifyWindowsTreeKillTarget', () => {
     ).resolves.toBe('foreign')
   })
 
-  it('falls open to unknown when both Windows process probes are unavailable', async () => {
+  it('returns unknown when both Windows process probes are unavailable', async () => {
     const readRows = vi.fn().mockResolvedValue(null)
     await expect(
       verifyWindowsTreeKillTarget(4242, { readRows, ownerPid: ORCA_PID, platform: 'win32' })
     ).resolves.toBe('unknown')
   })
 
-  it('falls open to unknown when the process query rejects', async () => {
+  it('returns unknown when the process query rejects', async () => {
     const readRows = vi.fn().mockRejectedValue(new Error('powershell missing'))
     await expect(
       verifyWindowsTreeKillTarget(4242, { readRows, ownerPid: ORCA_PID, platform: 'win32' })
     ).resolves.toBe('unknown')
   })
 
-  it('falls open to unknown when the query throws synchronously', async () => {
+  it('returns unknown when the query throws synchronously', async () => {
     const readRows = vi.fn(() => {
       throw new Error('spawn EPERM')
     })

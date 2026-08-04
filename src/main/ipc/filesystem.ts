@@ -87,6 +87,7 @@ import { assertGitPushTargetShape } from '../../shared/git-push-target-validatio
 import { getCommitMessageModelDiscoveryHostKey } from '../../shared/commit-message-host-key'
 import type { HostedReviewProvider } from '../../shared/hosted-review'
 import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control-ai'
+import { withLinkedIssueDraftContext } from '../../shared/source-control-ai-action-variables'
 import { validateGitPushTarget } from '../git/push-target-validation'
 import { getRemoteCommitUrl, getRemoteFileUrl } from '../git/repo'
 import {
@@ -99,7 +100,12 @@ import {
 import { listQuickOpenFiles } from './filesystem-list-files'
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
 import { searchWithGitGrep } from './filesystem-search-git'
-import { getLocalGitOptionsForRegisteredWorktree } from './local-worktree-runtime-options'
+import {
+  getLocalGitOptionsForRegisteredWorktree,
+  getLocalGitOptionsForRepo,
+  getLocalRepoForRegisteredWorktree
+} from './local-worktree-runtime-options'
+import { resolveSourceControlAiLinkedIssue } from './source-control-ai-linked-issue'
 import { listMarkdownDocuments, markdownDocumentsFromRelativePaths } from './markdown-documents'
 import { checkRgAvailable } from './rg-availability'
 import {
@@ -126,6 +132,7 @@ import { registerLocalLogTailHandlers } from './local-log-tail'
 import { localLogFileIdentity } from '../ai-vault/local-log-tail-reader'
 import { sanitizeLocalDownloadFilename } from '../local-download-filename'
 import { registerFilesystemDownloadFolderHandlers } from './filesystem-download-folder'
+import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
 import { createSenderScopedRequestCancellations } from './sender-scoped-request-cancellation'
 
 // Why: Monaco degrades features on large files like VS Code, so a 5MB block would needlessly lock out ordinary JSON/log files.
@@ -1114,12 +1121,16 @@ export function registerFilesystemHandlers(
           return await provider.getStatus(args.worktreePath, options)
         }
         const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-        const gitOptions = getLocalGitOptionsForRegisteredWorktree(
-          store,
-          args.worktreePath,
-          worktreePath
-        )
-        return await getStatus(worktreePath, { ...options, ...gitOptions })
+        // Why: one registered-worktree lookup feeds both — status polls this
+        // handler, and the scan walks every repo's worktree meta.
+        const repo = getLocalRepoForRegisteredWorktree(store, args.worktreePath, worktreePath)
+        const gitOptions = getLocalGitOptionsForRepo(store, repo)
+        const sharedLinkPaths = repo ? getWorktreeSharedLinkPaths(repo) : []
+        return await getStatus(worktreePath, {
+          ...options,
+          ...gitOptions,
+          ...(sharedLinkPaths.length > 0 ? { sharedLinkPaths } : {})
+        })
       } finally {
         gitStatusCancellations.finish(event, args.requestToken, controller)
       }
@@ -1360,6 +1371,8 @@ export function registerFilesystemHandlers(
       _event,
       args: {
         worktreePath: string
+        // Raw (unstripped) meta key; validated against worktreePath before any meta read.
+        worktreeId?: string
         repoId?: string
         connectionId?: string
         sourceControlAiResolvedParams?: ResolvedSourceControlAiGenerationParams
@@ -1408,6 +1421,10 @@ export function registerFilesystemHandlers(
         if (!context) {
           return { success: false, error: 'No staged changes to summarize.' }
         }
+        context = withLinkedIssueDraftContext(
+          context,
+          resolveSourceControlAiLinkedIssue(store, args)
+        )
         return generateCommitMessageFromContext(context, resolvedSettings.params, {
           kind: 'remote',
           cwd: args.worktreePath,
@@ -1435,6 +1452,10 @@ export function registerFilesystemHandlers(
       if (!context) {
         return { success: false, error: 'No staged changes to summarize.' }
       }
+      context = withLinkedIssueDraftContext(
+        context,
+        resolveSourceControlAiLinkedIssue(store, args, worktreePath)
+      )
       const localEnv = await prepareLocalCommitMessageAgentEnv(
         resolvedSettings.params.agentId,
         commitMessageAgentEnv,
@@ -1532,6 +1553,8 @@ export function registerFilesystemHandlers(
       _event,
       args: {
         worktreePath: string
+        // Raw (unstripped) meta key; validated against worktreePath before any meta read.
+        worktreeId?: string
         repoId?: string
         base: string
         title: string
@@ -1601,6 +1624,10 @@ export function registerFilesystemHandlers(
         if (!context) {
           return { success: false, error: 'No branch changes to summarize.' }
         }
+        context = withLinkedIssueDraftContext(
+          context,
+          resolveSourceControlAiLinkedIssue(store, args)
+        )
         return generatePullRequestFieldsFromContext(context, resolvedSettings.params, {
           kind: 'remote',
           cwd: args.worktreePath,
@@ -1644,6 +1671,10 @@ export function registerFilesystemHandlers(
       if (!context) {
         return { success: false, error: 'No branch changes to summarize.' }
       }
+      context = withLinkedIssueDraftContext(
+        context,
+        resolveSourceControlAiLinkedIssue(store, args, worktreePath)
+      )
       const localEnv = await prepareLocalCommitMessageAgentEnv(
         resolvedSettings.params.agentId,
         commitMessageAgentEnv,

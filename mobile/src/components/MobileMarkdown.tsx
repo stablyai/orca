@@ -7,7 +7,9 @@ import {
   isFilePathCodeSpan,
   normalizeFilePath
 } from './markdown-file-path-detection'
+import { isMobileMermaidLanguage } from './mobile-mermaid-language'
 import { parseMobileMarkdown } from './mobile-markdown-parser'
+import { MermaidDiagram } from './pr-sidebar/MermaidDiagram'
 
 type Props = {
   content?: string
@@ -23,6 +25,8 @@ type Props = {
 
 const MAX_TABLE_ROWS = 40
 const MAX_TABLE_COLUMNS = 8
+/** Prose base size — passed to MermaidDiagram fallback mono text. */
+const MERMAID_BASE = 13
 
 function openMarkdownUrl(url: string): void {
   const trimmed = url.trim()
@@ -153,6 +157,7 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
   if (!text) {
     return fallback ? <Text style={styles.paragraph}>{fallback}</Text> : null
   }
+  const mermaidSourceOccurrences = new Map<string, number>()
 
   return (
     <View style={styles.root}>
@@ -175,6 +180,20 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
           )
         }
         if (block.type === 'code') {
+          // Mermaid fences render as diagrams (WebView), not as raw code — same as PR sidebar.
+          // Unclosed fences are still streaming: mounting the WebView per tick would
+          // reload its document up to 20x/sec, so they stay raw code until terminated.
+          if (isMobileMermaidLanguage(block.language) && block.closed) {
+            const occurrence = mermaidSourceOccurrences.get(block.text) ?? 0
+            mermaidSourceOccurrences.set(block.text, occurrence + 1)
+            return (
+              <MermaidDiagram
+                key={`${block.text}:${occurrence}`}
+                source={block.text}
+                base={MERMAID_BASE}
+              />
+            )
+          }
           return (
             <View key={index} style={styles.codeBlock}>
               {block.language ? <Text style={styles.codeLanguage}>{block.language}</Text> : null}

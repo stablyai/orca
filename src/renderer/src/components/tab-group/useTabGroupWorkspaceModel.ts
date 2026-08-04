@@ -235,10 +235,12 @@ export function useTabGroupWorkspaceModel({
         worktreeId
       )
       if (item.contentType === 'terminal') {
-        closeTerminalTab(item.entityId)
-        if (!opts?.skipEmptyCheck) {
-          leaveWorktreeIfEmpty()
-        }
+        // Why: closeTerminalTab can defer behind a pin / running-process dialog, so the
+        // empty check has to run on the actual close — never on cancel.
+        closeTerminalTab(
+          item.entityId,
+          opts?.skipEmptyCheck ? undefined : { onClosed: leaveWorktreeIfEmpty }
+        )
         return
       }
       if (item.contentType === 'browser') {
@@ -296,7 +298,8 @@ export function useTabGroupWorkspaceModel({
         )
         if (item.contentType === 'terminal' && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
           // Why: revoke local resume + hook authority before the host removes its canonical tab.
-          closeTerminalTab(item.entityId)
+          // No running-process prompt: a bulk close of N busy tabs would be a modal storm.
+          closeTerminalTab(item.entityId, { skipRunningProcessConfirm: true })
           continue
         }
         if (item.contentType === 'browser') {
@@ -525,6 +528,25 @@ export function useTabGroupWorkspaceModel({
     [closeMany, group, groupTabs]
   )
 
+  const closeToLeft = useCallback(
+    (itemId: string) => {
+      // Why: see closeToRight — walk tabOrder locally and route through the
+      // dirty-aware closeMany path instead of the store helper.
+      const order = group?.tabOrder ?? []
+      const index = order.indexOf(itemId)
+      if (index === -1) {
+        return
+      }
+      const tabById = new Map(groupTabs.map((candidate) => [candidate.id, candidate]))
+      const leftIds = order.slice(0, index).filter((id) => {
+        const candidate = tabById.get(id)
+        return candidate ? !candidate.isPinned : false
+      })
+      closeMany(leftIds)
+    },
+    [closeMany, group, groupTabs]
+  )
+
   const tabBarOrder = useMemo(
     () =>
       (group?.tabOrder ?? []).map((itemId) => {
@@ -560,6 +582,7 @@ export function useTabGroupWorkspaceModel({
       closeItem,
       closeOthers,
       closeToRight,
+      closeToLeft,
       createSplitGroup,
       newBrowserTab: () => {
         void openNewBrowserTabInActiveWorkspace(groupId)

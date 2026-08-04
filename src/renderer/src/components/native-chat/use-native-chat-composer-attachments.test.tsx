@@ -1,8 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act } from 'react'
+import { act, createElement, useRef, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { createElement, useRef, useState } from 'react'
 import {
   clearNativeChatAttachmentCacheForTests,
   readNativeChatAttachmentCache,

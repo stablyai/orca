@@ -19,6 +19,7 @@ import {
 } from '../providers/macos-tcc-login-shell'
 import { MacosLoginSessionDeathWatch } from './macos-login-session-death-watch'
 import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-system-resolver-health'
+import { readCurrentDaemonReadyIdentity } from './daemon-ready-identity'
 
 export type ParsedDaemonArgs = {
   socketPath: string
@@ -209,6 +210,7 @@ async function main(): Promise<void> {
                 timing: {
                   periodicProbeMs: 2_000,
                   rejectionRecheckMs: 500,
+                  minimumRejectionSpanMs: 2_000,
                   ptyExitDebounceMs: 200,
                   clientActivityMinGapMs: 1_000,
                   minProbeGapMs: 100
@@ -255,9 +257,8 @@ async function main(): Promise<void> {
 
   // Signal readiness to parent via IPC (if available)
   if (process.send) {
-    // Why: Windows has no cheap OS query for a child's start time, so the
-    // daemon self-reports it here for the pid file's pid-recycling guard.
-    process.send({ type: 'ready', startedAtMs })
+    const readyIdentity = await readCurrentDaemonReadyIdentity(startedAtMs)
+    process.send({ type: 'ready', ...readyIdentity })
   }
   daemonLog.log('ready')
 

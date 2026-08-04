@@ -31,6 +31,8 @@ type SourceControlTextGenerationBaseDialogProps = {
   settings: GlobalSettings | null
   repo?: Pick<Repo, 'id' | 'sourceControlAi'> | null
   discoveryHostKey: string
+  /** Omitted by workspace-less callers (Settings dry-run); `null` means "linked to nothing". */
+  linkedIssue?: number | null
   onGenerate: (params: ResolvedSourceControlAiGenerationParams) => void
   onSaveDefaults: (
     target: SourceControlAiWriteTarget,
@@ -89,6 +91,7 @@ export function SourceControlTextGenerationDialog({
   settings,
   repo,
   discoveryHostKey,
+  linkedIssue,
   onGenerate,
   onSaveDefaults
 }: SourceControlTextGenerationDialogProps): React.JSX.Element {
@@ -179,6 +182,7 @@ export function SourceControlTextGenerationDialog({
           repo={repo ?? null}
           baseParams={baseParams}
           basePromptPreview={buildBasePromptPreview(actionId)}
+          linkedIssue={linkedIssue}
           saveTargets={saveTargets}
           onGenerate={onGenerate}
           onOpenChange={onOpenChange}

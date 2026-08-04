@@ -2,6 +2,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import {
   createWebRuntimeAgentSessionTerminal,
+  createWebRuntimeAgentSessionTerminalWithLaunchDraft,
   createWebRuntimeSessionTerminal,
   isWebTerminalSurfaceTabId
 } from '@/runtime/web-runtime-session'
@@ -128,6 +129,15 @@ export function launchAgentInWebHostTab(args: {
       submitPrompt: submitPastedPrompt,
       forcePromptPaste: promptDelivery === 'submit-after-ready'
     }).then(handleCreation)
+  }
+  if (hasPrompt && promptDelivery === 'draft') {
+    // Why: the draft rode in on the launch command, so no paste runs and
+    // nothing else seeds the chat-composer copy for this host class.
+    return createWebRuntimeAgentSessionTerminalWithLaunchDraft({
+      ...launch,
+      agent,
+      launchDraft: prompt
+    }).then((outcome) => handleCreation({ outcome, promptDelivered: outcome.status === 'created' }))
   }
   return createWebRuntimeSessionTerminal(launch).then((outcome) =>
     handleCreation({ outcome, promptDelivered: outcome.status === 'created' && hasPrompt })

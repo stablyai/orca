@@ -35,10 +35,13 @@ export function mapGitLabPipelineJobStatusToConclusion(
   if (s === 'skipped') {
     return 'skipped'
   }
-  // Why: manual GitLab jobs are intentionally waiting for a human trigger;
-  // treating them as pending would make the Checks tab look stuck forever.
+  // Why: manual GitLab jobs are intentionally waiting for a human trigger; calling them pending
+  // would make the Checks tab look stuck forever, and action_required flags green MRs as failing.
   if (s === 'manual') {
     return 'neutral'
+  }
+  if (s === 'action_required') {
+    return 'action_required'
   }
   if (
     s === 'created' ||
@@ -59,6 +62,8 @@ export function gitLabPipelineJobsToPRChecks(jobs: GitLabPipelineJob[]): PRCheck
     name: job.stage ? `${job.stage}: ${job.name}` : job.name,
     status: mapGitLabPipelineJobStatusToCheckStatus(job.status),
     conclusion: mapGitLabPipelineJobStatusToConclusion(job.status),
-    url: job.webUrl || null
+    url: job.webUrl || null,
+    // Truthiness, not != null: the runtime RPC schema requires a positive int.
+    ...(job.id ? { gitlabJobId: job.id } : {})
   }))
 }

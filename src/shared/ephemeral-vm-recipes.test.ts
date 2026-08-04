@@ -2,11 +2,13 @@ import { describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from './pairing'
 import {
   EPHEMERAL_VM_RECIPE_JSON_STRUCTURE_LIMITS,
+  parseEphemeralVmRecipeResult
+} from './ephemeral-vm-recipes'
+import {
   getEphemeralVmRecipeResultWarnings,
-  parseEphemeralVmRecipeResult,
   redactEphemeralVmRecipeDiagnosticText,
   redactEphemeralVmRecipeResultForDiagnostics
-} from './ephemeral-vm-recipes'
+} from './ephemeral-vm-recipe-diagnostics'
 
 function makePairingCode(endpoint = 'wss://sandbox.example.com'): string {
   return encodePairingOffer({

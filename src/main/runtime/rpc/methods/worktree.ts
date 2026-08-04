@@ -3,7 +3,9 @@ import {
   releaseAutomationWorkspaceProvenanceRequest,
   resolveAutomationWorkspaceProvenance
 } from '../../../automations/workspace-provenance'
+import { buildCliWorkspaceProvenance } from '../../../../shared/cli-workspace-provenance'
 import { defineMethod, type RpcMethod } from '../core'
+import { resolveWorktreeCatalogSnapshot } from '../worktree-catalog-snapshot'
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import {
   WorktreeCreate,
@@ -18,14 +20,22 @@ import {
   WorktreeResolvePrBase,
   WorktreeSelector,
   WorktreeSet,
-  WorktreeSortOrder
+  WorktreeSortOrder,
+  WorktreeTeardownMissingTerminalsParams
 } from './worktree-schemas'
 
 export const WORKTREE_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'worktree.ps',
     params: WorktreePsParams,
-    handler: async (params, { runtime }) => runtime.getWorktreePs(params.limit)
+    handler: async (params, { runtime }) => {
+      const result = await runtime.getWorktreePs(params.limit)
+      // Why: callers that never send the field get the byte-exact legacy response.
+      if (params.afterSnapshotId === undefined) {
+        return result
+      }
+      return resolveWorktreeCatalogSnapshot(result, params.afterSnapshotId)
+    }
   }),
   defineMethod({
     name: 'worktree.list',
@@ -36,6 +46,16 @@ export const WORKTREE_METHODS: RpcMethod[] = [
     name: 'worktree.detectedList',
     params: WorktreeDetectedListParams,
     handler: async (params, { runtime }) => runtime.listDetectedManagedWorktrees(params.repo)
+  }),
+  defineMethod({
+    name: 'worktree.teardownMissingTerminals',
+    params: WorktreeTeardownMissingTerminalsParams,
+    handler: async (params, { runtime }) =>
+      runtime.teardownMissingManagedWorktreeTerminals(
+        params.repo,
+        params.worktreeIds,
+        params.connectionId
+      )
   }),
   defineMethod({
     name: 'worktree.lineageList',
@@ -107,6 +127,8 @@ export const WORKTREE_METHODS: RpcMethod[] = [
             linkedBitbucketPR: params.linkedBitbucketPR,
             linkedAzureDevOpsPR: params.linkedAzureDevOpsPR,
             linkedGiteaPR: params.linkedGiteaPR,
+            linkedWorkItem: params.linkedWorkItem,
+            linkedTaskSourceContext: params.linkedTaskSourceContext,
             comment: params.comment,
             displayName: params.displayName,
             telemetrySource: params.telemetrySource,
@@ -119,6 +141,10 @@ export const WORKTREE_METHODS: RpcMethod[] = [
             setupDecision: params.setupDecision,
             createdWithAgent: params.createdWithAgent ?? params.startupAgent,
             automationProvenance,
+            cliProvenance: buildCliWorkspaceProvenance(params.cliProvenanceRequest, {
+              startupAgent: params.startupAgent ?? params.createdWithAgent,
+              createdAt: Date.now()
+            }),
             startup: params.startupCommand
               ? {
                   command: params.startupCommand,
@@ -183,6 +209,8 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         linkedBitbucketPR: params.linkedBitbucketPR,
         linkedAzureDevOpsPR: params.linkedAzureDevOpsPR,
         linkedGiteaPR: params.linkedGiteaPR,
+        linkedWorkItem: params.linkedWorkItem,
+        linkedTaskSourceContext: params.linkedTaskSourceContext,
         comment: params.comment,
         isArchived: params.isArchived,
         isUnread: params.isUnread,
@@ -246,7 +274,8 @@ export const WORKTREE_METHODS: RpcMethod[] = [
       const result = await runtime.removeManagedWorktree(
         params.worktree,
         params.force === true,
-        params.runHooks === true
+        params.runHooks === true,
+        params.allowUnverifiedPtyStop === true
       )
       return { removed: true, ...result }
     }

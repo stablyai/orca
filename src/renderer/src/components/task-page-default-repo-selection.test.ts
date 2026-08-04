@@ -40,7 +40,7 @@ describe('getTaskEligibleRepos', () => {
           remoteUrl: 'git@gitlab.example.com:team/orca.git'
         }
       }),
-      repo({ id: 'local-only' }),
+      repo({ id: 'settled-no-remote', gitRemoteIdentity: null }),
       repo({
         id: 'incomplete-remote',
         gitRemoteIdentity: {
@@ -61,6 +61,54 @@ describe('getTaskEligibleRepos', () => {
       'github-icon',
       'gitlab-remote'
     ])
+  })
+
+  it('keeps a repo visible while its remote identity probe has not answered', () => {
+    const eligible = getTaskEligibleRepos([
+      repo({ id: 'probe-pending' }),
+      repo({ id: 'ssh-probe-pending', connectionId: 'builder' }),
+      repo({ id: 'settled-no-remote', gitRemoteIdentity: null })
+    ])
+
+    expect(eligible.map((candidate) => candidate.id)).toEqual([
+      'probe-pending',
+      'ssh-probe-pending'
+    ])
+  })
+
+  it('excludes folders and settled remote-less repos even while others are pending', () => {
+    const eligible = getTaskEligibleRepos([
+      repo({ id: 'folder-pending', kind: 'folder' }),
+      repo({ id: 'folder-settled', kind: 'folder', gitRemoteIdentity: null }),
+      repo({ id: 'git-pending' })
+    ])
+
+    expect(eligible.map((candidate) => candidate.id)).toEqual(['git-pending'])
+  })
+
+  it('treats a partially resolved remote identity as settled, not pending', () => {
+    const eligible = getTaskEligibleRepos([
+      repo({
+        id: 'gitlab-ssh-partial',
+        connectionId: 'builder',
+        gitRemoteIdentity: {
+          canonicalKey: 'gitlab.example.com/team/orca',
+          remoteName: 'origin',
+          remoteUrl: ''
+        }
+      }),
+      repo({
+        id: 'gitlab-ssh-complete',
+        connectionId: 'builder',
+        gitRemoteIdentity: {
+          canonicalKey: 'gitlab.example.com/team/orca',
+          remoteName: 'origin',
+          remoteUrl: 'git@gitlab.example.com:team/orca.git'
+        }
+      })
+    ])
+
+    expect(eligible.map((candidate) => candidate.id)).toEqual(['gitlab-ssh-complete'])
   })
 })
 
@@ -83,6 +131,22 @@ describe('getDefaultTaskRepoSelection', () => {
     ])
 
     expect([...selection].sort()).toEqual(['local-orca', 'other'])
+  })
+
+  it('keeps GitHub grouping intact while a pending-identity repo joins as its own project', () => {
+    const selection = getDefaultTaskRepoSelection(
+      getTaskEligibleRepos([
+        repo({ id: 'local-orca', upstream: { owner: 'StablyAI', repo: 'Orca' } }),
+        repo({
+          id: 'ssh-orca',
+          connectionId: 'builder',
+          upstream: { owner: 'stablyai', repo: 'orca' }
+        }),
+        repo({ id: 'ssh-gitlab-pending', connectionId: 'builder' })
+      ])
+    )
+
+    expect([...selection].sort()).toEqual(['local-orca', 'ssh-gitlab-pending'])
   })
 
   it('prefers local checkout over a remote checkout for the same project', () => {

@@ -14,6 +14,8 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   // is what gives .tsx/.jsx files syntax highlighting in the editor.
   '.ts': 'typescript',
   '.tsx': 'typescript',
+  '.cts': 'typescript',
+  '.mts': 'typescript',
   '.js': 'javascript',
   '.jsx': 'javascript',
   '.mjs': 'javascript',
@@ -72,7 +74,6 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.proto': 'proto',
   '.lua': 'lua',
   '.r': 'r',
-  '.R': 'r',
   '.scala': 'scala',
   '.dart': 'dart',
   '.ex': 'elixir',

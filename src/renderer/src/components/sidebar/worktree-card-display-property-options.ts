@@ -21,6 +21,15 @@ export const PROPERTY_OPTIONS: { id: WorktreeCardProperty; label: string }[] = [
     }
   },
   {
+    id: 'jira-issue',
+    get label() {
+      return translate(
+        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.jiraIssue',
+        'Jira issue'
+      )
+    }
+  },
+  {
     id: 'pr',
     get label() {
       return translate(

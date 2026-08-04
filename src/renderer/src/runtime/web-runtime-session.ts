@@ -14,8 +14,10 @@ import type {
 } from '../../../shared/runtime-types'
 import type { TerminalPaneSplitSource } from '../../../shared/feature-education-telemetry'
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
-import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
-import type { AgentProviderSessionMetadata } from '../../../shared/agent-session-resume'
+import type {
+  SleepingAgentLaunchConfig,
+  AgentProviderSessionMetadata
+} from '../../../shared/agent-session-resume'
 import { AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import type {
   AgentLaunchPreferences,
@@ -46,7 +48,10 @@ import {
   toHostSessionTabId,
   toWebTerminalSurfaceTabId
 } from './web-terminal-surface-id'
-import { deliverLaunchPromptToAgentTab } from '../lib/agent-launch-prompt-delivery'
+import {
+  deliverLaunchPromptToAgentTab,
+  seedNativeChatLaunchDraftForAgentTab
+} from '../lib/agent-launch-prompt-delivery'
 import {
   listRemoteRuntimeSessionTabsAfterCurrentInFlight,
   listRemoteRuntimeSessionTabsDeduped
@@ -55,6 +60,7 @@ import { runRemoteAgentSessionLaunch } from './remote-agent-session-launch'
 import { translate } from '../i18n/i18n'
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 
 export {
   HOST_TERMINAL_SURFACE_SEPARATOR,
@@ -180,6 +186,28 @@ export async function createWebRuntimeAgentSessionTerminal(
   return { outcome: created.outcome, promptDelivered }
 }
 
+/**
+ * Launch a web-host agent terminal whose draft already rode in on the launch
+ * command (argv prefill). No post-ready paste runs for that delivery, so seed
+ * the chat-composer copy here once the mirrored host tab id is known.
+ */
+export async function createWebRuntimeAgentSessionTerminalWithLaunchDraft(
+  args: CreateWebRuntimeSessionTerminalArgs & {
+    agent: TuiAgent
+    launchDraft: string
+  }
+): Promise<WebRuntimeTerminalCreateOutcome> {
+  const created = await createWebRuntimeSessionTerminalResult(args)
+  if (created.outcome.status !== 'failed' && created.hostTabId) {
+    seedNativeChatLaunchDraftForAgentTab({
+      tabId: toWebTerminalSurfaceTabId(created.hostTabId),
+      agent: args.agent,
+      text: args.launchDraft
+    })
+  }
+  return created.outcome
+}
+
 async function createWebRuntimeSessionTerminalResult(
   args: CreateWebRuntimeSessionTerminalArgs
 ): Promise<CreatedWebRuntimeSessionTerminal> {
@@ -202,7 +230,7 @@ async function createWebRuntimeSessionTerminalResult(
   const callEnvironment = captureRuntimeEnvironmentCall(environmentId, intentOwner.pairingRevision)
 
   if (args.selectWorktree !== false) {
-    selectWebRuntimeSessionWorktree(args.worktreeId)
+    selectWebRuntimeSessionWorktree(args.worktreeId, environmentId)
   }
   let hostCreated = false
   let createdTabId: string | undefined
@@ -410,7 +438,7 @@ export async function createWebRuntimeSessionBrowserTab(args: {
   const shouldSelectWorktree = args.selectWorktree !== false
   const stagedFromWorktreeId = useAppStore.getState().activeWorktreeId
   if (shouldSelectWorktree) {
-    selectWebRuntimeSessionWorktree(args.worktreeId)
+    selectWebRuntimeSessionWorktree(args.worktreeId, environmentId)
   }
   try {
     const response = await callEnvironment({
@@ -476,7 +504,7 @@ function stageWebRuntimeBrowserTab(args: {
     remotePageId
   )
   if (args.restoreFocus !== false) {
-    selectWebRuntimeSessionWorktree(args.worktreeId)
+    selectWebRuntimeSessionWorktree(args.worktreeId, args.environmentId)
   }
 
   if (existing) {
@@ -506,8 +534,8 @@ function stageWebRuntimeBrowserTab(args: {
   })
 }
 
-function selectWebRuntimeSessionWorktree(worktreeId: string): void {
-  useAppStore.getState().setActiveWorktree(worktreeId)
+function selectWebRuntimeSessionWorktree(worktreeId: string, environmentId: string): void {
+  useAppStore.getState().setActiveWorktree(worktreeId, toRuntimeExecutionHostId(environmentId))
 }
 
 function findLocalBrowserPageForRemotePage(

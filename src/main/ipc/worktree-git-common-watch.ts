@@ -149,13 +149,15 @@ async function startSnapshotDiffPoller(
 async function startGitCommonNarrowWatch(
   target: WorktreeBaseWatchTarget,
   onEvents: (events: WorktreeBasePollEvent[]) => void,
-  pollIntervalMs: number
+  pollIntervalMs: number,
+  visibility: WorktreePollerWindowVisibility
 ): Promise<WorktreeBaseSubscription> {
   const worktreesDir = join(target.path, 'worktrees')
   let disposed = false
   let subscription: WorktreeBaseSubscription | null = null
   let existenceTimer: ReturnType<typeof setInterval> | null = null
   let subscribing = false
+  let parkedWhileHidden = false
 
   const stopExistencePoll = (): void => {
     if (existenceTimer) {
@@ -164,30 +166,59 @@ async function startGitCommonNarrowWatch(
     }
   }
 
+  const tryUpgradeToNarrowWatch = async (): Promise<void> => {
+    if (disposed || subscribing || subscription) {
+      return
+    }
+    subscribing = true
+    try {
+      const installed = await trySubscribe()
+      if (installed && !disposed) {
+        stopExistencePoll()
+        // The dir appearing means a first linked worktree was just
+        // registered; surface it so the repo's worktree list refreshes.
+        onEvents([{ type: 'create', path: worktreesDir }])
+      }
+    } finally {
+      subscribing = false
+    }
+  }
+
   const armExistencePoll = (): void => {
-    if (disposed || existenceTimer) {
+    if (disposed || existenceTimer || subscription) {
+      return
+    }
+    if (!visibility.isWindowVisible()) {
+      parkedWhileHidden = true
       return
     }
     existenceTimer = setInterval(() => {
-      if (disposed || subscribing || subscription) {
+      if (disposed) {
         return
       }
-      subscribing = true
-      void trySubscribe()
-        .then((installed) => {
-          if (installed && !disposed) {
-            stopExistencePoll()
-            // The dir appearing means a first linked worktree was just
-            // registered; surface it so the repo's worktree list refreshes.
-            onEvents([{ type: 'create', path: worktreesDir }])
-          }
-        })
-        .finally(() => {
-          subscribing = false
-        })
+      // Why: a hidden window has nothing to refresh, so stop stat'ing the dir
+      // entirely instead of burning a syscall per repo per tick in the background.
+      if (!visibility.isWindowVisible()) {
+        parkedWhileHidden = true
+        stopExistencePoll()
+        return
+      }
+      void tryUpgradeToNarrowWatch()
     }, pollIntervalMs)
     existenceTimer.unref?.()
   }
+
+  const unsubscribeVisibility = visibility.onWindowBecameVisible(() => {
+    if (disposed || !parkedWhileHidden) {
+      return
+    }
+    parkedWhileHidden = false
+    // Why: the first linked worktree may have been registered while hidden — check
+    // now (emitting the create) rather than losing it for a full interval.
+    void tryUpgradeToNarrowWatch().finally(() => {
+      armExistencePoll()
+    })
+  })
 
   const trySubscribe = async (): Promise<boolean> => {
     try {
@@ -269,6 +300,7 @@ async function startGitCommonNarrowWatch(
     unsubscribe: async () => {
       disposed = true
       stopExistencePoll()
+      unsubscribeVisibility()
       const current = subscription
       subscription = null
       if (current) {
@@ -288,7 +320,7 @@ export async function startGitCommonWatch(
 ): Promise<WorktreeBaseSubscription> {
   if (platform === 'darwin') {
     const [narrowWatch, primaryMetadataPoll] = await Promise.all([
-      startGitCommonNarrowWatch(target, onEvents, pollIntervalMs),
+      startGitCommonNarrowWatch(target, onEvents, pollIntervalMs, visibility),
       startSnapshotDiffPoller(
         () => snapshotPrimaryCheckoutMetadata(target.path),
         onEvents,

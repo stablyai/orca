@@ -40,7 +40,10 @@ describe('Windows SSH relay node-pty console-list patch', () => {
 
     const tamperedPatch = writeNodePtyFixture('1.1.0', publishedAgentSource())
     patchNodePtyConsoleListAgent(tamperedPatch.root)
-    writeFileSync(tamperedPatch.agentPath, `${readFileSync(tamperedPatch.agentPath)}\n// drift`)
+    writeFileSync(
+      tamperedPatch.agentPath,
+      `${readFileSync(tamperedPatch.agentPath, 'utf8')}\n// drift`
+    )
     expect(() => assertPatchedNodePtyConsoleListAgent(tamperedPatch.root)).toThrow('not installed')
   })
 })

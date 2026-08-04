@@ -40,7 +40,13 @@ const EMPTY_AGENT_STATUS: RuntimeOrchestrationState['agentStatusByPaneKey'] = {}
 const EMPTY_RETAINED_AGENTS: RuntimeOrchestrationState['retainedAgentsByPaneKey'] = {}
 const EMPTY_BATCH: ReadonlyMap<string, RuntimeOrchestrationRecord> = new Map()
 
-export const EMPTY_WORKTREE_AGENT_ORCHESTRATION: RuntimeOrchestrationRecord = {}
+export const EMPTY_WORKTREE_AGENT_ORCHESTRATION: RuntimeOrchestrationRecord = Object.freeze({})
+
+// Why null-prototype: a pane key of `__proto__` is a plain data key here; on a
+// normal object the write vanishes into the prototype setter and repoints it.
+function createRecord(): RuntimeOrchestrationRecord {
+  return Object.create(null) as RuntimeOrchestrationRecord
+}
 
 let runtimeDomainCache: RuntimeDomainCache | null = null
 let requestedTabMembershipCache: RequestedTabMembershipCache | null = null
@@ -181,12 +187,12 @@ function buildRuntimeBatch(
     }
 
     for (const worktreeId of targets) {
-      const existing = recordsByWorktree.get(worktreeId)
-      if (existing) {
-        existing[paneKey] = orchestration
-      } else {
-        recordsByWorktree.set(worktreeId, { [paneKey]: orchestration })
+      let record = recordsByWorktree.get(worktreeId)
+      if (!record) {
+        record = createRecord()
+        recordsByWorktree.set(worktreeId, record)
       }
+      record[paneKey] = orchestration
     }
   }
 

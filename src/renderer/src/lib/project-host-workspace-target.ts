@@ -40,6 +40,7 @@ type ProjectHostWorkspaceTargetInput = {
   hostId?: ExecutionHostId | null
   projectHostSetupId?: string | null
   focusedHostScope?: ExecutionHostScope | null
+  actionableHostIds?: ReadonlySet<ExecutionHostId>
 }
 
 type ProjectSetupModel = {
@@ -120,19 +121,37 @@ export function resolveWorkspaceCreationTarget(
 
   const model = getProjectSetupModel(input)
   const repoById = new Map(eligibleRepos.map((repo) => [repo.id, repo]))
-  const setups = model?.setups ?? []
+  const actionableHostIds = input.actionableHostIds
+  const allSetups = model?.setups ?? []
+  const setups = actionableHostIds
+    ? allSetups.filter((setup) => actionableHostIds.has(setup.hostId))
+    : allSetups
 
   if (projectHostSetupId) {
-    const setup = setups.find((entry) => entry.id === projectHostSetupId)
+    const setup = allSetups.find((entry) => entry.id === projectHostSetupId)
     if (!setup) {
+      return { status: 'unavailable', reason: 'setup-not-found' }
+    }
+    if (actionableHostIds && !actionableHostIds.has(setup.hostId)) {
+      // Why: the caller named this exact setup. Silently creating the workspace on a
+      // sibling host would put files (and any agent run) somewhere the user never chose,
+      // so fail closed and let them re-pick a host.
       return { status: 'unavailable', reason: 'setup-not-found' }
     }
     if (!isReadySetup(setup)) {
       return { status: 'unavailable', reason: 'setup-not-ready' }
     }
-    const target = createTarget(setup, repoById)
-    if (target) {
-      return { status: 'ready', target }
+    // Why: a project resolves to one setup per host, and the run-target picker shows only the first.
+    // A stale draft can still name a same-host duplicate from a legacy profile; canonicalize to the
+    // same setup the picker displays so the shown path is the path the workspace is created in.
+    const canonical =
+      findReadySetupTarget(
+        setups,
+        repoById,
+        (entry) => entry.projectId === setup.projectId && entry.hostId === setup.hostId
+      ) ?? createTarget(setup, repoById)
+    if (canonical) {
+      return { status: 'ready', target: canonical }
     }
     return { status: 'unavailable', reason: 'setup-not-found' }
   }
@@ -184,6 +203,9 @@ export function resolveWorkspaceCreationTarget(
     if (target) {
       return { status: 'ready', target }
     }
+    // Why: the caller named this host. Falling through to the legacy repo (or any other
+    // actionable host) would create the workspace somewhere the user never selected.
+    return { status: 'unavailable', reason: 'project-not-set-up-on-host' }
   }
 
   const repoId = resolveComposerRepoId(input)
@@ -192,14 +214,22 @@ export function resolveWorkspaceCreationTarget(
     return { status: 'unavailable', reason: 'no-eligible-repo' }
   }
 
+  const projectedLegacySetup = projectHostSetupProjectionFromRepos([legacyRepo]).setups[0]
   const legacySetup =
     setups.find((setup) => setup.repoId === legacyRepo.id && isReadySetup(setup)) ??
-    projectHostSetupProjectionFromRepos([legacyRepo]).setups[0]
+    (!actionableHostIds || actionableHostIds.has(projectedLegacySetup.hostId)
+      ? projectedLegacySetup
+      : null)
   const legacyTarget = legacySetup ? createTarget(legacySetup, repoById) : null
-  if (!legacyTarget) {
-    return { status: 'unavailable', reason: 'setup-not-found' }
+  if (legacyTarget) {
+    return { status: 'ready', target: legacyTarget }
   }
-  return { status: 'ready', target: legacyTarget }
+  const fallbackTarget = actionableHostIds
+    ? findReadySetupTarget(setups, repoById, () => true)
+    : null
+  return fallbackTarget
+    ? { status: 'ready', target: fallbackTarget }
+    : { status: 'unavailable', reason: 'setup-not-found' }
 }
 
 export function resolveWorkspaceCreationRepoId(input: ProjectHostWorkspaceTargetInput): string {

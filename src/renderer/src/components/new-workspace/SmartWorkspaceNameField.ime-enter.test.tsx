@@ -146,6 +146,31 @@ function renderSmartField(spies: {
   return input
 }
 
+function renderEmojiField(value: string, onValueChange: (value: string) => void): HTMLInputElement {
+  act(() => {
+    root.render(
+      <SmartWorkspaceNameField
+        repos={[]}
+        repoId="repo-1"
+        onRepoChange={vi.fn()}
+        value={value}
+        onValueChange={onValueChange}
+        onGitHubItemSelect={vi.fn()}
+        onBranchSelect={vi.fn()}
+        onLinearIssueSelect={vi.fn()}
+        selectedSource={null}
+        onClearSelectedSource={vi.fn()}
+        textOnly
+      />
+    )
+  })
+  const input = container.querySelector<HTMLInputElement>('[data-workspace-name-input="true"]')
+  if (!input) {
+    throw new Error('workspace name input not rendered')
+  }
+  return input
+}
+
 // Why: the guard must short-circuit before the `open && rows.length > 0`
 // row-select branch, so drive the field into that state — smart mode with a
 // typed value synchronously yields a highlighted "use this name" row.
@@ -233,5 +258,37 @@ describe('SmartWorkspaceNameField IME Enter guard', () => {
     // at the row-select branch, not merely inert.
     expect(onValueChange).toHaveBeenCalledWith('배포')
     expect(onPlainEnter).not.toHaveBeenCalled()
+  })
+})
+
+describe('SmartWorkspaceNameField emoji shortcodes', () => {
+  it('replaces a completed shortcode as it is typed', () => {
+    const onValueChange = vi.fn()
+    const input = renderEmojiField('Launch ', onValueChange)
+
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
+        input,
+        'Launch :wink: experiment'
+      )
+      input.setSelectionRange(13, 13)
+      input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }))
+    })
+
+    expect(onValueChange).toHaveBeenCalledWith('Launch 😉 experiment')
+  })
+
+  it('accepts the highlighted shortcode suggestion with Enter', () => {
+    const onValueChange = vi.fn()
+    const input = renderEmojiField('Launch :wink', onValueChange)
+
+    act(() => {
+      input.focus()
+      input.setSelectionRange(12, 12)
+      input.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    pressEnter(input)
+
+    expect(onValueChange).toHaveBeenCalledWith('Launch 😉')
   })
 })

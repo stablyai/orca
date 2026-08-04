@@ -129,11 +129,12 @@ export function NativeChatToolRun({
 
   const callCount = countToolCalls(blocks) || blocks.length
   const summary = summarizeToolRun(blocks)
-  const fallbackLabel = translate(
-    callCount === 1 ? 'components.native-chat.tool.countOne' : 'components.native-chat.tool.countN',
-    callCount === 1 ? '1 tool call' : `${callCount} tool calls`,
-    { count: callCount }
-  )
+  const fallbackLabel =
+    callCount === 1
+      ? translate('components.native-chat.tool.countOne', '1 tool call')
+      : translate('components.native-chat.tool.countN', '{{value0}} tool calls', {
+          value0: callCount
+        })
 
   return (
     // Extra top margin sets the tool run apart from the assistant prose above it

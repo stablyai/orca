@@ -120,6 +120,7 @@ vi.mock('../worktree-root-preparation', () => ({
 }))
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
+  getSshGitProviderGeneration: () => 0,
   getSshGitProvider: vi.fn().mockImplementation((id: string) => {
     if (id === 'conn-1') {
       return mockGitProvider
@@ -148,9 +149,16 @@ vi.mock('./ssh', () => ({
 
 import { registerRepoHandlers } from './repos'
 import { clearSubmodulePathsCacheForTests, listSubmodulePaths } from '../git/status'
+import { toSshExecutionHostId } from '../../shared/execution-host'
+import {
+  getSshProviderAuthority,
+  resetSshProviderAuthorities,
+  rotateSshProviderAuthority
+} from '../ssh/ssh-provider-authority'
 
 beforeEach(() => {
   clearGitCapabilityStateForTests()
+  resetSshProviderAuthorities()
 })
 
 describe('projectGroups IPC validation', () => {
@@ -207,6 +215,128 @@ describe('projectGroups IPC validation', () => {
     ).toThrow('invalid_project_group_create_args')
 
     expect(mockStore.createProjectGroup).not.toHaveBeenCalled()
+  })
+
+  it('returns an immutable repo catalog for exactly one execution host', async () => {
+    const localRepo = {
+      id: 'duplicate',
+      path: '/local/repo',
+      displayName: 'local',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    const sshRepo = {
+      id: 'duplicate',
+      path: '/remote/repo',
+      displayName: 'remote',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1'
+    }
+    const runtimeRepo = {
+      id: 'duplicate',
+      path: '/runtime/repo',
+      displayName: 'runtime',
+      badgeColor: '#000',
+      addedAt: 0,
+      executionHostId: 'runtime:environment-a'
+    }
+    mockStore.getRepos.mockReturnValue([localRepo, sshRepo, runtimeRepo])
+
+    await expect(
+      handlers.get('repos:listForExecutionHost')!(null, {
+        executionHostId: toSshExecutionHostId('conn-1'),
+        expectedAuthority: getSshProviderAuthority('conn-1')
+      })
+    ).resolves.toMatchObject({
+      authoritative: true,
+      authority: {
+        kind: 'direct-ssh',
+        executionHostId: 'ssh:conn-1',
+        targetId: 'conn-1'
+      },
+      repos: [sshRepo]
+    })
+
+    const local = await handlers.get('repos:listForExecutionHost')!(null, {
+      executionHostId: 'local'
+    })
+    expect(local).toMatchObject({ authoritative: true, repos: [localRepo] })
+    expect((local as { repos: object[] }).repos[0]).not.toBe(localRepo)
+  })
+
+  it('rejects repo catalogs whose execution host contradicts their SSH connection', async () => {
+    const baseRepo = {
+      id: 'repo-1',
+      path: '/repo',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    mockStore.getRepos.mockReturnValue([
+      {
+        ...baseRepo,
+        connectionId: 'conn-1',
+        executionHostId: 'local'
+      }
+    ])
+
+    await expect(
+      handlers.get('repos:listForExecutionHost')!(null, {
+        executionHostId: 'local'
+      })
+    ).resolves.toMatchObject({ authoritative: false, reason: 'rejected' })
+    await expect(
+      handlers.get('repos:listForExecutionHost')!(null, {
+        executionHostId: toSshExecutionHostId('conn-1'),
+        expectedAuthority: getSshProviderAuthority('conn-1')
+      })
+    ).resolves.toMatchObject({ authoritative: false, reason: 'rejected' })
+
+    mockStore.getRepos.mockReturnValue([
+      {
+        ...baseRepo,
+        connectionId: 'conn-1',
+        executionHostId: toSshExecutionHostId('conn-2')
+      }
+    ])
+
+    await expect(
+      handlers.get('repos:listForExecutionHost')!(null, {
+        executionHostId: toSshExecutionHostId('conn-1'),
+        expectedAuthority: getSshProviderAuthority('conn-1')
+      })
+    ).resolves.toMatchObject({ authoritative: false, reason: 'rejected' })
+  })
+
+  it('rejects runtime, partial, mismatched, and stale catalog authority', async () => {
+    await expect(
+      handlers.get('repos:listForExecutionHost')!(null, {
+        executionHostId: 'runtime:environment-a'
+      })
+    ).resolves.toMatchObject({ authoritative: false, reason: 'rejected' })
+    await expect(
+      handlers.get('repos:listForExecutionHost')!(null, {
+        executionHostId: toSshExecutionHostId('conn-1')
+      })
+    ).resolves.toMatchObject({ authoritative: false, reason: 'rejected' })
+    await expect(
+      handlers.get('repos:listForExecutionHost')!(null, {
+        executionHostId: toSshExecutionHostId('conn-1'),
+        expectedAuthority: {
+          ...getSshProviderAuthority('other-target'),
+          targetId: 'other-target'
+        }
+      })
+    ).resolves.toMatchObject({ authoritative: false, reason: 'rejected' })
+
+    const expectedAuthority = getSshProviderAuthority('conn-1')
+    const pending = handlers.get('repos:listForExecutionHost')!(null, {
+      executionHostId: toSshExecutionHostId('conn-1'),
+      expectedAuthority
+    })
+    rotateSshProviderAuthority('conn-1')
+    await expect(pending).resolves.toMatchObject({ authoritative: false, reason: 'stale' })
   })
 
   it('rejects malformed local project group update arguments before persistence', () => {
@@ -985,6 +1115,7 @@ describe('repos:addRemote', () => {
     })
     mockStore.getRepos.mockReset().mockReturnValue([])
     mockStore.addRepo.mockReset()
+    mockStore.removeProject.mockReset()
     mockStore.getSshTarget.mockReset()
     mockStore.updateRepo.mockReset()
     mockGitProvider.isGitRepoAsync.mockReset()
@@ -1934,6 +2065,76 @@ describe('repos:add + repos:clone', () => {
         host: 'github.acme-corp.com'
       }
     })
+  })
+
+  it('sets up a folder when the selected project exists only on another host', async () => {
+    const added: Record<string, unknown>[] = []
+    mockStore.getRepos.mockImplementation(() => added)
+    mockStore.addRepo.mockImplementation((repo: Record<string, unknown>) => added.push(repo))
+    mockStore.updateRepo.mockImplementation((id, updates) => {
+      const repo = added.find((entry) => entry.id === id)
+      if (!repo) {
+        return null
+      }
+      Object.assign(repo, updates)
+      return { ...repo }
+    })
+    mockStore.getProjects.mockImplementation(() => {
+      const repo = added.find((entry) => 'upstream' in entry)
+      return repo
+        ? [
+            {
+              id: 'github:github.acme.test/acme/orca',
+              displayName: 'Orca',
+              providerIdentity: {
+                provider: 'github',
+                owner: 'acme',
+                repo: 'orca',
+                host: 'github.acme.test'
+              }
+            }
+          ]
+        : []
+    })
+
+    const result = await handlers.get('projectHostSetups:setupExistingFolder')!(null, {
+      projectId: 'github:github.acme.test/acme/orca',
+      projectProviderIdentity: {
+        provider: 'github',
+        owner: 'acme',
+        repo: 'orca',
+        host: 'github.acme.test'
+      },
+      hostId: 'local',
+      path: '/tmp/orca-local',
+      kind: 'git'
+    })
+
+    expect(added[0]?.upstream).toEqual({
+      owner: 'acme',
+      repo: 'orca',
+      host: 'github.acme.test'
+    })
+    expect(result).toHaveProperty('project.id', 'github:github.acme.test/acme/orca')
+  })
+
+  it('rolls back a new repo when the supplied identity does not match the project', async () => {
+    const added: Record<string, unknown>[] = []
+    mockStore.getRepos.mockImplementation(() => added)
+    mockStore.addRepo.mockImplementation((repo: Record<string, unknown>) => added.push(repo))
+
+    await expect(
+      handlers.get('projectHostSetups:setupExistingFolder')!(null, {
+        projectId: 'github:acme/orca',
+        projectProviderIdentity: { provider: 'github', owner: 'other', repo: 'orca' },
+        hostId: 'local',
+        path: '/tmp/mismatched-project',
+        kind: 'git'
+      })
+    ).rejects.toThrow('Imported folder does not match the selected project identity.')
+
+    expect(mockStore.removeProject).toHaveBeenCalledWith(added[0]?.id)
+    expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
   })
 
   it('prepares and invalidates roots when repos:update changes worktree base path', () => {

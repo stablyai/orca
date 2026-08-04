@@ -1,0 +1,197 @@
+name: Install SignPath PowerShell module
+description: >-
+  Installs the SignPath PowerShell module (Get-SignedArtifact) from PSGallery,
+  falling back to a pinned, hash-verified nupkg from the gallery CDN when the
+  gallery's package API is unavailable.
+
+inputs:
+  fallback-version:
+    description: Module version fetched directly from the CDN when the gallery API is unreachable.
+    required: false
+    default: 4.4.6
+  fallback-sha256:
+    description: >-
+      SHA-256 of the pinned fallback nupkg. The CDN path bypasses the gallery's own
+      package validation, so this hash is the only integrity check on that route.
+    required: false
+    default: 2487357a9a02c7d985baaf9ebd9158b4ce877316a2d9de3a6e9af1b263c0a32d
+
+runs:
+  using: composite
+  steps:
+    - name: Install SignPath PowerShell module
+      shell: pwsh
+      env:
+        SIGNPATH_FALLBACK_VERSION: ${{ inputs.fallback-version }}
+        SIGNPATH_FALLBACK_SHA256: ${{ inputs.fallback-sha256 }}
+      run: |
+        $ErrorActionPreference = 'Stop'
+        # Why: force TLS 1.2 so gallery downloads work on older hosted images.
+        [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+
+        # Why: on some hosted Windows images `Register-PSRepository -Default`
+        # fails inside the legacy nuget.exe provider with "Missing option value
+        # for: '-source'", so PSGallery is never registered and the install
+        # below dies with "No repository with the name 'PSGallery'". PSResourceGet
+        # (bundled with PowerShell 7.4+) has PSGallery registered by default and
+        # avoids that code path, so prefer it and fall back to PowerShellGet only
+        # when it is absent.
+        $useResourceGet = $null -ne (Get-Command -Name Install-PSResource -ErrorAction SilentlyContinue)
+
+        try {
+          if ($useResourceGet) {
+            if ($null -eq (Get-PSResourceRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
+              Register-PSResourceRepository -PSGallery -Trusted
+            } else {
+              Set-PSResourceRepository -Name PSGallery -Trusted
+            }
+          } else {
+            Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force | Out-Null
+            if ($null -eq (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
+              Register-PSRepository -Default -InstallationPolicy Trusted
+            }
+            Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          }
+        } catch {
+          # Why: repository registration also talks to the gallery, so a gallery
+          # outage can fail here before a single install is attempted. The CDN
+          # fallback below does not need a registered repository, so keep going.
+          Write-Warning "PSGallery repository registration failed: $_"
+        }
+
+        $trimChars = [char[]]@([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+        $documentsRoot = [System.IO.Path]::GetFullPath([Environment]::GetFolderPath('MyDocuments')).TrimEnd($trimChars)
+        $currentUserModuleRoot = $env:PSModulePath -split [System.IO.Path]::PathSeparator |
+          Where-Object {
+            if ([string]::IsNullOrWhiteSpace($_)) {
+              $false
+            } else {
+              $candidate = [System.IO.Path]::GetFullPath($_).TrimEnd($trimChars)
+              $candidate.StartsWith($documentsRoot, [System.StringComparison]::OrdinalIgnoreCase)
+            }
+          } |
+          Select-Object -First 1
+
+        if ([string]::IsNullOrWhiteSpace($currentUserModuleRoot)) {
+          throw 'Unable to resolve the current-user PowerShell module root from PSModulePath.'
+        }
+
+        $signPathModulePath = Join-Path -Path $currentUserModuleRoot -ChildPath 'SignPath'
+
+        function Test-SignPathModule {
+          Import-Module SignPath -ErrorAction Stop
+          Get-Command -Name Get-SignedArtifact -Module SignPath -ErrorAction Stop
+        }
+
+        function Remove-SignPathModuleDirectory {
+          if (Test-Path -LiteralPath $signPathModulePath) {
+            Write-Warning "Removing current-user SignPath module directory: $signPathModulePath"
+            Remove-Item -LiteralPath $signPathModulePath -Recurse -Force
+          }
+        }
+
+        $installed = $false
+
+        for ($attempt = 1; $attempt -le 3; $attempt++) {
+          if ($attempt -eq 2) {
+            Start-Sleep -Seconds 15
+          } elseif ($attempt -eq 3) {
+            Start-Sleep -Seconds 30
+          }
+
+          try {
+            if ($useResourceGet) {
+              Install-PSResource -Name SignPath -Version '[4.0.0,5.0.0)' -Repository PSGallery -Scope CurrentUser -TrustRepository -Reinstall -ErrorAction Stop
+            } else {
+              Install-Module -Name SignPath -Repository PSGallery -MinimumVersion 4.0.0 -MaximumVersion 4.999.999 -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop
+            }
+            Test-SignPathModule
+            $installed = $true
+            break
+          } catch {
+            Write-Warning "SignPath PowerShell module preflight attempt $attempt failed: $_"
+            Remove-SignPathModuleDirectory
+          }
+        }
+
+        # Why: the gallery's package API (OData search + repository metadata) sits
+        # behind Azure Front Door and has returned 403/502/504 for every install
+        # attempt during gallery incidents, which hard-failed the whole Windows
+        # release job. The CDN that serves the nupkg itself is a separate origin
+        # and stays up through those incidents, so fall back to a pinned version
+        # fetched straight from it. The hash pin is mandatory: this route skips the
+        # gallery's package validation, so an unexpected payload must fail loudly.
+        if (-not $installed) {
+          $version = $env:SIGNPATH_FALLBACK_VERSION
+          $expectedHash = $env:SIGNPATH_FALLBACK_SHA256
+          Write-Warning "PSGallery install failed; falling back to pinned SignPath $version from the gallery CDN."
+
+          $nupkg = Join-Path -Path $env:RUNNER_TEMP -ChildPath "signpath-$version.zip"
+          if (Test-Path -LiteralPath $nupkg) {
+            Remove-Item -LiteralPath $nupkg -Force
+          }
+
+          # Why two URLs: the /api/v2/package route 302s to the CDN and can serve
+          # while the OData search endpoint is failing; the CDN URL is the same
+          # redirect target reached directly when the api host is down entirely.
+          $sources = @(
+            "https://www.powershellgallery.com/api/v2/package/SignPath/$version",
+            "https://cdn.powershellgallery.com/packages/signpath.$version.nupkg"
+          )
+
+          $downloaded = $false
+          foreach ($source in $sources) {
+            for ($attempt = 1; $attempt -le 3; $attempt++) {
+              if ($attempt -gt 1) {
+                Start-Sleep -Seconds (10 * $attempt)
+              }
+
+              try {
+                Invoke-WebRequest -Uri $source -OutFile $nupkg -MaximumRedirection 5 -UseBasicParsing -ErrorAction Stop
+                $actualHash = (Get-FileHash -LiteralPath $nupkg -Algorithm SHA256).Hash
+                if ($actualHash -ne $expectedHash.ToUpperInvariant()) {
+                  throw "SHA-256 mismatch for $source (expected $expectedHash, got $actualHash)."
+                }
+                $downloaded = $true
+                Write-Host "Downloaded and verified SignPath $version from $source"
+                break
+              } catch {
+                Write-Warning "SignPath CDN download attempt $attempt from $source failed: $_"
+                if (Test-Path -LiteralPath $nupkg) {
+                  Remove-Item -LiteralPath $nupkg -Force
+                }
+              }
+            }
+
+            if ($downloaded) {
+              break
+            }
+          }
+
+          if (-not $downloaded) {
+            throw "Unable to install the SignPath PowerShell module: PSGallery installs failed and the pinned $version nupkg could not be downloaded from any source."
+          }
+
+          Remove-SignPathModuleDirectory
+          # Why a version-named subdirectory: PowerShell only treats a nested folder
+          # as a side-by-side module version when the name matches the manifest's
+          # ModuleVersion, which is what makes `Import-Module SignPath` resolve it.
+          $versionRoot = Join-Path -Path $signPathModulePath -ChildPath $version
+          New-Item -ItemType Directory -Path $versionRoot -Force | Out-Null
+          Expand-Archive -LiteralPath $nupkg -DestinationPath $versionRoot -Force
+
+          # Why: strip nupkg packaging entries so only the module files remain.
+          foreach ($entry in @('_rels', 'package', '[Content_Types].xml', 'SignPath.nuspec')) {
+            $path = Join-Path -Path $versionRoot -ChildPath $entry
+            if (Test-Path -LiteralPath $path) {
+              Remove-Item -LiteralPath $path -Recurse -Force
+            }
+          }
+
+          $manifest = Join-Path -Path $versionRoot -ChildPath 'SignPath.psd1'
+          if (-not (Test-Path -LiteralPath $manifest)) {
+            throw "Pinned SignPath nupkg did not contain SignPath.psd1 at $versionRoot."
+          }
+
+          Test-SignPathModule
+        }

@@ -72,6 +72,42 @@ describe('sparse-checkout detection', () => {
       expect(mainWorktree(await listWorktrees(repoPath)).isSparse).toBeFalsy()
     }
   )
+
+  it.skipIf(process.platform === 'win32')(
+    'ignores config.worktree while extensions.worktreeConfig is off',
+    async () => {
+      const repoPath = await createRepoWithTwoDirs()
+
+      git(repoPath, ['sparse-checkout', 'set', 'keep'])
+      git(repoPath, ['config', 'extensions.worktreeConfig', 'false'])
+      git(repoPath, ['config', 'core.sparseCheckout', 'false'])
+      await writeFile(
+        path.join(repoPath, '.git', 'config.worktree'),
+        '[core]\n\tsparseCheckout = true\n'
+      )
+
+      expect(git(repoPath, ['config', '--get', 'core.sparseCheckout']).trim()).toBe('false')
+      expect(mainWorktree(await listWorktrees(repoPath)).isSparse).toBeFalsy()
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'honors config.worktree while extensions.worktreeConfig is on',
+    async () => {
+      const repoPath = await createRepoWithTwoDirs()
+
+      git(repoPath, ['sparse-checkout', 'set', 'keep'])
+      git(repoPath, ['config', 'extensions.worktreeConfig', 'true'])
+      git(repoPath, ['config', 'core.sparseCheckout', 'false'])
+      await writeFile(
+        path.join(repoPath, '.git', 'config.worktree'),
+        '[core]\n\tsparseCheckout = true\n'
+      )
+
+      expect(git(repoPath, ['config', '--get', 'core.sparseCheckout']).trim()).toBe('true')
+      expect(mainWorktree(await listWorktrees(repoPath)).isSparse).toBe(true)
+    }
+  )
 })
 
 describe('parseCoreSparseCheckoutFlag', () => {
@@ -112,5 +148,66 @@ describe('parseCoreSparseCheckoutFlag', () => {
 
   it('ignores an inline comment after the value', () => {
     expect(parseCoreSparseCheckoutFlag('[core]\n\tsparseCheckout = true # on\n')).toBe(true)
+  })
+
+  // Git's config parser is character- not line-based, so a header may be followed on the same line
+  // by the assignment. Every expectation below was confirmed against `git config --file --get`.
+  it('reads an assignment on the same line as the section header', () => {
+    expect(parseCoreSparseCheckoutFlag('[core] sparseCheckout = true\n')).toBe(true)
+    expect(parseCoreSparseCheckoutFlag('[core] sparseCheckout = false\n')).toBe(false)
+    expect(parseCoreSparseCheckoutFlag('[core]sparseCheckout=true\n')).toBe(true)
+    expect(parseCoreSparseCheckoutFlag('[core] sparseCheckout\n')).toBe(true)
+  })
+
+  it('keeps the section open for later lines after a same-line assignment', () => {
+    expect(
+      parseCoreSparseCheckoutFlag('[core] sparseCheckout = false\n\tsparseCheckout = true\n')
+    ).toBe(true)
+  })
+
+  it('lets the last header on a line decide the section', () => {
+    expect(parseCoreSparseCheckoutFlag('[core "sub"] [core] sparseCheckout = true\n')).toBe(true)
+    expect(parseCoreSparseCheckoutFlag('[core] [other] sparseCheckout = true\n')).toBeUndefined()
+  })
+
+  it('ignores a same-line assignment under a [core "subsection"] header', () => {
+    expect(parseCoreSparseCheckoutFlag('[core "sub"] sparseCheckout = true\n')).toBeUndefined()
+  })
+
+  it('leaves [core] when a subsection header carries its own same-line assignment', () => {
+    // A `[section "sub"]key = value` line matched neither branch of the old anchored regex, so the
+    // parser never left `[core]` and credited the next indented line to it — a bogus sparse badge.
+    // Git reports core.sparseCheckout as unset here.
+    expect(
+      parseCoreSparseCheckoutFlag(
+        '[core]\n[core "sub"]worktreeConfig = x\n\tsparseCheckout = true\n'
+      )
+    ).toBeUndefined()
+  })
+
+  it('honors the last assignment across mixed same-line and indented forms', () => {
+    expect(
+      parseCoreSparseCheckoutFlag(
+        '[core] sparseCheckout = true\n[core]\n\tsparseCheckout = false\n'
+      )
+    ).toBe(false)
+    expect(
+      parseCoreSparseCheckoutFlag(
+        '[core]\n\tsparseCheckout = false\n[core] sparseCheckout = true\n'
+      )
+    ).toBe(true)
+  })
+
+  it('handles comments and whitespace around a same-line header', () => {
+    expect(parseCoreSparseCheckoutFlag('[core]# c\n\tsparseCheckout = true\n')).toBe(true)
+    expect(parseCoreSparseCheckoutFlag('\t[core] sparseCheckout = true ; c\n')).toBe(true)
+  })
+
+  it('does not treat trailing junk as a second assignment', () => {
+    // Git parses this line fine and takes the whole tail as one value (`git config --list` reports
+    // `core.sparsecheckout=true bogus = false`) — a value runs to end of line, so only one
+    // assignment can share a line. Git then fails the boolean coercion outright, so reading the
+    // whole tail as the value keeps us on the conservative "not sparse" side.
+    expect(parseCoreSparseCheckoutFlag('[core] sparseCheckout = true bogus = false\n')).toBe(false)
   })
 })

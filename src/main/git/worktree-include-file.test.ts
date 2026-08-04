@@ -125,6 +125,20 @@ describe('resolveWorktreeIncludePaths', () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('unsafe'))
   })
 
+  it('stops after 1000 entries so one repo file cannot request unbounded work', async () => {
+    const names = Array.from({ length: 1001 }, (_, index) => `ignored-${index}.env`)
+    for (const name of names) {
+      writeFileSync(join(repo, name), 'A=1')
+    }
+    writeInclude(`${names.join('\n')}\n`)
+    mockCheckIgnore()
+
+    const resolved = await resolveWorktreeIncludePaths(repo)
+
+    expect(resolved).toHaveLength(1000)
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('more than 1000 entries'))
+  })
+
   it('resolves to [] when git fails instead of throwing', async () => {
     writeInclude('.env\n')
     writeFileSync(join(repo, '.env'), 'A=1')

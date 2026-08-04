@@ -1,11 +1,16 @@
+// @vitest-environment happy-dom
 import type { Editor } from '@tiptap/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { autoFocusRichEditor } from './rich-markdown-auto-focus'
 
-function createEditor(focus = vi.fn()): Editor {
+function createEditor(
+  focus = vi.fn(),
+  domFocus: (options?: FocusOptions) => void = vi.fn()
+): Editor {
   return {
     isDestroyed: false,
-    commands: { focus }
+    commands: { focus },
+    view: { dom: { focus: domFocus } }
   } as unknown as Editor
 }
 
@@ -37,6 +42,7 @@ function setupScheduledFocus(
 describe('autoFocusRichEditor', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
+    document.body.replaceChildren()
   })
 
   it('returns cleanup that cancels the pending focus frame', () => {
@@ -67,6 +73,53 @@ describe('autoFocusRichEditor', () => {
     runFrame()
 
     expect(focus).toHaveBeenCalledWith('start', { scrollIntoView: false })
+  })
+
+  it('claims DOM focus synchronously on an explicit handoff', () => {
+    const root = document.createElement('div')
+    const editorDom = document.createElement('div')
+    editorDom.tabIndex = -1
+    root.append(editorDom)
+    document.body.append(root)
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn(() => 11)
+    )
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+
+    autoFocusRichEditor(createEditor(vi.fn(), editorDom.focus.bind(editorDom)), root, true)
+
+    expect(root.contains(document.activeElement)).toBe(true)
+  })
+
+  it('leaves DOM focus alone for an ordinary lazy mount', () => {
+    const domFocus = vi.fn()
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn(() => 12)
+    )
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+
+    autoFocusRichEditor(createEditor(vi.fn(), domFocus), null, false)
+
+    expect(domFocus).not.toHaveBeenCalled()
+  })
+
+  it('does not run deferred focus after an explicit handoff expires', () => {
+    let runFrame: FrameRequestCallback = () => {}
+    let requestActive = true
+    const focus = vi.fn()
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      runFrame = callback
+      return 13
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+
+    autoFocusRichEditor(createEditor(focus), null, true, () => requestActive)
+    requestActive = false
+    runFrame(0)
+
+    expect(focus).not.toHaveBeenCalled()
   })
 
   it('does not steal focus from other controls outside the editor', () => {

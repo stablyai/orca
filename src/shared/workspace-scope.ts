@@ -8,12 +8,6 @@ export function folderWorkspaceKey(folderWorkspaceId: string): WorkspaceKey {
   return `folder:${folderWorkspaceId}`
 }
 
-export function workspaceKeyFromScope(scope: WorkspaceScope): WorkspaceKey {
-  return scope.type === 'worktree'
-    ? worktreeWorkspaceKey(scope.worktreeId)
-    : folderWorkspaceKey(scope.folderWorkspaceId)
-}
-
 export function parseWorkspaceKey(value: string): WorkspaceScope | null {
   if (value.startsWith('worktree:')) {
     const worktreeId = value.slice('worktree:'.length)

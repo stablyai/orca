@@ -86,6 +86,7 @@ describe('daemon self-retirement respawn', () => {
     ])
 
     expect(respawn).toHaveBeenCalledTimes(1)
+    expect(respawn).toHaveBeenCalledWith('daemon_died')
     adapter.dispose()
   })
 

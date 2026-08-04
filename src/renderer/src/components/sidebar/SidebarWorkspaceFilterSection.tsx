@@ -1,8 +1,8 @@
 import React from 'react'
-import { CalendarClock, GitBranch, Moon } from 'lucide-react'
+import { CalendarClock, GitBranch, GitCommitHorizontal, Moon, SquareTerminal } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { FilterToggleRow } from './FilterToggleRow'
 
 const SidebarWorkspaceFilterSection = React.memo(function SidebarWorkspaceFilterSection() {
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
@@ -12,6 +12,14 @@ const SidebarWorkspaceFilterSection = React.memo(function SidebarWorkspaceFilter
   const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
   const setHideAutomationGeneratedWorkspaces = useAppStore(
     (s) => s.setHideAutomationGeneratedWorkspaces
+  )
+  const hideCliCreatedWorkspaces = useAppStore((s) => s.hideCliCreatedWorkspaces)
+  const setHideCliCreatedWorkspaces = useAppStore((s) => s.setHideCliCreatedWorkspaces)
+  const hideDetachedHeadWorkspaces = useAppStore((s) => s.hideDetachedHeadWorkspaces)
+  const setHideDetachedHeadWorkspaces = useAppStore((s) => s.setHideDetachedHeadWorkspaces)
+  const alwaysShowDefaultBranchWorkspace = useAppStore((s) => s.alwaysShowDefaultBranchWorkspace)
+  const setAlwaysShowDefaultBranchWorkspace = useAppStore(
+    (s) => s.setAlwaysShowDefaultBranchWorkspace
   )
 
   return (
@@ -31,6 +39,20 @@ const SidebarWorkspaceFilterSection = React.memo(function SidebarWorkspaceFilter
         onChange={(hideSleeping) => setShowSleepingWorkspaces(!hideSleeping)}
       />
       <FilterToggleRow
+        indented
+        icon={<GitBranch className="size-3.5" />}
+        label={translate(
+          'auto.components.sidebar.SidebarWorkspaceFilterSection.keepDefaultBranch',
+          'Except default branch'
+        )}
+        ariaLabel={translate(
+          'auto.components.sidebar.SidebarWorkspaceFilterSection.keepDefaultBranchAria',
+          'Keep the default branch visible while hiding sleeping workspaces'
+        )}
+        checked={alwaysShowDefaultBranchWorkspace}
+        onChange={setAlwaysShowDefaultBranchWorkspace}
+      />
+      <FilterToggleRow
         icon={<GitBranch className="size-3.5" />}
         label={translate(
           'auto.components.sidebar.SidebarWorkspaceFilterSection.c3fa13dc2e',
@@ -48,49 +70,26 @@ const SidebarWorkspaceFilterSection = React.memo(function SidebarWorkspaceFilter
         checked={hideAutomationGeneratedWorkspaces}
         onChange={setHideAutomationGeneratedWorkspaces}
       />
+      <FilterToggleRow
+        icon={<SquareTerminal className="size-3.5" />}
+        label={translate(
+          'auto.components.sidebar.SidebarWorkspaceFilterSection.cliCreated',
+          'Hide CLI-created'
+        )}
+        checked={hideCliCreatedWorkspaces}
+        onChange={setHideCliCreatedWorkspaces}
+      />
+      <FilterToggleRow
+        icon={<GitCommitHorizontal className="size-3.5" />}
+        label={translate(
+          'auto.components.sidebar.SidebarWorkspaceFilterSection.detachedHead',
+          'Hide detached HEAD'
+        )}
+        checked={hideDetachedHeadWorkspaces}
+        onChange={setHideDetachedHeadWorkspaces}
+      />
     </>
   )
 })
-
-function FilterToggleRow({
-  icon,
-  label,
-  checked,
-  onChange
-}: {
-  icon: React.ReactNode
-  label: string
-  checked: boolean
-  onChange: (next: boolean) => void
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className="flex w-full items-center justify-between gap-2 rounded-[5px] px-2 py-1.5 text-[12px] font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-    >
-      <span className="inline-flex items-center gap-2 text-foreground">
-        <span className="text-muted-foreground">{icon}</span>
-        {label}
-      </span>
-      <span
-        aria-hidden
-        className={cn(
-          'relative h-3.5 w-6 shrink-0 rounded-full transition-colors',
-          checked ? 'bg-primary' : 'bg-muted-foreground/30'
-        )}
-      >
-        <span
-          className={cn(
-            'absolute top-0.5 left-0.5 size-2.5 rounded-full bg-background shadow-sm transition-transform',
-            checked && 'translate-x-2.5'
-          )}
-        />
-      </span>
-    </button>
-  )
-}
 
 export default SidebarWorkspaceFilterSection

@@ -513,6 +513,54 @@ describe('GitHub issue source split', () => {
     expect(item?.prRepo).toEqual(upstream)
   })
 
+  it('pins typed PR metadata to explicit origin when upstream has the same number', async () => {
+    const upstream = { owner: 'stablyai', repo: 'orca', host: 'github.com' }
+    const origin = { owner: 'fork', repo: 'orca', host: 'github.com' }
+    getOwnerRepoMock.mockResolvedValue(origin)
+    mockUpstreamCandidate(upstream)
+    resolvePRRepositoryCandidatesMock.mockResolvedValue({
+      candidates: [upstream, origin],
+      headRepo: origin
+    })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        number: 42,
+        title: 'Origin PR',
+        state: 'open',
+        url: 'https://github.com/fork/orca/pull/42',
+        labels: [],
+        updatedAt: '2026-04-02T00:00:00Z',
+        author: { login: 'octocat' },
+        isDraft: false,
+        headRefName: 'origin/fix',
+        baseRefName: 'main'
+      })
+    })
+
+    const item = await getWorkItem('/repo-root', 42, 'pr', null, {}, 'origin')
+
+    expect(resolvePRRepositoryCandidatesMock).not.toHaveBeenCalled()
+    expect(ghExecFileAsyncMock.mock.calls[0]?.[0]).toEqual(
+      expect.arrayContaining(['pr', 'view', '--repo', 'fork/orca'])
+    )
+    expect(
+      ghExecFileAsyncMock.mock.calls.some((call) =>
+        (call[0] as string[]).some((arg) => arg.includes('upstream/orca'))
+      )
+    ).toBe(false)
+    expect(item?.prRepo).toEqual(origin)
+  })
+
+  it('does not run a bare PR lookup when explicit origin identity is unresolved', async () => {
+    getOwnerRepoMock.mockResolvedValue(null)
+    mockUpstreamCandidate({ owner: 'stablyai', repo: 'orca' })
+
+    await expect(getWorkItem('/repo-root', 42, 'pr', null, {}, 'origin')).resolves.toBeNull()
+
+    expect(resolvePRRepositoryCandidatesMock).not.toHaveBeenCalled()
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
   it('does not run a bare gh lookup for an SSH repo without candidates', async () => {
     resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({ candidates: [], headRepo: null })
 

@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
+import { MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS } from './mobile-native-chat-send'
 import {
   sendMobileNativeChatPermissionResponse,
   useMobileNativeChatPermissionSend
@@ -28,12 +29,16 @@ describe('sendMobileNativeChatPermissionResponse', () => {
         text: '1'
       })
     ).resolves.toBe('accepted')
-    expect(sendRequest).toHaveBeenCalledWith('terminal.send', {
-      terminal: 'terminal',
-      text: '1',
-      enter: false,
-      client: { id: 'phone', type: 'mobile' }
-    })
+    expect(sendRequest).toHaveBeenCalledWith(
+      'terminal.send',
+      {
+        terminal: 'terminal',
+        text: '1',
+        enter: false,
+        client: { id: 'phone', type: 'mobile' }
+      },
+      { timeoutMs: MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS, budgetSpansConnect: true }
+    )
   })
 
   it('surfaces an ambiguous delivery as unknown instead of a definite failure', async () => {

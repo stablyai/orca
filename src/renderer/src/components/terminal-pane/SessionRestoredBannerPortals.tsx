@@ -1,10 +1,13 @@
 import { createPortal } from 'react-dom'
 import { SessionRestoredBanner } from './SessionRestoredBanner'
-import type { SessionRestoredBannerPane } from './session-restored-banner-pane-state'
+import type {
+  SessionRestoredBannerPane,
+  SessionRestoredBannerPaneReasons
+} from './session-restored-banner-pane-state'
 
 type SessionRestoredBannerPortalsProps = {
   panes: readonly SessionRestoredBannerPane[]
-  paneIds: ReadonlySet<number>
+  paneIds: SessionRestoredBannerPaneReasons
 }
 
 export function SessionRestoredBannerPortals({
@@ -14,13 +17,14 @@ export function SessionRestoredBannerPortals({
   return (
     <>
       {panes.map((pane) => {
-        if (!paneIds.has(pane.id)) {
+        const reason = paneIds.get(pane.id)
+        if (!reason) {
           return null
         }
         return createPortal(
           // Why: resumed TUIs repaint xterm immediately, so the wake marker
           // must live in that pane's chrome instead of the PTY byte stream.
-          <SessionRestoredBanner visible />,
+          <SessionRestoredBanner visible reason={reason} />,
           pane.container,
           `session-restored-banner-${pane.id}`
         )

@@ -22,7 +22,7 @@ export function TabBarQuickCommandItem({
     <CommandItem
       value={command.id}
       onSelect={onRun}
-      className="group/qc mx-1 my-0.5 items-center gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground"
+      className="group/qc mx-1 my-0.5 cursor-pointer items-center gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground"
     >
       {isTerminalAgentQuickCommand(command) ? (
         <span className="shrink-0 text-muted-foreground">
@@ -50,7 +50,7 @@ export function TabBarQuickCommandItem({
             event.stopPropagation()
             onEdit()
           }}
-          className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+          className="cursor-pointer rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
           aria-label={translate(
             'auto.components.tab.bar.TabBarQuickCommandsButton.15529ede69',
             'Edit {{value0}}',
@@ -65,7 +65,7 @@ export function TabBarQuickCommandItem({
             event.stopPropagation()
             onDelete()
           }}
-          className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-destructive"
+          className="cursor-pointer rounded p-1 text-muted-foreground hover:bg-accent hover:text-destructive"
           aria-label={translate(
             'auto.components.tab.bar.TabBarQuickCommandsButton.196593b6a9',
             'Remove {{value0}}',

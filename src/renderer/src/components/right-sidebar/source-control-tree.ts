@@ -1,7 +1,7 @@
 import { normalizeRelativePath } from '@/lib/path'
 import type { GitStatusEntry, GitStagingArea } from '../../../../shared/types'
 import { splitPathSegments } from './path-tree'
-import { compareGitStatusEntries } from './source-control-status-sort'
+import { compareGitStatusEntries, sourceControlPathCollator } from './source-control-status-sort'
 
 export type SourceControlTreeArea = Extract<GitStagingArea, 'unstaged' | 'staged' | 'untracked'>
 // Why: committed branch rows share the same path tree but do not carry
@@ -51,7 +51,7 @@ type MutableDirectoryNode<Entry extends SourceControlTreeEntry, Area extends str
 }
 
 function compareTreeEntriesByPath(a: SourceControlTreeEntry, b: SourceControlTreeEntry): number {
-  return a.path.localeCompare(b.path, undefined, { numeric: true })
+  return sourceControlPathCollator.compare(a.path, b.path)
 }
 
 function makeDirectoryNode<Entry extends SourceControlTreeEntry, Area extends string>(

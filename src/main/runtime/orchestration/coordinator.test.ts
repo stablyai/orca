@@ -98,6 +98,7 @@ function insertWorkerDone(
     payload: JSON.stringify({
       taskId: params.taskId,
       dispatchId,
+      outcome: 'succeeded',
       ...(params.filesModified ? { filesModified: params.filesModified } : {})
     }),
     senderPaneKey:
@@ -176,6 +177,42 @@ describe('Coordinator', () => {
     })
 
     expect(db.getDispatchContext(task.id)?.assignee_pane_key).toBe('tab_a:leaf_a')
+    expect(db.getDispatchContext(task.id)?.process_incarnation).toBeNull()
+
+    insertWorkerDone(db, { taskId: task.id })
+    await runPromise
+  })
+
+  it('records authenticated process authority for automatic dispatch', async () => {
+    db = new OrchestrationDb(':memory:')
+    const runtime = createMockRuntime()
+    runtime.terminals = [{ handle: 'term_a', worktreeId: 'wt1', connected: true, writable: true }]
+    const withAuthority = Object.assign(runtime, {
+      getOrchestrationDispatchAuthority: (handle: string) =>
+        handle === 'term_a'
+          ? {
+              paneKey: 'tab_a:leaf_a',
+              processIncarnation: 'pty_a:incarnation-a',
+              launchTokenHash: 'launch-token-hash'
+            }
+          : null
+    })
+    const task = db.createTask({ spec: 'implement feature' })
+    const coordinator = new Coordinator(db, withAuthority, {
+      spec: 'build it',
+      coordinatorHandle: 'coord',
+      pollIntervalMs: 50
+    })
+    const runPromise = coordinator.run()
+    await new Promise((r) => {
+      setTimeout(r, 100)
+    })
+
+    expect(db.getDispatchContext(task.id)).toMatchObject({
+      assignee_pane_key: 'tab_a:leaf_a',
+      process_incarnation: 'pty_a:incarnation-a',
+      launch_token_hash: 'launch-token-hash'
+    })
 
     insertWorkerDone(db, { taskId: task.id })
     await runPromise
@@ -192,7 +229,7 @@ describe('Coordinator', () => {
       to: 'coord',
       subject: 'Done',
       type: 'worker_done',
-      payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
+      payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id, outcome: 'succeeded' })
     })
 
     reconcileLifecycleMessage(db, msg)
@@ -214,7 +251,11 @@ describe('Coordinator', () => {
 
     const task = db.createTask({ spec: 'duplicate completion' })
     const dispatch = db.createDispatchContext(task.id, 'term_a')
-    const payload = JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
+    const payload = JSON.stringify({
+      taskId: task.id,
+      dispatchId: dispatch.id,
+      outcome: 'succeeded'
+    })
     const first = db.insertMessage({
       from: 'term_a',
       to: 'coord',
@@ -569,7 +610,11 @@ describe('Coordinator', () => {
       to: 'coord',
       subject: 'Late done',
       type: 'worker_done',
-      payload: JSON.stringify({ taskId: task.id, dispatchId: staleCtx.id })
+      payload: JSON.stringify({
+        taskId: task.id,
+        dispatchId: staleCtx.id,
+        outcome: 'succeeded'
+      })
     })
 
     const staleCoordinator = new Coordinator(db, runtime, {
@@ -621,7 +666,7 @@ describe('Coordinator', () => {
       to: 'coord',
       subject: 'Done after restart',
       type: 'worker_done',
-      payload: JSON.stringify({ taskId: task.id, dispatchId: ctx.id }),
+      payload: JSON.stringify({ taskId: task.id, dispatchId: ctx.id, outcome: 'succeeded' }),
       senderPaneKey: `tab_after:${leafId}`
     })
 

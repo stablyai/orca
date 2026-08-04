@@ -1,10 +1,35 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["typescript", "react", "react-hooks", "react-perf", "unicorn"],
+  "jsPlugins": [
+    {
+      "name": "mobile-pairing",
+      "specifier": "./config/oxlint-plugins/mobile-pairing-qrcode-import.mjs"
+    },
+    {
+      "name": "app-store-performance",
+      "specifier": "./config/oxlint-plugins/app-store-performance.mjs"
+    },
+    {
+      "name": "quadratic-buffer-concat",
+      "specifier": "./config/oxlint-plugins/quadratic-buffer-concat.mjs"
+    },
+    {
+      "name": "renderer-scrollbar-style",
+      "specifier": "./config/oxlint-plugins/renderer-scrollbar-style.mjs"
+    }
+  ],
   "categories": {
     "correctness": "error"
   },
   "rules": {
+    "app-store-performance/require-selector": "error",
+    "app-store-performance/no-identity-selector": "error",
+    "app-store-performance/no-fresh-selector-result": "error",
+    "no-fallthrough": "error",
+    "eslint/no-useless-call": "error",
+    "oxc/no-accumulating-spread": "error",
+    "quadratic-buffer-concat/no-loop-carried-concat": "error",
     "react/jsx-no-duplicate-props": "error",
     "react/jsx-no-undef": "error",
     "react/no-children-prop": "error",
@@ -49,6 +74,19 @@
     ],
     "curly": "error",
     "no-unneeded-ternary": "error",
+    "no-restricted-imports": [
+      "error",
+      {
+        "paths": [
+          {
+            "name": "@linear/sdk",
+            "allowTypeImports": true,
+            "message": "Value-importing @linear/sdk hoists its ~2.6MB CJS bundle into the eager top-level require block and defeats the lazy loader. Use `import type` plus loadLinearSdk() from src/main/linear/linear-sdk.ts."
+          }
+        ]
+      }
+    ],
+    "mobile-pairing/no-eager-qrcode-import": "error",
     "no-useless-return": "error",
     "prefer-template": "error",
     "unicorn/consistent-empty-array-spread": "error",
@@ -74,6 +112,19 @@
     "unicorn/throw-new-error": "error"
   },
   "overrides": [
+    {
+      "files": ["src/renderer/src/**/*.{ts,tsx}"],
+      "rules": {
+        "renderer-scrollbar-style/require-styled-vertical-scrollbar": "error"
+      }
+    },
+    {
+      "files": ["**/*.test.*", "**/*.spec.*", "**/*-benchmark.*"],
+      "rules": {
+        "quadratic-buffer-concat/no-loop-carried-concat": "off",
+        "renderer-scrollbar-style/require-styled-vertical-scrollbar": "off"
+      }
+    },
     {
       "files": ["**/*.ts"],
       "rules": {

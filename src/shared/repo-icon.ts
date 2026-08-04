@@ -64,9 +64,16 @@ function normalizeGitHubAvatarHost(rawHost?: string): string {
 }
 
 function isSupportedImageSrc(src: string, source: RepoIconImageSource): boolean {
-  if (source === 'upload' || source === 'file') {
+  if (source === 'upload') {
     return (
       /^data:image\/png;base64,[A-Za-z0-9+/=\s]+$/i.test(src) &&
+      validateRasterImageDataUri(src) !== null
+    )
+  }
+
+  if (source === 'file') {
+    return (
+      /^data:image\/(?:png|webp);base64,[A-Za-z0-9+/=\s]+$/i.test(src) &&
       validateRasterImageDataUri(src) !== null
     )
   }

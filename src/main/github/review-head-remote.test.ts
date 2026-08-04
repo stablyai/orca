@@ -38,6 +38,7 @@ describe('resolveGitHubReviewHeadRemote', () => {
 
     const remote = await resolveGitHubReviewHeadRemote({
       repoPath: '/repo',
+      issueSourcePreference: 'auto',
       gitExec: gitExecWithRemotes(['origin', 'upstream'])
     })
 
@@ -52,10 +53,38 @@ describe('resolveGitHubReviewHeadRemote', () => {
 
     const remote = await resolveGitHubReviewHeadRemote({
       repoPath: '/repo',
+      issueSourcePreference: 'upstream',
       gitExec: gitExecWithRemotes(['origin', 'upstream'])
     })
 
     expect(remote).toBe('origin')
+  })
+
+  it('uses explicit origin without probing hosting identity on a dual-remote clone', async () => {
+    getGitHubApiRepositoryForRemoteMock.mockResolvedValue({ owner: 'org', repo: 'project' })
+
+    const remote = await resolveGitHubReviewHeadRemote({
+      repoPath: '/repo',
+      issueSourcePreference: 'origin',
+      gitExec: gitExecWithRemotes(['origin', 'upstream'])
+    })
+
+    expect(remote).toBe('origin')
+    expect(getGitHubApiRepositoryForRemoteMock).not.toHaveBeenCalled()
+    expect(getDefaultRemoteMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects explicit origin when that remote is not configured', async () => {
+    await expect(
+      resolveGitHubReviewHeadRemote({
+        repoPath: '/repo',
+        issueSourcePreference: 'origin',
+        gitExec: gitExecWithRemotes(['upstream'])
+      })
+    ).rejects.toThrow('Repo has no configured origin remote.')
+
+    expect(getGitHubApiRepositoryForRemoteMock).not.toHaveBeenCalled()
+    expect(getDefaultRemoteMock).not.toHaveBeenCalled()
   })
 
   it('skips identity probes for a single-remote clone and uses the local default', async () => {

@@ -164,6 +164,35 @@ describe('useMobileNativeChatAnswerSend', () => {
     ])
   })
 
+  it('bounds a stepped answer with one shared budget, crediting back the pacing waits', async () => {
+    const timeouts: number[] = []
+    const sendRequest = vi.fn(async (_method: string, _params?: unknown, options?: unknown) => {
+      timeouts.push((options as { timeoutMs: number }).timeoutMs)
+      // A slow write must eat into what the rest of the answer has left.
+      vi.advanceTimersByTime(6_000)
+      return acceptedResponse()
+    })
+    await mount({ sendRequest } as unknown as RpcClient, vi.fn())
+
+    const prompt: AskPrompt = {
+      questions: [
+        { question: 'q1', multiSelect: false, options: [{ label: 'A' }, { label: 'B' }] },
+        { question: 'q2', multiSelect: false, options: [{ label: 'C' }, { label: 'D' }] }
+      ]
+    }
+    let result: Promise<boolean> | undefined
+    await act(async () => {
+      result = answerSend?.answerAsk(prompt, [{ indices: [1] }, { indices: [0] }])
+    })
+    await act(async () => vi.advanceTimersByTimeAsync(MOBILE_NATIVE_CHAT_QUESTION_STEP_MS))
+    await act(async () => vi.advanceTimersByTimeAsync(MOBILE_NATIVE_CHAT_QUESTION_STEP_MS))
+
+    await expect(result).resolves.toBe(true)
+    // 15s total transport, minus 6s per completed write; the 1s pacing steps are
+    // deliberate and are added back, so they never shrink the budget.
+    expect(timeouts).toEqual([15_000, 9_000, 3_000])
+  })
+
   it('free text: opens "Type something", types the sanitized answer, then Enter', async () => {
     const sendRequest = vi.fn().mockResolvedValue(acceptedResponse())
     await mount({ sendRequest } as unknown as RpcClient, vi.fn())
@@ -296,6 +325,34 @@ describe('useMobileNativeChatAnswerSend', () => {
     await expect(answerSend?.answerAsk(TABS_OR_SPACES, [{ indices: [1] }])).resolves.toBe(false)
     expect(sendRequest).toHaveBeenCalledTimes(1)
     expect(onSendError).toHaveBeenCalledWith('Answer not sent')
+  })
+
+  it('does not call a budget-truncated multi-question answer a definite non-send', async () => {
+    const onSendError = vi.fn()
+    const sendRequest = vi.fn(async () => {
+      // A slow relay: the first group lands, then the shared budget is gone and the
+      // next write short-circuits to 'rejected' without reaching the wire.
+      vi.advanceTimersByTime(16_000)
+      return acceptedResponse()
+    })
+    await mount({ sendRequest } as unknown as RpcClient, onSendError)
+
+    const prompt: AskPrompt = {
+      questions: [
+        { question: 'q1', multiSelect: false, options: [{ label: 'A' }, { label: 'B' }] },
+        { question: 'q2', multiSelect: false, options: [{ label: 'C' }, { label: 'D' }] }
+      ]
+    }
+    let result: Promise<boolean> | undefined
+    await act(async () => {
+      result = answerSend?.answerAsk(prompt, [{ indices: [1] }, { indices: [0] }])
+    })
+    await act(async () => vi.runAllTimersAsync())
+
+    await expect(result).resolves.toBe(false)
+    // The first group DID land, so the remote selector is half-stepped — telling the
+    // user nothing was sent invites a retry on top of the advanced state.
+    expect(onSendError).toHaveBeenCalledWith('Answer partly sent — check chat before retrying')
   })
 
   it('reports an ambiguous write as unconfirmed instead of a definite failure', async () => {

@@ -201,4 +201,16 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
       expect(supports(2, 31)).toBe(false)
     }
   })
+
+  // Why pin this: --verify swallows --end-of-options but --symbolic-full-name echoes
+  // it deliberately, on every version tested (2.25 through 2.49). git-history.ts skips
+  // that line; if a future git stopped emitting it, the skip stays correct, but if this
+  // assertion ever flips the reason for the skip is worth re-reading.
+  it('echoes the option marker from rev-parse --symbolic-full-name', async () => {
+    const result = await runGit(['rev-parse', '--symbolic-full-name', '--end-of-options', 'HEAD'])
+    const lines = result.stdout.trim().split(/\r?\n/).filter(Boolean)
+
+    expect(lines[0]).toBe('--end-of-options')
+    expect(lines.find((line) => line !== '--end-of-options')).toMatch(/^refs\//)
+  })
 })

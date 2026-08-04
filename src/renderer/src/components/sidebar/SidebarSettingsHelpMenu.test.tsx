@@ -222,9 +222,14 @@ describe('SidebarSettingsHelpMenu', () => {
     expect(html).not.toContain('Milestones')
   })
 
-  it('hides the Onboarding admin entry by default', () => {
+  it('renders the Onboarding menu item by default', () => {
     const html = renderToStaticMarkup(<SidebarSettingsHelpMenu />)
-    expect(html).not.toContain('Onboarding')
+    expect(html).toContain('Onboarding')
+  })
+
+  it('renders Restart Orca by default', () => {
+    const html = renderToStaticMarkup(<SidebarSettingsHelpMenu />)
+    expect(html).toContain('Restart Orca')
   })
 
   it('renders Docs link', () => {
