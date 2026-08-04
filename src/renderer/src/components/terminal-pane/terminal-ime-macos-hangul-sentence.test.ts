@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PtyTransport } from './pty-transport'
 import { installTerminalImeCompositionRoute } from './terminal-ime-composition-route'
 import { installTerminalImeCompositionTracker } from './terminal-ime-composition-tracker'
+import type { MacNativeTextInputSourceFeatures } from './terminal-ime-input-source'
 import { installTerminalImeNativeTextForwarder } from './terminal-ime-native-text-forwarder'
 import { shouldSuppressTerminalImeKeyboardEvent } from './xterm-bypass-policy'
 
@@ -17,7 +18,7 @@ const KOREAN_INPUT_SOURCE_FEATURES = {
   forwardHangulJamo: true,
   forwardAsciiPunctuation: true,
   forwardShortTextReplacements: false
-}
+} satisfies MacNativeTextInputSourceFeatures
 
 function nextEventLoop(): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, 0))
@@ -79,7 +80,11 @@ function openMacKoreanTerminal(): MacKoreanTerminal {
   }
 }
 
-function composition(textarea: HTMLTextAreaElement, type: string, data = ''): void {
+function composition(
+  textarea: HTMLTextAreaElement,
+  type: 'compositionstart' | 'compositionupdate' | 'compositionend',
+  data = ''
+): void {
   const event = new CompositionEvent(type, { bubbles: true, data })
   Object.defineProperty(event, 'data', { value: data })
   textarea.dispatchEvent(event)
@@ -97,6 +102,10 @@ function key(
   type: 'keydown' | 'keypress' | 'keyup',
   init: { key: string; code: string; keyCode: number; isComposing?: boolean }
 ): boolean {
+  if (type === 'keypress' && init.key.length !== 1) {
+    // Chromium reports the character, not the key name, so 'Enter' would arrive as 'E'.
+    throw new Error(`keypress needs the committed character, not ${init.key}`)
+  }
   const event = new KeyboardEvent(type, {
     bubbles: true,
     cancelable: true,
@@ -163,6 +172,8 @@ describe('macOS 2-Set Korean terminal sentence', () => {
     const { textarea } = harness
 
     composeSyllable(textarea, '', ['ㅎ', '하', '한'])
+    // Why: 한 commits with no tick before 글 starts, which is what typing faster
+    // than the finalizer looks like; the later commits get their tick back.
     composition(textarea, 'compositionend', '한')
     composeSyllable(textarea, '한', ['ㄱ', '그', '글'])
     await nextEventLoop()

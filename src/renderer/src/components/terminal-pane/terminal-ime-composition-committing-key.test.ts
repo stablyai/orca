@@ -143,12 +143,12 @@ describe.each([
     expect(emitted.join('')).toBe('이 ')
   })
 
-  it('sends only the second space when the first already flushed the commit', async () => {
+  it('sends a second space once the commit has already flushed', async () => {
     const { emitted, textarea } = openTerminal(TerminalType)
     commitThroughInsertText(textarea, '이', { key: ' ', keyCode: 32 })
     keypress(textarea, ' ', 32)
     await nextEventLoop()
 
-    expect(emitted.join('')).toBe('이  ')
+    expect(emitted.join('')).toBe(`이${' '.repeat(2)}`)
   })
 })
