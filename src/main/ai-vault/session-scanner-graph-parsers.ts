@@ -1,3 +1,4 @@
+import { remoteSessionContentLines } from './remote-session-content-lines'
 import { createReadStream } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
@@ -184,12 +185,13 @@ export async function parseMessageGraphSessionContent(
   file: FileWithMtime,
   content: string,
   platform: NodeJS.Platform = process.platform,
-  options: ParserSessionOptions = {}
+  options: ParserSessionOptions = {},
+  signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
   return parseMessageGraphSessionLines({
     agent,
     file,
-    lines: content.split(/\r?\n/),
+    lines: remoteSessionContentLines(content, signal),
     platform,
     options
   })

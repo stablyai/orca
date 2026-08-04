@@ -34,12 +34,16 @@ export type AiVaultScanOptions = {
   droidProjectsDir?: string
   kimiSessionsDir?: string
   limit?: number
+  unlimited?: boolean
   limitPerAgent?: number
   // Active workspace/project paths whose sessions must be included regardless of
   // the recency cap (see discoverInScopeClaudeFiles).
   scopePaths?: readonly string[]
   platform?: NodeJS.Platform
   executionHostId?: ExecutionHostId
+  // Superseded/cancelled scans stop between parse batches instead of parsing
+  // every remaining transcript for a caller that already left.
+  signal?: AbortSignal
 }
 
 export type FileWithMtime = {

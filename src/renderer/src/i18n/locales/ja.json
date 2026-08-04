@@ -4945,7 +4945,8 @@
           "failedSetParent": "親ワークツリーを設定できませんでした",
           "current": "現在",
           "searchPlaceholder": "ワークツリーを検索...",
-          "empty": "一致する対象ワークツリーがありません。"
+          "empty": "一致する対象ワークツリーがありません。",
+          "setParentFor": "次のワークツリーの親を設定"
         },
         "WorktreeCardStatusSlot": {
           "branchIdentity": "ブランチ"
@@ -10079,10 +10080,10 @@
             "653c105ecc": "その他の PR 操作",
             "f316a8ca2b": "未解決のコメントが選択されていません。",
             "d00ebdc402": "{{value0}} のコメントを AI で解決",
-            "ed3f79c031": "agent を開始する前にプロンプトを確認してください。選択したスレッドは開始後に解決済みにマークされます。",
-            "f273f2271c": "agent を開始しました。{{value0}} 件を解決済みにし、{{value1}} 件をスキップ、{{value2}} 件が失敗しました。",
-            "aa95b81a3a": "agent を開始しました。{{value0}} 件を解決済みにし、{{value1}} 件をスキップ、{{value2}} 件が失敗しました。",
-            "495b2f8c4b": "agent を開始しましたが、選択したコメントを解決済みにできませんでした。",
+            "ed3f79c031": "agent を開始する前にプロンプトを確認してください。プロンプトの送信後、Orca は選択したコメントに返信し、可能な場合はホスト上のスレッドを解決します。",
+            "f273f2271c": "agent を開始しました。{{value0}} 件を解決し、{{value1}} 件に返信し、{{value2}} 件をスキップし、{{value3}} 件の処理に失敗しました。{{value4}}",
+            "aa95b81a3a": "agent を開始しました。{{value0}} 件を解決し、{{value1}} 件に返信し、{{value2}} 件をスキップし、{{value3}} 件の処理に失敗しました。",
+            "495b2f8c4b": "agent を開始しましたが、選択したコメントの解決または返信ができませんでした。",
             "3c3ad3a1d2": "agent を開始しました。選択したコメントにホスト上で解決済みにできるものはありません。",
             "review": {
               "auto_retry": "Orca は {{time}} に再試行します。",
@@ -10092,7 +10093,8 @@
             "sync": {
               "pending": "Syncing…",
               "branch": "Sync Branch"
-            }
+            },
+            "7e4b2a19c0": "返信先の GitHub PR を特定できませんでした。"
           },
           "CreatePullRequestDialog": {
             "2bc1b4345e": "キャンセル",
@@ -11334,6 +11336,14 @@
           },
           "activityBar": {
             "error": "エラー"
+          },
+          "AiVaultSessionLimitMenu": {
+            "historyDepth": "履歴の件数: {{value0}}",
+            "performanceWarning": "履歴を増やすと、特にリモートホストではアプリ全体が遅くなる場合があります。無制限では利用可能な履歴をすべてスキャンします。",
+            "recommended": "推奨",
+            "mayBeSlower": "遅くなる可能性あり",
+            "slowest": "最も低速",
+            "unlimited": "無制限"
           }
         }
       },

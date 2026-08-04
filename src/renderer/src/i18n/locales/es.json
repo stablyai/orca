@@ -4945,7 +4945,8 @@
           "failedSetParent": "No se pudo establecer el worktree padre",
           "current": "Actual",
           "searchPlaceholder": "Buscar worktrees...",
-          "empty": "No hay worktrees elegibles que coincidan."
+          "empty": "No hay worktrees elegibles que coincidan.",
+          "setParentFor": "Establecer padre para"
         },
         "WorktreeCardStatusSlot": {
           "branchIdentity": "Rama"
@@ -10079,10 +10080,10 @@
             "653c105ecc": "Más acciones de PR",
             "f316a8ca2b": "No hay comentarios sin resolver seleccionados.",
             "d00ebdc402": "Resolver comentarios de {{value0}} con IA",
-            "ed3f79c031": "Revisa el prompt antes de iniciar un agente. Los hilos seleccionados se marcarán como resueltos después del inicio.",
-            "f273f2271c": "Agente iniciado. Marcados como resueltos: {{value0}}; omitidos: {{value1}}; con error: {{value2}}.",
-            "aa95b81a3a": "Agente iniciado. Marcados como resueltos: {{value0}}; omitidos: {{value1}}; con error: {{value2}}.",
-            "495b2f8c4b": "Agente iniciado, pero no se pudieron marcar los comentarios seleccionados como resueltos.",
+            "ed3f79c031": "Revisa el prompt antes de iniciar un agente. Una vez entregado el prompt, Orca responde a los comentarios seleccionados y resuelve los hilos en el host cuando es posible.",
+            "f273f2271c": "Agente iniciado. Marcados como resueltos: {{value0}}; respondidos: {{value1}}; omitidos: {{value2}}; con error: {{value3}}.{{value4}}",
+            "aa95b81a3a": "Agente iniciado. Marcados como resueltos: {{value0}}; respondidos: {{value1}}; omitidos: {{value2}}; con error: {{value3}}.",
+            "495b2f8c4b": "Agente iniciado, pero no se pudieron resolver ni responder los comentarios seleccionados.",
             "3c3ad3a1d2": "Agente iniciado. No se puede marcar ningún comentario seleccionado como resuelto en el host.",
             "review": {
               "auto_retry": "Orca reintentará a las {{time}}.",
@@ -10092,7 +10093,8 @@
             "sync": {
               "pending": "Syncing…",
               "branch": "Sync Branch"
-            }
+            },
+            "7e4b2a19c0": "No se pudo resolver el PR de GitHub para responder."
           },
           "CreatePullRequestDialog": {
             "2bc1b4345e": "Cancelar",
@@ -11334,6 +11336,14 @@
           },
           "activityBar": {
             "error": "Error"
+          },
+          "AiVaultSessionLimitMenu": {
+            "historyDepth": "Profundidad del historial: {{value0}}",
+            "performanceWarning": "Los historiales más extensos pueden ralentizar toda la aplicación, especialmente en hosts remotos. Sin límite escanea todo el historial disponible.",
+            "recommended": "Recomendado",
+            "mayBeSlower": "Puede ser más lento",
+            "slowest": "Más lento",
+            "unlimited": "Sin límite"
           }
         }
       },
