@@ -242,4 +242,71 @@ describe('preserved-pane replacement contract on workspace activation', () => {
     expect(after.tabsByWorktree[worktree.id]).toHaveLength(1)
     expect(after.sleepingAgentSessionsByPaneKey[makePaneKey(HUSK_TAB_ID, LEAF_ID)]).toBeDefined()
   })
+
+  // Why: web-mirror tabs never mount a local pane, so they cannot own recovery
+  // — the appended replacement stays the correct resume path for them.
+  it('still appends a replacement for a web-mirror tab that cannot mount a local pane', () => {
+    const webTabId = 'web-terminal-host-tab'
+    const worktree = { ...makeWorktree(), createdWithAgent: undefined }
+    const state = baseState(worktree)
+    state.tabsByWorktree = {
+      [worktree.id]: [{ id: webTabId, title: 'Codex', ptyId: null } as never]
+    }
+    state.unifiedTabsByWorktree = {
+      [worktree.id]: [
+        {
+          id: `unified-${webTabId}`,
+          contentType: 'terminal',
+          entityId: webTabId,
+          groupId: 'group-1'
+        } as never
+      ]
+    }
+    state.groupsByWorktree = {
+      [worktree.id]: [
+        {
+          id: 'group-1',
+          activeTabId: `unified-${webTabId}`,
+          tabOrder: [`unified-${webTabId}`],
+          recentTabIds: []
+        } as never
+      ]
+    }
+    state.activeGroupIdByWorktree = { [worktree.id]: 'group-1' }
+    state.terminalLayoutsByTabId = {
+      [webTabId]: {
+        root: { type: 'leaf', leafId: LEAF_ID },
+        activeLeafId: LEAF_ID,
+        ptyIdsByLeafId: { [LEAF_ID]: 'pty-old-1' }
+      } as never
+    }
+    useAppStore.setState(state)
+    const paneKey = makePaneKey(webTabId, LEAF_ID)
+    useAppStore.setState((s) => ({
+      sleepingAgentSessionsByPaneKey: {
+        ...s.sleepingAgentSessionsByPaneKey,
+        [paneKey]: {
+          paneKey,
+          tabId: webTabId,
+          worktreeId: worktree.id,
+          agent: 'codex' as const,
+          providerSession: { key: 'session_id' as const, id: 'codex-session-E' },
+          prompt: 'resume prior task',
+          state: 'working' as const,
+          origin: 'quit' as const,
+          capturedAt: 1000,
+          updatedAt: 1000,
+          terminalTitle: 'Codex'
+        }
+      }
+    }))
+
+    activateAndRevealWorktree(worktree.id)
+
+    const after = useAppStore.getState()
+    const tabs = after.tabsByWorktree[worktree.id] ?? []
+    expect(tabs.map((tab) => tab.id)).toContain(webTabId)
+    expect(tabs).toHaveLength(2)
+    expect(after.sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
+  })
 })

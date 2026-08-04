@@ -130,6 +130,22 @@ describe('listTerminals liveness truth for restored leaves', () => {
     })
   })
 
+  it('does not demote remote-runtime-scoped leaves the local inventory never covers', async () => {
+    const runtime = makeRuntimeWithLeaf({
+      leafPtyId: 'remote:env-1@@term_abc',
+      controllerSessions: []
+    })
+
+    const { terminals } = await runtime.listTerminals(`id:${WORKTREE_ID}`)
+
+    expect(terminals).toHaveLength(1)
+    expect(terminals[0]).toMatchObject({
+      ptyId: 'remote:env-1@@term_abc',
+      connected: true,
+      writable: true
+    })
+  })
+
   it('does not demote SSH-scoped leaves the aggregate inventory may not cover', async () => {
     const runtime = makeRuntimeWithLeaf({
       leafPtyId: 'ssh:target-1@@session-9',
