@@ -11,21 +11,10 @@ head_sha=$2
 git rev-parse --verify "${base_sha}^{tree}" >/dev/null
 git rev-parse --verify "${head_sha}^{tree}" >/dev/null
 
-base_entries=()
-while IFS= read -r -d '' entry; do
-  base_entries+=("$entry")
-done < <(git ls-tree -z --name-only "$base_sha")
-
 blocked_entries=()
 while IFS= read -r -d '' entry; do
-  entry_exists=false
-  for base_entry in "${base_entries[@]}"; do
-    if [[ "$entry" == "$base_entry" ]]; then
-      entry_exists=true
-      break
-    fi
-  done
-  if [[ "$entry_exists" == false ]]; then
+  # Why: Bash 3.2 treats an empty array expansion as unbound under nounset.
+  if ! git cat-file -e "${base_sha}:${entry}" 2>/dev/null; then
     blocked_entries+=("$entry")
   fi
 done < <(git ls-tree -z --name-only "$head_sha")
