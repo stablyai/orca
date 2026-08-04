@@ -1100,6 +1100,24 @@
           "result": "passed",
           "durationSeconds": 15.5,
           "summary": "All three reveal scenarios restored their buffer, delivered typed input to the host PTY, painted live without a tab flip, and converged the PTY on the 135x60 pane grid. Before the fix the reconnect-parked scenario stayed blank at recoveryState connecting with the PTY stranded at the host 128x60 grid."
+        },
+        {
+          "date": "2026-08-03",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec playwright test tests/e2e/paired-remote-terminal-parked-reveal-interactivity.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 15.5,
+          "summary": "Repeat run on a clean uninstrumented build; all three scenarios green with identical grids."
+        },
+        {
+          "date": "2026-08-03",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec playwright test tests/e2e/paired-remote-terminal-parked-reveal-interactivity.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 14.7,
+          "summary": "Third consecutive pass after the review follow-ups (env save/restore and the hidden-mounted stayed-mounted assertion)."
         }
       ],
       "runtimeBudget": {
@@ -1108,7 +1126,7 @@
       },
       "flakeHistory": {
         "status": "unknown",
-        "evidence": "Deterministic IPC coverage and three consecutive paired-server journey passes on macOS; CI soak history is not yet available."
+        "evidence": "Deterministic IPC coverage plus the three recorded paired-server journey runs, which passed consecutively on macOS at 14.7-15.5s; the spec also passed once on a shared CI runner. Longer soak history is not yet available."
       },
       "redGreenEvidence": {
         "status": "complete",
@@ -1126,7 +1144,7 @@
       "knownGaps": [
         "Live paired-server validation currently covers macOS host and client only.",
         "The transport drop is an explicit runtime disconnect; real sleep/wake and network partitions are not yet exercised by this gate.",
-        "Browser screencast and mobile subscribers share the fixed contract but have no dedicated reveal journey."
+        "Browser screencast subscribers share the fixed contract but have no dedicated reveal journey; the web and mobile clients run parallel transports and are unaffected."
       ],
       "demotionRule": "Demote if a retired runtime transport can leave a renderer subscription without a close event, if a close is delivered more than once, if payload frames from a retired transport reach the renderer, or if a revealed remote terminal can stay blank or reject input after a reconnect."
     },

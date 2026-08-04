@@ -9,10 +9,11 @@
  * the echo paint live. "Paints only after switching to another terminal and
  * back" is the failure, so each scenario records both.
  *
- * The decoy tabs are load-bearing, not scenery: the renderer only discards a
- * multiplexer once no stream holds it (closeIfIdle), so a sibling stream is what
- * keeps a wedged one alive and the pre-fix state red. Keep at least one decoy
- * mounted across the reveal, or a closeIfIdle change silently turns this green.
+ * The decoy tabs are load-bearing, not scenery. Pre-fix, handleClose never runs,
+ * so closeIfIdle is the only remaining release path and it needs zero streams —
+ * a sibling stream is what keeps the wedged multiplexer alive and the pre-fix
+ * state red. Each scenario asserts its flip decoy is still mounted at the reveal
+ * so that invariant cannot quietly lapse and turn this green.
  *
  * Run:
  *   pnpm exec playwright test \
@@ -312,6 +313,15 @@ async function probeInteractivity(
   }
 }
 
+/** The wedged-multiplexer repro needs a sibling stream alive at reveal time
+ *  (see the header), and S1 additionally needs its target never to have parked. */
+async function expectStillMounted(page: Page, webTabId: string, label: string): Promise<void> {
+  expect(
+    await page.evaluate((id) => window.__paneManagers?.has(id) ?? false, webTabId),
+    `${label} parked before the reveal it is supposed to survive`
+  ).toBe(true)
+}
+
 /** Logged unconditionally: on failure this line is the whole diagnosis. */
 function logResult(result: ScenarioResult): ScenarioResult {
   console.log(`[paired-reveal] ${JSON.stringify(result)}`)
@@ -383,13 +393,7 @@ test('paired client keeps revealed remote terminals interactive', async ({
       createdTerminals.push(target.terminal, ...decoys.map((decoy) => decoy.terminal))
       await openClientTab(client.page, worktreeId, decoys[0].webTabId)
       // Pins the scenario label: this reveal must not have gone through a park.
-      expect(
-        await client.page.evaluate(
-          (id) => window.__paneManagers?.has(id) ?? false,
-          target.webTabId
-        ),
-        'hidden-mounted target parked before its reveal'
-      ).toBe(true)
+      await expectStillMounted(client.page, target.webTabId, 'hidden-mounted target')
       await openClientTab(client.page, worktreeId, target.webTabId)
       results.push(
         logResult(
@@ -405,6 +409,7 @@ test('paired client keeps revealed remote terminals interactive', async ({
       await openClientTab(client.page, worktreeId, decoys[0].webTabId)
       await openClientTab(client.page, worktreeId, decoys[1].webTabId)
       await waitForTabParked(client.page, target.webTabId, { parkDelayMs: PARK_DELAY_MS })
+      await expectStillMounted(client.page, decoys[1].webTabId, 'cold-parked flip decoy')
       await openClientTab(client.page, worktreeId, target.webTabId)
       results.push(
         logResult(
@@ -434,6 +439,7 @@ test('paired client keeps revealed remote terminals interactive', async ({
           { timeout: 60_000, message: 'paired client never reconnected to the host runtime' }
         )
         .toBe(true)
+      await expectStillMounted(client.page, decoys[1].webTabId, 'reconnect-parked flip decoy')
       await openClientTab(client.page, worktreeId, target.webTabId)
       results.push(
         logResult(
