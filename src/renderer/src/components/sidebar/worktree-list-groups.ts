@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: sidebar row construction keeps every grouping mode in one pure module so reveal, virtualized rendering, and tests share the same flat row contract. */
-import { CircleX, FolderTree, List, Pin } from 'lucide-react'
+import { CircleX, FolderTree, List, Pin, Ticket } from 'lucide-react'
 import type React from 'react'
 import type {
   DetectedWorktree,
@@ -56,8 +56,61 @@ export { getLineageRenderInfo } from './worktree-lineage-projection'
 
 export { branchName }
 
-export type WorktreeGroupBy = 'none' | 'workspace-status' | 'repo' | 'pr-status'
+export type WorktreeGroupBy = 'none' | 'workspace-status' | 'repo' | 'pr-status' | 'issue'
 export type PinnedWorktreeDisplayPolicy = 'single-location' | 'duplicate-in-groups'
+
+export function getIssueGroupInfo(w: Worktree): { key: string; label: string } {
+  const item = w.linkedWorkItem
+  const rawId =
+    item?.jiraIdentifier ??
+    item?.linearIdentifier ??
+    (item?.number ? `#${item.number}` : null) ??
+    w.linkedLinearIssue ??
+    (w.linkedIssue ? `#${w.linkedIssue}` : null) ??
+    (w.linkedGitLabIssue ? `#${w.linkedGitLabIssue}` : null)
+
+  if (rawId) {
+    const identifier = rawId.toUpperCase()
+    let title = item?.title?.trim()
+
+    // Why: strip leading issue key prefix from title to prevent duplicating the identifier in the group header.
+    if (title && title.toUpperCase().startsWith(identifier)) {
+      title = title
+        .slice(identifier.length)
+        .replace(/^[:\s-]+/, '')
+        .trim()
+    }
+
+    const isNumericIssue = identifier.startsWith('#')
+    const label = title
+      ? `${identifier}: ${title}`
+      : isNumericIssue && !item?.title
+        ? `Issue ${identifier}`
+        : identifier
+
+    return { key: `issue:${identifier}`, label }
+  }
+
+  const branchStr = typeof w.branch === 'string' ? branchName(w.branch) : ''
+  const textToSearch = `${w.displayName || ''} ${branchStr} ${w.comment || ''}`
+  const issueKeyMatch = textToSearch.match(/\b([A-Za-z][A-Za-z0-9_]*-\d+)\b/)
+  if (issueKeyMatch) {
+    const identifier = issueKeyMatch[1].toUpperCase()
+    return { key: `issue:${identifier}`, label: identifier }
+  }
+
+  const genericIssueMatch =
+    textToSearch.match(/\b(?:issue|ticket)[/-]?(\d+)\b/i) ?? textToSearch.match(/#(\d+)\b/)
+  if (genericIssueMatch) {
+    const identifier = `#${genericIssueMatch[1]}`
+    return { key: `issue:${identifier}`, label: `Issue ${identifier}` }
+  }
+
+  return {
+    key: 'issue:none',
+    label: translate('auto.components.sidebar.worktree.list.groups.noIssue', 'No issue')
+  }
+}
 
 export function getPinnedWorktreeDisplayPolicy(
   settings?: { showPinnedWorktreesInGroups?: boolean } | null
@@ -1119,6 +1172,10 @@ export function buildRows(
       key = getWorkspaceStatusGroupKey(workspaceStatus)
       label =
         workspaceStatuses.find((status) => status.id === workspaceStatus)?.label ?? workspaceStatus
+    } else if (groupBy === 'issue') {
+      const issueGroup = getIssueGroupInfo(w)
+      key = issueGroup.key
+      label = issueGroup.label
     } else {
       const prGroup = getPRGroupKey(w, repoMap, prCache, settings)
       key = `pr:${prGroup}`
@@ -1225,6 +1282,20 @@ export function buildRows(
         orderedGroups.push([key, group])
       }
     }
+  } else if (groupBy === 'issue') {
+    const entries = Array.from(grouped.entries())
+    entries.sort((a, b) => {
+      if (a[0] === 'issue:none') {
+        return 1
+      }
+      if (b[0] === 'issue:none') {
+        return -1
+      }
+      return a[1].label.localeCompare(b[1].label, undefined, { numeric: true, sensitivity: 'base' })
+    })
+    for (const entry of entries) {
+      orderedGroups.push(entry)
+    }
   } else {
     for (const group of grouped.values()) {
       // Why: logical project headers can contain multiple host setup repos.
@@ -1282,21 +1353,35 @@ export function buildRows(
                   worktreeIds: group.items.map((worktree) => worktree.id)
                 }
               })()
-            : (() => {
-                const prGroup = key.replace(/^pr:/, '') as PRGroupKey
-                const meta = PR_GROUP_META[prGroup]
-                return {
-                  type: 'header' as const,
-                  key,
-                  label: meta.label,
-                  count: group.items.length,
-                  tone: meta.tone,
-                  icon: meta.icon,
-                  hostWorktreeCounts: getHostWorktreeCounts(group.items, repoMap, defaultHostId),
-                  hostWorktreeIds: getHostWorktreeIds(group.items, repoMap, defaultHostId),
-                  worktreeIds: group.items.map((worktree) => worktree.id)
-                }
-              })()
+            : groupBy === 'issue'
+              ? (() => {
+                  return {
+                    type: 'header' as const,
+                    key,
+                    label: group.label,
+                    count: group.items.length,
+                    tone: 'neutral',
+                    icon: Ticket,
+                    hostWorktreeCounts: getHostWorktreeCounts(group.items, repoMap, defaultHostId),
+                    hostWorktreeIds: getHostWorktreeIds(group.items, repoMap, defaultHostId),
+                    worktreeIds: group.items.map((worktree) => worktree.id)
+                  }
+                })()
+              : (() => {
+                  const prGroup = key.replace(/^pr:/, '') as PRGroupKey
+                  const meta = PR_GROUP_META[prGroup]
+                  return {
+                    type: 'header' as const,
+                    key,
+                    label: meta.label,
+                    count: group.items.length,
+                    tone: meta.tone,
+                    icon: meta.icon,
+                    hostWorktreeCounts: getHostWorktreeCounts(group.items, repoMap, defaultHostId),
+                    hostWorktreeIds: getHostWorktreeIds(group.items, repoMap, defaultHostId),
+                    worktreeIds: group.items.map((worktree) => worktree.id)
+                  }
+                })()
 
       result.push(header)
       if (!isCollapsed) {
@@ -1504,6 +1589,9 @@ export function getGroupKeyForWorktree(
   }
   if (groupBy === 'workspace-status') {
     return getWorkspaceStatusGroupKey(getWorkspaceStatus(worktree, workspaceStatuses))
+  }
+  if (groupBy === 'issue') {
+    return getIssueGroupInfo(worktree).key
   }
   if (groupBy === 'repo') {
     return getProjectGroupingForRepo(

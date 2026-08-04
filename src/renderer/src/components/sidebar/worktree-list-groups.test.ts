@@ -9,6 +9,7 @@ import {
   buildRows,
   getGroupKeyForWorktree,
   getGroupKeysForWorktree,
+  getIssueGroupInfo,
   getLineageGroupKey,
   getLineageRenderInfo,
   getPRGroupKey,
@@ -4134,5 +4135,125 @@ describe('buildRows pending creations', () => {
     )
 
     expect(rows[0]).toMatchObject({ type: 'pending-creation', creationId: 'c1' })
+  })
+
+  describe('issue grouping mode', () => {
+    it('correctly extracts issue group info from Jira linkedWorkItem', () => {
+      const wt: Worktree = {
+        ...worktree,
+        linkedWorkItem: {
+          url: 'https://jira.example.com/browse/ORCA-5199',
+          title: 'Custom Groups Feature',
+          number: 5199,
+          provider: 'jira',
+          jiraIdentifier: 'ORCA-5199',
+          type: 'issue'
+        }
+      }
+      expect(getIssueGroupInfo(wt)).toEqual({
+        key: 'issue:ORCA-5199',
+        label: 'ORCA-5199: Custom Groups Feature'
+      })
+    })
+
+    it('correctly extracts issue group info from Linear linkedWorkItem', () => {
+      const wt: Worktree = {
+        ...worktree,
+        linkedWorkItem: {
+          url: 'https://linear.app/org/issue/ENG-123',
+          title: 'Fix issue grouping',
+          number: 123,
+          provider: 'linear',
+          linearIdentifier: 'ENG-123',
+          type: 'issue'
+        }
+      }
+      expect(getIssueGroupInfo(wt)).toEqual({
+        key: 'issue:ENG-123',
+        label: 'ENG-123: Fix issue grouping'
+      })
+    })
+
+    it('correctly extracts issue group info from linkedLinearIssue string', () => {
+      const wt: Worktree = {
+        ...worktree,
+        linkedLinearIssue: 'STA-335'
+      }
+      expect(getIssueGroupInfo(wt)).toEqual({
+        key: 'issue:STA-335',
+        label: 'STA-335'
+      })
+    })
+
+    it('extracts issue key from branch name when no linked issue', () => {
+      const wt: Worktree = {
+        ...worktree,
+        displayName: 'feature/PROJ-456-something',
+        branch: 'feature/PROJ-456-something'
+      }
+      expect(getIssueGroupInfo(wt)).toEqual({
+        key: 'issue:PROJ-456',
+        label: 'PROJ-456'
+      })
+    })
+
+    it('falls back to No issue when no issue info present', () => {
+      const wt: Worktree = {
+        ...worktree,
+        displayName: 'main-branch',
+        branch: 'main'
+      }
+      expect(getIssueGroupInfo(wt)).toEqual({
+        key: 'issue:none',
+        label: 'No issue'
+      })
+    })
+
+    it('builds rows grouped by issue with issue:none placed last', () => {
+      const wtJira: Worktree = {
+        ...worktree,
+        id: 'wt-jira',
+        displayName: 'wt-jira',
+        linkedWorkItem: {
+          url: 'https://jira.example.com/browse/ORCA-5199',
+          title: 'Custom Groups',
+          number: 5199,
+          provider: 'jira',
+          jiraIdentifier: 'ORCA-5199',
+          type: 'issue'
+        }
+      }
+      const wtLinear: Worktree = {
+        ...worktree,
+        id: 'wt-linear',
+        displayName: 'wt-linear',
+        linkedLinearIssue: 'ABC-10'
+      }
+      const wtNoIssue: Worktree = {
+        ...worktree,
+        id: 'wt-none',
+        displayName: 'wt-none',
+        branch: 'main'
+      }
+
+      const rows = buildRows('issue', [wtNoIssue, wtJira, wtLinear], repoMap, null, new Set())
+
+      expect(rows).toMatchObject([
+        { type: 'header', key: 'issue:ABC-10', label: 'ABC-10', count: 1 },
+        { type: 'item', worktree: { id: 'wt-linear' } },
+        { type: 'header', key: 'issue:ORCA-5199', label: 'ORCA-5199: Custom Groups', count: 1 },
+        { type: 'item', worktree: { id: 'wt-jira' } },
+        { type: 'header', key: 'issue:none', label: 'No issue', count: 1 },
+        { type: 'item', worktree: { id: 'wt-none' } }
+      ])
+    })
+
+    it('returns issue group key from getGroupKeyForWorktree', () => {
+      const wt: Worktree = {
+        ...worktree,
+        linkedLinearIssue: 'STA-335'
+      }
+      expect(getGroupKeyForWorktree('issue', wt, repoMap, null)).toBe('issue:STA-335')
+    })
   })
 })
