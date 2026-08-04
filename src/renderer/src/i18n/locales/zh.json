@@ -40,6 +40,7 @@
   },
   "menu": {
     "checkForUpdates": "检查更新...",
+    "checkForPrereleaseUpdates": "检查预发布更新...",
     "settings": "设置",
     "exploreOrca": "探索 Orca",
     "gettingStarted": "Orca 入门",
@@ -561,6 +562,10 @@
             "7d732521ec": "评论"
           }
         }
+      },
+      "updateCheckClickOptions": {
+        "hint": "{{value0}}+单击检查最新 RC；{{value1}}+单击检查最新 perf 构建。",
+        "localBuildHint": "{{value0}}+单击选择本地 macOS 构建。"
       },
       "folderWorkspacePathStatus": {
         "title": {
@@ -8676,6 +8681,7 @@
               "09568ccc65": "服务器",
               "ebd5369acf": "环境",
               "d198440ce3": "运行时",
+              "prerelease": "预发布",
               "baec27aa8f": "将此浏览器连接到已保存的 Orca 服务器。",
               "3517fb2ec0": "活动服务器",
               "c6e5a03aa0": "开发盒",

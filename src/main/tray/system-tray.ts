@@ -6,6 +6,7 @@ import { createAppIconImage } from '../app-icon'
 import { translateMain } from '../i18n/main-i18n'
 import { composeTrayAttentionIcon, tintTrayTemplateForAttention } from './tray-attention-icon'
 import { stampTrayDevBadge } from './tray-dev-badge'
+import type { UpdateCheckOptions } from '../../shared/types'
 
 export type SystemTrayOptions = {
   /** App icon id from settings; the tray reuses the app icon image. */
@@ -18,8 +19,11 @@ export type SystemTrayOptions = {
   onOpen: () => void
   /** Restore the main window and open its Settings surface. */
   onOpenSettings: () => void
-  /** Run the existing user-initiated update check. */
-  onCheckForUpdates: () => void
+  /**
+   * Run the existing user-initiated update check. Takes channel options so the
+   * tray can offer the pre-release row; omitted options mean the stable channel.
+   */
+  onCheckForUpdates: (options?: UpdateCheckOptions) => void
   /** Quit Orca for real (caller must set the quitting latch before quitting). */
   onQuit: () => void
 }
@@ -275,6 +279,17 @@ export function createSystemTray(opts: SystemTrayOptions): Tray | null {
           {
             label: translateMain('menu.checkForUpdates', 'Check for Updates...'),
             click: safeMenuAction(() => opts.onCheckForUpdates())
+          },
+          // Why: a tray item can carry neither a tooltip nor a reliable modifier
+          // gesture, so the RC channel is only reachable here as its own row —
+          // same flat sibling the app menu got, same translation key. Perf builds
+          // stay out: an internal channel does not earn a permanent tray row.
+          {
+            label: translateMain(
+              'menu.checkForPrereleaseUpdates',
+              'Check for Pre-release Updates...'
+            ),
+            click: safeMenuAction(() => opts.onCheckForUpdates({ includePrerelease: true }))
           },
           { type: 'separator' }
         ] as Electron.MenuItemConstructorOptions[])

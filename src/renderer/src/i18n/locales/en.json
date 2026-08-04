@@ -67,6 +67,7 @@
   },
   "menu": {
     "checkForUpdates": "Check for Updates...",
+    "checkForPrereleaseUpdates": "Check for Pre-release Updates...",
     "settings": "Settings",
     "exploreOrca": "Explore Orca",
     "gettingStarted": "Getting Started with Orca",
@@ -602,6 +603,10 @@
             "7d732521ec": "Comment"
           }
         }
+      },
+      "updateCheckClickOptions": {
+        "hint": "{{value0}}+click checks the latest RC; {{value1}}+click checks the latest perf build.",
+        "localBuildHint": "{{value0}}+click chooses a local macOS build."
       },
       "folderWorkspacePathStatus": {
         "title": {
@@ -8840,6 +8845,7 @@
               "09568ccc65": "server",
               "ebd5369acf": "environment",
               "d198440ce3": "runtime",
+              "prerelease": "prerelease",
               "baec27aa8f": "Connect this browser to a saved Orca server.",
               "3517fb2ec0": "Active Server",
               "c6e5a03aa0": "dev box",

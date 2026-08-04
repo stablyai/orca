@@ -101,6 +101,8 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
   const updateCheckModifiersRef = React.useRef(NO_UPDATE_CHECK_MODIFIERS)
   const mountedRef = useMountedRef()
   const updateCheckHint = getUpdateCheckHint()
+  const updateCheckUnavailable =
+    updateStatus.state === 'checking' || updateStatus.state === 'downloading'
 
   const showMilestones =
     setupProgress.ready && setupProgress.coreDoneCount < setupProgress.coreTotal
@@ -167,6 +169,10 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
   }
 
   const handleCheckForUpdates = (): void => {
+    if (updateCheckUnavailable) {
+      updateCheckModifiersRef.current = NO_UPDATE_CHECK_MODIFIERS
+      return
+    }
     const modifiers = updateCheckModifiersRef.current
     updateCheckModifiersRef.current = NO_UPDATE_CHECK_MODIFIERS
     void window.api.updater.check(getUpdateCheckClickOptions(modifiers))
@@ -317,22 +323,35 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
               <ExternalLink className="ml-auto size-3 text-muted-foreground" />
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem
-              disabled={updateStatus.state === 'checking' || updateStatus.state === 'downloading'}
-              onPointerDown={handleCheckForUpdatesPointerDown}
-              onSelect={handleCheckForUpdates}
-              title={updateCheckHint}
-            >
-              {updateStatus.state === 'checking' ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : (
-                <RefreshCw className="size-3.5" />
-              )}
-              {translate(
-                'auto.components.sidebar.SidebarSettingsHelpMenu.29c56f30ee',
-                'Check for Updates'
-              )}
-            </DropdownMenuItem>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  data-testid="update-check-tooltip-trigger"
+                  tabIndex={updateCheckUnavailable ? 0 : undefined}
+                  className="block"
+                >
+                  <DropdownMenuItem
+                    disabled={updateCheckUnavailable}
+                    onPointerDown={handleCheckForUpdatesPointerDown}
+                    onSelect={handleCheckForUpdates}
+                  >
+                    {updateStatus.state === 'checking' ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="size-3.5" />
+                    )}
+                    {translate(
+                      'auto.components.sidebar.SidebarSettingsHelpMenu.29c56f30ee',
+                      'Check for Updates'
+                    )}
+                  </DropdownMenuItem>
+                </span>
+              </TooltipTrigger>
+              {/* Why: side="right" keeps the hint clear of the menu's own items. */}
+              <TooltipContent side="right" sideOffset={8}>
+                {updateCheckHint}
+              </TooltipContent>
+            </Tooltip>
             {showAdminOptions ? (
               <>
                 <DropdownMenuSeparator />

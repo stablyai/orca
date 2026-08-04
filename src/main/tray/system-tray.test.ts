@@ -142,6 +142,12 @@ function builtMenuItems(): MenuItem[] {
   return menuFromTemplateMock.mock.calls.at(-1)?.[0] as MenuItem[]
 }
 
+function clickMenuItem(label: string): void {
+  builtMenuItems()
+    .find((item) => item.label === label)
+    ?.click?.()
+}
+
 // Why: tray image/tooltip writes are deferred off the caller's stack to keep the
 // NSStatusItem scene update out of AppKit's dispatch; run the pending turn.
 function flushTraySceneMutation(): void {
@@ -232,6 +238,7 @@ describe('createSystemTray', () => {
       undefined,
       'Settings',
       'Check for Updates...',
+      'Check for Pre-release Updates...',
       undefined,
       'Quit'
     ])
@@ -249,6 +256,20 @@ describe('createSystemTray', () => {
         ?.click?.()
       expect(callback).toHaveBeenCalledOnce()
     }
+  })
+
+  it('routes the macOS tray pre-release row to the RC channel', async () => {
+    setPlatform('darwin')
+    const { createSystemTray } = await loadModule()
+    const options = createOptions()
+
+    createSystemTray(options)
+    clickMenuItem('Check for Updates...')
+    clickMenuItem('Check for Pre-release Updates...')
+
+    // Why: the stable row must stay channel-agnostic (no options), and only the
+    // pre-release row may force includePrerelease.
+    expect(options.onCheckForUpdates.mock.calls).toEqual([[], [{ includePrerelease: true }]])
   })
 
   it('does not create a blank macOS item when the template asset fails to load', async () => {

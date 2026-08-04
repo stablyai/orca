@@ -203,6 +203,44 @@ describe('registerAppMenu', () => {
     ])
   })
 
+  it('exposes an explicit pre-release check directly beneath Check for Updates', () => {
+    const options = buildMenuOptions()
+    registerAppMenu(options)
+
+    const parentLabel = isMac ? 'Orca' : 'Help'
+    const submenu = getSubmenu(getTemplate(), parentLabel)
+    const checkIndex = submenu.findIndex((entry) => entry.label === 'Check for Updates...')
+    const item = submenu[checkIndex + 1]
+    // Why: siblings, not a submenu — the common action must stay one click.
+    expect(item?.label).toBe('Check for Pre-release Updates...')
+
+    item?.click?.({} as never, undefined as never, {} as Electron.KeyboardEvent)
+    item?.click?.(
+      {} as never,
+      undefined as never,
+      (isMac ? { metaKey: true } : { ctrlKey: true }) as Electron.KeyboardEvent
+    )
+    // Why: accelerator-triggered events must not read stale modifier state.
+    item?.click?.(
+      {} as never,
+      undefined as never,
+      {
+        triggeredByAccelerator: true,
+        ...(isMac ? { metaKey: true } : { ctrlKey: true })
+      } as Electron.KeyboardEvent
+    )
+    // Why: ⌥ selects a local build on the plain row, but this row is the RC
+    // channel — the modifier must not turn it into a local-build check.
+    item?.click?.({} as never, undefined as never, { altKey: true } as Electron.KeyboardEvent)
+
+    expect(options.onCheckForUpdates.mock.calls).toEqual([
+      [{ includePrerelease: true, includePerfPrerelease: false }],
+      [{ includePrerelease: true, includePerfPrerelease: true }],
+      [{ includePrerelease: true, includePerfPrerelease: false }],
+      [{ includePrerelease: true, includePerfPrerelease: false }]
+    ])
+  })
+
   it('shows the worktree palette shortcut as a display-only menu hint', () => {
     registerAppMenu(buildMenuOptions())
 

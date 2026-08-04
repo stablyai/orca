@@ -40,6 +40,7 @@
   },
   "menu": {
     "checkForUpdates": "업데이트 확인...",
+    "checkForPrereleaseUpdates": "프리릴리스 업데이트 확인...",
     "settings": "설정",
     "exploreOrca": "Orca 둘러보기",
     "gettingStarted": "Orca 시작하기",
@@ -561,6 +562,10 @@
             "7d732521ec": "댓글"
           }
         }
+      },
+      "updateCheckClickOptions": {
+        "hint": "{{value0}}+클릭으로 최신 RC를, {{value1}}+클릭으로 최신 perf 빌드를 확인합니다.",
+        "localBuildHint": "{{value0}}+클릭으로 로컬 macOS 빌드를 선택합니다."
       },
       "folderWorkspacePathStatus": {
         "title": {
@@ -8664,6 +8669,7 @@
               "09568ccc65": "서버",
               "ebd5369acf": "환경",
               "d198440ce3": "런타임",
+              "prerelease": "프리릴리스",
               "baec27aa8f": "이 브라우저를 저장된 Orca 서버에 연결하세요.",
               "3517fb2ec0": "활성 서버",
               "c6e5a03aa0": "개발 박스",

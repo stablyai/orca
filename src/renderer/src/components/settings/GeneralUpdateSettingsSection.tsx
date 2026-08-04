@@ -97,7 +97,7 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
           'auto.components.settings.GeneralUpdateSettingsSection.ceb579abaf',
           'Check for app updates and install a newer Orca version.'
         )}
-        keywords={['update', 'version', 'release notes', 'download']}
+        keywords={['update', 'version', 'release notes', 'download', 'rc', 'prerelease', 'perf']}
         className="space-y-3"
       >
         <div className="flex items-center gap-3">
@@ -107,7 +107,6 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
             // Why: modifier-click channels are power-user update affordances, not
             // persistent settings toggles.
             onClick={(event) => window.api.updater.check(getUpdateCheckClickOptions(event))}
-            title={updateCheckHint}
             disabled={updateStatus.state === 'checking' || updateStatus.state === 'downloading'}
             className="gap-2"
           >
@@ -256,6 +255,9 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
                   { value0: updateStatus.message }
                 ))}
         </p>
+
+        {/* Why: kept visible — a hover-only `title` made the channels undiscoverable. */}
+        <p className="text-xs text-muted-foreground">{updateCheckHint}</p>
       </SearchableSetting>
       {channelSwitcherRevealed ? <ReleaseChannelSection /> : null}
       <GeneralRemoteServerUpdates />

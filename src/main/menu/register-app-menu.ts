@@ -87,29 +87,46 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     webContents.reload()
   }
 
-  // Why: modifier-click update checks are hidden power-user affordances.
-  // Extracted so the macOS app-menu entry and Windows/Linux Help entry share
-  // identical RC/perf channel routing.
-  const checkForUpdatesClick: Electron.MenuItemConstructorOptions['click'] = (
-    _menuItem,
-    _window,
-    event
-  ) => {
+  /**
+   * Maps a menu click's modifier state onto update channel options: Shift
+   * selects the latest RC, Cmd (mac) / Ctrl (elsewhere) the latest perf build.
+   * Accelerator invocations carry no meaningful modifier state, so they always
+   * resolve to the stable channel.
+   *
+   * Why: extracted so the macOS app-menu entries and the Windows/Linux Help
+   * entries share identical RC/perf routing instead of duplicating it.
+   */
+  const menuUpdateCheckOptions = (event: Electron.KeyboardEvent): UpdateCheckOptions => {
     const modifierClick = !event.triggeredByAccelerator
     const localBuild = isMac && modifierClick && event.altKey === true
     const includePerfPrerelease =
       !localBuild && modifierClick && (isMac ? event.metaKey === true : event.ctrlKey === true)
     const includePrerelease = !localBuild && modifierClick && event.shiftKey === true
-    onCheckForUpdates({
+    return {
       includePrerelease,
       includePerfPrerelease,
       ...(localBuild ? { localBuild: true } : {})
-    })
+    }
   }
 
   const checkForUpdatesItem: Electron.MenuItemConstructorOptions = {
     label: translateMain('menu.checkForUpdates', 'Check for Updates...'),
-    click: checkForUpdatesClick
+    click: (_menuItem, _window, event) => onCheckForUpdates(menuUpdateCheckOptions(event))
+  }
+
+  // Why: the menu is the primary update entry point (especially the macOS app
+  // menu), so the RC channel gets a visible row instead of only the hidden
+  // Shift modifier. Perf builds stay modifier-only — an internal channel does
+  // not earn a permanent menu row.
+  const checkForPrereleaseUpdatesItem: Electron.MenuItemConstructorOptions = {
+    label: translateMain('menu.checkForPrereleaseUpdates', 'Check for Pre-release Updates...'),
+    click: (_menuItem, _window, event) => {
+      // Why drop localBuild: this row exists to check the RC channel, and a
+      // local macOS build is not a channel — honouring an ⌥ held over this
+      // item would silently ignore the row the user actually clicked.
+      const { localBuild: _localBuild, ...channelOptions } = menuUpdateCheckOptions(event)
+      onCheckForUpdates({ ...channelOptions, includePrerelease: true })
+    }
   }
 
   const settingsItem: Electron.MenuItemConstructorOptions = {
@@ -142,6 +159,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     submenu: [
       { role: 'about' },
       checkForUpdatesItem,
+      checkForPrereleaseUpdatesItem,
       settingsItem,
       { type: 'separator' },
       { role: 'services' },
@@ -304,7 +322,8 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
         : ([
             { type: 'separator' },
             { role: 'about' },
-            checkForUpdatesItem
+            checkForUpdatesItem,
+            checkForPrereleaseUpdatesItem
           ] satisfies Electron.MenuItemConstructorOptions[]))
     ]
   }

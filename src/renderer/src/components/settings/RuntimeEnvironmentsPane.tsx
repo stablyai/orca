@@ -36,6 +36,7 @@ import {
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { SearchableSetting } from './SearchableSetting'
 import {
   Dialog,
@@ -79,6 +80,57 @@ export type RuntimeHostDetails = {
   runtimeStatus: RuntimeStatus | null
   compatibility: RuntimeCompatVerdict | null
   error: string | null
+}
+
+type RemoteServerUpdatesButtonProps = {
+  disabled: boolean
+  checking: boolean
+  running: boolean
+  onCheck: (event: React.MouseEvent<HTMLButtonElement>) => void
+}
+
+export function RemoteServerUpdatesButton({
+  disabled,
+  checking,
+  running,
+  onCheck
+}: RemoteServerUpdatesButtonProps): React.JSX.Element {
+  const updateCheckHint = getUpdateCheckHint()
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          data-testid="remote-server-update-check-tooltip-trigger"
+          tabIndex={disabled ? 0 : undefined}
+          className="inline-flex"
+        >
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={onCheck}
+            disabled={disabled}
+          >
+            {checking || running ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+            {running
+              ? translate(
+                  'auto.components.settings.RuntimeEnvironmentsPane.updatingServers',
+                  'Updating servers…'
+                )
+              : translate(
+                  'auto.components.settings.RuntimeEnvironmentsPane.reviewServerUpdates',
+                  'Check for Server Updates'
+                )}
+          </Button>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
+        {updateCheckHint}
+      </TooltipContent>
+    </Tooltip>
+  )
 }
 
 export function evaluateHostDetails(status: RuntimeStatus): RuntimeCompatVerdict {
@@ -295,7 +347,6 @@ export function RuntimeEnvironmentsPane({
   )
   const consumedAddServerIntentSignalRef = useRef(0)
   const mountedRef = useMountedRef()
-  const updateCheckHint = getUpdateCheckHint()
   const activeValue =
     settings.activeRuntimeEnvironmentId ??
     (allowLocalRuntime ? LOCAL_RUNTIME_VALUE : NO_RUNTIME_VALUE)
@@ -869,33 +920,15 @@ export function RuntimeEnvironmentsPane({
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {environments.length > 0 ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="gap-1.5"
-                title={updateCheckHint}
-                onClick={(event) => {
+              <RemoteServerUpdatesButton
+                disabled={remoteServerUpdatesChecking && remoteServerUpdates.size === 0}
+                checking={remoteServerUpdatesChecking}
+                running={remoteServerUpdatesRunning}
+                onCheck={(event) => {
                   setRemoteServerUpdateDialogOpen(true)
                   void refreshRemoteServerUpdates(getUpdateCheckClickOptions(event))
                 }}
-                disabled={remoteServerUpdatesChecking && remoteServerUpdates.size === 0}
-              >
-                {remoteServerUpdatesChecking || remoteServerUpdatesRunning ? (
-                  <Loader2 className="animate-spin" />
-                ) : (
-                  <RefreshCw />
-                )}
-                {remoteServerUpdatesRunning
-                  ? translate(
-                      'auto.components.settings.RuntimeEnvironmentsPane.updatingServers',
-                      'Updating servers…'
-                    )
-                  : translate(
-                      'auto.components.settings.RuntimeEnvironmentsPane.reviewServerUpdates',
-                      'Check for Server Updates'
-                    )}
-              </Button>
+              />
             ) : null}
             {addServerFormOpen ? null : (
               <Button
