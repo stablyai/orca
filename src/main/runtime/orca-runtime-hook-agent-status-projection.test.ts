@@ -15,6 +15,9 @@ vi.mock('electron', () => ({
 }))
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+// A leaf this runtime never minted: pane lookup recovers a reminted tab id by leaf id,
+// so only an unknown leaf id is genuinely unresolvable.
+const UNKNOWN_LEAF_ID = '22222222-2222-4222-8222-222222222222'
 const TAB_ID = 'ask-tab'
 const WORKTREE_ID = 'wt-1'
 const PANE_KEY = makePaneKey(TAB_ID, LEAF_ID)
@@ -290,7 +293,7 @@ describe('hook-driven session tabs republish (#11761)', () => {
     const events: { snapshotVersion: number }[] = []
     const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
 
-    runtime.touchMobileSessionTabsForPane(makePaneKey('gone-tab', LEAF_ID))
+    runtime.touchMobileSessionTabsForPane(makePaneKey('gone-tab', UNKNOWN_LEAF_ID))
     runtime.touchMobileSessionTabsForPane(PANE_KEY, WORKTREE_ID)
 
     await vi.waitFor(() => expect(events).toHaveLength(1))
