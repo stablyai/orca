@@ -142,8 +142,12 @@ export function useMobileNativeChatAnswerSend(args: {
         }
         return outcome === 'accepted'
       }
-      const wait = (ms: number): Promise<boolean> =>
-        new Promise((resolve) => {
+      const wait = (ms: number): Promise<boolean> => {
+        // Already superseded: schedule nothing, so the report is immediate.
+        if (generationRef.current !== generation) {
+          return Promise.resolve(false)
+        }
+        return new Promise((resolve) => {
           const delay = {
             timer: setTimeout(() => {
               delaysRef.current.delete(delay)
@@ -153,14 +157,18 @@ export function useMobileNativeChatAnswerSend(args: {
           }
           delaysRef.current.add(delay)
         })
+      }
       const fail = (): false => {
-        if (generationRef.current === generation) {
-          // Why: keystrokes that may have landed (ack lost / path cutover) must
-          // not read as a definite failure — a blind resend could double-step
-          // the selector. An earlier group that WAS accepted is the same hazard
-          // in definite form: a multi-question answer whose shared budget ran out
-          // mid-sequence left the remote selector half-stepped, and telling the
-          // user nothing was sent invites a retry on top of the advanced state.
+        // Why: keystrokes that may have landed (ack lost / path cutover) must
+        // not read as a definite failure — a blind resend could double-step
+        // the selector. An earlier group that WAS accepted is the same hazard
+        // in definite form: a multi-question answer whose shared budget ran out
+        // mid-sequence left the remote selector half-stepped, and telling the
+        // user nothing was sent invites a retry on top of the advanced state.
+        // A superseded/aborted chain (session swap, lease loss, Stop, newer
+        // answer) stays silent only while nothing was written yet: once a group
+        // landed, ending silently leaves the card looking cleanly sent.
+        if (generationRef.current === generation || sawAcceptedGroup || sawUnknownOutcome) {
           onSendError(
             sawAcceptedGroup
               ? 'Answer partly sent — check chat before retrying'
@@ -196,7 +204,7 @@ export function useMobileNativeChatAnswerSend(args: {
           return false
         }
         if (generationRef.current !== generation) {
-          return false
+          return fail()
         }
         return (await sendTerminal(formatAskAnswer(prompt, selections), true)) || fail()
       }
@@ -206,7 +214,7 @@ export function useMobileNativeChatAnswerSend(args: {
           : buildAskAnswerKeys(prompt, selections)
       for (let index = 0; index < groups.length; index += 1) {
         if (generationRef.current !== generation) {
-          return false
+          return fail()
         }
         const group = groups[index]!
         const body = 'raw' in group ? group.raw : sanitizeAskFreeText(group.text)
@@ -215,7 +223,7 @@ export function useMobileNativeChatAnswerSend(args: {
         }
         if (index < groups.length - 1) {
           if (!(await wait(MOBILE_NATIVE_CHAT_QUESTION_STEP_MS))) {
-            return false
+            return fail()
           }
           // Pacing is deliberate, not transport latency — don't charge it to the budget.
           deadline += MOBILE_NATIVE_CHAT_QUESTION_STEP_MS

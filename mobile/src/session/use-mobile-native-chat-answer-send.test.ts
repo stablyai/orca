@@ -375,8 +375,9 @@ describe('useMobileNativeChatAnswerSend', () => {
   })
 
   it('cancels delayed keystrokes when the acknowledged input lease is lost', async () => {
+    const onSendError = vi.fn()
     const sendRequest = vi.fn().mockResolvedValue(acceptedResponse())
-    await mount({ sendRequest } as unknown as RpcClient, vi.fn())
+    await mount({ sendRequest } as unknown as RpcClient, onSendError)
 
     const prompt: AskPrompt = {
       questions: [
@@ -395,5 +396,126 @@ describe('useMobileNativeChatAnswerSend', () => {
 
     await expect(result).resolves.toBe(false)
     expect(sendRequest).toHaveBeenCalledTimes(1)
+    // q1's digit DID land before the lease loss aborted the chain, so the remote
+    // selector sits on q2 — ending silently left the card looking cleanly sent.
+    expect(onSendError).toHaveBeenCalledWith('Answer partly sent — check chat before retrying')
+  })
+
+  it('reports the half-stepped selector when Stop aborts a paced answer', async () => {
+    const onSendError = vi.fn()
+    const sendRequest = vi.fn().mockResolvedValue(acceptedResponse())
+    await mount({ sendRequest } as unknown as RpcClient, onSendError)
+
+    const prompt: AskPrompt = {
+      questions: [
+        { question: 'q1', multiSelect: false, options: [{ label: 'A' }, { label: 'B' }] },
+        { question: 'q2', multiSelect: false, options: [{ label: 'C' }, { label: 'D' }] }
+      ]
+    }
+    let result: Promise<boolean> | undefined
+    await act(async () => {
+      result = answerSend?.answerAsk(prompt, [{ indices: [1] }, { indices: [0] }])
+    })
+    expect(sendRequest).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      answerSend?.cancelPending()
+      await vi.runAllTimersAsync()
+    })
+
+    await expect(result).resolves.toBe(false)
+    expect(sendRequest).toHaveBeenCalledTimes(1)
+    expect(onSendError).toHaveBeenCalledWith('Answer partly sent — check chat before retrying')
+  })
+
+  it('reports a superseded chain whose first group already moved the selector', async () => {
+    const onSendError = vi.fn()
+    const sendRequest = vi.fn().mockResolvedValue(acceptedResponse())
+    await mount({ sendRequest } as unknown as RpcClient, onSendError)
+
+    const prompt: AskPrompt = {
+      questions: [
+        { question: 'q1', multiSelect: false, options: [{ label: 'A' }, { label: 'B' }] },
+        { question: 'q2', multiSelect: false, options: [{ label: 'C' }, { label: 'D' }] }
+      ]
+    }
+    let first: Promise<boolean> | undefined
+    await act(async () => {
+      first = answerSend?.answerAsk(prompt, [{ indices: [1] }, { indices: [0] }])
+    })
+    expect(sendRequest).toHaveBeenCalledTimes(1)
+
+    // Changing the answer mid-sequence supersedes the chain, but q1's digit is
+    // already committed on the host — the replacement starts from a moved selector.
+    await act(async () => {
+      void answerSend?.answerAsk(TABS_OR_SPACES, [{ indices: [1] }])
+      await vi.runAllTimersAsync()
+    })
+
+    await expect(first).resolves.toBe(false)
+    expect(onSendError).toHaveBeenCalledWith('Answer partly sent — check chat before retrying')
+  })
+
+  it('keeps an ambiguous write ambiguous when the chain is aborted after it', async () => {
+    const onSendError = vi.fn()
+    let rejectWrite: (error: Error) => void = () => undefined
+    const sendRequest = vi.fn(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectWrite = reject
+        })
+    )
+    await mount({ sendRequest } as unknown as RpcClient, onSendError)
+
+    let result: Promise<boolean> | undefined
+    await act(async () => {
+      result = answerSend?.answerAsk(TABS_OR_SPACES, [{ indices: [1] }])
+      await Promise.resolve()
+    })
+    expect(sendRequest).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      answerSend?.cancelPending()
+      rejectWrite(markRpcDeliveryUnknown(new Error('Connection closed')))
+      await vi.runAllTimersAsync()
+    })
+
+    await expect(result).resolves.toBe(false)
+    // The abort says nothing about whether the in-flight keystroke landed.
+    expect(onSendError).toHaveBeenCalledWith('Answer unconfirmed — check chat before retrying')
+  })
+
+  it('stays silent when an aborted chain never got a keystroke onto the wire', async () => {
+    const onSendError = vi.fn()
+    let settleWrite: (response: unknown) => void = () => undefined
+    const sendRequest = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          settleWrite = resolve
+        })
+    )
+    await mount({ sendRequest } as unknown as RpcClient, onSendError)
+
+    let result: Promise<boolean> | undefined
+    await act(async () => {
+      result = answerSend?.answerAsk(TABS_OR_SPACES, [{ indices: [1] }])
+      await Promise.resolve()
+    })
+    expect(sendRequest).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      answerSend?.cancelPending()
+      settleWrite({
+        id: 'send',
+        ok: true as const,
+        result: { send: { accepted: false } },
+        _meta: { runtimeId: 'runtime' }
+      })
+      await vi.runAllTimersAsync()
+    })
+
+    await expect(result).resolves.toBe(false)
+    // Nothing reached the PTY and the user already moved on — no banner to raise.
+    expect(onSendError).not.toHaveBeenCalled()
   })
 })
