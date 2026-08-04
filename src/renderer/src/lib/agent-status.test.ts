@@ -457,6 +457,8 @@ describe('isGeminiTerminalTitle', () => {
     expect(isGeminiTerminalTitle('π ')).toBe(false)
     expect(isGeminiTerminalTitle('⠋ π - gemini-project')).toBe(false)
     expect(isGeminiTerminalTitle('/tmp/gemini/working')).toBe(false)
+    // Why: the static Qwen frame owns its title; a `gemini` directory token must not re-route it.
+    expect(isGeminiTerminalTitle('Qwen - gemini')).toBe(false)
     expect(isGeminiTerminalTitle('bash')).toBe(false)
   })
 })
