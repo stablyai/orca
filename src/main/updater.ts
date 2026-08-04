@@ -848,8 +848,9 @@ async function performQuitAndInstall(): Promise<void> {
       recoveryStatus ?? {
         state: 'error',
         // Why: past the native invoke this is the same pre-commit failure the event path reports, so it gets the same copy; only a pre-native exception can be helped by a restart.
+        // A synchronous throw out of quitAndInstall carries the same installer text the 'error' event would have.
         message: quitAndInstallNativeInvokedBeforeReset
-          ? getPreCommitInstallFailureMessage()
+          ? withInstallFailureCause(getPreCommitInstallFailureMessage(), error)
           : 'Could not restart to install the update. Quit and reopen Orca, then try again.'
       }
     )
@@ -894,7 +895,11 @@ const INSTALL_FAILURE_CAUSE_MAX_LENGTH = 200
  */
 function withInstallFailureCause(baseMessage: string, error: unknown): string {
   const raw = error instanceof Error ? error.message : typeof error === 'string' ? error : ''
-  const cause = raw.replace(/\s+/g, ' ').trim().slice(0, INSTALL_FAILURE_CAUSE_MAX_LENGTH)
+  // Why: the retained-package card runs its text through this same sanitizer, so a home directory,
+  // user name, or terminal escape must not reach the card merely because no artifact was tracked.
+  const redacted =
+    redactLinuxPackageInstallText(raw, getTrackedLinuxPackageArtifact()?.path ?? null) ?? ''
+  const cause = redacted.slice(0, INSTALL_FAILURE_CAUSE_MAX_LENGTH)
   if (!cause || cause === 'Unknown error') {
     return baseMessage
   }

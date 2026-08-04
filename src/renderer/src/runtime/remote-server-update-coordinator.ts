@@ -14,7 +14,7 @@ import type {
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import type { UpdateCheckOptions } from '../../../shared/types'
-import { readRemoteServerInstallFailure } from './remote-server-install-failure-probe'
+import { waitForReplacementRuntime } from './remote-server-restart-wait'
 import { remoteServerUpdateErrorMessage } from './remote-server-update-errors'
 import { pollRemoteServerUpdater } from './remote-server-updater-polling'
 
@@ -47,7 +47,10 @@ export type RemoteServerUpdateEntry = {
 
 export type RemoteServerUpdateTransport = {
   getRuntimeStatus: (environmentId: string, timeoutMs?: number) => Promise<RuntimeStatus>
-  getUpdaterStatus: (environmentId: string) => Promise<RemoteServerUpdaterSnapshot>
+  getUpdaterStatus: (
+    environmentId: string,
+    timeoutMs?: number
+  ) => Promise<RemoteServerUpdaterSnapshot>
   check: (
     environmentId: string,
     options: UpdateCheckOptions
@@ -264,42 +267,22 @@ export async function runRemoteServerUpdate(
     }
     onProgress(next)
 
-    const now = transport.now ?? Date.now
-    const reconnectDeadline = now() + timing.reconnectTimeoutMs
-    // Why: the install RPC returns before the installer fires, so an error on the first tick belongs to an earlier attempt.
-    let probed = false
-    while (now() < reconnectDeadline) {
-      let installFailure: string | null = null
-      try {
-        const status = await transport.getRuntimeStatus(entry.environmentId, 10_000)
-        const version = status.appVersion?.trim() ?? ''
-        const reachedTarget = hasReachedAppVersion(version, install.targetVersion)
-        if (status.runtimeId !== install.runtimeId && reachedTarget) {
-          next = {
-            ...next,
-            phase: 'updated',
-            currentVersion: version,
-            runtimeId: status.runtimeId,
-            liveTabCount: status.liveTabCount,
-            liveLeafCount: status.liveLeafCount
-          }
-          onProgress(next)
-          return next
-        }
-        installFailure = probed
-          ? await readRemoteServerInstallFailure(entry.environmentId, transport, install, status)
-          : null
-        probed = true
-      } catch {
-        // A refused connection is expected while the server process is being replaced.
-      }
-      // Why: thrown outside the try so the loop's own catch cannot swallow the reason we came for.
-      if (installFailure !== null) {
-        throw new Error(installFailure)
-      }
-      await transport.wait(timing.pollIntervalMs)
+    const replacement = await waitForReplacementRuntime(
+      entry.environmentId,
+      transport,
+      install,
+      timing
+    )
+    next = {
+      ...next,
+      phase: 'updated',
+      currentVersion: replacement.appVersion?.trim() ?? '',
+      runtimeId: replacement.runtimeId,
+      liveTabCount: replacement.liveTabCount,
+      liveLeafCount: replacement.liveLeafCount
     }
-    throw new Error('remote_update_reconnect_timeout')
+    onProgress(next)
+    return next
   } catch (error) {
     next = {
       ...next,

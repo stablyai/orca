@@ -1,3 +1,4 @@
+import os from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as TracerModule from './observability/tracer'
 import type * as UpdaterModule from './updater'
@@ -285,5 +286,48 @@ describe('quitAndInstall failure carries the updater cause', () => {
     const status = getUpdateStatus()
     // Prefixing this would put two contradictory instructions on one card.
     expect(status.state === 'error' ? status.message : '').toBe(WINDOWS_SIGNATURE_MISMATCH_ERROR)
+  })
+
+  it('redacts the cause the same way the retained-package card does', async () => {
+    const { quitAndInstall, getUpdateStatus } = await reachDownloaded()
+    const home = os.homedir()
+    const escape = String.fromCharCode(27)
+
+    autoUpdaterMock.quitAndInstall.mockImplementation(() => {
+      autoUpdaterMock.emit(
+        'error',
+        new Error(`${escape}[31mdpkg -i '${home}/.cache/orca-updater/pending/orca.deb'${escape}[0m`)
+      )
+    })
+
+    quitAndInstall()
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
+    })
+
+    const status = getUpdateStatus()
+    const message = status.state === 'error' ? status.message : ''
+    expect(message).not.toContain(home)
+    expect(message).not.toContain(escape)
+    expect(message).toContain("<home>/.cache/orca-updater/pending/orca.deb'")
+  })
+
+  it('carries the cause when quitAndInstall throws instead of dispatching an error event', async () => {
+    const { quitAndInstall, getUpdateStatus } = await reachDownloaded()
+
+    // Squirrel/NSIS can reject the request by throwing out of the native call; the event path never runs.
+    autoUpdaterMock.quitAndInstall.mockImplementation(() => {
+      throw new Error('Squirrel.framework is missing from the app bundle')
+    })
+
+    quitAndInstall()
+    await vi.waitFor(() => {
+      expect(getUpdateStatus().state).toBe('error')
+    })
+
+    const status = getUpdateStatus()
+    const message = status.state === 'error' ? status.message : ''
+    expect(message).toContain('Squirrel.framework is missing from the app bundle')
+    expect(message).toContain('Could not start the update installer.')
   })
 })

@@ -51,6 +51,23 @@ describe('readRemoteServerInstallFailure', () => {
     ).resolves.toBe('pkexec must be setuid root')
   })
 
+  it('bounds the status call by the deadline the caller passes', async () => {
+    const getUpdaterStatus = vi.fn(async () =>
+      snapshot({ state: 'error', message: 'pkexec must be setuid root' })
+    )
+
+    await readRemoteServerInstallFailure(
+      'server-1',
+      { getUpdaterStatus },
+      install,
+      runtime(),
+      4_000
+    )
+
+    // Without this the call inherits the RPC client's 15s default and can outlast the reconnect budget.
+    expect(getUpdaterStatus).toHaveBeenCalledWith('server-1', 4_000)
+  })
+
   it('ignores an error published by a different process', async () => {
     const getUpdaterStatus = vi.fn(async () =>
       snapshot({ state: 'error', message: 'pkexec must be setuid root' }, 'runtime-new')

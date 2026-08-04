@@ -5,7 +5,10 @@ import type {
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 
 type InstallFailureProbeTransport = {
-  getUpdaterStatus: (environmentId: string) => Promise<RemoteServerUpdaterSnapshot>
+  getUpdaterStatus: (
+    environmentId: string,
+    timeoutMs?: number
+  ) => Promise<RemoteServerUpdaterSnapshot>
 }
 
 /**
@@ -18,12 +21,14 @@ export async function readRemoteServerInstallFailure(
   environmentId: string,
   transport: InstallFailureProbeTransport,
   install: RemoteServerUpdateInstallResult,
-  runtime: RuntimeStatus
+  runtime: RuntimeStatus,
+  timeoutMs?: number
 ): Promise<string | null> {
   if (runtime.runtimeId !== install.runtimeId) {
     return null
   }
-  const snapshot = await transport.getUpdaterStatus(environmentId)
+  // Why: without an explicit deadline this inherits the RPC client's 15s default and can outlast the caller's own wait.
+  const snapshot = await transport.getUpdaterStatus(environmentId, timeoutMs)
   if (snapshot.runtimeId !== install.runtimeId || snapshot.status.state !== 'error') {
     return null
   }
