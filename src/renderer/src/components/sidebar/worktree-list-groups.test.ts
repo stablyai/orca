@@ -4215,15 +4215,83 @@ describe('buildRows pending creations', () => {
       })
     })
 
-    it('extracts issue key from branch name when no linked issue', () => {
+    it('correctly extracts issue group info from GitHub linkedWorkItem', () => {
       const wt: Worktree = {
         ...worktree,
-        displayName: 'feature/PROJ-456-something',
-        branch: 'feature/PROJ-456-something'
+        linkedWorkItem: {
+          url: 'https://github.com/org/repo/issues/42',
+          title: 'Implement custom grouping',
+          number: 42,
+          provider: 'github',
+          type: 'issue'
+        }
       }
       expect(getIssueGroupInfo(wt)).toEqual({
-        key: 'issue:PROJ-456',
-        label: 'PROJ-456'
+        key: 'issue:#42',
+        label: '#42: Implement custom grouping'
+      })
+    })
+
+    it('correctly extracts issue group info from GitLab linkedWorkItem', () => {
+      const wt: Worktree = {
+        ...worktree,
+        linkedWorkItem: {
+          url: 'https://gitlab.com/org/repo/-/issues/99',
+          title: 'Pipeline reliability fix',
+          number: 99,
+          provider: 'gitlab',
+          type: 'issue'
+        }
+      }
+      expect(getIssueGroupInfo(wt)).toEqual({
+        key: 'issue:#99',
+        label: '#99: Pipeline reliability fix'
+      })
+    })
+
+    it('correctly extracts issue group info from linkedGitLabIssue number without linkedWorkItem', () => {
+      const wt: Worktree = {
+        ...worktree,
+        linkedGitLabIssue: 88
+      }
+      expect(getIssueGroupInfo(wt)).toEqual({
+        key: 'issue:#88',
+        label: 'Issue #88'
+      })
+    })
+
+    it('strips redundant issue key prefixes from Jira titles', () => {
+      const wt: Worktree = {
+        ...worktree,
+        linkedWorkItem: {
+          url: 'https://jira.example.com/browse/MSYP-683',
+          title: 'MSYP-683: Integratie Productbeoordeling',
+          number: 683,
+          provider: 'jira',
+          jiraIdentifier: 'MSYP-683',
+          type: 'issue'
+        }
+      }
+      expect(getIssueGroupInfo(wt)).toEqual({
+        key: 'issue:MSYP-683',
+        label: 'MSYP-683: Integratie Productbeoordeling'
+      })
+    })
+
+    it('strips redundant numeric prefixes from GitHub titles', () => {
+      const wt: Worktree = {
+        ...worktree,
+        linkedWorkItem: {
+          url: 'https://github.com/org/repo/issues/5199',
+          title: '#5199: Custom Groups Support',
+          number: 5199,
+          provider: 'github',
+          type: 'issue'
+        }
+      }
+      expect(getIssueGroupInfo(wt)).toEqual({
+        key: 'issue:#5199',
+        label: '#5199: Custom Groups Support'
       })
     })
 
