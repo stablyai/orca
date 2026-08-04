@@ -2840,6 +2840,61 @@ describe('SSH IPC handlers', () => {
     expect(mockConnectionManager.disconnect).toHaveBeenCalledWith('ssh-1')
   })
 
+  it('ssh:resetRelay preserves zmx leases and local recovery state', async () => {
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy',
+      terminalPersistenceBackend: 'zmx'
+    }
+    const conn = {}
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect.mockResolvedValue(conn)
+    mockConnectionManager.getConnection.mockReturnValue(undefined)
+    mockStore.getSshRemotePtyLeases.mockReturnValue([
+      { targetId: 'ssh-1', ptyId: 'pty-1', state: 'detached' }
+    ])
+    vi.mocked(getPtyIdsForConnection).mockReturnValue(['pty-1'])
+
+    await handlers.get('ssh:resetRelay')!(null, { targetId: 'ssh-1' })
+
+    expect(mockForceStopRelayForTarget).toHaveBeenCalledWith(conn, 'ssh-1', {
+      preserveZmxSessions: true
+    })
+    expect(mockStore.markSshRemotePtyLease).not.toHaveBeenCalledWith('ssh-1', 'pty-1', 'expired')
+    expect(clearProviderPtyState).not.toHaveBeenCalled()
+    expect(deletePtyOwnership).not.toHaveBeenCalled()
+    expect(mockConnectionManager.disconnect).toHaveBeenCalledWith('ssh-1')
+  })
+
+  it('ssh:resetRelay expires relay-owned leases when enabling zmx', async () => {
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy',
+      terminalPersistenceBackend: 'zmx'
+    }
+    const conn = {}
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect.mockResolvedValue(conn)
+    mockConnectionManager.getConnection.mockReturnValue(undefined)
+    mockForceStopRelayForTarget.mockResolvedValueOnce('relay')
+    mockStore.getSshRemotePtyLeases.mockReturnValue([
+      { targetId: 'ssh-1', ptyId: 'pty-1', state: 'detached' }
+    ])
+    vi.mocked(getPtyIdsForConnection).mockReturnValue(['pty-1'])
+
+    await handlers.get('ssh:resetRelay')!(null, { targetId: 'ssh-1' })
+
+    expect(mockStore.markSshRemotePtyLease).toHaveBeenCalledWith('ssh-1', 'pty-1', 'expired')
+    expect(clearProviderPtyState).toHaveBeenCalled()
+    expect(deletePtyOwnership).toHaveBeenCalled()
+  })
+
   it('ssh:resetRelay clears scoped live PTYs while expiring raw leases', async () => {
     const target: SshTarget = {
       id: 'ssh-1',

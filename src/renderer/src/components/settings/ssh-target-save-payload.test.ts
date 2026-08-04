@@ -75,6 +75,29 @@ describe('buildSshTargetSavePayload', () => {
     })
   })
 
+  it('persists zmx terminal ownership and clears it when disabled', () => {
+    const enabled = buildSshTargetSavePayload({
+      ...EMPTY_FORM,
+      host: 'durable.example.com',
+      zmxTerminalPersistence: true
+    })
+    expect(enabled.ok).toBe(true)
+    if (enabled.ok) {
+      expect(enabled.payload.target.terminalPersistenceBackend).toBe('zmx')
+      expect(enabled.payload.updates.terminalPersistenceBackend).toBe('zmx')
+    }
+
+    const disabled = buildSshTargetSavePayload({
+      ...EMPTY_FORM,
+      host: 'durable.example.com'
+    })
+    expect(disabled.ok).toBe(true)
+    if (disabled.ok) {
+      expect(disabled.payload.target).not.toHaveProperty('terminalPersistenceBackend')
+      expect(disabled.payload.updates).toHaveProperty('terminalPersistenceBackend', undefined)
+    }
+  })
+
   it('rejects invalid bounded relay timeouts', () => {
     const result = buildSshTargetSavePayload({
       ...EMPTY_FORM,

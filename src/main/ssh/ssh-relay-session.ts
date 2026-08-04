@@ -4,6 +4,7 @@
 import { randomUUID } from 'node:crypto'
 import type { BrowserWindow } from 'electron'
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
+import type { SshTerminalPersistenceBackend } from '../../shared/ssh-terminal-persistence'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { isRelayVersionMismatchError } from './ssh-relay-version-mismatch-error'
 import { SshChannelMultiplexer } from './ssh-channel-multiplexer'
@@ -470,7 +471,11 @@ export class SshRelaySession {
   }
 
   // Why: single entry point for relay setup (initial connect + app-restart reconnect) so no path forgets a registration step.
-  async establish(conn: SshConnection, graceTimeSeconds?: number): Promise<void> {
+  async establish(
+    conn: SshConnection,
+    graceTimeSeconds?: number,
+    terminalPersistenceBackend?: SshTerminalPersistenceBackend
+  ): Promise<void> {
     if (this._state !== 'idle') {
       throw new Error(`Cannot establish relay session in state: ${this._state}`)
     }
@@ -488,7 +493,15 @@ export class SshRelaySession {
         sockPath,
         credentialFile,
         hostPlatform
-      } = await deployAndLaunchRelay(conn, undefined, graceTimeSeconds, this.targetId)
+      } = await (terminalPersistenceBackend
+        ? deployAndLaunchRelay(
+            conn,
+            undefined,
+            graceTimeSeconds,
+            this.targetId,
+            terminalPersistenceBackend
+          )
+        : deployAndLaunchRelay(conn, undefined, graceTimeSeconds, this.targetId))
       this.hostPlatform = hostPlatform ?? null
       this.remoteCliBridgeEnv =
         remoteHome && remoteRelayDir && nodePath && sockPath && hostPlatform
@@ -601,7 +614,11 @@ export class SshRelaySession {
   }
 
   // Why: network-blip reconnect; AbortController-guarded so overlapping attempts from fast flaps cancel the stale one.
-  async reconnect(conn: SshConnection, graceTimeSeconds?: number): Promise<void> {
+  async reconnect(
+    conn: SshConnection,
+    graceTimeSeconds?: number,
+    terminalPersistenceBackend?: SshTerminalPersistenceBackend
+  ): Promise<void> {
     // Why: reconnect only from 'ready'/'reconnecting' — from 'deploying' it would tear down a mux establish() is still using; 'idle' has no session yet.
     if (this._state !== 'ready' && this._state !== 'reconnecting') {
       return
@@ -632,7 +649,15 @@ export class SshRelaySession {
         sockPath,
         credentialFile,
         hostPlatform
-      } = await deployAndLaunchRelay(conn, undefined, graceTimeSeconds, this.targetId)
+      } = await (terminalPersistenceBackend
+        ? deployAndLaunchRelay(
+            conn,
+            undefined,
+            graceTimeSeconds,
+            this.targetId,
+            terminalPersistenceBackend
+          )
+        : deployAndLaunchRelay(conn, undefined, graceTimeSeconds, this.targetId))
       this.hostPlatform = hostPlatform ?? null
       this.remoteCliBridgeEnv =
         remoteHome && remoteRelayDir && nodePath && sockPath && hostPlatform

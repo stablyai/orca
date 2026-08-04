@@ -1481,6 +1481,29 @@ describe('Store', () => {
     expect(onDisk).not.toHaveProperty('relayGracePeriodSeconds')
   })
 
+  it('persists zmx terminal ownership and clears relay defaults on update', async () => {
+    const store = await createStore()
+    store.addSshTarget({
+      id: 'ssh-zmx',
+      label: 'Durable host',
+      host: 'durable.example.com',
+      port: 22,
+      username: 'dev',
+      terminalPersistenceBackend: 'zmx'
+    })
+
+    expect(store.getSshTarget('ssh-zmx')?.terminalPersistenceBackend).toBe('zmx')
+    expect(
+      store.updateSshTarget('ssh-zmx', { terminalPersistenceBackend: 'relay' })
+    ).not.toHaveProperty('terminalPersistenceBackend')
+
+    store.flush()
+    const persisted = readDataFile() as { sshTargets?: Record<string, unknown>[] }
+    expect(persisted.sshTargets?.find((target) => target.id === 'ssh-zmx')).not.toHaveProperty(
+      'terminalPersistenceBackend'
+    )
+  })
+
   it('persists the SSH target source field through add, update, and disk round-trip', async () => {
     const store = await createStore()
     store.addSshTarget({

@@ -2,16 +2,28 @@ import type { SshConnection } from './ssh-connection'
 import { shellEscape } from './ssh-connection-utils'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { relaySocketNameForInstanceId } from './ssh-relay-instance-id'
+import { zmxPtyNamespaceForRelaySocketName } from '../../shared/zmx-pty-namespace'
+import type { SshTerminalPersistenceBackend } from '../../shared/ssh-terminal-persistence'
+
+const PTY_BACKEND_OUTPUT_PREFIX = '__ORCA_PTY_BACKEND__='
 
 export async function forceStopRelayForTarget(
   conn: SshConnection,
-  relayInstanceId: string
-): Promise<void> {
+  relayInstanceId: string,
+  options: { preserveZmxSessions?: boolean } = {}
+): Promise<SshTerminalPersistenceBackend> {
   const sockName = relaySocketNameForInstanceId(relayInstanceId)
   const escapedSockName = shellEscape(sockName)
+  const zmxNamespace = zmxPtyNamespaceForRelaySocketName(sockName)
   const script = [
     `sock_name=${escapedSockName}`,
     'base="${HOME}/.orca-remote"',
+    'pty_backend=relay',
+    'if [ -f "$base/${sock_name}.pty-backend" ]; then',
+    '  IFS= read -r pty_backend < "$base/${sock_name}.pty-backend" || true',
+    'fi',
+    'case "$pty_backend" in zmx) ;; *) pty_backend=relay ;; esac',
+    `printf '${PTY_BACKEND_OUTPUT_PREFIX}%s\\n' "$pty_backend"`,
     'if [ -d "$base" ]; then',
     '  for sock in "$base"/relay-*/"$sock_name" "$base"/"$sock_name"; do',
     '    [ -S "$sock" ] || continue',
@@ -32,8 +44,46 @@ export async function forceStopRelayForTarget(
     '    fi',
     '    rm -f "$sock"',
     '  done',
-    'fi'
+    'fi',
+    ...(options.preserveZmxSessions
+      ? []
+      : [
+          `zmx_dir="\${HOME}/.orca-remote/zmx-pty/${zmxNamespace}/runtime"`,
+          `zmx_metadata_dir="\${HOME}/.orca-remote/zmx-pty/${zmxNamespace}/metadata"`,
+          'if [ -d "$zmx_dir" ]; then',
+          '  zmx_bin=$(command -v zmx 2>/dev/null || true)',
+          '  if [ -z "$zmx_bin" ]; then',
+          '    for candidate in /opt/homebrew/bin/zmx /usr/local/bin/zmx "$HOME/.local/bin/zmx" "$HOME/bin/zmx"; do',
+          '      [ -x "$candidate" ] && zmx_bin="$candidate" && break',
+          '    done',
+          '  fi',
+          '  if [ -z "$zmx_bin" ]; then',
+          '    shell_bin="${SHELL:-/bin/sh}"',
+          '    if [ -x "$shell_bin" ]; then',
+          '      zmx_bin=$("$shell_bin" -lc \'command -v zmx\' 2>/dev/null | tail -n 1)',
+          '      [ -x "$zmx_bin" ] || zmx_bin=',
+          '    fi',
+          '  fi',
+          '  if [ -z "$zmx_bin" ]; then',
+          '    for zmx_sock in "$zmx_dir"/pty-*; do',
+          '      [ -S "$zmx_sock" ] || continue',
+          '      echo "zmx is required to end persistent Orca terminals" >&2',
+          '      exit 1',
+          '    done',
+          '  fi',
+          '  if [ -n "$zmx_bin" ]; then',
+          '    sessions=$(ZMX_DIR="$zmx_dir" "$zmx_bin" list --short) || exit 1',
+          '    for session in $sessions; do',
+          '      case "$session" in pty-[0-9]*) ZMX_DIR="$zmx_dir" "$zmx_bin" kill "$session" || exit 1 ;; esac',
+          '    done',
+          '  fi',
+          'fi',
+          'rm -f "$zmx_metadata_dir"/pty-*.json'
+        ])
   ].join('\n')
 
-  await execCommand(conn, script)
+  const output = await execCommand(conn, script)
+  return output.split(/\r?\n/).some((line) => line.trim() === `${PTY_BACKEND_OUTPUT_PREFIX}zmx`)
+    ? 'zmx'
+    : 'relay'
 }

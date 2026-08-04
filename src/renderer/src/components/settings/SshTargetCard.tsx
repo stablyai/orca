@@ -66,6 +66,9 @@ function formatGraceDuration(seconds: number): string {
 }
 
 function formatTerminalPersistence(target: SshTarget): string {
+  if (target.terminalPersistenceBackend === 'zmx') {
+    return translate('settings.ssh.zmxTerminalPersistence.summary', 'durable terminals: zmx')
+  }
   const graceSeconds = target.relayGracePeriodSeconds ?? DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
   if (graceSeconds === 0) {
     return translate('auto.components.settings.SshTargetCard.8ce71262f4', 'terminals until reset')

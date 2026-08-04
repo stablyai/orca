@@ -131,6 +131,32 @@ describe('forceStopRelayForTarget', () => {
     expect(command).toContain('lsof -t -a -U "$sock"')
     expect(command).toContain('pgrep -f "$sock_name"')
     expect(command).toContain('rm -f "$sock"')
+    expect(command).toContain('zmx_bin=$(command -v zmx')
+  })
+
+  it('leaves zmx sessions untouched when the durable backend remains enabled', async () => {
+    const conn = {} as SshConnection
+
+    await forceStopRelayForTarget(conn, 'ssh-1', { preserveZmxSessions: true })
+
+    const command = vi.mocked(execCommand).mock.calls[0]?.[1] ?? ''
+    expect(command).not.toContain('zmx_bin=$(command -v zmx')
+  })
+
+  it('reports the backend owned by the stopped relay', async () => {
+    const conn = {} as SshConnection
+    vi.mocked(execCommand).mockResolvedValue('__ORCA_PTY_BACKEND__=zmx\n')
+
+    await expect(forceStopRelayForTarget(conn, 'ssh-1')).resolves.toBe('zmx')
+  })
+
+  it('uses the login shell fallback and propagates zmx cleanup failures', async () => {
+    const command = await capturedResetScript()
+
+    expect(command).toContain('"$shell_bin" -lc \'command -v zmx\'')
+    expect(command).toContain('sessions=$(ZMX_DIR="$zmx_dir" "$zmx_bin" list --short) || exit 1')
+    expect(command).toContain('"$zmx_bin" kill "$session" || exit 1')
+    expect(command).toContain('rm -f "$zmx_metadata_dir"/pty-*.json')
   })
 
   it.skipIf(process.platform === 'win32')(

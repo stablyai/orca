@@ -391,10 +391,8 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
                     busyAction={busyActionForTarget(target.id)}
                     onConnect={handleConnect}
                     onDisconnect={handleDisconnect}
-                    onTerminateSessions={(id) =>
-                      requestTerminateSessions({ id, label: target.label })
-                    }
-                    onResetRelay={(id) => requestResetRelay({ id, label: target.label })}
+                    onTerminateSessions={() => requestTerminateSessions(target)}
+                    onResetRelay={() => requestResetRelay(target)}
                     onTest={handleTest}
                     onEdit={handleEdit}
                     onRemove={(id) =>

@@ -70,6 +70,7 @@ import {
   type AgentSessionOwnerBinding
 } from '../shared/agent-session-host-authority'
 import { createPtySlaveEchoProbe, readPtySlavePath } from '../shared/pty-slave-line-discipline-echo'
+import { ZmxPtySupervisor, type ZmxPtySessionMetadata } from './zmx-pty-supervisor'
 
 // Why: only Linux compiles node-pty (no prebuilt), so the build-tools remedy is a closable setup gap
 // there and wrong advice anywhere node-pty ships one. The relay only sees an unloadable binding, never
@@ -154,6 +155,11 @@ type ManagedPty = {
   startupIngressIntent?: ReturnType<typeof parsePtyStartupIngressIntent>
   ownerBackend: PtyOwnerBackend
   agentSessionOwners?: AgentSessionOwnerBinding[]
+  zmxSession?: {
+    metadata: ZmxPtySessionMetadata
+    relayDetaching?: boolean
+    terminating?: boolean
+  }
 }
 
 type RelayAgentSessionCreateResult = {
@@ -352,6 +358,14 @@ export type RelayPtyWorktreeRemovalCoordinator = {
   beginWorktreePtySpawn(operationPath: string): () => void
 }
 
+export type PtyHandlerOptions = {
+  zmx?: {
+    executablePath: string
+    namespace: string
+    storageRoot?: string
+  }
+}
+
 export class PtyHandler {
   private ptys = new Map<string, ManagedPty>()
   private nextId = 1
@@ -387,10 +401,18 @@ export class PtyHandler {
     string,
     Promise<RelayAgentSessionCreateResult>
   >()
+  private readonly zmxSupervisor: ZmxPtySupervisor | null
+  private zmxIndexLoaded = false
+  private readonly pendingZmxRecoveries = new Map<string, Promise<ManagedPty | null>>()
 
-  constructor(dispatcher: RelayDispatcher, graceTimeMs = DEFAULT_GRACE_TIME_MS) {
+  constructor(
+    dispatcher: RelayDispatcher,
+    graceTimeMs = DEFAULT_GRACE_TIME_MS,
+    options: PtyHandlerOptions = {}
+  ) {
     this.dispatcher = dispatcher
     this.graceTimeMs = graceTimeMs
+    this.zmxSupervisor = options.zmx ? new ZmxPtySupervisor(options.zmx) : null
     this.registerHandlers()
     this.removeLegacyCapacityListener =
       this.dispatcher.onLegacyPtyCapacity?.(() => this.handleLegacyCapacity()) ?? null
@@ -470,6 +492,125 @@ export class PtyHandler {
     }
   }
 
+  private async loadZmxIndex(): Promise<void> {
+    if (!this.zmxSupervisor || this.zmxIndexLoaded) {
+      return
+    }
+    const [metadata, sessionNames] = await Promise.all([
+      this.zmxSupervisor.listMetadata(),
+      this.zmxSupervisor.listSessionNames()
+    ])
+    for (const id of [...metadata.map((entry) => entry.id), ...sessionNames]) {
+      const match = id.match(/^pty-(\d+)$/)
+      if (match) {
+        this.nextId = Math.max(this.nextId, Number.parseInt(match[1], 10) + 1)
+      }
+    }
+    this.zmxIndexLoaded = true
+  }
+
+  private spawnZmxClient(
+    pty: typeof NodePty,
+    metadata: ZmxPtySessionMetadata,
+    baseEnv: Record<string, string>,
+    shellArgs?: readonly string[]
+  ): IPty {
+    const supervisor = this.zmxSupervisor
+    if (!supervisor) {
+      throw new Error('zmx PTY supervisor is not configured')
+    }
+    const args = shellArgs
+      ? supervisor.newSessionArgs(metadata.id, metadata.shell, shellArgs)
+      : supervisor.attachArgs(metadata.id)
+    return pty.spawn(supervisor.executablePath, args, {
+      name: metadata.explicitTerm ?? baseEnv.TERM ?? 'xterm-256color',
+      cols: metadata.cols,
+      rows: metadata.rows,
+      cwd: metadata.initialCwd,
+      env: supervisor.spawnEnvironment(baseEnv)
+    })
+  }
+
+  private managedFromZmxMetadata(metadata: ZmxPtySessionMetadata, pty: IPty): ManagedPty {
+    return {
+      id: metadata.id,
+      incarnationId: metadata.incarnationId,
+      pty,
+      initialCwd: metadata.initialCwd,
+      buffered: new RecentPtyOutputBuffer({
+        preserveChunkBoundaries: false,
+        limit: REPLAY_BUFFER_MAX
+      }),
+      paneKey: metadata.paneKey,
+      tabId: metadata.tabId,
+      attachIdentity: metadata.attachIdentity,
+      worktreeId: metadata.worktreeId,
+      terminalHandle: metadata.terminalHandle,
+      explicitTerm: metadata.explicitTerm,
+      envToDelete: metadata.envToDelete,
+      gitCredentialPromptGuarded: metadata.gitCredentialPromptGuarded,
+      ownerBackend: resolvePtyOwnerBackend({
+        platform: process.platform,
+        shellPath: metadata.shell
+      }),
+      zmxSession: { metadata }
+    }
+  }
+
+  private async recoverZmxPty(id: string): Promise<ManagedPty | null> {
+    const managed = this.ptys.get(id)
+    if (managed && !managed.disposed) {
+      return managed
+    }
+    const pending = this.pendingZmxRecoveries.get(id)
+    if (pending) {
+      return await pending
+    }
+    const recovery = this.recoverZmxPtyUncached(id)
+    this.pendingZmxRecoveries.set(id, recovery)
+    try {
+      return await recovery
+    } finally {
+      if (this.pendingZmxRecoveries.get(id) === recovery) {
+        this.pendingZmxRecoveries.delete(id)
+      }
+    }
+  }
+
+  private async recoverZmxPtyUncached(id: string): Promise<ManagedPty | null> {
+    const supervisor = this.zmxSupervisor
+    if (!supervisor) {
+      return null
+    }
+    const [metadata, session] = await Promise.all([
+      supervisor.readMetadata(id),
+      supervisor.sessionInfo(id)
+    ])
+    if (!metadata || !session) {
+      if (metadata && !session) {
+        await supervisor.removeMetadata(id)
+      }
+      return null
+    }
+    await supervisor.detachClients(id)
+    const pty = await this.loadPty()
+    if (!pty) {
+      throw new Error(formatNodePtyUnavailableMessage(process.platform))
+    }
+    const env = this.buildSpawnEnv(
+      undefined,
+      { id, paneKey: metadata.paneKey, shell: metadata.shell },
+      metadata.envToDelete
+    )
+    const managed = this.managedFromZmxMetadata(metadata, this.spawnZmxClient(pty, metadata, env))
+    this.wireAndStore(managed)
+    const match = id.match(/^pty-(\d+)$/)
+    if (match) {
+      this.nextId = Math.max(this.nextId, Number.parseInt(match[1], 10) + 1)
+    }
+    return managed
+  }
+
   // Why: this value never reaches the grace *timer* — startGraceTimer's only caller always passes an
   // explicit timeoutMs — but relay.startGrace reads it back through configuredGraceTimeMs to pick the
   // grace branch, so a host-sent change does affect shutdown behavior. Callers and the host-sleep
@@ -494,6 +635,21 @@ export class PtyHandler {
         )
       })
       .map((managed) => managed.id)
+    if (this.zmxSupervisor) {
+      const metadata = await this.zmxSupervisor.listMetadata()
+      for (const entry of metadata) {
+        const ownedPath = entry.worktreeId
+          ? splitWorktreeId(entry.worktreeId)?.worktreePath
+          : undefined
+        if (
+          !matchingIds.includes(entry.id) &&
+          ((ownedPath !== undefined && isPathInsideOrEqual(rootPath, ownedPath)) ||
+            isPathInsideOrEqual(rootPath, entry.initialCwd))
+        ) {
+          matchingIds.push(entry.id)
+        }
+      }
+    }
     await Promise.all(matchingIds.map((id) => this.shutdown({ id, immediate: true })))
   }
 
@@ -679,6 +835,10 @@ export class PtyHandler {
     this.ptys.set(managed.id, managed)
     // Why: a second announce covers any store whose admission window has already closed.
     this.notifyPoolListener(this.ptyPoolActiveListener, 'pty-pool-active')
+    this.wireManagedPty(managed)
+  }
+
+  private wireManagedPty(managed: ManagedPty): void {
     const emitIngressData = (emission: PtyIngressEmission): void => {
       const rawLength = emission.rawEndSeq - emission.rawStartSeq
       this.appendReplayBuffer(managed, emission.data)
@@ -714,33 +874,113 @@ export class PtyHandler {
       if (managed.disposed) {
         return
       }
-      // Why: neutralize pty.kill synchronously so node-pty's 'close' SIGHUP can't hit a recycled pid on POSIX.
+      if (managed.zmxSession?.relayDetaching) {
+        this.finishZmxRelayDetach(managed)
+        return
+      }
+      if (managed.zmxSession && !managed.zmxSession.terminating) {
+        void this.handleZmxClientExit(managed, exitCode)
+        return
+      }
+      this.finishPtyExit(managed, exitCode)
+    })
+  }
+
+  private finishPtyExit(managed: ManagedPty, exitCode: number): void {
+    if (managed.disposed) {
+      return
+    }
+    // Why: neutralize pty.kill synchronously so node-pty's 'close' SIGHUP can't hit a recycled pid on POSIX.
+    if (process.platform !== 'win32') {
+      ;(managed.pty as unknown as { kill: (sig?: string) => void }).kill = () => {}
+    }
+    // Why: clear the SIGKILL fallback timer on clean exit so it doesn't fire later.
+    if (managed.killTimer) {
+      clearTimeout(managed.killTimer)
+      managed.killTimer = undefined
+    }
+    this.clearStartupCommandTimer(managed)
+    this.releaseRelayIngress(managed)
+    this.pausedOutputPtys.delete(managed.id)
+    this.consumerPausedOutputPtys.delete(managed.id)
+    this.flushPtyOutput(managed.id)
+    this.pendingExitByPty.set(managed.id, {
+      id: managed.id,
+      code: exitCode,
+      incarnationId: managed.incarnationId
+    })
+    this.publishPendingExit(managed.id)
+    this.notifyExitListener(managed)
+    this.agentSessionOwners.release(managed.id)
+    this.removePty(managed.id)
+    this.clearPtyInputState(managed.id)
+    // Why: release the ptmx fd on natural exit, else the master fd leaks until GC (docs/fix-pty-fd-leak.md).
+    disposeManagedPty(managed)
+    if (managed.zmxSession && this.zmxSupervisor) {
+      void this.zmxSupervisor.removeMetadata(managed.id)
+    }
+  }
+
+  private finishZmxRelayDetach(managed: ManagedPty): void {
+    if (managed.disposed) {
+      return
+    }
+    this.clearStartupCommandTimer(managed)
+    this.releaseRelayIngress(managed)
+    this.agentSessionOwners.release(managed.id)
+    this.removePty(managed.id)
+    this.clearPtyFlowState(managed.id)
+    disposeManagedPty(managed)
+  }
+
+  private async handleZmxClientExit(managed: ManagedPty, exitCode: number): Promise<void> {
+    const supervisor = this.zmxSupervisor
+    if (!supervisor || this.ptys.get(managed.id) !== managed || managed.disposed) {
+      return
+    }
+    const session = await supervisor.sessionInfo(managed.id).catch(() => null)
+    if (managed.zmxSession?.relayDetaching) {
+      this.finishZmxRelayDetach(managed)
+      return
+    }
+    if (managed.zmxSession?.terminating) {
+      this.finishPtyExit(managed, exitCode)
+      return
+    }
+    if (this.creationFenced) {
+      managed.zmxSession!.relayDetaching = true
+      this.finishZmxRelayDetach(managed)
+      return
+    }
+    if (!session) {
+      this.finishPtyExit(managed, exitCode)
+      return
+    }
+    const pty = await this.loadPty()
+    if (!pty || this.ptys.get(managed.id) !== managed || managed.disposed) {
+      this.finishPtyExit(managed, exitCode)
+      return
+    }
+    const metadata = managed.zmxSession!.metadata
+    const env = this.buildSpawnEnv(
+      undefined,
+      { id: managed.id, paneKey: managed.paneKey, shell: metadata.shell },
+      metadata.envToDelete
+    )
+    try {
+      // Why: node-pty does not release the exited wrapper's ptmx fd until destroy or GC.
       if (process.platform !== 'win32') {
         ;(managed.pty as unknown as { kill: (sig?: string) => void }).kill = () => {}
       }
-      // Why: clear the SIGKILL fallback timer on clean exit so it doesn't fire later.
-      if (managed.killTimer) {
-        clearTimeout(managed.killTimer)
-        managed.killTimer = undefined
-      }
-      this.clearStartupCommandTimer(managed)
-      this.releaseRelayIngress(managed)
-      this.pausedOutputPtys.delete(managed.id)
-      this.consumerPausedOutputPtys.delete(managed.id)
-      this.flushPtyOutput(managed.id)
-      this.pendingExitByPty.set(managed.id, {
-        id: managed.id,
-        code: exitCode,
-        incarnationId: managed.incarnationId
-      })
-      this.publishPendingExit(managed.id)
-      this.notifyExitListener(managed)
-      this.agentSessionOwners.release(managed.id)
-      this.removePty(managed.id)
-      this.clearPtyInputState(managed.id)
-      // Why: release the ptmx fd on natural exit, else the master fd leaks until GC (docs/fix-pty-fd-leak.md).
-      disposeManagedPty(managed)
-    })
+      ;(managed.pty as unknown as { destroy?: () => void }).destroy?.()
+      managed.pty = this.spawnZmxClient(pty, metadata, env)
+      managed.physicalExit = new PhysicalExitTracker()
+      managed.forceKillSent = false
+      managed.gracefulKillSent = false
+      this.wireManagedPty(managed)
+    } catch {
+      this.finishPtyExit(managed, exitCode)
+    }
   }
 
   private releaseRelayIngress(managed: ManagedPty): void {
@@ -1437,6 +1677,7 @@ export class PtyHandler {
       typeof params.shellOverride === 'string' ? params.shellOverride.trim() : ''
     const resolvedShellOverride = resolvePtyShellOverride(shellOverride)
     const shell = resolvedShellOverride || resolveDefaultShell()
+    await this.loadZmxIndex()
     let id: string
     do {
       id = `pty-${this.nextId++}`
@@ -1477,6 +1718,37 @@ export class PtyHandler {
       terminalWindowsWslDistro,
       emitReadyMarker: shouldEmitShellReadyMarker
     })
+    const tabId = typeof env?.ORCA_TAB_ID === 'string' ? env.ORCA_TAB_ID : undefined
+    const attachIdentity = {
+      paneKey: typeof params.paneKey === 'string' ? params.paneKey : paneKey,
+      tabId: typeof params.tabId === 'string' ? params.tabId : tabId
+    }
+    const worktreeId = typeof env?.ORCA_WORKTREE_ID === 'string' ? env.ORCA_WORKTREE_ID : undefined
+    const startupIngressIntent =
+      params.startupIngressVersion === PTY_STARTUP_INGRESS_VERSION
+        ? parsePtyStartupIngressIntent(params.startupIngress)
+        : undefined
+    const incarnationId = randomUUID()
+    const zmxMetadata: ZmxPtySessionMetadata | undefined = this.zmxSupervisor
+      ? {
+          version: 1,
+          id,
+          incarnationId,
+          initialCwd: cwd,
+          cols,
+          rows,
+          shell,
+          ...(paneKey ? { paneKey } : {}),
+          ...(tabId ? { tabId } : {}),
+          ...(attachIdentity.paneKey || attachIdentity.tabId ? { attachIdentity } : {}),
+          ...(worktreeId ? { worktreeId } : {}),
+          ...(terminalHandle ? { terminalHandle } : {}),
+          ...(explicitTerm !== undefined ? { explicitTerm } : {}),
+          envToDelete,
+          gitCredentialPromptGuarded,
+          createdAt: Date.now()
+        }
+      : undefined
 
     if (context?.signal?.aborted || context?.isStale()) {
       // Why: cancellation remains side-effect-free until the exact native spawn seam.
@@ -1490,16 +1762,29 @@ export class PtyHandler {
     // user startup files re-export their defaults.
     let term: IPty
     try {
-      term = pty.spawn(shell, shellLaunch.args, {
-        // Why: node-pty overwrites env.TERM with `name`; pass caller-selected TERM so it isn't lost.
-        name: spawnEnv.TERM ?? 'xterm-256color',
-        cols,
-        rows,
-        cwd,
-        // Why: relay shells inherit process.env; don't let an ambient Orca marker enable shell-ready unless requested.
-        env: { ...spawnEnv, ORCA_SHELL_READY_MARKER: '0', ...shellLaunch.env }
-      })
+      if (zmxMetadata && this.zmxSupervisor) {
+        await this.zmxSupervisor.writeMetadata(zmxMetadata)
+        term = this.spawnZmxClient(
+          pty,
+          zmxMetadata,
+          { ...spawnEnv, ORCA_SHELL_READY_MARKER: '0', ...shellLaunch.env },
+          shellLaunch.args
+        )
+      } else {
+        term = pty.spawn(shell, shellLaunch.args, {
+          // Why: node-pty overwrites env.TERM with `name`; pass caller-selected TERM so it isn't lost.
+          name: spawnEnv.TERM ?? 'xterm-256color',
+          cols,
+          rows,
+          cwd,
+          // Why: relay shells inherit process.env; don't let an ambient Orca marker enable shell-ready unless requested.
+          env: { ...spawnEnv, ORCA_SHELL_READY_MARKER: '0', ...shellLaunch.env }
+        })
+      }
     } catch (error) {
+      if (zmxMetadata && this.zmxSupervisor) {
+        await this.zmxSupervisor.killSession(id).catch(() => this.zmxSupervisor?.removeMetadata(id))
+      }
       // Why: Windows loads conpty.node only on first spawn, so handle that late binding failure here.
       if (isMissingNodePtyNativeBinding(error)) {
         this.invalidatePtyModuleAfterBindingFailure()
@@ -1510,19 +1795,9 @@ export class PtyHandler {
     onPhysicalSpawnCommitted?.()
 
     // Why: capture paneKey so the exit listener can evict per-pane caches without a separate ptyId→paneKey map.
-    const tabId = typeof env?.ORCA_TAB_ID === 'string' ? env.ORCA_TAB_ID : undefined
-    const attachIdentity = {
-      paneKey: typeof params.paneKey === 'string' ? params.paneKey : paneKey,
-      tabId: typeof params.tabId === 'string' ? params.tabId : tabId
-    }
-    const worktreeId = typeof env?.ORCA_WORKTREE_ID === 'string' ? env.ORCA_WORKTREE_ID : undefined
-    const startupIngressIntent =
-      params.startupIngressVersion === PTY_STARTUP_INGRESS_VERSION
-        ? parsePtyStartupIngressIntent(params.startupIngress)
-        : undefined
     const managed: ManagedPty = {
       id,
-      incarnationId: randomUUID(),
+      incarnationId,
       pty: term,
       initialCwd: cwd,
       buffered: new RecentPtyOutputBuffer({
@@ -1543,6 +1818,7 @@ export class PtyHandler {
       }),
       ...(startupIngressIntent ? { startupIngressIntent } : {}),
       ...(terminalHandle ? { terminalHandle } : {}),
+      ...(zmxMetadata ? { zmxSession: { metadata: zmxMetadata } } : {}),
       ...(shouldProviderDeliverCommand
         ? {
             startupCommand: {
@@ -1562,12 +1838,27 @@ export class PtyHandler {
     const sourceActivation =
       context && this.sourcePublication?.receivingActivation?.(id, context.clientId)
     this.wireAndStore(managed)
+    if (zmxMetadata && this.zmxSupervisor) {
+      const session = await this.zmxSupervisor.waitForSession(id)
+      if (!session) {
+        managed.zmxSession!.terminating = true
+        this.requestForceKill(managed)
+        await this.zmxSupervisor.killSession(id).catch(() => this.zmxSupervisor?.removeMetadata(id))
+        throw new Error(`zmx did not start persistent session "${id}"`)
+      }
+    }
     if (context?.isStale() && !params.agentSessionEnsure && !params.agentSessionCreateOperationId) {
-      // Why: if the client reconnected while pty.spawn was in flight, the
-      // response is discarded and no renderer can own this PTY. Shut it down
-      // immediately so it does not linger as an unreachable remote shell.
+      // Why: a superseded spawn has no renderer owner and must not linger remotely.
       this.releaseStartupCommand(managed)
-      this.requestGracefulKill(managed, 'terminate stale')
+      if (managed.zmxSession) {
+        void this.shutdown({ id: managed.id, immediate: true }).catch((error) => {
+          process.stderr.write(
+            `[pty-handler] failed to terminate stale zmx PTY ${managed.id}: ${error instanceof Error ? error.message : String(error)}\n`
+          )
+        })
+      } else {
+        this.requestGracefulKill(managed, 'terminate stale')
+      }
     } else if (managed.startupCommand) {
       this.scheduleStartupCommandDelivery(
         managed,
@@ -1593,14 +1884,20 @@ export class PtyHandler {
     sourceActivation?: PtySourceReceivingActivation
   }> {
     const id = params.id as string
-    const managed = this.ptys.get(id)
+    let managed = this.ptys.get(id)
+    if ((!managed || managed.disposed) && this.zmxSupervisor) {
+      managed = (await this.recoverZmxPty(id)) ?? undefined
+    }
     // Why: after dispose, pty.kill is a POSIX no-op; treat disposed as not-found so failures aren't silent.
     if (!managed || managed.disposed) {
       throw new Error(`PTY "${id}" not found`)
     }
 
-    // Why: verify liveness because shells can exit without node-pty onExit.
-    if (managed.pty.pid && !isProcessAlive(managed.pty.pid)) {
+    // Why: the zmx client PID can outlive a dead session; probe the durable owner instead.
+    const isBackingPtyAlive = managed.zmxSession
+      ? (await this.zmxSupervisor?.sessionInfo(id)) !== null
+      : !managed.pty.pid || isProcessAlive(managed.pty.pid)
+    if (!isBackingPtyAlive) {
       managed.physicalExit?.markExited()
       this.releaseRelayIngress(managed)
       this.flushPtyOutput(id)
@@ -1609,6 +1906,9 @@ export class PtyHandler {
       disposeManagedPty(managed)
       this.removePty(id)
       this.clearPtyFlowState(id)
+      if (managed.zmxSession && this.zmxSupervisor) {
+        await this.zmxSupervisor.removeMetadata(id)
+      }
       throw new Error(`PTY "${id}" not found`)
     }
 
@@ -1699,6 +1999,15 @@ export class PtyHandler {
     const managed = this.ptys.get(id)
     if (managed && !managed.disposed) {
       managed.pty.resize(cols, rows)
+      if (managed.zmxSession && this.zmxSupervisor) {
+        managed.zmxSession.metadata.cols = cols
+        managed.zmxSession.metadata.rows = rows
+        void this.zmxSupervisor.writeMetadata(managed.zmxSession.metadata).catch((error) => {
+          process.stderr.write(
+            `[pty-handler] failed to persist zmx PTY size ${id}: ${error instanceof Error ? error.message : String(error)}\n`
+          )
+        })
+      }
     }
   }
 
@@ -1717,6 +2026,28 @@ export class PtyHandler {
     const immediate = params.immediate as boolean
     const managed = this.ptys.get(id)
     if (!managed) {
+      if (this.zmxSupervisor && (await this.zmxSupervisor.sessionInfo(id))) {
+        await this.zmxSupervisor.killSession(id)
+      }
+      return
+    }
+
+    if (managed.zmxSession && this.zmxSupervisor) {
+      this.releaseStartupCommand(managed)
+      this.flushPtyOutput(id)
+      managed.zmxSession.terminating = true
+      try {
+        await this.zmxSupervisor.killSession(id)
+      } catch (error) {
+        managed.zmxSession.terminating = false
+        throw error
+      }
+      if (immediate) {
+        if (!managed.disposed) {
+          this.requestForceKill(managed)
+        }
+        await this.waitForPhysicalExit(managed, IMMEDIATE_PTY_EXIT_TIMEOUT_MS)
+      }
       return
     }
 
@@ -1743,6 +2074,14 @@ export class PtyHandler {
     if (!managed || managed.disposed) {
       throw new Error(`PTY "${id}" not found`)
     }
+    if (managed.zmxSession && this.zmxSupervisor) {
+      const info = await this.zmxSupervisor.sessionInfo(id)
+      if (!info) {
+        throw new Error(`PTY "${id}" not found`)
+      }
+      process.kill(-info.pid, signal)
+      return
+    }
     managed.pty.kill(signal)
   }
 
@@ -1765,6 +2104,7 @@ export class PtyHandler {
       return
     }
     managed.gracefulKillSent = true
+    this.requestZmxSessionTermination(managed)
     if (process.platform === 'win32') {
       // Why: ConPTY's bare kill is already force-final; block any later close of the handle.
       managed.forceKillSent = true
@@ -1819,6 +2159,7 @@ export class PtyHandler {
       return
     }
     managed.forceKillSent = true
+    this.requestZmxSessionTermination(managed)
     try {
       killPtyProcess(managed.pty, 'SIGKILL')
     } catch (error) {
@@ -1827,13 +2168,32 @@ export class PtyHandler {
     }
   }
 
+  private requestZmxSessionTermination(managed: ManagedPty): void {
+    if (
+      !managed.zmxSession ||
+      managed.zmxSession.relayDetaching ||
+      managed.zmxSession.terminating ||
+      !this.zmxSupervisor
+    ) {
+      return
+    }
+    managed.zmxSession.terminating = true
+    void this.zmxSupervisor.killSession(managed.id).catch((error) => {
+      managed.zmxSession!.terminating = false
+      process.stderr.write(
+        `[pty-handler] failed to terminate zmx PTY ${managed.id}: ${error instanceof Error ? error.message : String(error)}\n`
+      )
+    })
+  }
+
   private async getCwd(params: Record<string, unknown>): Promise<string> {
     const id = params.id as string
     const managed = this.ptys.get(id)
     if (!managed || managed.disposed) {
       throw new Error(`PTY "${id}" not found`)
     }
-    return resolveProcessCwd(managed.pty.pid, managed.initialCwd)
+    const pid = await this.getManagedProcessPid(managed)
+    return resolveProcessCwd(pid, managed.initialCwd)
   }
 
   private async getInitialCwd(params: Record<string, unknown>): Promise<string> {
@@ -1860,7 +2220,7 @@ export class PtyHandler {
     if (!managed || managed.disposed) {
       return false
     }
-    return await processHasChildren(managed.pty.pid)
+    return await processHasChildren(await this.getManagedProcessPid(managed))
   }
 
   private async getForegroundProcess(params: Record<string, unknown>): Promise<string | null> {
@@ -1869,7 +2229,8 @@ export class PtyHandler {
     if (!managed || managed.disposed) {
       return null
     }
-    return await getForegroundProcessName(managed.pty.pid, managed.pty.process || null)
+    const fallbackProcess = managed.zmxSession ? null : managed.pty.process || null
+    return await getForegroundProcessName(await this.getManagedProcessPid(managed), fallbackProcess)
   }
 
   private async inspectProcess(params: Record<string, unknown>): Promise<{
@@ -1881,21 +2242,49 @@ export class PtyHandler {
     if (!managed || managed.disposed) {
       throw new Error('terminal_gone')
     }
+    const pid = await this.getManagedProcessPid(managed)
     const foregroundProcess = await getForegroundProcessName(
-      managed.pty.pid,
-      managed.pty.process || null
+      pid,
+      managed.zmxSession ? null : managed.pty.process || null
     )
     return {
       foregroundProcess,
-      hasChildProcesses: await processHasChildren(managed.pty.pid)
+      hasChildProcesses: await processHasChildren(pid)
     }
   }
 
+  private async getManagedProcessPid(managed: ManagedPty): Promise<number> {
+    if (!managed.zmxSession || !this.zmxSupervisor) {
+      return managed.pty.pid
+    }
+    const info = await this.zmxSupervisor.sessionInfo(managed.id)
+    if (!info) {
+      throw new Error(`PTY "${managed.id}" not found`)
+    }
+    return info.pid
+  }
+
   private async listProcesses(): Promise<PtyProcessSummary[]> {
+    if (this.zmxSupervisor) {
+      await this.loadZmxIndex()
+      const metadata = await this.zmxSupervisor.listMetadata()
+      for (const entry of metadata) {
+        if (this.ptys.has(entry.id)) {
+          continue
+        }
+        const info = await this.zmxSupervisor.sessionInfo(entry.id)
+        if (!info) {
+          await this.zmxSupervisor.removeMetadata(entry.id)
+        }
+      }
+    }
     const results: PtyProcessSummary[] = []
     for (const [id, managed] of this.ptys) {
       const title =
-        (await getForegroundProcessName(managed.pty.pid, managed.pty.process || null)) || 'shell'
+        (await getForegroundProcessName(
+          await this.getManagedProcessPid(managed),
+          managed.zmxSession ? null : managed.pty.process || null
+        )) || 'shell'
       results.push({
         id,
         incarnationId: managed.incarnationId,
@@ -1907,6 +2296,26 @@ export class PtyHandler {
           ? { agentSessionOwners: this.agentSessionOwners.listForPty(id) }
           : {})
       })
+    }
+    if (this.zmxSupervisor) {
+      const metadata = await this.zmxSupervisor.listMetadata()
+      for (const entry of metadata) {
+        if (this.ptys.has(entry.id)) {
+          continue
+        }
+        const info = await this.zmxSupervisor.sessionInfo(entry.id)
+        if (!info) {
+          continue
+        }
+        results.push({
+          id: entry.id,
+          incarnationId: entry.incarnationId,
+          cwd: entry.initialCwd,
+          title: info.command ? info.command.split(/\s+/)[0] || 'shell' : 'shell',
+          ...(entry.worktreeId ? { worktreeId: entry.worktreeId } : {}),
+          ...(entry.terminalHandle ? { terminalHandle: entry.terminalHandle } : {})
+        })
+      }
     }
     return results
   }
@@ -1945,6 +2354,10 @@ export class PtyHandler {
 
     for (const entry of entries) {
       if (this.ptys.has(entry.id) || this.pendingReviveIds.has(entry.id)) {
+        continue
+      }
+      if (this.zmxSupervisor) {
+        await this.recoverZmxPty(entry.id)
         continue
       }
       // Only re-attach if the original process is still alive
@@ -2124,6 +2537,21 @@ export class PtyHandler {
     }
     this.clearStartupCommandTimer(managed)
     this.releaseRelayIngress(managed)
+    if (managed.zmxSession) {
+      managed.zmxSession.relayDetaching = true
+      await this.requestForceKillForRelayShutdown(managed)
+      if (waitForPhysicalExit && this.ptys.get(managed.id) === managed && !managed.disposed) {
+        try {
+          await this.waitForPhysicalExit(managed, IMMEDIATE_PTY_EXIT_TIMEOUT_MS)
+        } catch {
+          // The zmx daemon remains authoritative even if its client wrapper cannot report exit.
+        }
+      }
+      if (this.ptys.get(managed.id) === managed && !managed.disposed) {
+        this.finishZmxRelayDetach(managed)
+      }
+      return
+    }
     // Why: retain the native owner until SIGKILL is accepted (one bounded retry) or onExit proves it gone.
     await this.requestForceKillForRelayShutdown(managed)
     if (waitForPhysicalExit && this.ptys.get(managed.id) === managed && !managed.disposed) {
