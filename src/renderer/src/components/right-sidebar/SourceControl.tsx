@@ -180,6 +180,7 @@ import {
   cancelRuntimeGeneratePullRequestFields,
   commitRuntimeGit,
   discardRuntimeGitPath,
+  undoLastCommitRuntimeGit,
   generateRuntimeCommitMessage,
   generateRuntimePullRequestFields,
   getRuntimeGitBranchCompare,
@@ -800,6 +801,8 @@ function SourceControlInner(): React.JSX.Element {
   const pendingCommentEditorRevealFrameIdsRef = useRef<number[]>([])
   // Why: setState is async, so a double-click can pass the isCommitting guard before re-render; a synchronously-flipped ref gives a true single-flight lock.
   const commitInFlightRef = useRef<Record<string, boolean>>({})
+  // Why: same per-worktree single-flight lock as commitInFlightRef, but for undo.
+  const undoInFlightRef = useRef<Record<string, boolean>>({})
   const activeWorktree = useActiveWorktree()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorktreeInstanceId = activeWorktree?.instanceId
@@ -1078,6 +1081,9 @@ function SourceControlInner(): React.JSX.Element {
   const isAbortingOperation = abortOperationInFlightByWorktree[activeWorktreeId ?? ''] ?? false
   const confirmAction = useConfirmationDialog()
   const isCommitting = commitInFlightByWorktree[activeWorktreeId ?? ''] ?? false
+  // Why: same per-worktree shape as commitInFlightByWorktree.
+  const [undoInFlightByWorktree, setUndoInFlightByWorktree] = useState<Record<string, boolean>>({})
+  const isUndoInFlight = undoInFlightByWorktree[activeWorktreeId ?? ''] ?? false
   // Why: per-worktree shape (like commit) so navigating worktrees mid-generation never cancels the in-flight request.
   const generateInFlightRef = useRef<Record<string, boolean>>({})
   const [generateInFlightByWorktree, setGenerateInFlightByWorktree] = useState<
@@ -1983,6 +1989,7 @@ function SourceControlInner(): React.JSX.Element {
     setCommitInFlightByWorktree((prev) => pruneRecord(prev))
     setAbortOperationInFlightByWorktree((prev) => pruneRecord(prev))
     setGenerateInFlightByWorktree((prev) => pruneRecord(prev))
+    setUndoInFlightByWorktree((prev) => pruneRecord(prev))
     setGenerateErrors((prev) => pruneRecord(prev))
     setCreatePrIntentInFlightByWorktree((prev) => pruneRecord(prev))
     setCreatePrIntentNotices((prev) => pruneRecord(prev))
@@ -2001,6 +2008,11 @@ function SourceControlInner(): React.JSX.Element {
     for (const key of Object.keys(generateInFlightRef.current)) {
       if (!worktreeMap.has(key)) {
         delete generateInFlightRef.current[key]
+      }
+    }
+    for (const key of Object.keys(undoInFlightRef.current)) {
+      if (!worktreeMap.has(key)) {
+        delete undoInFlightRef.current[key]
       }
     }
     for (const key of Object.keys(createPrIntentInFlightRef.current)) {
@@ -2156,6 +2168,61 @@ function SourceControlInner(): React.JSX.Element {
       worktreePath
     ]
   )
+  /**
+   * Invokes `git reset --soft HEAD~1` on the active worktree, restoring the last
+   * commit message to the draft field and keeping all changes staged. Guards against
+   * concurrent undo via per-worktree in-flight tracking.
+   */
+  const handleUndoLastCommit = useCallback(async (): Promise<void> => {
+    if (!activeWorktreeId || !worktreePath || isExecutingBulk) return
+    if (undoInFlightRef.current[activeWorktreeId]) return
+    undoInFlightRef.current[activeWorktreeId] = true
+    setUndoInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: true }))
+    setCommitErrorForWorktree(activeWorktreeId, null)
+    // Why: snapshot the draft before the async call so the post-await guard can detect user edits made during the await — same pattern as handleCommit.
+    const preUndoDraft = commitDraftsRef.current[activeWorktreeId ?? '']
+    try {
+      const result = await undoLastCommitRuntimeGit({
+        settings: activeRepoSettings,
+        worktreeId: activeWorktreeId,
+        worktreePath,
+        connectionId: getConnectionId(activeWorktreeId) ?? undefined
+      })
+      if (!result.success) {
+        setCommitErrorForWorktree(activeWorktreeId, result.error ?? 'Undo failed')
+        return
+      }
+      if (result.message !== undefined) {
+        updateCommitDrafts((drafts) => {
+          const current = drafts[activeWorktreeId]
+          // Why: if the user edited the draft during the await, preserve their edits; otherwise restore the recovered message.
+          if (current !== undefined && current.trim() !== (preUndoDraft?.trim() ?? '')) {
+            return drafts
+          }
+          return { ...drafts, [activeWorktreeId]: result.message ?? '' }
+        })
+      }
+      await refreshActiveGitStatusAfterMutation()
+      void refreshGitHistoryRef.current()
+    } catch (error) {
+      setCommitErrorForWorktree(
+        activeWorktreeId,
+        error instanceof Error ? error.message : 'Undo failed'
+      )
+    } finally {
+      setUndoInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: false }))
+      undoInFlightRef.current[activeWorktreeId] = false
+    }
+  }, [
+    activeWorktreeId,
+    worktreePath,
+    activeRepoSettings,
+    isExecutingBulk,
+    refreshActiveGitStatusAfterMutation,
+    updateCommitDrafts,
+    setCommitErrorForWorktree,
+    refreshGitHistoryRef
+  ])
 
   const handleGenerate = useCallback(
     async (overrides?: RuntimeGenerateCommitMessageOverrides): Promise<void> => {
@@ -4315,7 +4382,9 @@ function SourceControlInner(): React.JSX.Element {
           branchSummary?.status === 'ready' ? (branchSummary.commitsAhead ?? 0) : undefined,
         hasCurrentBranch: Boolean(branchName),
         canPushLinkedReviewWithoutUpstream: canUseHostedReviewPushTarget,
-        rebaseBaseRef: effectiveBaseRef
+        rebaseBaseRef: effectiveBaseRef,
+        isUndoInFlight,
+        worktreeId: activeWorktreeId
       }),
     [
       commitMessage,
@@ -4324,6 +4393,7 @@ function SourceControlInner(): React.JSX.Element {
       hasUnstagedChanges,
       hasPartiallyStagedChanges,
       isCommitting,
+      isUndoInFlight,
       conflictOperation,
       isAbortingOperation,
       isRemoteOperationActive,
@@ -4340,7 +4410,8 @@ function SourceControlInner(): React.JSX.Element {
       branchName,
       effectiveBaseRef,
       remoteStatusForActions,
-      unresolvedConflicts.length
+      unresolvedConflicts.length,
+      activeWorktreeId
     ]
   )
 
@@ -4359,6 +4430,9 @@ function SourceControlInner(): React.JSX.Element {
           return
         case 'commit_sync':
           void runCompoundCommitAction('sync')
+          return
+        case 'undo_last_commit':
+          void handleUndoLastCommit()
           return
         case 'abort_merge':
           void handleAbortMerge()
@@ -4388,6 +4462,7 @@ function SourceControlInner(): React.JSX.Element {
       handleCreatePullRequest,
       handleAbortMerge,
       handleAbortRebase,
+      handleUndoLastCommit,
       isCreatingPr,
       isCreatePrIntentInFlight,
       prGenerating,

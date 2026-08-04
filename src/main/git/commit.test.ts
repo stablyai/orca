@@ -9,7 +9,7 @@ vi.mock('./runner', () => ({
   gitExecFileAsyncBuffer: vi.fn()
 }))
 
-import { commitChanges } from './status'
+import { commitChanges, undoLastCommit } from './status'
 
 describe('commitChanges', () => {
   beforeEach(() => {
@@ -77,5 +77,65 @@ describe('commitChanges', () => {
       success: false,
       error: 'spawn git ENOENT'
     })
+  })
+})
+
+describe('undoLastCommit', () => {
+  beforeEach(() => {
+    gitExecFileAsyncMock.mockReset()
+  })
+
+  it('returns success with commit message when reset completes', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'feat: previous commit\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    const result = await undoLastCommit('/repo')
+
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
+      1,
+      ['log', '-1', '--format=%s'],
+      { cwd: '/repo' }
+    )
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      ['reset', '--soft', 'HEAD~1'],
+      { cwd: '/repo' }
+    )
+    expect(result).toEqual({ success: true, message: 'feat: previous commit' })
+  })
+
+  it('returns failure when log fails (e.g. no commits)', async () => {
+    gitExecFileAsyncMock.mockRejectedValue({
+      stderr: 'fatal: ambiguous argument: HEAD~1: unknown revision\n'
+    })
+
+    const result = await undoLastCommit('/repo')
+
+    expect(result).toEqual({
+      success: false,
+      error: 'fatal: ambiguous argument: HEAD~1: unknown revision\n'
+    })
+  })
+
+  it('falls back to Error.message when stderr is empty on failure', async () => {
+    gitExecFileAsyncMock.mockRejectedValue(new Error('spawn git ENOENT'))
+
+    const result = await undoLastCommit('/repo')
+
+    expect(result).toEqual({
+      success: false,
+      error: 'spawn git ENOENT'
+    })
+  })
+
+  it('trims whitespace from commit message', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: '  feat: message with whitespace  \n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    const result = await undoLastCommit('/repo')
+
+    expect(result).toEqual({ success: true, message: 'feat: message with whitespace' })
   })
 })

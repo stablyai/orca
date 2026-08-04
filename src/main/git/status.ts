@@ -2046,6 +2046,39 @@ export async function commitChanges(
   }
 }
 
+
+/**
+ * Undo the last commit, keeping all changes staged.
+ */
+export async function undoLastCommit(
+  worktreePath: string,
+  options: GitRuntimeOptions = {}
+): Promise<{ success: boolean; message?: string; error?: string }> {
+  invalidateGitReadCaches()
+  try {
+    const { stdout: message } = await gitExecFileAsync(
+      ['log', '-1', '--format=%s'],
+      gitOptionsForWorktree(worktreePath, options)
+    )
+    await gitExecFileAsync(
+      ['reset', '--soft', 'HEAD~1'],
+      gitOptionsForWorktree(worktreePath, options)
+    )
+    return { success: true, message: message.trim() }
+  } catch (error) {
+    const errorMessage =
+      typeof error === 'object' && error !== null && 'stderr' in error
+        ? (error as { stderr: string }).stderr
+        : error instanceof Error
+          ? error.message
+          : 'Undo failed'
+    return { success: false, error: errorMessage }
+  } finally {
+    invalidateGitReadCaches()
+  }
+}
+
+
 /**
  * Discard working tree changes for a file.
  */

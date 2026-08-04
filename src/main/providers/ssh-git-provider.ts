@@ -194,6 +194,30 @@ export class SshGitProvider implements IGitProvider {
         })) as { success: boolean; error?: string }
     )
   }
+  /**
+   * Undoes the most recent commit on the given worktree using `git reset --soft HEAD~1`,
+   * returning the commit message so it can be restored to the draft field. Delegates to
+   * the relay via `git.undoLastCommit`. Wrapped in `runWithDiffDedupeClear` to prevent
+   * stale diff reads after the mutation. Throws an actionable reconnect message if the
+   * relay does not implement `git.undoLastCommit` (method-not-found error).
+   */
+  async undoLastCommit(
+    worktreePath: string
+  ): Promise<{ success: boolean; message?: string; error?: string }> {
+    return this.runWithDiffDedupeClear(async () => {
+      try {
+        const result = await this.mux.request('git.undoLastCommit', { worktreePath })
+        return result as { success: boolean; message?: string; error?: string }
+      } catch (error) {
+        if (isJsonRpcMethodNotFoundError(error)) {
+          throw new Error(
+            'This SSH host is running an older Orca relay that cannot undo the last commit. Reconnect to deploy the latest relay, then try again.'
+          )
+        }
+        throw error
+      }
+    })
+  }
 
   async getStagedCommitContext(worktreePath: string): Promise<CommitMessageDraftContext | null> {
     const branchPromise = this.exec(['branch', '--show-current'], worktreePath).catch(() => ({

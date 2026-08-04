@@ -47,6 +47,7 @@ import {
   detectConflictOperation,
   getDiff,
   commitChanges,
+  undoLastCommit,
   stageFile,
   unstageFile,
   bulkStageFiles,
@@ -1362,6 +1363,29 @@ export function registerFilesystemHandlers(
         worktreePath
       )
       return commitChanges(worktreePath, args.message, gitOptions)
+    }
+  )
+
+  ipcMain.handle(
+    'git:undoLastCommit',
+    async (
+      _event,
+      args: { worktreePath: string; connectionId?: string }
+    ): Promise<{ success: boolean; message?: string; error?: string }> => {
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+        }
+        return provider.undoLastCommit(args.worktreePath)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      return undoLastCommit(worktreePath, gitOptions)
     }
   )
 

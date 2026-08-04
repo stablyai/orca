@@ -10979,10 +10979,9 @@
                   "226b85a3a7": "Fetch",
                   "323bb614aa": "Commit y sincronizar",
                   "2b8e6595fd": "Commit",
+                  "undo_last_commit": "Deshacer último commit",
                   "04d709801d": "Fetch del remoto sin hacer merge"
-                }
-              },
-              "primary": {
+                },
                 "action": {
                   "ed93b4f14f": "Commit",
                   "946a8a05ea": "Crear un {{value0}} para esta rama",

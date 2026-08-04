@@ -17,8 +17,10 @@ import {
 } from './source-control-create-review-blocked-action'
 
 export type DropdownActionInputs = PrimaryActionInputs & {
+  worktreeId?: string | null
   conflictOperation?: GitConflictOperation
   isPullRequestOperationActive?: boolean
+  isUndoInFlight?: boolean
   rebaseBaseRef?: string | null
 }
 
@@ -26,6 +28,7 @@ export type DropdownActionKind =
   | 'commit'
   | 'commit_push'
   | 'commit_sync'
+  | 'undo_last_commit'
   | 'abort_merge'
   | 'abort_rebase'
   | 'create_pr'
@@ -138,6 +141,7 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
     branchCommitsAhead,
     hasCurrentBranch = true,
     canPushLinkedReviewWithoutUpstream = false,
+    worktreeId,
     rebaseBaseRef,
     isPullRequestOperationActive = false
   } = inputs
@@ -525,11 +529,21 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
     hint: canPushAndCreate ? undefined : createBlockedHint,
     disabled: !canPushAndCreate
   }
+  const undoLastCommitItem: DropdownItem = {
+    kind: 'undo_last_commit',
+    label: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.undo_last_commit',
+      'Undo Last Commit'
+    ),
+    title: 'Undo the most recent commit, keeping all changes staged',
+    disabled: globalBusy || !worktreeId || inputs.isUndoInFlight
+  }
 
   const entries: DropdownEntry[] = [
     commitItem,
     commitPushItem,
     commitSyncItem,
+    undoLastCommitItem,
     { kind: 'separator' },
     pushItem,
     forcePushItem,

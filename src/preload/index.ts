@@ -3316,6 +3316,11 @@ const api = {
       message: string
       connectionId?: string
     }): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('git:commit', args),
+    undoLastCommit: (args: {
+      worktreePath: string
+      connectionId?: string
+    }): Promise<{ success: boolean; message?: string; error?: string }> =>
+      ipcRenderer.invoke('git:undoLastCommit', args),
     generateCommitMessage: (args: {
       worktreePath: string
       worktreeId?: string
