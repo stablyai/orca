@@ -85,7 +85,13 @@ export class BrowserRecorderSessionObserver {
         level: details.level,
         message: details.message,
         lineNumber: details.lineNumber,
-        sourceId: details.sourceId
+        sourceId: details.sourceId,
+        // Why: Electron surfaces the JS stack for console errors — keep a
+        // slice so the log can point at the throwing function.
+        stack:
+          typeof (details as Electron.Event<{ stack?: string }>).stack === 'string'
+            ? (details as Electron.Event<{ stack?: string }>).stack
+            : undefined
       })
     }
   }

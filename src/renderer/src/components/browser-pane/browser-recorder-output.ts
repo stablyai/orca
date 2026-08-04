@@ -1,12 +1,13 @@
 import type { BrowserRecorderElementSummary, BrowserRecorderStep } from './browser-recorder-types'
 import type { BrowserRecorderAutomationAction } from '../../../../shared/browser-recorder-automation'
+import { groupRecorderSteps } from './browser-recorder-grouping'
 import {
   compactConsoleEntry,
   compactNetworkRequest,
   compactNetworkSummary,
   formatInteractionSummary
 } from './browser-recorder-stream-output'
-import { formatPageUrl, formatTime, inlineText } from './browser-recorder-text'
+import { formatPageUrl, formatTime, inlineCode, inlineText } from './browser-recorder-text'
 
 function elementLabel(element: BrowserRecorderElementSummary): string {
   const accessibleName = element.accessibleName?.trim()
@@ -24,6 +25,19 @@ function elementLabel(element: BrowserRecorderElementSummary): string {
  * page it happened on; network requests are indented under the interaction
  * that triggered them (trigger → request tree).
  */
+/** Format the gap: '' for sub-second, '(+Ns)' for seconds, '(+Ms)' for minutes. */
+export function stepGapLabel(currentAt: string, previousAt?: string): string {
+  if (!previousAt) {
+    return ''
+  }
+  const gapMs = new Date(currentAt).getTime() - new Date(previousAt).getTime()
+  if (!Number.isFinite(gapMs) || gapMs < 1000) {
+    return ''
+  }
+  const seconds = Math.round(gapMs / 1000)
+  return seconds >= 60 ? `(+${Math.floor(seconds / 60)}m${seconds % 60}s)` : `(+${seconds}s)`
+}
+
 export function formatBrowserRecorderStepsAsMarkdown(
   steps: BrowserRecorderStep[],
   options?: { startedAt?: string }
@@ -43,36 +57,105 @@ export function formatBrowserRecorderStepsAsMarkdown(
   }
   lines.push('')
 
-  let pendingTrigger = false
-  steps.forEach((step, index) => {
-    const kind = step.detail.kind
-    const branch = kind === 'network-request' && pendingTrigger ? '  └ ' : ''
-    lines.push(`${index + 1}. ${branch}${formatCompactStepLine(step)}`)
-    // Why: requests stream in after their click/type trigger; the tree keeps
-    // them grouped until the next user interaction breaks the chain. Hover and
-    // scroll never trigger requests, so they do not open a branch. Console
-    // noise and later requests do not break it.
-    if (
-      kind === 'interaction' &&
-      (step.detail.interaction.kind === 'click' ||
-        step.detail.interaction.kind === 'type' ||
-        step.detail.interaction.kind === 'keydown')
-    ) {
-      pendingTrigger = true
-    } else if (kind === 'automation-action' || kind === 'navigation') {
-      pendingTrigger = true
-    } else if (kind === 'element-selected' || kind === 'annotation-added') {
-      pendingTrigger = false
+  // Why: grouping lives in one place so the copied markdown log and the tray
+  // list always agree on which requests/console messages belong to which
+  // trigger. A lead (click/type/key, action, navigation) opens a group; its
+  // requests and console messages hang off it until the next lead or a
+  // closing step (selection/annotation/network summary). Hover/scroll render
+  // on their own line but keep the group open — a click's requests usually
+  // arrive after the mouse moved away. Standalone steps render on their line.
+  let stepNumber = 0
+  let previousAt = startedAt ?? steps[0]?.createdAt
+  const gapLabel = (step: BrowserRecorderStep): string => {
+    const gap = stepGapLabel(step.createdAt, previousAt)
+    previousAt = step.createdAt
+    return gap
+  }
+  const numbered = (step: BrowserRecorderStep, branch: string): string => {
+    stepNumber += 1
+    const gap = gapLabel(step)
+    return `${stepNumber}. ${gap ? `${gap} ` : ''}${branch}${formatCompactStepLine(step)}`
+  }
+  for (const group of groupRecorderSteps(steps)) {
+    if (group.lead) {
+      lines.push(numbered(group.lead, ''))
+      for (const item of group.items) {
+        const branch = item.kind === 'member' ? '  └ ' : ''
+        lines.push(numbered(item.step, branch))
+      }
+    } else {
+      for (const item of group.items) {
+        lines.push(numbered(item.step, ''))
+      }
     }
-  })
+  }
+
+  // ── session summary block ──
+  const summary = computeSessionSummary(steps, startedAt)
+  if (summary) {
+    lines.push('')
+    lines.push(`**Session:** ${summary}`)
+  }
 
   return lines.join('\n').trimEnd()
+}
+
+/**
+ * One-line session digest: total time, request count, errors, and slow
+ * requests so the agent gets context at a glance without scanning the log.
+ */
+export function computeSessionSummary(
+  steps: BrowserRecorderStep[],
+  startedAt?: string
+): string | null {
+  if (steps.length === 0) {
+    return null
+  }
+  const firstAt = startedAt ?? steps[0]?.createdAt
+  const lastAt = steps.at(-1)?.createdAt
+  const parts: string[] = []
+  if (firstAt && lastAt) {
+    const durationMs = new Date(lastAt).getTime() - new Date(firstAt).getTime()
+    if (Number.isFinite(durationMs) && durationMs >= 1000) {
+      const totalSec = Math.round(durationMs / 1000)
+      parts.push(
+        totalSec >= 60 ? `${Math.floor(totalSec / 60)}m ${totalSec % 60}s` : `${totalSec}s`
+      )
+    }
+  }
+  let requests = 0
+  let errors = 0
+  let slow = 0
+  for (const step of steps) {
+    if (step.detail.kind === 'network-request') {
+      requests += 1
+      if (step.detail.request.durationMs != null && step.detail.request.durationMs >= 1000) {
+        slow += 1
+      }
+    }
+    if (
+      step.detail.kind === 'console' &&
+      (step.detail.entry.level === 'error' || step.detail.entry.level === 'warning')
+    ) {
+      errors += 1
+    }
+  }
+  if (requests > 0) {
+    parts.push(`${requests} requests`)
+  }
+  if (errors > 0) {
+    parts.push(`${errors} errors`)
+  }
+  if (slow > 0) {
+    parts.push(`${slow} slow >1s`)
+  }
+  return parts.length > 0 ? parts.join(' · ') : null
 }
 
 /** One compact line describing a step, ending with the page it happened on. */
 export function formatCompactStepLine(step: BrowserRecorderStep): string {
   const body = compactStepBody(step)
-  const page = inlineText(formatPageUrl(step.pageUrl), 60)
+  const page = inlineText(formatPageUrl(step.pageUrl), 200)
   return body ? `${body} @ ${page}` : `@ ${page}`
 }
 
@@ -81,7 +164,9 @@ function compactStepBody(step: BrowserRecorderStep): string {
     case 'recording-started':
       return 'recording started'
     case 'navigation':
-      return `navigate ${formatPageUrl(step.detail.fromUrl)} → ${formatPageUrl(step.detail.toUrl)}`
+      // Why: backticks keep the URL's & from being auto-linkified into an
+      // HTML-escaped markdown link (which truncates at the first &amp;).
+      return `navigate ${inlineCode(formatPageUrl(step.detail.fromUrl))} → ${inlineCode(formatPageUrl(step.detail.toUrl))}`
     case 'element-selected':
       return `selected ${elementLabel(step.detail.element)}`
     case 'annotation-added':
@@ -139,6 +224,14 @@ function compactAutomationAction(action: BrowserRecorderAutomationAction): strin
               `${change.label} "${inlineText(change.before, 20)}"→"${inlineText(change.after, 20)}"`
           )
           .join('; ')
+      )
+    }
+    if (diff.textChange) {
+      // Why: the fingerprint diff already reports the delta; the text snippet
+      // shows what actually changed, so a tiny edit in a large page is
+      // readable without reading the whole DOM. Capped by the main process.
+      parts.push(
+        `text: "${inlineText(diff.textChange.before, 120)}" → "${inlineText(diff.textChange.after, 120)}"`
       )
     }
   }

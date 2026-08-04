@@ -5,7 +5,8 @@ import {
   parseBrowserInteractionMessage,
   parseBrowserRequestMessage,
   redactPostData,
-  redactRequestUrl
+  redactRequestUrl,
+  redactResponseText
 } from './browser-recorder-message-parsing'
 import { BROWSER_RECORDER_ACTION_CHANNEL } from '../../shared/browser-recorder-automation'
 
@@ -51,6 +52,45 @@ describe('recorder message parsers', () => {
     expect(redactPostData('k=v'.repeat(200), 20)).toMatch(/…$/)
   })
 
+  it('parses response body, size, and truncation flag from request lines', () => {
+    const payload = parseBrowserRequestMessage(
+      `__orca_recorder__ ${JSON.stringify({
+        type: 'request',
+        method: 'POST',
+        url: 'https://x/api/stok',
+        status: 200,
+        response: '{"ok":true}',
+        responseSize: 2100,
+        responseTruncated: true,
+        responseSchema: 'html'
+      })}`
+    )
+    expect(payload).toMatchObject({
+      response: '{"ok":true}',
+      responseSize: 2100,
+      responseTruncated: true,
+      responseSchema: 'html'
+    })
+    // Absent fields default to empty/untruncated/text schema.
+    const bare = parseBrowserRequestMessage(
+      `__orca_recorder__ ${JSON.stringify({ type: 'request', url: 'https://x/a' })}`
+    )
+    expect(bare).toMatchObject({
+      response: '',
+      responseSize: 0,
+      responseTruncated: false,
+      responseSchema: 'text'
+    })
+  })
+
+  it('redacts secret-shaped values inside JSON responses', () => {
+    expect(redactResponseText('{"islem":"stok_kaydet","token":"abc123","ad":"Test"}')).toBe(
+      '{"islem":"stok_kaydet","token":"***","ad":"Test"}'
+    )
+    expect(redactResponseText('{"ok":true,"sifre":"hunter2"}')).toBe('{"ok":true,"sifre":"***"}')
+    expect(redactResponseText('key=abc123&ad=Test')).toBe('key=***&ad=Test')
+  })
+
   it('parses element props from interaction payloads', () => {
     const payload = parseBrowserInteractionMessage(
       `__orca_recorder__ ${JSON.stringify({
@@ -90,6 +130,25 @@ describe('recorder message parsers', () => {
     )
     expect(compactOriginStack(undefined)).toBeNull()
     expect(compactOriginStack('Error\n    at <anonymous> (x:1:1)')).toBeNull()
+  })
+
+  it('redacts secret-shaped query values inside origin stack locations', () => {
+    const stack = [
+      'Error',
+      '    at report (<anonymous>:1:1)',
+      '    at CAGRI (https://example.com/ayarlar/otoban.js:561:3)',
+      '    at stokKaydet (https://example.com/stok.php:142:7)'
+    ].join('\n')
+    expect(compactOriginStack(stack)).toBe(
+      'CAGRI@https://example.com/ayarlar/otoban.js:561 ← stokKaydet@https://example.com/stok.php:142'
+    )
+    const withSecret = [
+      'Error',
+      '    at CAGRI (https://example.com/ayarlar/otoban.js?key=abc123:561:3)'
+    ].join('\n')
+    expect(compactOriginStack(withSecret)).toBe(
+      'CAGRI@https://example.com/ayarlar/otoban.js?key=***:561'
+    )
   })
 })
 
@@ -288,6 +347,45 @@ describe('BrowserActionRecorder session observer', () => {
     recorder.setEnabled(false)
   })
 
+  it('turns a change line into an interaction carrying the real value', () => {
+    const { recorder, send, enable, fireConsole } = makeObserverHarness()
+    enable()
+    fireConsole(
+      `__orca_recorder__ ${JSON.stringify({
+        type: 'change',
+        value: '2',
+        target: '#suz_kosul1'
+      })}`
+    )
+    expect(send).toHaveBeenCalledTimes(1)
+    const [, event] = send.mock.calls[0] as [string, Record<string, unknown>]
+    expect(event).toMatchObject({
+      kind: 'interaction',
+      interaction: { kind: 'change', value: '2', target: '#suz_kosul1' }
+    })
+    recorder.setEnabled(false)
+  })
+
+  it('turns a clipboard line into an interaction with masked text', () => {
+    const { recorder, send, enable, fireConsole } = makeObserverHarness()
+    enable()
+    fireConsole(
+      `__orca_recorder__ ${JSON.stringify({
+        type: 'clipboard',
+        clipboardAction: 'paste',
+        clipboardText: '153.049 - TEST',
+        target: '#urun_kod'
+      })}`
+    )
+    expect(send).toHaveBeenCalledTimes(1)
+    const [, event] = send.mock.calls[0] as [string, Record<string, unknown>]
+    expect(event).toMatchObject({
+      kind: 'interaction',
+      interaction: { kind: 'clipboard', clipboardAction: 'paste', clipboardText: '153.049 - TEST' }
+    })
+    recorder.setEnabled(false)
+  })
+
   it('turns untagged console lines into coalesced console entries', () => {
     const { recorder, send, enable, fireConsole } = makeObserverHarness()
     enable()
@@ -342,14 +440,14 @@ describe('BrowserActionRecorder session observer', () => {
   it('caps console entries and warns once when the cap is reached', () => {
     const { recorder, send, enable, fireConsole } = makeObserverHarness()
     enable()
-    for (let index = 0; index < 130; index += 1) {
+    for (let index = 0; index < 410; index += 1) {
       fireConsole(`message-${index}`)
     }
     const consoleEvents = send.mock.calls.filter(
       (call) => (call[1] as Record<string, unknown>).kind === 'console'
     )
-    // 120 entries + 1 cap warning
-    expect(consoleEvents).toHaveLength(121)
+    // 400 entries + 1 cap warning
+    expect(consoleEvents).toHaveLength(401)
     const capWarnings = consoleEvents.filter((call) =>
       ((call[1] as Record<string, unknown>).entry as { message: string }).message.includes(
         'cap reached'

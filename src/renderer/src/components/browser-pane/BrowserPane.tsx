@@ -45,6 +45,7 @@ import {
   Trash2,
   X
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { BrowserAnnotationSendMenuContent } from './BrowserAnnotationSendMenuContent'
@@ -4529,8 +4530,31 @@ function BrowserPagePane({
         browserPageId: browserTab.id
       })
       recorder.toggle({ pageUrl: browserTab.url, pageTitle: browserTab.title })
+      // Why: the flow is done — auto-copy the log so the user can drop it
+      // into an agent or note without an extra click.
+      setTimeout(() => {
+        if (recorderPrompt) {
+          void window.api.ui.writeClipboardText(recorderPrompt)
+          setRecorderCopied(true)
+          clearTimeout(recorderCopyTimerRef.current)
+          recorderCopyTimerRef.current = setTimeout(() => setRecorderCopied(false), 1400)
+          toast.success(
+            translate(
+              'auto.components.browser.pane.BrowserPane.recorderAutoCopied',
+              'Recording log copied to clipboard'
+            )
+          )
+        }
+      }, 100)
     }
-  }, [browserTab.id, browserTab.title, browserTab.url, recordFeatureInteraction, recorder])
+  }, [
+    browserTab.id,
+    browserTab.title,
+    browserTab.url,
+    recordFeatureInteraction,
+    recorder,
+    recorderPrompt
+  ])
 
   const handleCopyBrowserRecorderLog = useCallback((): void => {
     if (!recorderPrompt) {

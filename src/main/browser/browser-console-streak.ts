@@ -13,6 +13,8 @@ export type ConsoleMessageDetails = {
   message: string
   lineNumber: number
   sourceId: string
+  /** Call stack attached to the message, when the browser provides one. */
+  stack?: string
 }
 
 export type ConsoleStreakEntry = {
@@ -20,6 +22,7 @@ export type ConsoleStreakEntry = {
   message: string
   sourceId: string
   lineNumber: number
+  stack?: string
   count: number
   startedAt: string
 }
@@ -55,6 +58,7 @@ export class ConsoleStreakBuffer {
       message: details.message,
       sourceId: details.sourceId,
       lineNumber: details.lineNumber,
+      stack: details.stack,
       count: 1,
       startedAt: now
     }

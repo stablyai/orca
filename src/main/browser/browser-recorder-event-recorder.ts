@@ -13,8 +13,10 @@ import {
   type BrowserRecorderStreamEvent
 } from '../../shared/browser-recorder-automation'
 import {
+  compactOriginStack,
   redactPostData,
   redactRequestUrl,
+  redactResponseText,
   type BrowserRecorderInteractionPayload,
   type BrowserRecorderRequestPayload
 } from './browser-recorder-message-parsing'
@@ -28,12 +30,30 @@ import {
 import type { BrowserRecorderPageSource } from './browser-recorder-page-source'
 import type { BrowserRecorderWebRequestDetails } from './browser-recorder-web-request'
 
+/** Turnstile/Cloudflare challenge traffic — page-level noise, not app flow. */
+function isChallengeRequest(url: string, origin: string): boolean {
+  const haystack = `${url} ${origin}`
+  return (
+    haystack.includes('/cdn-cgi/challenge-platform/') ||
+    haystack.includes('challenges.cloudflare.com')
+  )
+}
+
 function requestKey(url: string, method: string): string {
   // Why: the page hook reports relative URLs while webRequest reports
   // absolute ones — normalize both to path+search so dedup matches.
+  // Decode the search too: one path percent-encodes (filter=Servis%20Hareket),
+  // the other sends it raw (filter=Servis Hareket Raporu), and those must
+  // dedupe against each other.
   try {
     const parsed = new URL(url, 'http://localhost')
-    return `${method}|${parsed.pathname}${parsed.search}`
+    let search = parsed.search
+    try {
+      search = decodeURIComponent(search)
+    } catch {
+      // malformed percent-encoding — keep as-is
+    }
+    return `${method}|${parsed.pathname}${search}`
   } catch {
     return `${method}|${url}`
   }
@@ -53,6 +73,20 @@ function isConsoleNoise(details: ConsoleMessageDetails): boolean {
   }
   // "1 null", "42 false" — app-internal counter reports.
   if (/^\d+\s+(null|false|true|undefined)$/i.test(message)) {
+    return true
+  }
+  // Why: framework/page chatter that adds no flow value — WebGL driver
+  // warnings, Turnstile/Cloudflare token logs, console.group bookkeeping,
+  // %c-formatted style probes, and short token-like strings.
+  if (
+    message.startsWith('WebGL:') ||
+    message.startsWith('WebGL INVALID') ||
+    message.startsWith('console.group') ||
+    message.startsWith('%c') ||
+    message === '[object HTMLAnchorElement]' ||
+    message.startsWith('service ') ||
+    /^[A-Za-z0-9]{3,16}(: .*)?$/.test(message)
+  ) {
     return true
   }
   return false
@@ -110,6 +144,13 @@ export class BrowserRecorderEventRecorder {
       element: payload.el,
       key: payload.type === 'keydown' ? payload.key : undefined,
       text: payload.type === 'type' ? payload.text : undefined,
+      value: payload.type === 'change' ? payload.value : undefined,
+      clipboardAction: payload.type === 'clipboard' ? payload.clipboardAction : undefined,
+      clipboardText: payload.type === 'clipboard' ? payload.clipboardText : undefined,
+      wsText: payload.type === 'ws' ? payload.wsText : undefined,
+      storageKey: payload.type === 'storage' ? payload.storageKey : undefined,
+      storageValue: payload.type === 'storage' ? payload.storageValue : undefined,
+      selectText: payload.type === 'select_text' ? payload.selectText : undefined,
       scrollX: payload.type === 'scroll' ? payload.x : undefined,
       scrollY: payload.type === 'scroll' ? payload.y : undefined
     }
@@ -118,6 +159,11 @@ export class BrowserRecorderEventRecorder {
   }
 
   async recordRequest(payload: BrowserRecorderRequestPayload): Promise<void> {
+    // Why: Turnstile/Cloudflare challenge traffic is page-level noise — its
+    // token bodies are huge base64 blobs and carry no app-flow information.
+    if (isChallengeRequest(payload.url ?? '', payload.origin ?? '')) {
+      return
+    }
     if (this.requestCount >= BROWSER_RECORDER_BUDGET.networkRequestMaxPerSession) {
       if (!this.requestCapWarned) {
         this.requestCapWarned = true
@@ -145,6 +191,19 @@ export class BrowserRecorderEventRecorder {
       origin: payload.origin ?? null,
       triggeredBy: this.lastTriggerId,
       kind: payload.kind ?? 'xhr',
+      response:
+        payload.response && payload.response.length > 0
+          ? capText(
+              redactResponseText(payload.response),
+              // Why: in-page head+tail truncation keeps ~8KB plus an omitted
+              // marker; cap slightly above the base budget so the tail's last
+              // rows survive the redaction pass.
+              BROWSER_RECORDER_BUDGET.responseMaxLength + 300
+            )
+          : null,
+      responseSize: payload.responseSize ?? 0,
+      responseTruncated: payload.responseTruncated === true,
+      responseSchema: payload.responseSchema === 'html' ? 'html' : 'text',
       screenChanged: await this.pageSource.screenChangedSinceLast()
     }
     this.markRequestKey(payload.url ?? '', payload.method ?? 'GET')
@@ -157,6 +216,9 @@ export class BrowserRecorderEventRecorder {
    * richer page record (with body/origin) wins the race.
    */
   recordWebRequest(details: BrowserRecorderWebRequestDetails): void {
+    if (isChallengeRequest(details.url, '')) {
+      return
+    }
     const key = requestKey(details.url, details.method)
     if (this.recentRequestKeys.has(key)) {
       return
@@ -172,7 +234,6 @@ export class BrowserRecorderEventRecorder {
       this.requestCount += 1
       const page = this.pageSource.pageContext()
       void this.pageSource.screenChangedSinceLast().then((screenChanged) => {
-        this.markRequestKey(details.url, details.method)
         const request: BrowserRecorderNetworkRequest = {
           id: `${page.browserPageId}:request:${this.requestCount}`,
           page,
@@ -196,9 +257,13 @@ export class BrowserRecorderEventRecorder {
   private markRequestKey(url: string, method: string): void {
     const now = Date.now()
     this.recentRequestKeys.set(requestKey(url, method), now)
-    // Why: keep the window bounded — drop keys older than 3s.
+    // Why: keep the window tight — it exists only to stop the webRequest
+    // safety net from double-reporting a request the page hook already
+    // delivered. A long TTL would swallow genuine follow-up requests to the
+    // same URL (e.g. a report tab loading its data table right after the
+    // toolbar), so drop keys once the 300ms safety-net delay has passed.
     for (const [key, at] of this.recentRequestKeys) {
-      if (now - at > 3000) {
+      if (now - at > 350) {
         this.recentRequestKeys.delete(key)
       }
     }
@@ -246,6 +311,9 @@ export class BrowserRecorderEventRecorder {
       message: capText(streak.message, BROWSER_RECORDER_BUDGET.consoleMessageMaxLength),
       source: capText(streak.sourceId, 120),
       lineNumber: streak.lineNumber,
+      // Why: the first stack frame names the throwing function; reuse the
+      // request-origin compactor so format stays fn@file:line with redaction.
+      stack: streak.stack ? (compactOriginStack(streak.stack, 140) ?? undefined) : undefined,
       repeatCount: streak.count,
       page,
       startedAt: streak.startedAt

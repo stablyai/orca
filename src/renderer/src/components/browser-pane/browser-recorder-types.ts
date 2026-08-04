@@ -71,7 +71,7 @@ export type BrowserRecorderStep = {
 
 export const RECORDER_BUDGET = {
   /** Hard cap on steps kept in a single recording session (oldest dropped). */
-  maxStepsPerSession: 200
+  maxStepsPerSession: 1000
 } as const
 
 /** Maps a grabbed element onto the compact log summary. */

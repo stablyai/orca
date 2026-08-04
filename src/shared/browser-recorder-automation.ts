@@ -17,6 +17,8 @@ export type BrowserRecorderDomFingerprint = {
   interactive: number
   /** Structured form-field snapshot (password values excluded, capped). */
   inputsDetail: BrowserRecorderInputState[]
+  /** Visible body text snapshot (capped) — enables a real DOM text diff. */
+  bodyText?: string
 }
 
 export type BrowserRecorderInputState = {
@@ -42,6 +44,8 @@ export type BrowserRecorderDomDiff = {
   inputsChanged: boolean
   /** Only fields whose value changed (capped). */
   inputChanges: BrowserRecorderInputChange[]
+  /** Visible-text before/after snippets around the changed region (capped). */
+  textChange: { before: string; after: string } | null
   changed: BrowserRecorderDomChangeKind[]
 }
 
@@ -74,7 +78,17 @@ export type BrowserRecorderAutomationAction = {
   domDiff: BrowserRecorderDomDiff | null
 }
 
-export type BrowserRecorderInteractionKind = 'click' | 'keydown' | 'type' | 'scroll' | 'hover'
+export type BrowserRecorderInteractionKind =
+  | 'click'
+  | 'keydown'
+  | 'type'
+  | 'scroll'
+  | 'hover'
+  | 'change'
+  | 'clipboard'
+  | 'ws'
+  | 'storage'
+  | 'select_text'
 
 /** Element properties captured for interacted elements (selector, classes, …). */
 export type BrowserRecorderElementProps = {
@@ -107,6 +121,20 @@ export type BrowserRecorderInteraction = {
   key?: string
   /** Coalesced typing burst text (kind 'type'). */
   text?: string
+  /** select/checkbox/input real value after a change (kind 'change'). */
+  value?: string
+  /** clipboard copy/paste/cut (kind 'clipboard'). */
+  clipboardAction?: 'copy' | 'paste' | 'cut'
+  /** clipboard text payload (kind 'clipboard'), secrets masked. */
+  clipboardText?: string
+  /** WebSocket frame text (kind 'ws'). */
+  wsText?: string
+  /** storage key (kind 'storage'). */
+  storageKey?: string
+  /** storage value (kind 'storage'), secret keys masked. */
+  storageValue?: string
+  /** selected text (kind 'select_text'). */
+  selectText?: string
   /** scroll */
   scrollX?: number
   scrollY?: number
@@ -132,6 +160,14 @@ export type BrowserRecorderNetworkRequest = {
   kind: 'fetch' | 'xhr' | 'frame'
   /** DOM change kinds observed after the response landed. */
   screenChanged: BrowserRecorderDomChangeKind[]
+  /** Response body text, secret values redacted; null when not captured. */
+  response?: string | null
+  /** Full response size in bytes/chars before truncation (0 = unknown). */
+  responseSize?: number
+  /** True when the response was truncated to fit the log budget. */
+  responseTruncated?: boolean
+  /** 'html' when an HTML response was schematized into visible text + controls. */
+  responseSchema?: 'html' | 'text'
 }
 
 export type BrowserRecorderConsoleLevel = 'log' | 'warning' | 'error' | 'debug'
@@ -143,6 +179,8 @@ export type BrowserRecorderConsoleEntry = {
   message: string
   source: string
   lineNumber: number
+  /** First stack frame (fn@file:line) when the browser provided one. */
+  stack?: string
   /** How many consecutive identical messages this entry represents. */
   repeatCount: number
   page: { browserPageId: string; url: string; title: string }
@@ -198,13 +236,25 @@ export const BROWSER_RECORDER_BUDGET = {
   /** Cap on manual interaction records per session (oldest dropped). */
   interactionMaxPerSession: 400,
   /** Cap on console entries per session (oldest dropped). */
-  consoleMaxPerSession: 120,
+  consoleMaxPerSession: 400,
   /** Cap on a console message text kept in an entry. */
   consoleMessageMaxLength: 300,
   /** Cap on network request records per session (oldest dropped). */
   networkRequestMaxPerSession: 300,
   /** Cap on a request body kept in an entry. */
-  requestBodyMaxLength: 300,
+  requestBodyMaxLength: 600,
+  /** Cap on a response body kept in an entry (larger responses are truncated). */
+  responseMaxLength: 8000,
+  /**
+   * Head slice kept from a truncated response — the tail slice is
+   * responseMaxLength minus this, so large HTML list responses keep both the
+   * header markup and the trailing data rows.
+   */
+  responseHeadMaxLength: 5800,
+  /** Cap on the visible body-text snapshot kept in a fingerprint. */
+  bodyTextMaxLength: 4000,
+  /** Cap on each side of the DOM text-change snippet in a diff. */
+  textChangeMaxLength: 400,
   /** Cap on classes kept per element props. */
   elementClassesMax: 5,
   /** Cap on element visible text kept in props. */

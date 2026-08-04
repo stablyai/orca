@@ -21,6 +21,13 @@ export type BrowserRecorderInteractionPayload = {
   tagName?: string
   key?: string
   text?: string
+  value?: string
+  clipboardAction?: 'copy' | 'paste' | 'cut'
+  clipboardText?: string
+  wsText?: string
+  storageKey?: string
+  storageValue?: string
+  selectText?: string
   code?: string
   /** Element props (selector/classes/text/styles) for the interacted element. */
   el?: BrowserRecorderElementProps
@@ -37,6 +44,14 @@ export type BrowserRecorderRequestPayload = {
   /** App call stack captured at request time, e.g. 'Error\n at stokKaydet (stok.php:142)…'. */
   origin?: string | null
   kind?: 'fetch' | 'xhr'
+  /** Response body text captured by the in-page hook (already capped). */
+  response?: string
+  /** Full response size before capping (0 = unknown/not captured). */
+  responseSize?: number
+  /** True when the response exceeded the capture cap. */
+  responseTruncated?: boolean
+  /** 'html' when the response was schematized into visible text + controls. */
+  responseSchema?: 'html' | 'text'
 }
 
 /**
@@ -57,7 +72,12 @@ export function parseBrowserInteractionMessage(
       parsed.type !== 'keydown' &&
       parsed.type !== 'type' &&
       parsed.type !== 'scroll' &&
-      parsed.type !== 'hover'
+      parsed.type !== 'hover' &&
+      parsed.type !== 'change' &&
+      parsed.type !== 'clipboard' &&
+      parsed.type !== 'ws' &&
+      parsed.type !== 'storage' &&
+      parsed.type !== 'select_text'
     ) {
       return null
     }
@@ -69,6 +89,22 @@ export function parseBrowserInteractionMessage(
       tagName: typeof parsed.tagName === 'string' ? parsed.tagName.slice(0, 40) : undefined,
       key: typeof parsed.key === 'string' ? parsed.key.slice(0, 40) : undefined,
       text: typeof parsed.text === 'string' ? parsed.text.slice(0, 200) : undefined,
+      value: typeof parsed.value === 'string' ? parsed.value.slice(0, 200) : undefined,
+      clipboardAction:
+        parsed.clipboardAction === 'copy' ||
+        parsed.clipboardAction === 'paste' ||
+        parsed.clipboardAction === 'cut'
+          ? parsed.clipboardAction
+          : undefined,
+      clipboardText:
+        typeof parsed.clipboardText === 'string' ? parsed.clipboardText.slice(0, 200) : undefined,
+      wsText: typeof parsed.wsText === 'string' ? parsed.wsText.slice(0, 200) : undefined,
+      storageKey:
+        typeof parsed.storageKey === 'string' ? parsed.storageKey.slice(0, 80) : undefined,
+      storageValue:
+        typeof parsed.storageValue === 'string' ? parsed.storageValue.slice(0, 200) : undefined,
+      selectText:
+        typeof parsed.selectText === 'string' ? parsed.selectText.slice(0, 200) : undefined,
       code: typeof parsed.code === 'string' ? parsed.code.slice(0, 40) : undefined,
       el: parseElementProps(parsed.el)
     }
@@ -126,7 +162,11 @@ export function parseBrowserRequestMessage(message: string): BrowserRecorderRequ
       status: typeof parsed.status === 'number' ? parsed.status : null,
       durationMs: typeof parsed.durationMs === 'number' ? Math.round(parsed.durationMs) : null,
       origin: compactOriginStack(parsed.origin),
-      kind: parsed.kind === 'fetch' ? 'fetch' : 'xhr'
+      kind: parsed.kind === 'fetch' ? 'fetch' : 'xhr',
+      response: typeof parsed.response === 'string' ? parsed.response : '',
+      responseSize: typeof parsed.responseSize === 'number' ? parsed.responseSize : 0,
+      responseTruncated: parsed.responseTruncated === true,
+      responseSchema: parsed.responseSchema === 'html' ? 'html' : 'text'
     }
   } catch {
     return null
@@ -167,7 +207,12 @@ export function compactOriginStack(
     }
     // Chrome formats file:line; Firefox uses file:line:col — keep both.
     const shortLocation = location.replace(/:(\d+):\d+$/, ':$1')
-    frames.push(fn.length > 40 ? `${fn.slice(0, 40)}…@${shortLocation}` : `${fn}@${shortLocation}`)
+    // Why: redact the query before appending the line suffix — a naive
+    // redactRequestUrl would swallow ':561' as part of the last query value.
+    const lineSuffix = /(:\d+)$/.exec(shortLocation)?.[1] ?? ''
+    const base = lineSuffix ? shortLocation.slice(0, -lineSuffix.length) : shortLocation
+    const safeLocation = `${redactRequestUrl(base)}${lineSuffix}`
+    frames.push(fn.length > 40 ? `${fn.slice(0, 40)}…@${safeLocation}` : `${fn}@${safeLocation}`)
     if (frames.length >= 2) {
       break
     }
@@ -204,4 +249,18 @@ export function redactPostData(body: string, maxLength: number): string {
     .map((part) => (SECRET_QUERY_PATTERN.test(part) ? part.replace(/=.*$/, '=***') : part))
     .join('&')
   return redacted.length > maxLength ? `${redacted.slice(0, maxLength)}…` : redacted
+}
+
+// Why: responses are usually JSON, where secrets appear as "key":"value"
+// pairs rather than key=value query parts — mask both shapes.
+const SECRET_JSON_VALUE_PATTERN =
+  /("(?:password|passwd|secret|token|authorization|api[_-]?key|credential|csrf|sifre|parola|key)"\s*:\s*")[^"]*(")/gi
+
+/** Redacts secret-shaped JSON values and query parts inside a response body. */
+export function redactResponseText(body: string): string {
+  const jsonRedacted = body.replace(SECRET_JSON_VALUE_PATTERN, '$1***$2')
+  return jsonRedacted
+    .split('&')
+    .map((part) => (SECRET_QUERY_PATTERN.test(part) ? part.replace(/=.*$/, '=***') : part))
+    .join('&')
 }
