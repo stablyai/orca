@@ -2,14 +2,16 @@ import type * as NodePath from 'node:path'
 import { mkdir, mkdtemp, realpath, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
+import { setFilesystemHostReadClientForTests } from '../filesystem-host/filesystem-host-read-authority'
 import type * as RepoWorktrees from '../repo-worktrees'
 import { listRepoWorktrees } from '../repo-worktrees'
 import type { FolderWorkspace, GitWorktreeInfo, ProjectGroup, Repo } from '../../shared/types'
 import {
   AUTHORIZED_EXTERNAL_PATHS_MAX,
   authorizeExternalPath,
+  ensureAuthorizedRootsCache,
   invalidateAuthorizedRootsCache,
   isDescendantOrEqual,
   isPathAllowed,
@@ -28,6 +30,24 @@ vi.mock('../repo-worktrees', async () => {
 })
 
 const LARGE_WORKTREE_ROOT_COUNT = 150_000
+
+beforeEach(() => {
+  setFilesystemHostReadClientForTests({
+    canonicalizePath: (path) => realpath(path),
+    readOrcaYaml: async () => {
+      throw new Error('unused')
+    },
+    readKeybindings: async () => {
+      throw new Error('unused')
+    },
+    readSnapshotFile: async () => Buffer.from(''),
+    prepareRateLimitPtyCwd: async (path) => path
+  })
+})
+
+afterEach(() => {
+  setFilesystemHostReadClientForTests(null)
+})
 
 const repo: Repo = {
   id: 'repo-1',
@@ -138,9 +158,85 @@ describe('filesystem auth worktree roots', () => {
     expect(listRepoWorktrees).toHaveBeenCalledTimes(repos.length)
     expect(maxActive).toBeLessThanOrEqual(8)
   })
+
+  it('does not publish an in-flight rebuild invalidated by a repo removal', async () => {
+    const removedWorktreePath = '/linked/removed-worktree'
+    const addedWorktreePath = '/linked/added-worktree'
+    const addedRepo = { ...repo, id: 'repo-2', path: '/repos/added' }
+    let repos = [repo]
+    let releaseProbe: ((worktrees: GitWorktreeInfo[]) => void) | undefined
+    vi.mocked(listRepoWorktrees)
+      .mockImplementationOnce(
+        () =>
+          new Promise<GitWorktreeInfo[]>((resolve) => {
+            releaseProbe = resolve
+          })
+      )
+      .mockResolvedValueOnce([
+        {
+          path: addedWorktreePath,
+          head: '',
+          branch: 'refs/heads/added',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+    const store = {
+      ...makeStore(),
+      getRepos: () => repos
+    } as Store
+
+    const staleRebuild = ensureAuthorizedRootsCache(store)
+    await vi.waitFor(() => expect(releaseProbe).toBeTypeOf('function'))
+    repos = [addedRepo]
+    invalidateAuthorizedRootsCache()
+    releaseProbe?.([
+      {
+        path: removedWorktreePath,
+        head: '',
+        branch: 'refs/heads/removed',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    await staleRebuild
+    expect(listRepoWorktrees).toHaveBeenCalledTimes(2)
+
+    await expect(resolveRegisteredWorktreePath(removedWorktreePath, store)).rejects.toThrow(
+      'Access denied'
+    )
+    await expect(resolveRegisteredWorktreePath(addedWorktreePath, store)).resolves.toBe(
+      resolve(addedWorktreePath)
+    )
+  })
 })
 
 describe('filesystem-auth path containment', () => {
+  it('keeps the textual grant when canonicalization times out', async () => {
+    const timedOut = resolve('/host-timeout/untrusted')
+    setFilesystemHostReadClientForTests({
+      canonicalizePath: async () => {
+        throw Object.assign(new Error('timed out'), { code: 'ETIMEDOUT' })
+      },
+      readOrcaYaml: async () => {
+        throw new Error('unused')
+      },
+      readKeybindings: async () => {
+        throw new Error('unused')
+      },
+      readSnapshotFile: async () => Buffer.from(''),
+      prepareRateLimitPtyCwd: async (path) => path
+    })
+
+    // A stalled host must not revoke the drop grant or abort the rest of a batch;
+    // resolveAuthorizedPath still canonicalizes and re-checks before any operation.
+    await expect(authorizeExternalPath(timedOut)).resolves.toBeUndefined()
+    expect(isPathAllowed(timedOut, makeStore([]))).toBe(true)
+    await expect(resolveAuthorizedPath(timedOut, makeStore([]))).rejects.toMatchObject({
+      code: 'ETIMEDOUT'
+    })
+  })
+
   it('authorizes missing nested descendants under an allowed repo', async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), 'orca-auth-missing-'))
     try {
@@ -347,17 +443,31 @@ describe('filesystem-auth authorized external path bound', () => {
   const flood = (n: number): string =>
     resolve(`/leak-audit-ext/flood-${String(n).padStart(6, '0')}`)
 
-  it('bounds the authorized external path set with LRU eviction', () => {
+  beforeEach(() => {
+    setFilesystemHostReadClientForTests({
+      canonicalizePath: async (path) => path,
+      readOrcaYaml: async () => {
+        throw new Error('unused')
+      },
+      readKeybindings: async () => {
+        throw new Error('unused')
+      },
+      readSnapshotFile: async () => Buffer.from(''),
+      prepareRateLimitPtyCwd: async (path) => path
+    })
+  })
+
+  it('bounds the authorized external path set with LRU eviction', async () => {
     const keep = resolve('/leak-audit-ext/keep')
-    authorizeExternalPath(keep)
+    await authorizeExternalPath(keep)
 
     // Flood past the cap with distinct external paths, re-authorizing `keep`
     // periodically so LRU keeps it hot.
     const total = AUTHORIZED_EXTERNAL_PATHS_MAX + 200
     for (let i = 0; i < total; i += 1) {
-      authorizeExternalPath(flood(i))
+      await authorizeExternalPath(flood(i))
       if (i % 250 === 0) {
-        authorizeExternalPath(keep)
+        await authorizeExternalPath(keep)
       }
     }
 
@@ -368,13 +478,13 @@ describe('filesystem-auth authorized external path bound', () => {
     expect(isPathAllowed(flood(total - 1), emptyStore)).toBe(true)
   })
 
-  it('re-authorizes an evicted path on next use (self-healing)', () => {
+  it('re-authorizes an evicted path on next use (self-healing)', async () => {
     const path = resolve('/leak-audit-ext/evicted-then-reused')
     for (let i = 0; i < AUTHORIZED_EXTERNAL_PATHS_MAX + 50; i += 1) {
-      authorizeExternalPath(flood(100_000 + i))
+      await authorizeExternalPath(flood(100_000 + i))
     }
     expect(isPathAllowed(path, emptyStore)).toBe(false)
-    authorizeExternalPath(path)
+    await authorizeExternalPath(path)
     expect(isPathAllowed(path, emptyStore)).toBe(true)
   })
 })

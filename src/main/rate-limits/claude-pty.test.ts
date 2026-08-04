@@ -1,16 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import type * as HiddenRateLimitPtyCwd from './hidden-rate-limit-pty-cwd'
 
-const { resolveClaudeCommandMock, spawnMock } = vi.hoisted(() => ({
-  resolveClaudeCommandMock: vi.fn(),
-  spawnMock: vi.fn()
-}))
-
-vi.mock('../codex-cli/command', () => ({
-  resolveClaudeCommand: resolveClaudeCommandMock
-}))
+const spawnMock = vi.hoisted(() => vi.fn())
 
 vi.mock('node-pty', () => ({
   spawn: spawnMock
+}))
+
+vi.mock('./hidden-rate-limit-pty-cwd', async () => ({
+  ...(await vi.importActual<typeof HiddenRateLimitPtyCwd>('./hidden-rate-limit-pty-cwd')),
+  getHiddenRateLimitPtyCwdSnapshot: () => ({
+    value: join(tmpdir(), 'rate-limit-pty-cwd'),
+    stale: false,
+    age: 0,
+    availability: 'ready'
+  })
 }))
 
 import { fetchViaPty } from './claude-pty'
@@ -53,7 +59,6 @@ describe('fetchViaPty', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.clearAllMocks()
-    resolveClaudeCommandMock.mockReturnValue('claude')
   })
 
   it('disposes node-pty listeners before killing the hidden PTY on timeout', async () => {
@@ -93,6 +98,38 @@ describe('fetchViaPty', () => {
     const spawnEnv = spawnMock.mock.calls[0]?.[2]?.env as Record<string, string>
     expect(spawnEnv.HTTPS_PROXY).toBe('http://127.0.0.1:7890')
     expect(spawnEnv.HTTP_PROXY).toBe('http://127.0.0.1:7890')
+
+    term.emitExit()
+    await resultPromise
+  })
+
+  it('uses the command prepared outside the polling path', async () => {
+    const term = makeMockTerm()
+    spawnMock.mockReturnValue(term)
+    const command = process.platform === 'win32' ? 'C:\\Tools\\claude.cmd' : '/opt/bin/claude'
+
+    const resultPromise = fetchViaPty({
+      authPreparation: {
+        command,
+        configDir: join(tmpdir(), '.claude'),
+        runtime: 'host',
+        wslDistro: null,
+        wslLinuxConfigDir: null,
+        envPatch: {},
+        stripAuthEnv: false,
+        provenance: 'system'
+      }
+    })
+    await vi.advanceTimersByTimeAsync(0)
+
+    const [spawnFile, spawnArgs] = spawnMock.mock.calls[0] as [string, string[]]
+    if (process.platform === 'win32') {
+      expect(spawnFile).toBe('cmd.exe')
+      expect(spawnArgs).toEqual(['/c', `"${command}"`])
+    } else {
+      expect(spawnFile).toBe(command)
+      expect(spawnArgs).toEqual([])
+    }
 
     term.emitExit()
     await resultPromise

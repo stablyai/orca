@@ -5,13 +5,21 @@ const {
   fromWebContentsMock,
   getSpeechModelManagerMock,
   getSpeechSttServiceMock,
-  deleteLocalSpeechModelMock
+  deleteLocalSpeechModelMock,
+  saveOpenAiSpeechApiKeyMock,
+  clearOpenAiSpeechApiKeyMock,
+  hydrateOpenAiSpeechApiKeySnapshotMock,
+  getOpenAiSpeechApiKeySnapshotMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   fromWebContentsMock: vi.fn(),
   getSpeechModelManagerMock: vi.fn(),
   getSpeechSttServiceMock: vi.fn(),
-  deleteLocalSpeechModelMock: vi.fn()
+  deleteLocalSpeechModelMock: vi.fn(),
+  saveOpenAiSpeechApiKeyMock: vi.fn(),
+  clearOpenAiSpeechApiKeyMock: vi.fn(),
+  hydrateOpenAiSpeechApiKeySnapshotMock: vi.fn(),
+  getOpenAiSpeechApiKeySnapshotMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -43,16 +51,23 @@ vi.mock('../speech/speech-model-deletion', () => ({
   deleteLocalSpeechModel: deleteLocalSpeechModelMock
 }))
 
+vi.mock('../speech/openai-api-key-store', () => ({
+  saveOpenAiSpeechApiKey: saveOpenAiSpeechApiKeyMock,
+  clearOpenAiSpeechApiKey: clearOpenAiSpeechApiKeyMock,
+  hydrateOpenAiSpeechApiKeySnapshot: hydrateOpenAiSpeechApiKeySnapshotMock,
+  getOpenAiSpeechApiKeySnapshot: getOpenAiSpeechApiKeySnapshotMock
+}))
+
 import { registerSpeechHandlers } from './speech'
 
-type SpeechDownloadHandler = (event: { sender: { id: number } }, modelId: string) => Promise<void>
+type SpeechHandler = (event: { sender: { id: number } }, value?: string) => unknown
 
-function getHandler(channel: string): SpeechDownloadHandler {
+function getHandler(channel: string): SpeechHandler {
   const call = handleMock.mock.calls.find((entry) => entry[0] === channel)
   if (!call) {
     throw new Error(`${channel} handler not registered`)
   }
-  return call[1] as SpeechDownloadHandler
+  return call[1] as SpeechHandler
 }
 
 describe('registerSpeechHandlers', () => {
@@ -62,6 +77,48 @@ describe('registerSpeechHandlers', () => {
     getSpeechModelManagerMock.mockReset()
     getSpeechSttServiceMock.mockReset()
     deleteLocalSpeechModelMock.mockReset()
+    saveOpenAiSpeechApiKeyMock.mockReset()
+    clearOpenAiSpeechApiKeyMock.mockReset()
+    hydrateOpenAiSpeechApiKeySnapshotMock.mockReset()
+    getOpenAiSpeechApiKeySnapshotMock.mockReset()
+    getOpenAiSpeechApiKeySnapshotMock.mockReturnValue({
+      value: false,
+      stale: false,
+      age: 0,
+      availability: 'missing'
+    })
+    hydrateOpenAiSpeechApiKeySnapshotMock.mockResolvedValue({
+      value: false,
+      stale: false,
+      age: 0,
+      availability: 'missing'
+    })
+  })
+
+  it('retries stale API-key status when the renderer requests model availability', async () => {
+    getOpenAiSpeechApiKeySnapshotMock.mockReturnValue({
+      value: false,
+      stale: true,
+      age: null,
+      availability: 'unavailable'
+    })
+    hydrateOpenAiSpeechApiKeySnapshotMock.mockResolvedValue({
+      value: true,
+      stale: false,
+      age: 0,
+      availability: 'ready'
+    })
+    registerSpeechHandlers({} as never)
+
+    await expect(
+      getHandler('speech:getOpenAiApiKeyStatus')({ sender: { id: 7 } })
+    ).resolves.toEqual({
+      value: true,
+      configured: true,
+      stale: false,
+      age: 0,
+      availability: 'ready'
+    })
   })
 
   it('clears the model download progress callback after completion', async () => {
@@ -155,5 +212,16 @@ describe('registerSpeechHandlers', () => {
       sttService,
       modelId: 'model-1'
     })
+  })
+
+  it('propagates a rejected API-key clear without publishing status', () => {
+    clearOpenAiSpeechApiKeyMock.mockImplementationOnce(() => {
+      throw new Error('contended')
+    })
+    registerSpeechHandlers({} as never)
+
+    expect(() => getHandler('speech:clearOpenAiApiKey')({ sender: { id: 7 } })).toThrow('contended')
+
+    expect(getOpenAiSpeechApiKeySnapshotMock).not.toHaveBeenCalled()
   })
 })

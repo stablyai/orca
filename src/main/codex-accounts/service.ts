@@ -28,6 +28,7 @@ import type {
 } from '../../shared/codex-reset-credit-attempt-ledger'
 import type { CodexRuntimeHomeService } from './runtime-home-service'
 import { writeFileAtomically } from './fs-utils'
+import { readSnapshotFileThroughFilesystemHost } from '../filesystem-host/filesystem-host-read-authority'
 import { rewriteRelativePathConfigValues } from '../codex/codex-config-path-reference-rewrite'
 import { stripCodexManagedHookTrustEntriesFromConfig } from '../codex/codex-managed-trust-reconciliation'
 import { isCodexSystemDefaultRealHomeEnabled } from '../codex/codex-real-home-flag'
@@ -58,8 +59,14 @@ import {
   type CodexAccountSelectionTarget
 } from './runtime-selection'
 import { assertOwnedHostCodexManagedHomePath } from './host-codex-managed-home-ownership'
+import {
+  classifyFilesystemSnapshotFailure,
+  MemorySnapshotStore
+} from '../rate-limits/memory-snapshot-store'
+import type { MemorySnapshot } from '../../shared/memory-snapshot'
 
 const LOGIN_TIMEOUT_MS = 120_000
+const SYSTEM_IDENTITY_REVALIDATION_MS = 30_000
 const MAX_LOGIN_OUTPUT_CHARS = 4_000
 // Why: mirrors the Windows rm retry policy in local-worktree-filesystem — a
 // just-terminated codex login can briefly keep handles inside a managed home.
@@ -250,6 +257,10 @@ export class CodexAccountService {
   private readonly unresolvedResetKeyByAccountScope = new Map<string, string>()
   private durableResetLedger: CodexResetCreditAttemptLedger | null = null
   private resetLedgerLoadError: Error | null = null
+  private readonly systemDefaultIdentitySnapshot =
+    new MemorySnapshotStore<CodexSystemDefaultIdentity>()
+  private readonly systemDefaultIdentityListeners = new Set<() => void>()
+  private lastNotifiedSystemDefaultIdentityRevision: string | null = null
 
   constructor(
     private readonly store: Store,
@@ -278,7 +289,73 @@ export class CodexAccountService {
 
   listAccounts(): CodexRateLimitAccountsState {
     this.normalizeActiveSelection()
+    const identitySnapshot = this.systemDefaultIdentitySnapshot.get()
+    // Why: keeps push-based consumers (mobile) converging on an out-of-band `codex login`;
+    // fresh reads avoid repeating the explicit IPC hydration that called this method.
+    if (
+      identitySnapshot.stale ||
+      identitySnapshot.age === null ||
+      identitySnapshot.age >= SYSTEM_IDENTITY_REVALIDATION_MS
+    ) {
+      void this.hydrateSystemDefaultIdentity()
+    }
     return this.getSnapshot()
+  }
+
+  getSystemDefaultIdentitySnapshot(): MemorySnapshot<CodexSystemDefaultIdentity> {
+    return this.systemDefaultIdentitySnapshot.get()
+  }
+
+  onSystemDefaultIdentityChanged(listener: () => void): () => void {
+    this.systemDefaultIdentityListeners.add(listener)
+    return () => this.systemDefaultIdentityListeners.delete(listener)
+  }
+
+  invalidateSystemDefaultIdentity(): void {
+    this.systemDefaultIdentitySnapshot.invalidate()
+  }
+
+  async hydrateSystemDefaultIdentity(): Promise<MemorySnapshot<CodexSystemDefaultIdentity>> {
+    const snapshot = await this.systemDefaultIdentitySnapshot.refresh(async () => {
+      let contents: string
+      try {
+        contents = (
+          await readSnapshotFileThroughFilesystemHost(
+            join(homedir(), '.codex', 'auth.json'),
+            'codex-auth'
+          )
+        ).toString('utf8')
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException | null)?.code
+        if (code === 'ENOENT' || code === 'ENOTDIR') {
+          return {
+            value: this.getMissingSystemDefaultIdentity(),
+            availability: 'missing'
+          }
+        }
+        throw error
+      }
+      return {
+        value: this.parseSystemDefaultIdentity(contents),
+        availability: 'ready'
+      }
+    }, classifyFilesystemSnapshotFailure)
+    const revision = JSON.stringify({
+      value: snapshot.value,
+      stale: snapshot.stale,
+      availability: snapshot.availability
+    })
+    if (revision !== this.lastNotifiedSystemDefaultIdentityRevision) {
+      this.lastNotifiedSystemDefaultIdentityRevision = revision
+      for (const listener of this.systemDefaultIdentityListeners) {
+        try {
+          listener()
+        } catch {
+          // One failed consumer must not prevent other account subscribers from converging.
+        }
+      }
+    }
+    return snapshot
   }
 
   async addAccount(target?: CodexAccountAddTarget): Promise<CodexRateLimitAccountsState> {
@@ -981,79 +1058,29 @@ export class CodexAccountService {
 
   private getSnapshot(): CodexRateLimitAccountsState {
     const settings = this.store.getSettings()
+    const systemDefaultSnapshot = this.systemDefaultIdentitySnapshot.get()
     return {
       accounts: settings.codexManagedAccounts
         .map((account) => this.toSummary(account))
         .sort((a, b) => b.updatedAt - a.updatedAt),
       activeAccountId: normalizeCodexRuntimeSelection(settings).host,
       activeAccountIdsByRuntime: normalizeCodexRuntimeSelection(settings),
-      systemDefault: this.resolveSystemDefaultIdentity()
+      systemDefault: systemDefaultSnapshot.value ?? this.getUnknownSystemDefaultIdentity(),
+      systemDefaultSnapshot
     }
   }
 
-  // Why: the system-default (activeAccountId:null) account has no stored
-  // identity — its effective login is whatever the real ~/.codex/auth.json is
-  // right now. Read it live and read-only so the switcher can display who the
-  // system default is and attribute usage, without ever mutating ~/.codex.
-  private resolveSystemDefaultIdentity(): CodexSystemDefaultIdentity {
-    const authFilePath = join(homedir(), '.codex', 'auth.json')
-    let contents: string
-    try {
-      // Why: a single read avoids an exists/read race and halves filesystem
-      // probes whenever an accounts snapshot resolves this live identity.
-      contents = readFileSync(authFilePath, 'utf-8')
-    } catch (error) {
-      const code = (error as NodeJS.ErrnoException | null)?.code
-      if (code === 'ENOENT' || code === 'ENOTDIR') {
-        // Why: no auth.json means either a signed-out home or an env-key/custom
-        // provider that authenticates via OPENAI_API_KEY instead of a token file.
-        return {
-          hasAuth: false,
-          authKind: this.hasEnvApiKey() ? 'api-key' : 'none',
-          email: null,
-          providerAccountId: null,
-          workspaceLabel: null
-        }
-      }
-      console.warn(
-        '[codex-accounts] Failed to read system-default Codex identity',
-        code ?? 'unknown-error'
-      )
-      return {
-        hasAuth: true,
-        authKind: 'none',
-        email: null,
-        providerAccountId: null,
-        workspaceLabel: null
-      }
-    }
-
+  private parseSystemDefaultIdentity(contents: string): CodexSystemDefaultIdentity {
     let parsed: unknown
     try {
       parsed = JSON.parse(contents)
     } catch {
-      // Why: SyntaxError messages can echo malformed input; never let auth
-      // contents or token fragments reach logs while degrading safely.
       console.warn('[codex-accounts] System-default Codex auth is not valid JSON')
-      return {
-        hasAuth: true,
-        authKind: 'none',
-        email: null,
-        providerAccountId: null,
-        workspaceLabel: null
-      }
+      throw new Error('System-default Codex auth is invalid')
     }
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      // Why: valid JSON can still have the wrong shape; account listing must
-      // degrade to an unknown identity instead of crashing the settings pane.
       console.warn('[codex-accounts] System-default Codex auth has an unexpected format')
-      return {
-        hasAuth: true,
-        authKind: 'none',
-        email: null,
-        providerAccountId: null,
-        workspaceLabel: null
-      }
+      throw new Error('System-default Codex auth has an unexpected format')
     }
     const raw = parsed as Record<string, unknown>
 
@@ -1076,6 +1103,26 @@ export class CodexAccountService {
       email: identity.email,
       providerAccountId: identity.providerAccountId,
       workspaceLabel: identity.workspaceLabel
+    }
+  }
+
+  private getMissingSystemDefaultIdentity(): CodexSystemDefaultIdentity {
+    return {
+      hasAuth: false,
+      authKind: this.hasEnvApiKey() ? 'api-key' : 'none',
+      email: null,
+      providerAccountId: null,
+      workspaceLabel: null
+    }
+  }
+
+  private getUnknownSystemDefaultIdentity(): CodexSystemDefaultIdentity {
+    return {
+      hasAuth: true,
+      authKind: 'none',
+      email: null,
+      providerAccountId: null,
+      workspaceLabel: null
     }
   }
 

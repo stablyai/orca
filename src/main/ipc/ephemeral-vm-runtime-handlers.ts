@@ -73,9 +73,9 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
       if (!runtime.repoId) {
         throw new Error(`Ephemeral VM runtime has no repo id: ${args.runtimeId}`)
       }
-      let resolved: ReturnType<typeof getRuntimeRecipeContext>
+      let resolved: Awaited<ReturnType<typeof getRuntimeRecipeContext>>
       try {
-        resolved = getRuntimeRecipeContext(store, userDataPath, runtime.id)
+        resolved = await getRuntimeRecipeContext(store, userDataPath, runtime.id)
       } catch (error) {
         return updateEphemeralVmRuntimeStatus(userDataPath, runtime.id, {
           status: 'cleanup_failed',
@@ -124,7 +124,7 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
       if (!runtime?.repoId) {
         return null
       }
-      const recipeContext = getRuntimeRecipeContext(store, userDataPath, runtime.id)
+      const recipeContext = await getRuntimeRecipeContext(store, userDataPath, runtime.id)
       const result = await suspendEphemeralVmRuntime({
         userDataPath,
         repoPath: recipeContext.repo.repo.path,
@@ -163,7 +163,7 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
       if (runtime.status !== 'suspended' && runtime.status !== 'resume_failed') {
         return runtime
       }
-      const recipeContext = getRuntimeRecipeContext(store, userDataPath, runtime.id)
+      const recipeContext = await getRuntimeRecipeContext(store, userDataPath, runtime.id)
       const result = await resumeEphemeralVmRuntime({
         userDataPath,
         repoPath: recipeContext.repo.repo.path,
@@ -209,7 +209,7 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
     'ephemeralVm:getCleanupCommand',
     async (_event, args: { runtimeId: string }): Promise<EphemeralVmCleanupCommandResult> => {
       const userDataPath = app.getPath('userData')
-      const resolved = getRuntimeRecipeContext(store, userDataPath, args.runtimeId)
+      const resolved = await getRuntimeRecipeContext(store, userDataPath, args.runtimeId)
       const payload = buildEphemeralVmRecipeCleanupPayload({
         recipe: resolved.recipe,
         context: {

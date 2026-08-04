@@ -183,12 +183,15 @@ function normalizeVmRecipes(value: unknown): VmRecipeParseResult {
   return { recipes, diagnostics }
 }
 
-/**
- * Parse the supported project defaults from `orca.yaml`.
- */
-export function parseOrcaYaml(content: string): OrcaHooks | null {
+export type OrcaYamlInspection = {
+  hooks: OrcaHooks | null
+  valid: boolean
+  topLevelKeys: string[]
+}
+
+export function inspectOrcaYaml(content: string): OrcaYamlInspection {
   if (!isOrcaYamlTextWithinLimit(content)) {
-    return null
+    return { hooks: null, valid: false, topLevelKeys: [] }
   }
 
   let root: unknown
@@ -200,17 +203,18 @@ export function parseOrcaYaml(content: string): OrcaHooks | null {
       uniqueKeys: true
     })
     if (document.errors.length > 0) {
-      return null
+      return { hooks: null, valid: false, topLevelKeys: [] }
     }
     root = document.toJS({ maxAliasCount: MAX_ORCA_YAML_ALIAS_COUNT })
   } catch {
-    return null
+    return { hooks: null, valid: false, topLevelKeys: [] }
   }
 
   const record = asRecord(root)
   if (!record) {
-    return null
+    return { hooks: null, valid: false, topLevelKeys: [] }
   }
+  const topLevelKeys = Object.keys(record)
 
   const scriptsRecord = asRecord(record.scripts)
   const setup = scriptsRecord ? asTrimmedString(scriptsRecord.setup) : undefined
@@ -234,18 +238,27 @@ export function parseOrcaYaml(content: string): OrcaHooks | null {
     environmentRecipeDiagnostics.length === 0 &&
     sharedDirectories.length === 0
   ) {
-    return null
+    return { hooks: null, valid: true, topLevelKeys }
   }
 
   return {
-    scripts: {
-      ...(setup ? { setup } : {}),
-      ...(archive ? { archive } : {})
-    },
-    ...(issueCommand ? { issueCommand } : {}),
-    ...(defaultTabs.length > 0 ? { defaultTabs } : {}),
-    ...(environmentRecipes.length > 0 ? { environmentRecipes } : {}),
-    ...(environmentRecipeDiagnostics.length > 0 ? { environmentRecipeDiagnostics } : {}),
-    ...(sharedDirectories.length > 0 ? { worktree: { sharedDirectories } } : {})
+    valid: true,
+    topLevelKeys,
+    hooks: {
+      scripts: {
+        ...(setup ? { setup } : {}),
+        ...(archive ? { archive } : {})
+      },
+      ...(issueCommand ? { issueCommand } : {}),
+      ...(defaultTabs.length > 0 ? { defaultTabs } : {}),
+      ...(environmentRecipes.length > 0 ? { environmentRecipes } : {}),
+      ...(environmentRecipeDiagnostics.length > 0 ? { environmentRecipeDiagnostics } : {}),
+      ...(sharedDirectories.length > 0 ? { worktree: { sharedDirectories } } : {})
+    }
   }
+}
+
+/** Parse the supported project defaults from `orca.yaml`. */
+export function parseOrcaYaml(content: string): OrcaHooks | null {
+  return inspectOrcaYaml(content).hooks
 }

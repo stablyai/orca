@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as HiddenRateLimitPtyCwd from './hidden-rate-limit-pty-cwd'
 
 const { childSpawnMock, readFileMock, resolveCodexCommandMock, ptySpawnMock } = vi.hoisted(() => ({
   childSpawnMock: vi.fn(),
@@ -25,15 +26,47 @@ vi.mock('node-pty', () => ({
   spawn: ptySpawnMock
 }))
 
+vi.mock('./hidden-rate-limit-pty-cwd', async () => ({
+  ...(await vi.importActual<typeof HiddenRateLimitPtyCwd>('./hidden-rate-limit-pty-cwd')),
+  getHiddenRateLimitPtyCwdSnapshot: () => ({
+    value: join('/tmp', 'rate-limit-pty-cwd'),
+    stale: false,
+    age: 0,
+    availability: 'ready'
+  })
+}))
+
 // Default to signed-in so the spawn paths under test still run; the auth gate
 // itself is covered by codex-auth-presence.test.ts and the no-auth case below.
 vi.mock('./codex-auth-presence', () => ({
   probeCodexAuthPresence: vi.fn(() => 'present')
 }))
 
-import { fetchCodexRateLimits } from './codex-fetcher'
+import {
+  fetchCodexRateLimits as fetchCodexRateLimitsImpl,
+  type FetchCodexRateLimitsOptions
+} from './codex-fetcher'
 import { probeCodexAuthPresence } from './codex-auth-presence'
 import { getActiveHiddenRateLimitPtyCount } from './hidden-pty-cleanup'
+
+const TEST_AUTH_JSON = JSON.stringify({
+  tokens: { access_token: 'test-access-token', account_id: 'acct-test' }
+})
+
+async function fetchCodexRateLimits(
+  options: FetchCodexRateLimitsOptions = {}
+): ReturnType<typeof fetchCodexRateLimitsImpl> {
+  const presence = await probeCodexAuthPresence()
+  return fetchCodexRateLimitsImpl({
+    codexCommand: 'codex',
+    hiddenPtyCwd: join('/tmp', 'rate-limit-pty-cwd'),
+    authSnapshot:
+      presence === 'present'
+        ? { status: 'present', authJson: TEST_AUTH_JSON }
+        : { status: presence === 'absent' ? 'absent' : 'unavailable', authJson: null },
+    ...options
+  })
+}
 
 function makeDisposable() {
   return { dispose: vi.fn() }
@@ -161,7 +194,7 @@ describe('fetchCodexRateLimits', () => {
   })
 
   it.each([
-    ['timeout', 'Timed out while checking Codex sign-in status'],
+    ['timeout', 'Codex sign-in status is unavailable'],
     ['unavailable', 'Codex sign-in status is unavailable']
   ] as const)(
     'does not report an indeterminate %s probe as signed out',
@@ -467,14 +500,6 @@ describe('fetchCodexRateLimits', () => {
   it('fills reset-credit count from the backend when the installed app-server omits it', async () => {
     const rpcChild = makeRpcChild()
     childSpawnMock.mockReturnValue(rpcChild)
-    readFileMock.mockResolvedValue(
-      JSON.stringify({
-        tokens: {
-          access_token: 'access-token',
-          account_id: 'account-id'
-        }
-      })
-    )
     vi.mocked(fetch).mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -530,7 +555,18 @@ describe('fetchCodexRateLimits', () => {
       }
     })
 
-    const resultPromise = fetchCodexRateLimits({ codexHomePath: '/managed/codex-home' })
+    const resultPromise = fetchCodexRateLimits({
+      codexHomePath: '/managed/codex-home',
+      authSnapshot: {
+        status: 'present',
+        authJson: JSON.stringify({
+          tokens: {
+            access_token: 'access-token',
+            account_id: 'account-id'
+          }
+        })
+      }
+    })
     await vi.advanceTimersByTimeAsync(1)
     await vi.advanceTimersByTimeAsync(1)
     const result = await resultPromise
@@ -557,7 +593,7 @@ describe('fetchCodexRateLimits', () => {
         }
       ]
     })
-    expect(readFileMock).toHaveBeenCalledWith(join('/managed/codex-home', 'auth.json'), 'utf8')
+    expect(readFileMock).not.toHaveBeenCalled()
     expect(fetch).toHaveBeenCalledWith(
       'https://chatgpt.com/backend-api/wham/rate-limit-reset-credits',
       expect.objectContaining({

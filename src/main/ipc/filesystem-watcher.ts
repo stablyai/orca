@@ -30,6 +30,7 @@ import {
   onWatcherChildCapacityAvailable,
   WatcherChildCapacityError
 } from './parcel-watcher-child-registry'
+import { orcaYamlSnapshots, refreshLocalOrcaYamlSnapshot } from '../git/orca-yaml-snapshot-store'
 import { beginWatcherInstall, isWatcherRemovalInProgressError } from './watcher-removal-gate'
 import {
   createWatcherRemovalDeadline,
@@ -287,8 +288,26 @@ async function tryStatIsDirectory(filePath: string): Promise<boolean | undefined
 
 // ── Flush and emit ───────────────────────────────────────────────────
 
+function revalidateWatchedOrcaYaml(rootPath: string, changedPaths?: readonly string[]): void {
+  if (!orcaYamlSnapshots.has(rootPath)) {
+    return
+  }
+  const configPath = normalizeRuntimePathForComparison(path.join(rootPath, 'orca.yaml'))
+  if (
+    changedPaths &&
+    !changedPaths.some(
+      (changedPath) => normalizeRuntimePathForComparison(changedPath) === configPath
+    )
+  ) {
+    return
+  }
+  orcaYamlSnapshots.invalidate(rootPath)
+  void refreshLocalOrcaYamlSnapshot(rootPath)
+}
+
 function emitOverflowPayload(root: WatchedRoot): void {
   const { rootPath } = root
+  revalidateWatchedOrcaYaml(rootPath)
   const payload: FsChangedPayload = {
     worktreePath: rootPath,
     events: [{ kind: 'overflow', absolutePath: rootPath }]
@@ -336,6 +355,10 @@ async function flushBatch(root: WatchedRoot): Promise<void> {
     worktreePath: root.rootPath,
     events
   }
+  revalidateWatchedOrcaYaml(
+    root.rootPath,
+    events.map((event) => event.absolutePath)
+  )
 
   for (const [, wc] of root.listeners) {
     if (!wc.isDestroyed()) {

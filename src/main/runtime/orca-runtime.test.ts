@@ -43,6 +43,7 @@ import {
   WORKTREE_TEARDOWN_RPC_MARGIN_MS
 } from './worktree-teardown'
 import { clearSubmodulePathsCacheForTests, listSubmodulePaths } from '../git/status'
+import { orcaYamlSnapshots } from '../git/orca-yaml-snapshot-store'
 import {
   createSetupRunnerScript,
   getEffectiveHooks,
@@ -452,11 +453,15 @@ vi.mock('../agent-trust-presets', () => ({
   markCursorWorkspaceTrusted: markCursorWorkspaceTrustedMock
 }))
 
+const runtimeEffectiveHooksMock = vi.hoisted(() => vi.fn().mockReturnValue(null))
+const runtimeLoadHooksMock = vi.hoisted(() => vi.fn().mockReturnValue(null))
+
 vi.mock('../hooks', () => ({
   buildPosixRunnerScript: (script: string) => `#!/usr/bin/env bash\nset -e\n${script}\n`,
   buildWindowsRunnerScript: (script: string) => `@echo off\r\n${script}\r\n`,
   createSetupRunnerScript: vi.fn(),
-  getEffectiveHooks: vi.fn().mockReturnValue(null),
+  getEffectiveHooks: runtimeEffectiveHooksMock,
+  getEffectiveHooksThroughFilesystemHost: runtimeEffectiveHooksMock,
   getEffectiveHooksFromConfig: vi.fn().mockReturnValue(null),
   getDefaultTabCommandTrustContent: vi.fn(
     (hooks: { scripts?: { setup?: string } } | null) => hooks?.scripts?.setup?.trim() ?? ''
@@ -466,7 +471,8 @@ vi.mock('../hooks', () => ({
     ORCA_ROOT_PATH: '/remote/repo',
     ORCA_WORKTREE_PATH: worktreePath
   }),
-  loadHooks: vi.fn().mockReturnValue(null),
+  loadHooks: runtimeLoadHooksMock,
+  loadHooksThroughFilesystemHost: runtimeLoadHooksMock,
   resolveSetupRunnerShell: vi.fn().mockReturnValue(undefined),
   runHook: vi.fn().mockResolvedValue({ success: true, output: '' }),
   shouldRunSetupForCreate: vi
@@ -629,6 +635,7 @@ vi.mock('../git/git-username', async () => {
 })
 
 function resetRuntimeTestMocks(): void {
+  orcaYamlSnapshots.resetForTests()
   resetPlatform()
   electronMocks.app.isPackaged = false
   clearConfiguredWorktreeSharedDirectoriesCacheForTests()
@@ -2098,6 +2105,41 @@ describe('OrcaRuntimeService', () => {
       scope: expectedScope,
       snapshot: { codex, rateLimits: rateLimitState }
     })
+  })
+
+  it('pushes account snapshots when the system-default Codex identity changes', () => {
+    const runtime = createRuntime()
+    const identitySubscription: { listener: (() => void) | null } = { listener: null }
+    const codexState = {
+      accounts: [],
+      activeAccountId: null,
+      activeAccountIdsByRuntime: { host: null, wsl: {} }
+    }
+    runtime.setAccountServices({
+      claudeAccounts: {
+        listAccounts: vi.fn(() => ({ accounts: [], activeAccountId: null }))
+      },
+      codexAccounts: {
+        listAccounts: vi.fn(() => codexState),
+        onSystemDefaultIdentityChanged: vi.fn((listener) => {
+          identitySubscription.listener = listener
+          return vi.fn()
+        })
+      },
+      rateLimits: {
+        getState: vi.fn(() => ({ marker: 'rate-limits' })),
+        onStateChange: vi.fn(() => vi.fn())
+      }
+    } as never)
+    const snapshots: unknown[] = []
+
+    const unsubscribe = runtime.onAccountsChanged((snapshot) => snapshots.push(snapshot))
+    identitySubscription.listener?.()
+
+    expect(snapshots).toEqual([
+      expect.objectContaining({ codex: codexState, rateLimits: { marker: 'rate-limits' } })
+    ])
+    unsubscribe()
   })
 
   it('advertises headless browser capability when an offscreen backend backs a windowless host', () => {
@@ -6076,9 +6118,9 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('hashes only the shared orca.yaml setup script for local run-both hooks', async () => {
-    vi.mocked(hasHooksFile).mockReturnValue(true)
-    vi.mocked(loadHooks).mockReturnValue({ scripts: { setup: 'echo yaml setup' } })
-    vi.mocked(getEffectiveHooks).mockReturnValue({
+    const repoPath = await mkdtemp(join(tmpdir(), 'orca-runtime-hook-trust-'))
+    await writeFile(join(repoPath, 'orca.yaml'), 'scripts:\n  setup: echo yaml setup\n')
+    vi.mocked(getEffectiveHooksFromConfig).mockReturnValue({
       scripts: { setup: 'echo yaml setup\necho local setup' }
     })
     const runtimeStore = {
@@ -6086,7 +6128,7 @@ describe('OrcaRuntimeService', () => {
       getRepos: () => [
         {
           id: TEST_REPO_ID,
-          path: TEST_REPO_PATH,
+          path: repoPath,
           displayName: 'repo',
           badgeColor: 'blue',
           addedAt: 1,
@@ -6099,13 +6141,84 @@ describe('OrcaRuntimeService', () => {
     }
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
-    await expect(runtime.getRepoHooks('id:repo-1')).resolves.toMatchObject({
-      hooks: { scripts: { setup: 'echo yaml setup\necho local setup' } },
-      setupTrust: {
-        contentHash: '9bc9f57699fe0390d263cca1aec01235cccc8fa5fc87cd87fd51ba1c8483ec84',
-        scriptContent: 'echo yaml setup'
-      }
+    try {
+      await expect(runtime.getRepoHooks('id:repo-1')).resolves.toMatchObject({
+        hooks: { scripts: { setup: 'echo yaml setup\necho local setup' } },
+        setupTrust: {
+          contentHash: '9bc9f57699fe0390d263cca1aec01235cccc8fa5fc87cd87fd51ba1c8483ec84',
+          scriptContent: 'echo yaml setup'
+        }
+      })
+      expect(hasHooksFile).not.toHaveBeenCalled()
+      expect(loadHooks).not.toHaveBeenCalled()
+    } finally {
+      await rm(repoPath, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps folder-workspace hooks on local settings without filesystem reads', async () => {
+    vi.mocked(getEffectiveHooksFromConfig).mockReturnValue({
+      scripts: { setup: 'pnpm install' }
     })
+    const folderStore = {
+      ...store,
+      getRepos: () => [
+        {
+          id: TEST_REPO_ID,
+          path: TEST_REPO_PATH,
+          name: 'repo',
+          kind: 'folder' as const,
+          connectionId: null,
+          executionHostId: 'local' as const,
+          hookSettings: { scripts: { setup: 'pnpm install' } }
+        }
+      ]
+    }
+    const runtime = new OrcaRuntimeService(folderStore as never)
+
+    await expect(runtime.getRepoHooks('id:repo-1')).resolves.toMatchObject({
+      hasHooksFile: false,
+      hooks: { scripts: { setup: 'pnpm install' } },
+      source: 'legacy'
+    })
+    expect(getEffectiveHooksFromConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'folder' }),
+      null
+    )
+    expect(hasHooksFile).not.toHaveBeenCalled()
+    expect(loadHooks).not.toHaveBeenCalled()
+  })
+
+  it('checks local repo hooks from the bounded snapshot', async () => {
+    const repoPath = await mkdtemp(join(tmpdir(), 'orca-runtime-hook-check-'))
+    await writeFile(join(repoPath, 'orca.yaml'), 'scripts:\n  setup: pnpm install\n')
+    const localStore = {
+      ...store,
+      getRepos: () => [
+        {
+          id: TEST_REPO_ID,
+          path: repoPath,
+          displayName: 'repo',
+          badgeColor: 'blue',
+          addedAt: 1
+        }
+      ]
+    }
+    const runtime = new OrcaRuntimeService(localStore as never)
+
+    try {
+      await expect(runtime.checkRepoHooks('id:repo-1')).resolves.toMatchObject({
+        status: 'ok',
+        hasHooks: true,
+        hooks: { scripts: { setup: 'pnpm install' } },
+        stale: false,
+        availability: 'ready'
+      })
+      expect(hasHooksFile).not.toHaveBeenCalled()
+      expect(loadHooks).not.toHaveBeenCalled()
+    } finally {
+      await rm(repoPath, { recursive: true, force: true })
+    }
   })
 
   it('uses remote path joins for SSH hook checks and issue-command files', async () => {
@@ -7149,6 +7262,44 @@ describe('OrcaRuntimeService', () => {
     const repo = await runtime.addRepo('/tmp/runtime-add-root-prep', 'folder')
 
     expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(runtimeStore, repo)
+  })
+
+  it('hydrates hooks for a repo added through the headless runtime API', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-hooks-'))
+    const repos: Record<string, unknown>[] = []
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [...repos] as never,
+      addRepo: (repo: Record<string, unknown>) => {
+        repos.push(repo)
+      },
+      getRepo: (id: string) => repos.find((repo) => repo.id === id) as never
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    try {
+      execFileSync('git', ['init'], { cwd: tempRoot, stdio: 'ignore' })
+      await writeFile(join(tempRoot, 'orca.yaml'), 'scripts:\n  setup: pnpm install\n')
+      vi.mocked(parseOrcaYaml).mockReturnValue({ scripts: { setup: 'pnpm install' } })
+      vi.mocked(getEffectiveHooksFromConfig).mockImplementation((_repo, hooks) => hooks)
+
+      const repo = await runtime.addRepo(tempRoot)
+
+      await vi.waitFor(() => {
+        expect(orcaYamlSnapshots.read(tempRoot)).toMatchObject({
+          stale: false,
+          availability: 'ready',
+          value: { hooks: { scripts: { setup: 'pnpm install' } } }
+        })
+      })
+      await expect(runtime.getRepoHooks(`id:${repo.id}`)).resolves.toMatchObject({
+        hasHooksFile: true,
+        hooks: { scripts: { setup: 'pnpm install' } },
+        source: 'orca.yaml'
+      })
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
+    }
   })
 
   it('sets up an existing folder on a fresh runtime after importing the repo project', async () => {
@@ -39111,7 +39262,8 @@ describe('OrcaRuntimeService', () => {
       '/tmp/workspaces/runtime-hook-no-pty',
       expect.objectContaining({ id: 'repo-1' }),
       '/tmp/workspaces/runtime-hook-no-pty',
-      undefined
+      undefined,
+      'pnpm worktree:setup'
     )
     expect(result.setupReceipt).toMatchObject({ state: 'running' })
   })
@@ -42954,10 +43106,10 @@ describe('OrcaRuntimeService', () => {
 
   it('passes project shared links through the runtime removal preflight and cleanup', async () => {
     const runtime = createWorktreeRemovalRuntime()
-    vi.mocked(loadHooks).mockReturnValue({
-      scripts: {},
-      worktree: { sharedDirectories: ['node_modules'] }
-    })
+    orcaYamlSnapshots.publishContent(
+      TEST_REPO_PATH,
+      'worktree:\n  sharedDirectories:\n    - node_modules\n'
+    )
     findExistingWorktreeSymlinkPathsMock.mockResolvedValue(['node_modules'])
     vi.mocked(removeWorktree).mockResolvedValue({})
 
@@ -44393,7 +44545,8 @@ describe('OrcaRuntimeService', () => {
       TEST_WORKTREE_PATH,
       expect.objectContaining({ id: TEST_REPO_ID, path: TEST_REPO_PATH }),
       undefined,
-      undefined
+      undefined,
+      'pnpm worktree:archive'
     )
     expect(removeWorktree).toHaveBeenCalledWith(
       TEST_REPO_PATH,

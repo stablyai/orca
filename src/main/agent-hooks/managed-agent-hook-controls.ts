@@ -1,4 +1,8 @@
-import type { AgentHookInstallStatus, AgentHookTarget } from '../../shared/agent-hook-types'
+import type {
+  AgentHookInstallStatus,
+  AgentHookInstallStatusSnapshot,
+  AgentHookTarget
+} from '../../shared/agent-hook-types'
 import {
   getManagedAgentHookTarget,
   isManagedAgentHookTarget
@@ -6,6 +10,7 @@ import {
 import { normalizeDisabledTuiAgents } from '../../shared/tui-agent-selection'
 import type { GlobalSettings } from '../../shared/types'
 import { detectLocalManagedAgentCliPresence } from './local-agent-cli-presence'
+import { agentHookInstallStatusSnapshots } from './install-status-snapshot-store'
 import {
   MANAGED_AGENT_HOOK_INSTALLERS,
   MANAGED_AGENT_HOOK_REMOVERS,
@@ -105,11 +110,13 @@ export async function installManagedAgentHooks(
     })
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error)
-    return installers.map(([agent]) =>
+    const statuses = installers.map(([agent]) =>
       disabled.has(agent)
         ? skippedStatus(agent, 'agent_disabled', 'Agent is disabled in Settings.')
         : skippedStatus(agent, 'cli_presence_unknown', detail)
     )
+    agentHookInstallStatusSnapshots.publishAll(statuses)
+    return statuses
   }
 
   const results: AgentHookInstallStatus[] = []
@@ -142,12 +149,13 @@ export async function installManagedAgentHooks(
     }
     results.push(runInstaller(entry, options.onInstallError))
   }
+  agentHookInstallStatusSnapshots.publishAll(results)
   return results
 }
 
 export function removeManagedAgentHooks(options: RemoveOptions = {}): AgentHookInstallStatus[] {
   const allowed = options.agents ? new Set(options.agents) : null
-  return MANAGED_AGENT_HOOK_REMOVERS.filter(
+  const statuses = MANAGED_AGENT_HOOK_REMOVERS.filter(
     ([agent]) => allowed === null || allowed.has(agent)
   ).map(([agent, remove]) => {
     try {
@@ -156,12 +164,22 @@ export function removeManagedAgentHooks(options: RemoveOptions = {}): AgentHookI
       return errorStatus(agent, error)
     }
   })
+  agentHookInstallStatusSnapshots.publishAll(statuses)
+  return statuses
 }
 
+export function getManagedAgentHookStatusSnapshots(): AgentHookInstallStatusSnapshot[] {
+  return MANAGED_AGENT_HOOK_INSTALLERS.map(([agent]) => agentHookInstallStatusSnapshots.read(agent))
+}
+
+/**
+ * CLI-only. The standalone `orca` process never publishes snapshots, so status must come
+ * from disk there; the desktop main process serves its IPC from the snapshots above.
+ */
 export function getManagedAgentHookStatuses(): AgentHookInstallStatus[] {
-  return MANAGED_AGENT_HOOK_STATUS_READERS.map(([agent, getStatus]) => {
+  return MANAGED_AGENT_HOOK_STATUS_READERS.map(([agent, read]) => {
     try {
-      return getStatus()
+      return read()
     } catch (error) {
       return errorStatus(agent, error)
     }

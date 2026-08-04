@@ -87,13 +87,19 @@ export function writeSecureJsonFile(targetPath: string, value: unknown): void {
   writeSecureFile(targetPath, JSON.stringify(value, null, 2))
 }
 
-export function writeSecureFile(targetPath: string, contents: string): void {
+export function writeSecureFile(
+  targetPath: string,
+  contents: string,
+  options: { hardenParentDirectory?: boolean } = {}
+): void {
   const dir = dirname(targetPath)
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true, mode: 0o700 })
   }
   // Windows dir hardening stays async + path-cached (it stormed the main thread, #4901); POSIX keeps the metadata cache to catch chmod/ctime drift.
-  hardenSecurePathOnce(dir, true)
+  if (options.hardenParentDirectory !== false) {
+    hardenSecurePathOnce(dir, true)
+  }
 
   const tmpFile = `${targetPath}.${process.pid}.${Date.now()}.${randomBytes(4).toString('hex')}.tmp`
   try {

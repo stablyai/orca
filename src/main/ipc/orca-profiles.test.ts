@@ -8,6 +8,7 @@ const {
   relaunchAppMock,
   destroySystemTrayMock,
   createLocalOrcaProfileMock,
+  getOrcaProfileListSnapshotMock,
   getOrcaProfileListStateMock,
   seedNewOrcaProfileTelemetryConsentMock,
   setActiveOrcaProfileMock,
@@ -20,6 +21,7 @@ const {
   relaunchAppMock: vi.fn(),
   destroySystemTrayMock: vi.fn(),
   createLocalOrcaProfileMock: vi.fn(),
+  getOrcaProfileListSnapshotMock: vi.fn(),
   getOrcaProfileListStateMock: vi.fn(),
   seedNewOrcaProfileTelemetryConsentMock: vi.fn(),
   setActiveOrcaProfileMock: vi.fn(),
@@ -51,6 +53,7 @@ vi.mock('../app-relaunch', () => ({
 vi.mock('../orca-profiles/profile-index-store', () => ({
   createLocalOrcaProfile: createLocalOrcaProfileMock,
   getOrcaProfileListState: getOrcaProfileListStateMock,
+  getOrcaProfileListSnapshot: getOrcaProfileListSnapshotMock,
   seedNewOrcaProfileTelemetryConsent: seedNewOrcaProfileTelemetryConsentMock,
   setActiveOrcaProfile: setActiveOrcaProfileMock
 }))
@@ -80,6 +83,7 @@ describe('registerOrcaProfileHandlers', () => {
     relaunchAppMock.mockImplementation(() => appRelaunchMock())
     destroySystemTrayMock.mockReset()
     createLocalOrcaProfileMock.mockReset()
+    getOrcaProfileListSnapshotMock.mockReset()
     getOrcaProfileListStateMock.mockReset()
     seedNewOrcaProfileTelemetryConsentMock.mockReset()
     setActiveOrcaProfileMock.mockReset()
@@ -99,7 +103,7 @@ describe('registerOrcaProfileHandlers', () => {
       ...listState,
       profile: { id: 'local-work', name: 'Work' }
     }
-    getOrcaProfileListStateMock.mockReturnValue(listState)
+    getOrcaProfileListSnapshotMock.mockReturnValue(listState)
     createLocalOrcaProfileMock.mockReturnValue(createState)
 
     registerOrcaProfileHandlers(makeStoreMock() as never)
@@ -108,6 +112,8 @@ describe('registerOrcaProfileHandlers', () => {
       ...listState,
       multiProfileUi: false
     })
+    expect(getOrcaProfileListSnapshotMock).toHaveBeenCalledOnce()
+    expect(getOrcaProfileListStateMock).not.toHaveBeenCalled()
     await expect(
       Promise.resolve(handlers.get('orcaProfiles:createLocal')?.(null, { name: 'Work' }))
     ).resolves.toBe(createState)
@@ -118,7 +124,7 @@ describe('registerOrcaProfileHandlers', () => {
     const previous = process.env.ORCA_MULTI_PROFILE_UI
     process.env.ORCA_MULTI_PROFILE_UI = '1'
     try {
-      getOrcaProfileListStateMock.mockReturnValue({
+      getOrcaProfileListSnapshotMock.mockReturnValue({
         activeProfileId: 'local-default',
         profiles: []
       })

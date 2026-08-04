@@ -2,17 +2,15 @@ import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { checkIgnoredPaths } from './check-ignored-paths'
 import type { GitRuntimeOptions } from './git-runtime-options'
-import { loadHooks } from '../hooks'
 import type { Repo } from '../../shared/types'
+import {
+  orcaYamlSnapshots,
+  readLocalOrcaYamlSnapshot,
+  refreshLocalOrcaYamlSnapshot
+} from './orca-yaml-snapshot-store'
 
 // Why: a fresh worktree has no node_modules/.cache, and copying them is slow and
 // duplicates disk; `orca.yaml` names the ones every worktree should share instead.
-
-const CONFIGURED_SHARED_DIRECTORIES_CACHE_TTL_MS = 30_000
-const configuredSharedDirectoriesByRepoPath = new Map<
-  string,
-  { directories: string[]; expiresAt: number }
->()
 
 /** The configured `worktree.sharedDirectories` names, before any existence or
  *  gitignore filtering.
@@ -26,22 +24,12 @@ const configuredSharedDirectoriesByRepoPath = new Map<
  *  corrupt every later read for the rest of the TTL. Copying on return would fix
  *  that too, but this runs on the status-polling path — the type costs nothing. */
 export function getConfiguredWorktreeSharedDirectories(repoPath: string): readonly string[] {
-  const cached = configuredSharedDirectoriesByRepoPath.get(repoPath)
-  const now = Date.now()
-  if (cached && cached.expiresAt > now) {
-    return cached.directories
-  }
-  const configured = loadHooks(repoPath)?.worktree?.sharedDirectories ?? []
-  configuredSharedDirectoriesByRepoPath.set(repoPath, {
-    directories: configured,
-    expiresAt: now + CONFIGURED_SHARED_DIRECTORIES_CACHE_TTL_MS
-  })
-  return configured
+  return readLocalOrcaYamlSnapshot(repoPath).value?.sharedDirectories ?? []
 }
 
 /** Reset the process cache between tests. */
 export function clearConfiguredWorktreeSharedDirectoriesCacheForTests(): void {
-  configuredSharedDirectoriesByRepoPath.clear()
+  orcaYamlSnapshots.resetForTests()
 }
 
 /** Every path Orca may have symlinked into a worktree: the per-user Worktree
@@ -53,6 +41,20 @@ export function clearConfiguredWorktreeSharedDirectoriesCacheForTests(): void {
 export function getWorktreeSharedLinkPaths(repo: Pick<Repo, 'path' | 'symlinkPaths'>): string[] {
   return Array.from(
     new Set([...(repo.symlinkPaths ?? []), ...getConfiguredWorktreeSharedDirectories(repo.path)])
+  )
+}
+
+export async function resolveWorktreeSharedLinkPaths(
+  repo: Pick<Repo, 'path' | 'symlinkPaths'>
+): Promise<string[]> {
+  const previous = orcaYamlSnapshots.read(repo.path).value?.sharedDirectories ?? []
+  const current = await refreshLocalOrcaYamlSnapshot(repo.path)
+  return Array.from(
+    new Set([
+      ...(repo.symlinkPaths ?? []),
+      ...previous,
+      ...(current.value?.sharedDirectories ?? [])
+    ])
   )
 }
 
@@ -70,7 +72,8 @@ export async function resolveWorktreeSharedDirectories(
   options: GitRuntimeOptions = {}
 ): Promise<string[]> {
   try {
-    const configured = loadHooks(repoPath)?.worktree?.sharedDirectories ?? []
+    const snapshot = await refreshLocalOrcaYamlSnapshot(repoPath)
+    const configured = snapshot.value?.sharedDirectories ?? []
     if (configured.length === 0) {
       return []
     }

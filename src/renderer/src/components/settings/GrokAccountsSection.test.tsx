@@ -66,4 +66,24 @@ describe('GrokAccountsSection', () => {
     ).toBeInTheDocument()
     expect(screen.queryByText(/grok login/i)).not.toBeInTheDocument()
   })
+
+  it('does not report signed-out while credential status is unavailable', async () => {
+    mocks.getStatus.mockResolvedValueOnce({
+      value: null,
+      stale: true,
+      age: 120,
+      availability: 'unavailable',
+      signedIn: false,
+      email: null,
+      teamId: null,
+      tokenFresh: false,
+      error: 'Unable to read Grok auth file'
+    })
+
+    render(<GrokAccountsSection />)
+
+    expect(await screen.findByText('Grok sign-in status unavailable')).toBeInTheDocument()
+    expect(screen.queryByText('Not signed in to Grok CLI')).not.toBeInTheDocument()
+    expect(screen.getByText('Unable to read Grok auth file')).toBeInTheDocument()
+  })
 })

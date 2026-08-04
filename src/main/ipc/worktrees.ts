@@ -85,16 +85,12 @@ import { getSshGitProvider, requireSshGitProvider } from '../providers/ssh-git-d
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import {
   createIssueCommandRunnerScript,
-  getEffectiveHooks,
   getEffectiveHooksFromConfig,
   getSetupRunnerEnvVars,
-  loadHooks,
   parseOrcaYaml,
   readIssueCommand,
   resolveSetupRunnerShell,
   runHook,
-  hasHooksFile,
-  hasUnrecognizedOrcaYamlKeys,
   writeIssueCommand
 } from '../hooks'
 import {
@@ -124,7 +120,8 @@ import type { OrcaRuntimeService, RuntimeWorktreeLifecycleEvent } from '../runti
 import { killAllProcessesForWorktree } from '../runtime/worktree-teardown'
 import { clearProviderPtyState, getLocalPtyProvider, getSshPtyProvider } from './pty'
 import { findExistingWorktreeSymlinkPaths, removeWorktreeLinkedPaths } from './worktree-symlinks'
-import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
+import { resolveWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
+import { readFreshLocalOrcaYamlSnapshot } from '../git/orca-yaml-snapshot-store'
 import { track } from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import { workspaceSourceSchema, type WorkspaceSource } from '../../shared/telemetry-events'
@@ -449,7 +446,15 @@ function getWorktreeRemovalInFlightKey(worktreeId: string, hostId?: ExecutionHos
 
 async function getArchiveHooksForRemoval(repo: Repo): Promise<OrcaHooks | null> {
   if (!repo.connectionId) {
-    return getEffectiveHooks(repo)
+    try {
+      const snapshot = await readFreshLocalOrcaYamlSnapshot(repo.path)
+      return getEffectiveHooksFromConfig(
+        repo,
+        snapshot.stale ? null : (snapshot.value?.hooks ?? null)
+      )
+    } catch {
+      return getEffectiveHooksFromConfig(repo, null)
+    }
   }
 
   const fsProvider = getSshFilesystemProvider(repo.connectionId)
@@ -2588,7 +2593,8 @@ export function registerWorktreeHandlers(
                       canonicalWorktreePath,
                       repo,
                       undefined,
-                      localWorktreeGitOptions
+                      localWorktreeGitOptions,
+                      archiveScript
                     )
                 if (!result.success) {
                   console.error(
@@ -2694,7 +2700,7 @@ export function registerWorktreeHandlers(
           // Why: `orca.yaml` shared directories are symlinked in too, and a
           // directory-only ignore rule leaves those links untracked, so removal must
           // tolerate and unlink them exactly like the per-user shared paths.
-          const linkedPaths = getWorktreeSharedLinkPaths(repo)
+          const linkedPaths = await resolveWorktreeSharedLinkPaths(repo)
           const ignoredLinkedPaths = args.force
             ? []
             : await findExistingWorktreeSymlinkPaths(canonicalWorktreePath, linkedPaths)
@@ -3136,15 +3142,23 @@ export function registerWorktreeHandlers(
         }
       }
 
-      const has = hasHooksFile(repo.path)
-      const hooks = has ? loadHooks(repo.path) : null
-      // Why: unrecognised top-level keys mean the file is well-formed but from a newer Orca; suggest updating rather than "could not be parsed".
-      const mayNeedUpdate = has && !hooks && hasUnrecognizedOrcaYamlKeys(repo.path)
+      const snapshot = await readFreshLocalOrcaYamlSnapshot(repo.path)
+      const value = snapshot.stale ? null : snapshot.value
       return {
-        status: 'ok',
-        hasHooks: has,
-        hooks,
-        mayNeedUpdate
+        status:
+          snapshot.stale ||
+          (value === null &&
+            (snapshot.availability === 'denied' || snapshot.availability === 'unavailable'))
+            ? 'error'
+            : 'ok',
+        hasHooks: value !== null && value.contentState !== 'missing',
+        hooks: value?.hooks ?? null,
+        mayNeedUpdate: value?.mayNeedUpdate ?? false,
+        stale: snapshot.stale,
+        age: snapshot.age,
+        availability: snapshot.availability,
+        contentState: value?.contentState ?? null,
+        lastError: snapshot.lastError
       }
     }
   )

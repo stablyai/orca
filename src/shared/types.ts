@@ -27,6 +27,7 @@ import type {
   FeatureInteractionTelemetryBucketState
 } from './feature-interactions'
 import type { GitBranchChangeStatus } from './git-status-types'
+import type { MemorySnapshot as MemoryFirstSnapshot } from './memory-snapshot'
 import type { KeybindingOverrides, TerminalShortcutPolicy } from './keybindings'
 import type { RepoIcon } from './repo-icon'
 import type { AppIconId } from './app-icon'
@@ -2524,6 +2525,7 @@ export type CodexRateLimitAccountsState = {
   /** Resolved identity of the host system-default (real ~/.codex) account.
    *  Omitted for runtimes where it is not resolved (e.g. per-distro WSL). */
   systemDefault?: CodexSystemDefaultIdentity
+  systemDefaultSnapshot?: MemoryFirstSnapshot<CodexSystemDefaultIdentity>
 }
 
 export type CodexManagedAccountRuntimeSelection = {

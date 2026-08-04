@@ -1780,8 +1780,10 @@ describe('updater', () => {
       'updater:status',
       expect.objectContaining({
         state: 'error',
-        // Why: a pre-commit install failure is not fixed by restarting, so the copy must not suggest it.
-        message: 'Could not start the update installer. Orca remains open.'
+        message:
+          process.platform === 'darwin'
+            ? 'Could not restart to install the update. Quit and reopen Orca, then try again.'
+            : 'Could not start the update installer. Orca remains open.'
       })
     )
   })

@@ -79,6 +79,7 @@ describe('Electron runtime package contract', () => {
       'build:mac:release',
       'build:linux',
       'test:e2e',
+      'test:e2e:freeze-safety',
       'test:e2e:terminal-rendering-golden',
       'test:e2e:terminal-rendering-release-evidence',
       'test:e2e:headful'

@@ -96,7 +96,7 @@ async function importOneSourceSsh(
 ): Promise<ImportItemResult> {
   const resolvedSource = resolve(sourcePath)
 
-  authorizeExternalPath(resolvedSource)
+  await authorizeExternalPath(resolvedSource)
 
   const originalName = basename(resolvedSource)
   try {

@@ -18,7 +18,10 @@ import type {
   SpeechModelStatus
 } from '../../shared/speech-types'
 import { SPEECH_MODEL_CATALOG, getCatalogModel, isLocalSpeechModel } from './model-catalog'
-import { hasOpenAiSpeechApiKey } from './openai-api-key-store'
+import {
+  getOpenAiSpeechApiKeySnapshot,
+  hydrateOpenAiSpeechApiKeySnapshot
+} from './openai-api-key-store'
 import {
   getSpeechModelCacheDirCandidates,
   migrateSpeechModelCacheIfNeeded,
@@ -221,9 +224,11 @@ export class ModelManager {
     }
 
     if (manifest.provider === 'openai') {
+      const current = getOpenAiSpeechApiKeySnapshot()
+      const key = current.stale ? await hydrateOpenAiSpeechApiKeySnapshot() : current
       return {
         id: modelId,
-        status: hasOpenAiSpeechApiKey() ? 'ready' : 'not-downloaded'
+        status: key.value ? 'ready' : 'not-downloaded'
       }
     }
 

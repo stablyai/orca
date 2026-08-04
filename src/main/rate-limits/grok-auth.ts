@@ -1,4 +1,3 @@
-import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { resolveGrokHomeDir } from '../../shared/grok-session-paths'
 
@@ -35,15 +34,6 @@ export type GrokAuthReadResult =
   | { status: 'missing' }
   | { status: 'error'; error: string }
   | { status: 'ok'; session: GrokAuthSession }
-
-function getGrokAuthReadError(err: unknown): string {
-  if (err instanceof SyntaxError) {
-    return 'Grok auth file is invalid'
-  }
-  // Why: filesystem errors often include the full auth path; renderer/mobile
-  // account state should not expose local usernames or custom GROK_HOME values.
-  return 'Unable to read Grok auth file'
-}
 
 function parseAuthEntry(value: unknown): TokenizedGrokAuthEntry | null {
   if (typeof value !== 'object' || value === null) {
@@ -82,13 +72,9 @@ function isPreferredGrokAuthKey(key: string): boolean {
   return key === PREFERRED_GROK_AUTH_ISSUER || key.startsWith(`${PREFERRED_GROK_AUTH_ISSUER}::`)
 }
 
-export function readGrokAuthSession(): GrokAuthReadResult {
-  const path = getGrokAuthPath()
-  if (!existsSync(path)) {
-    return { status: 'missing' }
-  }
+export function parseGrokAuthSession(contents: string): GrokAuthReadResult {
   try {
-    const parsed: unknown = JSON.parse(readFileSync(path, 'utf-8'))
+    const parsed: unknown = JSON.parse(contents)
     if (typeof parsed !== 'object' || parsed === null) {
       return { status: 'error', error: 'Grok auth file is invalid' }
     }
@@ -122,10 +108,10 @@ export function readGrokAuthSession(): GrokAuthReadResult {
     // Why: a token-less file (e.g. after grok logout) means signed out, not a
     // failure — 'error' would keep a status-bar alert visible for that user.
     return { status: 'missing' }
-  } catch (err) {
+  } catch {
     return {
       status: 'error',
-      error: getGrokAuthReadError(err)
+      error: 'Grok auth file is invalid'
     }
   }
 }

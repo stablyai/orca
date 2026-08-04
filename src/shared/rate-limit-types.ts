@@ -1,3 +1,5 @@
+import type { MemorySnapshot } from './memory-snapshot'
+
 export type RateLimitWindow = {
   /** Percentage of the window consumed (0–100). */
   usedPercent: number
@@ -107,12 +109,20 @@ export type InactiveAccountUsage = {
   isFetching: boolean
 }
 
-export type GrokAccountStatus = {
+export type GrokAccountIdentity = {
   signedIn: boolean
   email: string | null
   teamId: string | null
   tokenFresh: boolean
-  error: string | null
+}
+
+export type GrokAccountStatus = MemorySnapshot<GrokAccountIdentity> &
+  GrokAccountIdentity & {
+    error: string | null
+  }
+
+export type MiniMaxCredentialsStatus = MemorySnapshot<{ configured: true }> & {
+  configured: boolean
 }
 
 export type RateLimitState = {
@@ -133,6 +143,9 @@ export type RateLimitState = {
   minimaxCookieConfigured: boolean
   /** True when main finds a Grok CLI session file (~/.grok/auth.json or GROK_HOME). */
   grokAuthConfigured: boolean
+  minimaxCredentialSnapshot?: MemorySnapshot<{ configured: true }>
+  grokCredentialSnapshot?: MemorySnapshot<GrokAccountIdentity>
+  kimiCredentialSnapshot?: MemorySnapshot<{ configured: true }>
   claudeTarget: RateLimitRuntimeTarget
   codexTarget: RateLimitRuntimeTarget
   inactiveClaudeAccounts: InactiveAccountUsage[]

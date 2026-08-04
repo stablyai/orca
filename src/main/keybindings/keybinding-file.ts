@@ -17,6 +17,11 @@ import {
 } from '../../shared/keybindings'
 
 type JsonObject = Record<string, unknown>
+type JsonDocumentRead = {
+  exists: boolean
+  document: JsonObject | null
+  error?: string
+}
 
 const FILE_VERSION = 1
 const PLATFORM_KEYS: readonly KeybindingPlatform[] = ['darwin', 'linux', 'win32']
@@ -42,20 +47,31 @@ function createEmptyDocument(): JsonObject {
   }
 }
 
-function readJsonDocument(path: string): {
-  exists: boolean
-  document: JsonObject | null
-  error?: string
-} {
-  if (!existsSync(path)) {
+function parseJsonDocument(contents: string | null): JsonDocumentRead {
+  if (contents === null) {
     return { exists: false, document: createEmptyDocument() }
   }
   try {
-    const parsed = JSON.parse(readFileSync(path, 'utf8')) as unknown
+    const parsed = JSON.parse(contents) as unknown
     if (!isJsonObject(parsed)) {
       return { exists: true, document: null, error: 'Keybindings file must contain a JSON object.' }
     }
     return { exists: true, document: parsed }
+  } catch (error) {
+    return {
+      exists: true,
+      document: null,
+      error: error instanceof Error ? error.message : String(error)
+    }
+  }
+}
+
+function readJsonDocument(path: string): JsonDocumentRead {
+  if (!existsSync(path)) {
+    return parseJsonDocument(null)
+  }
+  try {
+    return parseJsonDocument(readFileSync(path, 'utf8'))
   } catch (error) {
     return {
       exists: true,
@@ -245,13 +261,13 @@ function removeConflictingOverrides(
   return next
 }
 
-export function readKeybindingFile(
+function snapshotFromJsonDocument(
   path: string,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform,
+  readResult: JsonDocumentRead
 ): KeybindingFileSnapshot {
   const keybindingPlatform = getKeybindingPlatform(platform)
   const diagnostics: KeybindingFileDiagnostic[] = []
-  const readResult = readJsonDocument(path)
   if (!readResult.document) {
     return {
       path,
@@ -290,6 +306,21 @@ export function readKeybindingFile(
     platformOverrides,
     diagnostics
   }
+}
+
+export function parseKeybindingFileContents(
+  path: string,
+  contents: string | null,
+  platform: NodeJS.Platform = process.platform
+): KeybindingFileSnapshot {
+  return snapshotFromJsonDocument(path, platform, parseJsonDocument(contents))
+}
+
+export function readKeybindingFile(
+  path: string,
+  platform: NodeJS.Platform = process.platform
+): KeybindingFileSnapshot {
+  return snapshotFromJsonDocument(path, platform, readJsonDocument(path))
 }
 
 export function ensureKeybindingFile(path: string): void {

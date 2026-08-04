@@ -1,17 +1,15 @@
-import {
-  LEGACY_TAB_SWITCH_BINDINGS,
-  type KeybindingActionId,
-  type KeybindingFileSnapshot,
-  type KeybindingOverrides
+import type {
+  KeybindingActionId,
+  KeybindingFileSnapshot,
+  KeybindingOverrides
 } from '../../shared/keybindings'
 import {
   ensureKeybindingFile,
   getUserKeybindingsPath,
-  migrateLegacyKeybindings,
-  readKeybindingFile,
-  seedLegacyTabSwitchBindings,
+  parseKeybindingFileContents,
   writeKeybindingOverride
 } from './keybinding-file'
+import { prepareKeybindingsThroughFilesystemHost } from '../filesystem-host/filesystem-host-read-authority'
 
 export type KeybindingServiceOptions = {
   homePath: string
@@ -26,34 +24,23 @@ export type KeybindingServiceOptions = {
   }
 }
 
+const FILESYSTEM_HOST_DIAGNOSTIC_SECTION = 'filesystem-host'
+
 export class KeybindingService {
   private readonly configPath: string
   private readonly platform: NodeJS.Platform
-  private snapshot: KeybindingFileSnapshot | null = null
+  private snapshot: KeybindingFileSnapshot
+  private generation = 0
+  private hydrationRetryNeeded = true
+  private readonly getLegacyOverrides: KeybindingServiceOptions['getLegacyOverrides']
+  private readonly legacyTabSwitchSeed: KeybindingServiceOptions['legacyTabSwitchSeed']
 
   constructor(options: KeybindingServiceOptions) {
     this.configPath = getUserKeybindingsPath(options.homePath)
     this.platform = options.platform ?? process.platform
-    // Why: older builds persisted custom shortcuts inside global settings.
-    // Once a keybindings file exists, it is the sole source of truth.
-    migrateLegacyKeybindings(this.configPath, this.platform, options.getLegacyOverrides?.())
-    // Why: pre-existing installs keep the old tab-switch chords. Only mark the
-    // one-shot done on success so a transient IO failure retries next launch
-    // instead of silently dropping the pin.
-    if (options.legacyTabSwitchSeed?.isPending()) {
-      try {
-        // Why: the seed already read the file to build its snapshot — prime the
-        // lazy cache with it instead of re-reading on the first getSnapshot().
-        this.snapshot = seedLegacyTabSwitchBindings(
-          this.configPath,
-          this.platform,
-          LEGACY_TAB_SWITCH_BINDINGS
-        ).snapshot
-        options.legacyTabSwitchSeed.markSeeded()
-      } catch (error) {
-        console.error('Failed to seed legacy tab-switch keybindings:', error)
-      }
-    }
+    this.getLegacyOverrides = options.getLegacyOverrides
+    this.legacyTabSwitchSeed = options.legacyTabSwitchSeed
+    this.snapshot = parseKeybindingFileContents(this.configPath, null, this.platform)
   }
 
   getPath(): string {
@@ -61,24 +48,71 @@ export class KeybindingService {
   }
 
   getSnapshot(): KeybindingFileSnapshot {
-    if (!this.snapshot) {
-      this.snapshot = readKeybindingFile(this.configPath, this.platform)
+    return this.snapshot
+  }
+
+  async hydrate(): Promise<KeybindingFileSnapshot> {
+    const generation = this.generation
+    let contents: string | null
+    try {
+      const prepared = await prepareKeybindingsThroughFilesystemHost(
+        this.configPath,
+        this.platform,
+        this.getLegacyOverrides?.(),
+        this.legacyTabSwitchSeed?.isPending() ?? false
+      )
+      contents = prepared.contents
+      if (prepared.seedCompleted) {
+        this.legacyTabSwitchSeed?.markSeeded()
+      }
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException | null)?.code
+      if (code === 'ENOENT' || code === 'ENOTDIR') {
+        contents = null
+      } else {
+        if (generation === this.generation) {
+          this.hydrationRetryNeeded = true
+          this.snapshot = {
+            ...this.snapshot,
+            diagnostics: [
+              ...this.snapshot.diagnostics.filter(
+                (diagnostic) => diagnostic.section !== FILESYSTEM_HOST_DIAGNOSTIC_SECTION
+              ),
+              {
+                severity: 'warning',
+                section: FILESYSTEM_HOST_DIAGNOSTIC_SECTION,
+                message:
+                  'Keybindings could not be refreshed; Orca is using the last available shortcuts.'
+              }
+            ]
+          }
+        }
+        return this.snapshot
+      }
+    }
+    if (generation === this.generation) {
+      this.snapshot = parseKeybindingFileContents(this.configPath, contents, this.platform)
+      this.hydrationRetryNeeded = false
     }
     return this.snapshot
   }
 
-  reload(): KeybindingFileSnapshot {
-    this.snapshot = readKeybindingFile(this.configPath, this.platform)
-    return this.snapshot
+  needsHydrationRetry(): boolean {
+    return this.hydrationRetryNeeded
+  }
+
+  reload(): Promise<KeybindingFileSnapshot> {
+    return this.hydrate()
   }
 
   getOverrides(): KeybindingOverrides {
     return this.getSnapshot().overrides
   }
 
-  ensureFile(): KeybindingFileSnapshot {
+  async ensureFile(): Promise<KeybindingFileSnapshot> {
     ensureKeybindingFile(this.configPath)
-    return this.reload()
+    this.generation += 1
+    return await this.reload()
   }
 
   setActionBindings(
@@ -86,6 +120,8 @@ export class KeybindingService {
     bindings: string[] | null
   ): KeybindingFileSnapshot {
     this.snapshot = writeKeybindingOverride(this.configPath, this.platform, actionId, bindings)
+    this.generation += 1
+    this.hydrationRetryNeeded = false
     return this.snapshot
   }
 }

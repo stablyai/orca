@@ -6,11 +6,15 @@ import {
   validCreds
 } from './gemini-usage-fetcher.test-fixtures'
 
-const { readFileMock, extractCredsMock, netFetchMock } = vi.hoisted(() => ({
-  readFileMock: vi.fn(),
-  extractCredsMock: vi.fn(),
-  netFetchMock: vi.fn()
-}))
+const { readFileMock, writeFileMock, renameMock, extractCredsMock, netFetchMock } = vi.hoisted(
+  () => ({
+    readFileMock: vi.fn(),
+    writeFileMock: vi.fn(),
+    renameMock: vi.fn(),
+    extractCredsMock: vi.fn(),
+    netFetchMock: vi.fn()
+  })
+)
 
 // Why: mock the CLI-credential extractor at the module boundary. The extractor
 // is a self-contained dependency with a simple async contract (returns a
@@ -24,18 +28,19 @@ vi.mock('./gemini-cli-oauth-extractor', () => ({
 
 vi.mock('node:fs/promises', () => ({
   readFile: readFileMock,
-  // Why: saveGeminiCredentials is exercised on the refresh path. The atomic
-  // tmp+rename write has no observable side effect in these tests, so the
-  // stubs just resolve.
-  writeFile: vi.fn().mockResolvedValue(undefined),
-  rename: vi.fn().mockResolvedValue(undefined)
+  // Why: timer refreshes must never persist credentials.
+  writeFile: writeFileMock,
+  rename: renameMock
 }))
 
 vi.mock('electron', () => ({
   net: { fetch: netFetchMock }
 }))
 
-import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
+import {
+  fetchGeminiRateLimits as fetchGeminiRateLimitsFromSnapshot,
+  fetchGeminiRateLimitsWithHydration as fetchGeminiRateLimits
+} from './gemini-usage-fetcher'
 
 describe('fetchGeminiRateLimits fallback oauth creds', () => {
   beforeEach(() => {
@@ -44,6 +49,8 @@ describe('fetchGeminiRateLimits fallback oauth creds', () => {
     readFileMock.mockReset()
     extractCredsMock.mockReset()
     netFetchMock.mockReset()
+    writeFileMock.mockReset().mockResolvedValue(undefined)
+    renameMock.mockReset().mockResolvedValue(undefined)
     extractCredsMock.mockResolvedValue({
       clientId: 'client-id-123',
       clientSecret: 'client-secret-456'
@@ -182,6 +189,56 @@ describe('fetchGeminiRateLimits fallback oauth creds', () => {
     expect(result.error).toContain('disabled')
     expect(readFileMock).not.toHaveBeenCalled()
     // No network calls should have been made.
+    expect(netFetchMock).not.toHaveBeenCalled()
+  })
+
+  it('refreshes an expired timer snapshot without filesystem reads, discovery, or persistence', async () => {
+    readFileMock.mockReset()
+    extractCredsMock.mockReset()
+    netFetchMock
+      .mockResolvedValueOnce(
+        makeResponse({ access_token: 'memory-refreshed-token', expires_in: 3600 })
+      )
+      .mockResolvedValueOnce(makeResponse({ cloudaicompanionProject: 'memory-project' }))
+      .mockResolvedValueOnce(makeResponse(quotaResponse))
+
+    const result = await fetchGeminiRateLimitsFromSnapshot(true, {
+      value: {
+        source: 'oauth-creds',
+        credentials: expiredCreds,
+        clientCredentials: { clientId: 'memory-client', clientSecret: 'memory-secret' }
+      },
+      stale: false,
+      age: 0,
+      availability: 'ready'
+    })
+
+    expect(result.status).toBe('ok')
+    expect(readFileMock).not.toHaveBeenCalled()
+    expect(extractCredsMock).not.toHaveBeenCalled()
+    expect(writeFileMock).not.toHaveBeenCalled()
+    expect(renameMock).not.toHaveBeenCalled()
+  })
+
+  it('returns a clear unavailable state for stale timer snapshots without I/O', async () => {
+    readFileMock.mockReset()
+    extractCredsMock.mockReset()
+    netFetchMock.mockReset()
+
+    const result = await fetchGeminiRateLimitsFromSnapshot(true, {
+      value: {
+        source: 'oauth-creds',
+        credentials: validCreds,
+        clientCredentials: null
+      },
+      stale: true,
+      age: 30_000,
+      availability: 'unavailable'
+    })
+
+    expect(result).toMatchObject({ status: 'error', error: expect.stringContaining('stale') })
+    expect(readFileMock).not.toHaveBeenCalled()
+    expect(extractCredsMock).not.toHaveBeenCalled()
     expect(netFetchMock).not.toHaveBeenCalled()
   })
 })

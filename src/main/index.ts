@@ -61,6 +61,7 @@ import {
   isAgentStatusHooksEnabled,
   removeManagedAgentHooks
 } from './agent-hooks/managed-agent-hook-controls'
+import { reconcileLocalOrcaYamlSnapshots } from './git/orca-yaml-snapshot-store'
 import { initCohortClassifier } from './telemetry/cohort-classifier'
 import { initOnboardingCohortClassifier } from './telemetry/onboarding-cohort-classifier'
 import { resolveConsent } from './telemetry/consent'
@@ -178,6 +179,7 @@ import { readMiniMaxSessionCookie } from './minimax/minimax-cookie-store'
 import { getInitialClaudeRateLimitTarget } from './rate-limits/claude-rate-limit-target'
 import { getInitialCodexRateLimitTarget } from './rate-limits/codex-rate-limit-target'
 import { createAccountRuntimeTargetSettingsSync } from './rate-limits/account-runtime-target-sync'
+import { hydrateMacTailscaleDnsDiagnostic } from './network/macos-tailscale-dns-diagnostic'
 import {
   attachMainWindowServices,
   ensureAutoUpdaterConfigured
@@ -259,6 +261,12 @@ import { PluginMarketplaceInstaller } from './plugins/plugin-marketplace-install
 import { PluginBundledBootstrapCoordinator } from './plugins/plugin-bundled-bootstrap-coordinator'
 import { resolveBundledPluginRoot } from './plugins/plugin-bundled-bootstrap'
 import { resolvePluginHostEntryPath } from './plugins/plugin-host-process'
+import { resolveFilesystemHostEntryPath } from './filesystem-host/filesystem-host-entry-path'
+import {
+  configureFilesystemHostReadAuthority,
+  FilesystemHostReadAuthority
+} from './filesystem-host/filesystem-host-read-authority'
+import { resolveCliCommandThroughFilesystemHost } from './filesystem-host/filesystem-host-rate-limit-client'
 import { applyPluginConsent, applyPluginEnablement } from './plugins/plugin-enablement'
 import { setPluginServiceForRpc } from './runtime/rpc/methods/plugins'
 import {
@@ -343,6 +351,7 @@ let pluginKillListService: PluginKillListService | null = null
 let pluginMarketplaceService: PluginMarketplaceService | null = null
 let pluginMarketplaceInstaller: PluginMarketplaceInstaller | null = null
 let keybindings: KeybindingService | null = null
+let filesystemHostReadAuthority: FilesystemHostReadAuthority | null = null
 
 function emitPluginWorktreeLifecycle(event: RuntimeWorktreeLifecycleEvent): void {
   pluginService?.emitEvent(
@@ -1980,6 +1989,31 @@ function shouldSuppressCodexAutoApprovalSyntheticTitleFromHook(args: {
 }
 
 void app.whenReady().then(async () => {
+  filesystemHostReadAuthority = new FilesystemHostReadAuthority({
+    entryPath: resolveFilesystemHostEntryPath(app.getAppPath(), app.isPackaged),
+    onTelemetry: (event) => {
+      if (event.result === 'success' || event.result === 'domain-error') {
+        return
+      }
+      track('filesystem_host_operation', {
+        operation: event.operation,
+        storage_class: event.storageClass,
+        result: event.result,
+        duration: event.duration,
+        breaker: event.breaker,
+        abandoned_children: event.abandonedChildren
+      })
+      recordDurableCrashBreadcrumb('filesystem_host_operation', {
+        operation: event.operation,
+        storageClass: event.storageClass,
+        result: event.result,
+        duration: event.duration,
+        breaker: event.breaker,
+        abandonedChildren: event.abandonedChildren
+      })
+    }
+  })
+  configureFilesystemHostReadAuthority(filesystemHostReadAuthority)
   logStartupMilestone('app-ready')
   installMainThreadHangWatchdog({ userDataPath: getCanonicalUserDataPath() })
   const hangDetection = consumeHangDetectionMarker(
@@ -2044,8 +2078,15 @@ void app.whenReady().then(async () => {
 
   const activeOrcaProfile = ensureActiveOrcaProfile()
   store = new Store({ dataFile: activeOrcaProfile.dataFile })
+  // Why: filesystem classification starts immediately below, so initialize its sink before startup reads.
+  initTelemetry(store)
+  filesystemHostReadAuthority.hydrateFailureDomains([
+    app.getPath('home'),
+    getCanonicalUserDataPath()
+  ])
   wslHookRelayManager.setManagedHookSettingsResolver(() => store?.getSettings() ?? null)
   logStartupMilestone('store-loaded')
+  reconcileLocalOrcaYamlSnapshots(store.getRepos())
   // Why: apply initial fallback WSL distro from store settings for global git/CLI calls.
   setDefaultWslDistroOverride(store.getSettings().terminalWindowsWslDistro ?? null)
   store.onSettingsChanged((updates, settings) => {
@@ -2119,8 +2160,6 @@ void app.whenReady().then(async () => {
     unsubscribeStatusChanges()
     unsubscribeProviderSessionChanges()
   }
-  // Why: telemetry must init before any IPC handler/renderer can call track(); it's a no-op in dev and while TELEMETRY_ENABLED is false, so it's safe early.
-  initTelemetry(store)
   // Why: the breadcrumb alone never leaves the machine — it rides crash reports, and a hang is not
   // a crash (the app is force-quit, so no report is ever generated). Without this the incidence
   // number the watchdog exists to produce would sit unread on the user's disk. Must run after
@@ -2198,6 +2237,7 @@ void app.whenReady().then(async () => {
   rateLimits.setCodexHomePathResolver((target) =>
     codexRuntimeHome!.prepareForRateLimitFetch(target)
   )
+  rateLimits.setCodexCommandResolver(() => resolveCliCommandThroughFilesystemHost('codex'))
   rateLimits.setCodexFetchTarget(getInitialCodexRateLimitTarget(store.getSettings()))
   rateLimits.setClaudeFetchTarget(getInitialClaudeRateLimitTarget(store.getSettings()))
   const syncAccountRuntimeTargets = createAccountRuntimeTargetSettingsSync(
@@ -2275,6 +2315,14 @@ void app.whenReady().then(async () => {
       .filter((account) => !activeIds.has(account.id))
       .map((account) => ({ id: account.id, managedHomePath: account.managedHomePath }))
   })
+  // Snapshot hydration must never delay window creation; unavailable values degrade in memory.
+  void rateLimits
+    .hydrateSnapshots()
+    .catch((error) => console.warn('[rate-limits] Initial snapshot hydration failed:', error))
+  void codexAccounts
+    .hydrateSystemDefaultIdentity()
+    .catch((error) => console.warn('[codex-accounts] Identity hydration failed:', error))
+  void hydrateMacTailscaleDnsDiagnostic()
   const orchestrationEnvironmentTransport: OrchestrationEnvironmentTransport = {
     resolve: (selector) => {
       const environment = resolveEnvironment(app.getPath('userData'), selector)
@@ -2983,6 +3031,8 @@ app.on('will-quit', (e) => {
   pluginMarketplaceInstaller = null
   const pluginHostShutdown = pluginService?.dispose() ?? Promise.resolve()
   pluginService = null
+  const filesystemHostShutdown = filesystemHostReadAuthority?.dispose() ?? Promise.resolve()
+  filesystemHostReadAuthority = null
   setUnreadDockBadgeCount(0)
   agentHookServer.stop()
   // Why: cancels relay restart/reinstall timers and kills wsl.exe children deterministically, not via stdio-pipe teardown.
@@ -3037,6 +3087,7 @@ app.on('will-quit', (e) => {
     { name: 'watchers', promise: watcherShutdown },
     { name: 'emulator', promise: emulatorShutdown },
     { name: 'plugin-hosts', promise: pluginHostShutdown },
+    { name: 'filesystem-hosts', promise: filesystemHostShutdown },
     { name: 'usage-cache', promise: usageCacheFlush },
     { name: 'stats', promise: statsFlush },
     { name: 'state', promise: storeFlush }

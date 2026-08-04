@@ -7,6 +7,9 @@ const {
   verifyPackagedDaemonEntryBoots
 } = require('./scripts/verify-packaged-daemon-entry.cjs')
 const {
+  verifyPackagedFilesystemHostEntryBoots
+} = require('./scripts/verify-packaged-filesystem-host-entry.cjs')
+const {
   createPackagedRuntimeNodeModuleResources,
   prunePackagedRuntimeNodeModules,
   verifyPackagedMainRuntimeDeps
@@ -174,6 +177,7 @@ module.exports = {
     'out/main/plugin-host-entry.js',
     'out/main/computer-sidecar.js',
     'out/main/parcel-watcher-process-entry.js',
+    'out/main/filesystem-host-entry.js',
     'out/main/chunks/**',
     'resources/**',
     'node_modules/ws/**',
@@ -222,6 +226,7 @@ module.exports = {
     }
     prunePackagedRuntimeNodeModules(resourcesDir, context.electronPlatformName, context.arch)
     verifyPackagedMainRuntimeDeps(resourcesDir)
+    verifyPackagedFilesystemHostEntryBoots(resourcesDir)
     // Why: boot the packaged daemon-entry under plain Node, but only for the
     // slice matching the packaging host's arch — daemon-entry.js is JS, yet it
     // require()s the native (N-API) node-pty for the TARGET arch, which the host

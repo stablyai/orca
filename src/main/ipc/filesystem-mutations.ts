@@ -380,7 +380,7 @@ async function importOneSource(
 
   // Why: authorize the external source path so downstream filesystem
   // operations (lstat, readdir, copyFile) are permitted by Electron.
-  authorizeExternalPath(resolvedSource)
+  await authorizeExternalPath(resolvedSource)
 
   // Why: validate source using lstat on the unresolved path *before*
   // canonicalization so top-level symlinks are rejected instead of being
@@ -466,7 +466,7 @@ async function stageOneSourceForRuntimeUpload(
 
   // Why: runtime uploads read client-local paths in the client main process;
   // authorize before lstat/readFile just like local copy imports.
-  authorizeExternalPath(resolvedSource)
+  await authorizeExternalPath(resolvedSource)
 
   let sourceStat: Awaited<ReturnType<typeof lstat>>
   try {

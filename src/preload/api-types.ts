@@ -353,7 +353,8 @@ import type { ElectronAPI } from '@electron-toolkit/preload'
 import type { BrowserSetAnnotationViewportBridgeArgs } from '../shared/browser-annotation-viewport-bridge'
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { E2EConfig } from '../shared/e2e-config'
-import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
+import type { AgentHookInstallStatusSnapshot } from '../shared/agent-hook-types'
+import type { SnapshotAvailability } from '../shared/memory-snapshot'
 import type { CodexConfigSyncStatus } from '../shared/codex-config-sync-types'
 import type {
   AgentStatusClearIpcPayload,
@@ -440,6 +441,7 @@ import type {
 import type {
   CodexRateLimitResetResult,
   GrokAccountStatus,
+  MiniMaxCredentialsStatus,
   RateLimitRuntimeTarget,
   RateLimitState
 } from '../shared/rate-limit-types'
@@ -448,6 +450,7 @@ import type {
   SpeechLifecycleEvent,
   SpeechModelManifest,
   SpeechModelState,
+  OpenAiSpeechApiKeyStatus,
   SpeechTranscriptEvent
 } from '../shared/speech-types'
 import type {
@@ -2443,19 +2446,20 @@ export type PreloadApi = {
     status: () => Promise<CodexConfigSyncStatus>
   }
   agentHooks: {
-    claudeStatus: () => Promise<AgentHookInstallStatus>
-    openClaudeStatus: () => Promise<AgentHookInstallStatus>
-    codexStatus: () => Promise<AgentHookInstallStatus>
-    geminiStatus: () => Promise<AgentHookInstallStatus>
-    antigravityStatus: () => Promise<AgentHookInstallStatus>
-    ampStatus: () => Promise<AgentHookInstallStatus>
-    cursorStatus: () => Promise<AgentHookInstallStatus>
-    droidStatus: () => Promise<AgentHookInstallStatus>
-    commandCodeStatus: () => Promise<AgentHookInstallStatus>
-    grokStatus: () => Promise<AgentHookInstallStatus>
-    copilotStatus: () => Promise<AgentHookInstallStatus>
-    hermesStatus: () => Promise<AgentHookInstallStatus>
-    devinStatus: () => Promise<AgentHookInstallStatus>
+    claudeStatus: () => Promise<AgentHookInstallStatusSnapshot>
+    openClaudeStatus: () => Promise<AgentHookInstallStatusSnapshot>
+    codexStatus: () => Promise<AgentHookInstallStatusSnapshot>
+    geminiStatus: () => Promise<AgentHookInstallStatusSnapshot>
+    antigravityStatus: () => Promise<AgentHookInstallStatusSnapshot>
+    ampStatus: () => Promise<AgentHookInstallStatusSnapshot>
+    cursorStatus: () => Promise<AgentHookInstallStatusSnapshot>
+    droidStatus: () => Promise<AgentHookInstallStatusSnapshot>
+    commandCodeStatus: () => Promise<AgentHookInstallStatusSnapshot>
+    grokStatus: () => Promise<AgentHookInstallStatusSnapshot>
+    copilotStatus: () => Promise<AgentHookInstallStatusSnapshot>
+    hermesStatus: () => Promise<AgentHookInstallStatusSnapshot>
+    devinStatus: () => Promise<AgentHookInstallStatusSnapshot>
+    kimiStatus: () => Promise<AgentHookInstallStatusSnapshot>
   }
   agentTrust: {
     markTrusted: (args: {
@@ -2571,6 +2575,11 @@ export type PreloadApi = {
       hasHooks: boolean
       hooks: OrcaHooks | null
       mayNeedUpdate: boolean
+      stale?: boolean
+      age?: number | null
+      availability?: SnapshotAvailability
+      contentState?: 'missing' | 'valid' | 'invalid' | null
+      lastError?: string | null
     }>
     inspectSetupScriptImports: (args: {
       repoId: string
@@ -3413,9 +3422,9 @@ export type PreloadApi = {
     onUpdate: (callback: (state: RateLimitState) => void) => () => void
   }
   minimaxCredentials: {
-    getStatus: () => Promise<{ configured: boolean }>
-    saveCookie: (cookie: string) => Promise<{ configured: boolean }>
-    clearCookie: () => Promise<{ configured: boolean }>
+    getStatus: () => Promise<MiniMaxCredentialsStatus>
+    saveCookie: (cookie: string) => Promise<MiniMaxCredentialsStatus>
+    clearCookie: () => Promise<MiniMaxCredentialsStatus>
   }
   grokAccounts: {
     getStatus: () => Promise<GrokAccountStatus>
@@ -3675,9 +3684,9 @@ export type PreloadApi = {
   speech: {
     getCatalog: () => Promise<SpeechModelManifest[]>
     getModelStates: () => Promise<SpeechModelState[]>
-    getOpenAiApiKeyStatus: () => Promise<{ configured: boolean }>
-    saveOpenAiApiKey: (apiKey: string) => Promise<{ configured: boolean }>
-    clearOpenAiApiKey: () => Promise<{ configured: boolean }>
+    getOpenAiApiKeyStatus: () => Promise<OpenAiSpeechApiKeyStatus>
+    saveOpenAiApiKey: (apiKey: string) => Promise<OpenAiSpeechApiKeyStatus>
+    clearOpenAiApiKey: () => Promise<OpenAiSpeechApiKeyStatus>
     downloadModel: (modelId: string) => Promise<void>
     cancelDownload: (modelId: string) => Promise<void>
     deleteModel: (modelId: string) => Promise<void>

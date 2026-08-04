@@ -835,11 +835,10 @@ import {
   createSetupRunnerScript,
   getDefaultTabCommandTrustContent,
   getDefaultTabsLaunch,
-  getEffectiveHooks,
+  getEffectiveHooksThroughFilesystemHost,
+  getEffectiveHooksFromConfig,
   getEffectiveSetupRunPolicy,
-  hasUnrecognizedOrcaYamlKeys,
-  hasHooksFile,
-  loadHooks,
+  loadHooksThroughFilesystemHost,
   parseOrcaYaml,
   readIssueCommand,
   resolveSetupRunnerShell,
@@ -847,6 +846,10 @@ import {
   shouldRunSetupForCreate,
   writeIssueCommand
 } from '../hooks'
+import {
+  readFreshLocalOrcaYamlSnapshot,
+  reconcileLocalOrcaYamlSnapshots
+} from '../git/orca-yaml-snapshot-store'
 import {
   DEFAULT_REPO_BADGE_COLOR,
   FLOATING_TERMINAL_WORKTREE_ID,
@@ -863,8 +866,8 @@ import {
 import { formatWorktreeIncludeCopyWarning } from '../ipc/worktree-include-copy-budget'
 import { resolveWorktreeIncludePaths } from '../git/worktree-include-file'
 import {
-  getWorktreeSharedLinkPaths,
-  resolveWorktreeSharedDirectories
+  resolveWorktreeSharedDirectories,
+  resolveWorktreeSharedLinkPaths
 } from '../git/worktree-shared-directories'
 import { deleteWorktreeHistoryDir } from '../terminal-history-deletion'
 import {
@@ -5125,6 +5128,7 @@ export class OrcaRuntimeService {
   }
 
   private notifyReposChanged(): void {
+    reconcileLocalOrcaYamlSnapshots(this.store?.getRepos() ?? [])
     this.notifier?.reposChanged()
     this.emitClientEvent({ type: 'reposChanged' })
   }
@@ -12625,13 +12629,21 @@ export class OrcaRuntimeService {
   // `rateLimits:update` IPC channel desktop already uses.
   onAccountsChanged(listener: (snapshot: AccountsSnapshot) => void): () => void {
     const services = this.requireAccountServices()
-    return services.rateLimits.onStateChange((rateLimits) => {
+    const emitSnapshot = (rateLimits: RateLimitState = services.rateLimits.getState()): void => {
       listener({
         claude: services.claudeAccounts.listAccounts(),
         codex: services.codexAccounts.listAccounts(),
         rateLimits
       })
-    })
+    }
+    const unsubscribeRateLimits = services.rateLimits.onStateChange(emitSnapshot)
+    const unsubscribeIdentity = services.codexAccounts.onSystemDefaultIdentityChanged(() =>
+      emitSnapshot()
+    )
+    return () => {
+      unsubscribeRateLimits()
+      unsubscribeIdentity()
+    }
   }
 
   // ─── Mobile Fit Override Management ─────────────────────────
@@ -19710,6 +19722,15 @@ export class OrcaRuntimeService {
 
   async getRepoHooks(repoSelector: string) {
     const repo = await this.resolveRepoSelector(repoSelector)
+    if (isFolderRepo(repo)) {
+      const hooks = getEffectiveHooksFromConfig(repo, null)
+      return {
+        hasHooksFile: false,
+        hooks,
+        setupRunPolicy: getEffectiveSetupRunPolicy(repo),
+        source: hooks ? 'legacy' : null
+      }
+    }
     if (repo.connectionId) {
       const fsProvider = getSshFilesystemProvider(repo.connectionId)
       if (!fsProvider) {
@@ -19742,9 +19763,11 @@ export class OrcaRuntimeService {
         }
       }
     }
-    const hasFile = hasHooksFile(repo.path)
-    const hooks = getEffectiveHooks(repo)
-    const sharedHooks = hasFile ? loadHooks(repo.path) : null
+    const snapshot = await readFreshLocalOrcaYamlSnapshot(repo.path)
+    const snapshotValue = snapshot.stale ? null : snapshot.value
+    const hasFile = snapshotValue !== null && snapshotValue.contentState !== 'missing'
+    const sharedHooks = snapshotValue?.hooks ?? null
+    const hooks = getEffectiveHooksFromConfig(repo, sharedHooks)
     const setupRunPolicy = getEffectiveSetupRunPolicy(repo)
     return {
       hasHooksFile: hasFile,
@@ -19754,7 +19777,12 @@ export class OrcaRuntimeService {
       setupTrust: this.getSharedSetupHookTrustPayload(
         repo,
         getDefaultTabCommandTrustContent(sharedHooks)
-      )
+      ),
+      stale: snapshot.stale,
+      age: snapshot.age,
+      availability: snapshot.availability,
+      contentState: snapshotValue?.contentState ?? null,
+      lastError: snapshot.lastError
     }
   }
 
@@ -19780,12 +19808,23 @@ export class OrcaRuntimeService {
       }
     }
 
-    const has = hasHooksFile(repo.path)
-    const hooks = has ? loadHooks(repo.path) : null
+    const snapshot = await readFreshLocalOrcaYamlSnapshot(repo.path)
+    const value = snapshot.stale ? null : snapshot.value
     return {
-      hasHooks: has,
-      hooks,
-      mayNeedUpdate: has && !hooks && hasUnrecognizedOrcaYamlKeys(repo.path)
+      status:
+        snapshot.stale ||
+        (value === null &&
+          (snapshot.availability === 'denied' || snapshot.availability === 'unavailable'))
+          ? 'error'
+          : 'ok',
+      hasHooks: value !== null && value.contentState !== 'missing',
+      hooks: value?.hooks ?? null,
+      mayNeedUpdate: value?.mayNeedUpdate ?? false,
+      stale: snapshot.stale,
+      age: snapshot.age,
+      availability: snapshot.availability,
+      contentState: value?.contentState ?? null,
+      lastError: snapshot.lastError
     }
   }
 
@@ -21597,8 +21636,8 @@ export class OrcaRuntimeService {
     // Why: CLI-created worktrees do not have a renderer preview to mismatch
     // against. Trust is granted by the direct CLI invocation (`--run-hooks`),
     // so loading the setup hook from the created worktree is intentional here.
-    const yamlHooks = loadHooks(worktreePath)
-    const hooks = getEffectiveHooks(repo, worktreePath)
+    const yamlHooks = await loadHooksThroughFilesystemHost(worktreePath)
+    const hooks = await getEffectiveHooksThroughFilesystemHost(repo, worktreePath)
     // Why: setupDecision lets mobile/CLI callers control whether the setup
     // script runs. 'skip' suppresses it, 'run' forces it, 'inherit' (default)
     // defers to the repo's orca.yaml setupRunPolicy. runHooks === true maps
@@ -21649,7 +21688,8 @@ export class OrcaRuntimeService {
           worktreePath,
           repo,
           worktreePath,
-          this.getLocalGitExecutionOptionArgs(repo)[0]
+          this.getLocalGitExecutionOptionArgs(repo)[0],
+          hooks.scripts.setup
         ).then((result) => {
           if (!result.success) {
             console.error(`[hooks] setup hook failed for ${worktreePath}:`, result.output)
@@ -23770,7 +23810,7 @@ export class OrcaRuntimeService {
           return removalResult ?? {}
         }
 
-        const hooks = getEffectiveHooks(repo)
+        const hooks = await getEffectiveHooksThroughFilesystemHost(repo)
         let warning: string | undefined
         if (hooks?.scripts.archive && runHooks) {
           const result = await runHook(
@@ -23778,7 +23818,8 @@ export class OrcaRuntimeService {
             canonicalWorktreePath,
             repo,
             undefined,
-            hasLocalWorktreeGitOptions ? localWorktreeGitOptions : undefined
+            hasLocalWorktreeGitOptions ? localWorktreeGitOptions : undefined,
+            hooks.scripts.archive
           )
           if (!result.success) {
             console.error(
@@ -23816,7 +23857,7 @@ export class OrcaRuntimeService {
         // Why: `orca.yaml` shared directories are symlinked in too, and a
         // directory-only ignore rule leaves those links untracked, so removal must
         // tolerate and unlink them exactly like the per-user shared paths.
-        const linkedPaths = getWorktreeSharedLinkPaths(repo)
+        const linkedPaths = await resolveWorktreeSharedLinkPaths(repo)
         const ignoredLinkedPaths = force
           ? []
           : await findExistingWorktreeSymlinkPaths(canonicalWorktreePath, linkedPaths)

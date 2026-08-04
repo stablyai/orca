@@ -1,5 +1,6 @@
 import type { GlobalSettings, OrcaHooks } from '../../../shared/types'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+import type { SnapshotAvailability } from '../../../shared/memory-snapshot'
 import type { SetupScriptImportCandidate } from '../../../shared/setup-script-imports'
 import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
 
@@ -19,6 +20,11 @@ export type HookCheckResult = {
   hasHooks: boolean
   hooks: OrcaHooks | null
   mayNeedUpdate: boolean
+  stale?: boolean
+  age?: number | null
+  availability?: SnapshotAvailability
+  contentState?: 'missing' | 'valid' | 'invalid' | null
+  lastError?: string | null
 }
 
 export type IssueCommandReadResult = {

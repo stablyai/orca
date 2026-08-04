@@ -3,6 +3,8 @@
 // agent-hooks/server.ts) and each per-agent hook service. Lives in `shared/`
 // to keep a single source of truth for the version string and status contract.
 
+import type { MemorySnapshot } from './memory-snapshot'
+
 export const AGENT_HOOK_TARGETS = [
   'claude',
   'openclaude',
@@ -37,6 +39,11 @@ export type AgentHookInstallStatus = {
   detail: string | null
   skipReason?: AgentHookInstallSkipReason
 }
+
+export type AgentHookInstallStatusSnapshot = AgentHookInstallStatus &
+  MemorySnapshot<AgentHookInstallStatus> & {
+    lastError: string | null
+  }
 
 // Why: bumped whenever the managed script's request shape changes. The
 // receiver logs a warning when it sees a request from a different version so a

@@ -32,6 +32,7 @@ import {
   legacyDataFilePath,
   profileBackupPath
 } from './profile-storage-paths'
+import { publishOrcaProfileListSnapshot } from './profile-list-snapshot-store'
 
 export {
   getOrcaProfileBrowserSessionMetaFile,
@@ -41,6 +42,7 @@ export {
   getOrcaProfilesDirectory,
   initOrcaProfilePaths
 } from './profile-storage-paths'
+export { getOrcaProfileListSnapshot } from './profile-list-snapshot-store'
 
 export type ActiveOrcaProfileState = {
   index: OrcaProfileIndex
@@ -114,7 +116,11 @@ function readProfileIndexFile(indexPath: string): OrcaProfileIndex | null {
 export function readProfileIndex(indexPath: string): OrcaProfileIndex | null {
   // Why: a torn/corrupt index must not silently reset the app to a single
   // default profile — that would orphan every other profile's data directory.
-  return readProfileIndexFile(indexPath) ?? readProfileIndexFile(`${indexPath}.bak`)
+  const index = readProfileIndexFile(indexPath) ?? readProfileIndexFile(`${indexPath}.bak`)
+  if (index) {
+    publishOrcaProfileListSnapshot(indexPath, index)
+  }
+  return index
 }
 
 export function writeProfileIndex(indexPath: string, index: OrcaProfileIndex): void {
@@ -131,6 +137,7 @@ export function writeProfileIndex(indexPath: string, index: OrcaProfileIndex): v
   const tmpPath = `${indexPath}.tmp`
   writeFileSync(tmpPath, JSON.stringify(index, null, 2), 'utf-8')
   renameSync(tmpPath, indexPath)
+  publishOrcaProfileListSnapshot(indexPath, index)
 }
 
 function copyIfPresent(source: string, target: string): void {

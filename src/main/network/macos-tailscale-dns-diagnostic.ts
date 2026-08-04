@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process'
+import { execFile } from 'node:child_process'
 
 const TAILSCALE_MAGIC_DNS = '100.100.100.100'
 const CACHE_TTL_MS = 5 * 60 * 1000
@@ -13,6 +13,7 @@ type CacheEntry = {
 }
 
 let cache: CacheEntry | null = null
+let refreshPromise: Promise<void> | null = null
 
 const NETWORK_LOOKUP_FAILURE_RE =
   /\b(?:ENOTFOUND|EAI_AGAIN|ESERVFAIL|ERR_NAME_NOT_RESOLVED)\b|lookup address|nodename nor servname|name resolution|dns|websocket|connection refused/i
@@ -42,28 +43,48 @@ export function parseMacTailscaleDnsDiagnostic(scutilOutput: string): DnsDiagnos
   return { globalNameservers: nameservers }
 }
 
-function readMacTailscaleDnsDiagnostic(now = Date.now()): DnsDiagnostic | null {
+function readScutilDns(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile(
+      '/usr/sbin/scutil',
+      ['--dns'],
+      { encoding: 'utf8', timeout: 1500 },
+      (error, stdout) => {
+        if (error) {
+          reject(error)
+          return
+        }
+        resolve(stdout)
+      }
+    )
+  })
+}
+
+export async function hydrateMacTailscaleDnsDiagnostic(now = Date.now()): Promise<void> {
   if (process.platform !== 'darwin') {
-    return null
+    return
   }
   if (cache && cache.expiresAt > now) {
-    return cache.diagnostic
+    return
+  }
+  if (refreshPromise) {
+    return refreshPromise
   }
 
-  let diagnostic: DnsDiagnostic | null = null
+  refreshPromise = (async () => {
+    let diagnostic: DnsDiagnostic | null = null
+    try {
+      diagnostic = parseMacTailscaleDnsDiagnostic(await readScutilDns())
+    } catch {
+      diagnostic = null
+    }
+    cache = { diagnostic, expiresAt: now + CACHE_TTL_MS }
+  })()
   try {
-    const output = execFileSync('/usr/sbin/scutil', ['--dns'], {
-      encoding: 'utf8',
-      timeout: 1500,
-      stdio: ['ignore', 'pipe', 'ignore']
-    })
-    diagnostic = parseMacTailscaleDnsDiagnostic(output)
-  } catch {
-    diagnostic = null
+    await refreshPromise
+  } finally {
+    refreshPromise = null
   }
-
-  cache = { diagnostic, expiresAt: now + CACHE_TTL_MS }
-  return diagnostic
 }
 
 export function withMacTailscaleDnsHintForDiagnostic(
@@ -85,9 +106,15 @@ export function withMacTailscaleDnsHintForDiagnostic(
 }
 
 export function withMacTailscaleDnsHint(message: string, detail?: string | null): string {
-  return withMacTailscaleDnsHintForDiagnostic(message, detail, readMacTailscaleDnsDiagnostic())
+  const now = Date.now()
+  const diagnostic = cache && cache.expiresAt > now ? cache.diagnostic : null
+  if (!cache || cache.expiresAt <= now) {
+    void hydrateMacTailscaleDnsDiagnostic(now)
+  }
+  return withMacTailscaleDnsHintForDiagnostic(message, detail, diagnostic)
 }
 
 export function __resetMacTailscaleDnsDiagnosticCacheForTests(): void {
   cache = null
+  refreshPromise = null
 }

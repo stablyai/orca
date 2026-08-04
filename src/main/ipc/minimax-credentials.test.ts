@@ -15,12 +15,14 @@ vi.mock('electron', () => ({
 const saveMiniMaxSessionCookieMock = vi.hoisted(() => vi.fn())
 const clearMiniMaxSessionCookieMock = vi.hoisted(() => vi.fn())
 const hasMiniMaxSessionCookieMock = vi.hoisted(() => vi.fn(() => false))
+const getMiniMaxCredentialSnapshotMock = vi.hoisted(() => vi.fn())
 const clearMiniMaxSessionCookieJarMock = vi.hoisted(() => vi.fn(() => Promise.resolve()))
 
 vi.mock('../minimax/minimax-cookie-store', () => ({
   saveMiniMaxSessionCookie: saveMiniMaxSessionCookieMock,
   clearMiniMaxSessionCookie: clearMiniMaxSessionCookieMock,
-  hasMiniMaxSessionCookie: hasMiniMaxSessionCookieMock
+  hasMiniMaxSessionCookie: hasMiniMaxSessionCookieMock,
+  getMiniMaxCredentialSnapshot: getMiniMaxCredentialSnapshotMock
 }))
 
 vi.mock('../rate-limits/minimax-request-context', () => ({
@@ -62,6 +64,16 @@ describe('registerMiniMaxCredentialsHandlers', () => {
     clearMiniMaxSessionCookieJarMock.mockResolvedValue(undefined)
     hasMiniMaxSessionCookieMock.mockReset()
     hasMiniMaxSessionCookieMock.mockReturnValue(false)
+    getMiniMaxCredentialSnapshotMock.mockReset()
+    getMiniMaxCredentialSnapshotMock.mockImplementation(() => {
+      const configured = hasMiniMaxSessionCookieMock()
+      return {
+        value: configured ? { configured: true } : null,
+        stale: false,
+        age: 0,
+        availability: configured ? 'ready' : 'missing'
+      }
+    })
   })
 
   afterEach(() => {
@@ -79,7 +91,7 @@ describe('registerMiniMaxCredentialsHandlers', () => {
     hasMiniMaxSessionCookieMock.mockReturnValue(true)
     registerMiniMaxCredentialsHandlers(null)
     const status = await invoke<{ configured: boolean }>('minimaxCredentials:getStatus')
-    expect(status).toEqual({ configured: true })
+    expect(status).toMatchObject({ configured: true, stale: false, availability: 'ready' })
   })
 
   it('persists the cookie and reports configured after saveCookie', async () => {
@@ -90,7 +102,7 @@ describe('registerMiniMaxCredentialsHandlers', () => {
       '_token=abc; minimax_group_id_v2=42'
     )
     expect(saveMiniMaxSessionCookieMock).toHaveBeenCalledWith('_token=abc; minimax_group_id_v2=42')
-    expect(status).toEqual({ configured: true })
+    expect(status).toMatchObject({ configured: true, stale: false, availability: 'ready' })
   })
 
   it('triggers a rate-limit refresh after saveCookie when a service is provided', async () => {
@@ -109,6 +121,19 @@ describe('registerMiniMaxCredentialsHandlers', () => {
     await expect(invoke('minimaxCredentials:saveCookie', '_token=abc')).resolves.toBeDefined()
   })
 
+  it('does not refresh after a rejected save', async () => {
+    const { refresh, invalidateMiniMaxCredentialState, service } = makeRefreshMock()
+    saveMiniMaxSessionCookieMock.mockImplementationOnce(() => {
+      throw new Error('contended')
+    })
+    registerMiniMaxCredentialsHandlers(service as RateLimitService)
+
+    await expect(invoke('minimaxCredentials:saveCookie', '_token=abc')).rejects.toThrow('contended')
+
+    expect(invalidateMiniMaxCredentialState).not.toHaveBeenCalled()
+    expect(refresh).not.toHaveBeenCalled()
+  })
+
   it('clears the cookie and triggers a refresh on clearCookie', async () => {
     const { refresh, invalidateMiniMaxCredentialState, service } = makeRefreshMock()
     hasMiniMaxSessionCookieMock.mockReturnValueOnce(false)
@@ -117,7 +142,7 @@ describe('registerMiniMaxCredentialsHandlers', () => {
     expect(clearMiniMaxSessionCookieMock).toHaveBeenCalledTimes(1)
     expect(invalidateMiniMaxCredentialState).toHaveBeenCalledTimes(1)
     expect(clearMiniMaxSessionCookieJarMock).toHaveBeenCalledTimes(1)
-    expect(status).toEqual({ configured: false })
+    expect(status).toMatchObject({ configured: false, stale: false, availability: 'missing' })
     await new Promise((resolve) => setImmediate(resolve))
     expect(refresh).toHaveBeenCalledTimes(1)
   })
@@ -134,13 +159,27 @@ describe('registerMiniMaxCredentialsHandlers', () => {
     expect(clearMiniMaxSessionCookieMock).toHaveBeenCalledTimes(1)
     expect(invalidateMiniMaxCredentialState).toHaveBeenCalledTimes(1)
     expect(clearMiniMaxSessionCookieJarMock).toHaveBeenCalledTimes(1)
-    expect(status).toEqual({ configured: false })
+    expect(status).toMatchObject({ configured: false, stale: false, availability: 'missing' })
     expect(errorSpy).toHaveBeenCalledWith(
       expect.stringContaining('failed to clear session cookie jar after credential clear'),
       expect.any(Error)
     )
     await new Promise((resolve) => setImmediate(resolve))
     expect(refresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not clear the jar or refresh after a rejected clear', async () => {
+    const { refresh, invalidateMiniMaxCredentialState, service } = makeRefreshMock()
+    clearMiniMaxSessionCookieMock.mockImplementationOnce(() => {
+      throw new Error('contended')
+    })
+    registerMiniMaxCredentialsHandlers(service as RateLimitService)
+
+    await expect(invoke('minimaxCredentials:clearCookie')).rejects.toThrow('contended')
+
+    expect(clearMiniMaxSessionCookieJarMock).not.toHaveBeenCalled()
+    expect(invalidateMiniMaxCredentialState).not.toHaveBeenCalled()
+    expect(refresh).not.toHaveBeenCalled()
   })
 
   it('logs but does not throw when the post-save rate-limit refresh rejects', async () => {

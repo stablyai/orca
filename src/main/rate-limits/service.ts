@@ -7,11 +7,21 @@ import type {
   InactiveAccountUsage,
   RateLimitRuntimeTarget
 } from '../../shared/rate-limit-types'
-import { fetchClaudeRateLimits, fetchManagedAccountUsage } from './claude-fetcher'
+import {
+  fetchClaudeRateLimits,
+  fetchManagedAccountUsage,
+  hydrateClaudeLegacyOAuthCredentialSnapshot,
+  hydrateClaudeOAuthCredentialSnapshot
+} from './claude-fetcher'
 import type { InactiveClaudeAccountInfo } from './claude-fetcher'
 import { mapClaudeUsageWindow } from './claude-usage-window'
 import type { ClaudeStatusLineRateLimits } from '../../shared/claude-statusline-rate-limits'
-import { consumeCodexRateLimitResetCredit, fetchCodexRateLimits } from './codex-fetcher'
+import {
+  consumeCodexRateLimitResetCredit,
+  fetchCodexRateLimits,
+  hydrateCodexCredentialSnapshot,
+  type CodexCredentialSnapshot
+} from './codex-fetcher'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 import type { NetworkProxySettings } from '../../shared/network-proxy'
 import {
@@ -20,10 +30,22 @@ import {
   type NormalizedClaudeAccountSelectionTarget
 } from '../claude-accounts/runtime-selection'
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
-import { fetchKimiRateLimits } from './kimi-fetcher'
+import {
+  getGeminiOAuthPreparationSnapshot,
+  hydrateGeminiOAuthPreparationSnapshot
+} from './gemini-oauth-preparation-snapshot'
+import {
+  fetchKimiRateLimits,
+  getKimiCredentialSnapshot,
+  refreshKimiCredentialSnapshot
+} from './kimi-fetcher'
 import { fetchGrokRateLimits } from './grok-fetcher'
-import { readGrokAuthSession } from './grok-auth'
-import { hasMiniMaxSessionCookie } from '../minimax/minimax-cookie-store'
+import { getGrokAuthSnapshot, refreshGrokAuthSnapshot } from './grok-auth-snapshot'
+import {
+  getMiniMaxCredentialSnapshot,
+  hasMiniMaxSessionCookie,
+  hydrateMiniMaxSessionCookie
+} from '../minimax/minimax-cookie-store'
 import { fetchMiniMaxRateLimits } from './minimax-fetcher'
 import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
 import {
@@ -31,6 +53,10 @@ import {
   type CodexAccountSelectionTarget,
   type NormalizedCodexAccountSelectionTarget
 } from '../codex-accounts/runtime-selection'
+import { MemorySnapshotStore } from './memory-snapshot-store'
+import type { MemorySnapshot } from '../../shared/memory-snapshot'
+import { getGrokAccountStatus } from '../grok-accounts/status'
+import { hydrateHiddenRateLimitPtyCwd } from './hidden-rate-limit-pty-cwd'
 
 export type InactiveCodexAccountInfo = {
   id: string
@@ -38,6 +64,12 @@ export type InactiveCodexAccountInfo = {
 }
 
 type CodexHomePathResolver = (target?: CodexAccountSelectionTarget) => string | null
+type CodexPreparedTarget = {
+  homePath: string | null
+  command: string
+  hiddenPtyCwd: string
+  authSnapshot: CodexCredentialSnapshot
+}
 type ClaudeAuthPreparationResolver = (
   target?: ClaudeAccountSelectionTarget
 ) => Promise<ClaudeRuntimeAuthPreparation>
@@ -174,7 +206,7 @@ export class RateLimitService {
     minimax: null,
     grok: null
   }
-  private grokAuthConfigured = readGrokAuthSession().status === 'ok'
+  private grokAuthConfigured = false
   private pollInterval: number = DEFAULT_POLL_MS
   private timer: ReturnType<typeof setInterval> | null = null
   private deferredStartupRefreshTimer: ReturnType<typeof setTimeout> | null = null
@@ -218,11 +250,14 @@ export class RateLimitService {
   private lastOpencodeConfigHash = ''
   private lastMiniMaxConfigHash = ''
   private codexHomePathResolver: CodexHomePathResolver | null = null
+  private codexCommandResolver: (() => Promise<string>) | null = null
+  private codexHomeSnapshots = new Map<string, MemorySnapshotStore<CodexPreparedTarget>>()
   private codexFetchTarget: NormalizedCodexAccountSelectionTarget = {
     runtime: 'host',
     wslDistro: null
   }
   private claudeAuthPreparationResolver: ClaudeAuthPreparationResolver | null = null
+  private claudeAuthSnapshots = new Map<string, MemorySnapshotStore<ClaudeRuntimeAuthPreparation>>()
   private claudeFetchTarget: NormalizedClaudeAccountSelectionTarget = {
     runtime: 'host',
     wslDistro: null
@@ -241,6 +276,7 @@ export class RateLimitService {
   private inactiveClaudeAccountsGeneration = 0
   private lastInactiveCodexFetchAt = 0
   private inactiveCodexAccountsGeneration = 0
+  private lifecycleGeneration = 0
   private stateListeners = new Set<(state: RateLimitState) => void>()
 
   constructor() {}
@@ -256,8 +292,45 @@ export class RateLimitService {
     this.codexHomePathResolver = resolver
   }
 
+  setCodexCommandResolver(resolver: () => Promise<string>): void {
+    this.codexCommandResolver = resolver
+  }
+
+  private async resolveCodexCommandForFetch(): Promise<string> {
+    try {
+      return this.codexCommandResolver ? await this.codexCommandResolver() : 'codex'
+    } catch {
+      return 'codex'
+    }
+  }
+
   setCodexFetchTarget(target?: CodexAccountSelectionTarget): void {
     this.codexFetchTarget = normalizeCodexAccountSelectionTarget(target)
+  }
+
+  async hydrateCodexTarget(
+    target?: CodexAccountSelectionTarget
+  ): Promise<MemorySnapshot<CodexPreparedTarget>> {
+    const normalized = normalizeCodexAccountSelectionTarget(target)
+    const store = this.getCodexHomeSnapshotStore(normalized)
+    return store.refresh(async () => {
+      const cwdSnapshot = await hydrateHiddenRateLimitPtyCwd()
+      if (cwdSnapshot.stale || !cwdSnapshot.value) {
+        throw new Error('Hidden rate-limit PTY cwd snapshot unavailable')
+      }
+      const homePath = this.codexHomePathResolver?.(normalized) ?? null
+      const command =
+        normalized.runtime === 'host' ? await this.resolveCodexCommandForFetch() : 'codex'
+      return {
+        value: {
+          homePath,
+          command,
+          hiddenPtyCwd: cwdSnapshot.value,
+          authSnapshot: await hydrateCodexCredentialSnapshot(homePath)
+        },
+        availability: 'ready'
+      }
+    })
   }
 
   setClaudeAuthPreparationResolver(resolver: ClaudeAuthPreparationResolver): void {
@@ -266,6 +339,62 @@ export class RateLimitService {
 
   setClaudeFetchTarget(target?: ClaudeAccountSelectionTarget): void {
     this.claudeFetchTarget = normalizeClaudeAccountSelectionTarget(target)
+  }
+
+  async hydrateClaudeTarget(
+    target?: ClaudeAccountSelectionTarget
+  ): Promise<MemorySnapshot<ClaudeRuntimeAuthPreparation>> {
+    const normalized = normalizeClaudeAccountSelectionTarget(target)
+    const store = this.getClaudeAuthSnapshotStore(normalized)
+    return store.refresh(async () => {
+      const cwdSnapshot = await hydrateHiddenRateLimitPtyCwd()
+      if (cwdSnapshot.stale || !cwdSnapshot.value) {
+        throw new Error('Hidden rate-limit PTY cwd snapshot unavailable')
+      }
+      const resolvedPreparation = await this.claudeAuthPreparationResolver?.(normalized)
+      const preparation =
+        resolvedPreparation ??
+        (normalized.runtime === 'host'
+          ? {
+              configDir: '',
+              runtime: 'host' as const,
+              wslDistro: null,
+              wslLinuxConfigDir: null,
+              envPatch: {},
+              stripAuthEnv: false,
+              provenance: 'system'
+            }
+          : null)
+      const legacyOAuthCredentials =
+        preparation &&
+        (preparation.runtime ?? 'host') === 'host' &&
+        !preparation.provenance.startsWith('managed:')
+          ? await hydrateClaudeLegacyOAuthCredentialSnapshot()
+          : { token: null, hasRefreshableCredentials: false, source: 'none' as const }
+      return {
+        value: preparation
+          ? {
+              ...preparation,
+              hiddenPtyCwd: cwdSnapshot.value,
+              oauthCredentials: await hydrateClaudeOAuthCredentialSnapshot(preparation),
+              legacyOAuthCredentials
+            }
+          : null,
+        availability: 'ready'
+      }
+    })
+  }
+
+  async hydrateSnapshots(): Promise<void> {
+    await Promise.all([
+      hydrateMiniMaxSessionCookie(),
+      refreshGrokAuthSnapshot(),
+      refreshKimiCredentialSnapshot(),
+      hydrateGeminiOAuthPreparationSnapshot(this.geminiCliOAuthEnabledResolver?.() ?? false),
+      this.hydrateCodexTarget(this.codexFetchTarget),
+      this.hydrateClaudeTarget(this.claudeFetchTarget)
+    ])
+    this.grokAuthConfigured = getGrokAuthSnapshot().value !== null
   }
 
   setOpenCodeGoConfigResolver(resolver: () => OpenCodeGoRateLimitConfig): void {
@@ -334,6 +463,7 @@ export class RateLimitService {
   }
 
   stop(): void {
+    this.lifecycleGeneration += 1
     this.abortActiveFetchCycle()
     this.clearQueuedFetches()
     this.inactiveClaudeFetching.clear()
@@ -349,11 +479,24 @@ export class RateLimitService {
   getState(): RateLimitState {
     this.pruneInactiveClaudeState()
     this.pruneInactiveCodexState()
+    const grokStatus = getGrokAccountStatus()
+    const kimiSnapshot = getKimiCredentialSnapshot()
     return {
       ...this.state,
       // Why: the cookie lives on the filesystem, not GlobalSettings; surface its presence so the renderer keeps the MiniMax bar across reloads.
       minimaxCookieConfigured: hasMiniMaxSessionCookie(),
       grokAuthConfigured: this.grokAuthConfigured,
+      minimaxCredentialSnapshot: getMiniMaxCredentialSnapshot(),
+      grokCredentialSnapshot: {
+        value: grokStatus.value,
+        stale: grokStatus.stale,
+        age: grokStatus.age,
+        availability: grokStatus.availability
+      },
+      kimiCredentialSnapshot: {
+        ...kimiSnapshot,
+        value: kimiSnapshot.value === null ? null : { configured: true }
+      },
       claudeTarget: this.claudeFetchTarget,
       codexTarget: this.codexFetchTarget,
       inactiveClaudeAccounts: this.buildInactiveArray(
@@ -369,6 +512,11 @@ export class RateLimitService {
 
   async refresh(): Promise<RateLimitState> {
     // Why: this user-directed refresh must bypass the poll throttle, else the click can no-op after wake/focus and feel broken.
+    const lifecycleGeneration = this.lifecycleGeneration
+    await this.hydrateSnapshots()
+    if (lifecycleGeneration !== this.lifecycleGeneration) {
+      return this.getState()
+    }
     await this.fetchAll({ force: true })
     return this.getState()
   }
@@ -381,6 +529,8 @@ export class RateLimitService {
   }
 
   async refreshGrok(): Promise<RateLimitState> {
+    await refreshGrokAuthSnapshot()
+    this.grokAuthConfigured = getGrokAuthSnapshot().value !== null
     await this.fetchGrokOnly({ force: true })
     return this.getState()
   }
@@ -409,6 +559,7 @@ export class RateLimitService {
       this.inactiveCodexCache.set(outgoingAccountId, this.state.codex)
     }
     this.codexFetchTarget = nextTarget
+    this.getCodexHomeSnapshotStore(nextTarget).invalidate()
     this.codexFetchGeneration += 1
     // Why: a new account/target starts with a clean retry schedule.
     this.activeFailureStreakByProvider.codex = 0
@@ -431,6 +582,7 @@ export class RateLimitService {
     const nextTarget = normalizeCodexAccountSelectionTarget(target)
     const targetChanged = !this.isSameCodexTarget(this.codexFetchTarget, nextTarget)
     this.codexFetchTarget = nextTarget
+    this.getCodexHomeSnapshotStore(nextTarget).invalidate()
     this.codexFetchGeneration += 1
     this.activeFailureStreakByProvider.codex = 0
     this.updateState({
@@ -459,14 +611,27 @@ export class RateLimitService {
       throw new Error(missingWslCodexHome.error ?? 'Codex home unavailable')
     }
     try {
+      const generation = this.codexFetchGeneration
+      if (!this.isSameCodexTarget(this.codexFetchTarget, codexTarget)) {
+        throw new Error('The active Codex rate-limit target changed before reset.')
+      }
+      const authSnapshot = await hydrateCodexCredentialSnapshot(codexHomePath)
+      if (
+        generation !== this.codexFetchGeneration ||
+        !this.isSameCodexTarget(this.codexFetchTarget, codexTarget)
+      ) {
+        throw new Error('The active Codex rate-limit target changed before reset.')
+      }
       const outcome = await consumeCodexRateLimitResetCredit({
         codexHomePath,
+        authSnapshot,
         idempotencyKey: options.idempotencyKey
       })
       const state = await this.fetchCodexResetResultState(
         codexTarget,
         codexHomePath,
-        scopedStateBeforeReset
+        scopedStateBeforeReset,
+        authSnapshot
       )
       return { outcome, state }
     } catch (error) {
@@ -491,6 +656,7 @@ export class RateLimitService {
       this.inactiveClaudeCache.set(outgoingAccountId, this.state.claude)
     }
     this.claudeFetchTarget = nextTarget
+    this.getClaudeAuthSnapshotStore(nextTarget).invalidate()
     this.inactiveClaudeAccountsGeneration += 1
     this.pruneInactiveClaudeState()
     this.claudeFetchGeneration += 1
@@ -511,6 +677,7 @@ export class RateLimitService {
     const nextTarget = normalizeClaudeAccountSelectionTarget(target)
     const targetChanged = !this.isSameClaudeTarget(this.claudeFetchTarget, nextTarget)
     this.claudeFetchTarget = nextTarget
+    this.getClaudeAuthSnapshotStore(nextTarget).invalidate()
     this.claudeFetchGeneration += 1
     this.activeFailureStreakByProvider.claude = 0
     if (targetChanged) {
@@ -637,6 +804,9 @@ export class RateLimitService {
 
     let staggerNextProbe = false
     try {
+      const codexCommand = this.codexCommandResolver
+        ? await this.resolveCodexCommandForFetch()
+        : 'codex'
       for (const account of accounts) {
         if (
           signal.aborted ||
@@ -668,10 +838,15 @@ export class RateLimitService {
         }
         staggerNextProbe = true
         try {
+          const cwdSnapshot = await hydrateHiddenRateLimitPtyCwd()
+          const authSnapshot = await hydrateCodexCredentialSnapshot(account.managedHomePath)
           // Why: point fetchCodexRateLimits at the managed home directly, avoiding materializing credentials into the shared runtime location.
           // Why: no PTY fallback — the switcher preview shouldn't spawn hidden PTYs per account (can crash ConPTY on Windows); RPC-only is enough.
           const fresh = await fetchCodexRateLimits({
             codexHomePath: account.managedHomePath,
+            codexCommand,
+            hiddenPtyCwd: cwdSnapshot.value ?? undefined,
+            authSnapshot,
             allowPtyFallback: false,
             signal
           })
@@ -1270,11 +1445,39 @@ export class RateLimitService {
     return left.runtime === right.runtime && left.wslDistro === right.wslDistro
   }
 
+  private getTargetSnapshotKey(target: RateLimitRuntimeTarget): string {
+    return target.runtime === 'wsl' ? `wsl:${target.wslDistro ?? '__default__'}` : 'host'
+  }
+
+  private getCodexHomeSnapshotStore(
+    target: NormalizedCodexAccountSelectionTarget
+  ): MemorySnapshotStore<CodexPreparedTarget> {
+    const key = this.getTargetSnapshotKey(target)
+    let store = this.codexHomeSnapshots.get(key)
+    if (!store) {
+      store = new MemorySnapshotStore<CodexPreparedTarget>()
+      this.codexHomeSnapshots.set(key, store)
+    }
+    return store
+  }
+
+  private getClaudeAuthSnapshotStore(
+    target: NormalizedClaudeAccountSelectionTarget
+  ): MemorySnapshotStore<ClaudeRuntimeAuthPreparation> {
+    const key = this.getTargetSnapshotKey(target)
+    let store = this.claudeAuthSnapshots.get(key)
+    if (!store) {
+      store = new MemorySnapshotStore<ClaudeRuntimeAuthPreparation>()
+      this.claudeAuthSnapshots.set(key, store)
+    }
+    return store
+  }
+
   private getCodexProvenance(
     target: NormalizedCodexAccountSelectionTarget,
     codexHomePath: string | null
   ): string {
-    const targetKey = target.runtime === 'wsl' ? `wsl:${target.wslDistro ?? '__default__'}` : 'host'
+    const targetKey = this.getTargetSnapshotKey(target)
     return codexHomePath ? `${targetKey}:managed:${codexHomePath}` : `${targetKey}:system`
   }
 
@@ -1294,16 +1497,31 @@ export class RateLimitService {
     }
   }
 
+  private getUnavailablePreparedTargetResult(provider: 'claude' | 'codex'): ProviderRateLimits {
+    return {
+      provider,
+      session: null,
+      weekly: null,
+      updatedAt: Date.now(),
+      error: `${provider === 'codex' ? 'Codex home' : 'Claude authentication'} snapshot is unavailable`,
+      status: 'unavailable'
+    }
+  }
+
   private async fetchCodexResetResultState(
     target: NormalizedCodexAccountSelectionTarget,
     codexHomePath: string | null,
-    stateBeforeReset: RateLimitState
+    stateBeforeReset: RateLimitState,
+    authSnapshot: CodexCredentialSnapshot
   ): Promise<RateLimitState> {
     const controller = this.beginFetchCycle()
     let fresh: ProviderRateLimits
     try {
       fresh = await fetchCodexRateLimits({
         codexHomePath,
+        codexCommand: this.getCodexHomeSnapshotStore(target).get().value?.command ?? 'codex',
+        hiddenPtyCwd: this.getCodexHomeSnapshotStore(target).get().value?.hiddenPtyCwd,
+        authSnapshot,
         allowPtyFallback: this.shouldAllowCodexPtyFallback(),
         signal: controller.signal
       })
@@ -1321,9 +1539,13 @@ export class RateLimitService {
     }
 
     const scopedCodex = this.applyStalePolicy(fresh, stateBeforeReset.codex)
-    const currentHomePath = this.codexHomePathResolver?.(target) ?? null
+    const currentHomeSnapshot = this.getCodexHomeSnapshotStore(target).get()
+    const currentHomePath = currentHomeSnapshot.stale
+      ? null
+      : (currentHomeSnapshot.value?.homePath ?? null)
     const stillActive =
       this.isSameCodexTarget(this.codexFetchTarget, target) &&
+      !currentHomeSnapshot.stale &&
       this.getCodexProvenance(target, currentHomePath) ===
         this.getCodexProvenance(target, codexHomePath)
     if (stillActive) {
@@ -1563,17 +1785,30 @@ export class RateLimitService {
     if (signal.aborted) {
       return
     }
-    const claudeTarget = this.claudeFetchTarget
-    // Why: capture before the resolver await so an account switch during it invalidates both the snapshot and the state apply.
-    const claudeGeneration = this.claudeFetchGeneration
-    const claudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
+    // Why: status IPC is served from memory, but a fetch must still see credentials the
+    // CLI rotated out-of-band. Bounded by the filesystem host, so it can't stall the cycle.
+    try {
+      await this.hydrateSnapshots()
+    } catch {
+      // Why: a failed hydration leaves the prior snapshot stale, which every reader below handles.
+    }
     if (signal.aborted) {
       return
     }
+    const claudeTarget = this.claudeFetchTarget
+    const claudeGeneration = this.claudeFetchGeneration
+    const claudeAuthSnapshot = this.getClaudeAuthSnapshotStore(claudeTarget).get()
+    const claudeAuthPreparation = claudeAuthSnapshot.stale
+      ? undefined
+      : (claudeAuthSnapshot.value ?? undefined)
     this.rememberClaudeAuthSnapshot(claudeAuthPreparation, claudeGeneration, claudeTarget)
     const claudeProvenance = claudeAuthPreparation?.provenance ?? 'system'
     const codexTarget = this.codexFetchTarget
-    const codexHomePath = this.codexHomePathResolver?.(codexTarget) ?? null
+    const codexHomeSnapshot = this.getCodexHomeSnapshotStore(codexTarget).get()
+    const codexHomePath = codexHomeSnapshot.stale
+      ? null
+      : (codexHomeSnapshot.value?.homePath ?? null)
+    const codexCommand = codexHomeSnapshot.value?.command ?? 'codex'
     const codexProvenance = this.getCodexProvenance(codexTarget, codexHomePath)
     const codexGeneration = this.codexFetchGeneration
     const previousState = this.state
@@ -1581,13 +1816,19 @@ export class RateLimitService {
     const cookie = openCodeGoConfig?.sessionCookie ?? ''
     const workspaceIdOverride = openCodeGoConfig?.workspaceIdOverride ?? ''
     const miniMaxConfigResult = this.resolveMiniMaxConfig()
+    const miniMaxCredentialSnapshot = getMiniMaxCredentialSnapshot()
+    const miniMaxCredentialUnavailable =
+      miniMaxCredentialSnapshot.stale ||
+      miniMaxCredentialSnapshot.availability === 'denied' ||
+      miniMaxCredentialSnapshot.availability === 'unavailable'
     const miniMaxCookie = miniMaxConfigResult.config.sessionCookie
     const miniMaxGroupId = miniMaxConfigResult.config.groupId
     const miniMaxModels = miniMaxConfigResult.config.models
     const geminiCliOAuthEnabled = this.geminiCliOAuthEnabledResolver?.() ?? false
-    // Why: getState() is hot (renderer pushes + mobile snapshots); keep Grok's sync auth-file probe on fetch cycles instead.
-    const grokAuthReadResult = readGrokAuthSession()
-    this.grokAuthConfigured = grokAuthReadResult.status === 'ok'
+    const geminiOAuthSnapshot = getGeminiOAuthPreparationSnapshot()
+    const grokAuthSnapshot = getGrokAuthSnapshot()
+    const kimiCredentialSnapshot = getKimiCredentialSnapshot()
+    this.grokAuthConfigured = grokAuthSnapshot.value !== null
 
     // Discard stale data on config change — it belongs to a different session/workspace.
     const currentConfigHash = `${cookie}|${workspaceIdOverride}`
@@ -1598,7 +1839,9 @@ export class RateLimitService {
     }
     const opencodeGeneration = this.opencodeFetchGeneration
 
-    const currentMiniMaxConfigHash = `${miniMaxCookie}|${miniMaxGroupId}|${miniMaxModels}|${miniMaxConfigResult.error ?? ''}`
+    const currentMiniMaxConfigHash = miniMaxCredentialUnavailable
+      ? this.lastMiniMaxConfigHash
+      : `${miniMaxCookie}|${miniMaxGroupId}|${miniMaxModels}|${miniMaxConfigResult.error ?? ''}`
     const miniMaxConfigChanged = currentMiniMaxConfigHash !== this.lastMiniMaxConfigHash
     if (miniMaxConfigChanged) {
       this.lastMiniMaxConfigHash = currentMiniMaxConfigHash
@@ -1623,12 +1866,14 @@ export class RateLimitService {
       grok: this.withFetchingStatus(previousState.grok, 'grok')
     })
 
-    const missingWslCodexHome = codexHomePath
-      ? null
-      : this.getMissingWslCodexHomeResult(codexTarget)
+    const missingWslCodexHome = codexHomeSnapshot.stale
+      ? this.getUnavailablePreparedTargetResult('codex')
+      : codexHomePath
+        ? null
+        : this.getMissingWslCodexHomeResult(codexTarget)
     const grokResultPromise = fetchGrokRateLimits({
       signal,
-      authReadResult: grokAuthReadResult
+      authSnapshot: grokAuthSnapshot
     }).then(
       (value) => ({ status: 'fulfilled', value }) as const,
       (reason) => ({ status: 'rejected', reason }) as const
@@ -1642,33 +1887,40 @@ export class RateLimitService {
       await Promise.allSettled([
         claudeFetchGated
           ? Promise.resolve(previousState.claude as ProviderRateLimits)
-          : fetchClaudeRateLimits({
-              authPreparation: claudeAuthPreparation,
-              allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
-              allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
-              networkProxySettings: this.networkProxySettingsResolver?.(),
-              signal
-            }),
+          : claudeAuthSnapshot.stale
+            ? Promise.resolve(this.getUnavailablePreparedTargetResult('claude'))
+            : fetchClaudeRateLimits({
+                authPreparation: claudeAuthPreparation,
+                allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
+                allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
+                networkProxySettings: this.networkProxySettingsResolver?.(),
+                signal
+              }),
         missingWslCodexHome ??
           fetchCodexRateLimits({
             codexHomePath,
+            codexCommand,
+            hiddenPtyCwd: codexHomeSnapshot.value?.hiddenPtyCwd,
+            authSnapshot: codexHomeSnapshot.value?.authSnapshot,
             allowPtyFallback: this.shouldAllowCodexPtyFallback(),
             signal
           }),
-        fetchGeminiRateLimits(geminiCliOAuthEnabled),
+        fetchGeminiRateLimits(geminiCliOAuthEnabled, geminiOAuthSnapshot),
         fetchOpenCodeGoRateLimits(
           cookie,
           workspaceIdOverride || undefined,
           this.networkProxySettingsResolver?.()
         ),
-        fetchKimiRateLimits(),
-        miniMaxConfigResult.error
-          ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
-          : fetchMiniMaxRateLimits({
-              cookie: miniMaxCookie,
-              groupId: miniMaxGroupId,
-              models: miniMaxModels
-            })
+        fetchKimiRateLimits(kimiCredentialSnapshot),
+        miniMaxCredentialUnavailable
+          ? Promise.resolve(this.getMiniMaxCredentialError('MiniMax credentials are unavailable'))
+          : miniMaxConfigResult.error
+            ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
+            : fetchMiniMaxRateLimits({
+                cookie: miniMaxCookie,
+                groupId: miniMaxGroupId,
+                models: miniMaxModels
+              })
       ])
 
     if (signal.aborted) {
@@ -1763,19 +2015,25 @@ export class RateLimitService {
             status: 'error'
           } satisfies ProviderRateLimits)
 
-    const latestCodexHomePath = this.codexHomePathResolver?.(codexTarget) ?? null
-    const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
-    if (signal.aborted) {
-      return
-    }
+    const latestCodexHomeSnapshot = this.getCodexHomeSnapshotStore(codexTarget).get()
+    const latestCodexHomePath = latestCodexHomeSnapshot.stale
+      ? null
+      : (latestCodexHomeSnapshot.value?.homePath ?? null)
+    const latestClaudeAuthSnapshot = this.getClaudeAuthSnapshotStore(claudeTarget).get()
+    const latestClaudeAuthPreparation = latestClaudeAuthSnapshot.stale
+      ? undefined
+      : (latestClaudeAuthSnapshot.value ?? undefined)
     const latestClaudeProvenance = latestClaudeAuthPreparation?.provenance ?? 'system'
     const latestCodexProvenance = this.getCodexProvenance(codexTarget, latestCodexHomePath)
     const shouldApplyCodex =
-      codexGeneration === this.codexFetchGeneration && codexProvenance === latestCodexProvenance
+      codexGeneration === this.codexFetchGeneration &&
+      !latestCodexHomeSnapshot.stale &&
+      codexProvenance === latestCodexProvenance
     // Why: a gated cycle made no Claude attempt; applying its passthrough result would grow the failure streak and reset stale-policy clocks for free.
     const shouldApplyClaude =
       !claudeFetchGated &&
       claudeGeneration === this.claudeFetchGeneration &&
+      !latestClaudeAuthSnapshot.stale &&
       claudeProvenance === latestClaudeProvenance &&
       this.isSameClaudeTarget(claudeTarget, this.claudeFetchTarget)
     const shouldApplyOpencode = opencodeGeneration === this.opencodeFetchGeneration
@@ -1848,9 +2106,21 @@ export class RateLimitService {
       return
     }
     const codexTarget = this.codexFetchTarget
-    const codexHomePath = this.codexHomePathResolver?.(codexTarget) ?? null
-    const codexProvenance = this.getCodexProvenance(codexTarget, codexHomePath)
     const codexGeneration = this.codexFetchGeneration
+    await this.hydrateCodexTarget(codexTarget)
+    if (
+      signal.aborted ||
+      codexGeneration !== this.codexFetchGeneration ||
+      !this.isSameCodexTarget(codexTarget, this.codexFetchTarget)
+    ) {
+      return
+    }
+    const codexHomeSnapshot = this.getCodexHomeSnapshotStore(codexTarget).get()
+    const codexHomePath = codexHomeSnapshot.stale
+      ? null
+      : (codexHomeSnapshot.value?.homePath ?? null)
+    const codexCommand = codexHomeSnapshot.value?.command ?? 'codex'
+    const codexProvenance = this.getCodexProvenance(codexTarget, codexHomePath)
     const previousState = this.state
 
     this.updateState({
@@ -1858,14 +2128,19 @@ export class RateLimitService {
       codex: this.withFetchingStatus(previousState.codex, 'codex')
     })
 
-    const missingWslCodexHome = codexHomePath
-      ? null
-      : this.getMissingWslCodexHomeResult(codexTarget)
+    const missingWslCodexHome = codexHomeSnapshot.stale
+      ? this.getUnavailablePreparedTargetResult('codex')
+      : codexHomePath
+        ? null
+        : this.getMissingWslCodexHomeResult(codexTarget)
     const codex = await (
       missingWslCodexHome
         ? Promise.resolve(missingWslCodexHome)
         : fetchCodexRateLimits({
             codexHomePath,
+            codexCommand,
+            hiddenPtyCwd: codexHomeSnapshot.value?.hiddenPtyCwd,
+            authSnapshot: codexHomeSnapshot.value?.authSnapshot,
             allowPtyFallback: this.shouldAllowCodexPtyFallback(),
             signal
           })
@@ -1884,10 +2159,15 @@ export class RateLimitService {
       return
     }
 
-    const latestCodexHomePath = this.codexHomePathResolver?.(codexTarget) ?? null
+    const latestCodexHomeSnapshot = this.getCodexHomeSnapshotStore(codexTarget).get()
+    const latestCodexHomePath = latestCodexHomeSnapshot.stale
+      ? null
+      : (latestCodexHomeSnapshot.value?.homePath ?? null)
     const latestCodexProvenance = this.getCodexProvenance(codexTarget, latestCodexHomePath)
     const shouldApplyCodex =
-      codexGeneration === this.codexFetchGeneration && codexProvenance === latestCodexProvenance
+      codexGeneration === this.codexFetchGeneration &&
+      !latestCodexHomeSnapshot.stale &&
+      codexProvenance === latestCodexProvenance
 
     if (shouldApplyCodex) {
       this.trackActiveFailureStreak('codex', codex)
@@ -1910,12 +2190,19 @@ export class RateLimitService {
       return
     }
     const claudeTarget = this.claudeFetchTarget
-    // Why: capture before the resolver await so an account switch during it invalidates both the snapshot and the state apply.
     const claudeGeneration = this.claudeFetchGeneration
-    const claudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
-    if (signal.aborted) {
+    await this.hydrateClaudeTarget(claudeTarget)
+    if (
+      signal.aborted ||
+      claudeGeneration !== this.claudeFetchGeneration ||
+      !this.isSameClaudeTarget(claudeTarget, this.claudeFetchTarget)
+    ) {
       return
     }
+    const claudeAuthSnapshot = this.getClaudeAuthSnapshotStore(claudeTarget).get()
+    const claudeAuthPreparation = claudeAuthSnapshot.stale
+      ? undefined
+      : (claudeAuthSnapshot.value ?? undefined)
     this.rememberClaudeAuthSnapshot(claudeAuthPreparation, claudeGeneration, claudeTarget)
     const claudeProvenance = claudeAuthPreparation?.provenance ?? 'system'
     const previousState = this.state
@@ -1925,13 +2212,17 @@ export class RateLimitService {
       claude: this.withFetchingStatus(previousState.claude, 'claude')
     })
 
-    const claude = await fetchClaudeRateLimits({
-      authPreparation: claudeAuthPreparation,
-      allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
-      allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
-      networkProxySettings: this.networkProxySettingsResolver?.(),
-      signal
-    }).catch(
+    const claude = await (
+      claudeAuthSnapshot.stale
+        ? Promise.resolve(this.getUnavailablePreparedTargetResult('claude'))
+        : fetchClaudeRateLimits({
+            authPreparation: claudeAuthPreparation,
+            allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
+            allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
+            networkProxySettings: this.networkProxySettingsResolver?.(),
+            signal
+          })
+    ).catch(
       (err): ProviderRateLimits => ({
         provider: 'claude',
         session: null,
@@ -1946,13 +2237,14 @@ export class RateLimitService {
       return
     }
 
-    const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
-    if (signal.aborted) {
-      return
-    }
+    const latestClaudeAuthSnapshot = this.getClaudeAuthSnapshotStore(claudeTarget).get()
+    const latestClaudeAuthPreparation = latestClaudeAuthSnapshot.stale
+      ? undefined
+      : (latestClaudeAuthSnapshot.value ?? undefined)
     const latestClaudeProvenance = latestClaudeAuthPreparation?.provenance ?? 'system'
     const shouldApplyClaude =
       claudeGeneration === this.claudeFetchGeneration &&
+      !latestClaudeAuthSnapshot.stale &&
       claudeProvenance === latestClaudeProvenance &&
       this.isSameClaudeTarget(claudeTarget, this.claudeFetchTarget)
 
@@ -1972,8 +2264,8 @@ export class RateLimitService {
       return
     }
     const previousState = this.state
-    const grokAuthReadResult = readGrokAuthSession()
-    this.grokAuthConfigured = grokAuthReadResult.status === 'ok'
+    const grokAuthSnapshot = getGrokAuthSnapshot()
+    this.grokAuthConfigured = grokAuthSnapshot.value !== null
 
     this.updateState({
       ...previousState,
@@ -1982,7 +2274,7 @@ export class RateLimitService {
 
     const grok = await fetchGrokRateLimits({
       signal,
-      authReadResult: grokAuthReadResult
+      authSnapshot: grokAuthSnapshot
     }).catch(
       (err): ProviderRateLimits => ({
         provider: 'grok',

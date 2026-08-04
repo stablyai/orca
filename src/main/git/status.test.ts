@@ -55,6 +55,11 @@ vi.mock('./runner', () => ({
 }))
 
 vi.mock('fs/promises', () => ({
+  access: async (target: string) => {
+    if (!existsSyncMock(target)) {
+      throw Object.assign(new Error('missing'), { code: 'ENOENT' })
+    }
+  },
   lstat: lstatMock,
   realpath: realpathMock,
   readFile: readFileMock,

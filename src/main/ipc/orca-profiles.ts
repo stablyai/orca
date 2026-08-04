@@ -22,6 +22,7 @@ import type {
 } from '../../shared/orca-profiles'
 import {
   createLocalOrcaProfile,
+  getOrcaProfileListSnapshot,
   getOrcaProfileListState,
   seedNewOrcaProfileTelemetryConsent,
   setActiveOrcaProfile
@@ -172,7 +173,7 @@ export function registerOrcaProfileHandlers(
   ipcMain.handle(
     'orcaProfiles:list',
     (): OrcaProfileListResult => ({
-      ...getOrcaProfileListState(),
+      ...getOrcaProfileListSnapshot(),
       multiProfileUi: isMultiProfileUiEnabled()
     })
   )

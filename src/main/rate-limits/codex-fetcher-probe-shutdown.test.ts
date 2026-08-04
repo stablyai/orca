@@ -29,8 +29,22 @@ vi.mock('./codex-auth-presence', () => ({
   probeCodexAuthPresence: vi.fn(() => 'present')
 }))
 
-import { fetchCodexRateLimits } from './codex-fetcher'
+import {
+  fetchCodexRateLimits as fetchCodexRateLimitsImpl,
+  type FetchCodexRateLimitsOptions
+} from './codex-fetcher'
 import { probeCodexAuthPresence } from './codex-auth-presence'
+
+function fetchCodexRateLimits(
+  options: FetchCodexRateLimitsOptions = {}
+): ReturnType<typeof fetchCodexRateLimitsImpl> {
+  return fetchCodexRateLimitsImpl({
+    codexCommand: 'codex',
+    hiddenPtyCwd: process.cwd(),
+    authSnapshot: { status: 'present', authJson: '{}' },
+    ...options
+  })
+}
 
 function makeRpcChild() {
   const child = new EventEmitter() as EventEmitter & {

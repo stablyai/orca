@@ -16,6 +16,8 @@ import { parseWslUncPath } from '../../shared/wsl-paths'
 import { resolveLocalAccountRuntimeTarget } from '../../shared/local-account-runtime'
 import { getDefaultWslDistro, getWslHome, toWindowsWslPath } from '../wsl'
 import { buildEncodedWslBashCommand } from '../wsl-bash-command'
+import { resolveClaudeCommand } from '../codex-cli/command'
+import { resolveCliCommandThroughFilesystemHost } from '../filesystem-host/filesystem-host-rate-limit-client'
 import { hasLiveClaudePtys } from './live-pty-gate'
 import { isOauthTokenExpiring, refreshClaudeOauthCredentials } from './oauth-refresh'
 import { ClaudeRuntimePathResolver } from './runtime-paths'
@@ -37,6 +39,10 @@ import {
 } from './runtime-selection'
 
 export type ClaudeRuntimeAuthPreparation = {
+  command?: string
+  hiddenPtyCwd?: string
+  oauthCredentials?: ClaudeOAuthCredentialSnapshot
+  legacyOAuthCredentials?: ClaudeOAuthCredentialSnapshot
   configDir: string
   runtime?: 'host' | 'wsl'
   wslDistro?: string | null
@@ -45,6 +51,13 @@ export type ClaudeRuntimeAuthPreparation = {
   stripAuthEnv: boolean
   managedRefreshDeferredByLivePty?: boolean
   provenance: string
+}
+
+export type ClaudeOAuthCredentialSnapshot = {
+  token: string | null
+  hasRefreshableCredentials: boolean
+  source: 'scoped-keychain' | 'legacy-keychain' | 'credentials-file' | 'none'
+  keychainUnavailable?: boolean
 }
 
 type ClaudeSystemDefaultSnapshot = {
@@ -123,7 +136,12 @@ export class ClaudeRuntimeAuthService {
   ): Promise<ClaudeRuntimeAuthPreparation> {
     const effectiveTarget = target ?? this.getDefaultAccountSelectionTarget()
     await this.syncForCurrentSelection(effectiveTarget)
-    return this.getPreparation(effectiveTarget)
+    const normalized = normalizeClaudeAccountSelectionTarget(effectiveTarget)
+    const command =
+      normalized.runtime === 'host'
+        ? await resolveCliCommandThroughFilesystemHost('claude')
+        : 'claude'
+    return this.getPreparation(effectiveTarget, command)
   }
 
   async syncForCurrentSelection(target?: ClaudeAccountSelectionTarget): Promise<void> {
@@ -601,7 +619,10 @@ export class ClaudeRuntimeAuthService {
     return candidates
   }
 
-  private getPreparation(target?: ClaudeAccountSelectionTarget): ClaudeRuntimeAuthPreparation {
+  private getPreparation(
+    target?: ClaudeAccountSelectionTarget,
+    preparedHostCommand?: string
+  ): ClaudeRuntimeAuthPreparation {
     const settings = this.store.getSettings()
     const paths = this.pathResolver.getRuntimePaths()
     const normalizedTarget = this.resolveWslDefaultTarget(
@@ -615,6 +636,7 @@ export class ClaudeRuntimeAuthService {
       activeAccount.wslLinuxAuthPath
     ) {
       return {
+        command: 'claude',
         configDir: activeAccount.managedAuthPath,
         runtime: 'wsl',
         wslDistro: activeAccount.wslDistro ?? null,
@@ -633,6 +655,7 @@ export class ClaudeRuntimeAuthService {
         const windowsConfigDir = join(wslHome, '.claude')
         const linuxConfigDir = `${wslHomeInfo.linuxPath.replace(/\/$/, '')}/.claude`
         return {
+          command: 'claude',
           configDir: windowsConfigDir,
           runtime: 'wsl',
           wslDistro: distro,
@@ -643,6 +666,7 @@ export class ClaudeRuntimeAuthService {
         }
       }
       return {
+        command: 'claude',
         configDir: paths.configDir,
         runtime: 'wsl',
         wslDistro: normalizeClaudeAccountSelectionTarget(normalizedTarget).wslDistro,
@@ -653,6 +677,7 @@ export class ClaudeRuntimeAuthService {
       }
     }
     return {
+      command: preparedHostCommand ?? resolveClaudeCommand(),
       configDir: paths.configDir,
       runtime: 'host',
       wslDistro: null,

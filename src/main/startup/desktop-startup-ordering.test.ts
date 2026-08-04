@@ -3,6 +3,34 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 describe('startup ordering', () => {
+  it('starts status snapshot hydration without delaying desktop startup', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const resolver = source.indexOf('rateLimits.setInactiveCodexAccountsResolver(')
+    const rateLimitHydration = source.indexOf('.hydrateSnapshots()', resolver)
+    const identityHydration = source.indexOf('.hydrateSystemDefaultIdentity()', resolver)
+    const dnsHydration = source.indexOf('hydrateMacTailscaleDnsDiagnostic()', resolver)
+    const runtimeConstruction = source.indexOf('new OrcaRuntimeService(', resolver)
+
+    expect(rateLimitHydration).toBeGreaterThan(resolver)
+    expect(identityHydration).toBeGreaterThan(rateLimitHydration)
+    expect(dnsHydration).toBeGreaterThan(identityHydration)
+    expect(runtimeConstruction).toBeGreaterThan(dnsHydration)
+    expect(source.slice(resolver, runtimeConstruction)).not.toMatch(
+      /await (?:rateLimits\s*\.\s*hydrateSnapshots|codexAccounts\s*\.\s*hydrateSystemDefaultIdentity|hydrateMacTailscaleDnsDiagnostic)/
+    )
+  })
+
+  it('seeds repo YAML snapshots before later startup consumers', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const hydrationStart = source.indexOf('reconcileLocalOrcaYamlSnapshots(store.getRepos())')
+    const hydrationEnd = source.indexOf('setDefaultWslDistroOverride(', hydrationStart)
+    const hydration = source.slice(hydrationStart, hydrationEnd)
+
+    expect(hydrationStart).toBeGreaterThanOrEqual(0)
+    expect(hydrationEnd).toBeGreaterThan(hydrationStart)
+    expect(hydration).toContain('reconcileLocalOrcaYamlSnapshots(store.getRepos())')
+  })
+
   it('passes the startup barrier into PTY handlers without blocking window creation', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
     const attachStart = source.indexOf('attachMainWindowServices(')

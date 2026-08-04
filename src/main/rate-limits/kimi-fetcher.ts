@@ -1,4 +1,3 @@
-import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { net } from 'electron'
@@ -7,6 +6,9 @@ import type {
   RateLimitWindow,
   UsageRateLimitMetadata
 } from '../../shared/rate-limit-types'
+import type { MemorySnapshot } from '../../shared/memory-snapshot'
+import { classifyFilesystemSnapshotFailure, MemorySnapshotStore } from './memory-snapshot-store'
+import { readSnapshotFileThroughFilesystemHost } from '../filesystem-host/filesystem-host-read-authority'
 
 // Why: Kimi Code's managed coding plan exposes subscription usage at
 // `${base}/usages` (see packages/oauth/src/managed-usage.ts in the CLI bundle).
@@ -28,15 +30,12 @@ function getCredentialsPath(): string {
   return join(getKimiHome(), 'credentials', 'kimi-code.json')
 }
 
-type KimiCredentials = {
+export type KimiCredentials = {
   access_token?: string
   expires_at?: number
 }
 
-type CredentialsReadResult =
-  | { status: 'missing' }
-  | { status: 'error'; error: string }
-  | { status: 'ok'; credentials: KimiCredentials }
+const credentialSnapshot = new MemorySnapshotStore<KimiCredentials>()
 
 function parseCredentials(value: unknown): KimiCredentials | null {
   if (typeof value !== 'object' || value === null) {
@@ -52,23 +51,40 @@ function parseCredentials(value: unknown): KimiCredentials | null {
   return credentials
 }
 
-function readCredentials(): CredentialsReadResult {
-  const path = getCredentialsPath()
-  if (!existsSync(path)) {
-    return { status: 'missing' }
-  }
-  try {
-    const parsed: unknown = JSON.parse(readFileSync(path, 'utf-8'))
-    const credentials = parseCredentials(parsed)
-    return credentials
-      ? { status: 'ok', credentials }
-      : { status: 'error', error: 'Kimi credentials file is invalid' }
-  } catch (err) {
-    return {
-      status: 'error',
-      error: err instanceof Error ? err.message : 'Unable to read Kimi credentials'
+export function getKimiCredentialSnapshot(): MemorySnapshot<KimiCredentials> {
+  return credentialSnapshot.get()
+}
+
+export function invalidateKimiCredentialSnapshot(): void {
+  credentialSnapshot.invalidate()
+}
+
+export async function refreshKimiCredentialSnapshot(): Promise<MemorySnapshot<KimiCredentials>> {
+  return credentialSnapshot.refresh(async () => {
+    let contents: string
+    try {
+      contents = (
+        await readSnapshotFileThroughFilesystemHost(getCredentialsPath(), 'kimi-credentials')
+      ).toString('utf8')
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException | null)?.code
+      if (code === 'ENOENT' || code === 'ENOTDIR') {
+        return { value: null, availability: 'missing' }
+      }
+      throw error
     }
-  }
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(contents)
+    } catch {
+      throw new Error('Kimi credentials file is invalid')
+    }
+    const credentials = parseCredentials(parsed)
+    if (!credentials) {
+      throw new Error('Kimi credentials file is invalid')
+    }
+    return { value: credentials, availability: 'ready' }
+  }, classifyFilesystemSnapshotFailure)
 }
 
 function isAccessTokenFresh(creds: KimiCredentials): boolean {
@@ -239,15 +255,19 @@ function result(
  * `/usage` command uses. The completion endpoint (the one Moonshot gates to
  * approved coding agents) is never touched here.
  */
-export async function fetchKimiRateLimits(): Promise<ProviderRateLimits> {
-  const readResult = readCredentials()
-  if (readResult.status === 'missing') {
+export async function fetchKimiRateLimits(
+  snapshot: MemorySnapshot<KimiCredentials>
+): Promise<ProviderRateLimits> {
+  if (snapshot.availability === 'denied') {
+    return result('error', 'Kimi credential access was denied')
+  }
+  if (snapshot.stale || snapshot.availability === 'unavailable') {
+    return result('error', 'Kimi credentials are unavailable')
+  }
+  if (snapshot.availability === 'missing' || snapshot.value === null) {
     return result('unavailable', 'Not signed in to Kimi Code')
   }
-  if (readResult.status === 'error') {
-    return result('error', readResult.error)
-  }
-  const creds = readResult.credentials
+  const creds = snapshot.value
   if (typeof creds.access_token !== 'string' || creds.access_token.length === 0) {
     return result('error', 'Kimi credentials file is missing an access token')
   }

@@ -7,12 +7,27 @@ import { deleteLocalSpeechModel } from '../speech/speech-model-deletion'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
 import {
   clearOpenAiSpeechApiKey,
-  hasOpenAiSpeechApiKey,
+  getOpenAiSpeechApiKeySnapshot,
+  hydrateOpenAiSpeechApiKeySnapshot,
   saveOpenAiSpeechApiKey
 } from '../speech/openai-api-key-store'
 import type { Store } from '../persistence'
+import type { OpenAiSpeechApiKeyStatus } from '../../shared/speech-types'
+
+function apiKeyStatusFromSnapshot(
+  snapshot: ReturnType<typeof getOpenAiSpeechApiKeySnapshot>
+): OpenAiSpeechApiKeyStatus {
+  return { ...snapshot, configured: snapshot.value === true }
+}
+
+async function getOpenAiApiKeyStatus(): Promise<OpenAiSpeechApiKeyStatus> {
+  const current = getOpenAiSpeechApiKeySnapshot()
+  const snapshot = current.stale ? await hydrateOpenAiSpeechApiKeySnapshot() : current
+  return apiKeyStatusFromSnapshot(snapshot)
+}
 
 export function registerSpeechHandlers(store: Store): void {
+  void hydrateOpenAiSpeechApiKeySnapshot()
   ipcMain.handle('speech:getCatalog', () => {
     return SPEECH_MODEL_CATALOG
   })
@@ -22,17 +37,17 @@ export function registerSpeechHandlers(store: Store): void {
   })
 
   ipcMain.handle('speech:getOpenAiApiKeyStatus', async () => {
-    return { configured: hasOpenAiSpeechApiKey() }
+    return await getOpenAiApiKeyStatus()
   })
 
-  ipcMain.handle('speech:saveOpenAiApiKey', async (_event, apiKey: string) => {
+  ipcMain.handle('speech:saveOpenAiApiKey', (_event, apiKey: string) => {
     saveOpenAiSpeechApiKey(apiKey)
-    return { configured: true }
+    return apiKeyStatusFromSnapshot(getOpenAiSpeechApiKeySnapshot())
   })
 
-  ipcMain.handle('speech:clearOpenAiApiKey', async () => {
+  ipcMain.handle('speech:clearOpenAiApiKey', () => {
     clearOpenAiSpeechApiKey()
-    return { configured: false }
+    return apiKeyStatusFromSnapshot(getOpenAiSpeechApiKeySnapshot())
   })
 
   ipcMain.handle('speech:downloadModel', async (event, modelId: string) => {

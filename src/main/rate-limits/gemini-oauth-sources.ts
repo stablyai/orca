@@ -1,8 +1,9 @@
-import { readFile, writeFile, rename } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import { net } from 'electron'
 import { extractOAuthClientCredentials } from './gemini-cli-oauth-extractor'
+import { readSnapshotFileThroughFilesystemHost } from '../filesystem-host/filesystem-host-read-authority'
+import { writeRateLimitCredentialThroughFilesystemHost } from '../filesystem-host/filesystem-host-rate-limit-client'
 
 const API_TIMEOUT_MS = 10_000
 const OAUTH_CREDS_PATH = path.join(homedir(), '.gemini', 'oauth_creds.json')
@@ -22,12 +23,14 @@ export type GoogleAuthEntry = {
   refresh: string
 }
 
-type AuthJson = {
+export type AuthJson = {
   google?: GoogleAuthEntry
   'opencode-go'?: { type: 'api'; key: string }
 }
 
-export async function readAuthJson(): Promise<AuthJson | null> {
+export type AuthJsonSource = { path: string; value: AuthJson }
+
+export async function readAuthJsonSource(): Promise<AuthJsonSource | null> {
   const candidates = [
     process.env.APPDATA ? path.join(process.env.APPDATA, 'opencode', 'auth.json') : null,
     process.env.XDG_DATA_HOME
@@ -39,8 +42,14 @@ export async function readAuthJson(): Promise<AuthJson | null> {
 
   for (const candidate of candidates) {
     try {
-      const raw = await readFile(candidate, 'utf-8')
-      return JSON.parse(raw) as AuthJson
+      const raw = (await readSnapshotFileThroughFilesystemHost(candidate, 'gemini-auth')).toString(
+        'utf8'
+      )
+      const parsed = JSON.parse(raw) as unknown
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return null
+      }
+      return { path: candidate, value: parsed as AuthJson }
     } catch (err) {
       if (err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT') {
         continue
@@ -54,7 +63,9 @@ export async function readAuthJson(): Promise<AuthJson | null> {
 
 export async function readGeminiCredentials(): Promise<GeminiCredentials | null> {
   try {
-    const raw = await readFile(OAUTH_CREDS_PATH, 'utf-8')
+    const raw = (
+      await readSnapshotFileThroughFilesystemHost(OAUTH_CREDS_PATH, 'gemini-oauth-credentials')
+    ).toString('utf8')
     const parsed = JSON.parse(raw) as unknown
     if (
       parsed &&
@@ -78,9 +89,24 @@ export async function readGeminiCredentials(): Promise<GeminiCredentials | null>
 }
 
 export async function saveGeminiCredentials(creds: GeminiCredentials): Promise<void> {
-  const tmpPath = `${OAUTH_CREDS_PATH}.${process.pid}.tmp`
-  await writeFile(tmpPath, JSON.stringify(creds, null, 2), 'utf-8')
-  await rename(tmpPath, OAUTH_CREDS_PATH)
+  await writeRateLimitCredentialThroughFilesystemHost(
+    OAUTH_CREDS_PATH,
+    'gemini-oauth-credentials',
+    JSON.stringify(creds, null, 2)
+  )
+}
+
+export async function saveAuthJsonSource(source: AuthJsonSource): Promise<void> {
+  const raw = await readSnapshotFileThroughFilesystemHost(source.path, 'gemini-auth')
+  const latest = JSON.parse(raw.toString('utf8')) as unknown
+  if (!latest || typeof latest !== 'object' || Array.isArray(latest)) {
+    throw new Error('OpenCode auth.json must contain a JSON object')
+  }
+  await writeRateLimitCredentialThroughFilesystemHost(
+    source.path,
+    'opencode-auth',
+    JSON.stringify({ ...(latest as AuthJson), google: source.value.google }, null, 2)
+  )
 }
 
 export type RefreshTokenResult = {

@@ -1,6 +1,5 @@
 /* eslint-disable max-lines */
-import { existsSync } from 'node:fs'
-import { readFile, stat } from 'node:fs/promises'
+import { access, readFile, stat } from 'node:fs/promises'
 import * as path from 'node:path'
 import type {
   GitBranchChangeEntry,
@@ -942,14 +941,28 @@ async function getConflictCompatibilityStatus(
   }
 
   try {
-    return existsSync(path.join(worktreePath, filePath)) ? 'modified' : 'deleted'
-  } catch {
-    // Why: on an fs check failure, 'modified' is safer — it keeps the row visible rather than falsely showing 'deleted'.
+    await access(path.join(worktreePath, filePath))
     return 'modified'
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | null)?.code
+    return code === 'ENOENT' || code === 'ENOTDIR' ? 'deleted' : 'modified'
   }
 }
 
-// Why: the git-status → existsSync race can miss a transient HEAD; fall back to 'unknown' for one poll cycle.
+async function filesystemEntryExists(entryPath: string): Promise<boolean> {
+  try {
+    await access(entryPath)
+    return true
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | null)?.code
+    if (code === 'ENOENT' || code === 'ENOTDIR') {
+      return false
+    }
+    throw error
+  }
+}
+
+// Why: the git-status → filesystem race can miss a transient HEAD; fall back to 'unknown' for one poll cycle.
 // Why: detect rebase from rebase-merge/ or rebase-apply/ dirs (persist all steps), not REBASE_HEAD (partial, lingers → stale badge).
 export async function detectConflictOperation(worktreePath: string): Promise<GitConflictOperation> {
   const gitDir = await resolveGitDir(worktreePath)
@@ -963,9 +976,17 @@ export async function detectConflictOperation(worktreePath: string): Promise<Git
   let hasRebaseDir = false
 
   try {
-    hasMergeHead = existsSync(mergeHead)
-    hasCherryPickHead = existsSync(cherryPickHead)
-    hasRebaseDir = existsSync(rebaseMergeDir) || existsSync(rebaseApplyDir)
+    const [mergeExists, cherryPickExists, rebaseMergeExists, rebaseApplyExists] = await Promise.all(
+      [
+        filesystemEntryExists(mergeHead),
+        filesystemEntryExists(cherryPickHead),
+        filesystemEntryExists(rebaseMergeDir),
+        filesystemEntryExists(rebaseApplyDir)
+      ]
+    )
+    hasMergeHead = mergeExists
+    hasCherryPickHead = cherryPickExists
+    hasRebaseDir = rebaseMergeExists || rebaseApplyExists
   } catch {
     return 'unknown'
   }

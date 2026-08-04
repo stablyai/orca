@@ -10,7 +10,8 @@ import type {
   TerminalPreviewDataPayload
 } from '../shared/terminal-preview'
 import type { CliInstallStatus } from '../shared/cli-install-types'
-import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
+import type { AgentHookInstallStatusSnapshot } from '../shared/agent-hook-types'
+import type { SnapshotAvailability } from '../shared/memory-snapshot'
 import type { CodexConfigSyncStatus } from '../shared/codex-config-sync-types'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
 import type { TerminalTabCreateReply } from '../shared/terminal-reveal-identity'
@@ -146,6 +147,7 @@ import type {
 import type {
   CodexRateLimitResetResult,
   GrokAccountStatus,
+  MiniMaxCredentialsStatus,
   RateLimitRuntimeTarget,
   RateLimitState
 } from '../shared/rate-limit-types'
@@ -199,6 +201,7 @@ import type {
   SpeechLifecycleEvent,
   SpeechModelManifest,
   SpeechModelState,
+  OpenAiSpeechApiKeyStatus,
   SpeechTranscriptEvent
 } from '../shared/speech-types'
 import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
@@ -2106,31 +2109,34 @@ const api = {
     status: (): Promise<CodexConfigSyncStatus> => ipcRenderer.invoke('codexConfigSync:status')
   },
   agentHooks: {
-    claudeStatus: (): Promise<AgentHookInstallStatus> =>
+    claudeStatus: (): Promise<AgentHookInstallStatusSnapshot> =>
       ipcRenderer.invoke('agentHooks:claudeStatus'),
-    openClaudeStatus: (): Promise<AgentHookInstallStatus> =>
+    openClaudeStatus: (): Promise<AgentHookInstallStatusSnapshot> =>
       ipcRenderer.invoke('agentHooks:openClaudeStatus'),
-    codexStatus: (): Promise<AgentHookInstallStatus> =>
+    codexStatus: (): Promise<AgentHookInstallStatusSnapshot> =>
       ipcRenderer.invoke('agentHooks:codexStatus'),
-    geminiStatus: (): Promise<AgentHookInstallStatus> =>
+    geminiStatus: (): Promise<AgentHookInstallStatusSnapshot> =>
       ipcRenderer.invoke('agentHooks:geminiStatus'),
-    antigravityStatus: (): Promise<AgentHookInstallStatus> =>
+    antigravityStatus: (): Promise<AgentHookInstallStatusSnapshot> =>
       ipcRenderer.invoke('agentHooks:antigravityStatus'),
-    ampStatus: (): Promise<AgentHookInstallStatus> => ipcRenderer.invoke('agentHooks:ampStatus'),
-    cursorStatus: (): Promise<AgentHookInstallStatus> =>
+    ampStatus: (): Promise<AgentHookInstallStatusSnapshot> =>
+      ipcRenderer.invoke('agentHooks:ampStatus'),
+    cursorStatus: (): Promise<AgentHookInstallStatusSnapshot> =>
       ipcRenderer.invoke('agentHooks:cursorStatus'),
-    droidStatus: (): Promise<AgentHookInstallStatus> =>
+    droidStatus: (): Promise<AgentHookInstallStatusSnapshot> =>
       ipcRenderer.invoke('agentHooks:droidStatus'),
-    commandCodeStatus: (): Promise<AgentHookInstallStatus> =>
+    commandCodeStatus: (): Promise<AgentHookInstallStatusSnapshot> =>
       ipcRenderer.invoke('agentHooks:commandCodeStatus'),
-    grokStatus: (): Promise<AgentHookInstallStatus> => ipcRenderer.invoke('agentHooks:grokStatus'),
-    devinStatus: (): Promise<AgentHookInstallStatus> =>
+    grokStatus: (): Promise<AgentHookInstallStatusSnapshot> =>
+      ipcRenderer.invoke('agentHooks:grokStatus'),
+    devinStatus: (): Promise<AgentHookInstallStatusSnapshot> =>
       ipcRenderer.invoke('agentHooks:devinStatus'),
-    copilotStatus: (): Promise<AgentHookInstallStatus> =>
+    copilotStatus: (): Promise<AgentHookInstallStatusSnapshot> =>
       ipcRenderer.invoke('agentHooks:copilotStatus'),
-    hermesStatus: (): Promise<AgentHookInstallStatus> =>
+    hermesStatus: (): Promise<AgentHookInstallStatusSnapshot> =>
       ipcRenderer.invoke('agentHooks:hermesStatus'),
-    kimiStatus: (): Promise<AgentHookInstallStatus> => ipcRenderer.invoke('agentHooks:kimiStatus')
+    kimiStatus: (): Promise<AgentHookInstallStatusSnapshot> =>
+      ipcRenderer.invoke('agentHooks:kimiStatus')
   },
 
   agentTrust: {
@@ -2884,6 +2890,11 @@ const api = {
       hasHooks: boolean
       hooks: unknown
       mayNeedUpdate: boolean
+      stale?: boolean
+      age?: number | null
+      availability?: SnapshotAvailability
+      contentState?: 'missing' | 'valid' | 'invalid' | null
+      lastError?: string | null
     }> => ipcRenderer.invoke('hooks:check', args),
 
     inspectSetupScriptImports: (args: {
@@ -4398,11 +4409,11 @@ const api = {
   },
 
   minimaxCredentials: {
-    getStatus: (): Promise<{ configured: boolean }> =>
+    getStatus: (): Promise<MiniMaxCredentialsStatus> =>
       ipcRenderer.invoke('minimaxCredentials:getStatus'),
-    saveCookie: (cookie: string): Promise<{ configured: boolean }> =>
+    saveCookie: (cookie: string): Promise<MiniMaxCredentialsStatus> =>
       ipcRenderer.invoke('minimaxCredentials:saveCookie', cookie),
-    clearCookie: (): Promise<{ configured: boolean }> =>
+    clearCookie: (): Promise<MiniMaxCredentialsStatus> =>
       ipcRenderer.invoke('minimaxCredentials:clearCookie')
   },
 
@@ -4779,11 +4790,11 @@ const api = {
   speech: {
     getCatalog: (): Promise<SpeechModelManifest[]> => ipcRenderer.invoke('speech:getCatalog'),
     getModelStates: (): Promise<SpeechModelState[]> => ipcRenderer.invoke('speech:getModelStates'),
-    getOpenAiApiKeyStatus: (): Promise<{ configured: boolean }> =>
+    getOpenAiApiKeyStatus: (): Promise<OpenAiSpeechApiKeyStatus> =>
       ipcRenderer.invoke('speech:getOpenAiApiKeyStatus'),
-    saveOpenAiApiKey: (apiKey: string): Promise<{ configured: boolean }> =>
+    saveOpenAiApiKey: (apiKey: string): Promise<OpenAiSpeechApiKeyStatus> =>
       ipcRenderer.invoke('speech:saveOpenAiApiKey', apiKey),
-    clearOpenAiApiKey: (): Promise<{ configured: boolean }> =>
+    clearOpenAiApiKey: (): Promise<OpenAiSpeechApiKeyStatus> =>
       ipcRenderer.invoke('speech:clearOpenAiApiKey'),
     downloadModel: (modelId: string): Promise<void> =>
       ipcRenderer.invoke('speech:downloadModel', modelId),

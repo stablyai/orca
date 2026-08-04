@@ -28,7 +28,10 @@ vi.mock('node:fs/promises', () => ({
 }))
 vi.mock('electron', () => ({ net: { fetch: netFetchMock } }))
 
-import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
+import {
+  fetchGeminiRateLimits as fetchGeminiFromSnapshot,
+  fetchGeminiRateLimitsWithHydration as fetchGeminiRateLimits
+} from './gemini-usage-fetcher'
 
 describe('fetchGeminiRateLimits', () => {
   beforeEach(() => {
@@ -71,6 +74,18 @@ describe('fetchGeminiRateLimits', () => {
   it('returns unavailable when no credentials exist', async () => {
     const result = await fetchGeminiRateLimits(true)
     expect(result.status).toBe('unavailable')
+  })
+
+  it('reports stale credential reads as transient errors', async () => {
+    const result = await fetchGeminiFromSnapshot(true, {
+      value: null,
+      stale: true,
+      age: 10,
+      availability: 'unavailable'
+    })
+
+    expect(result.status).toBe('error')
+    expect(result.usageMetadata?.failureKind).toBe('keychain-unavailable')
   })
 
   it('returns quota via auth.json', async () => {

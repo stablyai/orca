@@ -34,7 +34,12 @@ export function registerCodexAccountHandlers(
     }
     forgetStaleCodexPanes(args.ptyIds.filter((ptyId): ptyId is string => typeof ptyId === 'string'))
   })
-  ipcMain.handle('codexAccounts:list', () => codexAccounts.listAccounts())
+  ipcMain.handle('codexAccounts:list', async () => {
+    // Why: `codex login` can run in a terminal after launch, so the pane must not report a
+    // launch-time identity. Bounded by the filesystem host, so this can't block the main thread.
+    await codexAccounts.hydrateSystemDefaultIdentity()
+    return codexAccounts.listAccounts()
+  })
   ipcMain.handle('codexAccounts:add', (_event, args?: CodexAccountAddTarget) =>
     codexAccounts.addAccount(args)
   )

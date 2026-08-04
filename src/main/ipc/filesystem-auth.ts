@@ -1,8 +1,7 @@
 /* eslint-disable max-lines -- Why: keeps the filesystem-auth security boundary auditable end to end. */
 import { resolve, relative, dirname, basename, isAbsolute, sep } from 'node:path'
-import { realpathSync } from 'node:fs'
-import { realpath } from 'node:fs/promises'
 import type { Store } from '../persistence'
+import { canonicalizePathThroughFilesystemHost } from '../filesystem-host/filesystem-host-read-authority'
 import { isRepoRoot, listRepoWorktrees } from '../repo-worktrees'
 import { computeWorkspaceRoot, getWorktreePathSettings } from './worktree-logic'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
@@ -19,6 +18,7 @@ const registeredWorktreeRootsByRepo = new Map<string, Set<string>>()
 const registeredWorktreeRootRepoIds = new Set<string>()
 let registeredWorktreeRootsDirty = true
 let registeredWorktreeRootsRefresh: Promise<void> | null = null
+let registeredWorktreeRootsGeneration = 0
 const AUTHORIZED_ROOTS_REBUILD_CONCURRENCY = 8
 type FolderScopeStore = Pick<Store, 'getRepos'> &
   Partial<Pick<Store, 'getProjectGroups' | 'getFolderWorkspaces'>>
@@ -36,16 +36,21 @@ function rememberAuthorizedExternalPath(path: string): void {
   }
 }
 
-export function authorizeExternalPath(targetPath: string): void {
+export async function authorizeExternalPath(targetPath: string): Promise<void> {
   const resolvedTarget = resolve(targetPath)
   rememberAuthorizedExternalPath(resolvedTarget)
   try {
     // Why: macOS canonicalizes /tmp to /private/tmp during read authorization.
-    rememberAuthorizedExternalPath(realpathSync(resolvedTarget))
-  } catch {}
+    rememberAuthorizedExternalPath(
+      resolve(await canonicalizePathThroughFilesystemHost(resolvedTarget))
+    )
+  } catch {
+    // Why: a stalled or missing canonical path must not revoke the grant or abort a batch drop.
+  }
 }
 
 export function invalidateAuthorizedRootsCache(): void {
+  registeredWorktreeRootsGeneration += 1
   registeredWorktreeRootsDirty = true
   // Why: dirty roots can't be trusted for auth short-circuits; fresh worktrees:list seeds safe per-repo roots before a full rebuild.
   registeredWorktreeRoots.clear()
@@ -178,6 +183,7 @@ export function isPathAllowed(targetPath: string, store: Store): boolean {
 export async function rebuildAuthorizedRootsCache(store: Store): Promise<void> {
   // Why: bounded parallelism keeps the Windows speedup without one git process per repo.
   // Why no realpath here: canonicalizing every root on invalidation would trigger macOS TCC prompts; handlers still canonicalize the target before any operation.
+  const generation = registeredWorktreeRootsGeneration
   const repos = getLocalRepos(store)
   const perProjectResults = await mapWithConcurrency(
     repos,
@@ -197,6 +203,10 @@ export async function rebuildAuthorizedRootsCache(store: Store): Promise<void> {
       return { repoId: repo.id, roots }
     }
   )
+
+  if (generation !== registeredWorktreeRootsGeneration) {
+    return
+  }
 
   registeredWorktreeRoots.clear()
   registeredWorktreeRootsByRepo.clear()
@@ -238,6 +248,7 @@ export function registerWorktreeRootsForRepo(
   repoId: string,
   worktreeRoots: string[]
 ): void {
+  registeredWorktreeRootsGeneration += 1
   const localRepoIds = new Set(getLocalRepos(store).map((repo) => repo.id))
   for (const registeredRepoId of registeredWorktreeRootsByRepo.keys()) {
     if (!localRepoIds.has(registeredRepoId)) {
@@ -259,15 +270,14 @@ export function registerWorktreeRootsForRepo(
 }
 
 export async function ensureAuthorizedRootsCache(store: Store): Promise<void> {
-  if (!registeredWorktreeRootsDirty) {
-    return
+  while (registeredWorktreeRootsDirty) {
+    if (!registeredWorktreeRootsRefresh) {
+      registeredWorktreeRootsRefresh = rebuildAuthorizedRootsCache(store).finally(() => {
+        registeredWorktreeRootsRefresh = null
+      })
+    }
+    await registeredWorktreeRootsRefresh
   }
-  if (!registeredWorktreeRootsRefresh) {
-    registeredWorktreeRootsRefresh = rebuildAuthorizedRootsCache(store).finally(() => {
-      registeredWorktreeRootsRefresh = null
-    })
-  }
-  await registeredWorktreeRootsRefresh
 }
 
 /**
@@ -300,7 +310,7 @@ export async function resolveAuthorizedPath(
     // Canonicalize the parent so ancestor symlinks can't redirect outside allowed roots, but keep the leaf so delete/rename act on the link itself.
     let realParent: string
     try {
-      realParent = await realpath(dirname(resolvedTarget))
+      realParent = await canonicalizePathThroughFilesystemHost(dirname(resolvedTarget))
     } catch (error) {
       if (isENOENT(error)) {
         return resolveAuthorizedMissingPath(resolvedTarget, store)
@@ -320,7 +330,7 @@ export async function resolveAuthorizedPath(
 
   try {
     // Why: Windows/WSL realpath can return UNC-shaped paths; re-resolve to compare against this module's allow-list roots.
-    const realTarget = resolve(await realpath(resolvedTarget))
+    const realTarget = resolve(await canonicalizePathThroughFilesystemHost(resolvedTarget))
     if (
       !(await isPathAllowedIncludingRegisteredWorktrees(realTarget, store, {
         canonicalSourcePath: resolvedTarget
@@ -343,7 +353,7 @@ async function resolveAuthorizedMissingPath(resolvedTarget: string, store: Store
 
   while (true) {
     try {
-      const realAncestor = await realpath(existingAncestor)
+      const realAncestor = await canonicalizePathThroughFilesystemHost(existingAncestor)
       const candidateTarget = resolve(realAncestor, ...missingSegments)
       if (
         !(await isPathAllowedIncludingRegisteredWorktrees(candidateTarget, store, {
@@ -518,7 +528,7 @@ function findRegisteredWorktreeRoot(targetPath: string): string | null {
 
 async function normalizeExistingPath(resolvedPath: string): Promise<string> {
   try {
-    return resolve(await realpath(resolvedPath))
+    return resolve(await canonicalizePathThroughFilesystemHost(resolvedPath))
   } catch (error) {
     if (isENOENT(error)) {
       return resolvedPath

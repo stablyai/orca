@@ -68,10 +68,10 @@ describe('registerKeybindingHandlers', () => {
     showItemInFolderMock.mockReset()
   })
 
-  it('authorizes the keybindings file for in-app editing when ensuring it exists', () => {
+  it('authorizes the keybindings file for in-app editing when ensuring it exists', async () => {
     registerKeybindingHandlers({ ensureFile: vi.fn(() => snapshot) } as never)
 
-    expect(getHandler('keybindings:ensureFile')()).toBe(snapshot)
+    await expect(getHandler('keybindings:ensureFile')()).resolves.toBe(snapshot)
     expect(authorizeExternalPathMock).toHaveBeenCalledWith(snapshot.path)
   })
 
@@ -99,5 +99,67 @@ describe('registerKeybindingHandlers', () => {
     await expect(getHandler('keybindings:openFile')()).resolves.toBe(snapshot)
     expect(authorizeExternalPathMock).toHaveBeenCalledWith(snapshot.path)
     expect(openPathMock).toHaveBeenCalledWith(snapshot.path)
+  })
+
+  it('retries failed startup hydration and broadcasts the recovered shortcuts', async () => {
+    vi.useFakeTimers()
+    const send = vi.fn()
+    getAllWindowsMock.mockReturnValue([
+      { isDestroyed: () => false, webContents: { send } }
+    ] as never)
+    let needsRetry = true
+    const recovered = { ...snapshot, overrides: { 'tab.nextAllTypes': ['Mod+K'] } }
+    const hydrate = vi
+      .fn()
+      .mockResolvedValueOnce(snapshot)
+      .mockImplementationOnce(async () => {
+        needsRetry = false
+        return recovered
+      })
+    const onChanged = vi.fn()
+
+    try {
+      registerKeybindingHandlers(
+        {
+          hydrate,
+          needsHydrationRetry: () => needsRetry,
+          getSnapshot: () => snapshot
+        } as never,
+        onChanged
+      )
+      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(100)
+
+      expect(hydrate).toHaveBeenCalledTimes(2)
+      expect(send).toHaveBeenCalledWith('keybindings:changed', recovered)
+      expect(rebuildAppMenuMock).toHaveBeenCalledOnce()
+      expect(onChanged).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('deduplicates startup hydration across handler registration', async () => {
+    let release!: (value: typeof snapshot) => void
+    const hydrate = vi.fn(
+      async () =>
+        await new Promise<typeof snapshot>((resolve) => {
+          release = resolve
+        })
+    )
+    let needsRetry = true
+    const service = {
+      hydrate,
+      needsHydrationRetry: () => needsRetry,
+      getSnapshot: () => snapshot
+    } as never
+
+    registerKeybindingHandlers(service)
+    registerKeybindingHandlers(service)
+
+    expect(hydrate).toHaveBeenCalledOnce()
+    needsRetry = false
+    release(snapshot)
+    await Promise.resolve()
   })
 })

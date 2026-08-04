@@ -170,6 +170,15 @@ describe('profile index store', () => {
     expect(recovered.profiles.length).toBeGreaterThanOrEqual(2)
   })
 
+  it('serves the ordinary profile list from the startup snapshot', async () => {
+    const store = await loadProfileIndexStore()
+    store.ensureActiveOrcaProfile()
+    const before = store.getOrcaProfileListSnapshot()
+    writeFileSync(store.getOrcaProfileIndexPath(), '{ not json', 'utf-8')
+
+    expect(store.getOrcaProfileListSnapshot()).toEqual(before)
+  })
+
   it('rejects profile ids that are not safe path segments', async () => {
     const store = await loadProfileIndexStore()
     const indexPath = store.getOrcaProfileIndexPath()

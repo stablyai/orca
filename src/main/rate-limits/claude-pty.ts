@@ -3,15 +3,14 @@ driving, parser, timers, and teardown in one state machine; splitting it would
 make the lifecycle harder to audit. */
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
 import { buildConfiguredProxyEnv, type NetworkProxySettings } from '../../shared/network-proxy'
-import { resolveClaudeCommand } from '../codex-cli/command'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 import { applyClaudeEnvPatch } from '../claude-accounts/environment'
 import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
 import { cleanupHiddenRateLimitPty, registerHiddenRateLimitPty } from './hidden-pty-cleanup'
 import { extractClaudePtyResetMetadata } from './claude-pty-reset-parser'
 import {
-  getHiddenRateLimitWslCwdSetupCommands,
-  resolveHiddenRateLimitPtyCwd
+  getHiddenRateLimitPtyCwdSnapshot,
+  getHiddenRateLimitWslCwdSetupCommands
 } from './hidden-rate-limit-pty-cwd'
 
 const PTY_TIMEOUT_MS = 25_000
@@ -224,6 +223,17 @@ export async function fetchViaPty(options?: {
   if (options?.signal?.aborted) {
     return abortedClaudeUsageResult()
   }
+  const cwd = options?.authPreparation?.hiddenPtyCwd ?? getHiddenRateLimitPtyCwdSnapshot().value
+  if (!cwd) {
+    return {
+      provider: 'claude',
+      session: null,
+      weekly: null,
+      updatedAt: Date.now(),
+      error: 'Hidden rate-limit PTY cwd snapshot unavailable',
+      status: 'unavailable'
+    }
+  }
 
   return new Promise<ProviderRateLimits>((resolve) => {
     let output = ''
@@ -235,7 +245,7 @@ export async function fetchViaPty(options?: {
     let stopSettleTimer: ReturnType<typeof setTimeout> | null = null
     let claude21UsageSettleTimer: ReturnType<typeof setTimeout> | null = null
 
-    const claudeCommand = resolveClaudeCommand()
+    const claudeCommand = options?.authPreparation?.command ?? 'claude'
 
     // Why: node-pty cannot spawn .cmd/.bat batch scripts directly on Windows —
     // those need cmd.exe as an interpreter. Always route through cmd.exe on win32
@@ -291,7 +301,7 @@ export async function fetchViaPty(options?: {
       rows: 40,
       // Why: hidden usage PTYs must not inherit the process cwd (e.g. / or a
       // drive root), which can trigger unbounded file discovery.
-      cwd: resolveHiddenRateLimitPtyCwd(),
+      cwd,
       env: spawnEnv
     })
     const termDisposables: { dispose: () => void }[] = [registerHiddenRateLimitPty(term)]

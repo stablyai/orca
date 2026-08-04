@@ -1,18 +1,16 @@
 import { ipcMain } from 'electron'
 import {
   clearMiniMaxSessionCookie,
-  hasMiniMaxSessionCookie,
+  getMiniMaxCredentialSnapshot,
   saveMiniMaxSessionCookie
 } from '../minimax/minimax-cookie-store'
 import { clearMiniMaxSessionCookieJar } from '../rate-limits/minimax-request-context'
 import type { RateLimitService } from '../rate-limits/service'
-
-export type MiniMaxCredentialsStatus = {
-  configured: boolean
-}
+import type { MiniMaxCredentialsStatus } from '../../shared/rate-limit-types'
 
 function getMiniMaxCredentialsStatus(): MiniMaxCredentialsStatus {
-  return { configured: hasMiniMaxSessionCookie() }
+  const snapshot = getMiniMaxCredentialSnapshot()
+  return { ...snapshot, configured: snapshot.value?.configured === true }
 }
 
 // Why: fire-and-forget — callers get the persisted cookie status immediately;

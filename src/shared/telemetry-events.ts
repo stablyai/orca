@@ -266,6 +266,34 @@ const nthRepoAddedSchema = z.number().int().nonnegative().optional()
 
 const appOpenedSchema = z.object({ nth_repo_added: nthRepoAddedSchema }).strict()
 
+const filesystemHostOperationEventSchema = z
+  .object({
+    operation: z.enum([
+      'canonicalize-path',
+      'classify-path',
+      'read-orca-yaml',
+      'read-keybindings',
+      'prepare-keybindings',
+      'read-snapshot-file',
+      'prepare-rate-limit-pty-cwd',
+      'resolve-cli-command',
+      'write-rate-limit-credential'
+    ]),
+    storage_class: z.enum(['home', 'user-data', 'workspace', 'wsl', 'unc']),
+    result: z.enum([
+      'success',
+      'domain-error',
+      'deadline',
+      'outcome-unknown',
+      'unavailable',
+      'rejected'
+    ]),
+    duration: z.enum(['<100ms', '<1s', '<10s', '>=10s']),
+    breaker: z.enum(['closed', 'open', 'probe']),
+    abandoned_children: z.number().int().nonnegative()
+  })
+  .strict()
+
 export const featureInteractionIdSchema = z.enum(FEATURE_INTERACTION_IDS)
 export const featureInteractionCategorySchema = z.enum(FEATURE_INTERACTION_CATEGORIES)
 export const featureInteractionUsageBucketSchema = z.enum(FEATURE_INTERACTION_USAGE_BUCKETS)
@@ -1445,6 +1473,7 @@ export const eventSchemas = {
   agent_hook_unattributed: agentHookUnattributedSchema,
 
   daemon_start_failed: daemonStartFailedSchema,
+  filesystem_host_operation: filesystemHostOperationEventSchema,
   main_thread_hang_detected: mainThreadHangDetectedSchema,
   daemon_lifecycle: daemonLifecycleSchema,
   daemon_audit_eligibility: daemonAuditEligibilitySchema,

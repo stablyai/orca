@@ -25,6 +25,7 @@ import type {
 } from '../shared/types'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
 import type { SetupRunnerShell } from '../shared/setup-runner-command'
+import { readOrcaYamlThroughFilesystemHost } from './filesystem-host/filesystem-host-read-authority'
 
 const HOOK_TIMEOUT = 120_000 // 2 minutes
 
@@ -56,6 +57,14 @@ export function loadHooks(repoPath: string): OrcaHooks | null {
   try {
     const content = readFileSync(yamlPath, 'utf-8')
     return parseOrcaYaml(content)
+  } catch {
+    return null
+  }
+}
+
+export async function loadHooksThroughFilesystemHost(repoPath: string): Promise<OrcaHooks | null> {
+  try {
+    return parseOrcaYaml(await readOrcaYamlThroughFilesystemHost(join(repoPath, 'orca.yaml')))
   } catch {
     return null
   }
@@ -241,6 +250,16 @@ export function getEffectiveHooksFromConfig(
 export function getEffectiveHooks(repo: Repo, worktreePath?: string): OrcaHooks | null {
   const hooksRoot = worktreePath ?? repo.path
   return getEffectiveHooksFromConfig(repo, loadHooks(hooksRoot))
+}
+
+export async function getEffectiveHooksThroughFilesystemHost(
+  repo: Repo,
+  worktreePath?: string
+): Promise<OrcaHooks | null> {
+  return getEffectiveHooksFromConfig(
+    repo,
+    await loadHooksThroughFilesystemHost(worktreePath ?? repo.path)
+  )
 }
 
 export function getEffectiveSetupRunPolicy(repo: Repo): SetupRunPolicy {
@@ -636,10 +655,13 @@ export function runHook(
   cwd: string,
   repo: Repo,
   hooksPath?: string,
-  projectRuntime?: ProjectExecutionRuntimeResolution | HookRuntimeTarget
+  projectRuntime?: ProjectExecutionRuntimeResolution | HookRuntimeTarget,
+  scriptOverride?: string
 ): Promise<{ success: boolean; output: string }> {
-  const hooks = getEffectiveHooks(repo, hooksPath)
-  const script = hooks?.scripts[hookName]
+  const script =
+    scriptOverride === undefined
+      ? getEffectiveHooks(repo, hooksPath)?.scripts[hookName]
+      : scriptOverride
 
   if (!script) {
     return Promise.resolve({ success: true, output: '' })

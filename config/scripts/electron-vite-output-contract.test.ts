@@ -77,6 +77,10 @@ describe('Electron Vite output contract', () => {
     expect(output.format).toBe('cjs')
     expect(output.entryFileNames).toBe('[name].js')
     expect(output.chunkFileNames).toBe('chunks/[name]-[hash].js')
+    const input = electronViteConfig.main?.build?.rollupOptions?.input
+    expect(input).toMatchObject({
+      'filesystem-host-entry': expect.stringContaining('filesystem-host-entry.ts')
+    })
   })
 
   it('externalizes packaged dependencies but bundles the daemon xterm graph', () => {

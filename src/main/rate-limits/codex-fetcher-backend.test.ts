@@ -1,4 +1,3 @@
-import { join } from 'node:path'
 import { cancelTrackingResponse } from '../lib/unread-response-body.test-fixtures'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -17,6 +16,13 @@ vi.mock('./codex-auth-presence', () => ({
 
 import { consumeCodexRateLimitResetCredit, fetchCodexRateLimits } from './codex-fetcher'
 
+const authSnapshot = {
+  status: 'present' as const,
+  authJson: JSON.stringify({
+    tokens: { access_token: 'access-token', account_id: 'account-id' }
+  })
+}
+
 describe('Codex backend rate-limit requests', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -31,11 +37,6 @@ describe('Codex backend rate-limit requests', () => {
   })
 
   it('uses the official backend usage contract without spawning Codex', async () => {
-    readFileMock.mockResolvedValue(
-      JSON.stringify({
-        tokens: { access_token: 'access-token', account_id: 'account-id' }
-      })
-    )
     vi.mocked(fetch)
       .mockResolvedValueOnce({
         ok: true,
@@ -72,7 +73,8 @@ describe('Codex backend rate-limit requests', () => {
 
     await expect(
       fetchCodexRateLimits({
-        codexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\orca\\account\\home'
+        codexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\orca\\account\\home',
+        authSnapshot
       })
     ).resolves.toMatchObject({
       session: { usedPercent: 12, windowMinutes: 60, resetsAt: 1_800_000_000_000 },
@@ -98,11 +100,6 @@ describe('Codex backend rate-limit requests', () => {
   })
 
   it('classifies a sole seven-day backend primary window as weekly', async () => {
-    readFileMock.mockResolvedValue(
-      JSON.stringify({
-        tokens: { access_token: 'access-token', account_id: 'account-id' }
-      })
-    )
     vi.mocked(fetch)
       .mockResolvedValueOnce({
         ok: true,
@@ -125,7 +122,8 @@ describe('Codex backend rate-limit requests', () => {
 
     await expect(
       fetchCodexRateLimits({
-        codexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\orca\\account\\home'
+        codexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\orca\\account\\home',
+        authSnapshot
       })
     ).resolves.toMatchObject({
       session: null,
@@ -137,78 +135,58 @@ describe('Codex backend rate-limit requests', () => {
     expect(ptySpawnMock).not.toHaveBeenCalled()
   })
 
-  it('aborts callers while sharing one stalled backend auth read', async () => {
-    let resolveRead!: (content: string) => void
-    readFileMock.mockImplementation(
-      () =>
-        new Promise<string>((resolve) => {
-          resolveRead = resolve
-        })
-    )
-    const firstController = new AbortController()
-    const secondController = new AbortController()
+  it('uses injected auth concurrently without reading credentials from disk', async () => {
     const codexHomePath = '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex'
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        rate_limit: {
+          primary_window: { used_percent: 10, limit_window_seconds: 3_600 },
+          secondary_window: { used_percent: 20, limit_window_seconds: 604_800 }
+        },
+        rate_limit_reset_credits: { available_count: 0 }
+      })
+    } as Response)
 
-    const first = fetchCodexRateLimits({ codexHomePath, signal: firstController.signal })
-    const second = fetchCodexRateLimits({ codexHomePath, signal: secondController.signal })
-    await vi.advanceTimersByTimeAsync(0)
-    expect(readFileMock).toHaveBeenCalledTimes(1)
-    expect(readFileMock).toHaveBeenCalledWith(expect.stringContaining('auth.json'), 'utf8')
+    await Promise.all([
+      fetchCodexRateLimits({ codexHomePath, authSnapshot }),
+      fetchCodexRateLimits({ codexHomePath, authSnapshot })
+    ])
 
-    firstController.abort()
-    secondController.abort()
-
-    await expect(first).resolves.toMatchObject({
-      provider: 'codex',
-      status: 'error',
-      error: 'Rate-limit fetch aborted'
-    })
-    await expect(second).resolves.toMatchObject({
-      provider: 'codex',
-      status: 'error',
-      error: 'Rate-limit fetch aborted'
-    })
-    expect(fetch).not.toHaveBeenCalled()
+    expect(readFileMock).not.toHaveBeenCalled()
+    expect(fetch).toHaveBeenCalledTimes(2)
     expect(childSpawnMock).not.toHaveBeenCalled()
     expect(ptySpawnMock).not.toHaveBeenCalled()
-    resolveRead('{}')
-    await vi.advanceTimersByTimeAsync(0)
   })
 
-  it('applies the backend deadline while auth reading is still pending', async () => {
-    let resolveRead!: (content: string) => void
-    readFileMock.mockImplementation(
-      () =>
-        new Promise<string>((resolve) => {
-          resolveRead = resolve
-        })
-    )
+  it('applies the backend deadline to reset requests', async () => {
     const timeoutController = new AbortController()
     const timeout = vi.spyOn(AbortSignal, 'timeout').mockReturnValueOnce(timeoutController.signal)
     const deadlineError = new Error('backend deadline')
+    vi.mocked(fetch).mockImplementation(
+      (_url, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          const signal = init?.signal
+          signal?.addEventListener('abort', () => reject(signal.reason), { once: true })
+        })
+    )
 
     const result = consumeCodexRateLimitResetCredit({
       codexHomePath: '/managed/deadline-home',
+      authSnapshot,
       idempotencyKey: 'redeem-timeout'
     })
     await vi.advanceTimersByTimeAsync(0)
     // Why: redeem is user-triggered, so it gets the longer redeem deadline.
     expect(timeout).toHaveBeenCalledWith(30_000)
-    expect(readFileMock).toHaveBeenCalledWith(join('/managed/deadline-home', 'auth.json'), 'utf8')
+    expect(readFileMock).not.toHaveBeenCalled()
 
     timeoutController.abort(deadlineError)
 
     await expect(result).rejects.toBe(deadlineError)
-    resolveRead('{}')
-    await vi.advanceTimersByTimeAsync(0)
   })
 
   it('consumes a reset credit with the official payload and bounded request signal', async () => {
-    readFileMock.mockResolvedValue(
-      JSON.stringify({
-        tokens: { access_token: 'access-token', account_id: 'account-id' }
-      })
-    )
     vi.mocked(fetch).mockResolvedValue({
       ok: true,
       json: async () => ({ code: 'already_redeemed' })
@@ -217,6 +195,7 @@ describe('Codex backend rate-limit requests', () => {
     await expect(
       consumeCodexRateLimitResetCredit({
         codexHomePath: '/managed/codex-home',
+        authSnapshot,
         idempotencyKey: 'redeem-123'
       })
     ).resolves.toBe('alreadyRedeemed')
@@ -236,12 +215,18 @@ describe('Codex backend rate-limit requests', () => {
     )
   })
 
-  it('cancels the unread error-response body so bundled undici cannot crash on socket close', async () => {
-    readFileMock.mockResolvedValue(
-      JSON.stringify({
-        tokens: { access_token: 'access-token', account_id: 'account-id' }
+  it('rejects corrupt auth JSON without issuing a reset request', async () => {
+    await expect(
+      consumeCodexRateLimitResetCredit({
+        authSnapshot: { status: 'present', authJson: '{invalid' },
+        idempotencyKey: 'corrupt-auth'
       })
-    )
+    ).rejects.toThrow('Codex not signed in')
+
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('cancels the unread error-response body so bundled undici cannot crash on socket close', async () => {
     let cancelledBodies = 0
     vi.mocked(fetch).mockResolvedValue(
       cancelTrackingResponse(429, () => {
@@ -252,6 +237,7 @@ describe('Codex backend rate-limit requests', () => {
     await expect(
       consumeCodexRateLimitResetCredit({
         codexHomePath: '/managed/codex-home',
+        authSnapshot,
         idempotencyKey: 'redeem-429'
       })
     ).rejects.toThrow('Codex reset failed: HTTP 429')

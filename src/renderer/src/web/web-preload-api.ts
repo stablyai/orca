@@ -2882,14 +2882,24 @@ function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
       | 'copilot'
       | 'hermes'
       | 'devin'
-  ) =>
-    Promise.resolve({
+      | 'kimi'
+  ) => {
+    const fallback = {
       agent,
       state: 'not_installed',
       configPath: '',
       managedHooksPresent: false,
       detail: 'Agent hook status is only available on the Orca server.'
+    } as const
+    return Promise.resolve({
+      ...fallback,
+      value: null,
+      stale: true,
+      age: null,
+      availability: 'unavailable',
+      lastError: null
     } as const)
+  }
   return {
     claudeStatus: () => status('claude'),
     openClaudeStatus: () => status('openclaude'),
@@ -2903,7 +2913,8 @@ function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
     grokStatus: () => status('grok'),
     copilotStatus: () => status('copilot'),
     hermesStatus: () => status('hermes'),
-    devinStatus: () => status('devin')
+    devinStatus: () => status('devin'),
+    kimiStatus: () => status('kimi')
   }
 }
 
@@ -3029,7 +3040,13 @@ function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimits']> {
 }
 
 function createMiniMaxCredentialsApi(): NonNullable<Partial<PreloadApi>['minimaxCredentials']> {
-  const notConfigured = { configured: false }
+  const notConfigured = {
+    configured: false,
+    value: null,
+    stale: false,
+    age: 0,
+    availability: 'missing' as const
+  }
   const unsupportedError = new Error('MiniMax cookie storage is only available in the desktop app.')
   return {
     getStatus: () => Promise.resolve(notConfigured),
@@ -3044,7 +3061,11 @@ function createGrokAccountsApi(): NonNullable<Partial<PreloadApi>['grokAccounts'
     email: null,
     teamId: null,
     tokenFresh: false,
-    error: null
+    error: null,
+    value: null,
+    stale: false,
+    age: 0,
+    availability: 'missing' as const
   }
   return {
     getStatus: () => Promise.resolve(unsigned)

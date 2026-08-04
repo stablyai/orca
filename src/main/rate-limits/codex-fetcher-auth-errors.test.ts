@@ -24,7 +24,21 @@ vi.mock('./codex-auth-presence', () => ({
   probeCodexAuthPresence: vi.fn(() => 'present')
 }))
 
-import { fetchCodexRateLimits } from './codex-fetcher'
+import {
+  fetchCodexRateLimits as fetchCodexRateLimitsImpl,
+  type FetchCodexRateLimitsOptions
+} from './codex-fetcher'
+
+function fetchCodexRateLimits(
+  options: FetchCodexRateLimitsOptions = {}
+): ReturnType<typeof fetchCodexRateLimitsImpl> {
+  return fetchCodexRateLimitsImpl({
+    codexCommand: 'codex',
+    hiddenPtyCwd: process.cwd(),
+    authSnapshot: { status: 'present', authJson: '{}' },
+    ...options
+  })
+}
 
 function makeDisposable() {
   return { dispose: vi.fn() }

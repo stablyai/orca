@@ -10,6 +10,7 @@
     "../src/main/agent-hooks/installer-utils.ts",
     "../src/main/agent-hooks/installer-utils-remote.ts",
     "../src/main/agent-hooks/local-agent-cli-presence.ts",
+    "../src/main/agent-hooks/install-status-snapshot-store.ts",
     "../src/main/agent-hooks/managed-agent-hook-controls.ts",
     "../src/main/agent-hooks/managed-agent-hook-registry.ts",
     "../src/main/amp/hook-service.ts",

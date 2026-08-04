@@ -14,6 +14,23 @@ const transferPaneAuthority = vi.fn()
 const canTransferPaneAuthority = vi.fn(() => true)
 const getStatusSnapshot = vi.fn()
 const inferInterrupt = vi.fn()
+const readInstallStatusSnapshot = vi.fn((agent: string) => {
+  const value = {
+    agent,
+    state: 'not_installed',
+    configPath: `/config/${agent}`,
+    managedHooksPresent: false,
+    detail: null
+  }
+  return {
+    ...value,
+    value,
+    stale: false,
+    age: 0,
+    availability: 'missing',
+    lastError: null
+  }
+})
 const clearMigrationUnsupportedPtysByTabPrefix = vi.fn()
 const clearMigrationUnsupportedPtysForPaneKey = vi.fn()
 const onHandlers = new Map<string, (event: unknown, ...args: unknown[]) => void>()
@@ -58,6 +75,10 @@ vi.mock('../agent-hooks/migration-unsupported-pty-state', () => ({
   clearMigrationUnsupportedPtysByTabPrefix,
   clearMigrationUnsupportedPtysForPaneKey,
   getMigrationUnsupportedPtySnapshot: vi.fn(() => [])
+}))
+
+vi.mock('../agent-hooks/install-status-snapshot-store', () => ({
+  agentHookInstallStatusSnapshots: { read: readInstallStatusSnapshot }
 }))
 
 vi.mock('../claude/hook-service', () => ({
@@ -112,6 +133,7 @@ beforeEach(() => {
   canTransferPaneAuthority.mockReturnValue(true)
   getStatusSnapshot.mockReset()
   inferInterrupt.mockReset()
+  readInstallStatusSnapshot.mockClear()
   clearMigrationUnsupportedPtysByTabPrefix.mockReset()
   clearMigrationUnsupportedPtysForPaneKey.mockReset()
   onHandlers.clear()
@@ -215,7 +237,12 @@ describe('agentHooks:antigravityStatus IPC', () => {
 
     const handler = handleHandlers.get('agentHooks:antigravityStatus')
     expect(handler).toBeDefined()
-    expect(handler!({})).toEqual({ agent: 'antigravity', state: 'absent' })
+    expect(handler!({})).toMatchObject({
+      agent: 'antigravity',
+      state: 'not_installed',
+      availability: 'missing'
+    })
+    expect(readInstallStatusSnapshot).toHaveBeenCalledWith('antigravity')
   })
 })
 
@@ -226,7 +253,11 @@ describe('agentHooks:ampStatus IPC', () => {
 
     const handler = handleHandlers.get('agentHooks:ampStatus')
     expect(handler).toBeDefined()
-    expect(handler!({})).toEqual({ agent: 'amp', state: 'absent' })
+    expect(handler!({})).toMatchObject({
+      agent: 'amp',
+      state: 'not_installed',
+      availability: 'missing'
+    })
   })
 })
 
@@ -237,7 +268,11 @@ describe('agentHooks:openClaudeStatus IPC', () => {
 
     const handler = handleHandlers.get('agentHooks:openClaudeStatus')
     expect(handler).toBeDefined()
-    expect(handler!({})).toEqual({ agent: 'openclaude', state: 'absent' })
+    expect(handler!({})).toMatchObject({
+      agent: 'openclaude',
+      state: 'not_installed',
+      availability: 'missing'
+    })
   })
 })
 
@@ -248,7 +283,11 @@ describe('agentHooks:commandCodeStatus IPC', () => {
 
     const handler = handleHandlers.get('agentHooks:commandCodeStatus')
     expect(handler).toBeDefined()
-    expect(handler!({})).toEqual({ agent: 'command-code', state: 'absent' })
+    expect(handler!({})).toMatchObject({
+      agent: 'command-code',
+      state: 'not_installed',
+      availability: 'missing'
+    })
   })
 })
 
@@ -259,7 +298,11 @@ describe('agentHooks:devinStatus IPC', () => {
 
     const handler = handleHandlers.get('agentHooks:devinStatus')
     expect(handler).toBeDefined()
-    expect(handler!({})).toEqual({ agent: 'devin', state: 'absent' })
+    expect(handler!({})).toMatchObject({
+      agent: 'devin',
+      state: 'not_installed',
+      availability: 'missing'
+    })
   })
 })
 
@@ -270,7 +313,11 @@ describe('agentHooks:kimiStatus IPC', () => {
 
     const handler = handleHandlers.get('agentHooks:kimiStatus')
     expect(handler).toBeDefined()
-    expect(handler!({})).toEqual({ agent: 'kimi', state: 'absent' })
+    expect(handler!({})).toMatchObject({
+      agent: 'kimi',
+      state: 'not_installed',
+      availability: 'missing'
+    })
   })
 })
 

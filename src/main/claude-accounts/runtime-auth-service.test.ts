@@ -3883,6 +3883,7 @@ describe('ClaudeRuntimeAuthService', () => {
       // rotation, so the proactive refresh must be skipped entirely.
       expect(refreshClaudeOauthCredentials).not.toHaveBeenCalled()
       expect(preparation.managedRefreshDeferredByLivePty).toBe(true)
+      expect(preparation.command).toEqual(expect.any(String))
     } finally {
       markClaudePtyExited('pty-live-1')
       vi.mocked(isOauthTokenExpiring).mockReturnValue(false)

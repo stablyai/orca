@@ -1496,9 +1496,16 @@ describe('web MiniMax preload API', () => {
   it('exposes desktop-only MiniMax credential reads as unconfigured and rejects saves', async () => {
     const { api } = await installApi('Linux')
 
-    await expect(api.minimaxCredentials.getStatus()).resolves.toEqual({ configured: false })
+    const notConfigured = {
+      configured: false,
+      value: null,
+      stale: false,
+      age: 0,
+      availability: 'missing'
+    }
+    await expect(api.minimaxCredentials.getStatus()).resolves.toEqual(notConfigured)
     await expect(api.minimaxCredentials.saveCookie('_token=abc')).rejects.toThrow(/desktop app/i)
-    await expect(api.minimaxCredentials.clearCookie()).resolves.toEqual({ configured: false })
+    await expect(api.minimaxCredentials.clearCookie()).resolves.toEqual(notConfigured)
   })
 })
 

@@ -219,6 +219,8 @@ export const electronViteConfig: UserConfig = {
           // Why: forked with ELECTRON_RUN_AS_NODE so @parcel/watcher faults
           // can't take down the main process (issue #7547).
           'parcel-watcher-process-entry': resolve('src/main/ipc/parcel-watcher-process-entry.ts'),
+          // Why: hostile filesystem syscalls run in a supervised plain-Node process.
+          'filesystem-host-entry': resolve('src/main/filesystem-host/filesystem-host-entry.ts'),
           // Why: a worker thread survives the macOS 26 AppKit main-thread deadlock
           // without paying for another Electron process.
           'main-thread-hang-watchdog-entry': resolve(

@@ -133,6 +133,7 @@ import { localLogFileIdentity } from '../ai-vault/local-log-tail-reader'
 import { sanitizeLocalDownloadFilename } from '../local-download-filename'
 import { registerFilesystemDownloadFolderHandlers } from './filesystem-download-folder'
 import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
+import { orcaYamlSnapshots } from '../git/orca-yaml-snapshot-store'
 import { createSenderScopedRequestCancellations } from './sender-scoped-request-cancellation'
 
 // Why: Monaco degrades features on large files like VS Code, so a 5MB block would needlessly lock out ordinary JSON/log files.
@@ -842,6 +843,9 @@ export function registerFilesystemHandlers(
       }
 
       await writeFile(filePath, args.content, 'utf-8')
+      if (getRuntimePathBasename(filePath) === 'orca.yaml') {
+        orcaYamlSnapshots.publishContent(dirname(filePath), args.content)
+      }
     }
   )
 
@@ -872,14 +876,23 @@ export function registerFilesystemHandlers(
 
       // Why: WSL UNC targets have no Recycle Bin (shell.trashItem throws), so hard-delete via `rm` inside the distro (issue #6415).
       if (await tryDeleteWslUncPath(targetPath, { recursive: args.recursive })) {
+        if (getRuntimePathBasename(targetPath) === 'orca.yaml') {
+          orcaYamlSnapshots.publishContent(dirname(targetPath), null)
+        }
         return
       }
 
       // Why: swallow ENOENT so an external delete racing this UI delete stays idempotent (design §7.1).
       try {
         await shell.trashItem(targetPath)
+        if (getRuntimePathBasename(targetPath) === 'orca.yaml') {
+          orcaYamlSnapshots.publishContent(dirname(targetPath), null)
+        }
       } catch (error) {
         if (isENOENT(error)) {
+          if (getRuntimePathBasename(targetPath) === 'orca.yaml') {
+            orcaYamlSnapshots.publishContent(dirname(targetPath), null)
+          }
           return
         }
         throw error
@@ -889,8 +902,8 @@ export function registerFilesystemHandlers(
 
   registerFilesystemMutationHandlers(store)
 
-  ipcMain.handle('fs:authorizeExternalPath', (_event, args: { targetPath: string }): void => {
-    authorizeExternalPath(args.targetPath)
+  ipcMain.handle('fs:authorizeExternalPath', async (_event, args: { targetPath: string }) => {
+    await authorizeExternalPath(args.targetPath)
   })
 
   ipcMain.handle(

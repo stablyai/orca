@@ -31,8 +31,11 @@ vi.mock('./managed-agent-hook-registry', () => ({
 
 import {
   applyAgentStatusHooksEnabled,
+  getManagedAgentHookStatuses,
+  getManagedAgentHookStatusSnapshots,
   installManagedAgentHooks
 } from './managed-agent-hook-controls'
+import { agentHookInstallStatusSnapshots } from './install-status-snapshot-store'
 
 function status(agent: 'claude' | 'codex', state: 'installed' | 'not_installed') {
   return {
@@ -47,6 +50,7 @@ function status(agent: 'claude' | 'codex', state: 'installed' | 'not_installed')
 describe('managed agent hook controls', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    agentHookInstallStatusSnapshots.resetForTests()
     mocks.installClaude.mockReturnValue(status('claude', 'installed'))
     mocks.installCodex.mockReturnValue(status('codex', 'installed'))
     mocks.removeClaude.mockReturnValue(status('claude', 'not_installed'))
@@ -71,6 +75,12 @@ describe('managed agent hook controls', () => {
       }),
       expect.objectContaining({ agent: 'codex', state: 'installed' })
     ])
+    expect(agentHookInstallStatusSnapshots.read('codex')).toMatchObject({
+      state: 'installed',
+      value: expect.objectContaining({ state: 'installed' }),
+      stale: false,
+      availability: 'ready'
+    })
   })
 
   it('fails closed when CLI detection rejects', async () => {
@@ -91,6 +101,39 @@ describe('managed agent hook controls', () => {
         state: 'skipped',
         skipReason: 'cli_presence_unknown'
       })
+    ])
+  })
+
+  it('serves the desktop status snapshots from memory without invoking filesystem readers', () => {
+    agentHookInstallStatusSnapshots.publish(status('claude', 'installed'))
+
+    expect(getManagedAgentHookStatusSnapshots()).toEqual([
+      expect.objectContaining({ agent: 'claude', state: 'installed', stale: false }),
+      expect.objectContaining({ agent: 'codex', state: 'error' })
+    ])
+    expect(mocks.statusClaude).not.toHaveBeenCalled()
+    expect(mocks.statusCodex).not.toHaveBeenCalled()
+  })
+
+  it('reads status from disk for the CLI, where nothing has published a snapshot', () => {
+    mocks.statusClaude.mockReturnValue(status('claude', 'installed'))
+    mocks.statusCodex.mockReturnValue(status('codex', 'not_installed'))
+
+    expect(getManagedAgentHookStatuses()).toEqual([
+      expect.objectContaining({ agent: 'claude', state: 'installed' }),
+      expect.objectContaining({ agent: 'codex', state: 'not_installed' })
+    ])
+  })
+
+  it('reports a per-agent error when a disk status read throws', () => {
+    mocks.statusClaude.mockImplementation(() => {
+      throw new Error('config unreadable')
+    })
+    mocks.statusCodex.mockReturnValue(status('codex', 'installed'))
+
+    expect(getManagedAgentHookStatuses()).toEqual([
+      expect.objectContaining({ agent: 'claude', state: 'error' }),
+      expect.objectContaining({ agent: 'codex', state: 'installed' })
     ])
   })
 

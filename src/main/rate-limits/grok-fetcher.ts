@@ -4,12 +4,8 @@ import type {
   RateLimitWindow,
   UsageRateLimitMetadata
 } from '../../shared/rate-limit-types'
-import {
-  isGrokAccessTokenFresh,
-  readGrokAuthSession,
-  type GrokAuthReadResult,
-  type GrokAuthSession
-} from './grok-auth'
+import type { MemorySnapshot } from '../../shared/memory-snapshot'
+import { isGrokAccessTokenFresh, type GrokAuthSession } from './grok-auth'
 
 // Why: billing URL and headers must match Grok CLI or xAI rejects the request.
 const GROK_CLI_PROXY_BASE =
@@ -238,18 +234,21 @@ async function fetchMonthlyUsageFallback(
   return { kind: 'window', window: mapMonthlyUsage(config) }
 }
 
-// Why: Orca never runs grok login; it only reads the session file the CLI updates.
-export async function fetchGrokRateLimits(
-  options: { signal?: AbortSignal; authReadResult?: GrokAuthReadResult } = {}
-): Promise<ProviderRateLimits> {
-  const readResult = options.authReadResult ?? readGrokAuthSession()
-  if (readResult.status === 'missing') {
+export async function fetchGrokRateLimits(options: {
+  signal?: AbortSignal
+  authSnapshot: MemorySnapshot<GrokAuthSession>
+}): Promise<ProviderRateLimits> {
+  const snapshot = options.authSnapshot
+  if (snapshot.availability === 'denied') {
+    return result('error', 'Grok credential access was denied')
+  }
+  if (snapshot.stale || snapshot.availability === 'unavailable') {
+    return result('error', 'Grok credentials are unavailable — retry sign-in refresh')
+  }
+  if (snapshot.availability === 'missing' || snapshot.value === null) {
     return result('unavailable', 'Not signed in to Grok — run grok login')
   }
-  if (readResult.status === 'error') {
-    return result('error', readResult.error)
-  }
-  const session = readResult.session
+  const session = snapshot.value
   if (!isGrokAccessTokenFresh(session)) {
     // Why: a genuine sign-out returns 'missing' earlier, so reaching here always
     // means a stored, refreshable session — Grok CLI refreshes the access token

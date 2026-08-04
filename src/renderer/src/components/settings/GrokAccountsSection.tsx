@@ -24,6 +24,10 @@ export function GrokAccountsSection(): React.JSX.Element {
     } catch (error) {
       console.error('Failed to load Grok account status:', error)
       setStatus({
+        value: null,
+        stale: true,
+        age: null,
+        availability: 'unavailable',
         signedIn: false,
         email: null,
         teamId: null,
@@ -52,6 +56,9 @@ export function GrokAccountsSection(): React.JSX.Element {
 
   const signedIn = status?.signedIn === true
   const tokenFresh = status?.tokenFresh === true
+  const statusUnavailable = Boolean(
+    status?.stale || status?.availability === 'denied' || status?.availability === 'unavailable'
+  )
   // Why: unified-billing accounts have no weekly credits; surface their
   // monthly included usage instead of hiding the usage row entirely.
   const usageIsWeekly = Boolean(grokUsage?.weekly)
@@ -100,6 +107,21 @@ export function GrokAccountsSection(): React.JSX.Element {
             <p className="text-xs text-muted-foreground">
               {translate('auto.components.settings.GrokAccountsSection.ad47a33f72', 'Loading…')}
             </p>
+          ) : statusUnavailable ? (
+            <>
+              <p className="text-xs font-medium">
+                {translate(
+                  'auto.components.settings.GrokAccountsSection.729c8993a1',
+                  'Grok sign-in status unavailable'
+                )}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.settings.GrokAccountsSection.041fa62bc9',
+                  'Orca kept the last known sign-in state. Click Refresh usage to retry.'
+                )}
+              </p>
+            </>
           ) : signedIn ? (
             <>
               <p className="truncate text-xs font-medium">

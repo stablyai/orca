@@ -72,7 +72,7 @@ export async function ensureDefaultFloatingWorkspacePath(): Promise<string> {
   await mkdir(cwd, { recursive: true })
   // Why: the default floating workspace lives outside repo roots by design;
   // authorize only this app-owned directory instead of widening access to ~.
-  authorizeExternalPath(cwd)
+  await authorizeExternalPath(cwd)
   return cwd
 }
 
@@ -96,7 +96,7 @@ export async function resolveFloatingTerminalCwd(
   if (isTrustedFloatingWorkspaceDirectory(canonicalCwd, store.getSettings())) {
     // Why: picker-approved directories are persisted as explicit grants, so a
     // restart can restore file creation access without trusting arbitrary text.
-    authorizeExternalPath(canonicalCwd)
+    await authorizeExternalPath(canonicalCwd)
     return canonicalCwd
   }
 
@@ -112,7 +112,7 @@ export async function grantFloatingWorkspaceDirectory(
   if (!canonicalDir) {
     return
   }
-  authorizeExternalPath(canonicalDir)
+  await authorizeExternalPath(canonicalDir)
   const trustedDirectories = await getPreservedTrustedFloatingWorkspaceDirectories(
     store.getSettings()
   )

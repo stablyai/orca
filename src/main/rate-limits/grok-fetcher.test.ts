@@ -26,6 +26,26 @@ vi.mock('node:fs', () => ({
 vi.mock('node:os', () => ({ homedir: () => '/home/test' }))
 
 import { fetchGrokRateLimits } from './grok-fetcher'
+import { parseGrokAuthSession, type GrokAuthSession } from './grok-auth'
+import type { MemorySnapshot } from '../../shared/memory-snapshot'
+import type { ProviderRateLimits } from '../../shared/rate-limit-types'
+
+function currentAuthSnapshot(): MemorySnapshot<GrokAuthSession> {
+  if (authState.readError) {
+    return { value: null, stale: true, age: null, availability: 'unavailable' }
+  }
+  if (authState.file === null) {
+    return { value: null, stale: false, age: 0, availability: 'missing' }
+  }
+  const result = parseGrokAuthSession(authState.file)
+  return result.status === 'ok'
+    ? { value: result.session, stale: false, age: 0, availability: 'ready' }
+    : { value: null, stale: result.status === 'error', age: 0, availability: 'missing' }
+}
+
+function fetchCurrent(options: { signal?: AbortSignal } = {}): Promise<ProviderRateLimits> {
+  return fetchGrokRateLimits({ ...options, authSnapshot: currentAuthSnapshot() })
+}
 
 function jsonResponse(body: unknown, status = 200): Response {
   return {
@@ -71,9 +91,18 @@ describe('fetchGrokRateLimits', () => {
   })
 
   it('returns unavailable when not signed in', async () => {
-    const result = await fetchGrokRateLimits()
+    const result = await fetchCurrent()
     expect(result.provider).toBe('grok')
     expect(result.status).toBe('unavailable')
+    expect(netFetchMock).not.toHaveBeenCalled()
+  })
+
+  it('reports transient credential reads as errors so prior usage can survive', async () => {
+    authState.readError = new Error('host unavailable')
+
+    const result = await fetchCurrent()
+
+    expect(result.status).toBe('error')
     expect(netFetchMock).not.toHaveBeenCalled()
   })
 
@@ -81,7 +110,7 @@ describe('fetchGrokRateLimits', () => {
     authState.file = freshAuthJson()
     netFetchMock.mockResolvedValueOnce(jsonResponse(BILLING_RESPONSE))
 
-    const result = await fetchGrokRateLimits()
+    const result = await fetchCurrent()
     expect(result.status).toBe('ok')
     expect(result.weekly?.usedPercent).toBe(42)
     expect(result.weekly?.windowMinutes).toBe(10_080)
@@ -117,7 +146,7 @@ describe('fetchGrokRateLimits', () => {
       })
     )
 
-    const result = await fetchGrokRateLimits()
+    const result = await fetchCurrent()
     expect(result.status).toBe('ok')
     expect(result.weekly?.usedPercent).toBe(0)
     expect(result.weekly?.resetsAt).toBe(Date.parse('2026-07-24T19:38:56.948570+00:00'))
@@ -127,7 +156,7 @@ describe('fetchGrokRateLimits', () => {
 
   it('returns unavailable when not signed in even if a token-less auth file exists', async () => {
     authState.file = JSON.stringify({})
-    const result = await fetchGrokRateLimits()
+    const result = await fetchCurrent()
     expect(result.status).toBe('unavailable')
     expect(netFetchMock).not.toHaveBeenCalled()
   })
@@ -138,7 +167,7 @@ describe('fetchGrokRateLimits', () => {
       .mockResolvedValueOnce(jsonResponse({ config: { subscriptionTier: 'Enterprise' } }))
       .mockResolvedValueOnce(jsonResponse({ config: { subscriptionTier: 'Enterprise' } }))
 
-    const result = await fetchGrokRateLimits()
+    const result = await fetchCurrent()
     expect(result.status).toBe('unavailable')
     expect(result.weekly).toBeNull()
     expect(result.monthly).toBeUndefined()
@@ -171,7 +200,7 @@ describe('fetchGrokRateLimits', () => {
         })
       )
 
-    const result = await fetchGrokRateLimits()
+    const result = await fetchCurrent()
     expect(result.status).toBe('ok')
     expect(result.error).toBeNull()
     expect(result.weekly).toBeNull()
@@ -199,7 +228,7 @@ describe('fetchGrokRateLimits', () => {
       .mockResolvedValueOnce(jsonResponse({ config: { isUnifiedBillingUser: true } }))
       .mockResolvedValueOnce(jsonResponse({}, 500))
 
-    const result = await fetchGrokRateLimits()
+    const result = await fetchCurrent()
     expect(result.status).toBe('error')
     expect(result.error).toBe('Grok usage request failed (HTTP 500)')
   })
@@ -210,7 +239,7 @@ describe('fetchGrokRateLimits', () => {
       .mockResolvedValueOnce(jsonResponse({ config: { isUnifiedBillingUser: true } }))
       .mockRejectedValueOnce(new Error('network down'))
 
-    const result = await fetchGrokRateLimits()
+    const result = await fetchCurrent()
     expect(result.status).toBe('error')
     expect(result.error).toBe('network down')
   })
@@ -219,7 +248,7 @@ describe('fetchGrokRateLimits', () => {
     authState.file = freshAuthJson()
     netFetchMock.mockResolvedValueOnce(jsonResponse(BILLING_RESPONSE))
 
-    const result = await fetchGrokRateLimits()
+    const result = await fetchCurrent()
     expect(result.status).toBe('ok')
     expect(netFetchMock).toHaveBeenCalledTimes(1)
   })
@@ -228,7 +257,7 @@ describe('fetchGrokRateLimits', () => {
     authState.file = freshAuthJson()
     netFetchMock.mockResolvedValueOnce(jsonResponse({}))
 
-    const result = await fetchGrokRateLimits()
+    const result = await fetchCurrent()
     expect(result.status).toBe('unavailable')
   })
 
@@ -245,7 +274,7 @@ describe('fetchGrokRateLimits', () => {
       })
     })
 
-    const resultPromise = fetchGrokRateLimits({ signal: controller.signal })
+    const resultPromise = fetchCurrent({ signal: controller.signal })
     await Promise.resolve()
 
     expect(requestSignal?.aborted).toBe(false)
@@ -264,7 +293,7 @@ describe('fetchGrokRateLimits', () => {
         expires_at: '2000-01-01T00:00:00.000Z'
       }
     })
-    const result = await fetchGrokRateLimits()
+    const result = await fetchCurrent()
     expect(result.status).toBe('error')
     expect(result.error).toMatch(/expired/i)
     expect(result.error).toMatch(/run grok on the computer running Orca/i)

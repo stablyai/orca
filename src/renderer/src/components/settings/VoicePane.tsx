@@ -67,7 +67,11 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
     void window.api.speech
       .getOpenAiApiKeyStatus()
       .then((status) => {
-        if (!cancelled && status.configured !== voiceSettings.openAiApiKeyConfigured) {
+        if (
+          !cancelled &&
+          !status.stale &&
+          status.configured !== voiceSettings.openAiApiKeyConfigured
+        ) {
           updateVoiceSettings({ openAiApiKeyConfigured: status.configured })
           refreshModelStates()
         }

@@ -14,7 +14,20 @@ vi.mock('./codex-auth-presence', () => ({
   probeCodexAuthPresence: vi.fn(async () => 'present')
 }))
 
-import { fetchCodexRateLimits } from './codex-fetcher'
+import { fetchCodexRateLimits as fetchCodexRateLimitsImpl } from './codex-fetcher'
+
+function fetchCodexRateLimits(): ReturnType<typeof fetchCodexRateLimitsImpl> {
+  return fetchCodexRateLimitsImpl({
+    codexCommand: 'codex',
+    hiddenPtyCwd: process.cwd(),
+    authSnapshot: {
+      status: 'present',
+      authJson: JSON.stringify({
+        tokens: { access_token: 'access-token', account_id: 'account-id' }
+      })
+    }
+  })
+}
 
 function makeRpcChild(rateLimitResetCredits?: unknown) {
   const child = new EventEmitter() as EventEmitter & {
@@ -119,11 +132,6 @@ describe('Codex backend session supplement credits', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.clearAllMocks()
-    readFileMock.mockResolvedValue(
-      JSON.stringify({
-        tokens: { access_token: 'access-token', account_id: 'account-id' }
-      })
-    )
     vi.stubGlobal('fetch', vi.fn())
   })
 

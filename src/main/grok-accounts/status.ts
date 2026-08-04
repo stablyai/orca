@@ -1,32 +1,30 @@
-import type { GrokAccountStatus } from '../../shared/rate-limit-types'
-import { isGrokAccessTokenFresh, readGrokAuthSession } from '../rate-limits/grok-auth'
+import type { GrokAccountIdentity, GrokAccountStatus } from '../../shared/rate-limit-types'
+import { isGrokAccessTokenFresh } from '../rate-limits/grok-auth'
+import { getGrokAuthSnapshot } from '../rate-limits/grok-auth-snapshot'
 
 export function getGrokAccountStatus(): GrokAccountStatus {
-  const readResult = readGrokAuthSession()
-  if (readResult.status === 'missing') {
-    return {
-      signedIn: false,
-      email: null,
-      teamId: null,
-      tokenFresh: false,
-      error: null
-    }
-  }
-  if (readResult.status === 'error') {
-    return {
-      signedIn: false,
-      email: null,
-      teamId: null,
-      tokenFresh: false,
-      error: readResult.error
-    }
-  }
-  const session = readResult.session
+  const snapshot = getGrokAuthSnapshot()
+  const session = snapshot.value
+  const value: GrokAccountIdentity | null = session
+    ? {
+        signedIn: true,
+        email: session.email,
+        teamId: session.teamId,
+        tokenFresh: isGrokAccessTokenFresh(session)
+      }
+    : null
   return {
-    signedIn: true,
-    email: session.email,
-    teamId: session.teamId,
-    tokenFresh: isGrokAccessTokenFresh(session),
-    error: null
+    ...snapshot,
+    value,
+    signedIn: value?.signedIn ?? false,
+    email: value?.email ?? null,
+    teamId: value?.teamId ?? null,
+    tokenFresh: value?.tokenFresh ?? false,
+    error:
+      snapshot.availability === 'denied'
+        ? 'Grok auth file access was denied'
+        : snapshot.availability === 'unavailable'
+          ? 'Unable to read Grok auth file'
+          : null
   }
 }

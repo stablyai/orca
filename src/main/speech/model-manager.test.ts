@@ -6,10 +6,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SPEECH_MODEL_CATALOG } from './model-catalog'
 import { ModelManager } from './model-manager'
 
-const { hasOpenAiSpeechApiKeyMock, netRequestMock } = vi.hoisted(() => ({
-  hasOpenAiSpeechApiKeyMock: vi.fn(),
-  netRequestMock: vi.fn()
-}))
+const { getOpenAiSpeechApiKeySnapshotMock, hydrateOpenAiSpeechApiKeySnapshotMock, netRequestMock } =
+  vi.hoisted(() => ({
+    getOpenAiSpeechApiKeySnapshotMock: vi.fn(),
+    hydrateOpenAiSpeechApiKeySnapshotMock: vi.fn(),
+    netRequestMock: vi.fn()
+  }))
 
 vi.mock('electron', () => ({
   app: {
@@ -21,7 +23,8 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('./openai-api-key-store', () => ({
-  hasOpenAiSpeechApiKey: hasOpenAiSpeechApiKeyMock
+  getOpenAiSpeechApiKeySnapshot: getOpenAiSpeechApiKeySnapshotMock,
+  hydrateOpenAiSpeechApiKeySnapshot: hydrateOpenAiSpeechApiKeySnapshotMock
 }))
 
 type ModelManagerInternals = {
@@ -49,8 +52,9 @@ type ModelManagerInternals = {
 describe('ModelManager', () => {
   beforeEach(() => {
     netRequestMock.mockReset()
-    hasOpenAiSpeechApiKeyMock.mockReset()
-    hasOpenAiSpeechApiKeyMock.mockReturnValue(false)
+    getOpenAiSpeechApiKeySnapshotMock.mockReset()
+    hydrateOpenAiSpeechApiKeySnapshotMock.mockReset()
+    getOpenAiSpeechApiKeySnapshotMock.mockReturnValue({ value: false, stale: false })
   })
 
   it('requires pinned, internally consistent metadata for every model file', () => {
@@ -159,12 +163,29 @@ describe('ModelManager', () => {
         status: 'not-downloaded'
       })
 
-      hasOpenAiSpeechApiKeyMock.mockReturnValue(true)
+      getOpenAiSpeechApiKeySnapshotMock.mockReturnValue({ value: true, stale: false })
 
       await expect(manager.getModelState('openai-gpt-4o-mini-transcribe')).resolves.toEqual({
         id: 'openai-gpt-4o-mini-transcribe',
         status: 'ready'
       })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('retries a stale OpenAI key snapshot before reporting cloud model readiness', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
+    try {
+      getOpenAiSpeechApiKeySnapshotMock.mockReturnValue({ value: false, stale: true })
+      hydrateOpenAiSpeechApiKeySnapshotMock.mockResolvedValue({ value: true, stale: false })
+      const manager = new ModelManager(dir)
+
+      await expect(manager.getModelState('openai-gpt-4o-mini-transcribe')).resolves.toEqual({
+        id: 'openai-gpt-4o-mini-transcribe',
+        status: 'ready'
+      })
+      expect(hydrateOpenAiSpeechApiKeySnapshotMock).toHaveBeenCalledOnce()
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
