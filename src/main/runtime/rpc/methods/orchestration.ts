@@ -25,6 +25,7 @@ import { ORCHESTRATION_RUN_METHODS } from './orchestration-runs'
 import { ORCHESTRATION_WORKER_METHODS } from './orchestration-worker-methods'
 import { ORCHESTRATION_FEDERATION_METHODS } from './orchestration-federation-methods'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
+import { parseOrchestrationTaskDepsFlag } from '../../orchestration/task-deps-flag'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RunRow } from '../../orchestration/types'
 import { encodeFederatedControlMessage } from '../../orchestration/federation-control-message'
@@ -1090,18 +1091,9 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
     params: TaskCreateParams,
     handler: (params, { orchestrationCompatibilityEvidence, runtime, legacyCoordinatorRunId }) => {
       const db = runtime.getOrchestrationDb()
-      let deps: string[] | undefined
-      if (params.deps) {
-        try {
-          const parsed = JSON.parse(params.deps)
-          if (!Array.isArray(parsed) || !parsed.every((d) => typeof d === 'string')) {
-            throw new Error('not an array of strings')
-          }
-          deps = parsed
-        } catch {
-          throw new Error('Invalid --deps: must be a JSON array of task IDs')
-        }
-      }
+      // Why: parseOrchestrationTaskDepsFlag keeps canonical JSON and recovers
+      // the WSL quote-stripped form so non-empty --deps stop failing as #12188.
+      const deps = params.deps ? parseOrchestrationTaskDepsFlag(params.deps) : undefined
       const run = resolveRunScope(runtime, {
         runId: params.run,
         callerTerminalHandle: params.callerTerminalHandle,

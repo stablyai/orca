@@ -1765,6 +1765,20 @@ describe('orchestration RPC methods', () => {
       expect(result.task.status).toBe('pending')
     })
 
+    it('creates a task when --deps arrives quote-stripped (WSL bridge form)', async () => {
+      setup()
+      const t1 = db.createTask({ spec: 'first' })
+
+      const result = (await call('orchestration.taskCreate', {
+        spec: 'second',
+        // Why: PS 5.1 native splat drops ", so ["task_x"] becomes [task_x] (#12188).
+        deps: `[${t1.id}]`
+      })) as { task: { id: string; status: string } }
+
+      expect(result.task.status).toBe('pending')
+      expect(db.getTask(result.task.id)?.deps).toBe(JSON.stringify([t1.id]))
+    })
+
     it('records the caller pane, process, and Run generation when creating a task', async () => {
       setup()
       vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>

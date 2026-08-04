@@ -53,7 +53,15 @@ try {
     $env:ORCA_CLI_CWD = $WslCwd
   }
   Push-Location -LiteralPath (Split-Path -Parent $OrcaLauncher)
-  & $OrcaLauncher @ForwardArgs
+  # Why: Windows PowerShell 5.1 drops unescaped ASCII " when building native
+  # argv for orca.exe (#12231). Pre-escape so JSON flags like --deps '["task_x"]'
+  # and terminal send --text keep their quotes (also unblocks #12188).
+  $NativeArgs = @(
+    foreach ($arg in $ForwardArgs) {
+      $arg -replace '(\\\\*)"', '$1$1\\"'
+    }
+  )
+  & $OrcaLauncher @NativeArgs
   if ($null -eq $LASTEXITCODE) {
     if (-not $?) {
       $exitCode = 1
