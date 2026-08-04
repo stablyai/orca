@@ -23,14 +23,13 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuSeparator,
-  DropdownMenuShortcut,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
+import { FilterToggleRow } from './FilterToggleRow'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { searchRepos } from '@/lib/repo-search'
-import { cn } from '@/lib/utils'
 import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
 import { translate } from '@/i18n/i18n'
 
@@ -62,6 +61,10 @@ const SidebarFilter = React.memo(function SidebarFilter({
   const setHideCliCreatedWorkspaces = useAppStore((s) => s.setHideCliCreatedWorkspaces)
   const hideDetachedHeadWorkspaces = useAppStore((s) => s.hideDetachedHeadWorkspaces)
   const setHideDetachedHeadWorkspaces = useAppStore((s) => s.setHideDetachedHeadWorkspaces)
+  const alwaysShowDefaultBranchWorkspace = useAppStore((s) => s.alwaysShowDefaultBranchWorkspace)
+  const setAlwaysShowDefaultBranchWorkspace = useAppStore(
+    (s) => s.setAlwaysShowDefaultBranchWorkspace
+  )
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const setFilterRepoIds = useAppStore((s) => s.setFilterRepoIds)
   const repos = useAppStore((s) => s.repos)
@@ -114,6 +117,9 @@ const SidebarFilter = React.memo(function SidebarFilter({
     hideAutomationGeneratedWorkspaces ||
     hideCliCreatedWorkspaces ||
     hideDetachedHeadWorkspaces ||
+    // Why counted: turning the exemption off is the only way this row narrows
+    // the list, so the badge and Reset filters must both notice it.
+    !alwaysShowDefaultBranchWorkspace ||
     hasRepoFilter
   const activeFilterCount =
     (hasSleepingFilter ? 1 : 0) +
@@ -121,6 +127,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
     (hideAutomationGeneratedWorkspaces ? 1 : 0) +
     (hideCliCreatedWorkspaces ? 1 : 0) +
     (hideDetachedHeadWorkspaces ? 1 : 0) +
+    (alwaysShowDefaultBranchWorkspace ? 0 : 1) +
     selectedCount
 
   const filteredRepos = useMemo(() => searchRepos(repos, query), [repos, query])
@@ -136,6 +143,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
     setHideAutomationGeneratedWorkspaces(false)
     setHideCliCreatedWorkspaces(false)
     setHideDetachedHeadWorkspaces(false)
+    setAlwaysShowDefaultBranchWorkspace(true)
     setFilterRepoIds([])
   }, [
     setShowSleepingWorkspaces,
@@ -143,6 +151,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
     setHideAutomationGeneratedWorkspaces,
     setHideCliCreatedWorkspaces,
     setHideDetachedHeadWorkspaces,
+    setAlwaysShowDefaultBranchWorkspace,
     setFilterRepoIds
   ])
 
@@ -211,6 +220,20 @@ const SidebarFilter = React.memo(function SidebarFilter({
           checked={!showSleepingWorkspaces}
           onChange={(hideSleeping) => setShowSleepingWorkspaces(!hideSleeping)}
           shortcutLabel={sleepingShortcut === 'Unassigned' ? undefined : sleepingShortcut}
+        />
+        <FilterToggleRow
+          indented
+          icon={<GitBranch className="size-3.5" />}
+          label={translate(
+            'auto.components.sidebar.SidebarFilter.keepDefaultBranch',
+            'Except default branch'
+          )}
+          ariaLabel={translate(
+            'auto.components.sidebar.SidebarFilter.keepDefaultBranchAria',
+            'Keep the default branch visible while hiding sleeping workspaces'
+          )}
+          checked={alwaysShowDefaultBranchWorkspace}
+          onChange={setAlwaysShowDefaultBranchWorkspace}
         />
         <FilterToggleRow
           icon={<GitBranch className="size-3.5" />}
@@ -371,51 +394,5 @@ const SidebarFilter = React.memo(function SidebarFilter({
     </DropdownMenu>
   )
 })
-
-function FilterToggleRow({
-  icon,
-  label,
-  checked,
-  onChange,
-  shortcutLabel
-}: {
-  icon: React.ReactNode
-  label: string
-  checked: boolean
-  onChange: (next: boolean) => void
-  shortcutLabel?: string
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className="flex w-full items-center justify-between gap-2 rounded-[5px] px-2 py-1.5 text-[12px] font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-    >
-      <span className="inline-flex items-center gap-2 text-foreground">
-        <span className="text-muted-foreground">{icon}</span>
-        {label}
-      </span>
-      <span className="inline-flex items-center gap-2">
-        {shortcutLabel ? <DropdownMenuShortcut>{shortcutLabel}</DropdownMenuShortcut> : null}
-        <span
-          aria-hidden
-          className={cn(
-            'relative h-3.5 w-6 shrink-0 rounded-full transition-colors',
-            checked ? 'bg-primary' : 'bg-muted-foreground/30'
-          )}
-        >
-          <span
-            className={cn(
-              'absolute top-0.5 left-0.5 size-2.5 rounded-full bg-background shadow-sm transition-transform',
-              checked && 'translate-x-2.5'
-            )}
-          />
-        </span>
-      </span>
-    </button>
-  )
-}
 
 export default SidebarFilter

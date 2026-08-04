@@ -26,6 +26,7 @@ import type {
   TerminalSnapshot
 } from './types'
 import type { PtyOwnerBackend } from '../../shared/pty-owner-backend'
+import { createPtySlaveEchoProbe } from '../../shared/pty-slave-line-discipline-echo'
 
 const SHELL_READY_TIMEOUT_MS = 15_000
 // Why: Codex skips marker-gated command delivery; this only bounds older daemon/local paths that still report shell-ready for Codex.
@@ -53,6 +54,9 @@ export type SubprocessHandle = {
   /** Shell the subprocess actually spawned, after fallbacks. The host reconciles the caller's shell-ready
    *  assumption against it so a fallback shell without a ready marker never gates startup commands. */
   shellPath?: string
+  /** Slave device path, so startup replies can read the line discipline's ECHO bit before
+   *  writing. Absent on handles with no POSIX slave to read (ConPTY, tests). */
+  slavePath?: string
   write(data: string): void
   resize(cols: number, rows: number): void
   /** Stop reading the PTY fd (node-pty pause()) so a flooding child blocks on write. Optional:
@@ -164,11 +168,13 @@ export class Session {
     }
 
     this.postReadyFlushGate = new PostReadyFlushGate(() => this.flushPreReadyQueue())
+    const echoProbe = createPtySlaveEchoProbe(this.subprocess.slavePath)
     this.startupIngress = new PtyStartupIngress({
       ...(opts.startupIngress ? { intent: opts.startupIngress } : {}),
       ...(opts.ownerBackend ? { ownerBackend: opts.ownerBackend } : {}),
       write: (data) => this.subprocess.write(data),
-      onEmission: (emission) => this.emitSubprocessOutput(emission)
+      onEmission: (emission) => this.emitSubprocessOutput(emission),
+      ...(echoProbe ? { echoProbe } : {})
     })
     this.subprocess.onData((data) => this.handleSubprocessData(data))
     this.subprocess.onExit((code) => this.handleSubprocessExit(code))

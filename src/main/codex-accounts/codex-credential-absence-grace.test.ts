@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -53,6 +53,21 @@ describe('CodexCredentialAbsenceGrace', () => {
     expect(grace.assess(authPath, 100_000)).toEqual({ state: 'missing', durable: false })
     expect(grace.assess(authPath, 100_000 + CODEX_CREDENTIAL_ABSENCE_GRACE_MS)).toEqual({
       state: 'missing',
+      durable: true
+    })
+  })
+
+  it('keeps a permission-denied read inside the grace window before it turns durable', () => {
+    if (process.platform === 'win32' || process.getuid?.() === 0) {
+      return
+    }
+    const grace = new CodexCredentialAbsenceGrace()
+    writeFileSync(authPath, VALID_AUTH, 'utf-8')
+    chmodSync(authPath, 0o000)
+
+    expect(grace.assess(authPath, 1_000)).toEqual({ state: 'unreadable', durable: false })
+    expect(grace.assess(authPath, 1_000 + CODEX_CREDENTIAL_ABSENCE_GRACE_MS)).toEqual({
+      state: 'unreadable',
       durable: true
     })
   })

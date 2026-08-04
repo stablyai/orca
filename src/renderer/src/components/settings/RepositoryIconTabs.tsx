@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { toast } from 'sonner'
 import { Github, Image, Link2 } from 'lucide-react'
 import type { RepoIcon } from '../../../../shared/repo-icon'
@@ -10,8 +10,16 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { getRepoLucideIconOptions } from '../repo/repo-icon'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
+import { lazyWithRetry } from '@/lib/lazy-with-retry'
 
-const EMOJI_OPTIONS = ['🚀', '✨', '💻', '🧠', '📦', '🔧', '🎨', '🌐', '📊', '🔒', '⚡', '✅']
+// Deferred so emoji-picker-react's ~500KB chunk only loads once the Emoji tab renders.
+const RepositoryIconEmojiPicker = lazyWithRetry(
+  () =>
+    import('./RepositoryIconEmojiPicker').then((module) => ({
+      default: module.RepositoryIconEmojiPicker
+    })),
+  { reloadKey: 'repo-icon-emoji-picker' }
+)
 
 type RepositoryIconTabsProps = {
   initialTab: 'avatar' | 'icon' | 'emoji'
@@ -180,24 +188,10 @@ export function RepositoryIconTabs({
         </div>
       </TabsContent>
 
-      <TabsContent value="emoji" className="grid grid-cols-12 gap-1.5">
-        {EMOJI_OPTIONS.map((emoji) => (
-          <Button
-            key={emoji}
-            type="button"
-            variant={selectedEmoji === emoji ? 'secondary' : 'ghost'}
-            size="icon-xs"
-            className="size-8 text-base"
-            onClick={() => onSetIcon({ type: 'emoji', emoji })}
-            aria-label={translate(
-              'auto.components.settings.RepositoryIconPicker.2b7d27b93c',
-              'Use {{value0}} repo icon',
-              { value0: emoji }
-            )}
-          >
-            {emoji}
-          </Button>
-        ))}
+      <TabsContent value="emoji">
+        <Suspense fallback={null}>
+          <RepositoryIconEmojiPicker selectedEmoji={selectedEmoji} onSetIcon={onSetIcon} />
+        </Suspense>
       </TabsContent>
     </Tabs>
   )

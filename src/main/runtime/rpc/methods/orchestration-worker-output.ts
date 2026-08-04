@@ -181,7 +181,7 @@ function assertCursorSourceMatchesRequest(
   }
 }
 
-function orchestrationTimestampToMs(value: string): number {
+export function orchestrationTimestampToMs(value: string): number {
   const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(value)
     ? `${value.replace(' ', 'T')}Z`
     : value

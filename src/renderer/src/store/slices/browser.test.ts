@@ -180,6 +180,31 @@ describe('createBrowserSlice annotations', () => {
     expect(store.getState().browserAnnotationsByPageId[pageId]).toBeUndefined()
   })
 
+  it('can commit a navigation URL without hiding an active recovery error', () => {
+    const store = createTestStore()
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
+    const pageId = tab.activePageId
+    if (!pageId) {
+      throw new Error('Expected a new browser page')
+    }
+    const recoveryError = {
+      code: -720,
+      description: 'Recovery is still pending',
+      validatedUrl: 'https://example.com'
+    }
+
+    store.getState().updateBrowserPageState(pageId, { loadError: recoveryError })
+    store
+      .getState()
+      .setBrowserPageUrl(pageId, 'https://example.com/committed', { preserveLoadError: true })
+
+    const page = store.getState().browserPagesByWorkspace[tab.id]?.find(({ id }) => id === pageId)
+    expect(page).toMatchObject({
+      url: 'https://example.com/committed',
+      loadError: recoveryError
+    })
+  })
+
   it('keeps certificate challenges transient across navigation, success, and close', () => {
     const store = createTestStore()
     const tab = store.getState().createBrowserTab('wt-1', 'https://localhost:3443/')

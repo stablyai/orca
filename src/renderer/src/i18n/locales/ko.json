@@ -4208,7 +4208,9 @@
           "ee240a39eb": "필터 편집",
           "automationCreated": "자동화로 생성된 워크스페이스 숨기기",
           "cliCreated": "Hide CLI-created",
-          "detachedHead": "분리된 HEAD 숨기기"
+          "detachedHead": "분리된 HEAD 숨기기",
+          "keepDefaultBranch": "기본 브랜치는 제외",
+          "keepDefaultBranchAria": "슬립 중인 워크스페이스를 숨겨도 기본 브랜치는 계속 표시"
         },
         "SidebarHeader": {
           "92154beb7e": "새로운 워크스페이스",
@@ -4273,7 +4275,9 @@
           "82594419ba": "필터",
           "automationCreated": "자동화로 생성된 워크스페이스 숨기기",
           "cliCreated": "Hide CLI-created",
-          "detachedHead": "분리된 HEAD 숨기기"
+          "detachedHead": "분리된 HEAD 숨기기",
+          "keepDefaultBranch": "기본 브랜치는 제외",
+          "keepDefaultBranchAria": "슬립 중인 워크스페이스를 숨겨도 기본 브랜치는 계속 표시"
         },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "Agent 활동 레이아웃",
@@ -4944,7 +4948,8 @@
           "failedSetParent": "상위 워크트리를 설정하지 못했습니다",
           "current": "현재",
           "searchPlaceholder": "워크트리 검색...",
-          "empty": "일치하는 적격 워크트리가 없습니다."
+          "empty": "일치하는 적격 워크트리가 없습니다.",
+          "setParentFor": "다음 워크트리의 상위 설정"
         },
         "WorktreeCardStatusSlot": {
           "branchIdentity": "브랜치"
@@ -5012,8 +5017,6 @@
           "sshImportAlreadySynced": "~/.ssh/config가 이미 동기화되어 있습니다.",
           "sshImportSynced": "{{value0}} 호스트{{value1}}을(를) 동기화했습니다.",
           "sshImportFailed": "SSH 구성을 가져오지 못했습니다.",
-          "importing": "가져오는 중...",
-          "importSshConfig": "~/.ssh/config 가져오기",
           "sshPersistenceDefault": "이 호스트의 원격 터미널은 종료하거나 릴레이를 재설정할 때까지 계속 실행됩니다.",
           "advanced": "고급",
           "linkDestination": "링크 대상",
@@ -6465,7 +6468,10 @@
           "f79972271a": "이 repo에 대한 GitHub 원격을 찾을 수 없습니다.",
           "4d039317f4": "웹사이트 파비콘",
           "acf31559a0": "유효한 웹사이트 URL을 입력하세요.",
-          "868c5c9b56": "repo 아이콘을 가져오지 못했습니다."
+          "868c5c9b56": "repo 아이콘을 가져오지 못했습니다.",
+          "emojiTooLongForRepoIcon": "이 이모티콘은 repo 아이콘으로 사용할 수 없습니다.",
+          "currentEmojiSelection": "현재: {{value0}}",
+          "searchEmojiPlaceholder": "이모티콘 검색"
         },
         "RepositoryPane": {
           "15a99d9b9f": "상대 경로는 이 프로젝트 루트에서 확인됩니다.",
@@ -10078,10 +10084,10 @@
             "653c105ecc": "더 많은 PR 작업",
             "f316a8ca2b": "선택한 해결되지 않은 댓글이 없습니다.",
             "d00ebdc402": "AI로 {{value0}} 댓글 해결",
-            "ed3f79c031": "agent를 시작하기 전에 prompt를 검토하세요. 선택한 스레드는 시작 후 해결됨으로 표시됩니다.",
-            "f273f2271c": "agent를 시작했습니다. {{value0}}개 해결됨으로 표시, {{value1}}개 건너뜀, {{value2}}개 실패.",
-            "aa95b81a3a": "agent를 시작했습니다. {{value0}}개 해결됨으로 표시, {{value1}}개 건너뜀, {{value2}}개 실패.",
-            "495b2f8c4b": "agent를 시작했지만 선택한 댓글을 해결됨으로 표시할 수 없습니다.",
+            "ed3f79c031": "에이전트를 시작하기 전에 프롬프트를 확인하세요. 프롬프트가 전달된 후 Orca가 선택한 댓글에 답글을 남기고 가능한 경우 호스트 스레드를 해결합니다.",
+            "f273f2271c": "agent를 시작했습니다. {{value0}}개 해결됨, {{value1}}개 답글, {{value2}}개 건너뜀, {{value3}}개 실패.{{value4}}",
+            "aa95b81a3a": "agent를 시작했습니다. {{value0}}개 해결됨, {{value1}}개 답글, {{value2}}개 건너뜀, {{value3}}개 실패.",
+            "495b2f8c4b": "agent를 시작했지만 선택한 댓글을 해결하거나 답글할 수 없습니다.",
             "3c3ad3a1d2": "agent를 시작했습니다. 호스트에서 해결됨으로 표시할 수 있는 선택된 댓글이 없습니다.",
             "review": {
               "auto_retry": "Orca가 {{time}}에 다시 시도합니다.",
@@ -10091,7 +10097,8 @@
             "sync": {
               "pending": "Syncing…",
               "branch": "Sync Branch"
-            }
+            },
+            "7e4b2a19c0": "답글을 게시할 GitHub PR을 확인하지 못했습니다."
           },
           "CreatePullRequestDialog": {
             "2bc1b4345e": "취소",
@@ -10636,7 +10643,6 @@
                 "fd46a70f1a": "시작됨",
                 "a54ae21c6f": "상태:",
                 "e4e3af15ee": "전체 세부정보 보기",
-                "2524d1fb83": "자세한 내용을 로그 테일에서 확인할 수 있습니다.",
                 "a2fb3f4408": "처음 100개 작업 표시",
                 "df137989b3": "처음 20개의 주석 표시 중",
                 "1f2b980522": "검사 세부 정보 로드 중…",
@@ -10689,7 +10695,8 @@
                 "5e6e5a13fa": "보기",
                 "actionRequiredHint": "이 검사는 병합 차단이 해제되기 전에 GitHub에서 수동 작업(예: 워크플로 실행 승인)이 필요합니다.",
                 "b3195cba33": "작성자의 봇 지정 해제",
-                "f588b46a6c": "작성자를 봇으로 지정"
+                "f588b46a6c": "작성자를 봇으로 지정",
+                "checkDetailsLoadFailed": "체크 세부 정보를 불러오지 못했습니다."
               },
               "empty": {
                 "state": {
@@ -11333,6 +11340,14 @@
           },
           "activityBar": {
             "error": "오류"
+          },
+          "AiVaultSessionLimitMenu": {
+            "historyDepth": "기록 개수: {{value0}}",
+            "performanceWarning": "더 많은 기록을 불러오면 특히 원격 호스트에서 앱 전체가 느려질 수 있습니다. 무제한은 사용 가능한 모든 기록을 스캔합니다.",
+            "recommended": "권장",
+            "mayBeSlower": "느려질 수 있음",
+            "slowest": "가장 느림",
+            "unlimited": "무제한"
           }
         }
       },
@@ -14340,6 +14355,11 @@
       },
       "webRuntimeSession": {
         "remoteHostDisconnected": "The workspace is not connected to a remote Orca host."
+      },
+      "gitlabJobTraceClient": {
+        "loadFailed": "GitLab 작업 로그를 불러오지 못했습니다.",
+        "emptyTrace": "이 GitLab 작업의 로그를 사용할 수 없습니다.",
+        "timedOut": "GitLab 작업 로그를 불러오는 중 시간이 초과되었습니다."
       }
     }
   },

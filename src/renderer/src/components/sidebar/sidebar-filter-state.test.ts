@@ -38,6 +38,7 @@ function filterState(overrides: Partial<FilterState> = {}): FilterState {
     hideAutomationGeneratedWorkspaces: false,
     hideCliCreatedWorkspaces: false,
     hideDetachedHeadWorkspaces: false,
+    alwaysShowDefaultBranchWorkspace: true,
     workspaceHostScope: 'all',
     ...overrides
   }
@@ -97,6 +98,17 @@ describe('sidebarHasActiveFilters', () => {
     expect(sidebarHasActiveFilters(filterState({ filterRepoIds: ['repo1'] }))).toBe(true)
   })
 
+  it('counts an opted-out default-branch exemption as an active filter', () => {
+    expect(sidebarHasActiveFilters(filterState({ alwaysShowDefaultBranchWorkspace: false }))).toBe(
+      true
+    )
+  })
+
+  it('treats a missing default-branch exemption as the default, not a filter', () => {
+    const { alwaysShowDefaultBranchWorkspace: _omitted, ...withoutFlag } = filterState()
+    expect(sidebarHasActiveFilters(withoutFlag)).toBe(false)
+  })
+
   it('returns true when only host visibility is narrowed', () => {
     expect(sidebarHasActiveFilters(filterState({ visibleWorkspaceHostIds: ['local'] }))).toBe(true)
   })
@@ -111,6 +123,7 @@ describe('computeClearFilterActions', () => {
       resetHideAutomationGeneratedWorkspaces: false,
       resetHideCliCreatedWorkspaces: false,
       resetHideDetachedHeadWorkspaces: false,
+      resetAlwaysShowDefaultBranchWorkspace: false,
       resetVisibleWorkspaceHostIds: false
     })
   })
@@ -126,6 +139,7 @@ describe('computeClearFilterActions', () => {
       resetHideAutomationGeneratedWorkspaces: false,
       resetHideCliCreatedWorkspaces: false,
       resetHideDetachedHeadWorkspaces: false,
+      resetAlwaysShowDefaultBranchWorkspace: false,
       resetVisibleWorkspaceHostIds: false
     })
   })
@@ -140,6 +154,7 @@ describe('computeClearFilterActions', () => {
       resetHideAutomationGeneratedWorkspaces: true,
       resetHideCliCreatedWorkspaces: false,
       resetHideDetachedHeadWorkspaces: false,
+      resetAlwaysShowDefaultBranchWorkspace: false,
       resetVisibleWorkspaceHostIds: false
     })
   })
@@ -152,6 +167,7 @@ describe('computeClearFilterActions', () => {
       resetHideAutomationGeneratedWorkspaces: false,
       resetHideCliCreatedWorkspaces: true,
       resetHideDetachedHeadWorkspaces: false,
+      resetAlwaysShowDefaultBranchWorkspace: false,
       resetVisibleWorkspaceHostIds: false
     })
   })
@@ -164,6 +180,7 @@ describe('computeClearFilterActions', () => {
       resetHideAutomationGeneratedWorkspaces: false,
       resetHideCliCreatedWorkspaces: false,
       resetHideDetachedHeadWorkspaces: true,
+      resetAlwaysShowDefaultBranchWorkspace: false,
       resetVisibleWorkspaceHostIds: false
     })
   })
@@ -189,7 +206,23 @@ describe('computeClearFilterActions', () => {
       resetHideAutomationGeneratedWorkspaces: false,
       resetHideCliCreatedWorkspaces: false,
       resetHideDetachedHeadWorkspaces: false,
+      resetAlwaysShowDefaultBranchWorkspace: false,
       resetVisibleWorkspaceHostIds: true
+    })
+  })
+
+  it('flags only the default-branch exemption for reset when it is the sole filter', () => {
+    expect(
+      computeClearFilterActions(filterState({ alwaysShowDefaultBranchWorkspace: false }))
+    ).toEqual({
+      resetShowSleepingWorkspaces: false,
+      resetFilterRepoIds: false,
+      resetHideDefaultBranchWorkspace: false,
+      resetHideAutomationGeneratedWorkspaces: false,
+      resetHideCliCreatedWorkspaces: false,
+      resetHideDetachedHeadWorkspaces: false,
+      resetAlwaysShowDefaultBranchWorkspace: true,
+      resetVisibleWorkspaceHostIds: false
     })
   })
 
@@ -211,6 +244,7 @@ describe('computeClearFilterActions', () => {
       resetHideAutomationGeneratedWorkspaces: true,
       resetHideCliCreatedWorkspaces: false,
       resetHideDetachedHeadWorkspaces: false,
+      resetAlwaysShowDefaultBranchWorkspace: false,
       resetVisibleWorkspaceHostIds: true
     })
   })

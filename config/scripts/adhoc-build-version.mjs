@@ -2,6 +2,10 @@ import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { formatReleaseTitleTimestamp } from './release-title-timestamp.mjs'
+import {
+  readPublishedVersionsFromEnv,
+  resolveDevChannelBaseVersion
+} from './dev-channel-base-version.mjs'
 
 /** Long enough to name a feature, short enough that a picker row stays readable. */
 export const ADHOC_LABEL_MAX_LENGTH = 32
@@ -83,12 +87,13 @@ export function formatAdhocReleaseName(version, label, commit, date) {
   ].join(' • ')
 }
 
-export function getAdhocBuildIdentity(now = new Date(), label = '') {
+export function getAdhocBuildIdentity(now = new Date(), label = '', publishedVersions = []) {
   const packageJson = JSON.parse(readFileSync(resolve('package.json'), 'utf8'))
   const commit = execFileSync('git', ['rev-parse', '--short=12', 'HEAD'], {
     encoding: 'utf8'
   }).trim()
-  const version = createAdhocBuildVersion(packageJson.version, now)
+  const base = resolveDevChannelBaseVersion(packageJson.version, publishedVersions)
+  const version = createAdhocBuildVersion(base, now)
   return {
     commit,
     version,
@@ -98,7 +103,11 @@ export function getAdhocBuildIdentity(now = new Date(), label = '') {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename)) {
-  const identity = getAdhocBuildIdentity(new Date(), process.env.ORCA_ADHOC_LABEL ?? '')
+  const identity = getAdhocBuildIdentity(
+    new Date(),
+    process.env.ORCA_ADHOC_LABEL ?? '',
+    readPublishedVersionsFromEnv()
+  )
   // Consumed by the workflow via $GITHUB_OUTPUT.
   process.stdout.write(
     `version=${identity.version}\ncommit=${identity.commit}\nlabel=${identity.label}\nname=${identity.name}\n`
