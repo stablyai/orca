@@ -23,7 +23,10 @@ import {
 import { getGitHubPRCacheKey, getGitHubRepoCacheKey } from '@/store/slices/github-cache-key'
 import { useActiveWorktree } from '@/store/selectors'
 import { findRepoForHost, findRepoForWorktreeOwner } from '@/store/slices/repo-host-identity'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  getWorktreeExecutionHostId
+} from '../../../../shared/execution-host'
 import { useChecksPanelTerminalWorktree } from './use-checks-panel-terminal-worktree'
 import { cn } from '@/lib/utils'
 import { openHttpLink } from '@/lib/http-link-routing'
@@ -3748,6 +3751,7 @@ export default function ChecksPanel(): React.JSX.Element {
       // Why: the same workspace ID can exist under two hosts. Naming the owner
       // keeps the dialog on this workspace instead of the ambiguous lookup.
       repoId: activeWorktree.repoId,
+      executionHostId: getWorktreeExecutionHostId(activeWorktree, repo ?? undefined),
       currentDisplayName: activeWorktree.displayName,
       currentIssue: activeWorktree.linkedIssue,
       currentPR: activeWorktree.linkedPR ?? activeReview.number,
@@ -3760,7 +3764,14 @@ export default function ChecksPanel(): React.JSX.Element {
         }
       }
     })
-  }, [activeReview, activeWorktree, activeWorktreeId, openModal, refreshLinkedGitHubPullRequest])
+  }, [
+    activeReview,
+    activeWorktree,
+    activeWorktreeId,
+    openModal,
+    refreshLinkedGitHubPullRequest,
+    repo
+  ])
 
   const pushBeforeCreatePullRequest = useCallback(async (): Promise<boolean> => {
     if (!activeWorktreeId || !activeWorktree?.path) {

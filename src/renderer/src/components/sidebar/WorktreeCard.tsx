@@ -85,6 +85,7 @@ import { recordRendererCrashBreadcrumb } from '@/lib/crash-diagnostics'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   getRepoExecutionHostId,
+  getWorktreeExecutionHostId,
   isRuntimeOwnedSshTargetId,
   parseExecutionHostId,
   toRuntimeExecutionHostId
@@ -260,6 +261,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const projectGroups = useAppStore((s) => s.projectGroups)
   const newCardStyle = settings?.experimentalNewWorktreeCardStyle === true
   const compactCards = !newCardStyle && settings?.compactWorktreeCards === true
+  const worktreeExecutionHostId = getWorktreeExecutionHostId(worktree, repo)
   const handleEditIssue = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -268,6 +270,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
         // Why: the same workspace ID can exist under two hosts. Naming the owner
         // keeps the dialog on the clicked row instead of the ambiguous lookup.
         repoId: worktree.repoId,
+        executionHostId: worktreeExecutionHostId,
         currentDisplayName: worktree.displayName,
         currentIssue: worktree.linkedIssue,
         currentPR: worktree.linkedPR,
@@ -275,7 +278,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
         focus: 'issue'
       })
     },
-    [worktree, openModal]
+    [worktree, worktreeExecutionHostId, openModal]
   )
 
   const handleEditComment = useCallback(
@@ -284,6 +287,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
       openModal('edit-meta', {
         worktreeId: worktree.id,
         repoId: worktree.repoId,
+        executionHostId: worktreeExecutionHostId,
         currentDisplayName: worktree.displayName,
         currentIssue: worktree.linkedIssue,
         currentPR: worktree.linkedPR,
@@ -291,7 +295,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
         focus: 'comment'
       })
     },
-    [worktree, openModal]
+    [worktree, worktreeExecutionHostId, openModal]
   )
 
   const handleOpenAutomation = useCallback(
@@ -931,6 +935,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
       openModal('edit-meta', {
         worktreeId: worktree.id,
         repoId: worktree.repoId,
+        executionHostId: worktreeExecutionHostId,
         currentDisplayName: worktree.displayName,
         currentIssue: worktree.linkedIssue,
         currentPR: worktree.linkedPR,
@@ -945,7 +950,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
       worktree.id,
       worktree.linkedIssue,
       worktree.linkedPR,
-      worktree.repoId
+      worktree.repoId,
+      worktreeExecutionHostId
     ]
   )
 

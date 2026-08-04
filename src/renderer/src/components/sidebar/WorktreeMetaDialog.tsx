@@ -25,6 +25,7 @@ import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/scre
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { isWorkItemLinkQueryTooLarge } from '../../../../shared/new-workspace/work-item-link-query-bounds'
+import { normalizeExecutionHostId } from '../../../../shared/execution-host'
 import {
   getIssueLinkProviderFromUrl,
   parseIssueLinkInput,
@@ -68,6 +69,10 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   // Why: the opening row names its repo bucket for workspace IDs the owner index
   // reads as ambiguous across hosts.
   const ownerRepoId = typeof modalData.repoId === 'string' ? modalData.repoId : null
+  const ownerExecutionHostId =
+    typeof modalData.executionHostId === 'string'
+      ? normalizeExecutionHostId(modalData.executionHostId)
+      : null
   const {
     worktree,
     linkedIssue,
@@ -76,7 +81,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     currentProvider,
     isFolderWorkspace,
     liveLinks
-  } = useWorktreeMetaWorkspace({ worktreeId, ownerRepoId })
+  } = useWorktreeMetaWorkspace({ worktreeId, ownerRepoId, ownerExecutionHostId })
   // Why: ChecksPanel seeds the PR it is looking at, which may not be linked yet.
   const currentPR =
     typeof modalData.currentPR === 'number'
@@ -97,6 +102,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     useWorktreeIssueLink({
       worktreeId,
       ownerRepoId,
+      ownerExecutionHostId,
       issueInput,
       issueProvider,
       linearOrganizationUrlKey: worktree?.linkedLinearIssueOrganizationUrlKey ?? null,

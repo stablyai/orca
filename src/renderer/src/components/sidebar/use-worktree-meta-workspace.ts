@@ -1,11 +1,12 @@
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
-import { findIndexedWorktreeOwner } from '@/lib/worktree-runtime-owner-index'
 import type { Worktree } from '../../../../shared/types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
 import type { IssueLinkProvider } from '../../../../shared/issue-link-input'
 import type { WorktreeMetaLiveLinks } from './worktree-meta-updates'
+import { findWorktreeMetaOwner } from './worktree-meta-owner'
 
 /** Resolves the workspace the meta dialog edits and the issue-link state it
  *  seeds from. Link state is read from the store rather than threaded through
@@ -15,6 +16,7 @@ export function useWorktreeMetaWorkspace(args: {
   worktreeId: string
   /** The repo bucket the opening row belongs to, when it knows. */
   ownerRepoId: string | null
+  ownerExecutionHostId: ExecutionHostId | null
 }): {
   worktree: Worktree | undefined
   linkedIssue: number | null
@@ -26,22 +28,13 @@ export function useWorktreeMetaWorkspace(args: {
   /** Link state as it stands now, for save-time displacement decisions. */
   liveLinks: WorktreeMetaLiveLinks
 } {
-  const { worktreeId, ownerRepoId } = args
+  const { worktreeId, ownerRepoId, ownerExecutionHostId } = args
   const workspaceScope = useMemo(() => parseWorkspaceKey(worktreeId), [worktreeId])
   const indexedWorktree = useAppStore((s) => {
     // Why: the same workspace ID can exist under two hosts, which the owner index
     // reports as ambiguous rather than guessing. The row that opened the dialog
     // knows which one it is; the index stays the fallback for callers that cannot.
-    const scoped = ownerRepoId
-      ? s.worktreesByRepo[ownerRepoId]?.find((item) => item.id === worktreeId)
-      : undefined
-    if (scoped) {
-      return scoped
-    }
-    const owner = findIndexedWorktreeOwner(s.worktreesByRepo, worktreeId)
-    return owner
-      ? s.worktreesByRepo[owner.repoId]?.find((item) => item.id === worktreeId)
-      : undefined
+    return findWorktreeMetaOwner(s.worktreesByRepo, worktreeId, ownerRepoId, ownerExecutionHostId)
   })
   // Why: folder workspaces are absent from worktreesByRepo, so the lookup above
   // returns undefined and the row renders blank for them. The selector returns

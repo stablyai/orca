@@ -67,6 +67,7 @@ import {
   parseWorkspaceKey,
   worktreeWorkspaceKey
 } from '../../../../shared/workspace-scope'
+import { getWorktreeExecutionHostId } from '../../../../shared/execution-host'
 
 type Props = {
   worktree: Worktree
@@ -333,6 +334,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const deleteFolderWorkspace = useAppStore((s) => s.deleteFolderWorkspace)
   const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
   const repo = useRepoById(worktree.repoId)
+  const worktreeExecutionHostId = getWorktreeExecutionHostId(worktree, repo ?? undefined)
   const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
   const [menuOpen, setMenuOpen] = useState(false)
   // Why: the Developer submenu is a power-user affordance, so it is revealed by
@@ -601,6 +603,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
       // Why: the same workspace ID can exist under two hosts. Naming the owner
       // keeps the dialog on this row instead of the ambiguous lookup.
       repoId: worktree.repoId,
+      executionHostId: worktreeExecutionHostId,
       currentDisplayName: worktree.displayName,
       currentIssue: worktree.linkedIssue,
       currentPR: worktree.linkedPR,
@@ -614,6 +617,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     worktree.linkedIssue,
     worktree.linkedPR,
     worktree.comment,
+    worktreeExecutionHostId,
     openModal
   ])
 

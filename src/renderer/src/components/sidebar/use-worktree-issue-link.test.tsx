@@ -34,6 +34,12 @@ describe('useWorktreeIssueLink', () => {
           {
             id: 'wt-1',
             repoId: 'repo-1',
+            hostId: 'local',
+            path: '/local/repo/worktrees/feature'
+          },
+          {
+            id: 'wt-1',
+            repoId: 'repo-1',
             hostId: 'ssh:ssh-1',
             path: '/ssh/repo/worktrees/feature'
           }
@@ -43,7 +49,13 @@ describe('useWorktreeIssueLink', () => {
     } as never)
 
     const { result } = renderHook(() =>
-      useWorktreeIssueLink({ worktreeId: 'wt-1', issueInput: '42', issueProvider: 'github' })
+      useWorktreeIssueLink({
+        worktreeId: 'wt-1',
+        ownerRepoId: 'repo-1',
+        ownerExecutionHostId: 'ssh:ssh-1',
+        issueInput: '42',
+        issueProvider: 'github'
+      })
     )
 
     await act(async () => {
@@ -54,5 +66,37 @@ describe('useWorktreeIssueLink', () => {
       repoId: 'repo-1',
       executionHostId: 'ssh:ssh-1'
     })
+  })
+
+  it('does not fall through to another repo bucket for an explicit owner', async () => {
+    const fetchIssue = vi.fn().mockResolvedValue(null)
+    useAppStore.setState({
+      repos: [
+        { id: 'repo-1', path: '/local/repo', executionHostId: 'local' },
+        { id: 'repo-2', path: '/ssh/repo', executionHostId: 'ssh:ssh-1' }
+      ],
+      worktreesByRepo: {
+        'repo-1': [{ id: 'wt-1', repoId: 'repo-1', hostId: 'local', path: '/local/worktree' }],
+        'repo-2': [{ id: 'wt-1', repoId: 'repo-2', hostId: 'ssh:ssh-1', path: '/ssh/worktree' }]
+      },
+      fetchIssue
+    } as never)
+
+    const { result } = renderHook(() =>
+      useWorktreeIssueLink({
+        worktreeId: 'wt-1',
+        ownerRepoId: 'repo-1',
+        ownerExecutionHostId: 'ssh:ssh-1',
+        issueInput: '42',
+        issueProvider: 'github'
+      })
+    )
+
+    await act(async () => {
+      await result.current.handleOpenIssue()
+    })
+
+    expect(result.current.canOpenIssue).toBe(false)
+    expect(fetchIssue).not.toHaveBeenCalled()
   })
 })
