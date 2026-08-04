@@ -1185,11 +1185,8 @@ export function ResourceUsageStatusSegment({
         <TooltipContent side="top" sideOffset={6}>
           <div className="space-y-0.5">
             {resourceManagerTooltipLines.map((line, index) => (
-              <div
-                key={`${index}:${line}`}
-                className={line === 'Space scan ready' ? 'text-primary' : ''}
-              >
-                {line}
+              <div key={`${index}:${line.text}`} className={line.emphasized ? 'text-primary' : ''}>
+                {line.text}
               </div>
             ))}
           </div>

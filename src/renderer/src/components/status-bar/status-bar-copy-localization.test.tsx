@@ -93,18 +93,39 @@ describe('status-bar copy under a non-English UI language', () => {
         spaceScanReady: true
       })
     ).toEqual([
-      'リソースマネージャー - 512 MB - 2 件のターミナルセッション',
-      '容量スキャンの準備完了',
-      'ターミナルセッションはワークスペースごとにグループ化されます。'
+      {
+        text: 'リソースマネージャー - 512 MB - 2 件のターミナルセッション',
+        emphasized: false
+      },
+      { text: '容量スキャンの準備完了', emphasized: true },
+      { text: 'ターミナルセッションはワークスペースごとにグループ化されます。', emphasized: false }
     ])
+  })
+
+  // Why: the tint used to be selected by `line === 'Space scan ready'`, so it
+  // silently vanished for every non-English locale once the copy translated.
+  it('keeps the space-scan row flagged when its copy is no longer English', () => {
+    const lines = getResourceManagerTooltipLines({
+      memoryLabel: '512 MB',
+      sessionCount: 2,
+      spaceScanReady: true
+    })
+
+    const emphasized = lines.filter((line) => line.emphasized)
+    expect(emphasized).toHaveLength(1)
+    expect(emphasized[0]?.text).toBe('容量スキャンの準備完了')
+    expect(emphasized[0]?.text).not.toBe('Space scan ready')
   })
 
   it('translates the memory-unavailable and empty-session tooltip lines', () => {
     expect(
       getResourceManagerTooltipLines({ memoryLabel: '—', sessionCount: 0, spaceScanReady: false })
     ).toEqual([
-      'リソースマネージャー - メモリ情報を取得できません - 0 件のターミナルセッション',
-      'ターミナルセッションはまだありません。'
+      {
+        text: 'リソースマネージャー - メモリ情報を取得できません - 0 件のターミナルセッション',
+        emphasized: false
+      },
+      { text: 'ターミナルセッションはまだありません。', emphasized: false }
     ])
   })
 

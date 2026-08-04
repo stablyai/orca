@@ -21,11 +21,18 @@ function spaceScanReadyLabel(): string {
   )
 }
 
+/**
+ * `emphasized` marks the space-scan row the tooltip tints. The segment used to
+ * recognize that row by comparing it against the English text, which stops
+ * matching the moment the copy comes from the catalog.
+ */
+export type ResourceManagerTooltipLine = { text: string; emphasized: boolean }
+
 export function getResourceManagerTooltipLines(args: {
   memoryLabel: string
   sessionCount: number
   spaceScanReady: boolean
-}): string[] {
+}): ResourceManagerTooltipLine[] {
   const rawMemoryLabel = args.memoryLabel.trim()
   const memoryLabel =
     rawMemoryLabel === '' || rawMemoryLabel === '-' || rawMemoryLabel === '—'
@@ -36,33 +43,34 @@ export function getResourceManagerTooltipLines(args: {
       : rawMemoryLabel
   // Why: whole lines are single keys — locales reorder the summary and repunctuate
   // its separators, so it can't be concatenated from translated fragments here.
-  const lines = [
-    translate(
-      'auto.components.status.bar.resource.manager.terminal.copy.tooltipSummary',
-      'Resource Manager - {{memory}} - {{sessions}}',
-      { memory: memoryLabel, sessions: formatTerminalSessionCount(args.sessionCount) }
-    )
+  const lines: ResourceManagerTooltipLine[] = [
+    {
+      text: translate(
+        'auto.components.status.bar.resource.manager.terminal.copy.tooltipSummary',
+        'Resource Manager - {{memory}} - {{sessions}}',
+        { memory: memoryLabel, sessions: formatTerminalSessionCount(args.sessionCount) }
+      ),
+      emphasized: false
+    }
   ]
 
   if (args.spaceScanReady) {
-    lines.push(spaceScanReadyLabel())
+    lines.push({ text: spaceScanReadyLabel(), emphasized: true })
   }
 
-  if (args.sessionCount > 0) {
-    lines.push(
-      translate(
-        'auto.components.status.bar.resource.manager.terminal.copy.sessionsGroupedByWorkspace',
-        'Terminal sessions are grouped by workspace.'
-      )
-    )
-  } else {
-    lines.push(
-      translate(
-        'auto.components.status.bar.resource.manager.terminal.copy.noTerminalSessions',
-        'No terminal sessions yet.'
-      )
-    )
-  }
+  lines.push({
+    text:
+      args.sessionCount > 0
+        ? translate(
+            'auto.components.status.bar.resource.manager.terminal.copy.sessionsGroupedByWorkspace',
+            'Terminal sessions are grouped by workspace.'
+          )
+        : translate(
+            'auto.components.status.bar.resource.manager.terminal.copy.noTerminalSessions',
+            'No terminal sessions yet.'
+          ),
+    emphasized: false
+  })
 
   return lines
 }
