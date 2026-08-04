@@ -18,7 +18,7 @@ export async function selectDialableRelayCredentials(args: {
   onAdoptedFresherBundle: () => void
 }): Promise<{
   bundle: MobileRelayCredentialBundle | null
-  credentials: Array<MobileRelayCredentialBundle['current']>
+  credentials: MobileRelayCredentialBundle['current'][]
 }> {
   const memory = args.bundle
   const memoryCredentials = memory
