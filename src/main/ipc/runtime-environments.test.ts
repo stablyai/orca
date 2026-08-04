@@ -1837,6 +1837,75 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     })
   })
 
+  it("retires remaining subscriptions when one renderer's close notification throws", async () => {
+    // Why: send can throw on a disposed render frame, and an unguarded throw here
+    // aborts the sweep just as surely as a failing socket close.
+    registerRuntimeEnvironmentHandlers(store as never)
+    const closedStreams: string[] = []
+    let streamCount = 0
+    subscribeRemoteRuntimeRequestMock.mockImplementation(async () => {
+      streamCount += 1
+      const requestId = `stream-${streamCount}`
+      return {
+        requestId,
+        close: () => closedStreams.push(requestId),
+        sendBinary: vi.fn()
+      }
+    })
+
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
+
+    const deliveredCloses: string[] = []
+    const senderSend = vi.fn(
+      (_channel: string, payload: { subscriptionId: string; type: string }) => {
+        if (payload.type !== 'close') {
+          return
+        }
+        if (payload.subscriptionId === 'disposed-frame-sub') {
+          throw new Error('Render frame was disposed')
+        }
+        deliveredCloses.push(payload.subscriptionId)
+      }
+    )
+    const subscribe = handler<
+      { selector: string; method: string; params?: unknown; subscriptionId?: string },
+      { subscriptionId: string; requestId: string }
+    >('runtimeEnvironments:subscribe')
+    const sender = {
+      sender: {
+        id: 1,
+        isDestroyed: () => false,
+        send: senderSend,
+        once: vi.fn(),
+        removeListener: vi.fn()
+      }
+    }
+    await subscribe(sender, {
+      selector: added.environment.id,
+      method: 'terminal.multiplex',
+      params: {},
+      subscriptionId: 'disposed-frame-sub'
+    })
+    await subscribe(sender, {
+      selector: added.environment.id,
+      method: 'browser.screencast',
+      params: {},
+      subscriptionId: 'surviving-sub'
+    })
+
+    const disconnect = handler<{ selector: string }, { disconnected: { id: string } }>(
+      'runtimeEnvironments:disconnect'
+    )
+    expect(() => disconnect(null, { selector: added.environment.id })).not.toThrow()
+
+    expect(closedStreams).toEqual(['stream-1', 'stream-2'])
+    expect(deliveredCloses).toEqual(['surviving-sub'])
+  })
+
   it('suppresses stale payloads from a retired transport but never re-sends its close', async () => {
     registerRuntimeEnvironmentHandlers(store as never)
     let transportCallbacks: {

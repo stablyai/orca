@@ -1049,13 +1049,13 @@
       "providers": ["remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["remote-runtime"],
-      "coverageNotes": "Deterministic main-IPC contract tests cover disconnect-driven close delivery, exactly-once close, and continued suppression of stale payloads from a retired transport. A headed paired-server journey (real Orca host plus a separate paired Orca desktop client) covers hidden-but-mounted reveal, cold-parked reveal, and cold-parked reveal across a disconnect/reconnect. Live Linux and Windows paired-server evidence and real sleep/wake transport loss remain uncollected.",
+      "coverageNotes": "Deterministic main-IPC contract tests cover disconnect-driven close delivery, exactly-once close, per-subscription teardown isolation against both a failing socket close and a failing renderer notification, and continued suppression of stale payloads from a retired transport. A headed paired-server journey (real Orca host plus a separate paired Orca desktop client) covers hidden-but-mounted reveal, cold-parked reveal, and cold-parked reveal across a disconnect/reconnect. Live Linux and Windows paired-server evidence and real sleep/wake transport loss remain uncollected.",
       "motivatingLinks": [
         "tests/e2e/paired-remote-terminal-parked-reveal-interactivity.spec.ts",
         "docs/reference/headless-linux-server.md"
       ],
       "invariant": "Every renderer-held runtime subscription receives exactly one terminal close event when its transport is retired, including when the retirement advanced the transport generation first, and a single failing teardown never abandons that environment's remaining subscriptions. Payload frames from a retired transport stay suppressed. A revealed remote terminal therefore reattaches over a live multiplex connection: its buffer restores, typed input reaches the host PTY, the echo paints without a tab flip, and the PTY converges on the revealed pane grid.",
-      "oracle": "The main IPC contract test subscribes terminal.multiplex through the real handler, disconnects the environment, and asserts the renderer received exactly one {type: close} subscription event; a second test asserts that after retirement a late response frame is not forwarded and a late transport close does not re-send. The paired-server journey runs three reveal scenarios against one real host and one real paired desktop client, and for each records buffer restore, host-side receipt of the typed marker through an out-of-band host sink file, live paint without a tab flip, and PTY-versus-pane grid convergence.",
+      "oracle": "The main IPC contract test subscribes terminal.multiplex through the real handler, disconnects the environment, and asserts the renderer received exactly one {type: close} subscription event. Two isolation tests subscribe a second stream to the same environment and make the first one fail -- once in its socket close, once in its renderer close notification -- then assert the disconnect does not throw, both transports closed, and the surviving subscription still received its close. A fourth test asserts that after retirement a late response frame is not forwarded and a late transport close does not re-send. The paired-server journey runs three reveal scenarios against one real host and one real paired desktop client, and for each records buffer restore, host-side receipt of the typed marker through an out-of-band host sink file, live paint without a tab flip, and PTY-versus-pane grid convergence.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/runtime-environments.test.ts",
         "pnpm exec playwright test tests/e2e/paired-remote-terminal-parked-reveal-interactivity.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
@@ -1070,6 +1070,7 @@
           "assertions": [
             "tells the renderer when retiring the transport closes its streaming subscription (the load-bearing repro; red with the fix reverted)",
             "retires an environment's remaining subscriptions when one teardown throws (load-bearing; red without per-subscription isolation)",
+            "retires remaining subscriptions when one renderer's close notification throws (load-bearing; red without the guarded send)",
             "suppresses stale payloads from a retired transport but never re-sends its close (forward guard on the retained generation gate, not a repro)"
           ]
         },
@@ -1091,7 +1092,7 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/runtime-environments.test.ts",
           "result": "passed",
           "durationSeconds": 0.81,
-          "summary": "51 runtime environment IPC tests passed, including the new close-delivery, teardown-isolation, and stale-payload-suppression contracts."
+          "summary": "52 runtime environment IPC tests passed, including the new close-delivery, both teardown-isolation, and stale-payload-suppression contracts."
         },
         {
           "date": "2026-08-03",
