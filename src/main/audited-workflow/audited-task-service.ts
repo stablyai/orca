@@ -33,6 +33,13 @@ import { resolveAcceptanceCriteria } from './audited-plan-audit-criteria'
 import { getCurrentCoverage } from './audited-plan-coverage-repository'
 import { getCandidate } from './audited-candidate-repository'
 import { getLatestCodeAuditRun } from './audited-code-audit-run-repository'
+import {
+  getLatestApproval,
+  hasValidPendingApproval,
+  isAuditApprovedForCurrentCandidate,
+  resolveApprovalState
+} from './audited-approval-repository'
+import { getLatestCommitAttempt } from './audited-commit-attempt-repository'
 import { MAX_FIX_ROUNDS } from '../../shared/audited-code-audit-types'
 import type Database from '../sqlite/sync-database'
 import type {
@@ -113,6 +120,10 @@ function taskRowToProjectionSource(row: AuditedTaskRow): ProjectionSourceTask {
   // Phase 7: the first readers of the code-audit lane's durable state.
   const candidate = row.currentCandidateId ? getCandidate(db, row.currentCandidateId) : null
   const codeAudit = getLatestCodeAuditRun(db, row.id)
+  // Phase 8: the approval and commit lane's durable state.
+  const nowMs = Date.now()
+  const approval = getLatestApproval(db, row.id)
+  const commitAttempt = getLatestCommitAttempt(db, row.id)
   return {
     taskId: row.id,
     repoId: row.repoId,
@@ -129,11 +140,20 @@ function taskRowToProjectionSource(row: AuditedTaskRow): ProjectionSourceTask {
     // Phase 5 is the first writer of this long-declared field.
     lastVerdict: row.lastVerdict,
     blockedReasonCode: row.blockedReasonCode,
-    approvalState: 'none',
-    approvalExpiresAt: null,
+    // Phase 8: the first writers of these long-declared fields. Expiry is
+    // EVALUATED against now, so a lapsed approval reports 'expired' even if no
+    // sweep ever ran.
+    approvalState: resolveApprovalState(approval, nowMs),
+    approvalExpiresAt: approval?.expiresAt ?? null,
     auditApprovedTreeOid: row.auditApprovedTreeOid,
     committedSha: row.committedSha,
-    commitAttemptStatus: null,
+    commitAttemptStatus: commitAttempt?.status ?? null,
+    commitReasonCode: commitAttempt?.reasonCode ?? null,
+    // Deliberately separate from the failure code: a task may be `committed` with
+    // a valid SHA and still carry a drift advisory.
+    commitAdvisoryCode: commitAttempt?.postCommitAdvisory ?? null,
+    auditApprovedForCurrentCandidate: isAuditApprovedForCurrentCandidate(db, row.id),
+    approvalPendingAndValid: hasValidPendingApproval(db, row.id, nowMs),
     reconcileClass: null,
     reconcileReasonCode: null,
     worktreeProvenance: row.worktreeProvenance,

@@ -11,57 +11,52 @@ import type {
   AuditedWorkflowStartExecutionResult,
   AuditedWorkflowCancelExecutionResult,
   AuditedWorkflowRetryExecutionResult,
-  AuditedWorkflowStartPlanAuditResult,
-  AuditedWorkflowCancelPlanAuditResult,
-  AuditedWorkflowRetryPlanAuditResult,
-  AuditedWorkflowApprovePlanResult,
-  AuditedWorkflowRequestPlanRevisionResult,
   AuditedWorkflowCodeAuditResult,
   AuditedWorkflowGetPlanArtifactResult
 } from '../../../../shared/audited-workflow-command-types'
 import type { AppState } from '../types'
 import { getTaskListErrorMessage } from '../../components/audited-workflow/audited-workflow-error-messages'
+import { createAuditedCommitActions, type AuditedCommitActions } from './audited-commit-actions'
+import {
+  createAuditedPlanReviewActions,
+  type AuditedPlanReviewActions
+} from './audited-plan-review-actions'
 
-export type AuditedWorkflowSlice = {
-  auditedTasks: AuditedTaskStatusProjection[]
-  auditedTasksLoading: boolean
-  auditedTasksError: string | null
-  selectedAuditedTaskId: string | null
-  auditedTriageStartingTaskId: string | null
-  refreshAuditedTasks: (repoId?: string) => Promise<void>
-  selectAuditedTask: (taskId: string | null) => void
-  createAuditedTask: (
-    params: AuditedWorkflowSelectTaskParams
-  ) => Promise<AuditedWorkflowSelectTaskResult>
-  startAuditedTaskTriage: (taskId: string) => Promise<AuditedWorkflowStartTriageResult>
-  retryAuditedTaskTriage: (taskId: string) => Promise<AuditedWorkflowRetryTriageResult>
-  provisionAuditedTaskWorktree: (taskId: string) => Promise<AuditedWorkflowProvisionWorktreeResult>
-  auditedExecutionPendingTaskId: string | null
-  startAuditedTaskExecution: (taskId: string) => Promise<AuditedWorkflowStartExecutionResult>
-  cancelAuditedTaskExecution: (taskId: string) => Promise<AuditedWorkflowCancelExecutionResult>
-  retryAuditedTaskExecution: (taskId: string) => Promise<AuditedWorkflowRetryExecutionResult>
-  applyAuditedTaskChanged: (projection: AuditedTaskStatusProjection) => void
-  // Phase 5 plan review. One pending id for the whole block, matching the
-  // execution-controls idiom: the panel shows a single busy state.
-  auditedPlanReviewPendingTaskId: string | null
-  startAuditedPlanAudit: (taskId: string) => Promise<AuditedWorkflowStartPlanAuditResult>
-  cancelAuditedPlanAudit: (taskId: string) => Promise<AuditedWorkflowCancelPlanAuditResult>
-  retryAuditedPlanAudit: (taskId: string) => Promise<AuditedWorkflowRetryPlanAuditResult>
-  approveAuditedPlan: (taskId: string) => Promise<AuditedWorkflowApprovePlanResult>
-  requestAuditedPlanRevision: (taskId: string) => Promise<AuditedWorkflowRequestPlanRevisionResult>
-  auditedCodeAuditPendingTaskId: string | null
-  startAuditedCodeAudit: (taskId: string) => Promise<AuditedWorkflowCodeAuditResult>
-  cancelAuditedCodeAudit: (taskId: string) => Promise<AuditedWorkflowCodeAuditResult>
-  retryAuditedCodeAudit: (taskId: string) => Promise<AuditedWorkflowCodeAuditResult>
-  requestAuditedCodeFix: (taskId: string) => Promise<AuditedWorkflowCodeAuditResult>
-  // Cached by artifactId, NOT by taskId: a new round produces a new artifact id,
-  // so a stale body can never be shown next to a newer round's metadata.
-  auditedPlanArtifactBodies: Record<string, string>
-  loadAuditedPlanArtifact: (
-    taskId: string,
-    artifactId: string
-  ) => Promise<AuditedWorkflowGetPlanArtifactResult>
-}
+export type AuditedWorkflowSlice = AuditedCommitActions &
+  AuditedPlanReviewActions & {
+    auditedTasks: AuditedTaskStatusProjection[]
+    auditedTasksLoading: boolean
+    auditedTasksError: string | null
+    selectedAuditedTaskId: string | null
+    auditedTriageStartingTaskId: string | null
+    refreshAuditedTasks: (repoId?: string) => Promise<void>
+    selectAuditedTask: (taskId: string | null) => void
+    createAuditedTask: (
+      params: AuditedWorkflowSelectTaskParams
+    ) => Promise<AuditedWorkflowSelectTaskResult>
+    startAuditedTaskTriage: (taskId: string) => Promise<AuditedWorkflowStartTriageResult>
+    retryAuditedTaskTriage: (taskId: string) => Promise<AuditedWorkflowRetryTriageResult>
+    provisionAuditedTaskWorktree: (
+      taskId: string
+    ) => Promise<AuditedWorkflowProvisionWorktreeResult>
+    auditedExecutionPendingTaskId: string | null
+    startAuditedTaskExecution: (taskId: string) => Promise<AuditedWorkflowStartExecutionResult>
+    cancelAuditedTaskExecution: (taskId: string) => Promise<AuditedWorkflowCancelExecutionResult>
+    retryAuditedTaskExecution: (taskId: string) => Promise<AuditedWorkflowRetryExecutionResult>
+    applyAuditedTaskChanged: (projection: AuditedTaskStatusProjection) => void
+    auditedCodeAuditPendingTaskId: string | null
+    startAuditedCodeAudit: (taskId: string) => Promise<AuditedWorkflowCodeAuditResult>
+    cancelAuditedCodeAudit: (taskId: string) => Promise<AuditedWorkflowCodeAuditResult>
+    retryAuditedCodeAudit: (taskId: string) => Promise<AuditedWorkflowCodeAuditResult>
+    requestAuditedCodeFix: (taskId: string) => Promise<AuditedWorkflowCodeAuditResult>
+    // Cached by artifactId, NOT by taskId: a new round produces a new artifact id,
+    // so a stale body can never be shown next to a newer round's metadata.
+    auditedPlanArtifactBodies: Record<string, string>
+    loadAuditedPlanArtifact: (
+      taskId: string,
+      artifactId: string
+    ) => Promise<AuditedWorkflowGetPlanArtifactResult>
+  }
 
 function upsertTask(
   tasks: AuditedTaskStatusProjection[],
@@ -197,8 +192,20 @@ export const createAuditedWorkflowSlice: StateCreator<AppState, [], [], AuditedW
   applyAuditedTaskChanged: (projection) =>
     set((state) => ({ auditedTasks: upsertTask(state.auditedTasks, projection) })),
 
-  auditedPlanReviewPendingTaskId: null,
   auditedPlanArtifactBodies: {},
+  requestAuditedCodeFix: async (taskId) => {
+    set({ auditedCodeAuditPendingTaskId: taskId })
+    try {
+      const result = await window.api.auditedWorkflow.requestCodeFix({ taskId })
+      await refreshOneTask(set, taskId)
+      return result
+    } finally {
+      set({ auditedCodeAuditPendingTaskId: null })
+    }
+  },
+
+  ...createAuditedCommitActions(set),
+  ...createAuditedPlanReviewActions(set),
 
   // Phase 7. A separate pending id from the plan lane: the two lanes are never
   // active for the same task, but sharing one id would make a code-audit click
@@ -235,74 +242,6 @@ export const createAuditedWorkflowSlice: StateCreator<AppState, [], [], AuditedW
       return result
     } finally {
       set({ auditedCodeAuditPendingTaskId: null })
-    }
-  },
-
-  requestAuditedCodeFix: async (taskId) => {
-    set({ auditedCodeAuditPendingTaskId: taskId })
-    try {
-      const result = await window.api.auditedWorkflow.requestCodeFix({ taskId })
-      await refreshOneTask(set, taskId)
-      return result
-    } finally {
-      set({ auditedCodeAuditPendingTaskId: null })
-    }
-  },
-
-  startAuditedPlanAudit: async (taskId) => {
-    set({ auditedPlanReviewPendingTaskId: taskId })
-    try {
-      const result = await window.api.auditedWorkflow.startPlanAudit({ taskId })
-      await refreshOneTask(set, taskId)
-      return result
-    } finally {
-      set({ auditedPlanReviewPendingTaskId: null })
-    }
-  },
-
-  cancelAuditedPlanAudit: async (taskId) => {
-    set({ auditedPlanReviewPendingTaskId: taskId })
-    try {
-      const result = await window.api.auditedWorkflow.cancelPlanAudit({ taskId })
-      await refreshOneTask(set, taskId)
-      return result
-    } finally {
-      set({ auditedPlanReviewPendingTaskId: null })
-    }
-  },
-
-  retryAuditedPlanAudit: async (taskId) => {
-    set({ auditedPlanReviewPendingTaskId: taskId })
-    try {
-      const result = await window.api.auditedWorkflow.retryPlanAudit({ taskId })
-      await refreshOneTask(set, taskId)
-      return result
-    } finally {
-      set({ auditedPlanReviewPendingTaskId: null })
-    }
-  },
-
-  approveAuditedPlan: async (taskId) => {
-    set({ auditedPlanReviewPendingTaskId: taskId })
-    try {
-      const result = await window.api.auditedWorkflow.approvePlan({ taskId })
-      await refreshOneTask(set, taskId)
-      return result
-    } finally {
-      set({ auditedPlanReviewPendingTaskId: null })
-    }
-  },
-
-  // Deliberately does NOT chain into anything on failure: a refused revision
-  // leaves the task exactly where it was, and the panel renders the closed code.
-  requestAuditedPlanRevision: async (taskId) => {
-    set({ auditedPlanReviewPendingTaskId: taskId })
-    try {
-      const result = await window.api.auditedWorkflow.requestPlanRevision({ taskId })
-      await refreshOneTask(set, taskId)
-      return result
-    } finally {
-      set({ auditedPlanReviewPendingTaskId: null })
     }
   },
 

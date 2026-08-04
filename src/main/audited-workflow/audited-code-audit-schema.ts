@@ -57,6 +57,13 @@ export function createCodeAuditTables(db: Database.Database): void {
       base_commit    TEXT NOT NULL,
       branch_name    TEXT NOT NULL,
       superseded_by  TEXT,
+      -- Phase 8 §0.2/§0.3. store_bytes is the DURABLE on-disk object footprint of
+      -- this candidate's promoted store, NULL when it owns none. Set to NULL
+      -- INSIDE the transaction that makes the store ineligible, so nulling the
+      -- column IS the accounting release — the global budget is derived as
+      -- SUM(store_bytes) WHERE status='current', never a second counter.
+      store_bytes         INTEGER,
+      store_expires_at_ms INTEGER,
       created_at_ms  INTEGER NOT NULL,
       -- CANDIDATE OWNERSHIP: each execution run may produce at most ONE
       -- candidate. A second row could only come from a duplicate derivation — a

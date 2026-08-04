@@ -10,6 +10,7 @@ import type Database from '../sqlite/sync-database'
 import type { AuditedTaskState } from '../../shared/audited-workflow-types'
 import type { CandidateStatus } from '../../shared/audited-code-audit-types'
 import { sqliteRowToTask, type AuditedTaskRow } from './audited-task-row-mapping'
+import { revokePendingApprovalInTransaction } from './audited-approval-repository'
 import { validateAuditedTransition } from './audited-workflow-state-machine'
 
 export type CandidateRow = {
@@ -220,6 +221,17 @@ export function attachCandidate(
       return { ok: false, reasonCode: 'duplicate_candidate' }
     }
 
+    // Phase 8: a new candidate also invalidates any pending HUMAN approval, which
+    // is bound to the tree that was just superseded. Revoked in THIS transaction
+    // so an approval can never outlive the content it authorized. The superseded
+    // candidate's store accounting is cleared here too, so store_bytes means
+    // exactly one thing everywhere — "this row currently owns a durable store".
+    revokePendingApprovalInTransaction(db, args.taskId, nowMs)
+    db.prepare(
+      `UPDATE audited_candidates SET store_bytes = NULL, store_expires_at_ms = NULL
+        WHERE task_id = ? AND status = 'superseded' AND store_bytes IS NOT NULL`
+    ).run(args.taskId)
+
     // A new candidate invalidates any prior audit outcome: the approved tree OID
     // and the recorded verdict both describe work that has just been superseded.
     const taskUpdate = db
@@ -227,6 +239,7 @@ export function attachCandidate(
         `UPDATE audited_tasks
             SET state = 'awaiting_code_audit', current_candidate_id = ?,
                 audit_approved_tree_oid = NULL, code_audit_verdict = NULL,
+                current_approval_id = NULL,
                 pre_block_state = NULL, blocked_reason_code = NULL, blocked_phase = NULL,
                 updated_at_ms = ?
           WHERE id = ? AND state = ?`

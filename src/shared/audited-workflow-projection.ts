@@ -24,6 +24,7 @@ import type {
 import type { WorktreeReasonCode } from './audited-worktree-types'
 import type { ExecutionReasonCode, ExecutionRunStatus } from './audited-execution-types'
 import type { CodeAuditReasonCode, CodeAuditRunStatus } from './audited-code-audit-types'
+import type { CommitAdvisoryCode, CommitReasonCode } from './audited-commit-types'
 import { MAX_PLAN_ROUNDS } from './audited-plan-artifact-types'
 import type { PlanReviewReasonCode, PlanReviewRunStatus } from './audited-plan-artifact-types'
 
@@ -56,6 +57,17 @@ export type ProjectionSourceTask = {
   auditApprovedTreeOid: string | null
   committedSha: string | null
   commitAttemptStatus: CommitAttemptStatus | null
+  // Phase 8. The commit lane's failure code and, kept separate, the advisory that
+  // can only accompany a DURABLE commit.
+  commitReasonCode: CommitReasonCode | null
+  commitAdvisoryCode: CommitAdvisoryCode | null
+  // True only when the task's CURRENT candidate is the one the code audit
+  // approved, by both id and tree OID. Resolved by the repository in the same
+  // query grantApproval uses, so the UI and the transaction cannot diverge.
+  auditApprovedForCurrentCandidate: boolean
+  // Whether a pending, unexpired approval exists — evaluated against `now`, never
+  // trusted from the stored state alone.
+  approvalPendingAndValid: boolean
   reconcileClass: ReconcileClass | null
   reconcileReasonCode: ReconcileReasonCode | null
   // Phase 3 worktree state. Only the sanitized readiness boolean and the closed
@@ -128,6 +140,22 @@ export function buildAuditedTaskProjection(
     candidateIdShort: shortenCandidateId(source.auditApprovedTreeOid),
     committedShaShort: shortenCandidateId(source.committedSha),
     commitAttemptStatus: source.commitAttemptStatus,
+    commitReasonCode: source.commitReasonCode,
+    commitAdvisoryCode: source.commitAdvisoryCode,
+    // Approve is offered ONLY for a task resting in awaiting_human_approval whose
+    // CURRENT candidate carries the code audit's durable `approved` verdict.
+    // Deliberately not a function of fixRound — a round-3 candidate stays
+    // approvable, exactly as planApprovalReady ignores planRound.
+    commitApprovalReady:
+      source.state === 'awaiting_human_approval' && source.auditApprovedForCurrentCandidate,
+    // Commit additionally requires a live approval and a still-current candidate.
+    // Expiry is evaluated server-side, so a lapsed approval withdraws the
+    // affordance without any renderer clock.
+    commitReady:
+      source.state === 'awaiting_human_approval' &&
+      source.auditApprovedForCurrentCandidate &&
+      source.approvalPendingAndValid &&
+      source.candidateStatus === 'current',
     reconcileClass: source.reconcileClass,
     reconcileReasonCode: source.reconcileReasonCode,
     // Ready requires ALL THREE: provenance (a worktree was finalized), a
@@ -259,5 +287,22 @@ export const AUDITED_PROJECTION_FORBIDDEN_KEYS = [
   'candidateId',
   'tempIndexPath',
   'gitObjectDirectory',
-  'auditPromptText'
+  'auditPromptText',
+  // Phase 8 approval/commit internals. The approved tree OID is authorization
+  // identity; the commit message is renderer-authored INPUT that travels
+  // main-ward only and is never echoed back. The candidate store path and its
+  // byte accounting describe on-disk secrets-bearing storage and never cross.
+  'approvedTreeOid',
+  'approvalId',
+  'commitMessage',
+  'messageFilePath',
+  'intendedTreeOid',
+  'intendedParent',
+  'intendedMessageSha',
+  'createdCommitSha',
+  'materializedTreeOid',
+  'verifiedTreeOid',
+  'candidateStorePath',
+  'storeBytes',
+  'reservationId'
 ] as const

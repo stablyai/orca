@@ -3,7 +3,7 @@
 // projection. No RPC methods are registered anywhere for this feature —
 // Audited Workflow is deliberately Electron-IPC-only, so it can never reach
 // mobile/remote clients (see plan §10.2 and mobile-rpc-allowlist.test.ts).
-import { app, ipcMain } from 'electron'
+import { ipcMain } from 'electron'
 import { z } from 'zod'
 import type { Store } from '../persistence'
 import { getGitRepoRoot } from '../git/repo'
@@ -13,20 +13,14 @@ import { parseWslPath } from '../wsl'
 import {
   selectTask,
   getTaskProjection,
-  listTaskProjections,
-  getAuditedTaskRepository
+  listTaskProjections
 } from '../audited-workflow/audited-task-service'
-import { recoverInterruptedPlanReviewsOnStartup } from '../audited-workflow/audited-plan-review-orchestration'
-import { recoverInterruptedCodeAuditsOnStartup } from '../audited-workflow/audited-code-audit-orchestration'
-import { reconcilePlanArtifactFilesOnStartup } from '../audited-workflow/audited-plan-artifact-gc'
 import { registerAuditedPlanReviewHandlers } from './audited-workflow-plan-review'
 import { registerAuditedCodeAuditHandlers } from './audited-workflow-code-audit'
+import { registerAuditedWorkflowCommitHandlers } from './audited-workflow-commit'
+import { runAuditedWorkflowStartupRecovery } from './audited-workflow-startup-recovery'
 import { registerAuditedCodexProviderHandlers } from './audited-workflow-codex-provider'
-import {
-  startTriage,
-  retryTriage,
-  recoverInterruptedTriageRunsOnStartup
-} from '../audited-workflow/audited-triage-orchestration'
+import { startTriage, retryTriage } from '../audited-workflow/audited-triage-orchestration'
 import {
   hasAuditedTriageApiKey,
   saveAuditedTriageApiKey,
@@ -35,11 +29,9 @@ import {
 import {
   ensureWorktreeForTask,
   rebuildAuditedWorktreeRegistry,
-  reconcileAuditedWorktreesOnStartup,
   recoverWorktreeForTask,
   setAuditedWorktreeStore
 } from '../audited-workflow/audited-worktree-service'
-import { recoverInterruptedExecutionsOnStartup } from '../audited-workflow/audited-execution-orchestration'
 import { registerAuditedExecutionHandlers } from './audited-workflow-execution'
 import { broadcastAuditedTaskChanged } from '../audited-workflow/audited-workflow-broadcast'
 import { RISK_LEVELS, TASK_SOURCES } from '../../shared/audited-workflow-types'
@@ -123,45 +115,7 @@ export function registerAuditedWorkflowHandlers(store: Store): void {
   // dispatched against a live attempt's worktree after a restart.
   rebuildAuditedWorktreeRegistry()
 
-  // Why: runs once per registration (i.e. once per app process lifetime —
-  // registerAuditedWorkflowHandlers is called exactly once from
-  // register-core-handlers.ts). Idempotent and CAS-safe, so calling it again
-  // (e.g. in a test that re-registers handlers) is harmless — a second pass
-  // finds nothing left in 'running' state to recover.
-  recoverInterruptedTriageRunsOnStartup()
-
-  // Same rationale, for execution runs: a `running` row cannot be assumed alive
-  // after a restart, so every one is marked `interrupted` and its task blocked
-  // with pre_block_state set. Idempotent and CAS-safe.
-  recoverInterruptedExecutionsOnStartup()
-
-  // Same rationale for plan-review runs: a `running` Codex review cannot be
-  // assumed alive after a restart. Idempotent and CAS-safe.
-  recoverInterruptedPlanReviewsOnStartup()
-
-  // Same rationale for code-audit runs. Note candidate DERIVATION needs no
-  // recovery sweep: its objects live only in a per-run temp directory, so an
-  // interrupted derivation leaves nothing in the repository to reclaim.
-  recoverInterruptedCodeAuditsOnStartup()
-
-  // Reclaims artifact files whose DB row never committed (a crash or a lost
-  // ownership race between the atomic rename and the attach transaction).
-  // Conservative: only well-formed ids with no row in ANY status are removed.
-  try {
-    reconcilePlanArtifactFilesOnStartup(
-      getAuditedTaskRepository().getDatabase(),
-      app.getPath('userData')
-    )
-  } catch (error) {
-    console.error('[auditedWorkflow] Plan artifact reconciliation failed to start:', error)
-  }
-
-  // Read-only, network-free, Git-mutation-free. Fire-and-forget so handler
-  // registration is never blocked on filesystem/Git probes; failures are logged
-  // locally and never surface a raw error.
-  void reconcileAuditedWorktreesOnStartup().catch((error) => {
-    console.error('[auditedWorkflow] Worktree reconciliation failed:', error)
-  })
+  runAuditedWorkflowStartupRecovery()
 
   ipcMain.handle(
     'auditedWorkflow:listTasks',
@@ -360,6 +314,7 @@ export function registerAuditedWorkflowHandlers(store: Store): void {
   registerAuditedExecutionHandlers()
   registerAuditedPlanReviewHandlers()
   registerAuditedCodeAuditHandlers()
+  registerAuditedWorkflowCommitHandlers()
 
   // Why: exposes ONLY whether a key is configured — never the key, a masked
   // form, encrypted bytes, or a filesystem path. See

@@ -37,7 +37,13 @@ import type {
   AuditedWorkflowApprovePlanResult,
   AuditedWorkflowRequestPlanRevisionParams,
   AuditedWorkflowRequestPlanRevisionResult,
+  AuditedWorkflowApproveParams,
+  AuditedWorkflowApproveResult,
   AuditedWorkflowCodeAuditParams,
+  AuditedWorkflowCommitParams,
+  AuditedWorkflowCommitResult,
+  AuditedWorkflowRevokeApprovalParams,
+  AuditedWorkflowRevokeApprovalResult,
   AuditedWorkflowCodeAuditResult,
   AuditedWorkflowGetPlanArtifactParams,
   AuditedWorkflowSaveCodexProviderKeyParams,
@@ -2438,6 +2444,14 @@ const api = {
       params: AuditedWorkflowCodeAuditParams
     ): Promise<AuditedWorkflowCodeAuditResult> =>
       ipcRenderer.invoke('auditedWorkflow:requestCodeFix', params),
+    approve: (params: AuditedWorkflowApproveParams): Promise<AuditedWorkflowApproveResult> =>
+      ipcRenderer.invoke('auditedWorkflow:approve', params),
+    revokeApproval: (
+      params: AuditedWorkflowRevokeApprovalParams
+    ): Promise<AuditedWorkflowRevokeApprovalResult> =>
+      ipcRenderer.invoke('auditedWorkflow:revokeApproval', params),
+    commit: (params: AuditedWorkflowCommitParams): Promise<AuditedWorkflowCommitResult> =>
+      ipcRenderer.invoke('auditedWorkflow:commit', params),
     getPlanArtifact: (
       params: AuditedWorkflowGetPlanArtifactParams
     ): Promise<AuditedWorkflowGetPlanArtifactResult> =>

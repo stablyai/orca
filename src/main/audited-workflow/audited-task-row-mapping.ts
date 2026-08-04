@@ -6,6 +6,7 @@ import type {
   AuditedTaskState,
   AuditedTaskTransitionRecord,
   BlockReasonCode,
+  CommitAttemptStatus,
   ReviewVerdict,
   RiskLevel,
   TriageDecision,
@@ -73,6 +74,11 @@ export type AuditedTaskRow = {
   // lastVerdict so neither lane can overwrite the other's record.
   currentCandidateId: string | null
   codeAuditVerdict: ReviewVerdict | null
+  // Phase 8. currentApprovalId points at the single 'pending' approval row;
+  // commitAttemptStatus mirrors the latest attempt so the projection can read it
+  // without a second query.
+  currentApprovalId: string | null
+  commitAttemptStatus: CommitAttemptStatus | null
   createdAt: number
   updatedAt: number
 }
@@ -119,6 +125,8 @@ export function sqliteRowToTask(row: Record<string, unknown>): AuditedTaskRow {
     lastVerdict: (row.last_verdict as ReviewVerdict | null) ?? null,
     currentCandidateId: (row.current_candidate_id as string | null) ?? null,
     codeAuditVerdict: (row.code_audit_verdict as ReviewVerdict | null) ?? null,
+    currentApprovalId: (row.current_approval_id as string | null) ?? null,
+    commitAttemptStatus: (row.commit_attempt_status as CommitAttemptStatus | null) ?? null,
     createdAt: row.created_at_ms as number,
     updatedAt: row.updated_at_ms as number
   }

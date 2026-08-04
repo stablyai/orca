@@ -42,7 +42,13 @@ import type {
   AuditedWorkflowApprovePlanResult,
   AuditedWorkflowRequestPlanRevisionParams,
   AuditedWorkflowRequestPlanRevisionResult,
+  AuditedWorkflowApproveParams,
+  AuditedWorkflowApproveResult,
   AuditedWorkflowCodeAuditParams,
+  AuditedWorkflowCommitParams,
+  AuditedWorkflowCommitResult,
+  AuditedWorkflowRevokeApprovalParams,
+  AuditedWorkflowRevokeApprovalResult,
   AuditedWorkflowCodeAuditResult,
   AuditedWorkflowGetPlanArtifactParams,
   AuditedWorkflowSaveCodexProviderKeyParams,
@@ -2556,6 +2562,13 @@ export type PreloadApi = {
     requestCodeFix: (
       params: AuditedWorkflowCodeAuditParams
     ) => Promise<AuditedWorkflowCodeAuditResult>
+    // Phase 8 approval + commit. No `approver` and no `treeOid` cross: main
+    // derives every authority from durable state.
+    approve: (params: AuditedWorkflowApproveParams) => Promise<AuditedWorkflowApproveResult>
+    revokeApproval: (
+      params: AuditedWorkflowRevokeApprovalParams
+    ) => Promise<AuditedWorkflowRevokeApprovalResult>
+    commit: (params: AuditedWorkflowCommitParams) => Promise<AuditedWorkflowCommitResult>
     // The plan BODY. Fetched on demand rather than projected — it is the
     // largest, highest-risk field in the feature, and the handler re-verifies
     // that artifactId belongs to taskId before any read.

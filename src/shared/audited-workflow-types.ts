@@ -8,6 +8,8 @@ import type { PlanReviewReasonCode, PlanReviewRunStatus } from './audited-plan-a
 // ReviewVerdict from here) is erased at compile time — the same shape the plan
 // and execution type modules already use.
 import type { CodeAuditReasonCode, CodeAuditRunStatus } from './audited-code-audit-types'
+// Type-only, so the cycle with audited-commit-types.ts is erased at compile time.
+import type { CommitAdvisoryCode, CommitReasonCode } from './audited-commit-types'
 
 export const AUDITED_TASK_STATES = [
   'selected',
@@ -57,7 +59,19 @@ export type ReconcileClass = (typeof RECONCILE_CLASSES)[number]
 export const APPROVAL_TTL_PRESETS = ['short', 'standard', 'extended'] as const
 export type ApprovalTtlPreset = (typeof APPROVAL_TTL_PRESETS)[number]
 
-export const COMMIT_ATTEMPT_STATUSES = ['authorized', 'completed', 'failed', 'abandoned'] as const
+// `failed` is deliberately SPLIT, mirroring WORKTREE_ATTEMPT_STATUSES: a dangling
+// commit object with no ref update is exactly the "partial evidence remains" case
+// and must not collapse into a generic failure. failed_no_effect: the ref
+// provably never moved, so nothing in the user's history changed.
+// failed_ambiguous: partial/mismatched evidence remains and must stay guarded.
+// There is no bare `failed`.
+export const COMMIT_ATTEMPT_STATUSES = [
+  'authorized',
+  'completed',
+  'failed_no_effect',
+  'failed_ambiguous',
+  'abandoned'
+] as const
 export type CommitAttemptStatus = (typeof COMMIT_ATTEMPT_STATUSES)[number]
 
 export const TASK_SOURCES = ['roadmap', 'custom'] as const
@@ -102,6 +116,10 @@ export const BLOCK_REASON_CODES = [
   'branch_ref_moved',
   'branch_not_symbolic',
   'post_commit_drift_detected',
+  // Phase 8: the commit lane's generic block code. The detailed CommitReasonCode
+  // is persisted separately on the attempt row — blockedReasonCode stays narrow,
+  // exactly as the worktree lane's two codes do.
+  'commit_process_failed',
   'claude_not_found',
   'codex_not_found',
   'agent_timeout',
@@ -279,6 +297,18 @@ export type AuditedTaskStatusProjection = {
   candidateIdShort: string | null
   committedShaShort: string | null
   commitAttemptStatus: CommitAttemptStatus | null
+  // Phase 8. The commit lane's failure code, and — kept strictly separate — the
+  // advisory recorded on a DURABLE commit. A task may simultaneously be
+  // `committed` with a valid committedShaShort AND carry
+  // commitAdvisoryCode: 'post_commit_drift_detected'. Rendering that as a failed
+  // commit would lie about durable state, so the two never share a field.
+  commitReasonCode: CommitReasonCode | null
+  commitAdvisoryCode: CommitAdvisoryCode | null
+  // Server-computed authorities, exactly like planApprovalReady: the renderer
+  // renders these and never derives them, so a renderer bug cannot manufacture
+  // an approve or commit affordance.
+  commitApprovalReady: boolean
+  commitReady: boolean
   reconcileClass: ReconcileClass | null
   reconcileReasonCode: ReconcileReasonCode | null
   // Phase 3: the ONLY worktree facts that cross the boundary. Never a path,

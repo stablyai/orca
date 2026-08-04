@@ -67,6 +67,11 @@ export const CODE_AUDIT_REASON_CODES = [
   'code_audit_in_progress',
   // The fix round cap is reached.
   'round_limit_reached',
+  // Phase 8 §0.2: the durable candidate store has no room for this candidate's
+  // measured footprint, so it could never be promoted at commit time. Checked
+  // BEFORE spawning Codex so the budget is visible at admission rather than
+  // discovered at commit. Carries a ManifestReasonCode detail internally.
+  'candidate_store_quota_exceeded',
   // Derivation-side failures surfaced on the audit lane.
   'empty_change_set',
   'candidate_derivation_failed',

@@ -53,6 +53,10 @@ function task(overrides: Partial<AuditedTaskStatusProjection> = {}): AuditedTask
     candidateIdShort: null,
     committedShaShort: null,
     commitAttemptStatus: null,
+    commitReasonCode: null,
+    commitAdvisoryCode: null,
+    commitApprovalReady: false,
+    commitReady: false,
     reconcileClass: null,
     reconcileReasonCode: null,
     worktreeReady: true,
@@ -268,10 +272,12 @@ describe('failed retry preflight', () => {
 })
 
 describe('parked review states', () => {
-  // Phase 7 moved the dead-end forward: awaiting_code_audit now has a real UI
-  // owned by AuditedCodeAuditPanel, so these controls render nothing for it —
-  // the same relationship they already had with awaiting_plan_review. The note
-  // now sits at awaiting_human_approval, the lane's new resting point.
+  // Phase 7 moved the dead-end forward to awaiting_human_approval; Phase 8
+  // removes it entirely. awaiting_human_approval, committing, and committed are
+  // now owned by AuditedCommitPanel, so these controls render nothing for them —
+  // the same relationship they already have with awaiting_plan_review and
+  // awaiting_code_audit. Duplicating affordances across two panels would let the
+  // two disagree.
   it('renders nothing in awaiting_code_audit, which the code-audit panel owns', () => {
     const { container } = render(
       <AuditedExecutionControls task={task({ state: 'awaiting_code_audit' })} />
@@ -279,15 +285,13 @@ describe('parked review states', () => {
     expect(container).toBeEmptyDOMElement()
   })
 
-  it('shows an informational note with no affordance in awaiting_human_approval', () => {
-    render(<AuditedExecutionControls task={task({ state: 'awaiting_human_approval' })} />)
-    expect(
-      screen.getByText(
-        /Approved by code review\. The approval and commit step is not available yet\./
-      )
-    ).toBeInTheDocument()
-    expect(screen.queryByRole('button')).not.toBeInTheDocument()
-  })
+  it.each(['awaiting_human_approval', 'committing', 'committed'] as const)(
+    'renders nothing in %s, which the commit panel owns',
+    (state) => {
+      const { container } = render(<AuditedExecutionControls task={task({ state })} />)
+      expect(container).toBeEmptyDOMElement()
+    }
+  )
 
   it('renders nothing in awaiting_plan_review, which the plan-review panel owns', () => {
     const { container } = render(

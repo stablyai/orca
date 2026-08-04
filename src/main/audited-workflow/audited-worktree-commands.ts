@@ -32,7 +32,16 @@ const ALLOWED_SUBCOMMANDS = new Set([
   // isolation; runAuditedGitRead rejects them via isReadOnlyAuditedArgv.
   'read-tree',
   'add',
-  'write-tree'
+  'write-tree',
+  // Phase 8. commit-tree/update-ref are admissible ONLY through
+  // runAuditedGitCommitWrite; rev-list/pack-objects ONLY through
+  // runAuditedGitCandidateStoreRead. unpack-objects writes into the real store
+  // and is likewise commit-write-only.
+  'commit-tree',
+  'update-ref',
+  'rev-list',
+  'pack-objects',
+  'unpack-objects'
 ])
 const ALLOWED_WORKTREE_VERBS = new Set(['add', 'list'])
 
@@ -41,9 +50,28 @@ const ALLOWED_WORKTREE_VERBS = new Set(['add', 'list'])
 // structurally rather than by convention.
 const CANDIDATE_SUBCOMMANDS = new Set(['read-tree', 'add', 'write-tree'])
 
+// Phase 8. Subcommands that may run against the REAL object store, admissible
+// only through runAuditedGitCommitWrite.
+//
+// `add` and `write-tree` are DELIBERATELY EXCLUDED: they hash working-tree files,
+// and the whole point of the promotion design is that no such command ever runs
+// against the real store. Their only legitimate use is inside deriveCandidateTree,
+// which has its own enforced temp-object-dir isolation.
+export const COMMIT_WRITE_SUBCOMMANDS = new Set([
+  'unpack-objects',
+  'commit-tree',
+  'update-ref',
+  'read-tree'
+])
+
+// Phase 8. Read-only enumeration/packing against the app-owned candidate store.
+// Neither can write to the real store: pack-objects is --stdout-only and rev-list
+// creates nothing.
+export const CANDIDATE_STORE_READ_SUBCOMMANDS = new Set(['rev-list', 'pack-objects'])
+
 // Options that would let an argv re-point Git at a different index, object store,
 // worktree, or repository — defeating the env-based isolation.
-const CANDIDATE_FORBIDDEN_OPTIONS = [
+export const CANDIDATE_FORBIDDEN_OPTIONS = [
   '--index-file',
   '-C',
   '--work-tree',
@@ -112,6 +140,17 @@ export function isReadOnlyAuditedArgv(argv: readonly string[]): boolean {
   }
   if (subcommand !== null && CANDIDATE_SUBCOMMANDS.has(subcommand)) {
     // These create objects. They are admissible, but never through the read path.
+    return false
+  }
+  // Phase 8: commit-tree/unpack-objects create objects and update-ref mutates a
+  // ref, so none may reach the read path. rev-list/pack-objects create nothing,
+  // but they need the candidate store attached via GIT_OBJECT_DIRECTORY, which
+  // only runAuditedGitCandidateStoreRead supplies — so they are excluded here too
+  // rather than silently running against the wrong store.
+  if (subcommand !== null && COMMIT_WRITE_SUBCOMMANDS.has(subcommand)) {
+    return false
+  }
+  if (subcommand !== null && CANDIDATE_STORE_READ_SUBCOMMANDS.has(subcommand)) {
     return false
   }
   return subcommand !== null && ALLOWED_SUBCOMMANDS.has(subcommand)
@@ -372,3 +411,8 @@ export async function runAuditedWorktreeAdd(
     return { ok: false, error }
   }
 }
+
+// Phase 8's builders and its two extra spawn policies live in their own module so
+// this file stays within its line budget; re-exported so every audited Git call
+// site still imports from one place.
+export * from './audited-commit-commands'

@@ -23,6 +23,7 @@ import type {
   PlanRevisionReasonCode
 } from './audited-plan-artifact-types'
 import type { CodeAuditReasonCode } from './audited-code-audit-types'
+import type { CommitReasonCode } from './audited-commit-types'
 
 export type AuditedWorkflowListTasksParams = { repoId?: string }
 export type AuditedWorkflowGetTaskParams = { taskId: string }
@@ -164,21 +165,37 @@ export type AuditedWorkflowSaveTriageApiKeyParams = { apiKey: string }
 // its code-owned registry.
 export type AuditedWorkflowSaveCodexProviderKeyParams = { apiKey: string }
 
+// Phase 8. `approver` is deliberately ABSENT: like every Phase 3-7 command, the
+// renderer supplies only a taskId (plus a server-side TTL preset name, never a
+// raw duration). A renderer-supplied approver string would be unverifiable, so
+// main derives the approval's authority entirely from durable state.
 export type AuditedWorkflowApproveParams = {
   taskId: string
-  approver: string
   ttlPreset: ApprovalTtlPreset
 }
-export type AuditedWorkflowApproveResult = { granted: boolean; reasonCode: ApprovalReasonCode }
+
+// The house discriminated union, replacing the Phase-1 `{ granted, reasonCode }`
+// shape: `reasonCode` is always the property name and `kind` selects its
+// vocabulary. See the contract note above ExecutionCommandResult.
+export type ApprovalCommandResult =
+  | { ok: true }
+  | { ok: false; kind: 'approval'; reasonCode: ApprovalReasonCode }
+
+export type AuditedWorkflowApproveResult = ApprovalCommandResult
 
 export type AuditedWorkflowRevokeApprovalParams = { taskId: string }
-export type AuditedWorkflowRevokeApprovalResult = {
-  revoked: boolean
-  reasonCode: ApprovalReasonCode
-}
+export type AuditedWorkflowRevokeApprovalResult = ApprovalCommandResult
 
+// The commit message is renderer-authored INPUT. It travels main-ward only and is
+// never echoed back on the projection or logged.
 export type AuditedWorkflowCommitParams = { taskId: string; message: string }
-export type AuditedWorkflowCommitResult = { committed: boolean; reasonCode: string }
+export type CommitCommandResult =
+  | { ok: true }
+  | { ok: false; kind: 'commit'; reasonCode: CommitReasonCode }
+  // A read-only worktree verification failure. Nothing was written and nothing
+  // spawned; display-only, exactly like the plan-review lane's worktree arm.
+  | { ok: false; kind: 'worktree'; reasonCode: WorktreeReasonCode }
+export type AuditedWorkflowCommitResult = CommitCommandResult
 
 export type AuditedWorkflowResumeAttemptParams = { taskId: string }
 export type AuditedWorkflowResumeAttemptResult = { resumed: boolean; reasonCode: string }

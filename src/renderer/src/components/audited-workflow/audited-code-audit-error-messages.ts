@@ -70,6 +70,14 @@ export function getCodeAuditErrorMessage(reasonCode: CodeAuditReasonCode): strin
         'auto.components.auditedWorkflow.errors.codeAuditRoundLimit',
         'The fix limit has been reached.'
       )
+    // Phase 8 §0.2: refused BEFORE spawning Codex, because a candidate that
+    // cannot be stored could never be committed later. Names the remedy rather
+    // than the internal limit that was hit.
+    case 'candidate_store_quota_exceeded':
+      return translate(
+        'auto.components.auditedWorkflow.errors.codeAuditStoreQuota',
+        'This change set is too large to review and store. Reduce its size, or finish another audited task to free space.'
+      )
     case 'empty_change_set':
       return translate(
         'auto.components.auditedWorkflow.errors.emptyChangeSet',

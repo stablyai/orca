@@ -4,6 +4,7 @@
 // audited_tasks and audited_transitions.
 import {
   AUDITED_TASK_STATES,
+  COMMIT_ATTEMPT_STATUSES,
   TASK_SOURCES,
   RISK_LEVELS,
   TASK_ACTORS,
@@ -27,6 +28,11 @@ import {
   createCodeAuditTables,
   rebuildExecutionRunsForFixMode
 } from './audited-code-audit-schema'
+import {
+  PHASE_8_CANDIDATE_COLUMNS,
+  PHASE_8_TASK_COLUMNS,
+  createCommitTables
+} from './audited-commit-schema'
 import type Database from '../sqlite/sync-database'
 
 // Schema versions: v1 initial (audited_tasks, audited_transitions). v2 (Phase 2)
@@ -62,7 +68,15 @@ import type Database from '../sqlite/sync-database'
 // CHECK, so v7 rebuilds THAT ONE TABLE (see rebuildExecutionRunsForFixMode).
 // audited_tasks' state CHECK is still unchanged — Phase 7 introduces no task
 // state, only writers for states declared since Phase 1.
-export const SCHEMA_VERSION = 7
+// v8 (Phase 8) adds audited_approvals + audited_commit_attempts +
+// audited_store_reservations, two audited_tasks columns (current_approval_id,
+// commit_attempt_status), and two audited_candidates columns (store_bytes,
+// store_expires_at_ms) — FULLY ADDITIVE, unlike v7. Phase 8 introduces no task
+// state: awaiting_human_approval, committing, and committed have all been
+// declared since Phase 1, so audited_tasks' state CHECK is unchanged and NO
+// table rebuild is required. audited_transitions.event_type is unconstrained
+// TEXT, so the new commit_* event types need no migration either.
+export const SCHEMA_VERSION = 8
 
 export function createAuditedWorkflowTables(db: Database.Database): void {
   const stateList = AUDITED_TASK_STATES.map((s) => `'${s}'`).join(', ')
@@ -76,6 +90,7 @@ export function createAuditedWorkflowTables(db: Database.Database): void {
   const provenanceList = WORKTREE_PROVENANCE_KINDS.map((p) => `'${p}'`).join(', ')
   const worktreeReasonList = WORKTREE_REASON_CODES.map((r) => `'${r}'`).join(', ')
   const verdictList = REVIEW_VERDICTS.map((v) => `'${v}'`).join(', ')
+  const commitAttemptStatusList = COMMIT_ATTEMPT_STATUSES.map((s) => `'${s}'`).join(', ')
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS audited_tasks (
@@ -132,6 +147,13 @@ export function createAuditedWorkflowTables(db: Database.Database): void {
       -- last_verdict (which the plan lane owns) so one lane cannot overwrite the
       -- other's record. Same ReviewVerdict vocabulary.
       code_audit_verdict          TEXT CHECK(code_audit_verdict IS NULL OR code_audit_verdict IN (${verdictList})),
+      -- Phase 8. Denormalized pointer to the task's single 'pending' approval,
+      -- written in the SAME transaction as the approval row so the two can never
+      -- disagree; audited_approvals stays the source of truth.
+      current_approval_id         TEXT,
+      -- Phase 8. The latest commit attempt's status, projected as-is. The
+      -- detailed CommitReasonCode lives on the attempt row, not here.
+      commit_attempt_status       TEXT CHECK(commit_attempt_status IS NULL OR commit_attempt_status IN (${commitAttemptStatusList})),
       created_at_ms                INTEGER NOT NULL,
       updated_at_ms                INTEGER NOT NULL
     );
@@ -207,6 +229,7 @@ export function createAuditedWorkflowTables(db: Database.Database): void {
   createPlanReviewTables(db)
   createPlanCoverageTable(db)
   createCodeAuditTables(db)
+  createCommitTables(db)
 }
 
 // Phase 3 columns added to a pre-existing audited_tasks table, with their
@@ -326,6 +349,27 @@ export function migrateAuditedWorkflowSchema(db: Database.Database): void {
       if (!executionRunsAcceptsFixStates(db)) {
         rebuildExecutionRunsForFixMode(db)
       }
+    }
+    if (current < 8) {
+      // Phase 8: three new tables plus additive columns on audited_tasks and
+      // audited_candidates. FULLY ADDITIVE — no CHECK change on any existing
+      // table and no rebuild, because Phase 8 introduces no task state (every
+      // state it writes has been declared since Phase 1). Created here rather
+      // than relying on createAuditedWorkflowTables having run, for the same
+      // reason as v4-v7: this function is also called directly against a legacy
+      // DB, and a migration that silently depends on another call would leave
+      // that path without the tables.
+      for (const [column, type] of PHASE_8_TASK_COLUMNS) {
+        if (!columnExists(db, 'audited_tasks', column)) {
+          db.exec(`ALTER TABLE audited_tasks ADD COLUMN ${column} ${type}`)
+        }
+      }
+      for (const [column, type] of PHASE_8_CANDIDATE_COLUMNS) {
+        if (!columnExists(db, 'audited_candidates', column)) {
+          db.exec(`ALTER TABLE audited_candidates ADD COLUMN ${column} ${type}`)
+        }
+      }
+      createCommitTables(db)
     }
     db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`)
     db.exec('COMMIT')

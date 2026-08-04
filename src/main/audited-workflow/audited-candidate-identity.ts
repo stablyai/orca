@@ -40,8 +40,32 @@ import { FULL_OID } from './audited-worktree-identity'
 import type { CandidateReasonCode } from '../../shared/audited-code-audit-types'
 
 export type CandidateDerivationResult =
-  | { ok: true; treeOid: string }
+  | {
+      ok: true
+      treeOid: string
+      /**
+       * The object directory holding the derived graph. For 'ephemeral' this is
+       * already deleted by the time the caller sees it and is reported only for
+       * logging; for 'durable' it is the retained store the promoter reads.
+       */
+      objectDir: string
+    }
   | { ok: false; reasonCode: CandidateReasonCode }
+
+/**
+ * Whether the derived objects survive the call (Phase 8 §0).
+ *
+ * `ephemeral` is Phase 7's original behavior and stays the default for every
+ * VERIFICATION derivation — admission re-checks, the A0.1 freshness gate, and
+ * Phase D. Those must leave nothing behind, which is what keeps a drift mismatch
+ * from persisting the very bytes it is checking.
+ *
+ * `durable` retains the objects under an app-owned store so Phase 8 can later
+ * promote the approved graph into the real store instead of re-hashing the
+ * worktree. Used ONLY when a run is producing the candidate attachCandidate will
+ * record.
+ */
+export type CandidateRetention = 'ephemeral' | 'durable'
 
 export type DeriveCandidateArgs = {
   runId: string
@@ -53,6 +77,20 @@ export type DeriveCandidateArgs = {
   /** Non-null means a non-local execution host. */
   wslDistro: string | null
   hostId: string
+  /** Defaults to 'ephemeral' — Phase 7's behavior is never changed implicitly. */
+  retention?: CandidateRetention
+  /**
+   * Where durable objects land. Required when retention is 'durable'; the
+   * candidate id keys the directory so it shares the candidate's lifecycle.
+   */
+  durableStoreDir?: string
+  /**
+   * Invoked with the object dir while it still EXISTS, before an ephemeral
+   * cleanup runs. This is how §0.2 measures a completed fact: whatever Git
+   * hashed is the candidate, and its footprint is read here rather than guessed
+   * beforehand by a filesystem preflight.
+   */
+  onDerived?: (objectDir: string, treeOid: string) => Promise<void>
 }
 
 export function getCandidateRunDir(userDataPath: string, runId: string): string {
@@ -96,7 +134,17 @@ export async function deriveCandidateTree(
   }
   const commonObjectDir = join(commonDir, 'objects')
 
-  const candidateDir = getCandidateRunDir(args.userDataPath, args.runId)
+  // A durable derivation keeps its objects under the app-owned candidate store;
+  // an ephemeral one uses the per-run temp dir and deletes it in the `finally`.
+  // The ISOLATION SHAPE IS IDENTICAL either way — temp index, redirected object
+  // dir, real store attached read-only — so a durable derivation is still
+  // incapable of writing into .git/objects. Only the destination and the
+  // lifetime differ.
+  const retention: CandidateRetention = args.retention ?? 'ephemeral'
+  const candidateDir =
+    retention === 'durable' && args.durableStoreDir
+      ? args.durableStoreDir
+      : getCandidateRunDir(args.userDataPath, args.runId)
   const isolation: CandidateIsolationEnv = {
     gitIndexFile: join(candidateDir, 'index.tmp'),
     gitObjectDirectory: join(candidateDir, 'objects'),
@@ -158,15 +206,28 @@ export async function deriveCandidateTree(
       return { ok: false, reasonCode: 'empty_change_set' }
     }
 
-    return { ok: true, treeOid }
+    // Measured while the objects still exist — §0.2 judges a completed fact, not
+    // a preflight prediction. Runs before the `finally` deletes an ephemeral dir.
+    if (args.onDerived) {
+      await args.onDerived(isolation.gitObjectDirectory, treeOid)
+    }
+
+    return { ok: true, treeOid, objectDir: isolation.gitObjectDirectory }
   } catch (error) {
     // Includes the isolation shape errors, which are programming errors — logged
     // locally, reported as a closed code, never surfaced as text.
     console.error('[auditedWorkflow] Candidate derivation failed:', error)
     return { ok: false, reasonCode: 'candidate_derivation_failed' }
   } finally {
+    // A durable derivation KEEPS its objects: Phase 8 promotes the approved graph
+    // from them rather than re-hashing the worktree. Its temp index is still
+    // removed — only the object dir needs to survive.
     try {
-      rmSync(candidateDir, { recursive: true, force: true })
+      if (retention === 'durable') {
+        rmSync(isolation.gitIndexFile, { force: true })
+      } else {
+        rmSync(candidateDir, { recursive: true, force: true })
+      }
     } catch (error) {
       // A leftover directory is inert: it is outside the repository and nothing
       // references it. Losing the delete must never change an outcome.
