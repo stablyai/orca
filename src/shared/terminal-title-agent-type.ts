@@ -5,7 +5,11 @@ import {
   QWEN_AGENT_NAME_RE,
   titleHasAgentName
 } from './agent-name-token-match'
-import { isCursorAgentTitle, isQwenNativeTitle } from './agent-title-core'
+import {
+  isCursorAgentTitle,
+  isQwenBrailleSyntheticTitle,
+  isQwenNativeTitle
+} from './agent-title-core'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
 import {
   getPiCompatibleSyntheticAgentLabel,
@@ -103,7 +107,9 @@ export function isClaudeAgent(title: string): boolean {
     // Why: named non-Claude agents carry braille spinners too. Gate Cursor by its
     // identity title, not the token, so a Claude title mentioning a cursor stays Claude.
     return (
-      !isCursorAgentTitle(title) && !lower.includes('openclaude') && !QWEN_AGENT_NAME_RE.test(title)
+      !isCursorAgentTitle(title) &&
+      !lower.includes('openclaude') &&
+      !isQwenBrailleSyntheticTitle(title)
     )
   }
   // Why: permission/action-required Claude titles can omit the usual prefixes.
@@ -157,6 +163,12 @@ export function getAgentLabel(title: string): string | null {
   if (isPiAgentTitle(title)) {
     return 'Pi'
   }
+  // Why: the static `Qwen - <dir>` frame owns the title; directory tokens like
+  // `droid`/`opencode` must not re-route ownership (native prefix beats every
+  // generic token match below).
+  if (isQwenNativeTitle(title)) {
+    return 'Qwen Code'
+  }
   // Why: Codex/OpenCode/Aider can also use braille spinner prefixes while
   // working. Prefer explicit name matches before Claude's generic spinner
   // heuristic so mixed-agent hovercards stay truthful. Token-match (not
@@ -193,11 +205,6 @@ export function getAgentLabel(title: string): string | null {
   // title set (mirrors @cursor routing), before `isClaudeAgent` claims the braille frame.
   if (isCursorAgentTitle(title)) {
     return 'Cursor'
-  }
-  // Why: the static `Qwen - <dir>` frame owns the title; a directory token like
-  // `droid` must not re-route ownership (native prefix beats generic tokens).
-  if (isQwenNativeTitle(title)) {
-    return 'Qwen Code'
   }
   // Why: synthesized "⠋ Droid" working title needs to be matched before Claude's braille heuristic.
   // Token matching avoids labeling ordinary Android terminal titles as Droid.

@@ -117,20 +117,15 @@ export function isCursorNativeAgentTitle(title: string): boolean {
   return title.trim().toLowerCase() === CURSOR_NATIVE_TITLE_LOWER
 }
 
-// Why: Orca's synthetic Qwen titles reuse the native `Qwen - ` prefix with a
-// closed status suffix; only those stay classifiable — everything else behind
-// the prefix is a static OSC frame whose directory tokens must not mint state.
-const QWEN_SYNTHETIC_SUFFIXES = [
-  'action required',
-  'permission',
-  'waiting',
-  'ready',
-  'idle',
-  'done',
-  'working',
-  'thinking',
-  'running'
-] as const
+// Why: Orca currently synthesizes no Qwen spinner titles; if one is ever added,
+// its exact shape must stay out of Claude's generic braille branch without
+// letting Claude task text that merely mentions qwen escape it.
+const QWEN_BRAILLE_SYNTHETIC_RE = /^[\u2800-\u28ff]+\s+qwen(?: code)?$/i
+
+/** True for an exact synthesized braille Qwen spinner title (`⠋ Qwen Code`). */
+export function isQwenBrailleSyntheticTitle(title: string | null | undefined): boolean {
+  return typeof title === 'string' && QWEN_BRAILLE_SYNTHETIC_RE.test(title.trim())
+}
 
 /** True for Qwen Code's static `Qwen - <dir>` OSC frame (or bare `Qwen`). */
 export function isQwenNativeTitle(title: string | null | undefined): boolean {
@@ -138,14 +133,9 @@ export function isQwenNativeTitle(title: string | null | undefined): boolean {
     return false
   }
   const lower = title.trim().toLowerCase()
-  if (lower === 'qwen') {
-    return true
-  }
-  if (!lower.startsWith('qwen - ')) {
-    return false
-  }
-  const suffix = lower.slice('qwen - '.length).trim()
-  return !(QWEN_SYNTHETIC_SUFFIXES as readonly string[]).includes(suffix)
+  // Why: everything behind the `qwen - ` prefix is static frame text (usually a
+  // directory); no synthetic Qwen titles exist, so the whole frame is native.
+  return lower === 'qwen' || lower.startsWith('qwen - ')
 }
 
 // Why: `cursor` is also an ordinary editor noun that other agents type into their own

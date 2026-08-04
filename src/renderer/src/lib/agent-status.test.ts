@@ -228,13 +228,15 @@ describe('detectAgentStatusFromTitle', () => {
     // state, and a false idle here would resolve tui-idle mid-turn.
     expect(detectAgentStatusFromTitle('Qwen - my-project')).toBeNull()
     // Static-shaped frames whose directory carries keywords or other agent
-    // names must not mint status either (native guard precedes heuristics).
+    // names must not mint status either (native guard precedes heuristics);
+    // Orca synthesizes no Qwen status titles, so the whole frame is native.
     expect(detectAgentStatusFromTitle('Qwen - ~/projects/ready')).toBeNull()
+    expect(detectAgentStatusFromTitle('Qwen - ready')).toBeNull()
     expect(detectAgentStatusFromTitle('Qwen - droid')).toBeNull()
+    expect(detectAgentStatusFromTitle('Qwen - action required')).toBeNull()
     expect(detectAgentStatusFromTitle('Qwen - claude waiting')).toBeNull()
-    // Non-static keyword titles (Orca's synthetic shapes) still classify.
+    // Non-native keyword titles still classify.
     expect(detectAgentStatusFromTitle('Qwen ready')).toBe('idle')
-    expect(detectAgentStatusFromTitle('Qwen - action required')).toBe('permission')
     expect(detectAgentStatusFromTitle('qwen working')).toBe('working')
     // Path fragments are not identity.
     expect(detectAgentStatusFromTitle('~/qwen/working')).toBeNull()
@@ -492,8 +494,11 @@ describe('getAgentLabel', () => {
     // Why: directory tokens must not re-route the static `Qwen - <dir>` frame.
     expect(getAgentLabel('Qwen - droid')).toBe('Qwen Code')
     expect(getAgentLabel('Qwen - ~/projects/ready')).toBe('Qwen Code')
+    expect(getAgentLabel('Qwen - opencode')).toBe('Qwen Code')
+    expect(getAgentLabel('Qwen - codex')).toBe('Qwen Code')
     // Why: Claude-owned titles can mention qwen in task text; prefix/braille identity wins.
     expect(getAgentLabel('claude qwen integration notes')).toBe('Claude Code')
+    expect(getAgentLabel('⠋ Compare Qwen vs Claude APIs')).toBe('Claude Code')
     expect(getAgentLabel('⠋ Qwen Code')).toBe('Qwen Code')
   })
 
