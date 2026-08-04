@@ -28,7 +28,8 @@ import {
   parseWslPath,
   toLinuxPath,
   toWindowsWslPath,
-  wslUncDirectoryExists
+  wslUncDirectoryExists,
+  wslUncFileExists
 } from './wsl'
 
 function withPlatform<T>(value: NodeJS.Platform, fn: () => T): T {
@@ -740,5 +741,50 @@ describe('wslUncDirectoryExists', () => {
       withPlatform('linux', () => wslUncDirectoryExists('\\\\wsl.localhost\\Ubuntu\\home\\jin'))
     ).toBeNull()
     expect(execFileSyncMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('wslUncFileExists', () => {
+  afterEach(() => {
+    execFileSyncMock.mockReset()
+  })
+
+  it('asks the distro with test -f when the distro reports the file exists', () => {
+    execFileSyncMock.mockReturnValue('')
+    const result = withPlatform('win32', () =>
+      wslUncFileExists('\\\\wsl.localhost\\Ubuntu\\home\\jin\\.claude.json')
+    )
+    expect(result).toBe(true)
+    expect(execFileSyncMock).toHaveBeenCalledWith(
+      'wsl.exe',
+      ['-d', 'Ubuntu', '--', 'test', '-f', '/home/jin/.claude.json'],
+      expect.objectContaining({ timeout: 5000 })
+    )
+  })
+
+  it('returns false when test -f exits non-zero (file missing)', () => {
+    execFileSyncMock.mockImplementation(() => {
+      const error = new Error('Command failed') as Error & { status: number }
+      error.status = 1
+      throw error
+    })
+    expect(
+      withPlatform('win32', () =>
+        wslUncFileExists('\\\\wsl.localhost\\Ubuntu\\home\\jin\\.claude.json')
+      )
+    ).toBe(false)
+  })
+
+  it('returns null when the distro cannot answer (inconclusive)', () => {
+    execFileSyncMock.mockImplementation(() => {
+      const error = new Error('spawn wsl.exe ENOENT') as Error & { code: string }
+      error.code = 'ENOENT'
+      throw error
+    })
+    expect(
+      withPlatform('win32', () =>
+        wslUncFileExists('\\\\wsl.localhost\\Ubuntu\\home\\jin\\.claude.json')
+      )
+    ).toBeNull()
   })
 })

@@ -14,6 +14,7 @@
     "../src/main/ipc/worktree-path-comparison.ts",
     "../src/main/wsl-distro-list-output.ts",
     "../src/main/wsl-distro-retry.ts",
+    "../src/main/wsl-unc-path-probe.ts",
     "../src/main/wsl.ts"
   ],
   "compilerOptions": {

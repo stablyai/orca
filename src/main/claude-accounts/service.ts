@@ -396,7 +396,9 @@ export class ClaudeAccountService {
       }
       if (restoredManagedCredentials) {
         this.restoreClaudeSettings(previousSettings)
-        await this.runtimeAuth.forceMaterializeCurrentSelectionForRollback()
+        await this.runtimeAuth.forceMaterializeCurrentSelectionForRollback(
+          getClaudeSelectionTargetForAccount(account)
+        )
       } else if (wroteManagedCredentials) {
         this.store.updateSettings({ claudeManagedAccounts: reauthenticatedAccounts })
       } else {
@@ -452,7 +454,9 @@ export class ClaudeAccountService {
       return this.getSnapshot()
     } catch (error) {
       this.restoreClaudeSettings(settings)
-      await this.runtimeAuth.forceMaterializeCurrentSelectionForRollback()
+      await this.runtimeAuth.forceMaterializeCurrentSelectionForRollback(
+        getClaudeSelectionTargetForAccount(account)
+      )
       throw error
     }
   }
@@ -491,7 +495,7 @@ export class ClaudeAccountService {
       return this.getSnapshot()
     } catch (error) {
       this.restoreClaudeSettings(previousSettings)
-      await this.runtimeAuth.forceMaterializeCurrentSelectionForRollback()
+      await this.runtimeAuth.forceMaterializeCurrentSelectionForRollback(effectiveTarget)
       throw error
     }
   }

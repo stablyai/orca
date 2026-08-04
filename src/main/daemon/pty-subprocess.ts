@@ -29,6 +29,7 @@ import {
 } from '../providers/windows-shell-fallback-chain'
 import { isPwshAvailable } from '../pwsh'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-wsl-env'
+import { applyWslClaudeConfigDirEnv } from '../pty/claude-config-dir-wsl-env'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
 import { stripInheritedBuildModeEnv } from '../pty/build-mode-env'
@@ -741,10 +742,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       } else if (env.CODEX_HOME) {
         addWslEnvKeys(env, ['CODEX_HOME', 'ORCA_CODEX_HOME'])
       }
-      if (env.CLAUDE_CONFIG_DIR) {
-        // Why: non-default env vars need WSLENV import to cross Windows wsl.exe into the Linux side.
-        addWslEnvKeys(env, ['CLAUDE_CONFIG_DIR'])
-      }
+      applyWslClaudeConfigDirEnv(env, resolvedWslContext?.distro ?? null)
       if (env[ORCA_HERMES_STARTUP_QUERY_ENV] !== undefined) {
         // Why: wsl.exe drops custom Windows env vars unless named in WSLENV.
         addWslEnvKeys(env, [ORCA_HERMES_STARTUP_QUERY_ENV])

@@ -155,7 +155,34 @@ describe('fetchViaPty', () => {
     expect(bashCommand).toContain('mkdir -p "$orca_rate_limit_cwd"')
     expect(bashCommand).toContain('cd "$orca_rate_limit_cwd"')
     expect(bashCommand).toContain("export HTTPS_PROXY='http://127.0.0.1:7890'")
+    expect(bashCommand).toContain("export CLAUDE_CONFIG_DIR='/home/u/.claude'")
     expect(bashCommand).toContain('exec claude')
+
+    term.emitExit()
+    await resultPromise
+  })
+
+  it('leaves CLAUDE_CONFIG_DIR unset when the preparation carries no env patch', async () => {
+    // Why: a managed WSL account runs against the distro's own ~/.claude, so pinning a
+    // config dir here would make the probe resolve .claude.json differently than the session.
+    const term = makeMockTerm()
+    spawnMock.mockReturnValue(term)
+
+    const resultPromise = fetchViaPty({
+      authPreparation: {
+        configDir: '\\\\wsl.localhost\\Ubuntu\\home\\u\\.claude',
+        runtime: 'wsl',
+        wslDistro: 'Ubuntu',
+        wslLinuxConfigDir: '/home/u/.claude',
+        envPatch: {},
+        stripAuthEnv: true,
+        provenance: 'managed:account-1:wsl:Ubuntu'
+      }
+    })
+    await vi.advanceTimersByTimeAsync(0)
+
+    const [, spawnArgs] = spawnMock.mock.calls[0] as [string, string[]]
+    expect(spawnArgs.at(-1) as string).not.toContain('CLAUDE_CONFIG_DIR')
 
     term.emitExit()
     await resultPromise

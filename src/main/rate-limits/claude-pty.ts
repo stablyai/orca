@@ -253,6 +253,7 @@ export async function fetchViaPty(options?: {
     const proxyEnv = buildConfiguredProxyEnv(options?.networkProxySettings)
     Object.assign(spawnEnv, proxyEnv)
     const authPreparation = options?.authPreparation
+    const probeLinuxConfigDir = authPreparation?.envPatch.CLAUDE_CONFIG_DIR
     const wslConfig =
       authPreparation?.runtime === 'wsl' &&
       authPreparation.wslDistro &&
@@ -276,7 +277,11 @@ export async function fetchViaPty(options?: {
             // Why: hidden usage probes must not inherit a root-like WSL cwd;
             // keep Claude discovery bounded to a tiny temp directory.
             ...getHiddenRateLimitWslCwdSetupCommands(),
-            `export CLAUDE_CONFIG_DIR=${shellQuote(wslConfig.linuxConfigDir)}`,
+            // Why: the probe must resolve `.claude.json` like the interactive session, so it only
+            // pins a config dir when the preparation asked for one.
+            ...(probeLinuxConfigDir
+              ? [`export CLAUDE_CONFIG_DIR=${shellQuote(probeLinuxConfigDir)}`]
+              : []),
             ...Object.entries(proxyEnv).map(([key, value]) => `export ${key}=${shellQuote(value)}`),
             'exec claude'
           ].join(' && ')

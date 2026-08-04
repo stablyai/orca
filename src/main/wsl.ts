@@ -4,6 +4,7 @@ import { filterUserWslDistros, parseWslDistros } from './wsl-distro-list-output'
 import { wslDistroListRetryDelayMs } from './wsl-distro-retry'
 
 export { toWindowsWslPath } from '../shared/wsl-paths'
+export { wslUncDirectoryExists, wslUncFileExists } from './wsl-unc-path-probe'
 
 export type WslPathInfo = {
   distro: string
@@ -29,43 +30,6 @@ export function parseWslPath(windowsPath: string): WslPathInfo | null {
 
 export function isWslPath(path: string): boolean {
   return parseWslPath(path) !== null
-}
-
-/**
- * Check whether a WSL UNC working directory exists by testing it inside the
- * distro itself, returning null when the answer can't be determined.
- *
- * Why: Win32 fs.statSync against the WSL 9P filesystem (\\wsl.localhost\...)
- * is unreliable for repos that live on the WSL side — it can report ENOENT for
- * directories that exist, which made opening a WSL worktree fail with
- * "Working directory ... does not exist". `wsl.exe -d <distro> test -d` asks
- * the distro directly, which is the authoritative answer. Returns null (rather
- * than false) when wsl.exe is unavailable or errors so callers can fall back to
- * the fs check instead of falsely rejecting a valid directory.
- */
-export function wslUncDirectoryExists(uncPath: string): boolean | null {
-  if (process.platform !== 'win32') {
-    return null
-  }
-  const info = parseWslUncPath(uncPath)
-  if (!info) {
-    return null
-  }
-  try {
-    execFileSync('wsl.exe', ['-d', info.distro, '--', 'test', '-d', info.linuxPath], {
-      stdio: ['pipe', 'pipe', 'pipe'],
-      timeout: 5000
-    })
-    return true
-  } catch (error) {
-    // A non-zero exit (directory missing) surfaces as an error with a numeric
-    // `status`; treat that as a definitive "does not exist". Any other failure
-    // (wsl.exe missing, distro not running, timeout) is inconclusive -> null.
-    if (typeof (error as { status?: unknown })?.status === 'number') {
-      return false
-    }
-    return null
-  }
 }
 
 /**
