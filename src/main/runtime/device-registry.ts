@@ -46,6 +46,7 @@ function validRelayBinding(value: unknown, deviceId: string): RelayDeviceBinding
 export class DeviceRegistry {
   private readonly registryPath: string
   private devices: DeviceEntry[] = []
+  private lastSeenPersistScheduled = false
 
   constructor(userDataPath: string) {
     this.registryPath = join(userDataPath, DEVICE_REGISTRY_FILENAME)
@@ -172,14 +173,42 @@ export class DeviceRegistry {
     if (index < 0) {
       return
     }
-    // Why: persist before memory swap so a failed write cannot leave a scanned
-    // device looking never-scanned on disk, where rotation would drop it.
     const seenAt = Date.now()
-    const nextDevices = this.devices.map((device, candidateIndex) =>
+    // Why: apply in memory on the caller stack. Deferring the swap too would let a
+    // stale snapshot land after a concurrent removeDevice and resurrect a revoked
+    // device, both in memory and on disk.
+    this.devices = this.devices.map((device, candidateIndex) =>
       candidateIndex === index ? { ...device, lastSeenAt: seenAt } : device
     )
-    this.save(nextDevices)
-    this.devices = nextDevices
+    this.scheduleLastSeenPersist()
+  }
+
+  /**
+   * Persists the live device list on a later turn, coalescing bursts.
+   *
+   * Why: save() costs ~3s on Windows because writeSecureFile spawns PowerShell twice,
+   * synchronously, to apply ACLs. updateLastSeen runs inside the E2EE auth path ahead
+   * of the e2ee_authenticated frame, so that blew past the mobile client's handshake
+   * budget and made pairing impossible there. lastSeenAt is display and rotation
+   * metadata, not an auth gate, so it does not belong on that critical path.
+   *
+   * Reads this.devices at flush time rather than capturing a snapshot, so a removal
+   * that lands in between is persisted as-is instead of being overwritten.
+   */
+  private scheduleLastSeenPersist(): void {
+    if (this.lastSeenPersistScheduled) {
+      return
+    }
+    this.lastSeenPersistScheduled = true
+    setImmediate(() => {
+      this.lastSeenPersistScheduled = false
+      try {
+        this.save(this.devices)
+      } catch {
+        // Why: a best-effort timestamp must not take down the main process; the next
+        // connection schedules another write.
+      }
+    })
   }
 
   private load(): void {
