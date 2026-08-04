@@ -159,6 +159,12 @@ const { getLinuxRootPackageTypeMock, recordUpdaterLifecycleMock } = vi.hoisted((
   recordUpdaterLifecycleMock: vi.fn()
 }))
 
+// Why: macOS keeps the restart advice because quitting does re-stage a Squirrel update.
+const PRE_COMMIT_INSTALL_FAILURE =
+  process.platform === 'darwin'
+    ? 'Could not restart to install the update. Quit and reopen Orca, then try again.'
+    : 'Could not start the update installer. Orca remains open.'
+
 // Why: only the marker resolver is faked so the real artifact capture/redaction path stays under test.
 vi.mock('./linux-update-package-type', () => ({
   getLinuxRootPackageType: getLinuxRootPackageTypeMock
@@ -1829,10 +1835,8 @@ describe('updater', () => {
         state: 'error',
         // Why: a pre-commit install failure is not fixed by restarting, so the copy must not
         // suggest it — except on macOS, where quitting does re-stage a Squirrel update.
-        message:
-          process.platform === 'darwin'
-            ? 'Could not restart to install the update. Quit and reopen Orca, then try again.'
-            : 'Could not start the update installer. Orca remains open.'
+        // The updater's own text is appended because it is the only record of why the install never ran.
+        message: `${PRE_COMMIT_INSTALL_FAILURE} (No update filepath provided, can't quit and install)`
       })
     )
   })
@@ -3911,11 +3915,7 @@ describe('updater', () => {
     const lastStatus = (send: ReturnType<typeof vi.fn>): UpdateStatus | undefined =>
       send.mock.calls.findLast(([channel]) => channel === 'updater:status')?.[1]
 
-    // Why: macOS keeps the restart advice because quitting does re-stage a Squirrel update.
-    const PRE_COMMIT_FAILURE_MESSAGE =
-      process.platform === 'darwin'
-        ? 'Could not restart to install the update. Quit and reopen Orca, then try again.'
-        : 'Could not start the update installer. Orca remains open.'
+    const PRE_COMMIT_FAILURE_MESSAGE = PRE_COMMIT_INSTALL_FAILURE
     const AGENT_STDERR =
       'pkexec: Error executing command as another user: No authentication agent found.'
 
@@ -4081,7 +4081,7 @@ describe('updater', () => {
 
       expect(send).toHaveBeenCalledWith('updater:status', {
         state: 'error',
-        message: PRE_COMMIT_FAILURE_MESSAGE
+        message: `${PRE_COMMIT_FAILURE_MESSAGE} (${EXIT_127})`
       })
       expect(recordUpdaterLifecycleMock).not.toHaveBeenCalledWith(
         'linux_package_install_failed',

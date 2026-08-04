@@ -37322,6 +37322,22 @@ describe('OrcaRuntimeService', () => {
     expect(listWorktrees).toHaveBeenCalledTimes(1)
   })
 
+  // #11994: the host renderer already applied its own repos:changed, so re-notifying it
+  // would re-sort the sidebar; only the client-event stream may fire here.
+  it('notifyReposChangedForRemoteClients emits to clients without re-notifying the host', () => {
+    const runtime = createRuntime()
+    const reposChanged = vi.fn()
+    runtime.setNotifier({ reposChanged } as never)
+    const events: { type: string }[] = []
+    const unsubscribe = runtime.onClientEvent((event) => events.push(event))
+
+    runtime.notifyReposChangedForRemoteClients()
+    unsubscribe()
+
+    expect(events).toEqual([{ type: 'reposChanged' }])
+    expect(reposChanged).not.toHaveBeenCalled()
+  })
+
   it('worktree scan cache: folder metadata invalidation preserves raw scans', async () => {
     vi.mocked(listWorktrees).mockClear()
     const runtime = createRuntime()

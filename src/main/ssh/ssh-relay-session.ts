@@ -81,6 +81,7 @@ import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { DEFAULT_PTY_SOURCE_WINDOW_SU } from '../../shared/pty-source-credit-contract'
 import { PTY_CONSUMER_STALE_OWNER_RECOVERY_ERROR } from '../../shared/pty-consumer-session'
+import { retrySshOwnerRecoveryWhileBlocked } from './ssh-owner-recovery-retry'
 import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
 import {
   acknowledgeRemoteOrcaCliPostOutput,
@@ -1027,17 +1028,24 @@ export class SshRelaySession {
       outputFlowControl: { requestedWindowSu: DEFAULT_PTY_SOURCE_WINDOW_SU }
     }
     try {
-      return await openSshPtyConsumerSession(mux, {
-        ...options,
-        ...(previousOwner
-          ? {
-              resume: {
-                ownerGeneration: previousOwner.ownerGeneration,
-                ownerLease: previousOwner.ownerLease
-              }
-            }
-          : {})
-      })
+      return await retrySshOwnerRecoveryWhileBlocked(
+        () =>
+          openSshPtyConsumerSession(mux, {
+            ...options,
+            ...(previousOwner
+              ? {
+                  resume: {
+                    ownerGeneration: previousOwner.ownerGeneration,
+                    ownerLease: previousOwner.ownerLease
+                  }
+                }
+              : {})
+          }),
+        {
+          isCurrent: () => ownsAttempt() && !mux.isDisposed(),
+          onClosed: (listener) => mux.onDispose(listener)
+        }
+      )
     } catch (error) {
       if (
         !previousOwner ||
@@ -1046,26 +1054,36 @@ export class SshRelaySession {
         throw error
       }
       const recovery = getSshPtyConsumerRecovery(this.targetId)
-      if (recovery) {
-        delete recovery.owner
-        recovery.checkpointsByAppPtyId.clear()
-        for (const [ptyId, migration] of recovery.modelMigrationsByAppPtyId) {
-          recovery.modelMigrationsByAppPtyId.set(
-            ptyId,
-            migration.then(() =>
-              Object.freeze({
-                status: 'checkpoint-unavailable' as const,
-                reason: 'completion-failed' as const
-              })
+      // Why identity-guarded: the record is target-scoped and its clientInstanceId is shared by every
+      // session for that target, so only a record still describing the owner this attempt tried to
+      // resume is ours to drop — otherwise a loser wipes the winner's checkpoints.
+      const ownsRecoveryRecord =
+        ownsAttempt() &&
+        (!recovery?.owner ||
+          (recovery.owner.ownerGeneration === previousOwner.ownerGeneration &&
+            recovery.owner.ownerLease === previousOwner.ownerLease))
+      if (ownsRecoveryRecord) {
+        if (recovery) {
+          delete recovery.owner
+          recovery.checkpointsByAppPtyId.clear()
+          for (const [ptyId, migration] of recovery.modelMigrationsByAppPtyId) {
+            recovery.modelMigrationsByAppPtyId.set(
+              ptyId,
+              migration.then(() =>
+                Object.freeze({
+                  status: 'checkpoint-unavailable' as const,
+                  reason: 'completion-failed' as const
+                })
+              )
             )
-          )
+          }
         }
+        await removeSshPtyConsumerOwnerRecovery(
+          this.targetId,
+          this.ptyConsumerClientInstanceId,
+          this.store
+        )
       }
-      await removeSshPtyConsumerOwnerRecovery(
-        this.targetId,
-        this.ptyConsumerClientInstanceId,
-        this.store
-      )
       if (!ownsAttempt()) {
         throw new Error('Session disposed during establish')
       }

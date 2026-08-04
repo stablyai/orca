@@ -161,6 +161,16 @@ export class RelayDispatcher {
     this.closeClient(client, new Error('Relay client detached'), true)
   }
 
+  // Why: a displaced owner must lose its transport whichever client holds it, and the launch channel is
+  // often the half-open one. The primary keeps its id for setWrite() revival, so invalidate it instead.
+  releaseDisplacedClient(clientId: number): void {
+    if (clientId === this.primaryClient.id) {
+      this.invalidateClient()
+      return
+    }
+    this.detachClient(clientId)
+  }
+
   feedClient(clientId: number, data: Buffer): void {
     const client = this.clients.get(clientId)
     if (!client) {

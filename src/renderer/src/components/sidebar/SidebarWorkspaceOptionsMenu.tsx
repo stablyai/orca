@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
+import { isSleepingSweepExemptionNarrowingList } from './visible-worktrees'
 import SidebarRepositoryFilterSection from './SidebarRepositoryFilterSection'
 import SidebarWorkspaceFilterSection from './SidebarWorkspaceFilterSection'
 import { getSidebarHostVisibilityLabel, shouldShowHostScopeControls } from './sidebar-host-options'
@@ -79,13 +80,19 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
   const hasRepoFilter = selectedCount > 0
   const hasSleepingFilter = showSleepingWorkspaces !== DEFAULT_SHOW_SLEEPING_WORKSPACES
   const hasHostVisibilityFilter = visibleWorkspaceHostIds !== null
+  // Why gated on the parent row: the exemption only narrows the list during the
+  // "Hide sleeping" sweep, which is also the only time its row is rendered.
+  const hasSleepingExemptionFilter = isSleepingSweepExemptionNarrowingList(
+    showSleepingWorkspaces,
+    alwaysShowDefaultBranchWorkspace
+  )
   const hasAnyFilter =
     hasSleepingFilter ||
     hideDefaultBranchWorkspace ||
     hideAutomationGeneratedWorkspaces ||
     hideCliCreatedWorkspaces ||
     hideDetachedHeadWorkspaces ||
-    !alwaysShowDefaultBranchWorkspace ||
+    hasSleepingExemptionFilter ||
     hasRepoFilter ||
     hasHostVisibilityFilter
   const activeFilterCount =
@@ -94,7 +101,7 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
     (hideAutomationGeneratedWorkspaces ? 1 : 0) +
     (hideCliCreatedWorkspaces ? 1 : 0) +
     (hideDetachedHeadWorkspaces ? 1 : 0) +
-    (alwaysShowDefaultBranchWorkspace ? 0 : 1) +
+    (hasSleepingExemptionFilter ? 1 : 0) +
     (hasHostVisibilityFilter ? 1 : 0) +
     selectedCount
   const activeFilterLabel = `${activeFilterCount} ${activeFilterCount === 1 ? 'filter' : 'filters'}`

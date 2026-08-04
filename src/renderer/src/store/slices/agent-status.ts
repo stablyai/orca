@@ -32,7 +32,6 @@ import {
   getWorktreeExecutionHostId
 } from '../../../../shared/execution-host'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
-import { readLastTerminalInputAt } from '@/lib/terminal-input-activity-coalescing'
 import {
   getAgentRowGeneratedTitleText,
   getOrcaDispatchTaskId,
@@ -580,39 +579,64 @@ function normalizeSleepingAgentSessionCollectOptions(
     : (options as CollectSleepingAgentSessionRecordsOptions)
 }
 
-function isValidManualSleepLiveAgentEntry(
-  state: AppState,
-  entry: AgentStatusEntry,
-  capturedAt: number
-): boolean {
-  if (entry.interrupted === true || entry.state === 'done') {
-    return false
-  }
-  const lastInputAt = readLastTerminalInputAt(state.lastTerminalInputAtByPaneKey, entry.paneKey)
-  if (
-    typeof lastInputAt === 'number' &&
-    Number.isFinite(lastInputAt) &&
-    lastInputAt > entry.updatedAt
-  ) {
-    return false
-  }
-  return isExplicitAgentStatusFresh(entry, capturedAt, AGENT_STATUS_STALE_AFTER_MS)
-}
-
 function isValidCompletedAgentHibernationEntry(entry: AgentStatusEntry): boolean {
   return entry.state === 'done' && entry.interrupted !== true
+}
+
+// Why: a finished pane is passive wake evidence, and a mobile wake background-mounts every passive
+// record's tab. Sleeping a workspace must not become "one phone tap respawns all of it" — the pane
+// issues its own `--resume` cold restore when its tab is opened instead (#11598).
+function markManualSleepLazyRestore(record: SleepingAgentSessionRecord): void {
+  if (record.state === 'done') {
+    record.restoreOnTabOpenOnly = true
+  }
+}
+
+// Why: `live`/legacy rows are provisional checkpoints a fresh capture supersedes; an explicit
+// sleep or quit capture is the pane's only resume handle once its live row is gone.
+function isDurableSleepingCapture(record: SleepingAgentSessionRecord): boolean {
+  return record.origin === 'worktree-sleep' || record.origin === 'quit'
+}
+
+// Why: manual sleep kills the pty either way, so the record carries resume identity, not the dead
+// turn's interrupt flag — and an explicitly slept workspace is never stale at wake, so a row the
+// user is deliberately sleeping must not trip the wake-side staleness discard. `state` is preserved
+// so a done pane wakes lazily in place instead of spawning a new tab.
+function manualSleepCaptureEntry(entry: AgentStatusEntry, capturedAt: number): AgentStatusEntry {
+  return { ...entry, updatedAt: capturedAt, interrupted: false }
+}
+
+// Why: capture recreates a record the manual-sleep wipe would otherwise remove, so a deliberately
+// blocked worker must not become auto-resumable at wake.
+function carryOverAutomaticResumeBlock(
+  record: SleepingAgentSessionRecord,
+  previous: SleepingAgentSessionRecord | undefined
+): void {
+  if (
+    previous?.automaticResumeBlockedBy === 'legacy-orchestration-worker' &&
+    previous.agent === record.agent &&
+    agentProviderSessionsEqual(record.agent, previous.providerSession, record.providerSession)
+  ) {
+    record.automaticResumeBlockedBy = previous.automaticResumeBlockedBy
+  }
 }
 
 export function removeSleepingRecordsReplacedByManualWorktreeSleep(
   records: Record<string, SleepingAgentSessionRecord>,
   worktreeId: string,
-  paneKeys?: readonly string[]
+  paneKeys?: readonly string[],
+  replacements?: Readonly<Record<string, SleepingAgentSessionRecord>>
 ): { records: Record<string, SleepingAgentSessionRecord>; changed: boolean } {
   const allowedPaneKeys = paneKeys ? new Set(paneKeys) : null
   let next = records
   let changed = false
   for (const [paneKey, record] of Object.entries(records)) {
     if (record.worktreeId !== worktreeId || (allowedPaneKeys && !allowedPaneKeys.has(paneKey))) {
+      continue
+    }
+    // Why: a repeat sleep must not delete a durable record this capture cannot re-derive — the
+    // pane was never woken, so it has no live status row to rebuild it from (#11598).
+    if (!replacements?.[paneKey] && isDurableSleepingCapture(record)) {
       continue
     }
     if (next === records) {
@@ -642,6 +666,7 @@ export function collectSleepingAgentSessionRecordsForWorktree(
     : undefined
   const tabPrefixes = (state.tabsByWorktree[worktreeId] ?? []).map((tab) => `${tab.id}:`)
   const records: Record<string, SleepingAgentSessionRecord> = {}
+  const promotedLiveRecoveryPaneKeys = new Set<string>()
 
   if (isManualWorktreeSleep) {
     for (const existing of Object.values(state.sleepingAgentSessionsByPaneKey)) {
@@ -665,6 +690,7 @@ export function collectSleepingAgentSessionRecordsForWorktree(
         updatedAt: capturedAt,
         origin: 'worktree-sleep'
       }
+      promotedLiveRecoveryPaneKeys.add(existing.paneKey)
     }
   }
 
@@ -678,9 +704,16 @@ export function collectSleepingAgentSessionRecordsForWorktree(
     if (retained.worktreeId !== worktreeId) {
       continue
     }
+    // Why: the promoted checkpoint carries recovery identity (transcript, connection) a retained
+    // turn row lacks, so it must not be overwritten by a re-derived record.
+    if (promotedLiveRecoveryPaneKeys.has(retained.entry.paneKey)) {
+      continue
+    }
     const record = sleepingRecordFromEntry({
       state,
-      entry: retained.entry,
+      entry: isManualWorktreeSleep
+        ? manualSleepCaptureEntry(retained.entry, capturedAt)
+        : retained.entry,
       worktreeId,
       tab: retained.tab,
       capturedAt,
@@ -688,6 +721,13 @@ export function collectSleepingAgentSessionRecordsForWorktree(
       origin
     })
     if (record) {
+      if (isManualWorktreeSleep) {
+        markManualSleepLazyRestore(record)
+        carryOverAutomaticResumeBlock(
+          record,
+          state.sleepingAgentSessionsByPaneKey[retained.entry.paneKey]
+        )
+      }
       records[record.paneKey] = record
     }
   }
@@ -696,12 +736,14 @@ export function collectSleepingAgentSessionRecordsForWorktree(
     if (allowedPaneKeys && !allowedPaneKeys.has(paneKey)) {
       continue
     }
+    // Why: the promoted checkpoint carries recovery identity (transcript, connection) the live
+    // turn row lacks, so it must not be overwritten by a re-derived record.
+    if (promotedLiveRecoveryPaneKeys.has(paneKey)) {
+      continue
+    }
     const belongsToWorktree =
       entry.worktreeId === worktreeId || paneKeyMatchesAnyTabPrefix(paneKey, tabPrefixes)
     if (!belongsToWorktree) {
-      continue
-    }
-    if (isManualWorktreeSleep && !isValidManualSleepLiveAgentEntry(state, entry, capturedAt)) {
       continue
     }
     if (isCompletedAgentHibernation && !isValidCompletedAgentHibernationEntry(entry)) {
@@ -709,13 +751,17 @@ export function collectSleepingAgentSessionRecordsForWorktree(
     }
     const record = sleepingRecordFromEntry({
       state,
-      entry,
+      entry: isManualWorktreeSleep ? manualSleepCaptureEntry(entry, capturedAt) : entry,
       worktreeId,
       capturedAt,
       launchConfig: getLaunchConfigForEntry(state, entry),
       origin
     })
     if (record) {
+      if (isManualWorktreeSleep) {
+        markManualSleepLazyRestore(record)
+        carryOverAutomaticResumeBlock(record, state.sleepingAgentSessionsByPaneKey[paneKey])
+      }
       records[record.paneKey] = record
     }
   }
@@ -2745,7 +2791,8 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         const replaced = removeSleepingRecordsReplacedByManualWorktreeSleep(
           s.sleepingAgentSessionsByPaneKey,
           worktreeId,
-          paneKeys
+          paneKeys,
+          records
         )
         const next: Record<string, SleepingAgentSessionRecord> = { ...replaced.records }
         let changed = replaced.changed

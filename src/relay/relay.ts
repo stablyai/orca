@@ -10,7 +10,15 @@
 
 import { createServer, createConnection, type Socket, type Server } from 'node:net'
 import { join } from 'node:path'
-import { unlinkSync, existsSync, statSync, readFileSync, chmodSync } from 'node:fs'
+import {
+  unlinkSync,
+  existsSync,
+  statSync,
+  readFileSync,
+  chmodSync,
+  closeSync,
+  openSync
+} from 'node:fs'
 import {
   RELAY_SENTINEL,
   FrameDecoder,
@@ -597,6 +605,31 @@ async function main(): Promise<void> {
         }
         stdoutDrainWaiters.add(cb)
         return () => stdoutDrainWaiters.delete(cb)
+      },
+      close: () => {
+        stdoutAlive = false
+        flushStdoutDrainWaiters()
+        // Why close then re-pin: the SSH peer must see EOF, but a long-lived daemon that
+        // frees fds 0/1 lets accept()/open() recycle them while Node still treats
+        // process.stdin/stdout as those numbers — corrupting socket clients and shutdown.
+        for (const fd of [process.stdin.fd, process.stdout.fd]) {
+          try {
+            closeSync(fd)
+          } catch {
+            // Already closed by the peer.
+          }
+        }
+        const devNull = process.platform === 'win32' ? 'NUL' : '/dev/null'
+        try {
+          openSync(devNull, 'r')
+        } catch {
+          /* best-effort pin of the lowest free fd (normally 0) */
+        }
+        try {
+          openSync(devNull, 'w')
+        } catch {
+          /* best-effort pin of the next free fd (normally 1) */
+        }
       }
     },
     undefined,

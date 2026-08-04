@@ -38,6 +38,7 @@ import { TerminalKittyKeyboardModeTracker } from '../../shared/terminal-kitty-ke
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   isFreshNonDoneAgentStatus,
+  pickParsedAgentStatusPayload,
   type AgentStatusIpcPayload,
   type ParsedAgentStatusPayload,
   type AgentStatusOrchestrationContext,
@@ -1052,6 +1053,7 @@ type RuntimeStore = {
   updateFolderWorkspace?: Store['updateFolderWorkspace']
   removeFolderWorkspace?: Store['removeFolderWorkspace']
   removeProject?: Store['removeProject']
+  removeProjectForHost?: Store['removeProjectForHost']
   reorderRepos?: Store['reorderRepos']
   getAllWorktreeMeta: Store['getAllWorktreeMeta']
   getWorktreeMeta: Store['getWorktreeMeta']
@@ -1248,6 +1250,10 @@ type RuntimePtyWorktreeRecord = {
   lastAgentStatus: AgentStatus | null
   lastOscTitle: string | null
   lastOscTitleAt: number | null
+  // Why a second stamp: `lastOscTitleAt` is a title-observation sequence number,
+  // comparable only to other title stamps. Anything that must date a live title
+  // against an off-pane clock (hook `receivedAt`) needs wall-clock ms.
+  lastOscTitleEpochMs: number | null
   managementTitle: string | null
   managementTitleAt: number | null
   controllerTitle: string | null
@@ -1473,6 +1479,13 @@ type RuntimeAgentRowSnapshot = {
   stateStartedAt: number
   updatedAt: number
 }
+
+/** A hook row narrowed to what `session.tabs` publishes, shaped like the retained OSC
+ *  snapshot so one projection branch can consume either carrier. */
+type HookLiveAgentRow = Pick<
+  RuntimeAgentRowSnapshot,
+  'payload' | 'updatedAt' | 'stateStartedAt' | 'worktreeId'
+>
 
 type RuntimeHeadlessTerminal = {
   emulator: HeadlessEmulator
@@ -5239,6 +5252,13 @@ export class OrcaRuntimeService {
     this.emitClientEvent({ type: 'worktreesChanged', repoId })
   }
 
+  // Why: host-local repo IPC mutations never enter runtime methods, so paired
+  // clients need an explicit catalog invalidation; the local renderer already
+  // got its own repos:changed and must not be re-notified (#11994).
+  notifyReposChangedForRemoteClients(): void {
+    this.emitClientEvent({ type: 'reposChanged' })
+  }
+
   private notifyActivateWorktree(
     repoId: string,
     worktreeId: string,
@@ -6500,20 +6520,44 @@ export class OrcaRuntimeService {
       if (!hasPtyBackedTab) {
         continue
       }
-      this.mobileSessionTabsByWorktree.set(worktreeId, {
-        ...snapshot,
-        snapshotVersion: snapshot.snapshotVersion + 1
-      })
-      if (options.immediate) {
-        // Why: readiness/lifecycle changes are structural and must not wait
-        // behind the title/status coalescing window.
-        this.notifyMobileSessionTabsChanged(worktreeId)
-      } else {
-        // Why: title/status flips several times a second under spinner-in-title
-        // agents. Coalesce the emit instead of fanning out every version.
-        this.mobileSessionTabsNotifyCoalescer.schedule(worktreeId)
-      }
+      this.touchMobileSessionTabsForWorktree(worktreeId, options)
     }
+  }
+
+  /** Bump the snapshot version and emit, coalesced unless `immediate`.
+   *  Why the bump: clients gate mirrored snapshots on a strictly increasing
+   *  `snapshotVersion`, so a re-emit at the same version is silently dropped. */
+  touchMobileSessionTabsForWorktree(
+    worktreeId: string,
+    options: { immediate?: boolean } = {}
+  ): void {
+    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+    if (!snapshot) {
+      return
+    }
+    this.mobileSessionTabsByWorktree.set(worktreeId, {
+      ...snapshot,
+      snapshotVersion: snapshot.snapshotVersion + 1
+    })
+    if (options.immediate) {
+      // Why: readiness/lifecycle changes are structural and must not wait
+      // behind the title/status coalescing window.
+      this.notifyMobileSessionTabsChanged(worktreeId)
+      return
+    }
+    // Why: title/status flips several times a second under spinner-in-title
+    // agents. Coalesce the emit instead of fanning out every version.
+    this.mobileSessionTabsNotifyCoalescer.schedule(worktreeId)
+  }
+
+  /** Republish the workspace snapshot after a pane's hook status changed.
+   *  Hook rows feed the headless `agentStatus` projection, which nothing else touches. */
+  touchMobileSessionTabsForPane(paneKey: string, worktreeId?: string | null): void {
+    const resolved = worktreeId ?? this.getTerminalWorktreeIdForPaneKey(paneKey)
+    if (!resolved) {
+      return
+    }
+    this.touchMobileSessionTabsForWorktree(resolved)
   }
 
   private mobileSessionSnapshotHasSurface(
@@ -10031,6 +10075,7 @@ export class OrcaRuntimeService {
       const observedAt = this.nextTitleObservationSequence()
       pty.lastOscTitle = normalizedTitle
       pty.lastOscTitleAt = observedAt
+      pty.lastOscTitleEpochMs = Date.now()
       pty.lastAgentStatus = agentStatus
       this.setPtyManagementTitleFromObservedTitle(pty, normalizedTitle, observedAt)
       ptyRecordChanged = prevTitle !== normalizedTitle || prevStatus !== agentStatus
@@ -10112,6 +10157,7 @@ export class OrcaRuntimeService {
     if (pty) {
       pty.lastOscTitle = null
       pty.lastOscTitleAt = null
+      pty.lastOscTitleEpochMs = null
       pty.lastAgentStatus = null
       pty.managementTitle = null
       pty.managementTitleAt = null
@@ -18390,7 +18436,20 @@ export class OrcaRuntimeService {
       throw new Error('runtime_unavailable')
     }
     const repo = await this.resolveRepoSelector(repoSelector)
-    this.store.removeProject(repo.id)
+    // Why: removeProject is id-only, but the same id may be registered on a sibling
+    // execution host; a path:/name: selector resolves one row and must remove only it.
+    const hostId = getRepoExecutionHostId(repo)
+    const idExistsOnOtherHost = this.store
+      .getRepos()
+      .some((entry) => entry.id === repo.id && getRepoExecutionHostId(entry) !== hostId)
+    if (idExistsOnOtherHost) {
+      if (!this.store.removeProjectForHost) {
+        throw new Error('runtime_unavailable')
+      }
+      this.store.removeProjectForHost(repo.id, hostId)
+    } else {
+      this.store.removeProject(repo.id)
+    }
     this.terminalTopologyRevisionByRepoId.delete(repo.id)
     this.invalidateResolvedWorktreeCache()
     this.invalidateWorktreeScanCacheForRepo(repo.id)
@@ -28058,11 +28117,17 @@ export class OrcaRuntimeService {
           }))
         }
         // Why: mobile startup shares this path, so a slow repo scan degrades one repo's metadata instead of blocking all session loading.
-        const scan = await withTimeout(
-          this.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId),
-          RESOLVED_WORKTREE_REPO_TIMEOUT_MS,
-          { ok: false, worktrees: [] }
-        )
+        // Why the catch: `withTimeout` resolves its fallback on rejection too, so the rejection must be absorbed first for `null` to mean
+        // "timed out" only. A stall never reached a verdict, so restore persisted rows instead of publishing a healthy-looking empty catalog;
+        // a rejection is a real answer and keeps its shipped zero-row semantics.
+        const scan: RuntimeWorktreeScanResult =
+          (await withTimeout<RuntimeWorktreeScanResult | null>(
+            this.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId).catch(
+              () => ({ ok: false, worktrees: [] }) satisfies RuntimeWorktreeScanResult
+            ),
+            RESOLVED_WORKTREE_REPO_TIMEOUT_MS,
+            null
+          )) ?? { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) }
         const gitWorktrees = scan.worktrees
         if (scan.ok) {
           this.pruneLineageForMissingRepoWorktrees(repo, gitWorktrees)
@@ -28223,27 +28288,33 @@ export class OrcaRuntimeService {
     }
     const provider = getSshGitProvider(repo.connectionId)
     if (!provider) {
-      return { ok: false, worktrees: this.listStoredSshWorktreesForResolution(repo) }
+      return { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) }
     }
     try {
       return { ok: true, worktrees: await provider.listWorktrees(repo.path) }
     } catch {
-      return { ok: false, worktrees: this.listStoredSshWorktreesForResolution(repo) }
+      return { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) }
     }
   }
 
-  private listStoredSshWorktreesForResolution(repo: Repo): GitWorktreeInfo[] {
+  private listStoredWorktreesForResolution(repo: Repo): GitWorktreeInfo[] {
     const store = this.store
     if (!store) {
       return []
     }
+    const expectedHostId = getRepoExecutionHostId(repo)
+    const repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
     const byWorktreeId = new Map<string, GitWorktreeInfo>()
     for (const [worktreeId, meta] of Object.entries(store.getAllWorktreeMeta())) {
       const parsed = splitWorktreeId(worktreeId)
       if (!parsed || parsed.repoId !== repo.id) {
         continue
       }
-      // Why: mirror worktrees:list's disconnected-SSH fallback — keep persisted SSH worktrees while the provider reconnects instead of zero rows.
+      // Why: one repo id can be registered on several execution hosts, so a degraded host must not republish another host's rows (same gate as worktrees.ts).
+      if (meta.hostId ? meta.hostId !== expectedHostId : repoOwnerCount > 1) {
+        continue
+      }
+      // Why: keep persisted rows for any repo kind while its scan is unreachable or stalled, instead of zero rows (worktrees:list does the same for disconnected SSH).
       byWorktreeId.set(worktreeId, {
         path: parsed.worktreePath,
         head: '',
@@ -28366,6 +28437,7 @@ export class OrcaRuntimeService {
         lastAgentStatus: null,
         lastOscTitle: null,
         lastOscTitleAt: null,
+        lastOscTitleEpochMs: null,
         managementTitle: null,
         managementTitleAt: null,
         controllerTitle: null,
@@ -29783,11 +29855,15 @@ export class OrcaRuntimeService {
           )
         : null
     const ptyTitleClassification = classifyAgentTitle(ptyTitle)
-    if (ptyTitle !== null && ptyTitleClassification !== 'agent') {
+    const nonAgentTitle = ptyTitle !== null && ptyTitleClassification !== 'agent'
+    if (nonAgentTitle) {
       // Why: non-agent title = shell reclaimed the pane; suppress to clear stuck spinners (#1437), though a live hook signal survives.
       const hasLiveHookSignal =
         retained?.payload.interactivePrompt != null ||
         retained?.payload.toolName != null ||
+        // Why: a pending question is never inherited across hook events (unlike
+        // `toolName`), so it proves the agent is parked on a selector right now.
+        hookRow.live?.payload.interactivePrompt != null ||
         // Why: headless serve has no renderer to retain an OSC row, so a fresh hook
         // agentType is the only live signal a hook-only pane can offer — and an agent
         // that reports over HTTP need never set a title this gate would recognize.
@@ -29811,18 +29887,19 @@ export class OrcaRuntimeService {
       ownerAgent
     )
     // Why: OSC 9999 hook payload carries real state/prompt/agent; without preferring it, hook-only transitions never surfaced (#7970).
-    if (retained) {
+    const liveRow = retained ?? this.resolveHookLiveAgentRow(hookRow.live, pty, nonAgentTitle)
+    if (liveRow) {
       return {
         agentStatus: normalizeCompatibleAgentStatusEntryForOwner(
           {
-            ...retained.payload,
+            ...liveRow.payload,
             paneKey,
-            updatedAt: retained.updatedAt,
-            stateStartedAt: retained.stateStartedAt,
+            updatedAt: liveRow.updatedAt,
+            stateStartedAt: liveRow.stateStartedAt,
             stateHistory: [],
             ...(terminalHandle ? { terminalHandle } : {}),
-            ...((pty?.worktreeId ?? retained.worktreeId)
-              ? { worktreeId: pty?.worktreeId ?? retained.worktreeId }
+            ...((pty?.worktreeId ?? liveRow.worktreeId)
+              ? { worktreeId: pty?.worktreeId ?? liveRow.worktreeId }
               : {}),
             tabId: tab.parentTabId,
             terminalTitle,
@@ -29832,8 +29909,9 @@ export class OrcaRuntimeService {
         )
       }
     }
-    // A hook-only pane has no PTY status to date the row from; `done` with a
-    // now-stamp is the honest projection — the hook proves identity, not liveness.
+    // Last resort: the pane's hook evidence is identity only (resume rows, stale
+    // rows, or a row the freshness gate rejected). `done` with a now-stamp is the
+    // honest projection — and it is what retires the card once the agent exits.
     const now = pty?.lastOutputAt ?? Date.now()
     const agentType = ownerAgent ?? undefined
     return {
@@ -29859,6 +29937,32 @@ export class OrcaRuntimeService {
     }
   }
 
+  /** Live hook status to publish for a pane with no retained OSC row, or null when the
+   *  pane's hook evidence only proves identity.
+   *
+   *  Why the freshness rule: `pty.lastAgentStatus` is title-derived and refreshed live,
+   *  so an unconditional hook precedence would let a 29-minute-old `done` erase a pane
+   *  that is visibly working. A pending `interactivePrompt` outranks title evidence at
+   *  any age — the agent is parked on a selector until it answers — and it is also the
+   *  only signal allowed to survive the #1437 non-agent-title suppression. */
+  private resolveHookLiveAgentRow(
+    live: HookLiveAgentRow | null,
+    pty: RuntimePtyWorktreeRecord | null,
+    nonAgentTitle: boolean
+  ): HookLiveAgentRow | null {
+    if (!live) {
+      return null
+    }
+    if (live.payload.interactivePrompt != null) {
+      return live
+    }
+    // Why only this stamp: it is the sole wall-clock date on the pane's live title,
+    // so it is the only one comparable to a hook `receivedAt`. The sibling
+    // `titleUpdatedAt`/`lastOscTitleAt`/`paneTitleUpdatedAt` fields are observation
+    // sequence numbers, and comparing them here can only ever misfire.
+    return !nonAgentTitle && live.updatedAt >= (pty?.lastOscTitleEpochMs ?? 0) ? live : null
+  }
+
   /** Hook-reported identity for this pane, newest wins per field.
    *
    *  `providerSession` is deliberately unbounded: it is resume identity, not live
@@ -29869,15 +29973,24 @@ export class OrcaRuntimeService {
    *  `agentType` is bounded by the same staleness window the retained OSC path uses,
    *  because it is the signal that claims an agent owns the pane at all. A user who
    *  exits the agent leaves `pty.lastAgentStatus` behind forever, so an unbounded
-   *  read would keep offering native chat for what is now a plain shell. */
+   *  read would keep offering native chat for what is now a plain shell.
+   *
+   *  `live` is the newest fresh row's status fields — bounded like `agentType` because
+   *  it asserts liveness, and unlike `agentType` it excludes `providerSessionOnly` rows
+   *  with no Pi exception: those carry resume identity, and their status-shaped fields
+   *  are documented transport placeholders that must never reach a client. It also drops
+   *  `restoredUnconfirmed` rows, which `isFreshNonDoneAgentStatus` already treats as
+   *  never-fresh; they still count as `agentType` identity evidence. */
   private getHookAgentRowForPane(rows: readonly AgentStatusIpcPayload[]): {
     providerSession: AgentProviderSessionMetadata | null
     providerSessionAgentType: string | null
     providerSessionReceivedAt: number | null
     agentType: string | null
+    live: HookLiveAgentRow | null
   } {
     let session: AgentStatusIpcPayload | null = null
     let agent: AgentStatusIpcPayload | null = null
+    let live: AgentStatusIpcPayload | null = null
     const agentTypeFreshAfter = Date.now() - AGENT_STATUS_STALE_AFTER_MS
     // Why pane key only: the sibling `terminalHandle` arm this used to carry never
     // matched. `toAgentStatusIpcPayload` does not emit the field on the hook path
@@ -29896,12 +30009,31 @@ export class OrcaRuntimeService {
       ) {
         agent = entry
       }
+      if (
+        entry.providerSessionOnly !== true &&
+        // Why: a row hydrated from last-status.json describes a turn that may have ended
+        // while no receiver was up (#12346), so its `receivedAt` cannot prove liveness —
+        // publishing it would resurrect a zombie question card across a restart.
+        entry.restoredUnconfirmed !== true &&
+        entry.receivedAt >= agentTypeFreshAfter &&
+        (!live || entry.receivedAt > live.receivedAt)
+      ) {
+        live = entry
+      }
     }
     return {
       providerSession: session?.providerSession ?? null,
       providerSessionAgentType: session?.agentType ?? null,
       providerSessionReceivedAt: session?.receivedAt ?? null,
-      agentType: agent?.agentType ?? null
+      agentType: agent?.agentType ?? null,
+      live: live
+        ? {
+            payload: pickParsedAgentStatusPayload(live),
+            updatedAt: live.receivedAt,
+            stateStartedAt: live.stateStartedAt ?? live.receivedAt,
+            ...(live.worktreeId ? { worktreeId: live.worktreeId } : {})
+          }
+        : null
     }
   }
 
