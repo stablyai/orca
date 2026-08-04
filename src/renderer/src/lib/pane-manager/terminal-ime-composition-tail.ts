@@ -32,29 +32,53 @@ function isOpaqueColor(color: string | undefined): boolean {
     return alpha == null || alpha >= 1
   }
   if (value.startsWith('#')) {
-    return value.length !== 5 && value.length !== 9
+    const hex = value.slice(1)
+    if (!/^[\da-f]+$/.test(hex)) {
+      return false
+    }
+    // #rgba and #rrggbbaa still mask when the alpha channel is full.
+    if (hex.length === 4) {
+      return hex[3] === 'f'
+    }
+    if (hex.length === 8) {
+      return hex.slice(6) === 'ff'
+    }
+    return hex.length === 3 || hex.length === 6
   }
   return true
 }
 
-function resolveOpaqueBackdrop(
-  terminal: Terminal,
-  candidates: (Element | null | undefined)[]
-): string {
-  if (isOpaqueColor(terminal.options.theme?.background)) {
-    return terminal.options.theme?.background ?? ''
-  }
-  for (const element of candidates) {
-    if (!element) {
-      continue
-    }
+function findOpaqueSurface(start: Element): string {
+  let element: Element | null = start
+  while (element) {
     const background = window.getComputedStyle(element).backgroundColor
     if (isOpaqueColor(background)) {
       return background
     }
+    element = element.parentElement
   }
-  // xterm styles .composition-view opaque, so the preedit box itself always is.
   return '#000'
+}
+
+/**
+ * What the covered cells actually sit on. A translucent terminal background —
+ * `terminalBackgroundOpacity` bakes the alpha into `theme.background`, and
+ * xterm then leaves the viewport translucent too — is layered over the first
+ * opaque surface behind it rather than swapped for one, so the mask matches the
+ * row it replaces instead of falling back to a black block on a light theme.
+ */
+function resolveBackdrop(
+  terminal: Terminal,
+  surfaceProbe: Element
+): { color: string; overlay: string | null } {
+  const themeBackground = terminal.options.theme?.background
+  if (isOpaqueColor(themeBackground)) {
+    return { color: themeBackground ?? '', overlay: null }
+  }
+  return {
+    color: findOpaqueSurface(surfaceProbe),
+    overlay: themeBackground && themeBackground !== 'transparent' ? themeBackground : null
+  }
 }
 
 /**
@@ -97,8 +121,16 @@ export function installTerminalImeCompositionTail(terminal: Terminal): (() => vo
   let rowTail = ''
   let preedit = ''
   let cellWidth = 0
+  let cellHeight = 0
   let screenWidth = 0
   let repaintFrame: number | null = null
+
+  const measureCellGrid = (): void => {
+    const screenRect = screenElement.getBoundingClientRect()
+    screenWidth = screenRect.width
+    cellWidth = terminal.cols > 0 ? screenRect.width / terminal.cols : 0
+    cellHeight = terminal.rows > 0 ? screenRect.height / terminal.rows : 0
+  }
 
   const cancelScheduledRepaint = (): void => {
     if (repaintFrame != null) {
@@ -114,9 +146,14 @@ export function installTerminalImeCompositionTail(terminal: Terminal): (() => vo
   }
 
   // cursorY is viewport-relative; getLine indexes the whole buffer, scrollback included.
+  // A viewport scrolled off the cursor row leaves nothing to mask on screen.
   const readCursorLine = (): IBufferLine | undefined => {
     const buffer = terminal.buffer.active
-    if (buffer.cursorY < 0 || buffer.cursorY >= terminal.rows) {
+    if (
+      buffer.cursorY < 0 ||
+      buffer.cursorY >= terminal.rows ||
+      buffer.viewportY !== buffer.baseY
+    ) {
       return undefined
     }
     return buffer.getLine(buffer.baseY + buffer.cursorY)
@@ -162,30 +199,44 @@ export function installTerminalImeCompositionTail(terminal: Terminal): (() => vo
   }
 
   /**
-   * Start the tail on the cell the preedit ends on. Measuring the preedit box
-   * instead would inherit the bidi marks xterm wraps it in and leave a ragged
-   * gap; the cell budget is what the renderer itself lays text out on.
+   * Place the tail off the cell grid rather than off `.composition-view`. xterm
+   * only assigns that element's geometry from `compositionupdate`, so reading it
+   * on `compositionstart` would place the first composition of a terminal at the
+   * top-left corner; measuring its box would also inherit the bidi marks xterm
+   * wraps the preedit in and leave a ragged gap.
    */
-  const resolveTailLeft = (): number => {
-    const preeditLeft = Number.parseFloat(compositionView.style.left || '0')
-    if (cellWidth > 0) {
-      const columns = measureTerminalStringColumns(terminal, preedit) ?? preedit.length
-      return preeditLeft + columns * cellWidth
+  const resolveTailGeometry = (): { left: number; top: string; height: string } => {
+    const buffer = terminal.buffer.active
+    const preeditColumns = measureTerminalStringColumns(terminal, preedit) ?? preedit.length
+    if (cellWidth > 0 && cellHeight > 0) {
+      const column = Math.min(buffer.cursorX, terminal.cols - 1) + preeditColumns
+      return {
+        left: column * cellWidth,
+        top: `${buffer.cursorY * cellHeight}px`,
+        height: `${cellHeight}px`
+      }
     }
-    return preeditLeft + compositionView.offsetWidth
+    const preeditLeft = Number.parseFloat(compositionView.style.left || '0')
+    return {
+      left: preeditLeft + compositionView.offsetWidth,
+      top: compositionView.style.top,
+      height: compositionView.style.height
+    }
   }
 
   const paint = (): void => {
     if (!isComposing || !rowTail) {
       return
     }
-    const left = resolveTailLeft()
+    const { left, top, height } = resolveTailGeometry()
     tailElement.style.left = `${left}px`
-    tailElement.style.top = compositionView.style.top
-    tailElement.style.height = compositionView.style.height
-    tailElement.style.lineHeight = compositionView.style.lineHeight
-    tailElement.style.fontFamily = compositionView.style.fontFamily
-    tailElement.style.fontSize = compositionView.style.fontSize
+    tailElement.style.top = top
+    tailElement.style.height = height
+    tailElement.style.lineHeight = height
+    tailElement.style.fontFamily = terminal.options.fontFamily ?? compositionView.style.fontFamily
+    tailElement.style.fontSize = terminal.options.fontSize
+      ? `${terminal.options.fontSize}px`
+      : compositionView.style.fontSize
     if (screenWidth > 0) {
       tailElement.style.maxWidth = `${Math.max(screenWidth - left, 0)}px`
     }
@@ -207,14 +258,12 @@ export function installTerminalImeCompositionTail(terminal: Terminal): (() => vo
     preedit = ''
     tailElement.style.color =
       terminal.options.theme?.foreground ?? window.getComputedStyle(screenElement).color
-    tailElement.style.backgroundColor = resolveOpaqueBackdrop(terminal, [
-      screenElement,
-      terminal.element,
-      terminal.element?.parentElement
-    ])
-    const screenRect = screenElement.getBoundingClientRect()
-    screenWidth = screenRect.width
-    cellWidth = terminal.cols > 0 ? screenRect.width / terminal.cols : 0
+    const backdrop = resolveBackdrop(terminal, screenElement)
+    tailElement.style.backgroundColor = backdrop.color
+    tailElement.style.backgroundImage = backdrop.overlay
+      ? `linear-gradient(${backdrop.overlay}, ${backdrop.overlay})`
+      : 'none'
+    measureCellGrid()
     resnapshotAndPaint()
   }
 
@@ -250,12 +299,20 @@ export function installTerminalImeCompositionTail(terminal: Terminal): (() => vo
   terminal.element?.addEventListener('compositionupdate', handleCompositionUpdate)
   terminal.element?.addEventListener('compositionend', handleCompositionEnd)
   const writeDisposable = terminal.onWriteParsed(handleWriteParsed)
+  // A resize or font change mid-composition invalidates the snapshotted grid.
+  const resizeDisposable = terminal.onResize(() => {
+    if (isComposing) {
+      measureCellGrid()
+      resnapshotAndPaint()
+    }
+  })
 
   return () => {
     terminal.element?.removeEventListener('compositionstart', handleCompositionStart)
     terminal.element?.removeEventListener('compositionupdate', handleCompositionUpdate)
     terminal.element?.removeEventListener('compositionend', handleCompositionEnd)
     writeDisposable.dispose()
+    resizeDisposable.dispose()
     cancelScheduledRepaint()
     tailElement.remove()
   }

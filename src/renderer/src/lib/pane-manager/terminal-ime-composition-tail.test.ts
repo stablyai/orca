@@ -21,6 +21,35 @@ function nextFrame(): Promise<void> {
   return new Promise((resolve) => requestAnimationFrame(() => resolve()))
 }
 
+/** happy-dom reports a zero-sized screen; 400px over 40 cols keeps the grid at a round 10px. */
+function mockCellGrid(screenElement: HTMLElement): void {
+  vi.spyOn(screenElement, 'getBoundingClientRect').mockReturnValue({
+    width: 400,
+    height: 120
+  } as DOMRect)
+}
+
+function parkViewportAtScrollbackOrigin(terminal: Terminal): void {
+  const active = terminal.buffer.active
+  const scrolled = {
+    get cursorX() {
+      return active.cursorX
+    },
+    get cursorY() {
+      return active.cursorY
+    },
+    get baseY() {
+      return active.baseY
+    },
+    viewportY: 0,
+    getLine: (row: number) => active.getLine(row)
+  }
+  Object.defineProperty(terminal, 'buffer', {
+    configurable: true,
+    get: () => ({ active: scrolled })
+  })
+}
+
 function openTerminal(theme?: ITheme): OpenedTerminal {
   const container = document.createElement('div')
   document.body.appendChild(container)
@@ -159,29 +188,86 @@ describe('terminal IME composition tail', () => {
   })
 
   it('starts the tail on the cell the preedit ends on', async () => {
-    const { compositionView, container, screenElement, terminal, textarea } = openTerminal()
-    // 40 cols over 400px keeps the cell grid at a round 10px.
-    vi.spyOn(screenElement, 'getBoundingClientRect').mockReturnValue({
-      width: 400,
-      height: 120
-    } as DOMRect)
+    const { container, screenElement, terminal, textarea } = openTerminal()
+    mockCellGrid(screenElement)
     await write(terminal, '가나다라마')
     await write(terminal, CURSOR_BACK_3_SYLLABLES)
 
     compositionEvent(textarea, 'compositionstart')
     compositionEvent(textarea, 'compositionupdate', '바')
 
-    const preeditLeft = Number.parseFloat(compositionView.style.left || '0')
-    // 바 budgets two cells, so the tail resumes exactly two cells later.
-    expect(tailOf(container).style.left).toBe(`${preeditLeft + 20}px`)
+    // Cursor sits on column 4 and 바 budgets two cells, so the tail resumes on column 6.
+    expect(tailOf(container).style.left).toBe('60px')
+    expect(tailOf(container).style.top).toBe('0px')
+  })
+
+  it('places the first composition off the cell grid, not off the unset preedit box', async () => {
+    const { compositionView, container, screenElement, terminal, textarea } = openTerminal()
+    mockCellGrid(screenElement)
+    await write(terminal, '가나다라마')
+    await write(terminal, CURSOR_BACK_3_SYLLABLES)
+
+    // xterm only assigns .composition-view geometry from compositionupdate.
+    expect(compositionView.style.left).toBe('')
+    compositionEvent(textarea, 'compositionstart')
+
+    expect(tailOf(container).style.left).toBe('40px')
+    expect(tailOf(container).style.display).toBe('block')
+  })
+
+  it('hides while the viewport is scrolled off the cursor row', async () => {
+    const { container, screenElement, terminal, textarea } = openTerminal()
+    mockCellGrid(screenElement)
+    // Fill the scrollback so the viewport can leave the cursor row behind.
+    await write(terminal, '\r\n'.repeat(20))
+    await write(terminal, '가나다라마')
+    await write(terminal, CURSOR_BACK_3_SYLLABLES)
+
+    compositionEvent(textarea, 'compositionstart')
+    expect(tailOf(container).style.display).toBe('block')
+    compositionEvent(textarea, 'compositionend', '바')
+
+    // happy-dom's zero-sized viewport makes scrollToTop a no-op, so park the
+    // viewport at the scrollback origin directly.
+    parkViewportAtScrollbackOrigin(terminal)
+    compositionEvent(textarea, 'compositionstart')
+
+    expect(tailOf(container).style.display).toBe('none')
+  })
+
+  it('re-measures the cell grid when the terminal resizes mid-composition', async () => {
+    const { container, screenElement, terminal, textarea } = openTerminal()
+    mockCellGrid(screenElement)
+    await write(terminal, '가나다라마')
+    await write(terminal, CURSOR_BACK_3_SYLLABLES)
+
+    compositionEvent(textarea, 'compositionstart')
+    expect(tailOf(container).style.left).toBe('40px')
+
+    // Same pixel width over half the columns doubles the cell width.
+    terminal.resize(20, 6)
+
+    expect(tailOf(container).style.left).toBe('80px')
+  })
+
+  it('layers a see-through theme background over the opaque surface behind it', async () => {
+    const { container, screenElement, terminal, textarea } = openTerminal({
+      background: 'rgba(20, 20, 20, 0.5)'
+    })
+    screenElement.style.backgroundColor = 'rgb(240, 240, 240)'
+    await write(terminal, '가나다라마')
+    await write(terminal, CURSOR_BACK_3_SYLLABLES)
+
+    compositionEvent(textarea, 'compositionstart')
+
+    const tail = tailOf(container)
+    expect(tail.style.backgroundColor).toBe('rgb(240, 240, 240)')
+    expect(tail.style.backgroundImage).toContain('rgba(20, 20, 20, 0.5)')
   })
 
   it('advances each repainted character on the cell grid, not on font metrics', async () => {
     const { container, screenElement, terminal, textarea } = openTerminal()
-    vi.spyOn(screenElement, 'getBoundingClientRect').mockReturnValue({
-      width: 400,
-      height: 120
-    } as DOMRect)
+    mockCellGrid(screenElement)
     await write(terminal, '가나다라마')
     await write(terminal, CURSOR_BACK_3_SYLLABLES)
 
@@ -201,6 +287,38 @@ describe('terminal IME composition tail', () => {
     compositionEvent(textarea, 'compositionstart')
 
     expect(tailOf(container).style.backgroundColor).toMatch(/#112233|rgb\(17, 34, 51\)/)
+  })
+
+  it.each(['#112233ff', '#123f'])(
+    'masks with the terminal background when its alpha hex %s is full',
+    async (background) => {
+      const { container, screenElement, terminal, textarea } = openTerminal({ background })
+      screenElement.style.backgroundColor = 'rgb(240, 240, 240)'
+      await write(terminal, '가나다라마')
+      await write(terminal, CURSOR_BACK_3_SYLLABLES)
+
+      compositionEvent(textarea, 'compositionstart')
+
+      const tail = tailOf(container)
+      expect(tail.style.backgroundColor).toBeTruthy()
+      expect(tail.style.backgroundColor).not.toBe('rgb(240, 240, 240)')
+      expect(tail.style.backgroundImage).toBe('none')
+    }
+  )
+
+  it('layers an alpha hex theme background that is not fully opaque', async () => {
+    const { container, screenElement, terminal, textarea } = openTerminal({
+      background: '#11223380'
+    })
+    screenElement.style.backgroundColor = 'rgb(240, 240, 240)'
+    await write(terminal, '가나다라마')
+    await write(terminal, CURSOR_BACK_3_SYLLABLES)
+
+    compositionEvent(textarea, 'compositionstart')
+
+    const tail = tailOf(container)
+    expect(tail.style.backgroundColor).toBe('rgb(240, 240, 240)')
+    expect(tail.style.backgroundImage).toContain('#11223380')
   })
 
   it.each(['rgba(20, 20, 20, 0.5)', 'rgb(20 20 20 / 50%)', 'hsla(0, 0%, 8%, 0.5)'])(
