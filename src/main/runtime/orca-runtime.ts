@@ -29945,7 +29945,9 @@ export class OrcaRuntimeService {
    *  `live` is the newest fresh row's status fields — bounded like `agentType` because
    *  it asserts liveness, and unlike `agentType` it excludes `providerSessionOnly` rows
    *  with no Pi exception: those carry resume identity, and their status-shaped fields
-   *  are documented transport placeholders that must never reach a client. */
+   *  are documented transport placeholders that must never reach a client. It also drops
+   *  `restoredUnconfirmed` rows, which `isFreshNonDoneAgentStatus` already treats as
+   *  never-fresh; they still count as `agentType` identity evidence. */
   private getHookAgentRowForPane(rows: readonly AgentStatusIpcPayload[]): {
     providerSession: AgentProviderSessionMetadata | null
     providerSessionAgentType: string | null
@@ -29976,6 +29978,10 @@ export class OrcaRuntimeService {
       }
       if (
         entry.providerSessionOnly !== true &&
+        // Why: a row hydrated from last-status.json describes a turn that may have ended
+        // while no receiver was up (#12346), so its `receivedAt` cannot prove liveness —
+        // publishing it would resurrect a zombie question card across a restart.
+        entry.restoredUnconfirmed !== true &&
         entry.receivedAt >= agentTypeFreshAfter &&
         (!live || entry.receivedAt > live.receivedAt)
       ) {

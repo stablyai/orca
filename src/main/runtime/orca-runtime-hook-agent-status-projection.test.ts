@@ -177,6 +177,18 @@ describe('headless hook agent-status projection (#11761)', () => {
     expect(agentStatus).not.toHaveProperty('interactivePrompt')
   })
 
+  // #12346: a row hydrated from last-status.json may describe a turn that ended while
+  // no receiver was up, so its recent `receivedAt` proves nothing. Publishing it would
+  // resurrect the question card on every restart, with no agent left to answer it.
+  it('refuses a hydrated unconfirmed row while keeping its resume identity', async () => {
+    const agentStatus = await projectAgentStatus([hookRow({ restoredUnconfirmed: true })])
+
+    expect(agentStatus).toEqual(
+      expect.objectContaining({ state: 'done', prompt: '', providerSession: PROVIDER_SESSION })
+    )
+    expect(agentStatus).not.toHaveProperty('interactivePrompt')
+  })
+
   // #7970: a retained OSC 9999 row is the pane's own report and keeps precedence.
   it('prefers a retained OSC 9999 row over the hook row', async () => {
     const runtime = await createRuntimeWithHookRows([hookRow()])
