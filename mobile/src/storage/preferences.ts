@@ -30,6 +30,29 @@ export async function savePushNotificationsEnabled(enabled: boolean): Promise<vo
   await AsyncStorage.setItem(NOTIF_KEY, String(enabled))
 }
 
+const UPDATE_NUDGE_DISMISSED_KEY = 'orca:updateNudgeDismissedVersion'
+
+export type UpdateNudgeDismissalPreference = {
+  readonly version: string | null
+  readonly loaded: boolean
+}
+
+// Why: dismissal is stored per recommended version so dismissing today's nudge
+// cannot suppress the nudge for the next mobile release. loaded:false on an
+// unreadable store keeps the banner hidden rather than re-nagging a dismisser.
+export async function readUpdateNudgeDismissal(): Promise<UpdateNudgeDismissalPreference> {
+  try {
+    const raw = await AsyncStorage.getItem(UPDATE_NUDGE_DISMISSED_KEY)
+    return { version: raw, loaded: true }
+  } catch {
+    return { version: null, loaded: false }
+  }
+}
+
+export async function saveUpdateNudgeDismissedVersion(version: string): Promise<void> {
+  await AsyncStorage.setItem(UPDATE_NUDGE_DISMISSED_KEY, version)
+}
+
 const TEXT_SCALE_KEY = 'orca:terminalTextScale'
 
 // Why: the mobile terminal fits the desktop's full column count to the phone

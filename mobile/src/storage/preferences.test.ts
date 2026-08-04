@@ -15,11 +15,13 @@ import {
   loadTerminalLinkOpenMode,
   readPushNotificationsPreference,
   readDisabledTerminalLiveInputHandlesPreference,
+  readUpdateNudgeDismissal,
   saveDisabledTerminalLiveInputHandles,
   saveHostSidebarWidth,
   savePushNotificationsEnabled,
   saveTerminalAutocompleteEnabled,
-  saveTerminalLinkOpenMode
+  saveTerminalLinkOpenMode,
+  saveUpdateNudgeDismissedVersion
 } from './preferences'
 import {
   loadDefaultSessionView,
@@ -309,6 +311,38 @@ describe('push notification preference', () => {
 
     await savePushNotificationsEnabled(false)
     expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:pushNotificationsEnabled', 'false')
+  })
+})
+
+describe('update nudge dismissal preference', () => {
+  beforeEach(() => {
+    vi.mocked(AsyncStorage.getItem).mockReset()
+    vi.mocked(AsyncStorage.setItem).mockReset()
+  })
+
+  it('reports no dismissal when unset', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)
+
+    await expect(readUpdateNudgeDismissal()).resolves.toEqual({ version: null, loaded: true })
+    expect(AsyncStorage.getItem).toHaveBeenCalledWith('orca:updateNudgeDismissedVersion')
+  })
+
+  it('loads the persisted dismissed version', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue('0.0.33')
+
+    await expect(readUpdateNudgeDismissal()).resolves.toEqual({ version: '0.0.33', loaded: true })
+  })
+
+  it('marks an unreadable store as not loaded so the banner stays hidden', async () => {
+    vi.mocked(AsyncStorage.getItem).mockRejectedValue(new Error('storage unavailable'))
+
+    await expect(readUpdateNudgeDismissal()).resolves.toEqual({ version: null, loaded: false })
+  })
+
+  it('persists the dismissed version', async () => {
+    await saveUpdateNudgeDismissedVersion('0.0.33')
+
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:updateNudgeDismissedVersion', '0.0.33')
   })
 })
 

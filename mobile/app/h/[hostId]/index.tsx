@@ -34,10 +34,7 @@ import {
   useLastConnectedAt,
   useReconnectAttempt
 } from '../../../src/transport/client-context-connection-metrics'
-import {
-  classifyConnection,
-  type ConnectionVerdict
-} from '../../../src/transport/connection-health'
+import { classifyConnection, isErrorVerdict } from '../../../src/transport/connection-health'
 import type { RpcSuccess } from '../../../src/transport/types'
 import { StatusDot } from '../../../src/components/StatusDot'
 import { NewWorktreeModalController } from '../../../src/components/NewWorktreeModalController'
@@ -55,6 +52,7 @@ import { ConfirmModal } from '../../../src/components/ConfirmModal'
 import { BottomDrawer } from '../../../src/components/BottomDrawer'
 import { useHostProtocolGates } from '../../../src/components/HostProtocolGate'
 import { AuthFailedBanner } from '../../../src/components/AuthFailedBanner'
+import { UpdateNudgeBanner } from '../../../src/components/UpdateNudgeBanner'
 import { MobileSearchField } from '../../../src/components/MobileSearchField'
 import { WorkspaceDetailPlaceholder } from '../../../src/components/WorkspaceDetailPlaceholder'
 import { getCachedWorktrees, setCachedWorktrees } from '../../../src/cache/worktree-cache'
@@ -95,10 +93,6 @@ import {
 import type { RepoSummary } from '../../../src/worktree/host-worktree-rpc-types'
 import type { WorkspaceStatusDefinition } from '../../../../src/shared/types'
 import { DEFAULT_MOBILE_WORKSPACE_STATUSES } from '../../../src/worktree/mobile-workspace-statuses'
-
-function isErrorVerdict(v: ConnectionVerdict): boolean {
-  return v.kind === 'warning' || v.kind === 'unreachable' || v.kind === 'auth-failed'
-}
 
 const REPO_METADATA_REFRESH_MS = 60_000
 
@@ -177,7 +171,8 @@ export function HostScreen({
   const [showGroupPicker, setShowGroupPicker] = useState(false)
   const [showFilterModal, setShowFilterModal] = useState(false)
   const [actionTarget, setActionTarget] = useState<Worktree | null>(null)
-  const { hostCapabilities, floatingWorkspaceEnabled } = useHostProtocolGates()
+  const { hostCapabilities, floatingWorkspaceEnabled, recommendedMobileAppVersions } =
+    useHostProtocolGates()
   const [confirmDelete, setConfirmDelete] = useState<Worktree | null>(null)
   const [confirmRemoveHost, setConfirmRemoveHost] = useState(false)
   const [routeActionState, setRouteActionState] = useState(() =>
@@ -1089,6 +1084,11 @@ export function HostScreen({
           </View>
         )}
       </View>
+
+      {/* Soft update-your-app nudge; renders null unless this build is older than the host's recommendation. */}
+      {connState === 'connected' && recommendedMobileAppVersions && (
+        <UpdateNudgeBanner recommendedVersions={recommendedMobileAppVersions} />
+      )}
 
       {/* Auth failed banner */}
       {connState === 'auth-failed' && (

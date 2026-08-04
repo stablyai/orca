@@ -549,6 +549,10 @@ import {
   type ClaudeAgentTeamsMode
 } from '../../shared/claude-agent-teams-tmux-compat'
 import { joinWorktreeRelativePath } from './runtime-relative-paths'
+import {
+  getRecommendedAndroidVersion,
+  isAndroidReleaseFeedRefreshPending
+} from './mobile-android-release-feed'
 import { collectMemorySnapshot } from '../memory/collector'
 import { app, BrowserWindow, ipcMain, Notification } from 'electron'
 import { RendererPublicationThrottle } from '../window/renderer-publication-throttle'
@@ -4811,6 +4815,7 @@ export class OrcaRuntimeService {
     if (canBrowse) {
       capabilities.push(BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY)
     }
+    const mobileRecommendation = buildMobileAppRecommendationStatus()
     return {
       runtimeId: this.runtimeId,
       rendererGraphEpoch: this.rendererGraphEpoch,
@@ -4827,6 +4832,11 @@ export class OrcaRuntimeService {
       hostPlatform: process.platform,
       terminalWindowsShell: this.store?.getSettings?.().terminalWindowsShell ?? null,
       floatingWorkspaceEnabled: this.store?.getSettings?.().floatingTerminalEnabled !== false,
+      // Why: derived live from GitHub Releases (cached, fail-open) instead of a
+      // hand-bumped constant, so releases need no recommendation bookkeeping; omitted
+      // entirely when unknown. iOS defers to the App Store (no soft nudge).
+      recommendedMobileAppVersions: mobileRecommendation.versions,
+      recommendedMobileAppVersionsPending: mobileRecommendation.pending,
       protocolVersion: RUNTIME_PROTOCOL_VERSION,
       minCompatibleMobileVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
     }
@@ -36549,4 +36559,18 @@ function compareWorktreePs(
     return right.liveTerminalCount - left.liveTerminalCount
   }
   return left.path.localeCompare(right.path)
+}
+
+// Why: only Android has a soft nudge (APK from GitHub Releases); iOS defers to
+// App Store auto-update. Returns undefined when the latest Android version is
+// unknown so status.get omits the field and mobile shows no banner.
+function buildMobileAppRecommendationStatus(): {
+  versions: { android: string } | undefined
+  pending: true | undefined
+} {
+  const android = getRecommendedAndroidVersion(Date.now())
+  return {
+    versions: android ? { android } : undefined,
+    pending: !android && isAndroidReleaseFeedRefreshPending() ? true : undefined
+  }
 }

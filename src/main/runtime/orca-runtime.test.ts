@@ -22,6 +22,10 @@ import type {
 } from '../../shared/types'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status-types'
 import {
+  __resetAndroidReleaseFeedCacheForTests,
+  __setAndroidReleaseFeedCacheForTests
+} from './mobile-android-release-feed'
+import {
   reviewHeadRemoteRefComponent,
   REVIEW_HEAD_FETCH_TIMEOUT_MS
 } from '../../shared/review-head-tracking-ref'
@@ -1856,6 +1860,24 @@ describe('OrcaRuntimeService', () => {
     expect(typeof status.minCompatibleMobileVersion).toBe('number')
     expect(status.protocolVersion).toBeGreaterThanOrEqual(1)
     expect(status.minCompatibleMobileVersion).toBeGreaterThanOrEqual(0)
+  })
+
+  it('omits an unknown mobile recommendation, then reports cached Android', () => {
+    __setAndroidReleaseFeedCacheForTests(null)
+    try {
+      expect(createRuntime().getStatus().recommendedMobileAppVersions).toBeUndefined()
+
+      // Once the feed has a value, status.get carries only Android — iOS defers to
+      // the App Store, so it is never populated.
+      __setAndroidReleaseFeedCacheForTests('0.0.42')
+      const status = createRuntime().getStatus()
+      expect(status.recommendedMobileAppVersions).toEqual({ android: '0.0.42' })
+      expect(status.recommendedMobileAppVersionsPending).toBeUndefined()
+      expect(status.recommendedMobileAppVersions?.ios).toBeUndefined()
+      expect(status.recommendedMobileAppVersions?.android).toMatch(/^\d+\.\d+\.\d+$/)
+    } finally {
+      __resetAndroidReleaseFeedCacheForTests()
+    }
   })
 
   it('reports the configured Windows terminal shell on status', () => {

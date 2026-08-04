@@ -2,9 +2,9 @@ import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-nati
 import { router } from 'expo-router'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import type { CompatVerdict } from '../transport/protocol-compat'
+import { getMobileAppUpdateUrl } from './mobile-app-update-link'
 
 const RELEASES_URL = 'https://github.com/stablyai/orca/releases'
-const IOS_APP_STORE_URL = 'itms-apps://apps.apple.com/app/orca-ide/id6766130217'
 
 type Props = {
   verdict: Extract<CompatVerdict, { kind: 'blocked' }>
@@ -12,11 +12,20 @@ type Props = {
 
 export function ProtocolBlockScreen({ verdict }: Props) {
   const isMobileTooOld = verdict.reason === 'mobile-too-old'
-  // Why: Android APKs ship through GitHub Releases until a Play Store listing exists.
+  // Why: version-agnostic per-platform update surface (App Store / mobile-filtered
+  // GitHub Releases); ?? RELEASES_URL only narrows the type — ios/android never null.
   const mobileUpdateTarget =
     Platform.OS === 'ios'
-      ? { label: 'Open App Store', url: IOS_APP_STORE_URL, storeName: 'the App Store' }
-      : { label: 'Open GitHub Releases', url: RELEASES_URL, storeName: 'GitHub Releases' }
+      ? {
+          label: 'Open App Store',
+          url: getMobileAppUpdateUrl('ios') ?? RELEASES_URL,
+          storeName: 'the App Store'
+        }
+      : {
+          label: 'Open GitHub Releases',
+          url: getMobileAppUpdateUrl('android') ?? RELEASES_URL,
+          storeName: 'GitHub Releases'
+        }
   const primaryAction = isMobileTooOld
     ? { label: mobileUpdateTarget.label, url: mobileUpdateTarget.url }
     : { label: 'Open GitHub Releases', url: RELEASES_URL }

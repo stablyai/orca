@@ -106,8 +106,10 @@ describe('HostProtocolGate', () => {
     expect(output).not.toContain('mobile app store')
     expect(output).not.toContain('HostContent')
     act(() => renderer?.root.findAllByType('Pressable')[0]?.props.onPress())
+    // Why: the block screen shares getMobileAppUpdateUrl with the soft nudge, so
+    // Android lands on the mobile-filtered releases list, not the generic page.
     expect(nativeTestState.openUrl).toHaveBeenCalledWith(
-      'https://github.com/stablyai/orca/releases'
+      'https://github.com/stablyai/orca/releases?q=mobile-android'
     )
   })
 

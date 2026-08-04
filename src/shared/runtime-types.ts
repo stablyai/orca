@@ -30,7 +30,7 @@ import type {
   RuntimeMarkdownReadTabResult,
   RuntimeMarkdownSaveTabResult
 } from './mobile-markdown-document'
-import type { RuntimeCapability } from './protocol-version'
+import type { RecommendedMobileAppVersions, RuntimeCapability } from './protocol-version'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from './remote-runtime-shared-control-types'
 import type {
   AgentProviderSessionMetadata,
@@ -90,6 +90,11 @@ export type RuntimeStatus = {
   // Why: mobile gates its Floating Workspace entry on this; absent on older
   // hosts, false when the user disabled the feature in desktop settings.
   floatingWorkspaceEnabled?: boolean
+  // Why: per-platform release trains can diverge; absent on older hosts and
+  // mobile fails open (no update nudge).
+  recommendedMobileAppVersions?: RecommendedMobileAppVersions
+  // Why: lets mobile re-read once after a cold background refresh without polling old hosts.
+  recommendedMobileAppVersionsPending?: boolean
   // COMPAT(runtimeStatusMobileAliases): added 2026-05-15 for mobile builds
   // that still read these names; new desktop/CLI code uses the fields above.
   protocolVersion?: number

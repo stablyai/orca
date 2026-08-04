@@ -107,3 +107,11 @@ export function verdictDisplayLabel(verdict: ConnectionVerdict): string {
   }
   return verdict.label
 }
+
+// Why: shared definition of "connection is in trouble" for host screens that
+// gate error-only chrome (reconnect button, banners) on the header verdict.
+export function isErrorVerdict(verdict: ConnectionVerdict): boolean {
+  return (
+    verdict.kind === 'warning' || verdict.kind === 'unreachable' || verdict.kind === 'auth-failed'
+  )
+}
