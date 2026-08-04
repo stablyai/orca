@@ -3,6 +3,7 @@
 // bash (Git Bash on Windows), so the shared POSIX curl script works everywhere.
 
 import { homedir } from 'node:os'
+import { existsSync } from 'node:fs'
 import { join, posix as pathPosix } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
@@ -176,6 +177,17 @@ export class QwenHookService {
     const managedHooksPresent = presentCount > 0
     let state: AgentHookInstallState
     let detail: string | null
+    // Why: registrations without the script mean every Qwen hook fails silently;
+    // report error (not installed) so the UI surfaces a repair path.
+    if (managedHooksPresent && !existsSync(getManagedScriptPath())) {
+      return {
+        agent: 'qwen-code',
+        state: 'error',
+        configPath,
+        managedHooksPresent,
+        detail: `Managed hook script missing: ${getManagedScriptPath()}`
+      }
+    }
     if (missing.length === 0) {
       state = 'installed'
       detail = null

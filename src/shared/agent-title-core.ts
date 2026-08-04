@@ -117,6 +117,37 @@ export function isCursorNativeAgentTitle(title: string): boolean {
   return title.trim().toLowerCase() === CURSOR_NATIVE_TITLE_LOWER
 }
 
+// Why: Orca's synthetic Qwen titles reuse the native `Qwen - ` prefix with a
+// closed status suffix; only those stay classifiable — everything else behind
+// the prefix is a static OSC frame whose directory tokens must not mint state.
+const QWEN_SYNTHETIC_SUFFIXES = [
+  'action required',
+  'permission',
+  'waiting',
+  'ready',
+  'idle',
+  'done',
+  'working',
+  'thinking',
+  'running'
+] as const
+
+/** True for Qwen Code's static `Qwen - <dir>` OSC frame (or bare `Qwen`). */
+export function isQwenNativeTitle(title: string | null | undefined): boolean {
+  if (typeof title !== 'string') {
+    return false
+  }
+  const lower = title.trim().toLowerCase()
+  if (lower === 'qwen') {
+    return true
+  }
+  if (!lower.startsWith('qwen - ')) {
+    return false
+  }
+  const suffix = lower.slice('qwen - '.length).trim()
+  return !(QWEN_SYNTHETIC_SUFFIXES as readonly string[]).includes(suffix)
+}
+
 // Why: `cursor` is also an ordinary editor noun that other agents type into their own
 // task-summary titles, so a name token is not identity. Cursor's identifying titles are
 // a closed set (the native literal plus the labels Orca synthesizes from Cursor hooks),

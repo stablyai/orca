@@ -20,7 +20,8 @@ import {
   isClaudeManagementTitle,
   isGeminiTerminalTitle,
   isPiAgentTitle,
-  isPiTerminalTitle
+  isPiTerminalTitle,
+  isQwenNativeTitle
 } from './agent-title-core'
 import type { AgentStatus } from './agent-title-core'
 import { getPiCompatibleSyntheticAgentStatus } from './pi-compatible-synthetic-title'
@@ -182,6 +183,12 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
     !hasAgyAgentName &&
     !hasQwenAgentName
   ) {
+    return null
+  }
+  // Why: the static `Qwen - <dir>` OSC frame never reflects state; directory
+  // tokens (ready/droid/…) must not mint permission/idle/working (early
+  // tui-idle) — hooks are authoritative, and legacy names must not bypass this.
+  if (isQwenNativeTitle(title)) {
     return null
   }
   if (containsAny(title, ['action required', 'permission', 'waiting'])) {

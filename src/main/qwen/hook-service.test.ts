@@ -131,4 +131,17 @@ describe('QwenHookService', () => {
     expect(service.install().state).toBe('error')
     expect(readFileSync(configPath(), 'utf-8')).toBe(original)
   })
+
+  it('reports error when the managed script is deleted after install', () => {
+    const service = new QwenHookService()
+    expect(service.install().state).toBe('installed')
+
+    rmSync(scriptPath())
+    const status = service.getStatus()
+    // Why: registrations without the script make every hook fail silently;
+    // a false `installed` would hide the breakage from the UI.
+    expect(status.state).toBe('error')
+    expect(status.managedHooksPresent).toBe(true)
+    expect(status.detail).toContain('qwen-code-hook.sh')
+  })
 })

@@ -5,7 +5,7 @@ import {
   QWEN_AGENT_NAME_RE,
   titleHasAgentName
 } from './agent-name-token-match'
-import { isCursorAgentTitle } from './agent-title-core'
+import { isCursorAgentTitle, isQwenNativeTitle } from './agent-title-core'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
 import {
   getPiCompatibleSyntheticAgentLabel,
@@ -102,7 +102,9 @@ export function isClaudeAgent(title: string): boolean {
   if (containsBrailleSpinner(title)) {
     // Why: named non-Claude agents carry braille spinners too. Gate Cursor by its
     // identity title, not the token, so a Claude title mentioning a cursor stays Claude.
-    return !isCursorAgentTitle(title) && !lower.includes('openclaude')
+    return (
+      !isCursorAgentTitle(title) && !lower.includes('openclaude') && !QWEN_AGENT_NAME_RE.test(title)
+    )
   }
   // Why: permission/action-required Claude titles can omit the usual prefixes.
   // Token-match so cwd/worktree titles like "claude-scratch" do not become
@@ -192,6 +194,11 @@ export function getAgentLabel(title: string): string | null {
   if (isCursorAgentTitle(title)) {
     return 'Cursor'
   }
+  // Why: the static `Qwen - <dir>` frame owns the title; a directory token like
+  // `droid` must not re-route ownership (native prefix beats generic tokens).
+  if (isQwenNativeTitle(title)) {
+    return 'Qwen Code'
+  }
   // Why: synthesized "⠋ Droid" working title needs to be matched before Claude's braille heuristic.
   // Token matching avoids labeling ordinary Android terminal titles as Droid.
   if (DROID_AGENT_NAME_RE.test(title)) {
@@ -202,13 +209,15 @@ export function getAgentLabel(title: string): string | null {
   if (HERMES_AGENT_NAME_RE.test(title)) {
     return 'Hermes'
   }
+  // Why: a Claude-owned title can mention `qwen` in task text; Claude's prefix /
+  // braille identity must win before the generic Qwen token match.
+  if (isClaudeAgent(title)) {
+    return 'Claude Code'
+  }
   // Why: Qwen Code sets a static `Qwen - <dir>` OSC title; token-match so
   // paths like "qwen-scratch" don't mint a false identity.
   if (QWEN_AGENT_NAME_RE.test(title)) {
     return 'Qwen Code'
-  }
-  if (isClaudeAgent(title)) {
-    return 'Claude Code'
   }
 
   return null

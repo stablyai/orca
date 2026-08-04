@@ -35852,7 +35852,20 @@ function findQwenActivePromptIndex(normalized: string): number | null {
     return null
   }
   const segment = normalized.slice(headerIndex)
-  const hasPromptLine = segment.split('\n').some((line) => line.trimStart().startsWith('> '))
+  // Why: ready previews can include echoed paste after the header; scan line
+  // bounds directly instead of splitting the whole tail (mirrors
+  // findAntigravityReadyPromptIndex).
+  let hasPromptLine = false
+  let lineStart = 0
+  for (let cursor = 0; cursor <= segment.length && !hasPromptLine; cursor += 1) {
+    if (cursor < segment.length && segment.charCodeAt(cursor) !== 10) {
+      continue
+    }
+    if (segment.slice(lineStart, cursor).trimStart().startsWith('> ')) {
+      hasPromptLine = true
+    }
+    lineStart = cursor + 1
+  }
   return segment.includes('type your message') || hasPromptLine ? headerIndex : null
 }
 
