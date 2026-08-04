@@ -47,7 +47,8 @@ export function requireWorkerAuthority(runtime: OrcaRuntimeService, terminalHand
   return {
     paneKey,
     processIncarnation,
-    ...(authority?.launchTokenHash ? { launchTokenHash: authority.launchTokenHash } : {})
+    ...(authority?.launchTokenHash ? { launchTokenHash: authority.launchTokenHash } : {}),
+    ...(authority?.hostScope ? { hostScope: JSON.stringify(authority.hostScope) } : {})
   }
 }
 

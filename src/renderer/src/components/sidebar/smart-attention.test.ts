@@ -60,7 +60,8 @@ function makeEntry(overrides: Partial<AgentStatusEntry> & { paneKey: string }): 
     tabId: overrides.tabId,
     terminalTitle: overrides.terminalTitle,
     stateHistory: overrides.stateHistory ?? [],
-    interrupted: overrides.interrupted
+    interrupted: overrides.interrupted,
+    restoredUnconfirmed: overrides.restoredUnconfirmed
   }
 }
 
@@ -574,6 +575,82 @@ describe('buildAttentionByWorktree', () => {
       splitLayout(tab.id)
     )
     expect(map.get(w.id)).toEqual({ cls: 2, attentionTimestamp: NOW - 30_000 })
+  })
+
+  it('keeps a restored row idle while allowing an independently live sibling title', () => {
+    const w = makeWorktree('wt-1')
+    const tab = makeTab('tab-1', w.id)
+    const key = paneKey(tab.id, LEAF_1)
+    const map = buildAttentionByWorktree(
+      [w],
+      { [w.id]: [tab] },
+      {
+        [key]: makeEntry({
+          paneKey: key,
+          state: 'working',
+          restoredUnconfirmed: true
+        })
+      },
+      { [tab.id]: { 1: '⠋ Claude', 2: '✋ Gemini CLI' } },
+      ptyMap([tab.id]),
+      NOW,
+      undefined,
+      splitLayout(tab.id)
+    )
+
+    expect(map.get(w.id)).toEqual({
+      cls: 1,
+      attentionTimestamp: NOW,
+      cause: 'title-heuristic'
+    })
+  })
+
+  it('does not revive a restored row from one title before layout hydration', () => {
+    const w = makeWorktree('wt-1')
+    const tab = makeTab('tab-1', w.id)
+    const key = paneKey(tab.id, LEAF_1)
+    const map = buildAttentionByWorktree(
+      [w],
+      { [w.id]: [tab] },
+      {
+        [key]: makeEntry({
+          paneKey: key,
+          state: 'working',
+          restoredUnconfirmed: true
+        })
+      },
+      { [tab.id]: { 1: '⠋ Claude' } },
+      ptyMap([tab.id]),
+      NOW
+    )
+
+    expect(map.get(w.id)).toEqual(IDLE)
+  })
+
+  it('still uses one unmapped title when the hook is only age-stale', () => {
+    const w = makeWorktree('wt-1')
+    const tab = makeTab('tab-1', w.id)
+    const key = paneKey(tab.id, LEAF_1)
+    const map = buildAttentionByWorktree(
+      [w],
+      { [w.id]: [tab] },
+      {
+        [key]: makeEntry({
+          paneKey: key,
+          state: 'working',
+          updatedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 1
+        })
+      },
+      { [tab.id]: { 1: '✋ Gemini CLI' } },
+      ptyMap([tab.id]),
+      NOW
+    )
+
+    expect(map.get(w.id)).toEqual({
+      cls: 1,
+      attentionTimestamp: NOW,
+      cause: 'title-heuristic'
+    })
   })
 
   it('per-pane authority across panes: pane A fresh hook=done, pane B no hook + permission title → Class 1', () => {

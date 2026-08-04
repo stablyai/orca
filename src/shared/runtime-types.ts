@@ -740,6 +740,8 @@ export type RuntimeWorktreeAgentRow = {
   /** When the current `state` was first reported (ms). Drives "Xm ago". */
   stateStartedAt: number
   updatedAt: number
+  /** See AgentStatusEntry.restoredUnconfirmed — set for hydrated nonterminal rows so clients don't render them as confirmed activity. */
+  restoredUnconfirmed?: boolean
 }
 
 export type RuntimeWorktreePsSummary = {

@@ -15,6 +15,7 @@ function makeAgentStatusEntry(args: {
   state: AgentStatusEntry['state']
   worktreeId?: string
   parentPaneKey?: string
+  restoredUnconfirmed?: true
 }): AgentStatusEntry {
   return {
     paneKey: args.paneKey,
@@ -24,6 +25,7 @@ function makeAgentStatusEntry(args: {
     stateStartedAt: 1_000,
     stateHistory: [],
     worktreeId: args.worktreeId,
+    restoredUnconfirmed: args.restoredUnconfirmed,
     orchestration: args.parentPaneKey
       ? {
           taskId: 'task-1',
@@ -163,6 +165,33 @@ describe('selectWorktreeAgentActivitySummary', () => {
       hasLiveDone: true
     })
     expect(nowSpy).toHaveBeenCalledTimes(2)
+  })
+
+  it('lets an unconfirmed restored row suppress only its pane title', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(2_000)
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    const summary = selectWorktreeAgentActivitySummary(
+      {
+        tabsByWorktree: {
+          'repo::/wt-1': [makeTab('tab-1', 'repo::/wt-1')]
+        },
+        agentStatusEpoch: 0,
+        agentStatusByPaneKey: {
+          [paneKey]: makeAgentStatusEntry({
+            paneKey,
+            state: 'working',
+            restoredUnconfirmed: true
+          })
+        },
+        migrationUnsupportedByPtyId: {},
+        runtimeAgentOrchestrationByPaneKey: {},
+        retainedAgentsByPaneKey: {}
+      },
+      'repo::/wt-1'
+    )
+
+    expect(summary).toMatchObject({ hasLiveWorking: false, hasPermission: false })
+    expect(summary.agentStatusPaneIdsByTabId['tab-1']).toEqual(new Set([LEAF_ID]))
   })
 
   it('limits summary-reference churn to the transitioning worktree at scale', () => {

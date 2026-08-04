@@ -39,6 +39,7 @@ export async function readWorkerTranscript(args: {
   sessionId: string
   transcriptPath?: string
   offset?: number
+  endOffset?: number
   limit?: number
 }): Promise<WorkerTranscriptReadResult> {
   const transcriptAgent = resolveNativeChatTranscriptAgent(args.agent)
@@ -64,8 +65,8 @@ export async function readWorkerTranscript(args: {
   try {
     const page =
       args.offset === undefined
-        ? await readInitialPage(filePath, limit, decode)
-        : await readForwardPage(filePath, args.offset, limit, decode)
+        ? await readInitialPage(filePath, limit, decode, args.endOffset)
+        : await readForwardPage(filePath, args.offset, limit, decode, args.endOffset)
     if (!page.ok) {
       return page
     }
@@ -96,9 +97,13 @@ export async function readWorkerTranscript(args: {
 async function readInitialPage(
   filePath: string,
   limit: number,
-  decode: NativeChatLineDecoder
-): Promise<WorkerTranscriptReadSuccess> {
-  const page = await readNativeChatTranscriptTailFile(filePath, limit, decode, false)
+  decode: NativeChatLineDecoder,
+  endOffset?: number
+): Promise<WorkerTranscriptReadResult> {
+  if (endOffset !== undefined && (await stat(filePath)).size < endOffset) {
+    return { ok: false, reason: 'source_changed', warnings: [] }
+  }
+  const page = await readNativeChatTranscriptTailFile(filePath, limit, decode, false, endOffset)
   return {
     ok: true,
     filePath,
@@ -113,9 +118,14 @@ async function readForwardPage(
   filePath: string,
   startOffset: number,
   limit: number,
-  decode: NativeChatLineDecoder
+  decode: NativeChatLineDecoder,
+  endOffset?: number
 ): Promise<WorkerTranscriptReadResult> {
-  const fileSize = (await stat(filePath)).size
+  const currentFileSize = (await stat(filePath)).size
+  if (endOffset !== undefined && currentFileSize < endOffset) {
+    return { ok: false, reason: 'source_changed', warnings: [] }
+  }
+  const fileSize = Math.min(currentFileSize, endOffset ?? Number.MAX_SAFE_INTEGER)
   if (startOffset > fileSize) {
     return { ok: false, reason: 'source_changed', warnings: [] }
   }

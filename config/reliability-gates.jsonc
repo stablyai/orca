@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-01",
+  "updatedAt": "2026-08-03",
   "policy": {
     "maturityLevels": ["experimental", "soak", "blocking", "accepted-gap", "deprecated"],
     "blockingPromotion": {
@@ -6732,6 +6732,104 @@
         "The local Electron restart proof covers retained visible output from the same-build daemon checkpoint, not transcript recovery after a transport cut or distinct A/B runtime replacement."
       ],
       "demotionRule": "Keep experimental or demote if either Electron journey flakes without a product or harness defect, if local worker-start can return before tab materialization without an explicit reveal warning, if focus moves to the worker, if restart or workspace re-entry spawns/resumes/duplicates/interferes with the worker, if retained output becomes unreadable, or if pane-stable delivery reads the wrong mailbox."
+    },
+    {
+      "id": "orchestration.settled-worker-terminal-release",
+      "title": "Settled worker cleanup preserves one exact terminal lease and immutable output",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "orchestration",
+      "layer": "runtime-sqlite-terminal-lifecycle",
+      "surfaces": [
+        "worker-release",
+        "worker-retain",
+        "explicit terminal reuse",
+        "restart reconciliation",
+        "worker-read archives",
+        "orchestration reset"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local"],
+      "coverageNotes": "Deterministic service tests cover release-versus-reuse ordering, transactional retain and takeover cancellation, exact host/pane/process identity, conservative schema-v23 backfill, immutable transcript and bounded terminal archives, mutation restart, reset cleanup, replay idempotency, and 50-resource accounting. Live SSH, WSL, Windows, paired-runtime, and provider-close lost-ack journeys remain explicit gaps.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/pull/12355", "STA-905"],
+      "invariant": "A settled Dispatch may close only its one coordinator-created terminal lease. Explicit reuse, real user input, retain, identity or host change, ambiguity, and another resource for the same exact host/pane/process must fence closure. Output preservation and the requested-to-releasing transition are atomic, archives remain readable without the provider file, retries resume idempotently, and orchestration reset removes archive and authority state.",
+      "oracle": "Record release intent for a settled owner, attempt exact reuse before close, and require worker-start to fail with terminal_release_in_progress while the terminal stays open; then release the original owner exactly once. Race retain and real user input against a controlled archive promise and require no committed archive or close. Change host or process identity and inject duplicate resource evidence to require retention. Freeze a structured transcript, delete its source file, and require archived worker-read to return the same bounded redacted messages. Restart a pending mutation, reset orchestration state, and create 50 resources while asserting replay convergence, zero orphan rows, two-query worker listing, and no unrelated close.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-worker-release.test.ts src/main/runtime/rpc/methods/orchestration-worker-release-recovery.test.ts src/main/runtime/rpc/orchestration-mutation-ledger.test.ts src/main/runtime/orchestration/worker-transcript-read.test.ts src/renderer/src/lib/worker-terminal-takeover-report.test.ts --reporter=dot"
+      ],
+      "testFiles": [
+        "src/main/runtime/rpc/methods/orchestration-worker-release.test.ts",
+        "src/main/runtime/rpc/methods/orchestration-worker-release-recovery.test.ts",
+        "src/main/runtime/rpc/orchestration-mutation-ledger.test.ts",
+        "src/main/runtime/orchestration/worker-transcript-read.test.ts",
+        "src/renderer/src/lib/worker-terminal-takeover-report.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/runtime/rpc/methods/orchestration-worker-release.test.ts",
+          "assertions": [
+            "rejects exact reuse after release intent instead of closing the new worker",
+            "lets an explicit retain cancel a release while output capture is pending",
+            "retains when the terminal host scope changed instead of closing",
+            "reads an immutable transcript snapshot after the provider file disappears",
+            "backfills a legacy creator plus explicit reuser as ambiguous",
+            "removes terminal authority and archived output on orchestration reset"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/orchestration-mutation-ledger.test.ts",
+          "assertions": ["resumes a pending idempotent worker release after restart"]
+        },
+        {
+          "file": "src/main/runtime/rpc/methods/orchestration-worker-release-recovery.test.ts",
+          "assertions": [
+            "finishes a requested release after restart-style interruption",
+            "coalesces overlapping reconciliation passes and closes each resource once",
+            "keeps live terminals bounded across 50 settled workers while controls survive"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-03",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-worker-release.test.ts src/main/runtime/rpc/methods/orchestration-worker-release-recovery.test.ts src/main/runtime/rpc/orchestration-mutation-ledger.test.ts src/main/runtime/orchestration/worker-transcript-read.test.ts src/renderer/src/lib/worker-terminal-takeover-report.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 3.48,
+          "summary": "Five focused files passed 56 tests covering lease serialization, reminted-handle transfer, duplicate-identity fencing, retain and takeover races, immutable archives, conservative legacy migration, mutation restart, reset cleanup, bounded accounting, and renderer input reporting."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 8,
+        "scope": "deterministic runtime, SQLite, transcript, renderer-input, and mutation contracts"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "First local deterministic run only; focused CI and soak history are not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The byte-identical 56-test oracle produced 12 deterministic failures and 44 passes with production restored to exact PR head 4aa66b62e3, including ready reuse during release, unsafe migration, stale archives, mutable transcript output, host/identity close gaps, and mutation replay loss. Candidate 457bc4edd1 passed all 56; restoring the same five production files to 4aa66b62e3 reproduced the same red state."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Release performs constant-count indexed resource and identity queries plus one bounded archive capture. Worker-list uses two set queries rather than one resource lookup per worker. Reconciliation remains serial and adds no polling, timers, subprocesses, renderer subscriptions, or provider-wide listing."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive focused CI passes or 14 days of soak history.",
+        "Add live headed and headless paired-runtime release/reuse journeys.",
+        "Add Docker SSH reconnect and physical Windows WSL host-scope evidence.",
+        "Prove provider-close lost acknowledgements converge with an exact durable close receipt."
+      ],
+      "knownGaps": [
+        "Provider close has no durable cross-process operation receipt, so a crash after host mutation but before SQLite settlement remains release_pending until exact inventory returns.",
+        "Federated release remains explicitly unsupported and retained.",
+        "Mobile/direct remote input takeover and live Linux, Windows, WSL, SSH, headed, and headless paired-runtime release are not exercised."
+      ],
+      "demotionRule": "Keep experimental or demote if release can overlap exact reuse, close a conflicting lease, lose immutable output, retain reset archives, fan out per worker, or any focused ordering test flakes without a product or harness defect."
     },
     {
       "id": "terminal-render.windows-cjk-repaint",
