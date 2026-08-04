@@ -186,13 +186,14 @@ export function wakeSleepingAgentsForWorktreeInBackground(worktreeId: string): v
   // recovered by step (c) into a fresh tab, mounted in step (d).
   const passiveTabIds = new Set<string>()
   let hasUntargetablePassiveRecord = false
-  for (const record of getCanonicalPassiveWakeRecords(worktreeRecords, wokenClaimKeys)) {
-    // Why: a workspace the user explicitly slept must not respawn every finished
-    // agent because a phone opened it. Those panes cold-restore `--resume` when
-    // their own tab is opened, which is also what the desktop does (#11598).
-    if (record.restoreOnTabOpenOnly === true) {
-      continue
-    }
+  // Why: a workspace the user explicitly slept must not respawn every finished agent because a
+  // phone opened it. Those panes cold-restore `--resume` when their own tab is opened, which is
+  // also what the desktop does (#11598). Filtering before canonicalization keeps a lazy record
+  // from winning — and deleting — the claim of a hibernated record that does need mounting.
+  const backgroundWakeRecords = worktreeRecords.filter(
+    (record) => record.restoreOnTabOpenOnly !== true
+  )
+  for (const record of getCanonicalPassiveWakeRecords(backgroundWakeRecords, wokenClaimKeys)) {
     const tabId = getSleepingRecordTabId(record)
     if (tabId) {
       passiveTabIds.add(tabId)

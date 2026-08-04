@@ -310,6 +310,42 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
     expect(rec.mountDetails).toEqual([{ worktreeId: 'wt-1', tabIds: ['tab-hibernated'] }])
   })
 
+  it('mounts the hibernated record when a lazily restored slept pane shares its claim', () => {
+    sleepingRecords = {
+      'tab-slept:leaf-1': {
+        worktreeId: 'wt-1',
+        paneKey: 'tab-slept:leaf-1',
+        tabId: 'tab-slept',
+        capturedAt: 1,
+        updatedAt: 1,
+        providerSession: { key: 'session_id', id: 'session-shared' },
+        restoreOnTabOpenOnly: true
+      } as never,
+      'tab-hibernated:leaf-1': {
+        worktreeId: 'wt-1',
+        paneKey: 'tab-hibernated:leaf-1',
+        tabId: 'tab-hibernated',
+        capturedAt: 2,
+        updatedAt: 2,
+        providerSession: { key: 'session_id', id: 'session-shared' }
+      } as never
+    }
+    isPassiveSpy.mockReturnValue(true)
+    const rec = recordEvents()
+
+    wakeSleepingAgentsForWorktreeInBackground('wt-1')
+
+    rec.stop()
+    // Why: canonicalization deletes same-claim duplicates, so a lazy record must be filtered
+    // out before it can win the claim and strand the hibernated pane it deletes.
+    expect(rec.mountDetails).toEqual([{ worktreeId: 'wt-1', tabIds: ['tab-hibernated'] }])
+    expect(clearSleepingAgentSessionsByPaneKey).not.toHaveBeenCalledWith([
+      'tab-hibernated:leaf-1'
+    ])
+    expect(sleepingRecords).toHaveProperty('tab-hibernated:leaf-1')
+    expect(sleepingRecords).toHaveProperty('tab-slept:leaf-1')
+  })
+
   it('background-mounts the tabs the suppressed resume launches for non-passive records', () => {
     sleepingRecords = { k1: { worktreeId: 'wt-1', paneKey: 'tab-a:leaf-1', tabId: 'tab-a' } }
     isPassiveSpy.mockReturnValue(false)

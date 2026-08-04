@@ -597,6 +597,29 @@ function isDurableSleepingCapture(record: SleepingAgentSessionRecord): boolean {
   return record.origin === 'worktree-sleep' || record.origin === 'quit'
 }
 
+// Why: manual sleep kills the pty either way, so the record carries resume identity, not the dead
+// turn's interrupt flag — and an explicitly slept workspace is never stale at wake, so a row the
+// user is deliberately sleeping must not trip the wake-side staleness discard. `state` is preserved
+// so a done pane wakes lazily in place instead of spawning a new tab.
+function manualSleepCaptureEntry(entry: AgentStatusEntry, capturedAt: number): AgentStatusEntry {
+  return { ...entry, updatedAt: capturedAt, interrupted: false }
+}
+
+// Why: capture recreates a record the manual-sleep wipe would otherwise remove, so a deliberately
+// blocked worker must not become auto-resumable at wake.
+function carryOverAutomaticResumeBlock(
+  record: SleepingAgentSessionRecord,
+  previous: SleepingAgentSessionRecord | undefined
+): void {
+  if (
+    previous?.automaticResumeBlockedBy === 'legacy-orchestration-worker' &&
+    previous.agent === record.agent &&
+    agentProviderSessionsEqual(record.agent, previous.providerSession, record.providerSession)
+  ) {
+    record.automaticResumeBlockedBy = previous.automaticResumeBlockedBy
+  }
+}
+
 export function removeSleepingRecordsReplacedByManualWorktreeSleep(
   records: Record<string, SleepingAgentSessionRecord>,
   worktreeId: string,
@@ -680,9 +703,16 @@ export function collectSleepingAgentSessionRecordsForWorktree(
     if (retained.worktreeId !== worktreeId) {
       continue
     }
+    // Why: the promoted checkpoint carries recovery identity (transcript, connection) a retained
+    // turn row lacks, so it must not be overwritten by a re-derived record.
+    if (promotedLiveRecoveryPaneKeys.has(retained.entry.paneKey)) {
+      continue
+    }
     const record = sleepingRecordFromEntry({
       state,
-      entry: retained.entry,
+      entry: isManualWorktreeSleep
+        ? manualSleepCaptureEntry(retained.entry, capturedAt)
+        : retained.entry,
       worktreeId,
       tab: retained.tab,
       capturedAt,
@@ -692,6 +722,10 @@ export function collectSleepingAgentSessionRecordsForWorktree(
     if (record) {
       if (isManualWorktreeSleep) {
         markManualSleepLazyRestore(record)
+        carryOverAutomaticResumeBlock(
+          record,
+          state.sleepingAgentSessionsByPaneKey[retained.entry.paneKey]
+        )
       }
       records[record.paneKey] = record
     }
@@ -714,15 +748,9 @@ export function collectSleepingAgentSessionRecordsForWorktree(
     if (isCompletedAgentHibernation && !isValidCompletedAgentHibernationEntry(entry)) {
       continue
     }
-    // Why: manual sleep kills the pty either way, so the record carries resume identity, not
-    // the dead turn's interrupt flag — and an explicitly slept workspace is never stale at wake.
-    // `state` is preserved so a done pane wakes lazily in place instead of spawning a new tab.
-    const captureEntry = isManualWorktreeSleep
-      ? { ...entry, updatedAt: capturedAt, interrupted: false }
-      : entry
     const record = sleepingRecordFromEntry({
       state,
-      entry: captureEntry,
+      entry: isManualWorktreeSleep ? manualSleepCaptureEntry(entry, capturedAt) : entry,
       worktreeId,
       capturedAt,
       launchConfig: getLaunchConfigForEntry(state, entry),
@@ -731,17 +759,7 @@ export function collectSleepingAgentSessionRecordsForWorktree(
     if (record) {
       if (isManualWorktreeSleep) {
         markManualSleepLazyRestore(record)
-      }
-      // Why: capture recreates a record the manual-sleep wipe would otherwise remove, so a
-      // deliberately blocked worker must not become auto-resumable at wake.
-      const previous = state.sleepingAgentSessionsByPaneKey[paneKey]
-      if (
-        isManualWorktreeSleep &&
-        previous?.automaticResumeBlockedBy === 'legacy-orchestration-worker' &&
-        previous.agent === record.agent &&
-        agentProviderSessionsEqual(record.agent, previous.providerSession, record.providerSession)
-      ) {
-        record.automaticResumeBlockedBy = previous.automaticResumeBlockedBy
+        carryOverAutomaticResumeBlock(record, state.sleepingAgentSessionsByPaneKey[paneKey])
       }
       records[record.paneKey] = record
     }

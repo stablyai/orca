@@ -199,6 +199,105 @@ describe('manual sleep agent session capture', () => {
     })
   })
 
+  // Why: a retained row is the pane's last status after its pty died, so it is stale by
+  // construction — capturing it verbatim rebuilt a record wake discards as stale (#11598).
+  it('refreshes a stale retained working row so wake cannot discard it', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+    const store = createTestStore()
+    seedTabs(store)
+    const entry = makeAgentEntry({
+      paneKey: 'tab-1:retained',
+      updatedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 1,
+      interrupted: true
+    })
+    store.setState({
+      retainedAgentsByPaneKey: {
+        'tab-1:retained': {
+          entry,
+          tab: makeTab({ id: 'tab-1', worktreeId: 'wt-1' }),
+          worktreeId: 'wt-1',
+          agentType: 'codex',
+          startedAt: entry.stateStartedAt
+        }
+      }
+    } as Partial<AppState>)
+
+    store.getState().captureSleepingAgentSessionsByWorktree('wt-1')
+
+    const record = store.getState().sleepingAgentSessionsByPaneKey['tab-1:retained']
+    expect(record).toMatchObject({ origin: 'worktree-sleep', state: 'working', updatedAt: NOW })
+    expect(record.capturedAt - record.updatedAt).toBeLessThanOrEqual(AGENT_STATUS_STALE_AFTER_MS)
+    expect(record.interrupted).toBeUndefined()
+  })
+
+  it('carries a blocked legacy-orchestration-worker flag onto a retained replacement record', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+    const store = createTestStore()
+    seedTabs(store)
+    const entry = makeAgentEntry({ paneKey: 'tab-1:retained', state: 'done' })
+    store.setState({
+      retainedAgentsByPaneKey: {
+        'tab-1:retained': {
+          entry,
+          tab: makeTab({ id: 'tab-1', worktreeId: 'wt-1' }),
+          worktreeId: 'wt-1',
+          agentType: 'codex',
+          startedAt: entry.stateStartedAt
+        }
+      },
+      sleepingAgentSessionsByPaneKey: {
+        'tab-1:retained': makeSleepingRecord({
+          paneKey: 'tab-1:retained',
+          providerSession: { key: 'session_id', id: 'session-tab-1:retained' },
+          automaticResumeBlockedBy: 'legacy-orchestration-worker'
+        })
+      }
+    } as Partial<AppState>)
+
+    store.getState().captureSleepingAgentSessionsByWorktree('wt-1')
+
+    expect(
+      store.getState().sleepingAgentSessionsByPaneKey['tab-1:retained'].automaticResumeBlockedBy
+    ).toBe('legacy-orchestration-worker')
+  })
+
+  // Why: the promoted checkpoint owns the pane's recovery identity (connection, transcript); the
+  // retained pass must not re-derive over it any more than the live pass may.
+  it('keeps a promoted live checkpoint that also has a retained row', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+    const store = createTestStore()
+    seedTabs(store)
+    const providerSession = { key: 'session_id', id: 'codex-shared' } as const
+    const entry = makeAgentEntry({ paneKey: 'tab-1:leaf-1', state: 'done', providerSession })
+    store.setState({
+      sleepingAgentSessionsByPaneKey: {
+        'tab-1:leaf-1': makeSleepingRecord({ providerSession, connectionId: 'conn-1' })
+      },
+      retainedAgentsByPaneKey: {
+        'tab-1:leaf-1': {
+          entry,
+          tab: makeTab({ id: 'tab-1', worktreeId: 'wt-1' }),
+          worktreeId: 'wt-1',
+          agentType: 'codex',
+          startedAt: entry.stateStartedAt
+        }
+      }
+    } as Partial<AppState>)
+
+    store.getState().captureSleepingAgentSessionsByWorktree('wt-1')
+
+    const record = store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']
+    expect(record).toMatchObject({
+      origin: 'worktree-sleep',
+      state: 'working',
+      connectionId: 'conn-1'
+    })
+    expect(record.restoreOnTabOpenOnly).toBeUndefined()
+  })
+
   it('replaces pre-existing records for stale rows instead of dropping them', () => {
     vi.useFakeTimers()
     vi.setSystemTime(NOW)
