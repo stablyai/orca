@@ -4208,15 +4208,16 @@ export class Store {
     if (!project) {
       return null
     }
-    // Why: the same repo id can exist on multiple execution hosts, so prefer this setup's own
-    // host row and delete only it — removeProject is id-only and would take the sibling's too.
+    // Why: the same repo id can exist on multiple execution hosts, so match this setup's own host
+    // row and never fall back to a sibling host's row — a stale repoId/hostId would delete that host's
+    // registration. With no exact match the setup is stale, and the path below drops just the setup.
     const repo = setup.repoId
-      ? (this.state.repos.find(
+      ? this.state.repos.find(
           (entry) => entry.id === setup.repoId && getRepoExecutionHostId(entry) === setup.hostId
-        ) ?? this.state.repos.find((entry) => entry.id === setup.repoId))
+        )
       : undefined
     if (repo) {
-      this.removeProjectForHost(repo.id, getRepoExecutionHostId(repo))
+      this.removeProjectForHost(repo.id, setup.hostId)
       return { project, setup, repo: this.hydrateRepo(repo) }
     }
     this.state.projectHostSetups = this.state.projectHostSetups.filter(

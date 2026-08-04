@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { Repo } from '../shared/types'
+import type { Project, ProjectHostSetup, Repo } from '../shared/types'
 import { getDefaultPersistedState } from '../shared/constants'
 
 const testState = { dir: '' }
@@ -41,17 +41,51 @@ function duplicateIdRepos(): Repo[] {
   ]
 }
 
-async function createStoreWithDuplicateRepoId() {
+async function createStoreFromState(state: Record<string, unknown>) {
   mkdirSync(testState.dir, { recursive: true })
   writeFileSync(
     join(testState.dir, 'orca-data.json'),
-    JSON.stringify({ ...getDefaultPersistedState(testState.dir), repos: duplicateIdRepos() }),
+    JSON.stringify({ ...getDefaultPersistedState(testState.dir), ...state }),
     'utf-8'
   )
   vi.resetModules()
   const { Store, initDataPath } = await import('./persistence')
   initDataPath()
   return new Store()
+}
+
+function createStoreWithDuplicateRepoId() {
+  return createStoreFromState({ repos: duplicateIdRepos() })
+}
+
+/** A persisted local setup pointing at a repo id that only exists on ssh:ssh-1. */
+function staleLocalSetupState() {
+  const project: Project = {
+    id: 'project-dup',
+    displayName: 'Dup',
+    badgeColor: '#000',
+    sourceRepoIds: ['dup'],
+    createdAt: 1,
+    updatedAt: 1
+  }
+  const setup: ProjectHostSetup = {
+    id: 'project-dup::local',
+    projectId: project.id,
+    hostId: 'local',
+    repoId: 'dup',
+    path: '/laptop/dup',
+    displayName: 'Dup Local',
+    setupState: 'ready',
+    setupMethod: 'imported-existing-folder',
+    createdAt: 1,
+    updatedAt: 1
+  }
+  return {
+    repos: [duplicateIdRepos()[1]],
+    projects: [project],
+    projectHostSetups: [setup],
+    setupId: setup.id
+  }
 }
 
 beforeEach(() => {
@@ -91,5 +125,18 @@ describe('deleting one host copy of a repo id shared by two hosts', () => {
         .map((repo) => repo.path)
         .filter((path) => path !== result?.repo?.path)
     )
+  })
+
+  it('a stale local setup for an id that only exists on ssh never deletes the ssh row', async () => {
+    // Two mechanisms must each hold this line: load-time projection drops the stale setup, and
+    // deleteProjectHostSetup resolves the repo by (repoId, setup.hostId) with no sibling fallback.
+    const { setupId, ...state } = staleLocalSetupState()
+    const store = await createStoreFromState(state)
+
+    const result = store.deleteProjectHostSetup({ setupId })
+
+    expect(result?.repo).toBeUndefined()
+    expect(store.getProjectHostSetups().map((setup) => setup.id)).not.toContain(setupId)
+    expect(store.getRepos().map((repo) => repo.path)).toEqual(['/remote/dup'])
   })
 })
