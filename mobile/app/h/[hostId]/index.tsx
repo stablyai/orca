@@ -22,6 +22,7 @@ import {
 } from 'lucide-react-native'
 import type { RpcClient } from '../../../src/transport/rpc-client'
 import { loadHosts, updateLastConnected } from '../../../src/transport/host-store'
+import { hostRouteEditRedirect } from '../../../src/transport/host-edit-navigation'
 import { removeHostAndCloseClient } from '../../../src/transport/host-removal-lifecycle'
 import {
   useHostClient,
@@ -123,6 +124,19 @@ export function HostScreen({
   const router = useRouter()
   const pathname = usePathname()
   const insets = useSafeAreaInsets()
+  // Why: Edit host lands here with `action=edit` (see navigateToMobileHostEdit) —
+  // redirecting after mount is deterministic where a frame-timed replace from the
+  // home screen raced the nested stack commit. The embedded sidebar instance must
+  // not redirect too, or the routed screen and sidebar would both navigate.
+  useEffect(() => {
+    if (embedded) {
+      return
+    }
+    const redirect = hostRouteEditRedirect(action, hostId)
+    if (redirect) {
+      router.replace(redirect)
+    }
+  }, [embedded, action, hostId, router])
   // Why: cap and center the list on wide/tablet canvases; on phones isWideLayout is false so it stays edge-to-edge.
   const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
   const [initialCache] = useState(() =>
