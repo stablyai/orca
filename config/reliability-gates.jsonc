@@ -1093,7 +1093,7 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/runtime-environments.test.ts",
           "result": "passed",
           "durationSeconds": 0.81,
-          "summary": "53 runtime environment IPC tests passed, including the new close-delivery, all three teardown-isolation, and stale-payload-suppression contracts."
+          "summary": "53 runtime environment IPC tests passed, including the new close-delivery, both teardown-isolation, transport-path containment, and stale-payload-suppression contracts."
         },
         {
           "date": "2026-08-03",
