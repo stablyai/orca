@@ -1,5 +1,30 @@
 import { translate } from '@/i18n/i18n'
 
+export function getBrowserLinkRoutingShortcutLabel(platform: { isMac: boolean }): string {
+  return platform.isMac ? '⇧⌘-click' : 'Shift+Ctrl+click'
+}
+
+// Why: "always" stops being true once inverting is on, so only then does the nested
+// row take over the chord sentence — with it off this reads exactly as it always has.
+// Each variant is a complete catalog entry: stitched suffixes break in locales whose
+// sentence joining differs from English.
+export function getBrowserLinkRoutingDescription(
+  platform: { isMac: boolean },
+  modifierInverts = false
+): string {
+  if (modifierInverts) {
+    return translate(
+      'auto.components.settings.BrowserLinkRoutingSetting.descriptionBase',
+      "Open http(s) links in Orca's built-in browser — from the terminal, markdown, and the editor."
+    )
+  }
+  return translate(
+    'auto.components.settings.BrowserLinkRoutingSetting.description',
+    "Open http(s) links in Orca's built-in browser — from the terminal, markdown, and the editor. {{shortcut}} always uses your system browser.",
+    { shortcut: getBrowserLinkRoutingShortcutLabel(platform) }
+  )
+}
+
 /**
  * Title and description both name the destination the modifier reaches, which is
  * the opposite of wherever Link Routing points. Kept out of the component so the

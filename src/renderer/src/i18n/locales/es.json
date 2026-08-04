@@ -9680,6 +9680,10 @@
           "unpackedHelp": "Development builds must be updated from their source checkout.",
           "legacyHelp": "Update this server manually once to enable remote updates."
         },
+        "BrowserLinkRoutingSetting": {
+          "description": "Abre los enlaces http(s) del terminal, Markdown y el editor en el navegador integrado de Orca. {{shortcut}} siempre usa el navegador del sistema.",
+          "descriptionBase": "Abre los enlaces http(s) del terminal, Markdown y el editor en el navegador integrado de Orca."
+        },
         "BrowserLinkRoutingModifierSetting": {
           "titleSystem": "Hold Shift to open in your web browser",
           "titleOrca": "Hold Shift to open in Orca",
@@ -14634,25 +14638,25 @@
   },
   "browser": {
     "loadFailure": {
-      "connectionNotSecure": "Connection isn't secure",
-      "cantReachHost": "Can't reach {{value0}}",
-      "cantLoadPage": "Can't load this page",
-      "certificateNameMismatch": "The certificate doesn't match {{value0}}.",
-      "certificateDateInvalid": "The certificate for {{value0}} isn't valid at the current date and time.",
-      "certificateAuthorityInvalid": "Orca doesn't trust the authority that issued the certificate for {{value0}}.",
-      "certificateVerificationFailed": "Orca couldn't verify the certificate for {{value0}}.",
-      "trustedCertificateGuidance": "For local development, use a trusted local certificate when possible.",
-      "retry": "Retry",
-      "copyAddress": "Copy Address",
-      "addressCopied": "Copied the current page address.",
-      "openExternally": "Open Externally",
-      "tryHttps": "Try HTTPS",
-      "proceedUnsafe": "Proceed Anyway (Unsafe)",
-      "connecting": "Connecting…",
-      "certificateChallengeExpired": "This certificate approval expired. Retry the page to request a new one.",
-      "certificateChallengeChanged": "The certificate request changed. Retry the page and review the new warning.",
-      "certificateChallengeUnavailable": "This certificate request is no longer available. Retry the page to request a new one.",
-      "certificateProceedFailed": "Orca could not approve this certificate request. Retry the page and try again."
+      "connectionNotSecure": "La conexión no es segura",
+      "cantReachHost": "No se puede acceder a {{value0}}",
+      "cantLoadPage": "No se puede cargar esta página",
+      "certificateNameMismatch": "El certificado no coincide con {{value0}}.",
+      "certificateDateInvalid": "El certificado de {{value0}} no es válido en la fecha y hora actuales.",
+      "certificateAuthorityInvalid": "Orca no confía en la autoridad que emitió el certificado de {{value0}}.",
+      "certificateVerificationFailed": "Orca no pudo verificar el certificado de {{value0}}.",
+      "trustedCertificateGuidance": "Para el desarrollo local, usa un certificado local de confianza siempre que sea posible.",
+      "retry": "Reintentar",
+      "copyAddress": "Copiar dirección",
+      "addressCopied": "Se copió la dirección de la página actual.",
+      "openExternally": "Abrir externamente",
+      "tryHttps": "Probar HTTPS",
+      "proceedUnsafe": "Continuar (no seguro)",
+      "connecting": "Conectando…",
+      "certificateChallengeExpired": "Esta aprobación de certificado caducó. Vuelve a intentarlo con la página para solicitar una nueva.",
+      "certificateChallengeChanged": "La solicitud de certificado cambió. Vuelve a intentarlo con la página y revisa la nueva advertencia.",
+      "certificateChallengeUnavailable": "Esta solicitud de certificado ya no está disponible. Vuelve a intentarlo con la página para solicitar una nueva.",
+      "certificateProceedFailed": "Orca no pudo aprobar esta solicitud de certificado. Vuelve a intentarlo con la página e inténtalo de nuevo."
     }
   },
   "runtimeRpc": {

@@ -8490,7 +8490,9 @@
               "d5c5b47bb9": "update",
               "fb854902d9": "connecting",
               "9a9f8d4910": "Connect Jira Cloud to browse, create, and link issues.",
-              "74f3063026": "{{value0}} site{{value1}} connected"
+              "74f3063026": "{{value0}} site{{value1}} connected",
+              "statusConnected": "Connected",
+              "statusNotConnected": "Not connected"
             }
           }
         },
@@ -9313,7 +9315,9 @@
                 "disconnect_all": "Disconnect",
                 "account_scope_prefix": "Account scope",
                 "2d60ec7921": "Connect a Jira Cloud site with an API token, or a self-hosted Jira with a personal access token or username and password. Credentials are sent to the selected remote runtime and stored there with runtime-supported encryption.",
-                "977e360b71": "Connect a Jira Cloud site with an API token, or a self-hosted Jira with a personal access token or username and password. Credentials are stored locally and encrypted when local runtime storage supports it."
+                "977e360b71": "Connect a Jira Cloud site with an API token, or a self-hosted Jira with a personal access token or username and password. Credentials are stored locally and encrypted when local runtime storage supports it.",
+                "statusConnected": "Connected",
+                "statusNotConnected": "Not connected"
               }
             }
           }
@@ -9354,7 +9358,13 @@
                   "63a7f47392": "ORCA_BITBUCKET_EMAIL",
                   "24ac1c69dc": "Bitbucket status is not available in this runtime yet.",
                   "a924e8dcd1": "Pull requests and build statuses via Bitbucket Cloud API tokens.",
-                  "0fa5629dad": "Pull requests and build statuses"
+                  "0fa5629dad": "Pull requests and build statuses",
+                  "statusConnected": "Connected",
+                  "statusUnavailable": "Unavailable",
+                  "statusNotConfigured": "Not configured",
+                  "statusAuthFailed": "Auth failed",
+                  "statusConfigured": "Configured",
+                  "statusOptionalSetup": "Optional setup"
                 }
               }
             }
@@ -9817,6 +9827,10 @@
           "serviceManagerHelp": "Update Orca through the service manager that starts this server.",
           "unpackedHelp": "Development builds must be updated from their source checkout.",
           "legacyHelp": "Update this server manually once to enable remote updates."
+        },
+        "BrowserLinkRoutingSetting": {
+          "description": "Open http(s) links in Orca's built-in browser — from the terminal, markdown, and the editor. {{shortcut}} always uses your system browser.",
+          "descriptionBase": "Open http(s) links in Orca's built-in browser — from the terminal, markdown, and the editor."
         },
         "BrowserLinkRoutingModifierSetting": {
           "titleSystem": "Hold Shift to open in your web browser",
@@ -13487,7 +13501,8 @@
             "4a9568f773": "Back",
             "4f86e2a10b": "Skip tour",
             "d974f32a83": "Dismiss tour",
-            "ffa4412b66": "next"
+            "ffa4412b66": "next",
+            "complete": "Done"
           },
           "ContextualTourProgressDots": {
             "7734cb8ad3": "of",
@@ -13497,7 +13512,17 @@
             "tour": {
               "overlay": {
                 "measurement": {
-                  "38b3155418": "Next"
+                  "38b3155418": "Next",
+                  "automations": {
+                    "intro": {
+                      "title": "What is an automation?",
+                      "body": "Automations run agent work on a schedule. Add an automation by clicking this button."
+                    },
+                    "results": {
+                      "title": "Find the results",
+                      "body": "Runs show when automations ran, what happened, and where to inspect their output."
+                    }
+                  }
                 }
               }
             }

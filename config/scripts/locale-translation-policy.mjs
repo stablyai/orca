@@ -1,5 +1,8 @@
 import { CJK_LATIN_SPACED_TERMS } from './locale-cjk-latin-spaced-terms.mjs'
-import { isLocalizedProseTermContext } from './locale-prose-term-exemptions.mjs'
+import {
+  isCanonicalGenericRendering,
+  overlapsCanonicalRendering
+} from './locale-generic-ui-terms.mjs'
 import { isScreenCursorContext } from './locale-screen-cursor-exemptions.mjs'
 import { LOCALE_KEY_OVERRIDES } from './locale-key-overrides.mjs'
 import { LOCALE_PHRASE_FIXES } from './locale-phrase-fixes.mjs'
@@ -17,9 +20,10 @@ const OPEN_IN_APP_CATALOG_PREFIX = 'auto.lib.open.in.app.catalog.'
 // Why: product names and agent labels stay Latin — MT reads them as common words (Codex→copy, Gemini→zodiac).
 export const ENGLISH_ONLY_KEY_PREFIXES = [AGENT_CATALOG_PREFIX, OPEN_IN_APP_CATALOG_PREFIX]
 
+// Only genuine brand, product, and code tokens belong here. Ordinary UI words that happen to
+// name a product (agent, terminal, commit, repo, Continue) live in locale-generic-ui-terms.mjs
+// and are translated; their product sense is pinned by ENGLISH_ONLY_KEY_PREFIXES instead.
 export const NEVER_TRANSLATE_VALUES = new Set([
-  'Agent',
-  'Agents',
   'Aider',
   'Amp',
   'Android',
@@ -33,7 +37,6 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'Codebuff',
   'Codex',
   'Command Code',
-  'Continue',
   'Cursor',
   'Droid',
   'Devin',
@@ -60,30 +63,16 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'Pi',
   'PostHog',
   'Qwen Code',
-  'Repo',
-  'Repos',
   'Rovo Dev',
-  'Commit',
-  'Commits',
   'Markdown',
-  'Terminal',
-  'Terminals',
   'VS Code',
   'Warp',
   'Zed',
-  'agent',
-  'agents',
   'android',
   'codex',
-  'commit',
-  'commits',
   'gemini',
   'claude',
   'markdown',
-  'repo',
-  'repos',
-  'terminal',
-  'terminals',
   'gh',
   'idle',
   'anthropic',
@@ -368,6 +357,18 @@ function includesPreservedLatinTerm(value, term) {
   return new RegExp(`(^|[^A-Za-z_])${escapeRegExp(term)}($|[^A-Za-z_])`).test(value)
 }
 
+function replaceMistranslatedForm(value, wrong, brand, locale) {
+  let result = ''
+  let cursor = 0
+  for (let at = value.indexOf(wrong); at !== -1; at = value.indexOf(wrong, cursor)) {
+    const end = at + wrong.length
+    result += value.slice(cursor, at)
+    result += overlapsCanonicalRendering(brand, locale, value, at, end) ? wrong : brand
+    cursor = end
+  }
+  return result + value.slice(cursor)
+}
+
 function applyBrandMistranslationFixes(enValue, localeValue, locale, key = '') {
   let result = localeValue
   const mistranslations = BRAND_MISTRANSLATIONS[locale] ?? {}
@@ -383,9 +384,6 @@ function applyBrandMistranslationFixes(enValue, localeValue, locale, key = '') {
     if (isScreenCursorContext(brand, enValue, key)) {
       continue
     }
-    if (isLocalizedProseTermContext(brand, key)) {
-      continue
-    }
     if (includesPreservedLatinTerm(result, brand)) {
       continue
     }
@@ -393,11 +391,16 @@ function applyBrandMistranslationFixes(enValue, localeValue, locale, key = '') {
       if (!result.includes(wrong)) {
         continue
       }
+      // Why: #12113 — a generic term's correct translation is not a mistranslation; reverting it
+      // rewrote ~2000 translated values back to English on every repair run.
+      if (isCanonicalGenericRendering(brand, locale, wrong)) {
+        continue
+      }
       // Why: "Copy identifier" legitimately uses 사본/复制 — only swap when English names the brand.
       if (brand === 'Codex' && /\bCopy\b/i.test(enValue)) {
         continue
       }
-      result = result.replaceAll(wrong, brand)
+      result = replaceMistranslatedForm(result, wrong, brand, locale)
     }
   }
 
@@ -548,6 +551,11 @@ export function repairCatalog(enCatalog, localeCatalog, locale) {
 
   for (const leaf of leaves) {
     const current = leaf.key.split('.').reduce((cursor, part) => cursor?.[part], localeCatalog)
+    // Why: en.json carries keys the locale catalog has not been bootstrapped with yet; repair only
+    // rewrites values that already exist, so skip instead of crashing on undefined.
+    if (typeof current !== 'string') {
+      continue
+    }
     const next = repairTranslatedValue({
       key: leaf.key,
       enValue: leaf.value,
