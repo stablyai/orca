@@ -1,5 +1,24 @@
+import { translate } from '@/i18n/i18n'
+
 export function formatTerminalSessionCount(count: number): string {
-  return `${count} terminal session${count === 1 ? '' : 's'}`
+  return count === 1
+    ? translate(
+        'auto.components.status.bar.resource.manager.terminal.copy.terminalSessionCount_one',
+        '{{count}} terminal session',
+        { count }
+      )
+    : translate(
+        'auto.components.status.bar.resource.manager.terminal.copy.terminalSessionCount_other',
+        '{{count}} terminal sessions',
+        { count }
+      )
+}
+
+function spaceScanReadyLabel(): string {
+  return translate(
+    'auto.components.status.bar.resource.manager.terminal.copy.spaceScanReady',
+    'Space scan ready'
+  )
 }
 
 export function getResourceManagerTooltipLines(args: {
@@ -10,20 +29,39 @@ export function getResourceManagerTooltipLines(args: {
   const rawMemoryLabel = args.memoryLabel.trim()
   const memoryLabel =
     rawMemoryLabel === '' || rawMemoryLabel === '-' || rawMemoryLabel === '—'
-      ? 'memory unavailable'
+      ? translate(
+          'auto.components.status.bar.resource.manager.terminal.copy.memoryUnavailable',
+          'memory unavailable'
+        )
       : rawMemoryLabel
+  // Why: whole lines are single keys — locales reorder the summary and repunctuate
+  // its separators, so it can't be concatenated from translated fragments here.
   const lines = [
-    `Resource Manager - ${memoryLabel} - ${formatTerminalSessionCount(args.sessionCount)}`
+    translate(
+      'auto.components.status.bar.resource.manager.terminal.copy.tooltipSummary',
+      'Resource Manager - {{memory}} - {{sessions}}',
+      { memory: memoryLabel, sessions: formatTerminalSessionCount(args.sessionCount) }
+    )
   ]
 
   if (args.spaceScanReady) {
-    lines.push('Space scan ready')
+    lines.push(spaceScanReadyLabel())
   }
 
   if (args.sessionCount > 0) {
-    lines.push('Terminal sessions are grouped by workspace.')
+    lines.push(
+      translate(
+        'auto.components.status.bar.resource.manager.terminal.copy.sessionsGroupedByWorkspace',
+        'Terminal sessions are grouped by workspace.'
+      )
+    )
   } else {
-    lines.push('No terminal sessions yet.')
+    lines.push(
+      translate(
+        'auto.components.status.bar.resource.manager.terminal.copy.noTerminalSessions',
+        'No terminal sessions yet.'
+      )
+    )
   }
 
   return lines
@@ -33,11 +71,19 @@ export function getResourceManagerAriaLabel(args: {
   sessionCount: number
   spaceScanReady: boolean
 }): string {
-  const parts = ['Resource Manager', formatTerminalSessionCount(args.sessionCount)]
+  const sessions = formatTerminalSessionCount(args.sessionCount)
 
   if (args.spaceScanReady) {
-    parts.push('Space scan ready')
+    return translate(
+      'auto.components.status.bar.resource.manager.terminal.copy.ariaLabelWithSpaceScan',
+      'Resource Manager, {{sessions}}, {{spaceScan}}',
+      { sessions, spaceScan: spaceScanReadyLabel() }
+    )
   }
 
-  return parts.join(', ')
+  return translate(
+    'auto.components.status.bar.resource.manager.terminal.copy.ariaLabel',
+    'Resource Manager, {{sessions}}',
+    { sessions }
+  )
 }

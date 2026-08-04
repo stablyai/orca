@@ -1,4 +1,12 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+
+// Mirrors resource-memory-metric-copy.test.ts: assert the English source copy
+// through the catalog fallback, with placeholders filled the way i18next would.
+vi.mock('@/i18n/i18n', () => ({
+  translate: (_key: string, fallback: string, options?: Record<string, unknown>) =>
+    fallback.replace(/\{\{(\w+)\}\}/g, (match, name: string) => String(options?.[name] ?? match))
+}))
+
 import {
   formatTerminalSessionCount,
   getResourceManagerAriaLabel,

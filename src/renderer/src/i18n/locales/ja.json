@@ -349,7 +349,8 @@
               "8d6eedf97e": "Orca CLI を PATH に登録できませんでした。",
               "0f116999f1": "セットアップ前にシェルを再起動するか、Orca CLI ディレクトリを PATH に追加します。",
               "15cbedc3e3": "agent スキル セットアップを実行する前に、Orca CLI をインストールします。",
-              "windowsPathUnknown": "Orca could not check your Windows user PATH"
+              "windowsPathUnknown": "Orca could not check your Windows user PATH",
+              "refreshCliRegistration": "CLI の登録状態を更新してから、もう一度お試しください。"
             }
           }
         }
@@ -560,6 +561,9 @@
             "0b01ff98d2": "ポート",
             "7d732521ec": "コメント"
           }
+        },
+        "activation": {
+          "cannotOpenFolderWorkspace": "フォルダーワークスペースを開けません"
         }
       },
       "folderWorkspacePathStatus": {
@@ -3174,7 +3178,12 @@
             "runtime_disconnect_failed": "切断に失敗しました",
             "runtime_reconnecting": "再接続中",
             "runtime_last_close_reason": "クローズ: {{value0}}",
-            "runtime_reconnect_attempt": "試行 {{value0}}"
+            "runtime_reconnect_attempt": "試行 {{value0}}",
+            "connectedHostCount_one": "{{count}} 台のホスト",
+            "connectedHostCount_other": "{{count}} 台のホスト",
+            "connecting": "接続中…",
+            "workspaceConflict": "ワークスペースの競合",
+            "workspaceSyncError": "ワークスペースの同期エラー"
           },
           "StatusBar": {
             "9659e38343": "ポート",
@@ -3234,7 +3243,8 @@
             "antigravityUsage": "Antigravity の使用状況",
             "antigravityUsageDetails": "Antigravity の使用状況詳細を開く",
             "grokUsageAria": "Grok の使用状況詳細を開く",
-            "grokUsageMenu": "Grok の使用状況"
+            "grokUsageMenu": "Grok の使用状況",
+            "floatingTerminalNewActivity": "{{label}}、新しいアクティビティ"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "アカウントを接続する",
@@ -3443,6 +3453,21 @@
               "metric": {
                 "workingSetDescription": "合計ワーキングセット(WS)。共有ページが複数のプロセスに表示されることがあります。",
                 "rssDescription": "合計レジデントセットサイズ(RSS)。共有またはエイリアスされたページが複数のプロセスに表示されることがあります。"
+              }
+            },
+            "manager": {
+              "terminal": {
+                "copy": {
+                  "terminalSessionCount_one": "{{count}} 件のターミナルセッション",
+                  "terminalSessionCount_other": "{{count}} 件のターミナルセッション",
+                  "memoryUnavailable": "メモリ情報を取得できません",
+                  "tooltipSummary": "リソースマネージャー - {{memory}} - {{sessions}}",
+                  "spaceScanReady": "容量スキャンの準備完了",
+                  "sessionsGroupedByWorkspace": "ターミナルセッションはワークスペースごとにグループ化されます。",
+                  "noTerminalSessions": "ターミナルセッションはまだありません。",
+                  "ariaLabel": "リソースマネージャー、{{sessions}}",
+                  "ariaLabelWithSpaceScan": "リソースマネージャー、{{sessions}}、{{spaceScan}}"
+                }
               }
             }
           },
@@ -5609,7 +5634,8 @@
           "f00d6aa9b5": "このマシンでは WSL を利用できません。",
           "7c776ff9d8": "wsl",
           "fc0fcf72fd": "スキルセットアップ前に WSL シェルコマンドを登録してください。",
-          "windowsPathUnknown": "WSL shell command PATH could not be checked"
+          "windowsPathUnknown": "WSL shell command PATH could not be checked",
+          "refreshCliRegistration": "CLI の登録状態を更新してから、もう一度お試しください。"
         },
         "CommitMessageAiPane": {
           "841ed9884a": "ソース管理 AI をカスタマイズしていない repos によって使用されます。",
