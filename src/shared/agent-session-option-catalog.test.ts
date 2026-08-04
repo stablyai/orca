@@ -79,7 +79,7 @@ describe('agent session option catalog', () => {
     expect(
       resolveAgentSessionOptionLaunch('claude', { model: 'opus', effort: 'future-effort' })
     ).toMatchObject({
-      args: ['--model', 'opus', '--effort', 'future-effort'],
+      args: ['--model', 'opus[1m]', '--effort', 'future-effort'],
       appliedValues: { model: 'opus', effort: 'future-effort' }
     })
   })
@@ -156,8 +156,8 @@ describe('agent session option catalog', () => {
     const defaults = resolveNativeChatSessionOptionDefaults(persisted, 'claude')
 
     expect(resolveAgentSessionOptionLaunch('claude', defaults)).toEqual({
-      args: ['--model', 'sonnet', '--effort', 'high'],
-      appliedValues: { model: 'sonnet', effort: 'high' }
+      args: ['--model', 'sonnet[1m]', '--effort', 'high'],
+      appliedValues: { model: 'sonnet', effort: 'high', context1m: true }
     })
   })
 })

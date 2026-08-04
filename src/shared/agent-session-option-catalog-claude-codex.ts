@@ -72,11 +72,15 @@ const CLAUDE_LONG_CONTEXT: CatalogOption = {
   id: 'context1m',
   label: '1M context',
   category: 'model_config',
-  kind: { type: 'boolean', defaultValue: false },
+  // Why: models that expose the option are the ones that benefit from it, so
+  // new sessions launch long-context and opt out rather than in.
+  kind: { type: 'boolean', defaultValue: true },
   apply: { composedIntoModel: true }
 }
 
-function claudeOpus(extras: readonly CatalogOption[] = []): CatalogOption[] {
+/** Every current Claude model runs a 1M window except Haiku, so the toggle
+ * rides along with effort on all of them. */
+function longContextOptions(extras: readonly CatalogOption[] = []): CatalogOption[] {
   return [claudeEffort(true), CLAUDE_LONG_CONTEXT, ...extras]
 }
 
@@ -86,6 +90,9 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   // by substring-matching Claude's TUI header. Keep them verbatim header text.
   models: [
     {
+      // Why: Fable's 1M window is both default and maximum, so the CLI drops a
+      // `[1m]` suffix on it — offering the toggle would claim a state we can
+      // never read back from the header.
       id: 'fable',
       label: 'Fable 5',
       options: [claudeEffort(true)]
@@ -94,12 +101,12 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
       id: 'opus',
       label: 'Opus 5',
       isDefault: true,
-      options: claudeOpus([CLAUDE_FAST_MODE])
+      options: longContextOptions([CLAUDE_FAST_MODE])
     },
     {
       id: 'sonnet',
       label: 'Sonnet 5',
-      options: [claudeEffort(true)]
+      options: longContextOptions()
     },
     {
       id: 'haiku',
@@ -111,22 +118,22 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     {
       id: 'claude-opus-4-8',
       label: 'Opus 4.8',
-      options: claudeOpus([CLAUDE_FAST_MODE])
+      options: longContextOptions([CLAUDE_FAST_MODE])
     },
     {
       id: 'claude-opus-4-7',
       label: 'Opus 4.7',
-      options: claudeOpus()
+      options: longContextOptions()
     },
     {
       id: 'claude-opus-4-6',
       label: 'Opus 4.6',
-      options: claudeOpus()
+      options: longContextOptions()
     },
     {
       id: 'claude-sonnet-4-6',
       label: 'Sonnet 4.6',
-      options: [claudeEffort(true), CLAUDE_LONG_CONTEXT]
+      options: longContextOptions()
     }
   ],
   modelApply: {
