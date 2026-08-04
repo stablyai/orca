@@ -35,6 +35,7 @@ import type {
   WorktreeCreationPhase
 } from '@/lib/pending-worktree-creation'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
+import type { AppState } from '../types'
 export { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 
 export type WorktreeDeleteState = {
@@ -68,6 +69,12 @@ export type WorktreeMetaUpdateOptions = {
 export type WorktreeRenameRequest = {
   worktreeId: string
   rowKey?: string
+}
+
+export type ActiveWorktreeStateTransition = (state: AppState) => {
+  patch: Partial<AppState>
+  activate: boolean
+  preferredActiveUnifiedTabId?: string
 }
 
 export type WorktreeSlice = {
@@ -280,7 +287,11 @@ export type WorktreeSlice = {
    * fresh visit.
    */
   seedActiveWorktreeLastVisitedIfMissing: () => void
-  setActiveWorktree: (worktreeId: string | null, executionHostId?: ExecutionHostId) => void
+  setActiveWorktree: (
+    worktreeId: string | null,
+    executionHostId?: ExecutionHostId,
+    options?: { stateTransition?: ActiveWorktreeStateTransition }
+  ) => boolean
   /**
    * Health-driven remount of one terminal tab: bumps the tab's generation so
    * TerminalPane unmounts, detaches (preserving a live PTY), and remounts with

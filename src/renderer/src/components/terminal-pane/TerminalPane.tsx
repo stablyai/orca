@@ -14,7 +14,6 @@ import { createPortal } from 'react-dom'
 import type { CSSProperties } from 'react'
 import type { IDisposable } from '@xterm/xterm'
 import { useAppStore } from '../../store'
-import { isUnifiedTabPinned } from '@/store/pinned-tab-close-guard'
 import { useLinkRoutingPreferenceDialog } from '@/components/link-routing-preference-dialog'
 import { DaemonActionDialog, useDaemonActions } from '@/components/shared/useDaemonActions'
 import {
@@ -56,14 +55,16 @@ import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/termin
 import {
   applyExpandedLayoutTo,
   cancelPendingPaneSizeRefreshFrames,
-  createExpandCollapseActions,
-  restoreExpandedLayoutFrom
+  restoreExpandedLayoutFrom,
+  useExpandCollapseActions
 } from './expand-collapse'
 import { useTerminalKeyboardShortcuts, type SearchState } from './keyboard-handlers'
 import type { MacOptionAsAlt } from './terminal-shortcut-policy'
 import { useEffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
 import { useTerminalFontZoom } from './useTerminalFontZoom'
 import CloseTerminalDialog, { type CloseTerminalDialogCopyKind } from './CloseTerminalDialog'
+import { resolveLeafCloseCopyKind } from '../terminal/terminal-close-copy-kind'
+import { RUNNING_CLOSE_PROBE_TIMEOUT_MS } from '../terminal/running-terminal-close-guard'
 import CodexRestartChip from '../CodexRestartChip'
 import { MobileDriverOverlay } from './MobileDriverOverlay'
 import { stripSshReconnectOwnedErrorLines, TerminalErrorToast } from './TerminalErrorToast'
@@ -1250,7 +1251,7 @@ function TerminalPane(
     refreshPaneSizes,
     syncExpandedLayout,
     toggleExpandPane
-  } = createExpandCollapseActions({
+  } = useExpandCollapseActions({
     expandedPaneIdRef,
     expandedStyleSnapshotRef,
     containerRef,
@@ -1288,30 +1289,21 @@ function TerminalPane(
   )
 
   // Cmd+W confirms before killing a shell with a running child (e.g. npm run dev); idle prompts close immediately, and Ctrl+D bypasses by design.
+  // Why: the agent-vs-command rule is shared with the tab-strip prompt so the two close paths cannot word the same close differently (#10142).
   const getCloseDialogCopyKind = useCallback(
-    (paneId: number): CloseTerminalDialogCopyKind => {
-      const leafId = managerRef.current?.getLeafId(paneId)
-      if (!leafId) {
-        return 'command'
-      }
-      const agentType =
-        useAppStore.getState().agentStatusByPaneKey[makePaneKey(tabId, leafId)]?.agentType
-      return agentType && agentType !== 'unknown' ? 'agent' : 'command'
-    },
+    (paneId: number): CloseTerminalDialogCopyKind =>
+      resolveLeafCloseCopyKind(tabId, managerRef.current?.getLeafId(paneId)),
     [tabId]
   )
 
   const handleRequestClosePane = useCallback(
     (paneId: number) => {
-      // Why: closing the last pane of a pinned tab prefers the pin dialog over the running-process prompt; non-pinned tabs keep the process prompt.
-      const isLastPane = (managerRef.current?.getPanes().length ?? 0) <= 1
-      if (isLastPane) {
-        const state = useAppStore.getState()
-        const confirmPinned = state.settings?.confirmClosePinnedTab ?? true
-        if (confirmPinned && isUnifiedTabPinned(state, worktreeId, tabId)) {
-          executeClosePane(paneId)
-          return
-        }
+      // Why: the last pane closes the whole tab, and closeTerminalTab owns both the pinned
+      // and running-process guards. Probing here too would double-prompt, and its nullable
+      // transport ptyId would silently skip the prompt the mouse paths now get (#10142).
+      if ((managerRef.current?.getPanes().length ?? 0) <= 1) {
+        executeClosePane(paneId)
+        return
       }
       const transport = paneTransportsRef.current.get(paneId)
       const ptyId = transport?.getPtyId()
@@ -1320,18 +1312,40 @@ function TerminalPane(
         return
       }
       const settings = useAppStore.getState().settings
+      // Why: same bound as the whole-tab guard, so a wedged remote probe never leaves Cmd+W
+      // looking dead for the full 15s RPC timeout; unanswered means ask, not close (#10142).
+      let decided = false
+      const decide = (act: () => void): void => {
+        if (decided) {
+          return
+        }
+        decided = true
+        act()
+      }
+      const confirmClose = (): void =>
+        setPendingCloseConfirmation({ paneId, copyKind: getCloseDialogCopyKind(paneId) })
+      const probeTimeout = setTimeout(() => decide(confirmClose), RUNNING_CLOSE_PROBE_TIMEOUT_MS)
       void inspectRuntimeTerminalProcess(settings, ptyId)
         .then((process) => {
-          if (!process.hasChildProcesses || settings?.skipCloseTerminalWithRunningProcessConfirm) {
-            executeClosePane(paneId)
-          } else {
-            setPendingCloseConfirmation({ paneId, copyKind: getCloseDialogCopyKind(paneId) })
-          }
+          clearTimeout(probeTimeout)
+          decide(() => {
+            if (
+              !process.hasChildProcesses ||
+              settings?.skipCloseTerminalWithRunningProcessConfirm
+            ) {
+              executeClosePane(paneId)
+            } else {
+              confirmClose()
+            }
+          })
         })
         // Why: if the child-process probe rejects (wedged IPC, legacy provider), close anyway — Cmd+W doing nothing is worse than closing a pane with a child.
-        .catch(() => executeClosePane(paneId))
+        .catch(() => {
+          clearTimeout(probeTimeout)
+          decide(() => executeClosePane(paneId))
+        })
     },
-    [executeClosePane, tabId, worktreeId, getCloseDialogCopyKind]
+    [executeClosePane, getCloseDialogCopyKind]
   )
 
   useImperativeHandle(

@@ -95,6 +95,31 @@ describe('BrowserPaneOverlayLayer', () => {
     expect(view.container.querySelectorAll('[data-browser-overlay-tab-id]')).toHaveLength(2)
   })
 
+  it('discards the retained latch when the worktree surface unmounts', () => {
+    const view = render(
+      <RetainedBrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive mountEligible />
+    )
+    expect(view.container.querySelectorAll('[data-browser-overlay-tab-id]')).toHaveLength(2)
+
+    // Worktree removal (or Terminal teardown) unmounts the layer with its surface.
+    view.unmount()
+
+    // A remount starts a fresh layer: the latch must reset, deferring until eligible again.
+    const revisit = render(
+      <RetainedBrowserPaneOverlayLayer
+        worktreeId="wt-1"
+        isWorktreeActive={false}
+        mountEligible={false}
+      />
+    )
+    expect(revisit.container.querySelectorAll('[data-browser-overlay-tab-id]')).toHaveLength(0)
+
+    revisit.rerender(
+      <RetainedBrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive mountEligible />
+    )
+    expect(revisit.container.querySelectorAll('[data-browser-overlay-tab-id]')).toHaveLength(2)
+  })
+
   it('does not retain browser slots from an eligible render that never commits', () => {
     const pending = new Promise<never>(() => {})
     const BlockCommit = ({ blocked }: { blocked: boolean }): null => {

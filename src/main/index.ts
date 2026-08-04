@@ -2,7 +2,7 @@
 import { existsSync, statSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
 import os from 'node:os'
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, type Tray } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, powerMonitor, type Tray } from 'electron'
 import { initTccPromptNotice, stopTccPromptNotice } from './macos-tcc-prompt-notice'
 import { electronApp, is } from '@electron-toolkit/utils'
 import {
@@ -160,8 +160,10 @@ import {
   acquireSingleInstanceLock,
   logSingleInstanceLockBypass,
   logSingleInstanceLockFailure,
+  shouldActivateDesktopForSecondInstance,
   shouldBypassSingleInstanceLock,
-  shouldSkipSingleInstanceLock
+  shouldSkipSingleInstanceLock,
+  SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE
 } from './startup/single-instance-lock'
 import { startEventLoopStallProbe } from './startup/event-loop-stall-probe'
 import { startMainThreadChurnProbe } from './diagnostics/main-thread-churn-probe'
@@ -606,7 +608,11 @@ function focusExistingWindow(): void {
   })
 }
 
-function requestDesktopActivation(): void {
+function requestDesktopActivation(argv: readonly string[] = []): void {
+  // Why: a duplicate `orca serve` must not drag a headless server into opening a desktop window (#11935).
+  if (!shouldActivateDesktopForSecondInstance(argv)) {
+    return
+  }
   desktopActivationGate.requestActivation()
 }
 
@@ -726,10 +732,11 @@ if (startupDiagnosticsEnabled) {
 if (!hasSingleInstanceLock) {
   // Why: a false-negative lock loss otherwise looks like a silent crash on packaged macOS; `open --stderr` can capture this line.
   logSingleInstanceLockFailure()
-  app.quit()
+  // Why: a graceful quit is deferred pre-ready, so this launch would still walk into Linux display init and SIGSEGV (#11935).
+  app.exit(SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE)
 }
 
-// Why: when another process holds the lock we've already quit; skip file-writing side effects so this transient process never touches userData.
+// Why: when another process holds the lock we've already exited; skip file-writing side effects so this transient process never touches userData.
 if (hasSingleInstanceLock) {
   // Why: couple to dev-parent only for electron-vite desktop runs; `orca serve`'s parent (CLI shim/background shell) isn't the intended server lifetime.
   const shouldCoupleToDevParent = is.dev && !isServeMode
@@ -1406,6 +1413,7 @@ function openMainWindow(): BrowserWindow {
       providerSession,
       providerSessionOnly,
       promptInteractionKey,
+      restoredUnconfirmed,
       isReplay
     }) => {
       if (mainWindow?.isDestroyed()) {
@@ -1442,6 +1450,7 @@ function openMainWindow(): BrowserWindow {
         stateStartedAt,
         ...(providerSession ? { providerSession } : {}),
         ...(promptInteractionKey ? { promptInteractionKey } : {}),
+        ...(restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
         ...(orchestration ? { orchestration } : {})
       })
       recordAgentStateCrashBreadcrumb(payload.agentType ?? 'unknown', payload.state)
@@ -2741,6 +2750,9 @@ void app.whenReady().then(async () => {
     // Why: mobile pairing needs the stable pre-setName() path (getCanonicalUserDataPath), not a late app.getPath('userData') that drops paired devices across restarts.
     userDataPath: getCanonicalUserDataPath(),
     enableWebSocket: true,
+    // Why: STA-2370 — the desktop app binds the WS listener to loopback until the user pairs a device;
+    // `orca serve` is an explicit remote opt-in, and E2E keeps the wide bind its harness connects over.
+    exposeNetworkByDefault: Boolean(serveOptions) || isE2E,
     ...(isE2E ? { wsPort: e2eWsPort } : {}),
     ...(devWsPort !== undefined ? { wsPort: devWsPort } : {}),
     ...(serveOptions?.wsPort !== undefined
@@ -2892,6 +2904,9 @@ void app.whenReady().then(async () => {
         provisionRelay: (context, params) => relayService.provisionRelay(context, params)
       })
       relayService.start()
+      // Why: sleeping past relay-token expiry kills the broker with no retry
+      // timer; resume is the moment that state becomes recoverable.
+      powerMonitor.on('resume', () => desktopRelayService?.ensureLive())
     } catch (error) {
       console.warn(
         '[relay] Desktop relay startup unavailable:',

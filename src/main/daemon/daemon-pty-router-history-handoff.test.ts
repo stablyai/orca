@@ -121,9 +121,7 @@ describe('DaemonPtyRouter history handoff', () => {
         'finishHistorySeedTransfer'
       ])
     )
-    await expect(router.getBufferSnapshot(sessionId)).resolves.toMatchObject({
-      data: expect.stringContaining(marker)
-    })
+    await expect(router.getBufferSnapshot(sessionId)).resolves.toBeNull()
     expect(currentAdapter.getHistoryManager()?.hasWriter(sessionId)).toBe(true)
   })
 })

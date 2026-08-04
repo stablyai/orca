@@ -20,6 +20,8 @@ const {
   mockRegisterSshGitProvider,
   mockPortForwardManager,
   mockPortScannerCallbacks,
+  mockListConfigHosts,
+  mockResolveConfigHost,
   mockNextConnectionManagers,
   mockNextPortForwardManagers
 } = vi.hoisted(() => ({
@@ -28,6 +30,7 @@ const {
   powerMonitorOnMock: vi.fn(),
   mockSshStore: {
     listTargets: vi.fn().mockReturnValue([]),
+    listSuppressedSshConfigAliases: vi.fn().mockReturnValue([]),
     getTarget: vi.fn(),
     addTarget: vi.fn(),
     updateTarget: vi.fn(),
@@ -88,8 +91,21 @@ const {
     callbacksRef: { current: null as unknown }
   },
   mockPortScannerCallbacks: new Map<string, unknown>(),
+  mockListConfigHosts: vi.fn().mockReturnValue({
+    hosts: [],
+    totalHostCount: 0,
+    newHostCount: 0,
+    matchCount: 0,
+    hasMore: false
+  }),
+  mockResolveConfigHost: vi.fn().mockResolvedValue(null),
   mockNextConnectionManagers: [] as unknown[],
   mockNextPortForwardManagers: [] as unknown[]
+}))
+
+vi.mock('../ssh/ssh-config-host-picker', () => ({
+  listUserSshConfigHostSummaries: mockListConfigHosts,
+  resolveUserSshConfigHost: mockResolveConfigHost
 }))
 
 vi.mock('electron', () => ({
@@ -436,6 +452,8 @@ describe('SSH IPC handlers', () => {
     expect(channels).toContain('ssh:updateTarget')
     expect(channels).toContain('ssh:removeTarget')
     expect(channels).toContain('ssh:importConfig')
+    expect(channels).toContain('ssh:listConfigHosts')
+    expect(channels).toContain('ssh:resolveConfigHost')
     expect(channels).toContain('ssh:connect')
     expect(channels).toContain('ssh:disconnect')
     expect(channels).toContain('ssh:terminateSessions')
@@ -547,6 +565,35 @@ describe('SSH IPC handlers', () => {
 
     const result = await handlers.get('ssh:importConfig')!(null, {})
     expect(result).toEqual({ targets: imported, repoReadoptions: [] })
+  })
+
+  it('ssh:listConfigHosts loads summaries against current targets', async () => {
+    mockSshStore.listTargets.mockReturnValue([
+      { id: 'ssh-1', label: 'other', host: 'other.com', port: 22, username: 'x' }
+    ])
+
+    const result = await handlers.get('ssh:listConfigHosts')!(null, { query: 'oth' })
+
+    expect(mockSshStore.listTargets).toHaveBeenCalled()
+    expect(mockListConfigHosts).toHaveBeenCalledWith(mockSshStore.listTargets(), 'oth', [], {
+      refresh: false
+    })
+    expect(result).toMatchObject({ hosts: [], hasMore: false })
+  })
+
+  // Only a picker (re)open re-reads ~/.ssh/config; filter keystrokes reuse the parse.
+  it('ssh:listConfigHosts refreshes the parsed config only when asked', async () => {
+    mockSshStore.listTargets.mockReturnValue([])
+
+    await handlers.get('ssh:listConfigHosts')!(null, { query: '', refresh: true })
+
+    expect(mockListConfigHosts).toHaveBeenCalledWith([], '', [], { refresh: true })
+  })
+
+  it('ssh:resolveConfigHost resolves only the selected alias', async () => {
+    await handlers.get('ssh:resolveConfigHost')!(null, { alias: 'prod' })
+
+    expect(mockResolveConfigHost).toHaveBeenCalledWith('prod')
   })
 
   it('ssh:connect throws for unknown targetId', async () => {

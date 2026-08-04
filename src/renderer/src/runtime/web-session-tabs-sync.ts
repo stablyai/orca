@@ -801,10 +801,13 @@ function buildMirroredAgentStatusPatch(
     changed = true
     const entryAttributionChanged =
       existing?.worktreeId !== entry.worktreeId || existing?.tabId !== entry.tabId
+    const entryFreshnessChanged =
+      !!existing && isAgentStatusFresh(existing, now) !== isAgentStatusFresh(entry, now)
     const entrySortRelevantChange =
       !existing ||
       existing.state !== entry.state ||
       !isAgentStatusFresh(existing, now) ||
+      entryFreshnessChanged ||
       entryAttributionChanged ||
       isMirroredCommandCodeTurnBump(existing, entry)
     aggregateRelevantChange = aggregateRelevantChange || entrySortRelevantChange
@@ -1395,13 +1398,17 @@ function agentStatusEntryEqual(a: AgentStatusEntry | undefined, b: AgentStatusEn
     a.lastAssistantMessage === b.lastAssistantMessage &&
     a.interrupted === b.interrupted &&
     a.promptInteractionKey === b.promptInteractionKey &&
+    a.restoredUnconfirmed === b.restoredUnconfirmed &&
     agentProviderSessionsEqual(a.agentType, a.providerSession, b.providerSession) &&
     sameAgentStateHistory(a.stateHistory, b.stateHistory)
   )
 }
 
-function isAgentStatusFresh(entry: Pick<AgentStatusEntry, 'updatedAt'>, now: number): boolean {
-  return now - entry.updatedAt <= AGENT_STATUS_STALE_AFTER_MS
+function isAgentStatusFresh(
+  entry: Pick<AgentStatusEntry, 'updatedAt' | 'restoredUnconfirmed'>,
+  now: number
+): boolean {
+  return entry.restoredUnconfirmed !== true && now - entry.updatedAt <= AGENT_STATUS_STALE_AFTER_MS
 }
 
 function isMirroredCommandCodeTurnBump(

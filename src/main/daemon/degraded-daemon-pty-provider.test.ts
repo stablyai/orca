@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { DegradedDaemonPtyProvider } from './degraded-daemon-pty-provider'
+import { DEGRADED_DAEMON_RECOVERY_RETRY_MS } from './degraded-daemon-fresh-spawn-routing'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
@@ -124,6 +125,8 @@ function createDaemonAdapter(
   return {
     ...createProvider(label, sessions, true),
     protocolVersion: 13,
+    supportsGitCredentialGuardHost: vi.fn(() => true),
+    canProvideAuthoritativeBufferSnapshot: vi.fn(() => true),
     listSessions: vi.fn(async () => []),
     ackColdRestore: vi.fn(),
     clearTombstone: vi.fn(),
@@ -226,6 +229,89 @@ describe('DegradedDaemonPtyProvider', () => {
     expect(fallback.spawn).toHaveBeenCalledWith({ cols: 80, rows: 24 })
     expect(current.write).toHaveBeenCalledWith('daemon-session', 'old\n')
     expect(fallback.write).toHaveBeenCalledWith(fresh.id, 'new\n')
+  })
+
+  it('routes later fresh PTYs to the daemon after spawn health recovers', async () => {
+    const current = createDaemonAdapter('daemon')
+    const fallback = createProvider('fallback')
+    const probeCurrentDaemonSpawn = vi
+      .fn<() => Promise<boolean>>()
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true)
+    const provider = new DegradedDaemonPtyProvider({
+      current,
+      legacy: [],
+      fallback,
+      probeCurrentDaemonSpawn
+    })
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000)
+
+    try {
+      await expect(provider.recoverFreshSpawnRouting()).resolves.toBe(false)
+      await provider.spawn({ cols: 80, rows: 24 })
+      await expect(provider.recoverFreshSpawnRouting()).resolves.toBe(false)
+      expect(probeCurrentDaemonSpawn).toHaveBeenCalledOnce()
+      now.mockReturnValue(1_000 + DEGRADED_DAEMON_RECOVERY_RETRY_MS)
+      await expect(provider.recoverFreshSpawnRouting()).resolves.toBe(true)
+      const recovered = await provider.spawn({ cols: 80, rows: 24, worktreeId: 'wt-1' })
+
+      expect(provider.routesFreshSpawnsToLocalProvider).toBeUndefined()
+      expect(provider.isDegraded).toBe(true)
+      expect(provider.supportsGitCredentialGuardHost()).toBe(true)
+      expect(fallback.spawn).toHaveBeenCalledOnce()
+      expect(current.spawn).toHaveBeenCalledWith({ cols: 80, rows: 24, worktreeId: 'wt-1' })
+      expect(recovered.id).toBe('daemon-new')
+      expect(provider.canProvideAuthoritativeBufferSnapshot(recovered.id)).toBe(true)
+    } finally {
+      now.mockRestore()
+    }
+  })
+
+  it('coalesces concurrent fresh-spawn recovery probes', async () => {
+    let resolveProbe: ((healthy: boolean) => void) | undefined
+    const probeCurrentDaemonSpawn = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveProbe = resolve
+        })
+    )
+    const provider = new DegradedDaemonPtyProvider({
+      current: createDaemonAdapter('daemon'),
+      legacy: [],
+      fallback: createProvider('fallback'),
+      probeCurrentDaemonSpawn
+    })
+
+    const first = provider.recoverFreshSpawnRouting()
+    const second = provider.recoverFreshSpawnRouting()
+    expect(probeCurrentDaemonSpawn).toHaveBeenCalledOnce()
+    resolveProbe?.(true)
+
+    await expect(Promise.all([first, second])).resolves.toEqual([true, true])
+    await expect(provider.recoverFreshSpawnRouting()).resolves.toBe(true)
+    expect(probeCurrentDaemonSpawn).toHaveBeenCalledOnce()
+  })
+
+  it('does not retain recovered daemon ownership after exit beats the spawn reply', async () => {
+    const current = createDaemonAdapter('daemon')
+    const provider = new DegradedDaemonPtyProvider({
+      current,
+      legacy: [],
+      fallback: createProvider('fallback'),
+      probeCurrentDaemonSpawn: vi.fn(async () => true)
+    })
+    vi.mocked(current.spawn).mockImplementation(async () => {
+      current.emitExit('daemon-fast-exit', 0)
+      return { id: 'daemon-fast-exit', exitedBeforeSpawnReply: true }
+    })
+
+    await provider.recoverFreshSpawnRouting()
+    await expect(provider.spawn({ cols: 80, rows: 24 })).resolves.toMatchObject({
+      id: 'daemon-fast-exit',
+      exitedBeforeSpawnReply: true
+    })
+
+    expect(provider.getCurrentDaemonSessionIds()).toEqual([])
   })
 
   it('routes a previously daemon-backed id to fallback after daemon exit removes the mapping', async () => {

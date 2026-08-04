@@ -81,6 +81,35 @@ describe('ensureBrowserPageViewport', () => {
     expect(stale.shell.isConnected).toBe(false)
     expect(getBrowserPageViewportContainer('page-1')).toBe(rebuilt!.container)
   })
+
+  it('builds a fresh viewport when a revisit follows guest-budget eviction', () => {
+    const root = mountSlotViewport('workspace-1')
+    const evicted = ensureBrowserPageViewport('page-1', 'workspace-1')!
+    // Eviction destroys the guest (destroyPersistentWebview removes the viewport);
+    // the slot stays mounted and registered, so the revisit rebuilds into the same root.
+    removeBrowserPageViewport('page-1')
+
+    const rebuilt = ensureBrowserPageViewport('page-1', 'workspace-1')
+
+    expect(rebuilt).not.toBeNull()
+    expect(rebuilt).not.toBe(evicted)
+    expect(rebuilt!.shell.parentElement).toBe(root)
+    expect(rebuilt!.shell.isConnected).toBe(true)
+    expect(evicted.shell.isConnected).toBe(false)
+    expect(getBrowserPageViewportContainer('page-1')).toBe(rebuilt!.container)
+  })
+
+  it('removes the stale shell when a connected slot root is replaced', () => {
+    const oldRoot = mountSlotViewport('workspace-1')
+    const stale = ensureBrowserPageViewport('page-1', 'workspace-1')!
+    const newRoot = mountSlotViewport('workspace-1')
+    expect(oldRoot.contains(stale.shell)).toBe(true)
+
+    const rebuilt = ensureBrowserPageViewport('page-1', 'workspace-1')!
+
+    expect(oldRoot.contains(stale.shell)).toBe(false)
+    expect(rebuilt.shell.parentElement).toBe(newRoot)
+  })
 })
 
 describe('syncBrowserPageChromeInset', () => {
@@ -91,6 +120,27 @@ describe('syncBrowserPageChromeInset', () => {
 
     const viewport = ensureBrowserPageViewport('page-1', 'workspace-1')!
     expect(viewport.chromeInset.style.height).toBe('48px')
+  })
+
+  it('restores the inset when guest recovery rebuilds the shell', () => {
+    mountSlotViewport('workspace-1')
+    ensureBrowserPageViewport('page-1', 'workspace-1')
+    syncBrowserPageChromeInset('page-1', 48)
+    // Guest replacement tears the shell down; the recovery re-render rebuilds it without re-measuring the chrome.
+    removeBrowserPageViewport('page-1')
+
+    const rebuilt = ensureBrowserPageViewport('page-1', 'workspace-1')!
+
+    expect(rebuilt.chromeInset.style.height).toBe('48px')
+  })
+
+  it('applies an inset measured before the shell existed', () => {
+    syncBrowserPageChromeInset('page-2', 40)
+    mountSlotViewport('workspace-1')
+
+    const viewport = ensureBrowserPageViewport('page-2', 'workspace-1')!
+
+    expect(viewport.chromeInset.style.height).toBe('40px')
   })
 })
 

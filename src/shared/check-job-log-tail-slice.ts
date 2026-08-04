@@ -10,8 +10,19 @@ export const PR_CHECK_LOG_TAIL_EARLIER_SEPARATOR = '… earlier errors …'
 const ERROR_LINE_PATTERN =
   /(?:##\[error\]|::error::|::error\b|\berror:|FAILED|exit code|ENOENT|EACCES|panic:|AssertionError)/i
 
+// Why: this slicer runs in main (GitHub/GitLab log fetches) and in the renderer
+// (defensive re-slice of traces from older remote runtimes), so no Buffer.
+function utf8ByteLength(text: string): number {
+  let bytes = 0
+  for (const character of text) {
+    const codePoint = character.codePointAt(0) ?? 0
+    bytes += codePoint < 0x80 ? 1 : codePoint < 0x800 ? 2 : codePoint < 0x10000 ? 3 : 4
+  }
+  return bytes
+}
+
 function applyLogTailByteCap(text: string): string {
-  if (Buffer.byteLength(text, 'utf8') <= PR_CHECK_LOG_TAIL_BYTES) {
+  if (utf8ByteLength(text) <= PR_CHECK_LOG_TAIL_BYTES) {
     return text
   }
   return sliceTrailingTextByUtf8Bytes(text, PR_CHECK_LOG_TAIL_BYTES)
@@ -21,7 +32,7 @@ function sliceTrailingTextByUtf8Bytes(text: string, byteLimit: number): string {
   let byteLength = 0
   const characters = Array.from(text)
   for (let index = characters.length - 1; index >= 0; index -= 1) {
-    const characterByteLength = Buffer.byteLength(characters[index] ?? '', 'utf8')
+    const characterByteLength = utf8ByteLength(characters[index] ?? '')
     if (byteLength + characterByteLength > byteLimit) {
       return characters.slice(index + 1).join('')
     }
@@ -32,14 +43,13 @@ function sliceTrailingTextByUtf8Bytes(text: string, byteLimit: number): string {
 
 function joinLogExcerptWithByteCap(prefixLines: string[], recentLines: string[]): string {
   const prefix = prefixLines.join('\n')
-  const prefixByteLength = Buffer.byteLength(prefix, 'utf8')
+  const prefixByteLength = utf8ByteLength(prefix)
   if (prefixByteLength >= PR_CHECK_LOG_TAIL_BYTES) {
     return sliceTrailingTextByUtf8Bytes(prefix, PR_CHECK_LOG_TAIL_BYTES)
   }
 
   const separator = prefix.length > 0 && recentLines.length > 0 ? '\n' : ''
-  const recentBudget =
-    PR_CHECK_LOG_TAIL_BYTES - prefixByteLength - Buffer.byteLength(separator, 'utf8')
+  const recentBudget = PR_CHECK_LOG_TAIL_BYTES - prefixByteLength - utf8ByteLength(separator)
   const recentTail = sliceTrailingTextByUtf8Bytes(recentLines.join('\n'), recentBudget)
   return `${prefix}${separator}${recentTail}`
 }

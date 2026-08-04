@@ -127,6 +127,12 @@ export class WebSocketTransport implements RpcTransport {
     return this.port
   }
 
+  // Why: the actual OS-reported bind interface, so callers can verify loopback vs all-interfaces (STA-2370).
+  get resolvedHost(): string | null {
+    const addr = this.httpServer?.address()
+    return addr && typeof addr === 'object' ? addr.address : null
+  }
+
   async start(): Promise<void> {
     if (this.wss) {
       return

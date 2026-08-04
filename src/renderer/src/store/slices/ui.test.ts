@@ -721,6 +721,33 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().showSleepingWorkspaces).toBe(true)
   })
 
+  it('defaults the default-branch sleeping exemption to on', () => {
+    expect(getDefaultUIState().alwaysShowDefaultBranchWorkspace).toBe(true)
+    expect(createUIStore().getState().alwaysShowDefaultBranchWorkspace).toBe(true)
+  })
+
+  it('treats a legacy profile with no default-branch exemption key as opted in', () => {
+    // Why: profiles written before #8873 are exactly the ones showing the bug,
+    // so an absent key must hydrate to on rather than silently re-hiding main.
+    const store = createUIStore()
+    const legacy = makePersistedUI()
+    delete (legacy as Partial<PersistedUIState>).alwaysShowDefaultBranchWorkspace
+
+    store.getState().hydratePersistedUI(legacy, 'startup')
+
+    expect(store.getState().alwaysShowDefaultBranchWorkspace).toBe(true)
+  })
+
+  it('preserves an explicit default-branch exemption opt-out on hydration', () => {
+    const store = createUIStore()
+
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ alwaysShowDefaultBranchWorkspace: false }), 'startup')
+
+    expect(store.getState().alwaysShowDefaultBranchWorkspace).toBe(false)
+  })
+
   it('defaults workspace host scope to all hosts', () => {
     expect(getDefaultUIState().workspaceHostScope).toBe('all')
     expect(createUIStore().getState().workspaceHostScope).toBe('all')
