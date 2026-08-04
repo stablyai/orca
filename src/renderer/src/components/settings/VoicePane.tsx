@@ -13,7 +13,10 @@ import { handleVoiceDictationToggle } from './voice-dictation-toggle'
 import { VoiceDictationSettingsSection } from './VoiceDictationSettingsSection'
 import { VoiceSpeechModelSection } from './VoiceSpeechModelSection'
 import { matchesSettingsSearch } from './settings-search'
-import { getOpenaiTranscriptionSearchEntry } from './voice-pane-search'
+import {
+  getDeepgramTranscriptionSearchEntry,
+  getOpenaiTranscriptionSearchEntry
+} from './voice-pane-search'
 import { translate } from '@/i18n/i18n'
 
 export { handleVoiceDictationToggle }
@@ -152,7 +155,10 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
     (settingsSearchQuery.trim() !== '' &&
       matchesSettingsSearch(settingsSearchQuery, getOpenaiTranscriptionSearchEntry()))
   const showDeepgramSettingsRow =
-    voiceSettings.deepgramApiKeyConfigured || selectedModel?.provider === 'deepgram'
+    voiceSettings.deepgramApiKeyConfigured ||
+    selectedModel?.provider === 'deepgram' ||
+    (settingsSearchQuery.trim() !== '' &&
+      matchesSettingsSearch(settingsSearchQuery, getDeepgramTranscriptionSearchEntry()))
 
   const openOpenAiDialog = (modelId: string | null = null): void => {
     setPendingCloudModelId(modelId)
@@ -240,9 +246,18 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
       setDeepgramDialogOpen(false)
       setDeepgramApiKeyDraft('')
       setPendingDeepgramModelId(null)
-      toast.success('Deepgram API key saved')
+      toast.success(
+        translate('auto.components.settings.VoicePane.deepgramKeySaved', 'Deepgram API key saved')
+      )
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to save Deepgram API key')
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : translate(
+              'auto.components.settings.VoicePane.deepgramKeySaveFailed',
+              'Failed to save Deepgram API key'
+            )
+      )
     } finally {
       if (mountedRef.current) {
         setDeepgramKeyPending(false)
@@ -262,9 +277,21 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
       setDeepgramDialogOpen(false)
       setDeepgramApiKeyDraft('')
       setPendingDeepgramModelId(null)
-      toast.success('Deepgram API key cleared')
+      toast.success(
+        translate(
+          'auto.components.settings.VoicePane.deepgramKeyCleared',
+          'Deepgram API key cleared'
+        )
+      )
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to clear Deepgram API key')
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : translate(
+              'auto.components.settings.VoicePane.deepgramKeyClearFailed',
+              'Failed to clear Deepgram API key'
+            )
+      )
     } finally {
       if (mountedRef.current) {
         setDeepgramKeyPending(false)

@@ -4,8 +4,7 @@ export const DEEPGRAM_TRANSCRIPTION_MODEL_BY_ID: Record<string, string> = {
   'deepgram-nova-3': 'nova-3'
 }
 
-const DEEPGRAM_TRANSCRIPTION_URL =
-  'https://api.deepgram.com/v1/listen?model=nova-3&language=ko&smart_format=true'
+const DEEPGRAM_TRANSCRIPTION_ENDPOINT = 'https://api.deepgram.com/v1/listen'
 const CLOUD_TRANSCRIPTION_SAMPLE_RATE = 16_000
 const MAX_CLOUD_AUDIO_SECONDS = 10 * 60
 const DEEPGRAM_TRANSCRIPTION_REQUEST_TIMEOUT_MS = 60_000
@@ -21,6 +20,14 @@ type DeepgramTranscriptionResponse = {
       }[]
     }[]
   }
+}
+
+function buildDeepgramTranscriptionUrl(apiModel: string): string {
+  const url = new URL(DEEPGRAM_TRANSCRIPTION_ENDPOINT)
+  url.searchParams.set('model', apiModel)
+  url.searchParams.set('language', 'ko')
+  url.searchParams.set('smart_format', 'true')
+  return url.toString()
 }
 
 function encodePcm16Wav(samples: Float32Array, sampleRate: number): Buffer {
@@ -183,7 +190,8 @@ export class DeepgramTranscriptionSession {
       return ''
     }
 
-    if (!DEEPGRAM_TRANSCRIPTION_MODEL_BY_ID[this.modelId]) {
+    const apiModel = DEEPGRAM_TRANSCRIPTION_MODEL_BY_ID[this.modelId]
+    if (!apiModel) {
       throw new Error(`Unknown Deepgram transcription model: ${this.modelId}`)
     }
 
@@ -197,7 +205,7 @@ export class DeepgramTranscriptionSession {
     )
     let response: Response
     try {
-      response = await fetch(DEEPGRAM_TRANSCRIPTION_URL, {
+      response = await fetch(buildDeepgramTranscriptionUrl(apiModel), {
         method: 'POST',
         headers: {
           Authorization: `Token ${this.readApiKey()}`,

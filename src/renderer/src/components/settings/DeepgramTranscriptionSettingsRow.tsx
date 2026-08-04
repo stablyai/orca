@@ -1,6 +1,7 @@
 import { CheckCircle2, Cloud, Unlink } from 'lucide-react'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
+import { translate } from '@/i18n/i18n'
 
 type DeepgramTranscriptionSettingsRowProps = {
   configured: boolean
@@ -20,37 +21,62 @@ export function DeepgramTranscriptionSettingsRow({
       <div className="min-w-0 space-y-0.5">
         <div className="flex items-center gap-2">
           <Cloud className="size-4 shrink-0 text-muted-foreground" />
-          <Label>Deepgram Transcription</Label>
+          <Label>
+            {translate(
+              'auto.components.settings.DeepgramTranscriptionSettingsRow.label',
+              'Deepgram Transcription'
+            )}
+          </Label>
           {configured && (
             <span className="flex items-center gap-1 text-xs text-muted-foreground">
               <CheckCircle2 className="size-3.5" />
-              Connected
+              {translate(
+                'auto.components.settings.DeepgramTranscriptionSettingsRow.connected',
+                'Connected'
+              )}
             </span>
           )}
         </div>
         <p className="text-xs text-muted-foreground">
           {configured
-            ? 'API key configured for Deepgram Nova-3.'
-            : 'Add a Deepgram API key before selecting Deepgram Nova-3.'}
+            ? translate(
+                'auto.components.settings.DeepgramTranscriptionSettingsRow.configuredDescription',
+                'API key configured for Deepgram Nova-3.'
+              )
+            : translate(
+                'auto.components.settings.DeepgramTranscriptionSettingsRow.unconfiguredDescription',
+                'Add a Deepgram API key before selecting Deepgram Nova-3.'
+              )}
         </p>
       </div>
       {configured ? (
         <div className="flex shrink-0 items-center gap-1.5">
           <Button variant="outline" size="sm" disabled={disabled} onClick={onConfigure}>
-            Replace key
+            {translate(
+              'auto.components.settings.DeepgramTranscriptionSettingsRow.replaceKey',
+              'Replace key'
+            )}
           </Button>
-          <button
+          <Button
+            variant="ghost"
+            size="icon-sm"
             onClick={onClear}
-            aria-label="Disconnect Deepgram API key"
+            aria-label={translate(
+              'auto.components.settings.DeepgramTranscriptionSettingsRow.disconnectKey',
+              'Disconnect Deepgram API key'
+            )}
             disabled={disabled}
-            className="rounded-md p-1 text-muted-foreground/50 transition-colors hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50"
+            className="text-muted-foreground/50 hover:text-destructive"
           >
             <Unlink className="size-3.5" />
-          </button>
+          </Button>
         </div>
       ) : (
         <Button variant="outline" size="sm" disabled={disabled} onClick={onConfigure}>
-          Add API key
+          {translate(
+            'auto.components.settings.DeepgramTranscriptionSettingsRow.addKey',
+            'Add API key'
+          )}
         </Button>
       )}
     </div>

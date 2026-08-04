@@ -175,14 +175,22 @@ vi.mock('./model-catalog', () => ({
             streaming: false,
             sampleRate: 16000
           }
-        : {
-            id: 'model-a',
-            type: 'transducer',
-            provider: 'local',
-            streaming: true,
-            sampleRate: 16000,
-            files: ['encoder.onnx', 'decoder.onnx', 'joiner.onnx', 'tokens.txt']
-          }
+        : id === 'unsupported-cloud-model'
+          ? {
+              id,
+              type: 'futurecloud',
+              provider: 'futurecloud',
+              streaming: false,
+              sampleRate: 16000
+            }
+          : {
+              id: 'model-a',
+              type: 'transducer',
+              provider: 'local',
+              streaming: true,
+              sampleRate: 16000,
+              files: ['encoder.onnx', 'decoder.onnx', 'joiner.onnx', 'tokens.txt']
+            }
 }))
 
 vi.mock('./openai-api-key-store', () => ({
@@ -426,9 +434,24 @@ describe('SttService', () => {
 
     expect(getCreatedWorkerCount()).toBe(0)
     expect(getDeepgramSessions()).toHaveLength(1)
+    expect(getCloudSessions()).toHaveLength(0)
     expect(getDeepgramSessions()[0].feedCalls).toHaveLength(1)
     expect(sink).toHaveBeenCalledWith({ type: 'final', text: 'deepgram-model:test-deepgram-key' })
     expect(readDeepgramSpeechApiKeyMock).toHaveBeenCalledOnce()
+    expect(readOpenAiSpeechApiKeyMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects a cloud provider that does not have an explicit session implementation', async () => {
+    const service = new SttService({
+      getModelState: vi.fn().mockResolvedValue({ id: 'unsupported-cloud-model', status: 'ready' }),
+      getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
+    } as never)
+
+    await expect(
+      service.startDictation('unsupported-cloud-model', vi.fn(), undefined, 'desktop')
+    ).rejects.toThrow('Unsupported speech provider: futurecloud')
+    expect(getCloudSessions()).toHaveLength(0)
+    expect(getDeepgramSessions()).toHaveLength(0)
   })
 
   it('keeps startup cancellation tombstoned after the worker has been created', async () => {

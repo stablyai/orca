@@ -37,6 +37,20 @@ type CloudTranscriptionSession = {
   finish(): Promise<string>
 }
 
+function createCloudTranscriptionSession(
+  provider: string,
+  modelId: string
+): CloudTranscriptionSession {
+  switch (provider) {
+    case 'openai':
+      return new OpenAiTranscriptionSession(modelId, readOpenAiSpeechApiKey)
+    case 'deepgram':
+      return new DeepgramTranscriptionSession(modelId, readDeepgramSpeechApiKey)
+    default:
+      throw new Error(`Unsupported speech provider: ${provider}`)
+  }
+}
+
 export class SttService {
   private worker: Worker | null = null
   private cloudSession: CloudTranscriptionSession | null = null
@@ -121,10 +135,7 @@ export class SttService {
         throw new Error(`Model not ready: ${modelState.status}`)
       }
 
-      this.cloudSession =
-        manifest.provider === 'openai'
-          ? new OpenAiTranscriptionSession(modelId, readOpenAiSpeechApiKey)
-          : new DeepgramTranscriptionSession(modelId, readDeepgramSpeechApiKey)
+      this.cloudSession = createCloudTranscriptionSession(manifest.provider, modelId)
       this.activeModelId = modelId
       this.activeHotwordsFilePath = undefined
       this.eventSink = sink

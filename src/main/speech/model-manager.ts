@@ -557,8 +557,7 @@ export class ModelManager {
           )
         }
         console.warn(
-          '[speech] Model download attempt %d failed, retrying:',
-          requestCount,
+          `[speech] Model download attempt ${requestCount} failed, retrying:`,
           modelId,
           err
         )

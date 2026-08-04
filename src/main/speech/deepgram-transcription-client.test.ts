@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { DeepgramTranscriptionSession } from './deepgram-transcription-client'
+import {
+  DEEPGRAM_TRANSCRIPTION_MODEL_BY_ID,
+  DeepgramTranscriptionSession
+} from './deepgram-transcription-client'
 
 describe('DeepgramTranscriptionSession', () => {
   afterEach(() => {
@@ -29,6 +32,50 @@ describe('DeepgramTranscriptionSession', () => {
           'Content-Type': 'audio/wav'
         })
       })
+    )
+  })
+
+  it('uses the API model mapped from the selected catalog model', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          results: { channels: [{ alternatives: [{ transcript: 'Deepgram 전사' }] }] }
+        })
+      )
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    DEEPGRAM_TRANSCRIPTION_MODEL_BY_ID['deepgram-future'] = 'future-model'
+    const session = new DeepgramTranscriptionSession('deepgram-future', () => 'dg-secret')
+    session.feedAudio(new Float32Array([0]), 16_000)
+
+    try {
+      await expect(session.finish()).resolves.toBe('Deepgram 전사')
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://api.deepgram.com/v1/listen?model=future-model&language=ko&smart_format=true',
+        expect.anything()
+      )
+    } finally {
+      delete DEEPGRAM_TRANSCRIPTION_MODEL_BY_ID['deepgram-future']
+    }
+  })
+
+  it('rejects an unknown Deepgram model before sending a request', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const session = new DeepgramTranscriptionSession('deepgram-nova-9', () => 'dg-secret')
+    session.feedAudio(new Float32Array([0]), 16_000)
+
+    await expect(session.finish()).rejects.toThrow(
+      'Unknown Deepgram transcription model: deepgram-nova-9'
+    )
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('limits a single dictation to ten minutes of audio', () => {
+    const session = new DeepgramTranscriptionSession('deepgram-nova-3', () => 'dg-secret')
+
+    expect(() => session.feedAudio(new Float32Array(16_000 * 601), 16_000)).toThrow(
+      'Cloud transcription is limited to 10 minutes per dictation'
     )
   })
 

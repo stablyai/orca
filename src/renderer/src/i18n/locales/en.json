@@ -7550,7 +7550,11 @@
           "ad5d036ecc": "Could not request microphone permission. Voice dictation was not enabled.",
           "f9a9cf6928": "Microphone permission is required before enabling voice dictation.",
           "1eac933202": "Opened macOS Privacy & Security. Enable dictation again after granting access.",
-          "cd9fe37556": "Microphone permission granted"
+          "cd9fe37556": "Microphone permission granted",
+          "deepgramKeySaved": "Deepgram API key saved",
+          "deepgramKeySaveFailed": "Failed to save Deepgram API key",
+          "deepgramKeyCleared": "Deepgram API key cleared",
+          "deepgramKeyClearFailed": "Failed to clear Deepgram API key"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Remove {{value0}}",
@@ -9208,7 +9212,11 @@
               "micInput": "input",
               "micDevice": "device",
               "micAirpods": "airpods",
-              "micDefault": "system default"
+              "micDefault": "system default",
+              "deepgram": {
+                "title": "Deepgram Transcription",
+                "description": "Configure the Deepgram API key used for Nova-3 cloud speech-to-text."
+              }
             }
           }
         },
@@ -10207,6 +10215,26 @@
           "description": "Input device used for voice dictation. System default follows the OS microphone setting.",
           "accessHint": "Allow microphone access to list input devices.",
           "allowAccess": "Allow access"
+        },
+        "DeepgramTranscriptionKeyDialog": {
+          "title": "Deepgram Transcription",
+          "description": "Audio is sent to Deepgram only when Deepgram Nova-3 is selected.",
+          "consoleLink": "Open Deepgram Console",
+          "apiKeyLabel": "API Key",
+          "configuredPlaceholder": "API key configured",
+          "apiKeyPlaceholder": "Deepgram API key",
+          "encryptionHint": "Requires Electron encrypted credential storage. Your key is never stored in plaintext.",
+          "clearKey": "Clear Key",
+          "saveKey": "Save Key"
+        },
+        "DeepgramTranscriptionSettingsRow": {
+          "label": "Deepgram Transcription",
+          "connected": "Connected",
+          "configuredDescription": "API key configured for Deepgram Nova-3.",
+          "unconfiguredDescription": "Add a Deepgram API key before selecting Deepgram Nova-3.",
+          "replaceKey": "Replace key",
+          "disconnectKey": "Disconnect Deepgram API key",
+          "addKey": "Add API key"
         }
       },
       "right": {

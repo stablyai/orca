@@ -65,4 +65,14 @@ describe('Deepgram speech API key store', () => {
       'Encrypted credential storage is unavailable'
     )
   })
+
+  it('drops the cached key and encrypted file when cleared', async () => {
+    const store = await loadStoreModule()
+    store.saveDeepgramSpeechApiKey('dg-secret')
+
+    store.clearDeepgramSpeechApiKey()
+
+    expect(store.hasDeepgramSpeechApiKey()).toBe(false)
+    expect(() => store.readDeepgramSpeechApiKey()).toThrow('Deepgram API key is not configured')
+  })
 })

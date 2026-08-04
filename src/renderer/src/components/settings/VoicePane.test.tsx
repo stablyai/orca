@@ -76,6 +76,7 @@ async function renderVoicePane(args: {
   updateSettings: (updates: Partial<GlobalSettings>) => void
   requestMicrophonePermission?: () => Promise<DeveloperPermissionRequestResult>
   recordFeatureInteraction?: (id: string) => void
+  settingsSearchQuery?: string
 }): Promise<{
   button: HTMLButtonElement
   root: Root
@@ -88,7 +89,8 @@ async function renderVoicePane(args: {
       modelStates: [],
       refreshModelStates,
       markFeatureTipsSeen: args.markFeatureTipsSeen,
-      recordFeatureInteraction: args.recordFeatureInteraction ?? vi.fn()
+      recordFeatureInteraction: args.recordFeatureInteraction ?? vi.fn(),
+      settingsSearchQuery: args.settingsSearchQuery ?? ''
     })
   )
   useShortcutLabelMock.mockReturnValue('Ctrl+Shift+Y')
@@ -157,6 +159,17 @@ describe('VoicePane', () => {
     root.unmount()
 
     expect(window.api.speech.getDeepgramApiKeyStatus).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows Deepgram configuration when settings search matches Deepgram', async () => {
+    const { root, container } = await renderVoicePane({
+      markFeatureTipsSeen: vi.fn(),
+      updateSettings: vi.fn(),
+      settingsSearchQuery: 'deepgram'
+    })
+
+    expect(container.textContent).toContain('Deepgram Transcription')
+    root.unmount()
   })
 
   it('clicking the switch marks the voice tip seen before disabling voice settings', async () => {
