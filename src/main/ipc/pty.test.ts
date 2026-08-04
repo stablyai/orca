@@ -753,6 +753,7 @@ describe('registerPtyHandlers', () => {
     write: (ptyId: string, data: string) => boolean
     resize: (ptyId: string, cols: number, rows: number) => boolean
     probePtyLiveness: (ptyId: string) => Promise<boolean | null>
+    attach: (ptyId: string) => Promise<boolean>
   } {
     let controller:
       | {
@@ -760,6 +761,7 @@ describe('registerPtyHandlers', () => {
           write: (ptyId: string, data: string) => boolean
           resize: (ptyId: string, cols: number, rows: number) => boolean
           probePtyLiveness: (ptyId: string) => Promise<boolean | null>
+          attach: (ptyId: string) => Promise<boolean>
         }
       | undefined
     const runtime = {
@@ -875,6 +877,42 @@ describe('registerPtyHandlers', () => {
 
       await expect(controller.probePtyLiveness('daemon-owned')).resolves.toBeNull()
     })
+  })
+
+  it('routes controller attach to the local daemon provider only, false on doubt', async () => {
+    const localProvider = createAgentClaimProvider({})
+    const sshProvider = createAgentClaimProvider({})
+    setLocalPtyProvider(localProvider as never)
+    registerSshPtyProvider('ssh-attach', sshProvider as never)
+    const controller = registerAgentClaimController()
+    const daemonPtyId = 'repo-1::/tmp/wt@@1a2b3c4d'
+    const ownedSshPtyId = 'owned-remote-pty'
+    setPtyOwnership(ownedSshPtyId, 'ssh-attach')
+    try {
+      // Local daemon session: attach flows to the provider.
+      await expect(controller.attach(daemonPtyId)).resolves.toBe(true)
+      expect(localProvider.attach).toHaveBeenCalledWith(daemonPtyId)
+
+      // SSH-scoped sessions are excluded — leases handle their reattach.
+      await expect(controller.attach(ownedSshPtyId)).resolves.toBe(false)
+      await expect(controller.attach('ssh:ssh-attach@@relay-pty')).resolves.toBe(false)
+      expect(sshProvider.attach).not.toHaveBeenCalled()
+
+      // Provider refusal (absent/unprovable session) answers false, not throw.
+      localProvider.attach.mockRejectedValueOnce(new Error('Session not found'))
+      await expect(controller.attach(daemonPtyId)).resolves.toBe(false)
+
+      // The in-process local provider streams without attach; never called.
+      const inProcess = new LocalPtyProvider()
+      const inProcessAttach = vi.spyOn(inProcess, 'attach')
+      setLocalPtyProvider(inProcess)
+      await expect(controller.attach(daemonPtyId)).resolves.toBe(false)
+      expect(inProcessAttach).not.toHaveBeenCalled()
+    } finally {
+      unregisterSshPtyProvider('ssh-attach')
+      clearPtyOwnershipForConnection('ssh-attach')
+      clearProviderPtyState(ownedSshPtyId)
+    }
   })
 
   it('does not dispatch a runtime PTY spawn after its client disconnects', async () => {

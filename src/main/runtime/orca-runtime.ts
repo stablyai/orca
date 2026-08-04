@@ -1621,6 +1621,10 @@ type RuntimePtyController = {
     agentSessionEnsure?: AgentSessionClaimedSpawnResult
   }>
   write(ptyId: string, data: string): boolean
+  /** Attach-only adoption of a live local daemon session so its output streams
+   *  to main without a renderer pane; never creates, resizes, or focuses.
+   *  False on doubt (absent session, SSH-scoped id, non-daemon provider). */
+  attach?(ptyId: string): Promise<boolean>
   kill(ptyId: string): boolean
   stopAndWait?(
     ptyId: string,
@@ -3056,6 +3060,17 @@ export class OrcaRuntimeService {
   // Preview windows consume the raw stream but deliberately leave terminal
   // query replies to main's headless emulator.
   private rawTerminalViewSubscriberCounts = new Map<string, number>()
+  // Why a sticky promise per PTY: the daemon only emits data for sessions this
+  // app has attached, so the first remote view subscriber of a never-attached
+  // local daemon session triggers a main-side attach. The map dedupes
+  // concurrent first-subscribes and keeps later subscribes no-ops; it is
+  // cleared per lifecycle generation (exit/respawn) and on failed attempts.
+  private subscriberDrivenProviderAttachesByPtyId = new Map<string, Promise<boolean>>()
+  // Why: a spawn through this app already attaches its provider stream, so
+  // subscriber-driven attach and the never-attached read fallback must target
+  // only inventory-discovered sessions no local spawn published this
+  // generation (a replacement spawn under a reused id starts clean).
+  private spawnPublishedPtys = new Set<string>()
 
   // Why: per-PTY driver state. The "driver" is whoever currently owns the
   // input/resize floor. While `kind === 'mobile'` the desktop renderer drops
@@ -9160,6 +9175,7 @@ export class OrcaRuntimeService {
       // Why: surface absence cannot distinguish an in-flight admission from a completed headless lifecycle.
       this.pendingPtyRegistrationIncarnations.set(ptyId, incarnationId ?? null)
     }
+    this.spawnPublishedPtys.add(ptyId)
     const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
     if (pty) {
       if (incarnationId) {
@@ -9183,6 +9199,7 @@ export class OrcaRuntimeService {
     isWsl?: boolean
   ): void {
     this.assertPtyDidNotExitBeforeRegistration(ptyId, binding?.incarnationId)
+    this.spawnPublishedPtys.add(ptyId)
     // Why: record the renderer pane identity at spawn time so a stalled graph
     // sync can't hide that a live PTY already backs a pending mobile create.
     const paneKey =
@@ -10434,6 +10451,9 @@ export class OrcaRuntimeService {
   private advancePtyLifecycleGeneration(ptyId: string): void {
     this.ptyLifecycleGenerationById.set(ptyId, this.nextPtyLifecycleGeneration++)
     this.legacyWorkerRecoveredPtys.delete(ptyId)
+    // Why: a respawn under the same session id needs its own subscriber-driven attach.
+    this.subscriberDrivenProviderAttachesByPtyId.delete(ptyId)
+    this.spawnPublishedPtys.delete(ptyId)
     // Why: a provider response belongs to the process generation that issued
     // it; a respawn must neither reuse its frame nor join its in-flight call.
     this.providerBufferAcquisitionsByPtyId.delete(ptyId)
@@ -10613,6 +10633,7 @@ export class OrcaRuntimeService {
       ptyId,
       (this.remoteTerminalViewSubscriberCounts.get(ptyId) ?? 0) + 1
     )
+    this.ensureSubscriberDrivenProviderAttach(ptyId)
     this.notifyRemoteTerminalViewPresenceChanged(ptyId)
     let released = false
     return () => {
@@ -10628,6 +10649,57 @@ export class OrcaRuntimeService {
       }
       this.notifyRemoteTerminalViewPresenceChanged(ptyId)
     }
+  }
+
+  /** A local daemon session main knows is live but has never ingested a byte
+   *  from — i.e. no pane ever attached it, so the daemon is not emitting.
+   *  Headless state exists only after the first ingested byte; a snapshot
+   *  reconcile in flight implies a spawn-path attach already happened. */
+  private isKnownUnattachedLocalDaemonPty(ptyId: string): boolean {
+    if (this.headlessTerminals.has(ptyId) || this.providerSnapshotPreferredPtys.has(ptyId)) {
+      return false
+    }
+    // A spawn published (or admission pending) this generation already
+    // attaches the provider stream; a replacement under a reused id must not
+    // read as the discovered never-attached session it replaced.
+    if (
+      this.spawnPublishedPtys.has(ptyId) ||
+      this.pendingPtyRegistrationIncarnations.has(ptyId)
+    ) {
+      return false
+    }
+    // SSH panes have their own lease/reattach machinery.
+    if (parseAppSshPtyId(ptyId)) {
+      return false
+    }
+    const pty = this.ptysById.get(ptyId)
+    return pty !== undefined && pty.connectionId === null && pty.connected
+  }
+
+  /** First remote view subscriber of a never-attached local daemon session:
+   *  have main attach so output starts flowing. Attach-only (never spawns),
+   *  no resize, no renderer mount/focus — works headless. Releases never
+   *  detach: continued ingestion is the point, and daemon detach is stubbed. */
+  private ensureSubscriberDrivenProviderAttach(ptyId: string): void {
+    const controller = this.ptyController
+    if (
+      !controller?.attach ||
+      this.subscriberDrivenProviderAttachesByPtyId.has(ptyId) ||
+      !this.isKnownUnattachedLocalDaemonPty(ptyId)
+    ) {
+      return
+    }
+    const attach = controller.attach
+    // Async wrapper: a synchronous controller throw must not break subscribe.
+    const attempt = (async () => attach(ptyId))().catch(() => false)
+    this.subscriberDrivenProviderAttachesByPtyId.set(ptyId, attempt)
+    void attempt.then((attached) => {
+      // Why: an unprovable session must not be pinned as attached; a later
+      // subscriber may retry once the daemon can prove it.
+      if (!attached && this.subscriberDrivenProviderAttachesByPtyId.get(ptyId) === attempt) {
+        this.subscriberDrivenProviderAttachesByPtyId.delete(ptyId)
+      }
+    })
   }
 
   /** Mark a raw-output viewer without transferring terminal query authority. */
@@ -11446,7 +11518,13 @@ export class OrcaRuntimeService {
     const blankFallback = shouldFallbackToVisibleTerminalSnapshot(read, opts)
     const recoveredWorkerFallback =
       read.tail.length === 0 && this.legacyWorkerRecoveredPtys.has(ptyId)
-    if (recoveredWorkerFallback) {
+    // Why: a live daemon session no pane ever attached has ingested zero bytes,
+    // so only the provider holds its screen. Unprovable state stays empty.
+    const neverAttachedProviderFallback =
+      read.tail.length === 0 &&
+      !recoveredWorkerFallback &&
+      this.isKnownUnattachedLocalDaemonPty(ptyId)
+    if (recoveredWorkerFallback || neverAttachedProviderFallback) {
       const providerLines = await this.readProviderTerminalTailLines(ptyId, opts.limit)
       if (providerLines.length > 0) {
         return buildVisibleSnapshotReadFallback(read, providerLines, opts.limit)

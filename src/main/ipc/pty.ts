@@ -5130,6 +5130,30 @@ export function registerPtyHandlers(
         return null
       }
     },
+    // Why: subscriber-driven ingestion for daemon sessions no renderer pane
+    // ever attached. Local daemon sessions only — SSH panes have their own
+    // lease machinery, and the in-process local provider streams without
+    // attach. Attach-only and false-on-doubt: never creates or resizes.
+    attach: async (ptyId) => {
+      if (ptyOwnership.get(ptyId) != null || parseAppSshPtyId(ptyId)) {
+        return false
+      }
+      let provider: IPtyProvider
+      try {
+        provider = getProviderForPty(ptyId)
+      } catch {
+        return false
+      }
+      if (provider !== localProvider || provider instanceof LocalPtyProvider) {
+        return false
+      }
+      try {
+        await provider.attach(ptyId)
+        return true
+      } catch {
+        return false
+      }
+    },
     kill: (ptyId) => {
       let connectionId: string | null | undefined = ptyOwnership.get(ptyId)
       const parsedSshId = connectionId === undefined ? parseAppSshPtyId(ptyId) : null

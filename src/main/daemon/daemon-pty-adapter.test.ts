@@ -1062,12 +1062,13 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const ensureConnectedSpy = vi
         .spyOn(DaemonClient.prototype, 'ensureConnected')
         .mockResolvedValue()
-      const requestSpy = vi.spyOn(DaemonClient.prototype, 'request').mockResolvedValue({
-        isNew: false,
-        pid: 4242,
-        shellState: 'unsupported',
-        snapshot: null
-      } as never)
+      const requestSpy = vi
+        .spyOn(DaemonClient.prototype, 'request')
+        .mockImplementation(async (type: string) =>
+          type === 'getSize'
+            ? ({ size: { cols: 80, rows: 24 } } as never)
+            : ({ isNew: false, pid: 4242, shellState: 'unsupported', snapshot: null } as never)
+        )
       const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
       const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 28 })
       try {
@@ -1092,12 +1093,13 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const ensureConnectedSpy = vi
         .spyOn(DaemonClient.prototype, 'ensureConnected')
         .mockResolvedValue()
-      const requestSpy = vi.spyOn(DaemonClient.prototype, 'request').mockResolvedValue({
-        isNew: false,
-        pid: 4242,
-        shellState: 'unsupported',
-        snapshot: null
-      } as never)
+      const requestSpy = vi
+        .spyOn(DaemonClient.prototype, 'request')
+        .mockImplementation(async (type: string) =>
+          type === 'getSize'
+            ? ({ size: { cols: 80, rows: 24 } } as never)
+            : ({ isNew: false, pid: 4242, shellState: 'unsupported', snapshot: null } as never)
+        )
       const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
       const current = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 32 })
       try {
@@ -1653,6 +1655,64 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(dataPayloads[0]).toEqual({ id, data: 'after-reattach' })
 
       adapter2.dispose()
+    })
+
+    it('preserves the live session dimensions instead of forcing 80×24', async () => {
+      const { id } = await adapter.spawn({ cols: 137, rows: 41 })
+
+      const adapter2 = new DaemonPtyAdapter({ socketPath, tokenPath })
+      await adapter2.attach(id)
+
+      // The running TUI keeps its geometry: no resize, size unchanged.
+      expect(lastSubprocess.resize).not.toHaveBeenCalled()
+      expect(await adapter2.getAppliedSize(id)).toEqual({ cols: 137, rows: 41 })
+      adapter2.dispose()
+    })
+
+    it('refuses to create when the session is absent (attach-only)', async () => {
+      const adapter2 = new DaemonPtyAdapter({ socketPath, tokenPath })
+
+      await expect(adapter2.attach('wt-x@@deadbeef')).rejects.toThrow(
+        'Session not found: wt-x@@deadbeef'
+      )
+
+      // No shell was spawned as a side effect of the refused attach.
+      expect(lastSpawnOpts).toBeNull()
+      adapter2.dispose()
+    })
+
+    it('retires the accidental spawn of a pre-v31 daemon that ignores attachOnly', async () => {
+      const ensureConnectedSpy = vi
+        .spyOn(DaemonClient.prototype, 'ensureConnected')
+        .mockResolvedValue()
+      const requestSpy = vi
+        .spyOn(DaemonClient.prototype, 'request')
+        .mockImplementation(async (type: string) =>
+          type === 'getSize'
+            ? ({ size: { cols: 100, rows: 30 } } as never)
+            : type === 'createOrAttach'
+              ? ({ isNew: true, pid: 77, shellState: 'unsupported', snapshot: null } as never)
+              : ({} as never)
+        )
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 30 })
+      try {
+        await expect(legacy.attach('raced-legacy-session')).rejects.toThrow(
+          'Session not found: raced-legacy-session'
+        )
+
+        expect(requestSpy).toHaveBeenCalledWith(
+          'createOrAttach',
+          expect.objectContaining({ cols: 100, rows: 30, attachOnly: true })
+        )
+        expect(requestSpy).toHaveBeenCalledWith('kill', {
+          sessionId: 'raced-legacy-session',
+          immediate: true
+        })
+      } finally {
+        legacy.dispose()
+        requestSpy.mockRestore()
+        ensureConnectedSpy.mockRestore()
+      }
     })
   })
 

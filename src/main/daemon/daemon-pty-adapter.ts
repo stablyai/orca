@@ -897,11 +897,25 @@ export class DaemonPtyAdapter implements IPtyProvider {
       this.setPtyBackgrounded(id, false)
     }
 
-    await this.client.request<CreateOrAttachResult>('createOrAttach', {
+    // Why size-first: attach must ride the session's own geometry — a fixed
+    // 80×24 here could resize a live agent's TUI — and a null size means the
+    // daemon cannot prove the session, so refuse rather than risk a create.
+    const size = await this.getAppliedSize(id)
+    if (!size) {
+      throw new SessionNotFoundError(id)
+    }
+    const result = await this.client.request<CreateOrAttachResult>('createOrAttach', {
       sessionId: id,
-      cols: 80,
-      rows: 24
+      cols: size.cols,
+      rows: size.rows,
+      attachOnly: true
     })
+    if (result.isNew) {
+      // Why: a pre-v31 daemon ignores attachOnly; retire its accidental spawn
+      // instead of publishing a fresh shell as an attach.
+      await this.client.request('kill', { sessionId: id, immediate: true }).catch(() => {})
+      throw new SessionNotFoundError(id)
+    }
     this.clearSessionAwaitingDaemonRecovery(id)
   }
 
