@@ -24512,6 +24512,53 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it('publishes a launch-bound resume identity under a workspace-like Codex title', async () => {
+    const providerSession = {
+      key: 'session_id' as const,
+      id: '019fc599-4666-7f50-a226-da46428d1d0b',
+      transcriptPath: '/home/ada/.codex/sessions/rollout.jsonl'
+    }
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-codex-resume' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      tabId: 'codex-resume-tab',
+      leafId: HEADLESS_LEAF_ID,
+      title: 'agent-context-t40',
+      command: `codex resume ${providerSession.id}`,
+      launchAgent: 'codex',
+      resumeProviderSession: providerSession
+    })
+    const pty = (
+      runtime as unknown as {
+        ptysById: Map<string, { lastAgentStatus: 'working' | 'idle' | null }>
+      }
+    ).ptysById.get('pty-codex-resume')
+    expect(pty).toBeDefined()
+    if (!pty) {
+      throw new Error('expected resumed Codex PTY record')
+    }
+    pty.lastAgentStatus = 'working'
+
+    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(result.tabs[0]).toEqual(
+      expect.objectContaining({
+        type: 'terminal',
+        launchAgent: 'codex',
+        agentStatus: expect.objectContaining({
+          state: 'done',
+          agentType: 'codex',
+          providerSession
+        })
+      })
+    )
+  })
+
   it('recovers the agent type from the hook row when the pane was launched without an agent hint', async () => {
     // A user who types `claude` in a plain terminal leaves no launchAgent, and headless
     // has no renderer to publish one; without the hook's agentType mobile treats the tab

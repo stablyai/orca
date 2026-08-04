@@ -30785,6 +30785,7 @@ export class OrcaRuntimeService {
         : null
     const ptyTitleClassification = classifyAgentTitle(ptyTitle)
     const nonAgentTitle = ptyTitle !== null && ptyTitleClassification !== 'agent'
+    let launchResumeIdentityOnly = false
     if (nonAgentTitle) {
       // Why: non-agent title = shell reclaimed the pane; suppress to clear stuck spinners (#1437), though a live hook signal survives.
       const hasLiveHookSignal =
@@ -30802,7 +30803,10 @@ export class OrcaRuntimeService {
           (hookRow.agentType != null ||
             hookRow.providerSession != null ||
             pty?.providerSession != null))
-      if (!hasLiveHookSignal) {
+      // Codex can replace its agent title with the workspace name while retaining the pane.
+      launchResumeIdentityOnly =
+        !hasLiveHookSignal && pty?.providerSession != null && pty.launchAgent != null
+      if (!hasLiveHookSignal && !launchResumeIdentityOnly) {
         return {}
       }
     }
@@ -30856,8 +30860,9 @@ export class OrcaRuntimeService {
     const agentType = ownerAgent ?? undefined
     return {
       agentStatus: {
-        state:
-          pty?.lastAgentStatus === 'working'
+        state: launchResumeIdentityOnly
+          ? 'done'
+          : pty?.lastAgentStatus === 'working'
             ? 'working'
             : pty?.lastAgentStatus === 'permission'
               ? 'blocked'
