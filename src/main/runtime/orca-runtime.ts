@@ -29019,12 +29019,16 @@ export class OrcaRuntimeService {
     // Demote only on a controller-proven absence, and only for locally-scoped
     // ids the aggregate inventory authoritatively covers — SSH/remote scopes may
     // be legitimately missing from it, and unknown liveness never demotes.
+    // The sync hasPty rescue closes the spawn/list race: a just-spawned PTY can
+    // register after the inventory snapshot, and federation reads one
+    // connected:false as exited.
     const provenAbsent =
       provenLivePtyIds !== null &&
       leaf.ptyId !== null &&
       !provenLivePtyIds.has(leaf.ptyId) &&
       !leaf.ptyId.startsWith('remote:') &&
-      parseAppSshPtyId(leaf.ptyId) === null
+      parseAppSshPtyId(leaf.ptyId) === null &&
+      this.ptyController?.hasPty?.(leaf.ptyId) !== true
     return {
       handle: this.issueHandle(leaf),
       ptyId: leaf.ptyId,

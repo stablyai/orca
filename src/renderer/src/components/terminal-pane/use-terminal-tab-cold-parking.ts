@@ -96,6 +96,23 @@ export function useTerminalTabColdParking(args: {
     () => selectPairedRuntimeParkingEnvironmentIds(runtimeStatusByEnvironmentId),
     [runtimeStatusByEnvironmentId]
   )
+  const sleepingAgentSessionsByPaneKey = useAppStore(
+    (state) => state.sleepingAgentSessionsByPaneKey
+  )
+  const sleepingRecordOwnedTabIds = useMemo(() => {
+    let owned: Set<string> | null = null
+    for (const record of Object.values(sleepingAgentSessionsByPaneKey ?? {})) {
+      if (record.worktreeId !== worktreeId) {
+        continue
+      }
+      const tabId = record.tabId ?? record.paneKey.slice(0, record.paneKey.indexOf(':'))
+      if (tabId) {
+        owned ??= new Set()
+        owned.add(tabId)
+      }
+    }
+    return owned ?? EMPTY_TAB_IDS
+  }, [sleepingAgentSessionsByPaneKey, worktreeId])
   const terminalTabHiddenSinceRef = useRef(new Map<string, number>())
   // Why (shared measure-clock contract with Terminal.tsx): tab hiddenSince
   // survives a background-measure window so per-tab park deadlines stay in
@@ -288,7 +305,14 @@ export function useTerminalTabColdParking(args: {
           tabId: terminalTab.id
         }) !== null
       if (
-        (coldParkTerminalPanes || (!isVisible && coldParkedTerminalTabIds.has(terminalTab.id))) &&
+        (coldParkTerminalPanes ||
+          (!isVisible &&
+            coldParkedTerminalTabIds.has(terminalTab.id) &&
+            // Why: a pane owning a sleeping-session record must stay mountable
+            // on an active worktree — parked it can never cold-restore, so the
+            // agent's resume strands until the user reveals the tab. Scoped to
+            // per-tab parks: the worktree-level park clears on activation.
+            !sleepingRecordOwnedTabIds.has(terminalTab.id))) &&
         !hasActivityTerminalPortal &&
         // Why: a force-parked worktree's eviction-exempt tabs keep their
         // mounted panes — a remount would orphan their live pty. Scoped to
@@ -322,6 +346,7 @@ export function useTerminalTabColdParking(args: {
     evictionExemptTerminalTabIds,
     isWorktreeActive,
     shouldMeasureHiddenWorktree,
+    sleepingRecordOwnedTabIds,
     terminalTabs,
     worktreeId
   ])

@@ -3,13 +3,9 @@ import { OrcaRuntimeService } from './orca-runtime'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { WorkspaceSessionState } from '../../shared/types'
 
-// STA repro (run6-review-pr-11959 incident): a renderer-published leaf whose
-// ptyId no PTY provider owns anymore (e.g. a persisted surface restored after a
-// restart, or a pane that never completed its initial attach) must not be
-// reported connected/writable to external automation. `leaf.connected` mirrors
-// `ptyId !== null` from the graph, so without consulting the controller
-// inventory the CLI reports connected=true, writable=true with empty
-// title/lastOutputAt/preview forever — the exact incident signature.
+// run6-review-pr-11959 repro: leaf.connected mirrors the graph (`ptyId !== null`),
+// so a restored leaf whose PTY no provider owns must be demoted from the
+// controller inventory or the CLI reports it connected/writable forever.
 
 const WORKTREE_ID = 'repo-1::/tmp/probe-worktree'
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
@@ -42,12 +38,14 @@ type ControllerSession = { id: string; cwd: string; title?: string }
 function makeRuntimeWithLeaf(options: {
   leafPtyId: string
   controllerSessions: ControllerSession[] | 'unavailable'
+  hasPty?: (ptyId: string) => boolean | null
 }): OrcaRuntimeService {
   const runtime = new OrcaRuntimeService(makeStore() as never)
   runtime.setPtyController({
     spawn: vi.fn(async () => ({ id: 'never' })),
     write: () => true,
     kill: () => true,
+    ...(options.hasPty ? { hasPty: options.hasPty } : {}),
     listProcesses:
       options.controllerSessions === 'unavailable'
         ? vi.fn(async () => {
@@ -125,6 +123,26 @@ describe('listTerminals liveness truth for restored leaves', () => {
     expect(terminals).toHaveLength(1)
     expect(terminals[0]).toMatchObject({
       ptyId: 'pty-stale-from-prior-run',
+      connected: true,
+      writable: true
+    })
+  })
+
+  // Why: a just-spawned PTY can register after the inventory snapshot; the
+  // provider's sync hasPty must rescue it or federation reads one
+  // connected:false as exited.
+  it('keeps a leaf connected when the provider synchronously knows a ptyId the snapshot missed', async () => {
+    const runtime = makeRuntimeWithLeaf({
+      leafPtyId: 'pty-just-spawned',
+      controllerSessions: [],
+      hasPty: (ptyId) => ptyId === 'pty-just-spawned'
+    })
+
+    const { terminals } = await runtime.listTerminals(`id:${WORKTREE_ID}`)
+
+    expect(terminals).toHaveLength(1)
+    expect(terminals[0]).toMatchObject({
+      ptyId: 'pty-just-spawned',
       connected: true,
       writable: true
     })
