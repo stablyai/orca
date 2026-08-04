@@ -218,7 +218,7 @@ describe('OrchestrationDb dispatch assignee index migration', () => {
     }
   })
 
-  it('migrates a populated v21 database idempotently', () => {
+  it('migrates a populated upstream v23 database idempotently', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-dispatch-index-migration-'))
     const dbPath = join(tempDir, 'orchestration.db')
     db = new OrchestrationDb(dbPath)
@@ -229,19 +229,18 @@ describe('OrchestrationDb dispatch assignee index migration', () => {
 
     const oldDb = new Database(dbPath)
     oldDb.exec(`
-      DROP INDEX IF EXISTS idx_dispatch_assignee_handle;
       DROP INDEX IF EXISTS idx_dispatch_active_assignee_handle;
       DROP INDEX IF EXISTS idx_dispatch_assignee_pane_leaf;
       ALTER TABLE tasks DROP COLUMN created_by_pane_key;
       ALTER TABLE tasks DROP COLUMN created_by_process_incarnation;
       ALTER TABLE tasks DROP COLUMN created_by_run_generation;
     `)
-    oldDb.pragma('user_version = 21')
+    oldDb.pragma('user_version = 23')
     oldDb.close()
 
     db = new OrchestrationDb(dbPath)
     const sqlite = sqliteFor(db)
-    expect(sqlite.pragma('user_version', { simple: true })).toBe(24)
+    expect(sqlite.pragma('user_version', { simple: true })).toBe(25)
     expect(db.getDispatchContextById(dispatch.id)).toMatchObject({ assignee_handle: 'term_worker' })
     expect(db.getTask(task.id)).toMatchObject({
       created_by_pane_key: null,
@@ -278,16 +277,16 @@ describe('OrchestrationDb dispatch assignee index migration', () => {
 
     db.close()
     db = new OrchestrationDb(dbPath)
-    expect(sqliteFor(db).pragma('user_version', { simple: true })).toBe(24)
+    expect(sqliteFor(db).pragma('user_version', { simple: true })).toBe(25)
     expect(db.getDispatchContextById(dispatch.id)).toBeDefined()
   })
 
-  it('adds the active-handle index to a populated v23 database idempotently', () => {
+  it('adds the active-handle index to a populated v24 database idempotently', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-active-dispatch-index-migration-'))
     const dbPath = join(tempDir, 'orchestration.db')
     db = new OrchestrationDb(dbPath)
     const run = db.createRun({
-      objective: 'retained v23 authority',
+      objective: 'retained v24 authority',
       coordinatorHandle: 'term_coord',
       coordinatorPaneKey: 'tab_coord:leaf_coord'
     })
@@ -305,12 +304,12 @@ describe('OrchestrationDb dispatch assignee index migration', () => {
 
     const oldDb = new Database(dbPath)
     oldDb.exec('DROP INDEX IF EXISTS idx_dispatch_active_assignee_handle')
-    oldDb.pragma('user_version = 23')
+    oldDb.pragma('user_version = 24')
     oldDb.close()
 
     db = new OrchestrationDb(dbPath)
     const sqlite = sqliteFor(db)
-    expect(sqlite.pragma('user_version', { simple: true })).toBe(24)
+    expect(sqlite.pragma('user_version', { simple: true })).toBe(25)
     expect(db.getTask(task.id)).toMatchObject({
       created_by_pane_key: 'tab_creator:leaf_creator',
       created_by_process_incarnation: 'pty_creator:incarnation-a',
@@ -329,7 +328,7 @@ describe('OrchestrationDb dispatch assignee index migration', () => {
 
     db.close()
     db = new OrchestrationDb(dbPath)
-    expect(sqliteFor(db).pragma('user_version', { simple: true })).toBe(24)
+    expect(sqliteFor(db).pragma('user_version', { simple: true })).toBe(25)
     expect(db.getTask(task.id)?.created_by_process_incarnation).toBe('pty_creator:incarnation-a')
   })
 })
