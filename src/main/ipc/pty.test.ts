@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: stateful registration helper + shared mocked IPC/node-pty harness keep spawn-env assertions in one focused file. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { userInfo } from 'node:os'
-import { delimiter, join, posix } from 'node:path'
+import { delimiter, join, posix, resolve } from 'node:path'
 import { prepareCodexSessionResume } from '../codex/codex-session-resume-preparation'
 import {
   TERMINAL_INPUT_CHUNK_MAX_BYTES,
@@ -2119,9 +2119,19 @@ describe('registerPtyHandlers', () => {
 
     describe('unverifiable Codex resume provenance', () => {
       const RESUME_SESSION_ID = '019f81b9-19a9-7651-a8d1-352d9420bd11'
-      const ORIGIN_HOME = '/managed/origin/home'
-      const OTHER_HOME = '/managed/other/home'
-      const ORIGIN_ROLLOUT = `${ORIGIN_HOME}/sessions/2026/07/20/rollout-2026-07-20T12-00-00-${RESUME_SESSION_ID}.jsonl`
+      // Why: path.resolve yields a true absolute root on Windows (C:\managed\...)
+      // while join('/managed', ...) produces a non-absolute \managed\... path that
+      // fails provenance matching (#12437).
+      const ORIGIN_HOME = resolve('/managed/origin/home')
+      const OTHER_HOME = resolve('/managed/other/home')
+      const ORIGIN_ROLLOUT = resolve(
+        ORIGIN_HOME,
+        'sessions',
+        '2026',
+        '07',
+        '20',
+        `rollout-2026-07-20T12-00-00-${RESUME_SESSION_ID}.jsonl`
+      )
 
       // Why: main's real provenance rule via the same prepareCodexSessionResume that
       // index.ts calls, so the outcome wiring is exercised rather than restated. This
@@ -16659,6 +16669,9 @@ describe('registerPtyHandlers', () => {
   })
 
   it('records the origin account a resumed Codex pane is pinned to', async () => {
+    // Why: path.resolve yields drive-rooted absolute paths on Windows (#12437).
+    const originHome = resolve('/managed/origin/home')
+    const currentHome = resolve('/managed/current/home')
     setLocalPtyProvider({
       spawn: vi.fn(async () => ({ id: 'pty-resumed' })),
       write: vi.fn(),
@@ -16673,21 +16686,21 @@ describe('registerPtyHandlers', () => {
     const getSettings = vi.fn().mockReturnValue({
       activeCodexManagedAccountId: 'account-b',
       codexManagedAccounts: [
-        { id: 'account-a', managedHomePath: '/managed/origin/home' },
-        { id: 'account-b', managedHomePath: '/managed/current/home' }
+        { id: 'account-a', managedHomePath: originHome },
+        { id: 'account-b', managedHomePath: currentHome }
       ]
     })
     registerPtyHandlers(
       mainWindow as never,
       undefined,
-      vi.fn(() => '/managed/current/home'),
+      vi.fn(() => currentHome),
       getSettings as never,
       undefined,
       undefined,
       {
         prepareCodexSessionResume: async () => ({
           outcome: 'resume' as const,
-          codexHomePath: '/managed/origin/home'
+          codexHomePath: originHome
         })
       }
     )
@@ -16701,7 +16714,7 @@ describe('registerPtyHandlers', () => {
       resumeProviderSession: {
         key: 'session_id',
         id: 'session-a',
-        transcriptPath: '/managed/origin/home/sessions/2026/07/20/rollout-a.jsonl'
+        transcriptPath: join(originHome, 'sessions', '2026', '07', '20', 'rollout-a.jsonl')
       }
     })
 
@@ -16710,7 +16723,7 @@ describe('registerPtyHandlers', () => {
     expect(recordCodexPaneAccountMock.mock.calls).toEqual([
       ['pty-resumed', { selectionKey: 'host', accountId: 'account-a', homeRoute: 'account-home' }]
     ])
-    expect(readFileSyncMock).toHaveBeenCalledWith('/managed/origin/home/auth.json', 'utf8')
+    expect(readFileSyncMock).toHaveBeenCalledWith(join(originHome, 'auth.json'), 'utf8')
     expect(forgetCodexPaneAccountMock).not.toHaveBeenCalled()
   })
 
@@ -16767,6 +16780,9 @@ describe('registerPtyHandlers', () => {
   // same recording call the ipc handler makes. Without its own coverage a revert
   // there is invisible.
   it('records the origin account for a resumed Codex pane spawned by the runtime controller', async () => {
+    // Why: path.resolve yields drive-rooted absolute paths on Windows (#12437).
+    const originHome = resolve('/managed/origin/home')
+    const currentHome = resolve('/managed/current/home')
     type RuntimeSpawnController = {
       spawn(args: Record<string, unknown>): Promise<{ id: string }>
     }
@@ -16792,22 +16808,22 @@ describe('registerPtyHandlers', () => {
     const getSettings = vi.fn().mockReturnValue({
       activeCodexManagedAccountId: 'account-b',
       codexManagedAccounts: [
-        { id: 'account-a', managedHomePath: '/managed/origin/home' },
-        { id: 'account-b', managedHomePath: '/managed/current/home' }
+        { id: 'account-a', managedHomePath: originHome },
+        { id: 'account-b', managedHomePath: currentHome }
       ]
     })
     handlers.clear()
     registerPtyHandlers(
       mainWindow as never,
       runtime as never,
-      vi.fn(() => '/managed/current/home'),
+      vi.fn(() => currentHome),
       getSettings as never,
       undefined,
       undefined,
       {
         prepareCodexSessionResume: async () => ({
           outcome: 'resume' as const,
-          codexHomePath: '/managed/origin/home'
+          codexHomePath: originHome
         })
       }
     )
@@ -16823,7 +16839,7 @@ describe('registerPtyHandlers', () => {
       resumeProviderSession: {
         key: 'session_id',
         id: 'session-a',
-        transcriptPath: '/managed/origin/home/sessions/2026/07/20/rollout-a.jsonl'
+        transcriptPath: join(originHome, 'sessions', '2026', '07', '20', 'rollout-a.jsonl')
       }
     })
 
@@ -16833,7 +16849,7 @@ describe('registerPtyHandlers', () => {
         { selectionKey: 'host', accountId: 'account-a', homeRoute: 'account-home' }
       ]
     ])
-    expect(readFileSyncMock).toHaveBeenCalledWith('/managed/origin/home/auth.json', 'utf8')
+    expect(readFileSyncMock).toHaveBeenCalledWith(join(originHome, 'auth.json'), 'utf8')
     expect(forgetCodexPaneAccountMock).not.toHaveBeenCalled()
   })
 
