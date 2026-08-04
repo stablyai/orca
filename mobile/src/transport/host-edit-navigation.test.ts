@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { mobileHostEditRoute, navigateToMobileHostEdit } from './host-edit-navigation'
+import {
+  hostRouteEditRedirect,
+  mobileHostEditRoute,
+  navigateToMobileHostEdit
+} from './host-edit-navigation'
 
 describe('mobileHostEditRoute', () => {
   it('keeps the dynamic host segment explicit for a cold host navigator', () => {
@@ -8,22 +12,30 @@ describe('mobileHostEditRoute', () => {
       params: { hostId: 'host-1' }
     })
   })
+})
 
-  it('mounts a cold host navigator before replacing its index with edit', () => {
-    let nextFrame: FrameRequestCallback | null = null
+describe('navigateToMobileHostEdit', () => {
+  it('lands on the host index with an explicit edit action instead of a frame-timed replace', () => {
     const push = vi.fn()
     const replace = vi.fn()
-    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
-      nextFrame = callback
-      return 1
-    })
 
     navigateToMobileHostEdit({ push, replace }, 'host-1')
-    expect(push).toHaveBeenCalledWith('/h/host-1')
-    expect(replace).not.toHaveBeenCalled()
 
-    nextFrame?.(0)
-    expect(replace).toHaveBeenCalledWith(mobileHostEditRoute('host-1'))
-    vi.unstubAllGlobals()
+    expect(push).toHaveBeenCalledWith('/h/host-1?action=edit')
+    expect(replace).not.toHaveBeenCalled()
+  })
+})
+
+describe('hostRouteEditRedirect', () => {
+  it('redirects the mounted index route to the edit screen', () => {
+    expect(hostRouteEditRedirect('edit', 'host-1')).toEqual(mobileHostEditRoute('host-1'))
+  })
+
+  it.each([
+    ['a different action', 'newWorktree', 'host-1'],
+    ['no action', undefined, 'host-1'],
+    ['a missing host id', 'edit', undefined]
+  ])('stays put for %s', (_label, action, hostId) => {
+    expect(hostRouteEditRedirect(action, hostId)).toBeNull()
   })
 })
