@@ -1670,6 +1670,9 @@ type PtyControllerTerminalIdentity = Readonly<{
 
 type PtyControllerInventory = Readonly<{
   livePtyIds: ReadonlySet<string>
+  // Why: livePtyIds is worktree-scoped when a target is given; absence proofs
+  // must consult the unscoped inventory or a misattributed live PTY reads as dead.
+  allLivePtyIds: ReadonlySet<string>
   terminalIdentityByPtyId: ReadonlyMap<string, PtyControllerTerminalIdentity>
 }>
 
@@ -14955,13 +14958,20 @@ export class OrcaRuntimeService {
           : targetWorktreeId
             ? []
             : [...worktreesById.values()]
-    const refreshedPtyLiveness = await this.refreshPtyWorktreeRecordsFromController(
+    const controllerInventory = await this.refreshPtyWorktreeRecordsWithControllerInventory(
       resolvedWorktrees,
       targetWorktreeId
     )
+    const refreshedPtyLiveness = controllerInventory
+      ? new Set(controllerInventory.livePtyIds)
+      : null
     if (opts.requireFreshPtyLiveness && !refreshedPtyLiveness) {
       throw new Error('terminal_liveness_unavailable')
     }
+    // Why: a proof of absence, not a proof of liveness — leaves whose PTY the
+    // controller answered for but did not list must not read as connected. An
+    // unavailable inventory (null) proves nothing and demotes nothing.
+    const provenLivePtyIds = controllerInventory?.allLivePtyIds ?? null
 
     const livePtyWorktreeIds = new Set<string>()
     for (const pty of this.ptysById.values()) {
@@ -14989,7 +14999,7 @@ export class OrcaRuntimeService {
         if (leaf.ptyId) {
           ptyIdsFromLeaves.add(leaf.ptyId)
         }
-        terminals.push(this.buildTerminalSummary(leaf, worktreesById))
+        terminals.push(this.buildTerminalSummary(leaf, worktreesById, provenLivePtyIds))
       }
     }
 
@@ -28568,6 +28578,7 @@ export class OrcaRuntimeService {
       if (targetedLiveness !== null) {
         return {
           livePtyIds: targetedLiveness,
+          allLivePtyIds: targetedLiveness,
           terminalIdentityByPtyId: new Map()
         }
       }
@@ -28783,6 +28794,7 @@ export class OrcaRuntimeService {
     this.pruneDisconnectedPtyRecords()
     return {
       livePtyIds: targetWorktreeId ? selectedLivePtyIds : allLivePtyIds,
+      allLivePtyIds,
       terminalIdentityByPtyId: controllerIdentityByPtyId
     }
   }
@@ -28995,12 +29007,24 @@ export class OrcaRuntimeService {
 
   private buildTerminalSummary(
     leaf: RuntimeLeafRecord,
-    worktreesById: Map<string, ResolvedWorktree>
+    worktreesById: Map<string, ResolvedWorktree>,
+    provenLivePtyIds: ReadonlySet<string> | null = null
   ): RuntimeTerminalSummary {
     const worktree = worktreesById.get(leaf.worktreeId)
     const tab = this.tabs.get(leaf.tabId) ?? null
 
     const pty = leaf.ptyId ? this.ptysById.get(leaf.ptyId) : undefined
+    // Why: leaf.connected mirrors the renderer graph (`ptyId !== null`), so a
+    // restored surface whose PTY died with a prior run still reads connected.
+    // Demote only on a controller-proven absence, and only for locally-scoped
+    // ids the aggregate inventory authoritatively covers — SSH/remote scopes may
+    // be legitimately missing from it, and unknown liveness never demotes.
+    const provenAbsent =
+      provenLivePtyIds !== null &&
+      leaf.ptyId !== null &&
+      !provenLivePtyIds.has(leaf.ptyId) &&
+      !leaf.ptyId.startsWith('remote:') &&
+      parseAppSshPtyId(leaf.ptyId) === null
     return {
       handle: this.issueHandle(leaf),
       ptyId: leaf.ptyId,
@@ -29012,8 +29036,8 @@ export class OrcaRuntimeService {
       tabId: leaf.tabId,
       leafId: leaf.leafId,
       title: getLatestLeafTitle(leaf, tab?.title ?? null),
-      connected: leaf.connected,
-      writable: leaf.writable,
+      connected: provenAbsent ? false : leaf.connected,
+      writable: provenAbsent ? false : leaf.writable,
       lastOutputAt: leaf.lastOutputAt,
       preview: leaf.preview
     }
