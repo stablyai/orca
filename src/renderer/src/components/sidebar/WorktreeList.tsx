@@ -5300,6 +5300,7 @@ const WorktreeList = React.memo(function WorktreeList({
   const { prCache, hostedReviewCache } = useAppStore(
     useShallow((s) => selectWorktreeListReviewCacheInputs(s, groupBy, cardProps))
   )
+  const issueCache = useAppStore((s) => (groupBy === 'issue' ? s.issueCache : null))
   const settings = useAppStore((s) => s.settings)
   const pinnedDisplayPolicy = getPinnedWorktreeDisplayPolicy(settings)
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
@@ -5745,13 +5746,15 @@ const WorktreeList = React.memo(function WorktreeList({
         visibleFolderWorkspacesForRows,
         hostLabelById,
         defaultHostId,
-        pinnedDisplayPolicy
+        pinnedDisplayPolicy,
+        issueCache
       ),
     [
       groupBy,
       worktrees,
       repoMap,
       prCache,
+      issueCache,
       effectiveCollapsedGroups,
       defaultHostId,
       repoOrder,

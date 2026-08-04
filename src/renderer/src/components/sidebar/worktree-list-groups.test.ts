@@ -16,6 +16,7 @@ import {
   PINNED_GROUP_KEY,
   type PendingCreationRef
 } from './worktree-list-groups'
+import { issueCacheKey as getIssueCacheKey } from '@/store/slices/github'
 import {
   REPO_HEADER_ACTION_BUTTON_CLASS,
   REPO_HEADER_ACTION_REVEAL_CLASS
@@ -4171,6 +4172,27 @@ describe('buildRows pending creations', () => {
       expect(getIssueGroupInfo(wt)).toEqual({
         key: 'issue:ENG-123',
         label: 'ENG-123: Fix issue grouping'
+      })
+    })
+
+    it('correctly extracts issue group info from linkedIssue number with issueCache title lookup', () => {
+      const wt: Worktree = {
+        ...worktree,
+        repoId: 'repo-1',
+        linkedIssue: 5199
+      }
+      const repos = new Map<string, Repo>([
+        ['repo-1', { id: 'repo-1', path: '/path/to/repo' } as Repo]
+      ])
+      const issueKey = getIssueCacheKey('/path/to/repo', 'repo-1', 5199)
+      const issueCache = {
+        [issueKey]: {
+          data: { title: 'Custom Groups Feature' }
+        }
+      }
+      expect(getIssueGroupInfo(wt, issueCache, repos)).toEqual({
+        key: 'issue:#5199',
+        label: '#5199: Custom Groups Feature'
       })
     })
 

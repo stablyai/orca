@@ -20,6 +20,7 @@ import {
   getWorkspaceStatusGroupKey,
   getWorkspaceStatusVisualMeta
 } from './workspace-status'
+import { issueCacheKey as getIssueCacheKey } from '@/store/slices/github'
 import {
   ConductorDoneIcon,
   ConductorProgressIcon,
@@ -59,7 +60,11 @@ export { branchName }
 export type WorktreeGroupBy = 'none' | 'workspace-status' | 'repo' | 'pr-status' | 'issue'
 export type PinnedWorktreeDisplayPolicy = 'single-location' | 'duplicate-in-groups'
 
-export function getIssueGroupInfo(w: Worktree): { key: string; label: string } {
+export function getIssueGroupInfo(
+  w: Worktree,
+  issueCache?: Record<string, { data?: { title?: string | null } | null }> | null,
+  repoMap?: Map<string, Repo>
+): { key: string; label: string } {
   const item = w.linkedWorkItem
   const rawId =
     item?.jiraIdentifier ??
@@ -72,6 +77,25 @@ export function getIssueGroupInfo(w: Worktree): { key: string; label: string } {
   if (rawId) {
     const identifier = rawId.toUpperCase()
     let title = item?.title?.trim()
+
+    // Why: resolve numeric GitHub issue title from issueCache if available.
+    if (!title && w.linkedIssue && issueCache && repoMap) {
+      const repo = repoMap.get(w.repoId)
+      if (repo) {
+        const issueKey = getIssueCacheKey(
+          repo.path,
+          repo.id,
+          w.linkedIssue,
+          undefined,
+          repo.connectionId,
+          repo.executionHostId
+        )
+        const cachedTitle = issueCache[issueKey]?.data?.title?.trim()
+        if (cachedTitle) {
+          title = cachedTitle
+        }
+      }
+    }
 
     // Why: strip leading issue key prefix from title to prevent duplicating the identifier in the group header.
     if (title && title.toUpperCase().startsWith(identifier)) {
@@ -1076,7 +1100,8 @@ export function buildRows(
   folderWorkspaces: readonly FolderWorkspace[] = [],
   hostLabelById?: ReadonlyMap<string, string>,
   defaultHostId: ExecutionHostId = LOCAL_EXECUTION_HOST_ID,
-  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy = getPinnedWorktreeDisplayPolicy(settings)
+  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy = getPinnedWorktreeDisplayPolicy(settings),
+  issueCache?: Record<string, { data?: { title?: string | null } | null }> | null
 ): Row[] {
   const result: Row[] = []
   const projectIndex = buildProjectGroupingIndex(projectGrouping)
@@ -1173,7 +1198,7 @@ export function buildRows(
       label =
         workspaceStatuses.find((status) => status.id === workspaceStatus)?.label ?? workspaceStatus
     } else if (groupBy === 'issue') {
-      const issueGroup = getIssueGroupInfo(w)
+      const issueGroup = getIssueGroupInfo(w, issueCache, repoMap)
       key = issueGroup.key
       label = issueGroup.label
     } else {
