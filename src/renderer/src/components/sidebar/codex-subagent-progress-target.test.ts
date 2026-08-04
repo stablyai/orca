@@ -29,6 +29,7 @@ describe('Codex subagent progress target', () => {
       createCodexSubagentProgressTarget(childRow(), 'folder:workspace-1', { kind: 'local' })
     ).toEqual({
       sessionId: 'child-1',
+      startedAt: 10,
       paneKey: 'parent\u0000subagent:child-1',
       parentPaneKey: 'parent-pane',
       terminalTabId: 'tab-1',
@@ -47,6 +48,12 @@ describe('Codex subagent progress target', () => {
 
   it('rejects malformed modal data', () => {
     expect(parseCodexSubagentProgressTarget({ sessionId: 'child-1' })).toBeNull()
+    expect(
+      parseCodexSubagentProgressTarget({
+        ...createCodexSubagentProgressTarget(childRow(), 'wt-1', { kind: 'local' }),
+        startedAt: 0
+      } as Record<string, unknown>)
+    ).toBeNull()
   })
 
   it('retains captured runtime authority without consulting live workspace state', () => {

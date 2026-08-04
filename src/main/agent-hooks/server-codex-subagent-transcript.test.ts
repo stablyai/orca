@@ -204,4 +204,83 @@ describe('AgentHookServer Codex subagent transcript polling', () => {
       server.stop()
     }
   })
+
+  it('parks a waiting child without keeping a completed lead working', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'agent-hook-codex-subagent-'))
+    dirs.push(dir)
+    const parentPath = join(dir, 'rollout-parent.jsonl')
+    const childPath = join(dir, `rollout-child-${CHILD_ID}.jsonl`)
+    writeFileSync(parentPath, spawnLine(CHILD_ID, '/root/test_agent'))
+    writeFileSync(
+      childPath,
+      line({ type: 'event_msg', payload: { type: 'task_started' } }) +
+        line({
+          type: 'response_item',
+          payload: { type: 'function_call', name: 'wait_agent', call_id: 'call-wait-1' }
+        })
+    )
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/codex`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+        },
+        body: JSON.stringify({
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: {
+            hook_event_name: 'Stop',
+            session_id: 'root-session',
+            transcript_path: parentPath
+          }
+        })
+      })
+
+      expect(server.getStatusSnapshot()[0]).toMatchObject({
+        state: 'done',
+        subagents: [expect.objectContaining({ id: CHILD_ID, state: 'idle' })]
+      })
+
+      appendFileSync(
+        childPath,
+        line({
+          type: 'response_item',
+          payload: { type: 'function_call_output', call_id: 'call-wait-1', output: '' }
+        })
+      )
+      await vi.waitFor(
+        () => {
+          expect(server.getStatusSnapshot()[0]).toMatchObject({
+            state: 'working',
+            subagents: [expect.objectContaining({ id: CHILD_ID, state: 'working' })]
+          })
+        },
+        { timeout: 3_000, interval: 50 }
+      )
+
+      appendFileSync(
+        childPath,
+        line({
+          type: 'response_item',
+          payload: { type: 'function_call', name: 'wait_agent', call_id: 'call-wait-2' }
+        })
+      )
+      await vi.waitFor(
+        () => {
+          expect(server.getStatusSnapshot()[0]).toMatchObject({
+            state: 'done',
+            subagents: [expect.objectContaining({ id: CHILD_ID, state: 'idle' })]
+          })
+        },
+        { timeout: 3_000, interval: 50 }
+      )
+    } finally {
+      server.stop()
+    }
+  })
 })

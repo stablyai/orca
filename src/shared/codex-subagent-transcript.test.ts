@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import type * as NodeFs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -287,5 +287,77 @@ describe('Codex subagent transcript reconciliation', () => {
       expect(openSyncCalls).toHaveBeenCalledTimes(2)
       expect(codexRosterToSnapshots(roster)?.[0]?.model).toBe('gpt-5.6-terra')
     })
+  })
+
+  it('marks a child idle while wait_agent is pending and working when it resumes', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'codex-subagent-transcript-'))
+    dirs.push(dir)
+    const parentPath = join(dir, 'rollout-parent.jsonl')
+    const childPath = join(dir, `rollout-child-${CHILD_ID}.jsonl`)
+    writeFileSync(parentPath, jsonl([activity('started')]))
+    writeFileSync(
+      childPath,
+      jsonl([
+        { type: 'event_msg', payload: { type: 'task_started' } },
+        {
+          type: 'response_item',
+          payload: { type: 'function_call', name: 'wait_agent', call_id: 'call-wait-1' }
+        }
+      ])
+    )
+    const state = createCodexSubagentTranscriptState()
+    const roster: CodexSubagentRoster = new Map()
+
+    reconcileCodexSubagentTranscript(state, roster, parentPath)
+    expect(codexRosterToSnapshots(roster)?.[0]?.state).toBe('idle')
+
+    appendFileSync(
+      childPath,
+      jsonl([
+        {
+          type: 'response_item',
+          payload: { type: 'function_call_output', call_id: 'call-wait-1', output: '' }
+        },
+        {
+          type: 'response_item',
+          payload: { type: 'agent_message', author: '/root', recipient: '/root/test_agent' }
+        }
+      ])
+    )
+    reconcileCodexSubagentTranscript(state, roster, parentPath)
+    expect(codexRosterToSnapshots(roster)?.[0]?.state).toBe('working')
+
+    appendFileSync(
+      childPath,
+      jsonl([
+        {
+          type: 'response_item',
+          payload: {
+            type: 'function_call',
+            name: 'request_user_input',
+            call_id: 'call-question'
+          }
+        }
+      ])
+    )
+    reconcileCodexSubagentTranscript(state, roster, parentPath)
+    expect(codexRosterToSnapshots(roster)?.[0]?.state).toBe('waiting')
+
+    appendFileSync(
+      childPath,
+      jsonl([
+        {
+          type: 'response_item',
+          payload: { type: 'function_call_output', call_id: 'call-question', output: '' }
+        },
+        {
+          type: 'response_item',
+          payload: { type: 'function_call', name: 'wait_agent', call_id: 'call-wait-2' }
+        }
+      ])
+    )
+    reconcileCodexSubagentTranscript(state, roster, parentPath)
+    expect(codexRosterToSnapshots(roster)?.[0]?.state).toBe('idle')
+    expect(hasTrackedCodexTranscriptSubagents(state)).toBe(true)
   })
 })

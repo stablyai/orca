@@ -411,6 +411,7 @@ describe('WorktreeCardAgents activation', () => {
       'codex-subagent-progress',
       expect.objectContaining({
         sessionId: 'child-1',
+        startedAt: 1000,
         parentPaneKey,
         terminalTabId: 'tab-1',
         worktreeId: 'wt-1',

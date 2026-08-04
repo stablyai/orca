@@ -15,7 +15,7 @@ import {
   clearClaudeAnsweredQuestionWait,
   createHookListenerState,
   getEndpointFileName,
-  hasCodexTranscriptSubagents,
+  hasCodexParentTranscript,
   hasPendingAgentResultText,
   HOOK_REQUEST_SLOWLORIS_MS,
   isNewTurnEvent,
@@ -28,6 +28,7 @@ import {
   normalizeHookPayload,
   parseFormEncodedBody,
   readRequestBody,
+  refreshCodexSubagentTranscriptStatus,
   reapRestoredClaudeSubagentsForDeadPane,
   reconcileRemoteCodexState,
   resolveCachedClaudeCompactOwnership,
@@ -1534,7 +1535,6 @@ export class AgentHookServer {
 
   private scheduleCodexSubagentPoll(
     source: AgentHookSource,
-    body: unknown,
     original: EnrichedAgentHookEventPayload
   ): void {
     // Why: a nested non-codex CLI inherits ORCA_PANE_KEY, so clearing here would silently end a live codex poll.
@@ -1542,7 +1542,7 @@ export class AgentHookServer {
       return
     }
     this.clearCodexSubagentPoll(original.paneKey)
-    if (!hasCodexTranscriptSubagents(this.state, original.paneKey)) {
+    if (!hasCodexParentTranscript(this.state, original.paneKey)) {
       return
     }
     const timer = setTimeout(() => {
@@ -1551,14 +1551,24 @@ export class AgentHookServer {
       if (!this.server || current !== original) {
         return
       }
-      const normalized = normalizeHookPayload(this.state, source, body, this.env)
-      if (!normalized) {
+      const payload = refreshCodexSubagentTranscriptStatus(this.state, original.paneKey)
+      if (!payload) {
         return
       }
       const subagentsChanged =
-        JSON.stringify(normalized.payload.subagents) !== JSON.stringify(original.payload.subagents)
-      const next = subagentsChanged ? this.applyNormalizedStatus(normalized) : original
-      this.scheduleCodexSubagentPoll(source, body, next)
+        JSON.stringify(payload.subagents) !== JSON.stringify(original.payload.subagents)
+      const next = subagentsChanged
+        ? this.applyNormalizedStatus({
+            paneKey: original.paneKey,
+            launchToken: original.launchToken,
+            tabId: original.tabId,
+            worktreeId: original.worktreeId,
+            connectionId: original.connectionId,
+            providerSession: original.providerSession,
+            payload
+          })
+        : original
+      this.scheduleCodexSubagentPoll(source, next)
     }, CODEX_SUBAGENT_POLL_MS)
     this.codexSubagentPollTimers.set(original.paneKey, timer)
     if (typeof timer.unref === 'function') {
@@ -2484,7 +2494,7 @@ export class AgentHookServer {
           this.recordCurrentAuthorityObservation(event)
           const enriched = this.applyNormalizedStatus(event, normalized.onAccepted)
           this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
-          this.scheduleCodexSubagentPoll(source, aliasedBody, enriched)
+          this.scheduleCodexSubagentPoll(source, enriched)
         }
 
         res.writeHead(204)

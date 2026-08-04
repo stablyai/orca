@@ -3,6 +3,7 @@ import type { CodexSubagentProgressHostAuthority } from './codex-subagent-progre
 
 export type CodexSubagentProgressTarget = {
   sessionId: string
+  startedAt: number
   paneKey: string
   parentPaneKey: string
   terminalTabId: string
@@ -37,6 +38,7 @@ export function createCodexSubagentProgressTarget(
   const model = agent.entry.model?.trim() || undefined
   return {
     sessionId: session.id,
+    startedAt: agent.startedAt,
     paneKey: agent.paneKey,
     parentPaneKey: session.parentPaneKey,
     terminalTabId: agent.tab.id,
@@ -73,6 +75,10 @@ export function parseCodexSubagentProgressTarget(
   value: Record<string, unknown>
 ): CodexSubagentProgressTarget | null {
   const sessionId = nonEmptyString(value.sessionId)
+  const startedAt =
+    typeof value.startedAt === 'number' && Number.isFinite(value.startedAt) && value.startedAt > 0
+      ? value.startedAt
+      : null
   const paneKey = nonEmptyString(value.paneKey)
   const parentPaneKey = nonEmptyString(value.parentPaneKey)
   const terminalTabId = nonEmptyString(value.terminalTabId)
@@ -81,6 +87,7 @@ export function parseCodexSubagentProgressTarget(
   const hostAuthority = parseHostAuthority(value.hostAuthority)
   if (
     !sessionId ||
+    !startedAt ||
     !paneKey ||
     !parentPaneKey ||
     !terminalTabId ||
@@ -93,6 +100,7 @@ export function parseCodexSubagentProgressTarget(
   const model = nonEmptyString(value.model)
   return {
     sessionId,
+    startedAt,
     paneKey,
     parentPaneKey,
     terminalTabId,

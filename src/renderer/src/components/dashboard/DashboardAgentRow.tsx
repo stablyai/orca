@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react'
 import { cn } from '@/lib/utils'
 import { AgentStateDot, agentStateLabel, type AgentDotState } from '@/components/AgentStateDot'
 import { AgentIcon } from '@/lib/agent-catalog'
+import { formatCodexSubagentDisplayLabel } from '@/components/codex-subagent-display-label'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { DashboardAgentChildDisclosure } from './DashboardAgentChildDisclosure'
@@ -68,6 +69,8 @@ type Props = {
   hideExpand?: boolean
   /** Reuse the row's hover tint to show the focused terminal pane's agent. */
   isFocusedPane?: boolean
+  /** Mark a synthetic child row whose inspector is currently open. */
+  isCurrentAgent?: boolean
   // Why: inline-card orchestration rows fold children under a leading chevron.
   childAgentCount?: number
   childAgentsExpanded?: boolean
@@ -92,6 +95,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   hideIdentityIcon = false,
   hideExpand = false,
   isFocusedPane = false,
+  isCurrentAgent = false,
   childAgentCount,
   childAgentsExpanded = false,
   onToggleChildAgents,
@@ -105,6 +109,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
     typeof childAgentCount === 'number' &&
     childAgentCount > 0 &&
     typeof onToggleChildAgents === 'function'
+  const isHighlighted = isFocusedPane || isCurrentAgent
   const [expanded, setExpanded] = useState(false)
   const handleToggleExpanded = useCallback(() => {
     setExpanded((prev) => !prev)
@@ -143,7 +148,9 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const conversationName = useAgentRowConversationName(agent)
   const prompt = conversationName ?? getAgentRowPrimaryText(agent.entry)
   // Why: prompt is '' when unknown, so fall back to the state label to keep the row labeled.
-  const displayLabel = prompt || agentStateLabel(asDotState(agent.state))
+  const sourceLabel = prompt || agentStateLabel(asDotState(agent.state))
+  const isCodexSubagent = agent.subagentSession?.provider === 'codex'
+  const displayLabel = isCodexSubagent ? formatCodexSubagentDisplayLabel(sourceLabel) : sourceLabel
   const model = agent.entry.model?.trim() ?? ''
   const isWorking = agent.state === 'working'
   // Why: 'working' names the running tool and 'waiting' names what an approval is blocked on;
@@ -199,10 +206,12 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         sendTargetStatus === 'disabled' && 'cursor-default opacity-60'
       )}
       data-focused-agent-pane={isFocusedPane ? 'true' : undefined}
+      data-current={isCurrentAgent ? 'true' : undefined}
       data-agent-send-target={sendTargetStatus}
       title={titleParts.length > 0 ? titleParts.join(' • ') : undefined}
       role={participatesInLineage ? 'treeitem' : undefined}
       aria-level={participatesInLineage ? (lineage?.depth ?? 0) + 1 : undefined}
+      aria-selected={participatesInLineage ? isCurrentAgent : undefined}
     >
       {lineageChildCount > 0 && !hideLineageConnectors ? (
         <span
@@ -266,9 +275,9 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
             expanded ? 'h-auto whitespace-pre-wrap break-words' : 'h-[1lh] truncate',
             isUnvisited ? 'font-semibold text-foreground' : 'font-normal text-muted-foreground',
             // Why: the selected-row fill washes out muted text — keep it readable.
-            isFocusedPane && !isUnvisited && 'text-foreground/90'
+            isHighlighted && !isUnvisited && 'text-foreground/90'
           )}
-          title={displayLabel}
+          title={sourceLabel}
         >
           {displayLabel}
         </span>

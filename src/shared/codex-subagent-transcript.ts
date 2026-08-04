@@ -7,6 +7,10 @@ import {
   upsertCodexSubagent,
   type CodexSubagentRoster
 } from './codex-subagent-roster'
+import {
+  reconcileCodexSubagentTranscriptLifecycle,
+  type CodexSubagentTranscriptLifecycleState
+} from './codex-subagent-transcript-lifecycle'
 
 const TRANSCRIPT_READ_MAX_BYTES = 1024 * 1024
 const TRANSCRIPT_LINE_MAX_BYTES = 256 * 1024
@@ -27,6 +31,7 @@ type TrackedTranscriptSubagent = JsonlCursor & {
    *  because the cursor is incremental: `turn_context` is emitted once per
    *  turn, so a later read usually carries no model at all. */
   model?: string
+  state: CodexSubagentTranscriptLifecycleState
   startedAt: number
   unresolvedSince?: number
 }
@@ -222,22 +227,6 @@ function readChildModel(records: JsonRecord[]): string | undefined {
   return model
 }
 
-function childIsComplete(records: JsonRecord[]): boolean {
-  let complete = false
-  for (const recordValue of records) {
-    if (recordValue.type !== 'event_msg') {
-      continue
-    }
-    const payload = record(recordValue.payload)
-    if (payload?.type === 'task_started') {
-      complete = false
-    } else if (payload?.type === 'task_complete') {
-      complete = true
-    }
-  }
-  return complete
-}
-
 export function createCodexSubagentTranscriptState(): CodexSubagentTranscriptState {
   return {
     parent: { offset: 0, carry: '' },
@@ -249,6 +238,19 @@ export function hasTrackedCodexTranscriptSubagents(
   state: CodexSubagentTranscriptState | undefined
 ): boolean {
   return Boolean(state && state.subagents.size > 0)
+}
+
+export function hasTrackedCodexParentTranscript(
+  state: CodexSubagentTranscriptState | undefined
+): boolean {
+  return Boolean(state?.parent.filePath)
+}
+
+export function finishTrackedCodexTranscriptSubagent(
+  state: CodexSubagentTranscriptState | undefined,
+  id: string
+): void {
+  state?.subagents.delete(id.trim())
 }
 
 export function reconcileCodexSubagentTranscript(
@@ -280,9 +282,11 @@ export function reconcileCodexSubagentTranscript(
     const tracked = state.subagents.get(activity.id) ?? {
       offset: 0,
       carry: '',
+      state: 'working',
       startedAt: activity.startedAt
     }
     tracked.description = activity.description ?? tracked.description
+    tracked.state = 'working'
     state.subagents.set(activity.id, tracked)
     upsertCodexSubagent(
       roster,
@@ -313,11 +317,16 @@ export function reconcileCodexSubagentTranscript(
     } else {
       tracked.unresolvedSince = undefined
       tracked.model = readChildModel(records) ?? tracked.model
-      // Why: re-applied every reconcile, not just on discovery — the parent's
-      // own activity upsert can rebuild this child's roster entry, which would
-      // otherwise drop a model found on an earlier poll.
-      setCodexSubagentModel(roster, id, tracked.model)
-      if (!childIsComplete(records)) {
+      const lifecycle = reconcileCodexSubagentTranscriptLifecycle(records, tracked.state)
+      tracked.state = lifecycle.state
+      if (!lifecycle.complete) {
+        upsertCodexSubagent(
+          roster,
+          id,
+          { description: tracked.description, state: tracked.state },
+          tracked.startedAt
+        )
+        setCodexSubagentModel(roster, id, tracked.model)
         continue
       }
     }

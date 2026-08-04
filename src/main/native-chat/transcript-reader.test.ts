@@ -258,6 +258,47 @@ describe('readNativeChatTranscript (codex)', () => {
     const reasoning = result.messages.find((m) => m.role === 'reasoning')
     expect(reasoning?.blocks[0]).toEqual({ type: 'text', text: 'I will run it' })
   })
+
+  it('maps custom tool activity emitted by Codex subagents', async () => {
+    const filePath = await writeFixture('orca-native-chat-codex-custom-tool-', [
+      {
+        type: 'response_item',
+        timestamp: '2026-06-01T10:00:00.000Z',
+        payload: {
+          type: 'custom_tool_call',
+          name: 'exec',
+          input: 'const result = await tools.exec_command({ cmd: "git status" })'
+        }
+      },
+      {
+        type: 'response_item',
+        timestamp: '2026-06-01T10:00:01.000Z',
+        payload: {
+          type: 'custom_tool_call_output',
+          output: [
+            { type: 'input_text', text: 'Script completed\n' },
+            { type: 'input_text', text: '## main...origin/main\n' }
+          ]
+        }
+      }
+    ])
+
+    const result = await readNativeChatTranscript('codex', 'codex-sess', { filePath })
+    if (!('messages' in result)) {
+      throw new Error('expected messages')
+    }
+
+    expect(result.messages.map((message) => message.role)).toEqual(['assistant', 'tool'])
+    expect(result.messages[0]?.blocks[0]).toEqual({
+      type: 'tool-call',
+      name: 'exec',
+      input: 'const result = await tools.exec_command({ cmd: "git status" })'
+    })
+    expect(result.messages[1]?.blocks[0]).toEqual({
+      type: 'tool-result',
+      output: 'Script completed\n## main...origin/main'
+    })
+  })
 })
 
 describe('readNativeChatTranscript (errors)', () => {

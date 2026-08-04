@@ -15897,6 +15897,12 @@
     }
   },
   "components": {
+    "agent-child-disclosure": {
+      "hide-one": "Hide 1 child agent",
+      "hide-other": "Hide {{count}} child agents",
+      "show-one": "Show 1 child agent",
+      "show-other": "Show {{count}} child agents"
+    },
     "native-chat": {
       "composer": {
         "imageUnsupported": "Image paste is not supported for this agent.",

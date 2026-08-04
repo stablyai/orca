@@ -14367,6 +14367,12 @@
     }
   },
   "components": {
+    "agent-child-disclosure": {
+      "hide-one": "隐藏 1 个子智能体",
+      "hide-other": "隐藏 {{count}} 个子智能体",
+      "show-one": "显示 1 个子智能体",
+      "show-other": "显示 {{count}} 个子智能体"
+    },
     "native-chat": {
       "composer": {
         "imageUnsupported": "此智能体不支持粘贴图片。",

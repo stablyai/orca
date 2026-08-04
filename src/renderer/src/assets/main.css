@@ -1244,7 +1244,8 @@ html.native-shell .app-layout {
   background: color-mix(in srgb, var(--sidebar-foreground) 1.25%, transparent);
 }
 
-.worktree-agent-row-hover[data-focused-agent-pane='true'] {
+.worktree-agent-row-hover[data-focused-agent-pane='true'],
+.worktree-agent-row-hover[data-current='true'] {
   /* Why: a borderless fill. --sidebar-accent ≈ --sidebar in light mode, so the
      selection wash mixes sidebar-foreground into the accent to stay legible
      without going so dark that muted text (timestamp) drops out. */
@@ -1255,7 +1256,8 @@ html.native-shell .app-layout {
   background: color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
-.dark .worktree-agent-row-hover[data-focused-agent-pane='true'] {
+.dark .worktree-agent-row-hover[data-focused-agent-pane='true'],
+.dark .worktree-agent-row-hover[data-current='true'] {
   background: color-mix(in srgb, var(--accent) 70%, transparent);
 }
 
@@ -1584,13 +1586,17 @@ html.native-shell .app-layout {
 }
 
 [data-compact-agent-list='true']
-  .compact-agent-row.worktree-agent-row-hover[data-focused-agent-pane='true'] {
+  .compact-agent-row.worktree-agent-row-hover[data-focused-agent-pane='true'],
+[data-compact-agent-list='true'] .compact-agent-row.worktree-agent-row-hover[data-current='true'] {
   background: color-mix(in srgb, var(--sidebar-foreground) 12%, var(--sidebar-accent));
 }
 
 .dark
   [data-compact-agent-list='true']
-  .compact-agent-row.worktree-agent-row-hover[data-focused-agent-pane='true'] {
+  .compact-agent-row.worktree-agent-row-hover[data-focused-agent-pane='true'],
+.dark
+  [data-compact-agent-list='true']
+  .compact-agent-row.worktree-agent-row-hover[data-current='true'] {
   background: color-mix(in srgb, var(--accent) 70%, transparent);
 }
 

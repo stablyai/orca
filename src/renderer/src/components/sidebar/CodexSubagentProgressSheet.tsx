@@ -23,6 +23,7 @@ import {
   parseCodexSubagentProgressTarget,
   type CodexSubagentProgressTarget
 } from './codex-subagent-progress-target'
+import { scopeCodexSubagentTranscript } from './codex-subagent-transcript-scope'
 
 type ProgressPlaceholderKind = 'loading' | 'empty' | 'error'
 
@@ -142,13 +143,19 @@ function CodexSubagentTranscript({
     sessionId: target.sessionId,
     runtimeEnvironmentId
   })
-  const viewState = selectNativeChatViewState(session)
-  const working = state === 'working' || session.status === 'working'
+  const transcriptScope = scopeCodexSubagentTranscript(
+    session.messages,
+    session.hasMore,
+    target.startedAt
+  )
+  const scopedSession = { ...session, ...transcriptScope }
+  const viewState = selectNativeChatViewState(scopedSession)
+  const working = state === 'working'
 
   if (viewState.kind === 'error') {
     return <ProgressPlaceholder kind="error" message={viewState.message} />
   }
-  if (viewState.kind === 'loading' || (working && session.messages.length === 0)) {
+  if (viewState.kind === 'loading' || (working && scopedSession.messages.length === 0)) {
     return <ProgressPlaceholder kind="loading" />
   }
   if (viewState.kind === 'empty') {
@@ -156,7 +163,7 @@ function CodexSubagentTranscript({
   }
   return (
     <NativeChatMessageList
-      session={session}
+      session={scopedSession}
       isWorking={working}
       expandSignal={false}
       fontScale={1}
@@ -240,13 +247,19 @@ export default function CodexSubagentProgressSheet(): React.JSX.Element {
   return (
     <Sheet
       open={open}
+      modal={false}
       onOpenChange={(nextOpen) => {
         if (!nextOpen) {
           closeModal()
         }
       }}
     >
-      <SheetContent className="w-full p-0 sm:max-w-2xl" data-codex-subagent-progress="">
+      <SheetContent
+        className="w-full p-0 sm:max-w-2xl"
+        data-codex-subagent-progress=""
+        showOverlay={false}
+        onInteractOutside={(event) => event.preventDefault()}
+      >
         {target ? (
           <CodexSubagentProgressBody target={target} />
         ) : (

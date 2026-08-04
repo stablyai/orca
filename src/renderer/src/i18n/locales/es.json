@@ -14347,6 +14347,12 @@
     }
   },
   "components": {
+    "agent-child-disclosure": {
+      "hide-one": "Ocultar 1 subagente",
+      "hide-other": "Ocultar {{count}} subagentes",
+      "show-one": "Mostrar 1 subagente",
+      "show-other": "Mostrar {{count}} subagentes"
+    },
     "native-chat": {
       "composer": {
         "imageUnsupported": "Este agente no admite pegar imágenes.",

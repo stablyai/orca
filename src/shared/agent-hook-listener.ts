@@ -50,6 +50,8 @@ import {
 } from './codex-subagent-roster'
 import {
   createCodexSubagentTranscriptState,
+  finishTrackedCodexTranscriptSubagent,
+  hasTrackedCodexParentTranscript,
   hasTrackedCodexTranscriptSubagents,
   reconcileCodexSubagentTranscript,
   type CodexSubagentTranscriptState
@@ -3633,6 +3635,10 @@ export function hasCodexTranscriptSubagents(state: HookListenerState, paneKey: s
   return hasTrackedCodexTranscriptSubagents(state.codexSubagentTranscriptByPaneKey.get(paneKey))
 }
 
+export function hasCodexParentTranscript(state: HookListenerState, paneKey: string): boolean {
+  return hasTrackedCodexParentTranscript(state.codexSubagentTranscriptByPaneKey.get(paneKey))
+}
+
 export function seedCodexStateFromSnapshot(
   state: HookListenerState,
   paneKey: string,
@@ -3784,6 +3790,23 @@ function buildCodexChildDrivenStatusPayload(
   })
 }
 
+export function refreshCodexSubagentTranscriptStatus(
+  state: HookListenerState,
+  paneKey: string
+): ParsedAgentStatusPayload | null {
+  const transcriptState = state.codexSubagentTranscriptByPaneKey.get(paneKey)
+  const transcriptPath = transcriptState?.parent.filePath
+  if (!transcriptState || !transcriptPath) {
+    return null
+  }
+  reconcileCodexSubagentTranscript(
+    transcriptState,
+    getOrCreateCodexSubagentRoster(state, paneKey),
+    transcriptPath
+  )
+  return buildCodexChildDrivenStatusPayload(state, undefined, paneKey, {})
+}
+
 function normalizeCodexSubagentLifecycleEvent(
   state: HookListenerState,
   eventName: 'SubagentStart' | 'SubagentStop',
@@ -3808,6 +3831,10 @@ function normalizeCodexSubagentLifecycleEvent(
     )
   } else {
     finishCodexSubagent(roster, agentId)
+    finishTrackedCodexTranscriptSubagent(
+      state.codexSubagentTranscriptByPaneKey.get(paneKey),
+      agentId
+    )
   }
   return buildCodexChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
 }

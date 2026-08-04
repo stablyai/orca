@@ -28,6 +28,7 @@ import { useWorktreeAgentExpansionState } from './worktree-card-agents-expansion
 import { translate } from '@/i18n/i18n'
 import { createCodexSubagentProgressTarget } from './codex-subagent-progress-target'
 import { selectCodexSubagentProgressHostAuthority } from './codex-subagent-progress-host-authority'
+import { useCodexSubagentProgressPaneKey } from './codex-subagent-progress-selection'
 
 export const SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT =
   'orca-suppress-worktree-list-scroll-adjustment'
@@ -90,6 +91,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   const sendTargetInputs = useAppStore(useShallow((s) => selectSendTargetInputs(s, worktreeId)))
   const sendPromptToSidebarAgentTarget = useAppStore((s) => s.sendPromptToSidebarAgentTarget)
   const focusedAgentPaneKey = useFocusedAgentPaneKey(worktreeId)
+  const selectedSubagentPaneKey = useCodexSubagentProgressPaneKey(worktreeId)
   const compactAgentListRootRef = useRef<HTMLDivElement | null>(null)
 
   // Why: derive per-agent unvisited flags from the ack map so rows bold on first appearance and mute once the tab is visited.
@@ -187,9 +189,8 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     },
     [worktreeId]
   )
-  const handleActivateRetainedAgent = useCallback(() => {
-    // Why: hibernation-retained rows are passive completion evidence; activating would resume sleeping sessions, so the row is inert.
-  }, [])
+  // Why: hibernation-retained rows are passive completion evidence; activating would resume sleeping sessions, so the row is inert.
+  const handleActivateRetainedAgent = useCallback(() => undefined, [])
   const handleOpenCodexSubagentProgress = useCallback(
     (agent: DashboardAgentRowData) => {
       const hostAuthority = selectCodexSubagentProgressHostAuthority(useAppStore.getState(), {
@@ -246,9 +247,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     [toggleLineageParentState]
   )
 
-  const stopBubble = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation()
-  }, [])
+  const stopBubble = useCallback((e: React.MouseEvent) => e.stopPropagation(), [])
 
   // Why: root leaf siblings reserve a leading spacer when any root has a chevron, keeping the state-dot column aligned (descendants already indent).
   const anyRootHasChildren = rootAgents.some(
@@ -303,7 +302,8 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           }
           // Why: keep leaf rows aligned with parent rows — see anyRootHasChildren above.
           reserveDisclosureGutter={isRootAgent && anyRootHasChildren && !hasChildAgents}
-          isFocusedPane={agent.paneKey === focusedAgentPaneKey}
+          isFocusedPane={selectedSubagentPaneKey === null && agent.paneKey === focusedAgentPaneKey}
+          isCurrentAgent={agent.paneKey === selectedSubagentPaneKey}
           sendTargetStatus={sendTarget?.status}
           sendTargetDisabledReason={sendTarget?.disabledReason}
           onSendTargetClick={isAgentSendTargetModeActive ? handleSendTargetClick : undefined}
@@ -362,7 +362,8 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
             hasChildAgents ? () => toggleLineageParent(agent.paneKey) : undefined
           }
           reserveDisclosureGutter={isRootAgent && anyRootHasChildren && !hasChildAgents}
-          isFocusedPane={agent.paneKey === focusedAgentPaneKey}
+          isFocusedPane={selectedSubagentPaneKey === null && agent.paneKey === focusedAgentPaneKey}
+          isCurrentAgent={agent.paneKey === selectedSubagentPaneKey}
           cacheTimerActive={cacheTimerActive}
         />
         {hasChildAgents ? (

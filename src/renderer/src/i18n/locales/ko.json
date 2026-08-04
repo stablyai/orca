@@ -14376,6 +14376,12 @@
     }
   },
   "components": {
+    "agent-child-disclosure": {
+      "hide-one": "하위 에이전트 1개 숨기기",
+      "hide-other": "하위 에이전트 {{count}}개 숨기기",
+      "show-one": "하위 에이전트 1개 표시",
+      "show-other": "하위 에이전트 {{count}}개 표시"
+    },
     "native-chat": {
       "composer": {
         "imageUnsupported": "이 에이전트는 이미지 붙여넣기를 지원하지 않습니다.",
