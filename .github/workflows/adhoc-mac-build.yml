@@ -146,17 +146,26 @@ jobs:
         env:
           REF: ${{ inputs.ref || github.ref_name }}
           LABEL: ${{ inputs.label }}
+          MAIN_REPO_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # Why this check: the version script is read from the branch being built,
+          # Why this check: the version scripts are read from the branch being built,
           # not from main, so a branch cut before the adhoc channel landed has no
-          # copy of it. Say that plainly instead of failing with a module-not-found.
-          if [[ ! -f config/scripts/adhoc-build-version.mjs ]]; then
-            echo "::error::$REF has no config/scripts/adhoc-build-version.mjs; rebase it onto a main that has the adhoc channel."
-            exit 1
-          fi
+          # copy of them. Say that plainly instead of failing with a module-not-found.
+          for script in adhoc-build-version dev-channel-base-version; do
+            if [[ ! -f "config/scripts/$script.mjs" ]]; then
+              echo "::error::$REF has no config/scripts/$script.mjs; rebase it onto a main that has the adhoc channel."
+              exit 1
+            fi
+          done
           echo "head_sha=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
-          ORCA_ADHOC_LABEL="${LABEL:-$REF}" node config/scripts/adhoc-build-version.mjs \
+          # Why the main repo's tags: package.json on a branch is as stale as the
+          # main it forked from, and stable patches never merge back into it.
+          published="$(GH_TOKEN="$MAIN_REPO_TOKEN" gh release list \
+            --repo "$GITHUB_REPOSITORY" --limit 100 --exclude-drafts \
+            --json tagName --jq '.[].tagName' || true)"
+          ORCA_PUBLISHED_VERSIONS="$published" ORCA_ADHOC_LABEL="${LABEL:-$REF}" \
+            node config/scripts/adhoc-build-version.mjs \
             >"$RUNNER_TEMP/adhoc-identity.txt"
           if ! grep -q '^name=' "$RUNNER_TEMP/adhoc-identity.txt"; then
             echo "::error::adhoc-build-version.mjs emitted no release name; $REF's copy of the script is out of sync with this workflow."
