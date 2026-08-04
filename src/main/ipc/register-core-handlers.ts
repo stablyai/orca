@@ -19,6 +19,7 @@ import { registerFeedbackHandlers } from './feedback'
 import { registerCrashReportingHandlers } from './crash-reporting'
 import { registerExportHandlers } from './export'
 import { registerStatsHandlers } from './stats'
+import { registerAquariumReapHandlers } from './aquarium-reap'
 import { registerMemoryHandlers } from './memory'
 import { registerRateLimitHandlers } from './rate-limits'
 import { registerRuntimeHandlers } from './runtime'
@@ -120,6 +121,7 @@ export function registerCoreHandlers(
   registerLinearHandlers()
   registerJiraHandlers()
   registerFeedbackHandlers()
+  registerAquariumReapHandlers()
   if (crashReports) {
     registerCrashReportingHandlers(crashReports)
   }

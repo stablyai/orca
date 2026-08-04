@@ -12,6 +12,7 @@ import type { TerminalPaneSplitSource } from '../shared/feature-education-teleme
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../shared/codex-startup-delivery'
 import type { SleepingAgentLaunchConfig } from '../shared/agent-session-resume'
+import type { AquariumReapRequest } from '../shared/aquarium-reap'
 import type {
   BaseRefSearchResult,
   BaseRefDefaultResult,
@@ -686,6 +687,15 @@ const api = {
     hasKillableLocalProcesses: (args) =>
       ipcRenderer.invoke('workspaceCleanup:hasKillableLocalProcesses', args)
   } satisfies PreloadApi['workspaceCleanup'],
+
+
+  aquarium: {
+    // T7/T8 closure (2026-08-03): the Reap verb's disposal backend. The
+    // renderer sends only worktree identities; the server re-derives ownership
+    // and refuses anything it would not own.
+    reap: (request: AquariumReapRequest) =>
+      ipcRenderer.invoke('aquarium:reap', request)
+  } satisfies PreloadApi['aquarium'],
 
   workspaceSpace: {
     analyze: () => ipcRenderer.invoke('workspaceSpace:analyze'),

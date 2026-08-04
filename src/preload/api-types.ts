@@ -394,6 +394,7 @@ import type {
   WorkspaceCleanupScanProgress,
   WorkspaceCleanupScanResult
 } from '../shared/workspace-cleanup'
+import type { AquariumReapRequest, AquariumReapResult } from '../shared/aquarium-reap'
 import type { KeybindingActionId, KeybindingFileSnapshot } from '../shared/keybindings'
 
 export type BrowserApi = {
@@ -1004,6 +1005,9 @@ export type PreloadApi = {
     hasKillableLocalProcesses: (
       args: WorkspaceCleanupLocalProcessArgs
     ) => Promise<WorkspaceCleanupLocalProcessResult>
+  }
+  aquarium: {
+    reap: (request: AquariumReapRequest) => Promise<AquariumReapResult>
   }
   workspaceSpace: {
     analyze: () => Promise<WorkspaceSpaceAnalyzeResult>
