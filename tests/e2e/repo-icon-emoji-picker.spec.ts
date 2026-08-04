@@ -72,6 +72,9 @@ test.describe('Repository icon emoji picker', () => {
       )
       .toEqual({ type: 'emoji', emoji: '🚀' })
 
+    // The store round-trip alone would pass even if the panel rendered nothing.
+    await expect(repoSection.getByText('Current: 🚀')).toBeVisible()
+
     await attachScreenshot(orcaPage, testInfo, 'repo-icon-emoji-picker-selected')
   })
 })

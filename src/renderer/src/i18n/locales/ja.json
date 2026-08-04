@@ -6499,7 +6499,10 @@
           "f79972271a": "この repo の GitHub リモートが見つかりません。",
           "4d039317f4": "ウェブサイトのファビコン",
           "acf31559a0": "有効な Web サイトの URL を入力。",
-          "868c5c9b56": "repo のインポートに失敗しましたアイコン"
+          "868c5c9b56": "repo のインポートに失敗しましたアイコン",
+          "emojiTooLongForRepoIcon": "この絵文字は repo アイコンとして使用できません。",
+          "currentEmojiSelection": "現在: {{value0}}",
+          "searchEmojiPlaceholder": "絵文字を検索"
         },
         "RepositoryPane": {
           "15a99d9b9f": "相対パスは、このプロジェクトのルートから解決されます。",

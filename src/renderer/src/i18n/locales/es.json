@@ -6477,7 +6477,10 @@
           "f79972271a": "No se encontró ningún control remoto de GitHub para este repositorio.",
           "4d039317f4": "Favicon del sitio web",
           "acf31559a0": "Ingresa una URL de sitio web válida.",
-          "868c5c9b56": "No se pudo importar el icono del repositorio"
+          "868c5c9b56": "No se pudo importar el icono del repositorio",
+          "emojiTooLongForRepoIcon": "Este emoji no se puede usar como icono del repositorio.",
+          "currentEmojiSelection": "Actual: {{value0}}",
+          "searchEmojiPlaceholder": "Buscar emoji"
         },
         "RepositoryPane": {
           "15a99d9b9f": "Las rutas relativas se resuelven desde la raíz de este proyecto.",

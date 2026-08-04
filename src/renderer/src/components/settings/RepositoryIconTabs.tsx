@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react'
+import { Suspense, useState } from 'react'
 import { toast } from 'sonner'
 import { Github, Image, Link2 } from 'lucide-react'
 import type { RepoIcon } from '../../../../shared/repo-icon'
@@ -10,12 +10,15 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { getRepoLucideIconOptions } from '../repo/repo-icon'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
+import { lazyWithRetry } from '@/lib/lazy-with-retry'
 
 // Deferred so emoji-picker-react's ~500KB chunk only loads once the Emoji tab renders.
-const RepositoryIconEmojiPicker = lazy(() =>
-  import('./RepositoryIconEmojiPicker').then((module) => ({
-    default: module.RepositoryIconEmojiPicker
-  }))
+const RepositoryIconEmojiPicker = lazyWithRetry(
+  () =>
+    import('./RepositoryIconEmojiPicker').then((module) => ({
+      default: module.RepositoryIconEmojiPicker
+    })),
+  { reloadKey: 'repo-icon-emoji-picker' }
 )
 
 type RepositoryIconTabsProps = {

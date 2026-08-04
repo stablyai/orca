@@ -46,6 +46,9 @@ export function RepositoryIconEmojiPicker({
     <>
       <div className="repo-icon-emoji-picker overflow-hidden rounded-md border border-border">
         <EmojiPicker
+          // Off by default here: this picker is inline, and can mount with the panel
+          // (emoji repos open on this tab), so autofocus would steal the settings search.
+          autoFocusSearch={false}
           emojiStyle={EmojiStyle.NATIVE}
           height={340}
           width="100%"

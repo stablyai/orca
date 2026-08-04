@@ -6462,7 +6462,10 @@
           "f79972271a": "找不到此仓库的 GitHub 远程。",
           "4d039317f4": "网站图标",
           "acf31559a0": "输入有效的网站 URL。",
-          "868c5c9b56": "无法导入仓库图标"
+          "868c5c9b56": "无法导入仓库图标",
+          "emojiTooLongForRepoIcon": "此表情符号无法用作仓库图标。",
+          "currentEmojiSelection": "当前：{{value0}}",
+          "searchEmojiPlaceholder": "搜索表情符号"
         },
         "RepositoryPane": {
           "15a99d9b9f": "相对路径从该项目根解析。",

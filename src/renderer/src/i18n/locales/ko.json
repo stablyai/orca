@@ -6462,7 +6462,10 @@
           "f79972271a": "이 repo에 대한 GitHub 원격을 찾을 수 없습니다.",
           "4d039317f4": "웹사이트 파비콘",
           "acf31559a0": "유효한 웹사이트 URL을 입력하세요.",
-          "868c5c9b56": "repo 아이콘을 가져오지 못했습니다."
+          "868c5c9b56": "repo 아이콘을 가져오지 못했습니다.",
+          "emojiTooLongForRepoIcon": "이 이모티콘은 repo 아이콘으로 사용할 수 없습니다.",
+          "currentEmojiSelection": "현재: {{value0}}",
+          "searchEmojiPlaceholder": "이모티콘 검색"
         },
         "RepositoryPane": {
           "15a99d9b9f": "상대 경로는 이 프로젝트 루트에서 확인됩니다.",
