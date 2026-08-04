@@ -51,15 +51,19 @@ export async function waitForReplacementRuntime(
       if (status.runtimeId !== install.runtimeId && reachedTarget) {
         return status
       }
-      installFailure = probed
-        ? await readRemoteServerInstallFailure(
-            environmentId,
-            transport,
-            install,
-            status,
-            rpcTimeoutMs
-          )
-        : null
+      // Why: the status RPC already spent part of rpcTimeoutMs, so the probe re-reads what is left
+      // rather than starting a second full budget of its own.
+      const probeTimeoutMs = Math.min(RESTART_WAIT_RPC_TIMEOUT_MS, deadline - now())
+      installFailure =
+        probed && probeTimeoutMs > 0
+          ? await readRemoteServerInstallFailure(
+              environmentId,
+              transport,
+              install,
+              status,
+              probeTimeoutMs
+            )
+          : null
       probed = true
     } catch {
       // A refused connection is expected while the server process is being replaced.
@@ -68,7 +72,10 @@ export async function waitForReplacementRuntime(
     if (installFailure !== null) {
       throw new Error(installFailure)
     }
-    await transport.wait(timing.pollIntervalMs)
+    const waitMs = Math.min(timing.pollIntervalMs, deadline - now())
+    if (waitMs > 0) {
+      await transport.wait(waitMs)
+    }
   }
   throw new Error('remote_update_reconnect_timeout')
 }

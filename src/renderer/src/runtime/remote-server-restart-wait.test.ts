@@ -91,7 +91,65 @@ describe('waitForReplacementRuntime', () => {
     ).rejects.toThrow('remote_update_reconnect_timeout')
 
     // A tick allowed its full 10s past the deadline would push this well beyond the budget.
-    expect(clock).toBeLessThanOrEqual(reconnectTimeoutMs + pollIntervalMs)
+    expect(clock).toBeLessThanOrEqual(reconnectTimeoutMs)
+  })
+
+  it('keeps the total wait inside the budget when the status RPC eats it before the probe', async () => {
+    let clock = 0
+    const reconnectTimeoutMs = 20_000
+
+    await expect(
+      waitForReplacementRuntime(
+        'server-1',
+        {
+          now: () => clock,
+          wait: async (milliseconds) => {
+            clock += milliseconds
+          },
+          // Both RPCs burn everything they are handed, so a stale budget doubles the tick.
+          getUpdaterStatus: async (_environmentId, timeoutMs) => {
+            clock += timeoutMs ?? 0
+            return idleSnapshot
+          },
+          getRuntimeStatus: async (_environmentId, timeoutMs) => {
+            clock += timeoutMs ?? 0
+            return runtime('1.4.0', 'runtime-old')
+          }
+        },
+        install,
+        { reconnectTimeoutMs, pollIntervalMs: 500 }
+      )
+    ).rejects.toThrow('remote_update_reconnect_timeout')
+
+    expect(clock).toBeLessThanOrEqual(reconnectTimeoutMs)
+  })
+
+  it('charges the failure probe only the budget left after the status RPC', async () => {
+    let clock = 0
+    const getUpdaterStatus = vi.fn(async () => idleSnapshot)
+
+    await expect(
+      waitForReplacementRuntime(
+        'server-1',
+        {
+          now: () => clock,
+          wait: async (milliseconds) => {
+            clock += milliseconds
+          },
+          getUpdaterStatus,
+          getRuntimeStatus: async () => {
+            clock += 2_000
+            return runtime('1.4.0', 'runtime-old')
+          }
+        },
+        install,
+        { reconnectTimeoutMs: 9_000, pollIntervalMs: 1_000 }
+      )
+    ).rejects.toThrow('remote_update_reconnect_timeout')
+
+    // First probe runs on the second tick: it starts at 3s, the status RPC spends 2s more,
+    // so 4s of the 9s budget is left — not the 6s the tick began with.
+    expect(getUpdaterStatus).toHaveBeenNthCalledWith(1, 'server-1', 4_000)
   })
 
   it('bounds the failure probe by the same remaining budget', async () => {
