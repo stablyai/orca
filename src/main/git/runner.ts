@@ -1516,9 +1516,14 @@ export function redirectPortedHostnameToEnv(
   if (!/^[^/\s]+:\d+$/.test(host)) {
     return { args, options }
   }
+  const env: NodeJS.ProcessEnv = { ...(options.env ?? process.env), GITLAB_HOST: host }
+  if (process.platform === 'win32') {
+    // Why: spawn env stops at the wsl.exe boundary unless WSLENV names the var.
+    addWslEnvKeys(env, ['GITLAB_HOST'])
+  }
   return {
     args: [...args.slice(0, i), ...args.slice(i + 2)],
-    options: { ...options, env: { ...(options.env ?? process.env), GITLAB_HOST: host } }
+    options: { ...options, env }
   }
 }
 

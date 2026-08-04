@@ -55,6 +55,43 @@ describe('redirectPortedHostnameToEnv', () => {
     expect(options.env).toEqual({ A: '1' })
   })
 
+  // Why: wsl.exe only forwards variables named in WSLENV, so a WSL-routed glab
+  // never sees GITLAB_HOST unless it is listed there.
+  it('names GITLAB_HOST in WSLENV on Windows', () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+
+    const { options } = redirectPortedHostnameToEnv(
+      ['api', '--hostname', 'gitlab.internal:8443', 'user'],
+      { env: {} }
+    )
+
+    expect(options.env?.GITLAB_HOST).toBe('gitlab.internal:8443')
+    expect(options.env?.WSLENV?.split(':')).toContain('GITLAB_HOST')
+  })
+
+  it('appends to an existing WSLENV instead of replacing it', () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+
+    const { options } = redirectPortedHostnameToEnv(
+      ['api', '--hostname', 'gitlab.internal:8443', 'user'],
+      { env: { WSLENV: 'GIT_SSH_COMMAND' } }
+    )
+
+    expect(options.env?.WSLENV?.split(':')).toEqual(['GIT_SSH_COMMAND', 'GITLAB_HOST'])
+  })
+
+  it('leaves WSLENV alone off Windows', () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+
+    const { options } = redirectPortedHostnameToEnv(
+      ['api', '--hostname', 'gitlab.internal:8443', 'user'],
+      { env: {} }
+    )
+
+    expect(options.env?.GITLAB_HOST).toBe('gitlab.internal:8443')
+    expect(options.env?.WSLENV).toBeUndefined()
+  })
+
   it('preserves existing env entries alongside GITLAB_HOST', () => {
     const { options } = redirectPortedHostnameToEnv(
       ['auth', 'status', '--hostname', 'gl.example.org:3001'],
