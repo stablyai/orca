@@ -179,6 +179,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          MAIN_REPO_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           # Why read the highest number off existing titles rather than counting
@@ -195,7 +196,19 @@ jobs:
             --jq '[.[] | (.name // "") | capture(" • (?<n>[0-9]+) • ")? | .n | tonumber] | max // 0')"
           build_number=$(( last_number + 1 ))
           echo "Hourly build number $build_number (previous high: $last_number)"
-          ORCA_HOURLY_BUILD_NUMBER="$build_number" node config/scripts/hourly-build-version.mjs \
+          # Why the main repo's tags decide the base version rather than
+          # package.json: main's version only moves on `release:` commits, and
+          # stable patches are cut from release branches that never merge back, so
+          # package.json can sit several patches behind what users are running. A
+          # separate token because GH_TOKEN above is the App's, scoped to the
+          # hourly repo. Empty on failure — the script then falls back to
+          # package.json, which is stale but never wrong enough to fail a build.
+          published="$(GH_TOKEN="$MAIN_REPO_TOKEN" gh release list \
+            --repo "$GITHUB_REPOSITORY" --limit 100 --exclude-drafts \
+            --json tagName --jq '.[].tagName' || true)"
+          echo "Highest published tag seen: $(head -1 <<<"$published")"
+          ORCA_PUBLISHED_VERSIONS="$published" \
+            ORCA_HOURLY_BUILD_NUMBER="$build_number" node config/scripts/hourly-build-version.mjs \
             >"$RUNNER_TEMP/hourly-identity.txt"
           # Why check rather than trust: the checkout above pins `ref: main`, but a
           # workflow_dispatch runs this file from whatever branch was dispatched. A

@@ -48,6 +48,7 @@ import {
 } from './ai-vault-host-scope'
 import { usePersistedAiVaultViewOptions } from './use-persisted-ai-vault-view-options'
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
+import { AiVaultScanIssueBanners } from './AiVaultScanIssueBanners'
 
 export default function AiVaultPanel(): React.JSX.Element {
   const activeWorktreeId = useActiveWorktreeId()
@@ -77,9 +78,11 @@ export default function AiVaultPanel(): React.JSX.Element {
     sort,
     group,
     hideEmptySessions,
+    sessionLimit,
     setSort,
     setGroup,
     setHideEmptySessions,
+    setSessionLimit,
     setAgentEnabled,
     setAllAgentsEnabled,
     resetViewOptions
@@ -141,9 +144,10 @@ export default function AiVaultPanel(): React.JSX.Element {
   )
   const { error, loading, refresh, scanResult, sessions } = useAiVaultSessionRefresh(
     scopePaths,
-    executionHostScope
+    executionHostScope,
+    sessionLimit
   )
-  // Deliberately blind to the active repo/worktree: rebuilding these ~500-entry
+  // Deliberately blind to the active repo/worktree: rebuilding these session
   // maps on every worktree switch is what made switching visibly slow (#10841 era).
   const sessionProjectById = useMemo(
     () =>
@@ -180,7 +184,8 @@ export default function AiVaultPanel(): React.JSX.Element {
     agents,
     sort,
     group,
-    hideEmptySessions
+    hideEmptySessions,
+    sessionLimit
   })
 
   // Workspace is the preferred default, but unavailable context still falls back to All.
@@ -316,6 +321,7 @@ export default function AiVaultPanel(): React.JSX.Element {
         sort={sort}
         group={group}
         hideEmptySessions={hideEmptySessions}
+        sessionLimit={sessionLimit}
         adjustmentCount={viewAdjustmentCount}
         onQueryChange={setQuery}
         onScopeChange={handleScopeChange}
@@ -325,6 +331,7 @@ export default function AiVaultPanel(): React.JSX.Element {
         onSortChange={setSort}
         onGroupChange={setGroup}
         onHideEmptySessionsChange={setHideEmptySessions}
+        onSessionLimitChange={setSessionLimit}
         onReset={resetViewOptions}
         onRefresh={() => void refresh({ force: true })}
       />
@@ -335,15 +342,7 @@ export default function AiVaultPanel(): React.JSX.Element {
         </div>
       ) : null}
 
-      {scanResult && scanResult.issues.length > 0 ? (
-        <div className="border-b border-sidebar-border px-3 py-1.5 text-[11px] text-muted-foreground">
-          {translate(
-            'auto.components.right.sidebar.AiVaultPanel.transcriptsSkipped',
-            '{{count}} transcript skipped',
-            { count: scanResult.issues.length }
-          )}
-        </div>
-      ) : null}
+      <AiVaultScanIssueBanners scanResult={scanResult} />
 
       <AiVaultSessionVirtualList
         groups={groups}

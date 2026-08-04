@@ -2,6 +2,7 @@ import { ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../shared
 import {
   destroyPersistentWebview,
   registerPersistentWebview,
+  replacePersistentWebview,
   webviewRegistry
 } from './webview-registry'
 
@@ -30,9 +31,9 @@ export function ensureBrowserPageWebview({
   // preserves the newly replaced viewport; always verify the resolved container.
   if (webview && (parentDrifted || webview.getAttribute('partition') !== webviewPartition)) {
     if (parentDrifted) {
-      destroyPersistentWebview(browserTabId, { preserveViewport: true })
+      void replacePersistentWebview(browserTabId, { preserveViewport: true })
     } else {
-      destroyPersistentWebview(browserTabId)
+      void destroyPersistentWebview(browserTabId)
     }
     webview = undefined
     const refreshedContainer = resolveContainer()

@@ -9,6 +9,11 @@ vi.mock('../memory/pty-registry', () => ({
 }))
 
 import { killAllProcessesForWorktree, WORKTREE_PROCESS_SWEEP_TIMEOUT_MS } from './worktree-teardown'
+import { ABANDONED_SWEEP_GRACE_MS } from './forced-sweep-settlement'
+import {
+  classifyWorktreeForceDeleteReason,
+  isProvenLivePtyRemovalError
+} from '../../shared/worktree-removal'
 import type { IPtyProvider, PtyProcessInfo } from '../providers/types'
 
 // Why: these tests advance fake timers *before* awaiting the teardown, so a
@@ -243,6 +248,13 @@ describe('destructive teardown when a PTY stop cannot be proven', () => {
         providerStopped: 0,
         registryStopped: 0
       })
+      // Why: the deadline gave up on this sweep without cancelling it, so the grace
+      // expired with the provider still inside listProcesses. Force deletes the
+      // directory anyway, and this warning is the only record that a PTY handle may
+      // have outlived it — a silent "incomplete sweep" reads as if it had finished.
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining(`still running after the ${ABANDONED_SWEEP_GRACE_MS}ms grace`)
+      )
     } finally {
       releaseList([])
       await vi.advanceTimersByTimeAsync(0)
@@ -335,6 +347,79 @@ describe('destructive teardown when a PTY stop cannot be proven', () => {
     await expect(
       killAllProcessesForWorktree('w1', { localProvider, requirePhysicalStop: true })
     ).rejects.toThrow('ssh channel closed')
+  })
+
+  // Why (#11960): the wedge the escape hatch exists for — an unresponsive daemon, a dropped
+  // SSH channel — rejects the sweep in the provider's own words, which the force classifier
+  // cannot recognise. Failing closed with no Force Delete button is the dead end itself.
+  it('offers force delete for a sweep-level failure without losing the provider wording', async () => {
+    listRegisteredPtysMock.mockReturnValue([])
+    const localProvider = createProviderStub(async () => {
+      throw new Error('SSH channel closed while listing processes')
+    })
+
+    const error = await killAllProcessesForWorktree('repo-1::/w', {
+      localProvider,
+      requirePhysicalStop: true
+    }).then(
+      () => new Error('expected a rejection'),
+      (rejection: Error) => rejection
+    )
+    expect(error.message).toContain('SSH channel closed while listing processes')
+    expect(classifyWorktreeForceDeleteReason(error.message)).toBe('unstopped-pty')
+    // Nothing was verified here, so it must not read as the proven-live verdict.
+    expect(isProvenLivePtyRemovalError(error.message)).toBe(false)
+  })
+
+  // Why: the outer deadline rejects without cancelling the sweep it gave up on, so force
+  // could return — and the caller start deleting the directory — while shutdown() was still
+  // killing the PTY holding it open. On Windows that rmdir fails and half-deletes the
+  // workspace, which is exactly what the ordering at the removal call site exists to avoid.
+  it('waits for a shutdown the deadline abandoned before force returns', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    let releaseShutdown: () => void = () => {}
+    try {
+      listRegisteredPtysMock.mockReturnValue([])
+      const localProvider = createProviderStub(async () => [
+        { id: 'w1@@live-1', cwd: '/tmp/w1', title: 'shell' }
+      ])
+      let shutdownFinished = false
+      ;(localProvider.shutdown as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+        async () =>
+          await new Promise<void>((resolve) => {
+            releaseShutdown = () => {
+              shutdownFinished = true
+              resolve()
+            }
+          })
+      )
+
+      const teardown = settleTeardown(
+        killAllProcessesForWorktree('w1', {
+          localProvider,
+          timeoutMs: 30,
+          requirePhysicalStop: true,
+          allowUnverifiedStop: true
+        })
+      )
+      let returned = false
+      void teardown.then(() => {
+        returned = true
+      })
+      await new Promise((resolve) => setTimeout(resolve, 150))
+
+      expect(shutdownFinished).toBe(false)
+      expect(returned).toBe(false)
+      releaseShutdown()
+      await expect(teardown).resolves.toEqual({
+        runtimeStopped: 0,
+        providerStopped: 0,
+        registryStopped: 0
+      })
+    } finally {
+      releaseShutdown()
+      warn.mockRestore()
+    }
   })
 
   it('lets an explicit force removal proceed past PTYs it could not stop', async () => {

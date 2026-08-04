@@ -84,6 +84,9 @@ const WORKTREE_NATIVE_CONTEXT_MENU_ATTR = 'data-worktree-native-context-menu'
 const CONTEXT_MENU_CLICK_SUPPRESSION_MS = 500
 const DELETE_POSITION_RESTORE_MAX_FRAMES = 180
 const DELETE_POSITION_RESTORE_STABLE_FRAMES = 6
+// Why: the picker is unmounted on close, which would cut PopoverContent's
+// data-[state=closed] exit animation short; hold the subtree for its duration.
+const PARENT_PICKER_EXIT_ANIMATION_MS = 200
 
 // Why: stable empty sentinels let closed menu wrappers subscribe to a referentially
 // stable value instead of the high-churn maps that delete teardown replaces. The
@@ -346,11 +349,13 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     childWorktreeId: string
     anchorElement: HTMLElement
   } | null>(null)
+  const [parentPickerOpen, setParentPickerOpen] = useState(false)
   const pendingParentPickerRef = useRef<{
     childWorktreeId: string
     anchorElement: HTMLElement
   } | null>(null)
   const parentPickerFallbackTimerRef = useRef<number | null>(null)
+  const parentPickerUnmountTimerRef = useRef<number | null>(null)
   const isDeleting = deleteState?.isDeleting ?? false
   const repoMap = useRepoMap()
   const worktreeMap = useWorktreeMap()
@@ -505,6 +510,9 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     () => () => {
       if (parentPickerFallbackTimerRef.current != null) {
         window.clearTimeout(parentPickerFallbackTimerRef.current)
+      }
+      if (parentPickerUnmountTimerRef.current != null) {
+        window.clearTimeout(parentPickerUnmountTimerRef.current)
       }
     },
     []
@@ -684,7 +692,23 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
       window.clearTimeout(parentPickerFallbackTimerRef.current)
       parentPickerFallbackTimerRef.current = null
     }
+    if (parentPickerUnmountTimerRef.current != null) {
+      window.clearTimeout(parentPickerUnmountTimerRef.current)
+      parentPickerUnmountTimerRef.current = null
+    }
     setParentPicker(pendingParentPicker)
+    setParentPickerOpen(true)
+  }, [])
+
+  const handleParentPickerOpenChange = useCallback((open: boolean) => {
+    if (open) {
+      return
+    }
+    setParentPickerOpen(false)
+    parentPickerUnmountTimerRef.current = window.setTimeout(() => {
+      parentPickerUnmountTimerRef.current = null
+      setParentPicker(null)
+    }, PARENT_PICKER_EXIT_ANIMATION_MS)
   }, [])
 
   const handleOpenParentPicker = useCallback(
@@ -1063,16 +1087,18 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
         onOpenChange={setCreateGroupDialogOpen}
         onSubmit={handleSubmitNewProjectGroup}
       />
-      <WorktreeParentPickerPopover
-        open={parentPicker !== null}
-        childWorktreeId={parentPicker?.childWorktreeId ?? null}
-        anchorElement={parentPicker?.anchorElement ?? null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setParentPicker(null)
-          }
-        }}
-      />
+      {/* Why: mounted only while open — one instance of this lives behind every
+          worktree card, and each one subscribes to the worktree and lineage
+          maps just to compute parent candidates it will never show. Closing
+          flips `open` first so the exit animation runs, then unmounts. */}
+      {parentPicker ? (
+        <WorktreeParentPickerPopover
+          open={parentPickerOpen}
+          childWorktreeId={parentPicker.childWorktreeId}
+          anchorElement={parentPicker.anchorElement}
+          onOpenChange={handleParentPickerOpenChange}
+        />
+      ) : null}
     </div>
   )
 })

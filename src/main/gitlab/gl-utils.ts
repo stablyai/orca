@@ -2,7 +2,12 @@ import { gitExecFileAsync, glabExecFileAsync } from '../git/runner'
 import { parseGlabApiResponse, type GlabApiResponse } from './glab-api-response'
 
 export { glabExecFileAsync, gitExecFileAsync }
-export { classifyGlabError, classifyListIssuesError } from './glab-error-classification'
+export {
+  classifyGlabError,
+  classifyJobLogError,
+  classifyListIssuesError,
+  isMissingJobLogError
+} from './glab-error-classification'
 export {
   DEFAULT_GITLAB_HOSTS,
   _getProjectRefCacheSize,

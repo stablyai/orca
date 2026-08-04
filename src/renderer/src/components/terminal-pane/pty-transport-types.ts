@@ -72,6 +72,8 @@ export type PtyConnectResult = {
 }
 
 type PtyCallbacks = {
+  /** Called before an adopted PTY can publish buffered/live bytes. */
+  onReattachDetermined?: () => void
   onConnect?: () => void
   onDisconnect?: () => void
   onData?: (data: string, meta?: PtyDataMeta) => void

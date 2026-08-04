@@ -150,7 +150,9 @@ describe('AddProjectFromFolderDialog', () => {
     renderToStaticMarkup(<AddProjectFromFolderDialog />)
     await clickAddProject()
 
-    expect(mocks.state.addRepoPath).toHaveBeenCalledWith('/projects/child')
+    expect(mocks.state.addRepoPath).toHaveBeenCalledWith('/projects/child', 'git', {
+      runtimeEnvironmentId: null
+    })
     expect(mocks.state.fetchWorktrees).toHaveBeenCalledWith(repo.id, {
       requireAuthoritative: true,
       executionHostId: 'local'
@@ -179,11 +181,42 @@ describe('AddProjectFromFolderDialog', () => {
     renderToStaticMarkup(<AddProjectFromFolderDialog />)
     await clickAddProject()
 
-    expect(mocks.state.addRepoPath).toHaveBeenCalledWith('/projects/child')
+    expect(mocks.state.addRepoPath).toHaveBeenCalledWith('/projects/child', 'git', {
+      runtimeEnvironmentId: null
+    })
     expect(mocks.state.openModal).toHaveBeenCalledWith('confirm-non-git-folder', {
       folderPath: '/projects/child'
     })
     expect(mocks.state.fetchWorktrees).not.toHaveBeenCalled()
+  })
+
+  it("routes a runtime project's subfolder and completion to the owning runtime", async () => {
+    const repo = makeRepo({ id: 'runtime-repo', executionHostId: 'runtime:runtime-a' })
+    mocks.state.modalData = {
+      folderPath: '/srv/projects/child',
+      runtimeEnvironmentId: 'runtime-a'
+    }
+    mocks.state.addRepoPath.mockResolvedValue(repo)
+    const { default: AddProjectFromFolderDialog } = await import('./AddProjectFromFolderDialog')
+
+    renderToStaticMarkup(<AddProjectFromFolderDialog />)
+    await clickAddProject()
+
+    expect(mocks.state.addRepoPath).toHaveBeenCalledWith('/srv/projects/child', 'git', {
+      runtimeEnvironmentId: 'runtime-a'
+    })
+    expect(mocks.state.fetchWorktrees).toHaveBeenCalledWith(repo.id, {
+      requireAuthoritative: true,
+      executionHostId: 'runtime:runtime-a'
+    })
+    expect(mocks.finishProjectAddWithDefaultCheckout).toHaveBeenCalledWith({
+      repoId: repo.id,
+      source: 'runtime_server_path',
+      selectedPath: '/srv/projects/child',
+      executionHostId: 'runtime:runtime-a',
+      closeModal: mocks.state.closeModal,
+      setHideDefaultBranchWorkspace: mocks.state.setHideDefaultBranchWorkspace
+    })
   })
 
   it('adds an SSH Git folder through the remote repo import path', async () => {

@@ -84,6 +84,7 @@ function renderChecksList(
   props: Partial<{
     worktreeId: string
     detailsStickySurface: 'sidebar' | 'card'
+    checks: PRCheckDetail[]
     onLoadCheckDetails: (check: PRCheckDetail) => Promise<PRCheckRunDetails | null>
   }> = {}
 ): void {
@@ -91,7 +92,7 @@ function renderChecksList(
     root.render(
       <TooltipProvider>
         <ChecksList
-          checks={[failingCheck]}
+          checks={props.checks ?? [failingCheck]}
           checksLoading={false}
           checkDetailsContextKey="repo:42"
           worktreeId={props.worktreeId}
@@ -227,5 +228,150 @@ describe('ChecksList expanded check details', () => {
 
     expect(container.textContent).toContain('manual action on GitHub')
     expect(container.textContent).not.toContain('No inline details are available')
+  })
+
+  it('renders the log excerpt inline instead of deferring it to the full-details tab', async () => {
+    renderChecksList({ worktreeId: 'wt-child-1' })
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).toContain('Error: assertion failed')
+    expect(container.textContent).not.toContain('Log tail available in full details')
+  })
+
+  // Regression for #7732: manual/created GitLab jobs carry no web_url and no GitHub
+  // handles, so the panel used to short-circuit before ever asking for their log.
+  it('loads details for a GitLab job that only carries a job id', async () => {
+    const gitLabCheck: PRCheckDetail = {
+      name: 'deploy: production',
+      status: 'completed',
+      conclusion: 'failure',
+      url: null,
+      gitlabJobId: 987654
+    }
+    const onLoadCheckDetails = vi.fn(async () => ({
+      ...checkDetails,
+      name: gitLabCheck.name,
+      jobs: [{ ...checkDetails.jobs[0]!, id: 987654, logTail: 'ERROR: Job failed: exit code 1' }]
+    }))
+
+    renderChecksList({ worktreeId: 'wt-child-1', checks: [gitLabCheck], onLoadCheckDetails })
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(onLoadCheckDetails).toHaveBeenCalledWith(gitLabCheck)
+    expect(container.textContent).toContain('ERROR: Job failed: exit code 1')
+    expect(container.textContent).not.toContain('No inline details are available')
+    expect(container.querySelector('.sticky.top-0')?.textContent).toContain('View full logs')
+  })
+
+  // GitLab trace fetches fail for reasons GitHub's never do (auth, 404, self-hosted
+  // host resolution) and the panel has no retry button, so a transient failure must
+  // not pin its error on the row for the rest of the session.
+  it('retries a failed detail load once the check state moves on', async () => {
+    const runningCheck: PRCheckDetail = {
+      name: 'test: unit',
+      status: 'in_progress',
+      conclusion: 'failure',
+      url: null,
+      gitlabJobId: 5150
+    }
+    const onLoadCheckDetails = vi
+      .fn<(check: PRCheckDetail) => Promise<PRCheckRunDetails | null>>()
+      .mockRejectedValueOnce(new Error('401 Unauthorized'))
+      .mockResolvedValueOnce({
+        ...checkDetails,
+        name: runningCheck.name,
+        status: 'completed',
+        conclusion: 'failure',
+        jobs: [{ ...checkDetails.jobs[0]!, id: 5150, logTail: 'ERROR: Job failed: exit code 1' }]
+      })
+
+    renderChecksList({ worktreeId: 'wt-child-1', checks: [runningCheck], onLoadCheckDetails })
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).toContain('401 Unauthorized')
+    expect(onLoadCheckDetails).toHaveBeenCalledTimes(1)
+
+    const finishedCheck: PRCheckDetail = { ...runningCheck, status: 'completed' }
+    renderChecksList({ worktreeId: 'wt-child-1', checks: [finishedCheck], onLoadCheckDetails })
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(onLoadCheckDetails).toHaveBeenCalledTimes(2)
+    expect(container.textContent).not.toContain('401 Unauthorized')
+    expect(container.textContent).toContain('ERROR: Job failed: exit code 1')
+  })
+
+  // A running GitLab job has no trace yet, so the first load legitimately resolves to
+  // null — without re-arming, the row stays "no inline details" after the job finishes.
+  it('retries a detail load that resolved to null once the check state moves on', async () => {
+    const runningCheck: PRCheckDetail = {
+      name: 'test: unit',
+      status: 'in_progress',
+      conclusion: 'failure',
+      url: null,
+      gitlabJobId: 5150
+    }
+    const onLoadCheckDetails = vi
+      .fn<(check: PRCheckDetail) => Promise<PRCheckRunDetails | null>>()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        ...checkDetails,
+        name: runningCheck.name,
+        jobs: [{ ...checkDetails.jobs[0]!, id: 5150, logTail: 'ERROR: Job failed: exit code 1' }]
+      })
+
+    renderChecksList({ worktreeId: 'wt-child-1', checks: [runningCheck], onLoadCheckDetails })
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(onLoadCheckDetails).toHaveBeenCalledTimes(1)
+    expect(container.textContent).toContain('No inline details are available')
+
+    const finishedCheck: PRCheckDetail = { ...runningCheck, status: 'completed' }
+    renderChecksList({ worktreeId: 'wt-child-1', checks: [finishedCheck], onLoadCheckDetails })
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(onLoadCheckDetails).toHaveBeenCalledTimes(2)
+    expect(container.textContent).not.toContain('No inline details are available')
+    expect(container.textContent).toContain('ERROR: Job failed: exit code 1')
+  })
+
+  it('keeps a failed detail load pinned while the check state is unchanged', async () => {
+    const onLoadCheckDetails = vi
+      .fn<(check: PRCheckDetail) => Promise<PRCheckRunDetails | null>>()
+      .mockRejectedValue(new Error('401 Unauthorized'))
+    const gitLabCheck: PRCheckDetail = {
+      name: 'test: unit',
+      status: 'completed',
+      conclusion: 'failure',
+      url: null,
+      gitlabJobId: 5150
+    }
+
+    renderChecksList({ worktreeId: 'wt-child-1', checks: [gitLabCheck], onLoadCheckDetails })
+    await act(async () => {
+      await Promise.resolve()
+    })
+    // Re-render with an equal-but-new row array, as every 30s poll tick does.
+    renderChecksList({ worktreeId: 'wt-child-1', checks: [{ ...gitLabCheck }], onLoadCheckDetails })
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    // Why: re-arming on row identity alone would refetch on every poll tick.
+    expect(onLoadCheckDetails).toHaveBeenCalledTimes(1)
+    expect(container.textContent).toContain('401 Unauthorized')
   })
 })
