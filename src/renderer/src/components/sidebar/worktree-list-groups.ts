@@ -63,7 +63,8 @@ export type PinnedWorktreeDisplayPolicy = 'single-location' | 'duplicate-in-grou
 export function getIssueGroupInfo(
   w: Worktree,
   issueCache?: Record<string, { data?: { title?: string | null } | null }> | null,
-  repoMap?: Map<string, Repo>
+  repoMap?: Map<string, Repo>,
+  settings?: AppState['settings']
 ): { key: string; label: string } {
   const item = w.linkedWorkItem
   const rawId =
@@ -86,7 +87,7 @@ export function getIssueGroupInfo(
           repo.path,
           repo.id,
           w.linkedIssue,
-          undefined,
+          settings,
           repo.connectionId,
           repo.executionHostId
         )
@@ -1198,7 +1199,7 @@ export function buildRows(
       label =
         workspaceStatuses.find((status) => status.id === workspaceStatus)?.label ?? workspaceStatus
     } else if (groupBy === 'issue') {
-      const issueGroup = getIssueGroupInfo(w, issueCache, repoMap)
+      const issueGroup = getIssueGroupInfo(w, issueCache, repoMap, settings)
       key = issueGroup.key
       label = issueGroup.label
     } else {
