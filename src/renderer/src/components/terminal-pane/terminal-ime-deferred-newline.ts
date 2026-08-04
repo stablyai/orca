@@ -1,7 +1,8 @@
 import {
   capturePendingTerminalImeCompositionSessions,
   hasPendingTerminalImeComposition,
-  XTERM_COMPOSITION_SESSION_END_EVENT
+  XTERM_COMPOSITION_SESSION_END_EVENT,
+  XTERM_COMPOSITION_SESSION_START_EVENT
 } from './terminal-ime-composition-route'
 
 export const TERMINAL_IME_DEFERRED_NEWLINE_FALLBACK_MS = 200
@@ -29,6 +30,7 @@ export function sendTerminalInputAfterComposition(
   )
   let done = false
   let idleMs = 0
+  let laterSessionStarted = false
   const pendingCompositionSessions = capturePendingTerminalImeCompositionSessions(terminalElement)
   const hasCapturedPendingComposition = (): boolean =>
     hasPendingTerminalImeComposition(terminalElement, pendingCompositionSessions)
@@ -40,6 +42,10 @@ export function sendTerminalInputAfterComposition(
     done = true
     terminalElement.removeEventListener('compositionend', onCompositionEnd)
     terminalElement.removeEventListener('compositionupdate', onCompositionUpdate)
+    terminalElement.removeEventListener(
+      XTERM_COMPOSITION_SESSION_START_EVENT,
+      onCompositionSessionStart
+    )
     terminalElement.removeEventListener(
       XTERM_COMPOSITION_SESSION_END_EVENT,
       onCompositionSessionEnd
@@ -55,11 +61,16 @@ export function sendTerminalInputAfterComposition(
     }
   }
   const onCompositionEnd = (): void => finishAfterPendingComposition()
+  const onCompositionSessionStart = (): void => {
+    laterSessionStarted = true
+  }
   const onCompositionSessionEnd = (): void => finishAfterPendingComposition()
-  // Each preedit change proves the composition is still progressing, so the idle
-  // ceiling only ever expires on a composition that is genuinely stuck.
+  // Only preedit changes before a later xterm session starts belong to this snapshot.
   let sawRecentUpdate = false
   const onCompositionUpdate = (): void => {
+    if (laterSessionStarted) {
+      return
+    }
     if (pendingCompositionSessions.size > 0 && !hasCapturedPendingComposition()) {
       return
     }
@@ -68,6 +79,7 @@ export function sendTerminalInputAfterComposition(
   }
   terminalElement.addEventListener('compositionend', onCompositionEnd)
   terminalElement.addEventListener('compositionupdate', onCompositionUpdate)
+  terminalElement.addEventListener(XTERM_COMPOSITION_SESSION_START_EVENT, onCompositionSessionStart)
   terminalElement.addEventListener(XTERM_COMPOSITION_SESSION_END_EVENT, onCompositionSessionEnd)
 
   // Re-arm rather than sending: firing mid-composition splits the preedit with a newline.

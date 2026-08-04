@@ -117,6 +117,32 @@ describe('sendTerminalInputAfterComposition', () => {
     route.dispose()
   })
 
+  it('does not let updates from a later session refresh a captured session', () => {
+    const el = document.createElement('div')
+    const send = vi.fn()
+    const transport = { getPtyId: () => 'pty-1' } as unknown as PtyTransport
+    const route = installTerminalImeCompositionRoute({
+      terminalElement: el,
+      terminal: { input: vi.fn() },
+      capturedTransport: transport,
+      getCurrentTransport: () => transport
+    })
+    const sessionEvent = (type: string, id: number) =>
+      new CustomEvent(type, { detail: { id, data: `commit-${id}` } })
+
+    el.dispatchEvent(sessionEvent(XTERM_COMPOSITION_SESSION_START_EVENT, 1))
+    sendTerminalInputAfterComposition(el, send, { fallbackMs: 50, maxIdleMs: 200 })
+    el.dispatchEvent(sessionEvent(XTERM_COMPOSITION_SESSION_START_EVENT, 2))
+    for (let tick = 0; tick < 10; tick += 1) {
+      vi.advanceTimersByTime(30)
+      el.dispatchEvent(new Event('compositionupdate'))
+    }
+
+    expect(send).toHaveBeenCalledTimes(1)
+
+    route.dispose()
+  })
+
   it('sends only once and drops the listener after firing', () => {
     const el = document.createElement('div')
     const send = vi.fn()
