@@ -36,6 +36,7 @@ let persistedWindowsPathCache:
     }
   | undefined
 let pendingPersistedWindowsPathRefresh: Promise<string[]> | undefined
+let persistedWindowsPathCacheGeneration = 0
 
 function parseRegistryPathValue(output: string, valueName: string): string | null {
   const valuePattern = new RegExp(`^\\s*${valueName}\\s+REG_\\w+\\s+(.*)$`, 'i')
@@ -206,6 +207,7 @@ export async function readPersistedWindowsPathSegmentsAsync(
   const env = options.env ?? process.env
   const pathDelimiter = getPathDelimiter(platform)
   const executable = getRegExePath(env)
+  const cacheGeneration = persistedWindowsPathCacheGeneration
   const refresh = Promise.all(
     WINDOWS_PATH_REGISTRY_KEYS.map((registryValue) =>
       readRegistryPathAsync(run, executable, registryValue, env, pathDelimiter)
@@ -213,6 +215,9 @@ export async function readPersistedWindowsPathSegmentsAsync(
   ).then((reads) => {
     const segments = reads.flatMap((read) => read.segments)
     if (!useProductionCache) {
+      return segments
+    }
+    if (cacheGeneration !== persistedWindowsPathCacheGeneration) {
       return segments
     }
     return cachePersistedWindowsPathSegments(segments, reads.filter((read) => read.failed).length)
@@ -232,6 +237,11 @@ export async function readPersistedWindowsPathSegmentsAsync(
 }
 
 export function __resetPersistedWindowsPathCacheForTests(): void {
+  invalidatePersistedWindowsPathCache()
+}
+
+export function invalidatePersistedWindowsPathCache(): void {
+  persistedWindowsPathCacheGeneration += 1
   persistedWindowsPathCache = undefined
   pendingPersistedWindowsPathRefresh = undefined
 }

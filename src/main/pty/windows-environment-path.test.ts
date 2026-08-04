@@ -12,6 +12,7 @@ vi.mock('node:child_process', () => ({
 
 import {
   __resetPersistedWindowsPathCacheForTests,
+  invalidatePersistedWindowsPathCache,
   mergePersistedWindowsPath,
   mergePersistedWindowsPathAsync,
   readPersistedWindowsPathSegments,
@@ -103,6 +104,31 @@ describe('readPersistedWindowsPathSegments', () => {
         'C:\\User',
         'C:\\Program Files\\GitHub CLI'
       ])
+      expect(defaultExecFileSyncMock).toHaveBeenCalledTimes(4)
+    } finally {
+      __resetPersistedWindowsPathCacheForTests()
+      defaultExecFileSyncMock.mockReset()
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+  })
+
+  it('invalidates the cache after Windows reports an environment change', () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    defaultExecFileSyncMock
+      .mockReturnValueOnce('    Path    REG_SZ    C:\\OldMachine\r\n')
+      .mockReturnValueOnce('    Path    REG_SZ    C:\\OldUser\r\n')
+      .mockReturnValueOnce('    Path    REG_SZ    C:\\NewMachine\r\n')
+      .mockReturnValueOnce('    Path    REG_SZ    C:\\NewUser\r\n')
+    __resetPersistedWindowsPathCacheForTests()
+
+    try {
+      expect(readPersistedWindowsPathSegments()).toEqual(['C:\\OldMachine', 'C:\\OldUser'])
+      expect(readPersistedWindowsPathSegments()).toEqual(['C:\\OldMachine', 'C:\\OldUser'])
+
+      invalidatePersistedWindowsPathCache()
+
+      expect(readPersistedWindowsPathSegments()).toEqual(['C:\\NewMachine', 'C:\\NewUser'])
       expect(defaultExecFileSyncMock).toHaveBeenCalledTimes(4)
     } finally {
       __resetPersistedWindowsPathCacheForTests()
@@ -234,6 +260,37 @@ describe('readPersistedWindowsPathSegments', () => {
       ])
       expect(defaultExecFileMock).toHaveBeenCalledTimes(4)
       expect(defaultExecFileMock.mock.calls[2]?.[2]).toMatchObject({ timeout: 5_000 })
+    } finally {
+      __resetPersistedWindowsPathCacheForTests()
+      defaultExecFileMock.mockReset()
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+  })
+
+  it('does not let an invalidated asynchronous read repopulate the cache', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const callbacks: ExecCallback[] = []
+    defaultExecFileMock.mockImplementation(
+      (_file: string, _args: string[], _options: unknown, callback: ExecCallback) => {
+        callbacks.push(callback)
+        return {} as never
+      }
+    )
+    __resetPersistedWindowsPathCacheForTests()
+
+    try {
+      const staleRead = readPersistedWindowsPathSegmentsAsync()
+      invalidatePersistedWindowsPathCache()
+      callbacks[0]?.(null, '    Path    REG_SZ    C:\\OldMachine\r\n', '')
+      callbacks[1]?.(null, '    Path    REG_SZ    C:\\OldUser\r\n', '')
+      await expect(staleRead).resolves.toEqual(['C:\\OldMachine', 'C:\\OldUser'])
+
+      const freshRead = readPersistedWindowsPathSegmentsAsync()
+      callbacks[2]?.(null, '    Path    REG_SZ    C:\\NewMachine\r\n', '')
+      callbacks[3]?.(null, '    Path    REG_SZ    C:\\NewUser\r\n', '')
+      await expect(freshRead).resolves.toEqual(['C:\\NewMachine', 'C:\\NewUser'])
+      expect(defaultExecFileMock).toHaveBeenCalledTimes(4)
     } finally {
       __resetPersistedWindowsPathCacheForTests()
       defaultExecFileMock.mockReset()
