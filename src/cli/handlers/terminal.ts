@@ -37,11 +37,25 @@ import {
   getRequiredWorktreeSelector,
   getTerminalHandle
 } from '../selectors'
+import { readStdinPayload } from '../stdin-payload'
 
 // Why: terminal wait legitimately needs to outlive the CLI's default RPC
 // timeout. Even without an explicit server timeout, the client must allow
 // long waits instead of failing at the generic 15s transport cap.
 const DEFAULT_TERMINAL_WAIT_RPC_TIMEOUT_MS = 5 * 60 * 1000
+
+// Why: a send payload can carry characters argv cannot transport on every host, so the text may
+// arrive on stdin instead. Empty stdin stays a legal payload here — `--text-stdin --enter` is a
+// deliberate bare newline, unlike computer-use where empty text is a mistake.
+async function getSendText(flags: Map<string, string | boolean>): Promise<string | undefined> {
+  if (!flags.has('text-stdin')) {
+    return getOptionalStringFlag(flags, 'text')
+  }
+  if (flags.has('text')) {
+    throw new RuntimeClientError('invalid_argument', 'Use either --text or --text-stdin, not both')
+  }
+  return readStdinPayload()
+}
 
 const terminalFocusHandler: CommandHandler = async ({ flags, client, cwd, json }) => {
   const result = await client.call<{ focus: RuntimeTerminalFocus }>('terminal.focus', {
@@ -82,9 +96,10 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatTerminalRead)
   },
   'terminal send': async ({ flags, client, cwd, json }) => {
+    const text = await getSendText(flags)
     const result = await client.call<{ send: RuntimeTerminalSend }>('terminal.send', {
       terminal: await getTerminalHandle(flags, cwd, client),
-      text: getOptionalStringFlag(flags, 'text'),
+      text,
       enter: flags.get('enter') === true,
       interrupt: flags.get('interrupt') === true,
       client: { id: 'orca-cli', type: 'desktop' }

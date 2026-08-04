@@ -209,8 +209,15 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     path: ['terminal', 'send'],
     summary: 'Send input to a live terminal',
     usage:
-      'orca terminal send [--terminal <handle>] [--text <text>] [--enter] [--interrupt] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'text', 'enter', 'interrupt']
+      'orca terminal send [--terminal <handle>] [--text <text> | --text-stdin] [--enter] [--interrupt] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'text', 'text-stdin', 'enter', 'interrupt'],
+    notes: [
+      'Prefer --text-stdin when the payload may contain double quotes: on WSL the CLI reaches Orca through a PowerShell bridge that cannot transport them in argv.'
+    ],
+    examples: [
+      'orca terminal send --terminal term_abc123 --text "npm test" --enter --json',
+      'printf %s "$NOTE" | orca terminal send --terminal term_abc123 --text-stdin --enter --json'
+    ]
   },
   {
     path: ['terminal', 'wait'],
