@@ -81,7 +81,9 @@ class FakeRelaySession extends FakeSession implements MobileRelayRpcSession {
   ) {
     super(state)
   }
-  getLeaseExpiresAt = () => Date.now() + 120_000
+  // Mirrors production: leaseExpiresAt is the cell's short attach deadline.
+  getLeaseExpiresAt = () => Date.now() + 10_000
+  getResumeExpiresAt = () => Date.now() + 120_000
   getResumeConfirmation = () => null
   getFailure = () => this.failure
 }
@@ -319,6 +321,32 @@ describe('relay runtime recovery without direct connectivity', () => {
       expect.objectContaining({ version: 1 }),
       expect.any(String)
     )
+    expect(logical.getActivePath()).toBe('relay')
+    supervisor.stop()
+  })
+
+  it('does not churn relay sessions off the cell attach-reservation deadline', async () => {
+    // Why: the relay-hello's leaseExpiresAt is a ~10s attach deadline. Keying
+    // rotation off it replaced the session every second, killing any RPC
+    // slower than the cycle (the field symptom: "Worktree list unavailable").
+    class LongResumeRelaySession extends FakeRelaySession {
+      override getLeaseExpiresAt = () => Date.now() + 10_000
+      override getResumeExpiresAt = () => Date.now() + 7 * 24 * 3_600_000
+    }
+    const logical = new FakeLogicalClient('disconnected', 'lan')
+    const openRelay = vi.fn(() => new LongResumeRelaySession('connected'))
+    // Direct stays unreachable, as in the field — return probes must not
+    // confuse the churn measurement by migrating back to direct.
+    const openDirect = vi.fn(() => new FakeSession('disconnected'))
+    const deps = dependencies({ openRelay, openDirect })
+    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+
+    await supervisor.start()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(openRelay).toHaveBeenCalledOnce()
+
+    await vi.advanceTimersByTimeAsync(5 * 60_000)
+    expect(openRelay).toHaveBeenCalledOnce()
     expect(logical.getActivePath()).toBe('relay')
     supervisor.stop()
   })

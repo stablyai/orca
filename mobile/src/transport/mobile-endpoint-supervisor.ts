@@ -256,8 +256,13 @@ export class MobileEndpointSupervisor {
         await this.dependencies.writeBundle(this.bundle).catch(() => {})
       }
       // Why: async persistence can finish after stop/background; never recreate a stale timer.
+      // Why: rotate against the resume credential's expiry, never the hello's
+      // leaseExpiresAt — that field is the cell's ~10s attach-reservation
+      // deadline, and using it forced a session replacement every second.
       this.leaseRotation.scheduleFromLease(
-        this.stopped || !this.foreground ? null : session.getLeaseExpiresAt()
+        this.stopped || !this.foreground
+          ? null
+          : (confirmation?.resumeExpiresAt ?? session.getResumeExpiresAt())
       )
       this.directProbe.schedule()
       return { ok: true }

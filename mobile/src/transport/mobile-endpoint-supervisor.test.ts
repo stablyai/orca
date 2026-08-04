@@ -57,13 +57,16 @@ class FakeRelaySession extends FakeSession implements MobileRelayRpcSession {
     super(state)
   }
   getLeaseExpiresAt = () => this.lease
+  getResumeExpiresAt = () => this.lease
   getResumeConfirmation = () => ({
     v: 1 as const,
     reqId: 'confirm-1',
     currentVersion: 2,
     acceptedAs: 'current' as const,
     renewed: true,
-    resumeExpiresAt: Date.now() + 300_000
+    // Why: matches the lease param so rotation timing in these tests is
+    // unchanged by the resume-expiry rotation fix.
+    resumeExpiresAt: this.lease
   })
   getFailure = () => this.failure
 }

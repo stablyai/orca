@@ -20,6 +20,9 @@ type PendingRequest = {
 
 export type MobileRelayRpcSession = RpcClient & {
   getLeaseExpiresAt(): number | null
+  // Why: leaseExpiresAt is the cell's attach-reservation deadline (~10s), NOT a
+  // session lease — rotation must key off the resume credential's expiry.
+  getResumeExpiresAt(): number | null
   getResumeConfirmation(): DeviceResumeConfirmed | null
   getFailure(): Error | null
 }
@@ -41,6 +44,7 @@ export function connectMobileRelayRpcSession(args: {
   let requestCounter = 0
   let lastConnectedAt: number | null = null
   let leaseExpiresAt: number | null = null
+  let resumeExpiresAt: number | null = null
   let resumeConfirmation: DeviceResumeConfirmed | null = null
   let failure: Error | null = null
   let closed = false
@@ -66,6 +70,7 @@ export function connectMobileRelayRpcSession(args: {
         return
       }
       leaseExpiresAt = hello.leaseExpiresAt
+      resumeExpiresAt = hello.resumeExpiresAt
       publishState('handshaking')
     },
     onAuthenticated: () => void confirmResume(),
@@ -110,6 +115,7 @@ export function connectMobileRelayRpcSession(args: {
       publishState('disconnected')
     },
     getLeaseExpiresAt: () => leaseExpiresAt,
+    getResumeExpiresAt: () => resumeExpiresAt,
     getResumeConfirmation: () => resumeConfirmation,
     getFailure: () => failure
   }
@@ -131,6 +137,7 @@ export function connectMobileRelayRpcSession(args: {
         throw new Error('relay resume confirmation missing')
       }
       resumeConfirmation = result.resumeConfirmation
+      resumeExpiresAt = result.resumeConfirmation.resumeExpiresAt
       lastConnectedAt = Date.now()
       publishState('connected')
     } catch (error) {
