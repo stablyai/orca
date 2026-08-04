@@ -1,7 +1,10 @@
-import type { AgentType } from '../../../shared/native-chat-types'
+import type { AgentType, NativeChatMessage } from '../../../shared/native-chat-types'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { OrchestrationError } from './orchestration-error'
-import { redactWorkerTerminalLines } from './worker-transcript-payload'
+import {
+  MAX_WORKER_TRANSCRIPT_MESSAGE_LIMIT,
+  redactWorkerTerminalLines
+} from './worker-transcript-payload'
 import { readWorkerTranscript } from './worker-transcript-read'
 
 // Bound the durable copy of raw terminal output; the tail end is the evidence that matters.
@@ -17,6 +20,15 @@ export type WorkerTranscriptPinArchive = {
   endOffset?: number
 }
 
+export type WorkerTranscriptSnapshotArchive = {
+  version: 2
+  agent: AgentType
+  processIncarnation: string
+  messages: NativeChatMessage[]
+  limited: boolean
+  warnings: string[]
+}
+
 export type WorkerTerminalTailArchive = {
   lines: string[]
   truncated: boolean
@@ -25,7 +37,11 @@ export type WorkerTerminalTailArchive = {
 }
 
 export type WorkerOutputArchiveCapture =
-  | { kind: 'transcript_pin'; content: WorkerTranscriptPinArchive; status: 'captured' }
+  | {
+      kind: 'transcript_pin'
+      content: WorkerTranscriptSnapshotArchive
+      status: 'captured'
+    }
   | { kind: 'terminal_tail'; content: WorkerTerminalTailArchive; status: 'captured' | 'empty' }
 
 // Freezes an inspectable output source before the live PTY is closed. Prefers the exact
@@ -39,24 +55,23 @@ export async function captureWorkerOutputArchive(args: {
 }): Promise<WorkerOutputArchiveCapture> {
   const session = args.runtime.getExactWorkerProviderSession(args.terminalHandle, args.attachedAtMs)
   if (session) {
-    const probe = await readWorkerTranscript({
+    const snapshot = await readWorkerTranscript({
       agent: session.agent,
       sessionId: session.providerSession.id,
       transcriptPath: session.providerSession.transcriptPath,
-      limit: 1
+      limit: MAX_WORKER_TRANSCRIPT_MESSAGE_LIMIT
     }).catch(() => null)
-    if (probe?.ok) {
+    if (snapshot?.ok && snapshot.messages.length > 0) {
       return {
         kind: 'transcript_pin',
         status: 'captured',
         content: {
+          version: 2,
           agent: session.agent,
-          providerSessionKey: session.providerSession.key,
-          providerSessionId: session.providerSession.id,
-          transcriptPath: session.providerSession.transcriptPath ?? null,
           processIncarnation: session.processIncarnation,
-          observedAfter: args.attachedAtMs,
-          endOffset: probe.nextOffset
+          messages: snapshot.messages,
+          limited: snapshot.limited,
+          warnings: snapshot.warnings
         }
       }
     }

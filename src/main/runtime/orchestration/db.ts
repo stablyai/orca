@@ -44,9 +44,9 @@ import { OrchestrationError } from './orchestration-error'
 import { resolveOrchestrationMigrationStartVersion } from './orchestration-schema-version-skew'
 import {
   deriveWorkerTerminalListState,
-  residualResourcesClaimAgentTerminal,
   type WorkerTerminalResourceRow,
   type WorkerTerminalArchiveRow,
+  type WorkerTerminalArchiveStatus,
   type WorkerTerminalListState,
   type WorkerTerminalOwnershipState,
   type WorkerTerminalRetainedReason
@@ -428,6 +428,8 @@ export class OrchestrationDb {
         ON worker_terminal_resources(terminal_handle);
       CREATE INDEX IF NOT EXISTS idx_worker_terminal_resources_pane
         ON worker_terminal_resources(pane_key);
+      CREATE INDEX IF NOT EXISTS idx_worker_terminal_resources_identity
+        ON worker_terminal_resources(process_incarnation, host_scope);
       CREATE INDEX IF NOT EXISTS idx_worker_terminal_resources_release
         ON worker_terminal_resources(release_state);
 
@@ -4191,12 +4193,17 @@ export class OrchestrationDb {
           const transferable = this.findTransferableWorkerTerminalResource({
             terminalHandle: params.handle,
             paneKey: params.paneKey,
-            processIncarnation: params.processIncarnation
+            processIncarnation: params.processIncarnation,
+            hostScope: params.hostScope ?? null
           })
           if (transferable) {
             this.transferWorkerTerminalResourceStatement({
               resourceId: transferable.id,
-              toDispatchId: params.dispatchId
+              toDispatchId: params.dispatchId,
+              terminalHandle: params.handle,
+              paneKey: params.paneKey,
+              processIncarnation: params.processIncarnation,
+              hostScope: params.hostScope ?? null
             })
           } else {
             this.createWorkerTerminalResourceStatement({
@@ -5516,13 +5523,11 @@ export class OrchestrationDb {
 
   // --- Worker terminal resources (schema v23) ---------------------------------------------------
 
-  // Why: legacy rows get an owned resource only when exactly one dispatch claims the exact
-  // terminal with same-operation creation evidence; anything shared or identity-less is exposed
-  // as retained for explicit inspection instead of becoming auto-closable.
+  // Historical renderer input and reuse cannot be proven, so pre-v23 terminals stay external.
   private backfillWorkerTerminalResources(): void {
     const rows = this.db
       .prepare(
-        `SELECT w.dispatch_id, w.worktree_id, w.agent_terminal_handle, w.residual_resources,
+        `SELECT w.dispatch_id, w.worktree_id, w.agent_terminal_handle,
                 d.assignee_pane_key, d.process_incarnation
            FROM worker_dispatches w
            JOIN dispatch_contexts d ON d.id = w.dispatch_id
@@ -5536,45 +5541,28 @@ export class OrchestrationDb {
       dispatch_id: string
       worktree_id: string | null
       agent_terminal_handle: string
-      residual_resources: string
       assignee_pane_key: string | null
       process_incarnation: string | null
     }[]
-    const claimants = new Map<string, typeof rows>()
-    for (const row of rows) {
-      if (!residualResourcesClaimAgentTerminal(row.residual_resources, row.agent_terminal_handle)) {
-        continue
-      }
-      const existing = claimants.get(row.agent_terminal_handle)
-      if (existing) {
-        existing.push(row)
-      } else {
-        claimants.set(row.agent_terminal_handle, [row])
-      }
-    }
     const insert = this.db.prepare(
       `INSERT INTO worker_terminal_resources (
          id, origin_dispatch_id, owner_dispatch_id, worktree_id, terminal_handle,
          pane_key, process_incarnation, ownership_state, release_state, retained_reason
        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
-    for (const [handle, claims] of claimants) {
-      for (const row of claims) {
-        const unambiguous =
-          claims.length === 1 && Boolean(row.assignee_pane_key && row.process_incarnation)
-        insert.run(
-          generateId('wtr'),
-          row.dispatch_id,
-          row.dispatch_id,
-          row.worktree_id,
-          handle,
-          row.assignee_pane_key,
-          row.process_incarnation,
-          unambiguous ? 'owned' : 'external',
-          unambiguous ? 'not_requested' : 'retained',
-          unambiguous ? null : 'legacy_ambiguous'
-        )
-      }
+    for (const row of rows) {
+      insert.run(
+        generateId('wtr'),
+        row.dispatch_id,
+        row.dispatch_id,
+        row.worktree_id,
+        row.agent_terminal_handle,
+        row.assignee_pane_key,
+        row.process_incarnation,
+        'external',
+        'retained',
+        'legacy_ambiguous'
+      )
     }
   }
 
@@ -5641,6 +5629,10 @@ export class OrchestrationDb {
   transferWorkerTerminalResourceStatement(params: {
     resourceId: string
     toDispatchId: string
+    terminalHandle: string
+    paneKey: string
+    processIncarnation: string
+    hostScope: string | null
   }): WorkerTerminalResourceRow {
     const resource = this.getWorkerTerminalResource(params.resourceId)
     if (!resource) {
@@ -5656,10 +5648,19 @@ export class OrchestrationDb {
         `UPDATE worker_terminal_resources
          SET owner_dispatch_id = ?, prior_owner_dispatch_ids = ?, release_state = 'not_requested',
              retained_reason = NULL, release_requested_at = NULL, release_completed_at = NULL,
-             release_error = NULL, updated_at = datetime('now')
+             release_error = NULL, terminal_handle = ?, pane_key = ?, process_incarnation = ?,
+             host_scope = ?, updated_at = datetime('now')
          WHERE id = ? AND ownership_state = 'owned'`
       )
-      .run(params.toDispatchId, JSON.stringify(priorOwners), params.resourceId)
+      .run(
+        params.toDispatchId,
+        JSON.stringify(priorOwners),
+        params.terminalHandle,
+        params.paneKey,
+        params.processIncarnation,
+        params.hostScope,
+        params.resourceId
+      )
     return this.getWorkerTerminalResource(params.resourceId) as WorkerTerminalResourceRow
   }
 
@@ -5668,6 +5669,7 @@ export class OrchestrationDb {
     terminalHandle: string
     paneKey: string | null
     processIncarnation: string | null
+    hostScope: string | null
   }): WorkerTerminalResourceRow | undefined {
     if (!params.paneKey || !params.processIncarnation) {
       return undefined
@@ -5676,17 +5678,60 @@ export class OrchestrationDb {
       .prepare(
         `SELECT r.* FROM worker_terminal_resources r
            JOIN worker_dispatches w ON w.dispatch_id = r.owner_dispatch_id
-          WHERE r.terminal_handle = ? AND r.ownership_state = 'owned'
-            AND r.release_state IN ('not_requested', 'retained')
-            AND w.state IN ('succeeded', 'failed', 'stopped', 'abandoned')`
+          WHERE r.process_incarnation = ? AND r.host_scope IS ?
+            AND r.ownership_state != 'released'`
       )
-      .all(params.terminalHandle) as WorkerTerminalResourceRow[]
-    return candidates.find(
+      .all(params.processIncarnation, params.hostScope) as WorkerTerminalResourceRow[]
+    const exact = candidates.filter(
       (candidate) =>
         candidate.pane_key &&
         params.paneKey &&
         isEquivalentPaneKey(candidate.pane_key, params.paneKey) &&
-        candidate.process_incarnation === params.processIncarnation
+        candidate.process_incarnation === params.processIncarnation &&
+        candidate.host_scope === params.hostScope
+    )
+    if (
+      exact.some((candidate) =>
+        ['requested', 'releasing', 'unknown'].includes(candidate.release_state)
+      )
+    ) {
+      throw new OrchestrationError(
+        'terminal_release_in_progress',
+        `Terminal ${params.terminalHandle} has a release in progress; wait for cleanup or use another terminal.`
+      )
+    }
+    return exact.find(
+      (candidate) =>
+        candidate.ownership_state === 'owned' &&
+        ['not_requested', 'retained'].includes(candidate.release_state) &&
+        ['succeeded', 'failed', 'stopped', 'abandoned'].includes(
+          this.getWorkerDispatch(candidate.owner_dispatch_id)?.state ?? ''
+        )
+    )
+  }
+
+  workerTerminalResourceHasIdentityConflict(resourceId: string): boolean {
+    const resource = this.getWorkerTerminalResource(resourceId)
+    if (!resource?.pane_key || !resource.process_incarnation) {
+      return true
+    }
+    const candidates = this.db
+      .prepare(
+        `SELECT * FROM worker_terminal_resources
+          WHERE process_incarnation = ? AND host_scope IS ?
+            AND id != ? AND ownership_state != 'released'`
+      )
+      .all(
+        resource.process_incarnation,
+        resource.host_scope,
+        resource.id
+      ) as WorkerTerminalResourceRow[]
+    return candidates.some(
+      (candidate) =>
+        candidate.pane_key &&
+        isEquivalentPaneKey(candidate.pane_key, resource.pane_key as string) &&
+        candidate.process_incarnation === resource.process_incarnation &&
+        candidate.host_scope === resource.host_scope
     )
   }
 
@@ -5740,6 +5785,14 @@ export class OrchestrationDb {
         this.db.exec('COMMIT')
         return { disposition: 'retained', resource, reason: 'ownership_transferred' }
       }
+      if (
+        resource.release_state === 'unknown' ||
+        (resource.release_state === 'retained' && resource.retained_reason === 'user_requested')
+      ) {
+        this.db
+          .prepare('DELETE FROM worker_terminal_archives WHERE dispatch_id = ?')
+          .run(dispatchId)
+      }
       this.db
         .prepare(
           `UPDATE worker_terminal_resources
@@ -5764,23 +5817,6 @@ export class OrchestrationDb {
     }
   }
 
-  markWorkerTerminalReleasing(params: {
-    resourceId: string
-    archiveSource: 'transcript' | 'terminal' | null
-    archiveStatus: 'captured' | 'empty' | 'unavailable'
-  }): WorkerTerminalResourceRow {
-    this.db
-      .prepare(
-        `UPDATE worker_terminal_resources
-         SET release_state = 'releasing', archive_source = ?, archive_status = ?,
-             updated_at = datetime('now')
-         WHERE id = ? AND ownership_state = 'owned'
-           AND release_state IN ('requested', 'releasing')`
-      )
-      .run(params.archiveSource, params.archiveStatus, params.resourceId)
-    return this.getWorkerTerminalResource(params.resourceId) as WorkerTerminalResourceRow
-  }
-
   storeWorkerTerminalArchive(params: {
     dispatchId: string
     resourceId: string
@@ -5795,6 +5831,56 @@ export class OrchestrationDb {
            resource_id = excluded.resource_id, kind = excluded.kind, content = excluded.content`
       )
       .run(params.dispatchId, params.resourceId, params.kind, params.content)
+  }
+
+  commitWorkerTerminalArchiveForRelease(params: {
+    dispatchId: string
+    resourceId: string
+    kind?: 'transcript_pin' | 'terminal_tail'
+    content?: string
+    archiveSource: 'transcript' | 'terminal'
+    archiveStatus: Extract<WorkerTerminalArchiveStatus, 'captured' | 'empty'>
+  }): WorkerTerminalResourceRow {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const resource = this.getWorkerTerminalResource(params.resourceId)
+      if (
+        resource?.owner_dispatch_id === params.dispatchId &&
+        resource.ownership_state === 'owned' &&
+        resource.release_state === 'requested'
+      ) {
+        if (params.kind && params.content !== undefined) {
+          this.storeWorkerTerminalArchive({
+            dispatchId: params.dispatchId,
+            resourceId: params.resourceId,
+            kind: params.kind,
+            content: params.content
+          })
+        }
+        const archive = this.getWorkerTerminalArchive(params.dispatchId)
+        if (!archive || archive.resource_id !== params.resourceId) {
+          throw new OrchestrationError(
+            'archive_failed',
+            `Output could not be preserved for Dispatch ${params.dispatchId}; the terminal was retained.`
+          )
+        }
+        this.db
+          .prepare(
+            `UPDATE worker_terminal_resources
+             SET release_state = 'releasing', archive_source = ?, archive_status = ?,
+                 updated_at = datetime('now')
+             WHERE id = ? AND owner_dispatch_id = ? AND ownership_state = 'owned'
+               AND release_state = 'requested'`
+          )
+          .run(params.archiveSource, params.archiveStatus, params.resourceId, params.dispatchId)
+      }
+      const updated = this.getWorkerTerminalResource(params.resourceId) as WorkerTerminalResourceRow
+      this.db.exec('COMMIT')
+      return updated
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
   }
 
   getWorkerTerminalArchive(dispatchId: string): WorkerTerminalArchiveRow | undefined {
@@ -5848,68 +5934,87 @@ export class OrchestrationDb {
     | { disposition: 'already_released'; resource: WorkerTerminalResourceRow }
     | { disposition: 'release_committed'; resource: WorkerTerminalResourceRow }
     | { disposition: 'no_owned_resource'; resource: null } {
-    const resource = this.getWorkerTerminalResourceByOwner(dispatchId)
-    if (!resource) {
-      return { disposition: 'no_owned_resource', resource: null }
-    }
-    if (resource.release_state === 'released') {
-      return { disposition: 'already_released', resource }
-    }
-    this.db
-      .prepare(
-        `UPDATE worker_terminal_resources
-         SET release_state = 'retained', retained_reason = 'user_requested',
-             updated_at = datetime('now')
-         WHERE id = ? AND release_state IN ('not_requested', 'retained', 'requested')`
-      )
-      .run(resource.id)
-    const updated = this.getWorkerTerminalResource(resource.id) as WorkerTerminalResourceRow
-    if (updated.release_state !== 'retained') {
-      return { disposition: 'release_committed', resource: updated }
-    }
-    return {
-      disposition: 'retained',
-      resource: updated
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const resource = this.getWorkerTerminalResourceByOwner(dispatchId)
+      if (!resource) {
+        this.db.exec('COMMIT')
+        return { disposition: 'no_owned_resource', resource: null }
+      }
+      if (resource.release_state === 'released') {
+        this.db.exec('COMMIT')
+        return { disposition: 'already_released', resource }
+      }
+      this.db
+        .prepare(
+          `UPDATE worker_terminal_resources
+           SET release_state = 'retained', retained_reason = 'user_requested',
+               updated_at = datetime('now')
+           WHERE id = ? AND release_state IN ('not_requested', 'retained', 'requested')`
+        )
+        .run(resource.id)
+      const updated = this.getWorkerTerminalResource(resource.id) as WorkerTerminalResourceRow
+      if (updated.release_state !== 'retained') {
+        this.db.exec('COMMIT')
+        return { disposition: 'release_committed', resource: updated }
+      }
+      this.db.prepare('DELETE FROM worker_terminal_archives WHERE dispatch_id = ?').run(dispatchId)
+      this.db.exec('COMMIT')
+      return { disposition: 'retained', resource: updated }
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
     }
   }
 
   // Real user input relinquishes orchestration ownership durably; programmatic prompt delivery,
   // query auto-replies, resize, and output never reach this path.
   markWorkerTerminalUserOwned(paneKey: string): number {
-    const updateExact = this.db.prepare(
-      `UPDATE worker_terminal_resources
-       SET ownership_state = 'user_owned', release_state = 'retained',
-           retained_reason = 'user_takeover', updated_at = datetime('now')
-       WHERE pane_key = ? AND ownership_state = 'owned'
-         AND release_state IN ('not_requested', 'retained', 'requested')`
-    )
-    const exactChanges = Number(updateExact.run(paneKey).changes)
-    if (exactChanges > 0) {
-      return exactChanges
-    }
-    const candidates = this.db
-      .prepare(
-        `SELECT id, pane_key FROM worker_terminal_resources
-          WHERE ownership_state = 'owned'
-            AND release_state IN ('not_requested', 'retained', 'requested')
-            AND pane_key IS NOT NULL`
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const exact = this.db
+        .prepare(
+          `SELECT id, owner_dispatch_id, pane_key FROM worker_terminal_resources
+            WHERE pane_key = ? AND ownership_state = 'owned'
+              AND release_state IN ('not_requested', 'retained', 'requested')`
+        )
+        .all(paneKey) as { id: string; owner_dispatch_id: string; pane_key: string }[]
+      const candidates =
+        exact.length > 0
+          ? exact
+          : (
+              this.db
+                .prepare(
+                  `SELECT id, owner_dispatch_id, pane_key FROM worker_terminal_resources
+                  WHERE ownership_state = 'owned'
+                    AND release_state IN ('not_requested', 'retained', 'requested')
+                    AND pane_key IS NOT NULL`
+                )
+                .all() as { id: string; owner_dispatch_id: string; pane_key: string }[]
+            ).filter((candidate) => isEquivalentPaneKey(candidate.pane_key, paneKey))
+      const update = this.db.prepare(
+        `UPDATE worker_terminal_resources
+         SET ownership_state = 'user_owned', release_state = 'retained',
+             retained_reason = 'user_takeover', updated_at = datetime('now')
+         WHERE id = ? AND ownership_state = 'owned'
+           AND release_state IN ('not_requested', 'retained', 'requested')`
       )
-      .all() as { id: string; pane_key: string }[]
-    const update = this.db.prepare(
-      `UPDATE worker_terminal_resources
-       SET ownership_state = 'user_owned', release_state = 'retained',
-           retained_reason = 'user_takeover',
-           updated_at = datetime('now')
-       WHERE id = ? AND ownership_state = 'owned'
-         AND release_state IN ('not_requested', 'retained', 'requested')`
-    )
-    let changed = 0
-    for (const candidate of candidates) {
-      if (isEquivalentPaneKey(candidate.pane_key, paneKey)) {
-        changed += Number(update.run(candidate.id).changes)
+      let changed = 0
+      for (const candidate of candidates) {
+        const result = Number(update.run(candidate.id).changes)
+        if (result > 0) {
+          this.db
+            .prepare('DELETE FROM worker_terminal_archives WHERE dispatch_id = ?')
+            .run(candidate.owner_dispatch_id)
+          changed += result
+        }
       }
+      this.db.exec('COMMIT')
+      return changed
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
     }
-    return changed
   }
 
   listWorkerTerminalReleaseBacklog(): WorkerTerminalResourceRow[] {
@@ -5949,8 +6054,18 @@ export class OrchestrationDb {
       run_id: string
       dispatch_status: DispatchStatus
     }[]
+    const resources = this.db
+      .prepare(
+        `SELECT r.* FROM worker_terminal_resources r
+           JOIN dispatch_contexts d ON d.id = r.owner_dispatch_id
+          ${params.runId ? 'WHERE d.run_id = ?' : ''}`
+      )
+      .all(...(params.runId ? [params.runId] : [])) as WorkerTerminalResourceRow[]
+    const resourceByOwner = new Map(
+      resources.map((resource) => [resource.owner_dispatch_id, resource])
+    )
     return rows.map((row) => {
-      const resource = this.getWorkerTerminalResourceByOwner(row.dispatch_id) ?? null
+      const resource = resourceByOwner.get(row.dispatch_id) ?? null
       return {
         dispatchId: row.dispatch_id,
         taskId: row.task_id,
@@ -6565,6 +6680,8 @@ export class OrchestrationDb {
       DELETE FROM federation_relay_items;
       DELETE FROM remote_dispatch_attachments;
       DELETE FROM federated_dispatches;
+      DELETE FROM worker_terminal_archives;
+      DELETE FROM worker_terminal_resources;
       DELETE FROM worker_dispatches;
       DELETE FROM dispatch_contexts;
       DELETE FROM tasks;
@@ -6589,6 +6706,8 @@ export class OrchestrationDb {
       DELETE FROM federation_relay_items;
       DELETE FROM remote_dispatch_attachments;
       DELETE FROM federated_dispatches;
+      DELETE FROM worker_terminal_archives;
+      DELETE FROM worker_terminal_resources;
       DELETE FROM worker_dispatches;
       DELETE FROM dispatch_contexts;
       DELETE FROM tasks;

@@ -10,8 +10,10 @@ import type {
 } from '../../orchestration/worker-terminal-ownership'
 import type {
   WorkerTerminalTailArchive,
-  WorkerTranscriptPinArchive
+  WorkerTranscriptPinArchive,
+  WorkerTranscriptSnapshotArchive
 } from '../../orchestration/worker-output-archive'
+import { clampWorkerTranscriptLimit } from '../../orchestration/worker-transcript-payload'
 import {
   createWorkerOutputSourceIdentity,
   decodeWorkerOutputCursor,
@@ -47,7 +49,12 @@ export async function readArchivedWorkerOutput(args: {
         `Dispatch ${args.dispatchId} preserved structured transcript output only; terminal output was released.`
       )
     }
-    return readPinnedTranscript(args, archive)
+    const content = JSON.parse(archive.content) as
+      | WorkerTranscriptPinArchive
+      | WorkerTranscriptSnapshotArchive
+    return isTranscriptSnapshot(content)
+      ? readFrozenTranscript(args, archive, content)
+      : readLegacyPinnedTranscript(args, content)
   }
   if (args.source === 'transcript') {
     throw new OrchestrationError(
@@ -58,11 +65,52 @@ export async function readArchivedWorkerOutput(args: {
   return readArchivedTerminalTail(args, archive)
 }
 
-async function readPinnedTranscript(
+function readFrozenTranscript(
   args: Parameters<typeof readArchivedWorkerOutput>[0],
-  archive: WorkerTerminalArchiveRow
+  archive: WorkerTerminalArchiveRow,
+  snapshot: WorkerTranscriptSnapshotArchive
+): OrchestrationWorkerReadResult {
+  const cursor = decodeWorkerOutputCursor(args.cursor, args.dispatchId)
+  const sourceIdentity = createWorkerOutputSourceIdentity([
+    'released-transcript-snapshot',
+    args.resource.id,
+    snapshot.processIncarnation,
+    archive.created_at
+  ])
+  if (cursor && (cursor.source !== 'transcript' || cursor.sourceIdentity !== sourceIdentity)) {
+    throw sourceChanged()
+  }
+  const start = Math.min(cursor?.position ?? 0, snapshot.messages.length)
+  const end = Math.min(start + clampWorkerTranscriptLimit(args.limit), snapshot.messages.length)
+  const nextCursor = encodeWorkerOutputCursor(args.dispatchId, 'transcript', sourceIdentity, end)
+  return {
+    dispatchId: args.dispatchId,
+    source: 'transcript',
+    sourceIdentity,
+    provider: snapshot.agent,
+    transcript: {
+      messages: snapshot.messages.slice(start, end),
+      nextCursor,
+      limited: end < snapshot.messages.length,
+      returnedMessageCount: end - start
+    },
+    cursor: nextCursor,
+    status: { worker: args.workerState, terminal: 'exited' },
+    fallbackReason: null,
+    warnings: [
+      ...snapshot.warnings,
+      ...(snapshot.limited
+        ? ['Older transcript messages were omitted from the bounded archive.']
+        : [])
+    ],
+    archived: true
+  }
+}
+
+async function readLegacyPinnedTranscript(
+  args: Parameters<typeof readArchivedWorkerOutput>[0],
+  pin: WorkerTranscriptPinArchive
 ): Promise<OrchestrationWorkerReadResult> {
-  const pin = JSON.parse(archive.content) as WorkerTranscriptPinArchive
   const cursor = decodeWorkerOutputCursor(args.cursor, args.dispatchId)
   const sourceIdentity = createWorkerOutputSourceIdentity([
     'released-transcript',
@@ -117,6 +165,12 @@ async function readPinnedTranscript(
     warnings: transcript.warnings,
     archived: true
   }
+}
+
+function isTranscriptSnapshot(
+  content: WorkerTranscriptPinArchive | WorkerTranscriptSnapshotArchive
+): content is WorkerTranscriptSnapshotArchive {
+  return 'version' in content && content.version === 2
 }
 
 function readArchivedTerminalTail(

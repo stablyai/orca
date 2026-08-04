@@ -127,6 +127,16 @@ async function completeWorkerTerminalReleaseOnce(
       archive: archiveSummary(retained)
     }
   }
+  if (!workerTerminalLeaseIsCurrent(runtime, db, dispatchId, resource)) {
+    const retained = db.revertWorkerTerminalReleaseToRetained(resource.id, 'identity_unproven')
+    return {
+      dispatchId,
+      state: 'retained',
+      reason: 'identity_unproven',
+      processAction: 'none',
+      archive: archiveSummary(retained)
+    }
+  }
   if (observation.status === 'missing' || observation.status === 'unattached') {
     if (args.mode === 'recovery') {
       // Inventory may still be incomplete during startup/reconnect discovery; defer.
@@ -158,6 +168,7 @@ async function completeWorkerTerminalReleaseOnce(
   const archive = db.getWorkerTerminalArchive(dispatchId)
   let archiveSource = resource.archive_source as 'transcript' | 'terminal' | null
   let archiveStatus: WorkerTerminalArchiveStatus | null = resource.archive_status
+  let capturedArchive: { kind: 'transcript_pin' | 'terminal_tail'; content: string } | undefined
   if (!archive) {
     const captured = await captureWorkerOutputArchive({
       runtime,
@@ -165,12 +176,7 @@ async function completeWorkerTerminalReleaseOnce(
       terminalHandle: resource.terminal_handle,
       attachedAtMs: orchestrationTimestampToMs(worker.created_at)
     })
-    db.storeWorkerTerminalArchive({
-      dispatchId,
-      resourceId: resource.id,
-      kind: captured.kind,
-      content: JSON.stringify(captured.content)
-    })
+    capturedArchive = { kind: captured.kind, content: JSON.stringify(captured.content) }
     archiveSource = captured.kind === 'transcript_pin' ? 'transcript' : 'terminal'
     archiveStatus = captured.status
   } else {
@@ -178,10 +184,12 @@ async function completeWorkerTerminalReleaseOnce(
     archiveSource ??= stored.source
     archiveStatus ??= stored.status
   }
-  const releasing = db.markWorkerTerminalReleasing({
+  const releasing = db.commitWorkerTerminalArchiveForRelease({
+    dispatchId,
     resourceId: resource.id,
+    ...capturedArchive,
     archiveSource,
-    archiveStatus: archiveStatus ?? 'unavailable'
+    archiveStatus: archiveStatus === 'empty' ? 'empty' : 'captured'
   })
   if (releasing.ownership_state !== 'owned' || releasing.release_state !== 'releasing') {
     return {
@@ -192,15 +200,7 @@ async function completeWorkerTerminalReleaseOnce(
       archive: archiveSummary(releasing)
     }
   }
-  const workerAtClose = db.getWorkerDispatch(dispatchId)
-  const processIsExact =
-    workerAtClose?.agent_terminal_handle === resource.terminal_handle &&
-    db.isDispatchProcessCurrent({
-      dispatchId,
-      paneKey: runtime.getTerminalPaneKey(resource.terminal_handle),
-      processIncarnation: runtime.getTerminalProcessIncarnation(resource.terminal_handle)
-    })
-  if (!processIsExact) {
+  if (!workerTerminalLeaseIsCurrent(runtime, db, dispatchId, releasing)) {
     const retained = db.revertWorkerTerminalReleaseToRetained(resource.id, 'identity_unproven')
     return {
       dispatchId,
@@ -246,6 +246,27 @@ async function completeWorkerTerminalReleaseOnce(
       observation.status === 'exited' ? 'closed_exited_terminal' : 'closed_agent_terminal',
     archive: archiveSummary(released)
   }
+}
+
+function workerTerminalLeaseIsCurrent(
+  runtime: OrcaRuntimeService,
+  db: OrchestrationDb,
+  dispatchId: string,
+  resource: WorkerTerminalResourceRow
+): boolean {
+  const worker = db.getWorkerDispatch(dispatchId)
+  const authority = runtime.getOrchestrationDispatchAuthority(resource.terminal_handle)
+  return Boolean(
+    worker?.agent_terminal_handle === resource.terminal_handle &&
+    authority &&
+    resource.host_scope === JSON.stringify(authority.hostScope) &&
+    db.isDispatchProcessCurrent({
+      dispatchId,
+      paneKey: runtime.getTerminalPaneKey(resource.terminal_handle),
+      processIncarnation: runtime.getTerminalProcessIncarnation(resource.terminal_handle)
+    }) &&
+    !db.workerTerminalResourceHasIdentityConflict(resource.id)
+  )
 }
 
 function summarizeStoredArchive(archive: WorkerTerminalArchiveRow): {
