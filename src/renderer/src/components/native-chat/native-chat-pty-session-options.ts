@@ -1,5 +1,6 @@
 import {
   getAgentSessionOptionCatalog,
+  type AgentSessionOptionCatalog,
   type CatalogModel
 } from '../../../../shared/agent-session-option-catalog'
 import type { AgentType } from '../../../../shared/agent-status-types'
@@ -11,7 +12,8 @@ import type {
 import {
   createNativeChatSessionOptionRecord,
   readNativeChatSessionOptionCache,
-  writeNativeChatSessionOptionCache
+  writeNativeChatSessionOptionCache,
+  type NativeChatSessionOptionRecord
 } from './native-chat-session-option-cache'
 import { createSessionOptionAppliers } from './native-chat-session-option-apply'
 import {
@@ -47,6 +49,24 @@ export type CreateNativeChatPtySessionOptionsArgs = {
   onDraftValuesChanged?: (values: Record<string, SessionOptionValue>) => void
 }
 
+/**
+ * Why: the tracked model can sit outside the active list — a persisted default,
+ * or an alias this host's CLI no longer lists. Keeping a row for it preserves
+ * the labelled selection and the model's own options instead of blanking both.
+ */
+function withTrackedModel(
+  catalog: AgentSessionOptionCatalog,
+  models: readonly CatalogModel[],
+  record: NativeChatSessionOptionRecord
+): CatalogModel[] {
+  const trackedId = typeof record.model?.value === 'string' ? record.model.value : null
+  if (!trackedId || models.some((model) => model.id === trackedId)) {
+    return [...models]
+  }
+  const seeded = catalog.models.find((model) => model.id === trackedId)
+  return [...models, seeded ?? { id: trackedId, label: trackedId, options: [] }]
+}
+
 export function createNativeChatPtySessionOptions(
   args: CreateNativeChatPtySessionOptionsArgs
 ): NativeChatPtySessionOptionsSurface | null {
@@ -65,9 +85,10 @@ export function createNativeChatPtySessionOptions(
   if (args.reportedValues && applyNativeChatReportedSessionOptions(record, args.reportedValues)) {
     writeNativeChatSessionOptionCache(args.scopeKey, record)
   }
+  const activeModels = (): CatalogModel[] => withTrackedModel(catalog, models, record)
   let snapshot = buildNativeChatSessionOptionSnapshot({
     catalog,
-    models,
+    models: activeModels(),
     record,
     mode: args.mode
   })
@@ -77,7 +98,7 @@ export function createNativeChatPtySessionOptions(
     writeNativeChatSessionOptionCache(args.scopeKey, record)
     snapshot = buildNativeChatSessionOptionSnapshot({
       catalog,
-      models,
+      models: activeModels(),
       record,
       mode: args.mode
     })
@@ -124,7 +145,7 @@ export function createNativeChatPtySessionOptions(
   const appliers = createSessionOptionAppliers({
     mode: args.mode,
     catalog,
-    getModels: () => models,
+    getModels: activeModels,
     getRecord: () => record,
     dispatchCommand: args.dispatchCommand,
     onAgentPicker: args.onAgentPicker,
@@ -146,7 +167,7 @@ export function createNativeChatPtySessionOptions(
     recordOutgoingCommand: (command) => {
       const result = recordNativeChatSessionOptionCommand({
         catalog,
-        models,
+        models: activeModels(),
         record,
         command,
         persist

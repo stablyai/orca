@@ -221,6 +221,7 @@ import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex/cod
 import { normalizeRuntimePathForComparison } from '../shared/cross-platform-path'
 import type { AgentProviderSessionMetadata } from '../shared/agent-session-resume'
 import { getDefaultWslDistro } from './wsl'
+import { collectWorktreeTrashSweepRoots, sweepStaleWorktreeTrash } from './worktree-trash'
 import { ClaudeAccountService } from './claude-accounts/service'
 import { ClaudeRuntimeAuthService } from './claude-accounts/runtime-auth-service'
 import {
@@ -2627,6 +2628,13 @@ void app.whenReady().then(async () => {
   // Why: externally started serve-sim processes must stay independent — only Orca-managed/attached helpers belong to a workspace.
   const emulatorBridge = new EmulatorBridge()
   runtimeService.setEmulatorBridge(emulatorBridge)
+  // Why: worktree deletion renames the checkout aside and deletes it in the background, so a quit or
+  // crash mid-delete can leave the moved directory on disk.
+  void sweepStaleWorktreeTrash(
+    collectWorktreeTrashSweepRoots(store.getRepos(), store.getSettings())
+  ).catch((error) => {
+    console.warn('[worktrees] Failed to sweep leftover worktree directories:', error)
+  })
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
   if (codexRuntimeHome.isHostSystemDefaultRealHomeSelected()) {
     // Why: establish capability before managed-hook reconciliation so an

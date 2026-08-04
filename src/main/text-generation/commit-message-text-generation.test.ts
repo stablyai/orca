@@ -311,6 +311,7 @@ describe('discoverCommitMessageModelsLocal', () => {
 
     expect(result).toMatchObject({
       success: true,
+      catalogOrigin: 'spec',
       defaultModelId: 'smart'
     })
     expect(spawnMock).not.toHaveBeenCalled()
@@ -346,6 +347,94 @@ describe('discoverCommitMessageModelsLocal', () => {
       ['--list-models'],
       expect.objectContaining({ windowsHide: true })
     )
+  })
+
+  it('writes the Claude list_models request to stdin and parses the control response', async () => {
+    const listeners = new Map<string, (value: unknown) => void>()
+    const child = {
+      pid: 123,
+      kill: vi.fn(),
+      stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
+      stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
+      stdin: { on: vi.fn(), end: vi.fn() },
+      on: vi.fn((event, callback) => listeners.set(event, callback))
+    }
+    spawnMock.mockReturnValue(child as never)
+
+    const pending = discoverCommitMessageModelsLocal('claude', undefined)
+
+    listeners.get('stdout:data')?.(
+      Buffer.from(
+        `${JSON.stringify({
+          type: 'control_response',
+          response: {
+            subtype: 'success',
+            request_id: 'orca-model-discovery',
+            response: {
+              models: [
+                { value: 'default', displayName: 'Default (recommended)' },
+                {
+                  value: 'opus[1m]',
+                  displayName: 'Opus (1M context)',
+                  supportsEffort: true,
+                  supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max']
+                },
+                { value: 'sonnet', displayName: 'Sonnet' },
+                { value: 'haiku', displayName: 'Haiku' }
+              ]
+            }
+          }
+        })}\n`
+      )
+    )
+    listeners.get('close')?.(0)
+
+    await expect(pending).resolves.toMatchObject({
+      success: true,
+      catalogOrigin: 'probe',
+      defaultModelId: 'sonnet',
+      models: [
+        { id: 'opus[1m]', label: 'Opus (1M context)' },
+        { id: 'sonnet', label: 'Sonnet' },
+        { id: 'haiku', label: 'Haiku' }
+      ]
+    })
+    expect(spawnMock).toHaveBeenCalledWith(
+      'claude',
+      ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose'],
+      expect.objectContaining({ windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] })
+    )
+    expect(child.stdin.end).toHaveBeenCalledWith(expect.stringContaining('"list_models"'))
+  })
+
+  it('falls back to the Claude seed models when the CLI lacks list_models', async () => {
+    const listeners = new Map<string, (value: unknown) => void>()
+    const child = {
+      pid: 123,
+      kill: vi.fn(),
+      stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
+      stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
+      stdin: { on: vi.fn(), end: vi.fn() },
+      on: vi.fn((event, callback) => listeners.set(event, callback))
+    }
+    spawnMock.mockReturnValue(child as never)
+
+    const pending = discoverCommitMessageModelsLocal('claude', undefined)
+
+    // Captured from claude 2.1.100: the unsupported subtype still exits 0.
+    listeners.get('stdout:data')?.(
+      Buffer.from(
+        '{"type":"control_response","response":{"subtype":"error","request_id":"orca-model-discovery","error":"Unsupported control request subtype: list_models"}}\n'
+      )
+    )
+    listeners.get('close')?.(0)
+
+    await expect(pending).resolves.toMatchObject({
+      success: true,
+      catalogOrigin: 'spec',
+      defaultModelId: 'sonnet',
+      models: [{ id: 'haiku' }, { id: 'sonnet' }, { id: 'opus' }]
+    })
   })
 
   it('discovers dynamic models through the configured agent command override', async () => {

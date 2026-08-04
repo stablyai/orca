@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { openMobileTerminalFileTap } from './mobile-terminal-file-tap-open'
+import { openMobileFileTap } from './mobile-file-tap-open'
 
 function ok(result: unknown) {
   return { ok: true, result, _meta: { runtimeId: 'runtime-1' } }
@@ -22,7 +22,7 @@ function activeTerminalState(activated: boolean) {
   }
 }
 
-describe('openMobileTerminalFileTap', () => {
+describe('openMobileFileTap', () => {
   it('opens absolute terminal artifacts through the grant-backed preview route', async () => {
     const client = createClient([
       ok({
@@ -42,7 +42,7 @@ describe('openMobileTerminalFileTap', () => {
     const pushPreviewRoute = vi.fn()
     const triggerOpenFeedback = vi.fn()
 
-    openMobileTerminalFileTap({
+    openMobileFileTap({
       client,
       hostId: 'host-1',
       worktreeId: 'wt-1',
@@ -106,7 +106,7 @@ describe('openMobileTerminalFileTap', () => {
     const openedTab = { id: 'tab-2', relativePath: 'src/index.ts' }
     const switchSessionTab = vi.fn()
 
-    openMobileTerminalFileTap({
+    openMobileFileTap({
       client,
       hostId: 'host-1',
       worktreeId: 'wt-1',
@@ -153,7 +153,7 @@ describe('openMobileTerminalFileTap', () => {
     ])
     const pushPreviewRoute = vi.fn()
 
-    openMobileTerminalFileTap({
+    openMobileFileTap({
       client,
       hostId: 'host-1',
       worktreeId: 'wt-1',
@@ -204,7 +204,7 @@ describe('openMobileTerminalFileTap', () => {
     const pushPreviewRoute = vi.fn()
     const triggerOpenFeedback = vi.fn()
 
-    openMobileTerminalFileTap({
+    openMobileFileTap({
       client,
       hostId: 'host-1',
       worktreeId: 'wt-1',
@@ -258,7 +258,7 @@ describe('openMobileTerminalFileTap', () => {
     ])
     const openBrowser = vi.fn()
 
-    openMobileTerminalFileTap({
+    openMobileFileTap({
       client,
       hostId: 'host-1',
       worktreeId: 'wt-1',
@@ -299,7 +299,7 @@ describe('openMobileTerminalFileTap', () => {
       ok({ opened: true })
     ])
 
-    openMobileTerminalFileTap({
+    openMobileFileTap({
       client,
       hostId: 'host-1',
       worktreeId: 'wt-1',
@@ -346,7 +346,7 @@ describe('openMobileTerminalFileTap', () => {
     ])
     const openBrowser = vi.fn()
 
-    openMobileTerminalFileTap({
+    openMobileFileTap({
       client,
       hostId: 'host-1',
       worktreeId: 'wt-1',
@@ -387,7 +387,7 @@ describe('openMobileTerminalFileTap', () => {
     let activeTerminalHandle: string | null = 'terminal-1'
     const pushPreviewRoute = vi.fn()
 
-    openMobileTerminalFileTap({
+    openMobileFileTap({
       client,
       hostId: 'host-1',
       worktreeId: 'wt-1',
@@ -431,6 +431,180 @@ describe('openMobileTerminalFileTap', () => {
     expect(pushPreviewRoute).not.toHaveBeenCalled()
   })
 
+  it('reports a failed files.open through onOpenFailed', async () => {
+    const client = createClient([
+      ok({
+        worktree: 'wt-1',
+        relativePath: 'src/index.ts',
+        absolutePath: '/repo/src/index.ts',
+        exists: true,
+        isDirectory: false,
+        openTarget: {
+          kind: 'worktree-file',
+          provider: 'local',
+          relativePath: 'src/index.ts',
+          absolutePath: '/repo/src/index.ts'
+        }
+      }),
+      { ok: false, error: { message: 'nope' } }
+    ])
+    const onOpenFailed = vi.fn()
+
+    openMobileFileTap({
+      client,
+      hostId: 'host-1',
+      worktreeId: 'wt-1',
+      pathText: 'src/index.ts',
+      line: null,
+      column: null,
+      pushPreviewRoute: vi.fn(),
+      openBrowser: vi.fn(),
+      triggerOpenFeedback: vi.fn(),
+      fetchSessionTabs: vi.fn(),
+      getSessionTabs: () => [],
+      getActiveSessionTabId: () => null,
+      getActivationState: activeTerminalState,
+      switchSessionTab: vi.fn(),
+      scheduleDelayedAction: vi.fn(),
+      onOpenFailed
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(onOpenFailed).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports an unsupported file when files.open declines it', async () => {
+    const client = createClient([
+      ok({
+        worktree: 'wt-1',
+        relativePath: 'dist/app.zip',
+        absolutePath: '/repo/dist/app.zip',
+        exists: true,
+        isDirectory: false,
+        openTarget: {
+          kind: 'worktree-file',
+          provider: 'local',
+          relativePath: 'dist/app.zip',
+          absolutePath: '/repo/dist/app.zip'
+        }
+      }),
+      ok({ worktree: 'wt-1', relativePath: 'dist/app.zip', kind: 'binary', opened: false })
+    ])
+    const onOpenFailed = vi.fn()
+    const scheduleDelayedAction = vi.fn()
+
+    openMobileFileTap({
+      client,
+      hostId: 'host-1',
+      worktreeId: 'wt-1',
+      pathText: 'dist/app.zip',
+      line: null,
+      column: null,
+      pushPreviewRoute: vi.fn(),
+      openBrowser: vi.fn(),
+      triggerOpenFeedback: vi.fn(),
+      fetchSessionTabs: vi.fn(),
+      getSessionTabs: () => [],
+      getActiveSessionTabId: () => null,
+      getActivationState: activeTerminalState,
+      switchSessionTab: vi.fn(),
+      scheduleDelayedAction,
+      onOpenFailed
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(onOpenFailed).toHaveBeenCalledTimes(1)
+    expect(scheduleDelayedAction).not.toHaveBeenCalled()
+  })
+
+  it('does not report a stale failure after a newer tap supersedes it', async () => {
+    const client = createClient([
+      ok({
+        worktree: 'wt-1',
+        relativePath: null,
+        absolutePath: null,
+        exists: false,
+        isDirectory: false
+      })
+    ])
+    const onOpenFailed = vi.fn()
+
+    openMobileFileTap({
+      client,
+      hostId: 'host-1',
+      worktreeId: 'wt-1',
+      pathText: 'gone/missing.ts',
+      line: null,
+      column: null,
+      pushPreviewRoute: vi.fn(),
+      openBrowser: vi.fn(),
+      triggerOpenFeedback: vi.fn(),
+      fetchSessionTabs: vi.fn(),
+      getSessionTabs: () => [],
+      getActiveSessionTabId: () => null,
+      getActivationState: (activated) => ({
+        ...activeTerminalState(activated),
+        latestActivationSeq: 2
+      }),
+      switchSessionTab: vi.fn(),
+      scheduleDelayedAction: vi.fn(),
+      onOpenFailed
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(onOpenFailed).not.toHaveBeenCalled()
+  })
+
+  it('does not report a failure when the user left the source tab mid-resolve', async () => {
+    const client = createClient([
+      ok({
+        worktree: 'wt-1',
+        relativePath: 'src/index.ts',
+        absolutePath: '/repo/src/index.ts',
+        exists: true,
+        isDirectory: false,
+        openTarget: {
+          kind: 'worktree-file',
+          provider: 'local',
+          relativePath: 'src/index.ts',
+          absolutePath: '/repo/src/index.ts'
+        }
+      })
+    ])
+    const onOpenFailed = vi.fn()
+
+    openMobileFileTap({
+      client,
+      hostId: 'host-1',
+      worktreeId: 'wt-1',
+      pathText: 'src/index.ts',
+      line: null,
+      column: null,
+      pushPreviewRoute: vi.fn(),
+      openBrowser: vi.fn(),
+      triggerOpenFeedback: vi.fn(),
+      fetchSessionTabs: vi.fn(),
+      getSessionTabs: () => [],
+      getActiveSessionTabId: () => null,
+      getActivationState: (activated) => ({
+        ...activeTerminalState(activated),
+        activeTerminalHandle: 'terminal-2'
+      }),
+      switchSessionTab: vi.fn(),
+      scheduleDelayedAction: vi.fn(),
+      onOpenFailed
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(onOpenFailed).not.toHaveBeenCalled()
+  })
+
   it('does not activate a worktree file tab after a newer tap supersedes it', async () => {
     const client = createClient([
       ok({
@@ -452,7 +626,7 @@ describe('openMobileTerminalFileTap', () => {
     const openedTab = { id: 'tab-2', relativePath: 'src/index.ts' }
     const switchSessionTab = vi.fn()
 
-    openMobileTerminalFileTap({
+    openMobileFileTap({
       client,
       hostId: 'host-1',
       worktreeId: 'wt-1',

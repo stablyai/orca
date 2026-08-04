@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useRef,
-  type Dispatch,
-  type MutableRefObject,
-  type SetStateAction
-} from 'react'
+import { useRef, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 import { useMobileSessionViewMode } from './use-mobile-session-view-mode'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
@@ -16,7 +10,6 @@ import {
 import { type MobileNativeChatTab, resolveMobileNativeChat } from './mobile-native-chat-eligibility'
 import { detectAgentPermission } from './mobile-native-chat-permission'
 import { parseAgentQuestion } from './mobile-native-chat-question'
-import { openMobileNativeChatFile } from './mobile-native-chat-open-file'
 import { useMobileNativeChatPermissionSend } from './mobile-native-chat-permission-send'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import { useMobileNativeChatAnswerSend } from './use-mobile-native-chat-answer-send'
@@ -56,7 +49,6 @@ export type MobileNativeChatController = {
   nativeChatPermission: ReturnType<typeof detectAgentPermission>
   nativeChatQuestion: ReturnType<typeof parseAgentQuestion>
   nativeChatAsk: ReturnType<typeof parseAskFromStatus>
-  handleNativeChatOpenFile: (relativePath: string) => void
   handleNativeChatAnswerAsk: (
     prompt: AskPrompt,
     selections: AskAnswerSelection[]
@@ -188,21 +180,6 @@ export function useMobileNativeChatController(args: {
     messages: nativeChatSession.messages
   })
 
-  const handleNativeChatOpenFile = useCallback(
-    (pathText: string) => {
-      if (!client) {
-        return
-      }
-      void openMobileNativeChatFile({
-        client,
-        worktreeId,
-        pathText,
-        terminal: activeHandleRef.current
-      })
-    },
-    [activeHandleRef, client, worktreeId]
-  )
-
   // Every chat write gates on both: the lease proves the input floor is ours, and
   // `connState` collapses a render before the lease does on disconnect.
   const inputSendable = nativeChatInputLeaseReady && connState === 'connected'
@@ -290,7 +267,6 @@ export function useMobileNativeChatController(args: {
     nativeChatPermission,
     nativeChatQuestion,
     nativeChatAsk,
-    handleNativeChatOpenFile,
     handleNativeChatAnswerAsk: answerAsk,
     handleNativeChatCancelAsk: cancelAsk,
     handleNativeChatRespondPermission: respond,

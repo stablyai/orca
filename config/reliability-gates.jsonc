@@ -2339,6 +2339,120 @@
       "demotionRule": "Demote or quarantine if the gate flakes without a product or harness bug, if a Pi handler can again await receiver I/O, or if coalescing allows an older status to overwrite a newer one."
     },
     {
+      "id": "agent-status.manual-compact-identity",
+      "title": "Manual Claude compact completion retires only its exact status generation",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "agent-session",
+      "layer": "shared-main-relay-contract",
+      "surfaces": [
+        "Claude status hooks",
+        "manual compact lifecycle",
+        "last-status persistence",
+        "SSH relay ingest"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "ssh"],
+      "coverageNotes": "Deterministic listener, loopback HTTP, relay-restart, persisted-restore, and fake-SSH transport contracts run on macOS. Claude Code 2.1.220 captures prove manual PreCompact starts a new prompt UUID and exact PreCompact/PostCompact pairs share it. The shared Node paths are platform-independent; live Linux, Windows, WSL, and paired-runtime journeys remain gaps.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/11352",
+        "https://github.com/stablyai/orca/pull/11353"
+      ],
+      "invariant": "A Claude manual PreCompact may replace only a current Claude row from the same receiving connection and provider session; a manual PostCompact may mark done only when the current authoritative row is its exact manual PreCompact generation, including provider prompt UUID. Missing identity is never a wildcard; later cross-provider work, replay, duplication, pane or tab retirement, and server stop invalidate completion. Automatic Claude and Kimi completion remain fail-closed until their hooks expose independently proven generation identity.",
+      "oracle": "Run one byte-identical state-machine oracle plus local HTTP, relay-restart, SSH, and persisted-restore streams using Claude's observed different prior-turn and compact prompt UUIDs. Require matching manual completion to emit done while wrong or absent prompt UUID, session-presence mismatch, wrong source or connection, stale replay and duplicate delivery, later Codex work, automatic completion, and lifecycle cleanup cannot retire the current row. Assert both emitted event order and the authoritative lastStatusByPaneKey snapshot.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/manual-compact-prompt-identity.test.ts src/main/agent-hooks/manual-compact-hook-stream.test.ts src/main/agent-hooks/manual-compact-status-cleanup.test.ts src/shared/agent-hook-listener.test.ts src/shared/agent-hook-relay.test.ts src/relay/agent-hook-server.test.ts src/main/agent-hooks/server.test.ts src/main/ssh/ssh-relay-session-agent-hooks.integration.test.ts --reporter=dot",
+        "Manual Claude Code 2.1.220 interactive compact: isolate UserPromptSubmit, PreCompact, and PostCompact hooks; submit one ordinary prompt then /compact; compare source, trigger, session_id, and prompt_id"
+      ],
+      "testFiles": [
+        "src/shared/manual-compact-prompt-identity.test.ts",
+        "src/main/agent-hooks/manual-compact-hook-stream.test.ts",
+        "src/main/agent-hooks/manual-compact-status-cleanup.test.ts",
+        "src/shared/agent-hook-listener.test.ts",
+        "src/shared/agent-hook-relay.test.ts",
+        "src/relay/agent-hook-server.test.ts",
+        "src/main/agent-hooks/server.test.ts",
+        "src/main/ssh/ssh-relay-session-agent-hooks.integration.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/shared/manual-compact-prompt-identity.test.ts",
+          "assertions": [
+            "matching manual identity settles once",
+            "stale, duplicate, session-mismatched, malformed, automatic, and unproven provider completion fail closed",
+            "4,097 rejected pane keys allocate no ownership state"
+          ]
+        },
+        {
+          "file": "src/main/agent-hooks/manual-compact-hook-stream.test.ts",
+          "assertions": [
+            "local HTTP and relay-restart streams preserve the distinct prior-turn and compact prompt identities",
+            "later provider work and wrong transport identity remain authoritative",
+            "persisted PreCompact restores its prompt"
+          ]
+        },
+        {
+          "file": "src/main/agent-hooks/manual-compact-status-cleanup.test.ts",
+          "assertions": ["pane, tab, and server cleanup revoke compact completion authority"]
+        },
+        {
+          "file": "src/main/ssh/ssh-relay-session-agent-hooks.integration.test.ts",
+          "assertions": [
+            "SSH stamps the receiving connection and forwards source, prompt UUID, session, and manual trigger"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-02",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/manual-compact-prompt-identity.test.ts src/main/agent-hooks/manual-compact-hook-stream.test.ts src/main/agent-hooks/manual-compact-status-cleanup.test.ts src/shared/agent-hook-listener.test.ts src/shared/agent-hook-relay.test.ts src/relay/agent-hook-server.test.ts src/main/agent-hooks/server.test.ts src/main/ssh/ssh-relay-session-agent-hooks.integration.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 2.66,
+          "summary": "Eight focused files and 435 tests passed with local HTTP, relay, SSH, persistence, adversarial identity, cleanup, and existing provider-regression coverage."
+        },
+        {
+          "date": "2026-08-02",
+          "runner": "manual",
+          "platform": "macos",
+          "command": "Manual Claude Code 2.1.220 interactive compact: isolate UserPromptSubmit, PreCompact, and PostCompact hooks; submit one ordinary prompt then /compact; compare source, trigger, session_id, and prompt_id",
+          "result": "passed",
+          "durationSeconds": 120,
+          "summary": "A fresh capture proved /compact emits no UserPromptSubmit and its PreCompact uses a new UUID distinct from the preceding user turn; the preserved authenticated capture proved the matching manual PreCompact and PostCompact share that UUID and session. Automatic capture reused one prompt UUID across multiple compact generations, so automatic completion remains disabled."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 20,
+        "scope": "shared, main-process, relay, persistence, and fake-SSH contract tests"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "New deterministic gate with one local run; CI soak history is not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The byte-identical oracle (SHA-256 24e80c15b467ffa9c47a81099f11bf26dea71293e47b5d950b2fad1497094764) failed 5 of 6 on origin/main@a20165a43d, passed 6 of 6 on the candidate, failed 3 of 6 when only the exact-transition guard was disabled, and passed 6 of 6 after restoration."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Each compact event performs one O(1) current-status lookup plus bounded UUID, source, connection, session, and event comparisons. Identity lives on the existing status row and is removed by its existing lifecycle; the change adds no owner map, global scan, polling, timer, subprocess, network request, or listener. The 4,097-key adversarial arm retains zero status, prompt, or ownership entries."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive focused CI passes or 14 days of soak history.",
+        "Run live manual compact journeys on Linux and Windows and through a real SSH target.",
+        "Keep automatic compact completion disabled until a generation-unique provider identity is proven."
+      ],
+      "knownGaps": [
+        "No live Linux, Windows, WSL, paired-runtime, or real-SSH manual compact journey was run.",
+        "Claude versions before prompt_id support intentionally cannot complete a manual compact row through PostCompact.",
+        "Automatic Claude and Kimi completion remain intentionally fail-closed because their hooks do not prove an exact compact generation."
+      ],
+      "demotionRule": "Demote or quarantine if identity-mismatched completion can retire newer work, cleanup retains compact authority, or the focused gate flakes without a product or harness bug."
+    },
+    {
       "id": "agent-session.provider-ownership",
       "title": "Provider sessions are resumed once per workspace ownership claim",
       "maturity": "experimental",

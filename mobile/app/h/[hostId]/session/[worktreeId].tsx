@@ -196,7 +196,7 @@ import { MobileTerminalLiveInputStatus } from '../../../../src/session/MobileTer
 import { MobileTerminalInputActions } from '../../../../src/session/MobileTerminalInputActions'
 import { resolveMobileFileTabDoc } from '../../../../src/files/mobile-file-tab-doc'
 import { captureMobileFileMutationOwnership } from '../../../../src/files/mobile-file-mutation-ownership'
-import { openMobileTerminalFileTap } from '../../../../src/session/mobile-terminal-file-tap-open'
+import { useMobileFileTapHandlers } from '../../../../src/session/use-mobile-file-tap-handlers'
 import { useLiveWorktreeName } from '../../../../src/session/use-live-worktree-name'
 import {
   acceptSessionSnapshot,
@@ -3192,44 +3192,23 @@ export default function SessionScreen() {
     })
   }, [])
 
-  // Tap a terminal file path → resolve on host, open as file tab (mirrors desktop Cmd/Ctrl-click); silent on a miss.
-  const handleFileTapActivationSeqRef = useRef(0)
-  const handleFileTap = useCallback(
-    (handle: string, pathText: string, line: number | null, column: number | null) => {
-      if (handle !== activeHandleRef.current || !client) {
-        return
-      }
-      const activationSeq = ++handleFileTapActivationSeqRef.current
-      openMobileTerminalFileTap<MobileSessionTab>({
-        client,
-        hostId,
-        worktreeId,
-        worktreeName: routeWorktreeName,
-        terminalHandle: handle,
-        pathText,
-        cwd: terminalCwdRef.current.get(handle) ?? null,
-        line,
-        column,
-        pushPreviewRoute: (href) => router.push(href),
-        openBrowser: (url) => void handleCreateBrowserRef.current?.(url),
-        triggerOpenFeedback: triggerSelection,
-        fetchSessionTabs,
-        getSessionTabs: () => sessionTabsRef.current,
-        getActiveSessionTabId: () => activeSessionTabIdRef.current,
-        getActivationState: (activated) => ({
-          activated,
-          activationSeq,
-          latestActivationSeq: handleFileTapActivationSeqRef.current,
-          sourceTerminalHandle: handle,
-          activeTerminalHandle: activeHandleRef.current,
-          activeTabType: activeSessionTabTypeRef.current
-        }),
-        switchSessionTab: (tab) => switchSessionTabRef.current?.(tab),
-        scheduleDelayedAction
-      })
-    },
-    [client, fetchSessionTabs, hostId, routeWorktreeName, router, scheduleDelayedAction, worktreeId]
-  )
+  // Tap a terminal or chat file path → resolve on host, open as file tab/preview.
+  const { handleFileTap, handleNativeChatFileTap } = useMobileFileTapHandlers<MobileSessionTab>({
+    client,
+    hostId,
+    worktreeId,
+    worktreeName: routeWorktreeName,
+    activeHandleRef,
+    terminalCwdRef,
+    openBrowser: (url) => void handleCreateBrowserRef.current?.(url),
+    fetchSessionTabs,
+    getSessionTabs: () => sessionTabsRef.current,
+    getActiveSessionTabId: () => activeSessionTabIdRef.current,
+    getActiveSessionTabType: () => activeSessionTabTypeRef.current,
+    switchSessionTab: (tab) => switchSessionTabRef.current?.(tab),
+    scheduleDelayedAction,
+    reportChatTapFailure: nativeChatSendError.show
+  })
 
   const handleOpenedFileDiffActivationSeqRef = useRef(0)
   // Capture active tab at tap time; reading it after openDiff would misread a mid-RPC switch and let the retry steal focus.
@@ -4750,6 +4729,7 @@ export default function SessionScreen() {
                 ))}
                 <MobileNativeChatOverlay
                   controller={nativeChatController}
+                  onOpenFile={handleNativeChatFileTap}
                   images={nativeChatImages}
                   onMicPress={handleDictationToggle}
                   micActive={dictation.isRecording}

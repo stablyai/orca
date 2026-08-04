@@ -406,7 +406,7 @@ describe('startParkedTerminalByteWatcher', () => {
   it('feeds Command Code output through the parked byte detector', async () => {
     const { dispose } = await startWatcher()
 
-    emit('# Command Code v0.27.2')
+    emit('# Command Code v0.27.2\r\n')
     emit('⌘ Parsing...')
 
     expect(commandStatusPolicy.onCommandCodeWorking).toHaveBeenCalledTimes(1)

@@ -274,6 +274,9 @@ export function MobileNativeChatView({
               keyExtractor={(item) => item.id}
               renderItem={renderItem}
               contentContainerStyle={styles.listContent}
+              // Let link/file taps land while the composer keyboard is up
+              // instead of being swallowed by the dismiss gesture.
+              keyboardShouldPersistTaps="handled"
               onScroll={onScroll}
               scrollEventThrottle={32}
               onContentSizeChange={() => {

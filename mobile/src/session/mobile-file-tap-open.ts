@@ -1,4 +1,7 @@
-import type { RuntimeTerminalPathResolution } from '../../../src/shared/runtime-types'
+import type {
+  RuntimeFileOpenResult,
+  RuntimeTerminalPathResolution
+} from '../../../src/shared/runtime-types'
 import { filesystemPathToFileUri } from '../../../src/shared/file-uri-path'
 import { createMobileFilePreviewHref } from '../files/mobile-file-preview-route'
 import { classifyMobileArtifact } from './mobile-artifact-kind'
@@ -6,12 +9,12 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
 import { shouldActivateOpenedMobileSessionTab } from './opened-mobile-session-tab'
 
-type TerminalFileTapSessionTab = {
+export type FileTapSessionTab = {
   id: string
   relativePath?: string
 }
 
-type OpenMobileTerminalFileTapOptions<T extends TerminalFileTapSessionTab> = {
+export type OpenMobileFileTapOptions<T extends FileTapSessionTab> = {
   client: Pick<RpcClient, 'sendRequest'>
   hostId: string
   worktreeId: string
@@ -37,19 +40,34 @@ type OpenMobileTerminalFileTapOptions<T extends TerminalFileTapSessionTab> = {
   }
   switchSessionTab: (tab: T) => void
   scheduleDelayedAction: (callback: () => void, delayMs: number) => unknown
+  /** Invoked when the tap cannot open anything (resolve miss, directory, or a
+   *  failed open). Omitted on surfaces that keep the historical silent miss. */
+  onOpenFailed?: () => void
 }
 
-export function openMobileTerminalFileTap<T extends TerminalFileTapSessionTab>(
-  options: OpenMobileTerminalFileTapOptions<T>
+export function openMobileFileTap<T extends FileTapSessionTab>(
+  options: OpenMobileFileTapOptions<T>
 ): void {
-  void openMobileTerminalFileTapAsync(options).catch(() => {
-    // Terminal file taps are best-effort: a failed host resolution should leave
-    // terminal focus/input untouched, matching the existing silent miss behavior.
+  void openMobileFileTapAsync(options).catch(() => {
+    // File taps are best-effort: a failed host resolution should leave terminal
+    // focus/input untouched. Surfaces that want feedback pass onOpenFailed.
+    reportOpenFailure(options)
   })
 }
 
-async function openMobileTerminalFileTapAsync<T extends TerminalFileTapSessionTab>(
-  options: OpenMobileTerminalFileTapOptions<T>
+function reportOpenFailure<T extends FileTapSessionTab>(
+  options: OpenMobileFileTapOptions<T>
+): void {
+  if (
+    options.onOpenFailed &&
+    shouldActivateOpenedMobileSessionTab(options.getActivationState(false))
+  ) {
+    options.onOpenFailed()
+  }
+}
+
+async function openMobileFileTapAsync<T extends FileTapSessionTab>(
+  options: OpenMobileFileTapOptions<T>
 ): Promise<void> {
   const worktree = `id:${options.worktreeId}`
   const response = await options.client.sendRequest(
@@ -65,12 +83,15 @@ async function openMobileTerminalFileTapAsync<T extends TerminalFileTapSessionTa
     { timeoutMs: 10_000 }
   )
   if (!response.ok) {
+    reportOpenFailure(options)
     return
   }
   const resolved = (response as RpcSuccess).result as RuntimeTerminalPathResolution
   if (!resolved.exists || resolved.isDirectory) {
+    reportOpenFailure(options)
     return
   }
+  // Not a failure: the user moved off the source tab mid-resolve.
   if (!shouldActivateOpenedMobileSessionTab(options.getActivationState(false))) {
     return
   }
@@ -107,6 +128,7 @@ async function openMobileTerminalFileTapAsync<T extends TerminalFileTapSessionTa
       ? resolved.openTarget.relativePath
       : resolved.relativePath
   if (!openedPath) {
+    reportOpenFailure(options)
     return
   }
   options.triggerOpenFeedback()
@@ -143,13 +165,19 @@ async function openMobileTerminalFileTapAsync<T extends TerminalFileTapSessionTa
     { timeoutMs: 15_000 }
   )
   if (!openResponse.ok) {
+    reportOpenFailure(options)
+    return
+  }
+  const openResult = (openResponse as RpcSuccess).result as RuntimeFileOpenResult
+  if (!openResult.opened) {
+    reportOpenFailure(options)
     return
   }
   scheduleOpenedWorktreeTabActivation(options, openedPath)
 }
 
-function scheduleOpenedWorktreeTabActivation<T extends TerminalFileTapSessionTab>(
-  options: OpenMobileTerminalFileTapOptions<T>,
+function scheduleOpenedWorktreeTabActivation<T extends FileTapSessionTab>(
+  options: OpenMobileFileTapOptions<T>,
   openedPath: string
 ): void {
   let activated = false
