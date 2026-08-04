@@ -17130,6 +17130,84 @@ describe('registerPtyHandlers', () => {
     })
   })
 
+  // Why windowless: `orca serve`/CLI runtime creation is the topology that most
+  // needs informative records — its controller.spawn path must seed them too.
+  it('seeds restore records for a runtime-controller created terminal (headless reattach)', async () => {
+    const worktreeId = 'repo-restore::/tmp/restore-records'
+    const ptyId = `${worktreeId}@@session-headless-1`
+    const session = getDefaultWorkspaceSession()
+    const repo = {
+      id: 'repo-restore',
+      path: '/tmp/restore-records',
+      displayName: 'restore',
+      badgeColor: '#000000',
+      addedAt: 0
+    }
+    const runtime = new OrcaRuntimeService({
+      getWorkspaceSession: () => session,
+      setWorkspaceSession: () => {},
+      getRepo: (repoId: string) => (repoId === repo.id ? repo : undefined),
+      getRepos: () => [repo],
+      getAllWorktreeMeta: () => ({}),
+      getWorktreeMeta: () => undefined,
+      setWorktreeMeta: () => undefined as never,
+      removeWorktreeMeta: () => {},
+      getSettings: () => ({ workspaceDir: '/tmp/workspaces' }),
+      getProjects: () => [],
+      persistPtyBinding: vi.fn()
+    } as never)
+    // Why: selector resolution shells out to git for real repos; prime the
+    // resolved-worktree cache so this headless fixture resolves offline.
+    const worktreeResolutionInternals = runtime as unknown as {
+      buildResolvedWorktreeFromId(id: string): unknown
+      resolvedWorktreeCache: {
+        worktrees: unknown[]
+        platformByRepoId: Map<string, NodeJS.Platform>
+        expiresAt: number
+      } | null
+    }
+    worktreeResolutionInternals.resolvedWorktreeCache = {
+      worktrees: [worktreeResolutionInternals.buildResolvedWorktreeFromId(worktreeId)],
+      platformByRepoId: new Map([[repo.id, process.platform]]),
+      expiresAt: Date.now() + 60_000
+    }
+    setLocalPtyProvider({
+      spawn: vi.fn(async () => ({
+        id: ptyId,
+        isReattach: true,
+        snapshot: 'headless reattach history\r\n$ ',
+        snapshotCols: 80,
+        snapshotRows: 24,
+        lastTitle: 'headless-restored-title'
+      })),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      onData: vi.fn(() => vi.fn()),
+      onExit: vi.fn(() => vi.fn()),
+      listProcesses: vi.fn(async () => [{ id: ptyId, cwd: '/tmp/restore-records' }]),
+      getForegroundProcess: vi.fn(async () => null)
+    } as never)
+    registerPtyHandlers(mainWindow as never, runtime, undefined, undefined, undefined, {
+      persistPtyBinding: vi.fn()
+    } as never)
+
+    const created = await runtime.createTerminal(`id:${worktreeId}`, {
+      presentation: 'background'
+    })
+    expect(created.ptyId).toBe(ptyId)
+
+    const { terminals } = await runtime.listTerminals(`id:${worktreeId}`)
+    const terminal = terminals.find((entry) => entry.ptyId === ptyId)
+    expect(terminal).toBeDefined()
+    expect(terminal!.preview).toContain('headless reattach history')
+    expect(terminal!.title).toBe('headless-restored-title')
+    expect(terminal!.lastOutputAt).toBeNull()
+    const read = await runtime.readTerminal(created.handle)
+    expect(read.tail).toContain('headless reattach history')
+  })
+
   it('upgrades legacy numeric pane keys when the spawn metadata proves the stable leaf', async () => {
     registerPtyHandlers(mainWindow as never)
     const leafId = '11111111-1111-4111-8111-111111111111'

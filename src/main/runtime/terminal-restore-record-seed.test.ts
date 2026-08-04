@@ -189,6 +189,25 @@ describe('seedTerminalRestoreTail', () => {
     expect(read.tail).toEqual(['partial-first-line', 'final restored line'])
   })
 
+  it('does not stamp waitBlockedAt from a blocked prompt that exists only in seeded history', async () => {
+    const runtime = makeRuntimeWithLeaf()
+
+    runtime.seedTerminalRestoreTail(PTY_ID, {
+      text: 'Do you trust this workspace?\r\nPress t to trust\r\n'
+    })
+    const internals = runtime as unknown as RuntimeRecordInternals
+    const pty = internals.ptysById.get(PTY_ID)!
+    expect(pty.waitBlockedAt).toBeNull()
+
+    // A benign heartbeat must not resurrect the historical prompt as blocked NOW.
+    runtime.onPtyData(PTY_ID, 'heartbeat ok\r\n', 1_000_000)
+    expect(pty.waitBlockedAt).toBeNull()
+
+    // A prompt arriving in genuinely new output still stamps.
+    runtime.onPtyData(PTY_ID, 'Do you trust this workspace?\r\nPress t to trust\r\n', 2_000_000)
+    expect(pty.waitBlockedAt).toBe(2_000_000)
+  })
+
   it('seeds the pty record for a daemon-scoped id with no synced leaf', async () => {
     const runtime = makeRuntimeWithLeaf()
     const orphanPtyId = `${WORKTREE_ID}@@session-orphan`

@@ -334,6 +334,39 @@ const pendingRuntimePaneCreatesByOwnerKey = new Map<string, PendingRuntimePaneCr
 const agentSessionOwners = new ClaimedAgentPtyOwnerRegistry()
 let agentSessionOwnerReconciliation: Promise<void> | null = null
 
+// Why: restore payloads (reattach snapshot / cold-restore scrollback / relay
+// replay + lastTitle) ride spawn RPC results, never onPtyData, so EVERY spawn
+// choke point — renderer pty:spawn and the runtime controller — must seed the
+// terminal list/read records or headless/CLI-created reattaches stay blank.
+// The runtime's empty-record guard makes a second seed for the same session a
+// no-op, so overlapping paths cannot double-apply history.
+function seedTerminalRestoreRecordsFromSpawnResult(
+  runtime: OrcaRuntimeService | undefined,
+  result: PtySpawnResult
+): void {
+  const text =
+    typeof result.snapshot === 'string' && result.snapshot.length > 0
+      ? result.snapshot
+      : typeof result.coldRestore?.scrollback === 'string' &&
+          result.coldRestore.scrollback.length > 0
+        ? result.coldRestore.scrollback
+        : typeof result.replay === 'string' && result.replay.length > 0
+          ? result.replay
+          : undefined
+  const lastTitle =
+    typeof result.lastTitle === 'string' && result.lastTitle.length > 0
+      ? result.lastTitle
+      : typeof result.coldRestore?.lastTitle === 'string' && result.coldRestore.lastTitle.length > 0
+        ? result.coldRestore.lastTitle
+        : undefined
+  if (text !== undefined || lastTitle !== undefined) {
+    runtime?.seedTerminalRestoreTail?.(result.id, {
+      ...(text !== undefined ? { text } : {}),
+      ...(lastTitle !== undefined ? { lastTitle } : {})
+    })
+  }
+}
+
 function assertSpawnReplyWasLive(result: PtySpawnResult): void {
   if (!result.exitedBeforeSpawnReply) {
     return
@@ -4974,6 +5007,8 @@ export function registerPtyHandlers(
           // Why: non-worktree PTYs have no later surface-registration phase to clear admission intent.
           runtime?.cancelPendingPtyRegistration?.(result.id, result.incarnationId)
         }
+        // Why: runtime-controller creates (headless serve, CLI, splits) adopt surviving daemon sessions too; without this seed their records stay blank.
+        seedTerminalRestoreRecordsFromSpawnResult(runtime, result)
         // Why: arms main's per-PTY Command Code output detector from the launch command (renderer startupCommand parity).
         if (!stablePaneOwner) {
           runtime?.noteTerminalSpawnCommand?.(result.id, launchCommand ?? null)
@@ -6337,32 +6372,10 @@ export function registerPtyHandlers(
           runtime?.cancelPendingPtyRegistration?.(pendingRegistrationPtyId, result.incarnationId)
           pendingRegistrationPtyId = null
         }
-        // Why: restore payloads never pass through onPtyData, so seed the
-        // terminal list/read records here (after registerPty binds the
-        // worktree) — including on desktop, where the renderer-authority gate
-        // above skips the emulator seed but the records still live main-side.
-        const restoreRecordText =
-          typeof result.snapshot === 'string' && result.snapshot.length > 0
-            ? result.snapshot
-            : typeof result.coldRestore?.scrollback === 'string' &&
-                result.coldRestore.scrollback.length > 0
-              ? result.coldRestore.scrollback
-              : typeof result.replay === 'string' && result.replay.length > 0
-                ? result.replay
-                : undefined
-        const restoreRecordTitle =
-          typeof result.lastTitle === 'string' && result.lastTitle.length > 0
-            ? result.lastTitle
-            : typeof result.coldRestore?.lastTitle === 'string' &&
-                result.coldRestore.lastTitle.length > 0
-              ? result.coldRestore.lastTitle
-              : undefined
-        if (restoreRecordText !== undefined || restoreRecordTitle !== undefined) {
-          runtime?.seedTerminalRestoreTail?.(result.id, {
-            ...(restoreRecordText !== undefined ? { text: restoreRecordText } : {}),
-            ...(restoreRecordTitle !== undefined ? { lastTitle: restoreRecordTitle } : {})
-          })
-        }
+        // Why: seed after registerPty binds the worktree — including on
+        // desktop, where the renderer-authority gate above skips the emulator
+        // seed but the list/read records still live main-side.
+        seedTerminalRestoreRecordsFromSpawnResult(runtime, result)
         // Why: arm main's per-PTY Command Code output detector from the launch command (startupCommand parity); banner detection covers PTYs without one.
         if (!stablePaneOwner) {
           runtime?.noteTerminalSpawnCommand?.(

@@ -9694,6 +9694,30 @@ export class OrcaRuntimeService {
     state.appended = ''
   }
 
+  // Why: the scanner's first run after a restore seed compares against a null
+  // baseline, so a permission prompt visible only in seeded HISTORY would read
+  // as newly gained and stamp waitBlockedAt "now" on the next benign chunk.
+  // Store the seeded tail's wait state as the baseline WITHOUT stamping; only
+  // a signal that appears in genuinely new output counts as gained.
+  private primeWaitBlockedBaselineFromSeededTail(ptyId: string): void {
+    const pty = this.ptysById.get(ptyId)
+    if (!pty) {
+      return
+    }
+    let state = this.waitBlockedCheckStateByPtyId.get(ptyId)
+    if (!state) {
+      state = { lastAt: 0, lastWaitState: null, appended: '', keywordCarry: '', timer: null }
+      this.waitBlockedCheckStateByPtyId.set(ptyId, state)
+    }
+    if (state.lastWaitState === null) {
+      state.lastWaitState = computeTerminalTailWaitState(
+        pty.tailBuffer,
+        pty.tailPartialLine,
+        pty.preview
+      )
+    }
+  }
+
   private clearWaitBlockedCheckState(ptyId: string): void {
     const state = this.waitBlockedCheckStateByPtyId.get(ptyId)
     if (state?.timer) {
@@ -10899,6 +10923,7 @@ export class OrcaRuntimeService {
       // so a same-run remount reattach cannot re-apply history it already has.
       if (pty && restoredTerminalTailSeedAllowed(pty)) {
         applyRestoredTerminalTailSeed(pty, seed)
+        this.primeWaitBlockedBaselineFromSeededTail(ptyId)
       }
       for (const leaf of this.getLeavesForPty(ptyId)) {
         if (restoredTerminalTailSeedAllowed(leaf)) {
@@ -34918,10 +34943,14 @@ export function buildRestoredTerminalTailSeed(text: string): RestoredTerminalTai
   if (bounded.length > MAX_RESTORE_TAIL_SEED_CHARS) {
     bounded = bounded.slice(-MAX_RESTORE_TAIL_SEED_CHARS)
     // Why: an arbitrary suffix can start mid-escape; restarting after the first
-    // newline resumes at a line boundary (escape params never span one).
-    const firstNewline = bounded.indexOf('\n')
-    if (firstNewline !== -1) {
-      bounded = bounded.slice(firstNewline + 1)
+    // line break resumes at a boundary (escape params never span \n or \r —
+    // \r covers newline-free CR-redraw streams). Consume a full \r\n pair so
+    // the seed does not begin with a phantom blank line.
+    const anchor = bounded.search(/[\r\n]/)
+    if (anchor !== -1) {
+      bounded = bounded.slice(
+        bounded[anchor] === '\r' && bounded[anchor + 1] === '\n' ? anchor + 2 : anchor + 1
+      )
     }
     sliced = true
   }
