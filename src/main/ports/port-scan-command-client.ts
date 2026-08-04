@@ -297,27 +297,48 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-function resolveWorkerEntryPath(): string {
+const WORKER_ENTRY_FILENAME = 'port-scan-command-worker-entry.js'
+
+/** Where the built worker entry can live: packaged resources or the build dir. */
+export type WorkerEntryLayout = {
+  isPackaged: boolean
+  resourcesPath: string
+  moduleDir: string
+}
+
+/**
+ * Resolve the built worker entry for one runtime layout.
+ * @param layout - Packaged flag plus both candidate roots.
+ * @returns Path passed to `new Worker()`.
+ */
+export function resolveWorkerEntryPath(layout: WorkerEntryLayout): string {
+  // Packaged builds leave this entry inside app.asar — only forked child
+  // processes are asarUnpack'd — so it resolves off resourcesPath rather than
+  // the bundler's __dirname, matching the shipped stt/warp/opencode workers.
+  // Split out from the electron read so the packaged branch is testable without
+  // a packaged build.
+  if (layout.isPackaged) {
+    return join(layout.resourcesPath, 'app.asar', 'out', 'main', WORKER_ENTRY_FILENAME)
+  }
+  return join(layout.moduleDir, WORKER_ENTRY_FILENAME)
+}
+
+function currentWorkerEntryLayout(): WorkerEntryLayout {
   let app: { isPackaged: boolean } | null = null
   try {
     app = require('electron').app ?? null
   } catch {
     app = null
   }
-  if (app?.isPackaged) {
-    return join(
-      process.resourcesPath,
-      'app.asar',
-      'out',
-      'main',
-      'port-scan-command-worker-entry.js'
-    )
+  return {
+    isPackaged: app?.isPackaged === true,
+    resourcesPath: process.resourcesPath,
+    moduleDir: __dirname
   }
-  return join(__dirname, 'port-scan-command-worker-entry.js')
 }
 
 function defaultWorkerFactory(): Worker {
-  const workerPath = resolveWorkerEntryPath()
+  const workerPath = resolveWorkerEntryPath(currentWorkerEntryLayout())
   // Why: a missing built entry must throw synchronously so the client can fail
   // closed before it waits on a worker that can never post a result.
   if (!existsSync(workerPath)) {

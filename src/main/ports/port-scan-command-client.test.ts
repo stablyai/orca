@@ -1,10 +1,13 @@
+import { readFileSync } from 'node:fs'
+import { join, sep } from 'node:path'
 import { Worker } from 'node:worker_threads'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   CALL_DEADLINE_MS,
   MAX_QUEUED_CALLS,
   PortScanCommandClient,
-  isPortScanWorkerUnavailableError
+  isPortScanWorkerUnavailableError,
+  resolveWorkerEntryPath
 } from './port-scan-command-client'
 import {
   PortScanCommandTimeoutError,
@@ -196,6 +199,56 @@ describe('PortScanCommandClient', () => {
 
     expect(isPortScanWorkerUnavailableError(error)).toBe(true)
     expect(execFileMock).not.toHaveBeenCalled()
+  })
+})
+
+// Why: the packaged branch never runs in dev or e2e (both take the __dirname
+// path), so it is pinned here at the path-construction level. Whether Electron's
+// asar shim can load a Worker entry from inside app.asar is not testable here —
+// that still needs a packaged smoke test.
+describe('resolveWorkerEntryPath', () => {
+  const WORKER_ENTRY_FILENAME = 'port-scan-command-worker-entry.js'
+
+  it('resolves a packaged build under resourcesPath/app.asar/out/main', () => {
+    const resourcesPath = join(sep, 'Applications', 'Orca.app', 'Contents', 'Resources')
+
+    const resolved = resolveWorkerEntryPath({
+      isPackaged: true,
+      resourcesPath,
+      moduleDir: join(sep, 'unpackaged', 'out', 'main')
+    })
+
+    expect(resolved.startsWith(`${resourcesPath}${sep}`)).toBe(true)
+    expect(resolved.slice(resourcesPath.length + 1).split(sep)).toEqual([
+      'app.asar',
+      'out',
+      'main',
+      WORKER_ENTRY_FILENAME
+    ])
+  })
+
+  it('ignores resourcesPath when the app is not packaged', () => {
+    const moduleDir = join(sep, 'repo', 'out', 'main')
+
+    const resolved = resolveWorkerEntryPath({
+      isPackaged: false,
+      resourcesPath: join(sep, 'Applications', 'Orca.app', 'Contents', 'Resources'),
+      moduleDir
+    })
+
+    expect(resolved).toBe(join(moduleDir, WORKER_ENTRY_FILENAME))
+    expect(resolved).not.toContain('app.asar')
+  })
+
+  // A rename in the build config would leave both branches pointing at a file
+  // that is never emitted, and only the packaged one fails silently.
+  it('names the entry the main build actually emits', () => {
+    const config = readFileSync(
+      join(import.meta.dirname, '..', '..', '..', 'electron.vite.config.ts'),
+      'utf8'
+    )
+
+    expect(config).toContain("'port-scan-command-worker-entry': resolve(")
   })
 })
 
