@@ -13,6 +13,7 @@ export type MobileFileTabDoc =
   | { status: 'ready'; kind: 'file'; content: string; truncated: boolean; byteLength: number }
   | { status: 'ready'; kind: 'diff'; lines: MobileDiffLine[]; truncated: boolean }
   | { status: 'ready'; kind: 'image'; dataUri: string }
+  | { status: 'ready'; kind: 'video'; base64: string; mimeType: string }
   | { status: 'ready'; kind: 'html'; content: string }
 
 export type MobileFileTabDocRequest = {
@@ -55,7 +56,7 @@ export async function resolveMobileFileTabDoc(
   }
 
   const artifactKind = classifyMobileArtifact(relativePath)
-  if (artifactKind === 'image') {
+  if (artifactKind === 'image' || artifactKind === 'video') {
     const preview = await client.sendRequest('files.readPreview', { worktree, relativePath })
     if (!preview.ok) {
       throw new Error((preview as RpcFailure).error.message)
@@ -63,7 +64,14 @@ export async function resolveMobileFileTabDoc(
     const result = (preview as RpcSuccess).result as {
       content: string
       isImage?: boolean
+      isVideo?: boolean
       mimeType?: string
+    }
+    if (artifactKind === 'video') {
+      if (!result.isVideo || !result.mimeType || !result.content) {
+        throw new Error('binary_file')
+      }
+      return { status: 'ready', kind: 'video', base64: result.content, mimeType: result.mimeType }
     }
     const dataUri = result.isImage ? buildImageDataUri(result.mimeType, result.content) : null
     if (!dataUri) {

@@ -46,6 +46,7 @@ const BINARY_EXTENSIONS = new Set([
   '.ico',
   '.jpeg',
   '.jpg',
+  '.m4v',
   '.mov',
   '.mp3',
   '.mp4',

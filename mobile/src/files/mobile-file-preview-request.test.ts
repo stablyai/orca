@@ -44,6 +44,49 @@ describe('mobile-file-preview-request', () => {
     })
   })
 
+  it('selects readPreview for playable videos, including terminal artifacts', () => {
+    expect(createMobileFilePreviewRequest('wt-1', 'assets/demo.mp4')).toEqual({
+      method: 'files.readPreview',
+      params: { worktree: 'id:wt-1', relativePath: 'assets/demo.mp4' }
+    })
+    expect(
+      createMobileFilePreviewRequest({
+        source: 'terminalArtifact',
+        worktreeId: 'wt-1',
+        absolutePath: '/tmp/screen.mov',
+        grantId: 'grant-1'
+      })
+    ).toEqual({
+      method: 'files.readTerminalArtifactPreview',
+      params: { worktree: 'id:wt-1', absolutePath: '/tmp/screen.mov', grantId: 'grant-1' }
+    })
+  })
+
+  it('loads videos as raw base64 so the player can stage them on disk', async () => {
+    const client = clientWith(
+      ok({ content: 'dmlkZW8=', isBinary: true, isVideo: true, mimeType: 'video/mp4' })
+    )
+
+    await expect(loadMobileFilePreview(client, 'wt-1', 'assets/demo.mp4')).resolves.toEqual({
+      status: 'ready',
+      kind: 'video',
+      base64: 'dmlkZW8=',
+      mimeType: 'video/mp4'
+    })
+  })
+
+  it.each([
+    ['missing isVideo', { content: 'dmlkZW8=', isBinary: true, mimeType: 'video/mp4' }],
+    ['image flag only', { content: 'dmlkZW8=', isBinary: true, isImage: true }],
+    ['empty content', { content: '', isBinary: true, isVideo: true, mimeType: 'video/mp4' }]
+  ])('rejects invalid video preview results: %s', (_label, result) => {
+    expect(normalizeMobileFilePreviewResponse('assets/demo.mp4', ok(result))).toEqual({
+      status: 'error',
+      message: 'Binary preview unavailable',
+      reconnect: false
+    })
+  })
+
   it('loads images through readPreview and never calls files.open', async () => {
     const client = clientWith(
       ok({ content: 'aW1hZ2U=', isBinary: true, isImage: true, mimeType: 'image/png' })

@@ -22,6 +22,14 @@ export type MobileFilePreviewResult =
     }
   | {
       status: 'ready'
+      kind: 'video'
+      // Kept as raw base64 (not a data URI): the player needs the bytes on disk,
+      // and re-splitting a multi-megabyte data URI would double peak memory.
+      base64: string
+      mimeType: string
+    }
+  | {
+      status: 'ready'
       kind: MobileFilePreviewTextKind
       content: string
       truncated: boolean
@@ -48,10 +56,24 @@ export function normalizeMobileFilePreviewResponse(
   }
 
   const result = (response as RpcSuccess).result
-  if (classifyMobileArtifact(relativePath) === 'image') {
+  const artifactKind = classifyMobileArtifact(relativePath)
+  if (artifactKind === 'image') {
     return normalizeImagePreviewResult(result)
   }
+  if (artifactKind === 'video') {
+    return normalizeVideoPreviewResult(result)
+  }
   return normalizeTextPreviewResult(relativePath, result)
+}
+
+// Text arms carry editable content; image/video previews never do.
+export function isMobileFilePreviewTextResult(
+  result: MobileFilePreviewResult
+): result is Extract<
+  MobileFilePreviewResult,
+  { status: 'ready'; kind: MobileFilePreviewTextKind }
+> {
+  return result.status === 'ready' && result.kind !== 'image' && result.kind !== 'video'
 }
 
 export function previewError(message: string): MobileFilePreviewResult {
@@ -98,30 +120,44 @@ export function formatPreviewByteLength(byteLength: number): string {
 }
 
 function normalizeImagePreviewResult(result: unknown): MobileFilePreviewResult {
-  if (!result || typeof result !== 'object') {
-    return previewError('binary_file')
-  }
-  const preview = result as {
-    content?: unknown
-    isBinary?: unknown
-    isImage?: unknown
-    mimeType?: unknown
-  }
-  if (
-    preview.isBinary !== true ||
-    preview.isImage !== true ||
-    typeof preview.mimeType !== 'string' ||
-    preview.mimeType.length === 0 ||
-    typeof preview.content !== 'string' ||
-    preview.content.length === 0
-  ) {
+  const media = readBinaryPreviewMedia(result, 'isImage')
+  if (!media) {
     return previewError('binary_file')
   }
   return {
     status: 'ready',
     kind: 'image',
-    dataUri: `data:${preview.mimeType};base64,${preview.content}`
+    dataUri: `data:${media.mimeType};base64,${media.content}`
   }
+}
+
+function normalizeVideoPreviewResult(result: unknown): MobileFilePreviewResult {
+  const media = readBinaryPreviewMedia(result, 'isVideo')
+  if (!media) {
+    return previewError('binary_file')
+  }
+  return { status: 'ready', kind: 'video', base64: media.content, mimeType: media.mimeType }
+}
+
+function readBinaryPreviewMedia(
+  result: unknown,
+  flag: 'isImage' | 'isVideo'
+): { content: string; mimeType: string } | null {
+  if (!result || typeof result !== 'object') {
+    return null
+  }
+  const preview = result as Record<string, unknown>
+  if (
+    preview.isBinary !== true ||
+    preview[flag] !== true ||
+    typeof preview.mimeType !== 'string' ||
+    preview.mimeType.length === 0 ||
+    typeof preview.content !== 'string' ||
+    preview.content.length === 0
+  ) {
+    return null
+  }
+  return { content: preview.content, mimeType: preview.mimeType }
 }
 
 function normalizeTextPreviewResult(

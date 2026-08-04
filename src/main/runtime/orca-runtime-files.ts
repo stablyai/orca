@@ -97,6 +97,7 @@ import {
 import { beginWatcherInstall } from '../ipc/watcher-removal-gate'
 import { assertSshMutationExpectation } from '../ssh/ssh-connection-generation'
 import { toSshExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
+import { VIDEO_FILE_MIME_TYPES } from '../../shared/video-file-extensions'
 import { renameLocalPathSerializedByDestination } from '../destination-serialized-local-rename'
 import {
   NodeFileReadTooLargeError,
@@ -206,6 +207,7 @@ const MOBILE_BINARY_EXTENSIONS = new Set([
   '.ico',
   '.jpeg',
   '.jpg',
+  '.m4v',
   '.mov',
   '.mp3',
   '.mp4',
@@ -268,6 +270,20 @@ const RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
   '.bmp': 'image/bmp',
   '.ico': 'image/x-icon',
   '.pdf': 'application/pdf'
+}
+
+// Kept apart from the image map so a preview can flag which media kind it carries
+// instead of claiming every previewable binary is an image.
+function runtimePreviewableBinaryMedia(
+  filePath: string
+): { mimeType: string; isImage: true } | { mimeType: string; isVideo: true } | null {
+  const extension = extname(filePath).toLowerCase()
+  const imageMimeType = RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES[extension]
+  if (imageMimeType) {
+    return { mimeType: imageMimeType, isImage: true }
+  }
+  const videoMimeType = VIDEO_FILE_MIME_TYPES[extension]
+  return videoMimeType ? { mimeType: videoMimeType, isVideo: true } : null
 }
 
 function trackRuntimeFileWatcherUnsubscribe(
@@ -1661,8 +1677,8 @@ export class RuntimeFileCommands {
     }
 
     const filePath = await resolveAuthorizedPath(target.path, this.host.requireStore())
-    const mimeType = RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
-    const maxBytes = mimeType ? binaryMaxBytes : MOBILE_FILE_READ_MAX_BYTES
+    const media = runtimePreviewableBinaryMedia(filePath)
+    const maxBytes = media ? binaryMaxBytes : MOBILE_FILE_READ_MAX_BYTES
     let buffer: Buffer
     try {
       buffer = (await readNodeFileWithinLimit(filePath, maxBytes)).buffer
@@ -1672,13 +1688,12 @@ export class RuntimeFileCommands {
       }
       throw error
     }
-    if (mimeType) {
+    if (media) {
       return assertPreviewWithinTransportBudget(
         {
           content: buffer.toString('base64'),
           isBinary: true,
-          isImage: true,
-          mimeType
+          ...media
         },
         maxContentBytes
       )
@@ -2616,8 +2631,8 @@ async function readLocalTerminalArtifactPreviewFromHandle(
     throw new Error('Cannot preview a directory')
   }
   assertTerminalFileGrantFresh(grant, fileStats)
-  const mimeType = RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES[extname(grant.absolutePath).toLowerCase()]
-  if (mimeType) {
+  const media = runtimePreviewableBinaryMedia(grant.absolutePath)
+  if (media) {
     const binaryMaxBytes =
       maxContentBytes === undefined
         ? LOCAL_PREVIEWABLE_BINARY_MAX_BYTES
@@ -2632,8 +2647,7 @@ async function readLocalTerminalArtifactPreviewFromHandle(
     return {
       content: buffer.toString('base64'),
       isBinary: true,
-      isImage: true,
-      mimeType
+      ...media
     }
   }
 

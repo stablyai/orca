@@ -4,9 +4,11 @@ import {
   ChevronRight,
   File,
   FileText,
+  FileVideo,
   Folder,
   Image as ImageIcon
 } from 'lucide-react-native'
+import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
 import { triggerSelection } from '../platform/haptics'
 import { colors, spacing } from '../theme/mobile-theme'
 import { type FileExplorerRow, isMarkdownPath, type TreeNode } from './file-tree'
@@ -82,12 +84,13 @@ function TreeRow(props: {
   const { item, expanded, onPreviewFile, onToggleDirectory } = props
   const isDirectory = item.kind === 'directory'
   const isExpanded = expanded.has(item.relativePath)
-  // Images render in the mobile viewer (via files.readPreview), so a binary
-  // image is openable; only non-previewable binaries are unavailable.
+  // Images and videos render in the mobile viewer (via files.readPreview), so those
+  // binaries are openable; only non-previewable binaries are unavailable.
   const previewable =
     item.kind !== 'directory' &&
     canPreviewMobileFileRow({ kind: item.kind, relativePath: item.relativePath })
-  const isImage = item.kind === 'binary' && previewable
+  const previewableBinaryKind =
+    item.kind === 'binary' && previewable ? classifyMobileArtifact(item.relativePath) : null
   const disabled = item.kind === 'binary' && !previewable
   const markdown = item.kind === 'text' && isMarkdownPath(item.relativePath)
 
@@ -129,8 +132,10 @@ function TreeRow(props: {
         <Folder size={17} color={colors.textSecondary} />
       ) : markdown ? (
         <FileText size={17} color={disabled ? colors.textMuted : colors.textSecondary} />
-      ) : isImage ? (
+      ) : previewableBinaryKind === 'image' ? (
         <ImageIcon size={17} color={colors.textSecondary} />
+      ) : previewableBinaryKind === 'video' ? (
+        <FileVideo size={17} color={colors.textSecondary} />
       ) : (
         <File size={17} color={disabled ? colors.textMuted : colors.textSecondary} />
       )}

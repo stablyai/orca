@@ -60,9 +60,13 @@ describe('mobile-file-preview-navigation', () => {
     expect(scheduleClose).toHaveBeenCalledWith(expect.any(Function), 0)
   })
 
-  it('keeps non-image binary rows disabled while previewing text and raster images', () => {
+  it('keeps unplayable binary rows disabled while previewing text, raster images, and videos', () => {
     expect(canPreviewMobileFileRow({ kind: 'text', relativePath: 'src/app.ts' })).toBe(true)
     expect(canPreviewMobileFileRow({ kind: 'binary', relativePath: 'assets/logo.webp' })).toBe(true)
+    expect(canPreviewMobileFileRow({ kind: 'binary', relativePath: 'assets/demo.mp4' })).toBe(true)
+    expect(canPreviewMobileFileRow({ kind: 'binary', relativePath: 'assets/clip.webm' })).toBe(
+      false
+    )
     expect(canPreviewMobileFileRow({ kind: 'binary', relativePath: 'archive.zip' })).toBe(false)
   })
 })

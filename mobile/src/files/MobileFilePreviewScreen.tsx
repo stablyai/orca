@@ -7,6 +7,7 @@ import { getWorktreeLabel } from '../session/worktree-label'
 import { colors, spacing } from '../theme/mobile-theme'
 import { useForceReconnect, useHostClient } from '../transport/client-context'
 import {
+  isMobileFilePreviewTextResult,
   loadMobileFilePreview,
   previewError,
   saveMobileTerminalArtifactPreview,
@@ -118,12 +119,11 @@ export function MobileFilePreviewScreen({ route }: Props) {
         setSaveError(result.message)
         return
       }
-      const loadedContent =
-        result.status === 'ready' && result.kind !== 'image'
-          ? result.content
-          : result.status === 'empty'
-            ? ''
-            : null
+      const loadedContent = isMobileFilePreviewTextResult(result)
+        ? result.content
+        : result.status === 'empty'
+          ? ''
+          : null
       if (loadedContent !== null) {
         if (!preserveDirtyDraft) {
           setDraftContent(loadedContent)

@@ -4,6 +4,7 @@ import type { MobileFilePreviewResult } from './mobile-file-preview-request'
 import { MobileFileMarkdownPreview } from './MobileFileMarkdownPreview'
 import { MobileFilePreviewEditableSource } from './MobileFilePreviewEditableSource'
 import { MobileFilePreviewSourceText } from './MobileFilePreviewSourceText'
+import { MobileFileVideoPreview } from './MobileFileVideoPreview'
 import type { MobileFilePreviewLineColumn } from './mobile-file-preview-line-column'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
 
@@ -69,6 +70,16 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
           />
         </ScrollView>
       </View>
+    )
+  }
+  if (preview.kind === 'video') {
+    return (
+      <MobileFileVideoPreview
+        relativePath={options.relativePath}
+        base64={preview.base64}
+        mimeType={preview.mimeType}
+        title={options.title}
+      />
     )
   }
   if (preview.kind === 'markdown') {

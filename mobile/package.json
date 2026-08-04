@@ -46,6 +46,7 @@
     "expo-secure-store": "^55.0.13",
     "expo-splash-screen": "^55.0.20",
     "expo-status-bar": "^55.0.6",
+    "expo-video": "^55.0.19",
     "lowlight": "^3.3.0",
     "lucide-react-native": "^1.14.0",
     "mermaid": "11.16.1",
