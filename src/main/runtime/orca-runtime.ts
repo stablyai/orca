@@ -10338,7 +10338,6 @@ export class OrcaRuntimeService {
     return retainedChanged
   }
 
-  /** Updates the latest hook snapshot and reports whether Runtime clients need a refresh. */
   private retainAgentRowSnapshot(
     ptyId: string,
     paneKey: string,
@@ -29713,9 +29712,10 @@ export class OrcaRuntimeService {
             ownerAgent
           )
         : null
-      // Why: keep rich hook status on a live prompt/tool (authoritative even under a non-agent title), else interactivePrompt is lost.
+      // Why: keep live human blockers authoritative even under a non-agent title.
       const hasLiveAgentSignal =
         normalizedTabAgentStatus?.interactivePrompt != null ||
+        normalizedTabAgentStatus?.interaction != null ||
         normalizedTabAgentStatus?.toolName != null
       const keepFullAgentStatus =
         normalizedTabAgentStatus &&
@@ -29866,10 +29866,12 @@ export class OrcaRuntimeService {
       // Why: non-agent title = shell reclaimed the pane; suppress to clear stuck spinners (#1437), though a live hook signal survives.
       const hasLiveHookSignal =
         retained?.payload.interactivePrompt != null ||
+        retained?.payload.interaction != null ||
         retained?.payload.toolName != null ||
         // Why: a pending question is never inherited across hook events (unlike
         // `toolName`), so it proves the agent is parked on a selector right now.
         hookRow.live?.payload.interactivePrompt != null ||
+        hookRow.live?.payload.interaction != null ||
         // Why: headless serve has no renderer to retain an OSC row, so a fresh hook
         // agentType is the only live signal a hook-only pane can offer — and an agent
         // that reports over HTTP need never set a title this gate would recognize.
@@ -29948,9 +29950,8 @@ export class OrcaRuntimeService {
    *
    *  Why the freshness rule: `pty.lastAgentStatus` is title-derived and refreshed live,
    *  so an unconditional hook precedence would let a 29-minute-old `done` erase a pane
-   *  that is visibly working. A pending `interactivePrompt` outranks title evidence at
-   *  any age — the agent is parked on a selector until it answers — and it is also the
-   *  only signal allowed to survive the #1437 non-agent-title suppression. */
+   *  that is visibly working. A pending interaction outranks title evidence because
+   *  the agent is parked on a selector until it is answered. */
   private resolveHookLiveAgentRow(
     live: HookLiveAgentRow | null,
     pty: RuntimePtyWorktreeRecord | null,
@@ -29959,7 +29960,7 @@ export class OrcaRuntimeService {
     if (!live) {
       return null
     }
-    if (live.payload.interactivePrompt != null) {
+    if (live.payload.interactivePrompt != null || live.payload.interaction != null) {
       return live
     }
     // Why only this stamp: it is the sole wall-clock date on the pane's live title,

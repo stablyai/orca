@@ -230,6 +230,31 @@ describe('headless hook agent-status projection (#11761)', () => {
     )
   })
 
+  it('keeps an OpenCode permission visible even under a non-agent title', async () => {
+    const agentStatus = await projectAgentStatus(
+      [
+        hookRow({
+          prompt: '',
+          agentType: 'opencode',
+          toolName: undefined,
+          interactivePrompt: undefined,
+          interaction: { kind: 'permission' }
+        })
+      ],
+      (runtime) => {
+        observePaneTitle(runtime, 'bash')
+      }
+    )
+
+    expect(agentStatus).toEqual(
+      expect.objectContaining({
+        agentType: 'opencode',
+        state: 'waiting',
+        interaction: { kind: 'permission' }
+      })
+    )
+  })
+
   // The title path is refreshed live; an older hook `done` must not erase it.
   it('keeps the title-derived working state when the hook row predates the title', async () => {
     const now = Date.now()

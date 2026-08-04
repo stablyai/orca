@@ -4,6 +4,7 @@ import {
   isFreshNonDoneAgentStatus,
   parseAgentStatusPayload,
   normalizeAgentStatusPayload,
+  pickParsedAgentStatusPayload,
   AGENT_STATUS_JSON_STRUCTURE_LIMITS,
   AGENT_STATUS_MAX_FIELD_LENGTH,
   AGENT_STATUS_MAX_SUBAGENTS,
@@ -66,6 +67,20 @@ describe('parseAgentStatusPayload', () => {
     expect(
       normalizeAgentStatusPayload({ state: 'waiting', interaction: { kind: 'question' } })
     ).toMatchObject({ interaction: undefined })
+    expect(
+      normalizeAgentStatusPayload({ state: 'working', interaction: { kind: 'permission' } })
+    ).toMatchObject({ interaction: undefined })
+  })
+
+  it('keeps interactions while stripping IPC-only fields from Runtime projections', () => {
+    expect(
+      pickParsedAgentStatusPayload({
+        state: 'waiting',
+        prompt: '',
+        interaction: { kind: 'permission' },
+        launchToken: 'secret'
+      } as never)
+    ).toEqual({ state: 'waiting', prompt: '', interaction: { kind: 'permission' } })
   })
 
   it('returns null for invalid state', () => {

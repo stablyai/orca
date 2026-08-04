@@ -51,6 +51,7 @@ type CapturedStatus = {
     prompt: string
     agentType?: string
     toolName?: string
+    interaction?: { kind: string }
   }
 }
 
@@ -183,7 +184,8 @@ function captureAgentStatuses(events: CapturedStatus[]): void {
         state: event.payload.state,
         prompt: event.payload.prompt,
         agentType: event.payload.agentType,
-        toolName: event.payload.toolName
+        toolName: event.payload.toolName,
+        ...(event.payload.interaction ? { interaction: event.payload.interaction } : {})
       }
     })
   })
@@ -293,6 +295,34 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
         toolName: undefined
       }
     })
+  })
+
+  it('rebuilds a remote permission interaction at the main-process trust boundary', async () => {
+    relay = createFakeRelay()
+    vi.mocked(deployAndLaunchRelay).mockResolvedValue({
+      transport: relay.transport,
+      serverBuildId: 'test-relay-build',
+      platform: 'linux-x64'
+    })
+    const events: CapturedStatus[] = []
+    captureAgentStatuses(events)
+
+    session = createSession('conn-permission')
+    await session.establish({} as SshConnection)
+    relay.notifyAgentHook(
+      makeEnvelope({
+        source: 'opencode',
+        payload: {
+          state: 'waiting',
+          prompt: '',
+          agentType: 'opencode',
+          interaction: { kind: 'permission', requestID: 'secret' } as never
+        }
+      })
+    )
+
+    await waitForStatusCount(events, 1)
+    expect(events[0]?.payload.interaction).toEqual({ kind: 'permission' })
   })
 
   it('clears stamped status on reconnect loss but not final shutdown', async () => {

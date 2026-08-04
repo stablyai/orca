@@ -1378,7 +1378,6 @@ function sameAgentStateHistory(
   )
 }
 
-/** Compares mirrored agent entries to avoid publishing unchanged session-tab snapshots. */
 function agentStatusEntryEqual(a: AgentStatusEntry | undefined, b: AgentStatusEntry): boolean {
   if (!a) {
     return false

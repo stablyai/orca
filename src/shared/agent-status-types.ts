@@ -10,16 +10,17 @@ import {
   normalizePromptField
 } from './agent-status-field-normalization'
 import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
+import {
+  normalizeAgentStatusInteraction,
+  type AgentStatusInteraction
+} from './agent-status-interaction'
 
 export { AGENT_STATUS_MAX_FIELD_LENGTH } from './agent-status-field-normalization'
+export type { AgentStatusInteraction } from './agent-status-interaction'
 
 export const AGENT_STATUS_STATES = ['working', 'blocked', 'waiting', 'done'] as const
 export type AgentStatusState = (typeof AGENT_STATUS_STATES)[number]
 
-/** A structured human interaction the agent is awaiting. */
-export type AgentStatusInteraction = {
-  kind: 'permission'
-}
 // Why: agent types aren't a fixed set (custom agents exist); any non-empty string is
 // accepted — these well-known names are just a convenience union for pattern-matching.
 export type WellKnownAgentType =
@@ -207,6 +208,7 @@ export function pickParsedAgentStatusPayload(
     ...(row.toolName !== undefined ? { toolName: row.toolName } : {}),
     ...(row.toolInput !== undefined ? { toolInput: row.toolInput } : {}),
     ...(row.interactivePrompt !== undefined ? { interactivePrompt: row.interactivePrompt } : {}),
+    ...(row.interaction !== undefined ? { interaction: row.interaction } : {}),
     ...(row.lastAssistantMessage !== undefined
       ? { lastAssistantMessage: row.lastAssistantMessage }
       : {}),
@@ -344,15 +346,6 @@ function normalizeSubagentsField(value: unknown): AgentSubagentSnapshot[] | unde
   return normalized.length > 0 ? normalized : undefined
 }
 
-/** Returns the canonical supported interaction, omitting malformed or unknown kinds. */
-function normalizeInteractionField(value: unknown): AgentStatusInteraction | undefined {
-  if (typeof value !== 'object' || value === null) {
-    return undefined
-  }
-  const interaction = value as Record<string, unknown>
-  return interaction.kind === 'permission' ? { kind: 'permission' } : undefined
-}
-
 /** Structural equality for subagent lists so stores can reuse the previous
  *  array reference (and skip fanout) when nothing actually changed. */
 export function agentSubagentsEqual(
@@ -413,7 +406,7 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
       obj.interactivePrompt,
       AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH
     ),
-    interaction: normalizeInteractionField(obj.interaction),
+    interaction: state === 'waiting' ? normalizeAgentStatusInteraction(obj.interaction) : undefined,
     lastAssistantMessage: normalizeOptionalMultilineField(
       obj.lastAssistantMessage,
       AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH

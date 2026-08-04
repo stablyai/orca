@@ -24,9 +24,10 @@ describe('createHookStatusSessionTabsInvalidator', () => {
 
   it('stays quiet while the same status keeps being pinged', () => {
     const changed = createHookStatusSessionTabsInvalidator()
-    changed(working())
+    const permission = working({}, { interaction: { kind: 'permission' } })
+    changed(permission)
 
-    expect(changed(working())).toBe(false)
+    expect(changed(permission)).toBe(false)
   })
 
   it.each([
@@ -35,6 +36,7 @@ describe('createHookStatusSessionTabsInvalidator', () => {
     ['agentType', { agentType: 'codex' }],
     ['toolName', { toolName: 'Bash' }],
     ['interactivePrompt', { interactivePrompt: '{"questions":[]}' }],
+    ['interaction', { interaction: { kind: 'permission' as const } }],
     ['interrupted', { interrupted: true }]
   ])('invalidates when %s changes', (_field, payload) => {
     const changed = createHookStatusSessionTabsInvalidator()

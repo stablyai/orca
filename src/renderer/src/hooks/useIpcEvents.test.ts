@@ -4947,6 +4947,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     agentType?: string
     toolName?: string
     toolInput?: string
+    interaction?: { kind: 'permission' }
     lastAssistantMessage?: string
     interrupted?: boolean
     terminalHandle?: string
@@ -6070,9 +6071,10 @@ describe('useIpcEvents agent status snapshot integration', () => {
       Promise.resolve([
         {
           paneKey: FUTURE_PANE_KEY,
-          state: 'working' as const,
-          prompt: 'p',
-          agentType: 'claude',
+          state: 'waiting' as const,
+          prompt: '',
+          agentType: 'opencode',
+          interaction: { kind: 'permission' as const },
           receivedAt: 1_700_000_000_000,
           stateStartedAt: 1_699_999_999_000
         }
@@ -6155,7 +6157,12 @@ describe('useIpcEvents agent status snapshot integration', () => {
     expect(setAgentStatus).toHaveBeenCalledTimes(1)
     expect(setAgentStatus).toHaveBeenCalledWith(
       FUTURE_PANE_KEY,
-      expect.objectContaining({ state: 'working', prompt: 'p', agentType: 'claude' }),
+      expect.objectContaining({
+        state: 'waiting',
+        prompt: '',
+        agentType: 'opencode',
+        interaction: { kind: 'permission' }
+      }),
       'Future Tab',
       { updatedAt: 1_700_000_000_000, stateStartedAt: 1_699_999_999_000 },
       expectWorktreeRouting('wt-1'),

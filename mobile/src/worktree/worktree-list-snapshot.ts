@@ -107,6 +107,7 @@ function areAgentRowsEqual(
       a.lastAssistantMessage !== b.lastAssistantMessage ||
       a.toolName !== b.toolName ||
       a.toolInput !== b.toolInput ||
+      a.interaction?.kind !== b.interaction?.kind ||
       a.interrupted !== b.interrupted ||
       a.stateStartedAt !== b.stateStartedAt ||
       a.updatedAt !== b.updatedAt

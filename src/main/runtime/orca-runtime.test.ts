@@ -33170,7 +33170,7 @@ describe('OrcaRuntimeService', () => {
     ])
   })
 
-  it('attaches inline agent rows from hook-reported status (not just OSC)', async () => {
+  it('attaches inline permission rows from hook-reported status (not just OSC)', async () => {
     // Why: agent status arrives via hooks, not OSC; worktree.ps reads the hook snapshot so mobile surfaces those agents.
     const leafId = '33333333-3333-4333-8333-333333333333'
     const paneKey = `tab-1:${leafId}`
@@ -33181,9 +33181,10 @@ describe('OrcaRuntimeService', () => {
           paneKey,
           worktreeId: TEST_WORKTREE_ID,
           tabId: 'tab-1',
-          state: 'working',
-          prompt: 'ship it',
-          agentType: 'claude',
+          state: 'waiting',
+          prompt: '',
+          agentType: 'opencode',
+          interaction: { kind: 'permission' },
           lastAssistantMessage: 'on it',
           connectionId: null,
           receivedAt: now,
@@ -33239,9 +33240,10 @@ describe('OrcaRuntimeService', () => {
     expect(summary?.agents).toEqual([
       expect.objectContaining({
         paneKey,
-        state: 'working',
-        agentType: 'claude',
-        prompt: 'ship it',
+        state: 'waiting',
+        agentType: 'opencode',
+        prompt: '',
+        interaction: { kind: 'permission' },
         taskTitle: 'Dispatch prompt work',
         displayName: 'Review dispatch prompts and make worker labels distinct',
         lastAssistantMessage: 'on it',
@@ -33249,7 +33251,7 @@ describe('OrcaRuntimeService', () => {
         updatedAt: now
       })
     ])
-    expect(summary).toMatchObject({ hasHostSidebarActivity: true, status: 'working' })
+    expect(summary).toMatchObject({ hasHostSidebarActivity: true, status: 'permission' })
   })
 
   it('uses mirrored tab ownership after a workspace rename instead of stale hook attribution', async () => {

@@ -385,7 +385,6 @@ function toAgentStatusIpcPayload(entry: EnrichedAgentHookEventPayload): AgentSta
   }
 }
 
-/** Compares status fields that determine whether an incoming update changes the hook cache. */
 // Why: OSC never carries model/children; omit both so an equivalent OSC ping preserves the hook-cached identity graph.
 function equivalentParsedAgentStatusPayload(
   a: ParsedAgentStatusPayload,

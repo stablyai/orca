@@ -599,7 +599,6 @@ function buildRuntimeMobileEditorDraftsProjection(editorDrafts: AppState['editor
   )
 }
 
-/** Serializes a stable mobile projection used to detect agent-status graph changes. */
 function serializeRuntimeMobileAgentStatusEntry(
   paneKey: string,
   entry: AppState['agentStatusByPaneKey'][string]
