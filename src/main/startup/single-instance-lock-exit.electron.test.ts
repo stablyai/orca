@@ -21,9 +21,11 @@ const DUPLICATE_LOST_LOCK = 'DUPLICATE_LOST_LOCK'
 const DUPLICATE_CONTINUED_INTO_STARTUP = 'DUPLICATE_CONTINUED_INTO_STARTUP'
 const SECOND_INSTANCE_ARGV = 'SECOND_INSTANCE_ARGV '
 
+// Why: the marker path travels by env, not argv — Chromium rewrites argv, and the duplicate's argv is
+// itself under test.
 const OWNER_MAIN = `const { app } = require('electron')
 const { appendFileSync } = require('node:fs')
-const marker = process.argv[process.argv.length - 1]
+const marker = process.env.ORCA_LOCK_FIXTURE_MARKER
 app.on('second-instance', (_event, argv) => {
   appendFileSync(marker, '${SECOND_INSTANCE_ARGV}' + JSON.stringify(argv) + '\\n')
 })
@@ -52,7 +54,7 @@ function buildDuplicateMain(termination: string): string {
   return [
     `const { app } = require('electron')`,
     `const { appendFileSync } = require('node:fs')`,
-    `const marker = process.argv[process.argv.length - 1]`,
+    `const marker = process.env.ORCA_LOCK_FIXTURE_MARKER`,
     `const SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE = ${SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE}`,
     `const hasSingleInstanceLock = app.requestSingleInstanceLock()`,
     `if (hasSingleInstanceLock) { appendFileSync(marker, 'DUPLICATE_WON_LOCK\\n'); process.exit(0) }`,
@@ -103,11 +105,10 @@ beforeAll(async () => {
   writeFileSync(ownerMarker, '')
   const ownerDir = writeFixture(root, 'owner', OWNER_MAIN)
 
-  owner = spawn(
-    electronBinary,
-    [ownerDir, `--user-data-dir=${profile}`, '--no-sandbox', ownerMarker],
-    { stdio: 'ignore' }
-  )
+  owner = spawn(electronBinary, [ownerDir, `--user-data-dir=${profile}`, '--no-sandbox'], {
+    stdio: 'ignore',
+    env: { ...process.env, ORCA_LOCK_FIXTURE_MARKER: ownerMarker }
+  })
   await waitFor(() => readLines(ownerMarker).includes(OWNER_ACQUIRED), 'the owner to take the lock')
 }, 90_000)
 
@@ -134,8 +135,12 @@ async function launchDuplicate(termination: string, argv: string[]): Promise<Dup
 
   const result = spawnSync(
     electronBinary,
-    [dir, `--user-data-dir=${profile}`, '--no-sandbox', ...argv, marker],
-    { stdio: 'ignore', timeout: 60_000 }
+    [dir, `--user-data-dir=${profile}`, '--no-sandbox', ...argv],
+    {
+      stdio: 'ignore',
+      timeout: 60_000,
+      env: { ...process.env, ORCA_LOCK_FIXTURE_MARKER: marker }
+    }
   )
   expect(result.error).toBeUndefined()
   await waitFor(
