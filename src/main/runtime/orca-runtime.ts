@@ -16089,6 +16089,9 @@ export class OrcaRuntimeService {
   // verdict per ptyId serves the burst instead of a probe round-trip each call.
   private readonly provenAbsentLeafPtyVerdicts = new Map<string, number>()
   private readonly leafPtyAbsenceProbes = new Map<string, Promise<boolean>>()
+  // Why: probe dedupe shares one promise across callers, but each caller's
+  // continuation would re-deliver the same unread rows; arm one per pty.
+  private readonly probeDeferredDeliveryPtyIds = new Set<string>()
 
   private controllerKnowsPtyIsLive(ptyId: string): boolean {
     try {
@@ -31337,11 +31340,24 @@ export class OrcaRuntimeService {
       // and would mark these delivered while losing them. Proven absence keeps
       // them queued for a future surface; unknown liveness still delivers.
       const probedPtyId = leaf.ptyId
-      void this.isLeafPtyProvenAbsent(probedPtyId).then((absent) => {
-        if (!absent && leaf.ptyId === probedPtyId) {
-          this.deliverPendingMessages(leaf, true)
-        }
-      })
+      // Why: triggers arriving mid-probe must not each arm a continuation — the
+      // Claude Enter delay stamps delivered_at late, so every continuation would
+      // re-read the same unread rows and double-deliver. The single armed
+      // continuation re-reads fresh rows when it fires, so nothing is lost.
+      if (this.probeDeferredDeliveryPtyIds.has(probedPtyId)) {
+        return
+      }
+      this.probeDeferredDeliveryPtyIds.add(probedPtyId)
+      void this.isLeafPtyProvenAbsent(probedPtyId)
+        .then((absent) => {
+          this.probeDeferredDeliveryPtyIds.delete(probedPtyId)
+          if (!absent && leaf.ptyId === probedPtyId) {
+            this.deliverPendingMessages(leaf, true)
+          }
+        })
+        .catch(() => {
+          this.probeDeferredDeliveryPtyIds.delete(probedPtyId)
+        })
       return
     }
 

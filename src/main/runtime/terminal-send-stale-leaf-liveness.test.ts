@@ -306,4 +306,39 @@ describe('push-on-idle orchestration delivery absence gate', () => {
 
     expect(write).toHaveBeenCalledWith(STALE_PTY_ID, expect.stringContaining('Subject: hello'))
   })
+
+  // Why: delivered_at stamps after the delayed Enter, so a second continuation
+  // would re-read the same unread rows and inject the payload twice.
+  it('delivers once when concurrent triggers arrive during one in-flight probe', async () => {
+    let resolveProbe!: (value: boolean | null) => void
+    const { runtime, handle, write, stub } = await makeIdleLeafWithoutPtyRecord({
+      probePtyLiveness: () =>
+        new Promise<boolean | null>((resolve) => {
+          resolveProbe = resolve
+        })
+    })
+    stub.insert('exactly once')
+
+    runtime.deliverPendingMessagesForHandle(handle)
+    runtime.deliverPendingMessagesForHandle(handle)
+    runtime.deliverPendingMessagesForHandle(handle)
+    resolveProbe(null)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    const payloadWrites = write.mock.calls.filter(
+      ([, data]) => typeof data === 'string' && data.includes('Subject: exactly once')
+    )
+    expect(payloadWrites).toHaveLength(1)
+
+    // A later trigger after the probe settles must still be able to deliver
+    // newly queued messages (the single-flight guard is per-probe, not sticky).
+    stub.insert('second message')
+    runtime.deliverPendingMessagesForHandle(handle)
+    resolveProbe(null)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    const secondWrites = write.mock.calls.filter(
+      ([, data]) => typeof data === 'string' && data.includes('Subject: second message')
+    )
+    expect(secondWrites).toHaveLength(1)
+  })
 })
