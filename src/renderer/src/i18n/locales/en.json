@@ -14562,7 +14562,8 @@
       },
       "gitlabJobTraceClient": {
         "loadFailed": "Failed to load the GitLab job log.",
-        "emptyTrace": "No log is available for this GitLab job."
+        "emptyTrace": "No log is available for this GitLab job.",
+        "timedOut": "Timed out loading the GitLab job log."
       }
     }
   },

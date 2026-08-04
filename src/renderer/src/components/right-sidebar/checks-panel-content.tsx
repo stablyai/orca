@@ -80,6 +80,7 @@ import {
   getPRCommentGroupSurfaceClasses,
   type PRCommentPresentationClasses
 } from './pr-comment-presentation'
+import type { GitLabProjectRef } from '../../../../shared/gitlab-types'
 import type {
   PRInfo,
   PRCheckDetail,
@@ -542,7 +543,7 @@ type CheckDetailsLoadState = {
   loading: boolean
   details: PRCheckRunDetails | null
   error: string | null
-  /** Check state when the load failed, so a later state change can retry it. */
+  /** Check state when the load failed or returned nothing, so a later state change can retry it. */
   errorAt?: { status: PRCheckDetail['status']; conclusion: PRCheckDetail['conclusion'] }
 }
 
@@ -669,13 +670,16 @@ function CheckRunDetails({
   state,
   checkDetailsContextKey,
   worktreeId,
-  detailsStickySurface = 'sidebar'
+  detailsStickySurface = 'sidebar',
+  getGitLabProjectRef
 }: {
   check: PRCheckDetail
   state: CheckDetailsLoadState | undefined
   checkDetailsContextKey: string
   worktreeId: string | null
   detailsStickySurface?: CheckDetailsStickySurface
+  /** Why: a getter, not a value — the source ref is filled by an async fetch and would read stale during render. */
+  getGitLabProjectRef?: () => GitLabProjectRef | null
 }): React.JSX.Element {
   const openCheckRunDetails = useAppStore((s) => s.openCheckRunDetails)
   const details = state?.details
@@ -714,7 +718,8 @@ function CheckRunDetails({
     openCheckRunDetails(worktreeId, checkDetailsContextKey, check, {
       details: state?.details ?? null,
       loading: state?.loading ?? false,
-      error: state?.error ?? null
+      error: state?.error ?? null,
+      gitlabProjectRef: getGitLabProjectRef?.() ?? null
     })
   }
 
@@ -965,7 +970,8 @@ export function ChecksList({
   checkDetailsContextKey,
   onLoadCheckDetails,
   worktreeId: worktreeIdOverride,
-  detailsStickySurface = 'sidebar'
+  detailsStickySurface = 'sidebar',
+  getGitLabProjectRef
 }: {
   checks: PRCheckDetail[]
   checksLoading: boolean
@@ -974,6 +980,8 @@ export function ChecksList({
   /** Why: folder-workspace PR checks render rows for attached worktrees, not the active one. */
   worktreeId?: string
   detailsStickySurface?: CheckDetailsStickySurface
+  /** Why: a getter, not a value — the source ref is filled by an async fetch and would read stale during render. */
+  getGitLabProjectRef?: () => GitLabProjectRef | null
 }): React.JSX.Element {
   const activeWorktree = useActiveWorktree()
   const resolvedWorktreeId = worktreeIdOverride ?? activeWorktree?.id ?? null
@@ -1121,7 +1129,11 @@ export function ChecksList({
                 : translate(
                     'auto.components.right.sidebar.checks.panel.content.e15a8b77ef',
                     'No inline details are available for this check.'
-                  )
+                  ),
+              // Why: a detail-less result is only final for this status — re-arm the retry once the job moves on.
+              errorAt: details
+                ? undefined
+                : { status: row.check.status, conclusion: row.check.conclusion }
             }
           }))
         })
@@ -1172,12 +1184,14 @@ export function ChecksList({
       patchOpenCheckRunDetails(resolvedWorktreeId, checkDetailsContextKey, row.check, {
         details: detailsState.details ?? null,
         loading: detailsState.loading ?? false,
-        error: detailsState.error ?? null
+        error: detailsState.error ?? null,
+        gitlabProjectRef: getGitLabProjectRef?.() ?? null
       })
     }
   }, [
     checkDetailsContextKey,
     detailsByCheckKey,
+    getGitLabProjectRef,
     patchOpenCheckRunDetails,
     resolvedWorktreeId,
     rows
@@ -1353,6 +1367,7 @@ export function ChecksList({
                       checkDetailsContextKey={checkDetailsContextKey}
                       worktreeId={resolvedWorktreeId}
                       detailsStickySurface={detailsStickySurface}
+                      getGitLabProjectRef={getGitLabProjectRef}
                     />
                   )}
                 </div>

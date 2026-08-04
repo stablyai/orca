@@ -77,6 +77,10 @@ export function classifyJobLogError(stderr: string): ClassifiedError {
  * GitLab 404s the trace endpoint for a job canceled before it started and for a log
  * that was erased or expired. A missing *project* is a real failure, and GitLab also
  * masks unauthorized projects as 404, so keep that one an error.
+ *
+ * Deliberately broad: GitLab returns the same bare 404 for an unknown job id, so a
+ * stale/foreign id reads as an empty log rather than an error. Losing that diagnostic
+ * beats pinning "not found" on every job that was canceled before it produced a log.
  */
 export function isMissingJobLogError(stderr: string): boolean {
   return classifyGlabError(stderr).type === 'not_found' && !/project\s+not\s+found/i.test(stderr)

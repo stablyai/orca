@@ -152,6 +152,24 @@ describe('loadGitLabJobLogDetails', () => {
     ).rejects.toThrow('403 Forbidden')
   })
 
+  it('gives up on a local IPC call that never settles, matching the remote timeout', async () => {
+    vi.useFakeTimers()
+    try {
+      jobTrace.mockReturnValue(new Promise(() => {}))
+
+      const pending = loadGitLabJobLogDetails({
+        repoPath: '/repo',
+        settings: { activeRuntimeEnvironmentId: null },
+        check: gitLabCheck
+      })
+      const assertion = expect(pending).rejects.toThrow('Timed out loading the GitLab job log.')
+      await vi.advanceTimersByTimeAsync(30_000)
+      await assertion
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('falls back to a translated message when GitLab reports a blank error', async () => {
     jobTrace.mockResolvedValue({ ok: false, error: '   ' })
 

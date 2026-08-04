@@ -14351,7 +14351,8 @@
       },
       "gitlabJobTraceClient": {
         "loadFailed": "No se pudo cargar el registro del job de GitLab.",
-        "emptyTrace": "No hay ningún registro disponible para este job de GitLab."
+        "emptyTrace": "No hay ningún registro disponible para este job de GitLab.",
+        "timedOut": "Se agotó el tiempo de espera al cargar el registro del job de GitLab."
       }
     }
   },

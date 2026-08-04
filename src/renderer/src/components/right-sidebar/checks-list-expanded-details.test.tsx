@@ -310,6 +310,44 @@ describe('ChecksList expanded check details', () => {
     expect(container.textContent).toContain('ERROR: Job failed: exit code 1')
   })
 
+  // A running GitLab job has no trace yet, so the first load legitimately resolves to
+  // null — without re-arming, the row stays "no inline details" after the job finishes.
+  it('retries a detail load that resolved to null once the check state moves on', async () => {
+    const runningCheck: PRCheckDetail = {
+      name: 'test: unit',
+      status: 'in_progress',
+      conclusion: 'failure',
+      url: null,
+      gitlabJobId: 5150
+    }
+    const onLoadCheckDetails = vi
+      .fn<(check: PRCheckDetail) => Promise<PRCheckRunDetails | null>>()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        ...checkDetails,
+        name: runningCheck.name,
+        jobs: [{ ...checkDetails.jobs[0]!, id: 5150, logTail: 'ERROR: Job failed: exit code 1' }]
+      })
+
+    renderChecksList({ worktreeId: 'wt-child-1', checks: [runningCheck], onLoadCheckDetails })
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(onLoadCheckDetails).toHaveBeenCalledTimes(1)
+    expect(container.textContent).toContain('No inline details are available')
+
+    const finishedCheck: PRCheckDetail = { ...runningCheck, status: 'completed' }
+    renderChecksList({ worktreeId: 'wt-child-1', checks: [finishedCheck], onLoadCheckDetails })
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(onLoadCheckDetails).toHaveBeenCalledTimes(2)
+    expect(container.textContent).not.toContain('No inline details are available')
+    expect(container.textContent).toContain('ERROR: Job failed: exit code 1')
+  })
+
   it('keeps a failed detail load pinned while the check state is unchanged', async () => {
     const onLoadCheckDetails = vi
       .fn<(check: PRCheckDetail) => Promise<PRCheckRunDetails | null>>()

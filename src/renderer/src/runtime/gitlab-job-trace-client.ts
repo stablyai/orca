@@ -46,13 +46,15 @@ export async function loadGitLabJobLogDetails(args: {
           },
           { timeoutMs: JOB_TRACE_TIMEOUT_MS }
         )
-      : await window.api.gl.jobTrace({
-          repoPath: args.repoPath,
-          repoId: args.repoId,
-          jobId,
-          projectRef: args.projectRef ?? null,
-          logExcerpt: true
-        })
+      : await withJobTraceTimeout(
+          window.api.gl.jobTrace({
+            repoPath: args.repoPath,
+            repoId: args.repoId,
+            jobId,
+            projectRef: args.projectRef ?? null,
+            logExcerpt: true
+          })
+        )
   if (!result?.ok) {
     throw new Error(
       result?.error?.trim() ||
@@ -63,6 +65,33 @@ export async function loadGitLabJobLogDetails(args: {
     )
   }
   return gitLabJobTraceToCheckRunDetails(args.check, result.trace, emptyTraceStrings())
+}
+
+/**
+ * Bound the local IPC call the way `callRuntimeRpc` bounds the remote one.
+ *
+ * `glab` runs without a subprocess timeout in main, so an unreachable GitLab host
+ * would otherwise leave the expanded Checks row spinning forever.
+ */
+function withJobTraceTimeout<T>(pending: Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  return Promise.race([
+    pending,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        reject(
+          new Error(
+            translate(
+              'auto.runtime.gitlabJobTraceClient.timedOut',
+              'Timed out loading the GitLab job log.'
+            )
+          )
+        )
+      }, JOB_TRACE_TIMEOUT_MS)
+    })
+  ]).finally(() => {
+    clearTimeout(timer)
+  })
 }
 
 // Called per-request, not at module scope, so the active locale applies.

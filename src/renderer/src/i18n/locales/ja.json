@@ -14351,7 +14351,8 @@
       },
       "gitlabJobTraceClient": {
         "loadFailed": "GitLab ジョブのログを読み込めませんでした。",
-        "emptyTrace": "この GitLab ジョブのログはありません。"
+        "emptyTrace": "この GitLab ジョブのログはありません。",
+        "timedOut": "GitLab ジョブのログの読み込みがタイムアウトしました。"
       }
     }
   },

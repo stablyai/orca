@@ -14,6 +14,8 @@ import { resolveMarkdownLinkTarget } from '@/components/editor/markdown-internal
 import {
   buildCheckRunDetailsTabId,
   getCheckRunDetailsTabLabel,
+  isSameGitLabProjectRef,
+  type CheckRunDetailsTabPatch,
   type OpenCheckRunDetailsState
 } from '@/components/editor/check-run-details-tab'
 import { openHttpLink, type HttpLinkSourceOwner } from '@/lib/http-link-routing'
@@ -593,13 +595,13 @@ export type EditorSlice = {
     worktreeId: string,
     contextKey: string,
     check: OpenCheckRunDetailsState['check'],
-    state: Pick<OpenCheckRunDetailsState, 'details' | 'loading' | 'error'>
+    state: CheckRunDetailsTabPatch
   ) => void
   patchOpenCheckRunDetails: (
     worktreeId: string,
     contextKey: string,
     check: OpenCheckRunDetailsState['check'],
-    state: Pick<OpenCheckRunDetailsState, 'details' | 'loading' | 'error'>
+    state: CheckRunDetailsTabPatch
   ) => void
   reloadOpenCheckRunDetailsTab: (fileId: string) => Promise<void>
   openBranchAllDiffs: (
@@ -3794,7 +3796,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       check,
       details: state.details,
       loading: state.loading,
-      error: state.error
+      error: state.error,
+      gitlabProjectRef: state.gitlabProjectRef ?? null
     }
     set((s) => {
       const existing = s.openFiles.find((f) => f.id === id)
@@ -3843,26 +3846,31 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   // Why: sidebar detail fetches can finish after the full-details tab is open; update the snapshot without stealing focus.
   patchOpenCheckRunDetails: (worktreeId, contextKey, check, state) => {
     const id = buildCheckRunDetailsTabId(worktreeId, check)
-    const nextCheckRunDetails: OpenCheckRunDetailsState = {
-      contextKey,
-      check,
-      details: state.details,
-      loading: state.loading,
-      error: state.error
-    }
     set((s) => {
       const existing = s.openFiles.find((f) => f.id === id)
       if (!existing?.checkRunDetails) {
         return s
       }
       const current = existing.checkRunDetails
+      // Why: the sidebar resolves the MR's project asynchronously, so an early patch
+      // must not blank a ref we already know.
+      const gitlabProjectRef = state.gitlabProjectRef ?? current.gitlabProjectRef ?? null
+      const nextCheckRunDetails: OpenCheckRunDetailsState = {
+        contextKey,
+        check,
+        details: state.details,
+        loading: state.loading,
+        error: state.error,
+        gitlabProjectRef
+      }
       if (
         current.contextKey === nextCheckRunDetails.contextKey &&
         current.check.status === nextCheckRunDetails.check.status &&
         current.check.conclusion === nextCheckRunDetails.check.conclusion &&
         current.loading === nextCheckRunDetails.loading &&
         current.error === nextCheckRunDetails.error &&
-        current.details === nextCheckRunDetails.details
+        current.details === nextCheckRunDetails.details &&
+        isSameGitLabProjectRef(current.gitlabProjectRef ?? null, gitlabProjectRef)
       ) {
         return s
       }
@@ -3888,7 +3896,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       return
     }
     const { contextKey, check } = checkRunDetails
-    const patch = (next: Pick<OpenCheckRunDetailsState, 'details' | 'loading' | 'error'>): void => {
+    const patch = (next: CheckRunDetailsTabPatch): void => {
       get().patchOpenCheckRunDetails(file.worktreeId, contextKey, check, next)
     }
     patch({ details: checkRunDetails.details, loading: true, error: null })
@@ -3900,7 +3908,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             repoPath: repo.path,
             repoId: repo.id,
             settings: getSettingsForWorktreeRuntimeOwner(state, file.worktreeId),
-            check
+            check,
+            // Why: a fork MR's job lives in the source project, not the repo's own.
+            projectRef: checkRunDetails.gitlabProjectRef ?? null
           })
         : await get().fetchPRCheckDetails(
             repo.path,

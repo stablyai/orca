@@ -2099,6 +2099,9 @@ export default function ChecksPanel(): React.JSX.Element {
     [fetchPRCheckDetails, pr?.prRepo, repo, settings]
   )
 
+  // Why: read at call time — the ref is filled by an async MR fetch, so a value prop would be stale.
+  const getGitLabProjectRef = useCallback(() => gitLabProjectRefRef.current, [])
+
   useEffect(() => {
     if (activeGitLabReview) {
       return
@@ -4479,6 +4482,7 @@ export default function ChecksPanel(): React.JSX.Element {
           checksLoading={checksLoading}
           checkDetailsContextKey={stateRequestKey}
           onLoadCheckDetails={handleLoadCheckDetails}
+          getGitLabProjectRef={getGitLabProjectRef}
         />
       )}
       <PRCommentsList

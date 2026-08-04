@@ -14351,7 +14351,8 @@
       },
       "gitlabJobTraceClient": {
         "loadFailed": "GitLab 작업 로그를 불러오지 못했습니다.",
-        "emptyTrace": "이 GitLab 작업의 로그를 사용할 수 없습니다."
+        "emptyTrace": "이 GitLab 작업의 로그를 사용할 수 없습니다.",
+        "timedOut": "GitLab 작업 로그를 불러오는 중 시간이 초과되었습니다."
       }
     }
   },
