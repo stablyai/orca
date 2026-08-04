@@ -1382,6 +1382,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
   }
 
   async listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]> {
+    // Why: snapshotted before the request so ids spawned mid-flight can never
+    // be reconciled away below.
+    const preRequestActiveIds = new Set(this.activeSessionIds)
     try {
       // Why: connect + listSessions share the caller's one absolute deadline so a
       // wedged handshake cannot burn the whole teardown budget before the list issues.
@@ -1393,10 +1396,12 @@ export class DaemonPtyAdapter implements IPtyProvider {
       )
       const admission = new PtyProcessListAdmission()
       const processes: PtyProcessInfo[] = []
+      const aliveSessionIds = new Set<string>()
       for (const session of result.sessions) {
         if (!session.isAlive) {
           continue
         }
+        aliveSessionIds.add(session.sessionId)
         const { worktreeId } = parsePtySessionId(session.sessionId)
         processes.push(
           admission.admit({
@@ -1411,6 +1416,14 @@ export class DaemonPtyAdapter implements IPtyProvider {
             ...this.validatedAgentSessionOwners(session.agentSessionOwners)
           })
         )
+      }
+      // Why: hasPty reads activeSessionIds, and an exit missed while the socket
+      // was disconnected otherwise survives an authoritative inventory forever —
+      // defeating every absence proof built on the cache.
+      for (const id of preRequestActiveIds) {
+        if (!aliveSessionIds.has(id)) {
+          this.activeSessionIds.delete(id)
+        }
       }
       this.publishAuditObservation(
         recordAuthenticatedInventory(this.auditContext, this.exactDaemonIncarnation)

@@ -29,6 +29,7 @@ import {
   selectEvictionExemptTerminalTabIds,
   selectEvictionExemptTerminalTabLayoutKey
 } from './terminal-eviction-exempt-tabs'
+import { selectSleepingRecordParkExemptTabIds } from './sleeping-record-park-exemption'
 import {
   canWatcherCoverParkedTerminalTab,
   disposeParkedTerminalWatchersForWorktree,
@@ -99,20 +100,10 @@ export function useTerminalTabColdParking(args: {
   const sleepingAgentSessionsByPaneKey = useAppStore(
     (state) => state.sleepingAgentSessionsByPaneKey
   )
-  const sleepingRecordOwnedTabIds = useMemo(() => {
-    let owned: Set<string> | null = null
-    for (const record of Object.values(sleepingAgentSessionsByPaneKey ?? {})) {
-      if (record.worktreeId !== worktreeId) {
-        continue
-      }
-      const tabId = record.tabId ?? record.paneKey.slice(0, record.paneKey.indexOf(':'))
-      if (tabId) {
-        owned ??= new Set()
-        owned.add(tabId)
-      }
-    }
-    return owned ?? EMPTY_TAB_IDS
-  }, [sleepingAgentSessionsByPaneKey, worktreeId])
+  const sleepingRecordOwnedTabIds = useMemo(
+    () => selectSleepingRecordParkExemptTabIds(sleepingAgentSessionsByPaneKey, worktreeId),
+    [sleepingAgentSessionsByPaneKey, worktreeId]
+  )
   const terminalTabHiddenSinceRef = useRef(new Map<string, number>())
   // Why (shared measure-clock contract with Terminal.tsx): tab hiddenSince
   // survives a background-measure window so per-tab park deadlines stay in

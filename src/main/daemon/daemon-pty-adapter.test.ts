@@ -1657,6 +1657,21 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   })
 
   describe('listProcesses', () => {
+    // Why: hasPty reads the activeSessionIds cache; an exit missed while the
+    // socket was down must not survive an authoritative inventory, or absence
+    // proofs (terminal list demotion, send guard) are defeated forever.
+    it('drops cached session ids an authoritative inventory omits', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+      const staleId = 'repo::/repo/stale@@deadbeef'
+      ;(adapter as unknown as { activeSessionIds: Set<string> }).activeSessionIds.add(staleId)
+      expect(adapter.hasPty(staleId)).toBe(true)
+
+      await adapter.listProcesses()
+
+      expect(adapter.hasPty(staleId)).toBe(false)
+      expect(adapter.hasPty(id)).toBe(true)
+    })
+
     it('returns active sessions', async () => {
       await adapter.spawn({
         cols: 80,

@@ -308,5 +308,14 @@ describe('preserved-pane replacement contract on workspace activation', () => {
     expect(tabs.map((tab) => tab.id)).toContain(webTabId)
     expect(tabs).toHaveLength(2)
     expect(after.sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
+    const replacement = tabs.find((tab) => tab.id !== webTabId)!
+    expect(after.automaticAgentResumeClaimsByTabId[replacement.id]?.providerSession).toEqual({
+      key: 'session_id',
+      id: 'codex-session-E'
+    })
+    expect(after.consumeTabStartupCommand(replacement.id)?.resumeProviderSession).toEqual({
+      key: 'session_id',
+      id: 'codex-session-E'
+    })
   })
 })

@@ -284,4 +284,44 @@ describe('useTerminalTabColdParking measure-clock contract', () => {
     })
     expect(result.current).toEqual(new Set(['tab-2']))
   })
+
+  // Why: blocked and passive-completed records never auto-resume, so exempting
+  // them would pin a hidden pane mounted indefinitely for nothing.
+  it('keeps parking panes whose records cannot be consumed', () => {
+    const { result, rerender } = renderHook(
+      (args: ReturnType<typeof hookArgs>) => useTerminalTabColdParking(args),
+      { initialProps: hookArgs(false) }
+    )
+    act(() => {
+      vi.advanceTimersByTime(TERMINAL_TAB_HOT_RETAIN_MS + 1)
+    })
+    expect(result.current).toEqual(new Set(['tab-2']))
+
+    mocks.storeState.sleepingAgentSessionsByPaneKey = {
+      'tab-2:22222222-2222-4222-8222-222222222222': {
+        paneKey: 'tab-2:22222222-2222-4222-8222-222222222222',
+        tabId: 'tab-2',
+        worktreeId: WORKTREE_ID,
+        automaticResumeBlockedBy: 'legacy-orchestration-worker'
+      } as never
+    }
+    act(() => {
+      rerender(hookArgs(false))
+    })
+    expect(result.current).toEqual(new Set(['tab-2']))
+
+    mocks.storeState.sleepingAgentSessionsByPaneKey = {
+      'tab-2:22222222-2222-4222-8222-222222222222': {
+        paneKey: 'tab-2:22222222-2222-4222-8222-222222222222',
+        tabId: 'tab-2',
+        worktreeId: WORKTREE_ID,
+        origin: 'worktree-sleep',
+        state: 'done'
+      } as never
+    }
+    act(() => {
+      rerender(hookArgs(false))
+    })
+    expect(result.current).toEqual(new Set(['tab-2']))
+  })
 })
