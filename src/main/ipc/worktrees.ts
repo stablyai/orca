@@ -2322,6 +2322,9 @@ export function registerWorktreeHandlers(
         // Why: worktree.create is traced; delete freezes were invisible without a matching worktree.remove parent span.
         return withWorktreeSpan({ stage: 'remove', path: worktreePath }, async () => {
           if (isFolderRepo(repo)) {
+            if (!isFolderWorkspaceIdForRepo(repo, args.worktreeId)) {
+              throw new Error(`Worktree does not belong to folder repository: ${repoId}`)
+            }
             if (args.worktreeId === getFolderWorkspaceRootId(repo)) {
               throw new Error(
                 'Cannot delete the project root workspace. Remove the folder project instead.'

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { ArrowRight, ChevronDown, LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
@@ -38,26 +38,18 @@ export function GitHubIssueWorkspaceLaunchButton({
   })
   const visibleAgentState: AgentLoadState =
     agentState.repoKey === repoKey ? agentState : { repoKey, status: 'idle', agents: [] }
+  const [menuOpen, setMenuOpen] = useState(false)
   // Why: reopening, switching repositories, or unmounting must invalidate late detection results.
   const loadRequestRef = useRef(0)
+  const repoRef = useRef(repo)
+  repoRef.current = repo
 
   useEffect(() => {
-    loadRequestRef.current += 1
-    return () => {
-      loadRequestRef.current += 1
-    }
-  }, [repoKey])
-
-  const handleOpenChange = useCallback(
-    (open: boolean) => {
-      if (!open) {
-        loadRequestRef.current += 1
-        return
-      }
-      const requestId = loadRequestRef.current + 1
-      loadRequestRef.current = requestId
+    const requestId = loadRequestRef.current + 1
+    loadRequestRef.current = requestId
+    if (menuOpen) {
       setAgentState({ repoKey, status: 'loading', agents: [] })
-      void loadGitHubIssueLaunchAgents(repo).then(
+      void loadGitHubIssueLaunchAgents(repoRef.current).then(
         (agents) => {
           if (loadRequestRef.current === requestId) {
             setAgentState({ repoKey, status: 'ready', agents })
@@ -69,12 +61,14 @@ export function GitHubIssueWorkspaceLaunchButton({
           }
         }
       )
-    },
-    [repo, repoKey]
-  )
+    }
+    return () => {
+      loadRequestRef.current += 1
+    }
+  }, [menuOpen, repoKey])
 
   return (
-    <DropdownMenu modal={false} onOpenChange={handleOpenChange}>
+    <DropdownMenu modal={false} onOpenChange={setMenuOpen}>
       <ButtonGroup className="shrink-0" onClick={(event) => event.stopPropagation()}>
         <Button
           type="button"

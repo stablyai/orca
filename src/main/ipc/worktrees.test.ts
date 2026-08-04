@@ -8632,6 +8632,36 @@ describe('registerWorktreeHandlers', () => {
     expect(store.removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'runtime:env-1')
   })
 
+  it('rejects a sibling Git worktree id for a runtime folder owner', async () => {
+    const localRepo = {
+      id: 'repo-shared',
+      path: '/local/repo',
+      displayName: 'local',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    const runtimeRepo = {
+      ...localRepo,
+      path: '/runtime/folder',
+      displayName: 'runtime',
+      kind: 'folder' as const,
+      executionHostId: 'runtime:env-1' as const
+    }
+    const worktreeId = 'repo-shared::/local/feature-wt'
+    store.getRepos.mockReturnValue([localRepo, runtimeRepo])
+    store.getRepo.mockReturnValue(localRepo)
+
+    await expect(
+      handlers['worktrees:remove'](null, {
+        worktreeId,
+        hostId: 'runtime:env-1'
+      })
+    ).rejects.toThrow('Worktree does not belong to folder repository: repo-shared')
+
+    expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
+    expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
+  })
+
   it('rejects a runtime folder owner without an explicit host', async () => {
     const repo = {
       id: 'repo-folder',

@@ -123,4 +123,36 @@ describe('GitHubIssueWorkspaceLaunchButton', () => {
 
     await waitFor(() => expect(screen.queryByRole('menuitem', { name: 'Claude' })).toBeNull())
   })
+
+  it('loads agents for a repository change while the menu remains open', async () => {
+    mocks.loadAgents
+      .mockReturnValueOnce(new Promise(() => {}))
+      .mockResolvedValueOnce([{ id: 'codex', label: 'Codex', cmd: 'codex' }])
+    const user = userEvent.setup()
+    const nextRepo = { ...repo, id: 'repo-2' }
+    const { rerender } = render(
+      <TooltipProvider>
+        <GitHubIssueWorkspaceLaunchButton
+          repo={repo}
+          onStartDefault={vi.fn()}
+          onStartWithAgent={vi.fn()}
+        />
+      </TooltipProvider>
+    )
+    await user.click(screen.getByRole('button', { name: 'Choose an agent for this workspace' }))
+    await waitFor(() => expect(mocks.loadAgents).toHaveBeenCalledWith(repo))
+
+    rerender(
+      <TooltipProvider>
+        <GitHubIssueWorkspaceLaunchButton
+          repo={nextRepo}
+          onStartDefault={vi.fn()}
+          onStartWithAgent={vi.fn()}
+        />
+      </TooltipProvider>
+    )
+
+    await waitFor(() => expect(mocks.loadAgents).toHaveBeenCalledWith(nextRepo))
+    expect(await screen.findByRole('menuitem', { name: 'Codex' })).toBeTruthy()
+  })
 })
