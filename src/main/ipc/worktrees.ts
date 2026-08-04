@@ -191,15 +191,19 @@ async function stopPtysForDestructiveWorktreeRemoval(
   }
 }
 
-function findDesktopRepoOwner(
+function findRepoOwner(
   store: Store,
   repoId: string,
-  hostId?: ExecutionHostId
+  hostId?: ExecutionHostId,
+  allowRuntime = false
 ): Repo | undefined {
   const candidates = store.getRepos().filter((repo) => repo.id === repoId)
   const ownerHost = (repo: Repo): ExecutionHostId | null => {
     const owner = resolveRepoOwnershipEvidence(repo)
-    if (owner.status !== 'owned' || parseExecutionHostId(owner.hostId)?.kind === 'runtime') {
+    if (
+      owner.status !== 'owned' ||
+      (!allowRuntime && parseExecutionHostId(owner.hostId)?.kind === 'runtime')
+    ) {
       return null
     }
     return owner.hostId
@@ -209,7 +213,7 @@ function findDesktopRepoOwner(
     return undefined
   }
   const matches = candidates.filter((_, index) => !hostId || candidateHosts[index] === hostId)
-  // Why: desktop IPC must never guess between host owners; legacy unscoped calls work only while the repo id has one unique owner.
+  // Why: IPC must never guess between host owners; legacy unscoped calls work only while the repo id has one unique owner.
   if (matches.length === 1) {
     const match = matches[0]
     const matchHost = ownerHost(match)
@@ -224,6 +228,14 @@ function findDesktopRepoOwner(
   const legacyMatch = store.getRepo(repoId)
   const legacyHost = legacyMatch ? ownerHost(legacyMatch) : null
   return legacyMatch && legacyHost && (!hostId || legacyHost === hostId) ? legacyMatch : undefined
+}
+
+function findDesktopRepoOwner(
+  store: Store,
+  repoId: string,
+  hostId?: ExecutionHostId
+): Repo | undefined {
+  return findRepoOwner(store, repoId, hostId)
 }
 import { classifyWorkspaceCreateError } from './workspace-create-error-classifier'
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
@@ -2285,8 +2297,12 @@ export function registerWorktreeHandlers(
     'worktrees:remove',
     async (_event, args: RemoveWorktreeArgs): Promise<RemoveWorktreeResult> => {
       const { repoId, worktreePath } = parseWorktreeId(args.worktreeId)
-      const repo = findDesktopRepoOwner(store, repoId, args.hostId)
-      if (!repo) {
+      const requestedHost = args.hostId ? parseExecutionHostId(args.hostId) : null
+      const repo =
+        requestedHost?.kind === 'runtime'
+          ? findRepoOwner(store, repoId, args.hostId, true)
+          : findDesktopRepoOwner(store, repoId, args.hostId)
+      if (!repo || (requestedHost?.kind === 'runtime' && !isFolderRepo(repo))) {
         throw new Error(`Repo not found: ${repoId}`)
       }
       // The resolved repo supplies host ownership when legacy callers omit args.hostId.

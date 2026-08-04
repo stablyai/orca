@@ -8601,6 +8601,83 @@ describe('registerWorktreeHandlers', () => {
     expect(getSshPtyProviderMock).not.toHaveBeenCalled()
   })
 
+  it('selects the explicit runtime folder owner when repo ids collide', async () => {
+    const localRepo = {
+      id: 'repo-folder',
+      path: '/local/folder',
+      displayName: 'local',
+      badgeColor: '#000',
+      addedAt: 0,
+      kind: 'folder' as const
+    }
+    const runtimeRepo = {
+      ...localRepo,
+      path: '/runtime/folder',
+      displayName: 'runtime',
+      executionHostId: 'runtime:env-1' as const
+    }
+    const worktreeId = 'repo-folder::/runtime/folder::workspace:child-1'
+    store.getRepos.mockReturnValue([localRepo, runtimeRepo])
+    store.getRepo.mockReturnValue(localRepo)
+
+    await handlers['worktrees:remove'](null, {
+      worktreeId,
+      hostId: 'runtime:env-1'
+    })
+
+    expect(killAllProcessesForWorktreeMock).toHaveBeenCalledWith(
+      worktreeId,
+      expect.objectContaining({ resolvedRuntimeEnvironmentId: 'env-1' })
+    )
+    expect(store.removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'runtime:env-1')
+  })
+
+  it('rejects a runtime folder owner without an explicit host', async () => {
+    const repo = {
+      id: 'repo-folder',
+      path: '/runtime/folder',
+      displayName: 'runtime',
+      badgeColor: '#000',
+      addedAt: 0,
+      kind: 'folder' as const,
+      executionHostId: 'runtime:env-1' as const
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+
+    await expect(
+      handlers['worktrees:remove'](null, {
+        worktreeId: 'repo-folder::/runtime/folder::workspace:child-1'
+      })
+    ).rejects.toThrow('Repo not found: repo-folder')
+
+    expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects contradictory runtime folder ownership', async () => {
+    const repo = {
+      id: 'repo-folder',
+      path: '/runtime/folder',
+      displayName: 'runtime',
+      badgeColor: '#000',
+      addedAt: 0,
+      kind: 'folder' as const,
+      connectionId: 'conn-1',
+      executionHostId: 'runtime:env-1' as const
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+
+    await expect(
+      handlers['worktrees:remove'](null, {
+        worktreeId: 'repo-folder::/runtime/folder::workspace:child-1',
+        hostId: 'runtime:env-1'
+      })
+    ).rejects.toThrow('Repo not found: repo-folder')
+
+    expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
+  })
+
   it('runs the archive hook on remove when skipArchive is not set', async () => {
     mockKnownFeatureWorktree()
     removeWorktreeMock.mockResolvedValue(undefined)
