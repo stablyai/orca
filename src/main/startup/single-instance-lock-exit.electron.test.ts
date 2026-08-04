@@ -111,9 +111,16 @@ beforeAll(async () => {
   await waitFor(() => readLines(ownerMarker).includes(OWNER_ACQUIRED), 'the owner to take the lock')
 }, 90_000)
 
-afterAll(() => {
-  owner?.kill('SIGKILL')
-  rmSync(root, { recursive: true, force: true })
+afterAll(async () => {
+  if (owner && owner.exitCode === null) {
+    const exited = new Promise<void>((resolve) => {
+      owner?.once('exit', () => resolve())
+    })
+    owner.kill('SIGKILL')
+    await exited
+  }
+  // Why: Windows keeps the profile's handles open for a beat after the kill, which fails an immediate rm.
+  rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
 })
 
 type DuplicateRun = { status: number | null; markers: string[]; ownerSawArgv: string[] }
