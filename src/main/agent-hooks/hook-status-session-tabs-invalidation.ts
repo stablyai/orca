@@ -1,67 +1,34 @@
-import type { AgentStatusState } from '../../shared/agent-status-types'
+import type { AgentHookEventPayload } from '../../shared/agent-hook-listener'
+import type { ParsedAgentStatusPayload } from '../../shared/agent-status-types'
 
-/** Just the projected fields, declared locally because the server's enriched hook
- *  payload type is module-private. */
-export type HookStatusSessionTabsRow = {
-  paneKey: string
-  state: AgentStatusState
-  connectionId?: string | null
-  providerSessionOnly?: boolean
-  agentType?: string
-  prompt?: string
-  toolName?: string
-  interactivePrompt?: string
-  interrupted?: boolean
-}
-
-type ProjectedStatus = {
-  state: AgentStatusState
-  connectionId: string | null
-  agentType: string | null
-  prompt: string
-  toolName: string | null
-  interactivePrompt: string | null
-  interrupted: boolean
-}
-
-function project(row: HookStatusSessionTabsRow): ProjectedStatus {
-  return {
-    state: row.state,
-    connectionId: row.connectionId ?? null,
-    agentType: row.agentType ?? null,
-    prompt: row.prompt ?? '',
-    toolName: row.toolName ?? null,
-    interactivePrompt: row.interactivePrompt ?? null,
-    interrupted: row.interrupted ?? false
-  }
-}
+type KnownStatus = { connectionId: string | null; payload: ParsedAgentStatusPayload }
 
 /** Reports whether a hook status event changed anything the `session.tabs`
  *  projection publishes, so a repeated same-state ping costs no snapshot rebuild.
- *  Mirrors the retained-OSC change set so both carriers invalidate alike. */
+ *  Mirrors `retainAgentRowSnapshot`'s change set so both carriers invalidate alike. */
 export function createHookStatusSessionTabsInvalidator(): {
-  (row: HookStatusSessionTabsRow): boolean
+  (event: AgentHookEventPayload): boolean
   forgetPane: (paneKey: string) => void
   forgetConnection: (connectionId: string) => string[]
 } {
-  const known = new Map<string, ProjectedStatus>()
-  const invalidator = (row: HookStatusSessionTabsRow): boolean => {
+  const known = new Map<string, KnownStatus>()
+  const invalidator = (event: AgentHookEventPayload): boolean => {
     // Why: resume-identity rows carry transport placeholders, not status; the
     // provider-session invalidator owns their republish.
-    if (row.providerSessionOnly === true) {
+    if (event.providerSessionOnly === true) {
       return false
     }
-    const next = project(row)
-    const previous = known.get(row.paneKey)
-    known.set(row.paneKey, next)
+    const previous = known.get(event.paneKey)?.payload
+    const next = event.payload
+    known.set(event.paneKey, { connectionId: event.connectionId, payload: next })
     return (
       !previous ||
       previous.state !== next.state ||
-      previous.agentType !== next.agentType ||
       previous.prompt !== next.prompt ||
-      previous.toolName !== next.toolName ||
-      previous.interactivePrompt !== next.interactivePrompt ||
-      previous.interrupted !== next.interrupted
+      (previous.agentType ?? null) !== (next.agentType ?? null) ||
+      (previous.toolName ?? null) !== (next.toolName ?? null) ||
+      (previous.interactivePrompt ?? null) !== (next.interactivePrompt ?? null) ||
+      (previous.interrupted ?? false) !== (next.interrupted ?? false)
     )
   }
   // Why: a cleared pane must re-arm, else the memo swallows the first event of the

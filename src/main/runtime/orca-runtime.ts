@@ -1474,6 +1474,13 @@ type RuntimeAgentRowSnapshot = {
   updatedAt: number
 }
 
+/** A hook row narrowed to what `session.tabs` publishes, shaped like the retained OSC
+ *  snapshot so one projection branch can consume either carrier. */
+type HookLiveAgentRow = Pick<
+  RuntimeAgentRowSnapshot,
+  'payload' | 'updatedAt' | 'stateStartedAt' | 'worktreeId'
+>
+
 type RuntimeHeadlessTerminal = {
   emulator: HeadlessEmulator
   // Why: serialize can race with newer writes appended to writeChain; return
@@ -6430,24 +6437,17 @@ export class OrcaRuntimeService {
       if (!hasPtyBackedTab) {
         continue
       }
-      if (options.immediate) {
-        this.mobileSessionTabsByWorktree.set(worktreeId, {
-          ...snapshot,
-          snapshotVersion: snapshot.snapshotVersion + 1
-        })
-        // Why: readiness/lifecycle changes are structural and must not wait
-        // behind the title/status coalescing window.
-        this.notifyMobileSessionTabsChanged(worktreeId)
-      } else {
-        this.touchMobileSessionTabsForWorktree(worktreeId)
-      }
+      this.touchMobileSessionTabsForWorktree(worktreeId, options)
     }
   }
 
-  /** Bump the snapshot version and coalesce an emit.
+  /** Bump the snapshot version and emit, coalesced unless `immediate`.
    *  Why the bump: clients gate mirrored snapshots on a strictly increasing
    *  `snapshotVersion`, so a re-emit at the same version is silently dropped. */
-  touchMobileSessionTabsForWorktree(worktreeId: string): void {
+  touchMobileSessionTabsForWorktree(
+    worktreeId: string,
+    options: { immediate?: boolean } = {}
+  ): void {
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     if (!snapshot) {
       return
@@ -6456,6 +6456,12 @@ export class OrcaRuntimeService {
       ...snapshot,
       snapshotVersion: snapshot.snapshotVersion + 1
     })
+    if (options.immediate) {
+      // Why: readiness/lifecycle changes are structural and must not wait
+      // behind the title/status coalescing window.
+      this.notifyMobileSessionTabsChanged(worktreeId)
+      return
+    }
     // Why: title/status flips several times a second under spinner-in-title
     // agents. Coalesce the emit instead of fanning out every version.
     this.mobileSessionTabsNotifyCoalescer.schedule(worktreeId)
@@ -29413,7 +29419,7 @@ export class OrcaRuntimeService {
         retained?.payload.toolName != null ||
         // Why: a pending question is never inherited across hook events (unlike
         // `toolName`), so it proves the agent is parked on a selector right now.
-        hookRow.live?.interactivePrompt != null ||
+        hookRow.live?.payload.interactivePrompt != null ||
         // Why: headless serve has no renderer to retain an OSC row, so a fresh hook
         // agentType is the only live signal a hook-only pane can offer — and an agent
         // that reports over HTTP need never set a title this gate would recognize.
@@ -29437,14 +29443,7 @@ export class OrcaRuntimeService {
       ownerAgent
     )
     // Why: OSC 9999 hook payload carries real state/prompt/agent; without preferring it, hook-only transitions never surfaced (#7970).
-    const liveRow = retained
-      ? {
-          payload: retained.payload,
-          updatedAt: retained.updatedAt,
-          stateStartedAt: retained.stateStartedAt,
-          worktreeId: retained.worktreeId
-        }
-      : this.resolveHookLiveAgentRow(hookRow, pty, nonAgentTitle)
+    const liveRow = retained ?? this.resolveHookLiveAgentRow(hookRow.live, pty, nonAgentTitle)
     if (liveRow) {
       return {
         agentStatus: normalizeCompatibleAgentStatusEntryForOwner(
@@ -29503,40 +29502,21 @@ export class OrcaRuntimeService {
    *  any age — the agent is parked on a selector until it answers — and it is also the
    *  only signal allowed to survive the #1437 non-agent-title suppression. */
   private resolveHookLiveAgentRow(
-    hookRow: {
-      live: ParsedAgentStatusPayload | null
-      liveReceivedAt: number | null
-      liveStateStartedAt: number | null
-    },
+    live: HookLiveAgentRow | null,
     pty: RuntimePtyWorktreeRecord | null,
     nonAgentTitle: boolean
-  ): {
-    payload: ParsedAgentStatusPayload
-    updatedAt: number
-    stateStartedAt: number
-    worktreeId?: string
-  } | null {
-    const live = hookRow.live
-    const receivedAt = hookRow.liveReceivedAt
-    if (!live || receivedAt == null) {
+  ): HookLiveAgentRow | null {
+    if (!live) {
       return null
     }
-    const pendingQuestion = live.interactivePrompt != null
-    if (nonAgentTitle && !pendingQuestion) {
-      return null
+    if (live.payload.interactivePrompt != null) {
+      return live
     }
     // Why only this stamp: it is the sole wall-clock date on the pane's live title,
     // so it is the only one comparable to a hook `receivedAt`. The sibling
     // `titleUpdatedAt`/`lastOscTitleAt`/`paneTitleUpdatedAt` fields are observation
     // sequence numbers, and comparing them here can only ever misfire.
-    if (!pendingQuestion && receivedAt < (pty?.lastOscTitleEpochMs ?? 0)) {
-      return null
-    }
-    return {
-      payload: live,
-      updatedAt: receivedAt,
-      stateStartedAt: hookRow.liveStateStartedAt ?? receivedAt
-    }
+    return !nonAgentTitle && live.updatedAt >= (pty?.lastOscTitleEpochMs ?? 0) ? live : null
   }
 
   /** Hook-reported identity for this pane, newest wins per field.
@@ -29560,9 +29540,7 @@ export class OrcaRuntimeService {
     providerSessionAgentType: string | null
     providerSessionReceivedAt: number | null
     agentType: string | null
-    live: ParsedAgentStatusPayload | null
-    liveReceivedAt: number | null
-    liveStateStartedAt: number | null
+    live: HookLiveAgentRow | null
   } {
     let session: AgentStatusIpcPayload | null = null
     let agent: AgentStatusIpcPayload | null = null
@@ -29598,9 +29576,14 @@ export class OrcaRuntimeService {
       providerSessionAgentType: session?.agentType ?? null,
       providerSessionReceivedAt: session?.receivedAt ?? null,
       agentType: agent?.agentType ?? null,
-      live: live ? pickParsedAgentStatusPayload(live) : null,
-      liveReceivedAt: live?.receivedAt ?? null,
-      liveStateStartedAt: live?.stateStartedAt ?? null
+      live: live
+        ? {
+            payload: pickParsedAgentStatusPayload(live),
+            updatedAt: live.receivedAt,
+            stateStartedAt: live.stateStartedAt ?? live.receivedAt,
+            ...(live.worktreeId ? { worktreeId: live.worktreeId } : {})
+          }
+        : null
     }
   }
 

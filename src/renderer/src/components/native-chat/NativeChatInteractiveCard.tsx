@@ -2,10 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useAppStore } from '../../store'
 import { extractPendingAsk } from '../../../../shared/native-chat-ask'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import {
-  parseInteractivePrompt,
-  type InteractivePromptCard
-} from './native-chat-interactive-prompt'
+import { parseInteractivePrompt } from './native-chat-interactive-prompt'
 import { nativeChatCardDismissKey } from './native-chat-dismiss-key'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 import { NativeChatApprovalCard } from './NativeChatApprovalCard'
@@ -60,18 +57,14 @@ export function NativeChatInteractiveCard({
   const interactiveToolName = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.toolName ?? null)
   const { sendAnswer, sendRaw, cancelPending, cancel } = send
 
-  const statusCard = useMemo(
-    () => parseInteractivePrompt(interactivePrompt, interactiveToolName ?? undefined),
-    [interactivePrompt, interactiveToolName]
-  )
-  const transcriptCard = useMemo<InteractivePromptCard | null>(() => {
+  const card = useMemo(() => {
+    const statusCard = parseInteractivePrompt(interactivePrompt, interactiveToolName ?? undefined)
     if (statusCard || !messages) {
-      return null
+      return statusCard
     }
     const prompt = extractPendingAsk(messages)
-    return prompt ? { kind: 'question', prompt } : null
-  }, [statusCard, messages])
-  const card = statusCard ?? transcriptCard
+    return prompt ? { kind: 'question' as const, prompt } : null
+  }, [interactivePrompt, interactiveToolName, messages])
   const cardKey = useMemo(() => nativeChatCardDismissKey(card), [card])
   const [dismissedKey, setDismissedKey] = useState<string | null>(null)
   // A question answer is a paced multi-step write (body→Enter per question); keep

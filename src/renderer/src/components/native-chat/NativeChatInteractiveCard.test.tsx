@@ -4,10 +4,7 @@ import '@testing-library/jest-dom/vitest'
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
-  type NativeChatMessage
-} from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { applyCommandMarkerBoundaries } from './native-chat-pending'
 import type { NativeChatInteractiveSend } from './use-native-chat-interactive-send'
 
@@ -99,34 +96,6 @@ function askResultMessage(): NativeChatMessage {
     role: 'assistant',
     createdAt: 2,
     blocks: [{ type: 'tool-result', name: 'AskUserQuestion', output: 'Tabs' }]
-  } as unknown as NativeChatMessage
-}
-
-/** A tool call whose result the interrupt below replaced. */
-function orphanedCallMessage(): NativeChatMessage {
-  return {
-    id: 'orphan-1',
-    role: 'assistant',
-    createdAt: 0,
-    blocks: [{ type: 'tool-call', name: 'Bash', input: { command: 'sleep 999' } }]
-  } as unknown as NativeChatMessage
-}
-
-function interruptedMessage(): NativeChatMessage {
-  return {
-    id: 'interrupt-1',
-    role: 'system',
-    createdAt: 0,
-    blocks: [{ type: 'text', text: NATIVE_CHAT_INTERRUPTED_STATUS_TEXT }]
-  } as unknown as NativeChatMessage
-}
-
-function userTurnMessage(): NativeChatMessage {
-  return {
-    id: 'user-1',
-    role: 'user',
-    createdAt: 3,
-    blocks: [{ type: 'text', text: 'never mind, do this instead' }]
   } as unknown as NativeChatMessage
 }
 
@@ -243,6 +212,8 @@ describe('NativeChatInteractiveCard answer lifecycle', () => {
 
 // A headless host, a relay gap, or a replay can leave the pane with no live
 // `interactivePrompt` while the transcript still holds the unresolved call (#11761).
+// Which asks the transcript still counts as pending (orphaned calls, turn boundaries)
+// is the shared parser's contract — covered in `src/shared/native-chat-ask.test.ts`.
 describe('NativeChatInteractiveCard transcript fallback', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -301,28 +272,6 @@ describe('NativeChatInteractiveCard transcript fallback', () => {
     expect(screen.getByText('Tabs or spaces?')).toBeInTheDocument()
 
     rendered.rerender(cardElement(true, [askCallMessage('Tabs or spaces?'), askResultMessage()]))
-    expect(screen.queryByText('Tabs or spaces?')).not.toBeInTheDocument()
-  })
-
-  // A tool call the user ESC'd never gets a result, so without the turn-boundary
-  // reset its empty FIFO slot swallows the ask's result and the card sits over
-  // the composer forever (#11761).
-  it('clears the answered ask even when an earlier call was orphaned by an interrupt', () => {
-    render(
-      cardElement(true, [
-        orphanedCallMessage(),
-        interruptedMessage(),
-        askCallMessage('Tabs or spaces?'),
-        askResultMessage()
-      ])
-    )
-
-    expect(screen.queryByText('Tabs or spaces?')).not.toBeInTheDocument()
-  })
-
-  it('drops an ask the user escaped and typed past', () => {
-    render(cardElement(true, [askCallMessage('Tabs or spaces?'), userTurnMessage()]))
-
     expect(screen.queryByText('Tabs or spaces?')).not.toBeInTheDocument()
   })
 

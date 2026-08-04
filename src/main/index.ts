@@ -2102,10 +2102,9 @@ void app.whenReady().then(async () => {
         undefined
     }))
     for (const worktreeId of collectChangedProviderSessionWorktrees(ownedIdentities)) {
-      // Why the version bump: `notifyMobileSessionTabsChanged` re-emits at the
-      // unchanged `snapshotVersion`, which every client drops on its monotonic gate.
-      runtime?.touchMobileSessionTabsForWorktree(worktreeId)
-      runtime?.notifyMobileSessionTabsChanged(worktreeId)
+      // Why not `notifyMobileSessionTabsChanged` alone: it re-emits at the unchanged
+      // `snapshotVersion`, which every client drops on its monotonic gate.
+      runtime?.touchMobileSessionTabsForWorktree(worktreeId, { immediate: true })
     }
   }
   const unsubscribeStatusChanges = agentHookServer.subscribeStatusChanges((statuses) => {
@@ -2122,18 +2121,7 @@ void app.whenReady().then(async () => {
   // would keep the pane's last projection until an unrelated PTY touch came along.
   const hookStatusChangedSessionTabs = createHookStatusSessionTabsInvalidator()
   const unsubscribeHookStatusSessionTabs = agentHookServer.subscribeEnrichedStatus((enriched) => {
-    const changed = hookStatusChangedSessionTabs({
-      paneKey: enriched.paneKey,
-      connectionId: enriched.connectionId,
-      providerSessionOnly: enriched.providerSessionOnly,
-      state: enriched.payload.state,
-      agentType: enriched.payload.agentType,
-      prompt: enriched.payload.prompt,
-      toolName: enriched.payload.toolName,
-      interactivePrompt: enriched.payload.interactivePrompt,
-      interrupted: enriched.payload.interrupted
-    })
-    if (changed) {
+    if (hookStatusChangedSessionTabs(enriched)) {
       runtime?.touchMobileSessionTabsForPane(enriched.paneKey, enriched.worktreeId ?? null)
     }
   })

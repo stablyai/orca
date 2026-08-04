@@ -661,7 +661,13 @@ export class AgentHookServer {
   private emitPaneStatusCleared(clear: AgentStatusClearIpcPayload): void {
     this.onPaneStatusCleared?.(clear)
     for (const listener of this.paneStatusClearListeners) {
-      listener(clear)
+      // Why: callers are pane/connection teardown paths; one throwing subscriber must
+      // not strand the rest, matching every other fan-out here.
+      try {
+        listener(clear)
+      } catch (err) {
+        console.error('[agent-hooks] pane-status-clear listener threw', err)
+      }
     }
   }
 

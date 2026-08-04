@@ -162,21 +162,15 @@ describe('headless hook agent-status projection (#11761)', () => {
     expect(agentStatus).not.toHaveProperty('interactivePrompt')
   })
 
-  it('never fabricates live state from a resume-identity row', async () => {
-    const agentStatus = await projectAgentStatus([hookRow({ providerSessionOnly: true })])
-
-    expect(agentStatus).toEqual(expect.objectContaining({ state: 'done', prompt: '' }))
-    expect(agentStatus).not.toHaveProperty('toolName')
-  })
-
-  // Pi reports resume identity through a row whose status fields are transport
-  // placeholders, and `agentType` deliberately admits it — `live` must not.
-  it('never fabricates live state from a pi resume-identity row', async () => {
+  // Resume-identity rows carry transport placeholders, not status. `agentType`
+  // deliberately admits pi's flavour of them — `live` must not, either flavour.
+  it.each(['claude', 'pi'])('never fabricates live state from a %s resume row', async (agent) => {
     const agentStatus = await projectAgentStatus([
-      hookRow({ agentType: 'pi', providerSessionOnly: true })
+      hookRow({ agentType: agent, providerSessionOnly: true })
     ])
 
     expect(agentStatus).toEqual(expect.objectContaining({ state: 'done', prompt: '' }))
+    expect(agentStatus).not.toHaveProperty('toolName')
     expect(agentStatus).not.toHaveProperty('interactivePrompt')
   })
 
@@ -288,15 +282,19 @@ describe('hook-driven session tabs republish (#11761)', () => {
     unsubscribe()
   })
 
+  // Proven by version arithmetic rather than a timed silence: a pane that wrongly
+  // resolved to this workspace would bump the version a second time.
   it('ignores a pane with no resolvable workspace', async () => {
     const runtime = await createRuntimeWithHookRows([hookRow()])
-    const events: unknown[] = []
+    const before = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    const events: { snapshotVersion: number }[] = []
     const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
 
     runtime.touchMobileSessionTabsForPane(makePaneKey('gone-tab', LEAF_ID))
+    runtime.touchMobileSessionTabsForPane(PANE_KEY, WORKTREE_ID)
 
-    await new Promise((resolve) => setTimeout(resolve, 50))
-    expect(events).toHaveLength(0)
+    await vi.waitFor(() => expect(events).toHaveLength(1))
+    expect(events[0]!.snapshotVersion).toBe(before.snapshotVersion + 1)
     unsubscribe()
   })
 
