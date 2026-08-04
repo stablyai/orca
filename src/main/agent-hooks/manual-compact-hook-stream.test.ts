@@ -22,6 +22,8 @@ type ClaudeHook = {
   prompt_id: string
   session_id: string
   trigger?: 'manual' | 'auto'
+  agent_id?: string
+  agent_type?: string
 }
 
 function claudeHook(
@@ -97,6 +99,22 @@ describe('manual Claude compact hook stream', () => {
     await postHook(
       Number(env.ORCA_AGENT_HOOK_PORT),
       env.ORCA_AGENT_HOOK_TOKEN,
+      claudeHook('SubagentStart', PROMPT_ID_1, {
+        agent_id: 'compact-agent',
+        agent_type: 'general-purpose'
+      })
+    )
+    await postHook(
+      Number(env.ORCA_AGENT_HOOK_PORT),
+      env.ORCA_AGENT_HOOK_TOKEN,
+      claudeHook('SubagentStop', PROMPT_ID_1, {
+        agent_id: 'compact-agent',
+        agent_type: 'general-purpose'
+      })
+    )
+    await postHook(
+      Number(env.ORCA_AGENT_HOOK_PORT),
+      env.ORCA_AGENT_HOOK_TOKEN,
       claudeHook('PostCompact', PROMPT_ID_1, { trigger: 'manual' })
     )
     await postHook(
@@ -105,7 +123,13 @@ describe('manual Claude compact hook stream', () => {
       claudeHook('PostCompact', PROMPT_ID_1, { trigger: 'manual' })
     )
 
-    expect(events).toEqual(['UserPromptSubmit:working', 'PreCompact:working', 'PostCompact:done'])
+    expect(events).toEqual([
+      'UserPromptSubmit:working',
+      'PreCompact:working',
+      'SubagentStart:working',
+      'SubagentStop:working',
+      'PostCompact:done'
+    ])
     expect(server.getStatusSnapshot()).toEqual([
       expect.objectContaining({
         state: 'done',
@@ -175,6 +199,22 @@ describe('manual Claude compact hook stream', () => {
     await postHook(
       coordinates.port,
       coordinates.token,
+      claudeHook('SubagentStart', PROMPT_ID_1, {
+        agent_id: 'compact-agent',
+        agent_type: 'general-purpose'
+      })
+    )
+    await postHook(
+      coordinates.port,
+      coordinates.token,
+      claudeHook('SubagentStop', PROMPT_ID_1, {
+        agent_id: 'compact-agent',
+        agent_type: 'general-purpose'
+      })
+    )
+    await postHook(
+      coordinates.port,
+      coordinates.token,
       claudeHook('PostCompact', PROMPT_ID_1, { trigger: 'manual' })
     )
 
@@ -186,6 +226,11 @@ describe('manual Claude compact hook stream', () => {
       hookEventName: 'PostCompact'
     })
     expect(emitted.at(-1)).toBe('PostCompact:done')
+    expect(emitted.slice(-3)).toEqual([
+      'SubagentStart:working',
+      'SubagentStop:working',
+      'PostCompact:done'
+    ])
     expect(main.getStatusSnapshot()[0]).toMatchObject({
       state: 'done',
       prompt: 'work before compact'
@@ -222,7 +267,7 @@ describe('manual Claude compact hook stream', () => {
     })
   })
 
-  it('ignores automatic compact hooks', async () => {
+  it('keeps automatic compact hooks working without settling the turn', async () => {
     const main = new AgentHookServer()
     const forwarded: AgentHookRelayEnvelope[] = []
     const endpointDir = mkdtempSync(join(tmpdir(), 'orca-auto-compact-relay-'))
@@ -246,8 +291,16 @@ describe('manual Claude compact hook stream', () => {
     await postHook(port, token, claudeHook('PreCompact', PROMPT_ID_1, { trigger: 'auto' }))
     await postHook(port, token, claudeHook('PostCompact', PROMPT_ID_1, { trigger: 'auto' }))
 
-    expect(forwarded.map((event) => event.hookEventName)).toEqual(['UserPromptSubmit'])
+    expect(forwarded.map((event) => event.hookEventName)).toEqual([
+      'UserPromptSubmit',
+      'PreCompact',
+      'PostCompact'
+    ])
     expect(main.getStatusSnapshot()[0]).toMatchObject({ state: 'working', agentType: 'claude' })
+    expect(main._getStateForTests().lastStatusByPaneKey.get(PANE_KEY)).toMatchObject({
+      hookEventName: 'PostCompact',
+      compactTrigger: undefined
+    })
   })
 
   it('rejects unproven compact sources at the main relay boundary', () => {

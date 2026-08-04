@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   createHookListenerState,
   normalizeHookPayload,
+  resolveCachedClaudeCompactOwnership,
   type AgentHookEventPayload,
   type HookListenerState
 } from './agent-hook-listener'
@@ -22,7 +23,10 @@ function accept(
 ): AgentHookEventPayload | null {
   const event = normalizeHookPayload(state, source, { paneKey, payload }, 'production')
   if (event) {
-    state.lastStatusByPaneKey.set(paneKey, event)
+    state.lastStatusByPaneKey.set(
+      paneKey,
+      resolveCachedClaudeCompactOwnership(state.lastStatusByPaneKey.get(paneKey), event)
+    )
   }
   return event
 }
@@ -134,7 +138,7 @@ describe('manual compact prompt identity', () => {
     expect(state.lastStatusByPaneKey.get(PANE_KEY)?.hookEventName).toBe('PreCompact')
   })
 
-  it('ignores automatic Claude and unproven Kimi compact events', () => {
+  it('keeps automatic compact working and ignores unproven Kimi events', () => {
     const state = createHookListenerState()
     const current = accept(state, 'claude', {
       hook_event_name: 'UserPromptSubmit',
@@ -167,11 +171,43 @@ describe('manual compact prompt identity', () => {
       session_id: 'session-a'
     })
 
-    expect(automaticPre).toBeNull()
-    expect(automaticPost).toBeNull()
+    expect(automaticPre).toMatchObject({
+      compactTrigger: 'auto',
+      hookEventName: 'PreCompact',
+      payload: { state: 'working' }
+    })
+    expect(automaticPost).toMatchObject({
+      compactTrigger: 'auto',
+      hookEventName: 'PostCompact',
+      payload: { state: 'working' }
+    })
     expect(kimiPre).toBeNull()
     expect(kimiPost).toBeNull()
-    expect(state.lastStatusByPaneKey.get(PANE_KEY)).toBe(current)
+    expect(state.lastStatusByPaneKey.get(PANE_KEY)).toMatchObject({
+      hookEventName: 'PostCompact',
+      compactTrigger: undefined,
+      payload: { state: 'working', prompt: current?.payload.prompt }
+    })
+  })
+
+  it('does not let stale manual completion retire a newer automatic compact', () => {
+    const state = createHookListenerState()
+    beginManualCompact(state, PROMPT_ID_1)
+    expect(
+      accept(state, 'claude', {
+        hook_event_name: 'PreCompact',
+        trigger: 'auto',
+        prompt_id: PROMPT_ID_1,
+        session_id: 'session-a'
+      })
+    ).toMatchObject({ compactTrigger: 'auto', payload: { state: 'working' } })
+
+    expect(finishManualCompact(state, PROMPT_ID_1)).toBeNull()
+    expect(state.lastStatusByPaneKey.get(PANE_KEY)).toMatchObject({
+      compactTrigger: 'auto',
+      hookEventName: 'PreCompact',
+      payload: { state: 'working' }
+    })
   })
 
   it('does not allocate ownership for unaccepted untrusted pane keys', () => {

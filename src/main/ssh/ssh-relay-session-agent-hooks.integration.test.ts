@@ -350,9 +350,13 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     ).toMatchObject({
       source: 'claude',
       providerPromptId: COMPACT_PROMPT_ID,
-      compactTrigger: 'manual',
+      compactTrigger: undefined,
       connectionId: 'conn-compact'
     })
+
+    relay.notifyAgentHook(compactEnvelope('PostCompact', 'done'))
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(events).toHaveLength(3)
   })
 
   it('clears stamped status on reconnect loss but not final shutdown', async () => {

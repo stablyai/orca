@@ -86,8 +86,8 @@ export type AgentHookRelayEnvelope = {
   hookEventName?: string
   /** Claude's provider-owned user-prompt UUID. */
   providerPromptId?: string
-  /** Present only for correlated manual compact lifecycle events. */
-  compactTrigger?: 'manual'
+  /** Active Claude compact generation, keyed by provider prompt identity. */
+  compactTrigger?: 'manual' | 'auto'
   /** Claude tool execution id, when the source hook provides one. */
   toolUseId?: string
   /** Claude subagent identity, when the source hook provides one. */

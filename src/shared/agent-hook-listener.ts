@@ -327,8 +327,8 @@ export type AgentHookEventPayload = {
   hookEventName?: string
   /** Claude's provider-owned user-prompt UUID. */
   providerPromptId?: string
-  /** Present only for correlated manual compact lifecycle events. */
-  compactTrigger?: 'manual'
+  /** Active Claude compact generation, keyed by provider prompt identity. */
+  compactTrigger?: 'manual' | 'auto'
   /** Claude tool-use identifier when the hook source exposes one. */
   toolUseId?: string
   /** Claude agent/subagent identifier when the hook source exposes one. */
@@ -346,7 +346,7 @@ export type AgentHookEventPayload = {
   payload: ParsedAgentStatusPayload
 }
 
-type ManualCompactIdentity = Pick<
+type ClaudeCompactIdentity = Pick<
   AgentHookEventPayload,
   | 'source'
   | 'connectionId'
@@ -356,20 +356,23 @@ type ManualCompactIdentity = Pick<
   | 'providerSession'
 >
 
-export function canAcceptManualClaudeCompactTransition(
+export function canAcceptClaudeCompactTransition(
   previous: AgentHookEventPayload | undefined,
-  incoming: ManualCompactIdentity,
-  options: { allowUnanchoredPreCompact?: boolean } = {}
+  incoming: ClaudeCompactIdentity,
+  options: { allowUnanchoredPreCompact?: boolean; allowUnanchoredPostCompact?: boolean } = {}
 ): boolean {
   if (
     incoming.source !== 'claude' ||
-    incoming.compactTrigger !== 'manual' ||
+    incoming.compactTrigger === undefined ||
     incoming.providerPromptId === undefined ||
     (incoming.hookEventName !== 'PreCompact' && incoming.hookEventName !== 'PostCompact')
   ) {
     return false
   }
   if (incoming.hookEventName === 'PreCompact' && options.allowUnanchoredPreCompact) {
+    return true
+  }
+  if (incoming.hookEventName === 'PostCompact' && options.allowUnanchoredPostCompact) {
     return true
   }
   if (
@@ -382,12 +385,51 @@ export function canAcceptManualClaudeCompactTransition(
   }
   if (incoming.hookEventName === 'PostCompact') {
     return (
-      previous.hookEventName === 'PreCompact' &&
-      previous.compactTrigger === 'manual' &&
+      previous.compactTrigger === incoming.compactTrigger &&
       previous.providerPromptId === incoming.providerPromptId
     )
   }
-  return previous.providerPromptId !== undefined
+  return incoming.compactTrigger === 'manual'
+    ? previous.providerPromptId !== undefined
+    : previous.providerPromptId === incoming.providerPromptId
+}
+
+export function resolveCachedClaudeCompactOwnership(
+  previous: AgentHookEventPayload | undefined,
+  incoming: AgentHookEventPayload
+): AgentHookEventPayload {
+  const sameClaudeOwner =
+    previous?.source === 'claude' &&
+    previous.payload.agentType === 'claude' &&
+    incoming.source === 'claude' &&
+    incoming.payload.agentType === 'claude' &&
+    incoming.connectionId === previous.connectionId &&
+    agentProviderSessionsEqual('claude', previous.providerSession, incoming.providerSession)
+      ? previous
+      : undefined
+  if (incoming.hookEventName === 'PreCompact' && incoming.compactTrigger) {
+    return sameClaudeOwner?.payload.prompt && incoming.payload.prompt.length === 0
+      ? { ...incoming, payload: { ...incoming.payload, prompt: sameClaudeOwner.payload.prompt } }
+      : incoming
+  }
+  if (incoming.hookEventName === 'PostCompact') {
+    return incoming.compactTrigger ? { ...incoming, compactTrigger: undefined } : incoming
+  }
+  const ownsCompact =
+    sameClaudeOwner?.compactTrigger !== undefined &&
+    sameClaudeOwner.providerPromptId !== undefined &&
+    incoming.providerPromptId === sameClaudeOwner.providerPromptId
+  if (ownsCompact) {
+    return {
+      ...incoming,
+      compactTrigger: sameClaudeOwner.compactTrigger,
+      payload:
+        incoming.payload.prompt.length === 0 && sameClaudeOwner.payload.prompt
+          ? { ...incoming.payload, prompt: sameClaudeOwner.payload.prompt }
+          : incoming.payload
+    }
+  }
+  return incoming.compactTrigger ? { ...incoming, compactTrigger: undefined } : incoming
 }
 
 // ─── Body parsing ───────────────────────────────────────────────────
@@ -2726,11 +2768,12 @@ function normalizeClaudeEvent(
     eventName === 'PostToolUse' ||
     eventName === 'PostToolUseFailure' ||
     eventName === 'PreCompact' ||
+    (eventName === 'PostCompact' && hookPayload.trigger === 'auto') ||
     (eventName === 'PreToolUse' && !isAskUserQuestion)
       ? 'working'
       : eventName === 'PermissionRequest' || isAskUserQuestion
         ? 'waiting'
-        : isTurnBoundary || eventName === 'PostCompact'
+        : isTurnBoundary || (eventName === 'PostCompact' && hookPayload.trigger === 'manual')
           ? 'done'
           : null
 
@@ -4021,7 +4064,7 @@ export function normalizeHookPayload(
   source: AgentHookSource,
   body: unknown,
   expectedEnv: string,
-  options: { allowUnanchoredManualPreCompact?: boolean } = {}
+  options: { allowUnanchoredPreCompact?: boolean; allowUnanchoredPostCompact?: boolean } = {}
 ): AgentHookEventPayload | null {
   if (typeof body !== 'object' || body === null) {
     return null
@@ -4080,17 +4123,17 @@ export function normalizeHookPayload(
   const compactTrigger =
     source === 'claude' &&
     (eventName === 'PreCompact' || eventName === 'PostCompact') &&
-    hookPayloadRecord.trigger === 'manual'
-      ? ('manual' as const)
+    (hookPayloadRecord.trigger === 'manual' || hookPayloadRecord.trigger === 'auto')
+      ? hookPayloadRecord.trigger
       : undefined
   const isCompactEvent = eventName === 'PreCompact' || eventName === 'PostCompact'
-  if (isCompactEvent && compactTrigger !== 'manual') {
+  if (isCompactEvent && compactTrigger === undefined) {
     return null
   }
   const previousStatus = state.lastStatusByPaneKey.get(paneKey)
   if (
-    compactTrigger === 'manual' &&
-    !canAcceptManualClaudeCompactTransition(
+    compactTrigger !== undefined &&
+    !canAcceptClaudeCompactTransition(
       previousStatus,
       {
         source,
@@ -4101,7 +4144,8 @@ export function normalizeHookPayload(
         providerSession: providerSession ?? undefined
       },
       {
-        allowUnanchoredPreCompact: options.allowUnanchoredManualPreCompact
+        allowUnanchoredPreCompact: options.allowUnanchoredPreCompact,
+        allowUnanchoredPostCompact: options.allowUnanchoredPostCompact
       }
     )
   ) {
@@ -4109,7 +4153,7 @@ export function normalizeHookPayload(
   }
   if (
     eventName === 'PostCompact' &&
-    compactTrigger === 'manual' &&
+    compactTrigger !== undefined &&
     previousStatus?.payload.prompt &&
     !state.lastPromptByPaneKey.has(paneKey)
   ) {

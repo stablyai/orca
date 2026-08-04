@@ -22,13 +22,14 @@ import {
   markCodexLeadTurnInterrupted,
   MAX_PANE_KEY_LEN,
   movePaneCacheState,
-  canAcceptManualClaudeCompactTransition,
+  canAcceptClaudeCompactTransition,
   normalizeClaudePromptId,
   normalizeHookPayload,
   parseFormEncodedBody,
   readRequestBody,
   reapRestoredClaudeSubagentsForDeadPane,
   reconcileRemoteCodexState,
+  resolveCachedClaudeCompactOwnership,
   resolveHookSource,
   preparePendingGrokResultDiscovery,
   seedClaudeSubagentRosterFromSnapshots,
@@ -301,7 +302,9 @@ function sanitizeHydratedEntry(
   const providerPromptId =
     source === 'claude' ? normalizeClaudePromptId(record.providerPromptId) : undefined
   const compactTrigger =
-    source === 'claude' && record.compactTrigger === 'manual' ? ('manual' as const) : undefined
+    source === 'claude' && (record.compactTrigger === 'manual' || record.compactTrigger === 'auto')
+      ? record.compactTrigger
+      : undefined
   return {
     paneKey,
     source,
@@ -1205,7 +1208,8 @@ export class AgentHookServer {
     if (!identity.inheritedFromActivePane) {
       this.maybeTrackAgentPromptSent(effectivePayload, previous)
     }
-    const enriched = this.attachStatusTiming(effectivePayload, now)
+    const cachedPayload = resolveCachedClaudeCompactOwnership(previous, effectivePayload)
+    const enriched = this.attachStatusTiming(cachedPayload, now)
     this.runtimeObservedStatusPaneKeys.add(enriched.paneKey)
     this.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
     this.scheduleStatusPersist()
@@ -1870,7 +1874,10 @@ export class AgentHookServer {
     const providerPromptId =
       source === 'claude' ? normalizeClaudePromptId(envelope.providerPromptId) : undefined
     const compactTrigger =
-      source === 'claude' && envelope.compactTrigger === 'manual' ? ('manual' as const) : undefined
+      source === 'claude' &&
+      (envelope.compactTrigger === 'manual' || envelope.compactTrigger === 'auto')
+        ? envelope.compactTrigger
+        : undefined
     const statusDisposition = this.getAgentStatusDisposition(paneKey, {
       hookEventName,
       isReplay: envelope.isReplay === true
@@ -1915,23 +1922,22 @@ export class AgentHookServer {
     if (hookEventName === 'PreCompact' || hookEventName === 'PostCompact') {
       if (
         source !== 'claude' ||
-        compactTrigger !== 'manual' ||
+        compactTrigger === undefined ||
         normalizedPayload.agentType !== source
       ) {
         return
       }
       if (
         hookEventName === 'PreCompact' &&
-        compactTrigger === 'manual' &&
         envelope.isReplay === true &&
         (previousStatus?.hookEventName !== 'PreCompact' ||
-          previousStatus.compactTrigger !== 'manual' ||
+          previousStatus.compactTrigger !== compactTrigger ||
           previousStatus.providerPromptId !== providerPromptId)
       ) {
         return
       }
       if (
-        !canAcceptManualClaudeCompactTransition(previousStatus, {
+        !canAcceptClaudeCompactTransition(previousStatus, {
           source,
           connectionId: trimmedConnectionId,
           hookEventName,
@@ -1945,7 +1951,7 @@ export class AgentHookServer {
     }
     if (
       source === 'claude' &&
-      compactTrigger === 'manual' &&
+      compactTrigger !== undefined &&
       normalizedPayload.prompt.length === 0 &&
       previousStatus?.payload.prompt
     ) {
