@@ -11,5 +11,17 @@ export function normalizePairingBase64(base64url: string): string {
     throw new Error('Invalid pairing code')
   }
   const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/')
-  return base64.padEnd(Math.ceil(base64.length / 4) * 4, '=')
+  const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=')
+  // Why: permissive decoders accept alternate spellings when unused trailing bits are non-zero.
+  const trailingBits = padded.endsWith('==') ? 4 : padded.endsWith('=') ? 2 : 0
+  if (trailingBits > 0) {
+    const finalCharacter = padded[padded.length - trailingBits / 2 - 1]!
+    const value = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'.indexOf(
+      finalCharacter
+    )
+    if (value & ((1 << trailingBits) - 1)) {
+      throw new Error('Invalid pairing code')
+    }
+  }
+  return padded
 }

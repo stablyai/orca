@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { decodePairingUrl, extractPairingCodeFromUrl, parsePairingCode } from './pairing'
 import type { PairingOffer } from './types'
+import { PAIRING_INPUT_MAX_CHARACTERS } from '../../../src/shared/mobile-pairing-protocol-limits'
 
 const offer: PairingOffer = {
   v: 2,
@@ -63,13 +64,27 @@ describe('pairing deep links', () => {
     expect(parsePairingCode(code)).toEqual(offer)
   })
 
+  it('rejects oversized raw codes and URLs before parsing', () => {
+    const code = encodeOffer()
+    const oversizedRawCode = `${code}${' '.repeat(PAIRING_INPUT_MAX_CHARACTERS)}`
+    const oversizedUrl = `orca://pair?code=${code}&ignored=${'A'.repeat(
+      PAIRING_INPUT_MAX_CHARACTERS
+    )}`
+
+    expect(parsePairingCode(oversizedRawCode)).toBeNull()
+    expect(extractPairingCodeFromUrl(oversizedUrl)).toBeNull()
+    expect(decodePairingUrl(oversizedUrl)).toBeNull()
+  })
+
   it('rejects malformed padding without rejecting canonical padding', () => {
     const paddedOffer = { ...offer, endpoint: `${offer.endpoint}/a` }
     const code = encodeOffer(paddedOffer)
     expect(code.length % 4).toBe(2)
+    const alias = `${code.slice(0, -1)}${base64Alias(code.at(-1)!)}`
 
     expect(parsePairingCode(`${code}=`)).toBeNull()
     expect(parsePairingCode(`${code}==`)).toEqual(paddedOffer)
+    expect(parsePairingCode(alias)).toBeNull()
   })
 
   it('preserves a TLS reverse-proxy endpoint with an explicit port and path', () => {
@@ -82,3 +97,8 @@ describe('pairing deep links', () => {
     expect(parsePairingCode(code)).toEqual(proxiedOffer)
   })
 })
+
+function base64Alias(character: string): string {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
+  return alphabet[alphabet.indexOf(character) + 1]!
+}

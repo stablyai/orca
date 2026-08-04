@@ -5,6 +5,7 @@ import {
   parsePairingCode,
   type PairingOffer
 } from './pairing'
+import { PAIRING_INPUT_MAX_CHARACTERS } from './mobile-pairing-protocol-limits'
 
 describe('pairing offer', () => {
   const offer: PairingOffer = {
@@ -46,6 +47,27 @@ describe('pairing offer', () => {
     try {
       vi.stubGlobal('Buffer', undefined)
       browserDecoded = parsePairingCode(malformedCode)
+    } finally {
+      vi.stubGlobal('Buffer', nodeBuffer)
+    }
+
+    expect({ nodeDecoded, browserDecoded }).toEqual({
+      nodeDecoded: null,
+      browserDecoded: null
+    })
+  })
+
+  it('rejects non-zero pad bits consistently across Node and browser runtimes', () => {
+    const url = encodePairingOffer(offer)
+    const code = new URLSearchParams(url.slice(url.indexOf('?') + 1)).get('code')!
+    expect(code.length % 4).toBe(2)
+    const alias = `${code.slice(0, -1)}${base64Alias(code.at(-1)!)}`
+    const nodeDecoded = parsePairingCode(alias)
+    const nodeBuffer = Buffer
+    let browserDecoded: PairingOffer | null = null
+    try {
+      vi.stubGlobal('Buffer', undefined)
+      browserDecoded = parsePairingCode(alias)
     } finally {
       vi.stubGlobal('Buffer', nodeBuffer)
     }
@@ -107,6 +129,15 @@ describe('pairing offer', () => {
     expect(decodePairingOffer(`orca://pair#${code}`)).toEqual(offer)
   })
 
+  it('rejects oversized whole URLs before parsing', () => {
+    const url = encodePairingOffer(offer)
+    const oversizedUrl = `${url}&ignored=${'A'.repeat(PAIRING_INPUT_MAX_CHARACTERS)}`
+
+    expect(() => decodePairingOffer(oversizedUrl)).toThrow(
+      'Invalid pairing URL: pairing code exceeds safe size'
+    )
+  })
+
   it('rejects payloads with missing fields', () => {
     const partial = { v: 2, endpoint: 'ws://host:1234' }
     const base64 = Buffer.from(JSON.stringify(partial)).toString('base64')
@@ -150,6 +181,13 @@ describe('parsePairingCode', () => {
     expect(parsePairingCode(`  ${url}\n`)).toEqual(offer)
   })
 
+  it('rejects oversized whole raw input before trimming', () => {
+    const url = encodePairingOffer(offer)
+    const code = new URLSearchParams(url.slice(url.indexOf('?') + 1)).get('code')!
+
+    expect(parsePairingCode(`${code}${' '.repeat(PAIRING_INPUT_MAX_CHARACTERS)}`)).toBeNull()
+  })
+
   it('returns null for empty input', () => {
     expect(parsePairingCode('')).toBeNull()
     expect(parsePairingCode('   ')).toBeNull()
@@ -165,3 +203,8 @@ describe('parsePairingCode', () => {
     expect(parsePairingCode(bogus)).toBeNull()
   })
 })
+
+function base64Alias(character: string): string {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
+  return alphabet[alphabet.indexOf(character) + 1]!
+}

@@ -1,5 +1,6 @@
 import { PairingOfferSchema, type PairingOffer } from './types'
 import { normalizePairingBase64 } from '../../../src/shared/mobile-pairing-base64'
+import { PAIRING_INPUT_MAX_CHARACTERS } from '../../../src/shared/mobile-pairing-protocol-limits'
 
 // Why: this file mirrors src/shared/pairing.ts (which is covered by CI
 // vitest) but uses atob/btoa because Metro/Hermes don't ship Node's
@@ -22,6 +23,9 @@ export function decodePairingUrl(url: string): PairingOffer | null {
 // extraction here makes QR scan, paste, and external deep-link flows
 // accept the same URL shapes.
 export function extractPairingCodeFromUrl(url: string): string | null {
+  if (url.length > PAIRING_INPUT_MAX_CHARACTERS) {
+    return null
+  }
   const trimmed = url.trim()
   const match = /^orca:\/\/([^/?#]*)([^?#]*)?/i.exec(trimmed)
   if (!match) {
@@ -54,6 +58,9 @@ export function extractPairingCodeFromUrl(url: string): string | null {
 // string so the paste-pair flow can take whichever the user actually
 // copied from desktop.
 export function parsePairingCode(input: string): PairingOffer | null {
+  if (input.length > PAIRING_INPUT_MAX_CHARACTERS) {
+    return null
+  }
   const trimmed = input.trim()
   if (!trimmed) {
     return null

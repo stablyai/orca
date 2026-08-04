@@ -14,9 +14,12 @@ describe('pairing Base64 normalization', () => {
     expect(normalizePairingBase64(input)).toBe(expected)
   })
 
-  it.each(['A', 'Zg=', 'Zm8==', 'Zg===', '=Zg=', 'Z g='])('rejects malformed input %s', (input) => {
-    expect(() => normalizePairingBase64(input)).toThrow('Invalid pairing code')
-  })
+  it.each(['A', 'Zg=', 'Zm8==', 'Zg===', '=Zg=', 'Z g=', 'Zh', 'Zh==', 'Zm9', 'Zm9='])(
+    'rejects malformed or non-canonical input %s',
+    (input) => {
+      expect(() => normalizePairingBase64(input)).toThrow('Invalid pairing code')
+    }
+  )
 
   it('rejects oversized input before decoding', () => {
     expect(() => normalizePairingBase64('A'.repeat(PAIRING_CODE_MAX_CHARACTERS + 1))).toThrow(

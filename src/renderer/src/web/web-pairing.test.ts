@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { decideWebPairingStartup, parseWebPairingInput, type WebPairingOffer } from './web-pairing'
+import {
+  decideWebPairingStartup,
+  parseWebPairingInput,
+  readPairingInputFromLocation,
+  type WebPairingOffer
+} from './web-pairing'
+import { PAIRING_INPUT_MAX_CHARACTERS } from '../../../shared/mobile-pairing-protocol-limits'
 
 describe('web pairing input', () => {
   const offer: WebPairingOffer = {
@@ -25,13 +31,28 @@ describe('web pairing input', () => {
     expect(parseWebPairingInput(`orca://pair#${encodeOffer()}`)).toEqual(offer)
   })
 
+  it('rejects oversized raw codes, URLs, and location queries before parsing', () => {
+    const code = encodeOffer()
+    const oversizedRawCode = `${code}${' '.repeat(PAIRING_INPUT_MAX_CHARACTERS)}`
+    const oversizedQuery = `?pairing=${code}&ignored=${'A'.repeat(PAIRING_INPUT_MAX_CHARACTERS)}`
+    const location = { search: oversizedQuery, hash: '' } as Location
+
+    expect(parseWebPairingInput(oversizedRawCode)).toBeNull()
+    expect(
+      parseWebPairingInput(`orca://pair${oversizedQuery.replace('pairing=', 'code=')}`)
+    ).toBeNull()
+    expect(readPairingInputFromLocation(location)).toBeNull()
+  })
+
   it('rejects malformed padding without rejecting canonical padding', () => {
     const paddedOffer = { ...offer, endpoint: `${offer.endpoint}/` }
     const code = encodeOffer(paddedOffer)
     expect(code.length % 4).toBe(2)
+    const alias = `${code.slice(0, -1)}${base64Alias(code.at(-1)!)}`
 
     expect(parseWebPairingInput(`${code}=`)).toBeNull()
     expect(parseWebPairingInput(`${code}==`)).toEqual(paddedOffer)
+    expect(parseWebPairingInput(alias)).toBeNull()
   })
 
   it('preserves optional device scope metadata', () => {
@@ -95,3 +116,8 @@ describe('web pairing input', () => {
     })
   })
 })
+
+function base64Alias(character: string): string {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
+  return alphabet[alphabet.indexOf(character) + 1]!
+}
