@@ -35854,8 +35854,8 @@ function runtimePathsEqual(left: string, right: string): boolean {
 }
 
 function runtimeWorktreeIdsEqual(left: string, right: string): boolean {
-  const parsedLeft = splitWorktreeIdForFilesystem(left)
-  const parsedRight = splitWorktreeIdForFilesystem(right)
+  const parsedLeft = splitWorktreeId(left)
+  const parsedRight = splitWorktreeId(right)
   return parsedLeft && parsedRight
     ? parsedLeft.repoId === parsedRight.repoId &&
         runtimePathsEqual(parsedLeft.worktreePath, parsedRight.worktreePath)
@@ -35863,7 +35863,10 @@ function runtimeWorktreeIdsEqual(left: string, right: string): boolean {
 }
 
 function runtimeWorktreeIdentityKey(worktreeId: string): string {
-  const parsed = splitWorktreeIdForFilesystem(worktreeId)
+  const parsed = splitWorktreeId(worktreeId)
+  // Why: folder project sessions share one filesystem path but own independent
+  // terminal graphs. Stripping ::workspace:<uuid> here merges their PTY refresh,
+  // sleep, and mutation state; only filesystem callers may strip that suffix.
   return parsed
     ? `${parsed.repoId}\0${normalizeRuntimePathForComparison(parsed.worktreePath)}`
     : worktreeId
