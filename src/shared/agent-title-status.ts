@@ -9,6 +9,7 @@ import {
   GEMINI_SILENT_WORKING,
   GEMINI_WORKING,
   HERMES_AGENT_NAME_RE,
+  QWEN_AGENT_NAME_RE,
   STRONG_IDLE_KEYWORDS_RE,
   STRONG_WORKING_KEYWORDS_RE,
   STRONG_WORKING_KEYWORDS_RE_GLOBAL,
@@ -172,8 +173,15 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
   const hasDroidAgentName = DROID_AGENT_NAME_RE.test(title)
   const hasHermesAgentName = HERMES_AGENT_NAME_RE.test(title)
   const hasAgyAgentName = AGY_AGENT_NAME_RE.test(title)
+  const hasQwenAgentName = QWEN_AGENT_NAME_RE.test(title)
   const hasLegacyAgentName = containsLegacyAgentName(title)
-  if (!hasLegacyAgentName && !hasDroidAgentName && !hasHermesAgentName && !hasAgyAgentName) {
+  if (
+    !hasLegacyAgentName &&
+    !hasDroidAgentName &&
+    !hasHermesAgentName &&
+    !hasAgyAgentName &&
+    !hasQwenAgentName
+  ) {
     return null
   }
   if (containsAny(title, ['action required', 'permission', 'waiting'])) {
@@ -195,7 +203,10 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
 
   // Why: Droid hook events are authoritative; native name-only titles should
   // not turn a still-sleeping execute tool into completion.
-  if (hasDroidAgentName && !hasLegacyAgentName) {
+  // Why: Qwen Code's OSC title is a static `Qwen - <dir>` that never reflects
+  // state; a name-only title must not report idle while a turn is running,
+  // and leaving lastAgentStatus null keeps the quiescence fallback armed.
+  if ((hasDroidAgentName || hasQwenAgentName) && !hasLegacyAgentName) {
     return null
   }
 

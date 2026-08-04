@@ -67,3 +67,9 @@ export const DROID_AGENT_NAME_RE = /(?<![\w./\\-])droid(?![\w./\\-])/i
 // cwd/path titles like `~/hermes/working` would otherwise count as activity.
 export const HERMES_AGENT_NAME_RE = /(?<![\w./\\-])hermes(?![\w./\\-])/i
 export const AGY_AGENT_NAME_RE = /(?<![\w./\\-])agy(?![\w./\\-])/i
+
+// Why: Qwen Code sets a static `Qwen - <dir>` OSC title that never varies by
+// state, so it stays out of AGENT_NAMES (whose name-only fall-through would
+// report a working qwen pane as idle). Hook events are authoritative; the
+// regex keeps the title usable for identity/keyword detection.
+export const QWEN_AGENT_NAME_RE = /(?<![\w./\\-])qwen(?![\w./\\-])/i

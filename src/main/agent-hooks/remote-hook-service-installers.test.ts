@@ -21,105 +21,13 @@ import { HermesHookService, hermesHookService } from '../hermes/hook-service'
 import { DevinHookService, devinHookService } from '../devin/hook-service'
 import { KimiHookService, kimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
+import { QwenHookService, qwenCodeHookService } from '../qwen/hook-service'
 import { MANAGED_AGENT_HOOK_INSTALLERS } from './managed-agent-hook-controls'
 import {
   installRemoteManagedAgentHooks,
   REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
 } from './remote-managed-hook-installers'
-
-type FakeFs = {
-  files: Map<string, string>
-  dirs: Set<string>
-  modes: Map<string, number>
-  failRenameTo: Set<string>
-}
-
-function createFakeSftp(initialFiles: Record<string, string> = {}): {
-  sftp: SFTPWrapper
-  fs: FakeFs
-} {
-  const fs: FakeFs = {
-    files: new Map(Object.entries(initialFiles)),
-    dirs: new Set(['/']),
-    modes: new Map(),
-    failRenameTo: new Set()
-  }
-  const noEntryError = (path: string): { code: number; message: string } => ({
-    code: 2,
-    message: `ENOENT ${path}`
-  })
-  const fakeStats = (mode: number): { mode: number } => ({ mode })
-
-  const sftp = {
-    readFile: (path: string, _enc: string, cb: (err: unknown, data?: string) => void): void => {
-      const v = fs.files.get(path)
-      if (v === undefined) {
-        cb(noEntryError(path))
-        return
-      }
-      cb(null, v)
-    },
-    writeFile: (
-      path: string,
-      content: string,
-      options: string | { mode?: number },
-      cb: (err: unknown) => void
-    ): void => {
-      fs.files.set(path, content)
-      if (typeof options !== 'string' && options.mode !== undefined) {
-        fs.modes.set(path, options.mode)
-      }
-      cb(null)
-    },
-    rename: (src: string, dst: string, cb: (err: unknown) => void): void => {
-      if (fs.failRenameTo.has(dst)) {
-        cb({ code: 4, message: `rename failed ${dst}` })
-        return
-      }
-      const v = fs.files.get(src)
-      if (v === undefined) {
-        cb(noEntryError(src))
-        return
-      }
-      fs.files.set(dst, v)
-      fs.files.delete(src)
-      const mode = fs.modes.get(src)
-      if (mode !== undefined) {
-        fs.modes.set(dst, mode)
-        fs.modes.delete(src)
-      }
-      cb(null)
-    },
-    unlink: (path: string, cb: (err: unknown) => void): void => {
-      fs.files.delete(path)
-      fs.modes.delete(path)
-      cb(null)
-    },
-    chmod: (path: string, mode: number, cb: (err: unknown) => void): void => {
-      fs.modes.set(path, mode)
-      cb(null)
-    },
-    stat: (path: string, cb: (err: unknown, stats?: { mode: number }) => void): void => {
-      if (!fs.files.has(path)) {
-        cb(noEntryError(path))
-        return
-      }
-      cb(null, fakeStats(fs.modes.get(path) ?? 0o100644))
-    },
-    readdir: (path: string, cb: (err: unknown, list?: { filename: string }[]) => void): void => {
-      if (fs.dirs.has(path)) {
-        cb(null, [])
-        return
-      }
-      cb(noEntryError(path))
-    },
-    mkdir: (path: string, cb: (err: unknown) => void): void => {
-      fs.dirs.add(path)
-      cb(null)
-    }
-  } as unknown as SFTPWrapper
-  return { sftp, fs }
-}
+import { createAgentHookMemorySftp as createFakeSftp } from './agent-hook-memory-sftp.test-fixture'
 
 describe('remote hook service installers', () => {
   it('always writes POSIX scripts for SSH remotes even from a Windows host', async () => {
@@ -499,6 +407,56 @@ describe('remote hook service installers', () => {
     expect(fs.files.get('/home/dev/.orca/agent-hooks/kimi-hook.sh')).toContain('/hook/kimi')
   })
 
+  it('installs remote Qwen hooks into settings.json preserving user config', async () => {
+    const userConfig = {
+      model: { name: 'qwen3-coder' },
+      env: { QWEN_API_KEY: 'sk-secret' },
+      hooks: { Stop: [{ hooks: [{ type: 'command', command: 'echo user-authored' }] }] }
+    }
+    const { sftp, fs } = createFakeSftp({
+      '/home/dev/.qwen/settings.json': JSON.stringify(userConfig)
+    })
+
+    const status = await new QwenHookService().installRemote(sftp, '/home/dev')
+    expect(status.state).toBe('installed')
+
+    const config = JSON.parse(fs.files.get('/home/dev/.qwen/settings.json')!) as {
+      model?: { name?: string }
+      env?: Record<string, string>
+      hooks?: Record<string, { hooks?: { command?: string; timeout?: number }[] }[]>
+    }
+    // User config outside the managed entries survives.
+    expect(config.model?.name).toBe('qwen3-coder')
+    expect(config.env?.QWEN_API_KEY).toBe('sk-secret')
+    for (const eventName of [
+      'UserPromptSubmit',
+      'PreToolUse',
+      'PostToolUse',
+      'PostToolUseFailure',
+      'PermissionRequest',
+      'Stop',
+      'StopFailure'
+    ]) {
+      const commands = (config.hooks?.[eventName] ?? []).flatMap((definition) =>
+        (definition.hooks ?? []).map((hook) => hook.command)
+      )
+      expect(commands.some((command) => command?.includes('qwen-code-hook.sh'))).toBe(true)
+    }
+    // The user-authored Stop hook is preserved alongside the managed one.
+    const stopCommands = (config.hooks?.Stop ?? []).flatMap((definition) =>
+      (definition.hooks ?? []).map((hook) => hook.command)
+    )
+    expect(stopCommands).toContain('echo user-authored')
+    // Why: Qwen's command-hook timeout is milliseconds; 10 seconds is the backstop.
+    const managedStopHook = (config.hooks?.Stop ?? [])
+      .flatMap((definition) => definition.hooks ?? [])
+      .find((hook) => hook.command?.includes('qwen-code-hook.sh'))
+    expect(managedStopHook?.timeout).toBe(10000)
+    expect(fs.files.get('/home/dev/.orca/agent-hooks/qwen-code-hook.sh')).toContain(
+      '/hook/qwen-code'
+    )
+  })
+
   it('does not overwrite malformed remote Devin JSONC', async () => {
     const original = '{"hooks": }'
     const { sftp, fs } = createFakeSftp({
@@ -687,7 +645,8 @@ describe('remote hook service installers', () => {
       ['copilot', copilotHookService],
       ['hermes', hermesHookService],
       ['devin', devinHookService],
-      ['kimi', kimiHookService]
+      ['kimi', kimiHookService],
+      ['qwen-code', qwenCodeHookService]
     ])
 
     // Guard against a service silently missing from the map above as new agents land.

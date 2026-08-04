@@ -1529,6 +1529,125 @@ describe('shared agent-hook-listener', () => {
     expect(state.lastStatusByPaneKey.has(PANE_KEY)).toBe(false)
   })
 
+  it('normalizes Qwen Code Claude-compatible lifecycle events as qwen-code status', () => {
+    const submitted = normalizeHookPayload(
+      state,
+      'qwen-code',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'UserPromptSubmit',
+          session_id: 'session_qwen_1',
+          cwd: '/repo',
+          prompt: 'list the files here',
+          submitted_prompt: 'list the files here'
+        }
+      },
+      'production'
+    )
+    const tool = normalizeHookPayload(
+      state,
+      'qwen-code',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          session_id: 'session_qwen_1',
+          tool_name: 'run_shell_command',
+          tool_input: { command: 'ls' }
+        }
+      },
+      'production'
+    )
+    const waiting = normalizeHookPayload(
+      state,
+      'qwen-code',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'PermissionRequest', session_id: 'session_qwen_1' }
+      },
+      'production'
+    )
+    const stopped = normalizeHookPayload(
+      state,
+      'qwen-code',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'Stop', session_id: 'session_qwen_1' }
+      },
+      'production'
+    )
+    const failed = normalizeHookPayload(
+      state,
+      'qwen-code',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'StopFailure', session_id: 'session_qwen_1' }
+      },
+      'production'
+    )
+
+    expect(submitted?.payload).toMatchObject({
+      agentType: 'qwen-code',
+      state: 'working',
+      prompt: 'list the files here'
+    })
+    expect(tool?.payload).toMatchObject({
+      agentType: 'qwen-code',
+      state: 'working',
+      toolName: 'run_shell_command'
+    })
+    expect(waiting?.payload).toMatchObject({ agentType: 'qwen-code', state: 'waiting' })
+    expect(stopped?.payload).toMatchObject({ agentType: 'qwen-code', state: 'done' })
+    expect(failed?.payload).toMatchObject({ agentType: 'qwen-code', state: 'done' })
+    // The Claude-shaped session_id is captured for provider-session resume.
+    expect(stopped?.providerSession).toMatchObject({ key: 'session_id', id: 'session_qwen_1' })
+  })
+
+  it('maps Qwen ask_user_question PreToolUse to waiting, then back to working on answer', () => {
+    const question = normalizeHookPayload(
+      state,
+      'qwen-code',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          session_id: 'session_qwen_1',
+          tool_name: 'ask_user_question',
+          tool_input: {
+            questions: [{ question: 'Which region?', options: [{ label: 'us-east' }] }]
+          }
+        }
+      },
+      'production'
+    )
+    const answered = normalizeHookPayload(
+      state,
+      'qwen-code',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PostToolUse',
+          session_id: 'session_qwen_1',
+          tool_name: 'ask_user_question',
+          tool_response: { selected: ['us-east'] }
+        }
+      },
+      'production'
+    )
+
+    expect(question?.payload).toMatchObject({
+      agentType: 'qwen-code',
+      state: 'waiting',
+      toolName: 'ask_user_question'
+    })
+    expect(answered?.payload).toMatchObject({
+      agentType: 'qwen-code',
+      state: 'working',
+      toolName: 'ask_user_question'
+    })
+  })
+
   it('normalizes MiMo Code OpenCode-compatible lifecycle events as mimo-code status', () => {
     const message = normalizeHookPayload(
       state,

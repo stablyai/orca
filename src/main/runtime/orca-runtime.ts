@@ -16497,6 +16497,16 @@ export class OrcaRuntimeService {
     return bestStatus ? { status: bestStatus, updatedAt: bestUpdatedAt } : null
   }
 
+  // Why: tail/title idle heuristics (ready prompts, explicit idle titles) sample
+  // a screen that can lag the agent's real state — TUIs redraw after keystrokes
+  // and retained tail lines can briefly outlive the transition into work. A fresh
+  // explicit working/permission state (hooks first, OSC titles second) is
+  // authoritative and vetoes heuristic idle resolution for the handle.
+  private explicitAgentStateBlocksTuiIdleHeuristic(handle: string): boolean {
+    const explicit = this.getFreshExplicitAgentStatusForHandle(handle)
+    return explicit !== null && explicit.status !== 'idle'
+  }
+
   private async writeTerminalAction(
     ptyId: string,
     action: { text?: string; enter?: boolean; interrupt?: boolean },
@@ -16651,6 +16661,7 @@ export class OrcaRuntimeService {
       }
       if (
         condition === 'tui-idle' &&
+        !this.explicitAgentStateBlocksTuiIdleHeuristic(handle) &&
         (this.getAdoptedPtyExplicitIdleStatus(pty.pty) === 'idle' ||
           isKnownReadyPromptPreview(ptyWaitText))
       ) {
@@ -16709,8 +16720,9 @@ export class OrcaRuntimeService {
           } else if (live.pty.lastAgentStatus === 'idle') {
             this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
           } else if (
-            this.getAdoptedPtyExplicitIdleStatus(live.pty) === 'idle' ||
-            isKnownReadyPromptPreview(livePtyWaitText)
+            !this.explicitAgentStateBlocksTuiIdleHeuristic(handle) &&
+            (this.getAdoptedPtyExplicitIdleStatus(live.pty) === 'idle' ||
+              isKnownReadyPromptPreview(livePtyWaitText))
           ) {
             this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
           } else {
@@ -16742,8 +16754,9 @@ export class OrcaRuntimeService {
     if (condition === 'tui-idle') {
       const fastPathTitle = leaf.paneTitle ?? this.tabs.get(leaf.tabId)?.title
       if (
-        (fastPathTitle && detectExplicitIdleStatusFromTitle(fastPathTitle) === 'idle') ||
-        isKnownReadyPromptPreview(leafWaitText)
+        !this.explicitAgentStateBlocksTuiIdleHeuristic(handle) &&
+        ((fastPathTitle && detectExplicitIdleStatusFromTitle(fastPathTitle) === 'idle') ||
+          isKnownReadyPromptPreview(leafWaitText))
       ) {
         return buildTerminalWaitResult(handle, condition, leaf)
       }
@@ -16820,8 +16833,9 @@ export class OrcaRuntimeService {
             // preview/title until the waiter resolves or hits its timeout.
             const fastPathTitle = live.leaf.paneTitle ?? this.tabs.get(live.leaf.tabId)?.title
             if (
-              (fastPathTitle && detectExplicitIdleStatusFromTitle(fastPathTitle) === 'idle') ||
-              isKnownReadyPromptPreview(liveLeafWaitText)
+              !this.explicitAgentStateBlocksTuiIdleHeuristic(handle) &&
+              ((fastPathTitle && detectExplicitIdleStatusFromTitle(fastPathTitle) === 'idle') ||
+                isKnownReadyPromptPreview(liveLeafWaitText))
             ) {
               this.resolveWaiter(waiter, buildTerminalWaitResult(handle, condition, live.leaf))
             } else {
@@ -31082,7 +31096,7 @@ export class OrcaRuntimeService {
         }
         // Why: the renderer-synced title is the only path where OSC titles are visible for daemon-hosted terminals.
         const pollTitle = leaf.paneTitle ?? this.tabs.get(leaf.tabId)?.title
-        if (pollTitle) {
+        if (pollTitle && !this.explicitAgentStateBlocksTuiIdleHeuristic(waiter.handle)) {
           const titleStatus = detectExplicitIdleStatusFromTitle(pollTitle)
           if (titleStatus === 'idle') {
             if (waiter.pollInterval) {
@@ -31110,7 +31124,10 @@ export class OrcaRuntimeService {
           )
           return
         }
-        if (isKnownReadyPromptPreview(leafWaitText)) {
+        if (
+          !this.explicitAgentStateBlocksTuiIdleHeuristic(waiter.handle) &&
+          isKnownReadyPromptPreview(leafWaitText)
+        ) {
           if (waiter.pollInterval) {
             clearInterval(waiter.pollInterval)
             waiter.pollInterval = null
@@ -31119,11 +31136,14 @@ export class OrcaRuntimeService {
           return
         }
         // Foreground fallback: a reported non-shell process with quiet output is treated as idle.
+        // Why: hook-reported working wins over output silence — thinking phases
+        // and long tool runs can be quiet for seconds without being idle.
         if (
           leaf.lastAgentStatus === null &&
           leaf.ptyId &&
           this.ptyController &&
-          !foregroundPollInFlight
+          !foregroundPollInFlight &&
+          !this.explicitAgentStateBlocksTuiIdleHeuristic(waiter.handle)
         ) {
           foregroundPollInFlight = true
           startedForegroundPoll = true
@@ -31180,8 +31200,9 @@ export class OrcaRuntimeService {
         }
         // Why: adopted background PTY handles use their live xterm title as the same readiness signal as leaf handles.
         if (
-          this.getAdoptedPtyExplicitIdleStatus(pty) === 'idle' ||
-          isKnownReadyPromptPreview(ptyWaitText)
+          !this.explicitAgentStateBlocksTuiIdleHeuristic(waiter.handle) &&
+          (this.getAdoptedPtyExplicitIdleStatus(pty) === 'idle' ||
+            isKnownReadyPromptPreview(ptyWaitText))
         ) {
           if (waiter.pollInterval) {
             clearInterval(waiter.pollInterval)
@@ -31190,7 +31211,14 @@ export class OrcaRuntimeService {
           this.resolveWaiter(waiter, buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty))
           return
         }
-        if (pty.lastAgentStatus === null && this.ptyController && !foregroundPollInFlight) {
+        // Why: hook-reported working wins over output silence — thinking phases
+        // and long tool runs can be quiet for seconds without being idle.
+        if (
+          pty.lastAgentStatus === null &&
+          this.ptyController &&
+          !foregroundPollInFlight &&
+          !this.explicitAgentStateBlocksTuiIdleHeuristic(waiter.handle)
+        ) {
           foregroundPollInFlight = true
           startedForegroundPoll = true
           const fg = await this.ptyController.getForegroundProcess(pty.ptyId)
@@ -35778,7 +35806,8 @@ function findDismissedStartupModalIndex(normalized: string): number | null {
   const indexes = [
     findCodexReadyPromptIndex(normalized),
     findAntigravityReadyPromptIndex(normalized),
-    findCursorActivePromptIndex(normalized)
+    findCursorActivePromptIndex(normalized),
+    findQwenActivePromptIndex(normalized)
   ].filter((index): index is number => index !== null)
   return indexes.length > 0 ? Math.max(...indexes) : null
 }
@@ -35787,7 +35816,8 @@ function findKnownReadyPromptIndex(normalized: string): number | null {
   const indexes = [
     findCodexReadyPromptIndex(normalized),
     findAntigravityReadyPromptIndex(normalized),
-    findCursorReadyPromptIndex(normalized)
+    findCursorReadyPromptIndex(normalized),
+    findQwenReadyPromptIndex(normalized)
   ].filter((index): index is number => index !== null)
   return indexes.length > 0 ? Math.max(...indexes) : null
 }
@@ -35810,6 +35840,35 @@ function findCursorReadyPromptIndex(normalized: string): number | null {
     return null
   }
   return CURSOR_BUSY_SPINNER_RE.test(normalized.slice(activeIndex)) ? null : activeIndex
+}
+
+// Why: the ">_ Qwen Code" header box anchors identity; the input box below it
+// proves a live prompt. The placeholder is i18n'd, so the locale-stable
+// fallback is a `>`-prefixed input line.
+function findQwenActivePromptIndex(normalized: string): number | null {
+  const headerIndex = normalized.lastIndexOf('qwen code')
+  if (headerIndex === -1) {
+    return null
+  }
+  const segment = normalized.slice(headerIndex)
+  const hasPromptLine = segment.split('\n').some((line) => line.trimStart().startsWith('> '))
+  return segment.includes('type your message') || hasPromptLine ? headerIndex : null
+}
+
+// Why: qwen emits no state-bearing OSC title; infer idle from the tail (braille
+// spinner or the startup "Initializing..." line = busy, their absence = idle).
+const QWEN_BUSY_SPINNER_RE = /[⠁-⣿]/
+
+function findQwenReadyPromptIndex(normalized: string): number | null {
+  const activeIndex = findQwenActivePromptIndex(normalized)
+  if (activeIndex === null) {
+    return null
+  }
+  const segment = normalized.slice(activeIndex)
+  if (QWEN_BUSY_SPINNER_RE.test(segment) || segment.includes('initializing')) {
+    return null
+  }
+  return activeIndex
 }
 
 function findCodexReadyPromptIndex(normalized: string): number | null {

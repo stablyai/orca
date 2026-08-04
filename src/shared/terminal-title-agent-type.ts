@@ -2,6 +2,7 @@ import {
   AGY_AGENT_NAME_RE,
   DROID_AGENT_NAME_RE,
   HERMES_AGENT_NAME_RE,
+  QWEN_AGENT_NAME_RE,
   titleHasAgentName
 } from './agent-name-token-match'
 import { isCursorAgentTitle } from './agent-title-core'
@@ -201,6 +202,11 @@ export function getAgentLabel(title: string): string | null {
   if (HERMES_AGENT_NAME_RE.test(title)) {
     return 'Hermes'
   }
+  // Why: Qwen Code sets a static `Qwen - <dir>` OSC title; token-match so
+  // paths like "qwen-scratch" don't mint a false identity.
+  if (QWEN_AGENT_NAME_RE.test(title)) {
+    return 'Qwen Code'
+  }
   if (isClaudeAgent(title)) {
     return 'Claude Code'
   }
@@ -228,7 +234,8 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TuiAgent>> = {
   Droid: 'droid',
   Hermes: 'hermes',
   Pi: 'pi',
-  OMP: 'omp'
+  OMP: 'omp',
+  'Qwen Code': 'qwen-code'
 }
 
 function hasGenericClaudeStatusPrefix(title: string): boolean {

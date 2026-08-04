@@ -4,6 +4,8 @@ export type AgentHookMemoryFileSystem = {
   files: Map<string, string>
   dirs: Set<string>
   modes: Map<string, number>
+  /** Rename targets added here fail with a permission-style error. */
+  failRenameTo: Set<string>
 }
 
 export function createAgentHookMemorySftp(initialFiles: Record<string, string> = {}): {
@@ -13,7 +15,8 @@ export function createAgentHookMemorySftp(initialFiles: Record<string, string> =
   const fs: AgentHookMemoryFileSystem = {
     files: new Map(Object.entries(initialFiles)),
     dirs: new Set(['/']),
-    modes: new Map()
+    modes: new Map(),
+    failRenameTo: new Set()
   }
   const missing = (path: string): { code: number; message: string } => ({
     code: 2,
@@ -41,6 +44,10 @@ export function createAgentHookMemorySftp(initialFiles: Record<string, string> =
       done(null)
     },
     rename: (source: string, target: string, done: (error: unknown) => void) => {
+      if (fs.failRenameTo.has(target)) {
+        done({ code: 4, message: `rename failed ${target}` })
+        return
+      }
       const content = fs.files.get(source)
       if (content === undefined) {
         done(missing(source))

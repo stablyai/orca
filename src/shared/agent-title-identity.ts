@@ -3,6 +3,7 @@ import {
   CLAUDE_IDLE,
   DROID_AGENT_NAME_RE,
   HERMES_AGENT_NAME_RE,
+  QWEN_AGENT_NAME_RE,
   containsBrailleSpinner,
   isClaudeManagementTitle,
   isCursorAgentTitle,
@@ -112,6 +113,9 @@ export function getAgentLabel(title: string): string | null {
   }
   if (HERMES_AGENT_NAME_RE.test(title)) {
     return 'Hermes'
+  }
+  if (QWEN_AGENT_NAME_RE.test(title)) {
+    return 'Qwen Code'
   }
   if (isClaudeAgent(title)) {
     return 'Claude Code'

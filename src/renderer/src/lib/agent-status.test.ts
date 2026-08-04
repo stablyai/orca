@@ -223,6 +223,19 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('Hermes working')).toBe('working')
   })
 
+  it('does not infer state from Qwen Code static name-only titles', () => {
+    // Why: qwen's OSC title is a constant `Qwen - <dir>`; hook events own the
+    // state, and a false idle here would resolve tui-idle mid-turn.
+    expect(detectAgentStatusFromTitle('Qwen - my-project')).toBeNull()
+    // Keyword-bearing titles still classify.
+    expect(detectAgentStatusFromTitle('Qwen ready')).toBe('idle')
+    expect(detectAgentStatusFromTitle('Qwen - action required')).toBe('permission')
+    expect(detectAgentStatusFromTitle('qwen working')).toBe('working')
+    // Path fragments are not identity.
+    expect(detectAgentStatusFromTitle('~/qwen/working')).toBeNull()
+    expect(detectAgentStatusFromTitle('qwen-scratch ready')).toBeNull()
+  })
+
   it('classifies synthesized Devin titles', () => {
     expect(detectAgentStatusFromTitle('⠋ Devin')).toBe('working')
     expect(detectAgentStatusFromTitle('Devin ready')).toBe('idle')
@@ -465,6 +478,7 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('Droid ready')).toBe('Droid')
     expect(getAgentLabel('⠋ Hermes')).toBe('Hermes')
     expect(getAgentLabel('Hermes ready')).toBe('Hermes')
+    expect(getAgentLabel('Qwen - my-project')).toBe('Qwen Code')
     expect(getAgentLabel('⠋ Devin')).toBe('Devin')
     expect(getAgentLabel('Devin ready')).toBe('Devin')
   })

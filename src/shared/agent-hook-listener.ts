@@ -2408,6 +2408,9 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
     // Why: Kimi Code emits Claude-compatible hook events, so UserPromptSubmit is its new-turn boundary too.
     // falls through
     case 'kimi':
+    // Why: Qwen Code's hook system uses the same Claude-shaped event names.
+    // falls through
+    case 'qwen-code':
       return eventName === 'UserPromptSubmit'
     case 'codex':
       return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
@@ -2502,6 +2505,9 @@ function extractToolFields(
     // Why: Kimi Code uses Claude's tool_name/tool_input payload fields verbatim.
     // falls through
     case 'kimi':
+    // Why: Qwen Code posts the same tool_name/tool_input fields.
+    // falls through
+    case 'qwen-code':
       return extractClaudeToolFields(eventName, hookPayload)
     case 'codex':
       return extractCodexToolFields(eventName, hookPayload)
@@ -3025,6 +3031,60 @@ function normalizeKimiEvent(
       resetOnNewTurn: isNewTurnEvent('kimi', eventName)
     }),
     agentType: 'kimi',
+    toolName: snapshot.toolName,
+    toolInput: snapshot.toolInput,
+    lastAssistantMessage: snapshot.lastAssistantMessage,
+    interrupted
+  })
+}
+
+// Why: Qwen Code emits Claude-compatible hook events/payloads; normalize but attribute
+// to qwen-code so the sidebar shows Qwen's icon/label, not Claude's.
+function normalizeQwenEvent(
+  state: HookListenerState,
+  eventName: unknown,
+  promptText: string,
+  paneKey: string,
+  hookPayload: Record<string, unknown>
+): ParsedAgentStatusPayload | null {
+  const toolName = readString(hookPayload, 'tool_name')
+  // Why: ask_user_question emits PreToolUse (not PermissionRequest) while awaiting an answer; treat as waiting.
+  const isUserInputTool = isAskUserQuestionTool(toolName)
+
+  let stateName: 'working' | 'waiting' | 'done' | null = null
+  if (
+    eventName === 'UserPromptSubmit' ||
+    eventName === 'PostToolUse' ||
+    eventName === 'PostToolUseFailure' ||
+    (eventName === 'PreToolUse' && !isUserInputTool)
+  ) {
+    stateName = 'working'
+  } else if (eventName === 'PermissionRequest' || (eventName === 'PreToolUse' && isUserInputTool)) {
+    stateName = 'waiting'
+  } else if (eventName === 'Stop' || eventName === 'StopFailure') {
+    stateName = 'done'
+  }
+
+  if (!stateName) {
+    return null
+  }
+
+  const snapshot = resolveToolState(
+    state,
+    paneKey,
+    extractToolFields('qwen-code', eventName, hookPayload),
+    { resetOnNewTurn: isNewTurnEvent('qwen-code', eventName) }
+  )
+
+  const interrupted =
+    eventName === 'Stop' && hookPayload['is_interrupt'] === true ? true : undefined
+
+  return normalizeAgentStatusPayload({
+    state: stateName,
+    prompt: resolvePrompt(state, paneKey, promptText, {
+      resetOnNewTurn: isNewTurnEvent('qwen-code', eventName)
+    }),
+    agentType: 'qwen-code',
     toolName: snapshot.toolName,
     toolInput: snapshot.toolInput,
     lastAssistantMessage: snapshot.lastAssistantMessage,
@@ -4277,6 +4337,9 @@ export function normalizeHookPayload(
     case 'kimi':
       payload = normalizeKimiEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
+    case 'qwen-code':
+      payload = normalizeQwenEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      break
   }
 
   // Why: connectionId is null here; ingestRemote stamps it from mux identity on receive. See docs/design/agent-status-over-ssh.md §5.
@@ -4348,7 +4411,8 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/copilot': 'copilot',
   '/hook/hermes': 'hermes',
   '/hook/devin': 'devin',
-  '/hook/kimi': 'kimi'
+  '/hook/kimi': 'kimi',
+  '/hook/qwen-code': 'qwen-code'
 })
 
 export function resolveHookSource(pathname: string): AgentHookSource | null {
