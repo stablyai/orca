@@ -89,7 +89,8 @@ export function getIssueGroupInfo(
           w.linkedIssue,
           settings,
           repo.connectionId,
-          repo.executionHostId
+          repo.executionHostId,
+          true
         )
         const cachedTitle = issueCache[issueKey]?.data?.title?.trim()
         if (cachedTitle) {

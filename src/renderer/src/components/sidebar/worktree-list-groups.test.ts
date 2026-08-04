@@ -4184,7 +4184,15 @@ describe('buildRows pending creations', () => {
       const repos = new Map<string, Repo>([
         ['repo-1', { id: 'repo-1', path: '/path/to/repo' } as Repo]
       ])
-      const issueKey = getIssueCacheKey('/path/to/repo', 'repo-1', 5199)
+      const issueKey = getIssueCacheKey(
+        '/path/to/repo',
+        'repo-1',
+        5199,
+        undefined,
+        null,
+        null,
+        true
+      )
       const issueCache = {
         [issueKey]: {
           data: { title: 'Custom Groups Feature' }
