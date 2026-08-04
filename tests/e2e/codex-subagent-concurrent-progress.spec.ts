@@ -70,8 +70,8 @@ test.describe('Codex concurrent subagent progress', () => {
     appendSubagentActivity(context, secondChildId, secondPath, 'started', secondStartedAt)
 
     await expandParentChildren(orcaPage, context.prompt)
-    const firstRow = childAgentRow(orcaPage, 'concurrent_first')
-    const secondRow = childAgentRow(orcaPage, 'concurrent_second')
+    const firstRow = childAgentRow(orcaPage, firstChildId)
+    const secondRow = childAgentRow(orcaPage, secondChildId)
     await expect(firstRow).toBeVisible({ timeout: 15_000 })
     await expect(secondRow).toBeVisible({ timeout: 15_000 })
     await expect(parentAgentRow(orcaPage, context.prompt).getByLabel('Working')).toBeVisible()
@@ -127,7 +127,7 @@ test.describe('Codex concurrent subagent progress', () => {
     await expect(secondRow).toHaveAttribute('aria-selected', 'true')
 
     appendCodexRecords(firstChildPath, [codexEvent(firstStartedAt + 6, { type: 'task_complete' })])
-    await expect(childAgentRow(orcaPage, 'concurrent_first')).toHaveCount(0, {
+    await expect(childAgentRow(orcaPage, firstChildId)).toHaveCount(0, {
       timeout: 15_000
     })
     await expect(secondRow).toBeVisible()
@@ -136,7 +136,7 @@ test.describe('Codex concurrent subagent progress', () => {
     appendCodexRecords(secondChildPath, [
       codexEvent(secondStartedAt + 2, { type: 'task_complete' })
     ])
-    await expect(childAgentRow(orcaPage, 'concurrent_second')).toHaveCount(0, {
+    await expect(childAgentRow(orcaPage, secondChildId)).toHaveCount(0, {
       timeout: 15_000
     })
     await expect(parentAgentRow(orcaPage, context.prompt).getByLabel('Done')).toBeVisible()

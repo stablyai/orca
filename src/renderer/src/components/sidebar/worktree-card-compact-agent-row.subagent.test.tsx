@@ -55,6 +55,7 @@ describe('CompactAgentRow subagent display', () => {
     expect(row.textContent).not.toContain('Default')
     expect(row.textContent).not.toContain('gpt-5.6-sol')
     expect(row.getAttribute('title')).toBe('/root/test_agent')
+    expect(row.getAttribute('data-subagent-id')).toBe('child-1')
     expect(row.getAttribute('data-current')).toBe('true')
     expect(row.getAttribute('aria-selected')).toBe('true')
   })

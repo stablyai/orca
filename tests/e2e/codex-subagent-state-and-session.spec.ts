@@ -38,7 +38,7 @@ test.describe('Codex subagent state and session boundaries', () => {
 
     appendSubagentActivity(context, childId, agentPath, 'started', childStartedAt)
     await expandParentChildren(orcaPage, context.prompt)
-    const childRow = childAgentRow(orcaPage, 'state_transitions')
+    const childRow = childAgentRow(orcaPage, childId)
     await expect(childRow).toBeVisible({ timeout: 15_000 })
     await childRow.click()
 
@@ -119,7 +119,7 @@ test.describe('Codex subagent state and session boundaries', () => {
     await expect(progressSheet.getByText(answeredProgress, { exact: true })).toBeVisible()
 
     appendCodexRecords(childPath, [codexEvent(childStartedAt + 8, { type: 'task_complete' })])
-    await expect(childAgentRow(orcaPage, 'state_transitions')).toHaveCount(0, {
+    await expect(childAgentRow(orcaPage, childId)).toHaveCount(0, {
       timeout: 15_000
     })
     await expect(parentAgentRow(orcaPage, context.prompt).getByLabel('Done')).toBeVisible()
@@ -154,7 +154,7 @@ test.describe('Codex subagent state and session boundaries', () => {
       oldStartedAt
     )
     await expandParentChildren(orcaPage, firstContext.prompt)
-    await expect(childAgentRow(orcaPage, 'old_session_child')).toBeVisible({ timeout: 15_000 })
+    await expect(childAgentRow(orcaPage, oldChildId)).toBeVisible({ timeout: 15_000 })
 
     const nextSessionId = randomUUID()
     const nextStartedAt = firstContext.startedAt + 100
@@ -210,7 +210,7 @@ test.describe('Codex subagent state and session boundaries', () => {
       }
     })
     await expect(orcaPage.getByText(nextPrompt, { exact: true })).toBeVisible({ timeout: 15_000 })
-    await expect(childAgentRow(orcaPage, 'old_session_child')).toHaveCount(0)
+    await expect(childAgentRow(orcaPage, oldChildId)).toHaveCount(0)
 
     const staleChildId = randomUUID()
     const currentChildId = randomUUID()
@@ -254,9 +254,9 @@ test.describe('Codex subagent state and session boundaries', () => {
     )
 
     await expandParentChildren(orcaPage, nextPrompt)
-    const currentRow = childAgentRow(orcaPage, 'current_session_child')
+    const currentRow = childAgentRow(orcaPage, currentChildId)
     await expect(currentRow).toBeVisible({ timeout: 15_000 })
-    await expect(childAgentRow(orcaPage, 'stale_watcher_child')).toHaveCount(0)
+    await expect(childAgentRow(orcaPage, staleChildId)).toHaveCount(0)
     await currentRow.click()
     const progressSheet = codexProgressSheet(orcaPage)
     await expect(progressSheet.getByText(currentProgress, { exact: true })).toBeVisible({
@@ -268,7 +268,7 @@ test.describe('Codex subagent state and session boundaries', () => {
     appendCodexRecords(currentChildPath, [
       codexEvent(currentStartedAt + 2, { type: 'task_complete' })
     ])
-    await expect(childAgentRow(orcaPage, 'current_session_child')).toHaveCount(0, {
+    await expect(childAgentRow(orcaPage, currentChildId)).toHaveCount(0, {
       timeout: 15_000
     })
     await expect(parentAgentRow(orcaPage, nextPrompt).getByLabel('Done')).toBeVisible()

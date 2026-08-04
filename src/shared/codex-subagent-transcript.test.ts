@@ -315,12 +315,8 @@ describe('Codex subagent transcript reconciliation', () => {
       childPath,
       jsonl([
         {
-          type: 'response_item',
-          payload: { type: 'function_call_output', call_id: 'call-wait-1', output: '' }
-        },
-        {
-          type: 'response_item',
-          payload: { type: 'agent_message', author: '/root', recipient: '/root/test_agent' }
+          type: 'event_msg',
+          payload: { type: 'agent_message', message: 'Resumed work' }
         }
       ])
     )

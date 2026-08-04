@@ -267,6 +267,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       data-focused-agent-pane={isFocusedPane ? 'true' : undefined}
       data-current={isCurrentAgent ? 'true' : undefined}
       data-agent-send-target={sendTargetStatus}
+      data-subagent-id={agent.subagentSession?.id}
       role={agent.lineage ? 'treeitem' : undefined}
       aria-level={agent.lineage ? agent.lineage.depth + 1 : undefined}
       aria-expanded={hasChildDisclosure ? childAgentsExpanded : undefined}

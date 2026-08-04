@@ -24,6 +24,8 @@ export function reconcileCodexSubagentTranscriptLifecycle(
       state = 'working'
     } else if (recordValue.type === 'event_msg' && payload.type === 'task_complete') {
       complete = true
+    } else if (recordValue.type === 'event_msg' && payload.type === 'agent_message') {
+      state = 'working'
     } else if (recordValue.type === 'response_item' && payload.type === 'function_call') {
       const toolName = typeof payload.name === 'string' ? payload.name : undefined
       state =
@@ -33,7 +35,6 @@ export function reconcileCodexSubagentTranscriptLifecycle(
       (payload.type === 'function_call_output' ||
         payload.type === 'custom_tool_call' ||
         payload.type === 'custom_tool_call_output' ||
-        payload.type === 'agent_message' ||
         payload.type === 'message')
     ) {
       state = 'working'

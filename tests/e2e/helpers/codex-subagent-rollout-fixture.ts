@@ -147,7 +147,10 @@ export async function postCodexHook(
     })
   })
   if (response.status !== 204) {
-    throw new Error(`Codex hook POST returned ${response.status}`)
+    const body = await response.text().catch(() => '')
+    throw new Error(
+      `Codex hook POST returned ${response.status}${body ? `: ${body.slice(0, 500)}` : ''}`
+    )
   }
 }
 
@@ -257,8 +260,8 @@ export function parentAgentRow(page: Page, prompt: string): Locator {
   return page.getByRole('treeitem').filter({ hasText: prompt }).first()
 }
 
-export function childAgentRow(page: Page, label: string): Locator {
-  return page.getByRole('treeitem').filter({ hasText: label }).first()
+export function childAgentRow(page: Page, sessionId: string): Locator {
+  return page.locator(`[role="treeitem"][data-subagent-id="${sessionId}"]`)
 }
 
 export function codexProgressSheet(page: Page): Locator {

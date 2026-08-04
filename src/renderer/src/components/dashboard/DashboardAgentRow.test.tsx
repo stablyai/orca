@@ -390,6 +390,8 @@ describe('DashboardAgentRow', () => {
   it('renders orchestration child rows with a connector and tree level', () => {
     const markup = renderRow(
       makeAgent({
+        rowSource: 'subagent',
+        subagentSession: { id: 'child-1', provider: 'codex', parentPaneKey: 'tab-1:leaf-1' },
         lineage: {
           depth: 1,
           isFirstSibling: true,
@@ -400,6 +402,7 @@ describe('DashboardAgentRow', () => {
     )
 
     expect(markup).toContain('data-agent-lineage-connector="last"')
+    expect(markup).toContain('data-subagent-id="child-1"')
     expect(markup).toContain('role="treeitem"')
     expect(markup).toContain('aria-level="2"')
     expect(classTokens(markup)).toContain('pl-5')

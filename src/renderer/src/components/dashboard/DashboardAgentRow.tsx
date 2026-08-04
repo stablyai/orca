@@ -208,6 +208,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
       data-focused-agent-pane={isFocusedPane ? 'true' : undefined}
       data-current={isCurrentAgent ? 'true' : undefined}
       data-agent-send-target={sendTargetStatus}
+      data-subagent-id={agent.subagentSession?.id}
       title={titleParts.length > 0 ? titleParts.join(' • ') : undefined}
       role={participatesInLineage ? 'treeitem' : undefined}
       aria-level={participatesInLineage ? (lineage?.depth ?? 0) + 1 : undefined}
