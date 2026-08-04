@@ -1,8 +1,14 @@
 /* eslint-disable max-lines */
 import type { ExecutionHostId } from './execution-host'
-import type { RemovedSshTargetTombstone, SshRemotePtyLease, SshTarget } from './ssh-types'
+import type {
+  RemovedSshTargetTombstone,
+  SshPtyConsumerRecovery,
+  SshRemotePtyLease,
+  SshTarget
+} from './ssh-types'
 import type { Automation, AutomationExecutionTargetType, AutomationRun } from './automations-types'
 import type { WorkspaceSource } from './workspace-source'
+import type { DedicatedRepoChannel, ReleaseBuild, ReleaseChannel } from './release-channel'
 import type { GitHubProjectSettings } from './github-project-types'
 import type {
   AgentStatusState,
@@ -45,6 +51,7 @@ import type { StatusBarUsageMode } from './status-bar-usage-mode'
 import type { PersistedNativeChatSessionOptions } from './native-chat-session-options'
 import type { CodexResetCreditAttemptLedger } from './codex-reset-credit-attempt-ledger'
 import type { TaskSourceContext } from './task-source-context'
+import type { SetupRunnerShell } from './setup-runner-command'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -327,6 +334,8 @@ export type FolderWorkspace = {
   folderPath: string
   /** SSH target ID for folder workspaces whose folder path lives remotely. */
   connectionId?: string | null
+  /** Renderer-owned host stamp for host-qualified folder catalogs. */
+  executionHostId?: ExecutionHostId | null
   linkedTask: WorkspaceLinkedItem | null
   linkedTaskSourceContext?: TaskSourceContext | null
   comment: string
@@ -1116,6 +1125,7 @@ export type WorkspaceSessionState = {
   activeRepoId: string | null
   /** Scope-aware active owner for folder workspaces. Legacy worktree UI still reads activeWorktreeId. */
   activeWorkspaceKey?: WorkspaceKey | null
+  activeWorkspaceExecutionHostId?: ExecutionHostId | null
   activeWorktreeId: string | null
   activeTabId: string | null
   /** Keys may be legacy raw worktree IDs or canonical WorkspaceKey values. */
@@ -2056,6 +2066,7 @@ export type ListWorkItemsResult<T> = {
   }
   errors?: {
     issues?: ClassifiedError
+    prs?: ClassifiedError
   }
   /** True when the user's per-repo preference was `'upstream'` but no upstream
    *  remote is configured, so the resolver fell back to origin. Renderer uses
@@ -2156,6 +2167,7 @@ export type RepoHookSettings = {
 export type WorktreeSetupLaunch = {
   runnerScriptPath: string
   envVars: Record<string, string>
+  shell?: SetupRunnerShell
   command?: string
   waitForAgentStartup?: boolean
 }
@@ -2286,6 +2298,7 @@ export type CreateWorktreeResult = {
   }
   defaultTabs?: WorktreeDefaultTabsLaunch
   warning?: string
+  baseFallback?: WorktreeCreateBaseFallback
   initialBaseStatus?: WorktreeBaseStatusEvent
   localBaseRefRefresh?: LocalBaseRefRefreshResult
   localBaseRefUpdateSuggestion?: LocalBaseRefUpdateSuggestion
@@ -2298,6 +2311,11 @@ export type CreateWorktreeResult = {
     surface?: 'visible' | 'background'
   }
   timing?: WorktreeCreateTiming
+}
+
+export type WorktreeCreateBaseFallback = {
+  requestedRef: string
+  localRef: string
 }
 
 export type PreservedWorktreeBranch = {
@@ -2367,9 +2385,37 @@ export type UpdateCheckOptions = {
   includePrerelease?: boolean
   includePerfPrerelease?: boolean
   localBuild?: boolean
+  /** Dev channel switching; `targetTag` pins an exact build, including older ones. */
+  channel?: ReleaseChannel
+  targetTag?: string
 }
 
-export type UpdateSource = 'local'
+/** Non-release origins for an update. Derived from the dev-channel list so a new
+ *  channel with its own repo cannot be reported as an ordinary release. */
+export type UpdateSource = 'local' | DedicatedRepoChannel
+
+/** Root-package Linux install formats whose update installs need privilege escalation. */
+export type LinuxRootPackageType = 'deb' | 'rpm'
+
+export type LinuxPackageInstallFailureReason =
+  | 'authentication-agent-unavailable'
+  | 'authentication-denied'
+  | 'package-install-failed'
+
+// Why: the renderer must not infer "no polkit agent" from copy alone — main classifies and the card branches on this discriminant.
+export type LinuxPackageInstallRecovery = {
+  kind: 'linux-package-install'
+  packageType: LinuxRootPackageType
+  reason: LinuxPackageInstallFailureReason
+  version: string
+}
+
+/** Why: only these two mean no safe command exists here; every other failure clears recovery entirely. */
+export type LinuxPackageCommandUnavailableReason = 'no-sudo' | 'no-package-manager'
+
+export type LinuxPackageInstallInstructions =
+  | { ok: true; command: string; packageFileName: string }
+  | { ok: false; reason: LinuxPackageCommandUnavailableReason; message: string }
 
 export type UpdateStatus = (
   | { state: 'idle' }
@@ -2393,8 +2439,18 @@ export type UpdateStatus = (
   | { state: 'not-available'; userInitiated?: boolean }
   | { state: 'downloading'; percent: number; version: string; activeNudgeId?: string }
   | { state: 'downloaded'; version: string; releaseUrl?: string; activeNudgeId?: string }
-  | { state: 'error'; message: string; userInitiated?: boolean; activeNudgeId?: string }
+  | {
+      state: 'error'
+      message: string
+      userInitiated?: boolean
+      activeNudgeId?: string
+      recovery?: LinuxPackageInstallRecovery
+    }
 ) & { source?: UpdateSource }
+
+export type ReleaseBuildListResult =
+  | { ok: true; channel: ReleaseChannel; builds: ReleaseBuild[] }
+  | { ok: false; channel: ReleaseChannel; message: string }
 
 // ─── Settings ────────────────────────────────────────────────────────
 export type NotificationSettings = {
@@ -2875,6 +2931,8 @@ export type GlobalSettings = {
   terminalSshViewParking?: boolean
   /** Kill switch for the hidden-worktree retention budget (C1): force-parks the least-recently-hidden un-parkable worktrees beyond a count budget or TTL. */
   terminalHiddenWorktreeRetentionBudget?: boolean
+  /** Kill switch for the browser-guest worktree retention budget: destroys the least-recently-activated hidden worktrees' webview guests beyond an LRU count budget. */
+  browserGuestWorktreeRetentionBudget?: boolean
   /** Kill switch for main-process PTY side-effect authority; on (default) = title/bell/agent facts via pty:sideEffect channel, not renderer byte parsing. */
   terminalMainSideEffectAuthority?: boolean
   /** Kill switch for main's hidden-delivery gate (Phase 4): drops PTY bytes to hidden views after model ingestion; requires terminalMainSideEffectAuthority. */
@@ -2985,6 +3043,10 @@ export type GlobalSettings = {
   /** Preferred mobile pairing path for new QR codes. Missing/'automatic' = Anywhere (Relay + local);
    *  explicit 'local-only' = same-network only. */
   mobilePairingConnectionMode?: 'automatic' | 'local-only'
+  /** Explicit custom address restored when generating future mobile pairing codes. */
+  mobilePairingCustomAddress?: string | null
+  /** Saved custom addresses available in both mobile pairing pickers. */
+  mobilePairingCustomAddresses?: string[]
   /** Experimental: floating animated pet in the bottom-right corner. Opt-in cosmetic;
    *  off never mounts the overlay, and toggling takes effect instantly (renderer-side). */
   experimentalPet: boolean
@@ -3371,6 +3433,8 @@ export type PersistedUIState = {
   statusBarUsageMode?: StatusBarUsageMode
   dismissedUpdateVersion: string | null
   lastUpdateCheckAt: number | null
+  /** Dev-only update channel override; absent means the build's own channel. */
+  releaseChannelOverride?: ReleaseChannel | null
   pendingUpdateNudgeId?: string | null
   dismissedUpdateNudgeId?: string | null
   /** Whether Orca already tried triggering the macOS notification permission dialog; prevents re-firing every launch. */
@@ -3572,6 +3636,8 @@ export type PersistedState = {
   /** Identity records for removed SSH targets so a re-added host can re-adopt workspaces orphaned on the old target id. */
   removedSshTargetTombstones?: RemovedSshTargetTombstone[]
   sshRemotePtyLeases: SshRemotePtyLease[]
+  /** Main-owned authenticated relay recovery records; never expose through renderer settings APIs. */
+  sshPtyConsumerRecoveries?: SshPtyConsumerRecovery[]
   /** Live local Claude daemon session ids; seeds the live-PTY gate so early OAuth refresh can't rotate the single-use refresh token out from under a running daemon. */
   claudeLivePtySessionIds?: string[]
   migrationUnsupportedPtyEntries: MigrationUnsupportedPtyEntry[]

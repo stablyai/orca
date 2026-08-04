@@ -52,6 +52,7 @@ import { getLargeDiffRenderLimit } from '../../shared/large-diff-render-limit'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
 import type { GitRuntimeOptions } from './git-runtime-options'
 import { gitOptionsForWorktree } from './git-runtime-options'
+import { GitStatusReadLeaseOwner } from './git-status-read-lease-owner'
 import { parseGitRevListFirstParentOid } from '../../shared/git-rev-list-output'
 import {
   beginGitStatusLineStatsCacheWrite,
@@ -92,12 +93,12 @@ const effectiveUpstreamStatusInFlight = new Map<string, Promise<GitUpstreamStatu
 const retiredEffectiveUpstreamStatusInFlight = new Map<string, Promise<GitUpstreamStatus>>()
 const gitDiffReadDedupe = new InFlightPromiseDedupe<GitDiffResult>()
 const effectiveUpstreamStatusWriteGeneration = new Map<string, number>()
-const statusReadsInFlight = new Map<string, Promise<GitStatusResult>>()
+const statusReadLeaseOwner = new GitStatusReadLeaseOwner<GitStatusResult>()
 
 // Why: clear both diff and status in-flight caches; clearing only diff would let getStatus() join a pre-mutation read.
 export function invalidateGitReadCaches(): void {
   gitDiffReadDedupe.clear()
-  statusReadsInFlight.clear()
+  statusReadLeaseOwner.invalidate()
   clearGitStatusLineStatsCache()
   clearSubmodulePathsCache()
   resolvedUpstreamNameCache.clear()
@@ -216,31 +217,17 @@ export async function getStatus(
   options: GetStatusOptions = {}
 ): Promise<GitStatusResult> {
   gitDiffReadDedupe.clear()
-  if (options.signal) {
-    return runGetStatus(worktreePath, options)
-  }
   // Why: dedupe only concurrent identical reads; after settle, callers must run a fresh read.
   const cacheKey = getStatusReadKey(worktreePath, options)
-  const inFlightStatus = statusReadsInFlight.get(cacheKey)
-  if (inFlightStatus) {
-    return inFlightStatus
-  }
-
-  const statusPromise = runGetStatus(worktreePath, options)
-  statusReadsInFlight.set(cacheKey, statusPromise)
-  try {
-    return await statusPromise
-  } finally {
-    if (statusReadsInFlight.get(cacheKey) === statusPromise) {
-      statusReadsInFlight.delete(cacheKey)
-    }
-  }
+  return statusReadLeaseOwner.lease(cacheKey, options.signal, (sharedSignal) =>
+    runGetStatus(worktreePath, { ...options, signal: sharedSignal })
+  )
 }
 
 function getStatusReadKey(worktreePath: string, options: GetStatusOptions): string {
   // Why: each key part can change the output shape or runtime routing.
   const limit = resolveGitStatusLimit(options.limit)
-  return [
+  return stableInFlightKey([
     worktreePath,
     options.wslDistro ?? '',
     options.includeIgnored === true,
@@ -248,8 +235,8 @@ function getStatusReadKey(worktreePath: string, options: GetStatusOptions): stri
     options.bypassEffectiveUpstreamNegativeCache === true,
     limit,
     // Why: this changes which entries survive, so it must not share a cache slot.
-    (options.sharedLinkPaths ?? []).join('\u0001')
-  ].join('\0')
+    options.sharedLinkPaths ?? []
+  ])
 }
 
 /** Remove untracked entries that are shared symlinks Orca created.

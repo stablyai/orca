@@ -135,6 +135,56 @@ describe('openMobileTerminalFileTap', () => {
     expect(switchSessionTab).toHaveBeenCalledWith(openedTab)
   })
 
+  it('opens a sibling terminal path through the resolved owning worktree', async () => {
+    const client = createClient([
+      ok({
+        worktree: 'wt-2',
+        relativePath: 'docs/readme.md',
+        absolutePath: '/repo-b/docs/readme.md',
+        exists: true,
+        isDirectory: false,
+        openTarget: {
+          kind: 'worktree-file',
+          provider: 'local',
+          relativePath: 'docs/readme.md',
+          absolutePath: '/repo-b/docs/readme.md'
+        }
+      })
+    ])
+    const pushPreviewRoute = vi.fn()
+
+    openMobileTerminalFileTap({
+      client,
+      hostId: 'host-1',
+      worktreeId: 'wt-1',
+      pathText: '/repo-b/docs/readme.md',
+      line: null,
+      column: null,
+      pushPreviewRoute,
+      openBrowser: vi.fn(),
+      triggerOpenFeedback: vi.fn(),
+      fetchSessionTabs: vi.fn(),
+      getSessionTabs: () => [],
+      getActiveSessionTabId: () => null,
+      getActivationState: activeTerminalState,
+      switchSessionTab: vi.fn(),
+      scheduleDelayedAction: vi.fn()
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(pushPreviewRoute).toHaveBeenCalledWith({
+      pathname: '/h/[hostId]/files/preview/[worktreeId]',
+      params: expect.objectContaining({
+        hostId: 'host-1',
+        worktreeId: 'wt-2',
+        source: 'worktree',
+        relativePath: 'docs/readme.md'
+      })
+    })
+    expect(client.sendRequest).not.toHaveBeenCalledWith('files.open', expect.anything())
+  })
+
   it('opens worktree-contained line references through the preview route', async () => {
     const client = createClient([
       ok({

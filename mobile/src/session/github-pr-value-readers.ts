@@ -82,11 +82,14 @@ export function readCheckRunStatus(value: unknown): PRCheckDetail['status'] | nu
   return value === 'queued' || value === 'in_progress' || value === 'completed' ? value : null
 }
 
+// Why: dropping `action_required` here rendered a merge-blocking approval gate as a pending
+// check; the shared classifier counts it as a failure, so it must survive parsing.
 export function readCheckRunConclusion(value: unknown): PRCheckDetail['conclusion'] {
   return value === 'success' ||
     value === 'failure' ||
     value === 'cancelled' ||
     value === 'timed_out' ||
+    value === 'action_required' ||
     value === 'neutral' ||
     value === 'skipped' ||
     value === 'pending'

@@ -22,6 +22,7 @@ vi.mock('os', () => ({
 }))
 
 import { registerMobileHandlers } from './mobile'
+import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from '../runtime/network-exposure-guidance'
 
 describe('registerMobileHandlers', () => {
   const handlers = new Map<string, (...args: unknown[]) => unknown>()
@@ -285,7 +286,8 @@ describe('registerMobileHandlers', () => {
       endpoint: 'ws://100.64.1.20:6768',
       deviceId: 'runtime-1'
     })
-    const rpcServer = { createPairingOffer }
+    const ensureNetworkExposure = vi.fn().mockResolvedValue(undefined)
+    const rpcServer = { createPairingOffer, ensureNetworkExposure }
 
     registerMobileHandlers(rpcServer as never)
 
@@ -308,6 +310,35 @@ describe('registerMobileHandlers', () => {
       name: expect.stringMatching(/^Runtime /),
       scope: 'runtime'
     })
+    // Why: STA-2370 — generating a runtime offer must widen the listener BEFORE advertising its endpoint,
+    // or a client could read the URL and connect before the LAN bind exists. Assert call ORDER, not just
+    // that the widen ran, so a regression that widens after minting the offer is caught.
+    expect(ensureNetworkExposure).toHaveBeenCalled()
+    expect(ensureNetworkExposure.mock.invocationCallOrder[0]).toBeLessThan(
+      createPairingOffer.mock.invocationCallOrder[0]
+    )
+  })
+
+  it('reports the runtime pairing url unavailable and mints no offer when the widen fails', async () => {
+    const createPairingOffer = vi.fn()
+    // Why: STA-2370 — a failed widen leaves the listener on loopback, so the handler must NOT advertise a
+    // LAN endpoint. A regression that swallows the rejection and mints an offer against a loopback-only
+    // listener is caught here: createPairingOffer must never run.
+    const ensureNetworkExposure = vi.fn().mockRejectedValue(new Error('bind refused'))
+    const rpcServer = { createPairingOffer, ensureNetworkExposure }
+
+    registerMobileHandlers(rpcServer as never)
+
+    await expect(
+      handlers.get('mobile:getRuntimePairingUrl')?.(null, { address: '100.64.1.20' })
+    ).resolves.toEqual({
+      available: false,
+      reason: 'network_exposure_failed',
+      guidance: NETWORK_EXPOSURE_FAILED_GUIDANCE
+    })
+
+    expect(ensureNetworkExposure).toHaveBeenCalled()
+    expect(createPairingOffer).not.toHaveBeenCalled()
   })
 
   it('lists runtime access grants including unused generated links', () => {

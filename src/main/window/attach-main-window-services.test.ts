@@ -160,8 +160,10 @@ function createMainWindow(
   }
 }
 
-function createStore(): Store & { flush: MockFn } {
-  return { flush: vi.fn() } as Store & { flush: MockFn }
+function createStore(): Store & { flushPendingAsync: MockFn } {
+  return {
+    flushPendingAsync: vi.fn(() => Promise.resolve())
+  } as Store & { flushPendingAsync: MockFn }
 }
 
 function createRuntime(): RuntimeStub {
@@ -299,7 +301,7 @@ describe('attachMainWindowServices', () => {
     await setupAutoUpdaterMock.mock.calls[0][1].onBeforeQuit()
 
     expect(onBeforeUpdateQuit).toHaveBeenCalledTimes(1)
-    expect(store.flush).toHaveBeenCalledTimes(1)
+    expect(store.flushPendingAsync).toHaveBeenCalledTimes(1)
   })
 
   it('flushes the store before update quit when no cleanup is injected', async () => {
@@ -311,7 +313,7 @@ describe('attachMainWindowServices', () => {
     await fireReadyToShow(mainWindow)
     await setupAutoUpdaterMock.mock.calls[0][1].onBeforeQuit()
 
-    expect(store.flush).toHaveBeenCalledTimes(1)
+    expect(store.flushPendingAsync).toHaveBeenCalledTimes(1)
   })
 
   it('replaces the TCC handlers when the main window is reattached', () => {

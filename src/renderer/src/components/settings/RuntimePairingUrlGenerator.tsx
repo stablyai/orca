@@ -192,11 +192,14 @@ export function RuntimePairingUrlGenerator({
       if (!result.available) {
         clearGeneratedUrls()
         if (mountedRef.current) {
+          // Why: STA-2370 — surface the specific network-exposure guidance when the widen failed; fall back
+          // to the generic message for other unavailable cases (e.g. no reachable address).
           toast.error(
-            translate(
-              'auto.components.settings.RuntimePairingUrlGenerator.2752126f3e',
-              'Runtime pairing is unavailable.'
-            )
+            result.guidance ??
+              translate(
+                'auto.components.settings.RuntimePairingUrlGenerator.2752126f3e',
+                'Runtime pairing is unavailable.'
+              )
           )
         }
         return

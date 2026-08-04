@@ -19,6 +19,8 @@ export type CreateOrAttachOptions = {
   command?: string
   startupCommandDelivery?: StartupCommandDelivery
   launchAgent?: TuiAgent
+  /** Missing ownership is not permission to create during stable-pane adoption. */
+  attachOnly?: boolean
   /** Explicit shell the renderer asked for, forwarded to the subprocess. */
   shellOverride?: string
   terminalWindowsWslDistro?: string | null

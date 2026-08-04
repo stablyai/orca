@@ -38,6 +38,7 @@ import type { ShellReadySignal } from './local-pty-shell-ready'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
 import { stripInheritedBuildModeEnv } from '../pty/build-mode-env'
+import { resolvePathEnvKey } from '../pty/windows-environment-path'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-wsl-env'
 import { addWslEnvKeys } from '../wsl-env'
 import {
@@ -65,6 +66,14 @@ import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import { mergeGitConfigEnvProtocol } from '../../shared/git-credential-prompt-env'
 import { PtyStartupIngress, type PtyIngressEmission } from '../../shared/pty-startup-ingress'
 import { resolvePtyOwnerBackend } from '../../shared/pty-owner-backend'
+import {
+  createPtySlaveEchoProbe,
+  readPtySlavePath
+} from '../../shared/pty-slave-line-discipline-echo'
+import {
+  expandWindowsEnvironmentVariables,
+  expandWindowsPathEnvironmentVariables
+} from '../../shared/windows-environment-expansion'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -76,7 +85,7 @@ const PANE_IDENTITY_ENV_KEYS = [
 let ptyCounter = 0
 const ptyProcesses = new Map<string, pty.IPty>()
 const ptyIncarnations = new Map<string, string>()
-// Why: only agent sessions get descendant tree-kill (tool children run in detached groups SIGHUP can't reach); plain terminals skip it so nohup-detached children survive.
+// Why: agent sessions always sweep descendant trees; plain terminals preserve nohup children except on immediate win32 shutdown.
 const ptyAgentSessionIds = new Set<string>()
 // Why: descendant capture is async, so reattach/duplicate shutdown must wait for the original owner, not return a dying PTY.
 type PtyShutdownOperation = {
@@ -158,12 +167,18 @@ function promoteAgentTeamsShimPath(
   if (!env.ORCA_AGENT_TEAMS_TEAM_ID || !requestedPath) {
     return
   }
-  const shimDir = requestedPath.split(delimiter)[0]
+  const normalizedRequestedPath =
+    process.platform === 'win32'
+      ? expandWindowsEnvironmentVariables(requestedPath, env)
+      : requestedPath
+  const pathDelimiter = process.platform === 'win32' ? ';' : delimiter
+  const shimDir = normalizedRequestedPath.split(pathDelimiter)[0]
   if (!shimDir) {
     return
   }
-  const currentParts = env.PATH?.split(delimiter).filter(Boolean) ?? []
-  env.PATH = [shimDir, ...currentParts.filter((part) => part !== shimDir)].join(delimiter)
+  const pathKey = resolvePathEnvKey(env, process.platform)
+  const currentParts = env[pathKey]?.split(pathDelimiter).filter(Boolean) ?? []
+  env[pathKey] = [shimDir, ...currentParts.filter((part) => part !== shimDir)].join(pathDelimiter)
 }
 
 /**
@@ -360,9 +375,12 @@ function cancelAllPendingLocalPtySpawns(): void {
 /**
  * Normalizes renderer session ids that should be reused for local PTY reattach.
  */
-function normalizeLocalCallerSessionId(sessionId: string | undefined): string | null {
+function normalizeLocalCallerSessionId(
+  sessionId: string | undefined,
+  allowNumeric = false
+): string | null {
   const requested = sessionId?.trim()
-  if (!requested || /^\d+$/.test(requested)) {
+  if (!requested || (!allowNumeric && /^\d+$/.test(requested))) {
     return null
   }
   return requested
@@ -516,7 +534,7 @@ export class LocalPtyProvider implements IPtyProvider {
    * Windows launches can pre-deliver startup commands in argv, so the stdin fallback only runs when needed.
    */
   async spawn(args: PtySpawnOptions): Promise<PtySpawnResult> {
-    const reattachId = normalizeLocalCallerSessionId(args.sessionId)
+    const reattachId = normalizeLocalCallerSessionId(args.sessionId, args.attachOnly === true)
     if (reattachId) {
       const pendingShutdown = ptyShutdownOperations.get(reattachId)
       if (pendingShutdown) {
@@ -526,6 +544,9 @@ export class LocalPtyProvider implements IPtyProvider {
       if (existing) {
         return existing
       }
+    }
+    if (args.attachOnly) {
+      throw new Error(`Session not found: ${args.sessionId ?? ''}`)
     }
     const id = allocatePtyId(reattachId ?? undefined)
     const incarnationId = randomUUID()
@@ -789,7 +810,12 @@ export class LocalPtyProvider implements IPtyProvider {
         shellReadyLaunch = args.command ? shellLaunch : null
       }
     }
-    promoteAgentTeamsShimPath(finalEnv, args.env?.PATH)
+    const requestedEnv = args.env
+    expandWindowsPathEnvironmentVariables(finalEnv)
+    promoteAgentTeamsShimPath(
+      finalEnv,
+      requestedEnv ? requestedEnv[resolvePathEnvKey(requestedEnv, process.platform)] : undefined
+    )
 
     // Why: worktree-scoped HISTFILE — without it worktrees share one global history (terminal-history-scope-design §7–§10).
     const worktreeId = args.worktreeId
@@ -900,6 +926,7 @@ export class LocalPtyProvider implements IPtyProvider {
         )
       }
     }
+    const startupEchoProbe = createPtySlaveEchoProbe(readPtySlavePath(proc))
     const startupIngress = new PtyStartupIngress({
       ...(args.startupIngress ? { intent: args.startupIngress } : {}),
       ownerBackend: resolvePtyOwnerBackend({
@@ -908,7 +935,8 @@ export class LocalPtyProvider implements IPtyProvider {
         wslDistro: spawnedWslDistro
       }),
       write: (data) => proc.write(data),
-      onEmission: emitIngressData
+      onEmission: emitIngressData,
+      ...(startupEchoProbe ? { echoProbe: startupEchoProbe } : {})
     })
     startupIngressByPty.set(id, startupIngress)
 

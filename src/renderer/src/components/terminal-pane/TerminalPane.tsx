@@ -56,14 +56,15 @@ import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/termin
 import {
   applyExpandedLayoutTo,
   cancelPendingPaneSizeRefreshFrames,
-  createExpandCollapseActions,
-  restoreExpandedLayoutFrom
+  restoreExpandedLayoutFrom,
+  useExpandCollapseActions
 } from './expand-collapse'
 import { useTerminalKeyboardShortcuts, type SearchState } from './keyboard-handlers'
 import type { MacOptionAsAlt } from './terminal-shortcut-policy'
 import { useEffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
 import { useTerminalFontZoom } from './useTerminalFontZoom'
 import CloseTerminalDialog, { type CloseTerminalDialogCopyKind } from './CloseTerminalDialog'
+import CodexRestartChip from '../CodexRestartChip'
 import { MobileDriverOverlay } from './MobileDriverOverlay'
 import { stripSshReconnectOwnedErrorLines, TerminalErrorToast } from './TerminalErrorToast'
 import { TerminalSessionStateSaveFailureDialog } from './TerminalSessionStateSaveFailureDialog'
@@ -1249,7 +1250,7 @@ function TerminalPane(
     refreshPaneSizes,
     syncExpandedLayout,
     toggleExpandPane
-  } = createExpandCollapseActions({
+  } = useExpandCollapseActions({
     expandedPaneIdRef,
     expandedStyleSnapshotRef,
     containerRef,
@@ -1709,6 +1710,9 @@ function TerminalPane(
   // transport, so a queued restart has no ptyId to match on the mount pass. The
   // reconnected PTY rewrites this map when it binds — `ptyIdsByTabId` does not,
   // because a restored id is already listed there before the pane ever mounts.
+  // Panes with no mounted TerminalPane at all are executed by the detached
+  // driver instead (codex-detached-pane-restart), which leaves anything a live
+  // transport owns to this effect.
   const panePtyLayoutBindings = savedLayout.ptyIdsByLeafId
   useEffect(() => {
     const manager = managerRef.current
@@ -2963,6 +2967,24 @@ function TerminalPane(
           })
         }}
       />
+      {managedPanes.map((pane) => {
+        const ptyId =
+          paneTransportsRef.current.get(pane.id)?.getPtyId() ??
+          savedLayout.ptyIdsByLeafId?.[pane.leafId]
+        if (!ptyId) {
+          return null
+        }
+        return createPortal(
+          <CodexRestartChip
+            key={`codex-restart-${pane.id}-${ptyId}`}
+            isVisible={isVisible}
+            ptyId={ptyId}
+            shouldFocus={isActive && isVisible && activePane?.id === pane.id}
+          />,
+          pane.container,
+          `codex-restart-${pane.id}`
+        )
+      })}
       {/* Why: the reconnect banner already owns SSH recovery UX; the z-50 error
           toast was painting over it (same bottom strip) with the raw ssh:connect failure. */}
       {terminalError && isActive && !showSshReconnectOverlay ? (

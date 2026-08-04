@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { useConfirmationDialog } from '@/components/confirmation-dialog'
+import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { dirname } from '@/lib/path'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { isPathEqualOrDescendant } from './file-explorer-paths'

@@ -111,6 +111,9 @@ Orchestration:
   orchestration worker-read Read bounded output from one supervised worker
   orchestration worker-stop Stop one supervised worker
   orchestration worker-abandon Fence an uncertain worker without claiming it stopped
+  orchestration worker-release Release a settled worker's terminal after archiving its output
+  orchestration worker-retain Keep a worker terminal live for debugging
+  orchestration worker-list Report worker terminal resource accounting
   orchestration coordinator-start Start the legacy automatic coordinator loop
   orchestration coordinator-stop Stop the legacy automatic coordinator loop
   orchestration gate-create Create a decision gate blocking a task
@@ -443,6 +446,9 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   }
   if (command === 'orchestration worker-read' && flag === 'cursor') {
     return '--cursor <cursor>      Opaque cursor returned by a previous worker-read page'
+  }
+  if (command === 'orchestration worker-list' && flag === 'terminal-state') {
+    return '--terminal-state <state> Terminal accounting filter: active, reclaimable, retained, release_pending, release_unknown, or released'
   }
   if (command === 'linear list-issues' && flag === 'workspace') {
     return '--workspace <id|all>  Connected Linear workspace id, or all'

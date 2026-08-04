@@ -40,8 +40,6 @@ import { buildWindowsTerminalSnapshotPayload } from './windows-terminal-onboardi
 export { STEPS } from './use-onboarding-flow-types'
 export type { StepId, StepNumber } from './use-onboarding-flow-types'
 
-export type OnboardingFlowController = ReturnType<typeof useOnboardingFlow>
-
 type TaskSourcesSnapshotProps = EventProps<'onboarding_task_sources_snapshot'>
 type TaskSourcesGithubStatus = TaskSourcesSnapshotProps['github_status']
 type TaskSourcesLinearStatus = TaskSourcesSnapshotProps['linear_status']

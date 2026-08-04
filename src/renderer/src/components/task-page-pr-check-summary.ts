@@ -1,55 +1,6 @@
+import { summarizeProviderChecks } from '../../../shared/provider-check-summary'
 import type { PRCheckDetail, ProviderCheckSummary } from '../../../shared/types'
 
-function getCheckConclusion(check: PRCheckDetail): NonNullable<PRCheckDetail['conclusion']> {
-  return check.conclusion ?? 'pending'
-}
-
-function isPendingCheck(check: PRCheckDetail): boolean {
-  return (
-    check.status === 'queued' ||
-    check.status === 'in_progress' ||
-    getCheckConclusion(check) === 'pending'
-  )
-}
-
 export function deriveTaskPagePRCheckSummary(checks: PRCheckDetail[]): ProviderCheckSummary {
-  if (checks.length === 0) {
-    return { state: 'none', total: 0, passed: 0, failed: 0, pending: 0, neutral: 0 }
-  }
-
-  let passed = 0
-  let failed = 0
-  let pending = 0
-  let neutral = 0
-
-  for (const check of checks) {
-    const conclusion = getCheckConclusion(check)
-    if (conclusion === 'success' || conclusion === 'skipped') {
-      passed += 1
-    } else if (conclusion === 'neutral') {
-      neutral += 1
-    } else if (
-      conclusion === 'failure' ||
-      conclusion === 'timed_out' ||
-      conclusion === 'cancelled' ||
-      // Why: action_required (e.g. a workflow awaiting approval) blocks merge; it
-      // must count as failed so the summary never reads "passing" while blocked.
-      conclusion === 'action_required'
-    ) {
-      failed += 1
-    } else if (isPendingCheck(check)) {
-      pending += 1
-    } else {
-      neutral += 1
-    }
-  }
-
-  return {
-    state: failed > 0 ? 'failure' : pending > 0 ? 'pending' : neutral > 0 ? 'neutral' : 'success',
-    total: checks.length,
-    passed,
-    failed,
-    pending,
-    neutral
-  }
+  return summarizeProviderChecks(checks)
 }

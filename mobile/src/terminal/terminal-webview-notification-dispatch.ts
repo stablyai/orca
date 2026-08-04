@@ -1,4 +1,7 @@
-import type { TerminalSelectionEvents } from './terminal-webview-contract'
+import {
+  parseTerminalKeyboardAvoidanceMetrics,
+  type TerminalSelectionEvents
+} from './terminal-webview-contract'
 
 export type TerminalWebViewNotificationHandlers = Omit<
   TerminalSelectionEvents,
@@ -63,13 +66,7 @@ export function dispatchTerminalWebViewNotification(
       handlers.onOpenUrl?.(url)
     }
   } else if (msg.type === 'keyboard-avoidance-metrics') {
-    const cursorY = typeof msg.cursorY === 'number' ? msg.cursorY : 0
-    const rows = typeof msg.rows === 'number' ? msg.rows : 0
-    handlers.onKeyboardAvoidanceMetrics?.({
-      cursorY,
-      rows,
-      altScreen: !!msg.altScreen
-    })
+    handlers.onKeyboardAvoidanceMetrics?.(parseTerminalKeyboardAvoidanceMetrics(msg))
   } else if (msg.type === 'haptic') {
     const kind = msg.kind
     if (kind === 'selection' || kind === 'success' || kind === 'error' || kind === 'edge-bump') {

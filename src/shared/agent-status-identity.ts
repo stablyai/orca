@@ -9,6 +9,7 @@ type ExistingAgentIdentity = {
   agentType?: AgentType
   state: AgentStatusState
   updatedAt: number
+  restoredUnconfirmed?: boolean
 }
 
 type AgentIdentityResolution = {

@@ -1,0 +1,418 @@
+name: Adhoc macOS Dev Build
+
+# Why: lets anyone cut a signed macOS build of an unlanded branch so the team can
+# actually run an experimental feature for a few days, instead of reasoning about
+# it from a diff. Hourly covers main; this covers everything that is not main yet.
+#
+# Deliberately narrow scope, same trade as hourly:
+#   - macOS only. Other platforms keep using RC/stable.
+#   - No tests, no lint, no e2e. PR CI and release-cut remain the gates.
+#   - Signed AND notarized, exactly like a release. macOS anchors a notarized
+#     app's TCC grants on identifier + team rather than on its cdhash, so those
+#     grants survive an update; an unnotarized build reads as a new client and
+#     silently loses file access under Documents/Desktop/Downloads.
+#
+# Artifacts publish to stablyai/orca-adhoc — separate from both orca and
+# orca-hourly. Separate from orca because the main repo's releases atom feed
+# exposes only its 10 newest entries. Separate from orca-hourly because a build
+# from someone's branch must never be picked up by a developer who only meant to
+# ride main; the two are different levels of "unvetted".
+#
+# From the Actions tab: pick this workflow, "Run workflow", leave "Use workflow
+# from" on main, and type your branch in the first field. Or from the CLI:
+#
+#   gh workflow run adhoc-mac-build.yml --ref main -f ref=my-branch -f label=wasm-terminal
+#
+# Leaving the ref field empty builds whatever "Use workflow from" is set to, which
+# is what someone who only touched that picker means. Naming the branch explicitly
+# is still better: the workflow file is always read from the dispatch ref, so a
+# branch carrying a stale copy of this file would otherwise run that copy.
+#
+# GITHUB_TOKEN is scoped to this repo and cannot publish there, so writes use the
+# same GitHub App as hourly, additionally installed on orca-adhoc with
+# Contents: Read and write. The secret names below are historical — one App, one
+# private key, both dev-channel repos — and rotating it stays a single operation.
+# Provision with `bash config/scripts/setup-hourly-release-token.sh`.
+#
+# The requested ref is vetted before checkout: it must be a branch or tag of this
+# repo, or a commit reachable from one. PR refs are refused outright — this
+# workflow runs the checked-out code next to MAC_CERTS and the notary password,
+# so "just build that community PR" must not become a way to hand fork code the
+# release identity. A branch here always belongs to someone with write access,
+# which is the same trust the dispatch button itself already requires.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        # Why optional: the Actions UI already shows its own "Use workflow from"
+        # branch picker directly above this field, and picking a branch there is
+        # what most people will read as "build this". Defaulting to that branch
+        # makes the obvious action correct. Fill this in only to build a ref other
+        # than the one the workflow file itself is read from — normally leave the
+        # picker on main and name your branch here, so a stale copy of this
+        # workflow on an old branch is not what runs.
+        description: 'Branch, tag, or SHA to build — must live in stablyai/orca; PR refs are refused (default: the branch selected above)'
+        required: false
+        default: ''
+        type: string
+      label:
+        description: 'Short name shown in the release title (default: the ref)'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  # Why keyed on the ref rather than global: two people cutting builds from two
+  # different branches at the same time is the ordinary case here, and serialising
+  # them would make each wait out the other's notary queue. Re-dispatching the
+  # *same* branch still queues, so a push mid-build cannot race itself.
+  group: adhoc-mac-build-${{ inputs.ref || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  ADHOC_REPO: stablyai/orca-adhoc
+  # Why age and not a count like hourly: this channel is low-volume and bursty, so
+  # a count would either hold one week's experiments forever or evict a build
+  # someone is still running after a busy afternoon. A month is well past the "few
+  # days" these exist for, and by then the branch has landed or been abandoned.
+  ADHOC_RETAIN_DAYS: 30
+
+jobs:
+  build-adhoc-mac:
+    if: github.repository == 'stablyai/orca'
+    # Why an environment: it gives the signing/notary/App secrets somewhere to
+    # live that a stale copy of this workflow on an old branch cannot reach.
+    # Referencing it is a no-op until repo settings give it teeth; the intended
+    # follow-up is to move MAC_CERTS, MAC_CERTS_PASSWORD, APPLE_ID,
+    # APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID, HOURLY_RELEASE_APP_ID, and
+    # HOURLY_RELEASE_APP_PRIVATE_KEY into it, then pin its deployment branch
+    # policy to main so only main's copy of this file can read them.
+    environment: adhoc-mac-build
+    runs-on: blacksmith-6vcpu-macos-15
+    # Why 150: it must exceed the worst case the retry budgets below can produce
+    # (install 3x10 + publish 2x45 = 120, plus ~25 for checkout/build/verify), or
+    # the job is killed mid-retry and no cleanup step runs at all.
+    timeout-minutes: 150
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      # Why vet before checkout: everything after this step runs the checked-out
+      # code with release signing credentials in reach. Branches and tags of this
+      # repo are the intended audience; refs/pull/* would smuggle in fork code,
+      # and a raw SHA is only accepted when some branch or tag of this repo can
+      # actually reach it. Resolving to a pinned SHA here also means the commit
+      # that was vetted is the commit that gets checked out — a push to the
+      # branch between the two steps cannot swap it.
+      - name: Vet the requested ref
+        id: vetted
+        shell: bash
+        env:
+          REQUESTED_REF: ${{ inputs.ref || github.ref_name }}
+          REPO_URL: https://github.com/${{ github.repository }}
+        run: |
+          set -euo pipefail
+          case "$REQUESTED_REF" in
+            refs/pull/*|pull/*)
+              echo "::error::Refusing to build PR ref '$REQUESTED_REF': this workflow signs with release credentials, so it only builds branches, tags, or commits of stablyai/orca. Push the code to a branch of this repo instead."
+              exit 1
+              ;;
+          esac
+          # Bare: a work-tree repo refuses to fetch over its own checked-out
+          # branch. tree:0 keeps the fetch to the commit graph — no trees, no
+          # blobs — so this stays cheap next to the build it fronts.
+          scratch="$RUNNER_TEMP/vet-requested-ref"
+          git init -q --bare "$scratch"
+          git -C "$scratch" fetch -q --filter=tree:0 "$REPO_URL" '+refs/heads/*:refs/heads/*' '+refs/tags/*:refs/tags/*'
+          # Branch first to keep actions/checkout's old tie-break: bare
+          # rev-parse would prefer the tag when a branch shares its name.
+          sha=""
+          for cand in "refs/heads/$REQUESTED_REF" "refs/tags/$REQUESTED_REF" "$REQUESTED_REF"; do
+            if sha="$(git -C "$scratch" rev-parse --verify --quiet "$cand^{commit}")"; then
+              break
+            fi
+            sha=""
+          done
+          if [[ -z "$sha" ]]; then
+            echo "::error::'$REQUESTED_REF' does not resolve to a branch, tag, or commit of stablyai/orca."
+            exit 1
+          fi
+          # The object resolving locally is not proof a branch or tag reaches
+          # it: a partial clone can lazily fetch a bare SHA on demand, and
+          # GitHub serves PR-only commits by SHA. Reachability is the actual
+          # trust test.
+          if [[ -z "$(git -C "$scratch" for-each-ref --contains "$sha" refs/heads refs/tags | head -1)" ]]; then
+            echo "::error::Commit $REQUESTED_REF is not reachable from any branch or tag of stablyai/orca; refusing to build it with release credentials."
+            exit 1
+          fi
+          echo "Vetted $REQUESTED_REF -> $sha"
+          echo "sha=$sha" >>"$GITHUB_OUTPUT"
+
+      - name: Checkout the requested ref
+        uses: actions/checkout@v6
+        with:
+          # Why an input at all rather than just github.ref: the whole point is to
+          # build code that has not landed, and the workflow definition itself
+          # always comes from the dispatch ref — naming the branch here instead
+          # applies main's current copy of this file to an arbitrary branch.
+          ref: ${{ steps.vetted.outputs.sha }}
+          fetch-depth: 0
+          # This job only reads stablyai/orca and never pushes; every write goes
+          # to the adhoc repo through a minted App token passed by env. Not
+          # persisting the checkout credential shrinks the blast radius if a build
+          # step is compromised (zizmor: artipacked).
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          cache: pnpm
+
+      - name: Cache electron-builder downloads
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+          key: electron-builder-mac-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            electron-builder-mac-
+
+      - name: Install dependencies
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: pnpm install --frozen-lockfile
+
+      # Why: signing is what makes an adhoc build installable over an existing
+      # Orca, so a missing cert must fail here rather than after a 20-minute build.
+      - name: Verify macOS signing environment
+        run: node config/scripts/verify-macos-release-env.mjs
+        env:
+          CSC_LINK: ${{ secrets.MAC_CERTS }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Compute adhoc version
+        id: adhoc
+        shell: bash
+        env:
+          REF: ${{ inputs.ref || github.ref_name }}
+          LABEL: ${{ inputs.label }}
+          MAIN_REPO_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Why this check: the version scripts are read from the branch being built,
+          # not from main, so a branch cut before the adhoc channel landed has no
+          # copy of them. Say that plainly instead of failing with a module-not-found.
+          for script in adhoc-build-version dev-channel-base-version; do
+            if [[ ! -f "config/scripts/$script.mjs" ]]; then
+              echo "::error::$REF has no config/scripts/$script.mjs; rebase it onto a main that has the adhoc channel."
+              exit 1
+            fi
+          done
+          echo "head_sha=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
+          # Why the main repo's tags: package.json on a branch is as stale as the
+          # main it forked from, and stable patches never merge back into it.
+          published="$(GH_TOKEN="$MAIN_REPO_TOKEN" gh release list \
+            --repo "$GITHUB_REPOSITORY" --limit 100 --exclude-drafts \
+            --json tagName --jq '.[].tagName' || true)"
+          ORCA_PUBLISHED_VERSIONS="$published" ORCA_ADHOC_LABEL="${LABEL:-$REF}" \
+            node config/scripts/adhoc-build-version.mjs \
+            >"$RUNNER_TEMP/adhoc-identity.txt"
+          if ! grep -q '^name=' "$RUNNER_TEMP/adhoc-identity.txt"; then
+            echo "::error::adhoc-build-version.mjs emitted no release name; $REF's copy of the script is out of sync with this workflow."
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/adhoc-identity.txt" >>"$GITHUB_OUTPUT"
+
+      - name: Build app
+        run: pnpm build:release
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+          # Why: adhoc builds are not an official channel — telemetry's transport
+          # gate accepts only 'stable' or 'rc', so leaving this unset keeps them
+          # silent, which is correct for unvetted branch artifacts.
+          ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
+
+      # Why the token is minted here and not at the top: installation tokens live
+      # one hour, everything before this point writes nothing, and the notary round
+      # trip inside the publish step can be tens of minutes. Minting after the build
+      # starts the clock at the first call that actually uses it.
+      - name: Mint adhoc repo token
+        id: app_token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.HOURLY_RELEASE_APP_ID }}
+          private-key: ${{ secrets.HOURLY_RELEASE_APP_PRIVATE_KEY }}
+          owner: stablyai
+          repositories: orca-adhoc
+
+      - name: Create adhoc release
+        id: release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          TAG: v${{ steps.adhoc.outputs.version }}
+          NAME: ${{ steps.adhoc.outputs.name }}
+          SHA: ${{ steps.adhoc.outputs.head_sha }}
+          REF: ${{ inputs.ref || github.ref_name }}
+          # Via env, not inline `${{ }}`: both land inside a shell string, and an
+          # expression expanded there is substituted before bash parses the line
+          # (zizmor: template-injection).
+          ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          short_sha="${SHA:0:12}"
+          # Why create it up front: electron-builder then uploads into a known tag
+          # rather than inferring one from package.json.
+          #
+          # Why --draft: everything between here and the manifest check is a window
+          # where the release exists but has no installable assets. A draft is
+          # absent from the releases list and from listReleaseBuilds, so a job that
+          # dies in that window — including a hard kill by the job timeout, which
+          # runs no cleanup step at all — leaves something invisible rather than a
+          # tag the picker offers and the download 404s on.
+          gh release create "$TAG" \
+            --repo "$ADHOC_REPO" \
+            --title "$NAME" \
+            --draft \
+            --notes "Adhoc macOS dev build of \`$REF\` at commit \`$short_sha\`.
+
+          Built from [\`stablyai/orca@$short_sha\`](https://github.com/stablyai/orca/commit/$SHA), cut by @$ACTOR.
+
+          **Unlanded and unvetted.** This is somebody's branch, not main. No tests
+          ran. Signed and notarized like a release, so it installs through Orca's
+          in-app updater and opens without a Gatekeeper prompt — but the branch may
+          never merge, and this build is deleted after $ADHOC_RETAIN_DAYS days."
+          echo "tag=$TAG" >>"$GITHUB_OUTPUT"
+
+      - name: Publish adhoc macOS artifacts
+        uses: nick-fields/retry@v4
+        with:
+          # Why 45: an attempt is pack + notarize + upload, and the notary queue is
+          # the unbounded part. Two attempts, because a failed adhoc build has a
+          # person waiting on it who can simply dispatch again.
+          timeout_minutes: 45
+          max_attempts: 2
+          retry_wait_seconds: 30
+          command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_MAC_ADHOC=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always
+        env:
+          # Why: electron-builder's github publisher targets the repo named in the
+          # config; the token must therefore carry write access to orca-adhoc.
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          ORCA_ADHOC_BUILD_VERSION: ${{ steps.adhoc.outputs.version }}
+          ORCA_BUILD_COMMIT: ${{ steps.adhoc.outputs.commit }}
+          CSC_LINK: ${{ secrets.MAC_CERTS }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
+          # Why all three: electron-builder's notarize step authenticates to the
+          # Apple notary service with the app-specific password, not with the
+          # signing cert. Omitting them fails the build rather than skipping it.
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      # Why: the updater resolves a tag, then fetches latest-mac.yml from it. A
+      # release missing that manifest is a tag the picker offers and the download
+      # 404s on, so fail loudly instead of leaving a broken entry.
+      - name: Verify update manifest published
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          assets="$(gh release view "$TAG" --repo "$ADHOC_REPO" --json assets --jq '.assets[].name')"
+          echo "Published assets:"
+          echo "$assets"
+          # Why exit 1 without deleting here: the release is still a draft, so it is
+          # already invisible to users, and the failure handler below owns cleanup.
+          for required in latest-mac.yml; do
+            if ! grep -qx "$required" <<<"$assets"; then
+              echo "::error::Adhoc draft $TAG is missing $required; the updater could not install it."
+              exit 1
+            fi
+          done
+          if ! grep -q '\.zip$' <<<"$assets"; then
+            echo "::error::Adhoc draft $TAG has no ZIP artifact for the updater to download."
+            exit 1
+          fi
+
+      # Why this is the last mutating step: publishing the draft is what makes the
+      # build visible to listReleaseBuilds. Doing it only after the manifest check
+      # means the picker can never offer a release whose assets are incomplete.
+      - name: Publish the verified release
+        id: publish_live
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+          NAME: ${{ steps.adhoc.outputs.name }}
+        run: |
+          set -euo pipefail
+          # --title again: electron-builder resolves this draft by tag and may
+          # rewrite its title on upload. Re-asserting here means the name the
+          # picker reads is the one composed above, whatever it did in between.
+          gh release edit "$TAG" --repo "$ADHOC_REPO" --draft=false --prerelease --title "$NAME"
+          echo "Published $TAG as \"$NAME\""
+
+      # Why: a draft left behind by a failed publish is invisible to users but still
+      # holds its tag name. Gated on publish_live not having succeeded so a later
+      # failure (the prune step) cannot delete a release that already went live and
+      # that people may already be installing. Why cancelled() too: a run stopped
+      # from the Actions UI is not a failure(), so without it a manual cancel
+      # mid-publish would strand the draft.
+      - name: Discard the draft release on failure
+        if: >-
+          (failure() || cancelled()) && steps.release.outputs.tag != '' &&
+          steps.publish_live.outcome != 'success'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -uo pipefail
+          # No --cleanup-tag: an unpublished draft never created a git tag.
+          echo "Run failed before publish; discarding draft $TAG"
+          gh release delete "$TAG" --repo "$ADHOC_REPO" --yes ||
+            echo "::warning::Could not discard draft $TAG; remove it manually."
+
+      - name: Prune expired adhoc releases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+        run: |
+          set -euo pipefail
+          # Why compute the cutoff in bash rather than with jq's `now`: this runs
+          # once per dispatch, and a fixed epoch makes the threshold visible in the
+          # log when someone asks where their build went.
+          cutoff=$(( $(date -u +%s) - ADHOC_RETAIN_DAYS * 86400 ))
+          echo "Pruning adhoc releases created before $(date -u -r "$cutoff" '+%Y-%m-%dT%H:%M:%SZ')"
+          # --cleanup-tag so pruning does not leave orphan tags with no release or
+          # assets attached. Drafts are excluded: a stale draft is the failure
+          # path's business, not the retention window's.
+          stale="$(gh release list --repo "$ADHOC_REPO" --limit 200 --json tagName,createdAt,isDraft \
+            --jq "map(select(.isDraft | not)) | map(select((.createdAt | fromdateiso8601) < $cutoff)) | .[].tagName")"
+          if [[ -z "$stale" ]]; then
+            echo "Nothing to prune."
+            exit 0
+          fi
+          while read -r tag; do
+            [[ -n "$tag" ]] || continue
+            echo "Pruning $tag"
+            gh release delete "$tag" --repo "$ADHOC_REPO" --yes --cleanup-tag || \
+              echo "::warning::Could not prune $tag"
+          done <<<"$stale"

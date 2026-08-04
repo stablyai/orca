@@ -3,30 +3,29 @@ import { basename, join, win32, posix } from 'node:path'
 import { createReadStream, existsSync } from 'node:fs'
 import { realpath, readdir, stat } from 'node:fs/promises'
 import { createInterface } from 'node:readline'
-import type { Repo } from '../../shared/types'
 import { areWorktreePathsEqual } from '../ipc/worktree-logic'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../codex/codex-home-paths'
 import { getCodexAccountHomeSessionDirectories } from '../codex/codex-account-home-discovery'
 import { getLegacyCopiedCodexSessionBridgeScanPreference } from '../codex/codex-session-bridge'
 import { canonicalizeUsageWorktreePaths } from '../usage-worktree-canonicalizer'
+import { createUsageEventAggregation } from '../usage/usage-event-aggregation'
+import {
+  looksLikeWindowsPath,
+  normalizeComparablePath,
+  normalizeFsPath
+} from '../usage/usage-path-comparison'
+import { ensureNumber, extractString } from '../usage/usage-record-coercion'
+import type { UsageScanWorktreeRef } from '../usage/usage-provider-contract'
 import type {
   CodexUsageAttributedEvent,
   CodexUsageDailyAggregate,
-  CodexUsageLocationBreakdown,
-  CodexUsageLocationModelBreakdown,
-  CodexUsageModelBreakdown,
   CodexUsageParsedEvent,
   CodexUsagePersistedFile,
   CodexUsageProcessedFile,
   CodexUsageSession
 } from './types'
 
-export type CodexUsageWorktreeRef = {
-  repoId: string
-  worktreeId: string
-  path: string
-  displayName: string
-}
+export type CodexUsageWorktreeRef = UsageScanWorktreeRef
 
 type CodexUsageRawRecord = {
   timestamp?: string
@@ -57,28 +56,6 @@ type CodexUsageDeltaResolution =
 
 const YIELD_EVERY_FILES = 10
 const YIELD_EVERY_DISCOVERY_ENTRIES = 100
-
-function ensureNumber(value: unknown): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : 0
-}
-
-function normalizeComparablePath(pathValue: string, platform = process.platform): string {
-  const normalized = pathValue.replace(/\\/g, '/')
-  return platform === 'win32' || looksLikeWindowsPath(pathValue)
-    ? normalized.toLowerCase()
-    : normalized
-}
-
-function normalizeFsPath(pathValue: string, platform = process.platform): string {
-  if (platform === 'win32' || looksLikeWindowsPath(pathValue)) {
-    return win32.normalize(win32.resolve(pathValue))
-  }
-  return posix.normalize(posix.resolve(pathValue))
-}
-
-function looksLikeWindowsPath(pathValue: string): boolean {
-  return /^[A-Za-z]:[\\/]/.test(pathValue) || pathValue.startsWith('\\\\')
-}
 
 async function canonicalizePath(pathValue: string): Promise<string> {
   try {
@@ -414,14 +391,6 @@ function buildCodexUsageEventKey(
   return [timestamp, tupleOf(totalUsage), tupleOf(lastUsage)].join('|')
 }
 
-function extractString(value: unknown): string | null {
-  if (typeof value !== 'string') {
-    return null
-  }
-  const trimmed = value.trim()
-  return trimmed.length > 0 ? trimmed : null
-}
-
 function extractModel(value: unknown): string | null {
   if (value == null || typeof value !== 'object') {
     return null
@@ -568,331 +537,29 @@ export async function attributeCodexUsageEvent(
   }
 }
 
-function createEmptySession(event: CodexUsageAttributedEvent): CodexUsageSession {
-  return {
-    sessionId: event.sessionId,
-    firstTimestamp: event.timestamp,
-    lastTimestamp: event.timestamp,
-    primaryModel: event.model,
-    hasMixedModels: false,
-    primaryProjectLabel: event.projectLabel,
-    hasMixedLocations: false,
-    primaryWorktreeId: event.worktreeId,
-    primaryRepoId: event.repoId,
-    eventCount: 0,
-    totalInputTokens: 0,
-    totalCachedInputTokens: 0,
-    totalOutputTokens: 0,
-    totalReasoningOutputTokens: 0,
-    totalTokens: 0,
-    hasInferredPricing: false,
-    locationBreakdown: [],
-    modelBreakdown: [],
-    locationModelBreakdown: []
-  }
-}
+type CodexUsageMetric = { hasInferredPricing: boolean }
 
-function createEmptyDailyAggregate(event: CodexUsageAttributedEvent): CodexUsageDailyAggregate {
-  return {
-    day: event.day,
-    model: event.model,
-    projectKey: event.projectKey,
-    projectLabel: event.projectLabel,
-    repoId: event.repoId,
-    worktreeId: event.worktreeId,
-    eventCount: 0,
-    inputTokens: 0,
-    cachedInputTokens: 0,
-    outputTokens: 0,
-    reasoningOutputTokens: 0,
-    totalTokens: 0,
-    hasInferredPricing: false
-  }
-}
-
-function mergeLocationBreakdown(
-  target: CodexUsageLocationBreakdown[],
-  event: CodexUsageAttributedEvent
-): void {
-  const existing = target.find((entry) => entry.locationKey === event.projectKey) ?? null
-  if (existing) {
-    existing.eventCount++
-    existing.inputTokens += event.inputTokens
-    existing.cachedInputTokens += event.cachedInputTokens
-    existing.outputTokens += event.outputTokens
-    existing.reasoningOutputTokens += event.reasoningOutputTokens
-    existing.totalTokens += event.totalTokens
-    existing.hasInferredPricing ||= event.hasInferredPricing
-    return
-  }
-
-  target.push({
-    locationKey: event.projectKey,
-    projectLabel: event.projectLabel,
-    repoId: event.repoId,
-    worktreeId: event.worktreeId,
-    eventCount: 1,
-    inputTokens: event.inputTokens,
-    cachedInputTokens: event.cachedInputTokens,
-    outputTokens: event.outputTokens,
-    reasoningOutputTokens: event.reasoningOutputTokens,
-    totalTokens: event.totalTokens,
-    hasInferredPricing: event.hasInferredPricing
-  })
-}
-
-function mergeModelBreakdown(
-  target: CodexUsageModelBreakdown[],
-  event: CodexUsageAttributedEvent
-): void {
-  const key = event.model ?? 'unknown'
-  const existing = target.find((entry) => entry.modelKey === key) ?? null
-  if (existing) {
-    existing.eventCount++
-    existing.inputTokens += event.inputTokens
-    existing.cachedInputTokens += event.cachedInputTokens
-    existing.outputTokens += event.outputTokens
-    existing.reasoningOutputTokens += event.reasoningOutputTokens
-    existing.totalTokens += event.totalTokens
-    existing.hasInferredPricing ||= event.hasInferredPricing
-    return
-  }
-
-  target.push({
-    modelKey: key,
-    modelLabel: event.model ?? 'Unknown model',
-    eventCount: 1,
-    inputTokens: event.inputTokens,
-    cachedInputTokens: event.cachedInputTokens,
-    outputTokens: event.outputTokens,
-    reasoningOutputTokens: event.reasoningOutputTokens,
-    totalTokens: event.totalTokens,
-    hasInferredPricing: event.hasInferredPricing
-  })
-}
-
-function mergeLocationModelBreakdown(
-  target: CodexUsageLocationModelBreakdown[],
-  event: CodexUsageAttributedEvent
-): void {
-  const modelKey = event.model ?? 'unknown'
-  const existing =
-    target.find((entry) => entry.locationKey === event.projectKey && entry.modelKey === modelKey) ??
-    null
-  if (existing) {
-    existing.eventCount++
-    existing.inputTokens += event.inputTokens
-    existing.cachedInputTokens += event.cachedInputTokens
-    existing.outputTokens += event.outputTokens
-    existing.reasoningOutputTokens += event.reasoningOutputTokens
-    existing.totalTokens += event.totalTokens
-    existing.hasInferredPricing ||= event.hasInferredPricing
-    return
-  }
-
-  target.push({
-    locationKey: event.projectKey,
-    modelKey,
-    modelLabel: event.model ?? 'Unknown model',
-    repoId: event.repoId,
-    worktreeId: event.worktreeId,
-    eventCount: 1,
-    inputTokens: event.inputTokens,
-    cachedInputTokens: event.cachedInputTokens,
-    outputTokens: event.outputTokens,
-    reasoningOutputTokens: event.reasoningOutputTokens,
-    totalTokens: event.totalTokens,
-    hasInferredPricing: event.hasInferredPricing
-  })
-}
-
-function aggregateCodexUsage(events: CodexUsageAttributedEvent[]): {
-  sessions: CodexUsageSession[]
-  dailyAggregates: CodexUsageDailyAggregate[]
-} {
-  const sessionsById = new Map<string, CodexUsageSession>()
-  const dailyByKey = new Map<string, CodexUsageDailyAggregate>()
-
-  for (const event of events) {
-    const session = sessionsById.get(event.sessionId) ?? createEmptySession(event)
-    if (!sessionsById.has(event.sessionId)) {
-      sessionsById.set(event.sessionId, session)
+const codexUsageAggregation = createUsageEventAggregation<
+  CodexUsageAttributedEvent,
+  CodexUsageMetric
+>({
+  metric: {
+    empty: () => ({ hasInferredPricing: false }),
+    fromEvent: (event) => ({ hasInferredPricing: event.hasInferredPricing }),
+    fold: (target, source) => {
+      target.hasInferredPricing ||= source.hasInferredPricing
     }
-    if (event.timestamp < session.firstTimestamp) {
-      session.firstTimestamp = event.timestamp
-    }
-    if (event.timestamp >= session.lastTimestamp) {
-      session.lastTimestamp = event.timestamp
-    }
-    session.eventCount++
-    session.totalInputTokens += event.inputTokens
-    session.totalCachedInputTokens += event.cachedInputTokens
-    session.totalOutputTokens += event.outputTokens
-    session.totalReasoningOutputTokens += event.reasoningOutputTokens
-    session.totalTokens += event.totalTokens
-    session.hasInferredPricing ||= event.hasInferredPricing
-    mergeLocationBreakdown(session.locationBreakdown, event)
-    mergeModelBreakdown(session.modelBreakdown, event)
-    mergeLocationModelBreakdown(session.locationModelBreakdown, event)
-
-    const dailyKey = [event.day, event.model ?? 'unknown', event.projectKey].join('::')
-    const daily = dailyByKey.get(dailyKey) ?? createEmptyDailyAggregate(event)
-    if (!dailyByKey.has(dailyKey)) {
-      dailyByKey.set(dailyKey, daily)
-    }
-    daily.eventCount++
-    daily.inputTokens += event.inputTokens
-    daily.cachedInputTokens += event.cachedInputTokens
-    daily.outputTokens += event.outputTokens
-    daily.reasoningOutputTokens += event.reasoningOutputTokens
-    daily.totalTokens += event.totalTokens
-    daily.hasInferredPricing ||= event.hasInferredPricing
-  }
-
-  return {
-    sessions: finalizeSessions(sessionsById),
-    dailyAggregates: [...dailyByKey.values()].sort((left, right) =>
-      left.day === right.day
-        ? left.projectLabel.localeCompare(right.projectLabel)
-        : left.day.localeCompare(right.day)
-    )
-  }
-}
-
-function finalizeSessions(sessionsById: Map<string, CodexUsageSession>): CodexUsageSession[] {
-  for (const session of sessionsById.values()) {
-    session.locationBreakdown.sort((left, right) => right.totalTokens - left.totalTokens)
-    session.modelBreakdown.sort((left, right) => right.totalTokens - left.totalTokens)
-    const primaryLocation = session.locationBreakdown[0] ?? null
-    const primaryModel = session.modelBreakdown[0] ?? null
-    session.primaryProjectLabel =
-      session.locationBreakdown.length <= 1
-        ? (primaryLocation?.projectLabel ?? 'Unknown location')
-        : 'Multiple locations'
-    session.hasMixedLocations = session.locationBreakdown.length > 1
-    session.primaryWorktreeId = primaryLocation?.worktreeId ?? null
-    session.primaryRepoId = primaryLocation?.repoId ?? null
-    session.primaryModel =
-      session.modelBreakdown.length <= 1 ? (primaryModel?.modelLabel ?? null) : 'Mixed models'
-    session.hasMixedModels = session.modelBreakdown.length > 1
-  }
-
-  return [...sessionsById.values()].sort((left, right) =>
-    right.lastTimestamp.localeCompare(left.lastTimestamp)
-  )
-}
-
-function mergeSessions(
-  target: Map<string, CodexUsageSession>,
-  sessions: CodexUsageSession[]
-): void {
-  for (const session of sessions) {
-    const existing = target.get(session.sessionId)
-    if (!existing) {
-      target.set(session.sessionId, cloneSessionForMerge(session))
-      continue
-    }
-
-    existing.firstTimestamp =
-      session.firstTimestamp < existing.firstTimestamp
-        ? session.firstTimestamp
-        : existing.firstTimestamp
-    existing.lastTimestamp =
-      session.lastTimestamp > existing.lastTimestamp
-        ? session.lastTimestamp
-        : existing.lastTimestamp
-    existing.eventCount += session.eventCount
-    existing.totalInputTokens += session.totalInputTokens
-    existing.totalCachedInputTokens += session.totalCachedInputTokens
-    existing.totalOutputTokens += session.totalOutputTokens
-    existing.totalReasoningOutputTokens += session.totalReasoningOutputTokens
-    existing.totalTokens += session.totalTokens
-    existing.hasInferredPricing ||= session.hasInferredPricing
-
-    for (const location of session.locationBreakdown) {
-      const existingLocation =
-        existing.locationBreakdown.find((entry) => entry.locationKey === location.locationKey) ??
-        null
-      if (existingLocation) {
-        existingLocation.eventCount += location.eventCount
-        existingLocation.inputTokens += location.inputTokens
-        existingLocation.cachedInputTokens += location.cachedInputTokens
-        existingLocation.outputTokens += location.outputTokens
-        existingLocation.reasoningOutputTokens += location.reasoningOutputTokens
-        existingLocation.totalTokens += location.totalTokens
-        existingLocation.hasInferredPricing ||= location.hasInferredPricing
-      } else {
-        existing.locationBreakdown.push({ ...location })
-      }
-    }
-
-    for (const model of session.modelBreakdown) {
-      const existingModel =
-        existing.modelBreakdown.find((entry) => entry.modelKey === model.modelKey) ?? null
-      if (existingModel) {
-        existingModel.eventCount += model.eventCount
-        existingModel.inputTokens += model.inputTokens
-        existingModel.cachedInputTokens += model.cachedInputTokens
-        existingModel.outputTokens += model.outputTokens
-        existingModel.reasoningOutputTokens += model.reasoningOutputTokens
-        existingModel.totalTokens += model.totalTokens
-        existingModel.hasInferredPricing ||= model.hasInferredPricing
-      } else {
-        existing.modelBreakdown.push({ ...model })
-      }
-    }
-
-    for (const locationModel of session.locationModelBreakdown) {
-      const existingLocationModel =
-        existing.locationModelBreakdown.find(
-          (entry) =>
-            entry.locationKey === locationModel.locationKey &&
-            entry.modelKey === locationModel.modelKey
-        ) ?? null
-      if (existingLocationModel) {
-        existingLocationModel.eventCount += locationModel.eventCount
-        existingLocationModel.inputTokens += locationModel.inputTokens
-        existingLocationModel.cachedInputTokens += locationModel.cachedInputTokens
-        existingLocationModel.outputTokens += locationModel.outputTokens
-        existingLocationModel.reasoningOutputTokens += locationModel.reasoningOutputTokens
-        existingLocationModel.totalTokens += locationModel.totalTokens
-        existingLocationModel.hasInferredPricing ||= locationModel.hasInferredPricing
-      } else {
-        existing.locationModelBreakdown.push({ ...locationModel })
-      }
-    }
-  }
-}
-
-function cloneSessionForMerge(session: CodexUsageSession): CodexUsageSession {
-  return {
+  },
+  cloneSessionForMerge: (session) => ({
     ...session,
     locationBreakdown: session.locationBreakdown.map((entry) => ({ ...entry })),
     modelBreakdown: session.modelBreakdown.map((entry) => ({ ...entry })),
     locationModelBreakdown: session.locationModelBreakdown.map((entry) => ({ ...entry }))
-  }
-}
+  })
+})
 
-function mergeDailyAggregates(
-  target: Map<string, CodexUsageDailyAggregate>,
-  dailyAggregates: CodexUsageDailyAggregate[]
-): void {
-  for (const aggregate of dailyAggregates) {
-    const key = [aggregate.day, aggregate.model ?? 'unknown', aggregate.projectKey].join('::')
-    const existing = target.get(key)
-    if (!existing) {
-      target.set(key, { ...aggregate })
-      continue
-    }
-    existing.eventCount += aggregate.eventCount
-    existing.inputTokens += aggregate.inputTokens
-    existing.cachedInputTokens += aggregate.cachedInputTokens
-    existing.outputTokens += aggregate.outputTokens
-    existing.reasoningOutputTokens += aggregate.reasoningOutputTokens
-    existing.totalTokens += aggregate.totalTokens
-    existing.hasInferredPricing ||= aggregate.hasInferredPricing
-  }
-}
+const { finalizeSessions, mergeSessions, mergeDailyAggregates, sortDailyAggregates } =
+  codexUsageAggregation
 
 export function parseCodexUsageRecord(
   line: string,
@@ -1042,7 +709,7 @@ export async function parseCodexUsageFile(
 
   return {
     ...processedFile,
-    ...aggregateCodexUsage(events),
+    ...codexUsageAggregation.aggregate(events),
     ownedEventKeys: [...ownedEventKeys],
     hasDeferredClaims
   }
@@ -1154,42 +821,6 @@ export async function scanCodexUsageFiles(
   return {
     processedFiles,
     sessions: finalizeSessions(sessionsById),
-    dailyAggregates: [...dailyByKey.values()].sort((left, right) =>
-      left.day === right.day
-        ? left.projectLabel.localeCompare(right.projectLabel)
-        : left.day.localeCompare(right.day)
-    )
+    dailyAggregates: sortDailyAggregates(dailyByKey)
   }
-}
-
-export function createWorktreeRefs(
-  repos: Repo[],
-  worktreesByRepo: Map<string, { path: string; worktreeId: string; displayName: string }[]>
-): CodexUsageWorktreeRef[] {
-  const refs: CodexUsageWorktreeRef[] = []
-  for (const repo of repos) {
-    for (const worktree of worktreesByRepo.get(repo.id) ?? []) {
-      refs.push({
-        repoId: repo.id,
-        worktreeId: worktree.worktreeId,
-        path: worktree.path,
-        displayName: worktree.displayName
-      })
-    }
-  }
-  return refs
-}
-
-export function getDefaultWorktreeLabel(pathValue: string): string {
-  return basename(pathValue)
-}
-
-export function getSessionProjectLabel(locationBreakdown: CodexUsageLocationBreakdown[]): string {
-  if (locationBreakdown.length === 0) {
-    return 'Unknown location'
-  }
-  if (locationBreakdown.length === 1) {
-    return locationBreakdown[0].projectLabel
-  }
-  return 'Multiple locations'
 }

@@ -27,6 +27,8 @@
     "app-store-performance/no-identity-selector": "error",
     "app-store-performance/no-fresh-selector-result": "error",
     "no-fallthrough": "error",
+    "eslint/no-useless-call": "error",
+    "oxc/no-accumulating-spread": "error",
     "quadratic-buffer-concat/no-loop-carried-concat": "error",
     "react/jsx-no-duplicate-props": "error",
     "react/jsx-no-undef": "error",

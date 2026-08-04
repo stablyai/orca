@@ -9,6 +9,12 @@ on:
       - 'config/scripts/build-windows-cli-launcher.mjs'
       - 'config/scripts/build-windows-cli-launcher.test.mjs'
       - 'config/scripts/computer-e2e-workflow.test.mjs'
+      - 'config/scripts/macos-computer-helper-owner-loss-benchmark.mjs'
+      - 'config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs'
+      - 'config/scripts/macos-computer-helper-owner-loss-metrics.mjs'
+      - 'config/scripts/macos-computer-helper-owner-loss-processes.mjs'
+      - 'config/scripts/macos-computer-helper-owner-loss-processes.test.mjs'
+      - 'config/scripts/macos-computer-helper-owner-loss-trial-cleanup.mjs'
       - 'config/scripts/computer-use-modifier-safety.test.mjs'
       - 'config/scripts/computer-use-skill-guidance.test.mjs'
       - 'config/scripts/computer-use-smoke.mjs'
@@ -59,6 +65,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v6
         with:
           node-version-file: package.json
@@ -85,6 +93,8 @@ jobs:
           config/scripts/build-windows-cli-launcher.test.mjs
           src/main/ssh/ssh-remote-cli-launcher.test.ts
           config/scripts/computer-e2e-workflow.test.mjs
+          config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs
+          config/scripts/macos-computer-helper-owner-loss-processes.test.mjs
           config/scripts/computer-use-modifier-safety.test.mjs
           config/scripts/computer-use-skill-guidance.test.mjs
           config/scripts/computer-use-smoke.test.mjs
@@ -130,15 +140,31 @@ jobs:
       - name: Windows daemon workspace-close repro
         if: runner.os == 'Windows'
         run: node config/scripts/windows-daemon-workspace-close-repro.mjs
-      - if: runner.os == 'Linux'
-        env:
-          ORCA_COMPUTER_E2E: '1'
-          ACCESSIBILITY_ENABLED: '1'
-        run: xvfb-run --auto-servernum dbus-run-session -- pnpm test:e2e:computer --reporter=verbose tests/e2e/computer-linux.e2e.ts
-      - if: runner.os == 'Windows'
-        env:
-          ORCA_COMPUTER_E2E: '1'
-        run: pnpm test:e2e:computer --reporter=verbose tests/e2e/computer-windows.e2e.ts
+  mac-native-owner-smoke:
+    if: github.event_name == 'pull_request'
+    runs-on: macos-15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+      - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+      - run: pnpm install --frozen-lockfile
+      - name: Owner-loss benchmark process cleanup
+        run: >-
+          pnpm vitest run
+          config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs
+          config/scripts/macos-computer-helper-owner-loss-processes.test.mjs
+      - name: Authenticated helper owner-loss smoke
+        run: pnpm bench:macos-computer-helper-owner-loss --expect reaped --trials 1
+      - name: Swift tests and signed universal helper verification
+        run: pnpm verify:computer-native
 
   mac:
     # macOS Accessibility and Screen Recording require user-granted TCC entries.
