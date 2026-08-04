@@ -39,6 +39,7 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.xml': 'xml',
   '.svg': 'xml',
   '.py': 'python',
+  '.gd': 'gdscript',
   '.rs': 'rust',
   '.go': 'go',
   '.java': 'java',
