@@ -1837,21 +1837,27 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     })
   })
 
-  it("retires remaining subscriptions when one renderer's close notification throws", async () => {
-    // Why: send can throw on a disposed render frame, and an unguarded throw here
-    // aborts the sweep just as surely as a failing socket close.
+  it('contains a throwing renderer send on a host-initiated close', async () => {
+    // Why: this is the notifyClosed call site with no surrounding guard. A host
+    // close arriving on a disposed render frame would otherwise throw out through
+    // the transport's onClose and into the WebSocket close handler.
     registerRuntimeEnvironmentHandlers(store as never)
-    const closedStreams: string[] = []
-    let streamCount = 0
-    subscribeRemoteRuntimeRequestMock.mockImplementation(async () => {
-      streamCount += 1
-      const requestId = `stream-${streamCount}`
-      return {
-        requestId,
-        close: () => closedStreams.push(requestId),
-        sendBinary: vi.fn()
+    let transportCallbacks: {
+      onResponse: (response: Record<string, unknown>) => void
+      onClose: () => void
+    } | null = null
+    subscribeRemoteRuntimeRequestMock.mockImplementation(
+      async (
+        _environment: unknown,
+        _method: string,
+        _params: unknown,
+        _timeoutMs: number,
+        callbacks: NonNullable<typeof transportCallbacks>
+      ) => {
+        transportCallbacks = callbacks
+        return { requestId: 'host-closed-stream', close: vi.fn(), sendBinary: vi.fn() }
       }
-    })
+    )
 
     const add = handler<
       { name: string; pairingCode: string },
@@ -1859,51 +1865,48 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     >('runtimeEnvironments:addFromPairingCode')
     const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
 
-    const deliveredCloses: string[] = []
-    const senderSend = vi.fn(
-      (_channel: string, payload: { subscriptionId: string; type: string }) => {
-        if (payload.type !== 'close') {
-          return
-        }
-        if (payload.subscriptionId === 'disposed-frame-sub') {
-          throw new Error('Render frame was disposed')
-        }
-        deliveredCloses.push(payload.subscriptionId)
+    const senderSend = vi.fn((_channel: string, payload: { type: string }) => {
+      if (payload.type === 'close') {
+        throw new Error('Render frame was disposed')
       }
-    )
+    })
     const subscribe = handler<
       { selector: string; method: string; params?: unknown; subscriptionId?: string },
       { subscriptionId: string; requestId: string }
     >('runtimeEnvironments:subscribe')
-    const sender = {
-      sender: {
-        id: 1,
-        isDestroyed: () => false,
-        send: senderSend,
-        once: vi.fn(),
-        removeListener: vi.fn()
+    await subscribe(
+      {
+        sender: {
+          id: 1,
+          isDestroyed: () => false,
+          send: senderSend,
+          once: vi.fn(),
+          removeListener: vi.fn()
+        }
+      },
+      {
+        selector: added.environment.id,
+        method: 'terminal.multiplex',
+        params: {},
+        subscriptionId: 'host-closed-sub'
       }
-    }
-    await subscribe(sender, {
-      selector: added.environment.id,
-      method: 'terminal.multiplex',
-      params: {},
-      subscriptionId: 'disposed-frame-sub'
-    })
-    await subscribe(sender, {
-      selector: added.environment.id,
-      method: 'browser.screencast',
-      params: {},
-      subscriptionId: 'surviving-sub'
-    })
-
-    const disconnect = handler<{ selector: string }, { disconnected: { id: string } }>(
-      'runtimeEnvironments:disconnect'
     )
-    expect(() => disconnect(null, { selector: added.environment.id })).not.toThrow()
 
-    expect(closedStreams).toEqual(['stream-1', 'stream-2'])
-    expect(deliveredCloses).toEqual(['surviving-sub'])
+    // The host closes the stream on its own; nothing wraps this call site.
+    expect(() => transportCallbacks!.onClose()).not.toThrow()
+    expect(
+      senderSend.mock.calls.filter((call) => (call[1] as { type?: string }).type === 'close')
+    ).toHaveLength(1)
+
+    // The entry is still released, so a later unsubscribe finds nothing.
+    const unsubscribe = handler<{ subscriptionId: string }, { unsubscribed: boolean }>(
+      'runtimeEnvironments:unsubscribe'
+    )
+    expect(await unsubscribe({ sender: { id: 1 } }, { subscriptionId: 'host-closed-sub' })).toEqual(
+      {
+        unsubscribed: false
+      }
+    )
   })
 
   it('retires remaining subscriptions when a liveness probe inside notifyClosed throws', async () => {
