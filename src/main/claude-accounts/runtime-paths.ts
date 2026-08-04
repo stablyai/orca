@@ -13,8 +13,7 @@ export type ClaudeRuntimePaths = {
 export class ClaudeRuntimePathResolver {
   getRuntimePaths(): ClaudeRuntimePaths {
     const inheritedConfigDir = process.env.CLAUDE_CONFIG_DIR?.trim() || null
-    // Why: resolving must stay side-effect free — background usage refreshes call
-    // this even when Claude is disabled. Writers create the directory themselves.
+    // Why: disabled Claude still reaches this resolver through background usage refreshes.
     const configDir = inheritedConfigDir || join(homedir(), '.claude')
 
     return {
