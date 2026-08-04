@@ -1762,6 +1762,81 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     ])
   })
 
+  it("retires an environment's remaining subscriptions when one teardown throws", async () => {
+    // Why: the sweep exists to retire dead handles, so a single failing teardown
+    // must not strand the very sockets it was called to close.
+    registerRuntimeEnvironmentHandlers(store as never)
+    const closeCalls: string[] = []
+    let streamCount = 0
+    subscribeRemoteRuntimeRequestMock.mockImplementation(async () => {
+      streamCount += 1
+      const requestId = `stream-${streamCount}`
+      return {
+        requestId,
+        close: () => {
+          closeCalls.push(requestId)
+          if (requestId === 'stream-1') {
+            throw new Error('socket teardown exploded')
+          }
+        },
+        sendBinary: vi.fn()
+      }
+    })
+
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
+
+    const senderSend = vi.fn()
+    const subscribe = handler<
+      { selector: string; method: string; params?: unknown; subscriptionId?: string },
+      { subscriptionId: string; requestId: string }
+    >('runtimeEnvironments:subscribe')
+    const sender = {
+      sender: {
+        id: 1,
+        isDestroyed: () => false,
+        send: senderSend,
+        once: vi.fn(),
+        removeListener: vi.fn()
+      }
+    }
+    await subscribe(sender, {
+      selector: added.environment.id,
+      method: 'terminal.multiplex',
+      params: {},
+      subscriptionId: 'doomed-sub'
+    })
+    await subscribe(sender, {
+      selector: added.environment.id,
+      method: 'browser.screencast',
+      params: {},
+      subscriptionId: 'sibling-sub'
+    })
+
+    const disconnect = handler<{ selector: string }, { disconnected: { id: string } }>(
+      'runtimeEnvironments:disconnect'
+    )
+    expect(() => disconnect(null, { selector: added.environment.id })).not.toThrow()
+
+    expect(closeCalls).toEqual(['stream-1', 'stream-2'])
+    expect(
+      senderSend.mock.calls
+        .filter((call) => (call[1] as { type?: string }).type === 'close')
+        .map((call) => (call[1] as { subscriptionId: string }).subscriptionId)
+    ).toEqual(['doomed-sub', 'sibling-sub'])
+
+    // Both entries are gone, so a later unsubscribe finds nothing to release.
+    const unsubscribe = handler<{ subscriptionId: string }, { unsubscribed: boolean }>(
+      'runtimeEnvironments:unsubscribe'
+    )
+    expect(await unsubscribe({ sender: { id: 1 } }, { subscriptionId: 'sibling-sub' })).toEqual({
+      unsubscribed: false
+    })
+  })
+
   it('suppresses stale payloads from a retired transport but never re-sends its close', async () => {
     registerRuntimeEnvironmentHandlers(store as never)
     let transportCallbacks: {

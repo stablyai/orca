@@ -37,7 +37,14 @@ function closeSubscriptionsForEnvironment(environmentId: string): void {
       continue
     }
     remoteRuntimeSubscriptions.delete(subscriptionId)
-    subscription.close()
+    // Why: one failing teardown must not abandon this environment's other
+    // sockets -- that strands exactly the dead handles this sweep exists to
+    // retire. notifyClosed never throws, so it always runs.
+    try {
+      subscription.close()
+    } catch (error) {
+      console.warn('[runtime-environments] subscription close failed during retirement:', error)
+    }
     // Why: a shared-control logical close never calls back, so notify directly.
     subscription.notifyClosed()
   }
@@ -124,13 +131,19 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
         subscription?.close()
       }
       // Why: the renderer treats close as terminal and drops its handle, so send it once.
+      // Latch before sending so a re-entrant call cannot duplicate it, and never
+      // throw: a dying renderer must not abort its siblings' retirement.
       let closeNotified = false
       const notifyClosed = (): void => {
         if (closeNotified || sender.isDestroyed()) {
           return
         }
         closeNotified = true
-        sender.send('runtimeEnvironments:subscriptionEvent', { subscriptionId, type: 'close' })
+        try {
+          sender.send('runtimeEnvironments:subscriptionEvent', { subscriptionId, type: 'close' })
+        } catch {
+          // The renderer is gone; there is no one left to tell.
+        }
       }
       sender.once('destroyed', closeSubscription)
       destroyedListenerAttached = true
