@@ -1,6 +1,53 @@
 /* eslint-disable max-lines */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createHash } from 'node:crypto'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type * as UpdaterModule from './updater'
+import type * as RecoveryModule from './linux-package-update-recovery'
+import type { UpdateStatus } from '../shared/types'
+
+type RevalidationVerdict = Awaited<
+  ReturnType<typeof RecoveryModule.revalidateLinuxPackageForInstall>
+>
+
+// Captured before any vi.useFakeTimers() call: the only handle left that still yields to libuv.
+const realSetTimeout = globalThis.setTimeout
+
+type StagedLinuxPackages = {
+  cacheRoot: string
+  debPath: string
+  debSha512: string
+  rpmPath: string
+  rpmSha512: string
+}
+
+/**
+ * Stages real packages inside a real updater cache: every install re-proves the retained digest by
+ * streaming the file off disk, so a path that never existed would abort before reaching the native
+ * updater. Returns the actual digests for the download events.
+ */
+function stageLinuxUpdateCache(): StagedLinuxPackages {
+  const cacheRoot = mkdtempSync(join(tmpdir(), 'orca-updater-cache-'))
+  const pendingDir = join(cacheRoot, 'orca-updater', 'pending')
+  mkdirSync(pendingDir, { recursive: true })
+  const stagePackage = (fileName: string): { path: string; sha512: string } => {
+    const packagePath = join(pendingDir, fileName)
+    const bytes = Buffer.from(`orca test package ${fileName}`)
+    writeFileSync(packagePath, bytes)
+    return { path: packagePath, sha512: createHash('sha512').update(bytes).digest('base64') }
+  }
+  const deb = stagePackage('orca-ide_1.0.61_amd64.deb')
+  const rpm = stagePackage('orca-ide-1.0.61.x86_64.rpm')
+  return {
+    cacheRoot,
+    debPath: deb.path,
+    debSha512: deb.sha512,
+    rpmPath: rpm.path,
+    rpmSha512: rpm.sha512
+  }
+}
 
 const {
   appMock,
@@ -1780,8 +1827,12 @@ describe('updater', () => {
       'updater:status',
       expect.objectContaining({
         state: 'error',
-        // Why: a pre-commit install failure is not fixed by restarting, so the copy must not suggest it.
-        message: 'Could not start the update installer. Orca remains open.'
+        // Why: a pre-commit install failure is not fixed by restarting, so the copy must not
+        // suggest it — except on macOS, where quitting does re-stage a Squirrel update.
+        message:
+          process.platform === 'darwin'
+            ? 'Could not restart to install the update. Quit and reopen Orca, then try again.'
+            : 'Could not start the update installer. Orca remains open.'
       })
     )
   })
@@ -3794,28 +3845,92 @@ describe('updater', () => {
   })
 
   describe('linux root package install recovery', () => {
-    // Real 64-byte SHA-512 values; capture rejects a digest that cannot decode to one.
-    const DEB_SHA512 =
-      'LHlL7dKoqg98gS2nfQv878dK+UoktbAkm4M20/hoJ2Qr0Kqsa3MSL4VmWy/Lll/MYjQFkpvOxduQ/vswentozA=='
-    const RPM_SHA512 =
-      'W2U3AUPfVpc0Ia1qX/VJ5+8aW+yOFhysT6ryodo7A6DTZKqL6RYLK53U6ShGx+9f4lb35qtd4tOp5jzJZZdAfQ=='
+    let staged: StagedLinuxPackages
+    let EXIT_127: string
+
+    // Why: the pre-install digest re-proof streams the package off real disk. Fake timers never
+    // advance libuv, so the quit timer needs fake time while the read needs real event-loop turns.
+    const settleQuitAndInstall = async (): Promise<void> => {
+      await vi.advanceTimersByTimeAsync(100)
+      for (let turn = 0; turn < 40; turn += 1) {
+        await new Promise((resolve) => realSetTimeout(resolve, 0))
+      }
+      await vi.advanceTimersByTimeAsync(0)
+    }
+
+    beforeEach(() => {
+      staged = stageLinuxUpdateCache()
+      vi.stubEnv('XDG_CACHE_HOME', staged.cacheRoot)
+      EXIT_127 = `Command failed: /usr/bin/pkexec /usr/bin/dpkg -i ${staged.debPath}, exited with code 127`
+    })
+
+    afterEach(() => {
+      vi.doUnmock('./linux-package-update-recovery')
+      vi.unstubAllEnvs()
+      rmSync(staged.cacheRoot, { recursive: true, force: true })
+    })
+
+    /**
+     * Holds the pre-install re-proof open so a verdict can be delivered at an exact point in the
+     * cycle. Only that call is replaced — the artifact state stays real. Must precede startUpdater.
+     */
+    const holdRevalidation = (): {
+      settle: (verdict: RevalidationVerdict) => void
+      fail: (error: Error) => void
+    } => {
+      let pending: {
+        resolve: (verdict: RevalidationVerdict) => void
+        reject: (error: Error) => void
+      } | null = null
+      vi.doMock('./linux-package-update-recovery', async () => {
+        const actual = await vi.importActual<typeof RecoveryModule>(
+          './linux-package-update-recovery'
+        )
+        return {
+          ...actual,
+          revalidateLinuxPackageForInstall: vi.fn(
+            () =>
+              new Promise<RevalidationVerdict>((resolve, reject) => {
+                pending = { resolve, reject }
+              })
+          )
+        }
+      })
+      return {
+        settle: (verdict) => {
+          pending?.resolve(verdict)
+          pending = null
+        },
+        fail: (error) => {
+          pending?.reject(error)
+          pending = null
+        }
+      }
+    }
+
+    const lastStatus = (send: ReturnType<typeof vi.fn>): UpdateStatus | undefined =>
+      send.mock.calls.findLast(([channel]) => channel === 'updater:status')?.[1]
+
     // Why: macOS keeps the restart advice because quitting does re-stage a Squirrel update.
     const PRE_COMMIT_FAILURE_MESSAGE =
       process.platform === 'darwin'
         ? 'Could not restart to install the update. Quit and reopen Orca, then try again.'
         : 'Could not start the update installer. Orca remains open.'
-    const DEB_PATH = '/home/tester/.cache/orca-updater/pending/orca-ide_1.0.61_amd64.deb'
-    const RPM_PATH = '/home/tester/.cache/orca-updater/pending/orca-ide-1.0.61.x86_64.rpm'
     const AGENT_STDERR =
       'pkexec: Error executing command as another user: No authentication agent found.'
-    const EXIT_127 = `Command failed: /usr/bin/pkexec /usr/bin/dpkg -i ${DEB_PATH}, exited with code 127`
 
     const downloadedEvent = (overrides?: Record<string, unknown>): Record<string, unknown> => ({
       version: '1.0.61',
-      downloadedFile: DEB_PATH,
-      files: [{ url: 'orca-ide_1.0.61_amd64.deb', sha512: DEB_SHA512 }],
+      downloadedFile: staged.debPath,
+      files: [{ url: 'orca-ide_1.0.61_amd64.deb', sha512: staged.debSha512 }],
       ...overrides
     })
+
+    const rpmDownloadedEvent = (): Record<string, unknown> =>
+      downloadedEvent({
+        downloadedFile: staged.rpmPath,
+        files: [{ url: 'orca-ide-1.0.61.x86_64.rpm', sha512: staged.rpmSha512 }]
+      })
 
     const startUpdater = async (
       packageType: 'deb' | 'rpm' | null
@@ -3902,12 +4017,12 @@ describe('updater', () => {
       const { send, updater } = await startUpdater('deb')
       await reachDownloaded(updater, downloadedEvent())
       autoUpdaterMock.quitAndInstall.mockImplementation(() => {
-        autoUpdaterMock.logger?.error(`${AGENT_STDERR} target ${DEB_PATH}`)
+        autoUpdaterMock.logger?.error(`${AGENT_STDERR} target ${staged.debPath}`)
         throw new Error(EXIT_127)
       })
 
       updater.quitAndInstall()
-      await vi.advanceTimersByTimeAsync(100)
+      await settleQuitAndInstall()
 
       // Why: the sync throw ends capture before the catch, so the stashed text must survive.
       expect(send).toHaveBeenCalledWith('updater:status', {
@@ -3926,19 +4041,13 @@ describe('updater', () => {
       const openWindow = { removeAllListeners: vi.fn() }
       browserWindowMock.getAllWindows.mockReturnValue([openWindow] as never)
       const { send, updater } = await startUpdater('rpm')
-      await reachDownloaded(
-        updater,
-        downloadedEvent({
-          downloadedFile: RPM_PATH,
-          files: [{ url: 'orca-ide-1.0.61.x86_64.rpm', sha512: RPM_SHA512 }]
-        })
-      )
+      await reachDownloaded(updater, rpmDownloadedEvent())
       autoUpdaterMock.quitAndInstall.mockImplementation(() => {
         autoUpdaterMock.emit('error', new Error('Command failed, exited with code 1'))
       })
 
       updater.quitAndInstall()
-      await vi.advanceTimersByTimeAsync(100)
+      await settleQuitAndInstall()
 
       expect(send).toHaveBeenCalledWith('updater:status', {
         state: 'error',
@@ -3968,7 +4077,7 @@ describe('updater', () => {
       })
 
       updater.quitAndInstall()
-      await vi.advanceTimersByTimeAsync(100)
+      await settleQuitAndInstall()
 
       expect(send).toHaveBeenCalledWith('updater:status', {
         state: 'error',
@@ -3992,7 +4101,7 @@ describe('updater', () => {
       })
 
       updater.quitAndInstall()
-      await vi.advanceTimersByTimeAsync(100)
+      await settleQuitAndInstall()
 
       expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
       expect(send).toHaveBeenCalledWith('updater:status', {
@@ -4012,7 +4121,7 @@ describe('updater', () => {
       send.mockClear()
 
       updater.quitAndInstall()
-      await vi.advanceTimersByTimeAsync(100)
+      await settleQuitAndInstall()
 
       expect(recordUpdaterLifecycleMock).toHaveBeenCalledWith(
         'post_commit_cleanup_failed',
@@ -4030,7 +4139,7 @@ describe('updater', () => {
       await reachDownloaded(updater, downloadedEvent())
 
       updater.quitAndInstall()
-      await vi.advanceTimersByTimeAsync(100)
+      await settleQuitAndInstall()
       expect(killAllPtyMock).toHaveBeenCalledTimes(1)
 
       send.mockClear()
@@ -4048,9 +4157,9 @@ describe('updater', () => {
       })
 
       updater.quitAndInstall()
-      await vi.advanceTimersByTimeAsync(100)
+      await settleQuitAndInstall()
       updater.quitAndInstall()
-      await vi.advanceTimersByTimeAsync(100)
+      await settleQuitAndInstall()
 
       // Why: a retry usually fails identically; a deduped status would strand the preload restart relay.
       expect(
@@ -4069,16 +4178,205 @@ describe('updater', () => {
       })
     })
 
-    it('records classification-only lifecycle data for a package install failure', async () => {
-      const { updater } = await startUpdater('deb')
+    // Why: the cache path is user-writable, so the bytes verified when the recovery card
+    // rendered are not necessarily the bytes a root package manager would read on retry.
+    it('aborts the retry when the retained package no longer matches its digest', async () => {
+      const { send, updater } = await startUpdater('deb')
+      await reachDownloaded(updater, downloadedEvent())
+
+      // The escalation fails, which is what puts the recovery card (and its retry) on screen.
+      autoUpdaterMock.quitAndInstall.mockImplementation(() => {
+        autoUpdaterMock.emit('error', new Error(EXIT_127))
+      })
+      updater.quitAndInstall()
+      await settleQuitAndInstall()
+      expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
+
+      // A local process swaps the verified package for its own between failure and retry.
+      writeFileSync(staged.debPath, Buffer.from('attacker supplied package'))
+      send.mockClear()
+      killAllPtyMock.mockClear()
+
+      updater.quitAndInstall()
+      await settleQuitAndInstall()
+
+      expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
+      expect(killAllPtyMock).not.toHaveBeenCalled()
+      expect(updater.isQuittingForUpdate()).toBe(false)
+      expect(send).toHaveBeenCalledWith('updater:status', {
+        state: 'error',
+        message:
+          'The downloaded package no longer matches the verified release, so Orca will not hand it to a package manager. Download the update again, or get it from the official release page.'
+      })
+      expect(recordUpdaterLifecycleMock).toHaveBeenCalledWith(
+        'linux_package_revalidation_failed',
+        expect.objectContaining({ action: 'retry-automatic', reason: 'hash-mismatch' }),
+        expect.anything()
+      )
+    })
+
+    // Why: "Restart to Update" is the common path and can sit unclicked for hours, so the same
+    // user-writable package reaches a root installer with a far longer window than any retry.
+    it('aborts the first install when the downloaded package was swapped', async () => {
+      const { send, updater } = await startUpdater('deb')
+      await reachDownloaded(updater, downloadedEvent())
+      writeFileSync(staged.debPath, Buffer.from('attacker supplied package'))
+      send.mockClear()
+
+      updater.quitAndInstall()
+      await settleQuitAndInstall()
+
+      expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+      expect(killAllPtyMock).not.toHaveBeenCalled()
+      expect(updater.isQuittingForUpdate()).toBe(false)
+      expect(send).toHaveBeenCalledWith('updater:status', {
+        state: 'error',
+        message:
+          'The downloaded package no longer matches the verified release, so Orca will not hand it to a package manager. Download the update again, or get it from the official release page.'
+      })
+      expect(send).toHaveBeenCalledWith('updater:quitAndInstallAborted')
+      expect(recordUpdaterLifecycleMock).toHaveBeenCalledWith(
+        'linux_package_revalidation_failed',
+        expect.objectContaining({ action: 'restart-to-install', reason: 'hash-mismatch' }),
+        expect.anything()
+      )
+    })
+
+    it('installs normally when the retained package still matches its digest', async () => {
+      const { send, updater } = await startUpdater('deb')
+      await reachDownloaded(updater, downloadedEvent())
+
+      updater.quitAndInstall()
+      await settleQuitAndInstall()
+
+      expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
+      expect(killAllPtyMock).toHaveBeenCalledTimes(1)
+      // Why: an abort push here would clear the restart flag mid-quit and re-arm the dirty-buffer
+      // prompt against the install that is already committed.
+      expect(send).not.toHaveBeenCalledWith('updater:quitAndInstallAborted')
+      expect(recordUpdaterLifecycleMock).not.toHaveBeenCalledWith(
+        'linux_package_revalidation_failed',
+        expect.anything(),
+        expect.anything()
+      )
+    })
+
+    // Why: hashing 160 MB outlives the cycle it started in, and Check for Updates stays enabled
+    // while it runs — a verdict from the old cycle must not replace the card that took over.
+    it('drops an abort verdict once a newer check replaced the card', async () => {
+      const revalidation = holdRevalidation()
+      const { send, updater } = await startUpdater('deb')
+      await reachDownloaded(updater, downloadedEvent())
+
+      updater.quitAndInstall()
+      await vi.advanceTimersByTimeAsync(100)
+      // The user gives up waiting and checks again; that check owns the card from here.
+      updater.checkForUpdatesFromMenu()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(lastStatus(send)).toMatchObject({ state: 'available', version: '1.0.61' })
+
+      revalidation.settle({ ok: false, reason: 'hash-mismatch' })
+      await settleQuitAndInstall()
+
+      // The install is still abandoned — only the stale status is withheld.
+      expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+      expect(lastStatus(send)).toMatchObject({ state: 'available', version: '1.0.61' })
+      // Withholding the status must not also withhold the abort: the renderer armed its restart and
+      // would otherwise skip its unsaved-work prompt for the rest of the session.
+      expect(send).toHaveBeenCalledWith('updater:quitAndInstallAborted')
+      expect(recordUpdaterLifecycleMock).toHaveBeenCalledWith(
+        'linux_package_revalidation_failed',
+        expect.objectContaining({ reason: 'hash-mismatch' }),
+        expect.anything()
+      )
+    })
+
+    // Why: EMFILE/EIO during the stream says nothing about the bytes, so the copy must not claim
+    // the package changed and the card must keep the actions that still work.
+    it('keeps the recovery card usable when the re-proof cannot read the package', async () => {
+      const revalidation = holdRevalidation()
+      const { send, updater } = await startUpdater('deb')
       await reachDownloaded(updater, downloadedEvent())
       autoUpdaterMock.quitAndInstall.mockImplementation(() => {
-        autoUpdaterMock.logger?.error(`${AGENT_STDERR} target ${DEB_PATH}`)
         autoUpdaterMock.emit('error', new Error(EXIT_127))
+      })
+      updater.quitAndInstall()
+      await vi.advanceTimersByTimeAsync(100)
+      revalidation.settle({ ok: true })
+      await settleQuitAndInstall()
+      send.mockClear()
+
+      updater.quitAndInstall()
+      await vi.advanceTimersByTimeAsync(100)
+      revalidation.settle({ ok: false, reason: 'read-failed' })
+      await settleQuitAndInstall()
+
+      expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
+      expect(lastStatus(send)).toEqual({
+        state: 'error',
+        message:
+          'Orca could not read the downloaded package. Download the update again, or get it from the official release page.',
+        recovery: {
+          kind: 'linux-package-install',
+          packageType: 'deb',
+          reason: 'package-install-failed',
+          version: '1.0.61'
+        }
+      })
+    })
+
+    // Why: the re-proof runs before performQuitAndInstall's own error handling, so a rejection
+    // there would strand the quit timer and make every later install a silent no-op.
+    it('stays installable after a re-proof that rejects outright', async () => {
+      const revalidation = holdRevalidation()
+      const { send, updater } = await startUpdater('deb')
+      await reachDownloaded(updater, downloadedEvent())
+
+      updater.quitAndInstall()
+      await vi.advanceTimersByTimeAsync(100)
+      revalidation.fail(new Error('hash worker crashed'))
+      await settleQuitAndInstall()
+
+      // Fails closed: an unprovable package is not handed to a root package manager.
+      expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+      expect(lastStatus(send)).toMatchObject({
+        state: 'error',
+        message:
+          'Orca could not read the downloaded package. Download the update again, or get it from the official release page.'
       })
 
       updater.quitAndInstall()
       await vi.advanceTimersByTimeAsync(100)
+      revalidation.settle({ ok: true })
+      await settleQuitAndInstall()
+
+      expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
+    })
+
+    // Why: a second click during the multi-second hash must not schedule a parallel install.
+    it('ignores a second install request while the digest re-proof runs', async () => {
+      const { updater } = await startUpdater('deb')
+      await reachDownloaded(updater, downloadedEvent())
+
+      updater.quitAndInstall()
+      // Fires the quit timer, which starts the hash; the read itself is still outstanding.
+      await vi.advanceTimersByTimeAsync(100)
+      updater.quitAndInstall()
+      await settleQuitAndInstall()
+
+      expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
+    })
+
+    it('records classification-only lifecycle data for a package install failure', async () => {
+      const { updater } = await startUpdater('deb')
+      await reachDownloaded(updater, downloadedEvent())
+      autoUpdaterMock.quitAndInstall.mockImplementation(() => {
+        autoUpdaterMock.logger?.error(`${AGENT_STDERR} target ${staged.debPath}`)
+        autoUpdaterMock.emit('error', new Error(EXIT_127))
+      })
+
+      updater.quitAndInstall()
+      await settleQuitAndInstall()
 
       const failure = recordUpdaterLifecycleMock.mock.calls.find(
         ([event]) => event === 'linux_package_install_failed'
@@ -4091,7 +4389,7 @@ describe('updater', () => {
         errorType: 'Error'
       })
       const durable = JSON.stringify(recordUpdaterLifecycleMock.mock.calls)
-      expect(durable).not.toContain(DEB_PATH)
+      expect(durable).not.toContain(staged.debPath)
       expect(durable).not.toContain('authentication agent')
     })
 
@@ -4103,7 +4401,7 @@ describe('updater', () => {
       })
 
       updater.quitAndInstall()
-      await vi.advanceTimersByTimeAsync(100)
+      await settleQuitAndInstall()
 
       const failure = recordUpdaterLifecycleMock.mock.calls.find(
         ([event]) => event === 'linux_package_install_failed'

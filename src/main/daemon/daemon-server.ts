@@ -935,18 +935,22 @@ export class DaemonServer {
           request.payload.sessionId
         )
         this.lastInputAtBySessionId.delete(request.payload.sessionId)
-        this.log.log('session-killed', {
+        const attribution = {
           sessionId: request.payload.sessionId,
-          immediate: request.payload.immediate === true
-        })
+          immediate: request.payload.immediate === true,
+          // Daemon control identity, not the paired-device bearer credential.
+          clientId
+        }
         try {
           await this.host.kill(request.payload.sessionId, { immediate: request.payload.immediate })
         } catch (error) {
           // Why: a kill that wins before session registration already canceled the pending spawn, so its intent is done.
           if (!(canceledPendingSpawn && error instanceof SessionNotFoundError)) {
+            this.log.log('session-kill-failed', attribution)
             throw error
           }
         }
+        this.log.log('session-killed', attribution)
         return {}
       }
 

@@ -123,7 +123,7 @@ import {
   POST_REPLAY_REATTACH_RESET,
   RESET_KITTY_KEYBOARD_PROTOCOL,
   RESET_TERMINAL_CURSOR_STYLE
-} from './layout-serialization'
+} from '../../../../shared/terminal-mode-reset-profiles'
 import { buildFreshShellViewportBlankingSequence } from './terminal-restored-viewport'
 import { createShellReadyMarkerScanState, scanForShellReadyMarker } from './shell-ready-marker-scan'
 import { shouldUseShellReadyStartupDelivery } from '../../../../shared/codex-startup-delivery'
@@ -3012,7 +3012,7 @@ export function connectPanePty(
   // rings the bell. This is specific to terminals with cross-restart
   // persistence (as we have); our fix is to reset 1004 and friends after
   // scrollback replay so the mode state matches the fresh shell
-  // underneath. See POST_REPLAY_MODE_RESET in layout-serialization.ts.
+  // underneath. See POST_REPLAY_MODE_RESET in shared/terminal-mode-reset-profiles.ts.
   const onBell = (): void => {
     // Why: restored Claude Code sessions have been observed to emit a real
     // standalone BEL some time after daemon snapshot reattach, even when Orca
@@ -5492,7 +5492,15 @@ export function connectPanePty(
       })
     }
 
-    const reattachReplayResetSequence = (payload: string): string => {
+    const reattachReplayResetSequence = (payload: string, ownerProcessEnded = false): string => {
+      // Why a cold restore overrides the agent signal: liveness is read from the
+      // pane's status and title, both of which are persisted, so after a cold
+      // restore they describe the process that died. Preserving "its" modes arms
+      // mouse, focus and paste reporting against the fresh shell that replaces it,
+      // which then prints the reports as junk at the prompt (#12101).
+      if (ownerProcessEnded) {
+        return POST_REPLAY_MODE_RESET
+      }
       return shouldPreserveAgentReattachModes()
         ? buildPostReplayLiveAgentReattachReset(payload)
         : POST_REPLAY_REATTACH_RESET
@@ -7936,8 +7944,10 @@ export function connectPanePty(
           // Why: re-arm the kitty keyboard mirror from the snapshot preamble so Option chords keep their encoding after a window reload.
           kittyKeyboardModes.scanReplay(connectResult.snapshot)
           writeReplayData(connectResult.snapshot)
-          // Snapshot reattach keeps a live session, so drop only renderer-owned state instead of the broader mode reset.
-          writeReplayData(reattachReplayResetSequence(connectResult.snapshot))
+          // Snapshot reattach keeps a live session, so drop only renderer-owned state instead of the broader mode reset — unless this is a cold restore, whose owner is gone.
+          writeReplayData(
+            reattachReplayResetSequence(connectResult.snapshot, Boolean(connectResult.coldRestore))
+          )
           if (connectResult.pendingEscapeTailAnsi) {
             // Why last: re-arm the dangling mid-escape after the reset (whose ESC would abort it) so the live continuation completes it (#7329).
             writeReplayData(connectResult.pendingEscapeTailAnsi)
@@ -7990,7 +8000,9 @@ export function connectPanePty(
             for (const replayChunk of buildMainModelSnapshotReplayWrites(modelSnapshot)) {
               writeReplayData(replayChunk)
             }
-            writeReplayData(reattachReplayResetSequence(modelData))
+            writeReplayData(
+              reattachReplayResetSequence(modelData, Boolean(connectResult?.coldRestore))
+            )
             if (modelSnapshot.pendingEscapeTailAnsi) {
               // Why last: re-arm the dangling mid-escape after the reset so the live continuation completes it (#7329).
               writeReplayData(modelSnapshot.pendingEscapeTailAnsi)
@@ -8009,7 +8021,9 @@ export function connectPanePty(
             // Why: raw relay replay may contain the app's own kitty pushes; re-arm with set semantics so redelivery can't grow the stack.
             kittyKeyboardModes.scanReplay(connectResult.replay)
             writeReplayData(connectResult.replay)
-            writeReplayData(reattachReplayResetSequence(connectResult.replay))
+            writeReplayData(
+              reattachReplayResetSequence(connectResult.replay, Boolean(connectResult.coldRestore))
+            )
             sendFocusedReattachFocusInAfterReplay(ptyId, attemptGeneration)
             if (connectResult.coldRestore) {
               if (!isRemoteRuntimePtyId(ptyId)) {

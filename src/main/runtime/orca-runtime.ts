@@ -425,6 +425,7 @@ import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
 } from '../../shared/cross-platform-path'
+import { findRuntimeWorkspaceFileOwner } from '../../shared/runtime-workspace-file-owner'
 import { resolveTerminalStartupCwd } from '../../shared/terminal-startup-cwd'
 import { isWslUncPath, parseWslUncPath } from '../../shared/wsl-paths'
 import {
@@ -515,7 +516,7 @@ import {
 } from './workspace-session-terminal-membership-authority'
 import { RuntimeEmulatorCommands } from './orca-runtime-emulator'
 import type { EmulatorBridge } from '../emulator/emulator-bridge'
-import { RuntimeFileCommands } from './orca-runtime-files'
+import { getRuntimeFileTargetExecutionHostId, RuntimeFileCommands } from './orca-runtime-files'
 import { RuntimeGitCommands } from './orca-runtime-git'
 import {
   activateClientSessionTabSelection,
@@ -8542,6 +8543,8 @@ export class OrcaRuntimeService {
     requireStore: () => this.requireStore(),
     resolveWorktreeSelector: (selector) => this.resolveWorktreeSelector(selector),
     resolveRuntimeFileTarget: (selector) => this.resolveRuntimeFileTarget(selector),
+    resolveKnownWorkspaceFileTarget: (absolutePath, connectionId) =>
+      this.resolveKnownWorkspaceFileTarget(absolutePath, connectionId),
     resolveTerminalCwd: (terminalHandle) => this.resolveTerminalCwd(terminalHandle),
     resolveTerminalContext: (terminalHandle) => this.resolveTerminalContext(terminalHandle),
     resolveTerminalFileUriHostname: (terminalHandle) =>
@@ -8857,6 +8860,72 @@ export class OrcaRuntimeService {
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
     const repo = store.getRepo(worktree.repoId)
     return { worktree, connectionId: repo?.connectionId ?? undefined }
+  }
+
+  private async resolveKnownWorkspaceFileTarget(
+    absolutePath: string,
+    executionHostId: ExecutionHostId
+  ): Promise<{
+    worktree: ResolvedWorktree
+    connectionId?: string
+    relativePath: string
+  } | null> {
+    const targets = new Map<
+      string,
+      {
+        worktree: ResolvedWorktree
+        connectionId?: string
+        executionHostId: ExecutionHostId
+      }
+    >()
+    for (const worktree of await this.listResolvedWorktrees()) {
+      if (!this.isRuntimeWorktreeVisible(worktree)) {
+        continue
+      }
+      const candidateConnectionId = this.store?.getRepo(worktree.repoId)?.connectionId ?? undefined
+      const target = {
+        worktree,
+        executionHostId: getRuntimeFileTargetExecutionHostId({
+          worktree,
+          connectionId: candidateConnectionId
+        }),
+        ...(candidateConnectionId ? { connectionId: candidateConnectionId } : {})
+      }
+      targets.set(`${target.executionHostId}\0${worktree.id}`, target)
+    }
+    for (const folderWorkspace of this.store?.getFolderWorkspaces?.() ?? []) {
+      try {
+        const candidateConnectionId =
+          this.resolveFolderWorkspaceConnectionId(folderWorkspace) ?? undefined
+        const worktree = this.folderWorkspaceToResolvedWorktree(folderWorkspace)
+        const target = {
+          worktree,
+          executionHostId: getRuntimeFileTargetExecutionHostId({
+            worktree,
+            connectionId: candidateConnectionId
+          }),
+          ...(candidateConnectionId ? { connectionId: candidateConnectionId } : {})
+        }
+        targets.set(`${target.executionHostId}\0${worktree.id}`, target)
+      } catch {
+        // An ambiguous folder workspace has no single filesystem authority.
+      }
+    }
+
+    const owner = findRuntimeWorkspaceFileOwner(
+      [...targets.values()].map((target) => ({
+        workspaceId: target.worktree.id,
+        rootPath: target.worktree.path,
+        executionHostId: target.executionHostId
+      })),
+      absolutePath,
+      executionHostId
+    )
+    if (!owner) {
+      return null
+    }
+    const target = targets.get(`${owner.executionHostId}\0${owner.workspaceId}`)
+    return target ? { ...target, relativePath: owner.relativePath } : null
   }
 
   onMobileSessionTabsChanged(
@@ -23442,31 +23511,25 @@ export class OrcaRuntimeService {
               'Cannot delete the project root workspace. Remove the folder project instead.'
             )
           }
-          // Folder projects can be SSH-backed, so resolve the owner before sweeping.
-          const folderHost = parseExecutionHostId(
-            store.getWorktreeMeta(removalTarget.id)?.hostId ?? getRepoExecutionHostId(repo)
-          )
-          const folderSshPtyProvider =
-            folderHost?.kind === 'ssh' ? this.getSshProviderFn?.(folderHost.targetId) : undefined
-          const externalFolderHost = folderHost?.kind === 'ssh' || folderHost?.kind === 'runtime'
+          // This service runs inside the selected runtime, so runtime-stamped repos use its
+          // local PTY namespace; only a direct SSH connection is external from here.
+          const folderConnectionId = repo.connectionId?.trim() || null
+          const folderSshPtyProvider = folderConnectionId
+            ? this.getSshProviderFn?.(folderConnectionId)
+            : undefined
           const folderPtyProvider = folderSshPtyProvider ?? this.getLocalProvider()
           if (folderPtyProvider) {
             // Why: folder workspace deletion has no Git removal phase where PTYs
             // would otherwise be swept; tear them down before hiding the workspace.
             await killAllProcessesForWorktree(removalTarget.id, {
               runtime: this,
-              // External host inventories must never sweep a same-id local workspace.
               resolvedWorktreeId: removalTarget.id,
-              ...(folderHost?.kind === 'ssh' ? { resolvedConnectionId: folderHost.targetId } : {}),
-              ...(folderHost?.kind === 'runtime'
-                ? { resolvedRuntimeEnvironmentId: folderHost.environmentId }
-                : {}),
+              ...(folderConnectionId ? { resolvedConnectionId: folderConnectionId } : {}),
               localProvider: folderPtyProvider,
               onPtyStopped: this.onPtyStopped ?? undefined,
-              ...(externalFolderHost
+              ...(folderConnectionId
                 ? {
-                    includeProviderInventory:
-                      folderHost?.kind === 'ssh' && Boolean(folderSshPtyProvider),
+                    includeProviderInventory: Boolean(folderSshPtyProvider),
                     includeLocalRegistry: false
                   }
                 : {})
@@ -29977,11 +30040,13 @@ export class OrcaRuntimeService {
       return undefined
     }
     const contexts: Record<string, AgentStatusOrchestrationContext> = {}
+    const queriedHandles = new Set<string>()
     for (const leaf of this.leaves.values()) {
       if (!leaf.ptyId) {
         continue
       }
       const handle = this.issueHandle(leaf)
+      queriedHandles.add(handle)
       const context = this.getAgentStatusOrchestrationContextForHandle(handle, db)
       if (context) {
         contexts[this.makeRuntimePaneKey(leaf)] = context
@@ -29992,6 +30057,10 @@ export class OrcaRuntimeService {
         continue
       }
       const handle = this.issuePtyHandle(pty)
+      if (queriedHandles.has(handle)) {
+        continue
+      }
+      queriedHandles.add(handle)
       const context = this.getAgentStatusOrchestrationContextForHandle(handle, db)
       if (context) {
         contexts[pty.paneKey] = context
@@ -30011,7 +30080,7 @@ export class OrcaRuntimeService {
     if (!dispatch) {
       return undefined
     }
-    const task = db?.getTask?.(dispatch.task_id)
+    const task = db?.getTask?.(dispatch.task_id, dispatch.run_id)
     const display =
       typeof task?.spec === 'string'
         ? buildOrchestrationTaskDisplayMetadata({
@@ -30020,15 +30089,68 @@ export class OrcaRuntimeService {
             displayName: task.display_name
           })
         : { taskTitle: '', displayName: '' }
-    const activeRun =
-      dispatch.status === 'pending' || dispatch.status === 'dispatched'
+    const owningRun =
+      task?.run_id && task.run_id === dispatch.run_id ? db?.getRun?.(dispatch.run_id) : undefined
+    const runCoordinatorHandle = owningRun?.coordinator_handle ?? undefined
+    const legacyActiveRun =
+      owningRun?.legacy === 1 && (dispatch.status === 'pending' || dispatch.status === 'dispatched')
         ? db?.getActiveCoordinatorRun?.()
         : undefined
+    // Why: legacy coordinator runs have no durable task ownership, so fail closed across worktrees.
+    const handleWorktreeId = legacyActiveRun ? this.getWorktreeIdForTerminalHandle(handle) : null
+    const legacyCoordinatorWorktreeId = legacyActiveRun
+      ? this.getWorktreeIdForTerminalHandle(legacyActiveRun.coordinator_handle)
+      : null
+    const scopedLegacyActiveRun =
+      legacyActiveRun &&
+      handleWorktreeId &&
+      legacyCoordinatorWorktreeId &&
+      runtimeWorktreeIdsEqual(legacyCoordinatorWorktreeId, handleWorktreeId)
+        ? legacyActiveRun
+        : undefined
+    const coordinatorHandle = runCoordinatorHandle ?? scopedLegacyActiveRun?.coordinator_handle
+    const orchestrationRunId = owningRun?.legacy === 0 ? owningRun.id : scopedLegacyActiveRun?.id
+    const creatorPaneKey = task?.created_by_pane_key
+    const creatorPaneHandle = creatorPaneKey
+      ? this.getTerminalHandleForPaneKey(creatorPaneKey)
+      : null
+    const creatorAuthority = creatorPaneHandle
+      ? this.getOrchestrationDispatchAuthority(creatorPaneHandle)
+      : null
+    const storedCreatorPane = creatorPaneKey ? parsePaneKey(creatorPaneKey) : null
+    const currentCreatorPane = creatorAuthority?.paneKey
+      ? parsePaneKey(creatorAuthority.paneKey)
+      : null
+    const sameCreatorPane = Boolean(
+      creatorPaneKey &&
+      creatorAuthority?.paneKey &&
+      (creatorPaneKey === creatorAuthority.paneKey ||
+        (storedCreatorPane &&
+          currentCreatorPane &&
+          storedCreatorPane.leafId === currentCreatorPane.leafId))
+    )
+    const paneRun = creatorPaneKey ? db?.getCurrentRunForPane?.(creatorPaneKey) : undefined
+    const sameRunCreatorDispatch = Boolean(
+      task?.creator_dispatch_id &&
+      task.creator_dispatch_run_id === owningRun?.id &&
+      task.creator_dispatch_pane_key &&
+      task.creator_dispatch_process_incarnation === task.created_by_process_incarnation &&
+      parsePaneKey(task.creator_dispatch_pane_key)?.leafId === storedCreatorPane?.leafId
+    )
+    const currentCreatorHandle =
+      owningRun?.legacy === 0 &&
+      task?.created_by_run_generation === owningRun.consumer_generation &&
+      task.created_by_process_incarnation === creatorAuthority?.processIncarnation &&
+      sameCreatorPane &&
+      (paneRun
+        ? paneRun.id === owningRun.id &&
+          paneRun.consumer_generation === task.created_by_run_generation
+        : sameRunCreatorDispatch)
+        ? (creatorPaneHandle ?? undefined)
+        : undefined
     const parentTerminalHandle =
-      task?.created_by_terminal_handle ??
-      (activeRun?.coordinator_handle && activeRun.coordinator_handle !== handle
-        ? activeRun.coordinator_handle
-        : undefined)
+      currentCreatorHandle ??
+      (coordinatorHandle && coordinatorHandle !== handle ? coordinatorHandle : undefined)
     const parentPaneKey = parentTerminalHandle
       ? this.getPaneKeyForTerminalHandle(parentTerminalHandle)
       : undefined
@@ -30041,8 +30163,8 @@ export class OrcaRuntimeService {
       ...(display.displayName ? { displayName: display.displayName } : {}),
       ...(parentTerminalHandle ? { parentTerminalHandle } : {}),
       ...(parentPaneKey ? { parentPaneKey } : {}),
-      ...(activeRun?.coordinator_handle ? { coordinatorHandle: activeRun.coordinator_handle } : {}),
-      ...(activeRun?.id ? { orchestrationRunId: activeRun.id } : {})
+      ...(coordinatorHandle ? { coordinatorHandle } : {}),
+      ...(orchestrationRunId ? { orchestrationRunId } : {})
     }
   }
 
@@ -30095,10 +30217,21 @@ export class OrcaRuntimeService {
         return pty
       }
       leafPty = pty ?? null
+      for (const candidate of this.leaves.values()) {
+        if (candidate.leafId !== parsed.leafId || !candidate.ptyId) {
+          continue
+        }
+        const remintedPty = this.ptysById.get(candidate.ptyId)
+        if (remintedPty?.connected) {
+          return remintedPty
+        }
+        leafPty ??= remintedPty ?? null
+      }
     }
     let newestMatch: RuntimePtyWorktreeRecord | null = null
     for (const pty of this.ptysById.values()) {
-      if (pty.paneKey === paneKey) {
+      const ptyPane = parsePaneKey(pty.paneKey ?? '')
+      if (pty.paneKey === paneKey || (parsed && ptyPane && parsed.leafId === ptyPane.leafId)) {
         if (pty.connected) {
           return pty
         }
@@ -30121,6 +30254,18 @@ export class OrcaRuntimeService {
       return null
     }
     return makePaneKey(record.tabId, record.leafId)
+  }
+
+  private getWorktreeIdForTerminalHandle(handle: string): string | null {
+    const livePty = this.getLivePtyForHandle(handle)
+    if (livePty?.pty.worktreeId) {
+      return livePty.pty.worktreeId
+    }
+    const record = this.handles.get(handle)
+    if (!record || record.runtimeId !== this.runtimeId) {
+      return null
+    }
+    return record.worktreeId
   }
 
   private setPtyManagementTitleFromObservedTitle(

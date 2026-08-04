@@ -74,7 +74,7 @@ describe('registerRendererShutdownCheckpointHandler', () => {
     )
     expect(store.updateUI).toHaveBeenCalledWith({ activeView: 'settings' })
     expect(store.flushPendingOrThrowAsync).toHaveBeenCalledTimes(1)
-    // Why: a live app keeps mutating state, so draining to a stable generation would livelock.
+    // Why: Store fences the staged generation without draining unrelated live mutations.
     expect(store.flushPendingOrThrowAsync).toHaveBeenCalledWith(
       expect.objectContaining({ drainToStableGeneration: false })
     )

@@ -32,6 +32,7 @@ import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
 import { stripInheritedBuildModeEnv } from '../pty/build-mode-env'
+import { resolvePathEnvKey } from '../pty/windows-environment-path'
 import { parseWslPath } from '../wsl'
 import { addWslEnvKeys } from '../wsl-env'
 import {
@@ -70,6 +71,7 @@ import {
   expandWindowsPathEnvironmentVariables
 } from '../../shared/windows-environment-expansion'
 import { forceKillPosixPtyProcessGroups } from '../pty/posix-pty-process-groups'
+import { readPtySlavePath } from '../../shared/pty-slave-line-discipline-echo'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -77,6 +79,7 @@ const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_WORKTREE_ID',
   'ORCA_AGENT_LAUNCH_TOKEN'
 ] as const
+const WINDOWS_PATH_ENV_KEY_RE = /^path$/i
 const FOREGROUND_AGENT_CACHE_TTL_MS = 1000
 const SHELL_FOREGROUND_REFRESH_RETRY_MS = 5_000
 // Why: a Windows refresh forks a heavy powershell.exe CIM scan (~10-40x POSIX `ps`); idle shells retry slower, output re-arms the fast retry.
@@ -165,6 +168,36 @@ function removeUnspecifiedPaneIdentityEnv(
   }
 }
 
+/** Removes the second PATH key only when the daemon's env merge created it. */
+function collapseWindowsPathEnvKeys(
+  env: Record<string, string>,
+  requestedEnv: Record<string, string> | undefined
+): void {
+  if (process.platform !== 'win32') {
+    return
+  }
+  const pathKeys = Object.keys(env).filter((key) => WINDOWS_PATH_ENV_KEY_RE.test(key))
+  if (pathKeys.length < 2) {
+    return
+  }
+  // Why: a one-key main patch is authoritative; zero or two keys came from inherited state.
+  const requestedKeys = requestedEnv
+    ? Object.keys(requestedEnv).filter((key) => WINDOWS_PATH_ENV_KEY_RE.test(key))
+    : []
+  if (requestedKeys.length !== 1) {
+    return
+  }
+  const survivingKey = requestedKeys[0]
+  if (!survivingKey || env[survivingKey] === undefined) {
+    return
+  }
+  for (const key of pathKeys) {
+    if (key !== survivingKey) {
+      delete env[key]
+    }
+  }
+}
+
 /**
  * Promotes the agent-teams shim path ahead of inherited PATH entries.
  */
@@ -184,8 +217,9 @@ function promoteAgentTeamsShimPath(
   if (!shimDir) {
     return
   }
-  const currentParts = env.PATH?.split(pathDelimiter).filter(Boolean) ?? []
-  env.PATH = [shimDir, ...currentParts.filter((part) => part !== shimDir)].join(pathDelimiter)
+  const pathKey = resolvePathEnvKey(env, process.platform)
+  const currentParts = env[pathKey]?.split(pathDelimiter).filter(Boolean) ?? []
+  env[pathKey] = [shimDir, ...currentParts.filter((part) => part !== shimDir)].join(pathDelimiter)
 }
 
 /**
@@ -776,8 +810,14 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   ) {
     addWslEnvKeys(env, [POWERLEVEL10K_WIZARD_DISABLE_ENV])
   }
+  const requestedEnv = opts.env
   expandWindowsPathEnvironmentVariables(env)
-  promoteAgentTeamsShimPath(env, opts.env?.PATH)
+  // Why: collapse before promoting so the shim lands on the spelling the child actually inherits.
+  collapseWindowsPathEnvKeys(env, requestedEnv)
+  const requestedPath = requestedEnv
+    ? requestedEnv[resolvePathEnvKey(requestedEnv, process.platform)]
+    : undefined
+  promoteAgentTeamsShimPath(env, requestedPath)
 
   // Why: asar packaging can strip +x from node-pty's spawn-helper; the daemon is a separate forked process from the main-process fix.
   ensureNodePtySpawnHelperExecutable()
@@ -1000,9 +1040,11 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     }
   })
 
+  const slavePath = readPtySlavePath(proc)
   return {
     pid: proc.pid,
     shellPath,
+    ...(slavePath ? { slavePath } : {}),
     ...(startupCommandDeliveredInShellArgs ? { startupCommandDeliveredInShellArgs: true } : {}),
     getForegroundProcess: () => {
       // Why: node-pty's `.process` reports the live foreground name but reads a recycled pid on a reaped pty, so bail when dead.

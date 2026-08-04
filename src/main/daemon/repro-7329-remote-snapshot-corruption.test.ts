@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { Terminal } from '@xterm/headless'
 import { HeadlessEmulator } from './headless-emulator'
+// The reattach path the remote onSnapshot uses.
+import { POST_REPLAY_REATTACH_RESET } from '../../shared/terminal-mode-reset-profiles'
 
 // Repro for #7329: "remote server + terminal" — typing gets escape sequences
 // injected/wrapped around it and follow-up commands are corrupted.
@@ -10,12 +12,6 @@ import { HeadlessEmulator } from './headless-emulator'
 // replays it into the renderer xterm, then applies POST_REPLAY_REATTACH_RESET.
 // This test drives the REAL daemon serializer and a REAL renderer-side xterm to
 // see what the user's terminal ends up looking like after a subscribe/reattach.
-
-const RESET_TERMINAL_CURSOR_STYLE = '\x1b[0 q'
-const RESET_KITTY_KEYBOARD_PROTOCOL = '\x1b[<99u\x1b[=0u'
-const RESET_MOUSE_REPORTING = '\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1016l'
-// Verbatim from layout-serialization.ts (the reattach path the remote onSnapshot uses).
-const POST_REPLAY_REATTACH_RESET = `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}\x1b[?25h${RESET_MOUSE_REPORTING}\x1b[?1004l`
 
 function writeXterm(term: Terminal, data: string): Promise<void> {
   return new Promise((resolve) => term.write(data, resolve))

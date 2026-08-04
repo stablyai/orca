@@ -74,21 +74,26 @@ describe('browser page download activity', () => {
   it('deactivates an interrupted download (no finished event ever fires) and reactivates on resume', async () => {
     const { hasActiveBrowserPageDownload, installBrowserPageDownloadActivityTracking } =
       await import('./browser-page-download-activity')
-    installBrowserPageDownloadActivityTracking()
+    const onEvictionVetoChange = vi.fn()
+    installBrowserPageDownloadActivityTracking(onEvictionVetoChange)
 
     requestedCallbacks[0]({ downloadId: 'dl-1', browserPageId: 'page-1' })
     progressCallbacks[0]({ downloadId: 'dl-1', state: 'interrupted' })
     expect(hasActiveBrowserPageDownload('page-1')).toBe(false)
+    expect(onEvictionVetoChange).toHaveBeenCalledTimes(2)
 
     progressCallbacks[0]({ downloadId: 'dl-1', state: 'progressing' })
     expect(hasActiveBrowserPageDownload('page-1')).toBe(true)
 
-    // A null state is transport noise, not a transition.
+    // Duplicate progress and null transport noise are not transitions.
+    progressCallbacks[0]({ downloadId: 'dl-1', state: 'progressing' })
     progressCallbacks[0]({ downloadId: 'dl-1', state: null })
     expect(hasActiveBrowserPageDownload('page-1')).toBe(true)
+    expect(onEvictionVetoChange).toHaveBeenCalledTimes(3)
 
     finishedCallbacks[0]({ downloadId: 'dl-1' })
     expect(hasActiveBrowserPageDownload('page-1')).toBe(false)
+    expect(onEvictionVetoChange).toHaveBeenCalledTimes(4)
   })
 
   it('ignores duplicate start events, unknown progress and unknown finish events', async () => {

@@ -540,6 +540,38 @@ describe('discoverCommitMessageModelsLocal', () => {
     }
   })
 
+  it('releases the Codex home after a discovery timeout once the child exits', async () => {
+    vi.useFakeTimers()
+    const firstChild = createMockDiscoveryChild()
+    const secondChild = createMockDiscoveryChild()
+    spawnMock.mockReturnValueOnce(firstChild as never).mockReturnValueOnce(secondChild as never)
+    const env = { CODEX_HOME: '/managed/codex-discovery-descendant-home' }
+
+    try {
+      const first = discoverCommitMessageModelsLocal('codex', env)
+      await vi.advanceTimersByTimeAsync(0)
+      const second = discoverCommitMessageModelsLocal('codex', env)
+      await vi.advanceTimersByTimeAsync(60_000)
+      await expect(first).resolves.toMatchObject({ success: false })
+      expect(spawnMock).toHaveBeenCalledTimes(1)
+
+      // A grandchild kept the inherited stdout open, so the killed child reports
+      // 'exit' and 'close' never arrives.
+      firstChild.emit('exit', null, 'SIGKILL')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(spawnMock).toHaveBeenCalledTimes(2)
+
+      secondChild.stdout.emit(
+        'data',
+        Buffer.from(JSON.stringify({ models: [{ slug: 'gpt-5.5', display_name: 'GPT-5.5' }] }))
+      )
+      secondChild.emit('close', 0)
+      await expect(second).resolves.toMatchObject({ success: true, defaultModelId: 'gpt-5.5' })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('settles and detaches model discovery when output exceeds the limit', async () => {
     const child = createMockDiscoveryChild()
     spawnMock.mockReturnValue(child as never)
@@ -1686,6 +1718,39 @@ describe('generateCommitMessageFromContext', () => {
     expect(spawnMock).toHaveBeenCalledTimes(1)
 
     firstChild.emit('close', null)
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
+    secondChild.stdout.emit('data', Buffer.from('Update README\n'))
+    secondChild.emit('close', 0)
+    await expect(second).resolves.toMatchObject({ success: true, message: 'Update README' })
+  })
+
+  it('releases the Codex home lock when the child exits with a descendant holding its stdio', async () => {
+    const firstChild = createMockDiscoveryChild()
+    const secondChild = createMockDiscoveryChild()
+    spawnMock.mockReturnValueOnce(firstChild as never).mockReturnValueOnce(secondChild as never)
+    const env = { CODEX_HOME: '/managed/codex-descendant-home' }
+    const context = { branch: 'main', stagedSummary: 'M\tREADME.md', stagedPatch: '+hello' }
+    const params = { agentId: 'codex' as const, model: 'gpt-5.5' }
+
+    const first = generateCommitMessageFromContext(context, params, {
+      kind: 'local',
+      cwd: '/descendant-repo',
+      env
+    })
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
+    cancelGenerateCommitMessageLocal('/descendant-repo')
+    await expect(first).resolves.toMatchObject({ canceled: true })
+    expectChildTerminated(firstChild)
+
+    // SIGKILL reaches the codex process but not a grandchild that inherited its
+    // stdout, so 'exit' arrives and 'close' never does.
+    firstChild.emit('exit', null, 'SIGKILL')
+
+    const second = generateCommitMessageFromContext(context, params, {
+      kind: 'local',
+      cwd: '/descendant-repo-2',
+      env
+    })
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
     secondChild.stdout.emit('data', Buffer.from('Update README\n'))
     secondChild.emit('close', 0)

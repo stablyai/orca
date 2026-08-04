@@ -7,7 +7,11 @@ import {
   resolveExactWorktreeRoute,
   resolveIndexedRepoOperationRoute
 } from './worktree-owner-route'
-import { resolveIndexedWorktreeOwner } from './worktree-runtime-owner-index'
+import {
+  findIndexedDetectedWorktrees,
+  hasIndexedDetectedWorktree,
+  resolveIndexedWorktreeOwner
+} from './worktree-runtime-owner-index'
 import {
   findFolderWorkspaceOwner,
   getExecutionHostIdForFolderWorkspace,
@@ -46,11 +50,7 @@ function ownerRecordsOnHost(
   executionHostId: ExecutionHostId
 ): WorktreeOperationOwnerRecord[] {
   const owners: WorktreeOperationOwnerRecord[] = []
-  const catalogs = [
-    ...Object.values(state.worktreesByRepo ?? {}),
-    ...Object.values(state.detectedWorktreesByRepo ?? {}).map((result) => result.worktrees)
-  ]
-  for (const worktrees of catalogs) {
+  for (const worktrees of Object.values(state.worktreesByRepo ?? {})) {
     for (const worktree of worktrees) {
       if (
         worktree.id === worktreeId &&
@@ -58,6 +58,11 @@ function ownerRecordsOnHost(
       ) {
         owners.push(worktree)
       }
+    }
+  }
+  for (const worktree of findIndexedDetectedWorktrees(state.detectedWorktreesByRepo, worktreeId)) {
+    if (parseExecutionHostId(worktree.hostId)?.id === executionHostId) {
+      owners.push(worktree)
     }
   }
   return owners
@@ -130,12 +135,8 @@ export function resolveWorktreeOperationRouteResult(
   }
 
   const hasKnownWorktree =
-    Object.values(state.worktreesByRepo ?? {}).some((worktrees) =>
-      worktrees.some((worktree) => worktree.id === worktreeId)
-    ) ||
-    Object.values(state.detectedWorktreesByRepo ?? {}).some((result) =>
-      result.worktrees.some((worktree) => worktree.id === worktreeId)
-    )
+    resolveIndexedWorktreeOwner(state.worktreesByRepo, worktreeId).kind !== 'missing' ||
+    hasIndexedDetectedWorktree(state.detectedWorktreesByRepo, worktreeId)
   const repoId = getRepoIdFromWorktreeId(worktreeId)
   const hasKnownRepo = state.repos?.some((repo) => repo.id === repoId) === true
   if (!hasKnownWorktree && !hasKnownRepo) {
@@ -211,18 +212,14 @@ export function resolveExplicitWorktreeOperationRouteResult(
       addRoute(exactRoutes, resolution.route)
     }
   }
-  for (const result of Object.values(state.detectedWorktreesByRepo ?? {})) {
-    for (const worktree of result.worktrees) {
-      if (worktree.id === worktreeId) {
-        exactRepoIds.add(worktree.repoId)
-        const resolution = resolveExactWorktreeRoute(state, worktree)
-        if (resolution.kind === 'ambiguous') {
-          return resolution
-        }
-        if (resolution.kind === 'resolved') {
-          addRoute(exactRoutes, resolution.route)
-        }
-      }
+  for (const worktree of findIndexedDetectedWorktrees(state.detectedWorktreesByRepo, worktreeId)) {
+    exactRepoIds.add(worktree.repoId)
+    const resolution = resolveExactWorktreeRoute(state, worktree)
+    if (resolution.kind === 'ambiguous') {
+      return resolution
+    }
+    if (resolution.kind === 'resolved') {
+      addRoute(exactRoutes, resolution.route)
     }
   }
   if (exactRoutes.size > 0) {

@@ -805,6 +805,31 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
     })
 
+    it('promotes the agent-teams shim onto the Windows `Path` spelling', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      provider.configure({
+        buildSpawnEnv: (_id, env) => {
+          // Why: attribution collapses Windows PATH onto `Path` and prepends its own shim dir.
+          delete env.PATH
+          env.Path = `/tmp/orca-attribution:${env.Path ?? ''}`
+          return env
+        }
+      })
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        env: {
+          Path: '/tmp/orca-agent-teams-bin:/usr/bin',
+          ORCA_AGENT_TEAMS_TEAM_ID: 'team-test'
+        }
+      })
+
+      const spawnEnv = spawnMock.mock.calls.at(-1)![2].env
+      expect(Object.keys(spawnEnv).filter((key) => /^path$/i.test(key))).toEqual(['Path'])
+      expect(spawnEnv.Path.split(':')[0]).toBe('/tmp/orca-agent-teams-bin')
+    })
+
     it('does not pass a Windows Codex home into WSL terminals', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       provider.configure({

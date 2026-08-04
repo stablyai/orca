@@ -4221,7 +4221,9 @@
           "ee240a39eb": "编辑筛选条件",
           "automationCreated": "隐藏自动化创建的工作区",
           "cliCreated": "Hide CLI-created",
-          "detachedHead": "隐藏分离 HEAD"
+          "detachedHead": "隐藏分离 HEAD",
+          "keepDefaultBranch": "默认分支除外",
+          "keepDefaultBranchAria": "隐藏休眠工作区时仍显示默认分支"
         },
         "SidebarHeader": {
           "92154beb7e": "新工作区",
@@ -4286,7 +4288,9 @@
           "82594419ba": "筛选条件",
           "automationCreated": "隐藏自动化创建的工作区",
           "cliCreated": "Hide CLI-created",
-          "detachedHead": "隐藏分离 HEAD"
+          "detachedHead": "隐藏分离 HEAD",
+          "keepDefaultBranch": "默认分支除外",
+          "keepDefaultBranchAria": "隐藏休眠工作区时仍显示默认分支"
         },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "智能体活动布局",
@@ -6477,7 +6481,10 @@
           "f79972271a": "找不到此仓库的 GitHub 远程。",
           "4d039317f4": "网站图标",
           "acf31559a0": "输入有效的网站 URL。",
-          "868c5c9b56": "无法导入仓库图标"
+          "868c5c9b56": "无法导入仓库图标",
+          "emojiTooLongForRepoIcon": "此表情符号无法用作仓库图标。",
+          "currentEmojiSelection": "当前：{{value0}}",
+          "searchEmojiPlaceholder": "搜索表情符号"
         },
         "RepositoryPane": {
           "15a99d9b9f": "相对路径从该项目根解析。",
@@ -10649,7 +10656,6 @@
                 "fd46a70f1a": "开始",
                 "a54ae21c6f": "状态：",
                 "e4e3af15ee": "查看完整详细信息",
-                "2524d1fb83": "日志尾部提供完整详细信息。",
                 "a2fb3f4408": "显示前 100 个作业",
                 "df137989b3": "显示前 20 个注释",
                 "1f2b980522": "正在加载检查详细信息...",
@@ -10702,7 +10708,8 @@
                 "5e6e5a13fa": "查看",
                 "actionRequiredHint": "此检查需要在 GitHub 上执行手动操作（例如批准工作流运行）后才能解除合并阻止。",
                 "b3195cba33": "取消将作者标记为机器人",
-                "f588b46a6c": "将作者标记为机器人"
+                "f588b46a6c": "将作者标记为机器人",
+                "checkDetailsLoadFailed": "加载检查详细信息失败。"
               },
               "empty": {
                 "state": {
@@ -14370,6 +14377,11 @@
       },
       "webRuntimeSession": {
         "remoteHostDisconnected": "The workspace is not connected to a remote Orca host."
+      },
+      "gitlabJobTraceClient": {
+        "loadFailed": "加载 GitLab 作业日志失败。",
+        "emptyTrace": "此 GitLab 作业没有可用的日志。",
+        "timedOut": "加载 GitLab 作业日志超时。"
       }
     },
     "source": {

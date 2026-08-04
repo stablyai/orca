@@ -23,8 +23,8 @@ function flushStagedStateWithDeadline(store: Store): Promise<ShutdownCheckpointR
       resolve({ ok: false })
     }, SHUTDOWN_CHECKPOINT_FLUSH_DEADLINE_MS)
   })
-  // Why not drain to a stable generation: the staged snapshot lands in the first
-  // write, and a live app keeps mutating state, which would livelock the drain.
+  // Why not drain to stable: Store retries a superseded staged write without
+  // chasing unrelated live mutations, which the deadline would otherwise cut off.
   const flush = store
     .flushPendingOrThrowAsync({ signal: controller.signal, drainToStableGeneration: false })
     .then((): ShutdownCheckpointResult => ({ ok: true }))

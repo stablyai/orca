@@ -31,7 +31,8 @@ import {
   isAutomationGeneratedWorkspace,
   isCliCreatedWorkspace,
   isDetachedHeadWorkspace,
-  isDefaultBranchWorkspace
+  isDefaultBranchWorkspace,
+  isSleepingSweepExemptWorkspace
 } from '@/components/sidebar/visible-worktrees'
 import { getLiveAgentStatusByWorktreeId, isInactiveWorkspace } from '@/lib/worktree-activity-state'
 import { orderEmptyQueryWorktrees } from '@/lib/order-empty-query-worktrees'
@@ -404,6 +405,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const hideCliCreatedWorkspaces = useAppStore((s) => s.hideCliCreatedWorkspaces)
   const hideDetachedHeadWorkspaces = useAppStore((s) => s.hideDetachedHeadWorkspaces)
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
+  const alwaysShowDefaultBranchWorkspace = useAppStore((s) => s.alwaysShowDefaultBranchWorkspace)
   const lastVisitedAtByWorktreeId = useAppStore((s) => s.lastVisitedAtByWorktreeId)
   const workspacePortScan = useAppStore((s) => s.workspacePortScan?.result ?? null)
   const openNewBrowserTabInActiveWorkspace = useAppStore(
@@ -501,6 +503,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         }
         if (
           !showSleepingWorkspaces &&
+          // Why the exemption here too: Cmd+J re-implements the sidebar's
+          // filter pass, so the shared predicate is what keeps them in step.
+          !isSleepingSweepExemptWorkspace(worktree, alwaysShowDefaultBranchWorkspace) &&
           isInactiveWorkspace(
             worktree.id,
             tabsByWorktree,
@@ -515,6 +520,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       }),
     [
       allWorktrees,
+      alwaysShowDefaultBranchWorkspace,
       browserTabsByWorktree,
       hideAutomationGeneratedWorkspaces,
       hideCliCreatedWorkspaces,

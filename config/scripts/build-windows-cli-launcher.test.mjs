@@ -1,4 +1,12 @@
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -29,6 +37,20 @@ describe('Windows CLI launcher', () => {
     } finally {
       rmSync(outputRoot, { recursive: true, force: true })
     }
+  })
+
+  itCrossHost('never materializes the child environment block from ProcessStartInfo', () => {
+    // Why: both ProcessStartInfo env properties copy the process block into a case-insensitive
+    // dictionary that throws when the inherited block holds PATH and Path (stablyai/orca#12046).
+    const source = readFileSync(
+      join(projectRoot, 'native', 'windows-cli-launcher', 'OrcaCliLauncher.cs'),
+      'utf8'
+    )
+    const code = source.replace(/^\s*\/\/.*$/gm, '')
+
+    expect(code).not.toContain('EnvironmentVariables')
+    expect(code).not.toContain('startInfo.Environment')
+    expect(code).toContain('Environment.SetEnvironmentVariable')
   })
 
   itWindows('preserves a multiline argument from PowerShell through the native launcher', () => {
@@ -89,4 +111,70 @@ describe('Windows CLI launcher', () => {
       rmSync(appRoot, { recursive: true, force: true })
     }
   })
+
+  itWindows('survives an inherited environment block containing PATH and Path', () => {
+    const appRoot = mkdtempSync(join(tmpdir(), 'orca duplicate path launcher '))
+    try {
+      const resourcesPath = join(appRoot, 'resources')
+      const launcherPath = join(resourcesPath, 'bin', 'orca.exe')
+      const cliPath = join(resourcesPath, 'app.asar.unpacked', 'out', 'cli', 'index.js')
+      const outputPath = join(appRoot, 'child-result.json')
+      const harnessSourcePath = join(
+        projectRoot,
+        'config',
+        'scripts',
+        'fixtures',
+        'DuplicatePathProcessLauncher.cs'
+      )
+      const harnessPath = join(appRoot, 'DuplicatePathLauncher.exe')
+      mkdirSync(dirname(launcherPath), { recursive: true })
+      mkdirSync(dirname(cliPath), { recursive: true })
+      copyFileSync(process.execPath, join(appRoot, 'Orca.exe'))
+      writeFileSync(
+        cliPath,
+        `require('node:fs').writeFileSync(process.env.ORCA_TEST_OUTPUT, JSON.stringify({
+  electronRunAsNode: process.env.ELECTRON_RUN_AS_NODE,
+  pathKeys: Object.keys(process.env).filter((key) => key.toLowerCase() === 'path')
+}))\n`,
+        'utf8'
+      )
+      const build = spawnSync(
+        process.execPath,
+        ['config/scripts/build-windows-cli-launcher.mjs', '--output', launcherPath],
+        { cwd: projectRoot, encoding: 'utf8' }
+      )
+      expect(build.status, `${build.stdout}\n${build.stderr}`).toBe(0)
+
+      const compiler = findFrameworkCompiler()
+      expect(compiler).not.toBeNull()
+      const compileHarness = spawnSync(
+        compiler,
+        ['/nologo', '/target:exe', `/out:${harnessPath}`, harnessSourcePath],
+        { encoding: 'utf8' }
+      )
+      expect(compileHarness.status, `${compileHarness.stdout}\n${compileHarness.stderr}`).toBe(0)
+
+      const launch = spawnSync(harnessPath, [launcherPath, outputPath], { encoding: 'utf8' })
+      expect(launch.status, `${launch.stdout}\n${launch.stderr}`).toBe(0)
+      expect(JSON.parse(readFileSync(outputPath, 'utf8'))).toEqual({
+        electronRunAsNode: '1',
+        pathKeys: ['PATH', 'Path']
+      })
+    } finally {
+      rmSync(appRoot, { recursive: true, force: true })
+    }
+  })
 })
+
+function findFrameworkCompiler() {
+  const windowsDirectory = process.env.WINDIR ?? process.env.SystemRoot
+  if (!windowsDirectory) {
+    return null
+  }
+  return (
+    [
+      join(windowsDirectory, 'Microsoft.NET', 'Framework64', 'v4.0.30319', 'csc.exe'),
+      join(windowsDirectory, 'Microsoft.NET', 'Framework', 'v4.0.30319', 'csc.exe')
+    ].find((candidate) => existsSync(candidate)) ?? null
+  )
+}

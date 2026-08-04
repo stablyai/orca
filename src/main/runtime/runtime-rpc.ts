@@ -30,6 +30,7 @@ import {
 } from './rpc/mobile-socket-wiring'
 import type { PairingRelay } from '../../shared/mobile-relay-pairing-offer'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
+import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
 import {
   mobileRelayMintFailureFromUnknown,
   type MobileRelayMintFailure
@@ -661,6 +662,9 @@ export class OrcaRuntimeRpcServer {
     name?: string
     rotate?: boolean
     scope?: DeviceScope
+    // Why: STA-2370 — recorded on the grant so a "This computer only" client reconnecting cannot make the
+    // next launch bind every interface. Defaults to network reach, which is what every other caller means.
+    reach?: RuntimePairingReach
   }):
     | PairingOfferUnavailable
     | {
@@ -697,9 +701,10 @@ export class OrcaRuntimeRpcServer {
     const scope = args.scope ?? 'runtime'
     let device: DeviceEntry
     try {
+      const reach = args.reach ?? 'network'
       device = args.rotate
-        ? this.deviceRegistry.rotatePendingDevice(deviceName, scope)
-        : this.deviceRegistry.getOrCreatePendingDevice(deviceName, scope)
+        ? this.deviceRegistry.rotatePendingDevice(deviceName, scope, reach)
+        : this.deviceRegistry.getOrCreatePendingDevice(deviceName, scope, reach)
     } catch (error) {
       console.error('[runtime] Failed to persist pairing credential:', error)
       return pairingUnavailable('device_registry_unavailable', DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE)
@@ -1228,13 +1233,17 @@ export class OrcaRuntimeRpcServer {
 
   // Why: STA-2370 — a desktop with no previously-connected device stays on loopback until the user
   // explicitly pairs; `orca serve`/E2E (exposeNetworkByDefault) and a reconnecting paired device bind wide.
+  // A grant minted for "This computer only" is excluded: its client is a browser on this machine, so
+  // counting it would republish the runtime on every interface one restart after the user declined that.
   private resolveInitialWebSocketBindHost(): string {
     if (this.exposeNetworkByDefault) {
       return WS_BIND_HOST_ALL_INTERFACES
     }
-    const hasConnectedDevice =
-      this.deviceRegistry?.listDevices().some((device) => device.lastSeenAt > 0) ?? false
-    return hasConnectedDevice ? WS_BIND_HOST_ALL_INTERFACES : WS_BIND_HOST_LOOPBACK
+    const hasConnectedNetworkDevice =
+      this.deviceRegistry
+        ?.listDevices()
+        .some((device) => device.lastSeenAt > 0 && device.pairingReach !== 'this-computer') ?? false
+    return hasConnectedNetworkDevice ? WS_BIND_HOST_ALL_INTERFACES : WS_BIND_HOST_LOOPBACK
   }
 
   // Why: builds and starts a WS transport bound to `host`, wiring the session-scoped mobile socket
@@ -1340,9 +1349,10 @@ export class OrcaRuntimeRpcServer {
   }
 
   // Why: STA-2370 — widen the loopback listener to all interfaces so a freshly generated pairing
-  // offer's advertised LAN endpoint is reachable. Idempotent and only ever runs on the first opt-in
-  // (before any device has connected), so no live socket is disrupted; the resolved port is reused so
-  // an already-issued endpoint stays valid.
+  // offer's advertised LAN endpoint is reachable. Idempotent, but it is no longer confined to the first
+  // pairing action: a "This computer only" link never widens, so live loopback clients can already be
+  // connected when a later LAN/QR offer opts in. Rebinding terminates them (ws cannot move a listener),
+  // so the resolved port is reused — already-issued endpoints stay valid and clients reconnect in place.
   async ensureNetworkExposure(): Promise<void> {
     if (
       !this.enableWebSocket ||
