@@ -3943,7 +3943,9 @@ describe('OrcaRuntimeService', () => {
       displayName: 'Folder',
       badgeColor: 'blue',
       addedAt: 1,
-      kind: 'folder' as const
+      kind: 'folder' as const,
+      // removeManagedWorktree executes inside this selected runtime, where PTYs are local ids.
+      executionHostId: 'runtime:env-1' as const
     }
     const rootWorktreeId = 'folder-repo::/workspace/folder'
     const rootPriorWorktreeIds = ['folder-repo::/workspace/old-folder']

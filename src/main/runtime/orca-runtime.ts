@@ -23511,31 +23511,25 @@ export class OrcaRuntimeService {
               'Cannot delete the project root workspace. Remove the folder project instead.'
             )
           }
-          // Folder projects can be SSH-backed, so resolve the owner before sweeping.
-          const folderHost = parseExecutionHostId(
-            store.getWorktreeMeta(removalTarget.id)?.hostId ?? getRepoExecutionHostId(repo)
-          )
-          const folderSshPtyProvider =
-            folderHost?.kind === 'ssh' ? this.getSshProviderFn?.(folderHost.targetId) : undefined
-          const externalFolderHost = folderHost?.kind === 'ssh' || folderHost?.kind === 'runtime'
+          // This service runs inside the selected runtime, so runtime-stamped repos use its
+          // local PTY namespace; only a direct SSH connection is external from here.
+          const folderConnectionId = repo.connectionId?.trim() || null
+          const folderSshPtyProvider = folderConnectionId
+            ? this.getSshProviderFn?.(folderConnectionId)
+            : undefined
           const folderPtyProvider = folderSshPtyProvider ?? this.getLocalProvider()
           if (folderPtyProvider) {
             // Why: folder workspace deletion has no Git removal phase where PTYs
             // would otherwise be swept; tear them down before hiding the workspace.
             await killAllProcessesForWorktree(removalTarget.id, {
               runtime: this,
-              // External host inventories must never sweep a same-id local workspace.
               resolvedWorktreeId: removalTarget.id,
-              ...(folderHost?.kind === 'ssh' ? { resolvedConnectionId: folderHost.targetId } : {}),
-              ...(folderHost?.kind === 'runtime'
-                ? { resolvedRuntimeEnvironmentId: folderHost.environmentId }
-                : {}),
+              ...(folderConnectionId ? { resolvedConnectionId: folderConnectionId } : {}),
               localProvider: folderPtyProvider,
               onPtyStopped: this.onPtyStopped ?? undefined,
-              ...(externalFolderHost
+              ...(folderConnectionId
                 ? {
-                    includeProviderInventory:
-                      folderHost?.kind === 'ssh' && Boolean(folderSshPtyProvider),
+                    includeProviderInventory: Boolean(folderSshPtyProvider),
                     includeLocalRegistry: false
                   }
                 : {})

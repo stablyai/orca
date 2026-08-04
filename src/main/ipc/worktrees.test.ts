@@ -8380,6 +8380,8 @@ describe('registerWorktreeHandlers', () => {
       connectionId: 'conn-1'
     })
     getSshPtyProviderMock.mockReturnValue(sshPtyProvider)
+    // One global meta key can describe the same-id local copy; the resolved repo still owns this delete.
+    store.getWorktreeMeta.mockReturnValue(makeWorktreeMeta({ hostId: 'local' }))
 
     await handlers['worktrees:remove'](null, { worktreeId })
 
@@ -8393,6 +8395,37 @@ describe('registerWorktreeHandlers', () => {
       includeProviderInventory: true,
       includeLocalRegistry: false
     })
+  })
+
+  it('fences a mirrored runtime folder workspace sweep to its environment', async () => {
+    const runtimePtyProvider = {} as never
+    const worktreeId = 'repo-folder::/runtime/folder::workspace:child-1'
+    store.getRepo.mockReturnValue({
+      id: 'repo-folder',
+      path: '/runtime/folder',
+      displayName: 'folder',
+      badgeColor: '#000',
+      addedAt: 0,
+      kind: 'folder',
+      executionHostId: 'runtime:env-1'
+    })
+    getLocalPtyProviderMock.mockReturnValue(runtimePtyProvider)
+
+    await handlers['worktrees:remove'](null, {
+      worktreeId,
+      hostId: 'runtime:env-1'
+    })
+
+    expect(killAllProcessesForWorktreeMock).toHaveBeenCalledWith(worktreeId, {
+      runtime: runtimeStub,
+      resolvedWorktreeId: worktreeId,
+      resolvedRuntimeEnvironmentId: 'env-1',
+      localProvider: runtimePtyProvider,
+      onPtyStopped: clearProviderPtyStateMock,
+      includeProviderInventory: false,
+      includeLocalRegistry: false
+    })
+    expect(getSshPtyProviderMock).not.toHaveBeenCalled()
   })
 
   it('runs the archive hook on remove when skipArchive is not set', async () => {

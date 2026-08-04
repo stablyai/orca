@@ -2297,9 +2297,9 @@ export function registerWorktreeHandlers(
             await withWorktreeRemoveStageSpan('pty_sweep', 'folder', async () => {
               // Folder projects can be SSH-backed, so fence the sweep to the owning host exactly
               // like the git paths — the local inventory must never reach a remote workspace's id.
-              const ownerHost = parseExecutionHostId(
-                resolveWorktreeRemovalOwnerHostId(store, args.worktreeId, repo, args.hostId)
-              )
+              // The resolved repo is authoritative here: path-derived metadata is shared by
+              // same-id host copies and can describe a different owner's workspace.
+              const ownerHost = parseExecutionHostId(removalHostId)
               const sshPtyProvider =
                 ownerHost?.kind === 'ssh' ? getSshPtyProvider(ownerHost.targetId) : undefined
               const externalHost = ownerHost?.kind === 'ssh' || ownerHost?.kind === 'runtime'
