@@ -142,6 +142,39 @@ describe('stock xterm composition ownership', () => {
     terminal.dispose()
   })
 
+  it('orders application input after a native insertText commit', async () => {
+    const { emitted, terminal, textarea } = openTerminal()
+    composition(textarea, 'compositionstart')
+    composition(textarea, 'compositionupdate', '한')
+    composition(textarea, 'compositionend')
+    terminal.input('\x1b\r')
+    textarea.value = '한'
+    textarea.setSelectionRange(1, 1)
+    textarea.dispatchEvent(
+      new InputEvent('input', { bubbles: true, data: '한', inputType: 'insertText' })
+    )
+    await nextTask()
+
+    expect(emitted.join('')).toBe('한\x1b\r')
+    terminal.dispose()
+  })
+
+  it('releases application input queued during the late-commit window', async () => {
+    const { emitted, terminal, textarea } = openTerminal()
+    composition(textarea, 'compositionstart')
+    composition(textarea, 'compositionupdate', '한')
+    textarea.value = '한'
+    textarea.setSelectionRange(1, 1)
+    composition(textarea, 'compositionend', '한')
+    await nextTask()
+
+    terminal.input('\x1b\r')
+    await nextTask()
+
+    expect(emitted.join('')).toBe('한\x1b\r')
+    terminal.dispose()
+  })
+
   it('leaves application input immediate outside composition', () => {
     const { emitted, terminal } = openTerminal()
     terminal.input('\x1b\r')
