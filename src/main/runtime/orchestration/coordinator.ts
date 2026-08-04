@@ -5,7 +5,11 @@ import { buildDispatchPreamble } from './preamble'
 import { reconcileLifecycleMessage } from './lifecycle-reconciliation'
 
 export type CoordinatorRuntime = {
-  sendTerminalAgentPrompt(handle: string, prompt: string): Promise<unknown>
+  sendTerminalAgentPrompt(
+    handle: string,
+    prompt: string,
+    options?: { verifySubmission?: boolean }
+  ): Promise<unknown>
   listTerminals(
     worktreeSelector?: string,
     limit?: number
@@ -465,7 +469,9 @@ export class Coordinator {
     }
 
     try {
-      await this.runtime.sendTerminalAgentPrompt(targetHandle, preamble + gateContext)
+      await this.runtime.sendTerminalAgentPrompt(targetHandle, preamble + gateContext, {
+        verifySubmission: true
+      })
     } catch (err) {
       const updated = this.db.failDispatch(
         dispatch.id,

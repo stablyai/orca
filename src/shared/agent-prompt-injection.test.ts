@@ -4,6 +4,7 @@ import {
   AGENT_PROMPT_BRACKETED_PASTE_START,
   buildAgentPromptPasteBytes,
   buildAgentPromptSubmitBytes,
+  countAgentPromptPasteMarkers,
   getAgentPromptSubmitDelayMs,
   iterateAgentPromptPasteChunks,
   sanitizeAgentPromptText
@@ -38,6 +39,15 @@ describe('agent prompt injection bytes', () => {
 
   it('exposes the sanitizer for tests and diagnostics', () => {
     expect(sanitizeAgentPromptText('a\x1bb')).toBe('a<ESC>b')
+  })
+
+  it('counts only rendered pasted-content markers', () => {
+    expect(
+      countAgentPromptPasteMarkers([
+        '[Pasted Content 1015 chars][Pasted Content 4069 chars]',
+        'ordinary output [Pasted Content nope chars]'
+      ])
+    ).toBe(2)
   })
 
   it('chunks without changing the reconstructed paste frame', () => {
