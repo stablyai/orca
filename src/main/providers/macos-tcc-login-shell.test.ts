@@ -67,12 +67,24 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
     vi.clearAllMocks()
   })
 
-  it('wraps the shell in /usr/bin/login on macOS, preserving the shell args behind it', async () => {
+  it('uses the exact positional login-shell trampoline argv on macOS', async () => {
     setPlatform('darwin')
     await prepareMacosTccLoginShell()
     expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l'])).toEqual({
       file: '/usr/bin/login',
-      args: ['-flpq', 'ada', '/usr/bin/env', 'SHELL=/bin/zsh', '/bin/zsh', '-l']
+      args: [
+        '-flpq',
+        'ada',
+        '/bin/bash',
+        '--noprofile',
+        '--norc',
+        '-c',
+        'export SHELL="$1"; shift; exec -l "$@"',
+        'orca-tcc-login',
+        '/bin/zsh',
+        '/bin/zsh',
+        '-l'
+      ]
     })
     expect(execFileMock).toHaveBeenCalledWith(
       '/usr/bin/login',
@@ -328,7 +340,7 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
     expect(execFileMock).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps bash rcfile args intact after the shell path', async () => {
+  it('keeps custom shell arguments intact after the shell path', async () => {
     setPlatform('darwin')
     await prepareMacosTccLoginShell()
     expect(
@@ -338,8 +350,13 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
       args: [
         '-flpq',
         'ada',
-        '/usr/bin/env',
-        'SHELL=/bin/bash',
+        '/bin/bash',
+        '--noprofile',
+        '--norc',
+        '-c',
+        'export SHELL="$1"; shift; exec -l "$@"',
+        'orca-tcc-login',
+        '/bin/bash',
         '/bin/bash',
         '--rcfile',
         '/orca/bash/rcfile'
@@ -354,7 +371,19 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
       wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l'], { SHELL: '/opt/homebrew/bin/fish' })
     ).toEqual({
       file: '/usr/bin/login',
-      args: ['-flpq', 'ada', '/usr/bin/env', 'SHELL=/opt/homebrew/bin/fish', '/bin/zsh', '-l']
+      args: [
+        '-flpq',
+        'ada',
+        '/bin/bash',
+        '--noprofile',
+        '--norc',
+        '-c',
+        'export SHELL="$1"; shift; exec -l "$@"',
+        'orca-tcc-login',
+        '/opt/homebrew/bin/fish',
+        '/bin/zsh',
+        '-l'
+      ]
     })
   })
 
@@ -363,28 +392,47 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
     await prepareMacosTccLoginShell()
     expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l'], { SHELL: '' })).toEqual({
       file: '/usr/bin/login',
-      args: ['-flpq', 'ada', '/usr/bin/env', 'SHELL=/bin/zsh', '/bin/zsh', '-l']
+      args: [
+        '-flpq',
+        'ada',
+        '/bin/bash',
+        '--noprofile',
+        '--norc',
+        '-c',
+        'export SHELL="$1"; shift; exec -l "$@"',
+        'orca-tcc-login',
+        '/bin/zsh',
+        '/bin/zsh',
+        '-l'
+      ]
     })
   })
 
-  it('skips the env(1) interposition when the shell path would parse as an assignment', async () => {
+  it('passes spaces and equals signs positionally without interpolation', async () => {
     setPlatform('darwin')
     await prepareMacosTccLoginShell()
-    expect(wrapShellSpawnForMacosTccAttribution('/odd=dir/zsh', ['-l'])).toEqual({
+    expect(
+      wrapShellSpawnForMacosTccAttribution(
+        '/Applications/Custom Shell/bin/fish=debug',
+        ['--init-command', 'set label=a b'],
+        { SHELL: '/Applications/Custom Shell/bin/fish=debug' }
+      )
+    ).toEqual({
       file: '/usr/bin/login',
-      args: ['-flpq', 'ada', '/odd=dir/zsh', '-l']
-    })
-  })
-
-  it('still wraps with login when /usr/bin/env is missing, without interposition', async () => {
-    setPlatform('darwin')
-    existsSyncMock.mockImplementation(
-      (path: string) => path === '/usr/bin/login' || path === '/usr/bin/printf'
-    )
-    await prepareMacosTccLoginShell()
-    expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l'])).toEqual({
-      file: '/usr/bin/login',
-      args: ['-flpq', 'ada', '/bin/zsh', '-l']
+      args: [
+        '-flpq',
+        'ada',
+        '/bin/bash',
+        '--noprofile',
+        '--norc',
+        '-c',
+        'export SHELL="$1"; shift; exec -l "$@"',
+        'orca-tcc-login',
+        '/Applications/Custom Shell/bin/fish=debug',
+        '/Applications/Custom Shell/bin/fish=debug',
+        '--init-command',
+        'set label=a b'
+      ]
     })
   })
 

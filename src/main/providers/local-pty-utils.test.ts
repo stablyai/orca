@@ -157,11 +157,24 @@ describe('spawnShellWithFallback macOS TCC login wrapping', () => {
     existsSyncMock.mockReturnValue(true)
     statSyncMock.mockReturnValue(dirStats(true))
     accessSyncMock.mockReturnValue(undefined)
-    // Emulate the real wrapper: prepend /usr/bin/login in front of the shell.
-    wrapSpawnMock.mockImplementation((file: string, args: string[]) => ({
-      file: '/usr/bin/login',
-      args: ['-flpq', 'ada', file, ...args]
-    }))
+    wrapSpawnMock.mockImplementation(
+      (file: string, args: string[], env: Record<string, string | undefined>) => ({
+        file: '/usr/bin/login',
+        args: [
+          '-flpq',
+          'ada',
+          '/bin/bash',
+          '--noprofile',
+          '--norc',
+          '-c',
+          'export SHELL="$1"; shift; exec -l "$@"',
+          'orca-tcc-login',
+          env.SHELL || file,
+          file,
+          ...args
+        ]
+      })
+    )
   })
 
   afterEach(() => {
@@ -187,7 +200,19 @@ describe('spawnShellWithFallback macOS TCC login wrapping', () => {
     expect(wrapSpawnMock).toHaveBeenCalledWith('/bin/zsh', ['-l'], expect.any(Object))
     expect(ptySpawn).toHaveBeenCalledWith(
       '/usr/bin/login',
-      ['-flpq', 'ada', '/bin/zsh', '-l'],
+      [
+        '-flpq',
+        'ada',
+        '/bin/bash',
+        '--noprofile',
+        '--norc',
+        '-c',
+        'export SHELL="$1"; shift; exec -l "$@"',
+        'orca-tcc-login',
+        '/bin/zsh',
+        '/bin/zsh',
+        '-l'
+      ],
       expect.objectContaining({ cwd: '/work', cols: 80, rows: 24 })
     )
     // The reported shellPath stays the real shell so identity/name logic is intact.
@@ -221,7 +246,19 @@ describe('spawnShellWithFallback macOS TCC login wrapping', () => {
     )
     expect(ptySpawn).toHaveBeenLastCalledWith(
       '/usr/bin/login',
-      ['-flpq', 'ada', '/bin/bash', '-l'],
+      [
+        '-flpq',
+        'ada',
+        '/bin/bash',
+        '--noprofile',
+        '--norc',
+        '-c',
+        'export SHELL="$1"; shift; exec -l "$@"',
+        'orca-tcc-login',
+        '/bin/bash',
+        '/bin/bash',
+        '-l'
+      ],
       expect.objectContaining({ cwd: '/work' })
     )
     expect(result.shellPath).toBe('/bin/bash')
