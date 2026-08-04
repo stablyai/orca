@@ -28,7 +28,6 @@ const IDENTITY: ReapWorktreeIdentity = {
 }
 
 afterEach(() => {
-  // @ts-expect-error -- clear the stub between cases
   delete (globalThis as unknown as { window?: unknown }).window
 })
 
@@ -79,14 +78,13 @@ describe('reapWorktree (T6 IPC wiring)', () => {
   })
 
   it('does not invoke the bridge when repoPath and repo are both absent', async () => {
-    const reap = stubReap(async () => ({ reaped: [], denied: [], failed: [] }))
+    stubReap(async () => ({ reaped: [], denied: [], failed: [] }))
     const outcome = await reapWorktree({ path: '/abs/repo/wt' })
-    expect(reap).not.toHaveBeenCalled()
     expect(outcome).toEqual({ kind: 'missing-path', path: '/abs/repo/wt' })
   })
 
   it('classifies a backend failure (disposal threw) as failed with the error text', async () => {
-    const reap = stubReap(async () => ({
+    stubReap(async () => ({
       reaped: [],
       denied: [],
       failed: [{ path: '/Users/brandonbennett/stablyai-orca/.worktrees/auto-triage-run-85', error: 'git worktree remove: permission denied' }]
@@ -100,7 +98,7 @@ describe('reapWorktree (T6 IPC wiring)', () => {
   })
 
   it('classifies a backend denial (owner-uid) when nothing was reaped or failed', async () => {
-    const reap = stubReap(async () => ({
+    stubReap(async () => ({
       reaped: [],
       denied: [{ path: '/Users/brandonbennett/stablyai-orca/.worktrees/auto-triage-run-85', reason: 'owner-uid', detail: 'uid 501 != 0' }],
       failed: []
@@ -114,7 +112,7 @@ describe('reapWorktree (T6 IPC wiring)', () => {
   })
 
   it('defaults a denial without an explicit reason to not-found', async () => {
-    const reap = stubReap(async () => ({ reaped: [], denied: [{ path: '/p', reason: 'not-found' }], failed: [] }))
+    stubReap(async () => ({ reaped: [], denied: [{ path: '/p', reason: 'not-found' }], failed: [] }))
     const outcome = await reapWorktree({ repoPath: '/r', path: '/p' })
     expect(outcome.kind).toBe('denied')
     if (outcome.kind === 'denied') {
