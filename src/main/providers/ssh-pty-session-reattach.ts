@@ -171,6 +171,11 @@ function sameSourceActivation(
 
 export type { PtySourceRecoveryRequest }
 
+// Why: restoreRequired retirement is settled asynchronously on the relay; a couple of spaced
+// retries let the retired delivery clear so re-attach opens fresh instead of expiring a live PTY.
+const SSH_PTY_RESTORE_REQUIRED_ATTACH_ATTEMPTS = 3
+const SSH_PTY_RESTORE_REQUIRED_RETRY_DELAY_MS = 50
+
 export async function reattachSshPtySession(args: {
   mux: SshChannelMultiplexer
   connectionId: string
@@ -188,23 +193,54 @@ export async function reattachSshPtySession(args: {
     // Why: expected pane identity prevents a reused relay id from attaching the wrong shell.
     const expectedPaneKey = args.options.paneKey ?? args.options.env?.ORCA_PANE_KEY
     const expectedTabId = args.options.tabId ?? args.options.env?.ORCA_TAB_ID
-    const attachResult = await requestSshPtyAttach({
-      mux: args.mux,
-      relayPtyId: relaySessionId,
-      params: {
-        id: relaySessionId,
-        cols: args.options.cols,
-        rows: args.options.rows,
-        suppressReplayNotification: true,
-        ...(expectedPaneKey ? { expectedPaneKey } : {}),
-        ...(expectedTabId ? { expectedTabId } : {})
-      },
-      installSourceActivation: args.installSourceActivation,
-      rememberPtyIncarnation: args.rememberPtyIncarnation
-    })
-    console.warn(
-      `[ssh-pty] pty.attach succeeded for ${args.sessionId}, replay=${!!attachResult.replay}`
-    )
+    let attachResult: SshPtyAttachResult
+    for (let attempt = 1; ; attempt++) {
+      attachResult = await requestSshPtyAttach({
+        mux: args.mux,
+        relayPtyId: relaySessionId,
+        params: {
+          id: relaySessionId,
+          cols: args.options.cols,
+          rows: args.options.rows,
+          suppressReplayNotification: true,
+          ...(expectedPaneKey ? { expectedPaneKey } : {}),
+          ...(expectedTabId ? { expectedTabId } : {})
+        },
+        installSourceActivation: args.installSourceActivation,
+        rememberPtyIncarnation: args.rememberPtyIncarnation
+      })
+      if (
+        attachResult.sourceRecovery?.status !== 'restoreRequired' ||
+        attempt >= SSH_PTY_RESTORE_REQUIRED_ATTACH_ATTEMPTS
+      ) {
+        break
+      }
+      // Why: restoreRequired retires the stale delivery as it replies — the PTY is alive, and a
+      // fresh attach opens a new delivery with full replay. Only pty-not-found means the session died.
+      if (
+        attachResult.sourceActivationLease &&
+        !(await attachResult.sourceActivationLease.rollback())
+      ) {
+        // Why: an unconfirmed cancellation must fail closed rather than stack a new delivery on it.
+        console.warn(
+          `[ssh-pty] pty.attach for ${args.sessionId} could not confirm stale delivery cancellation; failing closed`
+        )
+        break
+      }
+      console.warn(
+        `[ssh-pty] pty.attach for ${args.sessionId} requires restore (${attachResult.sourceRecovery.reason}), retrying attach ${attempt + 1}/${SSH_PTY_RESTORE_REQUIRED_ATTACH_ATTEMPTS}`
+      )
+      await new Promise((resolve) => setTimeout(resolve, SSH_PTY_RESTORE_REQUIRED_RETRY_DELAY_MS))
+    }
+    if (attachResult.sourceRecovery?.status === 'restoreRequired') {
+      console.warn(
+        `[ssh-pty] pty.attach for ${args.sessionId} still requires restore (${attachResult.sourceRecovery.reason}); failing closed`
+      )
+    } else {
+      console.warn(
+        `[ssh-pty] pty.attach succeeded for ${args.sessionId}, replay=${!!attachResult.replay}`
+      )
+    }
     return {
       id: toAppSshPtyId(args.connectionId, relaySessionId),
       isReattach: true,
