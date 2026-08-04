@@ -852,6 +852,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
         : {}),
       isReattach: true,
       isAlternateScreen: isAltScreen,
+      // Why: the snapshot ANSI has no title frame; carry lastTitle beside it so main can seed title records after a relaunch.
+      ...(result.snapshot.lastTitle ? { lastTitle: result.snapshot.lastTitle } : {}),
       // Why: carry the mid-escape tail so the renderer writes it after the reattach reset, else a split escape renders literally (#7329).
       ...(result.snapshot.pendingEscapeTailAnsi
         ? { pendingEscapeTailAnsi: result.snapshot.pendingEscapeTailAnsi }
@@ -1135,7 +1137,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
       cwd: restoreInfo.cwd,
       cols: restoreInfo.cols,
       rows: restoreInfo.rows,
-      oscLinks: restoreInfo.oscLinks
+      oscLinks: restoreInfo.oscLinks,
+      ...(restoreInfo.lastTitle ? { lastTitle: restoreInfo.lastTitle } : {})
     }
   }
 

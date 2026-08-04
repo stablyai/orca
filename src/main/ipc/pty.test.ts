@@ -9,7 +9,7 @@ import {
 } from '../../shared/terminal-input'
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../shared/clipboard-text'
 import { redactPtyIdForDiagnostics } from '../../shared/pty-delivery-diagnostics'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultWorkspaceSession } from '../../shared/constants'
 import type { TuiAgent } from '../../shared/types'
 import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
 import { AGENT_SESSION_CLAIM_DIGEST_VERSION } from '../../shared/agent-session-host-authority'
@@ -102,6 +102,8 @@ const {
 }))
 
 vi.mock('electron', () => ({
+  // Why defined-but-undefined: the real OrcaRuntimeService guards BrowserWindow with `?.`; vitest throws on reading exports the mock omits.
+  BrowserWindow: undefined,
   app: {
     isPackaged: true,
     getPath: getPathMock,
@@ -16956,6 +16958,176 @@ describe('registerPtyHandlers', () => {
       'pty-ssh-reattach',
       'relay history\r\n'
     )
+  })
+
+  // STA repro (post-restart blind orchestrator): reattach restore payloads
+  // arrive as spawn RPC results, never through onPtyData, so without record
+  // seeding `terminal list` reported connected terminals with empty
+  // title/preview/lastOutputAt after every relaunch and `terminal read`
+  // returned a zero-line tail for a running session.
+  it('leaves the runtime reporting preview and title after a reattach spawn (restart restore)', async () => {
+    const worktreeId = 'repo-restore::/tmp/restore-records'
+    const tabId = 'tab-restore-records'
+    const leafId = '55555555-5555-4555-8555-555555555555'
+    const ptyId = `${worktreeId}@@session-restore-1`
+    const session = getDefaultWorkspaceSession()
+    const runtime = new OrcaRuntimeService({
+      getWorkspaceSession: () => session,
+      setWorkspaceSession: () => {},
+      getRepos: () => [
+        {
+          id: 'repo-restore',
+          path: '/tmp/restore-records',
+          displayName: 'restore',
+          badgeColor: '#000000',
+          addedAt: 0
+        }
+      ],
+      getAllWorktreeMeta: () => ({}),
+      getWorktreeMeta: () => undefined,
+      setWorktreeMeta: () => undefined as never,
+      removeWorktreeMeta: () => {},
+      getSettings: () => ({ workspaceDir: '/tmp/workspaces' }),
+      getProjects: () => []
+    } as never)
+    runtime.attachWindow(1)
+    // The restored window graph still knows the persisted ptyId binding.
+    runtime.syncWindowGraph(1, {
+      tabs: [{ tabId, worktreeId, title: '', activeLeafId: leafId, layout: null }],
+      leaves: [{ tabId, worktreeId, leafId, paneRuntimeId: 1, ptyId, paneTitle: null, title: '' }]
+    })
+    setLocalPtyProvider({
+      spawn: vi.fn(async () => ({
+        id: ptyId,
+        isReattach: true,
+        snapshot: '\x1b[32m$\x1b[0m npm test\r\n\x1b[1mall 42 tests passed\x1b[0m\r\n',
+        snapshotCols: 80,
+        snapshotRows: 24,
+        lastTitle: 'restored-agent-title'
+      })),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      onData: vi.fn(() => vi.fn()),
+      onExit: vi.fn(() => vi.fn()),
+      listProcesses: vi.fn(async () => [{ id: ptyId, cwd: '/tmp/restore-records' }]),
+      getForegroundProcess: vi.fn(async () => null)
+    } as never)
+    registerPtyHandlers(mainWindow as never, runtime)
+
+    await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, worktreeId, tabId, leafId })
+
+    const { terminals } = await runtime.listTerminals(`id:${worktreeId}`)
+    expect(terminals).toHaveLength(1)
+    const terminal = terminals[0]!
+    expect(terminal.preview).toContain('$ npm test')
+    expect(terminal.preview).toContain('all 42 tests passed')
+    expect(terminal.title).toBe('restored-agent-title')
+    // Seeded scrollback is historical — recency must come only from live bytes.
+    expect(terminal.lastOutputAt).toBeNull()
+    const read = await runtime.readTerminal(terminal.handle)
+    expect(read.tail).toEqual(['$ npm test', 'all 42 tests passed'])
+  })
+
+  it('seeds restore records even when the renderer pre-signals serializer ownership', async () => {
+    const tabId = 'tab-gated-restore'
+    const leafId = '66666666-6666-4666-8666-666666666666'
+    const paneKey = makePaneKey(tabId, leafId)
+    setLocalPtyProvider({
+      spawn: vi.fn(async () => ({
+        id: 'pty-gated-reattach',
+        isReattach: true,
+        snapshot: 'gated snapshot\r\n',
+        snapshotCols: 80,
+        snapshotRows: 24,
+        lastTitle: 'gated-title'
+      })),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      onData: vi.fn(() => vi.fn()),
+      onExit: vi.fn(() => vi.fn()),
+      listProcesses: vi.fn(async () => []),
+      getForegroundProcess: vi.fn(async () => null)
+    } as never)
+    const runtime = {
+      setPtyController: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
+      seedHeadlessTerminal: vi.fn(),
+      seedTerminalRestoreTail: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyData: vi.fn(),
+      onPtyExit: vi.fn(),
+      registerPty: vi.fn(),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'handle-gated-restore'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      preAllocateHandleForPty: vi.fn()
+    }
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    const gen = await handlers.get('pty:declarePendingPaneSerializer')!(null, { paneKey })
+
+    await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-gated',
+      tabId,
+      leafId,
+      env: { ORCA_PANE_KEY: paneKey }
+    })
+
+    // The renderer owns the emulator snapshot here — but the list/read records
+    // are main-side only, so the record seed must still run.
+    expect(runtime.seedHeadlessTerminal).not.toHaveBeenCalled()
+    expect(runtime.seedTerminalRestoreTail).toHaveBeenCalledWith('pty-gated-reattach', {
+      text: 'gated snapshot\r\n',
+      lastTitle: 'gated-title'
+    })
+    await handlers.get('pty:clearPendingPaneSerializer')!(null, { paneKey, gen })
+  })
+
+  it('seeds restore records from a cold-restore payload including its checkpoint title', async () => {
+    setLocalPtyProvider({
+      spawn: vi.fn(async () => ({
+        id: 'pty-cold-restore-records',
+        coldRestore: {
+          scrollback: 'cold restored history\r\n',
+          cwd: '/projects/restored',
+          cols: 132,
+          rows: 43,
+          lastTitle: 'checkpoint-title'
+        }
+      })),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      onData: vi.fn(() => vi.fn()),
+      onExit: vi.fn(() => vi.fn()),
+      listProcesses: vi.fn(async () => []),
+      getForegroundProcess: vi.fn(async () => null)
+    } as never)
+    const runtime = {
+      setPtyController: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
+      seedHeadlessTerminal: vi.fn(),
+      seedTerminalRestoreTail: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyData: vi.fn(),
+      onPtyExit: vi.fn(),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'handle-cold-restore-records'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      preAllocateHandleForPty: vi.fn()
+    }
+    registerPtyHandlers(mainWindow as never, runtime as never)
+
+    await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+
+    expect(runtime.seedTerminalRestoreTail).toHaveBeenCalledWith('pty-cold-restore-records', {
+      text: 'cold restored history\r\n',
+      lastTitle: 'checkpoint-title'
+    })
   })
 
   it('upgrades legacy numeric pane keys when the spawn metadata proves the stable leaf', async () => {

@@ -10885,6 +10885,33 @@ export class OrcaRuntimeService {
       })
   }
 
+  // Why: reattach/cold-restore/replay payloads arrive as spawn RPC results and
+  // never pass through onPtyData, so after a relaunch the records backing
+  // `terminal list`/`terminal read` stayed blank while the session was alive.
+  // Seed semantics (applySeededAgentStatus precedent): write state only — no
+  // waiters, no orchestration events, and no lastOutputAt, because restored
+  // bytes are historical output, not fresh activity.
+  seedTerminalRestoreTail(ptyId: string, restore: { text?: string; lastTitle?: string }): void {
+    const seed = restore.text ? buildRestoredTerminalTailSeed(restore.text) : null
+    if (seed) {
+      const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
+      // Why: live bytes outrank the seed — only never-written records take it,
+      // so a same-run remount reattach cannot re-apply history it already has.
+      if (pty && restoredTerminalTailSeedAllowed(pty)) {
+        applyRestoredTerminalTailSeed(pty, seed)
+      }
+      for (const leaf of this.getLeavesForPty(ptyId)) {
+        if (restoredTerminalTailSeedAllowed(leaf)) {
+          applyRestoredTerminalTailSeed(leaf, seed)
+        }
+      }
+    }
+    if (restore.lastTitle) {
+      // Why: mirror renderer hydration — a title main already tracked live outranks the payload's persisted one.
+      this.applySeededAgentStatus(ptyId, this.getTrackedRawTitleForPty(ptyId) ?? restore.lastTitle)
+    }
+  }
+
   // Why: hydrate the runtime headless emulator from the desktop renderer's
   // xterm buffer on the first onPtyData byte after a PTY is taken over by a
   // pane. Eager-state pattern matches seedHeadlessTerminal: headlessTerminals
@@ -34853,6 +34880,104 @@ export function buildPreview(lines: string[], partialLine: string): string {
   return preview.length > MAX_PREVIEW_CHARS
     ? preview.slice(preview.length - MAX_PREVIEW_CHARS)
     : preview
+}
+
+// Why: restore payloads can be multi-MB; the records only retain a bounded tail,
+// so cap the one-time parse on the spawn path to the suffix that can matter.
+const MAX_RESTORE_TAIL_SEED_CHARS = 256 * 1024
+
+type RestoredTerminalTailSeed = {
+  lines: string[]
+  transcriptLines: string[]
+  transcriptChars: number
+  partialLine: string
+  pendingAnsi: string
+  redrawCursor: RetainedTailRedrawCursor | null
+  truncated: boolean
+  linesTotal: number
+  preview: string
+}
+
+type RestorableTerminalTailRecord = Pick<
+  RuntimePtyWorktreeRecord,
+  | 'lastOutputAt'
+  | 'tailBuffer'
+  | 'tailTranscriptBuffer'
+  | 'tailTranscriptChars'
+  | 'tailPartialLine'
+  | 'tailPendingAnsi'
+  | 'tailRedrawCursor'
+  | 'tailTruncated'
+  | 'tailLinesTotal'
+  | 'preview'
+>
+
+export function buildRestoredTerminalTailSeed(text: string): RestoredTerminalTailSeed | null {
+  let bounded = text
+  let sliced = false
+  if (bounded.length > MAX_RESTORE_TAIL_SEED_CHARS) {
+    bounded = bounded.slice(-MAX_RESTORE_TAIL_SEED_CHARS)
+    // Why: an arbitrary suffix can start mid-escape; restarting after the first
+    // newline resumes at a line boundary (escape params never span one).
+    const firstNewline = bounded.indexOf('\n')
+    if (firstNewline !== -1) {
+      bounded = bounded.slice(firstNewline + 1)
+    }
+    sliced = true
+  }
+  // Why: the live-path pipeline, so seeded records equal what streaming the
+  // same bytes through onPtyData would have produced.
+  const normalized = normalizeTerminalChunk(bounded)
+  const tail = appendNormalizedToTailBuffer([], '', normalized.text, null)
+  if (tail.lines.length === 0 && tail.partialLine.length === 0) {
+    return null
+  }
+  const transcript = appendCompletedTerminalTranscript(
+    [],
+    0,
+    tail.newlyCompletedLines,
+    tail.newCompleteLines
+  )
+  return {
+    lines: tail.lines,
+    transcriptLines: transcript.lines,
+    transcriptChars: transcript.characters,
+    partialLine: tail.partialLine,
+    pendingAnsi: normalized.pendingAnsi,
+    redrawCursor: tail.redrawCursor,
+    truncated: sliced || tail.truncated || transcript.truncated,
+    linesTotal: tail.newCompleteLines,
+    preview: buildPreview(tail.lines, tail.partialLine)
+  }
+}
+
+function restoredTerminalTailSeedAllowed(record: RestorableTerminalTailRecord): boolean {
+  return (
+    record.lastOutputAt === null &&
+    record.preview.length === 0 &&
+    record.tailBuffer.length === 0 &&
+    record.tailPartialLine.length === 0
+  )
+}
+
+// Deliberately untouched: lastOutputAt (historical bytes must not read as fresh
+// activity) and waitBlockedAt/tailWaitState (a restored prompt is not a live
+// wait signal; the next live chunk recomputes both from this seeded tail).
+function applyRestoredTerminalTailSeed(
+  record: RestorableTerminalTailRecord,
+  seed: RestoredTerminalTailSeed
+): void {
+  // Why shared instances: append helpers never mutate prior arrays, and equal
+  // references let tailStateMatches keep its O(1) leaf/pty reuse fast path.
+  record.tailBuffer = seed.lines
+  record.tailTranscriptBuffer = seed.transcriptLines
+  record.tailTranscriptChars = seed.transcriptChars
+  record.tailPartialLine = seed.partialLine
+  record.tailPendingAnsi = seed.pendingAnsi
+  record.tailRedrawCursor = seed.redrawCursor
+  record.tailTruncated = seed.truncated
+  record.tailLinesTotal = seed.linesTotal
+  record.preview = seed.preview
 }
 
 function buildTerminalWaitText(lines: string[], partialLine: string, preview: string): string {

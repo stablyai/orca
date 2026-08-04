@@ -6337,6 +6337,32 @@ export function registerPtyHandlers(
           runtime?.cancelPendingPtyRegistration?.(pendingRegistrationPtyId, result.incarnationId)
           pendingRegistrationPtyId = null
         }
+        // Why: restore payloads never pass through onPtyData, so seed the
+        // terminal list/read records here (after registerPty binds the
+        // worktree) — including on desktop, where the renderer-authority gate
+        // above skips the emulator seed but the records still live main-side.
+        const restoreRecordText =
+          typeof result.snapshot === 'string' && result.snapshot.length > 0
+            ? result.snapshot
+            : typeof result.coldRestore?.scrollback === 'string' &&
+                result.coldRestore.scrollback.length > 0
+              ? result.coldRestore.scrollback
+              : typeof result.replay === 'string' && result.replay.length > 0
+                ? result.replay
+                : undefined
+        const restoreRecordTitle =
+          typeof result.lastTitle === 'string' && result.lastTitle.length > 0
+            ? result.lastTitle
+            : typeof result.coldRestore?.lastTitle === 'string' &&
+                result.coldRestore.lastTitle.length > 0
+              ? result.coldRestore.lastTitle
+              : undefined
+        if (restoreRecordText !== undefined || restoreRecordTitle !== undefined) {
+          runtime?.seedTerminalRestoreTail?.(result.id, {
+            ...(restoreRecordText !== undefined ? { text: restoreRecordText } : {}),
+            ...(restoreRecordTitle !== undefined ? { lastTitle: restoreRecordTitle } : {})
+          })
+        }
         // Why: arm main's per-PTY Command Code output detector from the launch command (startupCommand parity); banner detection covers PTYs without one.
         if (!stablePaneOwner) {
           runtime?.noteTerminalSpawnCommand?.(
