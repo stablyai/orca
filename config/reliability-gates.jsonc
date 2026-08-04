@@ -1032,6 +1032,126 @@
       "demotionRule": "Demote if any probe can run before lifecycle ownership, if more than one shared heartbeat timer is armed, if first-socket cleanup exceeds one interval, if later-socket cleanup exceeds two intervals, or if close/error cleanup retains listeners or timers."
     },
     {
+      "id": "runtime.streaming-subscription-close-delivery",
+      "title": "Retiring a runtime transport always tells the renderer its streams closed",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "runtime-platform",
+      "layer": "runtime-subscription-ipc-contract",
+      "surfaces": [
+        "paired remote server",
+        "runtime environment disconnect and re-pair",
+        "terminal.multiplex streaming",
+        "browser screencast streaming",
+        "parked remote terminal reveal"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["remote-runtime"],
+      "coverageNotes": "Deterministic main-IPC contract tests cover disconnect-driven close delivery, exactly-once close, per-subscription teardown isolation against a failing socket close and a throwing liveness probe, containment of a throwing renderer send on the unguarded host-close path, and continued suppression of stale payloads from a retired transport. A headed paired-server journey (real Orca host plus a separate paired Orca desktop client) covers hidden-but-mounted reveal, cold-parked reveal, and cold-parked reveal across a disconnect/reconnect. Live Linux and Windows paired-server evidence and real sleep/wake transport loss remain uncollected.",
+      "motivatingLinks": [
+        "tests/e2e/paired-remote-terminal-parked-reveal-interactivity.spec.ts",
+        "docs/reference/headless-linux-server.md"
+      ],
+      "invariant": "Every renderer-held runtime subscription receives exactly one terminal close event when its transport is retired, including when the retirement advanced the transport generation first, and a single failing teardown never abandons that environment's remaining subscriptions nor escapes into the transport that reported the close. Payload frames from a retired transport stay suppressed. A revealed remote terminal therefore reattaches over a live multiplex connection: its buffer restores, typed input reaches the host PTY, the echo paints without a tab flip, and the PTY converges on the revealed pane grid.",
+      "oracle": "The main IPC contract test subscribes terminal.multiplex through the real handler, disconnects the environment, and asserts the renderer received exactly one {type: close} subscription event. Two isolation tests subscribe a second stream to the same environment and make the first one fail -- in its socket close, and in the liveness probe inside notifyClosed -- then assert the disconnect does not throw, both transports closed, and every close the renderer could still receive was delivered. A third drives a host-initiated close through the transport callback, which is the one notifyClosed call site with no surrounding guard, with a renderer send that throws, and asserts it cannot escape into the WebSocket close handler. A fourth test asserts that after retirement a late response frame is not forwarded and a late transport close does not re-send. The paired-server journey runs three reveal scenarios against one real host and one real paired desktop client, and for each records buffer restore, host-side receipt of the typed marker through an out-of-band host sink file, live paint without a tab flip, and PTY-versus-pane grid convergence.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/runtime-environments.test.ts",
+        "pnpm exec playwright test tests/e2e/paired-remote-terminal-parked-reveal-interactivity.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+      ],
+      "testFiles": [
+        "src/main/ipc/runtime-environments.test.ts",
+        "tests/e2e/paired-remote-terminal-parked-reveal-interactivity.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/ipc/runtime-environments.test.ts",
+          "assertions": [
+            "tells the renderer when retiring the transport closes its streaming subscription (the load-bearing repro; red with the fix reverted)",
+            "retires an environment's remaining subscriptions when one teardown throws (load-bearing; red without per-subscription isolation)",
+            "contains a throwing renderer send on a host-initiated close (load-bearing; red without the guarded send, and the only coverage of the unguarded notifyClosed call site)",
+            "retires remaining subscriptions when a liveness probe inside notifyClosed throws (load-bearing; keeps the isolation structural rather than comment-asserted)",
+            "suppresses stale payloads from a retired transport but never re-sends its close (forward guard on the retained generation gate, not a repro)"
+          ]
+        },
+        {
+          "file": "tests/e2e/paired-remote-terminal-parked-reveal-interactivity.spec.ts",
+          "assertions": [
+            "a revealed hidden-but-mounted remote terminal restores, accepts input, and paints live",
+            "a revealed cold-parked remote terminal restores, accepts input, and paints live",
+            "a cold-parked remote terminal revealed after a runtime disconnect and reconnect restores, accepts input, and paints live",
+            "the host PTY grid converges on the revealed pane grid in every scenario"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-03",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/runtime-environments.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.81,
+          "summary": "53 runtime environment IPC tests passed, including the new close-delivery, both teardown-isolation, transport-path containment, and stale-payload-suppression contracts."
+        },
+        {
+          "date": "2026-08-03",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec playwright test tests/e2e/paired-remote-terminal-parked-reveal-interactivity.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 15.5,
+          "summary": "All three reveal scenarios restored their buffer, delivered typed input to the host PTY, painted live without a tab flip, and converged the PTY on the 135x60 pane grid. Before the fix the reconnect-parked scenario stayed blank at recoveryState connecting with the PTY stranded at the host 128x60 grid."
+        },
+        {
+          "date": "2026-08-03",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec playwright test tests/e2e/paired-remote-terminal-parked-reveal-interactivity.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 15.5,
+          "summary": "Repeat run on a clean uninstrumented build; all three scenarios green with identical grids."
+        },
+        {
+          "date": "2026-08-03",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec playwright test tests/e2e/paired-remote-terminal-parked-reveal-interactivity.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 14.7,
+          "summary": "Third consecutive pass after the review follow-ups (env save/restore and the hidden-mounted stayed-mounted assertion)."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 60,
+        "scope": "focused runtime environment IPC tests plus one headed paired-server reveal journey"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Deterministic IPC coverage plus the three recorded paired-server journey runs, which passed consecutively on macOS at 14.7-15.5s; the spec also passed once on a shared CI runner. Longer soak history is not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "On main the paired-server journey reproduced a blank, non-interactive pane after revealing a cold-parked remote terminal across a reconnect: recoveryState stayed connecting, the xterm buffer stayed empty, typed input never reached the host sink, a tab flip did not recover it, and the PTY stayed at the host 128x60 grid. Renderer instrumentation showed the multiplexer reusing a dead subscription (ensureConnected reuse-ready) and never receiving a subscribed event. Reverting the main-side fix also turns the close-delivery IPC test red; with the fix the multiplexer observes handleClose, reconnects fresh, and every scenario passes."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "The fix adds one boolean latch and at most one extra IPC send per retired subscription, on a path that already tears the subscription down. It introduces no timer, poll, retry, subprocess, or per-frame work, and the close is deduplicated so a transport-driven close after an environment-wide retirement sends nothing."
+      },
+      "promotionCriteria": [
+        "Collect at least 100 consecutive CI or soak passes or 14 days without an unexplained flake.",
+        "Collect live Linux and Windows paired-server reveal evidence.",
+        "Add real sleep/wake and network-loss transport drops alongside the explicit disconnect trigger."
+      ],
+      "knownGaps": [
+        "Live paired-server validation currently covers macOS host and client only.",
+        "The transport drop is an explicit runtime disconnect; real sleep/wake and network partitions are not yet exercised by this gate.",
+        "Browser screencast subscribers share the fixed contract but have no dedicated reveal journey; the web and mobile clients run parallel transports and are unaffected."
+      ],
+      "demotionRule": "Demote if a retired runtime transport can leave a renderer subscription without a close event, if a close is delivered more than once, if one failing teardown strands its sibling subscriptions, if payload frames from a retired transport reach the renderer, or if a revealed remote terminal can stay blank or reject input after a reconnect."
+    },
+    {
       "id": "editor.live-log-append-stability",
       "title": "Long live session logs retain their Monaco viewport while appending",
       "maturity": "experimental",
