@@ -1443,14 +1443,17 @@ async function launchRelay(
 
   // Why: after a restart the relay may still be alive in its grace period; --connect to its socket preserves PTY state and scrollback.
   try {
+    // Why: a dead relay's marker may sit in an older versioned install dir, so
+    // the DEAD branch scans every relay-*/ marker for this socket name.
+    const deadMarkerScan = `b=relay; for m in "$HOME/.orca-remote"/relay-*/${shellEscape(sockName)}.pty-backend ${shellEscape(ptyBackendFile)}; do [ -f "$m" ] && IFS= read -r b < "$m" && break; done; printf '%s' "$b"`
     const probeOutput = await execCommand(
       conn,
-      `test -S ${shellEscape(sockFile)} && { printf 'ALIVE:'; cat ${shellEscape(ptyBackendFile)} 2>/dev/null || printf 'relay'; } || echo DEAD`,
+      `test -S ${shellEscape(sockFile)} && { printf 'ALIVE:'; cat ${shellEscape(ptyBackendFile)} 2>/dev/null || printf 'relay'; } || { printf 'DEAD:'; ${deadMarkerScan}; }`,
       { signal }
     )
     console.warn(`[ssh-relay] Socket probe result: "${probeOutput.trim()}"`)
+    assertRelayPtyBackend(probeOutput, requestedPtyBackend)
     if (probeOutput.trim().startsWith('ALIVE')) {
-      assertRelayPtyBackend(probeOutput, requestedPtyBackend)
       console.log('[ssh-relay] Existing relay socket found, attempting reconnect...')
       try {
         const channel = await conn.exec(

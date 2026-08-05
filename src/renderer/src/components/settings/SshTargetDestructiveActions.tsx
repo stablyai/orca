@@ -196,7 +196,7 @@ export function SshTargetDestructiveActions({
           'zmx'
             ? translate(
                 'settings.ssh.resetRelay.zmxDescription',
-                'This force-stops the remote relay and port forwards. zmx terminals remain available for the next connection.'
+                'This force-stops the remote relay and port forwards. Terminals already running under zmx remain available for the next connection; terminals still owned by the current relay will end.'
               )
             : translate(
                 'auto.components.settings.SshTargetDestructiveActions.26be00392d',

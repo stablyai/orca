@@ -12,6 +12,16 @@ describe('SSH relay PTY backend', () => {
     expect(() => assertRelayPtyBackend('DEAD', 'zmx')).not.toThrow()
   })
 
+  it('fences a relay launch over surviving zmx sessions of a dead relay', () => {
+    expect(() => assertRelayPtyBackend('DEAD:zmx', 'relay')).toThrow(
+      'durable zmx terminals from a previous session'
+    )
+    expect(() => assertRelayPtyBackend('DEAD:zmx', 'zmx')).not.toThrow()
+    expect(() => assertRelayPtyBackend('DEAD:relay', 'relay')).not.toThrow()
+    expect(() => assertRelayPtyBackend('DEAD:relay', 'zmx')).not.toThrow()
+    expect(() => assertRelayPtyBackend('DEAD', 'relay')).not.toThrow()
+  })
+
   it('accepts one absolute zmx path from the remote login shell', () => {
     expect(parseRemoteZmxPath(' /usr/local/bin/zmx\n')).toBe('/usr/local/bin/zmx')
     expect(() => parseRemoteZmxPath('')).toThrow('not found in the remote login PATH')

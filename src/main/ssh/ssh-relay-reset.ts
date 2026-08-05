@@ -55,6 +55,9 @@ export async function forceStopRelayForTarget(
     '    fi',
     '    rm -f "$sock" "$sock.pty-backend"',
     '  done',
+    // Why: markers describing force-stopped (or rebooted-away) relays must not
+    // linger — a stale zmx marker would re-fence every later relay connect.
+    '  rm -f "$base"/relay-*/"$sock_name".pty-backend "$base"/"$sock_name".pty-backend',
     'fi',
     ...(options.preserveZmxSessions
       ? []
@@ -78,8 +81,18 @@ export async function forceStopRelayForTarget(
           '  if [ -z "$zmx_bin" ]; then',
           '    for zmx_sock in "$zmx_dir"/pty-*; do',
           '      [ -S "$zmx_sock" ] || continue',
-          '      echo "zmx is required to end persistent Orca terminals" >&2',
-          '      exit 1',
+          // Why: a socket inode can outlive its session (host reboot); only a
+          // live holder proves a session zmx must end. Stale sockets are swept
+          // so retries do not fail forever after the relay is already gone.
+          '      holder=""',
+          '      if command -v lsof >/dev/null 2>&1; then',
+          '        holder=$(lsof -t -a -U "$zmx_sock" 2>/dev/null | tr "\n" " ")',
+          '      fi',
+          '      if [ -n "$holder" ]; then',
+          '        echo "zmx is required to end persistent Orca terminals" >&2',
+          '        exit 1',
+          '      fi',
+          '      rm -f "$zmx_sock"',
           '    done',
           '  fi',
           '  if [ -n "$zmx_bin" ]; then',

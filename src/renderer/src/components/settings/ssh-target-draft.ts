@@ -202,6 +202,9 @@ export function parseRelayGracePeriodSeconds(draft: EditingTarget): number {
 
 export function isRelayGracePeriodValid(draft: EditingTarget, graceSeconds: number): boolean {
   return (
+    // Why: the grace controls are unmounted while zmx persistence is enabled;
+    // saving must never fail on a field the user cannot see or fix.
+    draft.zmxTerminalPersistence ||
     draft.relayKeepAliveUntilReset ||
     (!Number.isNaN(graceSeconds) &&
       graceSeconds >= MIN_SSH_RELAY_GRACE_PERIOD_SECONDS &&

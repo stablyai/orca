@@ -66,8 +66,8 @@ export async function saveNewSshHostFromForm({
     )
     return 'validation-failed'
   }
-  const graceSeconds = parseRelayGracePeriodSeconds(form)
-  if (!isRelayGracePeriodValid(form, graceSeconds)) {
+  const parsedGraceSeconds = parseRelayGracePeriodSeconds(form)
+  if (!isRelayGracePeriodValid(form, parsedGraceSeconds)) {
     toast.error(
       translate(
         'auto.components.sidebar.AddRemoteHostDialog.sshRelayGraceInvalid',
@@ -78,6 +78,9 @@ export async function saveNewSshHostFromForm({
     return 'validation-failed'
   }
 
+  // Why: zmx hides the grace controls, so a stale unparsable draft falls back
+  // to keep-alive instead of persisting NaN.
+  const graceSeconds = Number.isNaN(parsedGraceSeconds) ? 0 : parsedGraceSeconds
   const identityFile = form.identityFile.trim() || undefined
   const proxyCommand = form.proxyCommand.trim() || undefined
   const jumpHost = form.jumpHost.trim() || undefined

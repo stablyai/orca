@@ -71,7 +71,7 @@
         "summary": "durable terminals: zmx"
       },
       "resetRelay": {
-        "zmxDescription": "This force-stops the remote relay and port forwards. zmx terminals remain available for the next connection."
+        "zmxDescription": "This force-stops the remote relay and port forwards. Terminals already running under zmx remain available for the next connection; terminals still owned by the current relay will end."
       }
     }
   },

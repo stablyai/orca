@@ -75,6 +75,23 @@ describe('buildSshTargetSavePayload', () => {
     })
   })
 
+  it('saves despite a hidden invalid grace value while zmx is enabled', () => {
+    const result = buildSshTargetSavePayload({
+      ...EMPTY_FORM,
+      host: 'durable.example.com',
+      zmxTerminalPersistence: true,
+      relayKeepAliveUntilReset: false,
+      relayGracePeriodSeconds: 'not-a-number'
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      // Why: the grace controls are unmounted under zmx; a stale unparsable
+      // draft falls back to keep-alive instead of failing an invisible field.
+      expect(result.payload.target.relayGracePeriodSeconds).toBe(0)
+    }
+  })
+
   it('persists zmx opt-ins and clears the field for relay defaults', () => {
     const enabled = buildSshTargetSavePayload({
       ...EMPTY_FORM,
