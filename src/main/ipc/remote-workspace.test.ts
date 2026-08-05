@@ -151,9 +151,11 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
   const requestByTargetId = new Map<string, ReturnType<typeof vi.fn>>()
   const muxByTargetId = new Map<string, { request: ReturnType<typeof vi.fn> }>()
   const getRepoMock = vi.fn<Store['getRepo']>()
+  const getReposMock = vi.fn<Store['getRepos']>()
   const getWorkspaceSessionMock = vi.fn<Store['getWorkspaceSession']>()
   const store = {
     getRepo: getRepoMock,
+    getRepos: getReposMock,
     getWorkspaceSession: getWorkspaceSessionMock
   } as unknown as Store
 
@@ -186,6 +188,17 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
           } as never)
         : undefined
     )
+    getReposMock.mockReset()
+    getReposMock.mockReturnValue([
+      {
+        id: 'repo-target-1',
+        path: '/remote/repo',
+        displayName: 'Repo',
+        badgeColor: 'blue',
+        addedAt: 1,
+        connectionId: 'target-1'
+      } as never
+    ])
     getActiveMultiplexerMock.mockReset()
     getActiveMultiplexerMock.mockImplementation((targetId: string) => {
       let mux = muxByTargetId.get(targetId)
@@ -295,5 +308,60 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
         })
       })
     )
+  })
+
+  it('fails closed for hostless worktrees when repository ids overlap across hosts', async () => {
+    const sshRepo = {
+      id: 'shared-repo',
+      path: '/remote/repo',
+      displayName: 'Remote Repo',
+      badgeColor: 'blue',
+      addedAt: 1,
+      connectionId: 'target-1',
+      executionHostId: 'ssh:target-1'
+    } as const
+    getRepoMock.mockReturnValue(sshRepo as never)
+    getReposMock.mockReturnValue([
+      sshRepo as never,
+      {
+        ...sshRepo,
+        path: '/local/repo',
+        connectionId: null,
+        executionHostId: 'local'
+      } as never
+    ])
+
+    await callSetForConnectedTargets({
+      session: {
+        ...baseSession,
+        activeWorktreeId: 'shared-repo::/remote/worktree',
+        activeTabId: 'remote-tab',
+        tabsByWorktree: {
+          'shared-repo::/remote/worktree': [
+            {
+              id: 'remote-tab',
+              title: 'Remote shell',
+              worktreeId: 'shared-repo::/remote/worktree'
+            } as never
+          ],
+          'shared-repo::/local/worktree': [
+            {
+              id: 'local-tab',
+              title: 'Local shell',
+              worktreeId: 'shared-repo::/local/worktree'
+            } as never
+          ]
+        }
+      },
+      hydratedTargetIds: ['target-1']
+    })
+
+    const patchCall = requestByTargetId
+      .get('target-1')
+      ?.mock.calls.find(([method]) => method === 'workspace.patch')
+    const remoteSession = (patchCall?.[1] as { patch?: { session?: RemoteWorkspaceSession } })
+      ?.patch?.session
+    expect(remoteSession?.tabsByWorktreePath).toEqual({})
+    expect(remoteSession?.activeWorktreePath).toBeNull()
   })
 })

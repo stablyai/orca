@@ -1356,9 +1356,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const selectedRepoSettingsRef = useRef(selectedRepoSettings)
   selectedRepoSettingsRef.current = selectedRepoSettings
   const selectedRepoExecutionHostIdRef = useRef(selectedRepoExecutionHostId)
-  useEffect(() => {
-    selectedRepoExecutionHostIdRef.current = selectedRepoExecutionHostId
-  }, [selectedRepoExecutionHostId])
+  selectedRepoExecutionHostIdRef.current = selectedRepoExecutionHostId
 
   // Why: depend on the persisted policy *value*, not the selectedRepo object. Background repo
   // refetches (git polling) hand back a new repo reference with the same hookSettings; keying on

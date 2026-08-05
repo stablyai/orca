@@ -430,6 +430,16 @@ describe('useComposerState host-context boundaries', () => {
   })
 
   it('saves setup startup policy before creating a workspace', () => {
+    const ownerRefSection = sourceBetween(
+      HOOK_SOURCE,
+      'const selectedRepoExecutionHostIdRef',
+      '// Why: depend on the persisted policy'
+    )
+    expect(ownerRefSection).toContain(
+      'selectedRepoExecutionHostIdRef.current = selectedRepoExecutionHostId'
+    )
+    expect(ownerRefSection).not.toContain('useEffect')
+
     const persistSection = sourceBetween(
       HOOK_SOURCE,
       'const persistSetupAgentStartupPolicy = useCallback',

@@ -1,4 +1,7 @@
+// @vitest-environment happy-dom
+
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { renderHook } from '@testing-library/react'
 import type {
   PRCheckDetail,
   PRCheckRunDetails,
@@ -11,11 +14,13 @@ import {
   isCheckRunDetailsFixCandidate,
   resolveCheckRunDetailsFixCheck,
   resolveHostedReviewForCheckRunDetailsFix,
-  startCheckRunDetailsFixWithAI
+  startCheckRunDetailsFixWithAI,
+  useCheckRunDetailsFixWithAI
 } from './check-run-details-fix-with-ai'
 import { resolveCheckRunDetailsFixRepo } from './check-run-details-fix-context'
 
 const startFixChecksAgent = vi.fn()
+const saveSourceControlActionRecipe = vi.fn()
 
 const fixtures = vi.hoisted(() => {
   const repo: Repo = {
@@ -99,7 +104,9 @@ const storeState = vi.hoisted(() => ({
   prCache: {
     [fixtures.prCacheKey]: { data: fixtures.pr, fetchedAt: 1 }
   } as Record<string, { data: PRInfo; fetchedAt: number }>,
-  hostedReviewCache: {} as Record<string, { data: unknown }>
+  hostedReviewCache: {} as Record<string, { data: unknown }>,
+  updateRepo: vi.fn(),
+  updateSettings: vi.fn()
 }))
 
 vi.mock('@/lib/worktree-git-identity-display', () => ({
@@ -119,6 +126,10 @@ vi.mock('@/lib/fix-checks-agent-launch', () => ({
   startFixChecksAgent: (...args: unknown[]) => startFixChecksAgent(...args)
 }))
 
+vi.mock('../../../../shared/source-control-ai-recipe-save', () => ({
+  saveSourceControlActionRecipe: (...args: unknown[]) => saveSourceControlActionRecipe(...args)
+}))
+
 vi.mock('sonner', () => ({
   toast: {
     message: vi.fn(),
@@ -129,6 +140,9 @@ vi.mock('sonner', () => ({
 beforeEach(() => {
   startFixChecksAgent.mockReset()
   startFixChecksAgent.mockResolvedValue(true)
+  saveSourceControlActionRecipe.mockReset()
+  storeState.updateRepo.mockReset()
+  storeState.updateSettings.mockReset()
   storeState.worktreesByRepo = { 'repo-1': [fixtures.worktree] }
   storeState.repos = [fixtures.repo]
   storeState.prCache = {
@@ -191,6 +205,66 @@ describe('check-run-details-fix-with-ai', () => {
     }
 
     expect(resolveCheckRunDetailsFixRepo(fixtures.worktree.id)).toBe(runtimeRepo)
+  })
+
+  it('fails closed when the save target owner disappears', async () => {
+    const view = renderHook(() =>
+      useCheckRunDetailsFixWithAI({
+        worktreeId: fixtures.worktree.id,
+        check: fixtures.failingCheck,
+        details: fixtures.checkDetails
+      })
+    )
+    storeState.repos = []
+
+    await expect(
+      view.result.current.saveLaunchActionDefault(
+        { type: 'repo', repoId: 'repo-1' },
+        'fixChecks',
+        {}
+      )
+    ).rejects.toThrow('Repository owner is no longer available.')
+    expect(saveSourceControlActionRecipe).not.toHaveBeenCalled()
+  })
+
+  it('saves the launch recipe against the exact repository owner', async () => {
+    const localRepo = { ...fixtures.repo, path: '/local/repo', executionHostId: 'local' } as Repo
+    const sshRepo = {
+      ...fixtures.repo,
+      path: '/ssh/repo',
+      connectionId: 'ssh-1',
+      executionHostId: 'ssh:ssh-1'
+    } as Repo
+    storeState.repos = [localRepo, sshRepo]
+    storeState.worktreesByRepo = {
+      'repo-1': [{ ...fixtures.worktree, hostId: 'ssh:ssh-1' }]
+    }
+    saveSourceControlActionRecipe.mockReturnValue({
+      target: { type: 'repo', repoId: 'repo-1' },
+      update: { sourceControlAi: null }
+    })
+    const view = renderHook(() =>
+      useCheckRunDetailsFixWithAI({
+        worktreeId: fixtures.worktree.id,
+        check: fixtures.failingCheck,
+        details: fixtures.checkDetails
+      })
+    )
+
+    await view.result.current.saveLaunchActionDefault(
+      { type: 'repo', repoId: 'repo-1' },
+      'fixChecks',
+      {}
+    )
+
+    expect(saveSourceControlActionRecipe).toHaveBeenCalledWith(
+      expect.objectContaining({ repo: sshRepo })
+    )
+    expect(storeState.updateRepo).toHaveBeenCalledWith(
+      'repo-1',
+      { sourceControlAi: null },
+      { hostId: 'ssh:ssh-1' }
+    )
   })
 
   it('requires a hosted review before launching an AI fix', () => {

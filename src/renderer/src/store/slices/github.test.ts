@@ -526,7 +526,13 @@ describe('createGitHubSlice cache bounds', () => {
     })
 
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-    expect(mockApi.gh.issue).toHaveBeenCalledWith({ repoPath, repoId: 'repo-ssh', number: 321 })
+    expect(mockApi.gh.issue).toHaveBeenCalledWith({
+      repoPath,
+      repoId: 'repo-ssh',
+      executionHostId: 'ssh:ssh-1',
+      number: 321,
+      sourceContext: undefined
+    })
     expect(
       store.getState().issueCache[
         issueCacheKey(repoPath, 'repo-ssh', 321, null, 'ssh-1', 'ssh:ssh-1')
@@ -1257,6 +1263,7 @@ describe('createGitHubSlice.fetchPRComments', () => {
     expect(mockApi.gh.prComments).toHaveBeenCalledWith({
       repoPath,
       repoId,
+      executionHostId: 'local',
       prNumber: 12,
       prRepo: { owner: 'Acme', repo: 'Widgets' },
       noCache: true,
@@ -1487,6 +1494,7 @@ describe('createGitHubSlice.fetchPRCheckDetails', () => {
     expect(mockApi.gh.prCheckDetails).toHaveBeenCalledWith({
       repoPath,
       repoId,
+      executionHostId: 'local',
       checkRunId: 123,
       workflowRunId: undefined,
       checkName: 'build',
@@ -1583,10 +1591,12 @@ describe('createGitHubSlice PR comment mutations', () => {
     expect(mockApi.gh.addIssueComment).toHaveBeenCalledWith({
       repoPath,
       repoId,
+      executionHostId: 'local',
       number: 12,
       body: 'done',
       type: 'pr',
-      prRepo: { owner: 'Acme', repo: 'Widgets' }
+      prRepo: { owner: 'Acme', repo: 'Widgets' },
+      sourceContext: undefined
     })
     expect(
       store.getState().commentsCache[`${repoId}::pr-comments::acme/widgets::12`]?.data?.[0].body
@@ -1611,6 +1621,7 @@ describe('createGitHubSlice PR comment mutations', () => {
     expect(mockApi.gh.addIssueComment).toHaveBeenCalledWith({
       repoPath,
       repoId,
+      executionHostId: 'local',
       number: 12,
       body: 'done',
       type: 'pr',
@@ -4991,7 +5002,12 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
     await Promise.resolve()
 
     expect(mockApi.gh.issue).toHaveBeenCalledWith(
-      expect.objectContaining({ repoPath, repoId: 'repo-1', number: 123 })
+      expect.objectContaining({
+        repoPath,
+        repoId: 'repo-1',
+        executionHostId: 'local',
+        number: 123
+      })
     )
   })
 
@@ -5518,7 +5534,12 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
     await Promise.resolve()
 
     expect(mockApi.gh.issue).toHaveBeenCalledWith(
-      expect.objectContaining({ repoPath, repoId: 'repo-1', number: 123 })
+      expect.objectContaining({
+        repoPath,
+        repoId: 'repo-1',
+        executionHostId: 'local',
+        number: 123
+      })
     )
   })
 })

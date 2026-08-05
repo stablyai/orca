@@ -3229,7 +3229,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
                 : await window.api.gh.prForBranch({
                     repoPath,
                     repoId,
-                    executionHostId: options?.executionHostId,
+                    executionHostId: repo ? getRepoExecutionHostId(repo) : options?.executionHostId,
                     branch,
                     linkedPRNumber,
                     fallbackPRNumber,
@@ -3462,7 +3462,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             : await window.api.gh.issue({
                 repoPath,
                 repoId,
-                executionHostId: options?.executionHostId,
+                executionHostId: repo ? getRepoExecutionHostId(repo) : options?.executionHostId,
                 number,
                 sourceContext: options?.sourceContext
               })
@@ -3693,7 +3693,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       : ((await window.api.gh.prCheckDetails({
           repoPath,
           repoId,
-          executionHostId: options?.executionHostId,
+          executionHostId: repo ? getRepoExecutionHostId(repo) : options?.executionHostId,
           checkRunId: args.checkRunId,
           workflowRunId: args.workflowRunId,
           checkName: args.checkName,
@@ -3759,7 +3759,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             : ((await window.api.gh.prComments({
                 repoPath,
                 repoId,
-                executionHostId: options?.executionHostId,
+                executionHostId: repo ? getRepoExecutionHostId(repo) : options?.executionHostId,
                 prNumber,
                 prRepo: options?.prRepo ?? null,
                 noCache: options?.force,
@@ -3837,7 +3837,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           : await window.api.gh.addIssueComment({
               repoPath,
               repoId,
-              executionHostId: options?.executionHostId,
+              executionHostId: repo ? getRepoExecutionHostId(repo) : options?.executionHostId,
               number: prNumber,
               body,
               type: 'pr',
@@ -3927,7 +3927,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           : await window.api.gh.addPRReviewCommentReply({
               repoPath,
               repoId,
-              executionHostId: options?.executionHostId,
+              executionHostId: repo ? getRepoExecutionHostId(repo) : options?.executionHostId,
               prNumber,
               commentId,
               body,
@@ -4031,7 +4031,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           : await window.api.gh.resolveReviewThread({
               repoPath,
               repoId,
-              executionHostId: options?.executionHostId,
+              executionHostId: repo ? getRepoExecutionHostId(repo) : options?.executionHostId,
               threadId,
               resolve,
               prRepo: options?.prRepo ?? null,

@@ -236,8 +236,8 @@ export function resolveWorkspaceCreationTarget(
         : null)
     legacyTarget = legacySetup ? createTarget(legacySetup, reposById) : null
   } else if (repoId) {
-    // Why: duplicate repo ids across hosts leave no single legacy repo. Stay on the resolved id's
-    // own setup instead of failing closed and letting the composer re-pick an arbitrary repo.
+    // Why: the resolved id has no eligible repo row (for example, a stale draft). Stay on that
+    // id's own setup instead of letting the composer re-pick an arbitrary repository.
     legacyTarget = findReadySetupTarget(setups, reposById, (setup) => setup.repoId === repoId)
   }
   if (legacyTarget) {
