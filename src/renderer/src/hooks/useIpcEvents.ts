@@ -22,6 +22,7 @@ import {
 } from '@/runtime/sync-runtime-graph'
 import type { SplitTerminalPaneDetail, CloseTerminalPaneDetail } from '@/constants/terminal'
 import { getVisibleWorktreeIds } from '@/components/sidebar/visible-worktrees'
+import { switchProviderAccountByIndex } from '@/lib/provider-account-index-shortcut'
 import { activateTabNumberShortcut } from '@/lib/tab-number-shortcuts'
 import { nextEditorFontZoomLevel, computeEditorFontSize } from '@/lib/editor-font-zoom'
 import { canConnectSshStatus } from '@/ssh/ssh-connection-recoverability'
@@ -1362,6 +1363,12 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.ui.onJumpToTabIndex((index) => {
         activateTabNumberShortcut(index)
+      })
+    )
+
+    unsubs.push(
+      window.api.ui.onSwitchProviderAccountIndex(({ provider, index }) => {
+        void switchProviderAccountByIndex(provider, index)
       })
     )
 

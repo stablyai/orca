@@ -719,6 +719,12 @@ export function createMainWindow(
       case 'jumpToTabIndex':
         mainWindow.webContents.send('ui:jumpToTabIndex', action.index)
         return
+      case 'switchProviderAccountIndex':
+        mainWindow.webContents.send('ui:switchProviderAccountIndex', {
+          provider: action.provider,
+          index: action.index
+        })
+        return
       case 'worktreeHistoryNavigate':
         mainWindow.webContents.send('ui:worktreeHistoryNavigate', action.direction)
     }

@@ -3523,6 +3523,16 @@ const api = {
       ipcRenderer.on('ui:jumpToTabIndex', listener)
       return () => ipcRenderer.removeListener('ui:jumpToTabIndex', listener)
     },
+    onSwitchProviderAccountIndex: (
+      callback: (data: { provider: 'claude' | 'codex'; index: number }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { provider: 'claude' | 'codex'; index: number }
+      ) => callback(data)
+      ipcRenderer.on('ui:switchProviderAccountIndex', listener)
+      return () => ipcRenderer.removeListener('ui:switchProviderAccountIndex', listener)
+    },
     onWorktreeHistoryNavigate: (
       callback: (direction: 'back' | 'forward') => void
     ): (() => void) => {

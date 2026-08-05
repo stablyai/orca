@@ -455,6 +455,11 @@ export function setupGuestShortcutForwarding(args: {
       } else {
         renderer.send('ui:jumpToTabIndex', action.index)
       }
+    } else if (action?.type === 'switchProviderAccountIndex') {
+      renderer.send('ui:switchProviderAccountIndex', {
+        provider: action.provider,
+        index: action.index
+      })
     } else if (action?.type === 'dictationKeyDown') {
       if (!shouldForwardDictationShortcut?.()) {
         return false
