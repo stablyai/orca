@@ -508,6 +508,25 @@ describe('terminal scroll intent', () => {
     disposable.dispose()
   })
 
+  it('follows output when a bottom-offset restore outruns the rebuilt scrollback', () => {
+    // Long agent session: pinned 4000 rows above the bottom of a 5000-row
+    // scrollback, then a byte-capped snapshot replay rebuilds a far shorter
+    // buffer. The pinned content no longer exists to scroll back to.
+    const terminal = createTerminal({ viewportY: 1000, baseY: 5000 })
+    syncTerminalScrollIntentFromViewport(terminal)
+    const intent = captureTerminalStructuralScrollIntent(terminal)
+    expect(intent?.kind).toBe('pinnedViewport')
+
+    terminal.buffer.active.baseY = 800
+    terminal.buffer.active.viewportY = 800
+
+    restoreTerminalStructuralScrollIntent(terminal, intent, { restoreBy: 'bottomOffset' })
+
+    expect(terminal.scrollToLine).not.toHaveBeenCalled()
+    expect(terminal.buffer.active.viewportY).toBe(800)
+    expect(getTerminalScrollIntentKind(terminal)).toBe('followOutput')
+  })
+
   it('does not treat terminal body pointer activity as scrollbar intent', () => {
     vi.stubGlobal('Element', TestElement)
     const terminal = createTerminal({ viewportY: 100, baseY: 100 })

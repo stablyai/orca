@@ -272,6 +272,15 @@ export function restoreTerminalStructuralScrollIntent(
     options.restoreBy === 'bottomOffset'
       ? current.baseY - Math.max(0, snapshot.baseY - snapshot.viewportY)
       : snapshot.viewportY
+  // Why: an offset deeper than the rebuilt scrollback means the pinned content
+  // was trimmed away. Clamping to line 0 would strand the reader at the top and
+  // re-latch that as a durable pin, which mouse reports then re-enforce.
+  if (options.restoreBy === 'bottomOffset' && requestedY < 0) {
+    if (safeTerminalScrollCall(() => terminal.scrollToBottom?.())) {
+      writeIntent(terminal, 'followOutput')
+    }
+    return
+  }
   const targetY = clampTerminalViewportY(requestedY, current.baseY)
   if (current.viewportY !== targetY) {
     if (!safeTerminalScrollCall(() => terminal.scrollToLine?.(targetY))) {
