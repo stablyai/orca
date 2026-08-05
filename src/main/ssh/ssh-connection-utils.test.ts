@@ -613,23 +613,29 @@ describe('buildConnectConfig', () => {
     expect(mockReadFileSync).toHaveBeenCalledWith('/home/user/.ssh/work_key.pub')
   })
 
-  it('falls back to the raw agent when IdentitiesOnly keys cannot be parsed', () => {
+  it('does not offer the agent when a configured IdentitiesOnly key cannot be parsed', () => {
     mockReadFileSync.mockReturnValue(Buffer.from('not-a-key'))
     const config = buildConnectConfig(
       makeTarget(),
       makeResolved({ identityFile: ['/home/user/.ssh/work_key'], identitiesOnly: true })
     )
 
-    expect(config.agent).toBe('/tmp/agent.sock')
-    expect(config.privateKey).toBeUndefined()
+    expect(config.agent).toBeUndefined()
+    expect(config.privateKey).toEqual(Buffer.from('not-a-key'))
   })
 
-  it('falls back to the raw agent socket when IdentitiesOnly has no parseable local keys', () => {
+  it('does not offer the agent when a configured IdentitiesOnly identity file cannot be read', () => {
     process.env.SSH_AUTH_SOCK = '/tmp/env-agent.sock'
     const config = buildConnectConfig(
       makeTarget({ identitiesOnly: true, identityFile: '/nonexistent/id_ed25519' }),
       null
     )
+    expect(config.agent).toBeUndefined()
+  })
+
+  it('falls back to the raw agent socket when IdentitiesOnly has no configured identity file', () => {
+    process.env.SSH_AUTH_SOCK = '/tmp/env-agent.sock'
+    const config = buildConnectConfig(makeTarget({ identitiesOnly: true }), null)
     expect(config.agent).toBe('/tmp/env-agent.sock')
   })
 

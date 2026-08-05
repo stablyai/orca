@@ -196,6 +196,7 @@ import {
   shouldUseSystemSshTransport,
   type SshConnectionCallbacks
 } from './ssh-connection'
+import { probePreferredAgentSocket } from './ssh-agent-socket-probe'
 import { SshConnectionManager } from './ssh-connection-manager'
 import { resolveWithSshG, type SshResolvedConfig } from './ssh-config-parser'
 import {
@@ -370,6 +371,18 @@ describe('SshConnection', () => {
       'target-1',
       expect.objectContaining({ status: 'connected' })
     )
+  })
+
+  it('skips the agent socket probe when an IdentityAgent is explicitly configured', async () => {
+    vi.mocked(probePreferredAgentSocket).mockClear()
+    const conn = new SshConnection(
+      createTarget({ identityAgent: '~/.1password/agent.sock' }),
+      createCallbacks()
+    )
+
+    await conn.connect()
+
+    expect(probePreferredAgentSocket).not.toHaveBeenCalled()
   })
 
   it('enables TCP_NODELAY on the ssh2 client after ready', async () => {

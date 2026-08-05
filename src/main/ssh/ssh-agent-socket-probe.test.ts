@@ -50,7 +50,11 @@ let socketDir: string
 
 function startFakeAgent(keyCount: number, opts: { hang?: boolean } = {}): Promise<FakeAgent> {
   return new Promise((resolve, reject) => {
-    const socketPath = join(socketDir, `agent-${fakeAgents.length}.sock`)
+    // Why: win32 has no filesystem-backed unix sockets — use a named pipe path instead.
+    const socketPath =
+      process.platform === 'win32'
+        ? `\\\\.\\pipe\\orca-agent-probe-test-${fakeAgents.length}`
+        : join(socketDir, `agent-${fakeAgents.length}.sock`)
     const connections: Socket[] = []
     const server = createServer((connection) => {
       connections.push(connection)
@@ -94,7 +98,8 @@ describe('ssh-agent-socket-probe', () => {
       expect(candidates[0]).toBe(agent.socketPath)
     })
 
-    it('skips a nonexistent env socket path', () => {
+    // Why: win32 candidates skip existsSync entirely (named pipes aren't visible to it).
+    it.skipIf(process.platform === 'win32')('skips a nonexistent env socket path', () => {
       const candidates = listAgentSocketCandidates({
         SSH_AUTH_SOCK: join(socketDir, 'missing.sock')
       })

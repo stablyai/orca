@@ -15,8 +15,12 @@ const MACOS_1PASSWORD_AGENT_SOCKET = [
 ]
 const LINUX_1PASSWORD_AGENT_SOCKET = ['.1password', 'agent.sock']
 
-// Why: GUI-launched Electron inherits launchd's SSH_AUTH_SOCK (Apple's empty
-// agent) — probe the 1Password socket too so keys stored there are found.
+/**
+ * Lists SSH agent socket candidates to probe, in preference order: the
+ * environment socket, then the platform's 1Password agent socket/pipe.
+ * GUI-launched Electron inherits launchd's SSH_AUTH_SOCK (Apple's empty
+ * agent) — probe the 1Password socket too so keys stored there are found.
+ */
 export function listAgentSocketCandidates(env: NodeJS.ProcessEnv = process.env): string[] {
   const envSocket = env.SSH_AUTH_SOCK || undefined
   if (process.platform === 'win32') {
@@ -36,8 +40,12 @@ function isPresent(value: string | undefined): value is string {
   return typeof value === 'string' && value.length > 0
 }
 
-// Why: createAgent()'s stream is private to the closure, so a wedged agent can
-// never be destroyed on timeout — drive our own socket instead so we can.
+/**
+ * Connects to an agent socket and counts the identities it reports, treating
+ * connection errors and timeout as 0 keys. createAgent()'s stream is private
+ * to the closure, so a wedged agent can never be destroyed on timeout — drive
+ * our own socket instead so we can.
+ */
 export function countAgentIdentities(socketPath: string, timeoutMs = 500): Promise<number> {
   return new Promise((resolve) => {
     const stream = new Socket()
@@ -67,6 +75,7 @@ export function countAgentIdentities(socketPath: string, timeoutMs = 500): Promi
 // connects is harmless — every attempt re-probes right before reading it.
 let probedAgentSocket: string | undefined
 
+/** Probes each candidate socket in order and caches the first one that reports ≥1 key. */
 export async function probePreferredAgentSocket(): Promise<string | undefined> {
   for (const candidate of listAgentSocketCandidates()) {
     if ((await countAgentIdentities(candidate)) > 0) {
@@ -78,6 +87,7 @@ export async function probePreferredAgentSocket(): Promise<string | undefined> {
   return undefined
 }
 
+/** Returns the socket cached by the most recent {@link probePreferredAgentSocket} call, if any. */
 export function getProbedAgentSocket(): string | undefined {
   return probedAgentSocket
 }

@@ -93,8 +93,9 @@ function parseCapturedSshAuthSock(stdout: string): string | null {
 
 function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
   return new Promise((resolve) => {
-    // Why: printing $PATH between delimiters is resilient to rc-file banners,
-    // MOTDs, and `echo` invocations that shells like fish print unprompted.
+    // Why: printing $PATH and $SSH_AUTH_SOCK between delimiters is resilient to
+    // rc-file banners, MOTDs, and `echo` invocations that shells like fish print
+    // unprompted. Three delimiters bound two sections: $PATH, then $SSH_AUTH_SOCK.
     // `-ilc` runs the shell as a login+interactive so both .profile/.zprofile
     // and .bashrc/.zshrc are sourced — matches what `which` in Terminal sees.
     const command = `printf '%s' '${DELIMITER}'; printf '%s' "$PATH"; printf '%s' '${DELIMITER}'; printf '%s' "$SSH_AUTH_SOCK"; printf '%s' '${DELIMITER}'`

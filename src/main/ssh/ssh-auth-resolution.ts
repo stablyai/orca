@@ -73,15 +73,37 @@ function resolveDefaultAgentSocket(): string | undefined {
   )
 }
 
-export function resolveAgentSocket(
-  target: Pick<SshTarget, 'identityAgent' | 'configHost' | 'source' | 'host'>,
+type IdentityAgentSource = Pick<SshTarget, 'identityAgent' | 'configHost' | 'source' | 'host'>
+
+function resolveConfiguredIdentityAgent(
+  target: IdentityAgentSource,
   resolved: Pick<SshResolvedConfig, 'identityAgent'> | null
-): string | undefined {
+): string | null | undefined {
   // Why: imported config-host targets may contain raw OpenSSH tokens like %d.
   // ssh -G resolves those tokens, so its value must win when available.
-  const configuredIdentityAgent = isOpenSshConfigBackedTarget(target)
+  return isOpenSshConfigBackedTarget(target)
     ? (resolved?.identityAgent ?? target.identityAgent)
     : (target.identityAgent ?? resolved?.identityAgent)
+}
+
+/**
+ * Whether an explicit `IdentityAgent` (including `none`) is configured. A
+ * configured value — even `none` — makes the probed/default socket branch
+ * unreachable, so callers can skip probing entirely.
+ */
+export function hasConfiguredIdentityAgent(
+  target: IdentityAgentSource,
+  resolved: Pick<SshResolvedConfig, 'identityAgent'> | null
+): boolean {
+  return resolveConfiguredIdentityAgent(target, resolved) != null
+}
+
+/** Resolves the SSH agent socket path, honoring an explicit `IdentityAgent` before falling back to the probed/env/pipe default. */
+export function resolveAgentSocket(
+  target: IdentityAgentSource,
+  resolved: Pick<SshResolvedConfig, 'identityAgent'> | null
+): string | undefined {
+  const configuredIdentityAgent = resolveConfiguredIdentityAgent(target, resolved)
   if (configuredIdentityAgent != null) {
     const trimmed = configuredIdentityAgent.trim()
     if (!trimmed || trimmed.toLowerCase() === 'none') {
@@ -188,6 +210,12 @@ export function findEncryptedPrivateKeyPath(keys: PrivateKeyFile[]): string | un
   return undefined
 }
 
+/**
+ * Resolves the `agent` field of the ssh2 connect config under `IdentitiesOnly`.
+ * No configured `IdentityFile` at all (keys living only in the agent, e.g.
+ * 1Password) offers the raw agent instead of silently disabling agent auth.
+ * A configured file that fails to parse stays fail-closed, matching OpenSSH.
+ */
 export function resolveAgentConfigValue(
   agentSocket: string,
   target: SshTarget,
@@ -198,10 +226,9 @@ export function resolveAgentConfigValue(
     return agentSocket
   }
 
-  // Why: no parseable local identity file (keys living only in the agent, e.g.
-  // 1Password) must not silently disable agent auth — offer the raw agent instead.
-  return (
-    createIdentityFilteredAgent(agentSocket, resolveIdentityFilePaths(target, resolved)) ??
-    agentSocket
-  )
+  const identityFilePaths = resolveIdentityFilePaths(target, resolved)
+  if (identityFilePaths.length === 0) {
+    return agentSocket
+  }
+  return createIdentityFilteredAgent(agentSocket, identityFilePaths)
 }

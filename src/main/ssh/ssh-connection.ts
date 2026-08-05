@@ -50,6 +50,7 @@ import {
 import { SshReconnectLadder } from './ssh-reconnect-ladder'
 import { getPassphrasePrivateKeyPath } from './ssh-private-key-authentication'
 import { probePreferredAgentSocket } from './ssh-agent-socket-probe'
+import { hasConfiguredIdentityAgent } from './ssh-auth-resolution'
 import {
   requiresSystemSshForSecurityKey,
   shouldUseSystemSshTransport
@@ -693,9 +694,14 @@ export class SshConnection {
     this.systemSshGssapiOnlyForSession = false
     this.useSystemSshTransport = false
 
-    // Why: pick an agent socket that actually holds keys (e.g. 1Password) before
-    // building auth config; re-probed each attempt so 1Password lock/quit self-heals.
-    await probePreferredAgentSocket()
+    if (!hasConfiguredIdentityAgent(this.target, resolved)) {
+      // Why: pick an agent socket that actually holds keys (e.g. 1Password) before
+      // building auth config; re-probed each attempt so 1Password lock/quit self-heals.
+      await probePreferredAgentSocket()
+      if (!this.isCurrentConnectAttempt(connectGeneration)) {
+        throw this.createCancelledConnectAttemptError()
+      }
+    }
 
     const config = buildConnectConfig(this.target, resolved)
 
