@@ -15,7 +15,7 @@ type ActivityUnreadCountSource = Pick<
   | 'worktreesByRepo'
 >
 
-type ActivityUnreadCountMode = 'agent-events' | 'sidebar-badge'
+type ActivityUnreadCountMode = 'agent-events' | 'agent-threads' | 'sidebar-badge'
 
 const EMPTY_WORKTREES_BY_REPO: AppState['worktreesByRepo'] = {}
 const EMPTY_MIGRATION_UNSUPPORTED: AppState['migrationUnsupportedByPtyId'] = {}
@@ -39,6 +39,7 @@ export function countActivityUnread(
   mode: ActivityUnreadCountMode
 ): number {
   let count = 0
+  const unreadAgentPaneKeys = mode === 'agent-threads' ? new Set<string>() : null
 
   if (mode === 'sidebar-badge') {
     for (const worktrees of Object.values(source.worktreesByRepo)) {
@@ -50,38 +51,49 @@ export function countActivityUnread(
     }
   }
 
-  const countEntry = (entry: AgentStatusEntry, ackAt: number): void => {
-    if (mode === 'agent-events') {
-      // Why: Activity feed surfaces historical done/blocked/waiting events
-      // from stateHistory, so the titlebar badge must mirror that event count.
+  const countEntry = (paneKey: string, entry: AgentStatusEntry, ackAt: number): void => {
+    let hasUnreadAgentEvent = false
+    if (mode !== 'sidebar-badge') {
+      // Why: titlebar counts events, while thread badges collapse attention history by pane.
       for (const history of entry.stateHistory) {
         if (isUnreadAgentState(history.state) && ackAt < history.startedAt) {
-          count += 1
+          if (mode === 'agent-events') {
+            count += 1
+          } else {
+            hasUnreadAgentEvent = true
+          }
         }
       }
     }
     if (isUnreadAgentState(entry.state) && ackAt < entry.stateStartedAt) {
-      count += 1
+      if (mode === 'agent-threads') {
+        hasUnreadAgentEvent = true
+      } else {
+        count += 1
+      }
+    }
+    if (hasUnreadAgentEvent) {
+      unreadAgentPaneKeys?.add(paneKey)
     }
   }
 
   for (const [paneKey, entry] of Object.entries(source.agentStatusByPaneKey)) {
-    countEntry(entry, source.acknowledgedAgentsByPaneKey[paneKey] ?? 0)
+    countEntry(paneKey, entry, source.acknowledgedAgentsByPaneKey[paneKey] ?? 0)
   }
   for (const [paneKey, retained] of Object.entries(source.retainedAgentsByPaneKey)) {
     if (mode === 'sidebar-badge' && retained.entry.state !== 'done') {
       continue
     }
-    countEntry(retained.entry, source.acknowledgedAgentsByPaneKey[paneKey] ?? 0)
+    countEntry(paneKey, retained.entry, source.acknowledgedAgentsByPaneKey[paneKey] ?? 0)
   }
   for (const unsupported of Object.values(source.migrationUnsupportedByPtyId)) {
     const entry = migrationUnsupportedToAgentStatusEntry(unsupported)
     if (entry) {
-      countEntry(entry, source.acknowledgedAgentsByPaneKey[entry.paneKey] ?? 0)
+      countEntry(entry.paneKey, entry, source.acknowledgedAgentsByPaneKey[entry.paneKey] ?? 0)
     }
   }
 
-  return count
+  return unreadAgentPaneKeys?.size ?? count
 }
 
 export function useActivityUnreadCount(enabled: boolean, mode: ActivityUnreadCountMode): number {

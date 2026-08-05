@@ -1,6 +1,5 @@
 import { useEffect } from 'react'
-import { getUnreadBadgeCount } from '@/lib/unread-badge-count'
-import { useAppStore } from '@/store'
+import { useActivityUnreadCount } from '@/components/activity/useActivityUnreadCount'
 
 function setUnreadDockBadgeCountBestEffort(count: number): void {
   void window.api.app.setUnreadDockBadgeCount(count).catch(() => {
@@ -13,13 +12,7 @@ export function clearUnreadDockBadgeCount(): void {
 }
 
 export function useUnreadDockBadge(): typeof clearUnreadDockBadgeCount {
-  const unreadCount = useAppStore((state) =>
-    getUnreadBadgeCount({
-      worktreesByRepo: state.worktreesByRepo,
-      tabsByWorktree: state.tabsByWorktree,
-      unreadTerminalTabs: state.unreadTerminalTabs
-    })
-  )
+  const unreadCount = useActivityUnreadCount(true, 'agent-threads')
 
   // oxlint-disable-next-line react-doctor/no-derived-state-effect -- Why: this syncs an external OS dock badge, not React render state.
   useEffect(() => {
