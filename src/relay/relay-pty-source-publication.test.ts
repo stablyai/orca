@@ -324,6 +324,7 @@ describe('RelayPtySourcePublication', () => {
 
     expect(admitted).toBeGreaterThan(0)
     expect(admitted).toBeLessThan(20)
+    // A bystander subscriber is dropped rather than allowed to pause the PTY for every viewer.
     expect(harness.publication.publish('pty-1', { data: saturatedPayload }, false)).toBe(true)
 
     expect(detached).toEqual([saturatedId])

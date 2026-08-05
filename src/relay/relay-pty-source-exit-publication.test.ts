@@ -106,7 +106,7 @@ function createScenario(
     tryNotifyPtyExitToMatchingClients: vi.fn(
       (_matches: (clientId: number) => boolean, _params: unknown) => notifyAccepted
     ),
-    projectPtyExitToMatchingClients: vi.fn(() => true),
+    projectPtyExitToLegacyClients: vi.fn(() => true),
     tryNotifyPtyExitToClient: vi.fn(() => true)
   }
   const sender = { pump: vi.fn(), wakeSendWaiters: vi.fn() }
@@ -312,6 +312,23 @@ describe('RelayPtySourceLegacyExitIndex', () => {
     ).toBe(true)
   })
 
+  it('keeps the exit pending when the subscriber projection is refused', () => {
+    const record = deliveryRecord({ sealed: true })
+    const scenario = createScenario(closedSnapshot({ state: 'sealed-unsettled' }), record)
+    scenario.dispatcher.projectPtyExitToLegacyClients.mockReturnValueOnce(false)
+
+    expect(scenario.run()).toBe(false)
+    expect(record.legacyExitAccepted).toBe(false)
+    expect(record.sourceExitState).toBe('idle')
+    expect(scenario.dispatcher.tryNotifyPtyExitToClient).not.toHaveBeenCalled()
+
+    // The handler's retry after drain lands the exit once, with no duplicate legacy projection.
+    expect(scenario.run()).toBe(true)
+    expect(record.legacyExitAccepted).toBe(true)
+    expect(scenario.dispatcher.projectPtyExitToLegacyClients).toHaveBeenCalledTimes(2)
+    expect(scenario.dispatcher.tryNotifyPtyExitToClient).toHaveBeenCalledOnce()
+  })
+
   it('remembers a subscriber projection when the owner publication throws', () => {
     const record = deliveryRecord({ sealed: true })
     const scenario = createScenario(closedSnapshot({ state: 'sealed-unsettled' }), record)
@@ -321,7 +338,7 @@ describe('RelayPtySourceLegacyExitIndex', () => {
     })
 
     expect(() => scenario.runTracked(index)).toThrow('owner write failed')
-    expect(scenario.dispatcher.projectPtyExitToMatchingClients).toHaveBeenCalledOnce()
+    expect(scenario.dispatcher.projectPtyExitToLegacyClients).toHaveBeenCalledOnce()
     expect(scenario.session.cancelDelivery).toHaveBeenCalledWith(
       record.identity,
       'exit-publication-failed'

@@ -231,11 +231,12 @@ export class RelayPtySourcePublication {
       }
       return false
     }
-    if (!projectPtySourceOutputToLegacy(this.dispatcher, this.session, id, output, interactive)) {
-      return false
-    }
-    this.sender.pump(record)
-    return true
+    const { dispatcher, session, sender } = this
+    const projected = projectPtySourceOutputToLegacy(dispatcher, session, id, output, interactive)
+    // Why: the span is already in the source ledger, so a stalled legacy subscriber must not also
+    // starve the flow-controlled owner — only the PTY pause is shared.
+    sender.pump(record)
+    return projected
   }
 
   sealAndPublishExit = (params: PtyExitParams): boolean =>

@@ -55,6 +55,17 @@ export type RelayClientSourceOptions = {
   resumeReads?: () => void
 }
 
+/**
+ * How the legacy PTY projection serves a client whose producer queue is full.
+ * - `skip`: not a projection target (a flow-controlled source owner has its own credited lane).
+ * - `owner`: the projection is this client's only delivery lane, so a full queue back-pressures the PTY
+ *   until it drains — the #12041 disconnect was closing this client instead.
+ * - `mirror`: a bystander copy that recovers by reconnecting, so a full queue closes just that client.
+ *   Shedding the frame instead would leave its retained bytes gating `legacyRetentionBelowLowWater`
+ *   with nothing left to evict it, wedging every paused PTY on the host forever.
+ */
+export type LegacyProjectionRole = 'skip' | 'owner' | 'mirror'
+
 export type MethodHandler = (
   params: Record<string, unknown>,
   context: RequestContext
@@ -352,8 +363,8 @@ export class RelayDispatcher {
     )
   }
 
-  projectPtyDataToMatchingClients(
-    matchesClient: (clientId: number) => boolean,
+  projectPtyDataToLegacyClients(
+    roleOf: (clientId: number) => LegacyProjectionRole,
     params: Record<string, unknown>,
     options: { interactive?: boolean } = {}
   ): boolean {
@@ -361,7 +372,7 @@ export class RelayDispatcher {
       return false
     }
     return this.projectToClients(
-      this.activeClients().filter((client) => matchesClient(client.id)),
+      roleOf,
       { jsonrpc: '2.0', method: 'pty.data', params },
       options.interactive ? 'interactive' : 'ordinary'
     )
@@ -418,18 +429,14 @@ export class RelayDispatcher {
     )
   }
 
-  projectPtyExitToMatchingClients(
-    matchesClient: (clientId: number) => boolean,
+  projectPtyExitToLegacyClients(
+    roleOf: (clientId: number) => LegacyProjectionRole,
     params: Record<string, unknown>
   ): boolean {
     if (this.disposed) {
       return false
     }
-    return this.projectToClients(
-      this.activeClients().filter((client) => matchesClient(client.id)),
-      { jsonrpc: '2.0', method: 'pty.exit', params },
-      'ordinary'
-    )
+    return this.projectToClients(roleOf, { jsonrpc: '2.0', method: 'pty.exit', params }, 'ordinary')
   }
 
   tryNotifyPtyExitToClient(
@@ -548,9 +555,11 @@ export class RelayDispatcher {
           continue
         }
         if (method === 'pty.replay') {
-          // Why: replay is never re-sent, so it takes the control lane where overflow is fatal — the
-          // writer closes the client and reconnect reloads history rather than stranding a short buffer.
-          this.enqueueFrame(client, msg, 'control', undefined, frameBytes)
+          // Why: reattach regenerates replay, so killing the link over it just re-kills the reconnect;
+          // drop the pane's scrollback instead and let live output repaint it.
+          if (!this.enqueueFrame(client, msg, 'control', undefined, frameBytes, 'reject')) {
+            this.logDroppedProducerNotification(client, method, frameBytes, 'control')
+          }
           continue
         }
         // Why: closing can never make an oversized frame sendable — the producer regenerates it after
@@ -597,10 +606,17 @@ export class RelayDispatcher {
 
   // Why: one line per generation, method and drop reason — a flooding producer retries every batch and would
   // spam stderr, but a transient queue-full drop must not consume the slot a real over-capacity drop needs.
-  private logDroppedProducerNotification(client: RelayClient, method: string, bytes: number): void {
+  private logDroppedProducerNotification(
+    client: RelayClient,
+    method: string,
+    bytes: number,
+    // Why: a control-lane drop has nothing to do with the producer bound; naming that lane sends the
+    // reader to the wrong limit.
+    lane: 'producer' | 'control' = 'producer'
+  ): void {
     const capacity = client.writer.producerFrameCapacity
-    const overCapacity = bytes > capacity
-    const key = `${method}:${overCapacity ? 'over-capacity' : 'queue-full'}`
+    const overCapacity = lane === 'producer' && bytes > capacity
+    const key = `${method}:${lane === 'control' ? 'control-full' : overCapacity ? 'over-capacity' : 'queue-full'}`
     let log = client.droppedNotificationLog
     if (!log || log.generation !== client.generation) {
       log = { generation: client.generation, loggedKeys: new Set() }
@@ -611,9 +627,11 @@ export class RelayDispatcher {
     }
     log.loggedKeys.add(key)
     process.stderr.write(
-      overCapacity
-        ? `[relay] Dropped ${method} (${bytes}B > producer frame capacity ${capacity}B)\n`
-        : `[relay] Dropped ${method} (${bytes}B, producer queue full; frame capacity ${capacity}B)\n`
+      lane === 'control'
+        ? `[relay] Dropped ${method} (${bytes}B, control queue full)\n`
+        : overCapacity
+          ? `[relay] Dropped ${method} (${bytes}B > producer frame capacity ${capacity}B)\n`
+          : `[relay] Dropped ${method} (${bytes}B, producer queue full; frame capacity ${capacity}B)\n`
     )
   }
 
@@ -1106,13 +1124,15 @@ export class RelayDispatcher {
   private tryPublishToClients(
     clients: readonly RelayClient[],
     msg: JsonRpcNotification,
-    lane: 'interactive' | 'ordinary' | 'bulk'
+    lane: 'interactive' | 'ordinary' | 'bulk',
+    // Why: projection already sized the frame to pick shed targets; avoid a redundant encode.
+    estimatedBytes?: number
   ): boolean {
     return this.runPublicationTransaction(() => {
       if (clients.length === 0) {
         return true
       }
-      const bytes = this.estimateFrameBytes(msg)
+      const bytes = estimatedBytes ?? this.estimateFrameBytes(msg)
       if (clients.some((client) => !client.writer.canEnqueueProducer(bytes))) {
         return false
       }
@@ -1138,13 +1158,50 @@ export class RelayDispatcher {
   }
 
   private projectToClients(
-    clients: readonly RelayClient[],
+    roleOf: (clientId: number) => LegacyProjectionRole,
     msg: JsonRpcNotification,
     lane: 'interactive' | 'ordinary'
   ): boolean {
+    const owners: RelayClient[] = []
+    const mirrors: RelayClient[] = []
+    for (const client of this.clients.values()) {
+      if (client.closed) {
+        continue
+      }
+      const role = roleOf(client.id)
+      if (role === 'owner') {
+        owners.push(client)
+      } else if (role === 'mirror') {
+        mirrors.push(client)
+      }
+    }
+    // Why: having no projection target is the norm (a flow-controlled owner is excluded from the legacy
+    // mirror), and that is the PTY hot path — never encode the frame just to discard it.
+    if (owners.length === 0 && mirrors.length === 0) {
+      return true
+    }
+    const bytes = this.estimateFrameBytes(msg)
+    // Why: closing over a transiently full queue only makes the producer regenerate the same span for a
+    // fresh sink of identical capacity, so an owner — which has no second delivery lane — back-pressures
+    // instead. A frame past its frame capacity can never be admitted, so shed that one or the retry wedges.
+    const blocking = owners.filter((client) => {
+      if (bytes <= client.writer.producerFrameCapacity) {
+        return true
+      }
+      this.logDroppedProducerNotification(client, msg.method, bytes)
+      return false
+    })
     return this.runPublicationTransaction(() => {
-      for (const client of clients) {
-        if (client.closed || this.publishToClient(client, msg, lane)) {
+      if (!this.tryPublishToClients(blocking, msg, lane, bytes)) {
+        return false
+      }
+      // Why: a mirror must not hold the native PTY paused for every other viewer, but shedding its frame
+      // would strand its retained bytes above the relay-wide low-water mark with nothing left to release
+      // them, so every paused PTY would stay paused. Closing bounds that, and the client reconnects.
+      // Publishing only after the owners committed also keeps a back-pressured span from reaching a
+      // mirror twice when it is retried.
+      for (const client of mirrors) {
+        if (client.closed || this.publishToClient(client, msg, lane, undefined, bytes)) {
           continue
         }
         this.closeClient(

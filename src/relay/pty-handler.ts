@@ -362,6 +362,9 @@ export class PtyHandler {
   private pendingOutputByPty = new Map<string, PendingPtyOutput[]>()
   private pendingExitByPty = new Map<string, { id: string; code: number; incarnationId: string }>()
   private pausedOutputPtys = new Set<string>()
+  // Why: a publish runs with the pty's queue lifted out of pendingOutputByPty, so a capacity callback
+  // re-entering from the sink would read "no pending output" and let pty.exit overtake that span.
+  private publishingOutputPtys = new Set<string>()
   private consumerPausedOutputPtys = new Set<string>()
   private removeLegacyCapacityListener: (() => void) | null = null
   private sourcePublication: RelayPtySourcePublication | null = null
@@ -1001,7 +1004,13 @@ export class PtyHandler {
         ...(pending.transformed ? { transformed: true } : {})
       } satisfies RelayPtySourceOutput)
     pending.sourceChunk = sourceChunk
-    const published = this.publishPtyOutput(id, sourceChunk, pending.interactive === true)
+    this.publishingOutputPtys.add(id)
+    let published: boolean
+    try {
+      published = this.publishPtyOutput(id, sourceChunk, pending.interactive === true)
+    } finally {
+      this.publishingOutputPtys.delete(id)
+    }
     if (!published) {
       this.pendingOutputByPty.set(id, queue)
       this.pausePtyOutput(id)
@@ -1086,7 +1095,7 @@ export class PtyHandler {
   }
 
   private publishPendingExit(id: string): void {
-    if (this.pendingOutputByPty.has(id)) {
+    if (this.pendingOutputByPty.has(id) || this.publishingOutputPtys.has(id)) {
       return
     }
     const exit = this.pendingExitByPty.get(id)

@@ -652,7 +652,7 @@ describe('PtyHandler negotiated source publication', () => {
     await spawn({})
     const appendSpy = vi.spyOn(adapter, 'appendSource')
     const projectSpy = vi
-      .spyOn(dispatcher, 'projectPtyDataToMatchingClients')
+      .spyOn(dispatcher, 'projectPtyDataToLegacyClients')
       .mockReturnValueOnce(false)
     // Why: a larger capacity result on the retry must not move the memoized span boundary.
     const maxCharsSpy = vi.spyOn(dispatcher, 'maxLegacyPtyDataChars')
@@ -676,10 +676,44 @@ describe('PtyHandler negotiated source publication', () => {
     ])
   })
 
+  it('does not emit pty.exit ahead of output a failed projection re-queued', async () => {
+    await spawn({})
+    const projectSpy = vi
+      .spyOn(dispatcher, 'projectPtyDataToLegacyClients')
+      .mockImplementationOnce(() => {
+        // Why: capacity fans out from a bare socket callback mid-drain, when the captured queue has
+        // already been removed from pendingOutputByPty and the exit guard would read it as empty.
+        exitCallback!({ exitCode: 0 })
+        handler.handleSourcePublicationCapacity('pty-1')
+        return false
+      })
+
+    dataCallback!('abcd')
+    await vi.advanceTimersByTimeAsync(8)
+
+    expect(projectSpy).toHaveBeenCalledTimes(1)
+    expect(exitFrames()).toHaveLength(0)
+
+    projectSpy.mockRestore()
+    handler.handleSourcePublicationCapacity('pty-1')
+    await vi.advanceTimersByTimeAsync(8)
+
+    const ordered = writes
+      .map(notification)
+      .filter(
+        (frame): frame is Notification =>
+          frame?.method === 'pty.data' || frame?.method === 'pty.exit'
+      )
+      .map((frame) => frame.method)
+    expect(ordered.indexOf('pty.data')).toBeGreaterThanOrEqual(0)
+    expect(ordered.indexOf('pty.data')).toBeLessThan(ordered.lastIndexOf('pty.exit'))
+  })
+
   it('keeps the native PTY and V1 owner live when one subscriber saturates', async () => {
     await spawn({})
     const detached: number[] = []
     const healthyWrites: Buffer[] = []
+    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
     dispatcher.onClientDetached((clientId) => detached.push(clientId))
     const saturatedId = dispatcher.attachClient(() => false, {
       supportsWriteCallback: true,
@@ -707,6 +741,8 @@ describe('PtyHandler negotiated source publication', () => {
 
     expect(admitted).toBeGreaterThan(100)
     expect(admitted).toBeLessThan(140)
+    // A bystander subscriber is dropped rather than allowed to pause the PTY for every viewer or to
+    // pin the relay-wide legacy gate open.
     expect(detached).toEqual([saturatedId])
     expect(detached).not.toContain(healthyId)
     expect(
@@ -715,5 +751,9 @@ describe('PtyHandler negotiated source publication', () => {
     expect(sourceDataFrames()).toHaveLength(1)
     expect(publication.getDebugSnapshot()).toMatchObject({ sendCommitted: 1 })
     expect(pausePty).not.toHaveBeenCalled()
+    expect(
+      stderr.mock.calls.filter((call) => /Dropped pty\.data/.test(String(call[0])))
+    ).toHaveLength(0)
+    stderr.mockRestore()
   })
 })

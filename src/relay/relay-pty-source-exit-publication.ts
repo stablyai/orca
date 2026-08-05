@@ -1,4 +1,5 @@
 import type { RelayDispatcher } from './dispatcher'
+import { legacyProjectionRole } from './relay-pty-source-output'
 import {
   onceSinkSettlement,
   type RelayPtySourceDeliveryRecord,
@@ -177,8 +178,8 @@ export function sealAndPublishPtySourceExit(options: PtySourceExitOptions): bool
     return false
   }
   if (!record.legacyExitAccepted) {
-    record.legacyExitAccepted = dispatcher.projectPtyExitToMatchingClients(
-      (clientId) => session.deliveryMode(clientId) !== 'source-owner',
+    record.legacyExitAccepted = dispatcher.projectPtyExitToLegacyClients(
+      (clientId) => legacyProjectionRole(session, clientId),
       params
     )
     options.legacyExits?.remember(params, record.legacyExitAccepted)
