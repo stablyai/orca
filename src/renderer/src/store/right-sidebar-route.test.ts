@@ -9,6 +9,13 @@ describe('normalizeRightSidebarRoute', () => {
     })
   })
 
+  it('preserves the Linear issue route across a restart', () => {
+    expect(normalizeRightSidebarRoute('linear')).toEqual({
+      rightSidebarTab: 'linear',
+      rightSidebarExplorerView: 'files'
+    })
+  })
+
   it('still normalizes invalid tabs to Explorer files', () => {
     expect(normalizeRightSidebarRoute('missing')).toEqual({
       rightSidebarTab: 'explorer',

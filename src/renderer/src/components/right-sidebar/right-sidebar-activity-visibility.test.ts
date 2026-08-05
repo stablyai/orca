@@ -27,6 +27,7 @@ const items: ActivityBarItem[] = [
     gitOnly: true
   },
   { id: 'ports', icon: Files, title: 'Ports', shortcut: '', sshOnly: true },
+  { id: 'linear', icon: Files, title: 'Linear issue', shortcut: '', linearOnly: true },
   // Plugin panels carry no visibility flags, so they show in every context.
   {
     id: 'plugin:orca-samples.my-plugin/dashboard',
@@ -42,7 +43,8 @@ describe('getVisibleRightSidebarActivityItems', () => {
       getVisibleRightSidebarActivityItems(items, {
         isFolder: false,
         isFolderWorkspace: false,
-        isSshRepo: false
+        isSshRepo: false,
+        hasLinkedLinearIssue: false
       }).map((item) => item.id)
     ).toEqual(['explorer', 'source-control', 'plugin:orca-samples.my-plugin/dashboard'])
 
@@ -50,7 +52,8 @@ describe('getVisibleRightSidebarActivityItems', () => {
       getVisibleRightSidebarActivityItems(items, {
         isFolder: false,
         isFolderWorkspace: false,
-        isSshRepo: true
+        isSshRepo: true,
+        hasLinkedLinearIssue: false
       }).map((item) => item.id)
     ).toEqual(['explorer', 'source-control', 'ports', 'plugin:orca-samples.my-plugin/dashboard'])
   })
@@ -60,7 +63,8 @@ describe('getVisibleRightSidebarActivityItems', () => {
       getVisibleRightSidebarActivityItems(items, {
         isFolder: true,
         isFolderWorkspace: true,
-        isSshRepo: true
+        isSshRepo: true,
+        hasLinkedLinearIssue: false
       }).map((item) => item.id)
     ).toEqual([
       'explorer',
@@ -74,8 +78,31 @@ describe('getVisibleRightSidebarActivityItems', () => {
       getVisibleRightSidebarActivityItems(items, {
         isFolder: true,
         isFolderWorkspace: false,
-        isSshRepo: true
+        isSshRepo: true,
+        hasLinkedLinearIssue: false
       }).map((item) => item.id)
     ).toEqual(['explorer', 'ports', 'plugin:orca-samples.my-plugin/dashboard'])
+  })
+
+  it('shows the Linear tab only when the workspace has a linked issue', () => {
+    expect(
+      getVisibleRightSidebarActivityItems(items, {
+        isFolder: false,
+        isFolderWorkspace: false,
+        isSshRepo: false,
+        hasLinkedLinearIssue: true
+      }).map((item) => item.id)
+    ).toEqual(['explorer', 'source-control', 'linear', 'plugin:orca-samples.my-plugin/dashboard'])
+  })
+
+  it('keeps the Linear tab available for folder workspaces and SSH repos', () => {
+    expect(
+      getVisibleRightSidebarActivityItems(items, {
+        isFolder: true,
+        isFolderWorkspace: true,
+        isSshRepo: true,
+        hasLinkedLinearIssue: true
+      }).map((item) => item.id)
+    ).toContain('linear')
   })
 })
