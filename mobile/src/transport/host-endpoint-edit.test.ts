@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { displayHostEndpoint } from './host-endpoint'
-import { resolveHostEndpointEdit } from './host-endpoint-edit'
+import { hostProfileAfterEdit, resolveHostEndpointEdit } from './host-endpoint-edit'
 
 function persistedAfterEdit(stored: string, input = displayHostEndpoint(stored)) {
   const edit = resolveHostEndpointEdit(stored, input)
@@ -79,5 +79,31 @@ describe('resolveHostEndpointEdit', () => {
 
     expect(once).toBe(stored)
     expect(persistedAfterEdit(once)).toBe(stored)
+  })
+
+  it('builds the exact reconnect profile after an endpoint edit', () => {
+    const host = {
+      id: 'host-1',
+      name: 'Desk',
+      endpoint: 'ws://old.local:6768',
+      deviceToken: 'token',
+      publicKeyB64: 'key',
+      lastConnected: 0,
+      endpoints: [
+        { id: 'direct-primary', kind: 'lan' as const, url: 'ws://old.local:6768' },
+        { id: 'relay-primary', kind: 'relay' as const, url: 'wss://relay.invalid/host-1' }
+      ]
+    }
+
+    expect(
+      hostProfileAfterEdit(host, { name: 'Office', endpoint: 'ws://new.local:6768' })
+    ).toMatchObject({
+      name: 'Office',
+      endpoint: 'ws://new.local:6768',
+      endpoints: [
+        { id: 'direct-primary', url: 'ws://new.local:6768' },
+        { id: 'relay-primary', url: 'wss://relay.invalid/host-1' }
+      ]
+    })
   })
 })

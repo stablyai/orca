@@ -2,6 +2,7 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import type { FlatList } from 'react-native'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
+import { forceReconnectErrorPresentation } from '../transport/force-reconnect-feedback'
 import { triggerSelection } from '../platform/haptics'
 import { findNextMobileDiffHunkIndex, findPreviousMobileDiffHunkIndex } from './mobile-diff-hunks'
 import type {
@@ -196,7 +197,10 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
     openSendSheet,
     retryAction: () => {
       if (connState !== 'connected' && hostId) {
-        void onReconnect(hostId)
+        void Promise.resolve(onReconnect(hostId)).catch((error: unknown) => {
+          const presentation = forceReconnectErrorPresentation(error)
+          setActionError(`${presentation.title}. ${presentation.message}`)
+        })
         return
       }
       void loadReviewData()

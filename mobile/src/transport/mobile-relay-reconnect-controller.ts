@@ -193,7 +193,7 @@ export class RelayReconnectController {
     this.activeSession = null
     if (failure) {
       // Why: active relay closes need the same cooldown as failed replacement dials.
-      this.registerFailure(failure)
+      this.registerFailure(failure, true, logical.getRpcUnresponsiveSince?.() != null)
     } else {
       this.activeRelayConnectedAt = null
     }
@@ -218,7 +218,7 @@ export class RelayReconnectController {
     return false
   }
 
-  registerFailure(error: Error | null, scheduleRetry = true): void {
+  registerFailure(error: Error | null, scheduleRetry = true, preserveFailureStreak = false): void {
     const code = error instanceof RelayOuterError ? error.code : null
     const recovery =
       code != null && isMobileRelayCloseCode(code)
@@ -238,6 +238,7 @@ export class RelayReconnectController {
     }
     const now = this.dependencies.now()
     if (
+      !preserveFailureStreak &&
       this.activeRelayConnectedAt != null &&
       now - this.activeRelayConnectedAt >= RELAY_STABLE_CONNECTION_MS
     ) {

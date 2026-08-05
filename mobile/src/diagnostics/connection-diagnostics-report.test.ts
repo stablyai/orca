@@ -52,4 +52,24 @@ describe('buildConnectionDiagnosticsReport', () => {
     expect(report).toContain('Last connected: never this session')
     expect(report).toContain('No connection events recorded this session.')
   })
+
+  it('reports a connected application RPC stall', () => {
+    const report = buildConnectionDiagnosticsReport({
+      hostName: 'Host 3',
+      endpoint: 'ws://100.65.9.106:6768',
+      state: 'connected',
+      reconnectAttempts: 0,
+      lastConnectedAt: NOW - 60_000,
+      rpcUnresponsiveSince: NOW - 30_000,
+      platform: 'ios 26.5.1',
+      appVersion: '0.0.33',
+      entries: [],
+      nowMs: NOW
+    })
+
+    expect(report).toContain(
+      'State: connected, application RPC not responding (reconnect attempts: 0)'
+    )
+    expect(report).toContain('Application RPC stalled: 2026-07-09T21:59:30.000Z (30s ago)')
+  })
 })

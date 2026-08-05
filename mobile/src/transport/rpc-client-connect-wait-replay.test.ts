@@ -140,4 +140,26 @@ describe('mobile rpc-client connect-wait replay', () => {
       await request.catch(() => undefined)
     }
   })
+
+  it('rejects requests waiting for reconnect after the retry cap', async () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const socket = mockSockets[0]!
+    socket.open()
+    socket.close()
+
+    const waitingRequestError = client.sendRequest('status.get').then(
+      () => null,
+      (error: Error) => error
+    )
+    await vi.advanceTimersByTimeAsync(520_000)
+
+    expect(client.getState()).toBe('reconnecting')
+    expect(client.getReconnectAttempt()).toBe(12)
+    await expect(waitingRequestError).resolves.toMatchObject({
+      message: 'Connection retry limit reached'
+    })
+    await expect(client.sendRequest('status.get')).rejects.toThrow('Connection retry limit reached')
+
+    client.close()
+  })
 })

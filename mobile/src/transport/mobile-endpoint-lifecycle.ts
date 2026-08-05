@@ -8,10 +8,20 @@ import {
   readMobileRelayCredentialBundle,
   writeMobileRelayCredentialBundle
 } from './mobile-relay-credential-bundle'
-import { saveHost } from './host-store'
+import {
+  saveExistingHostRelayRouting,
+  writeExistingHostRelayCredentialBundle
+} from './existing-host-relay-routing'
+import {
+  beginHostEndpointPublicationLifecycle,
+  getHostEndpointPublicationLifecycle,
+  type HostEndpointPublicationLifecycle
+} from './host-profile-publication'
 import { upgradeDirectMobileRelay } from './mobile-relay-direct-upgrade'
+import { retireMobileRelayDirectUpgradeJournalForRelayHost } from './mobile-relay-direct-upgrade-journal'
 import { MobileRelayDirectUpgradeController } from './mobile-relay-direct-upgrade-controller'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
+import { RpcApplicationResponsiveness } from './rpc-application-responsiveness'
 
 type EndpointLifecycle = {
   setForeground(foreground: boolean): void
@@ -26,17 +36,42 @@ type EndpointOwner = EndpointLifecycle & {
 export function startMobileEndpointLifecycle(
   logical: StableLogicalRpcClient,
   initialHost: HostProfile,
-  onLog: ConnectionLogSink
+  onLog: ConnectionLogSink,
+  onHostUpdated: (host: HostProfile, sourceRevision?: number) => void = () => {},
+  applicationResponsiveness = new RpcApplicationResponsiveness()
 ): EndpointLifecycle {
   let stopped = false
   let foreground = true
   let owner: EndpointOwner
+  let publishedSourceRevision: number | undefined
+  const endpointLifecycle = beginHostEndpointPublicationLifecycle(initialHost.id)
+  const publishHostUpdate = (host: HostProfile): void => {
+    if (!stopped) {
+      onHostUpdated(host, publishedSourceRevision)
+    }
+  }
+  const saveHost = async (host: HostProfile, beforePublish?: () => Promise<void>) => {
+    publishedSourceRevision = await saveExistingHostRelayRouting(
+      host,
+      beforePublish,
+      endpointLifecycle
+    )
+    return publishedSourceRevision
+  }
 
   const startSupervisor = async (host: HostProfile): Promise<void> => {
     if (stopped) {
       return
     }
-    const supervisor = createSupervisor(logical, host, onLog)
+    const supervisor = createSupervisor(
+      logical,
+      host,
+      onLog,
+      publishHostUpdate,
+      endpointLifecycle,
+      saveHost,
+      applicationResponsiveness
+    )
     owner.stop()
     owner = supervisor
     supervisor.setForeground(foreground)
@@ -44,7 +79,24 @@ export function startMobileEndpointLifecycle(
   }
 
   if (initialHost.relay) {
-    owner = createSupervisor(logical, initialHost, onLog)
+    // Why: relay publication supersedes any committed journal retained by the retired direct owner.
+    void retireMobileRelayDirectUpgradeJournalForRelayHost(initialHost.id, () => {
+      const current = getHostEndpointPublicationLifecycle(initialHost.id)
+      return (
+        !stopped &&
+        current.generation === endpointLifecycle.generation &&
+        current.endpointRevision === endpointLifecycle.endpointRevision
+      )
+    }).catch(() => {})
+    owner = createSupervisor(
+      logical,
+      initialHost,
+      onLog,
+      publishHostUpdate,
+      endpointLifecycle,
+      saveHost,
+      applicationResponsiveness
+    )
     void owner.start()
   } else {
     owner = new MobileRelayDirectUpgradeController(logical, initialHost, {
@@ -52,9 +104,15 @@ export function startMobileEndpointLifecycle(
         upgradeDirectMobileRelay({
           client,
           host,
-          dependencies: { randomBytes: ExpoCrypto.getRandomBytes }
+          dependencies: {
+            randomBytes: ExpoCrypto.getRandomBytes,
+            saveHost
+          }
         }),
-      onUpgraded: ({ host }) => startSupervisor(host)
+      onUpgraded: async ({ host }) => {
+        publishHostUpdate(host)
+        await startSupervisor(host)
+      }
     })
     void owner.start()
   }
@@ -82,10 +140,18 @@ export function startMobileEndpointLifecycle(
 function createSupervisor(
   logical: StableLogicalRpcClient,
   host: HostProfile,
-  onLog: ConnectionLogSink
+  onLog: ConnectionLogSink,
+  onHostUpdated: (host: HostProfile) => void,
+  endpointLifecycle: HostEndpointPublicationLifecycle,
+  saveHost: (host: HostProfile, beforePublish?: () => Promise<void>) => Promise<number>,
+  applicationResponsiveness: RpcApplicationResponsiveness
 ): MobileEndpointSupervisor {
   return new MobileEndpointSupervisor(logical, host, {
-    openDirect: (endpoint) => connect(endpoint, host.deviceToken, host.publicKeyB64, { onLog }),
+    openDirect: (endpoint) =>
+      connect(endpoint, host.deviceToken, host.publicKeyB64, {
+        onLog,
+        applicationResponsiveness
+      }),
     openRelay: (relay, credential, confirmReqId) =>
       connectMobileRelayRpcSession({
         relay,
@@ -93,12 +159,20 @@ function createSupervisor(
         resumeCredentialVersion: credential.version,
         resumeConfirmReqId: confirmReqId,
         deviceToken: host.deviceToken,
-        desktopPublicKeyB64: host.publicKeyB64
+        desktopPublicKeyB64: host.publicKeyB64,
+        applicationResponsiveness
       }),
     resolveRelay: resolveMobileRelayEndpoint,
     readBundle: readMobileRelayCredentialBundle,
-    writeBundle: writeMobileRelayCredentialBundle,
+    writeBundle: (bundle) =>
+      writeExistingHostRelayCredentialBundle(
+        host,
+        bundle,
+        writeMobileRelayCredentialBundle,
+        endpointLifecycle
+      ),
     saveHost,
+    onHostUpdated,
     onLog,
     now: Date.now,
     randomBytes: ExpoCrypto.getRandomBytes,

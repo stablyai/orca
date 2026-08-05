@@ -255,6 +255,29 @@ describe('relay reconnect controller', () => {
     expect(onRetry).toHaveBeenCalledTimes(2)
   })
 
+  it('preserves backoff when an authenticated relay remains application-unresponsive', () => {
+    const onRetry = vi.fn()
+    const reconnect = createController(onRetry)
+    const session = {
+      getFailure: () => new Error('control probe timed out')
+    } as MobileRelayRpcSession
+    const logical = {
+      getActivePath: () => 'relay',
+      getRpcUnresponsiveSince: () => 1
+    } as StableLogicalRpcClient
+
+    reconnect.registerFailure(new Error('control probe timed out'))
+    vi.advanceTimersByTime(250)
+    reconnect.setActiveSession(session)
+    vi.advanceTimersByTime(45_000)
+    reconnect.registerActiveFailure(logical)
+
+    vi.advanceTimersByTime(499)
+    expect(onRetry).toHaveBeenCalledOnce()
+    vi.advanceTimersByTime(1)
+    expect(onRetry).toHaveBeenCalledTimes(2)
+  })
+
   it('uses grace only when the outer relay credential was rejected', () => {
     const reconnect = createController(vi.fn())
 

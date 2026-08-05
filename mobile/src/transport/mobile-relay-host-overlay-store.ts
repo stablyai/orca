@@ -108,6 +108,37 @@ export function removeMobileRelayHostOverlays(hostIds: readonly string[]): Promi
   })
 }
 
+export function updateMobileRelayHostOverlayDirectEndpoint(
+  hostId: string,
+  endpointUrl: string
+): Promise<void> {
+  return mutateOverlays((overlays) => {
+    const index = overlays.findIndex((overlay) => overlay.hostId === hostId)
+    if (index < 0) {
+      return overlays
+    }
+    const overlay = overlays[index]!
+    let changed = false
+    const endpoints = overlay.endpoints.map((endpoint) => {
+      if (
+        endpoint.id !== 'direct-primary' ||
+        endpoint.kind === 'relay' ||
+        endpoint.url === endpointUrl
+      ) {
+        return endpoint
+      }
+      changed = true
+      return { ...endpoint, url: endpointUrl }
+    })
+    if (!changed) {
+      return overlays
+    }
+    const next = overlays.slice()
+    next[index] = { ...overlay, endpoints }
+    return next
+  })
+}
+
 /** Test-only: drain the module mutation chain between cases. */
 export function resetMobileRelayHostOverlayStoreForTests(): void {
   overlayMutation = Promise.resolve()

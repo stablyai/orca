@@ -13,6 +13,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera'
 import { useRouter } from 'expo-router'
 import { ChevronLeft, Clipboard as ClipboardIcon, QrCode } from 'lucide-react-native'
 import { decodePairingUrl, parsePairingCode } from '../src/transport/pairing'
+import { pairingErrorMessage } from '../src/transport/pairing-error-presentation'
 import {
   startPreProfilePairing,
   type PreProfilePairingAttempt
@@ -177,11 +178,7 @@ export default function PairScanScreen() {
       }
       console.warn('[pair] connect failed', err)
       setStatus('error')
-      setErrorMessage(
-        timedOut
-          ? `Couldn't connect within ${PAIRING_OVERALL_TIMEOUT_MS / 1000}s — see log below for where it stalled`
-          : `Pairing failed: ${err instanceof Error ? err.message : String(err)}`
-      )
+      setErrorMessage(pairingErrorMessage(err, timedOut, PAIRING_OVERALL_TIMEOUT_MS / 1000))
       processingRef.current = false
     }
   }

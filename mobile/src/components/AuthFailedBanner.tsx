@@ -19,7 +19,8 @@ export function AuthFailedBanner({
   return (
     <View style={styles.banner}>
       <Text style={styles.text}>
-        Authentication failed — try reconnecting first; if it keeps failing, re-pair from desktop.
+        This desktop no longer accepts your phone&apos;s pairing. Try reconnecting once; if it still
+        fails, re-pair from the desktop.
       </Text>
       <View style={styles.actions}>
         {canRetry && (

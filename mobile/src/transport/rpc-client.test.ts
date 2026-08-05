@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connect } from './rpc-client'
-import { encodeTerminalStreamFrame, TerminalStreamOpcode } from './terminal-stream-protocol'
+import {
+  MockWebSocket,
+  encodeBrowserFrame,
+  encodeTerminalOutput,
+  mockSockets,
+  sentRequest,
+  sentRequests
+} from './rpc-client-test-socket'
 
 vi.mock('./e2ee', () => ({
   generateKeyPair: () => ({
@@ -15,112 +22,7 @@ vi.mock('./e2ee', () => ({
   decryptBytes: (bytes: Uint8Array) => bytes
 }))
 
-class MockWebSocket {
-  static CONNECTING = 0
-  static OPEN = 1
-  static CLOSING = 2
-  static CLOSED = 3
-
-  readonly CONNECTING = MockWebSocket.CONNECTING
-  readonly OPEN = MockWebSocket.OPEN
-  readonly CLOSING = MockWebSocket.CLOSING
-  readonly CLOSED = MockWebSocket.CLOSED
-
-  readyState = MockWebSocket.CONNECTING
-  onopen: (() => void) | null = null
-  onclose: (() => void) | null = null
-  onmessage: ((event: { data: unknown }) => void) | null = null
-  onerror: (() => void) | null = null
-  emitCloseOnClose = true
-  sent: string[] = []
-  close = vi.fn(() => {
-    if (this.readyState === MockWebSocket.CLOSED) {
-      return
-    }
-    this.readyState = MockWebSocket.CLOSED
-    if (this.emitCloseOnClose) {
-      this.onclose?.()
-    }
-  })
-
-  constructor(readonly endpoint: string) {
-    mockSockets.push(this)
-  }
-
-  send(payload: string): void {
-    this.sent.push(payload)
-  }
-
-  open(): void {
-    this.readyState = MockWebSocket.OPEN
-    this.onopen?.()
-  }
-
-  receive(payload: unknown): void {
-    this.onmessage?.({ data: payload })
-  }
-}
-
-const mockSockets: MockWebSocket[] = []
 const originalWebSocket = globalThis.WebSocket
-
-function sentRequest(socket: MockWebSocket, method: string): { id: string; params?: unknown } {
-  for (const payload of socket.sent) {
-    const decoded = JSON.parse(payload.replace(/^encrypted:/, '')) as {
-      id: string
-      method: string
-      params?: unknown
-    }
-    if (decoded.method === method) {
-      return { id: decoded.id, params: decoded.params }
-    }
-  }
-  throw new Error(`Request not sent: ${method}`)
-}
-
-function sentRequests(
-  socket: MockWebSocket,
-  method: string
-): Array<{ id: string; params?: unknown }> {
-  const requests: Array<{ id: string; params?: unknown }> = []
-  for (const payload of socket.sent) {
-    const decoded = JSON.parse(payload.replace(/^encrypted:/, '')) as {
-      id: string
-      method: string
-      params?: unknown
-    }
-    if (decoded.method === method) {
-      requests.push({ id: decoded.id, params: decoded.params })
-    }
-  }
-  return requests
-}
-
-function encodeBrowserFrame(): Uint8Array {
-  const metadata = new TextEncoder().encode(JSON.stringify({ deviceWidth: 800, deviceHeight: 600 }))
-  const image = new Uint8Array([1, 2, 3, 4])
-  const out = new Uint8Array(16 + metadata.byteLength + image.byteLength)
-  const view = new DataView(out.buffer)
-  view.setUint8(0, 0x62)
-  view.setUint8(1, 1)
-  view.setUint8(2, 1)
-  view.setUint8(3, 1)
-  view.setUint32(4, 7, true)
-  view.setUint32(8, metadata.byteLength, true)
-  view.setUint32(12, 0, true)
-  out.set(metadata, 16)
-  out.set(image, 16 + metadata.byteLength)
-  return out
-}
-
-function encodeTerminalOutput(streamId: number, chunk: string): Uint8Array {
-  return encodeTerminalStreamFrame({
-    opcode: TerminalStreamOpcode.Output,
-    streamId,
-    seq: 1,
-    payload: new TextEncoder().encode(chunk)
-  })
-}
 
 describe('mobile rpc-client connection timeout', () => {
   beforeEach(() => {
@@ -234,7 +136,7 @@ describe('mobile rpc-client connection timeout', () => {
     client.close()
   })
 
-  it('routes browser screencast binary frames to the browser subscriber', async () => {
+  it('routes browser frames without treating them as control liveness', async () => {
     const client = connect('ws://desktop.invalid', 'token', 'server-key')
     const socket = mockSockets[0]!
     const frames: unknown[] = []
@@ -260,14 +162,20 @@ describe('mobile rpc-client connection timeout', () => {
       })}`
     )
 
+    socket.emitCloseOnClose = false
     client.notifyForeground()
     socket.receive(encodeBrowserFrame())
     await Promise.resolve()
     await Promise.resolve()
+    // Why: browser frames only defer demotion through the bounded congestion
+    // grace — a stalled control channel still comes down once it runs out.
+    await vi.advanceTimersByTimeAsync(8_000)
+    expect(socket.close).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(8_000)
 
     expect(frames).toHaveLength(1)
-    expect(socket.close).not.toHaveBeenCalled()
+    expect(socket.close).toHaveBeenCalled()
+    expect(client.getState()).toBe('reconnecting')
     expect(frames[0]).toMatchObject({
       seq: 7,
       format: 'jpeg',
@@ -533,34 +441,6 @@ describe('mobile rpc-client connection timeout', () => {
     client.close()
   })
 
-  it('honors per-request timeout overrides', async () => {
-    const client = connect('ws://desktop.invalid', 'token', 'server-key')
-    const socket = mockSockets[0]!
-
-    socket.open()
-    socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
-    socket.receive('encrypted:{"type":"e2ee_authenticated"}')
-
-    const request = client.sendRequest(
-      'speech.dictation.finish',
-      { dictationId: 'd1' },
-      {
-        timeoutMs: 123
-      }
-    )
-    await Promise.resolve()
-
-    await vi.advanceTimersByTimeAsync(122)
-    await expect(
-      Promise.race([request.then(() => 'settled'), Promise.resolve('pending')])
-    ).resolves.toBe('pending')
-
-    await vi.advanceTimersByTimeAsync(1)
-    await expect(request).rejects.toThrow('Request timed out: speech.dictation.finish')
-
-    client.close()
-  })
-
   it('applies per-request timeout overrides while waiting for reconnect', async () => {
     const client = connect('ws://desktop.invalid', 'token', 'server-key')
     const socket = mockSockets[0]!
@@ -725,7 +605,7 @@ describe('mobile rpc-client connection timeout', () => {
       expect(mockSockets).toHaveLength(2)
       openAndAuthenticate(mockSockets[1]!)
       expect(client.getState()).toBe('connected')
-      expect(client.getReconnectAttempt()).toBe(0)
+      expect(client.getReconnectAttempt()).toBe(1)
 
       await vi.advanceTimersByTimeAsync(1_000)
       expect(mockSockets).toHaveLength(2)
@@ -823,7 +703,53 @@ describe('mobile rpc-client connection timeout', () => {
       client.close()
     })
 
-    it('keeps a healthy connection when a binary stream frame arrives while the probe is pending', async () => {
+    it.each([
+      [
+        'lease-only subscribed',
+        { ok: true, streaming: true, result: { type: 'subscribed', streamId: null } }
+      ],
+      ['ready', { ok: true, streaming: true, result: { type: 'ready', subscriptionId: 'sub-1' } }],
+      ['native-chat snapshot', { ok: true, streaming: true, result: { type: 'snapshot' } }],
+      ['session-tabs snapshot', { ok: true, streaming: true, result: { type: 'snapshot' } }]
+    ])('counts a subscription %s reply as control liveness', async (_name, reply) => {
+      const { client, socket } = connectAuthenticated()
+      client.subscribe('terminal.subscribe', { terminal: 'term-1' }, () => {})
+      const subscribe = sentRequest(socket, 'terminal.subscribe')
+
+      client.notifyForeground()
+      socket.receive(`encrypted:${JSON.stringify({ id: subscribe.id, ...reply })}`)
+      await vi.advanceTimersByTimeAsync(8_000)
+
+      expect(socket.close).not.toHaveBeenCalled()
+      expect(client.getState()).toBe('connected')
+      client.close()
+    })
+
+    it('does not count repeated subscription frames as fresh control responses', async () => {
+      const { client, socket } = connectAuthenticated()
+      client.subscribe('nativeChat.subscribe', {}, () => {})
+      const subscribe = sentRequest(socket, 'nativeChat.subscribe')
+      const snapshot = {
+        id: subscribe.id,
+        ok: true,
+        streaming: true,
+        result: { type: 'ready', subscriptionId: 'sub-1' }
+      }
+      socket.receive(`encrypted:${JSON.stringify(snapshot)}`)
+
+      client.notifyForeground()
+      socket.receive(`encrypted:${JSON.stringify(snapshot)}`)
+      // Why: the repeated frame buys bounded congestion grace, never satisfaction.
+      await vi.advanceTimersByTimeAsync(8_000)
+      expect(socket.close).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(8_000)
+
+      expect(socket.close).toHaveBeenCalled()
+      expect(client.getState()).toBe('reconnecting')
+      client.close()
+    })
+
+    it('does not let terminal stream traffic mask a stalled control channel', async () => {
       const { client, socket } = connectAuthenticated()
       const events: unknown[] = []
 
@@ -840,15 +766,73 @@ describe('mobile rpc-client connection timeout', () => {
         })}`
       )
 
+      socket.emitCloseOnClose = false
       client.notifyForeground()
+      // Why: continuous stream traffic in every probe window is the exact #10385
+      // shape — it may only defer demotion through the bounded grace windows.
       socket.receive(encodeTerminalOutput(42, 'still alive'))
+      await Promise.resolve()
+      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(8_000)
+      expect(socket.close).not.toHaveBeenCalled()
+      socket.receive(encodeTerminalOutput(42, 'still flowing'))
+      await Promise.resolve()
+      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(8_000)
+      expect(socket.close).not.toHaveBeenCalled()
+      socket.receive(encodeTerminalOutput(42, 'still masking'))
       await Promise.resolve()
       await Promise.resolve()
       await vi.advanceTimersByTimeAsync(8_000)
 
       expect(events).toContainEqual({ type: 'data', streamId: 42, chunk: 'still alive' })
+      expect(events).toContainEqual({ type: 'data', streamId: 42, chunk: 'still masking' })
+      expect(socket.close).toHaveBeenCalled()
+      expect(client.getState()).toBe('reconnecting')
+
+      client.close()
+    })
+
+    it('keeps a congested link when a late control reply lands during the grace window', async () => {
+      const { client, socket } = connectAuthenticated()
+      client.subscribe('terminal.subscribe', { terminal: 'term-1' }, () => {})
+      const subscribe = sentRequest(socket, 'terminal.subscribe')
+      socket.receive(
+        `encrypted:${JSON.stringify({
+          id: subscribe.id,
+          ok: true,
+          streaming: true,
+          result: { type: 'subscribed', streamId: 42 }
+        })}`
+      )
+
+      client.notifyForeground()
+      const probe = sentRequest(socket, 'status.get')
+      socket.receive(encodeTerminalOutput(42, 'backlog'))
+      await Promise.resolve()
+      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(8_000)
+      expect(socket.close).not.toHaveBeenCalled()
+
+      // Why: the parked probe reply finally drains behind the terminal backlog —
+      // a real control response ends the grace chain instead of a reconnect.
+      socket.receive(`encrypted:${JSON.stringify({ id: probe.id, ok: true, result: {} })}`)
+      await vi.advanceTimersByTimeAsync(8_000)
+
       expect(socket.close).not.toHaveBeenCalled()
       expect(client.getState()).toBe('connected')
+      client.close()
+    })
+
+    it('demotes a timed-out probe even when React Native omits onclose', async () => {
+      const { client, socket } = connectAuthenticated()
+      socket.emitCloseOnClose = false
+
+      client.notifyForeground()
+      await vi.advanceTimersByTimeAsync(8_000)
+
+      expect(socket.close).toHaveBeenCalled()
+      expect(client.getState()).toBe('reconnecting')
 
       client.close()
     })
@@ -964,30 +948,5 @@ describe('mobile rpc-client connection timeout', () => {
 
       client.close()
     })
-  })
-
-  it('rejects requests waiting for reconnect after the retry cap', async () => {
-    const client = connect('ws://desktop.invalid', 'token', 'server-key')
-    const socket = mockSockets[0]!
-
-    socket.open()
-    socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
-    socket.receive('encrypted:{"type":"e2ee_authenticated"}')
-    socket.close()
-
-    const waitingRequestError = client.sendRequest('status.get').then(
-      () => null,
-      (error: Error) => error
-    )
-    await vi.advanceTimersByTimeAsync(520_000)
-
-    expect(client.getState()).toBe('reconnecting')
-    expect(client.getReconnectAttempt()).toBe(12)
-    await expect(waitingRequestError).resolves.toMatchObject({
-      message: 'Connection retry limit reached'
-    })
-    await expect(client.sendRequest('status.get')).rejects.toThrow('Connection retry limit reached')
-
-    client.close()
   })
 })

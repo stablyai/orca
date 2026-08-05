@@ -22,6 +22,8 @@ type StreamRecord = {
   streamIds: Set<number>
   subscriptionId?: string
   cancelled: boolean
+  sent: boolean
+  controlResponseReceived: boolean
 }
 
 type StreamManagerOptions = {
@@ -51,14 +53,23 @@ export class MobileRelayRpcStreams {
       listener,
       onBinaryFrame: subscribeOptions?.onBinaryFrame,
       streamIds: new Set(),
-      cancelled: false
+      cancelled: false,
+      sent: false,
+      controlResponseReceived: false
     }
     this.streams.set(id, stream)
     void this.options
       .waitForConnected()
       .then(() => {
-        if (!stream.cancelled && !this.options.sendFrame({ id, method, params: stream.params })) {
-          this.fail(id, stream, 'Connection interrupted')
+        if (!stream.cancelled) {
+          stream.sent = this.options.sendFrame({
+            id,
+            method,
+            params: stream.params
+          })
+          if (!stream.sent) {
+            this.fail(id, stream, 'Connection interrupted')
+          }
         }
       })
       .catch((error: unknown) => {
@@ -83,7 +94,11 @@ export class MobileRelayRpcStreams {
     }
     const result = (response as RpcSuccess).result
     if (result && typeof result === 'object') {
-      const metadata = result as { subscriptionId?: unknown; streamId?: unknown; type?: unknown }
+      const metadata = result as {
+        subscriptionId?: unknown
+        streamId?: unknown
+        type?: unknown
+      }
       if (typeof metadata.subscriptionId === 'string') {
         stream.subscriptionId = metadata.subscriptionId
       }
@@ -106,16 +121,26 @@ export class MobileRelayRpcStreams {
     return true
   }
 
-  handleBinary(bytes: Uint8Array): void {
-    const browserFrame = decodeBrowserScreencastFrame(bytes)
-    if (browserFrame && this.activeBrowserStream?.onBinaryFrame) {
-      this.activeBrowserStream.onBinaryFrame(browserFrame)
-      return
+  isControlResponse(response: RpcResponse): boolean {
+    const stream = this.streams.get(response.id)
+    if (!stream?.sent || stream.controlResponseReceived) {
+      return false
     }
-    handleTerminalBinaryFrame(bytes, {
+    stream.controlResponseReceived = true
+    return true
+  }
+
+  // Why: the boolean reports protocol-decode success so the session can count
+  // the frame as drain evidence — undecodable bytes must not extend the probe.
+  handleBinary(bytes: Uint8Array): boolean {
+    const browserFrame = decodeBrowserScreencastFrame(bytes)
+    if (browserFrame) {
+      this.activeBrowserStream?.onBinaryFrame?.(browserFrame)
+      return true
+    }
+    return handleTerminalBinaryFrame(bytes, {
       terminalSnapshots: this.terminalSnapshots,
-      getListener: (streamId) => this.terminalListeners.get(streamId),
-      recordValidatedInboundTraffic: () => {}
+      getListener: (streamId) => this.terminalListeners.get(streamId)
     })
   }
 

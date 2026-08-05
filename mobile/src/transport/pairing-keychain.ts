@@ -156,8 +156,7 @@ async function setItemAtGeneration(key: string, value: string, generation: numbe
   }
 }
 
-export async function readPairingKeychainItem(key: string): Promise<string | null> {
-  await keychainMutation
+async function readPairingKeychainItemImpl(key: string): Promise<string | null> {
   const presenceGeneration = await loadPresenceGeneration(key)
   if (presenceGeneration !== null) {
     const value = await SecureStore.getItemAsync(key, optionsForGeneration(presenceGeneration))
@@ -180,6 +179,11 @@ export async function readPairingKeychainItem(key: string): Promise<string | nul
     }
   }
   return null
+}
+
+export async function readPairingKeychainItem(key: string): Promise<string | null> {
+  await keychainMutation
+  return readPairingKeychainItemImpl(key)
 }
 
 async function writePairingKeychainItemImpl(key: string, value: string): Promise<void> {
@@ -253,6 +257,20 @@ async function deletePairingKeychainItemImpl(key: string): Promise<void> {
 
 export function deletePairingKeychainItem(key: string): Promise<void> {
   return enqueueKeychainMutation(() => deletePairingKeychainItemImpl(key))
+}
+
+export function deletePairingKeychainItemIfMatches(
+  key: string,
+  expectedValue: string
+): Promise<boolean> {
+  let deleted = false
+  return enqueueKeychainMutation(async () => {
+    if ((await readPairingKeychainItemImpl(key)) !== expectedValue) {
+      return
+    }
+    await deletePairingKeychainItemImpl(key)
+    deleted = true
+  }).then(() => deleted)
 }
 
 /** Test-only: drop cached generation and mutation state between cases. */

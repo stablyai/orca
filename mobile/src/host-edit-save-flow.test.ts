@@ -4,8 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import EditHostScreen from '../app/h/[hostId]/edit'
 
 const dependencies = vi.hoisted(() => ({
+  alert: vi.fn(),
   back: vi.fn(),
   forceReconnectHost: vi.fn(),
+  forceReconnectHostAfterEdit: vi.fn(),
+  getHostListLoadRevision: vi.fn(() => 0),
   loadHosts: vi.fn(),
   primeHosts: vi.fn(),
   updateHostNameAndEndpoint: vi.fn(),
@@ -14,6 +17,7 @@ const dependencies = vi.hoisted(() => ({
 
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
+  Alert: { alert: dependencies.alert },
   KeyboardAvoidingView: 'KeyboardAvoidingView',
   Platform: { OS: 'ios' },
   Pressable: 'Pressable',
@@ -42,8 +46,13 @@ vi.mock('./transport/host-store', () => ({
   updateHostNameAndEndpoint: dependencies.updateHostNameAndEndpoint
 }))
 
+vi.mock('./transport/host-list-load-sharing', () => ({
+  getHostListLoadRevision: dependencies.getHostListLoadRevision
+}))
+
 vi.mock('./transport/client-context', () => ({
   useForceReconnect: () => dependencies.forceReconnectHost,
+  useForceReconnectAfterEdit: () => dependencies.forceReconnectHostAfterEdit,
   usePrimeHosts: () => dependencies.primeHosts
 }))
 
@@ -137,8 +146,11 @@ describe('edit host handleSave', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     dependencies.hostId = 'host-1'
+    dependencies.alert.mockReset()
     dependencies.back.mockReset()
     dependencies.forceReconnectHost.mockReset().mockResolvedValue(undefined)
+    dependencies.forceReconnectHostAfterEdit.mockReset().mockResolvedValue(undefined)
+    dependencies.getHostListLoadRevision.mockReset().mockReturnValue(0)
     dependencies.loadHosts.mockReset().mockResolvedValue([HOST_FIXTURE])
     dependencies.primeHosts.mockReset()
     dependencies.updateHostNameAndEndpoint.mockReset().mockResolvedValue(undefined)
@@ -168,6 +180,8 @@ describe('edit host handleSave', () => {
   })
 
   it('endpoint-only save updates only the endpoint and reconnects', async () => {
+    const savedHost = { ...HOST_FIXTURE, endpoint: 'ws://192.168.1.20:6768' }
+    dependencies.loadHosts.mockResolvedValueOnce([HOST_FIXTURE]).mockResolvedValueOnce([savedHost])
     const renderer = await renderEditHostRoute()
     setFieldValue(renderer, 'Address', '192.168.1.20:6768')
     await pressSave(renderer)
@@ -175,13 +189,20 @@ describe('edit host handleSave', () => {
     expect(dependencies.updateHostNameAndEndpoint).toHaveBeenCalledWith('host-1', {
       endpoint: 'ws://192.168.1.20:6768'
     })
-    expect(dependencies.forceReconnectHost).toHaveBeenCalledWith('host-1')
+    expect(dependencies.primeHosts).toHaveBeenCalledWith([savedHost], 0)
+    expect(dependencies.forceReconnectHost).toHaveBeenCalledWith('host-1', savedHost)
     expect(dependencies.back).toHaveBeenCalledTimes(1)
 
     act(() => renderer.unmount())
   })
 
   it('saves name and endpoint together in one call, then reconnects', async () => {
+    const savedHost = {
+      ...HOST_FIXTURE,
+      name: 'Home Desk',
+      endpoint: 'ws://192.168.1.20:6768'
+    }
+    dependencies.loadHosts.mockResolvedValueOnce([HOST_FIXTURE]).mockResolvedValueOnce([savedHost])
     const renderer = await renderEditHostRoute()
     setFieldValue(renderer, 'Name', 'Home Desk')
     setFieldValue(renderer, 'Address', '192.168.1.20:6768')
@@ -192,7 +213,8 @@ describe('edit host handleSave', () => {
       name: 'Home Desk',
       endpoint: 'ws://192.168.1.20:6768'
     })
-    expect(dependencies.forceReconnectHost).toHaveBeenCalledWith('host-1')
+    expect(dependencies.primeHosts).toHaveBeenCalledWith([savedHost], 0)
+    expect(dependencies.forceReconnectHost).toHaveBeenCalledWith('host-1', savedHost)
     expect(dependencies.back).toHaveBeenCalledTimes(1)
 
     act(() => renderer.unmount())
@@ -236,7 +258,42 @@ describe('edit host handleSave', () => {
     act(() => renderer.unmount())
   })
 
-  it('still navigates back and shows no error when the post-save reconnect rejects', async () => {
+  it('retires the old endpoint client when post-save profile loading fails', async () => {
+    dependencies.loadHosts
+      .mockResolvedValueOnce([HOST_FIXTURE])
+      .mockRejectedValueOnce(new Error('keychain locked'))
+    const renderer = await renderEditHostRoute()
+    setFieldValue(renderer, 'Address', '192.168.1.20:6768')
+    await pressSave(renderer)
+
+    expect(dependencies.primeHosts).not.toHaveBeenCalled()
+    expect(dependencies.forceReconnectHost).not.toHaveBeenCalled()
+    expect(dependencies.forceReconnectHostAfterEdit).toHaveBeenCalledWith('host-1', HOST_FIXTURE, {
+      endpoint: 'ws://192.168.1.20:6768'
+    })
+    expect(dependencies.back).toHaveBeenCalledTimes(1)
+
+    act(() => renderer.unmount())
+  })
+
+  it('merges the endpoint edit into the current cache when the host reload omits it', async () => {
+    dependencies.loadHosts.mockResolvedValueOnce([HOST_FIXTURE]).mockResolvedValueOnce([])
+    const renderer = await renderEditHostRoute()
+    setFieldValue(renderer, 'Address', '192.168.1.20:6768')
+    await pressSave(renderer)
+
+    expect(dependencies.forceReconnectHost).not.toHaveBeenCalled()
+    expect(dependencies.forceReconnectHostAfterEdit).toHaveBeenCalledWith('host-1', HOST_FIXTURE, {
+      endpoint: 'ws://192.168.1.20:6768'
+    })
+    expect(dependencies.back).toHaveBeenCalledTimes(1)
+
+    act(() => renderer.unmount())
+  })
+
+  it('still navigates back and alerts when the post-save reconnect rejects', async () => {
+    const savedHost = { ...HOST_FIXTURE, endpoint: 'ws://192.168.1.20:6768' }
+    dependencies.loadHosts.mockResolvedValueOnce([HOST_FIXTURE]).mockResolvedValueOnce([savedHost])
     dependencies.forceReconnectHost.mockRejectedValueOnce(new Error('connect failed'))
     const renderer = await renderEditHostRoute()
     setFieldValue(renderer, 'Address', '192.168.1.20:6768')
@@ -246,9 +303,62 @@ describe('edit host handleSave', () => {
       await Promise.resolve()
     })
 
-    expect(dependencies.forceReconnectHost).toHaveBeenCalledWith('host-1')
+    expect(dependencies.forceReconnectHost).toHaveBeenCalledWith('host-1', savedHost)
     expect(dependencies.back).toHaveBeenCalledTimes(1)
-    expect(findText(renderer, 'connect failed')).toBe(false)
+    expect(dependencies.alert).toHaveBeenCalledWith(
+      "Couldn't reconnect to desktop",
+      'Make sure desktop Orca is open and both devices are online, then try again.',
+      [{ text: 'Dismiss', style: 'cancel' }]
+    )
+
+    act(() => renderer.unmount())
+  })
+
+  it('reconnects with the fresh persisted profile when relay routing changed mid-edit', async () => {
+    const relayHost = {
+      ...HOST_FIXTURE,
+      endpoint: 'ws://192.168.1.20:6768',
+      endpoints: [
+        {
+          id: 'direct-primary',
+          kind: 'lan' as const,
+          url: 'ws://192.168.1.20:6768'
+        },
+        {
+          id: 'relay-primary',
+          kind: 'relay' as const,
+          url: 'wss://relay.invalid/host-1'
+        }
+      ]
+    }
+    dependencies.loadHosts.mockResolvedValueOnce([HOST_FIXTURE]).mockResolvedValueOnce([relayHost])
+    const renderer = await renderEditHostRoute()
+    setFieldValue(renderer, 'Address', '192.168.1.20:6768')
+    await pressSave(renderer)
+
+    expect(dependencies.primeHosts).toHaveBeenCalledWith([relayHost], 0)
+    expect(dependencies.forceReconnectHost).toHaveBeenCalledWith('host-1', relayHost)
+
+    act(() => renderer.unmount())
+  })
+
+  it('reloads the current edited profile when an unrelated write invalidates a snapshot', async () => {
+    const editedHost = { ...HOST_FIXTURE, endpoint: 'ws://192.168.1.20:6768' }
+    const invalidatedHost = { ...HOST_FIXTURE, name: 'Stale snapshot' }
+    dependencies.loadHosts
+      .mockResolvedValueOnce([HOST_FIXTURE])
+      .mockResolvedValueOnce([invalidatedHost])
+      .mockResolvedValueOnce([editedHost])
+    dependencies.getHostListLoadRevision
+      .mockReturnValueOnce(1)
+      .mockReturnValueOnce(2)
+      .mockReturnValue(2)
+    const renderer = await renderEditHostRoute()
+    setFieldValue(renderer, 'Address', '192.168.1.20:6768')
+    await pressSave(renderer)
+
+    expect(dependencies.primeHosts).toHaveBeenCalledWith([editedHost], 2)
+    expect(dependencies.forceReconnectHost).toHaveBeenCalledWith('host-1', editedHost)
 
     act(() => renderer.unmount())
   })
@@ -287,8 +397,11 @@ describe('edit host load() error states', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     dependencies.hostId = 'host-1'
+    dependencies.alert.mockReset()
     dependencies.back.mockReset()
     dependencies.forceReconnectHost.mockReset().mockResolvedValue(undefined)
+    dependencies.forceReconnectHostAfterEdit.mockReset().mockResolvedValue(undefined)
+    dependencies.getHostListLoadRevision.mockReset().mockReturnValue(0)
     dependencies.loadHosts.mockReset().mockResolvedValue([HOST_FIXTURE])
     dependencies.primeHosts.mockReset()
     dependencies.updateHostNameAndEndpoint.mockReset().mockResolvedValue(undefined)

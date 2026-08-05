@@ -16,6 +16,7 @@ import {
 } from '../src/components/AccountUsage'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { loadHosts } from '../src/transport/host-store'
+import { getHostListLoadRevision } from '../src/transport/host-list-load-sharing'
 import { useOpenMobileHostEdit } from '../src/transport/use-open-mobile-host-edit'
 import { removeHostAndCloseClient } from '../src/transport/host-removal-lifecycle'
 import { fetchHomeHostWorktreeInfo } from '../src/worktree/home-host-worktree-fetch'
@@ -26,6 +27,8 @@ import { createHostConnectRefetchGate } from '../src/transport/host-connect-refe
 import { sendSingleFlightRequest } from '../src/transport/request-single-flight'
 import { useCloseHost, useForceReconnect, usePrimeHosts } from '../src/transport/client-context'
 import { useAllHostClients } from '../src/transport/use-all-host-clients'
+import { startForceReconnectWithFeedback } from '../src/transport/force-reconnect-feedback'
+import { useRpcUnresponsiveByHost } from '../src/transport/client-context-connection-metrics'
 import { classifyConnection } from '../src/transport/connection-health'
 import { subscribeToDesktopNotifications } from '../src/notifications/mobile-notifications'
 import {
@@ -243,6 +246,7 @@ export default function HomeScreen() {
 
   // Why: shared clients from the per-host store, not N independent WebSockets. See docs/mobile-shared-client-per-host.md.
   const hostIds = useMemo(() => hosts.map((h) => h.id), [hosts])
+  const hostRpcUnresponsive = useRpcUnresponsiveByHost(hostIds)
   // Why: scoped to the paired hosts so an unpaired desktop's cached reply leaves the header total.
   const stats = useMemo(() => totalHomeStats(statsByHost, hostIds), [statsByHost, hostIds])
   const allClients = useAllHostClients(hostIds)
@@ -252,13 +256,13 @@ export default function HomeScreen() {
   )
   const closeHostClient = useCloseHost()
   const forceReconnectHost = useForceReconnect()
+  const reconnectHostWithFeedback = useCallback(
+    (hostId: string) => {
+      startForceReconnectWithFeedback(() => forceReconnectHost(hostId))
+    },
+    [forceReconnectHost]
+  )
   const primeHosts = usePrimeHosts()
-  // Why: prime the cache with loaded HostProfiles to avoid a second serialized Keychain pass (multi-second connect latency) on cold start.
-  useEffect(() => {
-    if (hosts.length > 0) {
-      primeHosts(hosts)
-    }
-  }, [hosts, primeHosts])
   const allClientsRef = useRef<Array<{ hostId: string; client: RpcClient }>>([])
   // Why: keep the focus callback stable (no refetch per render) while still exposing the latest host clients.
   allClientsRef.current = allClients.map((entry) => ({
@@ -308,10 +312,12 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       let stale = false
+      const hostLoadRevision = getHostListLoadRevision()
       void loadHosts().then(async (h) => {
         if (stale) {
           return
         }
+        primeHosts(h, hostLoadRevision)
         setHosts(h)
         if (h.length === 0 || onboardingOptInCheckedRef.current) {
           return
@@ -344,7 +350,7 @@ export default function HomeScreen() {
       return () => {
         stale = true
       }
-    }, [router])
+    }, [primeHosts, router])
   )
 
   const sortedHosts = useMemo(
@@ -629,7 +635,10 @@ export default function HomeScreen() {
     try {
       await removeHostAndCloseClient(hostToRemove.id, closeHostClient)
       setConfirmRemove(null)
-      setHosts(await loadHosts())
+      const hostLoadRevision = getHostListLoadRevision()
+      const remainingHosts = await loadHosts()
+      primeHosts(remainingHosts, hostLoadRevision)
+      setHosts(remainingHosts)
     } catch {
       // Why: ConfirmModal closes on confirm; re-open for retry so the failure isn't silent.
       setConfirmRemove(hostToRemove)
@@ -739,8 +748,31 @@ export default function HomeScreen() {
               state,
               reconnectAttempts: attempts,
               lastConnectedAt,
+              rpcUnresponsiveSince: hostRpcUnresponsive[item.id] ?? null,
               endpoint: item.endpoint
             })
+            const reconnectAction = {
+              label: state === 'disconnected' ? 'Connect' : 'Reconnect now',
+              onPress: () => reconnectHostWithFeedback(item.id)
+            }
+            let statusActions: { label: string; onPress: () => void }[] | undefined
+            if (verdict.kind === 'auth-failed') {
+              statusActions = [
+                { label: 'Retry', onPress: reconnectAction.onPress },
+                { label: 'Re-pair', onPress: () => router.push('/pair-scan') }
+              ]
+            } else if (verdict.kind === 'unreachable') {
+              statusActions = [
+                reconnectAction,
+                { label: 'Re-pair', onPress: () => router.push('/pair-scan') }
+              ]
+            } else if (
+              verdict.kind === 'warning' ||
+              state === 'reconnecting' ||
+              state === 'disconnected'
+            ) {
+              statusActions = [reconnectAction]
+            }
             return (
               <MobileHostCard
                 host={item}
@@ -748,6 +780,7 @@ export default function HomeScreen() {
                 verdict={verdict}
                 path={hostPaths[item.id] ?? 'lan'}
                 worktreeInfo={worktreeInfo[item.id]}
+                statusActions={statusActions}
                 onPress={() => router.push(`/h/${item.id}`)}
                 onLongPress={() => {
                   triggerMediumImpact()
@@ -925,7 +958,7 @@ export default function HomeScreen() {
             ? (hostLastConnected[actionTarget.id] ?? null) != null
             : false,
           onDismiss: () => setActionTarget(null),
-          onReconnect: (hostId) => void forceReconnectHost(hostId),
+          onReconnect: reconnectHostWithFeedback,
           onDisconnect: closeHostClient,
           onEdit: openMobileHostEdit,
           onRemove: setConfirmRemove

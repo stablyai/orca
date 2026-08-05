@@ -2,9 +2,9 @@ import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime-tailscal
 import type { ConnectionState } from './types'
 
 // Why: thresholds for escalating connection UX from neutral
-// "Reconnecting…" to alarming "host appears unreachable, re-pair?".
+// "Reconnecting…" to an actionable unreachable state.
 //
-// - WARNING_ATTEMPTS: 3 → label flips to "Can't connect" (existing
+// - WARNING_ATTEMPTS: 3 → label flips to "Still trying to connect" (existing
 //   behavior). Calibrated to absorb a normal laptop wake / brief
 //   network blip without alarming the user.
 // - UNREACHABLE_ATTEMPTS: 12 → with the tiered 0.5s→60s backoff this
@@ -25,12 +25,17 @@ const STALE_SINCE_LAST_CONNECT_MS = 60_000
 // Why: a repeatedly-unreachable 100.x/*.ts.net endpoint almost always means
 // the phone's Tailscale tunnel is down or wedged (a known iOS failure mode
 // that only a manual toggle fixes) — not that the desktop moved. Say so
-// instead of leaving the user staring at a generic "Can't connect".
+// instead of leaving the user staring at a generic unreachable label.
 const TAILSCALE_HINT = 'check Tailscale'
 
 export type ConnectionVerdict =
   | { kind: 'normal'; label: string }
-  | { kind: 'warning'; label: string; hint?: string } // "Can't connect"
+  | {
+      kind: 'warning'
+      label: string
+      reason: 'unresponsive' | 'retrying'
+      hint?: string
+    }
   | {
       kind: 'unreachable'
       label: string
@@ -46,6 +51,7 @@ export function classifyConnection(args: {
   state: ConnectionState
   reconnectAttempts: number
   lastConnectedAt: number | null
+  rpcUnresponsiveSince?: number | null
   // Optional pinned host endpoint — enables the Tailscale hint on
   // warning/unreachable verdicts. Callers without it get plain labels.
   endpoint?: string | null
@@ -58,10 +64,13 @@ export function classifyConnection(args: {
   // Why: auth-failed means the desktop no longer recognizes this pairing (e.g. it
   // lost its device registry) — retrying can't fix it, only re-pairing can, so say so.
   if (state === 'auth-failed') {
-    return { kind: 'auth-failed', label: 'Pairing invalid — re-pair with your desktop' }
+    return { kind: 'auth-failed', label: 'Pairing no longer works' }
   }
 
   if (state === 'connected') {
+    if (args.rpcUnresponsiveSince != null) {
+      return { kind: 'warning', label: 'Desktop not responding', reason: 'unresponsive', hint }
+    }
     return { kind: 'normal', label: 'Connected' }
   }
 
@@ -77,7 +86,7 @@ export function classifyConnection(args: {
     if (lastConnectedAt == null) {
       return {
         kind: 'unreachable',
-        label: "Can't reach desktop",
+        label: 'Desktop unreachable',
         reason: 'never-connected',
         hint
       }
@@ -85,7 +94,7 @@ export function classifyConnection(args: {
     if (now - lastConnectedAt >= STALE_SINCE_LAST_CONNECT_MS) {
       return {
         kind: 'unreachable',
-        label: "Can't reach desktop",
+        label: 'Desktop unreachable',
         reason: 'stale',
         hint
       }
@@ -93,7 +102,7 @@ export function classifyConnection(args: {
   }
 
   if (reconnectAttempts >= WARNING_ATTEMPTS) {
-    return { kind: 'warning', label: "Can't connect", hint }
+    return { kind: 'warning', label: 'Still trying to connect', reason: 'retrying', hint }
   }
 
   return { kind: 'normal', label: state === 'reconnecting' ? 'Reconnecting…' : 'Connecting…' }
@@ -102,8 +111,39 @@ export function classifyConnection(args: {
 // Why: single place that turns a verdict into display text so every screen
 // renders the Tailscale hint the same way.
 export function verdictDisplayLabel(verdict: ConnectionVerdict): string {
-  if ((verdict.kind === 'warning' || verdict.kind === 'unreachable') && verdict.hint) {
+  if (verdict.kind === 'unreachable' && verdict.hint) {
+    return "Can't reach desktop through Tailscale"
+  }
+  if (verdict.kind === 'warning' && verdict.hint) {
     return `${verdict.label} — ${verdict.hint}`
   }
   return verdict.label
+}
+
+export function verdictSupportingMessage(verdict: ConnectionVerdict): string | null {
+  if (verdict.kind === 'auth-failed') {
+    return "This desktop no longer accepts your phone's pairing. Try reconnecting once; if it still fails, re-pair from the desktop."
+  }
+  if (verdict.kind === 'warning') {
+    if (verdict.reason === 'unresponsive') {
+      return "The connection is open, but desktop Orca isn't answering. Orca is checking the connection and will retry automatically."
+    }
+    if (verdict.hint) {
+      return 'Open Tailscale on your phone and desktop and make sure both devices are connected. Orca will keep retrying.'
+    }
+    return "Orca can't reach your desktop yet and will keep retrying. Make sure Orca is open on the desktop and both devices are online."
+  }
+  if (verdict.kind === 'unreachable') {
+    if (verdict.hint) {
+      return 'Open Tailscale on your phone and desktop and make sure both devices are connected. Orca will keep retrying.'
+    }
+    return 'Orca will keep trying in the background, but retries have slowed to save battery. Check your desktop and network, then reconnect.'
+  }
+  if (verdict.label === 'Reconnecting…') {
+    return 'The connection was interrupted. Orca is retrying automatically.'
+  }
+  if (verdict.label === 'Disconnected') {
+    return 'Orca will not reconnect until you choose Connect.'
+  }
+  return null
 }

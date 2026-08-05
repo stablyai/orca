@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { hashMobileRelayCredential } from './mobile-relay-credential-hash'
 import {
   deletePairingKeychainItem,
+  deletePairingKeychainItemIfMatches,
   readPairingKeychainItem,
   writePairingKeychainItem
 } from './pairing-keychain'
@@ -68,6 +69,26 @@ export async function deleteMobileRelayDirectUpgradeJournal(hostId: string): Pro
     return
   }
   await deletePairingKeychainItem(journalKey(hostId))
+}
+
+export function deleteMobileRelayDirectUpgradeJournalIfCurrent(
+  journal: MobileRelayDirectUpgradeJournal
+): Promise<boolean> {
+  if (Platform.OS === 'web') {
+    return Promise.resolve(false)
+  }
+  const parsed = MobileRelayDirectUpgradeJournalSchema.parse(journal)
+  return deletePairingKeychainItemIfMatches(journalKey(parsed.hostId), JSON.stringify(parsed))
+}
+
+export async function retireMobileRelayDirectUpgradeJournalForRelayHost(
+  hostId: string,
+  shouldRetire: () => boolean = () => true
+): Promise<void> {
+  const journal = await readMobileRelayDirectUpgradeJournal(hostId)
+  if (journal && shouldRetire()) {
+    await deleteMobileRelayDirectUpgradeJournalIfCurrent(journal)
+  }
 }
 
 function encodeBase64Url(value: Uint8Array): string {

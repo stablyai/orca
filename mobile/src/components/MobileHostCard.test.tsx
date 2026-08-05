@@ -139,4 +139,37 @@ describe('MobileHostCard', () => {
     expect(lines).not.toContain('0 worktrees')
     expect(lines).not.toContain('Worktree list unavailable')
   })
+
+  it('explains automatic recovery and exposes Reconnect now', async () => {
+    const reconnect = vi.fn()
+    const stopPropagation = vi.fn()
+    await act(async () => {
+      renderer = create(
+        createElement(MobileHostCard, {
+          host,
+          state: 'connected',
+          verdict: {
+            kind: 'warning',
+            label: 'Desktop not responding',
+            reason: 'unresponsive'
+          },
+          path: 'lan',
+          statusActions: [{ label: 'Reconnect now', onPress: reconnect }],
+          onPress: () => {},
+          onLongPress: () => {}
+        })
+      )
+    })
+
+    const text = renderer!.root
+      .findAllByType('Text')
+      .flatMap((node) => node.children.filter((child) => typeof child === 'string'))
+    expect(text).toContain(
+      "The connection is open, but desktop Orca isn't answering. Orca is checking the connection and will retry automatically."
+    )
+    const action = renderer!.root.findByProps({ accessibilityLabel: 'Reconnect now' })
+    act(() => action.props.onPress({ stopPropagation }))
+    expect(stopPropagation).toHaveBeenCalledOnce()
+    expect(reconnect).toHaveBeenCalledOnce()
+  })
 })

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useHostClient, useForceReconnect } from '../transport/client-context'
+import { startForceReconnectWithFeedback } from '../transport/force-reconnect-feedback'
 import type { RpcSuccess } from '../transport/types'
 import type {
   AiVaultListResult,
@@ -169,7 +170,7 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
 
   const retry = useCallback(() => {
     if (connState !== 'connected' && hostId) {
-      void forceReconnect(hostId)
+      startForceReconnectWithFeedback(() => forceReconnect(hostId))
       return
     }
     void loadSessions({ scope, force: false })

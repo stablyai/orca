@@ -4,6 +4,9 @@ import {
   endpointScheme,
   normalizeHostEndpoint
 } from './host-endpoint'
+import type { HostProfile } from './types'
+
+export type HostProfileEdit = { name?: string; endpoint?: string }
 
 export type HostEndpointEditResolution =
   | { kind: 'unchanged'; endpoint: string }
@@ -41,6 +44,19 @@ export function resolveHostEndpointEdit(
     kind: 'changed',
     endpoint: normalizedInput.endpoint + endpointRouteSuffix(storedEndpoint)
   }
+}
+
+export function hostProfileAfterEdit(host: HostProfile, updates: HostProfileEdit): HostProfile {
+  const updatedEndpoint = updates.endpoint
+  const endpoints =
+    updatedEndpoint === undefined || !host.endpoints
+      ? host.endpoints
+      : host.endpoints.map((endpoint) =>
+          endpoint.id === 'direct-primary' && endpoint.kind !== 'relay'
+            ? { ...endpoint, url: updatedEndpoint }
+            : endpoint
+        )
+  return { ...host, ...updates, ...(endpoints ? { endpoints } : {}) }
 }
 
 function sameEndpointAuthority(left: string, right: string): boolean {

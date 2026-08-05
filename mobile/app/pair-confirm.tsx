@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
 import { resolvePairConfirmRouteState } from '../src/transport/pair-confirm-state'
+import { pairingErrorMessage } from '../src/transport/pairing-error-presentation'
 import {
   startPreProfilePairing,
   type PreProfilePairingAttempt
@@ -133,11 +134,7 @@ export default function PairConfirmScreen() {
       }
       console.warn('[pair-confirm] connect failed', err)
       setStatus('error')
-      setErrorMessage(
-        timedOut
-          ? `Couldn't connect within ${PAIRING_OVERALL_TIMEOUT_MS / 1000}s — see log below for where it stalled`
-          : `Pairing failed: ${err instanceof Error ? err.message : String(err)}`
-      )
+      setErrorMessage(pairingErrorMessage(err, timedOut, PAIRING_OVERALL_TIMEOUT_MS / 1000))
     }
   }
 
@@ -186,8 +183,11 @@ export default function PairConfirmScreen() {
               </View>
             )}
             <View style={styles.actionStack}>
-              <Pressable style={styles.primaryButton} onPress={cancel}>
-                <Text style={styles.primaryButtonText}>Back to home</Text>
+              <Pressable style={styles.primaryButton} onPress={() => router.replace('/pair-scan')}>
+                <Text style={styles.primaryButtonText}>Scan latest QR code</Text>
+              </Pressable>
+              <Pressable style={styles.secondaryButton} onPress={cancel}>
+                <Text style={styles.secondaryButtonText}>Back to home</Text>
               </Pressable>
             </View>
           </>

@@ -11,6 +11,7 @@ export function buildConnectionDiagnosticsReport(args: {
   state: ConnectionState
   reconnectAttempts: number
   lastConnectedAt: number | null
+  rpcUnresponsiveSince?: number | null
   platform: string
   appVersion: string
   entries: readonly ConnectionLogEntry[]
@@ -25,7 +26,16 @@ export function buildConnectionDiagnosticsReport(args: {
   lines.push(
     `Endpoint: ${formatEndpoint(args.endpoint)}${isTailscaleEndpoint(args.endpoint) ? ' (Tailscale)' : ''}`
   )
-  lines.push(`State: ${args.state} (reconnect attempts: ${args.reconnectAttempts})`)
+  const stateLabel =
+    args.state === 'connected' && args.rpcUnresponsiveSince != null
+      ? 'connected, application RPC not responding'
+      : args.state
+  lines.push(`State: ${stateLabel} (reconnect attempts: ${args.reconnectAttempts})`)
+  if (args.rpcUnresponsiveSince != null) {
+    lines.push(
+      `Application RPC stalled: ${new Date(args.rpcUnresponsiveSince).toISOString()} (${formatAgo(now - args.rpcUnresponsiveSince)} ago)`
+    )
+  }
   lines.push(
     args.lastConnectedAt == null
       ? 'Last connected: never this session'

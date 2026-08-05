@@ -12,7 +12,8 @@ import { connectionLogStore } from '../src/transport/connection-log-buffer'
 import { useHostClient } from '../src/transport/client-context'
 import {
   useLastConnectedAt,
-  useReconnectAttempt
+  useReconnectAttempt,
+  useRpcUnresponsiveSince
 } from '../src/transport/client-context-connection-metrics'
 import { buildConnectionDiagnosticsReport } from '../src/diagnostics/connection-diagnostics-report'
 import type { ConnectionLogEntry, HostProfile } from '../src/transport/types'
@@ -49,6 +50,7 @@ export default function ConnectionLogScreen() {
   const { state } = useHostClient(selected?.id)
   const reconnectAttempts = useReconnectAttempt(selected?.id)
   const lastConnectedAt = useLastConnectedAt(selected?.id)
+  const rpcUnresponsiveSince = useRpcUnresponsiveSince(selected?.id)
 
   const subscribe = useCallback(
     (listener: () => void) =>
@@ -71,6 +73,7 @@ export default function ConnectionLogScreen() {
       state,
       reconnectAttempts,
       lastConnectedAt,
+      rpcUnresponsiveSince,
       platform: `${Platform.OS} ${Platform.Version ?? ''}`.trim(),
       appVersion: Constants.expoConfig?.version ?? 'unknown',
       entries
@@ -78,7 +81,7 @@ export default function ConnectionLogScreen() {
     await Clipboard.setStringAsync(report)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
-  }, [selected, state, reconnectAttempts, lastConnectedAt, entries])
+  }, [selected, state, reconnectAttempts, lastConnectedAt, rpcUnresponsiveSince, entries])
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
@@ -112,7 +115,9 @@ export default function ConnectionLogScreen() {
         <>
           <View style={styles.statusRow}>
             <Text style={styles.statusText}>
-              {state}
+              {state === 'connected' && rpcUnresponsiveSince != null
+                ? 'Desktop not responding'
+                : state}
               {reconnectAttempts > 0 ? ` · attempt ${reconnectAttempts}` : ''}
             </Text>
             <Pressable style={styles.copyButton} onPress={() => void copyDiagnostics()}>

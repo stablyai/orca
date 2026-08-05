@@ -1,87 +1,121 @@
-import type { ConnectionState } from './types'
+import { RpcControlProbeFollowUp } from './rpc-control-probe-follow-up'
 
 // Why: RN auto-pongs pings natively, so JS needs an app-level probe to detect half-open sockets.
-const ACTIVITY_PROBE_INTERVAL_MS = 20_000
-const ACTIVITY_PROBE_TIMEOUT_MS = 8_000
+export const ACTIVITY_PROBE_INTERVAL_MS = 20_000
+export const ACTIVITY_PROBE_TIMEOUT_MS = 8_000
+// Why: a congested link parks the control reply behind queued terminal frames on
+// the desktop, so while decoded inbound frames still arrive chain this many
+// immediate re-probes before demoting — backlog gets ~24s to drain, while a
+// wedged host (streams flowing, control dead) is still detected, never masked.
+export const ACTIVITY_PROBE_MAX_EXTENSIONS = 2
 
-export type RpcActivityProbeDependencies = {
-  getState: () => ConnectionState
-  getSocket: () => WebSocket | null
-  // Counts only validated inbound traffic, so a malformed frame cannot pass for liveness.
-  getInboundSequence: () => number
+type ActivityProbeDeps<TSocket> = {
+  getConnectedSocket: () => TSocket | null
   nextId: () => string
-  registerPending: (id: string, onSettled: () => void) => void
-  clearPending: (id: string) => void
+  getControlResponseSequence: () => number
+  getInboundActivitySequence: () => number
+  rememberTimedOutControlId: (id: string) => void
+  registerPendingProbe: (id: string, entry: { resolve: () => void; reject: () => void }) => void
+  removePendingProbe: (id: string) => void
   sendProbe: (id: string) => boolean
-  forceReconnect: (socket: WebSocket) => void
+  demote: (socket: TSocket) => void
 }
 
-export type RpcActivityProbe = {
+export type RpcClientActivityProbe<TSocket> = {
+  run: (expectedSocket?: TSocket | null, queueAfterCurrent?: boolean) => void
   start: () => void
   stop: () => void
-  run: () => void
+  finishFollowUp: (socket?: TSocket) => void
 }
 
-export function createRpcActivityProbe(
-  dependencies: RpcActivityProbeDependencies
-): RpcActivityProbe {
+// Why: stream frames can flow while control RPC is wedged; only a control
+// response satisfies this probe — inbound frames merely extend its deadline.
+export function createRpcClientActivityProbe<TSocket>(
+  deps: ActivityProbeDeps<TSocket>
+): RpcClientActivityProbe<TSocket> {
   let timer: ReturnType<typeof setInterval> | null = null
-  let inFlight = false
+  let extensions = 0
+  const followUp = new RpcControlProbeFollowUp<TSocket>(deps.getConnectedSocket, run)
 
-  function stop(): void {
-    if (timer) {
-      clearInterval(timer)
-      timer = null
-    }
-  }
-
-  function run(): void {
-    const probeWs = dependencies.getSocket()
-    if (dependencies.getState() !== 'connected' || !probeWs || inFlight) {
+  function run(
+    expectedSocket: TSocket | null = deps.getConnectedSocket(),
+    queueAfterCurrent = false
+  ): void {
+    const socket = deps.getConnectedSocket()
+    if (!socket || socket !== expectedSocket) {
       return
     }
-    inFlight = true
-    const id = dependencies.nextId()
-    const probeInboundSequence = dependencies.getInboundSequence()
+    if (!followUp.begin(socket, queueAfterCurrent)) {
+      return
+    }
+    const id = deps.nextId()
+    const probeControlResponseSequence = deps.getControlResponseSequence()
+    const probeInboundSequence = deps.getInboundActivitySequence()
     let timedOut = false
     const timeout = setTimeout(() => {
       timedOut = true
-      inFlight = false
-      dependencies.clearPending(id)
-      // Why: any validated frame answered for the socket, even if this probe did not.
-      if (dependencies.getInboundSequence() > probeInboundSequence) {
+      deps.removePendingProbe(id)
+      deps.rememberTimedOutControlId(id)
+      const controlResponded = deps.getControlResponseSequence() > probeControlResponseSequence
+      followUp.finish(socket)
+      if (controlResponded) {
+        extensions = 0
         return
       }
-      console.log('[net] activity-probe TIMEOUT — forcing reconnect', {
-        state: dependencies.getState()
-      })
-      // Why: stale probe timers must not close a replacement socket.
-      if (probeWs === dependencies.getSocket() && probeWs.readyState === WebSocket.OPEN) {
-        dependencies.forceReconnect(probeWs)
+      if (
+        deps.getInboundActivitySequence() > probeInboundSequence &&
+        extensions < ACTIVITY_PROBE_MAX_EXTENSIONS
+      ) {
+        extensions++
+        console.log('[net] activity-probe extended — inbound frames without a control response', {
+          extension: extensions
+        })
+        run(socket)
+        return
       }
+      extensions = 0
+      console.log('[net] activity-probe TIMEOUT — forcing reconnect')
+      deps.demote(socket)
     }, ACTIVITY_PROBE_TIMEOUT_MS)
-
-    dependencies.registerPending(id, () => {
-      if (timedOut) {
-        return
+    deps.registerPendingProbe(id, {
+      resolve: () => {
+        if (timedOut) {
+          return
+        }
+        extensions = 0
+        clearTimeout(timeout)
+        followUp.finish(socket)
+      },
+      reject: () => {
+        if (timedOut) {
+          return
+        }
+        clearTimeout(timeout)
+        followUp.finish(socket)
       }
-      inFlight = false
-      clearTimeout(timeout)
     })
-
-    if (!dependencies.sendProbe(id)) {
-      inFlight = false
+    if (!deps.sendProbe(id)) {
       clearTimeout(timeout)
-      dependencies.clearPending(id)
+      deps.removePendingProbe(id)
+      followUp.finish(socket)
     }
   }
 
   return {
     run,
-    stop,
-    start(): void {
-      stop()
-      timer = setInterval(run, ACTIVITY_PROBE_INTERVAL_MS)
+    start: () => {
+      stopTimer()
+      extensions = 0
+      timer = setInterval(() => run(), ACTIVITY_PROBE_INTERVAL_MS)
+    },
+    stop: stopTimer,
+    finishFollowUp: (socket?: TSocket) => followUp.finish(socket)
+  }
+
+  function stopTimer(): void {
+    if (timer) {
+      clearInterval(timer)
+      timer = null
     }
   }
 }

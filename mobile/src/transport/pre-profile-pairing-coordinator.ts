@@ -2,7 +2,6 @@ import { Platform } from 'react-native'
 import {
   DeviceCredentialInstalledSchema,
   PairingGetEndpointsResultSchema,
-  type DeviceCredentialInstalled,
   type MobileRelayEndpoint
 } from '../../../src/shared/mobile-relay-credential-contract'
 import { connect, type ConnectOptions } from './rpc-client'
@@ -21,6 +20,7 @@ import {
   promotePairingJournalCredential,
   writeMobileRelayCredentialBundle
 } from './mobile-relay-credential-bundle'
+import { publishHostProfileTransaction } from './host-profile-publication'
 import {
   connectMobileRelayForPairing,
   type PairingCandidateClient
@@ -28,8 +28,10 @@ import {
 import { racePairingCandidates, type PairingCandidate } from './pairing-candidate-race'
 import { resolvePairingInviteThroughDirector } from './mobile-relay-invite-director'
 import { createRecoveringPairingRelayCandidate } from './pairing-relay-candidate'
+import { relayWebSocketUrl } from './mobile-endpoint-supervisor-support'
 import { createPairingRelayLogger } from './pairing-relay-log'
 import { redactSocketEndpoint } from './socket-event-debug'
+import { assertCommittedInstall, assertPairingActive } from './pairing-install-verification'
 
 export type PreProfilePairingAttempt = {
   readonly result: Promise<{ hostId: string }>
@@ -138,7 +140,7 @@ async function runPairing(
     offer.publicKeyB64,
     `host-${now}`
   )
-  assertActive(isDisposed)
+  assertPairingActive(isDisposed)
   let journal: MobileRelayPairingJournal | null = null
   if (offer.relay && dependencies.platform !== 'web') {
     journal = createMobileRelayPairingJournal({
@@ -148,7 +150,7 @@ async function runPairing(
       now
     })
     await dependencies.saveJournal(journal)
-    assertActive(isDisposed)
+    assertPairingActive(isDisposed)
   }
 
   const directClient = dependencies.connectDirect(
@@ -198,10 +200,15 @@ async function runPairing(
   }
   const winner = await racePairingCandidates(candidates)
   log('success', 'Pairing path selected', `winner: ${winner.path}`)
-  assertActive(isDisposed)
+  assertPairingActive(isDisposed)
 
   if (!journal) {
-    await dependencies.saveHost(baseHost(offer, hostId, hostName, now))
+    await publishHostProfileTransaction(
+      baseHost(offer, hostId, hostName, now),
+      null,
+      dependencies.saveHost,
+      'adopt-current'
+    )
     return { hostId }
   }
 
@@ -222,7 +229,12 @@ async function runPairing(
     if (winner.path !== 'direct') {
       throw new Error('relay pairing RPC unavailable after relay path authentication')
     }
-    await dependencies.saveHost(baseHost(offer, hostId, hostName, now))
+    await publishHostProfileTransaction(
+      baseHost(offer, hostId, hostName, now),
+      null,
+      dependencies.saveHost,
+      'adopt-current'
+    )
     await dependencies.clearJournal(journal.metadata.journalId)
     return { hostId }
   }
@@ -238,10 +250,19 @@ async function runPairing(
   if (!endpoints.relay) {
     throw new Error('desktop returned no relay endpoint after credential install')
   }
-  assertActive(isDisposed)
-  await dependencies.writeCredentialBundle(promotePairingJournalCredential({ journal, installed }))
-  await dependencies.saveHost(relayHost(journal, endpoints.relay))
-  await dependencies.clearJournal(journal.metadata.journalId)
+  assertPairingActive(isDisposed)
+  const committedJournal = journal
+  const host = relayHost(committedJournal, endpoints.relay)
+  await publishHostProfileTransaction(
+    host,
+    () =>
+      dependencies.writeCredentialBundle(
+        promotePairingJournalCredential({ journal: committedJournal, installed })
+      ),
+    dependencies.saveHost,
+    'adopt-current'
+  )
+  await dependencies.clearJournal(committedJournal.metadata.journalId)
   return { hostId }
 }
 
@@ -275,13 +296,6 @@ function relayHost(journal: MobileRelayPairingJournal, relay: MobileRelayEndpoin
   }
 }
 
-function relayWebSocketUrl(relay: MobileRelayEndpoint): string {
-  const url = new URL(relay.cellUrl)
-  url.protocol = 'wss:'
-  url.pathname = `/v1/connect/${encodeURIComponent(relay.relayHostId)}`
-  return url.toString()
-}
-
 function requireSuccess(response: RpcResponse): unknown {
   if (!response.ok) {
     throw new Error(`${response.error.code}: ${response.error.message}`)
@@ -291,26 +305,4 @@ function requireSuccess(response: RpcResponse): unknown {
 
 function isMethodNotFound(response: RpcResponse): boolean {
   return !response.ok && response.error.code === 'method_not_found'
-}
-
-function assertCommittedInstall(
-  status:
-    | { state: 'not-found' }
-    | { state: 'committed'; result: DeviceCredentialInstalled }
-    | undefined,
-  installed: DeviceCredentialInstalled
-): void {
-  if (
-    !status ||
-    status.state !== 'committed' ||
-    JSON.stringify(status.result) !== JSON.stringify(installed)
-  ) {
-    throw new Error('relay credential install was not authoritatively reconciled')
-  }
-}
-
-function assertActive(isDisposed: () => boolean): void {
-  if (isDisposed()) {
-    throw new Error('mobile pairing cancelled')
-  }
 }

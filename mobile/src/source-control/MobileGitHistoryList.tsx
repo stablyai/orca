@@ -5,6 +5,7 @@ import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import type { ConnectionState, RpcSuccess } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { useForceReconnect } from '../transport/client-context'
+import { startForceReconnectWithFeedback } from '../transport/force-reconnect-feedback'
 import {
   fetchMobileGitHistory,
   mapMobileCommitRows,
@@ -86,7 +87,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
     // MobileSourceControlPanel / issue #5049). The load effect re-runs via
     // connState once the fresh client connects.
     if (connState !== 'connected' && hostId) {
-      void forceReconnect(hostId)
+      startForceReconnectWithFeedback(() => forceReconnect(hostId))
       return
     }
     setReloadNonce((n) => n + 1)

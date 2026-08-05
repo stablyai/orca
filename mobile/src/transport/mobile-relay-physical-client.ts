@@ -4,6 +4,7 @@ import { MobileE2EEV2ClientSession } from './mobile-e2ee-v2-client-session'
 import { MobileE2EEV2PhysicalChannel } from './mobile-e2ee-v2-physical-channel'
 import { createPairingRelayLogger, pairingRelayErrorDetail } from './pairing-relay-log'
 import { isRpcResponse } from './rpc-response-shape'
+import { RecoverableRpcError } from './recoverable-rpc-error'
 import { redactSocketEndpoint } from './socket-event-debug'
 import type { ConnectionLogSink, RpcResponse } from './types'
 import { websocketPayloadToUint8 } from './websocket-payload-bytes'
@@ -177,7 +178,7 @@ export function connectMobileRelayForPairing(args: {
         ) {
           clearTimeout(timer)
           pending.delete(id)
-          reject(new Error('relay E2EE channel not ready'))
+          reject(new RecoverableRpcError('relay E2EE channel not ready'))
         }
       })
     },

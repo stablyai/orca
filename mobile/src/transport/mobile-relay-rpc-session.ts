@@ -1,47 +1,62 @@
 import {
   PairingGetEndpointsResultSchema,
-  type DeviceResumeConfirmed,
-  type MobileRelayEndpoint
+  type DeviceResumeConfirmed
 } from '../../../src/shared/mobile-relay-credential-contract'
 import { MobileRelayE2eeLink } from './mobile-relay-e2ee-link'
 import { MobileRelayRpcStreams } from './mobile-relay-rpc-streams'
+import { waitForMobileRelayRpcConnected } from './mobile-relay-rpc-connect-wait'
 import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel'
 import { markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
+import {
+  rejectMobileRelayPendingRequests,
+  type MobileRelayPendingRequest
+} from './mobile-relay-pending-requests'
+import {
+  CONTROL_PROBE_TIMEOUT_MS,
+  createMobileRelayControlProbe
+} from './mobile-relay-control-probe'
 import { openRpcRequestBudget, resolvePostConnectRequestTimeout } from './rpc-request-budget'
 import { isRpcResponse } from './rpc-response-shape'
-import type { RpcClient } from './rpc-client'
 import type { ConnectionState, RpcResponse } from './types'
+import { TimedOutControlRequestIndex } from './timed-out-control-request-index'
+import { RpcApplicationResponseTracker } from './rpc-application-response-tracker'
+import { RecoverableRpcError } from './recoverable-rpc-error'
+import type {
+  MobileRelayRpcSession,
+  MobileRelayRpcSessionOptions
+} from './mobile-relay-rpc-session-contract'
+export type { MobileRelayRpcSession } from './mobile-relay-rpc-session-contract'
 
-type PendingRequest = {
-  resolve: (response: RpcResponse) => void
-  reject: (error: Error) => void
-  timer: ReturnType<typeof setTimeout>
-}
-
-export type MobileRelayRpcSession = RpcClient & {
-  // The cell's attach-reservation deadline (~10s). Diagnostics only — never
-  // schedule anything from it; rotation keys off getResumeExpiresAt().
-  getAttachDeadlineAt(): number | null
-  getResumeExpiresAt(): number | null
-  getResumeConfirmation(): DeviceResumeConfirmed | null
-  getFailure(): Error | null
-}
-
-export function connectMobileRelayRpcSession(args: {
-  relay: MobileRelayEndpoint
-  resumeToken: string
-  resumeCredentialVersion: number
-  resumeConfirmReqId: string
-  deviceToken: string
-  desktopPublicKeyB64: string
-  requestTimeoutMs?: number
-  createSocket?: (url: string) => WebSocket
-}): MobileRelayRpcSession {
+export function connectMobileRelayRpcSession(
+  args: MobileRelayRpcSessionOptions
+): MobileRelayRpcSession {
   const requestTimeoutMs = args.requestTimeoutMs ?? 30_000
-  const pending = new Map<string, PendingRequest>()
+  const pending = new Map<string, MobileRelayPendingRequest>()
+  const timedOutControlRequestIds = new TimedOutControlRequestIndex()
+  const applicationResponseTracker = new RpcApplicationResponseTracker(
+    args.applicationResponsiveness
+  )
   const stateListeners = new Set<(state: ConnectionState) => void>()
   let state: ConnectionState = 'connecting'
   let requestCounter = 0
+  let controlResponseSequence = 0
+  let inboundActivitySequence = 0
+  const controlProbe = createMobileRelayControlProbe({
+    isActive: () => !closed && state === 'connected',
+    sendProbe: () =>
+      sendRpc('status.get', undefined, {
+        timeoutMs: CONTROL_PROBE_TIMEOUT_MS,
+        probeAfterTimeout: false
+      }),
+    getControlResponseSequence: () => controlResponseSequence,
+    getInboundActivitySequence: () => inboundActivitySequence,
+    onDemote: (error) => {
+      // Why: the replacement session inherits this latch, so a wedged desktop cannot
+      // present each freshly authenticated relay session as healthy (issue #10385).
+      applicationResponseTracker.recordControlPlaneFailure('status.get')
+      fail(asError(error))
+    }
+  })
   let lastConnectedAt: number | null = null
   let attachDeadlineAt: number | null = null
   let resumeExpiresAt: number | null = null
@@ -83,7 +98,12 @@ export function connectMobileRelayRpcSession(args: {
     async sendRequest(method, params, options) {
       const budget = openRpcRequestBudget(options)
       await waitForConnected(budget.timeoutMs)
-      return sendRpc(method, params, resolvePostConnectRequestTimeout(budget, requestTimeoutMs))
+      const timeoutError = `relay RPC timed out: ${method}`
+      const timeoutMs = resolvePostConnectRequestTimeout(budget, requestTimeoutMs, timeoutError)
+      return sendRpc(method, params, {
+        timeoutMs,
+        applicationHealthProbe: options?.applicationHealthProbe === true
+      })
     },
 
     subscribe(method, params, listener, options) {
@@ -99,18 +119,24 @@ export function connectMobileRelayRpcSession(args: {
     getState: () => state,
     getReconnectAttempt: () => 0,
     getLastConnectedAt: () => lastConnectedAt,
+    getRpcUnresponsiveSince: () => applicationResponseTracker.getUnresponsiveSince(),
     onStateChange(listener) {
       stateListeners.add(listener)
       return () => stateListeners.delete(listener)
     },
-    notifyForeground: () => {},
+    notifyForeground() {
+      controlProbe.startTimer()
+      controlProbe.probe()
+    },
     close() {
       if (closed) {
         return
       }
       closed = true
+      controlProbe.stopTimer()
+      timedOutControlRequestIds.clear()
       link.close()
-      rejectPending(new Error('Client closed'))
+      rejectMobileRelayPendingRequests(pending, new Error('Client closed'))
       streams.clear()
       publishState('disconnected')
     },
@@ -126,8 +152,7 @@ export function connectMobileRelayRpcSession(args: {
       const response = await sendRpc(
         'pairing.getEndpoints',
         { resumeConfirmReqId: args.resumeConfirmReqId },
-        requestTimeoutMs,
-        true
+        { timeoutMs: requestTimeoutMs, beforeConnected: true }
       )
       if (!response.ok) {
         throw new Error(response.error.code)
@@ -140,6 +165,7 @@ export function connectMobileRelayRpcSession(args: {
       resumeExpiresAt = result.resumeConfirmation.resumeExpiresAt
       lastConnectedAt = Date.now()
       publishState('connected')
+      controlProbe.startTimer()
     } catch (error) {
       fail(asError(error))
     }
@@ -148,24 +174,45 @@ export function connectMobileRelayRpcSession(args: {
   function sendRpc(
     method: string,
     params: unknown,
-    timeoutMs = requestTimeoutMs,
-    beforeConnected = false
+    options: {
+      timeoutMs?: number
+      beforeConnected?: boolean
+      probeAfterTimeout?: boolean
+      applicationHealthProbe?: boolean
+    } = {}
   ): Promise<RpcResponse> {
-    if (closed || (!beforeConnected && state !== 'connected')) {
-      return Promise.reject(new Error('relay session not connected'))
+    const timeoutMs = options.timeoutMs ?? requestTimeoutMs
+    if (closed || (!options.beforeConnected && state !== 'connected')) {
+      return Promise.reject(new RecoverableRpcError('relay session not connected'))
     }
     const id = nextId()
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         pending.delete(id)
+        timedOutControlRequestIds.remember(id)
         // Why: the frame was written long ago — the desktop may have processed it.
-        reject(markRpcDeliveryUnknown(new Error(`relay RPC timed out: ${method}`)))
+        const error = markRpcDeliveryUnknown(new Error(`relay RPC timed out: ${method}`))
+        reject(error)
+        if (
+          applicationResponseTracker.recordTimeout(
+            id,
+            method,
+            state === 'connected',
+            options.applicationHealthProbe === true
+          )
+        ) {
+          fail(error)
+          return
+        }
+        if (options.probeAfterTimeout !== false) {
+          controlProbe.probe(true)
+        }
       }, timeoutMs)
-      pending.set(id, { resolve, reject, timer })
+      pending.set(id, { resolve, reject, timer, method })
       if (!sendFrame({ id, method, params })) {
         clearTimeout(timer)
         pending.delete(id)
-        reject(new Error('relay E2EE channel not ready'))
+        reject(new RecoverableRpcError('relay E2EE channel not ready'))
       }
     })
   }
@@ -184,10 +231,34 @@ export function connectMobileRelayRpcSession(args: {
     if (!isRpcResponse(value)) {
       return
     }
+    // Why: only well-formed frames prove the desktop pipeline drains — malformed
+    // payloads must neither satisfy nor extend the probe.
+    inboundActivitySequence += 1
     const request = pending.get(value.id)
+    const lateApplicationResponse = applicationResponseTracker.consumeLateResponse(value.id)
+    if (!value.ok && value.error.code === 'unauthorized') {
+      const error = new MobileE2EEAuthenticationError()
+      if (request) {
+        clearTimeout(request.timer)
+        pending.delete(value.id)
+        request.reject(error)
+      }
+      // Why: only the rejected request is definite; concurrent written RPCs may have executed.
+      fail(error, new Error(error.message))
+      return
+    }
+    if (
+      request ||
+      timedOutControlRequestIds.consume(value.id) ||
+      lateApplicationResponse ||
+      streams.isControlResponse(value)
+    ) {
+      controlResponseSequence += 1
+    }
     if (request) {
       clearTimeout(request.timer)
       pending.delete(value.id)
+      applicationResponseTracker.recordResponse(request.method)
       request.resolve(value)
       return
     }
@@ -195,34 +266,16 @@ export function connectMobileRelayRpcSession(args: {
   }
 
   function handleBinary(bytes: Uint8Array): void {
-    streams.handleBinary(bytes)
+    if (streams.handleBinary(bytes)) {
+      inboundActivitySequence += 1
+    }
   }
 
   function waitForConnected(timeoutMs = requestTimeoutMs): Promise<void> {
-    if (state === 'connected') {
-      return Promise.resolve()
-    }
-    return new Promise((resolve, reject) => {
-      let timer: ReturnType<typeof setTimeout> | null = null
-      const unsubscribe = client.onStateChange((next) => {
-        if (next === 'connected') {
-          finish()
-          resolve()
-        } else if (next === 'disconnected' || next === 'auth-failed') {
-          finish()
-          reject(new Error(`relay session ${next}`))
-        }
-      })
-      timer = setTimeout(() => {
-        finish()
-        reject(new Error('relay session connection timed out'))
-      }, timeoutMs)
-      function finish(): void {
-        if (timer) {
-          clearTimeout(timer)
-        }
-        unsubscribe()
-      }
+    return waitForMobileRelayRpcConnected({
+      getState: () => state,
+      subscribe: (listener) => client.onStateChange(listener),
+      timeoutMs
     })
   }
 
@@ -236,30 +289,17 @@ export function connectMobileRelayRpcSession(args: {
     }
   }
 
-  function fail(error: Error): void {
+  function fail(error: Error, pendingError = error): void {
     if (closed) {
       return
     }
     closed = true
+    controlProbe.stopTimer()
+    timedOutControlRequestIds.clear()
     failure = error
     link.close()
-    rejectPending(error)
+    rejectMobileRelayPendingRequests(pending, pendingError)
     publishState(error instanceof MobileE2EEAuthenticationError ? 'auth-failed' : 'disconnected')
-  }
-
-  function rejectPending(error: Error): void {
-    if (pending.size === 0) {
-      return
-    }
-    // Why: pending entries only exist after their frame reached the authenticated
-    // link (sendFrame failures delete them synchronously), so the desktop may
-    // have processed them — mark the ambiguity for callers.
-    markRpcDeliveryUnknown(error)
-    for (const request of pending.values()) {
-      clearTimeout(request.timer)
-      request.reject(error)
-    }
-    pending.clear()
   }
 
   function nextId(): string {

@@ -6,6 +6,7 @@ import { ChevronLeft, Save } from 'lucide-react-native'
 import { getWorktreeLabel } from '../session/worktree-label'
 import { colors, spacing } from '../theme/mobile-theme'
 import { useForceReconnect, useHostClient } from '../transport/client-context'
+import { showForceReconnectError } from '../transport/force-reconnect-feedback'
 import {
   loadMobileFilePreview,
   previewError,
@@ -164,7 +165,7 @@ export function MobileFilePreviewScreen({ route }: Props) {
       (preview.status === 'error' && preview.reconnect) ||
       connState !== 'connected'
     ) {
-      await forceReconnect(previewParams.hostId)
+      await forceReconnect(previewParams.hostId).catch(showForceReconnectError)
       return
     }
     void loadPreview()

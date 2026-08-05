@@ -5,17 +5,20 @@ import {
   type DeviceCredentialInstalled,
   type PairingGetEndpointsResult
 } from '../../../src/shared/mobile-relay-credential-contract'
-import { MobileRelayUpgradeHostRemovedError, saveExistingHostRelayUpgrade } from './host-store'
+import {
+  MobileRelayUpgradeHostRemovedError,
+  MobileRelayUpgradeHostSupersededError,
+  saveExistingHostRelayRouting
+} from './existing-host-relay-routing'
 import { persistRelayHost } from './mobile-endpoint-supervisor-support'
 import {
   MobileRelayCredentialBundleSchema,
-  deleteMobileRelayCredentialBundle,
   writeMobileRelayCredentialBundle,
   type MobileRelayCredentialBundle
 } from './mobile-relay-credential-bundle'
 import {
   createMobileRelayDirectUpgradeJournal,
-  deleteMobileRelayDirectUpgradeJournal,
+  deleteMobileRelayDirectUpgradeJournalIfCurrent,
   readMobileRelayDirectUpgradeJournal,
   writeMobileRelayDirectUpgradeJournal,
   type MobileRelayDirectUpgradeJournal
@@ -31,10 +34,9 @@ export type MobileRelayDirectUpgradeResult = {
 type Dependencies = {
   readJournal: typeof readMobileRelayDirectUpgradeJournal
   writeJournal: typeof writeMobileRelayDirectUpgradeJournal
-  clearJournal: typeof deleteMobileRelayDirectUpgradeJournal
+  clearJournal: typeof deleteMobileRelayDirectUpgradeJournalIfCurrent
   writeBundle: typeof writeMobileRelayCredentialBundle
-  saveHost: typeof saveExistingHostRelayUpgrade
-  deleteBundle: typeof deleteMobileRelayCredentialBundle
+  saveHost: typeof saveExistingHostRelayRouting
   randomBytes: (length: number) => Uint8Array
 }
 
@@ -49,10 +51,9 @@ export async function upgradeDirectMobileRelay(args: {
   const dependencies: Dependencies = {
     readJournal: readMobileRelayDirectUpgradeJournal,
     writeJournal: writeMobileRelayDirectUpgradeJournal,
-    clearJournal: deleteMobileRelayDirectUpgradeJournal,
+    clearJournal: deleteMobileRelayDirectUpgradeJournalIfCurrent,
     writeBundle: writeMobileRelayCredentialBundle,
-    saveHost: saveExistingHostRelayUpgrade,
-    deleteBundle: deleteMobileRelayCredentialBundle,
+    saveHost: saveExistingHostRelayRouting,
     randomBytes: ExpoCrypto.getRandomBytes,
     ...args.dependencies
   }
@@ -65,7 +66,7 @@ export async function upgradeDirectMobileRelay(args: {
 
   const initial = await getEndpoints(args.client, journal.reqId)
   if (initial === 'method-not-found') {
-    await dependencies.clearJournal(args.host.id)
+    await dependencies.clearJournal(journal)
     return null
   }
   if (initial.installStatus?.state === 'committed') {
@@ -80,7 +81,7 @@ export async function upgradeDirectMobileRelay(args: {
     newResumeTokenHash: journal.pendingResumeTokenHash
   })
   if (isMethodNotFound(provisionResponse)) {
-    await dependencies.clearJournal(args.host.id)
+    await dependencies.clearJournal(journal)
     return null
   }
   const installed = DeviceCredentialInstalledSchema.parse(requireSuccess(provisionResponse))
@@ -115,19 +116,20 @@ async function publishCommitted(
       expiresAt: installed.resumeExpiresAt
     }
   })
-  // Why: the overlay must never advertise relay without its matching credential.
-  await dependencies.writeBundle(bundle)
   let updatedHost: HostProfile
   try {
-    updatedHost = await persistRelayHost(host, endpoints.relay, dependencies.saveHost)
+    updatedHost = await persistRelayHost(host, endpoints.relay, dependencies.saveHost, () =>
+      dependencies.writeBundle(bundle)
+    )
   } catch (error) {
     if (error instanceof MobileRelayUpgradeHostRemovedError) {
-      await dependencies.deleteBundle(host.id)
-      await dependencies.clearJournal(host.id)
+      await dependencies.clearJournal(journal)
+    } else if (error instanceof MobileRelayUpgradeHostSupersededError) {
+      await dependencies.clearJournal(journal)
     }
     throw error
   }
-  await dependencies.clearJournal(host.id)
+  await dependencies.clearJournal(journal)
   return { host: updatedHost, bundle }
 }
 

@@ -4,6 +4,8 @@ import {
   encodeBrowserScreencastFrame
 } from '../../../src/shared/browser-screencast-protocol'
 import { encodeTerminalStreamFrame, TerminalStreamOpcode } from './terminal-stream-protocol'
+import { verifyForceReconnectRpcHealth } from './force-reconnect-rpc-health'
+import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel'
 import { isRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 
 const fakes = vi.hoisted(() => ({
@@ -122,6 +124,21 @@ describe('mobile relay RPC session', () => {
     expect(session.getAttachDeadlineAt()).toEqual(expect.any(Number))
   })
 
+  it('does not send a strict Relay request after its budget is exhausted', async () => {
+    const { session } = await authenticateSession()
+
+    await expect(
+      session.sendRequest('status.get', undefined, {
+        timeoutMs: 0,
+        budgetSpansConnect: true,
+        strictDeadline: true
+      })
+    ).rejects.toThrow('relay RPC timed out: status.get')
+    expect(fakes.sendText).not.toHaveBeenCalled()
+
+    session.close()
+  })
+
   it('rejects a mismatched outer credential version and closes the physical link', () => {
     const session = openSession()
     fakes.linkOptions!.onHello({
@@ -218,7 +235,7 @@ describe('mobile relay RPC session', () => {
     await expect(pending.catch((error: unknown) => isRpcDeliveryUnknown(error))).resolves.toBe(true)
   })
 
-  it('marks a relay RPC timeout delivery-unknown', async () => {
+  it('probes before demoting a timed-out relay RPC', async () => {
     const { session } = await authenticateSession()
     vi.useFakeTimers()
     try {
@@ -234,7 +251,578 @@ describe('mobile relay RPC session', () => {
         message: 'relay RPC timed out: terminal.send',
         unknown: true
       })
+      expect(session.getState()).toBe('connected')
+      expect(fakes.close).not.toHaveBeenCalled()
+      expect(
+        fakes.sendText.mock.calls.map(([payload]) => JSON.parse(payload as string)).at(-1)
+      ).toMatchObject({ method: 'status.get' })
+
+      await vi.advanceTimersByTimeAsync(8_000)
+      expect(session.getFailure()).toMatchObject({ message: 'relay RPC timed out: status.get' })
+      expect(session.getState()).toBe('disconnected')
+      expect(fakes.close).toHaveBeenCalledOnce()
     } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps a relay session when its post-timeout probe answers', async () => {
+    const { session } = await authenticateSession()
+    vi.useFakeTimers()
+    try {
+      const request = session.sendRequest('browser.screenshot', {}, { timeoutMs: 100 })
+      const outcome = request.catch((error: unknown) => error)
+
+      await vi.advanceTimersByTimeAsync(100)
+      await expect(outcome).resolves.toMatchObject({
+        message: 'relay RPC timed out: browser.screenshot'
+      })
+      const probe = fakes.sendText.mock.calls
+        .map(([payload]) => JSON.parse(payload as string) as { id: string; method: string })
+        .find(({ method }) => method === 'status.get')!
+      fakes.linkOptions!.onText(
+        JSON.stringify({ id: probe.id, ok: true, result: {}, _meta: { runtimeId: 'runtime-1' } })
+      )
+
+      await vi.advanceTimersByTimeAsync(8_000)
+      expect(session.getState()).toBe('connected')
+      expect(fakes.close).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps Relay application stalls latched through probes and recycles a repeated stall', async () => {
+    const { session } = await authenticateSession()
+    vi.useFakeTimers()
+    try {
+      const first = session
+        .sendRequest('browser.screenshot', {}, { timeoutMs: 100, applicationHealthProbe: true })
+        .catch((error: unknown) => error)
+      await vi.advanceTimersByTimeAsync(100)
+      await expect(first).resolves.toMatchObject({
+        message: 'relay RPC timed out: browser.screenshot'
+      })
+      const probe = fakes.sendText.mock.calls
+        .map(([payload]) => JSON.parse(payload as string) as { id: string; method: string })
+        .find(({ method }) => method === 'status.get')!
+      fakes.linkOptions!.onText(
+        JSON.stringify({ id: probe.id, ok: true, result: {}, _meta: { runtimeId: 'runtime-1' } })
+      )
+
+      expect(session.getRpcUnresponsiveSince?.()).not.toBeNull()
+      expect(session.getState()).toBe('connected')
+      const second = session
+        .sendRequest('browser.screenshot', {}, { timeoutMs: 100, applicationHealthProbe: true })
+        .catch((error: unknown) => error)
+      await vi.advanceTimersByTimeAsync(100)
+
+      await expect(second).resolves.toMatchObject({
+        message: 'relay RPC timed out: browser.screenshot'
+      })
+      expect(session.getState()).toBe('disconnected')
+      expect(fakes.close).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('counts a late timed-out reply as relay control-plane liveness', async () => {
+    const { session } = await authenticateSession()
+    vi.useFakeTimers()
+    try {
+      const request = session.sendRequest('browser.screenshot', {}, { timeoutMs: 100 })
+      const outcome = request.catch((error: unknown) => error)
+      await vi.advanceTimersByTimeAsync(0)
+      const timedOutRequest = fakes.sendText.mock.calls
+        .map(([payload]) => JSON.parse(payload as string) as { id: string; method: string })
+        .find(({ method }) => method === 'browser.screenshot')!
+
+      await vi.advanceTimersByTimeAsync(100)
+      await expect(outcome).resolves.toMatchObject({
+        message: 'relay RPC timed out: browser.screenshot'
+      })
+      fakes.linkOptions!.onText(
+        JSON.stringify({ id: timedOutRequest.id, ok: true, result: {}, _meta: {} })
+      )
+
+      await vi.advanceTimersByTimeAsync(16_500)
+      expect(session.getState()).toBe('connected')
+      expect(fakes.close).not.toHaveBeenCalled()
+    } finally {
+      session.close()
+      vi.useRealTimers()
+    }
+  })
+
+  it('counts a Relay subscription reply as control-plane liveness', async () => {
+    const { session } = await authenticateSession()
+    vi.useFakeTimers()
+    try {
+      session.subscribe('terminal.subscribe', { terminal: 'term-1' }, vi.fn())
+      await vi.advanceTimersByTimeAsync(0)
+      const subscribe = fakes.sendText.mock.calls
+        .map(([payload]) => JSON.parse(payload as string) as { id: string; method: string })
+        .find(({ method }) => method === 'terminal.subscribe')!
+
+      session.notifyForeground()
+      fakes.linkOptions!.onText(
+        JSON.stringify({
+          id: subscribe.id,
+          ok: true,
+          result: { type: 'subscribed', streamId: 42 },
+          _meta: {}
+        })
+      )
+      await vi.advanceTimersByTimeAsync(8_000)
+
+      expect(session.getState()).toBe('connected')
+      expect(fakes.close).not.toHaveBeenCalled()
+    } finally {
+      session.close()
+      vi.useRealTimers()
+    }
+  })
+
+  it.each([
+    ['lease-only terminal', { type: 'subscribed', streamId: null }],
+    ['native-chat snapshot', { type: 'snapshot' }],
+    ['session-tabs snapshot', { type: 'snapshot' }]
+  ])('counts a Relay %s reply as control-plane liveness', async (_name, result) => {
+    const { session } = await authenticateSession()
+    vi.useFakeTimers()
+    try {
+      session.subscribe('nativeChat.subscribe', {}, vi.fn())
+      await vi.advanceTimersByTimeAsync(0)
+      const subscribe = fakes.sendText.mock.calls
+        .map(([payload]) => JSON.parse(payload as string) as { id: string; method: string })
+        .find(({ method }) => method === 'nativeChat.subscribe')!
+
+      session.notifyForeground()
+      fakes.linkOptions!.onText(
+        JSON.stringify({ id: subscribe.id, ok: true, streaming: true, result, _meta: {} })
+      )
+      await vi.advanceTimersByTimeAsync(8_000)
+
+      expect(session.getState()).toBe('connected')
+      expect(fakes.close).not.toHaveBeenCalled()
+    } finally {
+      session.close()
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not count repeated Relay subscription frames as fresh control responses', async () => {
+    const { session } = await authenticateSession()
+    vi.useFakeTimers()
+    try {
+      session.subscribe('nativeChat.subscribe', {}, vi.fn())
+      await vi.advanceTimersByTimeAsync(0)
+      const subscribe = fakes.sendText.mock.calls
+        .map(([payload]) => JSON.parse(payload as string) as { id: string; method: string })
+        .find(({ method }) => method === 'nativeChat.subscribe')!
+      const response = JSON.stringify({
+        id: subscribe.id,
+        ok: true,
+        streaming: true,
+        result: { type: 'snapshot' },
+        _meta: {}
+      })
+      fakes.linkOptions!.onText(response)
+
+      session.notifyForeground()
+      fakes.linkOptions!.onText(response)
+      // Why: the repeated frame buys bounded congestion grace, never satisfaction.
+      await vi.advanceTimersByTimeAsync(8_000)
+      expect(session.getState()).toBe('connected')
+      await vi.advanceTimersByTimeAsync(8_000)
+
+      expect(session.getState()).toBe('disconnected')
+      expect(fakes.close).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not let Relay terminal payload traffic mask a stalled control channel', async () => {
+    const { session } = await authenticateSession()
+    vi.useFakeTimers()
+    try {
+      session.subscribe('terminal.subscribe', { terminal: 'term-1' }, vi.fn())
+      await vi.advanceTimersByTimeAsync(0)
+      const subscribe = fakes.sendText.mock.calls
+        .map(([payload]) => JSON.parse(payload as string) as { id: string; method: string })
+        .find(({ method }) => method === 'terminal.subscribe')!
+      fakes.linkOptions!.onText(
+        JSON.stringify({
+          id: subscribe.id,
+          ok: true,
+          result: { type: 'subscribed', streamId: 42 },
+          _meta: {}
+        })
+      )
+
+      session.notifyForeground()
+      // Why: continuous terminal traffic in every probe window is the exact
+      // #10385 shape — it may only defer failure through the bounded grace.
+      for (let seq = 1; seq <= 3; seq += 1) {
+        fakes.linkOptions!.onBinary(
+          encodeTerminalStreamFrame({
+            opcode: TerminalStreamOpcode.Output,
+            streamId: 42,
+            seq,
+            payload: new TextEncoder().encode('still alive')
+          })
+        )
+        if (seq < 3) {
+          await vi.advanceTimersByTimeAsync(8_000)
+          expect(session.getState()).toBe('connected')
+        }
+      }
+      await vi.advanceTimersByTimeAsync(8_000)
+
+      expect(session.getState()).toBe('disconnected')
+      expect(fakes.close).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps a congested Relay session when a late control reply lands during the grace window', async () => {
+    const { session } = await authenticateSession()
+    vi.useFakeTimers()
+    try {
+      session.subscribe('terminal.subscribe', { terminal: 'term-1' }, vi.fn())
+      await vi.advanceTimersByTimeAsync(0)
+      const subscribe = fakes.sendText.mock.calls
+        .map(([payload]) => JSON.parse(payload as string) as { id: string; method: string })
+        .find(({ method }) => method === 'terminal.subscribe')!
+      fakes.linkOptions!.onText(
+        JSON.stringify({
+          id: subscribe.id,
+          ok: true,
+          result: { type: 'subscribed', streamId: 42 },
+          _meta: {}
+        })
+      )
+
+      session.notifyForeground()
+      await vi.advanceTimersByTimeAsync(0)
+      const probe = fakes.sendText.mock.calls
+        .map(([payload]) => JSON.parse(payload as string) as { id: string; method: string })
+        .findLast(({ method }) => method === 'status.get')!
+      fakes.linkOptions!.onBinary(
+        encodeTerminalStreamFrame({
+          opcode: TerminalStreamOpcode.Output,
+          streamId: 42,
+          seq: 1,
+          payload: new TextEncoder().encode('backlog')
+        })
+      )
+      await vi.advanceTimersByTimeAsync(8_000)
+      expect(session.getState()).toBe('connected')
+
+      // Why: the parked probe reply finally drains behind the terminal backlog —
+      // a real control response ends the grace chain instead of a session failure.
+      fakes.linkOptions!.onText(JSON.stringify({ id: probe.id, ok: true, result: {}, _meta: {} }))
+      await vi.advanceTimersByTimeAsync(8_000)
+
+      expect(session.getState()).toBe('connected')
+      expect(fakes.close).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('periodically demotes a silent half-open Relay session', async () => {
+    vi.useFakeTimers()
+    try {
+      const { session } = await authenticateSession()
+
+      await vi.advanceTimersByTimeAsync(20_000)
+      expect(
+        fakes.sendText.mock.calls.map(([payload]) => JSON.parse(payload as string)).at(-1)
+      ).toMatchObject({ method: 'status.get' })
+      expect(session.getState()).toBe('connected')
+
+      await vi.advanceTimersByTimeAsync(8_000)
+      expect(session.getState()).toBe('disconnected')
+      expect(fakes.close).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('stops periodic Relay probing when the session closes', async () => {
+    vi.useFakeTimers()
+    try {
+      const { session } = await authenticateSession()
+      session.close()
+
+      await vi.advanceTimersByTimeAsync(20_000)
+      expect(fakes.sendText).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('marks a Relay session auth-failed when its periodic probe is unauthorized', async () => {
+    vi.useFakeTimers()
+    try {
+      const { session } = await authenticateSession()
+
+      await vi.advanceTimersByTimeAsync(20_000)
+      const probe = fakes.sendText.mock.calls
+        .map(([payload]) => JSON.parse(payload as string) as { id: string; method: string })
+        .findLast(({ method }) => method === 'status.get')!
+      fakes.linkOptions!.onText(
+        JSON.stringify({
+          id: probe.id,
+          ok: false,
+          error: { code: 'unauthorized', message: 'Invalid device token' },
+          _meta: {}
+        })
+      )
+
+      expect(session.getFailure()).toBeInstanceOf(MobileE2EEAuthenticationError)
+      expect(session.getState()).toBe('auth-failed')
+      expect(fakes.close).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('rejects Force Reconnect health when Relay authorization was revoked', async () => {
+    const { session } = await authenticateSession()
+    const verification = verifyForceReconnectRpcHealth(session)
+    await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledOnce())
+    const probe = JSON.parse(fakes.sendText.mock.calls[0]![0] as string) as { id: string }
+    fakes.linkOptions!.onText(
+      JSON.stringify({
+        id: probe.id,
+        ok: false,
+        error: { code: 'unauthorized', message: 'Invalid device token' },
+        _meta: {}
+      })
+    )
+
+    await expect(verification).rejects.toBeInstanceOf(MobileE2EEAuthenticationError)
+    expect(session.getState()).toBe('auth-failed')
+  })
+
+  it('keeps concurrent written RPCs delivery-ambiguous when one request is unauthorized', async () => {
+    const { session } = await authenticateSession()
+    const rejected = session.sendRequest('status.get').catch((error: unknown) => error)
+    const concurrent = session
+      .sendRequest('terminal.send', { terminal: 'term', text: 'hi' })
+      .catch((error: unknown) => error)
+    await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledTimes(2))
+    const requests = fakes.sendText.mock.calls.map(
+      ([payload]) => JSON.parse(payload as string) as { id: string; method: string }
+    )
+    const rejectedRequest = requests.find(({ method }) => method === 'status.get')!
+
+    fakes.linkOptions!.onText(
+      JSON.stringify({
+        id: rejectedRequest.id,
+        ok: false,
+        error: { code: 'unauthorized', message: 'Invalid device token' },
+        _meta: {}
+      })
+    )
+
+    await expect(rejected).resolves.toBeInstanceOf(MobileE2EEAuthenticationError)
+    await expect(rejected.then(isRpcDeliveryUnknown)).resolves.toBe(false)
+    await expect(concurrent.then(isRpcDeliveryUnknown)).resolves.toBe(true)
+    expect(session.getState()).toBe('auth-failed')
+  })
+
+  it('keeps a Relay session when a fresh timeout probe proves it live', async () => {
+    const { session } = await authenticateSession()
+    vi.useFakeTimers()
+    try {
+      const stalled = session.sendRequest('browser.screenshot', {}, { timeoutMs: 100 })
+      const stalledOutcome = stalled.catch((error: unknown) => error)
+      const healthy = session.sendRequest('status.get', undefined, { timeoutMs: 100 })
+      await vi.advanceTimersByTimeAsync(0)
+      const requests = fakes.sendText.mock.calls.map(
+        ([payload]) => JSON.parse(payload as string) as { id: string; method: string }
+      )
+      const healthRequest = requests.find(({ method }) => method === 'status.get')!
+      fakes.linkOptions!.onText(
+        JSON.stringify({ id: healthRequest.id, ok: true, result: {}, _meta: {} })
+      )
+
+      await expect(healthy).resolves.toMatchObject({ ok: true })
+      await vi.advanceTimersByTimeAsync(100)
+      await expect(stalledOutcome).resolves.toMatchObject({
+        message: 'relay RPC timed out: browser.screenshot'
+      })
+      const probeRequest = fakes.sendText.mock.calls
+        .map(([payload]) => JSON.parse(payload as string) as { id: string; method: string })
+        .findLast(({ id, method }) => method === 'status.get' && id !== healthRequest.id)!
+      fakes.linkOptions!.onText(
+        JSON.stringify({ id: probeRequest.id, ok: true, result: {}, _meta: {} })
+      )
+      // Why: run out the probe deadline — without the reply above, the probe
+      // would demote the session inside this window, so the advance is what
+      // makes the "proves it live" claim falsifiable.
+      await vi.advanceTimersByTimeAsync(8_000)
+      expect(session.getState()).toBe('connected')
+      expect(fakes.close).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('demotes Relay when an earlier response precedes a later control-plane stall', async () => {
+    const { session } = await authenticateSession()
+    vi.useFakeTimers()
+    try {
+      const stalled = session.sendRequest('browser.screenshot', {}, { timeoutMs: 100 })
+      const stalledOutcome = stalled.catch((error: unknown) => error)
+      const healthy = session.sendRequest('status.get', undefined, { timeoutMs: 100 })
+      await vi.advanceTimersByTimeAsync(0)
+      const healthRequest = fakes.sendText.mock.calls
+        .map(([payload]) => JSON.parse(payload as string) as { id: string; method: string })
+        .find(({ method }) => method === 'status.get')!
+      fakes.linkOptions!.onText(
+        JSON.stringify({ id: healthRequest.id, ok: true, result: {}, _meta: {} })
+      )
+
+      await expect(healthy).resolves.toMatchObject({ ok: true })
+      await vi.advanceTimersByTimeAsync(100)
+      await expect(stalledOutcome).resolves.toMatchObject({
+        message: 'relay RPC timed out: browser.screenshot'
+      })
+      expect(session.getState()).toBe('connected')
+
+      await vi.advanceTimersByTimeAsync(8_000)
+      expect(session.getFailure()).toMatchObject({
+        message: 'relay RPC timed out: status.get'
+      })
+      expect(session.getState()).toBe('disconnected')
+      expect(fakes.close).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('queues a fresh Relay timeout probe behind an older in-flight probe', async () => {
+    const { session } = await authenticateSession()
+    vi.useFakeTimers()
+    try {
+      session.notifyForeground()
+      const stalled = session.sendRequest('browser.screenshot', {}, { timeoutMs: 100 })
+      const stalledOutcome = stalled.catch((error: unknown) => error)
+      const healthy = session.sendRequest('speech.models.list', {}, { timeoutMs: 100 })
+      await vi.advanceTimersByTimeAsync(0)
+      const healthyRequest = fakes.sendText.mock.calls
+        .map(([payload]) => JSON.parse(payload as string) as { id: string; method: string })
+        .find(({ method }) => method === 'speech.models.list')!
+      fakes.linkOptions!.onText(
+        JSON.stringify({ id: healthyRequest.id, ok: true, result: {}, _meta: {} })
+      )
+
+      await expect(healthy).resolves.toMatchObject({ ok: true })
+      await vi.advanceTimersByTimeAsync(100)
+      await expect(stalledOutcome).resolves.toMatchObject({
+        message: 'relay RPC timed out: browser.screenshot'
+      })
+      await vi.advanceTimersByTimeAsync(7_900)
+      const probes = fakes.sendText.mock.calls
+        .map(([payload]) => JSON.parse(payload as string) as { method: string })
+        .filter(({ method }) => method === 'status.get')
+      expect(probes).toHaveLength(2)
+      expect(session.getState()).toBe('connected')
+
+      await vi.advanceTimersByTimeAsync(8_000)
+      expect(session.getState()).toBe('disconnected')
+      expect(fakes.close).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps late Relay request evidence across a queued probe handoff', async () => {
+    const { session } = await authenticateSession()
+    vi.useFakeTimers()
+    try {
+      session.notifyForeground()
+      const stalled = session.sendRequest('browser.screenshot', {}, { timeoutMs: 100 })
+      const stalledOutcome = stalled.catch((error: unknown) => error)
+      const healthy = session.sendRequest('speech.models.list', {}, { timeoutMs: 100 })
+      await vi.advanceTimersByTimeAsync(0)
+      const requests = fakes.sendText.mock.calls.map(
+        ([payload]) => JSON.parse(payload as string) as { id: string; method: string }
+      )
+      const stalledRequest = requests.find(({ method }) => method === 'browser.screenshot')!
+      const healthyRequest = requests.find(({ method }) => method === 'speech.models.list')!
+      fakes.linkOptions!.onText(
+        JSON.stringify({ id: healthyRequest.id, ok: true, result: {}, _meta: {} })
+      )
+
+      await expect(healthy).resolves.toMatchObject({ ok: true })
+      await vi.advanceTimersByTimeAsync(100)
+      await expect(stalledOutcome).resolves.toMatchObject({
+        message: 'relay RPC timed out: browser.screenshot'
+      })
+      await vi.advanceTimersByTimeAsync(7_900)
+      const probes = fakes.sendText.mock.calls
+        .map(([payload]) => JSON.parse(payload as string) as { method: string })
+        .filter(({ method }) => method === 'status.get')
+      expect(probes).toHaveLength(2)
+      fakes.linkOptions!.onText(
+        JSON.stringify({ id: stalledRequest.id, ok: true, result: {}, _meta: {} })
+      )
+
+      await vi.advanceTimersByTimeAsync(8_000)
+      expect(
+        fakes.sendText.mock.calls
+          .map(([payload]) => JSON.parse(payload as string) as { method: string })
+          .filter(({ method }) => method === 'status.get')
+      ).toHaveLength(2)
+      expect(session.getState()).toBe('connected')
+      expect(fakes.close).not.toHaveBeenCalled()
+    } finally {
+      session.close()
+      vi.useRealTimers()
+    }
+  })
+
+  it('retains late Relay reply evidence after an earlier probe completes', async () => {
+    const { session } = await authenticateSession()
+    vi.useFakeTimers()
+    try {
+      const request = session.sendRequest('browser.screenshot', {}, { timeoutMs: 100 })
+      const outcome = request.catch((error: unknown) => error)
+      await vi.advanceTimersByTimeAsync(0)
+      const timedOutRequest = fakes.sendText.mock.calls
+        .map(([payload]) => JSON.parse(payload as string) as { id: string; method: string })
+        .find(({ method }) => method === 'browser.screenshot')!
+
+      await vi.advanceTimersByTimeAsync(100)
+      await expect(outcome).resolves.toMatchObject({
+        message: 'relay RPC timed out: browser.screenshot'
+      })
+      const firstProbe = fakes.sendText.mock.calls
+        .map(([payload]) => JSON.parse(payload as string) as { id: string; method: string })
+        .find(({ method }) => method === 'status.get')!
+      fakes.linkOptions!.onText(
+        JSON.stringify({ id: firstProbe.id, ok: true, result: {}, _meta: {} })
+      )
+      await vi.advanceTimersByTimeAsync(0)
+
+      session.notifyForeground()
+      fakes.linkOptions!.onText(
+        JSON.stringify({ id: timedOutRequest.id, ok: true, result: {}, _meta: {} })
+      )
+      await vi.advanceTimersByTimeAsync(16_500)
+
+      expect(session.getState()).toBe('connected')
+      expect(fakes.close).not.toHaveBeenCalled()
+    } finally {
+      session.close()
       vi.useRealTimers()
     }
   })

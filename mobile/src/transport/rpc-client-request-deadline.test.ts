@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connect } from './rpc-client'
+import { verifyForceReconnectRpcHealth } from './force-reconnect-rpc-health'
 
 vi.mock('./e2ee', () => ({
   generateKeyPair: () => ({
@@ -56,6 +57,20 @@ class MockWebSocket {
   }
 }
 
+function sentRequest(socket: MockWebSocket, method: string): { id: string } {
+  const payload = socket.sent.find((value) => value.includes(`"method":"${method}"`))
+  if (!payload) {
+    throw new Error(`No ${method} request sent`)
+  }
+  return JSON.parse(payload.replace(/^encrypted:/, '')) as { id: string }
+}
+
+function sentRequests(socket: MockWebSocket, method: string): { id: string }[] {
+  return socket.sent
+    .filter((value) => value.includes(`"method":"${method}"`))
+    .map((payload) => JSON.parse(payload.replace(/^encrypted:/, '')) as { id: string })
+}
+
 const mockSockets: MockWebSocket[] = []
 const originalWebSocket = globalThis.WebSocket
 
@@ -84,6 +99,23 @@ describe('mobile rpc-client request deadline', () => {
   afterEach(() => {
     vi.useRealTimers()
     globalThis.WebSocket = originalWebSocket
+  })
+
+  it('does not send a strict request after its budget is exhausted', async () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const socket = mockSockets[0]!
+    socket.open()
+
+    await expect(
+      client.sendRequest('status.get', undefined, {
+        timeoutMs: 0,
+        budgetSpansConnect: true,
+        strictDeadline: true
+      })
+    ).rejects.toThrow('Request timed out: status.get')
+    expect(sentRequests(socket, 'status.get')).toEqual([])
+
+    client.close()
   })
 
   it('spends one deadline across connect-wait and request, not one each', async () => {
@@ -170,5 +202,248 @@ describe('mobile rpc-client request deadline', () => {
       client.close()
       await request.catch(() => undefined)
     }
+  })
+
+  it('probes before demoting a request that exceeds its deadline', async () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const socket = mockSockets[0]!
+    socket.open()
+    const request = client.sendRequest('speech.dictation.finish', {}, { timeoutMs: 123 })
+    const outcome = track(request)
+
+    await vi.advanceTimersByTimeAsync(123)
+    expect(outcome.read()).toBe('Request timed out: speech.dictation.finish')
+    const probe = sentRequest(socket, 'status.get')
+    expect(socket.close).not.toHaveBeenCalled()
+    expect(client.getState()).toBe('connected')
+
+    socket.receive(`encrypted:${JSON.stringify({ id: probe.id, ok: true, result: {} })}`)
+    await vi.advanceTimersByTimeAsync(8_000)
+    expect(socket.close).not.toHaveBeenCalled()
+    expect(client.getState()).toBe('connected')
+
+    client.close()
+    await request.catch(() => undefined)
+  })
+
+  it('counts a late timed-out reply as control-plane liveness', async () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const socket = mockSockets[0]!
+    socket.open()
+    const request = client.sendRequest('browser.screenshot', {}, { timeoutMs: 100 })
+    const outcome = track(request)
+    await vi.advanceTimersByTimeAsync(0)
+    const timedOutRequest = sentRequest(socket, 'browser.screenshot')
+
+    await vi.advanceTimersByTimeAsync(100)
+    expect(outcome.read()).toBe('Request timed out: browser.screenshot')
+    expect(sentRequest(socket, 'status.get')).toBeDefined()
+    socket.receive(`encrypted:${JSON.stringify({ id: timedOutRequest.id, ok: true, result: {} })}`)
+
+    await vi.advanceTimersByTimeAsync(16_500)
+    expect(socket.close).not.toHaveBeenCalled()
+    expect(client.getState()).toBe('connected')
+
+    client.close()
+    await request.catch(() => undefined)
+  })
+
+  it('retains late reply evidence after an earlier probe completes', async () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const socket = mockSockets[0]!
+    socket.open()
+    const request = client.sendRequest('browser.screenshot', {}, { timeoutMs: 100 })
+    const outcome = track(request)
+    await vi.advanceTimersByTimeAsync(0)
+    const timedOutRequest = sentRequest(socket, 'browser.screenshot')
+
+    await vi.advanceTimersByTimeAsync(100)
+    expect(outcome.read()).toBe('Request timed out: browser.screenshot')
+    const firstProbe = sentRequest(socket, 'status.get')
+    socket.receive(`encrypted:${JSON.stringify({ id: firstProbe.id, ok: true, result: {} })}`)
+    await vi.advanceTimersByTimeAsync(0)
+
+    client.notifyForeground()
+    socket.receive(`encrypted:${JSON.stringify({ id: timedOutRequest.id, ok: true, result: {} })}`)
+    await vi.advanceTimersByTimeAsync(16_500)
+
+    expect(socket.close).not.toHaveBeenCalled()
+    expect(client.getState()).toBe('connected')
+    client.close()
+    await request.catch(() => undefined)
+  })
+
+  it('demotes when the post-timeout control probe also stalls', async () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const socket = mockSockets[0]!
+    socket.open()
+    const request = client.sendRequest('browser.screenshot', {}, { timeoutMs: 123 })
+    const outcome = track(request)
+
+    await vi.advanceTimersByTimeAsync(123)
+    expect(outcome.read()).toBe('Request timed out: browser.screenshot')
+    expect(sentRequest(socket, 'status.get')).toBeDefined()
+    expect(client.getState()).toBe('connected')
+
+    await vi.advanceTimersByTimeAsync(8_000)
+    expect(socket.close).toHaveBeenCalled()
+    expect(client.getState()).toBe('reconnecting')
+
+    client.close()
+    await request.catch(() => undefined)
+  })
+
+  it('keeps the socket when a fresh post-timeout probe proves it live', async () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const socket = mockSockets[0]!
+    socket.open()
+    const stalled = client.sendRequest('browser.screenshot', {}, { timeoutMs: 100 })
+    const stalledOutcome = stalled.catch((error: unknown) => error)
+    const healthy = client.sendRequest('status.get', undefined, { timeoutMs: 100 })
+    await vi.advanceTimersByTimeAsync(0)
+    const healthRequest = sentRequest(socket, 'status.get')
+    socket.receive(`encrypted:${JSON.stringify({ id: healthRequest.id, ok: true, result: {} })}`)
+
+    await expect(healthy).resolves.toMatchObject({ ok: true })
+    await vi.advanceTimersByTimeAsync(100)
+    await expect(stalledOutcome).resolves.toMatchObject({
+      message: 'Request timed out: browser.screenshot'
+    })
+    const freshProbe = sentRequests(socket, 'status.get').find(({ id }) => id !== healthRequest.id)!
+    socket.receive(`encrypted:${JSON.stringify({ id: freshProbe.id, ok: true, result: {} })}`)
+    await vi.advanceTimersByTimeAsync(8_000)
+    expect(socket.close).not.toHaveBeenCalled()
+    expect(client.getState()).toBe('connected')
+
+    client.close()
+  })
+
+  it('demotes when an earlier response precedes a later control-plane stall', async () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const socket = mockSockets[0]!
+    socket.open()
+    const stalled = client.sendRequest('browser.screenshot', {}, { timeoutMs: 100 })
+    const stalledOutcome = stalled.catch((error: unknown) => error)
+    const healthy = client.sendRequest('status.get', undefined, { timeoutMs: 100 })
+    await vi.advanceTimersByTimeAsync(0)
+    const healthRequest = sentRequest(socket, 'status.get')
+    socket.receive(`encrypted:${JSON.stringify({ id: healthRequest.id, ok: true, result: {} })}`)
+
+    await expect(healthy).resolves.toMatchObject({ ok: true })
+    await vi.advanceTimersByTimeAsync(100)
+    await expect(stalledOutcome).resolves.toMatchObject({
+      message: 'Request timed out: browser.screenshot'
+    })
+    expect(sentRequests(socket, 'status.get')).toHaveLength(2)
+
+    await vi.advanceTimersByTimeAsync(8_000)
+    expect(socket.close).toHaveBeenCalled()
+    expect(client.getState()).toBe('reconnecting')
+
+    client.close()
+  })
+
+  it('queues a fresh timeout probe behind an older in-flight probe', async () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const socket = mockSockets[0]!
+    socket.open()
+    client.notifyForeground()
+    const stalled = client.sendRequest('browser.screenshot', {}, { timeoutMs: 100 })
+    const stalledOutcome = stalled.catch((error: unknown) => error)
+    const healthy = client.sendRequest('speech.models.list', {}, { timeoutMs: 100 })
+    await vi.advanceTimersByTimeAsync(0)
+    const healthyRequest = sentRequest(socket, 'speech.models.list')
+    socket.receive(`encrypted:${JSON.stringify({ id: healthyRequest.id, ok: true, result: {} })}`)
+
+    await expect(healthy).resolves.toMatchObject({ ok: true })
+    await vi.advanceTimersByTimeAsync(100)
+    await expect(stalledOutcome).resolves.toMatchObject({
+      message: 'Request timed out: browser.screenshot'
+    })
+    await vi.advanceTimersByTimeAsync(7_900)
+    expect(sentRequests(socket, 'status.get')).toHaveLength(2)
+    expect(client.getState()).toBe('connected')
+
+    await vi.advanceTimersByTimeAsync(8_000)
+    expect(client.getState()).toBe('reconnecting')
+    expect(socket.close).toHaveBeenCalled()
+    client.close()
+  })
+
+  it('keeps late request evidence across a queued probe handoff', async () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const socket = mockSockets[0]!
+    socket.open()
+    client.notifyForeground()
+    const stalled = client.sendRequest('browser.screenshot', {}, { timeoutMs: 100 })
+    const stalledOutcome = stalled.catch((error: unknown) => error)
+    const healthy = client.sendRequest('speech.models.list', {}, { timeoutMs: 100 })
+    await vi.advanceTimersByTimeAsync(0)
+    const stalledRequest = sentRequest(socket, 'browser.screenshot')
+    const healthyRequest = sentRequest(socket, 'speech.models.list')
+    socket.receive(`encrypted:${JSON.stringify({ id: healthyRequest.id, ok: true, result: {} })}`)
+
+    await expect(healthy).resolves.toMatchObject({ ok: true })
+    await vi.advanceTimersByTimeAsync(100)
+    await expect(stalledOutcome).resolves.toMatchObject({
+      message: 'Request timed out: browser.screenshot'
+    })
+    await vi.advanceTimersByTimeAsync(7_900)
+    expect(sentRequests(socket, 'status.get')).toHaveLength(2)
+    socket.receive(`encrypted:${JSON.stringify({ id: stalledRequest.id, ok: true, result: {} })}`)
+
+    await vi.advanceTimersByTimeAsync(16_500)
+    expect(client.getState()).toBe('connected')
+    expect(socket.close).not.toHaveBeenCalled()
+    client.close()
+  })
+
+  it('keeps late activity-probe evidence across a queued probe handoff', async () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const socket = mockSockets[0]!
+    socket.open()
+    client.notifyForeground()
+    const firstProbe = sentRequest(socket, 'status.get')
+    const stalled = client.sendRequest('browser.screenshot', {}, { timeoutMs: 100 })
+    const stalledOutcome = stalled.catch((error: unknown) => error)
+    const healthy = client.sendRequest('speech.models.list', {}, { timeoutMs: 100 })
+    await vi.advanceTimersByTimeAsync(0)
+    const healthyRequest = sentRequest(socket, 'speech.models.list')
+    socket.receive(`encrypted:${JSON.stringify({ id: healthyRequest.id, ok: true, result: {} })}`)
+
+    await expect(healthy).resolves.toMatchObject({ ok: true })
+    await vi.advanceTimersByTimeAsync(100)
+    await expect(stalledOutcome).resolves.toMatchObject({
+      message: 'Request timed out: browser.screenshot'
+    })
+    await vi.advanceTimersByTimeAsync(7_900)
+    expect(sentRequests(socket, 'status.get')).toHaveLength(2)
+    socket.receive(`encrypted:${JSON.stringify({ id: firstProbe.id, ok: true, result: {} })}`)
+
+    await vi.advanceTimersByTimeAsync(16_500)
+    expect(client.getState()).toBe('connected')
+    expect(socket.close).not.toHaveBeenCalled()
+    client.close()
+  })
+
+  it('keeps Force Reconnect inside its deadline after a late connection', async () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const verification = verifyForceReconnectRpcHealth(client)
+    let outcome = 'pending'
+    const settled = verification.catch((error: Error) => {
+      outcome = error.message
+    })
+
+    await vi.advanceTimersByTimeAsync(14_900)
+    mockSockets.at(-1)!.open()
+    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(99)
+    expect(outcome).toBe('pending')
+
+    await vi.advanceTimersByTimeAsync(1)
+    await settled
+    expect(outcome).toBe('Request timed out: worktree.ps')
+
+    client.close()
   })
 })

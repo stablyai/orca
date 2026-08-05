@@ -28,11 +28,13 @@ import {
   useCloseHost,
   useForceReconnect
 } from '../../../src/transport/client-context'
+import { startForceReconnectWithFeedback } from '../../../src/transport/force-reconnect-feedback'
 import { useWorktreeResync } from '../../../src/transport/use-worktree-resync'
 import { startHostWorktreeRefresh } from '../../../src/worktree/host-worktree-refresh'
 import {
   useLastConnectedAt,
-  useReconnectAttempt
+  useReconnectAttempt,
+  useRpcUnresponsiveSince
 } from '../../../src/transport/client-context-connection-metrics'
 import {
   classifyConnection,
@@ -97,6 +99,7 @@ import {
 import type { RepoSummary } from '../../../src/worktree/host-worktree-rpc-types'
 import type { WorkspaceStatusDefinition } from '../../../../src/shared/types'
 import { DEFAULT_MOBILE_WORKSPACE_STATUSES } from '../../../src/worktree/mobile-workspace-statuses'
+import { worktreeDeleteConfirmationStyles } from '../../../src/components/worktree-delete-confirmation-styles'
 
 function isErrorVerdict(v: ConnectionVerdict): boolean {
   return v.kind === 'warning' || v.kind === 'unreachable' || v.kind === 'auth-failed'
@@ -137,6 +140,7 @@ export function HostScreen({
   const { client, state: connState } = useHostClient(hostId)
   const reconnectAttempts = useReconnectAttempt(hostId)
   const lastConnectedAt = useLastConnectedAt(hostId)
+  const rpcUnresponsiveSince = useRpcUnresponsiveSince(hostId)
   const clientRef = useRef<RpcClient | null>(null)
   const fetchWorktreesInFlightRef = useRef(false)
   // Why: useRef, not useMemo — React may discard memoized values, which would silently
@@ -149,6 +153,12 @@ export function HostScreen({
   const newWorktreeModalVisibleRef = useRef(false)
   const closeHostClient = useCloseHost()
   const forceReconnectHost = useForceReconnect()
+  const reconnectHostWithFeedback = useCallback(() => {
+    if (!hostId) {
+      return
+    }
+    startForceReconnectWithFeedback(() => forceReconnectHost(hostId))
+  }, [forceReconnectHost, hostId])
   const [worktrees, setWorktrees] = useState<Worktree[]>(initialCache ?? [])
   const [worktreesLoaded, setWorktreesLoaded] = useState(initialCache != null)
   // Why (STA-3123): error code of the last failed worktree.ps, so a broken catalog
@@ -816,7 +826,8 @@ export function HostScreen({
             const headerVerdict = classifyConnection({
               state: connState,
               reconnectAttempts,
-              lastConnectedAt
+              lastConnectedAt,
+              rpcUnresponsiveSince
             })
             return (
               <>
@@ -826,25 +837,24 @@ export function HostScreen({
                     {hostName || 'Host'}
                   </Text>
                 </View>
-                {connState !== 'connected' &&
-                  (() => {
-                    // Why: auth-failed has its own banner, so suppress the Reconnect button for that verdict.
-                    const verdict = headerVerdict
-                    const isError = isErrorVerdict(verdict)
-                    const showReconnectButton = isError && hostId && verdict.kind !== 'auth-failed'
-                    if (!showReconnectButton) {
-                      return null
-                    }
-                    return (
-                      <Pressable
-                        style={styles.reconnectButton}
-                        onPress={() => void forceReconnectHost(hostId!)}
-                        hitSlop={8}
-                      >
-                        <Text style={styles.reconnectButtonText}>Reconnect</Text>
-                      </Pressable>
-                    )
-                  })()}
+                {(() => {
+                  // Why: auth-failed has its own banner, so suppress the Reconnect button for that verdict.
+                  const verdict = headerVerdict
+                  const isError = isErrorVerdict(verdict)
+                  const showReconnectButton = isError && hostId && verdict.kind !== 'auth-failed'
+                  if (!showReconnectButton) {
+                    return null
+                  }
+                  return (
+                    <Pressable
+                      style={styles.reconnectButton}
+                      onPress={reconnectHostWithFeedback}
+                      hitSlop={8}
+                    >
+                      <Text style={styles.reconnectButtonText}>Reconnect now</Text>
+                    </Pressable>
+                  )
+                })()}
               </>
             )
           })()}
@@ -1099,7 +1109,7 @@ export function HostScreen({
       {connState === 'auth-failed' && (
         <AuthFailedBanner
           canRetry={!!hostId}
-          onRetry={() => hostId && void forceReconnectHost(hostId)}
+          onRetry={reconnectHostWithFeedback}
           onRepair={() => router.push('/pair-scan')}
           onRemove={() => setConfirmRemoveHost(true)}
         />
@@ -1296,28 +1306,28 @@ export function HostScreen({
       >
         {confirmDelete ? (
           <View>
-            <View style={styles.confirmContent}>
-              <Text style={styles.confirmTitle}>Delete Worktree</Text>
-              <Text style={styles.confirmMessage}>
+            <View style={worktreeDeleteConfirmationStyles.content}>
+              <Text style={worktreeDeleteConfirmationStyles.title}>Delete Worktree</Text>
+              <Text style={worktreeDeleteConfirmationStyles.message}>
                 Delete "{confirmDelete.displayName || confirmDelete.repo}" ({confirmDelete.branch})?
               </Text>
             </View>
-            <View style={styles.confirmButtons}>
+            <View style={worktreeDeleteConfirmationStyles.buttons}>
               <Pressable
                 style={({ pressed }) => [
-                  styles.confirmBtn,
-                  styles.confirmBtnCancel,
-                  pressed && styles.confirmBtnPressed
+                  worktreeDeleteConfirmationStyles.button,
+                  worktreeDeleteConfirmationStyles.cancelButton,
+                  pressed && worktreeDeleteConfirmationStyles.pressedButton
                 ]}
                 onPress={() => setConfirmDelete(null)}
               >
-                <Text style={styles.confirmBtnCancelText}>Cancel</Text>
+                <Text style={worktreeDeleteConfirmationStyles.cancelText}>Cancel</Text>
               </Pressable>
               <Pressable
                 style={({ pressed }) => [
-                  styles.confirmBtn,
-                  styles.confirmBtnDestructive,
-                  pressed && styles.confirmBtnPressed
+                  worktreeDeleteConfirmationStyles.button,
+                  worktreeDeleteConfirmationStyles.destructiveButton,
+                  pressed && worktreeDeleteConfirmationStyles.pressedButton
                 ]}
                 onPress={() => {
                   if (confirmDelete) {
@@ -1327,7 +1337,7 @@ export function HostScreen({
                   setActionTarget(null)
                 }}
               >
-                <Text style={styles.confirmBtnDestructiveText}>Delete</Text>
+                <Text style={worktreeDeleteConfirmationStyles.destructiveText}>Delete</Text>
               </Pressable>
             </View>
           </View>
@@ -1688,48 +1698,5 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4
-  },
-  confirmContent: {
-    paddingBottom: spacing.lg
-  },
-  confirmTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.textPrimary
-  },
-  confirmMessage: {
-    fontSize: typography.bodySize,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-    lineHeight: 20
-  },
-  confirmButtons: {
-    flexDirection: 'row',
-    gap: spacing.sm
-  },
-  confirmBtn: {
-    flex: 1,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: 10,
-    alignItems: 'center'
-  },
-  confirmBtnCancel: {
-    backgroundColor: colors.bgPanel
-  },
-  confirmBtnDestructive: {
-    backgroundColor: colors.statusRed
-  },
-  confirmBtnPressed: {
-    opacity: 0.7
-  },
-  confirmBtnCancelText: {
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    color: colors.textSecondary
-  },
-  confirmBtnDestructiveText: {
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    color: '#fff'
   }
 })

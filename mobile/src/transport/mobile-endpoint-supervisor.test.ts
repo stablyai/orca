@@ -119,9 +119,11 @@ describe('mobile endpoint supervisor', () => {
       .mockReturnValueOnce(new FakeRelaySession('disconnected', new RelayOuterError(4409)))
       .mockReturnValueOnce(new FakeRelaySession('connected'))
     const resolved = { ...relay, cellUrl: 'https://relay-c2.onorca.dev', assignmentEpoch: 8 }
+    const onHostUpdated = vi.fn()
     const deps = dependencies({
       openRelay,
-      resolveRelay: vi.fn(async () => resolved)
+      resolveRelay: vi.fn(async () => resolved),
+      onHostUpdated
     })
     const supervisor = new MobileEndpointSupervisor(logical, host, deps)
 
@@ -130,6 +132,10 @@ describe('mobile endpoint supervisor', () => {
     expect(deps.resolveRelay).toHaveBeenCalledOnce()
     expect(openRelay).toHaveBeenLastCalledWith(resolved, expect.any(Object), expect.any(String))
     expect(deps.saveHost).toHaveBeenCalledWith(
+      expect.objectContaining({ relay: resolved, endpoint: host.endpoint }),
+      undefined
+    )
+    expect(onHostUpdated).toHaveBeenCalledWith(
       expect.objectContaining({ relay: resolved, endpoint: host.endpoint })
     )
     supervisor.stop()

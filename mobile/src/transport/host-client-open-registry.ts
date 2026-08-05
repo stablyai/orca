@@ -1,18 +1,30 @@
 export type HostClientOpenTicket = {
   cancelled: boolean
+  profileVersion: number
   promise: Promise<void>
 }
 
 export class HostClientOpenRegistry {
   private readonly pending = new Map<string, HostClientOpenTicket>()
 
-  getActivePromise(hostId: string): Promise<void> | null {
+  getActivePromise(hostId: string, profileVersion: number): Promise<void> | null {
     const ticket = this.pending.get(hostId)
-    return ticket && !ticket.cancelled ? ticket.promise : null
+    return ticket && !ticket.cancelled && ticket.profileVersion === profileVersion
+      ? ticket.promise
+      : null
   }
 
-  register(hostId: string, promise: Promise<void>): HostClientOpenTicket {
-    const ticket = { cancelled: false, promise }
+  hasActive(hostId: string): boolean {
+    const ticket = this.pending.get(hostId)
+    return Boolean(ticket && !ticket.cancelled)
+  }
+
+  register(hostId: string, profileVersion: number, promise: Promise<void>): HostClientOpenTicket {
+    const previous = this.pending.get(hostId)
+    if (previous) {
+      previous.cancelled = true
+    }
+    const ticket = { cancelled: false, profileVersion, promise }
     this.pending.set(hostId, ticket)
     return ticket
   }

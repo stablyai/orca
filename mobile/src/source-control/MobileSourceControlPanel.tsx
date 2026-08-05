@@ -16,6 +16,7 @@ import type { SourceControlHubTab } from './mobile-source-control-hub-tab'
 import { buildMobilePrChipSummary, countUnresolvedReviewThreads } from './mobile-pr-chip-summary'
 import { isMobileConflictAborting } from './mobile-source-control-conflict-abort'
 import { useMobilePrSidebarController } from '../session/use-mobile-pr-sidebar-controller'
+import { startForceReconnectWithFeedback } from '../transport/force-reconnect-feedback'
 import { prSidebarDetailsNeedFetch } from '../session/mobile-pr-sidebar-state'
 import { MobilePrViewPanelBody } from '../components/pr-sidebar/MobilePrViewPanel'
 import { openMobilePrUrl } from '../components/MobilePrComposeSheet'
@@ -254,7 +255,7 @@ export function MobileSourceControlPanel({
             onPress={() => {
               // Why: a parked reconnect loop makes retry useless — revive the connection instead (issue #5049); loadStatus re-runs on reconnect.
               if (connState !== 'connected' && hostId) {
-                void forceReconnect(hostId)
+                startForceReconnectWithFeedback(() => forceReconnect(hostId))
                 return
               }
               void loadStatus()

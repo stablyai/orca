@@ -23,6 +23,7 @@ vi.mock('react-native', () => ({ Platform: platformMock }))
 
 import {
   deletePairingKeychainItem,
+  deletePairingKeychainItemIfMatches,
   readPairingKeychainItem,
   resetPairingKeychainForTests,
   writePairingKeychainItem
@@ -336,6 +337,22 @@ describe('pairing keychain', () => {
     )
     expect(services).toEqual(['orca.pairing.v2', 'orca.pairing.v1', undefined])
     expect(asyncStorageMock.removeItem).toHaveBeenCalledWith(TOKEN_PRESENCE_KEY)
+  })
+
+  it('does not delete a keychain item replaced by a newer lifecycle', async () => {
+    secureStoreMock.getItemAsync.mockResolvedValue('replacement')
+
+    await expect(deletePairingKeychainItemIfMatches(TOKEN_KEY, 'stale')).resolves.toBe(false)
+
+    expect(secureStoreMock.deleteItemAsync).not.toHaveBeenCalled()
+  })
+
+  it('deletes a keychain item only while its expected value is current', async () => {
+    secureStoreMock.getItemAsync.mockResolvedValue('current')
+
+    await expect(deletePairingKeychainItemIfMatches(TOKEN_KEY, 'current')).resolves.toBe(true)
+
+    expect(secureStoreMock.deleteItemAsync).toHaveBeenCalledOnce()
   })
 
   it('reports a partial delete failure after attempting every generation', async () => {

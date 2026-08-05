@@ -2,8 +2,7 @@ import { Platform } from 'react-native'
 import {
   DeviceCredentialInstalledSchema,
   PairingGetEndpointsResultSchema,
-  type DeviceCredentialInstalled,
-  type MobileRelayEndpoint
+  type DeviceCredentialInstalled
 } from '../../../src/shared/mobile-relay-credential-contract'
 import type { PairingRelay } from '../../../src/shared/mobile-relay-pairing-offer'
 import { loadHosts, saveHost } from './host-store'
@@ -26,6 +25,11 @@ import {
 } from './mobile-relay-physical-client'
 import { createRecoveringPairingRelayCandidate } from './pairing-relay-candidate'
 import type { HostProfile, RpcResponse } from './types'
+import { createMobileRelayRecoveredHost } from './mobile-relay-recovered-host'
+import {
+  getHostProfilePublicationRevision,
+  publishHostProfileTransaction
+} from './host-profile-publication'
 
 export type MobileRelayPairingRecoveryResult = 'none' | 'recovered' | 'deferred'
 
@@ -39,6 +43,7 @@ type RecoveryDependencies = {
   saveHost: typeof saveHost
   connectRelay: typeof connectMobileRelayForPairing
   resolveInviteDirector: typeof resolvePairingInviteThroughDirector
+  onHostPublished: (host: HostProfile) => void
   now: () => number
   platform: string
 }
@@ -53,6 +58,7 @@ const defaultDependencies: RecoveryDependencies = {
   saveHost,
   connectRelay: connectMobileRelayForPairing,
   resolveInviteDirector: resolvePairingInviteThroughDirector,
+  onHostPublished: () => {},
   now: Date.now,
   platform: Platform.OS
 }
@@ -87,9 +93,11 @@ async function runRecovery(
   if (!journal) {
     return 'none'
   }
-  const bundle = await dependencies.readCredentialBundle(journal.metadata.host.id).catch(() => null)
+  const hostId = journal.metadata.host.id
+  const publicationRevision = getHostProfilePublicationRevision(hostId)
+  const bundle = await dependencies.readCredentialBundle(hostId).catch(() => null)
   const hosts = await dependencies.loadHosts().catch(() => [])
-  const existing = hosts.find(({ id }) => id === journal!.metadata.host.id)
+  const existing = hosts.find(({ id }) => id === hostId)
   if (existing?.relayHostId === journal.metadata.relay.relayHostId && bundle) {
     await dependencies.clearJournal(journal.metadata.journalId)
     return 'recovered'
@@ -113,7 +121,7 @@ async function runRecovery(
             })
       const endpoints = await getRecoveryStatus(client, journal, credential.kind)
       if (endpoints.installStatus?.state === 'committed') {
-        await publishCommitted(journal, endpoints, dependencies)
+        await publishCommitted(journal, endpoints, dependencies, publicationRevision, existing)
         return 'recovered'
       }
       if (credential.kind === 'invite' && endpoints.installStatus?.state === 'not-found') {
@@ -128,7 +136,7 @@ async function runRecovery(
         )
         const reconciled = await getRecoveryStatus(client, journal, 'invite')
         assertCommitted(reconciled, installed)
-        await publishCommitted(journal, reconciled, dependencies)
+        await publishCommitted(journal, reconciled, dependencies, publicationRevision, existing)
         return 'recovered'
       }
     } catch {
@@ -226,7 +234,9 @@ async function transitionToInviteAuthorization(
 async function publishCommitted(
   journal: MobileRelayPairingJournal,
   endpoints: ReturnType<typeof PairingGetEndpointsResultSchema.parse>,
-  dependencies: RecoveryDependencies
+  dependencies: RecoveryDependencies,
+  publicationRevision: number,
+  existing: HostProfile | undefined
 ): Promise<void> {
   if (endpoints.installStatus?.state !== 'committed' || !endpoints.relay) {
     throw new Error('relay pairing recovery was not committed')
@@ -243,32 +253,28 @@ async function publishCommitted(
   if (journal.metadata.authorizationMode !== installed.authorizationMode) {
     await dependencies.updateJournal(journal.metadata.journalId, () => reconciledJournal.metadata)
   }
-  await dependencies.writeCredentialBundle(
-    promotePairingJournalCredential({ journal: reconciledJournal, installed })
+  const host = createMobileRelayRecoveredHost(reconciledJournal, endpoints.relay, existing)
+  await publishHostProfileTransaction(
+    host,
+    () =>
+      dependencies.writeCredentialBundle(
+        promotePairingJournalCredential({
+          journal: reconciledJournal,
+          installed
+        })
+      ),
+    dependencies.saveHost,
+    publicationRevision
   )
-  await dependencies.saveHost(relayHost(reconciledJournal, endpoints.relay))
+  dependencies.onHostPublished(host)
   await dependencies.clearJournal(journal.metadata.journalId)
 }
 
-function relayHost(journal: MobileRelayPairingJournal, relay: MobileRelayEndpoint): HostProfile {
-  const host = journal.metadata.host
-  const url = new URL(relay.cellUrl)
-  url.protocol = 'wss:'
-  url.pathname = `/v1/connect/${encodeURIComponent(relay.relayHostId)}`
-  return {
-    ...host,
-    deviceToken: journal.secrets.deviceToken,
-    endpoints: [
-      { id: 'direct-primary', kind: 'lan', url: host.endpoint },
-      { id: 'relay-primary', kind: 'relay', url: url.toString() }
-    ],
-    relayHostId: relay.relayHostId,
-    relay
-  }
-}
-
 function pairingRelay(journal: MobileRelayPairingJournal): PairingRelay {
-  return { ...journal.metadata.relay, inviteToken: journal.secrets.inviteToken }
+  return {
+    ...journal.metadata.relay,
+    inviteToken: journal.secrets.inviteToken
+  }
 }
 
 function requireSuccess(response: RpcResponse): unknown {

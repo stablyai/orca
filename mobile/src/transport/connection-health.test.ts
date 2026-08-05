@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { classifyConnection, verdictDisplayLabel } from './connection-health'
+import {
+  classifyConnection,
+  verdictDisplayLabel,
+  verdictSupportingMessage
+} from './connection-health'
 
 describe('classifyConnection auth-failed verdict', () => {
   it('tells the user to re-pair instead of showing a generic auth error', () => {
@@ -10,7 +14,8 @@ describe('classifyConnection auth-failed verdict', () => {
       nowMs: 1_000_000
     })
     expect(verdict.kind).toBe('auth-failed')
-    expect(verdictDisplayLabel(verdict)).toBe('Pairing invalid — re-pair with your desktop')
+    expect(verdictDisplayLabel(verdict)).toBe('Pairing no longer works')
+    expect(verdictSupportingMessage(verdict)).toContain('Try reconnecting once')
   })
 })
 
@@ -80,7 +85,11 @@ describe('classifyConnection while dialing (issue #10119)', () => {
   it('keeps the warning verdict through a redial instead of reverting to Connecting…', () => {
     for (const state of ['connecting', 'handshaking'] as const) {
       const verdict = classifyConnection({ ...base, state, reconnectAttempts: 3 })
-      expect(verdict).toMatchObject({ kind: 'warning', label: "Can't connect" })
+      expect(verdict).toMatchObject({
+        kind: 'warning',
+        label: 'Still trying to connect',
+        reason: 'retrying'
+      })
     }
   })
 
@@ -113,20 +122,71 @@ describe('classifyConnection while dialing (issue #10119)', () => {
 describe('verdictDisplayLabel', () => {
   it('appends the hint to warning and unreachable labels', () => {
     expect(
-      verdictDisplayLabel({ kind: 'warning', label: "Can't connect", hint: 'check Tailscale' })
-    ).toBe("Can't connect — check Tailscale")
+      verdictDisplayLabel({
+        kind: 'warning',
+        label: 'Still trying to connect',
+        reason: 'retrying',
+        hint: 'check Tailscale'
+      })
+    ).toBe('Still trying to connect — check Tailscale')
     expect(
       verdictDisplayLabel({
         kind: 'unreachable',
-        label: "Can't reach desktop",
+        label: 'Desktop unreachable',
         reason: 'stale',
         hint: 'check Tailscale'
       })
-    ).toBe("Can't reach desktop — check Tailscale")
+    ).toBe("Can't reach desktop through Tailscale")
   })
 
   it('returns the bare label without a hint', () => {
-    expect(verdictDisplayLabel({ kind: 'warning', label: "Can't connect" })).toBe("Can't connect")
+    expect(
+      verdictDisplayLabel({
+        kind: 'warning',
+        label: 'Still trying to connect',
+        reason: 'retrying'
+      })
+    ).toBe('Still trying to connect')
     expect(verdictDisplayLabel({ kind: 'normal', label: 'Connected' })).toBe('Connected')
+  })
+})
+
+describe('verdictSupportingMessage', () => {
+  it('explains automatic recovery for an unresponsive desktop', () => {
+    const verdict = classifyConnection({
+      state: 'connected',
+      reconnectAttempts: 4,
+      lastConnectedAt: 900_000,
+      rpcUnresponsiveSince: 999_000,
+      nowMs: 1_000_000
+    })
+
+    expect(verdictSupportingMessage(verdict)).toBe(
+      "The connection is open, but desktop Orca isn't answering. Orca is checking the connection and will retry automatically."
+    )
+  })
+
+  it('explains the slower background retry cadence', () => {
+    const verdict = classifyConnection({
+      state: 'reconnecting',
+      reconnectAttempts: 12,
+      lastConnectedAt: null,
+      nowMs: 1_000_000
+    })
+
+    expect(verdictSupportingMessage(verdict)).toContain('retries have slowed to save battery')
+  })
+
+  it('gives specific Tailscale recovery steps', () => {
+    const verdict = classifyConnection({
+      state: 'reconnecting',
+      reconnectAttempts: 12,
+      lastConnectedAt: null,
+      endpoint: 'ws://100.65.9.106:6768',
+      nowMs: 1_000_000
+    })
+
+    expect(verdictSupportingMessage(verdict)).toContain('Open Tailscale')
+    expect(verdictSupportingMessage(verdict)).toContain('Orca will keep retrying')
   })
 })

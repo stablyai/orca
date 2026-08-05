@@ -9,11 +9,8 @@ import {
 } from './mobile-endpoint-supervisor-support'
 import { selectDialableRelayCredentials } from './mobile-relay-credential-selection'
 import { createRelayRecoveryLog, type RelayRecoveryLog } from './mobile-relay-recovery-log'
-import {
-  mobileRelayCredentialNeedsRotation,
-  rotateMobileRelayCredential
-} from './mobile-relay-credential-rotation'
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
+import { MobileRelayCredentialRefresh } from './mobile-relay-credential-refresh'
 import { MobileEndpointNudgeRouter } from './mobile-endpoint-nudge-router'
 import { MobileRelayDirectGraceTimer } from './mobile-relay-direct-grace-timer'
 import { MobileRelaySessionEstablisher } from './mobile-relay-session-establisher'
@@ -33,7 +30,6 @@ export class MobileEndpointSupervisor {
   private operationInFlight = false
   private pendingReplace = false
   private readonly nudgeRouter: MobileEndpointNudgeRouter
-  private credentialRotationInFlight = false
   private relayRotationPending = false
   private unsubscribeState: (() => void) | null = null
   private readonly hysteresis: MobileEndpointHysteresis
@@ -43,6 +39,7 @@ export class MobileEndpointSupervisor {
   private readonly directProbe: DirectReturnProbe
   private readonly directGrace: MobileRelayDirectGraceTimer
   private readonly sessionEstablisher: MobileRelaySessionEstablisher
+  private readonly credentialRefresh: MobileRelayCredentialRefresh
 
   constructor(
     private readonly logical: StableLogicalRpcClient,
@@ -57,6 +54,23 @@ export class MobileEndpointSupervisor {
     })
     this.logRelay = createRelayRecoveryLog(dependencies.now, dependencies.onLog)
     this.relayReconnect = new RelayReconnectController(dependencies, this.recoverRelay.bind(this))
+    this.credentialRefresh = new MobileRelayCredentialRefresh({
+      logical,
+      controller: this.relayReconnect,
+      dependencies,
+      bundle: () => this.bundle,
+      host: () => this.host,
+      adoptBundle: (bundle) => {
+        this.bundle = bundle
+      },
+      adoptHost: (host) => {
+        this.host = host
+        this.dependencies.onHostUpdated?.(host)
+      },
+      isStopped: () => this.stopped,
+      isForeground: () => this.foreground,
+      recoverRelay: () => void this.recoverRelay()
+    })
     this.nudgeRouter = new MobileEndpointNudgeRouter({
       logical,
       controller: this.relayReconnect,
@@ -93,7 +107,13 @@ export class MobileEndpointSupervisor {
       relay: () => this.host.relay,
       resolveRelay: dependencies.resolveRelay,
       persistResolvedRelay: async (resolved) => {
+        if (this.stopped) {
+          return
+        }
         this.host = await persistRelayHost(this.host, resolved, dependencies.saveHost)
+        if (!this.stopped) {
+          this.dependencies.onHostUpdated?.(this.host)
+        }
       },
       bundle: () => this.bundle,
       adoptBundle: (bundle) => {
@@ -125,7 +145,7 @@ export class MobileEndpointSupervisor {
       onDirectMigrated: async () => {
         this.leaseRotation.clear()
         this.relayRotationPending = false
-        await this.rotateCredentialIfNeeded(this.relayReconnect.resetForDirectConnection())
+        await this.credentialRefresh.run(this.relayReconnect.resetForDirectConnection())
       },
       afterProbe: () => {
         this.operationInFlight = false
@@ -154,7 +174,7 @@ export class MobileEndpointSupervisor {
       if (state === 'connected') {
         this.directGrace.clear()
         if (this.logical.getActivePath() !== 'relay') {
-          void this.rotateCredentialIfNeeded(this.relayReconnect.resetForDirectConnection())
+          void this.credentialRefresh.run(this.relayReconnect.resetForDirectConnection())
         }
         this.directProbe.schedule()
       } else {
@@ -294,48 +314,6 @@ export class MobileEndpointSupervisor {
       }
       // Why: the active relay can drop while migration follow-up still owns the mutex.
       if (retryAfterOperation && !this.stopped && this.foreground) {
-        void this.recoverRelay()
-      }
-    }
-  }
-
-  private async rotateCredentialIfNeeded(force = false): Promise<void> {
-    if (
-      this.stopped ||
-      this.credentialRotationInFlight ||
-      !this.bundle ||
-      this.logical.getActivePath() === 'relay' ||
-      (!force && !mobileRelayCredentialNeedsRotation(this.bundle, this.dependencies.now()))
-    ) {
-      return
-    }
-    this.credentialRotationInFlight = true
-    let credentialRefreshed = false
-    try {
-      const result = await rotateMobileRelayCredential({
-        client: this.logical,
-        bundle: this.bundle,
-        writeBundle: this.dependencies.writeBundle,
-        randomBytes: this.dependencies.randomBytes
-      })
-      this.bundle = result.bundle
-      // Why: a scheduled rotation can finish after the old credential enters the rejection gate.
-      credentialRefreshed = true
-      this.host = await persistRelayHost(this.host, result.relay, this.dependencies.saveHost)
-    } catch {
-      // Why: pending material remains durable; the next authenticated direct
-      // opportunity must reconcile it before creating another install key.
-    } finally {
-      if (credentialRefreshed) {
-        this.relayReconnect.completeCredentialRefresh()
-      }
-      this.credentialRotationInFlight = false
-      if (
-        credentialRefreshed &&
-        !this.stopped &&
-        this.foreground &&
-        this.relayReconnect.needsRecovery(this.logical.getState())
-      ) {
         void this.recoverRelay()
       }
     }

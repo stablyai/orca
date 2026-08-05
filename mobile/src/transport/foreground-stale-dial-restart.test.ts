@@ -216,7 +216,7 @@ describe('foregrounding a phone that was suspended mid-dial', () => {
     }
     // Four failed dials is past WARNING_ATTEMPTS, so the card reads "Can't
     // connect — check Tailscale" rather than a neutral "Connecting…".
-    expect(label(client, TAILSCALE_ENDPOINT)).toBe("Can't connect — check Tailscale")
+    expect(label(client, TAILSCALE_ENDPOINT)).toBe('Still trying to connect — check Tailscale')
     await advanceUntilDialing(client)
     const doomed = latest()
 
@@ -247,7 +247,7 @@ describe('foregrounding a phone that was suspended mid-dial', () => {
     }
 
     expect(client.getReconnectAttempt()).toBeGreaterThanOrEqual(12)
-    expect(label(client, TAILSCALE_ENDPOINT)).toBe("Can't reach desktop — check Tailscale")
+    expect(label(client, TAILSCALE_ENDPOINT)).toBe("Can't reach desktop through Tailscale")
 
     // And the escalation is not sticky: the desktop comes back, the card clears.
     latest().authenticate()

@@ -7,10 +7,17 @@ import {
 } from './mobile-relay-pairing-recovery'
 import type { PairingCandidateClient } from './mobile-relay-physical-client'
 import type { PairingOffer, RpcResponse } from './types'
+import {
+  recordHostProfileMutation,
+  resetHostProfilePublicationForTests,
+  retireHostProfilePublication
+} from './host-profile-publication'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 vi.mock('expo-crypto', () => ({ getRandomBytes: vi.fn() }))
-vi.mock('expo-secure-store', () => ({ WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'WHEN_UNLOCKED' }))
+vi.mock('expo-secure-store', () => ({
+  WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'WHEN_UNLOCKED'
+}))
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: {} }))
 
 const now = Date.UTC(2026, 6, 13)
@@ -62,13 +69,19 @@ function endpoints(
       relayHostId: offer.relay.relayHostId,
       e2eeFraming: 2 as const
     },
-    installStatus: { v: 1 as const, reqId: journal.metadata.installReqId, ...state }
+    installStatus: {
+      v: 1 as const,
+      reqId: journal.metadata.installReqId,
+      ...state
+    }
   }
 }
 
 function journal(mode: 'authenticated-direct' | 'relay-basis' = 'authenticated-direct') {
   const value = createMobileRelayPairingJournal({
-    offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
+    offer: offer as PairingOffer & {
+      relay: NonNullable<PairingOffer['relay']>
+    },
     hostId: 'host-1',
     hostName: 'Blue Whale',
     now,
@@ -85,7 +98,10 @@ function journal(mode: 'authenticated-direct' | 'relay-basis' = 'authenticated-d
 }
 
 function client(handler: (method: string, params: unknown) => Promise<RpcResponse>) {
-  return { sendRequest: vi.fn(handler), close: vi.fn() } satisfies PairingCandidateClient
+  return {
+    sendRequest: vi.fn(handler),
+    close: vi.fn()
+  } satisfies PairingCandidateClient
 }
 
 function dependencies(args: {
@@ -107,6 +123,7 @@ function dependencies(args: {
     resolveInviteDirector: vi.fn(async () => {
       throw new Error('director not needed')
     }),
+    onHostPublished: vi.fn(),
     now: () => now,
     platform: 'ios'
   }
@@ -115,6 +132,7 @@ function dependencies(args: {
 describe('mobile relay pairing recovery', () => {
   beforeEach(() => {
     resetMobileRelayPairingRecoveryForTests()
+    resetHostProfilePublicationForTests()
   })
 
   it('recovers a lost direct-install response with the pending credential first', async () => {
@@ -140,6 +158,9 @@ describe('mobile relay pairing recovery', () => {
     )
     expect(deps.writeCredentialBundle).toHaveBeenCalledOnce()
     expect(deps.saveHost).toHaveBeenCalledOnce()
+    expect(deps.onHostPublished).toHaveBeenCalledWith(
+      expect.objectContaining({ id: saved.metadata.host.id })
+    )
     expect(deps.clearJournal).toHaveBeenCalledOnce()
   })
 
@@ -219,5 +240,96 @@ describe('mobile relay pairing recovery', () => {
     expect(written.current.token).toBe(saved.secrets.pendingResumeToken)
     expect(saved.metadata.authorizationMode).toBe('authenticated-direct')
     expect(deps.updateJournal).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not resurrect a host removed while startup recovery waits on Relay', async () => {
+    const saved = journal()
+    const committed = installed(saved, 'authenticated-direct')
+    let releaseStatus: () => void = () => {}
+    const statusPending = new Promise<void>((resolve) => {
+      releaseStatus = resolve
+    })
+    const statusStarted = vi.fn()
+    const pending = client(async () => {
+      statusStarted()
+      await statusPending
+      return response(endpoints(saved, { state: 'committed', result: committed }))
+    })
+    const deps = dependencies({
+      journal: saved,
+      connectRelay: vi.fn(() => pending)
+    })
+    const recovery = recoverMobileRelayPairing(deps)
+    await vi.waitFor(() => expect(statusStarted).toHaveBeenCalledOnce())
+
+    retireHostProfilePublication(saved.metadata.host.id)
+    releaseStatus()
+
+    await expect(recovery).resolves.toBe('deferred')
+    expect(deps.writeCredentialBundle).not.toHaveBeenCalled()
+    expect(deps.saveHost).not.toHaveBeenCalled()
+    expect(deps.onHostPublished).not.toHaveBeenCalled()
+    expect(deps.clearJournal).not.toHaveBeenCalled()
+  })
+
+  it('does not overwrite a host edited while startup recovery waits on Relay', async () => {
+    const saved = journal()
+    const committed = installed(saved, 'authenticated-direct')
+    let releaseStatus: () => void = () => {}
+    const statusPending = new Promise<void>((resolve) => {
+      releaseStatus = resolve
+    })
+    const statusStarted = vi.fn()
+    const pending = client(async () => {
+      statusStarted()
+      await statusPending
+      return response(endpoints(saved, { state: 'committed', result: committed }))
+    })
+    const deps = dependencies({
+      journal: saved,
+      connectRelay: vi.fn(() => pending)
+    })
+    const recovery = recoverMobileRelayPairing(deps)
+    await vi.waitFor(() => expect(statusStarted).toHaveBeenCalledOnce())
+
+    recordHostProfileMutation(saved.metadata.host.id)
+    releaseStatus()
+
+    await expect(recovery).resolves.toBe('deferred')
+    expect(deps.writeCredentialBundle).not.toHaveBeenCalled()
+    expect(deps.saveHost).not.toHaveBeenCalled()
+    expect(deps.onHostPublished).not.toHaveBeenCalled()
+  })
+
+  it('preserves current durable host fields when retrying a retained journal', async () => {
+    const saved = journal()
+    const committed = installed(saved, 'authenticated-direct')
+    const editedHost = {
+      ...saved.metadata.host,
+      name: 'Edited name',
+      endpoint: 'ws://192.168.1.99:6768',
+      deviceToken: saved.secrets.deviceToken,
+      lastConnected: 42
+    }
+    const pending = client(async () =>
+      response(endpoints(saved, { state: 'committed', result: committed }))
+    )
+    const deps = dependencies({
+      journal: saved,
+      connectRelay: vi.fn(() => pending)
+    })
+    deps.loadHosts.mockResolvedValue([editedHost])
+
+    await expect(recoverMobileRelayPairing(deps)).resolves.toBe('recovered')
+    expect(deps.saveHost).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: editedHost.name,
+        endpoint: editedHost.endpoint,
+        lastConnected: editedHost.lastConnected,
+        endpoints: expect.arrayContaining([
+          { id: 'direct-primary', kind: 'lan', url: editedHost.endpoint }
+        ])
+      })
+    )
   })
 })

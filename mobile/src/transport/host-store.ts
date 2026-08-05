@@ -1,5 +1,4 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { Platform } from 'react-native'
 import {
   HostProfileSchema,
   StoredHostProfileSchema,
@@ -8,12 +7,7 @@ import {
 } from './types'
 import { getNextHostNameFromHosts } from './host-names'
 import * as hostListLoads from './host-list-load-sharing'
-import {
-  deletePairingKeychainItem,
-  readPairingKeychainItem,
-  resetPairingKeychainForTests,
-  writePairingKeychainItem
-} from './pairing-keychain'
+import { resetPairingKeychainForTests } from './pairing-keychain'
 import {
   retryPendingHostCredentialCleanups,
   scheduleHostCredentialCleanup
@@ -22,54 +16,23 @@ import {
   loadMobileRelayHostOverlayState,
   removeMobileRelayHostOverlay,
   removeMobileRelayHostOverlays,
-  saveMobileRelayHostOverlay
+  saveMobileRelayHostOverlay,
+  updateMobileRelayHostOverlayDirectEndpoint
 } from './mobile-relay-host-overlay-store'
-import { deleteMobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
-import { deleteMobileRelayDirectUpgradeJournal } from './mobile-relay-direct-upgrade-journal'
 import { scheduleOrphanedMobileRelayCleanup } from './mobile-relay-orphan-cleanup'
+import {
+  recordDurableHostIdentity,
+  recordHostEndpointMutation,
+  recordHostProfileMutation,
+  resetHostProfilePublicationForTests,
+  retireHostProfilePublication,
+  serializeHostProfilePublication
+} from './host-profile-publication'
+import { readHostDeviceToken, writeHostDeviceToken } from './host-device-token-store'
+import { createRemovedHostCredentialDelete, deleteHostCredentials } from './host-credential-delete'
 
 const STORAGE_KEY = 'orca:hosts'
-// Why: SecureStore keys must match [A-Za-z0-9._-] (colons rejected), so use dots as the separator.
-const TOKEN_KEY_PREFIX = 'orca.host-token.'
-const WEB_TOKEN_KEY_PREFIX = 'orca:web-host-token:'
-
-function tokenKey(hostId: string): string {
-  return `${TOKEN_KEY_PREFIX}${hostId}`
-}
-
-function webTokenKey(hostId: string): string {
-  return `${WEB_TOKEN_KEY_PREFIX}${hostId}`
-}
-
-async function readDeviceToken(hostId: string): Promise<string | null> {
-  // Why: Expo SecureStore has no working web backend; fall back to AsyncStorage only on web so native still uses the keychain.
-  if (Platform.OS === 'web') {
-    return AsyncStorage.getItem(webTokenKey(hostId))
-  }
-  return readPairingKeychainItem(tokenKey(hostId))
-}
-
-async function writeDeviceToken(hostId: string, token: string): Promise<void> {
-  if (Platform.OS === 'web') {
-    await AsyncStorage.setItem(webTokenKey(hostId), token)
-    return
-  }
-  await writePairingKeychainItem(tokenKey(hostId), token)
-}
-
-async function deleteDeviceToken(hostId: string): Promise<void> {
-  if (Platform.OS === 'web') {
-    await AsyncStorage.removeItem(webTokenKey(hostId))
-    return
-  }
-  await deletePairingKeychainItem(tokenKey(hostId))
-}
-
-async function deleteHostCredentials(hostId: string): Promise<void> {
-  await deleteDeviceToken(hostId)
-  await deleteMobileRelayCredentialBundle(hostId)
-  await deleteMobileRelayDirectUpgradeJournal(hostId)
-}
+type StoredHostIdentity = Pick<HostProfile, 'endpoint' | 'publicKeyB64'>
 
 // Why: Keychain reads are slow (50-200ms) and loadHosts() runs on every screen mount; cache per-hostId in memory, invalidate on save/remove.
 const tokenCache = new Map<string, string>()
@@ -127,7 +90,7 @@ async function doLoadHosts(): Promise<HostProfile[]> {
       const readRevision = hostListLoads.getHostListLoadRevision()
       let fetched: string | null
       try {
-        fetched = await readDeviceToken(stored.id)
+        fetched = await readHostDeviceToken(stored.id)
       } catch {
         // Why: a transient Keychain failure for one entry (e.g. errSecInteractionNotAllowed while locked) must not blank the whole host list; skip it.
         continue
@@ -147,7 +110,11 @@ async function doLoadHosts(): Promise<HostProfile[]> {
       deviceToken: token,
       ...(overlay
         ? {
-            endpoints: overlay.endpoints,
+            endpoints: overlay.endpoints.map((endpoint) =>
+              endpoint.id === 'direct-primary' && endpoint.kind !== 'relay'
+                ? { ...endpoint, url: stored.endpoint }
+                : endpoint
+            ),
             relayHostId: overlay.relayHostId,
             relay: overlay.relay
           }
@@ -156,6 +123,16 @@ async function doLoadHosts(): Promise<HostProfile[]> {
   }
   return out
 }
+
+export async function loadStoredHostIdentity(hostId: string): Promise<StoredHostIdentity | null> {
+  await hostListMutation
+  const stored = (await readStoredHostsForMutation()).find(({ id }) => id === hostId)
+  return stored ? { endpoint: stored.endpoint, publicKeyB64: stored.publicKeyB64 } : null
+}
+
+const deleteRemovedHostCredentials = createRemovedHostCredentialDelete(async (hostId) =>
+  Boolean(await loadStoredHostIdentity(hostId))
+)
 
 export async function resolvePairingHostIdentity(
   publicKeyB64: string,
@@ -186,14 +163,18 @@ async function readStoredHostsForMutation(): Promise<StoredHostProfile[]> {
   }
 }
 
-async function mutateStoredHosts(
-  update: (hosts: StoredHostProfile[]) => StoredHostProfile[]
+export async function mutateStoredHosts(
+  update: (hosts: StoredHostProfile[]) => StoredHostProfile[],
+  beforeWrite?: () => Promise<void>
 ): Promise<void> {
   const mutation = hostListMutation.then(async () => {
     const current = await readStoredHostsForMutation()
     const next = update(current)
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next))
-    hostListLoads.dropSharedHostListLoad()
+    if (next !== current) {
+      await beforeWrite?.()
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+      hostListLoads.dropSharedHostListLoad()
+    }
   })
   hostListMutation = mutation.catch(() => {})
   return mutation
@@ -209,17 +190,7 @@ function toStored(host: HostProfile): StoredHostProfile {
   }
 }
 
-export class MobileRelayUpgradeHostRemovedError extends Error {}
-
 export async function saveHost(host: HostProfile): Promise<void> {
-  await persistHost(host, false)
-}
-
-export async function saveExistingHostRelayUpgrade(host: HostProfile): Promise<void> {
-  await persistHost(host, true)
-}
-
-async function persistHost(host: HostProfile, requireExisting: boolean): Promise<void> {
   const validated = HostProfileSchema.parse(host)
   const stored = toStored(validated)
   const duplicateHostIds = new Set<string>()
@@ -238,15 +209,13 @@ async function persistHost(host: HostProfile, requireExisting: boolean): Promise
         .filter(({ id }) => !duplicateHostIds.has(id))
         .map((candidate) => (candidate.id === stored.id ? stored : candidate))
     }
-    if (requireExisting) {
-      // Why: an in-flight relay upgrade must not resurrect a host the user removed.
-      throw new MobileRelayUpgradeHostRemovedError('mobile relay upgrade host was removed')
-    }
     return [...hosts.filter(({ id }) => !duplicateHostIds.has(id)), stored]
   })
   // Why: write metadata before the keychain token so a crash leaves recoverable orphaned metadata, not an orphaned token that persists forever.
-  await writeDeviceToken(stored.id, validated.deviceToken)
+  await writeHostDeviceToken(stored.id, validated.deviceToken)
   tokenCache.set(stored.id, validated.deviceToken)
+  // Why: a later overlay failure must not hide the already-committed credential identity.
+  recordDurableHostIdentity(validated)
   hostListLoads.dropSharedHostListLoad()
   if (validated.endpoints) {
     await saveMobileRelayHostOverlay({
@@ -278,19 +247,28 @@ async function persistHost(host: HostProfile, requireExisting: boolean): Promise
 }
 
 export async function removeHost(hostId: string): Promise<void> {
-  await mutateStoredHosts((hosts) => hosts.filter((h) => h.id !== hostId))
-  tokenCache.delete(hostId)
-  try {
-    await removeMobileRelayHostOverlay(hostId)
-    hostListLoads.dropSharedHostListLoad()
-  } catch {
-    // Base removal is authoritative; a retained overlay can't resurrect the host and is cleaned on a later retry.
-  }
-  // Why: keychain delete can stall/reject; await only the durable cleanup intent so removeHost can't freeze the UI.
-  try {
-    await scheduleHostCredentialCleanup(hostId, deleteHostCredentials)
-  } catch {
-    // Metadata is already committed; orphan-token recovery is best-effort.
+  const retiredPublication = retireHostProfilePublication(hostId)
+  await serializeHostProfilePublication(hostId, async () => {
+    await mutateStoredHosts((hosts) => hosts.filter((h) => h.id !== hostId))
+    tokenCache.delete(hostId)
+    try {
+      await removeMobileRelayHostOverlay(hostId)
+      hostListLoads.dropSharedHostListLoad()
+    } catch {
+      // Base removal is authoritative; a retained overlay can't resurrect the host and is cleaned on a later retry.
+    }
+    // Why: keychain delete can stall/reject; await only the durable cleanup intent so removeHost can't freeze the UI.
+    try {
+      await scheduleHostCredentialCleanup(hostId, deleteRemovedHostCredentials)
+    } catch {
+      // Metadata is already committed; orphan-token recovery is best-effort.
+    }
+  })
+  if (retiredPublication) {
+    // Why: a retired native write may land after the first delete was attempted.
+    void retiredPublication.then(() =>
+      scheduleHostCredentialCleanup(hostId, deleteRemovedHostCredentials).catch(() => {})
+    )
   }
 }
 
@@ -307,18 +285,31 @@ export async function updateHostNameAndEndpoint(
   hostId: string,
   updates: { name?: string; endpoint?: string }
 ): Promise<void> {
-  await mutateStoredHosts((hosts) => {
-    const index = hosts.findIndex((host) => host.id === hostId)
-    if (index < 0) {
-      throw new Error('Host not found')
+  await serializeHostProfilePublication(hostId, async () => {
+    await mutateStoredHosts(
+      (hosts) => {
+        const index = hosts.findIndex((host) => host.id === hostId)
+        if (index < 0) {
+          throw new Error('Host not found')
+        }
+        const next = hosts.slice()
+        if (updates.name !== undefined) {
+          next[index] = { ...next[index]!, name: updates.name }
+        }
+        if (updates.endpoint !== undefined) {
+          next[index] = { ...next[index]!, endpoint: updates.endpoint }
+        }
+        return next
+      },
+      updates.endpoint === undefined
+        ? undefined
+        : () => updateMobileRelayHostOverlayDirectEndpoint(hostId, updates.endpoint!)
+    )
+    if (updates.endpoint === undefined) {
+      recordHostProfileMutation(hostId)
+    } else {
+      recordHostEndpointMutation(hostId)
     }
-    const next = hosts.slice()
-    next[index] = {
-      ...next[index]!,
-      ...(updates.name !== undefined ? { name: updates.name } : {}),
-      ...(updates.endpoint !== undefined ? { endpoint: updates.endpoint } : {})
-    }
-    return next
   })
 }
 
@@ -343,5 +334,6 @@ export function resetHostStoreForTests(): void {
   hostListMutation = Promise.resolve()
   tokenCache.clear()
   hostListLoads.dropSharedHostListLoad()
+  resetHostProfilePublicationForTests()
   resetPairingKeychainForTests()
 }

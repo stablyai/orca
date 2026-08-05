@@ -1,11 +1,11 @@
 import { ChevronRight, Monitor } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { ConnectionVerdict } from '../transport/connection-health'
-import { verdictDisplayLabel } from '../transport/connection-health'
+import { verdictDisplayLabel, verdictSupportingMessage } from '../transport/connection-health'
 import { mobileConnectionPathLabel } from '../transport/mobile-connection-path-label'
 import type { MobileConnectionPath } from '../transport/stable-logical-rpc-client'
 import type { ConnectionState, HostProfile } from '../transport/types'
-import { colors, radii, spacing } from '../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { homeHostWorktreeSummary, type HostWorktreeInfo } from '../worktree/home-worktree-info'
 import { StatusDot } from './StatusDot'
 
@@ -17,6 +17,7 @@ export function MobileHostCard(props: {
   // Why: the card owns the fresh/stale/unavailable wording so no caller can re-gate the counts
   // away (STA-3123 shipped that bug once already).
   worktreeInfo?: HostWorktreeInfo
+  statusActions?: { label: string; onPress: () => void }[]
   onPress: () => void
   onLongPress: () => void
 }) {
@@ -28,6 +29,7 @@ export function MobileHostCard(props: {
     ['connecting', 'handshaking', 'reconnecting'].includes(props.state) && props.path === 'relay'
   const isError = ['warning', 'unreachable', 'auth-failed'].includes(props.verdict.kind)
   const worktreeSummary = homeHostWorktreeSummary(props.worktreeInfo)
+  const supportingMessage = verdictSupportingMessage(props.verdict)
   return (
     <Pressable
       style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
@@ -57,10 +59,34 @@ export function MobileHostCard(props: {
             {worktreeSummary}
           </Text>
         ) : null}
+        {supportingMessage ? (
+          <Text style={styles.supportingMessage} numberOfLines={3}>
+            {supportingMessage}
+          </Text>
+        ) : null}
         {props.verdict.kind === 'unreachable' && !props.host.relay ? (
           <Text style={styles.discoveryHint} numberOfLines={2}>
             Update desktop Orca and sign in to connect from anywhere
           </Text>
+        ) : null}
+        {props.statusActions?.length ? (
+          <View style={styles.statusActions}>
+            {props.statusActions.map((action) => (
+              <Pressable
+                key={action.label}
+                style={styles.statusAction}
+                accessibilityRole="button"
+                accessibilityLabel={action.label}
+                onPress={(event) => {
+                  event.stopPropagation()
+                  action.onPress()
+                }}
+                hitSlop={8}
+              >
+                <Text style={styles.statusActionText}>{action.label}</Text>
+              </Pressable>
+            ))}
+          </View>
         ) : null}
       </View>
       <ChevronRight size={16} color={colors.textMuted} />
@@ -99,10 +125,35 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textMuted
   },
+  supportingMessage: {
+    marginTop: spacing.xs,
+    fontSize: typography.metaSize,
+    color: colors.textSecondary
+  },
   discoveryHint: {
     marginTop: spacing.xs,
     fontSize: 11,
     lineHeight: 15,
     color: colors.textMuted
+  },
+  statusActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    flexWrap: 'wrap'
+  },
+  statusAction: {
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radii.button,
+    backgroundColor: colors.bgRaised,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle
+  },
+  statusActionText: {
+    color: colors.textPrimary,
+    fontSize: typography.metaSize,
+    fontWeight: '600'
   }
 })

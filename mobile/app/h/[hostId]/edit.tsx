@@ -15,9 +15,15 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../../../src/theme/mobile-theme'
 import { loadHosts, updateHostNameAndEndpoint } from '../../../src/transport/host-store'
+import { getHostListLoadRevision } from '../../../src/transport/host-list-load-sharing'
 import { displayHostEndpoint } from '../../../src/transport/host-endpoint'
 import { resolveHostEndpointEdit } from '../../../src/transport/host-endpoint-edit'
-import { useForceReconnect, usePrimeHosts } from '../../../src/transport/client-context'
+import {
+  useForceReconnect,
+  useForceReconnectAfterEdit,
+  usePrimeHosts
+} from '../../../src/transport/client-context'
+import { showForceReconnectError } from '../../../src/transport/force-reconnect-feedback'
 import type { HostProfile } from '../../../src/transport/types'
 
 export default function EditHostScreen() {
@@ -26,6 +32,7 @@ export default function EditHostScreen() {
   const { hostId } = useLocalSearchParams<{ hostId: string }>()
   const primeHosts = usePrimeHosts()
   const forceReconnectHost = useForceReconnect()
+  const forceReconnectHostAfterEdit = useForceReconnectAfterEdit()
 
   const [host, setHost] = useState<HostProfile | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -100,7 +107,11 @@ export default function EditHostScreen() {
       router.back()
       return
     }
-
+    const updates = {
+      ...(willRename ? { name: nextName } : {}),
+      ...(nextEndpoint !== undefined ? { endpoint: nextEndpoint } : {})
+    }
+    let reconnectProfile: HostProfile | null = null
     savingRef.current = true
     setSaving(true)
     setSaveError(null)
@@ -108,10 +119,7 @@ export default function EditHostScreen() {
       // Why: a single mutateStoredHosts pass so name + endpoint commit
       // atomically — a mid-save failure can never persist one without the
       // other, and a host removed mid-edit throws instead of no-oping.
-      await updateHostNameAndEndpoint(host.id, {
-        ...(willRename ? { name: nextName } : {}),
-        ...(nextEndpoint !== undefined ? { endpoint: nextEndpoint } : {})
-      })
+      await updateHostNameAndEndpoint(host.id, updates)
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Failed to save host.')
       savingRef.current = false
@@ -123,8 +131,22 @@ export default function EditHostScreen() {
       // Why: the write already committed above; a re-prime failure here
       // must not be reported as a save failure — the next loadHosts() call
       // elsewhere in the app picks up the fresh state regardless.
-      const hosts = await loadHosts()
-      primeHosts(hosts)
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const hostLoadRevision = getHostListLoadRevision()
+        const hosts = await loadHosts()
+        if (hostLoadRevision !== getHostListLoadRevision()) {
+          continue
+        }
+        const loadedHost = hosts.find(({ id }) => id === host.id)
+        if (!loadedHost) {
+          break
+        }
+        primeHosts(hosts, hostLoadRevision)
+        if (hostLoadRevision === getHostListLoadRevision()) {
+          reconnectProfile = loadedHost
+          break
+        }
+      }
     } catch {
       // best-effort re-prime; persisted data is unaffected
     }
@@ -137,7 +159,10 @@ export default function EditHostScreen() {
       // Why: reconnect is a follow-on side effect of a save that already
       // committed — its failure or a hang must not be reported as a save
       // failure or block navigating back.
-      void forceReconnectHost(host.id).catch(() => {})
+      const reconnect = reconnectProfile
+        ? forceReconnectHost(host.id, reconnectProfile)
+        : forceReconnectHostAfterEdit(host.id, host, updates)
+      void reconnect.catch(showForceReconnectError)
     }
   }
 

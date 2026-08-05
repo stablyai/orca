@@ -4,6 +4,7 @@ import type { DeviceCredentialInstalled } from '../../../src/shared/mobile-relay
 import type { MobileRelayPairingJournal } from './mobile-relay-pairing-journal'
 import {
   deletePairingKeychainItem,
+  deletePairingKeychainItemIfMatches,
   readPairingKeychainItem,
   writePairingKeychainItem
 } from './pairing-keychain'
@@ -99,6 +100,19 @@ export async function deleteMobileRelayCredentialBundle(hostId: string): Promise
     return
   }
   await deletePairingKeychainItem(credentialKey(hostId))
+}
+
+export function deleteMobileRelayCredentialBundleIfCurrent(
+  bundle: MobileRelayCredentialBundle
+): Promise<boolean> {
+  if (Platform.OS === 'web') {
+    return Promise.resolve(false)
+  }
+  const validated = MobileRelayCredentialBundleSchema.parse(bundle)
+  return deletePairingKeychainItemIfMatches(
+    credentialKey(validated.hostId),
+    JSON.stringify(validated)
+  )
 }
 
 function requireNativeSecretStore(): void {

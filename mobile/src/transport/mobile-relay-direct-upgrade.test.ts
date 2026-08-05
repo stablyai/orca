@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
-import { MobileRelayUpgradeHostRemovedError } from './host-store'
+import {
+  MobileRelayUpgradeLifecycleRetiredError,
+  MobileRelayUpgradeHostRemovedError,
+  MobileRelayUpgradeHostSupersededError
+} from './existing-host-relay-routing'
 import {
   createMobileRelayDirectUpgradeJournal,
   type MobileRelayDirectUpgradeJournal
@@ -59,12 +63,17 @@ function dependencies(journal: MobileRelayDirectUpgradeJournal | null = null) {
     writeJournal: vi.fn(async (next: MobileRelayDirectUpgradeJournal) => {
       stored = next
     }),
-    clearJournal: vi.fn(async () => {
+    clearJournal: vi.fn(async (expected: MobileRelayDirectUpgradeJournal) => {
+      if (stored?.reqId !== expected.reqId) {
+        return false
+      }
       stored = null
+      return true
     }),
     writeBundle: vi.fn(async () => {}),
-    deleteBundle: vi.fn(async () => {}),
-    saveHost: vi.fn(async () => {}),
+    saveHost: vi.fn(async (_host: HostProfile, beforePublish?: () => Promise<void>) => {
+      await beforePublish?.()
+    }),
     randomBytes: (length: number) => new Uint8Array(length).fill(7)
   }
 }
@@ -113,9 +122,108 @@ describe('existing direct pairing relay upgrade', () => {
       reqId: journal!.reqId,
       newResumeTokenHash: journal!.pendingResumeTokenHash
     })
-    expect(deps.writeBundle).toHaveBeenCalledBefore(deps.saveHost)
+    expect(deps.saveHost).toHaveBeenCalledWith(expect.any(Object), expect.any(Function))
+    expect(deps.writeBundle).toHaveBeenCalledOnce()
     expect(result?.host.relay).toEqual(relay)
-    expect(deps.clearJournal).toHaveBeenCalledWith(host.id)
+    expect(deps.clearJournal).toHaveBeenCalledWith(journal)
+  })
+
+  it('does not delete a replacement pairing bundle when the old upgrade is superseded', async () => {
+    const journal = createMobileRelayDirectUpgradeJournal(host.id, (length) =>
+      new Uint8Array(length).fill(6)
+    )
+    const committed = installed(journal)
+    const deps = dependencies(journal)
+    deps.saveHost.mockRejectedValue(
+      new MobileRelayUpgradeHostSupersededError('mobile relay upgrade host was re-paired')
+    )
+    const client = clientWith([
+      success({
+        v: 1,
+        relay,
+        installStatus: { v: 1, reqId: journal.reqId, state: 'committed', result: committed }
+      })
+    ])
+
+    await expect(
+      upgradeDirectMobileRelay({ client, host, dependencies: deps })
+    ).rejects.toBeInstanceOf(MobileRelayUpgradeHostSupersededError)
+    expect(deps.writeBundle).not.toHaveBeenCalled()
+    expect(deps.clearJournal).toHaveBeenCalledWith(journal)
+  })
+
+  it('does not clear a replacement lifecycle journal from a superseded upgrade', async () => {
+    const journal = createMobileRelayDirectUpgradeJournal(host.id, (length) =>
+      new Uint8Array(length).fill(6)
+    )
+    const replacement = createMobileRelayDirectUpgradeJournal(host.id, (length) =>
+      new Uint8Array(length).fill(9)
+    )
+    const committed = installed(journal)
+    const deps = dependencies(journal)
+    deps.saveHost.mockImplementation(async () => {
+      await deps.writeJournal(replacement)
+      throw new MobileRelayUpgradeHostSupersededError('mobile relay upgrade host was re-paired')
+    })
+    const client = clientWith([
+      success({
+        v: 1,
+        relay,
+        installStatus: { v: 1, reqId: journal.reqId, state: 'committed', result: committed }
+      })
+    ])
+
+    await expect(
+      upgradeDirectMobileRelay({ client, host, dependencies: deps })
+    ).rejects.toBeInstanceOf(MobileRelayUpgradeHostSupersededError)
+
+    await expect(deps.readJournal()).resolves.toEqual(replacement)
+  })
+
+  it('retains a committed journal when an endpoint lifecycle is retired', async () => {
+    const journal = createMobileRelayDirectUpgradeJournal(host.id, (length) =>
+      new Uint8Array(length).fill(6)
+    )
+    const committed = installed(journal)
+    const deps = dependencies(journal)
+    deps.saveHost.mockRejectedValue(
+      new MobileRelayUpgradeLifecycleRetiredError('mobile relay endpoint lifecycle was retired')
+    )
+    const client = clientWith([
+      success({
+        v: 1,
+        relay,
+        installStatus: { v: 1, reqId: journal.reqId, state: 'committed', result: committed }
+      })
+    ])
+
+    await expect(
+      upgradeDirectMobileRelay({ client, host, dependencies: deps })
+    ).rejects.toBeInstanceOf(MobileRelayUpgradeLifecycleRetiredError)
+    expect(deps.clearJournal).not.toHaveBeenCalled()
+    await expect(deps.readJournal()).resolves.toEqual(journal)
+  })
+
+  it('retains recovery state when host identity credentials are temporarily unavailable', async () => {
+    const journal = createMobileRelayDirectUpgradeJournal(host.id, (length) =>
+      new Uint8Array(length).fill(8)
+    )
+    const committed = installed(journal)
+    const deps = dependencies(journal)
+    deps.saveHost.mockRejectedValue(new Error('keychain locked'))
+    const client = clientWith([
+      success({
+        v: 1,
+        relay,
+        installStatus: { v: 1, reqId: journal.reqId, state: 'committed', result: committed }
+      })
+    ])
+
+    await expect(upgradeDirectMobileRelay({ client, host, dependencies: deps })).rejects.toThrow(
+      'keychain locked'
+    )
+    expect(deps.writeBundle).not.toHaveBeenCalled()
+    expect(deps.clearJournal).not.toHaveBeenCalled()
   })
 
   it('recovers an already committed install without authorizing a second one', async () => {
@@ -151,7 +259,7 @@ describe('existing direct pairing relay upgrade', () => {
     ])
 
     await expect(upgradeDirectMobileRelay({ client, host, dependencies: deps })).resolves.toBeNull()
-    expect(deps.clearJournal).toHaveBeenCalledWith(host.id)
+    expect(deps.clearJournal).toHaveBeenCalledWith(expect.objectContaining({ hostId: host.id }))
     expect(deps.writeBundle).not.toHaveBeenCalled()
     expect(deps.saveHost).not.toHaveBeenCalled()
   })
@@ -167,7 +275,7 @@ describe('existing direct pairing relay upgrade', () => {
     expect(deps.clearJournal).not.toHaveBeenCalled()
   })
 
-  it('cleans newly installed secrets instead of resurrecting a removed host', async () => {
+  it('does not delete a replacement bundle when removal wins before credential publication', async () => {
     const journal = createMobileRelayDirectUpgradeJournal(host.id, (length) =>
       new Uint8Array(length).fill(5)
     )
@@ -187,7 +295,7 @@ describe('existing direct pairing relay upgrade', () => {
     await expect(
       upgradeDirectMobileRelay({ client, host, dependencies: deps })
     ).rejects.toBeInstanceOf(MobileRelayUpgradeHostRemovedError)
-    expect(deps.deleteBundle).toHaveBeenCalledWith(host.id)
-    expect(deps.clearJournal).toHaveBeenCalledWith(host.id)
+    expect(deps.writeBundle).not.toHaveBeenCalled()
+    expect(deps.clearJournal).toHaveBeenCalledWith(journal)
   })
 })
