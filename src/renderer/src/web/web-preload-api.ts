@@ -268,6 +268,7 @@ type WebRuntimeEnvelopeCaller = <TResult>(
   timeoutMs?: number
 ) => Promise<RuntimeRpcResponse<TResult>>
 type WebGitHubRouteKey =
+  | 'viewer'
   | 'repoSlug'
   | 'repoUpstream'
   | 'prForBranch'
@@ -316,6 +317,7 @@ type WebGitHubRouteKey =
   | 'listIssueTypesBySlug'
   | 'updateIssueTypeBySlug'
 type WebGitHubRuntimeMethod =
+  | 'github.viewer'
   | 'github.repoSlug'
   | 'github.repoUpstream'
   | 'github.prForBranch'
@@ -417,6 +419,7 @@ type WebKeybindingDocument = {
 }
 
 export const GITHUB_WEB_RPC_METHODS = {
+  viewer: 'github.viewer',
   repoSlug: 'github.repoSlug',
   repoUpstream: 'github.repoUpstream',
   prForBranch: 'github.prForBranch',
@@ -2301,7 +2304,18 @@ function createGitHubApi(): WebGitHubApi {
   const route = <Result>(method: WebGitHubRuntimeMethod, args?: unknown): Promise<Result> =>
     callRuntimeResult<Result>(method, mapRepoPathArg(args))
   const githubApi = {
-    viewer: () => Promise.resolve(null),
+    viewer: (args) => {
+      if (!args) {
+        return Promise.resolve(null)
+      }
+      const identity = args.sourceContext?.providerIdentity
+      const host =
+        identity?.provider === 'github' ? identity.host?.trim() || 'github.com' : undefined
+      return route<WebGitHubResult<'viewer'>>(GITHUB_WEB_RPC_METHODS.viewer, {
+        ...args,
+        ...(host ? { host } : {})
+      })
+    },
     repoSlug: (args) => route<WebGitHubResult<'repoSlug'>>(GITHUB_WEB_RPC_METHODS.repoSlug, args),
     repoUpstream: (args) =>
       route<WebGitHubResult<'repoUpstream'>>(GITHUB_WEB_RPC_METHODS.repoUpstream, args),

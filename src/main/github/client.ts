@@ -14,7 +14,6 @@ import type {
   GitHubCommentResult,
   GitHubPRReviewCommentInput,
   PRComment,
-  GitHubViewer,
   GitHubWorkItem,
   GitHubPullRequestStateUpdate,
   GitHubRerunPRChecksResult,
@@ -118,6 +117,8 @@ import {
   spendsSharedGitHubComQuota,
   type RateLimitBucketKind
 } from './rate-limit'
+
+export { getAuthenticatedViewer } from './authenticated-viewer'
 
 type GhExecOptions = GitHubRepoExecOptions
 type HostedReviewLocalGitOptions = ReturnType<typeof getHostedReviewLocalGitOptions>
@@ -463,33 +464,6 @@ export async function starOrca(): Promise<boolean> {
     return true
   } catch {
     return false
-  } finally {
-    release()
-  }
-}
-
-/**
- * Get the authenticated GitHub viewer when gh is available and logged in.
- * Returns null when gh is unavailable, unauthenticated, or the lookup fails.
- */
-export async function getAuthenticatedViewer(): Promise<GitHubViewer | null> {
-  await acquire()
-  try {
-    const { stdout } = await execFileAsync(
-      'gh',
-      ['api', 'user', '--jq', '{login: .login, email: .email}'],
-      { encoding: 'utf-8' }
-    )
-    const viewer = JSON.parse(stdout) as { login?: string; email?: string | null }
-    if (!viewer.login?.trim()) {
-      return null
-    }
-    return {
-      login: viewer.login.trim(),
-      email: viewer.email?.trim() || null
-    }
-  } catch {
-    return null
   } finally {
     release()
   }

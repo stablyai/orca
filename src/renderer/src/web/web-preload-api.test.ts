@@ -3731,6 +3731,28 @@ describe('web GitHub preload API', () => {
       expectedParams: unknown
     }[] = [
       {
+        key: 'viewer',
+        args: {
+          repoPath,
+          repoId: 'repo-1',
+          force: true,
+          sourceContext: {
+            providerIdentity: { provider: 'github', host: 'ghe.example.com' }
+          }
+        },
+        expectedMethod: 'github.viewer',
+        expectedParams: {
+          repoPath,
+          repoId: 'repo-1',
+          force: true,
+          repo: 'id:repo-1',
+          host: 'ghe.example.com',
+          sourceContext: {
+            providerIdentity: { provider: 'github', host: 'ghe.example.com' }
+          }
+        }
+      },
+      {
         key: 'repoSlug',
         args: { repoPath },
         expectedMethod: 'github.repoSlug',

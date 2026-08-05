@@ -38,6 +38,24 @@ describe('github RPC methods', () => {
     expect(response).toMatchObject({ ok: true, result: { ok: true } })
   })
 
+  it('looks up the authenticated viewer in the repo GitHub scope', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getGitHubViewer: vi.fn().mockResolvedValue({ login: 'octocat', email: null })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('github.viewer', { repo: 'repo-1', host: 'ghe.example.com', force: true })
+    )
+
+    expect(runtime.getGitHubViewer).toHaveBeenCalledWith('repo-1', 'ghe.example.com', true)
+    expect(response).toMatchObject({
+      ok: true,
+      result: { login: 'octocat', email: null }
+    })
+  })
+
   it('lists work items on the runtime server', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

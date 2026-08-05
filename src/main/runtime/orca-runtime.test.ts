@@ -236,6 +236,7 @@ const {
   getPRForBranchOutcomeMock,
   getRepoSlugMock,
   getRepoUpstreamMock,
+  getAuthenticatedViewerMock,
   getGitHubWorkItemMock,
   getPullRequestPushTargetMock,
   getGitHubWorkItemByOwnerRepoMock,
@@ -343,6 +344,7 @@ const {
     getPRForBranchOutcomeMock: vi.fn().mockResolvedValue({ kind: 'no-pr', fetchedAt: 0 }),
     getRepoSlugMock: vi.fn().mockResolvedValue(null),
     getRepoUpstreamMock: vi.fn().mockResolvedValue(null),
+    getAuthenticatedViewerMock: vi.fn().mockResolvedValue(null),
     getGitHubWorkItemMock: vi.fn(),
     getPullRequestPushTargetMock: vi.fn(),
     getGitHubWorkItemByOwnerRepoMock: vi.fn(),
@@ -517,6 +519,7 @@ vi.mock('../github/client', async (importOriginal) => {
     getPRForBranchOutcome: getPRForBranchOutcomeMock,
     getRepoSlug: getRepoSlugMock,
     getRepoUpstream: getRepoUpstreamMock,
+    getAuthenticatedViewer: getAuthenticatedViewerMock,
     getWorkItem: getGitHubWorkItemMock,
     getPullRequestPushTarget: getPullRequestPushTargetMock,
     getWorkItemByOwnerRepo: getGitHubWorkItemByOwnerRepoMock,
@@ -734,6 +737,8 @@ function resetRuntimeTestMocks(): void {
   getRepoSlugMock.mockResolvedValue(null)
   getRepoUpstreamMock.mockReset()
   getRepoUpstreamMock.mockResolvedValue(null)
+  getAuthenticatedViewerMock.mockReset()
+  getAuthenticatedViewerMock.mockResolvedValue(null)
   getGitHubWorkItemMock.mockReset()
   getGitHubWorkItemMock.mockResolvedValue(null)
   getPullRequestPushTargetMock.mockReset()
@@ -6314,8 +6319,13 @@ describe('OrcaRuntimeService', () => {
       ]
     }
     const runtime = new OrcaRuntimeService(remoteStore as never)
+    getAuthenticatedViewerMock.mockResolvedValueOnce({ login: 'octocat', email: null })
 
     await expect(runtime.getRepoSlug('id:repo-1')).resolves.toBeNull()
+    await expect(runtime.getGitHubViewer('id:repo-1', 'github.com')).resolves.toEqual({
+      login: 'octocat',
+      email: null
+    })
     await expect(runtime.getRepoIssue('id:repo-1', 12)).resolves.toEqual({
       number: 12,
       title: 'Remote issue'
@@ -6332,6 +6342,7 @@ describe('OrcaRuntimeService', () => {
       ok: true
     })
     expect(getIssueMock).toHaveBeenCalledWith('/remote/repo', 12, 'ssh-1')
+    expect(getAuthenticatedViewerMock).toHaveBeenCalledWith({ host: 'github.com' })
     expect(listGitHubIssuesMock).toHaveBeenCalledWith('/remote/repo', 10, undefined, 'ssh-1')
     expect(requestGitHubPRReviewersMock).toHaveBeenCalledWith(
       '/remote/repo',
@@ -6372,6 +6383,7 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     getRepoSlugMock.mockResolvedValueOnce({ owner: 'acme', repo: 'orca' })
     getRepoUpstreamMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    getAuthenticatedViewerMock.mockResolvedValueOnce({ login: 'octocat', email: null })
 
     await expect(runtime.getRepoSlug('id:repo-1')).resolves.toEqual({
       owner: 'acme',
@@ -6381,10 +6393,19 @@ describe('OrcaRuntimeService', () => {
       owner: 'stablyai',
       repo: 'orca'
     })
+    await expect(runtime.getGitHubViewer('id:repo-1', 'ghe.example.com')).resolves.toEqual({
+      login: 'octocat',
+      email: null
+    })
 
     const runtimeOptions = { localGitExecOptions: { wslDistro: 'Ubuntu' } }
     expect(getRepoSlugMock).toHaveBeenCalledWith(TEST_REPO_PATH, null, runtimeOptions)
     expect(getRepoUpstreamMock).toHaveBeenCalledWith(TEST_REPO_PATH, null, runtimeOptions)
+    expect(getAuthenticatedViewerMock).toHaveBeenCalledWith({
+      cwd: TEST_REPO_PATH,
+      host: 'ghe.example.com',
+      wslDistro: 'Ubuntu'
+    })
   })
 
   it('routes runtime GitHub issue and work-item actions through the selected WSL project runtime', async () => {

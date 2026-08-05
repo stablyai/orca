@@ -560,6 +560,7 @@ import {
   getPRForBranchOutcome,
   getRepoSlug,
   getRepoUpstream,
+  getAuthenticatedViewer,
   getWorkItem,
   listIssues as listGitHubIssues,
   listWorkItems,
@@ -19134,6 +19135,21 @@ export class OrcaRuntimeService {
     force?: boolean
   }): Promise<Awaited<ReturnType<typeof getRateLimit>>> {
     return getRateLimit(options)
+  }
+
+  async getGitHubViewer(
+    repoSelector: string,
+    host?: string,
+    force?: boolean
+  ): Promise<Awaited<ReturnType<typeof getAuthenticatedViewer>>> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    return getAuthenticatedViewer({
+      ...(repo.connectionId
+        ? {}
+        : { cwd: repo.path, ...this.getLocalGitExecutionOptionArgs(repo)[0] }),
+      ...(host ? { host } : {}),
+      ...(force === undefined ? {} : { force })
+    })
   }
 
   async getRepoPRForBranch(

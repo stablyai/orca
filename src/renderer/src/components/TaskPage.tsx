@@ -399,6 +399,11 @@ import {
   type LinearOrderBy,
   type LinearViewMode
 } from '@/components/task-page-localized-options'
+import { useGitHubViewerLogin } from '@/components/task-page-github-viewer-login'
+import {
+  deriveGitHubTaskPreset,
+  requiresGitHubViewerLogin
+} from '@/components/task-page-preset-highlight'
 
 function isGitLabMRFilter(value: GitLabTaskFilter | GitLabIssueFilter): value is GitLabTaskFilter {
   return value === 'opened' || value === 'merged' || value === 'closed' || value === 'all'
@@ -5843,6 +5848,28 @@ export default function TaskPage(): React.JSX.Element {
 
   const activeGithubTaskKind = getGitHubTaskKind(activeTaskPreset, appliedTaskSearch)
   const appliedTaskQuery = useMemo(() => parseTaskQuery(appliedTaskSearch), [appliedTaskSearch])
+  const gitHubViewerLoginScopes = useMemo(
+    () =>
+      selectedRepos.map((repo) => ({
+        repoId: repo.id,
+        repoPath: repo.path,
+        sourceContext: getTaskPageRepoSourceContext(repo, 'github')
+      })),
+    [selectedRepos]
+  )
+  const shouldLoadGitHubViewerLogin =
+    taskSource === 'github' &&
+    githubMode === 'items' &&
+    requiresGitHubViewerLogin(activeGithubTaskKind, appliedTaskQuery)
+  const gitHubLogin = useGitHubViewerLogin(
+    shouldLoadGitHubViewerLogin,
+    gitHubViewerLoginScopes,
+    taskRefreshNonce
+  )
+  const derivedTaskPreset = useMemo(
+    () => deriveGitHubTaskPreset(activeGithubTaskKind, appliedTaskQuery, gitHubLogin),
+    [activeGithubTaskKind, appliedTaskQuery, gitHubLogin]
+  )
   const selectedGitHubRepoExternalLink = useMemo(() => {
     if (selectedRepos.length !== 1) {
       return null
@@ -8548,7 +8575,7 @@ export default function TaskPage(): React.JSX.Element {
                   >
                     <div className="mb-2 flex flex-wrap gap-2">
                       {getGitHubTaskKindPresets(activeGithubTaskKind).map((option) => {
-                        const active = activeTaskPreset === option.id
+                        const active = derivedTaskPreset === option.id
                         return (
                           <button
                             key={option.id}

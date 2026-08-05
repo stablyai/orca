@@ -291,6 +291,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'github.updatePR',
   'github.updatePRTitle',
   'github.updatePRState',
+  'github.viewer',
   'github.repoSlug',
   'github.workItem',
   // Cross-repo lookup: lets the mobile Smart picker resolve a pasted github.com URL for a different repo.

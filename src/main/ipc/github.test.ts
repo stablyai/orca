@@ -1301,6 +1301,72 @@ describe('registerGitHubHandlers', () => {
     expect(getAuthenticatedViewerMock).toHaveBeenCalled()
   })
 
+  it('routes a repo-scoped viewer lookup through its GitHub host and WSL auth scope', async () => {
+    setPlatform('win32')
+    projects = [
+      {
+        id: 'project-1',
+        displayName: 'repo',
+        badgeColor: 'blue',
+        sourceRepoIds: ['repo-1'],
+        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' },
+        createdAt: 0,
+        updatedAt: 0
+      }
+    ]
+    getAuthenticatedViewerMock.mockResolvedValue({ login: 'octocat', email: null })
+
+    registerGitHubHandlers(store as never, stats as never)
+    await handlers['gh:viewer'](null, {
+      repoPath: '/workspace/repo',
+      repoId: 'repo-1',
+      sourceContext: {
+        kind: 'task-source',
+        provider: 'github',
+        projectId: 'project-1',
+        hostId: 'local',
+        repoId: 'repo-1',
+        providerIdentity: {
+          provider: 'github',
+          owner: 'acme',
+          repo: 'orca',
+          host: 'ghe.example.com'
+        }
+      },
+      force: true
+    })
+
+    expect(getAuthenticatedViewerMock).toHaveBeenCalledWith({
+      cwd: '/workspace/repo',
+      force: true,
+      host: 'ghe.example.com',
+      wslDistro: 'Ubuntu'
+    })
+  })
+
+  it('keeps SSH GitHub API auth on the desktop host', async () => {
+    repos[0].path = '/remote/repo'
+    repos[0].connectionId = 'ssh-1'
+    repos[0].executionHostId = 'ssh:ssh-1'
+    getAuthenticatedViewerMock.mockResolvedValue({ login: 'octocat', email: null })
+
+    registerGitHubHandlers(store as never, stats as never)
+    await handlers['gh:viewer'](null, {
+      repoPath: '/remote/repo',
+      repoId: 'repo-1',
+      sourceContext: {
+        kind: 'task-source',
+        provider: 'github',
+        projectId: 'project-1',
+        hostId: 'ssh:ssh-1',
+        repoId: 'repo-1',
+        providerIdentity: { provider: 'github', owner: 'acme', repo: 'orca' }
+      }
+    })
+
+    expect(getAuthenticatedViewerMock).toHaveBeenCalledWith({ host: 'github.com' })
+  })
+
   it('emits app_starred_orca once after a successful star with cohort context', async () => {
     starOrcaMock.mockResolvedValue(true)
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 3 })

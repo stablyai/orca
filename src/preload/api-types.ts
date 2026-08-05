@@ -1715,7 +1715,12 @@ export type PreloadApi = {
   }
   export: ExportApi
   gh: {
-    viewer: () => Promise<GitHubViewer | null>
+    viewer: (args?: {
+      repoPath: string
+      repoId?: string
+      sourceContext?: TaskSourceContext | null
+      force?: boolean
+    }) => Promise<GitHubViewer | null>
     repoSlug: (args: {
       repoPath: string
       repoId?: string
