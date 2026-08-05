@@ -1,8 +1,8 @@
-// Install-owner identity for relay uploads that cross a split shell/SFTP namespace.
+// Transfer-owner identity for relay installs that cross a split shell/SFTP namespace.
 //
 // The shell and SFTP paths share one validated home-relative suffix
-// (`.orca-remote/relay-<fullVersion>`); a random marker inside the install lock
-// lets each SFTP session prove it is looking at THIS install's directory.
+// (`.orca-remote/relay-<fullVersion>`); a random marker inside the shared install
+// lock or attempt stage proves which shell-owned directory the SFTP session sees.
 //
 // See: docs/ssh-relay-sftp-namespace.md
 
@@ -21,6 +21,11 @@ import {
 
 export type RelayInstallNamespace = {
   homeRelativeRelayDir: string
+  markerFileName: string
+}
+
+export type RelayUploadStageNamespace = {
+  homeRelativeStageDir: string
   markerFileName: string
 }
 
@@ -56,6 +61,16 @@ export function createRelayInstallNamespace(homeRelativeRelayDir: string): Relay
   }
 }
 
+export function createRelayUploadStageNamespace(
+  homeRelativeStageDir: string,
+  markerFileName = createRelayInstallMarkerFileName()
+): RelayUploadStageNamespace {
+  return {
+    homeRelativeStageDir,
+    markerFileName
+  }
+}
+
 /**
  * Describe one relay transfer to the SFTP namespace resolver. `relativeFileName`
  * is omitted for the bundle directory upload itself.
@@ -74,6 +89,7 @@ export function relaySftpNamespaceMapping(
   }
   const homeRelativeLockDir = `${namespace.homeRelativeRelayDir}/${RELAY_INSTALL_LOCK_NAME}`
   return {
+    homeRelativeNamespaceRoot: namespace.homeRelativeRelayDir,
     homeRelativePath:
       relativeFileName !== undefined
         ? `${namespace.homeRelativeRelayDir}/${relativeFileName}`
@@ -81,6 +97,37 @@ export function relaySftpNamespaceMapping(
     shellProbePath: relayInstallMarkerShellPath(namespace, host, shellRelayDir),
     homeRelativeProbePath: `${homeRelativeLockDir}/${namespace.markerFileName}`
   }
+}
+
+export function relayUploadStageSftpNamespaceMapping(
+  namespace: RelayUploadStageNamespace,
+  host: RemoteHostPlatform,
+  shellStageDir: string,
+  relativeFileName?: string
+): SftpNamespacePathMapping {
+  if (relativeFileName !== undefined) {
+    assertSafeRemotePathSegment(relativeFileName, 'posix')
+  }
+  const homeRelativePayloadDir = `${namespace.homeRelativeStageDir}/payload`
+  return {
+    homeRelativeNamespaceRoot: namespace.homeRelativeStageDir,
+    homeRelativePath:
+      relativeFileName === undefined
+        ? homeRelativePayloadDir
+        : `${homeRelativePayloadDir}/${relativeFileName}`,
+    shellProbePath: joinRemotePath(host, shellStageDir, namespace.markerFileName),
+    homeRelativeProbePath: `${namespace.homeRelativeStageDir}/${namespace.markerFileName}`
+  }
+}
+
+export function makeRelayUploadStageDirectoryCommand(
+  namespace: RelayUploadStageNamespace,
+  host: RemoteHostPlatform,
+  shellStageDir: string
+): string {
+  const payloadDir = joinRemotePath(host, shellStageDir, 'payload')
+  const markerPath = joinRemotePath(host, shellStageDir, namespace.markerFileName)
+  return `${makeRemoteDirectoryCommand(host, payloadDir)} && umask 077 && touch ${shellEscape(markerPath)}`
 }
 
 export function relayInstallMarkerShellPath(

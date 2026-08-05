@@ -21,8 +21,12 @@ const SKIPPED_REASON_PRIORITY: SkillLocationChip[] = [
   'duplicate'
 ]
 
+// Why: a location the global update never judged cannot be why the skill was skipped, so it
+// must not outrank the placement that was — nor the ABSENCE of a chip, which is how the
+// stale-record remedy below is reached. The fallback keeps the sentence total.
 function blockingChip(locations: readonly SkillLocationRow[]): SkillLocationChip | undefined {
-  const present = new Set(locations.map((location) => location.chip))
+  const judged = locations.filter((location) => location.participatesInGlobalFreshness)
+  const present = new Set((judged.length > 0 ? judged : locations).map((location) => location.chip))
   return SKIPPED_REASON_PRIORITY.find((candidate) => present.has(candidate))
 }
 

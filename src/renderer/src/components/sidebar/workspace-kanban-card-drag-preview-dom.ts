@@ -25,24 +25,27 @@ export function setDragDocumentStyles(enabled: boolean): void {
   document.documentElement.toggleAttribute(POINTER_DRAGGING_ATTR, enabled)
 }
 
-export function getDraggedCards(
-  board: HTMLElement,
-  worktreeIds: readonly string[],
-  fallbackCard: HTMLElement
-): HTMLElement[] {
-  const ids = new Set(worktreeIds)
-  const cards = Array.from(board.querySelectorAll<HTMLElement>(CARD_SELECTOR)).filter((card) =>
-    ids.has(card.dataset.workspaceBoardCardId ?? '')
-  )
-  return cards.length > 0 ? cards : [fallbackCard]
-}
-
-export function setDraggedCardsDragging(cards: readonly HTMLElement[], enabled: boolean): void {
-  for (const card of cards) {
-    if (enabled) {
-      card.setAttribute(POINTER_CARD_DRAGGING_ATTR, 'true')
-    } else {
+export function setDraggedCardsDragging(args: {
+  board: HTMLElement | null
+  worktreeIds: readonly string[]
+  enabled: boolean
+}): void {
+  const { board, worktreeIds, enabled } = args
+  if (!board) {
+    return
+  }
+  // Why: virtual lanes remount cards during scroll; query live nodes by id
+  // instead of holding HTMLElement references across unmounts.
+  if (!enabled) {
+    board.querySelectorAll<HTMLElement>(`[${POINTER_CARD_DRAGGING_ATTR}]`).forEach((card) => {
       card.removeAttribute(POINTER_CARD_DRAGGING_ATTR)
+    })
+    return
+  }
+  const ids = new Set(worktreeIds)
+  for (const card of board.querySelectorAll<HTMLElement>(CARD_SELECTOR)) {
+    if (ids.has(card.dataset.workspaceBoardCardId ?? '')) {
+      card.setAttribute(POINTER_CARD_DRAGGING_ATTR, 'true')
     }
   }
 }

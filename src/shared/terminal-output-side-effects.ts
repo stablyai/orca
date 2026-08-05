@@ -98,6 +98,8 @@ export type TerminalTitleTracker = {
    * Titles are unaffected; un-suppressing resets the scanners' cross-chunk carry.
    */
   setTransientFactScanningSuppressed: (suppressed: boolean) => void
+  /** Enable consumer-only bell, PR-link, and mode-2031 scans without resetting title state. */
+  setTransientSideEffectScanningEnabled: (enabled: boolean) => void
   /** Cancel the stale-title timer and clear accumulated tracker state. */
   dispose: () => void
 }
@@ -117,12 +119,13 @@ export function createTerminalTitleTracker(
     onMode2031Subscribe,
     onMode2031Unsubscribe
   } = callbacks
-  const bellDetector = onBell ? createBellDetector() : null
+  let bellDetector = onBell ? createBellDetector() : null
   // Why: created only when a consumer exists so headless serve never pays the per-chunk 133/URL scans.
   const commandFinishedScanner = onCommandFinished
     ? createOsc133CommandFinishedScanner(onCommandFinished)
     : null
   let prLinkDetector = onPrLink ? createTerminalGitHubPRLinkDetector() : null
+  let transientSideEffectScanningEnabled = true
   let transientFactScanningSuppressed = false
   let mode2031ReplyScanState = INITIAL_MODE_2031_REPLY_SCAN_STATE
   // Why: seed both so a mid-session tracker behaves as if it had observed the pane's last live title (renderer parity).
@@ -210,7 +213,7 @@ export function createTerminalTitleTracker(
           onPrLink?.(link)
         }
       }
-      if (onMode2031Subscribe || onMode2031Unsubscribe) {
+      if (transientSideEffectScanningEnabled && (onMode2031Subscribe || onMode2031Unsubscribe)) {
         const previousMode2031ReplyScanState = options.mode2031PendingSubscribe
           ? { ...mode2031ReplyScanState, pendingSubscribe: true }
           : mode2031ReplyScanState
@@ -238,7 +241,11 @@ export function createTerminalTitleTracker(
       }
     }
     // The permission BEL rides outside the OSC title; a FRESH detector avoids touching the chunk detector's cross-chunk escape state.
-    if (onBell && createBellDetector().chunkContainsBell(frame)) {
+    if (
+      transientSideEffectScanningEnabled &&
+      onBell &&
+      createBellDetector().chunkContainsBell(frame)
+    ) {
       onBell()
     }
     // Why: deliberately skip the 133/PR-link/2031 scanners — fabricated bytes contain none and must not perturb their cross-chunk carry.
@@ -270,6 +277,16 @@ export function createTerminalTitleTracker(
           prLinkDetector = createTerminalGitHubPRLinkDetector()
         }
       }
+    },
+    setTransientSideEffectScanningEnabled(enabled: boolean): void {
+      if (enabled === transientSideEffectScanningEnabled) {
+        return
+      }
+      transientSideEffectScanningEnabled = enabled
+      bellDetector?.reset()
+      bellDetector = enabled && onBell ? createBellDetector() : null
+      prLinkDetector = enabled && onPrLink ? createTerminalGitHubPRLinkDetector() : null
+      mode2031ReplyScanState = INITIAL_MODE_2031_REPLY_SCAN_STATE
     },
     dispose(): void {
       clearStaleTitleTimer()

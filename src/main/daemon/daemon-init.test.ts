@@ -241,7 +241,10 @@ vi.mock('fs', () => ({
   writeFileSync: writeFileSyncMock
 }))
 
-vi.mock('child_process', () => ({ fork: forkMock }))
+vi.mock('child_process', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  fork: forkMock
+}))
 
 vi.mock('net', () => ({ connect: netConnectMock }))
 
@@ -684,6 +687,29 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(result.id).toBe('local-fallback-pty')
     expect(localFallbackProvider.spawn).toHaveBeenCalledWith({ cols: 80, rows: 24 })
     expect(adapterInstances[0].listProcesses).toHaveBeenCalled()
+  })
+
+  it('rechecks the preserved daemon endpoint before recovering fresh-spawn routing', async () => {
+    const mod = await importFresh()
+    ensureRunningOverrides.push(async () => ({
+      socketPath: '/fake/degraded-socket',
+      tokenPath: '/fake/degraded-token',
+      mode: 'degraded-new-pty-fallback'
+    }))
+    await mod.initDaemonPtyProvider()
+    checkDaemonHealthMock.mockClear()
+
+    const { DegradedDaemonPtyProvider } = await import('./degraded-daemon-pty-provider')
+    const provider = mod.getDaemonProvider()
+    expect(provider).toBeInstanceOf(DegradedDaemonPtyProvider)
+    const degradedProvider = provider as InstanceType<typeof DegradedDaemonPtyProvider>
+
+    await expect(degradedProvider.recoverFreshSpawnRouting()).resolves.toBe(true)
+    expect(checkDaemonHealthMock).toHaveBeenCalledWith(
+      '/fake/degraded-socket',
+      '/fake/degraded-token'
+    )
+    expect(degradedProvider.routesFreshSpawnsToLocalProvider).toBeUndefined()
   })
 
   it('fans pty:exit for every active session *before* unbinding listeners, and killedCount is captured pre-fanout', async () => {
@@ -1754,7 +1780,14 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       on(event: string, cb: (arg?: unknown) => void) {
         handlers[event]?.push(cb)
         if (event === 'message') {
-          queueMicrotask(() => cb({ type: 'ready', startedAtMs: 1_000_000 }))
+          queueMicrotask(() =>
+            cb({
+              type: 'ready',
+              startedAtMs: 1_000_000,
+              linuxStartTicks: '4242',
+              bootId: 'boot-a'
+            })
+          )
         }
         return this
       },
@@ -1782,6 +1815,8 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(JSON.parse(pidContents as string)).toEqual({
       pid: 12345,
       startedAtMs: 1_000_000,
+      linuxStartTicks: '4242',
+      bootId: 'boot-a',
       entryPath: FAKE_DAEMON_ENTRY_PATH,
       appVersion: '1.2.3',
       launchNonce: expect.stringMatching(/^[0-9a-f-]{36}$/)

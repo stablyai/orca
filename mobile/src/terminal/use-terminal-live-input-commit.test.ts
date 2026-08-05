@@ -11,6 +11,8 @@ type TerminalLiveInputCommitHarness = {
   readonly handlers: ReturnType<typeof useTerminalLiveInputCommit<string>>
   readonly sent: readonly string[]
   readonly setActiveSessionTabType: (next: string | undefined) => void
+  readonly setConnected: (next: boolean) => void
+  readonly setSendResult: (next: boolean) => void
   readonly unmount: () => void
 }
 
@@ -46,15 +48,16 @@ function createTerminalLiveInputCommitHarness({
     current: new Set([activeHandle])
   }
   const sent: string[] = []
+  let currentSendResult = sendResult
   const sendLiveTerminalInputRef: RefObject<TerminalLiveInputSender> = {
     current: async (_handle, bytes) => {
       sent.push(bytes)
-      return sendResult
+      return currentSendResult
     }
   }
-  // The hook keeps live-input state in refs, so a change handler alone never
-  // re-renders; only a prop change (this variable) re-runs the pending-clear effect.
+  // Refs never re-render; only these variables re-run the hook's clear effects.
   let currentActiveSessionTabType: string | undefined = 'terminal'
+  let currentConnected = true
   let handlers: ReturnType<typeof useTerminalLiveInputCommit<string>> | null = null
   let renderer: ReactTestRenderer | null = null
 
@@ -64,6 +67,7 @@ function createTerminalLiveInputCommitHarness({
       activeHandleRef,
       activeSessionTabType: currentActiveSessionTabType,
       activeSessionTabTypeRef,
+      connected: currentConnected,
       liveInputRef,
       liveInputTerminalHandles,
       liveInputTerminalHandlesRef,
@@ -97,6 +101,15 @@ function createTerminalLiveInputCommitHarness({
       act(() => {
         renderer?.update(createElement(Harness))
       })
+    },
+    setConnected: (next: boolean): void => {
+      currentConnected = next
+      act(() => {
+        renderer?.update(createElement(Harness))
+      })
+    },
+    setSendResult: (next: boolean): void => {
+      currentSendResult = next
     },
     unmount: () => {
       act(() => renderer?.unmount())
@@ -339,5 +352,41 @@ describe('terminal live input commit hook', () => {
 
     // Then: pending was dropped, so submit sends only the carriage return
     await vi.waitFor(() => expect(sent).toEqual(['\r']))
+  })
+
+  it('Given bytes lost in a silent stall When the disconnect is detected Then the first post-recovery send carries no stale fragment or phantom erases', async () => {
+    // Given: a stalled link — the mirror sends but the PTY never accepts (#6713 second defect)
+    const { captures, handlers, sent, setConnected, setSendResult } =
+      createTerminalLiveInputCommitHarness({ sendResult: false })
+    handlers.handleLiveInputChange('XYZZY')
+    await vi.waitFor(() => expect(sent).toEqual(['XYZZY']))
+
+    // When: the outage is finally detected, then the link recovers
+    setConnected(false)
+    setSendResult(true)
+    setConnected(true)
+
+    // Then: the capture was wiped, and fresh typing sends verbatim bytes — not
+    // 'XYZZY…' replayed and not DELs erasing PTY chars that never arrived
+    expect(captures.at(-1)).toBe('')
+    const sentBeforeRecovery = sent.length
+    handlers.handleLiveInputChange('echo CLEANLINE')
+    await vi.waitFor(() => expect(sent.slice(sentBeforeRecovery)).toEqual(['echo CLEANLINE']))
+  })
+
+  it('Given a held syllable during an outage When the disconnect is detected Then the settle timer cannot commit it later', async () => {
+    // Given
+    vi.useFakeTimers()
+    const { handlers, sent, setConnected } = createTerminalLiveInputCommitHarness({
+      sendResult: false
+    })
+    handlers.handleLiveInputChange('한')
+
+    // When
+    setConnected(false)
+    await vi.advanceTimersByTimeAsync(TERMINAL_LIVE_HELD_SYLLABLE_COMMIT_DELAY_MS)
+
+    // Then: the outage cleared the held text before the timer could send it
+    expect(sent).toEqual([])
   })
 })

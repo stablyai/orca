@@ -7,7 +7,12 @@ import {
   AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
   GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION
 } from './types'
-import { HISTORY_SEED_TRANSFER_PROTOCOL_VERSION } from './daemon-protocol-version'
+import {
+  HISTORY_SEED_TRANSFER_PROTOCOL_VERSION,
+  PROTOCOL_VERSION,
+  SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION,
+  STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION
+} from './daemon-protocol-version'
 
 type AdapterMock = DaemonPtyAdapter & {
   emitData: (id: string, data: string, sequenceChars?: number) => void
@@ -49,7 +54,8 @@ function createAdapter(
       protocolVersion >= AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
     providesAgentSessionOwnerListings: () =>
       protocolVersion >= AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
-    canProvideAuthoritativeBufferSnapshot: () => protocolVersion >= 20,
+    canProvideAuthoritativeBufferSnapshot: () =>
+      protocolVersion >= SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION,
     spawn: vi.fn(async (opts: PtySpawnOptions): Promise<PtySpawnResult> => {
       const id = opts.sessionId ?? `${label}-new`
       sessions.push(id)
@@ -336,8 +342,13 @@ describe('DaemonPtyRouter', () => {
   })
 
   it('reports snapshot capability for the adapter that owns each session', async () => {
-    const current = createAdapter('current', ['current-session'], undefined, 22)
-    const legacy = createAdapter('legacy', ['legacy-session'], undefined, 19)
+    const current = createAdapter('current', ['current-session'], undefined, PROTOCOL_VERSION)
+    const legacy = createAdapter(
+      'legacy',
+      ['legacy-session'],
+      undefined,
+      STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION
+    )
     const router = new DaemonPtyRouter({ current, legacy: [legacy] })
     await router.discoverLegacySessions()
 
@@ -371,21 +382,36 @@ describe('DaemonPtyRouter', () => {
     expect(current.confirmForegroundProcess).toHaveBeenCalledWith('current-session')
   })
 
-  it('routes existing legacy sessions to their old daemon and new sessions to current daemon', async () => {
-    const current = createAdapter('current')
-    const legacy = createAdapter('legacy', ['legacy-session'])
-    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+  it('preserves v30/v31 session owners and routes new sessions to v32', async () => {
+    const current = createAdapter('current', [], undefined, PROTOCOL_VERSION)
+    const legacyV30 = createAdapter(
+      'v30',
+      ['v30-session'],
+      undefined,
+      HISTORY_SEED_TRANSFER_PROTOCOL_VERSION
+    )
+    const legacyV31 = createAdapter(
+      'v31',
+      ['v31-session'],
+      undefined,
+      STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION
+    )
+    const router = new DaemonPtyRouter({ current, legacy: [legacyV30, legacyV31] })
 
     await router.discoverLegacySessions()
 
-    await router.spawn({ sessionId: 'legacy-session', cols: 80, rows: 24 })
+    await router.spawn({ sessionId: 'v30-session', cols: 80, rows: 24 })
+    await router.spawn({ sessionId: 'v31-session', cols: 80, rows: 24 })
     const fresh = await router.spawn({ cols: 80, rows: 24 })
-    router.write('legacy-session', 'old\n')
+    router.write('v30-session', 'old-v30\n')
+    router.write('v31-session', 'old-v31\n')
     router.write(fresh.id, 'new\n')
 
-    expect(legacy.spawn).toHaveBeenCalledWith({ sessionId: 'legacy-session', cols: 80, rows: 24 })
+    expect(legacyV30.spawn).toHaveBeenCalledWith({ sessionId: 'v30-session', cols: 80, rows: 24 })
+    expect(legacyV31.spawn).toHaveBeenCalledWith({ sessionId: 'v31-session', cols: 80, rows: 24 })
     expect(current.spawn).toHaveBeenCalledWith({ cols: 80, rows: 24 })
-    expect(legacy.write).toHaveBeenCalledWith('legacy-session', 'old\n')
+    expect(legacyV30.write).toHaveBeenCalledWith('v30-session', 'old-v30\n')
+    expect(legacyV31.write).toHaveBeenCalledWith('v31-session', 'old-v31\n')
     expect(current.write).toHaveBeenCalledWith(fresh.id, 'new\n')
   })
 
@@ -544,6 +570,35 @@ describe('DaemonPtyRouter', () => {
     const router = new DaemonPtyRouter({ current, legacy: [legacy] })
 
     await expect(router.listProcesses()).rejects.toThrow('legacy unavailable')
+  })
+
+  it('keeps a legacy adapter that exits after construction in fail-closed aggregates', async () => {
+    const current = createAdapter('current', ['current-session'])
+    const legacy = createAdapter('legacy', ['legacy-session'])
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+    await router.discoverLegacySessions()
+    vi.mocked(legacy.listProcesses).mockRejectedValue(new Error('legacy exited'))
+
+    await expect(router.listProcesses()).rejects.toThrow('legacy exited')
+    await expect(router.listProcesses()).rejects.toThrow('legacy exited')
+    expect(router.getLegacyAdapters()).toEqual([legacy])
+    expect(current.listProcesses).toHaveBeenCalledTimes(2)
+  })
+
+  it('pins colliding unmapped legacy ids falling through to the current daemon', async () => {
+    const sessionId = 'cross-generation-collision'
+    const current = createAdapter('current', [sessionId])
+    const legacy = createAdapter('legacy', [sessionId])
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.mocked(legacy.listProcesses).mockRejectedValueOnce(new Error('legacy discovery failed'))
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+
+    await router.discoverLegacySessions()
+    router.write(sessionId, 'misrouted\n')
+
+    expect(current.write).toHaveBeenCalledWith(sessionId, 'misrouted\n')
+    expect(legacy.write).not.toHaveBeenCalled()
+    warn.mockRestore()
   })
 
   it('merges startup reconciliation and updates route mappings', async () => {

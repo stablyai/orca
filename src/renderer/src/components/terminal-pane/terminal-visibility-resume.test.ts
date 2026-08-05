@@ -151,6 +151,50 @@ describe('resumeTerminalVisibility reveal repaint', () => {
     expect(manager.fitAllPanes).not.toHaveBeenCalled()
   })
 
+  it('latches viewport intent before refocus recovery flushes streaming output', async () => {
+    const terminal = { name: 'streaming-terminal' }
+    const manager = createManager()
+    manager.getPanes.mockReturnValue([{ terminal }])
+    const { syncTerminalScrollIntentFromViewport } = vi.mocked(
+      await import('@/lib/pane-manager/terminal-scroll-intent')
+    )
+    const { flushTerminalOutput } = vi.mocked(
+      await import('@/lib/pane-manager/pane-terminal-output-scheduler')
+    )
+
+    recoverVisibleTerminalWindowWake({
+      manager: manager as never as PaneManager,
+      isActive: true,
+      clearGlyphAtlases: false
+    })
+
+    expect(flushTerminalOutput).toHaveBeenCalledOnce()
+    expect(syncTerminalScrollIntentFromViewport).toHaveBeenCalledOnce()
+    expect(syncTerminalScrollIntentFromViewport.mock.invocationCallOrder[0]).toBeLessThan(
+      flushTerminalOutput.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
+    )
+  })
+
+  it('does not overwrite pre-reveal intent after queuing hidden output', async () => {
+    const terminal = { name: 'hidden-streaming-terminal' }
+    const manager = createManager()
+    manager.getPanes.mockReturnValue([{ terminal }])
+    const { syncTerminalScrollIntentFromViewport } = vi.mocked(
+      await import('@/lib/pane-manager/terminal-scroll-intent')
+    )
+    const { flushTerminalOutput } = vi.mocked(
+      await import('@/lib/pane-manager/pane-terminal-output-scheduler')
+    )
+
+    resumeTerminalVisibility(resumeArgs(manager, false))
+
+    expect(flushTerminalOutput).toHaveBeenCalledOnce()
+    expect(syncTerminalScrollIntentFromViewport).toHaveBeenCalledOnce()
+    expect(syncTerminalScrollIntentFromViewport.mock.invocationCallOrder[0]).toBeLessThan(
+      flushTerminalOutput.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
+    )
+  })
+
   it('resets each pane linkifier hover cache on window wake recovery so links recover without a scroll', () => {
     const first = { name: 'pane-a' }
     const second = { name: 'pane-b' }
@@ -213,8 +257,8 @@ describe('resumeTerminalVisibility reveal repaint', () => {
     // every refocus forces a mass re-rasterization that can hit xterm's atlas
     // page-merge race (#4480) and garble streaming panes. Focus recovery must
     // resume rendering and present WITHOUT the atlas-clearing reveal repaint —
-    // scheduleRevealRepaint clears each pane's (shared) atlas, so the refocus
-    // path must route to the atlas-preserving present instead.
+    // scheduleRevealRepaint runs shared-atlas recovery, so the refocus path
+    // must route to the atlas-preserving present instead.
     const { resetAndRefreshAllTerminalWebglAtlases } = vi.mocked(
       await import('@/lib/pane-manager/pane-manager-registry')
     )

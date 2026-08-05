@@ -2,6 +2,7 @@ import { ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../shared
 import {
   destroyPersistentWebview,
   registerPersistentWebview,
+  replacePersistentWebview,
   webviewRegistry
 } from './webview-registry'
 
@@ -21,17 +22,19 @@ export function ensureBrowserPageWebview({
   let webview = webviewRegistry.get(browserTabId)
   let created = false
   let activeContainer = container
+  const parentDrifted = webview?.parentElement !== container
 
   // Why: a persisted guest must be torn down and rebuilt when its DOM parent
   // drifted (moving a <webview> across parents can recreate the guest document)
   // or when its partition no longer matches — Electron partitions are immutable
-  // after creation, so reuse would keep the stale session. Re-resolve the
-  // viewport container the teardown may have detached; bail if it is gone.
-  if (
-    webview &&
-    (webview.parentElement !== container || webview.getAttribute('partition') !== webviewPartition)
-  ) {
-    destroyPersistentWebview(browserTabId)
+  // after creation, so reuse would keep the stale session. Parent-drift repair
+  // preserves the newly replaced viewport; always verify the resolved container.
+  if (webview && (parentDrifted || webview.getAttribute('partition') !== webviewPartition)) {
+    if (parentDrifted) {
+      void replacePersistentWebview(browserTabId, { preserveViewport: true })
+    } else {
+      void destroyPersistentWebview(browserTabId)
+    }
     webview = undefined
     const refreshedContainer = resolveContainer()
     if (!refreshedContainer) {

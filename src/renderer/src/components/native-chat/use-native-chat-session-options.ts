@@ -54,6 +54,9 @@ export function useNativeChatSessionOptions(args: {
       agent,
       scopeKey,
       ...(targetPtyId ? { fallbackScopeKey: terminalTabId } : {}),
+      // Why: the catalog seed carries version-neutral family labels, so it is
+      // safe on every host while the once-per-host probe runs or after it fails
+      // — without it the whole picker would pop in late or never appear.
       ...(discoveryContext
         ? {
             initialModels:

@@ -2,7 +2,6 @@ import {
   PTY_CONSUMER_SESSION_PROTOCOL_VERSION,
   type PtyConsumerSessionGrant
 } from '../../shared/pty-consumer-session'
-import { DEFAULT_PTY_SOURCE_WINDOW_SU } from '../../shared/pty-source-credit-contract'
 import type { SshChannelMultiplexer } from './ssh-channel-multiplexer'
 
 export const SSH_PTY_OPEN_CLIENT_METHOD = 'pty.openClient'
@@ -64,7 +63,8 @@ function validateGrant(
     !Number.isSafeInteger(grant.ownerGeneration) ||
     grant.ownerGeneration! <= 0 ||
     typeof grant.ownerLease !== 'string' ||
-    grant.ownerLease.length === 0
+    grant.ownerLease.length === 0 ||
+    grant.ownerLease.length > 512
   ) {
     throw new Error('Remote relay did not grant an authenticated PTY session owner')
   }
@@ -139,5 +139,3 @@ export async function openSshPtyConsumerSession(
       : {})
   }
 }
-
-export const SSH_PTY_SOURCE_WINDOW_SU = DEFAULT_PTY_SOURCE_WINDOW_SU

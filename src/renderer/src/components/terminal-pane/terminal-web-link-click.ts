@@ -6,12 +6,14 @@ import {
   openHttpLinkAtTerminalMouseEvent,
   type TerminalLinkRoutingPreferenceRequester
 } from './terminal-url-link-hit-testing'
+import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
 
 type TerminalWebLinkClickDeps = Pick<
   LinkHandlerDeps,
   'worktreeId' | 'worktreePath' | 'startupCwd' | 'runtimeEnvironmentId' | 'terminalHomePath'
 > & {
   terminal: Terminal | null
+  sourceOwner?: HttpLinkSourceOwner
   requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
 }
 
@@ -29,6 +31,11 @@ export function handleTerminalWebLinkClick(
     deps.terminal &&
     openHttpLinkAtTerminalMouseEvent(deps.terminal, event, {
       worktreeId: deps.worktreeId,
+      sourceOwner:
+        deps.sourceOwner ??
+        (deps.runtimeEnvironmentId
+          ? { kind: 'runtime', runtimeEnvironmentId: deps.runtimeEnvironmentId }
+          : { kind: 'local' }),
       modifierHeld: Boolean(event.shiftKey),
       requestOpenLinksInAppPreference: deps.requestOpenLinksInAppPreference
     })

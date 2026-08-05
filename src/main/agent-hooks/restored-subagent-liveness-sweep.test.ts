@@ -119,6 +119,7 @@ describe('restored subagent liveness sweep', () => {
     try {
       expect(paneStatus(server)).toEqual({ state: 'working', subagents: [WORKING_CHILD] })
       const previous = server.getStatusSnapshotForPane(PANE)[0]
+      expect(previous?.restoredUnconfirmed).toBe(true)
       const previousReceivedAt = previous?.receivedAt ?? 0
       const reconciledAt = previousReceivedAt + 1
       const now = vi.spyOn(Date, 'now').mockReturnValue(previousReceivedAt)
@@ -130,6 +131,8 @@ describe('restored subagent liveness sweep', () => {
         receivedAt: reconciledAt,
         stateStartedAt: reconciledAt
       })
+      // Why: the reconciled `done` is process-probe-verified, so it must shed the hydrated-unconfirmed marker.
+      expect(server.getStatusSnapshotForPane(PANE)[0]?.restoredUnconfirmed).toBeUndefined()
       now.mockRestore()
     } finally {
       server.stop()
@@ -163,7 +166,9 @@ describe('restored subagent liveness sweep', () => {
         state: 'waiting',
         subagents: undefined,
         receivedAt: previous?.receivedAt,
-        stateStartedAt: previous?.stateStartedAt
+        stateStartedAt: previous?.stateStartedAt,
+        // Why: a still-nonterminal reconciled row remains unconfirmed — only hooks or a terminal fact confirm it.
+        restoredUnconfirmed: true
       })
     } finally {
       server.stop()

@@ -3,7 +3,10 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { OnboardingInlineCommandTerminal } from '@/components/onboarding/OnboardingInlineCommandTerminal'
-import { buildSkillCommandForRuntime } from '@/components/settings/CliSkillRuntimeSetup'
+import {
+  buildSkillCommandForRuntime,
+  buildSkillSetupTerminalCommand
+} from '@/components/settings/CliSkillRuntimeSetup'
 import { ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/agent-feature-install-commands'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { translate } from '@/i18n/i18n'
@@ -17,6 +20,11 @@ export function CliSkillSetupTerminal(): React.JSX.Element {
   const skillCommand = buildSkillCommandForRuntime(
     ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND,
     activeSkillRuntime.installDisabledReason ? undefined : activeSkillRuntime.agentRuntime
+  )
+  // The copied string stays as built; only what we execute is adapted.
+  const setupTerminalCommand = buildSkillSetupTerminalCommand(
+    skillCommand,
+    activeSkillRuntime.terminalShellOverride
   )
 
   const handleCopySkillCommand = async (): Promise<void> => {
@@ -70,7 +78,7 @@ export function CliSkillSetupTerminal(): React.JSX.Element {
         </Tooltip>
       </div>
       <OnboardingInlineCommandTerminal
-        command={skillCommand}
+        command={setupTerminalCommand}
         title={translate(
           'auto.components.feature.tips.CliSkillSetupTerminal.84e9576dac',
           'Skill setup'

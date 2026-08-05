@@ -7,6 +7,7 @@ import {
   type SkillFreshnessInventory
 } from '../../../../shared/skill-freshness'
 import { useSkillFreshness } from '@/hooks/useSkillFreshness'
+import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { notifyInstalledAgentSkillsChanged } from '@/hooks/useInstalledAgentSkills'
 import { translate } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
@@ -63,7 +64,8 @@ function RunLog({ output }: { output: string }): React.JSX.Element | null {
 }
 
 export function SkillFreshnessUpdateDialog(): React.JSX.Element {
-  const state = useSkillFreshness()
+  const activeSkillRuntime = useActiveProjectSkillRuntime()
+  const state = useSkillFreshness(activeSkillRuntime.canUseLocalSkillFreshness)
   const run = useSkillUpdateRun()
   const open = useSyncExternalStore(
     subscribeSkillFreshnessUpdateDialog,

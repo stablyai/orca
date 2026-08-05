@@ -134,8 +134,7 @@ vi.mock('./ReviewNotesSendMenuContent', () => ({
 vi.mock('@/lib/active-agent-note-send', () => ({
   activeAgentNotesSendFailureMessage: (status: string) => status,
   getActiveTerminalNoteTarget: () => null,
-  sendNotesToActiveAgentSession: vi.fn(),
-  useCanSendNotesToActiveTerminal: () => false
+  sendNotesToActiveAgentSession: vi.fn()
 }))
 
 vi.mock('sonner', () => ({

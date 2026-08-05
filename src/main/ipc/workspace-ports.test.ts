@@ -102,14 +102,18 @@ describe('registerWorkspacePortHandlers', () => {
       worktrees: [{ id: 'attacker', path: '/tmp/not-authorized', repoId: 'local-repo' }]
     })
 
-    expect(scanWorkspacePortsMock).toHaveBeenCalledWith([
-      {
-        id: 'local-repo::/workspace/repo',
-        repoId: 'local-repo',
-        displayName: 'Primary',
-        path: '/workspace/repo'
-      }
-    ])
+    expect(scanWorkspacePortsMock).toHaveBeenCalledWith(
+      [
+        {
+          id: 'local-repo::/workspace/repo',
+          repoId: 'local-repo',
+          displayName: 'Primary',
+          path: '/workspace/repo'
+        }
+      ],
+      undefined,
+      undefined
+    )
   })
 
   it('deduplicates concurrent scans for the same store-derived probe set', async () => {
@@ -139,20 +143,24 @@ describe('registerWorkspacePortHandlers', () => {
 
     await handlers.get('workspacePorts:scan')?.(null, undefined)
 
-    expect(scanWorkspacePortsMock).toHaveBeenCalledWith([
-      {
-        id: 'local-repo::/workspace/repo',
-        repoId: 'local-repo',
-        displayName: 'Primary',
-        path: '/workspace/repo'
-      },
-      {
-        id: 'other-repo::/workspace/other',
-        repoId: 'other-repo',
-        displayName: 'Other',
-        path: '/workspace/other'
-      }
-    ])
+    expect(scanWorkspacePortsMock).toHaveBeenCalledWith(
+      [
+        {
+          id: 'local-repo::/workspace/repo',
+          repoId: 'local-repo',
+          displayName: 'Primary',
+          path: '/workspace/repo'
+        },
+        {
+          id: 'other-repo::/workspace/other',
+          repoId: 'other-repo',
+          displayName: 'Other',
+          path: '/workspace/other'
+        }
+      ],
+      undefined,
+      undefined
+    )
   })
 
   it('stops a process only after the current scan proves the pid owns a workspace port', async () => {

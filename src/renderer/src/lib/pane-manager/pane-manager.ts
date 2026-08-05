@@ -72,6 +72,7 @@ export class PaneManager {
   private styleOptions: PaneStyleOptions = {}
   private destroyed = false
   private renderingSuspended: boolean
+  private atlasRecoveryVisible: boolean
   private identities = new PaneIdentityRegistry()
   private pendingPaneReparentFrameIds = new Set<number>()
 
@@ -82,6 +83,7 @@ export class PaneManager {
     this.root = root
     this.options = options
     this.renderingSuspended = options.initialRenderingSuspended === true
+    this.atlasRecoveryVisible = !this.renderingSuspended
     // Why: atlas recovery must reach every live manager — see
     // resetAllTerminalWebglAtlases for the shared-atlas rationale.
     registerLivePaneManager(this)
@@ -207,8 +209,15 @@ export class PaneManager {
     })
   }
 
-  getPanes(): ManagedPane[] {
-    return Array.from(this.panes.values()).map(toPublicPane)
+  getPanes(limit = Number.POSITIVE_INFINITY): ManagedPane[] {
+    const panes: ManagedPane[] = []
+    for (const pane of this.panes.values()) {
+      if (panes.length >= limit) {
+        break
+      }
+      panes.push(toPublicPane(pane))
+    }
+    return panes
   }
 
   /** Why separate from getPanes: the census runs on the crash path, where
@@ -356,6 +365,14 @@ export class PaneManager {
 
   resetWebglTextureAtlases(): void {
     resetPaneWebglTextureAtlases(this.panes.values())
+  }
+
+  setAtlasRecoveryVisible(visible: boolean): void {
+    this.atlasRecoveryVisible = visible
+  }
+
+  isVisibleForAtlasRecovery(): boolean {
+    return this.atlasRecoveryVisible && !this.destroyed
   }
 
   scheduleRevealRepaint(): void {

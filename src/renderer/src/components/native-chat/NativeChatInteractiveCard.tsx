@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '../../store'
+import { extractPendingAsk } from '../../../../shared/native-chat-ask'
+import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { parseInteractivePrompt } from './native-chat-interactive-prompt'
 import { nativeChatCardDismissKey } from './native-chat-dismiss-key'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
@@ -19,17 +21,27 @@ import type { NativeChatInteractiveSend } from './use-native-chat-interactive-se
  * answered prompt by content key and hide the card until a genuinely different
  * prompt arrives. The dismissal resets once the prompt clears, so a later
  * (even identical) prompt shows again instead of staying hidden.
+ *
+ * The transcript is the second source (mobile parity again): a question that the
+ * live status never delivered — headless host, relay gap, replay, reconnect —
+ * still has its unresolved tool call in the messages we already parsed. Without
+ * it the composer stays mounted over a pane parked on a selector, and the next
+ * send commits the highlighted option instead of the typed message (#11761).
  */
 export function NativeChatInteractiveCard({
   paneKey,
   send,
   canSend,
+  messages,
   onShowingQuestionChange,
   answerInputRef
 }: {
   paneKey: string
   send: NativeChatInteractiveSend
   canSend: boolean
+  /** Transcript to fall back on when live status carries no prompt. Pass the
+   *  command-boundary-trimmed messages so an ask abandoned via `/clear` stays gone. */
+  messages?: readonly NativeChatMessage[]
   /** Reports whether a question card is on screen so the view can replace the
    *  composer with it (the card's free-text row is the answer input). */
   onShowingQuestionChange?: (showing: boolean) => void
@@ -45,10 +57,14 @@ export function NativeChatInteractiveCard({
   const interactiveToolName = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.toolName ?? null)
   const { sendAnswer, sendRaw, cancelPending, cancel } = send
 
-  const card = useMemo(
-    () => parseInteractivePrompt(interactivePrompt, interactiveToolName ?? undefined),
-    [interactivePrompt, interactiveToolName]
-  )
+  const card = useMemo(() => {
+    const statusCard = parseInteractivePrompt(interactivePrompt, interactiveToolName ?? undefined)
+    if (statusCard || !messages) {
+      return statusCard
+    }
+    const prompt = extractPendingAsk(messages)
+    return prompt ? { kind: 'question' as const, prompt } : null
+  }, [interactivePrompt, interactiveToolName, messages])
   const cardKey = useMemo(() => nativeChatCardDismissKey(card), [card])
   const [dismissedKey, setDismissedKey] = useState<string | null>(null)
   // A question answer is a paced multi-step write (body→Enter per question); keep

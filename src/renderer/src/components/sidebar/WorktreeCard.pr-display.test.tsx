@@ -72,10 +72,6 @@ vi.mock('./WorktreeCardAgents', () => ({
   default: () => null
 }))
 
-vi.mock('./SshDisconnectedDialog', () => ({
-  SshDisconnectedDialog: () => null
-}))
-
 vi.mock('./WorktreeContextMenu', () => ({
   default: ({ children }: { children: ReactNode }) => <>{children}</>,
   CLOSE_ALL_CONTEXT_MENUS_EVENT: 'orca:test-close-context-menus',

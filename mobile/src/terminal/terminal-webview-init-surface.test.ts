@@ -18,6 +18,7 @@ type TerminalStub = ReturnType<typeof makeTerminal>
 type TerminalOptions = {
   cursorInactiveStyle?: string
   cursorStyle?: string
+  showCursorImmediately?: boolean
 }
 type RegisteredWindowListener = {
   listener: EventListenerOrEventListenerObject
@@ -146,7 +147,8 @@ describe('terminal WebView init surface replacement', () => {
     for (const options of terminalOptions) {
       expect(options).toMatchObject({
         cursorStyle: 'bar',
-        cursorInactiveStyle: 'bar'
+        cursorInactiveStyle: 'block',
+        showCursorImmediately: true
       })
     }
   })

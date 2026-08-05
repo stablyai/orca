@@ -39,6 +39,7 @@ import {
   mergeGitConfigEnvProtocol
 } from '../shared/git-credential-prompt-env'
 import { isTuiAgent } from '../shared/tui-agent-config'
+import type { TuiAgent } from '../shared/types'
 import { forceKillPosixPtyProcessGroups } from '../main/pty/posix-pty-process-groups'
 import { stripInheritedBuildModeEnv } from '../main/pty/build-mode-env'
 import {
@@ -49,6 +50,7 @@ import {
 } from '../shared/pty-startup-ingress'
 import { resolvePtyOwnerBackend, type PtyOwnerBackend } from '../shared/pty-owner-backend'
 import { RecentPtyOutputBuffer } from '../main/runtime/recent-pty-output-buffer'
+import { expandWindowsPathEnvironmentVariables } from '../shared/windows-environment-expansion'
 import {
   agentSessionOwnerBindingsEqual,
   ClaimedAgentPtyOwnerRegistry
@@ -67,6 +69,7 @@ import {
   isAgentSessionSurfaceBinding,
   type AgentSessionOwnerBinding
 } from '../shared/agent-session-host-authority'
+import { createPtySlaveEchoProbe, readPtySlavePath } from '../shared/pty-slave-line-discipline-echo'
 
 // Why: only Linux compiles node-pty (no prebuilt), so the build-tools remedy is a closable setup gap
 // there and wrong advice anywhere node-pty ships one. The relay only sees an unloadable binding, never
@@ -179,7 +182,7 @@ type ManagedStartupCommand = {
   timer: ReturnType<typeof setTimeout> | null
 }
 
-// Why: node-pty's Windows agent throws on any signal arg (ConPTY has no signal semantics); drop it there, forward on POSIX.
+// Why: Windows ConPTY rejects signals; forward them only on POSIX.
 function killPtyProcess(pty: IPty, signal: string): void {
   if (process.platform === 'win32') {
     pty.kill()
@@ -262,6 +265,10 @@ const ALLOWED_WINDOWS_SHELL_OVERRIDES = new Set([
   'cmd',
   'wsl.exe',
   'wsl',
+  // Why: both spellings classify as a POSIX startup family, so rejecting them here made the relay
+  // the one host that hard-failed a setting the local and daemon PTYs accept.
+  'bash.exe',
+  'bash',
   WINDOWS_GIT_BASH_SHELL
 ])
 
@@ -338,6 +345,7 @@ export type PtyEnvAugmenter = (ctx: {
   shell: string
   env: Record<string, string>
   command?: string
+  launchAgent?: TuiAgent
 }) => Record<string, string>
 
 export type RelayPtyWorktreeRemovalCoordinator = {
@@ -370,7 +378,9 @@ export class PtyHandler {
   private reloadPtyModuleFromDisk = false
   // Why: single optional slot is intentional — callers compose externally; a throw is swallowed so it can't block cleanup.
   private exitListener: PtyExitListener | null = null
-  // Why: env augmenters run on every spawn so each PTY sees live hook coords without the dispatcher knowing about agent hooks.
+  private ptyPoolEmptyListener: (() => void) | null = null
+  private ptyPoolActiveListener: (() => void) | null = null
+  // Why: augment environment on every spawn so PTYs receive current hook coordinates.
   private envAugmenters: PtyEnvAugmenter[] = []
   private readonly agentSessionOwners = new ClaimedAgentPtyOwnerRegistry()
   private readonly agentSessionCreateOperations = new Map<
@@ -460,6 +470,10 @@ export class PtyHandler {
     }
   }
 
+  // Why: this value never reaches the grace *timer* — startGraceTimer's only caller always passes an
+  // explicit timeoutMs — but relay.startGrace reads it back through configuredGraceTimeMs to pick the
+  // grace branch, so a host-sent change does affect shutdown behavior. Callers and the host-sleep
+  // consequence: docs/reference/relay-grace-time-reconfiguration.md.
   setGraceTimeMs(graceTimeMs: number): void {
     this.graceTimeMs = Math.max(0, Math.floor(graceTimeMs))
   }
@@ -492,6 +506,53 @@ export class PtyHandler {
     this.exitListener = listener
   }
 
+  /** Notified when the last PTY leaves the pool, so the relay can re-arm its idle grace. */
+  onPtyPoolEmpty(listener: () => void): () => void {
+    this.ptyPoolEmptyListener = listener
+    return () => {
+      if (this.ptyPoolEmptyListener === listener) {
+        this.ptyPoolEmptyListener = null
+      }
+    }
+  }
+
+  /**
+   * Notified when a PTY creation is admitted or a PTY joins the pool.
+   *
+   * Why: the relay arms its idle cap on an empty pool, and a spawn/revive that lands after that
+   * decision must disarm it — creation is asynchronous, so the pool-empty edge alone can't see it.
+   */
+  onPtyPoolActive(listener: () => void): () => void {
+    this.ptyPoolActiveListener = listener
+    return () => {
+      if (this.ptyPoolActiveListener === listener) {
+        this.ptyPoolActiveListener = null
+      }
+    }
+  }
+
+  private notifyPoolListener(listener: (() => void) | null, label: string): void {
+    if (!listener) {
+      return
+    }
+    try {
+      listener()
+    } catch (err) {
+      process.stderr.write(
+        `[pty-handler] ${label} listener threw: ${err instanceof Error ? err.message : String(err)}\n`
+      )
+    }
+  }
+
+  // Why: the sole removal path, so the three exit routes can't drift on who announces an empty pool.
+  private removePty(id: string): void {
+    this.ptys.delete(id)
+    if (this.ptys.size > 0) {
+      return
+    }
+    this.notifyPoolListener(this.ptyPoolEmptyListener, 'pty-pool-empty')
+  }
+
   /** Register an env augmenter merged into every spawn env *after* process.env and renderer env.
    *  Used by the relay-hook server to inject ORCA_AGENT_HOOK_* coords. See docs/design/agent-status-over-ssh.md §3. */
   addEnvAugmenter(augmenter: PtyEnvAugmenter): () => void {
@@ -507,7 +568,13 @@ export class PtyHandler {
   /** Build augmented spawn env; augmenter values win over process.env/renderer env. Shared by spawn()/revive() so precedence can't drift. */
   private buildSpawnEnv(
     rendererEnv: Record<string, string> | undefined,
-    ctx: { id: string; paneKey?: string; shell: string; command?: string },
+    ctx: {
+      id: string
+      paneKey?: string
+      shell: string
+      command?: string
+      launchAgent?: TuiAgent
+    },
     envToDelete: readonly string[] = []
   ): Record<string, string> {
     const baseEnv = mergeGitConfigEnvProtocol(
@@ -548,6 +615,7 @@ export class PtyHandler {
     if (!result.TERM) {
       result.TERM = 'xterm-256color'
     }
+    expandWindowsPathEnvironmentVariables(result)
     return result
   }
 
@@ -609,6 +677,8 @@ export class PtyHandler {
   private wireAndStore(managed: ManagedPty): void {
     managed.physicalExit = new PhysicalExitTracker()
     this.ptys.set(managed.id, managed)
+    // Why: a second announce covers any store whose admission window has already closed.
+    this.notifyPoolListener(this.ptyPoolActiveListener, 'pty-pool-active')
     const emitIngressData = (emission: PtyIngressEmission): void => {
       const rawLength = emission.rawEndSeq - emission.rawStartSeq
       this.appendReplayBuffer(managed, emission.data)
@@ -620,11 +690,13 @@ export class PtyHandler {
           : {}
       )
     }
+    const echoProbe = createPtySlaveEchoProbe(readPtySlavePath(managed.pty))
     managed.startupIngress ??= new PtyStartupIngress({
       ...(managed.startupIngressIntent ? { intent: managed.startupIngressIntent } : {}),
       ownerBackend: managed.ownerBackend,
       write: (data) => managed.pty.write(data),
-      onEmission: emitIngressData
+      onEmission: emitIngressData,
+      ...(echoProbe ? { echoProbe } : {})
     })
     managed.pty.onData((data: string) => {
       const startup = managed.startupCommand
@@ -664,7 +736,7 @@ export class PtyHandler {
       this.publishPendingExit(managed.id)
       this.notifyExitListener(managed)
       this.agentSessionOwners.release(managed.id)
-      this.ptys.delete(managed.id)
+      this.removePty(managed.id)
       this.clearPtyInputState(managed.id)
       // Why: release the ptmx fd on natural exit, else the master fd leaks until GC (docs/fix-pty-fd-leak.md).
       disposeManagedPty(managed)
@@ -886,10 +958,15 @@ export class PtyHandler {
       ...(pending.rawLength === undefined ? {} : { rawLength: pending.rawLength }),
       ...(pending.transformed ? { transformed: true } : {})
     }
-    let chunkChars = pending.transformed
-      ? desiredChars
-      : (this.dispatcher.maxLegacyPtyDataChars?.(paramsWithoutData, pending.data, desiredChars) ??
-        desiredChars)
+    // Why: a failed publish may already have reserved this exact span (source-ledger append,
+    // partial legacy fan-out), so a retry must resend it verbatim and slice the remainder at
+    // the memo boundary — capacity and coalesced data can both have changed since. The capacity
+    // search is skipped on retry: its result is discarded, and publish re-checks capacity.
+    let chunkChars =
+      pending.transformed || pending.sourceChunk
+        ? desiredChars
+        : (this.dispatcher.maxLegacyPtyDataChars?.(paramsWithoutData, pending.data, desiredChars) ??
+          desiredChars)
     if (
       chunkChars > 0 &&
       chunkChars < pending.data.length &&
@@ -906,8 +983,8 @@ export class PtyHandler {
       this.pausePtyOutput(id)
       return false
     }
-    const chunk = pending.data.slice(0, chunkChars)
-    const remaining = pending.data.slice(chunkChars)
+    const chunk = pending.sourceChunk?.data ?? pending.data.slice(0, chunkChars)
+    const remaining = pending.data.slice(chunk.length)
     const chunkRawLength = pending.transformed
       ? pending.rawLength
       : pending.rawLength === undefined
@@ -930,10 +1007,16 @@ export class PtyHandler {
       this.pausePtyOutput(id)
       return false
     }
-    if (remaining) {
+    // rawLength fallback is defensive only: transformed memos always carry rawLength (ingress meta).
+    const publishedRawLength = sourceChunk.rawLength ?? sourceChunk.data.length
+    const remainingRawLength = pending.transformed
+      ? (pending.rawLength ?? 0) - publishedRawLength
+      : remaining.length
+    if (remaining || (pending.transformed && remainingRawLength > 0)) {
       queue[0] = {
         data: remaining,
-        ...(pending.rawLength === undefined ? {} : { rawLength: remaining.length }),
+        ...(pending.transformed ? { transformed: true } : {}),
+        ...(pending.rawLength === undefined ? {} : { rawLength: remainingRawLength }),
         seq: pending.seq
       }
     } else {
@@ -1011,18 +1094,51 @@ export class PtyHandler {
       return
     }
     if (this.sourcePublication?.accepts(id)) {
-      if (
-        !this.sourcePublication.sealAndPublishExit(exit) ||
-        !this.sourcePublication.exitPublicationSettled(id)
-      ) {
+      try {
+        // Why: after the exit settlement, re-entering sealAndPublishExit would pump a closed
+        // ledger delivery; the settled state alone decides completion.
+        if (this.sourcePublication.exitPublicationSettled(id)) {
+          this.pendingExitByPty.delete(id)
+          return
+        }
+        if (!this.sourcePublication.sealAndPublishExit(exit)) {
+          return
+        }
+        if (
+          this.sourcePublication.accepts(id) &&
+          !this.sourcePublication.exitPublicationSettled(id)
+        ) {
+          return
+        }
+        this.pendingExitByPty.delete(id)
         return
+      } catch (err) {
+        // Why: a source-publication fault must never escape onExit — it reaches
+        // uncaughtException and kills the whole relay daemon. Fall back to the legacy exit.
+        process.stderr.write(
+          `[pty-handler] pty source exit publication failed for ${id}: ${
+            err instanceof Error ? (err.stack ?? err.message) : String(err)
+          }\n`
+        )
       }
-      this.pendingExitByPty.delete(id)
-      return
     }
-    const published = this.dispatcher.tryNotifyPtyExit
-      ? this.dispatcher.tryNotifyPtyExit(exit)
-      : (this.dispatcher.notify('pty.exit', exit), true)
+    // Why: a retired record can already have projected this exit to the legacy subscribers, and
+    // the broadcast below would hand them a second copy.
+    let retiredExitPublished: boolean | null | undefined
+    try {
+      retiredExitPublished = this.sourcePublication?.publishExitAfterRetire?.(exit)
+    } catch (err) {
+      process.stderr.write(
+        `[pty-handler] retired pty exit publication failed for ${id}: ${
+          err instanceof Error ? (err.stack ?? err.message) : String(err)
+        }\n`
+      )
+    }
+    const published =
+      retiredExitPublished ??
+      (this.dispatcher.tryNotifyPtyExit
+        ? this.dispatcher.tryNotifyPtyExit(exit)
+        : (this.dispatcher.notify('pty.exit', exit), true))
     if (!published) {
       return
     }
@@ -1105,6 +1221,9 @@ export class PtyHandler {
       throw error
     }
     this.pendingSpawnCount++
+    // Why: announce at admission, not at store — the relay must stop treating itself as idle before
+    // the creation parks on its first await, or an armed idle timer kills the shell it produces.
+    this.notifyPoolListener(this.ptyPoolActiveListener, 'pty-pool-active')
     let finished = false
     return () => {
       if (finished) {
@@ -1119,6 +1238,11 @@ export class PtyHandler {
         this.pendingCreationDrainResolvers.clear()
       }
       finishPtyCreationOperations(finishRemovalOperations)
+      // Why: a creation that failed before wireAndStore still leaves the pool empty, and removePty
+      // can't announce a PTY that was never stored — without this the relay never re-arms its idle cap.
+      if (this.ptys.size === 0 && this.pendingSpawnCount === 0) {
+        this.notifyPoolListener(this.ptyPoolEmptyListener, 'pty-pool-empty')
+      }
     }
   }
 
@@ -1324,16 +1448,21 @@ export class PtyHandler {
     const terminalHandle =
       typeof env?.ORCA_TERMINAL_HANDLE === 'string' ? env.ORCA_TERMINAL_HANDLE : undefined
     const command = typeof params.command === 'string' ? params.command : undefined
+    const launchAgent = isTuiAgent(params.launchAgent) ? params.launchAgent : undefined
     const terminalWindowsWslDistro =
       typeof params.terminalWindowsWslDistro === 'string' ? params.terminalWindowsWslDistro : null
     const commandDelivery = params.commandDelivery === 'provider' ? 'provider' : 'renderer'
     const shouldProviderDeliverCommand = commandDelivery === 'provider' && command !== undefined
-    const spawnEnv = this.buildSpawnEnv(env, { id, paneKey, shell, command }, envToDelete)
+    const spawnEnv = this.buildSpawnEnv(
+      env,
+      { id, paneKey, shell, command, launchAgent },
+      envToDelete
+    )
     const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(spawnEnv, command)
     // Why: SSH PTYs bypass main's host-env builder, so apply the guard after the relay merges its authoritative env.
     const gitCredentialPromptGuarded = applyTerminalGitCredentialPromptGuard(spawnEnv, {
       launchCommand: launchCommandHint,
-      isUnattended: isTuiAgent(params.launchAgent),
+      isUnattended: launchAgent !== undefined,
       platform: process.platform
     })
     const shouldEmitShellReadyMarker =
@@ -1470,7 +1599,7 @@ export class PtyHandler {
       throw new Error(`PTY "${id}" not found`)
     }
 
-    // Why: a shell can die without node-pty firing onExit (reaped out-of-band); prove liveness so attach doesn't strand a dead, lingering lease.
+    // Why: verify liveness because shells can exit without node-pty onExit.
     if (managed.pty.pid && !isProcessAlive(managed.pty.pid)) {
       managed.physicalExit?.markExited()
       this.releaseRelayIngress(managed)
@@ -1478,12 +1607,12 @@ export class PtyHandler {
       this.notifyExitListener(managed)
       this.agentSessionOwners.release(managed.id)
       disposeManagedPty(managed)
-      this.ptys.delete(id)
+      this.removePty(id)
       this.clearPtyFlowState(id)
       throw new Error(`PTY "${id}" not found`)
     }
 
-    // Why: a relay generation reset can reuse pty-N for a different pane; reject on identity disagreement (absent identity permissive).
+    // Why: generation resets can reuse PTY IDs; reject conflicting identities.
     const mismatch = attachIdentityMismatches(
       {
         paneKey: typeof params.expectedPaneKey === 'string' ? params.expectedPaneKey : undefined,
@@ -1526,8 +1655,8 @@ export class PtyHandler {
       }
     }
 
-    // Why: renderer hasn't registered replay handlers yet during spawn, so return to the caller instead of notifying too early.
-    // Why: buffer intentionally NOT cleared after replay (client clears xterm first) so later restarts still replay full history.
+    // Why: return replay during spawn before renderer handlers register.
+    // Why: retain replay buffers so later restarts receive full history.
     const replay = managed.buffered.read()
     if (replay) {
       // Why: drop pending batched bytes already in the replay buffer so attach doesn't render them twice.
@@ -1595,7 +1724,7 @@ export class PtyHandler {
       this.releaseStartupCommand(managed)
       this.flushPtyOutput(id)
       this.requestForceKill(managed)
-      // Why: remote Git deletion must not race the child's native handles; on timeout keep the map entry so onExit/retry still owns it.
+      // Why: preserve timed-out entries so onExit/retry owns native handles.
       await this.waitForPhysicalExit(managed, IMMEDIATE_PTY_EXIT_TIMEOUT_MS)
     } else {
       this.releaseStartupCommand(managed)
@@ -2008,7 +2137,7 @@ export class PtyHandler {
       this.notifyExitListener(managed)
       this.agentSessionOwners.release(managed.id)
       disposeManagedPty(managed)
-      this.ptys.delete(managed.id)
+      this.removePty(managed.id)
       this.clearPtyFlowState(managed.id)
     }
   }
@@ -2046,6 +2175,11 @@ export class PtyHandler {
 
   get activePtyCount(): number {
     return this.ptys.size
+  }
+
+  /** Spawns admitted but not yet in the pool — each already owns a shell the relay must not treat as idle. */
+  get pendingPtyCreationCount(): number {
+    return this.pendingSpawnCount
   }
 
   get retainedStartupCommandCount(): number {

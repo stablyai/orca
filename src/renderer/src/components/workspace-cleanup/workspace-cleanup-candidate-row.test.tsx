@@ -62,4 +62,40 @@ describe('CandidateRow', () => {
     expect(container?.querySelector(`[aria-label="Select ${candidate.displayName}"]`)).toBeNull()
     expect(container?.querySelector(`[aria-label="Remove ${candidate.displayName}"]`)).toBeNull()
   })
+
+  it.each([
+    ['deleting' as const, 'Deleting…'],
+    ['queued' as const, 'Queued for deletion']
+  ])('replaces the status pill with the %s state', (deletionPhase, label) => {
+    const candidate = makeCandidate()
+
+    act(() => {
+      root?.render(
+        <CandidateRow
+          candidate={candidate}
+          deletionPhase={deletionPhase}
+          expanded={false}
+          last
+          lastActivityLabel="1d ago"
+          removing
+          reviewInfo={{
+            hasReview: false,
+            label: null,
+            provider: null,
+            state: null,
+            title: null
+          }}
+          selected
+          onIgnore={vi.fn()}
+          onRemove={vi.fn()}
+          onToggleExpanded={vi.fn()}
+          onToggleSelected={vi.fn()}
+          onView={vi.fn()}
+        />
+      )
+    })
+
+    expect(container?.textContent).toContain(label)
+    expect(container?.textContent).not.toContain('Ready')
+  })
 })

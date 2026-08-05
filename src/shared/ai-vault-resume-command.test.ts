@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildAiVaultResumeCommand } from './ai-vault-types'
+import { buildAiVaultResumeCommand } from './ai-vault-resume-command'
 
 describe('buildAiVaultResumeCommand', () => {
   it('uses Antigravity conversation ids instead of Gemini resume flags', () => {

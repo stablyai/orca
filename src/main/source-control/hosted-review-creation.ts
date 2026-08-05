@@ -36,6 +36,7 @@ import {
 } from '../gitlab/gl-utils'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import { detectHostedReviewProvider, getForgeProviderForRepository } from './forge-provider'
+import { invalidateHostedReviewBranchCache } from './hosted-review-branch-cache'
 import { getHostedReviewForBranch } from './hosted-review'
 import {
   getHostedReviewLocalGitOptions,
@@ -503,6 +504,10 @@ export async function getHostedReviewCreationEligibility(
       linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
       linkedGiteaPR: args.linkedGiteaPR ?? null,
       connectionId: args.connectionId ?? null,
+      // Why: eligibility is only ever asked for the worktree the user is acting
+      // on, so it earns the fast tier. Without it a review opened outside Orca
+      // in the last no-review interval would leave Create enabled (#11532).
+      active: true,
       ...hostedReviewExecutionContext(args)
     })
   } catch (error) {
@@ -624,7 +629,14 @@ export async function createHostedReview(
     return blocked
   }
   const localGitOptions = getHostedReviewLocalGitOptions(options)
-  return Object.keys(localGitOptions).length > 0
-    ? provider.createReview(repoPath, input, connectionId, options)
-    : provider.createReview(repoPath, input, connectionId)
+  const result =
+    Object.keys(localGitOptions).length > 0
+      ? await provider.createReview(repoPath, input, connectionId, options)
+      : await provider.createReview(repoPath, input, connectionId)
+  if (result.ok) {
+    // Why (#11532): the branch cache holds a "no review" answer for far longer
+    // than a poll interval, so Orca's own creation must retire it at once.
+    invalidateHostedReviewBranchCache(repoPath, connectionId)
+  }
+  return result
 }

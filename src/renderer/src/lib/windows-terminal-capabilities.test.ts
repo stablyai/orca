@@ -198,6 +198,24 @@ describe('windows terminal capabilities', () => {
     expect(wslIsAvailable).toHaveBeenCalledTimes(2)
   })
 
+  it('rechecks availability when distro discovery invalidates a stale failure', async () => {
+    const wslIsAvailable = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true)
+    vi.stubGlobal('window', {
+      api: {
+        wsl: { isAvailable: wslIsAvailable, listDistros: vi.fn().mockResolvedValue(['Ubuntu']) },
+        pwsh: { isAvailable: vi.fn().mockResolvedValue(false) },
+        gitBash: { isAvailable: vi.fn().mockResolvedValue(false) },
+        runtime: { getStatus: vi.fn().mockResolvedValue({ hostPlatform: 'win32' }) }
+      }
+    })
+
+    await expect(loadWindowsTerminalCapabilities()).resolves.toMatchObject({
+      wslAvailable: true,
+      wslDistros: ['Ubuntu']
+    })
+    expect(wslIsAvailable).toHaveBeenCalledTimes(2)
+  })
+
   it('re-probes when the capability cache expires', async () => {
     const wslIsAvailable = vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false)
     const pwshIsAvailable = vi.fn().mockResolvedValue(false)
@@ -556,6 +574,49 @@ describe('windows terminal capabilities', () => {
     })
 
     expect(detectRemoteWindowsTerminalCapabilities).toHaveBeenCalledTimes(1)
+  })
+
+  it('refreshes local capabilities while a long-lived consumer remains mounted', async () => {
+    vi.useFakeTimers()
+    const { wslIsAvailable, wslListDistros } = stubTerminalCapabilityApi({
+      wslAvailable: false,
+      pwshAvailable: true,
+      wslDistros: []
+    })
+    wslIsAvailable.mockResolvedValueOnce(false).mockResolvedValue(true)
+    wslListDistros.mockResolvedValueOnce([]).mockResolvedValue(['Ubuntu'])
+    let latest: ReturnType<typeof useWindowsTerminalCapabilities> | null = null
+
+    function HookProbe(): null {
+      latest = useWindowsTerminalCapabilities(true)
+      return null
+    }
+
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    hookRoots.push(root)
+
+    try {
+      await act(async () => {
+        root.render(createElement(HookProbe))
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+      expect(latest).toMatchObject({ wslAvailable: false, wslDistros: [] })
+
+      await act(async () => {
+        vi.advanceTimersByTime(30_000)
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+      expect(latest).toMatchObject({ wslAvailable: true, wslDistros: ['Ubuntu'] })
+      expect(wslIsAvailable).toHaveBeenCalledTimes(2)
+      vi.advanceTimersByTime(30_000)
+      expect(wslIsAvailable).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it.each([

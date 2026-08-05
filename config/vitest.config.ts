@@ -17,12 +17,14 @@ export default defineConfig({
     environment: 'node',
     // Why: Node 26's undefined Web Storage globals prevent Vitest from installing happy-dom's.
     execArgv: ['--no-experimental-webstorage'],
+    // Why: happy-dom drops MutationObserver callbacks on GC; keep them alive like a browser does.
+    setupFiles: [resolve('config/scripts/happy-dom-mutation-observer-retention.ts')],
     include: [
       'src/**/*.test.ts',
       'src/**/*.test.tsx',
       'config/scripts/**/*.test.ts',
       'config/scripts/**/*.test.mjs',
-      'tools/**/*.test.mjs',
+      'tests/tools/**/*.test.mjs',
       'tests/e2e/**/*.unit.test.ts'
     ],
     // Why: the full suite runs heavy TS transforms plus real git/http fixtures;

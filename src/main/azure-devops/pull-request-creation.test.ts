@@ -4,6 +4,7 @@ import {
   isAzureDevOpsReviewCreationAuthenticated
 } from './pull-request-creation'
 import { _resetAzureDevOpsRepoRefCache } from './repository-ref'
+import { REMOTE_URL_PROBE_TIMEOUT_MS } from '../git/remote-url-probe'
 
 const { gitExecFileAsyncMock, getSshGitProviderMock } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn(),
@@ -15,7 +16,8 @@ vi.mock('../git/runner', () => ({
 }))
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: getSshGitProviderMock
+  getSshGitProvider: getSshGitProviderMock,
+  getSshGitProviderGeneration: () => 0
 }))
 
 vi.mock('../source-control/pull-request-template', () => ({
@@ -128,7 +130,9 @@ describe('Azure DevOps pull request creation', () => {
       ok: true,
       number: 38
     })
-    expect(remoteGit.exec).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], '/remote/repo')
+    expect(remoteGit.exec).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], '/remote/repo', {
+      signal: expect.any(AbortSignal)
+    })
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
@@ -149,7 +153,8 @@ describe('Azure DevOps pull request creation', () => {
       code: 'auth_required'
     })
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
-      cwd: '/repo'
+      cwd: '/repo',
+      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
   })
 })

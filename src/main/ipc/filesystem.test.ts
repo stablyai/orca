@@ -2419,6 +2419,111 @@ describe('registerFilesystemHandlers', () => {
     )
   })
 
+  it('discovers models from an exact repo-less folder workspace root', async () => {
+    const folderPath = path.resolve('/outside-workspace/folder-project')
+    const folderStore = {
+      ...store,
+      getFolderWorkspaces: () => [
+        {
+          id: 'folder-1',
+          projectGroupId: 'group-1',
+          folderPath,
+          connectionId: null
+        }
+      ]
+    }
+    discoverCommitMessageModelsLocalMock.mockResolvedValue({
+      success: true,
+      models: [{ id: 'sonnet', label: 'Sonnet' }],
+      defaultModelId: 'sonnet'
+    })
+
+    registerFilesystemHandlers(folderStore as never)
+
+    await handlers.get('git:discoverCommitMessageModels')!(null, {
+      agentId: 'claude',
+      worktreePath: folderPath
+    })
+
+    expect(discoverCommitMessageModelsLocalMock).toHaveBeenCalledWith(
+      'claude',
+      undefined,
+      undefined,
+      { cwd: folderPath }
+    )
+  })
+
+  it('does not authorize remote-only folder roots as local discovery paths', async () => {
+    const folderPath = path.resolve('/remote-only/folder-project')
+    const folderStore = {
+      ...store,
+      getFolderWorkspaces: () => [
+        {
+          id: 'folder-1',
+          projectGroupId: 'group-1',
+          folderPath,
+          connectionId: 'ssh-1'
+        }
+      ]
+    }
+
+    registerFilesystemHandlers(folderStore as never)
+
+    await expect(
+      handlers.get('git:discoverCommitMessageModels')!(null, {
+        agentId: 'claude',
+        worktreePath: folderPath
+      })
+    ).rejects.toThrow('Access denied')
+    expect(discoverCommitMessageModelsLocalMock).not.toHaveBeenCalled()
+  })
+
+  it('routes a repo-less WSL folder workspace discovery through its distro', async () => {
+    await withPlatform('win32', async () => {
+      const folderPath = '\\\\wsl.localhost\\Ubuntu\\home\\tester\\folder-project'
+      const prepareForClaudeLaunch = vi.fn().mockResolvedValue({
+        configDir: '\\\\wsl.localhost\\Ubuntu\\home\\tester\\.claude',
+        envPatch: { CLAUDE_CONFIG_DIR: '/home/tester/.claude' },
+        stripAuthEnv: true,
+        provenance: 'managed:account-1'
+      })
+      const folderStore = {
+        ...store,
+        getFolderWorkspaces: () => [
+          {
+            id: 'folder-1',
+            projectGroupId: 'group-1',
+            folderPath,
+            connectionId: null
+          }
+        ]
+      }
+      discoverCommitMessageModelsLocalMock.mockResolvedValue({
+        success: true,
+        models: [{ id: 'sonnet', label: 'Sonnet' }],
+        defaultModelId: 'sonnet'
+      })
+
+      registerFilesystemHandlers(folderStore as never, { prepareForClaudeLaunch })
+
+      await handlers.get('git:discoverCommitMessageModels')!(null, {
+        agentId: 'claude',
+        worktreePath: folderPath
+      })
+
+      expect(prepareForClaudeLaunch).toHaveBeenCalledWith({
+        runtime: 'wsl',
+        wslDistro: 'Ubuntu'
+      })
+      expect(discoverCommitMessageModelsLocalMock).toHaveBeenCalledWith(
+        'claude',
+        expect.objectContaining({ CLAUDE_CONFIG_DIR: '/home/tester/.claude' }),
+        undefined,
+        { cwd: path.resolve(folderPath), wslDistro: 'Ubuntu' }
+      )
+    })
+  })
+
   it('routes local WSL project model discovery through the project runtime target', async () => {
     await withPlatform('win32', async () => {
       discoverCommitMessageModelsLocalMock.mockResolvedValue({

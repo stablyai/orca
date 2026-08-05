@@ -284,15 +284,13 @@ function NativeChatResolvedView({
       ? sessionWithLaunchPrompt
       : { ...sessionWithLaunchPrompt, messages }
   }, [sessionWithLaunchPrompt, commandMarkers])
-  const launchPromptVisible =
-    launchPromptMessage !== null &&
-    sessionAfterCommandBoundaries.messages.some((message) => message.id === launchPromptMessage.id)
   const failedLaunchPromptMessageIds = useMemo(() => {
-    if (!paneLaunchPrompt?.failed || !launchPromptVisible || !launchPromptMessage) {
+    const id = paneLaunchPrompt?.failed ? launchPromptMessage?.id : null
+    if (!id || !sessionAfterCommandBoundaries.messages.some((message) => message.id === id)) {
       return undefined
     }
-    return new Set([launchPromptMessage.id])
-  }, [paneLaunchPrompt?.failed, launchPromptMessage, launchPromptVisible])
+    return new Set([id])
+  }, [paneLaunchPrompt?.failed, launchPromptMessage?.id, sessionAfterCommandBoundaries.messages])
 
   // The streaming preview bubble (if any) sits after the transcript but before
   // the optimistic user echoes — same order mobile uses.
@@ -431,6 +429,7 @@ function NativeChatResolvedView({
         paneKey={paneKey}
         send={interactiveSend}
         canSend={canSend}
+        messages={sessionAfterCommandBoundaries.messages}
         onShowingQuestionChange={setQuestionActive}
         answerInputRef={questionAnswerInputRef}
       />
