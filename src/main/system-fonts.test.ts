@@ -63,8 +63,16 @@ describe('buildWindowsFontListScript', () => {
   it('forces UTF-8 console output before enumerating font families', async () => {
     const { buildWindowsFontListScript } = await import('./system-fonts')
     const script = buildWindowsFontListScript()
-    expect(script).toContain('[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)')
     expect(script).toContain('InstalledFontCollection')
+    // Why: pin order so enumeration cannot drift above the UTF-8 setup (#12590 review).
+    const encodingIndex = script.indexOf(
+      '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)'
+    )
+    const outputEncodingIndex = script.indexOf('$OutputEncoding = [Console]::OutputEncoding')
+    const enumerationIndex = script.indexOf('$fonts.Families | ForEach-Object')
+    expect(encodingIndex).toBeGreaterThanOrEqual(0)
+    expect(outputEncodingIndex).toBeGreaterThan(encodingIndex)
+    expect(enumerationIndex).toBeGreaterThan(outputEncodingIndex)
   })
 })
 
