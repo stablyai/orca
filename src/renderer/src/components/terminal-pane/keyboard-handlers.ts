@@ -15,7 +15,8 @@ import {
   getTerminalImeModifiedEnterKind,
   isTerminalImeConsumedKey,
   isTerminalImeEnterKeyUp,
-  isTerminalImeProcessEnter
+  isTerminalImeProcessEnter,
+  sendTerminalInputAfterComposition
 } from './terminal-ime-deferred-newline'
 import { hasPendingTerminalImeComposition } from './terminal-ime-composition-route'
 import {
@@ -589,14 +590,22 @@ export function useTerminalKeyboardShortcuts({
           return
         }
         const sendResolvedInput = createCapturedInputSender(pane, action.data)
-        if ((e.isComposing || hasPendingImeComposition) && (e.key === 'Enter' || imeProcessEnter)) {
-          if (isWindows) {
-            const chord = getModifiedEnterChord(e)
-            if (chord && !modifiedEnterChordOwner.claim(chord)) {
-              return
+        if (e.isComposing || hasPendingImeComposition) {
+          if (e.key === 'Enter' || imeProcessEnter) {
+            if (isWindows) {
+              const chord = getModifiedEnterChord(e)
+              if (chord && !modifiedEnterChordOwner.claim(chord)) {
+                return
+              }
             }
+            deferredNewlineSender.defer(e, pane.terminal.element, sendResolvedInput)
+            return
           }
-          deferredNewlineSender.defer(e, pane.terminal.element, sendResolvedInput)
+          // Why: xterm sends the committed glyph on a timer while these bytes go out
+          // synchronously, and the shell reads them against the line it already has —
+          // an unsequenced kill or cursor move lands before the trailing syllable.
+          // The Enter path keeps its own sender for the Windows redispatch ledger.
+          sendTerminalInputAfterComposition(pane.terminal.element, sendResolvedInput)
           return
         }
         sendResolvedInput()
