@@ -84,6 +84,7 @@ import {
 } from '../../../../shared/browser-viewport-presets'
 import { rememberLiveBrowserUrl } from './browser-runtime'
 import { ensureBrowserPageWebview } from './browser-page-webview'
+import { RemoteBrowserStreamRestartScheduler } from './remote-browser-stream-restart-scheduler'
 import {
   destroyPersistentWebview,
   isBrowserPageRendererRecoveryPending,
@@ -942,7 +943,7 @@ function RemoteBrowserPagePane({
   const remoteViewportTimerRef = useRef<number | null>(null)
   const streamFrameUrlRef = useRef<string | null>(null)
   const streamSubscriptionRef = useRef<RemoteBrowserStreamSubscription | null>(null)
-  const streamRestartTimerRef = useRef<number | null>(null)
+  const streamRestartSchedulerRef = useRef(new RemoteBrowserStreamRestartScheduler())
   const remoteTabRefreshTimerRef = useRef<number | null>(null)
   const remoteInputQueueRef = useRef<Promise<unknown>>(Promise.resolve())
   const pendingRemoteWheelRef = useRef<PendingRemoteBrowserWheel | null>(null)
@@ -1054,10 +1055,7 @@ function RemoteBrowserPagePane({
       activeStreamTokenRef.current = null
       streamSubscriptionRef.current?.unsubscribe()
       streamSubscriptionRef.current = null
-      if (streamRestartTimerRef.current !== null) {
-        window.clearTimeout(streamRestartTimerRef.current)
-        streamRestartTimerRef.current = null
-      }
+      streamRestartSchedulerRef.current.cancel()
       if (remoteViewportTimerRef.current !== null) {
         window.clearTimeout(remoteViewportTimerRef.current)
         remoteViewportTimerRef.current = null
@@ -1234,6 +1232,7 @@ function RemoteBrowserPagePane({
   useEffect(() => {
     // Why: StrictMode's mount→cleanup→mount leaves mountedRef false; re-arm or operation tokens read stale and the pane wedges.
     mountedRef.current = true
+    const streamRestartScheduler = streamRestartSchedulerRef.current
     return () => {
       mountedRef.current = false
       remoteOperationGenerationRef.current += 1
@@ -1241,10 +1240,7 @@ function RemoteBrowserPagePane({
       pendingFrameDecodeRef.current += 1
       activeStreamTokenRef.current = null
       remoteStreamViewportSizeRef.current = null
-      if (streamRestartTimerRef.current !== null) {
-        window.clearTimeout(streamRestartTimerRef.current)
-        streamRestartTimerRef.current = null
-      }
+      streamRestartScheduler.cancel()
       if (remoteViewportTimerRef.current !== null) {
         window.clearTimeout(remoteViewportTimerRef.current)
         remoteViewportTimerRef.current = null
@@ -1585,13 +1581,14 @@ function RemoteBrowserPagePane({
 
   const scheduleRemoteStreamRestart = useCallback(
     (token: RemoteBrowserStreamToken): void => {
-      if (!isCurrentRemoteStreamOperation(token) || streamRestartTimerRef.current !== null) {
+      if (!isCurrentRemoteStreamOperation(token) || streamRestartSchedulerRef.current.isScheduled) {
         return
       }
-      streamRestartTimerRef.current = window.setTimeout(() => {
-        streamRestartTimerRef.current = null
+      // Why: a failed self-heal attempt must keep retrying with bounded backoff (STA-3483)
+      // instead of leaving the pane holding a dead subscription with no way back.
+      streamRestartSchedulerRef.current.schedule(async (): Promise<boolean> => {
         if (!isCurrentRemoteStreamOperation(token)) {
-          return
+          return false
         }
         setBusy(true)
         const operationToken: RemoteBrowserOperationToken = {
@@ -1600,44 +1597,39 @@ function RemoteBrowserPagePane({
           remotePageId: token.remotePageId,
           generation: token.operationGeneration
         }
-        void fetchRemoteTabInfo(operationToken)
-          .then((tab) => {
-            if (!tab || !isCurrentRemoteStreamOperation(token)) {
-              return
-            }
+        try {
+          const tab = await fetchRemoteTabInfo(operationToken).catch(() => null)
+          if (tab && isCurrentRemoteStreamOperation(token)) {
             applyRemoteTabInfo(tab)
-          })
-          .catch(() => {})
-          .then(() => {
-            if (!isCurrentRemoteStreamOperation(token)) {
-              return null
-            }
-            return startRemoteStreamRef.current(token.remotePageId)
-          })
-          .then((subscription) => {
-            if (!subscription) {
-              return
-            }
-            if (!isCurrentRemoteStreamToken(subscription.token)) {
-              subscription?.unsubscribe()
-              return
-            }
-            streamSubscriptionRef.current = subscription
-          })
-          .catch((error: unknown) => {
-            if (!isCurrentRemoteStreamOperation(token)) {
-              return
-            }
-            if (isRemoteBrowserPageMissingError(error)) {
-              closeMissingRemotePage(token.remotePageId)
-              return
-            }
-            setRemoteError(
-              error instanceof Error ? error.message : 'Failed to restart remote browser stream.'
-            )
-            setBusy(false)
-          })
-      }, 500)
+          }
+          if (!isCurrentRemoteStreamOperation(token)) {
+            return false
+          }
+          const subscription = await startRemoteStreamRef.current(token.remotePageId)
+          if (!subscription) {
+            return false
+          }
+          if (!isCurrentRemoteStreamToken(subscription.token)) {
+            subscription.unsubscribe()
+            return false
+          }
+          streamSubscriptionRef.current = subscription
+          return false
+        } catch (error) {
+          if (!isCurrentRemoteStreamOperation(token)) {
+            return false
+          }
+          if (isRemoteBrowserPageMissingError(error)) {
+            closeMissingRemotePage(token.remotePageId)
+            return false
+          }
+          setRemoteError(
+            error instanceof Error ? error.message : 'Failed to restart remote browser stream.'
+          )
+          setBusy(false)
+          return true
+        }
+      })
     },
     [
       applyRemoteTabInfo,
@@ -1735,6 +1727,8 @@ function RemoteBrowserPagePane({
               }
               const event = response.result as BrowserScreencastResult
               if (event.type === 'ready') {
+                // Why: a confirmed-live stream forgets prior restart failures (STA-3483).
+                streamRestartSchedulerRef.current.reset()
                 applyRemoteTabInfo(event.tab)
                 void syncRemoteViewport(event.browserPageId).catch(() => {})
                 setBusy(false)
@@ -1805,10 +1799,7 @@ function RemoteBrowserPagePane({
       activeStreamTokenRef.current = null
       streamSubscriptionRef.current = null
       remoteStreamViewportSizeRef.current = null
-      if (streamRestartTimerRef.current !== null) {
-        window.clearTimeout(streamRestartTimerRef.current)
-        streamRestartTimerRef.current = null
-      }
+      streamRestartSchedulerRef.current.cancel()
       setBusy(true)
       current.unsubscribe()
       void startRemoteStreamRef
@@ -1860,10 +1851,8 @@ function RemoteBrowserPagePane({
     activeStreamTokenRef.current = null
     streamSubscriptionRef.current?.unsubscribe()
     streamSubscriptionRef.current = null
-    if (streamRestartTimerRef.current !== null) {
-      window.clearTimeout(streamRestartTimerRef.current)
-      streamRestartTimerRef.current = null
-    }
+    const streamRestartScheduler = streamRestartSchedulerRef.current
+    streamRestartScheduler.cancel()
     const operationToken = createRemoteOperationToken()
     if (!operationToken) {
       setBusy(false)
@@ -1911,10 +1900,7 @@ function RemoteBrowserPagePane({
       clearPendingRemoteWheel()
       streamSubscriptionRef.current?.unsubscribe()
       streamSubscriptionRef.current = null
-      if (streamRestartTimerRef.current !== null) {
-        window.clearTimeout(streamRestartTimerRef.current)
-        streamRestartTimerRef.current = null
-      }
+      streamRestartScheduler.cancel()
     }
   }, [
     clearPendingRemoteWheel,
