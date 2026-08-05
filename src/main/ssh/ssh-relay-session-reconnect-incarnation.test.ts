@@ -126,12 +126,15 @@ const {
   registerSshPtyProvider,
   getSshPtyProvider,
   getPtyIdsForConnection,
+  clearProviderPtyState,
+  deletePtyOwnership,
   setPtyOwnership,
   restorePtyIncarnation
 } = await import('../ipc/pty')
 const { deployAndLaunchRelay } = await import('./ssh-relay-deploy')
 
 const APP_PTY_ID = 'ssh:target-1@@pty-live'
+const SSH_HOST_ID = 'ssh:target-1'
 const INCARNATION_LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
 function detachedLease() {
@@ -141,7 +144,9 @@ function detachedLease() {
     state: 'detached' as const,
     worktreeId: 'worktree-1',
     tabId: 'tab-1',
-    leafId: INCARNATION_LEAF_ID
+    leafId: INCARNATION_LEAF_ID,
+    createdAt: 1,
+    updatedAt: 1
   }
 }
 
@@ -413,16 +418,279 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
       incarnationId
     })
     expect(runtime.onPtySpawned).not.toHaveBeenCalled()
-    expect(mockStore.persistPtyBinding).toHaveBeenCalledWith({
+    expect(mockStore.resolveExistingSshPtyBinding).toHaveBeenCalledWith({
+      targetId: 'target-1',
       worktreeId: 'worktree-1',
       tabId: 'tab-1',
       leafId: INCARNATION_LEAF_ID,
-      ptyId: APP_PTY_ID,
-      incarnationId
+      ptyId: APP_PTY_ID
     })
+    expect(mockStore.persistPtyBinding).toHaveBeenCalledWith(
+      {
+        worktreeId: 'worktree-1',
+        tabId: 'tab-1',
+        leafId: INCARNATION_LEAF_ID,
+        ptyId: APP_PTY_ID,
+        incarnationId
+      },
+      SSH_HOST_ID,
+      { mayCreate: false, expectedBinding: { ptyId: APP_PTY_ID } }
+    )
     expect(vi.mocked(mockStore.persistPtyBinding).mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(mockStore.markSshRemotePtyLeasesAttachedAsync).mock.invocationCallOrder[0]!
     )
+  })
+
+  it('refuses an absent pane before attach without publishing or destroying anything', async () => {
+    const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
+    const attachForReconnect = vi.fn().mockResolvedValue({ incarnationId: 'incarnation-refused' })
+    const shutdown = vi.fn()
+    vi.mocked(getSshPtyProvider).mockReturnValue({
+      attachForReconnect,
+      shutdown,
+      dispose: vi.fn()
+    } as unknown as ReturnType<typeof getSshPtyProvider>)
+    vi.mocked(mockStore.getSshRemotePtyLeases).mockReturnValue([detachedLease()] as ReturnType<
+      typeof mockStore.getSshRemotePtyLeases
+    >)
+    vi.mocked(mockStore.resolveExistingSshPtyBinding).mockReturnValue(null)
+    const runtime = { onPtyExit: vi.fn(), onPtySpawned: vi.fn(), registerPty: vi.fn() }
+    const session = new SshRelaySession(
+      'target-1',
+      getMainWindow,
+      mockStore,
+      mockPortForward,
+      runtime as never
+    )
+
+    await session.establish(mockConn)
+
+    expect(mockStore.resolveExistingSshPtyBinding).toHaveBeenCalledWith(
+      expect.objectContaining({
+        targetId: 'target-1',
+        ptyId: APP_PTY_ID,
+        tabId: 'tab-1',
+        leafId: INCARNATION_LEAF_ID
+      })
+    )
+    expect(mockStore.quarantineSshRemotePtyLeasesAsync).toHaveBeenCalledWith('target-1', [
+      'pty-live'
+    ])
+    expect(deletePtyOwnership).toHaveBeenCalledWith(APP_PTY_ID)
+    expect(mockStore.persistPtyBinding).not.toHaveBeenCalled()
+    expect(attachForReconnect).not.toHaveBeenCalled()
+    expect(runtime.registerPty).not.toHaveBeenCalled()
+    expect(runtime.onPtySpawned).not.toHaveBeenCalled()
+    expect(runtime.onPtyExit).not.toHaveBeenCalled()
+    expect(restorePtyIncarnation).not.toHaveBeenCalled()
+    expect(setPtyOwnership).not.toHaveBeenCalled()
+    expect(mockStore.markSshRemotePtyLeasesAttachedAsync).not.toHaveBeenCalled()
+    expect(shutdown).not.toHaveBeenCalled()
+    expect(
+      vi.mocked(mockWindow.webContents.send).mock.calls.some(([channel]) => channel === 'pty:exit')
+    ).toBe(false)
+  })
+
+  it('contains a #11005-style reattach failure without permitting a creating bind', async () => {
+    const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
+    const attachForReconnect = vi.fn().mockRejectedValue(new Error('output recovery failed'))
+    const shutdown = vi.fn()
+    vi.mocked(getSshPtyProvider).mockReturnValue({
+      attachForReconnect,
+      shutdown,
+      dispose: vi.fn()
+    } as unknown as ReturnType<typeof getSshPtyProvider>)
+    vi.mocked(mockStore.getSshRemotePtyLeases).mockReturnValue([detachedLease()] as ReturnType<
+      typeof mockStore.getSshRemotePtyLeases
+    >)
+    const runtime = { onPtyExit: vi.fn(), onPtySpawned: vi.fn(), registerPty: vi.fn() }
+    const session = new SshRelaySession(
+      'target-1',
+      getMainWindow,
+      mockStore,
+      mockPortForward,
+      runtime as never
+    )
+
+    await expect(session.establish(mockConn)).resolves.toBeUndefined()
+
+    expect(session.getState()).toBe('ready')
+    expect(attachForReconnect).toHaveBeenCalledTimes(2)
+    expect(mockStore.resolveExistingSshPtyBinding).toHaveBeenCalledOnce()
+    expect(mockStore.persistPtyBinding).not.toHaveBeenCalled()
+    expect(runtime.registerPty).not.toHaveBeenCalled()
+    expect(runtime.onPtySpawned).not.toHaveBeenCalled()
+    expect(runtime.onPtyExit).not.toHaveBeenCalled()
+    expect(setPtyOwnership).not.toHaveBeenCalled()
+    expect(mockStore.markSshRemotePtyLeasesAttachedAsync).not.toHaveBeenCalled()
+    expect(shutdown).not.toHaveBeenCalled()
+    expect(
+      vi.mocked(mockWindow.webContents.send).mock.calls.some(([channel]) => channel === 'pty:exit')
+    ).toBe(false)
+  })
+
+  it('contains a post-attach bind race without allowing a creating recovery bind', async () => {
+    const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
+    const sourceActivationLease = { commit: vi.fn(), rollback: vi.fn().mockResolvedValue(true) }
+    const attachForReconnect = vi.fn().mockResolvedValue({
+      incarnationId: 'incarnation-raced',
+      replay: 'unpublished-output',
+      sourceActivationLease
+    })
+    const shutdown = vi.fn()
+    vi.mocked(getSshPtyProvider).mockReturnValue({
+      attachForReconnect,
+      shutdown,
+      dispose: vi.fn()
+    } as unknown as ReturnType<typeof getSshPtyProvider>)
+    vi.mocked(mockStore.getSshRemotePtyLeases).mockReturnValue([detachedLease()] as ReturnType<
+      typeof mockStore.getSshRemotePtyLeases
+    >)
+    vi.mocked(mockStore.persistPtyBinding).mockReturnValue('refused')
+    const runtime = { onPtyExit: vi.fn(), onPtySpawned: vi.fn(), registerPty: vi.fn() }
+    const session = new SshRelaySession(
+      'target-1',
+      getMainWindow,
+      mockStore,
+      mockPortForward,
+      runtime as never
+    )
+
+    await session.establish(mockConn)
+
+    expect(attachForReconnect).toHaveBeenCalledOnce()
+    expect(mockStore.resolveExistingSshPtyBinding).toHaveBeenCalledOnce()
+    expect(mockStore.persistPtyBinding).toHaveBeenCalledWith(
+      expect.objectContaining({ incarnationId: 'incarnation-raced' }),
+      SSH_HOST_ID,
+      { mayCreate: false, expectedBinding: { ptyId: APP_PTY_ID } }
+    )
+    expect(mockStore.quarantineSshRemotePtyLeasesAsync).toHaveBeenCalledWith('target-1', [
+      'pty-live'
+    ])
+    expect(deletePtyOwnership).toHaveBeenCalledWith(APP_PTY_ID)
+    expect(runtime.registerPty).not.toHaveBeenCalled()
+    expect(runtime.onPtySpawned).not.toHaveBeenCalled()
+    expect(runtime.onPtyExit).not.toHaveBeenCalled()
+    expect(restorePtyIncarnation).not.toHaveBeenCalled()
+    expect(setPtyOwnership).not.toHaveBeenCalled()
+    expect(mockStore.markSshRemotePtyLeasesAttachedAsync).not.toHaveBeenCalled()
+    expect(sourceActivationLease.commit).not.toHaveBeenCalled()
+    expect(sourceActivationLease.rollback).toHaveBeenCalledOnce()
+    expect(shutdown).not.toHaveBeenCalled()
+    expect(
+      vi
+        .mocked(mockWindow.webContents.send)
+        .mock.calls.some(([channel]) => ['pty:exit', 'pty:replay'].includes(channel))
+    ).toBe(false)
+  })
+
+  it('attaches only the deterministic pane winner and never shuts down discarded duplicates', async () => {
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const attachForReconnect = vi.fn().mockResolvedValue({ incarnationId: 'incarnation-winner' })
+    const shutdown = vi.fn()
+    vi.mocked(getSshPtyProvider).mockReturnValue({
+      attachForReconnect,
+      shutdown,
+      dispose: vi.fn()
+    } as unknown as ReturnType<typeof getSshPtyProvider>)
+    vi.mocked(getPtyIdsForConnection).mockReturnValue(['pty-old', 'pty-winner'])
+    vi.mocked(mockStore.getSshRemotePtyLeases).mockReturnValue([
+      { ...detachedLease(), ptyId: 'pty-old', createdAt: 10, updatedAt: 10 },
+      { ...detachedLease(), ptyId: 'pty-winner', createdAt: 20, updatedAt: 20 }
+    ] as ReturnType<typeof mockStore.getSshRemotePtyLeases>)
+    const runtime = { onPtySpawned: vi.fn(), registerPty: vi.fn() }
+    const session = new SshRelaySession(
+      'target-1',
+      getMainWindow,
+      mockStore,
+      mockPortForward,
+      runtime as never
+    )
+
+    await session.establish(mockConn)
+
+    expect(mockStore.quarantineSshRemotePtyLeasesAsync).toHaveBeenCalledWith('target-1', [
+      'pty-old'
+    ])
+    expect(clearProviderPtyState).toHaveBeenCalledWith('ssh:target-1@@pty-old')
+    expect(deletePtyOwnership).toHaveBeenCalledWith('ssh:target-1@@pty-old')
+    expect(attachForReconnect).toHaveBeenCalledOnce()
+    expect(attachForReconnect).toHaveBeenCalledWith(
+      'pty-winner',
+      expect.objectContaining({ paneKey: `tab-1:${INCARNATION_LEAF_ID}` })
+    )
+    expect(mockStore.markSshRemotePtyLeasesAttachedAsync).toHaveBeenCalledWith('target-1', [
+      'pty-winner'
+    ])
+    expect(shutdown).not.toHaveBeenCalled()
+  })
+
+  it('keeps a quarantined duplicate blocked across later reconnects', async () => {
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const attachForReconnect = vi.fn().mockResolvedValue({ incarnationId: 'incarnation-winner' })
+    vi.mocked(getSshPtyProvider).mockReturnValue({ attachForReconnect } as never)
+    vi.mocked(getPtyIdsForConnection).mockReturnValue(['pty-old', 'pty-winner'])
+    const leases = [
+      { ...detachedLease(), ptyId: 'pty-old', createdAt: 10, updatedAt: 10 },
+      { ...detachedLease(), ptyId: 'pty-winner', createdAt: 20, updatedAt: 20 }
+    ] as ReturnType<typeof mockStore.getSshRemotePtyLeases>
+    vi.mocked(mockStore.getSshRemotePtyLeases).mockImplementation(() => leases)
+    vi.mocked(mockStore.quarantineSshRemotePtyLeasesAsync).mockImplementation(
+      async (_targetId, ptyIds) => {
+        for (const lease of leases) {
+          if (ptyIds.includes(lease.ptyId)) {
+            lease.state = 'expired'
+          }
+        }
+      }
+    )
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+
+    await session.establish(mockConn)
+    await session.reconnect(mockConn)
+
+    expect(attachForReconnect).toHaveBeenCalledTimes(2)
+    expect(attachForReconnect.mock.calls.every(([ptyId]) => ptyId === 'pty-winner')).toBe(true)
+    expect(deletePtyOwnership).toHaveBeenCalledTimes(2)
+    expect(deletePtyOwnership).toHaveBeenCalledWith('ssh:target-1@@pty-old')
+  })
+
+  it('reattaches an incomplete legacy lease only after resolving its durable pane', async () => {
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const attachForReconnect = vi.fn().mockResolvedValue({ incarnationId: 'incarnation-legacy' })
+    vi.mocked(getSshPtyProvider).mockReturnValue({ attachForReconnect } as never)
+    vi.mocked(mockStore.getSshRemotePtyLeases).mockReturnValue([
+      { ...detachedLease(), leafId: undefined }
+    ] as ReturnType<typeof mockStore.getSshRemotePtyLeases>)
+    vi.mocked(mockStore.resolveExistingSshPtyBinding).mockReturnValue({
+      worktreeId: 'worktree-1',
+      tabId: 'tab-1',
+      leafId: INCARNATION_LEAF_ID,
+      hostId: 'ssh:target-1',
+      ptyId: APP_PTY_ID
+    })
+    const runtime = { onPtySpawned: vi.fn(), registerPty: vi.fn() }
+    const session = new SshRelaySession(
+      'target-1',
+      getMainWindow,
+      mockStore,
+      mockPortForward,
+      runtime as never
+    )
+
+    await session.establish(mockConn)
+
+    expect(attachForReconnect).toHaveBeenCalledWith(
+      'pty-live',
+      expect.objectContaining({ paneKey: `tab-1:${INCARNATION_LEAF_ID}` })
+    )
+    expect(runtime.registerPty).toHaveBeenCalledWith(APP_PTY_ID, 'worktree-1', 'target-1', {
+      tabId: 'tab-1',
+      leafId: INCARNATION_LEAF_ID,
+      incarnationId: 'incarnation-legacy'
+    })
+    expect(runtime.onPtySpawned).not.toHaveBeenCalled()
   })
 
   it('does not restore a PTY whose matching exit shares the attach reply batch', async () => {
@@ -467,6 +735,7 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
     expect(runtime.registerPty).not.toHaveBeenCalled()
     expect(restorePtyIncarnation).toHaveBeenCalledWith(APP_PTY_ID, incarnationId)
     expect(setPtyOwnership).not.toHaveBeenCalled()
+    expect(mockStore.resolveExistingSshPtyBinding).toHaveBeenCalledOnce()
     expect(mockStore.persistPtyBinding).not.toHaveBeenCalled()
     expect(sourceActivationLease.rollback).toHaveBeenCalledOnce()
     expect(sourceActivationLease.commit).not.toHaveBeenCalled()
@@ -527,7 +796,9 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
     })
     expect(setPtyOwnership).toHaveBeenCalledWith(APP_PTY_ID, 'target-1')
     expect(mockStore.persistPtyBinding).toHaveBeenCalledWith(
-      expect.objectContaining({ ptyId: APP_PTY_ID, incarnationId: currentIncarnationId })
+      expect.objectContaining({ ptyId: APP_PTY_ID, incarnationId: currentIncarnationId }),
+      SSH_HOST_ID,
+      { mayCreate: false, expectedBinding: { ptyId: APP_PTY_ID } }
     )
     expect(mockWindow.webContents.send).toHaveBeenCalledWith('pty:replay', {
       id: APP_PTY_ID,
@@ -545,7 +816,7 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
     vi.mocked(mockStore.getSshRemotePtyLeases).mockReturnValue([detachedLease()] as ReturnType<
       typeof mockStore.getSshRemotePtyLeases
     >)
-    vi.mocked(mockStore.persistPtyBinding).mockImplementationOnce(() => {
+    vi.mocked(mockStore.persistPtyBinding).mockImplementation(() => {
       throw new Error('disk full')
     })
     const runtime = { onPtySpawned: vi.fn(), registerPty: vi.fn() }

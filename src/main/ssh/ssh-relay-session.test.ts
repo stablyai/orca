@@ -515,23 +515,39 @@ describe('SshRelaySession', () => {
       { targetId: 'target-1', ptyId: 'pty-live-2', state: 'detached' },
       { targetId: 'target-1', ptyId: 'pty-expired', state: 'expired' }
     ] as ReturnType<typeof mockStore.getSshRemotePtyLeases>)
+    vi.mocked(mockStore.resolveExistingSshPtyBinding).mockImplementation(({ ptyId }) =>
+      ptyId.endsWith('pty-live')
+        ? {
+            worktreeId: 'worktree-1',
+            tabId: 'tab-live',
+            leafId: '11111111-1111-4111-8111-111111111111',
+            hostId: 'ssh:target-1',
+            ptyId
+          }
+        : {
+            worktreeId: 'worktree-1',
+            tabId: 'tab-live-2',
+            leafId: '22222222-2222-4222-8222-222222222222',
+            hostId: 'ssh:target-1',
+            ptyId
+          }
+    )
 
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
 
     await session.establish(mockConn)
 
-    expect(mockAttach).toHaveBeenCalledWith('pty-live')
-    expect(mockAttach).toHaveBeenCalledWith('pty-live-2')
-    expect(mockAttach).not.toHaveBeenCalledWith('pty-expired')
+    expect(mockAttach.mock.calls.map(([ptyId]) => ptyId)).toEqual(['pty-live', 'pty-live-2'])
     expect(setPtyOwnership).toHaveBeenCalledWith('ssh:target-1@@pty-live', 'target-1')
     expect(mockStore.markSshRemotePtyLeasesAttachedAsync).toHaveBeenCalledOnce()
     expect(mockStore.markSshRemotePtyLeasesAttachedAsync).toHaveBeenCalledWith(
       'target-1',
       expect.arrayContaining(['pty-live', 'pty-live-2'])
     )
+    expect(mockStore.persistPtyBinding).not.toHaveBeenCalled()
   })
 
-  it('forwards a lease tab identity to reattach so a reset relay cannot cross-wire it', async () => {
+  it('resolves a legacy tab lease to pane identity before reattach', async () => {
     const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
     const { getSshPtyProvider } = await import('../ipc/pty')
     const mockAttach = vi.fn().mockResolvedValue(undefined)
@@ -543,11 +559,22 @@ describe('SshRelaySession', () => {
     vi.mocked(mockStore.getSshRemotePtyLeases).mockReturnValue([
       { targetId: 'target-1', ptyId: 'pty-1', state: 'detached', tabId: 'tab-a' }
     ] as ReturnType<typeof mockStore.getSshRemotePtyLeases>)
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    vi.mocked(mockStore.resolveExistingSshPtyBinding).mockReturnValue({
+      worktreeId: 'worktree-1',
+      tabId: 'tab-a',
+      leafId,
+      hostId: 'ssh:target-1',
+      ptyId: 'ssh:target-1@@pty-1'
+    })
 
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
     await session.establish(mockConn)
 
-    expect(mockAttach).toHaveBeenCalledWith('pty-1', { tabId: 'tab-a' })
+    expect(mockAttach).toHaveBeenCalledWith('pty-1', {
+      paneKey: `tab-a:${leafId}`,
+      tabId: 'tab-a'
+    })
   })
 
   it('forwards a lease pane identity when leaf identity is available', async () => {
@@ -561,7 +588,14 @@ describe('SshRelaySession', () => {
     vi.mocked(getPtyIdsForConnection).mockReturnValue([])
     const leafId = '11111111-1111-4111-8111-111111111111'
     vi.mocked(mockStore.getSshRemotePtyLeases).mockReturnValue([
-      { targetId: 'target-1', ptyId: 'pty-1', state: 'detached', tabId: 'tab-a', leafId }
+      {
+        targetId: 'target-1',
+        ptyId: 'pty-1',
+        state: 'detached',
+        worktreeId: 'worktree-1',
+        tabId: 'tab-a',
+        leafId
+      }
     ] as ReturnType<typeof mockStore.getSshRemotePtyLeases>)
 
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
@@ -595,6 +629,7 @@ describe('SshRelaySession', () => {
         targetId: 'target-1',
         ptyId: 'pty-1',
         state: 'detached',
+        worktreeId: 'worktree-1',
         tabId: 'tab-old',
         leafId: staleLeafId
       }

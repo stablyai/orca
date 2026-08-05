@@ -104,8 +104,10 @@ import {
   type RemovedSshTargetTombstone,
   type SshPtyConsumerRecovery,
   type SshRemotePtyLease,
+  type SshRemotePtyLeaseState,
   type SshTarget
 } from '../shared/ssh-types'
+import { coalesceSshRemotePtyLeasesByIdentity } from './ssh/ssh-remote-pty-lease-selection'
 import { isFolderRepo } from '../shared/repo-kind'
 import {
   getRepoExecutionHostId,
@@ -1607,6 +1609,20 @@ function normalizeSshRemotePtyLease(value: unknown): SshRemotePtyLease | null {
     ...(typeof raw.lastAttachedAt === 'number' ? { lastAttachedAt: raw.lastAttachedAt } : {}),
     ...(typeof raw.lastDetachedAt === 'number' ? { lastDetachedAt: raw.lastDetachedAt } : {})
   }
+}
+
+const SSH_REMOTE_PTY_LEASE_FINALITY: Record<SshRemotePtyLeaseState, number> = {
+  attached: 0,
+  detached: 0,
+  expired: 1,
+  terminated: 2
+}
+
+function canAdvanceSshRemotePtyLeaseState(
+  from: SshRemotePtyLeaseState,
+  to: SshRemotePtyLeaseState
+): boolean {
+  return SSH_REMOTE_PTY_LEASE_FINALITY[to] >= SSH_REMOTE_PTY_LEASE_FINALITY[from]
 }
 
 const SSH_PTY_OWNER_LEASE_MAX_LENGTH = 512
@@ -3629,9 +3645,16 @@ export class Store {
                 (alias): alias is string => typeof alias === 'string'
               )
             : [],
-          sshRemotePtyLeases: (parsed.sshRemotePtyLeases ?? [])
-            .map(normalizeSshRemotePtyLease)
-            .filter((lease): lease is SshRemotePtyLease => lease !== null),
+          sshRemotePtyLeases: (() => {
+            const leases = (parsed.sshRemotePtyLeases ?? [])
+              .map(normalizeSshRemotePtyLease)
+              .filter((lease): lease is SshRemotePtyLease => lease !== null)
+            const coalesced = coalesceSshRemotePtyLeasesByIdentity(leases)
+            if (coalesced.length !== leases.length) {
+              this.loadNeedsSave = true
+            }
+            return coalesced
+          })(),
           sshPtyConsumerRecoveries: parsed.sshPtyConsumerRecoveries,
           claudeLivePtySessionIds: normalizeClaudeLivePtySessionIds(parsed.claudeLivePtySessionIds),
           migrationUnsupportedPtyEntries: normalizeMigrationUnsupportedPtyEntries(
@@ -6618,7 +6641,182 @@ export class Store {
     return this.state.repos.find((repo) => repo.id === repoId)?.connectionId ?? null
   }
 
+  // Why: the renderer partitions an SSH worktree by worktree.hostId but collapses repo-only
+  // ownership onto the local partition, so a live pane is durable in either one. Search the
+  // owning partition first and report which one matched, else a pane the user still has open
+  // resolves to nothing and reattach quarantines its surviving remote shell.
+  resolveExistingSshPtyBinding(args: {
+    targetId: string
+    ptyId: string
+    worktreeId?: string
+    tabId?: string
+    leafId?: string
+  }): {
+    worktreeId: string
+    tabId: string
+    leafId: string
+    hostId: ExecutionHostId
+    ptyId: string
+    incarnationId?: string
+  } | null {
+    const partitions: ExecutionHostId[] = [
+      toSshExecutionHostId(args.targetId),
+      LOCAL_EXECUTION_HOST_ID
+    ]
+    const scans = partitions.map((hostId) =>
+      this.resolveExistingSshPtyBindingsInPartition(args, hostId)
+    )
+    if (scans.some((scan) => scan.conflictingRequestedPane)) {
+      return null
+    }
+    const matches = scans.flatMap((scan) => scan.matches)
+    const paneKeys = new Set(
+      matches.map((match) => `${match.worktreeId}\0${match.tabId}\0${match.leafId}`)
+    )
+    if (paneKeys.size !== 1) {
+      return null
+    }
+    for (const hostId of partitions) {
+      const resolved = matches.find((match) => match.hostId === hostId)
+      if (resolved) {
+        return resolved
+      }
+    }
+    return null
+  }
+
+  private resolveExistingSshPtyBindingsInPartition(
+    args: {
+      targetId: string
+      ptyId: string
+      worktreeId?: string
+      tabId?: string
+      leafId?: string
+    },
+    hostId: ExecutionHostId
+  ): {
+    matches: {
+      worktreeId: string
+      tabId: string
+      leafId: string
+      hostId: ExecutionHostId
+      ptyId: string
+      incarnationId?: string
+    }[]
+    conflictingRequestedPane: boolean
+  } {
+    const session = this.getWorkspaceSession(hostId)
+    const requestedLeafId =
+      typeof args.leafId === 'string' && isTerminalLeafId(args.leafId) ? args.leafId : undefined
+    if (args.worktreeId && args.tabId && requestedLeafId) {
+      const tab = session.tabsByWorktree?.[args.worktreeId]?.find(
+        (candidate) => candidate.id === args.tabId
+      )
+      const layout = session.terminalLayoutsByTabId?.[args.tabId]
+      if (!tab || !layoutContainsLeafId(layout?.root ?? null, requestedLeafId)) {
+        return { matches: [], conflictingRequestedPane: false }
+      }
+      const leafIds = this.getTerminalLayoutLeafIds(layout?.root ?? null)
+      const boundPtyId = this.resolvePersistedPanePtyId(tab, layout, leafIds, requestedLeafId)
+      if (!boundPtyId) {
+        return { matches: [], conflictingRequestedPane: false }
+      }
+      if (
+        this.getRelayPtyIdForSshLeaseComparison(args.targetId, boundPtyId) !==
+        this.getRelayPtyIdForSshLeaseComparison(args.targetId, args.ptyId)
+      ) {
+        return { matches: [], conflictingRequestedPane: true }
+      }
+      return {
+        matches: [
+          {
+            worktreeId: args.worktreeId,
+            tabId: args.tabId,
+            leafId: requestedLeafId,
+            hostId,
+            ptyId: boundPtyId,
+            ...(session.terminalPtyIncarnationsByPaneKey?.[`${args.tabId}:${requestedLeafId}`]
+              ? {
+                  incarnationId:
+                    session.terminalPtyIncarnationsByPaneKey[`${args.tabId}:${requestedLeafId}`]
+                }
+              : {})
+          }
+        ],
+        conflictingRequestedPane: false
+      }
+    }
+
+    const relayPtyId = this.getRelayPtyIdForSshLeaseComparison(args.targetId, args.ptyId)
+    const matches: {
+      worktreeId: string
+      tabId: string
+      leafId: string
+      hostId: ExecutionHostId
+      ptyId: string
+      incarnationId?: string
+    }[] = []
+    let conflictingRequestedPane = false
+    for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
+      if (args.worktreeId && args.worktreeId !== worktreeId) {
+        continue
+      }
+      for (const tab of tabs) {
+        if (args.tabId && args.tabId !== tab.id) {
+          continue
+        }
+        const layout = session.terminalLayoutsByTabId?.[tab.id]
+        const leafIds = this.getTerminalLayoutLeafIds(layout?.root ?? null)
+        for (const leafId of leafIds) {
+          if (requestedLeafId && requestedLeafId !== leafId) {
+            continue
+          }
+          const boundPtyId = this.resolvePersistedPanePtyId(tab, layout, leafIds, leafId)
+          if (!boundPtyId) {
+            continue
+          }
+          if (this.getRelayPtyIdForSshLeaseComparison(args.targetId, boundPtyId) !== relayPtyId) {
+            if (
+              requestedLeafId ||
+              (args.worktreeId === worktreeId && args.tabId === tab.id && leafIds.size === 1)
+            ) {
+              conflictingRequestedPane = true
+            }
+            continue
+          }
+          matches.push({
+            worktreeId,
+            tabId: tab.id,
+            leafId,
+            hostId,
+            ptyId: boundPtyId,
+            ...(session.terminalPtyIncarnationsByPaneKey?.[`${tab.id}:${leafId}`]
+              ? { incarnationId: session.terminalPtyIncarnationsByPaneKey[`${tab.id}:${leafId}`] }
+              : {})
+          })
+        }
+      }
+    }
+    return { matches, conflictingRequestedPane }
+  }
+
+  private resolvePersistedPanePtyId(
+    tab: TerminalTab,
+    layout: TerminalLayoutSnapshot | undefined,
+    leafIds: ReadonlySet<string>,
+    leafId: string
+  ): string | null {
+    const leafPtyId = layout?.ptyIdsByLeafId?.[leafId]
+    if (typeof leafPtyId === 'string' && leafPtyId.length > 0) {
+      return leafPtyId
+    }
+    return leafIds.size === 1 && typeof tab.ptyId === 'string' && tab.ptyId.length > 0
+      ? tab.ptyId
+      : null
+  }
+
   // Why: sync-flush the pty binding before pty:spawn returns to close the spawn/persist SIGKILL race (Issue #217).
+  // Reattach uses mayCreate:false because an absent durable pane never authorizes creating UI.
   persistPtyBinding(
     args: {
       worktreeId: string
@@ -6628,8 +6826,13 @@ export class Store {
       incarnationId?: string
       startupCwd?: string
     },
-    hostId?: string | null
-  ): void {
+    hostId?: string | null,
+    options?: {
+      mayCreate?: boolean
+      expectedBinding?: { ptyId: string; incarnationId?: string }
+    }
+  ): 'bound' | 'refused' {
+    const mayCreate = options?.mayCreate ?? true
     const resolvedHostId = this.resolveHostId(hostId)
     const session = this.getWorkspaceSession(resolvedHostId)
     if (resolvedHostId !== LOCAL_EXECUTION_HOST_ID) {
@@ -6638,8 +6841,26 @@ export class Store {
         [resolvedHostId]: session
       }
     }
-    const sessionBeforeBinding = cloneWorkspaceSessionState(session)
     const paneKey = `${args.tabId}:${args.leafId}`
+    const expectedBinding = options?.expectedBinding
+    if (expectedBinding) {
+      const tab = session.tabsByWorktree?.[args.worktreeId]?.find(
+        (candidate) => candidate.id === args.tabId
+      )
+      const layout = session.terminalLayoutsByTabId?.[args.tabId]
+      const leafIds = this.getTerminalLayoutLeafIds(layout?.root ?? null)
+      const currentPtyId = tab
+        ? this.resolvePersistedPanePtyId(tab, layout, leafIds, args.leafId)
+        : null
+      const currentIncarnationId = session.terminalPtyIncarnationsByPaneKey?.[paneKey]
+      if (
+        currentPtyId !== expectedBinding.ptyId ||
+        currentIncarnationId !== expectedBinding.incarnationId
+      ) {
+        return 'refused'
+      }
+    }
+    const sessionBeforeBinding = cloneWorkspaceSessionState(session)
     let terminalMembershipChanged = false
     const advanceTopologyAfterMembershipChange = (): void => {
       const repoId = getRepoIdFromWorktreeId(args.worktreeId)
@@ -6702,6 +6923,10 @@ export class Store {
     }
     if (!isTerminalLeafId(args.leafId)) {
       // Why: keep legacy renderer-local pane ids out of durable leaf-keyed layout state after the UUID migration.
+      if (!mayCreate && terminalMembershipChanged) {
+        restoreSession()
+        return 'refused'
+      }
       advanceTopologyAfterMembershipChange()
       try {
         this.flushOrThrow()
@@ -6709,7 +6934,7 @@ export class Store {
         restoreSession()
         throw err
       }
-      return
+      return 'bound'
     }
     const layout = session.terminalLayoutsByTabId?.[args.tabId]
     if (layout) {
@@ -6750,6 +6975,10 @@ export class Store {
         }
       }
     }
+    if (!mayCreate && terminalMembershipChanged) {
+      restoreSession()
+      return 'refused'
+    }
     advanceTopologyAfterMembershipChange()
     try {
       this.flushOrThrow()
@@ -6757,6 +6986,7 @@ export class Store {
       restoreSession()
       throw err
     }
+    return 'bound'
   }
 
   // ── SSH Targets ────────────────────────────────────────────────────
@@ -6949,6 +7179,11 @@ export class Store {
         carrierChanged = true
       }
     }
+    if (carrierChanged && this.state.sshRemotePtyLeases) {
+      this.state.sshRemotePtyLeases = coalesceSshRemotePtyLeasesByIdentity(
+        this.state.sshRemotePtyLeases
+      )
+    }
     const recoveries = this.state.sshPtyConsumerRecoveries ?? []
     const retainedRecoveries = recoveries.filter((record) => record.targetId !== oldTargetId)
     if (retainedRecoveries.length !== recoveries.length) {
@@ -7035,11 +7270,55 @@ export class Store {
     return leases.filter((lease) => targetId === undefined || lease.targetId === targetId)
   }
 
+  async quarantineSshRemotePtyLeasesAsync(
+    targetId: string,
+    ptyIds: readonly string[]
+  ): Promise<void> {
+    const relayPtyIds = new Set(
+      ptyIds.map((ptyId) => this.getRelayPtyIdForSshLeaseStorage(targetId, ptyId))
+    )
+    const now = Date.now()
+    const changed: {
+      lease: SshRemotePtyLease
+      state: SshRemotePtyLease['state']
+      updatedAt: number
+    }[] = []
+    for (const lease of this.state.sshRemotePtyLeases ?? []) {
+      if (
+        lease.targetId !== targetId ||
+        !relayPtyIds.has(lease.ptyId) ||
+        !canAdvanceSshRemotePtyLeaseState(lease.state, 'expired') ||
+        lease.state === 'expired'
+      ) {
+        continue
+      }
+      changed.push({ lease, state: lease.state, updatedAt: lease.updatedAt })
+      lease.state = 'expired'
+      lease.updatedAt = now
+    }
+    if (changed.length === 0) {
+      return
+    }
+    try {
+      await this.flushDurableStateOrThrowAsync()
+    } catch (error) {
+      for (const previous of changed) {
+        if (previous.lease.state === 'expired' && previous.lease.updatedAt === now) {
+          previous.lease.state = previous.state
+          previous.lease.updatedAt = previous.updatedAt
+        }
+      }
+      throw error
+    }
+  }
+
   upsertSshRemotePtyLease(
     lease: Omit<SshRemotePtyLease, 'createdAt' | 'updatedAt'> &
       Partial<Pick<SshRemotePtyLease, 'createdAt' | 'updatedAt'>>
   ): void {
-    this.state.sshRemotePtyLeases ??= []
+    this.state.sshRemotePtyLeases = coalesceSshRemotePtyLeasesByIdentity(
+      this.state.sshRemotePtyLeases ?? []
+    )
     const normalizedLease = { ...lease }
     if (normalizedLease.leafId !== undefined && !isTerminalLeafId(normalizedLease.leafId)) {
       delete normalizedLease.leafId
@@ -7117,10 +7396,7 @@ export class Store {
       if (lease.targetId !== targetId || (ptyIds && !ptyIds.has(lease.ptyId))) {
         continue
       }
-      if (state === 'attached' && (lease.state === 'terminated' || lease.state === 'expired')) {
-        continue
-      }
-      if (state === 'detached' && lease.state !== 'attached') {
+      if (!canAdvanceSshRemotePtyLeaseState(lease.state, state)) {
         continue
       }
       if (lease.state !== state) {
@@ -7152,7 +7428,7 @@ export class Store {
       return
     }
     const shouldClearBindings = state === 'terminated' || state === 'expired'
-    if (lease.state === state) {
+    if (lease.state === state || !canAdvanceSshRemotePtyLeaseState(lease.state, state)) {
       if (shouldClearBindings && this.clearSshRemotePtyBindingsForLeases(targetId, [lease])) {
         this.flush()
       }
