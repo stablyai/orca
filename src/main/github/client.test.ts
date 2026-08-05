@@ -4031,6 +4031,45 @@ describe('github.prMergeEvidence', () => {
     })
   })
 
+  it.each([
+    {
+      name: 'review threads only',
+      reviewThreadsHasNextPage: true,
+      filesHasNextPage: false,
+      expectedReviewThreadsComplete: false,
+      expectedFilesComplete: true
+    },
+    {
+      name: 'files only',
+      reviewThreadsHasNextPage: false,
+      filesHasNextPage: true,
+      expectedReviewThreadsComplete: true,
+      expectedFilesComplete: false
+    }
+  ])('tracks $name pagination independently', async (scenario) => {
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        data: { repository: { pullRequest: {
+          number: 7, headRefOid: 'c'.repeat(40), baseRefName: 'main',
+          reviewThreads: {
+            pageInfo: { hasNextPage: scenario.reviewThreadsHasNextPage },
+            nodes: [{ isResolved: true }]
+          },
+          files: {
+            pageInfo: { hasNextPage: scenario.filesHasNextPage },
+            nodes: [{ path: 'src/a.ts' }]
+          }
+        } } }
+      })
+    })
+
+    await expect(getPRMergeEvidence('/repo-root', 7)).resolves.toMatchObject({
+      reviewThreadsComplete: scenario.expectedReviewThreadsComplete,
+      filesComplete: scenario.expectedFilesComplete
+    })
+  })
+
   it('does not claim complete evidence when GitHub pagination continues', async () => {
     getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock.mockResolvedValueOnce({
