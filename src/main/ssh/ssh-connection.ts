@@ -49,6 +49,7 @@ import {
 } from './ssh-reconnect-error-classification'
 import { SshReconnectLadder } from './ssh-reconnect-ladder'
 import { getPassphrasePrivateKeyPath } from './ssh-private-key-authentication'
+import { probePreferredAgentSocket } from './ssh-agent-socket-probe'
 import {
   requiresSystemSshForSecurityKey,
   shouldUseSystemSshTransport
@@ -691,6 +692,10 @@ export class SshConnection {
     this.systemSshControlMasterDisabledForSession = false
     this.systemSshGssapiOnlyForSession = false
     this.useSystemSshTransport = false
+
+    // Why: pick an agent socket that actually holds keys (e.g. 1Password) before
+    // building auth config; re-probed each attempt so 1Password lock/quit self-heals.
+    await probePreferredAgentSocket()
 
     const config = buildConnectConfig(this.target, resolved)
 

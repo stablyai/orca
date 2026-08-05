@@ -3,6 +3,7 @@ import { utils, type BaseAgent, type ParsedKey } from 'ssh2'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './ssh-config-parser'
 import { createIdentityFilteredAgent } from './ssh-agent-identity-filter'
+import { getProbedAgentSocket, WINDOWS_OPENSSH_AGENT_PIPE } from './ssh-agent-socket-probe'
 import { resolveSshConfigHomePath } from './ssh-config-path-expansion'
 import { isOpenSshConfigBackedTarget } from './system-ssh-args'
 
@@ -16,7 +17,6 @@ const DEFAULT_KEY_PATHS = DEFAULT_KEY_NAMES.map((name) => `~/.ssh/${name}`)
 const DEFAULT_IDENTITY_PATHS = [...DEFAULT_KEY_NAMES, ...DEFAULT_SECURITY_KEY_NAMES].map(
   (name) => `~/.ssh/${name}`
 )
-const WINDOWS_OPENSSH_AGENT_PIPE = '\\\\.\\pipe\\openssh-ssh-agent'
 
 // Why: resolved IdentityFile paths are expanded before auth resolution, so they
 // won't match the ~/... form in DEFAULT_KEY_PATHS.
@@ -64,7 +64,10 @@ function expandIdentityAgentEnv(value: string): string | undefined {
 }
 
 function resolveDefaultAgentSocket(): string | undefined {
+  // Why: the probed socket is the first candidate proven to hold keys; absent a
+  // probe result, preserve the historical env/pipe fallback exactly.
   return (
+    getProbedAgentSocket() ||
     process.env.SSH_AUTH_SOCK ||
     (process.platform === 'win32' ? WINDOWS_OPENSSH_AGENT_PIPE : undefined)
   )

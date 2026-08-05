@@ -86,3 +86,8 @@ export function getProbedAgentSocket(): string | undefined {
 export function _resetProbedAgentSocket(): void {
   probedAgentSocket = undefined
 }
+
+/** @internal - unit tests arrange probe state without a live socket. */
+export function _setProbedAgentSocketForTest(socket: string): void {
+  probedAgentSocket = socket
+}

@@ -184,6 +184,13 @@ vi.mock('./ssh-config-parser', () => ({
   resolveWithSshG: vi.fn().mockResolvedValue(null)
 }))
 
+// Why: probing a developer's real SSH_AUTH_SOCK would hang fake-timer tests on real socket I/O.
+vi.mock('./ssh-agent-socket-probe', () => ({
+  probePreferredAgentSocket: vi.fn().mockResolvedValue(undefined),
+  getProbedAgentSocket: vi.fn().mockReturnValue(undefined),
+  WINDOWS_OPENSSH_AGENT_PIPE: '\\\\.\\pipe\\openssh-ssh-agent'
+}))
+
 import {
   SshConnection,
   shouldUseSystemSshTransport,

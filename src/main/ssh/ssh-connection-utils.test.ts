@@ -35,6 +35,10 @@ import {
   INITIAL_RETRY_DELAY_MS,
   RECONNECT_BACKOFF_MS
 } from './ssh-connection-utils'
+import {
+  _resetProbedAgentSocket,
+  _setProbedAgentSocketForTest
+} from './ssh-agent-socket-probe'
 import { resolveEffectiveProxy } from './ssh-proxy-command'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './ssh-config-parser'
@@ -397,6 +401,7 @@ describe('buildConnectConfig', () => {
     mockExistsSync.mockReturnValue(false)
     mockReadFileSync.mockReset()
     process.env.SSH_AUTH_SOCK = '/tmp/agent.sock'
+    _resetProbedAgentSocket()
   })
 
   afterEach(() => {
@@ -523,6 +528,30 @@ describe('buildConnectConfig', () => {
     } finally {
       platformSpy.mockRestore()
     }
+  })
+
+  it('uses the probed agent socket for the default branch', () => {
+    // Arrange module state directly: simulate a completed probe.
+    // (probePreferredAgentSocket is exercised end-to-end in its own test file.)
+    _setProbedAgentSocketForTest('/tmp/1password-agent.sock')
+    const config = buildConnectConfig(makeTarget(), null)
+    expect(config.agent).toBe('/tmp/1password-agent.sock')
+  })
+
+  it('explicit IdentityAgent still wins over the probed socket', () => {
+    _setProbedAgentSocketForTest('/tmp/1password-agent.sock')
+    const config = buildConnectConfig(
+      makeTarget({ identityAgent: '/tmp/explicit-agent.sock' }),
+      null
+    )
+    expect(config.agent).toBe('/tmp/explicit-agent.sock')
+  })
+
+  it('falls back to env SSH_AUTH_SOCK when nothing was probed', () => {
+    _resetProbedAgentSocket()
+    process.env.SSH_AUTH_SOCK = '/tmp/env-agent.sock'
+    const config = buildConnectConfig(makeTarget(), null)
+    expect(config.agent).toBe('/tmp/env-agent.sock')
   })
 
   it('uses configured IdentityAgent before SSH_AUTH_SOCK', () => {
