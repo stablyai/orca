@@ -2587,6 +2587,19 @@ export type PreloadApi = {
       worktreePath: string
       command: string
     }) => Promise<WorktreeSetupLaunch>
+    prepareSetupRunner: (args: {
+      repoId: string
+      worktreePath: string
+      hostId?: ExecutionHostId
+    }) => Promise<{
+      status: 'ok' | 'error'
+      setup: WorktreeSetupLaunch | null
+      setupScript?: string
+      setupScriptSource?: 'yaml' | 'local' | 'both'
+      trustContent?: string
+      reason?: 'no-setup-configured' | 'folder-repo' | 'remote-host' | 'runner-failed'
+      message?: string
+    }>
     readIssueCommand: (args: { repoId: string; hostId?: ExecutionHostId }) => Promise<{
       status?: 'ok' | 'error'
       localContent: string | null

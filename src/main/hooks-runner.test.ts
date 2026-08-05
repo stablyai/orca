@@ -16,8 +16,16 @@ vi.mock('fs', () => ({
   existsSync: vi.fn(),
   mkdirSync: vi.fn(),
   writeFileSync: vi.fn(),
-  chmodSync: vi.fn()
+  chmodSync: vi.fn(),
+  renameSync: vi.fn(),
+  rmSync: vi.fn()
 }))
+
+// Why: runner scripts are written to a unique tmp path then renamed over the target.
+const tmpPathFor = (finalPath: string) =>
+  expect.stringMatching(
+    new RegExp(`^${finalPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\.tmp-\\d+-\\d+$`)
+  )
 
 vi.mock('child_process', () => ({
   exec: vi.fn(),
@@ -67,7 +75,7 @@ describe('createSetupRunnerScript', () => {
         shell: { family: 'cmd' }
       })
       expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
-        'C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.cmd',
+        tmpPathFor('C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.cmd'),
         [
           '@echo off',
           'setlocal EnableExtensions DisableDelayedExpansion',
@@ -78,6 +86,39 @@ describe('createSetupRunnerScript', () => {
           ''
         ].join('\r\n'),
         'utf-8'
+      )
+      expect(vi.mocked(fs.renameSync)).toHaveBeenCalledWith(
+        tmpPathFor('C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.cmd'),
+        'C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.cmd'
+      )
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
+  it('absolutizes the relative --git-path a main worktree returns', async () => {
+    const fs = await import('node:fs')
+    const originalPlatform = process.platform
+
+    // Why: --git-path is worktree-relative in a main worktree; the runner must not
+    // land relative to the app process cwd.
+    execFileSyncMock.mockReturnValue('.git/orca/setup-runner.sh')
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'linux'
+    })
+
+    try {
+      const { createSetupRunnerScript } = await import('./hooks')
+      const result = createSetupRunnerScript(makeRepo(), '/test/repo', 'pnpm install')
+
+      expect(result.runnerScriptPath).toBe('/test/repo/.git/orca/setup-runner.sh')
+      expect(vi.mocked(fs.renameSync)).toHaveBeenCalledWith(
+        tmpPathFor('/test/repo/.git/orca/setup-runner.sh'),
+        '/test/repo/.git/orca/setup-runner.sh'
       )
     } finally {
       Object.defineProperty(process, 'platform', {
@@ -117,13 +158,13 @@ describe('createSetupRunnerScript', () => {
         shell: { family: 'posix' }
       })
       expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
-        'C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh',
+        tmpPathFor('C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh'),
         '#!/usr/bin/env bash\nset -e\npnpm install\n',
         'utf-8'
       )
       // Why: chmod over a native Windows path is meaningless; only the WSL branch sets the bit.
       expect(vi.mocked(fs.chmodSync)).not.toHaveBeenCalledWith(
-        'C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh',
+        tmpPathFor('C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh'),
         0o755
       )
     } finally {
@@ -300,13 +341,23 @@ describe('createSetupRunnerScript', () => {
         })
       })
       expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
-        '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.git\\worktrees\\feature\\orca\\setup-runner.sh',
+        tmpPathFor(
+          '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.git\\worktrees\\feature\\orca\\setup-runner.sh'
+        ),
         '#!/usr/bin/env bash\nset -e\npnpm install\n',
         'utf-8'
       )
       expect(vi.mocked(fs.chmodSync)).toHaveBeenCalledWith(
-        '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.git\\worktrees\\feature\\orca\\setup-runner.sh',
+        tmpPathFor(
+          '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.git\\worktrees\\feature\\orca\\setup-runner.sh'
+        ),
         0o755
+      )
+      expect(vi.mocked(fs.renameSync)).toHaveBeenCalledWith(
+        tmpPathFor(
+          '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.git\\worktrees\\feature\\orca\\setup-runner.sh'
+        ),
+        '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.git\\worktrees\\feature\\orca\\setup-runner.sh'
       )
     } finally {
       Object.defineProperty(process, 'platform', {
@@ -346,13 +397,17 @@ describe('createSetupRunnerScript', () => {
         })
       })
       expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
-        '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh',
+        tmpPathFor(
+          '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh'
+        ),
         '#!/usr/bin/env bash\nset -e\npnpm install\n',
         'utf-8'
       )
-      expect(vi.mocked(fs.chmodSync)).toHaveBeenCalledWith(
-        '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh',
-        0o755
+      expect(vi.mocked(fs.renameSync)).toHaveBeenCalledWith(
+        tmpPathFor(
+          '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh'
+        ),
+        '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh'
       )
     } finally {
       Object.defineProperty(process, 'platform', {
@@ -401,13 +456,17 @@ describe('createIssueCommandRunnerScript', () => {
         })
       })
       expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
-        '/test/repo/.git/worktrees/feature/orca/issue-command-runner.sh',
+        tmpPathFor('/test/repo/.git/worktrees/feature/orca/issue-command-runner.sh'),
         '#!/usr/bin/env bash\nset -e\ncodex exec "long command"\nclaude -p "review it"\n',
         'utf-8'
       )
       expect(vi.mocked(fs.chmodSync)).toHaveBeenCalledWith(
-        '/test/repo/.git/worktrees/feature/orca/issue-command-runner.sh',
+        tmpPathFor('/test/repo/.git/worktrees/feature/orca/issue-command-runner.sh'),
         0o755
+      )
+      expect(vi.mocked(fs.renameSync)).toHaveBeenCalledWith(
+        tmpPathFor('/test/repo/.git/worktrees/feature/orca/issue-command-runner.sh'),
+        '/test/repo/.git/worktrees/feature/orca/issue-command-runner.sh'
       )
     } finally {
       Object.defineProperty(process, 'platform', {

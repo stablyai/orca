@@ -85,8 +85,11 @@ import { getSshGitProvider, requireSshGitProvider } from '../providers/ssh-git-d
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import {
   createIssueCommandRunnerScript,
+  createSetupRunnerScript,
+  getDefaultTabCommandTrustContent,
   getEffectiveHooks,
   getEffectiveHooksFromConfig,
+  getSetupCommandSource,
   getSetupRunnerEnvVars,
   loadHooks,
   parseOrcaYaml,
@@ -1843,6 +1846,7 @@ export function registerWorktreeHandlers(
   ipcMain.removeHandler('hooks:check')
   ipcMain.removeHandler('hooks:inspectSetupScriptImports')
   ipcMain.removeHandler('hooks:createIssueCommandRunner')
+  ipcMain.removeHandler('hooks:prepareSetupRunner')
   ipcMain.removeHandler('hooks:readIssueCommand')
   ipcMain.removeHandler('hooks:writeIssueCommand')
 
@@ -3164,6 +3168,99 @@ export function registerWorktreeHandlers(
         getLocalProjectWorktreeGitOptions(store, repo),
         resolveSetupRunnerShell(store.getSettings())
       )
+    }
+  )
+
+  // Why: worktree create already materializes a setup runner; existing worktrees need
+  // the same launcher for manual re-run (#10015) without re-creating the worktree.
+  ipcMain.handle(
+    'hooks:prepareSetupRunner',
+    (
+      _event,
+      args: { repoId: string; worktreePath: string; hostId?: ExecutionHostId }
+    ): {
+      status: 'ok' | 'error'
+      setup: ReturnType<typeof createSetupRunnerScript> | null
+      setupScript?: string
+      setupScriptSource?: 'yaml' | 'local' | 'both'
+      trustContent?: string
+      reason?: 'no-setup-configured' | 'folder-repo' | 'remote-host' | 'runner-failed'
+      message?: string
+    } => {
+      const repo = getRepoForWorktreeRemoval(store, args.repoId, args.hostId)
+      if (!repo) {
+        const matches = store.getRepos().filter((entry) => entry.id === args.repoId)
+        if (matches.length > 1) {
+          return {
+            status: 'error',
+            setup: null,
+            reason: 'runner-failed',
+            message:
+              'Multiple project entries share this id; remove the duplicate project, or retry from the host that owns this workspace.'
+          }
+        }
+        throw new Error(`Repo not found: ${args.repoId}`)
+      }
+      if (isFolderRepo(repo)) {
+        return { status: 'ok', setup: null, reason: 'folder-repo' }
+      }
+      // Why: getEffectiveHooks/createSetupRunnerScript are local-FS only today; runtime-host
+      // repos have no connectionId, so gate on the execution host, not the SSH target.
+      if (getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID) {
+        return {
+          status: 'error',
+          setup: null,
+          reason: 'remote-host',
+          message:
+            'Run setup script is not yet supported for remote worktrees. Create a new worktree to run setup on that host, or open a local clone.'
+        }
+      }
+
+      let commandSource: ReturnType<typeof getSetupCommandSource>
+      try {
+        // Prefer the worktree's orca.yaml so branch-specific setup matches create; the
+        // source lets the renderer confirm trust against the exact script that will run.
+        commandSource = getSetupCommandSource(repo, args.worktreePath)
+      } catch (error) {
+        return {
+          status: 'error',
+          setup: null,
+          reason: 'runner-failed',
+          message: error instanceof Error ? error.message : String(error)
+        }
+      }
+
+      const setupScript = commandSource?.command.trim()
+      if (!setupScript) {
+        return { status: 'ok', setup: null, reason: 'no-setup-configured' }
+      }
+
+      try {
+        const setup = createSetupRunnerScript(
+          repo,
+          args.worktreePath,
+          setupScript,
+          getLocalProjectWorktreeGitOptions(store, repo),
+          resolveSetupRunnerShell(store.getSettings())
+        )
+        // Why: trust hashes must match the create path's canonical shape (setup +
+        // defaultTabs commands) or the one per-repo slot ping-pongs between flows.
+        const trustContent = getDefaultTabCommandTrustContent(loadHooks(args.worktreePath))
+        return {
+          status: 'ok',
+          setup,
+          setupScript,
+          setupScriptSource: commandSource?.source,
+          ...(trustContent ? { trustContent } : {})
+        }
+      } catch (error) {
+        return {
+          status: 'error',
+          setup: null,
+          reason: 'runner-failed',
+          message: error instanceof Error ? error.message : String(error)
+        }
+      }
     }
   )
 

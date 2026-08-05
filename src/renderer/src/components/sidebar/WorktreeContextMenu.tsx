@@ -22,6 +22,7 @@ import {
   Pencil,
   Pin,
   PinOff,
+  Play,
   Kanban,
   Trash2,
   Unlink,
@@ -43,6 +44,8 @@ import type {
 import { runWorktreeBatchDelete, runWorktreeDelete } from './delete-worktree-flow'
 import { runSleepWorktrees } from './sleep-worktree-flow'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { runWorktreeSetupScript } from '@/lib/run-worktree-setup-script'
+import { isFolderRepo } from '../../../../shared/repo-kind'
 import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
 import {
   getCyclicProjectedWorktreeLineageIds,
@@ -636,6 +639,18 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     sleepWorktreesAfterMenuClose(subtreeSleepableWorktrees.map((item) => item.id))
   }, [sleepWorktreesAfterMenuClose, subtreeSleepableWorktrees])
 
+  const handleRunSetupScript = useCallback(() => {
+    setMenuOpenState(false)
+    // Why: close the menu before trust prompts / activation so focus teardown
+    // does not fight the setup terminal launch.
+    window.setTimeout(() => {
+      void runWorktreeSetupScript(worktree.id)
+    }, 50)
+  }, [setMenuOpenState, worktree.id])
+
+  const canRunSetupScript =
+    !isMultiContext && !folderWorkspaceId && repo != null && !isFolderRepo(repo)
+
   const handleDelete = useCallback(() => {
     // Folder mode handled inline because it routes to a different modal;
     // standard delete delegates to the shared runWorktreeDelete helper.
@@ -987,6 +1002,16 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
               </DropdownMenuItem>
               <DropdownMenuSeparator />
             </>
+          ) : null}
+
+          {canRunSetupScript ? (
+            <DropdownMenuItem onSelect={handleRunSetupScript} disabled={isDeleting}>
+              <Play className="size-3.5" />
+              {translate(
+                'auto.components.sidebar.WorktreeContextMenu.runSetupScript',
+                'Run setup script'
+              )}
+            </DropdownMenuItem>
           ) : null}
 
           {shouldRevealWorktreeDeveloperMenu({ developerMenuRevealed, isMultiContext }) ? (

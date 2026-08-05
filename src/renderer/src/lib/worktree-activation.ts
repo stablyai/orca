@@ -121,6 +121,7 @@ function getSetupRunnerCommandPlatformForLaunch(setup: WorktreeSetupLaunch): 'wi
 
 type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
   tabsByWorktree: Record<string, { id: string }[]>
+  getActiveTab?: (worktreeId: string) => { id: string } | null
   defaultTerminalTabsAppliedByWorktreeId: Record<string, true>
   createTab: (
     worktreeId: string,
@@ -487,7 +488,14 @@ export function ensureWorktreeHasInitialTerminal(
   }
 
   if (!shouldAutoCreateInitialTerminal(renderableTabCount)) {
-    const existingTerminalTabId = store.tabsByWorktree[worktreeId]?.[0]?.id
+    const terminalTabs = store.tabsByWorktree[worktreeId] ?? []
+    // Why: on an existing worktree the oldest terminal is unrelated to where the user
+    // is; target the active tab when it is a terminal so focus and splits stay put.
+    const activeTabId = (store.getActiveTab ?? useAppStore.getState().getActiveTab)?.(
+      worktreeId
+    )?.id
+    const existingTerminalTabId =
+      terminalTabs.find((tab) => tab.id === activeTabId)?.id ?? terminalTabs[0]?.id
     if (existingTerminalTabId && (setup || issueCommand)) {
       // Why: main may have adopted the startup tab but failed to spawn setup; renderer must still launch the returned fallback setup.
       queueSetupAndIssueCommands(
@@ -501,7 +509,11 @@ export function ensureWorktreeHasInitialTerminal(
       )
       return existingTerminalTabId
     }
-    return null
+    if (!setup && !issueCommand) {
+      return null
+    }
+    // Why: editor/browser-only worktrees have no terminal to carry the launch; fall
+    // through and create one instead of silently dropping setup.
   }
 
   const templatedTabId = applyDefaultTerminalTabs(

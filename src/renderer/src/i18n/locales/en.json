@@ -709,6 +709,16 @@
             "additionalErrors": "{{count}} additional images could not be attached."
           }
         }
+      },
+      "runWorktreeSetupScript": {
+        "worktreeMissing": "Workspace is no longer available.",
+        "repoMissing": "Project is no longer available.",
+        "folderRepo": "Folder workspaces do not use setup scripts.",
+        "remoteHost": "Run setup script is not yet supported for remote worktrees. Create a new worktree to run setup on that host, or open a local clone.",
+        "prepareFailed": "Could not reach the setup service.",
+        "runnerFailed": "Could not prepare the setup runner.",
+        "noSetup": "No setup script is configured for this project.",
+        "activationFailed": "Could not open the workspace to run setup."
       }
     },
     "hooks": {
@@ -4617,7 +4627,8 @@
           "deleteWorktree": "Delete Worktree",
           "sleepWithDescendants": "Sleep with Descendants ({{value0}})",
           "sleepWithDescendantsDescription": "Close active panels in this workspace and every nested descendant to free up memory and CPU.",
-          "deleteWithDescendants": "Delete with Descendants…"
+          "deleteWithDescendants": "Delete with Descendants…",
+          "runSetupScript": "Run setup script"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",

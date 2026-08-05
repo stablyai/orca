@@ -2549,6 +2549,11 @@ function createHooksApi(): NonNullable<Partial<PreloadApi>['hooks']> {
     inspectSetupScriptImports: async ({ repoId }) =>
       callRuntimeResult('repo.setupScriptImports', { repo: repoId }),
     createIssueCommandRunner: async () => ({ launched: false }) as never,
+    prepareSetupRunner: async () => ({
+      status: 'ok' as const,
+      setup: null,
+      reason: 'no-setup-configured' as const
+    }),
     readIssueCommand: async ({ repoId }) =>
       callRuntimeResult('repo.issueCommandRead', { repo: repoId }),
     writeIssueCommand: async ({ repoId, content }) => {

@@ -463,6 +463,35 @@ describe('ensureHooksConfirmed', () => {
     expect(pending).toHaveLength(0)
   })
 
+  it('confirms the scriptContentOverride without inspecting the repo', async () => {
+    const { state, pending } = createTestState()
+
+    const decision = ensureHooksConfirmed(state, 'repo-1', 'setup', undefined, undefined, {
+      scriptContentOverride: 'echo "worktree-resolved setup"'
+    })
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+
+    expect(hooksCheckMock).not.toHaveBeenCalled()
+    expect(pending[0].data.scriptContent).toBe('echo "worktree-resolved setup"')
+    pending[0].resolve('run')
+    await expect(decision).resolves.toBe('run')
+  })
+
+  it('skips the prompt when the override matches the approved content hash', async () => {
+    const contentHash = await hashOrcaHookScript('echo "worktree-resolved setup"')
+    const { state, pending } = createTestState({
+      trustedOrcaHooks: { 'repo-1': { setup: { contentHash } } }
+    } as never)
+
+    const decision = await ensureHooksConfirmed(state, 'repo-1', 'setup', undefined, undefined, {
+      scriptContentOverride: 'echo "worktree-resolved setup"'
+    })
+
+    expect(decision).toBe('run')
+    expect(pending).toHaveLength(0)
+    expect(hooksCheckMock).not.toHaveBeenCalled()
+  })
+
   it('fails closed when hook inspection reports an error status', async () => {
     const { state, pending } = createTestState()
     hooksCheckMock.mockResolvedValue({

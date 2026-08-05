@@ -93,7 +93,12 @@ export async function ensureHooksConfirmed(
   repoId: string,
   scriptKind: HookScriptKind,
   hostId?: ExecutionHostId,
-  runtimeOwnerEnvironmentId?: string | null
+  runtimeOwnerEnvironmentId?: string | null,
+  options?: {
+    /** Confirm this exact script instead of re-inspecting the repo root — for callers
+     *  that already resolved what will run (e.g. a worktree-scoped setup script). */
+    scriptContentOverride?: string
+  }
 ): Promise<'run' | 'skip'> {
   return enqueueTrustPrompt(async () => {
     const hasDuplicateRepoId = state.repos.filter((repo) => repo.id === repoId).length > 1
@@ -103,7 +108,9 @@ export async function ensureHooksConfirmed(
 
     let scriptContent = ''
     try {
-      if (scriptKind === 'issueCommand') {
+      if (options?.scriptContentOverride !== undefined) {
+        scriptContent = options.scriptContentOverride.trim()
+      } else if (scriptKind === 'issueCommand') {
         // Local overrides are user-owned; only shared orca.yaml commands need repo trust.
         // Why: hostId disambiguates duplicate repo ids on the local IPC path,
         // matching the checkRuntimeHooks call below.

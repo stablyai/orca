@@ -2896,6 +2896,20 @@ const api = {
       command: string
     }): Promise<WorktreeSetupLaunch> => ipcRenderer.invoke('hooks:createIssueCommandRunner', args),
 
+    prepareSetupRunner: (args: {
+      repoId: string
+      worktreePath: string
+      hostId?: ExecutionHostId
+    }): Promise<{
+      status: 'ok' | 'error'
+      setup: WorktreeSetupLaunch | null
+      setupScript?: string
+      setupScriptSource?: 'yaml' | 'local' | 'both'
+      trustContent?: string
+      reason?: 'no-setup-configured' | 'folder-repo' | 'remote-host' | 'runner-failed'
+      message?: string
+    }> => ipcRenderer.invoke('hooks:prepareSetupRunner', args),
+
     readIssueCommand: (args: {
       repoId: string
       hostId?: ExecutionHostId

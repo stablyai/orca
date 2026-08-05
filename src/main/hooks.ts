@@ -1,6 +1,14 @@
 /* eslint-disable max-lines -- Why: hook parsing, layered issue-command resolution, and cross-platform runner setup share one execution surface, so keeping them together avoids subtle drift across create/read/write paths. */
-import { readFileSync, existsSync, mkdirSync, writeFileSync, chmodSync, rmSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import {
+  readFileSync,
+  existsSync,
+  mkdirSync,
+  writeFileSync,
+  chmodSync,
+  renameSync,
+  rmSync
+} from 'node:fs'
+import { dirname, join, posix as posixPath, win32 as win32Path } from 'node:path'
 import { exec, execFile } from 'node:child_process'
 import { getDefaultRepoHookSettings } from '../shared/constants'
 import { getRuntimePathBasename } from '../shared/cross-platform-path'
@@ -323,8 +331,14 @@ export function getSetupCommandSource(
     return localSetup ? { source: 'local', command: localSetup } : null
   }
 
-  if (policy === 'run-both' && yamlSetup && localSetup) {
-    return { source: 'both', command: `${yamlSetup}\n${localSetup}` }
+  // Why: run-both must degrade like the create path's merge — either script alone still runs.
+  if (policy === 'run-both' && (yamlSetup || localSetup)) {
+    if (yamlSetup && localSetup) {
+      return { source: 'both', command: `${yamlSetup}\n${localSetup}` }
+    }
+    return yamlSetup
+      ? { source: 'yaml', command: yamlSetup }
+      : { source: 'local', command: localSetup as string }
   }
 
   if (yamlSetup) {
@@ -539,6 +553,8 @@ export function createIssueCommandRunnerScript(
   })
 }
 
+let runnerTmpSequence = 0
+
 function createWorktreeRunnerScript(args: {
   repo: Repo
   worktreePath: string
@@ -584,23 +600,46 @@ function createWorktreeRunnerScript(args: {
   const gitRelPath = `orca/${runnerBaseName}.${runnerExtension}`
   let runnerScriptPath = getGitPath(worktreePath, gitRelPath, runtimeTarget)
 
+  // Why: a main worktree's --git-path is worktree-relative, and the fs calls below
+  // would resolve it against the app process cwd instead of the worktree. win32's
+  // check also accepts the rooted Linux paths git-in-WSL returns.
+  const isPathAbsolute = process.platform === 'win32' ? win32Path.isAbsolute : posixPath.isAbsolute
+  if (!isPathAbsolute(runnerScriptPath)) {
+    runnerScriptPath = join(worktreePath, runnerScriptPath)
+  }
+
   // Why: git runs inside WSL and returns a Linux path; convert to a UNC path so the Windows fs calls can reach it.
   if (wslWorktree) {
     const wslInfo = getHookWslContext(worktreePath, runtimeTarget)
-    if (wslInfo?.distro) {
+    if (wslInfo?.distro && runnerScriptPath.startsWith('/')) {
       runnerScriptPath = toWindowsWslPath(runnerScriptPath.trim(), wslInfo.distro)
     }
   }
 
   mkdirSync(dirname(runnerScriptPath), { recursive: true })
 
-  if (runnerShell.family === 'cmd') {
-    writeFileSync(runnerScriptPath, buildWindowsRunnerScript(script), 'utf-8')
-  } else {
-    writeFileSync(runnerScriptPath, buildPosixRunnerScript(script), 'utf-8')
-    if (!nativeWindowsWorktree) {
+  const runnerContent =
+    runnerShell.family === 'cmd'
+      ? buildWindowsRunnerScript(script)
+      : buildPosixRunnerScript(script)
+  // Why: a manual re-run can overwrite a script bash is still reading by byte offset;
+  // rename swaps the inode so the running shell keeps its own copy. The suffix is
+  // per-call so overlapping preparations cannot race each other into the fallback.
+  const tmpRunnerPath = `${runnerScriptPath}.tmp-${process.pid}-${++runnerTmpSequence}`
+  try {
+    writeFileSync(tmpRunnerPath, runnerContent, 'utf-8')
+    if (runnerShell.family !== 'cmd' && !nativeWindowsWorktree) {
       // Why: chmod over a UNC path to the WSL filesystem sets the execute bit correctly inside WSL.
-      chmodSync(runnerScriptPath, 0o755)
+      chmodSync(tmpRunnerPath, 0o755)
+    }
+    renameSync(tmpRunnerPath, runnerScriptPath)
+  } catch {
+    try {
+      // Why: Windows can refuse to replace a runner cmd.exe still holds open. The mode
+      // stays 0644 here, which is fine only while consumers run `bash <path>`.
+      writeFileSync(runnerScriptPath, runnerContent, 'utf-8')
+    } finally {
+      rmSync(tmpRunnerPath, { force: true })
     }
   }
 

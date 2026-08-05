@@ -41,6 +41,8 @@ const {
   getWorkItemMock,
   getPullRequestPushTargetMock,
   getEffectiveHooksMock,
+  getSetupCommandSourceMock,
+  getDefaultTabCommandTrustContentMock,
   createIssueCommandRunnerScriptMock,
   createSetupRunnerScriptMock,
   getEffectiveHooksFromConfigMock,
@@ -92,6 +94,8 @@ const {
   getWorkItemMock: vi.fn(),
   getPullRequestPushTargetMock: vi.fn(),
   getEffectiveHooksMock: vi.fn(),
+  getSetupCommandSourceMock: vi.fn(),
+  getDefaultTabCommandTrustContentMock: vi.fn(),
   createIssueCommandRunnerScriptMock: vi.fn(),
   createSetupRunnerScriptMock: vi.fn(),
   getEffectiveHooksFromConfigMock: vi.fn(),
@@ -196,6 +200,8 @@ vi.mock('../hooks', () => ({
   createIssueCommandRunnerScript: createIssueCommandRunnerScriptMock,
   createSetupRunnerScript: createSetupRunnerScriptMock,
   getEffectiveHooks: getEffectiveHooksMock,
+  getSetupCommandSource: getSetupCommandSourceMock,
+  getDefaultTabCommandTrustContent: getDefaultTabCommandTrustContentMock,
   getEffectiveHooksFromConfig: getEffectiveHooksFromConfigMock,
   getDefaultTabsLaunch: getDefaultTabsLaunchMock,
   getSetupRunnerEnvVars: getSetupRunnerEnvVarsMock,
@@ -364,6 +370,8 @@ describe('registerWorktreeHandlers', () => {
       getWorkItemMock,
       getPullRequestPushTargetMock,
       getEffectiveHooksMock,
+      getSetupCommandSourceMock,
+      getDefaultTabCommandTrustContentMock,
       getEffectiveHooksFromConfigMock,
       getDefaultTabsLaunchMock,
       parseOrcaYamlMock,
@@ -6755,6 +6763,210 @@ describe('registerWorktreeHandlers', () => {
         ORCA_ROOT_PATH: '/workspace/repo',
         ORCA_WORKTREE_PATH: '/workspace/improve-dashboard'
       }
+    })
+  })
+
+  it('prepares a setup runner with the selected Windows shell for an existing worktree', async () => {
+    getSetupCommandSourceMock.mockReturnValue({ source: 'yaml', command: 'pnpm install' })
+    const setupShell = {
+      family: 'posix' as const,
+      executable: 'C:\\Program Files\\Git\\bin\\bash.exe'
+    }
+    resolveSetupRunnerShellMock.mockReturnValue(setupShell)
+
+    const result = await handlers['hooks:prepareSetupRunner'](null, {
+      repoId: 'repo-1',
+      worktreePath: '/workspace/improve-dashboard'
+    })
+
+    expect(getSetupCommandSourceMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'repo-1' }),
+      '/workspace/improve-dashboard'
+    )
+    expect(resolveSetupRunnerShellMock).toHaveBeenCalledWith(store.getSettings())
+    expect(createSetupRunnerScriptMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'repo-1' }),
+      '/workspace/improve-dashboard',
+      'pnpm install',
+      {},
+      setupShell
+    )
+    expect(result).toEqual({
+      status: 'ok',
+      setup: {
+        runnerScriptPath: '/workspace/repo/.git/orca/setup-runner.sh',
+        envVars: {
+          ORCA_ROOT_PATH: '/workspace/repo',
+          ORCA_WORKTREE_PATH: '/workspace/improve-dashboard'
+        }
+      },
+      setupScript: 'pnpm install',
+      setupScriptSource: 'yaml'
+    })
+  })
+
+  it('returns the canonical trust content for the worktree yaml', async () => {
+    getSetupCommandSourceMock.mockReturnValue({ source: 'yaml', command: 'pnpm install' })
+    getDefaultTabCommandTrustContentMock.mockReturnValue(
+      'pnpm install\n\n# defaultTabs[1]\nnpm run dev'
+    )
+
+    const result = await handlers['hooks:prepareSetupRunner'](null, {
+      repoId: 'repo-1',
+      worktreePath: '/workspace/improve-dashboard'
+    })
+
+    expect(result).toMatchObject({
+      status: 'ok',
+      trustContent: 'pnpm install\n\n# defaultTabs[1]\nnpm run dev'
+    })
+  })
+
+  it('resolves the host-matching repo row when duplicate repo ids exist across hosts', async () => {
+    const localRepo = {
+      id: 'repo-1',
+      path: '/workspace/repo',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    const sshRepo = { ...localRepo, path: '/remote/repo', connectionId: 'ssh-target' }
+    store.getRepos.mockReturnValue([sshRepo, localRepo])
+    getSetupCommandSourceMock.mockReturnValue({ source: 'yaml', command: 'pnpm install' })
+
+    const result = await handlers['hooks:prepareSetupRunner'](null, {
+      repoId: 'repo-1',
+      worktreePath: '/workspace/improve-dashboard',
+      hostId: 'local'
+    })
+
+    expect(getSetupCommandSourceMock).toHaveBeenCalledWith(
+      expect.objectContaining({ path: '/workspace/repo' }),
+      '/workspace/improve-dashboard'
+    )
+    expect(result).toMatchObject({ status: 'ok' })
+  })
+
+  it('returns a structured error for ambiguous duplicate repo ids without a hostId', async () => {
+    const localRepo = {
+      id: 'repo-1',
+      path: '/workspace/repo',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    store.getRepos.mockReturnValue([
+      { ...localRepo, connectionId: 'ssh-target' },
+      { ...localRepo, path: '/other/repo' }
+    ])
+
+    const result = await handlers['hooks:prepareSetupRunner'](null, {
+      repoId: 'repo-1',
+      worktreePath: '/workspace/improve-dashboard'
+    })
+
+    expect(createSetupRunnerScriptMock).not.toHaveBeenCalled()
+    expect(result).toMatchObject({
+      status: 'error',
+      reason: 'runner-failed',
+      message: expect.stringContaining('Multiple project entries share this id')
+    })
+  })
+
+  it('returns no-setup-configured without creating a runner when setup is missing', async () => {
+    getSetupCommandSourceMock.mockReturnValue(null)
+
+    const result = await handlers['hooks:prepareSetupRunner'](null, {
+      repoId: 'repo-1',
+      worktreePath: '/workspace/improve-dashboard'
+    })
+
+    expect(createSetupRunnerScriptMock).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      status: 'ok',
+      setup: null,
+      reason: 'no-setup-configured'
+    })
+  })
+
+  it('returns folder-repo without creating a setup runner for folder workspaces', async () => {
+    store.getRepos.mockReturnValue([
+      {
+        id: 'repo-1',
+        path: '/workspace/folder',
+        displayName: 'folder',
+        badgeColor: '#000',
+        addedAt: 0,
+        kind: 'folder'
+      }
+    ])
+
+    const result = await handlers['hooks:prepareSetupRunner'](null, {
+      repoId: 'repo-1',
+      worktreePath: '/workspace/folder'
+    })
+
+    expect(getSetupCommandSourceMock).not.toHaveBeenCalled()
+    expect(createSetupRunnerScriptMock).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      status: 'ok',
+      setup: null,
+      reason: 'folder-repo'
+    })
+  })
+
+  it('rejects setup runner preparation for SSH repos', async () => {
+    store.getRepos.mockReturnValue([
+      {
+        id: 'repo-1',
+        path: '/workspace/repo',
+        displayName: 'repo',
+        badgeColor: '#000',
+        addedAt: 0,
+        connectionId: 'ssh-target'
+      }
+    ])
+
+    const result = await handlers['hooks:prepareSetupRunner'](null, {
+      repoId: 'repo-1',
+      worktreePath: '/workspace/improve-dashboard'
+    })
+
+    expect(getSetupCommandSourceMock).not.toHaveBeenCalled()
+    expect(createSetupRunnerScriptMock).not.toHaveBeenCalled()
+    expect(result).toMatchObject({
+      status: 'error',
+      setup: null,
+      reason: 'remote-host',
+      message: expect.stringContaining('not yet supported for remote worktrees')
+    })
+  })
+
+  it('rejects setup runner preparation for runtime-host repos without a connectionId', async () => {
+    store.getRepos.mockReturnValue([
+      {
+        id: 'repo-1',
+        path: '/workspace/repo',
+        displayName: 'repo',
+        badgeColor: '#000',
+        addedAt: 0,
+        connectionId: null,
+        executionHostId: 'runtime:env-1'
+      }
+    ])
+
+    const result = await handlers['hooks:prepareSetupRunner'](null, {
+      repoId: 'repo-1',
+      worktreePath: '/workspace/improve-dashboard'
+    })
+
+    expect(getSetupCommandSourceMock).not.toHaveBeenCalled()
+    expect(createSetupRunnerScriptMock).not.toHaveBeenCalled()
+    expect(result).toMatchObject({
+      status: 'error',
+      setup: null,
+      reason: 'remote-host',
+      message: expect.stringContaining('not yet supported for remote worktrees')
     })
   })
 
