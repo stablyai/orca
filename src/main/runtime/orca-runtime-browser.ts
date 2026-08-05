@@ -67,6 +67,7 @@ import {
   importCookiesFromBrowser,
   selectBrowserProfile
 } from '../browser/browser-cookie-import'
+import { getBrowserScreencastAwakeService } from '../browser-screencast-awake-service'
 import { waitForTabRegistration, waitForWorktreeTabRegistration } from '../ipc/browser'
 import { sendRemoteBrowserScreencastFrame } from './remote-browser-screencast-frame-admission'
 
@@ -158,12 +159,46 @@ export type RuntimeBrowserCommandHost = {
   ): void
 }
 
+function syncMainWindowBackgroundThrottlingForScreencast(
+  host: RuntimeBrowserCommandHost,
+  screencastActive: boolean
+): void {
+  const window = host.getAvailableAuthoritativeWindow()
+  const contents = window?.webContents
+  if (!contents || contents.isDestroyed?.() === true) {
+    return
+  }
+  try {
+    // Why: Electron has no throttle getter; restore `true` (createMainWindow default) when idle.
+    contents.setBackgroundThrottling(!screencastActive)
+  } catch {
+    // Why: the window can tear down between the null-check and the call during quit.
+  }
+}
+
 export class RuntimeBrowserCommands {
   private readonly activeScreencastPageIds = new Set<string>()
   private readonly activeScreencastsByPageId = new Map<string, ActiveBrowserScreencastPage>()
   private readonly stoppingScreencastPageIds = new Map<string, Promise<void>>()
 
   constructor(private readonly host: RuntimeBrowserCommandHost) {}
+
+  private screencastAwakeToken(browserPageId: string): string {
+    return `browser-screencast:${browserPageId}`
+  }
+
+  private markScreencastPageActive(browserPageId: string): void {
+    getBrowserScreencastAwakeService().acquire(this.screencastAwakeToken(browserPageId))
+    syncMainWindowBackgroundThrottlingForScreencast(this.host, true)
+  }
+
+  private markScreencastPageInactive(browserPageId: string): void {
+    getBrowserScreencastAwakeService().release(this.screencastAwakeToken(browserPageId))
+    syncMainWindowBackgroundThrottlingForScreencast(
+      this.host,
+      this.activeScreencastsByPageId.size > 0
+    )
+  }
 
   private requireAgentBrowserBridge(): AgentBrowserBridge {
     const bridge = this.host.getAgentBrowserBridge()
@@ -497,6 +532,8 @@ export class RuntimeBrowserCommands {
     }
     this.activeScreencastsByPageId.set(browserPageId, activeRecord)
     try {
+      // Why: wake + hold before CDP start so an already-sleeping display can recover.
+      this.markScreencastPageActive(browserPageId)
       session = await startBrowserScreencast(guest, {
         format,
         quality: clampInteger(params.quality, 10, 100, 70),
@@ -522,11 +559,17 @@ export class RuntimeBrowserCommands {
       if (this.activeScreencastsByPageId.get(browserPageId) === activeRecord) {
         this.activeScreencastsByPageId.delete(browserPageId)
       }
+      this.markScreencastPageInactive(browserPageId)
       resolveActiveDone()
       throw error
     }
     let stoppingPromise: Promise<void> | null = null
+    let pageGateCleared = false
     const clearPageGate = (): void => {
+      if (pageGateCleared) {
+        return
+      }
+      pageGateCleared = true
       this.activeScreencastPageIds.delete(browserPageId)
       if (this.activeScreencastsByPageId.get(browserPageId) === activeRecord) {
         this.activeScreencastsByPageId.delete(browserPageId)
@@ -537,6 +580,7 @@ export class RuntimeBrowserCommands {
       ) {
         this.stoppingScreencastPageIds.delete(browserPageId)
       }
+      this.markScreencastPageInactive(browserPageId)
       resolveActiveDone()
     }
     const markStopping = (): void => {
