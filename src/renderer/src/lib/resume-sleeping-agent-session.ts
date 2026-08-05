@@ -130,6 +130,23 @@ function activeOrQueuedResumeClaimsProviderSession(
   return false
 }
 
+function providerSessionOwnedElsewhere(
+  record: SleepingAgentSessionRecord,
+  state: ReturnType<typeof useAppStore.getState>
+): boolean {
+  const sessionId = record.providerSession?.id
+  if (!sessionId) {
+    return false
+  }
+  return Object.values(state.sleepingAgentSessionsByPaneKey).some(
+    (other) =>
+      other !== record &&
+      other.agent === record.agent &&
+      agentProviderSessionsEqual(record.agent, other.providerSession, record.providerSession) &&
+      recordPaneIsOwnedByPreservedPane(other, state)
+  )
+}
+
 // Why: an interrupted turn is still resumable — `claude --resume` reopens the transcript at the
 // prompt — so discarding those records only stranded the session across wake and restart.
 function isInvalidWorktreeActivationRecord(record: SleepingAgentSessionRecord): boolean {
@@ -210,6 +227,13 @@ export function resumeSleepingAgentSessionsForWorktree(
       continue
     }
     if (isPaneOwned) {
+      continue
+    }
+    // Why: claim keys are worktree-scoped, but a provider session is global —
+    // a record whose stored worktreeId went stale must not relaunch a session
+    // that a pane tracked by another record still owns.
+    if (providerSessionOwnedElsewhere(record, currentState)) {
+      state.clearSleepingAgentSession(record.paneKey)
       continue
     }
     if (launchSleepingAgentSession(record, options)) {

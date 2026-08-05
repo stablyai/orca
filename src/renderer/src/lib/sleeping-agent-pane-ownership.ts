@@ -5,6 +5,7 @@ import type {
   TerminalPaneLayoutNode,
   TerminalTab
 } from '../../../shared/terminal-tab-types'
+import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 
@@ -122,6 +123,31 @@ function paneWillConnectOnActivation(
   return !isWebTerminalSurfaceTabId(tabId)
 }
 
+// Why: sleeping records persist the worktreeId observed at capture time, which
+// goes stale when the session's transcript project differs from the tab's
+// worktree (e.g. an agent-managed checkout). Tab ids are globally unique, so a
+// miss under the recorded worktree must fall back to the tab's real owner —
+// otherwise a live pane is misread as gone and its session forked.
+function findPreservedTabOwner(
+  state: AppStoreState,
+  worktreeIdHint: string,
+  tabId: string
+): { tab: TerminalTab; worktreeId: string } | null {
+  const hinted = (state.tabsByWorktree[worktreeIdHint] ?? []).find(
+    (candidate) => candidate.id === tabId
+  )
+  if (hinted) {
+    return { tab: hinted, worktreeId: worktreeIdHint }
+  }
+  for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
+    const tab = tabs.find((candidate) => candidate.id === tabId)
+    if (tab) {
+      return { tab, worktreeId }
+    }
+  }
+  return null
+}
+
 export function recordPaneIsOwnedByPreservedPane(
   record: SleepingAgentSessionRecord,
   state: AppStoreState
@@ -133,10 +159,14 @@ export function recordPaneIsOwnedByPreservedPane(
       return false
     }
     const tabId = record.tabId ?? stable.tabId
-    const tab = worktreeTabs.find((candidate) => candidate.id === tabId) ?? null
-    if (!tab || !hasMatchingStablePaneLayout(tabId, stable.leafId, state.terminalLayoutsByTabId)) {
+    const owner = findPreservedTabOwner(state, record.worktreeId, tabId)
+    if (
+      !owner ||
+      !hasMatchingStablePaneLayout(tabId, stable.leafId, state.terminalLayoutsByTabId)
+    ) {
       return false
     }
+    const tab = owner.tab
     if (isPassiveCompletedHibernationEvidence(record)) {
       return true
     }
@@ -152,6 +182,17 @@ export function recordPaneIsOwnedByPreservedPane(
     ) {
       return true
     }
+    // Why: an SSH relay PTY survives transport loss by design — the disconnect
+    // handler clears ptyIdsByTabId for the whole target while the remote
+    // process keeps running and its lease only flips to 'detached'. A leaf
+    // still bound to a relay pty id therefore owns its session even though no
+    // live PTY is mapped; treating it as dead forks a second `--resume` onto
+    // the same transcript.
+    const leafPtyId =
+      state.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[stable.leafId] ?? tab.ptyId
+    if (leafPtyId && parseAppSshPtyId(leafPtyId)) {
+      return true
+    }
     // Why: active sessions rely on pane-level cold restore. A preserved leaf
     // without a PTY/session id can repaint scrollback but cannot resume.
     return (
@@ -161,7 +202,7 @@ export function recordPaneIsOwnedByPreservedPane(
         stable.leafId,
         state.ptyIdsByTabId,
         state.terminalLayoutsByTabId
-      ) && paneWillConnectOnActivation(record.worktreeId, tabId, state)
+      ) && paneWillConnectOnActivation(owner.worktreeId, tabId, state)
     )
   }
 
