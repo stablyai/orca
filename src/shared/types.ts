@@ -3471,6 +3471,8 @@ export type PersistedUIState = {
   osc52ClipboardDefaultOnNoticePending?: boolean
   /** User dismissed the first-run Mobile Emulator intro; reversible only by re-enabling the feature in Settings. */
   mobileEmulatorTabIntroDismissed?: boolean
+  /** One-shot diff file-tree discovery hint; written on first show so it never re-arms, even if the user never answers. */
+  combinedDiffFileTreeHintDismissed?: boolean
   /** User deferred the in-pane Mobile Emulator CLI + skill setup guide. */
   mobileEmulatorAgentSetupDismissed?: boolean
   /** One-shot rollout notice for manual project ordering default; absent or true keeps the sidebar callout hidden. */

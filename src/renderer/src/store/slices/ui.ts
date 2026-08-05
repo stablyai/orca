@@ -843,6 +843,8 @@ export type UISlice = {
   setBrowserImportHintHidden: (hidden: boolean) => void
   mobileEmulatorTabIntroDismissed: boolean
   dismissMobileEmulatorTabIntro: () => void
+  combinedDiffFileTreeHintDismissed: boolean
+  dismissCombinedDiffFileTreeHint: () => void
   mobileEmulatorAgentSetupDismissed: boolean
   dismissMobileEmulatorAgentSetup: () => void
   projectOrderManualDefaultNoticeDismissed: boolean
@@ -1957,6 +1959,15 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       window.api.ui.set({ mobileEmulatorTabIntroDismissed: true }).catch(console.error)
       return { mobileEmulatorTabIntroDismissed: true }
     }),
+  combinedDiffFileTreeHintDismissed: false,
+  dismissCombinedDiffFileTreeHint: () =>
+    set((s) => {
+      if (s.combinedDiffFileTreeHintDismissed) {
+        return s
+      }
+      window.api.ui.set({ combinedDiffFileTreeHintDismissed: true }).catch(console.error)
+      return { combinedDiffFileTreeHintDismissed: true }
+    }),
   mobileEmulatorAgentSetupDismissed: false,
   dismissMobileEmulatorAgentSetup: () =>
     set((s) => {
@@ -2540,6 +2551,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           ui.setupGuideBrowserMilestoneLegacyComplete === true,
         browserImportHintHidden: ui.browserImportHintHidden === true,
         mobileEmulatorTabIntroDismissed: ui.mobileEmulatorTabIntroDismissed === true,
+        combinedDiffFileTreeHintDismissed: ui.combinedDiffFileTreeHintDismissed === true,
         mobileEmulatorAgentSetupDismissed: ui.mobileEmulatorAgentSetupDismissed === true,
         projectOrderManualDefaultNoticeDismissed:
           ui.projectOrderManualDefaultNoticeDismissed === true,

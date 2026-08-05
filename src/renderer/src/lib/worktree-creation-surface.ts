@@ -13,3 +13,17 @@ export function shouldShowWorktreeCreationSurface({
 }: WorktreeCreationSurfaceInput): boolean {
   return activeView === 'terminal' && activePendingCreationId !== null && hasActivePendingCreation
 }
+
+export type TerminalWorkbenchVisibilityInput = WorktreeCreationSurfaceInput & {
+  activeWorktreeId: string | null
+}
+
+// Why: App renders the workbench with `hidden` instead of unmounting it, so a mounted pane
+// must consult this before anchoring a portaled layer to its own toolbar.
+export function isTerminalWorkbenchVisible(input: TerminalWorkbenchVisibilityInput): boolean {
+  return (
+    input.activeView === 'terminal' &&
+    input.activeWorktreeId !== null &&
+    !shouldShowWorktreeCreationSurface(input)
+  )
+}

@@ -13472,6 +13472,14 @@
               }
             }
           }
+        },
+        "CombinedDiffFileTreeHintButton": {
+          "4c1f0a7d92": "Default in diff views",
+          "8b3e6c1af0": "Browse changes as a file tree",
+          "d05a92be74": "See every changed file at once and jump between them without scrolling.",
+          "1e7c40b3d6": "Shown",
+          "6f2a83c5e1": "Hidden",
+          "a91d0f7b23": "Dismiss"
         }
       },
       "diff": {

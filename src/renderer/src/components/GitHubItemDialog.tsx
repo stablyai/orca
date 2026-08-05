@@ -34,7 +34,6 @@ import {
   MessageSquare,
   MessageSquarePlus,
   MoveRight,
-  PanelLeftOpen,
   Pencil,
   Plus,
   RefreshCw,
@@ -87,6 +86,8 @@ import {
   getCombinedDiffBranchEntriesInTreeOrder,
   type CombinedDiffFileTreeEntry
 } from '@/components/editor/combined-diff-file-tree-model'
+import { isCombinedDiffFileTreeCollapsedByDefault } from '@/components/editor/combined-diff-file-tree-default'
+import { CombinedDiffFileTreeHintButton } from '@/components/editor/CombinedDiffFileTreeHintButton'
 import {
   getStoredTextDiffContent,
   getStoredTextDiffResult
@@ -1391,6 +1392,9 @@ function PRFilesCombinedDiffViewer({
   onViewedChange
 }: PRFilesCombinedDiffViewerProps): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
+  // Why: this surface renders inline under the Tasks view (not a Radix dialog), and Radix
+  // unmounts the inactive Files tab — so the view check is the whole visibility gate.
+  const tasksViewActive = useAppStore((s) => s.activeView === 'tasks')
   const isDark =
     settings?.theme === 'dark' ||
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
@@ -1471,7 +1475,15 @@ function PRFilesCombinedDiffViewer({
   )
   const [sections, setSections] = useState<DiffSection[]>([])
   const [sideBySide, setSideBySide] = useState(false)
-  const [fileTreeCollapsed, setFileTreeCollapsed] = useState(false)
+  // Why no sync effect (unlike CombinedDiffViewer): this dialog is only opened from an
+  // already-hydrated app, so the initializer never reads a pre-hydration `undefined`.
+  const [fileTreeCollapsed, setFileTreeCollapsedState] = useState(() =>
+    isCombinedDiffFileTreeCollapsedByDefault(settings?.combinedDiffFileTreeVisibleByDefault)
+  )
+  const setFileTreeCollapsed = useCallback((collapsed: boolean) => {
+    setFileTreeCollapsedState(collapsed)
+    useAppStore.getState().recordFeatureInteraction('diff-file-tree')
+  }, [])
   const [sectionHeights, setSectionHeights] = useState<Record<number, number>>({})
   const [activeTreeSectionKey, setActiveTreeSectionKey] = useState<string | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -1810,25 +1822,16 @@ function PRFilesCombinedDiffViewer({
       <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-background/50 px-3 py-1.5">
         <div className="flex min-w-0 items-center gap-2">
           {fileTreeCollapsed && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={translate(
-                    'auto.components.GitHubItemDialog.1257d1435d',
-                    'Show file tree'
-                  )}
-                  onClick={() => setFileTreeCollapsed(false)}
-                >
-                  <PanelLeftOpen className="size-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={6}>
-                {translate('auto.components.GitHubItemDialog.1257d1435d', 'Show file tree')}
-              </TooltipContent>
-            </Tooltip>
+            <CombinedDiffFileTreeHintButton
+              label={translate('auto.components.GitHubItemDialog.1257d1435d', 'Show file tree')}
+              surfaceActive={tasksViewActive}
+              fileTreeCollapsed={fileTreeCollapsed}
+              // Why: sections are rebuilt from `entries`, so only a list that already matches
+              // the current entries reflects the real changed-file count.
+              sectionsLoaded={sections.length > 0 && sections.length === entries.length}
+              changedFileCount={sections.length}
+              onSetFileTreeCollapsed={setFileTreeCollapsed}
+            />
           )}
           <span className="truncate text-xs text-muted-foreground">
             {files.filter(isPRFileViewed).length} / {files.length}{' '}

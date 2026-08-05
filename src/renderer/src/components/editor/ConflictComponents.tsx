@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store'
 import type { ConflictReviewEntry, OpenFile } from '@/store/slices/editor'
 import type { GitConflictKind, GitStatusEntry } from '../../../../shared/types'
 import { ConflictReviewFileTree } from './ConflictReviewFileTree'
@@ -251,6 +252,7 @@ export function ConflictReviewPanel({
   const setFileTreeCollapsed = React.useCallback((collapsed: boolean) => {
     conflictReviewFileTreeCollapsedPreference = collapsed
     setFileTreeCollapsedState(collapsed)
+    useAppStore.getState().recordFeatureInteraction('diff-file-tree')
   }, [])
 
   if (snapshotEntries.length > 0 && unresolvedCount === 0) {

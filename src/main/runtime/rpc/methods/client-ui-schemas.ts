@@ -19,6 +19,7 @@ import {
 } from '../../../../shared/worktree-card-properties'
 import { isPluginPanelTabKey } from '../../../../shared/plugins/plugin-manifest'
 import type { TaskProvider } from '../../../../shared/types'
+import { OneShotDismissalFields } from './client-ui-dismissal-schemas'
 import { TaskResumeState } from './task-resume-state-schema'
 import { omitUndefinedValues, tolerateUnknownValues } from './ui-update-value-tolerance'
 
@@ -282,17 +283,7 @@ const UiUpdateFields = z
     _inlineAgentsDefaultedForAllUsers: z.boolean().optional(),
     trustedOrcaHooks: z.record(z.string(), z.unknown()).optional(),
     setupScriptPromptDismissedRepoIds: StringArray.optional(),
-    // Why: one-shot dismissals the renderer writes through ui.set; each was a
-    // whole-payload rejection for paired clients while unlisted.
-    setupGuideSidebarDismissed: z.boolean().optional(),
-    setupGuideBrowserMilestoneMigrated: z.boolean().optional(),
-    setupGuideBrowserMilestoneLegacyComplete: z.boolean().optional(),
-    browserImportHintHidden: z.boolean().optional(),
-    mobileEmulatorTabIntroDismissed: z.boolean().optional(),
-    mobileEmulatorAgentSetupDismissed: z.boolean().optional(),
-    projectOrderManualDefaultNoticeDismissed: z.boolean().optional(),
-    usagePercentageDisplayChangeNoticeDismissed: z.boolean().optional(),
-    usageEmptyStateDismissed: z.boolean().optional(),
+    ...OneShotDismissalFields,
     petVisible: z.boolean().optional(),
     petId: z.string().optional(),
     customPets: UnknownRecordArray.optional(),

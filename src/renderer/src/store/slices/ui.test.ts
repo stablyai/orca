@@ -2701,6 +2701,41 @@ describe('createUISlice mobile emulator tab intro dismissal', () => {
   })
 })
 
+describe('createUISlice combined diff file tree hint dismissal', () => {
+  it('persists the combined diff file tree hint dismissal once', () => {
+    const setMock = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', {
+      api: {
+        ui: {
+          set: setMock
+        }
+      }
+    })
+    const store = createUIStore()
+
+    store.getState().dismissCombinedDiffFileTreeHint()
+    store.getState().dismissCombinedDiffFileTreeHint()
+
+    expect(store.getState().combinedDiffFileTreeHintDismissed).toBe(true)
+    expect(setMock).toHaveBeenCalledTimes(1)
+    expect(setMock).toHaveBeenCalledWith({ combinedDiffFileTreeHintDismissed: true })
+  })
+
+  it('hydrates only explicit combined diff file tree hint dismissals', () => {
+    const store = createUIStore()
+
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ combinedDiffFileTreeHintDismissed: true }))
+    expect(store.getState().combinedDiffFileTreeHintDismissed).toBe(true)
+
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ combinedDiffFileTreeHintDismissed: undefined }))
+    expect(store.getState().combinedDiffFileTreeHintDismissed).toBe(false)
+  })
+})
+
 describe('createUISlice browser import hint dismissal', () => {
   it('persists browser import hint dismissal changes once', () => {
     const setMock = vi.fn(() => Promise.resolve())

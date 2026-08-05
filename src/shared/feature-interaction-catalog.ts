@@ -21,6 +21,7 @@ export type FeatureInteractionId =
   | 'browser-annotations'
   | 'browser-annotations-sent-to-agent'
   | 'browser-grab'
+  | 'diff-file-tree'
   | 'markdown-file-created'
   | 'workspace-creation'
   | 'agent-browser-setup'
@@ -93,6 +94,7 @@ export const FEATURE_INTERACTIONS = [
     interaction: 'browser annotations sent to an agent'
   },
   { id: 'browser-grab', interaction: 'browser element grab or screenshot used' },
+  { id: 'diff-file-tree', interaction: 'combined diff file tree shown or hidden' },
   { id: 'markdown-file-created', interaction: 'untitled markdown file explicitly created' },
   { id: 'workspace-creation', interaction: 'workspace creation flow opened' },
   { id: 'agent-browser-setup', interaction: 'Agent Browser Use setup enabled or opened' },

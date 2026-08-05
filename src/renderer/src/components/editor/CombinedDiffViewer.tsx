@@ -46,7 +46,7 @@ import type {
   GitDiffResult,
   GitStatusEntry
 } from '../../../../shared/types'
-import { Check, Copy, MessageSquare, PanelLeftOpen, Sparkles, Trash2, WrapText } from 'lucide-react'
+import { Check, Copy, MessageSquare, Sparkles, Trash2, WrapText } from 'lucide-react'
 import { toast } from 'sonner'
 import { DiffSectionItem } from './DiffSectionItem'
 import { DiffNotesSendMenu } from './DiffNotesSendMenu'
@@ -56,6 +56,9 @@ import {
   handleCombinedDiffFileTreeNavigation
 } from './CombinedDiffFileTree'
 import { getCombinedDiffFileTreeSectionKey } from './combined-diff-file-tree-model'
+import { CombinedDiffFileTreeHintButton } from './CombinedDiffFileTreeHintButton'
+import { isCombinedDiffFileTreeCollapsedByDefault } from './combined-diff-file-tree-default'
+import { isTerminalWorkbenchVisible } from '@/lib/worktree-creation-surface'
 import {
   ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
   type EditorPathMutationTarget
@@ -214,16 +217,21 @@ function getInitialCombinedDiffSideBySide(diffDefaultView: string | undefined): 
 function getInitialCombinedDiffFileTreeCollapsed(
   combinedDiffFileTreeVisibleByDefault: boolean | undefined
 ): boolean {
-  // Why: the tree is opt-in; only an explicit saved setting should open it while settings are still loading.
-  return combinedDiffFileTreeCollapsedPreference ?? combinedDiffFileTreeVisibleByDefault !== true
+  return (
+    combinedDiffFileTreeCollapsedPreference ??
+    isCombinedDiffFileTreeCollapsedByDefault(combinedDiffFileTreeVisibleByDefault)
+  )
 }
 
 export default function CombinedDiffViewer({
   file,
-  viewStateKey
+  viewStateKey,
+  viewStateId
 }: {
   file: OpenFile
   viewStateKey: string
+  /** Unified-tab id of the pane hosting this viewer; identifies which split group owns it. */
+  viewStateId: string
 }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const gitStatusEntries = useAppStore(
@@ -245,6 +253,21 @@ export default function CombinedDiffViewer({
     selectWorktreeDiffCommentsOrEmpty(s, file.worktreeId)
   )
   const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[file.worktreeId])
+  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
+  // Why: no isActive prop reaches this viewer (EditorPanel -> EditorContent thread none)
+  // and hidden worktrees stay mounted behind `hidden`, so reuse App's own visibility rule
+  // instead of anchoring the hint to an offscreen toolbar.
+  const workbenchVisible = useAppStore((s) =>
+    isTerminalWorkbenchVisible({
+      activeView: s.activeView,
+      activeWorktreeId: s.activeWorktreeId,
+      activePendingCreationId: s.activePendingCreationId,
+      hasActivePendingCreation:
+        s.activePendingCreationId !== null &&
+        s.pendingWorktreeCreations[s.activePendingCreationId] !== undefined
+    })
+  )
+  const isActiveWorktree = useAppStore((s) => s.activeWorktreeId === file.worktreeId)
   const isDark =
     settings?.theme === 'dark' ||
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
@@ -283,6 +306,19 @@ export default function CombinedDiffViewer({
   const [fileTreeCollapsed, setFileTreeCollapsedState] = useState(() =>
     getInitialCombinedDiffFileTreeCollapsed(settings?.combinedDiffFileTreeVisibleByDefault)
   )
+  // Why gated on fileTreeCollapsed: this runs on every store notification, and surfaceActive
+  // only feeds the hint, which cannot render while the tree is open.
+  const paneGroupId = useAppStore((s) =>
+    fileTreeCollapsed
+      ? (s.unifiedTabsByWorktree[file.worktreeId] ?? []).find((tab) => tab.id === viewStateId)
+          ?.groupId
+      : undefined
+  )
+  // Why the undefined tolerance: a single-group workspace never writes activeGroupId, and a
+  // floating-panel pane is not listed under this worktree — neither means "unfocused".
+  const paneFocused =
+    paneGroupId === undefined || activeGroupId === undefined || paneGroupId === activeGroupId
+  const surfaceActive = workbenchVisible && isActiveWorktree && paneFocused
   // Why: generation (state) keys DiffSectionItem remounts; generationRef mirrors it so loadSection's stale-async check avoids a stale closure.
   const [generation, setGeneration] = useState(0)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -408,10 +444,14 @@ export default function CombinedDiffViewer({
     }
   }, [settings?.combinedDiffFileTreeVisibleByDefault])
 
-  const setFileTreeCollapsed = useCallback((collapsed: boolean) => {
-    combinedDiffFileTreeCollapsedPreference = collapsed
-    setFileTreeCollapsedState(collapsed)
-  }, [])
+  const setFileTreeCollapsed = useCallback(
+    (collapsed: boolean) => {
+      combinedDiffFileTreeCollapsedPreference = collapsed
+      setFileTreeCollapsedState(collapsed)
+      recordFeatureInteraction('diff-file-tree')
+    },
+    [recordFeatureInteraction]
+  )
 
   const isBranchMode = file.diffSource === 'combined-branch'
   const isCommitMode = file.diffSource === 'combined-commit'
@@ -1829,28 +1869,19 @@ export default function CombinedDiffViewer({
         <div className="flex items-center justify-between gap-3 px-3 py-1.5 border-b border-border bg-background/50 shrink-0">
           <div className="flex min-w-0 items-center gap-2">
             {fileTreeCollapsed && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label={translate(
-                      'auto.components.editor.CombinedDiffViewer.b6c3b84476',
-                      'Show file tree'
-                    )}
-                    onClick={() => setFileTreeCollapsed(false)}
-                  >
-                    <PanelLeftOpen className="size-3.5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>
-                  {translate(
-                    'auto.components.editor.CombinedDiffViewer.b6c3b84476',
-                    'Show file tree'
-                  )}
-                </TooltipContent>
-              </Tooltip>
+              <CombinedDiffFileTreeHintButton
+                label={translate(
+                  'auto.components.editor.CombinedDiffViewer.b6c3b84476',
+                  'Show file tree'
+                )}
+                surfaceActive={surfaceActive}
+                fileTreeCollapsed={fileTreeCollapsed}
+                // Why: sections are rebuilt from `entries` in a layout effect, so only a list
+                // that already matches the current entries reflects the real file count.
+                sectionsLoaded={sections.length > 0 && sections.length === entries.length}
+                changedFileCount={sections.length}
+                onSetFileTreeCollapsed={setFileTreeCollapsed}
+              />
             )}
             <span className="truncate text-xs text-muted-foreground">
               {sections.length}{' '}

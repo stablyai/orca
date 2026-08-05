@@ -30,7 +30,10 @@ import {
   shouldRenderDesktopWindowChrome
 } from '@/lib/desktop-window-chrome'
 import { resolveLeftTitlebarChromeLayout } from '@/lib/titlebar-left-chrome'
-import { shouldShowWorktreeCreationSurface } from '@/lib/worktree-creation-surface'
+import {
+  isTerminalWorkbenchVisible,
+  shouldShowWorktreeCreationSurface
+} from '@/lib/worktree-creation-surface'
 import { buildAppFontFamily } from '@/lib/app-font-family'
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
@@ -558,8 +561,12 @@ function App(): React.JSX.Element {
   })
   const workspaceChromeActive =
     activeView === 'terminal' && activeWorktreeId !== null && !creationLayoutActive
-  const terminalWorkbenchVisible =
-    activeView === 'terminal' && activeWorktreeId !== null && !creationLayoutActive
+  const terminalWorkbenchVisible = isTerminalWorkbenchVisible({
+    activeView,
+    activeWorktreeId,
+    activePendingCreationId,
+    hasActivePendingCreation: activePendingCreationExists
+  })
   // Why: once the floating workspace owns tabs, keep it mounted while closed so hidden terminal/browser/editor panes retain local state.
   const shouldMountFloatingTerminalPanel =
     floatingTerminalEnabled && (floatingTerminalOpen || floatingVisibleTabCount > 0)

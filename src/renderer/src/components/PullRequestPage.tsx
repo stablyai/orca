@@ -31,7 +31,6 @@ import {
   LoaderCircle,
   MessageSquare,
   MessageSquarePlus,
-  PanelLeftOpen,
   Pencil,
   Plus,
   RefreshCw,
@@ -82,6 +81,8 @@ import {
   getCombinedDiffBranchEntriesInTreeOrder,
   type CombinedDiffFileTreeEntry
 } from '@/components/editor/combined-diff-file-tree-model'
+import { isCombinedDiffFileTreeCollapsedByDefault } from '@/components/editor/combined-diff-file-tree-default'
+import { CombinedDiffFileTreeHintButton } from '@/components/editor/CombinedDiffFileTreeHintButton'
 import {
   getStoredTextDiffContent,
   getStoredTextDiffResult
@@ -1452,6 +1453,9 @@ function PRFilesCombinedDiffViewer({
   onViewedChange
 }: PRFilesCombinedDiffViewerProps): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
+  // Why: this page only ever mounts under the Tasks view, and Radix unmounts the inactive
+  // Files tab — so the view check is the whole visibility gate the hint callout needs.
+  const tasksViewActive = useAppStore((s) => s.activeView === 'tasks')
   const isDark =
     settings?.theme === 'dark' ||
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
@@ -1536,7 +1540,15 @@ function PRFilesCombinedDiffViewer({
   )
   const [sections, setSections] = useState<DiffSection[]>([])
   const [sideBySide, setSideBySide] = useState(false)
-  const [fileTreeCollapsed, setFileTreeCollapsed] = useState(false)
+  // Why no sync effect (unlike CombinedDiffViewer): this page is only reachable by navigating
+  // an already-hydrated app, so the initializer never reads a pre-hydration `undefined`.
+  const [fileTreeCollapsed, setFileTreeCollapsedState] = useState(() =>
+    isCombinedDiffFileTreeCollapsedByDefault(settings?.combinedDiffFileTreeVisibleByDefault)
+  )
+  const setFileTreeCollapsed = useCallback((collapsed: boolean) => {
+    setFileTreeCollapsedState(collapsed)
+    useAppStore.getState().recordFeatureInteraction('diff-file-tree')
+  }, [])
   const [sectionHeights, setSectionHeights] = useState<Record<number, number>>({})
   const [activeTreeSectionKey, setActiveTreeSectionKey] = useState<string | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -1562,7 +1574,7 @@ function PRFilesCombinedDiffViewer({
       setSections(restoredSections)
       setSectionHeights(cached.sectionHeights)
       setSideBySide(cached.sideBySide)
-      setFileTreeCollapsed(cached.fileTreeCollapsed)
+      setFileTreeCollapsedState(cached.fileTreeCollapsed)
       setActiveTreeSectionKey(cached.activeTreeSectionKey)
       pendingRestoreScrollTopRef.current =
         prFilesDiffScrollTopCache.get(viewStateKey) ?? cached.scrollTop
@@ -1982,25 +1994,16 @@ function PRFilesCombinedDiffViewer({
       <div className="sticky top-0 z-20 flex shrink-0 items-center justify-between gap-3 border-b border-border bg-background px-3 py-1.5">
         <div className="flex min-w-0 items-center gap-2">
           {fileTreeCollapsed && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={translate(
-                    'auto.components.PullRequestPage.319cf2d54b',
-                    'Show file tree'
-                  )}
-                  onClick={() => setFileTreeCollapsed(false)}
-                >
-                  <PanelLeftOpen className="size-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={6}>
-                {translate('auto.components.PullRequestPage.319cf2d54b', 'Show file tree')}
-              </TooltipContent>
-            </Tooltip>
+            <CombinedDiffFileTreeHintButton
+              label={translate('auto.components.PullRequestPage.319cf2d54b', 'Show file tree')}
+              surfaceActive={tasksViewActive}
+              fileTreeCollapsed={fileTreeCollapsed}
+              // Why: sections are rebuilt from `entries`, so only a list that already matches
+              // the current entries reflects the real changed-file count.
+              sectionsLoaded={sections.length > 0 && sections.length === entries.length}
+              changedFileCount={sections.length}
+              onSetFileTreeCollapsed={setFileTreeCollapsed}
+            />
           )}
           <span className="truncate text-xs text-muted-foreground">
             {files.filter(isPRFileViewed).length} / {files.length}{' '}

@@ -513,6 +513,7 @@ export function getDefaultUIState(): PersistedUIState {
     // Why: fresh profiles start on the new default, so nothing was overridden to report.
     osc52ClipboardDefaultOnNoticePending: false,
     mobileEmulatorTabIntroDismissed: false,
+    combinedDiffFileTreeHintDismissed: false,
     mobileEmulatorAgentSetupDismissed: false,
     // Why: only upgraded profiles saw the old ordering, so only they get the one-time notice.
     projectOrderManualDefaultNoticeDismissed: true,
