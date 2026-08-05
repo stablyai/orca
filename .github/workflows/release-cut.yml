@@ -816,6 +816,28 @@ jobs:
     with:
       ref: refs/tags/${{ needs.cut.outputs.tag }}
 
+  # Phase 11 gate 4: the audited 8->10 lane against disposable local resources.
+  # Unlike `e2e` above this DOES block publication — landing writes the user's
+  # own working tree, so a regression here ships data loss rather than a flake.
+  # Secret-free by definition: the workflow declares no `secrets:` input.
+  audited-e2e:
+    needs: cut
+    if: needs.cut.outputs.should_release == 'true'
+    uses: ./.github/workflows/audited-e2e.yml
+    with:
+      ref: refs/tags/${{ needs.cut.outputs.tag }}
+
+  # Phase 11 gate 3: packaged smoke including the genuine v9->v10 migration
+  # proof. Runs after `build` because it verifies what that job produced.
+  installer-smoke:
+    needs:
+      - cut
+      - build
+    if: needs.cut.outputs.should_release == 'true'
+    uses: ./.github/workflows/installer-smoke.yml
+    with:
+      ref: refs/tags/${{ needs.cut.outputs.tag }}
+
   terminal-rendering-golden:
     needs: cut
     if: needs.cut.outputs.should_release == 'true'
@@ -1803,6 +1825,16 @@ jobs:
       - build
       - build-mac
       - terminal-rendering-golden
+      # Phase 11 release gates. Both are secret-free and use only disposable
+      # local resources, so neither can leak a credential or mutate a remote.
+      #
+      # NON-CERTIFICATION: a green `audited-e2e` proves Orca REFUSES the Codex
+      # audit correctly (S11 records `credential_delivery_unavailable` as
+      # EXPECTED-BLOCKED). It does NOT prove a Codex audit works. The audited
+      # chain stays uncertified through that segment until a separately approved
+      # provider architecture exists — release notes must say so.
+      - audited-e2e
+      - installer-smoke
     runs-on: ubuntu-latest
     permissions:
       contents: write

@@ -1,0 +1,128 @@
+name: Installer Smoke
+
+# Phase 11 §1 + §1a — packaged-artifact smoke with a genuine v9->v10 migration.
+#
+# THE ASSERTION THAT MATTERS: a seeded v9 profile migrates to v10 with its data
+# intact. A fresh database observed at v10 does NOT satisfy this gate —
+# createAuditedWorkflowTables builds every table at current shape, so a
+# first-launch profile is born at v10 and the migration is a no-op. Asserting the
+# version on a fresh profile would pass even if migrateToV10 were deleted.
+#
+# SECRET-FREE BY DEFINITION. No `secrets:` input is declared, so this workflow
+# cannot receive a signing or provider credential — it only consumes already-built
+# artifacts. The first step asserts the absence at runtime as well.
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Ref to check out (defaults to the calling workflow's ref)
+        required: false
+        type: string
+      artifact_run_id:
+        description: Run id to download installer artifacts from (optional)
+        required: false
+        type: string
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Ref to check out (defaults to the workflow ref)
+        required: false
+        type: string
+      artifact_run_id:
+        description: Run id to download installer artifacts from (optional)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  installer-smoke:
+    name: installer smoke (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            platform: win
+          - os: ubuntu-latest
+            platform: linux-x64
+          - os: ubuntu-24.04-arm
+            platform: linux-arm64
+          - os: macos-15
+            platform: mac
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+
+    steps:
+      # Why FIRST: this job consumes build artifacts and must never hold a
+      # signing or provider credential. Signing happens in the build job; this
+      # one only verifies what that job produced.
+      - name: Assert no credentials in this job
+        shell: bash
+        run: |
+          forbidden=(ORCA_AUDITED_CODEX_API_KEY OPENAI_API_KEY ANTHROPIC_API_KEY SIGNPATH_API_TOKEN CSC_LINK APPLE_ID)
+          found=()
+          for key in "${forbidden[@]}"; do
+            if [ -n "${!key:-}" ]; then
+              found+=("$key")
+            fi
+          done
+          if [ ${#found[@]} -gt 0 ]; then
+            echo "::error::Installer smoke must be secret-free, but these are set: ${found[*]}"
+            exit 1
+          fi
+          echo "No credential environment variables are set."
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Use external node-gyp to avoid pnpm's bundled copy (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          npm install -g node-gyp@11.5.0
+          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Why BEFORE the smoke: a fixture that had drifted to v10 would make the
+      # migration assertion vacuous. Failing here is loud; failing silently in
+      # the smoke is not.
+      - name: Validate the committed v9 fixture
+        run: pnpm exec vitest run --config config/vitest.config.ts config/scripts/generate-audited-v9-fixture.test.mjs
+
+      - name: Build Electron app for smoke
+        run: npx electron-vite build --mode e2e
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      # Seeds the isolated userData with the committed v9 database, launches the
+      # app, and asserts the migration plus landing-channel registration.
+      - name: Run audited-lane installer smoke
+        run: pnpm exec playwright test tests/e2e/installer-audited-lane-smoke.spec.ts --config tests/playwright.config.ts --project electron-headless
+
+      - name: Upload smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: installer-smoke-${{ matrix.platform }}
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 14
+          if-no-files-found: ignore

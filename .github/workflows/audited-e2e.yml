@@ -1,0 +1,125 @@
+name: Audited E2E
+
+# Phase 11 §3 — the audited 8->10 lane against disposable local resources.
+#
+# SECRET-FREE BY DEFINITION. This workflow declares NO `secrets:` input, so a
+# future edit adding one is visible in review rather than silently granting a
+# credential to a job that drives the audited lanes. The first step asserts the
+# absence at runtime too, because a definition-level guarantee still leaves
+# organization- or environment-level secrets injectable.
+#
+# NO NETWORK MUTATION. Every "remote" the specs use is a `git init --bare`
+# directory on the runner. There is no fork, no shared remote, and no PR/MR
+# creation against a real host.
+#
+# THE CODEX AUDIT SEGMENT IS NOT CERTIFIED HERE. S11 asserts that a
+# Byesu-configured task refuses with exactly `credential_delivery_unavailable`,
+# produced by an inert zero-byte fixture. That is a positive assertion of correct
+# REFUSAL, recorded as EXPECTED-BLOCKED — never counted as a passing audit.
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Ref to check out (defaults to the calling workflow's ref)
+        required: false
+        type: string
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Ref to check out (defaults to the workflow ref)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  audited-e2e:
+    name: audited lane 8-10 (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # Windows is MANDATORY: checked-out fast-forward landing writes the
+        # user's own working tree, and path/EOL semantics differ most there.
+        # One POSIX host is required alongside it; macOS is advisory while
+        # runner capacity is scarce.
+        os: [windows-2022, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+
+    steps:
+      # Why FIRST: a credential must never reach a job that drives the audited
+      # lanes. The Codex segment is asserted-blocked, which needs no key, so any
+      # provider secret present here is a configuration error, not a capability.
+      - name: Assert no credentials in this job
+        shell: bash
+        run: |
+          forbidden=(ORCA_AUDITED_CODEX_API_KEY OPENAI_API_KEY ANTHROPIC_API_KEY GH_TOKEN GITHUB_TOKEN)
+          found=()
+          for key in "${forbidden[@]}"; do
+            if [ -n "${!key:-}" ]; then
+              found+=("$key")
+            fi
+          done
+          if [ ${#found[@]} -gt 0 ]; then
+            echo "::error::Audited E2E must be secret-free, but these are set: ${found[*]}"
+            exit 1
+          fi
+          echo "No credential environment variables are set."
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Use external node-gyp to avoid pnpm's bundled copy (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          npm install -g node-gyp@11.5.0
+          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Why: the committed v9 fixture is the ground truth for the migration gate.
+      # Validating it BEFORE anything else means a drifted fixture fails loudly
+      # rather than making downstream assertions silently vacuous.
+      - name: Validate the committed v9 fixture
+        run: pnpm exec vitest run --config config/vitest.config.ts config/scripts/generate-audited-v9-fixture.test.mjs
+
+      # Why: pins the presence-only invariant that makes the inert S11 fixture
+      # valid. If this fails, S11 is VOID rather than merely failing — the
+      # zero-byte record would no longer be representative.
+      - name: Verify the inert provider fixture contract
+        run: pnpm exec vitest run --config config/vitest.config.ts src/main/audited-workflow/audited-codex-provider-inert-fixture.test.ts
+
+      - name: Build Electron app for E2E
+        run: npx electron-vite build --mode e2e
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run audited lane E2E
+        run: pnpm exec playwright test tests/e2e/audited-lane-8-10.spec.ts --config tests/playwright.config.ts --project electron-headless
+
+      - name: Upload audited E2E evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: audited-e2e-${{ matrix.os }}
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 14
+          if-no-files-found: ignore
