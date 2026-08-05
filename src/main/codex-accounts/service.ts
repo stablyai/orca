@@ -30,7 +30,6 @@ import type { CodexRuntimeHomeService } from './runtime-home-service'
 import { writeFileAtomically } from './fs-utils'
 import { rewriteRelativePathConfigValues } from '../codex/codex-config-path-reference-rewrite'
 import { stripCodexManagedHookTrustEntriesFromConfig } from '../codex/codex-managed-trust-reconciliation'
-import { isCodexSystemDefaultRealHomeEnabled } from '../codex/codex-real-home-flag'
 import { getCodexManagedHookInstallMaterial } from '../codex/hook-service'
 import { syncSystemConfigIntoManagedCodexHome } from '../codex/codex-config-mirror'
 import { getSystemCodexHomePath } from '../codex/codex-home-paths'
@@ -1238,9 +1237,9 @@ export class CodexAccountService {
   }
 
   private isSelfContainedHostManagedHome(managedHomePath: string): boolean {
-    // Why: flag ON makes each host account home its own launch CODEX_HOME. WSL
-    // homes keep their distro-local seed lane; the flag-OFF opt-out is unchanged.
-    return isCodexSystemDefaultRealHomeEnabled() && !parseWslUncPath(managedHomePath)
+    // Why: each host account home is its own launch CODEX_HOME. WSL homes keep
+    // their distro-local seed lane.
+    return !parseWslUncPath(managedHomePath)
   }
 
   private syncCanonicalConfigIntoManagedHome(
@@ -1270,18 +1269,15 @@ export class CodexAccountService {
     // account while preserving consistent Codex behavior. Managed homes are
     // real CODEX_HOMEs for `codex login`, so relative path-valued settings
     // must keep resolving against the home the config was read from.
-    let sanitizedConfig = canonicalConfig.contents
-    if (isCodexSystemDefaultRealHomeEnabled()) {
-      const material = getCodexManagedHookInstallMaterial()
-      // Why: source-home Orca trust is foreign to each managed home's hooks.json.
-      sanitizedConfig = stripCodexManagedHookTrustEntriesFromConfig(canonicalConfig.contents, {
-        runtimeHomePath: canonicalConfig.sourceHomePath,
-        sourcePath: canonicalConfig.sourceHooksPath,
-        command: material.command,
-        managedEventLabels: new Set(Object.values(material.eventLabel)),
-        timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
-      })
-    }
+    const material = getCodexManagedHookInstallMaterial()
+    // Why: source-home Orca trust is foreign to each managed home's hooks.json.
+    const sanitizedConfig = stripCodexManagedHookTrustEntriesFromConfig(canonicalConfig.contents, {
+      runtimeHomePath: canonicalConfig.sourceHomePath,
+      sourcePath: canonicalConfig.sourceHooksPath,
+      command: material.command,
+      managedEventLabels: new Set(Object.values(material.eventLabel)),
+      timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
+    })
     this.writeManagedConfig(
       trustedManagedHomePath,
       rewriteRelativePathConfigValues(sanitizedConfig, canonicalConfig.sourceHomePath)

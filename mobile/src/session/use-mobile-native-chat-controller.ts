@@ -295,8 +295,7 @@ export function useMobileNativeChatController(args: {
     onSendError
   })
 
-  // A Codex-style model change happens in the agent's own TUI picker — bring
-  // the terminal view forward so the dispatched `/model` selector is visible.
+  // Bring the terminal view forward when an agent-owned picker command is used.
   const handleAgentPicker = useCallback(() => {
     if (activeSessionTabId && isTabChatView(activeSessionTabId)) {
       toggleTabChatView(activeSessionTabId)

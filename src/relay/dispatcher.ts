@@ -55,6 +55,11 @@ export type RelayClientSourceOptions = {
   resumeReads?: () => void
 }
 
+export type PtyDataPublicationAdmission = (
+  clientId: number,
+  params: Readonly<Record<string, unknown>>
+) => boolean
+
 export type MethodHandler = (
   params: Record<string, unknown>,
   context: RequestContext
@@ -108,6 +113,7 @@ export class RelayDispatcher {
   private disposeListeners = new Set<() => void>()
   private legacyCapacityListeners = new Set<() => void>()
   private clientCapacityListeners = new Map<number, Set<() => void>>()
+  private ptyDataPublicationAdmission: PtyDataPublicationAdmission | null = null
   private publicationTransactionDepth = 0
   private deferredLegacyCapacity = false
   private deferredForcedLegacyCapacity = false
@@ -205,6 +211,20 @@ export class RelayDispatcher {
     return () => this.disposeListeners.delete(listener)
   }
 
+  // Why single-slot rather than a listener set: admission is a veto, so two registrations would have
+  // to agree on precedence. One owner (the PTY consumer session) holds it for the dispatcher's life.
+  registerPtyDataPublicationAdmission(admission: PtyDataPublicationAdmission): () => void {
+    if (this.ptyDataPublicationAdmission) {
+      throw new Error('PTY data publication admission is already registered')
+    }
+    this.ptyDataPublicationAdmission = admission
+    return () => {
+      if (this.ptyDataPublicationAdmission === admission) {
+        this.ptyDataPublicationAdmission = null
+      }
+    }
+  }
+
   onLegacyPtyCapacity(listener: () => void): () => void {
     this.legacyCapacityListeners.add(listener)
     return () => this.legacyCapacityListeners.delete(listener)
@@ -281,7 +301,9 @@ export class RelayDispatcher {
     data: string,
     limit = data.length
   ): number {
-    const clients = this.activeClients()
+    const clients = this.activeClients().filter((client) =>
+      this.admitsPtyDataPublication(client.id, params)
+    )
     const max = Math.min(data.length, limit)
     if (clients.length === 0) {
       return max
@@ -331,7 +353,7 @@ export class RelayDispatcher {
       params
     }
     return this.tryPublishToClients(
-      this.activeClients(),
+      this.activeClients().filter((client) => this.admitsPtyDataPublication(client.id, params)),
       msg,
       options.interactive ? 'interactive' : 'ordinary'
     )
@@ -346,7 +368,9 @@ export class RelayDispatcher {
       return false
     }
     return this.tryPublishToClients(
-      this.activeClients().filter((client) => matchesClient(client.id)),
+      this.activeClients().filter(
+        (client) => matchesClient(client.id) && this.admitsPtyDataPublication(client.id, params)
+      ),
       { jsonrpc: '2.0', method: 'pty.data', params },
       options.interactive ? 'interactive' : 'ordinary'
     )
@@ -361,7 +385,9 @@ export class RelayDispatcher {
       return false
     }
     return this.projectToClients(
-      this.activeClients().filter((client) => matchesClient(client.id)),
+      this.activeClients().filter(
+        (client) => matchesClient(client.id) && this.admitsPtyDataPublication(client.id, params)
+      ),
       { jsonrpc: '2.0', method: 'pty.data', params },
       options.interactive ? 'interactive' : 'ordinary'
     )
@@ -379,6 +405,10 @@ export class RelayDispatcher {
     const client = this.clients.get(clientId)
     if (!client || client.closed) {
       onSettled({ ok: false, error: new Error('Relay client is not connected') })
+      return false
+    }
+    if (!this.admitsPtyDataPublication(clientId, params)) {
+      onSettled({ ok: false, error: new Error('PTY publication is not admitted') })
       return false
     }
     return this.publishToClient(
@@ -547,6 +577,9 @@ export class RelayDispatcher {
         if (client.closed) {
           continue
         }
+        if (method === 'pty.data' && !this.admitsPtyDataPublication(client.id, params ?? {})) {
+          continue
+        }
         if (method === 'pty.replay') {
           // Why: replay is never re-sent, so it takes the control lane where overflow is fatal — the
           // writer closes the client and reconnect reloads history rather than stranding a short buffer.
@@ -583,6 +616,9 @@ export class RelayDispatcher {
       jsonrpc: '2.0',
       method,
       ...(params !== undefined ? { params } : {})
+    }
+    if (method === 'pty.data' && !this.admitsPtyDataPublication(client.id, params ?? {})) {
+      return false
     }
     const frameBytes = this.estimateFrameBytes(msg)
     if (this.publishToClient(client, msg, 'ordinary', undefined, frameBytes)) {
@@ -1055,12 +1091,17 @@ export class RelayDispatcher {
       const seq = client.nextOutgoingSeq++
       return encodeJsonRpcFrame(msg, seq, client.highestReceivedSeq)
     }
+    const isStillAdmitted =
+      'method' in msg && msg.method === 'pty.data'
+        ? () => this.admitsPtyDataPublication(client.id, msg.params ?? {})
+        : undefined
     return client.writer.enqueue(
       lane,
       encode,
       frameBytes,
       onSettled,
-      lane === 'control' && controlOverflow === 'reject'
+      lane === 'control' && controlOverflow === 'reject',
+      isStillAdmitted
     )
   }
 
@@ -1089,6 +1130,13 @@ export class RelayDispatcher {
 
   private activeClients(): RelayClient[] {
     return Array.from(this.clients.values()).filter((client) => !client.closed)
+  }
+
+  private admitsPtyDataPublication(
+    clientId: number,
+    params: Readonly<Record<string, unknown>>
+  ): boolean {
+    return this.ptyDataPublicationAdmission?.(clientId, params) ?? true
   }
 
   private activeClientKeys(): string[] {

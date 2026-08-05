@@ -33,6 +33,8 @@ import { MobileNativeChatQuestion } from './MobileNativeChatQuestion'
 import { mobileChatQuestionKey, type MobileChatQuestion } from './mobile-native-chat-question'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 
+const INPUT_LOCK_SETTLE_MS = 600
+
 /** Why the composer input is locked: the transport is disconnected, or the
  *  terminal subscription has not acknowledged its input lease yet. */
 export type MobileNativeChatInputLockReason = 'disconnected' | 'waiting'
@@ -250,20 +252,18 @@ export function MobileNativeChatView({
   const emptyState = mobileNativeChatEmptyState(status, agent ?? null, error)
   const showLoading = status === 'loading' && messages.length === 0
 
-  // Composer-lock flicker guard: on a remote link, brief connState blips or lease
-  // hand-offs would otherwise toggle the lock placeholder on and off. Only surface
-  // a lock once it has held ~600ms; drop it instantly so unlocking stays snappy.
+  // A dead PTY emits subscribed→end; settle both edges so its false lease cannot flash the composer enabled.
   const rawLockReason = inputLockReason ?? null
+  const rawLockHeld = rawLockReason !== null
   const [lockHeld, setLockHeld] = useState(false)
   useEffect(() => {
-    if (rawLockReason === null) {
-      setLockHeld(false)
+    if (rawLockHeld === lockHeld) {
       return
     }
-    const timer = setTimeout(() => setLockHeld(true), 600)
+    const timer = setTimeout(() => setLockHeld(rawLockHeld), INPUT_LOCK_SETTLE_MS)
     return () => clearTimeout(timer)
-  }, [rawLockReason])
-  const lockReason = lockHeld ? rawLockReason : null
+  }, [lockHeld, rawLockHeld])
+  const lockReason = lockHeld ? (rawLockReason ?? 'waiting') : null
 
   return (
     <View style={[styles.root, { paddingBottom: bottomPad }]}>

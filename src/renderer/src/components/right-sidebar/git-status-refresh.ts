@@ -117,6 +117,7 @@ export async function refreshGitStatusForWorktree({
     reuseLineStats?: boolean
     signal?: AbortSignal
     shouldApply?: () => boolean
+    onStatusAccepted?: (status: GitStatusResult) => void
   }
 }): Promise<void> {
   const refreshOrder = beginAutomaticUpstreamRefresh(worktreeId)
@@ -149,6 +150,7 @@ export async function refreshGitStatusForWorktree({
       // explicit clear signal so stale branch names don't linger in the UI.
       branch: status.branch ?? (status.head ? null : undefined)
     })
+    request?.onStatusAccepted?.(status)
     if (pushTarget) {
       // Why: porcelain status reports Git's configured upstream. Source Control
       // actions for PR-created worktrees must instead reconcile with Orca's

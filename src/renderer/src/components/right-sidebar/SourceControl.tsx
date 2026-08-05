@@ -264,6 +264,7 @@ import {
   getCreatePrIntentCommitFailureNoticeMessage,
   getCreatePrIntentStagePaths,
   resolveCreatePrIntentReviewBase,
+  resolveCreatePrIntentGeneratedReviewFields,
   resolveCreatePrIntentRemoteStep,
   shouldAttemptCreateHostedReviewForIntent,
   shouldGenerateHostedReviewDetailsForIntent,
@@ -3479,17 +3480,33 @@ function SourceControlInner(): React.JSX.Element {
             })
             return false
           }
-          if (generated.success) {
-            fields = {
-              // Why: intent auto-submits, so generated details must not retarget the review without confirmation.
-              base: fields.base,
-              title: generated.fields.title.trim() || fields.title,
-              body: generated.fields.body,
-              draft: generated.fields.draft
-            }
+          const resolved = resolveCreatePrIntentGeneratedReviewFields(fields, generated)
+          if (!resolved.ok) {
+            setCreatePrIntentNoticeForWorktree(token.worktreeId, {
+              tone: 'destructive',
+              message:
+                resolved.error ??
+                translate(
+                  'auto.components.right.sidebar.SourceControl.createPrIntentEmptyGeneratedBody',
+                  'Generated review details did not include a description. Retry Create PR.'
+                )
+            })
+            return false
           }
+          fields = resolved.fields
         } catch (error) {
           console.warn('[SourceControl] Create PR intent detail generation failed', error)
+          setCreatePrIntentNoticeForWorktree(token.worktreeId, {
+            tone: 'destructive',
+            message:
+              error instanceof Error
+                ? error.message
+                : translate(
+                    'auto.components.right.sidebar.SourceControl.createPrIntentGenerateDetailsFailed',
+                    'Could not generate review details. Retry Create PR.'
+                  )
+          })
+          return false
         }
       }
 

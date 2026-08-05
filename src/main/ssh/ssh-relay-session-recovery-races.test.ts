@@ -420,6 +420,7 @@ describe('SshRelaySession recovery race fencing', () => {
     })
     await session.reconnect(deps.mockConn)
     const closeCount = vi.mocked(closeSshPtyOutputGeneration).mock.calls.length
+    const muxDisposeCount = muxDisposeMock.mock.calls.length
 
     emitSourceFrame({
       targetId,
@@ -431,11 +432,9 @@ describe('SshRelaySession recovery race fencing', () => {
     })
 
     expect(acceptOutputDataMock).not.toHaveBeenCalled()
-    expect(closeSshPtyOutputGeneration).toHaveBeenCalledTimes(closeCount + 1)
-    expect(closeSshPtyOutputGeneration).toHaveBeenLastCalledWith(
-      23,
-      'ssh_source_frame_stale_or_non_contiguous'
-    )
+    expect(closeSshPtyOutputGeneration).toHaveBeenCalledTimes(closeCount)
+    expect(muxDisposeMock).toHaveBeenCalledTimes(muxDisposeCount)
+    await vi.waitFor(() => expect(attachForReconnectMock).toHaveBeenCalledTimes(2))
   })
 
   it('drops late frames from a token after its cancellation proof is validated', async () => {
