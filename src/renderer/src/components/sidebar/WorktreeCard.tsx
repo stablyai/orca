@@ -1406,7 +1406,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
             onToggleUnread={handleToggleUnreadQuick}
             prDisplay={statusLaneReview}
             newCardStyle={newCardStyle}
-            hasBranchIdentity={Boolean(branchIdentityDisplay)}
+            hasBranchIdentity={hasPathIdentityEnabled && Boolean(branchIdentityDisplay)}
           />
         </div>
       ) : null}
