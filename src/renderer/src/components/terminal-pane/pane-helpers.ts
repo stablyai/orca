@@ -1,4 +1,5 @@
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
+import { paneContainerOwnsFocus } from '@/lib/pane-manager/pane-pointer-focus'
 
 export function fitPanes(manager: PaneManager): void {
   manager.fitAllPanes()
@@ -16,6 +17,11 @@ export function focusActivePane(manager: PaneManager): void {
   }
   const panes = manager.getPanes()
   const activePane = manager.getActivePane() ?? panes[0]
+  // Why: a pane showing the native chat composer owns its own focus (see
+  // shouldAutofocusNativeChatComposer) — the xterm underneath must stay blurred.
+  if (activePane && paneContainerOwnsFocus(activePane.container)) {
+    return
+  }
   activePane?.terminal.focus()
 }
 

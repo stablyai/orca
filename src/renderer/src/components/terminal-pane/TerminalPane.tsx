@@ -2954,6 +2954,7 @@ function TerminalPane(
                 resolvedAgent={chatPaneResolvedAgent}
                 onSwitchToTerminal={() => toggleNativeChatForLeaf(chatPane.leafId)}
                 readTerminalScreen={readNativeChatTerminalScreen}
+                shouldFocusComposer={isActive && isVisible && activePaneIsChatLeaf}
                 contextMenuActions={{
                   onSplitRight: () => contextMenu.runForPane(chatPane.id, contextMenu.onSplitRight),
                   onSplitDown: () => contextMenu.runForPane(chatPane.id, contextMenu.onSplitDown),

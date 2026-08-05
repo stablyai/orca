@@ -16,5 +16,9 @@ export type NativeChatViewProps = {
   onSwitchToTerminal?: () => void
   /** Current xterm screen reader used to recover agent-reported session state. */
   readTerminalScreen?: () => string | null
+  /** True while this tab/pane is the visible, active chat surface — drives
+   *  composer autofocus on new-session launch and on switching back to this
+   *  chat tab (mirrors CodexRestartChip's `shouldFocus`). */
+  shouldFocusComposer?: boolean
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
 }

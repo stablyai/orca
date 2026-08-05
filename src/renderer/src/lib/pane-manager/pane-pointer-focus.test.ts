@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { shouldFocusTerminalFromPanePointerDown } from './pane-pointer-focus'
+import {
+  paneContainerOwnsFocus,
+  shouldFocusTerminalFromPanePointerDown
+} from './pane-pointer-focus'
 
 class FakeElement {
   constructor(private readonly closestResult: FakeElement | null = null) {}
@@ -33,5 +36,21 @@ describe('shouldFocusTerminalFromPanePointerDown', () => {
     const target = new FakeElement(control)
 
     expect(shouldFocusTerminalFromPanePointerDown(target as unknown as Element)).toBe(false)
+  })
+})
+
+describe('paneContainerOwnsFocus', () => {
+  function fakeContainer(hasMatch: boolean): HTMLElement {
+    return {
+      querySelector: vi.fn(() => (hasMatch ? {} : null))
+    } as unknown as HTMLElement
+  }
+
+  it('is false for an ordinary terminal pane container', () => {
+    expect(paneContainerOwnsFocus(fakeContainer(false))).toBe(false)
+  })
+
+  it('is true when the pane hosts a focus-owning app control (e.g. the native chat composer)', () => {
+    expect(paneContainerOwnsFocus(fakeContainer(true))).toBe(true)
   })
 })

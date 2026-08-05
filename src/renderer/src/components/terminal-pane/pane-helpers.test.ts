@@ -76,12 +76,18 @@ describe('fitAndFocusPanes', () => {
     vi.unstubAllGlobals()
   })
 
-  function makeManager(): { manager: PaneManager; terminal: { focus: ReturnType<typeof vi.fn> } } {
+  function makeManager(args?: { activeContainerHasFocusOwner?: boolean }): {
+    manager: PaneManager
+    terminal: { focus: ReturnType<typeof vi.fn> }
+  } {
     const terminal = { focus: vi.fn() }
+    const container = {
+      querySelector: vi.fn(() => (args?.activeContainerHasFocusOwner ? {} : null))
+    }
     const manager = {
       fitAllPanes: vi.fn(),
-      getActivePane: () => ({ terminal }),
-      getPanes: () => [{ terminal }]
+      getActivePane: () => ({ terminal, container }),
+      getPanes: () => [{ terminal, container }]
     } as unknown as PaneManager
     return { manager, terminal }
   }
@@ -131,5 +137,15 @@ describe('fitAndFocusPanes', () => {
 
     expect(manager.fitAllPanes).toHaveBeenCalled()
     expect(terminal.focus).toHaveBeenCalled()
+  })
+
+  it('does not steal focus from a pane showing the native chat composer', () => {
+    stubDocument(null)
+    const { manager, terminal } = makeManager({ activeContainerHasFocusOwner: true })
+
+    fitAndFocusPanes(manager)
+
+    expect(manager.fitAllPanes).toHaveBeenCalled()
+    expect(terminal.focus).not.toHaveBeenCalled()
   })
 })

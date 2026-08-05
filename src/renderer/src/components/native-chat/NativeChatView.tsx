@@ -38,11 +38,9 @@ import {
   deriveNativeChatStreamingText,
   nativeChatStreamingMessage
 } from '../../../../shared/native-chat-streaming'
-import {
-  shouldFocusNativeChatComposerFromEditingKey,
-  shouldFocusNativeChatPaneFromPointerTarget,
-  shouldRedirectNativeChatTyping
-} from './native-chat-typing-redirect'
+import { shouldFocusNativeChatPaneFromPointerTarget } from './native-chat-typing-redirect'
+import { useNativeChatComposerAutofocus } from './use-native-chat-composer-autofocus'
+import { useNativeChatRootKeyDownCapture } from './use-native-chat-root-keydown-capture'
 import {
   emptyNativeChatContextMenuActions,
   useNativeChatContextMenu
@@ -65,6 +63,7 @@ export default function NativeChatView({
   resolvedAgent,
   onSwitchToTerminal,
   readTerminalScreen,
+  shouldFocusComposer = false,
   contextMenuActions
 }: NativeChatViewProps): React.JSX.Element {
   // Select only this tab's status entry (shallow-compared) so an unrelated
@@ -98,6 +97,7 @@ export default function NativeChatView({
           terminalTabId={terminalTabId}
           onSwitchToTerminal={onSwitchToTerminal}
           readTerminalScreen={readTerminalScreen}
+          shouldFocusComposer={shouldFocusComposer}
           contextMenuActions={contextMenuActions}
         />
       )}
@@ -114,6 +114,7 @@ function NativeChatResolvedView({
   terminalTabId,
   onSwitchToTerminal,
   readTerminalScreen,
+  shouldFocusComposer,
   contextMenuActions
 }: {
   paneKey: string
@@ -124,6 +125,7 @@ function NativeChatResolvedView({
   terminalTabId: string
   onSwitchToTerminal?: () => void
   readTerminalScreen?: () => string | null
+  shouldFocusComposer: boolean
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
 }): React.JSX.Element {
   // Primitive owner selection (no useShallow): routes the pane's read/subscribe to
@@ -362,6 +364,15 @@ function NativeChatResolvedView({
   }, [interactiveSend, pendingScope])
   const nativeChatFileLinkClick = useNativeChatFileLinkClick(fileLinkContext)
 
+  useNativeChatComposerAutofocus({
+    chatSurfaceActive: shouldFocusComposer,
+    composerEnabled: targetPtyId !== null && canSend,
+    questionActive,
+    rootRef,
+    composerRef
+  })
+  const handleRootKeyDownCapture = useNativeChatRootKeyDownCapture(composerRef)
+
   // Chat-only font zoom via Cmd/Ctrl +/-/0, gated to the live conversation so
   // the chord is inert on the loading/empty/error states and elsewhere.
   const fontScale = useNativeChatFontScale(isConversation)
@@ -370,6 +381,8 @@ function NativeChatResolvedView({
     <div
       ref={rootRef}
       data-native-chat-root="true"
+      // Why: keeps imperative terminal focus off the hidden xterm underneath (paneContainerOwnsFocus).
+      data-pane-prevent-terminal-focus="true"
       tabIndex={-1}
       onPointerDownCapture={(event) => {
         if (event.button === 2) {
@@ -382,22 +395,7 @@ function NativeChatResolvedView({
           rootRef.current?.focus({ preventScroll: true })
         }
       }}
-      onKeyDownCapture={(event) => {
-        // Backspace/Delete outside an input focuses the composer (like typing)
-        // but inserts nothing — let the now-focused field handle the keystroke.
-        if (shouldFocusNativeChatComposerFromEditingKey(event)) {
-          composerRef.current?.focus()
-          return
-        }
-        if (!shouldRedirectNativeChatTyping(event)) {
-          return
-        }
-        if (!composerRef.current?.insertTypedText(event.key)) {
-          return
-        }
-        event.preventDefault()
-        event.stopPropagation()
-      }}
+      onKeyDownCapture={handleRootKeyDownCapture}
       onMouseUpCapture={contextMenu.onSelectionCapture}
       onKeyUpCapture={contextMenu.onSelectionCapture}
       onContextMenuCapture={contextMenu.onContextMenuCapture}
