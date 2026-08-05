@@ -71,10 +71,10 @@ const STALE_TITLE_TIMEOUT = 3000 // ms before stale working title is cleared
 const MAX_PTY_SIDE_EFFECTS_PER_DRAIN = 64
 // Why: background timer throttling clamps the drain to ~64 effects/s while an agent CLI can queue
 // hundreds/s, so an overnight minimized window otherwise grows this queue without bound (C1/H2).
-// 512 ≈ 8 drain ticks of catch-up latency once visible; entries are compact facts (≤1 title/payload).
+// Past this depth the deferral is applied inline rather than queued further.
 export const MAX_PENDING_PTY_SIDE_EFFECTS = 512
-// Why: agent status is last-wins store state, but payloads can carry KB-scale prompt/tool strings;
-// carry only the newest few through eviction so a status flood cannot re-grow what it evicted.
+// Why: only the paused-shutdown fallback evicts; carry the newest few statuses
+// so a flood in that window cannot re-grow what it evicted.
 export const MAX_EVICTED_AGENT_STATUS_PAYLOAD_CARRY = 16
 
 type PtyOutputCallbacks = Parameters<PtyTransport['connect']>[0]['callbacks']
@@ -165,6 +165,10 @@ export function createPtyOutputProcessor({
   let pendingSideEffects: PendingPtySideEffect[] = []
   let pendingSideEffectIndex = 0
   let pendingWorkingTitleSideEffects = 0
+  // Why: shutdown pauses the drain deliberately; the overflow valve must not
+  // resurrect side effects during that window.
+  let sideEffectsPaused = false
+  let applyingOverflowingSideEffects = false
   const agentTracker =
     onAgentBecameIdle || onAgentBecameWorking || onAgentExited
       ? createAgentStatusTracker(
@@ -214,9 +218,44 @@ export function createPtyOutputProcessor({
     sideEffectDrainTimer = setTimeout(drainPtySideEffects, 0)
   }
 
-  // Why: oldest-first eviction at the cap. Evicted titles are safe to drop (titles are last-wins);
-  // bells and agent-status payloads collapse onto the next-oldest survivor so a pending bell latch
-  // and the newest statuses still apply on drain instead of vanishing.
+  // Why not evict at the cap: titles are not last-wins facts. A working→idle
+  // transition is what mints the agent-completion notification, and evicted
+  // entries are older than what survives, so dropping them silently loses the
+  // completion. The deferral only exists to yield to xterm's parse timer and
+  // paint; at this depth the drain is starved (throttled background timers), so
+  // yielding buys nothing. Apply the excess inline instead — the queue stays
+  // bounded and every title, status and bell still fires, in order.
+  function boundPendingSideEffects(): void {
+    // Why: title/bell consumers can write back into the terminal; without this
+    // an overflowing enqueue would recurse through its own callbacks.
+    if (applyingOverflowingSideEffects) {
+      return
+    }
+    if (sideEffectsPaused) {
+      evictOldestPendingSideEffectsIfFull()
+      return
+    }
+    applyingOverflowingSideEffects = true
+    try {
+      while (pendingSideEffects.length - pendingSideEffectIndex >= MAX_PENDING_PTY_SIDE_EFFECTS) {
+        const next = pendingSideEffects[pendingSideEffectIndex]
+        if (!next) {
+          return
+        }
+        pendingSideEffectIndex += 1
+        applyPtySideEffect(next)
+        compactPendingSideEffectsIfNeeded()
+      }
+    } finally {
+      applyingOverflowingSideEffects = false
+    }
+  }
+
+  // Why eviction is still correct here and nowhere else: a paused drain is the
+  // shutdown handshake, where every pending fact is provisional — commit drops
+  // the whole queue anyway. Applying inline would fire side effects the pause
+  // exists to withhold, so hold the memory bound by dropping instead, exactly
+  // as before. Bells and statuses still collapse onto the next-oldest survivor.
   function evictOldestPendingSideEffectsIfFull(): void {
     while (pendingSideEffects.length - pendingSideEffectIndex >= MAX_PENDING_PTY_SIDE_EFFECTS) {
       const evicted = pendingSideEffects[pendingSideEffectIndex]
@@ -264,7 +303,7 @@ export function createPtyOutputProcessor({
       pendingWorkingTitleSideEffects += workingTitleCount
       return
     }
-    evictOldestPendingSideEffectsIfFull()
+    boundPendingSideEffects()
     pendingSideEffects.push(next)
     pendingWorkingTitleSideEffects += workingTitleCount
   }
@@ -409,6 +448,9 @@ export function createPtyOutputProcessor({
   }
 
   function flushPendingSideEffects(): void {
+    // Why: rollback partner of pausePendingSideEffects — the session keeps
+    // running, so lift the pause or the overflow valve stays disarmed.
+    sideEffectsPaused = false
     clearSideEffectDrainTimer()
     drainPtySideEffects({ flushAll: true })
   }
@@ -488,12 +530,14 @@ export function createPtyOutputProcessor({
     pendingSideEffects.length = 0
     pendingSideEffectIndex = 0
     pendingWorkingTitleSideEffects = 0
+    sideEffectsPaused = false
     clearStaleTitleTimer()
     agentTracker?.reset()
     bellDetector.reset()
   }
 
   function pausePendingSideEffects(): void {
+    sideEffectsPaused = true
     clearSideEffectDrainTimer()
     clearStaleTitleTimer()
   }

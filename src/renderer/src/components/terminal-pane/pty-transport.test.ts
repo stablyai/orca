@@ -927,7 +927,7 @@ describe('createIpcPtyTransport', () => {
     }
   })
 
-  it('bounds the deferred side-effect queue under a stalled drain, keeping the newest title and a pending bell', async () => {
+  it('bounds the deferred queue under a stalled drain without dropping facts', async () => {
     vi.useFakeTimers()
     try {
       const { createPtyOutputProcessor, MAX_PENDING_PTY_SIDE_EFFECTS } =
@@ -938,22 +938,21 @@ describe('createIpcPtyTransport', () => {
       const callbacks = { onData: vi.fn() }
       const total = MAX_PENDING_PTY_SIDE_EFFECTS * 4
 
-      // Why: the bell is queued first so the cap must evict it — the latch has to survive onto a newer entry.
       processor.processData('\x07', callbacks)
-      for (let i = 0; i < total / 2; i++) {
-        processor.processData(`\x1b]0;cap-title-${i}\x07`, callbacks)
-      }
-      // Why: a paused drain (background shutdown window) must not disable the bound either.
-      processor.pausePendingSideEffects()
-      for (let i = total / 2; i < total; i++) {
+      for (let i = 0; i < total; i++) {
         processor.processData(`\x1b]0;cap-title-${i}\x07`, callbacks)
       }
 
-      expect(onTitleChange).not.toHaveBeenCalled()
+      // The bound holds by applying the excess inline, so the backlog is capped
+      // before any timer runs...
+      expect(onTitleChange.mock.calls.length).toBeGreaterThanOrEqual(
+        total - MAX_PENDING_PTY_SIDE_EFFECTS
+      )
       processor.flushPendingSideEffects()
 
-      // Why: exactly the cap survives — every older title was evicted, never applied.
-      expect(onTitleChange).toHaveBeenCalledTimes(MAX_PENDING_PTY_SIDE_EFFECTS)
+      // ...and every title still arrives, in order, rather than being evicted.
+      expect(onTitleChange).toHaveBeenCalledTimes(total)
+      expect(onTitleChange).toHaveBeenNthCalledWith(1, 'cap-title-0', 'cap-title-0')
       expect(onTitleChange).toHaveBeenLastCalledWith(
         `cap-title-${total - 1}`,
         `cap-title-${total - 1}`
@@ -964,14 +963,36 @@ describe('createIpcPtyTransport', () => {
     }
   })
 
-  it('collapses evicted agent-status payloads onto the survivor, keeping the newest', async () => {
+  it('never drops an agent working->idle completion under overflow', async () => {
     vi.useFakeTimers()
     try {
-      const {
-        createPtyOutputProcessor,
-        MAX_PENDING_PTY_SIDE_EFFECTS,
-        MAX_EVICTED_AGENT_STATUS_PAYLOAD_CARRY
-      } = await import('./pty-transport')
+      const { createPtyOutputProcessor, MAX_PENDING_PTY_SIDE_EFFECTS } =
+        await import('./pty-transport')
+      const onTitleChange = vi.fn()
+      const onAgentBecameIdle = vi.fn()
+      const processor = createPtyOutputProcessor({ onTitleChange, onAgentBecameIdle })
+      const callbacks = { onData: vi.fn() }
+
+      processor.processData('\x1b]0;\u280b Claude working\x07', callbacks)
+      // The completion edge — this is what mints the unread notification.
+      processor.processData('\x1b]0;\u2733 Claude done\x07', callbacks)
+      for (let i = 0; i < MAX_PENDING_PTY_SIDE_EFFECTS + 50; i++) {
+        processor.processData(`\x1b]0;\u280b Claude working ${i}\x07`, callbacks)
+      }
+      processor.flushPendingSideEffects()
+
+      expect(onAgentBecameIdle).toHaveBeenCalledTimes(1)
+      expect(onAgentBecameIdle).toHaveBeenCalledWith('\u2733 Claude done')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps every agent status payload through overflow, in order', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createPtyOutputProcessor, MAX_PENDING_PTY_SIDE_EFFECTS } =
+        await import('./pty-transport')
       const onAgentStatus = vi.fn()
       const processor = createPtyOutputProcessor({ onAgentStatus })
       const callbacks = { onData: vi.fn() }
@@ -986,14 +1007,74 @@ describe('createIpcPtyTransport', () => {
       processor.flushPendingSideEffects()
 
       const delivered = onAgentStatus.mock.calls.map(([payload]) => payload.prompt)
-      expect(delivered.length).toBeLessThanOrEqual(
-        MAX_PENDING_PTY_SIDE_EFFECTS + MAX_EVICTED_AGENT_STATUS_PAYLOAD_CARRY
+      expect(delivered).toEqual(Array.from({ length: total }, (_, i) => `cap-status-${i}`))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('still bounds the queue by eviction while the drain is paused for shutdown', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createPtyOutputProcessor, MAX_PENDING_PTY_SIDE_EFFECTS } =
+        await import('./pty-transport')
+      const onTitleChange = vi.fn()
+      const onBell = vi.fn()
+      const processor = createPtyOutputProcessor({ onTitleChange, onBell })
+      const callbacks = { onData: vi.fn() }
+      const total = MAX_PENDING_PTY_SIDE_EFFECTS * 4
+
+      // Why: pending facts are provisional in the shutdown window (commit drops
+      // them wholesale), so the bound is held by eviction there rather than by
+      // firing side effects the pause exists to withhold.
+      processor.processData('\x07', callbacks)
+      processor.pausePendingSideEffects()
+      for (let i = 0; i < total; i++) {
+        processor.processData(`\x1b]0;paused-title-${i}\x07`, callbacks)
+      }
+
+      expect(onTitleChange).not.toHaveBeenCalled()
+      processor.flushPendingSideEffects()
+
+      expect(onTitleChange).toHaveBeenCalledTimes(MAX_PENDING_PTY_SIDE_EFFECTS)
+      expect(onTitleChange).toHaveBeenLastCalledWith(
+        `paused-title-${total - 1}`,
+        `paused-title-${total - 1}`
       )
-      expect(delivered.at(-1)).toBe(`cap-status-${total - 1}`)
-      // Why: eviction collapse must preserve chronological delivery order.
-      expect(delivered).toEqual(
-        [...delivered].sort((a, b) => Number(a.slice(11)) - Number(b.slice(11)))
-      )
+      expect(onBell).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('survives a title consumer that feeds output back during inline overflow', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createPtyOutputProcessor, MAX_PENDING_PTY_SIDE_EFFECTS } =
+        await import('./pty-transport')
+      const callbacks = { onData: vi.fn() }
+      // Why: real consumers write back into the terminal (echo, resize probes).
+      // Sustained feedback recurses into the inline valve; without the reentrancy
+      // guard this overflows the stack rather than queueing.
+      const feedbackWrites = 5_000
+      let reentered = 0
+      const onTitleChange = vi.fn((_title: string, _rawTitle: string) => {
+        if (reentered < feedbackWrites) {
+          reentered += 1
+          processor.processData(`\x1b]0;reentrant-${reentered}\x07`, callbacks)
+        }
+      })
+      const processor = createPtyOutputProcessor({ onTitleChange })
+
+      for (let i = 0; i < MAX_PENDING_PTY_SIDE_EFFECTS * 2; i++) {
+        processor.processData(`\x1b]0;overflow-title-${i}\x07`, callbacks)
+      }
+      processor.flushPendingSideEffects()
+
+      expect(reentered).toBe(feedbackWrites)
+      const delivered = onTitleChange.mock.calls.map(([title]) => title)
+      expect(delivered).toHaveLength(MAX_PENDING_PTY_SIDE_EFFECTS * 2 + feedbackWrites)
+      expect(delivered).toContain(`reentrant-${feedbackWrites}`)
     } finally {
       vi.useRealTimers()
     }
