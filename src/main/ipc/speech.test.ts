@@ -156,4 +156,12 @@ describe('registerSpeechHandlers', () => {
       modelId: 'model-1'
     })
   })
+
+  it('registers Deepgram API key handlers', () => {
+    registerSpeechHandlers({} as never)
+
+    expect(handleMock).toHaveBeenCalledWith('speech:getDeepgramApiKeyStatus', expect.any(Function))
+    expect(handleMock).toHaveBeenCalledWith('speech:saveDeepgramApiKey', expect.any(Function))
+    expect(handleMock).toHaveBeenCalledWith('speech:clearDeepgramApiKey', expect.any(Function))
+  })
 })

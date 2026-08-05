@@ -2,12 +2,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   MockOpenAiTranscriptionSession,
+  MockDeepgramTranscriptionSession,
   MockWorker,
   getCloudSessions,
+  getDeepgramSessions,
   getCreatedWorkerCount,
   getLastWorker,
   readOpenAiSpeechApiKeyMock,
+  readDeepgramSpeechApiKeyMock,
   resetCloudSessions,
+  resetDeepgramSessions,
   resetWorkers
 } = vi.hoisted(() => {
   class HoistedMockWorker extends EventTarget {
@@ -97,15 +101,41 @@ const {
     }
   }
 
+  class HoistedMockDeepgramTranscriptionSession {
+    static instances: HoistedMockDeepgramTranscriptionSession[] = []
+    feedCalls: { samples: Float32Array; sampleRate: number }[] = []
+
+    constructor(
+      readonly modelId: string,
+      readonly readApiKey: () => string
+    ) {
+      HoistedMockDeepgramTranscriptionSession.instances.push(this)
+    }
+
+    feedAudio(samples: Float32Array, sampleRate: number): void {
+      this.feedCalls.push({ samples, sampleRate })
+    }
+
+    finish(): Promise<string> {
+      return Promise.resolve(`${this.modelId}:${this.readApiKey()}`)
+    }
+  }
+
   return {
     MockOpenAiTranscriptionSession: HoistedMockOpenAiTranscriptionSession,
+    MockDeepgramTranscriptionSession: HoistedMockDeepgramTranscriptionSession,
     MockWorker: HoistedMockWorker,
     getCloudSessions: () => HoistedMockOpenAiTranscriptionSession.instances,
+    getDeepgramSessions: () => HoistedMockDeepgramTranscriptionSession.instances,
     getCreatedWorkerCount: () => HoistedMockWorker.created,
     getLastWorker: () => HoistedMockWorker.instances.at(-1),
     readOpenAiSpeechApiKeyMock: vi.fn(() => 'test-openai-key'),
+    readDeepgramSpeechApiKeyMock: vi.fn(() => 'test-deepgram-key'),
     resetCloudSessions: () => {
       HoistedMockOpenAiTranscriptionSession.instances = []
+    },
+    resetDeepgramSessions: () => {
+      HoistedMockDeepgramTranscriptionSession.instances = []
     },
     resetWorkers: () => {
       HoistedMockWorker.created = 0
@@ -137,14 +167,30 @@ vi.mock('./model-catalog', () => ({
           streaming: false,
           sampleRate: 16000
         }
-      : {
-          id: 'model-a',
-          type: 'transducer',
-          provider: 'local',
-          streaming: true,
-          sampleRate: 16000,
-          files: ['encoder.onnx', 'decoder.onnx', 'joiner.onnx', 'tokens.txt']
-        }
+      : id === 'deepgram-model'
+        ? {
+            id,
+            type: 'deepgram',
+            provider: 'deepgram',
+            streaming: false,
+            sampleRate: 16000
+          }
+        : id === 'unsupported-cloud-model'
+          ? {
+              id,
+              type: 'futurecloud',
+              provider: 'futurecloud',
+              streaming: false,
+              sampleRate: 16000
+            }
+          : {
+              id: 'model-a',
+              type: 'transducer',
+              provider: 'local',
+              streaming: true,
+              sampleRate: 16000,
+              files: ['encoder.onnx', 'decoder.onnx', 'joiner.onnx', 'tokens.txt']
+            }
 }))
 
 vi.mock('./openai-api-key-store', () => ({
@@ -155,13 +201,23 @@ vi.mock('./openai-transcription-client', () => ({
   OpenAiTranscriptionSession: MockOpenAiTranscriptionSession
 }))
 
+vi.mock('./deepgram-api-key-store', () => ({
+  readDeepgramSpeechApiKey: readDeepgramSpeechApiKeyMock
+}))
+
+vi.mock('./deepgram-transcription-client', () => ({
+  DeepgramTranscriptionSession: MockDeepgramTranscriptionSession
+}))
+
 import { IDLE_WORKER_TEARDOWN_MS, START_DICTATION_TIMEOUT_MS, SttService } from './stt-service'
 
 describe('SttService', () => {
   beforeEach(() => {
     resetCloudSessions()
+    resetDeepgramSessions()
     resetWorkers()
     readOpenAiSpeechApiKeyMock.mockClear()
+    readDeepgramSpeechApiKeyMock.mockClear()
   })
 
   it('reuses an idle warm worker for a second dictation with the same owner', async () => {
@@ -363,6 +419,39 @@ describe('SttService', () => {
     await service.stopDictation('desktop')
 
     expect(readOpenAiSpeechApiKeyMock).toHaveBeenCalledOnce()
+  })
+
+  it('uses the Deepgram transcription session without creating a worker', async () => {
+    const sink = vi.fn()
+    const service = new SttService({
+      getModelState: vi.fn().mockResolvedValue({ id: 'deepgram-model', status: 'ready' }),
+      getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
+    } as never)
+
+    await service.startDictation('deepgram-model', sink, undefined, 'desktop')
+    service.feedAudio(new Float32Array([0.25, -0.25]), 48000, 'desktop')
+    await service.stopDictation('desktop')
+
+    expect(getCreatedWorkerCount()).toBe(0)
+    expect(getDeepgramSessions()).toHaveLength(1)
+    expect(getCloudSessions()).toHaveLength(0)
+    expect(getDeepgramSessions()[0].feedCalls).toHaveLength(1)
+    expect(sink).toHaveBeenCalledWith({ type: 'final', text: 'deepgram-model:test-deepgram-key' })
+    expect(readDeepgramSpeechApiKeyMock).toHaveBeenCalledOnce()
+    expect(readOpenAiSpeechApiKeyMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects a cloud provider that does not have an explicit session implementation', async () => {
+    const service = new SttService({
+      getModelState: vi.fn().mockResolvedValue({ id: 'unsupported-cloud-model', status: 'ready' }),
+      getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
+    } as never)
+
+    await expect(
+      service.startDictation('unsupported-cloud-model', vi.fn(), undefined, 'desktop')
+    ).rejects.toThrow('Unsupported speech provider: futurecloud')
+    expect(getCloudSessions()).toHaveLength(0)
+    expect(getDeepgramSessions()).toHaveLength(0)
   })
 
   it('keeps startup cancellation tombstoned after the worker has been created', async () => {

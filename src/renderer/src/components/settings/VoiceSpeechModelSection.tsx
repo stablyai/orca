@@ -28,7 +28,7 @@ type VoiceSpeechModelSectionProps = {
   catalog: SpeechModelManifest[]
   modelStates: SpeechModelState[]
   onUpdateVoiceSettings: (updates: Partial<VoiceSettings>) => void
-  onOpenOpenAiDialog: (modelId: string) => void
+  onOpenCloudDialog: (manifest: SpeechModelManifest) => void
   onRefreshModelStates: () => void
 }
 
@@ -37,7 +37,7 @@ export function VoiceSpeechModelSection({
   catalog,
   modelStates,
   onUpdateVoiceSettings,
-  onOpenOpenAiDialog,
+  onOpenCloudDialog,
   onRefreshModelStates
 }: VoiceSpeechModelSectionProps): React.JSX.Element {
   const [pendingDeleteModelIds, setPendingDeleteModelIds] = useState<Set<string>>(() => new Set())
@@ -84,7 +84,7 @@ export function VoiceSpeechModelSection({
             const isDownloading =
               mState?.status === 'downloading' || mState?.status === 'extracting'
             const isActive = voiceSettings.sttModel === manifest.id
-            const isCloud = manifest.provider === 'openai'
+            const isCloud = manifest.provider !== 'local'
             const deletePending = pendingDeleteModelIds.has(manifest.id)
             const sizeMb = manifest.sizeBytes ? Math.round(manifest.sizeBytes / 1_000_000) : null
 
@@ -96,7 +96,7 @@ export function VoiceSpeechModelSection({
                   if (isReady) {
                     onUpdateVoiceSettings({ sttModel: manifest.id })
                   } else if (isCloud) {
-                    onOpenOpenAiDialog(manifest.id)
+                    onOpenCloudDialog(manifest)
                   } else if (!isDownloading) {
                     // Why: download progress appears in this menu, so starting one should not dismiss it.
                     event.preventDefault()

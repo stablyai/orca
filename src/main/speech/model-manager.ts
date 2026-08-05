@@ -19,6 +19,7 @@ import type {
 } from '../../shared/speech-types'
 import { SPEECH_MODEL_CATALOG, getCatalogModel, isLocalSpeechModel } from './model-catalog'
 import { hasOpenAiSpeechApiKey } from './openai-api-key-store'
+import { hasDeepgramSpeechApiKey } from './deepgram-api-key-store'
 import {
   getSpeechModelCacheDirCandidates,
   migrateSpeechModelCacheIfNeeded,
@@ -220,10 +221,17 @@ export class ModelManager {
       return { id: modelId, status: 'error', error: 'Unknown model' }
     }
 
-    if (manifest.provider === 'openai') {
+    if (manifest.provider === 'openai' || manifest.provider === 'deepgram') {
       return {
         id: modelId,
-        status: hasOpenAiSpeechApiKey() ? 'ready' : 'not-downloaded'
+        status:
+          manifest.provider === 'openai'
+            ? hasOpenAiSpeechApiKey()
+              ? 'ready'
+              : 'not-downloaded'
+            : hasDeepgramSpeechApiKey()
+              ? 'ready'
+              : 'not-downloaded'
       }
     }
 

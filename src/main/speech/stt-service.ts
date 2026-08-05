@@ -8,6 +8,8 @@ import { getCatalogModel } from './model-catalog'
 import type { ModelManager } from './model-manager'
 import { OpenAiTranscriptionSession } from './openai-transcription-client'
 import { readOpenAiSpeechApiKey } from './openai-api-key-store'
+import { DeepgramTranscriptionSession } from './deepgram-transcription-client'
+import { readDeepgramSpeechApiKey } from './deepgram-api-key-store'
 
 export const START_DICTATION_TIMEOUT_MS = 60_000
 const STOP_DICTATION_TIMEOUT_MS = 60_000
@@ -30,9 +32,28 @@ type StopInFlight = {
 
 type StopOutcome = 'stopped' | 'error' | 'exit' | 'timeout'
 
+type CloudTranscriptionSession = {
+  feedAudio(samples: Float32Array, sampleRate: number): void
+  finish(): Promise<string>
+}
+
+function createCloudTranscriptionSession(
+  provider: string,
+  modelId: string
+): CloudTranscriptionSession {
+  switch (provider) {
+    case 'openai':
+      return new OpenAiTranscriptionSession(modelId, readOpenAiSpeechApiKey)
+    case 'deepgram':
+      return new DeepgramTranscriptionSession(modelId, readDeepgramSpeechApiKey)
+    default:
+      throw new Error(`Unsupported speech provider: ${provider}`)
+  }
+}
+
 export class SttService {
   private worker: Worker | null = null
-  private cloudSession: OpenAiTranscriptionSession | null = null
+  private cloudSession: CloudTranscriptionSession | null = null
   private modelManager: ModelManager
   private activeModelId: string | null = null
   private activeHotwordsFilePath: string | undefined
@@ -102,7 +123,7 @@ export class SttService {
       throw new Error(`Unknown model: ${modelId}`)
     }
 
-    if (manifest.provider === 'openai') {
+    if (manifest.provider !== 'local') {
       if (this.worker) {
         const existingWorker = this.worker
         await this.stopDictation(owner, { cancelStarting: false })
@@ -114,7 +135,7 @@ export class SttService {
         throw new Error(`Model not ready: ${modelState.status}`)
       }
 
-      this.cloudSession = new OpenAiTranscriptionSession(modelId, readOpenAiSpeechApiKey)
+      this.cloudSession = createCloudTranscriptionSession(manifest.provider, modelId)
       this.activeModelId = modelId
       this.activeHotwordsFilePath = undefined
       this.eventSink = sink

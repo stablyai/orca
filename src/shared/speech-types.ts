@@ -5,7 +5,8 @@ export type SpeechModelType =
   | 'senseVoice'
   | 'nemo-ctc'
   | 'openai'
-export type SpeechModelProvider = 'local' | 'openai'
+  | 'deepgram'
+export type SpeechModelProvider = 'local' | 'openai' | 'deepgram'
 
 export type ModelingUnit = 'bpe' | 'cjkchar' | 'cjkchar+bpe'
 
@@ -75,6 +76,7 @@ export type VoiceSettings = {
   terminalConfirmBeforeInsert: boolean
   userModels: UserModelConfig[]
   openAiApiKeyConfigured: boolean
+  deepgramApiKeyConfigured: boolean
   /** null = system default input device */
   microphoneDeviceId: string | null
   /** Cached label for display when the preferred device is unplugged */

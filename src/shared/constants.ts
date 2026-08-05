@@ -404,6 +404,7 @@ export function getDefaultVoiceSettings(): VoiceSettings {
     terminalConfirmBeforeInsert: false,
     userModels: [],
     openAiApiKeyConfigured: false,
+    deepgramApiKeyConfigured: false,
     microphoneDeviceId: null,
     microphoneDeviceLabel: null
   }
