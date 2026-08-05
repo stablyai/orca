@@ -180,7 +180,15 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
         click: () => {
           // Why: a focused terminal/native-chat pane is not a native editable
           // control, so raw Electron paste cannot know which Orca surface owns it.
-          BrowserWindow.getFocusedWindow()?.webContents.send('ui:appMenuPaste')
+          const focusedWindow = BrowserWindow.getFocusedWindow()
+          if (focusedWindow) {
+            focusedWindow.webContents.send('ui:appMenuPaste')
+            return
+          }
+
+          if (isMac) {
+            Menu.sendActionToFirstResponder('paste:')
+          }
         }
       },
       { role: 'selectAll' }

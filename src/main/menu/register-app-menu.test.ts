@@ -1,9 +1,15 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { buildFromTemplateMock, setApplicationMenuMock, getFocusedWindowMock } = vi.hoisted(() => ({
+const {
+  buildFromTemplateMock,
+  setApplicationMenuMock,
+  getFocusedWindowMock,
+  sendActionToFirstResponderMock
+} = vi.hoisted(() => ({
   buildFromTemplateMock: vi.fn(),
   setApplicationMenuMock: vi.fn(),
-  getFocusedWindowMock: vi.fn()
+  getFocusedWindowMock: vi.fn(),
+  sendActionToFirstResponderMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -12,7 +18,8 @@ vi.mock('electron', () => ({
   },
   Menu: {
     buildFromTemplate: buildFromTemplateMock,
-    setApplicationMenu: setApplicationMenuMock
+    setApplicationMenu: setApplicationMenuMock,
+    sendActionToFirstResponder: sendActionToFirstResponderMock
   },
   app: {
     name: 'Orca'
@@ -70,7 +77,12 @@ describe('registerAppMenu', () => {
     buildFromTemplateMock.mockReset()
     setApplicationMenuMock.mockReset()
     getFocusedWindowMock.mockReset()
+    sendActionToFirstResponderMock.mockReset()
     buildFromTemplateMock.mockImplementation((template) => ({ template }))
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
   it('shows reload shortcuts as policy-routed menu hints', () => {
@@ -228,8 +240,36 @@ describe('registerAppMenu', () => {
 
     pasteItem?.click?.({} as never, {} as never, {} as never)
 
+    expect(send).toHaveBeenCalledOnce()
     expect(send).toHaveBeenCalledWith('ui:appMenuPaste')
+    expect(sendActionToFirstResponderMock).not.toHaveBeenCalled()
   })
+
+  it('routes Edit > Paste to the native first responder once on macOS without a focused window', () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    getFocusedWindowMock.mockReturnValue(null)
+    registerAppMenu(buildMenuOptions())
+
+    const pasteItem = getSubmenu(getTemplate(), 'Edit').find((item) => item.label === 'Paste')
+    pasteItem?.click?.({} as never, {} as never, {} as never)
+
+    expect(sendActionToFirstResponderMock).toHaveBeenCalledOnce()
+    expect(sendActionToFirstResponderMock).toHaveBeenCalledWith('paste:')
+  })
+
+  it.each(['linux', 'win32'] as const)(
+    'does not invoke the native paste responder on %s without a focused window',
+    (platform) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      getFocusedWindowMock.mockReturnValue(null)
+      registerAppMenu(buildMenuOptions())
+
+      const pasteItem = getSubmenu(getTemplate(), 'Edit').find((item) => item.label === 'Paste')
+      pasteItem?.click?.({} as never, {} as never, {} as never)
+
+      expect(sendActionToFirstResponderMock).not.toHaveBeenCalled()
+    }
+  )
 
   it.runIf(!isMac)('puts Settings and Exit under File on Windows/Linux', () => {
     registerAppMenu(buildMenuOptions())
