@@ -2,16 +2,28 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { focusTerminalTabSurface } from './focus-terminal-tab-surface'
 
 const mocks = vi.hoisted(() => ({
-  refreshTerminalImeInputContext: vi.fn()
+  refreshTerminalImeInputContext: vi.fn(),
+  paneContainerOwnsFocus: vi.fn(() => false)
 }))
 
 vi.mock('@/components/terminal-pane/terminal-ime-input-context-refresh', () => ({
   refreshTerminalImeInputContext: mocks.refreshTerminalImeInputContext
 }))
 
+vi.mock('@/lib/pane-manager/pane-pointer-focus', () => ({
+  paneContainerOwnsFocus: mocks.paneContainerOwnsFocus
+}))
+
+// Why: `helper` is outside `.pane` in real DOM checks (paneContainerOwnsFocus
+// mock above stands in), so the fake only needs `closest` to resolve `.pane`.
+function fakeHelper(): { focus: ReturnType<typeof vi.fn>; closest: ReturnType<typeof vi.fn> } {
+  return { focus: vi.fn(), closest: vi.fn(() => ({})) }
+}
+
 describe('focusTerminalTabSurface', () => {
   afterEach(() => {
     mocks.refreshTerminalImeInputContext.mockClear()
+    mocks.paneContainerOwnsFocus.mockReset().mockReturnValue(false)
     vi.unstubAllGlobals()
   })
 
@@ -25,7 +37,7 @@ describe('focusTerminalTabSurface', () => {
 
   it('focuses the scoped xterm helper textarea', () => {
     flushAnimationFrames()
-    const textarea = { focus: vi.fn() }
+    const textarea = fakeHelper()
     vi.stubGlobal('document', {
       querySelector: vi.fn((selector: string) =>
         selector === '[data-terminal-tab-id="tab-1"] .xterm-helper-textarea' ? textarea : null
@@ -39,7 +51,7 @@ describe('focusTerminalTabSurface', () => {
 
   it('optionally refreshes the focused helper native input context', () => {
     flushAnimationFrames()
-    const textarea = { focus: vi.fn() }
+    const textarea = fakeHelper()
     vi.stubGlobal('document', {
       querySelector: vi.fn((selector: string) =>
         selector === '[data-terminal-tab-id="tab-1"] .xterm-helper-textarea' ? textarea : null
@@ -61,7 +73,7 @@ describe('focusTerminalTabSurface', () => {
       return frames.length
     })
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
-    const textarea = { focus: vi.fn() }
+    const textarea = fakeHelper()
     const body = {}
     const outside = {}
     const documentState = {
@@ -81,9 +93,29 @@ describe('focusTerminalTabSurface', () => {
     expect(textarea.focus).not.toHaveBeenCalled()
   })
 
+  it('does not steal focus onto a pane whose composer owns focus', () => {
+    // Why: regression for the real-world miss — the composer overlay is a DOM
+    // sibling of the xterm container (both children of .pane), not an
+    // ancestor of the helper textarea, so this must check the shared .pane
+    // container rather than helper.closest(marker) directly.
+    flushAnimationFrames()
+    mocks.paneContainerOwnsFocus.mockReturnValue(true)
+    const textarea = fakeHelper()
+    vi.stubGlobal('document', {
+      querySelector: vi.fn((selector: string) =>
+        selector === '[data-terminal-tab-id="tab-1"] .xterm-helper-textarea' ? textarea : null
+      )
+    })
+
+    focusTerminalTabSurface('tab-1')
+
+    expect(textarea.closest).toHaveBeenCalledWith('.pane')
+    expect(textarea.focus).not.toHaveBeenCalled()
+  })
+
   it('does not steal focus while inline tab rename is open', () => {
     flushAnimationFrames()
-    const textarea = { focus: vi.fn() }
+    const textarea = fakeHelper()
     vi.stubGlobal('document', {
       querySelector: vi.fn((selector: string) => {
         if (selector === '[data-tab-rename-input="true"]') {
@@ -102,7 +134,7 @@ describe('focusTerminalTabSurface', () => {
 
   it('falls back to the single tab helper when an old leaf id was reminted', () => {
     flushAnimationFrames()
-    const textarea = { focus: vi.fn() }
+    const textarea = fakeHelper()
     vi.stubGlobal('document', {
       querySelector: vi.fn((selector: string) =>
         selector === '[data-terminal-tab-id="tab-1"]' ? { getAttribute: () => 'new-leaf' } : null
@@ -121,7 +153,7 @@ describe('focusTerminalTabSurface', () => {
 
   it('does not focus a mounted sibling while a requested split leaf is still expected', () => {
     flushAnimationFrames()
-    const textarea = { focus: vi.fn() }
+    const textarea = fakeHelper()
     vi.stubGlobal('document', {
       querySelector: vi.fn((selector: string) =>
         selector === '[data-terminal-tab-id="tab-1"]'
@@ -142,7 +174,7 @@ describe('focusTerminalTabSurface', () => {
 
   it('does not use stale-leaf fallback while the expected layout still has multiple leaves', () => {
     flushAnimationFrames()
-    const textarea = { focus: vi.fn() }
+    const textarea = fakeHelper()
     vi.stubGlobal('document', {
       querySelector: vi.fn((selector: string) =>
         selector === '[data-terminal-tab-id="tab-1"]'
@@ -163,8 +195,8 @@ describe('focusTerminalTabSurface', () => {
 
   it('does not focus a sibling when a stale leaf id has multiple helpers in the tab', () => {
     flushAnimationFrames()
-    const first = { focus: vi.fn() }
-    const second = { focus: vi.fn() }
+    const first = fakeHelper()
+    const second = fakeHelper()
     vi.stubGlobal('document', {
       querySelector: vi.fn((selector: string) =>
         selector === '[data-terminal-tab-id="tab-1"]'
