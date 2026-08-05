@@ -994,6 +994,7 @@ export default function SessionScreen() {
     lifecycleIdentity: client,
     lifecycleKey: JSON.stringify([hostId, worktreeId, connState]),
     liveInputEnabled,
+    reopenFocusedInputWhenKeyboardHidden: Platform.OS === 'android',
     timerRef: liveInputFocusTimerRef
   })
   useFocusEffect(
