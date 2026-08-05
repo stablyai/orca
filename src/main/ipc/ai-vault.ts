@@ -2,6 +2,7 @@ import { app, ipcMain } from 'electron'
 import { resolve } from 'node:path'
 import {
   configureAiVaultSessionSources,
+  getAiVaultSessionSourcesCacheKey,
   getAiVaultWslHomeDirs,
   listAiVaultSessions as listCachedLocalAiVaultSessions,
   resetAiVaultSessionListCacheForTests,
@@ -82,7 +83,11 @@ async function listAiVaultSessions(
       scopePaths.length <= AI_VAULT_SCOPE_PATHS_MAX_COUNT
         ? [...new Set(scopePaths)].sort()
         : scopePaths,
-    executionHostScope
+    executionHostScope,
+    localSessionSources:
+      executionHostScope === LOCAL_EXECUTION_HOST_ID || executionHostScope === 'all'
+        ? getAiVaultSessionSourcesCacheKey()
+        : null
   })
   const depth = requestedAiVaultSessionDepth(args)
   const scanKey = JSON.stringify({ key, depth })

@@ -1324,6 +1324,7 @@ function openMainWindow(): BrowserWindow {
     crashReports ?? undefined,
     keybindings,
     {
+      getCodexSessionSourceHomePath: () => resolveHostCodexSessionSourceHome(store!.getSettings()),
       getAdditionalAiVaultCodexHomePaths: () =>
         codexRuntimeHome ? codexRuntimeHome.getHostCodexHomePathsForSessionDiscovery() : [],
       prepareAiVaultSessionResume: (args) =>
@@ -2365,6 +2366,7 @@ void app.whenReady().then(async () => {
       agentHookServer.retirePaneAuthority(paneKey),
     canRecoverPersistentLocalPtys: () => getDaemonProvider() !== null,
     // Why: source codex-home here (runs in window AND serve) so aiVault.listSessions includes managed-Codex sessions; registerCoreHandlers is window-only.
+    getCodexSessionSourceHomePath: () => resolveHostCodexSessionSourceHome(store!.getSettings()),
     getAdditionalAiVaultCodexHomePaths: () =>
       codexRuntimeHome ? codexRuntimeHome.getHostCodexHomePathsForSessionDiscovery() : [],
     prepareAiVaultSessionResume: (args) =>

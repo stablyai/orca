@@ -55,6 +55,27 @@ beforeEach(() => {
 })
 
 describe('Agent Session History scan coalescing', () => {
+  it('starts a new local scan when the configured Codex source changes', async () => {
+    let sourceHome = '/custom/codex/a'
+    const resolveScans: ((result: AiVaultListResult) => void)[] = []
+    mocks.scanAiVaultSessions.mockImplementation(
+      () => new Promise<AiVaultListResult>((resolve) => resolveScans.push(resolve))
+    )
+    registerAiVaultHandlers({ getCodexSessionSourceHomePath: () => sourceHome })
+
+    const first = _internals.listAiVaultSessions({ executionHostScope: 'local' })
+    await vi.waitFor(() => expect(resolveScans).toHaveLength(1))
+    sourceHome = '/custom/codex/b'
+    const second = _internals.listAiVaultSessions({ executionHostScope: 'local' })
+    await vi.waitFor(() => expect(resolveScans).toHaveLength(2))
+
+    expect(mocks.scanAiVaultSessions.mock.calls[1]?.[0]).toMatchObject({
+      codexSessionsDir: '/custom/codex/b/sessions'
+    })
+    resolveScans.forEach((resolve) => resolve(EMPTY_RESULT))
+    await Promise.all([first, second])
+  })
+
   it.each([
     ['local', mocks.scanAiVaultSessions],
     ['runtime:remote-server', mocks.scanRuntimeAiVaultSessions]
