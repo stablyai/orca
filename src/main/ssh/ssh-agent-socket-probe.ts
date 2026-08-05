@@ -44,7 +44,9 @@ export function countAgentIdentities(socketPath: string, timeoutMs = 500): Promi
     let settled = false
     // Why: settle exactly once and always release the socket, even on timeout.
     const settle = (count: number): void => {
-      if (settled) return
+      if (settled) {
+        return
+      }
       settled = true
       clearTimeout(timer)
       stream.destroy()

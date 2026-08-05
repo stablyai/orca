@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createServer, type Server, type Socket } from 'node:net'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+import type * as NodeOS from 'node:os'
 import { join } from 'node:path'
 import {
   _resetProbedAgentSocket,
@@ -15,7 +16,7 @@ import {
 // keys) in the developer's actual home directory.
 const { homeDirState } = vi.hoisted(() => ({ homeDirState: { current: '' } }))
 vi.mock('node:os', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('node:os')>()
+  const actual = await importOriginal<typeof NodeOS>()
   return { ...actual, homedir: () => homeDirState.current }
 })
 
