@@ -3514,6 +3514,76 @@ describe('registerWorktreeHandlers', () => {
     ])
   })
 
+  it('keeps the folder root first, orders children by createdAt, and persists host ownership', async () => {
+    const folderRepo = {
+      id: 'repo-1',
+      path: '/workspace/folder',
+      displayName: 'folder',
+      badgeColor: '#000',
+      addedAt: 0,
+      kind: 'folder' as const
+    }
+    const rootId = `${folderRepo.id}::${folderRepo.path}`
+    const newerId = `${rootId}::workspace:newer`
+    const olderId = `${rootId}::workspace:older`
+    const metaById: Record<string, Record<string, unknown>> = {
+      [rootId]: makeWorktreeMeta({ instanceId: 'root', lastActivityAt: 1 }),
+      [olderId]: makeWorktreeMeta({
+        instanceId: 'older',
+        createdAt: 10,
+        lastActivityAt: 10_000
+      }),
+      [newerId]: makeWorktreeMeta({
+        instanceId: 'newer',
+        createdAt: 20,
+        lastActivityAt: 2
+      })
+    }
+    store.getRepos.mockReturnValue([folderRepo])
+    store.getRepo.mockReturnValue(folderRepo)
+    store.getAllWorktreeMeta.mockReturnValue(metaById)
+    store.getWorktreeMeta.mockImplementation((worktreeId: string) => metaById[worktreeId])
+    store.setWorktreeMeta.mockImplementation((worktreeId: string, updates: object) => {
+      metaById[worktreeId] = { ...metaById[worktreeId], ...updates }
+      return metaById[worktreeId]
+    })
+    store.getProjectHostSetups.mockReturnValue([
+      {
+        id: 'setup-1',
+        projectId: 'github:stablyai/orca',
+        hostId: 'local',
+        repoId: folderRepo.id,
+        path: folderRepo.path,
+        displayName: folderRepo.displayName,
+        setupState: 'ready',
+        setupMethod: 'legacy-repo',
+        createdAt: 0,
+        updatedAt: 0
+      }
+    ])
+
+    const listed = (await handlers['worktrees:list'](null, { repoId: folderRepo.id })) as Worktree[]
+
+    expect(listed.map((worktree) => worktree.id)).toEqual([rootId, newerId, olderId])
+    expect(listed).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          projectId: 'github:stablyai/orca',
+          hostId: 'local',
+          projectHostSetupId: 'setup-1'
+        })
+      ])
+    )
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(
+      rootId,
+      expect.objectContaining({
+        projectId: 'github:stablyai/orca',
+        hostId: 'local',
+        projectHostSetupId: 'setup-1'
+      })
+    )
+  })
+
   it('hides agent scratch created inside a linked checkout from desktop listings', async () => {
     const linkedCheckoutPath = '/workspace/feature-x'
     const scratchPath = `${linkedCheckoutPath}/.claude/worktrees/agent-a04ccaaa`

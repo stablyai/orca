@@ -349,7 +349,6 @@ import { isLinearUuid } from '../../shared/linear-uuid'
 import type { FeatureInteractionId } from '../../shared/feature-interactions'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import {
-  FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
   WORKTREE_ID_SEPARATOR,
   getRepoIdFromWorktreeId,
   splitWorktreeId,
@@ -364,6 +363,14 @@ import { parsePtySessionId } from '../../shared/pty-session-id-format'
 import { clampLinearIssueListLimit } from '../../shared/linear-issue-read-limits'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
+import {
+  getFolderWorkspaceInstanceId,
+  getFolderWorkspaceInstanceIdentity,
+  getFolderWorkspaceRootId,
+  isFolderWorkspaceIdForRepo,
+  mergeFolderWorkspace
+} from '../folder-workspace-worktree'
+import { gitStatusErrorMeansNotRepository } from '../git-status-error'
 import {
   buildSetupRunnerCommand,
   getSetupRunnerCommandPlatformForPath
@@ -2003,22 +2010,6 @@ async function isLocalRuntimeGitRepository(
   }
 }
 
-function gitStatusErrorMeansNotRepository(error: unknown): boolean {
-  const message =
-    error instanceof Error
-      ? error.message
-      : error && typeof error === 'object' && 'message' in error
-        ? String((error as { message: unknown }).message)
-        : typeof error === 'string'
-          ? error
-          : ''
-  const stderr =
-    error && typeof error === 'object' && 'stderr' in error
-      ? String((error as { stderr: unknown }).stderr)
-      : ''
-  return /not a git repository/i.test(`${message}\n${stderr}`)
-}
-
 type RuntimeWorktreeRemovalTarget = {
   id: string
   repoId: string
@@ -2046,10 +2037,6 @@ function getRuntimeWorktreeRemovalOptionsKey(
   // failed the PTY gate — it would inherit that failure instead of retrying.
   const ptyKey = allowUnverifiedPtyStop ? 'allow-unverified-pty' : 'require-pty-stop'
   return `${force ? 'force' : 'normal'}:${runHooks ? 'run-hooks' : 'skip-hooks'}:${ptyKey}`
-}
-
-function getRuntimeFolderWorkspaceRootId(repo: Repo): string {
-  return `${repo.id}::${repo.path}`
 }
 
 // Null executionHostId means host-unaware: path-only callers match any repo, and the first runtime
@@ -2081,79 +2068,14 @@ function assertProjectHostSetupHostIsSupported(hostId: ExecutionHostId | null | 
   )
 }
 
-function getRuntimeFolderWorkspaceInstanceId(repo: Repo, instanceId: string): string {
-  return `${getRuntimeFolderWorkspaceRootId(repo)}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}${instanceId}`
-}
-
-function getRuntimeFolderWorkspaceInstanceIdentity(repo: Repo, worktreeId: string): string {
-  const prefix = `${getRuntimeFolderWorkspaceRootId(repo)}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}`
-  return worktreeId.startsWith(prefix) ? worktreeId.slice(prefix.length) : randomUUID()
-}
-
-function isRuntimeFolderWorkspaceIdForRepo(repo: Repo, worktreeId: string): boolean {
-  const rootId = getRuntimeFolderWorkspaceRootId(repo)
-  return (
-    worktreeId === rootId ||
-    worktreeId.startsWith(`${rootId}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}`)
-  )
-}
-
-function mergeRuntimeFolderWorkspace(repo: Repo, worktreeId: string, meta: WorktreeMeta): Worktree {
-  return {
-    id: worktreeId,
-    ...(meta.instanceId !== undefined ? { instanceId: meta.instanceId } : {}),
-    repoId: repo.id,
-    ...(meta.projectId !== undefined ? { projectId: meta.projectId } : {}),
-    ...(meta.hostId !== undefined ? { hostId: meta.hostId } : {}),
-    ...(meta.projectHostSetupId !== undefined
-      ? { projectHostSetupId: meta.projectHostSetupId }
-      : {}),
-    path: repo.path,
-    head: '',
-    branch: '',
-    isBare: false,
-    isMainWorktree: worktreeId === getRuntimeFolderWorkspaceRootId(repo),
-    displayName: meta.displayName || repo.displayName,
-    comment: meta.comment || '',
-    linkedIssue: meta.linkedIssue ?? null,
-    linkedPR: meta.linkedPR ?? null,
-    linkedLinearIssue: meta.linkedLinearIssue ?? null,
-    linkedLinearIssueWorkspaceId: meta.linkedLinearIssueWorkspaceId ?? null,
-    linkedLinearIssueOrganizationUrlKey: meta.linkedLinearIssueOrganizationUrlKey ?? null,
-    linkedGitLabMR: meta.linkedGitLabMR ?? null,
-    linkedGitLabIssue: meta.linkedGitLabIssue ?? null,
-    linkedBitbucketPR: meta.linkedBitbucketPR ?? null,
-    linkedAzureDevOpsPR: meta.linkedAzureDevOpsPR ?? null,
-    linkedGiteaPR: meta.linkedGiteaPR ?? null,
-    linkedWorkItem: meta.linkedWorkItem ?? null,
-    linkedTaskSourceContext: meta.linkedTaskSourceContext ?? null,
-    isArchived: meta.isArchived ?? false,
-    isUnread: meta.isUnread ?? false,
-    isPinned: meta.isPinned ?? false,
-    sortOrder: meta.sortOrder ?? 0,
-    ...(meta.manualOrder !== undefined ? { manualOrder: meta.manualOrder } : {}),
-    lastActivityAt: meta.lastActivityAt ?? 0,
-    ...(meta.createdAt !== undefined ? { createdAt: meta.createdAt } : {}),
-    ...(meta.createdWithAgent !== undefined ? { createdWithAgent: meta.createdWithAgent } : {}),
-    ...(meta.automationProvenance !== undefined
-      ? { automationProvenance: meta.automationProvenance }
-      : {}),
-    ...(meta.cliProvenance !== undefined ? { cliProvenance: meta.cliProvenance } : {}),
-    ...(meta.priorWorktreeIds !== undefined ? { priorWorktreeIds: meta.priorWorktreeIds } : {}),
-    workspaceStatus: meta.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
-    diffComments: meta.diffComments,
-    mobileDiffReview: meta.mobileDiffReview
-  }
-}
-
 function listRuntimeFolderWorkspaces(
   store: Pick<RuntimeStore, 'getAllWorktreeMeta' | 'setWorktreeMeta'>,
   repo: Repo
 ): Worktree[] {
-  const rootId = getRuntimeFolderWorkspaceRootId(repo)
+  const rootId = getFolderWorkspaceRootId(repo)
   const allMeta = store.getAllWorktreeMeta()
   const ids = Object.keys(allMeta).filter((worktreeId) =>
-    isRuntimeFolderWorkspaceIdForRepo(repo, worktreeId)
+    isFolderWorkspaceIdForRepo(repo, worktreeId)
   )
   if (!ids.includes(rootId)) {
     ids.unshift(rootId)
@@ -2174,10 +2096,10 @@ function listRuntimeFolderWorkspaces(
     const meta = existing?.instanceId
       ? existing
       : store.setWorktreeMeta(worktreeId, {
-          instanceId: getRuntimeFolderWorkspaceInstanceIdentity(repo, worktreeId),
+          instanceId: getFolderWorkspaceInstanceIdentity(repo, worktreeId),
           ...(existing ? {} : { displayName: repo.displayName, lastActivityAt: Date.now() })
         })
-    return mergeRuntimeFolderWorkspace(repo, worktreeId, meta)
+    return mergeFolderWorkspace(repo, worktreeId, meta)
   })
 }
 
@@ -2721,6 +2643,10 @@ async function hasLocalWorktreeBaseRef(
     (gitArgs) => gitExecFileAsync(gitArgs, { cwd: repoPath, ...options }),
     baseRef
   )
+}
+
+function getRuntimeFolderWorkspaceRootId(repo: Repo): string {
+  return `${repo.id}::${repo.path}`
 }
 
 function getSetupRunnerCommandPlatformForLaunch(
@@ -21360,7 +21286,7 @@ export class OrcaRuntimeService {
       const now = Date.now()
       const settings = createSettings
       const instanceId = randomUUID()
-      const worktreeId = getRuntimeFolderWorkspaceInstanceId(repo, instanceId)
+      const worktreeId = getFolderWorkspaceInstanceId(repo, instanceId)
       const meta = this.store.setWorktreeMeta(worktreeId, {
         instanceId,
         ...getProjectHostSetupWorktreeMeta(this.store.getProjectHostSetups?.() ?? [], repo),
@@ -21406,7 +21332,7 @@ export class OrcaRuntimeService {
         ...(args.manualOrder !== undefined ? { manualOrder: args.manualOrder } : {}),
         ...(args.workspaceStatus !== undefined ? { workspaceStatus: args.workspaceStatus } : {})
       })
-      const worktree = mergeRuntimeFolderWorkspace(repo, worktreeId, meta)
+      const worktree = mergeFolderWorkspace(repo, worktreeId, meta)
       this.invalidateResolvedWorktreeCache()
       this.notifyWorktreesChanged(repo.id)
       this.emitWorktreeLifecycle({

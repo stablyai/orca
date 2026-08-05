@@ -226,11 +226,15 @@ import {
   stripOrcaProvenanceMetaUpdates,
   UNREGISTERED_MISSING_WORKTREE_MESSAGE
 } from '../worktree-removal-safety'
-import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
+import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
 import {
-  FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
-  getRepoIdFromWorktreeId
-} from '../../shared/worktree-id'
+  getFolderWorkspaceInstanceId,
+  getFolderWorkspaceInstanceIdentity,
+  getFolderWorkspaceRootId,
+  isFolderWorkspaceIdForRepo,
+  mergeFolderWorkspace
+} from '../folder-workspace-worktree'
+import { gitStatusErrorMeansNotRepository } from '../git-status-error'
 import { prefetchWorktreeCreateBase } from '../worktree-create-base-prefetch'
 import {
   getLocalProjectGitExecOptions,
@@ -414,27 +418,11 @@ async function isLocalGitRepository(
   }
 }
 
-function gitStatusErrorMeansNotRepository(error: unknown): boolean {
-  const message =
-    error instanceof Error
-      ? error.message
-      : error && typeof error === 'object' && 'message' in error
-        ? String((error as { message: unknown }).message)
-        : typeof error === 'string'
-          ? error
-          : ''
-  const stderr =
-    error && typeof error === 'object' && 'stderr' in error
-      ? String((error as { stderr: unknown }).stderr)
-      : ''
-  return /not a git repository/i.test(`${message}\n${stderr}`)
-}
-
 function getWorktreeRemovalOptionsKey(args: {
-  force?: boolean
-  allowUnverifiedPtyStop?: boolean
-  skipArchive?: boolean
-}): string {
+    force?: boolean
+    skipArchive?: boolean
+    allowUnverifiedPtyStop?: boolean
+  }): string {
   const forceKey = args.force === true ? 'force' : 'normal'
   const archiveKey = args.skipArchive === true ? 'skip-archive' : 'run-archive'
   // Why: a Force Delete retry must not coalesce onto the in-flight attempt that
@@ -907,75 +895,6 @@ function stampAndMergeVisibleDetectedWorktree(
 ) {
   const meta = resolveWorktreeMetaWithDiscoveryBackfill(store, repo, detected.id)
   return mergeWorktree(repo.id, detected, meta, repo.displayName)
-}
-
-function getFolderWorkspaceRootId(repo: Repo): string {
-  return `${repo.id}::${repo.path}`
-}
-
-function getFolderWorkspaceInstanceId(repo: Repo, instanceId: string): string {
-  return `${getFolderWorkspaceRootId(repo)}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}${instanceId}`
-}
-
-function getFolderWorkspaceInstanceIdentity(repo: Repo, worktreeId: string): string {
-  const prefix = `${getFolderWorkspaceRootId(repo)}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}`
-  return worktreeId.startsWith(prefix) ? worktreeId.slice(prefix.length) : randomUUID()
-}
-
-function isFolderWorkspaceIdForRepo(repo: Repo, worktreeId: string): boolean {
-  const rootId = getFolderWorkspaceRootId(repo)
-  return (
-    worktreeId === rootId ||
-    worktreeId.startsWith(`${rootId}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}`)
-  )
-}
-
-function mergeFolderWorkspace(repo: Repo, worktreeId: string, meta: WorktreeMeta): Worktree {
-  return {
-    id: worktreeId,
-    ...(meta.instanceId !== undefined ? { instanceId: meta.instanceId } : {}),
-    repoId: repo.id,
-    ...(meta.projectId !== undefined ? { projectId: meta.projectId } : {}),
-    ...(meta.hostId !== undefined ? { hostId: meta.hostId } : {}),
-    ...(meta.projectHostSetupId !== undefined
-      ? { projectHostSetupId: meta.projectHostSetupId }
-      : {}),
-    path: repo.path,
-    head: '',
-    branch: '',
-    isBare: false,
-    isMainWorktree: worktreeId === getFolderWorkspaceRootId(repo),
-    displayName: meta.displayName || repo.displayName,
-    comment: meta.comment || '',
-    linkedIssue: meta.linkedIssue ?? null,
-    linkedPR: meta.linkedPR ?? null,
-    linkedLinearIssue: meta.linkedLinearIssue ?? null,
-    linkedLinearIssueWorkspaceId: meta.linkedLinearIssueWorkspaceId ?? null,
-    linkedLinearIssueOrganizationUrlKey: meta.linkedLinearIssueOrganizationUrlKey ?? null,
-    linkedGitLabMR: meta.linkedGitLabMR ?? null,
-    linkedGitLabIssue: meta.linkedGitLabIssue ?? null,
-    linkedBitbucketPR: meta.linkedBitbucketPR ?? null,
-    linkedAzureDevOpsPR: meta.linkedAzureDevOpsPR ?? null,
-    linkedGiteaPR: meta.linkedGiteaPR ?? null,
-    linkedWorkItem: meta.linkedWorkItem ?? null,
-    linkedTaskSourceContext: meta.linkedTaskSourceContext ?? null,
-    isArchived: meta.isArchived ?? false,
-    isUnread: meta.isUnread ?? false,
-    isPinned: meta.isPinned ?? false,
-    sortOrder: meta.sortOrder ?? 0,
-    ...(meta.manualOrder !== undefined ? { manualOrder: meta.manualOrder } : {}),
-    lastActivityAt: meta.lastActivityAt ?? 0,
-    ...(meta.createdAt !== undefined ? { createdAt: meta.createdAt } : {}),
-    ...(meta.createdWithAgent !== undefined ? { createdWithAgent: meta.createdWithAgent } : {}),
-    ...(meta.automationProvenance !== undefined
-      ? { automationProvenance: meta.automationProvenance }
-      : {}),
-    ...(meta.cliProvenance !== undefined ? { cliProvenance: meta.cliProvenance } : {}),
-    ...(meta.priorWorktreeIds !== undefined ? { priorWorktreeIds: meta.priorWorktreeIds } : {}),
-    workspaceStatus: meta.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
-    diffComments: meta.diffComments,
-    mobileDiffReview: meta.mobileDiffReview
-  }
 }
 
 function listFolderWorkspaces(store: Store, repo: Repo): Worktree[] {
