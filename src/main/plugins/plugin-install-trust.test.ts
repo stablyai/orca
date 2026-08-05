@@ -46,7 +46,7 @@ describe('plugin install trust', () => {
         url: 'https://github.com/attacker/orca-secrets.git',
         ref: 'main'
       },
-      'reserved plugin identity community.orca-secrets must resolve to the stablyai organization'
+      'reserved plugin identity community.orca-secrets must resolve to the stablyai organization. Forks must either publish from github.com/stablyai/... or rename publisher/id away from the reserved namespace.'
     ],
     [
       {
