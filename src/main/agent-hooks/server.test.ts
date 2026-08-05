@@ -4727,6 +4727,38 @@ describe('Claude hook normalization', () => {
     expect(result?.payload.lastAssistantMessage).toBeUndefined()
   })
 
+  it('SessionEnd clears a stale Claude permission wait', () => {
+    _internals.normalizeHookPayload(
+      'claude',
+      buildBody({
+        hook_event_name: 'UserPromptSubmit',
+        prompt: 'deploy production'
+      }),
+      'production'
+    )
+    const waiting = _internals.normalizeHookPayload(
+      'claude',
+      buildBody({
+        hook_event_name: 'PermissionRequest',
+        tool_name: 'Bash'
+      }),
+      'production'
+    )
+    expect(waiting?.payload.state).toBe('waiting')
+
+    const ended = _internals.normalizeHookPayload(
+      'claude',
+      buildBody({
+        hook_event_name: 'SessionEnd',
+        reason: 'prompt_input_exit'
+      }),
+      'production'
+    )
+
+    expect(ended?.payload.state).toBe('done')
+    expect(ended?.payload.prompt).toBe('deploy production')
+  })
+
   describe('Stop transcript scan', () => {
     let tmpDir: string
     let transcriptPath: string

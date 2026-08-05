@@ -1369,6 +1369,114 @@ describe('shared agent-hook-listener', () => {
     expect(event?.payload.lastAssistantMessage).toBeUndefined()
   })
 
+  it('normalizes Claude SessionEnd to done after a permission wait', () => {
+    normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'UserPromptSubmit', prompt: 'deploy production' }
+      },
+      'production'
+    )
+    const waiting = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'PermissionRequest', tool_name: 'Bash' }
+      },
+      'production'
+    )
+    expect(waiting?.payload.state).toBe('waiting')
+
+    const ended = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'SessionEnd', reason: 'prompt_input_exit' }
+      },
+      'production'
+    )
+
+    expect(ended?.payload).toMatchObject({
+      state: 'done',
+      prompt: 'deploy production',
+      agentType: 'claude'
+    })
+  })
+
+  it('normalizes Claude SessionEnd to done from a working turn', () => {
+    normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'UserPromptSubmit', prompt: 'finish the task' }
+      },
+      'production'
+    )
+
+    const ended = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'SessionEnd', reason: 'prompt_input_exit' }
+      },
+      'production'
+    )
+
+    expect(ended?.payload).toMatchObject({
+      state: 'done',
+      prompt: 'finish the task',
+      agentType: 'claude'
+    })
+  })
+
+  it('clears working Claude subagents when SessionEnd terminates the session', () => {
+    normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'UserPromptSubmit', prompt: 'delegate the task' }
+      },
+      'production'
+    )
+    normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'SubagentStart',
+          agent_id: 'worker-1',
+          agent_type: 'general-purpose'
+        }
+      },
+      'production'
+    )
+
+    const ended = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'SessionEnd', reason: 'prompt_input_exit' }
+      },
+      'production'
+    )
+
+    expect(ended?.payload).toMatchObject({
+      state: 'done',
+      prompt: 'delegate the task',
+      agentType: 'claude'
+    })
+    expect(ended?.payload.subagents).toBeUndefined()
+  })
+
   it('normalizes Devin documented lifecycle events', () => {
     const started = normalizeHookPayload(
       state,

@@ -2741,7 +2741,8 @@ function normalizeClaudeEvent(
   }
   const previousLead = state.claudeLeadStateByPaneKey.get(paneKey)
   // Why: only a turn boundary may declare an interrupt or carry a prior one forward; any other event starts a fresh turn and drops it.
-  const isTurnBoundary = eventName === 'Stop' || eventName === 'StopFailure'
+  const isTurnBoundary =
+    eventName === 'Stop' || eventName === 'StopFailure' || eventName === 'SessionEnd'
   const interrupted =
     isTurnBoundary &&
     ((eventAgentId === undefined && hookPayload['is_interrupt'] === true) ||
@@ -2838,7 +2839,12 @@ function normalizeClaudeEvent(
     return buildClaudeChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
   }
 
-  if (isTurnBoundary && eventAgentId === undefined) {
+  if (eventName === 'SessionEnd' && eventAgentId === undefined) {
+    // Why: no later child/task event is guaranteed after session teardown, so stale session-scoped work must not gate the terminal done state.
+    state.claudeSubagentRosterByPaneKey.delete(paneKey)
+    state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+    state.claudeActiveSessionCronPaneKeys.delete(paneKey)
+  } else if (isTurnBoundary && eventAgentId === undefined) {
     // Why: background_tasks is trusted only where unambiguous (see foldClaudeBackgroundTasksIntoRoster) — teammates report "running" here even while idle.
     // Older Claude builds without the field keep the incrementally tracked roster.
     if (backgroundTasks.present) {

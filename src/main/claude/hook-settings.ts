@@ -33,6 +33,8 @@ export const CLAUDE_EVENTS = [
   // Why: OpenClaude skips normal Stop hooks after API/model errors and emits
   // StopFailure instead; without this hook Orca leaves the turn spinning.
   { eventName: 'StopFailure', definition: { hooks: [{ type: 'command', command: '' }] } },
+  // Why: a session can exit without a final Stop, leaving Orca stuck as working or waiting.
+  { eventName: 'SessionEnd', definition: { hooks: [{ type: 'command', command: '' }] } },
   // Why: subagent/teammate lifecycle feeds the sidebar's child rows and keeps
   // a pane 'working' while background children outlive the lead's turn.
   // TeammateIdle parks turn-based teammates without trusting their permanently

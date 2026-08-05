@@ -324,7 +324,7 @@ describe('ClaudeHookService.install', () => {
           readFileSync(join(tmpHome, '.claude', 'settings.json'), 'utf-8')
         ) as { hooks: Record<string, { hooks: { command: string }[] }[]> }
 
-        for (const eventName of ['UserPromptSubmit', 'Stop', 'StopFailure']) {
+        for (const eventName of ['UserPromptSubmit', 'Stop', 'StopFailure', 'SessionEnd']) {
           const command = settings.hooks[eventName]?.[0]?.hooks?.[0]?.command
           expect(command).toMatch(WINDOWS_POWERSHELL_LAUNCHER)
         }
@@ -381,6 +381,7 @@ describe('ClaudeHookService.installRemote', () => {
       'UserPromptSubmit',
       'Stop',
       'StopFailure',
+      'SessionEnd',
       'SubagentStart',
       'SubagentStop',
       'TeammateIdle',
@@ -481,7 +482,7 @@ describe('OpenClaudeHookService-compatible install', () => {
         configPath: openClaudeSettings
       })
       const parsed = JSON.parse(readFileSync(openClaudeSettings, 'utf-8'))
-      for (const event of ['UserPromptSubmit', 'Stop', 'StopFailure']) {
+      for (const event of ['UserPromptSubmit', 'Stop', 'StopFailure', 'SessionEnd']) {
         const command = parsed.hooks[event][0].hooks[0].command as string
         expect(isOpenClaudeManagedCommand(command)).toBe(true)
         if (process.platform !== 'win32') {
