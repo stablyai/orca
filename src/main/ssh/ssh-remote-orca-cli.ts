@@ -188,7 +188,10 @@ async function dispatchRemoteCli(
     case 'terminal list':
       return await call(dispatcher, 'terminal.list', {
         worktree: optionalRemoteCliString(parsed.flags, 'worktree'),
-        limit: optionalRemoteCliNumber(parsed.flags, 'limit')
+        limit: optionalRemoteCliNumber(parsed.flags, 'limit'),
+        // Why: agent JSON calls dominate; topology stays available through an explicit opt-in.
+        includeVisualLayouts:
+          !parsed.flags.has('json') || parsed.flags.has('include-visual-layouts')
       })
     case 'orchestration send': {
       const type = optionalRemoteCliString(parsed.flags, 'type')

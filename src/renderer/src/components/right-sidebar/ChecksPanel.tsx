@@ -3700,6 +3700,9 @@ export default function ChecksPanel(): React.JSX.Element {
     }
     openModal('edit-meta', {
       worktreeId: activeWorktreeId,
+      // Why: the same workspace ID can exist under two hosts. Naming the owner
+      // keeps the dialog on this workspace instead of the ambiguous lookup.
+      repoId: activeWorktree.repoId,
       currentDisplayName: activeWorktree.displayName,
       currentIssue: activeWorktree.linkedIssue,
       currentPR: activeWorktree.linkedPR ?? activeReview.number,

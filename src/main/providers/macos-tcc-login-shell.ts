@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { userInfo } from 'node:os'
+import { basename } from 'node:path'
 import {
   classifyLoginPreflightError,
   runMacosLoginSessionPtyProbe,
@@ -10,8 +11,10 @@ import {
 export type { LoginPreflightOutcome } from './macos-login-session-pty-probe'
 
 const MACOS_LOGIN_PATH = '/usr/bin/login'
-const MACOS_ENV_PATH = '/usr/bin/env'
+const MACOS_BASH_PATH = '/bin/bash'
 const MACOS_PRINTF_PATH = '/usr/bin/printf'
+const LOGIN_SHELL_TRAMPOLINE = 'export SHELL="$1"; shift; exec -l -- "$@"'
+const DIRECT_SHELL_TRAMPOLINE = 'export SHELL="$1"; shift; exec -- "$@"'
 const LOGIN_PREFLIGHT_TIMEOUT_MS = 500
 // Why: the death-watch probe runs off the spawn path, so it can afford a bound
 // that outlasts a PAM stack answering slowly rather than misreading it as a hang.
@@ -306,11 +309,11 @@ export async function probeMacosLoginSessionAlive(
  * Wrap a macOS shell spawn in `/usr/bin/login -flpq <user> …` so terminal children
  * get their own TCC identity instead of collapsing into Orca's bundle id — signed
  * CLIs like `op` otherwise re-prompt every launch because tccd attributes the grant
- * to Orca and never persists it (#6996). This mirrors how Terminal.app spawns shells.
+ * to Orca and never persists it (#6996, #8985).
  *
- * Why the env(1) interposition: login(1) overwrites SHELL from the account DB even
- * under -p, so `/usr/bin/env SHELL=<shell>` re-asserts the shell Orca actually runs
- * without disturbing login's attribution (skipped when the shell path contains `=`).
+ * A clean bash trampoline restores SHELL after login(1) overwrites it, then replaces
+ * itself with the configured shell. Values stay positional so custom paths and
+ * arguments are never interpreted as shell source.
  *
  * No-op off macOS, when already wrapped, when disabled via {@link DISABLE_ENV_VAR},
  * or when the login(1) PAM preflight rejects this process's user.
@@ -346,13 +349,29 @@ export function wrapShellSpawnForMacosTccAttribution(
   }
 
   const shellEnvValue = env?.SHELL || file
-  const interposedShellEnv =
-    !file.includes('=') && existsSync(MACOS_ENV_PATH)
-      ? [MACOS_ENV_PATH, `SHELL=${shellEnvValue}`]
-      : []
+  // Why: Bash ignores --rcfile when argv[0] marks it as a login shell; Orca's
+  // rcfile already reproduces login startup and must remain the active wrapper.
+  const trampoline =
+    basename(file).toLowerCase() === 'bash' && args.includes('--rcfile')
+      ? DIRECT_SHELL_TRAMPOLINE
+      : LOGIN_SHELL_TRAMPOLINE
 
+  // Why: -p blocks login(1)-preserved BASH_ENV and imported functions before the fixed trampoline runs.
   return {
     file: MACOS_LOGIN_PATH,
-    args: ['-flpq', username, ...interposedShellEnv, file, ...args]
+    args: [
+      '-flpq',
+      username,
+      MACOS_BASH_PATH,
+      '--noprofile',
+      '--norc',
+      '-p',
+      '-c',
+      trampoline,
+      'orca-tcc-login',
+      shellEnvValue,
+      file,
+      ...args
+    ]
   }
 }

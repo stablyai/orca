@@ -3,13 +3,14 @@ import { resolve } from 'node:path'
 import { defineConfig, type UserConfig } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import { createBootstrapFatalExitBanner } from './build-plugins/bootstrap-fatal-exit-banner'
-import { createPlainNodeEntryGuardPlugin } from './build-plugins/plain-node-entry-guard'
+import { createBootstrapFatalExitBanner } from './config/build-plugins/bootstrap-fatal-exit-banner'
+import { createPlainNodeEntryGuardPlugin } from './config/build-plugins/plain-node-entry-guard'
 import packageJson from './package.json' with { type: 'json' }
 
 const BUNDLED_MAIN_DEPENDENCIES = new Set([
   '@xterm/headless',
   '@xterm/addon-serialize',
+  'psl',
   // Why: Windows NSIS deploys app.asar before external resources; bootstrap must
   // not race the later resources/node_modules copy.
   'zod'

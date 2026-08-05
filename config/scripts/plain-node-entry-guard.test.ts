@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Plugin, Rollup } from 'vite'
 import { afterEach, describe, expect, it } from 'vitest'
-import { createPlainNodeEntryGuardPlugin } from '../../build-plugins/plain-node-entry-guard'
+import { createPlainNodeEntryGuardPlugin } from '../build-plugins/plain-node-entry-guard'
 
 let outputDir: string | undefined
 

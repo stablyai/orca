@@ -29,7 +29,7 @@ describe('createCommandCodeOutputStatusDetector', () => {
     })
 
     expect(detector.observe('Thinking about unrelated shell output')).toBe(false)
-    expect(detector.observe('# Command Code v0.27.2')).toBe(false)
+    expect(detector.observe('# Command Code v0.27.2\r\n')).toBe(false)
     expect(detector.observe('⌘ Parsing...')).toBe(true)
 
     expect(onWorking).toHaveBeenCalledWith('')
@@ -43,7 +43,7 @@ describe('createCommandCodeOutputStatusDetector', () => {
     })
 
     expect(detector.observe('# Command')).toBe(false)
-    expect(detector.observe(' Code v0.27.2')).toBe(false)
+    expect(detector.observe(' Code v0.27.2\r\n')).toBe(false)
     expect(detector.observe('⌘ Parsing...')).toBe(true)
 
     expect(onWorking).toHaveBeenCalledWith('')
@@ -56,7 +56,7 @@ describe('createCommandCodeOutputStatusDetector', () => {
       onWorking
     })
 
-    expect(detector.observe('# C\x1b[35mommand Co\x1b[0mde v0.27.2')).toBe(false)
+    expect(detector.observe('# C\x1b[35mommand Co\x1b[0mde v0.27.2\r\n')).toBe(false)
     expect(detector.observe('⌘ Parsing...')).toBe(true)
 
     expect(onWorking).toHaveBeenCalledWith('')
@@ -73,6 +73,59 @@ describe('createCommandCodeOutputStatusDetector', () => {
 
     expect(onWorking).not.toHaveBeenCalled()
   })
+
+  it('does not arm when another agent merely discusses Command Code', () => {
+    const onWorking = vi.fn()
+    const detector = createCommandCodeOutputStatusDetector({
+      startupCommand: null,
+      onWorking
+    })
+
+    expect(detector.observe('// Why: Command Code exposes transcript prompts')).toBe(false)
+    expect(detector.observe('\r\n✻ Thinking...')).toBe(false)
+
+    expect(onWorking).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    '# Command Code v1.2\r\n',
+    '# Command Code v1.2.3.4\r\n',
+    '# Command Code v01.2.3\r\n',
+    '# Command Code v1.2.3suffix\r\n',
+    '#\nCommand Code v1.2.3\r\n'
+  ])('does not arm for noncanonical banner %j', (banner) => {
+    const onWorking = vi.fn()
+    const detector = createCommandCodeOutputStatusDetector({ startupCommand: null, onWorking })
+
+    expect(detector.observe(banner)).toBe(false)
+    expect(detector.observe('✻ Thinking...')).toBe(false)
+
+    expect(onWorking).not.toHaveBeenCalled()
+  })
+
+  it('does not arm from a four-part version split at a PTY chunk boundary', () => {
+    const onWorking = vi.fn()
+    const detector = createCommandCodeOutputStatusDetector({ startupCommand: null, onWorking })
+
+    expect(detector.observe('# Command Code v1.2.3')).toBe(false)
+    expect(detector.observe('.4\r\n')).toBe(false)
+    expect(detector.observe('✻ Thinking...')).toBe(false)
+
+    expect(onWorking).not.toHaveBeenCalled()
+  })
+
+  it.each(['# Command Code v1.2.3\r\n', '# Command Code v1.2.3-beta.1+build.9\n'])(
+    'arms for canonical banner %j',
+    (banner) => {
+      const onWorking = vi.fn()
+      const detector = createCommandCodeOutputStatusDetector({ startupCommand: null, onWorking })
+
+      expect(detector.observe(banner)).toBe(false)
+      expect(detector.observe('✻ Thinking...')).toBe(true)
+
+      expect(onWorking).toHaveBeenCalledWith('')
+    }
+  )
 
   it.each([
     'Pondering',

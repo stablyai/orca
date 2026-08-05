@@ -24,7 +24,7 @@
     "src/relay/relay.ts",
     "src/relay/wsl-agent-hook-relay.ts",
     "config/scripts/**/*.{mjs,cjs,js,ts}",
-    "build-plugins/**/*.ts",
+    "config/build-plugins/**/*.ts",
     "electron.vite.config.ts",
     "vite.web.config.ts",
     "config/vitest.config.ts",
@@ -34,7 +34,11 @@
     "tests/**/*.{ts,tsx,mjs}",
     "**/*.test.{ts,tsx}"
   ],
-  "project": ["src/**/*.{ts,tsx}", "config/scripts/**/*.{mjs,cjs,js,ts}", "build-plugins/**/*.ts"],
+  "project": [
+    "src/**/*.{ts,tsx}",
+    "config/scripts/**/*.{mjs,cjs,js,ts}",
+    "config/build-plugins/**/*.ts"
+  ],
   "ignore": ["mobile/**", "out/**", "dist/**", "node_modules/**", "resources/**"],
   "ignoreDependencies": ["electron", "@types/*"],
   "ignoreExportsUsedInFile": true,

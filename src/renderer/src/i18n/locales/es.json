@@ -629,6 +629,13 @@
             "triageFollowupsSummary": "Set assignee, priority, or estimate, and file parented follow-up tickets.",
             "triageFollowupsPrompt": "Use {{value0}} to triage the linked Linear issue — set priority and estimate — and create a parented follow-up ticket for the deferred cleanup."
           }
+        },
+        "issue": {
+          "workspace": {
+            "open": {
+              "4f2c1d8a3b": "No se pudo abrir el espacio de trabajo vinculado a este issue."
+            }
+          }
         }
       },
       "codex": {
@@ -1208,7 +1215,13 @@
         "af6e02c44a": "página",
         "76ffd3c937": "Busca un proyecto para agregar.",
         "c11b4e3cc2": "No se encontraron proyectos.",
-        "519c3587f3": "Agregar al proyecto"
+        "519c3587f3": "Agregar al proyecto",
+        "openAttachedWorkspace": "Abrir el espacio de trabajo vinculado al issue",
+        "openWorkspace": "Abrir espacio de trabajo",
+        "moreWorkspaceActions": "Más acciones del espacio de trabajo del issue",
+        "startNewWorkspace": "Iniciar un espacio de trabajo nuevo",
+        "workspaceSection": "Espacio de trabajo",
+        "noWorkspaceYet": "Ninguno todavía"
       },
       "LinearItemDrawer": {
         "04008e6c46": "Iniciar espacio de trabajo desde el issue",
@@ -1240,7 +1253,11 @@
         "39883467f4": "Issue de Linear",
         "fda549766e": "{{value0}} para comentar",
         "d71cd3003e": "+ Asignado",
-        "commentTooLarge": "El comentario es demasiado grande para enviarlo de forma segura."
+        "commentTooLarge": "El comentario es demasiado grande para enviarlo de forma segura.",
+        "openAttachedWorkspace": "Abrir el espacio de trabajo vinculado al issue",
+        "openWorkspace": "Abrir espacio de trabajo",
+        "moreWorkspaceActions": "Más acciones del espacio de trabajo del issue",
+        "startNewWorkspace": "Iniciar un espacio de trabajo nuevo"
       },
       "NewWorkspaceComposerCard": {
         "cbb47ee0dc": "Solo disponible para proyectos Git locales.",
@@ -1849,6 +1866,14 @@
         "linearEmptyAttributeFilter": "Ningún issue coincide con los filtros seleccionados. Limpia un filtro o prueba con otros criterios.",
         "linearEmptyUnfilteredScope": "No hay issues en el alcance de este espacio de trabajo. Intenta buscar o ajustar los equipos.",
         "linearFetchMore": "Cargar más",
+        "linearHasWorktreeLoadFailed": "No se pudieron cargar los issues de Linear vinculados a un espacio de trabajo de Orca.",
+        "linearHasWorktreePartialLoadFailed": "No se pudieron cargar algunos issues de Linear vinculados a un espacio de trabajo de Orca. Actualiza para volver a intentarlo.",
+        "linearHasWorktreeSearchPlaceholder": "Filtrar issues vinculados a un espacio de trabajo de Orca...",
+        "linearModeHasWorktree": "Con espacio de trabajo",
+        "linearModeHasWorktreeTooltip": "Tickets de Linear vinculados a un espacio de trabajo de Orca",
+        "linearEmptyHasWorktree": "Aún no hay tickets de Linear vinculados a un espacio de trabajo de Orca. Inicia el trabajo desde un issue de Linear para verlo aquí.",
+        "linearOpenAttachedWorkspace": "Abrir el espacio de trabajo vinculado a {{value0}}",
+        "linearWorktreesColumn": "Espacios de trabajo",
         "jiraSortAscending": "ascendente",
         "jiraSortDescending": "descendente",
         "jiraSortBy": "Ordenar por",
@@ -4261,7 +4286,9 @@
           "83a820fa71": "Filtrar proyectos...",
           "5a273fbfce": "Agregar proyecto...",
           "4815c70605": "Ningún proyecto coincide",
-          "bbbc6e8e3b": "Ningún proyecto no seleccionado coincide"
+          "bbbc6e8e3b": "Ningún proyecto no seleccionado coincide",
+          "allProjects": "Todos los proyectos",
+          "selectedProjectsCount": "{{value0}} proyectos"
         },
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Reiniciar Orca",
@@ -4339,6 +4366,7 @@
           "680043342f": "compacto",
           "c7591b6014": "repositorio",
           "hosts": "Hosts",
+          "showSection": "Mostrar",
           "allHostsDetail": "Mostrar todos los hosts",
           "configuredSshHost": "SSH configurado",
           "projectSshHost": "SSH del proyecto",
@@ -4355,19 +4383,6 @@
           "219ebf1961": "Nombre de rama",
           "folderPathIdentity": "Rama / ruta de carpeta",
           "cli": "Orca CLI"
-        },
-        "SshDisconnectedDialog": {
-          "ca4a7892af": "Conectando...",
-          "89385db176": "Descartar",
-          "656368f3a2": "Falló la reconexión",
-          "376bed88e5": "La conexión al host remoto encontró un error.",
-          "4afcca1d24": "Reconectar",
-          "11552bf786": "SSH desconectado",
-          "cb5938ae79": "Reconectando...",
-          "disconnected": "Este host SSH no está conectado.",
-          "reconnecting": "Reconectando con el host remoto...",
-          "reconnectionFailed": "Falló la reconexión con el host remoto.",
-          "authFailed": "Falló la autenticación con el host remoto."
         },
         "SshTargetRow": {
           "4677394048": "Conectando…",
@@ -10548,7 +10563,9 @@
             "b8c2e1a904": "{{value0}} → {{value1}}",
             "a4e93c21d7": "Rama actual: {{value0}}",
             "c7d4e2f801": "Cambiar ref base: {{value0}}",
-            "f3a1b8c204": "upstream"
+            "f3a1b8c204": "upstream",
+            "createPrIntentEmptyGeneratedBody": "Los detalles de revisión generados no incluyeron una descripción. Reintentar Crear PR.",
+            "createPrIntentGenerateDetailsFailed": "No se pudieron generar los detalles de revisión. Reintentar Crear PR."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "No se pudo iniciar el agente seleccionado.",
@@ -12969,6 +12986,20 @@
           "6bbf827ef5": "Título 5",
           "d1bbf9a835": "Sección plegable"
         },
+        "RichMarkdownTableControls": {
+          "deleteTable": "Eliminar tabla",
+          "tableActions": "Acciones de tabla",
+          "addColumn": "Agregar columna",
+          "addRow": "Agregar fila",
+          "rowActions": "Acciones de fila",
+          "columnActions": "Acciones de columna",
+          "insertRowAbove": "Insertar fila arriba",
+          "insertColumnLeft": "Insertar columna a la izquierda",
+          "insertRowBelow": "Insertar fila abajo",
+          "insertColumnRight": "Insertar columna a la derecha",
+          "deleteRow": "Eliminar fila",
+          "deleteColumn": "Eliminar columna"
+        },
         "UntitledFileRenameDialog": {
           "a7dd27b0bc": "Guardar",
           "949711deb4": "Cancelar",
@@ -13424,6 +13455,8 @@
             "1b179ab561": "Copiar URL de página",
             "f7ab83f7ed": "Abrir página en el navegador predeterminado",
             "0e080d820e": "Recargar",
+            "a1f3c2e4b5": "Recarga forzada",
+            "b7e4d9c1a2": "Detener",
             "250a9b3e42": "Adelante",
             "40edfa75cb": "Atrás",
             "efb0e8f7f3": "Copiar dirección de enlace",
@@ -14364,6 +14397,28 @@
         "loadFailed": "No se pudo cargar el registro del job de GitLab.",
         "emptyTrace": "No hay ningún registro disponible para este job de GitLab.",
         "timedOut": "Se agotó el tiempo de espera al cargar el registro del job de GitLab."
+      }
+    },
+    "ssh": {
+      "sshConnectVerb": {
+        "connect": "Conectar",
+        "connecting": "Conectando…",
+        "reconnect": "Reconectar",
+        "retry": "Reintentar"
+      }
+    },
+    "main": {
+      "window": {
+        "editableContextMenu": {
+          "table": "Tabla",
+          "insertRowAbove": "Insertar fila arriba",
+          "insertRowBelow": "Insertar fila abajo",
+          "deleteRow": "Eliminar fila",
+          "insertColumnLeft": "Insertar columna a la izquierda",
+          "insertColumnRight": "Insertar columna a la derecha",
+          "deleteColumn": "Eliminar columna",
+          "deleteTable": "Eliminar tabla"
+        }
       }
     }
   },

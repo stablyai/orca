@@ -12,6 +12,7 @@ import {
   listCommitMessageAgentCapabilities,
   listCommitMessageAgentIds,
   parseAntigravityModels,
+  parseClaudeModels,
   parseCodexModels,
   parseCursorModels,
   parseLineModels,
@@ -194,6 +195,81 @@ describe('buildArgs (Claude)', () => {
 })
 
 describe('model discovery parsers', () => {
+  it('parses Claude list_models output into commit-message models', () => {
+    const stdout = `${JSON.stringify({
+      type: 'control_response',
+      response: {
+        subtype: 'success',
+        request_id: 'orca-model-discovery',
+        response: {
+          models: [
+            {
+              value: 'default',
+              displayName: 'Default (recommended)',
+              supportsEffort: true,
+              supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max']
+            },
+            {
+              value: 'opus[1m]',
+              displayName: 'Opus (1M context)',
+              description: 'Opus 5 with 1M context · $5/$25 per Mtok',
+              supportsEffort: true,
+              supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
+              supportsFastMode: true
+            },
+            { value: 'haiku', displayName: 'Haiku' }
+          ]
+        }
+      }
+    })}\n`
+    expect(parseClaudeModels(stdout)).toEqual([
+      {
+        id: 'opus[1m]',
+        label: 'Opus (1M context)',
+        description: 'Opus 5 with 1M context · $5/$25 per Mtok',
+        thinkingLevels: [
+          { id: 'low', label: 'Low' },
+          { id: 'medium', label: 'Medium' },
+          { id: 'high', label: 'High' },
+          { id: 'xhigh', label: 'Extra High' },
+          { id: 'max', label: 'Max' }
+        ],
+        defaultThinkingLevel: 'low',
+        supportsFastMode: true
+      },
+      { id: 'haiku', label: 'Haiku' }
+    ])
+  })
+
+  it('returns no Claude models when the CLI lacks list_models so the seed stays', () => {
+    expect(
+      parseClaudeModels(
+        '{"type":"control_response","response":{"subtype":"error","request_id":"orca-model-discovery","error":"Unsupported control request subtype: list_models"}}\n'
+      )
+    ).toEqual([])
+  })
+
+  it('declares stdin-driven dynamic discovery for Claude', () => {
+    const discovery = COMMIT_MESSAGE_AGENT_SPECS.claude?.modelDiscovery
+    expect(COMMIT_MESSAGE_AGENT_SPECS.claude?.modelSource).toBe('dynamic')
+    expect(discovery?.binary).toBe('claude')
+    expect(discovery?.args).toEqual([
+      '-p',
+      '--input-format',
+      'stream-json',
+      '--output-format',
+      'stream-json',
+      '--verbose'
+    ])
+    const payload = JSON.parse(discovery?.stdinPayload ?? '') as {
+      type?: string
+      request?: { subtype?: string }
+    }
+    expect(payload.type).toBe('control_request')
+    expect(payload.request?.subtype).toBe('list_models')
+    expect(discovery?.stdinPayload?.endsWith('\n')).toBe(true)
+  })
+
   it('parses Codex model JSON', () => {
     expect(
       parseCodexModels(

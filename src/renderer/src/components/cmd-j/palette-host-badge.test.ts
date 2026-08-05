@@ -35,6 +35,21 @@ describe('getPaletteHostBadge', () => {
     expect(getPaletteHostBadge({ connectionId: null }, hosts)).toBeNull()
   })
 
+  it('badges a disconnected host anyway when a host filter is applied', () => {
+    const hosts = buildSidebarHostOptions({
+      repos: [{ connectionId: 'ssh-1' }],
+      sshTargetLabels: new Map([['ssh-1', 'Builder']]),
+      settings: { activeRuntimeEnvironmentId: null }
+    })
+
+    // Why: with a host filter on, the badge is the only thing explaining which
+    // rows survived, so liveness must not suppress it.
+    expect(getPaletteHostBadge({ connectionId: 'ssh-1' }, hosts, true)).toEqual({
+      hostId: 'ssh:ssh-1',
+      label: 'Builder'
+    })
+  })
+
   it('badges the local host when a connected remote host exists', () => {
     const hosts = buildSidebarHostOptions({
       repos: [{ connectionId: 'ssh-1' }],

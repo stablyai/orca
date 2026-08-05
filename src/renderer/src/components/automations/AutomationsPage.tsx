@@ -1,46 +1,16 @@
 /* eslint-disable max-lines -- Why: this page owns the automations list/detail
- * orchestration while the form and detail presentation live in sibling files. */
+ * orchestration while the form, list, and detail presentation live in sibling files. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  CalendarClock,
-  Check,
-  Clock,
-  Eye,
-  Pause,
-  Pencil,
-  Play,
-  Plus,
-  RefreshCw,
-  Trash2,
-  X
-} from 'lucide-react'
+import { CalendarClock, Plus, RefreshCw, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
-import type { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuTrigger
-} from '@/components/ui/context-menu'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from '@/components/ui/dialog'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
 import { cn } from '@/lib/utils'
-import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { useRepoMap, useWorktreeMap } from '@/store/selectors'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -50,7 +20,6 @@ import type {
   ExternalAutomationJob,
   ExternalAutomationManager,
   ExternalAutomationRun,
-  AutomationPrecheck,
   AutomationRun,
   AutomationUpdateInput
 } from '../../../../shared/automations-types'
@@ -61,34 +30,20 @@ import {
   parseExecutionHostId
 } from '../../../../shared/execution-host'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
-import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import type { PreflightStatus } from '../../../../preload/api-types'
-import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import type { OrcaHooks, Repo, Worktree } from '../../../../shared/types'
+import type { OrcaHooks, Repo } from '../../../../shared/types'
 import { getWorktreePathBasenameFromId } from '../../../../shared/worktree-id'
 import {
-  buildAutomationCronSchedule,
   buildAutomationRrule,
-  formatAutomationSchedule,
   isValidAutomationCronSchedule,
   isValidAutomationSchedule,
   tryParseAutomationRrule
 } from '../../../../shared/automation-schedules'
 import {
-  formatAutomationDateTimeWithRelative,
-  getAutomationRunStatusLabel,
-  getAutomationRunStatusVariant
-} from './automation-page-parts'
-import {
-  formatAutomationCost,
-  formatAutomationTokens,
-  summarizeAutomationRunUsage
-} from './automation-usage-model'
-import {
   canRerunAutomationRun,
-  getAutomationRerunPendingRemainingMs,
-  getAutomationRunViewState
+  getAutomationRunViewState,
+  waitForAutomationRerunPendingVisibility
 } from './automation-run-view-state'
 import {
   automationRunMatchesPaneKey,
@@ -98,22 +53,17 @@ import {
   resolveAutomationRunOpenTarget
 } from './automation-run-open-target'
 import { getAutomationRunWorkspaceDisplay } from './automation-run-workspace-display'
-import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
-import { AutomationDetail } from './AutomationDetail'
-import { HermesCronOutputView } from './HermesCronOutputView'
 import {
   AutomationEditorDialog,
   type AutomationCreateTarget,
   type AutomationDraft
 } from './AutomationEditorDialog'
-import { AutomationRunPageFrame } from './AutomationRunPageFrame'
-import { AutomationRunHistory } from './AutomationRunHistory'
 import {
   getAutomationSetupDecisionDraftValue,
   getVisibleAutomationSetupDecision,
   resolveAutomationSetupDecisionForSave
 } from './automation-setup-decision'
-import { getAutomationTemplates, type AutomationTemplate } from './automation-templates'
+import type { AutomationTemplate } from './automation-templates'
 import { getAutomationTargetAvailability } from './automation-target-availability'
 import { buildAutomationRunContextForRepo } from './automation-run-context'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
@@ -125,14 +75,14 @@ import {
 } from '../task-source-provider-availability'
 import type { TaskSourceHostAvailability } from '../task-source-context-summary'
 import {
-  getExternalAutomationActionDisabledMessage,
   getExternalAutomationSourceAvailability,
   isSshConnectionBusy
 } from './external-automation-source-availability'
 import {
   createAutomationForTarget,
   deleteAutomationForTarget,
-  type AutomationHostTarget,
+  getAutomationHostTargetFromKey,
+  getAutomationHostTargetKey,
   getAutomationListTarget,
   getAutomationOwnerTarget,
   getAutomationTargetFromHostId,
@@ -141,223 +91,38 @@ import {
   runAutomationNowForTarget,
   updateAutomationForTarget
 } from './automation-host-client'
-import { getExternalAutomationScheduleDisplay } from './external-automation-schedule-display'
-import { ExternalAutomationManagers } from './ExternalAutomationManagers'
 import type { FetchExternalAutomationRuns } from './ExternalAutomationRunTable'
+import {
+  AUTOMATION_DEFAULT_TIME,
+  buildDraftPrecheck,
+  buildHermesCronSchedule,
+  formatTimeInput,
+  getDefaultWorktree,
+  parseDraftTime
+} from './automation-draft-model'
+import {
+  getRepoBackedAutomationSourceContext,
+  getRuntimeSourceHostAvailability,
+  type RepoBackedAutomationSourceContext
+} from './automation-source-context'
+import type { AutomationPaneTab, SelectedExternalRunPage } from './automation-page-state'
+import {
+  getExternalAutomationKey,
+  getExternalAutomationSourceKey,
+  getExternalProviderLabel,
+  getExternalTargetKindLabel,
+  isMissingExternalRunsApiError
+} from './external-automation-display'
+import { buildExternalAutomationListEntries } from './external-automation-list-entries'
+import { useAutomationListSearch } from './use-automation-list-search'
+import { AutomationDeleteDialog, ExternalAutomationDeleteDialog } from './AutomationDeleteDialogs'
+import { AutomationsListPanel } from './AutomationsListPanel'
+import { AutomationsDetailPane } from './AutomationsDetailPane'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import { translate } from '@/i18n/i18n'
 
 const AGENTS = getAgentCatalog().map((agent) => agent.id)
-const DEFAULT_TIME = '09:00'
 const AUTOMATIONS_CHANGED_EVENT = 'orca:automations-changed'
-type AutomationPaneTab = 'overview' | 'runs'
-type RepoBackedAutomationSourceContext = TaskSourceContext & { provider: 'github' | 'gitlab' }
-
-type ExternalAutomationListEntry =
-  | {
-      kind: 'job'
-      key: string
-      manager: ExternalAutomationManager
-      job: ExternalAutomationJob
-    }
-  | {
-      kind: 'source'
-      key: string
-      manager: ExternalAutomationManager
-    }
-
-type SelectedExternalRunPage = {
-  manager: ExternalAutomationManager
-  job: ExternalAutomationJob
-  run: ExternalAutomationRun
-}
-
-function getAutomationHostTargetKey(target: AutomationHostTarget): string {
-  return target.kind === 'environment' ? `environment:${target.environmentId}` : 'local'
-}
-
-function getAutomationHostTargetFromKey(key: string | null): AutomationHostTarget | null {
-  if (!key) {
-    return null
-  }
-  if (key.startsWith('environment:')) {
-    return { kind: 'environment', environmentId: key.slice('environment:'.length) }
-  }
-  return { kind: 'local' }
-}
-
-function getDefaultWorktree(worktrees: readonly Worktree[]): Worktree | null {
-  return worktrees.find((worktree) => worktree.isMainWorktree) ?? worktrees[0] ?? null
-}
-
-function getRepoBackedAutomationSourceContext(
-  automation: Automation
-): RepoBackedAutomationSourceContext | null {
-  const context = automation.sourceContext
-  return context?.provider === 'github' || context?.provider === 'gitlab'
-    ? (context as RepoBackedAutomationSourceContext)
-    : null
-}
-
-function getRuntimeSourceHostAvailability(
-  context: TaskSourceContext,
-  runtimeStatusByEnvironmentId: ReadonlyMap<
-    string,
-    { status: RuntimeStatus | null; checkedAt: number }
-  >
-): TaskSourceHostAvailability | null {
-  const parsed = parseExecutionHostId(context.hostId)
-  if (parsed?.kind !== 'runtime') {
-    return null
-  }
-  const entry = runtimeStatusByEnvironmentId.get(parsed.environmentId)
-  if (!entry) {
-    return { hostId: context.hostId, reason: 'checking-task-source-capability' }
-  }
-  if (!entry.status) {
-    return { hostId: context.hostId, health: 'disconnected' }
-  }
-  if (entry.status.graphStatus !== 'ready') {
-    return { hostId: context.hostId, health: 'connecting' }
-  }
-  const capabilities = entry.status.capabilities
-  if (!capabilities) {
-    return { hostId: context.hostId, reason: 'checking-task-source-capability' }
-  }
-  if (!capabilities.includes(TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY)) {
-    return { hostId: context.hostId, reason: 'missing-task-source-capability' }
-  }
-  return null
-}
-
-function formatTimeInput(hour: number, minute: number): string {
-  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
-}
-
-function parseDraftTime(time: string): { hour: number; minute: number } {
-  const [rawHour, rawMinute] = time.split(':').map((part) => Number(part))
-  return {
-    hour: Number.isFinite(rawHour) ? rawHour : 9,
-    minute: Number.isFinite(rawMinute) ? rawMinute : 0
-  }
-}
-
-function buildDraftPrecheck(draft: AutomationDraft): AutomationPrecheck | null {
-  const command = draft.precheckCommand.trim()
-  if (!command) {
-    return null
-  }
-  const rawTimeout = Number(draft.precheckTimeoutSeconds)
-  return {
-    command,
-    timeoutSeconds: Number.isFinite(rawTimeout) ? rawTimeout : 60
-  }
-}
-
-function buildHermesCronSchedule(draft: AutomationDraft): string {
-  if (draft.preset === 'custom') {
-    return draft.customSchedule.trim()
-  }
-  const { hour, minute } = parseDraftTime(draft.time)
-  return buildAutomationCronSchedule({
-    preset: draft.preset,
-    hour,
-    minute,
-    dayOfWeek: Number(draft.dayOfWeek)
-  })
-}
-
-function getAgentLabel(agentId: string): string {
-  return getAgentCatalog().find((agent) => agent.id === agentId)?.label ?? agentId
-}
-
-function getExternalAutomationKey(
-  manager: ExternalAutomationManager,
-  job: ExternalAutomationJob
-): string {
-  return `${manager.id}:${job.id}`
-}
-
-function getExternalAutomationSourceKey(manager: ExternalAutomationManager): string {
-  return `${manager.id}:source`
-}
-
-function formatExternalDate(value: string | null, now: number): string {
-  if (!value) {
-    return 'Never'
-  }
-  const parsed = Date.parse(value)
-  if (!Number.isFinite(parsed)) {
-    return value
-  }
-  return formatAutomationDateTimeWithRelative(parsed, now)
-}
-
-function getExternalProviderLabel(manager: ExternalAutomationManager): string {
-  return manager.provider === 'hermes' ? 'Hermes' : 'OpenClaw'
-}
-
-function getExternalTargetKindLabel(manager: ExternalAutomationManager): string {
-  return manager.target.type === 'ssh' ? 'SSH host' : 'Local'
-}
-
-function getExternalRunStatusLabel(run: ExternalAutomationRun): string {
-  switch (run.status) {
-    case 'completed':
-      return 'Completed'
-    case 'failed':
-      return 'Failed'
-    case 'unknown':
-      return 'Unknown'
-  }
-}
-
-function getExternalRunStatusVariant(
-  run: ExternalAutomationRun
-): React.ComponentProps<typeof Badge>['variant'] {
-  switch (run.status) {
-    case 'completed':
-      return 'secondary'
-    case 'failed':
-      return 'destructive'
-    case 'unknown':
-      return 'outline'
-  }
-}
-
-function getExternalRunContent(run: ExternalAutomationRun): string {
-  return run.outputContent ?? run.error ?? run.outputPreview ?? 'No output content available.'
-}
-
-function getAutomationRunContent(run: AutomationRun): string {
-  const savedOutput = run.outputSnapshot?.content.trim()
-  if (savedOutput) {
-    return run.outputSnapshot?.content ?? savedOutput
-  }
-  if (run.precheckResult) {
-    const output = [run.precheckResult.stderr.trim(), run.precheckResult.stdout.trim()]
-      .filter(Boolean)
-      .join('\n\n')
-    if (output) {
-      return output
-    }
-  }
-  return run.error ?? run.usage?.unavailableMessage ?? 'No output content available.'
-}
-
-function isMissingExternalRunsApiError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error)
-  return /listExternalRuns|automations:listExternalRuns|No handler registered/i.test(message)
-}
-
-async function waitForAutomationRerunPendingVisibility(pendingStartedAt: number): Promise<void> {
-  const remainingMs = getAutomationRerunPendingRemainingMs({ pendingStartedAt })
-  if (remainingMs <= 0) {
-    return
-  }
-  await new Promise<void>((resolve) => window.setTimeout(resolve, remainingMs))
-}
-
 export default function AutomationsPage(): React.JSX.Element {
   const repos = useAppStore((s) => s.repos)
   const projectHostSetups = useAppStore((s) => s.projectHostSetups)
@@ -415,6 +180,7 @@ export default function AutomationsPage(): React.JSX.Element {
   )
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [listSearchQuery, setListSearchQuery] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
   const [createTarget, setCreateTarget] = useState<AutomationCreateTarget>('orca')
   const [editingAutomationId, setEditingAutomationId] = useState<string | null>(null)
@@ -463,6 +229,9 @@ export default function AutomationsPage(): React.JSX.Element {
   const [dontAskDeleteAgain, setDontAskDeleteAgain] = useState(false)
   const editRequestRef = useRef(0)
   const deleteConfirmButtonRef = useRef<HTMLButtonElement>(null)
+  // Why: both dialogs stay mounted, so a shared ref would let one dialog's
+  // unmount clear the focus target the other still needs.
+  const externalDeleteConfirmButtonRef = useRef<HTMLButtonElement>(null)
   const completionInFlightRef = useRef<Set<string>>(new Set())
   const rerunRunIdsInFlightRef = useRef<Set<string>>(new Set())
   const workspaceNameCacheRef = useRef<Map<string, string>>(new Map())
@@ -488,40 +257,35 @@ export default function AutomationsPage(): React.JSX.Element {
     precheckCommand: '',
     precheckTimeoutSeconds: '60',
     preset: 'weekdays',
-    time: DEFAULT_TIME,
+    time: AUTOMATION_DEFAULT_TIME,
     dayOfWeek: '1',
     customSchedule: '',
     missedRunGraceMinutes: '720',
     scheduleWarning: null
   })
 
-  const externalAutomationEntries = useMemo<ExternalAutomationListEntry[]>(
-    () =>
-      externalManagers.flatMap((manager): ExternalAutomationListEntry[] => {
-        if (manager.jobs.length === 0) {
-          if (
-            manager.provider === 'hermes' &&
-            (manager.status === 'unavailable' || manager.error)
-          ) {
-            return [
-              {
-                kind: 'source' as const,
-                key: getExternalAutomationSourceKey(manager),
-                manager
-              }
-            ]
-          }
-          return []
-        }
-        return manager.jobs.map((job) => ({
-          kind: 'job' as const,
-          key: getExternalAutomationKey(manager, job),
-          manager,
-          job
-        }))
-      }),
+  const externalAutomationEntries = useMemo(
+    () => buildExternalAutomationListEntries(externalManagers),
     [externalManagers]
   )
+  const {
+    isListSearchQueryTooLarge,
+    isListSearchActive,
+    filteredAutomations,
+    filteredExternalAutomationEntries,
+    hasListItems,
+    hasFilteredListItems
+  } = useAutomationListSearch({
+    listSearchQuery,
+    automations,
+    externalAutomationEntries,
+    repoMap,
+    selectedId,
+    selectedExternalKey,
+    selectAutomationId,
+    selectExternalKey
+  })
+
   const selectedExternal =
     externalAutomationEntries.find((entry) => entry.key === selectedExternalKey) ??
     (automations.length === 0 ? (externalAutomationEntries[0] ?? null) : null)
@@ -769,7 +533,10 @@ export default function AutomationsPage(): React.JSX.Element {
     : null
   const canRerunSelectedAutomationRunPage =
     selectedAutomationRunPage !== null &&
-    canRerunAutomationRun({ automation: selected, run: selectedAutomationRunPage })
+    canRerunAutomationRun({
+      automation: selected,
+      run: selectedAutomationRunPage
+    })
   const isSelectedAutomationRunPageRerunPending =
     selectedAutomationRunPage !== null && rerunRunIdsInFlight.has(selectedAutomationRunPage.id)
   const preflightStatusCurrent = preflightStatusContextKey === expectedPreflightContextKey
@@ -1298,7 +1065,7 @@ export default function AutomationsPage(): React.JSX.Element {
       precheckCommand: '',
       precheckTimeoutSeconds: '60',
       preset: 'weekdays',
-      time: DEFAULT_TIME,
+      time: AUTOMATION_DEFAULT_TIME,
       dayOfWeek: '1',
       customSchedule: '',
       missedRunGraceMinutes: '720',
@@ -1356,7 +1123,7 @@ export default function AutomationsPage(): React.JSX.Element {
       precheckCommand: latest.precheck?.command ?? '',
       precheckTimeoutSeconds: String(latest.precheck?.timeoutSeconds ?? 60),
       preset: schedule?.preset ?? (hasCustomSchedule ? 'custom' : 'weekdays'),
-      time: schedule ? formatTimeInput(schedule.hour, schedule.minute) : DEFAULT_TIME,
+      time: schedule ? formatTimeInput(schedule.hour, schedule.minute) : AUTOMATION_DEFAULT_TIME,
       dayOfWeek: String(schedule?.dayOfWeek ?? 1),
       customSchedule: hasCustomSchedule ? latest.rrule : '',
       missedRunGraceMinutes: String(latest.missedRunGraceMinutes),
@@ -1404,7 +1171,7 @@ export default function AutomationsPage(): React.JSX.Element {
       precheckCommand: '',
       precheckTimeoutSeconds: '60',
       preset: hasCustomSchedule ? 'custom' : 'weekdays',
-      time: DEFAULT_TIME,
+      time: AUTOMATION_DEFAULT_TIME,
       dayOfWeek: '1',
       customSchedule: hasCustomSchedule ? rawSchedule : '',
       missedRunGraceMinutes: '720',
@@ -2009,7 +1776,9 @@ export default function AutomationsPage(): React.JSX.Element {
         )
         return
       }
-      const state = await window.api.ssh.connect({ targetId: manager.target.connectionId })
+      const state = await window.api.ssh.connect({
+        targetId: manager.target.connectionId
+      })
       if (!state || state.status !== 'connected') {
         toast.error(
           state?.error ??
@@ -2104,6 +1873,12 @@ export default function AutomationsPage(): React.JSX.Element {
 
       const target = event.target
       if (!(target instanceof HTMLElement)) {
+        return
+      }
+
+      // Why: fields that clear their own value on Escape consume this press;
+      // blurring here would drop focus and let the next Escape close the page.
+      if (target.dataset.escapeClearsValue === 'true') {
         return
       }
 
@@ -2232,8 +2007,10 @@ export default function AutomationsPage(): React.JSX.Element {
         onSave={() => void saveAutomation()}
       />
 
-      <Dialog
-        open={deleteTarget !== null}
+      <AutomationDeleteDialog
+        deleteTarget={deleteTarget}
+        dontAskDeleteAgain={dontAskDeleteAgain}
+        confirmButtonRef={deleteConfirmButtonRef}
         onOpenChange={(open) => {
           if (open) {
             return
@@ -2241,766 +2018,116 @@ export default function AutomationsPage(): React.JSX.Element {
           setDeleteTarget(null)
           setDontAskDeleteAgain(false)
         }}
-      >
-        <DialogContent
-          className="max-w-md"
-          onOpenAutoFocus={(event) => {
-            event.preventDefault()
-            deleteConfirmButtonRef.current?.focus()
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle className="text-sm">
-              {translate(
-                'auto.components.automations.AutomationsPage.080dcb5fbb',
-                'Delete Automation'
-              )}
-            </DialogTitle>
-            <DialogDescription className="text-xs">
-              {translate('auto.components.automations.AutomationsPage.15e0bfb13b', 'Delete')}{' '}
-              <span className="break-all font-medium text-foreground">{deleteTarget?.name}</span>{' '}
-              {translate(
-                'auto.components.automations.AutomationsPage.b264564427',
-                'and its run history. Workspaces created by previous runs are not deleted.'
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          {deleteTarget ? (
-            <div className="rounded-md border border-border/70 bg-muted/35 px-3 py-2 text-xs">
-              <div className="break-all font-medium text-foreground">{deleteTarget.name}</div>
-              <div className="mt-1 text-muted-foreground">
-                {deleteTarget.workspaceMode === 'new_per_run'
-                  ? translate(
-                      'auto.components.automations.AutomationsPage.cd8397cc32',
-                      'New workspace each run'
-                    )
-                  : translate(
-                      'auto.components.automations.AutomationsPage.36f71740a7',
-                      'Selected workspace'
-                    )}
-              </div>
-            </div>
-          ) : null}
-          <button
-            type="button"
-            role="checkbox"
-            aria-checked={dontAskDeleteAgain}
-            onClick={() => setDontAskDeleteAgain((prev) => !prev)}
-            className="flex items-center gap-2 rounded-sm px-1 py-1 text-xs text-foreground/80 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <span
-              className={`flex size-4 items-center justify-center rounded-sm border transition-colors ${
-                dontAskDeleteAgain
-                  ? 'border-foreground bg-foreground text-background'
-                  : 'border-muted-foreground bg-transparent'
-              }`}
-            >
-              {dontAskDeleteAgain ? <Check className="size-3" strokeWidth={3} /> : null}
-            </span>
-            {translate('auto.components.automations.AutomationsPage.1e2e41392f', "Don't ask again")}
-          </button>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setDeleteTarget(null)
-                setDontAskDeleteAgain(false)
-              }}
-            >
-              {translate('auto.components.automations.AutomationsPage.73f630b49d', 'Cancel')}
-            </Button>
-            <Button
-              ref={deleteConfirmButtonRef}
-              variant="destructive"
-              onClick={() => void confirmDeleteAutomation()}
-            >
-              <Trash2 className="size-4" />
-              {translate('auto.components.automations.AutomationsPage.15e0bfb13b', 'Delete')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        onDontAskAgainToggle={() => setDontAskDeleteAgain((prev) => !prev)}
+        onCancel={() => {
+          setDeleteTarget(null)
+          setDontAskDeleteAgain(false)
+        }}
+        onConfirm={() => void confirmDeleteAutomation()}
+      />
 
-      <Dialog
-        open={externalDeleteTarget !== null}
+      <ExternalAutomationDeleteDialog
+        externalDeleteTarget={externalDeleteTarget}
+        confirmButtonRef={externalDeleteConfirmButtonRef}
         onOpenChange={(open) => {
           if (!open) {
             setExternalDeleteTarget(null)
           }
         }}
-      >
-        <DialogContent
-          className="max-w-md"
-          onOpenAutoFocus={(event) => {
-            event.preventDefault()
-            deleteConfirmButtonRef.current?.focus()
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle className="text-sm">
-              {translate(
-                'auto.components.automations.AutomationsPage.9adfab2596',
-                'Delete External Automation'
-              )}
-            </DialogTitle>
-            <DialogDescription className="text-xs">
-              {translate('auto.components.automations.AutomationsPage.15e0bfb13b', 'Delete')}{' '}
-              <span className="break-all font-medium text-foreground">
-                {externalDeleteTarget?.job.name}
-              </span>{' '}
-              {translate('auto.components.automations.AutomationsPage.02a33e3204', 'from')}{' '}
-              {externalDeleteTarget
-                ? getExternalProviderLabel(externalDeleteTarget.manager)
-                : translate(
-                    'auto.components.automations.AutomationsPage.8500baacb4',
-                    'external source'
-                  )}{' '}
-              {translate('auto.components.automations.AutomationsPage.1b586f0e2b', 'on')}
-              {externalDeleteTarget?.manager.targetLabel}.
-            </DialogDescription>
-          </DialogHeader>
-          {externalDeleteTarget ? (
-            <div className="rounded-md border border-border/70 bg-muted/35 px-3 py-2 text-xs">
-              <div className="break-all font-medium text-foreground">
-                {externalDeleteTarget.job.name}
-              </div>
-              <div className="mt-1 text-muted-foreground">
-                {
-                  getExternalAutomationScheduleDisplay(
-                    externalDeleteTarget.manager,
-                    externalDeleteTarget.job
-                  ).label
-                }
-              </div>
-            </div>
-          ) : null}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setExternalDeleteTarget(null)}>
-              {translate('auto.components.automations.AutomationsPage.73f630b49d', 'Cancel')}
-            </Button>
-            <Button
-              ref={deleteConfirmButtonRef}
-              variant="destructive"
-              onClick={() => void confirmDeleteExternalAutomation()}
-            >
-              <Trash2 className="size-4" />
-              {translate('auto.components.automations.AutomationsPage.15e0bfb13b', 'Delete')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        onCancel={() => setExternalDeleteTarget(null)}
+        onConfirm={() => void confirmDeleteExternalAutomation()}
+      />
 
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(280px,360px)_1fr] overflow-hidden border-t border-border/50">
-        <section
-          className="flex min-h-0 flex-col border-r border-border/50 bg-muted/20"
-          data-contextual-tour-target="automations-list"
-        >
-          <div className="scrollbar-sleek min-h-0 flex-1 overflow-auto p-2">
-            {automations.length + externalAutomationEntries.length > 0 ? (
-              <div className="grid grid-cols-[1fr_auto] gap-2 px-2 pb-2 text-[11px] font-medium uppercase text-muted-foreground">
-                <span>
-                  {translate(
-                    'auto.components.automations.AutomationsPage.761a35834d',
-                    'Automation'
-                  )}
-                </span>
-                <span>
-                  {translate('auto.components.automations.AutomationsPage.587a4b205c', 'Next')}
-                </span>
-              </div>
-            ) : null}
-            {automations.map((automation) => {
-              const automationRepo = repoMap.get(getAutomationRunRepoId(automation))
-              const automationWorktree = automation.workspaceId
-                ? worktreeMap.get(automation.workspaceId)
-                : null
-              const automationRunAvailability = getAutomationTargetAvailability({
-                automation,
-                repo: automationRepo,
-                workspace: automationWorktree,
-                projectHostSetups,
-                sshConnectionStates,
-                runtimeStatusByEnvironmentId,
-                automationHostTarget,
-                sourceHostAvailability: automationSourceHostAvailabilityById.get(automation.id)
-              })
-              const workspaceLabel =
-                automation.workspaceMode === 'new_per_run'
-                  ? `Create from ${automation.baseBranch ?? automationRepo?.worktreeBaseRef ?? 'project default'}`
-                  : (automationWorktree?.displayName ?? 'Missing workspace')
-              const usageSummary = summarizeAutomationRunUsage(
-                runs.filter((run) => run.automationId === automation.id)
-              )
-              const usageText =
-                usageSummary.knownRuns > 0
-                  ? `${formatAutomationCost(
-                      usageSummary.estimatedCostUsd
-                    )} est. · ${formatAutomationTokens(usageSummary.totalTokens)} tokens`
-                  : usageSummary.unavailableRuns > 0
-                    ? 'Usage unavailable'
-                    : 'No run usage yet'
-              const nextRunLabel = automation.enabled
-                ? formatAutomationDateTimeWithRelative(automation.nextRunAt, relativeNow)
-                : 'Paused'
-              const scheduleLabel = formatAutomationSchedule(automation.rrule)
-              return (
-                <ContextMenu key={automation.id}>
-                  <ContextMenuTrigger asChild>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        selectExternalKey(null)
-                        selectAutomationId(automation.id)
-                      }}
-                      className={cn(
-                        'mb-1 grid w-full grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-md border px-3 py-2 text-left text-sm transition-colors',
-                        selectedExternal === null && selected?.id === automation.id
-                          ? 'border-foreground/30 bg-muted/70 text-foreground shadow-sm'
-                          : 'border-transparent hover:bg-muted/50'
-                      )}
-                    >
-                      <span className="min-w-0">
-                        <span className="flex min-w-0 items-center gap-2">
-                          <span
-                            className={cn(
-                              'size-2 rounded-full',
-                              automation.enabled ? 'bg-foreground' : 'bg-muted-foreground/40'
-                            )}
-                          />
-                          <span className="truncate font-medium">{automation.name}</span>
-                        </span>
-                        <span className="mt-1 block truncate text-xs font-medium text-foreground/80">
-                          {scheduleLabel}
-                        </span>
-                        <span className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-                          {automationRepo ? (
-                            <RepoBadgeLabel
-                              name={automationRepo.displayName}
-                              color={automationRepo.badgeColor}
-                              badgeClassName="size-1.5"
-                            />
-                          ) : (
-                            <span>
-                              {translate(
-                                'auto.components.automations.AutomationsPage.13118faadf',
-                                'Unknown project'
-                              )}
-                            </span>
-                          )}
-                          <span className="shrink-0">/</span>
-                          <span className="truncate">{workspaceLabel}</span>
-                          <span className="shrink-0">·</span>
-                          <span className="truncate">{getAgentLabel(automation.agentId)}</span>
-                        </span>
-                        <span className="mt-1 block truncate text-xs text-muted-foreground">
-                          {usageText}
-                        </span>
-                      </span>
-                      <span className="flex max-w-28 flex-col items-end gap-1 text-right text-xs text-muted-foreground">
-                        <Clock className="size-3.5" />
-                        <span className="line-clamp-2">{nextRunLabel}</span>
-                      </span>
-                    </button>
-                  </ContextMenuTrigger>
-                  <ContextMenuContent className="w-48">
-                    <ContextMenuItem
-                      disabled={!automationRunAvailability.canRunNow}
-                      onSelect={(event) => {
-                        if (!automationRunAvailability.canRunNow) {
-                          event.preventDefault()
-                          return
-                        }
-                        void runNow(automation)
-                      }}
-                    >
-                      <Play className="size-3.5" />
-                      <span className="min-w-0 truncate">
-                        {automationRunAvailability.canRunNow
-                          ? translate(
-                              'auto.components.automations.AutomationsPage.2faecab10b',
-                              'Run Now'
-                            )
-                          : automationRunAvailability.message}
-                      </span>
-                    </ContextMenuItem>
-                    <ContextMenuItem onSelect={() => void openEditDialog(automation)}>
-                      <Pencil className="size-3.5" />
-                      {translate('auto.components.automations.AutomationsPage.f4612e3f78', 'Edit')}
-                    </ContextMenuItem>
-                    <ContextMenuItem onSelect={() => void toggleAutomation(automation)}>
-                      {automation.enabled ? (
-                        <Pause className="size-3.5" />
-                      ) : (
-                        <Play className="size-3.5" />
-                      )}
-                      {automation.enabled
-                        ? translate(
-                            'auto.components.automations.AutomationsPage.b457436d6a',
-                            'Pause'
-                          )
-                        : translate(
-                            'auto.components.automations.AutomationsPage.376631ef2b',
-                            'Resume'
-                          )}
-                    </ContextMenuItem>
-                    <ContextMenuSeparator />
-                    <ContextMenuItem
-                      variant="destructive"
-                      onSelect={() => requestDeleteAutomation(automation)}
-                    >
-                      <Trash2 className="size-3.5" />
-                      {translate(
-                        'auto.components.automations.AutomationsPage.15e0bfb13b',
-                        'Delete'
-                      )}
-                    </ContextMenuItem>
-                  </ContextMenuContent>
-                </ContextMenu>
-              )
-            })}
-            {externalAutomationEntries.map((entry) => {
-              const providerLabel = getExternalProviderLabel(entry.manager)
-              const targetKindLabel = getExternalTargetKindLabel(entry.manager)
-              if (entry.kind === 'source') {
-                const sshStatus =
-                  entry.manager.target.type === 'ssh'
-                    ? sshConnectionStates.get(entry.manager.target.connectionId)?.status
-                    : undefined
-                const sourceAvailability = getExternalAutomationSourceAvailability({
-                  manager: entry.manager,
-                  providerLabel,
-                  targetKindLabel,
-                  sshStatus
-                })
-                return (
-                  <button
-                    key={entry.key}
-                    type="button"
-                    onClick={() => {
-                      selectExternalKey(entry.key)
-                      setActivePaneTab('overview')
-                    }}
-                    className={cn(
-                      'mb-1 grid w-full grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-md border px-3 py-2 text-left text-sm transition-colors',
-                      selectedExternal?.key === entry.key
-                        ? 'border-foreground/30 bg-muted/70 text-foreground shadow-sm'
-                        : 'border-transparent hover:bg-muted/50'
-                    )}
-                  >
-                    <span className="min-w-0">
-                      <span className="flex min-w-0 items-center gap-2">
-                        <span className="size-2 rounded-full bg-muted-foreground/40" />
-                        <span className="truncate font-medium">{entry.manager.targetLabel}</span>
-                      </span>
-                      <span className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-                        <span>
-                          {providerLabel}{' '}
-                          {translate(
-                            'auto.components.automations.AutomationsPage.82eb6cb933',
-                            'source'
-                          )}
-                        </span>
-                        <span className="shrink-0">/</span>
-                        <span className="truncate">{targetKindLabel}</span>
-                      </span>
-                      <span className="mt-1 block truncate text-xs text-muted-foreground">
-                        {sourceAvailability.summary}
-                      </span>
-                    </span>
-                    <span className="flex max-w-28 flex-col items-end gap-1 text-right text-xs text-muted-foreground">
-                      <Clock className="size-3.5" />
-                      <span className="line-clamp-2">{sourceAvailability.statusLabel}</span>
-                    </span>
-                  </button>
+        <AutomationsListPanel
+          hasListItems={hasListItems}
+          hasFilteredListItems={hasFilteredListItems}
+          isListSearchActive={isListSearchActive}
+          listSearchQuery={listSearchQuery}
+          isListSearchQueryTooLarge={isListSearchQueryTooLarge}
+          onListSearchQueryChange={setListSearchQuery}
+          filteredAutomations={filteredAutomations}
+          filteredExternalAutomationEntries={filteredExternalAutomationEntries}
+          selected={selected}
+          selectedExternal={selectedExternal}
+          runs={runs}
+          relativeNow={relativeNow}
+          repoMap={repoMap}
+          worktreeMap={worktreeMap}
+          projectHostSetups={projectHostSetups}
+          sshConnectionStates={sshConnectionStates}
+          runtimeStatusByEnvironmentId={runtimeStatusByEnvironmentId}
+          automationHostTarget={automationHostTarget}
+          automationSourceHostAvailabilityById={automationSourceHostAvailabilityById}
+          externalActionKey={externalActionKey}
+          selectAutomationId={selectAutomationId}
+          selectExternalKey={selectExternalKey}
+          setActivePaneTab={setActivePaneTab}
+          runNow={(automation) => void runNow(automation)}
+          openEditDialog={(automation) => void openEditDialog(automation)}
+          toggleAutomation={(automation) => void toggleAutomation(automation)}
+          requestDeleteAutomation={requestDeleteAutomation}
+          requestExternalAction={requestExternalAction}
+          openEditExternalDialog={openEditExternalDialog}
+          openCreateDialog={openCreateDialog}
+        />
+
+        <AutomationsDetailPane
+          selected={selected}
+          selectedExternal={selectedExternal}
+          selectedExternalRunPage={selectedExternalRunPage}
+          selectedAutomationRunPage={selectedAutomationRunPage}
+          selectedRuns={selectedRuns}
+          activePaneTab={activePaneTab}
+          relativeNow={relativeNow}
+          externalActionKey={externalActionKey}
+          selectedRepoDisplayName={
+            selectedRepo?.displayName ??
+            translate('auto.components.automations.AutomationsPage.13118faadf', 'Unknown project')
+          }
+          selectedRepoDefaultBaseRef={selectedRepo?.worktreeBaseRef ?? null}
+          selectedWorkspaceName={
+            selected?.workspaceMode === 'new_per_run'
+              ? translate(
+                  'auto.components.automations.AutomationsPage.cd8397cc32',
+                  'New workspace each run'
                 )
-              }
-              const nextRunLabel = entry.job.enabled
-                ? formatExternalDate(entry.job.nextRunAt, relativeNow)
-                : 'Paused'
-              const entrySshStatus =
-                entry.manager.target.type === 'ssh'
-                  ? sshConnectionStates.get(entry.manager.target.connectionId)?.status
-                  : undefined
-              const disabledMessage = getExternalAutomationActionDisabledMessage({
-                manager: entry.manager,
-                providerLabel,
-                targetKindLabel,
-                sshStatus: entrySshStatus,
-                actionInProgress: externalActionKey !== null
-              })
-              const actionDisabled = disabledMessage !== null
-              const scheduleDisplay = getExternalAutomationScheduleDisplay(entry.manager, entry.job)
-              return (
-                <ContextMenu key={entry.key}>
-                  <ContextMenuTrigger asChild>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        selectExternalKey(entry.key)
-                        setActivePaneTab('overview')
-                      }}
-                      className={cn(
-                        'mb-1 grid w-full grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-md border px-3 py-2 text-left text-sm transition-colors',
-                        selectedExternal?.key === entry.key
-                          ? 'border-foreground/30 bg-muted/70 text-foreground shadow-sm'
-                          : 'border-transparent hover:bg-muted/50'
-                      )}
-                    >
-                      <span className="min-w-0">
-                        <span className="flex min-w-0 items-center gap-2">
-                          <span
-                            className={cn(
-                              'size-2 rounded-full',
-                              entry.job.enabled ? 'bg-foreground' : 'bg-muted-foreground/40'
-                            )}
-                          />
-                          <span className="truncate font-medium">{entry.job.name}</span>
-                        </span>
-                        <span className="mt-1 block truncate text-xs font-medium text-foreground/80">
-                          {scheduleDisplay.label}
-                        </span>
-                        <span className="mt-1 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-                          <span className="truncate">
-                            {providerLabel} / {entry.manager.targetLabel}
-                          </span>
-                          <span className="shrink-0">·</span>
-                          <span className="truncate">
-                            {entry.manager.provider === 'hermes'
-                              ? `${entry.job.runCount} ${entry.job.runCount === 1 ? 'run' : 'runs'}`
-                              : entry.manager.canManage
-                                ? translate(
-                                    'auto.components.automations.AutomationsPage.aecdc3681f',
-                                    'Manageable'
-                                  )
-                                : translate(
-                                    'auto.components.automations.AutomationsPage.e059042585',
-                                    'Read-only'
-                                  )}
-                          </span>
-                        </span>
-                      </span>
-                      <span className="flex max-w-28 flex-col items-end gap-1 text-right text-xs text-muted-foreground">
-                        <Clock className="size-3.5" />
-                        <span className="line-clamp-2">{nextRunLabel}</span>
-                      </span>
-                    </button>
-                  </ContextMenuTrigger>
-                  <ContextMenuContent className="w-48">
-                    <ContextMenuItem
-                      disabled={actionDisabled}
-                      onSelect={() => requestExternalAction(entry.manager, entry.job, 'run')}
-                    >
-                      <Play className="size-3.5" />
-                      <span className="min-w-0 truncate">
-                        {disabledMessage ??
-                          translate(
-                            'auto.components.automations.AutomationsPage.2faecab10b',
-                            'Run Now'
-                          )}
-                      </span>
-                    </ContextMenuItem>
-                    {entry.manager.provider === 'hermes' ? (
-                      <ContextMenuItem
-                        disabled={!entry.manager.canManage || externalActionKey !== null}
-                        onSelect={() => openEditExternalDialog(entry.manager, entry.job)}
-                      >
-                        <Pencil className="size-3.5" />
-                        {translate(
-                          'auto.components.automations.AutomationsPage.f4612e3f78',
-                          'Edit'
-                        )}
-                      </ContextMenuItem>
-                    ) : null}
-                    <ContextMenuItem
-                      disabled={actionDisabled}
-                      onSelect={() =>
-                        requestExternalAction(
-                          entry.manager,
-                          entry.job,
-                          entry.job.enabled ? 'pause' : 'resume'
-                        )
-                      }
-                    >
-                      {entry.job.enabled ? (
-                        <Pause className="size-3.5" />
-                      ) : (
-                        <Play className="size-3.5" />
-                      )}
-                      {entry.job.enabled
-                        ? translate(
-                            'auto.components.automations.AutomationsPage.b457436d6a',
-                            'Pause'
-                          )
-                        : translate(
-                            'auto.components.automations.AutomationsPage.376631ef2b',
-                            'Resume'
-                          )}
-                    </ContextMenuItem>
-                    <ContextMenuSeparator />
-                    <ContextMenuItem
-                      variant="destructive"
-                      disabled={actionDisabled}
-                      onSelect={() => requestExternalAction(entry.manager, entry.job, 'delete')}
-                    >
-                      <Trash2 className="size-3.5" />
-                      {translate(
-                        'auto.components.automations.AutomationsPage.15e0bfb13b',
-                        'Delete'
-                      )}
-                    </ContextMenuItem>
-                  </ContextMenuContent>
-                </ContextMenu>
-              )
-            })}
-            {automations.length === 0 && externalAutomationEntries.length === 0 ? (
-              <div className="grid gap-2 p-2">
-                <div className="px-1 pb-1 text-sm font-medium">
-                  {translate(
-                    'auto.components.automations.AutomationsPage.d207ab4c25',
-                    'Start from a template'
-                  )}
-                </div>
-                {getAutomationTemplates().map((template) => (
-                  <button
-                    key={template.id}
-                    type="button"
-                    onClick={() => openCreateDialog(template)}
-                    className="rounded-md border border-border/70 bg-background px-3 py-2 text-left shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                  >
-                    <div className="text-[11px] font-medium uppercase text-muted-foreground">
-                      {template.category}
-                    </div>
-                    <div className="mt-1 text-sm font-medium">{template.label}</div>
-                    <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                      {template.description}
-                    </div>
-                  </button>
-                ))}
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="mt-1 w-full justify-start"
-                  onClick={() => openCreateDialog()}
-                >
-                  <Plus className="size-4" />
-                  {translate('auto.components.automations.AutomationsPage.25060635c6', 'Add new')}
-                </Button>
-              </div>
-            ) : null}
-          </div>
-        </section>
-
-        <section className="flex min-h-0 flex-col overflow-hidden">
-          {selectedExternal ? (
-            <div className="scrollbar-sleek min-h-0 overflow-auto p-5">
-              {selectedExternalRunPage ? (
-                <AutomationRunPageFrame
-                  title={selectedExternalRunPage.job.name}
-                  breadcrumbs={[
-                    formatExternalDate(selectedExternalRunPage.run.runAt, relativeNow),
-                    getExternalProviderLabel(selectedExternalRunPage.manager),
-                    selectedExternalRunPage.manager.targetLabel
-                  ]}
-                  detail={selectedExternalRunPage.run.outputPath}
-                  statusLabel={getExternalRunStatusLabel(selectedExternalRunPage.run)}
-                  statusVariant={getExternalRunStatusVariant(selectedExternalRunPage.run)}
-                  onBack={() => setSelectedExternalRunPage(null)}
-                >
-                  <HermesCronOutputView
-                    content={getExternalRunContent(selectedExternalRunPage.run)}
-                  />
-                </AutomationRunPageFrame>
-              ) : selectedExternal.kind === 'job' ? (
-                <ExternalAutomationManagers
-                  managers={[
-                    {
-                      ...selectedExternal.manager,
-                      jobs: [selectedExternal.job]
-                    }
-                  ]}
-                  now={relativeNow}
-                  runningActionKey={externalActionKey}
-                  onAction={requestExternalAction}
-                  onFetchRuns={fetchExternalAutomationRuns}
-                  onOpenRun={openExternalRunPage}
-                  onEdit={openEditExternalDialog}
-                />
-              ) : (
-                <div className="rounded-md border border-border/50 bg-muted/20 shadow-sm">
-                  <div className="flex items-center justify-between border-b border-border/50 px-3 py-2">
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-medium">
-                        {selectedExternal.manager.targetLabel}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {selectedExternalSourceAvailability?.summary}
-                      </div>
-                    </div>
-                    {selectedExternalSshSource ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={selectedExternalSourceAvailability?.isConnecting ?? false}
-                        onClick={() =>
-                          void connectExternalAutomationSource(selectedExternalSshSource.manager)
-                        }
-                      >
-                        {selectedExternalSourceAvailability?.isConnecting ? (
-                          <RefreshCw className="size-3.5 animate-spin" />
-                        ) : null}
-                        {selectedExternalSourceAvailability?.isConnecting
-                          ? translate(
-                              'auto.components.automations.AutomationsPage.f93ed7a6f8',
-                              'Connecting...'
-                            )
-                          : selectedExternalSshConnected
-                            ? translate(
-                                'auto.components.automations.AutomationsPage.53f06f0ad5',
-                                'Retry source'
-                              )
-                            : translate(
-                                'auto.components.automations.AutomationsPage.7934ee0d81',
-                                'Connect SSH'
-                              )}
-                      </Button>
-                    ) : null}
-                  </div>
-                  <div className="px-3 py-6 text-sm text-muted-foreground">
-                    {selectedExternalSourceAvailability?.detail}
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            <Tabs
-              value={activePaneTab}
-              onValueChange={(value) => setActivePaneTab(value as AutomationPaneTab)}
-              className="min-h-0 flex-1 gap-0"
-            >
-              <div
-                className="flex shrink-0 items-center justify-between border-b border-border/50 px-5 py-2"
-                data-contextual-tour-target="automations-runs"
-              >
-                <TabsList variant="line" className="h-8">
-                  <TabsTrigger value="overview">
-                    {translate(
-                      'auto.components.automations.AutomationsPage.bb1b2cd31e',
-                      'Overview'
-                    )}
-                  </TabsTrigger>
-                  <TabsTrigger value="runs" disabled={!selected}>
-                    {translate('auto.components.automations.AutomationsPage.0e110a3469', 'Runs')}{' '}
-                    <span className="text-xs text-muted-foreground">{selectedRuns.length}</span>
-                  </TabsTrigger>
-                </TabsList>
-              </div>
-
-              <TabsContent value="overview" className="scrollbar-sleek min-h-0 overflow-auto p-5">
-                <AutomationDetail
-                  automation={selected}
-                  runs={selectedRuns}
-                  projectName={selectedRepo?.displayName ?? 'Unknown project'}
-                  projectDefaultBaseRef={selectedRepo?.worktreeBaseRef ?? null}
-                  workspaceName={
-                    selected?.workspaceMode === 'new_per_run'
-                      ? 'New workspace each run'
-                      : (selectedWorktree?.displayName ?? 'Missing workspace')
-                  }
-                  hostLabelById={hostLabelById}
-                  runNowAvailability={selectedRunNowAvailability}
-                  now={relativeNow}
-                  onRunNow={(automation) => void runNow(automation)}
-                  onEdit={(automation) => void openEditDialog(automation)}
-                  onToggle={(automation) => void toggleAutomation(automation)}
-                  onDelete={requestDeleteAutomation}
-                />
-              </TabsContent>
-
-              <TabsContent value="runs" className="scrollbar-sleek min-h-0 overflow-auto p-5">
-                {selectedAutomationRunPage ? (
-                  <AutomationRunPageFrame
-                    title={selected?.name ?? selectedAutomationRunPage.title}
-                    breadcrumbs={[
-                      formatAutomationDateTimeWithRelative(
-                        selectedAutomationRunPage.scheduledFor,
-                        relativeNow
-                      ),
-                      'Orca',
-                      selectedAutomationRunPageWorkspaceDisplay?.detailLabel ?? 'No workspace'
-                    ]}
-                    detail={
-                      selectedAutomationRunPage.outputSnapshot?.truncated
-                        ? 'Latest saved output'
-                        : null
-                    }
-                    statusLabel={getAutomationRunStatusLabel(selectedAutomationRunPage.status)}
-                    statusVariant={getAutomationRunStatusVariant(selectedAutomationRunPage.status)}
-                    actions={
-                      <>
-                        {canRerunSelectedAutomationRunPage && selected ? (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            disabled={isSelectedAutomationRunPageRerunPending}
-                            onClick={() =>
-                              void rerunAutomationRun(selected, selectedAutomationRunPage)
-                            }
-                          >
-                            <RefreshCw
-                              className={cn(
-                                'size-3.5',
-                                isSelectedAutomationRunPageRerunPending && 'animate-spin'
-                              )}
-                            />
-                            {translate(
-                              'auto.components.automations.AutomationsPage.295698292f',
-                              'Rerun'
-                            )}
-                          </Button>
-                        ) : null}
-                        {selectedAutomationRunPageViewState ? (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            disabled={!selectedAutomationRunPageViewState.canOpen}
-                            onClick={() => openRunWorkspace(selectedAutomationRunPage)}
-                          >
-                            <Eye className="size-3.5" />
-                            {selectedAutomationRunPageViewState.actionLabel}
-                          </Button>
-                        ) : null}
-                      </>
-                    }
-                    onBack={() => setSelectedAutomationRunPageId(null)}
-                  >
-                    <CommentMarkdown
-                      variant="document"
-                      content={getAutomationRunContent(selectedAutomationRunPage)}
-                      className="text-sm leading-relaxed text-foreground"
-                    />
-                  </AutomationRunPageFrame>
-                ) : selected ? (
-                  <AutomationRunHistory
-                    runs={selectedRuns}
-                    automationId={selected.id}
-                    worktreeMap={worktreeMap}
-                    onOpenRun={openAutomationRunPage}
-                  />
-                ) : (
-                  <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                    {translate(
-                      'auto.components.automations.AutomationsPage.c3a28c9793',
-                      'Select an automation to view runs.'
-                    )}
-                  </div>
-                )}
-              </TabsContent>
-            </Tabs>
-          )}
-        </section>
+              : (selectedWorktree?.displayName ??
+                translate(
+                  'auto.components.automations.AutomationsPage.missingWorkspace',
+                  'Missing workspace'
+                ))
+          }
+          hostLabelById={hostLabelById}
+          selectedRunNowAvailability={selectedRunNowAvailability}
+          selectedExternalSourceAvailability={selectedExternalSourceAvailability}
+          selectedExternalSshSource={
+            selectedExternalSshSource ? { manager: selectedExternalSshSource.manager } : null
+          }
+          selectedExternalSshConnected={selectedExternalSshConnected}
+          selectedAutomationRunPageWorkspaceDisplay={selectedAutomationRunPageWorkspaceDisplay}
+          selectedAutomationRunPageViewState={selectedAutomationRunPageViewState}
+          canRerunSelectedAutomationRunPage={canRerunSelectedAutomationRunPage}
+          isSelectedAutomationRunPageRerunPending={isSelectedAutomationRunPageRerunPending}
+          worktreeMap={worktreeMap}
+          fetchExternalAutomationRuns={fetchExternalAutomationRuns}
+          onActivePaneTabChange={setActivePaneTab}
+          onClearExternalRunPage={() => setSelectedExternalRunPage(null)}
+          onClearAutomationRunPage={() => setSelectedAutomationRunPageId(null)}
+          requestExternalAction={requestExternalAction}
+          openExternalRunPage={openExternalRunPage}
+          openEditExternalDialog={openEditExternalDialog}
+          connectExternalAutomationSource={(manager) =>
+            void connectExternalAutomationSource(manager)
+          }
+          runNow={(automation) => void runNow(automation)}
+          openEditDialog={(automation) => void openEditDialog(automation)}
+          toggleAutomation={(automation) => void toggleAutomation(automation)}
+          requestDeleteAutomation={requestDeleteAutomation}
+          rerunAutomationRun={(automation, run) => void rerunAutomationRun(automation, run)}
+          openRunWorkspace={openRunWorkspace}
+          openAutomationRunPage={openAutomationRunPage}
+        />
       </div>
     </main>
   )

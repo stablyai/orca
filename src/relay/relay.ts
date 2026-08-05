@@ -1008,7 +1008,9 @@ async function main(): Promise<void> {
         const clientId = socketClients.get(sock)
         socketClients.delete(sock)
         if (clientId !== undefined) {
-          dispatcher.detachClient(clientId)
+          // Why 'peer-closed' only here: the socket itself ended, which is the one signal that
+          // actually says the client is gone rather than merely slow.
+          dispatcher.detachClient(clientId, 'peer-closed')
         }
         relayLogLine(`[relay] Socket client closed (clients=${socketClients.size})`)
         if (!stdoutAlive && socketClients.size === 0) {
@@ -1159,7 +1161,7 @@ async function main(): Promise<void> {
   process.stdout.on('error', () => {
     stdoutAlive = false
     flushStdoutDrainWaiters()
-    dispatcher.invalidateClient()
+    dispatcher.invalidateClient('peer-closed')
   })
 
   function startGrace(reason: string, options?: { retryDeferredShutdown?: boolean }): void {
@@ -1214,7 +1216,7 @@ async function main(): Promise<void> {
       // Why: stdin close means the SSH channel is gone; mark stdout dead so its write callback no-ops instead of hitting a dead pipe.
       stdoutAlive = false
       flushStdoutDrainWaiters()
-      dispatcher.invalidateClient()
+      dispatcher.invalidateClient('peer-closed')
       if (socketClients.size === 0) {
         startGrace('stdin ended')
       }
@@ -1223,7 +1225,7 @@ async function main(): Promise<void> {
     process.stdin.on('error', () => {
       stdoutAlive = false
       flushStdoutDrainWaiters()
-      dispatcher.invalidateClient()
+      dispatcher.invalidateClient('peer-closed')
       if (socketClients.size === 0) {
         startGrace('stdin error')
       }

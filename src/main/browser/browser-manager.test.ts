@@ -2891,6 +2891,36 @@ describe('browserManager', () => {
       })
     })
 
+    it.each([false, true])(
+      'keeps the session UA for native-mode profiles when mobile=%s',
+      async (mobile) => {
+        const { guest, debuggerSendCommand } = makeGuest(mobile ? 4244 : 4243)
+        webContentsFromIdMock.mockReturnValue(guest)
+        browserManager.attachGuestPolicies(guest as never)
+        browserManager.registerGuest({
+          browserPageId: `tab-native-${mobile}`,
+          sessionProfileId: 'native-profile',
+          userAgentMode: 'native',
+          webContentsId: guest.id as number,
+          rendererWebContentsId
+        })
+
+        await expect(
+          browserManager.setViewportOverride(`tab-native-${mobile}`, {
+            width: mobile ? 375 : 1024,
+            height: mobile ? 667 : 768,
+            deviceScaleFactor: mobile ? 2 : 1,
+            mobile
+          })
+        ).resolves.toBe(true)
+
+        expect(debuggerSendCommand).not.toHaveBeenCalledWith(
+          'Emulation.setUserAgentOverride',
+          expect.anything()
+        )
+      }
+    )
+
     it('clears device metrics and disables touch for override=null', async () => {
       const { guest, debuggerSendCommand } = makeGuest(4343)
       webContentsFromIdMock.mockReturnValue(guest)

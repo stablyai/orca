@@ -121,7 +121,7 @@ describe('relay PTY consumer owner displacement', () => {
     expect(adapter.deliveryMode(reconnectClientId)).toBe('source-owner')
     // Why: revocation is what bounds the takeover — the stale owner cannot open or drive deliveries again
     // even though its socket never closed.
-    expect(adapter.deliveryMode(1)).toBe('subscriber')
+    expect(adapter.deliveryMode(1)).toBe('unadmitted')
     expect(adapter.openDelivery(1, 'pty-2', 'incarnation-1')).toBeNull()
     expect(detached).toContain(1)
     expect(closeStaleTransport).toHaveBeenCalledOnce()
@@ -244,7 +244,7 @@ describe('relay PTY consumer owner displacement', () => {
 
     grantSettlement!({ ok: false, error: new Error('reconnect socket closed mid-response') })
     expect(adapter.deliveryMode(1)).toBe('source-owner')
-    expect(adapter.deliveryMode(reconnectClientId)).toBe('subscriber')
+    expect(adapter.deliveryMode(reconnectClientId)).toBe('unadmitted')
 
     // Why: the rolled-back attempt must leave the incumbent's lease reclaimable by the next reconnect.
     const retryWrites: Buffer[] = []
@@ -275,7 +275,7 @@ describe('relay PTY consumer owner displacement', () => {
       role: 'session-owner',
       ownerGeneration: 3
     })
-    expect(adapter.deliveryMode(1)).toBe('subscriber')
+    expect(adapter.deliveryMode(1)).toBe('unadmitted')
     expect(detached).toContain(1)
   })
 
@@ -349,7 +349,7 @@ describe('relay PTY consumer owner displacement', () => {
       code: PTY_CONSUMER_OWNER_RECOVERY_SUPERSEDED_ERROR
     })
     expect(adapter.deliveryMode(firstReconnectClientId)).toBe('source-owner')
-    expect(adapter.deliveryMode(retryClientId)).toBe('subscriber')
+    expect(adapter.deliveryMode(retryClientId)).toBe('unadmitted')
 
     dispatcher.detachClient(firstReconnectClientId)
     dispatcher.feedClient(

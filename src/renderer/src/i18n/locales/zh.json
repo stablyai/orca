@@ -629,6 +629,13 @@
             "triageFollowupsSummary": "设置负责人、优先级或预估工时，并创建带父级关联的后续议题。",
             "triageFollowupsPrompt": "使用 {{value0}} 对关联的 Linear 议题进行分类处理 — 设置优先级和预估工时 — 并为延后清理创建带父级关联的后续议题。"
           }
+        },
+        "issue": {
+          "workspace": {
+            "open": {
+              "4f2c1d8a3b": "无法打开关联到此议题的工作区。"
+            }
+          }
         }
       },
       "codex": {
@@ -1208,7 +1215,13 @@
         "af6e02c44a": "页面",
         "76ffd3c937": "搜索要添加的项目。",
         "c11b4e3cc2": "没有找到项目。",
-        "519c3587f3": "添加到项目"
+        "519c3587f3": "添加到项目",
+        "openAttachedWorkspace": "打开关联到议题的工作区",
+        "openWorkspace": "打开工作区",
+        "moreWorkspaceActions": "更多议题工作区操作",
+        "startNewWorkspace": "启动新工作区",
+        "workspaceSection": "工作区",
+        "noWorkspaceYet": "暂无"
       },
       "LinearItemDrawer": {
         "04008e6c46": "从议题开始工作区",
@@ -1240,7 +1253,11 @@
         "39883467f4": "Linear 议题",
         "fda549766e": "{{value0}} 发表评论",
         "d71cd3003e": "+ 负责人",
-        "commentTooLarge": "评论过长，无法安全提交。"
+        "commentTooLarge": "评论过长，无法安全提交。",
+        "openAttachedWorkspace": "打开关联到议题的工作区",
+        "openWorkspace": "打开工作区",
+        "moreWorkspaceActions": "更多议题工作区操作",
+        "startNewWorkspace": "启动新工作区"
       },
       "NewWorkspaceComposerCard": {
         "cbb47ee0dc": "仅适用于本地 Git 项目。",
@@ -1849,6 +1866,14 @@
         "linearEmptyAttributeFilter": "没有匹配所选筛选条件的问题。请清除筛选条件或尝试其他条件。",
         "linearEmptyUnfilteredScope": "此工作区范围内没有问题。请尝试搜索或调整团队。",
         "linearFetchMore": "加载更多",
+        "linearHasWorktreeLoadFailed": "无法加载关联到 Orca 工作区的 Linear 议题。",
+        "linearHasWorktreePartialLoadFailed": "部分关联到 Orca 工作区的 Linear 议题无法加载。请刷新后重试。",
+        "linearHasWorktreeSearchPlaceholder": "筛选关联到 Orca 工作区的议题...",
+        "linearModeHasWorktree": "有工作区",
+        "linearModeHasWorktreeTooltip": "已关联 Orca 工作区的 Linear 工单",
+        "linearEmptyHasWorktree": "还没有关联到 Orca 工作区的 Linear 工单。从 Linear 议题开始工作后会显示在这里。",
+        "linearOpenAttachedWorkspace": "打开关联到 {{value0}} 的工作区",
+        "linearWorktreesColumn": "工作区",
         "jiraSortAscending": "升序",
         "jiraSortDescending": "降序",
         "jiraSortBy": "排序方式",
@@ -4254,7 +4279,9 @@
           "83a820fa71": "筛选项目...",
           "5a273fbfce": "添加项目...",
           "4815c70605": "没有匹配的项目",
-          "bbbc6e8e3b": "没有匹配的未选择项目"
+          "bbbc6e8e3b": "没有匹配的未选择项目",
+          "allProjects": "所有项目",
+          "selectedProjectsCount": "{{value0}} 个项目"
         },
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "重启 Orca",
@@ -4332,6 +4359,7 @@
           "680043342f": "紧凑",
           "c7591b6014": "仓库",
           "hosts": "主机",
+          "showSection": "显示",
           "allHostsDetail": "显示所有主机",
           "configuredSshHost": "已配置 SSH",
           "projectSshHost": "项目 SSH",
@@ -4348,19 +4376,6 @@
           "automation": "自动化",
           "folderPathIdentity": "分支 / 文件夹路径",
           "cli": "Orca CLI"
-        },
-        "SshDisconnectedDialog": {
-          "ca4a7892af": "正在连接...",
-          "89385db176": "关闭",
-          "656368f3a2": "重连失败",
-          "376bed88e5": "与远程主机的连接遇到错误。",
-          "4afcca1d24": "重新连接",
-          "11552bf786": "SSH 已断开",
-          "cb5938ae79": "正在重新连接...",
-          "disconnected": "此 SSH 主机未连接。",
-          "reconnecting": "正在重新连接远程主机...",
-          "reconnectionFailed": "重新连接到远程主机失败。",
-          "authFailed": "远程主机身份验证失败。"
         },
         "SshTargetRow": {
           "4677394048": "正在连接…",
@@ -10568,7 +10583,9 @@
             "b8c2e1a904": "{{value0}} → {{value1}}",
             "a4e93c21d7": "当前分支：{{value0}}",
             "c7d4e2f801": "更改基引用：{{value0}}",
-            "f3a1b8c204": "upstream"
+            "f3a1b8c204": "upstream",
+            "createPrIntentEmptyGeneratedBody": "生成的评审详情未包含描述。请重试创建 PR。",
+            "createPrIntentGenerateDetailsFailed": "无法生成评审详情。请重试创建 PR。"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的智能体。",
@@ -12989,6 +13006,20 @@
           "6bbf827ef5": "标题 5",
           "d1bbf9a835": "可折叠小节"
         },
+        "RichMarkdownTableControls": {
+          "deleteTable": "删除表格",
+          "tableActions": "表格操作",
+          "addColumn": "添加列",
+          "addRow": "添加行",
+          "rowActions": "行操作",
+          "columnActions": "列操作",
+          "insertRowAbove": "在上方插入行",
+          "insertColumnLeft": "在左侧插入列",
+          "insertRowBelow": "在下方插入行",
+          "insertColumnRight": "在右侧插入列",
+          "deleteRow": "删除行",
+          "deleteColumn": "删除列"
+        },
         "UntitledFileRenameDialog": {
           "a7dd27b0bc": "保存",
           "949711deb4": "取消",
@@ -13444,6 +13475,8 @@
             "1b179ab561": "复制页面网址",
             "f7ab83f7ed": "在默认浏览器中打开页面",
             "0e080d820e": "重新加载",
+            "a1f3c2e4b5": "硬刷新",
+            "b7e4d9c1a2": "停止",
             "250a9b3e42": "向前",
             "40edfa75cb": "返回",
             "efb0e8f7f3": "复制链接地址",
@@ -14384,6 +14417,28 @@
         "loadFailed": "加载 GitLab 作业日志失败。",
         "emptyTrace": "此 GitLab 作业没有可用的日志。",
         "timedOut": "加载 GitLab 作业日志超时。"
+      }
+    },
+    "ssh": {
+      "sshConnectVerb": {
+        "connect": "连接",
+        "connecting": "正在连接…",
+        "reconnect": "重新连接",
+        "retry": "重试"
+      }
+    },
+    "main": {
+      "window": {
+        "editableContextMenu": {
+          "table": "表格",
+          "insertRowAbove": "在上方插入行",
+          "insertRowBelow": "在下方插入行",
+          "deleteRow": "删除行",
+          "insertColumnLeft": "在左侧插入列",
+          "insertColumnRight": "在右侧插入列",
+          "deleteColumn": "删除列",
+          "deleteTable": "删除表格"
+        }
       }
     }
   },

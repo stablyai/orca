@@ -119,13 +119,21 @@ describe('worktree git-common narrow watch (darwin)', () => {
     }
   }
 
-  async function startWatch(commonDir: string, received: WorktreeBasePollEvent[][]): Promise<void> {
+  async function startWatch(
+    commonDir: string,
+    received: WorktreeBasePollEvent[][],
+    getStatusRefPaths: () => readonly string[] = () => [],
+    onWatchError?: (error: Error) => void
+  ): Promise<void> {
     const watch = await startGitCommonWatch(
       makeTarget(commonDir),
       (events) => received.push(events),
       POLL_MS,
       'darwin',
-      alwaysVisible
+      alwaysVisible,
+      undefined,
+      getStatusRefPaths,
+      onWatchError
     )
     cleanups.push(() => watch.unsubscribe())
   }
@@ -144,6 +152,58 @@ describe('worktree git-common narrow watch (darwin)', () => {
     const entryPath = join(commonDir, 'worktrees', 'wt-a')
     childSubscriptions[0].callback(null, [{ type: 'create', path: entryPath }])
     expect(received.flat()).toContainEqual({ type: 'create', path: entryPath })
+  })
+
+  it('detects a common config write via the primary-metadata poll', async () => {
+    // Why: an external `git push -u` rewrites only the common config (plus
+    // remote-tracking refs) — outside the narrow worktrees/ stream, so the
+    // primary-metadata poll must carry it.
+    installSubscribeMock()
+    const commonDir = await makeCommonDir(true)
+    const configPath = join(commonDir, 'config')
+    await writeFile(configPath, '[core]\n\tbare = false\n')
+    const received: WorktreeBasePollEvent[][] = []
+    await startWatch(commonDir, received)
+
+    await appendFile(configPath, '[branch "main"]\n\tremote = origin\n')
+    await vi.waitFor(() => {
+      expect(received.flat()).toContainEqual({ type: 'update', path: configPath })
+    })
+  })
+
+  it('polls only the accepted upstream ref and rebinds without synthetic events', async () => {
+    installSubscribeMock()
+    const commonDir = await makeCommonDir(true)
+    const firstRef = join(commonDir, 'refs', 'remotes', 'origin', 'first')
+    const nextRef = join(commonDir, 'refs', 'remotes', 'origin', 'next')
+    const unrelatedRef = join(commonDir, 'refs', 'remotes', 'origin', 'unrelated')
+    await mkdir(join(commonDir, 'refs', 'remotes', 'origin'), { recursive: true })
+    await Promise.all([
+      writeFile(firstRef, 'aaa\n'),
+      writeFile(nextRef, 'bbb\n'),
+      writeFile(unrelatedRef, 'ccc\n')
+    ])
+    let selected = [firstRef]
+    const received: WorktreeBasePollEvent[][] = []
+    await startWatch(commonDir, received, () => selected)
+
+    statCalls.length = 0
+    await appendFile(firstRef, 'updated\n')
+    await vi.waitFor(() => {
+      expect(received.flat()).toContainEqual({ type: 'update', path: firstRef })
+    })
+    expect(statCalls).not.toContain(unrelatedRef)
+
+    received.length = 0
+    selected = [nextRef]
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS * 2))
+    expect(received.flat()).toEqual([])
+    await appendFile(firstRef, 'ignored\n')
+    await appendFile(nextRef, 'watched\n')
+    await vi.waitFor(() => {
+      expect(received.flat()).toContainEqual({ type: 'update', path: nextRef })
+    })
+    expect(received.flat()).not.toContainEqual({ type: 'update', path: firstRef })
   })
 
   it('tears down and re-arms when the watched root is deleted', async () => {
@@ -197,6 +257,20 @@ describe('worktree git-common narrow watch (darwin)', () => {
     // A replaced watch cannot tear down its successor or report stale events.
     expect(received).toHaveLength(receivedAfterRearm)
     expect(childSubscriptions[1].unsubscribe).not.toHaveBeenCalled()
+  })
+
+  it('routes watcher failures through the unknown-metadata callback', async () => {
+    installSubscribeMock()
+    const commonDir = await makeCommonDir(true)
+    const received: WorktreeBasePollEvent[][] = []
+    const onWatchError = vi.fn()
+    await startWatch(commonDir, received, () => [], onWatchError)
+
+    const error = new Error('watcher child reported failure')
+    childSubscriptions[0].callback(error, [])
+
+    expect(onWatchError).toHaveBeenCalledWith(error)
+    expect(received).toEqual([])
   })
 
   it('reports a structural change after a watcher-child interruption', async () => {
@@ -415,7 +489,8 @@ describe('worktree git-common polling gate (non-darwin)', () => {
     commonDir: string,
     received: WorktreeBasePollEvent[][],
     onFullScan?: () => void,
-    visibility: WorktreePollerWindowVisibility = alwaysVisible
+    visibility: WorktreePollerWindowVisibility = alwaysVisible,
+    getStatusRefPaths: () => readonly string[] = () => []
   ): Promise<void> {
     const watch = await startGitCommonWatch(
       makePollingTarget(commonDir),
@@ -423,7 +498,8 @@ describe('worktree git-common polling gate (non-darwin)', () => {
       POLL_MS,
       'linux',
       visibility,
-      onFullScan
+      onFullScan,
+      getStatusRefPaths
     )
     cleanups.push(() => watch.unsubscribe())
   }
@@ -539,6 +615,47 @@ describe('worktree git-common polling gate (non-darwin)', () => {
       expect(received.flat()).toContainEqual({ type: 'update', path: headLogPath })
     })
     expect(fullScans).not.toHaveBeenCalled()
+  })
+
+  it('polls the common config so an external push -u surfaces its new upstream', async () => {
+    // Why: `git push -u` from an external shell rewrites only the common
+    // config (plus remote-tracking refs); the primary-metadata list must
+    // surface it or the upstream stays invisible until a safety poll.
+    const commonDir = await makePollingCommonDir()
+    const configPath = join(commonDir, 'config')
+    await writeFile(configPath, '[core]\n\tbare = false\n')
+    const received: WorktreeBasePollEvent[][] = []
+    const fullScans = vi.fn()
+    await startPollingWatch(commonDir, received, fullScans)
+
+    await appendFile(configPath, '[branch "main"]\n\tremote = origin\n')
+    await vi.waitFor(() => {
+      expect(received.flat()).toContainEqual({ type: 'update', path: configPath })
+    })
+    expect(fullScans).not.toHaveBeenCalled()
+  })
+
+  it('detects create, update, and delete for one transient upstream ref', async () => {
+    const commonDir = await makePollingCommonDir()
+    const refPath = join(commonDir, 'refs', 'remotes', 'origin', 'feature', 'nested')
+    await mkdir(join(commonDir, 'refs', 'remotes', 'origin', 'feature'), { recursive: true })
+    const received: WorktreeBasePollEvent[][] = []
+    await startPollingWatch(commonDir, received, undefined, alwaysVisible, () => [refPath])
+
+    await writeFile(refPath, 'aaa\n')
+    await vi.waitFor(() => {
+      expect(received.flat()).toContainEqual({ type: 'create', path: refPath })
+    })
+    received.length = 0
+    await appendFile(refPath, 'bbb\n')
+    await vi.waitFor(() => {
+      expect(received.flat()).toContainEqual({ type: 'update', path: refPath })
+    })
+    received.length = 0
+    await rm(refPath)
+    await vi.waitFor(() => {
+      expect(received.flat()).toContainEqual({ type: 'delete', path: refPath })
+    })
   })
 
   it('forces a full scan on the 15-tick backstop', async () => {

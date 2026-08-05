@@ -170,7 +170,9 @@ export async function createWorkerWorktree(args: {
   if (!terminalHandle) {
     throw new Error(created.warning ?? 'Agent-first worktree creation returned no terminal.')
   }
-  const listed = await runtime.listTerminals(`id:${created.worktree.id}`)
+  const listed = await runtime.listTerminals(`id:${created.worktree.id}`, undefined, {
+    includeVisualLayouts: false
+  })
   const setupTerminalHandle = created.setupReceipt?.terminalHandle
   for (const terminal of listed.terminals) {
     effects.push({

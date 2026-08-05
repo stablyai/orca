@@ -1,7 +1,8 @@
 import type { AgentType } from './agent-status-types'
 import {
   CLAUDE_SESSION_OPTION_CATALOG,
-  CODEX_SESSION_OPTION_CATALOG
+  CODEX_SESSION_OPTION_CATALOG,
+  createClaudeCatalogOptions
 } from './agent-session-option-catalog-claude-codex'
 import {
   CURSOR_SESSION_OPTION_CATALOG,
@@ -23,6 +24,7 @@ export type {
   CatalogOption,
   CatalogOptionApply
 } from './agent-session-option-catalog-types'
+export { createClaudeCatalogOptions }
 
 const CATALOGS: AgentSessionOptionCatalogMap = {
   claude: CLAUDE_SESSION_OPTION_CATALOG,
@@ -49,8 +51,7 @@ export function findCatalogOption(
   return model?.options.find((option) => option.id === optionId)
 }
 
-/** Merge live rows over the static seed while retaining only option shapes Orca
- * can actually map. Newly discovered ids remain model-only until cataloged. */
+/** Merge live rows over the static seed while retaining cataloged option mappings. */
 export function mergeCatalogModels(
   seed: readonly CatalogModel[],
   discovered: readonly CatalogModel[]

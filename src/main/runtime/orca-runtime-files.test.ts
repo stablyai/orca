@@ -836,9 +836,17 @@ describe('RuntimeFileCommands', () => {
       commands: RuntimeFileCommands,
       pathText: string,
       cwd: string | null = null,
-      clientId = 'client-a'
+      clientId = 'client-a',
+      crossWorkspace = false
     ) {
-      return commands.resolveTerminalPath('id:wt-1', pathText, cwd, clientId, 'term-1')
+      return commands.resolveTerminalPath(
+        'id:wt-1',
+        pathText,
+        cwd,
+        clientId,
+        'term-1',
+        crossWorkspace
+      )
     }
 
     function createRemoteTerminalArtifactGrantFixture(artifactPath = '/tmp/result.json') {
@@ -911,7 +919,14 @@ describe('RuntimeFileCommands', () => {
       })
       statAsFile()
 
-      const result = await commands.resolveTerminalPath('id:wt-1', '/sibling/docs/readme.md')
+      const result = await commands.resolveTerminalPath(
+        'id:wt-1',
+        '/sibling/docs/readme.md',
+        null,
+        undefined,
+        null,
+        true
+      )
 
       expect(resolveKnownWorkspaceFileTarget).toHaveBeenCalledWith(
         '/sibling/docs/readme.md',
@@ -958,7 +973,7 @@ describe('RuntimeFileCommands', () => {
       resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
       statMock.mockResolvedValue({ isDirectory: () => true })
 
-      const result = await resolveTerminalArtifactPath(commands, '/sibling')
+      const result = await resolveTerminalArtifactPath(commands, '/sibling', null, 'client-a', true)
 
       expect(resolveKnownWorkspaceFileTarget).toHaveBeenCalledWith('/sibling', 'local')
       expect(result).toEqual({
@@ -999,7 +1014,14 @@ describe('RuntimeFileCommands', () => {
       const remoteStat = vi.fn().mockResolvedValue({ type: 'file', size: 12, mtime: 3 })
       vi.mocked(getSshFilesystemProvider).mockReturnValue({ stat: remoteStat } as never)
 
-      const result = await commands.resolveTerminalPath('id:wt-1', '/sibling/docs/readme.md')
+      const result = await commands.resolveTerminalPath(
+        'id:wt-1',
+        '/sibling/docs/readme.md',
+        null,
+        undefined,
+        null,
+        true
+      )
 
       expect(resolveKnownWorkspaceFileTarget).toHaveBeenCalledWith(
         '/sibling/docs/readme.md',
@@ -1044,7 +1066,7 @@ describe('RuntimeFileCommands', () => {
       const remoteStat = vi.fn().mockResolvedValue({ type: 'directory', size: 0, mtime: 3 })
       vi.mocked(getSshFilesystemProvider).mockReturnValue({ stat: remoteStat } as never)
 
-      const result = await resolveTerminalArtifactPath(commands, '/sibling')
+      const result = await resolveTerminalArtifactPath(commands, '/sibling', null, 'client-a', true)
 
       expect(resolveKnownWorkspaceFileTarget).toHaveBeenCalledWith('/sibling', 'ssh:ssh-1')
       expect(remoteStat).toHaveBeenCalledWith('/sibling')
@@ -1068,12 +1090,49 @@ describe('RuntimeFileCommands', () => {
         resolveKnownWorkspaceFileTarget
       })
 
-      await commands.resolveTerminalPath('id:wt-1', '/repo-b/docs/readme.md')
+      await commands.resolveTerminalPath(
+        'id:wt-1',
+        '/repo-b/docs/readme.md',
+        null,
+        undefined,
+        null,
+        true
+      )
 
       expect(resolveKnownWorkspaceFileTarget).toHaveBeenCalledWith(
         '/repo-b/docs/readme.md',
         'runtime:env-a'
       )
+    })
+
+    // Why: clients predating crossWorkspace (mobile <=0.0.36) reuse their own worktree
+    // id for files.open, so they must keep the pre-sibling-resolution contract.
+    it('keeps the caller worktree and a null relativePath when crossWorkspace is not requested', async () => {
+      const resolveKnownWorkspaceFileTarget = vi.fn(async () => ({
+        worktree: {
+          id: 'wt-2',
+          repoId: 'repo-2',
+          path: '/sibling',
+          git: { path: '/sibling', head: '', branch: '', isBare: false, isMainWorktree: true }
+        },
+        relativePath: 'docs/readme.md'
+      }))
+      const { commands } = createRuntimeFileCommands({
+        path: '/repo',
+        resolveKnownWorkspaceFileTarget
+      })
+      statAsFile()
+
+      const result = await commands.resolveTerminalPath('id:wt-1', '/sibling/docs/readme.md')
+
+      expect(resolveKnownWorkspaceFileTarget).not.toHaveBeenCalled()
+      expect(result).toEqual({
+        worktree: 'wt-1',
+        relativePath: null,
+        absolutePath: '/sibling/docs/readme.md',
+        exists: false,
+        isDirectory: false
+      })
     })
 
     it('resolves a relative path against the provided cwd', async () => {

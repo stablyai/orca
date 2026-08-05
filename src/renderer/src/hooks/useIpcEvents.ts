@@ -24,6 +24,7 @@ import type { SplitTerminalPaneDetail, CloseTerminalPaneDetail } from '@/constan
 import { getVisibleWorktreeIds } from '@/components/sidebar/visible-worktrees'
 import { activateTabNumberShortcut } from '@/lib/tab-number-shortcuts'
 import { nextEditorFontZoomLevel, computeEditorFontSize } from '@/lib/editor-font-zoom'
+import { canConnectSshStatus } from '@/ssh/ssh-connection-recoverability'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
@@ -2806,7 +2807,7 @@ export function useIpcEvents(): void {
       const previous = store.sshConnectionStates?.get(targetId)
       store.setSshConnectionState(targetId, state)
 
-      if (['disconnected', 'auth-failed', 'reconnection-failed', 'error'].includes(state.status)) {
+      if (canConnectSshStatus(state.status)) {
         reconnectAuthorityByTarget.delete(targetId)
         reconnectCoordinator.invalidate(targetId)
         // Why: remote agent list is tied to a live relay; clear on disconnect so reconnect re-detects against the new relay.
