@@ -25,6 +25,8 @@ describe('getAiVaultAgentProviderSession', () => {
       key: 'session_id',
       id: 'codex-1'
     })
+    expect(getAiVaultAgentProviderSession({ agent: 'pi', sessionId: 'pi-1' })).toBeNull()
+    expect(getAiVaultAgentProviderSession({ agent: 'cursor', sessionId: 'cursor-1' })).toBeNull()
   })
 })
 

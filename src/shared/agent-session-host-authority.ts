@@ -107,6 +107,8 @@ export type RuntimeEnsureAgentSessionRequest =
       agent: ResumableTuiAgent
       providerSession: AgentProviderSessionMetadata
       startupCwd?: string
+      env?: Record<string, string>
+      envToDelete?: string[]
       ompResumeFilePath?: string
       /** Explicit client override. Omission keeps launch defaults host-owned. */
       agentArgs?: string | null

@@ -2,6 +2,7 @@ import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../../src/shared/agent-session-resume'
+import type { RuntimeEnsureAgentSessionResult } from '../../../src/shared/agent-session-host-authority'
 import type { TuiAgent } from '../../../src/shared/types'
 import { AI_VAULT_HOST_AUTHORITY_RESUME_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 import type { RpcClient } from '../transport/rpc-client'
@@ -17,6 +18,8 @@ type HostAuthorityResumeLaunch = {
   providerSession?: AgentProviderSessionMetadata
   launchConfig?: SleepingAgentLaunchConfig
   startupCwd?: string
+  env?: Record<string, string>
+  envToDelete?: string[]
   hostAuthorityEligible?: boolean
 }
 
@@ -47,6 +50,8 @@ export async function tryHostAuthorityAiVaultResume(
       agent: launch.launchAgent,
       providerSession: launch.providerSession,
       ...(launch.startupCwd ? { startupCwd: launch.startupCwd } : {}),
+      ...(launch.env ? { env: launch.env } : {}),
+      ...(launch.envToDelete ? { envToDelete: launch.envToDelete } : {}),
       ...(launch.launchConfig?.ompResumeFilePath
         ? { ompResumeFilePath: launch.launchConfig.ompResumeFilePath }
         : {}),
@@ -68,10 +73,11 @@ export async function tryHostAuthorityAiVaultResume(
     }
     throw new Error(ensured.error?.message || 'Failed to resume agent session')
   }
-  const terminal = readEnsuredTerminal(ensured.result)
-  if (!terminal) {
+  const ensuredResult = readEnsuredAgentSessionResult(ensured.result)
+  if (!ensuredResult) {
     throw new Error('Ensured terminal response was invalid')
   }
+  const { terminal } = ensuredResult
   let activated
   try {
     activated = await activateMobileSessionTab(
@@ -95,18 +101,23 @@ export async function tryHostAuthorityAiVaultResume(
   }
   return {
     terminal,
-    created:
-      !!ensured.result &&
-      typeof ensured.result === 'object' &&
-      (ensured.result as { disposition?: unknown }).disposition === 'created'
+    created: ensuredResult.disposition === 'created'
   }
 }
 
-function readEnsuredTerminal(value: unknown): MobileReviewTerminalTab | null {
+function readEnsuredAgentSessionResult(value: unknown):
+  | (Pick<RuntimeEnsureAgentSessionResult, 'disposition'> & {
+      terminal: MobileReviewTerminalTab
+    })
+  | null {
   if (!value || typeof value !== 'object') {
     return null
   }
-  const terminal = (value as { terminal?: unknown }).terminal
+  const result = value as { disposition?: unknown; terminal?: unknown }
+  if (result.disposition !== 'created' && result.disposition !== 'adopted') {
+    return null
+  }
+  const terminal = result.terminal
   if (!terminal || typeof terminal !== 'object') {
     return null
   }
@@ -115,9 +126,12 @@ function readEnsuredTerminal(value: unknown): MobileReviewTerminalTab | null {
     return null
   }
   return {
-    id: record.tabId,
-    terminal: record.handle,
-    title: typeof record.title === 'string' && record.title ? record.title : 'Terminal'
+    disposition: result.disposition,
+    terminal: {
+      id: record.tabId,
+      terminal: record.handle,
+      title: typeof record.title === 'string' && record.title ? record.title : 'Terminal'
+    }
   }
 }
 

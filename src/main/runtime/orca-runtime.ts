@@ -25160,6 +25160,7 @@ export class OrcaRuntimeService {
       isRemote,
       terminalWindowsShell: settings.terminalWindowsShell
     })
+    const hostAgentEnv = resolveTuiAgentLaunchEnv(request.agent, settings.agentDefaultEnv)
     const startup = buildAgentResumeStartupPlan({
       agent: request.agent,
       providerSession: identity.providerSession,
@@ -25168,7 +25169,7 @@ export class OrcaRuntimeService {
         request.agentArgs !== undefined
           ? request.agentArgs
           : resolveTuiAgentLaunchArgs(request.agent, settings.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(request.agent, settings.agentDefaultEnv),
+      agentEnv: request.env ? { ...hostAgentEnv, ...request.env } : hostAgentEnv,
       ompResumeFilePath: request.ompResumeFilePath,
       sessionOptions: this.toAgentSessionOptions(request.launchPreferences),
       platform,
@@ -25195,6 +25196,7 @@ export class OrcaRuntimeService {
       command: startup.launchCommand,
       ...(startupCwd ? { cwd: startupCwd } : {}),
       env: startup.env,
+      ...(request.envToDelete ? { envToDelete: request.envToDelete } : {}),
       launchConfig: startup.launchConfig,
       launchAgent: request.agent,
       resumeProviderSession: identity.providerSession,

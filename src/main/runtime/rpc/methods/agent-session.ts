@@ -133,6 +133,8 @@ const ExplicitEnsure = z
       MAX_WORKTREE_SELECTOR_LENGTH,
       'Invalid startup directory'
     ).optional(),
+    env: z.record(z.string(), z.string()).optional(),
+    envToDelete: z.array(z.string().min(1).max(256)).max(32).optional(),
     ompResumeFilePath: OmpResumeFilePath.optional(),
     agentArgs: AgentArgs.optional(),
     launchPreferences: LaunchPreferences.optional(),

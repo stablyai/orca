@@ -13184,13 +13184,17 @@ describe('OrcaRuntimeService', () => {
       worktree: `id:${TEST_WORKTREE_ID}`,
       agent: 'codex',
       providerSession,
-      startupCwd: `${TEST_WORKTREE_PATH}/packages/app`
+      startupCwd: `${TEST_WORKTREE_PATH}/packages/app`,
+      env: { CODEX_PROFILE: 'history-profile' },
+      envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME']
     })
 
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
         command: expect.stringMatching(/\bresume\b.*codex-provider-session-1/),
         cwd: `${TEST_WORKTREE_PATH}/packages/app`,
+        env: expect.objectContaining({ CODEX_PROFILE: 'history-profile' }),
+        envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
         resumeProviderSession: providerSession
       })
     )

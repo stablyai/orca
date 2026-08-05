@@ -107,6 +107,11 @@ export function buildMobileAiVaultResumeLaunch(
   const resumeTitle = args.session.title.trim() || undefined
   const hostTranscriptPath = args.session.filePath?.trim() || undefined
   const resumeFilePath = normalizeAiVaultResumeFilePath(args.session.filePath, args.hostPlatform)
+  const agentEnv = resolveMobileAiVaultResumeAgentEnv(
+    args.session.agent,
+    codexHome,
+    resolveTuiAgentLaunchEnv(args.session.agent, args.settings?.agentDefaultEnv)
+  )
   if (isResumableTuiAgent(args.session.agent)) {
     const baseProviderSession = getAiVaultAgentProviderSession({
       agent: args.session.agent,
@@ -131,7 +136,7 @@ export function buildMobileAiVaultResumeLaunch(
       platform: args.hostPlatform,
       shell,
       agentArgs: resolveTuiAgentLaunchArgs(args.session.agent, args.settings?.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(args.session.agent, args.settings?.agentDefaultEnv),
+      agentEnv,
       ...(args.session.agent === 'omp' && resumeFilePath
         ? { ompResumeFilePath: resumeFilePath }
         : {})
@@ -174,6 +179,30 @@ export function buildMobileAiVaultResumeLaunch(
     }
   }
   return buildLegacyMobileAiVaultResumeLaunch(args, commandOverride)
+}
+
+function resolveMobileAiVaultResumeAgentEnv(
+  agent: TuiAgent,
+  codexHome: string | null,
+  configuredEnv: Record<string, string>
+): Record<string, string> {
+  const env = { ...configuredEnv }
+  if (agent !== 'codex') {
+    return env
+  }
+  if (codexHome) {
+    // The host-authority route does not execute the mobile-built shell prefix.
+    // Pin both values so native, daemon, WSL, and SSH startup wrappers select
+    // the same verified history home as the legacy command route.
+    env.CODEX_HOME = codexHome
+    env.ORCA_CODEX_HOME = codexHome
+  } else {
+    // Do not retain a configured home in sleeping launch metadata for a
+    // real-home session; envToDelete below also removes process inheritance.
+    delete env.CODEX_HOME
+    delete env.ORCA_CODEX_HOME
+  }
+  return env
 }
 
 function buildLegacyMobileAiVaultResumeLaunch(

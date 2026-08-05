@@ -259,15 +259,17 @@ describe('buildMobileAiVaultResumeLaunch', () => {
   })
 
   it('keeps managed-home Codex resumes free of env deletion', () => {
+    const codexHome = '/Users/ada/.orca/codex-runtime-home/home'
     const launch = buildMobileAiVaultResumeLaunch({
       session: session({
         agent: 'codex',
         sessionId: 'codex-1',
-        codexHome: '/Users/ada/.orca/codex-runtime-home/home'
+        codexHome
       }),
       hostPlatform: 'darwin'
     })
-    expect(launch.command).toContain("CODEX_HOME='/Users/ada/.orca/codex-runtime-home/home'")
+    expect(launch.command).toContain(`CODEX_HOME='${codexHome}'`)
+    expect(launch.env).toMatchObject({ CODEX_HOME: codexHome, ORCA_CODEX_HOME: codexHome })
     expect(launch.envToDelete).toBeUndefined()
   })
 })
@@ -293,7 +295,12 @@ describe('resumeAiVaultSessionInTerminal', () => {
         sessionId: 'codex-1',
         filePath: transcriptPath
       }),
-      hostPlatform: 'linux'
+      hostPlatform: 'linux',
+      settings: {
+        agentDefaultEnv: {
+          codex: { CODEX_PROFILE: 'history-profile', CODEX_HOME: '/stale/codex-home' }
+        }
+      }
     })
 
     await expect(
@@ -313,6 +320,8 @@ describe('resumeAiVaultSessionInTerminal', () => {
           id: 'codex-1',
           transcriptPath
         },
+        env: { CODEX_PROFILE: 'history-profile' },
+        envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
         startupCwd: '/Users/ada/repo',
         presentation: 'background'
       }),
@@ -491,6 +500,24 @@ describe('resumeAiVaultSessionInTerminal', () => {
       'terminal.send',
       'terminal.rename'
     ])
+  })
+
+  it('does not fall back when host authority may have started a resume', async () => {
+    const sendRequest = vi.fn().mockResolvedValueOnce({
+      ok: false,
+      error: { code: 'internal_error', message: 'host failed after dispatch' }
+    })
+    const launch = buildMobileAiVaultResumeLaunch({
+      session: session({ agent: 'codex', sessionId: 'codex-1' }),
+      hostPlatform: 'linux'
+    })
+
+    await expect(
+      resumeAiVaultSessionInTerminal({ sendRequest }, 'worktree-1', launch, {
+        hostCapabilities: [MOBILE_AI_VAULT_HOST_AUTHORITY_RESUME_CAPABILITY]
+      })
+    ).rejects.toThrow('host failed after dispatch')
+    expect(sendRequest.mock.calls.map((call) => call[0])).toEqual(['terminal.ensureAgentSession'])
   })
 
   it('keeps Windows-hosted WSL resumes on the platform-correct legacy path', async () => {
