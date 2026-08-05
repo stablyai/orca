@@ -13,6 +13,7 @@ type WorktreePathIndexEntry = {
   loadPromise: Promise<void> | null
   activeRequestToken: string | null
   cancelLoad: ((requestToken: string) => void) | null
+  listRelativePaths: ((requestToken: string) => Promise<readonly string[]>) | null
   // Why: multiple terminal tabs share one listing; only cancel when last consumer leaves.
   leaseCount: number
 }
@@ -54,6 +55,41 @@ function isFresh(entry: WorktreePathIndexEntry): boolean {
   return entry.loadedAt > 0 && Date.now() - entry.loadedAt < STALE_MS
 }
 
+function startIndexLoad(entry: WorktreePathIndexEntry): void {
+  if (entry.loadPromise || !entry.listRelativePaths) {
+    return
+  }
+  const requestToken = createBrowserUuid()
+  entry.activeRequestToken = requestToken
+  const listRelativePaths = entry.listRelativePaths
+  const loadPromise = listRelativePaths(requestToken)
+    .then((paths) => {
+      if (entry.activeRequestToken !== requestToken) {
+        return
+      }
+      const next = new Set<string>()
+      for (const path of paths) {
+        if (typeof path === 'string' && path.length > 0) {
+          next.add(normalizeWorktreeRelativePathKey(path))
+        }
+      }
+      entry.relativePaths = next
+      entry.loadedAt = Date.now()
+    })
+    .catch(() => {
+      // Why: listing is best-effort acceleration; hover still uses pathExists.
+    })
+    .finally(() => {
+      // Why: only the active request may clear in-flight state; a cancelled
+      // request finishing later must not wipe a newer loadPromise (#11975).
+      if (entry.activeRequestToken === requestToken) {
+        entry.activeRequestToken = null
+        entry.loadPromise = null
+      }
+    })
+  entry.loadPromise = loadPromise
+}
+
 export function lookupWorktreeListedPathExists(
   worktreeId: string,
   worktreePath: string,
@@ -62,7 +98,15 @@ export function lookupWorktreeListedPathExists(
 ): true | undefined {
   const entry = indexesByKey.get(indexKey(worktreeId, worktreePath, ownerKey))
   // Why: stale positive hits must not bypass pathExists forever (#11975 review).
-  if (!entry || !isFresh(entry)) {
+  // With an active lease, kick a background reload so multi-minute sessions
+  // regain the hot path without waiting for remount.
+  if (!entry) {
+    return undefined
+  }
+  if (!isFresh(entry)) {
+    if (entry.leaseCount > 0) {
+      startIndexLoad(entry)
+    }
     return undefined
   }
   const relative = toWorktreeRelativePath(absolutePath, worktreePath)
@@ -116,12 +160,15 @@ export function primeTerminalWorktreePathIndex({
       loadPromise: null,
       activeRequestToken: null,
       cancelLoad: null,
+      listRelativePaths: null,
       leaseCount: 0
     }
     indexesByKey.set(key, entry)
   }
   // Why: lease before eviction so a brand-new entry is never chosen as idle victim.
   entry.leaseCount += 1
+  entry.listRelativePaths = listRelativePaths
+  entry.cancelLoad = cancelLoad ?? null
   evictOldestIdleIndexesIfNeeded()
 
   if (entry.loadPromise) {
@@ -131,37 +178,7 @@ export function primeTerminalWorktreePathIndex({
     return
   }
 
-  const requestToken = createBrowserUuid()
-  entry.activeRequestToken = requestToken
-  entry.cancelLoad = cancelLoad ?? null
-
-  const loadPromise = listRelativePaths(requestToken)
-    .then((paths) => {
-      if (entry.activeRequestToken !== requestToken) {
-        return
-      }
-      const next = new Set<string>()
-      for (const path of paths) {
-        if (typeof path === 'string' && path.length > 0) {
-          next.add(normalizeWorktreeRelativePathKey(path))
-        }
-      }
-      entry.relativePaths = next
-      entry.loadedAt = Date.now()
-    })
-    .catch(() => {
-      // Why: listing is best-effort acceleration; hover still uses pathExists.
-    })
-    .finally(() => {
-      // Why: only the active request may clear in-flight state; a cancelled
-      // request finishing later must not wipe a newer loadPromise (#11975).
-      if (entry.activeRequestToken === requestToken) {
-        entry.activeRequestToken = null
-        entry.cancelLoad = null
-        entry.loadPromise = null
-      }
-    })
-  entry.loadPromise = loadPromise
+  startIndexLoad(entry)
 }
 
 export function releaseTerminalWorktreePathIndexLease(
@@ -214,6 +231,7 @@ export function seedTerminalWorktreePathIndexForTests(
     loadPromise: null,
     activeRequestToken: null,
     cancelLoad: null,
+    listRelativePaths: null,
     leaseCount: 1
   })
 }

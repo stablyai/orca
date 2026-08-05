@@ -740,25 +740,14 @@ export function useTerminalPaneLifecycle({
       resolveTerminalHttpLinkSourceOwner(paneTransportsRef.current.get(paneId))
     // Why: lifecycle-scoped cache for cross-SSH/runtime existence probes; may hold temporarily stale entries.
     const pathExistsCache = new Map<string, boolean>()
-    const linkDeps: LinkHandlerDeps = {
-      worktreeId,
-      worktreePath,
-      startupCwd,
-      getPaneLinkCwd,
-      terminalHomePath,
-      managerRef,
-      linkProviderDisposablesRef,
-      pathExistsCache,
-      getRuntimeEnvironmentIdForPane: (paneId) => {
-        const sourceOwner = getHttpLinkSourceOwnerForPane(paneId)
-        return sourceOwner.kind === 'runtime' ? sourceOwner.runtimeEnvironmentId : null
-      }
-    }
     // Why: warm positive-only worktree path index so hover linkify can skip
     // per-candidate shell:pathExists IPC for in-repo files (#11975). Never
     // awaited — miss degrades to the existing stat path. Use the worktree's
     // file-explorer owner (not global runtime focus) and cancel on teardown
     // so abandoned full-tree scans cannot stack on SSH/relay (#7721).
+    // Lookup must use this same owner key (via linkDeps.pathIndexOwnerKey), not
+    // the pane transport key — a local shell on a runtime-owned worktree still
+    // lists files through the explorer route.
     let pathIndexOwnerKey: string | null = null
     if (worktreeId && worktreePath) {
       const operationOwner = getFileExplorerOperationOwner(worktreeId)
@@ -785,6 +774,21 @@ export function useTerminalPaneLifecycle({
             }),
           cancelLoad: (requestToken) => cancelRuntimeFileList(fileContext, requestToken)
         })
+      }
+    }
+    const linkDeps: LinkHandlerDeps = {
+      worktreeId,
+      worktreePath,
+      startupCwd,
+      getPaneLinkCwd,
+      terminalHomePath,
+      managerRef,
+      linkProviderDisposablesRef,
+      pathExistsCache,
+      pathIndexOwnerKey,
+      getRuntimeEnvironmentIdForPane: (paneId) => {
+        const sourceOwner = getHttpLinkSourceOwnerForPane(paneId)
+        return sourceOwner.kind === 'runtime' ? sourceOwner.runtimeEnvironmentId : null
       }
     }
     let resizeRaf: number | null = null

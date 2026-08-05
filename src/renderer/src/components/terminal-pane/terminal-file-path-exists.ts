@@ -19,6 +19,7 @@ export async function resolveTerminalFilePathExists(args: {
   fileContext: RuntimeFileOperationArgs
   runtimeEnvironmentId?: string | null
   pathExistsCache: Map<string, boolean>
+  pathIndexOwnerKey?: string | null
 }): Promise<boolean> {
   const {
     mappedPath,
@@ -26,7 +27,8 @@ export async function resolveTerminalFilePathExists(args: {
     worktreePath,
     fileContext,
     runtimeEnvironmentId,
-    pathExistsCache
+    pathExistsCache,
+    pathIndexOwnerKey
   } = args
   const isRemoteRuntimePath = isRemoteRuntimeFileOperation(fileContext, mappedPath)
   const cacheKey = getTerminalPathExistsCacheKey({
@@ -36,14 +38,17 @@ export async function resolveTerminalFilePathExists(args: {
     runtimeEnvironmentId
   })
   const cachedExists = readTerminalPathExistsCache(pathExistsCache, cacheKey)
-  const listedExists = lookupWorktreeListedPathExists(
-    worktreeId,
-    worktreePath,
-    mappedPath,
+  const ownerKey =
+    pathIndexOwnerKey?.trim() ||
     terminalWorktreePathIndexOwnerKey({
       connectionId: fileContext.connectionId,
       runtimeEnvironmentId
     })
+  const listedExists = lookupWorktreeListedPathExists(
+    worktreeId,
+    worktreePath,
+    mappedPath,
+    ownerKey
   )
   const exists =
     cachedExists ??

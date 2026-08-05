@@ -51,6 +51,9 @@ export type LinkHandlerDeps = {
   runtimeEnvironmentId?: string | null
   terminalHomePath?: string | null
   getRuntimeEnvironmentIdForPane?: (paneId: number) => string | null
+  // Why: must match primeTerminalWorktreePathIndex's file-explorer owner key so
+  // local shells on runtime/SSH worktrees still hit the warm listing (#11975).
+  pathIndexOwnerKey?: string | null
 }
 
 type ProvidedFileLink = {
@@ -155,7 +158,8 @@ export function createFilePathLinkProvider(
                   worktreePath,
                   fileContext,
                   runtimeEnvironmentId,
-                  pathExistsCache
+                  pathExistsCache,
+                  pathIndexOwnerKey: deps.pathIndexOwnerKey
                 })
                 if (!exists) {
                   return null

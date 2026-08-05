@@ -60,6 +60,30 @@ describe('lookupWorktreeListedPathExists', () => {
     expect(lookupWorktreeListedPathExists('wt-1', '/repo', '/repo/a.ts', 'local')).toBeUndefined()
   })
 
+  it('reloads on lookup when a leased index is stale', async () => {
+    vi.useFakeTimers()
+    const listRelativePaths = vi
+      .fn()
+      .mockResolvedValueOnce(['a.ts'])
+      .mockResolvedValueOnce(['a.ts', 'b.ts'])
+
+    primeTerminalWorktreePathIndex({
+      worktreeId: 'wt-1',
+      worktreePath: '/repo',
+      ownerKey: 'local',
+      listRelativePaths
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(lookupWorktreeListedPathExists('wt-1', '/repo', '/repo/a.ts', 'local')).toBe(true)
+
+    vi.advanceTimersByTime(5 * 60 * 1000 + 1)
+    expect(lookupWorktreeListedPathExists('wt-1', '/repo', '/repo/a.ts', 'local')).toBeUndefined()
+    expect(listRelativePaths).toHaveBeenCalledTimes(2)
+
+    await vi.advanceTimersByTimeAsync(0)
+    expect(lookupWorktreeListedPathExists('wt-1', '/repo', '/repo/b.ts', 'local')).toBe(true)
+  })
+
   it('treats a successful empty listing as fresh positive-evidence set', async () => {
     primeTerminalWorktreePathIndex({
       worktreeId: 'wt-1',
