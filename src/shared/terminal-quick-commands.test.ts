@@ -161,6 +161,28 @@ describe('terminal quick commands', () => {
     ])
   })
 
+  it('preserves only enabled background-tab presentation', () => {
+    expect(
+      normalizeTerminalQuickCommands([
+        {
+          id: 'background',
+          label: 'Background',
+          command: 'pnpm test',
+          openInBackground: true
+        },
+        {
+          id: 'foreground',
+          label: 'Foreground',
+          command: 'pnpm lint',
+          openInBackground: false
+        }
+      ])
+    ).toEqual([
+      expect.objectContaining({ id: 'background', openInBackground: true }),
+      expect.not.objectContaining({ openInBackground: expect.anything() })
+    ])
+  })
+
   it('keeps larger reusable agent prompts while bounding shell commands separately', () => {
     const largePrompt = 'Review this diff.\n'.repeat(320)
     const overLimitPrompt = 'x'.repeat(6001)
@@ -244,6 +266,26 @@ describe('terminal quick commands', () => {
     expect(
       applyTerminalQuickCommandMutation([first!, second!], { type: 'delete', id: first!.id })
     ).toEqual([second])
+  })
+
+  it('keeps desktop background presentation when an older client edits a command', () => {
+    const [background] = normalizeTerminalQuickCommands([
+      {
+        id: 'background',
+        label: 'Background',
+        command: 'pnpm test',
+        openInBackground: true
+      }
+    ])
+    const edited = { ...background!, label: 'Edited' }
+    delete edited.openInBackground
+
+    expect(
+      applyTerminalQuickCommandMutation([background!], {
+        type: 'upsert',
+        command: edited
+      })
+    ).toEqual([{ ...edited, openInBackground: true }])
   })
 
   it('matches global commands everywhere and repo commands only in their repo', () => {

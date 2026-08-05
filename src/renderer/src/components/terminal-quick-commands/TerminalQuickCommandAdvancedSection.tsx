@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { TerminalQuickCommandAppendEnterSwitch } from './TerminalQuickCommandAppendEnterSwitch'
+import { TerminalQuickCommandBackgroundSwitch } from './TerminalQuickCommandBackgroundSwitch'
 import { TerminalQuickCommandScopeField } from './TerminalQuickCommandScopeField'
 
 type TerminalQuickCommandAdvancedSectionProps = {
@@ -20,6 +21,7 @@ type TerminalQuickCommandAdvancedSectionProps = {
   setAdvancedOpen: Dispatch<SetStateAction<boolean>>
   setDraft: Dispatch<SetStateAction<TerminalQuickCommand>>
   toggleAppendEnter: () => void
+  toggleOpenInBackground: () => void
 }
 
 export function TerminalQuickCommandAdvancedSection({
@@ -32,7 +34,8 @@ export function TerminalQuickCommandAdvancedSection({
   lastRepoScopeIdRef,
   setAdvancedOpen,
   setDraft,
-  toggleAppendEnter
+  toggleAppendEnter,
+  toggleOpenInBackground
 }: TerminalQuickCommandAdvancedSectionProps): React.JSX.Element {
   return (
     <div>
@@ -66,6 +69,10 @@ export function TerminalQuickCommandAdvancedSection({
                 : '-translate-y-1 opacity-0 delay-0'
             )}
           >
+            <TerminalQuickCommandBackgroundSwitch
+              openInBackground={draft.openInBackground === true}
+              onToggle={toggleOpenInBackground}
+            />
             {!isTerminalAgentQuickCommand(draft) ? (
               <TerminalQuickCommandAppendEnterSwitch
                 appendEnter={draft.appendEnter}

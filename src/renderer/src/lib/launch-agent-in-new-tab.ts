@@ -35,6 +35,8 @@ export type LaunchAgentInNewTabArgs = {
   worktreeId: string
   /** Tab group the user launched from; keeps split-group launches in that pane instead of the active group. */
   groupId?: string
+  /** Whether the new terminal becomes the active tab. */
+  activate?: boolean
   /** Optional initial prompt; delivery depends on `promptDelivery` and the agent's prompt mode. */
   prompt?: string
   /** Optional CLI arguments appended to the selected agent command. */
@@ -74,6 +76,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     agent,
     worktreeId,
     groupId,
+    activate = true,
     prompt,
     agentArgs,
     initialCwd,
@@ -154,6 +157,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       worktreeId,
       environmentId: runtimeEnvironmentId,
       groupId,
+      activate,
       cwd: initialCwd,
       startupPlan,
       prompt: trimmedPrompt,
@@ -181,6 +185,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   const tab = store.createTab(worktreeId, groupId, undefined, {
     launchAgent: agent,
     quickCommandLabel,
+    ...(!activate ? { activate: false } : {}),
     ...initialViewModeProps
   })
   seedNativeChatAppliedSessionOptions(tab.id, agent, startupPlan.sessionOptions)
@@ -251,7 +256,9 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   }
 
   // Why: without setActiveTabType('terminal') a worktree showing an editor keeps rendering it and the new tab stays hidden.
-  store.setActiveTabType('terminal')
+  if (activate) {
+    store.setActiveTabType('terminal')
+  }
 
   // Why: persist tab-bar order so reconcileTabOrder doesn't fall back to terminals-first and jump the new tab to index 0.
   const fresh = useAppStore.getState()

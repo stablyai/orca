@@ -36,6 +36,7 @@ export function launchAgentInWebHostTab(args: {
   worktreeId: string
   environmentId: string | null
   groupId?: string
+  activate?: boolean
   cwd?: string | null
   startupPlan: AgentStartupPlan
   prompt: string
@@ -51,6 +52,7 @@ export function launchAgentInWebHostTab(args: {
     worktreeId,
     environmentId,
     groupId,
+    activate = true,
     cwd,
     startupPlan,
     prompt,
@@ -70,7 +72,7 @@ export function launchAgentInWebHostTab(args: {
     worktreeId,
     environmentId,
     targetGroupId: groupId,
-    activate: true,
+    activate,
     ...(cwd?.trim() ? { cwd } : {}),
     ...(viewMode ? { viewMode } : {}),
     agentSessionKind: 'fresh',
@@ -114,7 +116,9 @@ export function launchAgentInWebHostTab(args: {
       )
       return { delivered: false, failureNotified: true }
     }
-    useAppStore.getState().setActiveTabType('terminal')
+    if (activate) {
+      useAppStore.getState().setActiveTabType('terminal')
+    }
     if (hasPrompt && promptDelivered) {
       onPromptDelivered?.()
     }

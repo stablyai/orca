@@ -135,4 +135,21 @@ describe('launchAgentInNewTab paired web runtime', () => {
     })
     expect(mocks.createTab).not.toHaveBeenCalled()
   })
+
+  it('creates paired agent terminals without selecting them when activation is disabled', async () => {
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    launchAgentInNewTab({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      groupId: 'group-1',
+      activate: false
+    })
+
+    expect(mocks.createWebRuntimeSessionTerminal).toHaveBeenCalledWith(
+      expect.objectContaining({ activate: false })
+    )
+    await Promise.resolve()
+    expect(mocks.setActiveTabType).not.toHaveBeenCalled()
+  })
 })

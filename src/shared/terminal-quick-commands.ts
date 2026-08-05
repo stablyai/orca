@@ -48,6 +48,10 @@ export function getTerminalQuickCommandScope(
   return normalizeTerminalQuickCommandScope(command.scope)
 }
 
+export function shouldOpenTerminalQuickCommandInBackground(command: TerminalQuickCommand): boolean {
+  return command.openInBackground === true
+}
+
 export function terminalQuickCommandMatchesRepo(
   command: TerminalQuickCommand,
   repoId: string | null
@@ -127,7 +131,8 @@ export function normalizeTerminalQuickCommands(input: unknown): TerminalQuickCom
     const base = {
       id,
       label: label.slice(0, MAX_QUICK_COMMAND_LABEL_LENGTH),
-      scope: normalizeTerminalQuickCommandScope(record.scope)
+      scope: normalizeTerminalQuickCommandScope(record.scope),
+      ...(record.openInBackground === true ? { openInBackground: true } : {})
     }
 
     if (action === 'agent-prompt') {
@@ -199,17 +204,35 @@ function isNormalizedTerminalQuickCommand(value: unknown, expected: TerminalQuic
   }
   if (isTerminalAgentQuickCommand(expected)) {
     return (
-      hasExactKeys(command, ['id', 'label', 'action', 'agent', 'prompt', 'scope']) &&
+      hasExactKeys(command, [
+        'id',
+        'label',
+        'action',
+        'agent',
+        'prompt',
+        'scope',
+        ...(expected.openInBackground ? ['openInBackground'] : [])
+      ]) &&
       command.action === 'agent-prompt' &&
       command.agent === expected.agent &&
-      command.prompt === expected.prompt
+      command.prompt === expected.prompt &&
+      command.openInBackground === expected.openInBackground
     )
   }
   return (
-    hasExactKeys(command, ['id', 'label', 'action', 'command', 'appendEnter', 'scope']) &&
+    hasExactKeys(command, [
+      'id',
+      'label',
+      'action',
+      'command',
+      'appendEnter',
+      'scope',
+      ...(expected.openInBackground ? ['openInBackground'] : [])
+    ]) &&
     command.action === 'terminal-command' &&
     command.command === expected.command &&
-    command.appendEnter === expected.appendEnter
+    command.appendEnter === expected.appendEnter &&
+    command.openInBackground === expected.openInBackground
   )
 }
 
@@ -244,7 +267,12 @@ export function applyTerminalQuickCommandMutation(
   if (existingIndex === -1) {
     return [...commands, mutation.command]
   }
-  return commands.map((command, index) => (index === existingIndex ? mutation.command : command))
+  const existing = commands[existingIndex]
+  const next =
+    existing.openInBackground && mutation.command.openInBackground === undefined
+      ? { ...mutation.command, openInBackground: true }
+      : mutation.command
+  return commands.map((command, index) => (index === existingIndex ? next : command))
 }
 
 export function buildTerminalQuickCommandInput(command: TerminalCommandQuickCommand): string {

@@ -19,7 +19,8 @@ type MockStoreState = {
 }
 
 const mocks = vi.hoisted(() => ({
-  launchAgentInNewTab: vi.fn()
+  launchAgentInNewTab: vi.fn(),
+  requestBackgroundTerminalWorktreeMount: vi.fn()
 }))
 
 let mockState: MockStoreState
@@ -32,6 +33,10 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/launch-agent-in-new-tab', () => ({
   launchAgentInNewTab: mocks.launchAgentInNewTab
+}))
+
+vi.mock('@/components/terminal/background-terminal-worktree-mount', () => ({
+  requestBackgroundTerminalWorktreeMount: mocks.requestBackgroundTerminalWorktreeMount
 }))
 
 function createStoreState(): MockStoreState {
@@ -56,6 +61,7 @@ describe('runQuickCommandInNewTab', () => {
   beforeEach(() => {
     mockState = createStoreState()
     mocks.launchAgentInNewTab.mockReset()
+    mocks.requestBackgroundTerminalWorktreeMount.mockReset()
   })
 
   it('flattens multiline quick commands before queuing', () => {
@@ -97,6 +103,31 @@ describe('runQuickCommandInNewTab', () => {
     expect(mockState.queueTabStartupCommand).toHaveBeenCalledWith('tab-new', {
       command: 'git status'
     })
+  })
+
+  it('runs terminal commands in a mounted background tab without changing the active view', () => {
+    runQuickCommandInNewTab({
+      command: {
+        id: 'test',
+        label: 'Test',
+        action: 'terminal-command',
+        command: 'pnpm test',
+        appendEnter: true,
+        openInBackground: true
+      },
+      worktreeId: 'wt-1',
+      groupId: 'group-1'
+    })
+
+    expect(mockState.createTab).toHaveBeenCalledWith('wt-1', 'group-1', undefined, {
+      quickCommandLabel: 'Test',
+      activate: false
+    })
+    expect(mocks.requestBackgroundTerminalWorktreeMount).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      tabIds: ['tab-new']
+    })
+    expect(mockState.setActiveTabType).not.toHaveBeenCalled()
   })
 
   it('launches agent quick commands through the programmatic agent prompt path', () => {
@@ -159,6 +190,40 @@ describe('runQuickCommandInNewTab', () => {
       'active-group',
       'agent-review'
     )
+  })
+
+  it('runs agent prompts in a mounted background tab without activating it', () => {
+    mocks.launchAgentInNewTab.mockReturnValue({ tabId: 'tab-agent' })
+    mockState.unifiedTabsByWorktree['repo::worktree'] = [
+      { entityId: 'tab-agent', contentType: 'terminal', groupId: 'group-1' }
+    ]
+
+    runQuickCommandInNewTab({
+      command: {
+        id: 'agent-review',
+        label: 'Review',
+        action: 'agent-prompt',
+        agent: 'codex',
+        prompt: 'Review this diff',
+        openInBackground: true
+      },
+      worktreeId: 'repo::worktree',
+      groupId: 'group-1'
+    })
+
+    expect(mocks.launchAgentInNewTab).toHaveBeenCalledWith({
+      agent: 'codex',
+      prompt: 'Review this diff',
+      worktreeId: 'repo::worktree',
+      groupId: 'group-1',
+      activate: false,
+      launchSource: 'quick_command',
+      quickCommandLabel: 'Review'
+    })
+    expect(mocks.requestBackgroundTerminalWorktreeMount).toHaveBeenCalledWith({
+      worktreeId: 'repo::worktree',
+      tabIds: ['tab-agent']
+    })
   })
 
   it('does not launch post-start-only agent quick commands', () => {

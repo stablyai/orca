@@ -2676,6 +2676,8 @@ export type TerminalQuickCommandBase = {
   id: string
   label: string
   scope?: TerminalQuickCommandScope
+  /** Create the terminal without changing the active tab. */
+  openInBackground?: boolean
 }
 
 export type TerminalCommandQuickCommand = TerminalQuickCommandBase & {

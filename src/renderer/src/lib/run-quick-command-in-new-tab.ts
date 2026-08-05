@@ -1,9 +1,11 @@
 import { useAppStore } from '@/store'
+import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import {
   flattenTerminalQuickCommand,
   isTerminalAgentQuickCommand,
+  shouldOpenTerminalQuickCommandInBackground,
   supportsTerminalAgentQuickCommand
 } from '../../../shared/terminal-quick-commands'
 import type { TerminalQuickCommand } from '../../../shared/types'
@@ -50,6 +52,7 @@ export function runQuickCommandInNewTab({
   groupId
 }: RunQuickCommandInNewTabArgs): { tabId: string } | null {
   const targetGroupId = groupId ?? undefined
+  const openInBackground = shouldOpenTerminalQuickCommandInBackground(command)
   if (isTerminalAgentQuickCommand(command)) {
     if (!command.prompt.trim() || !supportsTerminalAgentQuickCommand(command.agent)) {
       return null
@@ -59,10 +62,14 @@ export function runQuickCommandInNewTab({
       prompt: command.prompt,
       worktreeId,
       groupId: targetGroupId,
+      ...(openInBackground ? { activate: false } : {}),
       launchSource: 'quick_command',
       quickCommandLabel: command.label
     })
     if (result?.tabId) {
+      if (openInBackground) {
+        requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: [result.tabId] })
+      }
       const launchedGroupId = resolveQuickCommandGroupId(worktreeId, result.tabId, groupId)
       if (launchedGroupId) {
         useAppStore.getState().setRecentQuickCommandForGroup(launchedGroupId, command.id)
@@ -82,17 +89,23 @@ export function runQuickCommandInNewTab({
   }
   const store = useAppStore.getState()
   const tab = store.createTab(worktreeId, targetGroupId, undefined, {
-    quickCommandLabel: command.label
+    quickCommandLabel: command.label,
+    ...(openInBackground ? { activate: false } : {})
   })
 
   store.queueTabStartupCommand(tab.id, {
     command: flattenTerminalQuickCommand(command).command
   })
+  if (openInBackground) {
+    requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: [tab.id] })
+  }
 
   // Why: match `+` button's createNewTerminalTab — without this, a worktree
   // currently showing an editor file keeps rendering the editor and the new
   // terminal tab stays invisible.
-  store.setActiveTabType('terminal')
+  if (!openInBackground) {
+    store.setActiveTabType('terminal')
+  }
 
   // Why: persist tab-bar order with the new terminal appended. Without this,
   // reconcileTabOrder falls back to terminals-first when the stored order is

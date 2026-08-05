@@ -2700,6 +2700,11 @@
               "c936c2d6d2": "Submit immediately instead of only inserting text.",
               "5fa607d807": "Append Enter"
             },
+            "TerminalQuickCommandBackgroundSwitch": {
+              "bbcfd77bb5": "Toggle open in background",
+              "6f8f01b606": "Run in a new terminal without switching to it.",
+              "cf0b237949": "Open in background"
+            },
             "TerminalQuickCommandDialog": {
               "925b8e0f6e": "Advanced",
               "97e96cc027": "/goal",

@@ -125,6 +125,13 @@ export function TerminalQuickCommandDialog({
     )
   }
 
+  const toggleOpenInBackground = (): void => {
+    setDraft((current) => ({
+      ...current,
+      ...(current.openInBackground ? { openInBackground: undefined } : { openInBackground: true })
+    }))
+  }
+
   const saveDraft = (): void => {
     const next: TerminalQuickCommand = isTerminalAgentQuickCommand(draft)
       ? {
@@ -133,7 +140,8 @@ export function TerminalQuickCommandDialog({
           action: 'agent-prompt',
           agent: draft.agent,
           prompt: draft.prompt.trimEnd(),
-          scope: selectedScope
+          scope: selectedScope,
+          ...(draft.openInBackground ? { openInBackground: true } : {})
         }
       : {
           id: draft.id,
@@ -141,7 +149,8 @@ export function TerminalQuickCommandDialog({
           action: 'terminal-command',
           command: draft.command.trimEnd(),
           appendEnter: draft.appendEnter,
-          scope: selectedScope
+          scope: selectedScope,
+          ...(draft.openInBackground ? { openInBackground: true } : {})
         }
     if (
       !next.label ||
@@ -228,6 +237,7 @@ export function TerminalQuickCommandDialog({
             setAdvancedOpen={setAdvancedOpen}
             setDraft={setDraft}
             toggleAppendEnter={toggleAppendEnter}
+            toggleOpenInBackground={toggleOpenInBackground}
           />
         </div>
 

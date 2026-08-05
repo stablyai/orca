@@ -6,9 +6,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalQuickCommand } from '../../../../shared/types'
 import { TerminalQuickCommandDialog } from './TerminalQuickCommandDialog'
 
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
+
 const mountedRoots: Root[] = []
 
-async function renderDialog(command: TerminalQuickCommand): Promise<void> {
+async function renderDialog(
+  command: TerminalQuickCommand,
+  onSave = vi.fn()
+): Promise<{ onSave: ReturnType<typeof vi.fn> }> {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
@@ -22,10 +27,11 @@ async function renderDialog(command: TerminalQuickCommand): Promise<void> {
         command={command}
         repos={[]}
         onOpenChange={vi.fn()}
-        onSave={vi.fn()}
+        onSave={onSave}
       />
     )
   })
+  return { onSave }
 }
 
 function findAnimatedRowContaining(text: string): HTMLElement {
@@ -66,5 +72,38 @@ describe('TerminalQuickCommandDialog animation structure', () => {
     expect(agentRow.className).toContain('grid-rows-[0fr]')
     expect(promptHelpRow.getAttribute('aria-hidden')).toBe('true')
     expect(promptHelpRow.className).toContain('grid-rows-[0fr]')
+  })
+
+  it('saves background presentation for agent prompt commands', async () => {
+    const { onSave } = await renderDialog({
+      id: 'qc-1',
+      label: 'Review',
+      action: 'agent-prompt',
+      agent: 'codex',
+      prompt: 'Review this diff',
+      scope: { type: 'global' }
+    })
+    const advanced = Array.from(document.body.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Advanced'
+    )
+    const background = document.body.querySelector<HTMLButtonElement>(
+      'button[aria-label="Toggle open in background"]'
+    )
+    const save = document.body.querySelector<HTMLButtonElement>('button[title^="Save ("]')
+
+    expect(advanced).toBeTruthy()
+    expect(background).toBeTruthy()
+    expect(save).toBeTruthy()
+    await act(async () => {
+      advanced!.click()
+      background!.click()
+    })
+    await act(async () => {
+      save!.click()
+    })
+
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ openInBackground: true, action: 'agent-prompt' })
+    )
   })
 })
