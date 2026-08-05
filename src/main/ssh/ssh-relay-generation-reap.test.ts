@@ -52,13 +52,15 @@ function ownerOutput(overrides?: {
   identity?: string
   sock?: string
   generation?: string
+  /** Moves the manifest off the socket it is read against, which is what `superseded` means. */
+  manifestIno?: number
 }): string {
   const manifest = serializeRelayOwnerManifest({
     generation: overrides?.generation ?? GENERATION,
     pid: 4321,
     socketPath: overrides?.sock ?? SOCK,
     socketDev: 2049,
-    socketIno: 999,
+    socketIno: overrides?.manifestIno ?? 999,
     socketCtimeSeconds: 1785948267
   })
     .split('\n')
@@ -129,6 +131,11 @@ function termCommands(): string[] {
 
 function cleanupCommands(): string[] {
   return commands.filter((command) => command.includes('__ORCA_RELAY_RELAUNCH_READY__'))
+}
+
+function ownerProbes(): string[] {
+  // The identity sentinel is __ORCA_RELAY_OWNER_ID__, so this substring selects only the probe.
+  return commands.filter((command) => command.includes('__ORCA_RELAY_OWNER__'))
 }
 
 async function recover(overrides?: {
@@ -245,33 +252,6 @@ describe('recoverFailedRelayReconnect — fail closed', () => {
     expect(cleanupCommands()).toHaveLength(0)
   }
 
-  it('re-probes a missing manifest and stays retryable when a successor is mid-launch', async () => {
-    // Why: a relay answers the launch readiness poll before it publishes, so one probe cannot tell
-    // a legacy relay from a healthy successor still starting up.
-    installHost({
-      owners: [
-        probeOutput(SOCK_IDENTITY, 'missing'),
-        probeOutput('2049:1000:1785948267', 'missing')
-      ]
-    })
-    const relaunch = vi.fn()
-    const err = await recover({ relaunch }).catch((thrown: unknown) => thrown)
-    expect(err).toMatchObject({ reason: 'owner-superseded' })
-    expect(isTerminalRelayGenerationRecoveryError(err)).toBe(false)
-    expect(relaunch).not.toHaveBeenCalled()
-    expect(termCommands()).toHaveLength(0)
-  })
-
-  it('proceeds normally when the re-probe finds the successor manifest published', async () => {
-    installHost({
-      owners: [probeOutput(SOCK_IDENTITY, 'missing'), ownerOutput()],
-      identity: [identityOutput('match'), identityOutput('gone', '')]
-    })
-    const relaunch = vi.fn().mockResolvedValue('fresh')
-    await expect(recover({ relaunch })).resolves.toEqual({ status: 'relaunched', value: 'fresh' })
-    expect(termCommands()).toHaveLength(1)
-  })
-
   it('never signals a legacy relay that published no manifest', async () => {
     await expectFailClosed(
       {
@@ -293,8 +273,8 @@ describe('recoverFailedRelayReconnect — fail closed', () => {
   })
 
   it('never signals when a successor already rebound the socket', async () => {
-    // Why owner-unverifiable and not owner-superseded: this host reports the SAME identity on both
-    // probes, so nothing is rebinding — see the two escalation tests above for the split.
+    // Why owner-unverifiable and not a transition: this host reports the SAME identity on both
+    // probes, so nothing is moving — see the transition matrix below for the split.
     await expectFailClosed(
       { owner: ownerOutput({ identity: '2049:1000:1785948267' }) },
       'owner-unverifiable'
@@ -471,6 +451,125 @@ describe('recoverFailedRelayReconnect — fail closed', () => {
       owner: `__ORCA_RELAY_OWNER__\nsockid=${SOCK_IDENTITY}\nmanifest=missing\n__ORCA_RELAY_OWNER_END__\n`
     })
     await expect(recover()).rejects.toThrow(new RegExp(SOCK.replace(/[.]/g, '\\.')))
+  })
+})
+
+describe('recoverFailedRelayReconnect — the two-read transition table', () => {
+  const OTHER_SOCKET = '2049:1000:1785948267'
+  // A manifest that names this path but describes a different socket object, read against the socket
+  // the first probe saw: `manifest-superseded` without the socket itself having moved.
+  const supersededHere = ownerOutput({ manifestIno: 1000 })
+  // The same disagreement read against a socket that HAS moved.
+  const supersededElsewhere = ownerOutput({ identity: OTHER_SOCKET })
+  const noManifestHere = probeOutput(SOCK_IDENTITY, 'missing')
+
+  // Why the identity queue: without it a wrongly-permitted signal would fail on a missing mock
+  // instead of on the assertion. Scripted this way, any test that still reaches the reap runs it to
+  // completion — one TERM, one relaunch — so the count assertions are what fail.
+  function installTransition(owners: string[]): void {
+    installHost({ owners, identity: [identityOutput('match'), identityOutput('gone', '')] })
+  }
+
+  async function expectRetryableTransition(owners: string[]): Promise<void> {
+    installTransition(owners)
+    const relaunch = vi.fn().mockResolvedValue('fresh')
+    const err = await recover({ relaunch }).catch((thrown: unknown) => thrown)
+    expect(err).toMatchObject({
+      name: 'RelayGenerationRecoveryError',
+      reason: 'owner-in-transition'
+    })
+    expect(isTerminalRelayGenerationRecoveryError(err)).toBe(false)
+    expect(ownerProbes()).toHaveLength(2)
+    expect(termCommands()).toHaveLength(0)
+    expect(cleanupCommands()).toHaveLength(0)
+    expect(relaunch).not.toHaveBeenCalled()
+  }
+
+  it.each([
+    ['a missing manifest', noManifestHere],
+    ['a superseded manifest', supersededHere]
+  ])('refuses to signal a relay that published between the reads, after %s', async (_l, first) => {
+    // Why: publication follows listen, so this transition proves a relay just completed startup.
+    // It is a successor, and the whole point of #8585 is not to kill one.
+    await expectRetryableTransition([first, ownerOutput()])
+  })
+
+  it.each([
+    ['a manifest appearing', [noManifestHere, supersededHere]],
+    ['a manifest disappearing', [supersededHere, noManifestHere]]
+  ])('treats %s at an unchanged socket as movement, not a settled state', async (_l, owners) => {
+    // Why not terminal: the probe answered differently twice, so nothing here is stable enough to
+    // call stale. Only two identical reads may escalate.
+    await expectRetryableTransition(owners)
+  })
+
+  it.each([
+    ['no manifest on either read', [noManifestHere, probeOutput(OTHER_SOCKET, 'missing')]],
+    ['a superseded manifest on either read', [supersededHere, supersededElsewhere]]
+  ])('treats a socket rebound between the reads as movement, with %s', async (_l, owners) => {
+    await expectRetryableTransition(owners)
+  })
+
+  it.each([
+    ['no manifest at all', noManifestHere, 'owner-unknown'],
+    ['a manifest that never describes this socket', supersededHere, 'owner-unverifiable']
+  ])('keeps a stable %s terminal once the second read confirms it', async (_l, owner, reason) => {
+    installTransition([owner, owner])
+    const relaunch = vi.fn().mockResolvedValue('fresh')
+    const err = await recover({ relaunch }).catch((thrown: unknown) => thrown)
+    expect(err).toMatchObject({ reason })
+    expect(isTerminalRelayGenerationRecoveryError(err)).toBe(true)
+    expect(ownerProbes()).toHaveLength(2)
+    expect(termCommands()).toHaveLength(0)
+    expect(relaunch).not.toHaveBeenCalled()
+  })
+
+  it('proves the path empty rather than signalling when the socket vanishes between reads', async () => {
+    // Why this one may proceed: the readiness command is non-mutating and refuses anything but an
+    // empty pathname, so nothing is signalled and nothing is removed.
+    installTransition([noManifestHere, probeOutput('', 'missing')])
+    const relaunch = vi.fn().mockResolvedValue('fresh')
+    await expect(recover({ relaunch })).resolves.toEqual({ status: 'relaunched', value: 'fresh' })
+    expect(termCommands()).toHaveLength(0)
+    expect(cleanupCommands()).toHaveLength(1)
+    expect(relaunch).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    ['a rejected manifest', probeOutput(SOCK_IDENTITY, 'rejected'), 'owner-unverifiable', true],
+    ['an unparseable manifest', probeOutput(SOCK_IDENTITY, 'present'), 'owner-unverifiable', true],
+    [
+      'a manifest for another path',
+      ownerOutput({ sock: '/tmp/other.sock' }),
+      'owner-unverifiable',
+      true
+    ],
+    ['a non-socket at the path', probeOutput('unusable', 'missing'), 'endpoint-unusable', true],
+    ['an unreadable socket', probeOutput('unreadable', 'missing'), 'owner-indeterminate', false],
+    ['output it cannot read', 'garbage\n', 'owner-indeterminate', false]
+  ])(
+    'keeps %s fail-closed when it follows a transitional read',
+    async (_l, second, reason, terminal) => {
+      installTransition([noManifestHere, second])
+      const relaunch = vi.fn().mockResolvedValue('fresh')
+      const err = await recover({ relaunch }).catch((thrown: unknown) => thrown)
+      expect(err).toMatchObject({ reason })
+      expect(isTerminalRelayGenerationRecoveryError(err)).toBe(terminal)
+      expect(termCommands()).toHaveLength(0)
+      expect(cleanupCommands()).toHaveLength(0)
+      expect(relaunch).not.toHaveBeenCalled()
+    }
+  )
+
+  it('never turns a second read into permission to signal, whatever it says', async () => {
+    // The invariant behind every case above: once one read found the path unowned, this recovery
+    // attempt is over. A healthy relay is reclaimed by the next reconnect, not by this reap.
+    for (const second of [ownerOutput(), supersededHere, supersededElsewhere, noManifestHere]) {
+      commands.length = 0
+      installTransition([noManifestHere, second])
+      await recover({ relaunch: () => Promise.resolve('fresh') }).catch(() => undefined)
+      expect(termCommands()).toHaveLength(0)
+    }
   })
 })
 

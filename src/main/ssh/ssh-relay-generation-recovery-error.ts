@@ -7,7 +7,7 @@ export type RelayGenerationRecoveryReason =
   | 'recovery-busy'
   | 'owner-unknown'
   | 'owner-unverifiable'
-  | 'owner-superseded'
+  | 'owner-in-transition'
   | 'owner-indeterminate'
   | 'endpoint-unusable'
   | 'probe-failed'
@@ -22,7 +22,8 @@ const RECOVERY_ADVICE: Record<RelayGenerationRecoveryReason, string> = {
   'owner-unknown':
     'it was launched by an older Orca that publishes no owner manifest, so the process holding it cannot be identified',
   'owner-unverifiable': 'its owner manifest could not be read and trusted',
-  'owner-superseded': 'a newer relay generation already owns the socket',
+  'owner-in-transition':
+    'ownership of the socket moved while Orca was reading it, so the process holding it now is a relay Orca did not set out to reclaim',
   'owner-indeterminate': 'the ownership probe answered with output Orca could not read',
   'endpoint-unusable': 'the endpoint path is occupied by something that is not a socket',
   'probe-failed': 'the remote host did not answer the ownership probe',

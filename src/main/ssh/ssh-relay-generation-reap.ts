@@ -8,6 +8,11 @@
 // unlink, because a successor binding the same path within one second reproduces dev:ino:ctime
 // exactly. Every step that cannot be proven fails closed: no signal, no unlink, no relaunch.
 //
+// Ownership has to be proven by the first read. Once any read finds the path unowned, this attempt
+// is over: a later `owned` read is a relay that finished publishing while we watched — a successor
+// completing startup — and killing that is #8585 aimed at a healthy relay. The next reconnect picks
+// it up through the normal backoff.
+//
 // Threat boundary: the manifest and socket live in a directory owned by the SSH user, and a same-OS
 // user can already signal that user's processes directly. The guarantees here are against accidents
 // — PID reuse, a successor generation, a half-written or stale manifest — not against an attacker
@@ -210,32 +215,43 @@ async function proveRelaunchReadiness(
   }
 }
 
+/** The probe kinds that describe a path this client does not own — and cannot classify in one read. */
+type TransitionalProbe = Extract<RelayOwnerProbe, { kind: 'no-manifest' | 'manifest-superseded' }>
+
+/** A settled probe, or the one verdict no single read can produce: ownership moved while observed. */
+type RelayOwnerObservation = RelayOwnerProbe | { kind: 'owner-in-transition' }
+
+// Why these two: `no-manifest` cannot tell a legacy relay from a successor between listen and
+// publication, and `manifest-superseded` cannot tell a live rebind from a stale manifest a legacy
+// relay inherited. Each covers one terminal state and one transient one.
+function isTransitionalProbe(probe: RelayOwnerProbe): probe is TransitionalProbe {
+  return probe.kind === 'no-manifest' || probe.kind === 'manifest-superseded'
+}
+
 /**
- * Reads the owner probe, re-reading once when no manifest is present.
+ * Reads the owner probe, re-reading once when the first read cannot be classified on its own.
  *
- * Why the second read: a relay answers the launch readiness poll (a connect-and-close probe) before
- * it publishes its manifest, so a single `no-manifest` cannot distinguish a legacy relay — which is
- * terminal — from a healthy successor still starting up, which a retry resolves.
+ * Why the second read never grants permission: it happens only because the first read found the path
+ * unowned, so an `owned` second read means a relay finished publishing while this attempt watched —
+ * a successor completing startup, not a generation to reclaim. Signalling that is #8585 aimed at a
+ * healthy relay. Anything that moved between the reads yields `owner-in-transition`, which the
+ * reconnect backoff retries; the healthy relay is picked up by the next reconnect, not by this reap.
  */
 async function probeOwner(
   conn: SshConnection,
   host: RemoteHostPlatform,
   sockPath: string,
   signal?: AbortSignal
-): Promise<RelayOwnerProbe> {
+): Promise<RelayOwnerObservation> {
   const command = relayOwnerProbeCommand(sockPath)
   const first = parseRelayOwnerProbeOutput(
     await exec(conn, host, command, sockPath, 'probe-failed', signal),
     sockPath
   )
   signal?.throwIfAborted()
-  // Why both kinds: `no-manifest` cannot tell a legacy relay from a successor still starting up, and
-  // `manifest-superseded` cannot tell a live rebind from a stale manifest a legacy relay inherited.
-  // In each case only a second read can say whether the socket is actually changing under us.
-  if (first.kind !== 'no-manifest' && first.kind !== 'manifest-superseded') {
+  if (!isTransitionalProbe(first)) {
     return first
   }
-  const firstIdentity = first.socketIdentity
   await waitForRelayPollDelay(RELAY_GENERATION_EXIT_INTERVAL_MS, signal)
   signal?.throwIfAborted()
   const second = parseRelayOwnerProbeOutput(
@@ -243,24 +259,33 @@ async function probeOwner(
     sockPath
   )
   signal?.throwIfAborted()
-  // Why: a socket that changed identity between the two reads is actively being rebound, so this is
-  // a successor mid-launch and a retry resolves it.
-  if (
-    (second.kind === 'no-manifest' || second.kind === 'manifest-superseded') &&
-    second.socketIdentity !== firstIdentity
-  ) {
-    return { kind: 'manifest-superseded', socketIdentity: second.socketIdentity }
-  }
-  // Why escalate: an unchanged identity means nothing is rebinding, so a manifest that still fails
-  // to describe this socket is stale rather than transient — most likely a legacy relay that
-  // inherited a dead generation's file. Retrying that forever would hide it behind backoff.
-  if (second.kind === 'manifest-superseded' && second.socketIdentity === firstIdentity) {
-    return { kind: 'manifest-malformed' }
-  }
-  return second
+  return settleTransitionalProbe(first, second)
 }
 
-function probeRefusalReason(probe: RelayOwnerProbe): RelayGenerationRecoveryReason {
+function settleTransitionalProbe(
+  first: TransitionalProbe,
+  second: RelayOwnerProbe
+): RelayOwnerObservation {
+  if (second.kind === 'owned') {
+    return { kind: 'owner-in-transition' }
+  }
+  // Why pass the rest through: an absent socket still has to clear the readiness proof, and every
+  // other kind is already its own fail-closed refusal. Neither can be made worse by a first read.
+  if (!isTransitionalProbe(second)) {
+    return second
+  }
+  // Why the kind counts as movement too: a manifest that appeared or vanished at an unchanging
+  // socket is a publication or a shutdown in progress, which is no more settled than a rebind.
+  if (second.kind !== first.kind || second.socketIdentity !== first.socketIdentity) {
+    return { kind: 'owner-in-transition' }
+  }
+  // Why escalate: two identical reads mean nothing is moving, so a manifest that still fails to
+  // describe this socket is stale rather than transient — most likely a legacy relay that inherited
+  // a dead generation's file. Retrying that forever would hide it behind backoff.
+  return second.kind === 'manifest-superseded' ? { kind: 'manifest-malformed' } : second
+}
+
+function probeRefusalReason(probe: RelayOwnerObservation): RelayGenerationRecoveryReason {
   switch (probe.kind) {
     case 'no-manifest':
       return 'owner-unknown'
@@ -268,8 +293,11 @@ function probeRefusalReason(probe: RelayOwnerProbe): RelayGenerationRecoveryReas
     case 'manifest-malformed':
     case 'manifest-foreign':
       return 'owner-unverifiable'
+    // Why grouped: the two-read gate settles every superseded read, so that arm is here for
+    // exhaustiveness. Both say ownership moved, never that this client may reclaim it.
     case 'manifest-superseded':
-      return 'owner-superseded'
+    case 'owner-in-transition':
+      return 'owner-in-transition'
     case 'socket-unusable':
       return 'endpoint-unusable'
     case 'socket-unreadable':
