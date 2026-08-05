@@ -61,14 +61,18 @@ async function waitForRequest(
   transport: ReturnType<typeof createTransport>,
   method: string
 ): Promise<Record<string, unknown>> {
-  for (let turn = 0; turn < 10; turn += 1) {
-    const request = requestPayloads(transport).find((payload) => payload.method === method)
-    if (request) {
+  // Why: post-shutdown cancelDelivery is scheduled through async catch/rollback chains.
+  // A fixed microtask budget flakes under CI load (esp. Node 26 shards); yield real turns.
+  return await vi.waitFor(
+    () => {
+      const request = requestPayloads(transport).find((payload) => payload.method === method)
+      if (!request) {
+        throw new Error(`request not dispatched: ${method}`)
+      }
       return request
-    }
-    await Promise.resolve()
-  }
-  throw new Error(`request not dispatched: ${method}`)
+    },
+    { timeout: 1000, interval: 1 }
+  )
 }
 
 describe('SSH fresh agent-session create operations', () => {

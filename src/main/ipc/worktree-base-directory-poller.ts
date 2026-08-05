@@ -57,6 +57,8 @@ export function createWorktreePollerWindowVisibility(
 
 export type WorktreeBasePollerOptions = {
   pollIntervalMs?: number
+  gitCommonIdlePollIntervalMs?: number
+  gitCommonBackstopIntervalMs?: number
   platform?: NodeJS.Platform
   visibility?: WorktreePollerWindowVisibility
   /** Test hook: called whenever a full snapshot scan runs (vs. a gated skip). */
@@ -72,6 +74,8 @@ export type WorktreeBasePollerOptions = {
 // calls per tick. 2s is fast enough for external `git worktree add/remove`;
 // Orca's own worktree operations notify the renderer directly.
 export const WORKTREE_BASE_POLL_INTERVAL_MS = 2_000
+export const WORKTREE_GIT_COMMON_IDLE_POLL_INTERVAL_MS = 10_000
+export const WORKTREE_GIT_COMMON_BACKSTOP_INTERVAL_MS = 30_000
 
 // Why: the mtime gate is an optimization, not a correctness boundary — some
 // filesystems have coarse dir timestamps, and pending `.git` markers expire.
@@ -343,13 +347,18 @@ export async function startWorktreeBaseDirectoryPoller(
   const platform = options.platform ?? process.platform
   const visibility = options.visibility ?? alwaysVisible
   if (target.kind === 'git-common') {
+    const intervalScale = pollIntervalMs / WORKTREE_BASE_POLL_INTERVAL_MS
     return startGitCommonWatch(
       target,
       onEvents,
       pollIntervalMs,
       platform,
       visibility,
-      options.onFullScan
+      options.onFullScan,
+      options.gitCommonIdlePollIntervalMs ??
+        WORKTREE_GIT_COMMON_IDLE_POLL_INTERVAL_MS * intervalScale,
+      options.gitCommonBackstopIntervalMs ??
+        WORKTREE_GIT_COMMON_BACKSTOP_INTERVAL_MS * intervalScale
     )
   }
   return startBasePoller(target, getRepos, onEvents, pollIntervalMs, visibility, options.onFullScan)

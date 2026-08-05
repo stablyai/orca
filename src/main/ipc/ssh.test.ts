@@ -1341,6 +1341,52 @@ describe('SSH IPC handlers', () => {
     }
   })
 
+  // Why: the pull-side probe has to mirror the push-channel hold. A renderer whose ssh:connect
+  // timed out falls back to ssh:getState; the raw transport is already 'connected' there, so
+  // without this hold it would publish connected and clear the deferred SSH pane gate before any
+  // provider exists — the exact premature-connected the push channel guards against.
+  it('ssh:getState holds a live connect at deploying-relay until the relay is ready', async () => {
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    const conn = {}
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect.mockResolvedValue(conn)
+    mockConnectionManager.getConnection.mockReturnValue(conn)
+    mockConnectionManager.getState.mockReturnValue({
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+    let releaseDeploy!: () => void
+    mockDeployAndLaunchRelay.mockReset().mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          releaseDeploy = () => resolve(createRelayLaunchResult())
+        })
+    )
+
+    const connectPromise = handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
+    await vi.waitFor(() => expect(mockDeployAndLaunchRelay).toHaveBeenCalled())
+
+    const midConnect = handlers.get('ssh:getState')!(null, {
+      targetId: 'ssh-1'
+    }) as SshConnectionState
+    expect(midConnect.status).toBe('deploying-relay')
+
+    releaseDeploy()
+    await connectPromise
+    const afterReady = handlers.get('ssh:getState')!(null, {
+      targetId: 'ssh-1'
+    }) as SshConnectionState
+    expect(afterReady.status).toBe('connected')
+  })
+
   it('rebuilds instead of reusing a ready session while relay loss is pending', async () => {
     vi.useFakeTimers()
     const target: SshTarget = {

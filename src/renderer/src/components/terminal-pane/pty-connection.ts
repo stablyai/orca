@@ -185,6 +185,7 @@ import { createTerminalCommandLifecycle } from './terminal-command-lifecycle'
 import { createPaneForegroundAgentTracker } from './pane-foreground-agent-tracker'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { resolveSshPaneConnectGate } from './ssh-pane-connect-gate'
+import { connectSshTargetDeduplicated } from '@/lib/ssh-target-connect-deduplication'
 import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-finished-event'
 import { e2eConfig } from '@/lib/e2e-config'
 import {
@@ -783,14 +784,8 @@ function recordPtyConnectDiagnostic(message: string): void {
   }
 }
 
-// Why: when multiple panes/tabs need the same deferred SSH connection,
-// the first one calls ssh.connect() and subsequent ones must wait for it
-// rather than returning early (which would leave them disconnected). This
-// helper either connects or waits for an in-flight connect to finish.
 type SshConnectResult = { connected: true } | { connected: false; error: string }
 type UserInitiatedSshConnectOutcome = 'connected' | 'cancelled' | 'failed'
-
-const sshConnectPromises = new Map<string, Promise<SshConnectResult>>()
 
 function isSshSessionExpiredError(err: unknown): boolean {
   return (err instanceof Error ? err.message : String(err)).includes(SSH_SESSION_EXPIRED_ERROR)
@@ -861,28 +856,18 @@ async function waitForSshConnection(connectionId: string): Promise<SshConnectRes
     return { connected: true }
   }
 
-  const existing = sshConnectPromises.get(connectionId)
-  if (existing) {
-    return existing
-  }
-
-  const promise: Promise<SshConnectResult> = (async (): Promise<SshConnectResult> => {
-    try {
-      await window.api.ssh.connect({ targetId: connectionId })
-      return { connected: true }
-    } catch (err) {
-      console.warn(`Deferred SSH reconnect failed for ${connectionId}:`, err)
-      return {
-        connected: false,
-        error: err instanceof Error ? err.message : String(err)
-      }
-    } finally {
-      sshConnectPromises.delete(connectionId)
+  try {
+    await connectSshTargetDeduplicated(connectionId, () =>
+      window.api.ssh.connect({ targetId: connectionId })
+    )
+    return { connected: true }
+  } catch (err) {
+    console.warn(`Deferred SSH reconnect failed for ${connectionId}:`, err)
+    return {
+      connected: false,
+      error: err instanceof Error ? err.message : String(err)
     }
-  })()
-
-  sshConnectPromises.set(connectionId, promise)
-  return promise
+  }
 }
 
 function isCodexPaneStale(args: {

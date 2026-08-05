@@ -499,4 +499,53 @@ describe('createSshSlice', () => {
     expect(state.sshCredentialQueue).toBe(sshCredentialQueue)
     expect(state.deferredSshSessionIdsByTabId).toBe(deferredSshSessionIdsByTabId)
   })
+
+  it('releases the startup deferred gate once a target reports connected', () => {
+    const store = createTestStore()
+    store.setState({ deferredSshReconnectTargets: ['ssh-1', 'ssh-2'] })
+
+    store.getState().setSshConnectionState('ssh-1', {
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+
+    expect(store.getState().deferredSshReconnectTargets).toEqual(['ssh-2'])
+  })
+
+  it('releases the gate on a duplicate connected report from main', () => {
+    // Why: the startup batch can lose its own attempt (timeout, in-progress rejection) while main's
+    // connect still lands. That push carries state the store already holds, so the equality
+    // short-circuit must not skip the gate reconciliation.
+    const store = createTestStore()
+    const connected = {
+      targetId: 'ssh-1',
+      status: 'connected' as const,
+      error: null,
+      reconnectAttempt: 0
+    }
+    store.setState({
+      sshConnectionStates: new Map([['ssh-1', connected]]),
+      deferredSshReconnectTargets: ['ssh-1']
+    })
+
+    store.getState().setSshConnectionState('ssh-1', { ...connected })
+
+    expect(store.getState().deferredSshReconnectTargets).toEqual([])
+  })
+
+  it('keeps the gate closed while a target is still down', () => {
+    const store = createTestStore()
+    store.setState({ deferredSshReconnectTargets: ['ssh-1'] })
+
+    store.getState().setSshConnectionState('ssh-1', {
+      targetId: 'ssh-1',
+      status: 'connecting',
+      error: null,
+      reconnectAttempt: 1
+    })
+
+    expect(store.getState().deferredSshReconnectTargets).toEqual(['ssh-1'])
+  })
 })

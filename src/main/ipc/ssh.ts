@@ -446,8 +446,34 @@ function connectionSupportsFolderDownload(targetId: string): boolean {
 }
 
 function getPublicSshState(targetId: string): SshConnectionState | undefined {
-  const state = relayStateOverrides.get(targetId) ?? connectionManager!.getState(targetId)
-  return state ? withSshRemotePlatform(targetId, state) : undefined
+  const override = relayStateOverrides.get(targetId)
+  if (override) {
+    return withSshRemotePlatform(targetId, override)
+  }
+  const state = connectionManager!.getState(targetId)
+  if (!state) {
+    return undefined
+  }
+  const sessionState = activeSessions.get(targetId)?.getState()
+  if (
+    state.status === 'connected' &&
+    sessionState !== undefined &&
+    sessionState !== 'ready' &&
+    connectInFlight.has(targetId)
+  ) {
+    // Why: mirrors the push-channel hold in onStateChange. The raw transport reaches 'connected'
+    // before the relay session establishes, so a pull-side probe (ssh:getState, RPC projections)
+    // would otherwise report the host fully up while no provider exists — callers then remount SSH
+    // panes and clear deferred gates too early. Same connectInFlight gate, so a stray raw
+    // 'connected' outside a live connect is never wedged at 'deploying-relay'.
+    return withSshRemotePlatform(targetId, {
+      targetId,
+      status: 'deploying-relay',
+      error: state.error,
+      reconnectAttempt: state.reconnectAttempt
+    })
+  }
+  return withSshRemotePlatform(targetId, state)
 }
 
 function broadcastPortForwards(getMainWindow: () => BrowserWindow | null, targetId: string): void {

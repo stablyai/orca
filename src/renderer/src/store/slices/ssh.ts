@@ -96,10 +96,21 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
 
   setSshConnectionState: (targetId, state) =>
     set((s) => {
+      // Why: the startup deferred gate must not outlive the connection it waits for. Reconcile on
+      // every connected report, including a duplicate one — the batch that seeded the gate can lose
+      // its own attempt (timeout, in-progress rejection) while main's connect still lands here.
+      const deferredPatch =
+        state.status === 'connected' && s.deferredSshReconnectTargets.includes(targetId)
+          ? {
+              deferredSshReconnectTargets: s.deferredSshReconnectTargets.filter(
+                (id) => id !== targetId
+              )
+            }
+          : null
       const next = new Map(s.sshConnectionStates)
       const previous = next.get(targetId)
       if (sshConnectionStatesEqual(previous, state)) {
-        return s
+        return deferredPatch ?? s
       }
       advanceLocalSshTargetConnectionGeneration(targetId)
       next.set(targetId, state)
@@ -110,6 +121,7 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
         delete blockedConnections[targetId]
       }
       return {
+        ...deferredPatch,
         sshConnectionStates: next,
         sshConnectedGeneration: didReconnect
           ? s.sshConnectedGeneration + 1
