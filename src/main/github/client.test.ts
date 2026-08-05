@@ -4082,7 +4082,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
     )
   })
 
-  it('uses explicit PR repo for merge and title mutations', async () => {
+  it('uses explicit PR repo and exact-head fence for merge and title mutations', async () => {
     ghExecFileAsyncMock
       .mockResolvedValueOnce({
         stdout: JSON.stringify({
@@ -4102,11 +4102,15 @@ describe('GitHub GraphQL rate-limit guard', () => {
       .mockResolvedValue({ stdout: '', stderr: '' })
 
     await expect(
-      mergePR('/repo-root', 7, 'squash', undefined, {
-        owner: 'stablyai',
-        repo: 'orca',
-        host: 'github.com'
-      })
+      mergePR(
+        '/repo-root',
+        7,
+        'squash',
+        undefined,
+        { owner: 'stablyai', repo: 'orca', host: 'github.com' },
+        {},
+        'a'.repeat(40)
+      )
     ).resolves.toEqual({ ok: true })
     await expect(
       updatePRTitle('/repo-root', 7, 'New title', undefined, {
@@ -4132,7 +4136,16 @@ describe('GitHub GraphQL rate-limit guard', () => {
     )
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
-      ['pr', 'merge', '7', '--squash', '--repo', 'stablyai/orca'],
+      [
+        'pr',
+        'merge',
+        '7',
+        '--squash',
+        '--match-head-commit',
+        'a'.repeat(40),
+        '--repo',
+        'stablyai/orca'
+      ],
       expect.objectContaining({
         cwd: '/repo-root',
         env: expect.objectContaining({ GH_PROMPT_DISABLED: '1' }),

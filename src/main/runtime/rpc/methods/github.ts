@@ -131,7 +131,10 @@ const UpdatePr = RepoSelector.extend({
 const MergePr = RepoSelector.extend({
   prNumber: z.number().int().positive(),
   method: z.enum(['merge', 'squash', 'rebase']).optional(),
-  prRepo: SlugRepo.nullable().optional()
+  prRepo: SlugRepo.nullable().optional(),
+  // Why: owner completion cards authorize one immutable PR head. GitHub must
+  // enforce this atomically at merge time; a read-then-merge comparison races.
+  expectedHeadOid: z.string().regex(/^[0-9a-fA-F]{40}$/, 'Expected a full GitHub head SHA').optional()
 })
 
 const SetPrAutoMerge = RepoSelector.extend({
@@ -516,7 +519,13 @@ export const GITHUB_METHODS: RpcMethod[] = [
     name: 'github.mergePR',
     params: MergePr,
     handler: async (params, { runtime }) =>
-      runtime.mergeRepoPR(params.repo, params.prNumber, params.method, params.prRepo ?? null)
+      runtime.mergeRepoPR(
+        params.repo,
+        params.prNumber,
+        params.method,
+        params.prRepo ?? null,
+        params.expectedHeadOid
+      )
   }),
   defineMethod({
     name: 'github.setPRAutoMerge',

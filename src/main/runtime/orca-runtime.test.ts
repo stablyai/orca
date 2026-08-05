@@ -6596,7 +6596,7 @@ describe('OrcaRuntimeService', () => {
     })
     await runtime.updateRepoPRTitle('id:repo-1', 42, 'New title', prRepo)
     await runtime.updateRepoPRDetails('id:repo-1', 42, { body: 'New body' }, prRepo)
-    await runtime.mergeRepoPR('id:repo-1', 42, 'squash', prRepo)
+    await runtime.mergeRepoPR('id:repo-1', 42, 'squash', prRepo, 'a'.repeat(40))
     await runtime.setRepoPRAutoMerge('id:repo-1', 42, true, 'squash', prRepo)
     await runtime.updateRepoPRState('id:repo-1', 42, { state: 'closed' }, prRepo)
     await runtime.requestRepoPRReviewers('id:repo-1', 42, ['octo'], prRepo)
@@ -6724,7 +6724,8 @@ describe('OrcaRuntimeService', () => {
       'squash',
       null,
       prRepo,
-      localGitOptions
+      localGitOptions,
+      'a'.repeat(40)
     )
     expect(setGitHubPRAutoMergeMock).toHaveBeenCalledWith(
       TEST_REPO_PATH,

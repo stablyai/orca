@@ -4640,7 +4640,8 @@ export async function mergePR(
   method: 'merge' | 'squash' | 'rebase' = 'squash',
   connectionId?: string | null,
   prRepo?: GitHubApiRepository | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  expectedHeadOid?: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const { ownerRepo, ghOptions } = await resolveGitHubRepoExecution(
     repoPath,
@@ -4667,6 +4668,11 @@ export async function mergePR(
 
     // Don't use --delete-branch: it deletes the local branch, which fails while the worktree is checked out on it.
     const args = ['pr', 'merge', String(prNumber), `--${method}`]
+    if (expectedHeadOid) {
+      // Why: this is GitHub's atomic compare-and-merge fence. A separate fresh
+      // read followed by an unfenced merge still permits head drift in between.
+      args.push('--match-head-commit', expectedHeadOid)
+    }
     if (ownerRepo) {
       args.push('--repo', `${ownerRepo.owner}/${ownerRepo.repo}`)
     }

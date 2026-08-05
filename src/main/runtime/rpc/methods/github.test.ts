@@ -368,15 +368,41 @@ describe('github RPC methods', () => {
         repo: 'repo-1',
         prNumber: 7,
         method: 'squash',
-        prRepo: { owner: 'acme', repo: 'widgets' }
+        prRepo: { owner: 'acme', repo: 'widgets' },
+        expectedHeadOid: 'a'.repeat(40)
       })
     )
 
-    expect(runtime.mergeRepoPR).toHaveBeenCalledWith('repo-1', 7, 'squash', {
-      owner: 'acme',
-      repo: 'widgets'
-    })
+    expect(runtime.mergeRepoPR).toHaveBeenCalledWith(
+      'repo-1',
+      7,
+      'squash',
+      {
+        owner: 'acme',
+        repo: 'widgets'
+      },
+      'a'.repeat(40)
+    )
     expect(response).toMatchObject({ ok: true, result: { ok: true } })
+  })
+
+  it('rejects malformed exact-head merge fences before calling runtime', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      mergeRepoPR: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('github.mergePR', {
+        repo: 'repo-1',
+        prNumber: 7,
+        expectedHeadOid: 'short-sha'
+      })
+    )
+
+    expect(response).toMatchObject({ ok: false })
+    expect(runtime.mergeRepoPR).not.toHaveBeenCalled()
   })
 
   it('sets PR auto-merge on the runtime server', async () => {
