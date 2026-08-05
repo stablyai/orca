@@ -58,6 +58,13 @@ async function makeRuntimeWithLeafHandle(options: {
     ...(options.probePtyLiveness ? { probePtyLiveness: options.probePtyLiveness } : {})
   } as never)
   runtime.attachWindow(1)
+  publishLeafGraph(runtime, options.leafPtyId ?? STALE_PTY_ID)
+  const { terminals } = await runtime.listTerminals(`id:${WORKTREE_ID}`)
+  return { runtime, handle: terminals[0].handle, write }
+}
+
+// Re-invocable: every graph resync replaces leaf records with fresh objects.
+function publishLeafGraph(runtime: OrcaRuntimeService, leafPtyId: string): void {
   runtime.syncWindowGraph(1, {
     tabs: [
       {
@@ -74,14 +81,12 @@ async function makeRuntimeWithLeafHandle(options: {
         worktreeId: WORKTREE_ID,
         leafId: LEAF_ID,
         paneRuntimeId: 1,
-        ptyId: options.leafPtyId ?? STALE_PTY_ID,
+        ptyId: leafPtyId,
         paneTitle: null,
         title: ''
       }
     ]
   })
-  const { terminals } = await runtime.listTerminals(`id:${WORKTREE_ID}`)
-  return { runtime, handle: terminals[0].handle, write }
 }
 
 describe('sendTerminal absence gate for leaf-branch writes', () => {
@@ -261,6 +266,8 @@ function makeOrchestrationDbStub(toHandle: () => string) {
       getUndeliveredUnreadMessages: (handle: string) =>
         rows.filter((row) => row.to_handle === handle && !row.delivered_at),
       getActiveCoordinatorRun: () => null,
+      // Consulted by onPtyExit's dispatch-failure path.
+      getActiveDispatchForTerminal: () => null,
       markAsDelivered,
       close: () => {}
     }
@@ -400,6 +407,104 @@ describe('push-on-idle orchestration delivery absence gate', () => {
 
       await vi.advanceTimersByTimeAsync(500)
       expect(stub.rows.every((row) => row.delivered_at !== null)).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // Why: cold restore respawns under the SAME session id. An Enter armed for
+  // the dead incarnation must not fire into the replacement — it would inject
+  // \r and stamp rows the new session never received.
+  it('retires an armed Enter when the pty exits and respawns under the same id inside the window', async () => {
+    vi.useFakeTimers()
+    try {
+      const { runtime, handle, write, stub } = await makeIdleLeafWithoutPtyRecord({
+        probePtyLiveness: async () => null,
+        hasPty: (ptyId) => ptyId === STALE_PTY_ID
+      })
+      stub.insert('for the old session')
+
+      runtime.deliverPendingMessagesForHandle(handle)
+      expect(write).toHaveBeenCalledTimes(1)
+
+      runtime.onPtyExit(STALE_PTY_ID, 0)
+      runtime.onPtySpawned(STALE_PTY_ID)
+
+      await vi.advanceTimersByTimeAsync(500)
+      expect(write.mock.calls.filter(([, data]) => data === '\r')).toHaveLength(0)
+      expect(stub.markAsDelivered).not.toHaveBeenCalled()
+      expect(stub.rows[0].delivered_at).toBeNull()
+
+      // The replacement's own delivery starts a fresh flight and completes.
+      runtime.deliverPendingMessagesForHandle(handle)
+      const payloadWrites = write.mock.calls.filter(
+        ([, data]) => typeof data === 'string' && data.includes('Subject: for the old session')
+      )
+      expect(payloadWrites).toHaveLength(2)
+      await vi.advanceTimersByTimeAsync(500)
+      expect(write.mock.calls.filter(([, data]) => data === '\r')).toHaveLength(1)
+      expect(stub.rows[0].delivered_at).not.toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('cleans all delivery state on exit without id reuse — no leak, no stray settle effects', async () => {
+    vi.useFakeTimers()
+    try {
+      const { runtime, handle, write, stub } = await makeIdleLeafWithoutPtyRecord({
+        probePtyLiveness: async () => null,
+        hasPty: (ptyId) => ptyId === STALE_PTY_ID
+      })
+      const internals = runtime as unknown as {
+        messageDeliveryFlightsByPtyId: Map<string, unknown>
+        parkedMessageRedeliveryLeavesByPtyId: Map<string, unknown>
+      }
+      stub.insert('first')
+      runtime.deliverPendingMessagesForHandle(handle)
+      stub.insert('second')
+      runtime.deliverPendingMessagesForHandle(handle)
+      expect(internals.messageDeliveryFlightsByPtyId.size).toBe(1)
+      expect(internals.parkedMessageRedeliveryLeavesByPtyId.size).toBe(1)
+
+      runtime.onPtyExit(STALE_PTY_ID, 0)
+      expect(internals.messageDeliveryFlightsByPtyId.size).toBe(0)
+      expect(internals.parkedMessageRedeliveryLeavesByPtyId.size).toBe(0)
+
+      await vi.advanceTimersByTimeAsync(500)
+      expect(write.mock.calls.filter(([, data]) => data === '\r')).toHaveLength(0)
+      expect(stub.markAsDelivered).not.toHaveBeenCalled()
+      // No stray settle flushed the parked trigger into the dead pty.
+      expect(write).toHaveBeenCalledTimes(1)
+      expect(stub.rows.every((row) => row.delivered_at === null)).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // Why: graph resync replaces leaf objects, so onPtyExit flips writable only
+  // on the replacement — a callback trusting its closure snapshot would still
+  // read writable=true and inject Enter after the exit, without any respawn.
+  it('does not fire a stale Enter through an orphaned leaf snapshot after resync and exit', async () => {
+    vi.useFakeTimers()
+    try {
+      const { runtime, handle, write, stub } = await makeIdleLeafWithoutPtyRecord({
+        probePtyLiveness: async () => null,
+        hasPty: (ptyId) => ptyId === STALE_PTY_ID
+      })
+      stub.insert('orphaned snapshot')
+
+      runtime.deliverPendingMessagesForHandle(handle)
+      expect(write).toHaveBeenCalledTimes(1)
+
+      // Replace the leaf object the armed callback closed over, then exit.
+      publishLeafGraph(runtime, STALE_PTY_ID)
+      runtime.onPtyExit(STALE_PTY_ID, 0)
+
+      await vi.advanceTimersByTimeAsync(500)
+      expect(write.mock.calls.filter(([, data]) => data === '\r')).toHaveLength(0)
+      expect(stub.markAsDelivered).not.toHaveBeenCalled()
+      expect(stub.rows[0].delivered_at).toBeNull()
     } finally {
       vi.useRealTimers()
     }

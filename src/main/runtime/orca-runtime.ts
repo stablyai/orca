@@ -13208,6 +13208,10 @@ export class OrcaRuntimeService {
       clearTimeout(pendingSoft.timer)
       this.pendingSoftLeavers.delete(ptyId)
     }
+    // Why: a cold restore can respawn under the same session id within the
+    // delayed-Enter window; the armed Enter would inject \r into the
+    // replacement and stamp rows it never received.
+    this.retirePendingMessageDeliveryForPty(ptyId)
 
     if (this.terminalFitOverrides.has(ptyId)) {
       this.terminalFitOverrides.delete(ptyId)
@@ -31314,18 +31318,42 @@ export class OrcaRuntimeService {
   // Why: delivered_at for Claude targets stamps only in the delayed-Enter
   // callback, so the whole write→settle span must be single-flight per pty —
   // a second read inside it would re-inject the same unread rows. Triggers
-  // landing mid-flight park the latest leaf and re-run once on settle.
-  private readonly messageDeliveryInFlightPtyIds = new Set<string>()
+  // landing mid-flight park the latest leaf and re-run once on settle. The
+  // flight object is the settle identity: a stale settle surviving an exit
+  // retire must not clear a newer same-id flight or flush its parked trigger.
+  private readonly messageDeliveryFlightsByPtyId = new Map<
+    string,
+    { enterTimer: ReturnType<typeof setTimeout> | null }
+  >()
+
   private readonly parkedMessageRedeliveryLeavesByPtyId = new Map<string, RuntimeLeafRecord>()
 
-  private settlePendingMessageDelivery(ptyId: string): void {
-    this.messageDeliveryInFlightPtyIds.delete(ptyId)
+  private settlePendingMessageDelivery(
+    ptyId: string,
+    flight: { enterTimer: ReturnType<typeof setTimeout> | null }
+  ): void {
+    if (this.messageDeliveryFlightsByPtyId.get(ptyId) !== flight) {
+      return
+    }
+    this.messageDeliveryFlightsByPtyId.delete(ptyId)
     const parkedLeaf = this.parkedMessageRedeliveryLeavesByPtyId.get(ptyId)
     if (!parkedLeaf) {
       return
     }
     this.parkedMessageRedeliveryLeavesByPtyId.delete(ptyId)
     this.deliverPendingMessages(parkedLeaf)
+  }
+
+  // Why: an Enter armed for a dead session must not fire into a same-id cold
+  // restore — it would inject \r and stamp rows the replacement never saw.
+  // Retire without stamping; the rows re-deliver on the replacement's next idle.
+  private retirePendingMessageDeliveryForPty(ptyId: string): void {
+    const flight = this.messageDeliveryFlightsByPtyId.get(ptyId)
+    if (flight?.enterTimer != null) {
+      clearTimeout(flight.enterTimer)
+    }
+    this.messageDeliveryFlightsByPtyId.delete(ptyId)
+    this.parkedMessageRedeliveryLeavesByPtyId.delete(ptyId)
   }
 
   // Why: push-on-idle delivery is event-driven (no polling) because the runtime owns both the message store and terminal status detection.
@@ -31340,7 +31368,7 @@ export class OrcaRuntimeService {
     }
 
     // Why before reading rows: rows read mid-flight are the not-yet-stamped ones.
-    if (leaf.ptyId && this.messageDeliveryInFlightPtyIds.has(leaf.ptyId)) {
+    if (leaf.ptyId && this.messageDeliveryFlightsByPtyId.has(leaf.ptyId)) {
       this.parkedMessageRedeliveryLeavesByPtyId.set(leaf.ptyId, leaf)
       return
     }
@@ -31385,7 +31413,8 @@ export class OrcaRuntimeService {
     }
 
     const deliveryPtyId = leaf.ptyId
-    this.messageDeliveryInFlightPtyIds.add(deliveryPtyId)
+    const flight: { enterTimer: ReturnType<typeof setTimeout> | null } = { enterTimer: null }
+    this.messageDeliveryFlightsByPtyId.set(deliveryPtyId, flight)
     // Why: every sync outcome — failed write, sync-stamped branch, or a throw —
     // must end the flight here, or a leaked flag parks this pty's deliveries
     // forever. Only an armed Enter hands settling to its own callback.
@@ -31412,9 +31441,16 @@ export class OrcaRuntimeService {
 
       // Why: Claude Code treats a large PTY write as a paste and swallows a \r in the same write; send Enter separately after a delay, stamping delivered_at only once \r is confirmed.
       // Important (design doc §3.2, feedback #2): stamp delivered_at, not read — read means "a check-caller consumed this"; flipping it would hide the message from check --unread.
-      setTimeout(() => {
+      flight.enterTimer = setTimeout(() => {
         try {
-          if (!leaf.writable) {
+          // Why current state, not the closure: graph resync replaces leaf
+          // objects, so the captured record can read writable=true after the
+          // pty died, and an exit retire may have superseded this flight.
+          if (this.messageDeliveryFlightsByPtyId.get(deliveryPtyId) !== flight) {
+            return
+          }
+          const currentLeaf = this.leaves.get(this.getLeafKey(leaf.tabId, leaf.leafId))
+          if (!currentLeaf || currentLeaf.ptyId !== deliveryPtyId || !currentLeaf.writable) {
             return
           }
           const submitted = this.ptyController?.write(deliveryPtyId, '\r') ?? false
@@ -31426,13 +31462,13 @@ export class OrcaRuntimeService {
         } finally {
           // Why finally: every outcome — submit, refusal, throw — ends the flight,
           // and settle re-runs any trigger parked during it so nothing strands.
-          this.settlePendingMessageDelivery(deliveryPtyId)
+          this.settlePendingMessageDelivery(deliveryPtyId, flight)
         }
       }, 500)
       settlesInEnterCallback = true
     } finally {
       if (!settlesInEnterCallback) {
-        this.settlePendingMessageDelivery(deliveryPtyId)
+        this.settlePendingMessageDelivery(deliveryPtyId, flight)
       }
     }
   }
