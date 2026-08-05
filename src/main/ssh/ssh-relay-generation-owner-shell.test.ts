@@ -29,11 +29,15 @@ import {
   relayGenerationCleanupCommand,
   relayGenerationIdentityCommand,
   relayGenerationTerminateCommand,
-  relayOwnerProbeCommand
+  relayOwnerProbeCommand,
+  type RelayGenerationIdentity
 } from './ssh-relay-generation-owner-commands'
 
 const run = promisify(execFile)
 const describePosix = process.platform === 'win32' ? describe.skip : describe
+// Why: these drive several /bin/sh + ps round trips plus real signal delivery. On a loaded machine
+// that outruns vitest's 30s default and surfaces as an opaque harness timeout rather than a result.
+const PROCESS_TEST_TIMEOUT_MS = 120_000
 
 async function sh(script: string): Promise<string> {
   const { stdout } = await run('/bin/sh', ['-c', script], { maxBuffer: 1024 * 1024 })
@@ -83,18 +87,50 @@ function writeManifest(overrides?: {
 }
 
 /** A live process whose argv carries `relay.js` and the generation token, like a detached relay. */
-function spawnFakeRelay(generation: string): ChildProcess {
+async function spawnFakeRelay(generation: string): Promise<ChildProcess> {
   const child = spawn(
     process.execPath,
     ['-e', 'setInterval(function(){},60000)', 'relay.js', '--owner-token', generation],
     { stdio: 'ignore' }
   )
   children.push(child)
+  // Why: `spawn` resolves a pid at fork, before exec has replaced argv. Probing straight away can
+  // observe the pre-exec command line on a loaded machine, so wait until the host can see the real
+  // argv before any test asserts on identity.
+  await waitForIdentity(child.pid as number, generation, 'match')
   return child
 }
 
-function waitForExit(child: ChildProcess): Promise<void> {
-  return new Promise((resolve) => child.once('exit', () => resolve()))
+async function waitForIdentity(
+  pid: number,
+  generation: string,
+  kind: RelayGenerationIdentity['kind'],
+  timeoutMs = 15_000
+): Promise<RelayGenerationIdentity> {
+  const command = relayGenerationIdentityCommand(pid, generation)
+  const deadline = Date.now() + timeoutMs
+  let last: RelayGenerationIdentity = { kind: 'indeterminate' }
+  while (Date.now() < deadline) {
+    last = parseRelayGenerationIdentityOutput(await sh(command))
+    if (last.kind === kind) {
+      return last
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25))
+  }
+  throw new Error(`Timed out waiting for pid ${pid} identity ${kind}; last was ${last.kind}`)
+}
+
+function waitForExit(child: ChildProcess, timeoutMs = 30_000): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`Timed out waiting for pid ${child.pid} to exit`)),
+      timeoutMs
+    )
+    child.once('exit', () => {
+      clearTimeout(timer)
+      resolve()
+    })
+  })
 }
 
 beforeEach(async () => {
@@ -220,108 +256,151 @@ describePosix('relayOwnerProbeCommand against a real shell', () => {
   })
 })
 
-describePosix('relayGenerationIdentityCommand against a real process', () => {
-  it('matches a live process carrying the generation token in argv', async () => {
-    const generation = createRelayGenerationToken()
-    const child = spawnFakeRelay(generation)
-    const identity = parseRelayGenerationIdentityOutput(
-      await sh(relayGenerationIdentityCommand(child.pid as number, generation))
-    )
-    expect(identity.kind).toBe('match')
-    expect(identity.kind === 'match' && identity.startToken.length).toBeGreaterThan(4)
-  })
-
-  it('reports the same start token across repeated reads of one process', async () => {
-    const generation = createRelayGenerationToken()
-    const child = spawnFakeRelay(generation)
-    const command = relayGenerationIdentityCommand(child.pid as number, generation)
-    const first = parseRelayGenerationIdentityOutput(await sh(command))
-    const second = parseRelayGenerationIdentityOutput(await sh(command))
-    expect(second).toEqual(first)
-  })
-
-  it('reports a mismatch for a live process carrying a different token', async () => {
-    const child = spawnFakeRelay(createRelayGenerationToken())
-    expect(
-      parseRelayGenerationIdentityOutput(
-        await sh(relayGenerationIdentityCommand(child.pid as number, createRelayGenerationToken()))
-      )
-    ).toEqual({ kind: 'mismatch' })
-  })
-
-  it('reports a mismatch for a live process that is not a relay', async () => {
-    const generation = createRelayGenerationToken()
-    const child = spawn(process.execPath, ['-e', `setInterval(function(){},60000)`, generation], {
-      stdio: 'ignore'
-    })
-    children.push(child)
-    expect(
-      parseRelayGenerationIdentityOutput(
-        await sh(relayGenerationIdentityCommand(child.pid as number, generation))
-      )
-    ).toEqual({ kind: 'mismatch' })
-  })
-
-  it('reports gone for an exited process', async () => {
-    const generation = createRelayGenerationToken()
-    const child = spawnFakeRelay(generation)
-    const pid = child.pid as number
-    child.kill('SIGKILL')
-    await waitForExit(child)
-    expect(
-      parseRelayGenerationIdentityOutput(await sh(relayGenerationIdentityCommand(pid, generation)))
-    ).toEqual({ kind: 'gone' })
-  })
-})
-
-describePosix('relayGenerationTerminateCommand against a real process', () => {
-  it('sends SIGTERM only when the token and start token both still match', async () => {
-    const generation = createRelayGenerationToken()
-    const child = spawnFakeRelay(generation)
-    const pid = child.pid as number
-    const identity = parseRelayGenerationIdentityOutput(
-      await sh(relayGenerationIdentityCommand(pid, generation))
-    )
-    expect(identity.kind).toBe('match')
-    const startToken = identity.kind === 'match' ? identity.startToken : ''
-
-    const result = parseRelayGenerationTerminateOutput(
-      await sh(relayGenerationTerminateCommand(pid, generation, startToken))
+describePosix(
+  'relayGenerationIdentityCommand against a real process',
+  { timeout: PROCESS_TEST_TIMEOUT_MS },
+  () => {
+    it(
+      'matches a live process carrying the generation token in argv',
+      async () => {
+        const generation = createRelayGenerationToken()
+        const child = await spawnFakeRelay(generation)
+        const identity = parseRelayGenerationIdentityOutput(
+          await sh(relayGenerationIdentityCommand(child.pid as number, generation))
+        )
+        expect(identity.kind).toBe('match')
+        expect(identity.kind === 'match' && identity.startToken.length).toBeGreaterThan(4)
+      },
+      PROCESS_TEST_TIMEOUT_MS
     )
 
-    expect(result).toBe('signalled')
-    await waitForExit(child)
-    expect(
-      parseRelayGenerationIdentityOutput(await sh(relayGenerationIdentityCommand(pid, generation)))
-    ).toEqual({ kind: 'gone' })
-  })
-
-  it('refuses to signal when the start token no longer matches', async () => {
-    const generation = createRelayGenerationToken()
-    const child = spawnFakeRelay(generation)
-    const pid = child.pid as number
-
-    const result = parseRelayGenerationTerminateOutput(
-      await sh(relayGenerationTerminateCommand(pid, generation, 'linux:not-the-start-token'))
+    it(
+      'reports the same start token across repeated reads of one process',
+      async () => {
+        const generation = createRelayGenerationToken()
+        const child = await spawnFakeRelay(generation)
+        const command = relayGenerationIdentityCommand(child.pid as number, generation)
+        const first = parseRelayGenerationIdentityOutput(await sh(command))
+        const second = parseRelayGenerationIdentityOutput(await sh(command))
+        expect(second).toEqual(first)
+      },
+      PROCESS_TEST_TIMEOUT_MS
     )
 
-    expect(result).toBe('mismatch')
-    expect(
-      parseRelayGenerationIdentityOutput(await sh(relayGenerationIdentityCommand(pid, generation)))
-        .kind
-    ).toBe('match')
-  })
-
-  it('refuses to signal a recycled pid whose argv lost the token', async () => {
-    const generation = createRelayGenerationToken()
-    const child = spawnFakeRelay(createRelayGenerationToken())
-    const result = parseRelayGenerationTerminateOutput(
-      await sh(relayGenerationTerminateCommand(child.pid as number, generation, 'linux:1'))
+    it(
+      'reports a mismatch for a live process carrying a different token',
+      async () => {
+        const child = await spawnFakeRelay(createRelayGenerationToken())
+        expect(
+          parseRelayGenerationIdentityOutput(
+            await sh(
+              relayGenerationIdentityCommand(child.pid as number, createRelayGenerationToken())
+            )
+          )
+        ).toEqual({ kind: 'mismatch' })
+      },
+      PROCESS_TEST_TIMEOUT_MS
     )
-    expect(result).toBe('mismatch')
-    expect(child.killed).toBe(false)
-  })
-})
+
+    it(
+      'reports a mismatch for a live process that is not a relay',
+      async () => {
+        const generation = createRelayGenerationToken()
+        const child = spawn(
+          process.execPath,
+          ['-e', `setInterval(function(){},60000)`, generation],
+          {
+            stdio: 'ignore'
+          }
+        )
+        children.push(child)
+        expect(
+          parseRelayGenerationIdentityOutput(
+            await sh(relayGenerationIdentityCommand(child.pid as number, generation))
+          )
+        ).toEqual({ kind: 'mismatch' })
+      },
+      PROCESS_TEST_TIMEOUT_MS
+    )
+
+    it(
+      'reports gone for an exited process',
+      async () => {
+        const generation = createRelayGenerationToken()
+        const child = await spawnFakeRelay(generation)
+        const pid = child.pid as number
+        child.kill('SIGKILL')
+        await waitForExit(child)
+        await expect(waitForIdentity(pid, generation, 'gone')).resolves.toEqual({ kind: 'gone' })
+      },
+      PROCESS_TEST_TIMEOUT_MS
+    )
+  }
+)
+
+describePosix(
+  'relayGenerationTerminateCommand against a real process',
+  { timeout: PROCESS_TEST_TIMEOUT_MS },
+  () => {
+    it(
+      'sends SIGTERM only when the token and start token both still match',
+      async () => {
+        const generation = createRelayGenerationToken()
+        const child = await spawnFakeRelay(generation)
+        const pid = child.pid as number
+        const identity = parseRelayGenerationIdentityOutput(
+          await sh(relayGenerationIdentityCommand(pid, generation))
+        )
+        expect(identity.kind).toBe('match')
+        const startToken = identity.kind === 'match' ? identity.startToken : ''
+
+        const result = parseRelayGenerationTerminateOutput(
+          await sh(relayGenerationTerminateCommand(pid, generation, startToken))
+        )
+
+        expect(result).toBe('signalled')
+        await waitForExit(child)
+        await expect(waitForIdentity(pid, generation, 'gone')).resolves.toEqual({ kind: 'gone' })
+      },
+      PROCESS_TEST_TIMEOUT_MS
+    )
+
+    it(
+      'refuses to signal when the start token no longer matches',
+      async () => {
+        const generation = createRelayGenerationToken()
+        const child = await spawnFakeRelay(generation)
+        const pid = child.pid as number
+
+        const result = parseRelayGenerationTerminateOutput(
+          await sh(relayGenerationTerminateCommand(pid, generation, 'linux:not-the-start-token'))
+        )
+
+        expect(result).toBe('mismatch')
+        expect(
+          parseRelayGenerationIdentityOutput(
+            await sh(relayGenerationIdentityCommand(pid, generation))
+          ).kind
+        ).toBe('match')
+      },
+      PROCESS_TEST_TIMEOUT_MS
+    )
+
+    it(
+      'refuses to signal a recycled pid whose argv lost the token',
+      async () => {
+        const generation = createRelayGenerationToken()
+        const child = await spawnFakeRelay(createRelayGenerationToken())
+        const result = parseRelayGenerationTerminateOutput(
+          await sh(relayGenerationTerminateCommand(child.pid as number, generation, 'linux:1'))
+        )
+        expect(result).toBe('mismatch')
+        expect(child.killed).toBe(false)
+      },
+      PROCESS_TEST_TIMEOUT_MS
+    )
+  }
+)
 
 describePosix('relayGenerationCleanupCommand against real artifacts', () => {
   it('removes the socket and manifest that still belong to the generation', async () => {
