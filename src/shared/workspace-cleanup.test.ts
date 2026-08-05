@@ -1,13 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import {
+  WORKSPACE_CLEANUP_ARCHIVED_IDLE_MS,
   WORKSPACE_CLEANUP_CLASSIFIER_VERSION,
+  WORKSPACE_CLEANUP_IDLE_MS,
   applyWorkspaceCleanupPolicy,
   canQueueWorkspaceCleanupCandidate,
   canSelectWorkspaceCleanupCandidate,
   createWorkspaceCleanupFingerprint,
+  getWorkspaceCleanupInactivityReasons,
   shouldForceWorkspaceCleanupRemoval,
   shouldHideWorkspaceCleanupCandidate,
-  type WorkspaceCleanupCandidate
+  type WorkspaceCleanupCandidate,
+  type WorkspaceCleanupInactivityInput
 } from './workspace-cleanup'
 
 type CandidateOverrides = Partial<Omit<WorkspaceCleanupCandidate, 'git' | 'localContext'>> & {
@@ -21,6 +25,7 @@ function makeCandidate(overrides: CandidateOverrides = {}): WorkspaceCleanupCand
     worktreeId: 'repo-1::/tmp/feature',
     repoId: 'repo-1',
     repoName: 'Repo',
+    repoPath: '/tmp/repo-1',
     connectionId: null,
     displayName: 'feature',
     branch: 'feature',
@@ -125,5 +130,67 @@ describe('workspace cleanup policy', () => {
         classifierVersion: WORKSPACE_CLEANUP_CLASSIFIER_VERSION
       })
     ).toBe(false)
+  })
+})
+
+describe('workspace cleanup inactivity reasons (T12 worktree-ghost)', () => {
+  const NOW = 1_700_000_000_000
+
+  it('adds worktree-ghost for prunable worktrees regardless of age (zero age gate)', () => {
+    const ghostOld = {
+      isArchived: false,
+      lastActivityAt: NOW - 17 * 24 * 60 * 60 * 1000,
+      isPrunable: true
+    }
+    const ghostYoung = {
+      isArchived: false,
+      lastActivityAt: NOW - 1 * 24 * 60 * 60 * 1000,
+      isPrunable: true
+    }
+
+    expect(getWorkspaceCleanupInactivityReasons(ghostOld, NOW)).toEqual(['worktree-ghost'])
+    expect(getWorkspaceCleanupInactivityReasons(ghostYoung, NOW)).toEqual(['worktree-ghost'])
+  })
+
+  it('keeps the 30-day idle gate for non-prunable worktrees (humans unchanged)', () => {
+    const humanRecent = {
+      isArchived: false,
+      lastActivityAt: NOW - 17 * 24 * 60 * 60 * 1000,
+      isPrunable: false
+    }
+    const humanOld = {
+      isArchived: false,
+      lastActivityAt: NOW - WORKSPACE_CLEANUP_IDLE_MS,
+      isPrunable: false
+    }
+
+    expect(getWorkspaceCleanupInactivityReasons(humanRecent, NOW)).toEqual([])
+    expect(getWorkspaceCleanupInactivityReasons(humanOld, NOW)).toEqual(['idle-clean'])
+  })
+
+  it('keeps the 7-day archived gate for non-prunable archived worktrees', () => {
+    const archived = {
+      isArchived: true,
+      lastActivityAt: NOW - WORKSPACE_CLEANUP_ARCHIVED_IDLE_MS,
+      isPrunable: false
+    }
+    expect(getWorkspaceCleanupInactivityReasons(archived, NOW)).toEqual(['archived'])
+  })
+
+  it('handles null/partial input defensively', () => {
+    // Runtime defense: the typed contract is non-nullable, but JS callers may
+    // pass garbage — assert the classifier never crashes on it.
+    expect(
+      getWorkspaceCleanupInactivityReasons(
+        null as unknown as WorkspaceCleanupInactivityInput,
+        NOW
+      )
+    ).toEqual([])
+    expect(
+      getWorkspaceCleanupInactivityReasons(
+        undefined as unknown as WorkspaceCleanupInactivityInput,
+        NOW
+      )
+    ).toEqual([])
   })
 })

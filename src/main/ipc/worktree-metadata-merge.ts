@@ -27,6 +27,9 @@ export function mergeWorktree(
     branch: git.branch,
     isBare: git.isBare,
     ...(git.isSparse === true ? { isSparse: true } : {}),
+    // T12: pass the prunable/ghost flag through — mergeWorktree must not drop
+    // git fields the classifier relies on (the ghost signal dies here today).
+    ...(git.isPrunable === true ? { isPrunable: true } : {}),
     isMainWorktree: git.isMainWorktree,
     displayName: meta?.displayName || branchShort || defaultDisplayName || basename(git.path),
     comment: meta?.comment || '',

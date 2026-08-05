@@ -58,6 +58,7 @@ function createDisconnectedSshCandidate(
     worktreeId,
     repoId: repo.id,
     repoName: repo.displayName,
+    repoPath: repo.path,
     connectionId: repo.connectionId ?? null,
     displayName: meta.displayName || basename(path),
     branch: basename(path),

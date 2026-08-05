@@ -477,6 +477,7 @@ export function parseWorktreeList(
     let branch = ''
     let isBare = false
     let isSparse = false
+    let isPrunable = false
 
     for (const line of lines) {
       if (line.startsWith('worktree ')) {
@@ -489,6 +490,11 @@ export function parseWorktreeList(
         isBare = true
       } else if (line === 'sparse') {
         isSparse = true
+      } else if (line === 'prunable' || line.startsWith('prunable ')) {
+        // T12: the marker the parser previously discarded. Git emits
+        // `prunable <reason>` for worktrees whose working-tree dir is gone
+        // (gitdir points to a non-existent location) — the ghost signal.
+        isPrunable = true
       }
     }
 
@@ -500,6 +506,7 @@ export function parseWorktreeList(
         branch,
         isBare,
         ...(isSparse ? { isSparse } : {}),
+        ...(isPrunable ? { isPrunable: true } : {}),
         isMainWorktree: worktrees.length === 0
       })
     }

@@ -9,6 +9,13 @@ describe('normalizeRightSidebarRoute', () => {
     })
   })
 
+  it('preserves the aquarium route', () => {
+    expect(normalizeRightSidebarRoute('aquarium')).toEqual({
+      rightSidebarTab: 'aquarium',
+      rightSidebarExplorerView: 'files'
+    })
+  })
+
   it('still normalizes invalid tabs to Explorer files', () => {
     expect(normalizeRightSidebarRoute('missing')).toEqual({
       rightSidebarTab: 'explorer',

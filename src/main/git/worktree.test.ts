@@ -234,6 +234,71 @@ bare
       }
     ])
   })
+
+  it('parses the prunable marker into isPrunable: true (T12 ghost signal)', () => {
+    const output = `worktree /repo-ghost
+HEAD abc123
+branch refs/heads/feature
+prunable gitdir file points to non-existent location
+`
+    expect(parseWorktreeList(output)).toEqual([
+      {
+        path: '/repo-ghost',
+        head: 'abc123',
+        branch: 'refs/heads/feature',
+        isBare: false,
+        isPrunable: true,
+        isMainWorktree: true
+      }
+    ])
+  })
+
+  it('leaves isPrunable absent when no prunable marker is present (T12)', () => {
+    const output = `worktree /repo-live
+HEAD abc123
+branch refs/heads/main
+`
+    const [parsed] = parseWorktreeList(output)
+    expect(parsed).not.toHaveProperty('isPrunable')
+    expect(parsed).toMatchObject({
+      path: '/repo-live',
+      head: 'abc123',
+      branch: 'refs/heads/main',
+      isBare: false,
+      isMainWorktree: true
+    })
+  })
+
+  it('parses bare `prunable` line without a reason (marker tolerance)', () => {
+    const output = `worktree /repo-ghost-bare
+HEAD abc123
+branch refs/heads/feature
+prunable
+`
+    const [parsed] = parseWorktreeList(output)
+    expect(parsed.isPrunable).toBe(true)
+  })
+
+  it('keeps a healthy sibling unmarked in a mixed main+ghost+linked graph (T12)', () => {
+    const output = `worktree /repo
+HEAD abc123
+branch refs/heads/main
+
+worktree /repo-ghost
+HEAD def456
+branch refs/heads/feature
+prunable gitdir file points to non-existent location
+
+worktree /repo-live
+HEAD 789abc
+branch refs/heads/other
+`
+    const parsed = parseWorktreeList(output)
+    expect(parsed).toHaveLength(3)
+    expect(parsed[1].isPrunable).toBe(true)
+    expect(parsed[0]).not.toHaveProperty('isPrunable')
+    expect(parsed[2]).not.toHaveProperty('isPrunable')
+  })
 })
 
 describe('listWorktreeGraph', () => {

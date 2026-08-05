@@ -84,6 +84,8 @@ docs/**
 docs/reference/react-performance-audit.md
 !docs/STYLEGUIDE.md
 !docs/mobile-terminal-shortcut-bar.md
+!docs/adr/
+!docs/adr/**
 
 # Stably CLI (only docs/ are tracked)
 .stably/*
@@ -115,3 +117,8 @@ src/renderer/src/i18n/locales/.zh-catalog-cache.json
 src/renderer/src/i18n/locales/.ko-catalog-cache.json
 src/renderer/src/i18n/locales/.ja-catalog-cache.json
 src/renderer/src/i18n/locales/.es-catalog-cache.json
+
+# Scratch working artifacts (spikes, wayfinder canvases) — never committed.
+# Contains host evidence (reaper-leak-spike/report.md) and planning canvases
+# (reaper-gc-wayfinder/map.md) that must not leak via `git add .`.
+/.scratch/

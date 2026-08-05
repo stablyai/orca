@@ -106,6 +106,17 @@ export async function pasteDraftWhenAgentReady(args: {
   const settings = getSettingsForAgentTabRuntimeOwner(tabId)
   const ready = await waitForAgentDraftInputReady(ptyId, budget, readySignal, settings)
   if (!ready) {
+    // Why: `process-ready` agents (e.g. Hermes's prompt_toolkit TUI) never
+    // emit DECSET 2004, so readiness is the PTY-quiet window alone (handled by
+    // `waitForAgentDraftInputReady` above). The legacy fallback below inspects
+    // the foreground process name, but wrapped interpreter launches surface as
+    // `python3 .../hermes` — `isExpectedAgentProcess('python3','hermes')` fails,
+    // so the fallback can never confirm readiness and would only drop the paste.
+    // Trust the quiet-window signal for this signal; do not fall back.
+    if (readySignal === 'process-ready') {
+      onTimeout?.()
+      return false
+    }
     // Why: fast-starting TUIs can emit the paste-ready escape sequence before
     // this sidecar subscription attaches. If process/title inspection says the
     // launched agent owns the PTY, fall back to a best-effort paste instead of

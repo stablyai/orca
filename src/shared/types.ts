@@ -425,6 +425,11 @@ export type GitWorktreeInfo = {
   branch: string
   isBare: boolean
   isSparse?: boolean
+  /** True when git reports the worktree's working directory is gone — the
+   *  `prunable` marker from `git worktree list --porcelain` (gitdir points to
+   *  a non-existent location). The dir-less ghost is a cleanup candidate with
+   *  zero age gate (T12 worktree-ghost). */
+  isPrunable?: boolean
   /** True for the repo's main working tree (the first entry from `git worktree list`).
    *  Linked worktrees created via `git worktree add` have this set to false. */
   isMainWorktree: boolean
@@ -3057,6 +3062,9 @@ export type RightSidebarTab =
   | 'source-control'
   | 'checks'
   | 'ports'
+  // Reaper/Aquarium panel (T7): idle terminals, worktrees, and daemon
+  // generations with preview + destructive restore/reap verbs.
+  | 'aquarium'
 export type ActiveRightSidebarTab = Exclude<RightSidebarTab, 'search'>
 export type RightSidebarExplorerView = 'files' | 'search'
 

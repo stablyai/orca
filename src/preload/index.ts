@@ -688,6 +688,11 @@ const api = {
       ipcRenderer.invoke('workspaceCleanup:hasKillableLocalProcesses', args)
   } satisfies PreloadApi['workspaceCleanup'],
 
+  daemonInventory: {
+    // T9 (stablyai-orca-gdd): daemon pid-file inventory + liveness, exposed so
+    // daemon rows can rejoin the live Aquarium panel (evidence-only semantics).
+    scan: () => ipcRenderer.invoke('daemonInventory:scan')
+  } satisfies PreloadApi['daemonInventory'],
 
   aquarium: {
     // T7/T8 closure (2026-08-03): the Reap verb's disposal backend. The

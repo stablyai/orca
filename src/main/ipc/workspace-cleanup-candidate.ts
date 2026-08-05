@@ -57,6 +57,7 @@ export async function buildWorkspaceCleanupCandidate(args: {
     worktreeId: worktree.id,
     repoId: repo.id,
     repoName: repo.displayName,
+    repoPath: repo.path,
     connectionId: repo.connectionId ?? null,
     displayName: worktree.displayName,
     branch: shortWorkspaceCleanupBranchName(worktree.branch),
@@ -101,6 +102,7 @@ export function buildWorkspaceCleanupCandidateFromError(
     worktreeId: worktree.id,
     repoId: repo.id,
     repoName: repo.displayName,
+    repoPath: repo.path,
     connectionId: repo.connectionId ?? null,
     displayName: worktree.displayName,
     branch: shortWorkspaceCleanupBranchName(worktree.branch),
@@ -159,7 +161,7 @@ export function getNewestWorkspaceCleanupDiffCommentAt(
 }
 
 export function isWorkspaceInactiveForCleanup(
-  workspace: Pick<Worktree, 'isArchived' | 'lastActivityAt'>,
+  workspace: Pick<Worktree, 'isArchived' | 'lastActivityAt' | 'isPrunable'>,
   scannedAt: number
 ): boolean {
   return isWorkspaceOldForCleanup(workspace, scannedAt)
@@ -185,6 +187,12 @@ function shouldReadWorkspaceCleanupGitEvidence(args: {
 }): boolean {
   const { repoIsFolder, blockers, worktree, skipGit, forceGitCheck } = args
   if ((skipGit && !forceGitCheck) || repoIsFolder || worktree.isMainWorktree) {
+    return false
+  }
+  // T12: a ghost has no directory to read — skip, so it never surfaces the
+  // misleading `git-status-error` blocker. NON-prunable worktrees keep the
+  // read (git-status-error preserved for genuinely-broken dirs).
+  if (worktree.isPrunable === true) {
     return false
   }
   if (

@@ -1418,7 +1418,6 @@ app.whenReady().then(async () => {
     allowRemoteHostScheduling: isServeMode,
     headlessDispatcher: isServeMode
       ? async ({ automation, run, target }) => {
-          const terminalSnapshotLimit = 2_000
           let terminalHandle: string
           let terminalSessionId: string | null = null
           let terminalPaneKey: string | null = null
@@ -1468,14 +1467,45 @@ app.whenReady().then(async () => {
           }
 
           const completion = (async () => {
+            const snapshotBuffer = createHeadlessAutomationOutputSnapshotBuffer()
+            // Why: the prior single post-idle read capped at terminalSnapshotLimit
+            // (2k chars) and lost the run's streaming transcript the moment the PTY
+            // idled. Poll the live terminal with a moving cursor so the snapshot
+            // accumulates the full tail (buffer self-caps at 256k) before teardown.
+            let cursor: number | undefined
+            const POLL_INTERVAL_MS = 2_000
+            const POLL_CHUNK_LINES = 2_000
+            const deadline = Date.now() + 30 * 60 * 1_000
+            for (;;) {
+              const read = await runtimeService.readTerminal(terminalHandle, {
+                ...(cursor !== undefined ? { cursor } : {}),
+                limit: POLL_CHUNK_LINES
+              })
+              if (read.tail.length > 0) {
+                snapshotBuffer.append(read.tail.join('\n'))
+              }
+              // Why: cursor reads are pagination reads; nextCursor is the next
+              // line index, so advancing the cursor yields only unseen lines.
+              if (read.nextCursor != null) {
+                const parsed = Number.parseInt(read.nextCursor, 10)
+                if (!Number.isNaN(parsed)) {
+                  cursor = parsed
+                }
+              }
+              const wait = await runtimeService.waitForTerminal(terminalHandle, {
+                condition: 'tui-idle'
+              })
+              if (wait.satisfied) {
+                break
+              }
+              if (Date.now() > deadline) {
+                break
+              }
+              await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS))
+            }
             const wait = await runtimeService.waitForTerminal(terminalHandle, {
               condition: 'tui-idle'
             })
-            const read = await runtimeService.readTerminal(terminalHandle, {
-              limit: terminalSnapshotLimit
-            })
-            const snapshotBuffer = createHeadlessAutomationOutputSnapshotBuffer()
-            snapshotBuffer.append(read.tail.join('\n'))
             if (wait.satisfied) {
               return {
                 status: 'completed' as const,

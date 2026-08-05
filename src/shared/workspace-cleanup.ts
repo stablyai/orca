@@ -1,14 +1,23 @@
-export const WORKSPACE_CLEANUP_CLASSIFIER_VERSION = 2
+// v3: classifier decision surface changed (new `worktree-ghost` reason + zero
+// age gate + isPrunable input). Bump invalidates dismissals computed against v2,
+// where a git-status-error worktree (gitClean null) that later becomes a prunable
+// ghost shares an identical fingerprint — a stale v2 dismissal would otherwise
+// suppress the zero-age-gate auto-clean candidate.
+export const WORKSPACE_CLEANUP_CLASSIFIER_VERSION = 3
 export const WORKSPACE_CLEANUP_ARCHIVED_IDLE_MS = 7 * 24 * 60 * 60 * 1000
 export const WORKSPACE_CLEANUP_IDLE_MS = 30 * 24 * 60 * 60 * 1000
 
 export type WorkspaceCleanupTier = 'ready' | 'review' | 'protected'
 
-export type WorkspaceCleanupReason = 'archived' | 'idle-clean'
+export type WorkspaceCleanupReason = 'archived' | 'idle-clean' | 'worktree-ghost'
 
 export type WorkspaceCleanupInactivityInput = {
   isArchived: boolean
   lastActivityAt: number
+  /** True when git reports the worktree's working directory is gone (the
+   *  `prunable` marker). A dir-less ghost is a candidate regardless of age
+   *  (T12 worktree-ghost — zero age gate). */
+  isPrunable?: boolean
 }
 
 export type WorkspaceCleanupBlocker =
@@ -44,6 +53,7 @@ export type WorkspaceCleanupCandidate = {
   worktreeId: string
   repoId: string
   repoName: string
+  repoPath: string
   connectionId: string | null
   displayName: string
   branch: string
@@ -209,6 +219,17 @@ export function getWorkspaceCleanupInactivityReasons(
   scannedAt: number
 ): WorkspaceCleanupReason[] {
   const reasons: WorkspaceCleanupReason[] = []
+  // Defensive: never crash on partial/absent input (spike parity).
+  if (!workspace) {
+    return reasons
+  }
+  // T12: a prunable worktree (gitdir points to a non-existent location — the
+  // dir is already gone) is a candidate REGARDLESS of age. Zero age gate: git
+  // already proved there is no working tree to lose.
+  if (workspace.isPrunable === true) {
+    reasons.push('worktree-ghost')
+    return reasons
+  }
   if (
     workspace.isArchived &&
     scannedAt - workspace.lastActivityAt >= WORKSPACE_CLEANUP_ARCHIVED_IDLE_MS

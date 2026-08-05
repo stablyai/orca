@@ -394,6 +394,7 @@ import type {
   WorkspaceCleanupScanProgress,
   WorkspaceCleanupScanResult
 } from '../shared/workspace-cleanup'
+import type { DaemonInventoryScanResult } from '../shared/daemon-inventory'
 import type { AquariumReapRequest, AquariumReapResult } from '../shared/aquarium-reap'
 import type { KeybindingActionId, KeybindingFileSnapshot } from '../shared/keybindings'
 
@@ -1005,6 +1006,9 @@ export type PreloadApi = {
     hasKillableLocalProcesses: (
       args: WorkspaceCleanupLocalProcessArgs
     ) => Promise<WorkspaceCleanupLocalProcessResult>
+  }
+  daemonInventory: {
+    scan: () => Promise<DaemonInventoryScanResult>
   }
   aquarium: {
     reap: (request: AquariumReapRequest) => Promise<AquariumReapResult>

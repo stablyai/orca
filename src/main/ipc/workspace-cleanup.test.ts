@@ -387,6 +387,66 @@ describe('workspace cleanup scan', () => {
     expect(result.candidates).toEqual([])
   })
 
+  it('surfaces recent prunable ghosts as candidates with zero age gate (T12 AC#3)', async () => {
+    // The 17-day-old ghost (run-85..93 shape) is well under the 30-day idle
+    // gate — but prunable ⇒ candidate regardless of age.
+    listRepoWorktreesMock.mockResolvedValue([
+      {
+        path: '/repo-ghost',
+        head: 'abc123',
+        branch: 'refs/heads/feature-ghost',
+        isBare: false,
+        isMainWorktree: false,
+        isPrunable: true
+      }
+    ])
+
+    const result = await scanWorkspaceCleanup(
+      makeStore({
+        lastActivityAt: NOW - 17 * 24 * 60 * 60 * 1000
+      })
+    )
+
+    expect(result.candidates).toHaveLength(1)
+    expect(result.candidates[0]).toMatchObject({
+      reasons: ['worktree-ghost'],
+      tier: 'review',
+      selectedByDefault: false,
+      blockers: [],
+      git: {
+        clean: null,
+        checkedAt: null
+      }
+    })
+    // Git-evidence read is skipped for ghosts — no misleading git-status-error.
+    expect(getStatusMock).not.toHaveBeenCalled()
+    expect(result.candidates[0].blockers).not.toContain('git-status-error')
+  })
+
+  it('passes through all 9 ghosts in a broad scan (T12 AC#3 9/9)', async () => {
+    const ghosts = Array.from({ length: 9 }, (_, index) => ({
+      path: `/repo-ghost-${index}`,
+      head: `abc${index}`,
+      branch: `refs/heads/ghost-${index}`,
+      isBare: false,
+      isMainWorktree: false,
+      isPrunable: true
+    }))
+
+    listRepoWorktreesMock.mockResolvedValue(ghosts)
+
+    const result = await scanWorkspaceCleanup(
+      makeStore({
+        lastActivityAt: NOW - 17 * 24 * 60 * 60 * 1000
+      })
+    )
+
+    expect(result.candidates).toHaveLength(9)
+    expect(result.errors).toEqual([])
+    expect(result.candidates.every((c) => c.reasons.includes('worktree-ghost'))).toBe(true)
+    expect(getStatusMock).not.toHaveBeenCalled()
+  })
+
   it('includes focused remove preflight rows even when they are recent', async () => {
     const result = await scanWorkspaceCleanup(
       makeStore({
