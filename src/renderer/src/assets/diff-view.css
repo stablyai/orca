@@ -1,0 +1,136 @@
+/* Theme-agnostic on purpose: no hue is written here, so the active Monaco theme
+   keeps background, foreground, line-number color and syntax. */
+
+/* Monaco emits every theme color as a custom property on
+   `.monaco-editor, .monaco-diff-editor` at 0,1,0 — overriding at 0,2,0 on the
+   sub-editors retints diffs alone. */
+.monaco-diff-editor .monaco-editor {
+  /* Wash and chip shipped at the same weight, hiding changed words inside a
+     changed row. Derived from the chip so it tracks the theme. */
+  --vscode-diffEditor-insertedLineBackground: color-mix(
+    in srgb,
+    var(--vscode-diffEditor-insertedTextBackground) 30%,
+    transparent
+  );
+  --vscode-diffEditor-removedLineBackground: color-mix(
+    in srgb,
+    var(--vscode-diffEditor-removedTextBackground) 30%,
+    transparent
+  );
+  --vscode-diffEditor-unchangedCodeBackground: transparent;
+  /* The ribbon below replaces Monaco's full-width gutter fill. */
+  --vscode-diffEditorGutter-insertedLineBackground: transparent;
+  --vscode-diffEditorGutter-removedLineBackground: transparent;
+}
+
+.monaco-diff-editor {
+  --orca-diff-delete-bar: repeating-linear-gradient(
+    to bottom,
+    var(--git-decoration-deleted) 0 2px,
+    transparent 2px 3.5px
+  );
+}
+
+/* `gutter-*` lives on the margin decoration; the `line-*` classes are content-side. */
+.monaco-diff-editor .monaco-editor .margin-view-overlays .gutter-insert {
+  box-shadow: inset 3px 0 0 var(--git-decoration-added);
+}
+
+/* One owner per mode, else the bar doubles. `no-repeat` keeps the 3px background
+   from tiling across the margin. */
+.monaco-diff-editor:not(.side-by-side) .inline-deleted-margin-view-zone,
+.monaco-diff-editor.side-by-side .margin-view-overlays .gutter-delete {
+  background-image: var(--orca-diff-delete-bar);
+  background-size: 3px 100%;
+  background-repeat: no-repeat;
+}
+
+/* The view zone renders its own "−"; this one would land on top of the ribbon. */
+.monaco-diff-editor:not(.side-by-side) .margin-view-overlays .delete-sign {
+  display: none !important;
+}
+
+/* Monaco pins the opacity with !important. */
+.monaco-diff-editor .monaco-editor .insert-sign,
+.monaco-diff-editor .monaco-editor .delete-sign {
+  justify-content: center;
+  opacity: 0.95 !important;
+}
+
+.monaco-diff-editor .monaco-editor .insert-sign {
+  color: var(--git-decoration-added);
+}
+
+.monaco-diff-editor .monaco-editor .delete-sign {
+  color: var(--git-decoration-deleted);
+}
+
+.monaco-diff-editor .monaco-editor .margin-view-overlays .line-numbers {
+  font-weight: 600;
+}
+
+/* The margin decoration is a *sibling* of `.line-numbers`, so this reaches up. */
+.monaco-diff-editor .monaco-editor .margin-view-overlays > div:has(.gutter-insert) .line-numbers {
+  color: var(--git-decoration-added);
+}
+
+.monaco-diff-editor .monaco-editor .margin-view-overlays > div:has(.gutter-delete) .line-numbers {
+  color: var(--git-decoration-deleted);
+}
+
+/* A line with no inner char changes still gets a full-width char decoration on
+   top of the row wash; that stacking is what made all-add blocks shout. Monaco
+   gives both cases the same class, so the inline style is the only discriminator.
+   Tradeoff: a word chip wrapping onto the next visual line is also 100% wide and
+   loses its chip. Narrowing to `left:0;width:100%` did NOT match in Chromium —
+   verify in the running app before trying again. */
+.monaco-diff-editor .monaco-editor .cdr.char-insert[style*='100%'],
+.monaco-diff-editor .monaco-editor .cdr.char-delete[style*='100%'],
+.monaco-diff-editor .monaco-editor .view-line.char-delete {
+  background-color: transparent;
+}
+
+.monaco-diff-editor .char-insert,
+.monaco-diff-editor .char-delete {
+  border-radius: 3px;
+}
+
+.monaco-diff-editor .diff-hidden-lines {
+  font-family: var(--font-sans, system-ui, sans-serif);
+}
+
+.monaco-diff-editor .diff-hidden-lines .center {
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+}
+
+.combined-diff-scroll-container {
+  background: var(--background);
+  /* No top padding: Chromium insets sticky children by the scrollport padding,
+     so any here reappears as a gap above the stuck file header. */
+  padding-bottom: 8px;
+}
+
+/* Padding sits on the row itself because the virtualizer measures it, and the
+   top 8px is where the first panel's breathing room lives. */
+.combined-diff-scroll-container [data-combined-diff-section-row] {
+  padding: 8px 12px 6px;
+}
+
+/* Targets DiffSectionItem's own class, not whatever div happens to be first. */
+.combined-diff-scroll-container [data-combined-diff-section-row] .diff-section-panel {
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  border-radius: var(--radius-xl);
+  /* `clip`, not `hidden`: `hidden` makes the panel a scroll container, which
+     kills the sticky file header inside it. Both round off the corners. */
+  overflow: clip;
+  background: var(--editor-surface);
+}
+
+.combined-diff-scroll-container
+  [data-combined-diff-section-row]
+  .diff-section-panel
+  .monaco-editor
+  .margin {
+  background: transparent;
+}

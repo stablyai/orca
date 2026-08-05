@@ -397,7 +397,7 @@ export function DiffSectionItem({
   }, [index, loadSection])
 
   return (
-    <div ref={setSectionRootNode} className="border-b border-border">
+    <div ref={setSectionRootNode} className="diff-section-panel border-b border-border">
       <DiffSectionHeader
         path={section.path}
         dirty={section.dirty}
