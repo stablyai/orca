@@ -70,6 +70,6 @@ export type DaemonProcessProbeDependencies = {
   readLinuxStat?: (pid: number) => Promise<LinuxStatEvidence>
   readBootIdentity?: () => Promise<string | undefined>
   readCommandLine?: (pid: number, platform: NodeJS.Platform) => Promise<string | undefined>
-  readProcessStartedAtMs?: (pid: number) => number | null
+  readProcessStartedAtMs?: (pid: number) => Promise<number | null>
   queryWindowsProcess?: (pid: number) => Promise<WindowsProcessEvidence>
 }

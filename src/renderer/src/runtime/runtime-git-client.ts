@@ -62,6 +62,8 @@ type RuntimeDiscoverCommitMessageModelsResult =
       capability: CommitMessageAgentCapability
       models: CommitMessageModelCapability[]
       defaultModelId: string
+      /** Missing only when an older remote runtime produced the response. */
+      catalogOrigin?: 'probe' | 'spec'
     }
   | { success: false; error: string }
 

@@ -94,8 +94,8 @@ export function resumeTerminalVisibility({
       resetAndRefreshAllTerminalWebglAtlases()
     }
     // Why: the synchronous recovery above can fire before the revealed pane is
-    // attached and laid out, where the WebGL renderer drops redraw requests
-    // without retry. Follow up with a settled-frame, pane-scoped repaint.
+    // attached and laid out. Follow up after layout with one shared-atlas-safe
+    // recovery covering every visible terminal manager.
     manager.scheduleRevealRepaint()
   })
 }
@@ -143,6 +143,8 @@ export function recoverVisibleTerminalWindowWake({
 }: RecoverVisibleTerminalWindowWakeArgs): void {
   // Why: macOS screensaver/display wake can leave xterm visible but with a
   // stale renderer/input surface; Orca's own hidden-state resume never runs.
+  // Why: backlog writes can expose transient viewport geometry while parsing.
+  syncTerminalViewportIntents(manager)
   for (const pane of manager.getPanes()) {
     requestTerminalBacklogRecovery(pane.terminal)
     flushTerminalOutput(pane.terminal, { maxChars: WINDOW_WAKE_FLUSH_CHARS })
@@ -154,7 +156,6 @@ export function recoverVisibleTerminalWindowWake({
       resetTerminalLinkifierHoverState(pane.terminal)
     }
   }
-  syncTerminalViewportIntents(manager)
   manager.resumeRendering()
   // Why: wake re-attaches WebGL — same transient cell-metric wobble guard as the heavy resume.
   manager.fitAllRevealedPanes()
@@ -170,9 +171,9 @@ export function recoverVisibleTerminalWindowWake({
     resetAndRefreshAllTerminalWebglAtlases()
     manager.scheduleRevealRepaint()
   } else {
-    // Why: the reveal repaint clears each pane's texture atlas (a shared,
-    // same-config wipe), so a plain refocus must use the atlas-preserving
-    // present instead — otherwise it re-arms the same mid-stream garble race.
+    // Why: the reveal repaint runs a shared-atlas reset, so a plain refocus
+    // must use the atlas-preserving present instead — otherwise it re-arms the
+    // same mid-stream garble race.
     manager.scheduleRevealPresent()
   }
 }
@@ -192,7 +193,7 @@ function resumeTerminalVisibilityHeavy(manager: PaneManager, isActive: boolean):
     requestTerminalBacklogRecovery(pane.terminal)
     flushTerminalOutput(pane.terminal, { maxChars: VISIBLE_RESUME_FLUSH_CHARS })
   }
-  syncTerminalViewportIntents(manager)
+  // Intent was latched by the caller before queued writes can expose transient geometry.
   // Resume WebGL immediately so the terminal shows its last-known state
   // on the first painted frame. macOS context creation is ~5 ms; on
   // Windows (ANGLE -> D3D11) it can be 100-500 ms but a deferred resume

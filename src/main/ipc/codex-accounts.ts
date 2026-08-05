@@ -16,7 +16,8 @@ export function registerCodexAccountHandlers(
     }
     return listStaleCodexPanes({
       ptyIds: args.ptyIds.filter((ptyId): ptyId is string => typeof ptyId === 'string'),
-      settings
+      settings,
+      activeHostHomeRoute: codexAccounts.runtimeHomeService.getSelectedHostCodexHomeRoute()
     })
   })
   ipcMain.handle('codexAccounts:listRecordedPaneLanes', (_event, args: { ptyIds?: unknown }) => {

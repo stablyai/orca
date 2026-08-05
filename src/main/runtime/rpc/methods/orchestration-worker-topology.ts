@@ -47,7 +47,8 @@ export function requireWorkerAuthority(runtime: OrcaRuntimeService, terminalHand
   return {
     paneKey,
     processIncarnation,
-    ...(authority?.launchTokenHash ? { launchTokenHash: authority.launchTokenHash } : {})
+    ...(authority?.launchTokenHash ? { launchTokenHash: authority.launchTokenHash } : {}),
+    ...(authority?.hostScope ? { hostScope: JSON.stringify(authority.hostScope) } : {})
   }
 }
 
@@ -59,7 +60,10 @@ export async function createExistingWorktreeWorkerTerminal(args: {
   effects: WorkerEffect[]
 }): Promise<{ handle: string; warning?: string }> {
   const terminal = await args.runtime.createTerminal(`id:${args.worktreeId}`, {
-    command: args.agent,
+    // Why: the agent id is not a shell command — `cursor` resolves to the Cursor
+    // desktop app while its CLI is `cursor-agent`. Let the runtime build the
+    // configured launcher instead of executing the raw id.
+    startupAgent: args.agent,
     title: `worker-${args.taskId}`,
     // Why: dispatching a worker is background work; it must not pull the sidebar
     // to the worker's workspace while the user is reading somewhere else.
@@ -166,7 +170,9 @@ export async function createWorkerWorktree(args: {
   if (!terminalHandle) {
     throw new Error(created.warning ?? 'Agent-first worktree creation returned no terminal.')
   }
-  const listed = await runtime.listTerminals(`id:${created.worktree.id}`)
+  const listed = await runtime.listTerminals(`id:${created.worktree.id}`, undefined, {
+    includeVisualLayouts: false
+  })
   const setupTerminalHandle = created.setupReceipt?.terminalHandle
   for (const terminal of listed.terminals) {
     effects.push({

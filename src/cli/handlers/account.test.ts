@@ -49,7 +49,11 @@ vi.mock('../../shared/node-cli-command-resolution', () => ({
 import { ACCOUNT_HANDLERS } from './account'
 import type { HandlerContext } from '../dispatch'
 import type { RuntimeClient } from '../runtime-client'
-import { getCmdExePath } from '../../shared/windows-batch-spawn'
+import {
+  getCmdExePath,
+  WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR,
+  WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL
+} from '../../shared/windows-batch-spawn'
 import { ACCOUNT_IMPORT_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 
 function successfulChild(): EventEmitter {
@@ -166,6 +170,35 @@ describe('account CLI handlers', () => {
       ['/d', '/c', 'C:\\tools\\codex.cmd', 'login', '--device-auth'],
       expect.objectContaining({ stdio: ['inherit', 'inherit', 'inherit'] })
     )
+  })
+
+  it('launches a Windows shim installed under Program Files (x86)', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const shim = 'C:\\Program Files (x86)\\nodejs\\codex.cmd'
+    resolveCliCommandMock.mockReturnValue(shim)
+
+    await ACCOUNT_HANDLERS['account add'](context('codex'))
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      getCmdExePath(),
+      ['/d', '/c', shim, 'login', '--device-auth'],
+      expect.anything()
+    )
+  })
+
+  it('explains an unspawnable Windows shim path instead of leaking the error sentinel', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    resolveCliCommandMock.mockReturnValue('C:\\Users\\A&B\\codex.cmd')
+
+    const error = await ACCOUNT_HANDLERS['account add'](context('codex')).catch(
+      (thrown: unknown) => thrown
+    )
+
+    expect(spawnMock).not.toHaveBeenCalled()
+    const message = error instanceof Error ? error.message : String(error)
+    expect(message).not.toBe(WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR)
+    expect(message).toContain('C:\\Users\\A&B\\codex.cmd')
+    expect(message).toContain(WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL)
   })
 
   it('adds version-manager Node paths to the login child environment', async () => {

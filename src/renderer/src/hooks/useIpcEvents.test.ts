@@ -1077,6 +1077,12 @@ describe('useIpcEvents browser tab create routing', () => {
 
     expect(acquireBrowserAutomationVisibility).toHaveBeenCalledWith('page-new')
     expect(acquireBrowserAutomationVisibility).not.toHaveBeenCalledWith('page-active')
+    expect(state.createBrowserTab).toHaveBeenCalledWith(
+      'wt-1',
+      'https://example.com',
+      expect.objectContaining({ activate: false })
+    )
+    expect(state.createBrowserTab.mock.calls[0]?.[2]).not.toHaveProperty('allowWindowClose')
     expect(replyTabCreate).toHaveBeenCalledWith({
       requestId: 'req-create',
       browserPageId: 'page-new'
@@ -3376,7 +3382,10 @@ describe('useIpcEvents browser tab close routing', () => {
 
     closeTerminalListenerRef.current?.({ tabId: 'terminal-1' })
 
-    expect(closeTerminalTabMock).toHaveBeenCalledWith('terminal-1')
+    // The CLI/RPC caller is answered immediately, so this close must never raise a modal.
+    expect(closeTerminalTabMock).toHaveBeenCalledWith('terminal-1', {
+      skipRunningProcessConfirm: true
+    })
   })
 
   it('acknowledges whole-tab close only after the fresh session is durably persisted', async () => {
@@ -4904,7 +4913,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
 
     fetchWorktrees.mockClear()
     fetchWorktreeLineage.mockClear()
-    mockSettings.activeRuntimeEnvironmentId = 'env-1'
+    mockSettings.activeRuntimeEnvironmentId = null
     if (!runtimeOnResponse) {
       throw new Error('Expected runtime client event callbacks')
     }
@@ -4915,8 +4924,12 @@ describe('useIpcEvents CLI-created worktree activation', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
     await new Promise((resolve) => setTimeout(resolve, 0))
 
-    expect(fetchWorktrees).toHaveBeenCalledWith('repo-1', undefined)
-    expect(fetchWorktreeLineage).toHaveBeenCalledWith(undefined)
+    expect(fetchWorktrees).toHaveBeenCalledWith('repo-1', {
+      executionHostId: 'runtime:env-1'
+    })
+    expect(fetchWorktreeLineage).toHaveBeenCalledWith({
+      executionHostId: 'runtime:env-1'
+    })
   })
 })
 
@@ -5539,6 +5552,306 @@ describe('useIpcEvents agent status snapshot integration', () => {
     }
   )
 
+  it('does not let initial SSH port snapshots overwrite newer push events', async () => {
+    const targetId = 'target-ports'
+    const secondTargetId = 'target-ports-second'
+    const rejectingTargetId = 'target-ports-rejecting'
+    const partialTargetId = 'target-ports-partial'
+    const connectedState = {
+      targetId,
+      status: 'connected' as const,
+      error: null,
+      reconnectAttempt: 0,
+      providerEpoch: 'epoch-ports',
+      connectionGeneration: 3
+    }
+    const secondConnectedState = {
+      ...connectedState,
+      targetId: secondTargetId,
+      providerEpoch: 'epoch-ports-second'
+    }
+    const rejectingConnectedState = {
+      ...connectedState,
+      targetId: rejectingTargetId,
+      providerEpoch: 'epoch-ports-rejecting'
+    }
+    const partialConnectedState = {
+      ...connectedState,
+      targetId: partialTargetId,
+      providerEpoch: null,
+      connectionGeneration: undefined
+    }
+    const reconciledPartialState = {
+      ...connectedState,
+      targetId: partialTargetId,
+      providerEpoch: 'epoch-ports-partial',
+      connectionGeneration: 4
+    }
+    const liveForward = {
+      id: 'forward-live',
+      targetId,
+      localPort: 17860,
+      remoteHost: '127.0.0.1',
+      remotePort: 7860,
+      status: 'active' as const
+    }
+    const secondForward = {
+      ...liveForward,
+      id: 'forward-second',
+      targetId: secondTargetId,
+      localPort: 17861,
+      remotePort: 7861
+    }
+    const rejectingTargetForward = {
+      ...liveForward,
+      id: 'forward-rejecting-target',
+      targetId: rejectingTargetId,
+      localPort: 17862,
+      remotePort: 7862
+    }
+    const partialTargetForward = {
+      ...liveForward,
+      id: 'forward-partial-target',
+      targetId: partialTargetId,
+      localPort: 17863,
+      remotePort: 7863
+    }
+    const detectedPort = {
+      port: 7860,
+      pid: 42,
+      processName: 'python',
+      command: 'python -m http.server 7860'
+    }
+    const secondDetectedPort = {
+      ...detectedPort,
+      port: 7861,
+      pid: 43,
+      command: 'python -m http.server 7861'
+    }
+    let resolveForwards: (value: []) => void = () => {}
+    let resolveDetected: (value: (typeof detectedPort)[]) => void = () => {}
+    let resolveSecondForwards: (value: (typeof secondForward)[]) => void = () => {}
+    let resolveSecondDetected: (value: []) => void = () => {}
+    const forwardsSnapshot = new Promise<[]>((resolve) => {
+      resolveForwards = resolve
+    })
+    const detectedSnapshot = new Promise<(typeof detectedPort)[]>((resolve) => {
+      resolveDetected = resolve
+    })
+    const secondForwardsSnapshot = new Promise<(typeof secondForward)[]>((resolve) => {
+      resolveSecondForwards = resolve
+    })
+    const secondDetectedSnapshot = new Promise<[]>((resolve) => {
+      resolveSecondDetected = resolve
+    })
+    const listPortForwards = vi.fn(({ targetId: requestedTargetId }: { targetId: string }) => {
+      if (requestedTargetId === rejectingTargetId) {
+        return Promise.resolve([rejectingTargetForward])
+      }
+      if (requestedTargetId === partialTargetId) {
+        return Promise.resolve([partialTargetForward])
+      }
+      return requestedTargetId === targetId ? forwardsSnapshot : secondForwardsSnapshot
+    })
+    const listDetectedPorts = vi.fn(({ targetId: requestedTargetId }: { targetId: string }) => {
+      if (requestedTargetId === rejectingTargetId) {
+        return Promise.reject(new Error('detected snapshot unavailable'))
+      }
+      if (requestedTargetId === partialTargetId) {
+        return Promise.resolve([])
+      }
+      return requestedTargetId === targetId ? detectedSnapshot : secondDetectedSnapshot
+    })
+    let forwardListener:
+      | ((data: { targetId: string; forwards: (typeof liveForward)[] }) => void)
+      | undefined
+    let detectedListener:
+      | ((data: { targetId: string; ports: (typeof detectedPort)[] }) => void)
+      | undefined
+    const setPortForwards = vi.fn()
+    const setDetectedPorts = vi.fn()
+    const sshConnectionStates = new Map<
+      string,
+      | typeof connectedState
+      | typeof secondConnectedState
+      | typeof rejectingConnectedState
+      | typeof partialConnectedState
+      | typeof reconciledPartialState
+    >()
+    const storeState = buildStoreState({
+      sshTargetLabels: new Map([
+        [targetId, 'Ports Target'],
+        [secondTargetId, 'Second Ports Target'],
+        [rejectingTargetId, 'Rejecting Ports Target'],
+        [partialTargetId, 'Partial Ports Target']
+      ]),
+      sshConnectionStates,
+      setSshConnectionState: (
+        nextTargetId: string,
+        state:
+          | typeof connectedState
+          | typeof secondConnectedState
+          | typeof rejectingConnectedState
+          | typeof partialConnectedState
+          | typeof reconciledPartialState
+      ) => {
+        sshConnectionStates.set(nextTargetId, state)
+      },
+      setPortForwards,
+      setDetectedPorts,
+      setSshTargetsMetadata: vi.fn(),
+      setRemovedSshTargetLabels: vi.fn(),
+      setRemoteWorkspaceSyncStatus: vi.fn(),
+      fetchRuntimeEnvironmentRepos: vi.fn(async () => []),
+      fetchWorktreeLineage: vi.fn(async () => undefined),
+      clearRemoteDetectedAgents: vi.fn(),
+      clearDirectSshTargetPtyBindings: vi.fn(),
+      clearRemovedSshTargetState: vi.fn(),
+      invalidateStaleDirectSshTargetPtyBindings: vi.fn(() => 0),
+      retryDirectSshTargetPanes: vi.fn(() => 0)
+    })
+    const coordinator = {
+      requestReconnect: vi.fn(async () => ({ status: 'complete' })),
+      replaceAuthority: vi.fn(),
+      prepareOnly: vi.fn(async () => ({ token: null })),
+      correctUnboundTerminals: vi.fn(() => 0),
+      finalizeHydratedTerminals: vi.fn(() => 0),
+      invalidate: vi.fn(),
+      stop: vi.fn()
+    }
+    let partialTargetStateCalls = 0
+
+    stubReactSyncEffect()
+    stubAuxiliaryModules()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    vi.doMock('./direct-ssh-reconnect-rollout', () => ({
+      isDirectSshReconnectCoordinatorRoutingEnabled: () => true
+    }))
+    vi.doMock('./direct-ssh-worktree-refresh-scheduler', () => ({
+      createDirectSshWorktreeRefreshScheduler: () => ({
+        stop: vi.fn(),
+        disposeProvider: vi.fn()
+      })
+    }))
+    vi.doMock('./direct-ssh-host-hydration', () => ({
+      createDirectSshHostHydration: () => ({
+        capturePreparationInput: vi.fn(),
+        readHostScopedLineage: vi.fn(),
+        isPreparationTokenCurrent: vi.fn(() => true),
+        stop: vi.fn()
+      })
+    }))
+    vi.doMock('./direct-ssh-reconnect-coordinator', () => ({
+      createDirectSshReconnectCoordinator: () => coordinator
+    }))
+    vi.doMock('@/lib/direct-ssh-reconnect-product-telemetry', () => ({
+      createDirectSshReconnectProductTelemetryAdapter: vi.fn()
+    }))
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: () => () => {},
+        ssh: {
+          listTargets: () =>
+            Promise.resolve([
+              { id: rejectingTargetId, label: 'Rejecting Ports Target' },
+              { id: partialTargetId, label: 'Partial Ports Target' },
+              { id: targetId, label: 'Ports Target' },
+              { id: secondTargetId, label: 'Second Ports Target' }
+            ]),
+          listRemovedTargetLabels: () => Promise.resolve({}),
+          getState: ({ targetId: requestedTargetId }: { targetId: string }) => {
+            if (requestedTargetId === partialTargetId) {
+              partialTargetStateCalls += 1
+              return Promise.resolve(
+                partialTargetStateCalls === 1 ? partialConnectedState : reconciledPartialState
+              )
+            }
+            return Promise.resolve(
+              requestedTargetId === rejectingTargetId
+                ? rejectingConnectedState
+                : requestedTargetId === targetId
+                  ? connectedState
+                  : secondConnectedState
+            )
+          },
+          listPortForwards,
+          listDetectedPorts,
+          onPortForwardsChanged: (
+            listener: (data: { targetId: string; forwards: (typeof liveForward)[] }) => void
+          ) => {
+            forwardListener = listener
+            return () => {}
+          },
+          onDetectedPortsChanged: (
+            listener: (data: { targetId: string; ports: (typeof detectedPort)[] }) => void
+          ) => {
+            detectedListener = listener
+            return () => {}
+          }
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+    useIpcEvents()
+
+    await vi.waitFor(() => {
+      expect(forwardListener).toBeTypeOf('function')
+      expect(detectedListener).toBeTypeOf('function')
+      expect(partialTargetStateCalls).toBe(2)
+      expect(sshConnectionStates.get(partialTargetId)).toEqual(reconciledPartialState)
+      expect(listPortForwards).toHaveBeenCalledTimes(4)
+      expect(listDetectedPorts).toHaveBeenCalledTimes(4)
+      expect(
+        setPortForwards.mock.calls.filter(
+          ([requestedTargetId]) => requestedTargetId === rejectingTargetId
+        )
+      ).toEqual([[rejectingTargetId, [rejectingTargetForward]]])
+      expect(
+        setPortForwards.mock.calls.filter(
+          ([requestedTargetId]) => requestedTargetId === partialTargetId
+        )
+      ).toEqual([[partialTargetId, [partialTargetForward]]])
+    })
+    forwardListener?.({ targetId, forwards: [liveForward] })
+    resolveForwards([])
+    resolveDetected([detectedPort])
+
+    await vi.waitFor(() => {
+      expect(
+        setPortForwards.mock.calls.filter(([requestedTargetId]) => requestedTargetId === targetId)
+      ).toEqual([[targetId, [liveForward]]])
+      expect(
+        setDetectedPorts.mock.calls.filter(([requestedTargetId]) => requestedTargetId === targetId)
+      ).toEqual([[targetId, [detectedPort]]])
+      expect(listPortForwards).toHaveBeenCalledTimes(4)
+      expect(listDetectedPorts).toHaveBeenCalledTimes(4)
+    })
+    forwardListener?.({ targetId, forwards: [liveForward] })
+    detectedListener?.({ targetId: secondTargetId, ports: [secondDetectedPort] })
+    resolveSecondForwards([secondForward])
+    resolveSecondDetected([])
+
+    await vi.waitFor(() => {
+      expect(
+        setPortForwards.mock.calls.filter(
+          ([requestedTargetId]) => requestedTargetId === secondTargetId
+        )
+      ).toEqual([[secondTargetId, [secondForward]]])
+      expect(
+        setDetectedPorts.mock.calls.filter(
+          ([requestedTargetId]) => requestedTargetId === secondTargetId
+        )
+      ).toEqual([[secondTargetId, [secondDetectedPort]]])
+    })
+  })
+
   it('caps pending mobile state events while startup hydration is unresolved', async () => {
     const setFitOverride = vi.fn()
     const hydrateOverrides = vi.fn()
@@ -5848,6 +6161,202 @@ describe('useIpcEvents agent status snapshot integration', () => {
       expectWorktreeRouting('wt-1'),
       undefined
     )
+  })
+
+  it('applies a burst leading-edge first, then coalesces the rest into one deferred batch', async () => {
+    // Why: each live status event is its own IPC task, so N events used to pay
+    // N full render passes (STA-3328 mechanism 2). The leading event must stay
+    // synchronous (zero added latency); followers within the burst window must
+    // apply together on one later task, in arrival order.
+    vi.useFakeTimers()
+    const setAgentStatus = vi.fn()
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      workspaceSessionReady: true,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Future Tab' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-future': {
+          root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+          activeLeafId: FUTURE_LEAF_ID,
+          expandedLeafId: null
+        }
+      }
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (cb) => {
+          onSetListenerRef.current = cb
+          return () => {}
+        }
+      })
+    )
+
+    try {
+      const { useIpcEvents } = await import('./useIpcEvents')
+      useIpcEvents()
+      if (typeof onSetListenerRef.current !== 'function') {
+        throw new Error('Expected agentStatus.onSet listener to be registered')
+      }
+      const emit = (receivedAt: number, prompt: string): void => {
+        onSetListenerRef.current!({
+          paneKey: FUTURE_PANE_KEY,
+          state: 'working',
+          prompt,
+          agentType: 'claude',
+          receivedAt,
+          stateStartedAt: receivedAt
+        })
+      }
+
+      emit(1_700_000_000_000, 'first')
+      expect(setAgentStatus).toHaveBeenCalledTimes(1)
+
+      emit(1_700_000_000_001, 'second')
+      emit(1_700_000_000_002, 'third')
+      expect(setAgentStatus).toHaveBeenCalledTimes(1)
+
+      vi.advanceTimersByTime(40)
+      expect(setAgentStatus).toHaveBeenCalledTimes(3)
+      expect(setAgentStatus.mock.calls[1][1]).toEqual(expect.objectContaining({ prompt: 'second' }))
+      expect(setAgentStatus.mock.calls[2][1]).toEqual(expect.objectContaining({ prompt: 'third' }))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('preserves queued set-clear order for working removal and done retention', async () => {
+    vi.useFakeTimers()
+    let storeState: StoreLike
+    const setAgentStatus = vi.fn(
+      (
+        paneKey: string,
+        payload: { state: string },
+        _title: unknown,
+        timing: { updatedAt: number }
+      ) => {
+        storeState.agentStatusByPaneKey = {
+          ...(storeState.agentStatusByPaneKey as Record<string, unknown>),
+          [paneKey]: { ...payload, updatedAt: timing.updatedAt }
+        }
+      }
+    )
+    const removeAgentStatus = vi.fn((paneKey: string) => {
+      const next = { ...(storeState.agentStatusByPaneKey as Record<string, unknown>) }
+      delete next[paneKey]
+      storeState.agentStatusByPaneKey = next
+    })
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+    const onClearListenerRef: { current: ((data: { paneKey: string }) => void) | null } = {
+      current: null
+    }
+    storeState = buildStoreState({
+      setAgentStatus,
+      removeAgentStatus,
+      workspaceSessionReady: true,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Future Tab' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-future': {
+          root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+          activeLeafId: FUTURE_LEAF_ID,
+          expandedLeafId: null
+        }
+      }
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (cb) => {
+          onSetListenerRef.current = cb
+          return () => {}
+        },
+        onClear: (cb) => {
+          onClearListenerRef.current = cb as (data: { paneKey: string }) => void
+          return () => {}
+        }
+      })
+    )
+
+    try {
+      const { useIpcEvents } = await import('./useIpcEvents')
+      useIpcEvents()
+      if (
+        typeof onSetListenerRef.current !== 'function' ||
+        typeof onClearListenerRef.current !== 'function'
+      ) {
+        throw new Error('Expected agentStatus listeners to be registered')
+      }
+      const emit = (
+        receivedAt: number,
+        prompt: string,
+        state: AgentStatusSetData['state'] = 'working'
+      ): void => {
+        onSetListenerRef.current!({
+          paneKey: FUTURE_PANE_KEY,
+          state,
+          prompt,
+          agentType: 'claude',
+          receivedAt,
+          stateStartedAt: receivedAt
+        })
+      }
+
+      emit(1_700_000_000_000, 'leading')
+      emit(1_700_000_000_001, 'queued')
+      expect(setAgentStatus).toHaveBeenCalledTimes(1)
+
+      onClearListenerRef.current({ paneKey: FUTURE_PANE_KEY })
+      expect(removeAgentStatus).toHaveBeenCalledWith(FUTURE_PANE_KEY)
+      expect(storeState.agentStatusByPaneKey).toEqual({})
+
+      vi.advanceTimersByTime(40)
+      expect(setAgentStatus).toHaveBeenCalledTimes(2)
+      expect(storeState.agentStatusByPaneKey).toEqual({})
+
+      emit(1_700_000_000_002, 'task')
+      emit(1_700_000_000_003, 'task', 'done')
+      expect(setAgentStatus).toHaveBeenCalledTimes(3)
+
+      onClearListenerRef.current({ paneKey: FUTURE_PANE_KEY })
+
+      expect(setAgentStatus).toHaveBeenCalledTimes(4)
+      expect(setAgentStatus.mock.calls[3][1]).toEqual(expect.objectContaining({ state: 'done' }))
+      expect(removeAgentStatus).toHaveBeenCalledTimes(1)
+      expect(storeState.agentStatusByPaneKey).toEqual({
+        [FUTURE_PANE_KEY]: expect.objectContaining({ state: 'done' })
+      })
+      vi.advanceTimersByTime(40)
+      expect(setAgentStatus).toHaveBeenCalledTimes(4)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('does not recurse when flushing a pending status re-enters via the store subscriber', async () => {

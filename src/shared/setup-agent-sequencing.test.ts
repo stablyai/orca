@@ -165,6 +165,24 @@ describe('createSequencedSetupAgentCommands', () => {
     expect(result.startupCommand).toContain('[ "$seen" = nonce-remote ]')
   })
 
+  it('preserves WSL shell metadata when sequencing native Windows runners', () => {
+    const result = createSequencedSetupAgentCommands({
+      runnerScriptPath: 'C:\\repo\\.git\\orca\\setup-runner.sh',
+      startupCommand: 'claude',
+      platform: 'windows',
+      shell: { family: 'posix', executable: 'wsl.exe' },
+      nonce: 'nonce-wsl-shell'
+    })
+
+    expect(result.setupCommand).toContain('bash /mnt/c/repo/.git/orca/setup-runner.sh')
+    expect(result.setupCommand).toContain(
+      '/mnt/c/repo/.git/orca/setup-runner.sh.nonce-wsl-shell.done'
+    )
+    expect(result.startupCommand).toContain(
+      '/mnt/c/repo/.git/orca/setup-runner.sh.nonce-wsl-shell.done'
+    )
+  })
+
   it('wraps native Windows runners in a cmd-pinned setup and startup gate', () => {
     const result = createSequencedSetupAgentCommands({
       runnerScriptPath: 'C:\\repo\\.git\\orca\\setup-runner.cmd',
@@ -198,6 +216,40 @@ describe('createSequencedSetupAgentCommands', () => {
     expect(result.startupEnv).toEqual({
       [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: "codex --model gpt-5 'fix !PATH! & test'"
     })
+  })
+
+  it('launches a batch runner through the cmd launcher inside a Git Bash gate', () => {
+    // Regression (#6896): a Git Bash terminal with a batch setup script still gets a .cmd
+    // runner, and the gate must not hand that runner to bash. The gate itself stays POSIX
+    // because the Git Bash pane types it and quoted the startup command for bash.
+    const result = createSequencedSetupAgentCommands({
+      runnerScriptPath: 'C:\\repo\\.git\\orca\\setup-runner.cmd',
+      startupCommand: "claude 'fix the user'\\''s login'",
+      platform: 'windows',
+      shell: { family: 'posix' },
+      nonce: 'nonce-gitbash-cmd'
+    })
+
+    expect(result.setupCommand).toContain(
+      'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand'
+    )
+    expect(result.setupCommand).not.toMatch(/bash\s+\S*setup-runner/)
+    expect(decodePowerShellScript(result.setupCommand)).toContain(
+      "$runner = 'C:\\repo\\.git\\orca\\setup-runner.cmd'"
+    )
+    // Why: PowerShell's `Invoke-Expression` cannot parse the POSIX `'\''` escaping a Git Bash
+    // pane produces, so the gate that evaluates the startup command must be bash.
+    expect(result.setupCommand).toMatch(/^bash -lc /)
+    expect(result.startupCommand).toMatch(/^bash -lc /)
+    expect(result.startupCommand).not.toContain('Invoke-Expression')
+    expect(result.startupCommand).toContain('eval "$ORCA_SEQUENCED_STARTUP_COMMAND"')
+    // Why: bash writes and reads the marker here, so it needs the /c/... form of the path.
+    expect(result.setupCommand).toContain(
+      '/c/repo/.git/orca/setup-runner.cmd.nonce-gitbash-cmd.done'
+    )
+    expect(result.startupCommand).toContain(
+      '/c/repo/.git/orca/setup-runner.cmd.nonce-gitbash-cmd.done'
+    )
   })
 
   it.skipIf(process.platform !== 'win32')(

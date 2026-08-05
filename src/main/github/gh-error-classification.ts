@@ -55,3 +55,11 @@ export function classifyListIssuesError(stderr: string): ClassifiedError {
   }
   return { type: c.type, message: readMessages[c.type] }
 }
+
+// Why: PR-side list failures need the same read-op classification — pagination
+// decisions key on the type, and swallowing them made failures look like
+// end-of-data (#11485).
+export function classifyListPrsError(stderr: string): ClassifiedError {
+  const c = classifyGhError(stderr)
+  return { type: c.type, message: `Failed to load pull requests: ${stderr.trim()}` }
+}

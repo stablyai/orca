@@ -72,7 +72,8 @@ export function ensureNativeChatModelEnrichment(args: {
       if (!discovered || discovered.length === 0) {
         return
       }
-      entry.models = mergeCatalogModels(catalog.models, discovered)
+      entry.models =
+        args.agent === 'claude' ? [...discovered] : mergeCatalogModels(catalog.models, discovered)
       for (const listener of entry.listeners) {
         listener([...entry.models])
       }

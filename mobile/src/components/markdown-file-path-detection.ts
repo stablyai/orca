@@ -83,9 +83,11 @@ const FILE_EXTENSIONS = [
 const EXTENSION_SET = new Set<string>(FILE_EXTENSIONS)
 
 // Accept the host's native separator because transcript paths originate on the
-// connected runtime, which may be Windows even when the phone is not.
+// connected runtime, which may be Windows even when the phone is not. Leading
+// alternatives cover Windows drives, UNC, and POSIX absolute roots; the optional
+// tail captures only bounded agent-style :line(:col) citations.
 const CANDIDATE_PATTERN =
-  /(?:[A-Za-z]:[\\/]|\\\\)?(?:\.{1,2}[\\/])?(?:[\w.@~+-]+[\\/])+[\w.@+-]+\.[A-Za-z0-9]+/g
+  /(?:(?:[A-Za-z]:[\\/]|\\\\|[\\/]|\.{1,2}[\\/])(?:[\w.@~+-]+[\\/])*|(?:[\w.@~+-]+[\\/])+)[\w.@+-]+\.[A-Za-z0-9]+(?::[1-9]\d*(?::[1-9]\d*)?(?![\w@%]))?/g
 
 // A path candidate in chat prose is short; a much longer run can't hold one worth
 // linkifying but can push CANDIDATE_PATTERN into super-linear backtracking, so we
@@ -99,7 +101,31 @@ function hasMidTokenAt(candidate: string): boolean {
   return /[^\\/]@/.test(candidate)
 }
 
-function isOpenablePath(candidate: string): boolean {
+const LINE_SUFFIX_PATTERN = /^(.+?):([1-9]\d*)(?::([1-9]\d*))?$/
+
+/**
+ * Split an agent-style `path:line(:col)` citation into its parts. Windows drive
+ * colons are safe: only a trailing all-digit suffix is treated as a line ref.
+ */
+export function splitFilePathLineSuffix(pathText: string): {
+  path: string
+  line: number | null
+  column: number | null
+} {
+  const match = LINE_SUFFIX_PATTERN.exec(pathText)
+  if (!match) {
+    return { path: pathText, line: null, column: null }
+  }
+  return {
+    path: match[1]!,
+    line: Number.parseInt(match[2]!, 10),
+    column: match[3] ? Number.parseInt(match[3], 10) : null
+  }
+}
+
+function isOpenablePath(pathText: string): boolean {
+  // A :line(:col) tail is part of the citation, not the file name.
+  const { path: candidate } = splitFilePathLineSuffix(pathText)
   // Reject anything URL-ish or scheme-bearing — those are handled as web links.
   if (candidate.includes('://') || hasMidTokenAt(candidate)) {
     return false
@@ -153,10 +179,11 @@ export function detectFilePathSegments(text: string): FilePathSegment[] {
 
   while ((match = CANDIDATE_PATTERN.exec(text))) {
     const candidate = match[0]
-    // Skip candidates that are part of a URL (preceded by a scheme colon or an
-    // alphanumeric/host char that would make this a domain tail, not a path).
+    // Skip candidates that are part of a URL: a scheme colon, a domain tail, or
+    // a preceding slash (the leading slash of an absolute path is part of the
+    // match itself, so prev '/' means a '://' or '//' remainder, not a path).
     const prev = match.index > 0 ? text[match.index - 1]! : ''
-    if (prev === ':' || prev === '/' || /[\w.@]/.test(prev)) {
+    if (prev === ':' || prev === '/' || prev === '\\' || /[\w.@]/.test(prev)) {
       continue
     }
     if (!isOpenablePath(candidate)) {
@@ -195,16 +222,18 @@ export function isFilePathCodeSpan(code: string): boolean {
   if (isOpenablePath(trimmed)) {
     return true
   }
-  // Separator-less code span: accept a clean name.ext with a known extension.
-  if (/[\\/]/.test(trimmed)) {
+  // Separator-less code span: accept a clean name.ext (with an optional
+  // :line(:col) citation tail) and a known extension.
+  const { path } = splitFilePathLineSuffix(trimmed)
+  if (/[\\/]/.test(path)) {
     return false
   }
-  const dot = trimmed.lastIndexOf('.')
+  const dot = path.lastIndexOf('.')
   if (dot <= 0) {
     return false
   }
-  const name = trimmed.slice(0, dot)
-  const ext = trimmed.slice(dot + 1).toLowerCase()
+  const name = path.slice(0, dot)
+  const ext = path.slice(dot + 1).toLowerCase()
   if (/[^\w.@+-]/.test(name)) {
     return false
   }

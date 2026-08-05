@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-status-types'
+import { readClaudeBackgroundAgentTasks } from './claude-background-task-inventory'
 import {
   claudeRosterHasWorkingSubagent,
   claudeRosterToSnapshots,
   claudeTeammateIdMatchesName,
   foldClaudeBackgroundTasksIntoRoster,
   idleClaudeTeammateByName,
-  readClaudeBackgroundAgentTasks,
   reapRestoredClaudeSubagentsWithoutLiveAgent,
   stopClaudeSubagent,
   upsertWorkingClaudeSubagent,

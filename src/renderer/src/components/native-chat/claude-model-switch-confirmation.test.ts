@@ -40,6 +40,56 @@ describe('Claude model switch confirmation detection', () => {
     expect(unsubscribe).toHaveBeenCalledOnce()
   })
 
+  it('matches the resolved-model echo when the picker label carries no version', async () => {
+    // Why: the CLI echoes what the alias resolved to ("Opus 5 (1M context)")
+    // while discovered picker labels read "Opus (1M context)"; the family word
+    // must bridge the two so verified switches do not report as unverifiable.
+    const dataObserver = { current: (_data: string): void => {} }
+    const observer = createClaudeModelSwitchConfirmationObserver({
+      ptyId: 'pty-1',
+      settings: {},
+      expectedModelLabel: 'Opus (1M context)',
+      subscribeToData: (watcher) => {
+        dataObserver.current = watcher
+        return vi.fn(() => {})
+      },
+      timeoutMs: 100
+    })
+
+    await observer.ready
+    observer.arm()
+    dataObserver.current('Set model to Opus 5 (1M context) and saved as your default')
+
+    await expect(observer.result).resolves.toBe('applied')
+  })
+
+  it('does not confirm a different context variant from the same model family', async () => {
+    vi.useFakeTimers()
+    try {
+      const dataObserver = { current: (_data: string): void => {} }
+      const observer = createClaudeModelSwitchConfirmationObserver({
+        ptyId: 'pty-1',
+        settings: {},
+        expectedModelLabel: 'Opus (1M context)',
+        subscribeToData: (watcher) => {
+          dataObserver.current = watcher
+          return vi.fn(() => {})
+        },
+        timeoutMs: 100
+      })
+
+      await observer.ready
+      observer.arm()
+      observer.startDetection()
+      dataObserver.current('Set model to Opus 5 and saved as your default')
+      await vi.advanceTimersByTimeAsync(100)
+
+      await expect(observer.result).resolves.toBe('unknown')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('accepts the exact cached-history confirmation once and keeps observing', async () => {
     const dataObserver = { current: (_data: string): void => {} }
     const submitConfirmation = vi.fn()

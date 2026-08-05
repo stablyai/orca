@@ -174,6 +174,221 @@ describe('useMobileNativeChatSession', () => {
     }
   )
 
+  it('keeps paged-in history across an auto-reconnect replay snapshot', async () => {
+    // The transport replays the subscription with its original params after an
+    // in-place reconnect, so the replayed snapshot is the newest initial window
+    // again. It must merge into the grown history, not truncate it back to 40.
+    const sendRequest = vi.fn().mockResolvedValue({
+      ok: true,
+      result: {
+        messages: Array.from({ length: 60 }, (_unused, index) => message(`paged-${index}`)),
+        hasMore: false,
+        beforeOffset: 40
+      }
+    })
+    const window = Array.from({ length: 40 }, (_unused, index) => message(`win-${index}`))
+    const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
+      emit = onData
+      onData({ type: 'snapshot', messages: window, hasMore: true, beforeOffset: 100 })
+      return () => {}
+    })
+    await mount({ sendRequest, subscribe } as unknown as RpcClient)
+    await act(async () => {
+      state?.loadEarlier()
+      await Promise.resolve()
+    })
+    expect(state?.messages).toHaveLength(100)
+
+    // Reconnect replay: the same newest-40 window. History survives untouched.
+    await act(async () =>
+      emit({ type: 'snapshot', messages: window, hasMore: true, beforeOffset: 100 })
+    )
+    expect(state?.messages).toHaveLength(100)
+    expect(state?.messages[0]?.id).toBe('paged-0')
+
+    // A replay carrying one message that arrived while away merges it in; the
+    // grown window stays bounded, so only the single oldest row trims.
+    await act(async () =>
+      emit({
+        type: 'snapshot',
+        messages: [...window, message('live-1')],
+        hasMore: true,
+        beforeOffset: 100
+      })
+    )
+    expect(state?.messages).toHaveLength(100)
+    expect(state?.messages[0]?.id).toBe('paged-1')
+    expect(state?.messages.at(-1)?.id).toBe('live-1')
+  })
+
+  it('enables paging when a replay trims a window that previously had no earlier rows', async () => {
+    // Never settles: this asserts the request the replay's cursor produces.
+    const sendRequest = vi.fn(() => new Promise<never>(() => {}))
+    const window = Array.from({ length: 40 }, (_unused, index) => message(`win-${index}`))
+    const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
+      emit = onData
+      onData({ type: 'snapshot', messages: window, hasMore: false, beforeOffset: 0 })
+      return () => {}
+    })
+    await mount({ sendRequest, subscribe } as unknown as RpcClient)
+
+    await act(async () =>
+      emit({
+        type: 'snapshot',
+        messages: [...window.slice(1), message('live-1')],
+        hasMore: true,
+        beforeOffset: 10
+      })
+    )
+
+    expect(state?.messages[0]?.id).toBe('win-1')
+    expect(state?.hasMore).toBe(true)
+    act(() => state?.loadEarlier())
+    expect(sendRequest).toHaveBeenCalledWith('nativeChat.readSession', {
+      agent: 'claude',
+      sessionId: 'session',
+      limit: 100
+    })
+  })
+
+  it('drops paged rows that an authoritative replay says were removed', async () => {
+    const sendRequest = vi.fn().mockResolvedValue({
+      ok: true,
+      result: {
+        messages: Array.from({ length: 60 }, (_unused, index) => message(`paged-${index}`)),
+        hasMore: false,
+        beforeOffset: 40
+      }
+    })
+    const window = Array.from({ length: 40 }, (_unused, index) => message(`win-${index}`))
+    const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
+      emit = onData
+      onData({ type: 'snapshot', messages: window, hasMore: true, beforeOffset: 100 })
+      return () => {}
+    })
+    await mount({ sendRequest, subscribe } as unknown as RpcClient)
+    await act(async () => {
+      state?.loadEarlier()
+      await Promise.resolve()
+    })
+    expect(state?.messages).toHaveLength(100)
+
+    await act(async () =>
+      emit({ type: 'snapshot', messages: window, hasMore: false, beforeOffset: 0 })
+    )
+
+    expect(state?.messages).toEqual(window)
+    expect(state?.hasMore).toBe(false)
+  })
+
+  it('clears a stale cursor when a replacement omits paging metadata', async () => {
+    // Never settles: this asserts the request the cleared cursor produces.
+    const sendRequest = vi.fn(() => new Promise<never>(() => {}))
+    const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
+      emit = onData
+      onData({
+        type: 'snapshot',
+        messages: Array.from({ length: 40 }, (_unused, index) => message(`win-${index}`)),
+        hasMore: true,
+        beforeOffset: 100
+      })
+      return () => {}
+    })
+    await mount({ sendRequest, subscribe } as unknown as RpcClient)
+
+    await act(async () =>
+      emit({
+        type: 'replacement',
+        messages: Array.from({ length: 40 }, (_unused, index) => message(`new-${index}`))
+      })
+    )
+    act(() => state?.loadEarlier())
+
+    expect(sendRequest).toHaveBeenCalledWith('nativeChat.readSession', {
+      agent: 'claude',
+      sessionId: 'session',
+      limit: 100
+    })
+  })
+
+  it('clears hasMore when a replaced window is shorter than the initial page', async () => {
+    // A replaced window without paging metadata is judged by its own length:
+    // shorter than a full page means the whole transcript is on screen.
+    const sendRequest = vi.fn()
+    const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
+      emit = onData
+      onData({
+        type: 'snapshot',
+        messages: Array.from({ length: 40 }, (_unused, index) => message(`win-${index}`)),
+        hasMore: true,
+        beforeOffset: 100
+      })
+      return () => {}
+    })
+    await mount({ sendRequest, subscribe } as unknown as RpcClient)
+    expect(state?.hasMore).toBe(true)
+
+    await act(async () => emit({ type: 'replacement', messages: [message('only')] }))
+
+    expect(state?.hasMore).toBe(false)
+  })
+
+  it('fences an in-flight older page when a merging replay re-cuts the byte cursor', async () => {
+    let resolveEarlier: (response: unknown) => void = () => {}
+    const sendRequest = vi.fn(
+      () => new Promise((resolve) => (resolveEarlier = resolve))
+    ) as unknown as RpcClient['sendRequest']
+    const retained = Array.from({ length: 40 }, (_unused, index) => message(`win-${index}`))
+    const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
+      emit = onData
+      onData({ type: 'snapshot', messages: retained, hasMore: true, beforeOffset: 100 })
+      return () => {}
+    })
+    await mount({ sendRequest, subscribe } as unknown as RpcClient)
+    act(() => state?.loadEarlier())
+
+    // The replay merges (same rows, no trim), but the host re-cut the file, so
+    // it carries a new cursor. The page already in flight was addressed with the
+    // old offset and would write that stale cursor back over the fresh one.
+    await act(async () =>
+      emit({ type: 'snapshot', messages: retained, hasMore: true, beforeOffset: 250 })
+    )
+    await act(async () => {
+      resolveEarlier({
+        ok: true,
+        result: { messages: [message('stale-page')], hasMore: true, beforeOffset: 40 }
+      })
+      await Promise.resolve()
+    })
+
+    expect(state?.messages.some((entry) => entry.id === 'stale-page')).toBe(false)
+    expect(state?.loadingEarlier).toBe(false)
+  })
+
+  it('keeps the base snapshot authoritative when a live append arrives first', async () => {
+    const sendRequest = vi.fn()
+    const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
+      emit = onData
+      return () => {}
+    })
+    await mount({ sendRequest, subscribe } as unknown as RpcClient)
+    // Only a snapshot marks the base as delivered, so an append landing first
+    // must not demote the real base snapshot to a reconnect replay.
+    await act(async () =>
+      emit({ type: 'appended', messages: [message('early-a'), message('early-b')] })
+    )
+    await act(async () =>
+      emit({
+        type: 'snapshot',
+        messages: [message('early-b'), message('base-c')],
+        hasMore: true,
+        beforeOffset: 3
+      })
+    )
+
+    expect(state?.messages.map((entry) => entry.id)).toEqual(['early-b', 'base-c'])
+  })
+
   it('rejects a cursor page invalidated by live trim and retries with a growing tail', async () => {
     let resolveCursorPage: (response: unknown) => void = () => {}
     const sendRequest = vi

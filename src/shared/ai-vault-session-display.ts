@@ -12,6 +12,11 @@ export type AiVaultSessionDisplayTurn = {
   timestamp: string | null
 }
 
+export type AiVaultSessionPromptPreview = {
+  text: string
+  source: 'first-user-prompt' | 'preview-window'
+}
+
 export function latestSessionConversationTurn(
   session: AiVaultSession
 ): AiVaultSessionDisplayTurn | null {
@@ -42,6 +47,26 @@ export function sessionDetailConversationTurns(
     .filter((turn) => !turnTextMatchesSessionTitle(session.title, turn.text))
 
   return dedupeAdjacentConversationTurns(turns).slice(-limit)
+}
+
+/** Prompt text with enough provenance for the renderer to avoid overclaiming. */
+export function sessionPromptPreview(session: AiVaultSession): AiVaultSessionPromptPreview | null {
+  const stored = session.firstUserPrompt?.trim()
+  if (stored) {
+    return { text: stored, source: 'first-user-prompt' }
+  }
+
+  for (const message of session.previewMessages) {
+    if (message.role !== 'user') {
+      continue
+    }
+    const text = message.text.trim()
+    if (text) {
+      return { text, source: 'preview-window' }
+    }
+  }
+
+  return null
 }
 
 function turnTextMatchesSessionTitle(title: string, turnText: string): boolean {

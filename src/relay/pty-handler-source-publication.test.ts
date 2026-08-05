@@ -60,6 +60,8 @@ describe('PtyHandler negotiated source publication', () => {
   let destroyPty: ReturnType<typeof vi.fn>
   let holdDataSettlements: boolean
   let heldDataSettlements: ((result: SinkWriteSettlement) => void)[]
+  let holdExitSettlements: boolean
+  let heldExitSettlements: ((result: SinkWriteSettlement) => void)[]
   let highWaterMark: number | undefined
 
   beforeEach(async () => {
@@ -72,6 +74,8 @@ describe('PtyHandler negotiated source publication', () => {
     exitCallback = undefined
     holdDataSettlements = false
     heldDataSettlements = []
+    holdExitSettlements = false
+    heldExitSettlements = []
     highWaterMark = undefined
     pausePty = vi.fn()
     destroyPty = vi.fn()
@@ -105,6 +109,10 @@ describe('PtyHandler negotiated source publication', () => {
           return true
         }
         if (frame?.method === 'pty.exit') {
+          if (holdExitSettlements) {
+            heldExitSettlements.push(settle)
+            return true
+          }
           // Why: real sockets never settle inside write(); a synchronous settle would re-enter
           // the legacy capacity path before the pending exit is retired.
           queueMicrotask(() => settle({ ok: true }))
@@ -213,6 +221,74 @@ describe('PtyHandler negotiated source publication', () => {
     expect(exitFrames()).toHaveLength(1)
   })
 
+  function attachSubscriber(): Buffer[] {
+    const subscriberWrites: Buffer[] = []
+    dispatcher.attachClient(
+      (data, settle) => {
+        subscriberWrites.push(Buffer.from(data))
+        if (notification(data)?.method === 'pty.exit') {
+          // Why: real sockets never settle inside write(); see the primary sink above.
+          queueMicrotask(() => settle({ ok: true }))
+          return true
+        }
+        settle({ ok: true })
+        return true
+      },
+      { supportsWriteCallback: true }
+    )
+    return subscriberWrites
+  }
+
+  function subscriberExitFrames(subscriberWrites: Buffer[]): Notification[] {
+    return subscriberWrites
+      .map(notification)
+      .filter((frame): frame is Notification => frame?.method === 'pty.exit')
+  }
+
+  it('never re-delivers the exit to subscribers when a cancel retires the record', async () => {
+    await spawn({})
+    const spawnResult = writes.map((buffer) => responseResult(buffer, 2)).find(Boolean)!
+    const subscriberWrites = attachSubscriber()
+    dataCallback!('prompt')
+    await vi.advanceTimersByTimeAsync(8)
+
+    // Why: the owner's producer lane is saturated when the PTY exits, so only the legacy
+    // projection lands; the record then still holds the undelivered owner exit.
+    highWaterMark = 64
+    expect(() => exitCallback!({ exitCode: 0 })).not.toThrow()
+    await vi.advanceTimersByTimeAsync(8)
+    expect(subscriberExitFrames(subscriberWrites)).toHaveLength(1)
+
+    highWaterMark = undefined
+    await cancelSourceDelivery(spawnResult)
+    await vi.advanceTimersByTimeAsync(8)
+
+    expect(subscriberExitFrames(subscriberWrites)).toHaveLength(1)
+  })
+
+  it('drains the pending exit once the retired record published it', async () => {
+    await spawn({})
+    const spawnResult = writes.map((buffer) => responseResult(buffer, 2)).find(Boolean)!
+    dataCallback!('prompt')
+    await vi.advanceTimersByTimeAsync(8)
+    holdExitSettlements = true
+
+    exitCallback!({ exitCode: 0 })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(heldExitSettlements).toHaveLength(1)
+    await cancelSourceDelivery(spawnResult)
+    // Why: the in-flight frame failing on a canceled delivery is the only path that reaches
+    // the retiring branch with an unsettled exit publication.
+    heldExitSettlements[0]({ ok: false, error: new Error('socket write failed') })
+    await vi.advanceTimersByTimeAsync(8)
+    expect(exitFrames()).toHaveLength(2)
+
+    handler.handleSourcePublicationCapacity(String(spawnResult.id))
+    await vi.advanceTimersByTimeAsync(8)
+
+    expect(exitFrames()).toHaveLength(2)
+  })
+
   it('drains buffered legacy output before the exit when capacity returns', async () => {
     await spawn({})
     const spawnResult = writes.map((buffer) => responseResult(buffer, 2)).find(Boolean)!
@@ -265,6 +341,123 @@ describe('PtyHandler negotiated source publication', () => {
       expect(exitFrames()[0].params).toMatchObject({ id: spawnResult.id, code: 7 })
       expect(String(stderr.mock.calls.at(-1)?.[0])).toContain(
         '[pty-handler] pty source exit publication failed'
+      )
+    } finally {
+      stderr.mockRestore()
+    }
+  })
+
+  it('retires the delivery after the owner exit publication throws', async () => {
+    await spawn({})
+    const spawnResult = writes.map((buffer) => responseResult(buffer, 2)).find(Boolean)!
+    const id = String(spawnResult.id)
+    const subscriberWrites = attachSubscriber()
+    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+    const publishOwnerExit = vi
+      .spyOn(dispatcher, 'tryNotifyPtyExitToClient')
+      .mockImplementationOnce(() => {
+        throw new Error('owner write failed')
+      })
+    try {
+      expect(() => exitCallback!({ exitCode: 8 })).not.toThrow()
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(exitFrames()).toHaveLength(1)
+      expect(subscriberExitFrames(subscriberWrites)).toHaveLength(1)
+      expect(publication.accepts(id)).toBe(false)
+      expect(adapter.getDebugSnapshot().deliveryTokens).toBe(0)
+
+      handler.handleSourcePublicationCapacity(id)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(exitFrames()).toHaveLength(1)
+      expect(subscriberExitFrames(subscriberWrites)).toHaveLength(1)
+    } finally {
+      publishOwnerExit.mockRestore()
+      stderr.mockRestore()
+    }
+  })
+
+  it('retires the delivery when committed owner exit settlement fails', async () => {
+    await spawn({})
+    const spawnResult = writes.map((buffer) => responseResult(buffer, 2)).find(Boolean)!
+    const id = String(spawnResult.id)
+    const subscriberWrites = attachSubscriber()
+    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+    const settleOwnerExit = vi.spyOn(adapter, 'settleExitPublication').mockImplementation(() => {
+      throw new Error('exit settlement failed')
+    })
+    try {
+      exitCallback!({ exitCode: 9 })
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(exitFrames()).toHaveLength(1)
+      expect(subscriberExitFrames(subscriberWrites)).toHaveLength(1)
+      expect(publication.accepts(id)).toBe(false)
+      expect(adapter.getDebugSnapshot().deliveryTokens).toBe(0)
+
+      handler.handleSourcePublicationCapacity(id)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(exitFrames()).toHaveLength(1)
+      expect(subscriberExitFrames(subscriberWrites)).toHaveLength(1)
+    } finally {
+      settleOwnerExit.mockRestore()
+      stderr.mockRestore()
+    }
+  })
+
+  it('lets a retired record re-target its own exit instead of broadcasting a duplicate', async () => {
+    await spawn({})
+    const spawnResult = writes.map((buffer) => responseResult(buffer, 2)).find(Boolean)!
+    const subscriberWrites = attachSubscriber()
+    const publishExitAfterRetire = vi.fn(() => true)
+    handler.setSourcePublication(stubPublication({ accepts: () => false, publishExitAfterRetire }))
+
+    expect(() => exitCallback!({ exitCode: 4 })).not.toThrow()
+
+    expect(publishExitAfterRetire).toHaveBeenCalledWith(
+      expect.objectContaining({ id: spawnResult.id, code: 4 })
+    )
+    expect(exitFrames()).toHaveLength(0)
+    expect(subscriberExitFrames(subscriberWrites)).toHaveLength(0)
+
+    handler.handleSourcePublicationCapacity(String(spawnResult.id))
+    await vi.advanceTimersByTimeAsync(8)
+    expect(publishExitAfterRetire).toHaveBeenCalledOnce()
+  })
+
+  it('broadcasts the legacy exit when the retired record never projected one', async () => {
+    await spawn({})
+    const spawnResult = writes.map((buffer) => responseResult(buffer, 2)).find(Boolean)!
+    handler.setSourcePublication(
+      stubPublication({ accepts: () => false, publishExitAfterRetire: () => null })
+    )
+
+    exitCallback!({ exitCode: 5 })
+
+    expect(exitFrames()).toHaveLength(1)
+    expect(exitFrames()[0].params).toMatchObject({ id: spawnResult.id, code: 5 })
+  })
+
+  it('contains a retired-record publication fault and falls back to the legacy exit', async () => {
+    await spawn({})
+    const spawnResult = writes.map((buffer) => responseResult(buffer, 2)).find(Boolean)!
+    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+    try {
+      handler.setSourcePublication(
+        stubPublication({
+          accepts: () => false,
+          publishExitAfterRetire: () => {
+            throw new Error('retired owner lookup failed')
+          }
+        })
+      )
+
+      expect(() => exitCallback!({ exitCode: 6 })).not.toThrow()
+
+      expect(exitFrames()).toHaveLength(1)
+      expect(exitFrames()[0].params).toMatchObject({ id: spawnResult.id, code: 6 })
+      expect(String(stderr.mock.calls.at(-1)?.[0])).toContain(
+        '[pty-handler] retired pty exit publication failed'
       )
     } finally {
       stderr.mockRestore()

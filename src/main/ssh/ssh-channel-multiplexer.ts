@@ -48,6 +48,24 @@ const MAX_UNACKED_TIMESTAMPS = MAX_ORDINARY_UNACKED_TIMESTAMPS + 1
 // (system sleep, App Nap timer throttling) — not that the link is dead (#7773).
 const WAKE_GAP_MS = KEEPALIVE_SEND_MS * 3
 
+// Why: callers branch on "the request timed out" (fall back to a slower path,
+// report a host issue). Matching the message text made every unrelated error
+// carrying the same phrase take the timeout branch.
+export const SSH_MUX_REQUEST_TIMEOUT_CODE = 'SSH_MUX_REQUEST_TIMEOUT'
+
+function sshMuxRequestTimeoutError(method: string, timeoutMs: number): Error {
+  return Object.assign(new Error(`Request "${method}" timed out after ${timeoutMs}ms`), {
+    code: SSH_MUX_REQUEST_TIMEOUT_CODE
+  })
+}
+
+export function isSshMuxRequestTimeoutError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error as Error & { code?: unknown }).code === SSH_MUX_REQUEST_TIMEOUT_CODE
+  )
+}
+
 export class SshChannelMultiplexer {
   private decoder: FrameDecoder
   private transport: MultiplexerTransport
@@ -231,7 +249,7 @@ export class SshChannelMultiplexer {
           this.notify('rpc.cancel', { id })
         }
         this.pendingRequests.delete(id)
-        reject(new Error(`Request "${method}" timed out after ${timeoutMs}ms`))
+        reject(sshMuxRequestTimeoutError(method, timeoutMs))
       }, timeoutMs)
 
       if (options?.signal) {

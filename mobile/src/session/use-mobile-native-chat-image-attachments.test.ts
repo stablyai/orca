@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse, RpcSuccess } from '../transport/types'
 import { resetMobileNativeChatStaleInputForTests } from './mobile-native-chat-stale-input'
+import { resetMobileNativeChatTerminalWritesForTests } from './mobile-native-chat-terminal-write-lock'
 import { useMobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
 
 // Fully stub the picker so the real expo/react-native chain never loads under
@@ -88,9 +89,10 @@ describe('useMobileNativeChatImageAttachments', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     pick.mockReset()
-    // Stale markers live at module scope now (they outlive the screen), so they
-    // also outlive a test.
+    // Stale markers and write locks live at module scope (they outlive the
+    // screen), so they also outlive a test.
     resetMobileNativeChatStaleInputForTests()
+    resetMobileNativeChatTerminalWritesForTests()
   })
   afterEach(() => {
     act(() => renderer?.unmount())

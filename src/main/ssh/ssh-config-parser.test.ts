@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
 import { parseSshConfig, sshConfigHostsToTargets, parseSshGOutput } from './ssh-config-parser'
+import { searchSshConfigHosts } from './ssh-config-host-picker'
+
+const sshConfigHostsToSummaries = (
+  hosts: Parameters<typeof searchSshConfigHosts>[0],
+  targets: Parameters<typeof searchSshConfigHosts>[1]
+) => searchSshConfigHosts(hosts, targets).hosts
 
 vi.mock('os', () => ({
   homedir: () => '/home/testuser'
@@ -457,6 +463,60 @@ describe('sshConfigHostsToTargets', () => {
       host: 'first.example.com',
       username: 'first'
     })
+  })
+})
+
+describe('sshConfigHostsToSummaries', () => {
+  it('maps hosts for the picker and flags aliases already in Orca', () => {
+    const hosts = [
+      {
+        host: 'staging',
+        hostname: 'staging.internal',
+        user: 'ubuntu',
+        port: 22,
+        identityFile: '/home/me/.ssh/staging'
+      },
+      { host: 'prod', hostname: 'prod.example', user: 'ops', port: 2222, proxyJump: 'bastion' }
+    ]
+    const summaries = sshConfigHostsToSummaries(hosts, [
+      { label: 'staging', configHost: 'staging' }
+    ])
+    expect(summaries).toEqual([
+      {
+        alias: 'staging',
+        hostname: 'staging.internal',
+        port: 22,
+        username: 'ubuntu',
+        identityFile: '/home/me/.ssh/staging',
+        alreadyInOrca: true
+      },
+      {
+        alias: 'prod',
+        hostname: 'prod.example',
+        port: 2222,
+        username: 'ops',
+        jumpHost: 'bastion',
+        alreadyInOrca: false
+      }
+    ])
+  })
+
+  it('de-dupes aliases and defaults missing fields', () => {
+    const hosts = [
+      { host: 'box' },
+      { host: 'box', hostname: 'second.example' },
+      { host: 'other', user: 'me' }
+    ]
+    const summaries = sshConfigHostsToSummaries(hosts, [])
+    expect(summaries).toHaveLength(2)
+    expect(summaries[0]).toEqual({
+      alias: 'box',
+      hostname: 'box',
+      port: 22,
+      username: '',
+      alreadyInOrca: false
+    })
+    expect(summaries[1].alias).toBe('other')
   })
 })
 

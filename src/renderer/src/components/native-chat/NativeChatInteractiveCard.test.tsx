@@ -4,6 +4,8 @@ import '@testing-library/jest-dom/vitest'
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import { applyCommandMarkerBoundaries } from './native-chat-pending'
 import type { NativeChatInteractiveSend } from './use-native-chat-interactive-send'
 
 const INITIAL_PROMPT = JSON.stringify({
@@ -19,8 +21,9 @@ const INITIAL_PROMPT = JSON.stringify({
 const storeState = {
   agentStatusByPaneKey: {
     'tab-1:leaf-1': {
-      interactivePrompt: INITIAL_PROMPT,
-      toolName: 'AskUserQuestion'
+      interactivePrompt: INITIAL_PROMPT as string | undefined,
+      toolName: 'AskUserQuestion' as string | undefined,
+      state: undefined as string | undefined
     }
   }
 }
@@ -42,11 +45,17 @@ function renderCard(canSend = true): ReturnType<typeof render> {
   return render(cardElement(canSend))
 }
 
-function cardElement(canSend = true): React.JSX.Element {
+function cardElement(
+  canSend = true,
+  messages?: readonly NativeChatMessage[],
+  onShowingQuestionChange?: (showing: boolean) => void
+): React.JSX.Element {
   return (
     <NativeChatInteractiveCard
       paneKey="tab-1:leaf-1"
       canSend={canSend}
+      messages={messages}
+      onShowingQuestionChange={onShowingQuestionChange}
       send={{
         sendAnswer: mocks.sendAnswer,
         sendRaw: mocks.sendRaw,
@@ -55,6 +64,39 @@ function cardElement(canSend = true): React.JSX.Element {
       }}
     />
   )
+}
+
+function askCallMessage(question: string): NativeChatMessage {
+  return {
+    id: `call-${question}`,
+    role: 'assistant',
+    createdAt: 1,
+    blocks: [
+      {
+        type: 'tool-call',
+        name: 'AskUserQuestion',
+        input: {
+          questions: [
+            {
+              question,
+              header: 'Style',
+              multiSelect: false,
+              options: [{ label: 'Tabs' }, { label: 'Spaces' }]
+            }
+          ]
+        }
+      }
+    ]
+  } as unknown as NativeChatMessage
+}
+
+function askResultMessage(): NativeChatMessage {
+  return {
+    id: 'result-1',
+    role: 'assistant',
+    createdAt: 2,
+    blocks: [{ type: 'tool-result', name: 'AskUserQuestion', output: 'Tabs' }]
+  } as unknown as NativeChatMessage
 }
 
 function chooseSpacesAndSubmit(): void {
@@ -66,6 +108,7 @@ describe('NativeChatInteractiveCard answer lifecycle', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     storeState.agentStatusByPaneKey['tab-1:leaf-1'].interactivePrompt = INITIAL_PROMPT
+    storeState.agentStatusByPaneKey['tab-1:leaf-1'].state = undefined
   })
 
   afterEach(() => {
@@ -164,5 +207,84 @@ describe('NativeChatInteractiveCard answer lifecycle', () => {
 
     expect(screen.getByRole('button', { name: 'Send answer' })).toBeEnabled()
     expect(screen.getByText('Tabs or spaces?')).toBeInTheDocument()
+  })
+})
+
+// A headless host, a relay gap, or a replay can leave the pane with no live
+// `interactivePrompt` while the transcript still holds the unresolved call (#11761).
+// Which asks the transcript still counts as pending (orphaned calls, turn boundaries)
+// is the shared parser's contract — covered in `src/shared/native-chat-ask.test.ts`.
+describe('NativeChatInteractiveCard transcript fallback', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    storeState.agentStatusByPaneKey['tab-1:leaf-1'].interactivePrompt = undefined
+    storeState.agentStatusByPaneKey['tab-1:leaf-1'].state = undefined
+  })
+
+  afterEach(() => {
+    cleanup()
+  })
+
+  it('renders a pending transcript ask and reports the composer replacement', () => {
+    const onShowingQuestionChange = vi.fn()
+    render(cardElement(true, [askCallMessage('Tabs or spaces?')], onShowingQuestionChange))
+
+    expect(screen.getByText('Tabs or spaces?')).toBeInTheDocument()
+    expect(onShowingQuestionChange).toHaveBeenCalledWith(true)
+  })
+
+  it('prefers live status over the transcript when both carry a prompt', () => {
+    storeState.agentStatusByPaneKey['tab-1:leaf-1'].interactivePrompt = INITIAL_PROMPT
+    render(cardElement(true, [askCallMessage('Stale transcript question?')]))
+
+    expect(screen.getByText('Tabs or spaces?')).toBeInTheDocument()
+    expect(screen.queryByText('Stale transcript question?')).not.toBeInTheDocument()
+  })
+
+  it('still renders while the mirrored status says the agent is working', () => {
+    // Why no state gate: the mirrored status channel is exactly what fails in the
+    // reported topology, so keying the fallback on it would suppress the card.
+    storeState.agentStatusByPaneKey['tab-1:leaf-1'].state = 'working'
+    render(cardElement(true, [askCallMessage('Tabs or spaces?')]))
+
+    expect(screen.getByText('Tabs or spaces?')).toBeInTheDocument()
+  })
+
+  it('stays dismissed after answering while the transcript call is still pending', () => {
+    mocks.sendAnswer.mockReturnValue({ settleAfterMs: 500, waitsForVerifiedDelivery: true })
+    const messages = [askCallMessage('Tabs or spaces?')]
+    const rendered = render(cardElement(true, messages))
+
+    let settleDelivery: ((delivered: boolean) => void) | undefined
+    mocks.sendAnswer.mockImplementation((_prompt, _selections, onDeliverySettled) => {
+      settleDelivery = onDeliverySettled
+      return { settleAfterMs: 500, waitsForVerifiedDelivery: true }
+    })
+    chooseSpacesAndSubmit()
+    act(() => settleDelivery?.(true))
+    rendered.rerender(cardElement(true, messages))
+
+    expect(screen.queryByText('Tabs or spaces?')).not.toBeInTheDocument()
+  })
+
+  it('clears once the FIFO tool result lands', () => {
+    const rendered = render(cardElement(true, [askCallMessage('Tabs or spaces?')]))
+    expect(screen.getByText('Tabs or spaces?')).toBeInTheDocument()
+
+    rendered.rerender(cardElement(true, [askCallMessage('Tabs or spaces?'), askResultMessage()]))
+    expect(screen.queryByText('Tabs or spaces?')).not.toBeInTheDocument()
+  })
+
+  // The view passes the command-boundary-trimmed messages, so an ask abandoned via
+  // `/clear` cannot come back as a permanent card sitting over the composer.
+  it('drops an ask abandoned by /clear', () => {
+    const abandoned = { ...askCallMessage('Tabs or spaces?'), timestamp: 100 }
+    const trimmed = applyCommandMarkerBoundaries(
+      [abandoned as unknown as NativeChatMessage],
+      [{ id: 'clear-1', command: '/clear', sentAt: 200 }]
+    )
+    render(cardElement(true, trimmed))
+
+    expect(screen.queryByText('Tabs or spaces?')).not.toBeInTheDocument()
   })
 })

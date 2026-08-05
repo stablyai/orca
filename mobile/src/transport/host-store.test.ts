@@ -340,6 +340,154 @@ describe('host-store list mutations', () => {
     expect(storedHostsRaw).toBe('{')
   })
 
+  // Why: gates the (slow, real-device 50-200ms) Keychain pass so a load can be
+  // parked mid-flight while a write commits underneath it.
+  function gateKeychainReads(): () => void {
+    let release: () => void = () => {}
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    secureStoreMock.getItemAsync.mockImplementation(async (key: string) => {
+      await gate
+      return key.endsWith(HOST_ONE.id) || key.endsWith(HOST_TWO.id) ? `token-${key.at(-1)}` : null
+    })
+    return release
+  }
+
+  it('does not serve a pre-removal snapshot to a load issued after the removal (#8791)', async () => {
+    const releaseKeychain = gateKeychainReads()
+    const parkedLoad = loadHosts()
+    await vi.waitFor(() => {
+      expect(secureStoreMock.getItemAsync).toHaveBeenCalled()
+    })
+
+    await removeHost(HOST_ONE.id)
+    const afterRemoval = loadHosts()
+    releaseKeychain()
+
+    await parkedLoad
+    await expect(afterRemoval.then((hosts) => hosts.map((host) => host.id))).resolves.toEqual([
+      HOST_TWO.id
+    ])
+  })
+
+  it('does not serve a pre-rename snapshot to a load issued after the rename (#8791)', async () => {
+    const releaseKeychain = gateKeychainReads()
+    const parkedLoad = loadHosts()
+    await vi.waitFor(() => {
+      expect(secureStoreMock.getItemAsync).toHaveBeenCalled()
+    })
+
+    await updateHostNameAndEndpoint(HOST_ONE.id, { name: 'Living Room Mac' })
+    const afterRename = loadHosts()
+    releaseKeychain()
+
+    await parkedLoad
+    const hosts = await afterRename
+    expect(hosts.find((host) => host.id === HOST_ONE.id)?.name).toBe('Living Room Mac')
+  })
+
+  it('does not share a host-list pass started before saveHost commits its token', async () => {
+    const newHost = {
+      id: 'host-new',
+      name: 'New Host',
+      endpoint: 'ws://127.0.0.1:3',
+      publicKeyB64: 'key-new',
+      deviceToken: 'token-new',
+      lastConnected: 0
+    }
+    let releaseTokenWrite: () => void = () => {}
+    secureStoreMock.setItemAsync.mockReturnValue(
+      new Promise<void>((resolve) => {
+        releaseTokenWrite = resolve
+      })
+    )
+    let resolveParkedTokenRead: (token: string | null) => void = () => {}
+    const parkedTokenRead = new Promise<string | null>((resolve) => {
+      resolveParkedTokenRead = resolve
+    })
+    let shouldParkHostOneRead = true
+    secureStoreMock.getItemAsync.mockImplementation(async (key: string) => {
+      if (key.endsWith(HOST_ONE.id) && shouldParkHostOneRead) {
+        shouldParkHostOneRead = false
+        return parkedTokenRead
+      }
+      if (key.endsWith(newHost.id)) {
+        return newHost.deviceToken
+      }
+      return key.endsWith(HOST_ONE.id) || key.endsWith(HOST_TWO.id) ? `token-${key.at(-1)}` : null
+    })
+
+    const save = saveHost(newHost)
+    await vi.waitFor(() => {
+      expect(secureStoreMock.setItemAsync).toHaveBeenCalled()
+    })
+    const parkedLoad = loadHosts()
+    await vi.waitFor(() => {
+      expect(
+        asyncStorageMock.getItem.mock.calls.filter(([key]) => key === HOSTS_STORAGE_KEY)
+      ).toHaveLength(2)
+    })
+
+    releaseTokenWrite()
+    await save
+    await vi.waitFor(() => {
+      expect(secureStoreMock.getItemAsync).toHaveBeenCalledWith(
+        expect.stringContaining(HOST_ONE.id),
+        expect.anything()
+      )
+    })
+    const afterSave = loadHosts()
+    resolveParkedTokenRead(null)
+
+    const [parkedHosts, savedHosts] = await Promise.all([parkedLoad, afterSave])
+    expect(savedHosts.map((host) => host.id)).toContain(newHost.id)
+    expect(savedHosts).not.toBe(parkedHosts)
+  })
+
+  it('does not let a late pre-write token read poison the token cache', async () => {
+    const newHost = {
+      id: 'host-new',
+      name: 'New Host',
+      endpoint: 'ws://127.0.0.1:3',
+      publicKeyB64: 'key-new',
+      deviceToken: 'token-new',
+      lastConnected: 0
+    }
+    storedHostsRaw = JSON.stringify([{ ...newHost, deviceToken: undefined }])
+    let resolvePrewriteTokenRead: (token: string) => void = () => {}
+    secureStoreMock.getItemAsync.mockReturnValue(
+      new Promise<string>((resolve) => {
+        resolvePrewriteTokenRead = resolve
+      })
+    )
+
+    const parkedLoad = loadHosts()
+    await vi.waitFor(() => {
+      expect(secureStoreMock.getItemAsync).toHaveBeenCalled()
+    })
+    await saveHost(newHost)
+    resolvePrewriteTokenRead('token-old')
+    await parkedLoad
+
+    const hosts = await loadHosts()
+    expect(hosts.find((host) => host.id === newHost.id)?.deviceToken).toBe(newHost.deviceToken)
+  })
+
+  it('still shares one Keychain pass across loads with no write between them', async () => {
+    const releaseKeychain = gateKeychainReads()
+    const first = loadHosts()
+    await vi.waitFor(() => {
+      expect(secureStoreMock.getItemAsync).toHaveBeenCalled()
+    })
+    const second = loadHosts()
+    releaseKeychain()
+
+    const [firstHosts, secondHosts] = await Promise.all([first, second])
+    expect(firstHosts).toBe(secondHosts)
+    expect(secureStoreMock.getItemAsync).toHaveBeenCalledTimes(2)
+  })
+
   it('resolves instead of rejecting when updateLastConnected hits unreadable storage', async () => {
     // Why: callers fire updateLastConnected with `void`; a rejection here would
     // surface as an unhandled promise rejection rather than a caught error.

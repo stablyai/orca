@@ -94,7 +94,7 @@ export const JA_VALUE_OVERRIDES = {
   'Launch plan': '起動プラン',
   'Launch agent': 'エージェントを起動',
   'Launch {{value0}} in a new terminal': '新規ターミナルで {{value0}} を起動',
-  Play: 'Play',
+  Play: '再生',
   Action: '操作',
   Actions: '操作',
   action: '操作',
@@ -135,7 +135,7 @@ export const JA_VALUE_OVERRIDES = {
   'Pick a base branch below': '以下のベースブランチを選択',
   'Choose floating workspace directory': 'フローティング ワークスペース ディレクトリを選択',
   'Local project, Git repo, or folder with many repos':
-    'ローカルプロジェクト、Git repo、または多数の repos を含むフォルダー',
+    'ローカルプロジェクト、Git リポジトリ、または多数のリポジトリを含むフォルダー',
   'Enter passphrase': 'パスフレーズを入力',
   'Enter password': 'パスワードを入力',
   'Enter the passphrase for': 'のパスフレーズを入力',

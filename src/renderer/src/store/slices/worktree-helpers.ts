@@ -35,6 +35,7 @@ import type {
   WorktreeCreationPhase
 } from '@/lib/pending-worktree-creation'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
+import type { AppState } from '../types'
 export { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 
 export type WorktreeDeleteState = {
@@ -70,6 +71,12 @@ export type WorktreeRenameRequest = {
   rowKey?: string
 }
 
+export type ActiveWorktreeStateTransition = (state: AppState) => {
+  patch: Partial<AppState>
+  activate: boolean
+  preferredActiveUnifiedTabId?: string
+}
+
 export type WorktreeSlice = {
   worktreesByRepo: Record<string, Worktree[]>
   detectedWorktreesByRepo: Record<string, DetectedWorktreeListResult>
@@ -77,6 +84,7 @@ export type WorktreeSlice = {
   workspaceLineageByChildKey: Record<WorkspaceKey, WorkspaceLineage>
   activeWorktreeId: string | null
   activeWorkspaceKey: WorkspaceKey | null
+  activeWorkspaceExecutionHostId: ExecutionHostId | null
   /**
    * In-flight / failed background worktree creations, keyed by a renderer
    * `creationId`. Kept separate from `worktreesByRepo` on purpose — a real
@@ -146,7 +154,10 @@ export type WorktreeSlice = {
     (repoId: string, options?: WorktreeFetchOptions): Promise<boolean>
   }
   fetchAllWorktrees: (options?: { hydrationPurge?: 'allow' | 'defer' }) => Promise<void>
-  fetchWorktreeLineage: (options?: { forceLocalOwner?: boolean }) => Promise<void>
+  fetchWorktreeLineage: (options?: {
+    forceLocalOwner?: boolean
+    executionHostId?: ExecutionHostId
+  }) => Promise<void>
   updateWorktreeLineage: (
     worktreeId: string,
     args: { parentWorktreeId?: string; noParent?: boolean }
@@ -219,6 +230,9 @@ export type WorktreeSlice = {
     options?: {
       mode?: 'remove' | 'forget-local'
       suppressPreservedBranchToast?: boolean
+      // Why (#11960): only an explicit Force Delete waives the proof that every
+      // PTY stopped; `force` alone is set by the ordinary delete confirmation.
+      allowUnverifiedPtyStop?: boolean
     }
   ) => Promise<({ ok: true } & RemoveWorktreeResult) | { ok: false; error: string }>
   markWorktreesDeleting: (worktreeIds: readonly string[]) => void
@@ -229,11 +243,13 @@ export type WorktreeSlice = {
     expectedHead: string
   ) => Promise<({ ok: true } & ForceDeleteWorktreeBranchResult) | { ok: false; error: string }>
   clearWorktreeDeleteState: (worktreeId: string) => void
+  /** Never rejects — most callers fire-and-forget. Callers that own a surface
+   *  the user is waiting on should read the result and say what went wrong. */
   updateWorktreeMeta: (
     worktreeId: string,
     updates: Partial<WorktreeMeta>,
     options?: WorktreeMetaUpdateOptions
-  ) => Promise<void>
+  ) => Promise<{ ok: true } | { ok: false; error: string }>
   ensureHostedReviewPushTarget: (worktreeId: string) => Promise<void>
   updateWorktreesMeta: (
     updatesByWorktreeId: ReadonlyMap<string, Partial<WorktreeMeta>>
@@ -273,7 +289,11 @@ export type WorktreeSlice = {
    * fresh visit.
    */
   seedActiveWorktreeLastVisitedIfMissing: () => void
-  setActiveWorktree: (worktreeId: string | null) => void
+  setActiveWorktree: (
+    worktreeId: string | null,
+    executionHostId?: ExecutionHostId,
+    options?: { stateTransition?: ActiveWorktreeStateTransition }
+  ) => boolean
   /**
    * Health-driven remount of one terminal tab: bumps the tab's generation so
    * TerminalPane unmounts, detaches (preserving a live PTY), and remounts with
@@ -282,10 +302,13 @@ export type WorktreeSlice = {
    * undeliverable while the PTY is alive. Returns false when the tab is gone.
    */
   remountTerminalTabForRecovery: (tabId: string) => boolean
-  setActiveFolderWorkspace: (folderWorkspaceId: string) => void
+  setActiveFolderWorkspace: (folderWorkspaceId: string, executionHostId?: ExecutionHostId) => void
   setRenamingWorktreeId: (request: string | WorktreeRenameRequest | null) => void
   allWorktrees: () => Worktree[]
-  getKnownWorktreeById: (worktreeId: string) => Worktree | DetectedWorktree | undefined
+  getKnownWorktreeById: (
+    worktreeId: string,
+    executionHostId?: ExecutionHostId
+  ) => Worktree | DetectedWorktree | undefined
   /**
    * Wipes every terminal- and worktree-scoped map entry for each given id.
    * Called by the `worktrees:changed` listener on server-side deletions and

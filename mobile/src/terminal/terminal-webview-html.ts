@@ -3,6 +3,7 @@ import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-typ
 import { colors } from '../theme/mobile-theme'
 import { TERMINAL_TEXT_SCALES } from '../storage/preferences'
 import { TERMINAL_PATH_TAP_JS } from './terminal-path-tap-injected'
+import { TERMINAL_KEYBOARD_AVOIDANCE_METRICS_JS } from './terminal-keyboard-avoidance-metrics-injected'
 import { XTERM_ENGINE_CSS, XTERM_ENGINE_JS } from './terminal-webview-engine.generated'
 import { TERMINAL_REFLOW_JS } from './terminal-webview-reflow-injected'
 import { TERMINAL_SURFACE_SWAP_JS } from './terminal-webview-surface-swap-injected'
@@ -11,6 +12,8 @@ import { TERMINAL_WEBVIEW_THEME_JS } from './terminal-webview-theme-injected'
 import { TERMINAL_QUERY_REPLY_JS } from './terminal-webview-query-reply-injected'
 import { URL_TAP_WEBVIEW_JS } from './terminal-webview-url-tap'
 import { TERMINAL_WEBGL_RECOVERY_JS } from './terminal-webview-webgl-recovery-injected'
+import { TERMINAL_MOUSE_CLICK_DRAG_JS } from './terminal-webview-mouse-click-drag-injected'
+import { TERMINAL_MOUSE_REPORT_CELL_JS } from './terminal-webview-mouse-report-cell-injected'
 import { TERMINAL_WHEEL_SCROLL_JS } from './terminal-webview-wheel-scroll-injected'
 
 const DEFAULT_TERMINAL_THEME: RuntimeMobileTerminalTheme['theme'] = {
@@ -285,6 +288,7 @@ window.onerror = function(msg) {
         if (cols < MIN_FIT_COLS) return;
         var rows = Math.max(8, Math.floor(window.innerHeight / cellH));
         term.resize(cols, rows);
+        emitKeyboardAvoidanceMetrics();
       }
       applyFitScale('text-scale');
     });
@@ -800,6 +804,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
     if (!term) return;
     initRows = rows || initRows;
     term.resize(cols || term.cols, rows || term.rows);
+    emitKeyboardAvoidanceMetrics();
     applyFitScale('resize-msg');
     notify({ type: 'ready', cols: cols, rows: rows });
   }
@@ -956,6 +961,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
       initialOscLinkEvictionReady = false;
       if (term) { term.clear(); term.reset(); }
       emitModesIfChanged();
+      emitKeyboardAvoidanceMetrics();
       resetEvictionCounter();
       if (selMode === 'select') {
         notify({ type: 'selection-evicted' });
@@ -1098,17 +1104,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
     sgrMousePixelsMode: false
   };
 
-  function emitKeyboardAvoidanceMetrics() {
-    if (!term) return;
-    var alt = false;
-    try { alt = term.buffer && term.buffer.active && term.buffer.active.type === 'alternate'; } catch (e) {}
-    notify({
-      type: 'keyboard-avoidance-metrics',
-      cursorY: term.buffer && term.buffer.active ? term.buffer.active.cursorY : 0,
-      rows: term.rows || 0,
-      altScreen: alt
-    });
-  }
+  ${TERMINAL_KEYBOARD_AVOIDANCE_METRICS_JS}
 
   function attachTermObservers() {
     if (!term) return;
@@ -1153,31 +1149,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
     return { col: col, row: viewportRow + viewportY };
   }
 
-  function viewportToMouseReportCell(clientX, clientY) {
-    if (!term) return null;
-    var cellW = getCellWidth();
-    var cellH = getCellHeight();
-    if (cellW <= 0 || cellH <= 0) return null;
-    if (typeof clientX !== 'number') clientX = window.innerWidth / 2;
-    if (typeof clientY !== 'number') clientY = window.innerHeight / 2;
-    var total = getTotalScale();
-    if (total <= 0) total = 1;
-    var sx = (clientX - panX) / total;
-    var sy = (clientY - panY) / total;
-    var maxX = Math.max(0, term.cols * cellW - 1);
-    var maxY = Math.max(0, term.rows * cellH - 1);
-    if (sx < 0) sx = 0;
-    if (sx > maxX) sx = maxX;
-    if (sy < 0) sy = 0;
-    if (sy > maxY) sy = maxY;
-    var col = Math.floor(sx / cellW);
-    var row = Math.floor(sy / cellH);
-    if (col < 0) col = 0;
-    if (col > term.cols - 1) col = term.cols - 1;
-    if (row < 0) row = 0;
-    if (row > term.rows - 1) row = term.rows - 1;
-    return { col: col, row: row, x: Math.floor(sx), y: Math.floor(sy) };
-  }
+  ${TERMINAL_MOUSE_REPORT_CELL_JS}
 
   function isAlternateBufferActive() {
     try {
@@ -1648,6 +1620,10 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
   // terminal-webview-wheel-scroll-injected.ts (extracted for max-lines).
   ${TERMINAL_WHEEL_SCROLL_JS}
 
+  // External mouse click/drag: see
+  // terminal-webview-mouse-click-drag-injected.ts (extracted for max-lines).
+  ${TERMINAL_MOUSE_CLICK_DRAG_JS}
+
   btnCopy.addEventListener('click', function(e) {
     e.preventDefault();
     e.stopPropagation();
@@ -1705,6 +1681,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
     targetSurface.addEventListener('click', function(e) { e.preventDefault(); e.stopPropagation(); }, true);
 
     attachSurfaceWheelHandler(targetSurface);
+    attachSurfaceMouseClickDragHandler(targetSurface);
 
     targetSurface.addEventListener('touchstart', function(e) {
       if (dispatcherShouldBlockSurface()) return;

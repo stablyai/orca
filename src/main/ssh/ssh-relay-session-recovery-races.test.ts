@@ -279,11 +279,7 @@ describe('SshRelaySession recovery race fencing', () => {
     expect(recoveryActivationLease.retire).not.toHaveBeenCalled()
     expect(muxRequestMock).not.toHaveBeenCalledWith('pty.cancelDelivery', expect.anything())
     expect(setPtyOwnership).not.toHaveBeenCalled()
-    expect(deps.mockStore.markSshRemotePtyLease).not.toHaveBeenCalledWith(
-      targetId,
-      'pty-1',
-      'attached'
-    )
+    expect(deps.mockStore.markSshRemotePtyLeasesAttachedAsync).not.toHaveBeenCalled()
   })
 
   it('settles exact cancellation before publishing an exit with incomplete recovery data', async () => {
@@ -775,8 +771,10 @@ describe('SshRelaySession recovery race fencing', () => {
     expect(muxRequestMock.mock.calls.filter(([method]) => method === 'pty.cancelDelivery')).toEqual(
       []
     )
-    expect(deps.mockStore.markSshRemotePtyLease).toHaveBeenCalledTimes(1)
-    expect(deps.mockStore.markSshRemotePtyLease).toHaveBeenCalledWith(targetId, 'pty-1', 'attached')
+    expect(deps.mockStore.markSshRemotePtyLeasesAttachedAsync).toHaveBeenCalledOnce()
+    expect(deps.mockStore.markSshRemotePtyLeasesAttachedAsync).toHaveBeenCalledWith(targetId, [
+      'pty-1'
+    ])
     expect(setPtyOwnership).toHaveBeenCalledTimes(1)
     expect(staleLease.transferToRecovery).toHaveBeenCalledOnce()
     expect(staleLease.commit).not.toHaveBeenCalled()

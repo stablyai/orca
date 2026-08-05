@@ -13,8 +13,12 @@ type MobilePairingSetupSectionProps = {
   canGenerate?: boolean
   connectionPathControl: ReactNode
   networkInterfaces: MobileNetworkInterface[]
+  customAddresses: readonly string[]
   selectedAddress: string | undefined
+  selectedAddressIsCustom: boolean
   onSelectedAddressChange: (address: string) => void
+  onCustomAddressSelect: (address: string) => void
+  onCustomAddressRemove: (address: string) => void
   refreshingNetworkInterfaces: boolean
   onRefreshNetworkInterfaces: () => void
   loading: boolean
@@ -28,8 +32,12 @@ export function MobilePairingSetupSection({
   canGenerate = true,
   connectionPathControl,
   networkInterfaces,
+  customAddresses,
   selectedAddress,
+  selectedAddressIsCustom,
   onSelectedAddressChange,
+  onCustomAddressSelect,
+  onCustomAddressRemove,
   refreshingNetworkInterfaces,
   onRefreshNetworkInterfaces,
   loading,
@@ -71,8 +79,12 @@ export function MobilePairingSetupSection({
         <div className="flex flex-wrap items-center gap-2">
           <NetworkInterfacePicker
             networkInterfaces={networkInterfaces}
+            customAddresses={customAddresses}
             selectedAddress={selectedAddress}
+            selectedAddressIsCustom={selectedAddressIsCustom}
             onSelectedAddressChange={onSelectedAddressChange}
+            onCustomAddressSelect={onCustomAddressSelect}
+            onCustomAddressRemove={onCustomAddressRemove}
             className="min-w-[220px] justify-between font-normal"
           />
           <Tooltip>

@@ -210,6 +210,7 @@ async function main(): Promise<void> {
                 timing: {
                   periodicProbeMs: 2_000,
                   rejectionRecheckMs: 500,
+                  minimumRejectionSpanMs: 2_000,
                   ptyExitDebounceMs: 200,
                   clientActivityMinGapMs: 1_000,
                   minProbeGapMs: 100

@@ -60,6 +60,8 @@ export const AGENT_STATE_HISTORY_MAX = 20
 export type AgentStatusOrchestrationContext = {
   taskId: string
   dispatchId: string
+  /** Runtime-authoritative lifecycle state. Hook-only contexts may omit it. */
+  dispatchStatus?: 'pending' | 'dispatched' | 'completed' | 'failed' | 'circuit_broken'
   taskTitle?: string
   displayName?: string
   parentTerminalHandle?: string
@@ -135,6 +137,10 @@ export type AgentStatusEntry = {
   providerSession?: AgentProviderSessionMetadata
   /** Live-only Command Code turn boundary key; not persisted to last-status.json. */
   promptInteractionKey?: string
+  /** True for a nonterminal state hydrated from last-status.json with no live hook since:
+   *  the transition may have been missed while no receiver was up, so freshness gates
+   *  treat the row as stale immediately. Cleared by any accepted live event. */
+  restoredUnconfirmed?: boolean
 }
 
 export type MigrationUnsupportedPtyEntry = {
@@ -176,6 +182,31 @@ export type AgentStatusPayload = {
 export type ParsedAgentStatusPayload = Omit<AgentStatusPayload, 'prompt'> & { prompt: string }
 
 /**
+ * Narrow an `AgentStatusIpcPayload` (or any superset) down to the status fields alone.
+ * Why: the IPC shape is flattened, so a spread cannot be narrowed structurally — copying
+ * a hook row into a client-visible projection would otherwise ship `launchToken`,
+ * `connectionId`, `promptInteractionKey` and `providerSessionOnly` to every paired client.
+ */
+export function pickParsedAgentStatusPayload(
+  row: ParsedAgentStatusPayload
+): ParsedAgentStatusPayload {
+  return {
+    state: row.state,
+    prompt: row.prompt,
+    ...(row.agentType !== undefined ? { agentType: row.agentType } : {}),
+    ...(row.model !== undefined ? { model: row.model } : {}),
+    ...(row.toolName !== undefined ? { toolName: row.toolName } : {}),
+    ...(row.toolInput !== undefined ? { toolInput: row.toolInput } : {}),
+    ...(row.interactivePrompt !== undefined ? { interactivePrompt: row.interactivePrompt } : {}),
+    ...(row.lastAssistantMessage !== undefined
+      ? { lastAssistantMessage: row.lastAssistantMessage }
+      : {}),
+    ...(row.interrupted !== undefined ? { interrupted: row.interrupted } : {}),
+    ...(row.subagents !== undefined ? { subagents: row.subagents } : {})
+  }
+}
+
+/**
  * Wire shape for agent-status IPC. Both `agentStatus:set` and `agentStatus:getSnapshot`
  * produce this shape so renderer call sites share a single `setAgentStatus` path.
  */
@@ -198,6 +229,8 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   providerSessionOnly?: boolean
   /** Live-only Command Code turn boundary key; not persisted to last-status.json. */
   promptInteractionKey?: string
+  /** See AgentStatusEntry.restoredUnconfirmed — hydrated nonterminal provenance. */
+  restoredUnconfirmed?: boolean
 }
 
 /** Wire shape for ordinary pane teardown or a stamped SSH disconnect batch. */
@@ -226,11 +259,17 @@ export const AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH = 16000
 export const AGENT_STATUS_STALE_AFTER_MS = 30 * 60 * 1000
 
 export function isFreshNonDoneAgentStatus(
-  entry: Pick<AgentStatusEntry, 'state' | 'updatedAt'> | undefined,
+  entry: Pick<AgentStatusEntry, 'state' | 'updatedAt' | 'restoredUnconfirmed'> | undefined,
   now = Date.now(),
   staleAfterMs = AGENT_STATUS_STALE_AFTER_MS
 ): boolean {
-  return Boolean(entry && entry.state !== 'done' && now - entry.updatedAt <= staleAfterMs)
+  // Why: an unconfirmed hydrated row may describe a turn that ended while no receiver was up; never fresh.
+  return Boolean(
+    entry &&
+    entry.state !== 'done' &&
+    entry.restoredUnconfirmed !== true &&
+    now - entry.updatedAt <= staleAfterMs
+  )
 }
 
 // Why: ReadonlySet<string> so .has() accepts any string without a cast here; the narrowing cast stays on the return line where it's proven safe.

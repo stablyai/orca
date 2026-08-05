@@ -3,6 +3,7 @@ import {
   NEW_WORKSPACE_PROJECT_OPTION_QUERY_MAX_BYTES,
   buildNewWorkspaceFolderSourceOptions,
   buildNewWorkspaceProjectOptions,
+  findActionableFolderProjectGroup,
   getRepoIdFromNewWorkspaceFolderSourceOptionId,
   isNewWorkspaceProjectOptionQueryTooLarge,
   searchNewWorkspaceProjectOptions,
@@ -106,6 +107,35 @@ describe('buildNewWorkspaceProjectOptions', () => {
     })
 
     expect(options.map((option) => option.id)).toEqual(['github:stablyai/orca'])
+  })
+
+  it('excludes projects configured only on removed hosts', () => {
+    const options = buildNewWorkspaceProjectOptions({
+      projects: [project()],
+      projectHostSetups: [
+        setup({ id: 'removed-setup', hostId: 'ssh:removed', repoId: 'ssh-repo' })
+      ],
+      eligibleRepos: [repo('ssh-repo', { connectionId: 'removed' })],
+      hosts: [{ id: 'local', label: 'Local Mac' }]
+    })
+
+    expect(options).toEqual([])
+  })
+
+  it('keeps projects with an actionable sibling setup', () => {
+    const options = buildNewWorkspaceProjectOptions({
+      projects: [project()],
+      projectHostSetups: [
+        setup({ id: 'local-setup', hostId: 'local', repoId: 'local-repo' }),
+        setup({ id: 'removed-setup', hostId: 'ssh:removed', repoId: 'ssh-repo' })
+      ],
+      eligibleRepos: [repo('local-repo'), repo('ssh-repo', { connectionId: 'removed' })],
+      hosts: [{ id: 'local', label: 'Local Mac' }]
+    })
+
+    expect(options).toEqual([
+      expect.objectContaining({ id: 'github:stablyai/orca', detail: 'stablyai/orca' })
+    ])
   })
 
   it('shows configured directories when project names are duplicated', () => {
@@ -432,9 +462,16 @@ describe('buildNewWorkspaceCreateTargetOptions', () => {
       projects: [project()],
       projectHostSetups: [setup({ id: 'local-setup', repoId: 'local-repo' })],
       eligibleRepos: [repo('local-repo')],
+      hosts: [{ id: 'local', label: 'Local Mac' }],
       projectGroups: [
         group({ id: 'folder-group', name: 'Platform', parentPath: '/tmp/platform' }),
-        group({ id: 'org-group', name: 'Org', parentPath: null })
+        group({ id: 'org-group', name: 'Org', parentPath: null }),
+        group({
+          id: 'removed-folder-group',
+          name: 'Removed Remote',
+          parentPath: '/srv/removed',
+          connectionId: 'removed'
+        })
       ]
     })
 
@@ -448,5 +485,52 @@ describe('buildNewWorkspaceCreateTargetOptions', () => {
       displayName: 'Platform',
       detail: '/tmp/platform'
     })
+  })
+})
+
+describe('findActionableFolderProjectGroup', () => {
+  const folderGroups = [
+    group({ id: 'local-group' }),
+    group({ id: 'ssh-group', connectionId: 'box' }),
+    group({ id: 'repo-group', parentPath: null })
+  ]
+
+  it('finds a folder group whose host is actionable', () => {
+    expect(
+      findActionableFolderProjectGroup({
+        projectGroups: folderGroups,
+        groupId: 'ssh-group',
+        actionableHostIds: new Set(['ssh:box'])
+      })
+    ).toBe(folderGroups[1])
+  })
+
+  // Regression: the composer's initial-group restoration skipped the actionable-host
+  // check, so a removed host could still back a folder workspace.
+  it('rejects a folder group whose host is unavailable', () => {
+    expect(
+      findActionableFolderProjectGroup({
+        projectGroups: folderGroups,
+        groupId: 'ssh-group',
+        actionableHostIds: new Set(['local'])
+      })
+    ).toBeNull()
+  })
+
+  it('rejects repo groups and missing ids', () => {
+    expect(
+      findActionableFolderProjectGroup({
+        projectGroups: folderGroups,
+        groupId: 'repo-group',
+        actionableHostIds: new Set(['local'])
+      })
+    ).toBeNull()
+    expect(
+      findActionableFolderProjectGroup({
+        projectGroups: folderGroups,
+        groupId: null,
+        actionableHostIds: new Set(['local'])
+      })
+    ).toBeNull()
   })
 })

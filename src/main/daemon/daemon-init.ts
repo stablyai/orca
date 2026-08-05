@@ -763,7 +763,9 @@ export async function initDaemonPtyProvider(
         ? new DegradedDaemonPtyProvider({
             current: newAdapter,
             legacy: legacyAdapters,
-            fallback: getLocalPtyProvider()
+            fallback: getLocalPtyProvider(),
+            probeCurrentDaemonSpawn: async () =>
+              (await checkDaemonHealth(info.socketPath, info.tokenPath)) === 'healthy'
           })
         : legacyAdapters.length > 0
           ? new DaemonPtyRouter({
@@ -828,6 +830,26 @@ async function reconcileSeededClaudeLivePtys(provider: DaemonProvider): Promise<
 // Why: a narrow getter (not a raw export) keeps the "swap on restart" invariant in one place (replaceDaemonProvider).
 export function getDaemonProvider(): DaemonProvider | null {
   return adapter
+}
+
+/** Returns null unless every daemon generation supplied an authoritative inventory. */
+export async function listLiveDaemonPtyIds(): Promise<string[] | null> {
+  if (!adapter) {
+    return null
+  }
+  const adapters =
+    adapter instanceof DaemonPtyRouter || adapter instanceof DegradedDaemonPtyProvider
+      ? adapter.getAllAdapters()
+      : [adapter]
+  const inventories = await Promise.allSettled(
+    adapters.map((daemonAdapter) => daemonAdapter.listProcesses())
+  )
+  if (inventories.some((inventory) => inventory.status === 'rejected')) {
+    return null
+  }
+  return inventories.flatMap((inventory) =>
+    inventory.status === 'fulfilled' ? inventory.value.map((process) => process.id) : []
+  )
 }
 
 // Why: keep the module-level adapter and ipc/pty.ts's localProvider in sync so app-quit can't dispose a stale reference.
