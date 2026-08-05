@@ -31,6 +31,7 @@ import { WorktreeCardAutomationDetailSection } from './WorktreeCardAutomationDet
 import { WorktreeCardCliDetailSection } from './WorktreeCardCliDetailSection'
 import { WorktreeCardIssueDetailSection } from './WorktreeCardIssueDetailSection'
 import { WorktreeCardHoverIdentityHeader } from './WorktreeCardHoverIdentityHeader'
+import { isGenuineHostPointerEnter } from '@/hooks/webview-leaked-pointer-guard'
 
 export type {
   WorktreeCardIssueDisplay,
@@ -182,7 +183,28 @@ export function WorktreeCardDetailsHover({
       openDelay={openDelay}
       closeDelay={closeDelay}
     >
-      <HoverCardTrigger asChild>{children}</HoverCardTrigger>
+      <HoverCardTrigger
+        asChild
+        // Why: selecting text in a browser/mobile pane leaks guest-local pointer coordinates into the
+        // host document, which hit-test onto the sidebar and open this card over the page the user is
+        // reading — with no matching leave to ever close it. Only real motion over the card opens it.
+        onPointerEnter={(event) => {
+          if (!isGenuineHostPointerEnter(event)) {
+            event.preventDefault()
+          }
+        }}
+        // Why: the trigger wraps the whole card, so `focusin` bubbling from an inner control (or focus
+        // restored after an action) would open the card with the pointer somewhere else entirely — over
+        // the browser pane there is then no pointer leave to ever close it again. Focus on the trigger
+        // itself still opens, which is the keyboard path Radix wants.
+        onFocus={(event) => {
+          if (event.target !== event.currentTarget) {
+            event.preventDefault()
+          }
+        }}
+      >
+        {children}
+      </HoverCardTrigger>
       <HoverCardContent
         side="right"
         align="start"

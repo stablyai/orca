@@ -3998,6 +3998,9 @@ const api = {
       connectionId?: string | null
       runtimeEnvironmentId?: string | null
     }): Promise<string | null> => ipcRenderer.invoke('clipboard:saveImageAsTempFile', args),
+    // Why: Chromium leaks guest-local pointer coordinates out of a <webview> on release, parking CSS
+    // hover on an unrelated host element. Only trusted input clears Blink's hover state.
+    clearStaleHoverState: (): Promise<void> => ipcRenderer.invoke('ui:clearStaleHoverState'),
     writeClipboardText: (text: string): Promise<void> =>
       ipcRenderer.invoke('clipboard:writeText', text),
     writeTerminalClipboardText: (text: string): Promise<void> =>

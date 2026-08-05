@@ -1,4 +1,5 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { addWebviewGuestFocusListener } from '@/hooks/webview-guest-focus-listener'
 
 type WorktreeCardDetailMenu = 'issue' | 'review'
 
@@ -26,6 +27,15 @@ export function useWorktreeCardDetailsHoverControl() {
     },
     [openMenu]
   )
+
+  // Why: the card floats over the browser/mobile panes, and a press inside a guest never reaches this
+  // document, so Radix's outside-press dismissal never runs. Retire both layers on guest focus instead.
+  useEffect(() => {
+    if (!open && !openMenu) {
+      return
+    }
+    return addWebviewGuestFocusListener(closeHover)
+  }, [closeHover, open, openMenu])
 
   const setDetailMenuOpen = useCallback((menu: WorktreeCardDetailMenu, next: boolean) => {
     setOpenMenu(next ? menu : null)

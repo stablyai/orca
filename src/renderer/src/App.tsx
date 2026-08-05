@@ -92,6 +92,7 @@ import RecentTabSwitcher from './components/tab-bar/RecentTabSwitcher'
 import { useGitStatusPolling } from './components/right-sidebar/useGitStatusPolling'
 import { useEditorExternalWatch } from './hooks/useEditorExternalWatch'
 import { useAutoAckViewedAgent } from './hooks/useAutoAckViewedAgent'
+import { installWebviewPointerLeakCorrection } from './hooks/webview-leaked-pointer-guard'
 import { useDashboardPopoutBridge } from './components/dashboard/useDashboardPopoutBridge'
 import { useUnreadDockBadge } from './hooks/useUnreadDockBadge'
 import {
@@ -634,6 +635,10 @@ function App(): React.JSX.Element {
     },
     [floatingTerminalOpen, rememberFloatingTerminalReturnFocus, restoreFloatingTerminalReturnFocus]
   )
+
+  // Why: repairs the window's hover state after Chromium leaks guest-local pointer coordinates out of a
+  // <webview>, which otherwise leaves a sidebar row stuck in its hover style.
+  useEffect(() => installWebviewPointerLeakCorrection(), [])
 
   useEffect(() => {
     const toggleFloatingTerminal = (): void => {

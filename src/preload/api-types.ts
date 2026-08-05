@@ -3283,6 +3283,7 @@ export type PreloadApi = {
       connectionId?: string | null
       runtimeEnvironmentId?: string | null
     }) => Promise<string | null>
+    clearStaleHoverState: () => Promise<void>
     writeClipboardText: (text: string) => Promise<void>
     writeTerminalClipboardText: (text: string) => Promise<void>
     writeSelectionClipboardText: (text: string) => Promise<void>
