@@ -80,7 +80,12 @@ export async function pasteTerminalClipboard({
     if (!filePath) {
       return { status: 'skipped', reason: 'empty' }
     }
-    const result = await pasteText(filePath, {
+    // Why: agent TUIs (Cursor CLI, etc.) turn a pasted image path into
+    // `[Image #N]` only when the path is a separate token — their regexes
+    // require `(^|[^\w@-])` before `/…png`. With prior input like `1234`, a
+    // bare path becomes `1234/tmp/…png` and stays raw. A leading space keeps
+    // the boundary; Cursor's paste handler trims before the image-path check.
+    const result = await pasteText(` ${filePath}`, {
       // Why: a generated clipboard-image path is terminal image injection, not
       // ordinary one-line text. Keep it off the Ctrl+C stale-text paste path.
       forceBracketedPaste: true,

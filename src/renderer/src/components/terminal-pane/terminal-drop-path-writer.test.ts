@@ -68,9 +68,10 @@ describe('terminal drop path writer', () => {
 
     expect(result).toEqual({ sentAnyPath: true, targetCurrent: true, pathsWritten: 1 })
     // Why: image attachment detection in terminal TUIs keys off bracketed paste
-    // of the literal path — no shell-escaping, no trailing space.
+    // of the literal path — no shell-escaping. Leading space keeps a token
+    // boundary after typed text; no trailing space (images are self-delimiting).
     expect(sendInputAccepted).toHaveBeenCalledWith(
-      wrapTerminalBracketedPasteText('/repo/My Screenshot.png')
+      wrapTerminalBracketedPasteText(' /repo/My Screenshot.png')
     )
   })
 
@@ -91,7 +92,7 @@ describe('terminal drop path writer', () => {
     expect(sendInputAccepted).toHaveBeenNthCalledWith(1, '/repo/a.ts ')
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
       2,
-      wrapTerminalBracketedPasteText('/repo/shot.png')
+      wrapTerminalBracketedPasteText(' /repo/shot.png')
     )
   })
 
@@ -113,7 +114,7 @@ describe('terminal drop path writer', () => {
     // non-image path would collide with it without an explicit separator.
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
       1,
-      `${wrapTerminalBracketedPasteText('/repo/shot.png')} `
+      `${wrapTerminalBracketedPasteText(' /repo/shot.png')} `
     )
     expect(sendInputAccepted).toHaveBeenNthCalledWith(2, '/repo/a.ts ')
   })
@@ -136,11 +137,11 @@ describe('terminal drop path writer', () => {
     // TUI input between the two attachments.
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
       1,
-      wrapTerminalBracketedPasteText('/repo/one.png')
+      wrapTerminalBracketedPasteText(' /repo/one.png')
     )
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
       2,
-      wrapTerminalBracketedPasteText('/repo/two.png')
+      wrapTerminalBracketedPasteText(' /repo/two.png')
     )
   })
 
@@ -194,7 +195,7 @@ describe('terminal drop path writer', () => {
 
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
       1,
-      `${wrapTerminalBracketedPasteText('/repo/shot.png')} `
+      `${wrapTerminalBracketedPasteText(' /repo/shot.png')} `
     )
     expect(sendInputAccepted).toHaveBeenNthCalledWith(2, "'/repo/a.png; touch /tmp/pwned #.png' ")
   })
