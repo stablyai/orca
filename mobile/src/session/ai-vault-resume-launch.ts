@@ -27,6 +27,7 @@ import {
 } from './mobile-diff-review-rpc'
 import { tryHostAuthorityAiVaultResume } from './ai-vault-host-authority-resume'
 import { normalizeMobileAiVaultCodexHome } from './ai-vault-resume-platform'
+import { applyMobileAiVaultResumeTitle } from './ai-vault-resume-title'
 export {
   MOBILE_AI_VAULT_HOST_AUTHORITY_RESUME_CAPABILITY,
   readMobileRuntimeCapabilities
@@ -79,10 +80,11 @@ export type MobileAiVaultResumeLaunch = {
   providerSession?: AgentProviderSessionMetadata
   startupCwd?: string
   hostAuthorityEligible?: boolean
+  resumeTitle?: string
 }
 
 type MobileAiVaultResumeLaunchArgs = {
-  session: Pick<AiVaultSession, 'agent' | 'sessionId' | 'cwd' | 'codexHome'> &
+  session: Pick<AiVaultSession, 'agent' | 'sessionId' | 'cwd' | 'codexHome' | 'title'> &
     Partial<Pick<AiVaultSession, 'filePath'>>
   hostPlatform: NodeJS.Platform
   runtimeHostPlatform?: NodeJS.Platform | null
@@ -102,6 +104,7 @@ export function buildMobileAiVaultResumeLaunch(
     args.settings?.agentCmdOverrides
   )
   const commandOverride = cmdOverrides[args.session.agent] ?? null
+  const resumeTitle = args.session.title.trim() || undefined
   const hostTranscriptPath = args.session.filePath?.trim() || undefined
   const resumeFilePath = normalizeAiVaultResumeFilePath(args.session.filePath, args.hostPlatform)
   if (isResumableTuiAgent(args.session.agent)) {
@@ -165,7 +168,8 @@ export function buildMobileAiVaultResumeLaunch(
         // while an unknown runtime platform can safely let host authority reject before
         // side effects and fall back to the proven legacy command path.
         hostAuthorityEligible:
-          args.runtimeHostPlatform == null || args.runtimeHostPlatform === args.hostPlatform
+          args.runtimeHostPlatform == null || args.runtimeHostPlatform === args.hostPlatform,
+        ...(resumeTitle ? { resumeTitle } : {})
       }
     }
   }
@@ -183,7 +187,8 @@ function buildLegacyMobileAiVaultResumeLaunch(
       hostTerminalWindowsShell: args.hostTerminalWindowsShell,
       commandOverride
     }),
-    ...realHomeCodexResumeEnvDeletion(args.session)
+    ...realHomeCodexResumeEnvDeletion(args.session),
+    ...(args.session.title.trim() ? { resumeTitle: args.session.title.trim() } : {})
   }
 }
 
@@ -208,14 +213,20 @@ export async function resumeAiVaultSessionInTerminal(
   launch: MobileAiVaultResumeLaunch & { clientMutationId?: string },
   options: { hostCapabilities?: readonly string[] } = {}
 ): Promise<MobileReviewTerminalTab> {
-  const hostAuthorityTerminal = await tryHostAuthorityAiVaultResume(
+  const hostAuthorityResume = await tryHostAuthorityAiVaultResume(
     client,
     worktreeId,
     launch,
     options.hostCapabilities
   )
-  if (hostAuthorityTerminal) {
-    return hostAuthorityTerminal
+  if (hostAuthorityResume) {
+    return hostAuthorityResume.created
+      ? await applyMobileAiVaultResumeTitle(
+          client,
+          hostAuthorityResume.terminal,
+          launch.resumeTitle
+        )
+      : hostAuthorityResume.terminal
   }
   const created = await client.sendRequest(
     'session.tabs.createTerminal',
@@ -254,7 +265,7 @@ export async function resumeAiVaultSessionInTerminal(
   if (!readMobileReviewTerminalSendAccepted(sent.result)) {
     throw new Error('Terminal input is locked')
   }
-  return terminalTab
+  return applyMobileAiVaultResumeTitle(client, terminalTab, launch.resumeTitle)
 }
 
 export type MobileAiVaultResumeMutationRegistry = {

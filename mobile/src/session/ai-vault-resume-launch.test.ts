@@ -13,6 +13,7 @@ import {
   resumeAiVaultSessionInTerminal
 } from './ai-vault-resume-launch'
 import { RESUME_RPC_TIMEOUT_MS } from './ai-vault-resume-preparation'
+import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 
 function session(overrides: Partial<AiVaultSession> = {}): AiVaultSession {
   return {
@@ -203,6 +204,7 @@ describe('buildMobileAiVaultResumeLaunch', () => {
     )
     expect(launch.env).toEqual({ ANTHROPIC_BASE_URL: 'http://localhost:3000' })
     expect(launch.launchAgent).toBe('claude')
+    expect(launch.resumeTitle).toBe('Resume me')
     expect(launch.providerSession).toEqual({
       key: 'session_id',
       id: 'abc 123',
@@ -272,6 +274,8 @@ describe('buildMobileAiVaultResumeLaunch', () => {
 
 describe('resumeAiVaultSessionInTerminal', () => {
   it('uses host-authority resume and activates its tab when the host publishes identity', async () => {
+    const transcriptPath =
+      '/Users/ada/.codex/sessions/2026/08/05/rollout-2026-08-05T09-00-00-codex-1.jsonl'
     const sendRequest = vi
       .fn()
       .mockResolvedValueOnce({
@@ -282,8 +286,13 @@ describe('resumeAiVaultSessionInTerminal', () => {
         }
       })
       .mockResolvedValueOnce({ ok: true, result: {} })
+      .mockResolvedValueOnce({ ok: true, result: {} })
     const launch = buildMobileAiVaultResumeLaunch({
-      session: session({ agent: 'codex', sessionId: 'codex-1' }),
+      session: session({
+        agent: 'codex',
+        sessionId: 'codex-1',
+        filePath: transcriptPath
+      }),
       hostPlatform: 'linux'
     })
 
@@ -291,7 +300,7 @@ describe('resumeAiVaultSessionInTerminal', () => {
       resumeAiVaultSessionInTerminal({ sendRequest }, 'worktree-1', launch, {
         hostCapabilities: [MOBILE_AI_VAULT_HOST_AUTHORITY_RESUME_CAPABILITY]
       })
-    ).resolves.toEqual({ id: 'tab-1', terminal: 'term-1', title: 'Codex' })
+    ).resolves.toEqual({ id: 'tab-1', terminal: 'term-1', title: 'Resume me' })
     expect(sendRequest).toHaveBeenNthCalledWith(
       1,
       'terminal.ensureAgentSession',
@@ -302,7 +311,7 @@ describe('resumeAiVaultSessionInTerminal', () => {
         providerSession: {
           key: 'session_id',
           id: 'codex-1',
-          transcriptPath: '/Users/ada/.claude/session.jsonl'
+          transcriptPath
         },
         startupCwd: '/Users/ada/repo',
         presentation: 'background'
@@ -321,9 +330,103 @@ describe('resumeAiVaultSessionInTerminal', () => {
       },
       { timeoutMs: RESUME_RPC_TIMEOUT_MS }
     )
+    expect(sendRequest).toHaveBeenNthCalledWith(
+      3,
+      'terminal.rename',
+      { terminal: 'term-1', title: 'Resume me' },
+      expect.objectContaining({ failWhenDisconnected: true })
+    )
+    expect(sendRequest.mock.calls.map((call) => call[0])).toEqual([
+      'terminal.ensureAgentSession',
+      'session.tabs.activate',
+      'terminal.rename'
+    ])
+  })
+
+  it('preserves the current title when host authority adopts a running session', async () => {
+    const sendRequest = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        result: {
+          disposition: 'adopted',
+          terminal: { handle: 'term-1', tabId: 'tab-1', title: 'My live title' }
+        }
+      })
+      .mockResolvedValueOnce({ ok: true, result: {} })
+    const launch = buildMobileAiVaultResumeLaunch({
+      session: session({ agent: 'codex', sessionId: 'codex-1' }),
+      hostPlatform: 'linux'
+    })
+
+    await expect(
+      resumeAiVaultSessionInTerminal({ sendRequest }, 'worktree-1', launch, {
+        hostCapabilities: [MOBILE_AI_VAULT_HOST_AUTHORITY_RESUME_CAPABILITY]
+      })
+    ).resolves.toEqual({ id: 'tab-1', terminal: 'term-1', title: 'My live title' })
     expect(sendRequest.mock.calls.map((call) => call[0])).toEqual([
       'terminal.ensureAgentSession',
       'session.tabs.activate'
+    ])
+  })
+
+  it('does not relaunch when a best-effort history title rename fails', async () => {
+    const sendRequest = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        result: {
+          disposition: 'created',
+          terminal: { handle: 'term-1', tabId: 'tab-1', title: 'Codex' }
+        }
+      })
+      .mockResolvedValueOnce({ ok: true, result: {} })
+      .mockRejectedValueOnce(new Error('connection closed'))
+    const launch = buildMobileAiVaultResumeLaunch({
+      session: session({ agent: 'codex', sessionId: 'codex-1' }),
+      hostPlatform: 'linux'
+    })
+
+    await expect(
+      resumeAiVaultSessionInTerminal({ sendRequest }, 'worktree-1', launch, {
+        hostCapabilities: [MOBILE_AI_VAULT_HOST_AUTHORITY_RESUME_CAPABILITY]
+      })
+    ).resolves.toEqual({ id: 'tab-1', terminal: 'term-1', title: 'Codex' })
+    expect(sendRequest.mock.calls.map((call) => call[0])).toEqual([
+      'terminal.ensureAgentSession',
+      'session.tabs.activate',
+      'terminal.rename'
+    ])
+  })
+
+  it('retries only the idempotent title rename after a logical-client cutover', async () => {
+    const sendRequest = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        result: {
+          disposition: 'created',
+          terminal: { handle: 'term-1', tabId: 'tab-1', title: 'Codex' }
+        }
+      })
+      .mockResolvedValueOnce({ ok: true, result: {} })
+      .mockRejectedValueOnce(new LogicalClientCutoverError())
+      .mockResolvedValueOnce({ ok: true, result: {} })
+    const launch = buildMobileAiVaultResumeLaunch({
+      session: session({ agent: 'codex', sessionId: 'codex-1' }),
+      hostPlatform: 'linux'
+    })
+
+    await expect(
+      resumeAiVaultSessionInTerminal({ sendRequest }, 'worktree-1', launch, {
+        hostCapabilities: [MOBILE_AI_VAULT_HOST_AUTHORITY_RESUME_CAPABILITY]
+      })
+    ).resolves.toEqual({ id: 'tab-1', terminal: 'term-1', title: 'Resume me' })
+    expect(sendRequest.mock.calls.map((call) => call[0])).toEqual([
+      'terminal.ensureAgentSession',
+      'session.tabs.activate',
+      'terminal.rename',
+      'terminal.rename'
     ])
   })
 
@@ -371,6 +474,7 @@ describe('resumeAiVaultSessionInTerminal', () => {
         result: { tab: { type: 'terminal', id: 'tab-1', terminal: 'pty-1' } }
       })
       .mockResolvedValueOnce({ ok: true, result: { send: { accepted: true } } })
+      .mockResolvedValueOnce({ ok: true, result: {} })
     const launch = buildMobileAiVaultResumeLaunch({
       session: session({ agent: 'codex', sessionId: 'codex-1' }),
       hostPlatform: 'linux'
@@ -384,7 +488,8 @@ describe('resumeAiVaultSessionInTerminal', () => {
     expect(sendRequest.mock.calls.map((call) => call[0])).toEqual([
       'terminal.ensureAgentSession',
       'session.tabs.createTerminal',
-      'terminal.send'
+      'terminal.send',
+      'terminal.rename'
     ])
   })
 
@@ -396,6 +501,7 @@ describe('resumeAiVaultSessionInTerminal', () => {
         result: { tab: { type: 'terminal', id: 'tab-1', terminal: 'pty-1' } }
       })
       .mockResolvedValueOnce({ ok: true, result: { send: { accepted: true } } })
+      .mockResolvedValueOnce({ ok: true, result: {} })
     const launch = buildMobileAiVaultResumeLaunch({
       session: session({
         agent: 'codex',
@@ -415,7 +521,8 @@ describe('resumeAiVaultSessionInTerminal', () => {
 
     expect(sendRequest.mock.calls.map((call) => call[0])).toEqual([
       'session.tabs.createTerminal',
-      'terminal.send'
+      'terminal.send',
+      'terminal.rename'
     ])
     expect(sendRequest).not.toHaveBeenCalledWith(
       'terminal.ensureAgentSession',
@@ -432,6 +539,7 @@ describe('resumeAiVaultSessionInTerminal', () => {
         result: { tab: { type: 'terminal', id: 'tab-1', terminal: 'pty-1', title: 'Terminal' } }
       })
       .mockResolvedValueOnce({ ok: true, result: { send: { accepted: true } } })
+      .mockResolvedValueOnce({ ok: true, result: {} })
 
     await expect(
       resumeAiVaultSessionInTerminal({ sendRequest }, 'worktree-1', {
@@ -444,12 +552,13 @@ describe('resumeAiVaultSessionInTerminal', () => {
           agentEnv: { ANTHROPIC_BASE_URL: 'http://localhost:3000' }
         },
         launchAgent: 'claude',
+        resumeTitle: 'Resume me',
         clientMutationId: 'resume-1',
         activate: false,
         select: true,
         navigation: 'caller'
       })
-    ).resolves.toMatchObject({ id: 'tab-1', terminal: 'pty-1' })
+    ).resolves.toEqual({ id: 'tab-1', terminal: 'pty-1', title: 'Resume me' })
     expect(sendRequest).toHaveBeenNthCalledWith(
       1,
       'session.tabs.createTerminal',
@@ -481,6 +590,12 @@ describe('resumeAiVaultSessionInTerminal', () => {
         enter: true
       },
       { timeoutMs: RESUME_RPC_TIMEOUT_MS }
+    )
+    expect(sendRequest).toHaveBeenNthCalledWith(
+      3,
+      'terminal.rename',
+      { terminal: 'pty-1', title: 'Resume me' },
+      expect.objectContaining({ failWhenDisconnected: true })
     )
   })
 

@@ -20,12 +20,17 @@ type HostAuthorityResumeLaunch = {
   hostAuthorityEligible?: boolean
 }
 
+export type HostAuthorityAiVaultResumeResult = {
+  terminal: MobileReviewTerminalTab
+  created: boolean
+}
+
 export async function tryHostAuthorityAiVaultResume(
   client: Pick<RpcClient, 'sendRequest'>,
   worktreeId: string,
   launch: HostAuthorityResumeLaunch,
   hostCapabilities: readonly string[] | undefined
-): Promise<MobileReviewTerminalTab | null> {
+): Promise<HostAuthorityAiVaultResumeResult | null> {
   if (
     !launch.launchAgent ||
     !launch.providerSession ||
@@ -88,7 +93,13 @@ export async function tryHostAuthorityAiVaultResume(
     const detail = activated.error?.message ? `: ${activated.error.message}` : ''
     throw new Error(`Agent session started, but its tab could not be activated${detail}`)
   }
-  return terminal
+  return {
+    terminal,
+    created:
+      !!ensured.result &&
+      typeof ensured.result === 'object' &&
+      (ensured.result as { disposition?: unknown }).disposition === 'created'
+  }
 }
 
 function readEnsuredTerminal(value: unknown): MobileReviewTerminalTab | null {
