@@ -1590,59 +1590,149 @@ export function getSshConnectionManager(): SshConnectionManager | null {
   return connectionManager
 }
 
-// Why: an invalidated connect only observes its cancellation at the next checkpoint, and one blocked
-// in the transport handshake can sit there for the whole SSH timeout. Bound the join so the final
-// drain always runs well inside the quit deadline instead of racing it.
-const SSH_SHUTDOWN_INFLIGHT_JOIN_MS = 2_000
+// Why one budget for the whole sequence rather than one per phase: an invalidated connect only
+// observes its cancellation at the next checkpoint, and one blocked in the transport handshake can
+// sit there for the whole SSH timeout. A per-phase timeout lets any single phase consume the global
+// quit deadline; a shared absolute deadline cannot.
+export const SSH_SHUTDOWN_BUDGET_MS = 6_000
 
-async function settleWithinMs(work: readonly Promise<unknown>[], timeoutMs: number): Promise<void> {
-  if (work.length === 0) {
-    return
-  }
-  await Promise.race([
-    Promise.allSettled(work),
-    new Promise<void>((resolve) => {
-      const timer = setTimeout(resolve, timeoutMs)
-      timer.unref?.()
-    })
-  ])
+export type SshShutdownPhase = 'drain' | 'in-flight-join' | 'final-drain'
+export type SshShutdownUnfinished = { targetId: string; phase: SshShutdownPhase }
+export type SshShutdownResult = {
+  unfinished: readonly SshShutdownUnfinished[]
+  errors: readonly unknown[]
 }
 
+type SshShutdownTask = { targetId: string; promise: Promise<unknown> }
+
+let sshShutdownDrain: Promise<SshShutdownResult> | null = null
+
+async function settleTasksWithinMs(
+  tasks: readonly SshShutdownTask[],
+  timeoutMs: number
+): Promise<{ timedOut: SshShutdownTask[]; errors: unknown[] }> {
+  const pending = new Set(tasks)
+  const errors: unknown[] = []
+  if (tasks.length === 0) {
+    return { timedOut: [], errors }
+  }
+  const tracked = tasks.map(async (task) => {
+    try {
+      await task.promise
+    } catch (error) {
+      errors.push(error)
+    }
+    pending.delete(task)
+  })
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    await Promise.race([
+      Promise.all(tracked),
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, timeoutMs)
+        timer.unref?.()
+      })
+    ])
+  } finally {
+    clearTimeout(timer)
+  }
+  return { timedOut: [...pending], errors }
+}
+
+function sshShutdownTasks(targetIds: readonly string[]): SshShutdownTask[] {
+  return [
+    ...targetIds
+      .filter((targetId) => activeSessions.has(targetId))
+      .map((targetId) => ({
+        targetId,
+        promise: teardownActiveSshSession(targetId, (session) => session.detachAndPersist())
+      })),
+    { targetId: '*transports', promise: connectionManager?.disconnectAll() ?? Promise.resolve() }
+  ]
+}
+
+async function drainSshShutdown(
+  targetIds: readonly string[],
+  inFlight: readonly SshShutdownTask[],
+  detachErrors: readonly unknown[] = []
+): Promise<SshShutdownResult> {
+  const deadline = Date.now() + SSH_SHUTDOWN_BUDGET_MS
+  const unfinished: SshShutdownUnfinished[] = []
+  const errors: unknown[] = [...detachErrors]
+  const runPhase = async (
+    phase: SshShutdownPhase,
+    tasks: readonly SshShutdownTask[]
+  ): Promise<boolean> => {
+    const remainingMs = deadline - Date.now()
+    if (remainingMs <= 0) {
+      unfinished.push(...tasks.map((task) => ({ targetId: task.targetId, phase })))
+      return false
+    }
+    const settled = await settleTasksWithinMs(tasks, remainingMs)
+    errors.push(...settled.errors)
+    unfinished.push(...settled.timedOut.map((task) => ({ targetId: task.targetId, phase })))
+    return settled.timedOut.length === 0
+  }
+
+  await runPhase('drain', sshShutdownTasks(targetIds))
+  // Why a second drain after the join: a connect paused in old-session teardown still publishes its
+  // replacement session and opens a transport before it reaches the cancellation checkpoint, so the
+  // first drain can miss both.
+  if (await runPhase('in-flight-join', inFlight)) {
+    await runPhase('final-drain', sshShutdownTasks([...activeSessions.keys()]))
+  }
+
+  if (errors.length > 0 || unfinished.length > 0) {
+    // Why one aggregate line: per-target logging on the quit path competes with the final flush for
+    // the little time that remains.
+    console.warn(
+      `[ssh] Shutdown drain finished with ${errors.length} error(s); unfinished: ${
+        unfinished.map((entry) => `${entry.targetId}/${entry.phase}`).join(', ') || 'none'
+      }`
+    )
+  }
+  return { unfinished, errors }
+}
+
+// Why one entry point that returns rather than awaits: every in-memory transition the final store
+// flush must snapshot happens synchronously here, before this returns, so the caller can start that
+// flush with no await in between. Idempotent — a later call joins the same drain and repeats no
+// state transition.
+//
 // Why no fence latch here: the committed quit path sets it before calling this, so it is already on
 // for the snapshot below. Called without that gate (tests), this degrades to a plain drain.
-export async function detachAllSshSessionsForShutdown(): Promise<void> {
-  const inFlightWork: Promise<unknown>[] = [
-    ...[...connectInFlight.values()].map((attempt) => attempt.promise),
-    ...resetRelayInFlight.values(),
-    ...testConnectionProbes
+export function beginSshShutdown(): Promise<SshShutdownResult> {
+  if (sshShutdownDrain) {
+    return sshShutdownDrain
+  }
+  const inFlight: SshShutdownTask[] = [
+    ...[...connectInFlight.entries()].map(([targetId, attempt]) => ({
+      targetId,
+      promise: attempt.promise
+    })),
+    ...[...resetRelayInFlight.entries()].map(([targetId, promise]) => ({ targetId, promise })),
+    ...[...testConnectionProbes].map((promise) => ({ targetId: '*probe', promise }))
   ]
   for (const targetId of Array.from(connectInFlight.keys())) {
     invalidateConnectAttempt(targetId)
   }
-
-  const errors: unknown[] = []
-  const drain = async (): Promise<void> => {
-    const results = await Promise.allSettled([
-      ...[...activeSessions.keys()].map((targetId) =>
-        teardownActiveSshSession(targetId, (session) => session.detachAndPersist())
-      ),
-      connectionManager?.disconnectAll() ?? Promise.resolve()
-    ])
-    for (const result of results) {
-      if (result.status === 'rejected') {
-        errors.push(result.reason as unknown)
-      }
+  const targetIds = [...activeSessions.keys()]
+  // Why before any await: this is the whole point of the split. Each session marks its recovery lease
+  // detached in memory now, and the final flush persists it — the remote PTYs keep running.
+  const detachErrors: unknown[] = []
+  for (const session of activeSessions.values()) {
+    // Why per-session: this runs synchronously inside a non-async will-quit listener, so one throw
+    // (teardownProviders -> webContents.send on a destroyed renderer, routine on quit) would escape
+    // it and skip every later session, the drain assignment, and the store flush that persists all
+    // of this. Collect and keep going; the drain reports them.
+    try {
+      session.beginShutdownDetach()
+    } catch (error) {
+      detachErrors.push(error)
     }
   }
-
-  await drain()
-  // Why: a connect paused in old-session teardown still publishes its replacement session and opens a
-  // transport before it reaches the cancellation checkpoint, so the first drain can miss both.
-  await settleWithinMs(inFlightWork, SSH_SHUTDOWN_INFLIGHT_JOIN_MS)
-  await drain()
-  if (errors.length > 0) {
-    throw new AggregateError(errors, 'SSH shutdown detach failed')
-  }
+  sshShutdownDrain = drainSshShutdown(targetIds, inFlight, detachErrors)
+  return sshShutdownDrain
 }
 
 export async function resetSshHandlerStateForTests(): Promise<void> {
@@ -1674,6 +1764,7 @@ export async function resetSshHandlerStateForTests(): Promise<void> {
   testConnectionProbes.clear()
   credentialRequestedForTarget.clear()
   quitTeardownStartGate.resetForTests()
+  sshShutdownDrain = null
 
   await connectionManager?.disconnectAll()
   portForwardManager?.dispose()

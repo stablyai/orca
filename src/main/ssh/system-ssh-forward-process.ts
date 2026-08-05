@@ -6,6 +6,9 @@ import type { SshTarget } from '../../shared/ssh-types'
 export const SYSTEM_SSH_FORWARD_STARTUP_GRACE_MS = 750
 export const SYSTEM_SSH_FORWARD_LISTENER_PROBE_INTERVAL_MS = 50
 export const SYSTEM_SSH_FORWARD_STOP_TIMEOUT_MS = 2_000
+// Why short: SIGKILL is uncatchable, so a child that has not reported exit this long after it is
+// either already reaped or beyond anything teardown can do about it.
+export const SYSTEM_SSH_FORWARD_POST_KILL_TIMEOUT_MS = 500
 
 export type SystemSshPortForwardProcess = {
   process: ChildProcess
@@ -161,8 +164,10 @@ export function waitForSystemSshForwardStartup(
 export function waitForSystemSshForwardStop(process: ChildProcess): Promise<void> {
   return new Promise((resolve) => {
     let settled = false
+    let postKillTimer: ReturnType<typeof setTimeout> | undefined
     const cleanup = (): void => {
       clearTimeout(escalationTimer)
+      clearTimeout(postKillTimer)
       process.off('exit', onExit)
     }
     const finish = (): void => {
@@ -193,8 +198,18 @@ export function waitForSystemSshForwardStop(process: ChildProcess): Promise<void
       // Why: update/reconnect callers must not rebind while a stubborn ssh -L
       // process still owns the local port.
       kill('SIGKILL')
+      // Why a second timer: SIGKILL is never acknowledged, so if the runtime never reports the exit —
+      // a reparented child, a lost handle — nothing else can settle this promise and quit waits on it
+      // forever. Resolving here bounds teardown; it does not claim the child is gone.
+      postKillTimer = setTimeout(finish, SYSTEM_SSH_FORWARD_POST_KILL_TIMEOUT_MS)
     }, SYSTEM_SSH_FORWARD_STOP_TIMEOUT_MS)
 
+    // Why before any signal: a child that already exited needs no SIGTERM, and signalling a reaped pid
+    // can land on whatever the OS reassigned it to.
+    if (hasExited()) {
+      finish()
+      return
+    }
     process.once('exit', onExit)
     kill('SIGTERM')
   })

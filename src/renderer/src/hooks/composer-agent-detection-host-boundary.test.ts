@@ -10,9 +10,11 @@ describe('composer agent detection host boundary', () => {
     // source patterns ensure every dependency keeps the same selected host.
     expect(SOURCE).toContain('projectId: initialTargetSeed?.projectId')
     expect(SOURCE).toContain('hostId: initialTargetSeed?.hostId')
-    expect(SOURCE).toContain('projectHostSetupId: initialTargetSeed?.projectHostSetupId')
     expect(SOURCE).toContain(
-      "selectedWorkspaceTarget.status === 'ready'\n      ? selectedWorkspaceTarget.target.repo"
+      'selectedProjectHostSetupOverrideId ?? initialTargetSeed?.projectHostSetupId'
+    )
+    expect(SOURCE).toContain(
+      "selectedWorkspaceTarget.status === 'ready' && selectedWorkspaceTarget.target.repoId === repoId"
     )
     expect(SOURCE).toContain('const selectedRepoExecutionHostId = selectedRepo')
     expect(SOURCE).toMatch(
@@ -25,11 +27,13 @@ describe('composer agent detection host boundary', () => {
     expect(SOURCE).toContain(
       'const selectedRepoExecutionHostIdRef = useRef(selectedRepoExecutionHostId)\n  useEffect(() => {\n    selectedRepoExecutionHostIdRef.current = selectedRepoExecutionHostId\n  }, [selectedRepoExecutionHostId])'
     )
-    expect(SOURCE).toContain('readRuntimeIssueCommandForHost(')
+    expect(SOURCE).toMatch(
+      /readRuntimeIssueCommand\(\s*selectedRepoSettingsRef\.current,\s*repoId,\s*selectedRepoExecutionHostId \?\? undefined/
+    )
     expect(
       SOURCE.match(
         /'(?:setup|issueCommand|vmRecipe)',\n\s+selectedRepoExecutionHostId \?\? undefined/g
       )
-    ).toHaveLength(4)
+    ).toHaveLength(3)
   })
 })

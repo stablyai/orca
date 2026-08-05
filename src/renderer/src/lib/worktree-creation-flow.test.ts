@@ -563,6 +563,30 @@ describe('staged background worktree creation', () => {
     })
   })
 
+  it('activates a created workspace on its captured execution host', async () => {
+    store.createWorktree.mockResolvedValueOnce({
+      worktree: {
+        id: 'wt-1',
+        repoId: 'repo-1',
+        hostId: 'runtime:env-1',
+        runtimeOwnerEnvironmentId: 'env-1'
+      }
+    })
+
+    const started = continueBackgroundWorktreeCreation(
+      'creation-1',
+      makeRequest({ workspaceRunContext: RUNTIME_WORKSPACE_RUN_CONTEXT })
+    )
+
+    expect(started).toBe(true)
+    await vi.waitFor(() =>
+      expect(activateAndRevealWorktree).toHaveBeenCalledWith(
+        'wt-1',
+        expect.objectContaining({ executionHostId: 'runtime:env-1' })
+      )
+    )
+  })
+
   it('does not reveal a workspace cancelled during post-create trust preflight', async () => {
     let resolveTrust!: () => void
     const markTrusted = vi.fn(

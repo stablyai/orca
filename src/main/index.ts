@@ -258,7 +258,7 @@ import { AgentAwakeService } from './agent-awake-service'
 import { registerSystemResumeBroadcast } from './system-resume-broadcast'
 import { settleTeardownWithinDeadline } from './quit-teardown-deadline'
 import { quitTeardownStartGate } from './quit-teardown-start-gate'
-import { detachAllSshSessionsForShutdown } from './ipc/ssh'
+import { beginSshShutdown } from './ipc/ssh'
 import { PluginService } from './plugins/plugin-service'
 import { PluginKillListService } from './plugins/plugin-kill-list-service'
 import { getPluginsDataDir } from './plugins/plugin-discovery'
@@ -3047,7 +3047,9 @@ app.on('will-quit', (e) => {
   runtime?.getOffscreenBrowserBackend()?.destroyAll?.()
   browserManager.setBrowserGuestStateChangedListener(null)
   const emulatorShutdown = runtime?.getEmulatorBridge()?.destroyAllSessions() ?? Promise.resolve()
-  const sshShutdown = detachAllSshSessionsForShutdown()
+  // Why immediately before store.flushAsync() with no await in between: beginSshShutdown() marks every
+  // active SSH lease detached in memory synchronously, and that flush is what persists it.
+  const sshShutdown = beginSshShutdown()
   killAllPty()
   const watcherShutdown = shutdownWatchersOnce()
   const storeFlush = store?.flushAsync() ?? Promise.resolve()

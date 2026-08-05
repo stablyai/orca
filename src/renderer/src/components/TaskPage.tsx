@@ -149,7 +149,6 @@ import {
 } from '@/lib/linear-issue-workspace-attachment'
 import { openLinearIssueWorkspaceOrStart } from '@/lib/linear-issue-workspace-open'
 import { folderWorkspaceToWorktree } from '../../../shared/folder-workspace-worktree'
-import { createGitHubWorkItemWorkspaceInBackground } from '@/lib/github-work-item-background-create'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import GitHubItemDialog, { type ItemDialogTab } from '@/components/GitHubItemDialog'
@@ -6780,6 +6779,15 @@ export default function TaskPage(): React.JSX.Element {
   const openComposerForItem = useCallback(
     (item: GitHubWorkItem, initialAgent?: TuiAgent, repoOverride?: Repo): void => {
       const targetRepo = repoOverride ?? findTaskPageRepoForWorkItem(repos, item)
+      if (!targetRepo) {
+        toast.error(
+          translate(
+            'auto.components.TaskPage.githubWorkspaceRepositoryHostUnavailable',
+            'This repository host is no longer available.'
+          )
+        )
+        return
+      }
       const linkedWorkItem: LinkedWorkItemSummary = {
         provider: 'github',
         type: item.type,
@@ -6790,10 +6798,12 @@ export default function TaskPage(): React.JSX.Element {
       }
       openModal('new-workspace-composer', {
         linkedWorkItem,
+        initialGitHubWorkItem: item,
         taskSourceContext: getTaskPageRepoSourceContext(targetRepo, 'github'),
         prefilledName: getGitHubWorkItemWorkspaceSeed(item),
         initialRepoId: item.repoId,
         ...(initialAgent ? { initialAgent } : {}),
+        enableIssueAutomation: item.type === 'issue',
         telemetrySource: 'sidebar'
       })
     },
@@ -6804,16 +6814,7 @@ export default function TaskPage(): React.JSX.Element {
     (item: GitHubWorkItem, agentOverride?: TuiAgent, repoOverride?: Repo): void => {
       const targetRepo = repoOverride ?? findTaskPageRepoForWorkItem(repos, item)
       useAppStore.getState().recordFeatureInteraction('github-tasks')
-      void createGitHubWorkItemWorkspaceInBackground({
-        item,
-        repoId: item.repoId,
-        repoExecutionHostId:
-          item.repoExecutionHostId ?? (targetRepo ? getRepoExecutionHostId(targetRepo) : undefined),
-        taskSourceContext: getTaskPageRepoSourceContext(targetRepo, 'github'),
-        telemetrySource: 'sidebar',
-        agentOverride,
-        openModalFallback: () => openComposerForItem(item, agentOverride, targetRepo)
-      })
+      openComposerForItem(item, agentOverride, targetRepo)
     },
     [openComposerForItem, repos]
   )
@@ -6835,7 +6836,10 @@ export default function TaskPage(): React.JSX.Element {
         return
       }
 
-      const result = activateAndRevealWorktree(currentAttached.id)
+      const result = activateAndRevealWorktree(
+        currentAttached.id,
+        executionHostId ? { executionHostId } : undefined
+      )
       if (result === false) {
         toast.error(
           item.type === 'pr'

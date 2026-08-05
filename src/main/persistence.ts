@@ -7075,6 +7075,13 @@ export class Store {
     }
   }
 
+  // Why no write of its own: the committed quit path calls this immediately before the final store
+  // flush, and that flush is what persists it. A durable write here would race the flush and be
+  // rejected the moment it latches, which is exactly how an attached lease used to survive quit.
+  markSshRemotePtyLeasesForShutdown(targetId: string, state: SshRemotePtyLease['state']): void {
+    this.updateSshRemotePtyLeaseStates(targetId, state)
+  }
+
   async markSshRemotePtyLeasesAsync(
     targetId: string,
     state: SshRemotePtyLease['state']

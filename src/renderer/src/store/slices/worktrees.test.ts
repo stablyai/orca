@@ -4218,10 +4218,15 @@ describe('createWorktree base status merge', () => {
       })
     )
 
-    await store.getState().createWorktree('repo-remote', 'feature', 'origin/main')
+    const result = await store.getState().createWorktree('repo-remote', 'feature', 'origin/main')
 
     expect(mockApi.worktrees.create).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo['repo-remote']?.[0]).toEqual({
+      ...created,
+      hostId: 'runtime:env-1',
+      runtimeOwnerEnvironmentId: 'env-1'
+    })
+    expect(result.worktree).toEqual({
       ...created,
       hostId: 'runtime:env-1',
       runtimeOwnerEnvironmentId: 'env-1'

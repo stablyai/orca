@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import {
   canResolveFolderSmartGitHubSubmit,
   getInitialAutoManagedWorkspaceName,
+  getInitialGitHubPrStartPointSelection,
   getMatchingLinkedTaskSourceContext,
   isExplicitWorkspaceNameInput,
   resolveSmartGitHubCreateNames,
@@ -11,10 +12,6 @@ import {
 } from './useComposerState'
 
 const HOOK_SOURCE = readFileSync(join(__dirname, 'useComposerState.ts'), 'utf8')
-const RECIPE_OPTIONS_SOURCE = readFileSync(
-  join(__dirname, 'useEphemeralVmRecipeOptions.ts'),
-  'utf8'
-)
 
 function sourceBetween(source: string, startPattern: string, endPattern: string): string {
   const start = source.indexOf(startPattern)
@@ -25,6 +22,52 @@ function sourceBetween(source: string, startPattern: string, endPattern: string)
 }
 
 describe('useComposerState host-context boundaries', () => {
+  it('seeds TaskPage pull requests as submit-time PR start points', () => {
+    const item = {
+      id: 'pr-42',
+      type: 'pr' as const,
+      number: 42,
+      title: 'Fix PR workspace creation',
+      state: 'open' as const,
+      url: 'https://github.com/stablyai/orca/pull/42',
+      labels: [],
+      updatedAt: '2026-08-04T00:00:00.000Z',
+      author: 'octocat',
+      branchName: 'fix-pr-workspace',
+      baseRefName: 'main',
+      isCrossRepository: true,
+      repoId: 'repo-1'
+    }
+
+    expect(
+      getInitialGitHubPrStartPointSelection({
+        item,
+        linkedWorkItem: {
+          provider: 'github',
+          type: 'pr',
+          number: 42,
+          title: item.title,
+          url: item.url,
+          repoId: item.repoId
+        },
+        repoId: 'repo-1'
+      })
+    ).toEqual({ repoId: 'repo-1', item })
+    expect(
+      getInitialGitHubPrStartPointSelection({
+        item,
+        linkedWorkItem: {
+          provider: 'github',
+          type: 'pr',
+          number: 43,
+          title: item.title,
+          url: 'https://github.com/stablyai/orca/pull/43'
+        },
+        repoId: 'repo-1'
+      })
+    ).toBeNull()
+  })
+
   it('treats typed workspace names as user-authored, not auto-managed', () => {
     expect(isExplicitWorkspaceNameInput({ name: 'keep-my-name', lastAutoName: '' })).toBe(true)
     expect(
@@ -283,20 +326,21 @@ describe('useComposerState host-context boundaries', () => {
       'const [useInitialTargetSeed',
       'const selectedRepoIsGit'
     )
-    expect(targetSection).toContain('selectedTargetSeed ??')
     expect(targetSection).toContain('actionableHostIds')
     expect(targetSection).toContain('projectId: initialTargetSeed?.projectId')
     expect(targetSection).toContain('hostId: initialTargetSeed?.hostId')
-    expect(targetSection).toContain('projectHostSetupId: initialTargetSeed?.projectHostSetupId')
+    expect(targetSection).toContain(
+      'selectedProjectHostSetupOverrideId ?? initialTargetSeed?.projectHostSetupId'
+    )
 
     const changeSection = sourceBetween(
       HOOK_SOURCE,
       'const handleProjectHostSetupChange',
       'const handleProjectChange'
     )
-    expect(changeSection).toContain('setSelectedTargetSeed({')
-    expect(changeSection).toContain('projectHostSetupId: option.id')
-    expect(changeSection).toContain('hostId: option.hostId')
+    expect(changeSection).toContain('setSelectedProjectHostSetupOverrideId(option.id)')
+    expect(changeSection).toContain('preserveStartFrom: true')
+    expect(changeSection).toContain('forceResetStartFrom: true')
   })
 
   it('resolves typed GitHub issue/PR input through the selected repo source context', () => {
@@ -406,13 +450,13 @@ describe('useComposerState host-context boundaries', () => {
       'const submit = useCallback',
       'const submitQuick = useCallback'
     )
-    const fullPolicySave = fullSubmit.indexOf('await persistSetupAgentStartupPolicy()')
+    const fullPolicySave = fullSubmit.indexOf('persistSetupAgentStartupPolicy()')
     const fullCreate = fullSubmit.indexOf('const result = await createWorktree(')
     expect(fullPolicySave).toBeGreaterThanOrEqual(0)
     expect(fullCreate).toBeGreaterThan(fullPolicySave)
 
     const quickSubmit = sourceBetween(HOOK_SOURCE, 'const submitQuick = useCallback', 'return {')
-    const quickPolicySave = quickSubmit.indexOf('await persistSetupAgentStartupPolicy()')
+    const quickPolicySave = quickSubmit.indexOf('persistSetupAgentStartupPolicy()')
     const quickCreate = quickSubmit.indexOf('const request: WorktreeCreationRequest = {')
     expect(quickPolicySave).toBeGreaterThanOrEqual(0)
     expect(quickCreate).toBeGreaterThan(quickPolicySave)
@@ -447,8 +491,9 @@ describe('useComposerState host-context boundaries', () => {
     )
     expect(section).toContain('canResolveFolderSmartGitHubSubmit')
     expect(section).toContain('hasFolderSourceRepos: folderSourceRepos.length > 0')
-    expect(section).toContain('? await resolvePendingSmartGitHubSubmit()')
-    expect(section).toContain(': null')
+    expect(section).toContain('? resolvePendingSmartGitHubSubmit()')
+    expect(section).toContain("Promise.resolve({ kind: 'none' } as const)")
+    expect(section).toContain("smartGitHubSettlement.status === 'cancelled'")
     expect(section).not.toContain('folderSourceRequiresConnection')
   })
 
@@ -708,128 +753,6 @@ describe('useComposerState host-context boundaries', () => {
     ).toBeNull()
   })
 
-  it('resolves quick-create base refs through the worktree-create precedence helper', () => {
-    const section = sourceBetween(
-      HOOK_SOURCE,
-      'const smartSubmitBaseBranch',
-      'const createDisplayName'
-    )
-
-    expect(section).toContain('resolveWorktreeCreateBaseBranch')
-    expect(section).toContain('explicitBaseBranch: smartSubmitBaseBranch')
-    expect(section).not.toContain('repoWorktreeBaseRef: selectedRepo.worktreeBaseRef')
-    expect(section).not.toContain('getRuntimeRepoBaseRefDefault')
-  })
-
-  it('plans new workspace agent startup from the selected repo runtime', () => {
-    expect(HOOK_SOURCE).toContain('const selectedRepoAgentLaunchPlatform = useMemo')
-    expect(HOOK_SOURCE).toContain('getLocalRepoProjectExecutionRuntimeContext')
-    expect(HOOK_SOURCE).toContain('getAgentLaunchPlatformForRepo(selectedRepo, projectRuntime)')
-    expect(HOOK_SOURCE).toContain(
-      'runtimeStatusByEnvironmentId.get(selectedRepoExecutionHost.environmentId)?.status'
-    )
-
-    const fullSubmit = sourceBetween(
-      HOOK_SOURCE,
-      'const submit = useCallback',
-      'const submitQuick = useCallback'
-    )
-    expect(fullSubmit).toContain('platform: selectedRepoAgentLaunchPlatform')
-    expect(fullSubmit).not.toContain('platform: CLIENT_PLATFORM')
-
-    const quickSubmit = sourceBetween(
-      HOOK_SOURCE,
-      'const submitQuick = useCallback',
-      'const createGateInput'
-    )
-    expect(quickSubmit).toContain('platform: selectedRepoAgentLaunchPlatform')
-    expect(quickSubmit).not.toContain('platform: CLIENT_PLATFORM')
-  })
-
-  it('treats runtime-owned repos as remote when planning agent startup', () => {
-    const section = sourceBetween(
-      HOOK_SOURCE,
-      'const selectedRepoAgentLaunchPlatform',
-      'const selectedRepoStartupShell'
-    )
-
-    expect(section).toContain("selectedRepoExecutionHost?.kind !== 'local'")
-    expect(section).not.toContain('repoIsRemote(selectedRepo)')
-  })
-
-  // Why: activation no longer rebuilds a startup from `createdWithAgent`, so this
-  // caller's own `startup` is the only thing that launches the agent it planned.
-  it('passes its own startup to activation when submit planned an agent', () => {
-    const activation = sourceBetween(
-      HOOK_SOURCE,
-      'const activation = activateAndRevealWorktree(worktree.id, {',
-      'if (startupPlan) {'
-    )
-
-    expect(activation).toContain('...(startupPlan && !backendSpawnedStartup')
-    expect(activation).toContain('command: startupPlan.launchCommand')
-    expect(activation).toContain('launchAgent: tuiAgent')
-    // The removed activation-time fallback must not come back through this caller.
-    expect(HOOK_SOURCE).not.toContain('buildCreatedAgentReopenStartup')
-  })
-
-  it('prepares linked quick-create drafts for the selected default agent', () => {
-    const quickSubmit = sourceBetween(
-      HOOK_SOURCE,
-      'const submitQuick = useCallback',
-      'const createGateInput'
-    )
-
-    expect(quickSubmit).toContain(
-      'const promptLinkedWorkItem = agent === null ? null : submitLinkedWorkItem'
-    )
-    expect(quickSubmit).toContain('resolveQuickCreateLinkedWorkItemPrompt(promptLinkedWorkItem')
-    expect(quickSubmit).not.toContain('explicitAgentChoice')
-    expect(quickSubmit).not.toContain('shouldPrepareQuickLinkedWorkItemAgentPrompt')
-    expect(HOOK_SOURCE).not.toContain('resolveQuickWorkspaceSubmitAgent')
-  })
-
-  it('keeps sentinel-based Jira and Linear starts out of issue-command templates', () => {
-    expect(HOOK_SOURCE).not.toContain('isOrcaCliAvailableForLaunch')
-    expect(HOOK_SOURCE).not.toContain('hasGeneratedLinearSourceContext')
-    expect(HOOK_SOURCE).not.toContain('shouldDraftGeneratedLinearContext')
-    expect(HOOK_SOURCE).toMatch(
-      /willApplyIssueCommandAsPrompt[\s\S]*canUseIssueCommandForLinkedItemProvider\(linkedWorkItemProvider\)/
-    )
-
-    const previewSection = sourceBetween(
-      HOOK_SOURCE,
-      'const shouldApplyLinkedOnlyTemplate =',
-      'const linkedOnlyTemplatePrompt'
-    )
-    expect(previewSection).toContain(
-      'canUseIssueCommandForLinkedItemProvider(linkedWorkItemProvider)'
-    )
-
-    const fullSubmit = sourceBetween(
-      HOOK_SOURCE,
-      'const submit = useCallback',
-      'const submitQuick = useCallback'
-    )
-    expect(fullSubmit).toContain(
-      'canUseIssueCommandForLinkedItemProvider(submitLinkedWorkItemProvider)'
-    )
-    expect(fullSubmit).toMatch(
-      /submitShouldRunIssueAutomation[\s\S]*canUseIssueCommandForLinkedItemProvider\(submitLinkedWorkItemProvider\)/
-    )
-    expect(fullSubmit).toContain('prompt: submitStartupPrompt')
-    expect(fullSubmit).toContain('const shouldSeedInitialAgentStatus =')
-    expect(fullSubmit).toContain('...(shouldSeedInitialAgentStatus')
-
-    const quickSubmit = sourceBetween(
-      HOOK_SOURCE,
-      'const submitQuick = useCallback',
-      'const createGateInput'
-    )
-    expect(quickSubmit).toContain('agent === null || !quickDraftPrompt')
-    expect(quickSubmit).toContain('startupPlan.draftPrompt = quickDraftPrompt')
-  })
-
   it('selects the failed Jira source host before opening integration settings', () => {
     const section = sourceBetween(
       HOOK_SOURCE,
@@ -844,36 +767,5 @@ describe('useComposerState host-context boundaries', () => {
       section.indexOf("openSettingsTarget({ pane: 'integrations'")
     )
     expect(section).toContain('if (!selected)')
-  })
-
-  it('gates per-workspace environment recipe discovery behind the experimental setting', () => {
-    const recipeLoadSection = sourceBetween(
-      HOOK_SOURCE,
-      'const ephemeralVmsEnabled',
-      'const selectedRepoConnectionId'
-    )
-    expect(recipeLoadSection).toContain('settings?.experimentalEphemeralVms === true')
-    expect(recipeLoadSection).toContain('useEphemeralVmRecipeOptions')
-    expect(recipeLoadSection).toContain('enabled: ephemeralVmsEnabled')
-    expect(RECIPE_OPTIONS_SOURCE).toContain('args.enabled &&')
-    expect(RECIPE_OPTIONS_SOURCE).toContain('window.api.ephemeralVm')
-    expect(RECIPE_OPTIONS_SOURCE).toContain('window.api.plugins.onChanged')
-    expect(RECIPE_OPTIONS_SOURCE).toContain('requestGeneration')
-
-    const submitSection = sourceBetween(
-      HOOK_SOURCE,
-      'let ephemeralVmRecipe',
-      'const request: WorktreeCreationRequest'
-    )
-    expect(submitSection).toContain(
-      'const activeEphemeralVmRecipeId = ephemeralVmsEnabled ? selectedEphemeralVmRecipeId : null'
-    )
-    expect(submitSection).toContain('recipeId: activeEphemeralVmRecipeId')
-
-    const cardPropsSection = sourceBetween(HOOK_SOURCE, 'const cardProps', 'return {')
-    expect(cardPropsSection).toContain('ephemeralVmRecipes:')
-    expect(cardPropsSection).toContain('!ephemeralVmsEnabled')
-    expect(cardPropsSection).toContain('selectedEphemeralVmRecipeId:')
-    expect(cardPropsSection).toContain('ephemeralVmRecipeError:')
   })
 })

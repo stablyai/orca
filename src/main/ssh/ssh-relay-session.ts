@@ -6,7 +6,6 @@ import type { BrowserWindow } from 'electron'
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { isRelayVersionMismatchError } from './ssh-relay-version-mismatch-error'
-import type { RelayVersionMismatchError } from './ssh-relay-version-mismatch-error'
 import { SshChannelMultiplexer } from './ssh-channel-multiplexer'
 import { SshPtyProvider } from '../providers/ssh-pty-provider'
 import type { SshPtyAttachResult } from '../providers/ssh-pty-session-reattach'
@@ -80,8 +79,14 @@ import {
 import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { DEFAULT_PTY_SOURCE_WINDOW_SU } from '../../shared/pty-source-credit-contract'
-import { PTY_CONSUMER_STALE_OWNER_RECOVERY_ERROR } from '../../shared/pty-consumer-session'
-import { retrySshOwnerRecoveryWhileBlocked } from './ssh-owner-recovery-retry'
+import {
+  isSshOwnerAdmissionBlocked,
+  retrySshOwnerRecoveryWhileBlocked
+} from './ssh-owner-recovery-retry'
+import {
+  isSshOwnerAdmissionBlockedError,
+  SshOwnerAdmissionBlockedError
+} from './ssh-owner-admission-blocked-error'
 import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
 import {
   acknowledgeRemoteOrcaCliPostOutput,
@@ -97,6 +102,8 @@ import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
 import {
   openSshPtyConsumerSession,
+  type OpenSshPtyConsumerSessionOptions,
+  type SshPtyConsumerAdmission,
   type SshPtyConsumerOwnerState,
   type SshPtyConsumerSessionState
 } from './ssh-pty-consumer-session'
@@ -112,8 +119,7 @@ import {
   detachSshPtyConsumerRecovery,
   forgetSshPtyConsumerRecovery,
   getSshPtyConsumerRecovery,
-  rememberSshPtyConsumerRecovery,
-  removeSshPtyConsumerOwnerRecovery
+  rememberSshPtyConsumerRecovery
 } from './ssh-pty-consumer-recovery'
 
 export type RelaySessionState = 'idle' | 'deploying' | 'ready' | 'reconnecting' | 'disposed'
@@ -286,10 +292,9 @@ export class SshRelaySession {
   private muxNotificationCleanup: (() => void) | null = null
   // Why: onStateChange never fires when the relay channel closes but SSH stays up; this callback lets ssh.ts drive relay-level reconnect.
   private _onRelayLost: ((targetId: string) => void) | null = null
-  // Why: version mismatch is terminal, so it needs a separate callback from _onRelayLost (which expects a recoverable transport drop).
-  private _onTerminalRelayError:
-    | ((targetId: string, err: RelayVersionMismatchError) => void)
-    | null = null
+  // Why: a version mismatch or a blocked owner admission is terminal, so it needs a separate callback
+  // from _onRelayLost (which expects a recoverable transport drop).
+  private _onTerminalRelayError: ((targetId: string, err: Error) => void) | null = null
   private _onReady: ((targetId: string) => void) | null = null
   private portScanner: PortScanner | null = null
   private currentConnection: SshConnection | null = null
@@ -356,7 +361,7 @@ export class SshRelaySession {
     this._onRelayLost = cb
   }
 
-  setOnTerminalRelayError(cb: (targetId: string, err: RelayVersionMismatchError) => void): void {
+  setOnTerminalRelayError(cb: (targetId: string, err: Error) => void): void {
     this._onTerminalRelayError = cb
   }
 
@@ -559,10 +564,11 @@ export class SshRelaySession {
         )
         this._state = 'idle'
       }
-      // Why: a version mismatch on first connect is terminal (deployed binary vs. a still-running legacy daemon); notify the callback but still rethrow.
-      if (isRelayVersionMismatchError(err)) {
+      // Why: terminal on first connect — a deployed binary against a still-running legacy daemon, or a
+      // claim another connection holds. Notify the callback but still rethrow.
+      if (isRelayVersionMismatchError(err) || isSshOwnerAdmissionBlockedError(err)) {
         console.warn(
-          `[ssh-relay-session] Terminal relay version mismatch on initial connect for ${this.targetId}: ${err.message}`
+          `[ssh-relay-session] Terminal relay error on initial connect for ${this.targetId}: ${err.message}`
         )
         this._onTerminalRelayError?.(this.targetId, err)
       }
@@ -710,10 +716,11 @@ export class SshRelaySession {
             : 'connection_lost'
         )
       }
-      // Why: version-mismatch is terminal — fire the typed callback and drop out of 'reconnecting' since backoff retry can't reconcile it.
-      if (isRelayVersionMismatchError(err)) {
+      // Why terminal: neither a version mismatch nor a blocked owner claim is reconcilable by backoff
+      // retry, so fire the typed callback and drop out of 'reconnecting'.
+      if (isRelayVersionMismatchError(err) || isSshOwnerAdmissionBlockedError(err)) {
         console.warn(
-          `[ssh-relay-session] Terminal relay version mismatch for ${this.targetId}: ${err.message}`
+          `[ssh-relay-session] Terminal relay error for ${this.targetId}: ${err.message}`
         )
         if (this.abortController === abortController && !this.isDisposed()) {
           this._state = 'idle'
@@ -829,6 +836,28 @@ export class SshRelaySession {
       }
       completion = this.teardownCompletion
     }
+  }
+
+  // Why a separate transition from detachAndPersist: on the committed quit path every in-memory
+  // change has to land before the final store flush snapshots, and that flush — not a per-session
+  // durable write — is what persists it. Idempotent, and it schedules no persistence of its own, so
+  // nothing the async drain finishes later can write recovery state after the snapshot.
+  //
+  // 'detached' says this app let go of the lease, not that the remote shell died. The remote PTYs are
+  // left running for the next attach, exactly as an ordinary detach leaves them.
+  beginShutdownDetach(): void {
+    if (this.detachedInMemory || this._state === 'disposed') {
+      return
+    }
+    detachSshPtyConsumerRecovery(this.targetId, this.ptyConsumerClientInstanceId)
+    this.abortController?.abort()
+    this.stopPortScanning()
+    this.broadcastEmptyLists()
+    this.teardownProviders('connection_lost')
+    this.currentConnection = null
+    this._state = 'disposed'
+    this.detachedInMemory = true
+    this.store.markSshRemotePtyLeasesForShutdown(this.targetId, 'detached')
   }
 
   private runDetach(): Promise<void> {
@@ -1049,6 +1078,19 @@ export class SshRelaySession {
       allowSameBuildLegacyFallback: true,
       outputFlowControl: { requestedWindowSu: DEFAULT_PTY_SOURCE_WINDOW_SU }
     }
+    const admission = await this.admitPtyConsumerOwner(mux, previousOwner, options, ownsAttempt)
+    if (previousOwner && !admission.resumed) {
+      this.voidPtyConsumerCheckpoints(previousOwner, ownsAttempt)
+    }
+    return admission.state
+  }
+
+  private async admitPtyConsumerOwner(
+    mux: SshChannelMultiplexer,
+    previousOwner: SshPtyConsumerOwnerState | null,
+    options: OpenSshPtyConsumerSessionOptions,
+    ownsAttempt: () => boolean
+  ): Promise<SshPtyConsumerAdmission> {
     try {
       return await retrySshOwnerRecoveryWhileBlocked(
         () =>
@@ -1069,48 +1111,47 @@ export class SshRelaySession {
         }
       )
     } catch (error) {
-      if (
-        !previousOwner ||
-        (error as { code?: unknown }).code !== PTY_CONSUMER_STALE_OWNER_RECOVERY_ERROR
-      ) {
-        throw error
+      // Why converted here: past this point the failure travels the same path as a dropped transport,
+      // where backoff would keep redeploying a relay that is working fine and refusing on purpose.
+      if (isSshOwnerAdmissionBlocked(error)) {
+        throw new SshOwnerAdmissionBlockedError(this.targetId, { cause: error })
       }
-      const recovery = getSshPtyConsumerRecovery(this.targetId)
-      // Why identity-guarded: the record is target-scoped and its clientInstanceId is shared by every
-      // session for that target, so only a record still describing the owner this attempt tried to
-      // resume is ours to drop — otherwise a loser wipes the winner's checkpoints.
-      const ownsRecoveryRecord =
-        ownsAttempt() &&
-        (!recovery?.owner ||
-          (recovery.owner.ownerGeneration === previousOwner.ownerGeneration &&
-            recovery.owner.ownerLease === previousOwner.ownerLease))
-      if (ownsRecoveryRecord) {
-        if (recovery) {
-          delete recovery.owner
-          recovery.checkpointsByAppPtyId.clear()
-          for (const [ptyId, migration] of recovery.modelMigrationsByAppPtyId) {
-            recovery.modelMigrationsByAppPtyId.set(
-              ptyId,
-              migration.then(() =>
-                Object.freeze({
-                  status: 'checkpoint-unavailable' as const,
-                  reason: 'completion-failed' as const
-                })
-              )
-            )
-          }
-        }
-        await removeSshPtyConsumerOwnerRecovery(
-          this.targetId,
-          this.ptyConsumerClientInstanceId,
-          this.store
+      throw error
+    }
+  }
+
+  // Why the recovery row and clientInstanceId survive: the relay minted a fresh claim, which voids the
+  // checkpoints taken under the old one but says nothing about our identity for this target. The caller
+  // durably records the new lease before ready, so removal here would only lose the identity.
+  private voidPtyConsumerCheckpoints(
+    previousOwner: SshPtyConsumerOwnerState,
+    ownsAttempt: () => boolean
+  ): void {
+    const recovery = getSshPtyConsumerRecovery(this.targetId)
+    // Why identity-guarded: the record is target-scoped and its clientInstanceId is shared by every
+    // session for that target, so only a record still describing the owner this attempt tried to
+    // resume is ours to void — otherwise a loser wipes the winner's checkpoints.
+    if (
+      !recovery ||
+      !ownsAttempt() ||
+      (recovery.owner &&
+        (recovery.owner.ownerGeneration !== previousOwner.ownerGeneration ||
+          recovery.owner.ownerLease !== previousOwner.ownerLease))
+    ) {
+      return
+    }
+    delete recovery.owner
+    recovery.checkpointsByAppPtyId.clear()
+    for (const [ptyId, migration] of recovery.modelMigrationsByAppPtyId) {
+      recovery.modelMigrationsByAppPtyId.set(
+        ptyId,
+        migration.then(() =>
+          Object.freeze({
+            status: 'checkpoint-unavailable' as const,
+            reason: 'completion-failed' as const
+          })
         )
-      }
-      if (!ownsAttempt()) {
-        throw new Error('Session disposed during establish')
-      }
-      this.ptyConsumerSessionState = null
-      return openSshPtyConsumerSession(mux, options)
+      )
     }
   }
 

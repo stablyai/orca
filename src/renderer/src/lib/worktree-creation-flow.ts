@@ -3,12 +3,10 @@ import { useAppStore } from '@/store'
 import {
   activateAndRevealWorktree,
   ensureWorktreeHasInitialTerminal,
-  type ActivateAndRevealResult,
-  type WorktreeStartupPayload
+  type ActivateAndRevealResult
 } from '@/lib/worktree-activation'
 import { ensureAgentStartupInTerminal } from '@/lib/new-workspace'
 import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activation-terminal-focus'
-import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
   attachEphemeralVmRuntimeToWorkspace,
   cleanupEphemeralVmRuntimeForFailedCreate,
@@ -19,58 +17,23 @@ import {
   getWorkspaceCreateErrorToastMessage
 } from '@/lib/workspace-create-error-format'
 import type { CreateWorktreeResult } from '../../../shared/types'
-import type {
-  WorktreeCreationPhase,
-  WorktreeCreationRequest
+import {
+  findPendingLinkedWorkItemCreationId,
+  type WorktreeCreationPhase,
+  type WorktreeCreationRequest
 } from '@/lib/pending-worktree-creation'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { seedAgentTabStateAfterWorktreeCreate } from '@/lib/worktree-creation-agent-seeds'
 import { resolveBackendDraftStartup } from '@/lib/worktree-draft-startup-view-mode'
 import { preflightCreatedWorktreeAgentTrust } from '@/lib/created-worktree-agent-trust'
+import {
+  buildWorktreeCreationStartupOpt,
+  getInitialWorktreeCreationPhase,
+  getWorktreeCreationIndeterminate
+} from '@/lib/worktree-creation-flow-startup'
 
 type ContinueBackgroundWorktreeCreationOptions = {
   revealCreationSurface?: boolean
-}
-
-// Why: mirrors the startup-opt the composer used to build inline. The renderer
-// only seeds the first terminal when the backend did not already spawn it.
-function buildStartupOpt(
-  request: WorktreeCreationRequest,
-  backendSpawned: boolean
-): WorktreeStartupPayload | undefined {
-  const plan = request.startupPlan
-  if (!plan || backendSpawned) {
-    return undefined
-  }
-  return {
-    command: plan.launchCommand,
-    ...(plan.env ? { env: plan.env } : {}),
-    launchConfig: plan.launchConfig,
-    ...(plan.launchToken ? { launchToken: plan.launchToken } : {}),
-    ...(request.agent ? { launchAgent: request.agent } : {}),
-    ...(plan.draftPrompt ? { draftPrompt: plan.draftPrompt } : {}),
-    // Why: view-mode only. An argv-prefill plan sets no draftPrompt, so this is
-    // the sole signal that this launch starts with unsent context in the TUI.
-    ...(request.launchDraftPrompt ? { launchDraftText: request.launchDraftPrompt } : {}),
-    ...(plan.startupCommandDelivery ? { startupCommandDelivery: plan.startupCommandDelivery } : {}),
-    // Why: command-code shows its prompt in the tab status before the first
-    // hook fires, so the prompt is threaded through here.
-    ...(request.agent === 'command-code' && request.quickPrompt.trim().length > 0
-      ? { initialAgentStatus: { agent: request.agent, prompt: request.quickPrompt.trim() } }
-      : {}),
-    ...(request.quickTelemetry ? { telemetry: request.quickTelemetry } : {})
-  }
-}
-
-function getWorktreeCreationIndeterminate(request: WorktreeCreationRequest): boolean {
-  if (request.worktreeCreateProgressMode) {
-    return request.worktreeCreateProgressMode === 'indeterminate'
-  }
-  return getActiveRuntimeTarget(useAppStore.getState().settings).kind !== 'local'
-}
-
-function getInitialWorktreeCreationPhase(request: WorktreeCreationRequest): WorktreeCreationPhase {
-  return request.ephemeralVmRecipe && !request.ephemeralVmRuntimeId ? 'provisioning-vm' : 'fetching'
 }
 
 // Why: activePendingCreationId can outlive the terminal route when the user
@@ -178,6 +141,7 @@ async function executeWorktreeCreation(
   }
 
   const worktree = result.worktree
+  const worktreeExecutionHostId = worktree.hostId ?? preparedRequest.workspaceRunContext?.hostId
 
   // Why: if the user dismissed/cancelled while the create was in flight, the entry
   // is gone. Git already made the worktree on disk, but don't auto-provision (trust
@@ -194,7 +158,7 @@ async function executeWorktreeCreation(
     // startup, so both halves of the handoff share one renderer-session token.
     preparedRequest.startupPlan.launchToken = createBrowserUuid()
   }
-  const startupOpt = buildStartupOpt(preparedRequest, backendSpawned)
+  const startupOpt = buildWorktreeCreationStartupOpt(preparedRequest, backendSpawned)
 
   if (worktree.path) {
     await preflightCreatedWorktreeAgentTrust(
@@ -220,6 +184,7 @@ async function executeWorktreeCreation(
   if (shouldActivateOnCompletion) {
     activation = activateAndRevealWorktree(worktree.id, {
       sidebarRevealBehavior: 'auto',
+      ...(worktreeExecutionHostId ? { executionHostId: worktreeExecutionHostId } : {}),
       ...(result.setup ? { setup: result.setup } : {}),
       ...(result.defaultTabs ? { defaultTabs: result.defaultTabs } : {}),
       ...(startupOpt ? { startup: startupOpt } : {}),
@@ -281,12 +246,24 @@ async function executeWorktreeCreation(
  * immediately and the work outlives the now-closed modal. Progress and errors
  * surface on the pending creation's sidebar row and content panel.
  */
-export function runBackgroundWorktreeCreation(request: WorktreeCreationRequest): void {
+export function runBackgroundWorktreeCreation(request: WorktreeCreationRequest): string {
+  const store = useAppStore.getState()
+  const existingCreationId = findPendingLinkedWorkItemCreationId(
+    store.pendingWorktreeCreations,
+    request
+  )
+  if (existingCreationId) {
+    store.setActivePendingWorktreeCreation(existingCreationId)
+    store.setActiveView('terminal')
+    store.setSidebarOpen(true)
+    return existingCreationId
+  }
   // Why: crypto.randomUUID is undefined in non-secure browser contexts (LAN web
   // client over plain HTTP). createBrowserUuid falls back to getRandomValues.
   const creationId = createBrowserUuid()
   revealPendingCreation(creationId, request, getInitialWorktreeCreationPhase(request))
   void executeWorktreeCreation(creationId, request)
+  return creationId
 }
 
 /** Stage a pending entry before async preflight so the UI shows immediate progress. */

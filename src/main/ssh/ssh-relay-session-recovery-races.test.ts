@@ -191,12 +191,15 @@ describe('SshRelaySession recovery race fencing', () => {
   }> {
     let generation = 0
     openConsumerSessionMock.mockImplementation(async (_mux, options) => ({
-      mode: 'negotiated',
-      clientInstanceId: options.clientInstanceId,
-      clientGeneration: ++generation,
-      ownerGeneration: generation,
-      ownerLease: `owner-lease-${generation}`,
-      outputFlowControl: { version: 1, windowSu: 256 * 1024 }
+      state: {
+        mode: 'negotiated',
+        clientInstanceId: options.clientInstanceId,
+        clientGeneration: ++generation,
+        ownerGeneration: generation,
+        ownerLease: `owner-lease-${generation}`,
+        outputFlowControl: { version: 1, windowSu: 256 * 1024 }
+      },
+      resumed: options.resume !== undefined
     }))
     vi.mocked(getSshPtyAcceptedSourceCheckpoints).mockReturnValue([
       {
