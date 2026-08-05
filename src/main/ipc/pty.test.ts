@@ -11651,7 +11651,7 @@ describe('registerPtyHandlers', () => {
     }
   })
 
-  posixOnlyIt('wraps macOS spawns in login(1) with SHELL re-asserted via env(1)', async () => {
+  posixOnlyIt('wraps macOS spawns in login(1) with SHELL restored by the trampoline', async () => {
     const originalShell = process.env.SHELL
     // Re-enable the TCC login wrapper the suite-level beforeEach disables.
     delete process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL
@@ -11675,8 +11675,14 @@ describe('registerPtyHandlers', () => {
       expect(args).toEqual([
         '-flpq',
         userInfo().username,
-        '/usr/bin/env',
-        'SHELL=/bin/zsh',
+        '/bin/bash',
+        '--noprofile',
+        '--norc',
+        '-p',
+        '-c',
+        'export SHELL="$1"; shift; exec -l -- "$@"',
+        'orca-tcc-login',
+        '/bin/zsh',
         '/bin/zsh',
         '-l'
       ])
