@@ -14,6 +14,7 @@ import type { TerminalOscColorQueryReplyColors } from '../../../../shared/termin
 import type { TuiAgent } from '../../../../shared/types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { PtyDataMeta } from './pty-dispatcher'
+import type { RemoteRuntimeSnapshotOutcome } from '../../runtime/remote-runtime-terminal-multiplexer'
 
 export type PtyBufferSnapshot = {
   data: string
@@ -178,6 +179,9 @@ export type PtyTransport = {
    *  would corrupt the next live chunk. IPC transports only. */
   resetCrossChunkParserState?: () => void
   serializeBuffer?: (opts?: { scrollbackRows?: number }) => Promise<PtyBufferSnapshot | null>
+  serializeBufferOutcome?: (opts?: {
+    scrollbackRows?: number
+  }) => Promise<RemoteRuntimeSnapshotOutcome>
   preserve?: () => void
   detach?: (options?: { preserveExitObserver?: boolean }) => void
   destroy?: () => void | Promise<void>

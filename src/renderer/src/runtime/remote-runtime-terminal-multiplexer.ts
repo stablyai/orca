@@ -10,6 +10,10 @@ import {
   encodeTerminalStreamJson,
   encodeTerminalStreamText
 } from '../../../shared/terminal-stream-protocol'
+import {
+  parseTerminalSnapshotUnavailableReason,
+  type TerminalSnapshotUnavailableReason
+} from '../../../shared/terminal-snapshot-unavailability'
 import { e2eConfig, e2eDisableRemoteTerminalStallRecovery } from '@/lib/e2e-config'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import { deliverTerminalDataWithDeferredCredit } from '@/lib/pane-manager/terminal-delivery-credit'
@@ -69,7 +73,66 @@ export type RemoteRuntimeMultiplexedTerminalCallbacks = {
   onDriverChanged?: (
     driver: { kind: 'idle' } | { kind: 'desktop' } | { kind: 'mobile'; clientId: string }
   ) => void
+  onWriteUnavailable?: () => void
   onTransportClose?: (event: { recoverable: boolean; retryWithBackoff?: boolean }) => void
+}
+
+export type RemoteRuntimeSnapshotImage = {
+  data: string
+  cols: number
+  rows: number
+  seq?: number
+  source?: 'headless' | 'renderer'
+  pendingEscapeTailAnsi?: string
+}
+
+/** Transient causes the host itself reported: a request reached it and it declined to serialize now. */
+export type RemoteRuntimeSnapshotHostRetryCause =
+  | 'host-pending-output-overflowed'
+  | 'host-no-serializable-buffer'
+
+/** Transient causes decided entirely client-side: no request frame ever reached the host, so it answered nothing. */
+export type RemoteRuntimeSnapshotLocalRetryCause =
+  | 'resync-in-flight'
+  | 'stream-detached'
+  | 'connection-not-ready'
+  | 'request-already-in-flight'
+  | 'request-frame-not-sent'
+
+/** Transient causes: the same request may succeed later, so an absent buffer proves nothing about the pane. */
+export type RemoteRuntimeSnapshotRetryCause =
+  | RemoteRuntimeSnapshotHostRetryCause
+  | RemoteRuntimeSnapshotLocalRetryCause
+
+const HOST_ANSWERED_SNAPSHOT_RETRY_CAUSES = new Set<RemoteRuntimeSnapshotRetryCause>([
+  'host-pending-output-overflowed',
+  'host-no-serializable-buffer'
+])
+
+/** Callers budget host answers separately from local gates; only the former cost the host a request. */
+export function isHostAnsweredSnapshotRetryCause(
+  cause: RemoteRuntimeSnapshotRetryCause
+): cause is RemoteRuntimeSnapshotHostRetryCause {
+  return HOST_ANSWERED_SNAPSHOT_RETRY_CAUSES.has(cause)
+}
+
+/** Final causes: the host answered and repeating this exact request cannot produce the buffer. */
+export type RemoteRuntimeSnapshotPermanentReason = 'exceeds-client-replay-limit'
+
+export type RemoteRuntimeSnapshotAvailability =
+  | { kind: 'snapshot' }
+  | { kind: 'permanently-unavailable'; reason: RemoteRuntimeSnapshotPermanentReason }
+  | { kind: 'retry-worthy'; cause: RemoteRuntimeSnapshotRetryCause }
+  // Why: a pre-`unavailable` host sent an empty reply with no reason; the caller must fall back to its own heuristic.
+  | { kind: 'unknown-legacy-host' }
+
+/**
+ * `availability` is what the reply proves; `snapshot` is the buffer image the host actually sent.
+ * They are orthogonal so legacy callers can keep reading `snapshot` alone while new callers read the reason.
+ */
+export type RemoteRuntimeSnapshotOutcome = {
+  availability: RemoteRuntimeSnapshotAvailability
+  snapshot: RemoteRuntimeSnapshotImage | null
 }
 
 export type RemoteRuntimeMultiplexedTerminal = {
@@ -85,6 +148,10 @@ export type RemoteRuntimeMultiplexedTerminal = {
     seq?: number
     source?: 'headless' | 'renderer'
   } | null>
+  // Why: same request as serializeBuffer, but keeps the host's reason for an absent buffer instead of collapsing it to null.
+  serializeBufferOutcome: (opts?: {
+    scrollbackRows?: number
+  }) => Promise<RemoteRuntimeSnapshotOutcome>
   close: () => void
 }
 
@@ -132,6 +199,7 @@ type RemoteRuntimeSnapshotInfo = {
   source?: 'headless' | 'renderer'
   requestId?: number
   truncated?: boolean
+  unavailable?: TerminalSnapshotUnavailableReason
   // Why: a mid-escape tail the emulator could not serialize; the transport
   // must write it AFTER the replay reset so the next live chunk completes it
   // instead of rendering literally (#7329).
@@ -140,16 +208,7 @@ type RemoteRuntimeSnapshotInfo = {
 
 type RemoteRuntimeSnapshotRequest = {
   requestId: number
-  resolve: (
-    snapshot: {
-      data: string
-      cols: number
-      rows: number
-      seq?: number
-      source?: 'headless' | 'renderer'
-      pendingEscapeTailAnsi?: string
-    } | null
-  ) => void
+  resolve: (outcome: RemoteRuntimeSnapshotOutcome) => void
   reject: (error: Error) => void
   timer: ReturnType<typeof setTimeout>
 }
@@ -417,6 +476,7 @@ class RemoteRuntimeTerminalMultiplexer {
       },
       setOutputPaused: (paused) => this.setOutputPaused(state, paused),
       serializeBuffer: (opts) => this.requestSnapshot(state, opts),
+      serializeBufferOutcome: (opts) => this.requestSnapshotOutcome(state, opts),
       close: () => {
         if (this.streams.get(streamId) === state) {
           discardOutputAcknowledgements(state)
@@ -447,6 +507,7 @@ class RemoteRuntimeTerminalMultiplexer {
             ackOutput: 1,
             ackOutputSourceRanges: 1,
             outputPause: 1,
+            writeUnavailable: 1,
             ...(args.client.type === 'desktop' ? { desktopViewportClaims: 1 } : {})
           }
         })
@@ -676,6 +737,10 @@ class RemoteRuntimeTerminalMultiplexer {
       return
     }
     stream.watchdog.recordInbound()
+    if (frame.opcode === TerminalStreamOpcode.WriteUnavailable) {
+      stream.callbacks.onWriteUnavailable?.()
+      return
+    }
     if (
       frame.opcode === TerminalStreamOpcode.Output ||
       frame.opcode === TerminalStreamOpcode.OutputSpan
@@ -807,12 +872,15 @@ class RemoteRuntimeTerminalMultiplexer {
       if (snapshotApplied) {
         if (matchesPendingRequest) {
           pendingRequest.resolve({
-            data: data ?? '',
-            cols: info?.cols ?? 80,
-            rows: info?.rows ?? 24,
-            seq: info?.seq,
-            source: info?.source,
-            pendingEscapeTailAnsi: info?.pendingEscapeTailAnsi
+            availability: classifySnapshotAvailability(stream.snapshotOverflowed, info),
+            snapshot: {
+              data: data ?? '',
+              cols: info?.cols ?? 80,
+              rows: info?.rows ?? 24,
+              seq: info?.seq,
+              source: info?.source,
+              pendingEscapeTailAnsi: info?.pendingEscapeTailAnsi
+            }
           })
           clearPendingSnapshotRequest(stream)
         } else if (target === 'initial') {
@@ -829,7 +897,10 @@ class RemoteRuntimeTerminalMultiplexer {
           })
         }
       } else if (matchesPendingRequest) {
-        pendingRequest.resolve(null)
+        pendingRequest.resolve({
+          availability: classifySnapshotAvailability(stream.snapshotOverflowed, info),
+          snapshot: null
+        })
         clearPendingSnapshotRequest(stream)
       }
       clearSnapshot(stream)
@@ -997,7 +1068,7 @@ class RemoteRuntimeTerminalMultiplexer {
     stream.resyncTimer = timer
   }
 
-  private requestSnapshot(
+  private async requestSnapshot(
     stream: RemoteRuntimeMultiplexedTerminalState,
     opts?: { scrollbackRows?: number }
   ): Promise<{
@@ -1007,16 +1078,34 @@ class RemoteRuntimeTerminalMultiplexer {
     seq?: number
     source?: 'headless' | 'renderer'
   } | null> {
-    if (this.streams.get(stream.streamId) !== stream || !this.ready || !this.subscription) {
-      return Promise.resolve(null)
+    const outcome = await this.requestSnapshotOutcome(stream, opts)
+    // Why: the concurrent-request guard used to reject before the outcome existed; keep that contract for legacy callers.
+    if (
+      outcome.availability.kind === 'retry-worthy' &&
+      outcome.availability.cause === 'request-already-in-flight'
+    ) {
+      throw new Error('Remote terminal snapshot already in flight.')
+    }
+    return outcome.snapshot
+  }
+
+  private requestSnapshotOutcome(
+    stream: RemoteRuntimeMultiplexedTerminalState,
+    opts?: { scrollbackRows?: number }
+  ): Promise<RemoteRuntimeSnapshotOutcome> {
+    if (this.streams.get(stream.streamId) !== stream) {
+      return Promise.resolve(retryWorthySnapshotOutcome('stream-detached'))
+    }
+    if (!this.ready || !this.subscription) {
+      return Promise.resolve(retryWorthySnapshotOutcome('connection-not-ready'))
     }
     // Recovery uses an untagged snapshot frame group; callers can retry after
     // it completes instead of racing another request onto the same frame lane.
     if (stream.resyncInFlight) {
-      return Promise.resolve(null)
+      return Promise.resolve(retryWorthySnapshotOutcome('resync-in-flight'))
     }
     if (stream.pendingSnapshotRequest) {
-      return Promise.reject(new Error('Remote terminal snapshot already in flight.'))
+      return Promise.resolve(retryWorthySnapshotOutcome('request-already-in-flight'))
     }
     const requestId = this.allocateSnapshotRequestId()
     return new Promise((resolve, reject) => {
@@ -1039,7 +1128,7 @@ class RemoteRuntimeTerminalMultiplexer {
         )
       ) {
         clearPendingSnapshotRequest(stream)
-        resolve(null)
+        resolve(retryWorthySnapshotOutcome('request-frame-not-sent'))
       }
     })
   }
@@ -1438,6 +1527,7 @@ function decodeSnapshotInfo(
     source?: unknown
     requestId?: unknown
     truncated?: unknown
+    unavailable?: unknown
     pendingEscapeTailAnsi?: unknown
   }>(payload)
   if (!raw) {
@@ -1450,9 +1540,36 @@ function decodeSnapshotInfo(
     source: raw.source === 'headless' || raw.source === 'renderer' ? raw.source : undefined,
     requestId: typeof raw.requestId === 'number' ? raw.requestId : undefined,
     truncated: raw.truncated === true,
+    unavailable: parseTerminalSnapshotUnavailableReason(raw.unavailable),
     pendingEscapeTailAnsi:
       typeof raw.pendingEscapeTailAnsi === 'string' ? raw.pendingEscapeTailAnsi : undefined
   }
+}
+
+function retryWorthySnapshotOutcome(
+  cause: RemoteRuntimeSnapshotRetryCause
+): RemoteRuntimeSnapshotOutcome {
+  return { availability: { kind: 'retry-worthy', cause }, snapshot: null }
+}
+
+function classifySnapshotAvailability(
+  clientOverflowed: boolean,
+  info: RemoteRuntimeSnapshotInfo | null
+): RemoteRuntimeSnapshotAvailability {
+  if (clientOverflowed) {
+    return { kind: 'permanently-unavailable', reason: 'exceeds-client-replay-limit' }
+  }
+  if (info?.unavailable === 'pending-output-overflowed') {
+    return { kind: 'retry-worthy', cause: 'host-pending-output-overflowed' }
+  }
+  if (info?.unavailable === 'no-serializable-buffer') {
+    return { kind: 'retry-worthy', cause: 'host-no-serializable-buffer' }
+  }
+  // Why: a truncated reply with no stated reason can only come from a host that predates `unavailable`.
+  if (info?.truncated === true) {
+    return { kind: 'unknown-legacy-host' }
+  }
+  return { kind: 'snapshot' }
 }
 
 function isTerminalDriverState(

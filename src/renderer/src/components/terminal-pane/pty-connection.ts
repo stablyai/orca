@@ -121,6 +121,7 @@ import {
   POST_REPLAY_LIVE_SNAPSHOT_RESET,
   POST_REPLAY_MODE_RESET,
   POST_REPLAY_REATTACH_RESET,
+  POST_REPLAY_REATTACH_RESET_KEEP_MOUSE,
   RESET_KITTY_KEYBOARD_PROTOCOL,
   RESET_TERMINAL_CURSOR_STYLE
 } from '../../../../shared/terminal-mode-reset-profiles'
@@ -147,6 +148,7 @@ import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspec
 // actually attached — nothing is inspectable while the session hydrates.
 import { notifyCodexPaneBoundForStaleSweep } from '@/lib/codex-stale-pane-sweep'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
+import { isHostAnsweredSnapshotRetryCause } from '@/runtime/remote-runtime-terminal-multiplexer'
 import {
   discardTerminalOutput,
   flushTerminalOutput,
@@ -165,7 +167,8 @@ import { clearTerminalScrollbackAndFollowOutput } from '@/lib/pane-manager/termi
 import {
   enforceTerminalCurrentScrollIntent,
   getTerminalScrollIntentKind,
-  markTerminalFollowOutput
+  markTerminalFollowOutput,
+  onTerminalScrollIntentFollowOutput
 } from '@/lib/pane-manager/terminal-scroll-intent'
 import {
   cancelTerminalScrollIntentBufferRebuildCompletions,
@@ -357,6 +360,23 @@ const HIDDEN_OUTPUT_RESTORE_FLOOD_SUPPRESS_MS = 2000
 // (fresh-snapshot marks, unmappable slices) only this many times before it
 // abandons and lets live bytes flow.
 const HIDDEN_OUTPUT_RESTORE_MAX_LOOP_ITERATIONS = 3
+// Why: remote-runtime PTYs have no local main fallback — the host transport is
+// the only recovery and legitimately answers null while it resyncs, trims a
+// flooded snapshot, or waits out link RTT. Those nulls are not proof of loss,
+// so an abandoned restore re-arms one quiet post-suppression repaint instead of
+// claiming the bytes are gone. Five cycles (~2.15s each) outlast both the
+// multiplexer resync window and the remote snapshot request timeout (10s);
+// past that the host really is unreachable and the loss banner is honest.
+const HIDDEN_OUTPUT_RESTORE_REMOTE_REARM_MAX = 5
+// Why: the host declined seven separate times; each one cost it a real serialize attempt, so stop asking.
+const HIDDEN_OUTPUT_RESTORE_REMOTE_OUTCOME_MAX_ATTEMPTS = 7
+// Why separate and larger: these causes are decided before any frame leaves the
+// client (resync gate, occupied request lane, detached stream), so the host
+// declined nothing and charging them to its budget would banner a healthy pane —
+// the exact elapsed-time guess this change removes. They cost zero host traffic,
+// so the only job of this cap is termination. At the ~2s post-abandon re-arm
+// cadence, 30 outlasts several full 10s resync watchdog cycles.
+const HIDDEN_OUTPUT_RESTORE_LOCAL_GATE_MAX_ATTEMPTS = 30
 const TERMINAL_RENDERER_RISK_SCAN_TAIL_CHARS = 256
 const SYNCHRONIZED_OUTPUT_START_SEQUENCE = '\x1b[?2026h'
 const SYNCHRONIZED_OUTPUT_END_SEQUENCE = '\x1b[?2026l'
@@ -3987,10 +4007,17 @@ export function connectPanePty(
     }
     const storePtyId = useAppStore.getState().ptyIdsByTabId?.[deps.tabId]?.[0] ?? null
     const undeliverablePtyId = transport.getPtyId() ?? storePtyId
+    // Why the split: for a local (daemon/app-SSH) id main's registry can answer,
+    // and a `false` there means the shell really died — the dead-session
+    // reconcile owns that teardown and a remount would race it. For a `remote:`
+    // id main owns no registry entry, so `pty:hasPty` routes to the local
+    // provider and fabricates "dead"; that answer blocked every recovery this
+    // signal exists to trigger (STA-2830). The host's own rejection replaces it.
+    const hostRejectedRemoteInput = providerRejected && isRemoteRuntimePtyId(undeliverablePtyId)
     void requestTerminalPaneRecovery({
       tabId: deps.tabId,
       ptyId: undeliverablePtyId,
-      reason: 'input-undeliverable',
+      reason: hostRejectedRemoteInput ? 'input-rejected-by-host' : 'input-undeliverable',
       terminalRecoveryGeneration,
       terminalRecoveryInstanceId: terminalRecoveryInstance.id,
       // Why: pty:hasPty answers null for ids the local registry doesn't own,
@@ -5528,7 +5555,11 @@ export function connectPanePty(
       })
     }
 
-    const reattachReplayResetSequence = (payload: string, ownerProcessEnded = false): string => {
+    const reattachReplayResetSequence = (
+      payload: string,
+      ownerProcessEnded = false,
+      isAlternateScreen?: boolean
+    ): string => {
       // Why a cold restore overrides the agent signal: liveness is read from the
       // pane's status and title, both of which are persisted, so after a cold
       // restore they describe the process that died. Preserving "its" modes arms
@@ -5537,8 +5568,13 @@ export function connectPanePty(
       if (ownerProcessEnded) {
         return POST_REPLAY_MODE_RESET
       }
-      return shouldPreserveAgentReattachModes()
-        ? buildPostReplayLiveAgentReattachReset(payload)
+      if (shouldPreserveAgentReattachModes()) {
+        return buildPostReplayLiveAgentReattachReset(payload)
+      }
+      // Why: an alt-screen pane is a live TUI Orca just does not recognise as an agent, and the
+      // replay already re-armed its mouse modes — keep them instead of wiping them (#8291).
+      return (isAlternateScreen ?? kittyKeyboardModes.isAlternateScreen)
+        ? POST_REPLAY_REATTACH_RESET_KEEP_MOUSE
         : POST_REPLAY_REATTACH_RESET
     }
 
@@ -5838,6 +5874,11 @@ export function connectPanePty(
     let hiddenOutputRestoreDeferredRetryTimer: ReturnType<typeof setTimeout> | null = null
     let hiddenOutputRestoreForegroundDeadlineTimer: ReturnType<typeof setTimeout> | null = null
     let hiddenOutputRestoreDeferredRetryAttempts = 0
+    let hiddenOutputRestoreRemoteOutcomeAttempts = 0
+    let hiddenOutputRestoreLocalGateAttempts = 0
+    let hiddenOutputRestoreLegacyPtyId: string | null = null
+    // Bounded remote re-arms spent instead of the loss banner (per PTY stream).
+    let hiddenOutputRestoreRemoteAbandonCycles = 0
     let hiddenOutputSnapshotScrollRestore: {
       ptyId: string | null
       generation: number
@@ -5860,6 +5901,7 @@ export function connectPanePty(
       pendingDeliveryStartSeq?: number
     } | null = null
     let hiddenOutputRestoreFloodRepaintTimer: ReturnType<typeof setTimeout> | null = null
+    let cancelHiddenOutputRestoreFloodRepaintPark: (() => void) | null = null
     // Why: after a snapshot restore, main can still drain ACK-backlog chunks
     // whose bytes the snapshot already covers — writing them unguarded
     // duplicates visible output. Track the restored baseline seq (per PTY)
@@ -5940,21 +5982,59 @@ export function connectPanePty(
       return transport.getPtyId() === ptyId && typeof transport.serializeBuffer === 'function'
     }
 
+    type HiddenOutputSnapshotResult =
+      | { kind: 'snapshot'; snapshot: PtyBufferSnapshot }
+      // `source` picks the budget: only 'host' answers cost the host a serialize attempt.
+      | { kind: 'retry-worthy'; source: 'host' | 'local' }
+      | { kind: 'permanently-unavailable' }
+      | { kind: 'unknown-legacy-host' }
+      | { kind: 'unavailable' }
+
     async function serializeHiddenOutputSnapshot(
       ptyId: string,
       opts: { scrollbackRows?: number }
-    ): Promise<PtyBufferSnapshot | null> {
+    ): Promise<HiddenOutputSnapshotResult> {
       const e2eSnapshot = readE2eHiddenSnapshotOverride(ptyId)
       if (e2eSnapshot) {
-        return e2eSnapshot
+        const snapshot = await e2eSnapshot
+        return snapshot ? { kind: 'snapshot', snapshot } : { kind: 'unavailable' }
       }
       if (canUseMainBufferSnapshot(ptyId)) {
-        return window.api.pty.getMainBufferSnapshot(ptyId, opts)
+        const snapshot = await window.api.pty.getMainBufferSnapshot(ptyId, opts)
+        return snapshot ? { kind: 'snapshot', snapshot } : { kind: 'unavailable' }
       }
       if (transport.getPtyId() !== ptyId || typeof transport.serializeBuffer !== 'function') {
-        return null
+        return { kind: 'unavailable' }
       }
-      return transport.serializeBuffer(opts)
+      if (
+        hiddenOutputRestoreLegacyPtyId === ptyId ||
+        typeof transport.serializeBufferOutcome !== 'function'
+      ) {
+        const snapshot = await transport.serializeBuffer(opts)
+        return snapshot ? { kind: 'snapshot', snapshot } : { kind: 'unknown-legacy-host' }
+      }
+      try {
+        const outcome = await transport.serializeBufferOutcome(opts)
+        if (outcome.availability.kind === 'snapshot') {
+          // A success frame with no image is still the host's own answer to a request it received.
+          return outcome.snapshot
+            ? { kind: 'snapshot', snapshot: outcome.snapshot }
+            : { kind: 'retry-worthy', source: 'host' }
+        }
+        if (outcome.availability.kind === 'retry-worthy') {
+          return {
+            kind: 'retry-worthy',
+            source: isHostAnsweredSnapshotRetryCause(outcome.availability.cause) ? 'host' : 'local'
+          }
+        }
+        if (outcome.availability.kind === 'permanently-unavailable') {
+          return { kind: 'permanently-unavailable' }
+        }
+        return { kind: 'unknown-legacy-host' }
+      } catch {
+        // Why 'host': the reject path is the request timeout — the frame went out and the host stayed silent.
+        return { kind: 'retry-worthy', source: 'host' }
+      }
     }
 
     // Why: hidden/parked panes used to mark hidden only at the first
@@ -5999,6 +6079,8 @@ export function connectPanePty(
     }
 
     function clearHiddenOutputRestoreFloodRepaintTimer(): void {
+      cancelHiddenOutputRestoreFloodRepaintPark?.()
+      cancelHiddenOutputRestoreFloodRepaintPark = null
       if (hiddenOutputRestoreFloodRepaintTimer === null) {
         return
       }
@@ -6006,6 +6088,24 @@ export function connectPanePty(
       hiddenOutputRestoreFloodRepaintTimer = null
     }
     cleanupHiddenOutputRestoreFloodRepaint = clearHiddenOutputRestoreFloodRepaintTimer
+
+    // Why: the repaint discards the buffer and replays a full snapshot, which repositions the viewport; a user reading scrollback must not be yanked to the bottom, so hold it until their own scroll intent returns to follow-output.
+    function repaintAfterFloodWhenFollowingOutput(ptyId: string): void {
+      cancelHiddenOutputRestoreFloodRepaintPark?.()
+      cancelHiddenOutputRestoreFloodRepaintPark = null
+      let repainted = false
+      const cancelPark = onTerminalScrollIntentFollowOutput(pane.terminal, () => {
+        repainted = true
+        cancelHiddenOutputRestoreFloodRepaintPark = null
+        if (disposed || transport.getPtyId() !== ptyId) {
+          return
+        }
+        markHiddenOutputRestoreNeeded()
+      })
+      if (!repainted) {
+        cancelHiddenOutputRestoreFloodRepaintPark = cancelPark
+      }
+    }
 
     function resetHiddenOutputRestoreFloodSuppression(): void {
       hiddenOutputRestoreFloodSuppressedUntil = 0
@@ -6026,7 +6126,7 @@ export function connectPanePty(
           return
         }
         // Why one repaint: flood-dropped bytes leave a gap the live stream can't heal; once quiet, one snapshot restore repaints from main's authoritative buffer.
-        markHiddenOutputRestoreNeeded()
+        repaintAfterFloodWhenFollowingOutput(ptyId)
       }, HIDDEN_OUTPUT_RESTORE_FLOOD_SUPPRESS_MS)
     }
 
@@ -6891,6 +6991,9 @@ export function connectPanePty(
         disposed ||
         hiddenOutputRestoreForegroundDeadlineTimer !== null ||
         !shouldWritePtyOutputForeground(deps.isVisibleRef.current) ||
+        (isRemoteRuntimePtyId(hiddenOutputRestorePtyId) &&
+          hiddenOutputRestoreLegacyPtyId !== hiddenOutputRestorePtyId &&
+          typeof transport.serializeBufferOutcome === 'function') ||
         (hiddenOutputRestorePendingChunks.length === 0 && !hiddenOutputRestorePendingOverflow)
       ) {
         return
@@ -6915,14 +7018,42 @@ export function connectPanePty(
       }, HIDDEN_OUTPUT_RESTORE_FOREGROUND_TIMEOUT_MS)
     }
 
+    // Trades the loss banner for one bounded post-suppression repaint from the
+    // host's authoritative buffer. Ordered before the state reset so the repaint
+    // timer arms against the live ptyId (mirrors the flood-abandon call sites).
+    function rearmRemoteHiddenOutputRestoreInsteadOfWarning(
+      ptyId: string,
+      reason: string
+    ): boolean {
+      if (
+        !isRemoteRuntimePtyId(ptyId) ||
+        hiddenOutputRestoreRemoteAbandonCycles >= HIDDEN_OUTPUT_RESTORE_REMOTE_REARM_MAX
+      ) {
+        return false
+      }
+      hiddenOutputRestoreRemoteAbandonCycles += 1
+      recordTerminalFreezeBreadcrumb('restore-abandon-rearm', {
+        id: redactPtyIdForDiagnostics(ptyId),
+        reason,
+        cycle: hiddenOutputRestoreRemoteAbandonCycles
+      })
+      noteHiddenOutputRestoreFloodBackpressure()
+      return true
+    }
+
     function abandonHiddenOutputRestoreAndDrainPendingForeground(
       expectedPtyId: string,
-      opts: { quiet?: boolean } = {}
+      opts: { quiet?: boolean; rearmRemote?: boolean } = {}
     ): void {
       if (transport.getPtyId() !== expectedPtyId || hiddenOutputRestorePtyId !== expectedPtyId) {
         resetHiddenOutputRestoreIfPtyChanged()
         return
       }
+      const rearmedRemoteRestore =
+        opts.rearmRemote !== false &&
+        !opts.quiet &&
+        canUseHiddenOutputSnapshot(expectedPtyId) &&
+        rearmRemoteHiddenOutputRestoreInsteadOfWarning(expectedPtyId, 'abandon-deadline')
       const pendingChunks = hiddenOutputRestorePendingOverflow
         ? []
         : hiddenOutputRestorePendingChunks.slice()
@@ -6955,7 +7086,10 @@ export function connectPanePty(
       hiddenOutputRestoreDeferredRetryAttempts = 0
 
       // Why quiet: flood cuts abandon deliberately and repaint post-flood, so the "restore unavailable" warning would be noise the repaint wipes.
-      if (!opts.quiet) {
+      if (!opts.quiet && !rearmedRemoteRestore) {
+        // Why: this abandon declares the bytes unrecoverable, so a repaint armed by earlier live
+        // backpressure must not outlive it — it would re-open recovery and banner a second time.
+        clearHiddenOutputRestoreFloodRepaintTimer()
         writeRestoreUnavailableWarning()
       }
       if (hadPendingOverflow) {
@@ -7014,6 +7148,10 @@ export function connectPanePty(
     function clearHiddenOutputRestoreState(): void {
       cancelSnapshotScrollRestore()
       clearPendingLiveChunksDuringRestore()
+      // Re-arm budget is per PTY stream, like the rest of this state.
+      hiddenOutputRestoreRemoteAbandonCycles = 0
+      hiddenOutputRestoreRemoteOutcomeAttempts = 0
+      hiddenOutputRestoreLocalGateAttempts = 0
       hiddenStartupRendererQueryPending = ''
       hiddenRendererStateDirty = false
       resetHiddenRendererRiskState()
@@ -7325,7 +7463,13 @@ export function connectPanePty(
             if (hiddenOutputRestorePtyId === currentPtyId) {
               clearHiddenOutputRestoreState()
             }
-            writeRestoreUnavailableWarning()
+            // Remote-only path: the transport swapped PTYs mid-restore, which is a
+            // stream change, not proof the hidden bytes are unrecoverable.
+            if (
+              !rearmRemoteHiddenOutputRestoreInsteadOfWarning(currentPtyId, 'restore-pty-swapped')
+            ) {
+              writeRestoreUnavailableWarning()
+            }
             return
           }
           if (transport.getPtyId() !== currentPtyId) {
@@ -7336,13 +7480,19 @@ export function connectPanePty(
           }
           const restoreGeneration = hiddenOutputRestoreGeneration
           hiddenOutputRestoreNeeded = false
-          let snapshot: PtyBufferSnapshot | null = null
+          let snapshotResult: HiddenOutputSnapshotResult
           try {
-            snapshot = await serializeHiddenOutputSnapshot(currentPtyId, {
+            snapshotResult = await serializeHiddenOutputSnapshot(currentPtyId, {
               scrollbackRows: resolveHiddenRestoreScrollbackRows(pane.terminal.options.scrollback)
             })
           } catch {
-            snapshot = null
+            snapshotResult =
+              !isRemoteRuntimePtyId(currentPtyId) ||
+              hiddenOutputRestoreLegacyPtyId === currentPtyId ||
+              typeof transport.serializeBufferOutcome !== 'function'
+                ? { kind: 'unavailable' }
+                : // Why 'host': the only reject here is the request timeout — the frame went out and the host stayed silent.
+                  { kind: 'retry-worthy', source: 'host' }
           }
           if (disposed) {
             return
@@ -7357,14 +7507,53 @@ export function connectPanePty(
             }
             return
           }
-          if (!snapshot) {
+          if (snapshotResult.kind === 'retry-worthy') {
+            let budgetExhausted: boolean
+            if (snapshotResult.source === 'host') {
+              hiddenOutputRestoreRemoteOutcomeAttempts += 1
+              budgetExhausted =
+                hiddenOutputRestoreRemoteOutcomeAttempts >=
+                HIDDEN_OUTPUT_RESTORE_REMOTE_OUTCOME_MAX_ATTEMPTS
+            } else {
+              hiddenOutputRestoreLocalGateAttempts += 1
+              budgetExhausted =
+                hiddenOutputRestoreLocalGateAttempts >=
+                HIDDEN_OUTPUT_RESTORE_LOCAL_GATE_MAX_ATTEMPTS
+            }
+            if (budgetExhausted) {
+              abandonHiddenOutputRestoreAndDrainPendingForeground(currentPtyId, {
+                rearmRemote: false
+              })
+              return
+            }
+            hiddenOutputRestoreNeeded = true
+            hiddenOutputRestoreFreshSnapshotNeeded = false
+            noteHiddenOutputRestoreFloodBackpressure()
+            abandonHiddenOutputRestoreAndDrainPendingForeground(currentPtyId, { quiet: true })
+            return
+          }
+          if (snapshotResult.kind === 'permanently-unavailable') {
+            abandonHiddenOutputRestoreAndDrainPendingForeground(currentPtyId, {
+              rearmRemote: false
+            })
+            return
+          }
+          if (snapshotResult.kind === 'unknown-legacy-host') {
+            hiddenOutputRestoreLegacyPtyId = currentPtyId
+            armHiddenOutputRestoreForegroundDeadline()
+          }
+          if (snapshotResult.kind !== 'snapshot') {
             hiddenOutputRestoreNeeded = true
             hiddenOutputRestoreFreshSnapshotNeeded = false
             hiddenOutputRestoreRetryDeferred = true
             scheduleHiddenOutputRestoreDeferredRetry()
             return
           }
+          const snapshot = snapshotResult.snapshot
           hiddenOutputRestoreDeferredRetryAttempts = 0
+          hiddenOutputRestoreRemoteAbandonCycles = 0
+          hiddenOutputRestoreRemoteOutcomeAttempts = 0
+          hiddenOutputRestoreLocalGateAttempts = 0
           restoreIterations += 1
           await applyMainBufferSnapshot(snapshot)
           if (
@@ -8015,9 +8204,10 @@ export function connectPanePty(
           prefetchedParkModelSnapshot = await fetchSshMainModelReattachSnapshot()
         } else {
           try {
-            prefetchedParkModelSnapshot = await serializeHiddenOutputSnapshot(ptyId, {
+            const result = await serializeHiddenOutputSnapshot(ptyId, {
               scrollbackRows: resolveHiddenRestoreScrollbackRows(pane.terminal.options.scrollback)
             })
+            prefetchedParkModelSnapshot = result.kind === 'snapshot' ? result.snapshot : null
           } catch {
             prefetchedParkModelSnapshot = null
           }
@@ -8056,7 +8246,11 @@ export function connectPanePty(
           writeReplayData(connectResult.snapshot)
           // Snapshot reattach keeps a live session, so drop only renderer-owned state instead of the broader mode reset — unless this is a cold restore, whose owner is gone.
           writeReplayData(
-            reattachReplayResetSequence(connectResult.snapshot, Boolean(connectResult.coldRestore))
+            reattachReplayResetSequence(
+              connectResult.snapshot,
+              Boolean(connectResult.coldRestore),
+              connectResult.isAlternateScreen
+            )
           )
           if (connectResult.pendingEscapeTailAnsi) {
             // Why last: re-arm the dangling mid-escape after the reset (whose ESC would abort it) so the live continuation completes it (#7329).
@@ -8111,7 +8305,11 @@ export function connectPanePty(
               writeReplayData(replayChunk)
             }
             writeReplayData(
-              reattachReplayResetSequence(modelData, Boolean(connectResult?.coldRestore))
+              reattachReplayResetSequence(
+                modelData,
+                Boolean(connectResult?.coldRestore),
+                modelSnapshot.alternateScreen ?? connectResult?.isAlternateScreen
+              )
             )
             if (modelSnapshot.pendingEscapeTailAnsi) {
               // Why last: re-arm the dangling mid-escape after the reset so the live continuation completes it (#7329).
@@ -8132,7 +8330,11 @@ export function connectPanePty(
             kittyKeyboardModes.scanReplay(connectResult.replay)
             writeReplayData(connectResult.replay)
             writeReplayData(
-              reattachReplayResetSequence(connectResult.replay, Boolean(connectResult.coldRestore))
+              reattachReplayResetSequence(
+                connectResult.replay,
+                Boolean(connectResult.coldRestore),
+                connectResult.isAlternateScreen
+              )
             )
             sendFocusedReattachFocusInAfterReplay(ptyId, attemptGeneration)
             if (connectResult.coldRestore) {

@@ -10,6 +10,7 @@ import type {
   RuntimeEnsureAgentSessionResult
 } from '../../../../shared/agent-session-host-authority'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { TabActivationIntent } from '../../../../shared/tab-activation-intent'
 import type {
   RuntimeMobileSessionTerminalClientTab,
   RuntimeMobileSessionTabsResult,
@@ -43,7 +44,8 @@ import {
 import {
   getRemoteRuntimeTerminalMultiplexer,
   REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE,
-  type RemoteRuntimeMultiplexedTerminal
+  type RemoteRuntimeMultiplexedTerminal,
+  type RemoteRuntimeSnapshotOutcome
 } from '../../runtime/remote-runtime-terminal-multiplexer'
 import {
   toRuntimeTerminalWorktreeSelector,
@@ -517,6 +519,7 @@ export function createRemoteRuntimePtyTransport(
   function activateHostSessionSurface(
     hostTabId: string,
     worktree: string,
+    intent: TabActivationIntent,
     timeoutMs?: number
   ): Promise<RuntimeMobileSessionTabsResult> {
     return callRuntime<RuntimeMobileSessionTabsResult>(
@@ -526,7 +529,8 @@ export function createRemoteRuntimePtyTransport(
         tabId: hostTabId,
         ...(leafId ? { leafId } : {}),
         notifyClients: false,
-        navigation: 'caller'
+        navigation: 'caller',
+        intent
       },
       timeoutMs
     )
@@ -547,7 +551,8 @@ export function createRemoteRuntimePtyTransport(
     const worktree = toRuntimeWorktreeSelector(worktreeId)
     let activated: RuntimeMobileSessionTabsResult
     try {
-      activated = await activateHostSessionSurface(hostTabId, worktree)
+      // Why: this runs when the pane itself is opened/attached — the user's wake gesture.
+      activated = await activateHostSessionSurface(hostTabId, worktree, 'user')
     } catch (error) {
       if (isMissingHostSessionSurfaceError(error)) {
         return null
@@ -713,7 +718,9 @@ export function createRemoteRuntimePtyTransport(
                     requestRemainingMs
                   )
               })
-            : await activateHostSessionSurface(hostTabId, worktree, requestRemainingMs)
+            : // Why: reconnect recovery, not a user gesture — a pane the user slept
+              // must stay slept even though it publishes the same pending status.
+              await activateHostSessionSurface(hostTabId, worktree, 'automatic', requestRemainingMs)
         lastRequestError = null
         const nextHandle = findReadyHostSessionHandle(listed, hostTabId)
         if (nextHandle) {
@@ -1244,8 +1251,15 @@ export function createRemoteRuntimePtyTransport(
     }
   }
 
+  function notifyWriteUnavailable(): void {
+    if (!destroyed) {
+      storedCallbacks.onWriteUnavailable?.()
+    }
+  }
+
   const inputBatcher = createRemoteRuntimePtyTextBatcher(REMOTE_TERMINAL_INPUT_FLUSH_MS, (text) => {
     const targetHandle = handle
+    const targetLifecycleEpoch = lifecycleEpoch
     if (!connected || !targetHandle || recoveryBlocksIo()) {
       return
     }
@@ -1258,16 +1272,32 @@ export function createRemoteRuntimePtyTransport(
       pendingClaimInput += text
       return
     }
-    void callRuntime('terminal.send', {
+    void callRuntime<{ send: RuntimeTerminalSend }>('terminal.send', {
       terminal: targetHandle,
       text,
       client: { id: clientId, type: 'desktop' },
       ...(desiredViewport ? { viewport: desiredViewport, claimViewport: true as const } : {})
-    }).catch((error) => {
-      if (handle === targetHandle) {
-        handleRemoteTerminalError(error)
-      }
     })
+      .then((result) => {
+        if (
+          connected &&
+          lifecycleEpoch === targetLifecycleEpoch &&
+          handle === targetHandle &&
+          result.send.accepted !== true
+        ) {
+          notifyWriteUnavailable()
+        }
+      })
+      .catch((error) => {
+        if (lifecycleEpoch !== targetLifecycleEpoch || handle !== targetHandle) {
+          return
+        }
+        if (runtimeTerminalErrorMessage(error).includes('terminal_not_writable')) {
+          notifyWriteUnavailable()
+        } else {
+          handleRemoteTerminalError(error)
+        }
+      })
   })
 
   function sendViewportUpdate(cols: number, rows: number, claim = false): void {
@@ -1816,6 +1846,11 @@ export function createRemoteRuntimePtyTransport(
         onDriverChanged: (driver) => {
           if (isCurrentSubscription() && subscribedPtyId) {
             setDriverForPty(subscribedPtyId, driver)
+          }
+        },
+        onWriteUnavailable: () => {
+          if (isCurrentSubscription()) {
+            notifyWriteUnavailable()
           }
         },
         onTransportClose: ({ recoverable, retryWithBackoff }) => {
@@ -2459,6 +2494,23 @@ export function createRemoteRuntimePtyTransport(
         return null
       }
       return getCurrentMultiplexedStream(handle)?.serializeBuffer(opts) ?? null
+    },
+
+    async serializeBufferOutcome(opts): Promise<RemoteRuntimeSnapshotOutcome> {
+      if (!connected || !handle) {
+        return {
+          availability: { kind: 'retry-worthy', cause: 'connection-not-ready' },
+          snapshot: null
+        }
+      }
+      const stream = getCurrentMultiplexedStream(handle)
+      if (!stream) {
+        return {
+          availability: { kind: 'retry-worthy', cause: 'stream-detached' },
+          snapshot: null
+        }
+      }
+      return stream.serializeBufferOutcome(opts)
     },
 
     destroy() {

@@ -2882,7 +2882,8 @@ export default function SessionScreen() {
             worktree: `id:${worktreeId}`,
             tabId: matchingTab.id,
             notifyClients: false,
-            navigation: 'caller'
+            navigation: 'caller',
+            intent: 'user'
           }).catch(() => {})
         }
       }
@@ -2922,7 +2923,8 @@ export default function SessionScreen() {
             worktree: `id:${worktreeId}`,
             tabId: tab.id,
             notifyClients: false,
-            navigation: 'caller'
+            navigation: 'caller',
+            intent: 'user'
           }).catch(() => {})
         }
         return
@@ -2946,7 +2948,8 @@ export default function SessionScreen() {
           worktree: `id:${worktreeId}`,
           tabId: tab.id,
           notifyClients: false,
-          navigation: 'caller'
+          navigation: 'caller',
+          intent: 'user'
         }).catch(() => {})
       }
       if (tab.type === 'browser') {
@@ -4197,7 +4200,10 @@ export default function SessionScreen() {
       tabId: activePendingTerminalTab.id,
       leafId: activePendingTerminalTab.leafId,
       notifyClients: false,
-      navigation: 'caller'
+      navigation: 'caller',
+      // Why: this only ever runs for the tab the user is looking at, so it is the
+      // tail of their tap — the gesture that materializes a parked pane.
+      intent: 'user'
     })
       .then((response) => {
         if (!response.ok) {

@@ -8,6 +8,7 @@ import {
   POST_REPLAY_LIVE_SNAPSHOT_RESET,
   POST_REPLAY_MODE_RESET,
   POST_REPLAY_REATTACH_RESET,
+  POST_REPLAY_REATTACH_RESET_KEEP_MOUSE,
   RESET_KITTY_KEYBOARD_PROTOCOL,
   RESET_TERMINAL_CURSOR_STYLE
 } from '../../../../shared/terminal-mode-reset-profiles'
@@ -9235,6 +9236,49 @@ describe('connectPanePty', () => {
     })
   })
 
+  // Why: issue #8291 — the reattach reset wiped the mouse modes the daemon snapshot had just
+  // rehydrated, so xterm re-enabled its row-wise selection over a still-running TUI.
+  const reattachSnapshotResetFor = async (snapshot: string): Promise<string | undefined> => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('tab-pty')
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) =>
+      sessionId ? { id: sessionId, snapshot } : null
+    )
+    transportFactoryQueue.push(transport)
+    setReattachPaneTitle('zsh')
+
+    const pane = createPane(1)
+    const textarea = {} as HTMLTextAreaElement
+    configureTerminalFocusMode(pane, textarea)
+    return withMockedDocumentActiveElement(textarea, async () => {
+      const manager = createManager(1)
+      const deps = createDeps({
+        restoredLeafId: LEAF_1,
+        restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+      })
+      connectPanePty(pane as never, manager as never, deps as never)
+      await flushAsyncTicks(20)
+      return (pane.terminal.write as ReturnType<typeof vi.fn>).mock.calls
+        .map((call) => String(call[0]))
+        .find(
+          (data) =>
+            data === POST_REPLAY_REATTACH_RESET || data === POST_REPLAY_REATTACH_RESET_KEEP_MOUSE
+        )
+    })
+  }
+
+  it('keeps mouse reporting when a reattach snapshot restores a live alternate-screen TUI', async () => {
+    await expect(
+      reattachSnapshotResetFor('\x1b[?1049h\x1b[?1002h\x1b[?1006hthird-party tui session')
+    ).resolves.toBe(POST_REPLAY_REATTACH_RESET_KEEP_MOUSE)
+  })
+
+  it('still disarms mouse reporting when a reattach snapshot ends on the normal buffer', async () => {
+    await expect(reattachSnapshotResetFor('\x1b[?1003h\x1b[?1006hdead tui residue')).resolves.toBe(
+      POST_REPLAY_REATTACH_RESET
+    )
+  })
+
   it('does not treat persisted tab launchAgent metadata as a live agent reattach', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('tab-pty')
@@ -12033,7 +12077,7 @@ describe('connectPanePty', () => {
       it('abandons the restore on queue overflow, writes the stream through, and repaints once', async () => {
         const { pane, dataCallback, getMainBufferSnapshot, resolveFirstSnapshot } =
           await startInFlightRestore()
-        const { markTerminalPinnedViewport } =
+        const { markTerminalFollowOutput, markTerminalPinnedViewport } =
           await import('@/lib/pane-manager/terminal-scroll-intent')
         const parseCallbacks: (() => void)[] = []
         pane.terminal.write.mockImplementation((_data: string, callback?: () => void) => {
@@ -12072,11 +12116,50 @@ describe('connectPanePty', () => {
           expect(getMainBufferSnapshot).toHaveBeenCalledTimes(1)
           expect(writtenFloodData(pane)).toContain('AFTER-FLOOD')
 
+          // The repaint only runs while the viewport follows output; return there first.
+          markTerminalFollowOutput(pane.terminal)
+
           // After the flood goes quiet: exactly ONE deferred repaint.
           vi.advanceTimersByTime(2_100)
           await flushAsyncTicks(20)
           expect(getMainBufferSnapshot).toHaveBeenCalledTimes(2)
           vi.advanceTimersByTime(5_000)
+          await flushAsyncTicks(20)
+          expect(getMainBufferSnapshot).toHaveBeenCalledTimes(2)
+        } finally {
+          vi.useRealTimers()
+        }
+      })
+
+      it('holds the post-flood repaint while the user reads scrollback and runs it on return to the bottom', async () => {
+        const { pane, dataCallback, getMainBufferSnapshot, resolveFirstSnapshot } =
+          await startInFlightRestore()
+        const { markTerminalFollowOutput, markTerminalPinnedViewport } =
+          await import('@/lib/pane-manager/terminal-scroll-intent')
+        pane.terminal.buffer.active.viewportY = 42
+        pane.terminal.buffer.active.baseY = 100
+        markTerminalPinnedViewport(pane.terminal)
+
+        dataCallback('f'.repeat(300 * 1024), { seq: 300 * 1024 + 64, rawLength: 300 * 1024 })
+        dataCallback('g'.repeat(300 * 1024), { seq: 600 * 1024 + 64, rawLength: 300 * 1024 })
+
+        try {
+          vi.useFakeTimers()
+          resolveFirstSnapshot({ data: 'flood snapshot\r\n', cols: 100, rows: 30, seq: 64 })
+          await flushAsyncTicks(20)
+          expect(getMainBufferSnapshot).toHaveBeenCalledTimes(1)
+
+          // Quiet flood, but the user is still scrolled back: the clear-and-replay repaint must not move their viewport.
+          vi.advanceTimersByTime(2_100)
+          await flushAsyncTicks(20)
+          expect(getMainBufferSnapshot).toHaveBeenCalledTimes(1)
+          vi.advanceTimersByTime(60_000)
+          await flushAsyncTicks(20)
+          expect(getMainBufferSnapshot).toHaveBeenCalledTimes(1)
+
+          // Returning to the bottom is the event that releases it — the heal is deferred, never dropped.
+          pane.terminal.buffer.active.viewportY = pane.terminal.buffer.active.baseY
+          markTerminalFollowOutput(pane.terminal)
           await flushAsyncTicks(20)
           expect(getMainBufferSnapshot).toHaveBeenCalledTimes(2)
         } finally {

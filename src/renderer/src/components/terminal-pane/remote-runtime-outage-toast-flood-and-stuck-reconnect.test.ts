@@ -362,6 +362,7 @@ describe('remote runtime outage: toast flood and stuck reconnect (issue3)', () =
       let hostActivated = false
       let activateCallsAfterOutage = 0
       let listCallsAfterOutage = 0
+      const activateIntentsAfterOutage: unknown[] = []
       const hostSnapshot = () => ({
         ok: true,
         result: {
@@ -386,18 +387,21 @@ describe('remote runtime outage: toast flood and stuck reconnect (issue3)', () =
           ]
         }
       })
-      runtimeCall.mockImplementation(async (request: { method: string }) => {
-        if (request.method === 'session.tabs.list') {
-          listCallsAfterOutage += 1
-          return hostSnapshot()
+      runtimeCall.mockImplementation(
+        async (request: { method: string; params?: { intent?: unknown } }) => {
+          if (request.method === 'session.tabs.list') {
+            listCallsAfterOutage += 1
+            return hostSnapshot()
+          }
+          if (request.method === 'session.tabs.activate') {
+            activateCallsAfterOutage += 1
+            activateIntentsAfterOutage.push(request.params?.intent)
+            hostActivated = true
+            return hostSnapshot()
+          }
+          return { ok: true, result: {} }
         }
-        if (request.method === 'session.tabs.activate') {
-          activateCallsAfterOutage += 1
-          hostActivated = true
-          return hostSnapshot()
-        }
-        return { ok: true, result: {} }
-      })
+      )
 
       // Stream lost → reconnect. The resubscribe path looks for a status:'ready'
       // handle and finds only the pending surface.
@@ -426,6 +430,9 @@ describe('remote runtime outage: toast flood and stuck reconnect (issue3)', () =
         activateCallsAfterOutage,
         `reconnect ran ${listCallsAfterOutage} list-only inventory polls across online trigger + Reconnect click without ever activating the pending surface`
       ).toBeGreaterThan(0)
+      // Why: reconnect is machinery, not a user gesture, so the host must be able
+      // to tell it apart and leave a deliberately slept pane slept (STA-3465).
+      expect(activateIntentsAfterOutage.every((intent) => intent === 'automatic')).toBe(true)
       await vi.waitFor(() => expect(subscribedTerminalHandles()).toContain('terminal-2'))
       emitSnapshot(latestSubscribePayload().streamId, 'rematerialized')
       expect(transport.isConnected()).toBe(true)

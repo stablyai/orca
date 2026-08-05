@@ -244,7 +244,16 @@ async function main(): Promise<void> {
           onAuthenticatedClientPair: () => deathWatch.notifyClientActivity()
         }
       : {}),
-    spawnSubprocess: (opts) => createPtySubprocess(opts),
+    spawnSubprocess: (opts) =>
+      createPtySubprocess({
+        ...opts,
+        ...(process.platform === 'darwin'
+          ? {
+              onMacosTccSpawnStrategy: (strategy) =>
+                daemonLog.log('macos-tcc-pty-spawn', { strategy })
+            }
+          : {})
+      }),
     onIdleShutdown: () => {
       deathWatch?.stop()
       shuttingDown = true

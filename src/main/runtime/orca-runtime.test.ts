@@ -79,6 +79,7 @@ import {
 } from '../../shared/runtime-types'
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
+import type { SleepingAgentSessionRecord } from '../../shared/agent-session-resume'
 import {
   TERMINAL_INPUT_CHUNK_MAX_BYTES,
   TERMINAL_INPUT_MAX_BYTES,
@@ -1413,9 +1414,14 @@ function makeHeadlessTerminalLayout(
   }
 }
 
-function makeRuntimeStoreWithWorkspaceSession(initialSession: WorkspaceSessionState): {
+function makeRuntimeStoreWithWorkspaceSession(
+  initialSession: WorkspaceSessionState,
+  // Why: sessions are partitioned by execution host, so the stub must answer for
+  // one partition only — a loose stub lets a hardcoded host id pass unnoticed.
+  ownerHostId = 'local'
+): {
   runtimeStore: typeof store & {
-    getWorkspaceSession: () => WorkspaceSessionState
+    getWorkspaceSession: (hostId?: string) => WorkspaceSessionState
     setWorkspaceSession: ReturnType<typeof vi.fn>
     persistPtyBinding: ReturnType<typeof vi.fn>
   }
@@ -1428,7 +1434,8 @@ function makeRuntimeStoreWithWorkspaceSession(initialSession: WorkspaceSessionSt
   }
   const runtimeStore = {
     ...store,
-    getWorkspaceSession: () => session,
+    getWorkspaceSession: (hostId?: string) =>
+      hostId === undefined || hostId === ownerHostId ? session : getDefaultWorkspaceSession(),
     setWorkspaceSession: vi.fn(setSession),
     persistPtyBinding: vi.fn(
       (args: { worktreeId: string; tabId: string; leafId: string; ptyId: string }) => {
@@ -29145,6 +29152,293 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  describe('deliberately parked pane activation (STA-3465)', () => {
+    function makeParkedSessionStore(
+      origin: SleepingAgentSessionRecord['origin'] | undefined,
+      overrides: Partial<SleepingAgentSessionRecord> = {},
+      ownerHostId = 'local'
+    ) {
+      return makeRuntimeStoreWithWorkspaceSession(
+        makeWorkspaceSessionWithHeadlessTerminal({
+          sleepingAgentSessionsByPaneKey: {
+            [`host-tab:${HEADLESS_LEAF_ID}`]: {
+              paneKey: `host-tab:${HEADLESS_LEAF_ID}`,
+              tabId: 'host-tab',
+              worktreeId: TEST_WORKTREE_ID,
+              agent: 'claude',
+              providerSession: { key: 'session_id', id: 'provider-session-1' },
+              prompt: 'do the thing',
+              state: 'done',
+              capturedAt: 1,
+              updatedAt: 1,
+              ...(origin ? { origin } : {}),
+              ...overrides
+            } as SleepingAgentSessionRecord
+          }
+        }),
+        ownerHostId
+      )
+    }
+
+    function makeParkedRuntime(runtimeStore: unknown): {
+      runtime: OrcaRuntimeService
+      spawn: ReturnType<typeof vi.fn>
+    } {
+      const spawn = vi.fn().mockResolvedValue({ id: 'persisted-pty' })
+      const runtime = new OrcaRuntimeService(runtimeStore as never)
+      runtime.setPtyController({
+        spawn,
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        listProcesses: async () => []
+      })
+      runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+      return { runtime, spawn }
+    }
+
+    function setParkedRuntimeNotifier(
+      runtime: OrcaRuntimeService,
+      resumeSleepingAgents: (worktreeId: string) => void
+    ): void {
+      runtime.setNotifier({
+        worktreesChanged: vi.fn(),
+        reposChanged: vi.fn(),
+        activateWorktree: vi.fn(),
+        createTerminal: vi.fn(),
+        revealTerminalSession: vi.fn(),
+        splitTerminal: vi.fn(),
+        renameTerminal: vi.fn(),
+        focusTerminal: vi.fn(),
+        closeTerminal: vi.fn(),
+        sleepWorktree: vi.fn(),
+        resumeSleepingAgents,
+        terminalFitOverrideChanged: vi.fn(),
+        terminalDriverChanged: vi.fn()
+      })
+      runtime.attachWindow(TEST_WINDOW_ID)
+      runtime.markGraphReady(TEST_WINDOW_ID)
+    }
+
+    const userActivate = (
+      runtime: OrcaRuntimeService,
+      leafId?: string
+    ): Promise<RuntimeMobileSessionTabsResult> =>
+      runtime.activateMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab', leafId, {
+        notifyClients: false,
+        navigation: 'caller',
+        intent: 'user'
+      })
+
+    const automaticActivate = (
+      runtime: OrcaRuntimeService,
+      leafId?: string
+    ): Promise<RuntimeMobileSessionTabsResult> =>
+      runtime.activateMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab', leafId, {
+        notifyClients: false,
+        navigation: 'caller',
+        intent: 'automatic'
+      })
+
+    it('refuses an automatic reconnect probe for a deliberately slept pane', async () => {
+      const { runtimeStore } = makeParkedSessionStore('worktree-sleep')
+      const { runtime, spawn } = makeParkedRuntime(runtimeStore)
+
+      const activated = await automaticActivate(runtime)
+
+      expect(spawn).not.toHaveBeenCalled()
+      expect(activated.tabs[0]).toMatchObject({
+        type: 'terminal',
+        parentTabId: 'host-tab',
+        leafId: HEADLESS_LEAF_ID,
+        status: 'pending-handle',
+        terminal: null
+      })
+      // Negative safety: refusing to wake must not retire the surface either.
+      expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs[0]).toMatchObject(
+        { parentTabId: 'host-tab', status: 'pending-handle' }
+      )
+    })
+
+    it('refuses an automatic probe that carries the leafId the probe sends', async () => {
+      const { runtimeStore } = makeParkedSessionStore('worktree-sleep')
+      const { runtime, spawn } = makeParkedRuntime(runtimeStore)
+
+      const activated = await automaticActivate(runtime, HEADLESS_LEAF_ID)
+
+      expect(spawn).not.toHaveBeenCalled()
+      expect(activated.tabs[0]).toMatchObject({ status: 'pending-handle', terminal: null })
+    })
+
+    // Why: opening the tab is the documented wake gesture for a slept pane
+    // (#11598). These four cover every topology, because three of them never
+    // clear the record — the pane's own activation is the only thing that wakes it.
+    it('materializes a slept pane for a user tap under headless serve, which never wakes', async () => {
+      const { runtimeStore, getSession } = makeParkedSessionStore('worktree-sleep')
+      const resumeSleepingAgents = vi.fn()
+      const { runtime, spawn } = makeParkedRuntime(runtimeStore)
+      setParkedRuntimeNotifier(runtime, resumeSleepingAgents)
+      electronMocks.BrowserWindow.fromId.mockReturnValue(null as never)
+
+      const worktreeActivation = await runtime.activateManagedWorktree(`id:${TEST_WORKTREE_ID}`, {
+        notifyClients: false,
+        clientKind: 'mobile'
+      })
+
+      expect(worktreeActivation.sleepingAgentWake).toBe('unsupported-headless')
+      expect(resumeSleepingAgents).not.toHaveBeenCalled()
+      expect(
+        getSession().sleepingAgentSessionsByPaneKey?.[`host-tab:${HEADLESS_LEAF_ID}`]?.origin
+      ).toBe('worktree-sleep')
+
+      const activated = await userActivate(runtime, HEADLESS_LEAF_ID)
+
+      expect(spawn).toHaveBeenCalledOnce()
+      expect(activated.tabs[0]).toMatchObject({ status: 'ready' })
+    })
+
+    it('materializes a slept pane for a paired desktop client tab click, which asks for no wake', async () => {
+      const { runtimeStore, getSession } = makeParkedSessionStore('worktree-sleep')
+      const resumeSleepingAgents = vi.fn()
+      const { runtime, spawn } = makeParkedRuntime(runtimeStore)
+      setParkedRuntimeNotifier(runtime, resumeSleepingAgents)
+      electronMocks.BrowserWindow.fromId.mockReturnValue({ isDestroyed: () => false } as never)
+
+      await runtime.activateManagedWorktree(`id:${TEST_WORKTREE_ID}`, {
+        notifyClients: false,
+        clientKind: 'runtime'
+      })
+
+      expect(resumeSleepingAgents).not.toHaveBeenCalled()
+      expect(
+        getSession().sleepingAgentSessionsByPaneKey?.[`host-tab:${HEADLESS_LEAF_ID}`]
+      ).toBeDefined()
+
+      const activated = await userActivate(runtime)
+
+      expect(spawn).toHaveBeenCalledOnce()
+      expect(activated.tabs[0]).toMatchObject({ status: 'ready' })
+    })
+
+    // Why: manual sleep of a finished agent stamps restoreOnTabOpenOnly, which the
+    // background wake skips and resume classifies pane-owned, so the record survives.
+    it('materializes a slept pane whose completed-agent record is restore-on-tab-open-only', async () => {
+      const { runtimeStore } = makeParkedSessionStore('worktree-sleep', {
+        state: 'done',
+        restoreOnTabOpenOnly: true
+      })
+      const { runtime, spawn } = makeParkedRuntime(runtimeStore)
+
+      const activated = await userActivate(runtime)
+
+      expect(spawn).toHaveBeenCalledOnce()
+      expect(activated.tabs[0]).toMatchObject({ status: 'ready' })
+    })
+
+    // Why: manual sleep of a running agent is the one topology whose wake relaunches
+    // and clears the record, so the pane must materialize with the record gone too.
+    it('materializes a slept running-agent pane after its wake cleared the record', async () => {
+      const { runtimeStore, getSession, setSession } = makeParkedSessionStore('worktree-sleep', {
+        state: 'working'
+      })
+      const { runtime, spawn } = makeParkedRuntime(runtimeStore)
+      const woken = structuredClone(getSession())
+      delete woken.sleepingAgentSessionsByPaneKey?.[`host-tab:${HEADLESS_LEAF_ID}`]
+      setSession(woken)
+
+      const activated = await userActivate(runtime)
+
+      expect(spawn).toHaveBeenCalledOnce()
+      expect(activated.tabs[0]).toMatchObject({ status: 'ready' })
+    })
+
+    // Why: the field is additive, so a client that predates it sends nothing and
+    // must keep its wake gesture rather than silently losing it.
+    it('treats an absent intent as a user activation', async () => {
+      const { runtimeStore } = makeParkedSessionStore('worktree-sleep')
+      const { runtime, spawn } = makeParkedRuntime(runtimeStore)
+
+      const activated = await runtime.activateMobileSessionTab(
+        `id:${TEST_WORKTREE_ID}`,
+        'host-tab',
+        undefined,
+        { notifyClients: false, navigation: 'caller' }
+      )
+
+      expect(spawn).toHaveBeenCalledOnce()
+      expect(activated.tabs[0]).toMatchObject({ status: 'ready' })
+    })
+
+    // Why: #11542's reconnect fix depends on an automatic activate materializing a
+    // genuinely awaiting pane. These four prove the park guard did not break it.
+    it('still materializes a pane awaiting reconnect with no sleeping record', async () => {
+      const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
+        makeWorkspaceSessionWithHeadlessTerminal()
+      )
+      const { runtime, spawn } = makeParkedRuntime(runtimeStore)
+
+      const activated = await automaticActivate(runtime)
+
+      expect(spawn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tabId: 'host-tab',
+          leafId: HEADLESS_LEAF_ID,
+          sessionId: 'persisted-pty'
+        })
+      )
+      expect(activated.tabs[0]).toMatchObject({ status: 'ready' })
+    })
+
+    it('still materializes a pane whose record was captured while it was live', async () => {
+      const { runtimeStore } = makeParkedSessionStore('live')
+      const { runtime, spawn } = makeParkedRuntime(runtimeStore)
+
+      const activated = await automaticActivate(runtime)
+
+      expect(spawn).toHaveBeenCalledOnce()
+      expect(activated.tabs[0]).toMatchObject({ status: 'ready' })
+    })
+
+    it('still materializes a pane whose record was captured at app quit', async () => {
+      const { runtimeStore } = makeParkedSessionStore('quit')
+      const { runtime, spawn } = makeParkedRuntime(runtimeStore)
+
+      const activated = await automaticActivate(runtime)
+
+      expect(spawn).toHaveBeenCalledOnce()
+      expect(activated.tabs[0]).toMatchObject({ status: 'ready' })
+    })
+
+    it('ignores a park record that belongs to a different worktree', async () => {
+      const { runtimeStore } = makeParkedSessionStore('worktree-sleep', {
+        worktreeId: 'other-repo::/other'
+      })
+      const { runtime, spawn } = makeParkedRuntime(runtimeStore)
+
+      const activated = await automaticActivate(runtime)
+
+      expect(spawn).toHaveBeenCalledOnce()
+      expect(activated.tabs[0]).toMatchObject({ status: 'ready' })
+    })
+
+    // Why: sleeping records live in the owning execution host's session partition,
+    // so reading a fixed partition would miss the record on an SSH-host worktree.
+    it('reads the park record from the worktree own execution-host partition', async () => {
+      const sshRepo = { ...store.getRepos()[0]!, executionHostId: 'ssh:ssh-1' as const }
+      const { runtimeStore } = makeParkedSessionStore('worktree-sleep', {}, 'ssh:ssh-1')
+      const { runtime, spawn } = makeParkedRuntime({
+        ...runtimeStore,
+        getRepos: () => [sshRepo],
+        getRepo: (id: string) => (id === TEST_REPO_ID ? sshRepo : undefined)
+      })
+
+      const activated = await automaticActivate(runtime)
+
+      expect(spawn).not.toHaveBeenCalled()
+      expect(activated.tabs[0]).toMatchObject({ status: 'pending-handle', terminal: null })
+    })
+  })
+
   it('reattaches hydrated SSH headless terminals with the persisted relay identity', async () => {
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({
@@ -29167,7 +29461,8 @@ describe('OrcaRuntimeService', () => {
             [HEADLESS_LEAF_ID]: 'ssh:ssh-1@@relay-pty'
           })
         }
-      })
+      }),
+      'ssh:ssh-1'
     )
     const remoteRepo = { ...store.getRepo(TEST_REPO_ID)!, connectionId: 'ssh-1' }
     const remoteStore = {
@@ -29220,7 +29515,8 @@ describe('OrcaRuntimeService', () => {
         terminalLayoutsByTabId: {
           'host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: stalePtyId })
         }
-      })
+      }),
+      'ssh:ssh-1'
     )
     const remoteRepo = { ...store.getRepo(TEST_REPO_ID)!, connectionId: 'ssh-1' }
     const remoteStore = {
@@ -29446,7 +29742,8 @@ describe('OrcaRuntimeService', () => {
         terminalLayoutsByTabId: {
           'host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: undefined })
         }
-      })
+      }),
+      'ssh:ssh-1'
     )
     const remoteRepo = { ...store.getRepo(TEST_REPO_ID)!, connectionId: 'ssh-1' }
     const remoteStore = {

@@ -46,6 +46,7 @@ import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry
 } from '../../../shared/agent-status-types'
+import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { deriveGeneratedTabTitle } from '../../../shared/agent-tab-title'
@@ -458,12 +459,21 @@ describe('remote-paired pane: host snapshot mirror vs client byte-derived status
       expect(store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]).toBeUndefined()
     })
 
-    it('lets the stale boundary release a client "working" the agent never closed', () => {
+    // Contract change (STA-3107): the stale boundary DECAYS a client-owned
+    // pane, it does not delete it. This test previously asserted deletion,
+    // whose premise — that going stale hands the pane back to the host — does
+    // not hold when the host publishes no status for the pane: there is no host
+    // value to hand back to, so deletion erased the pane from the sidebar
+    // instead. A paired client asleep past the boundary lost a row for every
+    // pane it owned on the first snapshot after wake. Teardown (the test above)
+    // is the real handback signal; staleness is a display state that every
+    // consumer already renders as idle, exactly like a local pane.
+    it('decays rather than deletes a client "working" the agent never closed', () => {
       const store = seedPairedClientStore()
       replayClientOscWorking(store, T0)
       expect(store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]?.state).toBe('working')
 
-      // The agent died OSC-silent: no further client write, no host status.
+      // The agent went OSC-silent: no further client write, no host status.
       const afterStale = T0 + AGENT_STATUS_STALE_AFTER_MS + 1
       applyHostSnapshot(
         store,
@@ -471,7 +481,12 @@ describe('remote-paired pane: host snapshot mirror vs client byte-derived status
         afterStale
       )
 
-      expect(store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]).toBeUndefined()
+      const entry = store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]
+      expect(entry).toBeDefined()
+      expect(
+        isExplicitAgentStatusFresh(entry!, afterStale, AGENT_STATUS_STALE_AFTER_MS),
+        'the retained entry must read as stale so consumers render it idle'
+      ).toBe(false)
     })
 
     it('lets a host permission block pierce the fence (hook-HTTP-only on the host)', () => {

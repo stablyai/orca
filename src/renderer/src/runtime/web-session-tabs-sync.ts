@@ -715,18 +715,23 @@ function hostAgentStatusPiercesClientAuthority(entry: AgentStatusEntry): boolean
 }
 
 /** True while this renderer's own byte-derived status owns the pane: it claimed
- *  the pane at transport creation, wrote status from bytes, and that write has
- *  not gone stale (an OSC-silent dead agent hands the pane back to the host). */
+ *  the pane at transport creation and wrote status from bytes. The claim is
+ *  released on pane teardown, which is how the host takes the pane back. */
+function isClientOwnedAgentStatus(
+  paneKey: string,
+  existing: AgentStatusEntry | undefined
+): existing is AgentStatusEntry {
+  return existing !== undefined && isClientAuthoritativeAgentStatusPane(paneKey)
+}
+
+/** Owned AND still fresh — the arbitration rule for a pane the host also has an
+ *  opinion about: an OSC-silent dead agent hands that contest back to the host. */
 function isFencedClientAgentStatus(
   paneKey: string,
   existing: AgentStatusEntry | undefined,
   now: number
 ): existing is AgentStatusEntry {
-  return (
-    existing !== undefined &&
-    isClientAuthoritativeAgentStatusPane(paneKey) &&
-    isAgentStatusFresh(existing, now)
-  )
+  return isClientOwnedAgentStatus(paneKey, existing) && isAgentStatusFresh(existing, now)
 }
 
 /** Generates a state patch for mirrored agent statuses, merging host entries with client overrides. */
@@ -816,7 +821,11 @@ function buildMirroredAgentStatusPatch(
     // Why: the host surface carrying no status is not proof the agent stopped —
     // hook-only hosts publish nothing for OSC-driven panes. Keep a live entry
     // this renderer owns; it decays through the normal freshness boundary.
-    if (isFencedClientAgentStatus(paneKey, state.agentStatusByPaneKey[paneKey], now)) {
+    // Ownership, not freshness, is the gate here: with no competing host value
+    // there is nothing to arbitrate, and a client asleep past the stale
+    // boundary would otherwise erase every pane it owns on the first snapshot
+    // after wake (STA-3107) instead of decaying it like a local pane.
+    if (isClientOwnedAgentStatus(paneKey, state.agentStatusByPaneKey[paneKey])) {
       continue
     }
     if (nextAgentStatusByPaneKey === state.agentStatusByPaneKey) {

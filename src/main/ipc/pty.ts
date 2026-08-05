@@ -7159,6 +7159,13 @@ export function registerPtyHandlers(
   )
 
   ipcMain.handle('pty:hasPty', async (_event, args: { id: string }): Promise<boolean | null> => {
+    if (typeof args?.id !== 'string' || args.id.startsWith('remote:')) {
+      // Why: same routing hazard pty:kill guards against — ptyOwnership never holds
+      // a runtime terminal handle and parseAppSshPtyId ignores it, so the lookup
+      // falls through to the local provider and its "not in my table" reads as an
+      // authoritative dead. That is a fabricated answer about another host's PTY.
+      return null
+    }
     const ownedConnectionId = ptyOwnership.get(args.id)
     const parsedSshId = ownedConnectionId === undefined ? parseAppSshPtyId(args.id) : null
     const provider = parsedSshId

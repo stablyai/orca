@@ -907,9 +907,12 @@ async function callWebRuntimeSessionTabMethod(
         tabId: hostTabId,
         ...(method === 'session.tabs.activate'
           ? {
-              // Why: the additive intent protects new hosts while notifyClients:false protects old hosts.
+              // Why: the additive navigation target protects new hosts while notifyClients:false protects old hosts.
               notifyClients: false,
-              navigation: 'caller' as const
+              navigation: 'caller' as const,
+              // Why: every caller here is a tab click, shortcut, or palette pick —
+              // the gesture that is supposed to wake a slept pane.
+              intent: 'user' as const
             }
           : {}),
         ...(isLifecycleClose

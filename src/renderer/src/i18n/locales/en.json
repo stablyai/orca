@@ -109,6 +109,33 @@
       "mr": "MR",
       "port": "Port",
       "pr": "PR"
+    },
+    "renderCapOverflow": "{{value0}} more - keep typing or add a filter to narrow",
+    "filter": {
+      "emptyTitle": "No results match the active filter",
+      "emptySubtitle": "Clear the filter above, or widen it to more hosts and projects.",
+      "tabKey": "Tab",
+      "label": "Filter",
+      "activeCount": "{{value0}} active",
+      "removeChip": "Remove filter {{value0}}",
+      "chipOverflow": "+{{value0}}",
+      "clearAll": "Clear all",
+      "hosts": "Hosts",
+      "projects": "Projects",
+      "trigger": "Filter results",
+      "search": "Filter by host or project...",
+      "searchHosts": "Filter hosts...",
+      "searchProjects": "Filter projects...",
+      "noOptions": "No matching hosts or projects",
+      "noHosts": "No matching hosts",
+      "noProjects": "No matching projects",
+      "moreOptions": "{{value0}} more - keep typing to narrow",
+      "selectAllMatching": "Select all matching ({{value0}})",
+      "selectedCollapsed": "{{value0}} selected — remove via chips or Clear",
+      "clearHosts": "Clear hosts",
+      "clearProjects": "Clear projects",
+      "back": "Back",
+      "ariaActive": "Filter: {{value0}} active."
     }
   },
   "auto": {

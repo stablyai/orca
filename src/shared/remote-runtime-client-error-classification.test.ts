@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   isRecoverableRemoteRuntimeConnectionError,
+  isRuntimeRpcQueueOverloadError,
   toRemoteRuntimeClientErrorLike
 } from './remote-runtime-client-error-classification'
 
@@ -25,6 +26,24 @@ describe('remote runtime client error classification', () => {
       isRecoverableRemoteRuntimeConnectionError({
         code: 'invalid_runtime_response',
         message: 'bad frame'
+      })
+    ).toBe(false)
+  })
+
+  it('trusts a structured recovery code before legacy message fragments', () => {
+    expect(
+      isRecoverableRemoteRuntimeConnectionError({
+        code: 'unauthorized',
+        message: 'Remote Orca runtime closed the connection.'
+      })
+    ).toBe(false)
+  })
+
+  it('trusts a structured queue code before legacy message fragments', () => {
+    expect(
+      isRuntimeRpcQueueOverloadError({
+        code: 'remote_runtime_unavailable',
+        message: 'Remote runtime call queue is full; retry after current calls finish.'
       })
     ).toBe(false)
   })

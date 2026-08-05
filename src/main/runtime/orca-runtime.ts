@@ -245,6 +245,10 @@ import {
   navigationTargetsHost,
   type RuntimeNavigationTarget
 } from '../../shared/runtime-navigation'
+import {
+  isAutomaticTabActivation,
+  type TabActivationIntent
+} from '../../shared/tab-activation-intent'
 import type { SshConnectionState } from '../../shared/ssh-types'
 import { getPublicSshState } from './public-ssh-state'
 import { closeTerminalTabInWorkspaceSession } from '../../shared/workspace-session-terminal-tab-close'
@@ -6671,6 +6675,69 @@ export class OrcaRuntimeService {
     return next
   }
 
+  /**
+   * Retires each surface in the session partition of the host that owns its worktree.
+   * Why: an SSH pane's durable surface lives in that connection's partition; retiring it
+   * against the local partition strands the real ghost and bumps a foreign host's epoch.
+   * Returns null when nothing may be published because persistence is unavailable or failed.
+   */
+  private persistTerminalSurfaceRetirements(
+    retiredSurfaces: readonly RetiredTerminalSurface[]
+  ): { accepted: RetiredTerminalSurface[]; unpersisted: RetiredTerminalSurface[] } | null {
+    const surfacesByHostId = new Map<ExecutionHostId, RetiredTerminalSurface[]>()
+    for (const surface of retiredSurfaces) {
+      const hostId =
+        this.tryGetWorkspaceSessionHostIdForWorktree(surface.worktreeId) ?? LOCAL_EXECUTION_HOST_ID
+      const bucket = surfacesByHostId.get(hostId)
+      if (bucket) {
+        bucket.push(surface)
+      } else {
+        surfacesByHostId.set(hostId, [surface])
+      }
+    }
+    const accepted: RetiredTerminalSurface[] = []
+    const unpersisted: RetiredTerminalSurface[] = []
+    const pendingWrites: { hostId: ExecutionHostId; session: WorkspaceSessionState }[] = []
+    for (const [hostId, surfaces] of surfacesByHostId) {
+      const session = this.store?.getWorkspaceSession?.(hostId)
+      if (!session) {
+        unpersisted.push(...surfaces)
+        continue
+      }
+      // Why: publishing absence before its host membership fence is durable lets a crash or
+      // stale renderer write resurrect the retired surface.
+      if (!this.store?.setWorkspaceSession || !this.store.flushOrThrow) {
+        return null
+      }
+      let nextSession = session
+      const acceptedForHost: RetiredTerminalSurface[] = []
+      for (const surface of surfaces) {
+        const candidate = retireTerminalSurfaceFromPersistence(nextSession, surface)
+        if (candidate !== nextSession) {
+          acceptedForHost.push(surface)
+          nextSession = candidate
+        }
+      }
+      if (acceptedForHost.length === 0) {
+        continue
+      }
+      accepted.push(...acceptedForHost)
+      pendingWrites.push({ hostId, session: nextSession })
+    }
+    if (pendingWrites.length > 0) {
+      try {
+        for (const write of pendingWrites) {
+          this.store?.setWorkspaceSession?.(write.session, write.hostId)
+        }
+        this.store?.flushOrThrow?.()
+      } catch (error) {
+        console.error('[runtime] failed to persist terminal retirement:', error)
+        return null
+      }
+    }
+    return { accepted, unpersisted }
+  }
+
   private retireMobileSessionSurfacesForPty(
     ptyId: string,
     incarnationId: string,
@@ -6704,43 +6771,21 @@ export class OrcaRuntimeService {
     if (retiredSurfaces.length === 0) {
       return
     }
-    let publishableRetiredSurfaces = retiredSurfaces
-    const session = this.store?.getWorkspaceSession?.()
-    if (session) {
-      // Why: publishing absence before its host membership fence is durable lets a crash or
-      // stale renderer write resurrect the retired surface.
-      if (!this.store?.setWorkspaceSession || !this.store.flushOrThrow) {
-        return
-      }
-      let nextSession = session
-      const acceptedSurfaces: RetiredTerminalSurface[] = []
-      for (const surface of retiredSurfaces) {
-        const candidate = retireTerminalSurfaceFromPersistence(nextSession, surface)
-        if (candidate !== nextSession) {
-          acceptedSurfaces.push(surface)
-          nextSession = candidate
-        }
-      }
-      if (acceptedSurfaces.length === 0) {
-        return
-      }
-      try {
-        this.store.setWorkspaceSession(nextSession)
-        this.store.flushOrThrow()
-      } catch (error) {
-        console.error('[runtime] failed to persist terminal retirement:', error)
-        return
-      }
-      // Why: one repo epoch can cover multiple exits, but only surfaces individually accepted by persistence may disappear.
-      publishableRetiredSurfaces = acceptedSurfaces
-    } else {
-      for (const surface of retiredSurfaces) {
-        const repoId = getRepoIdFromWorktreeId(surface.worktreeId)
-        this.terminalTopologyRevisionByRepoId.set(
-          repoId,
-          (this.terminalTopologyRevisionByRepoId.get(repoId) ?? 0) + 1
-        )
-      }
+    const persisted = this.persistTerminalSurfaceRetirements(retiredSurfaces)
+    if (!persisted) {
+      return
+    }
+    for (const surface of persisted.unpersisted) {
+      const repoId = getRepoIdFromWorktreeId(surface.worktreeId)
+      this.terminalTopologyRevisionByRepoId.set(
+        repoId,
+        (this.terminalTopologyRevisionByRepoId.get(repoId) ?? 0) + 1
+      )
+    }
+    // Why: one repo epoch can cover multiple exits, but only surfaces individually accepted by persistence may disappear.
+    const publishableRetiredSurfaces = [...persisted.accepted, ...persisted.unpersisted]
+    if (publishableRetiredSurfaces.length === 0) {
+      return
     }
     for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
       const retired = retireTerminalSurfacesFromSnapshot({
@@ -7280,6 +7325,7 @@ export class OrcaRuntimeService {
       notifyClients?: boolean
       clientNavigationId?: string
       navigation?: RuntimeNavigationTarget
+      intent?: TabActivationIntent
     } = {}
   ): Promise<RuntimeMobileSessionTabsResult> {
     const navigation = opts.navigation ?? (opts.notifyClients === false ? 'caller' : 'all')
@@ -7321,6 +7367,10 @@ export class OrcaRuntimeService {
       const shouldMaterializePendingTerminal =
         publicTab?.type === 'terminal' &&
         publicTab.status !== 'ready' &&
+        // Why: opening a tab is the documented wake gesture for a slept pane
+        // (#11598), so only a background probe may be refused for one.
+        (!isAutomaticTabActivation(opts.intent) ||
+          !this.isDeliberatelyParkedPane(worktreeId, tab)) &&
         (!targetsHost ||
           !this.notifier?.focusTerminal ||
           this.shouldMaterializeHeadlessMobileSessionTab(snapshot!, tab))
@@ -7472,6 +7522,29 @@ export class OrcaRuntimeService {
       return projectClientSessionTabSelection(snapshot, selection).snapshot
     }
     return snapshot
+  }
+
+  /**
+   * Whether persistence proves this pane's PTY was deliberately taken down and parked
+   * (workspace sleep or completed-agent hibernation) rather than lost and awaiting reconnect.
+   * Why: `pending-handle` alone cannot tell those apart — a parked pane publishes it
+   * indefinitely — and respawning a parked pane re-launches its agent behind the user.
+   * Only an automatic activation consults this; a user opening the tab is the wake gesture.
+   */
+  private isDeliberatelyParkedPane(
+    worktreeId: string,
+    tab: RuntimeMobileSessionTerminalTab
+  ): boolean {
+    const record =
+      this.getWorkspaceSessionForWorktree(worktreeId)?.sleepingAgentSessionsByPaneKey?.[
+        makePaneKey(tab.parentTabId, tab.leafId)
+      ]
+    // Why: 'live'/'quit' captures describe a pane that was still running, so a reconnect
+    // must still mint its replacement PTY (#11542). Only a worktree-owned capture records
+    // a deliberate takedown the user did not ask to undo.
+    return (
+      record?.origin === 'worktree-sleep' && runtimeWorktreeIdsEqual(record.worktreeId, worktreeId)
+    )
   }
 
   private shouldMaterializeHeadlessMobileSessionTab(
