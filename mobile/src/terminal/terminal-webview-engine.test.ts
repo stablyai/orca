@@ -102,6 +102,13 @@ describe('terminal WebView bundled engine', () => {
     expect(() => parse(XTERM_ENGINE_JS, { ecmaVersion: 2019 })).not.toThrow()
   })
 
+  it('bundles per-renderer shared-atlas invalidation tracking', () => {
+    // Why: Relay reconnect replays can overlap old/new WebGL terminals. Every
+    // renderer sharing the atlas must rebuild after another renderer clears it.
+    expect(XTERM_ENGINE_JS).toContain('_clearModelGeneration')
+    expect(XTERM_ENGINE_JS).toContain('atlas page count')
+  })
+
   // Why: the context deliberately omits WeakRef (Chrome 84+) / structuredClone
   // (Chrome 98+) and supplies an Element without replaceChildren (Chrome 86+) —
   // the engine must evaluate on older WebViews via its own guarded runtime shims,

@@ -7,6 +7,7 @@ import {
   TERMINAL_LIVE_HELD_SYLLABLE_COMMIT_DELAY_MS
 } from './terminal-live-hangul-mirror'
 import {
+  createTerminalLivePendingFlushState,
   queueTerminalLiveMirrorSend,
   waitForTerminalLivePendingFlush
 } from './terminal-live-pending-flush-state'
@@ -39,7 +40,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
   setLiveInputCapture
 }: TerminalLivePendingInputFlushOptions<TTabType>): TerminalLivePendingInputFlush {
   const heldCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const pendingLiveInputFlushRef = useRef<Promise<boolean> | null>(null)
+  const pendingLiveInputFlushStateRef = useRef(createTerminalLivePendingFlushState())
   const heldLiveInputTextRef = useRef('')
   const sentLiveInputTextRef = useRef('')
   const pendingLiveInputHandleRef = useRef<string | null>(null)
@@ -68,7 +69,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
   }, [liveInputRef, resetMirrorState, setLiveInputCapture])
 
   const waitForPendingLiveInputFlush = useCallback(async (): Promise<boolean> => {
-    return waitForTerminalLivePendingFlush(pendingLiveInputFlushRef)
+    return waitForTerminalLivePendingFlush(pendingLiveInputFlushStateRef.current)
   }, [])
 
   const runMirrorStep = useCallback(
@@ -107,8 +108,11 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
       if (payload.length === 0) {
         return waitForPendingLiveInputFlush()
       }
-      return queueTerminalLiveMirrorSend(pendingLiveInputFlushRef, () =>
-        sendLiveTerminalInputRef.current(handle, payload)
+      return queueTerminalLiveMirrorSend(
+        pendingLiveInputFlushStateRef.current,
+        handle,
+        payload,
+        (batch) => sendLiveTerminalInputRef.current(handle, batch)
       )
     },
     [
@@ -164,7 +168,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
       heldLiveInputTextRef.current = ''
       sentLiveInputTextRef.current = ''
       pendingLiveInputHandleRef.current = null
-      pendingLiveInputFlushRef.current = null
+      pendingLiveInputFlushStateRef.current = createTerminalLivePendingFlushState()
     }
   }, [])
 
