@@ -273,6 +273,17 @@ describe('PtyHandler negotiated source publication', () => {
       { supportsWriteCallback: true },
       endpointIdentity
     )
+    // Why: admission is explicit (#12673); an unadmitted client receives nothing,
+    // so the pre-attach spawner must hold a legacy (non-flow-controlled) grant.
+    dispatcher.feedClient(
+      subscriberClientId,
+      requestFrame(21, 'pty.openClient', {
+        protocolVersion: 1,
+        clientInstanceId: 'legacy-spawner',
+        requestedRole: 'subscriber'
+      })
+    )
+    await vi.advanceTimersByTimeAsync(0)
     dispatcher.feedClient(subscriberClientId, requestFrame(2, 'pty.spawn', {}))
     await vi.advanceTimersByTimeAsync(0)
 

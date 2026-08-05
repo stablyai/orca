@@ -57,6 +57,7 @@ function makeLayout(leafId: string, ptyId: string): Record<string, unknown> {
 function seedInactivePane(options?: {
   ptyId?: string
   connectionId?: string | null
+  activeWorktreeId?: string
 }): SleepingAgentSessionRecord {
   const ptyId = options?.ptyId ?? toAppSshPtyId(TARGET_ID, 'pty-17')
   const record = {
@@ -64,7 +65,7 @@ function seedInactivePane(options?: {
     connectionId: options?.connectionId === undefined ? TARGET_ID : options.connectionId
   }
   useAppStore.setState({
-    activeWorktreeId: WORKTREE_ID,
+    activeWorktreeId: options?.activeWorktreeId ?? WORKTREE_ID,
     activeTabType: 'terminal',
     activeTabId: 'tab-2',
     activeTabIdByWorktree: { [WORKTREE_ID]: 'tab-2' },
@@ -172,8 +173,25 @@ describe('SSH sleeping-agent recovery', () => {
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
   })
 
-  it('cold-resumes an inactive non-SSH pane', () => {
+  it('keeps an inactive non-SSH pane of the active worktree for in-place cold restore', () => {
+    // Why: keep-alive mounts every tab of the active worktree (#12574), so the
+    // hidden pane consumes the record itself instead of forking a resume tab.
     const record = seedInactivePane({ ptyId: 'pty-local', connectionId: null })
+
+    const launched = resumeSleepingAgentSessionsForWorktree(WORKTREE_ID)
+
+    const state = useAppStore.getState()
+    expect(launched).toBe(0)
+    expect(state.tabsByWorktree[WORKTREE_ID]).toHaveLength(2)
+    expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
+  })
+
+  it('cold-resumes an inactive non-SSH pane on background wake', () => {
+    const record = seedInactivePane({
+      ptyId: 'pty-local',
+      connectionId: null,
+      activeWorktreeId: 'other-wt'
+    })
 
     const launched = resumeSleepingAgentSessionsForWorktree(WORKTREE_ID)
 
@@ -184,5 +202,18 @@ describe('SSH sleeping-agent recovery', () => {
     expect(launched).toBe(1)
     expect(resumedTab?.launchAgent).toBe('codex')
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
+  })
+
+  it('suppresses background wake for a zmx-preserved SSH pane', () => {
+    // Why: the durable PTY still owns the agent; a background resume tab would
+    // duplicate the live session.
+    const record = seedInactivePane({ activeWorktreeId: 'other-wt' })
+
+    const launched = resumeSleepingAgentSessionsForWorktree(WORKTREE_ID)
+
+    const state = useAppStore.getState()
+    expect(launched).toBe(0)
+    expect(state.tabsByWorktree[WORKTREE_ID]).toHaveLength(2)
+    expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
   })
 })
