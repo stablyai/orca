@@ -75,7 +75,7 @@ describe('buildSshTargetSavePayload', () => {
     })
   })
 
-  it('uses zmx by default and persists relay opt-outs', () => {
+  it('persists zmx opt-ins and clears the field for relay defaults', () => {
     const enabled = buildSshTargetSavePayload({
       ...EMPTY_FORM,
       host: 'durable.example.com',
@@ -94,8 +94,11 @@ describe('buildSshTargetSavePayload', () => {
     })
     expect(disabled.ok).toBe(true)
     if (disabled.ok) {
-      expect(disabled.payload.target.terminalPersistenceBackend).toBe('relay')
-      expect(disabled.payload.updates.terminalPersistenceBackend).toBe('relay')
+      // Why: the default is never persisted; updates carries explicit undefined
+      // so partial merges clear a previous zmx opt-in.
+      expect('terminalPersistenceBackend' in disabled.payload.target).toBe(false)
+      expect('terminalPersistenceBackend' in disabled.payload.updates).toBe(true)
+      expect(disabled.payload.updates.terminalPersistenceBackend).toBeUndefined()
     }
   })
 
