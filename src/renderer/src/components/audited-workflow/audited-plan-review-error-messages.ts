@@ -11,6 +11,7 @@ import {
   type PlanReviewReasonCode,
   type PlanRevisionReasonCode
 } from '../../../../shared/audited-plan-artifact-types'
+import { translateNoToolsReasonCode } from './audited-no-tools-error-messages'
 
 export function getPlanReviewErrorMessage(reasonCode: PlanReviewReasonCode): string {
   switch (reasonCode) {
@@ -137,6 +138,20 @@ export function getPlanReviewErrorMessage(reasonCode: PlanReviewReasonCode): str
         'auto.components.auditedWorkflow.errors.planReviewUnexpectedCommit',
         'The worktree changed unexpectedly during the review, so the result was refused.'
       )
+    // The no-tools transport codes share their text with the code-audit lane:
+    // the same transport produces them, so the same condition must read the same
+    // way in both places.
+    case 'api_unauthorized':
+    case 'api_rate_limited':
+    case 'api_unavailable':
+    case 'api_timeout':
+    case 'response_malformed':
+    case 'context_limit_exceeded':
+    case 'bundle_too_large':
+    case 'redaction_failed':
+    case 'context_request_invalid':
+    case 'context_budget_exhausted':
+      return translateNoToolsReasonCode(reasonCode, translate)
   }
 }
 

@@ -37,7 +37,8 @@ import {
 } from './audited-codex-provider-key-store'
 import {
   getAuditedCodexProviderStatus,
-  resolveAuditedCodexProvider
+  resolveAuditedCodexProvider,
+  resolveAuditedCodexCliProvider
 } from './audited-codex-provider-settings'
 
 const KEY_FILE = 'audited-workflow-codex-provider-token.enc'
@@ -121,37 +122,49 @@ describe('activation — selection is DERIVED, never separately persisted', () =
       settingsId: null,
       keyConfigured: false
     })
-    expect(resolveAuditedCodexProvider()).toEqual({ ok: true, provider: null, model: null })
+    expect(resolveAuditedCodexProvider()).toEqual({
+      ok: true,
+      provider: null,
+      model: null,
+      mode: 'codex_cli'
+    })
   })
 })
 
 describe('resolution — capability false', () => {
   it('no key ⇒ default path, unchanged behaviour', () => {
-    expect(resolveAuditedCodexProvider()).toEqual({ ok: true, provider: null, model: null })
-  })
-
-  it('key present ⇒ credential_delivery_unavailable, NOT provider_not_configured', () => {
-    // The distinction is the point: the user configured something real, so
-    // telling them to configure a key would misreport their own state.
-    saveAuditedCodexProviderKey('k')
     expect(resolveAuditedCodexProvider()).toEqual({
-      ok: false,
-      reasonCode: 'credential_delivery_unavailable'
+      ok: true,
+      provider: null,
+      model: null,
+      mode: 'codex_cli'
     })
   })
 
+  it('key present ⇒ the no-tools transport, NOT a refusal', () => {
+    // WAS `credential_delivery_unavailable`. The adapter delivers no credential
+    // to a child process, so the refusal no longer applies — but the mode keeps
+    // the result honest about which transport will run.
+    saveAuditedCodexProviderKey('k')
+    const resolution = resolveAuditedCodexProvider()
+    expect(resolution.ok).toBe(true)
+    expect(resolution.ok && resolution.mode).toBe('byesu_no_tools')
+    expect(resolution.ok && resolution.provider?.settingsId).toBe('byesu')
+  })
+
   it('a CORRUPT record resolves identically — presence is all that is read', () => {
-    // Distinguishing corrupt from good would require DECRYPTING the key, which
-    // admission must never do while delivery is disabled. So a garbage record
-    // and a good one produce the same refusal, and neither is inspected.
+    // UNCHANGED AND STILL THE POINT: distinguishing corrupt from good requires
+    // DECRYPTING the key, which resolution must never do. A garbage record and
+    // a good one resolve the same way, and neither is inspected. The corruption
+    // surfaces later as an `api_unauthorized` from the transport — the only
+    // layer entitled to read the value.
     saveAuditedCodexProviderKey('k')
     resetAuditedCodexProviderKeyCacheForTests()
     writeFileSync(keyPath(), '   ', 'utf8')
 
-    expect(resolveAuditedCodexProvider()).toEqual({
-      ok: false,
-      reasonCode: 'credential_delivery_unavailable'
-    })
+    const resolution = resolveAuditedCodexProvider()
+    expect(resolution.ok).toBe(true)
+    expect(resolution.ok && resolution.mode).toBe('byesu_no_tools')
   })
 
   it('does NOT report provider_not_configured for any present record', () => {
@@ -166,12 +179,15 @@ describe('resolution — capability false', () => {
     })
   })
 
-  it('never returns a provider while the capability is disabled', () => {
+  it('never hands a provider to a CLI LAUNCH while the capability is disabled', () => {
     saveAuditedCodexProviderKey('k')
-    const resolution = resolveAuditedCodexProvider()
-    // No code path may hand a provider (and therefore an endpoint) to a launch
-    // while delivery is off.
-    expect(resolution.ok).toBe(false)
+    // The property this always guarded, now asked of the resolver that owns the
+    // question. No code path may hand a provider — and therefore an endpoint
+    // plus a credential — to a CHILD PROCESS while delivery is off.
+    expect(resolveAuditedCodexCliProvider()).toEqual({
+      ok: false,
+      reasonCode: 'credential_delivery_unavailable'
+    })
   })
 })
 
@@ -190,6 +206,11 @@ describe('the settings field is INERT in this tranche', () => {
 
   it('no key + any planted settings value ⇒ still the default path', () => {
     // Nothing to plant into: resolution is a pure function of the key record.
-    expect(resolveAuditedCodexProvider()).toEqual({ ok: true, provider: null, model: null })
+    expect(resolveAuditedCodexProvider()).toEqual({
+      ok: true,
+      provider: null,
+      model: null,
+      mode: 'codex_cli'
+    })
   })
 })

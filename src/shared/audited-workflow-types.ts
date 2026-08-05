@@ -8,6 +8,7 @@ import type { PlanReviewReasonCode, PlanReviewRunStatus } from './audited-plan-a
 // ReviewVerdict from here) is erased at compile time — the same shape the plan
 // and execution type modules already use.
 import type { CodeAuditReasonCode, CodeAuditRunStatus } from './audited-code-audit-types'
+import type { AuditMode } from './audited-audit-mode-types'
 // Type-only, so the cycle with audited-commit-types.ts is erased at compile time.
 import type { CommitAdvisoryCode, CommitReasonCode } from './audited-commit-types'
 // Type-only, so the cycle with audited-publish-types.ts is erased at compile time.
@@ -395,6 +396,12 @@ export type AuditedTaskStatusProjection = AuditedTaskLandingProjection & {
   // Same closed union as lastVerdict — there is exactly one verdict vocabulary.
   codeAuditVerdict: ReviewVerdict | null
   codeAuditReasonCode: CodeAuditReasonCode | null
+  // HOW the latest audit reached its model. Projected deliberately, unlike most
+  // run internals: a `byesu_no_tools` verdict is WEAKER EVIDENCE than a Codex
+  // CLI one — no tools, no filesystem, only the bounded bundle Orca sent — and a
+  // user reading a verdict must be able to tell which they are looking at.
+  // Carries no endpoint, model name, key state, or byte counts.
+  codeAuditMode: AuditMode | null
   // Model-authored, sanitized and bounded BEFORE storage — the same treatment as
   // planReviewSummary, and the only free text this lane projects.
   codeAuditSummary: string | null

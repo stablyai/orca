@@ -272,6 +272,7 @@ describe('hasLivePlanReviewRun — the writer guard', () => {
         artifactSha256: sha,
         round: 0,
         worktreeVerifiedAtMs: 1,
+        auditMode: 'codex_cli' as const,
         expectedWorktreeIdentity: {
           worktreePath: WT_PATH,
           branchName: WT_BRANCH,
@@ -296,6 +297,7 @@ describe('hasLivePlanReviewRun — the writer guard', () => {
         artifactSha256: sha,
         round: 0,
         worktreeVerifiedAtMs: 1,
+        auditMode: 'codex_cli' as const,
         expectedWorktreeIdentity: {
           worktreePath: WT_PATH,
           branchName: WT_BRANCH,
@@ -327,6 +329,7 @@ describe('hasLivePlanReviewRun — the writer guard', () => {
         artifactSha256: first.sha,
         round: 0,
         worktreeVerifiedAtMs: 1,
+        auditMode: 'codex_cli' as const,
         expectedWorktreeIdentity: {
           worktreePath: WT_PATH,
           branchName: WT_BRANCH,
@@ -360,7 +363,8 @@ describe('startPlanReviewRun identity CAS', () => {
         artifactSha256: sha,
         round: 0,
         worktreeVerifiedAtMs: 1,
-        expectedWorktreeIdentity: identity
+        expectedWorktreeIdentity: identity,
+        auditMode: 'codex_cli' as const
       },
       1_000
     )

@@ -81,6 +81,7 @@ function source(overrides: Partial<ProjectionSourceTask> = {}): ProjectionSource
     codeAuditRunStatus: null,
     codeAuditVerdict: null,
     codeAuditReasonCode: null,
+    codeAuditMode: null,
     codeAuditSummary: null,
     codeAuditFindingCount: null,
     fixRoundLimit: 3,

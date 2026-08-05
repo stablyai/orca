@@ -55,7 +55,8 @@ import {
 } from './audited-codex-provider-key-store'
 import {
   getAuditedCodexProviderStatus,
-  resolveAuditedCodexProvider
+  resolveAuditedCodexProvider,
+  resolveAuditedCodexCliProvider
 } from './audited-codex-provider-settings'
 
 const KEY_FILE = 'audited-workflow-codex-provider-token.enc'
@@ -116,35 +117,46 @@ describe('presence detection is presence-ONLY (the S11 precondition)', () => {
   })
 })
 
-describe('the refusal S11 asserts, reached without any credential', () => {
-  it('resolves to exactly credential_delivery_unavailable', () => {
+describe('the inert record resolves without any credential being read', () => {
+  it('resolves to the no-tools transport', () => {
+    // WAS `credential_delivery_unavailable`, the S11 expected-blocked outcome.
+    // The no-tools adapter needs no credential DELIVERY — it spawns nothing —
+    // so a present record now admits an audit instead of refusing.
+    //
+    // WHAT THIS FILE STILL GUARDS IS UNCHANGED AND IS THE WHOLE POINT: the
+    // resolution path reaches its answer WITHOUT DECRYPTING. The zero-byte
+    // fixture is still never read, which is why it remains safe to plant in CI.
     writeInertProviderRecord()
     const result = resolveAuditedCodexProvider()
 
-    expect(result.ok).toBe(false)
-    if (result.ok) {
-      return
-    }
-    expect(result.reasonCode).toBe('credential_delivery_unavailable')
+    expect(result.ok).toBe(true)
+    expect(result.ok && result.mode).toBe('byesu_no_tools')
   })
 
   it.each([['provider_not_configured'], ['provider_storage_unavailable']])(
-    'is NOT the negative-control code %s',
+    'is never the negative-control code %s',
     (forbidden) => {
-      // These are the two plausible-but-wrong codes. `provider_not_configured`
-      // would misreport the user's own state and send them to configure
-      // something they already configured; `provider_storage_unavailable` would
-      // mean the presence probe threw. Either is a release BLOCKER, not a pass.
+      // Still the two plausible-but-wrong outcomes, and both are still release
+      // BLOCKERS: `provider_not_configured` would misreport the user's own
+      // state, and `provider_storage_unavailable` would mean the presence probe
+      // threw. Neither may appear for a well-formed present record.
       writeInertProviderRecord()
       const result = resolveAuditedCodexProvider()
 
-      expect(result.ok).toBe(false)
-      if (result.ok) {
-        return
-      }
-      expect(result.reasonCode).not.toBe(forbidden)
+      expect(result.ok === false && result.reasonCode).not.toBe(forbidden)
     }
   )
+
+  it('an inert record STILL cannot reach a Codex CLI launch', () => {
+    // The Tranche 2 gate, unchanged. A zero-byte record must never be handed to
+    // a child process, and the CLI resolver is what refuses.
+    writeInertProviderRecord()
+    expect(resolveAuditedCodexCliProvider()).toEqual({
+      ok: false,
+      reasonCode: 'credential_delivery_unavailable'
+    })
+    expect(decryptCalls).toBe(0)
+  })
 
   it('reaches the refusal without decrypting anything', () => {
     writeInertProviderRecord()

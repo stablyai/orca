@@ -176,7 +176,8 @@ export async function startPlanAudit(taskId: string): Promise<PlanReviewCommandR
       artifactSha256: artifact.contentSha256,
       round: artifact.round,
       worktreeVerifiedAtMs: nowMs,
-      expectedWorktreeIdentity
+      expectedWorktreeIdentity,
+      auditMode: providerResolution.mode
     },
     nowMs
   )
@@ -193,6 +194,22 @@ export async function startPlanAudit(taskId: string): Promise<PlanReviewCommandR
       // there to match the verified identity. Using anything captured earlier
       // would reintroduce the stale-cwd race this closes.
       worktreePath: started.worktreePath,
+      mode: providerResolution.mode,
+      // The plan lane's bundle carries the SANITIZED plan text and no diff: the
+      // artifact under review is the plan itself, not a change set.
+      bundle:
+        providerResolution.mode === 'byesu_no_tools'
+          ? {
+              title: task.title,
+              description: parseDescription(task.specJson),
+              acceptanceCriteria: criteria.criteria,
+              planText,
+              diffStat: '(not applicable — this is a plan audit)',
+              diff: '',
+              files: [],
+              redactionContext: buildSanitizationContext(task)
+            }
+          : undefined,
       prompt: buildPlanAuditPrompt({
         title: task.title,
         description: parseDescription(task.specJson),

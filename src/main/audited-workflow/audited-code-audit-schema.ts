@@ -3,6 +3,7 @@
 // Split out of audited-task-schema.ts alongside audited-plan-review-schema.ts and
 // audited-plan-coverage-schema.ts so each phase owns its own DDL and that file
 // stays within its line budget without a max-lines suppression.
+import { AUDIT_MODES } from '../../shared/audited-audit-mode-types'
 import {
   CANDIDATE_STATUSES,
   CODE_AUDIT_REASON_CODES,
@@ -41,6 +42,7 @@ export function createCodeAuditTables(db: Database.Database): void {
   const reasonList = CODE_AUDIT_REASON_CODES.map((r) => `'${r}'`).join(', ')
   // One vocabulary only: generated from the EXISTING REVIEW_VERDICTS.
   const verdictList = REVIEW_VERDICTS.map((v) => `'${v}'`).join(', ')
+  const modeList = AUDIT_MODES.map((m) => `'${m}'`).join(', ')
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS audited_candidates (
@@ -90,6 +92,10 @@ export function createCodeAuditTables(db: Database.Database): void {
       status            TEXT NOT NULL CHECK(status IN (${runStatusList})),
       verdict           TEXT CHECK(verdict IS NULL OR verdict IN (${verdictList})),
       reason_code       TEXT CHECK(reason_code IS NULL OR reason_code IN (${reasonList})),
+      -- HOW this audit reached its model. NULL reads as 'codex_cli' (see
+      -- toAuditMode): rows predating v11 all came from the spawned-CLI path, and
+      -- defaulting the other way would relabel real Codex audits as no-tools.
+      audit_mode        TEXT CHECK(audit_mode IS NULL OR audit_mode IN (${modeList})),
       finding_count     INTEGER,
       -- Sanitized and bounded BEFORE insert. The only free text that reaches the
       -- renderer from this lane.

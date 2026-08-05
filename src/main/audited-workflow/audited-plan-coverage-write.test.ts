@@ -113,7 +113,8 @@ function startReview(taskId: string, artifactId: string, sha: string): string {
       artifactSha256: sha,
       round: 0,
       worktreeVerifiedAtMs: EXPECTED_IDENTITY.worktreeVerifiedAt,
-      expectedWorktreeIdentity: EXPECTED_IDENTITY
+      expectedWorktreeIdentity: EXPECTED_IDENTITY,
+      auditMode: 'codex_cli' as const
     },
     1_000
   )

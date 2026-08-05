@@ -153,7 +153,8 @@ describe('round-3 plans stay reviewable', () => {
         artifactSha256: sha,
         round: 3,
         worktreeVerifiedAtMs: 1,
-        expectedWorktreeIdentity: EXPECTED_IDENTITY
+        expectedWorktreeIdentity: EXPECTED_IDENTITY,
+        auditMode: 'codex_cli' as const
       },
       2_000
     )
@@ -177,7 +178,8 @@ describe('revision exclusivity', () => {
         artifactSha256: sha,
         round: 0,
         worktreeVerifiedAtMs: 1,
-        expectedWorktreeIdentity: EXPECTED_IDENTITY
+        expectedWorktreeIdentity: EXPECTED_IDENTITY,
+        auditMode: 'codex_cli' as const
       },
       3_000
     )
@@ -195,7 +197,8 @@ describe('plan-review recovery and cancel', () => {
         artifactSha256: sha,
         round: 0,
         worktreeVerifiedAtMs: 1,
-        expectedWorktreeIdentity: EXPECTED_IDENTITY
+        expectedWorktreeIdentity: EXPECTED_IDENTITY,
+        auditMode: 'codex_cli' as const
       },
       1_000
     )
@@ -269,7 +272,8 @@ describe('plan-review recovery and cancel', () => {
         artifactSha256: sha,
         round: 0,
         worktreeVerifiedAtMs: 1,
-        expectedWorktreeIdentity: EXPECTED_IDENTITY
+        expectedWorktreeIdentity: EXPECTED_IDENTITY,
+        auditMode: 'codex_cli' as const
       },
       5_000
     )

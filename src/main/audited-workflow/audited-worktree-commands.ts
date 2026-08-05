@@ -23,7 +23,7 @@ import { canonicalizeAllowingMissing, isPathInside } from './audited-worktree-ma
 import {
   assertReadProbeShape,
   isRevListCountArgv,
-  LAND_READ_SUBCOMMANDS
+  EXACT_FORM_READ_SUBCOMMANDS
 } from './audited-read-probe-shapes'
 
 const ALLOWED_SUBCOMMANDS = new Set([
@@ -60,7 +60,10 @@ const ALLOWED_SUBCOMMANDS = new Set([
   // canonical forms screened by arity below. Both are network-free and neither
   // writes: `status --porcelain` reports, and `diff-index --quiet` compares.
   'status',
-  'diff-index'
+  'diff-index',
+  // The no-tools audit bundle. `diff-tree` rather than `diff`: it never consults
+  // the index or worktree. Two exact forms only — see assertDiffTreeShape.
+  'diff-tree'
 ])
 const ALLOWED_WORKTREE_VERBS = new Set(['add', 'list'])
 
@@ -206,11 +209,11 @@ export function isReadOnlyAuditedArgv(argv: readonly string[]): boolean {
   if (subcommand !== null && REMOTE_TOPOLOGY_SUBCOMMANDS.has(subcommand)) {
     return true
   }
-  // Phase 10: `status --porcelain` and `diff-index --quiet` genuinely are
-  // read-only once screened by arity above, so they stay on the read path. The
-  // land WRITE subcommands (update-ref/read-tree) are already excluded by the
-  // COMMIT_WRITE_SUBCOMMANDS check above, which covers both.
-  if (subcommand !== null && LAND_READ_SUBCOMMANDS.has(subcommand)) {
+  // Phase 10's `status --porcelain` / `diff-index --quiet` and the audit
+  // bundle's `diff-tree` are all genuinely read-only ONCE SCREENED BY ARITY
+  // above, so they stay on the read path. The land WRITE subcommands
+  // (update-ref/read-tree) are already excluded by COMMIT_WRITE_SUBCOMMANDS.
+  if (subcommand !== null && EXACT_FORM_READ_SUBCOMMANDS.has(subcommand)) {
     return true
   }
   return subcommand !== null && ALLOWED_SUBCOMMANDS.has(subcommand)

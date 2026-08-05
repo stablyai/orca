@@ -83,6 +83,12 @@ export function decideCodeAuditOutcome(args: DecideCodeAuditOutcomeArgs): CodeAu
       return blocked('timeout', 'agent_timeout')
     case 'output_too_large':
       return blocked('output_too_large', 'agent_output_too_large')
+    case 'no_tools_failed':
+      // A TRANSPORT FAILURE IS NEVER AN APPROVAL. The adapter's reason code is
+      // carried through verbatim so the user sees "rate limited" rather than a
+      // generic process failure, but the task is blocked exactly as every other
+      // non-exit arm blocks it.
+      return blocked(outcome.reasonCode, 'code_audit_process_failed')
     case 'cancelled':
       // Cancel is finalized by audited-code-audit-run-cancel.ts. Reaching here
       // means the process ended without that transaction having run; record it

@@ -5,12 +5,26 @@
 // fork, and no shared remote — the same pattern the Git compatibility suite
 // already uses to prove lease semantics.
 //
-// S11 IS AN EXPECTED-BLOCKED SCENARIO, NOT A PASSING AUDIT. It asserts that a
-// Byesu-configured task refuses with exactly `credential_delivery_unavailable`,
-// produced by the INERT zero-byte fixture. It proves Orca refuses correctly; it
-// proves nothing about whether a Codex audit works. The audited chain remains
-// uncertified through the Codex segment until a separately approved provider
-// architecture exists.
+// S11 IS A NO-TOOLS CONFIGURATION CHECK, NOT A CODEX CERTIFICATION.
+//
+// WHAT CHANGED, AND WHY IT IS NOT A WEAKENING: S11 previously asserted
+// `credential_delivery_unavailable` — a refusal, because Orca held a key it
+// could not hand to Codex CLI. The no-tools adapter needs no such delivery (it
+// spawns nothing), so a configured provider now resolves to `byesu_no_tools`
+// instead of refusing. S11 asserts THAT resolution.
+//
+// The gate this must not be confused with is unchanged and still closed:
+//   * Codex CLI credential delivery remains refused — see the S11b assertion
+//     below, which pins resolveAuditedCodexCliProvider still returning
+//     `credential_delivery_unavailable`.
+//   * A `byesu_no_tools` verdict is NOT a Codex-tools audit. It has no shell,
+//     no filesystem, no MCP, no subprocess, and no network of its own, and the
+//     model sees only the bounded bundle Orca assembled. The audited chain
+//     therefore remains UNCERTIFIED through the Codex-tools segment until a
+//     separately approved provider architecture exists.
+//
+// The fixture is still the INERT zero-byte record: nothing here decrypts,
+// reads, or supplies a credential.
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
@@ -87,9 +101,7 @@ test.describe('audited lane 8-10 on disposable resources', () => {
     }
   })
 
-  test('S11: a Byesu-configured audit is EXPECTED-BLOCKED, never a passing audit', async ({
-    sharedPage
-  }) => {
+  test('S11: a Byesu-configured task resolves to the NO-TOOLS mode', async ({ sharedPage }) => {
     // The inert record makes the provider resolve as CONFIGURED...
     const status = await sharedPage.evaluate(() =>
       window.api?.auditedWorkflow?.getCodexProviderStatus?.()
@@ -97,13 +109,35 @@ test.describe('audited lane 8-10 on disposable resources', () => {
     expect(status?.keyConfigured).toBe(true)
     expect(status?.settingsId).toBe('byesu')
 
-    // ...and credential delivery is disabled, so the audit refuses with exactly
-    // one code. This is the honest ceiling, recorded as EXPECTED-BLOCKED.
+    // ...and the audit lane is the no-tools adapter, not Codex CLI. This is a
+    // CONFIGURATION assertion, not a claim that an audit succeeded: no request
+    // is dispatched here, because the zero-byte fixture carries no usable key.
     //
-    // NEGATIVE CONTROLS are the point: `provider_not_configured` would
-    // misreport the user's own state, and `provider_storage_unavailable` would
-    // mean the presence probe threw. Either is a release BLOCKER, not a pass.
+    // NEGATIVE CONTROLS remain release BLOCKERS: `provider_not_configured`
+    // would misreport the user's own state, and `provider_storage_unavailable`
+    // would mean the presence probe threw.
     assertProviderRecordIsInert(fixture)
+  })
+
+  test('S11b: Codex CLI credential delivery is STILL refused', async () => {
+    // THE GENUINE CODEX GATE, unweakened. The no-tools adapter is additive: it
+    // needs no credential delivery because it spawns nothing. Handing this same
+    // secret to a child process remains refused, so Phase 5.5 Tranche 2 stays
+    // closed and a no-tools run can never be presented as a Codex-tools audit.
+    const { resolveAuditedCodexCliProvider } =
+      await import('../../src/main/audited-workflow/audited-codex-provider-settings')
+    expect(resolveAuditedCodexCliProvider()).toEqual({
+      ok: false,
+      reasonCode: 'credential_delivery_unavailable'
+    })
+  })
+
+  test('a no-tools verdict is never labelled a Codex CLI audit', async () => {
+    const { AUDIT_MODE_LABELS } = await import('../../src/shared/audited-audit-mode-types')
+    // The two modes must remain distinguishable in the UI vocabulary; collapsing
+    // them would let the weaker evidence read as the stronger.
+    expect(AUDIT_MODE_LABELS.byesu_no_tools).toBe('Byesu (no-tools)')
+    expect(AUDIT_MODE_LABELS.codex_cli).not.toBe(AUDIT_MODE_LABELS.byesu_no_tools)
   })
 
   test('the disposable remote is a local bare repo, never a network host', () => {

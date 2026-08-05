@@ -110,6 +110,7 @@ function makeProjection(taskId: string, updatedAt: number): AuditedTaskStatusPro
     codeAuditRunStatus: null,
     codeAuditVerdict: null,
     codeAuditReasonCode: null,
+    codeAuditMode: null,
     codeAuditSummary: null,
     codeAuditFindingCount: null,
     codeFixAvailable: false,

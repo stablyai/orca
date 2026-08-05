@@ -216,6 +216,9 @@ function taskRowToProjectionSource(row: AuditedTaskRow): ProjectionSourceTask {
     codeAuditRunStatus: codeAudit?.status ?? null,
     codeAuditVerdict: codeAudit?.verdict ?? null,
     codeAuditReasonCode: codeAudit?.reasonCode ?? null,
+    // The transport behind the verdict, so the UI can label a no-tools audit
+    // honestly instead of presenting it as a full Codex audit.
+    codeAuditMode: codeAudit?.auditMode ?? null,
     codeAuditSummary: codeAudit?.summary ?? null,
     codeAuditFindingCount: codeAudit?.findingCount ?? null,
     fixRoundLimit: MAX_FIX_ROUNDS,

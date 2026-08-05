@@ -1828,11 +1828,13 @@ jobs:
       # Phase 11 release gates. Both are secret-free and use only disposable
       # local resources, so neither can leak a credential or mutate a remote.
       #
-      # NON-CERTIFICATION: a green `audited-e2e` proves Orca REFUSES the Codex
-      # audit correctly (S11 records `credential_delivery_unavailable` as
-      # EXPECTED-BLOCKED). It does NOT prove a Codex audit works. The audited
-      # chain stays uncertified through that segment until a separately approved
-      # provider architecture exists — release notes must say so.
+      # NON-CERTIFICATION: a green `audited-e2e` proves the audit lane RESOLVES
+      # correctly (S11 records the `byesu_no_tools` mode) and that Codex CLI
+      # credential delivery is still refused (S11b). It does NOT prove a
+      # Codex-TOOLS audit works — a no-tools verdict is weaker evidence and is
+      # never counted as one. The audited chain stays uncertified through that
+      # segment until a separately approved provider architecture exists —
+      # release notes must say so.
       - audited-e2e
       - installer-smoke
     runs-on: ubuntu-latest

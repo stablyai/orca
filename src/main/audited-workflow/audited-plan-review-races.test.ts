@@ -140,7 +140,8 @@ describe('admission CAS', () => {
         artifactSha256: sha,
         round: 0,
         worktreeVerifiedAtMs: 1,
-        expectedWorktreeIdentity: EXPECTED_IDENTITY
+        expectedWorktreeIdentity: EXPECTED_IDENTITY,
+        auditMode: 'codex_cli' as const
       },
       1_000
     )
@@ -166,7 +167,8 @@ describe('admission CAS', () => {
         artifactSha256: sha,
         round: 0,
         worktreeVerifiedAtMs: 1,
-        expectedWorktreeIdentity: EXPECTED_IDENTITY
+        expectedWorktreeIdentity: EXPECTED_IDENTITY,
+        auditMode: 'codex_cli' as const
       },
       3_000
     )
@@ -185,7 +187,8 @@ describe('admission CAS', () => {
         artifactSha256: 'deadbeef',
         round: 0,
         worktreeVerifiedAtMs: 1,
-        expectedWorktreeIdentity: EXPECTED_IDENTITY
+        expectedWorktreeIdentity: EXPECTED_IDENTITY,
+        auditMode: 'codex_cli' as const
       },
       1_000
     )
@@ -208,7 +211,8 @@ describe('admission CAS', () => {
         artifactSha256: sha,
         round: 0,
         worktreeVerifiedAtMs: 1,
-        expectedWorktreeIdentity: EXPECTED_IDENTITY
+        expectedWorktreeIdentity: EXPECTED_IDENTITY,
+        auditMode: 'codex_cli' as const
       },
       1_000
     )
@@ -224,7 +228,8 @@ describe('admission CAS', () => {
       artifactSha256: sha,
       round: 0,
       worktreeVerifiedAtMs: 1,
-      expectedWorktreeIdentity: EXPECTED_IDENTITY
+      expectedWorktreeIdentity: EXPECTED_IDENTITY,
+      auditMode: 'codex_cli' as const
     }
     expect(startPlanReviewRun(repository.getDatabase(), args, 1_000).ok).toBe(true)
 
@@ -244,7 +249,8 @@ describe('finalization permissions', () => {
         artifactSha256: sha,
         round: 0,
         worktreeVerifiedAtMs: 1,
-        expectedWorktreeIdentity: EXPECTED_IDENTITY
+        expectedWorktreeIdentity: EXPECTED_IDENTITY,
+        auditMode: 'codex_cli' as const
       },
       1_000
     )
@@ -400,7 +406,8 @@ describe('approvePlan authorization', () => {
         artifactSha256: sha,
         round: 0,
         worktreeVerifiedAtMs: 1,
-        expectedWorktreeIdentity: EXPECTED_IDENTITY
+        expectedWorktreeIdentity: EXPECTED_IDENTITY,
+        auditMode: 'codex_cli' as const
       },
       1_000
     )

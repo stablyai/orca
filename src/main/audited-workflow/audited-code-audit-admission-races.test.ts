@@ -122,7 +122,10 @@ function startArgs() {
     candidateTreeOid: TREE_OID,
     round: 0,
     worktreeVerifiedAtMs: IDENTITY.worktreeVerifiedAt,
-    expectedWorktreeIdentity: IDENTITY
+    expectedWorktreeIdentity: IDENTITY,
+    // These cases exercise ADMISSION, which is transport-agnostic. The CLI mode
+    // keeps them asserting the same behaviour they always did.
+    auditMode: 'codex_cli' as const
   }
 }
 

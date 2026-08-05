@@ -100,7 +100,11 @@ test.describe('installer audited-lane smoke', () => {
     // migration. Listing tasks is read-only and mutates nothing.
     await sharedPage.evaluate(() => window.api?.auditedWorkflow?.listTasks?.({}))
 
-    expect(userVersion(fixture.databasePath)).toBe(10)
+    // At or beyond 10, not exactly 10: what this proves is that the seeded v9
+    // profile MIGRATED, and a later phase raising the schema version must not
+    // fail the installer gate. The table and column assertions below are what
+    // pin the Phase 10 shape specifically.
+    expect(userVersion(fixture.databasePath)).toBeGreaterThanOrEqual(10)
 
     const tables = queryRows(
       fixture.databasePath,

@@ -143,6 +143,18 @@ function reviewRunCount(taskId: string): number {
   return row.n
 }
 
+/** The transport recorded on the task's latest run row. */
+function runModeFor(taskId: string): string | null {
+  const row = repository
+    .getDatabase()
+    .prepare(
+      `SELECT audit_mode FROM audited_plan_review_runs WHERE task_id = ?
+        ORDER BY started_at_ms DESC, rowid DESC LIMIT 1`
+    )
+    .get(taskId) as { audit_mode: string | null } | undefined
+  return row?.audit_mode ?? null
+}
+
 function snapshotTask(taskId: string): unknown {
   return repository.getDatabase().prepare(`SELECT * FROM audited_tasks WHERE id = ?`).get(taskId)
 }
@@ -201,42 +213,37 @@ describe('no provider configured', () => {
   })
 })
 
-describe('provider configured while credential delivery is disabled', () => {
-  it('refuses with credential_delivery_unavailable and writes NOTHING', async () => {
+describe('provider configured', () => {
+  it('admits the audit rather than refusing', async () => {
     const taskId = seedReviewableTask()
-    const before = snapshotTask(taskId)
-    const transitions = transitionCount(taskId)
     saveAuditedCodexProviderKey('provider-key')
 
     const result = await startPlanAudit(taskId)
 
-    expect(result).toEqual({
-      ok: false,
-      kind: 'planReview',
-      reasonCode: 'credential_delivery_unavailable'
-    })
-    expectNothingWritten(taskId, before, transitions)
-    expect(repository.getTask(taskId)!.state).toBe('awaiting_plan_review')
+    // WAS a `credential_delivery_unavailable` refusal that wrote nothing. The
+    // no-tools adapter delivers no credential to any child process, so the
+    // refusal no longer applies and a run row is legitimately created.
+    expect(result).toEqual({ ok: true })
+    expect(reviewRunCount(taskId)).toBe(1)
   })
 
   it('does NOT report provider_not_configured when a key exists', async () => {
-    // The distinction is the point: the user configured something real, so
-    // telling them to configure a key would be a lie about their own state.
+    // Still the point: the user configured something real, so telling them to
+    // configure a key would be a lie about their own state. Now the honest
+    // answer is that it WORKS, rather than a different refusal.
     const taskId = seedReviewableTask()
     saveAuditedCodexProviderKey('provider-key')
 
     const result = await startPlanAudit(taskId)
 
-    expect(result).toMatchObject({ reasonCode: 'credential_delivery_unavailable' })
     expect(result).not.toMatchObject({ reasonCode: 'provider_not_configured' })
+    expect(result).not.toMatchObject({ reasonCode: 'credential_delivery_unavailable' })
   })
 })
 
 describe('a corrupt record is NOT distinguished — that would require a read', () => {
-  it('resolves identically to a good record, writing NOTHING', async () => {
+  it('admits identically to a good record, without reading either', async () => {
     const taskId = seedReviewableTask()
-    const before = snapshotTask(taskId)
-    const transitions = transitionCount(taskId)
 
     saveAuditedCodexProviderKey('provider-key')
     resetAuditedCodexProviderKeyCacheForTests()
@@ -249,14 +256,12 @@ describe('a corrupt record is NOT distinguished — that would require a read', 
 
     const result = await startPlanAudit(taskId)
 
-    // Telling corrupt from good means DECRYPTING, which admission must not do.
-    // A better error message is not worth a real secret read.
-    expect(result).toEqual({
-      ok: false,
-      kind: 'planReview',
-      reasonCode: 'credential_delivery_unavailable'
-    })
-    expectNothingWritten(taskId, before, transitions)
+    // STILL THE POINT: telling corrupt from good means DECRYPTING, which
+    // admission must not do. Both records therefore admit identically — the
+    // corruption surfaces later, as an `api_unauthorized` from the transport,
+    // which is the only layer entitled to read the value.
+    expect(result).toEqual({ ok: true })
+    expect(readKeySpy).not.toHaveBeenCalled()
   })
 })
 
@@ -414,27 +419,62 @@ describe('the settings field cannot activate or refuse', () => {
     expect(codexRunner).toHaveBeenCalledTimes(1)
   })
 
-  it('is INERT with a key: still credential_delivery_unavailable', async () => {
+  it('is INERT with a key: the settings field still changes nothing', async () => {
     const taskId = seedReviewableTask()
     saveAuditedCodexProviderKey('provider-key')
 
     const result = await startPlanAudit(taskId)
 
-    // Identical to the no-settings case — the field changes nothing in either
-    // direction.
-    expect(result).toMatchObject({ reasonCode: 'credential_delivery_unavailable' })
+    // The audit now RUNS, on the no-tools transport. What this case pins is
+    // unchanged: the planted `auditedCodexProvider` field is never read, so it
+    // cannot select a provider, an endpoint, or a mode.
+    expect(result).toEqual({ ok: true })
+    expect(runModeFor(taskId)).toBe('byesu_no_tools')
   })
 })
 
-describe('capability-false invariant', () => {
-  it('never spawns Codex while a provider key is configured', async () => {
+describe('a configured provider runs on the no-tools transport', () => {
+  it('admits the audit and records the mode on the run row', async () => {
+    const taskId = seedReviewableTask()
+    saveAuditedCodexProviderKey('provider-key')
+
+    const result = await startPlanAudit(taskId)
+
+    // WAS `credential_delivery_unavailable`. The adapter needs no credential
+    // delivery — it spawns nothing — so the refusal no longer applies.
+    expect(result).toEqual({ ok: true })
+    expect(reviewRunCount(taskId)).toBe(1)
+    // Recorded at ADMISSION, so the evidence survives an interrupted run.
+    expect(runModeFor(taskId)).toBe('byesu_no_tools')
+  })
+
+  it('routes through the launcher with mode byesu_no_tools and a bundle', async () => {
     const taskId = seedReviewableTask()
     saveAuditedCodexProviderKey('provider-key')
 
     await startPlanAudit(taskId)
 
-    // No code path may read the key for a launch or put it in a child
-    // environment while delivery is disabled.
-    expect(codexRunner).not.toHaveBeenCalled()
+    // The runner override intercepts ABOVE the mode branch, so a call here is
+    // not evidence of a spawn. What it does prove is that the launcher was
+    // handed the no-tools mode and a bundle — and the branch on that value
+    // returns before any argv is built. The STRUCTURAL no-spawn assertion lives
+    // in audited-no-tools-boundary.test.ts, which reads the source.
+    expect(codexRunner).toHaveBeenCalledTimes(1)
+    const launchArgs = codexRunner.mock.calls[0][0]
+    expect(launchArgs.mode).toBe('byesu_no_tools')
+    expect(launchArgs.bundle).toBeDefined()
+  })
+
+  it('still never reads the key value during admission', async () => {
+    const taskId = seedReviewableTask()
+    saveAuditedCodexProviderKey('provider-key')
+    readKeySpy.mockClear()
+
+    await startPlanAudit(taskId)
+
+    // UNCHANGED AND LOAD-BEARING. Admission branches on opaque PRESENCE only.
+    // The key is read once, later, inside the transport's header construction —
+    // never here, where a refusal decision is made.
+    expect(readKeySpy).not.toHaveBeenCalled()
   })
 })

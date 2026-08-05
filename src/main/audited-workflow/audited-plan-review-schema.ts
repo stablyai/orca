@@ -9,6 +9,7 @@ import {
   PLAN_REVIEW_REASON_CODES,
   PLAN_REVIEW_RUN_STATUSES
 } from '../../shared/audited-plan-artifact-types'
+import { AUDIT_MODES } from '../../shared/audited-audit-mode-types'
 import { REVIEW_VERDICTS } from '../../shared/audited-workflow-types'
 import type Database from '../sqlite/sync-database'
 // Phase 5 columns added to a pre-existing audited_tasks table. ALTER TABLE ADD
@@ -37,6 +38,7 @@ export function createPlanReviewTables(db: Database.Database): void {
   const reviewReasonList = PLAN_REVIEW_REASON_CODES.map((r) => `'${r}'`).join(', ')
   // One vocabulary only: generated from the EXISTING REVIEW_VERDICTS.
   const verdictList = REVIEW_VERDICTS.map((v) => `'${v}'`).join(', ')
+  const modeList = AUDIT_MODES.map((m) => `'${m}'`).join(', ')
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS audited_plan_artifacts (
@@ -78,6 +80,10 @@ export function createPlanReviewTables(db: Database.Database): void {
       status            TEXT NOT NULL CHECK(status IN (${reviewStatusList})),
       verdict           TEXT CHECK(verdict IS NULL OR verdict IN (${verdictList})),
       reason_code       TEXT CHECK(reason_code IS NULL OR reason_code IN (${reviewReasonList})),
+      -- HOW this audit reached its model. NULL reads as 'codex_cli' (see
+      -- toAuditMode): rows predating v11 all came from the spawned-CLI path, and
+      -- defaulting the other way would relabel real Codex audits as no-tools.
+      audit_mode        TEXT CHECK(audit_mode IS NULL OR audit_mode IN (${modeList})),
       finding_count     INTEGER,
       -- Sanitized and bounded to 4KB BEFORE insert. The only free text that
       -- later reaches the renderer.

@@ -24,6 +24,34 @@ export const PHASE_9_TASK_COLUMNS: readonly [string, string][] = [
 ]
 
 /**
+ * The v8 -> v9 migration step.
+ *
+ * FULLY ADDITIVE — no CHECK change on any existing table and no rebuild, because
+ * Phase 9 introduces no task state (the publish lane rests in `committed`
+ * throughout).
+ *
+ * Creates the table here rather than relying on createAuditedWorkflowTables
+ * having run, for the same reason as v4-v8 and v10: migrateAuditedWorkflowSchema
+ * is also called directly against a legacy DB, and a migration that silently
+ * depends on another call would leave that path without the table.
+ *
+ * Lives here beside its DDL, mirroring migrateToV10 in audited-land-schema.ts,
+ * so audited-task-schema.ts stays within its line budget without a max-lines
+ * suppression.
+ */
+export function migrateToV9(
+  db: Database.Database,
+  columnExists: (db: Database.Database, table: string, column: string) => boolean
+): void {
+  for (const [column, type] of PHASE_9_TASK_COLUMNS) {
+    if (!columnExists(db, 'audited_tasks', column)) {
+      db.exec(`ALTER TABLE audited_tasks ADD COLUMN ${column} ${type}`)
+    }
+  }
+  createPublishTables(db)
+}
+
+/**
  * Phase 9 tables.
  *
  * Shared by fresh-DB creation and the v8->v9 migration so both paths produce an

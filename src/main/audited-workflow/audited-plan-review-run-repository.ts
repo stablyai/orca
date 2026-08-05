@@ -4,6 +4,7 @@
 // The invariant this file exists to hold: a `running` review row is created ONLY
 // while the task rests in awaiting_plan_review and the artifact it names is
 // still the task's current one, by both id and content hash.
+import type { AuditMode } from '../../shared/audited-audit-mode-types'
 import type Database from '../sqlite/sync-database'
 import type {
   PlanReviewRunStatus,
@@ -148,6 +149,8 @@ export type StartPlanReviewRunArgs = {
   worktreeVerifiedAtMs: number
   /** The verified identity this launch depends on; re-checked inside the CAS. */
   expectedWorktreeIdentity: ExpectedWorktreeIdentity
+  /** The transport, resolved before admission and recorded on the row. */
+  auditMode: AuditMode
 }
 
 /**
@@ -279,14 +282,17 @@ export function startPlanReviewRun(
       db.prepare(
         `INSERT INTO audited_plan_review_runs
            (id, task_id, artifact_id, artifact_sha256, round, status,
-            worktree_verified_at_ms, started_at_ms)
-         VALUES (?, ?, ?, ?, ?, 'running', ?, ?)`
+            audit_mode, worktree_verified_at_ms, started_at_ms)
+         VALUES (?, ?, ?, ?, ?, 'running', ?, ?, ?)`
       ).run(
         runId,
         args.taskId,
         args.artifactId,
         args.artifactSha256,
         args.round,
+        // WRITTEN AT ADMISSION, not at finalization: an interrupted run never
+        // reaches a finalize and must still be attributable to its transport.
+        args.auditMode,
         args.worktreeVerifiedAtMs,
         nowMs
       )

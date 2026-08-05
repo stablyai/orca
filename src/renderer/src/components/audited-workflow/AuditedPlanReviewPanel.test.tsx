@@ -100,6 +100,7 @@ function task(overrides: Partial<AuditedTaskStatusProjection> = {}): AuditedTask
     codeAuditRunStatus: null,
     codeAuditVerdict: null,
     codeAuditReasonCode: null,
+    codeAuditMode: null,
     codeAuditSummary: null,
     codeAuditFindingCount: null,
     codeFixAvailable: false,

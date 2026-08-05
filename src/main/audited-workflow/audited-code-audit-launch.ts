@@ -8,7 +8,9 @@
 import { app } from 'electron'
 import { homedir } from 'node:os'
 import { mkdirSync } from 'node:fs'
+import type { AuditMode } from '../../shared/audited-audit-mode-types'
 import { MAX_FIX_ROUNDS } from '../../shared/audited-code-audit-types'
+import type { BundleInput } from './audited-no-tools-bundle'
 import { getAuditedTaskRepository, getTaskProjection } from './audited-task-service'
 import { broadcastAuditedTaskChanged } from './audited-workflow-broadcast'
 import { verifyWorktreeForTask } from './audited-worktree-service'
@@ -39,6 +41,10 @@ export type CodeAuditLaunchInput = {
   taskId: string
   worktreePath: string
   prompt: string
+  /** The transport resolved at admission and recorded on the run row. */
+  mode: AuditMode
+  /** Bundle material for the no-tools transport; absent for the CLI path. */
+  bundle?: BundleInput
 }
 
 /**
@@ -89,8 +95,16 @@ export async function launchAndFinalizeCodeAudit(
       })
     : null
 
+  // The no-tools adapter has no file to write, so it delivers its final message
+  // IN BAND. Preferring the in-band text when present is what lets ONE finalize
+  // path serve both transports; the CLI path never sets it and still reads the
+  // file, whose contents are the only thing that path trusts.
   const parsed =
-    outcome.kind === 'exit' && outcome.exitCode === 0 ? readAndParseVerdict(lastMessagePath) : null
+    outcome.kind === 'exit' && outcome.exitCode === 0
+      ? outcome.lastMessage !== undefined
+        ? parsePlanAuditVerdict(outcome.lastMessage)
+        : readAndParseVerdict(lastMessagePath)
+      : null
 
   const decision = decideCodeAuditOutcome({
     outcome,

@@ -20,6 +20,19 @@ export class AuditedGitProbeShapeError extends Error {
 export const LAND_READ_SUBCOMMANDS = new Set(['status', 'diff-index'])
 
 /**
+ * Every subcommand that is READ-ONLY once screened to its exact form(s) below.
+ *
+ * One set rather than one per phase: the read path asks a single question — "is
+ * this argv read-only?" — and for all of these the answer is yes for the SAME
+ * reason, namely that assertReadProbeShape has already pinned the form.
+ *
+ * Membership is MEANINGLESS WITHOUT THAT SCREEN: a bare `diff-tree` carrying
+ * `--ext-diff` or `--textconv` runs an external command from repository config.
+ * This set may only be consulted after assertAuditedGitArgvShape has run.
+ */
+export const EXACT_FORM_READ_SUBCOMMANDS = new Set([...LAND_READ_SUBCOMMANDS, 'diff-tree'])
+
+/**
  * Screens every exact-form subcommand. A no-op for anything else.
  *
  * `config` — exactly `config --get <key>`; any other form could WRITE config.
@@ -60,6 +73,40 @@ export function assertReadProbeShape(argv: readonly string[], subcommand: string
         'audited diff-index must be exactly `diff-index --quiet <tree-ish> --`'
       )
     }
+    return
+  }
+  if (subcommand === 'diff-tree') {
+    assertDiffTreeShape(argv)
+  }
+}
+
+/**
+ * The audit bundle's two diff forms, both exact.
+ *
+ * `diff-tree -r --stat <a> <b> --`  — the change summary
+ * `diff-tree -r --patch <a> <b> --` — the unified diff
+ *
+ * Both operands must be full OIDs, so a ref name, a range expression, or a
+ * `--output=<path>` cannot enter. The trailing `--` keeps a pathspec out, and
+ * the fixed length is what stops `--ext-diff` or `--textconv` — either of which
+ * would run an EXTERNAL COMMAND from repository config, turning a read probe
+ * into arbitrary execution.
+ */
+const FULL_OID = /^[0-9a-f]{40}$/
+
+function assertDiffTreeShape(argv: readonly string[]): void {
+  const rest = argv.slice(argv.indexOf('diff-tree'))
+  const shapeIsValid =
+    rest.length === 6 &&
+    rest[1] === '-r' &&
+    (rest[2] === '--stat' || rest[2] === '--patch') &&
+    FULL_OID.test(rest[3] ?? '') &&
+    FULL_OID.test(rest[4] ?? '') &&
+    rest[5] === '--'
+  if (!shapeIsValid) {
+    throw new AuditedGitProbeShapeError(
+      'audited diff-tree must be exactly `diff-tree -r --stat|--patch <oid> <oid> --`'
+    )
   }
 }
 

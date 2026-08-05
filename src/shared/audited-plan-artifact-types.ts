@@ -75,7 +75,21 @@ export const PLAN_REVIEW_REASON_CODES = [
   'cancelled_by_user',
   'interrupted',
   'verdict_unparseable',
-  'unexpected_commit_detected'
+  'unexpected_commit_detected',
+  // The no-tools adapter's transport and protocol failures, mirrored one-for-one
+  // from NO_TOOLS_REASON_CODES. Kept distinct from the process codes above
+  // because none of these involves a process: reporting an HTTP 429 as
+  // `spawn_failed` would send a user hunting for a missing binary.
+  'api_unauthorized',
+  'api_rate_limited',
+  'api_unavailable',
+  'api_timeout',
+  'response_malformed',
+  'context_limit_exceeded',
+  'bundle_too_large',
+  'redaction_failed',
+  'context_request_invalid',
+  'context_budget_exhausted'
 ] as const
 export type PlanReviewReasonCode = (typeof PLAN_REVIEW_REASON_CODES)[number]
 
@@ -101,11 +115,22 @@ export const RETRYABLE_PLAN_REVIEW_REASON_CODES: readonly PlanReviewReasonCode[]
   // An environmental probe failure (unreadable ~/.orca, permission error). Unlike
   // the other provider codes this CAN clear on its own, so Retry is a real
   // action rather than a promise that must fail.
-  'provider_storage_unavailable'
+  'provider_storage_unavailable',
+  // The three transient no-tools transport failures. Mirrors
+  // RETRYABLE_NO_TOOLS_REASON_CODES; the parity test pins the lists together so
+  // a code added there cannot end up silently non-retryable here.
+  'api_rate_limited',
+  'api_unavailable',
+  'api_timeout'
   // Deliberately absent: provider_not_configured, provider_settings_invalid, and
   // credential_delivery_unavailable. None is fixed by retrying — two need
   // configuration and one needs a reviewed code change — so offering Retry would
   // promise an action that must fail.
+  //
+  // Also absent from the no-tools set: api_unauthorized (needs a new key),
+  // context_limit_exceeded and bundle_too_large (the same bundle reproduces
+  // them), response_malformed (a deterministic provider defect), and both
+  // mediated-retrieval codes (a model that asked out of scope will ask again).
 ]
 
 export function isRetryablePlanReviewReasonCode(code: PlanReviewReasonCode): boolean {

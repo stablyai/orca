@@ -140,6 +140,20 @@ describe('the committed fixture is genuinely v9', () => {
 })
 
 describe('v9 -> v10 migration over the fixture', () => {
+  /**
+   * The version the CURRENT build migrates to.
+   *
+   * Read from the source of truth rather than hardcoded, so a later phase
+   * raising SCHEMA_VERSION does not fail a Phase 11 fixture test. What the
+   * fixture proves is that a v9 profile reaches current — not that current is
+   * any particular number.
+   */
+  async function currentSchemaVersion() {
+    const { SCHEMA_VERSION } =
+      await import('../../src/main/audited-workflow/audited-task-schema.ts')
+    return SCHEMA_VERSION
+  }
+
   async function migrate() {
     const { createAuditedWorkflowTables, migrateAuditedWorkflowSchema } =
       await import('../../src/main/audited-workflow/audited-task-schema.ts')
@@ -157,7 +171,7 @@ describe('v9 -> v10 migration over the fixture', () => {
     }
   }
 
-  it('raises user_version from 9 to 10', async () => {
+  it('raises user_version from 9 to the current schema version', async () => {
     const before = open(workingCopy, { readOnly: true })
     expect(userVersion(before)).toBe(9)
     before.close()
@@ -166,7 +180,11 @@ describe('v9 -> v10 migration over the fixture', () => {
 
     const after = open(workingCopy, { readOnly: true })
     try {
-      expect(userVersion(after)).toBe(10)
+      const current = await currentSchemaVersion()
+      expect(userVersion(after)).toBe(current)
+      // The Phase 10 floor: whatever current is, the fixture must have crossed
+      // the version that introduced audited_land_attempts.
+      expect(current).toBeGreaterThanOrEqual(10)
     } finally {
       after.close()
     }
@@ -301,7 +319,7 @@ describe('v9 -> v10 migration over the fixture', () => {
 
     const second = open(workingCopy, { readOnly: true })
     try {
-      expect(userVersion(second)).toBe(10)
+      expect(userVersion(second)).toBe(await currentSchemaVersion())
       expect(columnNames(second, 'audited_tasks').length).toBe(columnsAfterFirst)
       expect(second.prepare('SELECT COUNT(*) n FROM audited_tasks').get().n).toBe(taskCount)
     } finally {

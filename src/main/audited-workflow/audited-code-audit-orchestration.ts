@@ -25,6 +25,7 @@ import { launchAndFinalizeCodeAudit } from './audited-code-audit-launch'
 import { getCodeAuditLastMessagePath } from './audited-code-audit-paths'
 import { resolveAcceptanceCriteria } from './audited-plan-audit-criteria'
 import { resolveAuditedCodexProvider } from './audited-codex-provider-settings'
+import { buildNoToolsCodeAuditBundle } from './audited-no-tools-artifacts'
 import { removeLastMessageFile } from './audited-plan-audit-verdict'
 import { requestCodeFix } from './audited-code-audit-fix'
 import { validateRetryTransition } from './audited-workflow-state-machine'
@@ -153,7 +154,8 @@ export async function startCodeAudit(taskId: string): Promise<CodeAuditCommandRe
       candidateTreeOid: candidate.treeOid,
       round: task.fixRound,
       worktreeVerifiedAtMs: nowMs,
-      expectedWorktreeIdentity
+      expectedWorktreeIdentity,
+      auditMode: providerResolution.mode
     },
     nowMs
   )
@@ -162,15 +164,33 @@ export async function startCodeAudit(taskId: string): Promise<CodeAuditCommandRe
   }
   broadcastIfProjectable(taskId)
 
+  const description = parseDescription(task.specJson)
+
+  // The bundle is prepared ONLY for the no-tools transport. The CLI path reads
+  // the worktree itself under --sandbox read-only, so assembling a bundle for it
+  // would be unused work — and would read a diff that no one consumes.
+  const bundle =
+    providerResolution.mode === 'byesu_no_tools'
+      ? await buildNoToolsCodeAuditBundle({
+          task,
+          description,
+          criteria: criteria.criteria,
+          worktreePath: started.worktreePath,
+          candidateTreeOid: candidate.treeOid
+        })
+      : undefined
+
   await launchAndFinalizeCodeAudit(
     {
       runId: started.runId,
       taskId,
       // The CAS-CONFIRMED path, read inside the admission transaction.
       worktreePath: started.worktreePath,
+      mode: providerResolution.mode,
+      bundle,
       prompt: buildCodeAuditPrompt({
         title: task.title,
-        description: parseDescription(task.specJson),
+        description,
         acceptanceCriteria: criteria.criteria,
         baseCommit: task.baseCommit,
         fixRound: task.fixRound

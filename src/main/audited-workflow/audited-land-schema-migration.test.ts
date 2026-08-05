@@ -34,8 +34,11 @@ describe('v10 schema shape', () => {
 
   afterEach(() => db.close())
 
-  it('declares SCHEMA_VERSION 10', () => {
-    expect(SCHEMA_VERSION).toBe(10)
+  it('declares a SCHEMA_VERSION at or beyond the Phase 10 floor', () => {
+    // Phase 10 introduced v10. A LATER phase may legitimately raise this, so the
+    // assertion is a floor rather than an equality — pinning the exact number
+    // would make every future migration fail a Phase 10 test for no reason.
+    expect(SCHEMA_VERSION).toBeGreaterThanOrEqual(10)
   })
 
   it('creates audited_land_attempts with BOTH bindings', () => {
@@ -96,7 +99,9 @@ describe('v9 -> v10 is additive and produces an identical table', () => {
 
     migrateAuditedWorkflowSchema(migrated)
 
-    expect(migrated.pragma('user_version', { simple: true })).toBe(10)
+    // Migrates all the way to CURRENT, not merely to 10: a v9 profile opened by
+    // a later build must arrive at that build's version.
+    expect(migrated.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION)
     // The tasks table was NOT rebuilt.
     expect(tableSql(migrated, 'audited_tasks')).toBe(tasksBefore)
 

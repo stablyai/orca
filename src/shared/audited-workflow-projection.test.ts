@@ -5,6 +5,7 @@ import {
   AUDITED_PROJECTION_FORBIDDEN_KEYS,
   type ProjectionSourceTask
 } from './audited-workflow-projection'
+import { AUDIT_MODES, type AuditMode } from './audited-audit-mode-types'
 
 function baseSource(overrides: Partial<ProjectionSourceTask> = {}): ProjectionSourceTask {
   return {
@@ -67,6 +68,7 @@ function baseSource(overrides: Partial<ProjectionSourceTask> = {}): ProjectionSo
     codeAuditRunStatus: null,
     codeAuditVerdict: null,
     codeAuditReasonCode: null,
+    codeAuditMode: null,
     codeAuditSummary: null,
     codeAuditFindingCount: null,
     fixRoundLimit: 3,
@@ -370,5 +372,49 @@ describe('Phase 9 publish authorities', () => {
     )
     expect(projection.reviewAvailable).toBe(true)
     expect(projection.reviewNumber).toBe(42)
+  })
+})
+
+// The audit MODE is descriptive evidence about a completed audit. It must not
+// become an input to any authority: a verdict from the no-tools transport is
+// still a verdict, and gating approval on the mode would silently invent a
+// policy ("no-tools audits cannot be approved") that nobody asked for.
+describe('the audit mode changes no authority', () => {
+  function approvable(mode: AuditMode | null): ProjectionSourceTask {
+    return baseSource({
+      state: 'awaiting_plan_review',
+      planArtifactId: 'pa_1',
+      planArtifactStatus: 'current',
+      planReviewApprovedForCurrentArtifact: true,
+      codeAuditMode: mode
+    })
+  }
+
+  it.each([...AUDIT_MODES, null])('planApprovalReady is unaffected by mode %s', (mode) => {
+    expect(buildAuditedTaskProjection(approvable(mode)).planApprovalReady).toBe(true)
+  })
+
+  it('still refuses approval on a superseded artifact, whatever the mode', () => {
+    const projection = buildAuditedTaskProjection(
+      baseSource({
+        state: 'awaiting_plan_review',
+        planArtifactId: 'pa_1',
+        planArtifactStatus: 'superseded',
+        planReviewApprovedForCurrentArtifact: true,
+        codeAuditMode: 'byesu_no_tools'
+      })
+    )
+    // Unaffected in BOTH directions: the mode neither grants nor withholds.
+    expect(projection.planApprovalReady).toBe(false)
+  })
+
+  it('projects the mode without any endpoint or credential riding along', () => {
+    const projection = buildAuditedTaskProjection(approvable('byesu_no_tools'))
+    expect(projection.codeAuditMode).toBe('byesu_no_tools')
+
+    const serialized = JSON.stringify(projection)
+    expect(serialized).not.toContain('byesu.com')
+    expect(serialized).not.toContain('ORCA_AUDITED_CODEX_API_KEY')
+    expect(serialized).not.toContain('Bearer')
   })
 })

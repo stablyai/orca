@@ -10,6 +10,7 @@
 // state IS awaiting_code_audit, so "the task is in the audit state and has a
 // current candidate" is satisfied WHILE Claude is editing the worktree. Admitting
 // an audit there would spawn Codex against a moving tree.
+import { toAuditMode, type AuditMode } from '../../shared/audited-audit-mode-types'
 import type Database from '../sqlite/sync-database'
 import type {
   CodeAuditReasonCode,
@@ -27,6 +28,8 @@ export type CodeAuditRunRow = {
   status: CodeAuditRunStatus
   verdict: CodeAuditVerdict | null
   reasonCode: CodeAuditReasonCode | null
+  /** HOW this run reached its model. NULL in the DB reads as `codex_cli`. */
+  auditMode: AuditMode
   findingCount: number | null
   summary: string | null
   exitCode: number | null
@@ -48,6 +51,9 @@ export function sqliteRowToCodeAuditRun(row: Record<string, unknown>): CodeAudit
     status: row.status as CodeAuditRunStatus,
     verdict: (row.verdict as CodeAuditVerdict | null) ?? null,
     reasonCode: (row.reason_code as CodeAuditReasonCode | null) ?? null,
+    // toAuditMode owns the NULL default, so a pre-v11 row reads as `codex_cli`
+    // in one place rather than at each call site.
+    auditMode: toAuditMode(row.audit_mode),
     findingCount: (row.finding_count as number | null) ?? null,
     summary: (row.summary as string | null) ?? null,
     exitCode: (row.exit_code as number | null) ?? null,
@@ -104,6 +110,8 @@ export type StartCodeAuditRunArgs = {
   worktreeVerifiedAtMs: number
   /** The verified identity this launch depends on; re-checked inside the CAS. */
   expectedWorktreeIdentity: ExpectedWorktreeIdentity
+  /** The transport, resolved before admission and recorded on the row. */
+  auditMode: AuditMode
 }
 
 /**
@@ -219,14 +227,18 @@ export function startCodeAuditRun(
       db.prepare(
         `INSERT INTO audited_code_audit_runs
            (id, task_id, candidate_id, candidate_tree_oid, round, status,
-            worktree_verified_at_ms, started_at_ms)
-         VALUES (?, ?, ?, ?, ?, 'running', ?, ?)`
+            audit_mode, worktree_verified_at_ms, started_at_ms)
+         VALUES (?, ?, ?, ?, ?, 'running', ?, ?, ?)`
       ).run(
         runId,
         args.taskId,
         args.candidateId,
         args.candidateTreeOid,
         args.round,
+        // WRITTEN AT ADMISSION, not at finalization. The row carries its
+        // transport from birth, so an interrupted run — which never reaches a
+        // finalize — is still attributable to the mode that produced it.
+        args.auditMode,
         args.worktreeVerifiedAtMs,
         nowMs
       )

@@ -92,7 +92,21 @@ export const CODE_AUDIT_REASON_CODES = [
   'cancelled_by_user',
   'interrupted',
   'verdict_unparseable',
-  'unexpected_commit_detected'
+  'unexpected_commit_detected',
+  // The no-tools adapter's transport and protocol failures. Mirrored one-for-one
+  // from NO_TOOLS_REASON_CODES rather than collapsed into `spawn_failed`: none
+  // of these involves a process, and reporting an HTTP 429 as a spawn failure
+  // would send a user looking for a missing binary.
+  'api_unauthorized',
+  'api_rate_limited',
+  'api_unavailable',
+  'api_timeout',
+  'response_malformed',
+  'context_limit_exceeded',
+  'bundle_too_large',
+  'redaction_failed',
+  'context_request_invalid',
+  'context_budget_exhausted'
 ] as const
 export type CodeAuditReasonCode = (typeof CODE_AUDIT_REASON_CODES)[number]
 
@@ -119,7 +133,13 @@ export const RETRYABLE_CODE_AUDIT_REASON_CODES: readonly CodeAuditReasonCode[] =
   'codex_not_found',
   'empty_output',
   'worktree_identity_changed',
-  'provider_storage_unavailable'
+  'provider_storage_unavailable',
+  // The three transient no-tools transport failures. Mirrors
+  // RETRYABLE_NO_TOOLS_REASON_CODES; the parity test pins the two lists
+  // together so a code added there cannot be silently non-retryable here.
+  'api_rate_limited',
+  'api_unavailable',
+  'api_timeout'
 ]
 
 export function isRetryableCodeAuditReasonCode(code: CodeAuditReasonCode): boolean {

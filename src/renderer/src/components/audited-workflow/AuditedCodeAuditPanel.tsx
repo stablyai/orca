@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
+import { AUDIT_MODE_LABELS } from '../../../../shared/audited-audit-mode-types'
 import type { AuditedTaskStatusProjection } from '../../../../shared/audited-workflow-types'
 import type { AuditedWorkflowCodeAuditResult } from '../../../../shared/audited-workflow-command-types'
 import {
@@ -28,6 +29,18 @@ import {
 import { getWorktreeErrorMessage } from './audited-worktree-error-messages'
 
 type Props = { task: AuditedTaskStatusProjection }
+
+/**
+ * The hover text for the no-tools badge.
+ *
+ * States the LIMITATION, not the mechanism: what matters to someone reading a
+ * verdict is that the reviewer could not open the repository, so its opinion
+ * rests only on what it was shown.
+ */
+const NO_TOOLS_MODE_HINT = translate(
+  'auto.components.auditedWorkflow.codeAudit.noToolsHint',
+  'Reviewed without tools: the reviewer saw only the change summary Orca sent, and could not read the repository, run commands, or browse.'
+)
 
 /**
  * A failed command carries one of two closed vocabularies, selected by `kind`.
@@ -83,11 +96,28 @@ export function AuditedCodeAuditPanel({ task }: Props): React.JSX.Element | null
         <span className="text-[11px] font-medium uppercase text-muted-foreground">
           {roundLabel}
         </span>
-        {task.codeAuditVerdict ? (
-          <Badge variant={getPlanReviewVerdictVariant(task.codeAuditVerdict)}>
-            {getPlanReviewVerdictLabel(task.codeAuditVerdict)}
-          </Badge>
-        ) : null}
+        <div className="flex items-center gap-2">
+          {/*
+            THE MODE SITS BESIDE THE VERDICT, NOT BURIED IN A TOOLTIP. A
+            no-tools audit is weaker evidence than a Codex CLI one, and a user
+            deciding whether to trust an "approved" badge has to be able to see
+            which produced it without hovering or opening anything.
+
+            `codex_cli` is deliberately UNLABELLED: it is the full-strength
+            default, and badging it too would make the no-tools marker read as a
+            neutral variant rather than a caveat.
+          */}
+          {task.codeAuditMode === 'byesu_no_tools' ? (
+            <Badge variant="outline" title={NO_TOOLS_MODE_HINT}>
+              {AUDIT_MODE_LABELS.byesu_no_tools}
+            </Badge>
+          ) : null}
+          {task.codeAuditVerdict ? (
+            <Badge variant={getPlanReviewVerdictVariant(task.codeAuditVerdict)}>
+              {getPlanReviewVerdictLabel(task.codeAuditVerdict)}
+            </Badge>
+          ) : null}
+        </div>
       </div>
 
       {!task.candidateAvailable ? (

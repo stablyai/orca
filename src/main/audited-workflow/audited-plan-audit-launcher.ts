@@ -1,15 +1,27 @@
 // Assembles a Codex plan-audit launch: argv, env, then the spawn. Split from the
 // orchestration so the spawn seam is injectable in tests without mocking the
 // whole entry point (mirroring audited-execution-launcher.ts).
+import type { AuditMode } from '../../shared/audited-audit-mode-types'
 import { prepareLocalCommitMessageAgentEnv } from '../text-generation/commit-message-agent-environment'
 import { buildCodexPlanAuditPlan, DEFAULT_PLAN_AUDIT_MODEL } from './audited-codex-launch-plan'
 import { runCodexProcess, type CodexProcessOutcome } from './audited-codex-process'
+import { runNoToolsAudit } from './audited-no-tools-adapter'
+import type { BundleInput } from './audited-no-tools-bundle'
 
 export type PlanAuditLaunchContext = {
   runId: string
   taskId: string
   worktreePath: string
   prompt: string
+  /**
+   * The transport, resolved at admission.
+   *
+   * The branch on this value is EXCLUSIVE: `byesu_no_tools` returns before any
+   * argv is built or any process is spawned.
+   */
+  mode: AuditMode
+  /** Bundle material for the no-tools transport; absent for the CLI path. */
+  bundle?: BundleInput
 }
 
 export type PlanAuditLaunchArgs = PlanAuditLaunchContext & {
@@ -29,6 +41,17 @@ export function setAuditedCodexRunnerForTests(runner: Runner | undefined): void 
 export async function runAuditedCodex(args: PlanAuditLaunchArgs): Promise<CodexProcessOutcome> {
   if (runnerOverride) {
     return runnerOverride(args)
+  }
+
+  // THE NO-TOOLS BRANCH RETURNS BEFORE ANY SPAWN. Everything below — argv
+  // construction, env preparation, runCodexProcess — is unreachable in no-tools
+  // mode, which is what the "creates no subprocess" assertion rests on.
+  if (args.mode === 'byesu_no_tools') {
+    if (!args.bundle) {
+      console.error('[auditedWorkflow] No-tools plan audit reached launch without a bundle.')
+      return { kind: 'no_tools_failed', reasonCode: 'bundle_too_large' }
+    }
+    return runNoToolsAudit({ bundle: args.bundle, scopeRoot: args.worktreePath })
   }
 
   // The model is a main-process constant. The renderer supplies only a taskId,

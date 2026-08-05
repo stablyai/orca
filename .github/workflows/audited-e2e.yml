@@ -12,10 +12,20 @@ name: Audited E2E
 # directory on the runner. There is no fork, no shared remote, and no PR/MR
 # creation against a real host.
 #
-# THE CODEX AUDIT SEGMENT IS NOT CERTIFIED HERE. S11 asserts that a
-# Byesu-configured task refuses with exactly `credential_delivery_unavailable`,
-# produced by an inert zero-byte fixture. That is a positive assertion of correct
-# REFUSAL, recorded as EXPECTED-BLOCKED — never counted as a passing audit.
+# THE CODEX-TOOLS AUDIT SEGMENT IS NOT CERTIFIED HERE.
+#
+# S11 asserts that a Byesu-configured task resolves to the `byesu_no_tools`
+# adapter, using an inert zero-byte fixture that is never decrypted. That is a
+# CONFIGURATION assertion, not an audit result.
+#
+# A `byesu_no_tools` run is NOT a Codex-tools audit and must never be recorded
+# as one: it has no shell, no filesystem, no MCP, no subprocess, and no network
+# of its own, and the model sees only the bounded bundle Orca assembled.
+#
+# S11b keeps the genuine gate closed: Codex CLI credential delivery still
+# refuses with `credential_delivery_unavailable`. The audited chain remains
+# UNCERTIFIED through the Codex-tools segment until a separately approved
+# provider architecture exists.
 
 on:
   workflow_call:

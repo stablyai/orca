@@ -9,17 +9,44 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { resolveCliCommand } from '../codex-cli/command'
 import { killWithDescendantSweep } from '../pty-descendant-termination'
 import { getSpawnArgsForWindows, UnsafeWindowsBatchArgumentsError } from '../win32-utils'
+import type { NoToolsReasonCode } from '../../shared/audited-audit-mode-types'
 import { MAX_EXECUTION_OUTPUT_BYTES } from './audited-execution-output-store'
 import { CODEX_PLAN_AUDIT_TIMEOUT_MS, findLaunchPlanViolation } from './audited-codex-launch-plan'
 
 export type CodexProcessOutcome =
-  | { kind: 'exit'; exitCode: number | null; stdout: string; stderr: string }
+  | {
+      kind: 'exit'
+      exitCode: number | null
+      stdout: string
+      stderr: string
+      /**
+       * The agent's final message, when the transport delivered it IN BAND.
+       *
+       * The CLI path leaves this undefined: its verdict comes from the
+       * `--output-last-message` file, never from stdout (see
+       * audited-plan-audit-verdict.ts for why scraping stdout is not done at
+       * all). The no-tools adapter has no file to write, so it carries the text
+       * here instead. Callers prefer this when present and fall back to the
+       * file, which is what lets ONE finalize path serve both transports.
+       */
+      lastMessage?: string
+    }
   | { kind: 'not_found' }
   | { kind: 'spawn_failed' }
   | { kind: 'launch_plan_invalid' }
   | { kind: 'timeout'; stdout: string; stderr: string }
   | { kind: 'cancelled'; stdout: string; stderr: string }
   | { kind: 'output_too_large'; stdout: string; stderr: string }
+  /**
+   * The no-tools adapter failed before producing a message.
+   *
+   * A DISTINCT ARM rather than a reuse of `spawn_failed`: nothing spawned, and
+   * the existing arms all describe a process lifecycle this transport does not
+   * have. Adding it here forces every exhaustive switch over this union to
+   * decide what a transport failure means, instead of letting one fall through
+   * to a default that could reach an approval.
+   */
+  | { kind: 'no_tools_failed'; reasonCode: NoToolsReasonCode }
 
 export type RunCodexArgs = {
   argv: string[]

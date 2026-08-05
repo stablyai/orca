@@ -75,10 +75,16 @@ export async function launchAndFinalizeReview(
 
   const verified = await verifyWorktreeForTask(context.taskId)
 
-  // The verdict comes ONLY from the last-message file. Missing, unreadable,
-  // oversized, empty, or malformed all fail closed — never an approved verdict.
+  // The verdict comes from the last-message file on the CLI path, and IN BAND
+  // from the no-tools adapter, which spawns nothing and so has no file to write.
+  // Both go through the same parser: missing, unreadable, oversized, empty, or
+  // malformed all fail closed — never an approved verdict.
   const parsed =
-    outcome.kind === 'exit' && outcome.exitCode === 0 ? readAndParseVerdict(lastMessagePath) : null
+    outcome.kind === 'exit' && outcome.exitCode === 0
+      ? outcome.lastMessage !== undefined
+        ? parsePlanAuditVerdict(outcome.lastMessage)
+        : readAndParseVerdict(lastMessagePath)
+      : null
 
   const decision = decidePlanReviewOutcome({
     outcome,

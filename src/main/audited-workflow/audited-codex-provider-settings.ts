@@ -9,6 +9,7 @@
 // exists so GlobalSettings and preload can be typed ahead of the future picker,
 // and it is dropped from every renderer-originated settings update — so a
 // hand-planted or stale value is inert and cannot activate anything.
+import type { AuditMode } from '../../shared/audited-audit-mode-types'
 import type { AuditedCodexProviderStatus } from '../../shared/audited-codex-provider-types'
 import type { PlanReviewReasonCode } from '../../shared/audited-plan-artifact-types'
 import {
@@ -20,7 +21,19 @@ import { hasAuditedCodexProviderKey } from './audited-codex-provider-key-store'
 
 export type AuditedCodexProviderResolution =
   // `provider: null` is the built-in default path — unchanged Phase 5 behaviour.
-  | { ok: true; provider: AuditedCodexProviderDefinition | null; model: string | null }
+  | {
+      ok: true
+      provider: AuditedCodexProviderDefinition | null
+      model: string | null
+      /**
+       * The transport this launch must use.
+       *
+       * `codex_cli` spawns the binary. `byesu_no_tools` uses the HTTPS adapter
+       * and MUST NOT spawn anything — the launcher branches on this and nothing
+       * else, so the two transports cannot both run for one audit.
+       */
+      mode: AuditMode
+    }
   | { ok: false; reasonCode: PlanReviewReasonCode }
 
 /**
@@ -30,6 +43,11 @@ export type AuditedCodexProviderResolution =
  * is an opaque existence check; nothing here decrypts, and nothing here can
  * observe the secret. That is the whole point: while credential delivery is
  * disabled, admission must not touch the value even to validate it.
+ *
+ * A configured provider now resolves to the `byesu_no_tools` transport rather
+ * than refusing. See the branch comment for why that does not reopen credential
+ * delivery: the adapter needs no child process, so there is no environment to
+ * propagate a secret into. resolveAuditedCodexCliProvider still refuses.
  *
  * Two codes are consequently NOT produced here in this tranche:
  *  - `provider_not_configured` would require distinguishing a corrupt record
@@ -57,22 +75,54 @@ export function resolveAuditedCodexProvider(): AuditedCodexProviderResolution {
   // 1. No record ⇒ no custom provider. Selection is derived, so "no key" and
   //    "no provider" are the same fact.
   if (!probe.present) {
-    return { ok: true, provider: null, model: null }
+    return { ok: true, provider: null, model: null, mode: 'codex_cli' }
   }
 
-  // 2. A record exists — whatever its contents, which are never inspected.
-  //    Orca is deliberately declining to deliver the secret. Not
-  //    `provider_not_configured`: that would misreport the user's own state and
-  //    send them to configure something they already configured.
+  const provider = getSoleAuditedCodexProvider()
+
+  // 2. A record exists. The NO-TOOLS ADAPTER is the transport, and it needs no
+  //    credential DELIVERY: the key never leaves the main process, never enters
+  //    a child's environment, and never reaches argv. It goes from safeStorage
+  //    into an HTTPS Authorization header in this same process.
+  //
+  //    THIS IS WHY `credential_delivery_unavailable` IS NO LONGER RETURNED HERE.
+  //    That code answered "we hold a secret we cannot safely hand to Codex CLI",
+  //    which remains true — and is why the branch below still exists. It was
+  //    never a statement that the key was unusable for every purpose.
+  //
+  //    The mode is what keeps the result honest: a `byesu_no_tools` run has no
+  //    shell, no filesystem, no MCP, no subprocess, and no network of its own,
+  //    and is recorded and displayed as such. It is NOT a Codex-tools audit.
+  return { ok: true, provider, model: provider.defaultModel, mode: 'byesu_no_tools' }
+}
+
+/**
+ * Resolves a provider for a path that genuinely needs the CLI transport.
+ *
+ * Kept separate from resolveAuditedCodexProvider because the two questions are
+ * different: "can this audit run at all" now has a yes answer via the adapter,
+ * while "can Codex CLI be launched against this provider" is still no. Merging
+ * them would force one call site's answer onto the other.
+ *
+ * NO PRODUCTION CALLER TODAY. It exists so the Tranche 2 capability keeps a
+ * single, reviewed home — and so the constant it reads is not left dangling,
+ * which would invite someone to delete the gate as dead code.
+ */
+export function resolveAuditedCodexCliProvider(): AuditedCodexProviderResolution {
+  const probe = probeKeyPresence()
+  if (!probe.ok) {
+    return { ok: false, reasonCode: 'provider_storage_unavailable' }
+  }
+  if (!probe.present) {
+    return { ok: true, provider: null, model: null, mode: 'codex_cli' }
+  }
   if (!AUDITED_CODEX_CREDENTIAL_DELIVERY_ENABLED) {
+    // Unchanged Tranche 1 behaviour: delivering this secret to a child process
+    // needs the Windows/macOS/Linux propagation evidence, which does not exist.
     return { ok: false, reasonCode: 'credential_delivery_unavailable' }
   }
-
-  // 3. Unreachable while the capability is disabled. Kept as the honest shape of
-  //    the success case rather than a throw, so enabling delivery is a one-line
-  //    capability change plus the launcher overlay, reviewed together.
   const provider = getSoleAuditedCodexProvider()
-  return { ok: true, provider, model: provider.defaultModel }
+  return { ok: true, provider, model: provider.defaultModel, mode: 'codex_cli' }
 }
 
 /**

@@ -10,6 +10,7 @@ import {
   isRetryableCodeAuditReasonCode,
   type CodeAuditReasonCode
 } from '../../../../shared/audited-code-audit-types'
+import { translateNoToolsReasonCode } from './audited-no-tools-error-messages'
 
 export function getCodeAuditErrorMessage(reasonCode: CodeAuditReasonCode): string {
   switch (reasonCode) {
@@ -173,6 +174,19 @@ export function getCodeAuditErrorMessage(reasonCode: CodeAuditReasonCode): strin
         'auto.components.auditedWorkflow.errors.codeAuditUnexpectedCommit',
         'The repository changed unexpectedly during the audit, so the result was refused.'
       )
+    // The no-tools transport codes share their text with the plan lane: the same
+    // transport produces them, so the same condition must read the same way.
+    case 'api_unauthorized':
+    case 'api_rate_limited':
+    case 'api_unavailable':
+    case 'api_timeout':
+    case 'response_malformed':
+    case 'context_limit_exceeded':
+    case 'bundle_too_large':
+    case 'redaction_failed':
+    case 'context_request_invalid':
+    case 'context_budget_exhausted':
+      return translateNoToolsReasonCode(reasonCode, translate)
   }
 }
 

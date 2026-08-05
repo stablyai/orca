@@ -10,9 +10,12 @@
 // The ARGV BUILDER is reused verbatim: nothing in buildCodexPlanAuditPlan is
 // plan-specific (--sandbox read-only, -c approval_policy="never",
 // --ignore-user-config, prompt on stdin). Only the prompt differs.
+import type { AuditMode } from '../../shared/audited-audit-mode-types'
 import { prepareLocalCommitMessageAgentEnv } from '../text-generation/commit-message-agent-environment'
 import { buildCodexPlanAuditPlan, DEFAULT_PLAN_AUDIT_MODEL } from './audited-codex-launch-plan'
 import { runCodexProcess, type CodexProcessOutcome } from './audited-codex-process'
+import { runNoToolsAudit } from './audited-no-tools-adapter'
+import type { BundleInput } from './audited-no-tools-bundle'
 
 export type CodeAuditLaunchContext = {
   runId: string
@@ -24,6 +27,16 @@ export type CodeAuditLaunchContext = {
 export type CodeAuditLaunchArgs = CodeAuditLaunchContext & {
   /** Main-derived from userData + runId; never renderer-supplied. */
   lastMessagePath: string
+  /**
+   * The transport, resolved at admission.
+   *
+   * The branch on this value is EXCLUSIVE: `byesu_no_tools` returns before any
+   * argv is built or any process is spawned, so the two transports can never
+   * both run for one audit.
+   */
+  mode: AuditMode
+  /** Bundle material, prepared by the orchestration. Only used in no-tools mode. */
+  bundle?: BundleInput
 }
 
 // Test seam: lets a suite assert the admission path never reaches a spawn — the
@@ -40,6 +53,19 @@ export async function runAuditedCodeAuditCodex(
 ): Promise<CodexProcessOutcome> {
   if (runnerOverride) {
     return runnerOverride(args)
+  }
+
+  // THE NO-TOOLS BRANCH RETURNS BEFORE ANY SPAWN. Everything below this point —
+  // argv construction, env preparation, runCodexProcess — is unreachable in
+  // no-tools mode, which is what the "creates no subprocess" test asserts.
+  if (args.mode === 'byesu_no_tools') {
+    if (!args.bundle) {
+      // A no-tools launch with no bundle is a programming error, not a user
+      // condition. Failing closed keeps it out of the approval path.
+      console.error('[auditedWorkflow] No-tools code audit reached launch without a bundle.')
+      return { kind: 'no_tools_failed', reasonCode: 'bundle_too_large' }
+    }
+    return runNoToolsAudit({ bundle: args.bundle, scopeRoot: args.worktreePath })
   }
 
   // The model is a main-process constant. The renderer supplies only a taskId, so

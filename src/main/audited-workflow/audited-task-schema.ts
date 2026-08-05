@@ -35,8 +35,9 @@ import {
   PHASE_8_TASK_COLUMNS,
   createCommitTables
 } from './audited-commit-schema'
-import { PHASE_9_TASK_COLUMNS, createPublishTables } from './audited-publish-schema'
+import { createPublishTables, migrateToV9 } from './audited-publish-schema'
 import { createLandTables, migrateToV10 } from './audited-land-schema'
+import { migrateToV11 } from './audited-no-tools-schema'
 import type Database from '../sqlite/sync-database'
 
 // Schema versions: v1 initial (audited_tasks, audited_transitions). v2 (Phase 2)
@@ -95,7 +96,9 @@ import type Database from '../sqlite/sync-database'
 // CHECK from the beginning, so that CHECK is unchanged and no table rebuild is
 // required. audited_transitions.event_type is unconstrained TEXT, so the new
 // land_* event types need no migration either.
-export const SCHEMA_VERSION = 10
+// v11 adds `audit_mode` to both run tables — additive, no rebuild. NULL reads as
+// `codex_cli`; see audited-no-tools-schema.ts for why that default direction.
+export const SCHEMA_VERSION = 11
 
 export function createAuditedWorkflowTables(db: Database.Database): void {
   const stateList = AUDITED_TASK_STATES.map((s) => `'${s}'`).join(', ')
@@ -409,23 +412,13 @@ export function migrateAuditedWorkflowSchema(db: Database.Database): void {
       createCommitTables(db)
     }
     if (current < 9) {
-      // Phase 9: one new table plus four additive audited_tasks columns. FULLY
-      // ADDITIVE — no CHECK change on any existing table and no rebuild, because
-      // Phase 9 introduces no task state (the publish lane rests in `committed`
-      // throughout). Created here rather than relying on
-      // createAuditedWorkflowTables having run, for the same reason as v4-v8:
-      // this function is also called directly against a legacy DB, and a
-      // migration that silently depends on another call would leave that path
-      // without the table.
-      for (const [column, type] of PHASE_9_TASK_COLUMNS) {
-        if (!columnExists(db, 'audited_tasks', column)) {
-          db.exec(`ALTER TABLE audited_tasks ADD COLUMN ${column} ${type}`)
-        }
-      }
-      createPublishTables(db)
+      migrateToV9(db, columnExists)
     }
     if (current < 10) {
       migrateToV10(db, columnExists)
+    }
+    if (current < 11) {
+      migrateToV11(db, columnExists)
     }
     db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`)
     db.exec('COMMIT')
