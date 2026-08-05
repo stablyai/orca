@@ -143,6 +143,7 @@ export function EditorPanelShell({
           isMermaid={model.isMermaid}
           isCsv={model.isCsv}
           isNotebook={model.isNotebook}
+          isSqlite={model.isSqlite}
           mdViewMode={model.mdViewMode}
           isChangesMode={model.isDiffSurface && !model.isSingleDiff}
           sideBySide={sideBySide}

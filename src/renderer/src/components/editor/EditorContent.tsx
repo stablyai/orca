@@ -3,6 +3,7 @@ import React from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { AlertCircle, RefreshCw } from 'lucide-react'
 import { detectLanguage } from '@/lib/language-detect'
+import { resolveSqliteFileOwner } from './sqlite-file-owner'
 import { joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
@@ -42,6 +43,7 @@ const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
 const MermaidViewer = lazy(() => import('./MermaidViewer'))
 const CsvViewer = lazy(() => import('./CsvViewer'))
 const IpynbViewer = lazy(() => import('./IpynbViewer'))
+const SqliteViewer = lazy(() => import('./SqliteViewer'))
 
 // Why: module-level for a stable no-op identity so read-only tabs don't rebuild callbacks each render.
 const noopEditorContentChange = (_content: string): void => {}
@@ -128,6 +130,7 @@ export function EditorContent({
   isMermaid,
   isCsv,
   isNotebook,
+  isSqlite,
   mdViewMode,
   isChangesMode,
   sideBySide,
@@ -155,6 +158,7 @@ export function EditorContent({
   isMermaid: boolean
   isCsv: boolean
   isNotebook: boolean
+  isSqlite: boolean
   mdViewMode: MarkdownViewMode
   isChangesMode: boolean
   sideBySide: boolean
@@ -204,6 +208,14 @@ export function EditorContent({
     activeFile.mode === 'conflict-review' && activeFile.conflictReview?.selectedFileId
       ? (openFiles.find((file) => file.id === activeFile.conflictReview?.selectedFileId) ?? null)
       : null
+
+  const renderSqliteViewer = (file: OpenFile): React.JSX.Element => (
+    <SqliteViewer
+      key={file.id}
+      filePath={file.filePath}
+      owner={resolveSqliteFileOwner(file.worktreeId ?? null, file.filePath)}
+    />
+  )
 
   const isCombinedDiff =
     activeFile.mode === 'diff' &&
@@ -731,6 +743,10 @@ export function EditorContent({
   if (activeFile.mode === 'edit') {
     if (activeFile.conflict?.kind === 'conflict-placeholder') {
       return <ConflictPlaceholderView file={activeFile} />
+    }
+    // Before the content lookup: the viewer reads over its own IPC, and the text pipeline rejects a database as oversized binary.
+    if (isSqlite) {
+      return renderSqliteViewer(activeFile)
     }
     const fc = fileContents[activeFile.id]
     if (!fc) {

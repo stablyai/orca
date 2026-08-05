@@ -13472,6 +13472,19 @@
               }
             }
           }
+        },
+        "SqliteTableList": {
+          "heading": "Tables"
+        },
+        "SqliteViewer": {
+          "loading": "Reading database…",
+          "noTables": "This database has no tables",
+          "rows": "rows",
+          "columns": "columns",
+          "counting": "counting rows…",
+          "remoteUnsupported": "Opening SQLite databases on SSH hosts is not supported yet. Copy the file locally to inspect it.",
+          "runtimeUnsupported": "Opening SQLite databases in a remote runtime environment is not supported yet.",
+          "ownerUnresolved": "Still determining which host owns this file. Reopen the tab once the connection is ready."
         }
       },
       "diff": {

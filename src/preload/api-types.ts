@@ -8,6 +8,7 @@ import type {
   HostedReviewInfo,
   HostedReviewProvider
 } from '../shared/hosted-review'
+import type { SqliteDatabaseOverview, SqliteTablePage } from '../shared/sqlite-database'
 import type { NativeFileDropPayload } from '../shared/native-file-drop'
 import type { BrowserFindSource } from '../shared/browser-find-source'
 import type { DashboardSnapshot, DashboardRevealAgentArgs } from '../shared/dashboard-snapshot'
@@ -2731,6 +2732,24 @@ export type PreloadApi = {
   openCodeUsage: OpenCodeUsageApi
   aiVault: AiVaultApi
   nativeChat: NativeChatApi
+  sqlite: {
+    openDatabase: (args: {
+      filePath: string
+      connectionId?: string
+    }) => Promise<SqliteDatabaseOverview>
+    countTableRows: (args: {
+      filePath: string
+      table: string
+      connectionId?: string
+    }) => Promise<number>
+    readTablePage: (args: {
+      filePath: string
+      table: string
+      offset: number
+      limit: number
+      connectionId?: string
+    }) => Promise<SqliteTablePage>
+  }
   fs: {
     readDir: (args: { dirPath: string; connectionId?: string }) => Promise<DirEntry[]>
     readFile: (args: {
