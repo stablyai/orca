@@ -295,6 +295,82 @@ describe('mobile session terminal persistence retirement', () => {
     expect(untrustedReplacement.terminalPtyIncarnationsByPaneKey).toBeUndefined()
   })
 
+  it('exempts delegated worktrees from the fence so durable SSH membership survives', () => {
+    const sshWorktreeId = 'repo::/srv/atlas-eval'
+    const restoredWrite = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [sshWorktreeId]: [
+          {
+            id: 'durable-tab',
+            ptyId: 'ssh:target-1@@pty-42',
+            worktreeId: sshWorktreeId,
+            title: 'Terminal 16',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ],
+        [WORKTREE_ID]: [
+          {
+            id: 'stale-local-tab',
+            ptyId: null,
+            worktreeId: WORKTREE_ID,
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      unifiedTabs: {
+        [sshWorktreeId]: [
+          {
+            id: 'durable-tab',
+            entityId: 'durable-tab',
+            groupId: 'group-1',
+            worktreeId: sshWorktreeId,
+            contentType: 'terminal' as const,
+            label: 'Terminal 16',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      tabGroups: {
+        [sshWorktreeId]: [
+          {
+            id: 'group-1',
+            worktreeId: sshWorktreeId,
+            activeTabId: 'durable-tab',
+            tabOrder: ['durable-tab']
+          }
+        ]
+      }
+    }
+    // The fenced prior froze both worktrees' membership as empty.
+    const fencedPrior = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: { [sshWorktreeId]: [], [WORKTREE_ID]: [] },
+      unifiedTabs: { [sshWorktreeId]: [], [WORKTREE_ID]: [] },
+      terminalTopologyRevisionByRepoId: { [REPO_ID]: 92 }
+    }
+
+    const result = sanitizeWorkspaceSessionTerminalRetirements(restoredWrite, fencedPrior, {
+      worktreeMembershipDelegated: (worktreeId) => worktreeId === sshWorktreeId
+    })
+
+    expect(result.tabsByWorktree[sshWorktreeId]?.map((tab) => tab.id)).toEqual(['durable-tab'])
+    expect(result.unifiedTabs?.[sshWorktreeId]?.map((tab) => tab.id)).toEqual(['durable-tab'])
+    // Non-delegated worktrees of the fenced repo still rebase onto prior membership.
+    expect(result.tabsByWorktree[WORKTREE_ID]).toEqual([])
+    expect(result.terminalTopologyRevisionByRepoId?.[REPO_ID]).toBe(92)
+  })
+
   it('migrates legacy tombstones into one repo watermark', () => {
     const stale = {
       ...getDefaultWorkspaceSession(),

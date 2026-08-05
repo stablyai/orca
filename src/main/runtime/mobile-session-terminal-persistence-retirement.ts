@@ -7,7 +7,8 @@ import {
 } from './mobile-session-terminal-retirement'
 import {
   advanceTerminalTopologyRevision,
-  rebaseWorkspaceSessionTerminalMembership
+  rebaseWorkspaceSessionTerminalMembership,
+  type TerminalMembershipRebaseOptions
 } from './workspace-session-terminal-membership-authority'
 
 function visibleTypeForContentType(
@@ -223,7 +224,8 @@ export function retireTerminalSurfaceFromPersistence(
 
 export function sanitizeWorkspaceSessionTerminalRetirements(
   incoming: WorkspaceSessionState,
-  prior: WorkspaceSessionState | undefined
+  prior: WorkspaceSessionState | undefined,
+  options?: TerminalMembershipRebaseOptions
 ): WorkspaceSessionState {
   if (
     !prior?.terminalSurfaceTombstonesByPaneKey &&
@@ -253,6 +255,7 @@ export function sanitizeWorkspaceSessionTerminalRetirements(
   }
   return rebaseWorkspaceSessionTerminalMembership(
     { ...next, terminalSurfaceTombstonesByPaneKey: {} },
-    prior
+    prior,
+    options
   )
 }

@@ -6279,7 +6279,12 @@ export class Store {
     deferSnapshotFiles = false
   ): void {
     const prior = this.state.workspaceSession
-    session = sanitizeWorkspaceSessionTerminalRetirements(session, prior)
+    session = sanitizeWorkspaceSessionTerminalRetirements(session, prior, {
+      // Why: direct-SSH worktrees persist durable membership in their ssh:
+      // partition; the local fence would rebase them onto a frozen snapshot.
+      worktreeMembershipDelegated: (worktreeId) =>
+        Boolean(this.getConnectionIdForWorktree(worktreeId))
+    })
     session = pruneWorkspaceSessionBrowserHistory(
       pruneLocalTerminalScrollbackBuffers(session, this.state.repos)
     )
