@@ -34,32 +34,19 @@ def load_runtime_with_stub_atspi():
     gi.repository = repository
     gi.require_version = lambda *args, **kwargs: None
 
-    sys.modules["gi"] = gi
-    sys.modules["gi.repository"] = repository
-    sys.modules["gi.repository.Atspi"] = atspi
-
+    # Why: patch.dict only for load — permanent sys.modules["gi"] stubs leak into
+    # later tests that import real GI (#10569 review).
     path = Path(__file__).with_name("runtime.py")
-    spec = importlib.util.spec_from_file_location("computer_use_linux_runtime", path)
-    module = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    with mock.patch.dict(sys.modules, {"gi": gi, "gi.repository": repository, "gi.repository.Atspi": atspi}):
-        # runtime imports Atspi at module load via from gi.repository import Atspi
-        # Inject before exec
-        pass
-    # Re-exec with modules already registered
-    source = path.read_text(encoding="utf-8")
-    # Provide minimal globals after stubbing gi
-    module_globals = {
-        "__name__": "computer_use_linux_runtime",
-        "__file__": str(path),
-    }
-    # Execute only through importlib after gi is in sys.modules
     sys.modules.pop("computer_use_linux_runtime", None)
-    spec = importlib.util.spec_from_file_location("computer_use_linux_runtime", path)
-    module = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(module)
-    return module
+    with mock.patch.dict(
+        sys.modules,
+        {"gi": gi, "gi.repository": repository, "gi.repository.Atspi": atspi},
+    ):
+        spec = importlib.util.spec_from_file_location("computer_use_linux_runtime", path)
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+        return module
 
 
 class SetValueTests(unittest.TestCase):
