@@ -513,6 +513,46 @@ function deriveUrl(domain: string, secure: boolean): string | null {
   }
 }
 
+// Why: Google integrity cookies are bound to the source browser TLS/env; planting
+// them into Orca's embedded jar triggers CookieMismatch. Same policy for native
+// Chromium import and file/Firefox/Safari shared import (#12601).
+const GOOGLE_INTEGRITY_COOKIE_NAMES = new Set([
+  'SIDCC',
+  '__Secure-1PSIDCC',
+  '__Secure-3PSIDCC',
+  '__Secure-STRP',
+  'AEC'
+])
+
+export function normalizeCookieHost(domain: string): string {
+  return (domain.startsWith('.') ? domain.slice(1) : domain).toLowerCase()
+}
+
+export function isGoogleIntegrityCookie(name: string, domain: string): boolean {
+  if (!GOOGLE_INTEGRITY_COOKIE_NAMES.has(name)) {
+    return false
+  }
+  const host = normalizeCookieHost(domain)
+  // Why: require exact google.com or a real subdomain — not suffix-confusion like notgoogle.com.
+  return host === 'google.com' || host.endsWith('.google.com')
+}
+
+export function cookieHostBelongsToImportedDomain(
+  cookieDomain: string,
+  importedHosts: ReadonlySet<string>
+): boolean {
+  const host = normalizeCookieHost(cookieDomain)
+  if (importedHosts.has(host)) {
+    return true
+  }
+  for (const imported of importedHosts) {
+    if (host.endsWith(`.${imported}`)) {
+      return true
+    }
+  }
+  return false
+}
+
 function validateCookieEntry(raw: RawCookieEntry): ValidatedCookie | null {
   if (typeof raw.domain !== 'string' || raw.domain.trim().length === 0) {
     return null
@@ -558,14 +598,67 @@ async function importValidatedCookies(
     `importValidatedCookies: ${cookies.length} validated of ${totalInput} total, partition="${targetPartition}"`
   )
   const targetSession = session.fromPartition(targetPartition)
-  let importedCount = 0
+  // Why: validation failures already count as skipped; integrity skips share the same bucket
+  // so totalCookies = importedCookies + skippedCookies (#12601).
   let skipped = totalInput - cookies.length
-  const domainSet = new Set<string>()
+  const importable: ValidatedCookie[] = []
+  for (const cookie of cookies) {
+    if (isGoogleIntegrityCookie(cookie.name, cookie.domain)) {
+      skipped++
+      continue
+    }
+    importable.push(cookie)
+  }
 
+  const domainSet = new Set<string>()
+  for (const cookie of importable) {
+    domainSet.add(normalizeCookieHost(cookie.domain))
+  }
+
+  // Why: do not clear the jar when nothing is importable — preserves unrelated sessions
+  // and avoids wiping on fully-filtered Google integrity payloads.
+  if (importable.length === 0) {
+    diag(`importValidatedCookies: nothing importable after integrity filter (skipped=${skipped})`)
+    return {
+      ok: true,
+      profileId: '',
+      summary: {
+        totalCookies: totalInput,
+        importedCookies: 0,
+        skippedCookies: skipped,
+        domains: []
+      }
+    }
+  }
+
+  // Why: replace only domains present in this import so other site sessions survive.
+  // Native Chromium full-snapshot import still clears the whole jar on its own path.
+  try {
+    const existing = await targetSession.cookies.get({})
+    for (const existingCookie of existing) {
+      const host = existingCookie.domain ?? ''
+      if (!cookieHostBelongsToImportedDomain(host, domainSet)) {
+        continue
+      }
+      const url = deriveUrl(host, existingCookie.secure)
+      if (!url) {
+        continue
+      }
+      try {
+        await targetSession.cookies.remove(url, existingCookie.name)
+      } catch (err) {
+        diag(`  cookie.remove failed domain=${host} name=${existingCookie.name}: ${String(err)}`)
+      }
+    }
+  } catch (err) {
+    diag(`  cookies.get for domain-scoped clear failed: ${String(err)}`)
+  }
+
+  let importedCount = 0
   // Why: Electron's cookies.set() rejects any non-printable-ASCII byte; strip as a safety net.
   const stripNonPrintable = (s: string): string => s.replace(/[^\x20-\x7E]/g, '')
 
-  for (const cookie of cookies) {
+  for (const cookie of importable) {
     try {
       // Why: Chromium rejects __Host- cookies unless they omit domain and use path=/.
       const isHostPrefixed = cookie.name.startsWith('__Host-')
@@ -581,13 +674,9 @@ async function importValidatedCookies(
         expirationDate: cookie.expirationDate
       })
       importedCount++
-      // Why: surface only the domain (never name/value/path) so the summary doesn't leak secret cookie data.
-      const cleanDomain = cookie.domain.startsWith('.') ? cookie.domain.slice(1) : cookie.domain
-      domainSet.add(cleanDomain)
     } catch (err) {
       skipped++
       if (skipped <= 5) {
-        // Find the exact offending character position and code
         const val = cookie.value
         let badInfo = 'none found'
         for (let i = 0; i < val.length; i++) {
@@ -1572,22 +1661,6 @@ export async function importCookiesFromBrowser(
       }
     }
 
-    // Why: Google integrity cookies are bound to the source browser's TLS/env; importing them triggers CookieMismatch, so skip and let Google reissue.
-    const INTEGRITY_COOKIE_NAMES = new Set([
-      'SIDCC',
-      '__Secure-1PSIDCC',
-      '__Secure-3PSIDCC',
-      '__Secure-STRP',
-      'AEC'
-    ])
-    function isIntegrityCookie(name: string, domain: string): boolean {
-      if (!INTEGRITY_COOKIE_NAMES.has(name)) {
-        return false
-      }
-      const d = domain.startsWith('.') ? domain.slice(1) : domain
-      return d === 'google.com' || d.endsWith('.google.com')
-    }
-
     let imported = 0
     let skipped = 0
     let integritySkipped = 0
@@ -1658,7 +1731,7 @@ export async function importCookiesFromBrowser(
       const domain = sourceRow.host_key as string
       const name = sourceRow.name as string
 
-      if (isIntegrityCookie(name, domain)) {
+      if (isGoogleIntegrityCookie(name, domain)) {
         integritySkipped++
         continue
       }
@@ -1783,10 +1856,12 @@ export async function importCookiesFromBrowser(
       diag(`  set UA for partition: ${ua.substring(0, 80)}...`)
     }
 
+    // Why: integrity skips are deliberate filters, not silent drops — count them so
+    // totalCookies = importedCookies + skippedCookies for the Chromium path too (#12601).
     const summary: BrowserCookieImportSummary = {
       totalCookies: sourceRows.length,
       importedCookies: imported,
-      skippedCookies: skipped,
+      skippedCookies: skipped + integritySkipped,
       domains: [...domainSet].sort(),
       ...(warning ? { warning } : {})
     }
