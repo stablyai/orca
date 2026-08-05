@@ -127,4 +127,31 @@ describeWithZmx('zmx PTY lifecycle', () => {
     await replacement.request('pty.shutdown', { id: spawned.id, immediate: true })
     await waitFor(async () => !(await supervisor!.listSessionNames()).includes(spawned.id))
   }, 30_000)
+
+  it('ends the durable session when an idle shell receives Ctrl+D', async () => {
+    storageRoot = mkdtempSync(join(tmpdir(), 'orca-zmx-ctrl-d-'))
+    const options = {
+      zmx: { executablePath: zmxPath!, namespace: 'integration', storageRoot }
+    }
+    supervisor = new ZmxPtySupervisor(options.zmx)
+    const first = createDispatcher()
+    firstHandler = new PtyHandler(first.dispatcher, 0, options)
+
+    const spawned = (await first.request('pty.spawn', {
+      cols: 80,
+      rows: 24,
+      cwd: storageRoot,
+      shellOverride: '/bin/sh'
+    })) as { id: string }
+
+    first.notify('pty.data', { id: spawned.id, data: '\x04' })
+
+    await waitFor(async () => !(await supervisor!.listSessionNames()).includes(spawned.id))
+    await waitFor(() =>
+      first.notifications.some(
+        (entry) => entry.method === 'pty.exit' && entry.params.id === spawned.id
+      )
+    )
+    expect(await supervisor.readMetadata(spawned.id)).toBeNull()
+  }, 30_000)
 })

@@ -48,6 +48,60 @@ describe('fetchWorkspaceSessionFromHosts', () => {
     expect(read.runtimeHostIdByWorkspaceSessionKey).toEqual({})
   })
 
+  it('re-materializes PTY-bound durable SSH tabs the local unified maps lost', async () => {
+    const worktreeId = 'ssh-repo::/home/atlas-eval'
+    const boundTab = {
+      id: 'tab-claude',
+      ptyId: 'ssh:target-1@@pty-42',
+      worktreeId,
+      title: 'Terminal 16',
+      customTitle: null,
+      color: null,
+      sortOrder: 15,
+      createdAt: 16
+    }
+    const unboundTab = {
+      id: 'tab-blank',
+      ptyId: null,
+      worktreeId,
+      title: 'Terminal 2',
+      customTitle: null,
+      color: null,
+      sortOrder: 1,
+      createdAt: 2
+    }
+    // The local partition owns the unified maps and recorded the worktree as empty
+    // after a failed restore; the SSH partition still holds the durable tabs.
+    const localSession: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: { [worktreeId]: [] },
+      unifiedTabs: { [worktreeId]: [] },
+      tabGroups: { [worktreeId]: [] }
+    }
+    const sshSession: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: { [worktreeId]: [unboundTab, boundTab] },
+      activeTabIdByWorktree: { [worktreeId]: boundTab.id }
+    }
+    const get = vi.fn(async (hostId?: string) =>
+      hostId === 'ssh:target-1' ? sshSession : localSession
+    )
+
+    const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
+      { get },
+      [{ connectionId: 'target-1', executionHostId: 'ssh:target-1' }],
+      []
+    )
+
+    const unified = read.session.unifiedTabs?.[worktreeId] ?? []
+    expect(unified.map((tab) => tab.id)).toEqual([boundTab.id])
+    expect(unified[0]).toMatchObject({ contentType: 'terminal', entityId: boundTab.id })
+    const groups = read.session.tabGroups?.[worktreeId] ?? []
+    expect(groups).toHaveLength(1)
+    expect(groups[0].tabOrder).toEqual([boundTab.id])
+    expect(groups[0].activeTabId).toBe(boundTab.id)
+  })
+
   it('reads saved runtime host partitions before runtime repos are loaded', async () => {
     const worktreeId = 'remote-repo::/srv/remote-wt'
     const localSession: WorkspaceSessionState = {

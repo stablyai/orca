@@ -2,6 +2,7 @@ import type { StoreApi } from 'zustand'
 import type { RemoteWorkspaceSnapshot } from '../../../shared/remote-workspace-types'
 import { importRemoteWorkspaceSession } from '../../../shared/remote-workspace-session-projection'
 import type { DirectSshAuthority } from '../../../shared/ssh-types'
+import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
 import { translate } from '@/i18n/i18n'
 import { buildWorkspaceSessionPayload } from '../lib/workspace-session'
 import { resolveDirectSshTargetScope } from '../lib/direct-ssh-target-scope'
@@ -16,6 +17,7 @@ import {
   mergeDirectSshRemoteWorkspaceSession,
   uniqueWorktreeIdByPath
 } from './remote-workspace-session-merge'
+import { repairUnifiedTabMembershipFromLegacyTabs } from '../lib/unified-tab-membership-repair'
 
 const REMOTE_WORKSPACE_SNAPSHOT_WRITE_SUPPRESS_MS = 1_000
 const SNAPSHOT_TERMINAL_RECONNECT_TIMEOUT_MS = 30_000
@@ -60,7 +62,7 @@ function currentRecoveryTabIds(
       (state.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id)
     )
   )
-  return new Set(
+  const recoveryTabIds = new Set(
     [
       ...Object.entries(state.directSshPaneRetryByTabId),
       ...Object.entries(state.directSshLivePtyBindingByTabId)
@@ -71,6 +73,19 @@ function currentRecoveryTabIds(
       )
       .map(([tabId]) => tabId)
   )
+  for (const worktreeId of worktreeIds) {
+    for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
+      if (tab.ptyId && parseAppSshPtyId(tab.ptyId)?.connectionId === authority.targetId) {
+        recoveryTabIds.add(tab.id)
+      }
+    }
+  }
+  for (const [tabId, ptyId] of Object.entries(state.pendingReconnectPtyIdByTabId ?? {})) {
+    if (targetTabIds.has(tabId) && parseAppSshPtyId(ptyId)?.connectionId === authority.targetId) {
+      recoveryTabIds.add(tabId)
+    }
+  }
+  return recoveryTabIds
 }
 
 export async function applyDirectSshRemoteWorkspaceSnapshot({
@@ -111,12 +126,20 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
   const remoteSession = importRemoteWorkspaceSession(snapshot.session, {
     resolveWorktreeId: uniqueWorktreeIdByPath(worktreeIds)
   })
-  const merged = mergeDirectSshRemoteWorkspaceSession(
-    buildWorkspaceSessionPayload(state),
-    remoteSession,
-    worktreeIds,
-    state.tabsByWorktree,
-    currentRecoveryTabIds(state, authority, worktreeIds)
+  // Why: remote snapshots carry terminal membership in legacy format only; the
+  // unified maps that drive visible tabs must be re-materialized or a restored
+  // tab reattaches its PTY without ever rendering. PTY binding is required —
+  // materializing unbound stale tabs spawns fresh shells and can trigger
+  // sleeping-agent resume in panes the user already discarded.
+  const merged = repairUnifiedTabMembershipFromLegacyTabs(
+    mergeDirectSshRemoteWorkspaceSession(
+      buildWorkspaceSessionPayload(state),
+      remoteSession,
+      worktreeIds,
+      state.tabsByWorktree,
+      currentRecoveryTabIds(state, authority, worktreeIds)
+    ),
+    { worktreeIds }
   )
   if (!isArrivalCurrent(authority.targetId, arrival) || !isPreparationTokenCurrent(token)) {
     return

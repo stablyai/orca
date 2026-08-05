@@ -17,6 +17,10 @@ import {
   indexWorkspaceRuntimeHostOwnership,
   type WorkspaceRuntimeOwnerProjection
 } from './workspace-runtime-host-ownership'
+import {
+  collectDirectSshLegacyTabWorktreeIds,
+  repairUnifiedTabMembershipFromLegacyTabs
+} from './unified-tab-membership-repair'
 
 export type HostPersistenceState = {
   repos: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
@@ -281,27 +285,14 @@ export function persistWorkspaceSessionByHostSync(
   }
 }
 
-/** Collect the distinct runtime hosts owning any persisted repo. */
-export function listKnownRuntimeHostIds(
+/** Collect the distinct runtime and direct-SSH hosts owning any persisted repo. */
+function listKnownRemoteHostIds(
   repos: readonly Pick<Repo, 'connectionId' | 'executionHostId'>[]
 ): ExecutionHostId[] {
   const hostIds = new Set<ExecutionHostId>()
   for (const repo of repos) {
     const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
-    if (parsed?.kind === 'runtime') {
-      hostIds.add(parsed.id)
-    }
-  }
-  return [...hostIds]
-}
-
-export function listKnownDirectSshHostIds(
-  repos: readonly Pick<Repo, 'connectionId' | 'executionHostId'>[]
-): ExecutionHostId[] {
-  const hostIds = new Set<ExecutionHostId>()
-  for (const repo of repos) {
-    const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
-    if (parsed?.kind === 'ssh') {
+    if (parsed?.kind === 'runtime' || parsed?.kind === 'ssh') {
       hostIds.add(parsed.id)
     }
   }
@@ -334,8 +325,7 @@ export async function fetchWorkspaceSessionWithRuntimeHostOwners(
   // Why: startup can know saved runtime session hosts before their repo
   // catalogs hydrate, so include those partitions in the first read.
   const hostIds = new Set<ExecutionHostId>([
-    ...listKnownRuntimeHostIds(repos),
-    ...listKnownDirectSshHostIds(repos),
+    ...listKnownRemoteHostIds(repos),
     ...additionalRuntimeHostIds
   ])
   await Promise.all(
@@ -348,7 +338,11 @@ export async function fetchWorkspaceSessionWithRuntimeHostOwners(
     })
   )
   return {
-    session: mergeWorkspaceSessionsFromHosts(slices),
+    // Why: direct-SSH partitions persist tabs in legacy format only; re-materialize
+    // PTY-bound durable tabs into the unified maps hydration renders from.
+    session: repairUnifiedTabMembershipFromLegacyTabs(mergeWorkspaceSessionsFromHosts(slices), {
+      worktreeIds: collectDirectSshLegacyTabWorktreeIds(slices)
+    }),
     runtimeHostIdByWorkspaceSessionKey: buildRuntimeHostIdByWorkspaceSessionKey(slices)
   }
 }
