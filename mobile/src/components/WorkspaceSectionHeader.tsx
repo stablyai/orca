@@ -14,7 +14,6 @@ type WorkspaceSectionHeaderProps = {
   onToggle: (key: string) => void
 }
 
-// Group header row in the workspace list; the whole row is the collapse toggle.
 export function WorkspaceSectionHeader({
   section,
   collapsed,
