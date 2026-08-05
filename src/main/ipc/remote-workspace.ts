@@ -16,6 +16,8 @@ import type {
 import type { SshTarget } from '../../shared/ssh-types'
 import type { WorkspaceSessionState } from '../../shared/types'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
+import { toSshExecutionHostId } from '../../shared/execution-host'
+import { adoptOrphanedWorkspaceSessionPartition } from '../../shared/workspace-session-partition-adoption'
 import { getRemoteWorkspaceNamespace } from './remote-workspace-namespace'
 import { registerRemoteWorkspaceNotificationHandler } from './remote-workspace-events'
 
@@ -419,9 +421,26 @@ export function registerRemoteWorkspaceHandlers(
             (target) => hydratedTargetIds.has(target.id) && getActiveMultiplexer(target.id)
           ) ?? []
 
-      const workspaceSession = args.session ?? store.getWorkspaceSession()
+      const fallbackSession = args.session ?? store.getWorkspaceSession()
       const results = await Promise.all(
         targets.map(async (target) => {
+          // Why: the local-partition fallback cannot see session state the
+          // runtime persisted into the target's ssh partition; exporting
+          // without it round-trips those worktrees as empty, and the next
+          // remote-authoritative pull deletes their tabs on every client.
+          // Adoption here is deliberately read-only: the renderer owns the
+          // local partition and replaces its worktree map wholesale on every
+          // debounced write, so a store-side move would be silently undone —
+          // with the only durable copy already pruned. The move happens at
+          // boot hydration, where the adopted tabs enter the renderer's own
+          // state; deliberate closes are fenced by surface tombstones, which
+          // adoption honors.
+          const workspaceSession = args.session
+            ? args.session
+            : adoptOrphanedWorkspaceSessionPartition(
+                fallbackSession,
+                store.getWorkspaceSession(toSshExecutionHostId(target.id))
+              ).session
           // Why: each target has its own revision stream. Keep same-target
           // writes queued, but do not let one slow relay block others.
           const session = exportSessionForTarget(store, target.id, workspaceSession)

@@ -152,9 +152,11 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
   const muxByTargetId = new Map<string, { request: ReturnType<typeof vi.fn> }>()
   const getRepoMock = vi.fn<Store['getRepo']>()
   const getWorkspaceSessionMock = vi.fn<Store['getWorkspaceSession']>()
+  const patchWorkspaceSessionMock = vi.fn<Store['patchWorkspaceSession']>()
   const store = {
     getRepo: getRepoMock,
-    getWorkspaceSession: getWorkspaceSessionMock
+    getWorkspaceSession: getWorkspaceSessionMock,
+    patchWorkspaceSession: patchWorkspaceSessionMock
   } as unknown as Store
 
   beforeEach(() => {
@@ -174,6 +176,7 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
     getRepoMock.mockReset()
     getWorkspaceSessionMock.mockReset()
     getWorkspaceSessionMock.mockReturnValue(baseSession)
+    patchWorkspaceSessionMock.mockReset()
     getRepoMock.mockImplementation((repoId: string) =>
       repoId === 'repo-target-1'
         ? ({
@@ -291,6 +294,74 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
           session: expect.objectContaining({
             activeWorktreePath: '/repo',
             activeTabId: 'tab-store'
+          })
+        })
+      })
+    )
+  })
+
+  it('exports tabs stranded in the target ssh partition when the local partition is empty', async () => {
+    const worktreeId = 'repo-target-1::/repo'
+    getWorkspaceSessionMock.mockImplementation((hostId?: string | null) => {
+      if (hostId === 'ssh:target-1') {
+        return {
+          ...baseSession,
+          tabsByWorktree: {
+            [worktreeId]: [
+              {
+                id: 'stranded-tab',
+                title: 'Stranded shell',
+                ptyId: null,
+                worktreeId
+              } as never
+            ]
+          }
+        }
+      }
+      return { ...baseSession, tabsByWorktree: { [worktreeId]: [] } }
+    })
+
+    await callSetForConnectedTargets({ hydratedTargetIds: ['target-1'] })
+
+    expect(getWorkspaceSessionMock).toHaveBeenCalledWith('ssh:target-1')
+    expect(requestByTargetId.get('target-1')).toHaveBeenCalledWith(
+      'workspace.patch',
+      expect.objectContaining({
+        patch: expect.objectContaining({
+          session: expect.objectContaining({
+            tabsByWorktreePath: {
+              '/repo': [expect.objectContaining({ id: 'stranded-tab' })]
+            }
+          })
+        })
+      })
+    )
+    // Adoption on this path is read-only: the renderer owns the local
+    // partition, so a store-side move here would be undone by its next write.
+    expect(patchWorkspaceSessionMock).not.toHaveBeenCalled()
+  })
+
+  it('does not consult ssh partitions when an explicit session argument is provided', async () => {
+    const worktreeId = 'repo-target-1::/repo'
+    await callSetForConnectedTargets({
+      session: {
+        ...baseSession,
+        tabsByWorktree: {
+          [worktreeId]: [{ id: 'tab-explicit', title: 'Shell', ptyId: null, worktreeId } as never]
+        }
+      },
+      hydratedTargetIds: ['target-1']
+    })
+
+    expect(getWorkspaceSessionMock).not.toHaveBeenCalled()
+    expect(requestByTargetId.get('target-1')).toHaveBeenCalledWith(
+      'workspace.patch',
+      expect.objectContaining({
+        patch: expect.objectContaining({
+          session: expect.objectContaining({
+            tabsByWorktreePath: {
+              '/repo': [expect.objectContaining({ id: 'tab-explicit' })]
+            }
           })
         })
       })
