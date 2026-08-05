@@ -36,14 +36,9 @@ export function pluginInstallErrorMessage(cause: unknown): string {
       "The plugin exceeds Orca's install size or file-count limits."
     )
   }
-  if (/(git|repository|fetch|clone|checkout|remote)/.test(detail)) {
-    return translate(
-      'auto.components.settings.pluginError.installGit',
-      'Orca could not fetch the pinned Git revision. Check the URL, #ref, access, and system Git setup.'
-    )
-  }
-  // Why: reserved-namespace blocks used to fall through to a generic failure, so fork
-  // template installs looked like a silent no-op (#12598). Surface the rename guidance.
+  // Why before the git heuristic: production trust strings mention github.com, and
+  // /(git|...)/ matches the "git" substring inside "github", so reserved-identity
+  // blocks would mis-surface as a fetch failure (#12598 review).
   if (detail.includes('reserved plugin identity')) {
     if (detail.includes('local path')) {
       return translate(
@@ -54,6 +49,12 @@ export function pluginInstallErrorMessage(cause: unknown): string {
     return translate(
       'auto.components.settings.pluginError.installReservedGit',
       'This plugin uses a reserved official identity. Install it only from github.com/stablyai/..., or rename publisher/id for a third-party fork.'
+    )
+  }
+  if (/(git|repository|fetch|clone|checkout|remote)/.test(detail)) {
+    return translate(
+      'auto.components.settings.pluginError.installGit',
+      'Orca could not fetch the pinned Git revision. Check the URL, #ref, access, and system Git setup.'
     )
   }
   return translate(
