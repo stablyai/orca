@@ -22,6 +22,15 @@ export type RunWorktreeSetupScriptResult =
     }
   | { status: 'error'; message: string }
 
+function notifyRemoteHostUnsupported(): void {
+  toast.info(
+    translate(
+      'auto.lib.runWorktreeSetupScript.remoteHost',
+      'Run setup script is not yet supported for remote worktrees. Create a new worktree to run setup on that host, or open a local clone.'
+    )
+  )
+}
+
 /**
  * Manual re-run of the worktree setup script (#10015).
  * Materializes the same setup runner used at create, then launches via the
@@ -71,12 +80,7 @@ export async function runWorktreeSetupScript(
   // repo fallback, and a remote-host trust fetch can fail and end the flow silently.
   const hostId = getWorktreeExecutionHostId(worktree, repo)
   if (hostId !== LOCAL_EXECUTION_HOST_ID) {
-    toast.info(
-      translate(
-        'auto.lib.runWorktreeSetupScript.remoteHost',
-        'Run setup script is not yet supported for remote worktrees. Create a new worktree to run setup on that host, or open a local clone.'
-      )
-    )
+    notifyRemoteHostUnsupported()
     return { status: 'skipped', reason: 'remote-host' }
   }
 
@@ -102,12 +106,7 @@ export async function runWorktreeSetupScript(
   if (prepared.status === 'error') {
     const message = prepared.message ?? 'Could not prepare the setup script.'
     if (prepared.reason === 'remote-host') {
-      toast.info(
-        translate(
-          'auto.lib.runWorktreeSetupScript.remoteHost',
-          'Run setup script is not yet supported for remote worktrees. Create a new worktree to run setup on that host, or open a local clone.'
-        )
-      )
+      notifyRemoteHostUnsupported()
       return { status: 'skipped', reason: 'remote-host' }
     }
     toast.error(
