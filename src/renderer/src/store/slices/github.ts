@@ -74,6 +74,7 @@ import {
   getTaskSourceRuntimeSettings,
   type TaskSourceContext
 } from '../../../../shared/task-source-context'
+import { normalizeGitHubPRForBranchOutcome } from '../../../../shared/github-pr-for-branch-outcome'
 
 // ─── ProjectV2 cache types ────────────────────────────────────────────
 // Why: separate from CacheEntry<T> — project-view has a single GraphQL source (no issue/PR fallback) and a distinct error union.
@@ -667,6 +668,8 @@ type FetchOptions = {
   force?: boolean
   noCache?: boolean
   executionHostId?: ExecutionHostId
+  requireComplete?: boolean
+  allowStaleFallback?: boolean
   sourceContext?: TaskSourceContext | null
 }
 
@@ -728,6 +731,7 @@ type InflightWorkItems = {
   promise: Promise<GitHubWorkItem[]>
   force: boolean
   noCache: boolean
+  requireComplete: boolean
 }
 const inflightWorkItemsRequests = new Map<string, InflightWorkItems>()
 const prRequestGenerations = new Map<string, number>()
@@ -2006,7 +2010,12 @@ export type GitHubSlice = {
     displayLimit: number,
     query: string,
     options?: FetchOptions
-  ) => Promise<{ items: GitHubWorkItem[]; failedCount: number; githubUnavailable: boolean }>
+  ) => Promise<{
+    items: GitHubWorkItem[]
+    failedCount: number
+    githubUnavailable: boolean
+    requestFailureCount?: number
+  }>
   /** Fetch one numbered provider page. Pagination pages remain renderer-local. */
   fetchWorkItemsNextPage: (
     repos: {
@@ -2018,7 +2027,8 @@ export type GitHubSlice = {
     perRepoLimit: number,
     displayLimit: number,
     query: string,
-    page: number
+    page: number,
+    options?: Pick<FetchOptions, 'noCache' | 'requireComplete'>
   ) => Promise<{
     items: GitHubWorkItem[]
     failedCount: number
@@ -2091,18 +2101,6 @@ export type GitHubSlice = {
   ) => Promise<GitHubProjectMutationResult>
   /** Optimistic, IPC-free patcher for a single `projectViewCache` row's `content`; `patchWorkItem` only walks `workItemsCache` and would leave the Project view stale until the next refresh. */
   patchProjectRowContent: (cacheKey: string, rowId: string, patch: ProjectRowContentPatch) => void
-}
-
-/** Normalizes `github.prForBranch` into a {@link PRRefreshOutcome}: preserves a runtime `upstream-error` instead of collapsing to a false "no PR"; a legacy host returning `PRInfo | null` maps to `found`/`no-pr`. */
-function normalizeRuntimePRForBranchOutcome(
-  result: PRRefreshOutcome | PRInfo | null
-): PRRefreshOutcome {
-  if (result && typeof result === 'object' && 'kind' in result) {
-    return result
-  }
-  return result
-    ? { kind: 'found', pr: result, fetchedAt: Date.now() }
-    : { kind: 'no-pr', fetchedAt: Date.now() }
 }
 
 export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (set, get) => ({
@@ -2720,7 +2718,11 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const existing = inflightWorkItemsRequests.get(inflightKey)
     if (existing) {
       // Why: a forcing/noCache caller must not dedupe to a weaker in-flight fetch (noCache is stricter — it must bypass gh api's cache too).
-      if ((options?.force && !existing.force) || (options?.noCache && !existing.noCache)) {
+      if (
+        (options?.force && !existing.force) ||
+        (options?.noCache && !existing.noCache) ||
+        (options?.requireComplete && !existing.requireComplete)
+      ) {
         await existing.promise.catch(() => {})
       } else {
         return existing.promise
@@ -2741,6 +2743,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           repoId,
           ...(ownerHostId ? { repoExecutionHostId: ownerHostId } : {})
         }))
+        if (options?.requireComplete && (envelope.errors?.issues || envelope.errors?.prs)) {
+          throw new Error('GitHub work-item fetch returned a partial result.')
+        }
         // Why: only surface issues-side errors here; PR-side failures predate the issue-source split (#1076) and are out of scope for this banner (design doc §2).
         const issuesError = envelope.errors?.issues
         // Why: errors.issues without sources.issues has no slug for the banner, so it's dropped from the cache; log it so this rare case is visible in devtools.
@@ -2793,7 +2798,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     inflightWorkItemsRequests.set(inflightKey, {
       promise: request,
       force: Boolean(options?.force),
-      noCache: Boolean(options?.noCache)
+      noCache: Boolean(options?.noCache),
+      requireComplete: Boolean(options?.requireComplete)
     })
     return request
   },
@@ -2820,6 +2826,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           // Why: fall back to any cache entry (stale or not) before declaring this repo failed; only count as failed when it has nothing to contribute.
           // Why: use perRepoLimit (not displayLimit) so the cache key matches what fetchWorkItems wrote.
           if (isGitHubWorkItemsSshRemoteRequiredError(err)) {
+            if (options?.requireComplete) {
+              requestFailureCount += 1
+              failedCount += 1
+            }
             skippedSourceCount += 1
             return [] as GitHubWorkItem[]
           }
@@ -2839,7 +2849,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
                 ? workItemsCacheKey(r.repoId, perRepoLimit, query, executionHostId)
                 : getWorkItemsCacheKeyForOwner(get(), r.repoId, perRepoLimit, query, r.path)
           const cached = get().workItemsCache[key]?.data
-          if (cached) {
+          if (cached && options?.allowStaleFallback !== false) {
             console.warn(`[workItems] ${r.repoId} failed, serving cached:`, err)
             return cached
           }
@@ -2855,10 +2865,15 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       requestFailureCount > 0 &&
       requestFailureCount === repos.length - skippedSourceCount &&
       unavailableFailureCount === requestFailureCount
-    return { items: merged, failedCount, githubUnavailable }
+    return {
+      items: merged,
+      failedCount,
+      githubUnavailable,
+      ...(requestFailureCount > 0 ? { requestFailureCount } : {})
+    }
   },
 
-  fetchWorkItemsNextPage: async (repos, perRepoLimit, displayLimit, query, page) => {
+  fetchWorkItemsNextPage: async (repos, perRepoLimit, displayLimit, query, page, options) => {
     if (isGitHubWorkItemsQueryTooLarge(query)) {
       return { items: [], failedCount: 0, errorTypes: [] }
     }
@@ -2894,7 +2909,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           const envelope = await listGitHubWorkItemsForRepo(requestContext, {
             limit: perRepoLimit,
             query: query || undefined,
-            page
+            page,
+            ...(options?.noCache ? { noCache: true } : {})
           })
           // Why: page-N failures aren't in the per-repo banner (keyed on the initial fetch); log them so pagination failures are observable instead of silently truncating (richer surface deferred, design doc §6).
           if (envelope.errors?.issues) {
@@ -2922,6 +2938,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
               envelope.errors.prs
             )
           }
+          if (options?.requireComplete && (envelope.errors?.issues || envelope.errors?.prs)) {
+            failedCount += 1
+            return [] as GitHubWorkItem[]
+          }
           const ownerHostId = getGitHubWorkItemSourceHostId(requestState, repo, r.sourceContext)
           return envelope.items.map(
             (item): GitHubWorkItem => ({
@@ -2932,6 +2952,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           )
         } catch (err) {
           if (isGitHubWorkItemsSshRemoteRequiredError(err)) {
+            if (options?.requireComplete) {
+              failedCount += 1
+            }
             return [] as GitHubWorkItem[]
           }
           console.warn(`[workItems] next page ${r.repoId} failed:`, err)
@@ -3179,7 +3202,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
                   : {})
               },
               { timeoutMs: 30_000 }
-            ).then((result) => normalizeRuntimePRForBranchOutcome(result))
+            ).then((result) => normalizeGitHubPRForBranchOutcome(result))
           : await (async () => {
               const candidate: GitHubPRRefreshCandidate = {
                 repoId: repoId ?? '',
@@ -3201,25 +3224,19 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
                 cachedMergeable: cached?.data?.mergeable ?? null,
                 cachedMergeStateStatus: cached?.data?.mergeStateStatus ?? null
               }
-              return window.api.gh.refreshPRNow
+              const response = window.api.gh.refreshPRNow
                 ? await window.api.gh.refreshPRNow({ candidate })
-                : await window.api.gh
-                    .prForBranch({
-                      repoPath,
-                      repoId,
-                      executionHostId: options?.executionHostId,
-                      branch,
-                      linkedPRNumber,
-                      fallbackPRNumber,
-                      acceptMergedFallbackPR:
-                        fallbackPRNumber !== null && fallbackPRSource !== null,
-                      currentHeadOid: requestHeadOid
-                    })
-                    .then((pr) =>
-                      pr
-                        ? ({ kind: 'found', pr, fetchedAt: Date.now() } as const)
-                        : ({ kind: 'no-pr', fetchedAt: Date.now() } as const)
-                    )
+                : await window.api.gh.prForBranch({
+                    repoPath,
+                    repoId,
+                    executionHostId: options?.executionHostId,
+                    branch,
+                    linkedPRNumber,
+                    fallbackPRNumber,
+                    acceptMergedFallbackPR: fallbackPRNumber !== null && fallbackPRSource !== null,
+                    currentHeadOid: requestHeadOid
+                  })
+              return normalizeGitHubPRForBranchOutcome(response)
             })()
         const pr: PRInfo | null =
           outcome.kind === 'found' ? outcome.pr : outcome.kind === 'no-pr' ? null : null
@@ -4687,16 +4704,15 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     clearInflightWorkItemsForRepo(repoId, repoPath)
     // Why: evict AFTER the await so an overlapping fetch can't repopulate with pre-flip data; also drops legacy path-scoped keys.
     set((s) => {
-      const prefix = `${repoId}::`
-      const legacyPrefix = `${repoPath}::`
-      const next: Record<string, CacheEntry<GitHubWorkItem[]>> = {}
-      for (const [key, entry] of Object.entries(s.workItemsCache)) {
-        if (!key.startsWith(prefix) && !key.startsWith(legacyPrefix)) {
-          next[key] = entry
-        }
-      }
+      const workItems = evictRepoCacheEntries(
+        s.workItemsCache,
+        repoCacheKeyPrefixes(repoId, repoPath)
+      )
       // Why: the Tasks fetch effect keys on the nonce, not the cache, so bump it to re-run and re-populate the evicted entries.
-      return { workItemsCache: next, workItemsInvalidationNonce: s.workItemsInvalidationNonce + 1 }
+      return {
+        workItemsCache: workItems.cache,
+        workItemsInvalidationNonce: s.workItemsInvalidationNonce + 1
+      }
     })
   },
 

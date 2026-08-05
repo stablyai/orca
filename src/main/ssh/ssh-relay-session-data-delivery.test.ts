@@ -519,7 +519,7 @@ describe('SshRelaySession data delivery', () => {
     )
   })
 
-  it('rejects missing negotiated source identity before main admission', async () => {
+  it('quarantines missing negotiated source identity before main admission', async () => {
     const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
     await session.establish(mockConn)
@@ -536,10 +536,8 @@ describe('SshRelaySession data delivery', () => {
     })
 
     expect(acceptOutputDataMock).not.toHaveBeenCalled()
-    expect(closeSshPtyOutputGeneration).toHaveBeenCalledWith(
-      23,
-      'ssh_source_frame_malformed_or_missing'
-    )
+    expect(closeSshPtyOutputGeneration).not.toHaveBeenCalled()
+    expect(muxDisposeMock).not.toHaveBeenCalled()
   })
 
   it('keeps unoffered source metadata out of legacy intake', async () => {

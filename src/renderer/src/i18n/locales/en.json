@@ -4400,7 +4400,9 @@
           "83a820fa71": "Filter projects...",
           "5a273fbfce": "Add project...",
           "4815c70605": "No projects match",
-          "bbbc6e8e3b": "No unselected projects match"
+          "bbbc6e8e3b": "No unselected projects match",
+          "allProjects": "All projects",
+          "selectedProjectsCount": "{{value0}} projects"
         },
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Restart Orca",
@@ -4447,6 +4449,7 @@
         },
         "SidebarWorkspaceOptionsMenu": {
           "hosts": "Hosts",
+          "showSection": "Show",
           "allHostsDetail": "Show every host",
           "configuredSshHost": "Configured SSH",
           "projectSshHost": "Project SSH",
@@ -10803,7 +10806,9 @@
             "b8c2e1a904": "{{value0}} → {{value1}}",
             "a4e93c21d7": "Current branch: {{value0}}",
             "c7d4e2f801": "Change base ref: {{value0}}",
-            "f3a1b8c204": "upstream"
+            "f3a1b8c204": "upstream",
+            "createPrIntentEmptyGeneratedBody": "Generated review details did not include a description. Retry Create PR.",
+            "createPrIntentGenerateDetailsFailed": "Could not generate review details. Retry Create PR."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",
@@ -13474,6 +13479,20 @@
               }
             }
           }
+        },
+        "RichMarkdownTableControls": {
+          "deleteTable": "Delete table",
+          "tableActions": "Table actions",
+          "addColumn": "Add column",
+          "addRow": "Add row",
+          "rowActions": "Row actions",
+          "columnActions": "Column actions",
+          "insertRowAbove": "Insert row above",
+          "insertColumnLeft": "Insert column left",
+          "insertRowBelow": "Insert row below",
+          "insertColumnRight": "Insert column right",
+          "deleteRow": "Delete row",
+          "deleteColumn": "Delete column"
         }
       },
       "diff": {
@@ -14734,6 +14753,20 @@
         "retry": "Retry",
         "connect": "Connect",
         "connecting": "Connecting…"
+      }
+    },
+    "main": {
+      "window": {
+        "editableContextMenu": {
+          "table": "Table",
+          "insertRowAbove": "Insert row above",
+          "insertRowBelow": "Insert row below",
+          "deleteRow": "Delete row",
+          "insertColumnLeft": "Insert column left",
+          "insertColumnRight": "Insert column right",
+          "deleteColumn": "Delete column",
+          "deleteTable": "Delete table"
+        }
       }
     }
   },

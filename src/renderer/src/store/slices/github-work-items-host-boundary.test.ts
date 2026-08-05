@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
-import { createGitHubSlice } from './github'
+import { createGitHubSlice, workItemsCacheKey } from './github'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 
 const mockApi = {
@@ -187,6 +187,27 @@ describe('GitHub work-item host boundary', () => {
       hostId: 'ssh:ssh-1',
       updates: { issueSourcePreference: 'upstream' }
     })
+  })
+
+  it('evicts host-scoped work-item cache entries when issue-source preference changes', async () => {
+    const store = createTestStore()
+    const hostScopedKey = workItemsCacheKey('repo-1', 24, '', 'ssh:ssh-1')
+    const unrelatedKey = workItemsCacheKey('repo-2', 24, '', 'ssh:ssh-1')
+    store.setState({
+      repos: duplicateRepos(),
+      workItemsInvalidationNonce: 4,
+      workItemsCache: {
+        [hostScopedKey]: { data: [], fetchedAt: 1 },
+        [unrelatedKey]: { data: [], fetchedAt: 1 }
+      }
+    } as Partial<AppState>)
+
+    await store.getState().setIssueSourcePreference('repo-1', '/shared/repo', 'upstream', {
+      executionHostId: 'ssh:ssh-1'
+    })
+
+    expect(Object.keys(store.getState().workItemsCache)).toEqual([unrelatedKey])
+    expect(store.getState().workItemsInvalidationNonce).toBe(5)
   })
 
   it('preserves an explicit repo host through pagination and count IPC', async () => {

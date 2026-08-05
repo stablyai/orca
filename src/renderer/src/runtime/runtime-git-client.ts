@@ -182,6 +182,24 @@ export async function getRuntimeGitStatus(
   )
 }
 
+export async function setRuntimeGitStatusUpstreamRefWatch(
+  context: RuntimeGitContext,
+  args: { executionHostId: string; branch?: string; upstreamName?: string }
+): Promise<void> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind !== 'local' || !context.worktreeId) {
+    return
+  }
+  await window.api.git.setStatusUpstreamRefWatch({
+    worktreeId: context.worktreeId,
+    worktreePath: resolveLocalWorktreePath(context),
+    executionHostId: args.executionHostId,
+    ...(context.connectionId ? { connectionId: context.connectionId } : {}),
+    ...(args.branch ? { branch: args.branch } : {}),
+    ...(args.upstreamName ? { upstreamName: args.upstreamName } : {})
+  })
+}
+
 let nextGitStatusRequestToken = 0
 
 function createGitStatusAbortError(): Error {

@@ -138,6 +138,10 @@ import { sanitizeLocalDownloadFilename } from '../local-download-filename'
 import { registerFilesystemDownloadFolderHandlers } from './filesystem-download-folder'
 import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
 import { createSenderScopedRequestCancellations } from './sender-scoped-request-cancellation'
+import {
+  applyGitStatusUpstreamRefWatchRequest,
+  type GitStatusUpstreamRefWatchRequest
+} from './git-status-upstream-ref-watch-request'
 
 // Why: Monaco degrades features on large files like VS Code, so a 5MB block would needlessly lock out ordinary JSON/log files.
 const MAX_TEXT_FILE_SIZE = 50 * 1024 * 1024 // 50MB
@@ -1164,6 +1168,12 @@ export function registerFilesystemHandlers(
   ipcMain.handle('git:cancelStatus', (event, args: { requestToken: string }): void => {
     gitStatusCancellations.cancel(event, args.requestToken)
   })
+
+  ipcMain.handle(
+    'git:setStatusUpstreamRefWatch',
+    (_event, args: GitStatusUpstreamRefWatchRequest): Promise<void> =>
+      applyGitStatusUpstreamRefWatchRequest(store, args)
+  )
 
   // Why: parent status reports only one gitlink row per submodule; fetch inner per-file changes from the submodule's own worktree.
   ipcMain.handle(
