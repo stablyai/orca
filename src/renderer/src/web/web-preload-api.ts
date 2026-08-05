@@ -1979,6 +1979,7 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       includeIgnored,
       bypassEffectiveUpstreamNegativeCache,
       reuseLineStats,
+      branchLineTotalMergeBase,
       requestToken
     }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
@@ -1986,7 +1987,8 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         includeIgnored,
         bypassEffectiveUpstreamNegativeCache,
-        reuseLineStats
+        reuseLineStats,
+        ...(branchLineTotalMergeBase ? { branchLineTotalMergeBase } : {})
       }
       // Why: no token = nothing to cancel (pooled); a token routes via the subscription bridge so cancelStatus can abort.
       if (!requestToken) {

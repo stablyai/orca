@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { SourceControlBranchContextRow } from './source-control-branch-context-row'
 import type { GitBranchCompareSummary } from '../../../../shared/types'
+import type { GitBranchLineTotal } from '../../../../shared/git-status-types'
 
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -213,5 +214,146 @@ describe('SourceControlBranchContextRow', () => {
     )
 
     expect(markup).toContain('aria-label="Open review page in browser"')
+  })
+})
+
+function renderWithLineTotal(
+  branchLineTotal: GitBranchLineTotal | null | undefined,
+  summary: GitBranchCompareSummary | null = readySummary
+): string {
+  return renderToStaticMarkup(
+    <SourceControlBranchContextRow
+      summary={summary}
+      compareBaseRef={null}
+      headDisplay={{ kind: 'branch', branchName: 'feature/line-total' }}
+      manualReviewUrl="https://example.test/review"
+      branchLineTotal={branchLineTotal}
+      onChangeBaseRef={vi.fn()}
+      onRetry={vi.fn()}
+    />
+  )
+}
+
+describe('SourceControlBranchContextRow branch line total', () => {
+  it('renders both halves with grouped digits and a spoken label', () => {
+    const markup = renderWithLineTotal({ added: 8259, removed: 670, mergeBase: 'base' })
+
+    expect(markup).toContain('+8,259')
+    expect(markup).toContain('-670')
+    // Label reads raw digits; the grouped spans are decoration.
+    expect(markup).toContain('aria-label="8259 additions, 670 deletions"')
+    expect(markup).toContain('tabular-nums')
+    expect(markup).toContain('text-[color:var(--git-decoration-added)]')
+    expect(markup).toContain('text-[color:var(--git-decoration-deleted)]')
+    // Not clickable in v1 — the chip's scope differs from openBranchAllDiffs.
+    expect(markup).not.toContain('<button type="button" data-testid="source-control-branch')
+  })
+
+  it('keeps full precision instead of a compact 8.3k form', () => {
+    const markup = renderWithLineTotal({ added: 123456, removed: 0, mergeBase: 'base' })
+
+    expect(markup).toContain(`+${(123456).toLocaleString()}`)
+    expect(markup).not.toContain('123k')
+    expect(markup).not.toContain('123.5')
+  })
+
+  it('omits the zero half rather than printing +42 -0', () => {
+    const addedOnly = renderWithLineTotal({ added: 42, removed: 0, mergeBase: 'base' })
+    expect(addedOnly).toContain('>+42<')
+    expect(addedOnly).not.toContain('>-0<')
+    expect(addedOnly).toContain('aria-label="42 additions"')
+
+    const removedOnly = renderWithLineTotal({ added: 0, removed: 7, mergeBase: 'base' })
+    expect(removedOnly).toContain('>-7<')
+    expect(removedOnly).not.toContain('>+0<')
+    expect(removedOnly).toContain('aria-label="7 deletions"')
+  })
+
+  it('hides the chip when both counts are zero', () => {
+    const markup = renderWithLineTotal({ added: 0, removed: 0, mergeBase: 'base' })
+
+    expect(markup).not.toContain('data-testid="source-control-branch-line-total"')
+    expect(markup).not.toContain('>+0<')
+    expect(markup).not.toContain('>-0<')
+  })
+
+  it('hides the chip when the total is absent', () => {
+    for (const total of [null, undefined]) {
+      const markup = renderWithLineTotal(total)
+      expect(markup).not.toContain('data-testid="source-control-branch-line-total"')
+      expect(markup).not.toContain('NaN')
+    }
+  })
+
+  // Lines measure the branch's work, commits measure the comparison, so each sits
+  // on the line that names its subject. Adjacency is what made them read as one
+  // number in the first place.
+  it('puts the chip on the head line, ahead of the base line and its commit count', () => {
+    const markup = renderWithLineTotal(
+      { added: 8259, removed: 670, mergeBase: 'base' },
+      {
+        ...readySummary,
+        commitsAhead: 2
+      }
+    )
+    const headIndex = markup.indexOf('data-testid="source-control-head-identity"')
+    const chipIndex = markup.indexOf('data-testid="source-control-branch-line-total"')
+    const aheadIndex = markup.indexOf('↑2')
+    const reviewIndex = markup.indexOf('aria-label="Open review page in browser"')
+
+    expect(headIndex).toBeGreaterThan(-1)
+    expect(chipIndex).toBeGreaterThan(headIndex)
+    expect(aheadIndex).toBeGreaterThan(chipIndex)
+    expect(reviewIndex).toBeGreaterThan(aheadIndex)
+  })
+
+  it('keeps the ahead count out of the line-total colors', () => {
+    const markup = renderWithLineTotal(
+      { added: 8259, removed: 670, mergeBase: 'base' },
+      { ...readySummary, commitsAhead: 2 }
+    )
+    // The `↑2` span must carry the muted class, not added-green — two adjacent
+    // green numbers counting different units is the bug this guards.
+    const aheadSpan = markup.slice(
+      markup.lastIndexOf('<span', markup.indexOf('↑2')),
+      markup.indexOf('↑2')
+    )
+
+    expect(aheadSpan).toContain('text-muted-foreground/70')
+    expect(aheadSpan).not.toContain('--git-decoration-added')
+  })
+
+  it('folds the chip onto the base line when there is no head identity', () => {
+    const markup = renderToStaticMarkup(
+      <SourceControlBranchContextRow
+        summary={readySummary}
+        compareBaseRef={null}
+        headDisplay={null}
+        branchLineTotal={{ added: 8259, removed: 670, mergeBase: 'base' }}
+        onChangeBaseRef={vi.fn()}
+        onRetry={vi.fn()}
+      />
+    )
+
+    expect(markup).toContain('data-testid="source-control-branch-line-total"')
+    expect(markup).toContain('+8,259')
+  })
+
+  it('stays hidden while compare is loading or failed', () => {
+    const total: GitBranchLineTotal = { added: 8259, removed: 670, mergeBase: 'base' }
+
+    for (const summary of [
+      null,
+      { ...readySummary, status: 'loading' } as GitBranchCompareSummary,
+      {
+        ...readySummary,
+        status: 'error',
+        errorMessage: 'Could not compare against base'
+      } as GitBranchCompareSummary
+    ]) {
+      const markup = renderWithLineTotal(total, summary)
+      expect(markup).not.toContain('data-testid="source-control-branch-line-total"')
+      expect(markup).not.toContain('+8,259')
+    }
   })
 })

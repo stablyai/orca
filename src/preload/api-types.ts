@@ -2909,6 +2909,8 @@ export type PreloadApi = {
       includeIgnored?: boolean
       bypassEffectiveUpstreamNegativeCache?: boolean
       reuseLineStats?: boolean
+      /** Merge-base OID to measure the branch line total against; omit to skip the work. */
+      branchLineTotalMergeBase?: string
       requestToken?: string
     }) => Promise<GitStatusResult>
     cancelStatus: (args: { requestToken: string }) => Promise<void>

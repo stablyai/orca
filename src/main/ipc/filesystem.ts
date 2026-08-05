@@ -1127,6 +1127,7 @@ export function registerFilesystemHandlers(
         includeIgnored?: boolean
         bypassEffectiveUpstreamNegativeCache?: boolean
         reuseLineStats?: boolean
+        branchLineTotalMergeBase?: string
         requestToken?: string
       }
     ): Promise<GitStatusResult> => {
@@ -1134,6 +1135,9 @@ export function registerFilesystemHandlers(
       const options = {
         includeIgnored: args.includeIgnored ?? false,
         ...(args.reuseLineStats === true ? { reuseLineStats: true } : {}),
+        ...(args.branchLineTotalMergeBase === undefined
+          ? {}
+          : { branchLineTotalMergeBase: args.branchLineTotalMergeBase }),
         ...(args.bypassEffectiveUpstreamNegativeCache === true
           ? { bypassEffectiveUpstreamNegativeCache: true }
           : {}),

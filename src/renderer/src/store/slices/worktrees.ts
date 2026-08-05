@@ -2265,6 +2265,7 @@ const WORKTREE_ID_KEYED_MAP_KEYS = [
   'activeGroupIdByWorktree',
   'gitStatusByWorktree',
   'gitStatusHeadByWorktree',
+  'gitBranchLineTotalByWorktree',
   'gitIgnoredPathsByWorktree',
   'gitConflictOperationByWorktree',
   'trackedConflictPathsByWorktree',
@@ -2732,6 +2733,7 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     // Why: keyed by worktreeId; re-keyed on rename but missed by both removal paths (upstream-status entry).
     remoteStatusesByWorktree: omitByWorktree(s.remoteStatusesByWorktree),
     gitStatusHeadByWorktree: omitByWorktree(s.gitStatusHeadByWorktree),
+    gitBranchLineTotalByWorktree: omitByWorktree(s.gitBranchLineTotalByWorktree),
     gitIgnoredPathsByWorktree: omitByWorktree(s.gitIgnoredPathsByWorktree),
     gitConflictOperationByWorktree: omitByWorktree(s.gitConflictOperationByWorktree),
     trackedConflictPathsByWorktree: omitByWorktree(s.trackedConflictPathsByWorktree),
@@ -4244,6 +4246,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         delete nextGitStatusByWorktree[worktreeId]
         const nextGitStatusHeadByWorktree = { ...s.gitStatusHeadByWorktree }
         delete nextGitStatusHeadByWorktree[worktreeId]
+        const nextGitBranchLineTotalByWorktree = { ...s.gitBranchLineTotalByWorktree }
+        delete nextGitBranchLineTotalByWorktree[worktreeId]
         const nextGitIgnoredPathsByWorktree = { ...s.gitIgnoredPathsByWorktree }
         delete nextGitIgnoredPathsByWorktree[worktreeId]
         const nextGitConflictOperationByWorktree = { ...s.gitConflictOperationByWorktree }
@@ -4407,6 +4411,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           gitStatusHugeByWorktree: nextGitStatusHugeByWorktree,
           gitStatusByWorktree: nextGitStatusByWorktree,
           gitStatusHeadByWorktree: nextGitStatusHeadByWorktree,
+          gitBranchLineTotalByWorktree: nextGitBranchLineTotalByWorktree,
           gitIgnoredPathsByWorktree: nextGitIgnoredPathsByWorktree,
           gitConflictOperationByWorktree: nextGitConflictOperationByWorktree,
           trackedConflictPathsByWorktree: nextTrackedConflictPathsByWorktree,

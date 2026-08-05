@@ -6,12 +6,7 @@ import { getDefaultSettings } from '../../../../shared/constants'
 import { translate } from '../../i18n/i18n'
 import { useAppStore } from '../../store'
 import { shouldOpenAutoRenameBranchAdvanced } from './AutoRenameBranchFromWorkSetting'
-import {
-  GitPane,
-  SourceControlGroupOrderSetting,
-  getGitPaneSearchEntries,
-  shouldShowAutoRenameBranchSetting
-} from './GitPane'
+import { GitPane, getGitPaneSearchEntries, shouldShowAutoRenameBranchSetting } from './GitPane'
 import { TooltipProvider } from '../ui/tooltip'
 import { matchesSettingsSearch } from './settings-search'
 import { SettingsSegmentedControl } from './SettingsFormControls'
@@ -38,23 +33,6 @@ function visit(node: unknown, cb: (node: ReactElementLike) => void): void {
     }
     visit(value, cb)
   }
-}
-
-function findSegmentedControl(node: unknown): ReactElementLike {
-  let found: ReactElementLike | null = null
-  const label = translate(
-    'auto.components.settings.GitPane.sourceControlGroupOrderTitle',
-    'Source Control Group Order'
-  )
-  visit(node, (entry) => {
-    if (entry.type === SettingsSegmentedControl && entry.props.ariaLabel === label) {
-      found = entry
-    }
-  })
-  if (!found) {
-    throw new Error('segmented control not found')
-  }
-  return found
 }
 
 function findCompareBaseSegmentedControl(node: unknown): ReactElementLike {
@@ -134,52 +112,6 @@ describe('GitPane', () => {
     expect(markup).toContain('git diff main...HEAD')
     expect(markup).toContain('local-only commits')
     expect(markup).not.toContain('Refresh Local Base Ref')
-  })
-
-  it('renders Source Control group order in Git settings', () => {
-    const markup = renderGitPane('group order')
-
-    expect(markup).toContain(
-      translate(
-        'auto.components.settings.GitPane.sourceControlGroupOrderTitle',
-        'Source Control Group Order'
-      )
-    )
-    expect(markup).toContain(
-      translate('auto.components.settings.GitPane.changesFirst', 'Changes first')
-    )
-    expect(markup).toContain(
-      translate('auto.components.settings.GitPane.stagedFirst', 'Staged first')
-    )
-    expect(markup).toContain(
-      translate('auto.components.settings.GitPane.untrackedFirst', 'Untracked first')
-    )
-  })
-
-  it('updates Source Control group order only when the selected option changes', () => {
-    const updateSettings = vi.fn()
-    const element = SourceControlGroupOrderSetting({
-      settings: {
-        ...getDefaultSettings(os.homedir()),
-        sourceControlGroupOrder: 'changes-first'
-      },
-      updateSettings
-    })
-
-    const control = findSegmentedControl(element)
-    const onChange = control.props.onChange as (value: string) => void
-
-    onChange('staged-first')
-    expect(updateSettings).toHaveBeenCalledWith({ sourceControlGroupOrder: 'staged-first' })
-
-    updateSettings.mockClear()
-    onChange('changes-first')
-    expect(updateSettings).not.toHaveBeenCalled()
-  })
-
-  it('includes Source Control group order search metadata', () => {
-    expect(matchesSettingsSearch('staged', getGitPaneSearchEntries())).toBe(true)
-    expect(matchesSettingsSearch('group order', getGitPaneSearchEntries())).toBe(true)
   })
 
   it('renders the default compare base setting in Git settings', () => {

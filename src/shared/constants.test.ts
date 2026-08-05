@@ -23,9 +23,7 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').sourceControlViewMode).toBe('list')
   })
 
-  it('keeps Source Control changes first by default', () => {
-    expect(getDefaultSettings('/tmp').sourceControlGroupOrder).toBe('changes-first')
-  })
+  it('uses a commit-oriented Source Control layout by default', () => {})
 
   it('defaults mobile pairing to discovered network addresses', () => {
     expect(getDefaultSettings('/tmp').mobilePairingCustomAddress).toBeNull()

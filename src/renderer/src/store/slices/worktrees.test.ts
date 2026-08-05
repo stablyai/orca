@@ -5163,6 +5163,10 @@ describe('removeWorktree state cleanup', () => {
         'repo1::/path/wt1': 'head-1',
         'repo1::/path/wt2': 'head-2'
       },
+      gitBranchLineTotalByWorktree: {
+        'repo1::/path/wt1': { added: 24, removed: 3, mergeBase: 'base-1' },
+        'repo1::/path/wt2': { added: 1, removed: 0, mergeBase: 'base-2' }
+      },
       gitIgnoredPathsByWorktree: {
         'repo1::/path/wt1': ['dist/'],
         'repo1::/path/wt2': ['coverage/']
@@ -5200,6 +5204,9 @@ describe('removeWorktree state cleanup', () => {
     })
     expect(store.getState().gitStatusHeadByWorktree).toEqual({
       'repo1::/path/wt2': 'head-2'
+    })
+    expect(store.getState().gitBranchLineTotalByWorktree).toEqual({
+      'repo1::/path/wt2': { added: 1, removed: 0, mergeBase: 'base-2' }
     })
     expect(store.getState().gitIgnoredPathsByWorktree).toEqual({
       'repo1::/path/wt2': ['coverage/']
@@ -8512,6 +8519,10 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
         'repoA::/a/wt1': 'head-1',
         'repoA::/a/wt2': 'head-2'
       },
+      gitBranchLineTotalByWorktree: {
+        'repoA::/a/wt1': { added: 24, removed: 3, mergeBase: 'base-1' },
+        'repoA::/a/wt2': { added: 1, removed: 0, mergeBase: 'base-2' }
+      },
       gitBranchCompareRequestStatusHeadByWorktree: {
         'repoA::/a/wt1': 'head-1',
         'repoA::/a/wt2': 'head-2'
@@ -8555,6 +8566,9 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
     expect(s.editorDrafts).toEqual({ 'file-99': 'other' })
     expect(s.markdownFrontmatterVisible).toEqual({ 'file-99': true })
     expect(s.gitStatusHeadByWorktree).toEqual({ 'repoA::/a/wt2': 'head-2' })
+    expect(s.gitBranchLineTotalByWorktree).toEqual({
+      'repoA::/a/wt2': { added: 1, removed: 0, mergeBase: 'base-2' }
+    })
     expect(s.gitBranchCompareRequestStatusHeadByWorktree).toEqual({
       'repoA::/a/wt2': 'head-2'
     })
@@ -9063,6 +9077,7 @@ describe('migrateWorktreeIdentity', () => {
       groupsByWorktree: { [OLD]: [{ id: 'group1', worktreeId: OLD }] },
       gitStatusByWorktree: { [OLD]: [{ path: 'a.ts' }] },
       gitStatusHeadByWorktree: { [OLD]: 'head-old' },
+      gitBranchLineTotalByWorktree: { [OLD]: { added: 24, removed: 3, mergeBase: 'base-old' } },
       gitBranchCompareRequestStatusHeadByWorktree: { [OLD]: 'head-old' },
       lastVisitedAtByWorktreeId: { [OLD]: 123 },
       defaultTerminalTabsAppliedByWorktreeId: { [OLD]: true },
@@ -9110,6 +9125,12 @@ describe('migrateWorktreeIdentity', () => {
     expect(s.groupsByWorktree[NEW]?.[0]?.worktreeId).toBe(NEW)
     expect(s.gitStatusByWorktree[NEW]).toEqual([{ path: 'a.ts' }])
     expect(s.gitStatusHeadByWorktree[NEW]).toBe('head-old')
+    expect(s.gitBranchLineTotalByWorktree[OLD]).toBeUndefined()
+    expect(s.gitBranchLineTotalByWorktree[NEW]).toEqual({
+      added: 24,
+      removed: 3,
+      mergeBase: 'base-old'
+    })
     expect(s.gitBranchCompareRequestStatusHeadByWorktree[NEW]).toBe('head-old')
     expect(s.rightSidebarExplorerViewByWorktree[OLD]).toBeUndefined()
     expect(s.rightSidebarExplorerViewByWorktree[NEW]).toBe('search')
