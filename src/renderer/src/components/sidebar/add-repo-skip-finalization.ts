@@ -1,5 +1,6 @@
 import type { Worktree } from '../../../../shared/types'
 import { isDefaultBranchWorkspace } from './visible-worktrees'
+import { revealRepoInProjectFilter } from './reveal-repo-in-project-filter'
 
 export type AddRepoSkipFinalizationState = {
   activeRepoId: string | null
@@ -27,8 +28,11 @@ export function finalizeImportedRepoAfterSkip(
   if (state.activeRepoId !== importedRepoId) {
     state.setActiveRepo(importedRepoId)
   }
-  if (state.filterRepoIds.length > 0 && !state.filterRepoIds.includes(importedRepoId)) {
-    state.setFilterRepoIds([])
+  // Why reveal-not-clear: adding the imported project to an active filter keeps
+  // the user's other filtered projects selected instead of wiping the filter.
+  const revealedFilter = revealRepoInProjectFilter(state.filterRepoIds, importedRepoId)
+  if (revealedFilter) {
+    state.setFilterRepoIds(revealedFilter)
   }
   if (state.showActiveOnly) {
     state.setShowActiveOnly(false)

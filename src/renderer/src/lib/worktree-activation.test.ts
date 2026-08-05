@@ -1100,4 +1100,65 @@ describe('activateAndRevealWorktree', () => {
     expect(result).toEqual({ primaryTabId: 'tab-1' })
     expect(queueTabInitialCwd).toHaveBeenCalledWith('tab-1', '/repo/packages/web')
   })
+
+  it('adds the target repo to an active filter to reveal it, keeping other filtered projects', () => {
+    const setFilterRepoIds = vi.fn()
+    useAppStore.setState({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeView: 'terminal',
+      // Why: a filter that hides the reveal target — appending keeps the others.
+      filterRepoIds: ['repo-a', 'repo-b'],
+      isNavigatingHistory: false,
+      repos: [{ id: 'repo-1', connectionId: null }],
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: 'wt-1',
+            repoId: 'repo-1',
+            path: '/repo',
+            displayName: 'main',
+            branch: 'main',
+            head: 'abc',
+            isBare: false,
+            isMainWorktree: true
+          }
+        ]
+      },
+      getKnownWorktreeById: (worktreeId: string) =>
+        worktreeId === 'wt-1'
+          ? ({
+              id: 'wt-1',
+              repoId: 'repo-1',
+              path: '/repo',
+              displayName: 'main',
+              branch: 'main',
+              head: 'abc',
+              isBare: false,
+              isMainWorktree: true
+            } as never)
+          : null,
+      setActiveRepo: vi.fn(),
+      setActiveView: vi.fn(),
+      setActiveWorktree: vi.fn(),
+      setFilterRepoIds,
+      markWorktreeVisited: vi.fn(),
+      recordWorktreeVisit: vi.fn(),
+      reconcileWorktreeTabModel: vi.fn(() => ({ renderableTabCount: 0 })),
+      createTab: vi.fn(() => ({ id: 'tab-1' })),
+      setActiveTab: vi.fn(),
+      setTabCustomTitle: vi.fn(),
+      setTabColor: vi.fn(),
+      markDefaultTerminalTabsApplied: vi.fn(),
+      queueTabStartupCommand: vi.fn(),
+      queueTabInitialCwd: vi.fn(),
+      queueTabSetupSplit: vi.fn(),
+      queueTabIssueCommandSplit: vi.fn(),
+      revealWorktreeInSidebar: vi.fn()
+    } as never)
+
+    activateAndRevealWorktree('wt-1')
+
+    expect(setFilterRepoIds).toHaveBeenCalledWith(['repo-a', 'repo-b', 'repo-1'])
+  })
 })

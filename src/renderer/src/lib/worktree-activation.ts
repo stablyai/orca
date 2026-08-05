@@ -53,6 +53,7 @@ import { toast } from 'sonner'
 import { initialAgentTabViewModeProps } from './native-chat-initial-view-mode'
 import { getConnectionId } from '@/lib/connection-context'
 import { isDetachedHeadWorkspace } from '@/components/sidebar/visible-worktrees'
+import { revealRepoInProjectFilter } from '@/components/sidebar/reveal-repo-in-project-filter'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
@@ -338,9 +339,12 @@ export function activateAndRevealWorktree(
     useAppStore.getState().queueTabInitialCwd(primaryTabId, opts.initialCwd)
   }
 
-  // 5. Clear sidebar filters hiding the target — reveal needs the card rendered, else it silently no-ops.
-  if (state.filterRepoIds.length > 0 && !state.filterRepoIds.includes(wt.repoId)) {
-    state.setFilterRepoIds([])
+  // 5. Reveal past sidebar filters hiding the target — reveal needs the card rendered, else it silently no-ops.
+  // Add the target's repo to an active project filter so the card renders while
+  // the user's other filtered projects stay selected (never wipe the filter).
+  const revealedFilter = revealRepoInProjectFilter(state.filterRepoIds, wt.repoId)
+  if (revealedFilter) {
+    state.setFilterRepoIds(revealedFilter)
   }
   if (
     state.hideAutomationGeneratedWorkspaces &&

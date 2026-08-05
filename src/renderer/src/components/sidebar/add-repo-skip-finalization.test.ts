@@ -61,9 +61,48 @@ describe('finalizeImportedRepoAfterSkip', () => {
     finalizeImportedRepoAfterSkip(state, 'repo-new')
 
     expect(state.setActiveRepo).toHaveBeenCalledWith('repo-new')
-    expect(state.setFilterRepoIds).toHaveBeenCalledWith([])
+    expect(state.setFilterRepoIds).toHaveBeenCalledWith(['repo-old', 'repo-new'])
     expect(state.setShowActiveOnly).toHaveBeenCalledWith(false)
     expect(state.setHideDefaultBranchWorkspace).not.toHaveBeenCalled()
+  })
+
+  it('adds the imported repo to an active filter instead of clearing it', () => {
+    const state = makeState({
+      filterRepoIds: ['repo-a', 'repo-b'],
+      worktreesByRepo: {
+        'repo-new': [makeWorktree({ id: 'repo-new::/repo/feature', repoId: 'repo-new' })]
+      }
+    })
+
+    finalizeImportedRepoAfterSkip(state, 'repo-new')
+
+    expect(state.setFilterRepoIds).toHaveBeenCalledWith(['repo-a', 'repo-b', 'repo-new'])
+  })
+
+  it('leaves the filter untouched when it is empty (all projects already visible)', () => {
+    const state = makeState({
+      filterRepoIds: [],
+      worktreesByRepo: {
+        'repo-new': [makeWorktree({ id: 'repo-new::/repo/feature', repoId: 'repo-new' })]
+      }
+    })
+
+    finalizeImportedRepoAfterSkip(state, 'repo-new')
+
+    expect(state.setFilterRepoIds).not.toHaveBeenCalled()
+  })
+
+  it('leaves the filter untouched when the imported repo is already selected', () => {
+    const state = makeState({
+      filterRepoIds: ['repo-a', 'repo-new'],
+      worktreesByRepo: {
+        'repo-new': [makeWorktree({ id: 'repo-new::/repo/feature', repoId: 'repo-new' })]
+      }
+    })
+
+    finalizeImportedRepoAfterSkip(state, 'repo-new')
+
+    expect(state.setFilterRepoIds).not.toHaveBeenCalled()
   })
 
   it('clears default-branch hiding when it would hide every imported worktree', () => {
@@ -140,7 +179,7 @@ describe('finalizeImportedRepoAfterSkip', () => {
     finalizeImportedRepoAfterSkip(state, 'repo-new')
 
     expect(state.setActiveRepo).toHaveBeenCalledWith('repo-new')
-    expect(state.setFilterRepoIds).toHaveBeenCalledWith([])
+    expect(state.setFilterRepoIds).toHaveBeenCalledWith(['repo-old', 'repo-new'])
     expect(state.setShowActiveOnly).toHaveBeenCalledWith(false)
     expect(state.setHideDefaultBranchWorkspace).not.toHaveBeenCalled()
   })
