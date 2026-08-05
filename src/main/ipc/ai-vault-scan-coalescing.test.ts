@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultListResult } from '../../shared/ai-vault-types'
 import type { IFilesystemProvider } from '../providers/types'
@@ -70,7 +71,7 @@ describe('Agent Session History scan coalescing', () => {
     await vi.waitFor(() => expect(resolveScans).toHaveLength(2))
 
     expect(mocks.scanAiVaultSessions.mock.calls[1]?.[0]).toMatchObject({
-      codexSessionsDir: '/custom/codex/b/sessions'
+      codexSessionsDir: join('/custom/codex/b', 'sessions')
     })
     resolveScans.forEach((resolve) => resolve(EMPTY_RESULT))
     await Promise.all([first, second])
