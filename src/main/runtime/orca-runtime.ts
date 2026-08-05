@@ -25058,9 +25058,12 @@ export class OrcaRuntimeService {
       (Boolean(opts.agentSessionClaim) ||
         (!requiresRendererFocus && opts.rendererBacked !== true) ||
         // Why: `orca serve` exposes the local runtime without a renderer
-        // window. Renderer-backed Codex terminals are preferred for the app,
-        // but headless CLI users still need a usable terminal handle.
-        (opts.rendererBacked === true && rendererWindow === null))
+        // window. Renderer-backed and focus-requested creates are preferred on
+        // the renderer, but with no window a background spawn is the only
+        // usable path — otherwise getAuthoritativeWindow() below throws and the
+        // caller gets no terminal at all (#10333). Focus is not lost: the
+        // spawned pane is still published and revealed with `activate`.
+        availableAuthoritativeWindow === null)
 
     if (shouldCreateInBackground) {
       if (!this.ptyController?.spawn) {
