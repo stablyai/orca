@@ -15,6 +15,29 @@ function preserveNewerLocalTerminalFields(remote: TerminalTab, local: TerminalTa
     : preserved
 }
 
+// Why a worktree with local tabs but no remote tabs leaves the replace scope: the snapshot carries
+// no tombstones, so "no tabs" from the remote is indistinguishable from a snapshot that regressed
+// or was poisoned by an earlier export bug — and honoring it deletes terminal surfaces the user can
+// see, unrecoverably. Keeping local state for that worktree is always recoverable: the next push
+// re-exports it, and a genuinely emptied worktree converges once the remote reports any tab for it.
+//
+// The caller must pass the narrowed set both to the merge and to every hydration step keyed by
+// replace scope (replaceWorkspaceKeys) — a protected worktree left in that scope still gets its live
+// tabs reset and swept into PTY reconnect by the hydration pipeline.
+export function narrowDirectSshReplaceWorktreeIds(
+  requestedReplaceWorktreeIds: ReadonlySet<string>,
+  current: WorkspaceSessionState,
+  remote: WorkspaceSessionState,
+  liveTabsByWorktree: AppState['tabsByWorktree']
+): ReadonlySet<string> {
+  return new Set(
+    [...requestedReplaceWorktreeIds].filter((worktreeId) => {
+      const localTabs = liveTabsByWorktree[worktreeId] ?? current.tabsByWorktree[worktreeId] ?? []
+      return localTabs.length === 0 || (remote.tabsByWorktree[worktreeId] ?? []).length > 0
+    })
+  )
+}
+
 export function mergeDirectSshRemoteWorkspaceSession(
   current: WorkspaceSessionState,
   remote: WorkspaceSessionState,
@@ -22,6 +45,12 @@ export function mergeDirectSshRemoteWorkspaceSession(
   liveTabsByWorktree: AppState['tabsByWorktree'],
   preserveLocalTerminalTabIds: ReadonlySet<string>
 ): WorkspaceSessionState {
+  // Why remote records are filtered to the replace scope: the remote session may still carry entries
+  // for worktrees the caller narrowed out (e.g. an empty tab list), and spreading those over current
+  // would delete the very state the narrowing protects.
+  const inReplaceScope = (worktreeId: string): boolean => replaceWorktreeIds.has(worktreeId)
+  const scopedRemoteRecord = <T>(record: Record<string, T> | undefined): [string, T][] =>
+    Object.entries(record ?? {}).filter(([worktreeId]) => inReplaceScope(worktreeId))
   const currentTabsById = new Map(
     [...replaceWorktreeIds]
       .flatMap((worktreeId) => liveTabsByWorktree[worktreeId] ?? [])
@@ -29,7 +58,7 @@ export function mergeDirectSshRemoteWorkspaceSession(
   )
   const locallyPreservedTabIds = new Set<string>()
   const tabsByWorktree = Object.fromEntries(
-    Object.entries(remote.tabsByWorktree).map(([worktreeId, tabs]) => [
+    scopedRemoteRecord(remote.tabsByWorktree).map(([worktreeId, tabs]) => [
       worktreeId,
       tabs.map((tab) => {
         const local = currentTabsById.get(tab.id)
@@ -90,11 +119,11 @@ export function mergeDirectSshRemoteWorkspaceSession(
     terminalLayoutsByTabId,
     activeWorktreeIdsOnShutdown: [
       ...(current.activeWorktreeIdsOnShutdown ?? []).filter((id) => !replaceWorktreeIds.has(id)),
-      ...(remote.activeWorktreeIdsOnShutdown ?? [])
+      ...(remote.activeWorktreeIdsOnShutdown ?? []).filter(inReplaceScope)
     ],
     activeTabIdByWorktree: {
       ...omitTargetWorktrees(current.activeTabIdByWorktree),
-      ...remote.activeTabIdByWorktree
+      ...Object.fromEntries(scopedRemoteRecord(remote.activeTabIdByWorktree))
     },
     remoteSessionIdsByTabId: {
       ...Object.fromEntries(
@@ -110,11 +139,11 @@ export function mergeDirectSshRemoteWorkspaceSession(
     },
     lastVisitedAtByWorktreeId: {
       ...omitTargetWorktrees(current.lastVisitedAtByWorktreeId),
-      ...remote.lastVisitedAtByWorktreeId
+      ...Object.fromEntries(scopedRemoteRecord(remote.lastVisitedAtByWorktreeId))
     },
     defaultTerminalTabsAppliedByWorktreeId: {
       ...omitTargetWorktrees(current.defaultTerminalTabsAppliedByWorktreeId),
-      ...remote.defaultTerminalTabsAppliedByWorktreeId
+      ...Object.fromEntries(scopedRemoteRecord(remote.defaultTerminalTabsAppliedByWorktreeId))
     }
   }
 }

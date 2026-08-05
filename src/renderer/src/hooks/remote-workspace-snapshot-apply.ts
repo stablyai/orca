@@ -14,6 +14,7 @@ import {
 import { directSshAuthoritiesEqual } from './direct-ssh-reconnect-tokens'
 import {
   mergeDirectSshRemoteWorkspaceSession,
+  narrowDirectSshReplaceWorktreeIds,
   uniqueWorktreeIdByPath
 } from './remote-workspace-session-merge'
 
@@ -111,12 +112,22 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
   const remoteSession = importRemoteWorkspaceSession(snapshot.session, {
     resolveWorktreeId: uniqueWorktreeIdByPath(worktreeIds)
   })
-  const merged = mergeDirectSshRemoteWorkspaceSession(
-    buildWorkspaceSessionPayload(state),
-    remoteSession,
+  const currentSession = buildWorkspaceSessionPayload(state)
+  // Why the narrowed set drives every step below: a worktree kept out of the replace scope must not
+  // reach hydration either — hydrateWorkspaceSession resets and reconnect-sweeps every worktree in
+  // replaceWorkspaceKeys, which would churn the live terminals the narrowing protects.
+  const replaceWorktreeIds = narrowDirectSshReplaceWorktreeIds(
     worktreeIds,
+    currentSession,
+    remoteSession,
+    state.tabsByWorktree
+  )
+  const merged = mergeDirectSshRemoteWorkspaceSession(
+    currentSession,
+    remoteSession,
+    replaceWorktreeIds,
     state.tabsByWorktree,
-    currentRecoveryTabIds(state, authority, worktreeIds)
+    currentRecoveryTabIds(state, authority, replaceWorktreeIds)
   )
   if (!isArrivalCurrent(authority.targetId, arrival) || !isPreparationTokenCurrent(token)) {
     return
@@ -124,7 +135,7 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
   snapshotApplyDepth += 1
   try {
     const currentStore = store.getState()
-    const replaceWorkspaceKeys = [...worktreeIds]
+    const replaceWorkspaceKeys = [...replaceWorktreeIds]
     currentStore.hydrateWorkspaceSession(merged, {
       directSshAuthority: authority,
       replaceWorkspaceKeys
