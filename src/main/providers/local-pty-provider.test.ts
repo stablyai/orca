@@ -224,6 +224,43 @@ describe('LocalPtyProvider', () => {
       expect(typeof result.id).toBe('string')
     })
 
+    it('opts only recognized native Windows agent PTYs into ConPTY Job Object ownership', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+      await provider.spawn({ cols: 80, rows: 24, cwd: 'C:\\repo', command: 'claude' })
+      expect(spawnMock.mock.calls.at(-1)?.[2]).toMatchObject({
+        useConptyDll: true,
+        useConptyJobObject: true
+      })
+
+      await provider.spawn({ cols: 80, rows: 24, cwd: 'C:\\repo' })
+      expect(spawnMock.mock.calls.at(-1)?.[2]).not.toHaveProperty('useConptyJobObject')
+    })
+
+    it('does not apply the native Windows Job Object option to WSL agent PTYs', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\repo',
+        command: 'codex',
+        shellOverride: 'wsl.exe'
+      })
+
+      expect(spawnMock.mock.calls.at(-1)?.[2]).not.toHaveProperty('useConptyJobObject')
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\repo',
+        command: 'codex',
+        shellOverride: 'wsl'
+      })
+      expect(spawnMock.mock.calls.at(-1)?.[2]).not.toHaveProperty('useConptyJobObject')
+    })
+
+
     it('expands variables in PATH before spawning a Windows shell', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
 
@@ -1331,6 +1368,55 @@ describe('LocalPtyProvider', () => {
       await provider.shutdown(id, { immediate: true })
       expect(killSpy).toHaveBeenCalled()
     })
+
+    it('coalesces Windows agent shutdown around one native Job Object kill and physical exit', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const killSpy = vi.fn()
+      mockProc.kill = killSpy
+      const { id } = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        launchAgent: 'claude'
+      })
+      expect(spawnMock.mock.calls.at(-1)?.[2]).toMatchObject({ useConptyJobObject: true })
+
+      const graceful = provider.shutdown(id, { immediate: false })
+      const immediate = provider.shutdown(id, { immediate: true })
+      let settled = false
+      void immediate.then(() => {
+        settled = true
+      })
+      await Promise.resolve()
+      const settledBeforeExit = settled
+      exitCb?.({ exitCode: 137 })
+      await Promise.all([graceful, immediate])
+
+      expect(settledBeforeExit).toBe(false)
+      expect(killSpy).toHaveBeenCalledOnce()
+      // Why: Job Object owns the agent tree — no taskkill /T via killWithDescendantSweep.
+      expect(killWithDescendantSweepMock).not.toHaveBeenCalled()
+      expect(provider.hasPty(id)).toBe(false)
+    })
+
+    it('sweeps WSL agent descendants when no Windows Job Object owns the tree', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const { id } = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        launchAgent: 'claude',
+        shellOverride: 'wsl'
+      })
+      expect(spawnMock.mock.calls.at(-1)?.[2]).not.toHaveProperty('useConptyJobObject')
+
+      await provider.shutdown(id, { immediate: true })
+
+      expect(killWithDescendantSweepMock).toHaveBeenCalledWith(
+        mockProc.pid,
+        expect.any(Function),
+        expect.objectContaining({ ownsRoot: expect.any(Function) })
+      )
+    })
+
 
     it('invokes onExit callback via the node-pty exit handler', async () => {
       const onExit = vi.fn()
