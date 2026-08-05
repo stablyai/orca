@@ -96,6 +96,13 @@ export function installTerminalImeNativeTextForwarder(args: {
     }, 100)
   }
 
+  // Why: this forwarder only owns text macOS commits *outside* a composition.
+  // A jamo keydown claims its physical key before compositionstart can say
+  // otherwise, so retire the claim as soon as the CompositionHelper takes over.
+  const releaseClaimToComposition = (): void => {
+    claimedPress = null
+  }
+
   const markCompositionTransactionAccepted = (): void => {
     compositionTransactionPending = true
   }
@@ -124,19 +131,22 @@ export function installTerminalImeNativeTextForwarder(args: {
     if (!claimedPress) {
       return false
     }
-    if (event.ctrlKey || event.altKey || event.metaKey || event.isComposing === true) {
-      return false
-    }
-    if (event.type === 'keyup') {
-      if (!matchesClaimedPress(event, claimedPress)) {
-        return false
-      }
+    const chordedOrComposing =
+      event.ctrlKey || event.altKey || event.metaKey || event.isComposing === true
+    if (event.type === 'keyup' && matchesClaimedPress(event, claimedPress)) {
+      // Why: the release is the only thing that retires a claim, and every keyup
+      // inside a composition reports isComposing — bailing on that first strands
+      // the claim, so the next press of the same physical key is bypassed with
+      // nothing left armed to forward it.
       claimedPress = null
       if (pendingForward) {
         schedulePendingForwardClear()
       }
       // Bypass so the kitty release sequence for the swallowed press cannot leak.
-      return true
+      return !chordedOrComposing
+    }
+    if (chordedOrComposing) {
+      return false
     }
     if (event.type === 'keypress') {
       // Keep the keydown's armed state but still bypass xterm so it does not
@@ -190,6 +200,7 @@ export function installTerminalImeNativeTextForwarder(args: {
     markCompositionTransactionSettled,
     true
   )
+  terminalElement.addEventListener('compositionstart', releaseClaimToComposition, true)
   terminalElement.addEventListener('input', forwardCommittedText, true)
   terminalElement.addEventListener('blur', cancelPending, true)
 
@@ -207,6 +218,7 @@ export function installTerminalImeNativeTextForwarder(args: {
         markCompositionTransactionSettled,
         true
       )
+      terminalElement.removeEventListener('compositionstart', releaseClaimToComposition, true)
       terminalElement.removeEventListener('input', forwardCommittedText, true)
       terminalElement.removeEventListener('blur', cancelPending, true)
     }
