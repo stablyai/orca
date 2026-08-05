@@ -1662,6 +1662,17 @@ export type GitHubPRReviewCommentInput = {
   body: string
 }
 
+export type GitHubPRMergeEvidence = {
+  repo: GitHubRepositoryIdentity
+  prNumber: number
+  headSha: string
+  baseRefName: string
+  reviewThreadsComplete: boolean
+  unresolvedReviewThreadCount: number
+  filesComplete: boolean
+  files: string[]
+}
+
 export type GitHubWorkItemDetails = {
   // Why: main-process doesn't know Orca's Repo.id, so this inner item omits
   // repoId. The renderer stamps it when routing the details through the store.

@@ -283,6 +283,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'github.prForBranch',
   'github.prFileContents',
   'github.prChecks',
+  'github.prMergeEvidence',
   'github.prCheckDetails',
   'github.rerunPRChecks',
   'github.resolveReviewThread',

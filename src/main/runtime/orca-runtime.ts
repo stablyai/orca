@@ -565,6 +565,7 @@ import {
   listWorkItems,
   countWorkItems,
   getPRChecks,
+  getPRMergeEvidence,
   getPRCheckDetails,
   rerunPRChecks,
   getPRComments,
@@ -19615,6 +19616,21 @@ export class OrcaRuntimeService {
     return getIssue(
       repo.path,
       number,
+      repo.connectionId ?? null,
+      ...this.getLocalGitExecutionOptionArgs(repo)
+    )
+  }
+
+  async getRepoPRMergeEvidence(
+    repoSelector: string,
+    prNumber: number,
+    prRepo?: GitHubOwnerRepo | null
+  ): Promise<Awaited<ReturnType<typeof getPRMergeEvidence>>> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    return getPRMergeEvidence(
+      repo.path,
+      prNumber,
+      prRepo ?? null,
       repo.connectionId ?? null,
       ...this.getLocalGitExecutionOptionArgs(repo)
     )

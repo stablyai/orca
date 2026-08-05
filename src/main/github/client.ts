@@ -19,7 +19,8 @@ import type {
   GitHubPullRequestStateUpdate,
   GitHubRerunPRChecksResult,
   GitHubPRMergeMethod,
-  GitHubPRMergeMethodSettings
+  GitHubPRMergeMethodSettings,
+  GitHubPRMergeEvidence
 } from '../../shared/types'
 import type { CreateHostedReviewInput, CreateHostedReviewResult } from '../../shared/hosted-review'
 import {
@@ -4151,6 +4152,92 @@ query($owner: String!, $repo: String!, $pr: Int!) {
     }
   }
 }`
+
+const PR_MERGE_EVIDENCE_QUERY = `
+query($owner: String!, $repo: String!, $pr: Int!) {
+  repository(owner: $owner, name: $repo) {
+    pullRequest(number: $pr) {
+      number
+      headRefOid
+      baseRefName
+      reviewThreads(first: 100) {
+        pageInfo { hasNextPage }
+        nodes { isResolved }
+      }
+      files(first: 100) {
+        pageInfo { hasNextPage }
+        nodes { path }
+      }
+    }
+  }
+}`
+
+/** Fresh, bounded evidence for an owner-authorized exact-head merge. */
+export async function getPRMergeEvidence(
+  repoPath: string,
+  prNumber: number,
+  prRepo?: GitHubApiRepository | null,
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
+): Promise<GitHubPRMergeEvidence> {
+  const { ownerRepo, ghOptions } = await resolveGitHubRepoExecution(
+    repoPath,
+    prRepo,
+    connectionId,
+    localGitOptions
+  )
+  if (!ownerRepo) throw new Error('Could not resolve GitHub owner/repo for this repository')
+  await assertRateLimitBudget('graphql', ownerRepo, ghOptions)
+  await acquire()
+  try {
+    const { stdout } = await ghExecFileAsync(
+      [
+        'api',
+        'graphql',
+        '-f',
+        `query=${PR_MERGE_EVIDENCE_QUERY}`,
+        '-f',
+        `owner=${ownerRepo.owner}`,
+        '-f',
+        `repo=${ownerRepo.repo}`,
+        '-F',
+        `pr=${prNumber}`
+      ],
+      ghOptions
+    )
+    noteRepositoryRateLimitSpend(ownerRepo, 'graphql', 1, ghOptions)
+    const pr = (JSON.parse(stdout) as {
+      data?: {
+        repository?: {
+          pullRequest?: {
+            number?: number
+            headRefOid?: string
+            baseRefName?: string
+            reviewThreads?: { pageInfo?: { hasNextPage?: boolean }; nodes?: { isResolved?: boolean }[] }
+            files?: { pageInfo?: { hasNextPage?: boolean }; nodes?: { path?: string }[] }
+          }
+        }
+      }
+    }).data?.repository?.pullRequest
+    if (!pr || pr.number !== prNumber || !pr.headRefOid || !pr.baseRefName) {
+      throw new Error('GitHub returned incomplete PR merge evidence')
+    }
+    const threads = pr.reviewThreads
+    const files = pr.files
+    return {
+      repo: ownerRepo,
+      prNumber,
+      headSha: pr.headRefOid,
+      baseRefName: pr.baseRefName,
+      reviewThreadsComplete: threads?.pageInfo?.hasNextPage === false,
+      unresolvedReviewThreadCount: (threads?.nodes ?? []).filter((thread) => thread.isResolved !== true).length,
+      filesComplete: files?.pageInfo?.hasNextPage === false,
+      files: (files?.nodes ?? []).map((file) => file.path).filter((path): path is string => Boolean(path))
+    }
+  } finally {
+    release()
+  }
+}
 
 /**
  * Get all comments on a PR — both top-level conversation comments and inline

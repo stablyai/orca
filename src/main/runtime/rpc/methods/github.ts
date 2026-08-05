@@ -77,6 +77,8 @@ const PullRequestChecks = PullRequest.extend({
   headSha: OptionalString
 })
 
+const PullRequestMergeEvidence = PullRequest
+
 const PullRequestCheckDetails = RepoSelector.extend({
   checkRunId: z.number().int().positive().optional(),
   workflowRunId: z.number().int().positive().optional(),
@@ -423,6 +425,12 @@ export const GITHUB_METHODS: RpcMethod[] = [
     name: 'github.issue',
     params: Issue,
     handler: async (params, { runtime }) => runtime.getRepoIssue(params.repo, params.number)
+  }),
+  defineMethod({
+    name: 'github.prMergeEvidence',
+    params: PullRequestMergeEvidence,
+    handler: async (params, { runtime }) =>
+      runtime.getRepoPRMergeEvidence(params.repo, params.prNumber, params.prRepo ?? null)
   }),
   defineMethod({
     name: 'github.prChecks',
