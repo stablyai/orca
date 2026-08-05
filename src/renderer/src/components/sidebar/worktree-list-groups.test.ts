@@ -4152,7 +4152,7 @@ describe('buildRows pending creations', () => {
         }
       }
       expect(getIssueGroupInfo(wt)).toEqual({
-        key: 'issue:ORCA-5199',
+        key: 'issue:jira:repo-1:ORCA-5199',
         label: 'ORCA-5199: Custom Groups Feature'
       })
     })
@@ -4170,7 +4170,7 @@ describe('buildRows pending creations', () => {
         }
       }
       expect(getIssueGroupInfo(wt)).toEqual({
-        key: 'issue:ENG-123',
+        key: 'issue:linear:repo-1:ENG-123',
         label: 'ENG-123: Fix issue grouping'
       })
     })
@@ -4199,7 +4199,7 @@ describe('buildRows pending creations', () => {
         }
       }
       expect(getIssueGroupInfo(wt, issueCache, repos)).toEqual({
-        key: 'issue:#5199',
+        key: 'issue:github:repo-1:#5199',
         label: '#5199: Custom Groups Feature'
       })
     })
@@ -4210,7 +4210,7 @@ describe('buildRows pending creations', () => {
         linkedLinearIssue: 'STA-335'
       }
       expect(getIssueGroupInfo(wt)).toEqual({
-        key: 'issue:STA-335',
+        key: 'issue:issue:STA-335',
         label: 'STA-335'
       })
     })
@@ -4227,7 +4227,7 @@ describe('buildRows pending creations', () => {
         }
       }
       expect(getIssueGroupInfo(wt)).toEqual({
-        key: 'issue:#42',
+        key: 'issue:github:repo-1:#42',
         label: '#42: Implement custom grouping'
       })
     })
@@ -4244,7 +4244,7 @@ describe('buildRows pending creations', () => {
         }
       }
       expect(getIssueGroupInfo(wt)).toEqual({
-        key: 'issue:#99',
+        key: 'issue:gitlab:repo-1:#99',
         label: '#99: Pipeline reliability fix'
       })
     })
@@ -4255,7 +4255,7 @@ describe('buildRows pending creations', () => {
         linkedGitLabIssue: 88
       }
       expect(getIssueGroupInfo(wt)).toEqual({
-        key: 'issue:#88',
+        key: 'issue:gitlab:repo-1:#88',
         label: 'Issue #88'
       })
     })
@@ -4273,7 +4273,7 @@ describe('buildRows pending creations', () => {
         }
       }
       expect(getIssueGroupInfo(wt)).toEqual({
-        key: 'issue:MSYP-683',
+        key: 'issue:jira:repo-1:MSYP-683',
         label: 'MSYP-683: Integratie Productbeoordeling'
       })
     })
@@ -4290,7 +4290,7 @@ describe('buildRows pending creations', () => {
         }
       }
       expect(getIssueGroupInfo(wt)).toEqual({
-        key: 'issue:#5199',
+        key: 'issue:github:repo-1:#5199',
         label: '#5199: Custom Groups Support'
       })
     })
@@ -4302,6 +4302,37 @@ describe('buildRows pending creations', () => {
         branch: 'feat/issue-5199-custom-groups'
       }
       expect(getIssueGroupInfo(wt)).toEqual({
+        key: 'issue:none',
+        label: 'No issue'
+      })
+    })
+
+    it('ignores linkedWorkItem with type pr or mr for issue grouping', () => {
+      const wtPR: Worktree = {
+        ...worktree,
+        linkedWorkItem: {
+          url: 'https://github.com/org/repo/pull/123',
+          title: 'Fix issue grouping PR',
+          number: 123,
+          provider: 'github',
+          type: 'pr'
+        }
+      }
+      const wtMR: Worktree = {
+        ...worktree,
+        linkedWorkItem: {
+          url: 'https://gitlab.com/org/repo/-/merge_requests/456',
+          title: 'Fix issue grouping MR',
+          number: 456,
+          provider: 'gitlab',
+          type: 'mr'
+        }
+      }
+      expect(getIssueGroupInfo(wtPR)).toEqual({
+        key: 'issue:none',
+        label: 'No issue'
+      })
+      expect(getIssueGroupInfo(wtMR)).toEqual({
         key: 'issue:none',
         label: 'No issue'
       })
@@ -4349,9 +4380,14 @@ describe('buildRows pending creations', () => {
       const rows = buildRows('issue', [wtNoIssue, wtJira, wtLinear], repoMap, null, new Set())
 
       expect(rows).toMatchObject([
-        { type: 'header', key: 'issue:ABC-10', label: 'ABC-10', count: 1 },
+        { type: 'header', key: 'issue:issue:ABC-10', label: 'ABC-10', count: 1 },
         { type: 'item', worktree: { id: 'wt-linear' } },
-        { type: 'header', key: 'issue:ORCA-5199', label: 'ORCA-5199: Custom Groups', count: 1 },
+        {
+          type: 'header',
+          key: 'issue:jira:repo-1:ORCA-5199',
+          label: 'ORCA-5199: Custom Groups',
+          count: 1
+        },
         { type: 'item', worktree: { id: 'wt-jira' } },
         { type: 'header', key: 'issue:none', label: 'No issue', count: 1 },
         { type: 'item', worktree: { id: 'wt-none' } }
@@ -4363,7 +4399,7 @@ describe('buildRows pending creations', () => {
         ...worktree,
         linkedLinearIssue: 'STA-335'
       }
-      expect(getGroupKeyForWorktree('issue', wt, repoMap, null)).toBe('issue:STA-335')
+      expect(getGroupKeyForWorktree('issue', wt, repoMap, null)).toBe('issue:issue:STA-335')
     })
   })
 })

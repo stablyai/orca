@@ -66,7 +66,7 @@ export function getIssueGroupInfo(
   repoMap?: Map<string, Repo>,
   settings?: AppState['settings']
 ): { key: string; label: string } {
-  const item = w.linkedWorkItem
+  const item = w.linkedWorkItem?.type === 'issue' ? w.linkedWorkItem : null
   const rawId =
     item?.jiraIdentifier ??
     item?.linearIdentifier ??
@@ -114,7 +114,15 @@ export function getIssueGroupInfo(
         ? `Issue ${identifier}`
         : identifier
 
-    return { key: `issue:${identifier}`, label }
+    const providerScope = item?.provider
+      ? `${item.provider}:${item.repoId ?? w.repoId}`
+      : isNumericIssue
+        ? w.linkedGitLabIssue
+          ? `gitlab:${w.repoId}`
+          : `github:${w.repoId}`
+        : 'issue'
+
+    return { key: `issue:${providerScope}:${identifier}`, label }
   }
 
   return {
