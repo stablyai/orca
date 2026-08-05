@@ -11,6 +11,7 @@ import {
   getVisibleContextualTourStepIndexes
 } from './contextual-tour-gate'
 import type { ActiveTourRenderState } from './ContextualTourOverlaySurface'
+import { getLocalizedContextualTourStepCopy } from './contextual-tour-step-copy'
 import { translate } from '@/i18n/i18n'
 
 export type ContextualTourMeasurementAction =
@@ -27,36 +28,6 @@ export type ContextualTourOverlayMeasurementResult =
       renderState: ActiveTourRenderState
       telemetryTotalSteps: number
     }
-
-// Why: keyed by the step's stable id, not its position — inserting a step must
-// not shift localized copy onto a neighbour. Thunks keep translate() out of
-// module scope so the lookup resolves in the language active at render time.
-const LOCALIZED_STEP_COPY: Record<string, { title: () => string; body: () => string }> = {
-  'automations-intro': {
-    title: () =>
-      translate(
-        'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.intro.title',
-        'What is an automation?'
-      ),
-    body: () =>
-      translate(
-        'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.intro.body',
-        'Automations run agent work on a schedule. Add an automation by clicking this button.'
-      )
-  },
-  'automations-results': {
-    title: () =>
-      translate(
-        'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.results.title',
-        'Find the results'
-      ),
-    body: () =>
-      translate(
-        'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.results.body',
-        'Runs show when automations ran, what happened, and where to inspect their output.'
-      )
-  }
-}
 
 export function getContextualTourDisplayProgress(args: {
   tour: ContextualTour
@@ -119,13 +90,10 @@ export function measureContextualTourOverlayRenderState(args: {
   )
   const activeStep = args.tour.steps[args.activeStepIndex]
   const target = activeStep ? getMeasurableContextualTourTarget(activeStep.targetSelector) : null
-  const localizedCopy = activeStep?.id ? LOCALIZED_STEP_COPY[activeStep.id] : undefined
-  const localizedTitle = localizedCopy ? localizedCopy.title() : activeStep?.title
-  const localizedBody = localizedCopy
-    ? localizedCopy.body()
-    : activeStep
-      ? getContextualTourStepCopy(activeStep)
-      : undefined
+  const localizedCopy = getLocalizedContextualTourStepCopy(activeStep?.id)
+  const localizedTitle = localizedCopy?.title ?? activeStep?.title
+  const localizedBody =
+    localizedCopy?.body ?? (activeStep ? getContextualTourStepCopy(activeStep) : undefined)
   const progress = getContextualTourDisplayProgress({
     tour: args.tour,
     visibleStepIndexes,
@@ -162,7 +130,9 @@ export function measureContextualTourOverlayRenderState(args: {
           'Next'
         )
       } as const)
-    : activeStep.primaryAction
+    : activeStep.primaryAction && localizedCopy?.primaryActionLabel
+      ? { ...activeStep.primaryAction, label: localizedCopy.primaryActionLabel }
+      : activeStep.primaryAction
   const secondaryAction = sidebarAlreadyVisible ? undefined : activeStep.secondaryAction
 
   return {

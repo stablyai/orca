@@ -5089,5 +5089,98 @@
   },
   "auto.components.right.sidebar.AiVaultPanel.noAgentsSelected": {
     "ko": "선택된 에이전트가 없습니다"
+  },
+  "auto.components.contextual.tours.contextual.tour.step.copy.agent.sessions.parallel.body": {
+    "ko": "워크트리마다 자체 브랜치를 가지므로 병렬로 진행하는 작업이 서로 섞이지 않습니다."
+  },
+  "auto.components.contextual.tours.contextual.tour.step.copy.agent.sessions.parallel.title": {
+    "ko": "다른 작업을 병렬로 시작하기"
+  },
+  "auto.components.contextual.tours.contextual.tour.step.copy.agent.sessions.split.action": {
+    "ko": "Terminal 분할"
+  },
+  "auto.components.contextual.tours.contextual.tour.step.copy.agent.sessions.split.body": {
+    "ko": "{terminal.splitRight} 키로 두 번째 Terminal 창을 열거나, 창을 우클릭해 분할 옵션을 확인하세요."
+  },
+  "auto.components.contextual.tours.contextual.tour.step.copy.agent.sessions.split.title": {
+    "ko": "Terminal 창 분할"
+  },
+  "auto.components.contextual.tours.contextual.tour.step.copy.browser.annotate.body": {
+    "ko": "요소에 주석을 달고 그 메모를 agent에 보내세요."
+  },
+  "auto.components.contextual.tours.contextual.tour.step.copy.browser.annotate.title": {
+    "ko": "디자인 피드백을 화면에 바로 남기기"
+  },
+  "auto.components.contextual.tours.contextual.tour.step.copy.browser.grab.body": {
+    "ko": "grab 도구로 페이지 요소의 컨텍스트를 복사해 agent에 전달하세요."
+  },
+  "auto.components.contextual.tours.contextual.tour.step.copy.browser.grab.title": {
+    "ko": "agent를 위한 페이지 컨텍스트 가져오기"
+  },
+  "auto.components.contextual.tours.contextual.tour.step.copy.browser.logins.body": {
+    "ko": "기존 로그인 정보를 Orca로 가져와 바로 로그인 상태를 유지하세요."
+  },
+  "auto.components.contextual.tours.contextual.tour.step.copy.browser.logins.title": {
+    "ko": "로그인 상태 유지"
+  },
+  "auto.components.contextual.tours.contextual.tour.step.copy.floating.workspace.repos.body": {
+    "ko": "여기의 agent는 선택한 어떤 폴더에서도 실행됩니다. 서비스들의 상위 디렉터리를 지정하면 모든 repo에서 한 번에 작업할 수 있습니다."
+  },
+  "auto.components.contextual.tours.contextual.tour.step.copy.floating.workspace.repos.title": {
+    "ko": "모든 repo에서 agent 실행하기"
+  },
+  "auto.components.contextual.tours.contextual.tour.step.copy.floating.workspace.scratchpad.body": {
+    "ko": "집중하고 있는 워크트리를 어지럽히지 않고 agent, 임시 Terminal, 노트, 브라우저 탭을 열 수 있습니다."
+  },
+  "auto.components.contextual.tours.contextual.tour.step.copy.floating.workspace.scratchpad.title": {
+    "ko": "스크래치패드로도 사용하기"
+  },
+  "auto.components.contextual.tours.contextual.tour.step.copy.tasks.filter.body": {
+    "ko": "프리셋과 검색으로 이슈, 리뷰, merge requests, 작업의 범위를 좁히세요."
+  },
+  "auto.components.contextual.tours.contextual.tour.step.copy.tasks.filter.title": {
+    "ko": "필요한 작업만 필터링하기"
+  },
+  "auto.components.contextual.tours.contextual.tour.step.copy.tasks.source.body": {
+    "ko": "페이지를 이동하지 않고 연결된 제공자와 프로젝트 필터를 전환하세요."
+  },
+  "auto.components.contextual.tours.contextual.tour.step.copy.tasks.source.title": {
+    "ko": "작업 소스 선택"
+  },
+  "auto.components.contextual.tours.contextual.tour.step.copy.tasks.start.body": {
+    "ko": "작업, 이슈, 리뷰, merge request에서 시작 또는 열기를 눌러 해당 컨텍스트를 워크스페이스로 가져오세요."
+  },
+  "auto.components.contextual.tours.contextual.tour.step.copy.tasks.start.title": {
+    "ko": "작업 항목에서 시작하기"
+  },
+  "auto.components.contextual.tours.contextual.tour.step.copy.workspace.board.lanes.body": {
+    "ko": "상태가 바뀌면 워크스페이스를 레인 사이로 끌어다 놓으세요."
+  },
+  "auto.components.contextual.tours.contextual.tour.step.copy.workspace.board.lanes.title": {
+    "ko": "레인을 따라 작업 옮기기"
+  },
+  "auto.components.contextual.tours.contextual.tour.step.copy.workspace.board.plan.body": {
+    "ko": "프로젝트별이 아니라 상태별로 워크스페이스를 보고 싶을 때 보드를 사용하세요."
+  },
+  "auto.components.contextual.tours.contextual.tour.step.copy.workspace.board.plan.title": {
+    "ko": "보드에서 작업 계획하기"
+  },
+  "auto.components.contextual.tours.contextual.tour.step.copy.workspace.creation.agent.body": {
+    "ko": "이 워크트리가 생성될 때 열릴 agent를 선택하세요."
+  },
+  "auto.components.contextual.tours.contextual.tour.step.copy.workspace.creation.agent.title": {
+    "ko": "작업을 시작할 agent 선택"
+  },
+  "auto.components.contextual.tours.contextual.tour.step.copy.workspace.creation.name.body": {
+    "ko": "연결된 작업에서 시작하면 짧은 이슈나 PR 이름을 사용합니다. 비워 두면 첫 agent 메시지에서 이름이 자동으로 지정됩니다."
+  },
+  "auto.components.contextual.tours.contextual.tour.step.copy.workspace.creation.name.title": {
+    "ko": "이름을 정하거나 기존 작업에서 시작하기"
+  },
+  "auto.components.contextual.tours.contextual.tour.step.copy.workspace.creation.project.body": {
+    "ko": "Orca는 각 작업을 기준 브랜치에서 분기한 자체 워크트리로 분리합니다."
+  },
+  "auto.components.contextual.tours.contextual.tour.step.copy.workspace.creation.project.title": {
+    "ko": "프로젝트 선택"
   }
 }

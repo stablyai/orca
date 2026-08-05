@@ -13599,6 +13599,89 @@
                     }
                   }
                 }
+              },
+              "step": {
+                "copy": {
+                  "workspace": {
+                    "board": {
+                      "plan": {
+                        "title": "Plan work on the board",
+                        "body": "Use the board when you want to see workspaces by status instead of by project."
+                      },
+                      "lanes": {
+                        "title": "Move work through lanes",
+                        "body": "Drag workspaces between lanes as their status changes."
+                      }
+                    },
+                    "creation": {
+                      "project": {
+                        "title": "Pick a project",
+                        "body": "Orca isolates each task in its own worktree, branched off your base."
+                      },
+                      "name": {
+                        "title": "Name it, or start from existing work",
+                        "body": "Start from a linked task for a short issue or PR name. Or leave it blank to auto-name it from your first agent message."
+                      },
+                      "agent": {
+                        "title": "Choose what agent starts the work",
+                        "body": "Pick the agent that should be opened when this worktree is created."
+                      }
+                    }
+                  },
+                  "agent": {
+                    "sessions": {
+                      "split": {
+                        "title": "Split a terminal pane",
+                        "body": "Open a second terminal pane with {terminal.splitRight}, or right-click the pane for split options.",
+                        "action": "Split terminal"
+                      },
+                      "parallel": {
+                        "title": "Start another task in parallel",
+                        "body": "Each worktree gets its own branch, so parallel work stays separate."
+                      }
+                    }
+                  },
+                  "browser": {
+                    "grab": {
+                      "title": "Grab page context for agents",
+                      "body": "Use the grab tool to copy a page element's context for agents."
+                    },
+                    "annotate": {
+                      "title": "Mark design feedback in place",
+                      "body": "Annotate elements and send those notes to an agent."
+                    },
+                    "logins": {
+                      "title": "Stay logged in",
+                      "body": "Bring your existing logins into Orca to stay signed in immediately."
+                    }
+                  },
+                  "tasks": {
+                    "source": {
+                      "title": "Choose the work source",
+                      "body": "Switch between connected providers and project filters without changing pages."
+                    },
+                    "filter": {
+                      "title": "Filter to the work you need",
+                      "body": "Use presets and search to narrow issues, reviews, merge requests, or tasks."
+                    },
+                    "start": {
+                      "title": "Start from work items",
+                      "body": "Use Start or Open on a task, issue, review, or merge request to bring its context into a workspace."
+                    }
+                  },
+                  "floating": {
+                    "workspace": {
+                      "repos": {
+                        "title": "Run an agent across every repo",
+                        "body": "Agents here run in any folder you choose. Point one at the directory above your services to work across all your repos at once."
+                      },
+                      "scratchpad": {
+                        "title": "Or use it as a scratchpad",
+                        "body": "Open agents, scratch terminals, notes, and browser tabs without cluttering the worktree you’re focused on."
+                      }
+                    }
+                  }
+                }
               }
             }
           }
