@@ -2961,8 +2961,9 @@ function BrowserPagePane({
         case 'hard-reload':
           webview.reloadIgnoringCache()
           break
-        default:
+        case 'reload':
           webview.reload()
+          break
       }
     },
     [browserTab, reloadState]
