@@ -1445,11 +1445,18 @@ async function launchRelay(
   try {
     const probeOutput = await execCommand(
       conn,
-      `test -S ${shellEscape(sockFile)} && echo ALIVE || echo DEAD`,
+      // Why three states: `test -S` is also false for a regular file, a directory or a dangling
+      // symlink at the endpoint path. Collapsing those into DEAD sent them to a blind fresh launch.
+      `if test -S ${shellEscape(sockFile)} && test ! -L ${shellEscape(sockFile)}; then echo ALIVE; elif test -e ${shellEscape(sockFile)} || test -L ${shellEscape(sockFile)}; then echo OCCUPIED; else echo DEAD; fi`,
       { signal }
     )
-    console.warn(`[ssh-relay] Socket probe result: "${probeOutput.trim()}"`)
-    if (probeOutput.trim() === 'ALIVE') {
+    const probeState = probeOutput.trim()
+    console.warn(`[ssh-relay] Socket probe result: "${probeState}"`)
+    if (probeState === 'OCCUPIED') {
+      // Why: something that is not a socket holds the endpoint. Recovery refuses it with a typed
+      // reason instead of launching over it.
+      reconnectFailed = true
+    } else if (probeState === 'ALIVE') {
       console.log('[ssh-relay] Existing relay socket found, attempting reconnect...')
       const reconnected = await connectToExistingRelay()
       console.log('[ssh-relay] Reconnected to existing relay via socket')
@@ -1479,15 +1486,8 @@ async function launchRelay(
     if (recovery.status !== 'unsupported') {
       return recovery.value
     }
-    // Why: named-pipe endpoints publish no owner manifest. Unreachable today because Windows hosts
-    // return earlier, but keeping the historical cleanup means moving that branch cannot silently
-    // strand a pipe endpoint.
-    await execCommand(conn, `rm -f ${shellEscape(sockFile)}`, { signal }).catch((cleanupErr) => {
-      if (isUnconfirmedSshCommandTermination(cleanupErr)) {
-        throw cleanupErr
-      }
-    })
-    signal?.throwIfAborted()
+    // Why nothing here: `unsupported` means a named-pipe endpoint, where the historical `rm -f` was
+    // a no-op anyway. Leaving it out keeps "recovery unlinks nothing" true of the whole module.
   }
 
   return launchFreshRelay()

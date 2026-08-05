@@ -3,8 +3,10 @@
 // The old behaviour was `rm -f <socket>` followed by a fresh detached launch, which strands the
 // process that still owns the socket — and with it every PTY it holds (#8585). This module instead
 // proves ownership from the generation manifest and argv marker, sends one SIGTERM to that exact
-// generation, waits for its identity to disappear, and only then removes artifacts that still
-// belong to it. Every step that cannot be proven fails closed: no signal, no unlink, no relaunch.
+// generation, waits for its identity to disappear, and then relaunches only once the socket
+// pathname is proven empty. It removes nothing: after the owner exits no identity can authorize an
+// unlink, because a successor binding the same path within one second reproduces dev:ino:ctime
+// exactly. Every step that cannot be proven fails closed: no signal, no unlink, no relaunch.
 //
 // Threat boundary: the manifest and socket live in a directory owned by the SSH user, and a same-OS
 // user can already signal that user's processes directly. The guarantees here are against accidents
@@ -12,22 +14,33 @@
 // who already has the account.
 
 import { isRelayNamedPipeEndpoint } from '../../shared/relay-owner-manifest'
+import {
+  RelayGenerationRecoveryError,
+  type RelayGenerationRecoveryReason
+} from './ssh-relay-generation-recovery-error'
 import type { SshConnection } from './ssh-connection'
 import { shellEscape } from './ssh-connection-utils'
 import { execCommand, isUnconfirmedSshCommandTermination } from './ssh-relay-deploy-helpers'
 import {
-  parseRelayGenerationCleanupOutput,
   parseRelayGenerationIdentityOutput,
   parseRelayGenerationTerminateOutput,
   parseRelayOwnerProbeOutput,
-  relayGenerationCleanupCommand,
+  parseRelayRelaunchReadinessOutput,
   relayGenerationIdentityCommand,
   relayGenerationTerminateCommand,
-  relayOwnerProbeCommand
+  relayOwnerProbeCommand,
+  relayRelaunchReadinessCommand,
+  type RelayOwnerProbe
 } from './ssh-relay-generation-owner-commands'
 import { waitForRelayPollDelay } from './ssh-relay-poll-delay'
 import { acquireRelayRecoveryLock, releaseRelayRecoveryLock } from './ssh-relay-recovery-lock'
 import { isWindowsRemoteHost, type RemoteHostPlatform } from './ssh-remote-platform'
+
+export {
+  RelayGenerationRecoveryError,
+  isTerminalRelayGenerationRecoveryError,
+  type RelayGenerationRecoveryReason
+} from './ssh-relay-generation-recovery-error'
 
 // Why: the relay's own SIGTERM path disposes PTYs in parallel but waits IMMEDIATE_PTY_EXIT_TIMEOUT_MS
 // (8s) plus a 250ms force-kill retry for the slowest one (src/relay/pty-handler.ts). Giving up sooner
@@ -41,76 +54,6 @@ export const RELAY_GENERATION_EXIT_BUDGET_MS =
 // Why: these probes are single `stat`/`ps` reads, so the 30s execCommand default is far too generous
 // — it would let one wedged command stretch the recovery past the lock's staleness window.
 const RELAY_GENERATION_EXEC_TIMEOUT_MS = 15_000
-
-export type RelayGenerationRecoveryReason =
-  | 'recovery-busy'
-  | 'owner-unknown'
-  | 'owner-unverifiable'
-  | 'probe-failed'
-  | 'identity-mismatch'
-  | 'identity-unverifiable'
-  | 'termination-failed'
-  | 'still-running'
-  | 'cleanup-blocked'
-
-const RECOVERY_ADVICE: Record<RelayGenerationRecoveryReason, string> = {
-  'recovery-busy': 'another Orca client is already recovering this relay; retry shortly',
-  'owner-unknown':
-    'it was launched by an older Orca that publishes no owner manifest, so the process holding it cannot be identified',
-  'owner-unverifiable': 'its owner manifest could not be read and trusted',
-  'probe-failed': 'the remote host did not answer the ownership probe',
-  'identity-mismatch': 'the recorded process is no longer that relay generation',
-  'identity-unverifiable': 'the recorded process state could not be determined',
-  'termination-failed': 'the termination request could not be confirmed',
-  'still-running': 'the relay did not exit after SIGTERM',
-  'cleanup-blocked': 'a newer relay generation already owns the socket'
-}
-
-// Why: the message must not claim the relay is untouched once a SIGTERM has already landed.
-const SIGNALLED_REASONS = new Set<RelayGenerationRecoveryReason>([
-  'still-running',
-  'cleanup-blocked'
-])
-
-export class RelayGenerationRecoveryError extends Error {
-  readonly reason: RelayGenerationRecoveryReason
-  readonly sockPath: string
-
-  constructor(reason: RelayGenerationRecoveryReason, sockPath: string, cause?: unknown) {
-    const aftermath = SIGNALLED_REASONS.has(reason)
-      ? 'Orca did not remove the socket or start a replacement.'
-      : 'Orca left the existing relay and its PTYs untouched.'
-    super(
-      `Refusing to reclaim the relay socket at ${sockPath}: ${RECOVERY_ADVICE[reason]}. ${aftermath} Reset the relay for this host from SSH settings, or wait for the idle relay grace period to drain it.`,
-      cause === undefined ? undefined : { cause }
-    )
-    this.name = 'RelayGenerationRecoveryError'
-    this.reason = reason
-    this.sockPath = sockPath
-  }
-}
-
-// Why: only a refusal that re-running cannot change belongs here. A transport fault, a peer holding
-// the lock, a relay still draining, or a successor that already took the socket are all states the
-// existing reconnect backoff resolves — treating them as terminal would park a healthy session on
-// one timed-out probe.
-const TERMINAL_RECOVERY_REASONS = new Set<RelayGenerationRecoveryReason>([
-  'owner-unknown',
-  'owner-unverifiable',
-  'identity-mismatch'
-])
-
-/**
- * True for a recovery refusal no amount of reconnect backoff can resolve, so the session layer can
- * surface the message instead of looping.
- */
-export function isTerminalRelayGenerationRecoveryError(
-  error: unknown
-): error is RelayGenerationRecoveryError {
-  return (
-    error instanceof RelayGenerationRecoveryError && TERMINAL_RECOVERY_REASONS.has(error.reason)
-  )
-}
 
 export type RelayReconnectRecovery<T> =
   | { status: 'reconnected'; value: T }
@@ -205,22 +148,17 @@ async function reapRelayGeneration(
   sockPath: string,
   signal?: AbortSignal
 ): Promise<void> {
-  const probe = parseRelayOwnerProbeOutput(
-    await exec(conn, host, relayOwnerProbeCommand(sockPath), sockPath, 'probe-failed', signal),
-    sockPath
-  )
-  signal?.throwIfAborted()
+  const probe = await probeOwner(conn, host, sockPath, signal)
   if (probe.kind === 'socket-absent') {
-    // Nothing left to reclaim — the owner already released the path.
+    // Why the readiness proof anyway: the probe reports an absent socket for a path it merely could
+    // not read. Only the readiness command proves the parent is searchable before calling it empty.
+    await proveRelaunchReadiness(conn, host, sockPath, signal)
     return
   }
-  if (probe.kind === 'no-manifest') {
-    throw new RelayGenerationRecoveryError('owner-unknown', sockPath)
-  }
   if (probe.kind !== 'owned') {
-    throw new RelayGenerationRecoveryError('owner-unverifiable', sockPath)
+    throw new RelayGenerationRecoveryError(probeRefusalReason(probe), sockPath)
   }
-  const { manifest, socketIdentity } = probe
+  const { manifest } = probe
   const identityCommand = relayGenerationIdentityCommand(manifest.pid, manifest.generation)
   const identity = parseRelayGenerationIdentityOutput(
     await exec(conn, host, identityCommand, sockPath, 'identity-unverifiable', signal)
@@ -244,19 +182,105 @@ async function reapRelayGeneration(
     )
     await waitForGenerationExit(conn, host, sockPath, identityCommand, signal)
   }
-  const cleanup = parseRelayGenerationCleanupOutput(
+  // Why: a readiness proof, not a cleanup. Once the owner is gone nothing can authorize an unlink —
+  // a successor binding the same path within one second reproduces dev:ino:ctime exactly — so the
+  // parent removes nothing and relaunches only over an empty pathname.
+  await proveRelaunchReadiness(conn, host, sockPath, signal)
+}
+
+async function proveRelaunchReadiness(
+  conn: SshConnection,
+  host: RemoteHostPlatform,
+  sockPath: string,
+  signal?: AbortSignal
+): Promise<void> {
+  const readiness = parseRelayRelaunchReadinessOutput(
     await exec(
       conn,
       host,
-      relayGenerationCleanupCommand(sockPath, socketIdentity, manifest.generation),
+      relayRelaunchReadinessCommand(sockPath),
       sockPath,
-      'cleanup-blocked',
+      'relaunch-blocked',
       signal
     )
   )
   signal?.throwIfAborted()
-  if (cleanup !== 'clean') {
-    throw new RelayGenerationRecoveryError('cleanup-blocked', sockPath)
+  if (readiness !== 'absent') {
+    throw new RelayGenerationRecoveryError('relaunch-blocked', sockPath)
+  }
+}
+
+/**
+ * Reads the owner probe, re-reading once when no manifest is present.
+ *
+ * Why the second read: a relay answers the launch readiness poll (a connect-and-close probe) before
+ * it publishes its manifest, so a single `no-manifest` cannot distinguish a legacy relay — which is
+ * terminal — from a healthy successor still starting up, which a retry resolves.
+ */
+async function probeOwner(
+  conn: SshConnection,
+  host: RemoteHostPlatform,
+  sockPath: string,
+  signal?: AbortSignal
+): Promise<RelayOwnerProbe> {
+  const command = relayOwnerProbeCommand(sockPath)
+  const first = parseRelayOwnerProbeOutput(
+    await exec(conn, host, command, sockPath, 'probe-failed', signal),
+    sockPath
+  )
+  signal?.throwIfAborted()
+  // Why both kinds: `no-manifest` cannot tell a legacy relay from a successor still starting up, and
+  // `manifest-superseded` cannot tell a live rebind from a stale manifest a legacy relay inherited.
+  // In each case only a second read can say whether the socket is actually changing under us.
+  if (first.kind !== 'no-manifest' && first.kind !== 'manifest-superseded') {
+    return first
+  }
+  const firstIdentity = first.socketIdentity
+  await waitForRelayPollDelay(RELAY_GENERATION_EXIT_INTERVAL_MS, signal)
+  signal?.throwIfAborted()
+  const second = parseRelayOwnerProbeOutput(
+    await exec(conn, host, command, sockPath, 'probe-failed', signal),
+    sockPath
+  )
+  signal?.throwIfAborted()
+  // Why: a socket that changed identity between the two reads is actively being rebound, so this is
+  // a successor mid-launch and a retry resolves it.
+  if (
+    (second.kind === 'no-manifest' || second.kind === 'manifest-superseded') &&
+    second.socketIdentity !== firstIdentity
+  ) {
+    return { kind: 'manifest-superseded', socketIdentity: second.socketIdentity }
+  }
+  // Why escalate: an unchanged identity means nothing is rebinding, so a manifest that still fails
+  // to describe this socket is stale rather than transient — most likely a legacy relay that
+  // inherited a dead generation's file. Retrying that forever would hide it behind backoff.
+  if (second.kind === 'manifest-superseded' && second.socketIdentity === firstIdentity) {
+    return { kind: 'manifest-malformed' }
+  }
+  return second
+}
+
+function probeRefusalReason(probe: RelayOwnerProbe): RelayGenerationRecoveryReason {
+  switch (probe.kind) {
+    case 'no-manifest':
+      return 'owner-unknown'
+    case 'manifest-rejected':
+    case 'manifest-malformed':
+    case 'manifest-foreign':
+      return 'owner-unverifiable'
+    case 'manifest-superseded':
+      return 'owner-superseded'
+    case 'socket-unusable':
+      return 'endpoint-unusable'
+    case 'socket-unreadable':
+    case 'indeterminate':
+      return 'owner-indeterminate'
+    // Why listed rather than defaulted: the caller handles both before reaching here, and an
+    // exhaustive switch makes a future probe kind fail to compile instead of silently inheriting a
+    // classification nobody chose.
+    case 'owned':
+    case 'socket-absent':
+      return 'owner-indeterminate'
   }
 }
 

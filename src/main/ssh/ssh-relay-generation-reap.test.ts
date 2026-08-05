@@ -19,6 +19,7 @@ import { readFileSync } from 'node:fs'
 import { serializeRelayOwnerManifest } from '../../shared/relay-owner-manifest'
 import type { SshConnection } from './ssh-connection'
 import { execCommand } from './ssh-relay-deploy-helpers'
+import { waitForRelayPollDelay } from './ssh-relay-poll-delay'
 import {
   RELAY_GENERATION_EXIT_BUDGET_MS,
   RELAY_GENERATION_EXIT_MAX_ATTEMPTS,
@@ -42,9 +43,9 @@ type HostScript = {
   owner?: string
   identity?: string[]
   terminate?: string
-  cleanup?: string
+  readiness?: string
+  owners?: string[]
   lockCreate?: string[]
-  lockSteal?: string
 }
 
 function ownerOutput(overrides?: {
@@ -71,8 +72,12 @@ function identityOutput(state: string, start = START): string {
   return `__ORCA_RELAY_OWNER_ID__\nstate=${state}\nstart=${start}\n__ORCA_RELAY_OWNER_ID_END__\n`
 }
 
-function cleanupOutput(state: string): string {
-  return `__ORCA_RELAY_OWNER_CLEANUP__\ncleanup=${state}\n__ORCA_RELAY_OWNER_CLEANUP_END__\n`
+function readinessOutput(state: string): string {
+  return `__ORCA_RELAY_RELAUNCH_READY__\nready=${state}\n__ORCA_RELAY_RELAUNCH_READY_END__\n`
+}
+
+function probeOutput(sockid: string, manifest: string): string {
+  return `__ORCA_RELAY_OWNER__\nsockid=${sockid}\nmanifest=${manifest}\n__ORCA_RELAY_OWNER_END__\n`
 }
 
 const commands: string[] = []
@@ -81,29 +86,26 @@ function installHost(script: HostScript): void {
   const queues = {
     socketAlive: [...(script.socketAlive ?? ['DEAD'])],
     identity: [...(script.identity ?? [])],
-    lockCreate: [...(script.lockCreate ?? ['OK'])]
+    owners: [...(script.owners ?? [])],
+    lockCreate: [...(script.lockCreate ?? ['CREATED'])]
   }
   const next = (queue: string[], fallback: string): string =>
     queue.length > 1 ? (queue.shift() as string) : (queue[0] ?? fallback)
   mockExec.mockImplementation((_conn, command: string) => {
     commands.push(command)
-    if (command.includes('.recovery-lock') && command.startsWith('mkdir ')) {
-      return Promise.resolve(next(queues.lockCreate, 'OK'))
+    // The claim+publish command is one exec that embeds mkdir, the steal and its own rm -rf, so it
+    // must be matched before the release, which is the only other command naming the lock.
+    if (command.includes('orca_claim=$(')) {
+      return Promise.resolve(next(queues.lockCreate, 'CREATED'))
     }
-    if (command.includes('.recovery-lock.steal')) {
-      return Promise.resolve(script.lockSteal ?? 'BUSY')
-    }
-    if (command.includes('.recovery-lock') && command.includes('rm -rf')) {
+    if (command.includes('.recovery-lock')) {
       return Promise.resolve('RELEASED')
-    }
-    if (command.includes('.recovery-lock/.owner')) {
-      return Promise.resolve('')
     }
     if (command.includes('test -S')) {
       return Promise.resolve(next(queues.socketAlive, 'DEAD'))
     }
-    if (command.includes('__ORCA_RELAY_OWNER_CLEANUP__')) {
-      return Promise.resolve(script.cleanup ?? cleanupOutput('clean'))
+    if (command.includes('__ORCA_RELAY_RELAUNCH_READY__')) {
+      return Promise.resolve(script.readiness ?? readinessOutput('absent'))
     }
     if (command.includes('kill -TERM')) {
       return Promise.resolve(script.terminate ?? identityOutput('signalled'))
@@ -112,6 +114,9 @@ function installHost(script: HostScript): void {
       return Promise.resolve(next(queues.identity, identityOutput('gone', '')))
     }
     if (command.includes('__ORCA_RELAY_OWNER__')) {
+      if (queues.owners.length > 0) {
+        return Promise.resolve(next(queues.owners, ownerOutput()))
+      }
       return Promise.resolve(script.owner ?? ownerOutput())
     }
     return Promise.resolve('')
@@ -123,7 +128,7 @@ function termCommands(): string[] {
 }
 
 function cleanupCommands(): string[] {
-  return commands.filter((command) => command.includes('__ORCA_RELAY_OWNER_CLEANUP__'))
+  return commands.filter((command) => command.includes('__ORCA_RELAY_RELAUNCH_READY__'))
 }
 
 async function recover(overrides?: {
@@ -158,23 +163,37 @@ describe('recoverFailedRelayReconnect — proven generation', () => {
     expect(relaunch).toHaveBeenCalledTimes(1)
   })
 
-  it('cleans up only after the owner is confirmed gone', async () => {
+  it('checks relaunch readiness only after the owner is confirmed gone', async () => {
     installHost({ identity: [identityOutput('match'), identityOutput('gone', '')] })
     await recover()
     const termIndex = commands.findIndex((command) => command.includes('kill -TERM'))
-    const cleanupIndex = commands.findIndex((command) =>
-      command.includes('__ORCA_RELAY_OWNER_CLEANUP__')
+    const readyIndex = commands.findIndex((command) =>
+      command.includes('__ORCA_RELAY_RELAUNCH_READY__')
     )
     expect(termIndex).toBeGreaterThanOrEqual(0)
-    expect(cleanupIndex).toBeGreaterThan(termIndex)
+    expect(readyIndex).toBeGreaterThan(termIndex)
+  })
+
+  it('issues no command that could remove the socket or its manifest', async () => {
+    installHost({ identity: [identityOutput('match'), identityOutput('gone', '')] })
+    await recover()
+    // Why: recovery is read-only end to end. The recovery lock's own rm -rf is the sole exception,
+    // and it never names the socket path.
+    const destructive = commands.filter(
+      (command) =>
+        /\brm\b/.test(command) && command.includes(SOCK) && !command.includes('.recovery-lock')
+    )
+    expect(destructive).toEqual([])
   })
 
   it('threads the abort signal into every remote command except the lock release', async () => {
     installHost({ identity: [identityOutput('match'), identityOutput('gone', '')] })
     const signal = new AbortController().signal
     await recover({ signal })
+    // The claim command embeds its own rm -rf, so the release is the lock command that is NOT the
+    // claim.
     const isRelease = (command: string): boolean =>
-      command.includes('.recovery-lock') && command.includes('rm -rf')
+      command.includes('.recovery-lock') && !command.includes('orca_claim=$(')
     const cancellable = mockExec.mock.calls.filter(([, command]) => !isRelease(command as string))
     expect(cancellable.length).toBeGreaterThan(4)
     for (const call of cancellable) {
@@ -183,6 +202,10 @@ describe('recoverFailedRelayReconnect — proven generation', () => {
     // Why: the release must outlive the abort that triggers it, so it is bounded by time instead.
     const release = mockExec.mock.calls.find(([, command]) => isRelease(command as string))
     expect(release?.[2]).toMatchObject({ timeoutMs: expect.any(Number) })
+    // Why: the PR claims the signal reaches every new exec *and delay*; assert the delay too.
+    for (const call of vi.mocked(waitForRelayPollDelay).mock.calls) {
+      expect(call[1]).toBe(signal)
+    }
   })
 
   it('waits longer than the relay needs to tear its own PTYs down', () => {
@@ -222,6 +245,33 @@ describe('recoverFailedRelayReconnect — fail closed', () => {
     expect(cleanupCommands()).toHaveLength(0)
   }
 
+  it('re-probes a missing manifest and stays retryable when a successor is mid-launch', async () => {
+    // Why: a relay answers the launch readiness poll before it publishes, so one probe cannot tell
+    // a legacy relay from a healthy successor still starting up.
+    installHost({
+      owners: [
+        probeOutput(SOCK_IDENTITY, 'missing'),
+        probeOutput('2049:1000:1785948267', 'missing')
+      ]
+    })
+    const relaunch = vi.fn()
+    const err = await recover({ relaunch }).catch((thrown: unknown) => thrown)
+    expect(err).toMatchObject({ reason: 'owner-superseded' })
+    expect(isTerminalRelayGenerationRecoveryError(err)).toBe(false)
+    expect(relaunch).not.toHaveBeenCalled()
+    expect(termCommands()).toHaveLength(0)
+  })
+
+  it('proceeds normally when the re-probe finds the successor manifest published', async () => {
+    installHost({
+      owners: [probeOutput(SOCK_IDENTITY, 'missing'), ownerOutput()],
+      identity: [identityOutput('match'), identityOutput('gone', '')]
+    })
+    const relaunch = vi.fn().mockResolvedValue('fresh')
+    await expect(recover({ relaunch })).resolves.toEqual({ status: 'relaunched', value: 'fresh' })
+    expect(termCommands()).toHaveLength(1)
+  })
+
   it('never signals a legacy relay that published no manifest', async () => {
     await expectFailClosed(
       {
@@ -243,6 +293,8 @@ describe('recoverFailedRelayReconnect — fail closed', () => {
   })
 
   it('never signals when a successor already rebound the socket', async () => {
+    // Why owner-unverifiable and not owner-superseded: this host reports the SAME identity on both
+    // probes, so nothing is rebinding — see the two escalation tests above for the split.
     await expectFailClosed(
       { owner: ownerOutput({ identity: '2049:1000:1785948267' }) },
       'owner-unverifiable'
@@ -250,9 +302,11 @@ describe('recoverFailedRelayReconnect — fail closed', () => {
     expect(termCommands()).toHaveLength(0)
   })
 
-  it('never signals when the probe output is unusable', async () => {
-    await expectFailClosed({ owner: 'garbage\n' }, 'owner-unverifiable')
+  it('never signals when the probe output is unusable, and stays retryable', async () => {
+    await expectFailClosed({ owner: 'garbage\n' }, 'owner-indeterminate')
     expect(termCommands()).toHaveLength(0)
+    const err = await recover().catch((thrown: unknown) => thrown)
+    expect(isTerminalRelayGenerationRecoveryError(err)).toBe(false)
   })
 
   it('never signals when argv no longer carries the generation token', async () => {
@@ -301,18 +355,18 @@ describe('recoverFailedRelayReconnect — fail closed', () => {
     expect(identityProbes).toHaveLength(1 + RELAY_GENERATION_EXIT_MAX_ATTEMPTS)
   })
 
-  it('does not relaunch when cleanup finds foreign artifacts', async () => {
+  it('does not relaunch while anything still occupies the socket path', async () => {
     installHost({
       identity: [identityOutput('match'), identityOutput('gone', '')],
-      cleanup: cleanupOutput('foreign')
+      readiness: readinessOutput('present')
     })
     const relaunch = vi.fn()
-    await expect(recover({ relaunch })).rejects.toMatchObject({ reason: 'cleanup-blocked' })
+    await expect(recover({ relaunch })).rejects.toMatchObject({ reason: 'relaunch-blocked' })
     expect(relaunch).not.toHaveBeenCalled()
   })
 
   it('fails closed when the per-socket recovery lock cannot be acquired', async () => {
-    installHost({ lockCreate: ['BUSY'], lockSteal: 'BUSY' })
+    installHost({ lockCreate: ['BUSY'] })
     const relaunch = vi.fn()
     await expect(recover({ relaunch })).rejects.toMatchObject({ reason: 'recovery-busy' })
     expect(termCommands()).toHaveLength(0)
@@ -321,7 +375,7 @@ describe('recoverFailedRelayReconnect — fail closed', () => {
 
   it.each([
     ['the owner probe', '__ORCA_RELAY_OWNER__', 'probe-failed'],
-    ['the recovery lock', 'mkdir', 'recovery-busy']
+    ['the recovery lock', 'orca_claim=$(', 'recovery-busy']
   ])('turns a transport failure during %s into a typed refusal', async (_label, marker, reason) => {
     installHost({ identity: [identityOutput('match'), identityOutput('gone', '')] })
     const routed = mockExec.getMockImplementation()
@@ -356,13 +410,13 @@ describe('recoverFailedRelayReconnect — fail closed', () => {
   })
 
   it.each([
-    ['a busy peer', { lockCreate: ['BUSY'], lockSteal: 'BUSY' } as HostScript],
+    ['a busy peer', { lockCreate: ['BUSY'] } as HostScript],
     ['a relay still draining', { identity: [identityOutput('match')] } as HostScript],
     [
       'a successor that took the socket',
       {
         identity: [identityOutput('match'), identityOutput('gone', '')],
-        cleanup: cleanupOutput('foreign')
+        readiness: readinessOutput('present')
       } as HostScript
     ]
   ])('leaves %s retryable rather than parking the session', async (_label, script) => {
@@ -396,6 +450,22 @@ describe('recoverFailedRelayReconnect — fail closed', () => {
     expect((survivor as Error).message).toContain('did not remove the socket')
   })
 
+  it('does not claim the relay is untouched when the terminate reply was lost', async () => {
+    // Why: an exec timeout on the terminate command means the SIGTERM may well have landed and only
+    // the reply was lost. Telling the user the PTYs are untouched would be a guess.
+    installHost({ identity: [identityOutput('match')] })
+    const routed = mockExec.getMockImplementation()
+    mockExec.mockImplementation((c, command: string, options) => {
+      if (command.includes('kill -TERM')) {
+        return Promise.reject(new Error('command timed out after 15s'))
+      }
+      return (routed as NonNullable<typeof routed>)(c, command, options)
+    })
+    const err = await recover().catch((thrown: unknown) => thrown)
+    expect(err).toMatchObject({ reason: 'termination-failed' })
+    expect((err as Error).message).not.toContain('untouched')
+  })
+
   it('carries an actionable message naming the socket', async () => {
     installHost({
       owner: `__ORCA_RELAY_OWNER__\nsockid=${SOCK_IDENTITY}\nmanifest=missing\n__ORCA_RELAY_OWNER_END__\n`
@@ -417,7 +487,7 @@ describe('recoverFailedRelayReconnect — serialization and abort', () => {
 
   it('re-probes after waiting for the lock and reconnects when a peer already recovered', async () => {
     installHost({
-      lockCreate: ['BUSY', 'OK'],
+      lockCreate: ['BUSY', 'CREATED'],
       socketAlive: ['ALIVE'],
       identity: [identityOutput('match')]
     })
@@ -439,28 +509,22 @@ describe('recoverFailedRelayReconnect — serialization and abort', () => {
     const identityQueue = [identityOutput('match'), identityOutput('gone', '')]
     mockExec.mockImplementation((_conn, command: string) => {
       commands.push(command)
-      if (command.includes('.recovery-lock') && command.startsWith('mkdir ')) {
+      if (command.includes('orca_claim=$(')) {
         if (lockHeld) {
           return Promise.resolve('BUSY')
         }
         lockHeld = true
-        return Promise.resolve('OK')
+        return Promise.resolve('CREATED')
       }
-      if (command.includes('.recovery-lock.steal')) {
-        return Promise.resolve('BUSY')
-      }
-      if (command.includes('.recovery-lock') && command.includes('rm -rf')) {
+      if (command.includes('.recovery-lock')) {
         lockHeld = false
         return Promise.resolve('RELEASED')
-      }
-      if (command.includes('.recovery-lock/.owner')) {
-        return Promise.resolve('')
       }
       if (command.includes('test -S')) {
         return Promise.resolve(recovered ? 'ALIVE' : 'DEAD')
       }
-      if (command.includes('__ORCA_RELAY_OWNER_CLEANUP__')) {
-        return Promise.resolve(cleanupOutput('clean'))
+      if (command.includes('__ORCA_RELAY_RELAUNCH_READY__')) {
+        return Promise.resolve(readinessOutput('absent'))
       }
       if (command.includes('kill -TERM')) {
         return Promise.resolve(identityOutput('signalled'))
@@ -519,7 +583,8 @@ describe('recoverFailedRelayReconnect — serialization and abort', () => {
     // the staleness window expires, locking the user out of their own relay.
     const release = mockExec.mock.calls.find(
       ([, command]) =>
-        (command as string).includes('.recovery-lock') && (command as string).includes('rm -rf')
+        (command as string).includes('.recovery-lock') &&
+        !(command as string).includes('orca_claim=$(')
     )
     expect(release).toBeDefined()
     expect((release as unknown[])[2]).toMatchObject({ timeoutMs: expect.any(Number) })
@@ -549,6 +614,20 @@ describe('recoverFailedRelayReconnect — Windows', () => {
       recover({ host: WINDOWS, sockPath: '\\\\.\\pipe\\orca-relay-abc' })
     ).resolves.toEqual({ status: 'unsupported' })
     expect(mockExec).not.toHaveBeenCalled()
+  })
+
+  it('reports a Windows host as unsupported even for a POSIX-shaped socket path', async () => {
+    // Why: both current cases pass a pipe path, so the isWindowsRemoteHost disjunct alone was
+    // untested and could be deleted without any test noticing.
+    installHost({})
+    const relaunch = vi.fn()
+    const reconnect = vi.fn()
+    await expect(recover({ host: WINDOWS, relaunch, reconnect })).resolves.toEqual({
+      status: 'unsupported'
+    })
+    expect(mockExec).not.toHaveBeenCalled()
+    expect(relaunch).not.toHaveBeenCalled()
+    expect(reconnect).not.toHaveBeenCalled()
   })
 
   it('reports a named pipe path on a POSIX host as unsupported', async () => {

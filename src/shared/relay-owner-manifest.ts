@@ -2,8 +2,10 @@
 //
 // It exists so a client whose reconnect failed can prove *which process* owns the socket before
 // signalling anything. The generation token is minted per launch and also appears in the relay's
-// argv, so the pair (argv token, manifest) identifies one process start — a recycled PID cannot
-// reproduce it. Everything here is format-only so both the relay and the client parse identically.
+// argv, so a recycled PID cannot reproduce it. The token is not itself a process-start identity:
+// that comes from a separate OS value the reaper reads and re-compares (see
+// ssh-relay-generation-owner-commands.ts). Everything here is format-only so both the relay and the
+// client parse identically.
 
 export const RELAY_OWNER_MANIFEST_HEADER = 'orca-relay-owner-1'
 // Why: the client reads this file over SSH with `head -c`; a fixed bound keeps a tampered or

@@ -61,6 +61,8 @@ const REMOTE_DIR = '/home/user/.orca-remote/relay-0.1.0+abcdef012345'
 const SOCK = `${REMOTE_DIR}/relay.sock`
 const GENERATION_PATTERN = /--owner-token '([0-9a-f]{64})'/
 const SOCK_IDENTITY = '2049:999:1785948267'
+const OCCUPIED_PROBE =
+  '__ORCA_RELAY_OWNER__\nsockid=unusable\nmanifest=missing\n__ORCA_RELAY_OWNER_END__\n'
 
 const mockExec = vi.mocked(execCommand)
 const mockSentinel = vi.mocked(waitForSentinel)
@@ -135,11 +137,11 @@ function installHost(script: HostScript): { commands: string[]; launchedGenerati
     if (command.includes('ORCA-NATIVE')) {
       return Promise.resolve('ORCA-NATIVE-DEPS-OK')
     }
-    if (command.includes('.recovery-lock') && command.startsWith('mkdir ')) {
-      return Promise.resolve('OK')
+    if (command.includes('orca_claim=$(')) {
+      return Promise.resolve('CREATED')
     }
     if (command.includes('.recovery-lock')) {
-      return Promise.resolve(command.includes('rm -rf') ? 'RELEASED' : '')
+      return Promise.resolve('RELEASED')
     }
     if (command.includes('process.stdout.write("READY")')) {
       return Promise.resolve('READY')
@@ -147,9 +149,9 @@ function installHost(script: HostScript): { commands: string[]; launchedGenerati
     if (command.includes('test -S')) {
       return Promise.resolve(script.socketAlive ?? 'ALIVE')
     }
-    if (command.includes('__ORCA_RELAY_OWNER_CLEANUP__')) {
+    if (command.includes('__ORCA_RELAY_RELAUNCH_READY__')) {
       return Promise.resolve(
-        '__ORCA_RELAY_OWNER_CLEANUP__\ncleanup=clean\n__ORCA_RELAY_OWNER_CLEANUP_END__\n'
+        '__ORCA_RELAY_RELAUNCH_READY__\nready=absent\n__ORCA_RELAY_RELAUNCH_READY_END__\n'
       )
     }
     if (command.includes('kill -TERM')) {
@@ -314,6 +316,18 @@ describe('launchRelay reconnect recovery', () => {
     })
 
     await expect(deployAndLaunchRelay(conn)).rejects.toThrow(/relay socket/i)
+
+    expect(detachedLaunches(conn)).toHaveLength(0)
+    expect(host.commands.some((command) => command.includes('kill'))).toBe(false)
+  })
+
+  it('refuses a non-socket at the endpoint path instead of launching over it', async () => {
+    // Why: `test -S` is false for a plain file or a symlink too, and collapsing those into DEAD sent
+    // them to a blind fresh launch that rotates the endpoint credential.
+    const conn = makeMockConnection()
+    const host = installHost({ socketAlive: 'OCCUPIED', owner: OCCUPIED_PROBE })
+
+    await expect(deployAndLaunchRelay(conn)).rejects.toThrow(/not a socket/i)
 
     expect(detachedLaunches(conn)).toHaveLength(0)
     expect(host.commands.some((command) => command.includes('kill'))).toBe(false)

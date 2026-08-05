@@ -74,7 +74,13 @@ function launch(args: string[]): RelayProcess {
   return relay
 }
 
-async function waitForFile(path: string, present: boolean, timeoutMs = 30_000): Promise<void> {
+// Why the spawn budget: every wait here is on a file a freshly spawned relay writes, so it must
+// tolerate the same scheduling delay the spawn itself does.
+async function waitForFile(
+  path: string,
+  present: boolean,
+  timeoutMs = RELAY_SPAWN_TIMEOUT_MS
+): Promise<void> {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     if (existsSync(path) === present) {
@@ -92,9 +98,7 @@ beforeAll(() => {
 afterEach(async () => {
   for (const relay of spawned.splice(0)) {
     relay.kill('SIGKILL')
-    // Why: a short bound on purpose — spawnRelay's waitForExit never resolves for a child that has
-    // already exited, so teardown must not wait out the full spawn budget for relays a test killed.
-    await relay.waitForExit(2_000).catch(() => null)
+    await relay.waitForExit(RELAY_SPAWN_TIMEOUT_MS).catch(() => null)
   }
   rmSync(socketDir, { recursive: true, force: true })
   socketDir = mkdtempSync(join(tmpdir(), 'relay-owner-sock-'))
@@ -170,6 +174,26 @@ describePosix('detached relay owner manifest', { timeout: RELAY_SPAWN_TIMEOUT_MS
     expect(readFileSync(manifestPath(), 'utf8')).toBe(liveManifest)
     expect(statSync(sockPath(), { bigint: true }).ino).toBe(liveSocketIno)
     expect(parseRelayOwnerManifest(liveManifest)?.pid).toBe(live.proc.pid)
+  })
+
+  it('keeps a successor manifest intact across a predecessor shutdown', async () => {
+    // Why: the predecessor removes its manifest while it still owns the socket, so by the time the
+    // pathname is free there is nothing left of it to delete a successor's file with.
+    const first = launch(['--owner-token', GENERATION])
+    await waitForFile(manifestPath(), true)
+    first.kill('SIGTERM')
+    await first.waitForExit(RELAY_SPAWN_TIMEOUT_MS)
+    await waitForFile(manifestPath(), false)
+
+    const second = launch(['--owner-token', SUCCESSOR_GENERATION])
+    await second.sentinelReceived
+    const published = readFileSync(manifestPath(), 'utf8')
+    expect(parseRelayOwnerManifest(published)?.generation).toBe(SUCCESSOR_GENERATION)
+
+    // Nothing from the predecessor may land late.
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    expect(readFileSync(manifestPath(), 'utf8')).toBe(published)
+    expect(parseRelayOwnerManifest(published)?.pid).toBe(second.proc.pid)
   })
 
   it('lets a successor generation replace a crashed predecessor manifest', async () => {

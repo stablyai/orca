@@ -23,11 +23,19 @@ import {
 const GENERATION = 'b'.repeat(64)
 const SUCCESSOR_GENERATION = 'c'.repeat(64)
 const posixOnly = process.platform === 'win32' ? it.skip : it
+// Why: root bypasses DAC permission bits, so a 0500 directory is still writable there and the
+// unwritable-directory case cannot be produced at all.
+const unprivilegedPosixOnly = it.skipIf(process.platform === 'win32' || process.geteuid?.() === 0)
 
 let dir: string
 let sockPath: string
 let manifestPath: string
 let previousUmask: number
+
+/** A manifest body valid enough that only the named-pipe guard can explain its survival. */
+function serializePipeManifest(): string {
+  return `orca-relay-owner-1\ngeneration=${GENERATION}\npid=${process.pid}\nsock=/tmp/x.sock\ndev=1\nino=2\nctime=3\n`
+}
 
 function publish(generation = GENERATION, socket = sockPath): void {
   publishRelayOwnerManifest({
@@ -89,7 +97,7 @@ describe('publishRelayOwnerManifest', () => {
     expect(lstatSync(manifestPath).mode & 0o777).toBe(0o600)
   })
 
-  posixOnly('throws when the relay directory is not writable', () => {
+  unprivilegedPosixOnly('throws when the relay directory is not writable', () => {
     const readOnlyDir = join(dir, 'locked')
     mkdirSync(readOnlyDir)
     chmodSync(readOnlyDir, 0o500)
@@ -106,15 +114,27 @@ describe('publishRelayOwnerManifest', () => {
   })
 
   it('is a no-op for Windows named pipe endpoints', () => {
-    publishRelayOwnerManifest({
-      sockPath: '\\\\.\\pipe\\orca-relay-abc',
-      generation: GENERATION,
-      pid: process.pid,
-      socketDev: null,
-      socketIno: null,
-      socketCtimeNs: null
-    })
-    expect(readdirSync(dir)).toEqual([])
+    // Why cwd matters: relayOwnerManifestPath is pure string concat, so without the guard the write
+    // target is a RELATIVE name that lands in the process cwd. Pointing cwd at the temp dir is what
+    // makes this assertion able to fail — checking `dir` from elsewhere would pass either way.
+    const previousCwd = process.cwd()
+    process.chdir(dir)
+    try {
+      // Why a real identity: with nulls the identity check throws first, so the guard could be
+      // deleted and this would still pass. These values make the named-pipe guard the only thing
+      // standing between the call and a write.
+      publishRelayOwnerManifest({
+        sockPath: '\\\\.\\pipe\\orca-relay-abc',
+        generation: GENERATION,
+        pid: process.pid,
+        socketDev: 1n,
+        socketIno: 2n,
+        socketCtimeNs: 3_000_000_000n
+      })
+      expect(readdirSync(dir)).toEqual([])
+    } finally {
+      process.chdir(previousCwd)
+    }
   })
 })
 
@@ -152,8 +172,33 @@ describe('removeRelayOwnerManifestForGeneration', () => {
   })
 
   it('is a no-op for Windows named pipe endpoints', () => {
-    expect(() =>
+    // Why not `.not.toThrow()`: the function swallows every error, so that would pass with the guard
+    // deleted. Plant a real file at the name the guard prevents it from deriving and prove it lives.
+    const previousCwd = process.cwd()
+    process.chdir(dir)
+    const pipeManifest = '\\\\.\\pipe\\orca-relay-abc.owner'
+    try {
+      writeFileSync(pipeManifest, serializePipeManifest(), { mode: 0o600 })
+      chmodSync(pipeManifest, 0o600)
+
       removeRelayOwnerManifestForGeneration('\\\\.\\pipe\\orca-relay-abc', GENERATION)
-    ).not.toThrow()
+
+      expect(existsSync(pipeManifest)).toBe(true)
+    } finally {
+      process.chdir(previousCwd)
+    }
+  })
+
+  posixOnly('leaves a successor manifest untouched, inode and all', () => {
+    publish()
+    publish(SUCCESSOR_GENERATION)
+    const successorInode = statSync(manifestPath).ino
+
+    removeRelayOwnerManifestForGeneration(sockPath, GENERATION)
+
+    expect(parseRelayOwnerManifest(readFileSync(manifestPath, 'utf8'))?.generation).toBe(
+      SUCCESSOR_GENERATION
+    )
+    expect(statSync(manifestPath).ino).toBe(successorInode)
   })
 })

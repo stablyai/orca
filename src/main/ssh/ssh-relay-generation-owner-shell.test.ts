@@ -6,14 +6,18 @@ import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import {
   appendFileSync,
   chmodSync,
+  lstatSync,
+  mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
+  renameSync,
   rmSync,
   statSync,
   symlinkSync,
   writeFileSync
 } from 'node:fs'
-import { createServer, type Server } from 'node:net'
+import { createConnection, createServer, type Server } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -22,11 +26,11 @@ import { serializeRelayOwnerManifest } from '../../shared/relay-owner-manifest'
 import { wrapRemoteCommandForPosixShell } from './ssh-connection-utils'
 import {
   createRelayGenerationToken,
-  parseRelayGenerationCleanupOutput,
+  parseRelayRelaunchReadinessOutput,
   parseRelayGenerationIdentityOutput,
   parseRelayGenerationTerminateOutput,
   parseRelayOwnerProbeOutput,
-  relayGenerationCleanupCommand,
+  relayRelaunchReadinessCommand,
   relayGenerationIdentityCommand,
   relayGenerationTerminateCommand,
   relayOwnerProbeCommand,
@@ -35,6 +39,9 @@ import {
 
 const run = promisify(execFile)
 const describePosix = process.platform === 'win32' ? describe.skip : describe
+// Why: root bypasses DAC permission bits, so a 0000 directory is still searchable there and the
+// unreadable-parent case cannot be produced.
+const unprivilegedPosixIt = it.skipIf(process.platform === 'win32' || process.geteuid?.() === 0)
 // Why: these drive several /bin/sh + ps round trips plus real signal delivery. On a loaded machine
 // that outruns vitest's 30s default and surfaces as an opaque harness timeout rather than a result.
 const PROCESS_TEST_TIMEOUT_MS = 120_000
@@ -122,6 +129,12 @@ async function waitForIdentity(
 
 function waitForExit(child: ChildProcess, timeoutMs = 30_000): Promise<void> {
   return new Promise((resolve, reject) => {
+    // Why: the remote script SIGTERMs the child, so its exit is often already in flight — or done —
+    // by the time this registers. Without the guard the listener never fires.
+    if (child.exitCode !== null || child.signalCode !== null) {
+      resolve()
+      return
+    }
     const timer = setTimeout(
       () => reject(new Error(`Timed out waiting for pid ${child.pid} to exit`)),
       timeoutMs
@@ -174,38 +187,38 @@ describePosix('relayOwnerProbeCommand against a real shell', () => {
   it('reports a legacy relay with no manifest', async () => {
     expect(
       parseRelayOwnerProbeOutput(await sh(relayOwnerProbeCommand(sockPath)), sockPath)
-    ).toEqual({ kind: 'no-manifest' })
+    ).toMatchObject({ kind: 'no-manifest' })
   })
 
-  it('refuses a group-readable manifest', async () => {
+  it('reports a group-readable manifest as rejected', async () => {
     writeManifest()
     chmodSync(manifestPath, 0o644)
     expect(
       parseRelayOwnerProbeOutput(await sh(relayOwnerProbeCommand(sockPath)), sockPath)
-    ).toEqual({ kind: 'unusable-manifest' })
+    ).toEqual({ kind: 'manifest-rejected' })
   })
 
-  it('refuses a symlinked manifest without following it', async () => {
+  it('reports a symlinked manifest as rejected without following it', async () => {
     const decoy = join(dir, 'decoy')
     writeFileSync(decoy, 'orca-relay-owner-1\n', { mode: 0o600 })
     symlinkSync(decoy, manifestPath)
     expect(
       parseRelayOwnerProbeOutput(await sh(relayOwnerProbeCommand(sockPath)), sockPath)
-    ).toEqual({ kind: 'unusable-manifest' })
+    ).toEqual({ kind: 'manifest-rejected' })
   })
 
-  it('refuses a manifest whose inode no longer matches the live socket', async () => {
+  it('reports a manifest whose inode no longer matches the live socket as superseded', async () => {
     writeManifest({ ino: 1 })
     expect(
       parseRelayOwnerProbeOutput(await sh(relayOwnerProbeCommand(sockPath)), sockPath)
-    ).toEqual({ kind: 'unusable-manifest' })
+    ).toMatchObject({ kind: 'manifest-superseded' })
   })
 
-  it('refuses a manifest whose change time no longer matches the live socket', async () => {
+  it('reports a manifest whose change time no longer matches the live socket as superseded', async () => {
     writeManifest({ ctime: 1 })
     expect(
       parseRelayOwnerProbeOutput(await sh(relayOwnerProbeCommand(sockPath)), sockPath)
-    ).toEqual({ kind: 'unusable-manifest' })
+    ).toMatchObject({ kind: 'manifest-superseded' })
   })
 
   it('refuses a manifest that forges a second sentinel block', async () => {
@@ -216,7 +229,7 @@ describePosix('relayOwnerProbeCommand against a real shell', () => {
     )
     chmodSync(manifestPath, 0o600)
     const probe = parseRelayOwnerProbeOutput(await sh(relayOwnerProbeCommand(sockPath)), sockPath)
-    expect(probe).toEqual({ kind: 'unusable-manifest' })
+    expect(probe).toEqual({ kind: 'manifest-malformed' })
     expect(generation).toMatch(/^[0-9a-f]{64}$/)
   })
 
@@ -402,71 +415,108 @@ describePosix(
   }
 )
 
-describePosix('relayGenerationCleanupCommand against real artifacts', () => {
-  it('removes the socket and manifest that still belong to the generation', async () => {
+describePosix('relayRelaunchReadinessCommand against real artifacts', () => {
+  it('refuses a LIVE successor socket even when handed that socket own identity', async () => {
+    // Why: this is the whole point of the non-mutating design. The old cleanup command would take
+    // this exact input — a matching dev:ino:ctime — and unlink a listening socket. Same-second inode
+    // reuse produces precisely this state on ext4, so it is forged here rather than raced for.
     const generation = writeManifest()
-    const identity = socketIdentity()
-    await new Promise<void>((resolve) => (server as Server).close(() => resolve()))
-    server = null
+    const identityBefore = socketIdentity()
+    const inodeBefore = statSync(sockPath).ino
 
-    const result = parseRelayGenerationCleanupOutput(
-      await sh(relayGenerationCleanupCommand(sockPath, identity, generation))
+    const readiness = parseRelayRelaunchReadinessOutput(
+      await sh(relayRelaunchReadinessCommand(sockPath))
     )
 
-    expect(result).toBe('clean')
-    expect(() => statSync(sockPath)).toThrow()
-    expect(() => statSync(manifestPath)).toThrow()
-  })
-
-  it('refuses to remove a successor socket', async () => {
-    const generation = writeManifest()
-    const result = parseRelayGenerationCleanupOutput(
-      await sh(relayGenerationCleanupCommand(sockPath, '1:1:1', generation))
-    )
-    expect(result).toBe('foreign')
+    expect(readiness).toBe('present')
     expect(statSync(sockPath).isSocket()).toBe(true)
-    expect(statSync(manifestPath).isFile()).toBe(true)
+    expect(statSync(sockPath).ino).toBe(inodeBefore)
+    expect(socketIdentity()).toBe(identityBefore)
+    // The socket is still live and connectable.
+    await new Promise<void>((resolve, reject) => {
+      const probe = createConnection({ path: sockPath })
+      probe.once('connect', () => {
+        probe.destroy()
+        resolve()
+      })
+      probe.once('error', reject)
+    })
+    expect(generation).toMatch(/^[0-9a-f]{64}$/)
   })
 
-  it('refuses to remove artifacts a successor generation republished', async () => {
-    writeManifest()
-    const result = parseRelayGenerationCleanupOutput(
-      await sh(
-        relayGenerationCleanupCommand(sockPath, socketIdentity(), createRelayGenerationToken())
-      )
-    )
-    expect(result).toBe('foreign')
-    expect(statSync(manifestPath).isFile()).toBe(true)
+  it('cannot delete a successor manifest because it never names one', async () => {
+    const generation = writeManifest({ generation: 'c'.repeat(64) })
+    const before = readFileSync(manifestPath, 'utf8')
+
+    await sh(relayRelaunchReadinessCommand(sockPath))
+
+    expect(readFileSync(manifestPath, 'utf8')).toBe(before)
+    expect(relayRelaunchReadinessCommand(sockPath)).not.toContain('.owner')
+    expect(generation).toBe('c'.repeat(64))
   })
 
-  it('refuses to remove a live socket that publishes no manifest at all', async () => {
-    // A relay launched by an older Orca publishes no manifest; a recycled inode must not make its
-    // live socket look reclaimable.
-    const identity = socketIdentity()
-    const result = parseRelayGenerationCleanupOutput(
-      await sh(relayGenerationCleanupCommand(sockPath, identity, createRelayGenerationToken()))
-    )
-    expect(result).toBe('foreign')
-    expect(statSync(sockPath).isSocket()).toBe(true)
-  })
-
-  it('refuses to remove a manifest whose header is not the owner manifest header', async () => {
-    const generation = createRelayGenerationToken()
-    writeFileSync(manifestPath, `not-a-header\ngeneration=${generation}\n`, { mode: 0o600 })
-    chmodSync(manifestPath, 0o600)
-    const result = parseRelayGenerationCleanupOutput(
-      await sh(relayGenerationCleanupCommand(sockPath, socketIdentity(), generation))
-    )
-    expect(result).toBe('foreign')
-    expect(statSync(manifestPath).isFile()).toBe(true)
-  })
-
-  it('reports clean when both artifacts are already gone', async () => {
+  it('reports absent for an empty pathname and creates nothing', async () => {
     const missing = join(dir, 'gone.sock')
+    const before = readdirSync(dir).sort()
+
     expect(
-      parseRelayGenerationCleanupOutput(
-        await sh(relayGenerationCleanupCommand(missing, '1:1:1', createRelayGenerationToken()))
-      )
-    ).toBe('clean')
+      parseRelayRelaunchReadinessOutput(await sh(relayRelaunchReadinessCommand(missing)))
+    ).toBe('absent')
+    expect(readdirSync(dir).sort()).toEqual(before)
+  })
+
+  it('reports present for a stale socket node left by a crashed relay', async () => {
+    const orphanDir = mkdtempSync(join(tmpdir(), 'relay-owner-orphan-'))
+    const staged = join(orphanDir, 'staged.sock')
+    const orphan = createServer()
+    await new Promise<void>((resolve) => orphan.listen(staged, resolve))
+    const stale = join(dir, 'stale.sock')
+    renameSync(staged, stale)
+    // close() now unlinks the name it bound, which no longer exists — the node at `stale` survives.
+    await new Promise<void>((resolve) => orphan.close(() => resolve()))
+
+    expect(parseRelayRelaunchReadinessOutput(await sh(relayRelaunchReadinessCommand(stale)))).toBe(
+      'present'
+    )
+    expect(lstatSync(stale).isSocket()).toBe(true)
+    rmSync(orphanDir, { recursive: true, force: true })
+  })
+
+  it.each([
+    ['a plain file', (p: string) => writeFileSync(p, 'x')],
+    ['a directory', (p: string) => mkdirSync(p)],
+    ['a dangling symlink', (p: string) => symlinkSync(join(dir, 'nowhere'), p)]
+  ])('reports present for %s at the socket path', async (_label, create) => {
+    const occupied = join(dir, 'occupied.sock')
+    create(occupied)
+
+    expect(
+      parseRelayRelaunchReadinessOutput(await sh(relayRelaunchReadinessCommand(occupied)))
+    ).toBe('present')
+    expect(lstatSync(occupied)).toBeDefined()
+  })
+
+  it('survives the printf-octal remote command wrapper unchanged', async () => {
+    const direct = parseRelayRelaunchReadinessOutput(
+      await sh(relayRelaunchReadinessCommand(sockPath))
+    )
+    const wrapped = parseRelayRelaunchReadinessOutput(
+      await shWrapped(relayRelaunchReadinessCommand(sockPath))
+    )
+    expect(wrapped).toBe(direct)
+  })
+
+  unprivilegedPosixIt('reports unknown when the parent directory cannot be searched', async () => {
+    const locked = join(dir, 'locked')
+    mkdirSync(locked)
+    const hidden = join(locked, 'relay.sock')
+    chmodSync(locked, 0o000)
+    try {
+      expect(
+        parseRelayRelaunchReadinessOutput(await sh(relayRelaunchReadinessCommand(hidden)))
+      ).toBe('unknown')
+    } finally {
+      chmodSync(locked, 0o700)
+    }
   })
 })

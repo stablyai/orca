@@ -87,7 +87,13 @@ export function publishRelayOwnerManifest(publication: RelayOwnerManifestPublica
   }
 }
 
-/** Removes the manifest only while it still names `generation`, so a successor's file survives. */
+/**
+ * Removes the manifest only while it still names `generation`, so a successor's file survives.
+ *
+ * Caller contract: invoke this only while this process still owns the socket path. A bound socket is
+ * what excludes a successor — once the pathname is free, a successor can bind it and publish, and no
+ * check here can make a name-based unlink safe.
+ */
 export function removeRelayOwnerManifestForGeneration(sockPath: string, generation: string): void {
   if (isRelayNamedPipeEndpoint(sockPath)) {
     return
@@ -107,10 +113,10 @@ export function removeRelayOwnerManifestForGeneration(sockPath: string, generati
     ) {
       return
     }
-    // Why: a successor can rename its manifest over this name between the read and the unlink.
-    // Comparing the open inode to the name's current inode makes that swap visible. POSIX has no
-    // inode-verified unlink, so this narrows the window to microseconds rather than closing it; a
-    // successor that loses the race simply republishes on its next ownership check.
+    // Why: defence in depth for a caller that violates the contract above. Comparing the open inode
+    // to the name's current inode makes a swap visible, though POSIX has no inode-verified unlink so
+    // a microsecond window survives. Holding the socket path is what actually closes it: a process
+    // that cannot bind cannot publish, and publication only happens after a successful bind.
     const current = statSync(manifestPath, { bigint: true })
     if (opened.dev !== current.dev || opened.ino !== current.ino) {
       return

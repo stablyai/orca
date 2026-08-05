@@ -70,6 +70,7 @@ import {
   publishRelayOwnerManifest,
   removeRelayOwnerManifestForGeneration
 } from './relay-owner-manifest-publication'
+import { releaseOwnedEndpoint } from './relay-owned-endpoint-release'
 import { remoteCliRequestTimeoutMs } from './remote-cli-timeout'
 import { shouldReadRemoteCliStdin } from './remote-cli-stdin'
 import { registerManagedHookInstaller } from './managed-hook-installer'
@@ -557,15 +558,19 @@ async function main(): Promise<void> {
       sameSocketIdentity(currentIdentity, ownedSocketIdentity)
     )
   }
-  const cleanupOwnedSocket = (): void => {
-    if (ownsCurrentSocketPath()) {
-      cleanupSocket(sockPath)
-    }
-    // Why: generation-scoped, so a successor that already republished the manifest keeps its own —
-    // this runs even when the socket is gone, which is exactly when our manifest would be litter.
-    if (ownerToken !== undefined) {
-      removeRelayOwnerManifestForGeneration(sockPath, ownerToken)
-    }
+  // Why: the manifest comes down first, while this process still holds the socket path — see
+  // releaseOwnedEndpoint. Everything is gated on still owning the path, so a name we no longer hold
+  // is never touched at all; the next relay renames its own manifest over ours regardless.
+  const cleanupOwnedSocket = (closeServer?: () => void): void => {
+    releaseOwnedEndpoint({
+      ownsPath: ownsCurrentSocketPath,
+      removeManifest:
+        ownerToken === undefined
+          ? null
+          : () => removeRelayOwnerManifestForGeneration(sockPath, ownerToken),
+      closeServer: closeServer ?? null,
+      unlinkSocket: () => cleanupSocket(sockPath)
+    })
     ownsSocketPath = false
     ownedSocketIdentity = null
   }
@@ -1294,11 +1299,10 @@ async function main(): Promise<void> {
         fsHandler.dispose()
         gitHandler.dispose()
         hookServer.stop()
-        // Why: server.close() unlinks the listen path; skip if a newer relay rebound it, else we strand that newer daemon.
-        if (socketServer && ownsCurrentSocketPath()) {
-          socketServer.close()
-        }
-        cleanupOwnedSocket()
+        // Why: server.close() unlinks the listen path, so it runs inside the release — after the
+        // manifest is already down and behind the same ownership gate, else we both strand a newer
+        // daemon and hand it a window in which our removal could delete its manifest.
+        cleanupOwnedSocket(socketServer ? () => socketServer?.close() : undefined)
         process.exit(0)
       })
       .catch((error) => {

@@ -1,9 +1,21 @@
 // Remote probes that prove which relay process owns a POSIX socket before anything signals it.
 //
 // Every command is POSIX `/bin/sh` and emits a fixed token vocabulary between sentinels, so an SSH
-// login banner can never be mistaken for a result. Interpolated values are shell-escaped, and argv
-// matching uses `grep -Fxq` (fixed string, whole line) rather than a regex — there is no pattern to
-// escape, and a match means an exact argv element, not a substring.
+// login banner can never be mistaken for a result. Interpolated values are shell-escaped, and the
+// command line is matched with `grep -Fxq` (fixed string, whole line) rather than a regex — there is
+// no pattern to escape.
+//
+// What that match proves differs by platform, and the difference is real. On Linux the script reads
+// /proc/<pid>/cmdline and splits on NUL, so a hit is a true argv element. On macOS/BSD the kernel
+// has already flattened argv into a space-joined string by the time `ps -ww -o command=` sees it, so
+// a hit is an exact whitespace-delimited token of that flattened line — the most any POSIX tool can
+// recover there. Against the accident cases this guards (PID reuse, successor generations) both are
+// equally strong: a recycled PID cannot spontaneously contain a 256-bit token. Deliberate same-user
+// argv spoofing is outside the threat boundary — that actor can signal the process directly.
+//
+// The argv token is NOT by itself a process-start identity. That comes from a separate OS value
+// (/proc/<pid>/stat field 22, else `ps -o lstart=`) which the reaper reads, then re-reads and
+// re-compares inside the same remote command as the single SIGTERM.
 
 import {
   isRelayGenerationToken,
@@ -11,7 +23,6 @@ import {
   parseRelayOwnerManifest,
   relayOwnerManifestPath,
   relaySocketIdentity,
-  RELAY_OWNER_MANIFEST_HEADER,
   RELAY_OWNER_MANIFEST_MAX_BYTES,
   type RelayOwnerManifest
 } from '../../shared/relay-owner-manifest'
@@ -23,20 +34,37 @@ const OWNER_END = '__ORCA_RELAY_OWNER_END__'
 // Why: the manifest is the one untrusted payload inside the frame, so every one of its lines is
 // prefixed on the host. Without this, crafted content could forge probe fields or a second sentinel.
 const MANIFEST_LINE_PREFIX = 'm:'
-// Why: a token no `stat` can emit, so it can never collide with a real dev:ino:ctime triple.
+// Why: tokens no `stat` can emit, so they can never collide with a real dev:ino:ctime triple.
 const SOCKET_UNUSABLE_MARKER = 'unusable'
+const SOCKET_UNREADABLE_MARKER = 'unreadable'
 const IDENTITY_START = '__ORCA_RELAY_OWNER_ID__'
 const IDENTITY_END = '__ORCA_RELAY_OWNER_ID_END__'
-const CLEANUP_START = '__ORCA_RELAY_OWNER_CLEANUP__'
-const CLEANUP_END = '__ORCA_RELAY_OWNER_CLEANUP_END__'
+const READY_START = '__ORCA_RELAY_RELAUNCH_READY__'
+const READY_END = '__ORCA_RELAY_RELAUNCH_READY_END__'
 const MAX_PID = 2 ** 31 - 1
 
+/**
+ * The probe answers two different questions at once, and they partition the state space differently:
+ * "may we signal?" (only `owned` may) and "is this worth retrying?". Keeping the not-ours states
+ * distinct is what stops a healthy successor from inheriting the pessimism the signal gate needs.
+ */
 export type RelayOwnerProbe =
   | { kind: 'owned'; manifest: RelayOwnerManifest; socketIdentity: string }
-  | { kind: 'no-manifest' }
-  | { kind: 'unusable-manifest' }
+  /** No manifest at all: a legacy relay, or a successor between listen and publication. */
+  | { kind: 'no-manifest'; socketIdentity: string }
+  /** A file exists but the host refused it: symlink, wrong owner, wrong mode. Persistent. */
+  | { kind: 'manifest-rejected' }
+  /** Bytes present but unparseable. Publication is temp+rename, so this is corruption, not a tear. */
+  | { kind: 'manifest-malformed' }
+  /** Parses, but describes some other socket path entirely. Persistent. */
+  | { kind: 'manifest-foreign' }
+  /** Parses and names this path, but a different socket object now holds it — a successor. */
+  | { kind: 'manifest-superseded'; socketIdentity: string }
   | { kind: 'socket-absent' }
+  /** Something that is not a socket occupies the endpoint path. */
   | { kind: 'socket-unusable' }
+  /** A socket is present but the host could not stat it — never treat this as absent. */
+  | { kind: 'socket-unreadable' }
   | { kind: 'indeterminate' }
 
 export type RelayGenerationIdentity =
@@ -46,7 +74,11 @@ export type RelayGenerationIdentity =
   | { kind: 'indeterminate' }
 
 export type RelayGenerationTerminateResult = 'signalled' | 'mismatch' | 'gone' | 'indeterminate'
-export type RelayGenerationCleanupResult = 'clean' | 'foreign' | 'failed' | 'indeterminate'
+export type RelayRelaunchReadiness = 'absent' | 'present' | 'unknown'
+
+function relayEndpointParentDir(sockPath: string): string {
+  return sockPath.slice(0, sockPath.lastIndexOf('/')) || '/'
+}
 
 export function createRelayGenerationToken(): string {
   return randomBytes(32).toString('hex')
@@ -57,6 +89,7 @@ export function relayOwnerProbeCommand(sockPath: string): string {
   const manifest = shellEscape(relayOwnerManifestPath(sockPath))
   return [
     `orca_sock=${sock}`,
+    `orca_dir=${shellEscape(relayEndpointParentDir(sockPath))}`,
     `orca_manifest=${manifest}`,
     `printf '%s\\n' ${shellEscape(OWNER_START)}`,
     socketIdentityScript(),
@@ -81,8 +114,16 @@ export function relayOwnerProbeCommand(sockPath: string): string {
 function socketIdentityScript(): string {
   return [
     'orca_sockid=',
-    'if [ -S "$orca_sock" ] && [ ! -L "$orca_sock" ]; then',
+    // Why: `[ -S ]` is false both for "nothing here" and for "cannot look". Without proving the
+    // parent is searchable first, an unreadable path reports as absent — and absent authorizes a
+    // relaunch straight over a live relay.
+    'if [ ! -d "$orca_dir" ] || [ ! -x "$orca_dir" ]; then',
+    `orca_sockid=${SOCKET_UNREADABLE_MARKER};`,
+    'elif [ -S "$orca_sock" ] && [ ! -L "$orca_sock" ]; then',
     'orca_sockid=$(stat -c %d:%i:%Z "$orca_sock" 2>/dev/null || stat -f %d:%i:%c "$orca_sock" 2>/dev/null);',
+    // Why: an empty result here means a live socket the host could not stat, not an empty path.
+    // Reporting it as absent would authorize a relaunch straight over a listening relay.
+    `if [ -z "$orca_sockid" ]; then orca_sockid=${SOCKET_UNREADABLE_MARKER}; fi;`,
     // Why: a symlink or a plain file at the socket path is not "nothing here". Reporting it as
     // absent would let recovery relaunch, rotating the endpoint credential out from under whatever
     // the link points at. Name the state so the client refuses instead.
@@ -197,48 +238,38 @@ function terminateScript(): string {
   ].join('\n')
 }
 
-export function relayGenerationCleanupCommand(
-  sockPath: string,
-  socketIdentity: string,
-  generation: string
-): string {
-  if (!isRelaySocketIdentity(socketIdentity)) {
-    throw new Error(`Relay socket identity must be dev:inode:ctime integers: ${socketIdentity}`)
+/**
+ * Non-mutating proof that nothing occupies the socket pathname, used as the relaunch gate after the
+ * old generation is confirmed gone.
+ *
+ * Why nothing is removed here: once the owner has exited, no identity can authorize an unlink. The
+ * socket identity is dev:ino:ctime at whole-second granularity, and a successor binding the same
+ * path within that second reproduces it exactly — so a conditional `rm` could delete a live
+ * successor's socket. A relay releases its own socket on exit, so an empty pathname is the only
+ * signal the parent needs, and refusing to relaunch is the safe answer to anything else.
+ */
+export function relayRelaunchReadinessCommand(sockPath: string): string {
+  if (!sockPath.startsWith('/')) {
+    throw new Error(`Relay relaunch readiness needs an absolute POSIX socket path: ${sockPath}`)
   }
-  assertGeneration(generation)
   return [
     `orca_sock=${shellEscape(sockPath)}`,
-    `orca_manifest=${shellEscape(relayOwnerManifestPath(sockPath))}`,
-    `orca_want_sockid=${shellEscape(socketIdentity)}`,
-    `orca_want_gen=${shellEscape(generation)}`,
-    `printf '%s\\n' ${shellEscape(CLEANUP_START)}`,
-    'orca_res=clean',
-    socketIdentityScript(),
-    // Why: a socket still at this path must prove it is the one the terminated generation owned.
-    'if [ -e "$orca_sock" ] || [ -L "$orca_sock" ]; then',
-    '[ "$orca_sockid" = "$orca_want_sockid" ] || orca_res=foreign;',
-    'fi',
-    manifestAcceptanceScript(),
-    'orca_gen=',
-    'if [ -n "$orca_ok" ]; then',
-    // Why: read the generation only from a file that starts with the manifest header, so a stray
-    // `generation=` line in some other file can never authorize a removal.
-    `orca_head=$(head -c ${RELAY_OWNER_MANIFEST_MAX_BYTES} "$orca_manifest" 2>/dev/null);`,
-    `if [ "$(printf '%s\\n' "$orca_head" | sed -n 1p)" = ${shellEscape(RELAY_OWNER_MANIFEST_HEADER)} ]; then`,
-    "orca_gen=$(printf '%s\\n' \"$orca_head\" | sed -n 's/^generation=//p' | head -n 1);",
+    `orca_dir=${shellEscape(relayEndpointParentDir(sockPath))}`,
+    `printf '%s\\n' ${shellEscape(READY_START)}`,
+    // Why: closed by default — every branch below has to earn 'absent'.
+    'orca_ready=unknown',
+    // Why: `[ -e ]` is false both for "nothing here" and for "cannot look" — an unsearchable parent
+    // or a non-directory component. Prove the directory is searchable first so an unreadable path
+    // can never be reported as an empty one.
+    'if [ -d "$orca_dir" ] && [ -x "$orca_dir" ]; then',
+    // Why: -L as well as -e. A dangling symlink is still a node, and relaunching over it would hand
+    // the endpoint credential to whatever the link later resolves to.
+    'if [ -e "$orca_sock" ] || [ -L "$orca_sock" ]; then orca_ready=present;',
+    'else orca_ready=absent;',
     'fi;',
     'fi',
-    // Why: with the socket still present, an absent or foreign manifest is not proof of ownership —
-    // it is exactly the manifest-less successor case, so refuse rather than unlink a live relay.
-    'if [ "$orca_res" = clean ] && [ "$orca_gen" != "$orca_want_gen" ]; then',
-    'if [ -S "$orca_sock" ] || [ -e "$orca_manifest" ] || [ -L "$orca_manifest" ]; then orca_res=foreign; fi;',
-    'fi',
-    'if [ "$orca_res" = clean ]; then',
-    'rm -f "$orca_sock" "$orca_manifest" 2>/dev/null;',
-    'if [ -e "$orca_sock" ] || [ -e "$orca_manifest" ]; then orca_res=failed; fi;',
-    'fi',
-    'printf \'cleanup=%s\\n\' "$orca_res"',
-    `printf '%s\\n' ${shellEscape(CLEANUP_END)}`
+    'printf \'ready=%s\\n\' "$orca_ready"',
+    `printf '%s\\n' ${shellEscape(READY_END)}`
   ].join('\n')
 }
 
@@ -258,14 +289,17 @@ export function parseRelayOwnerProbeOutput(output: string, sockPath: string): Re
   if (socketIdentity === SOCKET_UNUSABLE_MARKER) {
     return { kind: 'socket-unusable' }
   }
+  if (socketIdentity === SOCKET_UNREADABLE_MARKER) {
+    return { kind: 'socket-unreadable' }
+  }
   if (!isRelaySocketIdentity(socketIdentity)) {
     return { kind: 'indeterminate' }
   }
   if (manifestState === 'missing') {
-    return { kind: 'no-manifest' }
+    return { kind: 'no-manifest', socketIdentity }
   }
   if (manifestState === 'rejected') {
-    return { kind: 'unusable-manifest' }
+    return { kind: 'manifest-rejected' }
   }
   if (manifestState !== 'present') {
     return { kind: 'indeterminate' }
@@ -277,12 +311,17 @@ export function parseRelayOwnerProbeOutput(output: string, sockPath: string): Re
     .map((line) => line.slice(MANIFEST_LINE_PREFIX.length))
     .join('\n')
   const manifest = parseRelayOwnerManifest(`${manifestText}\n`)
-  if (
-    manifest === null ||
-    manifest.socketPath !== sockPath ||
-    relaySocketIdentity(manifest) !== socketIdentity
-  ) {
-    return { kind: 'unusable-manifest' }
+  if (manifest === null) {
+    return { kind: 'manifest-malformed' }
+  }
+  if (manifest.socketPath !== sockPath) {
+    return { kind: 'manifest-foreign' }
+  }
+  // Why: the relay publishes only after it owns the socket and re-stats it, and nothing chmods a
+  // socket after listen — so a differing identity means a different socket object holds this path,
+  // i.e. a successor, not clock skew.
+  if (relaySocketIdentity(manifest) !== socketIdentity) {
+    return { kind: 'manifest-superseded', socketIdentity }
   }
   return { kind: 'owned', manifest, socketIdentity }
 }
@@ -314,13 +353,12 @@ export function parseRelayGenerationTerminateOutput(
   return 'indeterminate'
 }
 
-export function parseRelayGenerationCleanupOutput(output: string): RelayGenerationCleanupResult {
-  const body = sentinelBody(output, CLEANUP_START, CLEANUP_END)
-  const state = body === null ? null : fieldValue(body, 'cleanup=')
-  if (state === 'clean' || state === 'foreign' || state === 'failed') {
-    return state
-  }
-  return 'indeterminate'
+export function parseRelayRelaunchReadinessOutput(output: string): RelayRelaunchReadiness {
+  const body = sentinelBody(output, READY_START, READY_END)
+  const state = body === null ? null : fieldValue(body, 'ready=')
+  // Why: anything unrecognised is 'unknown', never 'absent'. Unparseable output must not read as
+  // permission to relaunch.
+  return state === 'absent' || state === 'present' ? state : 'unknown'
 }
 
 function sentinelBody(output: string, start: string, end: string): string[] | null {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   RELAY_OWNER_MANIFEST_MAX_BYTES,
   isRelayGenerationToken,
+  isRelayNamedPipeEndpoint,
   parseRelayOwnerManifest,
   relayOwnerManifestPath,
   serializeRelayOwnerManifest,
@@ -20,6 +21,25 @@ const MANIFEST: RelayOwnerManifest = {
 describe('relayOwnerManifestPath', () => {
   it('places the manifest adjacent to the socket', () => {
     expect(relayOwnerManifestPath('/tmp/x/relay-abc.sock')).toBe('/tmp/x/relay-abc.sock.owner')
+  })
+})
+
+describe('isRelayNamedPipeEndpoint', () => {
+  it.each([
+    ['\\\\.\\pipe\\orca-relay-abc'],
+    ['\\\\?\\pipe\\orca-relay-abc'],
+    ['\\\\.\\PIPE\\orca-relay-abc']
+  ])('recognises %s', (path) => {
+    expect(isRelayNamedPipeEndpoint(path)).toBe(true)
+  })
+
+  it.each([
+    ['a POSIX socket path', '/var/run/relay.sock'],
+    ['a UNC share', '\\\\server\\share\\relay.sock'],
+    ['a pipe-like prefix only', '\\\\.\\PIPEX\\relay'],
+    ['an empty string', '']
+  ])('rejects %s', (_label, path) => {
+    expect(isRelayNamedPipeEndpoint(path)).toBe(false)
   })
 })
 

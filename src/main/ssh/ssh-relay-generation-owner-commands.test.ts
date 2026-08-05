@@ -5,19 +5,18 @@ import {
 } from '../../shared/relay-owner-manifest'
 import {
   createRelayGenerationToken,
-  parseRelayGenerationCleanupOutput,
   parseRelayGenerationIdentityOutput,
   parseRelayGenerationTerminateOutput,
   parseRelayOwnerProbeOutput,
-  relayGenerationCleanupCommand,
   relayGenerationIdentityCommand,
   relayGenerationTerminateCommand,
-  relayOwnerProbeCommand
+  relayOwnerProbeCommand,
+  relayRelaunchReadinessCommand,
+  parseRelayRelaunchReadinessOutput
 } from './ssh-relay-generation-owner-commands'
 
 const SOCK = '/home/user/.orca-remote/relay-0.1.0/relay-deadbeefdeadbeef.sock'
 const GENERATION = 'a'.repeat(64)
-const OTHER_GENERATION = 'b'.repeat(64)
 const START_TOKEN = 'linux:8271934'
 const SOCK_IDENTITY = '2049:999:1785948267'
 
@@ -112,35 +111,37 @@ describe('parseRelayOwnerProbeOutput', () => {
   })
 
   it('reports a legacy relay with no manifest', () => {
+    // Why: the observed identity rides along so the caller can tell a legacy relay from a socket
+    // that is actively being rebound between two probes.
     expect(
       parseRelayOwnerProbeOutput(probeOutput(`sockid=${SOCK_IDENTITY}\nmanifest=missing\n`), SOCK)
-    ).toEqual({
-      kind: 'no-manifest'
-    })
+    ).toEqual({ kind: 'no-manifest', socketIdentity: SOCK_IDENTITY })
   })
 
-  it('reports a manifest the host refused to expose as unusable', () => {
+  it('reports a manifest the host refused to expose as rejected', () => {
     expect(
       parseRelayOwnerProbeOutput(probeOutput(`sockid=${SOCK_IDENTITY}\nmanifest=rejected\n`), SOCK)
-    ).toEqual({ kind: 'unusable-manifest' })
+    ).toEqual({ kind: 'manifest-rejected' })
   })
 
-  it('rejects a manifest naming a different socket path', () => {
+  it('reports a manifest naming a different socket path as foreign', () => {
     expect(parseRelayOwnerProbeOutput(ownedProbeOutput({ sock: '/tmp/other.sock' }), SOCK)).toEqual(
-      { kind: 'unusable-manifest' }
+      { kind: 'manifest-foreign' }
     )
   })
 
-  it('rejects a manifest whose inode lost to a successor socket', () => {
+  it('reports a manifest whose inode lost to a successor socket as superseded', () => {
+    // Why: a structurally valid manifest describing a different socket means a successor already
+    // took over. That is transient, not a corrupt file, and must stay retryable.
     expect(
       parseRelayOwnerProbeOutput(ownedProbeOutput({ identity: '2049:1000:1785948267' }), SOCK)
-    ).toEqual({ kind: 'unusable-manifest' })
+    ).toEqual({ kind: 'manifest-superseded', socketIdentity: '2049:1000:1785948267' })
   })
 
-  it('rejects a manifest whose socket was recreated at the same inode', () => {
+  it('reports a manifest whose socket was recreated at the same inode as superseded', () => {
     expect(
       parseRelayOwnerProbeOutput(ownedProbeOutput({ identity: '2049:999:1785948999' }), SOCK)
-    ).toEqual({ kind: 'unusable-manifest' })
+    ).toEqual({ kind: 'manifest-superseded', socketIdentity: '2049:999:1785948999' })
   })
 
   it('rejects a manifest that forges a second sentinel block', () => {
@@ -148,16 +149,30 @@ describe('parseRelayOwnerProbeOutput', () => {
       `sockid=${SOCK_IDENTITY}\nmanifest=present\n${framedManifest()}\n` +
         `m:__ORCA_RELAY_OWNER__\nm:sockid=${SOCK_IDENTITY}\nm:manifest=missing\n`
     )
-    expect(parseRelayOwnerProbeOutput(forged, SOCK)).toEqual({ kind: 'unusable-manifest' })
+    expect(parseRelayOwnerProbeOutput(forged, SOCK)).toEqual({ kind: 'manifest-malformed' })
   })
 
-  it('rejects a malformed manifest body', () => {
+  it('reports a malformed manifest body as malformed', () => {
     expect(
       parseRelayOwnerProbeOutput(
         probeOutput(`sockid=${SOCK_IDENTITY}\nmanifest=present\nm:rubbish\n`),
         SOCK
       )
-    ).toEqual({ kind: 'unusable-manifest' })
+    ).toEqual({ kind: 'manifest-malformed' })
+  })
+
+  it('reports a live socket whose stat produced nothing as unreadable, never absent', () => {
+    // Why: an empty sockid used to mean "socket-absent", which authorizes a relaunch. A host whose
+    // stat failed on a live socket must not hand out that authorization.
+    expect(
+      parseRelayOwnerProbeOutput(probeOutput('sockid=unreadable\nmanifest=missing\n'), SOCK)
+    ).toEqual({ kind: 'socket-unreadable' })
+  })
+
+  it('reports a non-socket at the endpoint path as unusable', () => {
+    expect(
+      parseRelayOwnerProbeOutput(probeOutput('sockid=unusable\nmanifest=missing\n'), SOCK)
+    ).toEqual({ kind: 'socket-unusable' })
   })
 
   it('reports an absent socket', () => {
@@ -302,56 +317,61 @@ describe('parseRelayGenerationTerminateOutput', () => {
   })
 })
 
-describe('relayGenerationCleanupCommand', () => {
-  const command = relayGenerationCleanupCommand(SOCK, SOCK_IDENTITY, GENERATION)
+describe('relayRelaunchReadinessCommand', () => {
+  const command = relayRelaunchReadinessCommand(SOCK)
 
-  it('removes only the socket and its manifest', () => {
-    expect(command).toContain('rm -f')
-    expect(command).not.toContain('rm -rf')
+  it('mutates nothing at all', () => {
+    // Why: after the owner exits there is no identity left that can authorize an unlink — a
+    // successor at the same path reproduces dev:ino:ctime within one second.
+    expect(command).not.toMatch(/\brm\b|\bunlink\b|\bmv\b|>/)
+  })
+
+  it('takes neither a socket identity nor a generation', () => {
+    expect(relayRelaunchReadinessCommand.length).toBe(1)
+    expect(command).not.toContain(SOCK_IDENTITY)
+    expect(command).not.toContain(GENERATION)
+  })
+
+  it('never names the manifest path', () => {
     expect(command).toContain(`'${SOCK}'`)
-    expect(command).toContain(`'${SOCK}.owner'`)
+    expect(command).not.toContain('.owner')
   })
 
-  it('rechecks the full socket identity and manifest generation before removing', () => {
-    const beforeRemove = command.slice(0, command.indexOf('rm -f'))
-    expect(beforeRemove).toContain(`'${SOCK_IDENTITY}'`)
-    expect(beforeRemove).toContain(`'${GENERATION}'`)
+  it('treats a dangling symlink as an occupied path', () => {
+    expect(command).toContain('-L ')
   })
 
-  it('requires the manifest header before trusting a generation line', () => {
-    expect(command).toContain("'orca-relay-owner-1'")
+  it('proves the parent directory is searchable before trusting an absent result', () => {
+    expect(command).toContain('-d "$orca_dir"')
+    expect(command).toContain('-x "$orca_dir"')
   })
 
-  it.each([
-    ['a shell metacharacter', '9; rm -rf /'],
-    ['a bare inode', '999'],
-    ['a partial identity', '2049:999'],
-    ['a negative field', '2049:-1:5']
-  ])('rejects %s as a socket identity', (_label, identity) => {
-    expect(() => relayGenerationCleanupCommand(SOCK, identity, GENERATION)).toThrow(/identity/i)
-  })
-
-  it('rejects a malformed generation token', () => {
-    expect(() =>
-      relayGenerationCleanupCommand(SOCK, SOCK_IDENTITY, OTHER_GENERATION.slice(1))
-    ).toThrow(/generation/i)
+  it('rejects a relative path', () => {
+    expect(() => relayRelaunchReadinessCommand('relay.sock')).toThrow(/absolute/i)
   })
 })
 
-describe('parseRelayGenerationCleanupOutput', () => {
+describe('parseRelayRelaunchReadinessOutput', () => {
   it.each([
-    ['clean', 'clean'],
-    ['foreign', 'foreign'],
-    ['failed', 'failed']
-  ])('maps cleanup=%s', (state, expected) => {
+    ['absent', 'absent'],
+    ['present', 'present'],
+    ['unknown', 'unknown']
+  ])('maps ready=%s', (state, expected) => {
     expect(
-      parseRelayGenerationCleanupOutput(
-        `__ORCA_RELAY_OWNER_CLEANUP__\ncleanup=${state}\n__ORCA_RELAY_OWNER_CLEANUP_END__\n`
+      parseRelayRelaunchReadinessOutput(
+        `__ORCA_RELAY_RELAUNCH_READY__\nready=${state}\n__ORCA_RELAY_RELAUNCH_READY_END__\n`
       )
     ).toBe(expected)
   })
 
-  it('treats unsentinelled output as indeterminate', () => {
-    expect(parseRelayGenerationCleanupOutput('clean')).toBe('indeterminate')
+  it.each([
+    ['unsentinelled output', 'absent'],
+    [
+      'an unknown token',
+      '__ORCA_RELAY_RELAUNCH_READY__\nready=maybe\n__ORCA_RELAY_RELAUNCH_READY_END__\n'
+    ],
+    ['empty output', '']
+  ])('never reports absent for %s', (_label, output) => {
+    expect(parseRelayRelaunchReadinessOutput(output)).toBe('unknown')
   })
 })

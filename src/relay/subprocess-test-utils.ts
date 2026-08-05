@@ -147,7 +147,9 @@ export function spawnRelay(
 
   const waitForExit = (timeoutMs = 5000): Promise<number | null> => {
     return new Promise((resolve, reject) => {
-      if (proc.exitCode !== null) {
+      // Why: a signal-terminated child leaves exitCode null and signalCode set. Without the second
+      // check the 'exit' event has already fired and been dropped, and this waits out the timeout.
+      if (proc.exitCode !== null || proc.signalCode !== null) {
         resolve(proc.exitCode)
         return
       }

@@ -39,76 +39,120 @@ export function relayRecoveryLockPath(sockPath: string): string {
  */
 export type RelayRecoveryLock = { token: string; waited: boolean }
 
+/**
+ * Claims the lock and publishes its owner token in ONE remote command.
+ *
+ * Why one command: with `mkdir` and the owner write as separate round trips, the lock exists
+ * ownerless for a full trip. A peer that sees it cannot tell an abandoned claim from a successor
+ * mid-publish, and a claimer that dies in the gap leaves a lock nobody can attribute. Emitting a
+ * success verdict only after the owner file exists removes the observable window entirely.
+ *
+ * `CREATED` and `STOLEN` are distinct on purpose: a steal takes over from a holder that may already
+ * have relaunched the relay before dying, so that caller must re-probe rather than reap what could
+ * be a healthy successor.
+ */
+function acquireRecoveryLockCommand(
+  host: RemoteHostPlatform,
+  lockPath: string,
+  token: string
+): string {
+  const ownerPath = joinRemotePath(host, lockPath, RECOVERY_LOCK_OWNER_NAME)
+  // Why: a failed publication removes only the directory this command just created, which is
+  // provably ours and milliseconds old — it can never be a peer's lock.
+  const publish = (verdict: 'CREATED' | 'STOLEN'): string =>
+    [
+      `if printf %s ${shellEscape(token)} > ${shellEscape(ownerPath)} 2>/dev/null; then echo ${verdict};`,
+      `else ${removeRemoteTreeCommand(host, lockPath)} 2>/dev/null; echo BUSY; fi`
+    ].join(' ')
+  // Why: both reused builders speak OK/BUSY, so capture each verdict instead of letting it reach
+  // stdout — only the publication below may speak for this command. The capture also keeps the
+  // steal's own `trap ... EXIT` cleanup firing when the substitution ends, exactly as before.
+  return [
+    `orca_claim=$(${tryCreateInstallLockCommand(host, lockPath)});`,
+    `case "$orca_claim" in *OK) ${publish('CREATED')}; exit 0;; esac;`,
+    `orca_claim=$(${tryStealInstallLockCommand(host, lockPath, RECOVERY_LOCK_STALE_SECONDS)});`,
+    `case "$orca_claim" in *OK) ${publish('STOLEN')}; exit 0;; esac;`,
+    'echo BUSY'
+  ].join(' ')
+}
+
 export async function acquireRelayRecoveryLock(
   conn: SshConnection,
   host: RemoteHostPlatform,
   sockPath: string,
   signal?: AbortSignal
 ): Promise<RelayRecoveryLock | null> {
+  // Why: the POSIX glue below (`$( )`, `case`) has no PowerShell equivalent. Recovery already
+  // refuses Windows hosts before reaching here (ssh-relay-generation-reap.ts), so this is a guard
+  // against a future caller, not a reachable path.
+  if (isWindowsRemoteHost(host)) {
+    throw new Error('Relay recovery locking is POSIX-only; Windows relays are not recovered')
+  }
   const lockPath = relayRecoveryLockPath(sockPath)
+  const token = `${process.pid}-${Date.now()}-${randomUUID()}`
+  const command = acquireRecoveryLockCommand(host, lockPath, token)
   for (let attempt = 0; attempt < RELAY_RECOVERY_LOCK_MAX_ATTEMPTS; attempt++) {
-    const created = await exec(conn, host, tryCreateInstallLockCommand(host, lockPath), signal)
-    if (created.trim().endsWith('OK')) {
-      return {
-        token: await writeRecoveryLockOwner(conn, host, sockPath, signal),
-        waited: attempt > 0
-      }
+    let claimed: string
+    try {
+      claimed = await exec(conn, host, command, signal)
+    } catch (err) {
+      // Why: the verdict may have landed before SSH lost the reply. Release is conditional on our
+      // token, so this drops only a lock we actually published and is a no-op otherwise.
+      await releaseRelayRecoveryLock(conn, host, sockPath, token).catch(() => undefined)
+      throw err
     }
-    const stolen = await exec(
-      conn,
-      host,
-      tryStealInstallLockCommand(host, lockPath, RECOVERY_LOCK_STALE_SECONDS),
-      signal
-    )
-    if (stolen.trim().endsWith('OK')) {
-      return { token: await writeRecoveryLockOwner(conn, host, sockPath, signal), waited: true }
+    const verdict = lastLine(claimed)
+    if (verdict === 'CREATED') {
+      return { token, waited: attempt > 0 }
+    }
+    if (verdict === 'STOLEN') {
+      return { token, waited: true }
     }
     await waitForRelayPollDelay(RECOVERY_LOCK_RETRY_MS, signal)
   }
   return null
 }
 
+export type RelayRecoveryLockRelease = 'released' | 'lost' | 'unknown'
+
 export async function releaseRelayRecoveryLock(
   conn: SshConnection,
   host: RemoteHostPlatform,
   sockPath: string,
   token: string
-): Promise<void> {
+): Promise<RelayRecoveryLockRelease> {
   const lockPath = relayRecoveryLockPath(sockPath)
   const ownerPath = joinRemotePath(host, lockPath, RECOVERY_LOCK_OWNER_NAME)
   // Why: conditional on our token, so a lock a successor already stole is never removed by us.
   const command = [
     `if ! [ -e ${shellEscape(lockPath)} ]; then echo RELEASED;`,
-    // Why: a lock directory with no owner file was never claimed by anyone — most likely ours, from
-    // a create that succeeded before the owner write lost its reply. Leaving it would block every
-    // client for the whole staleness window, so reclaim it rather than report it lost.
-    `elif [ ! -e ${shellEscape(ownerPath)} ]; then ${removeRemoteTreeCommand(host, lockPath)} 2>/dev/null; echo RELEASED;`,
+    // Why: an ownerless lock is a successor still publishing inside its own claim command, or a
+    // claim whose shell died mid-publish. Neither is ours to delete — deleting it would hand two
+    // clients the same socket. The staleness window reclaims the second case.
+    `elif [ ! -f ${shellEscape(ownerPath)} ]; then echo LOST;`,
     `elif [ "$(cat ${shellEscape(ownerPath)} 2>/dev/null)" != ${shellEscape(token)} ]; then echo LOST;`,
     `else ${removeRemoteTreeCommand(host, lockPath)} 2>/dev/null; echo RELEASED; fi`
   ].join(' ')
-  await execCommand(conn, command, {
+  const output = await execCommand(conn, command, {
     wrapCommand: !isWindowsRemoteHost(host),
     timeoutMs: RECOVERY_LOCK_RELEASE_TIMEOUT_MS
   }).catch(() => 'UNKNOWN')
+  const verdict = lastLine(output)
+  if (verdict === 'RELEASED') {
+    return 'released'
+  }
+  return verdict === 'LOST' ? 'lost' : 'unknown'
 }
 
-async function writeRecoveryLockOwner(
-  conn: SshConnection,
-  host: RemoteHostPlatform,
-  sockPath: string,
-  signal?: AbortSignal
-): Promise<string> {
-  const token = `${process.pid}-${Date.now()}-${randomUUID()}`
-  const ownerPath = joinRemotePath(host, relayRecoveryLockPath(sockPath), RECOVERY_LOCK_OWNER_NAME)
-  try {
-    await exec(conn, host, `printf %s ${shellEscape(token)} > ${shellEscape(ownerPath)}`, signal)
-    return token
-  } catch (err) {
-    // Why: the write may have landed before SSH lost the reply; drop our own generation rather than
-    // hold a lock we cannot prove we own.
-    await releaseRelayRecoveryLock(conn, host, sockPath, token).catch(() => undefined)
-    throw err
-  }
+// Why the last line and not `endsWith`: the composed command captures the reused builders' own
+// OK/BUSY output, but a login banner or a stray trailing byte would still make a substring test
+// answer for us. Only the final line is ours.
+function lastLine(output: string): string {
+  const lines = output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line !== '')
+  return lines.at(-1) ?? ''
 }
 
 function exec(
