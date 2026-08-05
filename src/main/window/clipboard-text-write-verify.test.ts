@@ -12,10 +12,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-import {
-  CLIPBOARD_WRITE_VERIFICATION_FAILED_ERROR,
-  writeClipboardTextAndVerify
-} from './clipboard-text-write-verify'
+import { writeClipboardTextAndVerify } from './clipboard-text-write-verify'
 
 describe('writeClipboardTextAndVerify', () => {
   beforeEach(() => {
@@ -56,23 +53,34 @@ describe('writeClipboardTextAndVerify', () => {
     expect(clipboardWriteTextMock).toHaveBeenCalledWith(crlf)
   })
 
-  it('rejects when multi-line read-back differs only by line endings', () => {
+  it('warns (does not throw) when multi-line read-back differs only by line endings', () => {
+    // Why: macOS clipboard managers and Windows normalization can alter
+    // line endings between write and read. The write succeeded; verify is advisory.
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     clipboardWriteTextMock.mockImplementation(() => {
-      // e.g. write LF, OS returns CRLF — strict verify must fail rather than lie.
+      // e.g. write LF, OS returns CRLF — advisory warning, not a failure.
       clipboardReadTextMock.mockReturnValue('line1\r\nline2')
     })
 
-    expect(() => writeClipboardTextAndVerify('line1\nline2')).toThrow(
-      CLIPBOARD_WRITE_VERIFICATION_FAILED_ERROR
+    expect(() => writeClipboardTextAndVerify('line1\nline2')).not.toThrow()
+    expect(clipboardWriteTextMock).toHaveBeenCalledWith('line1\nline2')
+    expect(consoleWarn).toHaveBeenCalledWith(
+      expect.stringContaining('Clipboard write verification mismatch')
     )
+    consoleWarn.mockRestore()
   })
 
-  it('rejects standard text writes when the clipboard read-back does not match', () => {
+  it('warns (does not throw) when the clipboard read-back does not match', () => {
+    // Why: the write succeeded (clipboard.writeText completed); a mismatch is
+    // advisory — throwing would make user copy silently fail with no clipboard content.
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     clipboardReadTextMock.mockReturnValue('old clipboard')
 
-    expect(() => writeClipboardTextAndVerify('tui answer')).toThrow(
-      CLIPBOARD_WRITE_VERIFICATION_FAILED_ERROR
-    )
+    expect(() => writeClipboardTextAndVerify('tui answer')).not.toThrow()
     expect(clipboardWriteTextMock).toHaveBeenCalledWith('tui answer')
+    expect(consoleWarn).toHaveBeenCalledWith(
+      expect.stringContaining('Clipboard write verification mismatch')
+    )
+    consoleWarn.mockRestore()
   })
 })
