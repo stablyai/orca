@@ -653,7 +653,6 @@ export function createRemoteRuntimePtyTransport(
     let pollMs = HOST_SESSION_ATTACH_POLL_MS
     // Why: list-only polling cannot recreate a host PTY lost across desktop generations.
     let nextRequest: 'activate' | 'list' = 'activate'
-    let retryActivationAfterInventory = false
     let lastRequestError: unknown = null
     let lastReadyHandle: string | null = null
     const finishBoundedWait = (): HostSessionHandleWaitResult => {
@@ -700,7 +699,6 @@ export function createRemoteRuntimePtyTransport(
                   )
               })
             : await activateHostSessionSurface(hostTabId, worktree, requestRemainingMs)
-        nextRequest = 'list'
         lastRequestError = null
         const nextHandle = findReadyHostSessionHandle(listed, hostTabId)
         if (nextHandle) {
@@ -713,20 +711,24 @@ export function createRemoteRuntimePtyTransport(
         if (nextHandle && (effectivePolicy === 'reuse' || nextHandle !== previousHandle)) {
           return { handle: nextHandle, inventoryFailed: false }
         }
-        if (!hasHostSessionTerminalSurface(listed, hostTabId)) {
-          return { handle: null, inventoryFailed: false }
-        }
-        if (request === 'list' && retryActivationAfterInventory) {
-          nextRequest = 'activate'
-          retryActivationAfterInventory = false
+        if (request === 'list') {
+          if (!hasHostSessionTerminalSurface(listed, hostTabId)) {
+            return { handle: null, inventoryFailed: false }
+          }
+          if (!nextHandle) {
+            // Why: the surface is published but unmaterialized, and only activation can mint its PTY.
+            nextRequest = 'activate'
+          }
+        } else {
+          // Why: an activation response can race host publication, so inventory — not this snapshot — decides what exists.
+          nextRequest = 'list'
         }
       } catch (error) {
         // Why: the inventory can race the reconnect that invalidated the handle; unknown liveness must not retire the pane.
         lastRequestError = error
-        // Why: activation absence is provisional until inventory confirms it.
-        if (request === 'activate' && isMissingHostSessionSurfaceError(error)) {
+        if (request === 'activate') {
+          // Why: no activation failure is absence proof, whether the surface is missing or the host predates the method.
           nextRequest = 'list'
-          retryActivationAfterInventory = true
         }
       }
       const remainingMs = HOST_SESSION_ATTACH_TIMEOUT_MS - (Date.now() - startedAt)
