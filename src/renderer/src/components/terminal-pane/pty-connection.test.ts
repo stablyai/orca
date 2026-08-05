@@ -7262,6 +7262,7 @@ describe('connectPanePty', () => {
     await flushAsyncTicks()
 
     expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+      ptyId,
       agent: null,
       shellForeground: true
     })
@@ -23615,6 +23616,7 @@ describe('connectPanePty', () => {
       binding.sampleForegroundAgentOnFocus()
 
       expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+        ptyId,
         agent: 'pi',
         routingRevoked: true,
         shellForeground: false
@@ -23626,6 +23628,7 @@ describe('connectPanePty', () => {
       )
       await flushAsyncTicks()
       expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+        ptyId,
         agent: null,
         shellForeground: true
       })

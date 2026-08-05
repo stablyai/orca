@@ -2214,7 +2214,7 @@ export function connectPanePty(
     // Why: cmd.exe and Git Bash have no OSC command boundaries. Keep the icon
     // as a hint, but revoke bytes until one current provider confirmation lands.
     useAppStore.getState().setPaneForegroundAgent(cacheKey, {
-agent: foreground.agent,
+      agent: foreground.agent,
       routingRevoked: true,
       shellForeground: false,
       ptyId: transport.getPtyId() ?? undefined
