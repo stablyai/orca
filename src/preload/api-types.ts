@@ -1808,15 +1808,15 @@ export type PreloadApi = {
       labels?: string[]
       assignees?: string[]
     }) => Promise<GitHubCreateIssueResult>
-    countWorkItems: (args: { repoPath: string; repoId?: string; query?: string }) => Promise<number>
-    listWorkItems: (args: {
-      repoPath: string
-      repoId?: string
-      limit?: number
-      query?: string
-      page?: number
-      noCache?: boolean
-    }) => Promise<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>>
+    countWorkItems: (args: GitHubRepoSelectorArgs & { query?: string }) => Promise<number>
+    listWorkItems: (
+      args: GitHubRepoSelectorArgs & {
+        limit?: number
+        query?: string
+        page?: number
+        noCache?: boolean
+      }
+    ) => Promise<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>>
     prChecks: (
       args: GitHubRepoSelectorArgs & {
         prNumber: number

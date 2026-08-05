@@ -460,9 +460,7 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
     'gh:listWorkItems',
     (
       _event,
-      args: {
-        repoPath: string
-        repoId?: string
+      args: RepoScopedArgs & {
         limit?: number
         query?: string
         page?: number
@@ -483,7 +481,7 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
     }
   )
 
-  ipcMain.handle('gh:countWorkItems', (_event, args: { repoPath: string; query?: string }) => {
+  ipcMain.handle('gh:countWorkItems', (_event, args: RepoScopedArgs & { query?: string }) => {
     const repo = assertRegisteredRepo(args, store)
     return countWorkItems(
       repo.path,

@@ -1399,12 +1399,16 @@ const api = {
     countWorkItems: (args: {
       repoPath: string
       repoId?: string
+      executionHostId?: ExecutionHostId
+      sourceContext?: TaskSourceContext | null
       query?: string
     }): Promise<number> => ipcRenderer.invoke('gh:countWorkItems', args),
 
     listWorkItems: (args: {
       repoPath: string
       repoId?: string
+      executionHostId?: ExecutionHostId
+      sourceContext?: TaskSourceContext | null
       limit?: number
       query?: string
       page?: number

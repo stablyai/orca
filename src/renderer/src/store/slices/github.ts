@@ -190,6 +190,8 @@ function enqueueLocalGitHubPRRefresh(
 type GitHubWorkItemRequestContext = {
   repoId: string
   repoPath: string
+  executionHostId?: ExecutionHostId
+  sourceContext?: TaskSourceContext | null
   target: GitHubWorkItemRequestTarget
 }
 
@@ -346,7 +348,8 @@ function getGitHubWorkItemRequestContext(
   settings: AppState['settings'],
   repoId: string,
   repoPath: string,
-  sourceContext?: TaskSourceContext | null
+  sourceContext?: TaskSourceContext | null,
+  executionHostId?: ExecutionHostId
 ): GitHubWorkItemRequestContext {
   if (sourceContext?.provider === 'github') {
     const parsedHost = parseExecutionHostId(sourceContext.hostId)
@@ -366,6 +369,8 @@ function getGitHubWorkItemRequestContext(
   return {
     repoId,
     repoPath,
+    ...(sourceContext?.provider !== 'github' && executionHostId ? { executionHostId } : {}),
+    ...(sourceContext?.provider === 'github' ? { sourceContext } : {}),
     target: runtimeRepo
       ? {
           kind: 'environment',
@@ -394,6 +399,8 @@ function listGitHubWorkItemsForRepo(
   return window.api.gh.listWorkItems({
     repoPath: context.repoPath,
     repoId: context.repoId,
+    ...(context.executionHostId ? { executionHostId: context.executionHostId } : {}),
+    ...(context.sourceContext ? { sourceContext: context.sourceContext } : {}),
     ...args
   })
 }
@@ -416,6 +423,8 @@ function countGitHubWorkItemsForRepo(
   return window.api.gh.countWorkItems({
     repoPath: context.repoPath,
     repoId: context.repoId,
+    ...(context.executionHostId ? { executionHostId: context.executionHostId } : {}),
+    ...(context.sourceContext ? { sourceContext: context.sourceContext } : {}),
     ...args
   })
 }
@@ -632,6 +641,7 @@ export type CacheEntry<T> = {
 type FetchOptions = {
   force?: boolean
   noCache?: boolean
+  executionHostId?: ExecutionHostId
   sourceContext?: TaskSourceContext | null
 }
 
@@ -2006,7 +2016,10 @@ export type GitHubSlice = {
     repoPath: string,
     limit?: number,
     query?: string,
-    options?: { sourceContext?: TaskSourceContext | null }
+    options?: {
+      executionHostId?: ExecutionHostId
+      sourceContext?: TaskSourceContext | null
+    }
   ) => void
   patchWorkItem: (
     itemId: string,
@@ -2650,7 +2663,11 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       return []
     }
     const requestState = get()
-    const repo = findRepoForGitHubOwner(requestState, repoId, repoPath)
+    const requestedHostId =
+      options?.sourceContext?.provider === 'github'
+        ? options.sourceContext.hostId
+        : options?.executionHostId
+    const repo = findRepoForGitHubOwner(requestState, repoId, repoPath, requestedHostId)
     const requestSettings = getGitHubWorkItemSourceSettings(
       requestState.settings,
       repo,
@@ -2670,7 +2687,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       requestSettings,
       repoId,
       repoPath,
-      options?.sourceContext
+      options?.sourceContext,
+      options?.executionHostId
     )
     const inflightKey = workItemsInflightRequestKey(key, requestContext.target)
     const existing = inflightWorkItemsRequests.get(inflightKey)
@@ -2710,7 +2728,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           issuesError && envelope.sources.issues
             ? { ...issuesError, source: envelope.sources.issues }
             : undefined
-        const currentRepo = findRepoForGitHubOwner(get(), repoId, repoPath)
+        const currentRepo = findRepoForGitHubOwner(get(), repoId, repoPath, requestedHostId)
         const currentHostId = getGitHubWorkItemSourceHostId(
           get(),
           currentRepo,
@@ -2768,6 +2786,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         try {
           return await state.fetchWorkItems(r.repoId, r.path, perRepoLimit, query, {
             ...options,
+            executionHostId: normalizeExecutionHostId(r.executionHostId) ?? undefined,
             sourceContext: r.sourceContext ?? options?.sourceContext
           })
         } catch (err) {
@@ -2819,7 +2838,15 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const perProjectResults = await Promise.all(
       repos.map(async (r) => {
         const requestState = get()
-        const repo = findRepoForGitHubOwner(requestState, r.repoId, r.path)
+        const executionHostId = normalizeExecutionHostId(r.executionHostId) ?? undefined
+        const sourceHostId =
+          r.sourceContext?.provider === 'github' ? r.sourceContext.hostId : undefined
+        const repo = findRepoForGitHubOwner(
+          requestState,
+          r.repoId,
+          r.path,
+          sourceHostId ?? executionHostId
+        )
         const requestSettings = getGitHubWorkItemSourceSettings(
           requestState.settings,
           repo,
@@ -2830,7 +2857,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           requestSettings,
           r.repoId,
           r.path,
-          r.sourceContext
+          r.sourceContext,
+          executionHostId
         )
         await acquireWorkItemSlot()
         try {
@@ -2902,7 +2930,15 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         await acquireWorkItemSlot()
         try {
           const requestState = get()
-          const repo = findRepoForGitHubOwner(requestState, r.repoId, r.path)
+          const executionHostId = normalizeExecutionHostId(r.executionHostId) ?? undefined
+          const sourceHostId =
+            r.sourceContext?.provider === 'github' ? r.sourceContext.hostId : undefined
+          const repo = findRepoForGitHubOwner(
+            requestState,
+            r.repoId,
+            r.path,
+            sourceHostId ?? executionHostId
+          )
           const requestSettings = getGitHubWorkItemSourceSettings(
             requestState.settings,
             repo,
@@ -2913,7 +2949,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             requestSettings,
             r.repoId,
             r.path,
-            r.sourceContext
+            r.sourceContext,
+            executionHostId
           )
           return await countGitHubWorkItemsForRepo(requestContext, { query: query || undefined })
         } catch {
@@ -2939,11 +2976,17 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       return
     }
     const requestState = get()
-    const repo = findRepoForGitHubOwner(requestState, repoId, repoPath)
+    const requestedHostId =
+      options?.sourceContext?.provider === 'github'
+        ? options.sourceContext.hostId
+        : options?.executionHostId
+    const repo = findRepoForGitHubOwner(requestState, repoId, repoPath, requestedHostId)
     const key =
       options?.sourceContext?.provider === 'github'
         ? workItemsCacheKey(repoId, limit, query, getTaskSourceCacheScope(options.sourceContext))
-        : getWorkItemsCacheKeyForOwner(requestState, repoId, limit, query, repoPath)
+        : requestedHostId
+          ? workItemsCacheKey(repoId, limit, query, requestedHostId)
+          : getWorkItemsCacheKeyForOwner(requestState, repoId, limit, query, repoPath)
     const cached = get().workItemsCache[key]
     const requestSettings = getGitHubWorkItemSourceSettings(
       requestState.settings,
@@ -2955,14 +2998,18 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       requestSettings,
       repoId,
       repoPath,
-      options?.sourceContext
+      options?.sourceContext,
+      options?.executionHostId
     )
     const inflightKey = workItemsInflightRequestKey(key, requestContext.target)
     if (isFresh(cached, WORK_ITEMS_CACHE_TTL) || inflightWorkItemsRequests.has(inflightKey)) {
       return
     }
     void get()
-      .fetchWorkItems(repoId, repoPath, limit, query, { sourceContext: options?.sourceContext })
+      .fetchWorkItems(repoId, repoPath, limit, query, {
+        executionHostId: options?.executionHostId,
+        sourceContext: options?.sourceContext
+      })
       .catch(() => {})
   },
 
