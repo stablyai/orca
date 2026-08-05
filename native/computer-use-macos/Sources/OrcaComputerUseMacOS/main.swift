@@ -909,6 +909,9 @@ final class Provider {
             start = try coordinatePoint(params: params, xKey: "fromX", yKey: "fromY", snapshot: snapshot)
             end = try coordinatePoint(params: params, xKey: "toX", yKey: "toY", snapshot: snapshot)
         }
+        // Why: HID button presses no longer postToPid (#12592); focus the target
+        // first so global presses land on the intended app, matching Provider.click.
+        recoverWindow(snapshot.app)
         try Input.drag(pid: snapshot.app.pid, from: start, to: end)
         return actionMetadata(path: "synthetic")
     }
@@ -2441,8 +2444,9 @@ private enum Input {
         // Why: postToPid alone moves the cursor (hover/tooltips work) but many
         // AppKit and Electron controls never activate on a pid-targeted press.
         // Keyboard already posts via cghidEventTap; use that for button
-        // down/up so --x/--y clicks activate (#12592). Keep postToPid for
-        // motion/drag so targeted apps still track the pointer.
+        // down/up so --x/--y clicks activate (#12592). Motion/drag stay
+        // postToPid-only — dual-posting leftMouseDragged doubles delivery
+        // when the target is frontmost.
         let isButtonPress =
             type == .leftMouseDown || type == .leftMouseUp
             || type == .rightMouseDown || type == .rightMouseUp
@@ -2451,7 +2455,6 @@ private enum Input {
             event.post(tap: .cghidEventTap)
         } else {
             event.postToPid(pid)
-            event.post(tap: .cghidEventTap)
         }
     }
 

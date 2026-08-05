@@ -37,6 +37,20 @@ final class AgentEntrypointSourceSafetyTests: XCTestCase {
         XCTAssertTrue(source.contains("event.post(tap: .cghidEventTap)"))
         XCTAssertTrue(source.contains("event.postToPid(pid)"))
         XCTAssertTrue(source.contains("mouseEventClickState"))
+        // Why: whole-file contains(cghidEventTap) is satisfied by keyEvent alone;
+        // pin the mouse button-press branch so the #12592 path cannot regress.
+        XCTAssertTrue(
+            source.contains(
+                """
+                        if isButtonPress {
+                            event.post(tap: .cghidEventTap)
+                        } else {
+                            event.postToPid(pid)
+                        }
+                """
+            ),
+            "Input.mouse must HID-post button presses and postToPid motion without dual-post"
+        )
     }
 
     private func agentEntrypointSource() throws -> String {
