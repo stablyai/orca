@@ -195,6 +195,11 @@ import {
   createBrowserPageGuestRecovery
 } from './browser-page-guest-recovery'
 import { subscribeBrowserSystemResume } from './browser-system-resume'
+import {
+  type BrowserReloadTrigger,
+  resolveBrowserReloadButtonLabelKind,
+  resolveBrowserReloadIntent
+} from './browser-reload-action'
 
 type BrowserTabPageState = Partial<
   Pick<
@@ -928,9 +933,6 @@ function RemoteBrowserPagePane({
   const [remoteError, setRemoteError] = useState<string | null>(null)
   const [contextMenu, setContextMenu] = useState<RemoteBrowserContextMenu | null>(null)
   const [busy, setBusy] = useState(false)
-  const [reloadMenuOpen, setReloadMenuOpen] = useState(false)
-  const remoteReloadShortcut = useShortcutLabel('browser.reload')
-  const remoteHardReloadShortcut = useShortcutLabel('browser.hardReload')
   const contextMenuRef = useRef<HTMLDivElement>(null)
   const remotePageIdRef = useRef<string | null>(null)
   const remoteViewportSizeRef = useRef<RemoteBrowserViewportSize | null>(null)
@@ -2616,53 +2618,31 @@ function RemoteBrowserPagePane({
         >
           <ArrowRight className="size-4" />
         </Button>
-        <DropdownMenu open={reloadMenuOpen} onOpenChange={setReloadMenuOpen}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-7 w-7"
-                  aria-label={translate(
-                    'auto.components.browser.pane.BrowserPane.0e080d820e',
-                    'Reload'
-                  )}
-                  onPointerDown={(e) => {
-                    if (e.button === 0) {
-                      e.preventDefault()
-                    }
-                  }}
-                  onClick={() => void runRemoteNavigation('browser.reload')}
-                  onContextMenu={(e) => {
-                    e.preventDefault()
-                    setReloadMenuOpen(true)
-                  }}
-                >
-                  {busy || browserTab.loading ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <RefreshCw className="size-4" />
-                  )}
-                </Button>
-              </DropdownMenuTrigger>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={4}>
-              {translate('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
-              {remoteReloadShortcut ? ` · ${remoteReloadShortcut}` : ''}
-            </TooltipContent>
-          </Tooltip>
-          <DropdownMenuContent align="start" alignOffset={-4}>
-            <DropdownMenuItem onClick={() => void runRemoteNavigation('browser.reload')}>
-              {translate('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
-              <DropdownMenuShortcut>{remoteReloadShortcut}</DropdownMenuShortcut>
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => void runRemoteNavigation('browser.reload')}>
-              {translate('auto.components.browser.pane.BrowserPane.a1f3c2e4b5', 'Hard Reload')}
-              <DropdownMenuShortcut>{remoteHardReloadShortcut}</DropdownMenuShortcut>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {/* Why: no ignore-cache RPC exists for remote pages, and this pane binds no reload chord, so there is
+            nothing truthful to put in a menu or a shortcut hint here — tooltip only. */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7"
+              aria-label={translate(
+                'auto.components.browser.pane.BrowserPane.0e080d820e',
+                'Reload'
+              )}
+              onClick={() => void runRemoteNavigation('browser.reload')}
+            >
+              {busy || browserTab.loading ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <RefreshCw className="size-4" />
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={4}>
+            {translate('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
+          </TooltipContent>
+        </Tooltip>
         <BrowserAddressBar
           value={addressBarValue}
           onChange={setAddressBarValue}
@@ -2956,6 +2936,46 @@ function BrowserPagePane({
   const contextMenuRef = useRef<HTMLDivElement>(null)
   const [findOpen, setFindOpen] = useState(false)
   const grab = useGrabMode(browserTab.id)
+
+  const reloadState = useMemo(
+    () => ({ loading: browserTab.loading, loadErrorCode: browserTab.loadError?.code ?? null }),
+    [browserTab.loading, browserTab.loadError]
+  )
+  const runReloadTrigger = useCallback(
+    (trigger: BrowserReloadTrigger) => {
+      const webview = webviewRef.current
+      if (!webview) {
+        return
+      }
+      switch (resolveBrowserReloadIntent(trigger, reloadState)) {
+        case 'stop':
+          webview.stop()
+          break
+        case 'retry-guest-recovery':
+          onUpdatePageStateRef.current(browserTab.id, { loading: true })
+          retryGuestRecoveryRef.current()
+          break
+        case 'retry-load':
+          retryBrowserTabLoad(webview, browserTab, onUpdatePageStateRef.current)
+          break
+        case 'hard-reload':
+          webview.reloadIgnoringCache()
+          break
+        default:
+          webview.reload()
+      }
+    },
+    [browserTab, reloadState]
+  )
+
+  // Keep the accessible name honest: the same button is Stop mid-load and Retry after a failure.
+  const reloadButtonLabelKind = resolveBrowserReloadButtonLabelKind(reloadState)
+  const reloadButtonLabel =
+    reloadButtonLabelKind === 'stop'
+      ? translate('auto.components.browser.pane.BrowserPane.b7e4d9c1a2', 'Stop')
+      : reloadButtonLabelKind === 'retry'
+        ? translate('auto.components.browser.pane.BrowserPane.781d6459ad', 'Retry')
+        : translate('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')
 
   const markup = useMarkupMode({
     getCaptureContext: useCallback((): MarkupCaptureContext | null => {
@@ -5216,41 +5236,32 @@ function BrowserPagePane({
           >
             <ArrowRight className="size-4" />
           </Button>
-          <DropdownMenu open={reloadMenuOpen} onOpenChange={setReloadMenuOpen}>
-            <Tooltip>
+          <DropdownMenu modal={false} open={reloadMenuOpen} onOpenChange={setReloadMenuOpen}>
+            {/* Why: suppress the tooltip while the menu is open — both anchor below the button and would overlap. */}
+            <Tooltip open={reloadMenuOpen ? false : undefined}>
               <TooltipTrigger asChild>
                 <DropdownMenuTrigger asChild>
                   <Button
                     size="icon"
                     variant="ghost"
                     className="h-7 w-7"
-                    aria-label={translate(
-                      'auto.components.browser.pane.BrowserPane.0e080d820e',
-                      'Reload'
-                    )}
+                    aria-label={reloadButtonLabel}
+                    // Why: preventDefault suppresses Radix's open-on-left-click (composeEventHandlers skips its
+                    // handler once defaultPrevented), keeping left-click on the primary action and the menu on right-click.
                     onPointerDown={(e) => {
                       if (e.button === 0) {
                         e.preventDefault()
                       }
                     }}
-                    onClick={() => {
-                      const webview = webviewRef.current
-                      if (!webview) {
-                        return
-                      }
-                      if (browserTab.loading) {
-                        webview.stop()
-                      } else if (browserTab.loadError) {
-                        if (browserTab.loadError.code === BROWSER_GUEST_RECOVERY_ERROR_CODE) {
-                          onUpdatePageStateRef.current(browserTab.id, { loading: true })
-                          retryGuestRecoveryRef.current()
-                        } else {
-                          retryBrowserTabLoad(webview, browserTab, onUpdatePageStateRef.current)
-                        }
-                      } else {
-                        webview.reload()
+                    // Why: same trick for Radix's open-on-Enter/Space, which would otherwise preventDefault the
+                    // synthesized click and strand keyboard users. ArrowDown still falls through to open the menu.
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        runReloadTrigger('button')
                       }
                     }}
+                    onClick={() => runReloadTrigger('button')}
                     onContextMenu={(e) => {
                       e.preventDefault()
                       setReloadMenuOpen(true)
@@ -5265,16 +5276,17 @@ function BrowserPagePane({
                 </DropdownMenuTrigger>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={4}>
-                {translate('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
-                {reloadShortcut ? ` · ${reloadShortcut}` : ''}
+                {reloadButtonLabel}
+                {/* Why: the chord maps to plain reload(), which is not what Stop or Retry do — only hint when they match. */}
+                {reloadShortcut && reloadButtonLabelKind === 'reload' ? ` · ${reloadShortcut}` : ''}
               </TooltipContent>
             </Tooltip>
             <DropdownMenuContent align="start" alignOffset={-4}>
-              <DropdownMenuItem onClick={() => webviewRef.current?.reload()}>
+              <DropdownMenuItem onClick={() => runReloadTrigger('reload')}>
                 {translate('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
                 <DropdownMenuShortcut>{reloadShortcut}</DropdownMenuShortcut>
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => webviewRef.current?.reloadIgnoringCache()}>
+              <DropdownMenuItem onClick={() => runReloadTrigger('hard-reload')}>
                 {translate('auto.components.browser.pane.BrowserPane.a1f3c2e4b5', 'Hard Reload')}
                 <DropdownMenuShortcut>{hardReloadShortcut}</DropdownMenuShortcut>
               </DropdownMenuItem>
