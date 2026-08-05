@@ -13,6 +13,7 @@ import {
   launchSleepingAgentSession,
   type ResumeSleepingAgentSessionsOptions
 } from './sleeping-agent-session-launch'
+import { directSshWorkspaceOwnsAgentRecovery } from './direct-ssh-workspace-hydration'
 
 export type { ResumeSleepingAgentSessionsOptions } from './sleeping-agent-session-launch'
 
@@ -177,6 +178,10 @@ export function resumeSleepingAgentSessionsForWorktree(
     }
     if (isInvalidWorktreeActivationRecord(record)) {
       state.clearSleepingAgentSession(record.paneKey)
+      continue
+    }
+    // Why: direct SSH attach owns in-place recovery; speculative tabs duplicate durable PTYs.
+    if (directSshWorkspaceOwnsAgentRecovery(currentState, record.worktreeId, record.connectionId)) {
       continue
     }
     const isPaneOwned = recordPaneIsOwnedByPreservedPane(record, currentState)

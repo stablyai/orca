@@ -1,7 +1,4 @@
-import {
-  DEFAULT_SSH_TERMINAL_PERSISTENCE_BACKEND,
-  type SshTerminalPersistenceBackend
-} from '../../shared/ssh-terminal-persistence'
+import type { SshTerminalPersistenceBackend } from '../../shared/ssh-terminal-persistence'
 
 export class RelayPtyBackendMismatchError extends Error {}
 
@@ -13,8 +10,7 @@ export function assertRelayPtyBackend(
   if (!trimmed.startsWith('ALIVE')) {
     return
   }
-  const active =
-    trimmed.split(':', 2)[1] === 'zmx' ? 'zmx' : DEFAULT_SSH_TERMINAL_PERSISTENCE_BACKEND
+  const active = trimmed.split(':', 2)[1] === 'zmx' ? 'zmx' : 'relay'
   if (active !== requested) {
     throw new RelayPtyBackendMismatchError(
       `The active relay uses ${active} terminal persistence. Reset Relay to apply ${requested}.`

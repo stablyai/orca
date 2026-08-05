@@ -27,6 +27,7 @@ import type {
 import { SSH_TERMINATE_RECONNECT_REQUIRED } from '../../shared/constants'
 import { quitTeardownStartGate } from '../quit-teardown-start-gate'
 import { isRuntimeOwnedSshTargetId } from '../../shared/execution-host'
+import { resolveSshTerminalPersistenceBackend } from '../../shared/ssh-terminal-persistence'
 import { isAuthError } from '../ssh/ssh-connection-utils'
 import { createCancelledConnectAttemptError } from '../ssh/ssh-connect-attempt-cancellation'
 import { forceStopRelayForTarget } from '../ssh/ssh-relay-reset'
@@ -327,7 +328,7 @@ function relayGracePeriodForTarget(target: SshTarget | null | undefined): number
 function terminalPersistenceBackendForTarget(
   target: SshTarget | null | undefined
 ): SshTarget['terminalPersistenceBackend'] {
-  return target?.terminalPersistenceBackend
+  return resolveSshTerminalPersistenceBackend(target?.terminalPersistenceBackend)
 }
 
 // Why: tabs must share one connect, while a disconnect must invalidate that
@@ -1388,8 +1389,11 @@ export function registerSshHandlers(
       assertSshConnectsNotFenced()
       conn = await connectionManager!.connect(target)
     }
-    const preserveZmxSessions = target.terminalPersistenceBackend === 'zmx'
-    let stoppedPtyBackend = target.terminalPersistenceBackend ?? 'relay'
+    const configuredPtyBackend = resolveSshTerminalPersistenceBackend(
+      target.terminalPersistenceBackend
+    )
+    const preserveZmxSessions = configuredPtyBackend === 'zmx'
+    let stoppedPtyBackend = configuredPtyBackend
     try {
       const detectedBackend = await (preserveZmxSessions
         ? forceStopRelayForTarget(conn, targetId, { preserveZmxSessions: true })

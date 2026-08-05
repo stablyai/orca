@@ -231,6 +231,22 @@ describe('getEditingTargetForSshTarget', () => {
     })
 
     expect(draft.zmxTerminalPersistence).toBe(true)
+    expect(hasAdvancedConnectionValues(draft)).toBe(false)
+  })
+
+  it('defaults SSH targets to zmx and preserves relay opt-outs', () => {
+    expect(EMPTY_FORM.zmxTerminalPersistence).toBe(true)
+
+    const draft = getEditingTargetForSshTarget({
+      id: 'ssh-1',
+      label: 'Relay server',
+      host: 'relay.example.com',
+      port: 22,
+      username: 'deploy',
+      terminalPersistenceBackend: 'relay'
+    })
+
+    expect(draft.zmxTerminalPersistence).toBe(false)
     expect(hasAdvancedConnectionValues(draft)).toBe(true)
   })
 

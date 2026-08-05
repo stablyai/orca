@@ -131,7 +131,6 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
     })
     currentStore.hydrateTabsSession(merged, { replaceWorkspaceKeys })
     // Why: direct SSH snapshots project terminal state only; global editor/browser hydration would reset unrelated hosts.
-    currentStore.markRemoteWorkspaceHydrated(authority.targetId)
     currentStore.setRemoteWorkspaceSyncStatus(authority.targetId, {
       phase: 'synced',
       direction: 'pull',
@@ -163,6 +162,7 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
     }
     if (isArrivalCurrent(authority.targetId, arrival) && isPreparationTokenCurrent(token)) {
       finalizeHydratedTerminals(authority)
+      store.getState().markRemoteWorkspaceHydrated(authority.targetId)
     }
   } finally {
     snapshotWriteSuppressUntil = Date.now() + REMOTE_WORKSPACE_SNAPSHOT_WRITE_SUPPRESS_MS

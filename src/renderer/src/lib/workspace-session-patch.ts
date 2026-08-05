@@ -48,6 +48,12 @@ export function buildWorkspaceSessionPatch(
   if (changed.has('activeRepoId')) {
     patch.activeRepoId = snapshot.activeRepoId
   }
+  if (changed.has('activeWorkspaceKey')) {
+    patch.activeWorkspaceKey = snapshot.activeWorkspaceKey
+  }
+  if (changed.has('activeWorkspaceExecutionHostId')) {
+    patch.activeWorkspaceExecutionHostId = snapshot.activeWorkspaceExecutionHostId
+  }
   if (changed.has('activeWorktreeId')) {
     patch.activeWorktreeId = snapshot.activeWorktreeId
   }

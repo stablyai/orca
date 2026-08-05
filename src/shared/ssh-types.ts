@@ -44,7 +44,7 @@ export type SshTarget = {
   /** Grace period in seconds before relay shuts down after disconnect.
    *  0 disables expiry. Default: 0 (until reset). Max: 604800 (7 days). */
   relayGracePeriodSeconds?: number
-  /** Durable PTY owner for terminals on this target. Undefined uses the relay. */
+  /** Durable PTY owner for terminals on this target. Undefined uses the default backend. */
   terminalPersistenceBackend?: SshTerminalPersistenceBackend
   /** Set to true after a successful connection that triggered a credential
    *  prompt (passphrase or password). Persisted so startup reconnect can

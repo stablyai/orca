@@ -8091,6 +8091,10 @@ export function connectPanePty(
           paneId: pane.id,
           ptyId: staleSessionId ?? null
         })
+        if (connectionId) {
+          settleDirectSshPaneRetryAttempt(directSshRetryAttempt, 'failed')
+          return false
+        }
         // Why: a stale restored session can fail reattach after mount; don't leave xterm alive without a backing PTY.
         if (staleSessionId) {
           deps.clearExitedPanePtyLayoutBinding(pane.id, staleSessionId)
@@ -8123,7 +8127,7 @@ export function connectPanePty(
           deps.clearTabPtyId(deps.tabId, staleSessionId)
         }
         // Why: SSH sleep/reconnect can invalidate the relay PTY while the tab stays mounted; replace the dead lease in-place, not a stale overlay.
-        startFreshColdRestoreAgentResume(coldRestoreStartup, {
+        startFreshColdRestoreAgentResume(coldRestoreStartup ?? undefined, {
           forceBlankRestoredViewport: true
         })
         return false
@@ -8141,11 +8145,15 @@ export function connectPanePty(
       const hasStructuralReplay = Boolean(
         connectResult?.snapshot || connectResult?.replay || connectResult?.coldRestore
       )
+      const passiveHibernationStartup =
+        !hasStructuralReplay && connectResult?.isReattach
+          ? (coldRestoreStartup ?? buildColdRestoreAgentResumeStartup())
+          : coldRestoreStartup
       const resumeComesFromPassiveHibernation = Boolean(
-        coldRestoreStartup &&
-        !coldRestoreStartup.useLiveEntry &&
-        coldRestoreStartup.sleepingRecordEntry &&
-        isPassiveCompletedHibernationEvidence(coldRestoreStartup.sleepingRecordEntry.record)
+        passiveHibernationStartup &&
+        !passiveHibernationStartup.useLiveEntry &&
+        passiveHibernationStartup.sleepingRecordEntry &&
+        isPassiveCompletedHibernationEvidence(passiveHibernationStartup.sleepingRecordEntry.record)
       )
       // Why: reattach drops startup commands; only passive hibernation is authority to retire an empty adopted shell and resume its provider session.
       if (!hasStructuralReplay && connectResult?.isReattach && resumeComesFromPassiveHibernation) {
@@ -8156,7 +8164,7 @@ export function connectPanePty(
         } else {
           deps.syncPanePtyLayoutBinding(pane.id, null)
         }
-        startFreshColdRestoreAgentResume(coldRestoreStartup, {
+        startFreshColdRestoreAgentResume(passiveHibernationStartup, {
           forceBlankRestoredViewport: true
         })
         return false
@@ -8656,8 +8664,7 @@ export function connectPanePty(
             console.warn(
               `[pty-connection] Attempting reattach for tab=${deps.tabId} sessionId=${pendingSessionId}`
             )
-            // Why: the saved remote PTY id is single-use restore metadata; clear it before attach so remounts don't keep retrying an expired session.
-            useAppStore.getState().removeDeferredSshSessionId(deps.tabId)
+            // Keep the saved PTY identity until attach succeeds or the relay proves it is gone.
             // Why: pre-signal SSH-deferred reattach too so the cooperation gate applies uniformly to remote sessions (Electron preserves the declare→connect order).
             // See docs/mobile-prefer-renderer-scrollback.md.
             const preSignalPromise =
@@ -8665,7 +8672,6 @@ export function connectPanePty(
                 ? Promise.resolve(null)
                 : window.api.pty.declarePendingPaneSerializer(cacheKey).catch(() => null)
             let expiredReattachError = false
-            const coldRestoreStartup = buildColdRestoreAgentResumeStartup()
             clearPaneMode2031State()
             clearHiddenOutputRestoreState()
             const outputCallbacks = captureTransportOutputCallbacks((message) => {
@@ -8685,20 +8691,7 @@ export function connectPanePty(
               cols,
               rows,
               sessionId: pendingSessionId,
-              ...(coldRestoreStartup?.command ? { command: coldRestoreStartup.command } : {}),
-              ...(coldRestoreStartup?.env
-                ? { env: mergeStartupEnvWithPaneIdentity(coldRestoreStartup.env) }
-                : {}),
-              ...(coldRestoreStartup?.launchConfig
-                ? { launchConfig: coldRestoreStartup.launchConfig }
-                : {}),
-              ...(coldRestoreStartup?.resumeProviderSession
-                ? { resumeProviderSession: coldRestoreStartup.resumeProviderSession }
-                : {}),
-              ...(coldRestoreStartup?.launchToken
-                ? { launchToken: coldRestoreStartup.launchToken }
-                : {}),
-              ...(coldRestoreStartup?.agent ? { launchAgent: coldRestoreStartup.agent } : {}),
+              startupIntent: 'reattach',
               ...(shouldDeclareHiddenAtSpawn() ? { initiallyHidden: true } : {}),
               ...(directSshRetryAttempt ? { admitPtyId: claimCapturedDirectSshRetryPty } : {}),
               callbacks: outputCallbacks.callbacks
@@ -8741,7 +8734,8 @@ export function connectPanePty(
                   }
                   deps.clearExitedPanePtyLayoutBinding(pane.id, pendingSessionId)
                   deps.clearTabPtyId(deps.tabId, pendingSessionId)
-                  startFreshColdRestoreAgentResume(coldRestoreStartup, {
+                  useAppStore.getState().removeDeferredSshSessionId(deps.tabId)
+                  startFreshColdRestoreAgentResume(undefined, {
                     forceBlankRestoredViewport: true
                   })
                   return
@@ -8749,9 +8743,15 @@ export function connectPanePty(
                 const accepted = await handleReattachResult(
                   result,
                   pendingSessionId,
-                  coldRestoreStartup,
+                  null,
                   outputCallbacks.generation
                 )
+                if (
+                  accepted ||
+                  (result && typeof result === 'object' && result.sessionExpired === true)
+                ) {
+                  useAppStore.getState().removeDeferredSshSessionId(deps.tabId)
+                }
                 finishReattachLiveDataDeferral(accepted, outputCallbacks.generation)
                 const gen = await preSignalPromise
                 if (typeof gen === 'number') {
@@ -8788,14 +8788,15 @@ export function connectPanePty(
                 if (isSshSessionExpiredError(err)) {
                   deps.clearExitedPanePtyLayoutBinding(pane.id, pendingSessionId)
                   deps.clearTabPtyId(deps.tabId, pendingSessionId)
-                  startFreshColdRestoreAgentResume(coldRestoreStartup, {
+                  useAppStore.getState().removeDeferredSshSessionId(deps.tabId)
+                  startFreshColdRestoreAgentResume(undefined, {
                     forceBlankRestoredViewport: true
                   })
                   return
                 }
-                startFreshColdRestoreAgentResume(coldRestoreStartup, {
-                  forceBlankRestoredViewport: true
-                })
+                const message = err instanceof Error ? err.message : String(err)
+                reportError(message)
+                settleDirectSshPaneRetryAttempt(directSshRetryAttempt, 'failed')
               })
             armDirectSshPaneRetryTimeout(trackedReattachPromise, directSshRetryAttempt)
           } else {
@@ -8914,7 +8915,7 @@ export function connectPanePty(
           : window.api.pty.declarePendingPaneSerializer(cacheKey).catch(() => null)
 
       let expiredReattachError = false
-      const coldRestoreStartup = buildColdRestoreAgentResumeStartup()
+      const coldRestoreStartup = connectionId ? null : buildColdRestoreAgentResumeStartup()
       const outputCallbacks = captureTransportOutputCallbacks((message) => {
         if (isSshSessionExpiredError(message)) {
           expiredReattachError = true
@@ -8932,6 +8933,7 @@ export function connectPanePty(
         cols,
         rows,
         sessionId: deferredReattachSessionId,
+        ...(connectionId ? { startupIntent: 'reattach' as const } : {}),
         ...(coldRestoreStartup?.command ? { command: coldRestoreStartup.command } : {}),
         ...(coldRestoreStartup?.env
           ? { env: mergeStartupEnvWithPaneIdentity(coldRestoreStartup.env) }
@@ -8978,7 +8980,7 @@ export function connectPanePty(
             }
             deps.clearExitedPanePtyLayoutBinding(pane.id, deferredReattachSessionId)
             deps.clearTabPtyId(deps.tabId, deferredReattachSessionId)
-            startFreshColdRestoreAgentResume(coldRestoreStartup, {
+            startFreshColdRestoreAgentResume(undefined, {
               forceBlankRestoredViewport: true
             })
             return
@@ -9030,15 +9032,21 @@ export function connectPanePty(
             ptyId: deferredReattachSessionId,
             reason: message
           })
-          deps.clearExitedPanePtyLayoutBinding(pane.id, deferredReattachSessionId)
-          deps.clearTabPtyId(deps.tabId, deferredReattachSessionId)
           if (connectionId && isSshSessionExpiredError(err)) {
-            startFreshColdRestoreAgentResume(coldRestoreStartup, {
+            deps.clearExitedPanePtyLayoutBinding(pane.id, deferredReattachSessionId)
+            deps.clearTabPtyId(deps.tabId, deferredReattachSessionId)
+            startFreshColdRestoreAgentResume(undefined, {
               forceBlankRestoredViewport: true
             })
             return
           }
           reportError(message)
+          if (connectionId) {
+            settleDirectSshPaneRetryAttempt(directSshRetryAttempt, 'failed')
+            return
+          }
+          deps.clearExitedPanePtyLayoutBinding(pane.id, deferredReattachSessionId)
+          deps.clearTabPtyId(deps.tabId, deferredReattachSessionId)
           startFreshColdRestoreAgentResume(coldRestoreStartup, {
             forceBlankRestoredViewport: true
           })

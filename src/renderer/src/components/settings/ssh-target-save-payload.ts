@@ -54,7 +54,9 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
   const proxyCommand = form.proxyCommand.trim() || undefined
   const jumpHost = form.jumpHost.trim() || undefined
   const systemSshConnectionReuse = form.systemSshConnectionReuse ? undefined : false
-  const terminalPersistenceBackend = form.zmxTerminalPersistence ? ('zmx' as const) : undefined
+  const terminalPersistenceBackend = form.zmxTerminalPersistence
+    ? ('zmx' as const)
+    : ('relay' as const)
 
   const target: Omit<SshTarget, 'id'> = {
     label: form.label.trim() || (username ? `${username}@${host}` : configHost),

@@ -14,6 +14,40 @@ import {
 } from './workspace-session-host-persistence'
 
 describe('fetchWorkspaceSessionFromHosts', () => {
+  it('restores direct SSH tabs from their durable host partition', async () => {
+    const worktreeId = 'ssh-repo::/srv/ssh-wt'
+    const sshSession: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [worktreeId]: [
+          {
+            id: 'ssh-tab',
+            ptyId: 'ssh:target-1@@pty-1',
+            worktreeId,
+            title: 'SSH',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      }
+    }
+    const get = vi.fn(async (hostId?: string) =>
+      hostId === 'ssh:target-1' ? sshSession : getDefaultWorkspaceSession()
+    )
+
+    const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
+      { get },
+      [{ connectionId: 'target-1', executionHostId: 'ssh:target-1' }],
+      []
+    )
+
+    expect(get).toHaveBeenCalledWith('ssh:target-1')
+    expect(read.session.tabsByWorktree[worktreeId]).toEqual(sshSession.tabsByWorktree[worktreeId])
+    expect(read.runtimeHostIdByWorkspaceSessionKey).toEqual({})
+  })
+
   it('reads saved runtime host partitions before runtime repos are loaded', async () => {
     const worktreeId = 'remote-repo::/srv/remote-wt'
     const localSession: WorkspaceSessionState = {

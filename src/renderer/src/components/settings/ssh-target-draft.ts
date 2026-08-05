@@ -6,6 +6,10 @@ import {
   type SshConfigHostResolution,
   type SshTarget
 } from '../../../../shared/ssh-types'
+import {
+  DEFAULT_SSH_TERMINAL_PERSISTENCE_BACKEND,
+  resolveSshTerminalPersistenceBackend
+} from '../../../../shared/ssh-terminal-persistence'
 
 export type EditingTarget = {
   label: string
@@ -34,7 +38,7 @@ export const EMPTY_FORM: EditingTarget = {
   proxyCommand: '',
   jumpHost: '',
   systemSshConnectionReuse: true,
-  zmxTerminalPersistence: false,
+  zmxTerminalPersistence: DEFAULT_SSH_TERMINAL_PERSISTENCE_BACKEND === 'zmx',
   relayGracePeriodSeconds: String(DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS),
   relayKeepAliveUntilReset: DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS === 0
 }
@@ -54,7 +58,8 @@ export function getEditingTargetForSshTarget(target: SshTarget): EditingTarget {
     proxyCommand: target.proxyCommand ?? '',
     jumpHost: target.jumpHost ?? '',
     systemSshConnectionReuse: target.systemSshConnectionReuse !== false,
-    zmxTerminalPersistence: target.terminalPersistenceBackend === 'zmx',
+    zmxTerminalPersistence:
+      resolveSshTerminalPersistenceBackend(target.terminalPersistenceBackend) === 'zmx',
     relayGracePeriodSeconds: String(
       target.relayGracePeriodSeconds === 0
         ? DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS
@@ -169,7 +174,7 @@ export function hasAdvancedConnectionValues(form: EditingTarget): boolean {
     form.proxyCommand.trim().length > 0 ||
     form.jumpHost.trim().length > 0 ||
     !form.systemSshConnectionReuse ||
-    form.zmxTerminalPersistence
+    form.zmxTerminalPersistence !== (DEFAULT_SSH_TERMINAL_PERSISTENCE_BACKEND === 'zmx')
   )
 }
 

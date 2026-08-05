@@ -2815,7 +2815,8 @@ describe('SSH IPC handlers', () => {
       label: 'Server',
       host: 'example.com',
       port: 22,
-      username: 'deploy'
+      username: 'deploy',
+      terminalPersistenceBackend: 'relay'
     }
     const conn = {}
     mockSshStore.getTarget.mockReturnValue(target)
@@ -2840,14 +2841,13 @@ describe('SSH IPC handlers', () => {
     expect(mockConnectionManager.disconnect).toHaveBeenCalledWith('ssh-1')
   })
 
-  it('ssh:resetRelay preserves zmx leases and local recovery state', async () => {
+  it('ssh:resetRelay preserves zmx leases and local recovery state by default', async () => {
     const target: SshTarget = {
       id: 'ssh-1',
       label: 'Server',
       host: 'example.com',
       port: 22,
-      username: 'deploy',
-      terminalPersistenceBackend: 'zmx'
+      username: 'deploy'
     }
     const conn = {}
     mockSshStore.getTarget.mockReturnValue(target)
@@ -2901,7 +2901,8 @@ describe('SSH IPC handlers', () => {
       label: 'Server',
       host: 'example.com',
       port: 22,
-      username: 'deploy'
+      username: 'deploy',
+      terminalPersistenceBackend: 'relay'
     }
     const conn = {}
     mockSshStore.getTarget.mockReturnValue(target)
@@ -2928,7 +2929,8 @@ describe('SSH IPC handlers', () => {
       label: 'Server',
       host: 'example.com',
       port: 22,
-      username: 'deploy'
+      username: 'deploy',
+      terminalPersistenceBackend: 'relay'
     }
     const conn = {}
     mockSshStore.getTarget.mockReturnValue(target)
@@ -2965,7 +2967,8 @@ describe('SSH IPC handlers', () => {
       label: 'Server',
       host: 'example.com',
       port: 22,
-      username: 'deploy'
+      username: 'deploy',
+      terminalPersistenceBackend: 'relay'
     }
     const conn = {}
     let resolveConnect!: (value: unknown) => void
@@ -3335,7 +3338,8 @@ describe('SSH IPC handlers', () => {
       label: 'Server',
       host: 'example.com',
       port: 22,
-      username: 'deploy'
+      username: 'deploy',
+      terminalPersistenceBackend: 'relay'
     }
     const conn = {}
     mockSshStore.getTarget.mockReturnValue(target)

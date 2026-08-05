@@ -8,6 +8,8 @@ function createSnapshot(
 ): WorkspaceSessionSnapshot {
   return {
     activeRepoId: 'repo-1',
+    activeWorkspaceKey: 'worktree:wt-1',
+    activeWorkspaceExecutionHostId: 'ssh:target-1',
     activeWorktreeId: 'wt-1',
     activeTabId: 'tab-1',
     tabsByWorktree: {
@@ -81,6 +83,18 @@ function createRepo(id: string, connectionId: string | null): Repo {
 }
 
 describe('buildWorkspaceSessionPatch', () => {
+  it('persists active workspace identity changes', () => {
+    const patch = buildWorkspaceSessionPatch(createSnapshot(), [
+      'activeWorkspaceKey',
+      'activeWorkspaceExecutionHostId'
+    ])
+
+    expect(patch).toEqual({
+      activeWorkspaceKey: 'worktree:wt-1',
+      activeWorkspaceExecutionHostId: 'ssh:target-1'
+    })
+  })
+
   it('returns only the direct key for active tab changes', () => {
     const patch = buildWorkspaceSessionPatch(createSnapshot({ activeTabId: 'tab-2' }), [
       'activeTabId'

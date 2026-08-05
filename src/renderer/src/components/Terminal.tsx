@@ -14,6 +14,7 @@ import { useAppStore } from '../store'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { useAllWorktrees } from '../store/selectors'
 import { getConnectionId } from '../lib/connection-context'
+import { directSshWorkspaceAwaitsHydration } from '../lib/direct-ssh-workspace-hydration'
 import { basename } from '../lib/path'
 import {
   Dialog,
@@ -316,6 +317,9 @@ function Terminal(): React.JSX.Element | null {
     [allWorktrees, folderWorkspaces]
   )
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const activeDirectSshWorkspaceAwaitsHydration = useAppStore((s) =>
+    activeWorktreeId ? directSshWorkspaceAwaitsHydration(s, activeWorktreeId) : false
+  )
   const renderedActiveWorktreeId = activeWorktreeId
   const activeWorktreeDeferralHostId = useAppStore((s) =>
     getResolvedExecutionHostIdForWorktree(s, renderedActiveWorktreeId)
@@ -1478,10 +1482,13 @@ function Terminal(): React.JSX.Element | null {
   useEffect(() => () => disposeAllParkedTerminalWatchers(), [])
   // Auto-create first tab when worktree activates
   useEffect(() => {
-    if (!workspaceSessionReady) {
+    if (!workspaceSessionReady || !startupWorktreeRefreshCompleted) {
       return
     }
     if (!activeWorktreeId) {
+      return
+    }
+    if (activeDirectSshWorkspaceAwaitsHydration) {
       return
     }
     // Why: host session-tabs are authoritative in the paired web client; a local fallback races the host's initial terminal and duplicates tabs.
@@ -1496,7 +1503,14 @@ function Terminal(): React.JSX.Element | null {
     }
     // Why: tag this never-visited-worktree tab so its PTY spawn doesn't count as activity and reshuffle the sidebar (explicit New Tab still bumps).
     createTab(activeWorktreeId, undefined, undefined, { pendingActivationSpawn: true })
-  }, [workspaceSessionReady, activeWorktreeId, createTab, reconcileWorktreeTabModel])
+  }, [
+    workspaceSessionReady,
+    startupWorktreeRefreshCompleted,
+    activeWorktreeId,
+    activeDirectSshWorkspaceAwaitsHydration,
+    createTab,
+    reconcileWorktreeTabModel
+  ])
 
   const startupResumeWorktreeIdsRef = useRef(new Set<string>())
   useEffect(() => {

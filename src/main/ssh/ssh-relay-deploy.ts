@@ -561,6 +561,7 @@ async function deployAndLaunchRelayAttempt(
 
   let launched: Awaited<ReturnType<typeof launchRelay>>
   let launchLivenessObserved = false
+  let failedLaunchFenceCanRelease = false
   try {
     deploySignal?.throwIfAborted()
     onProgress?.('Starting relay...')
@@ -576,13 +577,18 @@ async function deployAndLaunchRelayAttempt(
       deploySignal
     )
     launchLivenessObserved = true
+  } catch (error) {
+    // Why: backend mismatch is detected before launch, so retaining either fence only wedges Reset Relay behind a stale owner.
+    failedLaunchFenceCanRelease = error instanceof RelayPtyBackendMismatchError
+    throw error
   } finally {
+    const releaseLaunchFence = launchLivenessObserved || failedLaunchFenceCanRelease
     // Why: older clients understand only the install lock; if launch never goes live, keep it so their GC can't race a caller waiting behind this owner.
-    if (ownsInstallLock && launchLivenessObserved) {
+    if (ownsInstallLock && releaseLaunchFence) {
       await abandonInstall(conn, remoteRelayDir, hostPlatform)
     }
     // The detached start may outlive a timed-out SSH command; keep the fence on failed launch until stale recovery proves the handoff ended.
-    if (launchGcClaimToken && launchLivenessObserved) {
+    if (launchGcClaimToken && releaseLaunchFence) {
       await releaseRelayGcClaimWithRetry(conn, remoteRelayDir, launchGcClaimToken, hostPlatform)
     }
   }
@@ -1399,7 +1405,7 @@ async function launchRelay(
   const endpointDir = relayHookEndpointDirForHost(hostPlatform, remoteDir, sockFile)
   const credentialFile = joinRemotePath(hostPlatform, remoteDir, `${sockName}.credential`)
 
-  if (terminalPersistenceBackend === 'zmx' && isWindowsRemoteHost(hostPlatform)) {
+  if (requestedPtyBackend === 'zmx' && isWindowsRemoteHost(hostPlatform)) {
     throw new Error('zmx terminal persistence is available only on macOS and Linux SSH hosts')
   }
 
@@ -1490,7 +1496,7 @@ async function launchRelay(
   })
   // Why: --log-file lets the relay rotate relay.log in-process; the shell redirect stays to capture pre-JS boot/crash output.
   let ptyBackendArgs = ''
-  if (terminalPersistenceBackend === 'zmx') {
+  if (requestedPtyBackend === 'zmx') {
     const zmxPath = await resolveRemoteZmxPath(conn, signal)
     ptyBackendArgs = relayPtyBackendLaunchArgs('zmx', zmxPath, shellEscape)
   }

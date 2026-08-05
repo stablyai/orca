@@ -74,7 +74,6 @@ import { DispatcherClientWriter } from './dispatcher-client-writer'
 import { SshPtyConsumerSessionAdapter } from './ssh-pty-consumer-session-adapter'
 import { RelayPtySourcePublication } from './relay-pty-source-publication'
 import {
-  DEFAULT_SSH_TERMINAL_PERSISTENCE_BACKEND,
   isSshTerminalPersistenceBackend,
   type SshTerminalPersistenceBackend
 } from '../shared/ssh-terminal-persistence'
@@ -147,7 +146,7 @@ function parseArgs(argv: string[]): {
   let endpointDir: string | undefined
   let logFile: string | undefined
   let credentialFile: string | undefined
-  let ptyBackend = DEFAULT_SSH_TERMINAL_PERSISTENCE_BACKEND
+  let ptyBackend: SshTerminalPersistenceBackend = 'relay'
   let zmxPath: string | undefined
   for (let i = 2; i < argv.length; i++) {
     if (argv[i] === '--grace-time' && argv[i + 1]) {

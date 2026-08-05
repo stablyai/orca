@@ -23,7 +23,7 @@ const WORKSPACE_HYDRATION_TIMEOUT_MS = 10_000
 type RemoteWorkspaceApi = {
   get: (args: { targetId: string }) => Promise<RemoteWorkspaceSnapshot | null>
   setForConnectedTargets: (args: {
-    session?: WorkspaceSessionState
+    session: WorkspaceSessionState
     hydratedTargetIds?: string[]
   }) => Promise<{ targetId: string; result: RemoteWorkspacePatchResult }[]>
 }

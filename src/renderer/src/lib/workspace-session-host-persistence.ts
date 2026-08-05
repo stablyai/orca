@@ -117,6 +117,9 @@ function buildRuntimeHostIdByWorkspaceSessionKey(
   const owners: Record<string, ExecutionHostId> = {}
   const ambiguous = new Set<string>()
   for (const [hostId, slice] of nonLocalEntries(slices)) {
+    if (parseExecutionHostId(hostId)?.kind !== 'runtime') {
+      continue
+    }
     for (const worktreeId of collectWorkspaceSessionKeysFromHostSession(slice)) {
       if (owners[worktreeId] && owners[worktreeId] !== hostId) {
         ambiguous.add(worktreeId)
@@ -292,9 +295,21 @@ export function listKnownRuntimeHostIds(
   return [...hostIds]
 }
 
-/** Boot-time hydration: fetch the local partition plus one partition per known
- *  runtime host (from loaded repos and saved runtime ids), then merge them into
- *  the unified session the hydrators expect.
+export function listKnownDirectSshHostIds(
+  repos: readonly Pick<Repo, 'connectionId' | 'executionHostId'>[]
+): ExecutionHostId[] {
+  const hostIds = new Set<ExecutionHostId>()
+  for (const repo of repos) {
+    const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
+    if (parsed?.kind === 'ssh') {
+      hostIds.add(parsed.id)
+    }
+  }
+  return [...hostIds]
+}
+
+/** Boot-time hydration: fetch the local partition plus known runtime and direct
+ *  SSH partitions, then merge them into the unified session the hydrators expect.
  *
  *  Fail-soft: a partition whose fetch rejects is skipped — boot proceeds with
  *  the rest. Corrupt partitions never reach here; persistence zod-validates
@@ -318,12 +333,13 @@ export async function fetchWorkspaceSessionWithRuntimeHostOwners(
   }
   // Why: startup can know saved runtime session hosts before their repo
   // catalogs hydrate, so include those partitions in the first read.
-  const runtimeHostIds = new Set<ExecutionHostId>([
+  const hostIds = new Set<ExecutionHostId>([
     ...listKnownRuntimeHostIds(repos),
+    ...listKnownDirectSshHostIds(repos),
     ...additionalRuntimeHostIds
   ])
   await Promise.all(
-    [...runtimeHostIds].map(async (hostId) => {
+    [...hostIds].map(async (hostId) => {
       try {
         slices[hostId] = await api.get(hostId)
       } catch (err) {

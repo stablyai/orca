@@ -27,7 +27,7 @@ export function mergeDirectSshRemoteWorkspaceSession(
       .map((tab) => [tab.id, tab])
   )
   const locallyPreservedTabIds = new Set<string>()
-  const tabsByWorktree = Object.fromEntries(
+  const tabsByWorktree: Record<string, TerminalTab[]> = Object.fromEntries(
     Object.entries(remote.tabsByWorktree).map(([worktreeId, tabs]) => [
       worktreeId,
       tabs.map((tab) => {
@@ -45,6 +45,22 @@ export function mergeDirectSshRemoteWorkspaceSession(
       })
     ])
   )
+  const incomingTabIds = new Set(
+    Object.values(tabsByWorktree).flatMap((tabs) => tabs.map((tab) => tab.id))
+  )
+  for (const worktreeId of replaceWorktreeIds) {
+    const survivingLocalTabs = (liveTabsByWorktree[worktreeId] ?? []).filter(
+      (tab) => preserveLocalTerminalTabIds.has(tab.id) && !incomingTabIds.has(tab.id)
+    )
+    if (survivingLocalTabs.length === 0) {
+      continue
+    }
+    // Why: a successfully reattached durable PTY is stronger evidence than a stale relay snapshot that omitted its tab.
+    tabsByWorktree[worktreeId] = [...(tabsByWorktree[worktreeId] ?? []), ...survivingLocalTabs]
+    for (const tab of survivingLocalTabs) {
+      locallyPreservedTabIds.add(tab.id)
+    }
+  }
   const remoteTabIds = new Set(
     Object.values(tabsByWorktree).flatMap((tabs) => tabs.map((tab) => tab.id))
   )
@@ -70,18 +86,54 @@ export function mergeDirectSshRemoteWorkspaceSession(
       )
     )
   }
-  const activeOutsideTarget =
-    current.activeWorktreeId != null && !replaceWorktreeIds.has(current.activeWorktreeId)
+  const activeTabIdByWorktree = {
+    ...omitTargetWorktrees(current.activeTabIdByWorktree),
+    ...remote.activeTabIdByWorktree
+  }
+  for (const worktreeId of replaceWorktreeIds) {
+    const tabs = tabsByWorktree[worktreeId] ?? []
+    const rememberedTabId = current.activeTabIdByWorktree?.[worktreeId]
+    const currentTabId = current.activeWorktreeId === worktreeId ? current.activeTabId : null
+    const localTabId = [currentTabId, rememberedTabId].find((tabId): tabId is string =>
+      Boolean(tabId && tabs.some((tab) => tab.id === tabId))
+    )
+    if (localTabId) {
+      activeTabIdByWorktree[worktreeId] = localTabId
+    }
+  }
+  const activeWorktreeIsRestorable = Boolean(
+    current.activeWorktreeId &&
+    (!replaceWorktreeIds.has(current.activeWorktreeId) ||
+      Object.hasOwn(tabsByWorktree, current.activeWorktreeId))
+  )
+  const activeWorktreeId = activeWorktreeIsRestorable
+    ? current.activeWorktreeId
+    : remote.activeWorktreeId
+  const activeTargetTabs = activeWorktreeId ? (tabsByWorktree[activeWorktreeId] ?? []) : []
+  const activeTargetTabCandidate = activeWorktreeId
+    ? (activeTabIdByWorktree[activeWorktreeId] ??
+      (remote.activeWorktreeId === activeWorktreeId ? remote.activeTabId : null))
+    : null
+  const activeTabId =
+    activeWorktreeId && replaceWorktreeIds.has(activeWorktreeId)
+      ? activeTargetTabs.some((tab) => tab.id === activeTargetTabCandidate)
+        ? activeTargetTabCandidate
+        : (activeTargetTabs[0]?.id ?? null)
+      : current.activeTabId
+  const activeWorkspaceKey =
+    activeWorktreeIsRestorable &&
+    current.activeWorktreeId &&
+    !replaceWorktreeIds.has(current.activeWorktreeId)
+      ? current.activeWorkspaceKey
+      : activeWorktreeId
+        ? worktreeWorkspaceKey(activeWorktreeId)
+        : null
   return {
     ...current,
-    activeRepoId: activeOutsideTarget ? current.activeRepoId : remote.activeRepoId,
-    activeWorktreeId: activeOutsideTarget ? current.activeWorktreeId : remote.activeWorktreeId,
-    activeWorkspaceKey: activeOutsideTarget
-      ? current.activeWorkspaceKey
-      : remote.activeWorktreeId
-        ? worktreeWorkspaceKey(remote.activeWorktreeId)
-        : null,
-    activeTabId: activeOutsideTarget ? current.activeTabId : remote.activeTabId,
+    activeRepoId: activeWorktreeIsRestorable ? current.activeRepoId : remote.activeRepoId,
+    activeWorktreeId,
+    activeWorkspaceKey,
+    activeTabId,
     tabsByWorktree: {
       ...omitTargetWorktrees(current.tabsByWorktree),
       ...tabsByWorktree
@@ -91,10 +143,7 @@ export function mergeDirectSshRemoteWorkspaceSession(
       ...(current.activeWorktreeIdsOnShutdown ?? []).filter((id) => !replaceWorktreeIds.has(id)),
       ...(remote.activeWorktreeIdsOnShutdown ?? [])
     ],
-    activeTabIdByWorktree: {
-      ...omitTargetWorktrees(current.activeTabIdByWorktree),
-      ...remote.activeTabIdByWorktree
-    },
+    activeTabIdByWorktree,
     remoteSessionIdsByTabId: {
       ...Object.fromEntries(
         Object.entries(current.remoteSessionIdsByTabId ?? {}).filter(

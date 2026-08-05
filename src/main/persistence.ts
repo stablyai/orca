@@ -1234,10 +1234,7 @@ function normalizeSshTarget(t: SshTarget): SshTarget {
   if (systemSshConnectionReuse === false) {
     normalized.systemSshConnectionReuse = false
   }
-  if (
-    isSshTerminalPersistenceBackend(terminalPersistenceBackend) &&
-    terminalPersistenceBackend !== 'relay'
-  ) {
+  if (isSshTerminalPersistenceBackend(terminalPersistenceBackend)) {
     normalized.terminalPersistenceBackend = terminalPersistenceBackend
   }
   return normalized

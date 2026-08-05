@@ -264,25 +264,31 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
     expect(requestByTargetId.get('target-2')).toBeUndefined()
   })
 
-  it('can export from the persisted store session when no session argument is provided', async () => {
+  it('exports the explicit unified renderer session instead of the host-local store slice', async () => {
     getWorkspaceSessionMock.mockReturnValue({
-      activeRepoId: 'repo-target-1',
-      activeWorktreeId: 'repo-target-1::/repo',
-      activeTabId: 'tab-store',
-      tabsByWorktree: {
-        'repo-target-1::/repo': [
-          {
-            id: 'tab-store',
-            title: 'Store shell',
-            ptyId: 'pty-store',
-            worktreeId: 'repo-target-1::/repo'
-          } as never
-        ]
-      },
+      ...baseSession,
       terminalLayoutsByTabId: {}
     })
 
-    await callSetForConnectedTargets({ hydratedTargetIds: ['target-1'] })
+    await callSetForConnectedTargets({
+      session: {
+        activeRepoId: 'repo-target-1',
+        activeWorktreeId: 'repo-target-1::/repo',
+        activeTabId: 'tab-renderer',
+        tabsByWorktree: {
+          'repo-target-1::/repo': [
+            {
+              id: 'tab-renderer',
+              title: 'Renderer shell',
+              ptyId: 'pty-renderer',
+              worktreeId: 'repo-target-1::/repo'
+            } as never
+          ]
+        },
+        terminalLayoutsByTabId: {}
+      },
+      hydratedTargetIds: ['target-1']
+    })
 
     expect(requestByTargetId.get('target-1')).toHaveBeenCalledWith(
       'workspace.patch',
@@ -290,10 +296,19 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
         patch: expect.objectContaining({
           session: expect.objectContaining({
             activeWorktreePath: '/repo',
-            activeTabId: 'tab-store'
+            activeTabId: 'tab-renderer'
           })
         })
       })
     )
+    expect(getWorkspaceSessionMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses to replace a remote snapshot without a unified renderer session', async () => {
+    await expect(callSetForConnectedTargets({ hydratedTargetIds: ['target-1'] })).resolves.toEqual(
+      []
+    )
+
+    expect(requestByTargetId.get('target-1')).toBeUndefined()
   })
 })

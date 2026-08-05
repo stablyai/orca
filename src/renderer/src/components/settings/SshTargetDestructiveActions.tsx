@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { SshConnectionState, SshTarget } from '../../../../shared/ssh-types'
+import { resolveSshTerminalPersistenceBackend } from '../../../../shared/ssh-terminal-persistence'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { SshDestructiveActionDialog } from './SshDestructiveActionDialog'
 import {
@@ -191,7 +192,8 @@ export function SshTargetDestructiveActions({
           'Reset Remote Relay?'
         )}
         description={
-          dialogPendingReset?.terminalPersistenceBackend === 'zmx'
+          resolveSshTerminalPersistenceBackend(dialogPendingReset?.terminalPersistenceBackend) ===
+          'zmx'
             ? translate(
                 'settings.ssh.resetRelay.zmxDescription',
                 'This force-stops the remote relay and port forwards. zmx terminals remain available for the next connection.'

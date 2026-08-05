@@ -75,7 +75,7 @@ describe('buildSshTargetSavePayload', () => {
     })
   })
 
-  it('persists zmx terminal ownership and clears it when disabled', () => {
+  it('uses zmx by default and persists relay opt-outs', () => {
     const enabled = buildSshTargetSavePayload({
       ...EMPTY_FORM,
       host: 'durable.example.com',
@@ -89,12 +89,13 @@ describe('buildSshTargetSavePayload', () => {
 
     const disabled = buildSshTargetSavePayload({
       ...EMPTY_FORM,
-      host: 'durable.example.com'
+      host: 'durable.example.com',
+      zmxTerminalPersistence: false
     })
     expect(disabled.ok).toBe(true)
     if (disabled.ok) {
-      expect(disabled.payload.target).not.toHaveProperty('terminalPersistenceBackend')
-      expect(disabled.payload.updates).toHaveProperty('terminalPersistenceBackend', undefined)
+      expect(disabled.payload.target.terminalPersistenceBackend).toBe('relay')
+      expect(disabled.payload.updates.terminalPersistenceBackend).toBe('relay')
     }
   })
 

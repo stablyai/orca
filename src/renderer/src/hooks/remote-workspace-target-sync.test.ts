@@ -287,6 +287,9 @@ describe('createRemoteWorkspaceTargetSync', () => {
           pendingActivationSpawn: { requestedAt: 10 }
         })
       }),
+      markRemoteWorkspaceHydrated: vi.fn(() => {
+        calls.push('mark')
+      }),
       reconnectPersistedTerminals: vi.fn(async () => {
         calls.push('reconnect')
       })
@@ -311,7 +314,7 @@ describe('createRemoteWorkspaceTargetSync', () => {
 
     expect(harness.capturePreparationInput).toHaveBeenCalledOnce()
     expect(harness.prepareOnly).toHaveBeenCalledOnce()
-    expect(calls).toEqual(['hydrate', 'reconnect', 'finalize'])
+    expect(calls).toEqual(['hydrate', 'reconnect', 'finalize', 'mark'])
     expect(state.hydrateWorkspaceSession).toHaveBeenCalledWith(
       expect.any(Object),
       expect.objectContaining({
@@ -358,6 +361,57 @@ describe('createRemoteWorkspaceTargetSync', () => {
     expect(
       hydrateTabsSession.mock.calls[0][0].tabsByWorktree['repo-a::/remote/work'][0]
     ).toMatchObject({ generation: 7, ptyId: 'local-pty' })
+  })
+
+  it('retains a reattached durable tab omitted by the remote snapshot', async () => {
+    const hydrateTabsSession = vi.fn()
+    const worktreeId = 'repo-a::/remote/work'
+    const state = appState({
+      activeRepoId: 'repo-a',
+      activeWorktreeId: worktreeId,
+      activeWorkspaceKey: `worktree:${worktreeId}`,
+      activeTabId: 'durable-tab',
+      activeTabIdByWorktree: { [worktreeId]: 'durable-tab' },
+      tabsByWorktree: {
+        [worktreeId]: [
+          {
+            id: 'durable-tab',
+            worktreeId,
+            ptyId: 'ssh:target-a@@pty-17',
+            generation: 2
+          }
+        ]
+      },
+      directSshLivePtyBindingByTabId: {
+        'durable-tab': {
+          authority: owner,
+          tabGeneration: 2,
+          ptyId: 'ssh:target-a@@pty-17'
+        }
+      },
+      hydrateTabsSession
+    })
+    const harness = createHarness(state, async () => null)
+    const incoming = snapshot(6, {
+      '/remote/work': [
+        {
+          id: 'remote-tab',
+          worktreePath: '/remote/work',
+          ptyId: 'ssh:target-a@@pty-38',
+          generation: 1
+        } as RemoteWorkspaceSnapshot['session']['tabsByWorktreePath'][string][number]
+      ]
+    })
+
+    await harness.sync.applyUnsolicitedSnapshot('target-a', incoming)
+
+    const hydrated = hydrateTabsSession.mock.calls[0][0]
+    expect(hydrated.tabsByWorktree[worktreeId].map((entry: { id: string }) => entry.id)).toEqual([
+      'remote-tab',
+      'durable-tab'
+    ])
+    expect(hydrated.activeTabId).toBe('durable-tab')
+    expect(hydrated.activeTabIdByWorktree[worktreeId]).toBe('durable-tab')
   })
 
   it('admits a genuinely newer remote generation without local recovery state', async () => {
