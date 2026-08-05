@@ -148,6 +148,34 @@ describe('rich markdown table actions', () => {
     }
   })
 
+  it('reverts a rebalanced column insertion in a single undo', () => {
+    const editor = createEditor()
+    try {
+      setFirstRowColumnWidths(editor, [200, 100])
+      editor.commands.setTextSelection(caretAtText(editor, 'a1'))
+      expect(runRichMarkdownTableAction(editor, 'insert-column-right')).toBe(true)
+      expect(tableDimensions(editor).columns).toBe(3)
+
+      editor.commands.undo()
+
+      expect(tableDimensions(editor).columns).toBe(2)
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('does not throw when a cached cell position outlives the document', () => {
+    const editor = createEditor()
+    try {
+      const cellPosition = cellAtText(editor, 'a2')
+      editor.commands.setContent('Paragraph', { contentType: 'markdown' })
+      expect(runRichMarkdownTableAction(editor, 'delete-row', { cellPosition })).toBe(false)
+      expect(editor.getMarkdown()).toBe('Paragraph')
+    } finally {
+      editor.destroy()
+    }
+  })
+
   it('keeps a two-column table when one column is deleted', () => {
     const editor = createEditor()
     try {

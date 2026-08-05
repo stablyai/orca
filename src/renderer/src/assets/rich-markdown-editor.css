@@ -835,7 +835,10 @@
 .rich-markdown-table-controls {
   position: absolute;
   inset: 0;
-  z-index: 35;
+  /* Why: the slash (30), emoji (31) and doc-link (30) menus share this stacking
+     context, so hover affordances must stay under them — above editor content
+     chrome such as the code-block language selector (1). */
+  z-index: 10;
   pointer-events: none;
 }
 

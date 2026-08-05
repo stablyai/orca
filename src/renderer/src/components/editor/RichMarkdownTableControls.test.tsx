@@ -166,6 +166,7 @@ describe('RichMarkdownTableControls', () => {
       )
       expect(view.queryByLabelText('Row actions')).toBeNull()
     } finally {
+      view.unmount()
       editor.destroy()
       scrollContainer.remove()
     }

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import type { Editor } from '@tiptap/react'
-import { selectionCell } from '@tiptap/pm/tables'
+import { isInTable, selectionCell } from '@tiptap/pm/tables'
 
 export type ActiveTableCell = { cell: HTMLTableCellElement; table: HTMLTableElement }
 export type TableAxis = 'column' | 'row'
@@ -15,7 +15,9 @@ function tableCellFromTarget(target: EventTarget | null): HTMLTableCellElement |
 }
 
 function selectionTableCell(editor: Editor): HTMLTableCellElement | null {
-  if (!editor.isActive('table')) {
+  // Why: isActive('table') still admits a node selection on the table or a
+  // selection merely spanning it, and selectionCell throws for both.
+  if (!isInTable(editor.state)) {
     return null
   }
   const node = editor.view.nodeDOM(selectionCell(editor.state).pos)
@@ -117,7 +119,11 @@ export function useRichMarkdownTableControlTarget(
       editor.off('update', activateSelection)
       if (pointerFrameRef.current !== null) {
         window.cancelAnimationFrame(pointerFrameRef.current)
+        // Why: onPointerMove schedules with ??=, so a stale id blocks every
+        // later frame once the effect re-runs on a new editor instance.
+        pointerFrameRef.current = null
       }
+      pendingPointerRef.current = null
     }
   }, [editor, scrollContainerRef])
 

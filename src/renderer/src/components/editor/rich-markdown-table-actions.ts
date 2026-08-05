@@ -1,5 +1,5 @@
 import type { Editor } from '@tiptap/react'
-import { TextSelection } from '@tiptap/pm/state'
+import { TextSelection, type Transaction } from '@tiptap/pm/state'
 import { CellSelection, selectionCell, TableMap } from '@tiptap/pm/tables'
 
 export type RichMarkdownTableAction =
@@ -24,6 +24,11 @@ type TableContext = {
 }
 
 function cellPositionAtDocumentPosition(editor: Editor, position: number): number | null {
+  // Why: callers dispatch cached positions, so the doc may have shrunk since
+  // capture and resolve() throws past the end.
+  if (position < 0 || position > editor.state.doc.content.size) {
+    return null
+  }
   const $position = editor.state.doc.resolve(position)
   for (let depth = $position.depth; depth > 0; depth -= 1) {
     const role = $position.node(depth).type.spec.tableRole
@@ -183,8 +188,14 @@ function selectedTableCoverage(
   return { columns, rows, includesHeader }
 }
 
-function rebalanceAddedColumn(editor: Editor, tablePosition: number, insertedColumnIndex: number): void {
-  const table = editor.state.doc.nodeAt(tablePosition)
+// Why: mutates the caller's transaction so the rebalance lands in the same
+// undo step as the insertion it follows.
+function rebalanceAddedColumn(
+  transaction: Transaction,
+  tablePosition: number,
+  insertedColumnIndex: number
+): void {
+  const table = transaction.doc.nodeAt(tablePosition)
   const row = table?.firstChild
   if (!table || !row) {
     return
@@ -215,7 +226,6 @@ function rebalanceAddedColumn(editor: Editor, tablePosition: number, insertedCol
     const width = cell.width === null ? newWidth : cell.width * existingScale
     return Math.max(1, Math.round(width))
   })
-  const transaction = editor.state.tr
   table.forEach((tableRow, rowOffset) => {
     tableRow.forEach((cell, cellOffset, columnIndex) => {
       transaction.setNodeMarkup(tablePosition + 2 + rowOffset + cellOffset, undefined, {
@@ -224,9 +234,6 @@ function rebalanceAddedColumn(editor: Editor, tablePosition: number, insertedCol
       })
     })
   })
-  if (transaction.docChanged) {
-    editor.view.dispatch(transaction)
-  }
 }
 
 export function runRichMarkdownTableAction(
@@ -266,17 +273,27 @@ export function runRichMarkdownTableAction(
       }
       return chain.deleteRow().run()
     case 'insert-column-left':
-      if (targetColumnIndex === null || !chain.addColumnBefore().run()) {
+      if (targetColumnIndex === null) {
         return false
       }
-      rebalanceAddedColumn(editor, context.tablePosition, targetColumnIndex)
-      return true
+      return chain
+        .addColumnBefore()
+        .command(({ tr }) => {
+          rebalanceAddedColumn(tr, context.tablePosition, targetColumnIndex)
+          return true
+        })
+        .run()
     case 'insert-column-right':
-      if (targetColumnIndex === null || !chain.addColumnAfter().run()) {
+      if (targetColumnIndex === null) {
         return false
       }
-      rebalanceAddedColumn(editor, context.tablePosition, targetColumnIndex + 1)
-      return true
+      return chain
+        .addColumnAfter()
+        .command(({ tr }) => {
+          rebalanceAddedColumn(tr, context.tablePosition, targetColumnIndex + 1)
+          return true
+        })
+        .run()
     case 'delete-column':
       if (coverage.columns.size >= context.columnCount) {
         return chain.deleteTable().run()
