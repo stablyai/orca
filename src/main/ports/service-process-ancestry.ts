@@ -1,6 +1,11 @@
-import { runBoundedCommand } from './port-scan-command-runner'
+import { runPortScanCommand } from './port-scan-command-client'
 
-const ANCESTRY_TIMEOUT_MS = 3_000
+// Why (#11161): libuv performs process creation inline on the calling thread, so
+// this probe runs on the scan worker instead of freezing CrBrowserMain on hosts
+// where an endpoint-security hook stalls every spawn. The worker owns the
+// command budget, so callers pass no timeout.
+type ProbeCommandRunner = (command: string, args: string[]) => Promise<{ stdout: string }>
+
 const MAX_ANCESTOR_DEPTH = 16
 /** An agent's command line carries its entire prompt; nothing useful is that long. */
 const MAX_LAUNCH_COMMAND_LENGTH = 120
@@ -257,13 +262,13 @@ function findAgentAbove(
  * Never throws: ancestry is enrichment, and its absence only costs a column.
  */
 export async function readProcessAncestryTable(
-  runCommand: typeof runBoundedCommand = runBoundedCommand
+  runCommand: ProbeCommandRunner = runPortScanCommand
 ): Promise<ProcessAncestryTable> {
   try {
     if (process.platform === 'win32') {
       return await readWindowsAncestryTable(runCommand)
     }
-    const { stdout } = await runCommand('ps', ['-axo', 'pid=,ppid=,command='], ANCESTRY_TIMEOUT_MS)
+    const { stdout } = await runCommand('ps', ['-axo', 'pid=,ppid=,command='])
     return buildProcessAncestryTable(parseProcessAncestryOutput(stdout))
   } catch {
     return new Map()
@@ -271,17 +276,13 @@ export async function readProcessAncestryTable(
 }
 
 async function readWindowsAncestryTable(
-  runCommand: typeof runBoundedCommand
+  runCommand: ProbeCommandRunner
 ): Promise<ProcessAncestryTable> {
-  const { stdout } = await runCommand(
-    'powershell.exe',
-    [
-      '-NoProfile',
-      '-Command',
-      'Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,CommandLine,Name | ConvertTo-Json -Compress'
-    ],
-    ANCESTRY_TIMEOUT_MS
-  )
+  const { stdout } = await runCommand('powershell.exe', [
+    '-NoProfile',
+    '-Command',
+    'Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,CommandLine,Name | ConvertTo-Json -Compress'
+  ])
   return buildProcessAncestryTable(parseWindowsAncestryJson(stdout))
 }
 

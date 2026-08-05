@@ -1,8 +1,12 @@
 import { constants } from 'node:fs'
 import { access } from 'node:fs/promises'
-import { runBoundedCommand } from './port-scan-command-runner'
+import { runPortScanCommand } from './port-scan-command-client'
 
-const DOCKER_TIMEOUT_MS = 3_000
+// Why (#11161): libuv performs process creation inline on the calling thread, so
+// this probe runs on the scan worker instead of freezing CrBrowserMain on hosts
+// where an endpoint-security hook stalls every spawn. The worker owns the
+// command budget, so callers pass no timeout.
+type ProbeCommandRunner = (command: string, args: string[]) => Promise<{ stdout: string }>
 const FIELD_SEPARATOR = '\u0001'
 
 /**
@@ -181,18 +185,14 @@ export function indexDockerContainersByHostPort(
  * services panel must still render every local process.
  */
 export async function scanDockerContainerServices(
-  runCommand: typeof runBoundedCommand = runBoundedCommand
+  runCommand: ProbeCommandRunner = runPortScanCommand
 ): Promise<DockerContainerScan> {
   // Why no guard around resolveDockerBinary: it swallows its own access errors
   // and falls back to PATH, so it cannot reject.
   const binary = await resolveDockerBinary()
 
   try {
-    const { stdout } = await runCommand(
-      binary,
-      ['ps', '--no-trunc', '--format', DOCKER_PS_FORMAT],
-      DOCKER_TIMEOUT_MS
-    )
+    const { stdout } = await runCommand(binary, ['ps', '--no-trunc', '--format', DOCKER_PS_FORMAT])
     return { available: true, containers: parseDockerPsOutput(stdout) }
   } catch (error) {
     // Why log here: the reason handed to the panel is deliberately short, so

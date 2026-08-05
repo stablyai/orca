@@ -1,7 +1,7 @@
 import type { WorkspacePortKillResult, WorkspacePortProbe } from '../../shared/workspace-ports'
 import type { WorkspaceServiceStopRequest } from '../../shared/workspace-services'
 import { resolveDockerBinary, scanDockerContainerServices } from './docker-compose-services'
-import { runBoundedCommand } from './port-scan-command-runner'
+import { runBoundedCommand } from './service-stop-command-runner'
 import { findLocalPtyIdByProcessId, writeToLocalPty } from '../providers/local-pty-provider'
 import { buildAgentStopNotice, toTerminalInput } from './agent-service-stop-notice'
 import { readProcessAncestryTable, resolveServiceLaunchOrigin } from './service-process-ancestry'

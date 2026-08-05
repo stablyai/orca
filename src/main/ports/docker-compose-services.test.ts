@@ -177,14 +177,14 @@ describe('scanDockerContainerServices', () => {
     expect(scan.unavailableReason).toBeUndefined()
   })
 
-  it('passes a bounded timeout so a wedged daemon cannot hang the scan', async () => {
+  it('leaves the command budget to the scan worker', async () => {
     const runCommand = vi.fn().mockResolvedValue({ stdout: '' })
 
     await scanDockerContainerServices(runCommand)
 
-    const [, , timeoutMs] = runCommand.mock.calls[0]
-    expect(timeoutMs).toBeGreaterThan(0)
-    expect(timeoutMs).toBeLessThanOrEqual(5_000)
+    // A timeout argument here would be silently ignored by the worker client,
+    // so passing one would misreport the real bound to every reader.
+    expect(runCommand.mock.calls[0]).toHaveLength(2)
   })
 
   it('reports docker as available with no containers, not as unavailable', async () => {

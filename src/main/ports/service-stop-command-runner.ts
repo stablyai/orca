@@ -1,30 +1,32 @@
 import { execFile } from 'node:child_process'
 
-export const PORT_SCAN_COMMAND_TIMEOUT_MS = 4_000
+const DEFAULT_TIMEOUT_MS = 4_000
 
-export class CommandTimeoutError extends Error {
+class CommandTimeoutError extends Error {
   constructor(command: string, timeoutMs: number) {
     super(`${command} timed out after ${timeoutMs}ms`)
     this.name = 'CommandTimeoutError'
   }
 }
 
-export function isCommandTimeoutError(error: unknown): boolean {
-  return error instanceof CommandTimeoutError
-}
-
 /**
- * Run a command with a hard wall-clock bound.
+ * Run a command with a caller-chosen wall-clock bound.
+ *
+ * Why this stays off the scan worker (port-scan-command-client): stopping a
+ * service is a one-shot user action whose budget varies per command —
+ * `docker stop` waits out a container's grace period and needs far longer than
+ * the worker's fixed 4s — and it must not queue behind a periodic scan on that
+ * worker's one-at-a-time FIFO.
  *
  * Why the manual timer rather than execFile's `timeout` alone: Node's option
  * only signals the child. If the callback never arrives (a wedged daemon
- * holding the pipe open is the case that bit us), the awaiting scan would
- * hang forever. The timer guarantees the promise settles.
+ * holding the pipe open is the case that bit us), the caller would hang
+ * forever. The timer guarantees the promise settles.
  */
 export function runBoundedCommand(
   command: string,
   args: string[],
-  timeoutMs: number = PORT_SCAN_COMMAND_TIMEOUT_MS
+  timeoutMs: number = DEFAULT_TIMEOUT_MS
 ): Promise<{ stdout: string }> {
   return new Promise((resolve, reject) => {
     let settled = false

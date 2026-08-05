@@ -256,14 +256,14 @@ describe('parseWindowsAncestryJson', () => {
 })
 
 describe('readProcessAncestryTable', () => {
-  it('bounds the ps call', async () => {
+  it('leaves the command budget to the scan worker', async () => {
     const runCommand = vi.fn().mockResolvedValue({ stdout: REAL_PS_OUTPUT })
 
     const table = await readProcessAncestryTable(runCommand)
 
-    const [, , timeoutMs] = runCommand.mock.calls[0]
-    expect(timeoutMs).toBeGreaterThan(0)
-    expect(timeoutMs).toBeLessThanOrEqual(5_000)
+    // A timeout argument here would be silently ignored by the worker client,
+    // so passing one would misreport the real bound to every reader.
+    expect(runCommand.mock.calls[0]).toHaveLength(2)
     expect(table.size).toBe(8)
   })
 
