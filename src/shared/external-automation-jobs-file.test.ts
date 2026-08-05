@@ -52,9 +52,20 @@ describe('readExternalAutomationJobsFile', () => {
       JSON.stringify(Array.from({ length: EXTERNAL_AUTOMATION_JOBS_MAX_ENTRIES + 1 }, () => null))
     )
 
+    // REGRESSION: the count came from a bare `toLocaleString()`, so a ru-RU host
+    // rendered `more than 10 000 jobs` with U+00A0 inside an otherwise hardcoded
+    // English sentence. Pinned to en-US, so this literal holds on every host.
     await expect(readExternalAutomationJobsFile(path, { allowRootArray: true })).rejects.toThrow(
       'more than 10,000 jobs'
     )
+    await expect(readExternalAutomationJobsFile(path, { allowRootArray: true })).rejects.toThrow(
+      /more than 10,000 jobs/
+    )
+    // No locale-specific group separator may reach the message.
+    await readExternalAutomationJobsFile(path, { allowRootArray: true }).catch((error: Error) => {
+      expect(error.message).not.toContain(' ')
+      expect(error.message).not.toContain(' ')
+    })
   })
 
   it('rejects structural amplification before parsing jobs', async () => {

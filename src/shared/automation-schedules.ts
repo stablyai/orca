@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: automation scheduling needs RRULE presets and
  * custom cron parsing to share one execution path for main/renderer parity. */
 import type { AutomationSchedulePreset } from './automations-types'
+import { formatEnglishWeekday, formatHostClockTime } from './app-display-locale'
 import { isClipboardTextByteLengthOverLimit } from './clipboard-text'
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -325,10 +326,10 @@ export function tryParseAutomationRrule(
 function formatTime(hour: number, minute: number): string {
   const date = new Date()
   date.setHours(hour, minute, 0, 0)
-  return new Intl.DateTimeFormat(undefined, {
-    hour: 'numeric',
-    minute: '2-digit'
-  }).format(date)
+  // Host locale ON PURPOSE: 12h vs 24h is a real user preference, and the value
+  // is read standalone rather than joined to English words. See
+  // app-display-locale.ts for why weekdays are treated differently.
+  return formatHostClockTime(date)
 }
 
 function getSingleSetValue(values: Set<number>): number | null {
@@ -368,9 +369,9 @@ function formatParsedRruleSchedule(schedule: ReturnType<typeof parseAutomationRr
   if (schedule.preset === 'weekdays') {
     return `Weekdays at ${time}`
   }
-  const day = new Intl.DateTimeFormat(undefined, { weekday: 'long' }).format(
-    new Date(2026, 0, 4 + schedule.dayOfWeek)
-  )
+  // English weekday: the caller welds an English plural `s` and " at " onto it,
+  // so a host-locale name yields e.g. `воскресеньеs at 12:30`.
+  const day = formatEnglishWeekday(new Date(2026, 0, 4 + schedule.dayOfWeek))
   return `${day}s at ${time}`
 }
 
@@ -406,9 +407,8 @@ function classifyParsedCronSchedule(rule: ParsedCron): AutomationCronScheduleCla
     }
     const dayOfWeek = getSingleSetValue(rule.daysOfWeek)
     if (dayOfWeek !== null) {
-      const day = new Intl.DateTimeFormat(undefined, { weekday: 'long' }).format(
-        new Date(2026, 0, 4 + dayOfWeek)
-      )
+      // English weekday, for the same reason as describeAutomationSchedule.
+      const day = formatEnglishWeekday(new Date(2026, 0, 4 + dayOfWeek))
       return {
         kind: 'weekly',
         hour,

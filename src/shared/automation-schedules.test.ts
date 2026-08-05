@@ -146,6 +146,25 @@ describe('automation schedules', () => {
     expect(formatAutomationSchedule('30 12 * * 7')).toBe(`Sundays at ${formatTimeForTest(12, 30)}`)
   })
 
+  // REGRESSION: the weekday came from `Intl.DateTimeFormat(undefined, ...)`, so
+  // on a ru-RU host this produced `воскресеньеs at 12:30` — a localized weekday
+  // with an English plural `s` welded on. The label is rendered raw (never
+  // through translate()), so every word around it is hardcoded English and the
+  // weekday must be too. Asserted with literals so it fails on ANY host locale.
+  it('names weekdays in English on every host locale', () => {
+    for (const [cronDay, expected] of [
+      ['0', 'Sundays'],
+      ['1', 'Mondays'],
+      ['3', 'Wednesdays'],
+      ['6', 'Saturdays']
+    ] as const) {
+      const label = formatAutomationSchedule(`30 12 * * ${cronDay}`)
+      expect(label.startsWith(expected)).toBe(true)
+      // Latin-only up to the weekday suffix: no Cyrillic/CJK weekday can leak in.
+      expect(label.slice(0, expected.length)).toMatch(/^[A-Za-z]+$/)
+    }
+  })
+
   it('tokenizes pasted cron whitespace without regex field splitting', () => {
     const split = vi.spyOn(String.prototype, 'split')
     const schedule = ['15', String.fromCharCode(160), '10\n*\t*\rMON-FRI'].join('')

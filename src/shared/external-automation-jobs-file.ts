@@ -1,3 +1,4 @@
+import { formatEnglishCount } from './app-display-locale'
 import { NodeFileReadTooLargeError, readNodeFileWithinLimit } from './node-bounded-file-reader'
 import {
   assertJsonTextStructureWithinLimits,
@@ -47,7 +48,9 @@ export async function readExternalAutomationJobsFile(
         : []
   if (jobs.length > EXTERNAL_AUTOMATION_JOBS_MAX_ENTRIES) {
     throw new Error(
-      `External automation jobs file contains more than ${EXTERNAL_AUTOMATION_JOBS_MAX_ENTRIES.toLocaleString()} jobs and cannot be loaded safely: ${filePath}`
+      // English grouping: the surrounding sentence is hardcoded English, and a
+      // host-locale separator turns `10,000` into `10 000` (U+00A0) on e.g. ru-RU.
+      `External automation jobs file contains more than ${formatEnglishCount(EXTERNAL_AUTOMATION_JOBS_MAX_ENTRIES)} jobs and cannot be loaded safely: ${filePath}`
     )
   }
   return jobs

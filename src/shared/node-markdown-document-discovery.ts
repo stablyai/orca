@@ -1,6 +1,5 @@
 import { opendir } from 'node:fs/promises'
 import type { Dirent, Dir } from 'node:fs'
-import { join } from 'node:path'
 import {
   assertMarkdownDocumentPathWithinLimit,
   createMarkdownDocumentListingBudget,
@@ -23,6 +22,33 @@ export type MarkdownDocumentDiscoveryOptions = {
 export function isMarkdownDocumentPath(path: string): boolean {
   const lowerPath = path.toLowerCase()
   return lowerPath.endsWith('.md') || lowerPath.endsWith('.mdx') || lowerPath.endsWith('.markdown')
+}
+
+/**
+ * Appends a directory entry to the path handed back to the reader.
+ *
+ * THIS FUNCTION OWNS THE SEPARATOR CONTRACT, which is why it is not `path.join`.
+ * A root may legitimately arrive in either shape on Windows: a local worktree
+ * gives native `C:\repo`, while a WSL/SSH/relay root gives POSIX `/repo`
+ * (SshFilesystemProvider.listFiles and the relay's `fs.listFiles` both speak
+ * POSIX regardless of client platform). `path.join` on Windows rewrites every
+ * separator to `\`, so a POSIX root would be handed back to the reader as
+ * `\repo\docs` — a path the caller never named and, for a remote reader, one
+ * that cannot resolve at all.
+ *
+ * Appending with the separator the root ALREADY uses keeps both shapes intact
+ * and round-trips whatever the caller owns. Relative keys stay POSIX
+ * unconditionally (see the `/` join in visitDirectory), matching
+ * retainMarkdownRelativePath, which normalizes `\` to `/` for the same reason.
+ */
+function appendPathSegment(parentPath: string, name: string): string {
+  if (parentPath === '') {
+    return name
+  }
+  const usesBackslash = parentPath.includes('\\') && !parentPath.includes('/')
+  const separator = usesBackslash ? '\\' : '/'
+  const trimmedParent = parentPath.replace(/[\\/]+$/, '')
+  return `${trimmedParent}${separator}${name}`
 }
 
 export async function discoverMarkdownRelativePaths(
@@ -63,7 +89,11 @@ export async function discoverMarkdownRelativePaths(
       }
       if (entry.isDirectory()) {
         if (shouldDescend) {
-          await visitDirectory(join(absoluteDirectoryPath, entry.name), relativePath, nextDepth)
+          await visitDirectory(
+            appendPathSegment(absoluteDirectoryPath, entry.name),
+            relativePath,
+            nextDepth
+          )
         }
         continue
       }
