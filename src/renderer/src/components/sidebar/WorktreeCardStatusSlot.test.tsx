@@ -479,6 +479,7 @@ describe('WorktreeCardStatusSlot', () => {
   })
 
   it('shows the needs-attention indicator alongside PR status without replacing the review icon', () => {
+    mocks.status = 'inactive'
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
