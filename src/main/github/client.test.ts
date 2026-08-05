@@ -168,6 +168,7 @@ vi.mock('./github-api-repository', async (importOriginal) => {
 import {
   checkOrcaStarred,
   getPRComments,
+  getPRMergeEvidence,
   getPRForBranch,
   getPRForBranchOutcome,
   getGitHubPRLookupRateLimitBlock,
@@ -3984,9 +3985,73 @@ describe('updatePRState', () => {
   })
 })
 
+describe('github.prMergeEvidence', () => {
+  beforeEach(() => {
+    ghExecFileAsyncMock.mockReset()
+    getOwnerRepoMock.mockReset()
+    acquireMock.mockReset()
+    releaseMock.mockReset()
+    acquireMock.mockResolvedValue(undefined)
+    releaseMock.mockReset()
+    _resetOwnerRepoCache()
+  })
+
+  it('returns bounded complete thread and file evidence', async () => {
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        data: {
+          repository: {
+            pullRequest: {
+              number: 7,
+              headRefOid: 'a'.repeat(40),
+              baseRefName: 'main',
+              reviewThreads: {
+                pageInfo: { hasNextPage: false },
+                nodes: [{ isResolved: true }]
+              },
+              files: {
+                pageInfo: { hasNextPage: false },
+                nodes: [{ path: 'src/a.ts' }, { path: 'src/b.ts' }]
+              }
+            }
+          }
+        }
+      })
+    })
+
+    await expect(getPRMergeEvidence('/repo-root', 7)).resolves.toMatchObject({
+      prNumber: 7,
+      headSha: 'a'.repeat(40),
+      baseRefName: 'main',
+      reviewThreadsComplete: true,
+      unresolvedReviewThreadCount: 0,
+      filesComplete: true,
+      files: ['src/a.ts', 'src/b.ts']
+    })
+  })
+
+  it('does not claim complete evidence when GitHub pagination continues', async () => {
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        data: { repository: { pullRequest: {
+          number: 7, headRefOid: 'b'.repeat(40), baseRefName: 'main',
+          reviewThreads: { pageInfo: { hasNextPage: true }, nodes: [{ isResolved: true }] },
+          files: { pageInfo: { hasNextPage: true }, nodes: [{ path: 'src/a.ts' }] }
+        } } }
+      })
+    })
+
+    await expect(getPRMergeEvidence('/repo-root', 7)).resolves.toMatchObject({
+      reviewThreadsComplete: false,
+      filesComplete: false
+    })
+  })
+})
+
 describe('GitHub GraphQL rate-limit guard', () => {
   beforeEach(() => {
-    execFileAsyncMock.mockReset()
     ghExecFileAsyncMock.mockReset()
     getOwnerRepoMock.mockReset()
     getIssueOwnerRepoMock.mockReset()
