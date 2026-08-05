@@ -13306,7 +13306,7 @@
             "4a9568f773": "Atrás",
             "4f86e2a10b": "Saltar recorrido",
             "d974f32a83": "Descartar recorrido",
-            "ffa4412b66": "próximo",
+            "ffa4412b66": "Siguiente",
             "complete": "Hecho"
           },
           "ContextualTourProgressDots": {
@@ -13317,7 +13317,7 @@
             "tour": {
               "overlay": {
                 "measurement": {
-                  "38b3155418": "Próximo",
+                  "38b3155418": "Siguiente",
                   "automations": {
                     "intro": {
                       "title": "¿Qué es una automatización?",
@@ -13349,7 +13349,7 @@
                         "body": "Orca aísla cada tarea en su propio worktree, creado a partir de tu rama base."
                       },
                       "name": {
-                        "title": "Ponle nombre o parte de trabajo existente",
+                        "title": "Ponle nombre o usa un elemento de trabajo existente",
                         "body": "Parte de una tarea vinculada para usar un nombre corto de incidencia o PR. O déjalo en blanco para nombrarlo automáticamente a partir de tu primer mensaje al agente."
                       },
                       "agent": {

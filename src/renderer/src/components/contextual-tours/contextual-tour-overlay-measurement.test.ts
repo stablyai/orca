@@ -79,6 +79,7 @@ describe('contextual tour overlay measurement', () => {
         ...automations,
         steps: [
           {
+            id: 'inserted-step',
             title: 'Inserted step',
             body: 'Added ahead of the localized steps.',
             targetSelector: '[data-contextual-tour-target="automations-create"]'

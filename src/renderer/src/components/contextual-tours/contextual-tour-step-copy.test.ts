@@ -20,6 +20,7 @@ describe('contextual tour step copy', () => {
         expect(copy?.title).not.toBe(step.title)
         expect(copy?.body).not.toBe(step.body)
         if (step.primaryAction) {
+          expect(copy?.primaryActionLabel).toBeDefined()
           expect(copy?.primaryActionLabel).not.toBe(step.primaryAction.label)
         }
       }
