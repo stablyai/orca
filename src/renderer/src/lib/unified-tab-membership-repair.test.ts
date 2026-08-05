@@ -4,6 +4,7 @@ import type { TerminalTab, WorkspaceSessionState } from '../../../shared/types'
 import { buildHydratedTabState } from '../store/slices/tabs-hydration'
 import {
   collectDirectSshLegacyTabWorktreeIds,
+  enrichDirectSshLegacyTabRecords,
   repairUnifiedTabMembershipFromLegacyTabs
 } from './unified-tab-membership-repair'
 
@@ -169,6 +170,81 @@ describe('repairUnifiedTabMembershipFromLegacyTabs', () => {
       tabsByWorktree: {
         [otherWorktreeId]: [{ ...bound, worktreeId: otherWorktreeId }]
       }
+    }
+
+    const repaired = repairUnifiedTabMembershipFromLegacyTabs(session, {
+      worktreeIds: new Set([WORKTREE_ID])
+    })
+
+    expect(repaired).toBe(session)
+  })
+})
+
+describe('enrichDirectSshLegacyTabRecords', () => {
+  it('keeps local cosmetic fields while trusting the partition PTY binding', () => {
+    const localTab = {
+      ...legacyTab('tab-shared', null, 3),
+      title: 'build watcher',
+      customTitle: 'watcher',
+      color: '#ff0000'
+    }
+    const minimalTab = {
+      ...legacyTab('tab-shared', 'ssh:target-1@@pty-9', 0),
+      title: 'Terminal 1'
+    }
+    const partitionOnly = legacyTab('tab-partition-only', 'ssh:target-1@@pty-10', 1)
+    const slices = {
+      local: {
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: { [WORKTREE_ID]: [localTab] }
+      },
+      'ssh:target-1': {
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: { [WORKTREE_ID]: [minimalTab, partitionOnly] }
+      }
+    }
+
+    enrichDirectSshLegacyTabRecords(slices)
+
+    const enriched = slices['ssh:target-1'].tabsByWorktree[WORKTREE_ID]
+    expect(enriched[0]).toMatchObject({
+      id: 'tab-shared',
+      title: 'build watcher',
+      customTitle: 'watcher',
+      color: '#ff0000',
+      ptyId: 'ssh:target-1@@pty-9'
+    })
+    expect(enriched[1]).toBe(partitionOnly)
+    // The local slice itself is never rewritten.
+    expect(slices.local.tabsByWorktree[WORKTREE_ID][0]).toBe(localTab)
+  })
+})
+
+describe('repairUnifiedTabMembershipFromLegacyTabs dedup', () => {
+  it('never mints a unified tab whose id survives under another worktree or content type', () => {
+    const otherWorktreeId = 'repo-1::/home/other'
+    const bound = legacyTab('tab-elsewhere', 'ssh:target-1@@pty-42', 0)
+    const session: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: { [WORKTREE_ID]: [bound] },
+      unifiedTabs: {
+        [WORKTREE_ID]: [],
+        [otherWorktreeId]: [
+          {
+            id: 'tab-elsewhere',
+            entityId: 'tab-elsewhere',
+            groupId: 'group-x',
+            worktreeId: otherWorktreeId,
+            contentType: 'terminal',
+            label: 'Survivor',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      tabGroups: { [WORKTREE_ID]: [], [otherWorktreeId]: [] }
     }
 
     const repaired = repairUnifiedTabMembershipFromLegacyTabs(session, {

@@ -19,6 +19,7 @@ import {
 } from './workspace-runtime-host-ownership'
 import {
   collectDirectSshLegacyTabWorktreeIds,
+  enrichDirectSshLegacyTabRecords,
   repairUnifiedTabMembershipFromLegacyTabs
 } from './unified-tab-membership-repair'
 
@@ -337,6 +338,7 @@ export async function fetchWorkspaceSessionWithRuntimeHostOwners(
       }
     })
   )
+  enrichDirectSshLegacyTabRecords(slices)
   return {
     // Why: direct-SSH partitions persist tabs in legacy format only; re-materialize
     // PTY-bound durable tabs into the unified maps hydration renders from.

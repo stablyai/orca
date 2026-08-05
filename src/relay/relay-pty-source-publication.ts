@@ -236,9 +236,6 @@ export class RelayPtySourcePublication {
     return true
   }
 
-  projectLegacy = (id: string, output: RelayPtySourceOutput, interactive: boolean): boolean =>
-    projectPtySourceOutputToLegacy(this.dispatcher, this.session, id, output, interactive)
-
   sealAndPublishExit = (params: PtyExitParams): boolean =>
     sealAndPublishTrackedPtySourceExit({
       params,

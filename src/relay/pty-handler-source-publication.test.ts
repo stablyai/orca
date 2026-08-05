@@ -192,7 +192,6 @@ describe('PtyHandler negotiated source publication', () => {
       exitPublicationSettled: () => false,
       sealAndPublishExit: () => false,
       publish: () => false,
-      projectLegacy: () => false,
       onCreditAvailable: () => {},
       receivingActivation: () => undefined,
       waitForPendingSend: async () => true,

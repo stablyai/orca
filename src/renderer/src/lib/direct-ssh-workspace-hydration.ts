@@ -10,6 +10,7 @@ type DirectSshWorkspaceHydrationState = Pick<
   | 'repos'
   | 'worktreesByRepo'
   | 'remoteWorkspaceHydratedTargetIds'
+  | 'remoteWorkspaceSyncStatusByTargetId'
   | 'activeWorkspaceExecutionHostId'
   | 'activeWorkspaceKey'
   | 'activeWorktreeId'
@@ -60,5 +61,12 @@ export function directSshWorkspaceAwaitsHydration(
   fallbackConnectionId?: string | null
 ): boolean {
   const connectionId = resolveDirectSshConnectionId(state, worktreeId, fallbackConnectionId)
-  return Boolean(connectionId && !state.remoteWorkspaceHydratedTargetIds.has(connectionId))
+  if (!connectionId || state.remoteWorkspaceHydratedTargetIds.has(connectionId)) {
+    return false
+  }
+  // Why: offline/unsupported/error sync outcomes never mark hydration; only an
+  // absent or still-pulling sync may keep gating first-terminal creation, or an
+  // empty workspace on such a host would never get a terminal at all.
+  const phase = state.remoteWorkspaceSyncStatusByTargetId[connectionId]?.phase
+  return phase === undefined || phase === 'pulling'
 }

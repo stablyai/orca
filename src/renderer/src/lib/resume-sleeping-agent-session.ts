@@ -13,7 +13,10 @@ import {
   launchSleepingAgentSession,
   type ResumeSleepingAgentSessionsOptions
 } from './sleeping-agent-session-launch'
-import { directSshWorkspaceOwnsAgentRecovery } from './direct-ssh-workspace-hydration'
+import {
+  directSshWorkspaceAwaitsHydration,
+  directSshWorkspaceOwnsAgentRecovery
+} from './direct-ssh-workspace-hydration'
 
 export type { ResumeSleepingAgentSessionsOptions } from './sleeping-agent-session-launch'
 
@@ -180,11 +183,18 @@ export function resumeSleepingAgentSessionsForWorktree(
       state.clearSleepingAgentSession(record.paneKey)
       continue
     }
-    // Why: direct SSH attach owns in-place recovery; speculative tabs duplicate durable PTYs.
-    if (directSshWorkspaceOwnsAgentRecovery(currentState, record.worktreeId, record.connectionId)) {
+    const isPaneOwned = recordPaneIsOwnedByPreservedPane(record, currentState)
+    // Why: direct SSH attach owns in-place recovery for preserved panes, and a
+    // still-hydrating partition may be about to restore one — but a record with
+    // no surviving pane after hydration can only recover here; deferring it
+    // forever would strand it (never resumed, never cleaned).
+    if (
+      directSshWorkspaceOwnsAgentRecovery(currentState, record.worktreeId, record.connectionId) &&
+      (isPaneOwned ||
+        directSshWorkspaceAwaitsHydration(currentState, record.worktreeId, record.connectionId))
+    ) {
       continue
     }
-    const isPaneOwned = recordPaneIsOwnedByPreservedPane(record, currentState)
     if (isPassiveCompletedHibernationEvidence(record)) {
       // Why: completed-agent hibernation is passive history; activation should
       // only keep displayable evidence, never start new work from it.

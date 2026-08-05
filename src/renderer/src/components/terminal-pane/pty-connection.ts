@@ -8164,6 +8164,9 @@ export function connectPanePty(
         } else {
           deps.syncPanePtyLayoutBinding(pane.id, null)
         }
+        // Why: retiring consumes the saved durable identity; leaving the
+        // deferred entry would keep re-attaching a session this pane declined.
+        useAppStore.getState().removeDeferredSshSessionId(deps.tabId)
         startFreshColdRestoreAgentResume(passiveHibernationStartup, {
           forceBlankRestoredViewport: true
         })

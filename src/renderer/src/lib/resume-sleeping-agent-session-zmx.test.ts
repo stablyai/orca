@@ -120,7 +120,9 @@ describe('SSH sleeping-agent recovery', () => {
     expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
   })
 
-  it('leaves remote cold recovery to pane attach after an authoritative empty snapshot', () => {
+  it('cold-resumes a stranded record once the snapshot is authoritative and no pane survives', () => {
+    // Why: after hydration, a record with no owning pane can only recover here;
+    // deferring it forever would strand it (never resumed, never cleaned).
     const record = { ...makeRecord(), worktreeId: REMOTE_WORKTREE_ID, connectionId: undefined }
     useAppStore.setState({
       repos: [
@@ -138,9 +140,11 @@ describe('SSH sleeping-agent recovery', () => {
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
     } as never)
 
-    expect(resumeSleepingAgentSessionsForWorktree(REMOTE_WORKTREE_ID)).toBe(0)
-    expect(useAppStore.getState().tabsByWorktree[REMOTE_WORKTREE_ID]).toEqual([])
-    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
+    expect(resumeSleepingAgentSessionsForWorktree(REMOTE_WORKTREE_ID)).toBe(1)
+    const state = useAppStore.getState()
+    const resumedTab = state.tabsByWorktree[REMOTE_WORKTREE_ID]?.[0]
+    expect(resumedTab?.launchAgent).toBe('codex')
+    expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
   })
 
   it('uses the active SSH host before the remote repo catalog is hydrated', () => {

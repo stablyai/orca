@@ -592,23 +592,34 @@ export class PtyHandler {
       }
       return null
     }
-    await supervisor.detachClients(id)
-    const pty = await this.loadPty()
-    if (!pty) {
-      throw new Error(formatNodePtyUnavailableMessage(process.platform))
+    // Why: recovery is a PTY creation — it must respect the shutdown fence, the
+    // session cap, and worktree-removal coordination like any spawn, so dispose
+    // can wait on it and a fenced handler fails the attach cleanly.
+    const worktreePath = metadata.worktreeId
+      ? splitWorktreeId(metadata.worktreeId)?.worktreePath
+      : undefined
+    const finishCreation = this.beginPtyCreation([worktreePath, metadata.initialCwd])
+    try {
+      await supervisor.detachClients(id)
+      const pty = await this.loadPty()
+      if (!pty) {
+        throw new Error(formatNodePtyUnavailableMessage(process.platform))
+      }
+      const env = this.buildSpawnEnv(
+        undefined,
+        { id, paneKey: metadata.paneKey, shell: metadata.shell },
+        metadata.envToDelete
+      )
+      const managed = this.managedFromZmxMetadata(metadata, this.spawnZmxClient(pty, metadata, env))
+      this.wireAndStore(managed)
+      const match = id.match(/^pty-(\d+)$/)
+      if (match) {
+        this.nextId = Math.max(this.nextId, Number.parseInt(match[1], 10) + 1)
+      }
+      return managed
+    } finally {
+      finishCreation()
     }
-    const env = this.buildSpawnEnv(
-      undefined,
-      { id, paneKey: metadata.paneKey, shell: metadata.shell },
-      metadata.envToDelete
-    )
-    const managed = this.managedFromZmxMetadata(metadata, this.spawnZmxClient(pty, metadata, env))
-    this.wireAndStore(managed)
-    const match = id.match(/^pty-(\d+)$/)
-    if (match) {
-      this.nextId = Math.max(this.nextId, Number.parseInt(match[1], 10) + 1)
-    }
-    return managed
   }
 
   // Why: this value never reaches the grace *timer* — startGraceTimer's only caller always passes an
@@ -978,6 +989,12 @@ export class PtyHandler {
       managed.forceKillSent = false
       managed.gracefulKillSent = false
       this.wireManagedPty(managed)
+      // Why: the pause bookkeeping survives the respawn, but the replacement
+      // wrapper starts unpaused — without re-applying, producer flow control is
+      // dead for this PTY until the next full resume cycle.
+      if (this.pausedOutputPtys.has(managed.id)) {
+        managed.pty.pause()
+      }
     } catch {
       this.finishPtyExit(managed, exitCode)
     }
@@ -1300,11 +1317,14 @@ export class PtyHandler {
     output: RelayPtySourceOutput,
     interactive: boolean
   ): boolean {
-    if (this.sourcePublication) {
-      return this.sourcePublication.accepts(id)
-        ? this.sourcePublication.publish(id, output, interactive)
-        : this.sourcePublication.projectLegacy(id, output, interactive)
+    if (this.sourcePublication?.accepts(id)) {
+      return this.sourcePublication.publish(id, output, interactive)
     }
+    // Why: the transactional fall-through keeps legacy backpressure (a saturated
+    // writer re-queues and pauses the PTY instead of closing the client), while
+    // publication admission already withholds token-less output from
+    // flow-controlled owners — including a recovered zmx session's pre-attach
+    // bytes, which stay buffered until an admitted owner activates.
     if (this.dispatcher.tryNotifyPtyData) {
       return this.dispatcher.tryNotifyPtyData(
         {
@@ -2282,9 +2302,15 @@ export class PtyHandler {
     }
     const results: PtyProcessSummary[] = []
     for (const [id, managed] of this.ptys) {
+      // Why: a zmx session can die externally in the window before its wrapper
+      // exit is reaped; one dead entry must not reject the whole enumeration.
+      const pid = await this.getManagedProcessPid(managed).catch(() => null)
+      if (pid === null) {
+        continue
+      }
       const title =
         (await getForegroundProcessName(
-          await this.getManagedProcessPid(managed),
+          pid,
           managed.zmxSession ? null : managed.pty.process || null
         )) || 'shell'
       results.push({
