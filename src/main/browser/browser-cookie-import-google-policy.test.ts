@@ -13,6 +13,7 @@ vi.mock('electron', () => ({
 import {
   cookieHostBelongsToImportedDomain,
   importCookiesFromFile,
+  isCookieImportDomainSafeForScopedClear,
   isGoogleIntegrityCookie
 } from './browser-cookie-import'
 
@@ -98,6 +99,29 @@ describe('shared cookie import Google safeguards', () => {
     expect(cookiesRemoveMock).toHaveBeenCalledTimes(1)
     expect(cookiesRemoveMock.mock.calls[0][1]).toBe('SID')
     expect(cookiesSetMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('refuses scoped clear for bare TLD / single-label import domains', () => {
+    expect(isCookieImportDomainSafeForScopedClear('com')).toBe(false)
+    expect(isCookieImportDomainSafeForScopedClear('.com')).toBe(false)
+    expect(isCookieImportDomainSafeForScopedClear('localhost')).toBe(false)
+    expect(isCookieImportDomainSafeForScopedClear('google.com')).toBe(true)
+    expect(isCookieImportDomainSafeForScopedClear('.google.com')).toBe(true)
+  })
+
+  it('does not wipe *.com cookies when the import only carries a bare TLD domain', async () => {
+    cookiesGetMock.mockResolvedValue([
+      { domain: '.google.com', name: 'SID', secure: true },
+      { domain: '.example.com', name: 'keep', secure: false }
+    ])
+    const filePath = writeCookieFile([
+      { domain: 'com', name: 'evil', value: 'x', secure: false }
+    ])
+
+    const result = await importCookiesFromFile(filePath, 'persist:test')
+    expect(result.ok).toBe(true)
+    expect(cookiesRemoveMock).not.toHaveBeenCalled()
+    expect(cookiesSetMock).toHaveBeenCalled()
   })
 
   it('does not clear existing cookies when the import is fully integrity-filtered', async () => {

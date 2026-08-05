@@ -553,6 +553,21 @@ export function cookieHostBelongsToImportedDomain(
   return false
 }
 
+// Why: domain-scoped clear uses endsWith(`.${imported}`). A host like "com"
+// would match nearly every *.com cookie and wipe unrelated sessions (#12601 review).
+// Require at least one label separator (eTLD+1 or longer); bare TLDs/public
+// suffixes are never safe clear keys for this heuristic.
+export function isCookieImportDomainSafeForScopedClear(domain: string): boolean {
+  const host = normalizeCookieHost(domain)
+  if (!host || host.includes('/') || host.includes(':') || host.includes(' ')) {
+    return false
+  }
+  // Need two+ labels: example.com, co.uk is still two labels — good enough to
+  // block bare "com"/"uk" without a full PSL dependency.
+  const labels = host.split('.').filter((part) => part.length > 0)
+  return labels.length >= 2 && labels.every((part) => part.length > 0)
+}
+
 function validateCookieEntry(raw: RawCookieEntry): ValidatedCookie | null {
   if (typeof raw.domain !== 'string' || raw.domain.trim().length === 0) {
     return null
@@ -633,11 +648,15 @@ async function importValidatedCookies(
 
   // Why: replace only domains present in this import so other site sessions survive.
   // Native Chromium full-snapshot import still clears the whole jar on its own path.
+  // Drop bare TLD / single-label keys from the clear set so "com" cannot wipe *.com.
+  const clearDomainSet = new Set(
+    [...domainSet].filter((host) => isCookieImportDomainSafeForScopedClear(host))
+  )
   try {
     const existing = await targetSession.cookies.get({})
     for (const existingCookie of existing) {
       const host = existingCookie.domain ?? ''
-      if (!cookieHostBelongsToImportedDomain(host, domainSet)) {
+      if (!cookieHostBelongsToImportedDomain(host, clearDomainSet)) {
         continue
       }
       const url = deriveUrl(host, existingCookie.secure)
