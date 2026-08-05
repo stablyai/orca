@@ -1300,8 +1300,10 @@ export class PtyHandler {
     output: RelayPtySourceOutput,
     interactive: boolean
   ): boolean {
-    if (this.sourcePublication?.accepts(id)) {
-      return this.sourcePublication.publish(id, output, interactive)
+    if (this.sourcePublication) {
+      return this.sourcePublication.accepts(id)
+        ? this.sourcePublication.publish(id, output, interactive)
+        : this.sourcePublication.projectLegacy(id, output, interactive)
     }
     if (this.dispatcher.tryNotifyPtyData) {
       return this.dispatcher.tryNotifyPtyData(

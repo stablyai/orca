@@ -192,6 +192,7 @@ describe('PtyHandler negotiated source publication', () => {
       exitPublicationSettled: () => false,
       sealAndPublishExit: () => false,
       publish: () => false,
+      projectLegacy: () => false,
       onCreditAvailable: () => {},
       receivingActivation: () => undefined,
       waitForPendingSend: async () => true,
@@ -260,6 +261,35 @@ describe('PtyHandler negotiated source publication', () => {
       .map(notification)
       .filter((frame): frame is Notification => frame?.method === 'pty.exit')
   }
+
+  it('withholds unactivated PTY output from a flow-controlled owner', async () => {
+    const subscriberWrites: Buffer[] = []
+    const subscriberClientId = dispatcher.attachClient(
+      (data, settle) => {
+        subscriberWrites.push(Buffer.from(data))
+        settle({ ok: true })
+        return true
+      },
+      { supportsWriteCallback: true },
+      endpointIdentity
+    )
+    dispatcher.feedClient(subscriberClientId, requestFrame(2, 'pty.spawn', {}))
+    await vi.advanceTimersByTimeAsync(0)
+
+    dataCallback!('prompt')
+    await vi.advanceTimersByTimeAsync(8)
+
+    expect(sourceDataFrames()).toHaveLength(0)
+    expect(
+      subscriberWrites
+        .map(notification)
+        .filter((frame): frame is Notification => frame?.method === 'pty.data')
+    ).toEqual([
+      expect.objectContaining({
+        params: expect.objectContaining({ data: 'prompt' })
+      })
+    ])
+  })
 
   it('never re-delivers the exit to subscribers when a cancel retires the record', async () => {
     await spawn({})
