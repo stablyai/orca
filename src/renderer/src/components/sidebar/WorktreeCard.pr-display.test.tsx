@@ -60,7 +60,7 @@ vi.mock('@/components/ui/tooltip', () => ({
 }))
 
 vi.mock('./use-worktree-activity-status', () => ({
-  useWorktreeActivityStatus: () => 'active'
+  useWorktreeActivityStatus: () => 'inactive'
 }))
 
 vi.mock('./CacheTimer', () => ({
@@ -171,8 +171,8 @@ describe('WorktreeCard linked PR display', () => {
       <WorktreeCard worktree={makeWorktree({ linkedPR: 456 })} repo={makeRepo()} isActive={false} />
     )
 
-    expect(markup).toContain('Active')
-    expect(markup).toContain('bg-emerald-500')
+    expect(markup).toContain('Inactive')
+    expect(markup).toContain('bg-neutral-500/40')
     expect(markup).not.toContain('PR: Open')
     expect(markup).not.toContain('Linked PR #456')
   }, 20_000)
