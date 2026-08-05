@@ -3452,6 +3452,11 @@ const api = {
       ipcRenderer.on('ui:openCrashReport', listener)
       return () => ipcRenderer.removeListener('ui:openCrashReport', listener)
     },
+    onOpenFeedback: (callback: () => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent) => callback()
+      ipcRenderer.on('ui:openFeedback', listener)
+      return () => ipcRenderer.removeListener('ui:openFeedback', listener)
+    },
     onToggleLeftSidebar: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:toggleLeftSidebar', listener)

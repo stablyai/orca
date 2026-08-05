@@ -10,6 +10,8 @@ export function MobileRelayMintFailureNotice({
   onUseLan,
   onRetry,
   onCopyDiagnostics,
+  onSendDiagnostics,
+  sendingDiagnostics = false,
   className,
   compact = false,
   busy = false
@@ -18,6 +20,9 @@ export function MobileRelayMintFailureNotice({
   onUseLan: () => void
   onRetry: () => void
   onCopyDiagnostics: () => void
+  /** Why: without a direct send, users pasted this JSON into the crash dialog. */
+  onSendDiagnostics?: () => void
+  sendingDiagnostics?: boolean
   className?: string
   compact?: boolean
   busy?: boolean
@@ -122,6 +127,27 @@ export function MobileRelayMintFailureNotice({
               'Copy diagnostics'
             )}
           </Button>
+          {onSendDiagnostics ? (
+            <Button
+              type="button"
+              size={compact ? 'xs' : 'sm'}
+              variant="ghost"
+              onClick={onSendDiagnostics}
+              disabled={sendingDiagnostics}
+              className="w-28"
+            >
+              {sendingDiagnostics ? <Loader2 className="animate-spin" /> : null}
+              {sendingDiagnostics
+                ? translate(
+                    'auto.components.mobile.MobileRelayMintFailureNotice.sendingDiagnostics',
+                    'Sending…'
+                  )
+                : translate(
+                    'auto.components.mobile.MobileRelayMintFailureNotice.sendDiagnostics',
+                    'Send to Orca'
+                  )}
+            </Button>
+          ) : null}
         </div>
       </div>
     </div>

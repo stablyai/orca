@@ -64,7 +64,8 @@
     "openWorktreePalette": "Abrir paleta de worktrees",
     "window": "Ventana",
     "help": "Ayuda",
-    "paste": "Pegar"
+    "paste": "Pegar",
+    "sendFeedback": "Enviar comentarios..."
   },
   "tray": {
     "openOrca": "Abrir Orca",

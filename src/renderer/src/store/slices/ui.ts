@@ -790,6 +790,9 @@ export type UISlice = {
   modalData: Record<string, unknown>
   openModal: (modal: UISlice['activeModal'], data?: Record<string, unknown>) => void
   closeModal: () => void
+  /** Why: the OS Help menu can request feedback from any view, so this lives outside the sidebar that hosts the menu button. */
+  feedbackDialogOpen: boolean
+  setFeedbackDialogOpen: (open: boolean) => void
   featureTipsSeenIds: FeatureTipId[]
   markFeatureTipsSeen: (ids: FeatureTipId[]) => void
   featureInteractions: FeatureInteractionState
@@ -1564,6 +1567,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     })
   },
   closeModal: () => set({ activeModal: 'none', modalData: {} }),
+  feedbackDialogOpen: false,
+  setFeedbackDialogOpen: (open) => set({ feedbackDialogOpen: open }),
   featureTipsSeenIds: [],
   markFeatureTipsSeen: (ids) =>
     set((s) => {

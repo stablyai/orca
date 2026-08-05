@@ -3539,3 +3539,15 @@ describe('createUISlice clearOsc52ClipboardDefaultOnNotice', () => {
     expect(setUI).toHaveBeenCalledWith({ osc52ClipboardDefaultOnNoticePending: false })
   })
 })
+
+describe('createUISlice feedbackDialogOpen', () => {
+  it('holds the feedback dialog outside the sidebar so any view can open it', () => {
+    const store = createUIStore()
+
+    expect(store.getState().feedbackDialogOpen).toBe(false)
+    store.getState().setFeedbackDialogOpen(true)
+    expect(store.getState().feedbackDialogOpen).toBe(true)
+    store.getState().setFeedbackDialogOpen(false)
+    expect(store.getState().feedbackDialogOpen).toBe(false)
+  })
+})

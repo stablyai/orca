@@ -5,6 +5,7 @@ import { ZH_VALUE_OVERRIDES } from './locale-zh-value-overrides.mjs'
 export const LOCALE_VALUE_OVERRIDES = {
   es: {
     'Explore Orca': 'Explorar Orca',
+    'Send Feedback...': 'Enviar comentarios...',
     'OpenCode Go': 'OpenCode Go',
     'Open in Cursor': 'Abrir en Cursor',
     'Local project, Git repo, or folder with many repos':
@@ -60,6 +61,7 @@ export const LOCALE_VALUE_OVERRIDES = {
     'Search...': '검색...',
     'Saving...': '저장 중...',
     'Report Crash...': '크래시 신고...',
+    'Send Feedback...': '피드백 보내기...',
     Mobile: '모바일',
     Checks: '검사',
     Assignees: '담당자',
@@ -220,6 +222,7 @@ export const LOCALE_VALUE_OVERRIDES = {
     'Search...': '搜索...',
     'Saving...': '保存中...',
     'Report Crash...': '报告崩溃...',
+    'Send Feedback...': '发送反馈...',
     Mobile: '移动端',
     Checks: '检查项',
     Assignees: '负责人',
@@ -429,6 +432,7 @@ export const LOCALE_VALUE_OVERRIDES = {
     'Search...': '検索...',
     'Saving...': '保存中...',
     'Report Crash...': 'クラッシュを報告...',
+    'Send Feedback...': 'フィードバックを送信...',
     Mobile: 'モバイル',
     Checks: 'チェック',
     Assignees: '担当者',

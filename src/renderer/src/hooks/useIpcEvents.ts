@@ -1169,6 +1169,14 @@ export function useIpcEvents(): void {
       }) ?? (() => {})
     )
 
+    // Why: Help > Send Feedback must work with the sidebar collapsed or from Settings/Activity,
+    // where the sidebar help menu that owns the dialog trigger is unmounted.
+    unsubs.push(
+      window.api.ui.onOpenFeedback?.(() => {
+        useAppStore.getState().setFeedbackDialogOpen(true)
+      }) ?? (() => {})
+    )
+
     // Why: a phone stuck in a silent 4001 auth loop (lost device registry) reads as
     // "phone won't connect" with no clue on either end; main throttles to once per session.
     unsubs.push(

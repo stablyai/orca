@@ -64,7 +64,8 @@
     "openWorktreePalette": "워크트리 팔레트 열기",
     "window": "창",
     "help": "도움말",
-    "paste": "붙여넣기"
+    "paste": "붙여넣기",
+    "sendFeedback": "피드백 보내기..."
   },
   "tray": {
     "openOrca": "Orca 열기",

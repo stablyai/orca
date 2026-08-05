@@ -1,5 +1,5 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Clipboard, Send } from 'lucide-react'
+import { AlertTriangle, Clipboard, MessageSquareText, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -39,9 +39,12 @@ function formatSummary(report: CrashReportRecord): string {
   }`
 }
 
+// Why: with no captured crash this surface is a plain bug report, so it reads as
+// one. The transport stays the crash lane because that is the only path that
+// carries the diagnostic bundle; ingest separates the two on report_source.
 function getDialogTitle(report: CrashReportRecord | null): string {
   if (!report) {
-    return 'Report a crash'
+    return 'Tell us what went wrong'
   }
   return report && isReactErrorBoundaryReport(report)
     ? 'Orca hit a recoverable UI error'
@@ -50,7 +53,7 @@ function getDialogTitle(report: CrashReportRecord | null): string {
 
 function getDialogDescription(report: CrashReportRecord | null): string {
   if (!report) {
-    return 'Send a privacy-safe crash report. Recent redacted diagnostic logs are included when available.'
+    return 'No crash was captured, so this reaches the Orca team as a user report. Recent redacted diagnostic logs are included when available.'
   }
   return report && isReactErrorBoundaryReport(report)
     ? 'Send a privacy-safe diagnostic report to help us understand the failed UI surface.'
@@ -59,7 +62,7 @@ function getDialogDescription(report: CrashReportRecord | null): string {
 
 function getNotesPlaceholder(report: CrashReportRecord | null): string {
   if (!report) {
-    return 'Optional: what happened?'
+    return 'What happened? (optional)'
   }
   return report && isReactErrorBoundaryReport(report)
     ? 'Optional: what were you doing before this UI error?'
@@ -170,6 +173,8 @@ export function CrashReportDialogSurface({
   const handleSubmit = async (): Promise<void> => {
     setSubmitting(true)
     try {
+      // Why: omitting reportId mints an uncaptured user report. It keeps the
+      // diagnostic bundle — often the only signal when the note is one line.
       const result = await window.api.crashReports.submit({
         ...(report ? { reportId: report.id } : {}),
         notes,
@@ -196,10 +201,15 @@ export function CrashReportDialogSurface({
         toast.warning(warningNotice.title, { description: warningNotice.description })
       } else {
         toast.success(
-          translate(
-            'auto.components.crash.report.CrashReportDialog.8e24fe4f75',
-            'Crash report sent.'
-          )
+          report
+            ? translate(
+                'auto.components.crash.report.CrashReportDialog.8e24fe4f75',
+                'Crash report sent.'
+              )
+            : translate(
+                'auto.components.crash.report.CrashReportDialog.userReportSent',
+                'Report sent. Thanks for the details.'
+              )
         )
       }
       onOpenChange(false)
@@ -235,7 +245,11 @@ export function CrashReportDialogSurface({
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-sm">
-            <AlertTriangle className="size-4 text-destructive" />
+            {report ? (
+              <AlertTriangle className="size-4 text-destructive" />
+            ) : (
+              <MessageSquareText className="size-4 text-muted-foreground" />
+            )}
             {getDialogTitle(report)}
           </DialogTitle>
           <DialogDescription className="text-xs">{getDialogDescription(report)}</DialogDescription>
@@ -272,8 +286,8 @@ export function CrashReportDialogSurface({
                     'Checking for crash reports...'
                   )
                 : translate(
-                    'auto.components.crash.report.CrashReportDialog.ead6fc0510',
-                    'No automatic crash report was captured. You can still send details and include recent diagnostic logs when available.'
+                    'auto.components.crash.report.CrashReportDialog.noCapturedCrashFeedback',
+                    'No automatic crash report was captured. This is filed as a user report, with your description and recent diagnostic logs when available.'
                   )}
             </div>
           )}

@@ -121,6 +121,8 @@ export type IpcEventsHarness = {
   useIpcEvents: () => void
   createTerminal: (request: CreateTerminalRequest) => void
   requestTerminalCreate: (request: RequestTerminalCreateRequest) => void
+  /** Fires the Help > Send Feedback menu event the hook subscribed to. */
+  openFeedback: () => void
   replyTerminalCreate: ReturnType<typeof vi.fn>
 }
 
@@ -134,6 +136,7 @@ export async function loadIpcEventsHarness(
   const replyTerminalCreate = vi.fn()
   let createTerminalListener: ((request: CreateTerminalRequest) => void) | null = null
   let requestTerminalCreateListener: ((request: RequestTerminalCreateRequest) => void) | null = null
+  let openFeedbackListener: (() => void) | null = null
 
   vi.resetModules()
   vi.unstubAllGlobals()
@@ -187,6 +190,10 @@ export async function loadIpcEventsHarness(
           },
           onRequestTerminalCreate: (listener: (request: RequestTerminalCreateRequest) => void) => {
             requestTerminalCreateListener = listener
+            return () => {}
+          },
+          onOpenFeedback: (listener: () => void) => {
+            openFeedbackListener = listener
             return () => {}
           }
         }),
@@ -242,6 +249,12 @@ export async function loadIpcEventsHarness(
         throw new Error('Expected the request-terminal-create listener to be registered')
       }
       requestTerminalCreateListener(request)
+    },
+    openFeedback: () => {
+      if (typeof openFeedbackListener !== 'function') {
+        throw new Error('Expected the open-feedback listener to be registered')
+      }
+      openFeedbackListener()
     },
     replyTerminalCreate
   }

@@ -9191,3 +9191,25 @@ describe('useIpcEvents silent terminal adoption (surfaceOwner: false)', () => {
     expect(storeState.setActiveTab).not.toHaveBeenCalled()
   })
 })
+
+describe('useIpcEvents Help > Send Feedback', () => {
+  // Regression: the listener used to live in SidebarSettingsHelpMenu, which is
+  // unmounted when the sidebar is collapsed or Settings/Activity/Space/Skills is
+  // active — the OS menu item was a silent no-op in exactly those states.
+  it('opens the feedback dialog with the sidebar collapsed on a sidebar-less view', async () => {
+    const setFeedbackDialogOpen = vi.fn()
+    const storeState = createHarnessStoreState({
+      tabsByWorktree: {},
+      activeView: 'settings',
+      sidebarOpen: false,
+      setFeedbackDialogOpen
+    })
+    const harness = await loadIpcEventsHarness(storeState)
+
+    harness.useIpcEvents()
+
+    // Throws if the hook never subscribed, so an unregistered listener fails loudly.
+    harness.openFeedback()
+    expect(setFeedbackDialogOpen).toHaveBeenCalledWith(true)
+  })
+})

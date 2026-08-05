@@ -15,6 +15,7 @@ import { MobileAutoRestoreFitSection } from './MobileAutoRestoreFitSection'
 import { MobilePairingConnectionOptions } from './MobilePairingConnectionOptions'
 import { MobilePairingSetupSection } from './MobilePairingSetupSection'
 import { MobileRelayMintFailureNotice } from '../mobile/mobile-relay-mint-failure-notice'
+import { useSendRelayMintFailureFeedback } from '../mobile/relay-mint-failure-feedback'
 import { WindowsFirewallNotice } from '../mobile/WindowsFirewallNotice'
 import { translate } from '@/i18n/i18n'
 import {
@@ -287,6 +288,8 @@ export function MobilePane(): React.JSX.Element {
     ]
   )
 
+  const relayDiagnostics = useSendRelayMintFailureFeedback()
+
   const copyRelayDiagnostics = useCallback(async (): Promise<void> => {
     if (relayMintFailure == null) {
       return
@@ -417,6 +420,13 @@ export function MobilePane(): React.JSX.Element {
           onUseLan={() => changeConnectionMode('local-only')}
           onRetry={() => void generateQR({ rotate: true })}
           onCopyDiagnostics={() => void copyRelayDiagnostics()}
+          onSendDiagnostics={() =>
+            void relayDiagnostics.send({
+              failure: relayMintFailure,
+              preferredConnectionMode: connectionMode
+            })
+          }
+          sendingDiagnostics={relayDiagnostics.sending}
           busy={loading}
         />
       ) : null}

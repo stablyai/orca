@@ -27,6 +27,7 @@ type RegisterAppMenuOptions = {
   onOpenSetupGuide: (window?: Electron.BaseWindow | null) => void
   onOpenFeatureTour: (window?: Electron.BaseWindow | null) => void
   onOpenCrashReport: (window?: Electron.BaseWindow | null) => void
+  onOpenFeedback: (window?: Electron.BaseWindow | null) => void
   onCheckForUpdates: (options: UpdateCheckOptions) => void
   onBeforeReload?: (options: { ignoreCache: boolean; webContentsId: number }) => void
   onZoomIn: () => void
@@ -48,6 +49,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     onOpenSetupGuide,
     onOpenFeatureTour,
     onOpenCrashReport,
+    onOpenFeedback,
     onCheckForUpdates,
     onBeforeReload,
     onZoomIn,
@@ -130,6 +132,13 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
   const crashReportItem: Electron.MenuItemConstructorOptions = {
     label: translateMain('menu.reportCrash', 'Report Crash...'),
     click: (_menuItem, window) => onOpenCrashReport(window)
+  }
+
+  // Why: without a feedback entry, Report Crash was Help's only actionable
+  // item, so ordinary bug reports landed in the crash channel.
+  const feedbackItem: Electron.MenuItemConstructorOptions = {
+    label: translateMain('menu.sendFeedback', 'Send Feedback...'),
+    click: (_menuItem, window) => onOpenFeedback(window)
   }
 
   // Why: the macOS app-menu (named after the app) is mandatory on darwin and
@@ -295,6 +304,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
   const helpMenu: Electron.MenuItemConstructorOptions = {
     label: translateMain('menu.help', 'Help'),
     submenu: [
+      feedbackItem,
       crashReportItem,
       { type: 'separator' },
       featureTourItem,

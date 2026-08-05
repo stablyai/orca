@@ -84,6 +84,7 @@ import { requestScrollToCurrentWorkspaceRevealAndRename } from '@/lib/scroll-to-
 import { OPEN_WORKSPACE_BOARD_EVENT } from './components/sidebar/useWorkspaceBoardPanel'
 import { WorkspacePortScanner } from './components/ports/WorkspacePortScanner'
 import { CrashReportDialog } from './components/crash-report/CrashReportDialog'
+import { AppFeedbackDialog } from './components/feedback/AppFeedbackDialog'
 import NewWorkspaceComposerModal from './components/NewWorkspaceComposerModal'
 import { RecoverableRenderErrorBoundary } from './components/error-boundaries/RecoverableRenderErrorBoundary'
 import { ConfirmationDialogProvider } from './components/confirmation-dialog'
@@ -2728,6 +2729,16 @@ function App(): React.JSX.Element {
               )}
             >
               <CrashReportDialog />
+            </RecoverableRenderErrorBoundary>
+            {/* Why: mounted at the root, not in the sidebar toolbar, so Help > Send Feedback still works with the sidebar collapsed or on Settings/Activity. */}
+            <RecoverableRenderErrorBoundary
+              boundaryId="modal.feedback"
+              surface="modal"
+              reportAsCrash={false}
+              resetKey={activeModal}
+              compact
+            >
+              <AppFeedbackDialog />
             </RecoverableRenderErrorBoundary>
             {onboarding && shouldRenderOnboarding && !onboardingSettingsDetourActive ? (
               <Suspense fallback={null}>

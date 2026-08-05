@@ -189,6 +189,7 @@ import {
 } from './window/attach-main-window-services'
 import { createMainWindow, loadMainWindow } from './window/createMainWindow'
 import { zoomDashboardPopoutIfFocused } from './window/dashboard-popout-window'
+import { resolveHelpMenuEventTarget } from './window/help-menu-event-target'
 import {
   createSystemTray,
   destroySystemTray,
@@ -1509,22 +1510,20 @@ function openMainWindow(): BrowserWindow {
   return window
 }
 
-function sendOpenFeatureTour(targetWindow?: BrowserWindow | null): void {
-  const webContents =
-    targetWindow && !targetWindow.isDestroyed() ? targetWindow.webContents : mainWindow?.webContents
-  webContents?.send('ui:openFeatureTour')
-}
+type HelpMenuUiChannel =
+  | 'ui:openFeatureTour'
+  | 'ui:openSetupGuide'
+  | 'ui:openCrashReport'
+  | 'ui:openFeedback'
 
-function sendOpenSetupGuide(targetWindow?: BrowserWindow | null): void {
-  const webContents =
-    targetWindow && !targetWindow.isDestroyed() ? targetWindow.webContents : mainWindow?.webContents
-  webContents?.send('ui:openSetupGuide')
-}
-
-function sendOpenCrashReport(targetWindow?: BrowserWindow | null): void {
-  const webContents =
-    targetWindow && !targetWindow.isDestroyed() ? targetWindow.webContents : mainWindow?.webContents
-  webContents?.send('ui:openCrashReport')
+// Why: the invoking window keeps hidden/E2E and multi-window flows on the right renderer, but the
+// dashboard pop-out mounts none of these listeners — route those clicks to the main window and raise it.
+function sendHelpMenuEvent(channel: HelpMenuUiChannel, targetWindow?: BrowserWindow | null): void {
+  const target = resolveHelpMenuEventTarget(targetWindow, mainWindow)
+  if (target.surfaceMainWindow) {
+    showMainWindowFromTray()
+  }
+  target.window?.webContents.send(channel)
 }
 
 // Why: on renderer crash-loop the breaker stops auto-reloading and the window goes blank, so a main-process dialog is the only retry/quit surface.
@@ -2706,18 +2705,22 @@ void app.whenReady().then(async () => {
     onOpenSetupGuide: (targetWindow) => {
       recordCrashBreadcrumb('setup_guide_opened')
       const targetBrowserWindow = targetWindow instanceof BrowserWindow ? targetWindow : null
-      sendOpenSetupGuide(targetBrowserWindow)
+      sendHelpMenuEvent('ui:openSetupGuide', targetBrowserWindow)
     },
     onOpenCrashReport: (targetWindow) => {
       recordCrashBreadcrumb('crash_report_opened')
       const targetBrowserWindow = targetWindow instanceof BrowserWindow ? targetWindow : null
-      sendOpenCrashReport(targetBrowserWindow)
+      sendHelpMenuEvent('ui:openCrashReport', targetBrowserWindow)
+    },
+    onOpenFeedback: (targetWindow) => {
+      recordCrashBreadcrumb('feedback_opened')
+      const targetBrowserWindow = targetWindow instanceof BrowserWindow ? targetWindow : null
+      sendHelpMenuEvent('ui:openFeedback', targetBrowserWindow)
     },
     onOpenFeatureTour: (targetWindow) => {
       recordCrashBreadcrumb('feature_tour_opened')
-      // Why: use the invoking BrowserWindow so hidden/E2E and multi-window flows route to the right renderer, not global focus.
       const targetBrowserWindow = targetWindow instanceof BrowserWindow ? targetWindow : null
-      sendOpenFeatureTour(targetBrowserWindow)
+      sendHelpMenuEvent('ui:openFeatureTour', targetBrowserWindow)
     },
     // Why: menu zoom must act on the window the user is looking at — routing to
     // the main window while the dashboard pop-out is focused zooms behind it.

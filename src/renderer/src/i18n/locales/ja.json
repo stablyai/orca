@@ -64,7 +64,8 @@
     "openWorktreePalette": "ワークツリーパレットを開く",
     "window": "ウィンドウ",
     "help": "ヘルプ",
-    "paste": "貼り付け"
+    "paste": "貼り付け",
+    "sendFeedback": "フィードバックを送信..."
   },
   "tray": {
     "openOrca": "Orcaを開く",

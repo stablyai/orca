@@ -6,6 +6,7 @@ import { NetworkInterfacePicker } from './NetworkInterfacePicker'
 import { MobilePairingConnectionOptions } from '../settings/MobilePairingConnectionOptions'
 import { MobileRelayBetaNotice } from '../settings/MobileRelayBetaNotice'
 import { MobileRelayMintFailureNotice } from './mobile-relay-mint-failure-notice'
+import { useSendRelayMintFailureFeedback } from './relay-mint-failure-feedback'
 import { WindowsFirewallNotice } from './WindowsFirewallNotice'
 import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
 import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
@@ -106,6 +107,7 @@ export function MobileHeroPairingStep({
 }): React.JSX.Element {
   const copyPairingCodeRef = useRef<HTMLButtonElement | null>(null)
   const pairingWasReadyRef = useRef(pairingUrl != null && !pairLoading)
+  const relayDiagnostics = useSendRelayMintFailureFeedback()
   const emptyQrMessage =
     !pairLoading && pairQrDataUrl == null
       ? emptyPairingQrMessage({
@@ -161,6 +163,13 @@ export function MobileHeroPairingStep({
           onUseLan={onUseLan}
           onRetry={onRetryRelay}
           onCopyDiagnostics={onCopyRelayDiagnostics}
+          onSendDiagnostics={() =>
+            void relayDiagnostics.send({
+              failure: relayMintFailure,
+              preferredConnectionMode: connectionMode
+            })
+          }
+          sendingDiagnostics={relayDiagnostics.sending}
           compact
           busy={pairLoading}
         />

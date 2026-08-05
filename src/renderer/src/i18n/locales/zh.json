@@ -64,7 +64,8 @@
     "openWorktreePalette": "打开工作树面板",
     "window": "窗口",
     "help": "帮助",
-    "paste": "粘贴"
+    "paste": "粘贴",
+    "sendFeedback": "发送反馈..."
   },
   "tray": {
     "openOrca": "打开 Orca",

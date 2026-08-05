@@ -30,6 +30,7 @@ function buildMenuOptions() {
     onOpenSetupGuide: vi.fn(),
     onOpenFeatureTour: vi.fn(),
     onOpenCrashReport: vi.fn(),
+    onOpenFeedback: vi.fn(),
     onBeforeReload: vi.fn(),
     onZoomIn: vi.fn(),
     onZoomOut: vi.fn(),
@@ -272,6 +273,7 @@ describe('registerAppMenu', () => {
     expect(template.find((item) => item.label === 'File')).toBeUndefined()
     const helpLabels = getSubmenu(template, 'Help').map((item) => item.label)
     expect(helpLabels).toEqual([
+      'Send Feedback...',
       'Report Crash...',
       undefined,
       'Explore Orca',
@@ -309,6 +311,24 @@ describe('registerAppMenu', () => {
 
     expect(options.onOpenFeatureTour).toHaveBeenCalledTimes(1)
     expect(options.onOpenFeatureTour).toHaveBeenCalledWith(targetWindow)
+  })
+
+  it('offers Send Feedback above Report Crash so ordinary bugs skip the crash channel', () => {
+    const options = buildMenuOptions()
+    registerAppMenu(options)
+
+    const helpSubmenu = getSubmenu(getTemplate(), 'Help')
+    const helpLabels = helpSubmenu.map((item) => item.label)
+    const feedbackIndex = helpLabels.indexOf('Send Feedback...')
+    const crashIndex = helpLabels.indexOf('Report Crash...')
+    expect(feedbackIndex).toBeGreaterThanOrEqual(0)
+    expect(feedbackIndex).toBeLessThan(crashIndex)
+
+    const targetWindow = {} as Electron.BaseWindow
+    helpSubmenu[feedbackIndex]?.click?.({} as never, targetWindow, {} as Electron.KeyboardEvent)
+
+    expect(options.onOpenFeedback).toHaveBeenCalledTimes(1)
+    expect(options.onOpenFeedback).toHaveBeenCalledWith(targetWindow)
   })
 
   it('routes Report Crash through its callback', () => {

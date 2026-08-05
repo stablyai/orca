@@ -91,7 +91,8 @@
     "openWorktreePalette": "Open Worktree Palette",
     "window": "Window",
     "help": "Help",
-    "paste": "Paste"
+    "paste": "Paste",
+    "sendFeedback": "Send Feedback..."
   },
   "tray": {
     "openOrca": "Open Orca",
@@ -12179,7 +12180,11 @@
           "useLan": "Use LAN",
           "retrying": "Retrying…",
           "retry": "Retry Relay",
-          "copyDiagnostics": "Copy diagnostics"
+          "copyDiagnostics": "Copy diagnostics",
+          "sendDiagnostics": "Send to Orca",
+          "diagnosticsSent": "Diagnostics sent to Orca",
+          "diagnosticsSendFailed": "Failed to send diagnostics",
+          "sendingDiagnostics": "Sending…"
         }
       },
       "gitlab": {
@@ -13565,7 +13570,9 @@
             "b2e36f53a1": "Failed to send crash report. Diagnostic ticket {{value0}} was uploaded but not linked.",
             "ead6fc0510": "No automatic crash report was captured. You can still send details and include recent diagnostic logs when available.",
             "b082f27490": "Attach recent diagnostic logs",
-            "e59f0b9427": "Sends a capped redacted log bundle with the report."
+            "e59f0b9427": "Sends a capped redacted log bundle with the report.",
+            "noCapturedCrashFeedback": "No automatic crash report was captured. This is filed as a user report, with your description and recent diagnostic logs when available.",
+            "userReportSent": "Report sent. Thanks for the details."
           },
           "submit": {
             "notice": {

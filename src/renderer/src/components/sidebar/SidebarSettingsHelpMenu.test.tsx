@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   appRestart: vi.fn(),
   updaterCheck: vi.fn(),
   shellOpenUrl: vi.fn(),
+  setFeedbackDialogOpen: vi.fn(),
   useShortcutKeyDetails: vi.fn(),
   setupProgress: {
     ready: true,
@@ -31,6 +32,7 @@ vi.mock('@/store', () => ({
       openModal: mocks.openModal,
       openSettingsPage: mocks.openSettingsPage,
       openSettingsTarget: mocks.openSettingsTarget,
+      setFeedbackDialogOpen: mocks.setFeedbackDialogOpen,
       updateStatus
     })
 }))
@@ -112,10 +114,6 @@ vi.mock('sonner', () => ({
     info: vi.fn(),
     error: vi.fn()
   }
-}))
-
-vi.mock('./SidebarFeedbackDialog', () => ({
-  SidebarFeedbackDialog: () => <div data-testid="feedback-dialog" />
 }))
 
 function installWindowApi(): void {
@@ -252,6 +250,20 @@ describe('SidebarSettingsHelpMenu', () => {
     expect(html).toContain('Discord')
     expect(html).toContain('viewBox="0 0 20 20"')
     expect(html).toContain('M16.0742 4.45014C14.9244 3.92097 13.7106 3.54556 12.4638 3.3335')
+  })
+
+  it('opens the app-root feedback dialog through the store instead of owning it locally', async () => {
+    const container = await renderMenu()
+    // Why: the dialog must not live here — this component unmounts when the sidebar
+    // collapses or Settings/Activity take over, which would strand Help > Send Feedback.
+    expect(container.querySelector('[data-testid="feedback-dialog"]')).toBeNull()
+    expect(container.innerHTML).not.toContain('role="dialog"')
+
+    await act(async () => {
+      findMenuItem(container, 'Send Feedback').click()
+    })
+
+    expect(mocks.setFeedbackDialogOpen).toHaveBeenCalledWith(true)
   })
 
   it('opens Discord invite through the shell bridge', async () => {
