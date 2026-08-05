@@ -23,6 +23,9 @@ const RELAY_TS_ENTRY = resolve(__dirname, 'relay.ts')
 const GENERATION = 'a'.repeat(64)
 const SUCCESSOR_GENERATION = 'b'.repeat(64)
 const describePosix = process.platform === 'win32' ? describe.skip : describe
+// Why: every case here spawns a real relay process. Under full-suite parallel load that outruns a
+// 10-20s budget and surfaces as an opaque timeout rather than a result.
+const RELAY_SPAWN_TIMEOUT_MS = 60_000
 
 let bundleDir: string
 let relayEntry: string
@@ -71,7 +74,7 @@ function launch(args: string[]): RelayProcess {
   return relay
 }
 
-async function waitForFile(path: string, present: boolean, timeoutMs = 5_000): Promise<void> {
+async function waitForFile(path: string, present: boolean, timeoutMs = 30_000): Promise<void> {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     if (existsSync(path) === present) {
@@ -89,13 +92,15 @@ beforeAll(() => {
 afterEach(async () => {
   for (const relay of spawned.splice(0)) {
     relay.kill('SIGKILL')
-    await relay.waitForExit(5_000).catch(() => null)
+    // Why: a short bound on purpose — spawnRelay's waitForExit never resolves for a child that has
+    // already exited, so teardown must not wait out the full spawn budget for relays a test killed.
+    await relay.waitForExit(2_000).catch(() => null)
   }
   rmSync(socketDir, { recursive: true, force: true })
   socketDir = mkdtempSync(join(tmpdir(), 'relay-owner-sock-'))
 })
 
-describePosix('detached relay owner manifest', () => {
+describePosix('detached relay owner manifest', { timeout: RELAY_SPAWN_TIMEOUT_MS }, () => {
   it('publishes a 0600 manifest naming its own pid, socket and generation', async () => {
     const relay = launch(['--owner-token', GENERATION])
     await waitForFile(manifestPath(), true)
@@ -111,7 +116,7 @@ describePosix('detached relay owner manifest', () => {
       socketCtimeSeconds: Number(socketStat.ctimeNs / 1_000_000_000n)
     })
     expect(lstatSync(manifestPath()).mode & 0o777).toBe(0o600)
-  }, 20_000)
+  })
 
   it('publishes no manifest when the launch carries no owner token', async () => {
     // Why: the sentinel is written at the end of main(), after the publication point — so its
@@ -120,36 +125,36 @@ describePosix('detached relay owner manifest', () => {
     await relay.sentinelReceived
     expect(existsSync(sockPath())).toBe(true)
     expect(existsSync(manifestPath())).toBe(false)
-  }, 20_000)
+  })
 
   it('removes its manifest and socket on SIGTERM', async () => {
     const relay = launch(['--owner-token', GENERATION])
     await waitForFile(manifestPath(), true)
 
     relay.kill('SIGTERM')
-    await relay.waitForExit(10_000)
+    await relay.waitForExit(RELAY_SPAWN_TIMEOUT_MS)
 
     await waitForFile(manifestPath(), false)
     expect(existsSync(sockPath())).toBe(false)
-  }, 20_000)
+  })
 
   it('fails closed and leaves no socket behind when the manifest cannot be published', async () => {
     // A directory at the manifest path makes the atomic rename fail without touching the socket path.
     mkdirSync(manifestPath())
     const relay = launch(['--owner-token', GENERATION])
 
-    expect(await relay.waitForExit(10_000)).toBe(1)
+    expect(await relay.waitForExit(RELAY_SPAWN_TIMEOUT_MS)).toBe(1)
     expect(existsSync(sockPath())).toBe(false)
     expect(lstatSync(manifestPath()).isDirectory()).toBe(true)
-  }, 20_000)
+  })
 
   it('fails closed on a malformed owner token', async () => {
     const relay = launch(['--owner-token', 'not-a-generation-token'])
 
-    expect(await relay.waitForExit(10_000)).toBe(1)
+    expect(await relay.waitForExit(RELAY_SPAWN_TIMEOUT_MS)).toBe(1)
     expect(existsSync(sockPath())).toBe(false)
     expect(existsSync(manifestPath())).toBe(false)
-  }, 20_000)
+  })
 
   it("leaves a live relay's socket and manifest untouched when a duplicate is refused", async () => {
     const live = launch(['--owner-token', GENERATION])
@@ -160,22 +165,26 @@ describePosix('detached relay owner manifest', () => {
     // Why: the duplicate loses the bind and exits 1; its startup catch must clean only its own
     // artifacts, and it owns none.
     const duplicate = launch(['--owner-token', SUCCESSOR_GENERATION])
-    expect(await duplicate.waitForExit(10_000)).toBe(1)
+    expect(await duplicate.waitForExit(RELAY_SPAWN_TIMEOUT_MS)).toBe(1)
 
     expect(readFileSync(manifestPath(), 'utf8')).toBe(liveManifest)
     expect(statSync(sockPath(), { bigint: true }).ino).toBe(liveSocketIno)
     expect(parseRelayOwnerManifest(liveManifest)?.pid).toBe(live.proc.pid)
-  }, 30_000)
+  })
 
   it('lets a successor generation replace a crashed predecessor manifest', async () => {
     const first = launch(['--owner-token', GENERATION])
     await waitForFile(manifestPath(), true)
     first.kill('SIGKILL')
-    await first.waitForExit(10_000)
-    // The crashed relay left both artifacts behind; the manifest still names the dead generation.
+    await first.waitForExit(RELAY_SPAWN_TIMEOUT_MS)
+    // The crashed relay left the manifest behind, still naming the dead generation.
     expect(parseRelayOwnerManifest(readFileSync(manifestPath(), 'utf8'))?.generation).toBe(
       GENERATION
     )
+    // Why: drop the dead socket ourselves. Reclaiming a stale socket is its own race, bounded by the
+    // relay's 500ms stale probe and already covered by subprocess.test.ts; depending on it here
+    // would make this assertion about manifest succession fail for an unrelated reason.
+    rmSync(sockPath(), { force: true })
 
     const second = launch(['--owner-token', SUCCESSOR_GENERATION])
     await second.sentinelReceived
@@ -184,5 +193,5 @@ describePosix('detached relay owner manifest', () => {
     expect(manifest?.generation).toBe(SUCCESSOR_GENERATION)
     expect(manifest?.pid).toBe(second.proc.pid)
     expect(manifest?.socketIno).toBe(Number(statSync(sockPath(), { bigint: true }).ino))
-  }, 30_000)
+  })
 })
