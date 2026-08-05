@@ -85,8 +85,9 @@ const AGENT_HOOK_JSON_STRUCTURE_LIMITS = {
 } as const
 
 function parseAgentHookJson(content: string): unknown {
-  assertJsonTextStructureWithinLimits(content, AGENT_HOOK_JSON_STRUCTURE_LIMITS)
-  return JSON.parse(content) as unknown
+  const normalizedContent = content.charCodeAt(0) === 0xfeff ? content.slice(1) : content
+  assertJsonTextStructureWithinLimits(normalizedContent, AGENT_HOOK_JSON_STRUCTURE_LIMITS)
+  return JSON.parse(normalizedContent) as unknown
 }
 
 /** Bound the warn-once Sets so a client varying `version`/`env` per request can't grow them unbounded. */

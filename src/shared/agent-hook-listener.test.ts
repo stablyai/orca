@@ -152,6 +152,25 @@ describe('shared agent-hook-listener', () => {
     expect(event!.payload.agentType).toBe('claude')
   })
 
+  it('normalizes a BOM-prefixed Cursor hook payload to a working state', () => {
+    const event = normalizeHookPayload(
+      state,
+      'cursor',
+      {
+        paneKey: PANE_KEY,
+        payload: '\uFEFF{"hook_event_name":"beforeSubmitPrompt","prompt":"Synthetic Cursor prompt"}'
+      },
+      'production'
+    )
+
+    expect(event?.payload).toMatchObject({
+      agentType: 'cursor',
+      state: 'working',
+      prompt: 'Synthetic Cursor prompt'
+    })
+    expect(event?.hookEventName).toBe('beforeSubmitPrompt')
+  })
+
   it('normalizes Gemini BeforeTool to working with tool fields', () => {
     const event = normalizeHookPayload(
       state,
