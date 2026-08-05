@@ -61,6 +61,9 @@ export function useBrowserRecorder(browserPageId: string): BrowserRecorderHook {
       setRecording(next)
       if (next) {
         const now = new Date().toISOString()
+        // Why: a fresh session starts from an empty log — retained steps would
+        // mix two sessions under one startedAt.
+        setSteps([])
         setStartedAt(now)
         // Why: the start marker makes the log self-describing — the reader sees
         // when the session began, and the page it began on.

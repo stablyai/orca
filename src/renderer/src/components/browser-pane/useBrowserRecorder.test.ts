@@ -138,6 +138,35 @@ describe('useBrowserRecorder', () => {
     expect(afterStop.steps).toHaveLength(2)
   })
 
+  it('clears the previous session steps when recording restarts', async () => {
+    const harness = createReactHookHarness()
+    vi.doMock('react', () => harness.react)
+    const useBrowserRecorder = await loadRecorder()
+
+    harness.beginRender()
+    const recorder = useBrowserRecorder('page-1')
+    recorder.toggle({ pageUrl: 'https://example.com/one', pageTitle: 'One' })
+    harness.beginRender()
+    const running = useBrowserRecorder('page-1')
+    running.recordStep(
+      { kind: 'navigation', fromUrl: 'https://example.com/one', toUrl: 'https://example.com/two' },
+      { pageUrl: 'https://example.com/two', pageTitle: 'Two' }
+    )
+    harness.beginRender()
+    const withStep = useBrowserRecorder('page-1')
+    withStep.toggle()
+
+    harness.beginRender()
+    const stopped = useBrowserRecorder('page-1')
+    stopped.toggle({ pageUrl: 'https://example.com/three', pageTitle: 'Three' })
+
+    harness.beginRender()
+    const restarted = useBrowserRecorder('page-1')
+    expect(restarted.recording).toBe(true)
+    expect(restarted.steps).toHaveLength(1) // only the new session's start marker
+    expect(restarted.steps[0]?.pageUrl).toBe('https://example.com/three')
+  })
+
   it('caps steps at the session budget, dropping the oldest', async () => {
     const harness = createReactHookHarness()
     vi.doMock('react', () => harness.react)

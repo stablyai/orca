@@ -1,13 +1,4 @@
-// ---------------------------------------------------------------------------
-// Browser action recorder — shared contract (main → preload → renderer)
-//
-// The main process records browser automation actions (click/type/goto/scroll/
-// keypress/select/mouse…*) as they execute, together with the page they ran on
-// and the DOM change they caused. While a recording session is active it also
-// observes manual page interactions (clicks/keys/scroll) and page console
-// output, and summarizes network traffic on session stop. Records stream to
-// the renderer over IPC so the browser pane can fold them into its session log.
-// ---------------------------------------------------------------------------
+// Browser action recorder — shared contract (main → preload → renderer).
 
 /** Compact page/DOM state captured before and after an action via in-page eval. */
 export type BrowserRecorderDomFingerprint = {
@@ -260,6 +251,8 @@ export const BROWSER_RECORDER_BUDGET = {
   bodyTextMaxLength: 4000,
   /** Cap on each side of the DOM text-change snippet in a diff. */
   textChangeMaxLength: 400,
+  /** Cap on a raw tagged console line accepted for parsing (DoS guard). */
+  taggedLineMaxLength: 256 * 1024,
   /** Cap on classes kept per element props. */
   elementClassesMax: 5,
   /** Cap on element visible text kept in props. */

@@ -1,11 +1,4 @@
-// ---------------------------------------------------------------------------
-// Browser action recorder — pure helpers (no electron, no bridge)
-//
-// Method classification, param sanitization, target extraction, fingerprint
-// diffing, and network-log summarization. In-page capture expressions live in
-// browser-page-capture-expressions.ts; tagged-line parsing in
-// browser-recorder-message-parsing.ts.
-// ---------------------------------------------------------------------------
+// Browser action recorder — pure helpers: classification, sanitization, fingerprint diffing.
 
 import {
   BROWSER_RECORDER_BUDGET,

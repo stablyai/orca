@@ -1,10 +1,4 @@
-// ---------------------------------------------------------------------------
-// Browser action recorder — page source probe
-//
-// Wraps the bridge for the observer's per-event needs: current page context,
-// DOM screen-change detection after a response lands, and the stop-time
-// network summary. Best-effort: any failure yields empty/null, never throws.
-// ---------------------------------------------------------------------------
+// Browser action recorder — page source probe (best-effort, never throws).
 
 import type {
   BrowserRecorderDomChangeKind,

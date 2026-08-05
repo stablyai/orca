@@ -40,6 +40,12 @@
   transition: none !important;
 }
 
+/* STYLEGUIDE "Elevation & shadows": the floating tier, reserved for popovers
+   that escape the editor surface. */
+@theme {
+  --shadow-floating: 0 10px 24px rgb(0 0 0 / 0.18);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

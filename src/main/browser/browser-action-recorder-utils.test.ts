@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type {
-  BrowserRecorderDomFingerprint,
-  BrowserRecorderInputState
+import {
+  BROWSER_RECORDER_BUDGET,
+  type BrowserRecorderDomFingerprint,
+  type BrowserRecorderInputState
 } from '../../shared/browser-recorder-automation'
 import { diffFingerprints } from './browser-action-recorder-utils'
 
@@ -40,15 +41,15 @@ describe('diffFingerprints', () => {
   })
 
   it('caps each side of the text snippet to the log budget', () => {
-    const long = 'x'.repeat(1000)
-    const before = makeFingerprint({ bodyText: `a${long}b` })
-    const after = makeFingerprint({ bodyText: `a${long}c` })
+    const max = BROWSER_RECORDER_BUDGET.textChangeMaxLength
+    // Different long tails force a long snippet on each side, so the length
+    // assertions can only pass when truncation actually engages.
+    const before = makeFingerprint({ bodyText: `a${'x'.repeat(1000)}` })
+    const after = makeFingerprint({ bodyText: `a${'y'.repeat(1000)}` })
     const diff = diffFingerprints(before, after)
-    // Changed region is just "b"→"c"; but with a full different tail the
-    // snippet caps at textChangeMaxLength (400) per side.
     expect(diff.textChange).not.toBeNull()
-    expect(diff.textChange?.before.length).toBeLessThanOrEqual(401)
-    expect(diff.textChange?.after.length).toBeLessThanOrEqual(401)
+    expect(diff.textChange?.before).toBe(`${'x'.repeat(max)}…`)
+    expect(diff.textChange?.after).toBe(`${'y'.repeat(max)}…`)
   })
 
   it('still reports the compact delta fields alongside the snippet', () => {

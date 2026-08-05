@@ -1,9 +1,4 @@
-// ---------------------------------------------------------------------------
-// Browser action recorder — event recording
-//
-// Turns parsed interaction/request payloads and console streaks into stream
-// events, enforcing per-session caps with a one-time cap warning per stream.
-// ---------------------------------------------------------------------------
+// Browser action recorder — event recording with per-session caps.
 
 import {
   BROWSER_RECORDER_BUDGET,
@@ -241,10 +236,11 @@ export class BrowserRecorderEventRecorder {
         return
       }
       this.requestCount += 1
+      const requestSequence = this.requestCount
       const page = this.pageSource.pageContext()
       void this.pageSource.screenChangedSinceLast().then((screenChanged) => {
         const request: BrowserRecorderNetworkRequest = {
-          id: `${page.browserPageId}:request:${this.requestCount}`,
+          id: `${page.browserPageId}:request:${requestSequence}`,
           page,
           startedAt: new Date().toISOString(),
           method: details.method,

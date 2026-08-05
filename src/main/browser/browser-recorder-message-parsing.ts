@@ -1,12 +1,9 @@
-// ---------------------------------------------------------------------------
-// Browser action recorder — tagged console line parsing
-//
-// The in-page capture script reports interactions and network requests as
-// tagged console.debug lines; these parsers turn them back into structured
-// payloads, with secret-shaped request values redacted.
-// ---------------------------------------------------------------------------
+// Browser action recorder — tagged console line parsing (redacts secret-shaped values).
 
-import { BROWSER_RECORDER_INTERACTION_TAG } from '../../shared/browser-recorder-automation'
+import {
+  BROWSER_RECORDER_BUDGET,
+  BROWSER_RECORDER_INTERACTION_TAG
+} from '../../shared/browser-recorder-automation'
 import type {
   BrowserRecorderElementProps,
   BrowserRecorderInteractionKind
@@ -65,6 +62,11 @@ export function parseBrowserInteractionMessage(
     return null
   }
   const json = message.slice(BROWSER_RECORDER_INTERACTION_TAG.length).trim()
+  // Why: the page hook caps its own output, but a hostile page could emit an
+  // unbounded tagged line — reject it before JSON.parse runs.
+  if (json.length > BROWSER_RECORDER_BUDGET.taggedLineMaxLength) {
+    return null
+  }
   try {
     const parsed = JSON.parse(json) as Partial<BrowserRecorderInteractionPayload>
     if (
@@ -149,6 +151,10 @@ export function parseBrowserRequestMessage(message: string): BrowserRecorderRequ
     return null
   }
   const json = message.slice(BROWSER_RECORDER_INTERACTION_TAG.length).trim()
+  // Why: same DoS guard as the interaction parser — reject before parsing.
+  if (json.length > BROWSER_RECORDER_BUDGET.taggedLineMaxLength) {
+    return null
+  }
   try {
     const parsed = JSON.parse(json) as Partial<BrowserRecorderRequestPayload>
     if (parsed.type !== 'request') {
@@ -207,8 +213,7 @@ export function compactOriginStack(
     }
     // Chrome formats file:line; Firefox uses file:line:col — keep both.
     const shortLocation = location.replace(/:(\d+):\d+$/, ':$1')
-    // Why: redact the query before appending the line suffix — a naive
-    // redactRequestUrl would swallow ':561' as part of the last query value.
+    // Why: redact before appending the line suffix — a naive redact would swallow ':561'.
     const lineSuffix = /(:\d+)$/.exec(shortLocation)?.[1] ?? ''
     const base = lineSuffix ? shortLocation.slice(0, -lineSuffix.length) : shortLocation
     const safeLocation = `${redactRequestUrl(base)}${lineSuffix}`
@@ -251,8 +256,7 @@ export function redactPostData(body: string, maxLength: number): string {
   return redacted.length > maxLength ? `${redacted.slice(0, maxLength)}…` : redacted
 }
 
-// Why: responses are usually JSON, where secrets appear as "key":"value"
-// pairs rather than key=value query parts — mask both shapes.
+// Why: response secrets are JSON "key":"value" pairs, not query parts — mask both shapes.
 const SECRET_JSON_VALUE_PATTERN =
   /("(?:password|passwd|secret|token|authorization|api[_-]?key|credential|csrf|sifre|parola|key)"\s*:\s*")[^"]*(")/gi
 

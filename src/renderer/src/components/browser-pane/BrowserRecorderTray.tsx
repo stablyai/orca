@@ -96,7 +96,7 @@ export function BrowserRecorderTray({
   }
 
   return (
-    <div className="absolute bottom-3 left-3 z-30 flex max-h-[45%] w-[min(20rem,calc(100%-1.5rem))] flex-col overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-[0_10px_24px_rgba(0,0,0,0.18)]">
+    <div className="absolute bottom-3 left-3 z-30 flex max-h-[45%] w-[min(20rem,calc(100%-1.5rem))] flex-col overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-floating">
       <div className="flex items-center gap-2 border-b border-border px-3 py-2">
         <CircleDot className={cnIcon(recording)} aria-hidden />
         <div className="min-w-0 flex-1 truncate text-sm font-medium">{title}</div>
@@ -238,7 +238,7 @@ function CollapsedTrayBar({
   onExpand: () => void
 }): React.JSX.Element {
   return (
-    <div className="absolute bottom-3 left-3 z-30 w-[min(20rem,calc(100%-1.5rem))] overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-[0_10px_24px_rgba(0,0,0,0.18)]">
+    <div className="absolute bottom-3 left-3 z-30 w-[min(20rem,calc(100%-1.5rem))] overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-floating">
       <div className="flex items-center gap-1 px-3 py-1.5">
         <button
           type="button"
@@ -253,7 +253,7 @@ function CollapsedTrayBar({
           <span className="min-w-0 flex-1 truncate text-foreground">
             {lastStep ? formatBrowserRecorderStepSummary(lastStep) : ''}
           </span>
-          <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-muted-foreground">
+          <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-muted-foreground">
             {stepCount}
           </span>
         </button>
@@ -309,7 +309,7 @@ function StepRow({
         <CornerDownRight className="mt-1 size-3 shrink-0 text-muted-foreground/60" aria-hidden />
       )}
       <div
-        className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold${
+        className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold${
           nested ? ' bg-muted text-muted-foreground' : ' bg-primary text-primary-foreground'
         }`}
       >

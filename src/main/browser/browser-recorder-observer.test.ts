@@ -42,6 +42,13 @@ describe('recorder message parsers', () => {
     expect(parseBrowserRequestMessage('console.log("plain")')).toBeNull()
   })
 
+  it('rejects oversized tagged interaction and request lines before parsing', () => {
+    const interaction = `__orca_recorder__ ${JSON.stringify({ type: 'click', x: 1, y: 2 })}${'x'.repeat(300 * 1024)}`
+    expect(parseBrowserInteractionMessage(interaction)).toBeNull()
+    const request = `__orca_recorder__ ${JSON.stringify({ type: 'request', url: 'https://x/a' })}${'y'.repeat(300 * 1024)}`
+    expect(parseBrowserRequestMessage(request)).toBeNull()
+  })
+
   it('redacts secret-shaped values in request URLs and bodies', () => {
     expect(redactRequestUrl('https://x/api?islem=stok&key=abc123')).toBe(
       'https://x/api?islem=stok&key=***'
