@@ -59,12 +59,36 @@ async function expectFontCommandTimeout(
   })
 }
 
+describe('buildWindowsFontListScript', () => {
+  it('forces UTF-8 console output before enumerating font families', async () => {
+    const { buildWindowsFontListScript } = await import('./system-fonts')
+    const script = buildWindowsFontListScript()
+    expect(script).toContain('[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)')
+    expect(script).toContain('InstalledFontCollection')
+  })
+})
+
 describe('listSystemFontFamilies', () => {
   afterEach(() => {
     vi.useRealTimers()
     vi.resetModules()
     execFileMock.mockReset()
     killMock.mockReset()
+  })
+
+  it('keeps Korean font family names when PowerShell already emits UTF-8', async () => {
+    await withPlatform('win32', async () => {
+      execFileMock.mockImplementation((_cmd, _args, _opts, cb) => {
+        cb(null, '굴림\nG마켓 산스 Medium\nConsolas\n')
+        return { kill: killMock }
+      })
+      const { listSystemFontFamilies } = await import('./system-fonts')
+      await expect(listSystemFontFamilies()).resolves.toEqual(
+        expect.arrayContaining(['굴림', 'G마켓 산스 Medium', 'Consolas'])
+      )
+      const script = String(execFileMock.mock.calls[0]?.[1]?.at(-1) ?? '')
+      expect(script).toContain('UTF8Encoding')
+    })
   })
 
   it('falls back when the platform font command never exits', async () => {

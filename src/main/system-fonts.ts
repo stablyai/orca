@@ -76,16 +76,30 @@ function listLinuxFonts(): Promise<string[]> {
   )
 }
 
-function listWindowsFonts(): Promise<string[]> {
-  const script = `
+// Why: Windows PowerShell 5.1 redirected stdout uses the console/OEM code page
+// unless OutputEncoding is forced. Node always decodes with encoding:'utf8', so
+// Korean/CJK font family names become mojibake without this pin (#12590).
+export function buildWindowsFontListScript(): string {
+  return `
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+$OutputEncoding = [Console]::OutputEncoding
 Add-Type -AssemblyName System.Drawing
 $fonts = New-Object System.Drawing.Text.InstalledFontCollection
 $fonts.Families | ForEach-Object { $_.Name }
 `
+}
 
+function listWindowsFonts(): Promise<string[]> {
   return execFileText(
     'powershell.exe',
-    ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
+    [
+      '-NoProfile',
+      '-NonInteractive',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-Command',
+      buildWindowsFontListScript()
+    ],
     8 * 1024 * 1024
   ).then((output) =>
     uniqueSorted(
