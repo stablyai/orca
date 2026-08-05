@@ -13306,7 +13306,8 @@
             "4a9568f773": "Atrás",
             "4f86e2a10b": "Saltar recorrido",
             "d974f32a83": "Descartar recorrido",
-            "ffa4412b66": "próximo"
+            "ffa4412b66": "próximo",
+            "complete": "Hecho"
           },
           "ContextualTourProgressDots": {
             "7734cb8ad3": "de",
@@ -13316,7 +13317,100 @@
             "tour": {
               "overlay": {
                 "measurement": {
-                  "38b3155418": "Próximo"
+                  "38b3155418": "Próximo",
+                  "automations": {
+                    "intro": {
+                      "title": "¿Qué es una automatización?",
+                      "body": "Las automatizaciones ejecutan trabajo de agentes según una programación. Añade una automatización con este botón."
+                    },
+                    "results": {
+                      "title": "Consulta los resultados",
+                      "body": "Las ejecuciones muestran cuándo se ejecutaron las automatizaciones, qué ocurrió y dónde revisar su salida."
+                    }
+                  }
+                }
+              },
+              "step": {
+                "copy": {
+                  "workspace": {
+                    "board": {
+                      "plan": {
+                        "title": "Planifica el trabajo en el tablero",
+                        "body": "Usa el tablero cuando quieras ver los espacios de trabajo por estado en lugar de por proyecto."
+                      },
+                      "lanes": {
+                        "title": "Mueve el trabajo entre carriles",
+                        "body": "Arrastra los espacios de trabajo entre carriles a medida que cambia su estado."
+                      }
+                    },
+                    "creation": {
+                      "project": {
+                        "title": "Elige un proyecto",
+                        "body": "Orca aísla cada tarea en su propio worktree, creado a partir de tu rama base."
+                      },
+                      "name": {
+                        "title": "Ponle nombre o parte de trabajo existente",
+                        "body": "Parte de una tarea vinculada para usar un nombre corto de incidencia o PR. O déjalo en blanco para nombrarlo automáticamente a partir de tu primer mensaje al agente."
+                      },
+                      "agent": {
+                        "title": "Elige qué agente empieza el trabajo",
+                        "body": "Elige el agente que debe abrirse cuando se cree este worktree."
+                      }
+                    }
+                  },
+                  "agent": {
+                    "sessions": {
+                      "split": {
+                        "title": "Divide un panel de terminal",
+                        "body": "Abre un segundo panel de terminal con {terminal.splitRight} o haz clic derecho en el panel para ver las opciones de división.",
+                        "action": "Dividir terminal"
+                      },
+                      "parallel": {
+                        "title": "Empieza otra tarea en paralelo",
+                        "body": "Cada worktree tiene su propia rama, así que el trabajo en paralelo se mantiene separado."
+                      }
+                    }
+                  },
+                  "browser": {
+                    "grab": {
+                      "title": "Captura el contexto de la página para los agentes",
+                      "body": "Usa la herramienta de captura para copiar el contexto de un elemento de la página para los agentes."
+                    },
+                    "annotate": {
+                      "title": "Marca el feedback de diseño sobre la página",
+                      "body": "Anota elementos y envía esas notas a un agente."
+                    },
+                    "logins": {
+                      "title": "Mantén la sesión iniciada",
+                      "body": "Lleva tus inicios de sesión existentes a Orca para seguir conectado de inmediato."
+                    }
+                  },
+                  "tasks": {
+                    "source": {
+                      "title": "Elige el origen del trabajo",
+                      "body": "Cambia entre proveedores conectados y filtros de proyecto sin cambiar de página."
+                    },
+                    "filter": {
+                      "title": "Filtra hasta el trabajo que necesitas",
+                      "body": "Usa los preajustes y la búsqueda para acotar incidencias, revisiones, merge requests o tareas."
+                    },
+                    "start": {
+                      "title": "Empieza desde los elementos de trabajo",
+                      "body": "Usa Iniciar o Abrir en una tarea, incidencia, revisión o merge request para llevar su contexto a un espacio de trabajo."
+                    }
+                  },
+                  "floating": {
+                    "workspace": {
+                      "repos": {
+                        "title": "Ejecuta un agente en todos los repositorios",
+                        "body": "Los agentes de aquí se ejecutan en la carpeta que elijas. Apunta uno al directorio superior a tus servicios para trabajar en todos tus repositorios a la vez."
+                      },
+                      "scratchpad": {
+                        "title": "O úsalo como bloc de notas",
+                        "body": "Abre agentes, terminales temporales, notas y pestañas del navegador sin saturar el worktree en el que estás concentrado."
+                      }
+                    }
+                  }
                 }
               }
             }
