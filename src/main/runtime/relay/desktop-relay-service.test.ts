@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { MobilePairingConnectionContext } from '../runtime-rpc'
 import { DesktopRelayService, pairingAuthorizationForContext } from './desktop-relay-service'
 
@@ -58,6 +58,47 @@ describe('pairingAuthorizationForContext', () => {
         relayHostId
       )
     ).toThrow('stale_relay_connection')
+  })
+})
+
+describe('liveness safety net lifecycle', () => {
+  afterEach(() => vi.useRealTimers())
+
+  it('fences hard: the tick stops on fence and re-arms on the next auth mutation', () => {
+    // Why: a tick surviving the pre-sign-out fence could catch the window
+    // before the profile wipe and briefly resurrect a broker.
+    vi.useFakeTimers()
+    const coordinator = {
+      reconcile: vi.fn(),
+      ensureLive: vi.fn(),
+      fenceAndCloseNow: vi.fn(),
+      stop: vi.fn()
+    }
+    const service = Object.create(DesktopRelayService.prototype) as DesktopRelayService
+    Object.assign(service, {
+      coordinator,
+      demandLedger: { nextPendingExpiry: () => null },
+      stopped: false,
+      livenessTimer: null,
+      demandExpiryTimer: null
+    })
+
+    service.start()
+    vi.advanceTimersByTime(5 * 60_000)
+    expect(coordinator.ensureLive).toHaveBeenCalledTimes(1)
+
+    service.fenceAndCloseNow()
+    expect(coordinator.fenceAndCloseNow).toHaveBeenCalledOnce()
+    vi.advanceTimersByTime(30 * 60_000)
+    expect(coordinator.ensureLive).toHaveBeenCalledTimes(1)
+
+    service.authMutated()
+    vi.advanceTimersByTime(5 * 60_000)
+    expect(coordinator.ensureLive).toHaveBeenCalledTimes(2)
+
+    service.stop()
+    vi.advanceTimersByTime(30 * 60_000)
+    expect(coordinator.ensureLive).toHaveBeenCalledTimes(2)
   })
 })
 

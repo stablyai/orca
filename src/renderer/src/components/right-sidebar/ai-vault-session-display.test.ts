@@ -4,8 +4,8 @@ import {
   latestSessionConversationTurn,
   recentSessionConversationTurns,
   sessionDetailConversationTurns,
-  sessionFirstPrompt,
   sessionModelLabel,
+  sessionPromptPreview,
   sessionPreviewSearchText
 } from './ai-vault-session-display'
 
@@ -103,7 +103,7 @@ describe('ai vault session display', () => {
 
   it('prefers the stored firstUserPrompt over sliding preview turns', () => {
     expect(
-      sessionFirstPrompt({
+      sessionPromptPreview({
         ...baseSession,
         firstUserPrompt: 'Original long first prompt that scrolled out of preview',
         previewMessages: [
@@ -111,23 +111,28 @@ describe('ai vault session display', () => {
           { role: 'assistant', text: 'Later reply', timestamp: null }
         ]
       })
-    ).toBe('Original long first prompt that scrolled out of preview')
+    ).toEqual({
+      text: 'Original long first prompt that scrolled out of preview',
+      source: 'first-user-prompt'
+    })
   })
 
-  it('falls back to the earliest user preview turn when firstUserPrompt is absent', () => {
-    expect(sessionFirstPrompt(baseSession)).toBe('Please fix the flaky golden tests')
+  it('marks list-scan fallback text as a preview-window prompt', () => {
+    expect(sessionPromptPreview(baseSession)).toEqual({
+      text: 'Please fix the flaky golden tests',
+      source: 'preview-window'
+    })
     expect(
-      sessionFirstPrompt({
+      sessionPromptPreview({
         ...baseSession,
         previewMessages: [{ role: 'assistant', text: 'Only agent text', timestamp: null }]
       })
     ).toBeNull()
   })
-  // Remote/SSH rows never re-parse on demand, so a truncated window would
-  // otherwise show a RECENT ask permanently labelled as the first prompt.
-  it('refuses the preview fallback once the sliding window has truncated', () => {
+
+  it('keeps a truncated sliding-window fallback available as a recent prompt', () => {
     expect(
-      sessionFirstPrompt({
+      sessionPromptPreview({
         ...baseSession,
         previewMessagesTruncated: true,
         previewMessages: [
@@ -135,12 +140,15 @@ describe('ai vault session display', () => {
           { role: 'assistant', text: 'Later reply', timestamp: null }
         ]
       })
-    ).toBeNull()
+    ).toEqual({
+      text: 'Later user turn still in the preview window',
+      source: 'preview-window'
+    })
   })
 
   it('still prefers a stored firstUserPrompt when the window has truncated', () => {
     expect(
-      sessionFirstPrompt({
+      sessionPromptPreview({
         ...baseSession,
         previewMessagesTruncated: true,
         firstUserPrompt: 'Original long first prompt that scrolled out of preview',
@@ -148,6 +156,9 @@ describe('ai vault session display', () => {
           { role: 'user', text: 'Later user turn still in the preview window', timestamp: null }
         ]
       })
-    ).toBe('Original long first prompt that scrolled out of preview')
+    ).toEqual({
+      text: 'Original long first prompt that scrolled out of preview',
+      source: 'first-user-prompt'
+    })
   })
 })

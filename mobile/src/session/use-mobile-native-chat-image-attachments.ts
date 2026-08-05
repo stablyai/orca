@@ -26,6 +26,10 @@ import {
   isMobileNativeChatInputStale,
   markMobileNativeChatInputStale
 } from './mobile-native-chat-stale-input'
+import {
+  acquireMobileNativeChatTerminalWrite,
+  releaseMobileNativeChatTerminalWrite
+} from './mobile-native-chat-terminal-write-lock'
 
 type CurrentRef<T> = { readonly current: T }
 type ShowToast = (message: string, durationMs?: number) => void
@@ -127,8 +131,6 @@ export function useMobileNativeChatImageAttachments({
   // checked 'connected' at entry, so only a ref can see a mid-upload disconnect.
   const connStateRef = useRef(connState)
   connStateRef.current = connState
-  // Serialize clear/paste/submit ownership per terminal while allowing other tabs to send.
-  const sendInFlightTerminalsRef = useRef(new Set<string>())
 
   const attachments = (scopeKey ? attachmentsByScope[scopeKey] : undefined) ?? NO_ATTACHMENTS
 
@@ -219,14 +221,14 @@ export function useMobileNativeChatImageAttachments({
 
   const sendNativeChat = useCallback(
     async (text: string): Promise<boolean> => {
+      // Serialize clear/paste/submit ownership per terminal while allowing other
+      // tabs to send. Shared with the prompt-card writes (answer/permission), so
+      // a card tap can't interleave into a mid-flight paste sequence either.
       const operationTerminal = activeHandleRef.current
-      if (operationTerminal && sendInFlightTerminalsRef.current.has(operationTerminal)) {
+      if (operationTerminal && !acquireMobileNativeChatTerminalWrite(operationTerminal)) {
         onError?.()
         onSendError('Message not sent')
         return false
-      }
-      if (operationTerminal) {
-        sendInFlightTerminalsRef.current.add(operationTerminal)
       }
       // One budget for the whole user action. The paste loop, the settle, and the
       // text body that follows are a single send from the composer's point of view;
@@ -347,7 +349,7 @@ export function useMobileNativeChatImageAttachments({
         }
       } finally {
         if (operationTerminal) {
-          sendInFlightTerminalsRef.current.delete(operationTerminal)
+          releaseMobileNativeChatTerminalWrite(operationTerminal)
         }
       }
     },

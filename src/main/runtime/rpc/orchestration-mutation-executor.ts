@@ -54,6 +54,8 @@ export class OrchestrationMutationExecutor {
           return { disposition: row.state, row }
         })()
       : db.beginMutationReceipt(identity)
+    const resumedPendingMutation =
+      begun.disposition === 'pending' && request.method === 'orchestration.workerRelease'
 
     if (begun.disposition === 'completed') {
       const active = this.inFlight.get(key)
@@ -67,33 +69,35 @@ export class OrchestrationMutationExecutor {
       if (active) {
         return attachMutationReceipt(await active, requestId, true)
       }
-      const recovery = getPendingWorkerStartRecovery(request.method, begun.row.receipt)
-      throw new OrchestrationError(
-        'operation_unknown',
-        recovery
-          ? `Worker start ${requestId} was accepted as Dispatch ${recovery.dispatchId} before restart. Inspect that Dispatch; do not start another worker.`
-          : `Mutation ${requestId} may have been accepted before restart. Retry inspection or recovery with the same request ID.`,
-        recovery
-          ? {
-              requestId,
-              dispatchId: recovery.dispatchId,
-              recoveryCommand: `orca orchestration worker-show --dispatch ${recovery.dispatchId} --json`
-            }
-          : { requestId }
-      )
+      if (request.method !== 'orchestration.workerRelease') {
+        const recovery = getPendingWorkerStartRecovery(request.method, begun.row.receipt)
+        throw new OrchestrationError(
+          'operation_unknown',
+          recovery
+            ? `Worker start ${requestId} was accepted as Dispatch ${recovery.dispatchId} before restart. Inspect that Dispatch; do not start another worker.`
+            : `Mutation ${requestId} may have been accepted before restart. Retry inspection or recovery with the same request ID.`,
+          recovery
+            ? {
+                requestId,
+                dispatchId: recovery.dispatchId,
+                recoveryCommand: `orca orchestration worker-show --dispatch ${recovery.dispatchId} --json`
+              }
+            : { requestId }
+        )
+      }
     }
 
     const recordReceipt = (result: unknown): void => {
       db.completeMutationReceipt({
         ...identity,
-        receipt: JSON.stringify(attachMutationReceipt(result, requestId, false))
+        receipt: JSON.stringify(attachMutationReceipt(result, requestId, resumedPendingMutation))
       })
     }
     const active = Promise.resolve().then(() => invoke({ identity, recordReceipt }))
     this.inFlight.set(key, active)
     try {
       const result = await active
-      const receipted = attachMutationReceipt(result, requestId, false)
+      const receipted = attachMutationReceipt(result, requestId, resumedPendingMutation)
       db.completeMutationReceipt({ ...identity, receipt: JSON.stringify(receipted) })
       return receipted
     } catch (error) {

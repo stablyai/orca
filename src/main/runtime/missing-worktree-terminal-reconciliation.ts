@@ -46,6 +46,18 @@ function withSharedProcessSnapshot(provider: IPtyProvider): IPtyProvider {
   })
 }
 
+// Why: `repoId::path` ids repeat across hosts, so a sweep driven by one repo's inventory
+// must name its owner or it stops a same-id workspace's terminals on another host.
+function hostFence(
+  repo: Repo,
+  worktreeId: string
+): { resolvedWorktreeId: string; resolvedConnectionId?: string } {
+  return {
+    resolvedWorktreeId: worktreeId,
+    ...(repo.connectionId ? { resolvedConnectionId: repo.connectionId } : {})
+  }
+}
+
 type MissingWorktreeTerminalReconciliationDeps = {
   runtime: OrcaRuntimeService
   getLocalProvider: () => IPtyProvider | null
@@ -83,7 +95,7 @@ export async function stopMissingWorktreeTerminals(
         MISSING_WORKTREE_TEARDOWN_CONCURRENCY,
         async (worktreeId) => {
           try {
-            await deps.runtime.stopTerminalsForWorktree(worktreeId)
+            await deps.runtime.stopTerminalsForWorktree(worktreeId, hostFence(repo, worktreeId))
             return worktreeId
           } catch {
             return null
@@ -102,6 +114,7 @@ export async function stopMissingWorktreeTerminals(
         try {
           await killAllProcessesForWorktree(worktreeId, {
             runtime: deps.runtime,
+            ...hostFence(repo, worktreeId),
             localProvider: provider,
             onPtyStopped: deps.onPtyStopped,
             // Why: the shared process snapshot is only valid while nothing needs a

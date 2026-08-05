@@ -556,6 +556,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
         }
         writeJson(UI_STORAGE_KEY, mergeWebUIState(readLocalWebUIState(), ui))
       },
+      // Staging already wrote through to browser storage, so there is nothing left to join.
+      awaitBeforeUnloadCheckpoint: () => Promise.resolve(),
       awaitFirstWindowStartupServices: () => Promise.resolve(),
       recoverLegacyWorkerTerminalsForRendererStartup: () => Promise.resolve(),
       startupDiagnostic: () => Promise.resolve(),
@@ -1543,6 +1545,10 @@ function createAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault']> {
         executionHostId
       })
     },
+    // Why: the runtime RPC transport has no cancel verb, so the in-flight scan
+    // settles on its own timeout. The renderer's refreshId guard already drops
+    // the late result; this only means web pays for a scan nobody reads.
+    cancelListSessions: () => Promise.resolve(),
     prepareSessionResume: (args: AiVaultPrepareSessionResumeArgs) =>
       callRuntimeResult<AiVaultPrepareSessionResumeResult>('aiVault.prepareSessionResume', args),
     // Why: no server-side RPC for subagent transcript listing yet, so report an empty (not erroring) result.
@@ -2209,6 +2215,8 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
 function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> {
   return {
     registerGuest: () => Promise.resolve(false),
+    isGuestRegistered: () => Promise.resolve(false),
+    repairGuestRegistration: () => Promise.resolve(false),
     unregisterGuest: () => Promise.resolve(),
     openDevTools: () => Promise.resolve(false),
     setViewportOverride: () => Promise.resolve(false),
@@ -3080,6 +3088,10 @@ function createAccountsApi(): never {
 }
 
 function createUpdaterApi(): NonNullable<Partial<PreloadApi>['updater']> {
+  // Why: the linux-package-install recovery status can only originate in the native main process, so
+  // the web renderer never reaches these branches — reject loudly rather than resolve a fake result.
+  // A fresh Error per rejection: one shared instance would carry this function's stack, not the caller's.
+  const desktopOnlyMessage = 'Linux package install recovery is only available in the desktop app.'
   return {
     getVersion: () => Promise.resolve('web'),
     getStatus: () => Promise.resolve({ state: 'idle' } as never),
@@ -3088,6 +3100,8 @@ function createUpdaterApi(): NonNullable<Partial<PreloadApi>['updater']> {
     quitAndInstall: () => Promise.resolve(),
     dismissNudge: () => Promise.resolve(),
     dismissAvailableUpdate: () => Promise.resolve(),
+    getLinuxPackageInstallInstructions: () => Promise.reject(new Error(desktopOnlyMessage)),
+    showLinuxPackage: () => Promise.reject(new Error(desktopOnlyMessage)),
     // Why: the web client cannot install a desktop build, so channel switching
     // reports unavailable rather than an empty list that looks like a fetch miss.
     listBuilds: (channel) =>
@@ -3251,6 +3265,15 @@ function createSshApi(): NonNullable<Partial<PreloadApi>['ssh']> {
       Promise.reject(new Error('SSH target management is unavailable in the web client.')),
     removeTarget: () => Promise.resolve(),
     importConfig: () => Promise.resolve({ targets: [], repoReadoptions: [] }),
+    listConfigHosts: () =>
+      Promise.resolve({
+        hosts: [],
+        totalHostCount: 0,
+        newHostCount: 0,
+        matchCount: 0,
+        hasMore: false
+      }),
+    resolveConfigHost: () => Promise.resolve(null),
     connect: async (args) => {
       const { state } = await callRuntimeResult<{ state: SshConnectionState | null }>(
         'ssh.connect',

@@ -12,6 +12,7 @@ const {
   systemPreferencesAskForMediaAccessMock,
   systemPreferencesGetMediaAccessStatusMock,
   registerRepoHandlersMock,
+  setRepoRemoteClientNotifierMock,
   registerWorktreeHandlersMock,
   registerPtyHandlersMock,
   hydrateLocalPtyRegistryAtBootMock,
@@ -33,6 +34,7 @@ const {
   systemPreferencesAskForMediaAccessMock: vi.fn(),
   systemPreferencesGetMediaAccessStatusMock: vi.fn(),
   registerRepoHandlersMock: vi.fn(),
+  setRepoRemoteClientNotifierMock: vi.fn(),
   registerWorktreeHandlersMock: vi.fn(),
   registerPtyHandlersMock: vi.fn(),
   hydrateLocalPtyRegistryAtBootMock: vi.fn(),
@@ -66,7 +68,8 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../ipc/repos', () => ({
-  registerRepoHandlers: registerRepoHandlersMock
+  registerRepoHandlers: registerRepoHandlersMock,
+  setRepoRemoteClientNotifier: setRepoRemoteClientNotifierMock
 }))
 
 vi.mock('../ipc/worktrees', () => ({
@@ -213,6 +216,7 @@ describe('attachMainWindowServices', () => {
     systemPreferencesAskForMediaAccessMock.mockReset()
     systemPreferencesGetMediaAccessStatusMock.mockReset()
     registerRepoHandlersMock.mockReset()
+    setRepoRemoteClientNotifierMock.mockReset()
     registerWorktreeHandlersMock.mockReset()
     registerPtyHandlersMock.mockReset()
     hydrateLocalPtyRegistryAtBootMock.mockReset()
@@ -224,6 +228,15 @@ describe('attachMainWindowServices', () => {
     releasePendingTccPromptNoticeMock.mockReset()
     systemPreferencesAskForMediaAccessMock.mockResolvedValue(true)
     systemPreferencesGetMediaAccessStatusMock.mockReturnValue('granted')
+  })
+
+  // #11994: without this wiring, host-local repo IPC mutations never reach paired clients.
+  it('gives the repo IPC handlers the runtime so repo changes reach paired clients', () => {
+    const runtime = createRuntime()
+
+    attachMainWindowServices(createMainWindow() as never, createStore(), runtime as never)
+
+    expect(setRepoRemoteClientNotifierMock).toHaveBeenCalledWith(runtime)
   })
 
   it('reloads the app renderer through main and marks expected renderer teardown', async () => {

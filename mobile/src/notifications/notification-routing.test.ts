@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildLocalNotificationData, getNotificationNavigationPath } from './notification-routing'
+import { buildLocalNotificationData, getNotificationNavigationTarget } from './notification-routing'
 
 describe('notification routing', () => {
   it('includes the host id in locally scheduled notification data', () => {
@@ -20,26 +20,36 @@ describe('notification routing', () => {
     })
   })
 
+  // Identities stay raw: the target is dispatched as navigator params, not a URL.
   it('routes notification taps to the worktree terminal screen', () => {
     expect(
-      getNotificationNavigationPath({
+      getNotificationNavigationTarget({
         hostId: 'host-1',
         worktreeId: 'repo::/Users/me/orca/workspaces/feature'
       })
-    ).toBe('/h/host-1/session/repo%3A%3A%2FUsers%2Fme%2Forca%2Fworkspaces%2Ffeature')
+    ).toEqual({
+      hostId: 'host-1',
+      sessionTarget: {
+        name: '[hostId]/session/[worktreeId]',
+        params: { hostId: 'host-1', worktreeId: 'repo::/Users/me/orca/workspaces/feature' }
+      }
+    })
   })
 
   it('falls back to the host screen when the payload has no worktree id', () => {
-    expect(getNotificationNavigationPath({ hostId: 'host-1' })).toBe('/h/host-1')
+    expect(getNotificationNavigationTarget({ hostId: 'host-1' })).toEqual({
+      hostId: 'host-1',
+      sessionTarget: null
+    })
   })
 
   it('ignores payloads that cannot identify the paired host', () => {
-    expect(getNotificationNavigationPath({ worktreeId: 'repo::/tmp/worktree' })).toBeNull()
+    expect(getNotificationNavigationTarget({ worktreeId: 'repo::/tmp/worktree' })).toBeNull()
   })
 
   it('ignores payloads for hosts that are no longer paired', () => {
     expect(
-      getNotificationNavigationPath(
+      getNotificationNavigationTarget(
         { hostId: 'removed-host', worktreeId: 'repo::/tmp/worktree' },
         { knownHostIds: new Set(['host-1']) }
       )

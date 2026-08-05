@@ -9,17 +9,36 @@ import { createNativeChatPtySessionOptions } from './native-chat-pty-session-opt
 describe('native chat PTY session options', () => {
   beforeEach(() => clearNativeChatSessionOptionCacheForTests())
 
-  it('starts attached sessions unknown and hides model-scoped options', () => {
+  it('renders nothing when no model list exists at all', () => {
+    const surface = createNativeChatPtySessionOptions({
+      agent: 'claude',
+      scopeKey: 'pty-1',
+      initialModels: [],
+      mode: 'live',
+      dispatchCommand: vi.fn()
+    })!
+    expect(surface.getSnapshot()).toEqual([])
+  })
+
+  it('renders the version-neutral seed picker before any host catalog arrives', () => {
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
       scopeKey: 'pty-1',
       mode: 'live',
       dispatchCommand: vi.fn()
     })!
-    expect(surface.getSnapshot()).toHaveLength(1)
+
     expect(surface.getSnapshot()[0]).toMatchObject({
       id: 'model',
-      valueSource: 'unknown'
+      valueSource: 'unknown',
+      kind: {
+        choices: [
+          expect.objectContaining({ value: 'fable', label: 'Fable' }),
+          expect.objectContaining({ value: 'opus', label: 'Opus' }),
+          expect.objectContaining({ value: 'sonnet', label: 'Sonnet' }),
+          expect.objectContaining({ value: 'haiku', label: 'Haiku' })
+        ]
+      }
     })
   })
 
@@ -122,7 +141,7 @@ describe('native chat PTY session options', () => {
 
     expect(dispatch).toHaveBeenCalledWith('/model fable', {
       detectAgentInteraction: 'claude-model-switch-confirmation',
-      expectedChoiceLabel: 'Fable 5'
+      expectedChoiceLabel: 'Fable'
     })
     expect(onAgentPicker).not.toHaveBeenCalled()
     expect(result.snapshot[0]).toMatchObject({
@@ -600,6 +619,58 @@ describe('native chat PTY session options', () => {
     expect(model.kind).toMatchObject({
       currentValue: 'future-model',
       choices: expect.arrayContaining([{ value: 'future-model', label: 'future-model' }])
+    })
+  })
+
+  it('keeps a tracked alias selectable when the host catalog omits it', async () => {
+    seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
+      model: 'opus',
+      effort: 'xhigh'
+    })
+    const dispatch = vi.fn()
+    const surface = createNativeChatPtySessionOptions({
+      agent: 'claude',
+      scopeKey: 'pty-1',
+      // Why: current CLIs list `opus[1m]` and no plain `opus`.
+      initialModels: [
+        { id: 'opus[1m]', label: 'Opus (1M context)', options: [] },
+        { id: 'sonnet', label: 'Sonnet', options: [] }
+      ],
+      mode: 'live',
+      dispatchCommand: dispatch
+    })!
+
+    expect(surface.getSnapshot()[0].kind).toMatchObject({
+      currentValue: 'opus',
+      choices: expect.arrayContaining([
+        { value: 'opus', label: 'Opus', description: expect.any(String) }
+      ])
+    })
+    expect(surface.getSnapshot().find(({ id }) => id === 'effort')).toMatchObject({
+      settable: true,
+      kind: { currentValue: 'xhigh' }
+    })
+
+    await surface.setOption('effort', 'high')
+
+    expect(dispatch).toHaveBeenCalledWith('/effort high')
+  })
+
+  it('drops the reconciled row once the tracked model moves onto the host catalog', async () => {
+    seedNativeChatAppliedSessionOptions('pty-1', 'claude', { model: 'opus' })
+    const surface = createNativeChatPtySessionOptions({
+      agent: 'claude',
+      scopeKey: 'pty-1',
+      initialModels: [{ id: 'opus[1m]', label: 'Opus (1M context)', options: [] }],
+      mode: 'live',
+      dispatchCommand: vi.fn()
+    })!
+
+    await surface.setOption('model', 'opus[1m]')
+
+    expect(surface.getSnapshot()[0].kind).toMatchObject({
+      currentValue: 'opus[1m]',
+      choices: [{ value: 'opus[1m]', label: 'Opus (1M context)' }]
     })
   })
 

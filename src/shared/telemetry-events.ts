@@ -28,6 +28,7 @@ import {
   DAEMON_RETIRE_REASONS
 } from './daemon-lifecycle-telemetry'
 import {
+  DAEMON_AUDIT_GENERATION_ROLE_VALUES,
   DAEMON_AUDIT_PROCESS_REASON_VALUES,
   DAEMON_AUDIT_REASON_VALUES,
   DAEMON_AUDIT_STATE_VALUES,
@@ -419,28 +420,38 @@ const daemonLifecycleSchema = z.discriminatedUnion('transition', [
     .strict()
 ])
 
-const daemonAuditEligibilitySchema = z
-  .object({
-    state: z.enum(DAEMON_AUDIT_STATE_VALUES),
-    reason: z.enum(DAEMON_AUDIT_REASON_VALUES),
-    trigger: z.enum(DAEMON_AUDIT_TRIGGER_VALUES),
-    evidence_sources: z.array(z.enum(DAEMON_EVIDENCE_SOURCE_VALUES)).min(1).max(12),
-    protocol_generation: z.number().int().positive().max(1_000),
-    provider: z.literal('local-daemon'),
-    endpoint_kind: z.enum(['unix-socket', 'windows-named-pipe']),
-    profile_scope: z.enum(['configured', 'unspecified']),
-    exact_incarnation: z.enum([
-      'endpoint-identity',
-      'endpoint-identity-linux-ticks',
-      'unavailable'
-    ]),
-    reachability: z.enum(['authenticated', 'disconnected', 'unknown']),
-    inventory_authority: z.enum(['authoritative', 'unavailable']),
-    process_liveness: z.enum(['present', 'gone', 'unknown']),
-    process_reason: z.enum(DAEMON_AUDIT_PROCESS_REASON_VALUES).nullable(),
-    endpoint_state: z.enum(['missing', 'named-pipe', 'non-socket', 'socket', 'unknown'])
-  })
-  .strict()
+const daemonAuditEligibilityBaseSchema = z.object({
+  state: z.enum(DAEMON_AUDIT_STATE_VALUES),
+  reason: z.enum(DAEMON_AUDIT_REASON_VALUES),
+  trigger: z.enum(DAEMON_AUDIT_TRIGGER_VALUES),
+  evidence_sources: z.array(z.enum(DAEMON_EVIDENCE_SOURCE_VALUES)).min(1).max(12),
+  protocol_generation: z.number().int().positive().max(1_000),
+  generation_role: z.enum(DAEMON_AUDIT_GENERATION_ROLE_VALUES),
+  provider: z.literal('local-daemon'),
+  endpoint_kind: z.enum(['unix-socket', 'windows-named-pipe']),
+  profile_scope: z.enum(['configured', 'unspecified']),
+  reachability: z.enum(['authenticated', 'disconnected', 'unknown']),
+  inventory_authority: z.enum(['authoritative', 'unavailable']),
+  process_liveness: z.enum(['present', 'gone', 'unknown']),
+  process_reason: z.enum(DAEMON_AUDIT_PROCESS_REASON_VALUES).nullable(),
+  endpoint_state: z.enum(['missing', 'named-pipe', 'non-socket', 'socket', 'unknown'])
+})
+
+const daemonAuditEligibilitySchema = z.discriminatedUnion('exact_incarnation', [
+  daemonAuditEligibilityBaseSchema
+    .extend({
+      exact_incarnation: z.literal('endpoint-identity'),
+      exact_incarnation_correlation: z.string().regex(/^v1:[0-9a-f]{32}$/)
+    })
+    .strict(),
+  daemonAuditEligibilityBaseSchema
+    .extend({
+      exact_incarnation: z.literal('endpoint-identity-linux-ticks'),
+      exact_incarnation_correlation: z.string().regex(/^v1:[0-9a-f]{32}$/)
+    })
+    .strict(),
+  daemonAuditEligibilityBaseSchema.extend({ exact_incarnation: z.literal('unavailable') }).strict()
+])
 
 // Rollout signal for granting Codex hook trust via codex app-server RPCs
 // instead of Orca's self-computed trusted_hash. `fallback`/`verify_failed`

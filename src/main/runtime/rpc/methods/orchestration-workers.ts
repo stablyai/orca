@@ -243,7 +243,8 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           ...terminalAuthority,
           worktreeId: resolvedWorktree.id,
           effects,
-          setupState: setupReceipt.state
+          setupState: setupReceipt.state,
+          terminalOwnership: params.terminal ? 'external' : 'created'
         })
 
         failedStage = 'dispatch_input'

@@ -25,13 +25,13 @@ import type {
   TabGroup,
   TabGroupLayoutNode,
   TerminalLayoutSnapshot,
-  TerminalPaneLayoutNode,
   TerminalTab
 } from '../../../shared/types'
 import type { OpenFile } from '../store/slices/editor'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { getRemoteRuntimePtyEnvironmentId, toRemoteRuntimePtyId } from './runtime-terminal-stream'
 import { sanitizeTerminalLayoutPaneTitlesForLabels } from '@/lib/terminal-pane-title-sanitization'
+import { terminalLayoutEqual } from '@/lib/terminal-layout-equality'
 import { normalizeTerminalLayoutPtyOwnership } from '@/components/terminal-pane/terminal-layout-pty-ownership'
 import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getReachableRuntimeSessionMirrorTargets } from '@/lib/runtime-session-mirror-targets'
@@ -801,10 +801,13 @@ function buildMirroredAgentStatusPatch(
     changed = true
     const entryAttributionChanged =
       existing?.worktreeId !== entry.worktreeId || existing?.tabId !== entry.tabId
+    const entryFreshnessChanged =
+      !!existing && isAgentStatusFresh(existing, now) !== isAgentStatusFresh(entry, now)
     const entrySortRelevantChange =
       !existing ||
       existing.state !== entry.state ||
       !isAgentStatusFresh(existing, now) ||
+      entryFreshnessChanged ||
       entryAttributionChanged ||
       isMirroredCommandCodeTurnBump(existing, entry)
     aggregateRelevantChange = aggregateRelevantChange || entrySortRelevantChange
@@ -1395,13 +1398,17 @@ function agentStatusEntryEqual(a: AgentStatusEntry | undefined, b: AgentStatusEn
     a.lastAssistantMessage === b.lastAssistantMessage &&
     a.interrupted === b.interrupted &&
     a.promptInteractionKey === b.promptInteractionKey &&
+    a.restoredUnconfirmed === b.restoredUnconfirmed &&
     agentProviderSessionsEqual(a.agentType, a.providerSession, b.providerSession) &&
     sameAgentStateHistory(a.stateHistory, b.stateHistory)
   )
 }
 
-function isAgentStatusFresh(entry: Pick<AgentStatusEntry, 'updatedAt'>, now: number): boolean {
-  return now - entry.updatedAt <= AGENT_STATUS_STALE_AFTER_MS
+function isAgentStatusFresh(
+  entry: Pick<AgentStatusEntry, 'updatedAt' | 'restoredUnconfirmed'>,
+  now: number
+): boolean {
+  return entry.restoredUnconfirmed !== true && now - entry.updatedAt <= AGENT_STATUS_STALE_AFTER_MS
 }
 
 function isMirroredCommandCodeTurnBump(
@@ -1414,59 +1421,6 @@ function isMirroredCommandCodeTurnBump(
     existing.state === 'working' &&
     entry.state === 'working' &&
     entry.stateStartedAt > existing.stateStartedAt
-  )
-}
-
-function sameStringRecord(
-  a: Readonly<Record<string, string>> | undefined,
-  b: Readonly<Record<string, string>> | undefined
-): boolean {
-  const left = a ?? {}
-  const right = b ?? {}
-  const leftKeys = Object.keys(left)
-  const rightKeys = Object.keys(right)
-  return (
-    leftKeys.length === rightKeys.length &&
-    leftKeys.every(
-      (key) => Object.prototype.hasOwnProperty.call(right, key) && left[key] === right[key]
-    )
-  )
-}
-
-function terminalLayoutNodeEqual(
-  a: TerminalPaneLayoutNode | null | undefined,
-  b: TerminalPaneLayoutNode | null | undefined
-): boolean {
-  if (!a || !b) {
-    return !a && !b
-  }
-  if (a.type !== b.type) {
-    return false
-  }
-  if (a.type === 'leaf') {
-    return b.type === 'leaf' && a.leafId === b.leafId
-  }
-  return (
-    b.type === 'split' &&
-    a.direction === b.direction &&
-    a.ratio === b.ratio &&
-    terminalLayoutNodeEqual(a.first, b.first) &&
-    terminalLayoutNodeEqual(a.second, b.second)
-  )
-}
-
-function terminalLayoutEqual(
-  a: TerminalLayoutSnapshot | undefined,
-  b: TerminalLayoutSnapshot
-): boolean {
-  return (
-    terminalLayoutNodeEqual(a?.root, b.root) &&
-    (a?.activeLeafId ?? null) === b.activeLeafId &&
-    (a?.expandedLeafId ?? null) === b.expandedLeafId &&
-    sameStringRecord(a?.ptyIdsByLeafId, b.ptyIdsByLeafId) &&
-    sameStringRecord(a?.buffersByLeafId, b.buffersByLeafId) &&
-    sameStringRecord(a?.scrollbackRefsByLeafId, b.scrollbackRefsByLeafId) &&
-    sameStringRecord(a?.titlesByLeafId, b.titlesByLeafId)
   )
 }
 

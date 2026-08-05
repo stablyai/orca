@@ -6,6 +6,7 @@ import { mobileConnectionPathLabel } from '../transport/mobile-connection-path-l
 import type { MobileConnectionPath } from '../transport/stable-logical-rpc-client'
 import type { ConnectionState, HostProfile } from '../transport/types'
 import { colors, radii, spacing } from '../theme/mobile-theme'
+import { homeHostWorktreeSummary, type HostWorktreeInfo } from '../worktree/home-worktree-info'
 import { StatusDot } from './StatusDot'
 
 export function MobileHostCard(props: {
@@ -13,15 +14,20 @@ export function MobileHostCard(props: {
   state: ConnectionState
   verdict: ConnectionVerdict
   path: MobileConnectionPath
-  worktreeCounts?: { total: number; active: number }
+  // Why: the card owns the fresh/stale/unavailable wording so no caller can re-gate the counts
+  // away (STA-3123 shipped that bug once already).
+  worktreeInfo?: HostWorktreeInfo
   onPress: () => void
   onLongPress: () => void
 }) {
   const connected = props.state === 'connected'
+  // Why: a relay dial can run for seconds behind "Connecting…"/"Reconnecting…"; naming the
+  // path mid-wait tells the user the phone is off-LAN rather than hung (F5). Only 'relay' is
+  // named — 'lan' doubles as the unknown-path default, so it would be a guess before connect.
+  const dialingPath =
+    ['connecting', 'handshaking', 'reconnecting'].includes(props.state) && props.path === 'relay'
   const isError = ['warning', 'unreachable', 'auth-failed'].includes(props.verdict.kind)
-  const worktreeSummary = props.worktreeCounts
-    ? `${props.worktreeCounts.total} worktree${props.worktreeCounts.total === 1 ? '' : 's'}${props.worktreeCounts.active > 0 ? ` · ${props.worktreeCounts.active} active` : ''}`
-    : null
+  const worktreeSummary = homeHostWorktreeSummary(props.worktreeInfo)
   return (
     <Pressable
       style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
@@ -43,7 +49,7 @@ export function MobileHostCard(props: {
           <StatusDot state={props.state} verdict={props.verdict} />
           <Text style={[styles.metaText, isError && { color: colors.statusRed }]} numberOfLines={1}>
             {verdictDisplayLabel(props.verdict)}
-            {connected ? ` · ${mobileConnectionPathLabel(props.path)}` : ''}
+            {connected || dialingPath ? ` · ${mobileConnectionPathLabel(props.path)}` : ''}
           </Text>
         </View>
         {connected && worktreeSummary ? (

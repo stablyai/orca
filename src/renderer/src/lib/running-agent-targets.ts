@@ -71,7 +71,9 @@ export function deriveRunningAgentSendTargets(
     const liveTitleStatus = ptyId
       ? detectLiveAgentPaneStatus(state, parsed.tabId, parsed.leafId, tab.title)
       : null
-    if (decision.hookState === null) {
+    if (entry.restoredUnconfirmed) {
+      disabledReason = 'Agent status is stale'
+    } else if (decision.hookState === null) {
       if (liveTitleStatus === 'permission') {
         disabledReason = 'Agent needs permission'
       } else if (liveTitleStatus === null) {

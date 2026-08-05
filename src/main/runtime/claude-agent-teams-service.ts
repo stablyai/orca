@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto'
 import { splitTmuxCommand } from '../../shared/claude-agent-teams-tmux-compat'
 import { ClaudeAgentTeamsTmuxDispatcher } from './claude-agent-teams-tmux-dispatcher'
+import { resolvePathEnvKey } from '../pty/windows-environment-path'
 import type {
   AgentTeam,
   AgentTeamsLaunchEnv,
@@ -30,13 +31,15 @@ export class ClaudeAgentTeamsService {
     const teamId = `team-${randomUUID()}`
     const token = randomBytes(32).toString('base64url')
     const leaderPane = '%1'
-    const pathValue = [args.shimDir, args.baseEnv.PATH]
+    // Why: Windows callers pass an env spelt `Path`; reading `PATH` there truncated the launch PATH to just the shim dir.
+    const pathKey = resolvePathEnvKey(args.baseEnv, process.platform)
+    const pathValue = [args.shimDir, args.baseEnv[pathKey]]
       .filter(Boolean)
       .join(process.platform === 'win32' ? ';' : ':')
     const tmuxValue = `/tmp/orca-claude-agent-teams/${teamId},0,1`
     const env: Record<string, string> = {
       CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
-      PATH: pathValue,
+      [pathKey]: pathValue,
       TMUX: tmuxValue,
       TMUX_PANE: leaderPane,
       TERM: 'screen-256color',

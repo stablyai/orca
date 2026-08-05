@@ -327,12 +327,13 @@ function buildUncapturedCrashReportText(
 // erasing the pre-crash trail. Coalesce repeats into one entry that carries a
 // suppressed count instead.
 const DUPLICATE_TAB_OWNER_BREADCRUMB = 'terminal_tab_id_owned_by_multiple_worktrees'
+const PARK_VERDICT_CHURN_BREADCRUMB = 'terminal_park_verdict_churn'
 const COALESCED_RENDERER_BREADCRUMB_NAMES = new Set([
   'renderer_error',
   'renderer_unhandled_rejection',
-  'terminal_park_verdict_churn',
   'terminal_safe_fit_retry_exhausted',
   DUPLICATE_TAB_OWNER_BREADCRUMB,
+  PARK_VERDICT_CHURN_BREADCRUMB,
   TERMINAL_WEBGL_DIAGNOSTIC_BREADCRUMB
 ])
 const RENDERER_BREADCRUMB_COALESCE_MS = 30_000
@@ -345,10 +346,7 @@ const RENDERER_BREADCRUMB_COALESCE_MS = 30_000
 // mounted pane within ~60ms. Windows crash F0BKR84AHEH lost 26-90% of its
 // 30-entry ring to two such bursts. `suppressedSinceLast` keeps the pane count
 // — the only signal these carry — in one slot.
-const NAME_ONLY_COALESCED_BREADCRUMB_NAMES = new Set([
-  'terminal_park_verdict_churn',
-  'terminal_safe_fit_retry_exhausted'
-])
+const NAME_ONLY_COALESCED_BREADCRUMB_NAMES = new Set(['terminal_safe_fit_retry_exhausted'])
 
 function rendererBreadcrumbCoalesceKey(
   name: string,
@@ -356,6 +354,13 @@ function rendererBreadcrumbCoalesceKey(
 ): string | undefined {
   if (NAME_ONLY_COALESCED_BREADCRUMB_NAMES.has(name)) {
     return name
+  }
+  // Why trigger and not name alone: `burst` means damping engaged a commit
+  // short of React #185, `window` means slow benign churn. Collapsing them
+  // would drop the near-crash signal into a slow-churn slot. Still bounded —
+  // two slots per storm regardless of tab count.
+  if (name === PARK_VERDICT_CHURN_BREADCRUMB) {
+    return `${name}:${String(data?.trigger ?? '')}`
   }
   // Why kind and not name alone: a context loss (GPU/driver gave up on this
   // renderer) and an atlas reset (routine post-wake repaint) must never

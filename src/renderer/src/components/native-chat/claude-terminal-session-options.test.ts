@@ -37,6 +37,19 @@ describe('Claude terminal session option detection', () => {
     })
   })
 
+  it('matches headers from newer CLIs where the alias resolves to another version', () => {
+    // Why: family labels must keep matching as `opus` moves across releases.
+    const screen =
+      'Claude Code v2.1.220\r\n' +
+      'Opus 5 (1M context) with xhigh effort · API Usage Billing\r\n' +
+      '~/repo'
+
+    expect(readClaudeSessionOptionsFromTerminalScreen(screen)).toEqual({
+      model: 'opus',
+      effort: 'xhigh'
+    })
+  })
+
   it('reports an option-less Haiku model without inventing effort', () => {
     expect(
       readClaudeSessionOptionsFromTerminalScreen(

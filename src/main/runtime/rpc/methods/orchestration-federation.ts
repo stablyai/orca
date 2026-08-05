@@ -149,7 +149,9 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
               created.warning ?? 'Agent-first worktree creation returned no terminal.'
             )
           }
-          const listed = await runtime.listTerminals(`id:${created.worktree.id}`)
+          const listed = await runtime.listTerminals(`id:${created.worktree.id}`, undefined, {
+            includeVisualLayouts: false
+          })
           appendFederationTerminalEffects(
             effects,
             listed.terminals,

@@ -20,7 +20,7 @@ vi.mock('./connection-revival-triggers', () => ({
   subscribeConnectionRevivalTriggers: () => () => {}
 }))
 
-import { RpcClientProvider, useCloseHost, useHostClient } from './client-context'
+import { RpcClientProvider, useCloseHost, useForceReconnect, useHostClient } from './client-context'
 
 type FakeClient = RpcClient & {
   emitState: (state: ConnectionState) => void
@@ -172,7 +172,7 @@ describe('useHostClient', () => {
     }
   })
 
-  it('stays disconnected while a reused screen resolves an uncached host', async () => {
+  it('shows connecting while a reused screen resolves an uncached host', async () => {
     const client = makeFakeClient('connected')
     connectMock.mockReturnValue(client)
     loadHostsMock.mockResolvedValueOnce([HOST]).mockReturnValueOnce(new Promise<never>(() => {}))
@@ -194,18 +194,20 @@ describe('useHostClient', () => {
       })
       expect(stateByRenderTick.get(0)).toBe('connected')
 
+      // Why (S2): the unresolved-open window is amber, not grey — 'disconnected'
+      // here made every host swap flash a dead host while the Keychain read ran.
       selectedHostId = 'missing-host'
       renderTick = 1
       await act(async () => {
         renderer?.update(createElement(RpcClientProvider, null, createElement(Probe)))
       })
-      expect(stateByRenderTick.get(1)).toBe('disconnected')
+      expect(stateByRenderTick.get(1)).toBe('connecting')
 
       renderTick = 2
       await act(async () => {
         renderer?.update(createElement(RpcClientProvider, null, createElement(Probe)))
       })
-      expect(stateByRenderTick.get(2)).toBe('disconnected')
+      expect(stateByRenderTick.get(2)).toBe('connecting')
     } finally {
       restore()
       act(() => renderer?.unmount())
@@ -243,6 +245,73 @@ describe('useHostClient', () => {
     expect(harness.hook.state).toBe('disconnected')
 
     harness.unmount()
+  })
+
+  it('seeds connecting during the async open instead of flashing disconnected', async () => {
+    let resolveHosts: ((hosts: (typeof HOST)[]) => void) | null = null
+    const hostLookup = new Promise<(typeof HOST)[]>((resolve) => {
+      resolveHosts = resolve
+    })
+    connectMock.mockReturnValue(makeFakeClient('connecting'))
+    loadHostsMock.mockReturnValue(hostLookup)
+
+    const states: ConnectionState[] = []
+    let renderer: ReactTestRenderer | null = null
+    function Probe(): null {
+      states.push(useHostClient(HOST.id).state)
+      return null
+    }
+    const restore = suppressReactTestRendererDeprecationWarning()
+    try {
+      act(() => {
+        renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
+      })
+      expect(states.at(-1)).toBe('connecting')
+
+      await act(async () => {
+        resolveHosts?.([HOST])
+        await hostLookup
+      })
+      expect(states.at(-1)).toBe('connecting')
+      expect(states).not.toContain('disconnected')
+    } finally {
+      restore()
+      act(() => renderer?.unmount())
+    }
+  })
+
+  it('keeps Retry amber through forceReconnect instead of grey-then-amber', async () => {
+    const first = makeFakeClient('connected')
+    const second = makeFakeClient('connecting')
+    connectMock.mockReturnValueOnce(first).mockReturnValueOnce(second)
+    loadHostsMock.mockResolvedValue([HOST])
+
+    const states: ConnectionState[] = []
+    let forceReconnect: ((hostId: string) => Promise<void>) | null = null
+    let renderer: ReactTestRenderer | null = null
+    function Probe(): null {
+      forceReconnect = useForceReconnect()
+      states.push(useHostClient(HOST.id).state)
+      return null
+    }
+    const restore = suppressReactTestRendererDeprecationWarning()
+    try {
+      await act(async () => {
+        renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
+        await Promise.resolve()
+      })
+      expect(states.at(-1)).toBe('connected')
+
+      await act(async () => {
+        await forceReconnect?.(HOST.id)
+      })
+      expect(first.closeMock).toHaveBeenCalled()
+      expect(states.at(-1)).toBe('connecting')
+      expect(states).not.toContain('disconnected')
+    } finally {
+      restore()
+      act(() => renderer?.unmount())
+    }
   })
 
   it('does not open a client after the host is closed during an in-flight lookup', async () => {
