@@ -2141,6 +2141,13 @@ const api = {
     }): Promise<void> => ipcRenderer.invoke('agentTrust:markTrusted', args)
   },
 
+  agentSession: {
+    getRenamedTitle: (args: {
+      transcriptPath: string
+      connectionId?: string
+    }): Promise<string | null> => ipcRenderer.invoke('agentSession:getRenamedTitle', args)
+  },
+
   preflight: {
     check: (args?: {
       force?: boolean

@@ -391,7 +391,8 @@ export function FloatingTerminalPanel({
                 {
                   ...tab,
                   quickCommandLabel: tab.quickCommandLabel ?? terminalTab.quickCommandLabel,
-                  generatedLabel: tab.generatedLabel ?? terminalTab.generatedTitle
+                  generatedLabel: tab.generatedLabel ?? terminalTab.generatedTitle,
+                  agentRenamedLabel: tab.agentRenamedLabel ?? terminalTab.agentRenamedTitle
                 },
                 generatedTabTitlesEnabled,
                 tab.label

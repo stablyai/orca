@@ -656,6 +656,8 @@ function buildMirroredTerminalTabs(
         ...(quickCommandLabel ? { quickCommandLabel } : {}),
         ...(startupCwd ? { startupCwd } : {}),
         customTitle: existing?.customTitle ?? null,
+        // Why: the agent's deliberate rename is client-derived from the transcript; host snapshots never carry it.
+        ...(existing?.agentRenamedTitle ? { agentRenamedTitle: existing.agentRenamedTitle } : {}),
         color,
         isPinned,
         ...(viewMode ? { viewMode } : {}),
@@ -888,6 +890,7 @@ function buildTerminalUnifiedTab(
     label: tab.title,
     ...(tab.quickCommandLabel?.trim() ? { quickCommandLabel: tab.quickCommandLabel.trim() } : {}),
     ...(tab.generatedTitle?.trim() ? { generatedLabel: tab.generatedTitle.trim() } : {}),
+    ...(tab.agentRenamedTitle?.trim() ? { agentRenamedLabel: tab.agentRenamedTitle.trim() } : {}),
     customLabel: tab.customTitle,
     color: tab.color,
     sortOrder: tab.sortOrder,
@@ -1526,6 +1529,7 @@ function terminalTabEqual(a: TerminalTab, b: TerminalTab): boolean {
     a.quickCommandLabel === b.quickCommandLabel &&
     a.startupCwd === b.startupCwd &&
     a.generatedTitle === b.generatedTitle &&
+    a.agentRenamedTitle === b.agentRenamedTitle &&
     a.customTitle === b.customTitle &&
     a.color === b.color &&
     a.sortOrder === b.sortOrder &&

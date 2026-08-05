@@ -131,7 +131,8 @@ export function useTabGroupWorkspaceModel({
               {
                 ...item,
                 quickCommandLabel: item.quickCommandLabel ?? terminalTab?.quickCommandLabel,
-                generatedLabel: item.generatedLabel ?? terminalTab?.generatedTitle
+                generatedLabel: item.generatedLabel ?? terminalTab?.generatedTitle,
+                agentRenamedLabel: item.agentRenamedLabel ?? terminalTab?.agentRenamedTitle
               },
               worktreeState.generatedTabTitlesEnabled,
               item.label
@@ -139,6 +140,9 @@ export function useTabGroupWorkspaceModel({
             defaultTitle: terminalTab?.defaultTitle,
             quickCommandLabel: terminalTab?.quickCommandLabel ?? item.quickCommandLabel ?? null,
             generatedTitle: terminalTab?.generatedTitle ?? item.generatedLabel ?? null,
+            // Why: this rebuild is what the tab strip resolves against, so a
+            // dropped rename silently hands the label back to generatedTitle.
+            agentRenamedTitle: terminalTab?.agentRenamedTitle ?? item.agentRenamedLabel ?? null,
             customTitle: item.customLabel ?? terminalTab?.customTitle ?? null,
             color: item.color ?? terminalTab?.color ?? null,
             sortOrder: item.sortOrder,

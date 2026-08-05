@@ -1,8 +1,12 @@
 import type { Tab, TerminalTab } from './types'
+import { isAgentRenamedTerminalTitle } from './agent-session-rename-title'
 import { isMeaningfulOpenCodeTerminalTitle } from './opencode-terminal-title'
 
 export function resolveTerminalTabTitle(
-  tab: Pick<TerminalTab, 'customTitle' | 'quickCommandLabel' | 'generatedTitle' | 'title'>,
+  tab: Pick<
+    TerminalTab,
+    'customTitle' | 'quickCommandLabel' | 'generatedTitle' | 'title' | 'agentRenamedTitle'
+  >,
   generatedTitlesEnabled: boolean,
   fallback = ''
 ): string {
@@ -10,6 +14,7 @@ export function resolveTerminalTabTitle(
   return (
     tab.customTitle?.trim() ||
     tab.quickCommandLabel?.trim() ||
+    (isAgentRenamedTerminalTitle(liveTitle, tab.agentRenamedTitle) ? liveTitle : '') ||
     (isMeaningfulOpenCodeTerminalTitle(liveTitle) ? liveTitle : '') ||
     (generatedTitlesEnabled ? tab.generatedTitle?.trim() : '') ||
     liveTitle ||
@@ -18,7 +23,12 @@ export function resolveTerminalTabTitle(
 }
 
 export function resolveUnifiedTabLabel(
-  tab: Pick<Tab, 'customLabel' | 'quickCommandLabel' | 'generatedLabel' | 'label'> | undefined,
+  tab:
+    | Pick<
+        Tab,
+        'customLabel' | 'quickCommandLabel' | 'generatedLabel' | 'label' | 'agentRenamedLabel'
+      >
+    | undefined,
   generatedTitlesEnabled: boolean,
   fallback = ''
 ): string {
@@ -26,6 +36,7 @@ export function resolveUnifiedTabLabel(
   return (
     tab?.customLabel?.trim() ||
     tab?.quickCommandLabel?.trim() ||
+    (isAgentRenamedTerminalTitle(liveLabel, tab?.agentRenamedLabel) ? liveLabel : '') ||
     (isMeaningfulOpenCodeTerminalTitle(liveLabel) ? liveLabel : '') ||
     (generatedTitlesEnabled ? tab?.generatedLabel?.trim() : '') ||
     liveLabel ||

@@ -29,6 +29,7 @@ import {
   worktreeWorkspaceKey
 } from '../../../../shared/workspace-scope'
 import { deriveGeneratedTabTitle } from '../../../../shared/agent-tab-title'
+import { scheduleAgentRenamedTabTitleRefresh } from '@/lib/agent-session-rename-refresh'
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-decorative-title-signature'
 import {
   isTerminalLeafId,
@@ -347,6 +348,25 @@ function updateUnifiedTerminalLabel(
   return unifiedTabs.map((entry, index) => (index === unifiedIndex ? { ...entry, label } : entry))
 }
 
+function updateUnifiedTerminalAgentRenamedLabel(
+  unifiedTabs: Tab[],
+  terminalTabId: string,
+  agentRenamedLabel: string | null
+): Tab[] | null {
+  const unifiedIndex = unifiedTabs.findIndex(
+    (entry) => entry.contentType === 'terminal' && entry.entityId === terminalTabId
+  )
+  if (
+    unifiedIndex === -1 ||
+    (unifiedTabs[unifiedIndex]?.agentRenamedLabel ?? null) === agentRenamedLabel
+  ) {
+    return null
+  }
+  return unifiedTabs.map((entry, index) =>
+    index === unifiedIndex ? { ...entry, agentRenamedLabel } : entry
+  )
+}
+
 function updateUnifiedTerminalGeneratedLabel(
   unifiedTabs: Tab[],
   terminalTabId: string,
@@ -466,6 +486,33 @@ function getRemoteConnectionIdForWorktree(
     .find((entry) => entry.id === worktreeId)
   const repo = worktree ? state.repos.find((entry) => entry.id === worktree.repoId) : null
   return repo?.connectionId?.trim() || null
+}
+
+/**
+ * Ask main whether the tab's new live title is a deliberate in-agent rename.
+ * Only matters while generated titles are on: with the setting off the live
+ * title already outranks everything below the manual/quick-command labels.
+ */
+function requestAgentRenamedTabTitle(get: () => AppState, tabId: string, liveTitle: string): void {
+  const state = get()
+  if (state.settings?.tabAutoGenerateTitle !== true) {
+    return
+  }
+  const ownerWorktreeId = getTerminalTabOwnerWorktreeId(state.tabsByWorktree, tabId)
+  if (!ownerWorktreeId) {
+    return
+  }
+  const transcriptPaths = Object.entries(state.agentStatusByPaneKey).flatMap(([paneKey, entry]) => {
+    const transcriptPath = entry?.providerSession?.transcriptPath?.trim()
+    return transcriptPath && getTabIdFromPaneKey(paneKey) === tabId ? [transcriptPath] : []
+  })
+  scheduleAgentRenamedTabTitleRefresh({
+    tabId,
+    liveTitle,
+    transcriptPaths,
+    connectionId: getRemoteConnectionIdForWorktree(state, ownerWorktreeId),
+    apply: (agentRenamedTitle) => get().setTabAgentRenamedTitle(tabId, agentRenamedTitle)
+  })
 }
 
 function resolveTerminalStopRuntimeEnvironmentId(
@@ -688,6 +735,8 @@ export type TerminalSlice = {
     prompt: string,
     options?: { replaceExistingGeneratedTitle?: boolean }
   ) => void
+  /** Record the agent's own deliberate `/rename` so it outranks the generated title. */
+  setTabAgentRenamedTitle: (tabId: string, agentRenamedTitle: string | null) => void
   clearTabLaunchAgent: (tabId: string) => void
   setRuntimePaneTitle: (tabId: string, paneId: number, title: string) => void
   clearRuntimePaneTitle: (tabId: string, paneId: number) => void
@@ -1986,7 +2035,44 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     }))
   },
 
+  setTabAgentRenamedTitle: (tabId, agentRenamedTitle) => {
+    set((s) => {
+      const ownerWorktreeId = getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
+      if (!ownerWorktreeId) {
+        return s
+      }
+      const tabs = s.tabsByWorktree[ownerWorktreeId] ?? []
+      const currentTab = tabs.find((tab) => tab.id === tabId)
+      if (!currentTab || (currentTab.agentRenamedTitle ?? null) === agentRenamedTitle) {
+        return s
+      }
+      const unifiedTabsWithRenamedLabel = updateUnifiedTerminalAgentRenamedLabel(
+        s.unifiedTabsByWorktree[ownerWorktreeId] ?? [],
+        tabId,
+        agentRenamedTitle
+      )
+      scheduleRuntimeGraphSync()
+      return {
+        tabsByWorktree: {
+          ...s.tabsByWorktree,
+          [ownerWorktreeId]: tabs.map((tab) =>
+            tab.id === tabId ? { ...tab, agentRenamedTitle } : tab
+          )
+        },
+        ...(unifiedTabsWithRenamedLabel
+          ? {
+              unifiedTabsByWorktree: {
+                ...s.unifiedTabsByWorktree,
+                [ownerWorktreeId]: unifiedTabsWithRenamedLabel
+              }
+            }
+          : {})
+      }
+    })
+  },
+
   updateTabTitle: (tabId, title) => {
+    let changedLiveTitle: string | null = null
     set((s) => {
       // Why: update only the owner to preserve selector equality for background worktrees.
       const ownerWorktreeId = getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
@@ -2044,6 +2130,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
             }
           : tab
       )
+      changedLiveTitle = nextTitle
       scheduleRuntimeGraphSync()
       const nextTabsByWorktree = { ...s.tabsByWorktree, [ownerWorktreeId]: ownerTabs }
       // Why: title changes affect sorting, except active-worktree remount side effects.
@@ -2059,6 +2146,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       }
       return nextState
     })
+    if (changedLiveTitle) {
+      requestAgentRenamedTabTitle(get, tabId, changedLiveTitle)
+    }
   },
 
   setGeneratedTabTitleFromAgentPrompt: (paneKey, prompt, options) => {

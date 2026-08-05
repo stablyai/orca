@@ -36,6 +36,7 @@ const {
   registerCodexAccountHandlersMock,
   registerAgentHookHandlersMock,
   registerAgentTrustHandlersMock,
+  registerAgentSessionRenameHandlersMock,
   registerClaudeAccountHandlersMock,
   registerMiniMaxCredentialsHandlersMock,
   registerGrokAccountHandlersMock,
@@ -101,6 +102,7 @@ const {
   registerCodexAccountHandlersMock: vi.fn(),
   registerAgentHookHandlersMock: vi.fn(),
   registerAgentTrustHandlersMock: vi.fn(),
+  registerAgentSessionRenameHandlersMock: vi.fn(),
   registerClaudeAccountHandlersMock: vi.fn(),
   registerMiniMaxCredentialsHandlersMock: vi.fn(),
   registerGrokAccountHandlersMock: vi.fn(),
@@ -323,6 +325,10 @@ vi.mock('./agent-trust', () => ({
   registerAgentTrustHandlers: registerAgentTrustHandlersMock
 }))
 
+vi.mock('./agent-session-rename', () => ({
+  registerAgentSessionRenameHandlers: registerAgentSessionRenameHandlersMock
+}))
+
 vi.mock('./claude-accounts', () => ({
   registerClaudeAccountHandlers: registerClaudeAccountHandlersMock
 }))
@@ -419,6 +425,7 @@ describe('registerCoreHandlers', () => {
     registerCodexAccountHandlersMock.mockReset()
     registerAgentHookHandlersMock.mockReset()
     registerAgentTrustHandlersMock.mockReset()
+    registerAgentSessionRenameHandlersMock.mockReset()
     registerClaudeAccountHandlersMock.mockReset()
     registerMiniMaxCredentialsHandlersMock.mockReset()
     registerClipboardHandlersMock.mockReset()

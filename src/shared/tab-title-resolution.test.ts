@@ -48,6 +48,61 @@ describe('tab title resolution', () => {
     ).toBe('Refactor auth')
   })
 
+  it('lets a deliberate in-agent rename win after the first prompt', () => {
+    expect(
+      resolveTerminalTabTitle(
+        {
+          customTitle: null,
+          generatedTitle: 'What is 2 2',
+          title: '✳ billing-fix',
+          agentRenamedTitle: 'billing-fix'
+        },
+        true
+      )
+    ).toBe('✳ billing-fix')
+  })
+
+  it('keeps generated titles ahead of the agent auto-generated summary', () => {
+    expect(
+      resolveTerminalTabTitle(
+        {
+          customTitle: null,
+          generatedTitle: 'What is 2 2',
+          title: '✳ Answer simple arithmetic question',
+          agentRenamedTitle: 'billing-fix'
+        },
+        true
+      )
+    ).toBe('What is 2 2')
+  })
+
+  it('keeps manual and quick command titles ahead of an in-agent rename', () => {
+    expect(
+      resolveTerminalTabTitle(
+        {
+          customTitle: 'Payments',
+          quickCommandLabel: 'Run tests',
+          generatedTitle: 'What is 2 2',
+          title: '✳ billing-fix',
+          agentRenamedTitle: 'billing-fix'
+        },
+        true
+      )
+    ).toBe('Payments')
+    expect(
+      resolveTerminalTabTitle(
+        {
+          customTitle: null,
+          quickCommandLabel: 'Run tests',
+          generatedTitle: 'What is 2 2',
+          title: '✳ billing-fix',
+          agentRenamedTitle: 'billing-fix'
+        },
+        true
+      )
+    ).toBe('Run tests')
+  })
+
   it('places quick command labels between manual and generated titles', () => {
     expect(
       resolveTerminalTabTitle(
@@ -107,6 +162,31 @@ describe('tab title resolution', () => {
         true
       )
     ).toBe('OC | Native Stable Session')
+  })
+
+  it('lets a deliberate in-agent rename win for unified labels', () => {
+    expect(
+      resolveUnifiedTabLabel(
+        {
+          customLabel: null,
+          generatedLabel: 'What is 2 2',
+          label: '✳ billing-fix',
+          agentRenamedLabel: 'billing-fix'
+        },
+        true
+      )
+    ).toBe('✳ billing-fix')
+    expect(
+      resolveUnifiedTabLabel(
+        {
+          customLabel: null,
+          generatedLabel: 'What is 2 2',
+          label: '✳ Answer simple arithmetic question',
+          agentRenamedLabel: 'billing-fix'
+        },
+        true
+      )
+    ).toBe('What is 2 2')
   })
 
   it('keeps manual and quick command labels ahead of native OpenCode labels', () => {

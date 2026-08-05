@@ -840,6 +840,8 @@ export type Tab = {
   label: string // display title (auto-derived from PTY or filename)
   generatedLabel?: string | null
   quickCommandLabel?: string | null
+  /** Mirrors `TerminalTab.agentRenamedTitle` for unified-tab label resolution. */
+  agentRenamedLabel?: string | null
   customLabel: string | null
   color: string | null
   sortOrder: number
@@ -881,6 +883,11 @@ export type TerminalTab = {
   generatedTitle?: string | null
   /** Stable label from the tab-bar Quick Command that created this terminal. */
   quickCommandLabel?: string | null
+  /** Latest name the agent's own rename command set for this session (Claude's
+   *  `/rename`). Distinct from `customTitle`, which is the user renaming the tab
+   *  inside Orca: this one only outranks `generatedTitle` while the agent's live
+   *  title still carries it. See agent-session-rename-title.ts. */
+  agentRenamedTitle?: string | null
   customTitle: string | null
   color: string | null
   /** Pinned tabs survive "close others"; host-persisted for remote servers. */

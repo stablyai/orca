@@ -31,6 +31,24 @@ describe('getAgentRowConversationName', () => {
     )
   })
 
+  it('prefers a deliberate in-agent rename over the generated title', () => {
+    const tab = makeTab({
+      generatedTitle: 'What is 2 2',
+      title: '✳ billing-fix',
+      agentRenamedTitle: 'billing-fix'
+    })
+    expect(getAgentRowConversationName(tab, 'claude', true)).toBe('billing-fix')
+  })
+
+  it('keeps the generated title ahead of the agent auto-generated summary', () => {
+    const tab = makeTab({
+      generatedTitle: 'What is 2 2',
+      title: '✳ Answer simple arithmetic question',
+      agentRenamedTitle: 'billing-fix'
+    })
+    expect(getAgentRowConversationName(tab, 'claude', true)).toBe('What is 2 2')
+  })
+
   it('uses the generated title only when generated titles are enabled', () => {
     const tab = makeTab({ generatedTitle: 'Fix intake flow', title: '✳ Investigate replay bug' })
     expect(getAgentRowConversationName(tab, 'claude', true)).toBe('Fix intake flow')

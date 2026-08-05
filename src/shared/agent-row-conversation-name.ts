@@ -1,11 +1,13 @@
 // Resolves the stable "conversation name" an agent row can show instead of the
 // live last-message preview. Sources, in the same precedence the tab bar uses
-// (tab-title-resolution.ts): manual rename → quick-command label → OpenCode's
-// semantic session title → Orca's generated title → the agent-set live title.
+// (tab-title-resolution.ts): manual rename → quick-command label → the agent's
+// own deliberate `/rename` → OpenCode's semantic session title → Orca's
+// generated title → the agent-set live title.
 // Live titles are accepted only when they carry a real name — pure status,
 // identity-echo, and spinner/cwd titles yield null so callers keep the
 // last-message label.
 import type { AgentType } from './agent-status-types'
+import { isAgentRenamedTerminalTitle } from './agent-session-rename-title'
 import { isClaudeManagementTitle } from './agent-title-core'
 import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
 import { formatAgentTypeLabel } from './agent-type-label'
@@ -15,7 +17,12 @@ import type { TerminalTab } from './types'
 
 export type ConversationNameTab = Pick<
   TerminalTab,
-  'customTitle' | 'quickCommandLabel' | 'generatedTitle' | 'title' | 'defaultTitle'
+  | 'customTitle'
+  | 'quickCommandLabel'
+  | 'generatedTitle'
+  | 'title'
+  | 'defaultTitle'
+  | 'agentRenamedTitle'
 >
 
 // Why: synthetic status titles ("Codex ready", "Cursor - action required") are
@@ -124,6 +131,9 @@ export function getAgentRowConversationName(
     return quickCommandLabel
   }
   const liveTitle = tab.title?.trim() ?? ''
+  if (isAgentRenamedTerminalTitle(liveTitle, tab.agentRenamedTitle)) {
+    return stripLeadingAgentTitleDecorationOrEmpty(liveTitle) || liveTitle
+  }
   if (isMeaningfulOpenCodeTerminalTitle(liveTitle)) {
     return liveTitle
   }

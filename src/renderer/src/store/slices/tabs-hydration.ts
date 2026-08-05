@@ -219,6 +219,7 @@ function hydrateLegacyFormat(
         label: tt.title,
         ...(tt.quickCommandLabel?.trim() ? { quickCommandLabel: tt.quickCommandLabel.trim() } : {}),
         ...(tt.generatedTitle?.trim() ? { generatedLabel: tt.generatedTitle.trim() } : {}),
+        ...(tt.agentRenamedTitle?.trim() ? { agentRenamedLabel: tt.agentRenamedTitle.trim() } : {}),
         customLabel: tt.customTitle,
         color: tt.color,
         sortOrder: tt.sortOrder,
