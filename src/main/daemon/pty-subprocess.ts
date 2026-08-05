@@ -32,6 +32,7 @@ import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
 import { stripInheritedBuildModeEnv } from '../pty/build-mode-env'
+import { stripInheritedClaudeSessionEnv } from '../pty/claude-session-env'
 import { resolvePathEnvKey } from '../pty/windows-environment-path'
 import { parseWslPath } from '../wsl'
 import { addWslEnvKeys } from '../wsl-env'
@@ -607,7 +608,10 @@ function spawnDaemonPtyWithWindowsFallback(args: {
 export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandle {
   const size = normalizePtySize(opts.cols, opts.rows)
   const env: Record<string, string> = {
-    ...mergeGitConfigEnvProtocol(stripInheritedBuildModeEnv(process.env), opts.env),
+    ...mergeGitConfigEnvProtocol(
+      stripInheritedClaudeSessionEnv(stripInheritedBuildModeEnv(process.env)),
+      opts.env
+    ),
     TERM: 'xterm-256color',
     COLORTERM: 'truecolor',
     TERM_PROGRAM: 'Orca',

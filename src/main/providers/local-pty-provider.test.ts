@@ -564,6 +564,45 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.NODE_ENV).toBe('production')
     })
 
+    it('does not inherit the Claude Code child-session marker from the Orca process env', async () => {
+      // Why: an Orca launched from inside a Claude Code session inherits its
+      // marker; leaking it makes `claude` in the terminal falsely detect a
+      // child session and disable transcript saving.
+      const previous = process.env.CLAUDE_CODE_CHILD_SESSION
+      process.env.CLAUDE_CODE_CHILD_SESSION = '1'
+      try {
+        await provider.spawn({ cols: 80, rows: 24 })
+      } finally {
+        if (previous === undefined) {
+          delete process.env.CLAUDE_CODE_CHILD_SESSION
+        } else {
+          process.env.CLAUDE_CODE_CHILD_SESSION = previous
+        }
+      }
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[2].env.CLAUDE_CODE_CHILD_SESSION).toBeUndefined()
+      expect(spawnCall[2].env.PATH).toBe(process.env.PATH)
+    })
+
+    it('keeps an explicitly requested CLAUDE_CODE_CHILD_SESSION for spawned terminals', async () => {
+      // Why: only the ambient value is stripped; a caller-supplied value still wins.
+      const previous = process.env.CLAUDE_CODE_CHILD_SESSION
+      process.env.CLAUDE_CODE_CHILD_SESSION = '1'
+      try {
+        await provider.spawn({ cols: 80, rows: 24, env: { CLAUDE_CODE_CHILD_SESSION: 'explicit' } })
+      } finally {
+        if (previous === undefined) {
+          delete process.env.CLAUDE_CODE_CHILD_SESSION
+        } else {
+          process.env.CLAUDE_CODE_CHILD_SESSION = previous
+        }
+      }
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[2].env.CLAUDE_CODE_CHILD_SESSION).toBe('explicit')
+    })
+
     it('suppresses the first-run Powerlevel10k wizard for spawned terminals', async () => {
       await provider.spawn({ cols: 80, rows: 24 })
 
