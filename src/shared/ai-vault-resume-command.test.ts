@@ -1,6 +1,32 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildAiVaultResumeCommand } from './ai-vault-resume-command'
+import {
+  buildAiVaultResumeCommand,
+  getAiVaultAgentProviderSession
+} from './ai-vault-resume-command'
+
+describe('getAiVaultAgentProviderSession', () => {
+  it('uses each provider resume identity contract', () => {
+    expect(
+      getAiVaultAgentProviderSession({ agent: 'antigravity', sessionId: 'conversation-1' })
+    ).toEqual({ key: 'conversation_id', id: 'conversation-1' })
+    expect(
+      getAiVaultAgentProviderSession({
+        agent: 'pi',
+        sessionId: 'pi-1',
+        filePath: '/home/ada/.pi/session.jsonl'
+      })
+    ).toEqual({
+      key: 'session_id',
+      id: 'pi-1',
+      transcriptPath: '/home/ada/.pi/session.jsonl'
+    })
+    expect(getAiVaultAgentProviderSession({ agent: 'codex', sessionId: 'codex-1' })).toEqual({
+      key: 'session_id',
+      id: 'codex-1'
+    })
+  })
+})
 
 describe('buildAiVaultResumeCommand', () => {
   it('uses Antigravity conversation ids instead of Gemini resume flags', () => {

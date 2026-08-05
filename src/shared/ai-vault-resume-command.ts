@@ -8,6 +8,24 @@ import {
   type AgentStartupShell
 } from './tui-agent-startup-shell'
 import type { AiVaultAgent, AiVaultSession } from './ai-vault-types'
+import { isResumableTuiAgent, type AgentProviderSessionMetadata } from './agent-session-resume'
+
+export function getAiVaultAgentProviderSession(
+  session: Pick<AiVaultSession, 'agent' | 'sessionId'> & { filePath?: string | null }
+): AgentProviderSessionMetadata | null {
+  if (!isResumableTuiAgent(session.agent)) {
+    return null
+  }
+  if (session.agent === 'antigravity') {
+    return { key: 'conversation_id', id: session.sessionId }
+  }
+  if (session.agent === 'pi') {
+    return session.filePath
+      ? { key: 'session_id', id: session.sessionId, transcriptPath: session.filePath }
+      : null
+  }
+  return { key: 'session_id', id: session.sessionId }
+}
 
 export function buildAiVaultResumeCommand(args: {
   agent: AiVaultAgent

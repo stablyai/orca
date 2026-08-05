@@ -2,6 +2,7 @@ import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
 import {
   buildAiVaultResumeCommand,
   buildAiVaultResumeShellCommand,
+  getAiVaultAgentProviderSession,
   realHomeCodexResumeEnvDeletion
 } from '../../../src/shared/ai-vault-resume-command'
 import { RESUME_RPC_TIMEOUT_MS } from './ai-vault-resume-preparation'
@@ -80,14 +81,18 @@ export type MobileAiVaultResumeLaunch = {
   hostAuthorityEligible?: boolean
 }
 
-export function buildMobileAiVaultResumeLaunch(args: {
+type MobileAiVaultResumeLaunchArgs = {
   session: Pick<AiVaultSession, 'agent' | 'sessionId' | 'cwd' | 'codexHome'> &
     Partial<Pick<AiVaultSession, 'filePath'>>
   hostPlatform: NodeJS.Platform
   runtimeHostPlatform?: NodeJS.Platform | null
   hostTerminalWindowsShell?: string | null
   settings?: MobileAiVaultResumeSettings | null
-}): MobileAiVaultResumeLaunch {
+}
+
+export function buildMobileAiVaultResumeLaunch(
+  args: MobileAiVaultResumeLaunchArgs
+): MobileAiVaultResumeLaunch {
   const shell =
     args.hostPlatform === 'win32'
       ? resolveWindowsShellStartupFamily(args.hostTerminalWindowsShell)
@@ -100,10 +105,17 @@ export function buildMobileAiVaultResumeLaunch(args: {
   const hostTranscriptPath = args.session.filePath?.trim() || undefined
   const resumeFilePath = normalizeAiVaultResumeFilePath(args.session.filePath, args.hostPlatform)
   if (isResumableTuiAgent(args.session.agent)) {
-    const providerSession: AgentProviderSessionMetadata = {
-      key: 'session_id',
-      id: args.session.sessionId,
-      ...(hostTranscriptPath ? { transcriptPath: hostTranscriptPath } : {})
+    const baseProviderSession = getAiVaultAgentProviderSession({
+      agent: args.session.agent,
+      sessionId: args.session.sessionId,
+      filePath: hostTranscriptPath
+    })
+    const providerSession: AgentProviderSessionMetadata | null =
+      baseProviderSession && hostTranscriptPath
+        ? { ...baseProviderSession, transcriptPath: hostTranscriptPath }
+        : baseProviderSession
+    if (!providerSession) {
+      return buildLegacyMobileAiVaultResumeLaunch(args, commandOverride)
     }
     const executionProviderSession =
       resumeFilePath && resumeFilePath !== hostTranscriptPath
@@ -157,6 +169,13 @@ export function buildMobileAiVaultResumeLaunch(args: {
       }
     }
   }
+  return buildLegacyMobileAiVaultResumeLaunch(args, commandOverride)
+}
+
+function buildLegacyMobileAiVaultResumeLaunch(
+  args: MobileAiVaultResumeLaunchArgs,
+  commandOverride: string | null
+): MobileAiVaultResumeLaunch {
   return {
     command: buildMobileAiVaultResumeCommand({
       session: args.session,

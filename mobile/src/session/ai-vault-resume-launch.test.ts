@@ -123,6 +123,23 @@ describe('buildMobileAiVaultResumeCommand', () => {
 })
 
 describe('buildMobileAiVaultResumeLaunch', () => {
+  it('uses Antigravity conversation identity for host-authority resume', () => {
+    const launch = buildMobileAiVaultResumeLaunch({
+      session: session({
+        agent: 'antigravity',
+        sessionId: 'conversation-1',
+        filePath: null
+      }),
+      hostPlatform: 'linux'
+    })
+
+    expect(launch).toMatchObject({
+      launchAgent: 'antigravity',
+      providerSession: { key: 'conversation_id', id: 'conversation-1' }
+    })
+    expect(launch.command).toContain("'--conversation' 'conversation-1'")
+  })
+
   it('preserves an arbitrary OMP transcript locator for later cold resume', () => {
     const launch = buildMobileAiVaultResumeLaunch({
       session: session({
