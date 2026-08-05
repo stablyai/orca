@@ -20,8 +20,7 @@ const WINDOWS_GROK_HOOK_POST_COMMAND = buildWindowsAgentHookPostCommand('grok', 
  * guards become a syntax error and every Grok hook event fails with exit 255.
  *
  * - Guard substring ops behind `if defined` + goto (not a parenthesized block).
- * - Never compare against `"\"` (that RHS alone is a cmd quote-parser bug).
- * - Detect trailing `\` with findstr instead.
+ * - Reject oversized values before copying them onto a cmd input line.
  */
 export function buildWindowsGrokHookScript(): string {
   return [
@@ -31,9 +30,12 @@ export function buildWindowsGrokHookScript(): string {
     ...buildWindowsHookEnvironmentGuardLines(),
     'set "ORCA_GROK_HOME="',
     'if not defined GROK_HOME goto :orca_grok_home_ready',
+    `if not "%GROK_HOME:~${GROK_HOME_ENVELOPE_MAX_LENGTH},1%"=="" goto :orca_grok_home_ready`,
     'set "ORCA_GROK_HOME=%GROK_HOME%"',
+    'if not defined ORCA_GROK_HOME goto :orca_grok_home_ready',
+    'if "%ORCA_GROK_HOME:~-1%"=="\\" set "ORCA_GROK_HOME=%ORCA_GROK_HOME%."',
+    // Why: the trailing-backslash safety sentinel counts toward the relay envelope.
     `if not "%ORCA_GROK_HOME:~${GROK_HOME_ENVELOPE_MAX_LENGTH},1%"=="" set "ORCA_GROK_HOME="`,
-    'if defined ORCA_GROK_HOME echo.%ORCA_GROK_HOME%| findstr /r /c:"\\$" >nul 2>nul && set "ORCA_GROK_HOME=%ORCA_GROK_HOME%."',
     ':orca_grok_home_ready',
     WINDOWS_GROK_HOOK_POST_COMMAND,
     'exit /b 0',
