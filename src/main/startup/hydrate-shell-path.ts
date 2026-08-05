@@ -26,7 +26,7 @@ const ANSI_RE = /\x1b\[[0-9;?]*[A-Za-z]/g // eslint-disable-line no-control-rege
 // with the right reason. The shared alias keeps the enum in lockstep with the
 // telemetry schema (compile-time guard in telemetry-events.ts).
 export type HydrationResult =
-  | { ok: true; segments: string[]; failureReason: 'none' }
+  | { ok: true; segments: string[]; failureReason: 'none'; sshAuthSock?: string | null }
   | {
       ok: false
       segments: []
@@ -77,13 +77,27 @@ function parseCapturedPath(stdout: string): string[] {
   ]
 }
 
+// Why: the sock section is best-effort — a missing third delimiter (rc file
+// truncated output) must not fail PATH hydration.
+function parseCapturedSshAuthSock(stdout: string): string | null {
+  const cleaned = stdout.replace(ANSI_RE, '')
+  const first = cleaned.indexOf(DELIMITER)
+  const second = first < 0 ? -1 : cleaned.indexOf(DELIMITER, first + DELIMITER.length)
+  const third = second < 0 ? -1 : cleaned.indexOf(DELIMITER, second + DELIMITER.length)
+  if (third < 0) {
+    return null
+  }
+  const value = cleaned.slice(second + DELIMITER.length, third).trim()
+  return value || null
+}
+
 function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
   return new Promise((resolve) => {
     // Why: printing $PATH between delimiters is resilient to rc-file banners,
     // MOTDs, and `echo` invocations that shells like fish print unprompted.
     // `-ilc` runs the shell as a login+interactive so both .profile/.zprofile
     // and .bashrc/.zshrc are sourced — matches what `which` in Terminal sees.
-    const command = `printf '%s' '${DELIMITER}'; printf '%s' "$PATH"; printf '%s' '${DELIMITER}'`
+    const command = `printf '%s' '${DELIMITER}'; printf '%s' "$PATH"; printf '%s' '${DELIMITER}'; printf '%s' "$SSH_AUTH_SOCK"; printf '%s' '${DELIMITER}'`
     let finished = false
     let stdout = ''
     let timer: ReturnType<typeof setTimeout> | null = null
@@ -142,7 +156,12 @@ function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
         finish({ segments: [], ok: false, failureReason: 'empty_path' })
         return
       }
-      finish({ segments, ok: true, failureReason: 'none' })
+      finish({
+        segments,
+        ok: true,
+        failureReason: 'none',
+        sshAuthSock: parseCapturedSshAuthSock(stdout)
+      })
     }
 
     child.stdout.on('data', onStdoutData)
@@ -208,4 +227,17 @@ export function mergePathSegments(segments: string[]): string[] {
   // a healthy one from the same directory list in a different order.
   process.env.PATH = next
   return added
+}
+
+/**
+ * Export the login shell's SSH_AUTH_SOCK when it differs from the inherited
+ * value. The spawned shell inherits process.env, so a difference means the
+ * user's rc files exported another agent socket deliberately (e.g. 1Password).
+ */
+export function mergeShellSshAuthSock(sock: string | null | undefined): boolean {
+  if (!sock || sock === process.env.SSH_AUTH_SOCK) {
+    return false
+  }
+  process.env.SSH_AUTH_SOCK = sock
+  return true
 }

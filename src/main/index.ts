@@ -155,7 +155,7 @@ import { startFirstWindowStartupServices } from './startup/first-window-startup-
 import { recoverLegacyWorkerTerminalsForRendererStartup } from './startup/legacy-worker-renderer-recovery'
 import { createWslCliReconciliationStartupBarrier } from './startup/wsl-cli-reconciliation-startup-barrier'
 import { getDevInstanceIdentity } from './startup/dev-instance-identity'
-import { hydrateShellPath, mergePathSegments } from './startup/hydrate-shell-path'
+import { hydrateShellPath, mergePathSegments, mergeShellSshAuthSock } from './startup/hydrate-shell-path'
 import {
   acquireSingleInstanceLock,
   logSingleInstanceLockBypass,
@@ -580,6 +580,7 @@ if (app.isPackaged && process.platform !== 'win32') {
   void hydrateShellPath().then((result) => {
     if (result.ok) {
       mergePathSegments(result.segments)
+      mergeShellSshAuthSock(result.sshAuthSock)
     }
   })
 }

@@ -6,6 +6,7 @@ import {
   _resetHydrateShellPathCache,
   hydrateShellPath,
   mergePathSegments,
+  mergeShellSshAuthSock,
   type HydrationResult
 } from './hydrate-shell-path'
 
@@ -213,5 +214,106 @@ describe('mergePathSegments', () => {
 
     expect(mergePathSegments([])).toEqual([])
     expect(process.env.PATH).toBe(joinPath('/usr/bin', '/bin'))
+  })
+})
+
+describe('SSH_AUTH_SOCK capture', () => {
+  const originalSock = process.env.SSH_AUTH_SOCK
+
+  // Why: hydrateShellPath caches its promise at module scope; without a reset
+  // these tests could reuse a stale result left by the prior describe block.
+  beforeEach(() => {
+    _resetHydrateShellPathCache()
+    spawnMock.mockReset()
+  })
+
+  afterEach(() => {
+    if (originalSock === undefined) {
+      delete process.env.SSH_AUTH_SOCK
+    } else {
+      process.env.SSH_AUTH_SOCK = originalSock
+    }
+  })
+
+  it('parses the sock section after the PATH section', async () => {
+    const proc = createMockShellProcess()
+    spawnMock.mockReturnValue(proc)
+    const pending = hydrateShellPath({ shellOverride: '/bin/zsh' })
+    proc.stdout.emit(
+      'data',
+      Buffer.from(
+        '__ORCA_SHELL_PATH__/usr/bin__ORCA_SHELL_PATH__/tmp/1p/agent.sock__ORCA_SHELL_PATH__'
+      )
+    )
+    proc.emit('close', 0)
+    const result = await pending
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      throw new Error('expected ok result')
+    }
+    expect(result.sshAuthSock).toBe('/tmp/1p/agent.sock')
+  })
+
+  it('reports null when the shell exports no SSH_AUTH_SOCK', async () => {
+    const proc = createMockShellProcess()
+    spawnMock.mockReturnValue(proc)
+    const pending = hydrateShellPath({ shellOverride: '/bin/zsh' })
+    proc.stdout.emit(
+      'data',
+      Buffer.from('__ORCA_SHELL_PATH__/usr/bin__ORCA_SHELL_PATH____ORCA_SHELL_PATH__')
+    )
+    proc.emit('close', 0)
+    const result = await pending
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      throw new Error('expected ok result')
+    }
+    expect(result.sshAuthSock).toBeNull()
+  })
+
+  it('stays ok:true when the third delimiter is missing (old two-section output)', async () => {
+    const proc = createMockShellProcess()
+    spawnMock.mockReturnValue(proc)
+    const pending = hydrateShellPath({ shellOverride: '/bin/zsh' })
+    proc.stdout.emit('data', Buffer.from('__ORCA_SHELL_PATH__/usr/bin__ORCA_SHELL_PATH__'))
+    proc.emit('close', 0)
+    const result = await pending
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      throw new Error('expected ok result')
+    }
+    expect(result.segments).toEqual(['/usr/bin'])
+    expect(result.sshAuthSock).toBeNull()
+  })
+})
+
+describe('mergeShellSshAuthSock', () => {
+  const originalSock = process.env.SSH_AUTH_SOCK
+
+  afterEach(() => {
+    if (originalSock === undefined) {
+      delete process.env.SSH_AUTH_SOCK
+    } else {
+      process.env.SSH_AUTH_SOCK = originalSock
+    }
+  })
+
+  it('sets the env var when the shell value differs', () => {
+    process.env.SSH_AUTH_SOCK = '/tmp/launchd.sock'
+    expect(mergeShellSshAuthSock('/tmp/1p/agent.sock')).toBe(true)
+    expect(process.env.SSH_AUTH_SOCK).toBe('/tmp/1p/agent.sock')
+  })
+
+  it('is a no-op when the values already match', () => {
+    process.env.SSH_AUTH_SOCK = '/tmp/1p/agent.sock'
+    expect(mergeShellSshAuthSock('/tmp/1p/agent.sock')).toBe(false)
+    expect(process.env.SSH_AUTH_SOCK).toBe('/tmp/1p/agent.sock')
+  })
+
+  it('ignores null and empty values', () => {
+    process.env.SSH_AUTH_SOCK = '/tmp/launchd.sock'
+    expect(mergeShellSshAuthSock(null)).toBe(false)
+    expect(mergeShellSshAuthSock('')).toBe(false)
+    expect(process.env.SSH_AUTH_SOCK).toBe('/tmp/launchd.sock')
   })
 })
