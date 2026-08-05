@@ -995,8 +995,11 @@ export class AgentHookServer {
     if (!paneRetired) {
       return 'accept'
     }
-    // Why: command completion retires launch authority but leaves its shell pane reusable.
-    if (event?.hookEventName === 'UserPromptSubmit' && event.isReplay !== true) {
+    // Why: command completion retires launch authority but leaves its shell pane reusable;
+    // only a live provider prompt boundary may reopen it.
+    const isLivePromptBoundary =
+      event?.hookEventName === 'UserPromptSubmit' || event?.hookEventName === 'beforeSubmitPrompt'
+    if (isLivePromptBoundary && event.isReplay !== true) {
       this.closedAgentStatusPaneKeys.delete(paneKey)
       this.closedAgentStatusPaneKeys.delete(ownerPaneKey)
       return 'restart'
