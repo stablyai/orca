@@ -1,4 +1,4 @@
-import { View, StyleSheet } from 'react-native'
+import { View, StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
 import { colors } from '../theme/mobile-theme'
 import type { ConnectionState } from '../transport/types'
 import type { ConnectionVerdict } from '../transport/connection-health'
@@ -19,10 +19,12 @@ const stateColors: Record<ConnectionState, string> = {
 // has escalated to error (red).
 export function StatusDot({
   state,
-  verdict
+  verdict,
+  style
 }: {
   state: ConnectionState
   verdict?: ConnectionVerdict
+  style?: StyleProp<ViewStyle>
 }) {
   const color =
     verdict?.kind === 'unreachable' || verdict?.kind === 'auth-failed'
@@ -30,7 +32,7 @@ export function StatusDot({
       : verdict?.kind === 'warning'
         ? colors.statusAmber
         : (stateColors[state] ?? colors.textMuted)
-  return <View style={[styles.dot, { backgroundColor: color }]} />
+  return <View style={[styles.dot, { backgroundColor: color }, style]} />
 }
 
 const styles = StyleSheet.create({

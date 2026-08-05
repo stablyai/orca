@@ -39,14 +39,16 @@ export function MobileHostCard(props: {
         <Monitor size={20} color={connected ? colors.textPrimary : colors.textSecondary} />
       </View>
       <View style={styles.main}>
-        <Text
-          style={[styles.name, !connected && { color: colors.textSecondary }]}
-          numberOfLines={1}
-        >
-          {props.host.name}
-        </Text>
+        <View style={styles.nameRow}>
+          <Text
+            style={[styles.name, !connected && { color: colors.textSecondary }]}
+            numberOfLines={1}
+          >
+            {props.host.name}
+          </Text>
+          <StatusDot state={props.state} verdict={props.verdict} style={styles.nameStatusDot} />
+        </View>
         <View style={styles.meta}>
-          <StatusDot state={props.state} verdict={props.verdict} />
           <Text style={[styles.metaText, isError && { color: colors.statusRed }]} numberOfLines={1}>
             {verdictDisplayLabel(props.verdict)}
             {connected || dialingPath ? ` · ${mobileConnectionPathLabel(props.path)}` : ''}
@@ -90,12 +92,19 @@ const styles = StyleSheet.create({
     marginRight: 14
   },
   main: { flex: 1, minWidth: 0, marginRight: spacing.sm },
-  name: { color: colors.textPrimary, fontSize: 15, fontWeight: '600', lineHeight: 20 },
-  meta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3, minWidth: 0 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', minWidth: 0 },
+  name: {
+    color: colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '600',
+    lineHeight: 20,
+    flexShrink: 1
+  },
+  nameStatusDot: { marginLeft: spacing.sm, marginRight: 0 },
+  meta: { marginTop: 3, minWidth: 0 },
   metaText: { flex: 1, fontSize: 12, color: colors.textSecondary },
   worktreeMetaText: {
     marginTop: 2,
-    marginLeft: spacing.xl,
     fontSize: 12,
     color: colors.textMuted
   },
