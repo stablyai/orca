@@ -6,6 +6,7 @@ import { mobileConnectionPathLabel } from '../transport/mobile-connection-path-l
 import type { MobileConnectionPath } from '../transport/stable-logical-rpc-client'
 import type { ConnectionState, HostProfile } from '../transport/types'
 import { colors, radii, spacing } from '../theme/mobile-theme'
+import { homeHostWorktreeSummary, type HostWorktreeInfo } from '../worktree/home-worktree-info'
 import { StatusDot } from './StatusDot'
 
 export function MobileHostCard(props: {
@@ -13,20 +14,15 @@ export function MobileHostCard(props: {
   state: ConnectionState
   verdict: ConnectionVerdict
   path: MobileConnectionPath
-  worktreeCounts?: { total: number; active: number }
-  // Why (STA-3123): the host is connected but its worktree catalog request failed,
-  // so the card must say "unavailable" instead of asserting a count of zero.
-  worktreeCountsUnavailable?: boolean
+  // Why: the card owns the fresh/stale/unavailable wording so no caller can re-gate the counts
+  // away (STA-3123 shipped that bug once already).
+  worktreeInfo?: HostWorktreeInfo
   onPress: () => void
   onLongPress: () => void
 }) {
   const connected = props.state === 'connected'
   const isError = ['warning', 'unreachable', 'auth-failed'].includes(props.verdict.kind)
-  const worktreeSummary = props.worktreeCounts
-    ? `${props.worktreeCounts.total} worktree${props.worktreeCounts.total === 1 ? '' : 's'}${props.worktreeCounts.active > 0 ? ` · ${props.worktreeCounts.active} active` : ''}`
-    : props.worktreeCountsUnavailable
-      ? 'Worktree list unavailable'
-      : null
+  const worktreeSummary = homeHostWorktreeSummary(props.worktreeInfo)
   return (
     <Pressable
       style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}

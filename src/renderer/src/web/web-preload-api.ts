@@ -556,6 +556,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
         }
         writeJson(UI_STORAGE_KEY, mergeWebUIState(readLocalWebUIState(), ui))
       },
+      // Staging already wrote through to browser storage, so there is nothing left to join.
+      awaitBeforeUnloadCheckpoint: () => Promise.resolve(),
       awaitFirstWindowStartupServices: () => Promise.resolve(),
       recoverLegacyWorkerTerminalsForRendererStartup: () => Promise.resolve(),
       startupDiagnostic: () => Promise.resolve(),

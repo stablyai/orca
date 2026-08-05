@@ -1,5 +1,5 @@
-import { openAuthenticatedDirectEndpoint } from './mobile-direct-endpoint-probe'
 import type { MobileEndpointSupervisorDependencies } from './mobile-endpoint-supervisor-contract'
+import { DirectReturnProbe } from './mobile-direct-return-probe'
 import { RelayReconnectController } from './mobile-relay-reconnect-controller'
 import { RelayLeaseRotationTimer } from './mobile-relay-lease-rotation-timer'
 import { MobileEndpointHysteresis } from './mobile-endpoint-hysteresis'
@@ -9,6 +9,8 @@ import {
   persistRelayHost,
   toError
 } from './mobile-endpoint-supervisor-support'
+import { selectDialableRelayCredentials } from './mobile-relay-credential-selection'
+import { createRelayRecoveryLog, type RelayRecoveryLog } from './mobile-relay-recovery-log'
 import {
   applyResumeConfirmation,
   mobileRelayCredentialNeedsRotation,
@@ -20,7 +22,6 @@ import type { HostProfile } from './types'
 
 export type { MobileEndpointSupervisorDependencies } from './mobile-endpoint-supervisor-contract'
 
-const DIRECT_PROBE_INTERVAL_MS = 15_000
 const DIRECT_OBSERVATION_MS = 30_000
 const MINIMUM_DWELL_MS = 60_000
 const FAILURE_COOLDOWN_MS = 60_000
@@ -32,11 +33,12 @@ export class MobileEndpointSupervisor {
   private operationInFlight = false
   private credentialRotationInFlight = false
   private relayRotationPending = false
-  private probeTimer: ReturnType<typeof setTimeout> | null = null
   private unsubscribeState: (() => void) | null = null
   private readonly hysteresis: MobileEndpointHysteresis
   private readonly relayReconnect: RelayReconnectController
   private readonly leaseRotation: RelayLeaseRotationTimer
+  private readonly logRelay: RelayRecoveryLog
+  private readonly directProbe: DirectReturnProbe
 
   constructor(
     private readonly logical: StableLogicalRpcClient,
@@ -49,24 +51,52 @@ export class MobileEndpointSupervisor {
       failureCooldownMs: FAILURE_COOLDOWN_MS,
       minimumDwellMs: MINIMUM_DWELL_MS
     })
+    this.logRelay = createRelayRecoveryLog(dependencies.now, dependencies.onLog)
     this.relayReconnect = new RelayReconnectController(dependencies, this.recoverRelay.bind(this))
     this.leaseRotation = new RelayLeaseRotationTimer(dependencies, () => {
       this.relayRotationPending = true
       void this.recoverRelay(true)
     })
+    this.directProbe = new DirectReturnProbe(dependencies, {
+      hysteresis: this.hysteresis,
+      host: () => this.host,
+      canSchedule: () =>
+        !this.stopped && this.foreground && this.logical.getActivePath() === 'relay',
+      canAttempt: () => !this.stopped && this.foreground && !this.operationInFlight,
+      beginOperation: () => {
+        this.operationInFlight = true
+      },
+      migrate: (client, path) => this.logical.migrateTo(client, path),
+      onDirectMigrated: async () => {
+        this.leaseRotation.clear()
+        this.relayRotationPending = false
+        await this.rotateCredentialIfNeeded(this.relayReconnect.resetForDirectConnection())
+      },
+      afterProbe: () => {
+        this.operationInFlight = false
+        if (this.relayRotationPending || this.logical.getState() !== 'connected') {
+          void this.recoverRelay(this.relayRotationPending)
+        }
+      }
+    })
   }
 
   async start(): Promise<void> {
     this.bundle = await this.dependencies.readBundle(this.host.id).catch(() => null)
-    if (this.stopped || !this.bundle || !this.host.relay) {
+    if (this.stopped || !this.host.relay) {
       return
+    }
+    if (!this.bundle) {
+      // Why: a Keychain race at open must not kill relay recovery for the whole
+      // process lifetime; each recovery attempt re-reads the durable bundle.
+      this.logRelay('credential bundle unavailable at start; recovery will re-read')
     }
     this.unsubscribeState = this.logical.onStateChange((state) => {
       if (state === 'connected') {
         if (this.logical.getActivePath() !== 'relay') {
           void this.rotateCredentialIfNeeded(this.relayReconnect.resetForDirectConnection())
         }
-        this.scheduleDirectProbe()
+        this.directProbe.schedule()
       } else {
         // Why: the direct client enters reconnecting after its first failed
         // dial and may never publish disconnected while its retry loop lives.
@@ -78,7 +108,7 @@ export class MobileEndpointSupervisor {
       // are still loading, before the supervisor subscribes to state changes.
       await this.recoverRelay()
     } else {
-      this.scheduleDirectProbe()
+      this.directProbe.schedule()
     }
   }
 
@@ -87,11 +117,11 @@ export class MobileEndpointSupervisor {
     this.foreground = foreground
     if (foreground) {
       this.relayReconnect.handleForeground(this.logical, wasForeground)
-      this.scheduleDirectProbe(0)
+      this.directProbe.schedule(0)
     } else {
       // Why: background phones must not hold billed relay data splices.
       this.relayReconnect.suspendActiveRelay(this.logical)
-      this.clearDirectProbeTimer()
+      this.directProbe.clear()
       this.relayReconnect.clear()
       this.leaseRotation.clear()
     }
@@ -101,7 +131,7 @@ export class MobileEndpointSupervisor {
     this.stopped = true
     this.unsubscribeState?.()
     this.unsubscribeState = null
-    this.clearDirectProbeTimer()
+    this.directProbe.clear()
     this.relayReconnect.clear()
     this.leaseRotation.clear()
   }
@@ -112,7 +142,6 @@ export class MobileEndpointSupervisor {
       this.stopped ||
       !this.foreground ||
       this.operationInFlight ||
-      !this.bundle ||
       !this.host.relay ||
       (!forceReplacement && !this.relayReconnect.needsRecovery(this.logical.getState()))
     ) {
@@ -121,23 +150,42 @@ export class MobileEndpointSupervisor {
     // Why: revival and lease timers can overlap resume failures; one shared cooldown
     // prevents PEER_DROPPED/LIMIT_EXCEEDED reconnect churn.
     if (this.relayReconnect.shouldDefer()) {
+      this.logRelay('recovery deferred by cooldown or gate')
       return
     }
     this.operationInFlight = true
     let lastError: Error | null = null
     let retryAfterOperation = false
     try {
-      const credentials = this.relayReconnect.eligibleCredentials(
-        this.bundle.current,
-        this.bundle.grace
-      )
-      for (const credential of credentials) {
+      const selection = await selectDialableRelayCredentials({
+        bundle: this.bundle,
+        controller: this.relayReconnect,
+        readBundle: () => this.dependencies.readBundle(this.host.id),
+        onAdoptedFresherBundle: () => this.logRelay('adopted fresher durable credential bundle')
+      })
+      this.bundle = selection.bundle
+      if (selection.credentials.length === 0) {
+        // Why: "expired" vs "missing" separates a sleep-past-expiry phone
+        // (needs re-pair or LAN) from a Keychain failure in field reports.
+        this.logRelay(
+          selection.bundle
+            ? 'relay credential expired or rejected; slow reprobe armed'
+            : 'no relay credential bundle; slow reprobe armed'
+        )
+        this.relayReconnect.armCredentialReprobe()
+        return
+      }
+      for (const credential of selection.credentials) {
         const result = await this.tryRelayCredential(credential)
         if (result.ok) {
           retryAfterOperation = this.logical.getState() !== 'connected'
           return
         }
         lastError = result.error
+        this.logRelay(
+          'relay dial failed',
+          `${result.error.name}: ${String(result.error.message).slice(0, 80)}`
+        )
         if (this.relayReconnect.shouldTryGraceAfterRelayFailure(result.error)) {
           // Why: a rejected version stays invalid; retry only the grace credential.
           this.relayReconnect.recordRejectedCredential(credential.version)
@@ -145,12 +193,10 @@ export class MobileEndpointSupervisor {
           break
         }
       }
-      if (credentials.length > 0) {
-        // Why: cleanup may happen while a relay dial is awaiting the network;
-        // record its outcome without recreating a foreground retry timer.
-        const scheduleRetry = !forceReplacement && this.foreground && !this.stopped
-        this.relayReconnect.registerFailure(lastError, scheduleRetry)
-      }
+      // Why: cleanup may happen while a relay dial is awaiting the network;
+      // record its outcome without recreating a foreground retry timer.
+      const scheduleRetry = !forceReplacement && this.foreground && !this.stopped
+      this.relayReconnect.registerFailure(lastError, scheduleRetry)
     } finally {
       this.operationInFlight = false
       if (forceReplacement && this.relayRotationPending && !this.stopped && this.foreground) {
@@ -207,6 +253,7 @@ export class MobileEndpointSupervisor {
       }
       this.relayRotationPending = false
       this.hysteresis.recordMigration(this.dependencies.now())
+      this.logRelay('runtime channel migrated to relay')
       const confirmation = session.getResumeConfirmation()
       if (confirmation) {
         this.bundle = applyResumeConfirmation(this.bundle, credential.version, confirmation)
@@ -215,68 +262,21 @@ export class MobileEndpointSupervisor {
         await this.dependencies.writeBundle(this.bundle).catch(() => {})
       }
       // Why: async persistence can finish after stop/background; never recreate a stale timer.
+      // Why: rotate against the resume credential's expiry, never the hello's
+      // leaseExpiresAt — that field is the cell's ~10s attach-reservation
+      // deadline, and using it forced a session replacement every second.
+      // Why: renewed=false means a re-resume provably returns the same
+      // unchanged deadline — rotating then just churns one replacement per
+      // clamp floor until a fresh credential arrives over direct or disk.
       this.leaseRotation.scheduleFromLease(
-        this.stopped || !this.foreground ? null : session.getLeaseExpiresAt()
+        this.stopped || !this.foreground || confirmation?.renewed === false
+          ? null
+          : (confirmation?.resumeExpiresAt ?? session.getResumeExpiresAt())
       )
-      this.scheduleDirectProbe()
+      this.directProbe.schedule()
       return { ok: true }
     } catch (error) {
       return { ok: false, error: session.getFailure() ?? toError(error) }
-    }
-  }
-
-  private scheduleDirectProbe(delayMs = DIRECT_PROBE_INTERVAL_MS): void {
-    if (
-      this.stopped ||
-      !this.foreground ||
-      this.logical.getActivePath() !== 'relay' ||
-      this.probeTimer
-    ) {
-      return
-    }
-    this.probeTimer = this.dependencies.setTimer(() => {
-      this.probeTimer = null
-      void this.probeDirect()
-    }, delayMs)
-  }
-
-  private async probeDirect(): Promise<void> {
-    if (
-      this.stopped ||
-      !this.foreground ||
-      this.operationInFlight ||
-      !this.hysteresis.canProbe(this.dependencies.now())
-    ) {
-      this.scheduleDirectProbe()
-      return
-    }
-    this.operationInFlight = true
-    let successful: Awaited<ReturnType<typeof openAuthenticatedDirectEndpoint>> = null
-    try {
-      const openDirect = this.dependencies.openDirect
-      successful = await openAuthenticatedDirectEndpoint(this.host, openDirect, 12_000)
-      if (!successful) {
-        this.hysteresis.recordDirectFailure(this.dependencies.now())
-        return
-      }
-      if (!this.hysteresis.recordDirectSuccess(this.dependencies.now())) {
-        successful.client.close()
-        return
-      }
-      await this.logical.migrateTo(successful.client, successful.path)
-      successful = null
-      this.hysteresis.recordMigration(this.dependencies.now())
-      this.leaseRotation.clear()
-      this.relayRotationPending = false
-      await this.rotateCredentialIfNeeded(this.relayReconnect.resetForDirectConnection())
-    } finally {
-      successful?.client.close()
-      this.operationInFlight = false
-      // Why: a relay drop or backoff timer can arrive while the direct probe owns the mutex.
-      if (this.relayRotationPending || this.logical.getState() !== 'connected') {
-        void this.recoverRelay(this.relayRotationPending)
-      }
-      this.scheduleDirectProbe()
     }
   }
 
@@ -319,13 +319,6 @@ export class MobileEndpointSupervisor {
       ) {
         void this.recoverRelay()
       }
-    }
-  }
-
-  private clearDirectProbeTimer(): void {
-    if (this.probeTimer) {
-      this.dependencies.clearTimer(this.probeTimer)
-      this.probeTimer = null
     }
   }
 }

@@ -4227,7 +4227,9 @@
           "ee240a39eb": "Editar filtros",
           "automationCreated": "Ocultar creados por automatizaciones",
           "cliCreated": "Hide CLI-created",
-          "detachedHead": "Ocultar HEAD desacoplado"
+          "detachedHead": "Ocultar HEAD desacoplado",
+          "keepDefaultBranch": "Excepto la rama predeterminada",
+          "keepDefaultBranchAria": "Mantener visible la rama predeterminada al ocultar los espacios de trabajo en reposo"
         },
         "SidebarHeader": {
           "92154beb7e": "Nuevo espacio de trabajo",
@@ -4292,7 +4294,9 @@
           "82594419ba": "Filtros",
           "automationCreated": "Ocultar creados por automatizaciones",
           "cliCreated": "Hide CLI-created",
-          "detachedHead": "Ocultar HEAD desacoplado"
+          "detachedHead": "Ocultar HEAD desacoplado",
+          "keepDefaultBranch": "Excepto la rama predeterminada",
+          "keepDefaultBranchAria": "Mantener visible la rama predeterminada al ocultar los espacios de trabajo en reposo"
         },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "Diseño de actividad del Agent",
@@ -4351,19 +4355,6 @@
           "219ebf1961": "Nombre de rama",
           "folderPathIdentity": "Rama / ruta de carpeta",
           "cli": "Orca CLI"
-        },
-        "SshDisconnectedDialog": {
-          "ca4a7892af": "Conectando...",
-          "89385db176": "Descartar",
-          "656368f3a2": "Falló la reconexión",
-          "376bed88e5": "La conexión al host remoto encontró un error.",
-          "4afcca1d24": "Reconectar",
-          "11552bf786": "SSH desconectado",
-          "cb5938ae79": "Reconectando...",
-          "disconnected": "Este host SSH no está conectado.",
-          "reconnecting": "Reconectando con el host remoto...",
-          "reconnectionFailed": "Falló la reconexión con el host remoto.",
-          "authFailed": "Falló la autenticación con el host remoto."
         },
         "SshTargetRow": {
           "4677394048": "Conectando…",
@@ -6479,7 +6470,10 @@
           "f79972271a": "No se encontró ningún control remoto de GitHub para este repositorio.",
           "4d039317f4": "Favicon del sitio web",
           "acf31559a0": "Ingresa una URL de sitio web válida.",
-          "868c5c9b56": "No se pudo importar el icono del repositorio"
+          "868c5c9b56": "No se pudo importar el icono del repositorio",
+          "emojiTooLongForRepoIcon": "Este emoji no se puede usar como icono del repositorio.",
+          "currentEmojiSelection": "Actual: {{value0}}",
+          "searchEmojiPlaceholder": "Buscar emoji"
         },
         "RepositoryPane": {
           "15a99d9b9f": "Las rutas relativas se resuelven desde la raíz de este proyecto.",
@@ -9672,6 +9666,10 @@
           "unpackedHelp": "Development builds must be updated from their source checkout.",
           "legacyHelp": "Update this server manually once to enable remote updates."
         },
+        "BrowserLinkRoutingSetting": {
+          "description": "Abre los enlaces http(s) del terminal, Markdown y el editor en el navegador integrado de Orca. {{shortcut}} siempre usa el navegador del sistema.",
+          "descriptionBase": "Abre los enlaces http(s) del terminal, Markdown y el editor en el navegador integrado de Orca."
+        },
         "BrowserLinkRoutingModifierSetting": {
           "titleSystem": "Hold Shift to open in your web browser",
           "titleOrca": "Hold Shift to open in Orca",
@@ -10636,7 +10634,6 @@
                 "fd46a70f1a": "Iniciado",
                 "a54ae21c6f": "Estado:",
                 "e4e3af15ee": "Ver detalles completos",
-                "2524d1fb83": "Cola del log disponible en los detalles completos.",
                 "a2fb3f4408": "Mostrando los primeros 100 jobs",
                 "df137989b3": "Mostrando las primeras 20 anotaciones",
                 "1f2b980522": "Cargando detalles del check…",
@@ -10689,7 +10686,8 @@
                 "5e6e5a13fa": "Vista",
                 "actionRequiredHint": "Este check requiere una acción manual en GitHub (por ejemplo, aprobar la ejecución del workflow) antes de que el merge quede desbloqueado.",
                 "b3195cba33": "Desmarcar autor como bot",
-                "f588b46a6c": "Marcar autor como bot"
+                "f588b46a6c": "Marcar autor como bot",
+                "checkDetailsLoadFailed": "No se pudieron cargar los detalles del check."
               },
               "empty": {
                 "state": {
@@ -14348,6 +14346,19 @@
       },
       "webRuntimeSession": {
         "remoteHostDisconnected": "The workspace is not connected to a remote Orca host."
+      },
+      "gitlabJobTraceClient": {
+        "loadFailed": "No se pudo cargar el registro del job de GitLab.",
+        "emptyTrace": "No hay ningún registro disponible para este job de GitLab.",
+        "timedOut": "Se agotó el tiempo de espera al cargar el registro del job de GitLab."
+      }
+    },
+    "ssh": {
+      "sshConnectVerb": {
+        "connect": "Conectar",
+        "connecting": "Conectando…",
+        "reconnect": "Reconectar",
+        "retry": "Reintentar"
       }
     }
   },
@@ -14601,25 +14612,25 @@
   },
   "browser": {
     "loadFailure": {
-      "connectionNotSecure": "Connection isn't secure",
-      "cantReachHost": "Can't reach {{value0}}",
-      "cantLoadPage": "Can't load this page",
-      "certificateNameMismatch": "The certificate doesn't match {{value0}}.",
-      "certificateDateInvalid": "The certificate for {{value0}} isn't valid at the current date and time.",
-      "certificateAuthorityInvalid": "Orca doesn't trust the authority that issued the certificate for {{value0}}.",
-      "certificateVerificationFailed": "Orca couldn't verify the certificate for {{value0}}.",
-      "trustedCertificateGuidance": "For local development, use a trusted local certificate when possible.",
-      "retry": "Retry",
-      "copyAddress": "Copy Address",
-      "addressCopied": "Copied the current page address.",
-      "openExternally": "Open Externally",
-      "tryHttps": "Try HTTPS",
-      "proceedUnsafe": "Proceed Anyway (Unsafe)",
-      "connecting": "Connecting…",
-      "certificateChallengeExpired": "This certificate approval expired. Retry the page to request a new one.",
-      "certificateChallengeChanged": "The certificate request changed. Retry the page and review the new warning.",
-      "certificateChallengeUnavailable": "This certificate request is no longer available. Retry the page to request a new one.",
-      "certificateProceedFailed": "Orca could not approve this certificate request. Retry the page and try again."
+      "connectionNotSecure": "La conexión no es segura",
+      "cantReachHost": "No se puede acceder a {{value0}}",
+      "cantLoadPage": "No se puede cargar esta página",
+      "certificateNameMismatch": "El certificado no coincide con {{value0}}.",
+      "certificateDateInvalid": "El certificado de {{value0}} no es válido en la fecha y hora actuales.",
+      "certificateAuthorityInvalid": "Orca no confía en la autoridad que emitió el certificado de {{value0}}.",
+      "certificateVerificationFailed": "Orca no pudo verificar el certificado de {{value0}}.",
+      "trustedCertificateGuidance": "Para el desarrollo local, usa un certificado local de confianza siempre que sea posible.",
+      "retry": "Reintentar",
+      "copyAddress": "Copiar dirección",
+      "addressCopied": "Se copió la dirección de la página actual.",
+      "openExternally": "Abrir externamente",
+      "tryHttps": "Probar HTTPS",
+      "proceedUnsafe": "Continuar (no seguro)",
+      "connecting": "Conectando…",
+      "certificateChallengeExpired": "Esta aprobación de certificado caducó. Vuelve a intentarlo con la página para solicitar una nueva.",
+      "certificateChallengeChanged": "La solicitud de certificado cambió. Vuelve a intentarlo con la página y revisa la nueva advertencia.",
+      "certificateChallengeUnavailable": "Esta solicitud de certificado ya no está disponible. Vuelve a intentarlo con la página para solicitar una nueva.",
+      "certificateProceedFailed": "Orca no pudo aprobar esta solicitud de certificado. Vuelve a intentarlo con la página e inténtalo de nuevo."
     }
   },
   "runtimeRpc": {

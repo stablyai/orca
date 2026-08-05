@@ -26,6 +26,23 @@ const PLAIN_NODE_ENTRY_NAMES = [
   'codex/codex-app-server-grant-entry'
 ] as const
 
+// Entries executed as worker threads of the main process. Electron's module is
+// not registered on worker threads, so require("electron") throws
+// "Cannot find module 'electron'" there too (verified on Electron 43) and kills
+// the worker at startup. These carry hand-written "must stay electron-free"
+// comments, which is convention, not enforcement — and the port-scan worker in
+// particular sits one import away from a client module that deliberately does
+// require electron.
+const WORKER_THREAD_ENTRY_NAMES = [
+  'stt-worker',
+  'warp-theme-parser-worker',
+  'session-scanner-opencode-sqlite-worker-entry',
+  'main-thread-hang-watchdog-entry',
+  'port-scan-command-worker-entry'
+] as const
+
+type EntryRuntime = 'plain-Node process' | 'worker thread'
+
 const ELECTRON_REQUIRE_RE = /require\(\s*["']electron["']\s*\)/
 
 function collectReachableChunks(
@@ -56,13 +73,14 @@ function collectReachableChunks(
 function assertNoElectronRequire(
   entryName: string,
   entry: OutputChunk,
-  byFileName: Map<string, OutputChunk>
+  byFileName: Map<string, OutputChunk>,
+  runtime: EntryRuntime = 'plain-Node process'
 ): void {
   for (const chunk of collectReachableChunks(entry, byFileName)) {
     if (ELECTRON_REQUIRE_RE.test(chunk.code)) {
       throw new Error(
         `[plain-node-entry-guard] "${entryName}" reaches chunk "${chunk.fileName}" that ` +
-          `requires electron. "${entryName}" runs as a plain-Node process, where ` +
+          `requires electron. "${entryName}" runs as a ${runtime}, where ` +
           `require("electron") throws MODULE_NOT_FOUND and kills it at startup (the ` +
           `v1.4.129-rc.1 daemon outage). Keep electron imports out of its module graph.`
       )
@@ -125,7 +143,14 @@ export function createPlainNodeEntryGuardPlugin(): Plugin {
       for (const entryName of PLAIN_NODE_ENTRY_NAMES) {
         const entry = entryByName.get(entryName)
         if (entry) {
-          assertNoElectronRequire(entryName, entry, byFileName)
+          assertNoElectronRequire(entryName, entry, byFileName, 'plain-Node process')
+        }
+      }
+
+      for (const entryName of WORKER_THREAD_ENTRY_NAMES) {
+        const entry = entryByName.get(entryName)
+        if (entry) {
+          assertNoElectronRequire(entryName, entry, byFileName, 'worker thread')
         }
       }
 

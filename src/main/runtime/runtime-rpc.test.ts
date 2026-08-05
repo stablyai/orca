@@ -438,6 +438,58 @@ describe('OrcaRuntimeRpcServer', () => {
     expect(readRuntimeMetadata(userDataPath)).toMatchObject({ runtimeId: 'rt_second_instance' })
   })
 
+  it('flushes a lastSeen refresh scheduled while transports stop', async () => {
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath: mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-')),
+      enableWebSocket: false
+    })
+    let pending = false
+    const timeline: string[] = []
+    server['deviceRegistry'] = {
+      flushPendingLastSeen: vi.fn(() => {
+        timeline.push(pending ? 'flush-pending' : 'flush-empty')
+        pending = false
+      })
+    } as unknown as DeviceRegistry
+    let finishSecondStop: () => void = () => {}
+    const secondStop = new Promise<void>((resolve) => {
+      finishSecondStop = resolve
+    })
+    server['activeTransports'] = [
+      {
+        start: vi.fn(async () => {}),
+        stop: vi.fn(async () => {
+          timeline.push('failed-transport-stop')
+          throw new Error('transport stop failed')
+        })
+      },
+      {
+        start: vi.fn(async () => {}),
+        stop: vi.fn(async () => {
+          timeline.push('second-transport-started')
+          await secondStop
+          timeline.push('second-transport-stopped')
+          pending = true
+        })
+      }
+    ]
+
+    const stopping = server.stop()
+    await vi.waitFor(() => expect(timeline).toContain('second-transport-started'))
+    expect(timeline).not.toContain('flush-empty')
+    finishSecondStop()
+    await expect(stopping).rejects.toThrow('transport stop failed')
+
+    expect(timeline).toEqual([
+      'failed-transport-stop',
+      'second-transport-started',
+      'second-transport-stopped',
+      'flush-pending'
+    ])
+    expect(pending).toBe(false)
+  })
+
   it('creates a pairing offer for the active WebSocket transport', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()
@@ -3999,6 +4051,32 @@ describe('OrcaRuntimeRpcServer', () => {
         }
       ])
 
+      // Pins the opt-out half of the compat contract: the request above omits
+      // the flag and still gets layouts; only an explicit `false` drops them.
+      const optedOutResponse = await sendRequest(metadata!.transports[0]!.endpoint, {
+        id: 'req_list_layout_opt_out',
+        authToken: metadata!.authToken,
+        method: 'terminal.list',
+        params: { worktree: `id:${worktreeId}`, includeVisualLayouts: false }
+      })
+      const optedOut = optedOutResponse.result as {
+        visualLayouts?: unknown[]
+        terminals: unknown[]
+      }
+      expect(optedOutResponse).toMatchObject({ id: 'req_list_layout_opt_out', ok: true })
+      expect(optedOut.visualLayouts).toBeUndefined()
+      expect(optedOut.terminals).toHaveLength(result.terminals.length)
+
+      const explicitIncludeResponse = await sendRequest(metadata!.transports[0]!.endpoint, {
+        id: 'req_list_layout_opt_in',
+        authToken: metadata!.authToken,
+        method: 'terminal.list',
+        params: { worktree: `id:${worktreeId}`, includeVisualLayouts: true }
+      })
+      expect(
+        (explicitIncludeResponse.result as { visualLayouts?: unknown[] }).visualLayouts
+      ).toHaveLength(1)
+
       const resolvePaneResponse = await sendRequest(metadata!.transports[0]!.endpoint, {
         id: 'req_resolve_pane',
         authToken: metadata!.authToken,
@@ -5611,6 +5689,149 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
           .every((d) => d.lastSeenAt === 0)
       ).toBe(true)
       expect(wsTransportOf(server)?.resolvedHost).toBe('127.0.0.1')
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('stays on loopback at startup after a "This computer only" grant has connected', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    // Why: the local web client authenticating marks its grant lastSeenAt > 0 like any other socket, so a
+    // blanket "any connected device" widen republished the runtime on every interface one launch later —
+    // exactly what the user declined by picking "This computer only".
+    const registry = new DeviceRegistry(userDataPath)
+    const device = registry.getOrCreatePendingDevice('Runtime local', 'runtime', 'this-computer')
+    registry.updateLastSeen(device.deviceId)
+
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+    try {
+      expect(wsTransportOf(server)?.resolvedHost).toBe('127.0.0.1')
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('binds all interfaces at startup for a connected device paired before pairingReach existed', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    // Why: registries written by older desktops only ever held network-reach grants; a missing field must
+    // keep the reconnect widen or an already-paired phone would be stranded by the upgrade.
+    const legacyDevice = {
+      deviceId: 'legacy-device',
+      name: 'Legacy phone',
+      token: 'legacy-token',
+      scope: 'mobile',
+      pairedAt: Date.now(),
+      lastSeenAt: Date.now()
+    }
+    await writeFile(
+      join(userDataPath, DEVICE_REGISTRY_FILENAME),
+      JSON.stringify([legacyDevice]),
+      'utf-8'
+    )
+
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+    try {
+      expect(wsTransportOf(server)?.resolvedHost).toBe('0.0.0.0')
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('upgrades a reused pending grant to network reach so its link survives a relaunch', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+    let deviceId: string
+    try {
+      const local = server.createPairingOffer({
+        address: '127.0.0.1',
+        scope: 'runtime',
+        reach: 'this-computer'
+      })
+      expect(local.available).toBe(true)
+      // Why: without `rotate` the same pending token is re-advertised, now for off-host reach. The mark must
+      // widen with it — keeping it this-computer would leave the LAN link unserved after the next launch.
+      const network = server.createPairingOffer({
+        address: '100.64.1.20',
+        scope: 'runtime',
+        reach: 'network'
+      })
+      expect(network.available).toBe(true)
+      deviceId = network.available ? network.deviceId : ''
+      expect(deviceId).toBe(local.available ? local.deviceId : '')
+      server.getDeviceRegistry()?.updateLastSeen(deviceId)
+    } finally {
+      await server.stop()
+    }
+
+    const relaunched = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    await relaunched.start()
+    try {
+      expect(wsTransportOf(relaunched)?.resolvedHost).toBe('0.0.0.0')
+    } finally {
+      await relaunched.stop()
+    }
+  })
+
+  it('keeps the pinned port when a later widen tears down a live loopback client', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+    try {
+      const loopbackPort = wsTransportOf(server)!.resolvedPort
+      // Why: a "This computer only" link never widens, so unlike before, a local client can already be
+      // connected when a later LAN offer opts in. The rebind terminates it (ws cannot move a listener), so
+      // the port must be reused or the already-issued local link could never reconnect.
+      const client = new WebSocket(`ws://127.0.0.1:${loopbackPort}`)
+      await new Promise<void>((resolve, reject) => {
+        client.once('open', () => resolve())
+        client.once('error', reject)
+      })
+      const closed = new Promise<void>((resolve) => client.once('close', () => resolve()))
+
+      await server.ensureNetworkExposure()
+      await closed
+
+      expect(wsTransportOf(server)?.resolvedHost).toBe('0.0.0.0')
+      expect(wsTransportOf(server)?.resolvedPort).toBe(loopbackPort)
+
+      const reconnected = new WebSocket(`ws://127.0.0.1:${loopbackPort}`)
+      await new Promise<void>((resolve, reject) => {
+        reconnected.once('open', () => resolve())
+        reconnected.once('error', reject)
+      })
+      reconnected.close()
     } finally {
       await server.stop()
     }

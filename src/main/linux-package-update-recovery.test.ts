@@ -611,6 +611,31 @@ describePosix('validation coalescing', () => {
     expect(hashPasses.count).toBe(2)
   })
 
+  // Why: a verdict handed to a root package manager must cover the bytes as of the click, not the
+  // bytes a Copy click started streaming seconds earlier.
+  it('never reuses an in-flight pass for a pre-install re-proof', async () => {
+    await writePackage('orca.deb')
+    capture()
+    const artifact = recovery.getTrackedLinuxPackageArtifact()
+    const copyPass = recovery.resolveLinuxPackageInstallInstructions(recoveryFor())
+    const installPass = recovery.revalidateLinuxPackageForInstall(artifact!)
+
+    await expect(installPass).resolves.toEqual({ ok: true })
+    await expect(copyPass).resolves.toMatchObject({ ok: true })
+    expect(hashPasses.count).toBe(2)
+  })
+
+  it('lets a later Copy click join the pre-install pass', async () => {
+    await writePackage('orca.deb')
+    capture()
+    const artifact = recovery.getTrackedLinuxPackageArtifact()
+    const installPass = recovery.revalidateLinuxPackageForInstall(artifact!)
+    const copyPass = recovery.resolveLinuxPackageInstallInstructions(recoveryFor())
+
+    await Promise.all([installPass, copyPass])
+    expect(hashPasses.count).toBe(1)
+  })
+
   it('does not reuse an in-flight pass for a different artifact', async () => {
     await writePackage('orca.deb')
     await writePackage('orca-next.deb')
@@ -626,6 +651,39 @@ describePosix('validation coalescing', () => {
     )
     await Promise.all([first, second])
     expect(hashPasses.count).toBe(2)
+  })
+})
+
+describePosix('revalidateLinuxPackageForInstall', () => {
+  it('proves the retained package still matches its release digest', async () => {
+    await writePackage('orca.deb')
+    capture()
+    const artifact = recovery.getTrackedLinuxPackageArtifact()
+    await expect(recovery.revalidateLinuxPackageForInstall(artifact!)).resolves.toEqual({
+      ok: true
+    })
+  })
+
+  it('rejects a package swapped after the download was verified', async () => {
+    await writePackage('orca.deb')
+    capture()
+    const artifact = recovery.getTrackedLinuxPackageArtifact()
+    await writePackage('orca.deb', 'attacker supplied package')
+    await expect(recovery.revalidateLinuxPackageForInstall(artifact!)).resolves.toEqual({
+      ok: false,
+      reason: 'hash-mismatch'
+    })
+  })
+
+  it('reports a package deleted from the cache as missing', async () => {
+    const filePath = await writePackage('orca.deb')
+    capture()
+    const artifact = recovery.getTrackedLinuxPackageArtifact()
+    await fsp.rm(filePath)
+    await expect(recovery.revalidateLinuxPackageForInstall(artifact!)).resolves.toEqual({
+      ok: false,
+      reason: 'missing'
+    })
   })
 })
 

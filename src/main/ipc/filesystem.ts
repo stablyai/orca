@@ -409,6 +409,26 @@ function getLocalAgentRuntimeTarget(
     : { runtime: 'host' }
 }
 
+async function resolveModelDiscoveryLocalPath(
+  store: Store,
+  requestedPath: string
+): Promise<string> {
+  try {
+    return await resolveRegisteredWorktreePath(requestedPath, store)
+  } catch (error) {
+    const folderWorkspaces =
+      typeof store.getFolderWorkspaces === 'function' ? store.getFolderWorkspaces() : []
+    const isFolderWorkspaceRoot = folderWorkspaces.some(
+      (workspace) =>
+        comparableLocalPath(workspace.folderPath) === comparableLocalPath(requestedPath)
+    )
+    if (!isFolderWorkspaceRoot) {
+      throw error
+    }
+    return resolveAuthorizedPath(requestedPath, store)
+  }
+}
+
 function getLocalTextGenerationTarget(
   worktreePath: string,
   gitOptions: LocalProjectWorktreeGitOptions,
@@ -1517,16 +1537,17 @@ export function registerFilesystemHandlers(
       let localRuntimeTarget: CommitMessageAgentRuntimeTarget = { runtime: 'host' }
       let localDiscoveryOptions: Parameters<typeof discoverCommitMessageModelsLocal>[3]
       if (args.worktreePath) {
-        const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+        const worktreePath = await resolveModelDiscoveryLocalPath(store, args.worktreePath)
         const gitOptions = getLocalGitOptionsForRegisteredWorktree(
           store,
           args.worktreePath,
           worktreePath
         )
-        localRuntimeTarget = getLocalAgentRuntimeTarget(gitOptions)
-        localDiscoveryOptions = gitOptions.wslDistro
-          ? { cwd: worktreePath, wslDistro: gitOptions.wslDistro }
-          : { cwd: worktreePath }
+        const wslDistro = gitOptions.wslDistro ?? parseWslPath(args.worktreePath)?.distro
+        localRuntimeTarget = wslDistro
+          ? { runtime: 'wsl', wslDistro }
+          : getLocalAgentRuntimeTarget(gitOptions)
+        localDiscoveryOptions = wslDistro ? { cwd: worktreePath, wslDistro } : { cwd: worktreePath }
       }
       const localEnv = await prepareLocalCommitMessageAgentEnv(
         agentId,

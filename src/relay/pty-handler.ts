@@ -69,6 +69,7 @@ import {
   isAgentSessionSurfaceBinding,
   type AgentSessionOwnerBinding
 } from '../shared/agent-session-host-authority'
+import { createPtySlaveEchoProbe, readPtySlavePath } from '../shared/pty-slave-line-discipline-echo'
 
 // Why: only Linux compiles node-pty (no prebuilt), so the build-tools remedy is a closable setup gap
 // there and wrong advice anywhere node-pty ships one. The relay only sees an unloadable binding, never
@@ -689,11 +690,13 @@ export class PtyHandler {
           : {}
       )
     }
+    const echoProbe = createPtySlaveEchoProbe(readPtySlavePath(managed.pty))
     managed.startupIngress ??= new PtyStartupIngress({
       ...(managed.startupIngressIntent ? { intent: managed.startupIngressIntent } : {}),
       ownerBackend: managed.ownerBackend,
       write: (data) => managed.pty.write(data),
-      onEmission: emitIngressData
+      onEmission: emitIngressData,
+      ...(echoProbe ? { echoProbe } : {})
     })
     managed.pty.onData((data: string) => {
       const startup = managed.startupCommand

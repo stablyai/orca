@@ -182,6 +182,31 @@ export type AgentStatusPayload = {
 export type ParsedAgentStatusPayload = Omit<AgentStatusPayload, 'prompt'> & { prompt: string }
 
 /**
+ * Narrow an `AgentStatusIpcPayload` (or any superset) down to the status fields alone.
+ * Why: the IPC shape is flattened, so a spread cannot be narrowed structurally — copying
+ * a hook row into a client-visible projection would otherwise ship `launchToken`,
+ * `connectionId`, `promptInteractionKey` and `providerSessionOnly` to every paired client.
+ */
+export function pickParsedAgentStatusPayload(
+  row: ParsedAgentStatusPayload
+): ParsedAgentStatusPayload {
+  return {
+    state: row.state,
+    prompt: row.prompt,
+    ...(row.agentType !== undefined ? { agentType: row.agentType } : {}),
+    ...(row.model !== undefined ? { model: row.model } : {}),
+    ...(row.toolName !== undefined ? { toolName: row.toolName } : {}),
+    ...(row.toolInput !== undefined ? { toolInput: row.toolInput } : {}),
+    ...(row.interactivePrompt !== undefined ? { interactivePrompt: row.interactivePrompt } : {}),
+    ...(row.lastAssistantMessage !== undefined
+      ? { lastAssistantMessage: row.lastAssistantMessage }
+      : {}),
+    ...(row.interrupted !== undefined ? { interrupted: row.interrupted } : {}),
+    ...(row.subagents !== undefined ? { subagents: row.subagents } : {})
+  }
+}
+
+/**
  * Wire shape for agent-status IPC. Both `agentStatus:set` and `agentStatus:getSnapshot`
  * produce this shape so renderer call sites share a single `setAgentStatus` path.
  */

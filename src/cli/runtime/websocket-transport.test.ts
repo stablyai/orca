@@ -31,6 +31,8 @@ type TestRuntime = {
   publicKeyB64: string
   deviceToken: string
   authFrames: Record<string, unknown>[]
+  requestMethods: string[]
+  connectionCount: () => number
   close: () => Promise<void>
 }
 
@@ -168,6 +170,30 @@ describe('CLI remote WebSocket transport', () => {
       code: 'incompatible_runtime',
       message: expect.stringContaining('server is too old')
     })
+    expect(runtime.connectionCount()).toBe(1)
+    expect(runtime.authFrames).toHaveLength(1)
+    expect(runtime.requestMethods).toEqual(['status.get'])
+  })
+
+  it('preflights and dispatches through one authenticated connection', async () => {
+    const runtime = await startTestRuntime('runtime-single-auth')
+    servers.push(runtime)
+    const client = new RuntimeClient(
+      '/tmp/unused',
+      5_000,
+      encodePairingOffer({
+        v: 2,
+        endpoint: runtime.endpoint,
+        deviceToken: runtime.deviceToken,
+        publicKeyB64: runtime.publicKeyB64
+      })
+    )
+
+    await expect(client.call('repo.list')).rejects.toMatchObject({ code: 'method_not_found' })
+
+    expect(runtime.connectionCount()).toBe(1)
+    expect(runtime.authFrames).toHaveLength(1)
+    expect(runtime.requestMethods).toEqual(['status.get', 'repo.list'])
   })
 
   it('blocks orchestration mutations when a remote runtime lacks the contract capability', async () => {
@@ -214,8 +240,11 @@ async function startTestRuntime(
   const httpServer = createServer()
   const wss = new WebSocketServer({ server: httpServer })
   const authFrames: Record<string, unknown>[] = []
+  const requestMethods: string[] = []
+  let connectionCount = 0
 
   wss.on('connection', (ws) => {
+    connectionCount += 1
     let sharedKey: Uint8Array | null = null
     let authenticated = false
 
@@ -254,6 +283,7 @@ async function startTestRuntime(
       }
 
       const request = JSON.parse(plaintext) as { id: string; method: string }
+      requestMethods.push(request.method)
       const response =
         request.method === 'status.get'
           ? {
@@ -299,6 +329,8 @@ async function startTestRuntime(
     publicKeyB64: publicKeyToBase64(serverKeyPair.publicKey),
     deviceToken,
     authFrames,
+    requestMethods,
+    connectionCount: () => connectionCount,
     close: async () => {
       await new Promise<void>((resolve) => {
         wss.close(() => resolve())

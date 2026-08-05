@@ -237,7 +237,7 @@ Common Commands:
   orca file open <path> [--worktree <selector>] [--json]
   orca file diff <path> [--staged] [--worktree <selector>] [--json]
   orca file open-changed [--mode edit|diff|both] [--worktree <selector>] [--json]
-  orca terminal list [--worktree <selector>] [--limit <n>] [--json]
+  orca terminal list [--worktree <selector>] [--limit <n>] [--include-visual-layouts] [--json]
   orca terminal show [--terminal <handle>] [--json]
   orca terminal read [--terminal <handle>] [--cursor <n>] [--limit <n>] [--json]
   orca terminal send [--terminal <handle>] [--text <text>] [--enter] [--interrupt] [--json]
@@ -271,6 +271,9 @@ Terminal Send Options:
   --text <text>             Text to send to the terminal
   --enter                   Append Enter after sending text
   --interrupt               Send as an interrupt-style input when supported
+
+Terminal List Options:
+  --include-visual-layouts  Include tab and pane topology in JSON output
 
 Wait Options:
   --for exit                Wait until the target terminal exits
@@ -535,6 +538,8 @@ export function formatFlagHelp(flag: string): string {
     'from-x': '--from-x <x>           Source window-local x coordinate',
     'from-y': '--from-y <y>           Source window-local y coordinate',
     help: '--help                 Show this help message',
+    'include-visual-layouts':
+      '--include-visual-layouts Include tab and pane topology in JSON output',
     interrupt: '--interrupt            Send as an interrupt-style input when supported',
     id: '--id <id>             Identifier for a target item or permission',
     issue: '--issue <number|null>  Linked GitHub issue number',

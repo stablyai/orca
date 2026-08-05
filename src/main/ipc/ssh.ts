@@ -7,7 +7,7 @@ import {
   listUserSshConfigHostSummaries,
   resolveUserSshConfigHost
 } from '../ssh/ssh-config-host-picker'
-import type { SshConnectionCallbacks } from '../ssh/ssh-connection'
+import type { SshConnection, SshConnectionCallbacks } from '../ssh/ssh-connection'
 import { SshConnectionManager } from '../ssh/ssh-connection-manager'
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { SshRelaySession, type SshRelayAiVaultHostInfo } from '../ssh/ssh-relay-session'
@@ -25,6 +25,7 @@ import type {
   DirectSshAuthority
 } from '../../shared/ssh-types'
 import { SSH_TERMINATE_RECONNECT_REQUIRED } from '../../shared/constants'
+import { quitTeardownStartGate } from '../quit-teardown-start-gate'
 import { isRuntimeOwnedSshTargetId } from '../../shared/execution-host'
 import { isAuthError } from '../ssh/ssh-connection-utils'
 import { createCancelledConnectAttemptError } from '../ssh/ssh-connect-attempt-cancellation'
@@ -292,6 +293,33 @@ async function abandonFailedSshSession(targetId: string, session: SshRelaySessio
   }
 }
 
+// Why: a connect cancelled after its transport already opened still owns that transport and its
+// unpublished session — nothing else will reach them, so it has to close them itself. Why only the
+// connection it minted, and by identity: disconnecting by target id (or closing a transport it merely
+// reused) would tear down the replacement connect's live transport.
+async function abandonCancelledConnectAttempt(
+  targetId: string,
+  session: SshRelaySession,
+  mintedConnection: SshConnection | null
+): Promise<void> {
+  // Why the identity guard: every path that removes a session from activeSessions detaches it first,
+  // so re-detaching a superseded session would only clobber the replacement's lease state.
+  if (activeSessions.get(targetId) === session) {
+    await abandonFailedSshSession(targetId, session)
+  }
+  if (!mintedConnection) {
+    return
+  }
+  try {
+    await connectionManager!.disconnectConnection(targetId, mintedConnection)
+  } catch (error) {
+    // Why: the caller is about to throw the cancellation; a teardown throw must not replace it.
+    console.warn(
+      `[ssh] Failed to disconnect cancelled connect transport for ${targetId}: ${error instanceof Error ? error.message : String(error)}`
+    )
+  }
+}
+
 function relayGracePeriodForTarget(target: SshTarget | null | undefined): number | undefined {
   return target?.relayGracePeriodSeconds
 }
@@ -305,6 +333,15 @@ type ConnectAttempt = {
 
 const connectInFlight = new Map<string, ConnectAttempt>()
 const pendingTransportReconnects = new Set<string>()
+
+// Why the quit gate rather than a local latch: "the committed quit has begun" already has an owner,
+// and a private copy could be set by something that is not actually quitting — leaving SSH connects
+// refused for the rest of the process lifetime.
+function assertSshConnectsNotFenced(): void {
+  if (quitTeardownStartGate.hasStarted()) {
+    throw new Error('SSH connects are closed for app shutdown')
+  }
+}
 
 function invalidateConnectAttempt(targetId: string): void {
   rotateSshProviderAuthority(targetId)
@@ -322,6 +359,7 @@ const resetRelayInFlight = new Map<string, Promise<void>>()
 
 // Why: ssh:testConnection connects then disconnects; suppressing broadcasts during the test avoids worktree cards flashing connected → disconnected.
 const testingTargets = new Set<string>()
+const testConnectionProbes = new Set<Promise<unknown>>()
 
 // Why: without backoff, a relay channel that keeps dying reconnects as fast as the network allows, hammering local + remote sshd; track attempts and back off to end the loop recoverably.
 type RelayLostBackoffState = {
@@ -1042,6 +1080,9 @@ export function registerSshHandlers(
     if (!isCurrentSshProviderAuthority(observedAuthority)) {
       throw createCancelledConnectAttemptError()
     }
+    // Why: the shutdown drain fences and snapshots synchronously, so a connect either registers in
+    // connectInFlight below (and gets joined) or fails here — it can never slip between the two.
+    assertSshConnectsNotFenced()
 
     pendingTransportReconnects.delete(targetId)
     const promise = doConnect(targetId, replacePendingTransport)
@@ -1130,6 +1171,11 @@ export function registerSshHandlers(
       }
     }
 
+    // Why here and not only at entry: this is the publication point, and it is the last statement
+    // before the transport opens. Checking it in the same synchronous block as activeSessions.set
+    // means a connect either registers before the shutdown drain snapshots, or registers never and
+    // owns nothing to clean up.
+    assertSshConnectsNotFenced()
     // Why: create the session early so onStateChange sees it in 'deploying' and skips reconnect logic.
     const session = new SshRelaySession(
       targetId,
@@ -1144,6 +1190,12 @@ export function registerSshHandlers(
     const ownsSession = (): boolean =>
       isCurrentConnectAttempt(targetId, authority) && activeSessions.get(targetId) === session
 
+    // Why captured here and not with existingState: connect() reuses an already-connected transport,
+    // and only a transport this attempt opened is this attempt's to close when it loses the race.
+    const priorConnection = connectionManager!.getConnection(targetId)
+    const mintedConnection = (): SshConnection | null =>
+      conn && conn !== priorConnection ? conn : null
+
     try {
       conn = await connectionManager!.connect(target)
       if (!ownsSession()) {
@@ -1154,6 +1206,7 @@ export function registerSshHandlers(
       const errObj = err instanceof Error ? err : new Error(String(err))
       const status: SshConnectionStatus = isAuthError(errObj) ? 'auth-failed' : 'error'
       if (!ownsSession()) {
+        await abandonCancelledConnectAttempt(targetId, session, mintedConnection())
         throw createCancelledConnectAttemptError()
       }
       // Why: clear this failed connect's flag so a later non-prompting connect isn't deferred.
@@ -1194,6 +1247,7 @@ export function registerSshHandlers(
       })
     } catch (err) {
       if (!ownsSession()) {
+        await abandonCancelledConnectAttempt(targetId, session, mintedConnection())
         throw createCancelledConnectAttemptError()
       }
       await abandonFailedSshSession(targetId, session)
@@ -1300,7 +1354,13 @@ export function registerSshHandlers(
     }
 
     const existingConn = connectionManager!.getConnection(targetId)
-    const conn = existingConn ?? (await connectionManager!.connect(target))
+    let conn = existingConn
+    if (!conn) {
+      // Why re-check: admission fenced this reset before it parked on the in-flight connect, so shutdown
+      // may have started (and drained) while we waited — opening a transport now would outlive the drain.
+      assertSshConnectsNotFenced()
+      conn = await connectionManager!.connect(target)
+    }
     try {
       await forceStopRelayForTarget(conn, targetId)
     } finally {
@@ -1333,6 +1393,8 @@ export function registerSshHandlers(
     if (!target) {
       throw new Error(`SSH target "${args.targetId}" not found`)
     }
+    // Why: reset opens its own transport, so it must be fenced by shutdown the same way connect is.
+    assertSshConnectsNotFenced()
 
     let resetPromise: Promise<void>
     resetPromise = runTargetLifecycle(args.targetId, () =>
@@ -1392,17 +1454,26 @@ export function registerSshHandlers(
     }
 
     testingTargets.add(args.targetId)
-    try {
+    // Why a tracked promise and not just the id: a probe holds a real transport that no session owns,
+    // so shutdown has to be able to join it before the final drain disconnects what is left.
+    const probe = (async () => {
+      // Why: a probe transport opened after the shutdown drain would outlive orderly teardown.
+      assertSshConnectsNotFenced()
       const conn = await connectionManager!.connect(target)
       const state = conn.getState()
       await connectionManager!.disconnect(args.targetId)
-      return { success: true, state }
+      return state
+    })()
+    testConnectionProbes.add(probe)
+    try {
+      return { success: true, state: await probe }
     } catch (err) {
       return {
         success: false,
         error: err instanceof Error ? err.message : String(err)
       }
     } finally {
+      testConnectionProbes.delete(probe)
       testingTargets.delete(args.targetId)
       // Why: clear so a test's credential prompt doesn't leave lastRequiredPassphrase=true and defer this target at startup.
       credentialRequestedForTarget.delete(args.targetId)
@@ -1510,6 +1581,61 @@ export function getSshConnectionManager(): SshConnectionManager | null {
   return connectionManager
 }
 
+// Why: an invalidated connect only observes its cancellation at the next checkpoint, and one blocked
+// in the transport handshake can sit there for the whole SSH timeout. Bound the join so the final
+// drain always runs well inside the quit deadline instead of racing it.
+const SSH_SHUTDOWN_INFLIGHT_JOIN_MS = 2_000
+
+async function settleWithinMs(work: readonly Promise<unknown>[], timeoutMs: number): Promise<void> {
+  if (work.length === 0) {
+    return
+  }
+  await Promise.race([
+    Promise.allSettled(work),
+    new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, timeoutMs)
+      timer.unref?.()
+    })
+  ])
+}
+
+// Why no fence latch here: the committed quit path sets it before calling this, so it is already on
+// for the snapshot below. Called without that gate (tests), this degrades to a plain drain.
+export async function detachAllSshSessionsForShutdown(): Promise<void> {
+  const inFlightWork: Promise<unknown>[] = [
+    ...[...connectInFlight.values()].map((attempt) => attempt.promise),
+    ...resetRelayInFlight.values(),
+    ...testConnectionProbes
+  ]
+  for (const targetId of Array.from(connectInFlight.keys())) {
+    invalidateConnectAttempt(targetId)
+  }
+
+  const errors: unknown[] = []
+  const drain = async (): Promise<void> => {
+    const results = await Promise.allSettled([
+      ...[...activeSessions.keys()].map((targetId) =>
+        teardownActiveSshSession(targetId, (session) => session.detachAndPersist())
+      ),
+      connectionManager?.disconnectAll() ?? Promise.resolve()
+    ])
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        errors.push(result.reason as unknown)
+      }
+    }
+  }
+
+  await drain()
+  // Why: a connect paused in old-session teardown still publishes its replacement session and opens a
+  // transport before it reaches the cancellation checkpoint, so the first drain can miss both.
+  await settleWithinMs(inFlightWork, SSH_SHUTDOWN_INFLIGHT_JOIN_MS)
+  await drain()
+  if (errors.length > 0) {
+    throw new AggregateError(errors, 'SSH shutdown detach failed')
+  }
+}
+
 export async function resetSshHandlerStateForTests(): Promise<void> {
   advertisedUrlWatcherUnsubscribe?.()
   advertisedUrlWatcherUnsubscribe = null
@@ -1536,7 +1662,9 @@ export async function resetSshHandlerStateForTests(): Promise<void> {
   resetSshProviderAuthorities()
   resetRelayInFlight.clear()
   testingTargets.clear()
+  testConnectionProbes.clear()
   credentialRequestedForTarget.clear()
+  quitTeardownStartGate.resetForTests()
 
   await connectionManager?.disconnectAll()
   portForwardManager?.dispose()

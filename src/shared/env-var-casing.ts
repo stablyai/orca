@@ -21,17 +21,3 @@ export function readEnvVar(
   }
   return undefined
 }
-
-/** Returns the key `env` already uses for `name` (any casing), else `name` unchanged. */
-export function resolveEnvVarKey(env: Record<string, string | undefined>, name: string): string {
-  if (env[name] !== undefined) {
-    return name
-  }
-  const lowered = name.toLowerCase()
-  for (const key of Object.keys(env)) {
-    if (key.toLowerCase() === lowered) {
-      return key
-    }
-  }
-  return name
-}

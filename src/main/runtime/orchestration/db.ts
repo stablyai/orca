@@ -66,8 +66,10 @@ function isEquivalentPaneKey(a: string, b: string): boolean {
 
 // Why: indexable pre-filter for isEquivalentPaneKey — equal strings and equal leaves both share the
 // text after the first ':', so this narrows candidates without deciding equivalence itself.
-const PANE_KEY_MATCH_SUFFIX_SQL =
+const RUN_PANE_KEY_MATCH_SUFFIX_SQL =
   "substr(coordinator_pane_key, instr(coordinator_pane_key, ':') + 1)"
+const DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL =
+  "substr(assignee_pane_key, instr(assignee_pane_key, ':') + 1)"
 
 function paneKeyMatchSuffix(paneKey: string): string {
   const colon = paneKey.indexOf(':')
@@ -263,13 +265,20 @@ export type RunListPage = {
   nextCursor: string | null
 }
 
+export type TaskRuntimeLineageRow = TaskRow & {
+  creator_dispatch_id: string | null
+  creator_dispatch_run_id: string | null
+  creator_dispatch_pane_key: string | null
+  creator_dispatch_process_incarnation: string | null
+}
+
 type RunListCursor = {
   createdAt: string
   id: string
 }
 
-// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup, v23 worker terminal resource ownership.
-const SCHEMA_VERSION = 23
+// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup, v23 worker terminal resource ownership, v24 creator-incarnation authority, v25 active Dispatch handle lookup.
+const SCHEMA_VERSION = 25
 
 function hardenOrchestrationDatabaseFiles(dbPath: string | ':memory:'): void {
   if (dbPath === ':memory:' || process.platform === 'win32') {
@@ -517,6 +526,9 @@ export class OrchestrationDb {
         run_id        TEXT NOT NULL DEFAULT '${LEGACY_RUN_ID}',
         parent_id     TEXT,
         created_by_terminal_handle TEXT,
+        created_by_pane_key TEXT,
+        created_by_process_incarnation TEXT,
+        created_by_run_generation INTEGER,
         task_title    TEXT,
         display_name  TEXT,
         spec          TEXT NOT NULL,
@@ -576,7 +588,7 @@ export class OrchestrationDb {
       CREATE INDEX IF NOT EXISTS idx_gates_status ON decision_gates(status);
 
       CREATE INDEX IF NOT EXISTS idx_runs_coordinator_pane_leaf
-        ON runs(${PANE_KEY_MATCH_SUFFIX_SQL})
+        ON runs(${RUN_PANE_KEY_MATCH_SUFFIX_SQL})
         WHERE coordinator_pane_key IS NOT NULL;
 
       CREATE TABLE IF NOT EXISTS coordinator_runs (
@@ -949,6 +961,29 @@ export class OrchestrationDb {
       if (current < 23) {
         this.backfillWorkerTerminalResources()
       }
+      if (current < 24) {
+        if (!this.hasColumn('tasks', 'created_by_pane_key')) {
+          this.db.exec('ALTER TABLE tasks ADD COLUMN created_by_pane_key TEXT')
+        }
+        if (!this.hasColumn('tasks', 'created_by_process_incarnation')) {
+          this.db.exec('ALTER TABLE tasks ADD COLUMN created_by_process_incarnation TEXT')
+        }
+        if (!this.hasColumn('tasks', 'created_by_run_generation')) {
+          this.db.exec('ALTER TABLE tasks ADD COLUMN created_by_run_generation INTEGER')
+        }
+      }
+      if (current < 25) {
+        this.db.exec(`
+          CREATE INDEX IF NOT EXISTS idx_dispatch_active_assignee_handle
+            ON dispatch_contexts(assignee_handle)
+            WHERE assignee_handle IS NOT NULL AND status IN ('pending', 'dispatched');
+        `)
+      }
+      this.db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_dispatch_assignee_pane_leaf
+          ON dispatch_contexts(${DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL})
+          WHERE assignee_pane_key IS NOT NULL AND status IN ('pending', 'dispatched');
+      `)
       this.createUndeliveredInboxIndexIfPossible()
 
       this.db.pragma(`user_version = ${SCHEMA_VERSION}`)
@@ -2423,7 +2458,7 @@ export class OrchestrationDb {
         .prepare(
           `SELECT * FROM runs
            WHERE coordinator_pane_key IS NOT NULL AND legacy = 0
-             AND ${PANE_KEY_MATCH_SUFFIX_SQL} = ?
+             AND ${RUN_PANE_KEY_MATCH_SUFFIX_SQL} = ?
            ORDER BY rowid`
         )
         .all(paneKeyMatchSuffix(paneKey)) as RunRow[]
@@ -3743,6 +3778,9 @@ export class OrchestrationDb {
     deps?: string[]
     parentId?: string
     createdByTerminalHandle?: string
+    createdByPaneKey?: string
+    createdByProcessIncarnation?: string
+    createdByRunGeneration?: number
     runId?: string
   }): TaskRow {
     const runId = task.runId ?? LEGACY_RUN_ID
@@ -3770,13 +3808,20 @@ export class OrchestrationDb {
     })
     this.db
       .prepare(
-        'INSERT INTO tasks (id, run_id, parent_id, created_by_terminal_handle, task_title, display_name, spec, status, deps) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        `INSERT INTO tasks (
+           id, run_id, parent_id, created_by_terminal_handle, created_by_pane_key,
+           created_by_process_incarnation, created_by_run_generation,
+           task_title, display_name, spec, status, deps
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         id,
         runId,
         task.parentId ?? null,
         task.createdByTerminalHandle ?? null,
+        task.createdByPaneKey ?? null,
+        task.createdByProcessIncarnation ?? null,
+        task.createdByRunGeneration ?? null,
         display.taskTitle || null,
         display.displayName || null,
         task.spec,
@@ -3786,8 +3831,33 @@ export class OrchestrationDb {
     return this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as TaskRow
   }
 
-  getTask(id: string): TaskRow | undefined {
-    return this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as TaskRow | undefined
+  // Why: return the active creator Dispatch proof with the Task read; runtime still owns pane/process currency.
+  getTask(id: string): TaskRow | undefined
+  getTask(id: string, dispatchRunId: string): TaskRuntimeLineageRow | undefined
+  getTask(id: string, dispatchRunId?: string): TaskRow | TaskRuntimeLineageRow | undefined {
+    if (dispatchRunId === undefined) {
+      return this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as TaskRow | undefined
+    }
+    return this.db
+      .prepare(
+        `SELECT t.*,
+           creator.id AS creator_dispatch_id,
+           creator.run_id AS creator_dispatch_run_id,
+           creator.assignee_pane_key AS creator_dispatch_pane_key,
+           creator.process_incarnation AS creator_dispatch_process_incarnation
+         FROM tasks t
+         LEFT JOIN dispatch_contexts creator ON creator.rowid = (
+           SELECT candidate.rowid
+           FROM dispatch_contexts candidate
+           WHERE candidate.assignee_handle = t.created_by_terminal_handle
+             AND candidate.run_id = ?
+             AND candidate.status IN ('pending', 'dispatched')
+           ORDER BY candidate.rowid DESC
+           LIMIT 1
+         )
+         WHERE t.id = ?`
+      )
+      .get(dispatchRunId, id) as TaskRuntimeLineageRow | undefined
   }
 
   listTasks(filter?: { status?: TaskStatus; ready?: boolean; runId?: string }): TaskRow[] {
@@ -6088,7 +6158,8 @@ export class OrchestrationDb {
     assigneeHandle: string,
     // Why: pane key is the remint-stable identity behind the handle — lets worker_done ownership survive handle reissue.
     assigneePaneKey?: string,
-    launchTokenHash?: string
+    launchTokenHash?: string,
+    processIncarnation?: string
   ): DispatchContextRow {
     const task = this.getTask(taskId)
     if (!task) {
@@ -6118,8 +6189,9 @@ export class OrchestrationDb {
       .prepare(
         `INSERT INTO dispatch_contexts (
            id, run_id, task_id, contract_version, launch_token_hash,
-           assignee_handle, assignee_pane_key, status, failure_count, dispatched_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, 'dispatched', ?, datetime('now'))`
+           assignee_handle, assignee_pane_key, process_incarnation,
+           status, failure_count, dispatched_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'dispatched', ?, datetime('now'))`
       )
       .run(
         id,
@@ -6129,6 +6201,7 @@ export class OrchestrationDb {
         launchTokenHash ?? null,
         assigneeHandle,
         assigneePaneKey ?? null,
+        processIncarnation ?? null,
         priorFailures
       )
     this.hasAnyDispatchContextsCache = true
@@ -6300,9 +6373,12 @@ export class OrchestrationDb {
 
     const actives = this.db
       .prepare(
-        "SELECT * FROM dispatch_contexts WHERE assignee_pane_key IS NOT NULL AND status IN ('pending', 'dispatched')"
+        `SELECT * FROM dispatch_contexts
+         WHERE assignee_pane_key IS NOT NULL
+           AND status IN ('pending', 'dispatched')
+           AND ${DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL} = ?`
       )
-      .all() as DispatchContextRow[]
+      .all(paneKeyMatchSuffix(assigneePaneKey)) as DispatchContextRow[]
 
     for (const row of actives) {
       if (row.assignee_pane_key && isEquivalentPaneKey(row.assignee_pane_key, assigneePaneKey)) {

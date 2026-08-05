@@ -7,6 +7,10 @@ import {
   type MobileNativeChatSendOutcome
 } from './mobile-native-chat-send'
 import { healMobileNativeChatStaleInput } from './mobile-native-chat-stale-input'
+import {
+  acquireMobileNativeChatTerminalWrite,
+  releaseMobileNativeChatTerminalWrite
+} from './mobile-native-chat-terminal-write-lock'
 import type { MobileNativeChatSendOrigin } from './use-mobile-native-chat-drafts'
 import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
 import { buildAgentTuiClearInputForText } from '../../../src/shared/agent-tui-input-clear'
@@ -210,11 +214,26 @@ export function useMobileNativeChatMessageSend(args: {
     [sendWithOutcome]
   )
 
-  // A question answer is not composer text, so it never syncs the draft.
+  // A question answer is not composer text, so it never syncs the draft. It
+  // reaches this send directly (not through the image hook's locked path), so
+  // it takes the per-terminal write lock itself: an answer landing mid-flight
+  // in an image paste sequence would interleave bytes into the PTY.
   const answerQuestion = useCallback(
-    async (text: string): Promise<boolean> =>
-      (await sendMessage(text, undefined, false)) !== 'rejected',
-    [sendMessage]
+    async (text: string): Promise<boolean> => {
+      const terminal = handleRef.current
+      if (terminal && !acquireMobileNativeChatTerminalWrite(terminal)) {
+        onSendError('Answer not sent')
+        return false
+      }
+      try {
+        return (await sendMessage(text, undefined, false)) !== 'rejected'
+      } finally {
+        if (terminal) {
+          releaseMobileNativeChatTerminalWrite(terminal)
+        }
+      }
+    },
+    [handleRef, onSendError, sendMessage]
   )
 
   return { send, sendWithOutcome, answerQuestion }

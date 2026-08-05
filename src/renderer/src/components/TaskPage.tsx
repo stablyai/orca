@@ -359,6 +359,7 @@ import {
   resolveVisibleTaskProvider
 } from '../../../shared/task-providers'
 import { translate } from '@/i18n/i18n'
+import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
 import {
   getGitHubModeButtons,
   getGitHubTaskKindPresets,
@@ -585,29 +586,8 @@ function scopeGitHubTaskSearch(query: string, kind: GitHubTaskKind): string {
   return `${inferredKind === 'prs' ? 'is:pr' : 'is:issue'} ${trimmed}`
 }
 
-// Why: Intl.RelativeTimeFormat allocation is non-trivial; hoist to module scope so all rows share one instance instead of allocating per render.
-const relativeTimeFormatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
-
 function formatRelativeTime(input: string): string {
-  const date = new Date(input)
-  if (Number.isNaN(date.getTime())) {
-    return 'recently'
-  }
-
-  const diffMs = date.getTime() - Date.now()
-  const diffMinutes = Math.round(diffMs / 60_000)
-
-  if (Math.abs(diffMinutes) < 60) {
-    return relativeTimeFormatter.format(diffMinutes, 'minute')
-  }
-
-  const diffHours = Math.round(diffMinutes / 60)
-  if (Math.abs(diffHours) < 24) {
-    return relativeTimeFormatter.format(diffHours, 'hour')
-  }
-
-  const diffDays = Math.round(diffHours / 24)
-  return relativeTimeFormatter.format(diffDays, 'day')
+  return formatUiRelativeTimeFromDate(input)
 }
 
 type LinearProjectTab = 'overview' | 'issues'

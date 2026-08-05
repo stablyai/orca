@@ -106,6 +106,95 @@ describe('filterWorktrees', () => {
     ).toEqual([featureNamedMain])
   })
 
+  it('keeps a sleeping main worktree visible under hide-sleeping by default (#8873)', () => {
+    const main = worktree({ worktreeId: 'main', branch: 'main', isMainWorktree: true })
+    const feature = worktree({ worktreeId: 'feature', isMainWorktree: false })
+
+    expect(
+      filterWorktrees(
+        [main, feature],
+        { filterRepoIds: new Set(), hideSleeping: true, hideDefaultBranch: false },
+        ''
+      )
+    ).toEqual([main])
+  })
+
+  it('keeps a sleeping folder workspace visible under hide-sleeping', () => {
+    const folder = worktree({
+      workspaceKind: 'folder-workspace',
+      worktreeId: 'folder:workspace-1',
+      branch: '',
+      isMainWorktree: true
+    })
+
+    expect(
+      filterWorktrees(
+        [folder],
+        { filterRepoIds: new Set(), hideSleeping: true, hideDefaultBranch: false },
+        ''
+      )
+    ).toEqual([folder])
+  })
+
+  it('re-hides the sleeping main worktree when the desktop setting is off', () => {
+    const main = worktree({ worktreeId: 'main', branch: 'main', isMainWorktree: true })
+
+    expect(
+      filterWorktrees(
+        [main],
+        {
+          filterRepoIds: new Set(),
+          hideSleeping: true,
+          hideDefaultBranch: false,
+          alwaysShowDefaultBranch: false
+        },
+        ''
+      )
+    ).toEqual([])
+  })
+
+  it('falls back to the branch heuristic for hosts that omit isMainWorktree', () => {
+    const legacyMain = worktree({ worktreeId: 'legacy-main', branch: 'refs/heads/master' })
+
+    expect(
+      filterWorktrees(
+        [legacyMain],
+        { filterRepoIds: new Set(), hideSleeping: true, hideDefaultBranch: false },
+        ''
+      )
+    ).toEqual([legacyMain])
+  })
+
+  it('keeps a sleeping folder workspace on hosts that omit isMainWorktree', () => {
+    // A folder workspace has no branch, so the legacy branch heuristic can never
+    // recognise it — without its own arm, #8873 still reproduces on old desktops.
+    const legacyFolder = worktree({
+      workspaceKind: 'folder-workspace',
+      worktreeId: 'folder:legacy-1',
+      branch: ''
+    })
+
+    expect(
+      filterWorktrees(
+        [legacyFolder],
+        { filterRepoIds: new Set(), hideSleeping: true, hideDefaultBranch: false },
+        ''
+      )
+    ).toEqual([legacyFolder])
+  })
+
+  it('lets hide-default-branch still win over the sleeping exemption', () => {
+    const main = worktree({ worktreeId: 'main', branch: 'main', isMainWorktree: true })
+
+    expect(
+      filterWorktrees(
+        [main],
+        { filterRepoIds: new Set(), hideSleeping: true, hideDefaultBranch: true },
+        ''
+      )
+    ).toEqual([])
+  })
+
   it('keeps folder workspaces when default branch hiding is enabled', () => {
     const folder = worktree({
       workspaceKind: 'folder-workspace',

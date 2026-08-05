@@ -1,6 +1,6 @@
 {
   "name": "orca",
-  "version": "1.4.168-rc.1",
+  "version": "1.4.169-rc.0",
   "description": "Next-gen IDE for parallel agentic development",
   "homepage": "https://github.com/stablyai/orca",
   "author": "stablyai",
@@ -210,7 +210,7 @@
     "lowlight": "^3.3.0",
     "lucide-react": "^0.577.0",
     "marked": "^17.0.1",
-    "mermaid": "^11.15.0",
+    "mermaid": "^11.16.0",
     "monaco-editor": "^0.55.1",
     "oxfmt": "^0.52.0",
     "oxlint": "^1.75.0",

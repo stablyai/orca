@@ -190,6 +190,31 @@ it('preserves unavailable inspection from an owning daemon', async () => {
 })
 
 describe('DegradedDaemonPtyProvider', () => {
+  it('refuses attach for ids no daemon adapter owns instead of the fallback no-op', async () => {
+    const daemonSessions: string[] = []
+    const current = createDaemonAdapter('daemon', daemonSessions)
+    const fallback = createProvider('fallback', ['fresh-fallback-session'])
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+
+    // Unknown id: the fallback's resolving no-op attach must never read as
+    // success — the runtime would pin a blank stream as attached.
+    await expect(provider.attach('wt-1@@unknown')).rejects.toThrow(
+      'Session not found: wt-1@@unknown'
+    )
+    // Fallback-owned fresh sessions stream in-process; attach is refused too.
+    await expect(provider.attach('fresh-fallback-session')).rejects.toThrow(
+      'Session not found: fresh-fallback-session'
+    )
+    expect(fallback.attach).not.toHaveBeenCalled()
+    expect(current.attach).not.toHaveBeenCalled()
+
+    // Once a daemon adapter owns the id, attach routes to that adapter.
+    daemonSessions.push('wt-1@@learned')
+    await expect(provider.attach('wt-1@@learned')).resolves.toBeUndefined()
+    expect(current.attach).toHaveBeenCalledWith('wt-1@@learned')
+    expect(fallback.attach).not.toHaveBeenCalled()
+  })
+
   it('only delegates owner-listing authority to the provider that owns the id', async () => {
     const current = createDaemonAdapter('daemon', ['daemon-session'])
     const fallback = createProvider('fallback', [], true)

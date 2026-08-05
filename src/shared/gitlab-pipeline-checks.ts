@@ -62,6 +62,8 @@ export function gitLabPipelineJobsToPRChecks(jobs: GitLabPipelineJob[]): PRCheck
     name: job.stage ? `${job.stage}: ${job.name}` : job.name,
     status: mapGitLabPipelineJobStatusToCheckStatus(job.status),
     conclusion: mapGitLabPipelineJobStatusToConclusion(job.status),
-    url: job.webUrl || null
+    url: job.webUrl || null,
+    // Truthiness, not != null: the runtime RPC schema requires a positive int.
+    ...(job.id ? { gitlabJobId: job.id } : {})
   }))
 }

@@ -409,8 +409,8 @@ export type RuntimeTerminalPathOpenTarget =
     }
 
 /** Result of resolving a file path tapped in the mobile terminal against the
- *  worktree root (+ optional cwd). relativePath is null when the path resolves
- *  outside the worktree (not openable via the worktree-scoped file RPCs). */
+ *  selected or sibling workspace root (+ optional cwd). relativePath is null
+ *  when no workspace on the same execution host owns the path. */
 export type RuntimeTerminalPathResolution = {
   worktree: string
   relativePath: string | null

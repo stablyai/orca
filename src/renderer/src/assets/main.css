@@ -1648,6 +1648,30 @@ html.native-shell .app-layout {
   animation: settings-shell-enter 180ms ease-out;
 }
 
+.repo-icon-emoji-picker .EmojiPickerReact {
+  --epr-bg-color: var(--card);
+  --epr-category-label-bg-color: var(--card);
+  --epr-text-color: var(--card-foreground);
+  --epr-search-input-bg-color: var(--input);
+  --epr-search-input-bg-color-active: var(--input);
+  --epr-search-border-color: var(--border);
+  --epr-search-border-color-active: var(--ring);
+  --epr-hover-bg-color: var(--accent);
+  --epr-highlight-color: var(--ring);
+  --epr-picker-border-color: var(--border);
+  border: none;
+}
+
+/* The library sets `font-family: sans-serif` on every descendant, so inheriting from the root never lands. */
+.repo-icon-emoji-picker .EmojiPickerReact * {
+  font-family: var(--font-sans);
+}
+
+.repo-icon-emoji-picker .epr-body {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--muted-foreground, #737373) 34%, transparent) transparent;
+}
+
 .collapsible-height-content {
   overflow: hidden;
 }

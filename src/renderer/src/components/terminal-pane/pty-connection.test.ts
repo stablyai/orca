@@ -10,13 +10,14 @@ import {
   POST_REPLAY_REATTACH_RESET,
   RESET_KITTY_KEYBOARD_PROTOCOL,
   RESET_TERMINAL_CURSOR_STYLE
-} from './layout-serialization'
+} from '../../../../shared/terminal-mode-reset-profiles'
 import { buildFreshShellViewportBlankingSequence } from './terminal-restored-viewport'
 import { DEFAULT_DA1_RESPONSE } from './terminal-capability-replies'
 import { TERMINAL_PASTE_DIRECT_MAX_BYTES } from './terminal-paste-coordinator'
 import { resolveWindowsShiftEnterEncodingForPane } from './terminal-windows-shift-enter'
 import type * as UseNotificationDispatchModule from './use-notification-dispatch'
 import { getEagerPtyBufferHandle } from './pty-dispatcher'
+import type { AgentType } from '../../../../shared/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
@@ -227,6 +228,7 @@ type StoreState = {
   consumePendingSnapshot: ReturnType<typeof vi.fn>
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
   agentStatusByPaneKey: Record<string, unknown>
+  retainedAgentsByPaneKey: Record<string, { agentType: AgentType }>
   paneForegroundAgentByPaneKey: Record<string, PaneForegroundAgentEntry>
   sleepingAgentSessionsByPaneKey: Record<string, unknown>
   suppressedPtyExitIds: Record<string, true>
@@ -928,6 +930,7 @@ describe('connectPanePty', () => {
       consumePendingSnapshot: vi.fn(() => null),
       runtimePaneTitlesByTabId: {},
       agentStatusByPaneKey: {},
+      retainedAgentsByPaneKey: {},
       paneForegroundAgentByPaneKey: {},
       sleepingAgentSessionsByPaneKey: {},
       suppressedPtyExitIds: {},
@@ -9027,6 +9030,103 @@ describe('connectPanePty', () => {
         ([data]) => data as string
       )
       expect(writes.some((data) => data.includes('\x1b[?25h'))).toBe(false)
+    })
+  })
+
+  it('ignores the stale agent signal on a cold restore and applies the fresh-shell reset', async () => {
+    // Why: pane status and title are persisted, so after a cold restore they still
+    // describe the process that died and make the pane look agent-owned. Preserving
+    // "its" modes arms mouse/focus/paste reporting against the replacement shell,
+    // which then prints the reports as junk at the prompt (#12101).
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('tab-pty')
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      if (sessionId) {
+        return {
+          id: sessionId,
+          snapshot: '\x1b[?1003h\x1b[?1006h\x1b[?2004huser@host ~ $ ',
+          coldRestore: { scrollback: 'cold-payload', cwd: '/tmp/wt-1' }
+        }
+      }
+      return null
+    })
+    transportFactoryQueue.push(transport)
+    setReattachPaneTitle('Cursor Agent')
+
+    const pane = createPane(1)
+    const textarea = {} as HTMLTextAreaElement
+    configureTerminalFocusMode(pane, textarea)
+    await withMockedDocumentActiveElement(textarea, async () => {
+      const manager = createManager(1)
+      const deps = createDeps({
+        restoredLeafId: LEAF_1,
+        restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+      })
+
+      connectPanePty(pane as never, manager as never, deps as never)
+      await flushAsyncTicks(20)
+
+      const writes = (pane.terminal.write as ReturnType<typeof vi.fn>).mock.calls.map(
+        ([data]) => data as string
+      )
+      expect(writes).toContain(POST_REPLAY_MODE_RESET)
+      expect(writes).not.toContain(POST_REPLAY_LIVE_AGENT_REATTACH_RESET)
+    })
+  })
+
+  it('applies the fresh-shell reset when a spawn is answered with a cold-restore reattach', async () => {
+    // Why: main can answer a *spawn* with an adopted session, so the reattach handler
+    // is reachable by a second door that skips the restored-session path entirely. The
+    // cold-restore signal has to survive that door too, or #12101 returns on it.
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('tab-pty')
+    let activePtyId = 'tab-pty'
+    transport.getPtyId.mockImplementation(() => activePtyId)
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      if (sessionId) {
+        throw new Error('restored session is gone')
+      }
+      // Main answered the spawn by adopting a durable session instead.
+      activePtyId = 'adopted-pty'
+      return {
+        id: 'adopted-pty',
+        isReattach: true,
+        // Keep this snapshot free of ?25l: the live agent reset is built from the
+        // payload and only equals the constant negated below when the cursor is left
+        // visible. Ending it hidden would quietly retire that assertion.
+        snapshot: '\x1b[?1003h\x1b[?1006h\x1b[?2004huser@host ~ $ ',
+        coldRestore: { scrollback: 'cold-payload', cwd: '/tmp/wt-1' }
+      }
+    })
+    transportFactoryQueue.push(transport)
+    setReattachPaneTitle('Cursor Agent')
+
+    const pane = createPane(1)
+    const textarea = {} as HTMLTextAreaElement
+    configureTerminalFocusMode(pane, textarea)
+    await withMockedDocumentActiveElement(textarea, async () => {
+      const manager = createManager(1)
+      const deps = createDeps({
+        restoredLeafId: LEAF_1,
+        restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+      })
+
+      connectPanePty(pane as never, manager as never, deps as never)
+      await flushAsyncTicks(30)
+
+      expect(transport.connect).toHaveBeenCalledTimes(2)
+      expect(transport.connect.mock.calls[0]?.[0]?.sessionId).toBe('tab-pty')
+      expect(transport.connect.mock.calls[1]?.[0]?.sessionId).toBeUndefined()
+      const writes = (pane.terminal.write as ReturnType<typeof vi.fn>).mock.calls.map(
+        ([data]) => data as string
+      )
+      const output = writes.join('')
+      const snapshotIndex = output.indexOf('\x1b[?1003h\x1b[?1006h\x1b[?2004huser@host ~ $ ')
+      const resetIndex = output.indexOf(POST_REPLAY_MODE_RESET)
+      expect(snapshotIndex).toBeGreaterThanOrEqual(0)
+      expect(resetIndex).toBeGreaterThan(snapshotIndex)
+      expect(writes).toContain(POST_REPLAY_MODE_RESET)
+      expect(writes).not.toContain(POST_REPLAY_LIVE_AGENT_REATTACH_RESET)
     })
   })
 
@@ -18900,6 +19000,90 @@ describe('connectPanePty', () => {
         prompt: 'say hi',
         agentType: 'command-code'
       })
+    })
+
+    it('rejects Command Code facts when Claude owns the pane', async () => {
+      enableMainAuthority()
+      const { connectPanePty } = await import('./pty-connection')
+      const handler = await import('./terminal-side-effect-facts-handler')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+      vi.useFakeTimers()
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+      const claudeStatus = {
+        paneKey,
+        state: 'done' as const,
+        prompt: 'Previous Claude turn',
+        updatedAt: Date.now(),
+        stateStartedAt: Date.now(),
+        agentType: 'claude' as const,
+        stateHistory: []
+      }
+      mockStoreState.tabsByWorktree = {
+        'wt-1': [{ id: 'tab-1', ptyId: null, launchAgent: 'claude' }]
+      }
+      mockStoreState.agentStatusByPaneKey[paneKey] = claudeStatus
+      mockStoreState.paneForegroundAgentByPaneKey[paneKey] = {
+        agent: 'claude',
+        shellForeground: false
+      }
+
+      connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
+      const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as (ptyId: string) => void
+      onPtySpawn('pty-fact-false-cc')
+      mockStoreState.setAgentStatus.mockClear()
+
+      handler._dispatchTerminalSideEffectBatchForTest({
+        ptyId: 'pty-fact-false-cc',
+        seq: 1,
+        facts: [
+          { kind: 'command-code-working', prompt: 'False prompt' },
+          { kind: 'command-code-done', prompt: 'False prompt' }
+        ]
+      })
+      vi.advanceTimersByTime(2000)
+
+      expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
+      expect(mockStoreState.agentStatusByPaneKey[paneKey]).toBe(claudeStatus)
+    })
+
+    it('rejects Command Code facts when retained Claude identity owns the pane', async () => {
+      enableMainAuthority()
+      const { connectPanePty } = await import('./pty-connection')
+      const handler = await import('./terminal-side-effect-facts-handler')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+      vi.useFakeTimers()
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+      const unknownStatus = {
+        paneKey,
+        state: 'working' as const,
+        prompt: '',
+        updatedAt: Date.now(),
+        stateStartedAt: Date.now(),
+        agentType: 'unknown' as const,
+        stateHistory: []
+      }
+      mockStoreState.retainedAgentsByPaneKey[paneKey] = { agentType: 'claude' }
+      mockStoreState.agentStatusByPaneKey[paneKey] = unknownStatus
+
+      connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
+      const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as (ptyId: string) => void
+      onPtySpawn('pty-fact-retained-false-cc')
+      mockStoreState.setAgentStatus.mockClear()
+
+      handler._dispatchTerminalSideEffectBatchForTest({
+        ptyId: 'pty-fact-retained-false-cc',
+        seq: 1,
+        facts: [
+          { kind: 'command-code-working', prompt: 'False prompt' },
+          { kind: 'command-code-done', prompt: 'False prompt' }
+        ]
+      })
+      vi.advanceTimersByTime(2000)
+
+      expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
+      expect(mockStoreState.agentStatusByPaneKey[paneKey]).toBe(unknownStatus)
     })
 
     it('keeps Command Code working when a working fact lands before the done settles', async () => {

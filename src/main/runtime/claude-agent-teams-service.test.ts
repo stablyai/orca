@@ -284,35 +284,23 @@ describe('ClaudeAgentTeamsService', () => {
     ).resolves.toMatchObject({ ok: false, exitCode: 1 })
   })
 
-  it('keeps the inherited PATH when the caller sends Windows-cased Path', () => {
-    // Why: native Windows processes expose `Path`, so reading baseEnv.PATH dropped the
-    // inherited PATH and left the teammate with only the shim dir — `claude` then
-    // failed to spawn with ENOENT.
-    const service = new ClaudeAgentTeamsService()
-    const launch = service.createLaunchEnv({
-      leaderHandle: 'leader-handle',
-      baseEnv: { Path: 'C:\\Windows\\System32' },
-      shimDir: 'C:\\shim',
-      shimBin: 'C:\\orca.exe'
-    })
+  it('keeps the inherited Windows `Path` instead of minting a truncated `PATH`', () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      const launch = new ClaudeAgentTeamsService().createLaunchEnv({
+        leaderHandle: 'leader-handle',
+        baseEnv: { Path: 'C:\\Windows\\system32' },
+        shimDir: 'C:\\orca-shim',
+        shimBin: 'C:\\orca.exe'
+      })
 
-    // Written back under the caller's own key so the child cannot end up with both.
-    expect(launch.env.Path).toContain('C:\\Windows\\System32')
-    expect(launch.env.Path).toContain('C:\\shim')
-    expect(launch.env.PATH).toBeUndefined()
-  })
-
-  it('still uses PATH when the caller sends POSIX-cased PATH', () => {
-    const service = new ClaudeAgentTeamsService()
-    const launch = service.createLaunchEnv({
-      leaderHandle: 'leader-handle',
-      baseEnv: { PATH: '/usr/bin' },
-      shimDir: '/tmp/orca-shim',
-      shimBin: '/usr/bin/orca'
-    })
-
-    expect(launch.env.PATH).toContain('/usr/bin')
-    expect(launch.env.PATH).toContain('/tmp/orca-shim')
-    expect(launch.env.Path).toBeUndefined()
+      expect(Object.keys(launch.env).filter((key) => /^path$/i.test(key))).toEqual(['Path'])
+      expect(launch.env.Path).toBe('C:\\orca-shim;C:\\Windows\\system32')
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
   })
 })

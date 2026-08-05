@@ -265,6 +265,42 @@ describe('agent status runtime orchestration metadata', () => {
     })
   })
 
+  it('clears stale lineage when the authoritative runtime snapshot loses its Run binding', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
+
+    store.getState().setAgentStatus(childPaneKey, {
+      state: 'working',
+      prompt: 'child agent',
+      agentType: 'codex',
+      orchestration: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        dispatchStatus: 'dispatched',
+        parentTerminalHandle: 'term-old-coordinator',
+        parentPaneKey: 'tab-parent:22222222-2222-4222-8222-222222222222',
+        coordinatorHandle: 'term-old-coordinator',
+        orchestrationRunId: 'run-1'
+      }
+    })
+    store.getState().setRuntimeAgentOrchestrationByPaneKey({
+      [childPaneKey]: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        dispatchStatus: 'dispatched',
+        orchestrationRunId: 'run-1'
+      }
+    })
+
+    expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toEqual({
+      taskId: 'task-1',
+      dispatchId: 'ctx-1',
+      dispatchStatus: 'dispatched',
+      orchestrationRunId: 'run-1'
+    })
+  })
+
   it('updates runtime status for the same dispatch', () => {
     vi.useFakeTimers()
     const store = createTestStore()

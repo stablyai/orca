@@ -121,6 +121,27 @@ describe('syncBrowserPageChromeInset', () => {
     const viewport = ensureBrowserPageViewport('page-1', 'workspace-1')!
     expect(viewport.chromeInset.style.height).toBe('48px')
   })
+
+  it('restores the inset when guest recovery rebuilds the shell', () => {
+    mountSlotViewport('workspace-1')
+    ensureBrowserPageViewport('page-1', 'workspace-1')
+    syncBrowserPageChromeInset('page-1', 48)
+    // Guest replacement tears the shell down; the recovery re-render rebuilds it without re-measuring the chrome.
+    removeBrowserPageViewport('page-1')
+
+    const rebuilt = ensureBrowserPageViewport('page-1', 'workspace-1')!
+
+    expect(rebuilt.chromeInset.style.height).toBe('48px')
+  })
+
+  it('applies an inset measured before the shell existed', () => {
+    syncBrowserPageChromeInset('page-2', 40)
+    mountSlotViewport('workspace-1')
+
+    const viewport = ensureBrowserPageViewport('page-2', 'workspace-1')!
+
+    expect(viewport.chromeInset.style.height).toBe('40px')
+  })
 })
 
 describe('applyBrowserPageViewportLayout', () => {

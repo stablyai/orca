@@ -29,6 +29,7 @@ import {
   selectEvictionExemptTerminalTabIds,
   selectEvictionExemptTerminalTabLayoutKey
 } from './terminal-eviction-exempt-tabs'
+import { selectSleepingRecordParkExemptTabIds } from './sleeping-record-park-exemption'
 import {
   canWatcherCoverParkedTerminalTab,
   disposeParkedTerminalWatchersForWorktree,
@@ -95,6 +96,13 @@ export function useTerminalTabColdParking(args: {
   const pairedRuntimeParkingEnvironmentIds = useMemo(
     () => selectPairedRuntimeParkingEnvironmentIds(runtimeStatusByEnvironmentId),
     [runtimeStatusByEnvironmentId]
+  )
+  const sleepingAgentSessionsByPaneKey = useAppStore(
+    (state) => state.sleepingAgentSessionsByPaneKey
+  )
+  const sleepingRecordOwnedTabIds = useMemo(
+    () => selectSleepingRecordParkExemptTabIds(sleepingAgentSessionsByPaneKey, worktreeId),
+    [sleepingAgentSessionsByPaneKey, worktreeId]
   )
   const terminalTabHiddenSinceRef = useRef(new Map<string, number>())
   // Why (shared measure-clock contract with Terminal.tsx): tab hiddenSince
@@ -288,7 +296,14 @@ export function useTerminalTabColdParking(args: {
           tabId: terminalTab.id
         }) !== null
       if (
-        (coldParkTerminalPanes || (!isVisible && coldParkedTerminalTabIds.has(terminalTab.id))) &&
+        (coldParkTerminalPanes ||
+          (!isVisible &&
+            coldParkedTerminalTabIds.has(terminalTab.id) &&
+            // Why: a pane owning a sleeping-session record must stay mountable
+            // on an active worktree — parked it can never cold-restore, so the
+            // agent's resume strands until the user reveals the tab. Scoped to
+            // per-tab parks: the worktree-level park clears on activation.
+            !sleepingRecordOwnedTabIds.has(terminalTab.id))) &&
         !hasActivityTerminalPortal &&
         // Why: a force-parked worktree's eviction-exempt tabs keep their
         // mounted panes — a remount would orphan their live pty. Scoped to
@@ -322,6 +337,7 @@ export function useTerminalTabColdParking(args: {
     evictionExemptTerminalTabIds,
     isWorktreeActive,
     shouldMeasureHiddenWorktree,
+    sleepingRecordOwnedTabIds,
     terminalTabs,
     worktreeId
   ])

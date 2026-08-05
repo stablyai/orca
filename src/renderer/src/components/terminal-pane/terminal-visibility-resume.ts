@@ -94,8 +94,8 @@ export function resumeTerminalVisibility({
       resetAndRefreshAllTerminalWebglAtlases()
     }
     // Why: the synchronous recovery above can fire before the revealed pane is
-    // attached and laid out, where the WebGL renderer drops redraw requests
-    // without retry. Follow up with a settled-frame, pane-scoped repaint.
+    // attached and laid out. Follow up after layout with one shared-atlas-safe
+    // recovery covering every visible terminal manager.
     manager.scheduleRevealRepaint()
   })
 }
@@ -171,9 +171,9 @@ export function recoverVisibleTerminalWindowWake({
     resetAndRefreshAllTerminalWebglAtlases()
     manager.scheduleRevealRepaint()
   } else {
-    // Why: the reveal repaint clears each pane's texture atlas (a shared,
-    // same-config wipe), so a plain refocus must use the atlas-preserving
-    // present instead — otherwise it re-arms the same mid-stream garble race.
+    // Why: the reveal repaint runs a shared-atlas reset, so a plain refocus
+    // must use the atlas-preserving present instead — otherwise it re-arms the
+    // same mid-stream garble race.
     manager.scheduleRevealPresent()
   }
 }

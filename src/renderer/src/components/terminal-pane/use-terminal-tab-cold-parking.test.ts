@@ -8,7 +8,11 @@ const mocks = vi.hoisted(() => ({
     pendingStartupByTabId: {} as Record<string, unknown>,
     runtimeStatusByEnvironmentId: new Map(),
     settings: {} as Record<string, unknown>,
-    terminalLayoutsByTabId: {} as Record<string, { ptyIdsByLeafId?: Record<string, string> }>
+    terminalLayoutsByTabId: {} as Record<string, { ptyIdsByLeafId?: Record<string, string> }>,
+    sleepingAgentSessionsByPaneKey: {} as Record<
+      string,
+      { paneKey: string; tabId?: string; worktreeId: string }
+    >
   },
   exemptTabIds: new Set<string>(),
   exemptSelectCalls: 0
@@ -76,6 +80,7 @@ describe('useTerminalTabColdParking measure-clock contract', () => {
     mocks.exemptTabIds = new Set()
     mocks.exemptSelectCalls = 0
     mocks.storeState.terminalLayoutsByTabId = {}
+    mocks.storeState.sleepingAgentSessionsByPaneKey = {}
     mocks.storeState.runtimeStatusByEnvironmentId = new Map()
   })
 
@@ -238,6 +243,85 @@ describe('useTerminalTabColdParking measure-clock contract', () => {
       rerender({ ...stableArgs, isWorktreeActive: false })
     })
     expect(mocks.exemptSelectCalls).toBe(callsAfterFirstRender)
+    expect(result.current).toEqual(new Set(['tab-2']))
+  })
+
+  // Why: a parked pane can never cold-restore, so a per-tab park holding a
+  // sleeping-session record would strand the agent's resume until tab reveal.
+  it('unparks a per-tab-parked pane once it owns a sleeping-session record', () => {
+    const { result, rerender } = renderHook(
+      (args: ReturnType<typeof hookArgs>) => useTerminalTabColdParking(args),
+      { initialProps: hookArgs(false) }
+    )
+
+    act(() => {
+      vi.advanceTimersByTime(TERMINAL_TAB_HOT_RETAIN_MS + 1)
+    })
+    expect(result.current).toEqual(new Set(['tab-2']))
+
+    mocks.storeState.sleepingAgentSessionsByPaneKey = {
+      'tab-2:22222222-2222-4222-8222-222222222222': {
+        paneKey: 'tab-2:22222222-2222-4222-8222-222222222222',
+        tabId: 'tab-2',
+        worktreeId: WORKTREE_ID
+      }
+    }
+    act(() => {
+      rerender(hookArgs(false))
+    })
+    expect(result.current.size).toBe(0)
+
+    // Records for other worktrees change nothing.
+    mocks.storeState.sleepingAgentSessionsByPaneKey = {
+      'tab-2:22222222-2222-4222-8222-222222222222': {
+        paneKey: 'tab-2:22222222-2222-4222-8222-222222222222',
+        tabId: 'tab-2',
+        worktreeId: 'other-worktree'
+      }
+    }
+    act(() => {
+      rerender(hookArgs(false))
+    })
+    expect(result.current).toEqual(new Set(['tab-2']))
+  })
+
+  // Why: blocked and passive-completed records never auto-resume, so exempting
+  // them would pin a hidden pane mounted indefinitely for nothing.
+  it('keeps parking panes whose records cannot be consumed', () => {
+    const { result, rerender } = renderHook(
+      (args: ReturnType<typeof hookArgs>) => useTerminalTabColdParking(args),
+      { initialProps: hookArgs(false) }
+    )
+    act(() => {
+      vi.advanceTimersByTime(TERMINAL_TAB_HOT_RETAIN_MS + 1)
+    })
+    expect(result.current).toEqual(new Set(['tab-2']))
+
+    mocks.storeState.sleepingAgentSessionsByPaneKey = {
+      'tab-2:22222222-2222-4222-8222-222222222222': {
+        paneKey: 'tab-2:22222222-2222-4222-8222-222222222222',
+        tabId: 'tab-2',
+        worktreeId: WORKTREE_ID,
+        automaticResumeBlockedBy: 'legacy-orchestration-worker'
+      } as never
+    }
+    act(() => {
+      rerender(hookArgs(false))
+    })
+    expect(result.current).toEqual(new Set(['tab-2']))
+
+    mocks.storeState.sleepingAgentSessionsByPaneKey = {
+      'tab-2:22222222-2222-4222-8222-222222222222': {
+        paneKey: 'tab-2:22222222-2222-4222-8222-222222222222',
+        tabId: 'tab-2',
+        worktreeId: WORKTREE_ID,
+        origin: 'worktree-sleep',
+        state: 'done'
+      } as never
+    }
+    act(() => {
+      rerender(hookArgs(false))
+    })
     expect(result.current).toEqual(new Set(['tab-2']))
   })
 })

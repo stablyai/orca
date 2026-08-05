@@ -3,6 +3,7 @@ import type {
   ExternalAutomationProvider
 } from '../../../../shared/automations-types'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
+import { isConnectingSshStatus } from '@/ssh/ssh-connection-recoverability'
 
 export type ExternalAutomationSourceAvailability = {
   statusLabel: string
@@ -75,7 +76,7 @@ export function getExternalAutomationSourceAvailability({
 }
 
 export function isSshConnectionBusy(status: SshConnectionStatus | undefined): boolean {
-  return status === 'connecting' || status === 'deploying-relay' || status === 'reconnecting'
+  return isConnectingSshStatus(status)
 }
 
 export function getExternalAutomationActionDisabledMessage(args: {

@@ -311,6 +311,7 @@ describe('discoverCommitMessageModelsLocal', () => {
 
     expect(result).toMatchObject({
       success: true,
+      catalogOrigin: 'spec',
       defaultModelId: 'smart'
     })
     expect(spawnMock).not.toHaveBeenCalled()
@@ -346,6 +347,94 @@ describe('discoverCommitMessageModelsLocal', () => {
       ['--list-models'],
       expect.objectContaining({ windowsHide: true })
     )
+  })
+
+  it('writes the Claude list_models request to stdin and parses the control response', async () => {
+    const listeners = new Map<string, (value: unknown) => void>()
+    const child = {
+      pid: 123,
+      kill: vi.fn(),
+      stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
+      stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
+      stdin: { on: vi.fn(), end: vi.fn() },
+      on: vi.fn((event, callback) => listeners.set(event, callback))
+    }
+    spawnMock.mockReturnValue(child as never)
+
+    const pending = discoverCommitMessageModelsLocal('claude', undefined)
+
+    listeners.get('stdout:data')?.(
+      Buffer.from(
+        `${JSON.stringify({
+          type: 'control_response',
+          response: {
+            subtype: 'success',
+            request_id: 'orca-model-discovery',
+            response: {
+              models: [
+                { value: 'default', displayName: 'Default (recommended)' },
+                {
+                  value: 'opus[1m]',
+                  displayName: 'Opus (1M context)',
+                  supportsEffort: true,
+                  supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max']
+                },
+                { value: 'sonnet', displayName: 'Sonnet' },
+                { value: 'haiku', displayName: 'Haiku' }
+              ]
+            }
+          }
+        })}\n`
+      )
+    )
+    listeners.get('close')?.(0)
+
+    await expect(pending).resolves.toMatchObject({
+      success: true,
+      catalogOrigin: 'probe',
+      defaultModelId: 'sonnet',
+      models: [
+        { id: 'opus[1m]', label: 'Opus (1M context)' },
+        { id: 'sonnet', label: 'Sonnet' },
+        { id: 'haiku', label: 'Haiku' }
+      ]
+    })
+    expect(spawnMock).toHaveBeenCalledWith(
+      'claude',
+      ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose'],
+      expect.objectContaining({ windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] })
+    )
+    expect(child.stdin.end).toHaveBeenCalledWith(expect.stringContaining('"list_models"'))
+  })
+
+  it('falls back to the Claude seed models when the CLI lacks list_models', async () => {
+    const listeners = new Map<string, (value: unknown) => void>()
+    const child = {
+      pid: 123,
+      kill: vi.fn(),
+      stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
+      stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
+      stdin: { on: vi.fn(), end: vi.fn() },
+      on: vi.fn((event, callback) => listeners.set(event, callback))
+    }
+    spawnMock.mockReturnValue(child as never)
+
+    const pending = discoverCommitMessageModelsLocal('claude', undefined)
+
+    // Captured from claude 2.1.100: the unsupported subtype still exits 0.
+    listeners.get('stdout:data')?.(
+      Buffer.from(
+        '{"type":"control_response","response":{"subtype":"error","request_id":"orca-model-discovery","error":"Unsupported control request subtype: list_models"}}\n'
+      )
+    )
+    listeners.get('close')?.(0)
+
+    await expect(pending).resolves.toMatchObject({
+      success: true,
+      catalogOrigin: 'spec',
+      defaultModelId: 'sonnet',
+      models: [{ id: 'haiku' }, { id: 'sonnet' }, { id: 'opus' }]
+    })
   })
 
   it('discovers dynamic models through the configured agent command override', async () => {
@@ -529,6 +618,38 @@ describe('discoverCommitMessageModelsLocal', () => {
       firstChild.emit('close', null)
       await vi.advanceTimersByTimeAsync(0)
       expect(spawnMock).toHaveBeenCalledTimes(2)
+      secondChild.stdout.emit(
+        'data',
+        Buffer.from(JSON.stringify({ models: [{ slug: 'gpt-5.5', display_name: 'GPT-5.5' }] }))
+      )
+      secondChild.emit('close', 0)
+      await expect(second).resolves.toMatchObject({ success: true, defaultModelId: 'gpt-5.5' })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('releases the Codex home after a discovery timeout once the child exits', async () => {
+    vi.useFakeTimers()
+    const firstChild = createMockDiscoveryChild()
+    const secondChild = createMockDiscoveryChild()
+    spawnMock.mockReturnValueOnce(firstChild as never).mockReturnValueOnce(secondChild as never)
+    const env = { CODEX_HOME: '/managed/codex-discovery-descendant-home' }
+
+    try {
+      const first = discoverCommitMessageModelsLocal('codex', env)
+      await vi.advanceTimersByTimeAsync(0)
+      const second = discoverCommitMessageModelsLocal('codex', env)
+      await vi.advanceTimersByTimeAsync(60_000)
+      await expect(first).resolves.toMatchObject({ success: false })
+      expect(spawnMock).toHaveBeenCalledTimes(1)
+
+      // A grandchild kept the inherited stdout open, so the killed child reports
+      // 'exit' and 'close' never arrives.
+      firstChild.emit('exit', null, 'SIGKILL')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(spawnMock).toHaveBeenCalledTimes(2)
+
       secondChild.stdout.emit(
         'data',
         Buffer.from(JSON.stringify({ models: [{ slug: 'gpt-5.5', display_name: 'GPT-5.5' }] }))
@@ -1686,6 +1807,39 @@ describe('generateCommitMessageFromContext', () => {
     expect(spawnMock).toHaveBeenCalledTimes(1)
 
     firstChild.emit('close', null)
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
+    secondChild.stdout.emit('data', Buffer.from('Update README\n'))
+    secondChild.emit('close', 0)
+    await expect(second).resolves.toMatchObject({ success: true, message: 'Update README' })
+  })
+
+  it('releases the Codex home lock when the child exits with a descendant holding its stdio', async () => {
+    const firstChild = createMockDiscoveryChild()
+    const secondChild = createMockDiscoveryChild()
+    spawnMock.mockReturnValueOnce(firstChild as never).mockReturnValueOnce(secondChild as never)
+    const env = { CODEX_HOME: '/managed/codex-descendant-home' }
+    const context = { branch: 'main', stagedSummary: 'M\tREADME.md', stagedPatch: '+hello' }
+    const params = { agentId: 'codex' as const, model: 'gpt-5.5' }
+
+    const first = generateCommitMessageFromContext(context, params, {
+      kind: 'local',
+      cwd: '/descendant-repo',
+      env
+    })
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
+    cancelGenerateCommitMessageLocal('/descendant-repo')
+    await expect(first).resolves.toMatchObject({ canceled: true })
+    expectChildTerminated(firstChild)
+
+    // SIGKILL reaches the codex process but not a grandchild that inherited its
+    // stdout, so 'exit' arrives and 'close' never does.
+    firstChild.emit('exit', null, 'SIGKILL')
+
+    const second = generateCommitMessageFromContext(context, params, {
+      kind: 'local',
+      cwd: '/descendant-repo-2',
+      env
+    })
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
     secondChild.stdout.emit('data', Buffer.from('Update README\n'))
     secondChild.emit('close', 0)

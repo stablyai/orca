@@ -270,6 +270,7 @@
           "4a18052018": "Local {{value0}} is behind {{value1}}",
           "903b51c2ed": "Workspace created from {{value0}}, but Orca could not fast-forward local {{value1}} because {{value2}}",
           "0216895fb5": "Failed to delete branch",
+          "c6cf133786": "This workspace is no longer available.",
           "19db0085fb": "Local branch deleted",
           "2b0afc7f14": "Could not keep local {{value0}} up to date",
           "670864ab52": "Keeping local {{value0}} up to date",
@@ -279,7 +280,8 @@
           "3b57982bf6": "Git could not safely delete branch \"{{value0}}\" after deleting workspace \"{{value1}}\", so Orca kept it to avoid losing local commits.",
           "81f13f48d2": "Git could not safely delete branch \"{{value0}}\" after deleting worktree \"{{value1}}\", so Orca kept it to avoid losing local commits.",
           "runtimeScopeForbiddenTitle": "This connection has limited (mobile) access",
-          "runtimeScopeForbiddenDescription": "Workspaces are unavailable on a mobile-scope pairing. Reconnect using the browser access link from Settings → Runtime Environments → Share this Orca server."
+          "runtimeScopeForbiddenDescription": "Workspaces are unavailable on a mobile-scope pairing. Reconnect using the browser access link from Settings → Runtime Environments → Share this Orca server.",
+          "a17f4d2e93": "Could not update this workspace."
         },
         "repos": {
           "2975400634": "Update Orca server to open non-Git folders on this runtime.",
@@ -293,7 +295,8 @@
           "3be0f7df04": "Cannot open folder on selected runtime",
           "15cf5319ec": "{{path}} was checked on {{hostName}}, but that host did not report a usable folder.",
           "2dcd706774": "Project also exists in another profile",
-          "presenceProfileOverflow": "{{names}} +{{count}} more"
+          "presenceProfileOverflow": "{{names}} +{{count}} more",
+          "removeProjectFailed": "Failed to remove project"
         },
         "settings": {
           "e12dab333b": "Failed to switch servers",
@@ -4309,7 +4312,9 @@
           "ee240a39eb": "Edit filters",
           "automationCreated": "Hide automation-created",
           "cliCreated": "Hide CLI-created",
-          "detachedHead": "Hide detached HEAD"
+          "detachedHead": "Hide detached HEAD",
+          "keepDefaultBranch": "Except default branch",
+          "keepDefaultBranchAria": "Keep the default branch visible while hiding sleeping workspaces"
         },
         "SidebarHeader": {
           "25a95899c9": "Add Project",
@@ -4374,7 +4379,9 @@
           "82594419ba": "Filters",
           "automationCreated": "Hide automation-created",
           "cliCreated": "Hide CLI-created",
-          "detachedHead": "Hide detached HEAD"
+          "detachedHead": "Hide detached HEAD",
+          "keepDefaultBranch": "Except default branch",
+          "keepDefaultBranchAria": "Keep the default branch visible while hiding sleeping workspaces"
         },
         "sidebarHostOptions": {
           "3e102f111c": "All hosts",
@@ -4441,19 +4448,6 @@
           "219ebf1961": "Branch name",
           "folderPathIdentity": "Branch / folder path",
           "cli": "Orca CLI"
-        },
-        "SshDisconnectedDialog": {
-          "ca4a7892af": "Connecting...",
-          "89385db176": "Dismiss",
-          "656368f3a2": "Reconnection failed",
-          "376bed88e5": "The connection to the remote host encountered an error.",
-          "4afcca1d24": "Reconnect",
-          "11552bf786": "SSH Disconnected",
-          "cb5938ae79": "Reconnecting...",
-          "disconnected": "This SSH host is not connected.",
-          "reconnecting": "Reconnecting to the remote host...",
-          "reconnectionFailed": "Reconnection to the remote host failed.",
-          "authFailed": "Authentication to the remote host failed."
         },
         "SshTargetRow": {
           "4677394048": "Connecting…",
@@ -4688,7 +4682,8 @@
           "65770ad0f0": "Edit GitHub links and notes for this workspace.",
           "382fd11a3e": "Edit Worktree Details",
           "2174f17011": "Save",
-          "61d6f612cf": "Saving..."
+          "61d6f612cf": "Saving...",
+          "a0d191b7a7": "Edit issue links, pull request links, and notes for this workspace."
         },
         "WorktreeOpenInMenu": {
           "localOnly": "Local only",
@@ -4769,7 +4764,8 @@
               "0899ebdb28": "Git already forgot this workspace, but its directory is still on disk. Use Force Delete to remove the orphaned directory.",
               "locked": "This workspace is locked by Git. Run git worktree unlock <worktree-path> from its repository, then retry deletion.",
               "lockedReason": "This workspace is locked by Git. Git reported: {{value0}}. Run git worktree unlock <worktree-path> from its repository, then retry deletion.",
-              "unstoppedPty": "Orca could not confirm every terminal in this workspace has exited, so it stopped before deleting any files. Use Force Delete to remove it anyway."
+              "unstoppedPty": "Orca could not confirm every terminal in this workspace has exited, so it stopped before deleting any files. Use Force Delete to remove it anyway.",
+              "unstoppedPtyLive": "This workspace still has running terminals, so Orca stopped before deleting any files. Force Delete will kill them and discard any uncommitted work they hold."
             }
           }
         },
@@ -5149,6 +5145,39 @@
           "3b7ea51793": "Clear search",
           "7f1c2e94a5": "Search text is too long — the board is unfiltered",
           "9a4d0f6b21": "Too long"
+        },
+        "WorktreeIssueLinkField": {
+          "25852bfc59": "Linear",
+          "5b440069e6": "GitHub",
+          "161b2d053a": "Open linked issue",
+          "d4785f9954": "Issue links are set when a folder workspace is created and can't be changed here yet.",
+          "964d9bc00a": "Not a Linear issue key or linear.app issue URL.",
+          "0a7a2c6efd": "Not a GitHub issue number or issue URL.",
+          "72486800ff": "Saving unlinks {{first}} and {{second}} — a workspace tracks one issue.",
+          "2c245ac134": "Saving unlinks {{link}} — a workspace tracks one issue.",
+          "d8c8a30d1f": "Couldn't open that issue. Check the identifier and your Linear connection.",
+          "269198eeda": "Couldn't open that issue. Check the number and your GitHub connection.",
+          "f047887705": "Paste a GitHub or Linear URL, or enter a number. Leave blank to remove the link.",
+          "ad78f9bee2": "Issue",
+          "662ae142f8": "Issue #, or a GitHub or Linear URL",
+          "929c98d05a": "Issue provider"
+        },
+        "worktreeIssueDisplacement": {
+          "3f61c0a8d2": "Linear {{value}}",
+          "9c4b7e1f60": "GitHub #{{value}}"
+        },
+        "WorktreeCardSshHostControl": {
+          "connectFailed": "SSH connection failed",
+          "removedTooltip": "SSH host removed — reconnect unavailable",
+          "removedName": "SSH host {{value0}} was removed",
+          "connectedTooltip": "Project on SSH host",
+          "connectedName": "Project on SSH host {{value0}}",
+          "connectingName": "Connecting to SSH host {{value0}}",
+          "authFailedName": "Reconnect SSH host {{value0}} — authentication failed",
+          "retryName": "Retry SSH connection to {{value0}}",
+          "connectName": "Connect to SSH host {{value0}}",
+          "authFailedTooltip": "{{value0}} · authentication failed",
+          "failedTooltip": "{{value0}} · connection failed"
         }
       },
       "shared": {
@@ -6640,7 +6669,10 @@
           "f79972271a": "No GitHub remote found for this repo.",
           "4d039317f4": "Website favicon",
           "acf31559a0": "Enter a valid website URL.",
-          "868c5c9b56": "Failed to import repo icon"
+          "868c5c9b56": "Failed to import repo icon",
+          "emojiTooLongForRepoIcon": "This emoji can't be used as a repo icon.",
+          "currentEmojiSelection": "Current: {{value0}}",
+          "searchEmojiPlaceholder": "Search emoji"
         },
         "RepositoryPane": {
           "15a99d9b9f": "Relative paths resolve from this project root.",
@@ -8480,7 +8512,9 @@
               "d5c5b47bb9": "update",
               "fb854902d9": "connecting",
               "9a9f8d4910": "Connect Jira Cloud to browse, create, and link issues.",
-              "74f3063026": "{{value0}} site{{value1}} connected"
+              "74f3063026": "{{value0}} site{{value1}} connected",
+              "statusConnected": "Connected",
+              "statusNotConnected": "Not connected"
             }
           }
         },
@@ -9303,7 +9337,9 @@
                 "disconnect_all": "Disconnect",
                 "account_scope_prefix": "Account scope",
                 "2d60ec7921": "Connect a Jira Cloud site with an API token, or a self-hosted Jira with a personal access token or username and password. Credentials are sent to the selected remote runtime and stored there with runtime-supported encryption.",
-                "977e360b71": "Connect a Jira Cloud site with an API token, or a self-hosted Jira with a personal access token or username and password. Credentials are stored locally and encrypted when local runtime storage supports it."
+                "977e360b71": "Connect a Jira Cloud site with an API token, or a self-hosted Jira with a personal access token or username and password. Credentials are stored locally and encrypted when local runtime storage supports it.",
+                "statusConnected": "Connected",
+                "statusNotConnected": "Not connected"
               }
             }
           }
@@ -9344,7 +9380,13 @@
                   "63a7f47392": "ORCA_BITBUCKET_EMAIL",
                   "24ac1c69dc": "Bitbucket status is not available in this runtime yet.",
                   "a924e8dcd1": "Pull requests and build statuses via Bitbucket Cloud API tokens.",
-                  "0fa5629dad": "Pull requests and build statuses"
+                  "0fa5629dad": "Pull requests and build statuses",
+                  "statusConnected": "Connected",
+                  "statusUnavailable": "Unavailable",
+                  "statusNotConfigured": "Not configured",
+                  "statusAuthFailed": "Auth failed",
+                  "statusConfigured": "Configured",
+                  "statusOptionalSetup": "Optional setup"
                 }
               }
             }
@@ -9807,6 +9849,10 @@
           "serviceManagerHelp": "Update Orca through the service manager that starts this server.",
           "unpackedHelp": "Development builds must be updated from their source checkout.",
           "legacyHelp": "Update this server manually once to enable remote updates."
+        },
+        "BrowserLinkRoutingSetting": {
+          "description": "Open http(s) links in Orca's built-in browser — from the terminal, markdown, and the editor. {{shortcut}} always uses your system browser.",
+          "descriptionBase": "Open http(s) links in Orca's built-in browser — from the terminal, markdown, and the editor."
         },
         "BrowserLinkRoutingModifierSetting": {
           "titleSystem": "Hold Shift to open in your web browser",
@@ -10804,7 +10850,6 @@
                 "a54ae21c6f": "Status:",
                 "e4e3af15ee": "View full details",
                 "b8c4e2a1f7": "View full logs",
-                "2524d1fb83": "Log tail available in full details.",
                 "a2fb3f4408": "Showing first 100 jobs",
                 "df137989b3": "Showing first 20 annotations",
                 "1f2b980522": "Loading check details…",
@@ -10856,7 +10901,8 @@
                 "5e6e5a13fa": "View",
                 "actionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked.",
                 "b3195cba33": "Unmark author as bot",
-                "f588b46a6c": "Mark author as bot"
+                "f588b46a6c": "Mark author as bot",
+                "checkDetailsLoadFailed": "Failed to load check details."
               },
               "empty": {
                 "state": {
@@ -13477,7 +13523,8 @@
             "4a9568f773": "Back",
             "4f86e2a10b": "Skip tour",
             "d974f32a83": "Dismiss tour",
-            "ffa4412b66": "next"
+            "ffa4412b66": "next",
+            "complete": "Done"
           },
           "ContextualTourProgressDots": {
             "7734cb8ad3": "of",
@@ -13487,7 +13534,17 @@
             "tour": {
               "overlay": {
                 "measurement": {
-                  "38b3155418": "Next"
+                  "38b3155418": "Next",
+                  "automations": {
+                    "intro": {
+                      "title": "What is an automation?",
+                      "body": "Automations run agent work on a schedule. Add an automation by clicking this button."
+                    },
+                    "results": {
+                      "title": "Find the results",
+                      "body": "Runs show when automations ran, what happened, and where to inspect their output."
+                    }
+                  }
                 }
               }
             }
@@ -13909,7 +13966,20 @@
           "a21f6c33ad": "Automation source refreshed.",
           "53f06f0ad5": "Retry source",
           "pendingAutomationMissing": "Automation no longer available.",
-          "pendingAutomationRunMissing": "Run history no longer available."
+          "pendingAutomationRunMissing": "Run history no longer available.",
+          "noSearchMatches": "No automations match your search.",
+          "paused": "Paused",
+          "runCount": "{{count}} runs",
+          "runCount_one": "{{count}} run",
+          "runCount_other": "{{count}} runs",
+          "projectDefaultBaseRef": "project default",
+          "createFromBaseRef": "Create from {{baseRef}}",
+          "missingWorkspace": "Missing workspace",
+          "runUsageSummary": "{{cost}} est. · {{tokens}} tokens",
+          "usageUnavailable": "Usage unavailable",
+          "noRunUsageYet": "No run usage yet",
+          "noWorkspace": "No workspace",
+          "latestSavedOutput": "Latest saved output"
         },
         "CreateFromPicker": {
           "f061f49e3f": "Search repo branches...",
@@ -14022,6 +14092,13 @@
           "5a7863909c": "Run setup for each new workspace",
           "18f000ad4e": "Advanced",
           "874b72195b": "When this automation creates a workspace, prepare it the same way creating a worktree by hand does — run the project's setup and open its terminal tabs."
+        },
+        "AutomationListSearchField": {
+          "tooLong": "Search text is too long — list is unfiltered",
+          "label": "Search automations",
+          "placeholder": "Search by name, project, or prompt",
+          "tooLongShort": "Too long",
+          "clear": "Clear search"
         }
       },
       "agent": {
@@ -14559,6 +14636,19 @@
       },
       "webRuntimeSession": {
         "remoteHostDisconnected": "The workspace is not connected to a remote Orca host."
+      },
+      "gitlabJobTraceClient": {
+        "loadFailed": "Failed to load the GitLab job log.",
+        "emptyTrace": "No log is available for this GitLab job.",
+        "timedOut": "Timed out loading the GitLab job log."
+      }
+    },
+    "ssh": {
+      "sshConnectVerb": {
+        "reconnect": "Reconnect",
+        "retry": "Retry",
+        "connect": "Connect",
+        "connecting": "Connecting…"
       }
     }
   },

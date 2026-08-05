@@ -31,6 +31,7 @@ import type {
   TabGroup,
   TabGroupLayoutNode,
   TerminalLayoutSnapshot,
+  TerminalPaneLayoutNode,
   TerminalTab
 } from '../../../shared/types'
 import { resolveTerminalTabTitle } from '../../../shared/tab-title-resolution'
@@ -93,6 +94,22 @@ type MobileSessionPublicationInputs = {
   terminalTheme: RuntimeMobileTerminalTheme | undefined
 }
 /**
+ * Live PaneManager/DOM reads for one mounted terminal tab, captured once per
+ * publication.
+ *
+ * Why: builders read this instead of the registry, so live state the memo
+ * cannot witness is unrepresentable — mounted worktrees memoize like the rest
+ * instead of rebuilding on every publication.
+ */
+type MountedTerminalSurfaceCapture = {
+  paneLeafIds: readonly string[]
+  hasLiveActivePane: boolean
+  liveActiveLeafId: string | null
+  liveLayoutRoot: TerminalPaneLayoutNode | null
+  numericPaneIdByLeafId: ReadonlyMap<string, number | null>
+  ptyIdByNumericPaneId: ReadonlyMap<number, string | null>
+}
+/**
  * One worktree's complete mobile-snapshot input set.
  *
  * Why: every builder below takes this instead of `AppState`, so the compiler —
@@ -131,8 +148,7 @@ type MobileSessionWorktreeInputs = {
   activeBrowserWorkspaceId: string | null
   generatedTitlesEnabled: boolean
   terminalTheme: RuntimeMobileTerminalTheme | undefined
-  // Why: a mounted TerminalPane feeds live DOM/PaneManager state that no store reference can witness.
-  hasMountedTerminalSurface: boolean
+  mountedSurfaceCaptureByTabId: ReadonlyMap<string, MountedTerminalSurfaceCapture>
 }
 
 const registeredTabs = new Map<string, RegisteredTerminalTab>()
@@ -1026,11 +1042,99 @@ function buildMobileSessionWorktreeInputs(
     activeBrowserWorkspaceId: state.activeBrowserTabIdByWorktree?.[worktreeId] ?? null,
     generatedTitlesEnabled: publication.generatedTitlesEnabled,
     terminalTheme: publication.terminalTheme,
-    hasMountedTerminalSurface: terminalTabs.some((tab) => registeredTabs.has(tab.id))
+    mountedSurfaceCaptureByTabId: captureMountedTerminalSurfaces(
+      terminalTabs,
+      state.terminalLayoutsByTabId
+    )
   }
 }
 
-function narrowedEntriesEqual<T>(a: ReadonlyMap<string, T>, b: ReadonlyMap<string, T>): boolean {
+function captureMountedTerminalSurfaces(
+  terminalTabs: AppState['tabsByWorktree'][string],
+  terminalLayoutsByTabId: AppState['terminalLayoutsByTabId']
+): ReadonlyMap<string, MountedTerminalSurfaceCapture> {
+  let captures: Map<string, MountedTerminalSurfaceCapture> | null = null
+  for (const tab of terminalTabs) {
+    const registered = registeredTabs.get(tab.id)
+    if (!registered) {
+      continue
+    }
+    captures ??= new Map()
+    captures.set(tab.id, captureMountedTerminalSurface(registered, terminalLayoutsByTabId[tab.id]))
+  }
+  return captures ?? EMPTY_NARROWED_BY_KEY
+}
+
+function captureMountedTerminalSurface(
+  registered: RegisteredTerminalTab,
+  savedLayout: AppState['terminalLayoutsByTabId'][string] | undefined
+): MountedTerminalSurfaceCapture {
+  const manager = registered.getManager()
+  const paneLeafIds = manager?.getPanes().map((pane) => pane.leafId) ?? []
+  const activePane = manager?.getActivePane() ?? null
+  const firstChild = registered.getContainer()?.firstElementChild
+  // Why: mirrors getRuntimeLeafIdsForTerminal so every leaf the builder resolves has a captured pane id.
+  const effectiveLeafIds =
+    paneLeafIds.length > 0
+      ? paneLeafIds
+      : collectLeafIdsInOrder(savedLayout?.root).filter(isTerminalLeafId)
+  const numericPaneIdByLeafId = new Map<string, number | null>()
+  const ptyIdByNumericPaneId = new Map<number, string | null>()
+  for (const leafId of effectiveLeafIds) {
+    const numericPaneId = manager?.getNumericIdForLeaf(leafId) ?? null
+    numericPaneIdByLeafId.set(leafId, numericPaneId)
+    if (numericPaneId !== null) {
+      ptyIdByNumericPaneId.set(numericPaneId, registered.getPtyIdForPane(numericPaneId))
+    }
+  }
+  return {
+    paneLeafIds,
+    hasLiveActivePane: activePane !== null,
+    liveActiveLeafId: activePane !== null ? (manager?.getLeafId(activePane.id) ?? null) : null,
+    liveLayoutRoot: serializePaneTree(
+      typeof HTMLElement !== 'undefined' && firstChild instanceof HTMLElement ? firstChild : null
+    ),
+    numericPaneIdByLeafId,
+    ptyIdByNumericPaneId
+  }
+}
+
+function mountedTerminalSurfaceCaptureEquals(
+  a: MountedTerminalSurfaceCapture,
+  b: MountedTerminalSurfaceCapture
+): boolean {
+  return (
+    a.hasLiveActivePane === b.hasLiveActivePane &&
+    a.liveActiveLeafId === b.liveActiveLeafId &&
+    a.paneLeafIds.length === b.paneLeafIds.length &&
+    a.paneLeafIds.every((leafId, index) => b.paneLeafIds[index] === leafId) &&
+    narrowedEntriesEqual(a.numericPaneIdByLeafId, b.numericPaneIdByLeafId) &&
+    narrowedEntriesEqual(a.ptyIdByNumericPaneId, b.ptyIdByNumericPaneId) &&
+    // Why: serialization allocates a fresh tree per capture, so it compares by content.
+    jsonContentEquals(a.liveLayoutRoot, b.liveLayoutRoot)
+  )
+}
+
+function mountedSurfaceCapturesEqual(
+  a: ReadonlyMap<string, MountedTerminalSurfaceCapture>,
+  b: ReadonlyMap<string, MountedTerminalSurfaceCapture>
+): boolean {
+  if (a === b) {
+    return true
+  }
+  if (a.size !== b.size) {
+    return false
+  }
+  for (const [tabId, capture] of a) {
+    const other = b.get(tabId)
+    if (!other || !mountedTerminalSurfaceCaptureEquals(capture, other)) {
+      return false
+    }
+  }
+  return true
+}
+
+function narrowedEntriesEqual<K, T>(a: ReadonlyMap<K, T>, b: ReadonlyMap<K, T>): boolean {
   if (a === b) {
     return true
   }
@@ -1056,9 +1160,6 @@ function canReuseMobileSessionSnapshot(
   next: MobileSessionWorktreeInputs
 ): boolean {
   return (
-    // Why: live DOM/PaneManager state is invisible to store references, so a mounted surface always rebuilds.
-    !previous.hasMountedTerminalSurface &&
-    !next.hasMountedTerminalSurface &&
     previous.worktreeId === next.worktreeId &&
     previous.terminalTabs === next.terminalTabs &&
     previous.browserWorkspaces === next.browserWorkspaces &&
@@ -1084,6 +1185,12 @@ function canReuseMobileSessionSnapshot(
     narrowedEntriesEqual(
       previous.certificateFailureByBrowserPageId,
       next.certificateFailureByBrowserPageId
+    ) &&
+    // Why: live DOM/PaneManager state is invisible to store references; the
+    // capture makes it comparable instead of forcing mounted worktrees to rebuild.
+    mountedSurfaceCapturesEqual(
+      previous.mountedSurfaceCaptureByTabId,
+      next.mountedSurfaceCaptureByTabId
     )
   )
 }
@@ -1683,12 +1790,10 @@ function resolveMobileTerminalTheme(
 }
 
 function getRuntimeLeafIdsForTerminal(
-  tabId: string,
+  capture: MountedTerminalSurfaceCapture | undefined,
   savedLayout: AppState['terminalLayoutsByTabId'][string] | undefined
-): string[] {
-  const registered = registeredTabs.get(tabId)
-  const manager = registered?.getManager()
-  const liveLeafIds = manager?.getPanes().map((pane) => pane.leafId) ?? []
+): readonly string[] {
+  const liveLeafIds = capture?.paneLeafIds ?? []
   if (liveLeafIds.length > 0) {
     return liveLeafIds
   }
@@ -1707,18 +1812,15 @@ function buildMobileTerminalSurfaceTabs(
   terminal: NonNullable<AppState['tabsByWorktree'][string]>[number],
   unifiedTabId?: string
 ): RuntimeMobileSessionSnapshotTab[] {
-  const registered = registeredTabs.get(terminal.id)
+  const capture = inputs.mountedSurfaceCaptureByTabId.get(terminal.id)
   const isDesktopTabActive = unifiedTabId
     ? isUnifiedTabActiveInActiveGroup(inputs, unifiedTabId)
     : inputs.activeTerminalTabId === terminal.id
-  const manager = registered?.getManager()
-  const liveActivePaneId = manager?.getActivePane()?.id ?? null
   const savedLayout = inputs.terminalLayoutByTabId.get(terminal.id)
-  const leafIds = getRuntimeLeafIdsForTerminal(terminal.id, savedLayout)
-  const activeLeafId =
-    liveActivePaneId !== null
-      ? (manager?.getLeafId(liveActivePaneId) ?? null)
-      : (savedLayout?.activeLeafId ?? leafIds[0] ?? null)
+  const leafIds = getRuntimeLeafIdsForTerminal(capture, savedLayout)
+  const activeLeafId = capture?.hasLiveActivePane
+    ? capture.liveActiveLeafId
+    : (savedLayout?.activeLeafId ?? leafIds[0] ?? null)
   const paneTitles = inputs.paneTitlesByTabId.get(terminal.id) ?? {}
   const generatedTitlesEnabled = inputs.generatedTitlesEnabled
   const sanitizedSavedLayout = savedLayout
@@ -1736,11 +1838,7 @@ function buildMobileTerminalSurfaceTabs(
       ? seededLaunchDraft
       : null
   const publishedLaunchDraft = launchDraftEntry?.text.trim() ? launchDraftEntry : null
-  const container = registered?.getContainer()
-  const firstChild = container?.firstElementChild
-  const liveLayoutRoot = serializePaneTree(
-    typeof HTMLElement !== 'undefined' && firstChild instanceof HTMLElement ? firstChild : null
-  )
+  const liveLayoutRoot = capture?.liveLayoutRoot ?? null
   const parentLayout = normalizeTerminalLayoutSnapshot({
     // Why: live DOM tree is authoritative when mounted, else the saved tree; synthesize only as a last resort, never re-guess.
     root: resolveTerminalLayoutRoot({
@@ -1760,11 +1858,11 @@ function buildMobileTerminalSurfaceTabs(
       : {})
   } satisfies TerminalLayoutSnapshot).snapshot
   return leafIds.map((leafId) => {
-    const numericPaneId = manager?.getNumericIdForLeaf(leafId) ?? null
+    const numericPaneId = capture?.numericPaneIdByLeafId.get(leafId) ?? null
     const ptyId =
       numericPaneId === null
         ? (savedPtyIdsByLeafId[leafId] ?? (leafIds.length === 1 ? terminal.ptyId : null))
-        : (registered?.getPtyIdForPane(numericPaneId) ?? savedPtyIdsByLeafId[leafId] ?? null)
+        : (capture?.ptyIdByNumericPaneId.get(numericPaneId) ?? savedPtyIdsByLeafId[leafId] ?? null)
     const legacyPaneId = numericPaneId === null ? /^pane:(\d+)$/.exec(leafId)?.[1] : null
     const paneTitle =
       numericPaneId !== null

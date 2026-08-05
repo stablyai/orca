@@ -22,11 +22,14 @@ import {
   markCodexLeadTurnInterrupted,
   MAX_PANE_KEY_LEN,
   movePaneCacheState,
+  canAcceptClaudeCompactTransition,
+  normalizeClaudePromptId,
   normalizeHookPayload,
   parseFormEncodedBody,
   readRequestBody,
   reapRestoredClaudeSubagentsForDeadPane,
   reconcileRemoteCodexState,
+  resolveCachedClaudeCompactOwnership,
   resolveHookSource,
   preparePendingGrokResultDiscovery,
   seedClaudeSubagentRosterFromSnapshots,
@@ -41,7 +44,11 @@ import {
   claudeRosterHasWorkingSubagent,
   claudeRosterToSnapshots
 } from '../../shared/claude-subagent-roster'
-import { restoreShedStatusFields, type AgentHookSource } from '../../shared/agent-hook-relay'
+import {
+  isAgentHookSource,
+  restoreShedStatusFields,
+  type AgentHookSource
+} from '../../shared/agent-hook-relay'
 import {
   CLAUDE_STATUSLINE_PATHNAME,
   parseClaudeStatusLineBody,
@@ -293,13 +300,23 @@ function sanitizeHydratedEntry(
   if (providerSessionOnly && !isValidPiProviderSessionOnly(providerSession, payload.agentType)) {
     return null
   }
+  const source = isAgentHookSource(record.source) ? record.source : undefined
+  const providerPromptId =
+    source === 'claude' ? normalizeClaudePromptId(record.providerPromptId) : undefined
+  const compactTrigger =
+    source === 'claude' && (record.compactTrigger === 'manual' || record.compactTrigger === 'auto')
+      ? record.compactTrigger
+      : undefined
   return {
     paneKey,
+    source,
     tabId: typeof tabId === 'string' ? tabId : undefined,
     worktreeId: typeof worktreeId === 'string' ? worktreeId : undefined,
     connectionId,
     hasExplicitPrompt: record.hasExplicitPrompt === true ? true : undefined,
     hookEventName: typeof record.hookEventName === 'string' ? record.hookEventName : undefined,
+    providerPromptId,
+    compactTrigger,
     toolUseId: typeof record.toolUseId === 'string' ? record.toolUseId : undefined,
     toolAgentId: typeof record.toolAgentId === 'string' ? record.toolAgentId : undefined,
     toolAgentType: typeof record.toolAgentType === 'string' ? record.toolAgentType : undefined,
@@ -570,6 +587,7 @@ export class AgentHookServer {
   private onAgentStatus: ((payload: EnrichedAgentHookEventPayload) => void) | null = null
   private onClaudeStatusLine: ((event: ClaudeStatusLineRateLimits) => void) | null = null
   private onPaneStatusCleared: PaneStatusClearListener | null = null
+  private paneStatusClearListeners = new Set<PaneStatusClearListener>()
   private statusChangeListeners = new Set<StatusChangeListener>()
   private providerSessionChangeListeners = new Set<ProviderSessionChangeListener>()
   // Why: setListener is a single slot owned by the main-window fanout; the
@@ -652,6 +670,29 @@ export class AgentHookServer {
 
   setPaneStatusClearListener(listener: PaneStatusClearListener | null): void {
     this.onPaneStatusCleared = listener
+  }
+
+  /** Multi-subscriber tap on pane status clears. Unlike `setPaneStatusClearListener`
+   *  (a single slot the main window owns and drops on close) this survives window
+   *  teardown and exists at all under headless serve, which never opens one. */
+  subscribePaneStatusClear(listener: PaneStatusClearListener): () => void {
+    this.paneStatusClearListeners.add(listener)
+    return () => {
+      this.paneStatusClearListeners.delete(listener)
+    }
+  }
+
+  private emitPaneStatusCleared(clear: AgentStatusClearIpcPayload): void {
+    this.onPaneStatusCleared?.(clear)
+    for (const listener of this.paneStatusClearListeners) {
+      // Why: callers are pane/connection teardown paths; one throwing subscriber must
+      // not strand the rest, matching every other fan-out here.
+      try {
+        listener(clear)
+      } catch (err) {
+        console.error('[agent-hooks] pane-status-clear listener threw', err)
+      }
+    }
   }
 
   /** Snapshot of cached statuses in IPC shape. Used by `agentStatus:getSnapshot` after tabs hydrate so the
@@ -1212,7 +1253,8 @@ export class AgentHookServer {
     if (!identity.inheritedFromActivePane) {
       this.maybeTrackAgentPromptSent(effectivePayload, previous)
     }
-    const enriched = this.attachStatusTiming(effectivePayload, now)
+    const cachedPayload = resolveCachedClaudeCompactOwnership(previous, effectivePayload)
+    const enriched = this.attachStatusTiming(cachedPayload, now)
     this.runtimeObservedStatusPaneKeys.add(enriched.paneKey)
     this.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
     this.scheduleStatusPersist()
@@ -1633,7 +1675,7 @@ export class AgentHookServer {
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
       for (const paneKey of clearedStatusPaneKeys) {
-        this.onPaneStatusCleared?.({ paneKey })
+        this.emitPaneStatusCleared({ paneKey })
       }
     }
   }
@@ -1810,6 +1852,9 @@ export class AgentHookServer {
       hasExplicitPrompt?: boolean
       promptInteractionKey?: string
       hookEventName?: string
+      source?: unknown
+      providerPromptId?: unknown
+      compactTrigger?: unknown
       toolUseId?: string
       toolAgentId?: string
       toolAgentType?: string
@@ -1871,6 +1916,14 @@ export class AgentHookServer {
       typeof envelope.hookEventName === 'string' && envelope.hookEventName.trim().length > 0
         ? envelope.hookEventName.trim()
         : undefined
+    const source = isAgentHookSource(envelope.source) ? envelope.source : undefined
+    const providerPromptId =
+      source === 'claude' ? normalizeClaudePromptId(envelope.providerPromptId) : undefined
+    const compactTrigger =
+      source === 'claude' &&
+      (envelope.compactTrigger === 'manual' || envelope.compactTrigger === 'auto')
+        ? envelope.compactTrigger
+        : undefined
     const statusDisposition = this.getAgentStatusDisposition(paneKey, {
       hookEventName,
       isReplay: envelope.isReplay === true
@@ -1906,11 +1959,50 @@ export class AgentHookServer {
       return
     }
     // Why: restore a shed roster only when its digest and turn identity still match the cache.
-    const normalizedPayload = restoreShedStatusFields(
+    let normalizedPayload = restoreShedStatusFields(
       validatedPayload,
       envelope.shedFields,
       this.state.lastStatusByPaneKey.get(paneKey)?.payload
     )
+    const previousStatus = this.state.lastStatusByPaneKey.get(paneKey)
+    if (hookEventName === 'PreCompact' || hookEventName === 'PostCompact') {
+      if (
+        source !== 'claude' ||
+        compactTrigger === undefined ||
+        normalizedPayload.agentType !== source
+      ) {
+        return
+      }
+      if (
+        hookEventName === 'PreCompact' &&
+        envelope.isReplay === true &&
+        (previousStatus?.hookEventName !== 'PreCompact' ||
+          previousStatus.compactTrigger !== compactTrigger ||
+          previousStatus.providerPromptId !== providerPromptId)
+      ) {
+        return
+      }
+      if (
+        !canAcceptClaudeCompactTransition(previousStatus, {
+          source,
+          connectionId: trimmedConnectionId,
+          hookEventName,
+          providerPromptId,
+          compactTrigger,
+          providerSession
+        })
+      ) {
+        return
+      }
+    }
+    if (
+      source === 'claude' &&
+      compactTrigger !== undefined &&
+      normalizedPayload.prompt.length === 0 &&
+      previousStatus?.payload.prompt
+    ) {
+      normalizedPayload = { ...normalizedPayload, prompt: previousStatus.payload.prompt }
+    }
     if (
       envelope.providerSessionOnly === true &&
       !isValidPiProviderSessionOnly(providerSession, normalizedPayload.agentType)
@@ -1930,6 +2022,7 @@ export class AgentHookServer {
     })
     const event: AgentHookEventPayload = {
       paneKey,
+      source,
       launchToken: statusDisposition === 'restart' ? undefined : envelope.launchToken,
       tabId,
       worktreeId,
@@ -1937,6 +2030,8 @@ export class AgentHookServer {
       hasExplicitPrompt: envelope.hasExplicitPrompt === true ? true : undefined,
       promptInteractionKey,
       hookEventName,
+      providerPromptId,
+      compactTrigger,
       toolUseId,
       toolAgentId,
       toolAgentType,
@@ -2177,7 +2272,7 @@ export class AgentHookServer {
       this.notifyStatusChangeListeners()
     }
     // Why: always send the cutoff even with no matched entry — another host may have overwritten this pane's row.
-    this.onPaneStatusCleared?.({
+    this.emitPaneStatusCleared({
       transient: true,
       connectionId: normalizedConnectionId,
       clearedAt
@@ -2319,7 +2414,7 @@ export class AgentHookServer {
       this.runtimeObservedStatusPaneKeys.delete(resolvedPaneKey)
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
-      this.onPaneStatusCleared?.({ paneKey: resolvedPaneKey })
+      this.emitPaneStatusCleared({ paneKey: resolvedPaneKey })
     }
   }
 

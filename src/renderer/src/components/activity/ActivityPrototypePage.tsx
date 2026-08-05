@@ -73,6 +73,7 @@ import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 import { translate } from '@/i18n/i18n'
+import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import {
   getActivityThreadTaskTitle,
   getActivityThreadWorkspaceTitle,
@@ -168,24 +169,12 @@ const absoluteDateFormatter = new Intl.DateTimeFormat(undefined, {
   minute: '2-digit'
 })
 
-const relativeTimeFormatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
-
 function formatAbsoluteDate(timestamp: number): string {
   return absoluteDateFormatter.format(new Date(timestamp))
 }
 
 function formatRelativeTime(timestamp: number): string {
-  const diffMs = timestamp - Date.now()
-  const diffMinutes = Math.round(diffMs / 60_000)
-  if (Math.abs(diffMinutes) < 60) {
-    return relativeTimeFormatter.format(diffMinutes, 'minute')
-  }
-  const diffHours = Math.round(diffMinutes / 60)
-  if (Math.abs(diffHours) < 24) {
-    return relativeTimeFormatter.format(diffHours, 'hour')
-  }
-  const diffDays = Math.round(diffHours / 24)
-  return relativeTimeFormatter.format(diffDays, 'day')
+  return formatUiRelativeTime(timestamp - Date.now())
 }
 
 function findActivityTerminalPane(
