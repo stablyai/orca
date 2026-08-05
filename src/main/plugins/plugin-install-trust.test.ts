@@ -67,9 +67,11 @@ describe('plugin install trust', () => {
 
     await expect(
       installPluginFromLocalPath({ pluginsDir, sourcePath, hostVersion: '1.4.0' })
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       ok: false,
-      error: 'reserved plugin identity stablyai.orca-skills cannot be installed from a local path'
+      error: expect.stringMatching(
+        /reserved plugin identity stablyai\.orca-skills cannot be installed from a local path.*orca-plugin\.json/s
+      )
     })
     await expect(readPluginLockfile(pluginsDir)).resolves.toEqual({ version: 1, plugins: {} })
   })

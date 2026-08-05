@@ -42,6 +42,20 @@ export function pluginInstallErrorMessage(cause: unknown): string {
       'Orca could not fetch the pinned Git revision. Check the URL, #ref, access, and system Git setup.'
     )
   }
+  // Why: reserved-namespace blocks used to fall through to a generic failure, so fork
+  // template installs looked like a silent no-op (#12598). Surface the rename guidance.
+  if (detail.includes('reserved plugin identity')) {
+    if (detail.includes('local path')) {
+      return translate(
+        'auto.components.settings.pluginError.installReservedLocal',
+        'This plugin still uses a reserved official identity (publisher "stablyai" or an id starting with "orca-"). For local testing of a fork, change publisher and id in orca-plugin.json to your own values first.'
+      )
+    }
+    return translate(
+      'auto.components.settings.pluginError.installReservedGit',
+      'This plugin uses a reserved official identity. Install it only from github.com/stablyai/..., or rename publisher/id for a third-party fork.'
+    )
+  }
   return translate(
     'auto.components.settings.PluginInstallDialog.installFailed',
     'Plugin installation failed. Check the source and try again.'
