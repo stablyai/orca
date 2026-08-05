@@ -868,7 +868,7 @@ function repoCacheKeyPrefixes(repoId: string, repoPath?: string): string[] {
 }
 
 function matchesRepoCacheKey(key: string, prefixes: readonly string[]): boolean {
-  return prefixes.some((prefix) => key.startsWith(prefix))
+  return prefixes.some((prefix) => key.startsWith(prefix) || key.includes(`::${prefix}`))
 }
 
 function clearInflightWorkItemsForRepo(repoId: string, repoPath?: string): void {
@@ -2033,7 +2033,8 @@ export type GitHubSlice = {
   setIssueSourcePreference: (
     repoId: string,
     repoPath: string,
-    preference: IssueSourcePreference
+    preference: IssueSourcePreference,
+    options?: { executionHostId?: ExecutionHostId | null }
   ) => Promise<void>
   evictGitHubRepoCaches: (repoId: string, repoPath?: string) => void
   // ── ProjectV2 view cache ─────────────────────────────────────────────
@@ -2783,10 +2784,11 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     let skippedSourceCount = 0
     const perProjectResults = await Promise.all(
       repos.map(async (r) => {
+        const executionHostId = normalizeExecutionHostId(r.executionHostId) ?? undefined
         try {
           return await state.fetchWorkItems(r.repoId, r.path, perRepoLimit, query, {
             ...options,
-            executionHostId: normalizeExecutionHostId(r.executionHostId) ?? undefined,
+            executionHostId,
             sourceContext: r.sourceContext ?? options?.sourceContext
           })
         } catch (err) {
@@ -2808,7 +2810,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
                   query,
                   getTaskSourceCacheScope(r.sourceContext)
                 )
-              : getWorkItemsCacheKeyForOwner(get(), r.repoId, perRepoLimit, query, r.path)
+              : executionHostId
+                ? workItemsCacheKey(r.repoId, perRepoLimit, query, executionHostId)
+                : getWorkItemsCacheKeyForOwner(get(), r.repoId, perRepoLimit, query, r.path)
           const cached = get().workItemsCache[key]?.data
           if (cached) {
             console.warn(`[workItems] ${r.repoId} failed, serving cached:`, err)
@@ -4604,11 +4608,23 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     })
   },
 
-  setIssueSourcePreference: async (repoId, repoPath, preference) => {
+  setIssueSourcePreference: async (repoId, repoPath, preference, options) => {
+    const requestedHostId = normalizeExecutionHostId(options?.executionHostId) ?? undefined
+    const ownerRepo = requestedHostId
+      ? findRepoForGitHubOwner(get(), repoId, repoPath, requestedHostId)
+      : undefined
+    if (requestedHostId && !ownerRepo) {
+      console.warn('Failed to resolve issue-source preference owner:', {
+        repoId,
+        repoPath,
+        requestedHostId
+      })
+      return
+    }
     // Why: optimistically patch the local Repo so the segmented control updates this frame; resync via fetchRepos on IPC failure.
     set((s) => ({
       repos: s.repos.map((r) =>
-        r.id === repoId
+        (requestedHostId ? r === ownerRepo : r.id === repoId)
           ? {
               ...r,
               issueSourcePreference: preference === 'auto' ? undefined : preference
@@ -4621,9 +4637,14 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       // Why: map 'auto' to undefined so persistence drops the key entirely (see main/persistence.ts#updateRepo).
       const updates = { issueSourcePreference: preference === 'auto' ? undefined : preference }
       // Why: route to the repo's owner host (like updateRepo) so the write lands where the repo lives, not the focused runtime.
-      const target = getActiveRuntimeTarget(getSettingsForRepoRuntimeOwner(get(), repoId))
+      const ownerState = ownerRepo ? { repos: [ownerRepo], settings: get().settings } : get()
+      const target = getActiveRuntimeTarget(getSettingsForRepoRuntimeOwner(ownerState, repoId))
       await (target.kind === 'local'
-        ? window.api.repos.update({ repoId, updates })
+        ? window.api.repos.update({
+            repoId,
+            updates,
+            ...(requestedHostId ? { hostId: requestedHostId } : {})
+          })
         : callRuntimeRpc(target, 'repo.update', { repo: repoId, updates }, { timeoutMs: 15_000 }))
     } catch (err) {
       console.error('Failed to persist issue-source preference:', err)

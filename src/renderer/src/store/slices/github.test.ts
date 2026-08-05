@@ -236,6 +236,25 @@ describe('createGitHubSlice.evictGitHubRepoCaches', () => {
     expect(state.workItemsInvalidationNonce).toBe(5)
   })
 
+  it('evicts host-scoped cache entries for the repo', () => {
+    const store = createTestStore()
+    const hostScopedKey = workItemsCacheKey('repo-1', 20, '', 'ssh:ssh-1')
+    store.setState({
+      workItemsInvalidationNonce: 4,
+      workItemsCache: {
+        [hostScopedKey]: { data: [], fetchedAt: 1 },
+        [workItemsCacheKey('repo-2', 20, '', 'ssh:ssh-1')]: { data: [], fetchedAt: 1 }
+      }
+    })
+
+    store.getState().evictGitHubRepoCaches('repo-1', '/repo/one')
+
+    expect(Object.keys(store.getState().workItemsCache)).toEqual([
+      workItemsCacheKey('repo-2', 20, '', 'ssh:ssh-1')
+    ])
+    expect(store.getState().workItemsInvalidationNonce).toBe(5)
+  })
+
   it('does not bump the work-item invalidation nonce when no work-item entries are evicted', () => {
     const store = createTestStore()
     store.setState({

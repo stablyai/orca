@@ -8771,14 +8771,18 @@ export default function TaskPage(): React.JSX.Element {
                       return (
                         <div className="mt-2 flex flex-wrap items-center gap-2">
                           {rows.map((s) => {
-                            const repo = selectedRepos.find((r) => r.id === s.repoId)
+                            const repo = findRepoForHost(selectedRepos, s.repoId, {
+                              hostId: s.executionHostId,
+                              settings
+                            })
+                            const rowKey = `${s.executionHostId ?? 'unknown'}::${s.repoId}`
                             const showRepoBadgeLabel = selectedRepos.length > 1 && repo
                             const selectorRenderable = hasUpstreamCandidateDivergence(s)
                             // Why: render the indicator standalone — it has its own chip styles, so nesting it in our chip would double-border it.
                             if (!selectorRenderable && hasDivergentSources(s)) {
                               return (
                                 <IssueSourceIndicator
-                                  key={s.repoId}
+                                  key={rowKey}
                                   issues={s.sources.issues}
                                   prs={s.sources.prs}
                                   localRepo={
@@ -8794,7 +8798,7 @@ export default function TaskPage(): React.JSX.Element {
                             }
                             // Why: <div> not <span> — the child selector renders a block <div> (div-in-span is invalid HTML); inline-flex class looks identical.
                             return (
-                              <div key={s.repoId} className={issueSourceChipClass}>
+                              <div key={rowKey} className={issueSourceChipClass}>
                                 {showRepoBadgeLabel ? (
                                   <RepoBadgeLabel
                                     name={repo.displayName}
@@ -8808,7 +8812,9 @@ export default function TaskPage(): React.JSX.Element {
                                   origin={s.sources.originCandidate}
                                   upstream={s.sources.upstreamCandidate}
                                   onChange={(next) => {
-                                    void setIssueSourcePreference(repo.id, repo.path, next)
+                                    void setIssueSourcePreference(repo.id, repo.path, next, {
+                                      executionHostId: getRepoExecutionHostId(repo)
+                                    })
                                   }}
                                 />
                               </div>
@@ -11486,7 +11492,8 @@ export default function TaskPage(): React.JSX.Element {
                       void setIssueSourcePreference(
                         newIssueTargetRepo.id,
                         newIssueTargetRepo.path,
-                        next
+                        next,
+                        { executionHostId: getRepoExecutionHostId(newIssueTargetRepo) }
                       )
                     }}
                   />

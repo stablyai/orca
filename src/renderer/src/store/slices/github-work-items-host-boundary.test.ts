@@ -8,6 +8,9 @@ const mockApi = {
   gh: {
     listWorkItems: vi.fn(),
     countWorkItems: vi.fn()
+  },
+  repos: {
+    update: vi.fn()
   }
 }
 
@@ -59,6 +62,7 @@ describe('GitHub work-item host boundary', () => {
       sources: { issues: null, prs: null, originCandidate: null, upstreamCandidate: null }
     })
     mockApi.gh.countWorkItems.mockResolvedValue(7)
+    mockApi.repos.update.mockResolvedValue(undefined)
   })
 
   it('preserves an explicit SSH source owner through local list IPC', async () => {
@@ -113,6 +117,76 @@ describe('GitHub work-item host boundary', () => {
         query: 'is:open'
       })
     )
+  })
+
+  it('keeps stale-cache fallback scoped to the requested repo host', async () => {
+    const store = createTestStore()
+    store.setState({ repos: duplicateRepos() } as Partial<AppState>)
+    const sources = { issues: null, prs: null, originCandidate: null, upstreamCandidate: null }
+    const localItem = {
+      type: 'issue' as const,
+      number: 1,
+      title: 'Local item',
+      url: 'https://example.test/local',
+      updatedAt: '2026-08-05T00:00:00Z'
+    }
+    const sshItem = {
+      type: 'issue' as const,
+      number: 2,
+      title: 'SSH item',
+      url: 'https://example.test/ssh',
+      updatedAt: '2026-08-05T00:00:00Z'
+    }
+    mockApi.gh.listWorkItems
+      .mockResolvedValueOnce({ items: [localItem], sources })
+      .mockResolvedValueOnce({ items: [sshItem], sources })
+      .mockRejectedValueOnce(new Error('refresh failed'))
+
+    await store.getState().fetchWorkItems('repo-1', '/shared/repo', 24, '', {
+      executionHostId: 'local'
+    })
+    await store.getState().fetchWorkItems('repo-1', '/shared/repo', 24, '', {
+      executionHostId: 'ssh:ssh-1'
+    })
+    const result = await store
+      .getState()
+      .fetchWorkItemsAcrossRepos(
+        [{ repoId: 'repo-1', path: '/shared/repo', executionHostId: 'ssh:ssh-1' }],
+        24,
+        100,
+        '',
+        { force: true }
+      )
+
+    expect(result.items).toEqual([
+      { ...sshItem, repoId: 'repo-1', repoExecutionHostId: 'ssh:ssh-1' }
+    ])
+    expect(result.failedCount).toBe(0)
+  })
+
+  it('persists issue-source preference to only the requested repo host', async () => {
+    const store = createTestStore()
+    const [localRepo, sshRepo] = duplicateRepos()
+    store.setState({
+      repos: [
+        { ...localRepo, issueSourcePreference: 'origin' },
+        { ...sshRepo, issueSourcePreference: 'origin' }
+      ]
+    } as Partial<AppState>)
+
+    await store.getState().setIssueSourcePreference('repo-1', '/shared/repo', 'upstream', {
+      executionHostId: 'ssh:ssh-1'
+    })
+
+    expect(store.getState().repos.map((repo) => repo.issueSourcePreference)).toEqual([
+      'origin',
+      'upstream'
+    ])
+    expect(mockApi.repos.update).toHaveBeenCalledWith({
+      repoId: 'repo-1',
+      hostId: 'ssh:ssh-1',
+      updates: { issueSourcePreference: 'upstream' }
+    })
   })
 
   it('preserves an explicit repo host through pagination and count IPC', async () => {
