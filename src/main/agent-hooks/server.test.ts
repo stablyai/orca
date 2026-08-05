@@ -2310,6 +2310,95 @@ describe('AgentHookServer listener replay', () => {
     ).toBeNull()
   })
 
+  it('accepts a new local Cursor turn without launch authority in a reusable pane', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const postHook = (payload: Record<string, unknown>): Promise<Response> =>
+        fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/cursor`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+          },
+          body: JSON.stringify(buildBody(payload))
+        })
+
+      await postHook({ hook_event_name: 'beforeSubmitPrompt', prompt: 'first Cursor turn' })
+      server.retirePaneAuthority(PANE)
+      await postHook({ hook_event_name: 'stop', status: 'completed' })
+      expect(server.getStatusSnapshot()).toEqual([])
+
+      await postHook({ hook_event_name: 'beforeSubmitPrompt', prompt: 'restored Cursor turn' })
+      await postHook({ hook_event_name: 'stop', status: 'completed' })
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: PANE,
+          state: 'done',
+          prompt: 'restored Cursor turn',
+          agentType: 'cursor'
+        })
+      ])
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('accepts a live remote Cursor turn but not replay after launch authority retires', () => {
+    const server = new AgentHookServer()
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        hookEventName: 'beforeSubmitPrompt',
+        launchToken: 'retired-cursor-launch-token',
+        payload: { state: 'working', prompt: 'first Cursor turn', agentType: 'cursor' }
+      },
+      'conn-1'
+    )
+    server.retirePaneAuthority(PANE)
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        hookEventName: 'beforeSubmitPrompt',
+        launchToken: 'retired-cursor-launch-token',
+        isReplay: true,
+        payload: { state: 'working', prompt: 'stale Cursor replay', agentType: 'cursor' }
+      },
+      'conn-1'
+    )
+    expect(server.getStatusSnapshot()).toEqual([])
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        hookEventName: 'beforeSubmitPrompt',
+        launchToken: 'retired-cursor-launch-token',
+        payload: { state: 'working', prompt: 'live Cursor restart', agentType: 'cursor' }
+      },
+      'conn-1'
+    )
+
+    expect(server.getStatusSnapshot()).toEqual([
+      expect.objectContaining({
+        paneKey: PANE,
+        state: 'working',
+        prompt: 'live Cursor restart',
+        connectionId: 'conn-1'
+      })
+    ])
+    expect(
+      server.attestCompatibilityAuthority({
+        paneKey: PANE,
+        launchTokenHash: createHash('sha256').update('retired-cursor-launch-token').digest('hex'),
+        connectionId: 'conn-1',
+        terminalProvenance: 'current_runtime'
+      })
+    ).toBeNull()
+  })
+
   it('hydrates cached statuses as not observed in the current runtime', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-agent-hooks-'))
     const firstServer = new AgentHookServer()
