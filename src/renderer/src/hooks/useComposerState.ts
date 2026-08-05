@@ -833,16 +833,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     [folderDetectedIds]
   )
   const [useInitialTargetSeed, setUseInitialTargetSeed] = useState(true)
-  const [selectedTargetSeed, setSelectedTargetSeed] = useState<{
-    projectId: string | null
-    hostId: ExecutionHostId | null
-    projectHostSetupId: string | null
-  } | null>(null)
   // Why: the incoming task target only seeds the matching initial repo; once the
   // user chooses another target, it must not silently reassert stale host identity.
   const initialTargetSeed =
-    selectedTargetSeed ??
-    (useInitialTargetSeed && repoId === resolvedInitialRepoId ? initialRunSeed : null)
+    useInitialTargetSeed && repoId === resolvedInitialRepoId ? initialRunSeed : null
   const selectedWorkspaceTarget = useMemo(
     () =>
       resolveWorkspaceCreationTarget({
@@ -2780,7 +2774,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       submitContextGenerationRef.current += 1
       setProjectError(null)
       setUseInitialTargetSeed(false)
-      setSelectedTargetSeed(null)
       if (value === repoId && !options.forceResetStartFrom) {
         if (!options.preserveStartFrom) {
           setSelectedProjectHostSetupOverrideId(null)

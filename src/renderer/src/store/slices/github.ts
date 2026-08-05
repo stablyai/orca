@@ -127,6 +127,23 @@ function getRuntimeRepoTarget(
   return repo ? { target, repo } : null
 }
 
+function getRuntimeRepoTargetForOwner(
+  repo: Repo | undefined,
+  settings: AppState['settings']
+): { target: { kind: 'environment'; environmentId: string }; repo: Repo } | null {
+  const target = getActiveRuntimeTarget(settings)
+  const owner = repo ? parseExecutionHostId(getRepoExecutionHostId(repo)) : null
+  if (
+    !repo ||
+    target.kind !== 'environment' ||
+    owner?.kind !== 'runtime' ||
+    owner.environmentId !== target.environmentId
+  ) {
+    return null
+  }
+  return { target, repo }
+}
+
 function getPRRefreshOwnerRuntimeEnvironmentId(
   candidate: Pick<GitHubPRRefreshCandidate, 'cacheKey' | 'executionHostId'>
 ): string | null {
@@ -147,10 +164,11 @@ function getPRRefreshRuntimeRepoTarget(
   if (!ownerRuntimeEnvironmentId) {
     return null
   }
+  const ownerHostId = normalizeExecutionHostId(candidate.executionHostId) ?? undefined
+  const repo = findRepoForGitHubOwner(state, candidate.repoId, candidate.repoPath, ownerHostId)
   // Why: PR refreshes must follow the repo owner host, not the Active Server dropdown (a runtime-owned worktree can show while Local is focused).
-  return getRuntimeRepoTarget(
-    state,
-    candidate.repoPath,
+  return getRuntimeRepoTargetForOwner(
+    repo,
     state.settings
       ? { ...state.settings, activeRuntimeEnvironmentId: ownerRuntimeEnvironmentId }
       : ({ activeRuntimeEnvironmentId: ownerRuntimeEnvironmentId } as AppState['settings'])
@@ -256,13 +274,20 @@ function findRepoForGitHubOwner(
       repoId ? candidate.id === repoId || candidate.path === repoPath : candidate.path === repoPath
     )
   }
-  const matches = repos.filter(
-    (candidate) =>
-      (repoId
-        ? candidate.id === repoId && candidate.path === repoPath
-        : candidate.path === repoPath) && getRepoExecutionHostId(candidate) === executionHostId
+  const hostMatches = repos.filter(
+    (candidate) => getRepoExecutionHostId(candidate) === executionHostId
   )
-  return matches.length === 1 ? matches[0] : undefined
+  if (!repoId) {
+    const pathMatches = hostMatches.filter((candidate) => candidate.path === repoPath)
+    return pathMatches.length === 1 ? pathMatches[0] : undefined
+  }
+  const idMatches = hostMatches.filter((candidate) => candidate.id === repoId)
+  if (idMatches.length === 1) {
+    return idMatches[0]
+  }
+  // Why: a worktree path may differ from Repo.path; use it only to disambiguate duplicate rows.
+  const pathMatches = idMatches.filter((candidate) => candidate.path === repoPath)
+  return pathMatches.length === 1 ? pathMatches[0] : undefined
 }
 
 function getGitHubFocusedRepoOwnerHostId(
@@ -3135,7 +3160,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
     const request = (async () => {
       try {
-        const runtimeRepo = getRuntimeRepoTarget(get(), repoPath, requestSettings)
+        const runtimeRepo = getRuntimeRepoTargetForOwner(repo, requestSettings)
         const candidateWorktree = options?.worktreeId
           ? findWorktreeById(get(), options.worktreeId)
           : null
