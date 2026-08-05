@@ -12,3 +12,7 @@
 /src/cli/bundled-skill-guides.ts text eol=lf
 # Bundled plugin trees are byte-hashed; CRLF checkout would break the pinned hash.
 /resources/plugins/** text eol=lf
+# Generated skill artifacts are compared as raw text against a \n-terminated
+# serialization, so a CRLF checkout fails the staleness check on Windows even
+# when the content is byte-identical.
+/resources/skills/** text eol=lf
