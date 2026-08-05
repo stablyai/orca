@@ -28,14 +28,18 @@ export const WINDOWS_HOOK_STDIN_DRAIN_LABEL = 'orca_agent_hook_drain_stdin'
 export const WINDOWS_HOOK_STDIN_READER = '"%SystemRoot%\\System32\\more.com"'
 export const WINDOWS_HOOK_STDIN_DRAIN_COMMAND = `${WINDOWS_HOOK_STDIN_READER} >nul 2>nul`
 
-// Why: batch payloads stream directly to curl and cannot be buffered safely in
-// environment variables, so guard failures share one EOF-draining epilogue.
+// Why: these guards deliberately exit instead of draining, walking back part of #8430.
+// #8430 did cover callers without Orca env, but it assumed every caller eventually closes
+// stdin. A non-Orca caller need not, and more.com then blocks forever: an immortal
+// cmd.exe/more.com pair plus a console window on every hook event (#11549). A transient
+// broken pipe on a caller that would never close stdin is the cheaper of the two failures.
+// Orca-invoked hooks keep the #8430 guarantee — their env is set, so they fall through to
+// the post command, which reads stdin to EOF.
 export function buildWindowsHookEnvironmentGuardLines(): string[] {
-  const drainTarget = `goto :${WINDOWS_HOOK_STDIN_DRAIN_LABEL}`
   return [
-    `if "%ORCA_AGENT_HOOK_PORT%"=="" ${drainTarget}`,
-    `if "%ORCA_AGENT_HOOK_TOKEN%"=="" ${drainTarget}`,
-    `if "%ORCA_PANE_KEY%"=="" ${drainTarget}`
+    'if "%ORCA_AGENT_HOOK_PORT%"=="" exit /b 0',
+    'if "%ORCA_AGENT_HOOK_TOKEN%"=="" exit /b 0',
+    'if "%ORCA_PANE_KEY%"=="" exit /b 0'
   ]
 }
 

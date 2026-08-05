@@ -22,8 +22,7 @@ import {
 } from '../agent-hooks/installer-utils-remote'
 import {
   buildPosixHookPayloadCapture,
-  buildWindowsHookEnvironmentGuardLines,
-  buildWindowsHookStdinDrainEpilogue
+  buildWindowsHookEnvironmentGuardLines
 } from '../agent-hooks/hook-stdin-contract'
 
 // Why: Grok's tool-event matcher is a real regex (see Grok hooks docs). Bare
@@ -128,7 +127,6 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       'if "%ORCA_GROK_HOME:~-1%"=="\\" set "ORCA_GROK_HOME=%ORCA_GROK_HOME%."',
       WINDOWS_GROK_HOOK_POST_COMMAND,
       'exit /b 0',
-      ...buildWindowsHookStdinDrainEpilogue(),
       ''
     ].join('\r\n')
   }

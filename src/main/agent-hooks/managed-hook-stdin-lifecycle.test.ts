@@ -1,10 +1,15 @@
 // Why: stdin ownership is a cross-agent process contract; one executable
 // matrix catches an unread early exit without duplicating template assertions.
+// Windows batch guards are the one exception: an Orca-less caller gets an
+// immediate exit and may see a broken pipe, because more.com would otherwise
+// block forever on a caller that never closes stdin (#11549).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { spawn } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import type { AddressInfo } from 'node:net'
 import type { SFTPWrapper } from 'ssh2'
 import type * as osModule from 'node:os'
 
@@ -222,6 +227,41 @@ async function generatePosixScripts(): Promise<Map<string, string>> {
   return scripts
 }
 
+const WINDOWS_DRAIN_LABEL_LINE = ':orca_agent_hook_drain_stdin'
+const WINDOWS_DRAIN_COMMAND_LINE = '"%SystemRoot%\\System32\\more.com" >nul 2>nul'
+// Why: Node surfaces a closed Windows pipe under several codes; anything else
+// (EACCES, ENOENT) would mean the script failed rather than exited early.
+const BROKEN_PIPE_CODES = new Set(['EPIPE', 'ECONNRESET', 'ERR_STREAM_DESTROYED', 'EOF'])
+// Why: these two capture stdin before any guard, so the #8430 no-EPIPE guarantee
+// still holds for them even without Orca environment.
+const CAPTURES_BEFORE_GUARDS = new Set(['copilot-hook.ps1', 'kimi-hook.sh'])
+
+function orcaHookEnvironment(port: number): NodeJS.ProcessEnv {
+  return {
+    ORCA_AGENT_HOOK_PORT: String(port),
+    ORCA_AGENT_HOOK_TOKEN: 'test-token',
+    ORCA_PANE_KEY: 'tab-1:00000000-0000-4000-8000-000000000000',
+    // Why: the Grok template substrings %GROK_HOME%; leave it defined so this
+    // case exercises the post path rather than undefined-variable expansion.
+    GROK_HOME: 'C:\\orca-test-grok-home'
+  }
+}
+
+// Why: a live reader is what makes the with-Orca-env assertion meaningful — the
+// post command must consume the whole payload, not fail before touching stdin.
+async function withLoopbackHookServer<T>(run: (port: number) => Promise<T>): Promise<T> {
+  const server = createServer((request, response) => {
+    request.resume()
+    request.on('end', () => response.end('{}'))
+  })
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  try {
+    return await run((server.address() as AddressInfo).port)
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+  }
+}
+
 function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
   const original = Object.getOwnPropertyDescriptor(process, 'platform')
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
@@ -235,7 +275,7 @@ function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
 }
 
 describe('Windows managed hook stdin structure', () => {
-  it('routes every batch guard to a shared drain epilogue', () => {
+  it('exits missing-Orca-env guards and keeps a drain epilogue only where a jump survives', () => {
     const home = mkdtempSync(join(tmpdir(), 'orca-hook-stdin-windows-'))
     homedirMock.mockReturnValue(home)
     const previousGrokHome = process.env.GROK_HOME
@@ -256,22 +296,65 @@ describe('Windows managed hook stdin structure', () => {
       mainBatchScripts.push('antigravity-hook.cmd')
       expect(mainBatchScripts).toHaveLength(10)
       for (const fileName of mainBatchScripts) {
-        const script = readFileSync(join(hooksDir, fileName), 'utf8')
-        expect(script, `${fileName} port guard`).toContain(
-          'if "%ORCA_AGENT_HOOK_PORT%"=="" goto :orca_agent_hook_drain_stdin'
+        const lines = readFileSync(join(hooksDir, fileName), 'utf8').split('\r\n')
+        // Why: a caller without Orca env is not Orca, so it may never close stdin —
+        // more.com would then block forever and leak a cmd.exe/more.com pair (#11549).
+        expect(lines, `${fileName} port guard`).toContain(
+          'if "%ORCA_AGENT_HOOK_PORT%"=="" exit /b 0'
         )
-        expect(script, `${fileName} token guard`).toContain(
-          'if "%ORCA_AGENT_HOOK_TOKEN%"=="" goto :orca_agent_hook_drain_stdin'
+        expect(lines, `${fileName} token guard`).toContain(
+          'if "%ORCA_AGENT_HOOK_TOKEN%"=="" exit /b 0'
         )
-        expect(script, `${fileName} pane guard`).toContain(
-          'if "%ORCA_PANE_KEY%"=="" goto :orca_agent_hook_drain_stdin'
+        expect(lines, `${fileName} pane guard`).toContain('if "%ORCA_PANE_KEY%"=="" exit /b 0')
+        // Why: text presence proved nothing once the guards stopped jumping. Emit the
+        // epilogue only where a jump survives, so a dead label cannot pose as coverage.
+        const jumpIndex = lines.findIndex((line) =>
+          line.endsWith(`goto :${WINDOWS_DRAIN_LABEL_LINE.slice(1)}`)
         )
-        expect(script, `${fileName} drain epilogue`).toContain(
-          [
-            ':orca_agent_hook_drain_stdin',
-            '"%SystemRoot%\\System32\\more.com" >nul 2>nul',
+        const labelIndex = lines.indexOf(WINDOWS_DRAIN_LABEL_LINE)
+        expect(labelIndex > -1, `${fileName} drain epilogue reachable`).toBe(jumpIndex > -1)
+        if (labelIndex > -1) {
+          expect(lines.slice(labelIndex, labelIndex + 3), `${fileName} drain epilogue`).toEqual([
+            WINDOWS_DRAIN_LABEL_LINE,
+            WINDOWS_DRAIN_COMMAND_LINE,
             'exit /b 0'
-          ].join('\r\n')
+          ])
+        }
+      }
+
+      // Why: Claude's Devin skip is the one surviving jump, and it must sit after the
+      // Orca-env guards — only an Orca-invoked hook is guaranteed to close stdin.
+      const claude = readFileSync(join(hooksDir, 'claude-hook.cmd'), 'utf8').split('\r\n')
+      const claudePaneGuardIndex = claude.indexOf('if "%ORCA_PANE_KEY%"=="" exit /b 0')
+      const claudeDevinIndex = claude.findIndex((line) =>
+        line.startsWith('if not "%DEVIN_PROJECT_DIR%"==""')
+      )
+      expect(claudePaneGuardIndex, 'claude pane guard').toBeGreaterThan(-1)
+      expect(claudeDevinIndex, 'claude Devin skip after Orca guards').toBeGreaterThan(
+        claudePaneGuardIndex
+      )
+      expect(claude.indexOf(WINDOWS_DRAIN_LABEL_LINE), 'claude drain epilogue').toBeGreaterThan(
+        claudeDevinIndex
+      )
+      // Why: OpenClaude has no Devin skip, so nothing can reach a drain there.
+      const openClaude = readFileSync(join(hooksDir, 'openclaude-hook.cmd'), 'utf8')
+      expect(openClaude, 'openclaude drain').not.toContain(WINDOWS_DRAIN_LABEL_LINE.slice(1))
+
+      // Why: a partially removed install leaves these wrappers behind with the core
+      // script gone, which is exactly the never-EOF path #11549 reported.
+      const wrapperFileNames = fileNames.filter(
+        (name) => name.startsWith('antigravity-') && name !== 'antigravity-hook.cmd'
+      )
+      expect(wrapperFileNames, 'antigravity event wrappers').toHaveLength(4)
+      for (const fileName of wrapperFileNames) {
+        const lines = readFileSync(join(hooksDir, fileName), 'utf8').split('\r\n')
+        const guardIndex = lines.indexOf('if "%ORCA_PANE_KEY%"=="" exit /b 0')
+        const drainIndex = lines.indexOf(WINDOWS_DRAIN_COMMAND_LINE)
+        expect(guardIndex, `${fileName} Orca env guard`).toBeGreaterThan(-1)
+        expect(drainIndex, `${fileName} drain after Orca env guard`).toBeGreaterThan(guardIndex)
+        // Why: the JSON protocol reply must still precede the guard, or Antigravity stalls.
+        expect(lines.indexOf('  echo {}'), `${fileName} protocol reply before guard`).toBeLessThan(
+          guardIndex
         )
       }
 
@@ -300,7 +383,7 @@ describe('Windows managed hook stdin structure', () => {
   })
 
   it.skipIf(process.platform !== 'win32')(
-    'executes every local script and missing-script launcher without a broken writer',
+    'exits without Orca env and never breaks an Orca writer',
     async () => {
       const home = mkdtempSync(join(tmpdir(), 'orca-hook-stdin-windows-live-'))
       homedirMock.mockReturnValue(home)
@@ -310,6 +393,9 @@ describe('Windows managed hook stdin structure', () => {
           expect(entry.install().state, `${entry.agent} install status`).toBe('installed')
         }
         const hooksDir = join(home, '.orca', 'agent-hooks')
+        const eventWrappers = readdirSync(hooksDir).filter(
+          (name) => name.startsWith('antigravity-') && name !== 'antigravity-hook.cmd'
+        )
         const mainScripts = readdirSync(hooksDir).filter(
           (name) =>
             name === 'antigravity-hook.cmd' ||
@@ -318,28 +404,78 @@ describe('Windows managed hook stdin structure', () => {
             (name.endsWith('-hook.cmd') && !name.startsWith('antigravity-'))
         )
         expect(mainScripts).toHaveLength(12)
-        for (const fileName of mainScripts) {
+        expect(eventWrappers).toHaveLength(4)
+        const spawnArgsFor = (
+          fileName: string
+        ): { executable: string; args: string[]; scriptPath: string } => {
           const scriptPath = join(hooksDir, fileName)
-          const executable = fileName.endsWith('.cmd')
-            ? 'cmd.exe'
-            : fileName.endsWith('.ps1')
-              ? join(
-                  process.env.SystemRoot ?? 'C:\\Windows',
-                  'System32',
-                  'WindowsPowerShell',
-                  'v1.0',
-                  'powershell.exe'
-                )
-              : gitBash
-          const args = fileName.endsWith('.cmd')
-            ? ['/d', '/c', scriptPath]
-            : fileName.endsWith('.ps1')
-              ? ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath]
-              : [scriptPath]
-          const result = await runHookProcess(executable, args, hookEnvironment())
-          expect(result.exitCode, `${fileName} exit code`).toBe(0)
-          expect(result.stdinErrors, `${fileName} stdin errors`).toHaveLength(0)
+          if (fileName.endsWith('.cmd')) {
+            return { executable: 'cmd.exe', args: ['/d', '/c', scriptPath], scriptPath }
+          }
+          if (fileName.endsWith('.ps1')) {
+            return {
+              executable: join(
+                process.env.SystemRoot ?? 'C:\\Windows',
+                'System32',
+                'WindowsPowerShell',
+                'v1.0',
+                'powershell.exe'
+              ),
+              args: ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath],
+              scriptPath
+            }
+          }
+          return { executable: gitBash, args: [scriptPath], scriptPath }
         }
+
+        // Why: the wrappers are only a hang risk once the core script is gone, which is
+        // what a partially removed install leaves behind.
+        rmSync(join(hooksDir, 'antigravity-hook.cmd'))
+        for (const fileName of [...mainScripts, ...eventWrappers]) {
+          if (fileName === 'antigravity-hook.cmd') {
+            continue
+          }
+          const { executable, args } = spawnArgsFor(fileName)
+          const result = await runHookProcess(executable, args, hookEnvironment())
+          // Why: the run must end on its own — a hung more.com is the #11549 leak, and
+          // runHookProcess rejects rather than resolving if it never closes.
+          expect(result.exitCode, `${fileName} exit code`).toBe(0)
+          if (CAPTURES_BEFORE_GUARDS.has(fileName)) {
+            expect(result.stdinErrors, `${fileName} stdin errors`).toHaveLength(0)
+          } else {
+            // Why: batch guards exit before reading, so a caller that is not Orca gets a
+            // broken pipe by design; any other errno would mean the script itself failed.
+            const unexpected = result.stdinErrors
+              .map((error) => error.code ?? 'unknown')
+              .filter((code) => !BROKEN_PIPE_CODES.has(code))
+            expect(unexpected, `${fileName} unexpected stdin errors`).toEqual([])
+          }
+        }
+
+        // Why: the #8430 guarantee still has to hold for hooks Orca invokes — nothing
+        // about the missing-env exit may cost an Orca-launched agent its payload write.
+        for (const entry of LOCAL_INSTALLERS) {
+          expect(entry.install().state, `${entry.agent} reinstall status`).toBe('installed')
+        }
+        await withLoopbackHookServer(async (port) => {
+          const orcaEnv = orcaHookEnvironment(port)
+          for (const fileName of mainScripts) {
+            const { executable, args } = spawnArgsFor(fileName)
+            const result = await runHookProcess(executable, args, hookEnvironment(orcaEnv))
+            expect(result.exitCode, `${fileName} Orca-env exit code`).toBe(0)
+            expect(result.stdinErrors, `${fileName} Orca-env stdin errors`).toHaveLength(0)
+          }
+          // Why: the Devin skip is the only guard that still drains; it runs after the
+          // Orca-env guards, so reaching it proves the surviving epilogue is live.
+          const claude = spawnArgsFor('claude-hook.cmd')
+          const devinSkip = await runHookProcess(
+            claude.executable,
+            claude.args,
+            hookEnvironment({ ...orcaEnv, DEVIN_PROJECT_DIR: 'C:\\devin-project' })
+          )
+          expect(devinSkip.exitCode, 'claude Devin skip exit code').toBe(0)
+          expect(devinSkip.stdinErrors, 'claude Devin skip stdin errors').toHaveLength(0)
+        })
 
         const missingScript = 'C:\\missing\\orca-hook.cmd'
         // Why: the cmd fast path is intentionally a bare, directly-spawnable .cmd

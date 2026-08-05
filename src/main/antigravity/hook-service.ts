@@ -28,7 +28,6 @@ import {
 import {
   buildPosixHookPayloadCapture,
   buildWindowsHookEnvironmentGuardLines,
-  buildWindowsHookStdinDrainEpilogue,
   WINDOWS_HOOK_STDIN_DRAIN_COMMAND
 } from '../agent-hooks/hook-stdin-contract'
 
@@ -102,7 +101,6 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       ...buildWindowsHookEnvironmentGuardLines(),
       buildWindowsAntigravityHookPostCommand(),
       'exit /b 0',
-      ...buildWindowsHookStdinDrainEpilogue(),
       ''
     ].join('\r\n')
   }
@@ -165,6 +163,10 @@ function getWindowsWrapperScript(eventName: string): string {
     ') else (',
     '  echo {}',
     ')',
+    // Why: guard before the drain below — a stale wrapper left by a partial uninstall is
+    // still reachable outside Orca, and more.com would hang on a caller that never closes
+    // stdin, leaking a cmd.exe/more.com pair per event (#11549).
+    ...buildWindowsHookEnvironmentGuardLines(),
     // Why: when the shared core script is missing, this wrapper becomes the
     // stdin owner and must finish the agent's payload write before returning.
     WINDOWS_HOOK_STDIN_DRAIN_COMMAND,

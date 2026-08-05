@@ -58,22 +58,27 @@ function getManagedScript(
   options: { skipWhenDevinImportsClaude?: boolean } = {}
 ): string {
   if (target === 'local' && process.platform === 'win32') {
+    const skipsDevinImport = options.skipWhenDevinImportsClaude === true
     return [
       '@echo off',
       'setlocal',
-      ...(options.skipWhenDevinImportsClaude
+      // Why: refresh endpoint coordinates for PTYs surviving an Orca restart.
+      'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
+      // Why: the Orca-env guards run before the Devin skip so the skip is reachable only
+      // when Orca invoked this hook — only then is a payload written and stdin closed,
+      // which is what makes the skip's drain safe rather than a #11549 hang.
+      ...buildWindowsHookEnvironmentGuardLines(),
+      ...(skipsDevinImport
         ? [
             // Why: Devin imports .claude hooks by default; skip Orca's managed hook there so status posts stay attributed to Devin.
             `if not "%DEVIN_PROJECT_DIR%"=="" goto :${WINDOWS_HOOK_STDIN_DRAIN_LABEL}`
           ]
         : []),
-      // Why: refresh endpoint coordinates for PTYs surviving an Orca restart.
-      'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
-      ...buildWindowsHookEnvironmentGuardLines(),
       // Why: use curl.exe to avoid an extra PowerShell startup per hook.
       buildWindowsAgentHookCurlPostCommand('claude'),
       'exit /b 0',
-      ...buildWindowsHookStdinDrainEpilogue(),
+      // Why: the Devin skip is the only remaining jump here; without it this would be dead code.
+      ...(skipsDevinImport ? buildWindowsHookStdinDrainEpilogue() : []),
       ''
     ].join('\r\n')
   }
