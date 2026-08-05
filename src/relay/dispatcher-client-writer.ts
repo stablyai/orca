@@ -88,7 +88,8 @@ export class DispatcherClientWriter {
     encode: () => Buffer,
     estimatedBytes: number,
     onSettled: (result: SinkWriteSettlement) => void = () => {},
-    overflowIsNonFatal = false
+    overflowIsNonFatal = false,
+    usesControlReserve = false
   ): boolean {
     if (this.closed) {
       onSettled({ ok: false, error: new Error('Relay writer is closed') })
@@ -100,7 +101,8 @@ export class DispatcherClientWriter {
       estimatedBytes,
       onSettled: onceDispatcherWriterSettlement(onSettled),
       settled: false,
-      overflowIsNonFatal
+      overflowIsNonFatal,
+      usesControlReserve
     }
     const admission = this.admission.admit(entry, this.sink.frameCapacity(lane, this.saturated))
     if (!admission.accepted) {

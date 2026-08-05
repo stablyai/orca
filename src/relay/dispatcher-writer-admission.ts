@@ -17,6 +17,9 @@ export type DispatcherWriterEntry = {
   settled: boolean
   // Why: control overflow closes the client by default; best-effort frames opt out of that instead.
   overflowIsNonFatal?: boolean
+  // Why: a rejected response's tiny error substitute must still reach the caller when the lane is
+  // full, so it alone may draw on a small reserve past the bound. See RelayDispatcher.sendResponse.
+  usesControlReserve?: boolean
 }
 
 type AdmissionResult =
@@ -25,6 +28,9 @@ type AdmissionResult =
 
 export const DISPATCHER_CONTROL_QUEUE_MAX_FRAMES = 256
 export const DISPATCHER_CONTROL_QUEUE_MAX_BYTES = 1024 * 1024
+// Why: sized for a handful of ~110-byte JSON-RPC error frames, not for carrying real payloads.
+const CONTROL_RESERVE_FRAMES = 16
+const CONTROL_RESERVE_BYTES = 64 * 1024
 const LIVENESS_QUEUE_MAX_FRAMES = 2
 
 export const DEFAULT_PRODUCER_QUEUE_MAX_BYTES = 2 * 1024 * 1024
@@ -70,11 +76,13 @@ export class DispatcherWriterAdmission {
     return this.producerBytes
   }
 
-  canAdmitControl(bytes: number): boolean {
-    return (
-      this.controlFrames < DISPATCHER_CONTROL_QUEUE_MAX_FRAMES &&
-      this.controlBytes + bytes <= DISPATCHER_CONTROL_QUEUE_MAX_BYTES
-    )
+  canAdmitControl(bytes: number, usesReserve = false): boolean {
+    // Why: the reserve is additive headroom for the error substitute only — widening the bound here
+    // rather than shrinking it for everyone keeps every frame that fits today still fitting.
+    const frameLimit =
+      DISPATCHER_CONTROL_QUEUE_MAX_FRAMES + (usesReserve ? CONTROL_RESERVE_FRAMES : 0)
+    const byteLimit = DISPATCHER_CONTROL_QUEUE_MAX_BYTES + (usesReserve ? CONTROL_RESERVE_BYTES : 0)
+    return this.controlFrames < frameLimit && this.controlBytes + bytes <= byteLimit
   }
 
   get queuedEntries(): number {
@@ -154,7 +162,7 @@ export class DispatcherWriterAdmission {
   private admitControl(entry: DispatcherWriterEntry): AdmissionResult {
     // Why: best-effort controls may fail soft without weakening protocol-critical admission.
     const overflowIsNonFatal = entry.overflowIsNonFatal === true
-    if (!this.canAdmitControl(entry.estimatedBytes)) {
+    if (!this.canAdmitControl(entry.estimatedBytes, entry.usesControlReserve === true)) {
       if (overflowIsNonFatal) {
         return { accepted: false }
       }

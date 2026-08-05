@@ -1010,12 +1010,15 @@ export class RelayDispatcher {
     }
     const estimatedBytes = this.estimateFrameBytes(msg)
     const lane = estimatedBytes > DISPATCHER_CONTROL_QUEUE_MAX_BYTES ? 'legacy-response' : 'control'
-    const accepted = this.enqueueFrame(client, msg, lane, onSettled)
+    // Why: a response is fenced by its request, so overflow must fail that request only — closing would
+    // kill every pane on the host and a reattach burst would re-kill the link on every reconnect.
+    const accepted = this.enqueueFrame(client, msg, lane, onSettled, estimatedBytes, 'reject')
     if (accepted) {
       return true
     }
-    // Why: an oversized response must fail its own request; closing would kill every pane on the host.
-    // A rejected first enqueue either left onSettled untouched or closed the client, so exactly one settlement happens.
+    // Why: the substitute draws on the control lane's reserve, so a lane saturated by bulky replay
+    // responses can still answer. A rejected first enqueue left onSettled untouched, so exactly one
+    // settlement happens.
     return this.enqueueFrame(
       client,
       {
@@ -1034,7 +1037,10 @@ export class RelayDispatcher {
           settlement.ok
             ? { ok: false, error: new Error(RESPONSE_OVER_CAPACITY_MESSAGE) }
             : settlement
-        )
+        ),
+      undefined,
+      'close-client',
+      true
     )
   }
 
@@ -1045,7 +1051,8 @@ export class RelayDispatcher {
     onSettled: (result: SinkWriteSettlement) => void = () => {},
     // Why: publish paths already sized the frame; avoid a redundant encode.
     estimatedBytes?: number,
-    controlOverflow: 'close-client' | 'reject' = 'close-client'
+    controlOverflow: 'close-client' | 'reject' = 'close-client',
+    usesControlReserve = false
   ): boolean {
     if (this.disposed || client.closed) {
       return false
@@ -1060,7 +1067,8 @@ export class RelayDispatcher {
       encode,
       frameBytes,
       onSettled,
-      lane === 'control' && controlOverflow === 'reject'
+      lane === 'control' && controlOverflow === 'reject',
+      usesControlReserve
     )
   }
 
