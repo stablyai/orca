@@ -2,9 +2,14 @@ import {
   AGY_AGENT_NAME_RE,
   DROID_AGENT_NAME_RE,
   HERMES_AGENT_NAME_RE,
+  QWEN_AGENT_NAME_RE,
   titleHasAgentName
 } from './agent-name-token-match'
-import { isCursorAgentTitle } from './agent-title-core'
+import {
+  isCursorAgentTitle,
+  isQwenBrailleSyntheticTitle,
+  isQwenNativeTitle
+} from './agent-title-core'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
 import {
   getPiCompatibleSyntheticAgentLabel,
@@ -44,6 +49,11 @@ export function isGeminiTerminalTitle(title: string): boolean {
   // Why: Pi/OMP titles include cwd/session text; substring matching made
   // paths like "gemini-project" masquerade as Gemini CLI.
   if (isPiAgentTitle(title)) {
+    return false
+  }
+  // Why: the static Qwen frame owns its title; a `gemini` directory token
+  // must not re-route ownership.
+  if (isQwenNativeTitle(title)) {
     return false
   }
   return titleHasAgentName(title, 'gemini')
@@ -101,7 +111,11 @@ export function isClaudeAgent(title: string): boolean {
   if (containsBrailleSpinner(title)) {
     // Why: named non-Claude agents carry braille spinners too. Gate Cursor by its
     // identity title, not the token, so a Claude title mentioning a cursor stays Claude.
-    return !isCursorAgentTitle(title) && !lower.includes('openclaude')
+    return (
+      !isCursorAgentTitle(title) &&
+      !lower.includes('openclaude') &&
+      !isQwenBrailleSyntheticTitle(title)
+    )
   }
   // Why: permission/action-required Claude titles can omit the usual prefixes.
   // Token-match so cwd/worktree titles like "claude-scratch" do not become
@@ -154,6 +168,12 @@ export function getAgentLabel(title: string): string | null {
   if (isPiAgentTitle(title)) {
     return 'Pi'
   }
+  // Why: the static `Qwen - <dir>` frame owns the title; directory tokens like
+  // `droid`/`opencode` must not re-route ownership (native prefix beats every
+  // generic token match below).
+  if (isQwenNativeTitle(title)) {
+    return 'Qwen Code'
+  }
   // Why: Codex/OpenCode/Aider can also use braille spinner prefixes while
   // working. Prefer explicit name matches before Claude's generic spinner
   // heuristic so mixed-agent hovercards stay truthful. Token-match (not
@@ -201,8 +221,15 @@ export function getAgentLabel(title: string): string | null {
   if (HERMES_AGENT_NAME_RE.test(title)) {
     return 'Hermes'
   }
+  // Why: a Claude-owned title can mention `qwen` in task text; Claude's prefix /
+  // braille identity must win before the generic Qwen token match.
   if (isClaudeAgent(title)) {
     return 'Claude Code'
+  }
+  // Why: Qwen Code sets a static `Qwen - <dir>` OSC title; token-match so
+  // paths like "qwen-scratch" don't mint a false identity.
+  if (QWEN_AGENT_NAME_RE.test(title)) {
+    return 'Qwen Code'
   }
 
   return null
@@ -228,7 +255,8 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TuiAgent>> = {
   Droid: 'droid',
   Hermes: 'hermes',
   Pi: 'pi',
-  OMP: 'omp'
+  OMP: 'omp',
+  'Qwen Code': 'qwen-code'
 }
 
 function hasGenericClaudeStatusPrefix(title: string): boolean {

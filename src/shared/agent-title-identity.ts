@@ -3,11 +3,14 @@ import {
   CLAUDE_IDLE,
   DROID_AGENT_NAME_RE,
   HERMES_AGENT_NAME_RE,
+  QWEN_AGENT_NAME_RE,
   containsBrailleSpinner,
   isClaudeManagementTitle,
   isCursorAgentTitle,
   isGeminiTerminalTitle,
   isPiAgentTitle,
+  isQwenBrailleSyntheticTitle,
+  isQwenNativeTitle,
   titleHasAgentName
 } from './agent-title-core'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
@@ -34,7 +37,11 @@ export function isClaudeAgent(title: string): boolean {
   if (containsBrailleSpinner(title)) {
     // Why: named non-Claude agents carry braille spinners too. Gate Cursor by its
     // identity title, not the token, so a Claude title mentioning a cursor stays Claude.
-    return !isCursorAgentTitle(title) && !lower.includes('openclaude')
+    return (
+      !isCursorAgentTitle(title) &&
+      !lower.includes('openclaude') &&
+      !isQwenBrailleSyntheticTitle(title)
+    )
   }
 
   const trimmedTitle = title.trimStart()
@@ -73,6 +80,12 @@ export function getAgentLabel(title: string): string | null {
   }
   if (isPiAgentTitle(title)) {
     return 'Pi'
+  }
+  // Why: the static `Qwen - <dir>` frame owns the title; directory tokens like
+  // `droid`/`opencode` must not re-route ownership (native prefix beats every
+  // generic token match below).
+  if (isQwenNativeTitle(title)) {
+    return 'Qwen Code'
   }
 
   if (titleHasAgentName(title, 'codex')) {
@@ -113,8 +126,13 @@ export function getAgentLabel(title: string): string | null {
   if (HERMES_AGENT_NAME_RE.test(title)) {
     return 'Hermes'
   }
+  // Why: a Claude-owned title can mention `qwen` in task text; Claude's prefix /
+  // braille identity must win before the generic Qwen token match.
   if (isClaudeAgent(title)) {
     return 'Claude Code'
+  }
+  if (QWEN_AGENT_NAME_RE.test(title)) {
+    return 'Qwen Code'
   }
 
   return null

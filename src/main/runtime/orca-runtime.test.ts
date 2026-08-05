@@ -14646,6 +14646,176 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('resolves tui-idle from a Qwen Code ready prompt preview', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+    runtime.onPtyData(
+      'pty-bg',
+      [
+        ' >_ Qwen Code (v0.21.4)\n',
+        ' Token Plan | qwen3.8-max-preview\n',
+        ' /repo\n',
+        '>  Type your message or @path/to/file\n',
+        ' repo · qwen3.8-max-preview\n',
+        ' Auto mode (shift + tab to cycle)\n'
+      ].join(''),
+      Date.now()
+    )
+
+    await expect(
+      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 1_000 })
+    ).resolves.toMatchObject({
+      handle,
+      condition: 'tui-idle',
+      status: 'running'
+    })
+  })
+
+  it('resolves tui-idle from a Qwen Code ready prompt without the English placeholder', async () => {
+    // Why: the placeholder text is localized; the `>` input line is the stable fallback.
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+    runtime.onPtyData(
+      'pty-bg',
+      [' >_ Qwen Code (v0.21.4)\n', ' /repo\n', '>  输入您的消息或 @ 文件路径\n'].join(''),
+      Date.now()
+    )
+
+    await expect(
+      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 1_000 })
+    ).resolves.toMatchObject({
+      handle,
+      condition: 'tui-idle',
+      status: 'running'
+    })
+  })
+
+  it('does not treat a busy Qwen Code screen as tui-idle readiness', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+      runtime.onPtyData(
+        'pty-bg',
+        [' >_ Qwen Code (v0.21.4)\n', ' ⠙ Working on the request…\n', '>  \n'].join(''),
+        Date.now()
+      )
+
+      const waitPromise = runtime.waitForTerminal(handle, {
+        condition: 'tui-idle',
+        timeoutMs: 1_000
+      })
+      const timeoutAssertion = expect(waitPromise).rejects.toThrow('timeout')
+
+      await vi.advanceTimersByTimeAsync(2_000)
+
+      await timeoutAssertion
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not resolve a stale ready prompt while hooks report the pane working', async () => {
+    // Why: the retained tail can lag a TUI redraw after a prompt submit; a fresh
+    // hook `working` row must veto the ready-prompt heuristic (PRTS-525).
+    const hookSnapshot: {
+      paneKey: string
+      state: 'working' | 'done'
+      prompt: string
+      agentType: string
+      connectionId: null
+      receivedAt: number
+      stateStartedAt: number
+      tabId: string
+      worktreeId: string
+    }[] = []
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      getAgentStatusSnapshot: () => hookSnapshot
+    })
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: () => true,
+      kill: () => true,
+      // Why: arm the quiescence fallback too (non-shell foreground + old output)
+      // so the test proves the hook `working` row vetoes BOTH heuristics.
+      getForegroundProcess: async () => 'qwen'
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-bg',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'qwen',
+          activeLeafId: '11111111-1111-4111-8111-111111111111',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-bg',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: '11111111-1111-4111-8111-111111111111',
+          paneRuntimeId: 1,
+          ptyId: 'pty-bg',
+          paneTitle: null
+        }
+      ]
+    })
+    const [terminal] = (await runtime.listTerminals()).terminals
+    hookSnapshot.push({
+      paneKey: 'tab-bg:11111111-1111-4111-8111-111111111111',
+      state: 'working',
+      prompt: 'do the work',
+      agentType: 'qwen-code',
+      connectionId: null,
+      receivedAt: Date.now(),
+      stateStartedAt: Date.now(),
+      tabId: 'tab-bg',
+      worktreeId: TEST_WORKTREE_ID
+    })
+    // Tail still shows the idle screen from before the submit reached the TUI;
+    // the stale timestamp also makes the output look quiescent (>= 3s quiet).
+    runtime.onPtyData(
+      'pty-bg',
+      [' >_ Qwen Code (v0.21.4)\n', '>  Type your message or @path/to/file\n'].join(''),
+      Date.now() - 10_000
+    )
+
+    vi.useFakeTimers()
+    try {
+      const waitPromise = runtime.waitForTerminal(terminal.handle, {
+        condition: 'tui-idle',
+        timeoutMs: 1_000
+      })
+      const timeoutAssertion = expect(waitPromise).rejects.toThrow('timeout')
+
+      await vi.advanceTimersByTimeAsync(5_000)
+
+      await timeoutAssertion
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('resolves Antigravity ready prompts with newline-heavy pasted tails without splitting', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({

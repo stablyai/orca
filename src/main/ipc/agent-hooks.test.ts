@@ -102,6 +102,9 @@ vi.mock('../devin/hook-service', () => ({
 vi.mock('../kimi/hook-service', () => ({
   kimiHookService: { getStatus: vi.fn(() => ({ agent: 'kimi', state: 'absent' })) }
 }))
+vi.mock('../qwen/hook-service', () => ({
+  qwenCodeHookService: { getStatus: vi.fn(() => ({ agent: 'qwen-code', state: 'absent' })) }
+}))
 
 beforeEach(() => {
   dropStatusEntry.mockReset()
@@ -271,6 +274,17 @@ describe('agentHooks:kimiStatus IPC', () => {
     const handler = handleHandlers.get('agentHooks:kimiStatus')
     expect(handler).toBeDefined()
     expect(handler!({})).toEqual({ agent: 'kimi', state: 'absent' })
+  })
+})
+
+describe('agentHooks:qwenCodeStatus IPC', () => {
+  it('returns Qwen Code hook installation status', async () => {
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    registerAgentHookHandlers()
+
+    const handler = handleHandlers.get('agentHooks:qwenCodeStatus')
+    expect(handler).toBeDefined()
+    expect(handler!({})).toEqual({ agent: 'qwen-code', state: 'absent' })
   })
 })
 

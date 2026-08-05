@@ -2,12 +2,19 @@ import {
   AGY_AGENT_NAME_RE,
   DROID_AGENT_NAME_RE,
   HERMES_AGENT_NAME_RE,
+  QWEN_AGENT_NAME_RE,
   titleHasAgentName,
   titleHasAnyLegacyAgentName
 } from './agent-name-token-match'
 import { isLegacyPiCompatibleTitle } from './pi-compatible-synthetic-title'
 
-export { AGY_AGENT_NAME_RE, DROID_AGENT_NAME_RE, HERMES_AGENT_NAME_RE, titleHasAgentName }
+export {
+  AGY_AGENT_NAME_RE,
+  DROID_AGENT_NAME_RE,
+  HERMES_AGENT_NAME_RE,
+  QWEN_AGENT_NAME_RE,
+  titleHasAgentName
+}
 
 export type AgentStatus = 'working' | 'permission' | 'idle'
 
@@ -62,6 +69,11 @@ export function isGeminiTerminalTitle(title: string): boolean {
   if (isPiAgentTitle(title)) {
     return false
   }
+  // Why: the static Qwen frame owns its title; a `gemini` directory token
+  // must not re-route ownership.
+  if (isQwenNativeTitle(title)) {
+    return false
+  }
   return titleHasAgentName(title, 'gemini')
 }
 
@@ -92,7 +104,8 @@ export function containsAgentName(title: string): boolean {
     containsLegacyAgentName(title) ||
     AGY_AGENT_NAME_RE.test(title) ||
     DROID_AGENT_NAME_RE.test(title) ||
-    HERMES_AGENT_NAME_RE.test(title)
+    HERMES_AGENT_NAME_RE.test(title) ||
+    QWEN_AGENT_NAME_RE.test(title)
   )
 }
 
@@ -107,6 +120,27 @@ export function isClaudeManagementTitle(title: string): boolean {
 
 export function isCursorNativeAgentTitle(title: string): boolean {
   return title.trim().toLowerCase() === CURSOR_NATIVE_TITLE_LOWER
+}
+
+// Why: Orca currently synthesizes no Qwen spinner titles; if one is ever added,
+// its exact shape must stay out of Claude's generic braille branch without
+// letting Claude task text that merely mentions qwen escape it.
+const QWEN_BRAILLE_SYNTHETIC_RE = /^[\u2800-\u28ff]+\s+qwen(?: code)?$/i
+
+/** True for an exact synthesized braille Qwen spinner title (`⠋ Qwen Code`). */
+export function isQwenBrailleSyntheticTitle(title: string | null | undefined): boolean {
+  return typeof title === 'string' && QWEN_BRAILLE_SYNTHETIC_RE.test(title.trim())
+}
+
+/** True for Qwen Code's static `Qwen - <dir>` OSC frame (or bare `Qwen`). */
+export function isQwenNativeTitle(title: string | null | undefined): boolean {
+  if (typeof title !== 'string') {
+    return false
+  }
+  const lower = title.trim().toLowerCase()
+  // Why: everything behind the `qwen - ` prefix is static frame text (usually a
+  // directory); no synthetic Qwen titles exist, so the whole frame is native.
+  return lower === 'qwen' || lower.startsWith('qwen - ')
 }
 
 // Why: `cursor` is also an ordinary editor noun that other agents type into their own

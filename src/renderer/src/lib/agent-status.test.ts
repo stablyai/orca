@@ -223,6 +223,26 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('Hermes working')).toBe('working')
   })
 
+  it('does not infer state from Qwen Code static name-only titles', () => {
+    // Why: qwen's OSC title is a constant `Qwen - <dir>`; hook events own the
+    // state, and a false idle here would resolve tui-idle mid-turn.
+    expect(detectAgentStatusFromTitle('Qwen - my-project')).toBeNull()
+    // Static-shaped frames whose directory carries keywords or other agent
+    // names must not mint status either (native guard precedes heuristics);
+    // Orca synthesizes no Qwen status titles, so the whole frame is native.
+    expect(detectAgentStatusFromTitle('Qwen - ~/projects/ready')).toBeNull()
+    expect(detectAgentStatusFromTitle('Qwen - ready')).toBeNull()
+    expect(detectAgentStatusFromTitle('Qwen - droid')).toBeNull()
+    expect(detectAgentStatusFromTitle('Qwen - action required')).toBeNull()
+    expect(detectAgentStatusFromTitle('Qwen - claude waiting')).toBeNull()
+    // Non-native keyword titles still classify.
+    expect(detectAgentStatusFromTitle('Qwen ready')).toBe('idle')
+    expect(detectAgentStatusFromTitle('qwen working')).toBe('working')
+    // Path fragments are not identity.
+    expect(detectAgentStatusFromTitle('~/qwen/working')).toBeNull()
+    expect(detectAgentStatusFromTitle('qwen-scratch ready')).toBeNull()
+  })
+
   it('classifies synthesized Devin titles', () => {
     expect(detectAgentStatusFromTitle('⠋ Devin')).toBe('working')
     expect(detectAgentStatusFromTitle('Devin ready')).toBe('idle')
@@ -437,6 +457,8 @@ describe('isGeminiTerminalTitle', () => {
     expect(isGeminiTerminalTitle('π ')).toBe(false)
     expect(isGeminiTerminalTitle('⠋ π - gemini-project')).toBe(false)
     expect(isGeminiTerminalTitle('/tmp/gemini/working')).toBe(false)
+    // Why: the static Qwen frame owns its title; a `gemini` directory token must not re-route it.
+    expect(isGeminiTerminalTitle('Qwen - gemini')).toBe(false)
     expect(isGeminiTerminalTitle('bash')).toBe(false)
   })
 })
@@ -465,8 +487,22 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('Droid ready')).toBe('Droid')
     expect(getAgentLabel('⠋ Hermes')).toBe('Hermes')
     expect(getAgentLabel('Hermes ready')).toBe('Hermes')
+    expect(getAgentLabel('Qwen - my-project')).toBe('Qwen Code')
     expect(getAgentLabel('⠋ Devin')).toBe('Devin')
     expect(getAgentLabel('Devin ready')).toBe('Devin')
+  })
+
+  it('keeps native Qwen frames owned by Qwen and Claude-owned titles owned by Claude', () => {
+    // Why: directory tokens must not re-route the static `Qwen - <dir>` frame.
+    expect(getAgentLabel('Qwen - droid')).toBe('Qwen Code')
+    expect(getAgentLabel('Qwen - ~/projects/ready')).toBe('Qwen Code')
+    expect(getAgentLabel('Qwen - opencode')).toBe('Qwen Code')
+    expect(getAgentLabel('Qwen - codex')).toBe('Qwen Code')
+    expect(getAgentLabel('Qwen - gemini')).toBe('Qwen Code')
+    // Why: Claude-owned titles can mention qwen in task text; prefix/braille identity wins.
+    expect(getAgentLabel('claude qwen integration notes')).toBe('Claude Code')
+    expect(getAgentLabel('⠋ Compare Qwen vs Claude APIs')).toBe('Claude Code')
+    expect(getAgentLabel('⠋ Qwen Code')).toBe('Qwen Code')
   })
 
   it('does not label the Claude agents management title', () => {
@@ -862,6 +898,10 @@ describe('formatAgentTypeLabel', () => {
 
   it("maps 'trae' to 'Trae'", () => {
     expect(formatAgentTypeLabel('trae')).toBe('Trae')
+  })
+
+  it("maps 'qwen-code' to 'Qwen Code'", () => {
+    expect(formatAgentTypeLabel('qwen-code')).toBe('Qwen Code')
   })
 
   it('passes through arbitrary custom agent names as-is', () => {
