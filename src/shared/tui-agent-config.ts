@@ -27,6 +27,8 @@ export type TuiAgentConfig = {
   launchCmd: string
   /** Platform-specific launch command when the public binary name differs. */
   launchCmdByPlatform?: Partial<Record<NodeJS.Platform, string>>
+  /** Launch command to use when detection matched an alias rather than `detectCmd`. */
+  launchCmdByDetectCmd?: Readonly<Record<string, string>>
   expectedProcess: string
   promptInjectionMode: AgentPromptInjectionMode
   /** Option terminator required before positional prompts that may look like CLI syntax. */
@@ -130,9 +132,7 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     expectedProcess: 'pi',
     promptInjectionMode: 'argv',
     // Why: pi has no `--prefill` and paste-after-ready races its long startup; the orca-prefill extension seeds this env var instead.
-    draftPromptEnvVar: 'ORCA_PI_PREFILL',
-    // Why: Pi decodes CSI-u; Esc+CR submits after tool subprocesses reset live KKP state (#9703).
-    windowsShiftEnterEncoding: 'csi-u'
+    draftPromptEnvVar: 'ORCA_PI_PREFILL'
   },
   omp: {
     detectCmd: 'omp',
@@ -226,8 +226,14 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     promptInjectionMode: 'stdin-after-start'
   },
   cursor: {
+    // Why: the standalone installer puts `cursor-agent` on PATH, but Cursor.app only
+    // installs `cursor`, which reaches the same agent via the `agent` subcommand.
     detectCmd: 'cursor-agent',
+    detectCmdAliases: ['cursor'],
     launchCmd: 'cursor-agent',
+    // Why: Cursor.app's shim self-installs the agent (`curl https://cursor.com/install | bash`)
+    // when `cursor-agent` is missing, so this form can block on a download on first launch.
+    launchCmdByDetectCmd: { cursor: 'cursor agent' },
     expectedProcess: 'cursor-agent',
     promptInjectionMode: 'argv',
     // Why: first-launch trust menu swallows the bracketed paste; pre-write the .workspace-trusted marker so it skips (agent-trust-presets.ts).
@@ -320,8 +326,14 @@ export function getTuiAgentDetectCommands(config: TuiAgentConfig): string[] {
 export function getTuiAgentLaunchCommand(
   config: TuiAgentConfig,
   platform: NodeJS.Platform,
-  opts?: { isRemote?: boolean }
+  opts?: { isRemote?: boolean; detectedCmd?: string }
 ): string {
+  // Why: the detected executable is a fact about this host's PATH, so it outranks
+  // the static defaults — without it an alias-only install launches a missing binary.
+  const detected = opts?.detectedCmd ? config.launchCmdByDetectCmd?.[opts.detectedCmd] : undefined
+  if (detected) {
+    return detected
+  }
   // Why: local-only orca-ide rename (avoids GNOME Orca clash) must not leak to Linux remotes, whose relay shim is always `orca`.
   if (opts?.isRemote && platform === 'linux') {
     return config.launchCmd

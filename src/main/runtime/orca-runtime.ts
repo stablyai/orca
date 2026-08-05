@@ -1400,10 +1400,18 @@ function resolveBareAgentLaunchCommand(args: {
       continue
     }
     const override = cmdOverrides[agent]?.trim()
-    const defaultLaunchCommand = getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[agent], args.platform, {
+    const config = TUI_AGENT_CONFIG[agent]
+    const defaultLaunchCommand = getTuiAgentLaunchCommand(config, args.platform, {
       isRemote: args.isRemote
     })
-    const launchCommands = override ? [defaultLaunchCommand, override] : [defaultLaunchCommand]
+    // Why: recognition must accept every alias form, not just the one this PATH resolves
+    // to — otherwise a typed `cursor agent` loses its managed lane (hooks, preflightTrust)
+    // the moment Cursor's shim installs `cursor-agent` and detection flips to it.
+    const launchCommands = [
+      defaultLaunchCommand,
+      ...Object.values(config.launchCmdByDetectCmd ?? {}),
+      ...(override ? [override] : [])
+    ]
     if (
       launchCommands.some((candidate) => command === normalizeAgentLaunchCommandForMatch(candidate))
     ) {
