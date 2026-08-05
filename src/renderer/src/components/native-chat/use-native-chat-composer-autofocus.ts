@@ -19,7 +19,11 @@ export function useNativeChatComposerAutofocus(args: {
         composerEnabled,
         activeElement: typeof document === 'undefined' ? null : document.activeElement,
         body: typeof document === 'undefined' ? undefined : document.body,
-        focusScope: rootRef.current
+        // Why: the composer overlay is a DOM sibling of the xterm container
+        // (both children of .pane), not an ancestor of the helper textarea —
+        // scope the politeness check to .pane so this same pane's xterm is
+        // recognized as stealable, not mistaken for a focus elsewhere.
+        focusScope: rootRef.current?.closest('.pane') ?? rootRef.current
       })
     ) {
       return

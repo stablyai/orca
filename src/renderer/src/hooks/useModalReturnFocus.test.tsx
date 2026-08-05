@@ -198,6 +198,34 @@ describe('useModalReturnFocus', () => {
     expect(focusTerminalTabSurface).toHaveBeenCalledWith('terminal-1', 'leaf-1')
   })
 
+  it('does not steal focus from a pane whose composer owns focus in the generic surface fallback', async () => {
+    // Why: regression — the generic 'surface' fallback used a document-wide
+    // .xterm-helper-textarea query with no awareness of the native chat
+    // composer owning that pane's focus.
+    installAnimationFrameStubs()
+    useAppStore.setState({
+      activeWorktreeId: 'wt-1',
+      activeTabType: 'terminal',
+      activeTabId: null,
+      activeTabIdByWorktree: {}
+    })
+    const pane = document.createElement('div')
+    pane.className = 'pane'
+    const owner = document.createElement('div')
+    owner.setAttribute('data-pane-prevent-terminal-focus', 'true')
+    pane.append(owner)
+    const terminalTextarea = document.createElement('textarea')
+    terminalTextarea.className = 'xterm-helper-textarea'
+    pane.append(terminalTextarea)
+    document.body.append(pane)
+
+    await renderProbe(true)
+    await renderProbe(false)
+    flushAnimationFrames()
+
+    expect(document.activeElement).not.toBe(terminalTextarea)
+  })
+
   it('skips return focus when the close action already moved focus', async () => {
     installAnimationFrameStubs()
     useAppStore.setState({ activeWorktreeId: 'wt-1', activeTabType: 'editor' })

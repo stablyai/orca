@@ -3,7 +3,7 @@ import { focusTerminalTabSurface } from './focus-terminal-tab-surface'
 
 const mocks = vi.hoisted(() => ({
   refreshTerminalImeInputContext: vi.fn(),
-  paneContainerOwnsFocus: vi.fn(() => false)
+  isInsideFocusOwnedPane: vi.fn(() => false)
 }))
 
 vi.mock('@/components/terminal-pane/terminal-ime-input-context-refresh', () => ({
@@ -11,11 +11,12 @@ vi.mock('@/components/terminal-pane/terminal-ime-input-context-refresh', () => (
 }))
 
 vi.mock('@/lib/pane-manager/pane-pointer-focus', () => ({
-  paneContainerOwnsFocus: mocks.paneContainerOwnsFocus
+  isInsideFocusOwnedPane: mocks.isInsideFocusOwnedPane
 }))
 
-// Why: `helper` is outside `.pane` in real DOM checks (paneContainerOwnsFocus
-// mock above stands in), so the fake only needs `closest` to resolve `.pane`.
+// Why: `closest` is unused directly (isInsideFocusOwnedPane mock above stands
+// in for the real .pane lookup) but kept so callers matching a `.closest`
+// shape don't throw.
 function fakeHelper(): { focus: ReturnType<typeof vi.fn>; closest: ReturnType<typeof vi.fn> } {
   return { focus: vi.fn(), closest: vi.fn(() => ({})) }
 }
@@ -23,7 +24,7 @@ function fakeHelper(): { focus: ReturnType<typeof vi.fn>; closest: ReturnType<ty
 describe('focusTerminalTabSurface', () => {
   afterEach(() => {
     mocks.refreshTerminalImeInputContext.mockClear()
-    mocks.paneContainerOwnsFocus.mockReset().mockReturnValue(false)
+    mocks.isInsideFocusOwnedPane.mockReset().mockReturnValue(false)
     vi.unstubAllGlobals()
   })
 
@@ -99,7 +100,7 @@ describe('focusTerminalTabSurface', () => {
     // ancestor of the helper textarea, so this must check the shared .pane
     // container rather than helper.closest(marker) directly.
     flushAnimationFrames()
-    mocks.paneContainerOwnsFocus.mockReturnValue(true)
+    mocks.isInsideFocusOwnedPane.mockReturnValue(true)
     const textarea = fakeHelper()
     vi.stubGlobal('document', {
       querySelector: vi.fn((selector: string) =>
@@ -109,7 +110,7 @@ describe('focusTerminalTabSurface', () => {
 
     focusTerminalTabSurface('tab-1')
 
-    expect(textarea.closest).toHaveBeenCalledWith('.pane')
+    expect(mocks.isInsideFocusOwnedPane).toHaveBeenCalledWith(textarea)
     expect(textarea.focus).not.toHaveBeenCalled()
   })
 

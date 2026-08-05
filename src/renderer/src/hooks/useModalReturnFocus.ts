@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from 'react'
 
 import { useAppStore } from '../store'
 import { focusTerminalTabSurface } from '../lib/focus-terminal-tab-surface'
+import { isInsideFocusOwnedPane } from '../lib/pane-manager/pane-pointer-focus'
 import {
   ORCA_BROWSER_FOCUS_REQUEST_EVENT,
   queueBrowserFocusRequest,
@@ -67,7 +68,9 @@ export function useModalReturnFocus(visible: boolean): {
           innerFrameRef.current = null
           for (const selector of selectors) {
             const target = document.querySelector(selector) as HTMLElement | null
-            if (!target) {
+            // Why: an xterm-helper-textarea candidate can belong to a pane
+            // whose native chat composer owns focus — don't steal it back.
+            if (!target || isInsideFocusOwnedPane(target)) {
               continue
             }
             target.focus()

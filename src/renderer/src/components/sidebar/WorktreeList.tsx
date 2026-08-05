@@ -81,6 +81,7 @@ import { track } from '@/lib/telemetry'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { deriveRunningAgentSendTargets } from '@/lib/running-agent-targets'
 import { rightSidebarShowsPullRequestData } from '@/lib/right-sidebar-visibility'
+import { isInsideFocusOwnedPane } from '@/lib/pane-manager/pane-pointer-focus'
 import {
   type Row,
   type ProjectGroupingModel,
@@ -2569,7 +2570,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         const helper = document.querySelector(
           '.xterm-helper-textarea'
         ) as HTMLTextAreaElement | null
-        if (helper) {
+        // Why: don't steal focus from a pane whose native chat composer owns it.
+        if (helper && !isInsideFocusOwnedPane(helper)) {
           helper.focus()
         }
         e.preventDefault()

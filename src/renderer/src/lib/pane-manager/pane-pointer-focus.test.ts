@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  isInsideFocusOwnedPane,
   paneContainerOwnsFocus,
   shouldFocusTerminalFromPanePointerDown
 } from './pane-pointer-focus'
@@ -52,5 +53,27 @@ describe('paneContainerOwnsFocus', () => {
 
   it('is true when the pane hosts a focus-owning app control (e.g. the native chat composer)', () => {
     expect(paneContainerOwnsFocus(fakeContainer(true))).toBe(true)
+  })
+})
+
+describe('isInsideFocusOwnedPane', () => {
+  function fakeCandidate(paneHasMatch: boolean | null): Element {
+    const pane =
+      paneHasMatch === null
+        ? null
+        : ({ querySelector: vi.fn(() => (paneHasMatch ? {} : null)) } as unknown as HTMLElement)
+    return { closest: vi.fn(() => pane) } as unknown as Element
+  }
+
+  it('is false when the candidate has no .pane ancestor', () => {
+    expect(isInsideFocusOwnedPane(fakeCandidate(null))).toBe(false)
+  })
+
+  it('is false when the ancestor pane has no focus-owning app control', () => {
+    expect(isInsideFocusOwnedPane(fakeCandidate(false))).toBe(false)
+  })
+
+  it('is true when the ancestor pane hosts a focus-owning app control', () => {
+    expect(isInsideFocusOwnedPane(fakeCandidate(true))).toBe(true)
   })
 })

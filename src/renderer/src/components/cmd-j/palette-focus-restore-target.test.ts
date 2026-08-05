@@ -57,4 +57,22 @@ describe('resolvePaletteFocusRestoreTarget', () => {
   it('returns null when nothing is focusable', () => {
     expect(resolvePaletteFocusRestoreTarget(null)).toBeNull()
   })
+
+  it('skips a terminal whose pane composer owns focus, falling back to the editor', () => {
+    const pane = document.createElement('div')
+    pane.className = 'pane'
+    const owner = document.createElement('div')
+    owner.setAttribute('data-pane-prevent-terminal-focus', 'true')
+    pane.appendChild(owner)
+    const terminal = addTerminal('chat-owned')
+    pane.appendChild(terminal)
+    document.body.appendChild(pane)
+    const editor = document.createElement('div')
+    editor.className = 'monaco-editor'
+    const editorTextarea = document.createElement('textarea')
+    editor.appendChild(editorTextarea)
+    document.body.appendChild(editor)
+
+    expect(resolvePaletteFocusRestoreTarget(null)).toBe(editorTextarea)
+  })
 })
