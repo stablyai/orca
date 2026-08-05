@@ -952,11 +952,19 @@ const api = {
       agentResumeUnavailable?: true
     }> => ipcRenderer.invoke('pty:spawn', opts),
 
-    write: (id: string, data: string): void => {
-      ipcRenderer.send('pty:write', { id, data })
+    write: (id: string, data: string, rendererBacklogDropped?: true): void => {
+      ipcRenderer.send('pty:write', {
+        id,
+        data,
+        ...(rendererBacklogDropped ? { rendererBacklogDropped } : {})
+      })
     },
-    writeAccepted: (id: string, data: string): Promise<boolean> =>
-      ipcRenderer.invoke('pty:writeAccepted', { id, data }),
+    writeAccepted: (id: string, data: string, rendererBacklogDropped?: true): Promise<boolean> =>
+      ipcRenderer.invoke('pty:writeAccepted', {
+        id,
+        data,
+        ...(rendererBacklogDropped ? { rendererBacklogDropped } : {})
+      }),
     onWriteUnavailable: (callback: (payload: { id: string }) => void): (() => void) => {
       const handler = (_event: Electron.IpcRendererEvent, payload: { id: string }): void =>
         callback(payload)

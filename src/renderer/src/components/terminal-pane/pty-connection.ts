@@ -150,6 +150,7 @@ import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-str
 import {
   discardTerminalOutput,
   flushTerminalOutput,
+  prioritizeTerminalInput,
   registerTerminalBacklogRecovery,
   waitForTerminalOutputParsed,
   writeTerminalOutput
@@ -239,6 +240,7 @@ import {
   sendTerminalOscColorQueryReplies
 } from './terminal-capability-replies'
 import { registerPtyModelRestoreNeededHandler } from './pty-model-restore-channel'
+import type { PtyModelRestoreNeededEvent } from '../../../../shared/pty-model-restore-marker'
 import {
   acquireHiddenRendererPtyDeliveryClaim,
   declareRendererPtyDeliveryVisible,
@@ -1072,6 +1074,8 @@ export function connectPanePty(
   let cleanupHiddenOutputRestoreDeferredRetry = (): void => {}
   let cleanupHiddenOutputRestoreForegroundDeadline = (): void => {}
   let cleanupHiddenOutputRestoreFloodRepaint = (): void => {}
+  let cleanupInteractiveDropRestore = (): void => {}
+  let deferInteractiveDropRestore = (_restoreNeeded = false): void => {}
   let resetRendererOrderedSeqForPtyExit: (exitedPtyId: string) => void = () => {}
   let cleanupStartupDraftPasteTimers = (): void => {}
   let unregisterE2ePtyDataInjection = (): void => {}
@@ -4076,6 +4080,8 @@ export function connectPanePty(
       clearPendingTerminalInputIntent()
       return
     }
+    const rendererBacklogDropped = prioritizeTerminalInput(pane.terminal)
+    deferInteractiveDropRestore(rendererBacklogDropped)
     const intent = pendingTerminalInputIntent
     // Why: real xterm can deliver the terminal byte even when our DOM keydown
     // listener missed the press. Exact Ctrl+C/Escape bytes are still safe to
@@ -4097,8 +4103,11 @@ export function connectPanePty(
         cancelSuspendedShellCommandInference()
       }
       clearPendingTerminalInputIntent()
-      const writePromise = transport
-        .sendInputAccepted(data)
+      const writePromise = (
+        rendererBacklogDropped
+          ? transport.sendInputAccepted(data, true)
+          : transport.sendInputAccepted(data)
+      )
         .then((accepted) => {
           if (accepted) {
             // Why: rejected writes use transport recovery and must not arm a parser probe.
@@ -4125,7 +4134,10 @@ export function connectPanePty(
     }
     if (intent) {
       claimViewportForUserActivity()
-      if (transport.sendInput(data)) {
+      const inputSent = rendererBacklogDropped
+        ? transport.sendInput(data, true)
+        : transport.sendInput(data)
+      if (inputSent) {
         markAcceptedTerminalInputSent()
         observeAcceptedShellCommandInput(data)
         observeAcceptedTerminalInput(data, intent)
@@ -4136,7 +4148,10 @@ export function connectPanePty(
       return
     }
     claimViewportForUserActivity()
-    if (transport.sendInput(data)) {
+    const inputSent = rendererBacklogDropped
+      ? transport.sendInput(data, true)
+      : transport.sendInput(data)
+    if (inputSent) {
       markAcceptedTerminalInputSent()
       observeAcceptedShellCommandInput(data)
       observeAcceptedTerminalInput(data)
@@ -5845,6 +5860,8 @@ export function connectPanePty(
       pendingDeliveryStartSeq?: number
     } | null = null
     let hiddenOutputRestoreFloodRepaintTimer: ReturnType<typeof setTimeout> | null = null
+    let interactiveDropRestoreTimer: ReturnType<typeof setTimeout> | null = null
+    let interactiveDropRestorePtyId: string | null = null
     // Why: after a snapshot restore, main can still drain ACK-backlog chunks
     // whose bytes the snapshot already covers — writing them unguarded
     // duplicates visible output. Track the restored baseline seq (per PTY)
@@ -6016,7 +6033,39 @@ export function connectPanePty(
     }
 
     // Why: main reports dropped renderer-bound bytes out-of-band, routed per PTY by pty-model-restore-channel.ts.
-    function handleModelRestoreNeededMarker(): void {
+    function clearInteractiveDropRestoreTimer(): void {
+      if (interactiveDropRestoreTimer !== null) {
+        clearTimeout(interactiveDropRestoreTimer)
+        interactiveDropRestoreTimer = null
+      }
+      interactiveDropRestorePtyId = null
+    }
+    cleanupInteractiveDropRestore = clearInteractiveDropRestoreTimer
+
+    function scheduleInteractiveDropRestore(markedPtyId: string): void {
+      clearInteractiveDropRestoreTimer()
+      interactiveDropRestorePtyId = markedPtyId
+      interactiveDropRestoreTimer = setTimeout(() => {
+        interactiveDropRestoreTimer = null
+        interactiveDropRestorePtyId = null
+        if (!disposed && transport.getPtyId() === markedPtyId) {
+          markHiddenOutputRestoreNeeded()
+        }
+      }, 500)
+    }
+
+    deferInteractiveDropRestore = (restoreNeeded = false): void => {
+      if (interactiveDropRestorePtyId !== null) {
+        scheduleInteractiveDropRestore(interactiveDropRestorePtyId)
+      } else if (restoreNeeded) {
+        const ptyId = transport.getPtyId()
+        if (ptyId !== null) {
+          scheduleInteractiveDropRestore(ptyId)
+        }
+      }
+    }
+
+    function handleModelRestoreNeededMarker(event: PtyModelRestoreNeededEvent): void {
       if (disposed) {
         return
       }
@@ -6025,6 +6074,14 @@ export function connectPanePty(
       })
       // Why: dropped bytes invalidate cross-chunk carry — a partial OSC-9999 prefix spanning the gap would corrupt the next live chunk.
       transport.resetCrossChunkParserState?.()
+      if (event.discardedQueryData) {
+        salvageRendererQueriesFromDiscardedRestoreData(event.discardedQueryData)
+      }
+      if (event.reason === 'interactive-drop') {
+        scheduleInteractiveDropRestore(event.id)
+        return
+      }
+      clearInteractiveDropRestoreTimer()
       // Why gated (rc.7.perf loop): on a visible pane these markers come from our own restore starving ACKs; re-arming per marker kept the fetch loop alive all flood, so defer to one post-flood repaint.
       if (isForegroundRestoreBackpressureContext()) {
         noteHiddenOutputRestoreFloodBackpressure()
@@ -6377,6 +6434,7 @@ export function connectPanePty(
         // Why: every scheduler write claims one child so a split delivery is credited only after all children parse or discard.
         ackCredit: takeCurrentTerminalDeliveryCredit() ?? undefined,
         onBackgroundBacklogDropped: markHiddenOutputRestoreNeeded,
+        onDenseSgrBacklogDropped: salvageRendererQueriesFromDiscardedRestoreData,
         latencySensitive:
           !foreground || parseHiddenStartupOutput
             ? true
@@ -9167,6 +9225,7 @@ export function connectPanePty(
       cleanupHiddenOutputRestoreDeferredRetry()
       cleanupHiddenOutputRestoreForegroundDeadline()
       cleanupHiddenOutputRestoreFloodRepaint()
+      cleanupInteractiveDropRestore()
       unregisterBacklogRecovery?.()
       unregisterBacklogRecovery = null
       unregisterDocumentVisibilityRecovery?.()

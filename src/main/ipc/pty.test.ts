@@ -10,6 +10,7 @@ import {
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../shared/clipboard-text'
 import { redactPtyIdForDiagnostics } from '../../shared/pty-delivery-diagnostics'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultWorkspaceSession } from '../../shared/constants'
+import { stripTerminalSgr } from '../../shared/terminal-sgr-load'
 import type { TuiAgent } from '../../shared/types'
 import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
 import { AGENT_SESSION_CLAIM_DIGEST_VERSION } from '../../shared/agent-session-host-authority'
@@ -588,7 +589,10 @@ describe('registerPtyHandlers', () => {
     }
   }
 
-  function getPtyWriteListener(): (event: unknown, args: { id: string; data: string }) => void {
+  function getPtyWriteListener(): (
+    event: unknown,
+    args: { id: string; data: string; rendererBacklogDropped?: true }
+  ) => void {
     const writeCall = onMock.mock.calls.find((call: unknown[]) => call[0] === 'pty:write')
     if (!writeCall) {
       throw new Error('missing pty:write listener')
@@ -16194,6 +16198,247 @@ describe('registerPtyHandlers', () => {
     }
   })
 
+  it('strips dense pending styling without dropping an earlier echo or query', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+    let sequence = 0
+    const runtime = {
+      setPtyController: vi.fn(),
+      setRemoteTerminalSourceRangeConsumerHooks: vi.fn(),
+      preAllocateHandleForPty: vi.fn(),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyData: vi.fn((_id: string, _data: string, _at: number, rawLength: number) => {
+        sequence += rawLength
+      }),
+      getDriver: vi.fn(() => ({ kind: 'host' })),
+      getPtyOutputSequence: vi.fn(() => sequence),
+      acceptPtyDataBounded: vi.fn((_id: string, _data: string, _at: number, rawLength: number) => {
+        sequence += rawLength
+        return { sequence, completion: Promise.resolve() }
+      })
+    }
+
+    try {
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const dense = Array.from(
+        { length: 4_096 },
+        (_value, index) => `\x1b[38;5;${index % 216}mX\x1b[0m`
+      ).join('')
+      const pendingData = `${dense}__PRIOR_ECHO__\x1b[6n\x1b[38;5`
+      const currentData = `${dense}__ECHO__`
+      mockProc.emitData(pendingData)
+      mainWindow.webContents.send.mockClear()
+      getPtyWriteListener()(mainWindowIpcEvent, { id: spawnResult.id, data: 'a' })
+
+      mockProc.emitData(currentData)
+
+      expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(1, 'pty:modelRestoreNeeded', {
+        id: spawnResult.id,
+        reason: 'interactive-drop',
+        markerSeq: pendingData.length
+      })
+      expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(2, 'pty:data', {
+        id: spawnResult.id,
+        data: stripTerminalSgr(pendingData) + stripTerminalSgr(currentData),
+        seq: pendingData.length + currentData.length,
+        rawLength: pendingData.length + currentData.length,
+        transformed: true
+      })
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        pendingChars: 0,
+        pendingDroppedChars: pendingData.length - stripTerminalSgr(pendingData).length
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not bypass ordinary pending output after recent input', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const ordinary = 'plain-output'.repeat(4_096)
+      getPtyWriteListener()(mainWindowIpcEvent, { id: spawnResult.id, data: 'a' })
+      mainWindow.webContents.send.mockClear()
+
+      mockProc.emitData(ordinary)
+      mockProc.emitData('__ECHO__')
+
+      expect(mainWindow.webContents.send).not.toHaveBeenCalledWith(
+        'pty:modelRestoreNeeded',
+        expect.objectContaining({ reason: 'interactive-drop' })
+      )
+      vi.advanceTimersByTime(2)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: `${ordinary}__ECHO__`.slice(0, 16 * 1024)
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps unsaturated dense output byte-identical after input', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+    const dense = Array.from(
+      { length: 64 },
+      (_value, index) => `\x1b[38;5;${index % 216}mX\x1b[0m`
+    ).join('')
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const write = getPtyWriteListener()
+
+      write(mainWindowIpcEvent, { id: spawnResult.id, data: 'a' })
+      mainWindow.webContents.send.mockClear()
+      mockProc.emitData(dense)
+      vi.advanceTimersByTime(2)
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: dense
+      })
+      expect(mainWindow.webContents.send).not.toHaveBeenCalledWith(
+        'pty:modelRestoreNeeded',
+        expect.objectContaining({ reason: 'interactive-drop' })
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('activates dense protection when the renderer dropped its backlog', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+    const dense = Array.from(
+      { length: 64 },
+      (_value, index) => `\x1b[38;5;${index % 216}mX\x1b[0m`
+    ).join('')
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+
+      getPtyWriteListener()(mainWindowIpcEvent, {
+        id: spawnResult.id,
+        data: 'a',
+        rendererBacklogDropped: true
+      })
+      mainWindow.webContents.send.mockClear()
+      mockProc.emitData(dense)
+
+      expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(1, 'pty:modelRestoreNeeded', {
+        id: spawnResult.id,
+        reason: 'interactive-drop'
+      })
+      expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(2, 'pty:data', {
+        id: spawnResult.id,
+        data: `\x18\x1b[0m${'X'.repeat(64)}\x18\x1b[0m`,
+        rawLength: dense.length,
+        transformed: true
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('preserves source-tracked SSH projection bytes during recent input', async () => {
+    vi.useFakeTimers()
+    const connectionId = 'ssh-dense-source'
+    const id = `ssh:${connectionId}@@dense-source-pty`
+    const provider = createAgentClaimProvider({})
+    const dense = Array.from(
+      { length: 4_096 },
+      (_value, index) => `\x1b[38;5;${index % 216}mX\x1b[0m`
+    ).join('')
+    let sequence = 0
+    const runtime = {
+      setPtyController: vi.fn(),
+      setRemoteTerminalSourceRangeConsumerHooks: vi.fn(),
+      getDriver: vi.fn(() => ({ kind: 'host' })),
+      getPtyOutputSequence: vi.fn(() => sequence),
+      acceptPtyDataBounded: vi.fn((_id: string, _data: string, _at: number, rawLength: number) => {
+        sequence += rawLength
+        return { sequence, completion: Promise.resolve() }
+      })
+    }
+
+    try {
+      registerSshPtyProvider(connectionId, provider as never)
+      setPtyOwnership(id, connectionId)
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      getPtyWriteListener()(mainWindowIpcEvent, { id, data: 'a' })
+      mainWindow.webContents.send.mockClear()
+
+      await acceptSshPtyOutputData({
+        id,
+        data: dense,
+        providerGeneration: 71,
+        ptyIncarnation: 'dense-source-incarnation',
+        rawLength: dense.length,
+        transformed: false,
+        source: {
+          relayPtyId: 'relay-dense-source-pty',
+          spanId: `dense-source:0:${dense.length}`,
+          clientGeneration: 2,
+          ownerGeneration: 3,
+          deliveryToken: 'dense-source',
+          sourceStartSu: 0,
+          sourceEndSu: dense.length
+        }
+      })
+      getPtyWriteListener()(mainWindowIpcEvent, { id, data: 'b' })
+      vi.runAllTimers()
+
+      expect(mainWindow.webContents.send).not.toHaveBeenCalledWith(
+        'pty:modelRestoreNeeded',
+        expect.objectContaining({ reason: 'interactive-drop' })
+      )
+      const payloads = mainWindow.webContents.send.mock.calls
+        .filter(([channel]) => channel === 'pty:data')
+        .map(([, payload]) => payload as { data: string; rawLength?: number; transformed?: true })
+      const delivered = payloads.map(({ data }) => data).join('')
+      expect(delivered).toBe(dense)
+      expect(payloads.reduce((sum, payload) => sum + (payload.rawLength ?? 0), 0)).toBe(
+        dense.length
+      )
+      expect(payloads.every((payload) => payload.transformed !== true)).toBe(true)
+    } finally {
+      closeSshPtyOutputGeneration(71, 'test-cleanup')
+      deletePtyOwnership(id)
+      unregisterSshPtyProvider(connectionId)
+      vi.useRealTimers()
+    }
+  })
+
   posixOnlyIt('falls back to a system shell when SHELL points to a missing binary', async () => {
     const originalShell = process.env.SHELL
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -16329,7 +16574,7 @@ describe('registerPtyHandlers', () => {
     })
   })
 
-  it('rejects malformed and cross-window pty write IPC before provider writes', async () => {
+  it('accepts an explicit false backlog flag but rejects malformed and cross-window writes', async () => {
     const mockProc = createMockProc()
     spawnMock.mockReturnValue(mockProc.proc)
     registerPtyHandlers(mainWindow as never)
@@ -16346,13 +16591,23 @@ describe('registerPtyHandlers', () => {
     write(mainWindowIpcEvent, null)
     write(mainWindowIpcEvent, { id: '', data: 'x' })
     write(mainWindowIpcEvent, { id: result.id, data: 1 })
+    write(mainWindowIpcEvent, { id: result.id, data: 'x', rendererBacklogDropped: false })
+    write(mainWindowIpcEvent, { id: result.id, data: 'x', rendererBacklogDropped: 'yes' })
     write(foreignWindowIpcEvent, { id: result.id, data: 'x' })
 
     expect(writeAccepted(mainWindowIpcEvent, null)).toBe(false)
     expect(writeAccepted(mainWindowIpcEvent, { id: '', data: 'x' })).toBe(false)
     expect(writeAccepted(mainWindowIpcEvent, { id: result.id, data: 1 })).toBe(false)
+    expect(
+      writeAccepted(mainWindowIpcEvent, {
+        id: result.id,
+        data: 'x',
+        rendererBacklogDropped: false
+      })
+    ).toBe(true)
     expect(writeAccepted(foreignWindowIpcEvent, { id: result.id, data: 'x' })).toBe(false)
-    expect(mockProc.proc.write).not.toHaveBeenCalled()
+    expect(mockProc.proc.write).toHaveBeenNthCalledWith(1, 'x')
+    expect(mockProc.proc.write).toHaveBeenNthCalledWith(2, 'x')
   })
 
   it('silently drops writes to a live PTY after ownership loss until pty:listSessions rebuilds it (frozen-terminal repro)', async () => {

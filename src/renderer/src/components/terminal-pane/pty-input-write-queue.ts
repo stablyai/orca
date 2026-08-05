@@ -12,20 +12,21 @@ export const TERMINAL_INPUT_COALESCE_MAX_CODE_UNITS = 4096
 type PendingPtyInputWrite = {
   id: string
   text: string
+  rendererBacklogDropped: boolean
   tooLarge: boolean | Promise<boolean>
   chunks?: Iterator<string>
   nextChunk?: string
 }
 
 export type PtyInputWriteQueue = {
-  enqueue: (id: string, data: string) => boolean
+  enqueue: (id: string, data: string, rendererBacklogDropped?: boolean) => boolean
   waitForDrain: () => Promise<void>
   clear: () => void
 }
 
 export type PtyInputWriteQueueDeps = {
   isWritable: (id: string) => boolean
-  write: (id: string, data: string) => void
+  write: (id: string, data: string, rendererBacklogDropped?: true) => void
   yieldBetweenWrites?: () => Promise<void>
 }
 
@@ -69,6 +70,7 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
       // the PTY byte stream identical while draining the backlog in one turn.
       if (next.chunks === undefined && isCoalescibleText(next.text)) {
         let payload = next.text
+        let rendererBacklogDropped = next.rendererBacklogDropped
         pending.shift()
         while (pending.length > 0) {
           const peek = pending[0]
@@ -83,9 +85,14 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
             break
           }
           payload += peek.text
+          rendererBacklogDropped ||= peek.rendererBacklogDropped
           pending.shift()
         }
-        deps.write(next.id, payload)
+        if (rendererBacklogDropped) {
+          deps.write(next.id, payload, true)
+        } else {
+          deps.write(next.id, payload)
+        }
         if (pending.length > 0) {
           await yieldBetweenWrites()
         }
@@ -99,7 +106,11 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
         pending.shift()
         continue
       }
-      deps.write(next.id, chunk.value)
+      if (next.rendererBacklogDropped) {
+        deps.write(next.id, chunk.value, true)
+      } else {
+        deps.write(next.id, chunk.value)
+      }
       const following = next.chunks.next()
       if (following.done) {
         pending.shift()
@@ -125,13 +136,13 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
   }
 
   return {
-    enqueue(id: string, data: string): boolean {
+    enqueue(id: string, data: string, rendererBacklogDropped = false): boolean {
       try {
         const tooLarge = isTerminalInputTooLargeWithDeferredMeasurement(data)
         if (tooLarge === true) {
           return false
         }
-        pending.push({ id, text: data, tooLarge })
+        pending.push({ id, text: data, rendererBacklogDropped, tooLarge })
         scheduleDrain()
         return true
       } catch {

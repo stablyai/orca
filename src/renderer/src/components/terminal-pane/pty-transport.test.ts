@@ -1072,6 +1072,18 @@ describe('createIpcPtyTransport', () => {
     expect(sshTransport.sendInputAccepted).toBeUndefined()
   })
 
+  it('propagates renderer backlog drops through local IPC writes', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const transport = createIpcPtyTransport({})
+
+    await transport.connect({ url: '', callbacks: {} })
+    expect(transport.sendInput('a', true)).toBe(true)
+    expect(window.api.pty.write).toHaveBeenCalledWith('pty-1', 'a', true)
+
+    await expect(transport.sendInputAccepted?.('\x03', true)).resolves.toBe(true)
+    expect(window.api.pty.writeAccepted).toHaveBeenCalledWith('pty-1', '\x03', true)
+  })
+
   it('chunks large local IPC terminal input before renderer-to-main writes', async () => {
     vi.useFakeTimers()
     try {

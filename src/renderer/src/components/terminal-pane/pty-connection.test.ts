@@ -11469,7 +11469,10 @@ describe('connectPanePty', () => {
       return window.api.pty.setHiddenRendererPty as unknown as ReturnType<typeof vi.fn>
     }
 
-    async function connectHiddenPane(deps: ReturnType<typeof createDeps>): Promise<{
+    async function connectHiddenPane(
+      deps: ReturnType<typeof createDeps>,
+      terminalElement?: ReturnType<typeof createKeyboardEventTarget>['target']
+    ): Promise<{
       transport: MockTransport
       pane: ReturnType<typeof createPane>
       dataCallback: (
@@ -11496,6 +11499,9 @@ describe('connectPanePty', () => {
       )
       transportFactoryQueue.push(transport)
       const pane = createPane(1)
+      if (terminalElement) {
+        pane.terminal.element = terminalElement
+      }
       const manager = createManager(1)
       const binding = connectPanePty(pane as never, manager as never, deps as never) as {
         syncProcessTracking: () => void
@@ -11924,6 +11930,115 @@ describe('connectPanePty', () => {
       await flushAsyncTicks(20)
 
       expect(getMainBufferSnapshot).not.toHaveBeenCalled()
+    })
+
+    it('restores an interactive drop after typing quiets and answers salvaged queries', async () => {
+      enableMainAuthority()
+      const deps = createDeps({ isVisibleRef: { current: true } })
+      const terminalTarget = createKeyboardEventTarget()
+      const { pane, transport } = await connectHiddenPane(deps, terminalTarget.target)
+      const transportOptions = createdTransportOptions.at(-1) as {
+        onPtySpawn?: (ptyId: string) => void
+      }
+      transportOptions.onPtySpawn?.('pty-id')
+      const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+        typeof vi.fn
+      >
+      getMainBufferSnapshot.mockResolvedValue({
+        data: 'interactive recovery\r\n',
+        cols: 100,
+        rows: 30,
+        seq: 64
+      })
+      const { _dispatchPtyModelRestoreNeededForTest } = await import('./pty-model-restore-channel')
+
+      vi.useFakeTimers()
+      try {
+        _dispatchPtyModelRestoreNeededForTest({
+          id: 'pty-id',
+          reason: 'interactive-drop',
+          markerSeq: 48,
+          discardedQueryData: '\x1b[c'
+        })
+        expect(transport.sendInputImmediate).toHaveBeenCalledWith(DEFAULT_DA1_RESPONSE)
+        expect(getMainBufferSnapshot).not.toHaveBeenCalled()
+
+        vi.advanceTimersByTime(400)
+        terminalTarget.dispatch(keyEvent({ key: 'a' }))
+        sendTerminalInputThroughPane(pane, 'a')
+        vi.advanceTimersByTime(499)
+        await flushAsyncTicks(4)
+        expect(getMainBufferSnapshot).not.toHaveBeenCalled()
+
+        vi.advanceTimersByTime(1)
+        await flushAsyncTicks(20)
+        expect(getMainBufferSnapshot).toHaveBeenCalledTimes(1)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('cancels a deferred interactive restore when the pane is disposed', async () => {
+      enableMainAuthority()
+      const deps = createDeps({ isVisibleRef: { current: true } })
+      const { binding } = await connectHiddenPane(deps)
+      const transportOptions = createdTransportOptions.at(-1) as {
+        onPtySpawn?: (ptyId: string) => void
+      }
+      transportOptions.onPtySpawn?.('pty-id')
+      const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+        typeof vi.fn
+      >
+      const { _dispatchPtyModelRestoreNeededForTest } = await import('./pty-model-restore-channel')
+
+      vi.useFakeTimers()
+      try {
+        _dispatchPtyModelRestoreNeededForTest({ id: 'pty-id', reason: 'interactive-drop' })
+        binding.dispose()
+        vi.advanceTimersByTime(500)
+        await flushAsyncTicks(4)
+        expect(getMainBufferSnapshot).not.toHaveBeenCalled()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('defers recovery when a real keydown drops the dense renderer backlog', async () => {
+      enableMainAuthority()
+      const deps = createDeps({ isVisibleRef: { current: true } })
+      const terminalTarget = createKeyboardEventTarget()
+      const { pane, transport, dataCallback } = await connectHiddenPane(deps, terminalTarget.target)
+      const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+        typeof vi.fn
+      >
+      getMainBufferSnapshot.mockResolvedValue({
+        data: 'renderer backlog recovery\r\n',
+        cols: 100,
+        rows: 30,
+        seq: 64
+      })
+      const dense = `\x1b[c${Array.from(
+        { length: 4_096 },
+        (_value, index) => `\x1b[38;5;${index % 216}mX\x1b[0m`
+      ).join('')}`
+
+      vi.useFakeTimers()
+      try {
+        dataCallback(dense)
+        terminalTarget.dispatch(keyEvent({ key: 'a' }))
+        sendTerminalInputThroughPane(pane, 'a')
+        expect(transport.sendInput).toHaveBeenCalledWith('a', true)
+        expect(transport.sendInputImmediate).toHaveBeenCalledWith(DEFAULT_DA1_RESPONSE)
+        vi.advanceTimersByTime(499)
+        await flushAsyncTicks(4)
+        expect(getMainBufferSnapshot).not.toHaveBeenCalled()
+
+        vi.advanceTimersByTime(1)
+        await flushAsyncTicks(20)
+        expect(getMainBufferSnapshot).toHaveBeenCalledTimes(1)
+      } finally {
+        vi.useRealTimers()
+      }
     })
 
     it('gates marker re-arms during an in-flight foreground restore and repaints once after', async () => {

@@ -547,7 +547,13 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   let suppressAttentionEvents = false
   const inputWriteQueue = createPtyInputWriteQueue({
     isWritable: (id) => connected && ptyId === id,
-    write: (id, data) => window.api.pty.write(id, data)
+    write: (id, data, rendererBacklogDropped) => {
+      if (rendererBacklogDropped) {
+        window.api.pty.write(id, data, true)
+      } else {
+        window.api.pty.write(id, data)
+      }
+    }
   })
   const outputProcessor = createPtyOutputProcessor({
     onTitleChange,
@@ -666,7 +672,11 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     return new Promise((resolve) => setTimeout(resolve, 0))
   }
 
-  async function writeAcceptedPtyInput(id: string, data: string): Promise<boolean> {
+  async function writeAcceptedPtyInput(
+    id: string,
+    data: string,
+    rendererBacklogDropped = false
+  ): Promise<boolean> {
     try {
       const tooLarge = isTerminalInputTooLargeWithDeferredMeasurement(data)
       if (typeof tooLarge === 'boolean' ? tooLarge : await tooLarge) {
@@ -678,7 +688,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         if (!connected || ptyId !== id) {
           return false
         }
-        const accepted = await window.api.pty.writeAccepted(id, chunk.value)
+        const accepted = rendererBacklogDropped
+          ? await window.api.pty.writeAccepted(id, chunk.value, true)
+          : await window.api.pty.writeAccepted(id, chunk.value)
         if (!accepted) {
           return false
         }
@@ -1004,11 +1016,11 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       storedCallbacks = {}
     },
 
-    sendInput(data: string): boolean {
+    sendInput(data: string, rendererBacklogDropped = false): boolean {
       if (!connected || !ptyId) {
         return false
       }
-      return inputWriteQueue.enqueue(ptyId, data)
+      return inputWriteQueue.enqueue(ptyId, data, rendererBacklogDropped)
     },
 
     // Why: kept distinct from sendInput so the remote transport can override with flush-then-send (#7329); local queue drains same-turn.
@@ -1022,7 +1034,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     ...(connectionId
       ? {}
       : {
-          async sendInputAccepted(data: string): Promise<boolean> {
+          async sendInputAccepted(data: string, rendererBacklogDropped = false): Promise<boolean> {
             if (!connected || !ptyId) {
               return false
             }
@@ -1031,7 +1043,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
             if (!connected || ptyId !== id) {
               return false
             }
-            return writeAcceptedPtyInput(id, data)
+            return writeAcceptedPtyInput(id, data, rendererBacklogDropped)
           }
         }),
 

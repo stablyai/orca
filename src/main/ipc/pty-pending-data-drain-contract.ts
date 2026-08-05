@@ -7,6 +7,7 @@ export type PendingPtyData = {
   transformed?: true
   containsBackgroundOutput?: boolean
   droppedOutput?: true
+  denseSgrDrop?: true
   droppedMode2031Data?: string
   droppedMode2031ScanState?: Mode2031ReplyScanState
   projectionAdmissionIds?: readonly string[]

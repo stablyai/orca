@@ -1536,8 +1536,8 @@ export type PreloadApi = {
       startupCwdFallback?: { kind: 'worktree'; cwd: string }
       agentResumeUnavailable?: true
     }>
-    write: (id: string, data: string) => void
-    writeAccepted: (id: string, data: string) => Promise<boolean>
+    write: (id: string, data: string, rendererBacklogDropped?: true) => void
+    writeAccepted: (id: string, data: string, rendererBacklogDropped?: true) => Promise<boolean>
     onWriteUnavailable?: (callback: (payload: { id: string }) => void) => () => void
     resize: (id: string, cols: number, rows: number) => void
     claimViewport: (id: string, cols: number, rows: number) => void

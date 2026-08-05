@@ -10,7 +10,7 @@ import {
 
 const WHEEL_UP_REPORT = '\x1b[<64;60;20M'
 
-type WriteRecord = { id: string; data: string }
+type WriteRecord = { id: string; data: string; rendererBacklogDropped?: true }
 
 function createRecordingQueue(options: { writable?: () => boolean } = {}): {
   writes: WriteRecord[]
@@ -19,7 +19,8 @@ function createRecordingQueue(options: { writable?: () => boolean } = {}): {
   const writes: WriteRecord[] = []
   const queue = createPtyInputWriteQueue({
     isWritable: () => options.writable?.() ?? true,
-    write: (id, data) => writes.push({ id, data })
+    write: (id, data, rendererBacklogDropped) =>
+      writes.push({ id, data, ...(rendererBacklogDropped ? { rendererBacklogDropped } : {}) })
   })
   return { writes, queue }
 }
@@ -53,6 +54,20 @@ describe('pty input write queue', () => {
     await queue.waitForDrain()
 
     expect(writes.map((write) => write.data).join('')).toBe(inputs.join(''))
+  })
+
+  it('preserves a renderer backlog-drop signal when coalescing input', async () => {
+    const { writes, queue } = createRecordingQueue()
+
+    queue.enqueue('pty-1', 'a')
+    queue.enqueue('pty-1', 'b')
+    queue.enqueue('pty-1', 'c', true)
+    await queue.waitForDrain()
+
+    expect(writes).toEqual([
+      { id: 'pty-1', data: 'a' },
+      { id: 'pty-1', data: 'bc', rendererBacklogDropped: true }
+    ])
   })
 
   it('does not coalesce across different PTY ids', async () => {
@@ -106,6 +121,17 @@ describe('pty input write queue', () => {
     for (const write of writes) {
       expect(write.data.length).toBeLessThanOrEqual(TERMINAL_INPUT_CHUNK_MAX_BYTES)
     }
+  })
+
+  it('preserves a renderer backlog-drop signal across oversized input chunks', async () => {
+    const { writes, queue } = createRecordingQueue()
+    const large = 'y'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES * 2 + 100)
+
+    queue.enqueue('pty-1', large, true)
+    await queue.waitForDrain()
+
+    expect(writes.map((write) => write.data).join('')).toBe(large)
+    expect(writes.every((write) => write.rendererBacklogDropped === true)).toBe(true)
   })
 
   it('rejects input over the terminal input byte limit without writing', async () => {

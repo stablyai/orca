@@ -8,7 +8,12 @@
  * marker is delivery machinery, not PTY data — remote-runtime transports
  * never see it.
  */
-export type PtyModelRestoreReason = 'hidden-drop' | 'unhide' | 'pending-cap' | 'delivery-heal'
+export type PtyModelRestoreReason =
+  | 'hidden-drop'
+  | 'unhide'
+  | 'pending-cap'
+  | 'delivery-heal'
+  | 'interactive-drop'
 
 export type PtyModelRestoreNeededEvent = {
   id: string
@@ -16,4 +21,6 @@ export type PtyModelRestoreNeededEvent = {
   /** Main's PTY output sequence at emit time — everything at or before this
    *  point is only recoverable from the model snapshot. */
   markerSeq?: number
+  /** Queries salvaged from discarded display output must still receive replies. */
+  discardedQueryData?: string
 }

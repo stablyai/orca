@@ -19,6 +19,7 @@ import type { GlobalSettings, TuiAgent } from '../../shared/types'
 import { toSshExecutionHostId } from '../../shared/execution-host'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { terminalOutputBacklogCapChars } from '../../shared/terminal-scrollback-policy'
+import { isDenseTerminalSgr, stripTerminalSgr } from '../../shared/terminal-sgr-load'
 import type {
   PtyDeliveryWriteOff,
   PtyRendererDeliveryHealthReply,
@@ -259,6 +260,8 @@ const ptySizes = new Map<string, { cols: number; rows: number }>()
 // Why: the "recent user input" signal is PTY-scoped and must be cleared by every teardown path, incl. SSH/daemon shutdowns that skip the local exit listener.
 const lastInputAtByPty = new Map<string, number>()
 const interactiveOutputCharsByPty = new Map<string, number>()
+const interactiveDenseProtectionPtys = new Set<string>()
+const interactiveDenseRestoreMarkedPtys = new Set<string>()
 const activeRendererPtys = new Set<string>()
 const visibleRendererPtys = new Set<string>()
 const rendererVisibilityKnownPtys = new Set<string>()
@@ -1892,6 +1895,8 @@ export function clearProviderPtyState(
   ptyIncarnationById.delete(id)
   lastInputAtByPty.delete(id)
   interactiveOutputCharsByPty.delete(id)
+  interactiveDenseProtectionPtys.delete(id)
+  interactiveDenseRestoreMarkedPtys.delete(id)
   const activeChanged = activeRendererPtys.delete(id)
   visibleRendererPtys.delete(id)
   rendererVisibilityKnownPtys.delete(id)
@@ -2436,6 +2441,8 @@ export function registerPtyHandlers(
   const INTERACTIVE_OUTPUT_MAX_CHARS = 1024
   const INTERACTIVE_REDRAW_MAX_CHARS = PTY_BATCH_FLUSH_CHUNK_CHARS
   const INTERACTIVE_OUTPUT_BUDGET_CHARS = 32 * 1024
+  const INTERACTIVE_DENSE_BACKLOG_DROP_CHARS = 32 * 1024
+  const INTERACTIVE_DROP_RESTORE_QUIET_MS = 500
   let peakPendingChars = 0
   let peakMaxPendingCharsByPty = 0
   let peakRendererInFlightChars = 0
@@ -2720,6 +2727,8 @@ export function registerPtyHandlers(
     clearPendingPtyData()
     pendingOverflowMarkedPtys.clear()
     rendererDeliveryRestoreNeededPtys.clear()
+    interactiveDenseProtectionPtys.clear()
+    interactiveDenseRestoreMarkedPtys.clear()
     // Why hold sends: the reloading page's pty:data listener is gone until it re-registers/handshakes, so bytes would drop into a listener-less page and re-pin the gate.
     rendererPtyDispatcherReady = false
     // Why: arm the self-heal watchdog so a never-arriving handshake can't hold the gate forever; the real handshake cancels it.
@@ -2736,14 +2745,33 @@ export function registerPtyHandlers(
     return data.length <= INTERACTIVE_REDRAW_MAX_CHARS && data.includes('\x1b[')
   }
 
-  function shouldSendInteractiveOutputNow(id: string, data: string, now: number): boolean {
+  function hasRecentPtyInput(id: string, now: number): boolean {
     const lastInputAt = lastInputAtByPty.get(id)
-    if (lastInputAt === undefined || now - lastInputAt > INTERACTIVE_OUTPUT_WINDOW_MS) {
+    return lastInputAt !== undefined && now - lastInputAt <= INTERACTIVE_OUTPUT_WINDOW_MS
+  }
+
+  function notePtyInput(id: string, now: number): void {
+    const lastInputAt = lastInputAtByPty.get(id)
+    if (lastInputAt === undefined || now - lastInputAt > INTERACTIVE_DROP_RESTORE_QUIET_MS) {
+      interactiveDenseProtectionPtys.delete(id)
+      interactiveDenseRestoreMarkedPtys.delete(id)
+    }
+    lastInputAtByPty.set(id, now)
+    interactiveOutputCharsByPty.set(id, 0)
+    if (getRendererInFlightCharsForPty(id) >= PTY_RENDERER_IN_FLIGHT_HIGH_WATER_CHARS) {
+      interactiveDenseProtectionPtys.add(id)
+    }
+  }
+
+  function shouldSendInteractiveOutputNow(id: string, data: string, now: number): boolean {
+    if (!hasRecentPtyInput(id, now)) {
       interactiveOutputCharsByPty.delete(id)
       return false
     }
     if (!isLikelyInteractiveRedraw(data)) {
-      interactiveOutputCharsByPty.set(id, INTERACTIVE_OUTPUT_BUDGET_CHARS)
+      if (!isDenseTerminalSgr(data)) {
+        interactiveOutputCharsByPty.set(id, INTERACTIVE_OUTPUT_BUDGET_CHARS)
+      }
       return false
     }
     const usedChars = interactiveOutputCharsByPty.get(id) ?? 0
@@ -3027,7 +3055,8 @@ export function registerPtyHandlers(
   function sendModelRestoreNeededMarker(
     id: string,
     reason: PtyModelRestoreReason,
-    markerSeq: number | undefined
+    markerSeq: number | undefined,
+    discardedQueryData?: string
   ): void {
     if (mainWindow.isDestroyed()) {
       return
@@ -3035,7 +3064,8 @@ export function registerPtyHandlers(
     mainWindow.webContents.send('pty:modelRestoreNeeded', {
       id,
       reason,
-      ...(typeof markerSeq === 'number' ? { markerSeq } : {})
+      ...(typeof markerSeq === 'number' ? { markerSeq } : {}),
+      ...(discardedQueryData ? { discardedQueryData } : {})
     })
   }
 
@@ -3051,6 +3081,66 @@ export function registerPtyHandlers(
     }
     const extracted = extractHiddenStartupRendererQueryData(data, '')
     return extracted.statelessQueryData + extracted.statefulQueryData + extracted.oscColorQueryData
+  }
+
+  function getDiscardedPendingQueryData(pending: PendingPtyData): string {
+    if (pending.droppedOutput === true) {
+      return (pending.data + getDroppedMode2031RendererData(pending)).slice(
+        0,
+        DROPPED_QUERY_SALVAGE_MAX_CHARS
+      )
+    }
+    const mode2031 = scanDroppedMode2031Data(pending.data, INITIAL_MODE_2031_REPLY_SCAN_STATE)
+    return (extractDroppedPtyQueryBytes(pending.data) + mode2031.data).slice(
+      0,
+      DROPPED_QUERY_SALVAGE_MAX_CHARS
+    )
+  }
+
+  function protectDensePendingForInteractiveOutput(
+    id: string,
+    pending: PendingPtyData | undefined,
+    markerSeq: number | undefined
+  ): boolean {
+    if (
+      !pending ||
+      (pending.droppedOutput === true
+        ? pending.denseSgrDrop !== true
+        : pending.data.length <= INTERACTIVE_DENSE_BACKLOG_DROP_CHARS ||
+          pending.projectionAdmissionIds !== undefined ||
+          !isDenseTerminalSgr(pending.data))
+    ) {
+      return false
+    }
+    let discardedQueryData: string | undefined
+    if (pending.droppedOutput === true) {
+      discardedQueryData = getDiscardedPendingQueryData(pending)
+      deletePendingPtyData(id)
+      pendingOverflowMarkedPtys.delete(id)
+      clearFlushTimerIfIdle()
+    } else {
+      const protectedData = stripTerminalSgr(pending.data)
+      pendingDroppedChars += Math.max(0, pending.data.length - protectedData.length)
+      setPendingPtyData(id, {
+        ...pending,
+        data: protectedData,
+        rawLength: pending.rawLength ?? pending.data.length,
+        transformed: true
+      })
+    }
+    updateProducerFlowControl(id)
+    sendModelRestoreNeededMarker(id, 'interactive-drop', markerSeq, discardedQueryData)
+    interactiveDenseProtectionPtys.add(id)
+    interactiveDenseRestoreMarkedPtys.add(id)
+    return true
+  }
+
+  function prioritizePendingPtyDataForInput(id: string): void {
+    protectDensePendingForInteractiveOutput(
+      id,
+      pendingData.get(id),
+      runtime?.getPtyOutputSequence?.(id)
+    )
   }
 
   function scanDroppedMode2031Data(
@@ -3099,11 +3189,16 @@ export function registerPtyHandlers(
     if (pending.projectionAdmissionIds) {
       sshOutputIntake?.transferProjections(pending.projectionAdmissionIds, 'pending-cap')
     }
+    const denseSgrDrop =
+      activeRendererPtys.has(id) &&
+      hasRecentPtyInput(id, performance.now()) &&
+      isDenseTerminalSgr(pending.data)
     const mode2031 = scanDroppedMode2031Data(pending.data, INITIAL_MODE_2031_REPLY_SCAN_STATE)
     // Why no trimmed content tail: a mid-stream gap would corrupt the pane; the droppedOutput sentinel repaints from the snapshot and realigns by sequence (only query bytes ride along).
     return {
       data: extractDroppedPtyQueryBytes(pending.data).slice(0, DROPPED_QUERY_SALVAGE_MAX_CHARS),
       droppedOutput: true,
+      ...(denseSgrDrop ? { denseSgrDrop: true } : {}),
       droppedMode2031Data: mode2031.data,
       droppedMode2031ScanState: mode2031.state
     }
@@ -3501,6 +3596,8 @@ export function registerPtyHandlers(
     rendererDeliveryRestoreNeededPtys.delete(payload.id)
     lastInputAtByPty.delete(payload.id)
     interactiveOutputCharsByPty.delete(payload.id)
+    interactiveDenseProtectionPtys.delete(payload.id)
+    interactiveDenseRestoreMarkedPtys.delete(payload.id)
     const releasedRendererCredit = getRendererInFlightCharsForPty(payload.id)
     rendererInFlightTotalChars = Math.max(0, rendererInFlightTotalChars - releasedRendererCredit)
     // Why: the renderer also drops its cumulative total on pty:exit, so a reused id restarts aligned at zero on both sides.
@@ -3550,7 +3647,18 @@ export function registerPtyHandlers(
     projection?: LegacySshProjectionSemantics
   ): void {
     const rawLength = payload.sequenceChars ?? payload.data.length
-    const preservesSeq = !payload.transformed && rawLength === payload.data.length
+    const now = performance.now()
+    const recentInput = hasRecentPtyInput(payload.id, now)
+    // Source-tracked SSH spans retain their reserved display/accounting mapping.
+    const denseSgrOutput =
+      recentInput &&
+      interactiveDenseProtectionPtys.has(payload.id) &&
+      !projection?.desktopSpan &&
+      isDenseTerminalSgr(payload.data)
+    const collapseDenseStyling = denseSgrOutput
+    const rendererData = collapseDenseStyling ? stripTerminalSgr(payload.data) : payload.data
+    const rendererTransformed = payload.transformed === true || collapseDenseStyling
+    const preservesSeq = !rendererTransformed && rawLength === rendererData.length
     const startSeq = typeof outputSeq === 'number' ? Math.max(0, outputSeq - rawLength) : undefined
     const projectionId = projection?.identity.projectionSemanticsId
     if (mainWindow.isDestroyed()) {
@@ -3600,35 +3708,44 @@ export function registerPtyHandlers(
       markHiddenRendererResizeOutputDelivered(payload.id)
     }
     const overflowMarkedBeforeAppend = pendingOverflowMarkedPtys.has(payload.id)
+    const existingPending = pendingData.get(payload.id)
+    if (
+      recentInput &&
+      isLikelyInteractiveRedraw(rendererData) &&
+      existingPending?.denseSgrDrop !== true
+    ) {
+      protectDensePendingForInteractiveOutput(payload.id, existingPending, outputSeq)
+    }
     if (projection?.desktopSpan) {
       sourceCreditPendingPtys.add(payload.id)
     }
     const pending = appendPendingPtyData(
       payload.id,
       pendingData.get(payload.id),
-      payload.data,
+      rendererData,
       startSeq,
       preservesSeq,
       containsBackgroundOutput,
       rawLength,
-      payload.transformed === true,
+      rendererTransformed,
       projectionId
     )
     const shouldEmitPendingCapRestoreMarker =
       pending.droppedOutput === true &&
       !overflowMarkedBeforeAppend &&
       pendingOverflowMarkedPtys.has(payload.id)
+    const pendingCapRestoreReason = pending.denseSgrDrop ? 'interactive-drop' : 'pending-cap'
     const nextData = pending.data + getDroppedMode2031RendererData(pending)
-    const isInteractiveOutput = shouldSendInteractiveOutputNow(
-      payload.id,
-      nextData,
-      performance.now()
-    )
+    const isInteractiveOutput = shouldSendInteractiveOutputNow(payload.id, nextData, now)
+    if (collapseDenseStyling && !interactiveDenseRestoreMarkedPtys.has(payload.id)) {
+      interactiveDenseRestoreMarkedPtys.add(payload.id)
+      sendModelRestoreNeededMarker(payload.id, 'interactive-drop', outputSeq)
+    }
     if (isInteractiveOutput && rendererPtyDispatcherReady) {
       if (!canSendPtyDataToRenderer(payload.id, { interactive: true })) {
         setPendingPtyData(payload.id, pending)
         if (shouldEmitPendingCapRestoreMarker) {
-          sendModelRestoreNeededMarker(payload.id, 'pending-cap', outputSeq)
+          sendModelRestoreNeededMarker(payload.id, pendingCapRestoreReason, outputSeq)
         }
         updateProducerFlowControl(payload.id)
         requestDeliveryResyncForGatedPty()
@@ -3637,27 +3754,26 @@ export function registerPtyHandlers(
       deletePendingPtyData(payload.id)
       clearFlushTimerIfIdle()
       if (shouldEmitPendingCapRestoreMarker) {
-        sendModelRestoreNeededMarker(payload.id, 'pending-cap', outputSeq)
+        sendModelRestoreNeededMarker(payload.id, pendingCapRestoreReason, outputSeq)
       }
       pendingOverflowMarkedPtys.delete(payload.id)
       try {
-        sendPtyDataToRenderer(
-          payload.id,
-          {
-            id: payload.id,
-            data: nextData,
-            ...(typeof pending.startSeq === 'number'
-              ? {
-                  seq: pending.startSeq + (pending.rawLength ?? nextData.length),
-                  rawLength: pending.rawLength ?? nextData.length
-                }
-              : {}),
-            ...(pending.transformed ? { transformed: true } : {}),
-            ...(pending.containsBackgroundOutput === true ? { background: true } : {}),
-            ...(pending.droppedOutput === true ? { droppedOutput: true } : {})
-          },
-          pending.projectionAdmissionIds
-        )
+        const immediatePayload =
+          pending.droppedOutput === true
+            ? {
+                id: payload.id,
+                data: nextData,
+                droppedOutput: true as const
+              }
+            : makePtyDataPayload(
+                payload.id,
+                nextData,
+                pending.startSeq,
+                pending.containsBackgroundOutput,
+                pending.rawLength,
+                pending.transformed
+              )
+        sendPtyDataToRenderer(payload.id, immediatePayload, pending.projectionAdmissionIds)
       } finally {
         updateProducerFlowControl(payload.id)
       }
@@ -3665,7 +3781,7 @@ export function registerPtyHandlers(
     }
     setPendingPtyData(payload.id, pending)
     if (shouldEmitPendingCapRestoreMarker) {
-      sendModelRestoreNeededMarker(payload.id, 'pending-cap', outputSeq)
+      sendModelRestoreNeededMarker(payload.id, pendingCapRestoreReason, outputSeq)
     }
     updateProducerFlowControl(payload.id)
     if (
@@ -6616,7 +6732,7 @@ export function registerPtyHandlers(
     }
   }
 
-  type PtyWritePayload = { id: string; data: string }
+  type PtyWritePayload = { id: string; data: string; rendererBacklogDropped?: boolean }
   type PtyViewportClaimPayload = { id: string; cols: number; rows: number }
 
   const isPtyWritePayload = (value: unknown): value is PtyWritePayload =>
@@ -6624,7 +6740,9 @@ export function registerPtyHandlers(
     value !== null &&
     typeof (value as { id?: unknown }).id === 'string' &&
     (value as { id: string }).id.length > 0 &&
-    typeof (value as { data?: unknown }).data === 'string'
+    typeof (value as { data?: unknown }).data === 'string' &&
+    ((value as { rendererBacklogDropped?: unknown }).rendererBacklogDropped === undefined ||
+      typeof (value as { rendererBacklogDropped?: unknown }).rendererBacklogDropped === 'boolean')
 
   const isPtyViewportClaimPayload = (value: unknown): value is PtyViewportClaimPayload =>
     typeof value === 'object' &&
@@ -6646,6 +6764,14 @@ export function registerPtyHandlers(
     !mainWindow.isDestroyed() &&
     !(typeof mainWebContents.isDestroyed === 'function' && mainWebContents.isDestroyed())
 
+  const notePtyInputForWrite = (args: PtyWritePayload): void => {
+    notePtyInput(args.id, performance.now())
+    if (args.rendererBacklogDropped) {
+      interactiveDenseProtectionPtys.add(args.id)
+    }
+    prioritizePendingPtyDataForInput(args.id)
+  }
+
   const writePtyInput = (args: PtyWritePayload): boolean | Promise<boolean> => {
     // Why: mobile-presence-lock defense-in-depth — the renderer's onData guard can let one keystroke slip during the state-flip lag, so catch it server-side. See docs/mobile-presence-lock.md.
     if (runtime?.getDriver(args.id).kind === 'mobile') {
@@ -6656,9 +6782,7 @@ export function registerPtyHandlers(
       return false
     }
     try {
-      const now = performance.now()
-      lastInputAtByPty.set(args.id, now)
-      interactiveOutputCharsByPty.set(args.id, 0)
+      notePtyInputForWrite(args)
       if (visibleRendererPtys.has(args.id)) {
         clearHiddenRendererResizeOutput(args.id)
       }
@@ -6681,9 +6805,7 @@ export function registerPtyHandlers(
       return false
     }
     try {
-      const now = performance.now()
-      lastInputAtByPty.set(args.id, now)
-      interactiveOutputCharsByPty.set(args.id, 0)
+      notePtyInputForWrite(args)
       if (visibleRendererPtys.has(args.id)) {
         clearHiddenRendererResizeOutput(args.id)
       }
