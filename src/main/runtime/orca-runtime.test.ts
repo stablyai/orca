@@ -43584,6 +43584,65 @@ describe('OrcaRuntimeService', () => {
     })
   }
 
+  it('waits for an in-progress terminal spawn before exact closeout proceeds', async () => {
+    const instanceId = '1f30c982-f195-4b82-b27c-d10b048220f8'
+    const runtimeStore = {
+      ...store,
+      getAllWorktreeMeta: () => ({
+        [TEST_WORKTREE_ID]: { ...store.getAllWorktreeMeta()[TEST_WORKTREE_ID], instanceId }
+      }),
+      getWorktreeMeta: (id: string) =>
+        id === TEST_WORKTREE_ID
+          ? { ...store.getAllWorktreeMeta()[TEST_WORKTREE_ID], instanceId }
+          : undefined
+    }
+    const runtime = createWorktreeRemovalRuntime(runtimeStore)
+    const releaseSpawn = await runtime.acquireWorktreeTerminalSpawn(TEST_WORKTREE_ID)
+    const removal = runtime.removeManagedWorktree(
+      TEST_WORKTREE_ID,
+      false,
+      false,
+      false,
+      instanceId
+    )
+    let settled = false
+    void removal.finally(() => {
+      settled = true
+    })
+    await Promise.resolve()
+    expect(settled).toBe(false)
+
+    releaseSpawn()
+    await expect(removal).resolves.toBeDefined()
+  })
+
+  it('rejects exact closeout when the persisted worktree instance changed', async () => {
+    const instanceId = '1f30c982-f195-4b82-b27c-d10b048220f8'
+    const runtimeStore = {
+      ...store,
+      getAllWorktreeMeta: () => ({
+        [TEST_WORKTREE_ID]: { ...store.getAllWorktreeMeta()[TEST_WORKTREE_ID], instanceId }
+      }),
+      getWorktreeMeta: (id: string) =>
+        id === TEST_WORKTREE_ID
+          ? { ...store.getAllWorktreeMeta()[TEST_WORKTREE_ID], instanceId }
+          : undefined
+    }
+    const runtime = createWorktreeRemovalRuntime(runtimeStore)
+
+    await expect(
+      runtime.removeManagedWorktree(
+        TEST_WORKTREE_ID,
+        false,
+        false,
+        false,
+        '47db95d0-b2bc-4322-aa38-55c3d69f69c6'
+      )
+    ).rejects.toThrow('worktree_identity_changed')
+
+    expect(removeWorktree).not.toHaveBeenCalled()
+  })
+
   it('skips archive hooks for CLI worktree removal by default', async () => {
     const runtime = createWorktreeRemovalRuntime()
     vi.mocked(getEffectiveHooks).mockReturnValue({

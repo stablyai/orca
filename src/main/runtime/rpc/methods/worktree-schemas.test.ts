@@ -1,7 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { WorktreeActivate, WorktreeCreate, WorktreeSet } from './worktree-schemas'
+import { WorktreeActivate, WorktreeCreate, WorktreeRemove, WorktreeSet } from './worktree-schemas'
 
 describe('worktree RPC schemas', () => {
+  it('accepts only UUID worktree instance fences', () => {
+    const id = '1f30c982-f195-4b82-b27c-d10b048220f8'
+    expect(
+      WorktreeRemove.parse({ worktree: 'id:wt-1', expectedWorktreeInstanceId: id })
+        .expectedWorktreeInstanceId
+    ).toBe(id)
+    expect(
+      WorktreeRemove.safeParse({ worktree: 'id:wt-1', expectedWorktreeInstanceId: 'wt-1' })
+        .success
+    ).toBe(false)
+  })
+
   it('validates additive navigation intent', () => {
     expect(WorktreeActivate.parse({ worktree: 'id:wt-1', navigation: 'clients' }).navigation).toBe(
       'clients'

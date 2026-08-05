@@ -2025,6 +2025,7 @@ type RuntimeWorktreeRemovalTarget = {
 
 type RuntimeWorktreeRemovalInFlight = {
   optionsKey: string
+  expectedWorktreeInstanceId?: string
   promise: Promise<RemoveWorktreeResult & { warning?: string }>
 }
 
@@ -3239,6 +3240,8 @@ export class OrcaRuntimeService {
   private canonicalFetchKeyCache = new Map<string, string>()
   private optimisticReconcileTokens = new Map<string, string>()
   private removeManagedWorktreeInFlight = new Map<string, RuntimeWorktreeRemovalInFlight>()
+  private exactWorktreeRemovalPending = new Set<string>()
+  private exactWorktreeRemovalInstanceById = new Map<string, string>()
   private preservedBranchCleanupByWorktreeId = new Map<string, PreservedBranchCleanupTarget>()
   private readonly getLocalProviderFn: (() => IPtyProvider) | null
   private readonly getSshProviderFn: ((connectionId: string) => IPtyProvider | undefined) | null
@@ -23760,21 +23763,69 @@ export class OrcaRuntimeService {
     runHooks = false,
     // Why (#11960): only an explicit Force Delete waives PTY-stop proof; `force`
     // alone is already set by the ordinary delete confirmation.
-    allowUnverifiedPtyStop = false
+    allowUnverifiedPtyStop = false,
+    expectedWorktreeInstanceId?: string
   ): Promise<RemoveWorktreeResult & { warning?: string }> {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
     const store = this.store
     const removalTarget = await this.resolveWorktreeRemovalTarget(worktreeSelector)
-    const optionsKey = getRuntimeWorktreeRemovalOptionsKey(force, runHooks, allowUnverifiedPtyStop)
-    const inFlightRemoval = this.removeManagedWorktreeInFlight.get(removalTarget.id)
-    if (inFlightRemoval) {
-      if (inFlightRemoval.optionsKey === optionsKey) {
-        return inFlightRemoval.promise
+    if (expectedWorktreeInstanceId && this.exactWorktreeRemovalPending.has(removalTarget.id)) {
+      if (
+        this.exactWorktreeRemovalInstanceById.get(removalTarget.id) === expectedWorktreeInstanceId
+      ) {
+        const pending = this.removeManagedWorktreeInFlight.get(removalTarget.id)
+        if (pending?.expectedWorktreeInstanceId === expectedWorktreeInstanceId) {
+          return pending.promise
+        }
       }
       throw new Error(`Worktree deletion already in progress: ${removalTarget.id}`)
     }
+    if (expectedWorktreeInstanceId) {
+      this.exactWorktreeRemovalPending.add(removalTarget.id)
+      this.exactWorktreeRemovalInstanceById.set(removalTarget.id, expectedWorktreeInstanceId)
+    }
+    let releaseExactTerminalMutation: (() => void) | null = null
+    try {
+      releaseExactTerminalMutation = expectedWorktreeInstanceId
+        ? await this.acquireWorktreeTerminalMutation(removalTarget.id)
+        : null
+    } catch (error) {
+      if (expectedWorktreeInstanceId) {
+        this.exactWorktreeRemovalPending.delete(removalTarget.id)
+        this.exactWorktreeRemovalInstanceById.delete(removalTarget.id)
+      }
+      throw error
+    }
+    let exactFenceTransferred = false
+    try {
+      const optionsKey = getRuntimeWorktreeRemovalOptionsKey(
+        force,
+        runHooks,
+        allowUnverifiedPtyStop
+      )
+      const inFlightRemoval = this.removeManagedWorktreeInFlight.get(removalTarget.id)
+      if (inFlightRemoval) {
+        if (
+          inFlightRemoval.optionsKey === optionsKey &&
+          inFlightRemoval.expectedWorktreeInstanceId === expectedWorktreeInstanceId
+        ) {
+          return inFlightRemoval.promise
+        }
+        throw new Error(`Worktree deletion already in progress: ${removalTarget.id}`)
+      }
+      if (expectedWorktreeInstanceId !== undefined) {
+        const liveInstanceId = store.getWorktreeMeta(removalTarget.id)?.instanceId
+        if (liveInstanceId !== expectedWorktreeInstanceId) {
+          throw new Error('worktree_identity_changed')
+        }
+        // This lock is also acquired by pty:spawn before provider.spawn. It
+        // excludes already queued and future PTY creation until deletion ends.
+        if (this.getLivePtyIdsForWorktree(removalTarget.id).size > 0) {
+          throw new Error('worktree_became_active')
+        }
+      }
 
     // Why: runtime callers can race the same workspace through CLI/mobile
     // retries. Share one destructive Git/filesystem operation per worktree ID.
@@ -24360,7 +24411,12 @@ export class OrcaRuntimeService {
         }
       })
     })()
-    this.removeManagedWorktreeInFlight.set(removalTarget.id, { optionsKey, promise: removal })
+    this.removeManagedWorktreeInFlight.set(removalTarget.id, {
+      optionsKey,
+      ...(expectedWorktreeInstanceId ? { expectedWorktreeInstanceId } : {}),
+      promise: removal
+    })
+    exactFenceTransferred = true
     try {
       const result = await removal
       this.emitWorktreeLifecycle({
@@ -24372,6 +24428,20 @@ export class OrcaRuntimeService {
     } finally {
       if (this.removeManagedWorktreeInFlight.get(removalTarget.id)?.promise === removal) {
         this.removeManagedWorktreeInFlight.delete(removalTarget.id)
+      }
+      releaseExactTerminalMutation?.()
+      if (expectedWorktreeInstanceId) {
+        this.exactWorktreeRemovalPending.delete(removalTarget.id)
+        this.exactWorktreeRemovalInstanceById.delete(removalTarget.id)
+      }
+    }
+    } finally {
+      if (!exactFenceTransferred) {
+        releaseExactTerminalMutation?.()
+        if (expectedWorktreeInstanceId) {
+          this.exactWorktreeRemovalPending.delete(removalTarget.id)
+          this.exactWorktreeRemovalInstanceById.delete(removalTarget.id)
+        }
       }
     }
   }

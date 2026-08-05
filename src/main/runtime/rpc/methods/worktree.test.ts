@@ -97,6 +97,33 @@ describe('worktree RPC methods', () => {
     expect(response).toMatchObject({ ok: true, result: { removed: true } })
   })
 
+  it('routes an exact persisted instance fence to the runtime server', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      dedupeWorktreeCreate: passthroughDedupe,
+      removeManagedWorktree: vi.fn().mockResolvedValue({})
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+    const expectedWorktreeInstanceId = '1f30c982-f195-4b82-b27c-d10b048220f8'
+
+    await dispatcher.dispatch(
+      makeRequest('worktree.rm', {
+        worktree: 'id:wt-1',
+        force: false,
+        runHooks: false,
+        expectedWorktreeInstanceId
+      })
+    )
+
+    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith(
+      'id:wt-1',
+      false,
+      false,
+      false,
+      expectedWorktreeInstanceId
+    )
+  })
+
   it('routes create options to the runtime server', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

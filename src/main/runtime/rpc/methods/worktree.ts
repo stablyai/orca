@@ -271,12 +271,15 @@ export const WORKTREE_METHODS: RpcMethod[] = [
     name: 'worktree.rm',
     params: WorktreeRemove,
     handler: async (params, { runtime }) => {
-      const result = await runtime.removeManagedWorktree(
+      const removalArgs = [
         params.worktree,
         params.force === true,
         params.runHooks === true,
         params.allowUnverifiedPtyStop === true
-      )
+      ] as const
+      const result = params.expectedWorktreeInstanceId
+        ? await runtime.removeManagedWorktree(...removalArgs, params.expectedWorktreeInstanceId)
+        : await runtime.removeManagedWorktree(...removalArgs)
       return { removed: true, ...result }
     }
   }),
