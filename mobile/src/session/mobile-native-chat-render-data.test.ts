@@ -116,6 +116,36 @@ describe('buildMobileNativeChatTransientData', () => {
     expect(data[0]?.blocks).toEqual([{ type: 'image-ref', path: '/tmp/a.png' }])
   })
 
+  it('keeps the phone-local image visible when the transcript replaces its optimistic echo', () => {
+    const folded = foldMobileNativeChatMessages([
+      user('source', '[Image: source: /tmp/a.png]'),
+      user('prompt', '[Image #1] look at this')
+    ])
+    const result = buildMobileNativeChatTransientData({
+      folded,
+      streaming: null,
+      pending: [],
+      imagePreviewsByMessageId: { prompt: ['file:///phone-photo.jpg'] }
+    })
+
+    expect(result.data).toHaveLength(1)
+    expect(result.data[0]?.blocks).toEqual([
+      { type: 'image-ref', path: '/tmp/a.png', url: 'file:///phone-photo.jpg' },
+      { type: 'text', text: 'look at this' }
+    ])
+  })
+
+  it('restores the local preview onto a marker-only transcript turn', () => {
+    const result = buildMobileNativeChatTransientData({
+      folded: foldMobileNativeChatMessages([user('prompt', '[Image #1]')]),
+      streaming: null,
+      pending: [],
+      imagePreviewsByMessageId: { prompt: ['file:///phone-photo.jpg'] }
+    })
+
+    expect(result.data[0]?.blocks).toEqual([{ type: 'image-ref', url: 'file:///phone-photo.jpg' }])
+  })
+
   it('appends a synthetic bubble for gated streaming text, between transcript and pending', () => {
     // Whether text streams at all is the gate's call
     // (`mobile-native-chat-streaming-gate.test.ts`); this only places it.

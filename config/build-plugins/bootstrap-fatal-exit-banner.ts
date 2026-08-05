@@ -1,4 +1,4 @@
-import { BOOTSTRAP_FATAL_EXIT_GUARD_KEY } from '../src/main/startup/bootstrap-fatal-exit-guard'
+import { BOOTSTRAP_FATAL_EXIT_GUARD_KEY } from '../../src/main/startup/bootstrap-fatal-exit-guard'
 export const BOOTSTRAP_FATAL_LOG_ENV_VAR = 'ORCA_BOOTSTRAP_FATAL_LOG'
 export const BOOTSTRAP_FATAL_LOG_FILE_NAME = 'bootstrap-fatal.log'
 const BOOTSTRAP_FATAL_LOG_MAX_BYTES = 262_144

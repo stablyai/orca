@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   coordinateHostStackNavigation,
   hostStackHostRoute,
+  hostStackRouteHref,
   navigateToHostStackRoute,
   type HostStackNavigationState
 } from './host-stack-navigation'
@@ -69,7 +70,7 @@ describe('host stack navigation', () => {
     const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
     const push = vi.fn()
 
-    navigateToHostStackRoute(harness.navigation, { push }, 'host/one', TARGET)
+    navigateToHostStackRoute(harness.navigation, { push, replace: vi.fn() }, 'host/one', TARGET)
     expect(push).toHaveBeenCalledWith(hostStackHostRoute('host/one'))
     expect(harness.navigation.dispatch).not.toHaveBeenCalled()
 
@@ -89,7 +90,12 @@ describe('host stack navigation', () => {
       rootLayoutScopedState({ index: 0, routes: [{ name: 'index' }] })
     )
 
-    navigateToHostStackRoute(harness.navigation, { push: vi.fn() }, 'host/one', TARGET)
+    navigateToHostStackRoute(
+      harness.navigation,
+      { push: vi.fn(), replace: vi.fn() },
+      'host/one',
+      TARGET
+    )
     harness.setState(rootLayoutScopedState(committedHostState('host/one')))
 
     expect(harness.navigation.dispatch).toHaveBeenCalledWith({
@@ -103,7 +109,12 @@ describe('host stack navigation', () => {
   it('survives the state emitted before the root navigator has hydrated', () => {
     const harness = navigationHarness(undefined)
 
-    navigateToHostStackRoute(harness.navigation, { push: vi.fn() }, 'host/one', TARGET)
+    navigateToHostStackRoute(
+      harness.navigation,
+      { push: vi.fn(), replace: vi.fn() },
+      'host/one',
+      TARGET
+    )
 
     expect(() => harness.setState(undefined)).not.toThrow()
     expect(harness.navigation.dispatch).not.toHaveBeenCalled()
@@ -112,10 +123,30 @@ describe('host stack navigation', () => {
     expect(harness.navigation.dispatch).toHaveBeenCalledTimes(1)
   })
 
+  it('replaces through Expo Router when root state omits the mounted child stack', () => {
+    const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
+    const replace = vi.fn()
+
+    navigateToHostStackRoute(harness.navigation, { push: vi.fn(), replace }, 'host/one', TARGET)
+    harness.setState({
+      index: 0,
+      routes: [{ name: 'h', params: { hostId: 'host/one' } }]
+    })
+
+    expect(harness.navigation.dispatch).not.toHaveBeenCalled()
+    expect(replace).toHaveBeenCalledWith(hostStackRouteHref(TARGET))
+    expect(harness.listenerCount()).toBe(0)
+  })
+
   it('abandons the transition when navigation leaves the host route it was waiting on', () => {
     const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
 
-    navigateToHostStackRoute(harness.navigation, { push: vi.fn() }, 'host/one', TARGET)
+    navigateToHostStackRoute(
+      harness.navigation,
+      { push: vi.fn(), replace: vi.fn() },
+      'host/one',
+      TARGET
+    )
     harness.setState({ index: 0, routes: [{ name: 'h' }] })
     harness.setState({ index: 0, routes: [{ name: 'index' }] })
     harness.setState(committedHostState('host/one'))
@@ -127,7 +158,12 @@ describe('host stack navigation', () => {
   it('ignores a different host whose id merely decodes badly', () => {
     const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
 
-    navigateToHostStackRoute(harness.navigation, { push: vi.fn() }, 'host/one', TARGET)
+    navigateToHostStackRoute(
+      harness.navigation,
+      { push: vi.fn(), replace: vi.fn() },
+      'host/one',
+      TARGET
+    )
     harness.setState(committedHostState('100%'))
 
     expect(harness.navigation.dispatch).not.toHaveBeenCalled()
@@ -138,7 +174,7 @@ describe('host stack navigation', () => {
 
     const controller = navigateToHostStackRoute(
       harness.navigation,
-      { push: vi.fn() },
+      { push: vi.fn(), replace: vi.fn() },
       'host/one',
       TARGET
     )
@@ -156,7 +192,7 @@ describe('host stack navigation', () => {
   it('retargets a still-pending transition to the same host instead of pushing twice', () => {
     const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
     const push = vi.fn()
-    const router = { push }
+    const router = { push, replace: vi.fn() }
 
     const pending = coordinateHostStackNavigation(
       null,

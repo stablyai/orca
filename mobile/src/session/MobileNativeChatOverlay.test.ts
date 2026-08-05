@@ -47,6 +47,7 @@ function overlayElement(tick: Tick): ReturnType<typeof createElement> {
     nativeChatStreamLive: tick.streamLive ?? false,
     nativeChatStreamScopeKey: tick.identity ?? 'tab-a',
     chatPending: [],
+    chatImagePreviewsByMessageId: {},
     chatComposerText: '',
     setChatComposerText: vi.fn()
   } as unknown as MobileNativeChatController

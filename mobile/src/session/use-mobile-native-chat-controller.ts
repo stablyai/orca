@@ -50,6 +50,7 @@ export type MobileNativeChatController = {
   chatComposerText: string
   setChatComposerText: Dispatch<SetStateAction<string>>
   chatPending: MobileNativeChatPendingMessage[]
+  chatImagePreviewsByMessageId: Record<string, string[]>
   nativeChatSession: ReturnType<typeof useMobileNativeChatSession>
   nativeChatAgentWorking: boolean
   nativeChatStreamingText?: string
@@ -160,6 +161,7 @@ export function useMobileNativeChatController(args: {
     composerText: chatComposerText,
     setComposerText: setChatComposerText,
     pending: chatPending,
+    imagePreviewsByMessageId: chatImagePreviewsByMessageId,
     captureSendOrigin,
     readSeededLaunchDraft,
     readSeededLaunchDraftSeed,
@@ -326,6 +328,7 @@ export function useMobileNativeChatController(args: {
     chatComposerText,
     setChatComposerText,
     chatPending,
+    chatImagePreviewsByMessageId,
     nativeChatSession,
     nativeChatAgentWorking,
     nativeChatStreamingText,

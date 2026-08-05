@@ -198,7 +198,6 @@ import {
 } from '../codex/codex-pane-account-registry'
 import { resolveCodexPaneLaunchAccount } from '../codex/codex-pane-launch-account'
 import { getSystemCodexHomePath } from '../codex/codex-home-paths'
-import { isCodexSystemDefaultRealHomeEnabled } from '../codex/codex-real-home-flag'
 import {
   environmentCodexHomeOverrideContextsEqual,
   getCustomCodexHomeOverrideForLaunch,
@@ -1117,10 +1116,7 @@ function shouldStripInheritedOrcaCodexHome(args: {
   settings: GlobalSettings | undefined
 }): boolean {
   return (
-    args.target.runtime === 'host' &&
-    args.selectedCodexHomePath === null &&
-    !args.skipCodexHomeEnv &&
-    isCodexSystemDefaultRealHomeEnabled()
+    args.target.runtime === 'host' && args.selectedCodexHomePath === null && !args.skipCodexHomeEnv
   )
 }
 

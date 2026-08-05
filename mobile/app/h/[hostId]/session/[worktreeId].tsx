@@ -4986,6 +4986,7 @@ export default function SessionScreen() {
                       <MobileTerminalLiveInputStatus
                         dictation={dictation}
                         isAttaching={isAttaching}
+                        liveInputText={liveInputCapture}
                       />
                     </Pressable>
                     <MobileTerminalInputActions
