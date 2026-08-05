@@ -31059,6 +31059,13 @@ export class OrcaRuntimeService {
 
   // Why: wake blocking orchestration.check --wait calls on this handle so they return the new message immediately instead of polling.
   notifyMessageArrived(handle: string, messageType?: string): void {
+    // Why: push-on-idle is driven by status transitions; a message that
+    // arrives while the recipient is already idle never sees a transition, so
+    // deliver now (#12536). deliverPendingMessagesForHandle no-ops when the
+    // leaf is not idle. Main's messageDeliveryFlights serialize mid-Enter
+    // re-notifies without a separate settle barrier.
+    this.deliverPendingMessagesForHandle(handle)
+
     const waiters = this.messageWaitersByHandle.get(handle)
     if (!waiters || waiters.size === 0) {
       return

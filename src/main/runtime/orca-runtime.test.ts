@@ -32993,6 +32993,152 @@ describe('OrcaRuntimeService', () => {
     await task
   })
 
+  it('delivers pending mail via notifyMessageArrived when the recipient is already idle', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new InMemoryOrchestrationMessages()
+      const write = vi.fn().mockReturnValue(true)
+      setInMemoryOrchestrationMessages(runtime, db)
+      runtime.setPtyController({
+        write,
+        kill: vi.fn(),
+        getForegroundProcess: async () => null
+      })
+      syncSinglePty(runtime)
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+      runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
+      await runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle' })
+      const message = db.insertMessage({
+        from: 'sender',
+        to: terminal.handle,
+        subject: 'after wait'
+      })
+
+      // Why: notifyMessageArrived is the send-path hook; it must push-on-idle
+      // without requiring another agent-status transition (#12536).
+      runtime.notifyMessageArrived(terminal.handle, 'status')
+
+      expect(write).toHaveBeenCalledWith('pty-1', expect.stringContaining('Subject: after wait'))
+      await vi.advanceTimersByTimeAsync(500)
+      expect(write).toHaveBeenCalledWith('pty-1', '\r')
+      expect(message.delivered_at).not.toBeNull()
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not inject pending mail on notify when the recipient is still working', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const db = new InMemoryOrchestrationMessages()
+    const write = vi.fn().mockReturnValue(true)
+    setInMemoryOrchestrationMessages(runtime, db)
+    runtime.setPtyController({
+      write,
+      kill: vi.fn(),
+      getForegroundProcess: async () => null
+    })
+    syncSinglePty(runtime)
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+    db.insertMessage({ from: 'sender', to: terminal.handle, subject: 'while working' })
+    write.mockClear()
+
+    runtime.notifyMessageArrived(terminal.handle, 'status')
+
+    expect(write).not.toHaveBeenCalled()
+    db.close()
+  })
+
+  it('does not re-inject the same message when notify fires again during Enter delay', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new InMemoryOrchestrationMessages()
+      const write = vi.fn().mockReturnValue(true)
+      setInMemoryOrchestrationMessages(runtime, db)
+      runtime.setPtyController({
+        write,
+        kill: vi.fn(),
+        getForegroundProcess: async () => null
+      })
+      syncSinglePty(runtime)
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+      runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
+      await runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle' })
+      db.insertMessage({ from: 'sender', to: terminal.handle, subject: 'once only' })
+
+      runtime.notifyMessageArrived(terminal.handle, 'status')
+      runtime.notifyMessageArrived(terminal.handle, 'status')
+
+      const payloadWrites = write.mock.calls.filter(
+        ([, payload]) => typeof payload === 'string' && payload.includes('Subject: once only')
+      )
+      expect(payloadWrites).toHaveLength(1)
+
+      await vi.advanceTimersByTimeAsync(500)
+      const enterWrites = write.mock.calls.filter(([, payload]) => payload === '\r')
+      expect(enterWrites).toHaveLength(1)
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('delivers a second message parked during Enter delay once the flight settles', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new InMemoryOrchestrationMessages()
+      const write = vi.fn().mockReturnValue(true)
+      setInMemoryOrchestrationMessages(runtime, db)
+      runtime.setPtyController({
+        write,
+        kill: vi.fn(),
+        getForegroundProcess: async () => null
+      })
+      syncSinglePty(runtime)
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+      runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
+      await runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle' })
+      const first = db.insertMessage({ from: 'sender', to: terminal.handle, subject: 'first' })
+      runtime.notifyMessageArrived(terminal.handle, 'status')
+
+      // Why: mid-flight notify parks the leaf; flight settle re-runs delivery
+      // so the second row is not lost and is not double-injected with the first.
+      const second = db.insertMessage({ from: 'sender', to: terminal.handle, subject: 'second' })
+      runtime.notifyMessageArrived(terminal.handle, 'status')
+      expect(
+        write.mock.calls.filter(
+          ([, payload]) => typeof payload === 'string' && payload.includes('Subject: second')
+        )
+      ).toHaveLength(0)
+      expect(second.delivered_at).toBeNull()
+
+      await vi.advanceTimersByTimeAsync(500)
+      expect(write).toHaveBeenCalledWith('pty-1', '\r')
+      expect(first.delivered_at).not.toBeNull()
+      expect(
+        write.mock.calls.filter(
+          ([, payload]) => typeof payload === 'string' && payload.includes('Subject: second')
+        )
+      ).toHaveLength(1)
+      await vi.advanceTimersByTimeAsync(500)
+      expect(second.delivered_at).not.toBeNull()
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('keeps already-idle status after tui-idle wait for immediate message delivery', async () => {
     const runtime = new OrcaRuntimeService(store)
     const db = new InMemoryOrchestrationMessages()
