@@ -1,6 +1,6 @@
 import type { Tab, TerminalTab, WorkspaceSessionState } from '../../../shared/types'
 import { parseExecutionHostId } from '../../../shared/execution-host'
-import { isValidTerminalTabId } from '../../../shared/terminal-tab-id'
+import { isValidHostTerminalTabId } from '../../../shared/terminal-tab-id'
 import { createBrowserUuid } from './browser-uuid'
 
 type RepairOptions = {
@@ -69,8 +69,9 @@ export function repairUnifiedTabMembershipFromLegacyTabs(
     )
     // Why: PTY evidence is required — materializing unbound stale tabs spawns
     // fresh shells and can trigger sleeping-agent resume in discarded panes.
+    // Web-mirror surfaces never mount a local pane, so they are never repaired.
     const missing = legacyTabs
-      .filter((tab) => isValidTerminalTabId(tab.id) && !knownTerminalEntityIds.has(tab.id))
+      .filter((tab) => isValidHostTerminalTabId(tab.id) && !knownTerminalEntityIds.has(tab.id))
       .filter((tab) => hasPtyEvidence(session, tab))
       .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt)
     if (missing.length === 0) {

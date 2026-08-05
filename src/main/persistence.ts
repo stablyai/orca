@@ -7272,6 +7272,22 @@ export class Store {
           changed = true
         }
       }
+      // Why: a lingering relay-session mapping is durable-terminal evidence too;
+      // keeping it would let restore re-materialize a tab whose session is gone.
+      for (const [tabId, sessionPtyId] of Object.entries(session.remoteSessionIdsByTabId ?? {})) {
+        if (
+          leases.some((lease) =>
+            this.sshRemotePtyLeaseMayReferenceBinding(lease, {
+              ptyId: sessionPtyId,
+              targetId,
+              tabId
+            })
+          )
+        ) {
+          delete session.remoteSessionIdsByTabId![tabId]
+          changed = true
+        }
+      }
     }
     if (changed) {
       this.scheduleSave()

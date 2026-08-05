@@ -10426,6 +10426,47 @@ describe('Store', () => {
     expect(session.terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({})
   })
 
+  it('clears relay-session tab mappings when marking an SSH remote PTY lease expired', async () => {
+    const store = await createStore()
+    store.upsertSshRemotePtyLease({
+      targetId: 'ssh-1',
+      ptyId: 'remote-pty',
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      leafId: TEST_LEAF_1,
+      state: 'attached'
+    })
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab1',
+            worktreeId: 'wt1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: null
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {},
+      // Why: the mapping alone is durable-terminal evidence; restore would
+      // re-materialize the tab for a session that no longer exists.
+      remoteSessionIdsByTabId: { tab1: 'ssh:ssh-1@@remote-pty', other: 'ssh:ssh-1@@pty-live' }
+    })
+
+    store.markSshRemotePtyLease('ssh-1', 'ssh:ssh-1@@remote-pty', 'expired')
+
+    const session = store.getWorkspaceSession()
+    expect(session.remoteSessionIdsByTabId?.tab1).toBeUndefined()
+    expect(session.remoteSessionIdsByTabId?.other).toBe('ssh:ssh-1@@pty-live')
+  })
+
   it('removes SSH remote PTY leases when callers pass scoped app ids', async () => {
     const store = await createStore()
     store.upsertSshRemotePtyLease({
