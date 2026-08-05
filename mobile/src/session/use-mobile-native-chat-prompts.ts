@@ -8,6 +8,7 @@ import { parseAgentQuestion } from './mobile-native-chat-question'
 export type MobileNativeChatPrompts = {
   permission: ReturnType<typeof detectAgentPermission>
   question: ReturnType<typeof parseAgentQuestion>
+  detectedAsk: ReturnType<typeof parseAskFromStatus>
   ask: ReturnType<typeof parseAskFromStatus>
 }
 
@@ -19,15 +20,18 @@ export function useMobileNativeChatPrompts(args: {
 }): MobileNativeChatPrompts {
   const { enabled, status, messages } = args
   const blocked = status?.state === 'waiting' || status?.state === 'blocked'
+  // Both permission paths sit inside the paused gate: an approval envelope can
+  // outlive its answer (the host keeps it sticky), so only a waiting/blocked
+  // agent may surface it — never a working or done one (STA-3144).
   const permission =
-    (blocked && status
-      ? detectAgentPermission({
+    blocked && status
+      ? (detectAgentPermission({
           state: status.state,
           lastAssistantMessage: status.lastAssistantMessage,
           toolName: status.toolName,
           toolInput: status.toolInput
-        })
-      : null) ?? parseApprovalFromStatus(status?.interactivePrompt)
+        }) ?? parseApprovalFromStatus(status.interactivePrompt))
+      : null
   const question =
     blocked && status && !permission ? parseAgentQuestion(status.lastAssistantMessage ?? '') : null
   const askFromStatus = useMemo(
@@ -39,9 +43,17 @@ export function useMobileNativeChatPrompts(args: {
     [askFromStatus, messages]
   )
 
+  const detectedAsk = askFromStatus ?? askFromMessages
+
   return {
     permission,
     question,
-    ask: enabled ? (askFromStatus ?? askFromMessages) : null
+    detectedAsk: enabled ? detectedAsk : null,
+    // Only the status payload needs the paused gate the approval envelope uses:
+    // it outlives its answer, so a working/done agent must not surface one. The
+    // transcript fallback clears itself when the tool result lands, and it is the
+    // only source left once the hook row goes stale and projects to `done` with
+    // no interactivePrompt — gating it too strands a genuinely pending question.
+    ask: enabled ? ((blocked ? askFromStatus : null) ?? askFromMessages) : null
   }
 }

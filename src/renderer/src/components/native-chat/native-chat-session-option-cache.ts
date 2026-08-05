@@ -1,43 +1,14 @@
 import type { AgentType } from '../../../../shared/agent-status-types'
-import type {
-  SessionOptionValue,
-  SessionOptionValueSource
-} from '../../../../shared/native-chat-session-options'
+import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
+import {
+  cloneNativeChatSessionOptionRecord,
+  createNativeChatSessionOptionRecord,
+  type NativeChatSessionOptionRecord,
+  type TrackedNativeChatSessionOption
+} from '../../../../shared/native-chat-session-option-state'
 import { setBoundedScopeCacheEntry } from './native-chat-composer-scope-cache'
 
-export type TrackedNativeChatSessionOption = {
-  value: SessionOptionValue
-  source: Exclude<SessionOptionValueSource, 'unknown'>
-}
-
-export type NativeChatSessionOptionRecord = {
-  agent: AgentType
-  model?: TrackedNativeChatSessionOption
-  valuesByModel: Record<string, Record<string, TrackedNativeChatSessionOption>>
-}
-
 const sessionOptionCache = new Map<string, NativeChatSessionOptionRecord>()
-
-export function createNativeChatSessionOptionRecord(
-  agent: AgentType
-): NativeChatSessionOptionRecord {
-  return { agent, valuesByModel: {} }
-}
-
-export function cloneNativeChatSessionOptionRecord(
-  record: NativeChatSessionOptionRecord
-): NativeChatSessionOptionRecord {
-  return {
-    agent: record.agent,
-    ...(record.model ? { model: { ...record.model } } : {}),
-    valuesByModel: Object.fromEntries(
-      Object.entries(record.valuesByModel).map(([modelId, values]) => [
-        modelId,
-        Object.fromEntries(Object.entries(values).map(([id, tracked]) => [id, { ...tracked }]))
-      ])
-    )
-  }
-}
 
 export function readNativeChatSessionOptionCache(
   scopeKey: string,

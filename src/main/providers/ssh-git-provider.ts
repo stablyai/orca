@@ -40,6 +40,8 @@ type NonInteractiveExecQueueEntry = {
   release: () => void
 }
 
+const NON_INTERACTIVE_TRANSPORT_TIMEOUT_MARGIN_MS = 5_000
+
 function isJsonRpcMethodNotFoundError(error: unknown): boolean {
   if (!error || typeof error !== 'object') {
     return false
@@ -370,10 +372,9 @@ export class SshGitProvider implements IGitProvider {
         }
       }
       entry.started = true
-      return (await this.mux.request(
-        'agent.execNonInteractive',
-        payload
-      )) as RemoteCommitMessageExecResult
+      return (await this.mux.request('agent.execNonInteractive', payload, {
+        timeoutMs: payload.timeoutMs + NON_INTERACTIVE_TRANSPORT_TIMEOUT_MARGIN_MS
+      })) as RemoteCommitMessageExecResult
     } finally {
       signal?.removeEventListener('abort', abortEntry)
       entry.release()

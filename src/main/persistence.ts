@@ -2786,6 +2786,7 @@ export class Store {
   private quitFlushPromise: Promise<void> | null = null
   // Content hash at last write, to skip no-op writes; derived from the payload with encrypted blobs normalized back to plaintext (see buildStateToSave), since encrypt() uses a random IV per call.
   private lastWrittenStateHash: string | null = null
+  private lastDurableWriteGeneration = -1
   private firstPendingSaveAt: number | null = null
   private githubCacheDirty = false
   private githubCacheGeneration = 0
@@ -3941,6 +3942,7 @@ export class Store {
     const { payload, stateHash } = this.buildStateToSave()
     // Why: don't rewrite a byte-identical multi-MB file when state nets out to already-persisted.
     if (stateHash === this.lastWrittenStateHash) {
+      this.lastDurableWriteGeneration = Math.max(this.lastDurableWriteGeneration, gen)
       return
     }
     const dataFile = this.dataFile
@@ -3976,9 +3978,14 @@ export class Store {
           this.inFlightAsyncTmpFile = null
         }
       }
-      // Why re-check gen: a sync flush during the rename await may have written fresher state; don't record a stale hash over it.
+      // Why re-check gen: a mutation or sync flush during rename makes the installed hash ambiguous; invalidate the no-op guard.
       if (renamed && this.writeGeneration === gen) {
         this.lastWrittenStateHash = stateHash
+      } else if (renamed) {
+        this.lastWrittenStateHash = null
+      }
+      if (renamed) {
+        this.lastDurableWriteGeneration = Math.max(this.lastDurableWriteGeneration, gen)
       }
     } finally {
       if (!renamed) {
@@ -4020,6 +4027,10 @@ export class Store {
       writeFileDurableSync(tmpFile, dataFile, payload)
       renamed = true
       this.lastWrittenStateHash = stateHash
+      this.lastDurableWriteGeneration = Math.max(
+        this.lastDurableWriteGeneration,
+        this.writeGeneration
+      )
     } finally {
       if (!renamed) {
         try {
@@ -4197,11 +4208,16 @@ export class Store {
     if (!project) {
       return null
     }
+    // Why: the same repo id can exist on multiple execution hosts, so match this setup's own host
+    // row and never fall back to a sibling host's row — a stale repoId/hostId would delete that host's
+    // registration. With no exact match the setup is stale, and the path below drops just the setup.
     const repo = setup.repoId
-      ? this.state.repos.find((entry) => entry.id === setup.repoId)
+      ? this.state.repos.find(
+          (entry) => entry.id === setup.repoId && getRepoExecutionHostId(entry) === setup.hostId
+        )
       : undefined
     if (repo) {
-      this.removeProject(repo.id)
+      this.removeProjectForHost(repo.id, setup.hostId)
       return { project, setup, repo: this.hydrateRepo(repo) }
     }
     this.state.projectHostSetups = this.state.projectHostSetups.filter(
@@ -7291,11 +7307,13 @@ export class Store {
     return this.flushCurrentStateAsync(false, undefined, false).catch(() => {})
   }
 
-  flushPendingOrThrowAsync(options: { signal?: AbortSignal } = {}): Promise<void> {
+  flushPendingOrThrowAsync(
+    options: { signal?: AbortSignal; drainToStableGeneration?: boolean } = {}
+  ): Promise<void> {
     if (this.writesFrozen || this.quitFlushStarted) {
       return Promise.reject(new Error('Cannot flush while persistence is finalized'))
     }
-    return this.flushCurrentStateAsync(false, options.signal)
+    return this.flushCurrentStateAsync(false, options.signal, options.drainToStableGeneration, true)
   }
 
   // Async twin of flushOrThrow: durable state only. Active-view and GitHub sidecars are
@@ -7321,8 +7339,10 @@ export class Store {
   private async flushCurrentStateAsync(
     final: boolean,
     signal?: AbortSignal,
-    drainToStableGeneration = true
+    drainToStableGeneration = true,
+    requireInitialGenerationDurable = false
   ): Promise<void> {
+    const requiredDurableGeneration = requireInitialGenerationDurable ? this.writeGeneration : null
     for (;;) {
       if (signal?.aborted) {
         throw new Error('Persistence flush aborted')
@@ -7349,7 +7369,16 @@ export class Store {
       if (signal?.aborted) {
         throw new Error('Persistence flush aborted')
       }
-      if (!drainToStableGeneration || generation === this.writeGeneration) {
+      if (!drainToStableGeneration) {
+        if (
+          requiredDurableGeneration === null ||
+          this.lastDurableWriteGeneration >= requiredDurableGeneration
+        ) {
+          break
+        }
+        continue
+      }
+      if (generation === this.writeGeneration) {
         break
       }
     }

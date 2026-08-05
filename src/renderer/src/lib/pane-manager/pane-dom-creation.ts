@@ -76,10 +76,10 @@ export function createPaneDOM(
         if (uri) {
           linkTooltipHoverToken += 1
           const hoverToken = linkTooltipHoverToken
-          const openLinkHint = options.linkOpenHint()
+          const openLinkHint = options.linkOpenHint(id)
           linkTooltip.textContent = defaultLinkTooltipText(uri, openLinkHint)
           linkTooltip.style.display = ''
-          const formatted = options.formatLinkTooltip?.(uri, openLinkHint)
+          const formatted = options.formatLinkTooltip?.(id, uri, openLinkHint)
           if (formatted && typeof formatted === 'object' && 'then' in formatted) {
             void formatted.then(
               (nextText) => {

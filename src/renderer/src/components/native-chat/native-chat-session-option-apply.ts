@@ -11,13 +11,16 @@ import type {
   SessionOptionSetResult,
   SessionOptionValue
 } from '../../../../shared/native-chat-session-options'
-import type { NativeChatSessionOptionRecord } from './native-chat-session-option-cache'
-import { buildNativeChatSessionOptionCommand } from './native-chat-session-option-command-builder'
+import { buildNativeChatSessionOptionCommand } from '../../../../shared/native-chat-session-option-commands'
+import {
+  getTrackedSessionOption as getTrackedOption,
+  isFlipOnlyMidSession,
+  type NativeChatSessionOptionRecord
+} from '../../../../shared/native-chat-session-option-state'
 import type {
   NativeChatSessionOptionDispatchCommand,
   NativeChatSessionOptionDispatchResult
 } from './native-chat-session-option-command-dispatch'
-import { getTrackedOption, isFlipOnlyMidSession } from './native-chat-session-option-flip'
 import {
   flattenNativeChatSessionOptionRecord,
   type NativeChatSessionOptionMode

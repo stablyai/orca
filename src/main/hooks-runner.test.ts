@@ -1,3 +1,8 @@
+import type * as NodeChildProcess from 'node:child_process'
+import type * as NodeFs from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 import type { Repo } from '../shared/types'
 
 import { describe, expect, it, vi } from 'vitest'
@@ -94,7 +99,7 @@ describe('createSetupRunnerScript', () => {
       const result = createSetupRunnerScript(
         { ...makeRepo(), path: 'C:\\Users\\jinwo\\git\\orca' },
         'C:\\repo\\feature',
-        'pnpm install',
+        '#!/usr/bin/env bash\npnpm install',
         undefined,
         { family: 'posix' }
       )
@@ -185,6 +190,55 @@ describe('createSetupRunnerScript', () => {
     expect(runner).toContain('setlocal EnableExtensions DisableDelayedExpansion')
     expect(runner).toContain('call echo hello!world!')
   })
+
+  it('refuses to run a shebang script as a batch command', async () => {
+    const { buildWindowsRunnerScript } = await import('./hooks')
+
+    // Regression: a POSIX script reaching the cmd runner (no Git Bash terminal, or an SSH
+    // Windows host) must not have its interpreter-agnostic prefix executed under cmd —
+    // `pnpm install` would run and only a later bash-only line would fail, leaving the
+    // worktree half set up.
+    const runner = buildWindowsRunnerScript('#!/usr/bin/env bash\npnpm install\nsource .env')
+
+    expect(runner).not.toContain('call pnpm install')
+    expect(runner).not.toContain('call source .env')
+    expect(runner).toContain('needs a POSIX shell')
+    expect(runner).toContain('exit /b 1')
+  })
+
+  it('keeps a `#` comment that is not an interpreter line', async () => {
+    const { buildWindowsRunnerScript } = await import('./hooks')
+
+    const runner = buildWindowsRunnerScript('# not a shebang\nrem still batch')
+
+    expect(runner).toContain('call # not a shebang')
+    expect(runner).toContain('call rem still batch')
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'runs a script whose shebang carries invocation-only bash flags',
+    async () => {
+      // Regression: `set` rejects `-l`/`-s`/`-i` with exit 2, and the runner's own `set -e` turns
+      // that into an aborted setup before the first user line.
+      const { buildPosixRunnerScript } = await import('./hooks')
+      const { mkdtempSync, rmSync, writeFileSync } = await vi.importActual<typeof NodeFs>('node:fs')
+      const { execFileSync } = await vi.importActual<typeof NodeChildProcess>('node:child_process')
+
+      const dir = mkdtempSync(join(tmpdir(), 'orca-posix-runner-'))
+      try {
+        const runnerPath = join(dir, 'setup-runner.sh')
+        writeFileSync(
+          runnerPath,
+          buildPosixRunnerScript('#!/bin/bash -l\necho SETUP_RAN\n'),
+          'utf-8'
+        )
+
+        expect(execFileSync('bash', [runnerPath], { encoding: 'utf-8' })).toContain('SETUP_RAN')
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    }
+  )
 
   it('derives ORCA_WORKSPACE_NAME from a POSIX worktree path', async () => {
     const originalPlatform = process.platform

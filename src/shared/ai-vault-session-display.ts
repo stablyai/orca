@@ -12,6 +12,11 @@ export type AiVaultSessionDisplayTurn = {
   timestamp: string | null
 }
 
+export type AiVaultSessionPromptPreview = {
+  text: string
+  source: 'first-user-prompt' | 'preview-window'
+}
+
 export function latestSessionConversationTurn(
   session: AiVaultSession
 ): AiVaultSessionDisplayTurn | null {
@@ -44,22 +49,11 @@ export function sessionDetailConversationTurns(
   return dedupeAdjacentConversationTurns(turns).slice(-limit)
 }
 
-/**
- * Placeholder text for the first-prompt row while the full body loads on demand.
- * List scans no longer store firstUserPrompt (payload/perf); this is preview-only.
- */
-export function sessionFirstPrompt(session: AiVaultSession): string | null {
-  // Prefer a stored full body when present (on-demand re-parse / tests).
+/** Prompt text with enough provenance for the renderer to avoid overclaiming. */
+export function sessionPromptPreview(session: AiVaultSession): AiVaultSessionPromptPreview | null {
   const stored = session.firstUserPrompt?.trim()
   if (stored) {
-    return stored
-  }
-
-  // Why: `previewMessages` is a newest-N sliding window. Once it has truncated,
-  // its earliest user turn is a RECENT ask, not the opening one — returning it
-  // would show (and copy) the wrong message under a "first prompt" label.
-  if (session.previewMessagesTruncated) {
-    return null
+    return { text: stored, source: 'first-user-prompt' }
   }
 
   for (const message of session.previewMessages) {
@@ -68,7 +62,7 @@ export function sessionFirstPrompt(session: AiVaultSession): string | null {
     }
     const text = message.text.trim()
     if (text) {
-      return text
+      return { text, source: 'preview-window' }
     }
   }
 

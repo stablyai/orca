@@ -56,4 +56,35 @@ describe('file explorer add project action', () => {
       connectionId: 'ssh-target-1'
     })
   })
+
+  it('routes an execution-host-only SSH project subfolder to its SSH target', () => {
+    expect(
+      buildAddProjectFromFolderModalData(folderNode, {
+        ...folderRepo,
+        executionHostId: 'ssh:ssh-target-1'
+      })
+    ).toEqual({
+      folderPath: '/projects/child-project',
+      connectionId: 'ssh-target-1'
+    })
+  })
+
+  it('routes a local project subfolder explicitly to local', () => {
+    expect(buildAddProjectFromFolderModalData(folderNode, folderRepo)).toEqual({
+      folderPath: '/projects/child-project',
+      runtimeEnvironmentId: null
+    })
+  })
+
+  it("routes a runtime project subfolder to the repo's runtime", () => {
+    expect(
+      buildAddProjectFromFolderModalData(folderNode, {
+        ...folderRepo,
+        executionHostId: 'runtime:runtime-a'
+      })
+    ).toEqual({
+      folderPath: '/projects/child-project',
+      runtimeEnvironmentId: 'runtime-a'
+    })
+  })
 })

@@ -176,6 +176,24 @@ describe('startup ordering', () => {
     expect(source.slice(0, willQuitStart)).not.toContain('stopTccPromptNoticeForQuit')
   })
 
+  it('keeps the power bridge through vetoable before-quit and disposes after commit', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const beforeQuitStart = source.indexOf("app.on('before-quit'")
+    const willQuitStart = source.indexOf("app.on('will-quit'", beforeQuitStart)
+    const windowAllClosedStart = source.indexOf("app.on('window-all-closed'", willQuitStart)
+    const beforeQuit = source.slice(beforeQuitStart, willQuitStart)
+    const willQuit = source.slice(willQuitStart, windowAllClosedStart)
+    const commitIndex = willQuit.indexOf('quitTeardownStartGate.tryStart(e)')
+    const disposeIndex = willQuit.indexOf('unsubscribeSystemResumeBroadcast?.()')
+
+    expect(beforeQuitStart).toBeGreaterThanOrEqual(0)
+    expect(willQuitStart).toBeGreaterThan(beforeQuitStart)
+    expect(windowAllClosedStart).toBeGreaterThan(willQuitStart)
+    expect(beforeQuit).not.toContain('unsubscribeSystemResumeBroadcast')
+    expect(commitIndex).toBeGreaterThanOrEqual(0)
+    expect(disposeIndex).toBeGreaterThan(commitIndex)
+  })
+
   it('starts the automation scheduler before headless serve reports ready', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
     const serveStart = source.indexOf('if (serveOptions) {')

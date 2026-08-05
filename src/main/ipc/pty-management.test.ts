@@ -44,10 +44,17 @@ vi.mock('../daemon/daemon-pty-router', () => {
 // subscribes to adapter events, so keep only the accessors pty-management uses.
 vi.mock('../daemon/degraded-daemon-pty-provider', () => {
   class DegradedDaemonPtyProvider {
-    readonly isDegraded = true
     private allAdapters: unknown[]
+    private routesFreshToFallback = true
     constructor(opts: { current: unknown; legacy: unknown[] }) {
       this.allAdapters = [opts.current, ...opts.legacy]
+    }
+    get routesFreshSpawnsToLocalProvider(): true | undefined {
+      return this.routesFreshToFallback ? true : undefined
+    }
+    async recoverFreshSpawnRouting(): Promise<boolean> {
+      this.routesFreshToFallback = false
+      return true
     }
     getAllAdapters() {
       return this.allAdapters
@@ -175,6 +182,19 @@ describe('pty:management IPC handlers', () => {
 
       expect(result.degraded).toBe(true)
       expect(result.sessions.map((s) => s.sessionId)).toEqual(['preserved-1'])
+    })
+
+    it('clears degraded mode after durable fresh-spawn routing recovers', async () => {
+      const current = makeAdapter(5, [makeSession('preserved-1')])
+      const provider = await makeDegradedProvider(current)
+      const { registerDaemonManagementHandlers } = await importFresh()
+      getDaemonProviderMock.mockReturnValue(provider)
+      registerDaemonManagementHandlers()
+      const handler = buildHandlerMap()['pty:management:listSessions']
+
+      await expect(handler({})).resolves.toMatchObject({ degraded: true })
+      await provider.recoverFreshSpawnRouting()
+      await expect(handler({})).resolves.toMatchObject({ degraded: false })
     })
 
     it('returns empty list when no daemon provider is installed', async () => {

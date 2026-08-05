@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: these activation cases share one mock store and assert ordering across startup, setup, issue commands, and default tabs. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SetupScriptLaunchMode } from '../../../shared/types'
+import { SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV } from '../../../shared/setup-agent-sequencing'
 import { activateAndRevealWorktree, ensureWorktreeHasInitialTerminal } from './worktree-activation'
 import { resetHookCommandDelayedDeliveryForTests } from './hook-command-delayed-delivery'
 import { useAppStore } from '@/store'
@@ -698,13 +699,19 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     expect(store.queueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: expect.stringContaining('Timed out waiting for setup before starting agent.')
+        env: expect.objectContaining({
+          [SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]: expect.stringContaining(
+            'Timed out waiting for setup before starting agent.'
+          )
+        })
       })
     )
     expect(store.queueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: expect.stringContaining('exec claude')
+        env: expect.objectContaining({
+          [SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]: expect.stringContaining('exec claude')
+        })
       })
     )
     expect(store.queueTabStartupCommand).toHaveBeenCalledWith(
@@ -765,7 +772,9 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     expect(store.queueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: expect.stringContaining('exec claude')
+        env: expect.objectContaining({
+          [SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]: expect.stringContaining('exec claude')
+        })
       })
     )
     expect(store.queueTabSetupSplit).toHaveBeenCalledWith('tab-1', {
@@ -799,7 +808,11 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     expect(store.queueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: expect.stringContaining('/mnt/c/repo/.git/orca/setup-runner.sh')
+        env: expect.objectContaining({
+          [SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]: expect.stringContaining(
+            '/mnt/c/repo/.git/orca/setup-runner.sh'
+          )
+        })
       })
     )
     expect(store.queueTabSetupSplit).toHaveBeenCalledWith('tab-1', {

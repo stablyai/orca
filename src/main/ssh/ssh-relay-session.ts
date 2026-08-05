@@ -15,6 +15,7 @@ import type { SshPtyRecoveryActivationLease } from '../providers/ssh-pty-notific
 import { isSshPtyIdentityMismatchError, isSshPtyNotFoundError } from '../providers/ssh-pty-errors'
 import { toAppSshPtyId, toRelaySshPtyId } from '../providers/ssh-pty-id'
 import { SshFilesystemProvider } from '../providers/ssh-filesystem-provider'
+import { isMethodNotFoundError } from './ssh-filesystem-stream-reader'
 import { SshGitProvider } from '../providers/ssh-git-provider'
 import { agentHookServer } from '../agent-hooks/server'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
@@ -80,12 +81,18 @@ import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { DEFAULT_PTY_SOURCE_WINDOW_SU } from '../../shared/pty-source-credit-contract'
 import { PTY_CONSUMER_STALE_OWNER_RECOVERY_ERROR } from '../../shared/pty-consumer-session'
+import { retrySshOwnerRecoveryWhileBlocked } from './ssh-owner-recovery-retry'
 import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
 import {
   acknowledgeRemoteOrcaCliPostOutput,
   parseRemoteOrcaCliPostOutput
 } from './ssh-remote-orchestration-post-output'
 import { toSshExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
+import {
+  SSH_AI_VAULT_LIST_SESSIONS_METHOD,
+  SSH_AI_VAULT_LIST_SESSIONS_TIMEOUT_MS,
+  type SshAiVaultRelayListParams
+} from '../../shared/ssh-ai-vault-relay'
 import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
 import {
@@ -119,6 +126,22 @@ const SSH_PTY_REATTACH_ATTEMPT_TIMEOUT_MS = 10_000
 const SSH_PTY_REATTACH_RETRY_MIN_DELAY_MS = 50
 const SSH_PTY_REATTACH_RETRY_JITTER_MS = 200
 const SSH_SOURCE_RECOVERY_CANCELLATION_FAILED = 'ssh_source_recovery_cancellation_failed'
+
+// Why: superseded attempts stop quietly; a dead mux still owned by this attempt must enter recovery.
+function verifyRelayAttempt(
+  mux: SshChannelMultiplexer,
+  isAttemptCurrent: () => boolean,
+  phase: string
+): boolean {
+  if (!isAttemptCurrent()) {
+    return false
+  }
+  if (mux.isDisposed()) {
+    throw new Error(`Relay connection lost during ${phase}`)
+  }
+  return true
+}
+
 type PendingPtyReattach = {
   mux: SshChannelMultiplexer
   providerGeneration: number
@@ -272,6 +295,7 @@ export class SshRelaySession {
   private currentConnection: SshConnection | null = null
   private hostPlatform: RemoteHostPlatform | null = null
   private remoteCliBridgeEnv: RemoteCliBridgeEnv | null = null
+  private aiVaultListMethodSupported: boolean | null = null
   private pendingPtyReattaches = new Map<string, PendingPtyReattach>()
   private readonly ptyRecoveryRetention = new SshPtyRecoveryRetentionBudget()
   private activePtyProviderGeneration: number | null = null
@@ -377,6 +401,33 @@ export class SshRelaySession {
     }
   }
 
+  async requestAiVaultSessionList(
+    params: SshAiVaultRelayListParams,
+    options: { signal?: AbortSignal; timeoutMs?: number } = {}
+  ): Promise<unknown | null> {
+    if (this.aiVaultListMethodSupported === false) {
+      return null
+    }
+    const mux = this.mux
+    if (!mux || mux.isDisposed() || this._state !== 'ready') {
+      throw new Error('SSH relay is not ready')
+    }
+    try {
+      const result = await mux.request(SSH_AI_VAULT_LIST_SESSIONS_METHOD, params, {
+        signal: options.signal,
+        timeoutMs: options.timeoutMs ?? SSH_AI_VAULT_LIST_SESSIONS_TIMEOUT_MS
+      })
+      this.aiVaultListMethodSupported = true
+      return result
+    } catch (error) {
+      if (isMethodNotFoundError(error)) {
+        this.aiVaultListMethodSupported = false
+        return null
+      }
+      throw error
+    }
+  }
+
   getPortScanner(): PortScanner | null {
     return this.portScanner
   }
@@ -395,6 +446,7 @@ export class SshRelaySession {
       throw new Error(`Cannot establish relay session in state: ${this._state}`)
     }
     this._state = 'deploying'
+    this.aiVaultListMethodSupported = null
     this.currentConnection = conn
 
     try {
@@ -432,14 +484,15 @@ export class SshRelaySession {
 
       const mux = new SshChannelMultiplexer(transport)
       this.mux = mux
-      const ownsAttempt = (): boolean => this.mux === mux && !mux.isDisposed() && !this.isDisposed()
+      const isAttemptCurrent = (): boolean => this.mux === mux && !this.isDisposed()
+      const shouldContinue = (): boolean => isAttemptCurrent() && !mux.isDisposed()
 
       const ptyConsumerSessionState = await this.openPtyConsumerSession(
         mux,
         serverBuildId,
-        ownsAttempt
+        shouldContinue
       )
-      if (!ownsAttempt()) {
+      if (!verifyRelayAttempt(mux, isAttemptCurrent, 'consumer session setup')) {
         if (!mux.isDisposed()) {
           mux.dispose()
         }
@@ -447,7 +500,7 @@ export class SshRelaySession {
       }
       this.ptyConsumerSessionState = ptyConsumerSessionState
       await this.rememberPtyConsumerRecovery(serverBuildId)
-      if (!ownsAttempt()) {
+      if (!verifyRelayAttempt(mux, isAttemptCurrent, 'consumer recovery persistence')) {
         if (!mux.isDisposed()) {
           mux.dispose()
         }
@@ -455,7 +508,7 @@ export class SshRelaySession {
       }
 
       await mux.request('session.resolveHome', { path: '~' })
-      if (!ownsAttempt()) {
+      if (!verifyRelayAttempt(mux, isAttemptCurrent, 'home resolution')) {
         if (!mux.isDisposed()) {
           mux.dispose()
         }
@@ -463,33 +516,35 @@ export class SshRelaySession {
       }
       const connectionIncarnation = randomUUID()
 
-      const registered = await this.registerProviders(mux, ownsAttempt, connectionIncarnation)
+      const registered = await this.registerProviders(mux, shouldContinue, connectionIncarnation)
       if (!registered) {
+        if (!verifyRelayAttempt(mux, isAttemptCurrent, 'provider registration')) {
+          if (!mux.isDisposed()) {
+            mux.dispose()
+          }
+          throw new Error('Session disposed during establish')
+        }
+        throw new Error('Relay provider registration stopped unexpectedly')
+      }
+
+      if (!verifyRelayAttempt(mux, isAttemptCurrent, 'provider registration')) {
         if (!mux.isDisposed()) {
           mux.dispose()
         }
         throw new Error('Session disposed during establish')
       }
 
-      // Why: registerProviders swallows mux errors, so an isDisposed check catches a transport that closed mid-registration before we reach 'ready'.
-      if (mux.isDisposed()) {
-        throw new Error('Relay connection lost during provider registration')
-      }
-
-      if (this.isDisposed()) {
-        this.teardownProviders('connection_lost')
-        throw new Error('Session disposed during establish')
-      }
-
       // Why: explicit disconnect keeps PTY ownership, so a later manual connect must reattach those remote PTYs.
-      await this.reattachKnownPtys(mux, ownsAttempt)
+      await this.reattachKnownPtys(mux, shouldContinue)
 
-      if (!ownsAttempt()) {
+      if (!verifyRelayAttempt(mux, isAttemptCurrent, 'PTY reattach')) {
         throw new Error('Session disposed during establish')
       }
 
       this.configureRelayGraceTime(mux, graceTimeSeconds)
+      verifyRelayAttempt(mux, isAttemptCurrent, 'establish')
       this.watchMuxForRelayLoss(mux)
+      verifyRelayAttempt(mux, isAttemptCurrent, 'establish')
       this._state = 'ready'
       this.startPortScanning()
       this._onReady?.(this.targetId)
@@ -528,6 +583,7 @@ export class SshRelaySession {
     this.abortController = abortController
 
     this._state = 'reconnecting'
+    this.aiVaultListMethodSupported = null
     this.currentConnection = conn
 
     // Why: stop scanning before teardownProviders so the poll timer can't fire against a disposed multiplexer.
@@ -572,19 +628,19 @@ export class SshRelaySession {
       const mux = new SshChannelMultiplexer(transport)
       this.mux = mux
 
-      const ownsAttempt = (): boolean =>
+      const isAttemptCurrent = (): boolean =>
         this.mux === mux &&
-        !mux.isDisposed() &&
         this.abortController === abortController &&
         !abortController.signal.aborted &&
         !this.isDisposed()
+      const shouldContinue = (): boolean => isAttemptCurrent() && !mux.isDisposed()
 
       const ptyConsumerSessionState = await this.openPtyConsumerSession(
         mux,
         serverBuildId,
-        ownsAttempt
+        shouldContinue
       )
-      if (!ownsAttempt()) {
+      if (!verifyRelayAttempt(mux, isAttemptCurrent, 'consumer session setup')) {
         if (!mux.isDisposed()) {
           mux.dispose()
         }
@@ -592,7 +648,7 @@ export class SshRelaySession {
       }
       this.ptyConsumerSessionState = ptyConsumerSessionState
       await this.rememberPtyConsumerRecovery(serverBuildId)
-      if (!ownsAttempt()) {
+      if (!verifyRelayAttempt(mux, isAttemptCurrent, 'consumer recovery persistence')) {
         if (!mux.isDisposed()) {
           mux.dispose()
         }
@@ -600,7 +656,7 @@ export class SshRelaySession {
       }
 
       await mux.request('session.resolveHome', { path: '~' })
-      if (!ownsAttempt()) {
+      if (!verifyRelayAttempt(mux, isAttemptCurrent, 'home resolution')) {
         if (!mux.isDisposed()) {
           mux.dispose()
         }
@@ -608,20 +664,21 @@ export class SshRelaySession {
       }
       const connectionIncarnation = randomUUID()
 
-      const registered = await this.registerProviders(mux, ownsAttempt, connectionIncarnation)
+      const registered = await this.registerProviders(mux, shouldContinue, connectionIncarnation)
       if (!registered) {
-        if (!mux.isDisposed()) {
-          mux.dispose()
+        if (!verifyRelayAttempt(mux, isAttemptCurrent, 'provider registration')) {
+          if (this.mux === mux) {
+            this.teardownProviders('shutdown')
+          } else if (!mux.isDisposed()) {
+            mux.dispose()
+          }
+          return
         }
-        return
-      }
-
-      if (mux.isDisposed()) {
-        throw new Error('Relay connection lost during provider registration')
+        throw new Error('Relay provider registration stopped unexpectedly')
       }
 
       // Why: dispose() during registration/attach already cleaned up, but this.mux was reassigned above — clean up the new mux so it doesn't leak.
-      if (!ownsAttempt()) {
+      if (!verifyRelayAttempt(mux, isAttemptCurrent, 'provider registration')) {
         if (this.mux === mux) {
           this.teardownProviders('shutdown')
         } else if (!mux.isDisposed()) {
@@ -630,14 +687,16 @@ export class SshRelaySession {
         return
       }
 
-      await this.reattachKnownPtys(mux, ownsAttempt)
+      await this.reattachKnownPtys(mux, shouldContinue)
 
-      if (!ownsAttempt()) {
+      if (!verifyRelayAttempt(mux, isAttemptCurrent, 'PTY reattach')) {
         return
       }
 
       this.configureRelayGraceTime(mux, graceTimeSeconds)
+      verifyRelayAttempt(mux, isAttemptCurrent, 'reconnect')
       this.watchMuxForRelayLoss(mux)
+      verifyRelayAttempt(mux, isAttemptCurrent, 'reconnect')
       this._state = 'ready'
       this.startPortScanning()
       this._onReady?.(this.targetId)
@@ -991,17 +1050,24 @@ export class SshRelaySession {
       outputFlowControl: { requestedWindowSu: DEFAULT_PTY_SOURCE_WINDOW_SU }
     }
     try {
-      return await openSshPtyConsumerSession(mux, {
-        ...options,
-        ...(previousOwner
-          ? {
-              resume: {
-                ownerGeneration: previousOwner.ownerGeneration,
-                ownerLease: previousOwner.ownerLease
-              }
-            }
-          : {})
-      })
+      return await retrySshOwnerRecoveryWhileBlocked(
+        () =>
+          openSshPtyConsumerSession(mux, {
+            ...options,
+            ...(previousOwner
+              ? {
+                  resume: {
+                    ownerGeneration: previousOwner.ownerGeneration,
+                    ownerLease: previousOwner.ownerLease
+                  }
+                }
+              : {})
+          }),
+        {
+          isCurrent: () => ownsAttempt() && !mux.isDisposed(),
+          onClosed: (listener) => mux.onDispose(listener)
+        }
+      )
     } catch (error) {
       if (
         !previousOwner ||
@@ -1010,26 +1076,36 @@ export class SshRelaySession {
         throw error
       }
       const recovery = getSshPtyConsumerRecovery(this.targetId)
-      if (recovery) {
-        delete recovery.owner
-        recovery.checkpointsByAppPtyId.clear()
-        for (const [ptyId, migration] of recovery.modelMigrationsByAppPtyId) {
-          recovery.modelMigrationsByAppPtyId.set(
-            ptyId,
-            migration.then(() =>
-              Object.freeze({
-                status: 'checkpoint-unavailable' as const,
-                reason: 'completion-failed' as const
-              })
+      // Why identity-guarded: the record is target-scoped and its clientInstanceId is shared by every
+      // session for that target, so only a record still describing the owner this attempt tried to
+      // resume is ours to drop — otherwise a loser wipes the winner's checkpoints.
+      const ownsRecoveryRecord =
+        ownsAttempt() &&
+        (!recovery?.owner ||
+          (recovery.owner.ownerGeneration === previousOwner.ownerGeneration &&
+            recovery.owner.ownerLease === previousOwner.ownerLease))
+      if (ownsRecoveryRecord) {
+        if (recovery) {
+          delete recovery.owner
+          recovery.checkpointsByAppPtyId.clear()
+          for (const [ptyId, migration] of recovery.modelMigrationsByAppPtyId) {
+            recovery.modelMigrationsByAppPtyId.set(
+              ptyId,
+              migration.then(() =>
+                Object.freeze({
+                  status: 'checkpoint-unavailable' as const,
+                  reason: 'completion-failed' as const
+                })
+              )
             )
-          )
+          }
         }
+        await removeSshPtyConsumerOwnerRecovery(
+          this.targetId,
+          this.ptyConsumerClientInstanceId,
+          this.store
+        )
       }
-      await removeSshPtyConsumerOwnerRecovery(
-        this.targetId,
-        this.ptyConsumerClientInstanceId,
-        this.store
-      )
       if (!ownsAttempt()) {
         throw new Error('Session disposed during establish')
       }
@@ -1288,6 +1364,9 @@ export class SshRelaySession {
         hasExplicitPrompt?: unknown
         promptInteractionKey?: unknown
         hookEventName?: unknown
+        source?: unknown
+        providerPromptId?: unknown
+        compactTrigger?: unknown
         toolUseId?: unknown
         toolAgentId?: unknown
         toolAgentType?: unknown
@@ -1317,6 +1396,9 @@ export class SshRelaySession {
               : undefined,
           hookEventName:
             typeof envelope.hookEventName === 'string' ? envelope.hookEventName : undefined,
+          source: envelope.source,
+          providerPromptId: envelope.providerPromptId,
+          compactTrigger: envelope.compactTrigger,
           toolUseId: typeof envelope.toolUseId === 'string' ? envelope.toolUseId : undefined,
           toolAgentId: typeof envelope.toolAgentId === 'string' ? envelope.toolAgentId : undefined,
           toolAgentType:
