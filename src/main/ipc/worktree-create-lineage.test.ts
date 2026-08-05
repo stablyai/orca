@@ -13,6 +13,8 @@ function makeStore(metaById: Record<string, { instanceId?: string }>) {
 const CHILD = { id: 'repo::child', instanceId: 'child-instance' }
 
 describe('recordWorktreeLineageForCreatedWorktree', () => {
+  // Why: the default keeps folder-scope creates attributed to the active workspace,
+  // which is what the caller omitting a source has always meant.
   it('records worktree lineage for a worktree-type parent workspace', () => {
     const store = makeStore({ 'repo::parent': { instanceId: 'parent-instance' } })
 
@@ -33,6 +35,20 @@ describe('recordWorktreeLineageForCreatedWorktree', () => {
       createdAt: 1234
     })
     expect(store.setWorktreeLineage).toHaveBeenCalledWith('repo::child', lineage)
+  })
+
+  it('attributes an explicitly picked parent to a manual action', () => {
+    const store = makeStore({ 'repo::parent': { instanceId: 'parent-instance' } })
+
+    const lineage = recordWorktreeLineageForCreatedWorktree(
+      store,
+      worktreeWorkspaceKey('repo::parent'),
+      CHILD,
+      1234,
+      'manual-action'
+    )
+
+    expect(lineage?.capture).toEqual({ source: 'manual-action', confidence: 'explicit' })
   })
 
   it('records nothing for folder-workspace parents', () => {

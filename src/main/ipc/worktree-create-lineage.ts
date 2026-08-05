@@ -1,5 +1,10 @@
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
-import type { CreateWorktreeArgs, Worktree, WorktreeLineage } from '../../shared/types'
+import type {
+  CreateWorktreeArgs,
+  CreateWorktreeParentCaptureSource,
+  Worktree,
+  WorktreeLineage
+} from '../../shared/types'
 
 type WorktreeLineageStore = {
   getWorktreeMeta(worktreeId: string): { instanceId?: string } | undefined
@@ -13,7 +18,8 @@ export function recordWorktreeLineageForCreatedWorktree(
   store: WorktreeLineageStore,
   parentWorkspace: CreateWorktreeArgs['parentWorkspace'],
   worktree: Pick<Worktree, 'id' | 'instanceId'>,
-  createdAt: number
+  createdAt: number,
+  captureSource: CreateWorktreeParentCaptureSource = 'active-workspace'
 ): WorktreeLineage | null {
   if (!parentWorkspace || !worktree.instanceId) {
     return null
@@ -32,7 +38,7 @@ export function recordWorktreeLineageForCreatedWorktree(
     parentWorktreeId: parentScope.worktreeId,
     parentWorktreeInstanceId: parentInstanceId,
     origin: 'manual',
-    capture: { source: 'active-workspace', confidence: 'explicit' },
+    capture: { source: captureSource, confidence: 'explicit' },
     createdAt
   })
 }

@@ -3716,6 +3716,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             : activeScope?.type === 'folder'
               ? folderWorkspaceKey(activeScope.folderWorkspaceId)
               : undefined
+          // Why: a parent picked from the sidebar is a manual choice that need not be
+          // the active workspace, so it must not be attributed to active context.
+          const parentWorkspaceCaptureSource = options?.parentWorktreeId
+            ? ('manual-action' as const)
+            : undefined
           const createArgs = {
             repoId,
             name: candidateName,
@@ -3742,6 +3747,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
               : {}),
             ...(manualOrder !== undefined ? { manualOrder } : {}),
             ...(parentWorkspace ? { parentWorkspace } : {}),
+            ...(parentWorkspaceCaptureSource ? { parentWorkspaceCaptureSource } : {}),
             ...(workspaceStatus !== undefined ? { workspaceStatus } : {}),
             ...(linkedGitLabMR !== undefined ? { linkedGitLabMR } : {}),
             ...(linkedGitLabIssue !== undefined ? { linkedGitLabIssue } : {}),
@@ -3799,6 +3805,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                       : {}),
                     ...(manualOrder !== undefined ? { manualOrder } : {}),
                     ...(parentWorkspace ? { parentWorkspace } : {}),
+                    ...(parentWorkspaceCaptureSource
+                      ? { parentWorkspaceCaptureSource }
+                      : {}),
                     ...(workspaceStatus !== undefined ? { workspaceStatus } : {}),
                     ...(linkedGitLabMR !== undefined ? { linkedGitLabMR } : {}),
                     ...(linkedGitLabIssue !== undefined ? { linkedGitLabIssue } : {}),

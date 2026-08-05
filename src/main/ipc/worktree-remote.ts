@@ -245,7 +245,10 @@ function recordWorkspaceLineageForCreatedWorktree(
     parentWorkspaceKey: args.parentWorkspace,
     parentInstanceId: parentWorktreeMeta?.instanceId ?? null,
     origin: 'manual',
-    capture: { source: 'active-workspace', confidence: 'explicit' },
+    capture: {
+      source: args.parentWorkspaceCaptureSource ?? 'active-workspace',
+      confidence: 'explicit'
+    },
     createdAt
   })
 }
@@ -1839,7 +1842,8 @@ export async function createRemoteWorktree(
     store,
     args.parentWorkspace,
     worktree,
-    now
+    now,
+    args.parentWorkspaceCaptureSource
   )
 
   // Why: shared/symlink paths, `orca.yaml` shared directories, and `.worktreeinclude` copies are local-only; remote (SSH) support needs a new relay method + auth surface, so all are skipped here.
@@ -2454,7 +2458,8 @@ export async function createLocalWorktree(
     store,
     args.parentWorkspace,
     worktree,
-    now
+    now,
+    args.parentWorkspaceCaptureSource
   )
   // Why: reuse the roots creation already paid for via `git worktree list` so later IPC doesn't lazily rescan and trip macOS privacy prompts.
   registerWorktreeRootsForRepo(store, repo.id, [
