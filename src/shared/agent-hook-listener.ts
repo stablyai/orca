@@ -4280,11 +4280,13 @@ export function normalizeHookPayload(
     readFirstString(record, ['hook_event_name', 'hookEventName', 'hook_type', 'hookType']) ??
     hookPayloadRecord.hook_event_name ??
     hookPayloadRecord.hookEventName
-  // Why: Codex child hooks expose the child's session_id on the parent's pane.
+  // Why: Codex child hooks expose the child's session_id on the parent's pane;
+  // treating it as the root resume id would replace the terminal's real session.
+  // SessionStart may cache the root session id before any visible status event.
   const providerSession =
     source === 'codex' && readString(hookPayloadRecord, 'agent_id')
       ? null
-      : extractAgentProviderSession(source, hookPayloadRecord)
+      : (resolveHookProviderSession(state, source, paneKey, hookPayloadRecord) ?? null)
   const providerPromptId =
     source === 'claude' ? normalizeClaudePromptId(hookPayloadRecord.prompt_id) : undefined
   const compactTrigger =
