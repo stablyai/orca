@@ -1279,28 +1279,37 @@ export function registerSshHandlers(
     invalidateConnectAttempt(args.targetId)
     await runTargetLifecycle(args.targetId, async () => {
       const provider = getSshPtyProvider(args.targetId)
-      const leasedIds = persistedStore!
-        .getSshRemotePtyLeases(args.targetId)
-        .filter((lease) => lease.state !== 'terminated' && lease.state !== 'expired')
-        .map((lease) => lease.ptyId)
+      const leases = persistedStore!.getSshRemotePtyLeases(args.targetId)
       const ptyIdsByRelayId = new Map<string, string>()
-      for (const ptyId of getPtyIdsForConnection(args.targetId)) {
+      // Why: only leases the app still believes it owns may force a reconnect; 'expired' ones are
+      // swept opportunistically because they can name a host that is gone for good (issue #2626).
+      const ownedRelayIds = new Set<string>()
+      const trackPtyId = (ptyId: string, owned: boolean): void => {
         const relayPtyId = toRelaySshPtyId(args.targetId, ptyId)
-        ptyIdsByRelayId.set(relayPtyId, toAppSshPtyId(args.targetId, ptyId))
+        if (!ptyIdsByRelayId.has(relayPtyId)) {
+          ptyIdsByRelayId.set(relayPtyId, toAppSshPtyId(args.targetId, ptyId))
+        }
+        if (owned) {
+          ownedRelayIds.add(relayPtyId)
+        }
       }
-      for (const ptyId of leasedIds) {
-        const relayPtyId = toRelaySshPtyId(args.targetId, ptyId)
-        ptyIdsByRelayId.set(
-          relayPtyId,
-          ptyIdsByRelayId.get(relayPtyId) ?? toAppSshPtyId(args.targetId, ptyId)
-        )
+      for (const ptyId of getPtyIdsForConnection(args.targetId)) {
+        trackPtyId(ptyId, true)
+      }
+      for (const lease of leases) {
+        if (lease.state === 'terminated') {
+          continue
+        }
+        // Why: 'expired' records that reattach gave up, never that the remote shell died — those are
+        // precisely the orphans, so the user's terminate action has to be able to reach them.
+        trackPtyId(lease.ptyId, lease.state !== 'expired')
       }
       const ptyIds = Array.from(ptyIdsByRelayId, ([relayPtyId, appPtyId]) => ({
         relayPtyId,
         appPtyId
       }))
 
-      if (ptyIds.length > 0 && !provider) {
+      if (ownedRelayIds.size > 0 && !provider) {
         throw new Error(
           `${SSH_TERMINATE_RECONNECT_REQUIRED}: SSH relay is not connected; reconnect before terminating remote sessions.`
         )

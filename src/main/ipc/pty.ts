@@ -712,7 +712,13 @@ function retirePersistedStablePaneOwner(
   const paneKey = makePaneKey(owner.tabId, owner.leafId)
   const hostId = connectionId ? toSshExecutionHostId(connectionId) : undefined
   const current = resolvePersistedStablePaneOwner(store, paneKey, worktreeId, connectionId)
-  if (current?.ptyId !== owner.ptyId || current.incarnationId !== owner.incarnationId) {
+  if (!current) {
+    // Why: persistence already dropped this pane binding (an earlier stop retired it while the
+    // runtime kept history), so there is nothing left to clear — that is a completed retirement,
+    // not a competing owner. Reporting failure here strands the pane after its PTY is proven dead.
+    return true
+  }
+  if (current.ptyId !== owner.ptyId || current.incarnationId !== owner.incarnationId) {
     return false
   }
   const session = store.getWorkspaceSession(hostId)

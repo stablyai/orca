@@ -9513,6 +9513,143 @@ describe('registerPtyHandlers', () => {
     expect(store.flushOrThrow).toHaveBeenCalledOnce()
   })
 
+  // Why: a parked pane (stopped with keepHistory) leaves the runtime holding the binding while
+  // persistence has already dropped it. Reading "nothing left to retire" as a competing owner
+  // aborted materialization *after* signalling the exit, which destroyed the pane instead of
+  // rebuilding it — the reconnect path then had no surface to attach to (#11541).
+  it('respawns a proven-dead owner whose persisted binding was already retired', async () => {
+    const worktreeId = 'repo-1::/tmp/already-retired-owner'
+    const cwd = '/tmp/already-retired-owner'
+    const tabId = 'tab-already-retired-owner'
+    const leafId = '89898989-8989-4989-8989-898989898989'
+    const paneKey = makePaneKey(tabId, leafId)
+    const providerSpawn = vi.fn(
+      async (options: { attachOnly?: boolean; command?: string; sessionId?: string }) => {
+        if (options.attachOnly) {
+          throw new Error('Session not found: pty-already-retired-owner')
+        }
+        return { id: 'pty-fresh-already-retired', incarnationId: 'inc-fresh-already-retired' }
+      }
+    )
+    const probePtyLiveness = vi.fn(async () => false)
+    setLocalPtyProvider({
+      spawn: providerSpawn,
+      probePtyLiveness,
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => []),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    // Persistence kept the tab but already dropped this leaf's PTY binding, exactly as an
+    // earlier keep-history stop leaves it.
+    let session = {
+      tabsByWorktree: {
+        [worktreeId]: [{ id: tabId, worktreeId, ptyId: null }]
+      },
+      terminalLayoutsByTabId: {
+        [tabId]: {
+          root: { type: 'leaf' as const, leafId },
+          activeLeafId: leafId,
+          expandedLeafId: null,
+          ptyIdsByLeafId: {}
+        }
+      },
+      terminalPtyIncarnationsByPaneKey: {}
+    }
+    const store = {
+      getWorkspaceSession: vi.fn(() => session),
+      setWorkspaceSession: vi.fn((next) => {
+        session = next
+      }),
+      flushOrThrow: vi.fn(),
+      persistPtyBinding: vi.fn(),
+      getFolderWorkspace: vi.fn(() => undefined),
+      getFolderWorkspaces: vi.fn(() => []),
+      getProjectGroups: vi.fn(() => []),
+      getRepos: vi.fn(() => [])
+    }
+    let runtimeOwnsPane = true
+    const runtime = {
+      setPtyController: vi.fn(),
+      resolveTerminalPane: vi.fn(() => {
+        if (!runtimeOwnsPane) {
+          throw new Error('terminal_not_found')
+        }
+        return {
+          ptyId: 'pty-already-retired-owner',
+          tabId,
+          leafId,
+          handle: 'term-already-retired',
+          connected: true
+        }
+      }),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term-already-retired-fresh'),
+      preAllocateHandleForPty: vi.fn(() => 'term-already-retired-fresh'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      beginPtyRegistration: vi.fn(),
+      cancelPendingPtyRegistration: vi.fn(),
+      assertPtyRegistrationAllowed: vi.fn(),
+      registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
+      seedHeadlessTerminal: vi.fn(),
+      onPtySpawned: vi.fn(),
+      // Why: the real runtime drops its pane binding on exit; the guard after retirement must
+      // see that release rather than a resurrected owner.
+      onPtyExit: vi.fn(() => {
+        runtimeOwnsPane = false
+      }),
+      onPtyData: vi.fn()
+    }
+
+    registerPtyHandlers(
+      mainWindow as never,
+      runtime as never,
+      undefined,
+      undefined,
+      undefined,
+      store as never
+    )
+
+    const mounted = await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      cwd,
+      command: 'codex resume already-retired-session',
+      worktreeId,
+      tabId,
+      leafId,
+      env: {
+        ORCA_PANE_KEY: paneKey,
+        ORCA_TAB_ID: tabId,
+        ORCA_WORKTREE_ID: worktreeId
+      }
+    })
+
+    expect(probePtyLiveness).toHaveBeenCalledWith('pty-already-retired-owner')
+    expect(mounted).toMatchObject({ id: 'pty-fresh-already-retired' })
+    expect(providerSpawn).toHaveBeenCalledTimes(2)
+    expect(providerSpawn.mock.calls[1]?.[0]).toMatchObject({
+      command: 'codex resume already-retired-session'
+    })
+    expect(runtime.onPtyExit).toHaveBeenCalledWith('pty-already-retired-owner', 0, undefined)
+  })
+
   it('retires a dead owner from the exact SSH host session before fresh recovery', async () => {
     const connectionId = 'ssh-dead-stable-pane'
     const hostId = `ssh:${connectionId}`

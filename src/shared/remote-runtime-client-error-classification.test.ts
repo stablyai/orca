@@ -5,14 +5,17 @@ import {
 } from './remote-runtime-client-error-classification'
 
 describe('remote runtime client error classification', () => {
-  it.each(['remote_runtime_unavailable', 'runtime_timeout', 'runtime_unavailable', 'reconnecting'])(
-    'treats %s as recoverable',
-    (code) => {
-      expect(isRecoverableRemoteRuntimeConnectionError({ code, message: 'transport failed' })).toBe(
-        true
-      )
-    }
-  )
+  it.each([
+    'remote_runtime_unavailable',
+    'runtime_rpc_queue_overloaded',
+    'runtime_timeout',
+    'runtime_unavailable',
+    'reconnecting'
+  ])('treats %s as recoverable', (code) => {
+    expect(isRecoverableRemoteRuntimeConnectionError({ code, message: 'transport failed' })).toBe(
+      true
+    )
+  })
 
   it('does not retry authentication or protocol failures', () => {
     expect(
@@ -31,6 +34,7 @@ describe('remote runtime client error classification', () => {
     'Remote Orca runtime closed the connection.',
     'Remote Orca runtime connection closed.',
     'Remote Orca runtime is not connected.',
+    "Error invoking remote method 'runtimeEnvironments:call': RuntimeRpcCallQueueOverloadError: Remote runtime call queue is full; retry after current calls finish.",
     'Remote runtime subscription closed before it started.'
   ])('normalizes unstructured connection failure: %s', (message) => {
     const error = toRemoteRuntimeClientErrorLike(new Error(message))

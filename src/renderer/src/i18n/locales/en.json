@@ -674,6 +674,13 @@
             "triageFollowupsSummary": "Set assignee, priority, or estimate, and file parented follow-up tickets.",
             "triageFollowupsPrompt": "Use {{value0}} to triage the linked Linear issue — set priority and estimate — and create a parented follow-up ticket for the deferred cleanup."
           }
+        },
+        "issue": {
+          "workspace": {
+            "open": {
+              "4f2c1d8a3b": "Unable to open the workspace attached to this issue."
+            }
+          }
         }
       },
       "codex": {
@@ -1257,7 +1264,13 @@
         "af6e02c44a": "page",
         "76ffd3c937": "Search for a project to add.",
         "c11b4e3cc2": "No projects found.",
-        "519c3587f3": "Add to project"
+        "519c3587f3": "Add to project",
+        "openAttachedWorkspace": "Open workspace attached to issue",
+        "openWorkspace": "Open workspace",
+        "moreWorkspaceActions": "More issue workspace actions",
+        "startNewWorkspace": "Start new workspace",
+        "workspaceSection": "Workspace",
+        "noWorkspaceYet": "None yet"
       },
       "LinearItemDrawer": {
         "04008e6c46": "Start workspace from issue",
@@ -1289,7 +1302,11 @@
         "39883467f4": "Linear issue",
         "fda549766e": "{{value0}} to comment",
         "d71cd3003e": "+ Assignee",
-        "commentTooLarge": "Comment is too large to submit safely."
+        "commentTooLarge": "Comment is too large to submit safely.",
+        "openAttachedWorkspace": "Open workspace attached to issue",
+        "openWorkspace": "Open workspace",
+        "moreWorkspaceActions": "More issue workspace actions",
+        "startNewWorkspace": "Start new workspace"
       },
       "NewWorkspaceComposerCard": {
         "reuseExistingBranch": "Reuse branch",
@@ -1908,7 +1925,15 @@
         "jiraLinkSourceUnavailable": "Couldn’t link this Jira issue. Reconnect Jira or pick the matching site, then try again.",
         "loadPageUnreachable": "Page {{value0}} is beyond what GitHub search can return.",
         "loadPageFailed": "Page {{value0}} could not be loaded from GitHub.",
-        "loadPageNoMoreResults": "No more results on page {{value0}}."
+        "loadPageNoMoreResults": "No more results on page {{value0}}.",
+        "linearHasWorktreeLoadFailed": "Unable to load Linear issues linked to an Orca workspace.",
+        "linearHasWorktreePartialLoadFailed": "Some Linear issues linked to an Orca workspace could not be loaded. Refresh to try again.",
+        "linearHasWorktreeSearchPlaceholder": "Filter issues linked to an Orca workspace...",
+        "linearModeHasWorktree": "Has Workspace",
+        "linearModeHasWorktreeTooltip": "Linear tickets linked to an Orca workspace",
+        "linearEmptyHasWorktree": "No Linear tickets are linked to an Orca workspace yet. Start work from a Linear issue to see it here.",
+        "linearOpenAttachedWorkspace": "Open workspace attached to {{value0}}",
+        "linearWorktreesColumn": "Workspaces"
       },
       "Terminal": {
         "73768427cf": "Close",
