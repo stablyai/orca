@@ -46,8 +46,10 @@ function resolveAttentionPane(
     if (parsed === null) {
       continue
     }
-    // Why both: hook rows can omit the worktree stamp and still map through a mirrored tab.
-    if (entry.worktreeId !== worktreeId && !worktreeTabIds.has(parsed.tabId)) {
+    // Why tab ownership alone: a row stamped for this worktree can still name another worktree's
+    // tab, and focusing that would activate one worktree while revealing another's pane. The stamp
+    // already decided which worktree is Class 1; here it must not override live tab ownership.
+    if (!worktreeTabIds.has(parsed.tabId)) {
       continue
     }
     if (best === null || entry.stateStartedAt > best.startedAt) {

@@ -137,6 +137,31 @@ describe('findNextAttentionTarget', () => {
     expect(target).toEqual({ worktreeId: 'wt-a', tabId: 'tab-9', leafId: LEAF_A })
   })
 
+  it('refuses a pane whose tab belongs to another worktree, even when the row is stamped here', () => {
+    const target = findNextAttentionTarget({
+      attentionByWorktree: new Map([['wt-a', CLASS_1(NOW)]]),
+      agentStatusByPaneKey: {
+        [`tab-a:${LEAF_A}`]: makeWaitingEntry({
+          paneKey: `tab-a:${LEAF_A}`,
+          worktreeId: 'wt-a',
+          stateStartedAt: NOW - 5_000
+        }),
+        [`tab-b:${LEAF_B}`]: makeWaitingEntry({
+          paneKey: `tab-b:${LEAF_B}`,
+          worktreeId: 'wt-a',
+          stateStartedAt: NOW
+        })
+      },
+      tabsByWorktree: { 'wt-a': [makeTab('tab-a', 'wt-a')], 'wt-b': [makeTab('tab-b', 'wt-b')] },
+      eligibleWorktreeIds: new Set(['wt-a']),
+      activeWorktreeId: null,
+      now: NOW
+    })
+
+    // The fresher row names wt-b's tab; focusing it would reveal another worktree's pane.
+    expect(target).toEqual({ worktreeId: 'wt-a', tabId: 'tab-a', leafId: LEAF_A })
+  })
+
   it('still targets the worktree when its only waiting row is stale or unroutable', () => {
     const target = findNextAttentionTarget({
       attentionByWorktree: new Map([['wt-a', CLASS_1(NOW)]]),
