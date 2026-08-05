@@ -3,7 +3,7 @@ import {
   type SystemPowerLifecycleListener
 } from '../system-power-lifecycle'
 
-export const SSH_FILE_STREAM_INACTIVITY_TIMEOUT_MS = 30_000
+export const SSH_FILE_STREAM_INACTIVITY_TIMEOUT_MS = 60_000
 
 type SystemPowerLifecycleSubscription = (listener: SystemPowerLifecycleListener) => () => void
 
