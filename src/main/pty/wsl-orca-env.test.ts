@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
+  SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
+} from '../../shared/setup-agent-sequencing'
+import {
   addOrcaWslInteropEnv,
   addWorktreeSetupWslInteropEnv,
   stampWslOrchestrationCompatibilityHost
@@ -12,6 +16,20 @@ describe('addOrcaWslInteropEnv', () => {
     addOrcaWslInteropEnv(env)
 
     expect(env.WSLENV).toBe('ORCA_TERMINAL_HANDLE/u')
+  })
+
+  it('imports setup-gated startup env into WSL without path translation', () => {
+    const env: Record<string, string> = {
+      [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: 'codex',
+      [SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]: 'while :; do sleep 1; done'
+    }
+
+    addOrcaWslInteropEnv(env)
+
+    expect(env.WSLENV?.split(':')).toEqual([
+      `${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}/u`,
+      `${SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV}/u`
+    ])
   })
 
   it('preserves existing WSLENV entries and does not duplicate the handle entry', () => {

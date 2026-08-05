@@ -54,6 +54,7 @@ import type { AgentStartedTelemetry } from '../../lib/worktree-activation'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { forgetAgentHibernationTabOutput } from '@/lib/agent-hibernation-output-activity'
 import { forgetForegroundTerminalTabs } from '@/lib/foreground-terminal-tabs'
+import { terminalLayoutEqual } from '@/lib/terminal-layout-equality'
 import { forgetAgentStartupDeliveriesForTabs } from '@/lib/agent-startup-delivery-guards'
 import { clearTransientTerminalState, emptyLayoutSnapshot } from './terminal-helpers'
 import {
@@ -1266,15 +1267,18 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
 
   setCacheTimerStartedAt: (key, ts) => {
     set((s) => {
-      const next = { ...s.cacheTimerByKey, [key]: ts }
       // Why: a real pane write clears any ':seed' sentinel from seedCacheTimersForIdleTabs, avoiding phantom timers when the seed key doesn't match the real pane.
       const colonIdx = key.indexOf(':')
-      if (colonIdx !== -1) {
-        const tabId = key.slice(0, colonIdx)
-        const suffix = key.slice(colonIdx + 1)
-        if (suffix !== 'seed') {
-          delete next[`${tabId}:seed`]
-        }
+      const suffix = colonIdx === -1 ? null : key.slice(colonIdx + 1)
+      const seedKey = colonIdx !== -1 && suffix !== 'seed' ? `${key.slice(0, colonIdx)}:seed` : null
+      const hasStaleSeed = seedKey !== null && seedKey in s.cacheTimerByKey
+      // Why: parked-pane watchers replay null-over-null on every working/exit transition; each redundant write runs every subscriber's selector.
+      if (s.cacheTimerByKey[key] === ts && !hasStaleSeed) {
+        return s
+      }
+      const next = { ...s.cacheTimerByKey, [key]: ts }
+      if (seedKey !== null) {
+        delete next[seedKey]
       }
       return { cacheTimerByKey: next }
     })
@@ -3650,20 +3654,27 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   setTabLayout: (tabId, layout) => {
     let ownershipTransfers: ReturnType<typeof resolveTerminalLayoutPtyOwnershipTransfers> = []
     set((s) => {
-      const next = { ...s.terminalLayoutsByTabId }
-      if (layout) {
-        const normalized = normalizeTerminalLayoutPtyOwnership(layout)
-        next[tabId] = normalized.snapshot
-        if (normalized.changed) {
-          ownershipTransfers = resolveTerminalLayoutPtyOwnershipTransfers(
-            layout,
-            normalized.snapshot
-          )
+      if (!layout) {
+        if (!(tabId in s.terminalLayoutsByTabId)) {
+          return s
         }
-      } else {
+        const next = { ...s.terminalLayoutsByTabId }
         delete next[tabId]
+        return { terminalLayoutsByTabId: next }
       }
-      return { terminalLayoutsByTabId: next }
+      const normalized = normalizeTerminalLayoutPtyOwnership(layout)
+      // Resolved before the bailout: normalization can transfer pane ownership even when the stored snapshot is untouched.
+      if (normalized.changed) {
+        ownershipTransfers = resolveTerminalLayoutPtyOwnershipTransfers(layout, normalized.snapshot)
+      }
+      // Why: pane-title churn re-persists structurally identical snapshots; bailing keeps every pane selector asleep.
+      const existing = s.terminalLayoutsByTabId[tabId]
+      if (existing && terminalLayoutEqual(existing, normalized.snapshot)) {
+        return s
+      }
+      return {
+        terminalLayoutsByTabId: { ...s.terminalLayoutsByTabId, [tabId]: normalized.snapshot }
+      }
     })
     transferNormalizedTerminalLayoutPtyOwnership(get(), tabId, ownershipTransfers)
   },

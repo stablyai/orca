@@ -719,7 +719,8 @@ export class RuntimeFileCommands {
     pathText: string,
     cwd?: string | null,
     clientId?: string,
-    terminalHandle?: string | null
+    terminalHandle?: string | null,
+    crossWorkspace?: boolean
   ): Promise<RuntimeTerminalPathResolution> {
     const store = this.host.requireStore()
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
@@ -757,8 +758,10 @@ export class RuntimeFileCommands {
       terminalFileUriHostname
     })
     const relativePath = relativePathInsideRoot(worktree.path, absolutePath)
+    // Why: clients that predate crossWorkspace reuse their own worktree id for the
+    // follow-up files.open, so retargeting to a sibling workspace must be opt-in.
     const knownWorkspaceTarget =
-      relativePath === null
+      crossWorkspace && relativePath === null
         ? await this.host.resolveKnownWorkspaceFileTarget?.(
             absolutePath,
             getRuntimeFileTargetExecutionHostId(target)

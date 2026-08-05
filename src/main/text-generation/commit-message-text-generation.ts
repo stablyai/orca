@@ -75,6 +75,7 @@ export type DiscoverCommitMessageModelsResult =
       capability: CommitMessageAgentCapability
       models: CommitMessageModelCapability[]
       defaultModelId: string
+      catalogOrigin: 'probe' | 'spec'
     }
   | { success: false; error: string }
 
@@ -229,7 +230,8 @@ function userFacingUnsafeWindowsBatchArgs(label: string): string {
 function toModelDiscoveryCapability(
   spec: NonNullable<ReturnType<typeof getCommitMessageAgentSpec>>,
   models = spec.models,
-  defaultModelId = spec.defaultModelId
+  defaultModelId = spec.defaultModelId,
+  catalogOrigin: 'probe' | 'spec' = 'spec'
 ): Extract<DiscoverCommitMessageModelsResult, { success: true }> {
   return {
     success: true,
@@ -241,7 +243,8 @@ function toModelDiscoveryCapability(
       models
     },
     models,
-    defaultModelId
+    defaultModelId,
+    catalogOrigin
   }
 }
 
@@ -281,7 +284,7 @@ function finalizeModelDiscoveryOutput(
   const defaultModelId = models.some((model) => model.id === spec.defaultModelId)
     ? spec.defaultModelId
     : models[0].id
-  return toModelDiscoveryCapability(spec, models, defaultModelId)
+  return toModelDiscoveryCapability(spec, models, defaultModelId, 'probe')
 }
 
 function planModelDiscovery(
@@ -301,7 +304,7 @@ function planModelDiscovery(
     plan: {
       binary: command.binary,
       args: [...command.prefixArgs, ...modelDiscovery.args],
-      stdinPayload: null,
+      stdinPayload: modelDiscovery.stdinPayload ?? null,
       label: spec.label
     }
   }
@@ -330,6 +333,7 @@ export async function discoverCommitMessageModelsLocal(
     const result = new Promise<DiscoverCommitMessageModelsResult>((resolve) => {
       let child: ChildProcess
       const spawnEnv = env ?? process.env
+      let discoveryStdin: string | null = null
       try {
         const planned = planModelDiscovery(spec, agentCommandOverride)
         if (!planned.ok) {
@@ -337,11 +341,13 @@ export async function discoverCommitMessageModelsLocal(
           resolve({ success: false, error: planned.error })
           return
         }
+        discoveryStdin = planned.plan.stdinPayload
+        const stdinMode = discoveryStdin === null ? 'ignore' : 'pipe'
         if (process.platform === 'win32' && options.wslDistro) {
           child = wslAwareSpawn(planned.plan.binary, planned.plan.args, {
             cwd: options.cwd,
             env: buildWslLauncherEnv(env),
-            stdio: ['ignore', 'pipe', 'pipe'],
+            stdio: [stdinMode, 'pipe', 'pipe'],
             windowsHide: true,
             wslDistro: options.wslDistro,
             useWslLoginShell: true
@@ -356,9 +362,15 @@ export async function discoverCommitMessageModelsLocal(
           const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(resolvedBinary, planned.plan.args)
           child = spawn(spawnCmd, spawnArgs, {
             env: spawnEnv,
-            stdio: ['ignore', 'pipe', 'pipe'],
+            stdio: [stdinMode, 'pipe', 'pipe'],
             windowsHide: true
           })
+        }
+        if (discoveryStdin !== null) {
+          // Why: a CLI that rejects the args exits before reading stdin; the
+          // resulting EPIPE must surface as exit-code fallback, not a crash.
+          child.stdin?.on?.('error', () => {})
+          child.stdin?.end(discoveryStdin)
         }
       } catch (error) {
         markProcessClosed()

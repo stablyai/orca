@@ -112,7 +112,10 @@ import {
 } from '../../shared/constants'
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import { makePaneKey } from '../../shared/stable-pane-id'
-import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../shared/setup-agent-sequencing'
+import {
+  SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
+  SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
+} from '../../shared/setup-agent-sequencing'
 import type {
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding
@@ -5674,7 +5677,9 @@ describe('OrcaRuntimeService', () => {
         1,
         expect.objectContaining({
           cwd: '/remote/mobile-setup',
-          command: expect.stringContaining('exec claude'),
+          env: expect.objectContaining({
+            [SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]: expect.stringContaining('exec claude')
+          }),
           worktreeId: result.worktree.id
         })
       )
@@ -5688,14 +5693,20 @@ describe('OrcaRuntimeService', () => {
           worktreeId: result.worktree.id
         })
       )
-      const startupCommand = (spawn.mock.calls[0]![0] as { command: string }).command
+      const startup = spawn.mock.calls[0]![0] as {
+        command: string
+        env: Record<string, string>
+      }
+      const startupCommand = startup.command
+      const startupScript = startup.env[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]!
       const setupCommand = (spawn.mock.calls[1]![0] as { command: string }).command
-      const nonceMatch = startupCommand.match(/if \[ "\$seen" = ([0-9a-f-]+) \]/)
+      const nonceMatch = startupScript.match(/if \[ "\$seen" = ([0-9a-f-]+) \]/)
       expect(nonceMatch?.[1]).toBeTruthy()
       const markerPath = `/remote/repo/.git/worktrees/mobile-setup/orca/setup-runner.sh.${nonceMatch![1]}.done`
+      expect(startupCommand.length).toBeLessThan(256)
       expect(setupCommand).toContain('printf')
       expect(setupCommand).toContain(`${nonceMatch![1]} "$status"`)
-      expect(startupCommand).toContain(markerPath)
+      expect(startupScript).toContain(markerPath)
       expect(setupCommand).toContain(markerPath)
       expect(revealTerminalSession).toHaveBeenLastCalledWith(
         result.worktree.id,
@@ -6168,6 +6179,61 @@ describe('OrcaRuntimeService', () => {
       'C:\\remote\\repo\\.gitignore',
       'node_modules\n.orca\n'
     )
+  })
+
+  describe('checkRepoHooks status', () => {
+    const remoteStore = {
+      ...store,
+      getRepos: () => [
+        {
+          id: TEST_REPO_ID,
+          path: '/remote/repo',
+          displayName: 'repo',
+          badgeColor: 'blue',
+          addedAt: 1,
+          connectionId: 'ssh-1'
+        }
+      ]
+    }
+
+    it('reports an error when the SSH filesystem provider is unavailable', async () => {
+      const runtime = new OrcaRuntimeService(remoteStore as never)
+
+      await expect(runtime.checkRepoHooks('id:repo-1')).resolves.toEqual({
+        status: 'error',
+        hasHooks: false,
+        hooks: null,
+        mayNeedUpdate: false
+      })
+    })
+
+    it('reports ok for a missing remote orca.yaml and error for any other read failure', async () => {
+      const readFile = vi.fn()
+      registerSshFilesystemProvider('ssh-1', { readFile } as never)
+      const runtime = new OrcaRuntimeService(remoteStore as never)
+
+      try {
+        readFile.mockRejectedValueOnce(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+        await expect(runtime.checkRepoHooks('id:repo-1')).resolves.toMatchObject({
+          status: 'ok',
+          hasHooks: false
+        })
+
+        readFile.mockRejectedValueOnce(Object.assign(new Error('down'), { code: 'ECONNRESET' }))
+        await expect(runtime.checkRepoHooks('id:repo-1')).resolves.toMatchObject({
+          status: 'error',
+          hasHooks: false
+        })
+      } finally {
+        unregisterSshFilesystemProvider('ssh-1')
+      }
+    })
+
+    it('reports ok for a local repo hook check', async () => {
+      const runtime = new OrcaRuntimeService(store as never)
+
+      await expect(runtime.checkRepoHooks('id:repo-1')).resolves.toMatchObject({ status: 'ok' })
+    })
   })
 
   it('resolves SSH issue commands from shared orca.yaml and deletes empty overrides', async () => {
@@ -20757,6 +20823,47 @@ describe('OrcaRuntimeService', () => {
         ]
       })
     ).rejects.toThrow('terminal_topology_conflict')
+  })
+
+  it('keeps orphaned list and show writability aligned with the send gate', async () => {
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: { [TEST_WORKTREE_ID]: [] }
+    })
+    const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
+    const writes: [string, string][] = []
+    runtime.setPtyController({
+      write: (ptyId: string, data: string) => {
+        writes.push([ptyId, data])
+        return true
+      },
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [
+        {
+          id: 'pty-orphan',
+          incarnationId: 'inc-orphan',
+          terminalHandle: 'term_orphan',
+          title: 'shell',
+          cwd: TEST_WORKTREE_PATH,
+          worktreeId: TEST_WORKTREE_ID,
+          wslDistro: null
+        }
+      ]
+    } as never)
+    runtime.registerPty('pty-orphan', TEST_WORKTREE_ID)
+    runtime.onPtySpawned('pty-orphan', 'inc-orphan', { awaitsRegistration: false })
+
+    const listed = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
+    const entry = listed.terminals.find((terminal) => terminal.ptyId === 'pty-orphan')
+    expect(entry).toMatchObject({ orphaned: true, connected: true, writable: true })
+
+    const shown = await runtime.showTerminal(entry!.handle)
+    expect(shown.writable).toBe(true)
+    await expect(runtime.sendTerminal(entry!.handle, { text: 'hi' })).resolves.toMatchObject({
+      accepted: true
+    })
+    expect(writes).toEqual([['pty-orphan', 'hi']])
   })
 
   it('rejects connection mismatch and reused handles while allowing a WSL-owned orphan', async () => {
@@ -39737,12 +39844,18 @@ describe('OrcaRuntimeService', () => {
     )
     // Why: setup is provisioned fire-and-forget; the wait-for-setup guarantee comes from the shell nonce/marker, not JS spawn ordering.
     await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(2))
-    const startupCommand = (spawn.mock.calls[0]![0] as { command: string }).command
+    const startup = spawn.mock.calls[0]![0] as {
+      command: string
+      env: Record<string, string>
+    }
+    const startupCommand = startup.command
+    const startupScript = startup.env[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]!
     const setupCommand = (spawn.mock.calls[1]![0] as { command: string }).command
-    const nonceMatch = startupCommand.match(/if \[ "\$seen" = ([0-9a-f-]+) \]/)
+    const nonceMatch = startupScript.match(/if \[ "\$seen" = ([0-9a-f-]+) \]/)
     expect(nonceMatch?.[1]).toBeTruthy()
-    expect(startupCommand).toContain('exec claude')
-    expect(startupCommand).toContain('/mnt/c/tmp/repo/.git/orca/setup-runner.sh')
+    expect(startupCommand.length).toBeLessThan(256)
+    expect(startupScript).toContain('exec claude')
+    expect(startupScript).toContain('/mnt/c/tmp/repo/.git/orca/setup-runner.sh')
     expect(setupCommand).toContain('bash /mnt/c/tmp/repo/.git/orca/setup-runner.sh')
     expect(setupCommand).toContain('printf')
     expect(setupCommand).toContain(`${nonceMatch![1]} "$status"`)
@@ -41021,7 +41134,9 @@ describe('OrcaRuntimeService', () => {
       1,
       expect.objectContaining({
         cwd: '/tmp/workspaces/runtime-startup-setup-split',
-        command: expect.stringContaining('codex'),
+        env: expect.objectContaining({
+          [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: expect.stringContaining('codex')
+        }),
         worktreeId: result.worktree.id
       })
     )
@@ -41038,15 +41153,21 @@ describe('OrcaRuntimeService', () => {
         worktreeId: result.worktree.id
       })
     )
-    const startupCommand = (spawn.mock.calls[0]![0] as { command: string }).command
+    const startup = spawn.mock.calls[0]![0] as {
+      command: string
+      env: Record<string, string>
+    }
+    const startupCommand = startup.command
+    const startupScript = startup.env[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]!
     const setupCommand = (spawn.mock.calls[1]![0] as { command: string }).command
-    const nonceMatch = startupCommand.match(/if \[ "\$seen" = ([0-9a-f-]+) \]/)
+    const nonceMatch = startupScript.match(/if \[ "\$seen" = ([0-9a-f-]+) \]/)
     expect(nonceMatch?.[1]).toBeTruthy()
     const markerPath = `/tmp/repo/.git/orca/setup-runner.sh.${nonceMatch![1]}.done`
-    expect(startupCommand).toContain('--dangerously-bypass-approvals-and-sandbox')
+    expect(startupCommand.length).toBeLessThan(256)
+    expect(startupScript).toContain('--dangerously-bypass-approvals-and-sandbox')
     expect(setupCommand).toContain('printf')
     expect(setupCommand).toContain(`${nonceMatch![1]} "$status"`)
-    expect(startupCommand).toContain(markerPath)
+    expect(startupScript).toContain(markerPath)
     expect(setupCommand).toContain(markerPath)
     const mainEnv = (spawn.mock.calls[0]![0] as { env?: Record<string, string> }).env ?? {}
     const setupEnv = (spawn.mock.calls[1]![0] as { env?: Record<string, string> }).env ?? {}

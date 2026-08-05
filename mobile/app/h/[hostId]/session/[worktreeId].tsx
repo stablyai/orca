@@ -196,8 +196,11 @@ import { MobileTerminalLiveInputStatus } from '../../../../src/session/MobileTer
 import { MobileTerminalInputActions } from '../../../../src/session/MobileTerminalInputActions'
 import { resolveMobileFileTabDoc } from '../../../../src/files/mobile-file-tab-doc'
 import { captureMobileFileMutationOwnership } from '../../../../src/files/mobile-file-mutation-ownership'
-import { openMobileTerminalFileTap } from '../../../../src/session/mobile-terminal-file-tap-open'
+import { useMobileFileTapHandlers } from '../../../../src/session/use-mobile-file-tap-handlers'
 import { useLiveWorktreeName } from '../../../../src/session/use-live-worktree-name'
+import { useMissingWorktreeBounce } from '../../../../src/session/use-missing-worktree-bounce'
+import { hostRouteWithNotice } from '../../../../src/host-route-notice'
+import { LAST_VISITED_WORKTREE_STORAGE_KEY } from '../../../../src/worktree/last-visited-worktree-repo'
 import {
   acceptSessionSnapshot,
   applyClosedTabTombstones,
@@ -859,11 +862,18 @@ export default function SessionScreen() {
   const reconnectAttempts = useReconnectAttempt(hostId)
   const lastConnectedAt = useLastConnectedAt(hostId)
   const forceReconnectHost = useForceReconnect()
-  const worktreeName = useLiveWorktreeName({
+  const { name: worktreeName, resolution: worktreeResolution } = useLiveWorktreeName({
     client,
     connState,
     routeName: routeWorktreeName,
     worktreeId
+  })
+  // Why: a workspace deleted on the desktop leaves every RPC on this route failing forever.
+  useMissingWorktreeBounce({
+    hostId,
+    worktreeId,
+    resolution: worktreeResolution,
+    bounce: (id) => router.replace(hostRouteWithNotice(id, 'worktree-missing'))
   })
   // Master-detail state: wide layouts dock a tapped panel beside the session; narrow keeps it null and pushes full-screen routes.
   const { isWideLayout } = useResponsiveLayout()
@@ -1693,7 +1703,8 @@ export default function SessionScreen() {
 
       try {
         const response = await client.sendRequest('terminal.list', {
-          worktree: `id:${worktreeId}`
+          worktree: `id:${worktreeId}`,
+          includeVisualLayouts: false
         })
         if (response.ok) {
           const result = (response as RpcSuccess).result as { terminals: Terminal[] }
@@ -2639,7 +2650,7 @@ export default function SessionScreen() {
   useEffect(() => {
     if (hostId && worktreeId) {
       void AsyncStorage.setItem(
-        'orca:last-visited-worktree',
+        LAST_VISITED_WORKTREE_STORAGE_KEY,
         JSON.stringify({ hostId, worktreeId })
       )
     }
@@ -3192,44 +3203,23 @@ export default function SessionScreen() {
     })
   }, [])
 
-  // Tap a terminal file path → resolve on host, open as file tab (mirrors desktop Cmd/Ctrl-click); silent on a miss.
-  const handleFileTapActivationSeqRef = useRef(0)
-  const handleFileTap = useCallback(
-    (handle: string, pathText: string, line: number | null, column: number | null) => {
-      if (handle !== activeHandleRef.current || !client) {
-        return
-      }
-      const activationSeq = ++handleFileTapActivationSeqRef.current
-      openMobileTerminalFileTap<MobileSessionTab>({
-        client,
-        hostId,
-        worktreeId,
-        worktreeName: routeWorktreeName,
-        terminalHandle: handle,
-        pathText,
-        cwd: terminalCwdRef.current.get(handle) ?? null,
-        line,
-        column,
-        pushPreviewRoute: (href) => router.push(href),
-        openBrowser: (url) => void handleCreateBrowserRef.current?.(url),
-        triggerOpenFeedback: triggerSelection,
-        fetchSessionTabs,
-        getSessionTabs: () => sessionTabsRef.current,
-        getActiveSessionTabId: () => activeSessionTabIdRef.current,
-        getActivationState: (activated) => ({
-          activated,
-          activationSeq,
-          latestActivationSeq: handleFileTapActivationSeqRef.current,
-          sourceTerminalHandle: handle,
-          activeTerminalHandle: activeHandleRef.current,
-          activeTabType: activeSessionTabTypeRef.current
-        }),
-        switchSessionTab: (tab) => switchSessionTabRef.current?.(tab),
-        scheduleDelayedAction
-      })
-    },
-    [client, fetchSessionTabs, hostId, routeWorktreeName, router, scheduleDelayedAction, worktreeId]
-  )
+  // Tap a terminal or chat file path → resolve on host, open as file tab/preview.
+  const { handleFileTap, handleNativeChatFileTap } = useMobileFileTapHandlers<MobileSessionTab>({
+    client,
+    hostId,
+    worktreeId,
+    worktreeName: routeWorktreeName,
+    activeHandleRef,
+    terminalCwdRef,
+    openBrowser: (url) => void handleCreateBrowserRef.current?.(url),
+    fetchSessionTabs,
+    getSessionTabs: () => sessionTabsRef.current,
+    getActiveSessionTabId: () => activeSessionTabIdRef.current,
+    getActiveSessionTabType: () => activeSessionTabTypeRef.current,
+    switchSessionTab: (tab) => switchSessionTabRef.current?.(tab),
+    scheduleDelayedAction,
+    reportChatTapFailure: nativeChatSendError.show
+  })
 
   const handleOpenedFileDiffActivationSeqRef = useRef(0)
   // Capture active tab at tap time; reading it after openDiff would misread a mid-RPC switch and let the retry steal focus.
@@ -4750,6 +4740,7 @@ export default function SessionScreen() {
                 ))}
                 <MobileNativeChatOverlay
                   controller={nativeChatController}
+                  onOpenFile={handleNativeChatFileTap}
                   images={nativeChatImages}
                   onMicPress={handleDictationToggle}
                   micActive={dictation.isRecording}

@@ -91,11 +91,11 @@ export function resumeTerminalVisibility({
     if (!shouldUseLightTabResume) {
       // Why: this clear wipes the glyph atlas shared with other same-config
       // terminals; refresh after reset so rebuilt atlases repaint from xterm.
-      resetAndRefreshAllTerminalWebglAtlases()
+      resetAndRefreshAllTerminalWebglAtlases('visibility-resume')
     }
     // Why: the synchronous recovery above can fire before the revealed pane is
-    // attached and laid out, where the WebGL renderer drops redraw requests
-    // without retry. Follow up with a settled-frame, pane-scoped repaint.
+    // attached and laid out. Follow up after layout with one shared-atlas-safe
+    // recovery covering every visible terminal manager.
     manager.scheduleRevealRepaint()
   })
 }
@@ -168,12 +168,12 @@ export function recoverVisibleTerminalWindowWake({
     // every same-config pane re-rasterize at once, and xterm's atlas page-merge
     // clear-model flag is consumed by one renderer (xterm.js #4480), so panes
     // that lose that race paint garbled glyphs mid-stream.
-    resetAndRefreshAllTerminalWebglAtlases()
+    resetAndRefreshAllTerminalWebglAtlases('system-resume')
     manager.scheduleRevealRepaint()
   } else {
-    // Why: the reveal repaint clears each pane's texture atlas (a shared,
-    // same-config wipe), so a plain refocus must use the atlas-preserving
-    // present instead — otherwise it re-arms the same mid-stream garble race.
+    // Why: the reveal repaint runs a shared-atlas reset, so a plain refocus
+    // must use the atlas-preserving present instead — otherwise it re-arms the
+    // same mid-stream garble race.
     manager.scheduleRevealPresent()
   }
 }

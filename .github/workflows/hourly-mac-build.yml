@@ -182,20 +182,15 @@ jobs:
           MAIN_REPO_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # Why read the highest number off existing titles rather than counting
-          # releases: the prune step trims to HOURLY_RETAIN_COUNT, so a count would
-          # roll backwards after three days and reissue numbers already in use. The
-          # maximum is always among the retained builds, because pruning drops the
-          # oldest. `capture(...)?` swallows the non-match on legacy titles, which
-          # were the raw tag, so the series simply starts at 01.
+          # Existing titles, which carry the build number this series continues
+          # from. The script picks the number, because it restarts per base version
+          # and only the script knows which base this build resolved to.
           #
           # Why drafts count here but not in the freshness check: that check asks
           # "did this commit ship", where a draft is a no. This one asks "is the
           # number free", where a stranded draft still holds one.
-          last_number="$(gh release list --repo "$HOURLY_REPO" --limit 200 --json name,isDraft \
-            --jq '[.[] | (.name // "") | capture(" • (?<n>[0-9]+) • ")? | .n | tonumber] | max // 0')"
-          build_number=$(( last_number + 1 ))
-          echo "Hourly build number $build_number (previous high: $last_number)"
+          names="$(gh release list --repo "$HOURLY_REPO" --limit 200 --json name \
+            --jq '.[].name // empty')"
           # Why the main repo's tags decide the base version rather than
           # package.json: main's version only moves on `release:` commits, and
           # stable patches are cut from release branches that never merge back, so
@@ -207,9 +202,10 @@ jobs:
             --repo "$GITHUB_REPOSITORY" --limit 100 --exclude-drafts \
             --json tagName --jq '.[].tagName' || true)"
           echo "Highest published tag seen: $(head -1 <<<"$published")"
-          ORCA_PUBLISHED_VERSIONS="$published" \
-            ORCA_HOURLY_BUILD_NUMBER="$build_number" node config/scripts/hourly-build-version.mjs \
+          ORCA_PUBLISHED_VERSIONS="$published" ORCA_HOURLY_RELEASE_NAMES="$names" \
+            node config/scripts/hourly-build-version.mjs \
             >"$RUNNER_TEMP/hourly-identity.txt"
+          grep -E '^(version|build_number)=' "$RUNNER_TEMP/hourly-identity.txt"
           # Why check rather than trust: the checkout above pins `ref: main`, but a
           # workflow_dispatch runs this file from whatever branch was dispatched. A
           # branch that edits this step while main still has the old script yields

@@ -12,6 +12,8 @@ import type {
   PtySpawnResult
 } from '../providers/types'
 import {
+  adoptOwningProvider,
+  attachDaemonOwnedSession,
   discoverDegradedDaemonSessions,
   findDaemonAdapter,
   listProviderSessionIds
@@ -82,7 +84,9 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
 
   spawn = (opts: PtySpawnOptions): Promise<PtySpawnResult> => this.freshSpawns.spawn(opts)
 
-  attach = (id: string): Promise<void> => this.providerFor(id).attach(id)
+  // Why refuse the fallback route (unknown ids resolve to it): see attachDaemonOwnedSession.
+  attach = (id: string): Promise<void> =>
+    attachDaemonOwnedSession(this.providerFor(id), this.fallback, id)
 
   hasPty(id: string): boolean {
     const mapped = this.sessionProviders.get(id)
@@ -343,13 +347,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   }
 
   private findProviderForExistingSession(sessionId: string): IPtyProvider | null {
-    for (const provider of this.allProviders()) {
-      if (provider.hasPty?.(sessionId) === true) {
-        this.sessionProviders.set(sessionId, provider)
-        return provider
-      }
-    }
-    return null
+    return adoptOwningProvider(this.sessionProviders, this.allProviders(), sessionId)
   }
 
   private allProviders(): IPtyProvider[] {

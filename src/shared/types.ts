@@ -1026,6 +1026,12 @@ export type BrowserTab = BrowserWorkspace
 
 export type BrowserSessionProfileScope = 'default' | 'isolated' | 'imported'
 
+export type BrowserSessionUserAgentMode = 'clean' | 'native'
+
+export type BrowserSessionProfileCreateOptions = {
+  userAgentMode?: BrowserSessionUserAgentMode
+}
+
 export type BrowserSessionProfileSource = {
   browserFamily:
     | 'chrome'
@@ -1047,6 +1053,7 @@ export type BrowserSessionProfile = {
   partition: string
   label: string
   source: BrowserSessionProfileSource | null
+  userAgentMode?: BrowserSessionUserAgentMode
 }
 
 export type BrowserCookieImportSummary = {
@@ -1542,6 +1549,8 @@ export type IssueInfo = {
   state: IssueState
   url: string
   labels: string[]
+  /** Full markdown body when fetched through the single-issue endpoint. */
+  description?: string
 }
 
 export type GitHubViewer = {
@@ -3308,7 +3317,7 @@ export type TaskResumeState = {
   githubItemsPreset?: TaskViewPresetId | null
   githubItemsQuery?: string
   githubProjectHiddenFieldIdsByView?: Record<string, string[]>
-  linearMode?: 'issues' | 'projects' | 'views'
+  linearMode?: 'issues' | 'projects' | 'views' | 'in-orca'
   linearPreset?: 'assigned' | 'created' | 'all' | 'completed'
   linearQuery?: string
   linearContext?: {

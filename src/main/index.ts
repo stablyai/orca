@@ -221,6 +221,7 @@ import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex/cod
 import { normalizeRuntimePathForComparison } from '../shared/cross-platform-path'
 import type { AgentProviderSessionMetadata } from '../shared/agent-session-resume'
 import { getDefaultWslDistro } from './wsl'
+import { collectWorktreeTrashSweepRoots, sweepStaleWorktreeTrash } from './worktree-trash'
 import { ClaudeAccountService } from './claude-accounts/service'
 import { ClaudeRuntimeAuthService } from './claude-accounts/runtime-auth-service'
 import {
@@ -1020,7 +1021,7 @@ async function prepareCodexSessionResumeForLaunch(args: {
   const settingsStore = store
   // Why: a `fresh` outcome must skip migration, trust and hook repair entirely — there is
   // no verified origin home to prepare, so the PTY layer drops the resume argv (#10793).
-  return prepareCodexSessionResume({
+  const preparation = await prepareCodexSessionResume({
     sessionId: args.providerSession.id,
     transcriptPath: args.providerSession.transcriptPath,
     trustedCodexHomes: trustedHomes,
@@ -1082,6 +1083,14 @@ async function prepareCodexSessionResumeForLaunch(args: {
       return resumeHome
     }
   })
+  return preparation.outcome === 'resume'
+    ? {
+        ...preparation,
+        reconcileSharedRuntimeAuth:
+          normalizeRuntimePathForComparison(preparation.codexHomePath) ===
+          normalizeRuntimePathForComparison(getOrcaManagedCodexHomePath())
+      }
+    : preparation
 }
 
 // Why: restore the window the close handler may have hidden to tray, or reopen it (dock-reactivation style) if fully torn down.
@@ -2627,6 +2636,13 @@ void app.whenReady().then(async () => {
   // Why: externally started serve-sim processes must stay independent — only Orca-managed/attached helpers belong to a workspace.
   const emulatorBridge = new EmulatorBridge()
   runtimeService.setEmulatorBridge(emulatorBridge)
+  // Why: worktree deletion renames the checkout aside and deletes it in the background, so a quit or
+  // crash mid-delete can leave the moved directory on disk.
+  void sweepStaleWorktreeTrash(
+    collectWorktreeTrashSweepRoots(store.getRepos(), store.getSettings())
+  ).catch((error) => {
+    console.warn('[worktrees] Failed to sweep leftover worktree directories:', error)
+  })
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
   if (codexRuntimeHome.isHostSystemDefaultRealHomeSelected()) {
     // Why: establish capability before managed-hook reconciliation so an

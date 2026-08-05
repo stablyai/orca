@@ -629,6 +629,13 @@
             "triageFollowupsSummary": "设置负责人、优先级或预估工时，并创建带父级关联的后续议题。",
             "triageFollowupsPrompt": "使用 {{value0}} 对关联的 Linear 议题进行分类处理 — 设置优先级和预估工时 — 并为延后清理创建带父级关联的后续议题。"
           }
+        },
+        "issue": {
+          "workspace": {
+            "open": {
+              "4f2c1d8a3b": "无法打开关联到此议题的工作区。"
+            }
+          }
         }
       },
       "codex": {
@@ -1208,7 +1215,13 @@
         "af6e02c44a": "页面",
         "76ffd3c937": "搜索要添加的项目。",
         "c11b4e3cc2": "没有找到项目。",
-        "519c3587f3": "添加到项目"
+        "519c3587f3": "添加到项目",
+        "openAttachedWorkspace": "打开关联到议题的工作区",
+        "openWorkspace": "打开工作区",
+        "moreWorkspaceActions": "更多议题工作区操作",
+        "startNewWorkspace": "启动新工作区",
+        "workspaceSection": "工作区",
+        "noWorkspaceYet": "暂无"
       },
       "LinearItemDrawer": {
         "04008e6c46": "从议题开始工作区",
@@ -1240,7 +1253,11 @@
         "39883467f4": "Linear 议题",
         "fda549766e": "{{value0}} 发表评论",
         "d71cd3003e": "+ 负责人",
-        "commentTooLarge": "评论过长，无法安全提交。"
+        "commentTooLarge": "评论过长，无法安全提交。",
+        "openAttachedWorkspace": "打开关联到议题的工作区",
+        "openWorkspace": "打开工作区",
+        "moreWorkspaceActions": "更多议题工作区操作",
+        "startNewWorkspace": "启动新工作区"
       },
       "NewWorkspaceComposerCard": {
         "cbb47ee0dc": "仅适用于本地 Git 项目。",
@@ -1849,6 +1866,14 @@
         "linearEmptyAttributeFilter": "没有匹配所选筛选条件的问题。请清除筛选条件或尝试其他条件。",
         "linearEmptyUnfilteredScope": "此工作区范围内没有问题。请尝试搜索或调整团队。",
         "linearFetchMore": "加载更多",
+        "linearHasWorktreeLoadFailed": "无法加载关联到 Orca 工作区的 Linear 议题。",
+        "linearHasWorktreePartialLoadFailed": "部分关联到 Orca 工作区的 Linear 议题无法加载。请刷新后重试。",
+        "linearHasWorktreeSearchPlaceholder": "筛选关联到 Orca 工作区的议题...",
+        "linearModeHasWorktree": "有工作区",
+        "linearModeHasWorktreeTooltip": "已关联 Orca 工作区的 Linear 工单",
+        "linearEmptyHasWorktree": "还没有关联到 Orca 工作区的 Linear 工单。从 Linear 议题开始工作后会显示在这里。",
+        "linearOpenAttachedWorkspace": "打开关联到 {{value0}} 的工作区",
+        "linearWorktreesColumn": "工作区",
         "jiraSortAscending": "升序",
         "jiraSortDescending": "降序",
         "jiraSortBy": "排序方式",
@@ -4348,19 +4373,6 @@
           "automation": "自动化",
           "folderPathIdentity": "分支 / 文件夹路径",
           "cli": "Orca CLI"
-        },
-        "SshDisconnectedDialog": {
-          "ca4a7892af": "正在连接...",
-          "89385db176": "关闭",
-          "656368f3a2": "重连失败",
-          "376bed88e5": "与远程主机的连接遇到错误。",
-          "4afcca1d24": "重新连接",
-          "11552bf786": "SSH 已断开",
-          "cb5938ae79": "正在重新连接...",
-          "disconnected": "此 SSH 主机未连接。",
-          "reconnecting": "正在重新连接远程主机...",
-          "reconnectionFailed": "重新连接到远程主机失败。",
-          "authFailed": "远程主机身份验证失败。"
         },
         "SshTargetRow": {
           "4677394048": "正在连接…",
@@ -14384,6 +14396,14 @@
         "loadFailed": "加载 GitLab 作业日志失败。",
         "emptyTrace": "此 GitLab 作业没有可用的日志。",
         "timedOut": "加载 GitLab 作业日志超时。"
+      }
+    },
+    "ssh": {
+      "sshConnectVerb": {
+        "connect": "连接",
+        "connecting": "正在连接…",
+        "reconnect": "重新连接",
+        "retry": "重试"
       }
     }
   },

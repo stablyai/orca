@@ -32,6 +32,7 @@ import {
   Users,
   X,
   FolderKanban,
+  FolderOpen,
   Tag,
   UserRound
 } from 'lucide-react'
@@ -138,6 +139,13 @@ import {
   findGithubWorkItemWorkspaceAttachment,
   getGithubWorkItemWorkspaceAttachmentLabel
 } from '@/lib/github-work-item-workspace-attachment'
+import {
+  buildLinearIssueWorkspaceAttachmentIndex,
+  findLinearIssueWorkspaceAttachmentInIndex,
+  getLinearIssueWorkspaceAttachmentLabel
+} from '@/lib/linear-issue-workspace-attachment'
+import { openLinearIssueWorkspaceOrStart } from '@/lib/linear-issue-workspace-open'
+import { folderWorkspaceToWorktree } from '../../../shared/folder-workspace-worktree'
 import { createGitHubWorkItemWorkspaceInBackground } from '@/lib/github-work-item-background-create'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
@@ -228,6 +236,13 @@ import {
   resolveLinearIssueEmptyKind,
   shouldOfferLinearIssueFetchMore
 } from '@/components/task-page-linear-issue-empty-state'
+import {
+  collectLinkedLinearIssueRefsFromWorktrees,
+  filterLinearIssuesBySearchQuery,
+  filterLinearIssuesForInOrcaWorkspace,
+  linkedLinearIssueRefsSignature,
+  readLinkedLinearIssuesWithLimit
+} from '@/components/task-page-linear-in-orca-issues'
 import {
   emptyLinearIssueAttributeFilter,
   linearIssueAttributeFilterSignature,
@@ -936,6 +951,7 @@ function getLinearIssueGridTemplate(visibleProperties: ReadonlySet<LinearDisplay
   if (visibleProperties.has('updated')) {
     columns.push('104px')
   }
+  // Why: Worktrees is icon-only (open vs start); keep it narrow so issue title keeps the room.
   columns.push('64px')
   return columns.join(' ')
 }
@@ -3094,8 +3110,11 @@ export default function TaskPage(): React.JSX.Element {
   const searchLinearIssues = useAppStore((s) => s.searchLinearIssues)
   const listLinearIssues = useAppStore((s) => s.listLinearIssues)
   const linearListInvalidationToken = useAppStore((s) => s.linearListInvalidationToken)
+  const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
   const invalidateLinearIssueLists = useAppStore((s) => s.invalidateLinearIssueLists)
   const getCachedLinearIssues = useAppStore((s) => s.getCachedLinearIssues)
+  const fetchLinearIssue = useAppStore((s) => s.fetchLinearIssue)
+  const refreshLinearIssue = useAppStore((s) => s.refreshLinearIssue)
   const getCachedLinearTeams = useAppStore((s) => s.getCachedLinearTeams)
   const listLinearTeams = useAppStore((s) => s.listLinearTeams)
   const getCachedLinearProjects = useAppStore((s) => s.getCachedLinearProjects)
@@ -5196,16 +5215,55 @@ export default function TaskPage(): React.JSX.Element {
   const showLinearAttributeFilters =
     linearMode === 'issues' && !activeLinearIssueContextLabel && !linearSearchActive
 
+  // Why: one pass over worktrees per list render; per-row scans re-parsed every link.
+  const linearAttachmentWorkspaces = useMemo(
+    () => [...allWorktrees, ...folderWorkspaces.map(folderWorkspaceToWorktree)],
+    [allWorktrees, folderWorkspaces]
+  )
+  const linearIssueAttachmentIndex = useMemo(
+    () => buildLinearIssueWorkspaceAttachmentIndex(linearAttachmentWorkspaces),
+    [linearAttachmentWorkspaces]
+  )
+  const inOrcaLinkedLinearRefs = useMemo(
+    () =>
+      collectLinkedLinearIssueRefsFromWorktrees(linearAttachmentWorkspaces, {
+        workspaceId: selectedLinearWorkspaceId,
+        workspaces: linearStatus.workspaces ?? []
+      }),
+    [linearAttachmentWorkspaces, linearStatus.workspaces, selectedLinearWorkspaceId]
+  )
+  const inOrcaLinkedLinearRefsSignature = useMemo(
+    () => linkedLinearIssueRefsSignature(inOrcaLinkedLinearRefs),
+    [inOrcaLinkedLinearRefs]
+  )
+  const inOrcaLinkedLinearRefsRef = useRef(inOrcaLinkedLinearRefs)
+  // Keep latest linked refs for the in-orca loader without re-running it on identity churn.
+  useEffect(() => {
+    inOrcaLinkedLinearRefsRef.current = inOrcaLinkedLinearRefs
+  }, [inOrcaLinkedLinearRefs])
+
   const filteredLinearIssues = useMemo(() => {
-    if (activeLinearIssueContextLabel) {
-      return displayedLinearIssues
+    const searchedIssues =
+      linearMode === 'in-orca'
+        ? filterLinearIssuesBySearchQuery(displayedLinearIssues, appliedLinearSearch)
+        : displayedLinearIssues
+    // Why: 'in-orca' is scoped by local workspace links, not by team, and it has no "Fetch more" —
+    // a team filter would silently drop a linked ticket with no way to recover it.
+    if (activeLinearIssueContextLabel || linearMode === 'in-orca') {
+      return searchedIssues
     }
     // Why: team options can arrive after issue rows render; treat an empty selection as "all" until reconciliation sets teams.
-    if (displayedLinearIssues.length > 0 && linearTeamSelection.size === 0) {
-      return displayedLinearIssues
+    if (searchedIssues.length > 0 && linearTeamSelection.size === 0) {
+      return searchedIssues
     }
-    return displayedLinearIssues.filter((issue) => linearTeamSelection.has(issue.team.id))
-  }, [activeLinearIssueContextLabel, displayedLinearIssues, linearTeamSelection])
+    return searchedIssues.filter((issue) => linearTeamSelection.has(issue.team.id))
+  }, [
+    activeLinearIssueContextLabel,
+    appliedLinearSearch,
+    displayedLinearIssues,
+    linearMode,
+    linearTeamSelection
+  ])
 
   const orderedLinearIssues = useMemo(
     () => [...filteredLinearIssues].sort((a, b) => compareLinearIssues(a, b, linearOrderBy)),
@@ -7484,6 +7542,108 @@ export default function TaskPage(): React.JSX.Element {
     linearTaskSourceContext
   ])
 
+  // Why: Has Worktree loads Linear tickets linked on local worktrees, not a Linear list/search query.
+  useEffect(() => {
+    if (!taskResumeApplied) {
+      return
+    }
+    if (taskSource !== 'linear' || linearMode !== 'in-orca' || !linearConnected) {
+      return
+    }
+
+    let cancelled = false
+    const linkedRefs = inOrcaLinkedLinearRefsRef.current
+    const requestSignature = `in-orca::${selectedLinearWorkspaceId ?? 'default'}::${inOrcaLinkedLinearRefsSignature}`
+    const previousRequest = lastLinearRequestRef.current
+    const isNewSignature = previousRequest?.signature !== requestSignature
+    const forceRefresh = linearRefreshNonce > 0 && previousRequest?.nonce !== linearRefreshNonce
+    lastLinearRequestRef.current = { nonce: linearRefreshNonce, signature: requestSignature }
+    setLinearIssuesHasMore(false)
+    setLinearError(null)
+
+    if (linkedRefs.length === 0) {
+      setLinearIssues([])
+      setLinearLoading(false)
+      return () => {
+        cancelled = true
+      }
+    }
+
+    if (isNewSignature) {
+      setLinearIssues([])
+    }
+    setLinearLoading(true)
+    // Why: fetchLinearIssue serves anything under the 60s TTL and ignores `force`, so an
+    // explicit refresh has to go through refreshLinearIssue or the button does nothing.
+    void readLinkedLinearIssuesWithLimit(linkedRefs, (ref) => {
+      const read = forceRefresh ? refreshLinearIssue : fetchLinearIssue
+      return read(ref.identifier, ref.workspaceId ?? selectedLinearWorkspaceId, {
+        sourceContext: ref.sourceContext ?? linearTaskSourceContext
+      })
+    })
+      .then((results) => {
+        if (
+          cancelled ||
+          lastLinearRequestRef.current?.signature !== requestSignature ||
+          lastLinearRequestRef.current?.nonce !== linearRefreshNonce
+        ) {
+          return
+        }
+        const loaded = results.filter((issue): issue is LinearIssue => issue != null)
+        // Why: reads resolve to null instead of throwing, so an all-null result with links
+        // present is a load failure — not the "nothing linked yet" empty state.
+        if (loaded.length === 0) {
+          setLinearError(
+            translate(
+              'auto.components.TaskPage.linearHasWorktreeLoadFailed',
+              'Unable to load Linear issues linked to an Orca workspace.'
+            )
+          )
+          setLinearIssues([])
+          setLinearLoading(false)
+          return
+        }
+        if (loaded.length !== results.length) {
+          setLinearError(
+            translate(
+              'auto.components.TaskPage.linearHasWorktreePartialLoadFailed',
+              'Some Linear issues linked to an Orca workspace could not be loaded. Refresh to try again.'
+            )
+          )
+        }
+        setLinearIssues(filterLinearIssuesForInOrcaWorkspace(loaded, selectedLinearWorkspaceId))
+        setLinearLoading(false)
+      })
+      .catch((err) => {
+        if (
+          cancelled ||
+          lastLinearRequestRef.current?.signature !== requestSignature ||
+          lastLinearRequestRef.current?.nonce !== linearRefreshNonce
+        ) {
+          return
+        }
+        setLinearError(err instanceof Error ? err.message : 'Failed to load Linear issues.')
+        setLinearLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+    // Why: linkedRefs are read from a ref keyed by their signature, so unrelated worktree
+    // churn (activity stamps, unread flags) can't re-issue one read per linked ticket.
+  }, [
+    fetchLinearIssue,
+    inOrcaLinkedLinearRefsSignature,
+    linearConnected,
+    linearMode,
+    linearRefreshNonce,
+    linearTaskSourceContext,
+    refreshLinearIssue,
+    selectedLinearWorkspaceId,
+    taskResumeApplied,
+    taskSource
+  ])
+
   useEffect(() => {
     if (!taskResumeApplied) {
       return
@@ -7933,6 +8093,15 @@ export default function TaskPage(): React.JSX.Element {
       openComposerForLinearItem(issue)
     },
     [openComposerForLinearItem]
+  )
+
+  const handleOpenOrUseLinearItem = useCallback(
+    (issue: LinearIssue): void => {
+      if (openLinearIssueWorkspaceOrStart(issue, () => handleUseLinearItem(issue)) === 'opened') {
+        useAppStore.getState().recordFeatureInteraction('linear-tasks')
+      }
+    },
+    [handleUseLinearItem]
   )
 
   const handleLinearWorkspaceChange = useCallback(
@@ -8608,18 +8777,41 @@ export default function TaskPage(): React.JSX.Element {
                       >
                         {linearModeOptions.map((mode) => {
                           const active = linearMode === mode.id
+                          const buttonClassName = cn(
+                            'rounded-md border px-2 py-1 text-xs transition',
+                            active
+                              ? 'border-border/50 bg-foreground/90 text-background'
+                              : 'border-border/50 bg-transparent text-foreground hover:bg-muted/50'
+                          )
+                          if (mode.id === 'in-orca') {
+                            return (
+                              <Tooltip key={mode.id}>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    type="button"
+                                    aria-pressed={active}
+                                    onClick={() => selectLinearMode(mode.id)}
+                                    className={buttonClassName}
+                                  >
+                                    {mode.label}
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom" sideOffset={6}>
+                                  {translate(
+                                    'auto.components.TaskPage.linearModeHasWorktreeTooltip',
+                                    'Linear tickets linked to an Orca workspace'
+                                  )}
+                                </TooltipContent>
+                              </Tooltip>
+                            )
+                          }
                           return (
                             <button
                               key={mode.id}
                               type="button"
                               aria-pressed={active}
                               onClick={() => selectLinearMode(mode.id)}
-                              className={cn(
-                                'rounded-md border px-2 py-1 text-xs transition',
-                                active
-                                  ? 'border-border/50 bg-foreground/90 text-background'
-                                  : 'border-border/50 bg-transparent text-foreground hover:bg-muted/50'
-                              )}
+                              className={buttonClassName}
                             >
                               {mode.label}
                             </button>
@@ -8704,7 +8896,7 @@ export default function TaskPage(): React.JSX.Element {
                               size="icon"
                               onClick={() => setLinearRefreshNonce((n) => n + 1)}
                               disabled={
-                                linearMode === 'issues'
+                                linearMode === 'issues' || linearMode === 'in-orca'
                                   ? linearLoading
                                   : linearMode === 'projects'
                                     ? linearProjectsLoading || linearProjectDetailLoading
@@ -8716,7 +8908,8 @@ export default function TaskPage(): React.JSX.Element {
                               )}
                               className="size-8 border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
                             >
-                              {linearMode === 'issues' && linearLoading ? (
+                              {(linearMode === 'issues' || linearMode === 'in-orca') &&
+                              linearLoading ? (
                                 <LoaderCircle className="size-4 animate-spin" />
                               ) : linearMode === 'projects' &&
                                 (linearProjectsLoading || linearProjectDetailLoading) ? (
@@ -8736,7 +8929,7 @@ export default function TaskPage(): React.JSX.Element {
                       </div>
                     </div>
 
-                    {linearMode === 'issues' ? (
+                    {linearMode === 'issues' || linearMode === 'in-orca' ? (
                       <div className="mt-3 flex min-w-0 items-center gap-2">
                         {showLinearAttributeFilters ? (
                           <LinearIssueAttributeFilterDropdowns
@@ -8772,14 +8965,26 @@ export default function TaskPage(): React.JSX.Element {
                                 const trimmed = linearSearchInput.trim()
                                 setLinearSearchInput(trimmed)
                                 setAppliedLinearSearch(trimmed)
-                                setTaskResumeState({ linearQuery: trimmed, linearMode: 'issues' })
-                                setLinearRefreshNonce((n) => n + 1)
+                                setTaskResumeState({
+                                  linearQuery: trimmed,
+                                  linearMode: linearMode === 'in-orca' ? 'in-orca' : 'issues'
+                                })
+                                if (linearMode !== 'in-orca') {
+                                  setLinearRefreshNonce((n) => n + 1)
+                                }
                               }
                             }}
-                            placeholder={translate(
-                              'auto.components.TaskPage.eec0c5c079',
-                              'Search Linear issues...'
-                            )}
+                            placeholder={
+                              linearMode === 'in-orca'
+                                ? translate(
+                                    'auto.components.TaskPage.linearHasWorktreeSearchPlaceholder',
+                                    'Filter issues linked to an Orca workspace...'
+                                  )
+                                : translate(
+                                    'auto.components.TaskPage.eec0c5c079',
+                                    'Search Linear issues...'
+                                  )
+                            }
                             className="h-8 rounded-md border-border/50 bg-background pl-8 pr-8 text-xs"
                           />
                           {linearSearchInput ? (
@@ -8792,8 +8997,13 @@ export default function TaskPage(): React.JSX.Element {
                               onClick={() => {
                                 setLinearSearchInput('')
                                 setAppliedLinearSearch('')
-                                setTaskResumeState({ linearQuery: '', linearMode: 'issues' })
-                                setLinearRefreshNonce((n) => n + 1)
+                                setTaskResumeState({
+                                  linearQuery: '',
+                                  linearMode: linearMode === 'in-orca' ? 'in-orca' : 'issues'
+                                })
+                                if (linearMode !== 'in-orca') {
+                                  setLinearRefreshNonce((n) => n + 1)
+                                }
                               }}
                               className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
                             >
@@ -10325,7 +10535,12 @@ export default function TaskPage(): React.JSX.Element {
                   ) : null}
                   <div className="min-w-0 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
                     {activeLinearIssueContextLabel ??
-                      translate('auto.components.TaskPage.60f68a2ef4', 'Linear issues')}
+                      (linearMode === 'in-orca'
+                        ? translate(
+                            'auto.components.TaskPage.linearModeHasWorktree',
+                            'Has Workspace'
+                          )
+                        : translate('auto.components.TaskPage.60f68a2ef4', 'Linear issues'))}
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
@@ -10472,7 +10687,9 @@ export default function TaskPage(): React.JSX.Element {
                   {effectiveLinearDisplayProperties.has('updated') ? (
                     <span>{translate('auto.components.TaskPage.f362667d55', 'Updated')}</span>
                   ) : null}
-                  <span />
+                  <span>
+                    {translate('auto.components.TaskPage.linearWorktreesColumn', 'Workspaces')}
+                  </span>
                 </div>
               ) : null}
 
@@ -10527,6 +10744,18 @@ export default function TaskPage(): React.JSX.Element {
                     </p>
                     <p className="mt-2 text-sm text-muted-foreground">
                       {(() => {
+                        if (linearMode === 'in-orca') {
+                          if (linearSearchActive) {
+                            return translate(
+                              'auto.components.TaskPage.2bdefbcac3',
+                              'Try a different search query.'
+                            )
+                          }
+                          return translate(
+                            'auto.components.TaskPage.linearEmptyHasWorktree',
+                            'No Linear tickets are linked to an Orca workspace yet. Start work from a Linear issue to see it here.'
+                          )
+                        }
                         const emptyKind = resolveLinearIssueEmptyKind({
                           hasContextLabel: Boolean(activeLinearIssueContextLabel),
                           searchActive: linearSearchActive,
@@ -10566,18 +10795,26 @@ export default function TaskPage(): React.JSX.Element {
                 filteredLinearIssues.length === 0 ? (
                   <div className="px-4 py-10 text-center">
                     <p className="text-sm font-medium text-foreground">
-                      {translate(
-                        'auto.components.TaskPage.618107fab3',
-                        'No fetched issues match the selected teams'
-                      )}
+                      {linearMode === 'in-orca' && linearSearchActive
+                        ? translate('auto.components.TaskPage.903c7af49f', 'No Linear issues found')
+                        : translate(
+                            'auto.components.TaskPage.618107fab3',
+                            'No fetched issues match the selected teams'
+                          )}
                     </p>
                     <p className="mt-2 text-sm text-muted-foreground">
-                      {translate(
-                        'auto.components.TaskPage.592a55611b',
-                        'Try selecting more teams or refreshing; team filters apply to the current fetched issue set.'
-                      )}
+                      {linearMode === 'in-orca' && linearSearchActive
+                        ? translate(
+                            'auto.components.TaskPage.2bdefbcac3',
+                            'Try a different search query.'
+                          )
+                        : translate(
+                            'auto.components.TaskPage.592a55611b',
+                            'Try selecting more teams or refreshing; team filters apply to the current fetched issue set.'
+                          )}
                     </p>
-                    {shouldOfferLinearIssueFetchMore({
+                    {linearMode !== 'in-orca' &&
+                    shouldOfferLinearIssueFetchMore({
                       emptyKind: 'client-team',
                       serverHasMore: linearIssuesHasMore
                     }) ? (
@@ -10632,6 +10869,13 @@ export default function TaskPage(): React.JSX.Element {
                               selectedLinearWorkspaceId === 'all' && issue.workspaceName
                                 ? `${issue.workspaceName} / ${issue.team.name}`
                                 : issue.team.name
+                            const attachedWorkspace = findLinearIssueWorkspaceAttachmentInIndex(
+                              linearIssueAttachmentIndex,
+                              issue
+                            )
+                            const attachedWorkspaceLabel = attachedWorkspace
+                              ? getLinearIssueWorkspaceAttachmentLabel(attachedWorkspace)
+                              : null
                             return (
                               <div
                                 key={issue.id}
@@ -10683,23 +10927,48 @@ export default function TaskPage(): React.JSX.Element {
                                       {issue.title}
                                     </h3>
                                   </div>
-                                  <div className="flex shrink-0 items-center gap-1 opacity-70 transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100">
-                                    <Button
-                                      variant="ghost"
-                                      size="icon-xs"
-                                      data-contextual-tour-target="tasks-start-workspace"
-                                      onClick={(event) => {
-                                        event.stopPropagation()
-                                        handleUseLinearItem(issue)
-                                      }}
-                                      aria-label={translate(
-                                        'auto.components.TaskPage.ff90d0abc7',
-                                        'Start workspace from {{value0}}',
-                                        { value0: issue.identifier }
-                                      )}
-                                    >
-                                      <ArrowRight className="size-3.5" />
-                                    </Button>
+                                  <div className="flex shrink-0 items-center gap-1">
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          // Why: solid primary when a workspace is already linked so Open reads stronger than Start.
+                                          variant={attachedWorkspace ? 'default' : 'ghost'}
+                                          size="icon-xs"
+                                          data-contextual-tour-target="tasks-start-workspace"
+                                          onClick={(event) => {
+                                            event.stopPropagation()
+                                            handleOpenOrUseLinearItem(issue)
+                                          }}
+                                          aria-label={
+                                            attachedWorkspace
+                                              ? translate(
+                                                  'auto.components.TaskPage.linearOpenAttachedWorkspace',
+                                                  'Open workspace attached to {{value0}}',
+                                                  { value0: issue.identifier }
+                                                )
+                                              : translate(
+                                                  'auto.components.TaskPage.ff90d0abc7',
+                                                  'Start workspace from {{value0}}',
+                                                  { value0: issue.identifier }
+                                                )
+                                          }
+                                        >
+                                          {attachedWorkspace ? (
+                                            <FolderOpen className="size-3.5" />
+                                          ) : (
+                                            <ArrowRight className="size-3.5" />
+                                          )}
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="bottom" sideOffset={6}>
+                                        {attachedWorkspace
+                                          ? translate('auto.components.TaskPage.606a85c774', 'Open')
+                                          : translate(
+                                              'auto.components.TaskPage.7d08e8be0f',
+                                              'Start'
+                                            )}
+                                      </TooltipContent>
+                                    </Tooltip>
                                     <Button
                                       variant="ghost"
                                       size="icon-xs"
@@ -10739,6 +11008,12 @@ export default function TaskPage(): React.JSX.Element {
                                   ) : null}
                                   {effectiveLinearDisplayProperties.has('updated') ? (
                                     <span>{formatRelativeTime(issue.updatedAt)}</span>
+                                  ) : null}
+                                  {attachedWorkspaceLabel ? (
+                                    <span className="inline-flex min-w-0 items-center gap-1">
+                                      <FolderOpen className="size-3 shrink-0" />
+                                      <span className="truncate">{attachedWorkspaceLabel}</span>
+                                    </span>
                                   ) : null}
                                 </div>
                                 {effectiveLinearDisplayProperties.has('labels') &&
@@ -10793,6 +11068,13 @@ export default function TaskPage(): React.JSX.Element {
                         selectedLinearWorkspaceId === 'all' && issue.workspaceName
                           ? `${issue.workspaceName} / ${issue.team.name}`
                           : issue.team.name
+                      const attachedWorkspace = findLinearIssueWorkspaceAttachmentInIndex(
+                        linearIssueAttachmentIndex,
+                        issue
+                      )
+                      const attachedWorkspaceLabel = attachedWorkspace
+                        ? getLinearIssueWorkspaceAttachmentLabel(attachedWorkspace)
+                        : null
                       return (
                         <div
                           key={issue.id}
@@ -10853,6 +11135,12 @@ export default function TaskPage(): React.JSX.Element {
                               {effectiveLinearDisplayProperties.has('team') ? (
                                 <span className="min-w-0 truncate text-[11px] text-muted-foreground">
                                   {teamLabel}
+                                </span>
+                              ) : null}
+                              {attachedWorkspaceLabel ? (
+                                <span className="inline-flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground">
+                                  <FolderOpen className="size-3 shrink-0" />
+                                  <span className="truncate">{attachedWorkspaceLabel}</span>
                                 </span>
                               ) : null}
                             </div>
@@ -10935,28 +11223,46 @@ export default function TaskPage(): React.JSX.Element {
                             </Tooltip>
                           ) : null}
 
-                          <div className="flex shrink-0 items-center justify-end gap-1 md:opacity-0 md:transition-opacity md:group-hover/row:opacity-100 md:group-focus-within/row:opacity-100">
+                          <div className="flex shrink-0 items-center justify-end gap-1">
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button
-                                  variant="ghost"
+                                  type="button"
+                                  // Why: solid primary when a workspace is already linked so Open reads stronger than Start.
+                                  variant={attachedWorkspace ? 'default' : 'ghost'}
                                   size="icon-xs"
                                   data-contextual-tour-target="tasks-start-workspace"
                                   onClick={(event) => {
                                     event.stopPropagation()
-                                    handleUseLinearItem(issue)
+                                    handleOpenOrUseLinearItem(issue)
                                   }}
-                                  aria-label={translate(
-                                    'auto.components.TaskPage.ff90d0abc7',
-                                    'Start workspace from {{value0}}',
-                                    { value0: issue.identifier }
-                                  )}
+                                  className={attachedWorkspace ? 'shadow-xs' : undefined}
+                                  aria-label={
+                                    attachedWorkspace
+                                      ? translate(
+                                          'auto.components.TaskPage.linearOpenAttachedWorkspace',
+                                          'Open workspace attached to {{value0}}',
+                                          { value0: issue.identifier }
+                                        )
+                                      : translate(
+                                          'auto.components.TaskPage.ff90d0abc7',
+                                          'Start workspace from {{value0}}',
+                                          { value0: issue.identifier }
+                                        )
+                                  }
                                 >
-                                  <ArrowRight className="size-3.5" />
+                                  {attachedWorkspace ? (
+                                    <FolderOpen className="size-3.5" />
+                                  ) : (
+                                    <ArrowRight className="size-3.5" />
+                                  )}
                                 </Button>
                               </TooltipTrigger>
                               <TooltipContent side="bottom" sideOffset={6}>
-                                {translate('auto.components.TaskPage.7d08e8be0f', 'Start')}
+                                {attachedWorkspace
+                                  ? (attachedWorkspaceLabel ??
+                                    translate('auto.components.TaskPage.606a85c774', 'Open'))
+                                  : translate('auto.components.TaskPage.7d08e8be0f', 'Start')}
                               </TooltipContent>
                             </Tooltip>
                             <Tooltip>

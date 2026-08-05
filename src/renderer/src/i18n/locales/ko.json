@@ -629,6 +629,13 @@
             "triageFollowupsSummary": "Set assignee, priority, or estimate, and file parented follow-up tickets.",
             "triageFollowupsPrompt": "Use {{value0}} to triage the linked Linear issue — set priority and estimate — and create a parented follow-up ticket for the deferred cleanup."
           }
+        },
+        "issue": {
+          "workspace": {
+            "open": {
+              "4f2c1d8a3b": "이 이슈에 연결된 워크스페이스를 열 수 없습니다."
+            }
+          }
         }
       },
       "codex": {
@@ -1208,7 +1215,13 @@
         "af6e02c44a": "페이지",
         "76ffd3c937": "추가할 프로젝트를 검색하세요.",
         "c11b4e3cc2": "프로젝트를 찾을 수 없습니다.",
-        "519c3587f3": "프로젝트에 추가"
+        "519c3587f3": "프로젝트에 추가",
+        "openAttachedWorkspace": "이슈에 연결된 워크스페이스 열기",
+        "openWorkspace": "워크스페이스 열기",
+        "moreWorkspaceActions": "이슈 워크스페이스 작업 더 보기",
+        "startNewWorkspace": "새 워크스페이스 시작",
+        "workspaceSection": "워크스페이스",
+        "noWorkspaceYet": "아직 없음"
       },
       "LinearItemDrawer": {
         "04008e6c46": "이슈에서 워크스페이스 시작",
@@ -1240,7 +1253,11 @@
         "39883467f4": "Linear 이슈",
         "fda549766e": "댓글을 달려면 {{value0}}",
         "d71cd3003e": "+ 담당자",
-        "commentTooLarge": "댓글이 너무 길어 안전하게 제출할 수 없습니다."
+        "commentTooLarge": "댓글이 너무 길어 안전하게 제출할 수 없습니다.",
+        "openAttachedWorkspace": "이슈에 연결된 워크스페이스 열기",
+        "openWorkspace": "워크스페이스 열기",
+        "moreWorkspaceActions": "이슈 워크스페이스 작업 더 보기",
+        "startNewWorkspace": "새 워크스페이스 시작"
       },
       "NewWorkspaceComposerCard": {
         "cbb47ee0dc": "로컬 Git 프로젝트에만 사용할 수 있습니다.",
@@ -1849,6 +1866,14 @@
         "linearEmptyAttributeFilter": "선택한 필터와 일치하는 이슈가 없습니다. 필터를 지우거나 다른 조건을 시도하세요.",
         "linearEmptyUnfilteredScope": "이 워크트리 범위에 이슈가 없습니다. 검색하거나 팀을 조정해 보세요.",
         "linearFetchMore": "더 불러오기",
+        "linearHasWorktreeLoadFailed": "Orca 워크스페이스에 연결된 Linear 이슈를 불러올 수 없습니다.",
+        "linearHasWorktreePartialLoadFailed": "Orca 워크스페이스에 연결된 일부 Linear 이슈를 불러올 수 없습니다. 새로 고쳐 다시 시도하세요.",
+        "linearHasWorktreeSearchPlaceholder": "Orca 워크스페이스에 연결된 이슈 필터...",
+        "linearModeHasWorktree": "워크스페이스 있음",
+        "linearModeHasWorktreeTooltip": "Orca 워크스페이스에 연결된 Linear 티켓",
+        "linearEmptyHasWorktree": "아직 Orca 워크스페이스에 연결된 Linear 티켓이 없습니다. Linear 이슈에서 작업을 시작하면 여기에 표시됩니다.",
+        "linearOpenAttachedWorkspace": "{{value0}}에 연결된 워크스페이스 열기",
+        "linearWorktreesColumn": "워크스페이스",
         "jiraSortAscending": "오름차순",
         "jiraSortDescending": "내림차순",
         "jiraSortBy": "정렬 기준",
@@ -4336,19 +4361,6 @@
           "automation": "자동화",
           "folderPathIdentity": "브랜치 / 폴더 경로",
           "cli": "Orca CLI"
-        },
-        "SshDisconnectedDialog": {
-          "ca4a7892af": "연결 중...",
-          "89385db176": "닫기",
-          "656368f3a2": "재연결 실패",
-          "376bed88e5": "원격 호스트 연결에 오류가 발생했습니다.",
-          "4afcca1d24": "다시 연결",
-          "11552bf786": "SSH 연결 끊김",
-          "cb5938ae79": "다시 연결하는 중...",
-          "disconnected": "이 SSH 호스트는 연결되어 있지 않습니다.",
-          "reconnecting": "원격 호스트에 다시 연결하는 중...",
-          "reconnectionFailed": "원격 호스트에 다시 연결하지 못했습니다.",
-          "authFailed": "원격 호스트 인증에 실패했습니다."
         },
         "SshTargetRow": {
           "4677394048": "연결 중…",
@@ -14375,6 +14387,14 @@
         "loadFailed": "GitLab 작업 로그를 불러오지 못했습니다.",
         "emptyTrace": "이 GitLab 작업의 로그를 사용할 수 없습니다.",
         "timedOut": "GitLab 작업 로그를 불러오는 중 시간이 초과되었습니다."
+      }
+    },
+    "ssh": {
+      "sshConnectVerb": {
+        "connect": "연결",
+        "connecting": "연결 중…",
+        "reconnect": "다시 연결",
+        "retry": "재시도"
       }
     }
   },

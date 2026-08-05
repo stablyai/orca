@@ -931,11 +931,8 @@ export class CodexRuntimeHomeService {
     }
   }
 
-  // Why: an unreadable managed auth.json says nothing about who the shared
-  // runtime home currently holds. The credential's own identity claims answer
-  // that without touching the unreadable home; Orca's write records and its
-  // provenance file are corroboration, not the only evidence — a torn or fenced
-  // provenance file is no proof the bytes belong to somebody else.
+  // Why: stale panes can overwrite the mirror after provenance is committed, so
+  // launch ownership needs current-byte identity or Orca's exact same-run write.
   private sharedRuntimeAuthBelongsToAccount(account: CodexManagedAccount): boolean {
     if (!existsSync(this.getRuntimeAuthPath())) {
       return true
@@ -950,14 +947,7 @@ export class CodexRuntimeHomeService {
         return true
       }
     }
-    const status = this.resolveSharedRuntimeAuthProvenanceStatus()
-    if (status.kind === 'committed') {
-      return status.provenance.owner === 'managed' && status.provenance.accountId === account.id
-    }
-    // Why: with no committed record left, only claims that contradict this
-    // account prove the mirror is somebody else's. Deleting bytes nothing can
-    // attribute logs the user out over the very absence the grace window covers.
-    return runtimeAuth !== null && codexAuthCouldBelongToManagedAccount(runtimeAuth, account)
+    return false
   }
 
   // Why: the absence may still heal, so keep the selection — but leave no other
@@ -966,28 +956,30 @@ export class CodexRuntimeHomeService {
   private clearRuntimeAuthForUnprovenSelection(): void {
     const runtimeAuthPath = this.getRuntimeAuthPath()
     try {
-      try {
-        // Why: a refresh Codex wrote into the mirror belongs to whoever owns
-        // those bytes; persist it to that owner's home — managed or ~/.codex —
-        // first, then fence so a delete the OS refuses (Windows AV lock, EBUSY)
-        // still leaves the surviving bytes marked untrusted.
-        const readBackResult = this.readBackRefreshedTokensFromPath(runtimeAuthPath, {
-          updateLastWrittenAuthJson: false
-        })
-        if (readBackResult === 'rejected') {
-          this.readBackRefreshedSystemDefaultAuth()
-        }
-        this.persistSharedRuntimeAuthProvenance({ owner: 'fenced' })
-      } finally {
-        // Why: neither the rescue nor the fence may cancel the delete — leaving
-        // another identity's credentials for the launch is the defect itself.
-        this.lastWrittenAuthJson = null
-        rmSync(runtimeAuthPath, { force: true })
+      // Why: a refresh Codex wrote into the mirror belongs to whoever owns
+      // those bytes; persist it to that owner's home — managed or ~/.codex —
+      // first, then fence so later syncs cannot adopt the removed bytes.
+      const readBackResult = this.readBackRefreshedTokensFromPath(runtimeAuthPath, {
+        updateLastWrittenAuthJson: false
+      })
+      if (readBackResult === 'rejected') {
+        this.readBackRefreshedSystemDefaultAuth()
       }
+      this.persistSharedRuntimeAuthProvenance({ owner: 'fenced' })
     } catch (error) {
-      // Why: this branch only runs because the filesystem already refused a
-      // read; a second failure must not throw out of launch preparation.
-      console.warn('[codex-runtime-home] Failed to clear unproven runtime auth:', error)
+      // Why: rescue and metadata are best-effort; neither may leave another
+      // identity's credentials in the home returned to the launch.
+      console.warn('[codex-runtime-home] Failed to rescue or fence unproven runtime auth:', error)
+    }
+    this.lastWrittenAuthJson = null
+    try {
+      rmSync(runtimeAuthPath, { force: true })
+    } catch (error) {
+      // Why: a fence is Orca metadata that Codex does not read. If Windows or
+      // another host keeps auth.json locked, failing launch is the safe result.
+      throw new Error('Cannot safely launch Codex while stale runtime auth remains.', {
+        cause: error
+      })
     }
   }
 

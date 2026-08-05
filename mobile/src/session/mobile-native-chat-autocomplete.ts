@@ -2,6 +2,8 @@
 // `/slash` commands. Detection is pure (text + cursor → active trigger) so it's
 // unit-testable and the composer stays a thin view over it.
 
+import type { SlashCommandSuggestion } from '../../../src/shared/native-chat-slash-commands'
+
 export type AutocompleteKind = 'file' | 'slash'
 
 export type AutocompleteTrigger = {
@@ -84,6 +86,34 @@ export function rankSuggestions(candidates: readonly string[], query: string, li
       prefix.push(candidate)
     } else if (lower.includes(q)) {
       substring.push(candidate)
+    }
+    if (prefix.length >= limit) {
+      break
+    }
+  }
+  return [...prefix, ...substring].slice(0, limit)
+}
+
+/** Rank an agent's slash commands: prefix matches first, then substring, in
+ *  catalog order. A bare `/` shows the whole catalog (desktop parity) — the
+ *  suggestion list scrolls, so the cap only guards against absurd catalogs. */
+export function rankSlashCommandSuggestions(
+  commands: readonly SlashCommandSuggestion[],
+  query: string,
+  limit = 50
+): SlashCommandSuggestion[] {
+  const q = query.toLowerCase()
+  if (q.length === 0) {
+    return commands.slice(0, limit)
+  }
+  const prefix: SlashCommandSuggestion[] = []
+  const substring: SlashCommandSuggestion[] = []
+  for (const command of commands) {
+    const lower = command.name.toLowerCase()
+    if (lower.startsWith(q)) {
+      prefix.push(command)
+    } else if (lower.includes(q)) {
+      substring.push(command)
     }
     if (prefix.length >= limit) {
       break

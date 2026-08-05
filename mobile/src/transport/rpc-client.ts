@@ -3,7 +3,8 @@ import type {
   RpcSuccess,
   ConnectionState,
   ConnectionLogLevel,
-  ConnectionLogSink
+  ConnectionLogSink,
+  ForegroundNudgeReason
 } from './types'
 import {
   generateKeyPair,
@@ -105,7 +106,8 @@ export type RpcClient = {
   getLastConnectedAt: () => number | null
   onStateChange: (listener: (state: ConnectionState) => void) => () => void
   // Why: app-resume hook — iOS/Android can kill the TCP path while backgrounded; call on AppState 'active' to recover.
-  notifyForeground: () => void
+  // The reason routes relay handling (probe vs replace); the direct socket probes regardless.
+  notifyForeground: (reason?: ForegroundNudgeReason) => void
   close: () => void
 }
 

@@ -47,9 +47,14 @@ function validRelayBinding(value: unknown, deviceId: string): RelayDeviceBinding
     : undefined
 }
 
+// Why: a lastSeen refresh is pure bookkeeping, so coalesce reconnect bursts into one write instead of
+// paying a secure-file rewrite (two synchronous PowerShell ACL spawns on Windows) per connection.
+const LAST_SEEN_FLUSH_DELAY_MS = 250
+
 export class DeviceRegistry {
   private readonly registryPath: string
   private devices: DeviceEntry[] = []
+  private pendingLastSeenFlush: NodeJS.Timeout | null = null
 
   constructor(userDataPath: string) {
     this.registryPath = join(userDataPath, DEVICE_REGISTRY_FILENAME)
@@ -214,6 +219,58 @@ export class DeviceRegistry {
     )
     this.save(nextDevices)
     this.devices = nextDevices
+    this.cancelPendingLastSeenFlush()
+  }
+
+  /**
+   * Marks a device seen without blocking the caller on disk — the E2EE auth handshake runs this, and on
+   * Windows every save spawns PowerShell synchronously to reapply the registry's ACL.
+   * The first-ever sighting still persists inline: rotatePendingDevice drops entries that disk says were
+   * never scanned, so only that 0 -> non-zero transition is load-bearing.
+   */
+  updateLastSeenDeferred(deviceId: string): void {
+    const index = this.devices.findIndex((d) => d.deviceId === deviceId)
+    if (index < 0) {
+      return
+    }
+    if (this.devices[index]!.lastSeenAt === 0) {
+      this.updateLastSeen(deviceId)
+      return
+    }
+    const seenAt = Date.now()
+    this.devices = this.devices.map((device, candidateIndex) =>
+      candidateIndex === index ? { ...device, lastSeenAt: seenAt } : device
+    )
+    if (this.pendingLastSeenFlush) {
+      return
+    }
+    this.pendingLastSeenFlush = setTimeout(
+      () => this.flushPendingLastSeen(),
+      LAST_SEEN_FLUSH_DELAY_MS
+    )
+    // Why: bookkeeping must never hold the process open.
+    this.pendingLastSeenFlush.unref?.()
+  }
+
+  /** Persists a deferred lastSeen refresh now; no-op when nothing is pending. */
+  flushPendingLastSeen(): void {
+    if (!this.pendingLastSeenFlush) {
+      return
+    }
+    this.cancelPendingLastSeenFlush()
+    try {
+      this.save(this.devices)
+    } catch (error) {
+      // Why: matches the async hardening path — a failed bookkeeping write must not take down the runtime.
+      console.error('[mobile] Failed to persist device lastSeen:', error)
+    }
+  }
+
+  private cancelPendingLastSeenFlush(): void {
+    if (this.pendingLastSeenFlush) {
+      clearTimeout(this.pendingLastSeenFlush)
+      this.pendingLastSeenFlush = null
+    }
   }
 
   private load(): void {
@@ -243,5 +300,7 @@ export class DeviceRegistry {
 
   private save(devices: DeviceEntry[]): void {
     writeSecureJsonFile(this.registryPath, devices)
+    // Why: every registry save includes the latest in-memory timestamps, so a later timer would rewrite it.
+    this.cancelPendingLastSeenFlush()
   }
 }

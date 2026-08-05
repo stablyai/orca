@@ -11,7 +11,8 @@ import {
   createSetupAgentSequenceNonce,
   getSetupAgentSequenceShellForTests,
   resolveSetupAgentSequenceLaunchCommand,
-  SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV
+  SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
+  SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
 } from './setup-agent-sequencing'
 import {
   DEFAULT_SETUP_AGENT_STARTUP_POLICY,
@@ -66,20 +67,39 @@ describe('createSequencedSetupAgentCommands', () => {
     expect(result.setupCommand).toContain(
       'mv -f /repo/.git/orca/setup-runner.sh.nonce-123.done.tmp'
     )
-    expect(result.startupCommand).toMatch(/^bash -lc /)
-    expect(result.startupCommand).toContain('deadline=$((SECONDS + 9))')
-    expect(result.startupCommand).not.toContain('date +%s')
-    expect(result.startupCommand).toContain('Waiting for setup to finish before starting agent...')
-    expect(result.startupCommand).toContain('[ "$seen" = nonce-123 ]')
-    expect(result.startupCommand).toContain(
+    const startupScript = result.startupEnv?.[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]
+    expect(result.startupCommand).toBe(
+      `bash -lc 'eval "$${SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV}"'`
+    )
+    expect(startupScript).toContain('deadline=$((SECONDS + 9))')
+    expect(startupScript).not.toContain('date +%s')
+    expect(startupScript).toContain('Waiting for setup to finish before starting agent...')
+    expect(startupScript).toContain('[ "$seen" = nonce-123 ]')
+    expect(startupScript).toContain(
       'rm -f /repo/.git/orca/setup-runner.sh.nonce-123.done /repo/.git/orca/setup-runner.sh.nonce-123.done.tmp'
     )
-    expect(result.startupCommand).toContain('exec codex')
-    expect(result.startupCommand).toContain('fix bug')
+    expect(startupScript).toContain('exec codex')
+    expect(startupScript).toContain('fix bug')
     expect(result.startupEnv).toEqual(
       expect.objectContaining({
-        [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: "codex 'fix bug'"
+        [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: "codex 'fix bug'",
+        [SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]: startupScript
       })
+    )
+  })
+
+  it('keeps the POSIX terminal submission below the canonical input floor', () => {
+    const result = createSequencedSetupAgentCommands({
+      runnerScriptPath: `/repo/${'nested-worktree/'.repeat(100)}setup-runner.sh`,
+      startupCommand: 'codex',
+      platform: 'posix',
+      nonce: 'long-path'
+    })
+
+    expect(result.startupCommand.length).toBeLessThan(256)
+    expect(result.startupCommand).not.toContain('nested-worktree')
+    expect(result.startupEnv?.[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]).toContain(
+      'nested-worktree'
     )
   })
 
@@ -98,9 +118,13 @@ describe('createSequencedSetupAgentCommands', () => {
     })
 
     expect(first.setupCommand).toContain('/repo/.git/orca/setup-runner.sh.first-launch.done')
-    expect(first.startupCommand).toContain('/repo/.git/orca/setup-runner.sh.first-launch.done')
+    expect(first.startupEnv?.[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]).toContain(
+      '/repo/.git/orca/setup-runner.sh.first-launch.done'
+    )
     expect(second.setupCommand).toContain('/repo/.git/orca/setup-runner.sh.second-launch.done')
-    expect(second.startupCommand).toContain('/repo/.git/orca/setup-runner.sh.second-launch.done')
+    expect(second.startupEnv?.[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]).toContain(
+      '/repo/.git/orca/setup-runner.sh.second-launch.done'
+    )
     expect(first.setupCommand).not.toContain('/repo/.git/orca/setup-runner.sh.second-launch.done')
     expect(second.setupCommand).not.toContain('/repo/.git/orca/setup-runner.sh.first-launch.done')
   })
@@ -114,8 +138,9 @@ describe('createSequencedSetupAgentCommands', () => {
       waitTimeoutSeconds: 9
     })
 
-    expect(result.startupCommand).toContain("exec codex '\\''fix this; then test'\\''")
-    expect(result.startupCommand).not.toContain('eval codex')
+    const startupScript = result.startupEnv?.[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]
+    expect(startupScript).toContain("exec codex 'fix this; then test'")
+    expect(startupScript).not.toContain('eval codex')
   })
 
   it('preserves POSIX inline environment assignment startup commands', () => {
@@ -127,9 +152,10 @@ describe('createSequencedSetupAgentCommands', () => {
       waitTimeoutSeconds: 9
     })
 
-    expect(result.startupCommand).toContain('FOO=bar claude')
-    expect(result.startupCommand).toContain('exit "$?"')
-    expect(result.startupCommand).not.toContain('exec FOO=bar claude')
+    const startupScript = result.startupEnv?.[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]
+    expect(startupScript).toContain('FOO=bar claude')
+    expect(startupScript).toContain('exit "$?"')
+    expect(startupScript).not.toContain('exec FOO=bar claude')
   })
 
   it('uses the converted Linux marker path for WSL UNC runners on Windows', () => {
@@ -162,7 +188,9 @@ describe('createSequencedSetupAgentCommands', () => {
     expect(result.setupCommand).toContain(
       'bash /remote/repo/.git/worktrees/feature/orca/setup-runner.sh'
     )
-    expect(result.startupCommand).toContain('[ "$seen" = nonce-remote ]')
+    expect(result.startupEnv?.[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]).toContain(
+      '[ "$seen" = nonce-remote ]'
+    )
   })
 
   it('preserves WSL shell metadata when sequencing native Windows runners', () => {
@@ -178,7 +206,7 @@ describe('createSequencedSetupAgentCommands', () => {
     expect(result.setupCommand).toContain(
       '/mnt/c/repo/.git/orca/setup-runner.sh.nonce-wsl-shell.done'
     )
-    expect(result.startupCommand).toContain(
+    expect(result.startupEnv?.[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]).toContain(
       '/mnt/c/repo/.git/orca/setup-runner.sh.nonce-wsl-shell.done'
     )
   })
@@ -242,12 +270,14 @@ describe('createSequencedSetupAgentCommands', () => {
     expect(result.setupCommand).toMatch(/^bash -lc /)
     expect(result.startupCommand).toMatch(/^bash -lc /)
     expect(result.startupCommand).not.toContain('Invoke-Expression')
-    expect(result.startupCommand).toContain('eval "$ORCA_SEQUENCED_STARTUP_COMMAND"')
+    expect(result.startupEnv?.[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]).toContain(
+      'eval "$ORCA_SEQUENCED_STARTUP_COMMAND"'
+    )
     // Why: bash writes and reads the marker here, so it needs the /c/... form of the path.
     expect(result.setupCommand).toContain(
       '/c/repo/.git/orca/setup-runner.cmd.nonce-gitbash-cmd.done'
     )
-    expect(result.startupCommand).toContain(
+    expect(result.startupEnv?.[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]).toContain(
       '/c/repo/.git/orca/setup-runner.cmd.nonce-gitbash-cmd.done'
     )
   })
@@ -336,7 +366,10 @@ describe('createSequencedSetupAgentCommands', () => {
       })
 
       const startupExitPromise = waitForExit(
-        spawn('bash', ['-lc', commands.startupCommand], { stdio: 'pipe' })
+        spawn('bash', ['-lc', commands.startupCommand], {
+          stdio: 'pipe',
+          env: { ...process.env, ...commands.startupEnv }
+        })
       )
       await sleep(250)
       expect(readIfExists(logPath)).toBe('')
@@ -380,15 +413,19 @@ describe('createSequencedSetupAgentCommands', () => {
         spawn('bash', ['-lc', commands.setupCommand], { stdio: 'pipe' })
       )
       const startupExit = await waitForExit(
-        spawn('bash', ['-lc', commands.startupCommand], { stdio: 'pipe' })
+        spawn('bash', ['-lc', commands.startupCommand], {
+          stdio: 'pipe',
+          env: { ...process.env, ...commands.startupEnv }
+        })
       )
       const setupExit = await setupExitPromise
 
       expect(setupExit.code).toBe(0)
       expect(startupExit.code).toBe(0)
       expect(readFileSync(logPath, 'utf8')).toBe('setup-done\nagent-start\ncleanup\n')
-      expect(commands.startupCommand).toContain('eval')
-      expect(commands.startupCommand).not.toContain('exec printf')
+      const startupScript = commands.startupEnv?.[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]
+      expect(startupScript).toContain('eval')
+      expect(startupScript).not.toContain('exec printf')
     }
   )
 
@@ -430,6 +467,7 @@ describe('createSequencedSetupAgentCommands', () => {
           stdio: 'pipe',
           env: {
             ...process.env,
+            ...commands.startupEnv,
             [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: `FOO=bar bash ${quoteSh(startupScriptPath)}; printf 'env-cleanup\\n' >> ${quoteSh(logPath)}`
           }
         })
@@ -459,7 +497,10 @@ describe('createSequencedSetupAgentCommands', () => {
       })
 
       const startupExit = await waitForExit(
-        spawn('bash', ['-lc', commands.startupCommand], { stdio: 'pipe' })
+        spawn('bash', ['-lc', commands.startupCommand], {
+          stdio: 'pipe',
+          env: { ...process.env, ...commands.startupEnv }
+        })
       )
 
       expect(startupExit.code).toBe(124)
