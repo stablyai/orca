@@ -262,20 +262,25 @@ export async function discoverActivePtyId(page: Page): Promise<string> {
     buildFreshShellProbeInputSequence(`echo ${marker}_${index}\r`)
   )
 
-  await page.evaluate(
-    ({ candidateIds, candidateInputs }) => {
-      // Why: daemon PTY IDs can contain path separators and shell metacharacters.
-      // Echo a numeric probe index, then map it back to the opaque ID in Node.
-      for (const [index, id] of candidateIds.entries()) {
-        for (const input of candidateInputs[index] ?? []) {
-          window.api.pty.write(String(id), input)
+  const writeProbes = async (): Promise<void> => {
+    await page.evaluate(
+      ({ candidateIds, candidateInputs }) => {
+        // Why: daemon PTY IDs can contain path separators and shell metacharacters.
+        // Echo a numeric probe index, then map it back to the opaque ID in Node.
+        for (const [index, id] of candidateIds.entries()) {
+          for (const input of candidateInputs[index] ?? []) {
+            window.api.pty.write(String(id), input)
+          }
         }
-      }
-    },
-    { candidateIds, candidateInputs }
-  )
+      },
+      { candidateIds, candidateInputs }
+    )
+  }
+
+  await writeProbes()
 
   let foundPtyId: string | null = null
+  let probeAttempts = 0
   await expect
     .poll(
       async () => {
@@ -287,9 +292,15 @@ export async function discoverActivePtyId(page: Page): Promise<string> {
           foundPtyId = Number.isInteger(index) ? (candidateIds[index] ?? null) : null
           return true
         }
+        // Why: Windows ConPTY can drop the first write before the shell is ready.
+        // Re-probe every few polls instead of failing after a single lost write.
+        probeAttempts += 1
+        if (probeAttempts % 4 === 0) {
+          await writeProbes()
+        }
         return false
       },
-      { timeout: 10_000, message: 'PTY marker did not appear in terminal buffer' }
+      { timeout: 15_000, message: 'PTY marker did not appear in terminal buffer' }
     )
     .toBe(true)
 

@@ -50,6 +50,16 @@ describe('buildMobileAgentHistoryCard', () => {
     expect(card.isCurrentWorktree).toBe(true)
   })
 
+  it('preserves metadata-only conversation availability in the card model', () => {
+    const card = buildMobileAgentHistoryCard(
+      session({ messageCount: 0, hasConversation: true, previewMessages: [] }),
+      null,
+      NOW
+    )
+    expect(card.hasConversation).toBe(true)
+    expect(card.messageCount).toBe(0)
+  })
+
   it('omits the current-worktree badge when cwd is outside the active worktree', () => {
     const card = buildMobileAgentHistoryCard(session(), '/Users/ada/other', NOW)
     expect(card.isCurrentWorktree).toBe(false)
@@ -75,6 +85,17 @@ describe('buildMobileAgentHistoryResumeActionState', () => {
   it('keeps resume buttons enabled when no launch is in flight', () => {
     const state = buildMobileAgentHistoryResumeActionState([session({ id: 'claude:1' })], null)
     expect(state.get('claude:1')).toEqual({ disabled: false, loading: false })
+  })
+
+  it('defers Cursor command validation until the target worktree is known', () => {
+    const cursor = session({ id: 'cursor:1', agent: 'cursor' })
+    expect(buildMobileAgentHistoryResumeActionState([cursor], null).get(cursor.id)).toEqual({
+      disabled: false,
+      loading: false
+    })
+    expect(
+      buildMobileAgentHistoryResumeActionState([{ ...cursor, cwd: null }], null).get(cursor.id)
+    ).toEqual({ disabled: true, loading: false })
   })
 })
 

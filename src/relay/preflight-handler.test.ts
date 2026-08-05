@@ -233,6 +233,54 @@ describe('hasAbsoluteCommandPath', () => {
 })
 
 describe('PreflightHandler', () => {
+  it('returns a versioned inventory with the capability-probed Cursor command', async () => {
+    execFileAsyncMock.mockImplementation(async (file, args) => {
+      if (file === '/relay/bin/cursor' && args[0] === 'agent' && args[1] === '--help') {
+        return { stdout: 'Cursor agent help\n' }
+      }
+      const script = String(args[1])
+      if (script.includes("'cursor-agent'")) {
+        return { stdout: '__ORCA_AGENT_PATH__/relay/bin/cursor-agent\n' }
+      }
+      if (script.includes("'cursor'")) {
+        return { stdout: '__ORCA_AGENT_PATH__/relay/bin/cursor\n' }
+      }
+      throw new Error('not found')
+    })
+    const requestHandlers = new Map<string, (params: Record<string, unknown>) => Promise<unknown>>()
+    const dispatcher = {
+      onRequest: vi.fn(
+        (method: string, handler: (params: Record<string, unknown>) => Promise<unknown>) => {
+          requestHandlers.set(method, handler)
+        }
+      )
+    }
+
+    new PreflightHandler(dispatcher as never)
+    const inventory = requestHandlers.get('preflight.detectAgentInventory')
+    await expect(
+      inventory!({
+        version: 1,
+        commands: [
+          {
+            id: 'cursor',
+            cmd: 'cursor-agent',
+            capabilityProbe: { args: ['--help'], matchedCommand: 'cursor-agent' }
+          },
+          {
+            id: 'cursor',
+            cmd: 'cursor',
+            capabilityProbe: { args: ['agent', '--help'], matchedCommand: 'cursor agent' }
+          }
+        ]
+      })
+    ).resolves.toEqual({
+      version: 1,
+      agents: ['cursor'],
+      matchedCommands: { cursor: 'cursor agent' }
+    })
+  })
+
   it('honors required commands when reporting detected agents', async () => {
     execFileAsyncMock.mockImplementation(async (_file, args) => {
       const script = String(args[1])

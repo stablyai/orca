@@ -28,6 +28,9 @@ export function resolveAgentLaunchCommand(args: {
   isRemote?: boolean
 }): ResolvedAgentLaunchCommand {
   const override = args.cmdOverrides[args.agent]
+  if (args.agent === 'cursor' && !override?.trim()) {
+    return { ok: false, error: 'Cursor launch command is unavailable for this context.' }
+  }
   const command =
     override ||
     getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[args.agent], args.platform, {

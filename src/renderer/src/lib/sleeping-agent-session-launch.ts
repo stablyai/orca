@@ -1,5 +1,6 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
+import { resolveCursorCommandOverrides } from '@/lib/ai-vault-cursor-command'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
@@ -71,7 +72,12 @@ export function launchSleepingAgentSession(
   const startupPlan = buildAgentResumeStartupPlan({
     agent: record.agent,
     providerSession: record.providerSession,
-    cmdOverrides: state.settings?.agentCmdOverrides ?? {},
+    cmdOverrides: resolveCursorCommandOverrides({
+      state,
+      agent: record.agent,
+      worktreeId: record.worktreeId,
+      cmdOverrides: state.settings?.agentCmdOverrides ?? {}
+    }),
     agentArgs:
       launchConfig !== undefined
         ? launchConfig.agentArgs

@@ -12,6 +12,7 @@ import { createCopilotSessionResumeState } from './session-scanner-copilot-parse
 import { createCursorSessionResumeState } from './session-scanner-cursor-parser'
 import { countSubagentTranscripts } from './session-scanner-subagent-transcripts'
 import type { ResumableSessionParseState, SessionFileCandidate } from './session-scanner-types'
+import { resetCursorSidecarParseCacheForTests } from './session-scanner-cursor-sidecar'
 
 // Sized past the default recency cap (1000) plus the in-scope cap (2000) so a
 // full steady-state result set stays resident between forced rescans.
@@ -51,7 +52,9 @@ function resumableStateFactoryFor(
     case 'codex':
       return () => createCodexSessionResumeState(candidate.file, candidate.codexHome)
     case 'cursor':
-      return () => createCursorSessionResumeState(candidate.file)
+      return candidate.cursorLayout === 'sidecar'
+        ? null
+        : () => createCursorSessionResumeState(candidate.file)
     case 'copilot':
       return () => createCopilotSessionResumeState(candidate.file)
     case 'droid':
@@ -93,6 +96,7 @@ const cache = new Map<string, SessionParseCacheEntry>()
 
 export function resetSessionParseCacheForTests(): void {
   cache.clear()
+  resetCursorSidecarParseCacheForTests()
 }
 
 // Persisted subset of a cache entry: the non-serializable `resume` parser

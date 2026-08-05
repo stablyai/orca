@@ -105,6 +105,15 @@ describe('createDetectedAgentsSlice WSL context', () => {
     })
   })
 
+  it('preserves the legacy Cursor command when the preload lacks inventory methods', async () => {
+    detectAgents.mockResolvedValueOnce(['cursor'])
+    const store = createTestStore()
+    store.getState().clearLocalDetectedAgents()
+    await expect(store.getState().ensureDetectedAgents()).resolves.toEqual(['cursor'])
+    expect(store.getState().detectedAgentCommands).toEqual({ cursor: 'cursor-agent' })
+    expect(store.getState().detectedAgentCommandsByContext.host).toEqual({ cursor: 'cursor-agent' })
+  })
+
   it('detects local agents inside the active WSL worktree distro', async () => {
     const store = createTestStore({
       repos: [makeRepo({ id: 'repo-1', path: 'C:\\repo' })],
@@ -443,13 +452,26 @@ describe('createDetectedAgentsSlice remote detection', () => {
               runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
               minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
             }
-          : ['codex']
+          : method === 'preflight.detectAgentInventory'
+            ? { version: 1, agents: ['codex'], matchedCommands: { codex: 'codex' } }
+            : ['codex']
       return Promise.resolve({
         id: method,
         ok: true,
         result,
         _meta: { runtimeId: 'remote-runtime' }
       })
+    })
+  })
+
+  it('preserves the legacy Cursor command when remote inventory methods are unavailable', async () => {
+    detectRemoteAgents.mockResolvedValueOnce(['cursor'])
+    const store = createTestStore()
+    await expect(store.getState().ensureRemoteDetectedAgents('ssh-legacy')).resolves.toEqual([
+      'cursor'
+    ])
+    expect(store.getState().remoteDetectedAgentCommands['ssh-legacy']).toEqual({
+      cursor: 'cursor-agent'
     })
   })
 
@@ -558,9 +580,47 @@ describe('createDetectedAgentsSlice remote detection', () => {
     })
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
       selector: 'env-1',
-      method: 'preflight.detectAgents',
+      method: 'preflight.detectAgentInventory',
       params: undefined,
       timeoutMs: undefined
+    })
+  })
+
+  it('preserves the legacy Cursor command when runtime inventory is unavailable', async () => {
+    const store = createTestStore()
+    runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
+      if (method === 'preflight.detectAgentInventory') {
+        return Promise.resolve({
+          id: method,
+          ok: false,
+          error: { code: 'method_not_found', message: `Unknown method: ${method}` },
+          _meta: { runtimeId: 'remote-runtime' }
+        })
+      }
+      const result =
+        method === 'status.get'
+          ? {
+              runtimeId: 'remote-runtime',
+              rendererGraphEpoch: 1,
+              graphStatus: 'ready',
+              authoritativeWindowId: null,
+              liveTabCount: 0,
+              liveLeafCount: 0,
+              runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+              minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
+            }
+          : ['cursor']
+      return Promise.resolve({
+        id: method,
+        ok: true,
+        result,
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+    })
+
+    await expect(store.getState().ensureRuntimeDetectedAgents('env-1')).resolves.toEqual(['cursor'])
+    expect(store.getState().runtimeDetectedAgentCommands['env-1']).toEqual({
+      cursor: 'cursor-agent'
     })
   })
 
@@ -583,9 +643,12 @@ describe('createDetectedAgentsSlice remote detection', () => {
           runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
           minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
         }
-      } else {
+      } else if (method === 'preflight.detectAgentInventory') {
         detectCalls += 1
-        result = detectCalls === 1 ? [] : ['kilo']
+        const agents = detectCalls === 1 ? [] : ['kilo']
+        result = { version: 1, agents, matchedCommands: {} }
+      } else {
+        result = []
       }
       return Promise.resolve({
         id: method,
@@ -675,7 +738,7 @@ describe('createDetectedAgentsSlice remote detection', () => {
         })
       }
       return new Promise((resolve) => {
-        if (method === 'preflight.detectAgents') {
+        if (method === 'preflight.detectAgentInventory') {
           resolveDetect = resolve
         } else {
           resolveRefresh = resolve
@@ -687,7 +750,7 @@ describe('createDetectedAgentsSlice remote detection', () => {
     await vi.waitFor(() => {
       expect(
         runtimeEnvironmentCall.mock.calls.filter(
-          ([{ method }]) => method === 'preflight.detectAgents'
+          ([{ method }]) => method === 'preflight.detectAgentInventory'
         )
       ).toHaveLength(1)
     })
@@ -718,9 +781,9 @@ describe('createDetectedAgentsSlice remote detection', () => {
     await expect(refresh).resolves.toEqual(['kilo'])
 
     resolveDetect({
-      id: 'preflight.detectAgents',
+      id: 'preflight.detectAgentInventory',
       ok: true,
-      result: ['claude'],
+      result: { version: 1, agents: ['claude'], matchedCommands: { claude: 'claude' } },
       _meta: { runtimeId: 'remote-runtime' }
     })
     await expect(detect).resolves.toEqual(['claude'])
@@ -758,7 +821,7 @@ describe('createDetectedAgentsSlice remote detection', () => {
               runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
               minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
             }
-          : ['kilo']
+          : ['cursor']
       return Promise.resolve({
         id: method,
         ok: true,
@@ -767,8 +830,13 @@ describe('createDetectedAgentsSlice remote detection', () => {
       })
     })
 
-    await expect(store.getState().refreshRuntimeDetectedAgents('env-1')).resolves.toEqual(['kilo'])
-    expect(store.getState().runtimeDetectedAgentIds['env-1']).toEqual(['kilo'])
+    await expect(store.getState().refreshRuntimeDetectedAgents('env-1')).resolves.toEqual([
+      'cursor'
+    ])
+    expect(store.getState().runtimeDetectedAgentCommands['env-1']).toEqual({
+      cursor: 'cursor-agent'
+    })
+    expect(store.getState().runtimeDetectedAgentIds['env-1']).toEqual(['cursor'])
     expect(store.getState().isRefreshingRuntimeAgents['env-1']).toBe(false)
   })
 

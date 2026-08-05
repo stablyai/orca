@@ -8,6 +8,7 @@ export type Worktree = {
   repoId: string
   hostId?: ExecutionHostId
   terminalPlatform?: NodeJS.Platform
+  wslDistro?: string
   repo: string
   branch: string
   displayName: string

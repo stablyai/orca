@@ -2,12 +2,14 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { TuiAgent } from '../../../../shared/types'
 import { callRuntimeRpc, RuntimeRpcCallError } from '@/runtime/runtime-rpc-client'
+import { legacyDetectedAgentInventory } from '../../../../shared/detected-agent-inventory'
 
 // Why: remote runtime hosts are not SSH connections, but their launch surfaces
 // (tab bar, quick launch, Settings → Agents under an Active Server) still have
 // to probe the host where the workspace actually runs.
 export type RuntimeDetectedAgentsSlice = {
   runtimeDetectedAgentIds: Record<string, TuiAgent[] | null>
+  runtimeDetectedAgentCommands: Record<string, Partial<Record<TuiAgent, string>>>
   isDetectingRuntimeAgents: Record<string, boolean>
   isRefreshingRuntimeAgents: Record<string, boolean>
   ensureRuntimeDetectedAgents: (environmentId: string) => Promise<TuiAgent[]>
@@ -42,6 +44,7 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
   RuntimeDetectedAgentsSlice
 > = (set, get) => ({
   runtimeDetectedAgentIds: {},
+  runtimeDetectedAgentCommands: {},
   isDetectingRuntimeAgents: {},
   isRefreshingRuntimeAgents: {},
 
@@ -66,18 +69,32 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
       isDetectingRuntimeAgents: { ...s.isDetectingRuntimeAgents, [environmentId]: true }
     }))
 
-    const pending = callRuntimeRpc<TuiAgent[]>(
-      { kind: 'environment', environmentId },
-      'preflight.detectAgents'
-    )
-      .then((ids) => {
-        const typed = ids as TuiAgent[]
+    const pending = callRuntimeRpc<{
+      agents: TuiAgent[]
+      matchedCommands?: Partial<Record<TuiAgent, string>>
+    }>({ kind: 'environment', environmentId }, 'preflight.detectAgentInventory')
+      .catch((error) => {
+        if (!isRuntimeMethodNotFoundError(error)) {
+          throw error
+        }
+        return callRuntimeRpc<TuiAgent[]>(
+          { kind: 'environment', environmentId },
+          'preflight.detectAgents'
+        ).then(legacyDetectedAgentInventory)
+      })
+      .then((result) => {
+        const typed = result.agents as TuiAgent[]
         // Why: skip committing if the environment was removed (retained out)
         // while the detect was in flight — otherwise it re-adds a stale entry
         // that retainRuntimeDetectedAgents just pruned.
         if (runtimeDetectPromises.get(environmentId) === pending) {
           set((s) => ({
             runtimeDetectedAgentIds: { ...s.runtimeDetectedAgentIds, [environmentId]: typed },
+            runtimeDetectedAgentCommands: {
+              ...s.runtimeDetectedAgentCommands,
+              [environmentId]:
+                ('matchedCommands' in result ? result.matchedCommands : undefined) ?? {}
+            },
             isDetectingRuntimeAgents: { ...s.isDetectingRuntimeAgents, [environmentId]: false }
           }))
         }
@@ -120,11 +137,11 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
       isRefreshingRuntimeAgents: { ...s.isRefreshingRuntimeAgents, [environmentId]: true }
     }))
 
-    const pending = callRuntimeRpc<{ agents: TuiAgent[] }>(
-      { kind: 'environment', environmentId },
-      'preflight.refreshAgents'
-    )
-      .then((result) => result.agents)
+    const pending = callRuntimeRpc<{
+      agents: TuiAgent[]
+      matchedCommands?: Partial<Record<TuiAgent, string>>
+    }>({ kind: 'environment', environmentId }, 'preflight.refreshAgents')
+      .then((result) => result)
       .catch((error) => {
         if (!isRuntimeMethodNotFoundError(error)) {
           throw error
@@ -134,15 +151,20 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
         return callRuntimeRpc<TuiAgent[]>(
           { kind: 'environment', environmentId },
           'preflight.detectAgents'
-        )
+        ).then(legacyDetectedAgentInventory)
       })
-      .then((ids) => {
-        const typed = ids as TuiAgent[]
+      .then((result) => {
+        const typed = result.agents as TuiAgent[]
         // Why: same guard as ensureRuntimeDetectedAgents — if the environment
         // was retained out mid-refresh, don't re-add a pruned entry.
         if (runtimeRefreshPromises.get(environmentId) === pending) {
           set((s) => ({
             runtimeDetectedAgentIds: { ...s.runtimeDetectedAgentIds, [environmentId]: typed },
+            runtimeDetectedAgentCommands: {
+              ...s.runtimeDetectedAgentCommands,
+              [environmentId]:
+                ('matchedCommands' in result ? result.matchedCommands : undefined) ?? {}
+            },
             isDetectingRuntimeAgents: {
               ...s.isDetectingRuntimeAgents,
               [environmentId]: false
@@ -183,8 +205,10 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
       const { [environmentId]: _, ...restAgents } = s.runtimeDetectedAgentIds
       const { [environmentId]: __, ...restLoading } = s.isDetectingRuntimeAgents
       const { [environmentId]: ___, ...restRefreshing } = s.isRefreshingRuntimeAgents
+      const { [environmentId]: ____, ...restCommands } = s.runtimeDetectedAgentCommands
       return {
         runtimeDetectedAgentIds: restAgents,
+        runtimeDetectedAgentCommands: restCommands,
         isDetectingRuntimeAgents: restLoading,
         isRefreshingRuntimeAgents: restRefreshing
       }
@@ -206,11 +230,18 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
     set((s) => {
       let changed = false
       const nextAgents = { ...s.runtimeDetectedAgentIds }
+      const nextCommands = { ...s.runtimeDetectedAgentCommands }
       const nextLoading = { ...s.isDetectingRuntimeAgents }
       const nextRefreshing = { ...s.isRefreshingRuntimeAgents }
       for (const id of Object.keys(nextAgents)) {
         if (!keep.has(id)) {
           delete nextAgents[id]
+          changed = true
+        }
+      }
+      for (const id of Object.keys(nextCommands)) {
+        if (!keep.has(id)) {
+          delete nextCommands[id]
           changed = true
         }
       }
@@ -229,6 +260,7 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
       return changed
         ? {
             runtimeDetectedAgentIds: nextAgents,
+            runtimeDetectedAgentCommands: nextCommands,
             isDetectingRuntimeAgents: nextLoading,
             isRefreshingRuntimeAgents: nextRefreshing
           }

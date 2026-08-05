@@ -4,6 +4,7 @@ import type { TuiAgent } from '../../../../shared/types'
 import type { SourceControlAgentActionDeliveryPlanState } from './SourceControlAgentActionDialogForm'
 import { buildSourceControlAgentConnectionErrorPlan } from './source-control-agent-action-dialog-support'
 import { resolveNativeChatSessionOptionDefaults } from '../../../../shared/native-chat-session-option-defaults'
+import { resolveCursorCommandOverrides } from '@/lib/ai-vault-cursor-command'
 
 type BuildSourceControlAgentDeliveryPlanArgs = {
   selectedAgent: TuiAgent | null
@@ -31,21 +32,28 @@ export function buildSourceControlAgentDeliveryPlan({
   if (connectionUnavailable) {
     return buildSourceControlAgentConnectionErrorPlan()
   }
+  const state = useAppStore.getState()
   const result = planSourceControlAgentActionLaunch({
     agent: selectedAgent,
     commandInput,
     agentArgs,
     sessionOptions: selectedAgent
       ? resolveNativeChatSessionOptionDefaults(
-          useAppStore.getState().settings?.nativeChatSessionOptions,
+          state.settings?.nativeChatSessionOptions,
           selectedAgent
         )
       : undefined,
     promptDelivery,
     detectedAgents,
-    disabledAgents: useAppStore.getState().settings?.disabledTuiAgents,
-    cmdOverrides: useAppStore.getState().settings?.agentCmdOverrides,
-    terminalWindowsShell: useAppStore.getState().settings?.terminalWindowsShell,
+    disabledAgents: state.settings?.disabledTuiAgents,
+    cmdOverrides: selectedAgent
+      ? resolveCursorCommandOverrides({
+          state,
+          agent: selectedAgent,
+          cmdOverrides: state.settings?.agentCmdOverrides ?? {}
+        })
+      : state.settings?.agentCmdOverrides,
+    terminalWindowsShell: state.settings?.terminalWindowsShell,
     platform: launchPlatform,
     isRemote
   })

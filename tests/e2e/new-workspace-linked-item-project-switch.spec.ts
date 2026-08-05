@@ -73,6 +73,9 @@ async function openComposerWithLinkedWorkItem(
   )
 }
 
+// Why: useComposerState drops Jira seeds that lack a matching taskSourceContext
+// (site + project identity). Derive host/project from the active setup so the
+// seed mirrors real onSmartJiraIssueSelect metadata.
 async function getJiraSourceContext(page: Page): Promise<TaskSourceContext> {
   return page.evaluate(() => {
     const state = window.__store?.getState()

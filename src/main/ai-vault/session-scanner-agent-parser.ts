@@ -41,6 +41,9 @@ export async function parseAgentSessionFile(
     case 'copilot':
       return parseCopilotSessionFile(candidate.file, platform)
     case 'cursor':
+      if (candidate.cursorLayout === 'sidecar') {
+        return null
+      }
       return parseCursorSessionFile(candidate.file, platform)
     case 'opencode': {
       // Why: OpenCode 1.17.x sessions are read from SQLite via a synthetic

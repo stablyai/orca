@@ -12,11 +12,13 @@ export async function discoverFiles(args: {
   extensions: string[]
   filePredicate?: (path: string) => boolean
   directoryPredicate?: (name: string, depth: number) => boolean
+  recordDirectoryErrors?: boolean
 }): Promise<SessionFileDiscovery> {
   const paths = await walkSessionFiles(args.rootDir, args.agent, args.issues, {
     extensions: new Set(args.extensions),
     filePredicate: args.filePredicate,
-    directoryPredicate: args.directoryPredicate
+    directoryPredicate: args.directoryPredicate,
+    recordDirectoryErrors: args.recordDirectoryErrors
   })
   const files: FileWithMtime[] = []
   for (const path of paths) {
@@ -76,13 +78,17 @@ export async function walkSessionFiles(
     // Return false to skip descending into a directory; depth 0 is a child of
     // rootDir, so pruned subtrees are never stat'd or parsed.
     directoryPredicate?: (name: string, depth: number) => boolean
+    recordDirectoryErrors?: boolean
   },
   depth = 0
 ): Promise<string[]> {
   let entries
   try {
     entries = await readdir(dirPath, { withFileTypes: true })
-  } catch {
+  } catch (err) {
+    if (options.recordDirectoryErrors && !isMissingPathError(err)) {
+      issues.push({ agent, path: dirPath, message: errorMessage(err) })
+    }
     return []
   }
 
@@ -106,4 +112,12 @@ export async function walkSessionFiles(
     }
   }
   return files
+}
+
+function isMissingPathError(error: unknown): boolean {
+  const code =
+    error && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
+      ? error.code
+      : null
+  return code === 'ENOENT' || code === 'ENOTDIR'
 }

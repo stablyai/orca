@@ -71,7 +71,9 @@ beforeEach(() => {
             runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
             minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
           }
-        : []
+        : method === 'preflight.detectAgentInventory'
+          ? { version: 1, agents: [], matchedCommands: {} }
+          : []
     return Promise.resolve({
       id: method,
       ok: true,
@@ -170,7 +172,7 @@ describe('useDetectedAgents (runtime call site)', () => {
 
     expect(
       runtimeEnvironmentCall.mock.calls.filter(
-        ([{ method }]) => method === 'preflight.detectAgents'
+        ([{ method }]) => method === 'preflight.detectAgentInventory'
       )
     ).toHaveLength(2)
   })
@@ -245,7 +247,8 @@ describe('useDetectedAgents (runtime call site)', () => {
         }
       } else {
         detectCalls += 1
-        result = detectCalls === 1 ? [] : ['kilo']
+        const agents = detectCalls === 1 ? [] : ['kilo']
+        result = { version: 1, agents, matchedCommands: {} }
       }
       return Promise.resolve({
         id: method,

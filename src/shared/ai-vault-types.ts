@@ -94,6 +94,10 @@ export type AiVaultSession = {
   updatedAt: string | null
   modifiedAt: string
   messageCount: number
+  /** Provider evidence that content exists when an exact turn count is unavailable. */
+  hasConversation?: boolean
+  /** Explicit transcript path; null means this producer has no readable transcript. */
+  transcriptFilePath?: string | null
   totalTokens: number
   previewMessages: AiVaultSessionPreviewMessage[]
   /** Older messages fell out of the newest-N window: the earliest preview turn
@@ -151,9 +155,10 @@ export type AiVaultFirstUserPromptResult = {
 // Conversation previews count as evidence too: some parsers (e.g. Grok, OpenCode
 // fallback schemas) only learn the turn count from metadata that may be absent.
 export function isAiVaultSessionResumableContent(
-  session: Pick<AiVaultSession, 'messageCount' | 'previewMessages'>
+  session: Pick<AiVaultSession, 'messageCount' | 'previewMessages' | 'hasConversation'>
 ): boolean {
   return (
+    session.hasConversation === true ||
     session.messageCount > 0 ||
     session.previewMessages.some(
       (message) => message.role === 'user' || message.role === 'assistant'
@@ -193,6 +198,8 @@ export type AiVaultListArgs = {
   limit?: number
   unlimited?: boolean
   force?: boolean
+  refreshReason?: 'manual' | 'passive' | 'session-start'
+  refreshExecutionHostId?: ExecutionHostId
   // Active workspace/project paths. The global result is recency-capped, so these
   // guarantee a scoped view still surfaces its own (possibly older) sessions.
   scopePaths?: readonly string[]

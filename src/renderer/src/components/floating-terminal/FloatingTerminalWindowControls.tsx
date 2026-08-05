@@ -8,6 +8,7 @@ import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
+import { cursorLaunchCommandFromMatch } from '../../../../shared/cursor-command'
 import { useAppStore } from '@/store'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
@@ -74,10 +75,17 @@ export function FloatingTerminalWindowControls({
       return
     }
     const state = useAppStore.getState()
+    const cmdOverrides = { ...state.settings?.agentCmdOverrides }
+    if (defaultAgent === 'cursor' && !cmdOverrides.cursor?.trim()) {
+      const detectedCommand = cursorLaunchCommandFromMatch(state.detectedAgentCommands?.cursor)
+      if (detectedCommand) {
+        cmdOverrides.cursor = detectedCommand
+      }
+    }
     const startupPlan = buildAgentStartupPlan({
       agent: defaultAgent,
       prompt: '',
-      cmdOverrides: state.settings?.agentCmdOverrides ?? {},
+      cmdOverrides,
       agentArgs: resolveTuiAgentLaunchArgs(defaultAgent, state.settings?.agentDefaultArgs),
       agentEnv: resolveTuiAgentLaunchEnv(defaultAgent, state.settings?.agentDefaultEnv),
       sessionOptions: resolveNativeChatSessionOptionDefaults(

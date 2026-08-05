@@ -608,4 +608,33 @@ describe('aiVaultSessionRowResumeGating', () => {
       canCopyResumeCommand: true
     })
   })
+
+  it('requires both strong cwd and a live host command for Cursor', () => {
+    const cursorSession = {
+      agent: 'cursor' as const,
+      cwd: '/repo',
+      resumeCommand: "cursor-agent --resume 'session'",
+      messageCount: 0,
+      hasConversation: true,
+      previewMessages: []
+    }
+    expect(
+      aiVaultSessionRowResumeGating(cursorSession, {
+        blocked: false,
+        cursorCommandAvailable: false
+      })
+    ).toEqual({ resumeDisabled: true, canCopyResumeCommand: false })
+    expect(
+      aiVaultSessionRowResumeGating(
+        { ...cursorSession, cwd: null },
+        { blocked: false, cursorCommandAvailable: true }
+      )
+    ).toEqual({ resumeDisabled: true, canCopyResumeCommand: false })
+    expect(
+      aiVaultSessionRowResumeGating(cursorSession, {
+        blocked: false,
+        cursorCommandAvailable: true
+      })
+    ).toEqual({ resumeDisabled: false, canCopyResumeCommand: true })
+  })
 })

@@ -164,6 +164,13 @@ function trackPromiseSettled(promise: Promise<unknown>): () => boolean {
   return () => settled
 }
 
+function successfulRuntimeResponse<TResult>(
+  id: string,
+  result: TResult
+): RuntimeRpcResponse<TResult> {
+  return { id, ok: true, result, _meta: { runtimeId: 'runtime-1' } }
+}
+
 function installClipboardImageBase64(contentBase64: string): void {
   vi.stubGlobal(
     'FileReader',
@@ -1597,6 +1604,87 @@ describe('web AI Vault preload API', () => {
       scannedAt: expect.any(String)
     })
     expect(runtimeCalls).toEqual([])
+  })
+})
+
+describe('web preflight preload API', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.doUnmock('./web-runtime-client')
+  })
+
+  it('preserves Cursor commands when paired with an older runtime', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          if (method === 'preflight.detectAgents') {
+            return Promise.resolve(successfulRuntimeResponse(method, ['cursor', 'codex']))
+          }
+          if (method === 'preflight.detectRemoteAgents') {
+            return Promise.resolve(successfulRuntimeResponse(method, ['cursor']))
+          }
+          if (method === 'preflight.refreshAgents') {
+            return Promise.resolve(
+              successfulRuntimeResponse(method, {
+                agents: ['cursor'],
+                addedPathSegments: [],
+                shellHydrationOk: true,
+                pathSource: 'shell_hydrate',
+                pathFailureReason: 'none'
+              })
+            )
+          }
+          return Promise.resolve({
+            id: method,
+            ok: false,
+            error: { code: 'method_not_found', message: `Unknown method: ${method}` },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(
+      globals.window.api.preflight.detectAgentInventory({ wslDistro: 'Ubuntu' })
+    ).resolves.toMatchObject({
+      agents: ['cursor', 'codex'],
+      matchedCommands: { cursor: 'cursor-agent' }
+    })
+    await expect(
+      globals.window.api.preflight.detectRemoteAgentCommands({ connectionId: 'ssh-old' })
+    ).resolves.toMatchObject({
+      agents: ['cursor'],
+      matchedCommands: { cursor: 'cursor-agent' }
+    })
+    await expect(
+      globals.window.api.preflight.refreshAgents({ wslDistro: 'Ubuntu' })
+    ).resolves.toMatchObject({
+      agents: ['cursor'],
+      matchedCommands: { cursor: 'cursor-agent' }
+    })
+    expect(runtimeCalls).toEqual([
+      { method: 'preflight.detectAgentInventory', params: { wslDistro: 'Ubuntu' } },
+      { method: 'preflight.detectAgents', params: undefined },
+      {
+        method: 'preflight.detectRemoteAgentCommands',
+        params: { connectionId: 'ssh-old' }
+      },
+      { method: 'preflight.detectRemoteAgents', params: { connectionId: 'ssh-old' } },
+      { method: 'preflight.refreshAgents', params: { wslDistro: 'Ubuntu' } }
+    ])
   })
 })
 

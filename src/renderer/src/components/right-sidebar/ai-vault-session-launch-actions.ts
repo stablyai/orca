@@ -12,8 +12,7 @@ import {
 } from '@/lib/worktree-activation'
 import { useAppStore } from '@/store'
 import {
-  canResumeAiVaultSessionOnTarget,
-  getAiVaultResumeWorkspaceExecutionHostId,
+  canResumeAiVaultSessionForWorkspace,
   getAiVaultResumeWorkspaceTargetStatus
 } from '@/lib/ai-vault-resume-target'
 import type { AiVaultAgent, AiVaultSession } from '../../../../shared/ai-vault-types'
@@ -94,6 +93,7 @@ export function useAiVaultSessionLaunchActions({
   const handleResume = useCallback(
     (session: AiVaultSession, targetWorktreeId?: string): void => {
       const targetId = resolveAiVaultSessionLaunchTargetOrNotify({
+        sessionAgent: session.agent,
         sessionFilePath: session.filePath,
         sessionExecutionHostId: session.executionHostId,
         activeWorktreeId: activeWorktreeId ?? activeWorktree?.id ?? null,
@@ -153,6 +153,7 @@ export function useAiVaultSessionLaunchActions({
   const handleContinueInNewSession = useCallback(
     (session: AiVaultSession, targetWorktreeId: string): void => {
       const targetId = resolveAiVaultSessionLaunchTargetOrNotify({
+        sessionAgent: session.agent,
         sessionFilePath: session.filePath,
         sessionExecutionHostId: session.executionHostId,
         activeWorktreeId: activeWorktreeId ?? activeWorktree?.id ?? null,
@@ -238,6 +239,7 @@ export type AiVaultSessionLaunchTarget =
   | { status: 'ready'; worktreeId: string }
 
 export function resolveAiVaultSessionLaunchTarget(args: {
+  sessionAgent?: AiVaultSession['agent']
   sessionFilePath: string | null
   sessionExecutionHostId?: AiVaultSession['executionHostId'] | null
   activeWorktreeId: string | null
@@ -253,16 +255,13 @@ export function resolveAiVaultSessionLaunchTarget(args: {
   }
 
   const targetStatus = getAiVaultResumeWorkspaceTargetStatus(args.targetState, targetWorktreeId)
-  const targetExecutionHostId = getAiVaultResumeWorkspaceExecutionHostId(
-    args.targetState,
-    targetWorktreeId
-  )
   if (
-    !canResumeAiVaultSessionOnTarget({
+    !canResumeAiVaultSessionForWorkspace({
+      state: args.targetState,
+      workspaceId: targetWorktreeId,
       sessionFilePath: args.sessionFilePath,
       sessionExecutionHostId: args.sessionExecutionHostId,
-      targetStatus,
-      targetExecutionHostId
+      sessionAgent: args.sessionAgent
     })
   ) {
     return { status: 'unsupported', targetStatus }

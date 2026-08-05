@@ -27,6 +27,7 @@ import type { AgentStartedTelemetry } from '@/lib/worktree-activation'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
+import { resolveCursorCommandOverrides } from '@/lib/ai-vault-cursor-command'
 
 export type GitHubWorkItemBackgroundStoreSnapshot = {
   repos: readonly Repo[]
@@ -55,6 +56,16 @@ export type GitHubWorkItemBackgroundStoreSnapshot = {
   ensureRuntimeDetectedAgents: ReturnType<
     typeof useAppStore.getState
   >['ensureRuntimeDetectedAgents']
+  detectedAgentCommands?: ReturnType<typeof useAppStore.getState>['detectedAgentCommands']
+  detectedAgentCommandsByContext?: ReturnType<
+    typeof useAppStore.getState
+  >['detectedAgentCommandsByContext']
+  remoteDetectedAgentCommands?: ReturnType<
+    typeof useAppStore.getState
+  >['remoteDetectedAgentCommands']
+  runtimeDetectedAgentCommands?: ReturnType<
+    typeof useAppStore.getState
+  >['runtimeDetectedAgentCommands']
 }
 
 export type BuildInitialGitHubWorkItemRequestArgs = {
@@ -196,11 +207,17 @@ export function buildGitHubWorkItemStartupPlan(args: {
     isRemote,
     terminalWindowsShell: store.settings?.terminalWindowsShell
   })
+  const cmdOverrides = resolveCursorCommandOverrides({
+    state: store as ReturnType<typeof useAppStore.getState>,
+    agent,
+    repoId: repo.id,
+    cmdOverrides: store.settings?.agentCmdOverrides ?? {}
+  })
   const draftLaunchPlan = draftPrompt
     ? buildAgentDraftLaunchPlan({
         agent,
         draft: draftPrompt,
-        cmdOverrides: store.settings?.agentCmdOverrides ?? {},
+        cmdOverrides,
         agentArgs: resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs),
         agentEnv: resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv),
         platform,
@@ -223,7 +240,7 @@ export function buildGitHubWorkItemStartupPlan(args: {
     : buildAgentStartupPlan({
         agent,
         prompt: quickPrompt,
-        cmdOverrides: store.settings?.agentCmdOverrides ?? {},
+        cmdOverrides,
         agentArgs: resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs),
         agentEnv: resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv),
         platform,

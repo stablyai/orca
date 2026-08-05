@@ -6,27 +6,40 @@ import { getBitbucketAuthStatus } from '../bitbucket/client'
 import { getGiteaAuthStatus } from '../gitea/client'
 import { _resetKnownHostsCache } from '../gitlab/gl-utils'
 import { mergePersistedWindowsPathAsync } from '../pty/windows-environment-path'
-import { getActiveMultiplexer } from './ssh'
-import { detectWslCommandsOnPath, type WslPreflightTarget } from './preflight-wsl-agent-detection'
-import { detectCommandsInInstallDirs } from './local-agent-install-dir-detection'
+import type { WslPreflightTarget } from './preflight-wsl-agent-detection'
 import { getPreflightWslTarget, type PreflightRuntimeContext } from './preflight-runtime-target'
-import { hydrateShellPathForAgentDetection } from './agent-detection-shell-path'
 import {
   execCommandInWsl,
   execLocalPreflightCommand,
   isCommandAvailable,
-  isCommandOnPath,
   shellQuote
 } from './preflight-command-exec'
 import {
   detectRemoteWindowsTerminalCapabilities,
   type RemoteWindowsTerminalCapabilities
 } from './preflight-remote-windows-terminal-capabilities'
+import type { DetectedTuiAgentsResult } from './tui-agent-detection-commands'
 import {
-  getTuiAgentDetectionProbeCommands,
-  KNOWN_TUI_AGENT_DETECTION_COMMANDS,
-  resolveDetectedTuiAgentIds
-} from './tui-agent-detection-commands'
+  detectInstalledAgentCommands,
+  detectInstalledAgentCommandsWithShellPathHydration,
+  detectInstalledAgentInventoryWithShellPathHydration,
+  detectInstalledAgents,
+  detectInstalledAgentsWithShellPathHydration,
+  detectRemoteAgentCommands,
+  detectRemoteAgentInventory,
+  detectRemoteAgents
+} from './tui-agent-inventory-detection'
+
+export {
+  detectInstalledAgentCommands,
+  detectInstalledAgentCommandsWithShellPathHydration,
+  detectInstalledAgentInventoryWithShellPathHydration,
+  detectInstalledAgents,
+  detectInstalledAgentsWithShellPathHydration,
+  detectRemoteAgentCommands,
+  detectRemoteAgentInventory,
+  detectRemoteAgents
+}
 
 export type PreflightStatus = {
   git: { installed: boolean }
@@ -65,10 +78,6 @@ export function _resetPreflightCache(): void {
   cached = null
 }
 
-function uniqueAgentIds(ids: Iterable<string>): string[] {
-  return [...new Set(ids)]
-}
-
 async function detectCommandRuntime(
   command: string,
   context?: PreflightRuntimeContext
@@ -85,52 +94,10 @@ async function detectCommandRuntime(
   return { installed: false }
 }
 
-export async function detectInstalledAgents(context?: PreflightRuntimeContext): Promise<string[]> {
-  const wslTarget = getPreflightWslTarget(context)
-  if (wslTarget) {
-    const foundCommands = await detectWslCommandsOnPath(
-      wslTarget,
-      getTuiAgentDetectionProbeCommands(KNOWN_TUI_AGENT_DETECTION_COMMANDS, 'wsl')
-    )
-    return resolveDetectedTuiAgentIds(KNOWN_TUI_AGENT_DETECTION_COMMANDS, foundCommands, 'wsl')
-  }
-
-  const probeCommands = getTuiAgentDetectionProbeCommands(
-    KNOWN_TUI_AGENT_DETECTION_COMMANDS,
-    process.platform
-  )
-  const pathChecks = await Promise.all(
-    probeCommands.map(async (cmd) => ({
-      cmd,
-      installedOnPath: await isCommandOnPath(cmd)
-    }))
-  )
-  const missedCommands = pathChecks.filter((check) => !check.installedOnPath).map(({ cmd }) => cmd)
-  // Why: PATH may still be unhydrated on a cold GUI launch; bulk resolution
-  // computes user install dirs once instead of blocking once per missed CLI.
-  const installDirCommands = detectCommandsInInstallDirs(missedCommands)
-  const foundCommands = new Set(
-    pathChecks
-      .filter(({ cmd, installedOnPath }) => installedOnPath || installDirCommands.has(cmd))
-      .map(({ cmd }) => cmd)
-  )
-  return resolveDetectedTuiAgentIds(
-    KNOWN_TUI_AGENT_DETECTION_COMMANDS,
-    foundCommands,
-    process.platform
-  )
-}
-
-export async function detectInstalledAgentsWithShellPathHydration(
-  context?: PreflightRuntimeContext
-): Promise<string[]> {
-  await hydrateShellPathForAgentDetection(context)
-  return detectInstalledAgents(context)
-}
-
 export type RefreshAgentsResult = {
   /** Agents detected after hydrating PATH from the user's login shell. */
   agents: string[]
+  matchedCommands?: DetectedTuiAgentsResult['matchedCommands']
   /** PATH segments that were added this refresh (empty if nothing new). */
   addedPathSegments: string[]
   /** True when the shell spawn succeeded. False = relied on existing PATH. */
@@ -155,9 +122,10 @@ export async function refreshShellPathAndDetectAgents(
   context?: PreflightRuntimeContext
 ): Promise<RefreshAgentsResult> {
   if (getPreflightWslTarget(context)) {
-    const agents = await detectInstalledAgents(context)
+    const detected = await detectInstalledAgentCommands(context)
     return {
-      agents,
+      agents: detected.agents,
+      matchedCommands: detected.matchedCommands,
       addedPathSegments: [],
       shellHydrationOk: true,
       pathSource: 'sync_seed_only',
@@ -167,27 +135,15 @@ export async function refreshShellPathAndDetectAgents(
 
   const hydration = await hydrateShellPath({ force: true })
   const added = hydration.ok ? mergePathSegments(hydration.segments) : []
-  const agents = await detectInstalledAgents(context)
+  const detected = await detectInstalledAgentCommands(context)
   return {
-    agents,
+    agents: detected.agents,
+    matchedCommands: detected.matchedCommands,
     addedPathSegments: added,
     shellHydrationOk: hydration.ok,
     pathSource: hydration.ok ? 'shell_hydrate' : 'sync_seed_only',
     pathFailureReason: hydration.failureReason
   }
-}
-
-export async function detectRemoteAgents(args: { connectionId: string }): Promise<string[]> {
-  const mux = getActiveMultiplexer(args.connectionId)
-  if (!mux || mux.isDisposed()) {
-    // Why: remote agent detection is passive UI polling. A disconnected host has
-    // no detectable agents until reconnect, but should not spam IPC errors.
-    return []
-  }
-  const result = (await mux.request('preflight.detectAgents', {
-    commands: KNOWN_TUI_AGENT_DETECTION_COMMANDS
-  })) as { agents: string[] }
-  return uniqueAgentIds(result.agents)
 }
 
 async function isGhAuthenticated(wslTarget?: WslPreflightTarget): Promise<boolean> {
@@ -293,6 +249,12 @@ export function registerPreflightHandlers(): void {
   ipcMain.handle('preflight:detectAgents', async (_event, args?: PreflightRuntimeContext) =>
     detectInstalledAgentsWithShellPathHydration(args)
   )
+  ipcMain.handle('preflight:detectAgentCommands', async (_event, args?: PreflightRuntimeContext) =>
+    detectInstalledAgentCommandsWithShellPathHydration(args)
+  )
+  ipcMain.handle('preflight:detectAgentInventory', async (_event, args?: PreflightRuntimeContext) =>
+    detectInstalledAgentInventoryWithShellPathHydration(args)
+  )
 
   ipcMain.handle('preflight:refreshAgents', async (_event, args?: PreflightRuntimeContext) => {
     return refreshShellPathAndDetectAgents(args)
@@ -307,6 +269,14 @@ export function registerPreflightHandlers(): void {
     async (_event, args: { connectionId: string }): Promise<string[]> => {
       return detectRemoteAgents(args)
     }
+  )
+  ipcMain.handle(
+    'preflight:detectRemoteAgentCommands',
+    async (_event, args: { connectionId: string }) => detectRemoteAgentCommands(args)
+  )
+  ipcMain.handle(
+    'preflight:detectRemoteAgentInventory',
+    async (_event, args: { connectionId: string }) => detectRemoteAgentInventory(args)
   )
 
   ipcMain.handle(

@@ -105,6 +105,20 @@ describe('listAiVaultSessions host routing', () => {
     )
   })
 
+  it('forwards manual force refreshes through the SSH result cache', async () => {
+    await _internals.listAiVaultSessions({
+      executionHostScope: 'ssh:dev-box',
+      force: true
+    })
+
+    expect(mocks.scanRemoteAiVaultSessions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider,
+        executionHostId: 'ssh:dev-box'
+      })
+    )
+  })
+
   it('uses one target-side relay scan when the SSH relay supports it', async () => {
     mocks.requestActiveSshAiVaultSessionList.mockResolvedValue(
       result([session('local', 'remote-session')])
@@ -262,6 +276,54 @@ describe('listAiVaultSessions host routing', () => {
     expect(result.sessions.map((entry) => entry.executionHostId)).toEqual(['ssh:dev-box', 'local'])
   })
 
+  it('invalidates the all-host cache when the connected host set changes', async () => {
+    mocks.getActiveSshAiVaultHostInfo.mockImplementation((targetId) => hostInfo(targetId))
+    mocks.scanRemoteAiVaultSessions.mockImplementation(({ executionHostId }) =>
+      Promise.resolve(result([session(executionHostId, `${executionHostId}-session`)]))
+    )
+    await _internals.listAiVaultSessions({ executionHostScope: 'all' })
+
+    mocks.getActiveSshAiVaultHostInfos.mockReturnValue([
+      hostInfo('dev-box'),
+      hostInfo('second-box')
+    ])
+    const scanResult = await _internals.listAiVaultSessions({ executionHostScope: 'all' })
+
+    expect(mocks.scanRemoteAiVaultSessions).toHaveBeenCalledTimes(2)
+    expect(scanResult.sessions.map((entry) => entry.executionHostId)).toContain('ssh:second-box')
+  })
+
+  it('keeps successful hosts when one SSH scan fails', async () => {
+    mocks.getActiveSshAiVaultHostInfos.mockReturnValue([
+      hostInfo('unavailable'),
+      hostInfo('dev-box')
+    ])
+    mocks.getActiveSshAiVaultHostInfo.mockImplementation((targetId) => hostInfo(targetId))
+    mocks.scanRemoteAiVaultSessions.mockImplementation(({ executionHostId }) =>
+      executionHostId === 'ssh:unavailable'
+        ? Promise.reject(new Error('relay unavailable'))
+        : Promise.resolve(result([session('ssh:dev-box', 'remote-session')]))
+    )
+
+    const scanResult = await _internals.listAiVaultSessions({ executionHostScope: 'all' })
+
+    expect(
+      mocks.scanRemoteAiVaultSessions.mock.calls.map(([scanArgs]) => scanArgs.executionHostId)
+    ).toEqual(['ssh:unavailable', 'ssh:dev-box'])
+    expect(scanResult.issues).toMatchObject([
+      {
+        executionHostId: 'ssh:unavailable',
+        agent: 'codex',
+        path: 'unavailable',
+        message: 'relay unavailable'
+      }
+    ])
+    expect(scanResult.sessions.map((entry) => entry.executionHostId)).toEqual([
+      'ssh:dev-box',
+      'local'
+    ])
+  })
+
   it('merges paired runtime servers for all hosts', async () => {
     registerAiVaultHandlers({
       getActiveRuntimeAiVaultHostInfos: () => [
@@ -278,7 +340,8 @@ describe('listAiVaultSessions host routing', () => {
     expect(mocks.scanRuntimeAiVaultSessions).toHaveBeenCalledWith(
       'remote-server',
       {
-        executionHostScope: 'runtime:remote-server'
+        executionHostScope: 'runtime:remote-server',
+        force: false
       },
       expect.objectContaining({ timeoutMs: expect.any(Number) })
     )

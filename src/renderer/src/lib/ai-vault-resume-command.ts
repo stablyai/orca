@@ -30,6 +30,7 @@ import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { resolveAiVaultResumeCommandOverride } from '@/lib/ai-vault-cursor-command'
 
 type AiVaultResumeCommandSession = Pick<
   AiVaultSession,
@@ -58,7 +59,16 @@ type AiVaultResumeWorktreeArgs = {
     | 'repos'
     | 'settings'
     | 'worktreesByRepo'
-  >
+  > &
+    Partial<
+      Pick<
+        AppState,
+        | 'detectedAgentCommands'
+        | 'detectedAgentCommandsByContext'
+        | 'remoteDetectedAgentCommands'
+        | 'runtimeDetectedAgentCommands'
+      >
+    >
   worktreeId?: string | null
   session: AiVaultResumeCommandSession
   commandOverride?: string | null
@@ -77,11 +87,7 @@ export function buildAiVaultResumeCopyCommandForWorktree(args: AiVaultResumeWork
   return `${clearHomes}${separator}${command}`
 }
 
-export function buildAiVaultResumeStartupForWorktree(
-  args: AiVaultResumeWorktreeArgs
-): AiVaultResumeStartup {
-  return buildAiVaultResumeForWorktree(args)
-}
+export const buildAiVaultResumeStartupForWorktree = buildAiVaultResumeForWorktree
 
 /**
  * Rebuilds a drag-drop resume startup under the account home the host
@@ -122,13 +128,15 @@ export function buildAiVaultDropRepinStartup(args: {
 
 function buildAiVaultResumeForWorktree(args: AiVaultResumeWorktreeArgs): AiVaultResumeStartup {
   const providerSession = getAiVaultAgentProviderSession(args.session)
+  const commandOverride = resolveAiVaultResumeCommandOverride(args)
   if (
     args.session.executionHostId &&
     args.session.executionHostId !== LOCAL_EXECUTION_HOST_ID &&
     args.session.resumeCommand &&
     args.session.agent !== 'omp' &&
+    args.session.agent !== 'cursor' &&
     !(args.session.agent === 'codex' && args.session.codexHome === null) &&
-    !args.commandOverride?.trim()
+    !commandOverride?.trim()
   ) {
     return {
       command: args.session.resumeCommand,
@@ -160,7 +168,7 @@ function buildAiVaultResumeForWorktree(args: AiVaultResumeWorktreeArgs): AiVault
       providerSession,
       cmdOverrides: {
         ...args.state.settings?.agentCmdOverrides,
-        ...(args.commandOverride?.trim() ? { [args.session.agent]: args.commandOverride } : {})
+        ...(commandOverride?.trim() ? { [args.session.agent]: commandOverride } : {})
       },
       platform,
       shell: liveShell,
@@ -212,7 +220,7 @@ function buildAiVaultResumeForWorktree(args: AiVaultResumeWorktreeArgs): AiVault
       resumeFilePath,
       cwd: args.session.cwd,
       platform,
-      commandOverride: args.commandOverride,
+      commandOverride,
       codexHome,
       // Why: non-resumable agents queue through this fallback too, so it must
       // quote for the live Windows shell like the startup-plan branch above.

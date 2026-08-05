@@ -52,11 +52,16 @@ export function SessionMetadata({
         {liveState && liveState !== 'done' ? <AgentStateDot state={liveState} /> : null}
         <span className="min-w-0 shrink-[2] truncate">{agentLabel(session.agent)}</span>
         <span className="shrink-0 tabular-nums">
-          {translate(
-            'auto.components.right.sidebar.AiVaultSessionRow.messageCount',
-            '{{value0}} msgs',
-            { value0: session.messageCount }
-          )}
+          {session.messageCount === 0 && session.hasConversation
+            ? translate(
+                'auto.components.right.sidebar.AiVaultSessionRow.conversationAvailable',
+                'Conversation available'
+              )
+            : translate(
+                'auto.components.right.sidebar.AiVaultSessionRow.messageCount',
+                '{{value0}} msgs',
+                { value0: session.messageCount }
+              )}
         </span>
         {session.subagentTranscriptCount > 0 ? (
           <>

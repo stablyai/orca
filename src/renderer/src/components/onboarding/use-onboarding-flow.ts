@@ -30,6 +30,7 @@ import { STEPS, type StepNumber } from './use-onboarding-flow-types'
 import { persistStep, useCloseWith, usePersistCurrentStep } from './use-onboarding-flow-persistence'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { buildOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
+import { resolveAiVaultCursorCommand } from '@/lib/ai-vault-cursor-command'
 import { resolveOnboardingSettingsHydration } from './onboarding-settings-hydration'
 import { openProjectDefaultCheckout } from '../sidebar/project-added-default-checkout'
 import { translate } from '@/i18n/i18n'
@@ -549,7 +550,15 @@ export function useOnboardingFlow(
         const worktree = worktrees[0] ?? null
         if (worktree) {
           // Why: non-git folders skip the composer, so seed their first terminal with the chosen default agent here.
-          const startup = buildOnboardingFolderAgentStartup(settings)
+          const state = useAppStore.getState()
+          const startup = buildOnboardingFolderAgentStartup(
+            settings,
+            resolveAiVaultCursorCommand({
+              state,
+              worktreeId: worktree.id,
+              commandOverride: settings?.agentCmdOverrides?.cursor
+            })
+          )
           activateAndRevealWorktree(worktree.id, { startup })
         }
       }

@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { buildDismissedOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
+import { resolveAiVaultCursorCommand } from '@/lib/ai-vault-cursor-command'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { translate } from '@/i18n/i18n'
 import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
@@ -81,12 +82,18 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
             )
           if (folderWorktree) {
             const onboarding = await window.api.onboarding.get().catch(() => null)
+            const currentState = useAppStore.getState()
             // Why: SSH users can hit this dialog from Add Project after
             // dismissing onboarding, bypassing the local addNonGitFolder path.
             const startup = buildDismissedOnboardingFolderAgentStartup(
-              useAppStore.getState().settings,
+              currentState.settings,
               onboarding,
-              hadProjectBeforeAdd
+              hadProjectBeforeAdd,
+              resolveAiVaultCursorCommand({
+                state: currentState,
+                worktreeId: folderWorktree.id,
+                commandOverride: currentState.settings?.agentCmdOverrides?.cursor
+              })
             )
             activateAndRevealWorktree(folderWorktree.id, {
               sidebarRevealBehavior: 'auto',

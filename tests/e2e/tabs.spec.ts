@@ -91,11 +91,12 @@ test.describe('Tabs', () => {
     // Why: the "+" dropdown uses Radix <DropdownMenuItem>, which exposes the
     // label text as the accessible name once the menu is open.
     const newTerminalMenuItem = orcaPage.getByRole('menuitem', { name: /New Terminal/i }).first()
+    await expect(newTerminalMenuItem).toBeVisible()
     await newTerminalMenuItem.click({ force: true })
-    await expect(newTerminalMenuItem).toBeHidden({ timeout: 3_000 })
 
-    // Final assertion is on the rendered tab count — the tab bar itself must
-    // gain an element, not just the store.
+    // Why: assert the product outcome (new tab) rather than menu teardown.
+    // Radix can leave the menuitem in the a11y tree briefly after a forced
+    // click even when the terminal tab was already created.
     await expect
       .poll(() => countRenderedTabs(orcaPage), {
         timeout: 5_000,

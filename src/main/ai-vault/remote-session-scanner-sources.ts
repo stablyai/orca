@@ -67,14 +67,18 @@ export function remoteSessionSources(
       ['.copilot', 'session-state'],
       parseCopilotSessionContent
     ),
-    jsonlSource(
-      'cursor',
-      remoteHome,
-      hostPlatform,
-      ['.cursor', 'projects'],
-      parseCursorSessionContent,
-      (path) => remotePathSegments(path).includes('agent-transcripts')
-    ),
+    {
+      ...jsonlSource(
+        'cursor',
+        remoteHome,
+        hostPlatform,
+        ['.cursor', 'projects'],
+        parseCursorSessionContent,
+        (path) => remotePathSegments(path).includes('agent-transcripts')
+      ),
+      cursorLayout: 'legacy',
+      cursorStorageContextKey: ''
+    },
     source(
       'hermes',
       remoteHome,

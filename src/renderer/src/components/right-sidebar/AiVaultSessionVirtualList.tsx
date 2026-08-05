@@ -310,7 +310,11 @@ function AiVaultVirtualRow({
   const resumeActions = row.type === 'session' ? getSessionResumeActions(row.session) : null
   const continuationWorktreeId =
     row.type === 'session' &&
-    canContinueAiVaultSessionInNewSession(row.session, resumeState?.worktreeId)
+    canContinueAiVaultSessionInNewSession(
+      row.session,
+      resumeState?.worktreeId,
+      resumeState?.cursorCommandAvailable
+    )
       ? resumeState?.worktreeId
       : null
   // Gate resume on real content: a zero-turn transcript would resume into an

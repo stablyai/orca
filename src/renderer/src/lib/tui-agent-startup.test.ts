@@ -149,7 +149,7 @@ describe('buildAgentStartupPlan', () => {
       buildAgentStartupPlan({
         agent: 'cursor',
         prompt: 'Review this file',
-        cmdOverrides: {},
+        cmdOverrides: { cursor: 'cursor-agent' },
         platform: 'darwin'
       })
     ).toEqual({
@@ -159,6 +159,28 @@ describe('buildAgentStartupPlan', () => {
       followupPrompt: null,
       launchConfig: emptyLaunchConfig('cursor-agent')
     })
+  })
+
+  it('does not fall back to a Cursor command that was not proven in this context', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'cursor',
+        prompt: 'Review this file',
+        cmdOverrides: {},
+        platform: 'darwin'
+      })
+    ).toBeNull()
+  })
+
+  it('uses the capability-proven Cursor subcommand form exactly', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'cursor',
+        prompt: 'Review this file',
+        cmdOverrides: { cursor: 'cursor agent' },
+        platform: 'linux'
+      })?.launchCommand
+    ).toBe("cursor agent 'Review this file'")
   })
 
   it('applies command overrides without changing the prompt syntax contract', () => {

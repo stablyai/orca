@@ -8,6 +8,13 @@ import { isPwshAvailable } from '../main/pwsh'
 import { isWslAvailable, listWslDistros } from '../main/wsl'
 import { isGitBashAvailable } from '../main/git-bash'
 import { buildPosixCommandPathLookupScript } from '../shared/posix-command-path-lookup'
+import {
+  detectedAgentInventory,
+  detectedAgentInventoryRequestSchema,
+  emptyDetectedAgentInventory,
+  type DetectedAgentInventoryRequestV1,
+  type DetectedAgentInventoryV1
+} from '../shared/detected-agent-inventory'
 
 const execFileAsync = promisify(execFile)
 
@@ -23,14 +30,7 @@ type RelayCommandLookupOptions = {
   accountLoginShell?: string | null
 }
 
-type AgentDetectionRuntime = NodeJS.Platform | 'wsl'
-
-type AgentDetectionCommand = {
-  id: string
-  cmd: string
-  requiredCommands?: readonly string[]
-  unsupportedRuntimes?: readonly AgentDetectionRuntime[]
-}
+type AgentDetectionCommand = DetectedAgentInventoryRequestV1['commands'][number]
 
 const SUPPORTED_POSIX_SHELLS = new Set(['sh', 'dash', 'bash', 'zsh', 'fish'])
 const CONSERVATIVE_SYSTEM_SHELL_DIRS = new Set(['/bin', '/usr/bin'])
@@ -45,7 +45,13 @@ export class PreflightHandler {
   }
 
   private registerHandlers(): void {
-    this.dispatcher.onRequest('preflight.detectAgents', (p) => this.detectAgents(p))
+    this.dispatcher.onRequest('preflight.detectAgents', async (params) => {
+      const inventory = await this.detectAgentInventory(params)
+      return { agents: inventory.agents }
+    })
+    this.dispatcher.onRequest('preflight.detectAgentInventory', (params) =>
+      this.detectAgentInventory(params)
+    )
     this.dispatcher.onRequest('preflight.detectWindowsTerminalCapabilities', () =>
       this.detectWindowsTerminalCapabilities()
     )
@@ -54,11 +60,17 @@ export class PreflightHandler {
   // Why: the client sends the command list rather than importing TUI_AGENT_CONFIG
   // on the relay side. This keeps the relay bundle minimal and makes the protocol
   // self-describing — the relay doesn't need to know the agent catalog.
-  private async detectAgents(params: Record<string, unknown>): Promise<{ agents: string[] }> {
-    const commands = params.commands as AgentDetectionCommand[]
-    if (!Array.isArray(commands)) {
-      return { agents: [] }
+  private async detectAgentInventory(
+    params: Record<string, unknown>
+  ): Promise<DetectedAgentInventoryV1> {
+    const parsed = detectedAgentInventoryRequestSchema.safeParse({
+      ...params,
+      version: params.version ?? 1
+    })
+    if (!parsed.success) {
+      return emptyDetectedAgentInventory()
     }
+    const commands = parsed.data.commands
     const probeCommands = [
       ...new Set(
         commands
@@ -70,27 +82,57 @@ export class PreflightHandler {
     const results = await Promise.all(
       probeCommands.map(async (cmd) => ({
         cmd,
-        installed: await this.isCommandOnPath(cmd)
+        resolvedPath: await resolveCommandOnPathForRelay(cmd)
       }))
     )
     const foundCommands = new Set(
-      results.filter((result) => result.installed).map(({ cmd }) => cmd)
+      results.filter((result) => result.resolvedPath).map(({ cmd }) => cmd)
+    )
+    await Promise.all(
+      commands
+        .filter((command) => command.capabilityProbe && foundCommands.has(command.cmd))
+        .map(async (command) => {
+          const resolvedPath = results.find((result) => result.cmd === command.cmd)?.resolvedPath
+          if (!resolvedPath) {
+            foundCommands.delete(command.cmd)
+            return
+          }
+          try {
+            await execFileAsync(resolvedPath, [...(command.capabilityProbe?.args ?? [])], {
+              encoding: 'utf-8',
+              env: buildRelayCommandEnv(process.env, process.platform),
+              timeout: 5000,
+              ...(process.platform === 'win32' ? { windowsHide: true } : {})
+            })
+          } catch {
+            foundCommands.delete(command.cmd)
+          }
+        })
     )
 
-    return {
-      agents: [
-        ...new Set(
-          commands
-            .filter(
-              (command) =>
-                !isDetectionUnsupportedInRuntime(command, process.platform) &&
-                foundCommands.has(command.cmd) &&
-                (command.requiredCommands ?? []).every((required) => foundCommands.has(required))
-            )
-            .map(({ id }) => id)
-        )
-      ]
+    const agents = [
+      ...new Set(
+        commands
+          .filter(
+            (command) =>
+              !isDetectionUnsupportedInRuntime(command, process.platform) &&
+              foundCommands.has(command.cmd) &&
+              (command.requiredCommands ?? []).every((required) => foundCommands.has(required))
+          )
+          .map(({ id }) => id)
+      )
+    ]
+    const matchedCommands: Record<string, string> = {}
+    for (const command of commands) {
+      if (
+        agents.includes(command.id) &&
+        foundCommands.has(command.cmd) &&
+        matchedCommands[command.id] === undefined
+      ) {
+        matchedCommands[command.id] = command.capabilityProbe?.matchedCommand ?? command.cmd
+      }
     }
+    return detectedAgentInventory(agents, matchedCommands)
   }
 
   private async detectWindowsTerminalCapabilities(): Promise<{
@@ -114,19 +156,11 @@ export class PreflightHandler {
       hostPlatform: process.platform
     }
   }
-
-  // Why: SSH exec channels give the relay a minimal environment without shell
-  // startup files sourced. Ask the user's configured shell so agent dirs added
-  // by zsh/bash/fish startup hooks match the remote terminal experience.
-  // Windows has no POSIX shell on native OpenSSH hosts, so use where.exe there.
-  private async isCommandOnPath(command: string): Promise<boolean> {
-    return isCommandOnPathForRelay(command)
-  }
 }
 
 function isDetectionUnsupportedInRuntime(
   command: AgentDetectionCommand,
-  runtime: AgentDetectionRuntime
+  runtime: NodeJS.Platform | 'wsl'
 ): boolean {
   return command.unsupportedRuntimes?.includes(runtime) === true
 }
@@ -172,6 +206,13 @@ export async function isCommandOnPathForRelay(
   command: string,
   options: RelayCommandLookupOptions = {}
 ): Promise<boolean> {
+  return Boolean(await resolveCommandOnPathForRelay(command, options))
+}
+
+export async function resolveCommandOnPathForRelay(
+  command: string,
+  options: RelayCommandLookupOptions = {}
+): Promise<string | null> {
   const platform = options.platform ?? process.platform
   const env = options.env ?? process.env
   const specs = buildCommandLookupSpecs(command, platform, env, options.accountLoginShell)
@@ -184,31 +225,39 @@ export async function isCommandOnPathForRelay(
         timeout: 5000,
         ...(spec.windowsHide ? { windowsHide: true } : {})
       })
-      if (hasAbsoluteCommandPath(stdout, platform)) {
-        return true
+      const resolvedPath = firstAbsoluteCommandPath(stdout, platform)
+      if (resolvedPath) {
+        return resolvedPath
       }
     } catch {
       // Try the inherited-PATH fallback before reporting the agent missing.
     }
   }
 
-  return false
+  return null
 }
 
 export function hasAbsoluteCommandPath(output: string, platform: NodeJS.Platform): boolean {
+  return Boolean(firstAbsoluteCommandPath(output, platform))
+}
+
+function firstAbsoluteCommandPath(output: string, platform: NodeJS.Platform): string | null {
   const pathOps = platform === 'win32' ? win32 : path
-  return output
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .some((line) => {
-      const resolvedPath =
-        platform === 'win32'
-          ? line
-          : line.startsWith(AGENT_PATH_PREFIX)
-            ? line.slice(AGENT_PATH_PREFIX.length)
-            : ''
-      return pathOps.isAbsolute(resolvedPath)
-    })
+  return (
+    output
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .map((line) => {
+        const resolvedPath =
+          platform === 'win32'
+            ? line
+            : line.startsWith(AGENT_PATH_PREFIX)
+              ? line.slice(AGENT_PATH_PREFIX.length)
+              : ''
+        return pathOps.isAbsolute(resolvedPath) ? resolvedPath : null
+      })
+      .find((resolvedPath): resolvedPath is string => Boolean(resolvedPath)) ?? null
+  )
 }
 
 function buildPosixCommandLookupSpec(command: string, shell: string): CommandLookupSpec {

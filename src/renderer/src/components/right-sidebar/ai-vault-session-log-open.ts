@@ -7,8 +7,9 @@ import { translate } from '@/i18n/i18n'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { canOpenAiVaultSessionLogInOrca } from './ai-vault-session-path-actions'
+import { getAiVaultTranscriptPath } from '../../../../shared/ai-vault-transcript-path'
 
-type AiVaultLogSession = Pick<AiVaultSession, 'filePath' | 'executionHostId'>
+type AiVaultLogSession = Pick<AiVaultSession, 'filePath' | 'transcriptFilePath' | 'executionHostId'>
 
 // Why: rapid double-clicks of View Log during the authorize await must share one
 // in-flight open (and toast-once on failure) so a slow FS grant can't spawn
@@ -48,7 +49,7 @@ function focusEditorContent(): void {
  * capability by itself and never redirects the open to a remote host.
  */
 export async function openAiVaultSessionLogInOrca(session: AiVaultLogSession): Promise<void> {
-  const filePath = session.filePath?.trim()
+  const filePath = getAiVaultTranscriptPath(session)
   // Defensive: UI availability should already withhold blank/remote/synthetic
   // paths. Bail silently rather than toast — there is no user-actionable error.
   if (!filePath || !canOpenAiVaultSessionLogInOrca(session)) {

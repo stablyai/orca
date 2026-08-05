@@ -129,7 +129,9 @@ function AgentHistoryCardRow({
       <View style={styles.cardMetaRow}>
         <Text style={styles.cardMetaText}>{card.agentLabel}</Text>
         <Text style={styles.cardMetaText}>
-          {card.messageCount} {card.messageCount === 1 ? 'message' : 'messages'}
+          {card.messageCount === 0 && card.hasConversation
+            ? 'Conversation available'
+            : `${card.messageCount} ${card.messageCount === 1 ? 'message' : 'messages'}`}
         </Text>
         {showCurrentWorktreeBadge && card.isCurrentWorktree ? (
           <View style={styles.currentBadge}>

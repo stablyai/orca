@@ -12,6 +12,7 @@ import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
 } from '../../shared/ai-vault-resume-preparation'
+import { buildAiVaultSessionId } from '../../shared/ai-vault-session-id'
 import { parseAiVaultListResult } from './session-list-result-validation'
 
 export type RuntimeAiVaultHostInfo = {
@@ -145,7 +146,13 @@ function retagRuntimeSession(
   return {
     ...session,
     executionHostId,
-    id: `${executionHostId}:${session.agent}:${session.sessionId}:${session.filePath}`
+    id: buildAiVaultSessionId({
+      executionHostId,
+      agent: session.agent,
+      sessionId: session.sessionId,
+      filePath: session.filePath,
+      previousId: session.id
+    })
   }
 }
 

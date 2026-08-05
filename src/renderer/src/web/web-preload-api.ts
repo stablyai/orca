@@ -9,6 +9,8 @@ import type {
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { parseHostAccessLink } from '../../../shared/remote-pairing-address'
 import { verifyRemotePairingRuntimeStatus } from '../../../shared/remote-pairing-verification'
+import type { DetectedAgentInventoryV1 } from '../../../shared/detected-agent-inventory'
+import { legacyDetectedAgentInventory } from '../../../shared/detected-agent-inventory'
 import type { AiVaultListArgs, AiVaultListResult } from '../../../shared/ai-vault-types'
 import type {
   AiVaultPrepareSessionResumeArgs,
@@ -31,6 +33,7 @@ import type {
   RemoveWorktreeResult,
   SearchResult,
   StatsSummary,
+  TuiAgent,
   Worktree,
   WorktreeLineage,
   WorkspaceLineage,
@@ -2796,6 +2799,12 @@ function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight']> {
     pathSource: 'sync_seed_only',
     pathFailureReason: 'spawn_error'
   }
+  const withLegacyMatchedCommands = (refresh: RefreshAgentsResult): RefreshAgentsResult => ({
+    ...refresh,
+    matchedCommands:
+      refresh.matchedCommands ??
+      legacyDetectedAgentInventory(refresh.agents as TuiAgent[]).matchedCommands
+  })
   type WindowsTerminalCapabilityBridgeResult = {
     wslAvailable: boolean
     wslDistros: string[]
@@ -2817,22 +2826,93 @@ function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight']> {
       }
       return callRuntimeResult<PreflightStatus>('preflight.check', args)
     },
-    detectAgents: async () => {
+    detectAgents: async (args) => {
       if (!requireActiveEnvironmentOrNull()) {
         return []
       }
-      return callRuntimeResult<string[]>('preflight.detectAgents').catch(() => [])
+      try {
+        return await callRuntimeResult<string[]>('preflight.detectAgents', args)
+      } catch {
+        return args ? callRuntimeResult<string[]>('preflight.detectAgents').catch(() => []) : []
+      }
     },
-    refreshAgents: () =>
-      requireActiveEnvironmentOrNull()
-        ? callRuntimeResult('preflight.refreshAgents')
-            .then((result) => result as RefreshAgentsResult)
-            .catch(() => fallbackRefreshAgents)
-        : Promise.resolve(fallbackRefreshAgents),
+    detectAgentInventory: async (args) => {
+      if (!requireActiveEnvironmentOrNull()) {
+        return { version: 1, agents: [], matchedCommands: {} }
+      }
+      return callRuntimeResult<DetectedAgentInventoryV1>(
+        'preflight.detectAgentInventory',
+        args
+      ).catch(async () =>
+        legacyDetectedAgentInventory(
+          (await callRuntimeResult<string[]>('preflight.detectAgents').catch(
+            () => []
+          )) as TuiAgent[]
+        )
+      )
+    },
+    detectAgentCommands: async (args) => {
+      if (!requireActiveEnvironmentOrNull()) {
+        return { agents: [], matchedCommands: {} }
+      }
+      return callRuntimeResult<{
+        agents: string[]
+        matchedCommands?: Record<string, string>
+      }>('preflight.detectAgentCommands', args).catch(async () =>
+        legacyDetectedAgentInventory(
+          (await callRuntimeResult<string[]>('preflight.detectAgents').catch(
+            () => []
+          )) as TuiAgent[]
+        )
+      )
+    },
+    refreshAgents: async (args) => {
+      if (!requireActiveEnvironmentOrNull()) {
+        return fallbackRefreshAgents
+      }
+      try {
+        return withLegacyMatchedCommands(
+          await callRuntimeResult<RefreshAgentsResult>('preflight.refreshAgents', args)
+        )
+      } catch {
+        if (!args) {
+          return fallbackRefreshAgents
+        }
+        return callRuntimeResult<RefreshAgentsResult>('preflight.refreshAgents')
+          .then(withLegacyMatchedCommands)
+          .catch(() => fallbackRefreshAgents)
+      }
+    },
     detectRemoteAgents: async (args) =>
       requireActiveEnvironmentOrNull()
         ? callRuntimeResult<string[]>('preflight.detectRemoteAgents', args).catch(() => [])
         : [],
+    detectRemoteAgentInventory: async (args) =>
+      requireActiveEnvironmentOrNull()
+        ? callRuntimeResult<DetectedAgentInventoryV1>(
+            'preflight.detectRemoteAgentInventory',
+            args
+          ).catch(async () =>
+            legacyDetectedAgentInventory(
+              (await callRuntimeResult<string[]>('preflight.detectRemoteAgents', args).catch(
+                () => []
+              )) as TuiAgent[]
+            )
+          )
+        : { version: 1, agents: [], matchedCommands: {} },
+    detectRemoteAgentCommands: async (args) =>
+      requireActiveEnvironmentOrNull()
+        ? callRuntimeResult<{
+            agents: string[]
+            matchedCommands?: Record<string, string>
+          }>('preflight.detectRemoteAgentCommands', args).catch(async () =>
+            legacyDetectedAgentInventory(
+              (await callRuntimeResult<string[]>('preflight.detectRemoteAgents', args).catch(
+                () => []
+              )) as TuiAgent[]
+            )
+          )
+        : { agents: [], matchedCommands: {} },
     detectRemoteWindowsTerminalCapabilities: async (args) =>
       requireActiveEnvironmentOrNull()
         ? callRuntimeResult<WindowsTerminalCapabilityBridgeResult>(

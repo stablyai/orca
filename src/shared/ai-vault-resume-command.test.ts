@@ -122,4 +122,31 @@ describe('buildAiVaultResumeCommand', () => {
       })
     ).toBe("cd '/Users/ada/repo' && omp --resume '019f27cd-4268-7000-96e7-62f42a55c144'")
   })
+
+  it('quotes hostile Cursor cwd and session values for POSIX shells', () => {
+    expect(
+      buildAiVaultResumeCommand({
+        agent: 'cursor',
+        sessionId: "id'; echo pwn",
+        cwd: "/repo/'quoted;$(touch /tmp/pwn)",
+        platform: 'linux',
+        commandOverride: 'cursor-agent'
+      })
+    ).toBe("cd '/repo/'\\''quoted;$(touch /tmp/pwn)' && cursor-agent --resume 'id'\\''; echo pwn'")
+  })
+
+  it('quotes hostile Cursor cwd and session values for PowerShell', () => {
+    expect(
+      buildAiVaultResumeCommand({
+        agent: 'cursor',
+        sessionId: "id'; Write-Host pwn",
+        cwd: "C:\\repo\\'; Remove-Item *",
+        platform: 'win32',
+        shell: 'powershell',
+        commandOverride: 'cursor agent'
+      })
+    ).toBe(
+      "Set-Location -LiteralPath 'C:\\repo\\''; Remove-Item *'; cursor agent --resume 'id''; Write-Host pwn'"
+    )
+  })
 })

@@ -114,4 +114,18 @@ describe('buildOnboardingFolderAgentStartup', () => {
       }
     })
   })
+
+  it('uses the detected Cursor command for skipped-onboarding folder startup', () => {
+    expect(
+      buildDismissedOnboardingFolderAgentStartup(
+        {
+          ...getDefaultSettings('/tmp/orca-workspaces'),
+          defaultTuiAgent: 'cursor'
+        },
+        { ...getDefaultOnboardingState(), outcome: 'dismissed' },
+        false,
+        'cursor agent'
+      )?.command
+    ).toContain('cursor agent')
+  })
 })

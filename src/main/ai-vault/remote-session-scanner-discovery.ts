@@ -15,7 +15,7 @@ import type {
   RemoteSessionSource
 } from './remote-session-scanner-types'
 
-const REMOTE_DISCOVERY_CONCURRENCY = 8
+export const REMOTE_DISCOVERY_CONCURRENCY = 8
 
 export async function discoverRemoteSourceCandidates(args: {
   source: RemoteSessionSource

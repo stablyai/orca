@@ -5,13 +5,20 @@ import {
   type TuiAgentConfig,
   type TuiAgentDetectionRuntime
 } from './tui-agent-config'
+import { detectedAgentInventory, type DetectedAgentInventoryV1 } from './detected-agent-inventory'
 
 export type TuiAgentDetectionCommand = {
   id: TuiAgent
   cmd: string
+  capabilityProbe?: {
+    args: readonly string[]
+    matchedCommand: string
+  }
   requiredCommands?: readonly string[]
   unsupportedRuntimes?: readonly TuiAgentDetectionRuntime[]
 }
+
+export type DetectedTuiAgentsResult = DetectedAgentInventoryV1
 
 export const KNOWN_TUI_AGENT_DETECTION_COMMANDS = buildTuiAgentDetectionCommands()
 
@@ -31,6 +38,14 @@ function buildTuiAgentDetectionCommand(
   return {
     id,
     cmd,
+    ...(id === 'cursor'
+      ? {
+          capabilityProbe: {
+            args: cmd === 'cursor' ? ['agent', '--help'] : ['--help'],
+            matchedCommand: cmd === 'cursor' ? 'cursor agent' : 'cursor-agent'
+          }
+        }
+      : {}),
     ...(config.detectRequiredCommands?.length
       ? { requiredCommands: config.detectRequiredCommands }
       : {}),
@@ -67,6 +82,29 @@ export function resolveDetectedTuiAgentIds(
     )
     .map(({ id }) => id)
   return [...new Set(detected)]
+}
+
+export function resolveDetectedTuiAgents(
+  commands: readonly TuiAgentDetectionCommand[],
+  foundCommands: ReadonlySet<string>,
+  runtime: TuiAgentDetectionRuntime,
+  capableCommands: ReadonlySet<string> = foundCommands
+): DetectedTuiAgentsResult {
+  const eligible = commands.filter(
+    (command) =>
+      !isDetectionUnsupportedInRuntime(command, runtime) &&
+      foundCommands.has(command.cmd) &&
+      (!command.capabilityProbe || capableCommands.has(command.cmd)) &&
+      (command.requiredCommands ?? []).every((required) => foundCommands.has(required))
+  )
+  const agents = [...new Set(eligible.map((command) => command.id))]
+  const matchedCommands: Partial<Record<TuiAgent, string>> = {}
+  for (const command of eligible) {
+    if (matchedCommands[command.id] === undefined) {
+      matchedCommands[command.id] = command.capabilityProbe?.matchedCommand ?? command.cmd
+    }
+  }
+  return detectedAgentInventory(agents, matchedCommands)
 }
 
 export function isDetectionUnsupportedInRuntime(

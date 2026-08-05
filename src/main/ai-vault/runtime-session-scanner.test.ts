@@ -127,6 +127,27 @@ describe('runtime AI Vault session scanner', () => {
     ])
   })
 
+  it('preserves metadata-only conversation and explicit transcript absence', async () => {
+    const cursor = {
+      ...session('local', 'cursor-session'),
+      agent: 'cursor' as const,
+      messageCount: 0,
+      hasConversation: true,
+      transcriptFilePath: null
+    }
+    mocks.callRuntimeEnvironment.mockResolvedValueOnce({
+      ok: true,
+      result: result([cursor])
+    })
+
+    const scanResult = await scanRuntimeAiVaultSessions('/user-data', 'env-1', {})
+    expect(scanResult.sessions[0]).toMatchObject({
+      agent: 'cursor',
+      hasConversation: true,
+      transcriptFilePath: null
+    })
+  })
+
   it('prepares a resume on the transcript-owning runtime', async () => {
     mocks.callRuntimeEnvironment.mockResolvedValueOnce({
       ok: true,

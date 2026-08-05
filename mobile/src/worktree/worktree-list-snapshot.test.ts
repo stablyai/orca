@@ -119,6 +119,12 @@ describe('areWorktreeListsEqual', () => {
         [worktree({ terminalPlatform: 'linux' })]
       )
     ).toBe(false)
+    expect(
+      areWorktreeListsEqual(
+        [worktree({ wslDistro: 'Ubuntu' })],
+        [worktree({ wslDistro: 'Debian' })]
+      )
+    ).toBe(false)
   })
 
   it('detects lineage changes', () => {

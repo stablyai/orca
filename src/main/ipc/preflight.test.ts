@@ -570,6 +570,12 @@ describe('preflight', () => {
 
   it('only reports agents when which/where resolves to a real executable path', async () => {
     execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (
+        (command === '/Users/test/.local/bin/cursor-agent' || command === 'cursor-agent') &&
+        args?.[0] === '--help'
+      ) {
+        return { stdout: 'Cursor Agent help\n' }
+      }
       if (command !== 'which') {
         throw new Error(`unexpected command ${String(command)}`)
       }
@@ -670,7 +676,7 @@ describe('preflight', () => {
     )
 
     await expect(detectInstalledAgents()).resolves.toEqual(['claude', 'codex', 'opencode'])
-    expect(resolveCliCommandsMock).toHaveBeenCalledTimes(1)
+    expect(resolveCliCommandsMock).toHaveBeenCalledTimes(2)
   })
 
   it('does not double-count an agent already found on PATH via the install-dir resolver', async () => {
@@ -689,8 +695,11 @@ describe('preflight', () => {
     )
 
     await expect(detectInstalledAgents()).resolves.toEqual(['claude'])
-    expect(resolveCliCommandsMock).toHaveBeenCalledTimes(1)
-    expect(resolveCliCommandsMock).toHaveBeenCalledWith(expect.not.arrayContaining(['claude']))
+    expect(resolveCliCommandsMock).toHaveBeenCalledTimes(2)
+    expect(resolveCliCommandsMock).toHaveBeenNthCalledWith(
+      1,
+      expect.not.arrayContaining(['claude'])
+    )
   })
 
   it('treats an agent as not installed when the install-dir resolver throws', async () => {
@@ -710,6 +719,12 @@ describe('preflight', () => {
 
   it('registers agent detection through the shared launch config commands', async () => {
     execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (
+        (command === '/Users/test/.local/bin/cursor-agent' || command === 'cursor-agent') &&
+        args?.[0] === '--help'
+      ) {
+        return { stdout: 'Cursor Agent help\n' }
+      }
       if (command !== 'which') {
         throw new Error(`unexpected command ${String(command)}`)
       }
@@ -725,6 +740,26 @@ describe('preflight', () => {
     registerPreflightHandlers()
 
     await expect(handlers['preflight:detectAgents']()).resolves.toEqual(['openclaude', 'cursor'])
+  })
+
+  it('reports the successful cursor agent alias in the versioned inventory', async () => {
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command === 'cursor' && args?.[0] === 'agent' && args?.[1] === '--help') {
+        return { stdout: 'Cursor agent help\n' }
+      }
+      if (command === 'which' && String(args[0]) === 'cursor') {
+        return { stdout: '/Users/test/.local/bin/cursor\n' }
+      }
+      throw new Error('not found')
+    })
+    registerPreflightHandlers()
+
+    await expect(handlers['preflight:detectAgentInventory']()).resolves.toEqual({
+      version: 1,
+      agents: ['cursor'],
+      matchedCommands: { cursor: 'cursor agent' }
+    })
+    await expect(handlers['preflight:detectAgents']()).resolves.toEqual(['cursor'])
   })
 
   it('hydrates shell PATH before user-facing agent detection', async () => {
@@ -852,6 +887,27 @@ describe('preflight', () => {
         { id: 'mistral-vibe', cmd: 'vibe' },
         { id: 'mistral-vibe', cmd: 'mistral-vibe' }
       ])
+    })
+  })
+
+  it('preserves the legacy Cursor launch command when inventory RPC is unavailable', async () => {
+    const request = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('method_not_found'))
+      .mockResolvedValueOnce({ agents: ['cursor'] })
+    getActiveMultiplexerMock.mockReturnValue({
+      isDisposed: () => false,
+      request
+    })
+
+    registerPreflightHandlers()
+
+    await expect(
+      handlers['preflight:detectRemoteAgentInventory'](undefined, { connectionId: 'ssh-1' })
+    ).resolves.toEqual({
+      version: 1,
+      agents: ['cursor'],
+      matchedCommands: { cursor: 'cursor-agent' }
     })
   })
 
@@ -1041,6 +1097,7 @@ describe('preflight', () => {
 
     expect(result).toEqual({
       agents: ['claude'],
+      matchedCommands: { claude: 'claude' },
       addedPathSegments: [],
       shellHydrationOk: true,
       pathSource: 'sync_seed_only',
@@ -1082,6 +1139,7 @@ describe('preflight', () => {
 
     expect(result).toEqual({
       agents: ['opencode'],
+      matchedCommands: { opencode: 'opencode' },
       addedPathSegments: ['/Users/test/.opencode/bin'],
       shellHydrationOk: true,
       pathSource: 'shell_hydrate',

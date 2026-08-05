@@ -1,15 +1,10 @@
 import { app, ipcMain } from 'electron'
-import { resolve } from 'node:path'
 import {
   configureAiVaultSessionSources,
-  getAiVaultWslHomeDirs,
   listAiVaultSessions as listCachedLocalAiVaultSessions,
   resetAiVaultSessionListCacheForTests,
   type AiVaultSessionSources
 } from '../ai-vault/cached-session-list'
-import { listClaudeSubagentSessions } from '../ai-vault/session-scanner-claude-subagents'
-import { claudeProjectsRootDirs } from '../ai-vault/session-scanner-source-discovery'
-import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import {
   aiVaultScanIssueResult,
   cancelledAiVaultListResult,
@@ -22,9 +17,7 @@ import {
   isAiVaultScanCancelledError,
   type AiVaultFirstUserPromptArgs,
   type AiVaultListArgs,
-  type AiVaultListResult,
-  type AiVaultSubagentListArgs,
-  type AiVaultSubagentListResult
+  type AiVaultListResult
 } from '../../shared/ai-vault-types'
 import { handleAiVaultGetFirstUserPrompt } from '../ai-vault/session-first-user-prompt-read'
 import { registerAiVaultResumeHandler, type AiVaultResumeHandlerOptions } from './ai-vault-resume'
@@ -46,6 +39,9 @@ import {
 } from './ai-vault-runtime-scan'
 import { resetAiVaultHostLegCacheForTests, scanHostLegWithCache } from './ai-vault-host-leg-cache'
 import { requestedAiVaultSessionDepth } from '../../shared/ai-vault-session-depth'
+import { mapDirectSshScans } from '../ai-vault/remote-session-scan-concurrency'
+import { shouldBypassAiVaultMergedCache, shouldForceAiVaultHost } from './ai-vault-refresh-policy'
+import { listAiVaultSubagentSessions } from './ai-vault-subagent-list'
 
 const AI_VAULT_ALL_HOST_RUNTIME_TIMEOUT_MS = 3_000
 // Why: a remote home with many agent roots routinely needs seconds to walk,
@@ -62,6 +58,11 @@ type AiVaultHandlerOptions = AiVaultSessionSources &
     scanRuntimeAiVaultSessions?: RuntimeAiVaultScanner
   }
 
+type AllHostScanSnapshot = {
+  sshHosts: AiVaultHostDiscoveryResult<{ targetId: string }>
+  runtimeHosts: AiVaultHostDiscoveryResult<RuntimeAiVaultHostInfo>
+}
+
 let scanCoordinator = new AiVaultScanCoordinator()
 let handlerOptions: AiVaultHandlerOptions = {}
 const listCancellations = createSenderScopedRequestCancellations()
@@ -73,28 +74,44 @@ async function listAiVaultSessions(
   const executionHostScope = normalizeExecutionHostScope(
     args?.executionHostScope ?? LOCAL_EXECUTION_HOST_ID
   )
+  const allHostSnapshot = executionHostScope === 'all' ? captureAllHostScanSnapshot() : undefined
   // Scope paths change the result set, so they must be part of the cache key.
   // A scanner consumes at most 64 paths, so smaller equivalent workspace sets
   // can share a snapshot regardless of which worktree was selected first.
   const scopePaths = args?.scopePaths ?? []
-  const key = JSON.stringify({
+  const hostLegCacheKey = JSON.stringify({
     scopePaths:
       scopePaths.length <= AI_VAULT_SCOPE_PATHS_MAX_COUNT
         ? [...new Set(scopePaths)].sort()
         : scopePaths,
     executionHostScope
   })
+  const key = JSON.stringify({
+    hostLegCacheKey,
+    hostTopology: allHostSnapshot ? allHostTopologyKey(allHostSnapshot) : undefined
+  })
   const depth = requestedAiVaultSessionDepth(args)
   const scanKey = JSON.stringify({ key, depth })
+  const force =
+    executionHostScope === 'all'
+      ? shouldBypassAiVaultMergedCache(args)
+      : shouldForceAiVaultHost(args, executionHostScope)
   // Why: every renderer request carries its own cancellation signal, so
   // coalescing has to survive them — the coordinator hands all same-key callers
   // one scan and only aborts it once every one of them has cancelled.
   return scanCoordinator.run({
     key: scanKey,
-    force: args?.force,
+    force,
     signal: options.signal,
     start: (scanSignal) => {
-      const scan = () => scanAiVaultSessionsByHostScope(args, executionHostScope, scanSignal, key)
+      const scan = () =>
+        scanAiVaultSessionsByHostScope(
+          args,
+          executionHostScope,
+          scanSignal,
+          hostLegCacheKey,
+          allHostSnapshot
+        )
       if (executionHostScope === LOCAL_EXECUTION_HOST_ID) {
         return scan()
       }
@@ -102,7 +119,7 @@ async function listAiVaultSessions(
         cacheKey: key,
         depth,
         scopePaths,
-        force: args?.force === true,
+        force,
         scan
       })
     }
@@ -113,7 +130,8 @@ async function scanAiVaultSessionsByHostScope(
   args: AiVaultListArgs | undefined,
   executionHostScope: ExecutionHostScope,
   signal?: AbortSignal,
-  cacheKey = ''
+  cacheKey = '',
+  allHostSnapshot?: AllHostScanSnapshot
 ): Promise<AiVaultListResult> {
   const depth = requestedAiVaultSessionDepth(args)
   const scopePaths = args?.scopePaths ?? []
@@ -121,46 +139,56 @@ async function scanAiVaultSessionsByHostScope(
     return scanLocalAiVaultSessions(args, signal)
   }
   if (executionHostScope === 'all') {
-    const runtimeHosts = getActiveRuntimeAiVaultHostInfosResult()
-    const sshHosts = getActiveSshAiVaultHostInfosResult()
+    const snapshot = allHostSnapshot ?? captureAllHostScanSnapshot()
+    const { runtimeHosts, sshHosts } = snapshot
     const runtimeResults = [
       ...(runtimeHosts.issue ? [runtimeHosts.issue] : []),
       ...(sshHosts.issue ? [sshHosts.issue] : [])
     ]
-    const scannedResults = await Promise.all([
+    const scanSignal = signal ?? new AbortController().signal
+    const [localResult, sshResults, runtimeScanResults] = await Promise.all([
       scanLocalAiVaultSessionsForAllScope(args, signal),
-      ...sshHosts.hostInfos.map((hostInfo) =>
-        scanHostLegWithCache({
-          cacheKey: `${cacheKey}|${toSshExecutionHostId(hostInfo.targetId)}`,
-          depth,
-          scopePaths,
-          force: args?.force === true,
-          scan: () =>
-            scanSshAiVaultSessions(hostInfo.targetId, args, {
-              signal,
-              timeoutMs: AI_VAULT_ALL_HOST_SSH_TIMEOUT_MS,
-              relayTimeoutMs: AI_VAULT_ALL_HOST_SSH_RELAY_TIMEOUT_MS
-            })
-        })
+      mapDirectSshScans(
+        sshHosts.hostInfos,
+        (hostInfo, workerSignal) => {
+          const executionHostId = toSshExecutionHostId(hostInfo.targetId)
+          const hostArgs = withAiVaultHostForce(args, executionHostId)
+          return scanHostLegWithCache({
+            cacheKey: `${cacheKey}|${executionHostId}`,
+            depth,
+            scopePaths,
+            force: hostArgs.force === true,
+            scan: () =>
+              scanSshAiVaultSessions(hostInfo.targetId, hostArgs, {
+                signal: workerSignal,
+                timeoutMs: AI_VAULT_ALL_HOST_SSH_TIMEOUT_MS,
+                relayTimeoutMs: AI_VAULT_ALL_HOST_SSH_RELAY_TIMEOUT_MS
+              })
+          })
+        },
+        scanSignal
       ),
-      ...runtimeHosts.hostInfos.map((hostInfo) =>
-        scanHostLegWithCache({
-          cacheKey: `${cacheKey}|${hostInfo.executionHostId}`,
-          depth,
-          scopePaths,
-          force: args?.force === true,
-          scan: () =>
-            scanRuntimeAiVaultSessions({
-              hostInfo,
-              scanner: handlerOptions.scanRuntimeAiVaultSessions,
-              listArgs: args,
-              options: { signal, timeoutMs: AI_VAULT_ALL_HOST_RUNTIME_TIMEOUT_MS }
-            })
+      Promise.all(
+        runtimeHosts.hostInfos.map((hostInfo) => {
+          const hostArgs = withAiVaultHostForce(args, hostInfo.executionHostId)
+          return scanHostLegWithCache({
+            cacheKey: `${cacheKey}|${hostInfo.executionHostId}`,
+            depth,
+            scopePaths,
+            force: hostArgs.force === true,
+            scan: () =>
+              scanRuntimeAiVaultSessions({
+                hostInfo,
+                scanner: handlerOptions.scanRuntimeAiVaultSessions,
+                listArgs: hostArgs,
+                options: { signal, timeoutMs: AI_VAULT_ALL_HOST_RUNTIME_TIMEOUT_MS }
+              })
+          })
         })
       )
     ])
     return mergeAiVaultListResults(
-      [...scannedResults, ...runtimeResults],
+      [localResult, ...sshResults, ...runtimeScanResults, ...runtimeResults],
       args?.limit,
       args?.unlimited
     )
@@ -168,7 +196,9 @@ async function scanAiVaultSessionsByHostScope(
 
   const parsed = parseExecutionHostId(executionHostScope)
   if (parsed?.kind === 'ssh') {
-    return scanSshAiVaultSessions(parsed.targetId, args, { signal })
+    return scanSshAiVaultSessions(parsed.targetId, withAiVaultHostForce(args, executionHostScope), {
+      signal
+    })
   }
   if (parsed?.kind === 'runtime') {
     return scanRuntimeAiVaultSessions({
@@ -177,7 +207,7 @@ async function scanAiVaultSessionsByHostScope(
         executionHostId: toRuntimeExecutionHostId(parsed.environmentId)
       },
       scanner: handlerOptions.scanRuntimeAiVaultSessions,
-      listArgs: args,
+      listArgs: withAiVaultHostForce(args, executionHostScope),
       options: { signal }
     })
   }
@@ -194,6 +224,24 @@ function getActiveRuntimeAiVaultHostInfosResult(): AiVaultHostDiscoveryResult<Ru
     path: 'runtime environments',
     fallbackMessage: 'Runtime hosts are unavailable.'
   })
+}
+
+function captureAllHostScanSnapshot(): AllHostScanSnapshot {
+  return {
+    sshHosts: getActiveSshAiVaultHostInfosResult(),
+    runtimeHosts: getActiveRuntimeAiVaultHostInfosResult()
+  }
+}
+
+function allHostTopologyKey(snapshot: AllHostScanSnapshot): unknown {
+  return {
+    ssh: snapshot.sshHosts.hostInfos.map((host) => host.targetId).sort(),
+    runtime: snapshot.runtimeHosts.hostInfos.map((host) => host.executionHostId).sort(),
+    issues: [snapshot.sshHosts.issue, snapshot.runtimeHosts.issue]
+      .flatMap((result) => result?.issues ?? [])
+      .map((issue) => `${issue.path}:${issue.message}`)
+      .sort()
+  }
 }
 
 function getActiveSshAiVaultHostInfosResult(): AiVaultHostDiscoveryResult<{ targetId: string }> {
@@ -235,11 +283,18 @@ async function scanLocalAiVaultSessions(
     {
       limit: args?.limit,
       unlimited: args?.unlimited,
-      force: args?.force,
+      force: shouldForceAiVaultHost(args, LOCAL_EXECUTION_HOST_ID),
       scopePaths: args?.scopePaths
     },
     { signal }
   )
+}
+
+function withAiVaultHostForce(
+  args: AiVaultListArgs | undefined,
+  executionHostId: Exclude<ExecutionHostScope, 'all'>
+): AiVaultListArgs {
+  return { ...args, force: shouldForceAiVaultHost(args, executionHostId) }
 }
 
 export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): void {
@@ -277,10 +332,8 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
     }
   )
   registerAiVaultResumeHandler(options)
-  ipcMain.handle(
-    'aiVault:listSubagentSessions',
-    (_event, args?: AiVaultSubagentListArgs): Promise<AiVaultSubagentListResult> =>
-      listAiVaultSubagentSessions(args)
+  ipcMain.handle('aiVault:listSubagentSessions', (_event, args) =>
+    listAiVaultSubagentSessions(args)
   )
   ipcMain.handle('aiVault:getFirstUserPrompt', (_event, args?: AiVaultFirstUserPromptArgs) =>
     handleAiVaultGetFirstUserPrompt(args)
@@ -292,40 +345,6 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
       window.webContents.send('aiVault:windowFocused')
     }
   })
-}
-
-// Provider-gated: only Claude materializes Task subagent transcripts as
-// sibling files today; other agents resolve to an empty list.
-async function listAiVaultSubagentSessions(
-  args?: AiVaultSubagentListArgs
-): Promise<AiVaultSubagentListResult> {
-  // IPC payloads are untyped at runtime; malformed input resolves empty like
-  // every other rejected input instead of throwing.
-  if (
-    !args ||
-    args.agent !== 'claude' ||
-    typeof args.parentFilePath !== 'string' ||
-    !args.parentFilePath.trim()
-  ) {
-    return { sessions: [], issues: [] }
-  }
-  // Why: subagent transcripts are read from the local filesystem. The UI
-  // skips remote sessions (their transcripts live on the remote host); return
-  // empty defensively rather than reading local paths for a remote session.
-  const executionHostId = args.executionHostId ?? LOCAL_EXECUTION_HOST_ID
-  if (executionHostId !== LOCAL_EXECUTION_HOST_ID) {
-    return { sessions: [], issues: [] }
-  }
-  // Why: the path is renderer-supplied; only list files under a known Claude
-  // projects root so a crafted path can't readdir/preview arbitrary dirs.
-  // resolve() collapses `..` segments first — isPathInsideOrEqual compares
-  // textually and would otherwise pass `<root>/../../etc/x.jsonl`.
-  const parentFilePath = resolve(args.parentFilePath)
-  const roots = claudeProjectsRootDirs({ wslHomeDirs: await getAiVaultWslHomeDirs() })
-  if (!roots.some((root) => isPathInsideOrEqual(resolve(root), parentFilePath))) {
-    return { sessions: [], issues: [] }
-  }
-  return listClaudeSubagentSessions({ parentFilePath })
 }
 
 function resetAiVaultCacheForTests(): void {

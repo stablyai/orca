@@ -22,7 +22,8 @@ type AiVaultResumeCommandState = Pick<
   | 'repos'
   | 'settings'
   | 'worktreesByRepo'
->
+> &
+  Partial<Pick<AppState, 'remoteDetectedAgentCommands'>>
 
 function makeState(args: {
   worktreePath: string
@@ -142,7 +143,8 @@ describe('ai vault resume command runtime', () => {
           sessionId: 'session one',
           cwd: 'C:\\Users\\alice\\repo',
           codexHome: null
-        }
+        },
+        commandOverride: 'cursor-agent'
       })
     ).toBe(
       "Set-Location -LiteralPath 'C:\\Users\\alice\\repo'; cursor-agent --resume 'session one'"
@@ -631,6 +633,39 @@ describe('ai vault resume command runtime', () => {
       })
     ).toBe(
       "Set-Location -LiteralPath 'C:/Users/alice/repo'; $env:CODEX_HOME='C:/Users/alice/.codex'; my-codex 'resume' 'session one'"
+    )
+  })
+
+  it('rebuilds remote Windows Cursor resumes from the host-matched command', () => {
+    const state = makeState({ worktreePath: 'C:/Users/alice/repo' })
+    state.repos = [
+      {
+        id: 'repo-1',
+        path: 'C:/Users/alice/repo',
+        executionHostId: 'ssh:win-box'
+      }
+    ] as never
+    state.remoteDetectedAgentCommands = {
+      'win-box': { cursor: 'cursor agent' }
+    }
+
+    expect(
+      buildQueuedAiVaultResumeCommand({
+        state,
+        worktreeId: 'repo-1::worktree-1',
+        session: {
+          agent: 'cursor',
+          sessionId: 'session one',
+          cwd: "C:/Users/alice/repo's",
+          codexHome: null,
+          executionHostId: 'ssh:win-box',
+          executionHostPlatform: 'win32',
+          resumeCommand:
+            'cmd /d /s /c "cd /d ""C:/Users/alice/repo"" && cursor-agent --resume ""session one"""'
+        }
+      })
+    ).toBe(
+      "Set-Location -LiteralPath 'C:/Users/alice/repo''s'; cursor agent --resume 'session one'"
     )
   })
 

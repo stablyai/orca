@@ -1,4 +1,8 @@
 import type { DirEntry, FsChangeEvent, SearchOptions, SearchResult } from '../../shared/types'
+import type {
+  CursorSidecarScanRequest,
+  CursorSidecarScanResponse
+} from '../../shared/cursor-sidecar-scan'
 import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
 
 export type FileStat = {
@@ -21,6 +25,10 @@ export type FileReadResult = {
 export type IFilesystemProvider = {
   readDir(dirPath: string): Promise<DirEntry[]>
   readFile(filePath: string): Promise<FileReadResult>
+  scanCursorSidecars?(
+    request: CursorSidecarScanRequest,
+    options?: { signal?: AbortSignal }
+  ): Promise<CursorSidecarScanResponse>
   readTerminalArtifact?(
     filePath: string,
     options: TerminalArtifactAccessOptions

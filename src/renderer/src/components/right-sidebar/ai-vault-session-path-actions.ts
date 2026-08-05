@@ -4,6 +4,7 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import { getAiVaultTranscriptPath } from '../../../../shared/ai-vault-transcript-path'
 
 export function canUseLocalAiVaultSessionPathActions(
   executionHostId: ExecutionHostId | null | undefined
@@ -28,9 +29,9 @@ export function isSyntheticAiVaultSessionPath(filePath: string): boolean {
  * a provider-owned log-resource contract.
  */
 export function canOpenAiVaultSessionLogInOrca(
-  session: Pick<AiVaultSession, 'filePath' | 'executionHostId'>
+  session: Pick<AiVaultSession, 'filePath' | 'transcriptFilePath' | 'executionHostId'>
 ): boolean {
-  const filePath = session.filePath?.trim()
+  const filePath = getAiVaultTranscriptPath(session)
   if (!filePath) {
     return false
   }

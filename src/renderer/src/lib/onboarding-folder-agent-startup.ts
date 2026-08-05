@@ -30,7 +30,8 @@ function getClientPlatform(): NodeJS.Platform {
 }
 
 export function buildOnboardingFolderAgentStartup(
-  settings: GlobalSettings | null
+  settings: GlobalSettings | null,
+  cursorCommand?: string | null
 ): OnboardingFolderAgentStartup | undefined {
   const agent = settings?.defaultTuiAgent
   if (
@@ -45,7 +46,10 @@ export function buildOnboardingFolderAgentStartup(
   const startupPlan = buildAgentStartupPlan({
     agent,
     prompt: '',
-    cmdOverrides: settings.agentCmdOverrides ?? {},
+    cmdOverrides:
+      agent === 'cursor' && cursorCommand
+        ? { ...settings.agentCmdOverrides, cursor: cursorCommand }
+        : settings.agentCmdOverrides,
     agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
     agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
     sessionOptions: resolveNativeChatSessionOptionDefaults(
@@ -91,10 +95,11 @@ export function shouldSeedFolderAgentAfterDismissedOnboarding(
 export function buildDismissedOnboardingFolderAgentStartup(
   settings: GlobalSettings | null,
   onboarding: OnboardingState | null,
-  hasExistingProject: boolean
+  hasExistingProject: boolean,
+  cursorCommand?: string | null
 ): OnboardingFolderAgentStartup | undefined {
   if (!shouldSeedFolderAgentAfterDismissedOnboarding(onboarding, hasExistingProject)) {
     return undefined
   }
-  return buildOnboardingFolderAgentStartup(settings)
+  return buildOnboardingFolderAgentStartup(settings, cursorCommand)
 }

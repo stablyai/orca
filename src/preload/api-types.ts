@@ -10,6 +10,7 @@ import type {
 } from '../shared/hosted-review'
 import type { NativeFileDropPayload } from '../shared/native-file-drop'
 import type { BrowserFindSource } from '../shared/browser-find-source'
+import type { DetectedAgentInventoryV1 } from '../shared/detected-agent-inventory'
 import type { DashboardSnapshot, DashboardRevealAgentArgs } from '../shared/dashboard-snapshot'
 import type {
   TerminalPreviewConnectResult,
@@ -714,6 +715,7 @@ export type PreflightStatus = {
 
 export type RefreshAgentsResult = {
   agents: string[]
+  matchedCommands?: Record<string, string>
   addedPathSegments: string[]
   shellHydrationOk: boolean
   /** Drives agent_picks `on_path:false` triage (dashboard 1562016). `'shell_hydrate'` = detection saw the user's
@@ -721,6 +723,11 @@ export type RefreshAgentsResult = {
   pathSource: PathSource
   /** Classified hydration outcome: `'none'` on success, else a failure mode when `shellHydrationOk` is false. */
   pathFailureReason: ShellHydrationFailureReason
+}
+
+export type DetectedAgentCommandsResult = {
+  agents: string[]
+  matchedCommands?: Record<string, string>
 }
 
 export type PreflightRuntimeContext = {
@@ -732,8 +739,14 @@ export type PreflightRuntimeContext = {
 export type PreflightApi = {
   check: (args?: PreflightRuntimeContext & { force?: boolean }) => Promise<PreflightStatus>
   detectAgents: (args?: PreflightRuntimeContext) => Promise<string[]>
+  detectAgentInventory: (args?: PreflightRuntimeContext) => Promise<DetectedAgentInventoryV1>
+  detectAgentCommands: (args?: PreflightRuntimeContext) => Promise<DetectedAgentCommandsResult>
   refreshAgents: (args?: PreflightRuntimeContext) => Promise<RefreshAgentsResult>
   detectRemoteAgents: (args: { connectionId: string }) => Promise<string[]>
+  detectRemoteAgentInventory: (args: { connectionId: string }) => Promise<DetectedAgentInventoryV1>
+  detectRemoteAgentCommands: (args: {
+    connectionId: string
+  }) => Promise<DetectedAgentCommandsResult>
   detectRemoteWindowsTerminalCapabilities: (args: { connectionId: string }) => Promise<{
     wslAvailable: boolean
     wslDistros: string[]

@@ -4,8 +4,9 @@ import type {
   AiVaultSession
 } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import { sessionSortTime } from './session-scanner-accumulator'
+import { buildAiVaultSessionId } from '../../shared/ai-vault-session-id'
 import { aiVaultScanLimit } from '../../shared/ai-vault-session-depth'
+import { sessionSortTime } from './session-scanner-accumulator'
 
 export function aiVaultScanIssueResult(args: {
   executionHostId?: ExecutionHostId
@@ -48,7 +49,13 @@ export function restampAiVaultListResult(
         : {
             ...session,
             executionHostId,
-            id: `${executionHostId}:${session.agent}:${session.sessionId}:${session.filePath}`
+            id: buildAiVaultSessionId({
+              executionHostId,
+              agent: session.agent,
+              sessionId: session.sessionId,
+              filePath: session.filePath,
+              previousId: session.id
+            })
           }
     ),
     issues: result.issues.map((issue) => ({ ...issue, executionHostId })),
@@ -77,4 +84,18 @@ export function mergeAiVaultListResults(
     issues,
     scannedAt: new Date().toISOString()
   }
+}
+
+export function mergeAiVaultSessions(
+  cappedSessions: readonly AiVaultSession[],
+  scopeSessions: readonly AiVaultSession[]
+): AiVaultSession[] {
+  if (scopeSessions.length === 0) {
+    return [...cappedSessions]
+  }
+  const byId = new Map(cappedSessions.map((session) => [session.id, session]))
+  for (const session of scopeSessions) {
+    byId.set(session.id, session)
+  }
+  return [...byId.values()].sort((left, right) => sessionSortTime(right) - sessionSortTime(left))
 }

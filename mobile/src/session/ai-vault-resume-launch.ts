@@ -85,6 +85,7 @@ export function buildMobileAiVaultResumeLaunch(args: {
   hostPlatform: NodeJS.Platform
   hostTerminalWindowsShell?: string | null
   settings?: MobileAiVaultResumeSettings | null
+  cursorCommand?: string | null
 }): MobileAiVaultResumeLaunch {
   const shell =
     args.hostPlatform === 'win32'
@@ -94,6 +95,9 @@ export function buildMobileAiVaultResumeLaunch(args: {
   const cmdOverrides = normalizeMobileAiVaultResumeCommandOverrides(
     args.settings?.agentCmdOverrides
   )
+  if (args.session.agent === 'cursor' && !cmdOverrides.cursor && args.cursorCommand?.trim()) {
+    cmdOverrides.cursor = args.cursorCommand.trim()
+  }
   const commandOverride = cmdOverrides[args.session.agent] ?? null
   const resumeFilePath = normalizeAiVaultResumeFilePath(args.session.filePath, args.hostPlatform)
   if (isResumableTuiAgent(args.session.agent)) {

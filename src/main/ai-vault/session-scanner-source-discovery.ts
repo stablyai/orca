@@ -10,6 +10,7 @@ import type { AiVaultScanOptions, SessionFileDiscovery } from './session-scanner
 import { normalizeAgentSessionsDir } from './session-scanner-values'
 import { resolveGrokSessionsDir } from '../../shared/grok-session-paths'
 import { antigravityDiscoveries } from './session-scanner-antigravity-sources'
+import { cursorDiscoveries } from './session-scanner-cursor-sources'
 
 const CLAUDE_PROJECTS_DIR = join(homedir(), '.claude', 'projects')
 export const DEFAULT_CODEX_HOME_DIR = join(homedir(), '.codex')
@@ -20,7 +21,6 @@ const COPILOT_SESSIONS_DIR = join(
   process.env.COPILOT_HOME?.trim() || join(homedir(), '.copilot'),
   'session-state'
 )
-const CURSOR_PROJECTS_DIR = join(homedir(), '.cursor', 'projects')
 const HERMES_SESSIONS_DIR = join(homedir(), '.hermes', 'sessions')
 const ROVO_SESSIONS_DIR = join(homedir(), '.rovodev', 'sessions')
 const OPENCLAW_STATE_DIR = process.env.OPENCLAW_STATE_DIR?.trim() || join(homedir(), '.openclaw')
@@ -145,27 +145,6 @@ function standardDiscoveries(
     ...piDiscoveries(options, wslHomeDirs, limit, issues),
     ...ompDiscoveries(options, wslHomeDirs, limit, issues)
   ]
-}
-
-function cursorDiscoveries(
-  options: AiVaultScanOptions,
-  wslHomeDirs: readonly string[],
-  limit: number,
-  issues: AiVaultScanIssue[]
-): Promise<SessionFileDiscovery>[] {
-  return sessionRootDirs(options.cursorProjectsDir ?? CURSOR_PROJECTS_DIR, wslHomeDirs, [
-    '.cursor',
-    'projects'
-  ]).map((rootDir) =>
-    discoverFiles({
-      rootDir,
-      limit,
-      agent: 'cursor',
-      issues,
-      extensions: ['.jsonl'],
-      filePredicate: (path) => path.split(/[\\/]/).includes('agent-transcripts')
-    })
-  )
 }
 
 function grokDiscoveries(

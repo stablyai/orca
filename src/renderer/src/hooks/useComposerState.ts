@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
+import { resolveCursorCommandOverrides } from '@/lib/ai-vault-cursor-command'
 import { getDefaultRepoHookSettings } from '../../../shared/constants'
 import { getAgentLaunchPlatformForRepo } from '@/lib/agent-launch-platform'
 import { getAgentCatalog } from '@/lib/agent-catalog'
@@ -3765,7 +3766,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       const startupPlan = buildAgentStartupPlan({
         agent: tuiAgent,
         prompt: submitStartupPrompt,
-        cmdOverrides: settings?.agentCmdOverrides ?? {},
+        cmdOverrides: resolveCursorCommandOverrides({
+          state: useAppStore.getState(),
+          agent: tuiAgent,
+          repoId: selectedRepo?.id,
+          cmdOverrides: settings?.agentCmdOverrides ?? {}
+        }),
         agentArgs: resolveTuiAgentLaunchArgs(tuiAgent, settings?.agentDefaultArgs),
         agentEnv: resolveTuiAgentLaunchEnv(tuiAgent, settings?.agentDefaultEnv),
         sessionOptions: resolveNativeChatSessionOptionDefaults(
@@ -4316,7 +4322,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             : buildAgentDraftLaunchPlan({
                 agent,
                 draft: quickDraftPrompt,
-                cmdOverrides: settings?.agentCmdOverrides ?? {},
+                cmdOverrides: resolveCursorCommandOverrides({
+                  state: useAppStore.getState(),
+                  agent,
+                  repoId: selectedRepo?.id,
+                  cmdOverrides: settings?.agentCmdOverrides ?? {}
+                }),
                 agentArgs: resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs),
                 agentEnv: resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv),
                 sessionOptions: resolveNativeChatSessionOptionDefaults(
@@ -4348,7 +4359,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           startupPlan = buildAgentStartupPlan({
             agent,
             prompt: quickPrompt,
-            cmdOverrides: settings?.agentCmdOverrides ?? {},
+            cmdOverrides: resolveCursorCommandOverrides({
+              state: useAppStore.getState(),
+              agent,
+              repoId: selectedRepo?.id,
+              cmdOverrides: settings?.agentCmdOverrides ?? {}
+            }),
             agentArgs: resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs),
             agentEnv: resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv),
             sessionOptions: resolveNativeChatSessionOptionDefaults(

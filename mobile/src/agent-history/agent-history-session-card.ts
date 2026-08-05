@@ -11,6 +11,7 @@ export type MobileAgentHistoryCard = {
   title: string
   lastMessage: string
   messageCount: number
+  hasConversation: boolean
   timeAgo: string
   isCurrentWorktree: boolean
 }
@@ -47,20 +48,21 @@ export function buildMobileAgentHistoryCard(
     title: session.title || 'Untitled session',
     lastMessage: latestTurn?.text.trim() ?? '',
     messageCount: session.messageCount,
+    hasConversation: session.hasConversation === true,
     timeAgo: Number.isFinite(updatedAtMs) ? formatTimeAgo(updatedAtMs, now) : '',
     isCurrentWorktree: isSessionInActiveWorktree(session, activeWorktreePath)
   }
 }
 
 export function buildMobileAgentHistoryResumeActionState(
-  sessions: readonly Pick<AiVaultSession, 'id'>[],
+  sessions: readonly Pick<AiVaultSession, 'id' | 'agent' | 'cwd'>[],
   resumingSessionId: string | null
 ): ReadonlyMap<string, MobileAgentHistoryResumeActionState> {
   return new Map(
     sessions.map((session) => [
       session.id,
       {
-        disabled: resumingSessionId !== null,
+        disabled: resumingSessionId !== null || (session.agent === 'cursor' && !session.cwd),
         loading: resumingSessionId === session.id
       }
     ])

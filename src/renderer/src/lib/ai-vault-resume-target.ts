@@ -9,10 +9,13 @@ import {
 import type { Repo } from '../../../shared/types'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree-id'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import { isWslUncPath } from '../../../shared/wsl-paths'
+import { isWslUncPath, parseWslUncPath } from '../../../shared/wsl-paths'
+import type { AiVaultAgent } from '../../../shared/ai-vault-types'
+import { canResumeAiVaultSessionInExecutionContext } from '../../../shared/ai-vault-resume-context'
 import type { AppState } from '@/store/types'
 import { getIndexedWorktreeMap } from '@/store/worktree-repo-index'
 import { getFolderWorkspaceCandidateRepos } from './folder-workspace-connection'
+import { getLocalAgentPreflightContext } from './local-preflight-context'
 
 export type AiVaultResumeTargetStatus = 'local' | 'ssh' | 'runtime' | 'unknown'
 
@@ -46,49 +49,40 @@ export function isWslStoredAiVaultSessionFile(sessionFilePath: string | null | u
 export function canResumeAiVaultSessionOnTarget(args: {
   sessionFilePath: string | null | undefined
   sessionExecutionHostId?: ExecutionHostId | null
+  sessionAgent?: AiVaultAgent
   targetStatus: AiVaultResumeTargetStatus
   targetExecutionHostId?: ExecutionHostId | null
+  targetWorkspacePath?: string | null
+  targetWslDistro?: string | null
 }): boolean {
-  const sessionExecutionHostId = normalizeExecutionHostId(args.sessionExecutionHostId)
-  const targetExecutionHostId = normalizeExecutionHostId(args.targetExecutionHostId)
-  if (args.targetStatus === 'runtime') {
-    // Runtime session stores live on one paired server; only queue resumes back
-    // onto that exact server host.
-    return Boolean(
-      sessionExecutionHostId &&
-      targetExecutionHostId &&
-      sessionExecutionHostId === targetExecutionHostId
-    )
-  }
-  if (!isSupportedAiVaultResumeTargetStatus(args.targetStatus)) {
-    return false
-  }
-  if (sessionExecutionHostId) {
-    if (targetExecutionHostId) {
-      if (sessionExecutionHostId === targetExecutionHostId) {
-        return true
-      }
-      // Why: SSH-to-local-WSL setups (#6270) tag the session 'local' but the
-      // file lives under a WSL UNC path reachable from any SSH shell into this
-      // machine, so we bypass the exact host-id match for that case.
-      return (
-        sessionExecutionHostId === LOCAL_EXECUTION_HOST_ID &&
-        args.targetStatus === 'ssh' &&
-        isWslStoredAiVaultSessionFile(args.sessionFilePath)
-      )
-    }
-    if (sessionExecutionHostId !== LOCAL_EXECUTION_HOST_ID) {
-      return false
-    }
-  }
-  // Why: vault sessions are scanned from this machine's disk (host home dirs
-  // plus local WSL homes). An SSH shell can only reach the WSL-stored ones
-  // (SSH-to-local-WSL setups, #6270); host-stored session files do not exist
-  // on a remote filesystem, so queuing a resume there is guaranteed to fail.
-  if (args.targetStatus === 'ssh') {
-    return isWslStoredAiVaultSessionFile(args.sessionFilePath)
-  }
-  return true
+  return canResumeAiVaultSessionInExecutionContext({
+    agent: args.sessionAgent,
+    sessionFilePath: args.sessionFilePath,
+    sessionExecutionHostId: args.sessionExecutionHostId,
+    targetStatus: args.targetStatus,
+    targetExecutionHostId: args.targetExecutionHostId,
+    targetWslDistro:
+      args.targetWslDistro ?? parseWslUncPath(args.targetWorkspacePath ?? '')?.distro ?? null
+  })
+}
+
+export function canResumeAiVaultSessionForWorkspace(args: {
+  state: Pick<AppState, 'folderWorkspaces' | 'projectGroups' | 'repos' | 'worktreesByRepo'> &
+    Partial<Pick<AppState, 'activeRepoId' | 'activeWorktreeId' | 'projects' | 'settings'>>
+  workspaceId: string
+  sessionFilePath: string | null | undefined
+  sessionExecutionHostId?: ExecutionHostId | null
+  sessionAgent?: AiVaultAgent
+}): boolean {
+  return canResumeAiVaultSessionOnTarget({
+    sessionFilePath: args.sessionFilePath,
+    sessionExecutionHostId: args.sessionExecutionHostId,
+    sessionAgent: args.sessionAgent,
+    targetStatus: getAiVaultResumeWorkspaceTargetStatus(args.state, args.workspaceId),
+    targetExecutionHostId: getAiVaultResumeWorkspaceExecutionHostId(args.state, args.workspaceId),
+    targetWorkspacePath: getAiVaultResumeWorkspacePath(args.state, args.workspaceId),
+    targetWslDistro: getAiVaultResumeWorkspaceWslDistro(args.state, args.workspaceId)
+  })
 }
 
 export function isUnsupportedAiVaultResumeRepo(
@@ -164,6 +158,44 @@ export function getAiVaultResumeWorkspaceTargetStatus(
   }
   const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
   return getAiVaultResumeRepoTargetStatus(state.repos.find((repo) => repo.id === repoId))
+}
+
+export function getAiVaultResumeWorkspacePath(
+  state: Pick<AppState, 'folderWorkspaces' | 'worktreesByRepo'>,
+  workspaceId: string
+): string | null {
+  const workspaceKey = parseWorkspaceKey(workspaceId)
+  if (workspaceKey?.type === 'folder') {
+    return (
+      state.folderWorkspaces.find((workspace) => workspace.id === workspaceKey.folderWorkspaceId)
+        ?.folderPath ?? null
+    )
+  }
+  const worktreeId = workspaceKey?.type === 'worktree' ? workspaceKey.worktreeId : workspaceId
+  return getIndexedWorktreeMap(state.worktreesByRepo ?? {}).get(worktreeId)?.path ?? null
+}
+
+export function getAiVaultResumeWorkspaceWslDistro(
+  state: Pick<AppState, 'folderWorkspaces' | 'worktreesByRepo'> &
+    Partial<
+      Pick<AppState, 'activeRepoId' | 'activeWorktreeId' | 'projects' | 'repos' | 'settings'>
+    >,
+  workspaceId: string
+): string | null {
+  const workspaceKey = parseWorkspaceKey(workspaceId)
+  if (workspaceKey?.type !== 'folder' && state.settings && state.projects && state.repos) {
+    const worktreeId = workspaceKey?.type === 'worktree' ? workspaceKey.worktreeId : workspaceId
+    const context = getLocalAgentPreflightContext(
+      state as AppState,
+      undefined,
+      undefined,
+      worktreeId
+    )
+    if (context?.wslDistro) {
+      return context.wslDistro
+    }
+  }
+  return parseWslUncPath(getAiVaultResumeWorkspacePath(state, workspaceId) ?? '')?.distro ?? null
 }
 
 type AiVaultResumeRepoOwnerWithId = AiVaultResumeRepoOwner & { id: string }

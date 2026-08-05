@@ -2,6 +2,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { planAgentCliArgsSuffix } from '@/lib/tui-agent-startup'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { resolveCursorCommandOverrides } from '@/lib/ai-vault-cursor-command'
 import { isTuiAgentEnabled, pickTuiAgent } from '../../../shared/tui-agent-selection'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { CLIENT_PLATFORM, getWorkspaceIntentName, getWorkspaceSeedName } from '@/lib/new-workspace'
@@ -276,7 +277,22 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
         agentArgs,
         draftContent,
         promptDelivery,
-        settings,
+        settings: settings
+          ? {
+              ...settings,
+              agentCmdOverrides: effectiveAgent
+                ? resolveCursorCommandOverrides({
+                    // Why: the pre-create snapshot lacks the new worktree, so
+                    // Cursor would resolve against the active/local host.
+                    state: latestStore,
+                    agent: effectiveAgent,
+                    worktreeId,
+                    repoId: repo.id,
+                    cmdOverrides: settings.agentCmdOverrides ?? {}
+                  })
+                : settings.agentCmdOverrides
+            }
+          : settings,
         launchPlatform,
         // Why: SSH hosts run the plain `orca` shim, so the Linux-only `orca-ide`
         // rename must not be applied for remote launches.

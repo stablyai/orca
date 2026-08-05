@@ -1613,9 +1613,6 @@
   "auto.components.right.sidebar.AiVaultPanel.refreshSessionHistory": {
     "ko": "세션 기록 새로고침"
   },
-  "auto.components.right.sidebar.AiVaultPanel.remoteBrowseLocalHistory": {
-    "ko": "원격 워크스페이스는 로컬 기록을 탐색할 수 있습니다. 재개 작업은 로컬 워크스페이스에서 실행됩니다."
-  },
   "auto.components.right.sidebar.AiVaultPanel.resumeCommandCopied": {
     "ko": "재개 명령이 복사됨"
   },

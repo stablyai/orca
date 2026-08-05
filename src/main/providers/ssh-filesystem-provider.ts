@@ -24,7 +24,9 @@ import type {
 import type { DirEntry, FsChangeEvent, SearchOptions, SearchResult } from '../../shared/types'
 import { routeSshFilesystemWatchNotification } from './ssh-filesystem-watch-notifications'
 import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
+import type { CursorSidecarScanRequest } from '../../shared/cursor-sidecar-scan'
 import { isWindowsRemoteHost, type RemoteHostPlatform } from '../ssh/ssh-remote-platform'
+import { scanSshCursorSidecars } from './ssh-cursor-sidecar-scan'
 const WORKSPACE_SPACE_SCAN_TIMEOUT_MS = 130_000
 
 export class SshFilesystemProvider implements IFilesystemProvider {
@@ -107,6 +109,10 @@ export class SshFilesystemProvider implements IFilesystemProvider {
       }
       throw err
     }
+  }
+
+  async scanCursorSidecars(request: CursorSidecarScanRequest, options?: { signal?: AbortSignal }) {
+    return scanSshCursorSidecars(this.mux, request, options)
   }
 
   async readTerminalArtifact(

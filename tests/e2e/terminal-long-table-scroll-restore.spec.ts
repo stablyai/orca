@@ -503,7 +503,10 @@ test.describe('Terminal long table scroll restore repro', () => {
     const ptyId = await waitForActivePanePtyId(orcaPage)
     await waitForPtyColumnsAtMost(orcaPage, ptyId, renderedTableTerminalCols)
     const runId = randomUUID()
-    const marker = `EMOJI_FIXTURE_TABLE_RESTORE_${runId}`
+    // Why: the trailing RESTORE line is often clobbered by shell prompt redraw
+    // (\x1b[1A). The WIDTH line is one line earlier and is the durable survival
+    // signal for this fixture; the right-edge assertions below use it too.
+    const widthMarker = emojiFixtureTableWidthMarker(runId)
     const scriptPath = path.join(testRepoPath, `.orca-emoji-fixture-table-${runId}.mjs`)
     writeFileSync(scriptPath, emojiFixtureMarkdownTableScript(EMOJI_TABLE_FIXTURE, runId))
 
@@ -525,11 +528,9 @@ test.describe('Terminal long table scroll restore repro', () => {
           timeout: 10_000,
           message: 'real emoji table marker did not survive workspace switch'
         })
-        .toContain(marker)
+        .toContain(widthMarker)
       const generatedWidthContent = await getTerminalContent(orcaPage, 30_000)
-      const generatedWidthMatch = generatedWidthContent.match(
-        new RegExp(`${emojiFixtureTableWidthMarker(runId)}(\\d+)`)
-      )
+      const generatedWidthMatch = generatedWidthContent.match(new RegExp(`${widthMarker}(\\d+)`))
       expect(generatedWidthMatch).not.toBeNull()
       const generatedTableWidth = Number(generatedWidthMatch?.[1] ?? 0)
 

@@ -1,12 +1,15 @@
 import {
   getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
   parseExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../src/shared/execution-host'
 import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
+import { canResumeAiVaultSessionInExecutionContext } from '../../../src/shared/ai-vault-resume-context'
 import { isPathInsideOrEqual } from '../../../src/shared/cross-platform-path'
+import { parseWslUncPath } from '../../../src/shared/wsl-paths'
 import type { Worktree } from '../worktree/workspace-list-types'
 import {
   canResumeInMobileSessionWorktree,
@@ -50,6 +53,7 @@ export type MobileAiVaultSessionResumeTarget =
       targetStatus: 'local'
       workspacePath: string | null
       terminalPlatform: NodeJS.Platform | null
+      wslDistro: string | null
     }
   | { status: 'blocked'; message: string }
 
@@ -148,16 +152,33 @@ export function resolveMobileAiVaultSessionResumeTarget(args: {
     if (!isSupportedMobileAiVaultResumeTargetStatus(targetStatus)) {
       continue
     }
+    const targetWorktree = args.worktrees.find(
+      (worktree) => worktree.worktreeId === candidateWorktreeId
+    )
+    const targetRepo = args.repos.find((repo) => repo.id === targetWorktree?.repoId)
+    const targetWslDistro =
+      targetWorktree?.wslDistro ?? parseWslUncPath(targetWorktree?.path ?? '')?.distro ?? null
+    if (
+      !canResumeAiVaultSessionInExecutionContext({
+        agent: args.session.agent,
+        sessionFilePath: args.session.filePath,
+        sessionExecutionHostId: args.session.executionHostId,
+        targetStatus,
+        targetExecutionHostId:
+          normalizeExecutionHostId(targetWorktree?.hostId) ??
+          (targetRepo ? getRepoExecutionHostId(targetRepo) : LOCAL_EXECUTION_HOST_ID),
+        targetWslDistro
+      })
+    ) {
+      continue
+    }
     return {
       status: 'ready',
       worktreeId: candidateWorktreeId,
       targetStatus,
-      workspacePath:
-        args.worktrees.find((worktree) => worktree.worktreeId === candidateWorktreeId)?.path ??
-        null,
-      terminalPlatform:
-        args.worktrees.find((worktree) => worktree.worktreeId === candidateWorktreeId)
-          ?.terminalPlatform ?? null
+      workspacePath: targetWorktree?.path ?? null,
+      terminalPlatform: targetWorktree?.terminalPlatform ?? null,
+      wslDistro: targetWslDistro
     }
   }
 
@@ -222,11 +243,7 @@ function getMobileAiVaultResumeFolderTargetStatus(args: {
 function getMobileAiVaultResumeExecutionHostTargetStatus(
   hostId: ExecutionHostId | null | undefined
 ): MobileAiVaultResumeTargetStatus {
-  const parsed = parseExecutionHostId(hostId)
-  if (!parsed) {
-    return 'unknown'
-  }
-  return parsed.kind
+  return parseExecutionHostId(hostId)?.kind ?? 'unknown'
 }
 
 function parseFolderWorkspaceRepoId(repoId: string): string | null {

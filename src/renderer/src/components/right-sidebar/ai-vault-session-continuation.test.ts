@@ -78,4 +78,13 @@ describe('AI Vault session continuation', () => {
     expect(request.source.lastPrompt).toBeNull()
     expect(request.source.lastAssistantMessage).toBe('The component tests still need work.')
   })
+
+  it('requires Cursor cwd and host command before offering continuation', () => {
+    const cursor = session('cursor')
+    expect(canContinueAiVaultSessionInNewSession(cursor, 'worktree-1', false)).toBe(false)
+    expect(
+      canContinueAiVaultSessionInNewSession({ ...cursor, cwd: null }, 'worktree-1', true)
+    ).toBe(false)
+    expect(canContinueAiVaultSessionInNewSession(cursor, 'worktree-1', true)).toBe(true)
+  })
 })
