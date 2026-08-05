@@ -68,6 +68,11 @@ function isConsoleNoise(details: ConsoleMessageDetails): boolean {
   if (message.length < 3) {
     return true
   }
+  // Why: errors and warnings are the reason the recorder watches the console —
+  // never filter them out as token-shaped chatter.
+  if (details.level === 'error' || details.level === 'warning') {
+    return false
+  }
   if (message === '[object Object]') {
     return true
   }
@@ -85,7 +90,9 @@ function isConsoleNoise(details: ConsoleMessageDetails): boolean {
     message.startsWith('%c') ||
     message === '[object HTMLAnchorElement]' ||
     message.startsWith('service ') ||
-    /^[A-Za-z0-9]{3,16}(: .*)?$/.test(message)
+    // Why: token-shaped one-liners ('a1b2c3') without a message part; real
+    // 'TypeError: x' style messages carry a ': ' suffix and are kept.
+    /^[A-Za-z0-9]{3,16}$/.test(message)
   ) {
     return true
   }
@@ -175,6 +182,9 @@ export class BrowserRecorderEventRecorder {
       return
     }
     this.requestCount += 1
+    // Why: mark before the awaited DOM check so the 300ms safety net cannot
+    // emit a duplicate bare record while the page evaluation is in flight.
+    this.markRequestKey(payload.url ?? '', payload.method ?? 'GET')
     const page = this.pageSource.pageContext()
     const request: BrowserRecorderNetworkRequest = {
       id: `${page.browserPageId}:request:${this.requestCount}`,
@@ -206,7 +216,6 @@ export class BrowserRecorderEventRecorder {
       responseSchema: payload.responseSchema === 'html' ? 'html' : 'text',
       screenChanged: await this.pageSource.screenChangedSinceLast()
     }
-    this.markRequestKey(payload.url ?? '', payload.method ?? 'GET')
     this.send({ kind: 'network-request', request })
   }
 

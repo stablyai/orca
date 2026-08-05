@@ -6,7 +6,10 @@ import {
   isRecordedBrowserMethod,
   sanitizeBrowserActionParams
 } from './browser-action-recorder'
-import { BROWSER_RECORDER_ACTION_CHANNEL } from '../../shared/browser-recorder-automation'
+import {
+  BROWSER_RECORDER_ACTION_CHANNEL,
+  BROWSER_RECORDER_BUDGET
+} from '../../shared/browser-recorder-automation'
 
 function makeFingerprintResult(overrides: Record<string, unknown> = {}): string {
   return JSON.stringify({
@@ -76,7 +79,7 @@ describe('sanitizeBrowserActionParams', () => {
   it('caps long string values', () => {
     const long = 'x'.repeat(500)
     const out = sanitizeBrowserActionParams('browser.fill', { element: '#a', value: long })
-    expect(out.value).toBe(`${'x'.repeat(200)}…`)
+    expect(out.value).toBe(`${'x'.repeat(BROWSER_RECORDER_BUDGET.paramValueMaxLength)}…`)
   })
 
   it('drops secret-shaped params', () => {
@@ -99,6 +102,31 @@ describe('sanitizeBrowserActionParams', () => {
       files: ['/a.png', '/b.png', 3 as unknown as string]
     })
     expect(out.files).toBe('/a.png, /b.png, 3')
+  })
+
+  it('masks fill values when the element looks like a password field', () => {
+    const out = sanitizeBrowserActionParams('browser.fill', {
+      element: 'input[type="password"]',
+      value: 'hunter2'
+    })
+    expect(out).toEqual({ element: 'input[type="password"]', value: '••••••' })
+  })
+
+  it('masks selector-less text-entry payloads unconditionally', () => {
+    expect(sanitizeBrowserActionParams('browser.type', { input: 'hunter2' })).toEqual({
+      input: '••••••'
+    })
+    expect(sanitizeBrowserActionParams('browser.keyboardInsertText', { text: 'hunter2' })).toEqual({
+      text: '••••••'
+    })
+  })
+
+  it('keeps non-secret fill values for ordinary elements', () => {
+    const out = sanitizeBrowserActionParams('browser.fill', {
+      element: '#search',
+      value: 'merhaba'
+    })
+    expect(out).toEqual({ element: '#search', value: 'merhaba' })
   })
 })
 
@@ -206,7 +234,7 @@ describe('BrowserActionRecorder.capture', () => {
         textLengthDelta: 280,
         interactiveDelta: 0,
         inputsChanged: true,
-        inputChanges: [{ label: 'email', before: 'user@example.com', after: '' }],
+        inputChanges: [{ key: 'email', label: 'email', before: 'user@example.com', after: '' }],
         changed: ['url', 'title', 'text', 'inputs']
       }
     })

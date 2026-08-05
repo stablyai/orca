@@ -15,10 +15,13 @@ import { INTERACTION_CAPTURE_PREAMBLE } from './browser-interaction-capture-prea
 export const DOM_FINGERPRINT_EXPRESSION = `(() => {
   try {
     const form = Array.from(document.querySelectorAll('input:not([type="password"]),textarea,select'))
-    const inputsDetail = form.slice(0, 50).map(function (el) {
+    const inputsDetail = form.slice(0, 50).map(function (el, index) {
       var v = (el && 'value' in el ? el.value : '') || ''
       var label = el.id || el.name || el.getAttribute('aria-label') || el.type || el.tagName
-      return { label: label, value: v.length > 60 ? v.slice(0, 60) + '...' : v }
+      // Why: label collides for unnamed fields ('text' for every text input) —
+      // key adds a stable identity so the diff never merges two fields.
+      var key = el.id ? '#' + el.id : (el.name ? el.name + '[' + index + ']' : el.tagName.toLowerCase() + '[' + index + ']')
+      return { key: key, label: label, value: v.length > 60 ? v.slice(0, 60) + '...' : v }
     })
     var text = (document.body && document.body.innerText) || ''
     return {

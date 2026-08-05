@@ -25,6 +25,10 @@ export const INTERACTION_CAPTURE_NETWORK = `  function originStack() {
   // content-length short-circuit only skips truly huge payloads (binary/media
   // downloads) — anything up to 2MB is read once and capped/schematized.
   var RESPONSE_READ_MAX = 2 * 1024 * 1024
+  // Why: schematizing parses the HTML and runs several querySelectorAll passes
+  // on the page's own thread — cap the parse step well below the read cap so
+  // a 2MB polling response cannot stall the recorded app.
+  var SCHEMATIZE_MAX = 256 * 1024
   function truncateResponseText(t) {
     if (t.length <= RESPONSE_MAX) {
       return { text: t, size: t.length, truncated: false }
@@ -67,7 +71,7 @@ export const INTERACTION_CAPTURE_NETWORK = `  function originStack() {
     return tag
   }
   function schematizeResponseText(t) {
-    if (t.length === 0 || t.trim().charAt(0) !== '<') { return null }
+    if (t.length === 0 || t.length > SCHEMATIZE_MAX || t.trim().charAt(0) !== '<') { return null }
     try {
       var doc = new DOMParser().parseFromString(t, 'text/html')
       var out = []
@@ -92,7 +96,7 @@ export const INTERACTION_CAPTURE_NETWORK = `  function originStack() {
         cursor = next
         depth += 1
       }
-      if (spine.length > 0) { out.push('yapı: ' + spine.join(' > ')) }
+      if (spine.length > 0) { out.push('structure: ' + spine.join(' > ')) }
       // ── content: tables row-by-row, then the remaining visible text ──
       // Why: innerText's cell separators differ across engines (tab vs
       // nothing), so read tables straight from the DOM: each row becomes
@@ -129,7 +133,7 @@ export const INTERACTION_CAPTURE_NETWORK = `  function originStack() {
         }
         if (!dup) { textParts.push(bodyLine) }
       }
-      if (textParts.length > 0) { out.push('içerik: ' + textParts.join(' || ')) }
+      if (textParts.length > 0) { out.push('content: ' + textParts.join(' || ')) }
       // Why: script-only responses (stok counters, bildirim codes) have empty
       // body text but the payload is in script bodies — keep a slice.
       var scripts = doc.querySelectorAll('script')
@@ -157,7 +161,7 @@ export const INTERACTION_CAPTURE_NETWORK = `  function originStack() {
         }
         controls.push(tag)
       }
-      if (controls.length > 0) { out.push('kontroller: ' + controls.join(' · ')) }
+      if (controls.length > 0) { out.push('controls: ' + controls.join(' · ')) }
       var result = out.join(' | ')
       return result.length > 0 ? result : null
     } catch (e) {

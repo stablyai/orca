@@ -329,9 +329,7 @@ export class RuntimeBrowserCommands {
     }
   }
 
-  // Why: while the action recorder is enabled, wrap browser automation actions
-  // with before/after DOM fingerprints and page context so the session log can
-  // show what the action did and where it ran. No-op (zero overhead) when off.
+  // Why: capture DOM fingerprints around each action so the session log shows what it did.
   private async recordedBrowserAction<T>(
     method: string,
     params: Record<string, unknown>,

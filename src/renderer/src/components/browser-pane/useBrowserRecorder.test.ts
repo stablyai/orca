@@ -1,11 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { BrowserRecorderElementSummary } from './browser-recorder-types'
 
 // Why: the repo's hook tests mock React's dispatcher directly (see
 // useGrabMode.test.ts). This harness additionally supports functional
 // setState updaters, which useBrowserRecorder relies on for capping.
 function createReactHookHarness() {
   const refs: { current: unknown }[] = []
-  const states: unknown[] = []
+  // Why: a Map (not an array with ??=) so a state slot set to null/undefined
+  // is never mistaken for uninitialized and silently reset on the next render.
+  const states = new Map<number, unknown>()
   let refIndex = 0
   let stateIndex = 0
 
@@ -25,14 +28,18 @@ function createReactHookHarness() {
       useState: <T>(initialValue: T): [T, (value: T | ((previous: T) => T)) => void] => {
         const index = stateIndex
         stateIndex += 1
-        states[index] ??= initialValue
+        if (!states.has(index)) {
+          states.set(index, initialValue)
+        }
         return [
-          states[index] as T,
+          states.get(index) as T,
           (value: T | ((previous: T) => T)) => {
-            states[index] =
+            states.set(
+              index,
               typeof value === 'function'
-                ? (value as (previous: T) => T)(states[index] as T)
+                ? (value as (previous: T) => T)(states.get(index) as T)
                 : value
+            )
           }
         ]
       }
@@ -185,13 +192,7 @@ describe('useBrowserRecorder', () => {
   })
 })
 
-function makeElement(selector = '#submit'): {
-  tagName: string
-  selector: string
-  textSnippet: string
-  accessibleName: string | null
-  rectViewport: { x: number; y: number; width: number; height: number }
-} {
+function makeElement(selector = '#submit'): BrowserRecorderElementSummary {
   return {
     tagName: 'button',
     selector,

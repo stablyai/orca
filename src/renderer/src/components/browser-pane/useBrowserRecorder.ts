@@ -27,13 +27,7 @@ function nextStepId(): string {
   return `browser-recorder-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-/**
- * Chronological log of user operations inside one browser page pane.
- *
- * Recording is opt-in (toolbar toggle). While active, every recorded step
- * carries the page it happened on, so the session log stays readable across
- * navigations. Steps are capped at RECORDER_BUDGET.maxStepsPerSession.
- */
+/** Chronological log of user operations inside one browser page pane. */
 export function useBrowserRecorder(browserPageId: string): BrowserRecorderHook {
   const [recording, setRecording] = useState(false)
   const recordingRef = useRef(false)

@@ -1,15 +1,10 @@
 // ---------------------------------------------------------------------------
 // Browser action recorder — step grouping
 //
-// Turns the flat step stream into trigger groups: a lead step (interaction
-// click/type/keydown, automation action, navigation) opens a group, and the
-// network requests and console messages that follow it belong to that group.
-// Hover/scroll render on their own line but keep the group open — a click's
-// requests usually arrive after the mouse moved away (loading blockers,
-// tooltips), so a hover must not sever the click → request causality chain.
-// element-selected/annotation/network-summary close the group and stand
-// alone. Both the compact markdown log and the tray list render the same
-// grouping, so the UI and the copied log agree on what belongs to what.
+// Requests/console messages hang off their triggering lead (click/type/keydown,
+// automation action, navigation). Hover/scroll stay on their own line but keep
+// the group open — a click's requests usually arrive after the mouse moved
+// away, so a hover must not sever the click → request causality chain.
 // ---------------------------------------------------------------------------
 
 import type { BrowserRecorderStep } from './browser-recorder-types'
@@ -38,7 +33,11 @@ function isLeadStep(step: BrowserRecorderStep): boolean {
         step.detail.interaction.kind === 'type' ||
         step.detail.interaction.kind === 'keydown'
       )
-    default:
+    case 'element-selected':
+    case 'annotation-added':
+    case 'console':
+    case 'network-request':
+    case 'network-summary':
       return false
   }
 }
@@ -58,17 +57,16 @@ function isClosingStep(step: BrowserRecorderStep): boolean {
     case 'annotation-added':
     case 'network-summary':
       return true
-    default:
+    case 'recording-started':
+    case 'navigation':
+    case 'automation-action':
+    case 'interaction':
+    case 'console':
+    case 'network-request':
       return false
   }
 }
 
-/**
- * Groups steps so requests/console messages hang off their triggering lead.
- * Hover/scroll keep the group open; element-selected/annotation/network-
- * summary close it. Steps without a lead (or before the first lead) form
- * standalone groups.
- */
 export function groupRecorderSteps(steps: BrowserRecorderStep[]): BrowserRecorderStepGroup[] {
   const groups: BrowserRecorderStepGroup[] = []
   let open: BrowserRecorderStepGroup | null = null

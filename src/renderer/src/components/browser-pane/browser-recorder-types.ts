@@ -1,12 +1,4 @@
-// ---------------------------------------------------------------------------
 // Browser action recorder — renderer-only types
-//
-// The recorder captures a chronological log of user operations inside a local
-// browser pane: element selections (grab), annotations, and page navigations.
-// Every step stores the page it happened on, so the log stays readable even
-// when the user navigates mid-session.
-// ---------------------------------------------------------------------------
-
 import type {
   BrowserAnnotationIntent,
   BrowserGrabRect,

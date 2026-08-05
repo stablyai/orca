@@ -13748,7 +13748,8 @@
             "2a4c4b8e1f": "Copy",
             "c220f1eac9": "Record browser actions",
             "f039b073be": "Stop recording",
-            "c2778b3d98": "Stop recording ({{value0}} steps)"
+            "c2778b3d98": "Stop recording ({{value0}} steps)",
+            "recorderAutoCopied": "Recording log copied to clipboard"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "Cancel",

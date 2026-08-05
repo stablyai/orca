@@ -102,6 +102,28 @@ const FULLY_REDACTED_METHODS = new Set([
 const SECRET_PARAM_PATTERN =
   /password|passwd|secret|token|authorization|api[_-]?key|credential|csrf/i
 
+// Why: text-entry payloads carry user-typed values under neutral keys
+// ('value'/'input'/'text'). browser.fill's element selector is checked for
+// password hints; browser.type/keyboardInsertText type into the focused field
+// with no selector, so their payloads are masked unconditionally.
+const TEXT_ENTRY_METHODS = new Set(['browser.fill', 'browser.type', 'browser.keyboardInsertText'])
+
+const TEXT_ENTRY_PAYLOAD_KEY: Record<string, string> = {
+  'browser.fill': 'value',
+  'browser.type': 'input',
+  'browser.keyboardInsertText': 'text'
+}
+
+const PASSWORD_FIELD_HINT =
+  /password|passwd|pwd|secret|token|credential|sifre|parola|type=.?["']?password/i
+
+// Why: mirrors the in-page isPasswordField heuristic (el.type === 'password'
+// or name/id matching) against the only text-entry target we can see.
+function passwordHinted(params: Record<string, unknown>): boolean {
+  const element = typeof params.element === 'string' ? params.element : ''
+  return PASSWORD_FIELD_HINT.test(element)
+}
+
 export function isRecordedBrowserMethod(method: string): boolean {
   return RECORDED_METHODS.has(method)
 }
@@ -129,6 +151,20 @@ export function sanitizeBrowserActionParams(
     }
     if (SECRET_PARAM_PATTERN.test(key)) {
       continue
+    }
+    const payloadKey = TEXT_ENTRY_METHODS.has(method) ? TEXT_ENTRY_PAYLOAD_KEY[method] : undefined
+    if (
+      payloadKey !== undefined &&
+      key === payloadKey &&
+      typeof value === 'string' &&
+      value.length > 0
+    ) {
+      // Why: mask credential-shaped text payloads — the value param of a fill
+      // on a password field, and the (selector-less) type/insert payloads.
+      if (method !== 'browser.fill' || passwordHinted(params)) {
+        out[key] = '••••••'
+        continue
+      }
     }
     if (typeof value === 'string') {
       out[key] = capText(value, BROWSER_RECORDER_BUDGET.paramValueMaxLength)
@@ -253,19 +289,55 @@ function diffInputStates(
   before: BrowserRecorderInputState[],
   after: BrowserRecorderInputState[]
 ): BrowserRecorderInputChange[] {
-  const beforeByLabel = new Map(before.map((state) => [state.label, state.value]))
+  // Why: key (not label) is the identity — unnamed fields share the label
+  // 'text', so a label-keyed map would merge two distinct inputs.
+  const beforeByKey = new Map(before.map((state) => [state.key, state]))
   const changes: BrowserRecorderInputChange[] = []
   for (const field of after) {
-    const prev = beforeByLabel.get(field.label)
-    if (prev !== undefined && prev !== field.value) {
-      changes.push({ label: field.label, before: prev, after: field.value })
+    const prev = beforeByKey.get(field.key)
+    if (prev !== undefined && prev.value !== field.value) {
+      changes.push({ key: field.key, label: field.label, before: prev.value, after: field.value })
     }
-    beforeByLabel.delete(field.label)
+    beforeByKey.delete(field.key)
   }
   // Why: a field present before but gone after means the page replaced the
   // form (navigation or re-render); surface it as cleared rather than silent.
-  for (const [label, value] of beforeByLabel) {
-    changes.push({ label, before: value, after: '' })
+  for (const [, state] of beforeByKey) {
+    changes.push({ key: state.key, label: state.label, before: state.value, after: '' })
   }
   return changes.slice(0, BROWSER_RECORDER_BUDGET.inputChangesMaxEntries)
+}
+
+/** Parses the fingerprint expression's raw inputsDetail payload into states. */
+export function parseInputsDetail(value: unknown): BrowserRecorderInputState[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  const states: BrowserRecorderInputState[] = []
+  for (const field of value) {
+    if (!field || typeof field !== 'object') {
+      continue
+    }
+    const label = (field as Record<string, unknown>).label
+    const fieldValue = (field as Record<string, unknown>).value
+    const fieldKey = (field as Record<string, unknown>).key
+    if (typeof label !== 'string') {
+      continue
+    }
+    states.push({
+      key:
+        typeof fieldKey === 'string'
+          ? fieldKey.slice(0, BROWSER_RECORDER_BUDGET.paramValueMaxLength)
+          : label.slice(0, BROWSER_RECORDER_BUDGET.paramValueMaxLength),
+      label: label.slice(0, BROWSER_RECORDER_BUDGET.paramValueMaxLength),
+      value:
+        typeof fieldValue === 'string'
+          ? fieldValue.slice(0, BROWSER_RECORDER_BUDGET.inputValueMaxLength)
+          : ''
+    })
+    if (states.length >= BROWSER_RECORDER_BUDGET.fingerprintInputsMaxFields) {
+      break
+    }
+  }
+  return states
 }

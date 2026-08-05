@@ -22,6 +22,9 @@ export type BrowserRecorderDomFingerprint = {
 }
 
 export type BrowserRecorderInputState = {
+  /** Stable identity across fingerprint snapshots (CSS path/id or index). */
+  key: string
+  /** Display label (id, name, aria-label, type, or tag name). */
   label: string
   value: string
 }
@@ -30,6 +33,8 @@ export type BrowserRecorderDomChangeKind = 'url' | 'title' | 'text' | 'inputs' |
 
 /** One form field whose value changed as a result of an action. */
 export type BrowserRecorderInputChange = {
+  /** Stable identity from the fingerprint state (see BrowserRecorderInputState). */
+  key: string
   label: string
   before: string
   after: string

@@ -1,32 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import type { BrowserRecorderElementSummary, BrowserRecorderStep } from './browser-recorder-types'
+import type { BrowserRecorderStep } from './browser-recorder-types'
 import {
   formatBrowserRecorderStepsAsMarkdown,
   formatCompactStepLine
 } from './browser-recorder-output'
-
-const element: BrowserRecorderElementSummary = {
-  tagName: 'button',
-  selector: 'form > button[type="submit"]',
-  elementPath: 'body > form > button',
-  cssClasses: 'btn primary',
-  accessibleName: 'Submit order',
-  textSnippet: 'Submit order now',
-  rectViewport: { x: 12, y: 34, width: 120, height: 32 }
-}
-
-function makeStep(
-  overrides: Partial<BrowserRecorderStep> & Pick<BrowserRecorderStep, 'detail'>
-): BrowserRecorderStep {
-  return {
-    id: 'step-1',
-    browserPageId: 'page-1',
-    createdAt: '2026-07-31T10:15:30.000Z',
-    pageUrl: 'https://example.com/checkout',
-    pageTitle: 'Checkout',
-    ...overrides
-  }
-}
+import { element, makeStep } from './browser-recorder-step-fixtures'
 
 describe('formatBrowserRecorderStepsAsMarkdown', () => {
   it('returns an empty string for an empty session', () => {
@@ -133,7 +111,9 @@ describe('formatBrowserRecorderStepsAsMarkdown', () => {
             textLengthDelta: 280,
             interactiveDelta: 2,
             inputsChanged: true,
-            inputChanges: [{ label: '#email', before: '', after: 'user@example.com' }],
+            inputChanges: [
+              { key: '#email', label: '#email', before: '', after: 'user@example.com' }
+            ],
             textChange: null,
             changed: ['url', 'title', 'text', 'inputs', 'interactive']
           }

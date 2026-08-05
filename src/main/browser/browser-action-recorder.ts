@@ -17,7 +17,6 @@ import {
   BROWSER_RECORDER_BUDGET,
   type BrowserRecorderAutomationAction,
   type BrowserRecorderDomFingerprint,
-  type BrowserRecorderInputState,
   type BrowserRecorderStreamEvent
 } from '../../shared/browser-recorder-automation'
 import type { AgentBrowserBridge } from './agent-browser-bridge'
@@ -27,6 +26,7 @@ import {
   capText,
   diffFingerprints,
   extractBrowserActionTarget,
+  parseInputsDetail,
   sanitizeBrowserActionParams
 } from './browser-action-recorder-utils'
 import {
@@ -182,8 +182,12 @@ export class BrowserActionRecorder {
       fingerprintBefore
     } = context
     const durationMs = Date.now() - startedMs
-    const fingerprintAfter = bridge ? await this.captureFingerprint(bridge, worktreeId) : null
-    const pageAfter = bridge?.getPageInfo(worktreeId) ?? null
+    // Why: probe the same page the action targeted — without browserPageId the
+    // after-state can come from a different (active) page and diff wrong.
+    const fingerprintAfter = bridge
+      ? await this.captureFingerprint(bridge, worktreeId, browserPageId)
+      : null
+    const pageAfter = bridge?.getPageInfo(worktreeId, browserPageId) ?? null
     const action: BrowserRecorderAutomationAction = {
       id: randomUUID(),
       method,
@@ -248,34 +252,6 @@ export class BrowserActionRecorder {
       return null
     }
   }
-}
-
-function parseInputsDetail(value: unknown): BrowserRecorderInputState[] {
-  if (!Array.isArray(value)) {
-    return []
-  }
-  const states: BrowserRecorderInputState[] = []
-  for (const field of value) {
-    if (!field || typeof field !== 'object') {
-      continue
-    }
-    const label = (field as Record<string, unknown>).label
-    const fieldValue = (field as Record<string, unknown>).value
-    if (typeof label !== 'string') {
-      continue
-    }
-    states.push({
-      label: label.slice(0, BROWSER_RECORDER_BUDGET.paramValueMaxLength),
-      value:
-        typeof fieldValue === 'string'
-          ? fieldValue.slice(0, BROWSER_RECORDER_BUDGET.inputValueMaxLength)
-          : ''
-    })
-    if (states.length >= BROWSER_RECORDER_BUDGET.fingerprintInputsMaxFields) {
-      break
-    }
-  }
-  return states
 }
 
 /** App-wide recorder instance; enabled/disabled from the renderer via IPC. */

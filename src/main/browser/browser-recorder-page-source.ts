@@ -13,7 +13,11 @@ import type {
 } from '../../shared/browser-recorder-automation'
 import type { AgentBrowserBridge } from './agent-browser-bridge'
 import { DOM_FINGERPRINT_EXPRESSION } from './browser-page-capture-expressions'
-import { diffFingerprints, summarizeBrowserNetworkEntries } from './browser-action-recorder-utils'
+import {
+  diffFingerprints,
+  parseInputsDetail,
+  summarizeBrowserNetworkEntries
+} from './browser-action-recorder-utils'
 
 export type BrowserActionRecorderTarget = {
   worktreeId?: string
@@ -57,14 +61,7 @@ export class BrowserRecorderPageSource {
         title: typeof parsed.title === 'string' ? parsed.title : '',
         textLength: typeof parsed.textLength === 'number' ? parsed.textLength : 0,
         interactive: typeof parsed.interactive === 'number' ? parsed.interactive : 0,
-        inputsDetail: Array.isArray(parsed.inputsDetail)
-          ? parsed.inputsDetail.filter(
-              (field): field is { label: string; value: string } =>
-                Boolean(field) &&
-                typeof (field as { label?: unknown }).label === 'string' &&
-                typeof (field as { value?: unknown }).value === 'string'
-            )
-          : [],
+        inputsDetail: parseInputsDetail(parsed.inputsDetail),
         bodyText: typeof parsed.bodyText === 'string' ? parsed.bodyText : undefined
       }
       if (!this.lastFingerprint) {

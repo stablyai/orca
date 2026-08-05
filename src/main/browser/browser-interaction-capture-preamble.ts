@@ -89,7 +89,7 @@ export const INTERACTION_CAPTURE_PREAMBLE = `(() => {
     if (typing.timer) { clearTimeout(typing.timer) }
     typing.timer = setTimeout(flushTyping, TYPE_PAUSE_MS)
   }
-  var PRINTABLE = /^[ -~\\\\u00a0-\\\\uffff]$/
+  var PRINTABLE = /^[ -~\\u00a0-\\uffff]$/
   function isPrintableKey(key) {
     return key && key.length === 1 && PRINTABLE.test(key)
   }
@@ -133,7 +133,7 @@ export const INTERACTION_CAPTURE_PREAMBLE = `(() => {
     try {
       var sel = document.getSelection()
       if (!sel || sel.isCollapsed) { return }
-      var text = String(sel).replace(/\\\\s+/g, ' ').trim().slice(0, 200)
+      var text = String(sel).replace(/\\s+/g, ' ').trim().slice(0, 200)
       if (text.length === 0) { return }
       var node = sel.anchorNode
       if (node && node.parentElement && isPasswordField(node.parentElement)) { return }
@@ -152,6 +152,9 @@ export const INTERACTION_CAPTURE_PREAMBLE = `(() => {
     if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = null }
     hoverTarget = ''
     hoverEl = null
+    // Why: without this, re-hovering the same element after leaving it would
+    // be swallowed (lastHover.target still equals the reported target).
+    lastHover = { target: '', at: 0 }
   }
   function hoverTimerFired() {
     hoverTimer = null
@@ -181,9 +184,10 @@ export const INTERACTION_CAPTURE_PREAMBLE = `(() => {
       cancelHover()
     }
   }, true)
-  // ── scroll (throttled, change-only) ──
+  // ── scroll (throttled, change-only, trailing emit) ──
   var lastScroll = null
   var lastScrollAt = 0
+  var scrollTimer = null
   window.addEventListener('scroll', function () {
     var x = Math.round(window.scrollX)
     var y = Math.round(window.scrollY)
@@ -191,10 +195,22 @@ export const INTERACTION_CAPTURE_PREAMBLE = `(() => {
     // Why: only meaningful position changes are recorded — wheel events that
     // move nothing would otherwise log scroll x=0, y=0 noise.
     if (lastScroll && lastScroll.x === x && lastScroll.y === y) { return }
-    if (now - lastScrollAt < 1000) { return }
-    lastScroll = { x: x, y: y }
-    lastScrollAt = now
-    report('scroll', { x: x, y: y })
+    if (scrollTimer) { clearTimeout(scrollTimer) }
+    if (now - lastScrollAt >= 1000) {
+      lastScroll = { x: x, y: y }
+      lastScrollAt = now
+      report('scroll', { x: x, y: y })
+    } else {
+      // Why: a short gesture would otherwise record only its first position —
+      // the trailing timer emits the final coordinates when the throttle
+      // window ends, so the log shows where the scroll actually stopped.
+      scrollTimer = setTimeout(function () {
+        scrollTimer = null
+        lastScroll = { x: x, y: y }
+        lastScrollAt = Date.now()
+        report('scroll', { x: x, y: y })
+      }, 1000 - (now - lastScrollAt))
+    }
   }, true)
   // ── change (select/checkbox/input real value) ──
   // Why: a click on a <select> shows the option label but not what the app

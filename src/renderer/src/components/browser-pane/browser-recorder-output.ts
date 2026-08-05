@@ -19,12 +19,6 @@ function elementLabel(element: BrowserRecorderElementSummary): string {
   return base
 }
 
-/**
- * Formats the recorded session as a compact markdown log, one line per step,
- * so it fits more context when handed to an agent. Every line ends with the
- * page it happened on; network requests are indented under the interaction
- * that triggered them (trigger → request tree).
- */
 /** Format the gap: '' for sub-second, '(+Ns)' for seconds, '(+Ms)' for minutes. */
 export function stepGapLabel(currentAt: string, previousAt?: string): string {
   if (!previousAt) {
@@ -38,6 +32,12 @@ export function stepGapLabel(currentAt: string, previousAt?: string): string {
   return seconds >= 60 ? `(+${Math.floor(seconds / 60)}m${seconds % 60}s)` : `(+${seconds}s)`
 }
 
+/**
+ * Formats the recorded session as a compact markdown log, one line per step,
+ * so it fits more context when handed to an agent. Every line ends with the
+ * page it happened on; network requests are indented under the interaction
+ * that triggered them (trigger → request tree).
+ */
 export function formatBrowserRecorderStepsAsMarkdown(
   steps: BrowserRecorderStep[],
   options?: { startedAt?: string }
@@ -125,6 +125,7 @@ export function computeSessionSummary(
   }
   let requests = 0
   let errors = 0
+  let warnings = 0
   let slow = 0
   for (const step of steps) {
     if (step.detail.kind === 'network-request') {
@@ -133,11 +134,14 @@ export function computeSessionSummary(
         slow += 1
       }
     }
-    if (
-      step.detail.kind === 'console' &&
-      (step.detail.entry.level === 'error' || step.detail.entry.level === 'warning')
-    ) {
-      errors += 1
+    if (step.detail.kind === 'console') {
+      // Why: warnings are not errors — mixing them would make the agent read
+      // the session as more broken than it was.
+      if (step.detail.entry.level === 'error') {
+        errors += 1
+      } else if (step.detail.entry.level === 'warning') {
+        warnings += 1
+      }
     }
   }
   if (requests > 0) {
@@ -145,6 +149,9 @@ export function computeSessionSummary(
   }
   if (errors > 0) {
     parts.push(`${errors} errors`)
+  }
+  if (warnings > 0) {
+    parts.push(`${warnings} warnings`)
   }
   if (slow > 0) {
     parts.push(`${slow} slow >1s`)

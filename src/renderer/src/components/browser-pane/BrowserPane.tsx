@@ -4713,6 +4713,10 @@ function BrowserPagePane({
       }),
     [recorder.startedAt, recorder.steps]
   )
+  // Why: the stop-click auto-copy runs 100ms later — a ref reads the latest
+  // log instead of the one captured when the callback was created.
+  const recorderPromptRef = useRef(recorderPrompt)
+  recorderPromptRef.current = recorderPrompt
 
   const handleToggleBrowserRecorder = useCallback(async (): Promise<void> => {
     recordFeatureInteraction('browser-recorder')
@@ -4720,10 +4724,13 @@ function BrowserPagePane({
     if (nextRecording) {
       // Why: fail-closed toggle — if main cannot attach to the page, do not
       // show a recording session that records nothing.
-      const attached = await window.api.browser.setRecorderEnabled({
-        enabled: true,
-        browserPageId: browserTab.id
-      })
+      const attached = await window.api.browser
+        .setRecorderEnabled({
+          enabled: true,
+          browserPageId: browserTab.id
+        })
+        // Why: normalize IPC rejection to false so the toggle stays fail-closed.
+        .catch(() => false)
       if (!attached) {
         console.warn(
           '[browser-recorder] could not attach to the page; recording not started',
@@ -4733,16 +4740,19 @@ function BrowserPagePane({
       }
       recorder.toggle({ pageUrl: browserTab.url, pageTitle: browserTab.title })
     } else {
-      void window.api.browser.setRecorderEnabled({
-        enabled: false,
-        browserPageId: browserTab.id
-      })
+      void window.api.browser
+        .setRecorderEnabled({
+          enabled: false,
+          browserPageId: browserTab.id
+        })
+        .catch(() => false)
       recorder.toggle({ pageUrl: browserTab.url, pageTitle: browserTab.title })
       // Why: the flow is done — auto-copy the log so the user can drop it
       // into an agent or note without an extra click.
       setTimeout(() => {
-        if (recorderPrompt) {
-          void window.api.ui.writeClipboardText(recorderPrompt)
+        const log = recorderPromptRef.current
+        if (log) {
+          void window.api.ui.writeClipboardText(log)
           setRecorderCopied(true)
           clearTimeout(recorderCopyTimerRef.current)
           recorderCopyTimerRef.current = setTimeout(() => setRecorderCopied(false), 1400)
@@ -4755,14 +4765,7 @@ function BrowserPagePane({
         }
       }, 100)
     }
-  }, [
-    browserTab.id,
-    browserTab.title,
-    browserTab.url,
-    recordFeatureInteraction,
-    recorder,
-    recorderPrompt
-  ])
+  }, [browserTab.id, browserTab.title, browserTab.url, recordFeatureInteraction, recorder])
 
   const handleCopyBrowserRecorderLog = useCallback((): void => {
     if (!recorderPrompt) {
@@ -5485,10 +5488,17 @@ function BrowserPagePane({
                       'bg-destructive text-destructive-foreground hover:bg-destructive/90'
                   )}
                   onClick={handleToggleBrowserRecorder}
-                  aria-label={translate(
-                    'auto.components.browser.pane.BrowserPane.c220f1eac9',
-                    recorder.recording ? 'Stop recording' : 'Record browser actions'
-                  )}
+                  aria-label={
+                    recorder.recording
+                      ? translate(
+                          'auto.components.browser.pane.BrowserPane.f039b073be',
+                          'Stop recording'
+                        )
+                      : translate(
+                          'auto.components.browser.pane.BrowserPane.c220f1eac9',
+                          'Record browser actions'
+                        )
+                  }
                   data-contextual-tour-target="browser-recorder-control"
                 >
                   <CircleDot className="size-4" />

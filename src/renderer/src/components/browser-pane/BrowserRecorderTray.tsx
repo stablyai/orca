@@ -18,6 +18,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { translate } from '@/i18n/i18n'
 import type { BrowserRecorderStep } from './browser-recorder-types'
 import { formatBrowserRecorderStepSummary, stepGapLabel } from './browser-recorder-output'
+import { formatTime } from './browser-recorder-text'
 import { groupRecorderSteps } from './browser-recorder-grouping'
 
 function StepIcon({ step }: { step: BrowserRecorderStep }): React.JSX.Element {
@@ -39,14 +40,6 @@ function StepIcon({ step }: { step: BrowserRecorderStep }): React.JSX.Element {
     case 'recording-started':
       return <CircleDot className={className} />
   }
-}
-
-function formatStepTime(iso: string): string {
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) {
-    return iso
-  }
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
 function formatPageHost(url: string): string {
@@ -184,26 +177,15 @@ export function BrowserRecorderTray({
                 stepNumber += 1
                 const itemGap = stepGapLabel(item.step.createdAt, previousAt)
                 previousAt = item.step.createdAt
-                if (item.kind === 'member') {
-                  blockChildren.push(
-                    <StepRow
-                      key={item.step.id}
-                      step={item.step}
-                      number={stepNumber}
-                      nested
-                      gap={itemGap}
-                    />
-                  )
-                } else {
-                  blockChildren.push(
-                    <StepRow
-                      key={item.step.id}
-                      step={item.step}
-                      number={stepNumber}
-                      gap={itemGap}
-                    />
-                  )
-                }
+                blockChildren.push(
+                  <StepRow
+                    key={item.step.id}
+                    step={item.step}
+                    number={stepNumber}
+                    nested={item.kind === 'member'}
+                    gap={itemGap}
+                  />
+                )
               }
               rows.push(
                 <div key={group.lead.id} className="overflow-hidden rounded-md">
@@ -300,11 +282,7 @@ function CollapsedTrayBar({
         >
           <Trash2 className="size-3" />
         </button>
-        <ChevronUp
-          className="size-3 shrink-0 text-muted-foreground"
-          aria-hidden
-          onClick={onExpand}
-        />
+        <ChevronUp className="size-3 shrink-0 text-muted-foreground" aria-hidden />
       </div>
     </div>
   )
@@ -345,7 +323,7 @@ function StepRow({
         <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
           <StepIcon step={step} />
           <span className="min-w-0 flex-1 truncate">{formatPageHost(step.pageUrl)}</span>
-          <span className="shrink-0">{formatStepTime(step.createdAt)}</span>
+          <span className="shrink-0">{formatTime(step.createdAt)}</span>
         </div>
       </div>
     </div>
@@ -354,6 +332,6 @@ function StepRow({
 
 function cnIcon(recording: boolean): string {
   return recording
-    ? 'size-4 shrink-0 animate-pulse text-red-500'
+    ? 'size-4 shrink-0 animate-pulse text-destructive'
     : 'size-4 shrink-0 text-muted-foreground'
 }

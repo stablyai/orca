@@ -68,4 +68,23 @@ describe('diffFingerprints', () => {
     expect(diff.textChange).toEqual({ before: 'Kaydet', after: 'Guncelle' })
     expect(diff.changed.filter((kind) => kind === 'text')).toHaveLength(1)
   })
+
+  it('diffs unnamed inputs by their unique key, not the shared label', () => {
+    const before = makeFingerprint({
+      inputsDetail: [
+        { key: 'input[0]', label: 'text', value: 'birinci' },
+        { key: 'input[1]', label: 'text', value: 'ikinci' }
+      ]
+    })
+    const after = makeFingerprint({
+      inputsDetail: [
+        { key: 'input[0]', label: 'text', value: 'birinci' },
+        { key: 'input[1]', label: 'text', value: 'guncellendi' }
+      ]
+    })
+    const diff = diffFingerprints(before, after)
+    expect(diff.inputChanges).toEqual([
+      { key: 'input[1]', label: 'text', before: 'ikinci', after: 'guncellendi' }
+    ])
+  })
 })
