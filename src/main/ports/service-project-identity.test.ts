@@ -148,8 +148,10 @@ describe('resolveServiceIdentity', () => {
     const target = path.join(root, 'repo')
 
     const first = await resolveServiceIdentity(target)
-    // Removing the repo would change the answer if the second call re-walked.
-    await rm(path.join(root, 'repo/.git'), { recursive: true, force: true })
+    // Why not remove .git: package.json is itself a root manifest, so the walk
+    // would still resolve the same identity and the assertion would hold even
+    // on a cache miss. Renaming the package is the only edit a re-walk shows.
+    await makeFile('repo/package.json', '{"name":"changed"}')
     const second = await resolveServiceIdentity(target)
 
     expect(second).toEqual(first)
