@@ -38,7 +38,7 @@ Introduce `aquarium:reap` as the single, gated disposal IPC channel for worktree
 
 ## Disposal Sequence
 
-```
+```text
 For each worktree path:
   git worktree remove --force <path>   # evaporates the working tree
 After all removals:

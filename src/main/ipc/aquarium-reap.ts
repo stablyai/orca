@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
-import { basename } from 'path'
+import { basename, join } from 'path'
 import { execFile } from 'child_process'
+import { existsSync, statSync } from 'fs'
 import { promisify } from 'util'
 import { AQUARIUM_REAP_CHANNEL, type AquariumReapRequest, type AquariumReapResult } from '../../shared/aquarium-reap'
 import { areWorktreePathsEqual } from '../ipc/worktree-logic'
@@ -24,14 +25,32 @@ const execFileAsync = promisify(execFile)
 export type AquariumReapHandlerDeps = {
   /** Owner check — returns true if the local process may reap this path. */
   isOwnedByLocal?: (worktreePath: string) => boolean
+  /** Active lock check — returns true if another process holds the worktree. */
+  isActiveLocked?: (worktreePath: string) => boolean
 }
 
-function defaultIsOwnedByLocal(): boolean {
+function defaultIsOwnedByLocal(worktreePath: string): boolean {
   // On a single-user dev machine the local process owns its own worktrees.
   // Real multi-user hardening would stat the dir owner; the contract refuses
   // not-found + guard-block regardless, so a false "owned" here only widens
   // the reapable set, never bypasses a hard deny.
-  return true
+  try {
+    const stat = statSync(worktreePath, { throwIfNoEntry: true })
+    return stat.uid === process.getuid()
+  } catch {
+    // If we can't stat the path (e.g. ghost worktree dir is gone), fall back
+    // to true — the not-found gate already handles missing worktrees, and
+    // guard-block covers active sessions. Ownership is a secondary check.
+    return true
+  }
+}
+
+function defaultIsActiveLocked(worktreePath: string): boolean {
+  // No lock file present → not locked. The spike implements this via O_EXCL
+  // lock files (bookbag acquire_lock parity). A missing lock file means no
+  // active session holds the worktree.
+  const lockPath = join(worktreePath, '.aquarium.lock')
+  return existsSync(lockPath)
 }
 
 /** Ghost-tolerant worktree listing: `listWorktrees` does sparse-checkout
@@ -72,6 +91,7 @@ export async function reapAquariumWorktrees(
 ): Promise<AquariumReapResult> {
   const { repoPath, worktreePaths } = request
   const isOwnedByLocal = deps.isOwnedByLocal ?? defaultIsOwnedByLocal
+  const isActiveLocked = deps.isActiveLocked ?? defaultIsActiveLocked
 
   const reaped: string[] = []
   const denied: AquariumReapResult['denied'] = []
@@ -98,6 +118,10 @@ export async function reapAquariumWorktrees(
     }
     if (!isOwnedByLocal(path)) {
       denied.push({ path, reason: 'owner-uid' })
+      continue
+    }
+    if (isActiveLocked(path)) {
+      denied.push({ path, reason: 'guard-block', detail: 'worktree is locked by an active session' })
       continue
     }
 
