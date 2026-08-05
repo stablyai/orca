@@ -168,14 +168,22 @@ function getClientPlatform(): NodeJS.Platform {
   return 'darwin'
 }
 
-function getResumeLaunchPlatform(get: StoreGet, worktreeId: string): NodeJS.Platform {
+// Why: SSH hosts need both Linux platform and isRemote so the planner uses the
+// remote `orca` shim; WSL is Linux platform but still a local path (not isRemote).
+function getResumeLaunchTarget(
+  get: StoreGet,
+  worktreeId: string
+): { platform: NodeJS.Platform; isRemote: boolean } {
   const state = get()
   const worktree = state.getKnownWorktreeById?.(worktreeId)
   const repo = worktree ? state.repos.find((entry) => entry.id === worktree.repoId) : null
-  if (repo?.connectionId || (worktree?.path && isWslUncPath(worktree.path))) {
-    return 'linux'
+  if (repo?.connectionId) {
+    return { platform: 'linux', isRemote: true }
   }
-  return getClientPlatform()
+  if (worktree?.path && isWslUncPath(worktree.path)) {
+    return { platform: 'linux', isRemote: false }
+  }
+  return { platform: getClientPlatform(), isRemote: false }
 }
 
 /** Resume a closed agent tab when the snapshot carries a resumable provider session. */
@@ -189,6 +197,7 @@ function tryReopenClosedTerminalWithAgentResume(
   }
   const state = get()
   const launchConfig = snapshot.launchConfig
+  const { platform, isRemote } = getResumeLaunchTarget(get, worktreeId)
   const startupPlan = buildAgentResumeStartupPlan({
     agent: snapshot.agent,
     providerSession: snapshot.providerSession,
@@ -202,7 +211,13 @@ function tryReopenClosedTerminalWithAgentResume(
         ? launchConfig.agentEnv
         : resolveTuiAgentLaunchEnv(snapshot.agent, state.settings),
     ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
-    platform: getResumeLaunchPlatform(get, worktreeId)
+    // Why: OMP cold resume stores a file path in the sleeping launch config; drop it
+    // and the planner builds resume argv without the locator.
+    ...(launchConfig?.ompResumeFilePath
+      ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
+      : {}),
+    platform,
+    isRemote
   })
   if (!startupPlan) {
     return false
