@@ -130,8 +130,7 @@ import {
 } from '@/runtime/runtime-terminal-inspection'
 import {
   clearWebRuntimeTerminalBuffer,
-  closeWebRuntimeTerminal,
-  updateWebRuntimePaneLayout
+  closeWebRuntimeTerminal
 } from '@/runtime/web-runtime-session'
 import {
   armPrimarySelectionNativePasteSuppression,
@@ -152,6 +151,10 @@ import {
   planTerminalLiveLayoutInsertions
 } from './terminal-live-layout-reconciliation'
 import type { TerminalQuickCommand, TerminalQuickCommandScope } from '../../../../shared/types'
+import {
+  createRemotePaneLayoutPusher,
+  type RemotePaneLayoutPusher
+} from './remote-pane-layout-push'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
@@ -402,6 +405,8 @@ function TerminalPane(
   paneTitlesRef.current = paneTitles
   const removedTitleLeafIdsRef = useRef<Set<string>>(new Set())
   const clearedScrollbackLeafIdsRef = useRef<Set<string>>(new Set())
+  const remotePaneLayoutPusherRef = useRef<RemotePaneLayoutPusher | null>(null)
+  remotePaneLayoutPusherRef.current ??= createRemotePaneLayoutPusher()
   const [paneTitleOverlayRects, setPaneTitleOverlayRects] = useState<
     Record<number, PaneTitleOverlayRect>
   >({})
@@ -947,13 +952,7 @@ function TerminalPane(
       (ptyId) => typeof ptyId === 'string' && isRemoteRuntimePtyId(ptyId)
     )
     if (hasRemotePane) {
-      void updateWebRuntimePaneLayout({
-        worktreeId,
-        tabId,
-        root: layout.root,
-        expandedLeafId: layout.expandedLeafId,
-        ...(layout.titlesByLeafId ? { titlesByLeafId: layout.titlesByLeafId } : {})
-      })
+      remotePaneLayoutPusherRef.current?.push({ worktreeId, tabId, layout })
     }
     for (const leafId of currentLeafIds) {
       clearedScrollbackLeafIds.delete(leafId)

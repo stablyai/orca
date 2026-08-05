@@ -3,6 +3,7 @@ import { collectRendererMemoryProfileCounts } from '../renderer-memory-profile'
 import {
   forEachLivePaneForDesyncSentinel,
   getLivePaneCensus,
+  presentAllTerminalPanesWithoutAtlasClear,
   getLivePaneMemoryProfileCounts,
   refitAndRefreshAllTerminalPanes,
   registerLivePaneManager,
@@ -134,6 +135,29 @@ describe('pane manager registry', () => {
     expect(broken.refreshAllPanes).not.toHaveBeenCalled()
     expect(healthy.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
     expect(healthy.refreshAllPanes).toHaveBeenCalledTimes(1)
+  })
+
+  it('presents visible managers without resetting their atlases', () => {
+    const visible = {
+      resetWebglTextureAtlases: vi.fn<() => void>(),
+      scheduleRevealPresent: vi.fn<() => void>(),
+      isVisibleForAtlasRecovery: () => true
+    }
+    const hidden = {
+      resetWebglTextureAtlases: vi.fn<() => void>(),
+      scheduleRevealPresent: vi.fn<() => void>(),
+      isVisibleForAtlasRecovery: () => false
+    }
+    registerLivePaneManager(visible)
+    registeredManagers.push(visible)
+    registerLivePaneManager(hidden)
+    registeredManagers.push(hidden)
+
+    presentAllTerminalPanesWithoutAtlasClear()
+
+    expect(visible.scheduleRevealPresent).toHaveBeenCalledOnce()
+    expect(visible.resetWebglTextureAtlases).not.toHaveBeenCalled()
+    expect(hidden.scheduleRevealPresent).not.toHaveBeenCalled()
   })
 
   it('fits and refreshes every registered manager', () => {

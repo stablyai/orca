@@ -24,12 +24,8 @@ import type { HomeWorktreeSummary, HostWorktreeInfo } from '../src/worktree/home
 import type { RpcClient } from '../src/transport/rpc-client'
 import { createHostConnectRefetchGate } from '../src/transport/host-connect-refetch-gate'
 import { sendSingleFlightRequest } from '../src/transport/request-single-flight'
-import {
-  useAllHostClients,
-  useCloseHost,
-  useForceReconnect,
-  usePrimeHosts
-} from '../src/transport/client-context'
+import { useCloseHost, useForceReconnect, usePrimeHosts } from '../src/transport/client-context'
+import { useAllHostClients } from '../src/transport/use-all-host-clients'
 import { classifyConnection } from '../src/transport/connection-health'
 import { subscribeToDesktopNotifications } from '../src/notifications/mobile-notifications'
 import {
@@ -44,7 +40,15 @@ import { TaskProviderLogo } from '../src/components/TaskProviderLogo'
 import { ActionSheetModal } from '../src/components/ActionSheetModal'
 import { getHostListActionSheetActions } from '../src/host-list-action-sheet-actions'
 import { ConfirmModal } from '../src/components/ConfirmModal'
-import { setCachedWorktrees, getCachedWorktrees } from '../src/cache/worktree-cache'
+import {
+  setCachedWorktrees,
+  getCachedWorktrees,
+  getProvenCachedWorktrees
+} from '../src/cache/worktree-cache'
+import {
+  LAST_VISITED_WORKTREE_STORAGE_KEY,
+  readLastVisitedWorktreeRecord
+} from '../src/worktree/last-visited-worktree-repo'
 import { loadHomeSnapshot, saveHomeSnapshot } from '../src/cache/home-snapshot-cache'
 import { colors, spacing, radii } from '../src/theme/mobile-theme'
 import {
@@ -55,6 +59,13 @@ import {
 import { useOpenMobileTasks } from '../src/tasks/use-open-mobile-tasks'
 import { useResponsiveLayout } from '../src/layout/responsive-layout'
 import { useOpenMobileSession } from '../src/session/use-open-mobile-session'
+import { useOpenMobileAccounts } from '../src/accounts/use-open-mobile-accounts'
+import {
+  isResumeTargetConfirmedMissing,
+  selectHomeResumeCard,
+  type HomeResumeCard
+} from '../src/worktree/home-resume-card'
+import { hostRouteWithNotice } from '../src/host-route-notice'
 
 function endpointLabel(endpoint: string): string {
   try {
@@ -209,6 +220,7 @@ export default function HomeScreen() {
   const openMobileHostEdit = useOpenMobileHostEdit()
   const openMobileTasks = useOpenMobileTasks()
   const openMobileSession = useOpenMobileSession()
+  const openMobileAccounts = useOpenMobileAccounts()
   const insets = useSafeAreaInsets()
   // Why: cap/center content on wide/tablet canvases so cards don't stretch edge-to-edge on iPad.
   const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
@@ -313,13 +325,13 @@ export default function HomeScreen() {
           router.replace(mobileOnboardingDestination(onboardingSteps))
         }
       })
-      void AsyncStorage.getItem('orca:last-visited-worktree').then((raw) => {
-        if (stale || !raw) {
+      void AsyncStorage.getItem(LAST_VISITED_WORKTREE_STORAGE_KEY).then((raw) => {
+        if (stale) {
           return
         }
-        try {
-          setLastVisited(JSON.parse(raw))
-        } catch {}
+        // Why the validating reader: this record becomes the Resume card's navigation target,
+        // so a malformed or older-shaped payload must read as no history, not a broken route.
+        setLastVisited(readLastVisitedWorktreeRecord(raw))
       })
       for (const entry of allClientsRef.current) {
         if (entry.client.getState() === 'connected') {
@@ -482,28 +494,43 @@ export default function HomeScreen() {
       .join(',')
   ])
 
-  // Why: prefer the worktree last opened on this device so Resume reflects mobile session history.
-  // Why: don't gate on 'connected' so the card doesn't flash empty for ~1s on cold-start; cached data holds until fresh RPC lands.
-  const resumeWorktree = useMemo(() => {
-    // Why: only surface Resume for connected hosts; a stale worktree taps into a route that can't load.
-    if (lastVisited && hostStates[lastVisited.hostId] === 'connected') {
-      const cached = getCachedWorktrees(lastVisited.hostId) as HomeWorktreeSummary[] | null
-      const match = cached?.find((w) => w.worktreeId === lastVisited.worktreeId)
-      if (match) {
-        return { hostId: lastVisited.hostId, worktree: match }
+  // Why: the card renders from cached/snapshot data the moment a candidate exists — see
+  // selectHomeResumeCard for why its slot must not wait for the host to connect.
+  const resumeCard = useMemo(
+    () =>
+      selectHomeResumeCard({
+        hosts: sortedHosts,
+        hostStates,
+        worktreeInfo,
+        lastVisited,
+        cachedWorktrees: (hostId) => getCachedWorktrees(hostId) as HomeWorktreeSummary[] | null
+      }),
+    [sortedHosts, hostStates, worktreeInfo, lastVisited]
+  )
+
+  // Why: the card is drawn from a snapshot that can name a workspace the desktop has since
+  // deleted. When the host has proven otherwise, open its workspace list rather than a session
+  // screen whose every RPC would fail. An unproven catalog is not evidence — that tap goes
+  // through and the session screen bounces once the host answers (F7).
+  const openResume = useCallback(
+    (card: HomeResumeCard) => {
+      if (
+        isResumeTargetConfirmedMissing(
+          card,
+          getProvenCachedWorktrees(card.hostId) as HomeWorktreeSummary[] | null
+        )
+      ) {
+        router.push(hostRouteWithNotice(card.hostId, 'worktree-missing'))
+        return
       }
-    }
-    for (const host of sortedHosts) {
-      if (hostStates[host.id] !== 'connected') {
-        continue
-      }
-      const info = worktreeInfo[host.id]
-      if (info?.lastActiveWorktree) {
-        return { hostId: host.id, worktree: info.lastActiveWorktree }
-      }
-    }
-    return null
-  }, [sortedHosts, hostStates, worktreeInfo, lastVisited])
+      openMobileSession({
+        hostId: card.hostId,
+        worktreeId: card.worktree.worktreeId,
+        name: card.worktree.displayName || card.worktree.repo
+      })
+    },
+    [openMobileSession, router]
+  )
 
   // Why: only show Account usage for connected hosts; stale cached usage would imply live data.
   const accountsHosts = useMemo(() => {
@@ -545,7 +572,7 @@ export default function HomeScreen() {
       disabled={!primaryConnectedHost}
       style={({ pressed }) => [
         styles.taskHomeCard,
-        !primaryConnectedHost && styles.quickActionDisabled,
+        !primaryConnectedHost && styles.cardDisabled,
         pressed && styles.hostCardPressed
       ]}
       onPress={() => {
@@ -732,51 +759,45 @@ export default function HomeScreen() {
           ListFooterComponent={
             <View>
               {/* ─── Resume card ─── */}
-              {resumeWorktree ? (
+              {resumeCard ? (
                 <>
                   <Text style={[styles.sectionHeading, styles.sectionHeadingTightTop]}>Resume</Text>
                   <Pressable
-                    style={({ pressed }) => [styles.resumeCard, pressed && styles.hostCardPressed]}
-                    onPress={() =>
-                      openMobileSession({
-                        hostId: resumeWorktree.hostId,
-                        worktreeId: resumeWorktree.worktree.worktreeId,
-                        name: resumeWorktree.worktree.displayName || resumeWorktree.worktree.repo
-                      })
-                    }
+                    disabled={!resumeCard.actionable}
+                    style={({ pressed }) => [
+                      styles.resumeCard,
+                      !resumeCard.actionable && styles.cardDisabled,
+                      pressed && styles.hostCardPressed
+                    ]}
+                    onPress={() => openResume(resumeCard)}
                   >
                     <View style={styles.resumeIcon}>
                       <Terminal size={18} color={colors.textSecondary} />
                     </View>
                     <View style={styles.resumeMain}>
                       <Text style={styles.resumeTitle} numberOfLines={1}>
-                        {resumeWorktree.worktree.displayName}
+                        {resumeCard.worktree.displayName}
                       </Text>
                       <View style={styles.resumeSub}>
                         <View
                           style={[
                             styles.repoDot,
-                            { backgroundColor: repoColor(resumeWorktree.worktree.repo) }
+                            { backgroundColor: repoColor(resumeCard.worktree.repo) }
                           ]}
                         />
                         <Text style={styles.resumeSubText} numberOfLines={1}>
-                          {resumeWorktree.worktree.repo}
+                          {resumeCard.worktree.repo}
                           {'  ·  '}
-                          {resumeWorktree.worktree.branch}
+                          {resumeCard.worktree.branch}
                         </Text>
                       </View>
                     </View>
                     <ChevronRight size={16} color={colors.textMuted} />
                   </Pressable>
-                  <Text style={[styles.sectionHeading, styles.sectionHeadingTightTop]}>Tasks</Text>
-                  {renderTaskHomeCard()}
                 </>
-              ) : (
-                <>
-                  <Text style={[styles.sectionHeading, styles.sectionHeadingTightTop]}>Tasks</Text>
-                  {renderTaskHomeCard()}
-                </>
-              )}
+              ) : null}
+              <Text style={[styles.sectionHeading, styles.sectionHeadingTightTop]}>Tasks</Text>
+              {renderTaskHomeCard()}
 
               {/* ─── Quick actions ─── */}
               <Text style={[styles.sectionHeading, { marginTop: spacing.xl }]}>Quick Actions</Text>
@@ -794,7 +815,7 @@ export default function HomeScreen() {
                   disabled={!primaryConnectedHost}
                   style={({ pressed }) => [
                     styles.quickAction,
-                    !primaryConnectedHost && styles.quickActionDisabled,
+                    !primaryConnectedHost && styles.cardDisabled,
                     pressed && styles.hostCardPressed
                   ]}
                   onPress={() => {
@@ -831,7 +852,7 @@ export default function HomeScreen() {
                           styles.accountsCard,
                           pressed && styles.hostCardPressed
                         ]}
-                        onPress={() => router.push(`/h/${host.id}/accounts`)}
+                        onPress={() => openMobileAccounts(host.id)}
                       >
                         {showHostName ? (
                           <Text style={styles.accountsHostLabel} numberOfLines={1}>
@@ -1221,7 +1242,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10
   },
-  quickActionDisabled: {
+  cardDisabled: {
     opacity: 0.45
   },
   quickActionIcon: {

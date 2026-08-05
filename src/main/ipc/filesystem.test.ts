@@ -44,6 +44,7 @@ const {
   cancelGeneratePullRequestFieldsLocalMock,
   getPullRequestDraftContextMock,
   resolveHostedReviewBodyForGenerationMock,
+  loadPullRequestLinkedIssueMock,
   getSshFilesystemProviderMock,
   getSshGitProviderMock,
   tryDeleteWslUncPathMock,
@@ -89,6 +90,7 @@ const {
   cancelGeneratePullRequestFieldsLocalMock: vi.fn(),
   getPullRequestDraftContextMock: vi.fn(),
   resolveHostedReviewBodyForGenerationMock: vi.fn(),
+  loadPullRequestLinkedIssueMock: vi.fn(),
   getSshFilesystemProviderMock: vi.fn(),
   getSshGitProviderMock: vi.fn(),
   tryDeleteWslUncPathMock: vi.fn(),
@@ -203,6 +205,10 @@ vi.mock('../source-control/pull-request-template', () => ({
   resolveHostedReviewBodyForGeneration: resolveHostedReviewBodyForGenerationMock
 }))
 
+vi.mock('../source-control/pull-request-linked-issue', () => ({
+  loadPullRequestLinkedIssue: loadPullRequestLinkedIssueMock
+}))
+
 import { registerFilesystemHandlers } from './filesystem'
 import { invalidateAuthorizedRootsCache, registerWorktreeRootsForRepo } from './filesystem-auth'
 
@@ -305,6 +311,7 @@ describe('registerFilesystemHandlers', () => {
       generatePullRequestFieldsFromContextMock,
       getPullRequestDraftContextMock,
       resolveHostedReviewBodyForGenerationMock,
+      loadPullRequestLinkedIssueMock,
       discoverCommitMessageModelsLocalMock,
       discoverCommitMessageModelsRemoteMock,
       cancelGenerateCommitMessageLocalMock,
@@ -316,6 +323,7 @@ describe('registerFilesystemHandlers', () => {
     ]) {
       mock.mockReset()
     }
+    loadPullRequestLinkedIssueMock.mockResolvedValue(null)
 
     handleMock.mockImplementation((channel, handler) => {
       handlers.set(channel, handler)
@@ -2244,6 +2252,13 @@ describe('registerFilesystemHandlers', () => {
 
     it('enriches the local pull-request context with a validated worktree linked issue', async () => {
       const worktreeId = `repo-1::${WORKTREE_FEATURE_PATH}`
+      const linkedIssueDetails = {
+        provider: 'github',
+        number: 123,
+        title: 'Improve PR generation',
+        description: 'Include issue context.'
+      }
+      loadPullRequestLinkedIssueMock.mockResolvedValue(linkedIssueDetails)
       const linkedStore = {
         ...store,
         getWorktreeMeta: (id: string) => (id === worktreeId ? { linkedIssue: 123 } : undefined)
@@ -2254,11 +2269,17 @@ describe('registerFilesystemHandlers', () => {
       await handlers.get('git:generatePullRequestFields')!(null, {
         ...PULL_REQUEST_ARGS,
         worktreePath: WORKTREE_FEATURE_PATH,
-        worktreeId
+        worktreeId,
+        provider: 'github'
       })
 
       expect(generatePullRequestFieldsFromContextMock).toHaveBeenCalledWith(
-        { ...PULL_REQUEST_CONTEXT, linkedIssue: 123 },
+        {
+          ...PULL_REQUEST_CONTEXT,
+          linkedIssue: 123,
+          provider: 'github',
+          linkedIssueDetails
+        },
         params,
         expect.objectContaining({ kind: 'local' })
       )

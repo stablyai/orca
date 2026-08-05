@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useNavigation, useRouter } from 'expo-router'
 import {
   coordinateHostStackNavigation,
@@ -14,11 +14,17 @@ let pendingNavigation: PendingHostStackNavigation | null = null
 export function useOpenHostStackRoute(): (hostId: string, target: HostStackRouteTarget) => void {
   const navigation = useNavigation<HostStackRootNavigation>()
   const router = useRouter()
+  // Why: an unmounting screen may only cancel a transition it armed itself — home
+  // unmounting for onboarding must not kill a notification push still in flight.
+  const armedRef = useRef<PendingHostStackNavigation | null>(null)
 
   useEffect(
     () => () => {
-      pendingNavigation?.controller.cancel()
-      pendingNavigation = null
+      if (armedRef.current && armedRef.current === pendingNavigation) {
+        pendingNavigation.controller.cancel()
+        pendingNavigation = null
+      }
+      armedRef.current = null
     },
     []
   )
@@ -32,6 +38,7 @@ export function useOpenHostStackRoute(): (hostId: string, target: HostStackRoute
         hostId,
         target
       )
+      armedRef.current = pendingNavigation
     },
     [navigation, router]
   )

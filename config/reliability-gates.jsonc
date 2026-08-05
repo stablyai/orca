@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-03",
+  "updatedAt": "2026-08-04",
   "policy": {
     "maturityLevels": ["experimental", "soak", "blocking", "accepted-gap", "deprecated"],
     "blockingPromotion": {
@@ -4435,7 +4435,7 @@
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": [],
-      "coverageNotes": "Platform-neutral unit coverage proves the Resource Manager closed badge performs one readiness seed, coalesces unknown spawn signals, skips known-session reattach signals, and installs no interval. Broader terminal interaction coverage remains on the pending reliability stack.",
+      "coverageNotes": "Platform-neutral unit coverage proves the Resource Manager closed badge performs one readiness seed, coalesces unknown spawn signals, skips known-session reattach signals, installs no interval, and re-reads only once per explicit daemon-management kill/restart (which emits no pty:exit). Broader terminal interaction coverage remains on the pending reliability stack.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/7002",
         "https://github.com/stablyai/orca/pull/6858",
@@ -4464,7 +4464,8 @@
             "spawn signals during a slow inventory read never overlap provider-wide scans and cause at most one required follow-up",
             "unknown sessions that exit before reconciliation cancel their queued inventory read",
             "unmount during a slow inventory read cannot schedule follow-up work",
-            "exit and out-of-order refresh races cannot resurrect stale sessions"
+            "exit and out-of-order refresh races cannot resurrect stale sessions",
+            "an explicit daemon-management invalidation performs exactly one inventory read, and none before readiness or after unmount"
           ]
         },
         {
@@ -8079,21 +8080,24 @@
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local"],
-      "coverageNotes": "A deterministic renderer contract models one visible manager plus 64 mounted hidden managers and hidden synchronized/TUI output. A macOS Electron run verifies that a document visibility cycle preserves real WebGL atlases and terminal pixels. Production v1.4.163 evidence linked the same 49-manager fanout to paired traffic, but the candidate has not been rerun against an isolated live paired server.",
+      "coverageNotes": "A deterministic renderer contract models one visible manager plus 64 mounted hidden managers, hidden synchronized/TUI output, and five minutes of sustained streaming recovery requests. A macOS Electron run verifies that a document visibility cycle preserves real WebGL atlases and terminal pixels. Production v1.4.163 evidence linked the same 49-manager fanout to paired traffic, but the candidate has not been rerun against an isolated live paired server.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/7054",
-        "https://github.com/stablyai/orca/pull/7604"
+        "https://github.com/stablyai/orca/pull/7604",
+        "https://github.com/stablyai/orca/issues/12094"
       ],
-      "invariant": "Ordinary document visibility transitions and hidden terminal output must not clear the shared WebGL glyph atlas. Heavy reset-and-refresh recovery may touch only managers with visible terminal surfaces; hidden managers recover when revealed. Genuine OS resume remains a heavy recovery trigger.",
-      "oracle": "Dispatch a visible document visibilitychange and require atlas-preserving wake recovery; register one visible manager and 64 hidden managers and require exactly one reset and one refresh; parse hidden synchronized and high-confidence TUI output and require zero global atlas-recovery schedules. Separately, drive an Electron visibility cycle with two real WebGL panes, require zero atlas clears, and retain at least 85% of each pane's baseline ink pixels.",
+      "invariant": "Ordinary document visibility transitions and hidden terminal output must not clear the shared WebGL glyph atlas. Heavy reset-and-refresh recovery may touch only managers with visible terminal surfaces; hidden managers recover when revealed. Sustained streaming recovery requests must keep resets rate-bounded without starving repair. Genuine OS resume remains a heavy recovery trigger.",
+      "oracle": "Dispatch a visible document visibilitychange and require atlas-preserving wake recovery; register one visible manager and 64 hidden managers and require exactly one reset and one refresh; parse hidden synchronized and high-confidence TUI output and require zero global atlas-recovery schedules. Across five minutes of 300ms streaming recovery requests, require more than one but at most 75 resets, no internal or trailing repair gap above 6.5 seconds, atlas-preserving presentation while a reset is suppressed, and one delayed wipe for a final suppressed settle. Separately, drive an Electron visibility cycle with two real WebGL panes, require zero atlas clears, and retain at least 85% of each pane's baseline ink pixels.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects.test.ts src/renderer/src/lib/pane-manager/pane-manager-registry.test.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery-rate.test.ts",
         "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-document-visibility-webgl-recovery.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-document-visibility-webgl-recovery.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1"
       ],
       "testFiles": [
         "src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts",
         "src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery-rate.test.ts",
         "src/renderer/src/lib/pane-manager/pane-manager-registry.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection.test.ts",
         "tests/e2e/terminal-document-visibility-webgl-recovery.spec.ts"
@@ -8107,6 +8111,13 @@
           "file": "src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects.test.ts",
           "assertions": [
             "preserves WebGL texture atlases when the active terminal document becomes visible"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery-rate.test.ts",
+          "assertions": [
+            "sustained streaming requests keep atlas resets rate-bounded with no repair starvation",
+            "suppressed resets present live buffers, cancel repair during resumed output, receive a trailing repair after settle, and clean up pending timers"
           ]
         },
         {
@@ -8129,6 +8140,15 @@
         }
       ],
       "evidenceRuns": [
+        {
+          "date": "2026-08-04",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery-rate.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.5,
+          "summary": "Seven deterministic tests passed for sustained reset cadence, bounded repair gaps, suppressed presentation with trailing repair, clock rollback, one-shot bypasses, and pending-timer cleanup."
+        },
         {
           "date": "2026-08-01",
           "runner": "local",
@@ -8171,7 +8191,7 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "A recovery with one visible and 64 hidden managers performs one reset and one refresh instead of 65 of each. Hidden synchronized/TUI output schedules zero global recovery work; no polling, cooldown, provider call, or parking change is added."
+        "evidence": "A recovery with one visible and 64 hidden managers performs one reset and one refresh instead of 65 of each. Hidden synchronized/TUI output schedules zero global recovery work. Sustained 300ms recovery requests keep full atlas resets at or below 75 over five minutes while preserving a 6.5-second maximum repair gap. A final suppressed settle schedules one cancelable repair at the next budget boundary; resumed streaming cancels it. The rate budget adds no polling, recurring timer, provider call, or parking change."
       },
       "promotionCriteria": [
         "Accumulate stable macOS Electron runs with real BrowserWindow visibility transitions.",

@@ -289,6 +289,6 @@ describe('SmartWorkspaceNameField emoji shortcodes', () => {
     })
     pressEnter(input)
 
-    expect(onValueChange).toHaveBeenCalledWith('Launch 😉')
+    expect(onValueChange).toHaveBeenCalledWith('Launch 😉 ')
   })
 })

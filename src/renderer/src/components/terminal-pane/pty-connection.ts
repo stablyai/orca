@@ -1054,6 +1054,7 @@ export function connectPanePty(
   // that follows this mount, so connect time is the only moment a pane can tell
   // a reveal remount from an in-place reattach.
   let mountFollowsTerminalPark = isTerminalTabParked(deps.tabId)
+  let authoritativeReattachGeneration = 0
   exposeE2eTerminalPtyOutputDebug()
   let disposed = false
   const structuralReplayCoordinator = createTerminalStructuralReplayCoordinator(pane.terminal)
@@ -2183,6 +2184,7 @@ export function connectPanePty(
     // as a hint, but revoke bytes until one current provider confirmation lands.
     useAppStore.getState().setPaneForegroundAgent(cacheKey, {
       agent: foreground.agent,
+      routingRevoked: true,
       shellForeground: false
     })
     visibleForegroundSamplePending = false
@@ -5146,6 +5148,7 @@ export function connectPanePty(
         // about to unmount — so skip the doomed respawn instead of racing it.
         return Promise.resolve(null)
       }
+      authoritativeReattachGeneration += 1
       clearPaneMode2031State()
       clearHiddenOutputRestoreState()
       // Why: a canceled old replay clear can preserve xterm's native
@@ -7752,12 +7755,107 @@ export function connectPanePty(
       return true
     }
 
+    let parkedSshSnapshotPrefetch: {
+      ptyId: string
+      fetch: () => Promise<PtyBufferSnapshot | null>
+    } | null = null
+
+    const createSshMainModelSnapshotProbe = (
+      ptyId: string
+    ): (() => Promise<PtyBufferSnapshot | null>) =>
+      memoizeSshReattachModelSnapshotProbe(async (): Promise<PtyBufferSnapshot | null> => {
+        const sshParkingEnabled = useAppStore.getState().settings?.terminalSshViewParking !== false
+        if (!shouldFetchSshReattachModelSnapshot({ ptyId, sshParkingEnabled })) {
+          return null
+        }
+        const snapshot = await resolveSshReattachModelSnapshotWithTimeout(
+          window.api.pty.getMainBufferSnapshot(ptyId, {
+            scrollbackRows: resolveHiddenRestoreScrollbackRows(pane.terminal.options.scrollback)
+          })
+        )
+        return snapshot &&
+          decideSshReattachPaintSource({ ptyId, sshParkingEnabled, snapshot }) ===
+            'main-model-snapshot'
+          ? snapshot
+          : null
+      })
+
+    const getSshMainModelSnapshotProbe = (
+      ptyId: string
+    ): (() => Promise<PtyBufferSnapshot | null>) => {
+      if (parkedSshSnapshotPrefetch?.ptyId !== ptyId) {
+        parkedSshSnapshotPrefetch = { ptyId, fetch: createSshMainModelSnapshotProbe(ptyId) }
+      }
+      return parkedSshSnapshotPrefetch.fetch
+    }
+
+    const prepaintParkedSshSnapshot = (ptyId: string | null): void => {
+      const parsedPtyId = ptyId ? parseAppSshPtyId(ptyId) : null
+      if (
+        !ptyId ||
+        !mountFollowsTerminalPark ||
+        parsedPtyId?.connectionId !== connectionId ||
+        !capturedDirectSshRetryLeaseMatches()
+      ) {
+        return
+      }
+      const capturedGeneration = authoritativeReattachGeneration
+      const isCurrent = (): boolean =>
+        !disposed &&
+        mountFollowsTerminalPark &&
+        authoritativeReattachGeneration === capturedGeneration &&
+        capturedDirectSshRetryLeaseMatches()
+      const fetchSnapshot = getSshMainModelSnapshotProbe(ptyId)
+      void fetchSnapshot()
+        .then(async (snapshot) => {
+          if (!snapshot || !isCurrent()) {
+            return
+          }
+          await structuralReplayCoordinator.run(
+            async () => {
+              if (!isCurrent()) {
+                return
+              }
+              const modelData = `${snapshot.scrollbackAnsi ?? ''}${snapshot.data}`
+              rememberReattachPayloadAgentSignal(modelData, { fullScreenReplay: true })
+              if (
+                hasPositiveTerminalDimensions(snapshot.cols, snapshot.rows) &&
+                (pane.terminal.cols !== snapshot.cols || pane.terminal.rows !== snapshot.rows)
+              ) {
+                suppressStructuralReplayPtyResize = true
+                try {
+                  pane.terminal.resize(snapshot.cols, snapshot.rows)
+                } finally {
+                  suppressStructuralReplayPtyResize = false
+                }
+              }
+              kittyKeyboardModes.scanReplay(modelData)
+              for (const replayChunk of buildMainModelSnapshotReplayWrites(snapshot)) {
+                writeReplayData(replayChunk)
+              }
+              writeReplayData(reattachReplayResetSequence(modelData))
+              if (snapshot.pendingEscapeTailAnsi) {
+                writeReplayData(snapshot.pendingEscapeTailAnsi)
+              }
+              recordTerminalOutput(pane.terminal)
+              await waitForTerminalReplayWritesParsed(pane.terminal)
+              if (isCurrent()) {
+                manager.rebuildPaneWebgl(pane.id)
+              }
+            },
+            { shouldRestore: isCurrent }
+          )
+        })
+        .catch(() => {})
+    }
+
     const handleReattachResult = async (
       result: PtyConnectResult | string | void,
       staleSessionId?: string | null,
       coldRestoreStartup?: ColdRestoreAgentResumeStartup | null,
       attemptGeneration = transportStreamGeneration
     ): Promise<boolean> => {
+      authoritativeReattachGeneration += 1
       if (disposed) {
         return false
       }
@@ -7885,28 +7983,7 @@ export function connectPanePty(
       // deadlock on the coordinator's tail chain.
       // Memoized: the prefetch and the payload task share one probe result, so a
       // null prefetch can never buy a second timeout before the relay paint.
-      const fetchSshMainModelReattachSnapshot = memoizeSshReattachModelSnapshotProbe(
-        async (): Promise<PtyBufferSnapshot | null> => {
-          const sshParkingEnabled =
-            useAppStore.getState().settings?.terminalSshViewParking !== false
-          if (!shouldFetchSshReattachModelSnapshot({ ptyId, sshParkingEnabled })) {
-            return null
-          }
-          const snapshot = await resolveSshReattachModelSnapshotWithTimeout(
-            window.api.pty.getMainBufferSnapshot(ptyId, {
-              scrollbackRows: resolveHiddenRestoreScrollbackRows(pane.terminal.options.scrollback)
-            })
-          )
-          if (
-            !snapshot ||
-            decideSshReattachPaintSource({ ptyId, sshParkingEnabled, snapshot }) !==
-              'main-model-snapshot'
-          ) {
-            return null
-          }
-          return snapshot
-        }
-      )
+      const fetchSshMainModelReattachSnapshot = getSshMainModelSnapshotProbe(ptyId)
       // Why consume-once: only the first reattach of a reveal remount may pay
       // the probe; a later in-place reconnect on this same mount must not buy a
       // second timeout before the relay paint.
@@ -8188,6 +8265,7 @@ export function connectPanePty(
 
     const attachRetainedLegacyPty = (ptyId: string): boolean => {
       try {
+        authoritativeReattachGeneration += 1
         clearPaneMode2031State()
         clearHiddenOutputRestoreState()
         const outputCallbacks = captureTransportOutputCallbacks(reportError)
@@ -8245,6 +8323,8 @@ export function connectPanePty(
       )
       const legacyWorkerOwnsPane = isLegacyWorkerAutomaticResumeBlocked()
       if (gate.enterDeferredFlow && (!legacyWorkerOwnsPane || !gate.sshConnected)) {
+        // Paint main's parked model while SSH recovery continues off the render path.
+        prepaintParkedSshSnapshot(pendingSessionId)
         void (async () => {
           // Why: for a passphrase target with no cached credential, don't auto-fire ssh.connect — a prompt popping just from focusing a tab / Cmd+J would surprise the user.
           // Wait for a user-initiated connect first; no-passphrase targets return false here and auto-connect as before.
@@ -8607,6 +8687,7 @@ export function connectPanePty(
     if (deferredReattachSessionId) {
       allowInitialIdleCacheSeed = true
       recordPtyConnectDiagnostic(`pane=${pane.id} -> REATTACH ${deferredReattachSessionId}`)
+      prepaintParkedSshSnapshot(deferredReattachSessionId)
 
       // Why: pre-signal (declare) before the reattach connect so the cooperation gate suppresses the daemon seed for this paneKey; Electron preserves IPC order.
       // See docs/mobile-prefer-renderer-scrollback.md (Renderer-side prerequisite requirement #4).

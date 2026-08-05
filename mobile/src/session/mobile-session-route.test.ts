@@ -106,7 +106,19 @@ describe('mobile session route', () => {
     expect(end).toBeGreaterThan(start)
 
     const resumeCard = homeSource.slice(start, end)
-    expect(resumeCard).toContain('openMobileSession({')
+    expect(resumeCard).toContain('openResume(')
     expect(resumeCard).not.toContain('router.push(')
+
+    // The tap handler itself must go through the coordinated transition; its only
+    // direct push is the shallow noticed host-index route for a proven-missing target.
+    const handlerStart = homeSource.indexOf('const openResume = useCallback(')
+    const handlerEnd = homeSource.indexOf('[openMobileSession, router]', handlerStart)
+    expect(handlerStart).toBeGreaterThanOrEqual(0)
+    expect(handlerEnd).toBeGreaterThan(handlerStart)
+
+    const openResume = homeSource.slice(handlerStart, handlerEnd)
+    expect(openResume).toContain('openMobileSession({')
+    expect(openResume.match(/router\.push\(/g)).toHaveLength(1)
+    expect(openResume).toContain('router.push(hostRouteWithNotice(')
   })
 })

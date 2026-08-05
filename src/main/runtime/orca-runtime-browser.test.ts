@@ -42,7 +42,8 @@ const {
     ]),
     getDefaultProfile: vi.fn(),
     getProfile: vi.fn(),
-    resolveKnownPartition: vi.fn()
+    resolveKnownPartition: vi.fn(),
+    createProfile: vi.fn()
   }
 }))
 
@@ -129,6 +130,32 @@ describe('RuntimeBrowserCommands browser screencast', () => {
         return browserSessionRegistryMock.profiles.get(profileId)?.partition ?? null
       }
     )
+    browserSessionRegistryMock.createProfile.mockReset()
+  })
+
+  it('creates profiles with the requested user-agent mode', async () => {
+    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const profile = {
+      id: 'profile-google',
+      scope: 'isolated',
+      partition: 'persist:orca-browser-session-profile-google',
+      label: 'Google',
+      source: null,
+      userAgentMode: 'native'
+    }
+    browserSessionRegistryMock.createProfile.mockReturnValue(profile)
+    const commands = new RuntimeBrowserCommands(createHost())
+
+    await expect(
+      commands.browserProfileCreate({
+        label: 'Google',
+        scope: 'isolated',
+        userAgentMode: 'native'
+      })
+    ).resolves.toEqual({ profile })
+    expect(browserSessionRegistryMock.createProfile).toHaveBeenCalledWith('isolated', 'Google', {
+      userAgentMode: 'native'
+    })
   })
 
   it('waits for explicit worktree browser registration after requesting a hidden mount', async () => {

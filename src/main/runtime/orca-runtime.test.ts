@@ -6170,6 +6170,61 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  describe('checkRepoHooks status', () => {
+    const remoteStore = {
+      ...store,
+      getRepos: () => [
+        {
+          id: TEST_REPO_ID,
+          path: '/remote/repo',
+          displayName: 'repo',
+          badgeColor: 'blue',
+          addedAt: 1,
+          connectionId: 'ssh-1'
+        }
+      ]
+    }
+
+    it('reports an error when the SSH filesystem provider is unavailable', async () => {
+      const runtime = new OrcaRuntimeService(remoteStore as never)
+
+      await expect(runtime.checkRepoHooks('id:repo-1')).resolves.toEqual({
+        status: 'error',
+        hasHooks: false,
+        hooks: null,
+        mayNeedUpdate: false
+      })
+    })
+
+    it('reports ok for a missing remote orca.yaml and error for any other read failure', async () => {
+      const readFile = vi.fn()
+      registerSshFilesystemProvider('ssh-1', { readFile } as never)
+      const runtime = new OrcaRuntimeService(remoteStore as never)
+
+      try {
+        readFile.mockRejectedValueOnce(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+        await expect(runtime.checkRepoHooks('id:repo-1')).resolves.toMatchObject({
+          status: 'ok',
+          hasHooks: false
+        })
+
+        readFile.mockRejectedValueOnce(Object.assign(new Error('down'), { code: 'ECONNRESET' }))
+        await expect(runtime.checkRepoHooks('id:repo-1')).resolves.toMatchObject({
+          status: 'error',
+          hasHooks: false
+        })
+      } finally {
+        unregisterSshFilesystemProvider('ssh-1')
+      }
+    })
+
+    it('reports ok for a local repo hook check', async () => {
+      const runtime = new OrcaRuntimeService(store as never)
+
+      await expect(runtime.checkRepoHooks('id:repo-1')).resolves.toMatchObject({ status: 'ok' })
+    })
+  })
+
   it('resolves SSH issue commands from shared orca.yaml and deletes empty overrides', async () => {
     const remoteStore = {
       ...store,
@@ -20757,6 +20812,47 @@ describe('OrcaRuntimeService', () => {
         ]
       })
     ).rejects.toThrow('terminal_topology_conflict')
+  })
+
+  it('keeps orphaned list and show writability aligned with the send gate', async () => {
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: { [TEST_WORKTREE_ID]: [] }
+    })
+    const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
+    const writes: [string, string][] = []
+    runtime.setPtyController({
+      write: (ptyId: string, data: string) => {
+        writes.push([ptyId, data])
+        return true
+      },
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [
+        {
+          id: 'pty-orphan',
+          incarnationId: 'inc-orphan',
+          terminalHandle: 'term_orphan',
+          title: 'shell',
+          cwd: TEST_WORKTREE_PATH,
+          worktreeId: TEST_WORKTREE_ID,
+          wslDistro: null
+        }
+      ]
+    } as never)
+    runtime.registerPty('pty-orphan', TEST_WORKTREE_ID)
+    runtime.onPtySpawned('pty-orphan', 'inc-orphan', { awaitsRegistration: false })
+
+    const listed = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
+    const entry = listed.terminals.find((terminal) => terminal.ptyId === 'pty-orphan')
+    expect(entry).toMatchObject({ orphaned: true, connected: true, writable: true })
+
+    const shown = await runtime.showTerminal(entry!.handle)
+    expect(shown.writable).toBe(true)
+    await expect(runtime.sendTerminal(entry!.handle, { text: 'hi' })).resolves.toMatchObject({
+      accepted: true
+    })
+    expect(writes).toEqual([['pty-orphan', 'hi']])
   })
 
   it('rejects connection mismatch and reused handles while allowing a WSL-owned orphan', async () => {

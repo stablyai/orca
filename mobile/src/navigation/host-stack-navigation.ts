@@ -28,7 +28,9 @@ export type HostStackReplaceAction = Readonly<{
 export type HostStackRootNavigation = {
   addListener: (event: 'state', listener: () => void) => () => void
   dispatch: (action: HostStackReplaceAction) => void
-  getState: () => HostStackNavigationState
+  // Why: the root layout's navigator has no committed state until it hydrates, and a
+  // notification tap can arm the transition before that first commit.
+  getState: () => HostStackNavigationState | undefined
 }
 
 export type HostStackHostRoute = `/h/${string}`
@@ -68,15 +70,31 @@ function hostParamMatches(param: unknown, expectedHostId: string): boolean {
   }
 }
 
+/** The focused `h` route, however deep the caller's navigator sits above it: a screen
+ *  inside the root stack sees it at the top, but app/_layout.tsx is itself a screen of
+ *  Expo Router's internal navigator, so from there the root stack is one level down. */
+function focusedHostRoute(state: HostStackNavigationState): HostStackNavigationRoute | null {
+  let current: HostStackNavigationState | undefined = state
+  while (current) {
+    const route: HostStackNavigationRoute | undefined = current.routes[current.index]
+    if (!route) {
+      return null
+    }
+    if (route.name === 'h') {
+      return route
+    }
+    current = route.state
+  }
+  return null
+}
+
 function mountedHostStack(
-  state: HostStackNavigationState,
+  hostContainer: HostStackNavigationRoute,
   expectedHostId: string
 ): { key: string; routeKey: string } | null {
-  const hostContainer = state.routes[state.index]
-  const hostState = hostContainer?.state
+  const hostState = hostContainer.state
   const hostRoute = hostState?.routes[hostState.index]
   if (
-    hostContainer?.name !== 'h' ||
     !hostState?.key ||
     hostRoute?.name !== '[hostId]/index' ||
     !hostRoute.key ||
@@ -114,14 +132,17 @@ export function navigateToHostStackRoute(
       return
     }
     const state = navigation.getState()
-    const currentRoute = state.routes[state.index]
-    if (currentRoute?.name === 'h') {
+    if (!state) {
+      return
+    }
+    const hostContainer = focusedHostRoute(state)
+    if (hostContainer) {
       hostRouteSeen = true
     } else if (hostRouteSeen) {
       dispose()
       return
     }
-    const hostStack = mountedHostStack(state, hostId)
+    const hostStack = hostContainer && mountedHostStack(hostContainer, hostId)
     if (!hostStack) {
       return
     }

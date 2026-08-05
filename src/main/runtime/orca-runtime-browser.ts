@@ -49,7 +49,10 @@ import type {
   BrowserViewportResult,
   BrowserWaitResult
 } from '../../shared/runtime-types'
-import type { BrowserCertificateProceedResult } from '../../shared/types'
+import type {
+  BrowserCertificateProceedResult,
+  BrowserSessionUserAgentMode
+} from '../../shared/types'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import type { BrowserBackend } from '../browser/browser-backend'
 import { browserCertificateTrustController, browserManager } from '../browser/browser-manager'
@@ -1496,9 +1499,12 @@ export class RuntimeBrowserCommands {
   async browserProfileCreate(params: {
     label: string
     scope: 'isolated' | 'imported'
+    userAgentMode?: BrowserSessionUserAgentMode
   }): Promise<BrowserProfileCreateResult> {
     return {
-      profile: browserSessionRegistry.createProfile(params.scope, params.label)
+      profile: browserSessionRegistry.createProfile(params.scope, params.label, {
+        userAgentMode: params.userAgentMode
+      })
     }
   }
 

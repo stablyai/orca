@@ -124,6 +124,7 @@ import type {
   BrowserCertificateProceedResult,
   BrowserLoadError,
   BrowserSessionProfile,
+  BrowserSessionProfileCreateOptions,
   BrowserSessionProfileScope,
   BrowserSessionProfileSource,
   BrowserViewportOverride,
@@ -618,10 +619,12 @@ export type BrowserApi = {
     callback: (args: { browserPageId: string; key: 'c' | 's' }) => void
   ) => () => void
   sessionListProfiles: () => Promise<BrowserSessionProfile[]>
-  sessionCreateProfile: (args: {
-    scope: BrowserSessionProfileScope
-    label: string
-  }) => Promise<BrowserSessionProfile | null>
+  sessionCreateProfile: (
+    args: {
+      scope: BrowserSessionProfileScope
+      label: string
+    } & BrowserSessionProfileCreateOptions
+  ) => Promise<BrowserSessionProfile | null>
   sessionDeleteProfile: (args: { profileId: string }) => Promise<boolean>
   sessionImportCookies: (args: { profileId: string }) => Promise<BrowserCookieImportResult>
   sessionResolvePartition: (args: { profileId: string | null }) => Promise<string | null>

@@ -5636,7 +5636,8 @@
           "b4c167764d": "Imported {{value0}} cookies from file into {{value1}}.",
           "a3f8c2d1e0b4": "Imported {{value0}} cookies from {{value1}} ({{value2}}) into {{value3}}.",
           "b4e9d3f2a1c5": "Imported {{value0}} cookies from {{value1}} into {{value2}}.",
-          "c5a273a809": "From {{value0}}"
+          "c5a273a809": "From {{value0}}",
+          "b5c0479e21": "Unmodified user agent"
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "Open Computer Use",
@@ -13769,6 +13770,16 @@
                 "suggestions": {
                   "87fcdd0da9": "{{value0}} Search"
                 }
+              }
+            }
+          }
+        },
+        "profile": {
+          "user": {
+            "agent": {
+              "option": {
+                "04af3dc12b": "Use unmodified user agent",
+                "5bf47a3c91": "May improve Google sign-in, but can reduce compatibility with bot-protected sites."
               }
             }
           }

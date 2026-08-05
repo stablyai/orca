@@ -813,7 +813,10 @@ const TerminalListParams = z.object({
     .array(requiredString('Missing terminal handle').pipe(z.string().max(256)))
     .max(64)
     .optional(),
-  requireFreshPtyLiveness: z.boolean().optional()
+  requireFreshPtyLiveness: z.boolean().optional(),
+  // Why: layouts are ~31% of a large listing and only the human CLI formatter
+  // reads them. Absent means "include" so pre-flag clients keep rendering them.
+  includeVisualLayouts: z.boolean().optional()
 })
 
 const TerminalResolveActive = z.object({
@@ -1108,7 +1111,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     handler: async (params, { runtime }) =>
       runtime.listTerminals(params.worktree, params.limit, {
         handles: params.handles,
-        requireFreshPtyLiveness: params.requireFreshPtyLiveness
+        requireFreshPtyLiveness: params.requireFreshPtyLiveness,
+        includeVisualLayouts: params.includeVisualLayouts
       })
   }),
   defineMethod({

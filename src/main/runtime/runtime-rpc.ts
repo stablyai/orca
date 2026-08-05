@@ -1166,6 +1166,8 @@ export class OrcaRuntimeRpcServer {
 
     // Why: WebSocket uses per-device tokens + E2EE (tweetnacl) instead of TLS since React Native can't pin self-signed certs.
     if (this.enableWebSocket) {
+      // Why: land any deferred lastSeen write before a replacement registry reads the same file.
+      this.deviceRegistry?.flushPendingLastSeen()
       const pairingIdentity = this.initializePairingIdentity()
       if (!pairingIdentity.ok) {
         this.deviceRegistry = null
@@ -1497,10 +1499,15 @@ export class OrcaRuntimeRpcServer {
     this.metadataOwnershipWatch = null
     this.mobileSocketWiring = null
     this.detachWebSocketWiring = null
-    if (transports.length === 0) {
-      return
+    const stopResults = await Promise.allSettled(
+      transports.map(async (transport) => transport.stop())
+    )
+    // Why: before-quit fences relay input; direct auth can still refresh lastSeen while these transports close.
+    this.deviceRegistry?.flushPendingLastSeen()
+    const failedStop = stopResults.find((result) => result.status === 'rejected')
+    if (failedStop?.status === 'rejected') {
+      throw failedStop.reason
     }
-    await Promise.all(transports.map((t) => t.stop()))
     // Why: leave the metadata file on shutdown — shared userData may host another live runtime whose bootstrap file we'd erase.
   }
 

@@ -108,7 +108,8 @@ async function waitForLegacySleepConvergence(
         {
           worktree: worktreeSelector,
           limit: 10_000,
-          requireFreshPtyLiveness: true
+          requireFreshPtyLiveness: true,
+          includeVisualLayouts: false
         },
         { timeoutMs: listTimeoutMs }
       )

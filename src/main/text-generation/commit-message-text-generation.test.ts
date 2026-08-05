@@ -2307,18 +2307,32 @@ describe('linkedIssue template substitution', () => {
     expect(prompt).not.toContain('linkedIssue')
   })
 
-  it('leaves the built-in pull-request prompt free of issue guidance', async () => {
+  it('includes the linked issue in the built-in pull-request prompt', async () => {
     let prompt = ''
     await generatePullRequestFieldsFromContext(
-      { ...PULL_REQUEST_CONTEXT, linkedIssue: BUILT_IN_PROMPT_SENTINEL_ISSUE },
+      {
+        ...PULL_REQUEST_CONTEXT,
+        linkedIssue: BUILT_IN_PROMPT_SENTINEL_ISSUE,
+        provider: 'gitlab',
+        linkedIssueDetails: {
+          provider: 'gitlab',
+          number: BUILT_IN_PROMPT_SENTINEL_ISSUE,
+          title: 'Stop phantom polling',
+          description: 'Avoid paths that cannot exist on this host.'
+        }
+      },
       builtInPromptParams,
       capturingTarget((value) => {
         prompt = value
       })
     )
 
-    expect(prompt).not.toContain(String(BUILT_IN_PROMPT_SENTINEL_ISSUE))
-    expect(prompt).not.toContain('linkedIssue')
+    expect(prompt).toContain(`Linked GitLab issue: #${BUILT_IN_PROMPT_SENTINEL_ISSUE}`)
+    expect(prompt).toContain(`Closes #${BUILT_IN_PROMPT_SENTINEL_ISSUE}`)
+    expect(prompt).toContain(`Related to #${BUILT_IN_PROMPT_SENTINEL_ISSUE}`)
+    expect(prompt).toContain('Stop phantom polling')
+    expect(prompt).toContain('Avoid paths that cannot exist on this host.')
+    expect(prompt).not.toContain('GitHub issue')
   })
 
   it('substitutes the linked issue into the pull-request prompt', async () => {

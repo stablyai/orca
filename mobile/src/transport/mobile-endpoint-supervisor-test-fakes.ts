@@ -72,17 +72,31 @@ export class FakeLogicalClient extends FakeSession implements StableLogicalRpcCl
     this.path = path
   }
 
-  migrateTo = vi.fn(async (session: RpcClient, path: MobileConnectionPath) => {
-    if (session.getState() !== 'connected') {
-      session.close()
-      throw new Error(`replacement session ${session.getState()}`)
+  migrateTo = vi.fn(
+    async (
+      session: RpcClient,
+      path: MobileConnectionPath,
+      _timeoutMs?: number,
+      shouldAbort?: () => boolean
+    ) => {
+      if (session.getState() !== 'connected') {
+        session.close()
+        throw new Error(`replacement session ${session.getState()}`)
+      }
+      // Mirrors the real client: a racing caller withdraws after auth, before the swap.
+      if (shouldAbort?.()) {
+        session.close()
+        throw new Error('migration superseded')
+      }
+      this.path = path
+      this.generation += 1
+      this.publishState('connected')
     }
-    this.path = path
-    this.generation += 1
-    this.publishState('connected')
-  })
+  )
   suspendActiveSession = vi.fn(() => this.publishState('disconnected'))
   getActivePath = () => this.path
+  // This fake migrates instantly, so no dial is ever in flight to name.
+  getPendingPath = () => null
   getGeneration = () => this.generation
 }
 

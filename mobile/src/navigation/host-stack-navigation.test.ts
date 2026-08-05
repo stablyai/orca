@@ -14,7 +14,7 @@ const OTHER_TARGET = {
 
 // Removal is modeled for real: a no-op unsubscribe would let `setState` keep
 // calling a canceled listener, testing the `active` guard instead of teardown.
-function navigationHarness(initialState: HostStackNavigationState) {
+function navigationHarness(initialState: HostStackNavigationState | undefined) {
   const stateListeners = new Set<() => void>()
   let state = initialState
   const unsubscribe = vi.fn()
@@ -33,7 +33,7 @@ function navigationHarness(initialState: HostStackNavigationState) {
     navigation,
     unsubscribe,
     listenerCount: () => stateListeners.size,
-    setState(nextState: HostStackNavigationState) {
+    setState(nextState: HostStackNavigationState | undefined) {
       state = nextState
       for (const listener of stateListeners) {
         listener()
@@ -58,6 +58,12 @@ function committedHostState(hostIdParam: string): HostStackNavigationState {
   }
 }
 
+// The shape app/_layout.tsx sees: Expo Router mounts it as a screen of its own internal
+// navigator, so every route the host stack lives in sits one level below.
+function rootLayoutScopedState(inner: HostStackNavigationState): HostStackNavigationState {
+  return { key: 'internal', index: 0, routes: [{ key: '__root', name: '__root', state: inner }] }
+}
+
 describe('host stack navigation', () => {
   it('matches a host committed as the encoded segment it was pushed as', () => {
     const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
@@ -76,6 +82,46 @@ describe('host stack navigation', () => {
       source: 'host-index',
       payload: TARGET
     })
+  })
+
+  it('replaces the host stack seen from the root layout, one navigator further down', () => {
+    const harness = navigationHarness(
+      rootLayoutScopedState({ index: 0, routes: [{ name: 'index' }] })
+    )
+
+    navigateToHostStackRoute(harness.navigation, { push: vi.fn() }, 'host/one', TARGET)
+    harness.setState(rootLayoutScopedState(committedHostState('host/one')))
+
+    expect(harness.navigation.dispatch).toHaveBeenCalledWith({
+      type: 'REPLACE',
+      target: '/h',
+      source: 'host-index',
+      payload: TARGET
+    })
+  })
+
+  it('survives the state emitted before the root navigator has hydrated', () => {
+    const harness = navigationHarness(undefined)
+
+    navigateToHostStackRoute(harness.navigation, { push: vi.fn() }, 'host/one', TARGET)
+
+    expect(() => harness.setState(undefined)).not.toThrow()
+    expect(harness.navigation.dispatch).not.toHaveBeenCalled()
+
+    harness.setState(rootLayoutScopedState(committedHostState('host/one')))
+    expect(harness.navigation.dispatch).toHaveBeenCalledTimes(1)
+  })
+
+  it('abandons the transition when navigation leaves the host route it was waiting on', () => {
+    const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
+
+    navigateToHostStackRoute(harness.navigation, { push: vi.fn() }, 'host/one', TARGET)
+    harness.setState({ index: 0, routes: [{ name: 'h' }] })
+    harness.setState({ index: 0, routes: [{ name: 'index' }] })
+    harness.setState(committedHostState('host/one'))
+
+    expect(harness.navigation.dispatch).not.toHaveBeenCalled()
+    expect(harness.listenerCount()).toBe(0)
   })
 
   it('ignores a different host whose id merely decodes badly', () => {

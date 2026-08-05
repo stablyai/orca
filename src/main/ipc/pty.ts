@@ -334,6 +334,39 @@ const pendingRuntimePaneCreatesByOwnerKey = new Map<string, PendingRuntimePaneCr
 const agentSessionOwners = new ClaimedAgentPtyOwnerRegistry()
 let agentSessionOwnerReconciliation: Promise<void> | null = null
 
+// Why: restore payloads (reattach snapshot / cold-restore scrollback / relay
+// replay + lastTitle) ride spawn RPC results, never onPtyData, so EVERY spawn
+// choke point — renderer pty:spawn and the runtime controller — must seed the
+// terminal list/read records or headless/CLI-created reattaches stay blank.
+// The runtime's empty-record guard makes a second seed for the same session a
+// no-op, so overlapping paths cannot double-apply history.
+function seedTerminalRestoreRecordsFromSpawnResult(
+  runtime: OrcaRuntimeService | undefined,
+  result: PtySpawnResult
+): void {
+  const text =
+    typeof result.snapshot === 'string' && result.snapshot.length > 0
+      ? result.snapshot
+      : typeof result.coldRestore?.scrollback === 'string' &&
+          result.coldRestore.scrollback.length > 0
+        ? result.coldRestore.scrollback
+        : typeof result.replay === 'string' && result.replay.length > 0
+          ? result.replay
+          : undefined
+  const lastTitle =
+    typeof result.lastTitle === 'string' && result.lastTitle.length > 0
+      ? result.lastTitle
+      : typeof result.coldRestore?.lastTitle === 'string' && result.coldRestore.lastTitle.length > 0
+        ? result.coldRestore.lastTitle
+        : undefined
+  if (text !== undefined || lastTitle !== undefined) {
+    runtime?.seedTerminalRestoreTail?.(result.id, {
+      ...(text !== undefined ? { text } : {}),
+      ...(lastTitle !== undefined ? { lastTitle } : {})
+    })
+  }
+}
+
 function assertSpawnReplyWasLive(result: PtySpawnResult): void {
   if (!result.exitedBeforeSpawnReply) {
     return
@@ -4033,7 +4066,7 @@ export function registerPtyHandlers(
   }
 
   type CodexResumeLaunch = {
-    codexResumeHome: { codexHomePath: string } | null
+    codexResumeHome: Extract<CodexSessionResumePreparation, { outcome: 'resume' }> | null
     command: string | undefined
     notifyResumeUnavailable: boolean
     droppedResumeArgv: boolean
@@ -4084,6 +4117,20 @@ export function registerPtyHandlers(
         providerSession
       }
     })
+
+  const reconcileSharedRuntimeResumeHome = (
+    resumeHome: Extract<CodexSessionResumePreparation, { outcome: 'resume' }>,
+    resolveCurrentHome: () => string | null
+  ): string => {
+    if (!resumeHome.reconcileSharedRuntimeAuth) {
+      return resumeHome.codexHomePath
+    }
+    const currentHome = resolveCurrentHome()
+    if (!codexHomePathsEqual(currentHome, resumeHome.codexHomePath)) {
+      throw new Error(CODEX_RESUME_AUTH_UNAVAILABLE_MESSAGE)
+    }
+    return resumeHome.codexHomePath
+  }
 
   /** Why: buildPtyHostEnv prefers ORCA_SEQUENCED_STARTUP_COMMAND over the launch command
    *  and the sequenced wrapper `eval`s it, so a dropped resume argv has to go there too. */
@@ -4362,7 +4409,15 @@ export function registerPtyHandlers(
           ? getCompatibleSelectedCodexHomePath(
               codexSelectionTarget,
               codexResumeHome
-                ? codexResumeHome.codexHomePath
+                ? reconcileSharedRuntimeResumeHome(codexResumeHome, () =>
+                    getCompatibleSelectedCodexHomePath(
+                      codexSelectionTarget,
+                      getSelectedCodexHomePath?.(codexSelectionTarget, env, {
+                        workspacePath: cwd,
+                        launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
+                      }) ?? null
+                    )
+                  )
                 : (getSelectedCodexHomePath?.(codexSelectionTarget, env, {
                     workspacePath: cwd,
                     launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
@@ -4974,6 +5029,8 @@ export function registerPtyHandlers(
           // Why: non-worktree PTYs have no later surface-registration phase to clear admission intent.
           runtime?.cancelPendingPtyRegistration?.(result.id, result.incarnationId)
         }
+        // Why: runtime-controller creates (headless serve, CLI, splits) adopt surviving daemon sessions too; without this seed their records stay blank.
+        seedTerminalRestoreRecordsFromSpawnResult(runtime, result)
         // Why: arms main's per-PTY Command Code output detector from the launch command (renderer startupCommand parity).
         if (!stablePaneOwner) {
           runtime?.noteTerminalSpawnCommand?.(result.id, launchCommand ?? null)
@@ -5062,6 +5119,58 @@ export function registerPtyHandlers(
     write: (ptyId, data) => {
       try {
         getProviderForPty(ptyId).write(ptyId, data)
+        return true
+      } catch {
+        return false
+      }
+    },
+    probePtyLiveness: async (ptyId) => {
+      try {
+        // Why: no locally routed provider can authoritatively answer for a
+        // remote host's PTY, so remote-scoped ids stay unknown, never absent.
+        if (ptyId.startsWith('remote:')) {
+          return null
+        }
+        const connectionId = ptyOwnership.get(ptyId) ?? parseAppSshPtyId(ptyId)?.connectionId
+        // Why: during cold start the daemon swap is in flight; the pre-swap
+        // fallback would answer absent for every daemon-owned id.
+        const startupPromise = getLocalPtyProviderStartupPromise(connectionId)
+        if (startupPromise) {
+          await startupPromise
+        }
+        const provider = getProviderForPty(ptyId)
+        if (provider.probePtyLiveness) {
+          return await provider.probePtyLiveness(ptyId)
+        }
+        // Why: the in-process provider is its own sole owner (#12393), so its
+        // refusal is authoritative; every other probe-less provider is doubt.
+        if (provider instanceof LocalPtyProvider) {
+          return provider.hasPty(ptyId)
+        }
+        return null
+      } catch {
+        return null
+      }
+    },
+    // Why: subscriber-driven ingestion for daemon sessions no renderer pane
+    // ever attached. Local daemon sessions only — SSH panes have their own
+    // lease machinery, and the in-process local provider streams without
+    // attach. Attach-only and false-on-doubt: never creates or resizes.
+    attach: async (ptyId) => {
+      if (ptyOwnership.get(ptyId) != null || parseAppSshPtyId(ptyId)) {
+        return false
+      }
+      let provider: IPtyProvider
+      try {
+        provider = getProviderForPty(ptyId)
+      } catch {
+        return false
+      }
+      if (provider !== localProvider || provider instanceof LocalPtyProvider) {
+        return false
+      }
+      try {
+        await provider.attach(ptyId)
         return true
       } catch {
         return false
@@ -5745,7 +5854,15 @@ export function registerPtyHandlers(
             ? getCompatibleSelectedCodexHomePath(
                 codexSelectionTarget,
                 codexResumeHome
-                  ? codexResumeHome.codexHomePath
+                  ? reconcileSharedRuntimeResumeHome(codexResumeHome, () =>
+                      getCompatibleSelectedCodexHomePath(
+                        codexSelectionTarget,
+                        getSelectedCodexHomePath?.(codexSelectionTarget, baseEnv, {
+                          workspacePath: cwd,
+                          launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
+                        }) ?? null
+                      )
+                    )
                   : (getSelectedCodexHomePath?.(codexSelectionTarget, baseEnv, {
                       workspacePath: cwd,
                       launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
@@ -6309,6 +6426,10 @@ export function registerPtyHandlers(
           runtime?.cancelPendingPtyRegistration?.(pendingRegistrationPtyId, result.incarnationId)
           pendingRegistrationPtyId = null
         }
+        // Why: seed after registerPty binds the worktree — including on
+        // desktop, where the renderer-authority gate above skips the emulator
+        // seed but the list/read records still live main-side.
+        seedTerminalRestoreRecordsFromSpawnResult(runtime, result)
         // Why: arm main's per-PTY Command Code output detector from the launch command (startupCommand parity); banner detection covers PTYs without one.
         if (!stablePaneOwner) {
           runtime?.noteTerminalSpawnCommand?.(

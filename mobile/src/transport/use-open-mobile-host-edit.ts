@@ -1,29 +1,14 @@
-import { useCallback, useEffect, useRef } from 'react'
-import { useNavigation, useRouter } from 'expo-router'
-import {
-  navigateToMobileHostEdit,
-  type MobileHostEditNavigationController,
-  type MobileHostEditRootNavigation
-} from './host-edit-navigation'
+import { useCallback } from 'react'
+import { useOpenHostStackRoute } from '../navigation/use-open-host-stack-route'
+import { mobileHostEditRouteTarget } from './host-edit-navigation'
 
 export function useOpenMobileHostEdit(): (hostId: string) => void {
-  const navigation = useNavigation<MobileHostEditRootNavigation>()
-  const router = useRouter()
-  const pendingRef = useRef<MobileHostEditNavigationController | null>(null)
-
-  useEffect(
-    () => () => {
-      pendingRef.current?.cancel()
-      pendingRef.current = null
-    },
-    []
-  )
+  const openHostStackRoute = useOpenHostStackRoute()
 
   return useCallback(
     (hostId) => {
-      pendingRef.current?.cancel()
-      pendingRef.current = navigateToMobileHostEdit(navigation, router, hostId)
+      openHostStackRoute(hostId, mobileHostEditRouteTarget(hostId))
     },
-    [navigation, router]
+    [openHostStackRoute]
   )
 }

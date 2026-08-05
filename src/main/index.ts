@@ -1021,7 +1021,7 @@ async function prepareCodexSessionResumeForLaunch(args: {
   const settingsStore = store
   // Why: a `fresh` outcome must skip migration, trust and hook repair entirely — there is
   // no verified origin home to prepare, so the PTY layer drops the resume argv (#10793).
-  return prepareCodexSessionResume({
+  const preparation = await prepareCodexSessionResume({
     sessionId: args.providerSession.id,
     transcriptPath: args.providerSession.transcriptPath,
     trustedCodexHomes: trustedHomes,
@@ -1083,6 +1083,14 @@ async function prepareCodexSessionResumeForLaunch(args: {
       return resumeHome
     }
   })
+  return preparation.outcome === 'resume'
+    ? {
+        ...preparation,
+        reconcileSharedRuntimeAuth:
+          normalizeRuntimePathForComparison(preparation.codexHomePath) ===
+          normalizeRuntimePathForComparison(getOrcaManagedCodexHomePath())
+      }
+    : preparation
 }
 
 // Why: restore the window the close handler may have hidden to tray, or reopen it (dock-reactivation style) if fully torn down.
