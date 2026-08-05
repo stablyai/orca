@@ -66,6 +66,10 @@ import {
   type RelayGraceBranch
 } from './relay-grace-branch'
 import { relayLogLine } from './relay-diagnostic-log'
+import {
+  publishRelayOwnerManifest,
+  removeRelayOwnerManifestForGeneration
+} from './relay-owner-manifest-publication'
 import { remoteCliRequestTimeoutMs } from './remote-cli-timeout'
 import { shouldReadRemoteCliStdin } from './remote-cli-stdin'
 import { registerManagedHookInstaller } from './managed-hook-installer'
@@ -130,6 +134,7 @@ function parseArgs(argv: string[]): {
   endpointDir?: string
   logFile?: string
   credentialFile?: string
+  ownerToken?: string
 } {
   let graceTimeMs = DEFAULT_GRACE_MS
   let connectMode = false
@@ -139,6 +144,7 @@ function parseArgs(argv: string[]): {
   let endpointDir: string | undefined
   let logFile: string | undefined
   let credentialFile: string | undefined
+  let ownerToken: string | undefined
   for (let i = 2; i < argv.length; i++) {
     if (argv[i] === '--grace-time' && argv[i + 1]) {
       const parsed = Number.parseInt(argv[i + 1], 10)
@@ -165,6 +171,11 @@ function parseArgs(argv: string[]): {
     } else if (argv[i] === '--credential-file' && argv[i + 1]) {
       credentialFile = argv[i + 1]
       i++
+    } else if (argv[i] === '--owner-token' && argv[i + 1]) {
+      // Why: the same token the launching client greps for in this process's argv, so a later
+      // reconnect failure can prove which generation owns the socket before signalling anything.
+      ownerToken = argv[i + 1]
+      i++
     }
   }
   if (!sockPath) {
@@ -178,7 +189,8 @@ function parseArgs(argv: string[]): {
     sockPath,
     endpointDir,
     logFile,
-    credentialFile
+    credentialFile,
+    ownerToken
   }
 }
 
@@ -507,7 +519,8 @@ async function main(): Promise<void> {
     sockPath,
     endpointDir,
     logFile,
-    credentialFile
+    credentialFile,
+    ownerToken
   } = parseArgs(process.argv)
   const endpointCredential = readEndpointCredential(credentialFile)
 
@@ -547,6 +560,11 @@ async function main(): Promise<void> {
   const cleanupOwnedSocket = (): void => {
     if (ownsCurrentSocketPath()) {
       cleanupSocket(sockPath)
+    }
+    // Why: generation-scoped, so a successor that already republished the manifest keeps its own —
+    // this runs even when the socket is gone, which is exactly when our manifest would be litter.
+    if (ownerToken !== undefined) {
+      removeRelayOwnerManifestForGeneration(sockPath, ownerToken)
     }
     ownsSocketPath = false
     ownedSocketIdentity = null
@@ -1149,9 +1167,32 @@ async function main(): Promise<void> {
 
   try {
     socketServer = await startSocketServer()
+    // Why: the manifest is the client's only proof of which process owns this socket. Publish it
+    // after ownership is proven and before anything else, and fail closed if it cannot be written
+    // securely — a relay nobody can identify is exactly the orphan this guards against (#8585).
+    if (ownerToken !== undefined && !isWindowsNamedPipePath(sockPath)) {
+      // Why: re-stat rather than trust the bind-time identity — the manifest must describe the
+      // socket this process owns *now*, and losing it between listen and publish must fail closed.
+      const identity = ownsCurrentSocketPath() ? readSocketIdentity(sockPath) : null
+      if (identity === null) {
+        throw new Error(`Relay no longer owns ${sockPath}; refusing to publish an owner manifest`)
+      }
+      publishRelayOwnerManifest({
+        sockPath,
+        generation: ownerToken,
+        pid: process.pid,
+        socketDev: identity.dev,
+        socketIno: identity.ino,
+        socketCtimeNs: identity.ctimeNs
+      })
+    }
     // Why: publish endpoint.env only after socket ownership is proven, so a refused duplicate daemon can't poison hook coordinates.
     hookServer.publishEndpointFile()
-  } catch {
+  } catch (err) {
+    relayLogLine(
+      `[relay] Startup failed: ${err instanceof Error ? err.message : String(err)}; releasing owned artifacts`
+    )
+    cleanupOwnedSocket()
     process.exit(1)
   }
 
