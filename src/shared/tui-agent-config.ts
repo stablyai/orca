@@ -306,6 +306,13 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     expectedProcess: 'devin',
     // Why: `devin -- <prompt>` auto-submits immediately (docs.devin.ai/cli), so start the REPL with no argv prompt.
     promptInjectionMode: 'stdin-after-start'
+  },
+  reasonix: {
+    detectCmd: 'reasonix',
+    launchCmd: 'reasonix',
+    expectedProcess: 'reasonix',
+    // Why: reasonix's prompt contract is unverified; start bare and inject after startup, like aider/goose.
+    promptInjectionMode: 'stdin-after-start'
   }
 }
 

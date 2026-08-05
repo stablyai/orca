@@ -114,6 +114,12 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://docs.trae.cn/cli_get-started-with-trae-cli'
   },
   {
+    id: 'reasonix',
+    label: translate('auto.lib.agent.catalog.reasonix', 'Reasonix'),
+    cmd: 'reasonix',
+    homepageUrl: 'https://github.com/esengine/DeepSeek-Reasonix'
+  },
+  {
     id: 'pi',
     label: translate('auto.lib.agent.catalog.302934c5d9', 'Pi'),
     cmd: 'pi',
