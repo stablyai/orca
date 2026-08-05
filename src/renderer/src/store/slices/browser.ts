@@ -9,6 +9,7 @@ import type {
   BrowserLoadError,
   BrowserPage,
   BrowserSessionProfile,
+  BrowserSessionProfileCreateOptions,
   BrowserViewportPresetId,
   BrowserWorkspace,
   WorkspaceSessionState
@@ -195,7 +196,8 @@ export type BrowserSlice = {
   fetchBrowserSessionProfiles: () => Promise<void>
   createBrowserSessionProfile: (
     scope: 'isolated' | 'imported',
-    label: string
+    label: string,
+    options?: BrowserSessionProfileCreateOptions
   ) => Promise<BrowserSessionProfile | null>
   deleteBrowserSessionProfile: (profileId: string) => Promise<boolean>
   importCookiesToProfile: (profileId: string) => Promise<BrowserCookieImportResult>
@@ -1841,7 +1843,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     }
   },
 
-  createBrowserSessionProfile: async (scope, label) => {
+  createBrowserSessionProfile: async (scope, label, options) => {
     const hostId = getBrowserSettingsHostId(get())
     const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(get())
     if (runtimeEnvironmentId) {
@@ -1849,7 +1851,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         const result = await callRuntimeRpc<BrowserProfileCreateResult>(
           { kind: 'environment', environmentId: runtimeEnvironmentId },
           'browser.profileCreate',
-          { scope, label },
+          { scope, label, ...options },
           { timeoutMs: 15_000 }
         )
         const profile = result.profile
@@ -1870,7 +1872,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     try {
       const profile = (await window.api.browser.sessionCreateProfile({
         scope,
-        label
+        label,
+        ...options
       })) as BrowserSessionProfile | null
       if (profile) {
         set((s) => ({

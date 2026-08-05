@@ -32,6 +32,8 @@ export type RpcClientContextValue = {
   forceReconnect: (hostId: string) => Promise<void>
   closeHost: (hostId: string) => void
   getState: (hostId: string) => ConnectionState
+  // null = host has no client entry and no open in flight; callers pick the default.
+  getKnownState: (hostId: string) => ConnectionState | null
   getReconnectAttempt: (hostId: string) => number
   // Why: ms-epoch of the last 'connected' (null if never this session); UI escalates "Reconnecting…" into a re-pair prompt.
   getLastConnectedAt: (hostId: string) => number | null
@@ -95,6 +97,8 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
       resolve = res
     })
     const pendingOpen = pendingOpensRef.current.register(hostId, promise)
+    // Why: already-mounted subscribers must go amber for the Keychain read too.
+    notifyHostState(hostId, 'connecting')
 
     try {
       // Why: prefer the primed cache so we don't serialize a second Keychain pass on cold start.
@@ -209,6 +213,8 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
         entry.client.close()
         storeRef.current.delete(hostId)
       }
+      // Why: Retry must read amber for the whole reopen, not grey-then-amber.
+      notifyHostState(hostId, 'connecting')
       const fresh = await openEntry(hostId)
       if (fresh) {
         fresh.refCount = savedRefCount
@@ -217,9 +223,21 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
     [openEntry]
   )
 
-  const getState = useCallback((hostId: string): ConnectionState => {
-    return storeRef.current.get(hostId)?.state ?? 'disconnected'
+  // null = no entry and no open in flight; callers pick their own default.
+  const getKnownState = useCallback((hostId: string): ConnectionState | null => {
+    const entry = storeRef.current.get(hostId)
+    if (entry) {
+      return entry.state
+    }
+    // Why: the async open (a Keychain pass) predates the store entry; reading that
+    // window as 'disconnected' made every host screen flash dead on mount (S2).
+    return pendingOpensRef.current.getActivePromise(hostId) ? 'connecting' : null
   }, [])
+
+  const getState = useCallback(
+    (hostId: string): ConnectionState => getKnownState(hostId) ?? 'disconnected',
+    [getKnownState]
+  )
 
   const getReconnectAttempt = useCallback((hostId: string): number => {
     return storeRef.current.get(hostId)?.client.getReconnectAttempt() ?? 0
@@ -284,9 +302,9 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
 
   // Why: nudge live clients when the OS signals the link may be back so sessions recover without a restart (issue #5049).
   useEffect(() => {
-    return subscribeConnectionRevivalTriggers(() => {
+    return subscribeConnectionRevivalTriggers((reason) => {
       for (const entry of storeRef.current.values()) {
-        entry.client.notifyForeground()
+        entry.client.notifyForeground(reason)
       }
     })
   }, [])
@@ -298,6 +316,7 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
       forceReconnect,
       closeHost: closeEntry,
       getState,
+      getKnownState,
       getReconnectAttempt,
       getLastConnectedAt,
       getActivePath,
@@ -312,6 +331,7 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
       forceReconnect,
       closeEntry,
       getState,
+      getKnownState,
       getReconnectAttempt,
       getLastConnectedAt,
       getActivePath,
@@ -340,8 +360,10 @@ export function useHostClient(hostId: string | undefined): {
 } {
   const ctx = useRpcClientContext()
   const [, force] = useState(0)
+  // Why: an absent entry at mount is almost always the open racing the render, not a
+  // dead host — seed amber; a failed open notifies 'disconnected' moments later.
   const [state, setState] = useState<ConnectionState>(() =>
-    hostId ? ctx.getState(hostId) : 'disconnected'
+    hostId ? (ctx.getKnownState(hostId) ?? 'connecting') : 'disconnected'
   )
   const clientRef = useRef<RpcClient | null>(null)
   const clientHostIdRef = useRef<string | undefined>(hostId)
@@ -374,7 +396,7 @@ export function useHostClient(hostId: string | undefined): {
     })
     const initial = ctx.acquire(hostId)
     clientRef.current = initial
-    setState(ctx.getState(hostId))
+    setState(ctx.getKnownState(hostId) ?? 'connecting')
     if (initial) {
       // Why: two cached hosts can both be connected, so equal state values cannot reveal the replacement client.
       force((n) => n + 1)
@@ -390,61 +412,12 @@ export function useHostClient(hostId: string | undefined): {
 
   // Why: Expo can reuse the screen before effects bind the next host; never expose the prior host's client or state in that render.
   const bound = clientHostIdRef.current === hostId
-  const boundState = bound ? state : hostId ? ctx.getState(hostId) : 'disconnected'
+  const boundState = bound
+    ? state
+    : hostId
+      ? (ctx.getKnownState(hostId) ?? 'connecting')
+      : 'disconnected'
   return { client: bound ? clientRef.current : null, state: boundState }
-}
-
-// Why: refcounting prevents a double-open when a host-detail screen shares one of these hosts.
-export function useAllHostClients(hostIds: string[]) {
-  const ctx = useRpcClientContext()
-  // Stable key so we don't tear down on every render of the array.
-  const key = useMemo(() => [...hostIds].sort().join(','), [hostIds])
-  const [tick, setTick] = useState(0)
-
-  useEffect(() => {
-    if (hostIds.length === 0) {
-      return
-    }
-    for (const id of hostIds) {
-      ctx.acquire(id)
-    }
-    const unsubs: Array<() => void> = []
-    for (const id of hostIds) {
-      unsubs.push(ctx.subscribeHostState(id, () => setTick((n) => n + 1)))
-    }
-    unsubs.push(ctx.subscribeAllHosts(() => setTick((n) => n + 1)))
-    return () => {
-      for (const u of unsubs) {
-        u()
-      }
-      for (const id of hostIds) {
-        ctx.release(id)
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key])
-
-  return useMemo(() => {
-    const out: Array<{
-      hostId: string
-      client: RpcClient
-      state: ConnectionState
-      path: MobileConnectionPath
-    }> = []
-    for (const id of hostIds) {
-      const all = ctx.getAllClients().find((entry) => entry.hostId === id)
-      if (all) {
-        out.push({
-          hostId: id,
-          client: all.client,
-          state: ctx.getState(id),
-          path: ctx.getActivePath(id)
-        })
-      }
-    }
-    return out
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, tick])
 }
 
 // Why: host-store's removeHost() must close the live client but has no React-side handle; this hook bridges to it.
@@ -467,5 +440,10 @@ export function usePrimeHosts(): (hosts: HostProfile[]) => void {
 
 function clientActivePath(client: RpcClient | undefined): MobileConnectionPath {
   const logical = client as Partial<StableLogicalRpcClient> | undefined
-  return typeof logical?.getActivePath === 'function' ? logical.getActivePath() : 'lan'
+  if (typeof logical?.getActivePath !== 'function') {
+    return 'lan'
+  }
+  // Why: mid-migration the active path still names the session being replaced; the
+  // pending one is what the user is actually waiting on (F5).
+  return logical.getPendingPath?.() ?? logical.getActivePath()
 }

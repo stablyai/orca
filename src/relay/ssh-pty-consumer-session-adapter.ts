@@ -95,12 +95,12 @@ export class SshPtyConsumerSessionAdapter {
     dispatcher.onRequest(SSH_PTY_OPEN_CLIENT_METHOD, (params, context) =>
       this.openClient(params, context)
     )
-    dispatcher.onClientDetached((clientId) => {
+    dispatcher.onClientDetached((clientId, cause) => {
       const grant = this.session.activeGrant(String(clientId))
       if (grant) {
         this.clearPausedForGrant(grant)
       }
-      this.session.close(String(clientId))
+      this.session.close(String(clientId), cause)
       if (grant) {
         this.sourceCredit.retainOrCloseOnDetach(grant)
       }

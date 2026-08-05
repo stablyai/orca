@@ -257,8 +257,8 @@ describe('resumeTerminalVisibility reveal repaint', () => {
     // every refocus forces a mass re-rasterization that can hit xterm's atlas
     // page-merge race (#4480) and garble streaming panes. Focus recovery must
     // resume rendering and present WITHOUT the atlas-clearing reveal repaint —
-    // scheduleRevealRepaint clears each pane's (shared) atlas, so the refocus
-    // path must route to the atlas-preserving present instead.
+    // scheduleRevealRepaint runs shared-atlas recovery, so the refocus path
+    // must route to the atlas-preserving present instead.
     const { resetAndRefreshAllTerminalWebglAtlases } = vi.mocked(
       await import('@/lib/pane-manager/pane-manager-registry')
     )

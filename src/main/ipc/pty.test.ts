@@ -9,7 +9,7 @@ import {
 } from '../../shared/terminal-input'
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../shared/clipboard-text'
 import { redactPtyIdForDiagnostics } from '../../shared/pty-delivery-diagnostics'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultWorkspaceSession } from '../../shared/constants'
 import type { TuiAgent } from '../../shared/types'
 import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
 import { AGENT_SESSION_CLAIM_DIGEST_VERSION } from '../../shared/agent-session-host-authority'
@@ -102,6 +102,8 @@ const {
 }))
 
 vi.mock('electron', () => ({
+  // Why defined-but-undefined: the real OrcaRuntimeService guards BrowserWindow with `?.`; vitest throws on reading exports the mock omits.
+  BrowserWindow: undefined,
   app: {
     isPackaged: true,
     getPath: getPathMock,
@@ -750,12 +752,16 @@ describe('registerPtyHandlers', () => {
     spawn: (args: Record<string, unknown>) => Promise<unknown>
     write: (ptyId: string, data: string) => boolean
     resize: (ptyId: string, cols: number, rows: number) => boolean
+    probePtyLiveness: (ptyId: string) => Promise<boolean | null>
+    attach: (ptyId: string) => Promise<boolean>
   } {
     let controller:
       | {
           spawn: (args: Record<string, unknown>) => Promise<unknown>
           write: (ptyId: string, data: string) => boolean
           resize: (ptyId: string, cols: number, rows: number) => boolean
+          probePtyLiveness: (ptyId: string) => Promise<boolean | null>
+          attach: (ptyId: string) => Promise<boolean>
         }
       | undefined
     const runtime = {
@@ -799,6 +805,114 @@ describe('registerPtyHandlers', () => {
 
     unregisterSshPtyProvider(connectionId)
     clearProviderPtyState(ptyId)
+  })
+
+  describe('controller probePtyLiveness routing', () => {
+    it('proves absence for an id the in-process local provider never owned', async () => {
+      setLocalPtyProvider(new LocalPtyProvider())
+      const controller = registerAgentClaimController()
+
+      await expect(controller.probePtyLiveness('pty-from-prior-run')).resolves.toBe(false)
+    })
+
+    it('delegates to a provider-exposed probe and preserves its answer', async () => {
+      const provider = {
+        ...createAgentClaimProvider({}),
+        probePtyLiveness: vi.fn(async () => true)
+      }
+      setLocalPtyProvider(provider as never)
+      const controller = registerAgentClaimController()
+
+      await expect(controller.probePtyLiveness('daemon-owned')).resolves.toBe(true)
+      expect(provider.probePtyLiveness).toHaveBeenCalledWith('daemon-owned')
+    })
+
+    it('answers unknown for a probe-less provider that is not the in-process one', async () => {
+      // Why: only the in-process provider is its own sole owner; any other
+      // probe-less provider's ignorance is doubt, not absence.
+      setLocalPtyProvider(createAgentClaimProvider({}) as never)
+      const controller = registerAgentClaimController()
+
+      await expect(controller.probePtyLiveness('pty-unknown')).resolves.toBeNull()
+    })
+
+    it('answers unknown for SSH-owned ids whose provider has no probe', async () => {
+      const connectionId = 'ssh-probe-1'
+      const ptyId = `ssh:${connectionId}@@remote-pty`
+      setLocalPtyProvider(new LocalPtyProvider())
+      registerSshPtyProvider(connectionId, createAgentClaimProvider({}) as never)
+      setPtyOwnership(ptyId, connectionId)
+      const controller = registerAgentClaimController()
+      try {
+        await expect(controller.probePtyLiveness(ptyId)).resolves.toBeNull()
+
+        unregisterSshPtyProvider(connectionId)
+        // A disconnected SSH provider is an error path, and errors never prove absence.
+        await expect(controller.probePtyLiveness(ptyId)).resolves.toBeNull()
+      } finally {
+        unregisterSshPtyProvider(connectionId)
+        clearPtyOwnershipForConnection(connectionId)
+        clearProviderPtyState(ptyId)
+      }
+    })
+
+    it('answers unknown for remote-scoped ids without consulting local providers', async () => {
+      // Why: a locally routed provider would answer confidently — and wrongly —
+      // for a PTY that lives on a remote Orca host.
+      setLocalPtyProvider(new LocalPtyProvider())
+      const controller = registerAgentClaimController()
+
+      await expect(controller.probePtyLiveness('remote:some-remote-pty')).resolves.toBeNull()
+    })
+
+    it('answers unknown when the provider probe throws', async () => {
+      const provider = {
+        ...createAgentClaimProvider({}),
+        probePtyLiveness: vi.fn(async () => {
+          throw new Error('probe transport down')
+        })
+      }
+      setLocalPtyProvider(provider as never)
+      const controller = registerAgentClaimController()
+
+      await expect(controller.probePtyLiveness('daemon-owned')).resolves.toBeNull()
+    })
+  })
+
+  it('routes controller attach to the local daemon provider only, false on doubt', async () => {
+    const localProvider = createAgentClaimProvider({})
+    const sshProvider = createAgentClaimProvider({})
+    setLocalPtyProvider(localProvider as never)
+    registerSshPtyProvider('ssh-attach', sshProvider as never)
+    const controller = registerAgentClaimController()
+    const daemonPtyId = 'repo-1::/tmp/wt@@1a2b3c4d'
+    const ownedSshPtyId = 'owned-remote-pty'
+    setPtyOwnership(ownedSshPtyId, 'ssh-attach')
+    try {
+      // Local daemon session: attach flows to the provider.
+      await expect(controller.attach(daemonPtyId)).resolves.toBe(true)
+      expect(localProvider.attach).toHaveBeenCalledWith(daemonPtyId)
+
+      // SSH-scoped sessions are excluded — leases handle their reattach.
+      await expect(controller.attach(ownedSshPtyId)).resolves.toBe(false)
+      await expect(controller.attach('ssh:ssh-attach@@relay-pty')).resolves.toBe(false)
+      expect(sshProvider.attach).not.toHaveBeenCalled()
+
+      // Provider refusal (absent/unprovable session) answers false, not throw.
+      localProvider.attach.mockRejectedValueOnce(new Error('Session not found'))
+      await expect(controller.attach(daemonPtyId)).resolves.toBe(false)
+
+      // The in-process local provider streams without attach; never called.
+      const inProcess = new LocalPtyProvider()
+      const inProcessAttach = vi.spyOn(inProcess, 'attach')
+      setLocalPtyProvider(inProcess)
+      await expect(controller.attach(daemonPtyId)).resolves.toBe(false)
+      expect(inProcessAttach).not.toHaveBeenCalled()
+    } finally {
+      unregisterSshPtyProvider('ssh-attach')
+      clearPtyOwnershipForConnection('ssh-attach')
+      clearProviderPtyState(ownedSshPtyId)
+    }
   })
 
   it('does not dispatch a runtime PTY spawn after its client disconnects', async () => {
@@ -1928,6 +2042,44 @@ describe('registerPtyHandlers', () => {
       expect(selectedHome).not.toHaveBeenCalled()
       expect(env.CODEX_HOME).toBe('/managed/origin/home')
       expect(env.ORCA_CODEX_HOME).toBe('/managed/origin/home')
+    })
+
+    it('blocks a shared-runtime resume when auth reconciliation fails', async () => {
+      const selectedHome = vi.fn(() => {
+        throw new Error('Cannot safely launch Codex while stale runtime auth remains.')
+      })
+      registerPtyHandlers(
+        mainWindow as never,
+        undefined,
+        selectedHome,
+        undefined,
+        undefined,
+        undefined,
+        {
+          prepareCodexSessionResume: async () => ({
+            outcome: 'resume' as const,
+            codexHomePath: '/managed/shared-mirror/home',
+            reconcileSharedRuntimeAuth: true
+          })
+        }
+      )
+
+      await expect(
+        handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          command: 'codex resume session-a',
+          launchAgent: 'codex',
+          resumeProviderSession: {
+            key: 'session_id',
+            id: 'session-a',
+            transcriptPath: '/managed/shared-mirror/home/sessions/2026/07/20/rollout-a.jsonl'
+          }
+        })
+      ).rejects.toThrow('Cannot safely launch Codex while stale runtime auth remains.')
+
+      expect(selectedHome).toHaveBeenCalledTimes(1)
+      expect(spawnMock).not.toHaveBeenCalled()
     })
 
     it('overrides an unmarked custom home when the resumed session originated in real home', async () => {
@@ -6919,6 +7071,41 @@ describe('registerPtyHandlers', () => {
     await expect(handlers.get('pty:hasPty')!(null, { id: 'maybe-pty' })).resolves.toBe(null)
   })
 
+  it('never answers liveness for a paired-runtime handle from the local registry', async () => {
+    const hasPty = vi.fn(() => false)
+    setLocalPtyProvider({
+      spawn: vi.fn(),
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => []),
+      attach: vi.fn(),
+      hasPty,
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    registerPtyHandlers(mainWindow as never)
+
+    // The local provider would happily report `false` here — it just doesn't
+    // hold the id. Callers read that as "the shell died" (STA-2830).
+    await expect(
+      handlers.get('pty:hasPty')!(null, { id: 'remote:env-1@@terminal-1' })
+    ).resolves.toBe(null)
+    expect(hasPty).not.toHaveBeenCalled()
+  })
+
   it('lists duplicate SSH relay session ids as distinct app sessions', async () => {
     registerPtyHandlers(mainWindow as never)
     const shutdownA = vi.fn(async () => undefined)
@@ -9361,6 +9548,143 @@ describe('registerPtyHandlers', () => {
     expect(store.flushOrThrow).toHaveBeenCalledOnce()
   })
 
+  // Why: a parked pane (stopped with keepHistory) leaves the runtime holding the binding while
+  // persistence has already dropped it. Reading "nothing left to retire" as a competing owner
+  // aborted materialization *after* signalling the exit, which destroyed the pane instead of
+  // rebuilding it — the reconnect path then had no surface to attach to (#11541).
+  it('respawns a proven-dead owner whose persisted binding was already retired', async () => {
+    const worktreeId = 'repo-1::/tmp/already-retired-owner'
+    const cwd = '/tmp/already-retired-owner'
+    const tabId = 'tab-already-retired-owner'
+    const leafId = '89898989-8989-4989-8989-898989898989'
+    const paneKey = makePaneKey(tabId, leafId)
+    const providerSpawn = vi.fn(
+      async (options: { attachOnly?: boolean; command?: string; sessionId?: string }) => {
+        if (options.attachOnly) {
+          throw new Error('Session not found: pty-already-retired-owner')
+        }
+        return { id: 'pty-fresh-already-retired', incarnationId: 'inc-fresh-already-retired' }
+      }
+    )
+    const probePtyLiveness = vi.fn(async () => false)
+    setLocalPtyProvider({
+      spawn: providerSpawn,
+      probePtyLiveness,
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => []),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    // Persistence kept the tab but already dropped this leaf's PTY binding, exactly as an
+    // earlier keep-history stop leaves it.
+    let session = {
+      tabsByWorktree: {
+        [worktreeId]: [{ id: tabId, worktreeId, ptyId: null }]
+      },
+      terminalLayoutsByTabId: {
+        [tabId]: {
+          root: { type: 'leaf' as const, leafId },
+          activeLeafId: leafId,
+          expandedLeafId: null,
+          ptyIdsByLeafId: {}
+        }
+      },
+      terminalPtyIncarnationsByPaneKey: {}
+    }
+    const store = {
+      getWorkspaceSession: vi.fn(() => session),
+      setWorkspaceSession: vi.fn((next) => {
+        session = next
+      }),
+      flushOrThrow: vi.fn(),
+      persistPtyBinding: vi.fn(),
+      getFolderWorkspace: vi.fn(() => undefined),
+      getFolderWorkspaces: vi.fn(() => []),
+      getProjectGroups: vi.fn(() => []),
+      getRepos: vi.fn(() => [])
+    }
+    let runtimeOwnsPane = true
+    const runtime = {
+      setPtyController: vi.fn(),
+      resolveTerminalPane: vi.fn(() => {
+        if (!runtimeOwnsPane) {
+          throw new Error('terminal_not_found')
+        }
+        return {
+          ptyId: 'pty-already-retired-owner',
+          tabId,
+          leafId,
+          handle: 'term-already-retired',
+          connected: true
+        }
+      }),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term-already-retired-fresh'),
+      preAllocateHandleForPty: vi.fn(() => 'term-already-retired-fresh'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      beginPtyRegistration: vi.fn(),
+      cancelPendingPtyRegistration: vi.fn(),
+      assertPtyRegistrationAllowed: vi.fn(),
+      registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
+      seedHeadlessTerminal: vi.fn(),
+      onPtySpawned: vi.fn(),
+      // Why: the real runtime drops its pane binding on exit; the guard after retirement must
+      // see that release rather than a resurrected owner.
+      onPtyExit: vi.fn(() => {
+        runtimeOwnsPane = false
+      }),
+      onPtyData: vi.fn()
+    }
+
+    registerPtyHandlers(
+      mainWindow as never,
+      runtime as never,
+      undefined,
+      undefined,
+      undefined,
+      store as never
+    )
+
+    const mounted = await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      cwd,
+      command: 'codex resume already-retired-session',
+      worktreeId,
+      tabId,
+      leafId,
+      env: {
+        ORCA_PANE_KEY: paneKey,
+        ORCA_TAB_ID: tabId,
+        ORCA_WORKTREE_ID: worktreeId
+      }
+    })
+
+    expect(probePtyLiveness).toHaveBeenCalledWith('pty-already-retired-owner')
+    expect(mounted).toMatchObject({ id: 'pty-fresh-already-retired' })
+    expect(providerSpawn).toHaveBeenCalledTimes(2)
+    expect(providerSpawn.mock.calls[1]?.[0]).toMatchObject({
+      command: 'codex resume already-retired-session'
+    })
+    expect(runtime.onPtyExit).toHaveBeenCalledWith('pty-already-retired-owner', 0, undefined)
+  })
+
   it('retires a dead owner from the exact SSH host session before fresh recovery', async () => {
     const connectionId = 'ssh-dead-stable-pane'
     const hostId = `ssh:${connectionId}`
@@ -11499,7 +11823,7 @@ describe('registerPtyHandlers', () => {
     }
   })
 
-  posixOnlyIt('wraps macOS spawns in login(1) with SHELL re-asserted via env(1)', async () => {
+  posixOnlyIt('wraps macOS spawns in login(1) with SHELL restored by the trampoline', async () => {
     const originalShell = process.env.SHELL
     // Re-enable the TCC login wrapper the suite-level beforeEach disables.
     delete process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL
@@ -11523,8 +11847,14 @@ describe('registerPtyHandlers', () => {
       expect(args).toEqual([
         '-flpq',
         userInfo().username,
-        '/usr/bin/env',
-        'SHELL=/bin/zsh',
+        '/bin/bash',
+        '--noprofile',
+        '--norc',
+        '-p',
+        '-c',
+        'export SHELL="$1"; shift; exec -l -- "$@"',
+        'orca-tcc-login',
+        '/bin/zsh',
         '/bin/zsh',
         '-l'
       ])
@@ -16751,17 +17081,19 @@ describe('registerPtyHandlers', () => {
       codexManagedAccounts: [{ id: 'account-b', managedHomePath: '/managed/current/home' }]
     })
     handlers.clear()
+    const resolveHome = vi.fn(() => '/managed/shared-mirror/home')
     registerPtyHandlers(
       mainWindow as never,
       runtime as never,
-      vi.fn(() => '/managed/current/home'),
+      resolveHome,
       getSettings as never,
       undefined,
       undefined,
       {
         prepareCodexSessionResume: async () => ({
           outcome: 'resume' as const,
-          codexHomePath: '/managed/shared-mirror/home'
+          codexHomePath: '/managed/shared-mirror/home',
+          reconcileSharedRuntimeAuth: true
         })
       }
     )
@@ -16780,6 +17112,7 @@ describe('registerPtyHandlers', () => {
       }
     })
 
+    expect(resolveHome).toHaveBeenCalledTimes(1)
     expect(recordCodexPaneAccountMock).not.toHaveBeenCalled()
     expect(forgetCodexPaneAccountMock).toHaveBeenCalledWith('pty-runtime-resumed')
   })
@@ -16882,6 +17215,254 @@ describe('registerPtyHandlers', () => {
       'pty-ssh-reattach',
       'relay history\r\n'
     )
+  })
+
+  // STA repro (post-restart blind orchestrator): reattach restore payloads
+  // arrive as spawn RPC results, never through onPtyData, so without record
+  // seeding `terminal list` reported connected terminals with empty
+  // title/preview/lastOutputAt after every relaunch and `terminal read`
+  // returned a zero-line tail for a running session.
+  it('leaves the runtime reporting preview and title after a reattach spawn (restart restore)', async () => {
+    const worktreeId = 'repo-restore::/tmp/restore-records'
+    const tabId = 'tab-restore-records'
+    const leafId = '55555555-5555-4555-8555-555555555555'
+    const ptyId = `${worktreeId}@@session-restore-1`
+    const session = getDefaultWorkspaceSession()
+    const runtime = new OrcaRuntimeService({
+      getWorkspaceSession: () => session,
+      setWorkspaceSession: () => {},
+      getRepos: () => [
+        {
+          id: 'repo-restore',
+          path: '/tmp/restore-records',
+          displayName: 'restore',
+          badgeColor: '#000000',
+          addedAt: 0
+        }
+      ],
+      getAllWorktreeMeta: () => ({}),
+      getWorktreeMeta: () => undefined,
+      setWorktreeMeta: () => undefined as never,
+      removeWorktreeMeta: () => {},
+      getSettings: () => ({ workspaceDir: '/tmp/workspaces' }),
+      getProjects: () => []
+    } as never)
+    runtime.attachWindow(1)
+    // The restored window graph still knows the persisted ptyId binding.
+    runtime.syncWindowGraph(1, {
+      tabs: [{ tabId, worktreeId, title: '', activeLeafId: leafId, layout: null }],
+      leaves: [{ tabId, worktreeId, leafId, paneRuntimeId: 1, ptyId, paneTitle: null, title: '' }]
+    })
+    setLocalPtyProvider({
+      spawn: vi.fn(async () => ({
+        id: ptyId,
+        isReattach: true,
+        snapshot: '\x1b[32m$\x1b[0m npm test\r\n\x1b[1mall 42 tests passed\x1b[0m\r\n',
+        snapshotCols: 80,
+        snapshotRows: 24,
+        lastTitle: 'restored-agent-title'
+      })),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      onData: vi.fn(() => vi.fn()),
+      onExit: vi.fn(() => vi.fn()),
+      listProcesses: vi.fn(async () => [{ id: ptyId, cwd: '/tmp/restore-records' }]),
+      getForegroundProcess: vi.fn(async () => null)
+    } as never)
+    registerPtyHandlers(mainWindow as never, runtime)
+
+    await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, worktreeId, tabId, leafId })
+
+    const { terminals } = await runtime.listTerminals(`id:${worktreeId}`)
+    expect(terminals).toHaveLength(1)
+    const terminal = terminals[0]!
+    expect(terminal.preview).toContain('$ npm test')
+    expect(terminal.preview).toContain('all 42 tests passed')
+    expect(terminal.title).toBe('restored-agent-title')
+    // Seeded scrollback is historical — recency must come only from live bytes.
+    expect(terminal.lastOutputAt).toBeNull()
+    const read = await runtime.readTerminal(terminal.handle)
+    expect(read.tail).toEqual(['$ npm test', 'all 42 tests passed'])
+  })
+
+  it('seeds restore records even when the renderer pre-signals serializer ownership', async () => {
+    const tabId = 'tab-gated-restore'
+    const leafId = '66666666-6666-4666-8666-666666666666'
+    const paneKey = makePaneKey(tabId, leafId)
+    setLocalPtyProvider({
+      spawn: vi.fn(async () => ({
+        id: 'pty-gated-reattach',
+        isReattach: true,
+        snapshot: 'gated snapshot\r\n',
+        snapshotCols: 80,
+        snapshotRows: 24,
+        lastTitle: 'gated-title'
+      })),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      onData: vi.fn(() => vi.fn()),
+      onExit: vi.fn(() => vi.fn()),
+      listProcesses: vi.fn(async () => []),
+      getForegroundProcess: vi.fn(async () => null)
+    } as never)
+    const runtime = {
+      setPtyController: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
+      seedHeadlessTerminal: vi.fn(),
+      seedTerminalRestoreTail: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyData: vi.fn(),
+      onPtyExit: vi.fn(),
+      registerPty: vi.fn(),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'handle-gated-restore'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      preAllocateHandleForPty: vi.fn()
+    }
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    const gen = await handlers.get('pty:declarePendingPaneSerializer')!(null, { paneKey })
+
+    await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-gated',
+      tabId,
+      leafId,
+      env: { ORCA_PANE_KEY: paneKey }
+    })
+
+    // The renderer owns the emulator snapshot here — but the list/read records
+    // are main-side only, so the record seed must still run.
+    expect(runtime.seedHeadlessTerminal).not.toHaveBeenCalled()
+    expect(runtime.seedTerminalRestoreTail).toHaveBeenCalledWith('pty-gated-reattach', {
+      text: 'gated snapshot\r\n',
+      lastTitle: 'gated-title'
+    })
+    await handlers.get('pty:clearPendingPaneSerializer')!(null, { paneKey, gen })
+  })
+
+  it('seeds restore records from a cold-restore payload including its checkpoint title', async () => {
+    setLocalPtyProvider({
+      spawn: vi.fn(async () => ({
+        id: 'pty-cold-restore-records',
+        coldRestore: {
+          scrollback: 'cold restored history\r\n',
+          cwd: '/projects/restored',
+          cols: 132,
+          rows: 43,
+          lastTitle: 'checkpoint-title'
+        }
+      })),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      onData: vi.fn(() => vi.fn()),
+      onExit: vi.fn(() => vi.fn()),
+      listProcesses: vi.fn(async () => []),
+      getForegroundProcess: vi.fn(async () => null)
+    } as never)
+    const runtime = {
+      setPtyController: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
+      seedHeadlessTerminal: vi.fn(),
+      seedTerminalRestoreTail: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyData: vi.fn(),
+      onPtyExit: vi.fn(),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'handle-cold-restore-records'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      preAllocateHandleForPty: vi.fn()
+    }
+    registerPtyHandlers(mainWindow as never, runtime as never)
+
+    await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+
+    expect(runtime.seedTerminalRestoreTail).toHaveBeenCalledWith('pty-cold-restore-records', {
+      text: 'cold restored history\r\n',
+      lastTitle: 'checkpoint-title'
+    })
+  })
+
+  // Why windowless: `orca serve`/CLI runtime creation is the topology that most
+  // needs informative records — its controller.spawn path must seed them too.
+  it('seeds restore records for a runtime-controller created terminal (headless reattach)', async () => {
+    const worktreeId = 'repo-restore::/tmp/restore-records'
+    const ptyId = `${worktreeId}@@session-headless-1`
+    const session = getDefaultWorkspaceSession()
+    const repo = {
+      id: 'repo-restore',
+      path: '/tmp/restore-records',
+      displayName: 'restore',
+      badgeColor: '#000000',
+      addedAt: 0
+    }
+    const runtime = new OrcaRuntimeService({
+      getWorkspaceSession: () => session,
+      setWorkspaceSession: () => {},
+      getRepo: (repoId: string) => (repoId === repo.id ? repo : undefined),
+      getRepos: () => [repo],
+      getAllWorktreeMeta: () => ({}),
+      getWorktreeMeta: () => undefined,
+      setWorktreeMeta: () => undefined as never,
+      removeWorktreeMeta: () => {},
+      getSettings: () => ({ workspaceDir: '/tmp/workspaces' }),
+      getProjects: () => [],
+      persistPtyBinding: vi.fn()
+    } as never)
+    // Why: selector resolution shells out to git for real repos; prime the
+    // resolved-worktree cache so this headless fixture resolves offline.
+    const worktreeResolutionInternals = runtime as unknown as {
+      buildResolvedWorktreeFromId(id: string): unknown
+      resolvedWorktreeCache: {
+        worktrees: unknown[]
+        platformByRepoId: Map<string, NodeJS.Platform>
+        expiresAt: number
+      } | null
+    }
+    worktreeResolutionInternals.resolvedWorktreeCache = {
+      worktrees: [worktreeResolutionInternals.buildResolvedWorktreeFromId(worktreeId)],
+      platformByRepoId: new Map([[repo.id, process.platform]]),
+      expiresAt: Date.now() + 60_000
+    }
+    setLocalPtyProvider({
+      spawn: vi.fn(async () => ({
+        id: ptyId,
+        isReattach: true,
+        snapshot: 'headless reattach history\r\n$ ',
+        snapshotCols: 80,
+        snapshotRows: 24,
+        lastTitle: 'headless-restored-title'
+      })),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      onData: vi.fn(() => vi.fn()),
+      onExit: vi.fn(() => vi.fn()),
+      listProcesses: vi.fn(async () => [{ id: ptyId, cwd: '/tmp/restore-records' }]),
+      getForegroundProcess: vi.fn(async () => null)
+    } as never)
+    registerPtyHandlers(mainWindow as never, runtime, undefined, undefined, undefined, {
+      persistPtyBinding: vi.fn()
+    } as never)
+
+    const created = await runtime.createTerminal(`id:${worktreeId}`, {
+      presentation: 'background'
+    })
+    expect(created.ptyId).toBe(ptyId)
+
+    const { terminals } = await runtime.listTerminals(`id:${worktreeId}`)
+    const terminal = terminals.find((entry) => entry.ptyId === ptyId)
+    expect(terminal).toBeDefined()
+    expect(terminal!.preview).toContain('headless reattach history')
+    expect(terminal!.title).toBe('headless-restored-title')
+    expect(terminal!.lastOutputAt).toBeNull()
+    const read = await runtime.readTerminal(created.handle)
+    expect(read.tail).toContain('headless reattach history')
   })
 
   it('upgrades legacy numeric pane keys when the spawn metadata proves the stable leaf', async () => {

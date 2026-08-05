@@ -1,6 +1,10 @@
 import type { SshChannelMultiplexer } from './ssh-channel-multiplexer'
 import { STREAM_CHUNK_SIZE, JsonRpcErrorCode, RelayErrorCode } from './relay-protocol'
 import type { FileReadResult } from '../providers/types'
+import {
+  createSshFileStreamInactivityDeadline,
+  SSH_FILE_STREAM_INACTIVITY_TIMEOUT_MS
+} from './ssh-file-stream-inactivity-deadline'
 
 const RESULT_ENCODING_BASE64 = 'base64'
 const SENTINEL_STREAM_ID = -1
@@ -76,6 +80,14 @@ export async function readFileViaStream(
     const pending: PendingFrame[] = []
     let metadataReady = false
 
+    const inactivity = createSshFileStreamInactivityDeadline(() => {
+      fail(
+        new StreamProtocolError(
+          `File stream stalled (>${SSH_FILE_STREAM_INACTIVITY_TIMEOUT_MS}ms without data)`
+        )
+      )
+    })
+
     const cancel = (): void => {
       if (streamIdRef.current !== SENTINEL_STREAM_ID && !mux.isDisposed()) {
         try {
@@ -91,6 +103,7 @@ export async function readFileViaStream(
         return
       }
       settled = true
+      inactivity.clear()
       cancel()
       cleanup()
       reject(err)
@@ -101,6 +114,7 @@ export async function readFileViaStream(
         return
       }
       settled = true
+      inactivity.clear()
       cleanup()
       resolve(value)
     }
@@ -148,6 +162,7 @@ export async function readFileViaStream(
       expectedSeq += 1
       receivedChunks += 1
       bytesReceived += decoded.length
+      inactivity.reset()
       // Why: credit-based flow control — the relay caps unacked chunks so bulk
       // stream frames cannot queue unbounded ahead of interactive pty.data
       // frames on the shared SSH channel. Old relays ignore this notification.
@@ -314,6 +329,7 @@ export async function readFileViaStream(
         }
         streamIdRef.current = metadata.streamId
         metadataReady = true
+        inactivity.reset()
         drainPending()
       })
       .catch((err) => {

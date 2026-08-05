@@ -55,6 +55,8 @@ import { ConfirmModal } from '../../../src/components/ConfirmModal'
 import { BottomDrawer } from '../../../src/components/BottomDrawer'
 import { useHostProtocolGates } from '../../../src/components/HostProtocolGate'
 import { AuthFailedBanner } from '../../../src/components/AuthFailedBanner'
+import { HostRouteNoticeBanner } from '../../../src/components/HostRouteNoticeBanner'
+import { visibleHostRouteNotice } from '../../../src/host-route-notice'
 import { MobileSearchField } from '../../../src/components/MobileSearchField'
 import { WorkspaceDetailPlaceholder } from '../../../src/components/WorkspaceDetailPlaceholder'
 import { getCachedWorktrees, setCachedWorktrees } from '../../../src/cache/worktree-cache'
@@ -117,9 +119,12 @@ export function HostScreen({
   action: actionProp,
   onHideSidebar
 }: HostScreenProps = {}) {
-  const params = useLocalSearchParams<{ hostId: string; action?: string }>()
+  const params = useLocalSearchParams<{ hostId: string; action?: string; notice?: string }>()
   const hostId = hostIdProp ?? params.hostId
   const action = actionProp ?? params.action
+  const [dismissedNotice, setDismissedNotice] = useState<string | null>(null)
+  const noticeParam = params.notice?.trim()
+  const routeNotice = visibleHostRouteNotice(embedded, noticeParam, dismissedNotice)
   const router = useRouter()
   const pathname = usePathname()
   const insets = useSafeAreaInsets()
@@ -461,7 +466,7 @@ export function HostScreen({
           setWorktreesLoaded(true)
           // Why (#8498): overwrite the home-written cache with the confirmed snapshot so a reconnect/remount can't serve a stale list.
           if (hostId) {
-            setCachedWorktrees(hostId, confirmed)
+            setCachedWorktrees(hostId, confirmed, { proven: true })
           }
           // Drop the optimistic active override once the host reports it active, so later desktop changes win.
           setOptimisticActiveWorktreeId((pending) =>
@@ -512,7 +517,8 @@ export function HostScreen({
   useFocusEffect(
     useCallback(() => {
       // Why: focus nudges reconnect and probes a possibly half-open socket; empty deps fire per focus, not per state flip (which defeats backoff).
-      clientRef.current?.notifyForeground()
+      // 'focus' keeps a healthy relay green — probe, never suspend (S2 grey blink).
+      clientRef.current?.notifyForeground('focus')
     }, [])
   )
 
@@ -734,10 +740,9 @@ export function HostScreen({
   )
 
   const displayWorktrees = useMemo(() => {
-    const base =
-      connState === 'disconnected' || connState === 'reconnecting' || connState === 'auth-failed'
-        ? lastKnownWorktrees
-        : worktrees
+    // Why: live `worktrees` is authoritative only while connected; under the amber
+    // mount default, connecting/handshaking must keep the pre-reconnect list too.
+    const base = connState === 'connected' ? worktrees : lastKnownWorktrees
     if (sleptIds.size === 0 && optimisticActiveWorktreeId === null) {
       return base
     }
@@ -1097,6 +1102,14 @@ export function HostScreen({
           onRetry={() => hostId && void forceReconnectHost(hostId)}
           onRepair={() => router.push('/pair-scan')}
           onRemove={() => setConfirmRemoveHost(true)}
+        />
+      )}
+
+      {/* Why a bounced route landed here (e.g. the workspace was deleted on the desktop). */}
+      {routeNotice && (
+        <HostRouteNoticeBanner
+          message={routeNotice}
+          onDismiss={() => setDismissedNotice(noticeParam ?? null)}
         />
       )}
 

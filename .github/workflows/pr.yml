@@ -233,7 +233,31 @@ jobs:
             --exclude=src/main/providers/__tests__/shell-ready-framework-example.test.ts \
             --exclude=src/main/pty/omp-shell-wrapper.node-pty.test.ts \
             --exclude=src/shared/posix-command-path-lookup.test.ts \
+            --exclude=tests/e2e/cross-version-wire/** \
             --shard=${{ matrix.shard }}/${{ matrix.shard_total }}
+
+  cross-version-wire:
+    name: cross-version wire compatibility
+    runs-on: ubuntu-latest
+
+    steps:
+      # Why fetch-depth 0: the harness extracts the newest release tag to skew
+      # current code against it. The default shallow clone has no tags, which is
+      # why this cannot ride along in the sharded `test` job.
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+
+      # A path filter that matches nothing exits 1 ("No test files found"), so this
+      # lane cannot report success while running zero tests.
+      - name: Old/new client and server terminal journey
+        run: pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts
 
   package:
     name: package

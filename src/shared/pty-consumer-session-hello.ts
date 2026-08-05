@@ -34,19 +34,3 @@ export function validateHello(hello: PtyConsumerSessionHello): void {
     throw new Error('outputFlowControl.requestedWindowSu must be a positive safe integer')
   }
 }
-
-// Why: a duplicate open on one connection is only idempotent if it asks for exactly the same thing.
-export function helloFingerprint(hello: PtyConsumerSessionHello): string {
-  const flow = hello.capabilities?.outputFlowControl
-  return JSON.stringify({
-    clientInstanceId: hello.clientInstanceId,
-    requestedRole: hello.requestedRole,
-    resume: hello.resume,
-    outputFlowControl: flow
-      ? {
-          versions: [...flow.versions].sort((a, b) => a - b),
-          requestedWindowSu: flow.requestedWindowSu
-        }
-      : undefined
-  })
-}

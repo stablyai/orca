@@ -7024,6 +7024,37 @@ describe('worktree remote runtime mutations', () => {
     })
   })
 
+  // A rejected folder update reconciles the optimistic write away, so reporting
+  // ok would show the dialog a save that silently undid itself.
+  it('reports a rejected folder workspace update to the caller', async () => {
+    const store = createTestStore()
+    const folderWorkspace = makeFolderWorkspace({ id: 'folder-rejected' })
+    store.setState({ folderWorkspaces: [folderWorkspace] } as Partial<AppState>)
+    const updateFolderWorkspace = vi.fn().mockResolvedValue(false)
+    store.setState({ updateFolderWorkspace } as Partial<AppState>)
+
+    const result = await store
+      .getState()
+      .updateWorktreeMeta(folderWorkspaceKey(folderWorkspace.id), { comment: 'note' })
+
+    expect(updateFolderWorkspace).toHaveBeenCalledTimes(1)
+    expect(result).toEqual({ ok: false, error: expect.any(String) })
+  })
+
+  it('reports a thrown folder workspace update instead of rejecting', async () => {
+    const store = createTestStore()
+    const folderWorkspace = makeFolderWorkspace({ id: 'folder-throwing' })
+    store.setState({ folderWorkspaces: [folderWorkspace] } as Partial<AppState>)
+    const updateFolderWorkspace = vi.fn().mockRejectedValue(new Error('Runtime is offline'))
+    store.setState({ updateFolderWorkspace } as Partial<AppState>)
+
+    const result = await store
+      .getState()
+      .updateWorktreeMeta(folderWorkspaceKey(folderWorkspace.id), { comment: 'note' })
+
+    expect(result).toEqual({ ok: false, error: 'Runtime is offline' })
+  })
+
   it('persists activity for hidden detected worktrees', async () => {
     const store = createTestStore()
     const hidden = makeWorktree({

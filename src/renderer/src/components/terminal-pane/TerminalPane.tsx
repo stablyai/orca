@@ -130,8 +130,7 @@ import {
 } from '@/runtime/runtime-terminal-inspection'
 import {
   clearWebRuntimeTerminalBuffer,
-  closeWebRuntimeTerminal,
-  updateWebRuntimePaneLayout
+  closeWebRuntimeTerminal
 } from '@/runtime/web-runtime-session'
 import {
   armPrimarySelectionNativePasteSuppression,
@@ -152,6 +151,10 @@ import {
   planTerminalLiveLayoutInsertions
 } from './terminal-live-layout-reconciliation'
 import type { TerminalQuickCommand, TerminalQuickCommandScope } from '../../../../shared/types'
+import {
+  createRemotePaneLayoutPusher,
+  type RemotePaneLayoutPusher
+} from './remote-pane-layout-push'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
@@ -204,6 +207,7 @@ import {
   type TerminalPasteSource,
   type TerminalPasteTextOptions
 } from './terminal-paste-coordinator'
+import { appendTerminalErrorMessage } from './terminal-error-accumulation'
 import { formatTerminalPasteExecutionError } from './terminal-paste-errors'
 import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
 import { getTerminalPasteSshRemotePlatform } from './terminal-paste-ssh-platform'
@@ -402,6 +406,8 @@ function TerminalPane(
   paneTitlesRef.current = paneTitles
   const removedTitleLeafIdsRef = useRef<Set<string>>(new Set())
   const clearedScrollbackLeafIdsRef = useRef<Set<string>>(new Set())
+  const remotePaneLayoutPusherRef = useRef<RemotePaneLayoutPusher | null>(null)
+  remotePaneLayoutPusherRef.current ??= createRemotePaneLayoutPusher()
   const [paneTitleOverlayRects, setPaneTitleOverlayRects] = useState<
     Record<number, PaneTitleOverlayRect>
   >({})
@@ -468,8 +474,15 @@ function TerminalPane(
       setSessionStateSaveFailureOpen(true)
       return
     }
-    setTerminalError((prev) => (prev ? `${prev}\n${message}` : message))
+    setTerminalError((prev) => appendTerminalErrorMessage(prev, message))
   })
+  /** Dismissal is the only signal that the user has seen the surface, so it must also release the transports' repeat-suppression memory. */
+  const dismissTerminalError = useCallback(() => {
+    setTerminalError(null)
+    for (const transport of paneTransportsRef.current.values()) {
+      transport.notifyErrorSurfaceDismissed?.()
+    }
+  }, [])
   const onPtyRecoveryStateRef = useRef(
     (paneId: number, state: PtyTransportRecoveryState | null) => {
       setPtyRecoveryStatesByPaneId((previous) =>
@@ -947,13 +960,7 @@ function TerminalPane(
       (ptyId) => typeof ptyId === 'string' && isRemoteRuntimePtyId(ptyId)
     )
     if (hasRemotePane) {
-      void updateWebRuntimePaneLayout({
-        worktreeId,
-        tabId,
-        root: layout.root,
-        expandedLeafId: layout.expandedLeafId,
-        ...(layout.titlesByLeafId ? { titlesByLeafId: layout.titlesByLeafId } : {})
-      })
+      remotePaneLayoutPusherRef.current?.push({ worktreeId, tabId, layout })
     }
     for (const leafId of currentLeafIds) {
       clearedScrollbackLeafIds.delete(leafId)
@@ -2893,7 +2900,7 @@ function TerminalPane(
       {terminalError && isActive && !showSshReconnectOverlay ? (
         <TerminalErrorToast
           error={terminalError}
-          onDismiss={() => setTerminalError(null)}
+          onDismiss={dismissTerminalError}
           onRestartDaemon={() => daemonActions.setPending('restart')}
         />
       ) : null}

@@ -192,7 +192,7 @@ describe('WorktreeCardStatusSlot', () => {
     expect(markup).not.toContain('PR checks: Failed')
   })
 
-  it('uses PR status instead of the quiet active dot when new card style is on', () => {
+  it('keeps the active dot ahead of PR status when new card style is on', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
@@ -207,14 +207,34 @@ describe('WorktreeCardStatusSlot', () => {
       />
     )
 
-    expect(markup).toContain('PR checks: Failed')
+    expect(markup).toContain('Active')
     expect(markup).toContain('inline-flex size-5 items-center justify-center')
-    expect(markup).toContain('size-[13px] translate-x-px')
-    expect(markup).toContain('text-rose-500/85')
-    expect(markup).not.toContain('bg-emerald-500')
+    expect(markup).toContain('bg-emerald-500')
+    expect(markup).not.toContain('PR checks: Failed')
+  })
+
+  it('keeps the emerald activity dot ahead of branch identity when new card style is on', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCardStatusSlot
+        worktreeId="wt-1"
+        showStatus
+        showUnreadAction={false}
+        isUnread={false}
+        unreadTooltip="Mark as unread"
+        onPointerDown={vi.fn()}
+        onToggleUnread={vi.fn()}
+        newCardStyle
+        hasBranchIdentity
+      />
+    )
+
+    expect(markup).toContain('Active')
+    expect(markup).toContain('bg-emerald-500')
+    expect(markup).not.toContain('lucide-git-branch')
   })
 
   it('uses the unified compact review glyph for GitLab MR status', () => {
+    mocks.status = 'inactive'
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
@@ -236,7 +256,7 @@ describe('WorktreeCardStatusSlot', () => {
     expect(markup).not.toContain('lucide-git-merge')
   })
 
-  it('uses PR status instead of the quiet done dot when new card style is on', () => {
+  it('keeps the done dot ahead of PR status when new card style is on', () => {
     mocks.status = 'done'
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
@@ -252,8 +272,9 @@ describe('WorktreeCardStatusSlot', () => {
       />
     )
 
-    expect(markup).toContain('PR checks: Failed')
-    expect(markup).not.toContain('bg-emerald-500')
+    expect(markup).toContain('Done')
+    expect(markup).toContain('bg-emerald-500')
+    expect(markup).not.toContain('PR checks: Failed')
   })
 
   it('uses PR status instead of the inactive dot when new card style is on', () => {
@@ -277,7 +298,8 @@ describe('WorktreeCardStatusSlot', () => {
     expect(markup).not.toContain('bg-neutral-500/40')
   })
 
-  it('uses a branch icon with branch-only tooltip copy by default', () => {
+  it('uses a branch icon with branch-only tooltip copy on quiet rows', () => {
+    mocks.status = 'inactive'
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
@@ -301,6 +323,7 @@ describe('WorktreeCardStatusSlot', () => {
   })
 
   it('uses context-aware branch or folder path tooltip copy', () => {
+    mocks.status = 'inactive'
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
@@ -407,6 +430,7 @@ describe('WorktreeCardStatusSlot', () => {
   })
 
   it('overlays an unread badge on PR status when new card style is on', () => {
+    mocks.status = 'inactive'
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
@@ -436,6 +460,7 @@ describe('WorktreeCardStatusSlot', () => {
   })
 
   it('overlays an unread badge on the branch icon in new card style', () => {
+    mocks.status = 'inactive'
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"

@@ -109,17 +109,20 @@ export function applyWorkspaceEmojiSuggestion(
   active: ActiveWorkspaceEmojiShortcode,
   suggestion: WorkspaceEmojiSuggestion
 ): WorkspaceEmojiReplacement {
-  return replaceWorkspaceEmojiRange(value, active.start, active.end, suggestion.emoji)
+  return replaceWorkspaceEmojiRange(value, active.start, active.end, suggestion.emoji, true)
 }
 
 function replaceWorkspaceEmojiRange(
   value: string,
   start: number,
   end: number,
-  emoji: string
+  emoji: string,
+  addTrailingSpace = false
 ): WorkspaceEmojiReplacement {
+  const hasFollowingWhitespace = /\s/.test(value[end] ?? '')
+  const trailingSpace = addTrailingSpace && !hasFollowingWhitespace ? ' ' : ''
   return {
-    value: `${value.slice(0, start)}${emoji}${value.slice(end)}`,
-    cursor: start + emoji.length
+    value: `${value.slice(0, start)}${emoji}${trailingSpace}${value.slice(end)}`,
+    cursor: start + emoji.length + (addTrailingSpace ? 1 : 0)
   }
 }

@@ -339,9 +339,7 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
     // Why: canonicalization deletes same-claim duplicates, so a lazy record must be filtered
     // out before it can win the claim and strand the hibernated pane it deletes.
     expect(rec.mountDetails).toEqual([{ worktreeId: 'wt-1', tabIds: ['tab-hibernated'] }])
-    expect(clearSleepingAgentSessionsByPaneKey).not.toHaveBeenCalledWith([
-      'tab-hibernated:leaf-1'
-    ])
+    expect(clearSleepingAgentSessionsByPaneKey).not.toHaveBeenCalledWith(['tab-hibernated:leaf-1'])
     expect(sleepingRecords).toHaveProperty('tab-hibernated:leaf-1')
     expect(sleepingRecords).toHaveProperty('tab-slept:leaf-1')
   })

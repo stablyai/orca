@@ -1,10 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SshRelaySession } from './ssh-relay-session'
-import {
-  createMismatchedOwnerRecoveryError,
-  createMockDeps,
-  mockDeploySuccess
-} from './ssh-relay-session-test-fixtures'
+import { createMockDeps, mockDeploySuccess } from './ssh-relay-session-test-fixtures'
 
 const {
   acceptOutputDataMock,
@@ -145,16 +141,22 @@ describe('SshRelaySession data delivery', () => {
     vi.mocked(applySshPtySourceCancellationProof).mockReturnValue(true)
     vi.mocked(applySshPtySourceRecoveryCancellationProof).mockReturnValue(true)
     openConsumerSessionMock.mockImplementation(async (_mux, options) => ({
-      mode: 'negotiated',
-      clientInstanceId: options.clientInstanceId,
-      clientGeneration: 1,
-      ownerGeneration: 1,
-      ownerLease: 'test-owner-lease',
-      ...(options.outputFlowControl
-        ? {
-            outputFlowControl: { version: 1, windowSu: options.outputFlowControl.requestedWindowSu }
-          }
-        : {})
+      state: {
+        mode: 'negotiated',
+        clientInstanceId: options.clientInstanceId,
+        clientGeneration: 1,
+        ownerGeneration: 1,
+        ownerLease: 'test-owner-lease',
+        ...(options.outputFlowControl
+          ? {
+              outputFlowControl: {
+                version: 1,
+                windowSu: options.outputFlowControl.requestedWindowSu
+              }
+            }
+          : {})
+      },
+      resumed: options.resume !== undefined
     }))
     muxRequestMock.mockResolvedValue([])
     mockDeploySuccess()
@@ -173,12 +175,15 @@ describe('SshRelaySession data delivery', () => {
     )
     let generation = 0
     openConsumerSessionMock.mockImplementation(async (_mux, options) => ({
-      mode: 'negotiated',
-      clientInstanceId: options.clientInstanceId,
-      clientGeneration: ++generation,
-      ownerGeneration: generation,
-      ownerLease: `owner-lease-${generation}`,
-      outputFlowControl: { version: 1, windowSu: 256 * 1024 }
+      state: {
+        mode: 'negotiated',
+        clientInstanceId: options.clientInstanceId,
+        clientGeneration: ++generation,
+        ownerGeneration: generation,
+        ownerLease: `owner-lease-${generation}`,
+        outputFlowControl: { version: 1, windowSu: 256 * 1024 }
+      },
+      resumed: options.resume !== undefined
     }))
     vi.mocked(getSshPtyAcceptedSourceCheckpoints).mockReturnValue([
       {
@@ -342,7 +347,7 @@ describe('SshRelaySession data delivery', () => {
     expect(mockStore.removeSshPtyConsumerRecovery).toHaveBeenCalledWith(targetId)
   })
 
-  it('clears stale owner recovery and retries a fresh same-build relay once without resume', async () => {
+  it('voids checkpoints for a fresh claim without a second owner request', async () => {
     const targetId = 'fresh-relay-retry'
     const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
     vi.mocked(deployAndLaunchRelay).mockResolvedValue({
@@ -365,16 +370,17 @@ describe('SshRelaySession data delivery', () => {
     await first.establish(mockConn)
     first.detach()
 
-    openConsumerSessionMock
-      .mockRejectedValueOnce(createMismatchedOwnerRecoveryError())
-      .mockImplementationOnce(async (_mux, options) => ({
+    openConsumerSessionMock.mockImplementationOnce(async (_mux, options) => ({
+      state: {
         mode: 'negotiated',
         clientInstanceId: options.clientInstanceId,
         clientGeneration: 1,
         ownerGeneration: 1,
         ownerLease: 'fresh-owner-lease',
         outputFlowControl: { version: 1, windowSu: 256 * 1024 }
-      }))
+      },
+      resumed: false
+    }))
     vi.mocked(getPtyIdsForConnection).mockReturnValue([`ssh:${targetId}@@pty-1`])
     vi.mocked(getSshPtyProvider).mockImplementation(
       () => vi.mocked(registerSshPtyProvider).mock.calls.at(-1)?.[1]
@@ -391,9 +397,10 @@ describe('SshRelaySession data delivery', () => {
     const retryCalls = openConsumerSessionMock.mock.calls
       .slice(openCallCountBeforeRetry)
       .map(([, options]) => options)
-    expect(retryCalls).toHaveLength(2)
+    // Why one call: the relay answers a proof it cannot match with a fresh claim, so the client never
+    // needs a second, resume-less request to get owner authority back.
+    expect(retryCalls).toHaveLength(1)
     expect(retryCalls[0]).toHaveProperty('resume')
-    expect(retryCalls[1]).not.toHaveProperty('resume')
     expect(attachForReconnectMock).toHaveBeenCalledWith(
       'pty-1',
       undefined,
@@ -644,12 +651,15 @@ describe('SshRelaySession data delivery', () => {
     openConsumerSessionMock.mockImplementation(async (_mux, options) => {
       generation++
       return {
-        mode: 'negotiated',
-        clientInstanceId: options.clientInstanceId,
-        clientGeneration: generation,
-        ownerGeneration: generation,
-        ownerLease: `owner-lease-${generation}`,
-        outputFlowControl: { version: 1, windowSu: 256 * 1024 }
+        state: {
+          mode: 'negotiated',
+          clientInstanceId: options.clientInstanceId,
+          clientGeneration: generation,
+          ownerGeneration: generation,
+          ownerLease: `owner-lease-${generation}`,
+          outputFlowControl: { version: 1, windowSu: 256 * 1024 }
+        },
+        resumed: options.resume !== undefined
       }
     })
     vi.mocked(getSshPtyAcceptedSourceCheckpoints).mockReturnValue([

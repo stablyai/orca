@@ -150,5 +150,10 @@
       }
     }
   ],
-  "ignorePatterns": ["**/node_modules", "**/dist", "**/out"]
+  "ignorePatterns": [
+    "**/node_modules",
+    "**/dist",
+    "**/out",
+    "tests/e2e/.cross-version-checkouts"
+  ]
 }

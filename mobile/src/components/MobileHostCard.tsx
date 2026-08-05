@@ -21,6 +21,11 @@ export function MobileHostCard(props: {
   onLongPress: () => void
 }) {
   const connected = props.state === 'connected'
+  // Why: a relay dial can run for seconds behind "Connecting…"/"Reconnecting…"; naming the
+  // path mid-wait tells the user the phone is off-LAN rather than hung (F5). Only 'relay' is
+  // named — 'lan' doubles as the unknown-path default, so it would be a guess before connect.
+  const dialingPath =
+    ['connecting', 'handshaking', 'reconnecting'].includes(props.state) && props.path === 'relay'
   const isError = ['warning', 'unreachable', 'auth-failed'].includes(props.verdict.kind)
   const worktreeSummary = homeHostWorktreeSummary(props.worktreeInfo)
   return (
@@ -44,7 +49,7 @@ export function MobileHostCard(props: {
           <StatusDot state={props.state} verdict={props.verdict} />
           <Text style={[styles.metaText, isError && { color: colors.statusRed }]} numberOfLines={1}>
             {verdictDisplayLabel(props.verdict)}
-            {connected ? ` · ${mobileConnectionPathLabel(props.path)}` : ''}
+            {connected || dialingPath ? ` · ${mobileConnectionPathLabel(props.path)}` : ''}
           </Text>
         </View>
         {connected && worktreeSummary ? (

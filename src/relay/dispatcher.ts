@@ -27,6 +27,7 @@ import {
   LegacyRelayPublicationLedger,
   type LegacyPublicationLease
 } from './legacy-relay-publication-ledger'
+import type { PtyConsumerCloseCause } from '../shared/pty-consumer-session-contract'
 
 export type {
   RelayClientSinkOptions,
@@ -101,7 +102,9 @@ export class RelayDispatcher {
   private readonly requestAborts = new ClientRequestAborts()
   private readonly publicationLedger = new LegacyRelayPublicationLedger()
   private pendingRelayRequests = new Map<number, PendingRelayRequest>()
-  private clientDetachListeners = new Set<(clientId: number) => void>()
+  private clientDetachListeners = new Set<
+    (clientId: number, cause: PtyConsumerCloseCause) => void
+  >()
   private disposeListeners = new Set<() => void>()
   private legacyCapacityListeners = new Set<() => void>()
   private clientCapacityListeners = new Map<number, Set<() => void>>()
@@ -137,8 +140,13 @@ export class RelayDispatcher {
   }
 
   // Why: mark in-flight requests stale on disconnect so a late pty.spawn/fs.watch can't create unowned remote state.
-  invalidateClient(): void {
-    this.closeClient(this.primaryClient, new Error('Relay primary client invalidated'), false)
+  invalidateClient(cause: PtyConsumerCloseCause = 'local'): void {
+    this.closeClient(
+      this.primaryClient,
+      new Error('Relay primary client invalidated'),
+      false,
+      cause
+    )
   }
 
   // Why: seq numbers and request ids are per SSH channel, so each attached client needs independent protocol state.
@@ -153,12 +161,12 @@ export class RelayDispatcher {
     return client.id
   }
 
-  detachClient(clientId: number): void {
+  detachClient(clientId: number, cause: PtyConsumerCloseCause = 'local'): void {
     const client = this.clients.get(clientId)
     if (!client || client === this.primaryClient) {
       return
     }
-    this.closeClient(client, new Error('Relay client detached'), true)
+    this.closeClient(client, new Error('Relay client detached'), true, cause)
   }
 
   // Why: a displaced owner must lose its transport whichever client holds it, and the launch channel is
@@ -187,7 +195,7 @@ export class RelayDispatcher {
     this.notificationHandlers.set(method, handler)
   }
 
-  onClientDetached(listener: (clientId: number) => void): () => void {
+  onClientDetached(listener: (clientId: number, cause: PtyConsumerCloseCause) => void): () => void {
     this.clientDetachListeners.add(listener)
     return () => this.clientDetachListeners.delete(listener)
   }
@@ -1269,7 +1277,14 @@ export class RelayDispatcher {
     }
   }
 
-  private closeClient(client: RelayClient, error: Error, remove: boolean): void {
+  private closeClient(
+    client: RelayClient,
+    error: Error,
+    remove: boolean,
+    // Why the default is the cautious one: most closes here are the relay's own doing, and only the
+    // callers holding real evidence of a peer-side transport end may say so.
+    cause: PtyConsumerCloseCause = 'local'
+  ): void {
     if (client.closed) {
       return
     }
@@ -1280,7 +1295,7 @@ export class RelayDispatcher {
     if (remove) {
       this.clients.delete(client.id)
     }
-    this.notifyClientDetached(client.id)
+    this.notifyClientDetached(client.id, cause)
     if (remove) {
       // Only for a client that is gone for good: an invalidated primary is revived by setWrite, and a
       // frame stranded by its retired sink must stay armed to retry. After the detach fan-out, so a
@@ -1329,10 +1344,10 @@ export class RelayDispatcher {
     }
   }
 
-  private notifyClientDetached(clientId: number): void {
+  private notifyClientDetached(clientId: number, cause: PtyConsumerCloseCause): void {
     for (const listener of this.clientDetachListeners) {
       try {
-        listener(clientId)
+        listener(clientId, cause)
       } catch (err) {
         process.stderr.write(
           `[relay] Client detach listener failed: ${err instanceof Error ? err.message : String(err)}\n`

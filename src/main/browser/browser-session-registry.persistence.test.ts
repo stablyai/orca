@@ -195,7 +195,9 @@ describe('BrowserSessionRegistry persistence', () => {
       orcaProfileId: 'local-work',
       profileDirectory: '/user-data/profiles/local-work'
     })
-    const profile = browserSessionRegistry.createProfile('isolated', 'Work Browser')
+    const profile = browserSessionRegistry.createProfile('isolated', 'Work Browser', {
+      userAgentMode: 'native'
+    })
 
     expect(profile).not.toBeNull()
     expect(fsState.files.has(profileMetaPath)).toBe(true)
@@ -203,8 +205,33 @@ describe('BrowserSessionRegistry persistence', () => {
     expect(JSON.parse(fsState.files.get(profileMetaPath) ?? '{}').profiles[0]).toMatchObject({
       id: profile!.id,
       partition: profile!.partition,
-      label: 'Work Browser'
+      label: 'Work Browser',
+      userAgentMode: 'native'
     })
+  })
+
+  it('keeps UA cleaning as the fallback for profiles without an override', async () => {
+    const fsState = createFsState()
+    const { sessionFromPartitionMock, setupClientHintsOverrideMock } = installModuleMocks(fsState)
+    const { browserSessionRegistry } = await import('./browser-session-registry')
+
+    browserSessionRegistry.createProfile('isolated', 'Default identity')
+
+    const profileSession = sessionFromPartitionMock.mock.results.at(-1)?.value
+    expect(profileSession.setUserAgent).toHaveBeenCalledWith('Mozilla/5.0 Orca')
+    expect(setupClientHintsOverrideMock).toHaveBeenCalledWith(profileSession, 'Mozilla/5.0 Orca')
+  })
+
+  it('leaves UA and client hints untouched for native-mode profiles', async () => {
+    const fsState = createFsState()
+    const { sessionFromPartitionMock, setupClientHintsOverrideMock } = installModuleMocks(fsState)
+    const { browserSessionRegistry } = await import('./browser-session-registry')
+
+    browserSessionRegistry.createProfile('isolated', 'Google', { userAgentMode: 'native' })
+
+    const profileSession = sessionFromPartitionMock.mock.results.at(-1)?.value
+    expect(profileSession.setUserAgent).not.toHaveBeenCalled()
+    expect(setupClientHintsOverrideMock).not.toHaveBeenCalled()
   })
 
   it('merges partition-keyed pending entries without clobbering unrelated entries', async () => {
@@ -320,7 +347,7 @@ describe('BrowserSessionRegistry persistence', () => {
     expect(fsState.present.has('/staged/default')).toBe(true)
   })
 
-  it('restores persisted UA for non-default partitions', async () => {
+  it('restores a persisted source UA even for native-mode profiles', async () => {
     const importedPartition = 'persist:orca-browser-session-11111111-1111-4111-8111-111111111111'
     const importedUa = 'Mozilla/5.0 Chrome/120.0.0.0 Safari/537.36'
     const defaultUa = 'Mozilla/5.0 Chrome/119.0.0.0 Safari/537.36'
@@ -340,7 +367,8 @@ describe('BrowserSessionRegistry persistence', () => {
           scope: 'imported',
           partition: importedPartition,
           label: 'Imported',
-          source: { browserFamily: 'comet', importedAt: 1 }
+          source: { browserFamily: 'comet', importedAt: 1 },
+          userAgentMode: 'native'
         }
       ]
     })
@@ -366,6 +394,44 @@ describe('BrowserSessionRegistry persistence', () => {
           c[1] === importedUa
       )
     ).toBe(true)
+  })
+
+  it('preserves native mode across hydration when no source UA was imported', async () => {
+    const importedPartition = 'persist:orca-browser-session-12121212-1212-4121-8121-121212121212'
+    const fsState = createFsState()
+    seedMeta(fsState, {
+      defaultSource: null,
+      userAgent: null,
+      userAgentByPartition: {},
+      pendingCookieDbPath: null,
+      pendingCookieImports: {},
+      profiles: [
+        {
+          id: '12121212-1212-4121-8121-121212121212',
+          scope: 'isolated',
+          partition: importedPartition,
+          label: 'Google',
+          source: null,
+          userAgentMode: 'native'
+        }
+      ]
+    })
+
+    const { sessionFromPartitionMock, setupClientHintsOverrideMock } = installModuleMocks(fsState)
+    const { browserSessionRegistry } = await import('./browser-session-registry')
+
+    browserSessionRegistry.initializeBrowserSessionsFromPersistedState()
+
+    const importedSessions = sessionFromPartitionMock.mock.results
+      .filter((_, index) => sessionFromPartitionMock.mock.calls[index]?.[0] === importedPartition)
+      .map((result) => result.value)
+    expect(importedSessions.length).toBeGreaterThan(0)
+    expect(importedSessions.every((sess) => sess.setUserAgent.mock.calls.length === 0)).toBe(true)
+    expect(
+      setupClientHintsOverrideMock.mock.calls.some(
+        ([sess]) => (sess as { partition?: string }).partition === importedPartition
+      )
+    ).toBe(false)
   })
 
   it('sets up default-partition policies on restore', async () => {

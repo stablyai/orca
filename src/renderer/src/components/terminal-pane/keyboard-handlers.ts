@@ -339,37 +339,8 @@ export function useTerminalKeyboardShortcuts({
       }
     }
 
-    // Why: this callback is installed once per active tab and invoked only for
-    // Windows Shift+Enter, keeping store work and allocations off ordinary keys.
-    const getActivePaneWindowsShiftEnterEncoding = () => {
-      const manager = managerRef.current
-      const activePane = manager?.getActivePane() ?? manager?.getPanes()[0]
-      if (!activePane) {
-        return 'alt-enter' as const
-      }
-      const state = useAppStore.getState()
-      const paneKey = makePaneKey(tabId, activePane.leafId)
-      return resolveWindowsShiftEnterEncodingForPane(state, paneKey)
-    }
-
-    // Why: host metadata is live and can hydrate after the terminal mounts;
-    // resolve it only when Shift+Enter needs to choose a byte protocol.
-    const isActivePaneWindowsTerminalHost = (): boolean => {
-      const manager = managerRef.current
-      const activePane = manager?.getActivePane() ?? manager?.getPanes()[0]
-      return (
-        resolveTerminalInputHostPlatform({
-          clientPlatform: shortcutPlatform,
-          state: useAppStore.getState(),
-          worktreeId,
-          transport: activePane ? (paneTransportsRef.current.get(activePane.id) ?? null) : null
-        }) === 'win32'
-      )
-    }
-
-    // Why: the active pane's live PTY session decides whether Ctrl+Arrow should
-    // pass through as native \e[1;5C/\e[1;5D or be translated to \eb/\ef.
-    // Resolved lazily so session/runtime lookups stay off other keystrokes.
+    // Why: foreground proof and Ctrl+Arrow translation are local ConPTY-only;
+    // resolve lazily so session/runtime lookups stay off ordinary keystrokes.
     const isLocalWindowsConptyPane = (): boolean => {
       const manager = managerRef.current
       const activePane = manager?.getActivePane() ?? manager?.getPanes()[0]
@@ -388,6 +359,40 @@ export function useTerminalKeyboardShortcuts({
         fallbackCwd,
         transport: paneTransportsRef.current.get(activePane.id) ?? null
       })
+    }
+
+    // Why: this callback is installed once per active tab and invoked only for
+    // Windows Shift+Enter, keeping store work and allocations off ordinary keys.
+    const getActivePaneWindowsShiftEnterEncoding = () => {
+      const manager = managerRef.current
+      const activePane = manager?.getActivePane() ?? manager?.getPanes()[0]
+      if (!activePane) {
+        return 'alt-enter' as const
+      }
+      const state = useAppStore.getState()
+      const paneKey = makePaneKey(tabId, activePane.leafId)
+      return resolveWindowsShiftEnterEncodingForPane(
+        state,
+        paneKey,
+        isLocalWindowsConptyPane()
+          ? state.runtimePaneTitlesByTabId[tabId]?.[activePane.id]
+          : undefined
+      )
+    }
+
+    // Why: host metadata is live and can hydrate after the terminal mounts;
+    // resolve it only when Shift+Enter needs to choose a byte protocol.
+    const isActivePaneWindowsTerminalHost = (): boolean => {
+      const manager = managerRef.current
+      const activePane = manager?.getActivePane() ?? manager?.getPanes()[0]
+      return (
+        resolveTerminalInputHostPlatform({
+          clientPlatform: shortcutPlatform,
+          state: useAppStore.getState(),
+          worktreeId,
+          transport: activePane ? (paneTransportsRef.current.get(activePane.id) ?? null) : null
+        }) === 'win32'
+      )
     }
 
     // Why: the pane's TUI opted into kitty keyboard reporting via CSI > u;

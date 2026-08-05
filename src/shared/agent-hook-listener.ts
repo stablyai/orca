@@ -55,11 +55,15 @@ import {
 import { ORCA_HOOK_PROTOCOL_VERSION } from './agent-hook-types'
 import { REMOTE_AGENT_HOOK_ENV, type AgentHookSource } from './agent-hook-relay'
 import {
+  agentProviderSessionsEqual,
   extractAgentProviderSession,
   type AgentProviderSessionMetadata
 } from './agent-session-resume'
 import { parsePaneKey } from './stable-pane-id'
-import { isKnownHarnessInjectedUserTurnText } from './harness-injected-user-turns'
+import {
+  isCompactContinuationUserTurnText,
+  isKnownHarnessInjectedUserTurnText
+} from './harness-injected-user-turns'
 import {
   buildGrokChatHistoryPathCandidates,
   findGrokChatHistoryBySessionId,
@@ -102,6 +106,15 @@ function capOpenCodeHookText(text: string): string {
 
 /** Bound paneKey size (real keys are well under 200); caps per-pane caches against pathological input. Exported so non-HTTP ingest (`ingestRemote`) applies the same cap as defense-in-depth. */
 export const MAX_PANE_KEY_LEN = 200
+const CLAUDE_PROMPT_ID_RE = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i
+
+export function normalizeClaudePromptId(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined
+  }
+  const normalized = value.trim().toLowerCase()
+  return CLAUDE_PROMPT_ID_RE.test(normalized) ? normalized : undefined
+}
 
 /** Per-listener-instance caches needing per-PTY teardown; Orca's main process and the relay each get their own, never shared. */
 export type HookListenerState = {
@@ -298,6 +311,8 @@ export function warnOnHookEnvOrVersionMismatch(
 
 export type AgentHookEventPayload = {
   paneKey: string
+  /** Authenticated hook route that produced this event. */
+  source?: AgentHookSource
   /** Ephemeral Orca launch identity stamped into the PTY env for this process. */
   launchToken?: string
   tabId?: string
@@ -310,6 +325,10 @@ export type AgentHookEventPayload = {
   promptInteractionKey?: string
   /** Raw agent hook event name, used by main-process transition guards. */
   hookEventName?: string
+  /** Claude's provider-owned user-prompt UUID. */
+  providerPromptId?: string
+  /** Active Claude compact generation, keyed by provider prompt identity. */
+  compactTrigger?: 'manual' | 'auto'
   /** Claude tool-use identifier when the hook source exposes one. */
   toolUseId?: string
   /** Claude agent/subagent identifier when the hook source exposes one. */
@@ -325,6 +344,92 @@ export type AgentHookEventPayload = {
   /** Transport-only Claude background-work evidence used to reject false input-based interrupts. */
   claudeRunningNonAgentTask?: boolean
   payload: ParsedAgentStatusPayload
+}
+
+type ClaudeCompactIdentity = Pick<
+  AgentHookEventPayload,
+  | 'source'
+  | 'connectionId'
+  | 'hookEventName'
+  | 'providerPromptId'
+  | 'compactTrigger'
+  | 'providerSession'
+>
+
+export function canAcceptClaudeCompactTransition(
+  previous: AgentHookEventPayload | undefined,
+  incoming: ClaudeCompactIdentity,
+  options: { allowUnanchoredPreCompact?: boolean; allowUnanchoredPostCompact?: boolean } = {}
+): boolean {
+  if (
+    incoming.source !== 'claude' ||
+    incoming.compactTrigger === undefined ||
+    incoming.providerPromptId === undefined ||
+    (incoming.hookEventName !== 'PreCompact' && incoming.hookEventName !== 'PostCompact')
+  ) {
+    return false
+  }
+  if (incoming.hookEventName === 'PreCompact' && options.allowUnanchoredPreCompact) {
+    return true
+  }
+  if (incoming.hookEventName === 'PostCompact' && options.allowUnanchoredPostCompact) {
+    return true
+  }
+  if (
+    previous?.source !== 'claude' ||
+    previous.payload.agentType !== 'claude' ||
+    previous.connectionId !== incoming.connectionId ||
+    !agentProviderSessionsEqual('claude', previous.providerSession, incoming.providerSession)
+  ) {
+    return false
+  }
+  if (incoming.hookEventName === 'PostCompact') {
+    return (
+      previous.compactTrigger === incoming.compactTrigger &&
+      previous.providerPromptId === incoming.providerPromptId
+    )
+  }
+  return incoming.compactTrigger === 'manual'
+    ? previous.providerPromptId !== undefined
+    : previous.providerPromptId === incoming.providerPromptId
+}
+
+export function resolveCachedClaudeCompactOwnership(
+  previous: AgentHookEventPayload | undefined,
+  incoming: AgentHookEventPayload
+): AgentHookEventPayload {
+  const sameClaudeOwner =
+    previous?.source === 'claude' &&
+    previous.payload.agentType === 'claude' &&
+    incoming.source === 'claude' &&
+    incoming.payload.agentType === 'claude' &&
+    incoming.connectionId === previous.connectionId &&
+    agentProviderSessionsEqual('claude', previous.providerSession, incoming.providerSession)
+      ? previous
+      : undefined
+  if (incoming.hookEventName === 'PreCompact' && incoming.compactTrigger) {
+    return sameClaudeOwner?.payload.prompt && incoming.payload.prompt.length === 0
+      ? { ...incoming, payload: { ...incoming.payload, prompt: sameClaudeOwner.payload.prompt } }
+      : incoming
+  }
+  if (incoming.hookEventName === 'PostCompact') {
+    return incoming.compactTrigger ? { ...incoming, compactTrigger: undefined } : incoming
+  }
+  const ownsCompact =
+    sameClaudeOwner?.compactTrigger !== undefined &&
+    sameClaudeOwner.providerPromptId !== undefined &&
+    incoming.providerPromptId === sameClaudeOwner.providerPromptId
+  if (ownsCompact) {
+    return {
+      ...incoming,
+      compactTrigger: sameClaudeOwner.compactTrigger,
+      payload:
+        incoming.payload.prompt.length === 0 && sameClaudeOwner.payload.prompt
+          ? { ...incoming.payload, prompt: sameClaudeOwner.payload.prompt }
+          : incoming.payload
+    }
+  }
+  return incoming.compactTrigger ? { ...incoming, compactTrigger: undefined } : incoming
 }
 
 // ─── Body parsing ───────────────────────────────────────────────────
@@ -502,6 +607,14 @@ function stripGrokUserQueryWrapper(promptText: string): string {
   const text = wrappedText.endsWith(closer) ? wrappedText.slice(0, -closer.length) : wrappedText
   // Why: Grok wraps the submitted prompt in a `<user_query>` envelope; the status cache should hold the plain user text.
   return text.trim()
+}
+
+// Why: the post-compact continuation prompt has no matching Stop and would resurrect working.
+function shouldIgnoreCompactContinuationUserPromptSubmit(
+  eventName: unknown,
+  promptText: string
+): boolean {
+  return eventName === 'UserPromptSubmit' && isCompactContinuationUserTurnText(promptText)
 }
 
 function resolvePrompt(
@@ -2640,19 +2753,27 @@ function normalizeClaudeEvent(
   const sessionCronInventoryPresent = Array.isArray(sessionCrons)
   const hasActiveSessionCron = sessionCronInventoryPresent && sessionCrons.length > 0
 
+  if (shouldIgnoreCompactContinuationUserPromptSubmit(eventName, promptText)) {
+    return null
+  }
+
   // Why: Claude's auto-allowed AskUserQuestion emits PreToolUse (not PermissionRequest; its Notification hook isn't registered) while blocked on a human answer.
   // Treat that PreToolUse as waiting so the sidebar shows amber attention, not a spinner that decays to grey. Mirrors normalizeKimiEvent.
   const isAskUserQuestion =
     eventName === 'PreToolUse' && isAskUserQuestionTool(readString(hookPayload, 'tool_name'))
+  // Why: /compact can take minutes and does not emit Stop. PreCompact marks the pane busy;
+  // PostCompact clears it so a finished compact cannot leave a sticky working spinner (#11352).
   const reportedStateName =
     eventName === 'UserPromptSubmit' ||
     eventName === 'PostToolUse' ||
     eventName === 'PostToolUseFailure' ||
+    eventName === 'PreCompact' ||
+    (eventName === 'PostCompact' && hookPayload.trigger === 'auto') ||
     (eventName === 'PreToolUse' && !isAskUserQuestion)
       ? 'working'
       : eventName === 'PermissionRequest' || isAskUserQuestion
         ? 'waiting'
-        : isTurnBoundary
+        : isTurnBoundary || (eventName === 'PostCompact' && hookPayload.trigger === 'manual')
           ? 'done'
           : null
 
@@ -2863,6 +2984,10 @@ function normalizeKimiEvent(
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
+  if (shouldIgnoreCompactContinuationUserPromptSubmit(eventName, promptText)) {
+    return null
+  }
+
   const toolName = readString(hookPayload, 'tool_name')
   const isUserInputTool = isKimiUserInputTool(toolName)
 
@@ -3938,7 +4063,8 @@ export function normalizeHookPayload(
   state: HookListenerState,
   source: AgentHookSource,
   body: unknown,
-  expectedEnv: string
+  expectedEnv: string,
+  options: { allowUnanchoredPreCompact?: boolean; allowUnanchoredPostCompact?: boolean } = {}
 ): AgentHookEventPayload | null {
   if (typeof body !== 'object' || body === null) {
     return null
@@ -3987,6 +4113,52 @@ export function normalizeHookPayload(
     readFirstString(record, ['hook_event_name', 'hookEventName', 'hook_type', 'hookType']) ??
     hookPayloadRecord.hook_event_name ??
     hookPayloadRecord.hookEventName
+  // Why: Codex child hooks expose the child's session_id on the parent's pane.
+  const providerSession =
+    source === 'codex' && readString(hookPayloadRecord, 'agent_id')
+      ? null
+      : extractAgentProviderSession(source, hookPayloadRecord)
+  const providerPromptId =
+    source === 'claude' ? normalizeClaudePromptId(hookPayloadRecord.prompt_id) : undefined
+  const compactTrigger =
+    source === 'claude' &&
+    (eventName === 'PreCompact' || eventName === 'PostCompact') &&
+    (hookPayloadRecord.trigger === 'manual' || hookPayloadRecord.trigger === 'auto')
+      ? hookPayloadRecord.trigger
+      : undefined
+  const isCompactEvent = eventName === 'PreCompact' || eventName === 'PostCompact'
+  if (isCompactEvent && compactTrigger === undefined) {
+    return null
+  }
+  const previousStatus = state.lastStatusByPaneKey.get(paneKey)
+  if (
+    compactTrigger !== undefined &&
+    !canAcceptClaudeCompactTransition(
+      previousStatus,
+      {
+        source,
+        connectionId: null,
+        hookEventName: typeof eventName === 'string' ? eventName : undefined,
+        providerPromptId,
+        compactTrigger,
+        providerSession: providerSession ?? undefined
+      },
+      {
+        allowUnanchoredPreCompact: options.allowUnanchoredPreCompact,
+        allowUnanchoredPostCompact: options.allowUnanchoredPostCompact
+      }
+    )
+  ) {
+    return null
+  }
+  if (
+    eventName === 'PostCompact' &&
+    compactTrigger !== undefined &&
+    previousStatus?.payload.prompt &&
+    !state.lastPromptByPaneKey.has(paneKey)
+  ) {
+    state.lastPromptByPaneKey.set(paneKey, previousStatus.payload.prompt)
+  }
   const extractedPrompt = extractPromptText(hookPayload as Record<string, unknown>)
   const promptText = extractedPrompt.text
   let resolvedPromptText = promptText
@@ -4108,12 +4280,6 @@ export function normalizeHookPayload(
   }
 
   // Why: connectionId is null here; ingestRemote stamps it from mux identity on receive. See docs/design/agent-status-over-ssh.md §5.
-  // Why: Codex child hooks expose the child's session_id on the parent's pane;
-  // treating it as the root resume id would replace the terminal's real session.
-  const providerSession =
-    source === 'codex' && readString(hookPayloadRecord, 'agent_id')
-      ? null
-      : extractAgentProviderSession(source, hookPayloadRecord)
   const providerSessionOnly =
     source === 'pi' && eventName === 'session_start' && providerSession !== null
   // Why: Pi session_start carries resume identity while idle; providerSessionOnly makes receivers discard the placeholder row.
@@ -4125,6 +4291,7 @@ export function normalizeHookPayload(
   return transportPayload
     ? {
         paneKey,
+        source,
         launchToken,
         tabId,
         worktreeId,
@@ -4143,6 +4310,8 @@ export function normalizeHookPayload(
               ),
         promptInteractionKey,
         hookEventName: typeof eventName === 'string' ? eventName : undefined,
+        providerPromptId,
+        compactTrigger,
         toolUseId: readFirstString(hookPayloadRecord, ['tool_use_id', 'toolUseId']),
         toolAgentId: readFirstString(hookPayloadRecord, ['agent_id', 'agentId']),
         toolAgentType: readString(hookPayloadRecord, 'agent_type'),
