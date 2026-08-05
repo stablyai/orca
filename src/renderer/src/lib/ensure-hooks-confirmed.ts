@@ -39,6 +39,55 @@ function getSetupTrustContent(yamlHooks: OrcaHooks | null): string {
   return [yamlHooks?.scripts?.setup?.trim(), ...defaultTabCommands].filter(Boolean).join('\n\n')
 }
 
+// Why: collapse every whitespace run — including a bare CR, which YAML
+// double-quoted scalars can produce and which renders as a line break under the
+// dialog's pre-wrap — to one space, so a repo-authored label/agent cannot inject
+// a break that forges a "# quickCommands[...]" header at column 0.
+function toSingleTrustLine(value: string): string {
+  return value.replace(/\s+/g, ' ').trim()
+}
+
+function indentTrustBodyLines(value: string): string {
+  return value
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) => `  ${line}`)
+    .join('\n')
+}
+
+// Why: one hash covers the whole project quick-command set, so any orca.yaml
+// quick-command change re-prompts once instead of per command. Repo-authored
+// fields are flattened/indented so embedded newlines cannot forge
+// "# quickCommands[...]" section headers in the review dialog. The action and
+// insert/run mode are encoded in the header so a behavior-changing edit
+// (terminal-command<->agent-prompt, or an appendEnter flip) changes the hash
+// and re-prompts, and so a terminal body of "agent: .../prompt: ..." cannot
+// hash-collide with an agent-prompt entry.
+function getQuickCommandsTrustContent(yamlHooks: OrcaHooks | null): string {
+  return (yamlHooks?.quickCommands ?? [])
+    .map((command, index) => {
+      const mode =
+        command.action === 'agent-prompt'
+          ? 'agent-prompt'
+          : command.appendEnter === false
+            ? 'terminal-command, insert'
+            : 'terminal-command'
+      const header = `# quickCommands[${index + 1}] (${mode}) ${toSingleTrustLine(command.label)}`
+      const body =
+        command.action === 'agent-prompt'
+          ? `agent: ${toSingleTrustLine(command.agent)}\nprompt: ${command.prompt}`
+          : command.command
+      return `${header}\n${indentTrustBodyLines(body)}`
+    })
+    .join('\n\n')
+}
+
+function getTrustHashInput(scriptKind: HookScriptKind, scriptContent: string): string {
+  // Why: hashOrcaHookScript trims outer whitespace, but a final insert-only
+  // command's cursor space is behavior. A fixed terminator keeps it interior.
+  return scriptKind === 'quickCommands' ? `${scriptContent}\n# end quickCommands` : scriptContent
+}
+
 function getVmRecipeTrustContent(yamlHooks: OrcaHooks | null): string {
   return (yamlHooks?.environmentRecipes ?? [])
     .map((recipe) =>
@@ -88,16 +137,27 @@ function settingsForHookRepoOwner(
     : ({ activeRuntimeEnvironmentId: runtimeEnvironmentId } as AppState['settings'])
 }
 
+export type EnsureHooksConfirmedOptions = {
+  /** Called with the parsed orca.yaml hooks from the same read that produced
+   *  the trust hash, so callers can execute exactly what was reviewed.
+   *  Providing this callback forces a read even for always-trusted repos. */
+  onSharedHooksInspected?: (yamlHooks: OrcaHooks | null) => void
+}
+
 export async function ensureHooksConfirmed(
   state: AppState,
   repoId: string,
   scriptKind: HookScriptKind,
   hostId?: ExecutionHostId,
-  runtimeOwnerEnvironmentId?: string | null
+  runtimeOwnerEnvironmentId?: string | null,
+  opts?: EnsureHooksConfirmedOptions
 ): Promise<'run' | 'skip'> {
   return enqueueTrustPrompt(async () => {
     const hasDuplicateRepoId = state.repos.filter((repo) => repo.id === repoId).length > 1
-    if (state.trustedOrcaHooks[repoId]?.all && !(hostId && hasDuplicateRepoId)) {
+    const canUseAlwaysTrust = Boolean(
+      state.trustedOrcaHooks[repoId]?.all && !(hostId && hasDuplicateRepoId)
+    )
+    if (canUseAlwaysTrust && !opts?.onSharedHooksInspected) {
       return 'run'
     }
 
@@ -124,15 +184,20 @@ export async function ensureHooksConfirmed(
         scriptContent = (result.sharedContent ?? '').trim()
       } else {
         const repo = findHookRepo(state, repoId, hostId)
-        const localScript = repo?.hookSettings?.scripts?.[scriptKind]?.trim()
-        const sourcePolicy = resolveHookCommandSourcePolicy(
-          repo?.hookSettings?.commandSourcePolicy,
-          {
-            hasLocalScript: Boolean(localScript)
+        // Why: commandSourcePolicy governs local overrides of hook scripts;
+        // project quick commands are always shared content, so 'local-only'
+        // must not skip their trust prompt.
+        if (scriptKind !== 'quickCommands') {
+          const localScript = repo?.hookSettings?.scripts?.[scriptKind]?.trim()
+          const sourcePolicy = resolveHookCommandSourcePolicy(
+            repo?.hookSettings?.commandSourcePolicy,
+            {
+              hasLocalScript: Boolean(localScript)
+            }
+          )
+          if (sourcePolicy === 'local-only') {
+            return 'run'
           }
-        )
-        if (sourcePolicy === 'local-only') {
-          return 'run'
         }
         const result = await checkRuntimeHooks(
           settingsForHookRepoOwner(state, repoId, hostId, runtimeOwnerEnvironmentId),
@@ -143,23 +208,29 @@ export async function ensureHooksConfirmed(
           return 'skip'
         }
         const yamlHooks = (result.hooks as OrcaHooks | null) ?? null
+        opts?.onSharedHooksInspected?.(yamlHooks)
         scriptContent =
           scriptKind === 'setup'
             ? getSetupTrustContent(yamlHooks)
             : scriptKind === 'vmRecipe'
               ? getVmRecipeTrustContent(yamlHooks)
-              : (yamlHooks?.scripts?.[scriptKind] ?? '').trim()
+              : scriptKind === 'quickCommands'
+                ? getQuickCommandsTrustContent(yamlHooks)
+                : (yamlHooks?.scripts?.[scriptKind] ?? '').trim()
       }
     } catch {
       // Fail closed: if we cannot inspect the script, we cannot trust it.
       return 'skip'
     }
 
+    if (canUseAlwaysTrust) {
+      return 'run'
+    }
     if (!scriptContent) {
       return 'run'
     }
 
-    const contentHash = await hashOrcaHookScript(scriptContent)
+    const contentHash = await hashOrcaHookScript(getTrustHashInput(scriptKind, scriptContent))
     const existingHash = state.trustedOrcaHooks[repoId]?.[scriptKind]?.contentHash
     if (existingHash === contentHash) {
       return 'run'

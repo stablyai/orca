@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Plus } from 'lucide-react'
 import type { GlobalSettings, TerminalQuickCommand } from '../../../../shared/types'
 import { getTerminalQuickCommandScope } from '../../../../shared/terminal-quick-commands'
@@ -14,6 +14,7 @@ import { getSettingOwnershipSummary } from './setting-ownership'
 import { translate } from '@/i18n/i18n'
 import { QuickCommandsList } from './QuickCommandsList'
 import { GLOBAL_SCOPE_KEY, QuickCommandsScopeFilter } from './QuickCommandsScopeFilter'
+import { collectProjectQuickCommandsForRepos } from '@/store/slices/project-quick-commands'
 
 type QuickCommandsPaneProps = {
   settings: GlobalSettings
@@ -32,6 +33,32 @@ type EditorState =
     }
   | null
 
+// Why: four keeps cross-repo Settings results progressive without flooding a
+// local IPC, SSH relay, or runtime transport with one request per repo.
+const MAX_CONCURRENT_PROJECT_COMMAND_LOADS = 4
+
+export async function warmProjectQuickCommandCaches(
+  repoIds: readonly string[],
+  load: (repoId: string) => Promise<void>,
+  isCancelled: () => boolean = () => false
+): Promise<void> {
+  const pendingRepoIds = [...new Set(repoIds)]
+  let nextIndex = 0
+  const worker = async (): Promise<void> => {
+    while (!isCancelled() && nextIndex < pendingRepoIds.length) {
+      const repoId = pendingRepoIds[nextIndex]
+      nextIndex += 1
+      await load(repoId)
+    }
+  }
+  await Promise.all(
+    Array.from(
+      { length: Math.min(MAX_CONCURRENT_PROJECT_COMMAND_LOADS, pendingRepoIds.length) },
+      worker
+    )
+  )
+}
+
 export function shouldOpenQuickCommandAddIntent(
   addCommandIntentSignal: number | undefined,
   consumedAddIntentSignal: number
@@ -49,6 +76,25 @@ export function QuickCommandsPane({
   const commands = settings.terminalQuickCommands ?? []
   const ownership = getSettingOwnershipSummary('terminalQuickCommands')
   const confirm = useConfirmationDialog()
+
+  const projectQuickCommandsByRepo = useAppStore((s) => s.projectQuickCommandsByRepo)
+  const projectQuickCommandOwnerByRepo = useAppStore((s) => s.projectQuickCommandOwnerByRepo)
+  const loadProjectQuickCommands = useAppStore((s) => s.loadProjectQuickCommands)
+  useEffect(() => {
+    let cancelled = false
+    // Why: Settings needs every repo, but a bounded worker pool avoids a burst
+    // of local/SSH/runtime reads when users have many projects.
+    void warmProjectQuickCommandCaches(
+      repos.map((repo) => repo.id),
+      loadProjectQuickCommands,
+      () => cancelled
+    ).catch((err: unknown) => {
+      console.warn('Failed to warm project quick commands:', err)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [repos, loadProjectQuickCommands])
 
   const [editor, setEditor] = useState<EditorState>(null)
   const consumedAddIntentSignalRef = useRef(0)
@@ -76,6 +122,23 @@ export function QuickCommandsPane({
       return effectiveSelection.has(GLOBAL_SCOPE_KEY)
     }
     return effectiveSelection.has(scope.repoId)
+  })
+
+  const projectCommands = useMemo(
+    () =>
+      collectProjectQuickCommandsForRepos({
+        repos,
+        projectQuickCommandsByRepo,
+        projectQuickCommandOwnerByRepo
+      }),
+    [repos, projectQuickCommandsByRepo, projectQuickCommandOwnerByRepo]
+  )
+  const visibleProjectCommands = projectCommands.filter((command) => {
+    if (showAll) {
+      return true
+    }
+    const scope = getTerminalQuickCommandScope(command)
+    return scope.type === 'repo' && effectiveSelection.has(scope.repoId)
   })
 
   const createDraftForCurrentFilter = useCallback((): TerminalQuickCommand => {
@@ -146,6 +209,13 @@ export function QuickCommandsPane({
     updateSettings({ terminalQuickCommands: nextList })
   }
 
+  // Why: project commands are read-only; copying opens the editor on a
+  // personal duplicate (fresh id) so the user can tweak and save it.
+  const copyProjectCommand = (command: TerminalQuickCommand): void => {
+    const draft = createTerminalQuickCommandDraft(getTerminalQuickCommandScope(command))
+    setEditor({ mode: 'add', command: { ...command, id: draft.id } })
+  }
+
   const removeCommand = async (command: TerminalQuickCommand): Promise<void> => {
     const confirmed = await confirm({
       title: translate(
@@ -209,6 +279,33 @@ export function QuickCommandsPane({
         onEdit={(command) => setEditor({ mode: 'edit', command })}
         onRemove={(command) => void removeCommand(command)}
       />
+
+      {visibleProjectCommands.length > 0 ? (
+        <>
+          <div className="space-y-1 pt-2">
+            <Label>
+              {translate(
+                'auto.components.settings.QuickCommandsPane.a7e5c2f918',
+                'Project Commands'
+              )}
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              {translate(
+                'auto.components.settings.QuickCommandsPane.c4d81b6a53',
+                "Shared with your team through each repository's orca.yaml. Edit the file to change them, or copy one into your saved commands."
+              )}
+            </p>
+          </div>
+          <QuickCommandsList
+            commands={projectCommands}
+            visibleCommands={visibleProjectCommands}
+            repoById={repoById}
+            onEdit={() => {}}
+            onRemove={() => {}}
+            onCopyToPersonal={copyProjectCommand}
+          />
+        </>
+      ) : null}
 
       {editor !== null ? (
         <TerminalQuickCommandDialog

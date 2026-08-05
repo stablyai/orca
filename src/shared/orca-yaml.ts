@@ -1,7 +1,9 @@
 import { parseDocument } from 'yaml'
+import { MAX_QUICK_COMMANDS } from './terminal-quick-commands'
 import type {
   OrcaDefaultTabTemplate,
   OrcaHooks,
+  OrcaQuickCommandTemplate,
   OrcaVmRecipe,
   OrcaVmRecipeDiagnostic
 } from './types'
@@ -96,6 +98,52 @@ function normalizeDefaultTabs(value: unknown): OrcaDefaultTabTemplate[] {
       }
     })
     .filter((entry): entry is OrcaDefaultTabTemplate => entry !== null)
+}
+
+function normalizeQuickCommands(value: unknown): OrcaQuickCommandTemplate[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  const commands: OrcaQuickCommandTemplate[] = []
+  for (const entry of value) {
+    // Why: orca.yaml is repo-authored input; the cap must bound normalization
+    // work and allocations, not merely truncate an already-built list.
+    if (commands.length >= MAX_QUICK_COMMANDS) {
+      break
+    }
+    const record = asRecord(entry)
+    if (!record) {
+      continue
+    }
+    const label = asTrimmedString(record.label)
+    if (!label) {
+      continue
+    }
+    if (record.action === 'agent-prompt') {
+      const agent = asTrimmedString(record.agent)
+      const prompt = typeof record.prompt === 'string' ? record.prompt.trimEnd() : ''
+      if (agent && prompt.trim()) {
+        commands.push({ action: 'agent-prompt', label, agent, prompt })
+      }
+      continue
+    }
+    const rawCommand = typeof record.command === 'string' ? record.command : ''
+    // Why: insert-only commands may end with an intentional cursor space, so
+    // strip only block-scalar newlines for them instead of a full trimEnd.
+    const command =
+      record.appendEnter === false ? rawCommand.replace(/[\r\n]+$/, '') : rawCommand.trimEnd()
+    if (!command.trim()) {
+      continue
+    }
+    commands.push({
+      action: 'terminal-command',
+      label,
+      command,
+      ...(record.appendEnter === false ? { appendEnter: false } : {})
+    })
+  }
+  return commands
 }
 
 type VmRecipeParseResult = {
@@ -217,6 +265,7 @@ export function parseOrcaYaml(content: string): OrcaHooks | null {
   const archive = scriptsRecord ? asTrimmedString(scriptsRecord.archive) : undefined
   const issueCommand = asTrimmedString(record.issueCommand)
   const defaultTabs = normalizeDefaultTabs(record.defaultTabs)
+  const quickCommands = normalizeQuickCommands(record.quickCommands)
   const environmentRecipeParse = normalizeVmRecipes(record.environmentRecipes)
   const environmentRecipes = environmentRecipeParse.recipes
   const environmentRecipeDiagnostics = environmentRecipeParse.diagnostics
@@ -230,6 +279,7 @@ export function parseOrcaYaml(content: string): OrcaHooks | null {
     !archive &&
     !issueCommand &&
     defaultTabs.length === 0 &&
+    quickCommands.length === 0 &&
     environmentRecipes.length === 0 &&
     environmentRecipeDiagnostics.length === 0 &&
     sharedDirectories.length === 0
@@ -244,6 +294,7 @@ export function parseOrcaYaml(content: string): OrcaHooks | null {
     },
     ...(issueCommand ? { issueCommand } : {}),
     ...(defaultTabs.length > 0 ? { defaultTabs } : {}),
+    ...(quickCommands.length > 0 ? { quickCommands } : {}),
     ...(environmentRecipes.length > 0 ? { environmentRecipes } : {}),
     ...(environmentRecipeDiagnostics.length > 0 ? { environmentRecipeDiagnostics } : {}),
     ...(sharedDirectories.length > 0 ? { worktree: { sharedDirectories } } : {})

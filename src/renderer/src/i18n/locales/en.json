@@ -2795,7 +2795,8 @@
             "c2f0b72b8d": "Insert",
             "925f49f210": "Expand Pane",
             "df766809e0": "Collapse Pane",
-            "cff67afad1": "Copy Context"
+            "cff67afad1": "Copy Context",
+            "5b2ac41d87": "Project — orca.yaml"
           },
           "TerminalErrorToast": {
             "e4aa243f8c": "Restart daemon",
@@ -3084,7 +3085,9 @@
             "c781f992e4": "destructive",
             "be8f0ff166": "Delete",
             "f3a8c2d1e7": "Search quick commands...",
-            "b4e7f9a2c1": "No commands match"
+            "b4e7f9a2c1": "No commands match",
+            "7c41da95e2": "Copy {{value0}} to my commands",
+            "d5f1c0a9b3": "Project — orca.yaml"
           },
           "shell": {
             "icons": {
@@ -6605,7 +6608,10 @@
           "38d61927e6": "No quick commands saved.",
           "44923dd982": "destructive",
           "ec1ed99e70": "Delete",
-          "d1d0976320": "None"
+          "d1d0976320": "None",
+          "a7e5c2f918": "Project Commands",
+          "b1c85a7f42": "Copy {{value0}} to my commands",
+          "c4d81b6a53": "Shared with your team through each repository's orca.yaml. Edit the file to change them, or copy one into your saved commands."
         },
         "RecentTabOrderControl": {
           "3b17c81ede": "Tab strip order",

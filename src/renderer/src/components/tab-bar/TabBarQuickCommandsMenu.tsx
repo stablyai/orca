@@ -1,12 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, Play } from 'lucide-react'
-import {
-  Command,
-  CommandEmpty,
-  CommandInput,
-  CommandList,
-  CommandSeparator
-} from '@/components/ui/command'
+import { Command, CommandInput, CommandList } from '@/components/ui/command'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,7 +14,7 @@ import {
 } from '../../../../shared/terminal-quick-commands'
 import type { TerminalQuickCommand } from '../../../../shared/types'
 import { getAgentLabel } from '@/lib/agent-catalog'
-import { TabBarQuickCommandItem } from './TabBarQuickCommandItem'
+import { TabBarQuickCommandsMenuSections } from './TabBarQuickCommandsMenuSections'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import {
@@ -31,22 +25,28 @@ import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { useTabBarQuickCommandsShortcut } from './tab-bar-quick-commands-shortcut'
 type TabBarQuickCommandsMenuProps = {
   repoCommands: readonly TerminalQuickCommand[]
+  projectCommands: readonly TerminalQuickCommand[]
   globalCommands: readonly TerminalQuickCommand[]
   mostRecent: TerminalQuickCommand | null
   onAddCommand: () => void
   onDeleteCommand: (command: TerminalQuickCommand) => void
   onEditCommand: (command: TerminalQuickCommand) => void
   onRunCommand: (command: TerminalQuickCommand) => void
+  onCopyProjectCommand: (command: TerminalQuickCommand) => void
+  onMenuOpen?: () => void
 }
 
 export function TabBarQuickCommandsMenu({
   repoCommands,
+  projectCommands,
   globalCommands,
   mostRecent,
   onAddCommand,
   onDeleteCommand,
   onEditCommand,
-  onRunCommand
+  onRunCommand,
+  onCopyProjectCommand,
+  onMenuOpen
 }: TabBarQuickCommandsMenuProps): React.JSX.Element {
   const openMenuShortcutCombos = useShortcutKeyComboDetails('tab.openQuickCommandsMenu')
   const [menuOpen, setMenuOpen] = useState(false)
@@ -59,19 +59,23 @@ export function TabBarQuickCommandsMenu({
   // Why: closing restores focus to the chevron for accessibility, but that
   // focus restoration should not immediately reopen its tooltip.
   const suppressMoreCommandsTooltipRef = useRef(false)
-  const totalVisible = repoCommands.length + globalCommands.length
+  const totalVisible = repoCommands.length + projectCommands.length + globalCommands.length
   const showSearch = totalVisible > 1
   const filteredRepoCommands = useMemo(
     () => searchTerminalQuickCommands(repoCommands, query),
     [repoCommands, query]
+  )
+  const filteredProjectCommands = useMemo(
+    () => searchTerminalQuickCommands(projectCommands, query),
+    [projectCommands, query]
   )
   const filteredGlobalCommands = useMemo(
     () => searchTerminalQuickCommands(globalCommands, query),
     [globalCommands, query]
   )
   const filteredVisibleCommands = useMemo(
-    () => [...filteredRepoCommands, ...filteredGlobalCommands],
-    [filteredRepoCommands, filteredGlobalCommands]
+    () => [...filteredRepoCommands, ...filteredProjectCommands, ...filteredGlobalCommands],
+    [filteredRepoCommands, filteredProjectCommands, filteredGlobalCommands]
   )
   const commandValue = useMemo(() => {
     const activeValue = getTerminalQuickCommandPickerValue({
@@ -126,6 +130,7 @@ export function TabBarQuickCommandsMenu({
         suppressMoreCommandsTooltipRef.current = false
         setMoreCommandsTooltipOpen(false)
         setCommandValueOverride(null)
+        onMenuOpen?.()
         return
       }
       suppressMoreCommandsTooltipRef.current = true
@@ -134,7 +139,7 @@ export function TabBarQuickCommandsMenu({
       setQuery('')
       setCommandValueOverride(null)
     },
-    [cancelFocusFrame]
+    [cancelFocusFrame, onMenuOpen]
   )
   const closeMenu = useCallback((): void => {
     handleOpenChange(false)
@@ -334,52 +339,25 @@ export function TabBarQuickCommandsMenu({
               />
             ) : null}
             <CommandList ref={commandListRef} className="max-h-72 py-1">
-              {filteredVisibleCommands.length === 0 ? (
-                <CommandEmpty className="py-4 text-center text-[11px]">
-                  {query.trim()
-                    ? translate(
-                        'auto.components.tab.bar.TabBarQuickCommandsButton.b4e7f9a2c1',
-                        'No commands match'
-                      )
-                    : translate(
-                        'auto.components.tab.bar.TabBarQuickCommandsButton.20bbd75896',
-                        'No commands'
-                      )}
-                </CommandEmpty>
-              ) : null}
-              {filteredRepoCommands.map((command) => (
-                <TabBarQuickCommandItem
-                  key={command.id}
-                  command={command}
-                  onRun={() => runAndClose(command)}
-                  onEdit={() => {
-                    closeMenu()
-                    onEditCommand(command)
-                  }}
-                  onDelete={() => {
-                    closeMenu()
-                    onDeleteCommand(command)
-                  }}
-                />
-              ))}
-              {filteredRepoCommands.length > 0 && filteredGlobalCommands.length > 0 ? (
-                <CommandSeparator className="my-1" />
-              ) : null}
-              {filteredGlobalCommands.map((command) => (
-                <TabBarQuickCommandItem
-                  key={command.id}
-                  command={command}
-                  onRun={() => runAndClose(command)}
-                  onEdit={() => {
-                    closeMenu()
-                    onEditCommand(command)
-                  }}
-                  onDelete={() => {
-                    closeMenu()
-                    onDeleteCommand(command)
-                  }}
-                />
-              ))}
+              <TabBarQuickCommandsMenuSections
+                filteredRepoCommands={filteredRepoCommands}
+                filteredProjectCommands={filteredProjectCommands}
+                filteredGlobalCommands={filteredGlobalCommands}
+                query={query}
+                onRunCommand={runAndClose}
+                onEditCommand={(command) => {
+                  closeMenu()
+                  onEditCommand(command)
+                }}
+                onDeleteCommand={(command) => {
+                  closeMenu()
+                  onDeleteCommand(command)
+                }}
+                onCopyProjectCommand={(command) => {
+                  closeMenu()
+                  onCopyProjectCommand(command)
+                }}
+              />
             </CommandList>
             <div className="border-t border-border/50 p-1">
               <button

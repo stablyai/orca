@@ -30,6 +30,7 @@ import {
 } from '@/constants/terminal'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { runQuickCommandInNewTab } from '@/lib/run-quick-command-in-new-tab'
+import { ensureProjectQuickCommandTrusted } from '@/lib/project-quick-command-trust'
 import {
   copyAgentSessionContextFromPane,
   prepareAgentSessionForkFromPane,
@@ -451,21 +452,38 @@ export function useTerminalPaneContextMenu({
   }
 
   const onQuickCommand = (command: TerminalQuickCommand): void => {
-    if (isTerminalAgentQuickCommand(command)) {
-      runQuickCommandInNewTab({ command, worktreeId, groupId })
-      return
-    }
-
+    // Why: resolve before async trust; the menu reference goes stale, and the
+    // freshly inspected command may have switched from agent to terminal.
     const pane = resolveMenuPane()
-    if (!pane) {
-      return
-    }
-    sendTerminalQuickCommandToPane({
-      command,
-      pane,
-      tabId,
-      transport: paneTransportsRef.current.get(pane.id)
-    })
+    void (async () => {
+      // Why: for project commands this returns the command re-projected from
+      // the same orca.yaml read the trust prompt covered, not the cached copy.
+      const trusted = await ensureProjectQuickCommandTrusted(command)
+      if (!trusted) {
+        return
+      }
+      if (isTerminalAgentQuickCommand(trusted)) {
+        runQuickCommandInNewTab({ command: trusted, worktreeId, groupId })
+        return
+      }
+      if (!pane) {
+        return
+      }
+      // Why: the trust prompt can outlive the pane (a close/remount may even
+      // reuse numeric ids), so only dispatch to the same still-live pane.
+      const livePane = managerRef.current
+        ?.getPanes()
+        .find((candidate) => candidate.id === pane.id && candidate.leafId === pane.leafId)
+      if (!livePane) {
+        return
+      }
+      sendTerminalQuickCommandToPane({
+        command: trusted,
+        pane: livePane,
+        tabId,
+        transport: paneTransportsRef.current.get(livePane.id)
+      })
+    })()
   }
 
   const onToggleExpand = (): void => {
