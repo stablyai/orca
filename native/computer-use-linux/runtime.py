@@ -1010,11 +1010,18 @@ def write_clipboard(value):
 
 
 def set_value(node, value):
-    if node is not None and bool(attempt(node.is_editable_text, False)):
-        editable = attempt(node.get_editable_text_iface)
-        if editable is not None and attempt(lambda: Atspi.EditableText.set_text_contents(editable, str(value)), False):
-            return True
-    value_iface = attempt(node.get_value_iface) if node is not None else None
+    # Why: Atspi.Accessible.is_editable_text is a C API only; GObject Introspection
+    # does not expose it on the Python wrapper, so attribute access raised before
+    # attempt() could catch it and every set-value failed (#10569). Probe the
+    # EditableText interface instead — that binding exists as get_editable_text_iface().
+    if node is None:
+        return False
+    editable = attempt(node.get_editable_text_iface)
+    if editable is not None and attempt(
+        lambda: Atspi.EditableText.set_text_contents(editable, str(value)), False
+    ):
+        return True
+    value_iface = attempt(node.get_value_iface)
     if value_iface is not None:
         return bool(attempt(lambda: Atspi.Value.set_current_value(value_iface, float(value)), False))
     return False
