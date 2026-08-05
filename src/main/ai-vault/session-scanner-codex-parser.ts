@@ -262,11 +262,11 @@ async function finalizeCodexParseState(
 
 export function createCodexSessionResumeState(
   file: FileWithMtime,
-  codexHome: string | null
-): ResumableSessionParseState {
-  return codexResumeStateFromParseState(createCodexParseState(file), codexHome, (sessionId) =>
+  codexHome: string | null,
+  titleReader: (sessionId: string) => Promise<string | null> = (sessionId) =>
     readCodexSessionIndexTitle(file.path, codexHome, sessionId)
-  )
+): ResumableSessionParseState {
+  return codexResumeStateFromParseState(createCodexParseState(file), codexHome, titleReader)
 }
 
 function codexResumeStateFromParseState(

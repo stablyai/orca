@@ -2,7 +2,7 @@ import type { AiVaultAgent, AiVaultSession } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { IFilesystemProvider } from '../providers/types'
 import type { RemoteHostPlatform } from '../ssh/ssh-remote-platform'
-import type { FileWithMtime } from './session-scanner-types'
+import type { FileWithMtime, ResumableSessionParseState } from './session-scanner-types'
 import type { AntigravityWorkspaceResolver } from './session-scanner-antigravity-history'
 
 export type RemoteScannerContext = {
@@ -16,7 +16,7 @@ export type RemoteScannerContext = {
 
 export type RemoteSessionFilesystemProvider = Pick<
   IFilesystemProvider,
-  'readDir' | 'readFile' | 'stat'
+  'downloadFile' | 'readDir' | 'readFile' | 'stat'
 >
 
 export type RemoteParserOptions = {
@@ -39,6 +39,12 @@ export type RemoteSessionSource = {
   // Claude layout: count `<session>/subagents/*.jsonl` siblings from the walked
   // listing and drop them from candidates instead of indexing them as sessions.
   collectSubagentSiblingCounts?: boolean
+  // Line-oriented JSONL sources can parse a downloaded large transcript
+  // without materializing the whole file as one string.
+  createParseState?: (
+    file: FileWithMtime,
+    context: RemoteScannerContext
+  ) => ResumableSessionParseState | null
   parse: (
     file: FileWithMtime,
     content: string,

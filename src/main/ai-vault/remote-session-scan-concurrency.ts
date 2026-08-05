@@ -13,10 +13,17 @@ export function limitRemoteScanFilesystemConcurrency(
   maxInFlight: number = REMOTE_SCAN_FILESYSTEM_CONCURRENCY
 ): RemoteSessionFilesystemProvider {
   const gate = createConcurrencyGate(maxInFlight)
+  const downloadFile = provider.downloadFile?.bind(provider)
   return {
     readDir: (dirPath) => gate(() => provider.readDir(dirPath)),
     readFile: (filePath) => gate(() => provider.readFile(filePath)),
-    stat: (filePath) => gate(() => provider.stat(filePath))
+    stat: (filePath) => gate(() => provider.stat(filePath)),
+    ...(downloadFile
+      ? {
+          downloadFile: (sourcePath: string, destinationPath: string) =>
+            gate(() => downloadFile(sourcePath, destinationPath))
+        }
+      : {})
   }
 }
 

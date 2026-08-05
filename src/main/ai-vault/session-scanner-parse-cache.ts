@@ -42,7 +42,7 @@ type SessionParseCacheEntry = {
 // unchanged-file reuse only and re-parse whole when they change.
 // Returns a factory (not a state) so steady-state resumes, which clone the
 // cached state instead, never pay for a throwaway accumulator.
-function resumableStateFactoryFor(
+export function resumableStateFactoryFor(
   candidate: SessionFileCandidate
 ): (() => ResumableSessionParseState) | null {
   switch (candidate.agent) {
