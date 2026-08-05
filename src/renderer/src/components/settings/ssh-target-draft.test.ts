@@ -231,11 +231,11 @@ describe('getEditingTargetForSshTarget', () => {
     })
 
     expect(draft.zmxTerminalPersistence).toBe(true)
-    expect(hasAdvancedConnectionValues(draft)).toBe(false)
+    expect(hasAdvancedConnectionValues(draft)).toBe(true)
   })
 
-  it('defaults SSH targets to zmx and preserves relay opt-outs', () => {
-    expect(EMPTY_FORM.zmxTerminalPersistence).toBe(true)
+  it('defaults SSH targets to relay so zmx stays opt-in', () => {
+    expect(EMPTY_FORM.zmxTerminalPersistence).toBe(false)
 
     const draft = getEditingTargetForSshTarget({
       id: 'ssh-1',
@@ -247,7 +247,7 @@ describe('getEditingTargetForSshTarget', () => {
     })
 
     expect(draft.zmxTerminalPersistence).toBe(false)
-    expect(hasAdvancedConnectionValues(draft)).toBe(true)
+    expect(hasAdvancedConnectionValues(draft)).toBe(false)
   })
 
   it('uses the default persistence for targets without an explicit grace period', () => {

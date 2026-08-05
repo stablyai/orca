@@ -2,7 +2,8 @@ export const SSH_TERMINAL_PERSISTENCE_BACKENDS = ['relay', 'zmx'] as const
 
 export type SshTerminalPersistenceBackend = (typeof SSH_TERMINAL_PERSISTENCE_BACKENDS)[number]
 
-export const DEFAULT_SSH_TERMINAL_PERSISTENCE_BACKEND: SshTerminalPersistenceBackend = 'zmx'
+// Why: zmx is opt-in per target — it requires the zmx binary on the remote host.
+export const DEFAULT_SSH_TERMINAL_PERSISTENCE_BACKEND: SshTerminalPersistenceBackend = 'relay'
 
 export function resolveSshTerminalPersistenceBackend(
   backend: SshTerminalPersistenceBackend | null | undefined
