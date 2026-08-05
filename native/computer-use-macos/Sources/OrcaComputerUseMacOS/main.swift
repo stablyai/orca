@@ -729,6 +729,15 @@ final class Provider {
         let snapshot = try currentSnapshot(params: params)
         let button = params["mouseButton"]?.string ?? "left"
         let count = try positiveInteger(params["clickCount"]?.number, defaultValue: 1, name: "clickCount")
+        // Why: Input.click sleeps 10ms per iteration; reject huge counts so a
+        // bad agent payload cannot stall the helper for minutes (#12592 review).
+        let maxClickCount = 20
+        guard count <= maxClickCount else {
+            throw ProviderError.coded(
+                "invalid_argument",
+                "clickCount must be <= \(maxClickCount)"
+            )
+        }
         let modifiers = try KeyMap.parseModifiers(params["modifiers"]?.string)
         // Why: agents expect a click into a target app to make the next
         // keyboard action safe, even when the click uses an AX action path.
