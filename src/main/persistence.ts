@@ -94,6 +94,7 @@ import type { MigrationUnsupportedPtyEntry } from '../shared/agent-status-types'
 import { MOBILE_PAIRING_USERDATA_FILES } from './runtime/mobile-pairing-files'
 import { normalizePersistedMobileClientTabSelections } from './runtime/client-session-tab-selection-persistence'
 import { sanitizeWorkspaceSessionTerminalRetirements } from './runtime/mobile-session-terminal-persistence-retirement'
+import { inferFolderWorkspacePathConnection } from './project-groups/folder-workspace-path-status'
 import {
   removeRepoFromHostWorkspaceSessions,
   removeRepoFromWorkspaceSession
@@ -6280,10 +6281,9 @@ export class Store {
   ): void {
     const prior = this.state.workspaceSession
     session = sanitizeWorkspaceSessionTerminalRetirements(session, prior, {
-      // Why: direct-SSH worktrees persist durable membership in their ssh:
+      // Why: direct-SSH workspaces persist durable membership in their ssh:
       // partition; the local fence would rebase them onto a frozen snapshot.
-      worktreeMembershipDelegated: (worktreeId) =>
-        Boolean(this.getConnectionIdForWorktree(worktreeId))
+      worktreeMembershipDelegated: (worktreeId) => this.isDirectSshOwnedWorkspaceKey(worktreeId)
     })
     session = pruneWorkspaceSessionBrowserHistory(
       pruneLocalTerminalScrollbackBuffers(session, this.state.repos)
@@ -6621,6 +6621,31 @@ export class Store {
   private getConnectionIdForWorktree(worktreeId: string): string | null {
     const repoId = getRepoIdFromWorktreeId(worktreeId)
     return this.state.repos.find((repo) => repo.id === repoId)?.connectionId ?? null
+  }
+
+  /** Whether a workspace key's terminal membership is owned by an ssh: partition. */
+  private isDirectSshOwnedWorkspaceKey(worktreeId: string): boolean {
+    const scope = parseWorkspaceKey(worktreeId)
+    if (scope?.type === 'folder') {
+      const workspace = this.state.folderWorkspaces?.find(
+        (entry) => entry.id === scope.folderWorkspaceId
+      )
+      if (!workspace) {
+        return false
+      }
+      const connection = inferFolderWorkspacePathConnection({
+        folderPath: workspace.folderPath,
+        projectGroupId: workspace.projectGroupId,
+        connectionId: workspace.connectionId ?? null,
+        projectGroups: this.state.projectGroups ?? [],
+        repos: this.state.repos
+      })
+      // Why: ambiguous scopes may include SSH children; fencing them risks
+      // rebasing durable membership onto a frozen snapshot.
+      return connection.kind !== 'local'
+    }
+    const rawWorktreeId = scope?.type === 'worktree' ? scope.worktreeId : worktreeId
+    return Boolean(this.getConnectionIdForWorktree(rawWorktreeId))
   }
 
   // Why: sync-flush the pty binding before pty:spawn returns to close the spawn/persist SIGKILL race (Issue #217).

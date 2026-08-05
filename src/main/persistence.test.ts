@@ -10426,6 +10426,52 @@ describe('Store', () => {
     expect(session.terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({})
   })
 
+  it('does not fence SSH folder workspace terminal membership onto a frozen local snapshot', async () => {
+    const store = await createStore()
+    const group = store.createProjectGroup({
+      name: 'Remote group',
+      parentPath: '/srv/projects',
+      connectionId: 'ssh-1',
+      createdFrom: 'manual'
+    })
+    const workspace = store.createFolderWorkspace({
+      projectGroupId: group.id,
+      name: 'Remote folder',
+      folderPath: '/srv/projects/app'
+    })
+    const workspaceKey = `folder:${workspace.id}`
+    const folderTab = {
+      id: 'folder-tab',
+      worktreeId: workspaceKey,
+      title: 'Terminal',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 1,
+      ptyId: 'ssh:ssh-1@@pty-7'
+    }
+    // Freeze the folder workspace's membership at empty, as retirement would.
+    store.setWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: { [workspaceKey]: [] },
+      terminalLayoutsByTabId: {},
+      terminalTopologyRevisionByRepoId: { [workspaceKey]: 5 }
+    })
+
+    store.setWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: { [workspaceKey]: [folderTab] },
+      terminalLayoutsByTabId: {}
+    })
+
+    const session = store.getWorkspaceSession()
+    expect(session.tabsByWorktree[workspaceKey]?.map((tab) => tab.id)).toEqual(['folder-tab'])
+  })
+
   it('clears relay-session tab mappings when marking an SSH remote PTY lease expired', async () => {
     const store = await createStore()
     store.upsertSshRemotePtyLease({
