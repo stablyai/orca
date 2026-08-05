@@ -31,7 +31,7 @@ describe('contextual tour step copy', () => {
     await setRendererUiLanguage('ko')
 
     expect(getLocalizedContextualTourStepCopy('floating-workspace-scratchpad')?.title).toBe(
-      '스크래치패드로도 사용하기'
+      '메모장처럼 사용하기'
     )
   })
 
