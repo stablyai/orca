@@ -5071,6 +5071,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     connectionId?: string | null
     receivedAt: number
     stateStartedAt: number
+    isReplay?: boolean
   }
   type StoreLike = Record<string, unknown>
   type StoreSubscribeListener = (state: StoreLike, previousState: StoreLike) => void
@@ -7839,6 +7840,81 @@ describe('useIpcEvents agent status snapshot integration', () => {
     )
     expect(updateTabTitle).toHaveBeenCalledWith('tab-future', 'Codex - action required')
     expect(observeAgentHookCompletionForNotification).toHaveBeenCalledTimes(1)
+  })
+
+  it('applies a replayed status without observing it for completion notifications', async () => {
+    const setAgentStatus = vi.fn()
+    const updateTabTitle = vi.fn()
+    const observeAgentHookCompletionForNotification = vi.fn()
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      updateTabTitle,
+      workspaceSessionReady: true,
+      settings: { terminalFontSize: 13, notifications: { enabled: true, agentTaskComplete: true } },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Claude' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-future': {
+          root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+          activeLeafId: FUTURE_LEAF_ID,
+          expandedLeafId: null
+        }
+      }
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    vi.doMock('./agent-hook-completion-notifications', () => ({
+      observeAgentHookCompletionForNotification,
+      resetAgentHookCompletionNotificationCoordinators: vi.fn(),
+      syncAgentHookCompletionNotificationsForStoreUpdate: vi.fn()
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (cb) => {
+          onSetListenerRef.current = cb
+          return () => {}
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+
+    useIpcEvents()
+    await Promise.resolve()
+
+    if (typeof onSetListenerRef.current !== 'function') {
+      throw new Error('Expected agentStatus.onSet listener to be registered')
+    }
+
+    // A reconnect replay re-delivers the cached terminal status. It must refresh the status UI
+    // without re-firing the task-complete notification the user already received.
+    onSetListenerRef.current({
+      paneKey: FUTURE_PANE_KEY,
+      tabId: 'tab-future',
+      worktreeId: 'wt-1',
+      state: 'done',
+      prompt: 'finish the report',
+      agentType: 'claude',
+      receivedAt: 1_700_000_000_400,
+      stateStartedAt: 1_699_999_999_400,
+      isReplay: true
+    })
+
+    expect(setAgentStatus).toHaveBeenCalledTimes(1)
+    expect(observeAgentHookCompletionForNotification).not.toHaveBeenCalled()
   })
 
   it('does not send an out-of-order hook event to completion lifecycle tracking', async () => {
