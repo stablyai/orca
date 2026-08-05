@@ -198,5 +198,10 @@ export function resolveAgentConfigValue(
     return agentSocket
   }
 
-  return createIdentityFilteredAgent(agentSocket, resolveIdentityFilePaths(target, resolved))
+  // Why: no parseable local identity file (keys living only in the agent, e.g.
+  // 1Password) must not silently disable agent auth — offer the raw agent instead.
+  return (
+    createIdentityFilteredAgent(agentSocket, resolveIdentityFilePaths(target, resolved)) ??
+    agentSocket
+  )
 }
