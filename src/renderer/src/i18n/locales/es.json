@@ -14521,6 +14521,8 @@
       "scrollMessageToTop": "Desplazar este mensaje hacia arriba",
       "loadingEarlier": "Cargando…",
       "loadEarlier": "Cargar mensajes anteriores",
+      "loadEarlierError": "No se pudieron cargar los mensajes anteriores",
+      "retryLoadEarlier": "Intentar de nuevo",
       "question": {
         "step": "Paso {{value0}}",
         "other": "Otro…",

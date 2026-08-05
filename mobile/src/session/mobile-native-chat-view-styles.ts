@@ -105,5 +105,16 @@ export const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: typography.metaSize,
     fontWeight: '600'
+  },
+  loadEarlierErrorText: {
+    color: colors.statusRed,
+    fontSize: typography.metaSize,
+    fontWeight: '600'
+  },
+  loadEarlierRetryText: {
+    color: colors.textSecondary,
+    fontSize: typography.metaSize,
+    fontWeight: '700',
+    marginTop: spacing.xs
   }
 })

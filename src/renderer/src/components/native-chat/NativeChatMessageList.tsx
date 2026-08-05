@@ -19,7 +19,14 @@ import { isNearBottom, shouldShowJumpToLatest, type ScrollGeometry } from './nat
 import { isNativeChatPastedImagePath } from './native-chat-image-paste'
 import { NativeChatToolRun } from './NativeChatToolRun'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
+import { NativeChatLoadEarlierButton } from './NativeChatLoadEarlierButton'
 import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat-streaming'
+import { canAutoLoadEarlier } from '../../../../shared/native-chat-load-earlier'
+import {
+  captureNativeChatPrependAnchor,
+  restoreNativeChatPrependAnchor,
+  type NativeChatPrependAnchor
+} from './native-chat-prepend-anchor'
 
 function geometryOf(el: HTMLElement): ScrollGeometry {
   return { scrollTop: el.scrollTop, scrollHeight: el.scrollHeight, clientHeight: el.clientHeight }
@@ -166,7 +173,11 @@ function MessageRow({
     // stays. (A distinct "queued" treatment flickered normal→queued→normal as the
     // transcript caught up.)
     return (
-      <div ref={rowRef} className="flex flex-col items-end gap-0.5">
+      <div
+        ref={rowRef}
+        data-native-chat-message-id={message.id}
+        className="flex flex-col items-end gap-0.5"
+      >
         {/* User turns get a distinct muted fill (not the card/canvas color) so
             the prompt reads apart from the assistant's body copy. */}
         <div className="max-w-[85%] rounded-lg rounded-tr-sm bg-muted px-3.5 py-2.5 text-sm text-foreground">
@@ -204,6 +215,7 @@ function MessageRow({
   return (
     <div
       ref={rowRef}
+      data-native-chat-message-id={message.id}
       className={cn(
         'group relative max-w-full text-sm leading-relaxed text-foreground',
         // Reasoning is the agent thinking aloud — quieter, italic, like an aside.
@@ -263,7 +275,7 @@ export function NativeChatMessageList({
   const stuckToBottomRef = useRef(stuckToBottom)
   stuckToBottomRef.current = stuckToBottom
 
-  const { hasMore, loadingEarlier, loadEarlier } = session
+  const { hasMore, loadingEarlier, loadEarlierError, loadEarlier } = session
 
   // Strip harness noise (task-notifications, system reminders, slash-command
   // envelopes) before folding so they don't render as the user's own bubbles —
@@ -277,10 +289,19 @@ export function NativeChatMessageList({
   const showTypingIndicator =
     isWorking && !messages.some((message) => message.id === NATIVE_CHAT_STREAMING_ID)
 
-  // When an older page prepends, the scroll content grows above the viewport.
-  // Capture the pre-render scroll height so the layout effect can restore the
-  // user's position (no jump) instead of letting the browser keep scrollTop.
-  const prependAnchorRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null)
+  // Preserve the visible row while older history is prepended above it.
+  const prependAnchorRef = useRef<NativeChatPrependAnchor | null>(null)
+  useLayoutEffect(() => {
+    prependAnchorRef.current = null
+  }, [session.historySourceKey])
+  const loadEarlierWithAnchor = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) {
+      return
+    }
+    prependAnchorRef.current = captureNativeChatPrependAnchor(el, contentRef.current)
+    loadEarlier()
+  }, [loadEarlier])
 
   const handleScroll = useCallback(() => {
     const el = scrollRef.current
@@ -288,16 +309,22 @@ export function NativeChatMessageList({
       return
     }
     const geometry = geometryOf(el)
+    if (
+      loadingEarlier &&
+      prependAnchorRef.current &&
+      geometry.scrollTop !== prependAnchorRef.current.scrollTop
+    ) {
+      prependAnchorRef.current = null
+    }
     const stick = isNearBottom(geometry)
     setStuckToBottom(stick)
     setShowJump(shouldShowJumpToLatest(stick, geometry))
     // Near the top — page in older history, anchoring the current position so the
     // prepend doesn't yank the view.
-    if (geometry.scrollTop < 80 && hasMore && !loadingEarlier) {
-      prependAnchorRef.current = { scrollHeight: el.scrollHeight, scrollTop: el.scrollTop }
-      loadEarlier()
+    if (geometry.scrollTop < 80 && canAutoLoadEarlier(hasMore, loadingEarlier, loadEarlierError)) {
+      loadEarlierWithAnchor()
     }
-  }, [hasMore, loadingEarlier, loadEarlier])
+  }, [hasMore, loadingEarlier, loadEarlierError, loadEarlierWithAnchor])
 
   const scrollToBottom = useCallback(() => {
     const el = scrollRef.current
@@ -328,19 +355,27 @@ export function NativeChatMessageList({
   // scrolled up. Layout effect so the jump happens before paint (no flicker).
   // When an older page just prepended, restore the prior position instead.
   useLayoutEffect(() => {
+    if (loadEarlierError) {
+      prependAnchorRef.current = null
+    }
+  }, [loadEarlierError])
+
+  useLayoutEffect(() => {
     const el = scrollRef.current
     if (el && prependAnchorRef.current) {
-      // Preserve the viewport: shift scrollTop by however much taller the content
-      // got, so the message the user was reading stays put.
-      const grew = el.scrollHeight - prependAnchorRef.current.scrollHeight
-      el.scrollTop = prependAnchorRef.current.scrollTop + grew
+      // Live tail growth may race the page; keep the visible row as the anchor
+      // and consume it only when the older-page request settles.
+      if (loadingEarlier) {
+        return
+      }
+      restoreNativeChatPrependAnchor(el, prependAnchorRef.current)
       prependAnchorRef.current = null
       return
     }
     if (stuckToBottomRef.current) {
       scrollToBottom()
     }
-  }, [messages.length, isWorking, showTypingIndicator, scrollToBottom])
+  }, [messages.length, isWorking, showTypingIndicator, loadingEarlier, scrollToBottom])
 
   // Content growing without a message-count change (a streaming assistant turn
   // extends its own message in place) never re-fires the layout effect above.
@@ -386,18 +421,11 @@ export function NativeChatMessageList({
           style={{ zoom: fontScale }}
         >
           {hasMore ? (
-            <div className="flex justify-center py-1">
-              <button
-                type="button"
-                onClick={loadEarlier}
-                disabled={loadingEarlier}
-                className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
-              >
-                {loadingEarlier
-                  ? translate('components.native-chat.loadingEarlier', 'Loading…')
-                  : translate('components.native-chat.loadEarlier', 'Load earlier messages')}
-              </button>
-            </div>
+            <NativeChatLoadEarlierButton
+              loadingEarlier={loadingEarlier}
+              loadEarlierError={loadEarlierError}
+              onLoadEarlier={loadEarlierWithAnchor}
+            />
           ) : null}
           {messages.map((message) => (
             <MessageRow

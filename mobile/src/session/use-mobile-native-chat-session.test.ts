@@ -1,4 +1,4 @@
-import { createElement } from 'react'
+import { createElement, useLayoutEffect } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
@@ -7,6 +7,9 @@ import {
   useMobileNativeChatSession,
   type MobileNativeChatSession
 } from './use-mobile-native-chat-session'
+
+/** Hands a pending `sendRequest` promise's settlers to the test body. */
+type PageSettle = { resolve: (response: unknown) => void; reject: (reason: unknown) => void }
 
 function message(id: string): NativeChatMessage {
   return {
@@ -22,10 +25,12 @@ describe('useMobileNativeChatSession', () => {
   let renderer: ReactTestRenderer | null = null
   let state: MobileNativeChatSession | null = null
   let emit: (frame: unknown) => void = () => {}
+  const renderedLoadEarlierErrors: Array<string | null> = []
 
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     state = null
+    renderedLoadEarlierErrors.length = 0
   })
 
   afterEach(() => {
@@ -33,17 +38,32 @@ describe('useMobileNativeChatSession', () => {
     renderer = null
   })
 
-  function Harness({ client }: { client: RpcClient | null }): null {
+  function Harness({
+    client,
+    agent = 'claude',
+    transcriptPath = null,
+    onLayout
+  }: {
+    client: RpcClient | null
+    agent?: string | null
+    transcriptPath?: string | null
+    onLayout?: () => void
+  }): null {
     state = useMobileNativeChatSession({
       client,
-      agent: 'claude',
+      agent,
       sessionId: 'session',
-      transcriptPath: null
+      transcriptPath
     })
+    renderedLoadEarlierErrors.push(state.loadEarlierError)
+    useLayoutEffect(() => onLayout?.(), [onLayout])
     return null
   }
 
-  async function mount(client: RpcClient): Promise<void> {
+  async function mount(
+    client: RpcClient,
+    options: { agent?: string | null; transcriptPath?: string | null } = {}
+  ): Promise<void> {
     const original = console.error
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
       if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
@@ -53,7 +73,7 @@ describe('useMobileNativeChatSession', () => {
     })
     try {
       await act(async () => {
-        renderer = create(createElement(Harness, { client }))
+        renderer = create(createElement(Harness, { client, ...options }))
       })
     } finally {
       consoleSpy.mockRestore()
@@ -125,6 +145,44 @@ describe('useMobileNativeChatSession', () => {
     expect(state?.loadingEarlier).toBe(false)
   })
 
+  it('drops a page settled during a same-session transcript source change', async () => {
+    const settle: PageSettle = { resolve: () => {}, reject: () => {} }
+    const sendRequest = vi.fn(
+      () =>
+        new Promise((resolve, reject) => {
+          settle.resolve = resolve
+          settle.reject = reject
+        })
+    ) as unknown as RpcClient['sendRequest']
+    const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
+      onData({
+        type: 'snapshot',
+        messages: Array.from({ length: 40 }, (_unused, index) => message(`old-${index}`)),
+        hasMore: true,
+        beforeOffset: 100
+      })
+      return () => {}
+    })
+    const client = { sendRequest, subscribe } as unknown as RpcClient
+    await mount(client, { transcriptPath: '/old/transcript.jsonl' })
+    act(() => state?.loadEarlier())
+    renderedLoadEarlierErrors.length = 0
+
+    await act(async () => {
+      renderer?.update(
+        createElement(Harness, {
+          client,
+          transcriptPath: '/new/transcript.jsonl',
+          onLayout: () => settle.resolve({ ok: false, error: 'offline' })
+        })
+      )
+      await Promise.resolve()
+    })
+
+    expect(renderedLoadEarlierErrors).not.toContain('Couldn’t load earlier messages')
+    expect(state?.loadEarlierError).toBeNull()
+  })
+
   it.each(['replacement', 'snapshot'] as const)(
     'can page again after an authoritative %s resets a maxed-out read window',
     async (frameType) => {
@@ -173,6 +231,150 @@ describe('useMobileNativeChatSession', () => {
       })
     }
   )
+
+  it('surfaces a failed older-history page and clears it on a retry', async () => {
+    const sendRequest = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, error: 'offline' })
+      .mockResolvedValueOnce({
+        ok: true,
+        result: { messages: [message('older')], hasMore: false, beforeOffset: 0 }
+      })
+    const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
+      onData({
+        type: 'snapshot',
+        messages: Array.from({ length: 40 }, (_unused, index) => message(`window-${index}`)),
+        hasMore: true,
+        beforeOffset: 100
+      })
+      return () => {}
+    })
+    await mount({ sendRequest, subscribe } as unknown as RpcClient)
+
+    await act(async () => {
+      state?.loadEarlier()
+      await Promise.resolve()
+    })
+    expect(state?.loadEarlierError).toBe('Couldn’t load earlier messages')
+    expect(state?.loadingEarlier).toBe(false)
+    // The failure must not consume the page budget — the retry asks for the same
+    // cursor, not the one after it.
+    expect(state?.hasMore).toBe(true)
+
+    await act(async () => {
+      state?.loadEarlier()
+      await Promise.resolve()
+    })
+    expect(state?.loadEarlierError).toBeNull()
+    expect(state?.messages.map((entry) => entry.id)[0]).toBe('older')
+    expect(sendRequest.mock.calls[1]?.[1]).toEqual(sendRequest.mock.calls[0]?.[1])
+  })
+
+  it('surfaces an error result from an older-history page', async () => {
+    const sendRequest = vi.fn().mockResolvedValue({ ok: true, result: { error: 'read failed' } })
+    const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
+      onData({
+        type: 'snapshot',
+        messages: Array.from({ length: 40 }, (_unused, index) => message(`window-${index}`)),
+        hasMore: true,
+        beforeOffset: 100
+      })
+      return () => {}
+    })
+    await mount({ sendRequest, subscribe } as unknown as RpcClient)
+
+    await act(async () => {
+      state?.loadEarlier()
+      await Promise.resolve()
+    })
+
+    expect(state?.loadEarlierError).toBe('Couldn’t load earlier messages')
+  })
+
+  it('surfaces a rejected older-history request instead of leaking it', async () => {
+    const sendRequest = vi.fn().mockRejectedValue(new Error('disconnected'))
+    const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
+      onData({
+        type: 'snapshot',
+        messages: Array.from({ length: 40 }, (_unused, index) => message(`window-${index}`)),
+        hasMore: true,
+        beforeOffset: 100
+      })
+      return () => {}
+    })
+    await mount({ sendRequest, subscribe } as unknown as RpcClient)
+
+    await act(async () => {
+      state?.loadEarlier()
+      await Promise.resolve()
+    })
+
+    expect(state?.loadEarlierError).toBe('Couldn’t load earlier messages')
+    expect(state?.loadingEarlier).toBe(false)
+  })
+
+  // A source generation must drop every stale settlement shape.
+  it.each([
+    ['a rejected request', (settle: PageSettle) => settle.reject(new Error('disconnected'))],
+    ['a not-ok response', (settle: PageSettle) => settle.resolve({ ok: false, error: 'offline' })]
+  ])('drops %s from a page the session swapped out from under', async (_label, settleEarlier) => {
+    const settle: PageSettle = { resolve: () => {}, reject: () => {} }
+    const sendRequest = vi.fn(
+      () =>
+        new Promise((resolve, reject) => {
+          settle.resolve = resolve
+          settle.reject = reject
+        })
+    ) as unknown as RpcClient['sendRequest']
+    const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
+      emit = onData
+      onData({
+        type: 'snapshot',
+        messages: Array.from({ length: 40 }, (_unused, index) => message(`window-${index}`)),
+        hasMore: true,
+        beforeOffset: 100
+      })
+      return () => {}
+    })
+    await mount({ sendRequest, subscribe } as unknown as RpcClient)
+    act(() => state?.loadEarlier())
+
+    await act(async () =>
+      emit({ type: 'replacement', messages: [message('fresh')], hasMore: true, beforeOffset: 0 })
+    )
+    await act(async () => {
+      settleEarlier(settle)
+      await Promise.resolve()
+    })
+
+    expect(state?.loadEarlierError).toBeNull()
+  })
+
+  it('clears a surfaced failure when an authoritative window replaces the transcript', async () => {
+    const sendRequest = vi.fn().mockResolvedValue({ ok: false, error: 'offline' })
+    const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
+      emit = onData
+      onData({
+        type: 'snapshot',
+        messages: Array.from({ length: 40 }, (_unused, index) => message(`window-${index}`)),
+        hasMore: true,
+        beforeOffset: 100
+      })
+      return () => {}
+    })
+    await mount({ sendRequest, subscribe } as unknown as RpcClient)
+    await act(async () => {
+      state?.loadEarlier()
+      await Promise.resolve()
+    })
+    expect(state?.loadEarlierError).toBe('Couldn’t load earlier messages')
+
+    await act(async () =>
+      emit({ type: 'replacement', messages: [message('fresh')], hasMore: true, beforeOffset: 0 })
+    )
+
+    expect(state?.loadEarlierError).toBeNull()
+  })
 
   it('keeps paged-in history across an auto-reconnect replay snapshot', async () => {
     // The transport replays the subscription with its original params after an

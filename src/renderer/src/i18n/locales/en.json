@@ -14851,6 +14851,8 @@
       "scrollMessageToTop": "Scroll this message to top",
       "loadingEarlier": "Loading…",
       "loadEarlier": "Load earlier messages",
+      "loadEarlierError": "Couldn’t load earlier messages",
+      "retryLoadEarlier": "Try again",
       "question": {
         "step": "Step {{value0}}",
         "other": "Other…",

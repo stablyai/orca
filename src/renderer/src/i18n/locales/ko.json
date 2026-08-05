@@ -14532,6 +14532,8 @@
       "scrollMessageToTop": "이 메시지를 맨 위로 스크롤",
       "loadingEarlier": "로드 중…",
       "loadEarlier": "이전 메시지 로드",
+      "loadEarlierError": "이전 메시지를 불러올 수 없습니다",
+      "retryLoadEarlier": "다시 시도",
       "question": {
         "step": "{{value0}} 단계",
         "other": "다른…",

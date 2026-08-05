@@ -14521,6 +14521,8 @@
       "scrollMessageToTop": "このメッセージを一番上までスクロールします",
       "loadingEarlier": "読み込み中…",
       "loadEarlier": "以前のメッセージをロードする",
+      "loadEarlierError": "以前のメッセージを読み込めませんでした",
+      "retryLoadEarlier": "もう一度試す",
       "question": {
         "step": "ステップ {{value0}}",
         "other": "他の…",

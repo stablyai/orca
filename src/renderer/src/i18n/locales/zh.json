@@ -14541,6 +14541,8 @@
       "scrollMessageToTop": "将此消息滚动到顶部",
       "loadingEarlier": "正在加载…",
       "loadEarlier": "加载更早的消息",
+      "loadEarlierError": "无法加载更早的消息",
+      "retryLoadEarlier": "重试",
       "question": {
         "step": "步骤 {{value0}}",
         "other": "其他…",

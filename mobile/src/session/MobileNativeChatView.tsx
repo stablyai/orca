@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import { ArrowDown, ChevronsDownUp, ChevronsUpDown, Square } from 'lucide-react-native'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { canAutoLoadEarlier as canAutoPage } from '../../../src/shared/native-chat-load-earlier'
 import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-native-chat-view-styles'
 import {
@@ -20,6 +21,7 @@ import {
   type MobileNativeChatPendingItem
 } from './mobile-native-chat-render-data'
 import { useMobileNativeChatPinchGesture } from './use-mobile-native-chat-pinch-gesture'
+import { useMobileNativeChatLoadEarlierAccessibility } from './use-mobile-native-chat-load-earlier-accessibility'
 import { MobileAgentWorkingIndicator } from './MobileAgentWorkingIndicator'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import { MobileNativeChatComposer } from './MobileNativeChatComposer'
@@ -54,6 +56,7 @@ type Props = {
   streaming: string | null
   hasMore?: boolean
   loadingEarlier?: boolean
+  loadEarlierError?: string | null
   onLoadEarlier?: () => void
   onSend: (text: string) => Promise<boolean>
   /** Optimistic queued sends (owned by the route so they survive view switches). */
@@ -120,6 +123,7 @@ export function MobileNativeChatView({
   streaming,
   hasMore,
   loadingEarlier,
+  loadEarlierError,
   onLoadEarlier,
   onSend,
   pending,
@@ -155,6 +159,8 @@ export function MobileNativeChatView({
   const insets = useSafeAreaInsets()
   const listRef = useRef<FlatList<NativeChatMessage>>(null)
   const [toolsExpanded, setToolsExpanded] = useState(false)
+  const { isLoadingEarlier, accessibilityLabel: loadEarlierAccessibilityLabel } =
+    useMobileNativeChatLoadEarlierAccessibility(loadingEarlier, loadEarlierError)
   // Lift the composer clear of the keyboard, plus the bottom safe-area so it
   // never sits under the home indicator / nav bar (mirrors the terminal dock).
   const bottomPad = keyboardInset > 0 ? keyboardInset + insets.bottom : insets.bottom
@@ -169,7 +175,6 @@ export function MobileNativeChatView({
     },
     []
   )
-
   const pendingIds = useMemo(() => new Set(pending.map((p) => p.id)), [pending])
   // `data` is the list source: folded transcript + synthetic streaming bubble +
   // route-owned optimistic queued messages. Memoize on the same deps so the
@@ -219,12 +224,12 @@ export function MobileNativeChatView({
       const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent
       const distanceFromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height)
       setAtBottom(distanceFromBottom < 80)
-      // Near the top — page in older history.
-      if (contentOffset.y < 60 && hasMore && !loadingEarlier) {
+      // A failed page stays at the top, so only its explicit retry may clear it.
+      if (contentOffset.y < 60 && canAutoPage(hasMore, loadingEarlier, loadEarlierError)) {
         onLoadEarlier?.()
       }
     },
-    [hasMore, loadingEarlier, onLoadEarlier]
+    [hasMore, loadingEarlier, loadEarlierError, onLoadEarlier]
   )
 
   // Align a single message's top to the top of the viewport.
@@ -310,10 +315,18 @@ export function MobileNativeChatView({
                   <Pressable
                     style={styles.loadEarlier}
                     onPress={onLoadEarlier}
-                    disabled={loadingEarlier}
+                    disabled={isLoadingEarlier}
+                    accessibilityRole="button"
+                    accessibilityLabel={loadEarlierAccessibilityLabel}
+                    accessibilityState={{ busy: isLoadingEarlier, disabled: isLoadingEarlier }}
                   >
-                    {loadingEarlier ? (
+                    {isLoadingEarlier ? (
                       <ActivityIndicator size="small" color={colors.textMuted} />
+                    ) : loadEarlierError ? (
+                      <>
+                        <Text style={styles.loadEarlierErrorText}>{loadEarlierError}</Text>
+                        <Text style={styles.loadEarlierRetryText}>Tap to retry</Text>
+                      </>
                     ) : (
                       <Text style={styles.loadEarlierText}>Load earlier messages</Text>
                     )}

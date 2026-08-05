@@ -17,6 +17,30 @@ import {
  *  hook and everything downstream (merge, assembler, pagination) are unchanged. */
 export type NativeChatSessionTransport = Pick<NativeChatApi, 'readSession' | 'subscribe'>
 
+export function openNativeChatSessionSubscription(
+  transport: NativeChatSessionTransport,
+  args: Parameters<NativeChatSessionTransport['subscribe']>[0],
+  onFrame: Parameters<NativeChatSessionTransport['subscribe']>[1]
+): () => void {
+  const teardown = transport.subscribe(args, onFrame) as unknown
+  let closed = false
+  return () => {
+    if (closed) {
+      return
+    }
+    closed = true
+    if (typeof teardown === 'function') {
+      ;(teardown as () => void)()
+    } else if (teardown && typeof (teardown as { then?: unknown }).then === 'function') {
+      void (teardown as Promise<unknown>).then((fn) => {
+        if (typeof fn === 'function') {
+          ;(fn as () => void)()
+        }
+      })
+    }
+  }
+}
+
 const RUNTIME_TOO_OLD =
   'This remote runtime is too old to show agent chat history. Update the remote runtime to view it.'
 

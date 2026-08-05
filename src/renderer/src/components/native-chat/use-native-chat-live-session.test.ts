@@ -51,7 +51,8 @@ const { transportFactory, getMockTransport, resetMockTransports } = vi.hoisted((
   }
 })
 
-vi.mock('./native-chat-session-transport', () => ({
+vi.mock('./native-chat-session-transport', async (importOriginal) => ({
+  ...(await importOriginal()),
   getNativeChatSessionTransport: transportFactory
 }))
 
@@ -245,6 +246,47 @@ describe('useNativeChatLiveSession — transport routing', () => {
     })
 
     expect(latest?.messages.map((m) => m.id)).not.toContain('stale')
+  })
+
+  it('surfaces one failed page and retries the same read window explicitly', async () => {
+    const transport = getMockTransport('env-1')
+    const many = Array.from({ length: NATIVE_CHAT_INITIAL_LIMIT }, (_unused, index) =>
+      assistant(`window-${index}`, 'current')
+    )
+    await render({
+      paneKey: PANE,
+      agent: AGENT,
+      sessionId: SESSION,
+      runtimeEnvironmentId: 'env-1'
+    })
+    await act(async () => transport.emit({ type: 'snapshot', messages: many, hasMore: true }))
+    transport.readSession.mockClear()
+    let resolveFailedPage: (result: { error: string }) => void = () => {}
+    transport.readSession.mockImplementationOnce(
+      () => new Promise((resolve) => (resolveFailedPage = resolve))
+    )
+
+    act(() => {
+      latest?.loadEarlier()
+      latest?.loadEarlier()
+      latest?.loadEarlier()
+    })
+    expect(transport.readSession).toHaveBeenCalledOnce()
+    const failedRequest = transport.readSession.mock.calls[0]
+
+    await act(async () => {
+      resolveFailedPage({ error: 'offline' })
+      await Promise.resolve()
+    })
+    expect(latest?.loadEarlierError).toBe('Couldn’t load earlier messages')
+    expect(latest?.loadingEarlier).toBe(false)
+
+    transport.readSession.mockResolvedValueOnce({ messages: [assistant('older', 'older')] })
+    await act(async () => latest?.loadEarlier())
+
+    expect(transport.readSession.mock.calls[1]).toEqual(failedRequest)
+    expect(latest?.loadEarlierError).toBeNull()
+    expect(latest?.messages.map((message) => message.id)).toContain('older')
   })
 
   it('discards a load-earlier resolve from before transcript replacement', async () => {
