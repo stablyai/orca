@@ -1180,8 +1180,9 @@ export class SshRelaySession {
     options: OpenSshPtyConsumerSessionOptions,
     ownsAttempt: () => boolean
   ): Promise<SshPtyConsumerAdmission> {
+    const startedAtMs = Date.now()
     try {
-      return await retrySshOwnerRecoveryWhileBlocked(
+      const admission = await retrySshOwnerRecoveryWhileBlocked(
         () =>
           openSshPtyConsumerSession(mux, {
             ...options,
@@ -1199,6 +1200,16 @@ export class SshRelaySession {
           onClosed: (listener) => mux.onDispose(listener)
         }
       )
+      // Why logged on success: a disconnected incumbent can hold admission for its whole grace, so a
+      // reconnect may legitimately idle here for tens of seconds. Without this line that wait is
+      // indistinguishable from a hang in a bug report's logs.
+      const waitedMs = Date.now() - startedAtMs
+      if (waitedMs >= 1_000) {
+        console.log(
+          `[ssh-relay-session] PTY owner admission for ${this.targetId} granted after ${waitedMs}ms of retrying refusals`
+        )
+      }
+      return admission
     } catch (error) {
       // Why converted here: past this point the failure travels the same path as a dropped transport,
       // where backoff would keep redeploying a relay that is working fine and refusing on purpose.

@@ -1,4 +1,5 @@
 import {
+  PTY_CONSUMER_OWNER_GRACE_MS,
   PTY_CONSUMER_OWNER_HELD_ATTACHED_ERROR,
   PTY_CONSUMER_OWNER_HELD_DISCONNECTED_ERROR,
   PTY_CONSUMER_OWNER_HELD_SELF_ERROR,
@@ -8,9 +9,15 @@ import {
 
 // Why: bound polling when publication is settling or a superseded attempt is closing its transport.
 export const SSH_OWNER_RECOVERY_WAIT_MS = 3_000
-// Why separate and longer than the relay's grace floor: a disconnected incumbent releases admission
-// only after that floor elapses, so this budget must outlast it without borrowing the pending budget.
-export const SSH_OWNER_HELD_DISCONNECTED_WAIT_MS = 2_000
+// Why the budget outlasts the relay's full owner grace, not just its floor: only a 'peer-closed'
+// disconnect clamps the incumbent to the floor. A 'local'-cause holder — a socket the relay itself
+// tore down — keeps the whole grace, and a client that lost its resume proof has no way to shorten
+// it. Waiting the grace out on this connection always converges; tearing down and re-dialing resets
+// nothing on the relay, so each attempt hits the same refusal until the relay-lost backoff burns its
+// budget and parks the target in a terminal error state that only a manual reconnect clears.
+// Deriving from PTY_CONSUMER_OWNER_GRACE_MS keeps the invariant structural: the budget cannot fall
+// behind a grace retune.
+export const SSH_OWNER_HELD_DISCONNECTED_WAIT_MS = PTY_CONSUMER_OWNER_GRACE_MS + 2_000
 // Why short: the incumbent is this client's own half-open connection, and the relay frees it when its
 // keepalive notices — well outside any budget worth blocking a connect on. Poll briefly in case the
 // close is already in flight, then let the ordinary relay-lost backoff carry the retry.

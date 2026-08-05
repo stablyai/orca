@@ -12,6 +12,7 @@ import {
   SSH_OWNER_HELD_DISCONNECTED_WAIT_MS,
   SSH_OWNER_HELD_SELF_WAIT_MS
 } from './ssh-owner-recovery-retry'
+import { PTY_CONSUMER_OWNER_GRACE_MS } from '../../shared/pty-consumer-session'
 
 function publicationPendingError(): Error & { code: number } {
   return Object.assign(new Error('Owner grant publication is still pending'), {
@@ -137,6 +138,27 @@ describe('SSH owner recovery retry', () => {
     expect(attempt).toHaveBeenCalledTimes(7)
   })
 
+  it("waits out a 'local'-cause holder's full owner grace instead of failing the connect", async () => {
+    vi.useFakeTimers()
+    const start = Date.now()
+    const attempt = vi.fn<() => Promise<string>>().mockImplementation(async () => {
+      // A holder the relay closed itself keeps the entire PTY_CONSUMER_OWNER_GRACE_MS — nothing the
+      // requester sends can clamp it, so admission opens only once the grace has fully elapsed.
+      if (Date.now() - start < PTY_CONSUMER_OWNER_GRACE_MS) {
+        throw heldError(PTY_CONSUMER_OWNER_HELD_DISCONNECTED_ERROR)
+      }
+      return 'recovered'
+    })
+
+    const recovery = retrySshOwnerRecoveryWhileBlocked(attempt, openGate())
+    await vi.advanceTimersByTimeAsync(SSH_OWNER_HELD_DISCONNECTED_WAIT_MS)
+
+    // Why this must resolve: throwing here tears the whole relay session down, and the re-dial meets
+    // the same untouched grace — a loop that ends in the relay-lost ladder's terminal error state.
+    await expect(recovery).resolves.toBe('recovered')
+    expect(SSH_OWNER_HELD_DISCONNECTED_WAIT_MS).toBeGreaterThan(PTY_CONSUMER_OWNER_GRACE_MS)
+  })
+
   it('reports each exhausted retry budget under its own reason', async () => {
     vi.useFakeTimers()
     const exhausted: string[] = []
@@ -181,8 +203,9 @@ describe('SSH owner recovery retry', () => {
         : 'recovered'
     })
 
-    const recovery = retrySshOwnerRecoveryWhileBlocked(attempt, openGate(), 30_000)
-    await vi.advanceTimersByTimeAsync(30_000)
+    const publicationBudget = SSH_OWNER_HELD_DISCONNECTED_WAIT_MS + 10_000
+    const recovery = retrySshOwnerRecoveryWhileBlocked(attempt, openGate(), publicationBudget)
+    await vi.advanceTimersByTimeAsync(publicationBudget)
 
     // Why this fails on eagerly computed deadlines: the disconnected budget would have started at
     // entry and be long gone by the time the first -32045 arrives, giving that phase zero attempts.
