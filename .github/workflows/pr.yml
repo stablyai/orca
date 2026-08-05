@@ -200,6 +200,36 @@ jobs:
             src/main/pty/omp-shell-wrapper.node-pty.test.ts \
             src/shared/posix-command-path-lookup.test.ts
 
+  daemon_cross_protocol:
+    name: daemon cross-protocol reattach
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          # Why: the spec builds each previous release's daemon from its own tag,
+          # so it needs full history and tags rather than the shallow default.
+          fetch-depth: 0
+
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+
+      - name: Restore legacy daemon bundle cache
+        uses: actions/cache@v5
+        with:
+          path: node_modules/.cache/orca-daemon-release-entries
+          key: legacy-daemons-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('src/main/daemon/legacy-daemon-release-refs.ts') }}
+          restore-keys: |
+            legacy-daemons-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+
+      - name: Test current adapter against every previous daemon
+        run: |
+          pnpm exec vitest run --bail=1 --config config/vitest.config.ts \
+            src/main/daemon/cross-protocol-daemon-reattach.test.ts
+
   test:
     name: tests node ${{ matrix.node }} ${{ matrix.shard }}/${{ matrix.shard_total }}
     runs-on: ubuntu-latest
@@ -233,6 +263,7 @@ jobs:
             --exclude=src/main/providers/__tests__/shell-ready-framework-example.test.ts \
             --exclude=src/main/pty/omp-shell-wrapper.node-pty.test.ts \
             --exclude=src/shared/posix-command-path-lookup.test.ts \
+            --exclude=src/main/daemon/cross-protocol-daemon-reattach.test.ts \
             --shard=${{ matrix.shard }}/${{ matrix.shard_total }}
 
   package:
@@ -398,6 +429,7 @@ jobs:
       - typecheck
       - git_compatibility
       - shell_contracts
+      - daemon_cross_protocol
       - test
       - package
       - package_windows
@@ -419,6 +451,7 @@ jobs:
           TYPECHECK: ${{ needs.typecheck.result }}
           GIT_COMPATIBILITY: ${{ needs.git_compatibility.result }}
           SHELL_CONTRACTS: ${{ needs.shell_contracts.result }}
+          DAEMON_CROSS_PROTOCOL: ${{ needs.daemon_cross_protocol.result }}
           TEST: ${{ needs.test.result }}
           PACKAGE: ${{ needs.package.result }}
           PACKAGE_WINDOWS: ${{ needs.package_windows.result }}
@@ -429,6 +462,7 @@ jobs:
             "$TYPECHECK" \
             "$GIT_COMPATIBILITY" \
             "$SHELL_CONTRACTS" \
+            "$DAEMON_CROSS_PROTOCOL" \
             "$TEST" \
             "$PACKAGE" \
             "$PACKAGE_WINDOWS"; do

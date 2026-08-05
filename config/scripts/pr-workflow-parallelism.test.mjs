@@ -17,6 +17,7 @@ const patchedNodePtyContractFiles = [
   'src/main/daemon/node-pty-fd-leak.test.ts',
   'src/main/pty/omp-shell-wrapper.node-pty.test.ts'
 ]
+const crossProtocolDaemonTest = 'src/main/daemon/cross-protocol-daemon-reattach.test.ts'
 const nativeShellContractFiles = [...shellContractFiles, ...patchedNodePtyContractFiles]
 const testFilePatterns = [
   'config/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}',
@@ -53,6 +54,25 @@ describe('PR workflow parallelism', () => {
     for (const testFile of nativeShellContractFiles) {
       expect(testStep.run).toContain(`--exclude=${testFile}`)
     }
+    expect(testStep.run).toContain(`--exclude=${crossProtocolDaemonTest}`)
+  })
+
+  it('runs cross-protocol daemon coverage once with release history and a bundle cache', () => {
+    const job = workflow.jobs.daemon_cross_protocol
+    const checkout = job.steps.find((step) => step.name === 'Checkout')
+    const install = job.steps.find(
+      (step) => step.uses === './.github/actions/install-node-dependencies'
+    )
+    const cache = job.steps.find((step) => step.name === 'Restore legacy daemon bundle cache')
+    const testStep = job.steps.find(
+      (step) => step.name === 'Test current adapter against every previous daemon'
+    )
+
+    expect(checkout.with['fetch-depth']).toBe(0)
+    expect(install.with['native-runtime']).toBe('node')
+    expect(cache.with.path).toBe('node_modules/.cache/orca-daemon-release-entries')
+    expect(testStep.run).toContain('--bail=1')
+    expect(testStep.run).toContain(crossProtocolDaemonTest)
   })
 
   it('runs real-zsh coverage once outside the general shards', () => {
@@ -177,6 +197,7 @@ describe('PR workflow parallelism', () => {
       'typecheck',
       'git_compatibility',
       'shell_contracts',
+      'daemon_cross_protocol',
       'test',
       'package',
       'package_windows'

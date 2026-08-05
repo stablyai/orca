@@ -9442,6 +9442,95 @@
         "The live topology uses an SSH Git worktree; folder-workspace behavior is covered by target-scoped renderer reconciliation rather than a second headed topology."
       ],
       "demotionRule": "Keep experimental or demote if same-authority snapshots can overwrite newer pushes, reconnect silently loses persisted intent, one forward operation disturbs unrelated forwards, live HTTP diverges from renderer/main inventory, or either transport topology flakes without an identified product or harness fault."
+    },
+    {
+      "id": "terminal-daemon.cross-protocol-reattach",
+      "title": "The current adapter adopts a live pane from every still-supported daemon protocol without replacing or orphaning a shell",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "daemon-terminal",
+      "layer": "daemon-protocol-compatibility",
+      "surfaces": [
+        "pane mount after an app update",
+        "attach-only spawn against a preserved daemon",
+        "legacy attach-only emulation",
+        "daemon session and process lifecycle"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local-daemon"],
+      "coveredPlatforms": ["macos", "linux"],
+      "coveredProviders": ["local-daemon"],
+      "coverageNotes": "Each still-supported protocol is replayed by building its declared historical daemon entry and booting it under plain Node on a private socket, then driving it with the working tree's DaemonPtyAdapter pinned to that protocol. The working-tree build runs as a control case. Windows is skipped because the fixture drives the PTY with a POSIX shell command and reads daemon children through ps; SSH, WSL, and relay providers are out of scope because they do not speak the local daemon protocol.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/11789",
+        "https://github.com/stablyai/orca/pull/12351"
+      ],
+      "invariant": "For every protocol in PREVIOUS_DAEMON_PROTOCOL_VERSIONS plus PROTOCOL_VERSION, an attach-only spawn issued by the current build against a real daemon of that protocol must return the existing session, the same shell pid, and a snapshot still carrying output written before the attach. An attach-only spawn for an unknown session id must fail with a rejection the pane mount classifies as already-gone, must leave the daemon's session list and child-process set exactly as they were, and must not disturb the unrelated live session's liveness or pid. PREVIOUS_DAEMON_PROTOCOL_VERSIONS must end at PROTOCOL_VERSION - 1 and every entry must have a declared historical ref whose own source reports that protocol.",
+      "oracle": "For each protocol, extract src/main and src/shared at that protocol's shipped ref, bundle daemon-entry.ts against the current node_modules, and boot it on a temporary socket with VITEST cleared. Create a real PTY session through the current adapter, drive the shell until it emits a per-protocol marker, and disconnect. Attach-only through a fresh adapter and require the same session id, isReattach true, the original shell pid, the marker inside the returned snapshot, and an unchanged session list. Then attach-only to an absent id and require a rejection matching the message the mount path keys on, the SessionNotFoundError class on emulated protocols, the orphan session record and any created shell process to clear within a bounded settle, and the surviving session to keep its pid and liveness. Separately assert the manifest and the previous-version list agree with PROTOCOL_VERSION.",
+      "commands": [
+        "pnpm exec vitest run --bail=1 --config config/vitest.config.ts src/main/daemon/cross-protocol-daemon-reattach.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/cross-protocol-daemon-reattach.test.ts"
+      ],
+      "testFiles": ["src/main/daemon/cross-protocol-daemon-reattach.test.ts"],
+      "assertionRefs": [
+        {
+          "file": "src/main/daemon/cross-protocol-daemon-reattach.test.ts",
+          "assertions": [
+            "declares a release for every still-supported previous protocol",
+            "requires a protocol bump to extend the previous-version list",
+            "adopts the live session instead of replacing it",
+            "rejects a missing session without leaving an orphan behind"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-03",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/cross-protocol-daemon-reattach.test.ts",
+          "durationSeconds": 18.6,
+          "summary": "64 tests passed against 30 historical daemon builds plus the working-tree control, with a warm bundle cache."
+        },
+        {
+          "date": "2026-08-03",
+          "runner": "local",
+          "platform": "linux",
+          "result": "passed",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/cross-protocol-daemon-reattach.test.ts",
+          "durationSeconds": 9.9,
+          "summary": "Reproduction of the daemon_cross_protocol job in a node:24 container from a --shared clone: 64 passed cold, 4.2s warm. The same container reverted PR 12351 and failed 60 of 64, so the gate bites on the CI platform, not only on macOS."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 60,
+        "scope": "31 sequential daemon builds and boots, each with one real PTY session"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Local macOS and containerized linux sweeps passed. The suite is new, so no CI or soak history exists yet. Two environmental sensitivities are known. Host pty exhaustion: the orphan case needs one pty beyond the live pane, and a saturated host fails it with an explicit posix_openpt error - macos caps ptmx at 511 where linux allows 4096, so this is effectively a developer-machine condition. Ambient SHELL: every daemon build resolves the PTY shell as env.SHELL then process.env.SHELL then /bin/zsh, so an unset SHELL on a zsh-less image failed 20 of 31 protocols; bootDaemon now pins SHELL to the first existing of /bin/bash and /bin/sh instead of inheriting it."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Two mutations of daemon-pty-adapter.ts were run against the suite. Restoring the #11789 hard throw for legacy attach-only failed 60 of 64 tests (all 30 legacy protocols, both cases). Deleting only the kill-and-throw so the emulated create is silently kept failed 30 of 64 - the exact silent-replacement mode the gate exists for. The adapter was restored and the suite returned to 64 passed."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "No product code is touched. The fixture bundles each release's daemon entry with esbuild and caches it under node_modules/.cache keyed by commit, so a warm run pays only for forks and PTY spawns. macOS measured about 32 seconds cold and 19 warm; linux, which is what the CI job runs on, measured 9.9 cold and 4.2 warm."
+      },
+      "promotionCriteria": [
+        "Accumulate CI history from the dedicated daemon_cross_protocol job; linux is covered by a containerized reproduction but has never run on a real GitHub runner.",
+        "Confirm the cold-cache runtime stays inside the runtime budget on CI hardware.",
+        "Keep the pid-identity, snapshot-marker, and orphan-settle assertions green as new protocols are appended."
+      ],
+      "knownGaps": [
+        "Windows is skipped entirely: the marker command is POSIX shell and the orphan-process check reads ps, so ConPTY daemons get no coverage.",
+        "Only one representative ref per protocol is replayed, so other daemon builds within the same protocol are not exercised.",
+        "The daemon is bundled against the current node_modules rather than the release's own dependency tree, so a native-dependency behavior change between releases is not reproduced.",
+        "The orphan case needs one pty beyond the live pane; a host at its pty ceiling fails rather than skipping, which is deliberate but makes the gate sensitive to unrelated load."
+      ],
+      "demotionRule": "Keep experimental or demote if attach-only against a preserved daemon can return a different pid than the live pane, a failed attach can leave a session record or shell process behind, the previous-protocol list can grow without a matching release ref, or the gate flakes for reasons other than host pty exhaustion."
     }
   ]
 }
