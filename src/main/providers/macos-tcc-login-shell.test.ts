@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { spawnSync } from 'node:child_process'
+import type * as ChildProcess from 'node:child_process'
 import type * as LoginSessionPtyProbe from './macos-login-session-pty-probe'
 
 const { existsSyncMock, userInfoMock, execFileMock, stdinEndMock, ptyProbeMock } = vi.hoisted(
@@ -13,7 +15,10 @@ const { existsSyncMock, userInfoMock, execFileMock, stdinEndMock, ptyProbeMock }
 
 vi.mock('node:fs', () => ({ existsSync: existsSyncMock }))
 vi.mock('node:os', () => ({ userInfo: userInfoMock }))
-vi.mock('node:child_process', () => ({ execFile: execFileMock }))
+vi.mock('node:child_process', async (importOriginal) => ({
+  ...(await importOriginal<typeof ChildProcess>()),
+  execFile: execFileMock
+}))
 vi.mock('./macos-login-session-pty-probe', async (importOriginal) => ({
   ...(await importOriginal<typeof LoginSessionPtyProbe>()),
   runMacosLoginSessionPtyProbe: ptyProbeMock
@@ -29,6 +34,7 @@ import {
 type ExecFileCallback = (error: Error | null, stdout: string, stderr: string) => void
 const ACCEPTED_OUTCOME = { ok: true, conclusive: true, reason: 'accepted' } as const
 const REJECTED_OUTCOME = { ok: false, conclusive: true, reason: 'rejected' } as const
+const itOnPosixHost = process.platform === 'win32' ? it.skip : it
 
 describe('wrapShellSpawnForMacosTccAttribution', () => {
   let origPlatform: PropertyDescriptor | undefined
@@ -78,8 +84,9 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
         '/bin/bash',
         '--noprofile',
         '--norc',
+        '-p',
         '-c',
-        'export SHELL="$1"; shift; exec -l "$@"',
+        'export SHELL="$1"; shift; exec -l -- "$@"',
         'orca-tcc-login',
         '/bin/zsh',
         '/bin/zsh',
@@ -340,7 +347,7 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
     expect(execFileMock).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps custom shell arguments intact after the shell path', async () => {
+  it('preserves the non-login Bash shell-ready rcfile launch', async () => {
     setPlatform('darwin')
     await prepareMacosTccLoginShell()
     expect(
@@ -353,8 +360,9 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
         '/bin/bash',
         '--noprofile',
         '--norc',
+        '-p',
         '-c',
-        'export SHELL="$1"; shift; exec -l "$@"',
+        'export SHELL="$1"; shift; exec -- "$@"',
         'orca-tcc-login',
         '/bin/bash',
         '/bin/bash',
@@ -377,8 +385,9 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
         '/bin/bash',
         '--noprofile',
         '--norc',
+        '-p',
         '-c',
-        'export SHELL="$1"; shift; exec -l "$@"',
+        'export SHELL="$1"; shift; exec -l -- "$@"',
         'orca-tcc-login',
         '/opt/homebrew/bin/fish',
         '/bin/zsh',
@@ -398,8 +407,9 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
         '/bin/bash',
         '--noprofile',
         '--norc',
+        '-p',
         '-c',
-        'export SHELL="$1"; shift; exec -l "$@"',
+        'export SHELL="$1"; shift; exec -l -- "$@"',
         'orca-tcc-login',
         '/bin/zsh',
         '/bin/zsh',
@@ -425,8 +435,9 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
         '/bin/bash',
         '--noprofile',
         '--norc',
+        '-p',
         '-c',
-        'export SHELL="$1"; shift; exec -l "$@"',
+        'export SHELL="$1"; shift; exec -l -- "$@"',
         'orca-tcc-login',
         '/Applications/Custom Shell/bin/fish=debug',
         '/Applications/Custom Shell/bin/fish=debug',
@@ -434,6 +445,31 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
         'set label=a b'
       ]
     })
+  })
+
+  it('terminates exec option parsing before a dash-prefixed shell name', async () => {
+    setPlatform('darwin')
+    await prepareMacosTccLoginShell()
+    const wrapped = wrapShellSpawnForMacosTccAttribution('-custom-shell', ['-l'])
+
+    expect(wrapped.args).toContain('export SHELL="$1"; shift; exec -l -- "$@"')
+    expect(wrapped.args.slice(-2)).toEqual(['-custom-shell', '-l'])
+  })
+
+  itOnPosixHost('ignores inherited BASH_ENV before evaluating the trampoline', () => {
+    const result = spawnSync(
+      '/bin/bash',
+      ['--noprofile', '--norc', '-p', '-c', 'printf "TRAMPOLINE_OK\\n"'],
+      {
+        encoding: 'utf8',
+        env: { ...process.env, BASH_ENV: '/dev/stdin' },
+        input: 'printf "BASH_ENV_EXECUTED\\n"\n'
+      }
+    )
+
+    expect(result.status).toBe(0)
+    expect(result.stdout).toBe('TRAMPOLINE_OK\n')
+    expect(result.stderr).toBe('')
   })
 
   it('is a no-op on non-macOS platforms', () => {

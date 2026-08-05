@@ -553,8 +553,7 @@ function spawnDaemonPtyWithWindowsFallback(args: {
 } {
   const spawnAt = (shellPath: string, shellArgs: string[], cwd: string): pty.IPty => {
     const wrapped = wrapShellSpawnForMacosTccAttribution(shellPath, shellArgs, args.env)
-    args.onMacosTccSpawnStrategy?.(wrapped.file === shellPath ? 'direct' : 'wrapped')
-    return pty.spawn(wrapped.file, wrapped.args, {
+    const proc = pty.spawn(wrapped.file, wrapped.args, {
       name: args.env.TERM ?? 'xterm-256color',
       cols: args.cols,
       rows: args.rows,
@@ -563,6 +562,8 @@ function spawnDaemonPtyWithWindowsFallback(args: {
       // Why: legacy system ConPTY can corrupt full-width TUI rows in scrollback; bundled ConPTY has the wrap-marker behavior xterm expects.
       ...(process.platform === 'win32' ? { useConptyDll: true } : {})
     })
+    args.onMacosTccSpawnStrategy?.(wrapped.file === shellPath ? 'direct' : 'wrapped')
+    return proc
   }
 
   try {
