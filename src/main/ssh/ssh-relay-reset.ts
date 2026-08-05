@@ -19,8 +19,19 @@ export async function forceStopRelayForTarget(
     `sock_name=${escapedSockName}`,
     'base="${HOME}/.orca-remote"',
     'pty_backend=relay',
-    'if [ -f "$base/${sock_name}.pty-backend" ]; then',
-    '  IFS= read -r pty_backend < "$base/${sock_name}.pty-backend" || true',
+    'marker_read=',
+    // Why: the launcher writes the marker next to the versioned relay socket
+    // ($base/relay-<version>/<sock>.pty-backend); prefer the marker whose relay
+    // socket is live, falling back to any marker a dead relay left behind.
+    'if [ -d "$base" ]; then',
+    '  for marker in "$base"/relay-*/"$sock_name".pty-backend "$base"/"$sock_name".pty-backend; do',
+    '    [ -f "$marker" ] || continue',
+    '    if [ -S "${marker%.pty-backend}" ] || [ -z "$marker_read" ]; then',
+    '      IFS= read -r pty_backend < "$marker" || true',
+    '      marker_read=1',
+    '    fi',
+    '    [ -S "${marker%.pty-backend}" ] && break',
+    '  done',
     'fi',
     'case "$pty_backend" in zmx) ;; *) pty_backend=relay ;; esac',
     `printf '${PTY_BACKEND_OUTPUT_PREFIX}%s\\n' "$pty_backend"`,
@@ -42,7 +53,7 @@ export async function forceStopRelayForTarget(
     '      sleep 0.2',
     '      kill -KILL $pid 2>/dev/null || true',
     '    fi',
-    '    rm -f "$sock"',
+    '    rm -f "$sock" "$sock.pty-backend"',
     '  done',
     'fi',
     ...(options.preserveZmxSessions
