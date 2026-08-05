@@ -4335,7 +4335,8 @@
           "219ebf1961": "브랜치 이름",
           "automation": "자동화",
           "folderPathIdentity": "브랜치 / 폴더 경로",
-          "cli": "Orca CLI"
+          "cli": "Orca CLI",
+          "showHostSections": "호스트별 섹션 표시"
         },
         "SshTargetRow": {
           "4677394048": "연결 중…",

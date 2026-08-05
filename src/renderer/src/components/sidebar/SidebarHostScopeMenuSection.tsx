@@ -20,6 +20,8 @@ type SidebarHostScopeMenuSectionProps = {
   setWorkspaceHostScope: (scope: WorkspaceHostScope) => void
   visibleWorkspaceHostIds: VisibleWorkspaceHostIds
   setVisibleWorkspaceHostIds: (ids: VisibleWorkspaceHostIds) => void
+  showHostSections: boolean
+  setShowHostSections: (v: boolean) => void
 }
 
 function getHostMetadata(host: SidebarHostOption): string {
@@ -60,7 +62,9 @@ export function SidebarHostScopeMenuSection({
   preserveWorkspaceBoardOpen,
   setWorkspaceHostScope,
   visibleWorkspaceHostIds,
-  setVisibleWorkspaceHostIds
+  setVisibleWorkspaceHostIds,
+  showHostSections,
+  setShowHostSections
 }: SidebarHostScopeMenuSectionProps): React.JSX.Element {
   const allVisible = !visibleWorkspaceHostIds
   const visibleHostIdSet = new Set(visibleWorkspaceHostIds ?? [])
@@ -148,6 +152,17 @@ export function SidebarHostScopeMenuSection({
           ))}
         </DropdownMenuSubContent>
       </DropdownMenuSub>
+
+      <DropdownMenuCheckboxItem
+        checked={showHostSections}
+        onCheckedChange={setShowHostSections}
+        onSelect={(e) => e.preventDefault()}
+      >
+        {translate(
+          'auto.components.sidebar.SidebarWorkspaceOptionsMenu.showHostSections',
+          'Show host sections'
+        )}
+      </DropdownMenuCheckboxItem>
 
       <DropdownMenuSeparator />
     </>

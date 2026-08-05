@@ -866,6 +866,8 @@ export type UISlice = {
   setVisibleWorkspaceHostIds: (ids: VisibleWorkspaceHostIds) => void
   workspaceHostOrder: WorkspaceHostOrder
   setWorkspaceHostOrder: (ids: WorkspaceHostOrder) => void
+  showHostSections: boolean
+  setShowHostSections: (v: boolean) => void
   manualRepoOrder: ManualRepoOrderEntry[]
   hideDefaultBranchWorkspace: boolean
   setHideDefaultBranchWorkspace: (v: boolean) => void
@@ -2045,6 +2047,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set({ workspaceHostOrder })
     window.api.ui.set({ workspaceHostOrder }).catch(console.error)
   },
+  showHostSections: false,
+  setShowHostSections: (v) => {
+    set({ showHostSections: v })
+    window.api.ui.set({ showHostSections: v }).catch(console.error)
+  },
   manualRepoOrder: [],
 
   hideDefaultBranchWorkspace: false,
@@ -2456,6 +2463,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         workspaceHostScope: normalizeExecutionHostScope(ui.workspaceHostScope),
         visibleWorkspaceHostIds: normalizeHydratedVisibleWorkspaceHostIds(ui),
         workspaceHostOrder: normalizeExecutionHostOrder(ui.workspaceHostOrder),
+        showHostSections: ui.showHostSections === true,
         manualRepoOrder,
         // Why: apply the desktop-owned overlay immediately since UI state can arrive after a catalog or from another client.
         repos: orderedRepos,

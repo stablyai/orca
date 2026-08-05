@@ -213,6 +213,7 @@ const UiUpdateFields = z
     workspaceHostScope: z.string().optional(),
     visibleWorkspaceHostIds: z.array(z.string()).nullable().optional(),
     workspaceHostOrder: z.array(z.string()).optional(),
+    showHostSections: z.boolean().optional(),
     manualRepoOrder: z
       .array(z.object({ hostId: z.string(), repoId: z.string() }).strict())
       .optional(),

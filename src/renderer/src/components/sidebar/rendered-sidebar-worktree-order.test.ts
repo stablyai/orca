@@ -248,6 +248,32 @@ describe('closed-sidebar Cmd+1-9 ordering (#9497)', () => {
     ])
   })
 
+  it('groups hosts contiguously when the host-sections toggle is on without a filter', () => {
+    // Repo order interleaves the hosts (local, ssh, local); only host sections
+    // can pull the second local repo ahead of the SSH one.
+    const storeOverrides = {
+      repos: [
+        makeRepo('repo1'),
+        makeRepo('repo-ssh', { connectionId: 'my-target' }),
+        makeRepo('repo2')
+      ],
+      worktreesByRepo: {
+        repo1: [makeMainWorktree('wt-local-1')],
+        'repo-ssh': [makeMainWorktree('wt-remote', { repoId: 'repo-ssh' })],
+        repo2: [makeMainWorktree('wt-local-2', { repoId: 'repo2' })]
+      },
+      sshTargetLabels: new Map([['my-target', 'My Target']])
+    } as Partial<AppState>
+
+    seedStore([], storeOverrides)
+    // Toggle off: all-hosts default keeps plain repo ordering.
+    expect(getVisibleWorktreeIds()).toEqual(['wt-local-1', 'wt-remote', 'wt-local-2'])
+
+    seedStore([], { ...storeOverrides, showHostSections: true })
+    // Toggle on: host sections apply even without an explicit host filter, local first.
+    expect(getVisibleWorktreeIds()).toEqual(['wt-local-1', 'wt-local-2', 'wt-remote'])
+  })
+
   it('keeps the sort layer intact for smart and comparator sort modes', () => {
     const main = makeMainWorktree('wt-main')
     const older = makeWorktree('wt-older', { displayName: 'b-older', lastActivityAt: 1 })

@@ -759,6 +759,16 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(createUIStore().getState().manualRepoOrder).toEqual([])
   })
 
+  it('defaults host sections off and hydrates the persisted toggle', () => {
+    expect(getDefaultUIState().showHostSections).toBe(false)
+    const store = createUIStore()
+    expect(store.getState().showHostSections).toBe(false)
+
+    store.getState().hydratePersistedUI(makePersistedUI({ showHostSections: true }), 'startup')
+
+    expect(store.getState().showHostSections).toBe(true)
+  })
+
   it('defaults the persisted active view to terminal', () => {
     expect(getDefaultUIState().activeView).toBe('terminal')
     expect(createUIStore().getState().activeView).toBe('terminal')

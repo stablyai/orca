@@ -87,7 +87,9 @@ export function computeRenderedSidebarWorktreeOrder(
   // Why lazy: with no host filter, addHostSectionRows is a pass-through, so skip building the whole host registry on a keystroke.
   // Deliberately a superset of its internal guards — on <=1 host it still no-ops, wasting only the registry build.
   const needsHostSections =
-    state.workspaceHostScope !== ALL_EXECUTION_HOSTS_SCOPE || state.visibleWorkspaceHostIds != null
+    state.workspaceHostScope !== ALL_EXECUTION_HOSTS_SCOPE ||
+    state.visibleWorkspaceHostIds != null ||
+    state.showHostSections
   const sectionRows = needsHostSections
     ? addHostSectionRows({
         rows,
@@ -108,7 +110,7 @@ export function computeRenderedSidebarWorktreeOrder(
         defaultHostId,
         collapsedHostKeys: state.collapsedGroups,
         forceCollapseHosts: false,
-        preferProjectGrouping: true
+        preferProjectGrouping: !state.showHostSections
       })
     : rows
 

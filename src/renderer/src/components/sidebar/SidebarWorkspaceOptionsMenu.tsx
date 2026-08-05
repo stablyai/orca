@@ -47,6 +47,8 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
   const setWorkspaceHostScope = useAppStore((s) => s.setWorkspaceHostScope)
   const visibleWorkspaceHostIds = useAppStore((s) => s.visibleWorkspaceHostIds)
   const setVisibleWorkspaceHostIds = useAppStore((s) => s.setVisibleWorkspaceHostIds)
+  const showHostSections = useAppStore((s) => s.showHostSections)
+  const setShowHostSections = useAppStore((s) => s.setShowHostSections)
   const sortBy = useAppStore((s) => s.sortBy)
   const setSortBy = useAppStore((s) => s.setSortBy)
   const groupBy = useAppStore((s) => s.groupBy)
@@ -177,6 +179,8 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
             setWorkspaceHostScope={setWorkspaceHostScope}
             visibleWorkspaceHostIds={visibleWorkspaceHostIds}
             setVisibleWorkspaceHostIds={setVisibleWorkspaceHostIds}
+            showHostSections={showHostSections}
+            setShowHostSections={setShowHostSections}
           />
         )}
 

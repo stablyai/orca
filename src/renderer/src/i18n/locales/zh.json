@@ -4347,7 +4347,8 @@
           "219ebf1961": "分支名称",
           "automation": "自动化",
           "folderPathIdentity": "分支 / 文件夹路径",
-          "cli": "Orca CLI"
+          "cli": "Orca CLI",
+          "showHostSections": "按主机显示分区"
         },
         "SshTargetRow": {
           "4677394048": "正在连接…",

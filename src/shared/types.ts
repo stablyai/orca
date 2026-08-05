@@ -3391,6 +3391,8 @@ export type PersistedUIState = {
   visibleWorkspaceHostIds?: VisibleWorkspaceHostIds
   /** User-defined sidebar order for host sections; missing/new hosts append in discovered order. */
   workspaceHostOrder?: WorkspaceHostOrder
+  /** Always group the sidebar under host section headers, not only under explicit host filters. */
+  showHostSections?: boolean
   /** Desktop-owned all-host repo order; host-qualified identities keep a manual cross-host interleaving while each host owns its local permutation. */
   manualRepoOrder?: ManualRepoOrderEntry[]
   /** Deprecated legacy positive-form setting. Ignored on hydration. */

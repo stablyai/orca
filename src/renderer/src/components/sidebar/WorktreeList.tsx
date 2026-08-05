@@ -5211,6 +5211,7 @@ const WorktreeList = React.memo(function WorktreeList({
   const workspaceHostScope = useAppStore((s) => s.workspaceHostScope)
   const visibleWorkspaceHostIds = useAppStore((s) => s.visibleWorkspaceHostIds)
   const workspaceHostOrder = useAppStore((s) => s.workspaceHostOrder)
+  const showHostSections = useAppStore((s) => s.showHostSections)
   const setWorkspaceHostOrder = useAppStore((s) => s.setWorkspaceHostOrder)
   const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
   const sortBy = useAppStore((s) => s.sortBy)
@@ -5811,8 +5812,8 @@ const WorktreeList = React.memo(function WorktreeList({
         defaultHostId,
         collapsedHostKeys: effectiveCollapsedGroups,
         forceCollapseHosts: hostDragActive,
-        // Why: projects/workspaces are the primary sidebar object; host sections are only an explicit host-filter view.
-        preferProjectGrouping: true
+        // Why: projects/workspaces are the primary sidebar object; host sections appear only under explicit host filters or the user's opt-in toggle.
+        preferProjectGrouping: !showHostSections
       }),
     [
       defaultHostId,
@@ -5820,6 +5821,7 @@ const WorktreeList = React.memo(function WorktreeList({
       hostDragActive,
       orderedHostOptions,
       rows,
+      showHostSections,
       visibleWorkspaceHostIds,
       workspaceHostScope
     ]
