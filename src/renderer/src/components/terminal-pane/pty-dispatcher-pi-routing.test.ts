@@ -33,7 +33,7 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
           spawn: vi.fn().mockResolvedValue({ id: 'pty-pi' }),
           write: vi.fn(),
           resize: vi.fn(),
-          kill: vi.fn(),
+          kill: vi.fn(async () => {}),
           ackData: vi.fn(),
           rendererDispatcherReady: vi.fn(),
           onData: vi.fn(

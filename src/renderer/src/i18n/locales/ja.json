@@ -5070,6 +5070,19 @@
           "3b7ea51793": "検索をクリア",
           "7f1c2e94a5": "検索テキストが長すぎます — ボードは絞り込まれていません",
           "9a4d0f6b21": "長すぎます"
+        },
+        "WorktreeCardSshHostControl": {
+          "connectFailed": "SSH接続に失敗しました",
+          "removedTooltip": "SSHホストが削除されました — 再接続できません",
+          "removedName": "SSHホスト {{value0}} は削除されました",
+          "connectedTooltip": "SSHホスト上のプロジェクト",
+          "connectedName": "SSHホスト {{value0}} 上のプロジェクト",
+          "connectingName": "SSHホスト {{value0}} に接続中",
+          "authFailedName": "SSHホスト {{value0}} に再接続 — 認証に失敗しました",
+          "retryName": "{{value0}} へのSSH接続を再試行",
+          "connectName": "SSHホスト {{value0}} に接続",
+          "authFailedTooltip": "{{value0}} · 認証失敗",
+          "failedTooltip": "{{value0}} · 接続失敗"
         }
       },
       "shared": {

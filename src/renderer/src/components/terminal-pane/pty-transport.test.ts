@@ -49,7 +49,7 @@ describe('createIpcPtyTransport', () => {
             return () => {}
           }),
           resize: vi.fn(),
-          kill: vi.fn(),
+          kill: vi.fn(async () => {}),
           onData: vi.fn((callback: (payload: { id: string; data: string }) => void) => {
             onData = callback
             return () => {}
@@ -1634,7 +1634,7 @@ describe('createIpcPtyTransport', () => {
           spawn: spawnMock,
           write: writeMock,
           resize: vi.fn(),
-          kill: vi.fn(),
+          kill: vi.fn(async () => {}),
           onData: vi.fn((callback: (payload: { id: string; data: string }) => void) => {
             onData = callback
             return () => {}
@@ -1691,7 +1691,7 @@ describe('createIpcPtyTransport', () => {
           spawn: spawnMock,
           write: vi.fn(),
           resize: vi.fn(),
-          kill: vi.fn(),
+          kill: vi.fn(async () => {}),
           onData: vi.fn((callback: (payload: { id: string; data: string }) => void) => {
             onData = callback
             return () => {}
@@ -1772,7 +1772,7 @@ describe('createIpcPtyTransport', () => {
           spawn: spawnMock,
           write: vi.fn(),
           resize: vi.fn(),
-          kill: vi.fn(),
+          kill: vi.fn(async () => {}),
           onData: vi.fn(() => () => {}),
           onReplay: vi.fn(() => () => {}),
           onExit: vi.fn(() => () => {})
@@ -2105,7 +2105,7 @@ describe('createIpcPtyTransport', () => {
           spawn: spawnMock,
           write: vi.fn(),
           resize: vi.fn(),
-          kill: vi.fn(),
+          kill: vi.fn(async () => {}),
           onData: vi.fn(() => () => {}),
           onReplay: vi.fn(() => () => {}),
           onExit: vi.fn(() => () => {})
@@ -2140,7 +2140,7 @@ describe('createIpcPtyTransport', () => {
           spawn: spawnMock,
           write: vi.fn(),
           resize: vi.fn(),
-          kill: vi.fn(),
+          kill: vi.fn(async () => {}),
           onData: vi.fn(() => () => {}),
           onReplay: vi.fn(() => () => {}),
           onExit: vi.fn(() => () => {})
@@ -2171,7 +2171,7 @@ describe('createIpcPtyTransport', () => {
           spawn: spawnMock,
           write: vi.fn(),
           resize: vi.fn(),
-          kill: vi.fn(),
+          kill: vi.fn(async () => {}),
           onData: vi.fn(() => () => {}),
           onReplay: vi.fn(() => () => {}),
           onExit: vi.fn(() => () => {})
@@ -2205,7 +2205,7 @@ describe('createIpcPtyTransport', () => {
           spawn: spawnMock,
           write: vi.fn(),
           resize: vi.fn(),
-          kill: vi.fn(),
+          kill: vi.fn(async () => {}),
           onData: vi.fn(() => () => {}),
           onReplay: vi.fn(() => () => {}),
           onExit: vi.fn(() => () => {})
@@ -2241,7 +2241,7 @@ describe('createIpcPtyTransport', () => {
           spawn: spawnMock,
           write: vi.fn(),
           resize: vi.fn(),
-          kill: vi.fn(),
+          kill: vi.fn(async () => {}),
           onData: vi.fn(() => () => {}),
           onReplay: vi.fn(() => () => {}),
           onExit: vi.fn(() => () => {})
@@ -2277,7 +2277,7 @@ describe('createIpcPtyTransport', () => {
           spawn: spawnMock,
           write: vi.fn(),
           resize: vi.fn(),
-          kill: vi.fn(),
+          kill: vi.fn(async () => {}),
           onData: vi.fn(() => () => {}),
           onReplay: vi.fn(() => () => {}),
           onExit: vi.fn(() => () => {})

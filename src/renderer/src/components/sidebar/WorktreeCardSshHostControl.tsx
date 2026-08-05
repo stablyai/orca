@@ -242,11 +242,16 @@ export function WorktreeCardSshHostControl({
           data-ssh-target-label={targetLabel}
           aria-busy={connecting || undefined}
           // Why: aria-disabled, not disabled — `disabled` adds pointer-events-none, so an
-          // impatient second click would fall through to the card (activating the workspace,
-          // or opening Edit metadata on a double-click), drop focus to <body>, and kill the
-          // tooltip for the entire in-flight window.
+          // impatient second click would fall through to the card (activating the workspace),
+          // drop focus to <body>, and kill the tooltip for the entire in-flight window.
           aria-disabled={connecting || undefined}
           onPointerDown={onPointerDown}
+          onDoubleClick={(event) => {
+            // Why: dblclick bubbles independently of the swallowed clicks — without this an
+            // impatient double-click reaches the card root and opens Edit metadata.
+            event.stopPropagation()
+            event.preventDefault()
+          }}
           onKeyDown={(event) => {
             // Why: the sidebar scroll root treats a bubbled Enter as "focus the terminal"
             // (WorktreeList handleContainerKeyDown), which would cancel this button's own

@@ -980,7 +980,11 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       inputWriteQueue.clear()
       if (ptyId) {
         const id = ptyId
-        window.api.pty.kill(id)
+        // Why: stays non-blocking — the close must not wait on a wedged transport — but main records the
+        // close durably before its RPC, so a rejection here is only a report, never a lost intent.
+        void window.api.pty.kill(id).catch((err: unknown) => {
+          console.warn(`[pty-transport] kill failed for ${id}:`, err)
+        })
         connected = false
         ptyId = null
         unregisterPtyHandlers(id)

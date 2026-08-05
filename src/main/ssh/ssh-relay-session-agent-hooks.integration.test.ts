@@ -159,7 +159,15 @@ function createSession(targetId: string): InstanceType<typeof SshRelaySession> {
     markSshRemotePtyLease: vi.fn(),
     markSshRemotePtyLeases: vi.fn(),
     markSshRemotePtyLeasesAsync: vi.fn(),
-    markSshRemotePtyLeasesAttachedAsync: vi.fn()
+    markSshRemotePtyLeasesAttachedAsync: vi.fn(),
+    claimSshRemotePtyLeasesToReap: vi.fn().mockReturnValue([]),
+    clearSshRemotePtyLeaseReapFlag: vi.fn(),
+    clearAllSshRemotePtyLeaseReapFlags: vi.fn().mockReturnValue(0),
+    retireLeaseAndReap: vi.fn(),
+    retireLeaseSparingPty: vi.fn(),
+    retireAllLeasesSparingPtys: vi.fn().mockReturnValue(0),
+    getSshRelayIncarnation: vi.fn().mockReturnValue(null),
+    setSshRelayIncarnation: vi.fn()
   } as unknown as Store
   const portForwardManager = {
     removeAllForwards: vi.fn().mockResolvedValue(undefined)

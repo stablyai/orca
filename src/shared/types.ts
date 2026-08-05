@@ -4,6 +4,7 @@ import type {
   RemovedSshTargetTombstone,
   SshPtyConsumerRecovery,
   SshRemotePtyLease,
+  SshRelayIncarnation,
   SshTarget
 } from './ssh-types'
 import type { Automation, AutomationExecutionTargetType, AutomationRun } from './automations-types'
@@ -3650,6 +3651,8 @@ export type PersistedState = {
   /** Identity records for removed SSH targets so a re-added host can re-adopt workspaces orphaned on the old target id. */
   removedSshTargetTombstones?: RemovedSshTargetTombstone[]
   sshRemotePtyLeases: SshRemotePtyLease[]
+  /** D7 — the relay incarnation that owned each target's PTYs at the last connect; a change retires that target's leases. */
+  sshRelayIncarnations?: SshRelayIncarnation[]
   /** Main-owned authenticated relay recovery records; never expose through renderer settings APIs. */
   sshPtyConsumerRecoveries?: SshPtyConsumerRecovery[]
   /** Live local Claude daemon session ids; seeds the live-PTY gate so early OAuth refresh can't rotate the single-use refresh token out from under a running daemon. */

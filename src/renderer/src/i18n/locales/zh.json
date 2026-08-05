@@ -5082,6 +5082,19 @@
           "3b7ea51793": "清除搜索",
           "7f1c2e94a5": "搜索文本过长 — 看板未被筛选",
           "9a4d0f6b21": "过长"
+        },
+        "WorktreeCardSshHostControl": {
+          "connectFailed": "SSH 连接失败",
+          "removedTooltip": "SSH 主机已移除 — 无法重新连接",
+          "removedName": "SSH 主机 {{value0}} 已被移除",
+          "connectedTooltip": "SSH 主机上的项目",
+          "connectedName": "SSH 主机 {{value0}} 上的项目",
+          "connectingName": "正在连接 SSH 主机 {{value0}}",
+          "authFailedName": "重新连接 SSH 主机 {{value0}} — 身份验证失败",
+          "retryName": "重试与 {{value0}} 的 SSH 连接",
+          "connectName": "连接 SSH 主机 {{value0}}",
+          "authFailedTooltip": "{{value0}} · 身份验证失败",
+          "failedTooltip": "{{value0}} · 连接失败"
         }
       },
       "shared": {

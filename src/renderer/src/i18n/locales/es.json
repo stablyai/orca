@@ -5070,6 +5070,19 @@
           "3b7ea51793": "Borrar búsqueda",
           "7f1c2e94a5": "El texto de búsqueda es demasiado largo: el tablero no está filtrado",
           "9a4d0f6b21": "Demasiado largo"
+        },
+        "WorktreeCardSshHostControl": {
+          "connectFailed": "Error de conexión SSH",
+          "removedTooltip": "Host SSH eliminado — no se puede reconectar",
+          "removedName": "El host SSH {{value0}} fue eliminado",
+          "connectedTooltip": "Proyecto en host SSH",
+          "connectedName": "Proyecto en el host SSH {{value0}}",
+          "connectingName": "Conectando al host SSH {{value0}}",
+          "authFailedName": "Reconectar el host SSH {{value0}} — autenticación fallida",
+          "retryName": "Reintentar la conexión SSH a {{value0}}",
+          "connectName": "Conectar al host SSH {{value0}}",
+          "authFailedTooltip": "{{value0}} · autenticación fallida",
+          "failedTooltip": "{{value0}} · conexión fallida"
         }
       },
       "shared": {

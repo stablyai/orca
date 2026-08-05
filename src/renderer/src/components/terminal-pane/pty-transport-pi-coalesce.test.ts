@@ -34,7 +34,7 @@ describe('pty-transport — coalesced OSC titles from Pi', () => {
           spawn: vi.fn().mockResolvedValue({ id: 'pty-pi' }),
           write: vi.fn(),
           resize: vi.fn(),
-          kill: vi.fn(),
+          kill: vi.fn(async () => {}),
           onData: vi.fn((cb: (payload: { id: string; data: string }) => void) => {
             onData = cb
             return () => {}

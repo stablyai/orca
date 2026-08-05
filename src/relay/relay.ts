@@ -9,6 +9,7 @@
 // reconnects via `relay.js --connect`, bridging the new SSH channel's stdio to the existing relay's socket.
 
 import { createServer, createConnection, type Socket, type Server } from 'node:net'
+import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import {
   unlinkSync,
@@ -867,6 +868,9 @@ async function main(): Promise<void> {
   const socketClients = new Map<Socket, number>()
   let socketServer: Server | null = null
   const startedAt = Date.now()
+  // Why: names this relay process across reconnects without either machine's clock. `pid` + uptime can
+  // only approximate identity, and an NTP step on either side moves that approximation past any tolerance.
+  const incarnationToken = randomUUID()
   let acceptedSocketConnections = 0
   let hasAcceptedSocketClient = false
   let graceDeadlineAt: number | null = null
@@ -877,6 +881,7 @@ async function main(): Promise<void> {
 
   dispatcher.onRequest('relay.status', async () => ({
     pid: process.pid,
+    incarnationToken,
     uptimeMs: Date.now() - startedAt,
     detached,
     stdoutAlive,

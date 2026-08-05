@@ -33,7 +33,7 @@ describe('createIpcPtyTransport — Pi titlebar spinner signal', () => {
           spawn: vi.fn().mockResolvedValue({ id: 'pty-pi' }),
           write: vi.fn(),
           resize: vi.fn(),
-          kill: vi.fn(),
+          kill: vi.fn(async () => {}),
           onData: vi.fn((cb: (payload: { id: string; data: string }) => void) => {
             onData = cb
             return () => {}

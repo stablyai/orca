@@ -6154,18 +6154,19 @@ export class OrcaRuntimeService {
   ): ReturnType<NonNullable<RuntimeStore['getSshRemotePtyLeases']>>[number] | null {
     const now = Date.now()
     return (
-      this.store
-        ?.getSshRemotePtyLeases?.()
-        .find(
-          (lease) =>
-            lease.state === 'expired' &&
-            lease.worktreeId === worktreeId &&
-            lease.tabId === tabId &&
-            (ptyId === undefined || lease.ptyId === ptyId) &&
-            (leafId === undefined || lease.leafId === undefined || lease.leafId === leafId) &&
-            lease.updatedAt <= now &&
-            now - lease.updatedAt <= SSH_PANE_RECOVERY_GRACE_MS
-        ) ?? null
+      this.store?.getSshRemotePtyLeases?.().find(
+        (lease) =>
+          lease.state === 'expired' &&
+          // Why: `'expired'` means both "the relay expired this" and "we retired it". Only the first
+          // authorizes recovery, and `retiredReason` is present iff Orca wrote the row itself.
+          lease.retiredReason === undefined &&
+          lease.worktreeId === worktreeId &&
+          lease.tabId === tabId &&
+          (ptyId === undefined || lease.ptyId === ptyId) &&
+          (leafId === undefined || lease.leafId === undefined || lease.leafId === leafId) &&
+          lease.updatedAt <= now &&
+          now - lease.updatedAt <= SSH_PANE_RECOVERY_GRACE_MS
+      ) ?? null
     )
   }
 

@@ -5070,6 +5070,19 @@
           "3b7ea51793": "검색 지우기",
           "7f1c2e94a5": "검색어가 너무 깁니다 — 보드가 필터링되지 않았습니다",
           "9a4d0f6b21": "너무 김"
+        },
+        "WorktreeCardSshHostControl": {
+          "connectFailed": "SSH 연결 실패",
+          "removedTooltip": "SSH 호스트가 제거됨 — 재연결할 수 없음",
+          "removedName": "SSH 호스트 {{value0}}이(가) 제거되었습니다",
+          "connectedTooltip": "SSH 호스트의 프로젝트",
+          "connectedName": "SSH 호스트 {{value0}}의 프로젝트",
+          "connectingName": "SSH 호스트 {{value0}}에 연결 중",
+          "authFailedName": "SSH 호스트 {{value0}} 재연결 — 인증 실패",
+          "retryName": "{{value0}}에 SSH 연결 재시도",
+          "connectName": "SSH 호스트 {{value0}}에 연결",
+          "authFailedTooltip": "{{value0}} · 인증 실패",
+          "failedTooltip": "{{value0}} · 연결 실패"
         }
       },
       "shared": {

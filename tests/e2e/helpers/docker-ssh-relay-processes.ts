@@ -129,6 +129,60 @@ export function signalDockerSshRelayWatchers(
   )
 }
 
+// Why not readDockerSshRelayProcessSnapshot: it only returns a group when a
+// relay-watcher.js child is present, and the per-connection watcher exits on
+// disconnect while the persistent detached relay (and its grace window)
+// survives -- so right after a graceful disconnect that pairing comes back
+// empty even though the relay pid callers need (e.g. to freeze it) is alive.
+export function findDockerSshRelayPid(target: DockerSshRelayTarget): number | null {
+  const rows = parseRelayProcessRows(
+    execDockerSshRelayTargetCommand(target, LIST_RELAY_PROCESSES_COMMAND)
+  )
+  const relays = rows.filter((row) => row.type === 'relay')
+  if (relays.length === 0) {
+    return null
+  }
+  if (relays.length > 1) {
+    throw new Error(
+      `Expected one detached relay process, found ${relays.length}: ${relays.map((row) => row.pid).join(',')}`
+    )
+  }
+  return relays[0].pid
+}
+
+function signalDockerSshRelay(
+  target: DockerSshRelayTarget,
+  relayPid: number,
+  signal: string
+): void {
+  if (!Number.isInteger(relayPid)) {
+    throw new Error('Docker SSH relay process ID must be an integer')
+  }
+  execDockerSshRelayTargetCommand(
+    target,
+    [
+      `proc=/proc/${relayPid}`,
+      '[ -r "$proc/cmdline" ]',
+      'argv=()',
+      'mapfile -d \'\' -t argv < "$proc/cmdline"',
+      '[ "${argv[1]##*/}" = relay.js ]',
+      '[[ " ${argv[*]:2} " = *" --detached "* ]]',
+      `kill -${signal} ${relayPid}`
+    ].join(' && ')
+  )
+}
+
+// Freeze/unfreeze the persistent relay to force a bounded reattach RPC (e.g.
+// attachPtyWithRetry's 10s x 2 deadline) to time out without killing the
+// remote PTYs it's holding a socket open for.
+export function freezeDockerSshRelay(target: DockerSshRelayTarget, relayPid: number): void {
+  signalDockerSshRelay(target, relayPid, 'STOP')
+}
+
+export function unfreezeDockerSshRelay(target: DockerSshRelayTarget, relayPid: number): void {
+  signalDockerSshRelay(target, relayPid, 'CONT')
+}
+
 export function terminateDockerSshRelay(
   target: DockerSshRelayTarget,
   snapshot: DockerSshRelayProcessSnapshot

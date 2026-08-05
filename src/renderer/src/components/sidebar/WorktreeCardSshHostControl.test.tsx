@@ -214,6 +214,28 @@ describe('WorktreeCardSshHostControl', () => {
     expect(onCardClick).not.toHaveBeenCalled()
   })
 
+  it('does not let a double-click bubble to the card, which would open Edit metadata', async () => {
+    const onCardDoubleClick = vi.fn()
+    const user = userEvent.setup()
+    render(
+      <div onDoubleClick={onCardDoubleClick}>
+        <WorktreeCardSshHostControl
+          targetId="ssh-target-1"
+          targetLabel="devbox"
+          status="disconnected"
+          targetRemoved={false}
+          sshOwnerEnvironmentId={null}
+          iconOnly={false}
+          onPointerDown={() => {}}
+        />
+      </div>
+    )
+
+    await user.dblClick(screen.getByRole('button'))
+
+    expect(onCardDoubleClick).not.toHaveBeenCalled()
+  })
+
   it('reports connect failures and resyncs target metadata so a ghost host converges', async () => {
     const connect = vi.fn().mockRejectedValue(new Error('SSH target "ssh-target-1" not found'))
     const listTargets = vi
