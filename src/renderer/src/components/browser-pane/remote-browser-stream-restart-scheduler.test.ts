@@ -32,6 +32,54 @@ describe('RemoteBrowserStreamRestartScheduler', () => {
     expect(attempts).toBe(FAILURES_BEFORE_SUCCESS + 1)
   })
 
+  // Why: clearTimeout cannot recall an attempt already dispatched into an await. Pre-fix, a cancel()
+  // during that window was a no-op and the resolving attempt re-armed a "cancelled" scheduler.
+  it('does not re-arm when cancelled while an attempt is already in flight', async () => {
+    vi.useFakeTimers()
+    const scheduler = new RemoteBrowserStreamRestartScheduler()
+    let resolveAttempt: ((shouldRetry: boolean) => void) | undefined
+    const run = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveAttempt = resolve
+        })
+    )
+
+    scheduler.schedule(run)
+    await vi.advanceTimersByTimeAsync(500)
+    expect(run).toHaveBeenCalledTimes(1)
+    expect(scheduler.isScheduled).toBe(false) // timer fired; the attempt is now awaiting
+
+    scheduler.cancel()
+    resolveAttempt?.(true) // the in-flight attempt reports a transient failure after the cancel
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(scheduler.isScheduled).toBe(false)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(run).toHaveBeenCalledTimes(1)
+  })
+
+  it('still retries normally when an in-flight attempt resolves without an intervening cancel', async () => {
+    vi.useFakeTimers()
+    const scheduler = new RemoteBrowserStreamRestartScheduler()
+    let resolveAttempt: ((shouldRetry: boolean) => void) | undefined
+    const run = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveAttempt = resolve
+        })
+    )
+
+    scheduler.schedule(run)
+    await vi.advanceTimersByTimeAsync(500)
+    resolveAttempt?.(true)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(scheduler.isScheduled).toBe(true)
+
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(run).toHaveBeenCalledTimes(2)
+  })
+
   it('grows the delay per counted attempt and caps it, never by elapsed wall time', () => {
     vi.useFakeTimers()
     const scheduler = new RemoteBrowserStreamRestartScheduler()

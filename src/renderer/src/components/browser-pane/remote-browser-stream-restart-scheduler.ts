@@ -6,6 +6,9 @@ export type RemoteBrowserStreamRestartAttempt = () => Promise<boolean>
 export class RemoteBrowserStreamRestartScheduler {
   private attempt = 0
   private timer: ReturnType<typeof setTimeout> | null = null
+  // Why: clearing the timer cannot recall an attempt already dispatched into an await. Without a
+  // generation, a cancel() during that window is a no-op and the resolving attempt re-arms itself.
+  private generation = 0
 
   get attemptCount(): number {
     return this.attempt
@@ -22,10 +25,11 @@ export class RemoteBrowserStreamRestartScheduler {
     }
     const delayMs = RESTART_DELAYS_MS[Math.min(this.attempt, RESTART_DELAYS_MS.length - 1)]
     this.attempt += 1
+    const generation = this.generation
     this.timer = setTimeout(() => {
       this.timer = null
       void run().then((shouldRetry) => {
-        if (shouldRetry) {
+        if (shouldRetry && generation === this.generation) {
           this.schedule(run)
         }
       })
@@ -42,6 +46,8 @@ export class RemoteBrowserStreamRestartScheduler {
       clearTimeout(this.timer)
       this.timer = null
     }
+    // Retires any attempt already in flight so it cannot re-arm after this cancel.
+    this.generation += 1
     this.attempt = 0
   }
 }

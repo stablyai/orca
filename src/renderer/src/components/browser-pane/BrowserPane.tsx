@@ -554,6 +554,29 @@ function browserPageExists(tabId: string): boolean {
   )
 }
 
+// Why: a runtime lacking browser.screencast.v1 will not grow it while this connection lives, so
+// retrying that failure is unbounded work with a visible error each round. Tagged rather than
+// message-matched so a reworded string cannot silently turn it back into an infinite retry.
+const REMOTE_BROWSER_STREAM_UNSUPPORTED = 'remote_browser_stream_unsupported'
+
+function remoteBrowserStreamUnsupportedError(): Error {
+  return Object.assign(
+    new Error('The selected runtime does not support remote browser streaming.'),
+    {
+      code: REMOTE_BROWSER_STREAM_UNSUPPORTED
+    }
+  )
+}
+
+function isRemoteBrowserStreamUnsupportedError(error: unknown): boolean {
+  return (
+    !!error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    (error as { code: unknown }).code === REMOTE_BROWSER_STREAM_UNSUPPORTED
+  )
+}
+
 function isRemoteBrowserPageMissingError(error: unknown): boolean {
   if (error instanceof RuntimeRpcCallError) {
     return isRemoteBrowserPageMissingCode(error.code)
@@ -1627,7 +1650,9 @@ function RemoteBrowserPagePane({
             error instanceof Error ? error.message : 'Failed to restart remote browser stream.'
           )
           setBusy(false)
-          return true
+          // A capability the host does not have is permanent for this connection; everything else
+          // is unproven and must keep retrying rather than strand the pane.
+          return !isRemoteBrowserStreamUnsupportedError(error)
         }
       })
     },
@@ -1676,7 +1701,7 @@ function RemoteBrowserPagePane({
         timeoutMs: 15_000
       })
       if (!status.capabilities?.includes('browser.screencast.v1')) {
-        throw new Error('The selected runtime does not support remote browser streaming.')
+        throw remoteBrowserStreamUnsupportedError()
       }
       if (!isCurrentRemoteOperationToken(operationToken)) {
         return null
@@ -1796,6 +1821,10 @@ function RemoteBrowserPagePane({
 
       // Why: the runtime stream validates frames against its start viewport, so restart media after resize or new-size frames get rejected.
       streamGenerationRef.current += 1
+      // Why: cancel() cannot recall a retry already dispatched into an await. Bumping the operation
+      // generation — as every other supersession site does — makes that attempt's own token guard
+      // fail, so it cannot subscribe concurrently with the restart below.
+      remoteOperationGenerationRef.current += 1
       activeStreamTokenRef.current = null
       streamSubscriptionRef.current = null
       remoteStreamViewportSizeRef.current = null
