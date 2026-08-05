@@ -31,7 +31,12 @@ final class AgentEntrypointSourceSafetyTests: XCTestCase {
                             try? keyEvent(modifier.keyCode, down: false, flags: flags, pid: pid)
             """
         ))
-        XCTAssertTrue(source.contains("event.flags = flags\n        event.postToPid(pid)"))
+        // Why: synthetic mouse delivery must set modifier flags and use the HID
+        // tap path so coordinate clicks actually press (#12592), not only move.
+        XCTAssertTrue(source.contains("event.flags = flags"))
+        XCTAssertTrue(source.contains("event.post(tap: .cghidEventTap)"))
+        XCTAssertTrue(source.contains("event.postToPid(pid)"))
+        XCTAssertTrue(source.contains("mouseEventClickState"))
     }
 
     private func agentEntrypointSource() throws -> String {

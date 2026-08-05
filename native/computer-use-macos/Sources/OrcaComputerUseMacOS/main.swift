@@ -2298,10 +2298,36 @@ private enum Input {
         let flags = modifiers.reduce(into: CGEventFlags()) { result, modifier in
             result.insert(modifier.flag)
         }
-        for _ in 0..<max(count, 1) {
-            try mouse(.mouseMoved, source: source, point: point, button: button.cgButton, flags: flags, pid: pid)
-            try mouse(button.downEvent, source: source, point: point, button: button.cgButton, flags: flags, pid: pid)
-            try mouse(button.upEvent, source: source, point: point, button: button.cgButton, flags: flags, pid: pid)
+        for clickIndex in 1...max(count, 1) {
+            try mouse(
+                .mouseMoved,
+                source: source,
+                point: point,
+                button: button.cgButton,
+                flags: flags,
+                pid: pid
+            )
+            // Why: a move+down in the same tick is ignored by some AppKit/Electron
+            // controls even when the cursor visibly arrives (#12592).
+            usleep(10_000)
+            try mouse(
+                button.downEvent,
+                source: source,
+                point: point,
+                button: button.cgButton,
+                flags: flags,
+                pid: pid,
+                clickState: clickIndex
+            )
+            try mouse(
+                button.upEvent,
+                source: source,
+                point: point,
+                button: button.cgButton,
+                flags: flags,
+                pid: pid,
+                clickState: clickIndex
+            )
         }
     }
 
@@ -2399,13 +2425,34 @@ private enum Input {
         point: CGPoint,
         button: CGMouseButton,
         flags: CGEventFlags = [],
-        pid: pid_t
+        pid: pid_t,
+        clickState: Int = 1
     ) throws {
         guard let event = CGEvent(mouseEventSource: source, mouseType: type, mouseCursorPosition: point, mouseButton: button) else {
             throw ProviderError.coded("accessibility_error", "failed to create mouse event")
         }
         event.flags = flags
-        event.postToPid(pid)
+        if type == .leftMouseDown || type == .leftMouseUp
+            || type == .rightMouseDown || type == .rightMouseUp
+            || type == .otherMouseDown || type == .otherMouseUp
+        {
+            event.setIntegerValueField(.mouseEventClickState, value: Int64(max(clickState, 1)))
+        }
+        // Why: postToPid alone moves the cursor (hover/tooltips work) but many
+        // AppKit and Electron controls never activate on a pid-targeted press.
+        // Keyboard already posts via cghidEventTap; use that for button
+        // down/up so --x/--y clicks activate (#12592). Keep postToPid for
+        // motion/drag so targeted apps still track the pointer.
+        let isButtonPress =
+            type == .leftMouseDown || type == .leftMouseUp
+            || type == .rightMouseDown || type == .rightMouseUp
+            || type == .otherMouseDown || type == .otherMouseUp
+        if isButtonPress {
+            event.post(tap: .cghidEventTap)
+        } else {
+            event.postToPid(pid)
+            event.post(tap: .cghidEventTap)
+        }
     }
 
     private static func keyEvent(_ keyCode: CGKeyCode, down: Bool, flags: CGEventFlags, pid: pid_t) throws {
