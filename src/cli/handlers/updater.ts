@@ -167,8 +167,14 @@ async function waitForStatus(
   }
 
   const deadline = Date.now() + timeoutMs
-  while (Date.now() < deadline) {
+  for (;;) {
+    // Why: read the clock once and break on non-positive remaining time — a
+    // separate condition read could let the slice reach updater.wait as 0/negative,
+    // which its `min(1)` param validation rejects as an RPC error, not a timeout.
     const remainingMs = deadline - Date.now()
+    if (remainingMs <= 0) {
+      break
+    }
     const next = await withUpdaterRecovery(() =>
       client.waitForUpdateStatus(
         response.result.revision,

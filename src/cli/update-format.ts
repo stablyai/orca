@@ -62,7 +62,7 @@ function formatUnavailableSupport(support: RemoteServerUpdateSupport): string {
     case 'updater-unavailable':
       return 'The Orca updater is not ready yet. Try again in a moment.'
     case 'manual-service-update-required':
-      return 'This Orca runs as a headless service it cannot update itself. Update it through its service manager (e.g. redeploy or restart the orca serve process).'
+      return 'This Orca runs as a headless service, so it cannot update itself. Update it through its service manager (e.g. redeploy or restart the orca serve process).'
     case 'available':
       // Why: 'available' pairs with automatic=true, so this branch is unreachable;
       // kept exhaustive so a future reason can't silently fall through.
