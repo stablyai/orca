@@ -435,8 +435,17 @@ describe('push-on-idle orchestration delivery absence gate', () => {
       expect(stub.markAsDelivered).not.toHaveBeenCalled()
       expect(stub.rows[0].delivered_at).toBeNull()
 
-      // The replacement's own delivery starts a fresh flight and completes.
+      // The replacement's own delivery starts a fresh flight and completes —
+      // but only once ITS live title proves idle; the dead session's live status
+      // no longer authorizes a write into the new process.
       runtime.deliverPendingMessagesForHandle(handle)
+      expect(
+        write.mock.calls.filter(
+          ([, data]) => typeof data === 'string' && data.includes('Subject: for the old session')
+        )
+      ).toHaveLength(1)
+      runtime.onPtyData(STALE_PTY_ID, '\x1b]0;Codex working\x07', 200)
+      runtime.onPtyData(STALE_PTY_ID, '\x1b]0;Codex done\x07', 201)
       const payloadWrites = write.mock.calls.filter(
         ([, data]) => typeof data === 'string' && data.includes('Subject: for the old session')
       )

@@ -33021,6 +33021,8 @@ describe('OrcaRuntimeService', () => {
       // without requiring another agent-status transition (#12536).
       runtime.notifyMessageArrived(terminal.handle, 'status')
 
+      // The push is deferred one microtask so it lands behind any resolved check.
+      await Promise.resolve()
       expect(write).toHaveBeenCalledWith('pty-1', expect.stringContaining('Subject: after wait'))
       await vi.advanceTimersByTimeAsync(500)
       expect(write).toHaveBeenCalledWith('pty-1', '\r')
@@ -33053,6 +33055,7 @@ describe('OrcaRuntimeService', () => {
     write.mockClear()
 
     runtime.notifyMessageArrived(terminal.handle, 'status')
+    await Promise.resolve()
 
     expect(write).not.toHaveBeenCalled()
     // Why: busy must leave the row undelivered so a later idle can push it;
@@ -33087,6 +33090,7 @@ describe('OrcaRuntimeService', () => {
       write.mockClear()
 
       runtime.notifyMessageArrived(terminal.handle, 'status')
+      await Promise.resolve()
 
       expect(write).not.toHaveBeenCalled()
       await vi.advanceTimersByTimeAsync(600)
@@ -33096,6 +33100,153 @@ describe('OrcaRuntimeService', () => {
       runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
       runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
       expect(write).toHaveBeenCalledWith('pty-1', expect.stringContaining('Subject: seeded idle'))
+      await vi.advanceTimersByTimeAsync(600)
+      expect(message.delivered_at).not.toBeNull()
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('lets a resolved check consume its rows before a later same-tick notify pushes', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new InMemoryOrchestrationMessages()
+      const write = vi.fn().mockReturnValue(true)
+      setInMemoryOrchestrationMessages(runtime, db)
+      runtime.setPtyController({
+        write,
+        kill: vi.fn(),
+        getForegroundProcess: async () => null
+      })
+      syncSinglePty(runtime)
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+      runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
+      await runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle' })
+      write.mockClear()
+
+      // Why: resolveMessageWaiter removes the waiter synchronously, but the check
+      // handler marks its rows read a microtask later. Two sends resuming off one
+      // shared in-flight promise put a no-waiter notify inside that window, so the
+      // push must not inject rows the resolved check is about to return.
+      const consumed = runtime
+        .waitForMessage(terminal.handle, { timeoutMs: 5_000 })
+        .then(() => db.getUnreadMessages(terminal.handle).map((row) => (row.read = 1)))
+      const first = db.insertMessage({ from: 'sender', to: terminal.handle, subject: 'pulled' })
+      runtime.notifyMessageArrived(terminal.handle, 'status')
+      const second = db.insertMessage({
+        from: 'sender',
+        to: terminal.handle,
+        subject: 'also pulled'
+      })
+      runtime.notifyMessageArrived(terminal.handle, 'status')
+
+      await consumed
+      await Promise.resolve()
+      expect(write).not.toHaveBeenCalled()
+      expect(first.delivered_at).toBeNull()
+      expect(second.delivered_at).toBeNull()
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps live idle authority across a renderer graph republish', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new InMemoryOrchestrationMessages()
+      const write = vi.fn().mockReturnValue(true)
+      setInMemoryOrchestrationMessages(runtime, db)
+      runtime.setPtyController({
+        write,
+        kill: vi.fn(),
+        getForegroundProcess: async () => null
+      })
+      syncSinglePty(runtime)
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+      runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
+      await runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle' })
+      write.mockClear()
+
+      // Why: syncWindowGraph rebuilds every leaf record on any pane/tab change.
+      // An idle agent emits no new title, so dropping the live-status carry here
+      // would strand mail until the next OSC frame — the #12536 symptom.
+      syncSinglePty(runtime)
+
+      const [republished] = (await runtime.listTerminals()).terminals
+      const message = db.insertMessage({
+        from: 'sender',
+        to: republished.handle,
+        subject: 'after republish'
+      })
+
+      runtime.notifyMessageArrived(republished.handle, 'status')
+      await Promise.resolve()
+
+      expect(write).toHaveBeenCalledWith(
+        'pty-1',
+        expect.stringContaining('Subject: after republish')
+      )
+      await vi.advanceTimersByTimeAsync(600)
+      expect(message.delivered_at).not.toBeNull()
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not reuse the dead process live idle authority after a same-id respawn', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new InMemoryOrchestrationMessages()
+      const write = vi.fn().mockReturnValue(true)
+      runtime.setPtyController({
+        write,
+        kill: vi.fn(),
+        getForegroundProcess: async () => null
+      })
+      syncSinglePty(runtime)
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+      runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
+      await runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle' })
+      write.mockClear()
+
+      // Why: a cold restore respawns under the same session id and makes the
+      // leaf writable again before any new title. The dead process's live idle
+      // must not authorize typing into its replacement mid-turn.
+      runtime.onPtyExit('pty-1', 0)
+      runtime.onPtySpawned('pty-1', undefined, { awaitsRegistration: false })
+      setInMemoryOrchestrationMessages(runtime, db)
+      const message = db.insertMessage({
+        from: 'sender',
+        to: terminal.handle,
+        subject: 'after same id respawn'
+      })
+
+      runtime.notifyMessageArrived(terminal.handle, 'status')
+      await Promise.resolve()
+
+      expect(write).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(600)
+      expect(message.delivered_at).toBeNull()
+
+      // The replacement's first live idle frame re-authorizes delivery.
+      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 200)
+      runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 201)
+      expect(write).toHaveBeenCalledWith(
+        'pty-1',
+        expect.stringContaining('Subject: after same id respawn')
+      )
       await vi.advanceTimersByTimeAsync(600)
       expect(message.delivered_at).not.toBeNull()
       db.close()
@@ -33140,6 +33291,7 @@ describe('OrcaRuntimeService', () => {
 
       runtime.notifyMessageArrived(terminal.handle, 'status')
 
+      await Promise.resolve()
       expect(write).toHaveBeenCalledWith(
         'pty-1',
         expect.stringContaining('Subject: unfiltered status')
@@ -33216,7 +33368,9 @@ describe('OrcaRuntimeService', () => {
       db.insertMessage({ from: 'sender', to: terminal.handle, subject: 'once only' })
 
       runtime.notifyMessageArrived(terminal.handle, 'status')
+      await Promise.resolve()
       runtime.notifyMessageArrived(terminal.handle, 'status')
+      await Promise.resolve()
 
       const payloadWrites = write.mock.calls.filter(
         ([, payload]) => typeof payload === 'string' && payload.includes('Subject: once only')
@@ -33252,11 +33406,15 @@ describe('OrcaRuntimeService', () => {
       await runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle' })
       const first = db.insertMessage({ from: 'sender', to: terminal.handle, subject: 'first' })
       runtime.notifyMessageArrived(terminal.handle, 'status')
+      // Why the flush: the deferred push must actually arm its flight before the
+      // second message arrives, or this exercises a plain batch instead.
+      await Promise.resolve()
 
       // Why: mid-flight notify parks the leaf; flight settle re-runs delivery
       // so the second row is not lost and is not double-injected with the first.
       const second = db.insertMessage({ from: 'sender', to: terminal.handle, subject: 'second' })
       runtime.notifyMessageArrived(terminal.handle, 'status')
+      await Promise.resolve()
       expect(
         write.mock.calls.filter(
           ([, payload]) => typeof payload === 'string' && payload.includes('Subject: second')
