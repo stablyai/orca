@@ -174,7 +174,7 @@ export function loadWindowsTerminalCapabilities(
 }
 
 export function refreshWindowsTerminalCapabilities(
-  ownerKey: string | undefined = undefined,
+  ownerKey?: string,
   target: WindowsTerminalCapabilityLoadTarget = { kind: 'local' },
   sshConnectionId?: string | null
 ): Promise<WindowsTerminalCapabilities> {
@@ -197,7 +197,7 @@ export function selectWindowsTerminalCapabilitiesForOwner(
 export function useWindowsTerminalCapabilities(
   enabled: boolean,
   forceRefreshOnMount = false,
-  ownerKey: string | undefined = undefined,
+  ownerKey?: string,
   target: WindowsTerminalCapabilityLoadTarget = { kind: 'local' },
   sshConnectionId?: string | null
 ): WindowsTerminalCapabilities {
@@ -249,9 +249,24 @@ export function useWindowsTerminalCapabilities(
         setState({ ownerKey: resolvedOwnerKey, capabilities: nextCapabilities })
       }
     })
+    const refreshInterval = globalThis.setInterval(() => {
+      if (resolvedTarget.kind !== 'local' || sshConnectionIdKey) {
+        return
+      }
+      const cachedCapabilities = getCachedWindowsTerminalCapabilities(resolvedOwnerKey)
+      if (cachedCapabilities.wslAvailable && cachedCapabilities.wslDistros.length > 0) {
+        return
+      }
+      void loadWindowsTerminalCapabilities({
+        ownerKey: resolvedOwnerKey,
+        target: resolvedTarget,
+        sshConnectionId: sshConnectionIdKey
+      })
+    }, CAPABILITY_CACHE_TTL_MS)
 
     return () => {
       cancelled = true
+      globalThis.clearInterval(refreshInterval)
       const currentSubscribers = subscribersByOwnerKey.get(resolvedOwnerKey)
       currentSubscribers?.delete(setCapabilities)
       if (currentSubscribers?.size === 0) {
@@ -261,6 +276,27 @@ export function useWindowsTerminalCapabilities(
   }, [enabled, forceRefreshOnMount, resolvedOwnerKey, resolvedTarget, sshConnectionIdKey])
 
   return selectWindowsTerminalCapabilitiesForOwner(state, enabled, resolvedOwnerKey)
+}
+
+export function isWindowsTerminalCapabilityHost(args: {
+  isWindowsRenderer: boolean
+  isWebClient: boolean
+  target: WindowsTerminalCapabilityLoadTarget
+  hostPlatform: NodeJS.Platform | null
+}): boolean {
+  return (
+    args.hostPlatform === 'win32' ||
+    (!args.isWebClient && args.target.kind === 'local' && args.isWindowsRenderer)
+  )
+}
+
+export function useLocalWindowsTerminalCapabilities(
+  enabled: boolean,
+  forceRefreshOnMount = false,
+  ownerKey = 'local'
+): WindowsTerminalCapabilities {
+  // Why: desktop-owned defaults must not follow the active remote environment.
+  return useWindowsTerminalCapabilities(enabled, forceRefreshOnMount, ownerKey, { kind: 'local' })
 }
 
 export function resetWindowsTerminalCapabilitiesForTests(): void {

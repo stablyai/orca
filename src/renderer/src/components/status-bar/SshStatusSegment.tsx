@@ -20,10 +20,8 @@ import { isUserManagedRuntimeEnvironment } from '../../../../shared/runtime-envi
 import { RuntimeHostStatusRow, type RuntimeHostConnectionState } from './RuntimeHostStatusRow'
 import { SshTargetStatusRow } from './SshTargetStatusRow'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime-shared-control-types'
-
-function isConnecting(status: SshConnectionStatus): boolean {
-  return ['connecting', 'deploying-relay', 'reconnecting'].includes(status)
-}
+import { connectRuntimeEnvironmentAndRecordStatus } from './runtime-environment-explicit-connect'
+import { isConnectingSshStatus } from '@/ssh/ssh-connection-recoverability'
 
 type HostStatus = 'connected' | 'disconnected' | 'connecting'
 
@@ -69,7 +67,7 @@ function sshStatusForOverall(status: SshConnectionStatus): HostStatus {
   if (status === 'connected') {
     return 'connected'
   }
-  return isConnecting(status) ? 'connecting' : 'disconnected'
+  return isConnectingSshStatus(status) ? 'connecting' : 'disconnected'
 }
 
 function runtimeHostConnectionState({
@@ -177,7 +175,6 @@ export function SshStatusSegment({
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
   const setRuntimeEnvironmentStatus = useAppStore((s) => s.setRuntimeEnvironmentStatus)
   const hydrateRuntimeEnvironmentStatuses = useAppStore((s) => s.hydrateRuntimeEnvironmentStatuses)
-  const refreshRuntimeEnvironmentStatus = useAppStore((s) => s.refreshRuntimeEnvironmentStatus)
   const remoteWorkspaceSyncStatusByTargetId = useAppStore(
     (s) => s.remoteWorkspaceSyncStatusByTargetId
   )
@@ -232,7 +229,7 @@ export function SshStatusSegment({
       const store = useAppStore.getState()
       const reachable = await connectRuntimeHostForNavigation({
         environmentId,
-        refreshStatus: refreshRuntimeEnvironmentStatus,
+        refreshStatus: connectRuntimeEnvironmentAndRecordStatus,
         fetchRepos: store.fetchRuntimeEnvironmentRepos,
         fetchWorktrees: store.fetchWorktrees,
         fetchLineage: store.fetchWorktreeLineage
@@ -248,13 +245,17 @@ export function SshStatusSegment({
       }
       recordFeatureInteraction('ssh')
     },
-    [recordFeatureInteraction, refreshRuntimeEnvironmentStatus]
+    [recordFeatureInteraction]
   )
   const disconnectRuntimeHost = useCallback(
     async (environmentId: string): Promise<void> => {
       try {
         await window.api.runtimeEnvironments.disconnect({ selector: environmentId })
-        setRuntimeEnvironmentStatus(environmentId, { status: null, checkedAt: Date.now() })
+        setRuntimeEnvironmentStatus(
+          environmentId,
+          { status: null, checkedAt: Date.now() },
+          { suppressDisconnectToast: true }
+        )
         recordFeatureInteraction('ssh')
       } catch (err) {
         toast.error(

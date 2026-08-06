@@ -5,6 +5,12 @@ import {
 } from '../../shared/skill-freshness'
 import { eligibleSkillUpdateNames } from './skill-freshness-eligibility'
 
+const globallyUpdatableNames = new Set(['computer-use', 'orca-cli', 'orchestration'])
+
+function eligible(installations: SkillFreshnessInstallation[]): string[] {
+  return eligibleSkillUpdateNames(installations, globallyUpdatableNames)
+}
+
 function placement(
   name: string,
   overrides: Partial<SkillFreshnessInstallation> = {}
@@ -35,7 +41,7 @@ function placement(
 describe('skill freshness name-scoped update eligibility', () => {
   it('offers a name when at least one supported placement is outdated and all are official', () => {
     expect(
-      eligibleSkillUpdateNames([
+      eligible([
         placement('orca-cli'),
         placement('orca-cli', {
           id: 'orca-cli-claude',
@@ -62,7 +68,7 @@ describe('skill freshness name-scoped update eligibility', () => {
       // update over one refuses work the command could do to a copy that is never at
       // stake. The canonical copy converges and the outlier is reported separately.
       expect(
-        eligibleSkillUpdateNames([
+        eligible([
           placement('orca-cli'),
           placement('orca-cli', { id: `outlier-${status}-${topology}`, status, topology })
         ])
@@ -76,7 +82,7 @@ describe('skill freshness name-scoped update eligibility', () => {
       // Why: this is the placement the command writes to, so overwriting it is the
       // real data-loss case the rail exists to avoid.
       expect(
-        eligibleSkillUpdateNames([
+        eligible([
           placement('orca-cli', { id: 'blocked-canonical', status }),
           placement('orca-cli', {
             id: 'orca-cli-claude',
@@ -93,7 +99,7 @@ describe('skill freshness name-scoped update eligibility', () => {
     // Why: a duplicate no longer omits the whole name — the canonical copy converges
     // and the duplicate row is flagged as maybe-not-reached rather than blocking.
     expect(
-      eligibleSkillUpdateNames([
+      eligible([
         placement('orca-cli'),
         placement('orca-cli', {
           id: 'orca-cli-gemini',
@@ -112,7 +118,7 @@ describe('skill freshness name-scoped update eligibility', () => {
     // name here advertises an update the command reports as already up to date, so the
     // badge could never clear; the dialog explains the duplicate as skipped instead.
     expect(
-      eligibleSkillUpdateNames([
+      eligible([
         placement('orchestration', { status: 'current' }),
         placement('orchestration', {
           id: 'orchestration-factory',
@@ -131,7 +137,7 @@ describe('skill freshness name-scoped update eligibility', () => {
     // Why: with no canonical or alias to anchor `--global`, the command has no
     // reliable target, so a duplicate-only skill stays unoffered.
     expect(
-      eligibleSkillUpdateNames([
+      eligible([
         placement('orca-cli', {
           rootId: 'home-gemini',
           unresolvedPath: '/home/.gemini/skills/orca-cli',
@@ -147,7 +153,7 @@ describe('skill freshness name-scoped update eligibility', () => {
     // Why: a project copy is never written by `--global`, so it does not speak for
     // the global one — while a name whose convergent copy is current stays unoffered.
     expect(
-      eligibleSkillUpdateNames([
+      eligible([
         placement('computer-use', { status: 'current' }),
         placement('orchestration'),
         placement('orchestration', {
@@ -157,6 +163,10 @@ describe('skill freshness name-scoped update eligibility', () => {
         })
       ])
     ).toEqual(['orchestration'])
+  })
+
+  it('does not offer an official canonical copy missing from the updater lock (#10791)', () => {
+    expect(eligibleSkillUpdateNames([placement('orca-cli')], new Set())).toEqual([])
   })
 
   it('builds only an explicit, deterministic global command', () => {

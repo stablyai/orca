@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
+import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
@@ -531,7 +532,8 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
             ptyIdsByLeafId: { right: 'pty-right' }
           })
         }
-      })
+      }),
+      LOCAL_EXECUTION_HOST_ID
     )
   })
 
@@ -659,7 +661,8 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
         },
         terminalSurfaceTombstonesByPaneKey: {},
         terminalTopologyRevisionByRepoId: { [REPO_ID]: 1 }
-      })
+      }),
+      LOCAL_EXECUTION_HOST_ID
     )
     expect(flushOrThrow).toHaveBeenCalledOnce()
   })

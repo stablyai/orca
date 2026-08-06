@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: cookie import is one pipeline (detect → decrypt → stage → swap) that must stay together to keep encryption/schema/staging in sync. */
-import { app, type BrowserWindow, dialog, session } from 'electron'
+import { app, type BrowserWindow, type Cookie, dialog, session } from 'electron'
 import { execFileSync } from 'node:child_process'
 import { createDecipheriv, pbkdf2Sync, randomUUID } from 'node:crypto'
 import {
@@ -76,10 +76,19 @@ import type {
 import { browserSessionRegistry } from './browser-session-registry'
 import { setupClientHintsOverride } from './browser-session-ua'
 import {
+  isGoogleSourceBoundCookie,
+  normalizeCookieDomain,
+  normalizeCookieImportDomain,
+  replaceCookiesForImportedDomains,
+  restoreImportedDomainCookies,
+  type CookieImportMode
+} from './browser-cookie-import-policy'
+import {
   createChromiumCookieSnapshot,
   type ChromiumCookieSnapshot
 } from './chromium-cookie-snapshot'
 import { resolveChromiumCookiesPath } from './chromium-cookie-path'
+import { copyFileWithWindowsRetry } from '../codex-accounts/fs-utils'
 
 // ---------------------------------------------------------------------------
 // Browser detection
@@ -499,13 +508,13 @@ function normalizeSameSite(raw: unknown): 'unspecified' | 'no_restriction' | 'la
 
 // Why: cookies.set() needs a url to scope the cookie; derive it from domain + secure flag.
 function deriveUrl(domain: string, secure: boolean): string | null {
-  const cleanDomain = domain.startsWith('.') ? domain.slice(1) : domain
-  if (!cleanDomain || cleanDomain.includes(' ')) {
+  const normalizedDomain = normalizeCookieDomain(domain)
+  if (!normalizedDomain) {
     return null
   }
   const protocol = secure ? 'https' : 'http'
   try {
-    const url = new URL(`${protocol}://${cleanDomain}/`)
+    const url = new URL(`${protocol}://${normalizedDomain}/`)
     return url.toString()
   } catch {
     return null
@@ -551,38 +560,79 @@ function validateCookieEntry(raw: RawCookieEntry): ValidatedCookie | null {
 async function importValidatedCookies(
   cookies: ValidatedCookie[],
   totalInput: number,
-  targetPartition: string
+  targetPartition: string,
+  mode: CookieImportMode
 ): Promise<BrowserCookieImportResult> {
+  const importDomainCache = new Map<string, boolean>()
+  const validDomainCookies = cookies.filter((cookie) => {
+    let valid = importDomainCache.get(cookie.domain)
+    if (valid === undefined) {
+      valid = normalizeCookieImportDomain(cookie.domain) !== null
+      importDomainCache.set(cookie.domain, valid)
+    }
+    return valid
+  })
+  const importableCookies = validDomainCookies.filter(
+    (cookie) => !isGoogleSourceBoundCookie(cookie.name, cookie.domain)
+  )
+  const integritySkipped = validDomainCookies.length - importableCookies.length
+  const invalidDomainSkipped = cookies.length - validDomainCookies.length
   diag(
-    `importValidatedCookies: ${cookies.length} validated of ${totalInput} total, partition="${targetPartition}"`
+    `importValidatedCookies: ${cookies.length} validated, ${invalidDomainSkipped} unsafe-domain skipped, ${integritySkipped} source-bound skipped of ${totalInput} total, partition="${targetPartition}"`
   )
   const targetSession = session.fromPartition(targetPartition)
   let importedCount = 0
-  let skipped = totalInput - cookies.length
+  let skipped = totalInput - importableCookies.length
   const domainSet = new Set<string>()
+  let replacedCookies: Cookie[] | null = null
+
+  if (mode === 'replace-imported-domains' && importableCookies.length > 0) {
+    try {
+      replacedCookies = await replaceCookiesForImportedDomains(
+        targetSession.cookies,
+        importableCookies.map((cookie) => cookie.domain)
+      )
+      diag(`  removed ${replacedCookies.length} existing cookies in imported domain scopes`)
+    } catch (err) {
+      diag(`  existing cookie replacement failed: ${summarizeCookieImportError(err)}`)
+      return {
+        ok: false,
+        reason: reasonWithDiagLog('Could not replace existing cookies for the imported sites.')
+      }
+    }
+  }
 
   // Why: Electron's cookies.set() rejects any non-printable-ASCII byte; strip as a safety net.
   const stripNonPrintable = (s: string): string => s.replace(/[^\x20-\x7E]/g, '')
+  const importedCookieKeys: { url: string; name: string }[] = []
+  let setFailure: unknown = null
 
-  for (const cookie of cookies) {
+  for (const cookie of importableCookies) {
     try {
+      // Why: Chromium rejects __Host- cookies unless they omit domain and use path=/.
+      const isHostPrefixed = cookie.name.startsWith('__Host-')
+      const path = isHostPrefixed ? '/' : cookie.path
       await targetSession.cookies.set({
         url: cookie.url,
         name: cookie.name,
         value: stripNonPrintable(cookie.value),
-        domain: cookie.domain,
-        path: cookie.path,
+        ...(isHostPrefixed ? {} : { domain: cookie.domain }),
+        path,
         secure: cookie.secure,
         httpOnly: cookie.httpOnly,
         sameSite: cookie.sameSite,
         expirationDate: cookie.expirationDate
       })
+      const removalUrl = new URL(cookie.url)
+      removalUrl.pathname = path.startsWith('/') ? path : '/'
+      importedCookieKeys.push({ url: removalUrl.toString(), name: cookie.name })
       importedCount++
       // Why: surface only the domain (never name/value/path) so the summary doesn't leak secret cookie data.
       const cleanDomain = cookie.domain.startsWith('.') ? cookie.domain.slice(1) : cookie.domain
       domainSet.add(cleanDomain)
     } catch (err) {
       skipped++
+      setFailure = err
       if (skipped <= 5) {
         // Find the exact offending character position and code
         const val = cookie.value
@@ -595,9 +645,35 @@ async function importValidatedCookies(
           }
         }
         diag(
-          `  cookie.set FAILED: domain=${cookie.domain} name=${cookie.name} valLen=${val.length} badChar=${badInfo} err=${err}`
+          `  cookie.set FAILED: domain=${cookie.domain} name=${cookie.name} valLen=${val.length} badChar=${badInfo} err=${String(err)}`
         )
       }
+      if (replacedCookies) {
+        break
+      }
+    }
+  }
+
+  if (setFailure && replacedCookies) {
+    const rollbackFailures: unknown[] = []
+    for (const cookie of importedCookieKeys.toReversed()) {
+      try {
+        await targetSession.cookies.remove(cookie.url, cookie.name)
+      } catch (err) {
+        rollbackFailures.push(err)
+      }
+    }
+    try {
+      await restoreImportedDomainCookies(targetSession.cookies, replacedCookies)
+    } catch (err) {
+      rollbackFailures.push(err)
+    }
+    if (rollbackFailures.length > 0) {
+      diag(`  cookie replacement rollback failed: ${rollbackFailures.length} operation(s)`)
+    }
+    return {
+      ok: false,
+      reason: reasonWithDiagLog('Could not safely replace cookies for the imported sites.')
     }
   }
 
@@ -687,7 +763,12 @@ export async function importCookiesFromFile(
     }
   }
 
-  return importValidatedCookies(validated, parsed.length, targetPartition)
+  return importValidatedCookies(
+    validated,
+    parsed.length,
+    targetPartition,
+    'replace-imported-domains'
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -1018,7 +1099,7 @@ function getWindowsEncryptionKey(browser: DetectedBrowser): EncryptionKeyResult 
 
     return { key: Buffer.from(result, 'base64'), mode: 'aes-256-gcm' }
   } catch (err) {
-    diag(`  Windows DPAPI key extraction failed: ${err}`)
+    diag(`  Windows DPAPI key extraction failed: ${String(err)}`)
     return null
   }
 }
@@ -1335,10 +1416,15 @@ async function importCookiesFromFirefox(
       return { ok: false, reason: 'No valid cookies found in Firefox.' }
     }
 
-    return importValidatedCookies(validated, rows.length, targetPartition)
+    return importValidatedCookies(
+      validated,
+      rows.length,
+      targetPartition,
+      'replace-imported-domains'
+    )
   } catch (err) {
     rmSync(tmpDir, { recursive: true, force: true })
-    diag(`  Firefox import failed: ${err}`)
+    diag(`  Firefox import failed: ${String(err)}`)
     return {
       ok: false,
       reason: 'Could not import cookies from Firefox. Try closing Firefox first.'
@@ -1360,7 +1446,7 @@ async function importCookiesFromSafari(
   try {
     data = readFileSync(browser.cookiesPath)
   } catch (err) {
-    diag(`  Safari read failed: ${err}`)
+    diag(`  Safari read failed: ${String(err)}`)
     // Why: Safari's Cookies.binarycookies is in a sandbox container; reading it needs Full Disk Access.
     const isPermError =
       err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'EPERM'
@@ -1389,9 +1475,14 @@ async function importCookiesFromSafari(
       return { ok: false, reason: 'All Safari cookies are expired.' }
     }
 
-    return importValidatedCookies(valid, cookies.length, targetPartition)
+    return importValidatedCookies(
+      valid,
+      cookies.length,
+      targetPartition,
+      'replace-imported-domains'
+    )
   } catch (err) {
-    diag(`  Safari import failed: ${err}`)
+    diag(`  Safari import failed: ${String(err)}`)
     return { ok: false, reason: 'Could not import cookies from Safari.' }
   }
 }
@@ -1449,17 +1540,24 @@ export async function importCookiesFromBrowser(
     stagingDir,
     `Cookies-${partitionSegment}-${Date.now()}-${randomUUID()}`
   )
+  // Why: #9355 — staging only backs the cold-restart replay for cookies the in-memory
+  // import rejects, so losing it must degrade that fallback rather than abort the import.
+  let stagingAvailable = false
   try {
     mkdirSync(stagingDir, { recursive: true })
-    copyFileSync(liveCookiesPath, stagingCookiesPath)
-  } catch {
+    copyFileWithWindowsRetry(liveCookiesPath, stagingCookiesPath)
+    stagingAvailable = true
+  } catch (err) {
+    const fsErr = err as NodeJS.ErrnoException
+    diag(
+      `  staging copy unavailable: code=${fsErr.code ?? 'unknown'} errno=${fsErr.errno ?? 'unknown'} syscall=${fsErr.syscall ?? 'unknown'} path=${liveCookiesPath} destination=${stagingCookiesPath}`
+    )
     // Why: copyFile is non-atomic and can leave a partial DB; delete it so failed imports retain no cookie data.
     try {
       unlinkSync(stagingCookiesPath)
     } catch {
       /* best-effort */
     }
-    return { ok: false, reason: 'Could not create staging cookie database.' }
   }
 
   let sourceSnapshot: ChromiumCookieSnapshot
@@ -1472,7 +1570,7 @@ export async function importCookiesFromBrowser(
     } catch {
       /* best-effort */
     }
-    diag(`  Chromium snapshot failed: ${err}`)
+    diag(`  Chromium snapshot failed: ${String(err)}`)
     return {
       ok: false,
       reason: `Could not copy ${browser.label} cookies database. Try closing ${browser.label} first.`
@@ -1481,6 +1579,21 @@ export async function importCookiesFromBrowser(
 
   let sourceDb: InstanceType<typeof DatabaseSync> | null = null
   let stagingDb: InstanceType<typeof DatabaseSync> | null = null
+  const closeStagingDb = (): void => {
+    try {
+      stagingDb?.close()
+    } catch {
+      /* best-effort */
+    }
+    stagingDb = null
+  }
+  const discardStagingFile = (): void => {
+    try {
+      unlinkSync(stagingCookiesPath)
+    } catch {
+      /* best-effort */
+    }
+  }
 
   try {
     // Why: Chromium timestamps (µs since 1601) can exceed Number.MAX_SAFE_INTEGER; readBigInts avoids precision loss.
@@ -1488,15 +1601,32 @@ export async function importCookiesFromBrowser(
       readOnly: true,
       readBigInts: true
     })
-    stagingDb = new DatabaseSync(stagingCookiesPath)
-
-    const targetColumnInfo = stagingDb
-      .prepare('PRAGMA table_info(cookies)')
-      .all() as ChromiumCookieColumnInfo[]
-    const targetCols: string[] = targetColumnInfo.map((r) => r.name)
-    const colList = targetCols.join(', ')
-
-    stagingDb.exec('DELETE FROM cookies')
+    let targetColumnInfo: ChromiumCookieColumnInfo[] | null = null
+    let colList: string | null = null
+    let placeholders: string | null = null
+    if (stagingAvailable) {
+      // Why: the staged file is Orca's own partition DB, also named "Cookies", so the same
+      // transient AV handle can make opening it throw — degrade instead of killing the import.
+      try {
+        stagingDb = new DatabaseSync(stagingCookiesPath)
+        targetColumnInfo = stagingDb
+          .prepare('PRAGMA table_info(cookies)')
+          .all() as ChromiumCookieColumnInfo[]
+        const targetCols: string[] = targetColumnInfo.map((r) => r.name)
+        colList = targetCols.join(', ')
+        placeholders = targetCols.map(() => '?').join(', ')
+        stagingDb.exec('DELETE FROM cookies')
+      } catch (err) {
+        diag(`  staging database unusable, restart fallback disabled: ${String(err)}`)
+        stagingAvailable = false
+        targetColumnInfo = null
+        colList = null
+        placeholders = null
+        closeStagingDb()
+        // Why: the copy holds real partition cookies; discard it now rather than at the exit branches.
+        discardStagingFile()
+      }
+    }
 
     const sourceRows = sourceDb.prepare('SELECT * FROM cookies ORDER BY rowid').all() as Record<
       string,
@@ -1508,13 +1638,8 @@ export async function importCookiesFromBrowser(
     diag(`  source has ${sourceRows.length} cookies`)
 
     if (sourceRows.length === 0) {
-      stagingDb.close()
-      stagingDb = null
-      try {
-        unlinkSync(stagingCookiesPath)
-      } catch {
-        /* best-effort */
-      }
+      closeStagingDb()
+      discardStagingFile()
       return { ok: false, reason: `No cookies found in ${browser.label}.` }
     }
 
@@ -1526,34 +1651,13 @@ export async function importCookiesFromBrowser(
       ? getEncryptionKey(browser.keychainService!, browser.keychainAccount!, browser)
       : null
     if (needsSourceKey && !sourceKey) {
-      stagingDb.close()
-      stagingDb = null
+      closeStagingDb()
       // Why: key denial happens after staging, so clean up the target DB copy or retries pile up.
-      try {
-        unlinkSync(stagingCookiesPath)
-      } catch {
-        /* best-effort */
-      }
+      discardStagingFile()
       return {
         ok: false,
         reason: `Could not access ${browser.label} encryption key. The OS may have denied access.`
       }
-    }
-
-    // Why: Google integrity cookies are bound to the source browser's TLS/env; importing them triggers CookieMismatch, so skip and let Google reissue.
-    const INTEGRITY_COOKIE_NAMES = new Set([
-      'SIDCC',
-      '__Secure-1PSIDCC',
-      '__Secure-3PSIDCC',
-      '__Secure-STRP',
-      'AEC'
-    ])
-    function isIntegrityCookie(name: string, domain: string): boolean {
-      if (!INTEGRITY_COOKIE_NAMES.has(name)) {
-        return false
-      }
-      const d = domain.startsWith('.') ? domain.slice(1) : domain
-      return d === 'google.com' || d.endsWith('.google.com')
     }
 
     let imported = 0
@@ -1576,13 +1680,31 @@ export async function importCookiesFromBrowser(
     }
 
     const decryptedCookies: DecryptedCookie[] = []
+    const sourceDomainValidity = new Map<string, boolean>()
 
-    const placeholders = targetCols.map(() => '?').join(', ')
-    const insertStmt = stagingDb.prepare(
-      `INSERT OR REPLACE INTO cookies (${colList}) VALUES (${placeholders})`
-    )
+    // Why: staging only backs the cold-restart replay, so any failure writing it disables that
+    // fallback instead of aborting an import whose in-memory half still works.
+    let insertStmt: ReturnType<InstanceType<typeof DatabaseSync>['prepare']> | null = null
+    const disableStaging = (reason: string): void => {
+      diag(`  staging disabled, restart fallback unavailable: ${reason}`)
+      stagingAvailable = false
+      insertStmt = null
+      closeStagingDb()
+      discardStagingFile()
+    }
 
-    stagingDb.exec('BEGIN TRANSACTION')
+    if (stagingDb && colList && placeholders) {
+      try {
+        insertStmt = stagingDb.prepare(
+          `INSERT OR REPLACE INTO cookies (${colList}) VALUES (${placeholders})`
+        )
+        stagingDb.exec('BEGIN TRANSACTION')
+      } catch (err) {
+        disableStaging(String(err))
+      }
+    } else if (stagingAvailable) {
+      disableStaging('staged database exposed no cookies columns')
+    }
 
     for (const sourceRow of sourceRows) {
       const encRaw = sourceRow.encrypted_value
@@ -1609,8 +1731,18 @@ export async function importCookiesFromBrowser(
       const domain = sourceRow.host_key as string
       const name = sourceRow.name as string
 
-      if (isIntegrityCookie(name, domain)) {
+      if (isGoogleSourceBoundCookie(name, domain)) {
         integritySkipped++
+        continue
+      }
+
+      let validDomain = sourceDomainValidity.get(domain)
+      if (validDomain === undefined) {
+        validDomain = normalizeCookieImportDomain(domain) !== null
+        sourceDomainValidity.set(domain, validDomain)
+      }
+      if (!validDomain) {
+        skipped++
         continue
       }
 
@@ -1637,17 +1769,50 @@ export async function importCookiesFromBrowser(
         expirationDate: expiresUtc > 0 ? expiresUtc : undefined
       })
 
-      const params = buildChromiumCookieInsertParams(targetColumnInfo, sourceRow, decryptedValue)
-      insertStmt.run(...params)
+      if (insertStmt && targetColumnInfo) {
+        try {
+          const params = buildChromiumCookieInsertParams(
+            targetColumnInfo,
+            sourceRow,
+            decryptedValue
+          )
+          insertStmt.run(...params)
+        } catch (err) {
+          disableStaging(String(err))
+        }
+      }
+      // Why: counts importable cookies, not staged rows — the summary must stay truthful when
+      // the optional staging DB is unavailable.
       imported++
     }
     diag(`  skipped ${integritySkipped} Google integrity cookies (SIDCC/STRP/AEC)`)
 
-    stagingDb.exec('COMMIT')
-    stagingDb.close()
-    stagingDb = null
+    if (decryptedCookies.length === 0) {
+      closeStagingDb()
+      discardStagingFile()
+      return {
+        ok: true,
+        profileId: '',
+        summary: {
+          totalCookies: sourceRows.length,
+          importedCookies: 0,
+          skippedCookies: skipped + integritySkipped,
+          domains: []
+        }
+      }
+    }
 
-    diag(`  SQLite staging complete: ${imported} cookies, ${domainSet.size} domains`)
+    if (stagingDb) {
+      try {
+        stagingDb.exec('COMMIT')
+        closeStagingDb()
+        diag(`  SQLite staging complete: ${imported} cookies, ${domainSet.size} domains`)
+      } catch (err) {
+        disableStaging(String(err))
+      }
+    } else {
+      diag(`  staging skipped: ${imported} cookies will load in-memory only`)
+    }
 
     // Why: clear stale cookies first; mixing them with the imported set makes sites like Google reject the session.
     await targetSession.clearStorageData({ storages: ['cookies'] })
@@ -1684,16 +1849,27 @@ export async function importCookiesFromBrowser(
 
     diag(`  memory load: ${memoryLoaded} OK, ${memoryFailed} failed`)
 
-    if (memoryFailed > 0) {
+    let warning: BrowserCookieImportSummary['warning']
+    if (memoryFailed > 0 && stagingAvailable) {
       // Why: keep the staging DB so the failed cookies load from SQLite on next cold start, where CookieMonster skips validation.
       browserSessionRegistry.setPendingCookieImport(targetPartition, stagingCookiesPath)
       diag(`  staged at ${stagingCookiesPath} for ${memoryFailed} cookies that need restart`)
-    } else {
-      try {
-        unlinkSync(stagingCookiesPath)
-      } catch {
-        /* best-effort */
+    } else if (memoryFailed > 0) {
+      // Why: never register a path that was never written — cold start would replay a missing
+      // or partial DB over the live partition.
+      browserSessionRegistry.clearPendingCookieImport(targetPartition)
+      discardStagingFile()
+      diag(`  ${memoryFailed} cookies need a restart but staging is unavailable — skipped`)
+      // Why: the jar was already cleared, so silence here would report a lossy import as a clean success.
+      warning = {
+        code: 'restart-fallback-unavailable',
+        loadedCookies: memoryLoaded,
+        failedCookies: memoryFailed
       }
+    } else {
+      // Why: this import already rewrote the live session, so an older staged DB must not replay over it.
+      browserSessionRegistry.clearPendingCookieImport(targetPartition)
+      discardStagingFile()
       diag(`  all cookies loaded in-memory — no restart needed`)
     }
 
@@ -1708,8 +1884,9 @@ export async function importCookiesFromBrowser(
     const summary: BrowserCookieImportSummary = {
       totalCookies: sourceRows.length,
       importedCookies: imported,
-      skippedCookies: skipped,
-      domains: [...domainSet].sort()
+      skippedCookies: skipped + integritySkipped,
+      domains: [...domainSet].sort(),
+      ...(warning ? { warning } : {})
     }
 
     return { ok: true, profileId: '', summary }
@@ -1730,7 +1907,7 @@ export async function importCookiesFromBrowser(
     } catch {
       /* may not exist yet */
     }
-    diag(`  SQLite import failed: ${err}`)
+    diag(`  SQLite import failed: ${String(err)}`)
     return {
       ok: false,
       reason: reasonWithDiagLog(
@@ -1741,7 +1918,7 @@ export async function importCookiesFromBrowser(
     try {
       sourceSnapshot.cleanup()
     } catch (err) {
-      diag(`  Chromium snapshot cleanup failed: ${err}`)
+      diag(`  Chromium snapshot cleanup failed: ${String(err)}`)
     }
   }
 }

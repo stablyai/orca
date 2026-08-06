@@ -1,6 +1,9 @@
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { readFile } from 'node:fs/promises'
+import { asRecord } from './session-scanner-record-value'
+
+export { asRecord }
 
 export function timestampMs(value: unknown): number {
   if (typeof value === 'string') {
@@ -23,12 +26,6 @@ export function parseJsonObject(line: string): Record<string, unknown> | null {
   } catch {
     return null
   }
-}
-
-export function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null
 }
 
 export function extractString(value: unknown): string | null {
@@ -58,8 +55,14 @@ export {
   extractMessageText,
   extractPreviewContentText,
   normalizePreviewText,
-  normalizeTitleText
+  normalizeTitleText,
+  sliceAtCodeUnitLimit
 } from './session-scanner-text-normalization'
+export {
+  extractFullFirstUserPromptText,
+  normalizeFullFirstUserPromptText,
+  shouldCaptureFullFirstUserPrompt
+} from './session-scanner-first-user-prompt'
 
 export function extractGitBranch(value: unknown): string | null {
   const git = asRecord(value)

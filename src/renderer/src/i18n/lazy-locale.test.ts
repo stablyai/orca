@@ -37,6 +37,13 @@ describe('renderer i18n lazy locale loading', () => {
     expect(i18n.t('menu.file', { defaultValue: 'File' })).not.toBe('File')
   })
 
+  it('uses the inline English default when a target catalog omits a key', async () => {
+    await setRendererUiLanguage(UI_LANGUAGE_SPANISH)
+    expect(i18n.t('missing.renderer.feature', { defaultValue: 'English fallback' })).toBe(
+      'English fallback'
+    )
+  })
+
   it('returns to English from a lazily-loaded locale', async () => {
     await setRendererUiLanguage(UI_LANGUAGE_SPANISH)
     expect(i18n.t('menu.file', { defaultValue: 'File' })).toBe('Archivo')

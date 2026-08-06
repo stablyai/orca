@@ -22,7 +22,13 @@ const {
   spawnMock: vi.fn()
 }))
 
-vi.mock('./runtime-client', () => {
+vi.mock('./runtime-client', async () => {
+  // Why: re-export the REAL error classes rather than redefining them. format.ts
+  // narrows with `instanceof` against ./runtime/types, so a look-alike class
+  // here would make every CLI error fall through to the generic `runtime_error`
+  // shape — mirroring the barrel keeps the mock faithful to production.
+  const { RuntimeClientError, RuntimeRpcFailureError } = await import('./runtime/types.js')
+
   class RuntimeClient {
     readonly isRemote: boolean
     call = callMock
@@ -49,26 +55,6 @@ vi.mock('./runtime-client', () => {
         )
       }
       this.isRemote = Boolean(effectivePairingCode || effectiveEnvironment)
-    }
-  }
-
-  class RuntimeClientError extends Error {
-    readonly code: string
-    readonly data?: unknown
-
-    constructor(code: string, message: string, data?: unknown) {
-      super(message)
-      this.code = code
-      this.data = data
-    }
-  }
-
-  class RuntimeRpcFailureError extends RuntimeClientError {
-    readonly response: unknown
-
-    constructor(response: unknown) {
-      super('runtime_error', 'runtime_error')
-      this.response = response
     }
   }
 
@@ -320,6 +306,20 @@ describe('orca root help', () => {
     logSpy.mockRestore()
   })
 
+  it('advertises host-local account management', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main([], '/tmp/repo')
+
+    expect(logSpy.mock.calls.flat().join('\n')).toContain(
+      'account add               Add a managed Claude or Codex account on this Orca host'
+    )
+    expect(logSpy.mock.calls.flat().join('\n')).toContain(
+      'account list              List managed Claude and Codex accounts on this Orca host'
+    )
+    logSpy.mockRestore()
+  })
+
   it('advertises computer-use capabilities discovery', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
@@ -361,6 +361,15 @@ describe('orca root help', () => {
     )
     expect(logSpy.mock.calls[0][0]).toContain(
       'orchestration worker-abandon Fence an uncertain worker without claiming it stopped'
+    )
+    expect(logSpy.mock.calls[0][0]).toContain(
+      "orchestration worker-release Release a settled worker's terminal after archiving its output"
+    )
+    expect(logSpy.mock.calls[0][0]).toContain(
+      'orchestration worker-retain Keep a worker terminal live for debugging'
+    )
+    expect(logSpy.mock.calls[0][0]).toContain(
+      'orchestration worker-list Report worker terminal resource accounting'
     )
     expect(callMock).not.toHaveBeenCalled()
   })
@@ -414,6 +423,19 @@ describe('orca root help', () => {
     )
     expect(listIssuesHelp).toContain('--workspace <id|all>  Connected Linear workspace id, or all')
     expect(listIssuesHelp).not.toContain('Line cursor from a previous read')
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
+  it('documents the machine-readable terminal topology opt-in', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    logSpy.mockClear()
+
+    await main(['terminal', 'list', '--help'], '/tmp/repo')
+
+    const help = String(logSpy.mock.calls[0][0])
+    expect(help).toContain('[--include-visual-layouts] [--json]')
+    expect(help).toContain('--include-visual-layouts Include tab and pane topology in JSON output')
+    expect(help).toContain('JSON omits visualLayouts by default')
     expect(callMock).not.toHaveBeenCalled()
   })
 
@@ -1236,6 +1258,9 @@ describe('orca cli worktree awareness', () => {
       linkedIssue: undefined,
       linkedLinearIssue: 'STA-335',
       linkedLinearIssueWorkspaceId: null,
+      // Why: a bare identifier carries no org, and the two scoping fields
+      // describe the issue being replaced. Inheriting a stale org key would
+      // pin the lookup to a workspace this issue does not live in.
       linkedLinearIssueOrganizationUrlKey: null,
       comment: undefined,
       runHooks: false,
@@ -2840,7 +2865,7 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
-  it('passes agent prompt and setup policy through worktree.create', async () => {
+  it('starts an agent worktree in the background unless activation is explicit', async () => {
     queueFixtures(
       callMock,
       worktreeListFixture([buildWorktree('/tmp/repo', 'main', 'abc', 'repo-1')]),
@@ -2878,7 +2903,7 @@ describe('orca cli worktree awareness', () => {
       linkedIssue: undefined,
       comment: undefined,
       runHooks: false,
-      activate: true,
+      activate: false,
       setupDecision: 'run',
       parentWorktree: undefined,
       cwdParentWorktree: 'id:repo-1::/tmp/repo',
@@ -2890,7 +2915,7 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
-  it('infers the repo from the current worktree on worktree.create', async () => {
+  it('infers the repo and honors explicit activation on worktree.create', async () => {
     queueFixtures(
       callMock,
       worktreeListFixture([buildWorktree('/tmp/repo', 'main', 'abc', 'repo-1')]),
@@ -2912,6 +2937,7 @@ describe('orca cli worktree awareness', () => {
         'codex',
         '--prompt',
         'hi',
+        '--activate',
         '--json'
       ],
       '/tmp/repo/src'
@@ -3692,7 +3718,60 @@ describe('orca cli worktree awareness', () => {
 
     expect(callMock).toHaveBeenNthCalledWith(2, 'terminal.list', {
       worktree: 'id:repo::/tmp/repo/feature',
-      limit: undefined
+      limit: undefined,
+      includeVisualLayouts: false
+    })
+  })
+
+  it('requests visual layouts only for the human-readable terminal list', async () => {
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo')]),
+      okFixture('req_term', { terminals: [], totalCount: 0, truncated: false })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['terminal', 'list', '--worktree', 'active'], '/tmp/repo/feature/src')
+
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'terminal.list',
+      expect.objectContaining({ includeVisualLayouts: true })
+    )
+  })
+
+  it('allows agent JSON clients to request visual layouts explicitly', async () => {
+    const visualLayouts = [
+      {
+        worktreeId: 'repo::/tmp/repo/feature',
+        worktreePath: '/tmp/repo/feature',
+        root: { type: 'group', groupId: null, activeTabId: null, tabs: [] }
+      }
+    ]
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo')]),
+      okFixture('req_term', {
+        terminals: [],
+        visualLayouts,
+        totalCount: 0,
+        truncated: false
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['terminal', 'list', '--worktree', 'active', '--include-visual-layouts', '--json'],
+      '/tmp/repo/feature/src'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'terminal.list',
+      expect.objectContaining({ includeVisualLayouts: true })
+    )
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
+      result: { visualLayouts }
     })
   })
 

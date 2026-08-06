@@ -201,6 +201,57 @@ describe('Jira client credential storage', () => {
     expect(userAgent).not.toMatch(/Mozilla|Chrome|Safari|AppleWebKit/i)
   })
 
+  it('removes cancelled queued reads so the request pool recovers', async () => {
+    const jira = await loadClientModule()
+    await Promise.all([jira.acquire(), jira.acquire(), jira.acquire(), jira.acquire()])
+    const controller = new AbortController()
+    const queued = jira.acquire(controller.signal)
+
+    controller.abort()
+
+    await expect(queued).rejects.toMatchObject({ name: 'AbortError' })
+    jira.release()
+    await expect(jira.acquire()).resolves.toBeUndefined()
+    jira.release()
+    jira.release()
+    jira.release()
+    jira.release()
+  })
+
+  it('downloads same-origin attachment URLs without forwarding auth cross-origin', async () => {
+    const jira = await loadClientModule({ encryptionAvailable: true })
+    const client = {
+      site: {
+        id: 'site-alpha',
+        siteUrl: 'https://example.atlassian.net',
+        email: 'ada@example.com',
+        displayName: 'Ada',
+        accountId: 'account-alpha'
+      },
+      authorization: 'Basic token-alpha'
+    }
+    netFetchMock.mockResolvedValueOnce(
+      new Response(Uint8Array.from([1, 2, 3]), {
+        status: 200,
+        headers: { 'Content-Type': 'image/png' }
+      })
+    )
+
+    await expect(
+      jira.jiraRequestBinary(
+        client,
+        'https://example.atlassian.net/rest/api/3/attachment/content/1?redirect=false'
+      )
+    ).resolves.toMatchObject({ contentType: 'image/png' })
+    const headers = netFetchMock.mock.calls[0]?.[1]?.headers as Headers
+    expect(headers.get('Authorization')).toBe('Basic token-alpha')
+
+    await expect(
+      jira.jiraRequestBinary(client, 'https://files.example.com/attachment.png')
+    ).rejects.toThrow('configured site origin')
+    expect(netFetchMock).toHaveBeenCalledTimes(1)
+  })
+
   it('does not pass encrypted safeStorage bytes to Jira when encryption is unavailable', async () => {
     const siteId = 'site-alpha'
     const tokenPath = tokenPathForSite(siteId)

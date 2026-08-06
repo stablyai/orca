@@ -30,6 +30,7 @@ import type {
 } from '../../shared/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import type { SshMutationExpectation } from '../../shared/ssh-types'
+import { sortDirEntries } from '../../shared/file-name-sort'
 import { assertSshMutationExpectation } from '../ssh/ssh-connection-generation'
 import {
   buildRgArgs,
@@ -100,8 +101,15 @@ import {
 import { listQuickOpenFiles } from './filesystem-list-files'
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
 import { searchWithGitGrep } from './filesystem-search-git'
-import { getLocalGitOptionsForRegisteredWorktree } from './local-worktree-runtime-options'
-import { resolveSourceControlAiLinkedIssue } from './source-control-ai-linked-issue'
+import {
+  getLocalGitOptionsForRegisteredWorktree,
+  getLocalGitOptionsForRepo,
+  getLocalRepoForRegisteredWorktree
+} from './local-worktree-runtime-options'
+import {
+  resolveSourceControlAiLinkedIssue,
+  resolveSourceControlAiLinkedIssueMeta
+} from './source-control-ai-linked-issue'
 import { listMarkdownDocuments, markdownDocumentsFromRelativePaths } from './markdown-documents'
 import { checkRgAvailable } from './rg-availability'
 import {
@@ -113,6 +121,7 @@ import {
   SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
 } from '../providers/ssh-git-dispatch'
 import { resolveHostedReviewBodyForGeneration } from '../source-control/pull-request-template'
+import { loadPullRequestLinkedIssue } from '../source-control/pull-request-linked-issue'
 import {
   prepareLocalCommitMessageAgentEnv,
   type CommitMessageAgentRuntimeTarget,
@@ -128,7 +137,12 @@ import { registerLocalLogTailHandlers } from './local-log-tail'
 import { localLogFileIdentity } from '../ai-vault/local-log-tail-reader'
 import { sanitizeLocalDownloadFilename } from '../local-download-filename'
 import { registerFilesystemDownloadFolderHandlers } from './filesystem-download-folder'
+import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
 import { createSenderScopedRequestCancellations } from './sender-scoped-request-cancellation'
+import {
+  applyGitStatusUpstreamRefWatchRequest,
+  type GitStatusUpstreamRefWatchRequest
+} from './git-status-upstream-ref-watch-request'
 
 // Why: Monaco degrades features on large files like VS Code, so a 5MB block would needlessly lock out ordinary JSON/log files.
 const MAX_TEXT_FILE_SIZE = 50 * 1024 * 1024 // 50MB
@@ -404,6 +418,26 @@ function getLocalAgentRuntimeTarget(
     : { runtime: 'host' }
 }
 
+async function resolveModelDiscoveryLocalPath(
+  store: Store,
+  requestedPath: string
+): Promise<string> {
+  try {
+    return await resolveRegisteredWorktreePath(requestedPath, store)
+  } catch (error) {
+    const folderWorkspaces =
+      typeof store.getFolderWorkspaces === 'function' ? store.getFolderWorkspaces() : []
+    const isFolderWorkspaceRoot = folderWorkspaces.some(
+      (workspace) =>
+        comparableLocalPath(workspace.folderPath) === comparableLocalPath(requestedPath)
+    )
+    if (!isFolderWorkspaceRoot) {
+      throw error
+    }
+    return resolveAuthorizedPath(requestedPath, store)
+  }
+}
+
 function getLocalTextGenerationTarget(
   worktreePath: string,
   gitOptions: LocalProjectWorktreeGitOptions,
@@ -507,7 +541,9 @@ export function registerFilesystemHandlers(
         if (args.connectionId) {
           throwSite = 'ssh-provider'
           const provider = requireSshFilesystemProvider(args.connectionId)
-          return await provider.readDir(args.dirPath)
+          // Why: re-sort locally — the remote relay may be an older build with
+          // lexicographic ordering.
+          return sortDirEntries(await provider.readDir(args.dirPath))
         }
         throwSite = 'authorize'
         const dirPath = await resolveAuthorizedPath(args.dirPath, store)
@@ -522,12 +558,7 @@ export function registerFilesystemHandlers(
             isSymlink: entry.isSymbolicLink()
           }))
         )
-        return mapped.sort((a, b) => {
-          if (a.isDirectory !== b.isDirectory) {
-            return a.isDirectory ? -1 : 1
-          }
-          return a.name.localeCompare(b.name)
-        })
+        return sortDirEntries(mapped)
       } catch (error: unknown) {
         recordCrashBreadcrumb(
           'fs_readdir_error',
@@ -1094,6 +1125,7 @@ export function registerFilesystemHandlers(
         includeIgnored?: boolean
         bypassEffectiveUpstreamNegativeCache?: boolean
         reuseLineStats?: boolean
+        branchLineTotalMergeBase?: string
         requestToken?: string
       }
     ): Promise<GitStatusResult> => {
@@ -1101,6 +1133,9 @@ export function registerFilesystemHandlers(
       const options = {
         includeIgnored: args.includeIgnored ?? false,
         ...(args.reuseLineStats === true ? { reuseLineStats: true } : {}),
+        ...(args.branchLineTotalMergeBase === undefined
+          ? {}
+          : { branchLineTotalMergeBase: args.branchLineTotalMergeBase }),
         ...(args.bypassEffectiveUpstreamNegativeCache === true
           ? { bypassEffectiveUpstreamNegativeCache: true }
           : {}),
@@ -1116,12 +1151,16 @@ export function registerFilesystemHandlers(
           return await provider.getStatus(args.worktreePath, options)
         }
         const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-        const gitOptions = getLocalGitOptionsForRegisteredWorktree(
-          store,
-          args.worktreePath,
-          worktreePath
-        )
-        return await getStatus(worktreePath, { ...options, ...gitOptions })
+        // Why: one registered-worktree lookup feeds both — status polls this
+        // handler, and the scan walks every repo's worktree meta.
+        const repo = getLocalRepoForRegisteredWorktree(store, args.worktreePath, worktreePath)
+        const gitOptions = getLocalGitOptionsForRepo(store, repo)
+        const sharedLinkPaths = repo ? getWorktreeSharedLinkPaths(repo) : []
+        return await getStatus(worktreePath, {
+          ...options,
+          ...gitOptions,
+          ...(sharedLinkPaths.length > 0 ? { sharedLinkPaths } : {})
+        })
       } finally {
         gitStatusCancellations.finish(event, args.requestToken, controller)
       }
@@ -1131,6 +1170,12 @@ export function registerFilesystemHandlers(
   ipcMain.handle('git:cancelStatus', (event, args: { requestToken: string }): void => {
     gitStatusCancellations.cancel(event, args.requestToken)
   })
+
+  ipcMain.handle(
+    'git:setStatusUpstreamRefWatch',
+    (_event, args: GitStatusUpstreamRefWatchRequest): Promise<void> =>
+      applyGitStatusUpstreamRefWatchRequest(store, args)
+  )
 
   // Why: parent status reports only one gitlink row per submodule; fetch inner per-file changes from the submodule's own worktree.
   ipcMain.handle(
@@ -1508,16 +1553,17 @@ export function registerFilesystemHandlers(
       let localRuntimeTarget: CommitMessageAgentRuntimeTarget = { runtime: 'host' }
       let localDiscoveryOptions: Parameters<typeof discoverCommitMessageModelsLocal>[3]
       if (args.worktreePath) {
-        const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+        const worktreePath = await resolveModelDiscoveryLocalPath(store, args.worktreePath)
         const gitOptions = getLocalGitOptionsForRegisteredWorktree(
           store,
           args.worktreePath,
           worktreePath
         )
-        localRuntimeTarget = getLocalAgentRuntimeTarget(gitOptions)
-        localDiscoveryOptions = gitOptions.wslDistro
-          ? { cwd: worktreePath, wslDistro: gitOptions.wslDistro }
-          : { cwd: worktreePath }
+        const wslDistro = gitOptions.wslDistro ?? parseWslPath(args.worktreePath)?.distro
+        localRuntimeTarget = wslDistro
+          ? { runtime: 'wsl', wslDistro }
+          : getLocalAgentRuntimeTarget(gitOptions)
+        localDiscoveryOptions = wslDistro ? { cwd: worktreePath, wslDistro } : { cwd: worktreePath }
       }
       const localEnv = await prepareLocalCommitMessageAgentEnv(
         agentId,
@@ -1587,6 +1633,13 @@ export function registerFilesystemHandlers(
             error: SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
           }
         }
+        const issueMeta = resolveSourceControlAiLinkedIssueMeta(store, args)
+        const linkedIssueDetailsPromise = loadPullRequestLinkedIssue({
+          meta: issueMeta,
+          provider: args.provider,
+          repoPath: args.worktreePath,
+          connectionId: args.connectionId
+        })
         let context: Awaited<ReturnType<typeof getPullRequestDraftContext>>
         try {
           const currentBody = await resolveHostedReviewBodyForGeneration({
@@ -1615,10 +1668,12 @@ export function registerFilesystemHandlers(
         if (!context) {
           return { success: false, error: 'No branch changes to summarize.' }
         }
-        context = withLinkedIssueDraftContext(
-          context,
-          resolveSourceControlAiLinkedIssue(store, args)
-        )
+        const linkedIssueDetails = await linkedIssueDetailsPromise
+        context = {
+          ...withLinkedIssueDraftContext(context, issueMeta?.linkedIssue),
+          ...(args.provider ? { provider: args.provider } : {}),
+          ...(linkedIssueDetails ? { linkedIssueDetails } : {})
+        }
         return generatePullRequestFieldsFromContext(context, resolvedSettings.params, {
           kind: 'remote',
           cwd: args.worktreePath,
@@ -1634,6 +1689,14 @@ export function registerFilesystemHandlers(
         args.worktreePath,
         worktreePath
       )
+      const issueMeta = resolveSourceControlAiLinkedIssueMeta(store, args, worktreePath)
+      const linkedIssueDetailsPromise = loadPullRequestLinkedIssue({
+        meta: issueMeta,
+        provider: args.provider,
+        repoPath: worktreePath,
+        connectionId: args.connectionId,
+        localGitOptions: gitOptions
+      })
       let context: Awaited<ReturnType<typeof getPullRequestDraftContext>>
       try {
         const currentBody = await resolveHostedReviewBodyForGeneration({
@@ -1662,10 +1725,12 @@ export function registerFilesystemHandlers(
       if (!context) {
         return { success: false, error: 'No branch changes to summarize.' }
       }
-      context = withLinkedIssueDraftContext(
-        context,
-        resolveSourceControlAiLinkedIssue(store, args, worktreePath)
-      )
+      const linkedIssueDetails = await linkedIssueDetailsPromise
+      context = {
+        ...withLinkedIssueDraftContext(context, issueMeta?.linkedIssue),
+        ...(args.provider ? { provider: args.provider } : {}),
+        ...(linkedIssueDetails ? { linkedIssueDetails } : {})
+      }
       const localEnv = await prepareLocalCommitMessageAgentEnv(
         resolvedSettings.params.agentId,
         commitMessageAgentEnv,

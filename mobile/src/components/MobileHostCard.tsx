@@ -1,64 +1,132 @@
-import { ChevronRight, Monitor } from 'lucide-react-native'
+import { Monitor, MoreVertical } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { ConnectionVerdict } from '../transport/connection-health'
 import { verdictDisplayLabel } from '../transport/connection-health'
 import { mobileConnectionPathLabel } from '../transport/mobile-connection-path-label'
 import type { MobileConnectionPath } from '../transport/stable-logical-rpc-client'
-import type { ConnectionState, HostProfile } from '../transport/types'
+import type { ConnectionState, HostCatalogEntry, HostProfile } from '../transport/types'
 import { colors, radii, spacing } from '../theme/mobile-theme'
+import { homeHostWorktreeSummary, type HostWorktreeInfo } from '../worktree/home-worktree-info'
 import { StatusDot } from './StatusDot'
 
 export function MobileHostCard(props: {
-  host: HostProfile
+  host: HostProfile | HostCatalogEntry
+  credentialStatus?: HostCatalogEntry['credentialStatus']
   state: ConnectionState
   verdict: ConnectionVerdict
   path: MobileConnectionPath
-  worktreeCounts?: { total: number; active: number }
+  // Why: the card owns the fresh/stale/unavailable wording so no caller can re-gate the counts
+  // away (STA-3123 shipped that bug once already).
+  worktreeInfo?: HostWorktreeInfo
   onPress: () => void
   onLongPress: () => void
+  onOpenActions: () => void
 }) {
-  const connected = props.state === 'connected'
-  const isError = ['warning', 'unreachable', 'auth-failed'].includes(props.verdict.kind)
-  const worktreeSummary = props.worktreeCounts
-    ? `${props.worktreeCounts.total} worktree${props.worktreeCounts.total === 1 ? '' : 's'}${props.worktreeCounts.active > 0 ? ` · ${props.worktreeCounts.active} active` : ''}`
-    : null
+  const credentialUnavailable = props.credentialStatus === 'temporarily-unavailable'
+  const credentialMissing = props.credentialStatus === 'missing'
+  const connected = props.state === 'connected' && !credentialUnavailable && !credentialMissing
+  // Why: a relay dial can run for seconds behind "Connecting…"/"Reconnecting…"; naming the
+  // path mid-wait tells the user the phone is off-LAN rather than hung (F5). Only 'relay' is
+  // named — 'lan' doubles as the unknown-path default, so it would be a guess before connect.
+  const dialingPath =
+    ['connecting', 'handshaking', 'reconnecting'].includes(props.state) && props.path === 'relay'
+  const isError =
+    credentialMissing || ['warning', 'unreachable', 'auth-failed'].includes(props.verdict.kind)
+  const statusLabel = credentialMissing
+    ? 'Pairing invalid'
+    : credentialUnavailable
+      ? 'Pairing temporarily unavailable'
+      : verdictDisplayLabel(props.verdict)
+  const statusVerdict: ConnectionVerdict = credentialMissing
+    ? { kind: 'auth-failed', label: statusLabel }
+    : credentialUnavailable
+      ? { kind: 'warning', label: statusLabel }
+      : props.verdict
+  const worktreeSummary = homeHostWorktreeSummary(props.worktreeInfo)
+  const connectionPathLabel =
+    !credentialMissing && !credentialUnavailable && (connected || dialingPath)
+      ? mobileConnectionPathLabel(props.path)
+      : null
+  const discoveryHint =
+    props.verdict.kind === 'unreachable' && !props.host.relay
+      ? 'Update desktop Orca and sign in to connect from anywhere'
+      : null
+  const credentialHint = credentialMissing
+    ? 'Tap to re-pair with your desktop'
+    : credentialUnavailable
+      ? 'Unlock your phone, then tap to retry'
+      : null
+  const accessibilityLabel = [
+    `Open ${props.host.name}`,
+    statusLabel,
+    connectionPathLabel?.replace(' · ', ' via '),
+    connected ? worktreeSummary?.replace(' · ', ', ') : null,
+    discoveryHint,
+    credentialHint
+  ]
+    .filter(Boolean)
+    .join(', ')
   return (
-    <Pressable
-      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-      onPress={props.onPress}
-      onLongPress={props.onLongPress}
-      delayLongPress={400}
-    >
-      <View style={styles.icon}>
-        <Monitor size={20} color={connected ? colors.textPrimary : colors.textSecondary} />
-      </View>
-      <View style={styles.main}>
-        <Text
-          style={[styles.name, !connected && { color: colors.textSecondary }]}
-          numberOfLines={1}
-        >
-          {props.host.name}
-        </Text>
-        <View style={styles.meta}>
-          <StatusDot state={props.state} verdict={props.verdict} />
-          <Text style={[styles.metaText, isError && { color: colors.statusRed }]} numberOfLines={1}>
-            {verdictDisplayLabel(props.verdict)}
-            {connected ? ` · ${mobileConnectionPathLabel(props.path)}` : ''}
-          </Text>
+    <View style={styles.card}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        style={({ pressed }) => [styles.cardMain, pressed && styles.cardPressed]}
+        onPress={props.onPress}
+        onLongPress={props.onLongPress}
+        delayLongPress={400}
+      >
+        <View style={styles.icon}>
+          <Monitor size={20} color={connected ? colors.textPrimary : colors.textSecondary} />
         </View>
-        {connected && worktreeSummary ? (
-          <Text style={styles.worktreeMetaText} numberOfLines={1}>
-            {worktreeSummary}
+        <View style={styles.main}>
+          <Text
+            style={[styles.name, !connected && { color: colors.textSecondary }]}
+            numberOfLines={1}
+          >
+            {props.host.name}
           </Text>
-        ) : null}
-        {props.verdict.kind === 'unreachable' && !props.host.relay ? (
-          <Text style={styles.discoveryHint} numberOfLines={2}>
-            Update desktop Orca and sign in to connect from anywhere
-          </Text>
-        ) : null}
-      </View>
-      <ChevronRight size={16} color={colors.textMuted} />
-    </Pressable>
+          <View style={styles.meta}>
+            <StatusDot state={props.state} verdict={statusVerdict} />
+            <Text
+              style={[
+                styles.metaText,
+                isError && { color: colors.statusRed },
+                credentialUnavailable && { color: colors.statusAmber }
+              ]}
+              numberOfLines={1}
+            >
+              {statusLabel}
+              {connectionPathLabel ? ` · ${connectionPathLabel}` : ''}
+            </Text>
+          </View>
+          {connected && worktreeSummary ? (
+            <Text style={styles.worktreeMetaText} numberOfLines={1}>
+              {worktreeSummary}
+            </Text>
+          ) : null}
+          {discoveryHint ? (
+            <Text style={styles.discoveryHint} numberOfLines={2}>
+              {discoveryHint}
+            </Text>
+          ) : null}
+          {credentialHint ? (
+            <Text style={styles.discoveryHint} numberOfLines={2}>
+              {credentialHint}
+            </Text>
+          ) : null}
+        </View>
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Actions for ${props.host.name}`}
+        hitSlop={8}
+        style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
+        onPress={props.onOpenActions}
+      >
+        <MoreVertical size={18} color={colors.textSecondary} />
+      </Pressable>
+    </View>
   )
 }
 
@@ -66,12 +134,19 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: 12,
     borderRadius: radii.card,
     backgroundColor: colors.bgPanel,
     borderWidth: 1,
-    borderColor: colors.borderSubtle
+    borderColor: colors.borderSubtle,
+    overflow: 'hidden'
+  },
+  cardMain: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: spacing.md,
+    paddingVertical: 12
   },
   cardPressed: { backgroundColor: colors.bgRaised },
   icon: {
@@ -98,5 +173,16 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 15,
     color: colors.textMuted
+  },
+  actionButton: {
+    width: 40,
+    height: 40,
+    marginHorizontal: spacing.xs,
+    borderRadius: radii.row,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  actionButtonPressed: {
+    backgroundColor: colors.bgRaised
   }
 })

@@ -207,7 +207,7 @@ function getTabLayoutSignature(
     return `${item.type}:${item.id}:${item.isPinned}:${isExpanded}:${Boolean(item.data.color)}:${label}`
   }
   if (item.type === 'browser') {
-    return `${item.type}:${item.id}:${item.isPinned}:${item.data.loading}:${item.data.loadError}:${label}`
+    return `${item.type}:${item.id}:${item.isPinned}:${item.data.loading}:${Boolean(item.data.loadError)}:${label}`
   }
   if (item.type === 'editor') {
     return `${item.type}:${item.id}:${item.isPinned}:${item.data.isDirty}:${item.data.isPreview}:${item.data.externalMutation ?? ''}:${status ?? ''}:${label}`

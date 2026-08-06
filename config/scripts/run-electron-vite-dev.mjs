@@ -128,10 +128,8 @@ function prepareMacDevElectronApp() {
 
   const title = process.env.ORCA_DEV_DOCK_TITLE || 'Orca: dev'
   const identityKey = process.env.ORCA_DEV_INSTANCE_KEY || repoRoot
-  // v6: bundle the notification-status helper (real permission readout) and
-  // ad-hoc re-sign after plist edits so Notification Center accepts the
-  // bundle; bumping forces stale cached copies to be recreated.
-  const bundleLayoutVersion = 'dock-title-app-preserve-framework-symlinks-v6'
+  // v7: give the terminal daemon helper an Orca-specific TCC identity.
+  const bundleLayoutVersion = 'dock-title-app-preserve-framework-symlinks-v7'
   const hash = createHash('sha1')
     .update(
       `${sourceAppPath}\0${electronVersion ?? ''}\0${title}\0${identityKey}\0${bundleLayoutVersion}`
@@ -155,6 +153,7 @@ function prepareMacDevElectronApp() {
   // Electron drops clicks for notification ids it didn't create, so the
   // click is lost, not misdirected.
   const bundleId = 'com.stablyai.orca.dev'
+  const helperBundleId = `${bundleId}.helper`
   process.env.ORCA_DEV_MACOS_BUNDLE_ID = bundleId
   const expectedMarker = JSON.stringify(
     { title, appBundleName, bundleId, sourceAppPath, electronVersion, bundleLayoutVersion },
@@ -205,9 +204,18 @@ function prepareMacDevElectronApp() {
   restoreElectronFrameworkSymlinks(appPath)
 
   const plistPath = path.join(appPath, 'Contents', 'Info.plist')
+  const helperPlistPath = path.join(
+    appPath,
+    'Contents',
+    'Frameworks',
+    'Electron Helper.app',
+    'Contents',
+    'Info.plist'
+  )
   setPlistValue(plistPath, 'CFBundleName', title)
   setPlistValue(plistPath, 'CFBundleDisplayName', title)
   setPlistValue(plistPath, 'CFBundleIdentifier', bundleId)
+  setPlistValue(helperPlistPath, 'CFBundleIdentifier', helperBundleId)
 
   // Why: the notification-status helper reads the app's real macOS
   // notification authorization (UNUserNotificationCenter has no Electron

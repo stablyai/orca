@@ -2,19 +2,33 @@ import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { combineUnsubscribes } from './combine-unsubscribes'
 import { shutdownDegradedFallbackSessions } from './degraded-daemon-fallback-shutdown'
 import { inspectPtyProviderProcess } from '../providers/pty-process-inspection'
-import type { IPtyProvider, PtyBackgroundStreamEvent } from '../providers/types'
-import type { PtyDataEvent, PtyProviderBufferSnapshot } from '../providers/types'
-import type { PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import type {
+  IPtyProvider,
+  PtyBackgroundStreamEvent,
+  PtyDataEvent,
+  PtyProviderBufferSnapshot,
+  PtyProcessInfo,
+  PtySpawnOptions,
+  PtySpawnResult
+} from '../providers/types'
+import {
+  adoptOwningProvider,
+  attachDaemonOwnedSession,
+  findDaemonAdapter,
+  listProviderSessionIds
+} from './degraded-daemon-session-routing'
+import { DegradedDaemonFreshSpawnRouter } from './degraded-daemon-fresh-spawn-routing'
+import { DegradedDaemonOwnerRecovery } from './degraded-daemon-owner-recovery'
 
 export class DegradedDaemonPtyProvider implements IPtyProvider {
-  readonly routesFreshSpawnsToLocalProvider = true
-  // Why: surface that fresh PTYs lack daemon persistence until restart.
   readonly isDegraded = true
 
   private current: DaemonPtyAdapter
   private legacy: DaemonPtyAdapter[]
   private fallback: IPtyProvider
   private sessionProviders = new Map<string, IPtyProvider>()
+  private freshSpawns: DegradedDaemonFreshSpawnRouter
+  private ownerRecovery: DegradedDaemonOwnerRecovery
   private unsubscribers: (() => void)[] = []
   private dataListeners: ((payload: PtyDataEvent) => void)[] = []
   private exitListeners: ((payload: { id: string; code: number }) => void)[] = []
@@ -23,56 +37,65 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     current: DaemonPtyAdapter
     legacy: DaemonPtyAdapter[]
     fallback: IPtyProvider
+    probeCurrentDaemonSpawn?: () => Promise<boolean>
   }) {
     this.current = opts.current
     this.legacy = opts.legacy
     this.fallback = opts.fallback
+    this.freshSpawns = new DegradedDaemonFreshSpawnRouter(
+      opts.current,
+      opts.fallback,
+      this.sessionProviders,
+      opts.probeCurrentDaemonSpawn ?? null
+    )
+    this.ownerRecovery = new DegradedDaemonOwnerRecovery(
+      this.allProviders(),
+      this.allDaemonAdapters(),
+      this.sessionProviders,
+      (spawnOpts) => this.freshSpawns.spawn(spawnOpts)
+    )
 
     for (const provider of this.allProviders()) {
       this.unsubscribers.push(
-        provider.onData((payload) => {
-          for (const listener of this.dataListeners) {
-            listener(payload)
-          }
-        }),
+        provider.onData((payload) => this.dataListeners.forEach((listener) => listener(payload))),
         provider.onExit((payload) => {
-          this.sessionProviders.delete(payload.id)
-          for (const listener of this.exitListeners) {
-            listener(payload)
-          }
+          this.ownerRecovery.forgetRoute(payload.id)
+          this.exitListeners.forEach((listener) => listener(payload))
         })
       )
     }
+    this.unsubscribers.push(...this.ownerRecovery.subscribeIdentityChanges())
   }
 
   async discoverDaemonSessions(): Promise<void> {
-    for (const adapter of this.allDaemonAdapters()) {
-      try {
-        const sessions = await adapter.listProcesses()
-        for (const session of sessions) {
-          this.sessionProviders.set(session.id, adapter)
-        }
-      } catch (error) {
-        console.warn('[daemon] Failed to discover degraded daemon sessions', error)
-      }
-    }
+    await this.ownerRecovery.discoverRoutes()
   }
 
-  async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
-    const mapped = opts.sessionId ? this.sessionProviders.get(opts.sessionId) : undefined
-    const target = mapped ?? this.fallback
-    const result = await target.spawn(opts)
-    this.sessionProviders.set(result.id, target)
-    return result
+  get routesFreshSpawnsToLocalProvider(): true | undefined {
+    return this.freshSpawns.routesToFallback
   }
 
-  async attach(id: string): Promise<void> {
-    await this.providerFor(id).attach(id)
-  }
+  recoverFreshSpawnRouting = (): Promise<boolean> => this.freshSpawns.recover()
+
+  supportsGitCredentialGuardHost = (id?: string): boolean =>
+    this.freshSpawns.supportsGitGuardHost(id)
+
+  canProvideAuthoritativeBufferSnapshot = (id: string): boolean =>
+    this.freshSpawns.canProvideSnapshot(id)
+
+  spawn = (opts: PtySpawnOptions): Promise<PtySpawnResult> => this.ownerRecovery.spawn(opts)
+
+  // Why refuse the fallback route (unknown ids resolve to it): see attachDaemonOwnedSession.
+  attach = (id: string): Promise<void> =>
+    attachDaemonOwnedSession(this.providerFor(id), this.fallback, id)
 
   hasPty(id: string): boolean {
     const mapped = this.sessionProviders.get(id)
     return mapped ? (mapped.hasPty?.(id) ?? true) : this.findProviderForExistingSession(id) !== null
+  }
+
+  async probePtyLiveness(id: string): Promise<boolean | null> {
+    return await this.ownerRecovery.probe(id)
   }
 
   // Why: an unknown id cannot borrow listing authority from the fresh-spawn provider.
@@ -135,9 +158,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     return (await this.providerFor(id).getBufferSnapshot?.(id, opts)) ?? null
   }
 
-  async clearBuffer(id: string): Promise<void> {
-    await this.providerFor(id).clearBuffer(id)
-  }
+  clearBuffer = (id: string): Promise<void> => this.providerFor(id).clearBuffer(id)
 
   async closeStartupQueryAuthority(id: string): Promise<number> {
     return (await this.providerFor(id).closeStartupQueryAuthority?.(id)) ?? 0
@@ -240,31 +261,22 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   }
 
   ackColdRestore(sessionId: string): void {
-    this.daemonAdapterFor(sessionId)?.ackColdRestore(sessionId)
+    findDaemonAdapter(this.sessionProviders, this.allDaemonAdapters(), sessionId)?.ackColdRestore(
+      sessionId
+    )
   }
 
   clearTombstone(sessionId: string): void {
-    this.daemonAdapterFor(sessionId)?.clearTombstone(sessionId)
+    findDaemonAdapter(this.sessionProviders, this.allDaemonAdapters(), sessionId)?.clearTombstone(
+      sessionId
+    )
   }
 
   async reconcileOnStartup(validWorktreeIds: Set<string>): Promise<{
     alive: string[]
     killed: string[]
   }> {
-    const alive: string[] = []
-    const killed: string[] = []
-    for (const adapter of this.allDaemonAdapters()) {
-      const result = await adapter.reconcileOnStartup(validWorktreeIds)
-      for (const id of result.alive) {
-        alive.push(id)
-        this.sessionProviders.set(id, adapter)
-      }
-      for (const id of result.killed) {
-        killed.push(id)
-        this.sessionProviders.delete(id)
-      }
-    }
-    return { alive, killed }
+    return await this.ownerRecovery.reconcileOnStartup(validWorktreeIds)
   }
 
   dispose(): void {
@@ -283,7 +295,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   }
 
   getCurrentDaemonSessionIds(): string[] {
-    return this.sessionIdsForProvider(this.current)
+    return listProviderSessionIds(this.sessionProviders, this.current)
   }
 
   fanoutCurrentDaemonSyntheticExits(code: number): void {
@@ -323,26 +335,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   }
 
   private findProviderForExistingSession(sessionId: string): IPtyProvider | null {
-    for (const provider of this.allProviders()) {
-      if (provider.hasPty?.(sessionId) === true) {
-        this.sessionProviders.set(sessionId, provider)
-        return provider
-      }
-    }
-    return null
-  }
-
-  private sessionIdsForProvider(provider: IPtyProvider): string[] {
-    return [...this.sessionProviders]
-      .filter(([, mappedProvider]) => mappedProvider === provider)
-      .map(([id]) => id)
-  }
-
-  private daemonAdapterFor(sessionId: string): DaemonPtyAdapter | null {
-    const provider = this.sessionProviders.get(sessionId)
-    return provider && this.allDaemonAdapters().includes(provider as DaemonPtyAdapter)
-      ? (provider as DaemonPtyAdapter)
-      : null
+    return adoptOwningProvider(this.sessionProviders, this.allProviders(), sessionId)
   }
 
   private allProviders(): IPtyProvider[] {

@@ -35,6 +35,37 @@ export function isDefaultBranchWorkspace(worktree: Worktree): boolean {
   return worktree.isMainWorktree && worktree.branch.trim() !== ''
 }
 
+/**
+ * Whether the "Hide sleeping" sweep must keep this row (#8873).
+ *
+ * Why isMainWorktree and not isDefaultBranchWorkspace: the project's primary
+ * checkout is the repo's only guaranteed entry point. Folder workspaces and
+ * detached-HEAD mains fail the default-branch predicate yet often have no
+ * sibling row at all, so sweeping them drops the entire project out of the
+ * sidebar, Cmd+J and the board with no way back except changing a filter.
+ *
+ * Why shared: the sidebar pipeline and the jump palette both apply this, and a
+ * second copy is how the two surfaces drift.
+ */
+export function isSleepingSweepExemptWorkspace(
+  worktree: Worktree,
+  alwaysShowDefaultBranchWorkspace: boolean | undefined
+): boolean {
+  return alwaysShowDefaultBranchWorkspace !== false && worktree.isMainWorktree
+}
+
+/**
+ * Whether turning the exemption off is currently narrowing the list. It only
+ * bites during the "Hide sleeping" sweep, so its row — and the filter badge on
+ * both menu surfaces — ignores it while sleeping workspaces are shown.
+ */
+export function isSleepingSweepExemptionNarrowingList(
+  showSleepingWorkspaces: boolean,
+  alwaysShowDefaultBranchWorkspace: boolean | undefined
+): boolean {
+  return !showSleepingWorkspaces && alwaysShowDefaultBranchWorkspace === false
+}
+
 export function isAutomationGeneratedWorkspace(worktree: Worktree): boolean {
   return worktree.automationProvenance?.kind === 'created-by-automation'
 }
@@ -63,6 +94,8 @@ export type SidebarFilterState = {
   hideAutomationGeneratedWorkspaces: boolean
   hideCliCreatedWorkspaces: boolean
   hideDetachedHeadWorkspaces: boolean
+  /** Keeps each project's main workspace out of the "Hide sleeping" sweep; absent means on. */
+  alwaysShowDefaultBranchWorkspace?: boolean
   visibleWorkspaceHostIds?: readonly ExecutionHostId[] | null
   workspaceHostScope?: ExecutionHostScope
 }
@@ -84,6 +117,9 @@ export function sidebarHasActiveFilters(state: SidebarFilterState): boolean {
     state.hideAutomationGeneratedWorkspaces ||
     state.hideCliCreatedWorkspaces ||
     state.hideDetachedHeadWorkspaces ||
+    // Why: turning this off is the only way to narrow the list below the
+    // default, so Clear Filters must be able to undo it like any other filter.
+    state.alwaysShowDefaultBranchWorkspace === false ||
     state.visibleWorkspaceHostIds != null ||
     (state.workspaceHostScope != null && state.workspaceHostScope !== ALL_EXECUTION_HOSTS_SCOPE)
   )
@@ -98,6 +134,7 @@ export type ClearFilterActions = {
   resetHideAutomationGeneratedWorkspaces: boolean
   resetHideCliCreatedWorkspaces: boolean
   resetHideDetachedHeadWorkspaces: boolean
+  resetAlwaysShowDefaultBranchWorkspace: boolean
   resetVisibleWorkspaceHostIds: boolean
 }
 
@@ -119,6 +156,7 @@ export function computeClearFilterActions(state: SidebarFilterState): ClearFilte
     resetHideAutomationGeneratedWorkspaces: state.hideAutomationGeneratedWorkspaces,
     resetHideCliCreatedWorkspaces: state.hideCliCreatedWorkspaces,
     resetHideDetachedHeadWorkspaces: state.hideDetachedHeadWorkspaces,
+    resetAlwaysShowDefaultBranchWorkspace: state.alwaysShowDefaultBranchWorkspace === false,
     resetVisibleWorkspaceHostIds:
       state.visibleWorkspaceHostIds != null ||
       (state.workspaceHostScope != null && state.workspaceHostScope !== ALL_EXECUTION_HOSTS_SCOPE)
@@ -155,6 +193,11 @@ export function computeVisibleWorktreeIds(
     hideAutomationGeneratedWorkspaces: boolean
     hideCliCreatedWorkspaces: boolean
     hideDetachedHeadWorkspaces: boolean
+    // Why optional here, against the "why required" rule above: omitting it
+    // must fail *open*. A caller that forgets the flag then shows an extra row
+    // instead of silently re-hiding the project's entry point, which is the
+    // exact regression #8873 reports.
+    alwaysShowDefaultBranchWorkspace?: boolean
     repoMap: Map<string, Repo>
     workspaceHostScope: ExecutionHostScope
     visibleWorkspaceHostIds?: readonly ExecutionHostId[] | null
@@ -211,8 +254,11 @@ export function computeVisibleWorktreeIds(
   }
 
   if (!opts.showSleepingWorkspaces) {
+    // Why no !hideDefaultBranchWorkspace term: that filter already ran above, so
+    // an explicit hide still wins over the exemption.
     all = all.filter(
       (w) =>
+        isSleepingSweepExemptWorkspace(w, opts.alwaysShowDefaultBranchWorkspace) ||
         !isInactiveWorkspace(
           w.id,
           opts.tabsByWorktree,
@@ -370,6 +416,7 @@ export function getVisibleWorktreeIds(): string[] {
     hideAutomationGeneratedWorkspaces: state.hideAutomationGeneratedWorkspaces,
     hideCliCreatedWorkspaces: state.hideCliCreatedWorkspaces,
     hideDetachedHeadWorkspaces: state.hideDetachedHeadWorkspaces,
+    alwaysShowDefaultBranchWorkspace: state.alwaysShowDefaultBranchWorkspace,
     repoMap,
     workspaceHostScope: state.workspaceHostScope,
     visibleWorkspaceHostIds: state.visibleWorkspaceHostIds,

@@ -1512,6 +1512,38 @@ describe('browserManager', () => {
     expect(browserManager.getGuestWebContentsId('browser-destroyed-before-register')).toBeNull()
   })
 
+  it('removes a destroyed primary guest from its tab registration maps', () => {
+    const guest = {
+      id: 306,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    webContentsFromIdMock.mockReturnValue(guest)
+
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'browser-destroyed-after-register',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+
+    const destroyedHandler = guestOnMock.mock.calls.find(
+      ([event]) => event === 'destroyed'
+    )?.[1] as (() => void) | undefined
+    destroyedHandler?.()
+
+    expect(browserManager.getGuestWebContentsId('browser-destroyed-after-register')).toBeNull()
+    const managerState = browserManager as unknown as {
+      tabIdByWebContentsId: Map<number, string>
+    }
+    expect(managerState.tabIdByWebContentsId.has(guest.id)).toBe(false)
+  })
+
   it('fully unregisters stale guests discovered during authorization', () => {
     const guest = {
       id: 305,
@@ -2858,6 +2890,36 @@ describe('browserManager', () => {
         userAgent: expect.stringContaining('CriOS/134')
       })
     })
+
+    it.each([false, true])(
+      'keeps the session UA for native-mode profiles when mobile=%s',
+      async (mobile) => {
+        const { guest, debuggerSendCommand } = makeGuest(mobile ? 4244 : 4243)
+        webContentsFromIdMock.mockReturnValue(guest)
+        browserManager.attachGuestPolicies(guest as never)
+        browserManager.registerGuest({
+          browserPageId: `tab-native-${mobile}`,
+          sessionProfileId: 'native-profile',
+          userAgentMode: 'native',
+          webContentsId: guest.id as number,
+          rendererWebContentsId
+        })
+
+        await expect(
+          browserManager.setViewportOverride(`tab-native-${mobile}`, {
+            width: mobile ? 375 : 1024,
+            height: mobile ? 667 : 768,
+            deviceScaleFactor: mobile ? 2 : 1,
+            mobile
+          })
+        ).resolves.toBe(true)
+
+        expect(debuggerSendCommand).not.toHaveBeenCalledWith(
+          'Emulation.setUserAgentOverride',
+          expect.anything()
+        )
+      }
+    )
 
     it('clears device metrics and disables touch for override=null', async () => {
       const { guest, debuggerSendCommand } = makeGuest(4343)

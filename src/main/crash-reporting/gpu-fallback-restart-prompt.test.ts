@@ -22,13 +22,13 @@ describe('promptForGpuFallbackRestart', () => {
     await expect(promptForGpuFallbackRestart(parentWindow as never)).resolves.toBe('restart')
     expect(showMessageBoxMock).toHaveBeenCalledWith(parentWindow, {
       type: 'warning',
-      buttons: ['Restart with Software Rendering', 'Keep Running'],
+      buttons: ['Restart in Safe Graphics Mode', 'Keep Running'],
       defaultId: 0,
       cancelId: 1,
-      title: 'Restart Orca?',
+      title: 'Restart Orca in Safe Graphics Mode?',
       message: "Orca's graphics process has crashed repeatedly.",
       detail:
-        'Restart to switch to software rendering and reduce the chance of the app window crashing. If you keep running, Orca may become unstable.'
+        'Safe graphics mode disables hardware acceleration and WebGL for this Orca version. Terminals and 3D content may render more slowly. Keep Running leaves graphics settings unchanged.'
     })
   })
 

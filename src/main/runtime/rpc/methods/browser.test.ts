@@ -10,13 +10,25 @@ import {
 import { BROWSER_CORE_METHODS } from './browser-core'
 import { BROWSER_EXTRA_METHODS } from './browser-extras'
 import { BROWSER_SCREENCAST_METHODS } from './browser-screencast'
-import { ClipboardWrite, Fill, KeyboardInsert, Type } from './browser-schemas'
+import { ClipboardWrite, Fill, KeyboardInsert, ProfileCreate, Type } from './browser-schemas'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
 }
 
 describe('browser RPC methods', () => {
+  it('validates profile user-agent modes', () => {
+    expect(
+      ProfileCreate.safeParse({ label: 'Google', scope: 'isolated', userAgentMode: 'native' })
+        .success
+    ).toBe(true)
+    expect(ProfileCreate.safeParse({ label: 'Work', scope: 'isolated' }).success).toBe(true)
+    expect(
+      ProfileCreate.safeParse({ label: 'Bad', scope: 'isolated', userAgentMode: 'rotating' })
+        .success
+    ).toBe(false)
+  })
+
   it('routes core browser automation commands to the runtime server', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

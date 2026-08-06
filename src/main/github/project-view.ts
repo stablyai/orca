@@ -54,7 +54,7 @@ import {
 import { githubProjectHost } from '../../shared/github-project-identity'
 
 // Re-export the public API so existing `./project-view` call sites keep working; the split is internal-only.
-export { isValidOwnerSlug, isValidRepoSlug, isValidSlug } from './project-view/internals'
+export { isValidOwnerSlug, isValidRepoSlug } from './project-view/internals'
 export { classifyProjectError } from './project-view/project-error-classification'
 export {
   updateProjectItemFieldValue,

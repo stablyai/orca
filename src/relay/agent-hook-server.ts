@@ -14,11 +14,13 @@ import {
   clearPaneCacheState,
   createHookListenerState,
   getEndpointFileName,
+  hasCodexTranscriptSubagents,
   hasPendingAgentResultText,
   HOOK_REQUEST_SLOWLORIS_MS,
   normalizeHookPayload,
   preparePendingGrokResultDiscovery,
   readRequestBody,
+  resolveCachedClaudeCompactOwnership,
   resolveHookSource,
   writeEndpointFile,
   type AgentHookEventPayload,
@@ -37,11 +39,12 @@ const RELAY_HOOKS_DIR_NAME = '.orca-relay'
 const RELAY_HOOKS_SUBDIR = 'agent-hooks'
 const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
 const ASSISTANT_MESSAGE_RETRY_MS = 50
+const CODEX_SUBAGENT_POLL_MS = 1_000
 
-// Why: cap env/version at 64 chars so a misbehaving agent CLI can't grow the meta cache unboundedly; canonical values are short.
+// Why: cap metadata to prevent a misbehaving CLI growing the cache unboundedly.
 const MAX_HOOK_META_LEN = 64
 
-// Why: WSL relay has no per-pane teardown (PTYs live on the Windows host), so the replay cache would grow forever without a recency cap.
+// Why: WSL lacks per-pane teardown, so cap replay-cache recency.
 const MAX_CACHED_PANES = 256
 
 function defaultEndpointDir(): string {
@@ -94,13 +97,14 @@ export class RelayAgentHookServer {
   private endpointFilePath: string
   private endpointFileWritten = false
   private state: HookListenerState = createHookListenerState()
-  // Why: shared status cache drops wire-envelope fields; this sidecar holds source/env/version so replay matches the live POST path.
+  // Why: retain envelope metadata so replays match live POSTs.
   // Invariant: keys mirror state.lastStatusByPaneKey, populated/cleared in lockstep.
   private lastEnvelopeMetaByPaneKey: Map<
     string,
     { source: AgentHookSource; env?: string; version?: string }
   > = new Map()
   private assistantMessageRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  private codexSubagentPollTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private forward: RelayHookForward
   private fixedToken: string | undefined
   private preferredPort: number
@@ -125,7 +129,7 @@ export class RelayAgentHookServer {
     try {
       await this.listenOn(this.preferredPort)
     } catch (err) {
-      // Why: preferred port is best-effort; on EADDRINUSE fall back to ephemeral and let clients re-coordinate via the endpoint file.
+      // Why: fall back to an ephemeral port on EADDRINUSE; clients use the endpoint file.
       if (this.preferredPort > 0 && (err as NodeJS.ErrnoException)?.code === 'EADDRINUSE') {
         this.portFallbackApplied = true
         await this.listenOn(0)
@@ -148,7 +152,7 @@ export class RelayAgentHookServer {
     return new Promise<void>((resolve, reject) => {
       const onStartupError = (err: Error): void => {
         this.server?.off('listening', onListening)
-        // Why: null the server ref on bind failure so a later start() can retry (else the early-return at top of start() wedges it).
+        // Why: clear failed server refs so later start() calls can retry.
         this.server = null
         reject(err)
       }
@@ -193,6 +197,10 @@ export class RelayAgentHookServer {
       clearTimeout(timer)
     }
     this.assistantMessageRetryTimers.clear()
+    for (const timer of this.codexSubagentPollTimers.values()) {
+      clearTimeout(timer)
+    }
+    this.codexSubagentPollTimers.clear()
     clearAllListenerCaches(this.state)
     this.lastEnvelopeMetaByPaneKey.clear()
   }
@@ -216,6 +224,7 @@ export class RelayAgentHookServer {
   /** Drop a paneKey's cached entries on PTY exit so a terminated pane can't resurface as a ghost event on reconnect. */
   clearPaneState(paneKey: string): void {
     this.clearAssistantMessageRetry(paneKey)
+    this.clearCodexSubagentPoll(paneKey)
     clearPaneCacheState(this.state, paneKey)
     this.lastEnvelopeMetaByPaneKey.delete(paneKey)
   }
@@ -267,13 +276,17 @@ export class RelayAgentHookServer {
         res.end()
         return
       }
-      const event = normalizeHookPayload(this.state, source, body, this.env)
+      const event = normalizeHookPayload(this.state, source, body, this.env, {
+        allowUnanchoredPreCompact: true,
+        allowUnanchoredPostCompact: true
+      })
       if (event) {
         // TODO: once normalizeHookPayload returns validated env/version, drop bodyEnv/bodyVersion and source them from the listener result.
         const env = this.bodyEnv(body)
         const version = this.bodyVersion(body)
         this.applyEvent(event, source, env, version)
         this.scheduleAssistantMessageRetry(source, body, event, env, version)
+        this.scheduleCodexSubagentPoll(source, body, event, env, version)
       }
       res.writeHead(204)
       res.end()
@@ -304,9 +317,12 @@ export class RelayAgentHookServer {
       hasExplicitPrompt: event.hasExplicitPrompt,
       promptInteractionKey: event.promptInteractionKey,
       hookEventName: event.hookEventName,
+      providerPromptId: event.providerPromptId,
+      compactTrigger: event.compactTrigger,
       toolUseId: event.toolUseId,
       toolAgentId: event.toolAgentId,
       toolAgentType: event.toolAgentType,
+      claudeRunningNonAgentTask: event.claudeRunningNonAgentTask,
       ...(event.providerSession ? { providerSession: event.providerSession } : {}),
       ...(event.providerSessionOnly ? { providerSessionOnly: true } : {}),
       isReplay: options.isReplay === true ? true : undefined,
@@ -326,9 +342,11 @@ export class RelayAgentHookServer {
     if (event.payload.state !== 'done' || event.payload.lastAssistantMessage) {
       this.clearAssistantMessageRetry(event.paneKey)
     }
+    const previous = this.state.lastStatusByPaneKey.get(event.paneKey)
+    const cachedEvent = resolveCachedClaudeCompactOwnership(previous, event)
     // Why: delete-then-set makes Map insertion order = recency, so the cap below evicts the longest-idle pane.
     this.state.lastStatusByPaneKey.delete(event.paneKey)
-    this.state.lastStatusByPaneKey.set(event.paneKey, event)
+    this.state.lastStatusByPaneKey.set(event.paneKey, cachedEvent)
     this.lastEnvelopeMetaByPaneKey.delete(event.paneKey)
     this.lastEnvelopeMetaByPaneKey.set(event.paneKey, { source, env, version })
     while (this.state.lastStatusByPaneKey.size > MAX_CACHED_PANES) {
@@ -348,6 +366,53 @@ export class RelayAgentHookServer {
     }
     clearTimeout(timer)
     this.assistantMessageRetryTimers.delete(paneKey)
+  }
+
+  private clearCodexSubagentPoll(paneKey: string): void {
+    const timer = this.codexSubagentPollTimers.get(paneKey)
+    if (!timer) {
+      return
+    }
+    clearTimeout(timer)
+    this.codexSubagentPollTimers.delete(paneKey)
+  }
+
+  private scheduleCodexSubagentPoll(
+    source: AgentHookSource,
+    body: unknown,
+    original: AgentHookEventPayload,
+    env?: string,
+    version?: string
+  ): void {
+    // Why: a nested non-codex CLI inherits ORCA_PANE_KEY, so clearing here would silently end a live codex poll.
+    if (source !== 'codex') {
+      return
+    }
+    this.clearCodexSubagentPoll(original.paneKey)
+    if (!hasCodexTranscriptSubagents(this.state, original.paneKey)) {
+      return
+    }
+    const timer = setTimeout(() => {
+      this.codexSubagentPollTimers.delete(original.paneKey)
+      if (!this.server || this.state.lastStatusByPaneKey.get(original.paneKey) !== original) {
+        return
+      }
+      const event = normalizeHookPayload(this.state, source, body, this.env)
+      if (!event) {
+        return
+      }
+      const subagentsChanged =
+        JSON.stringify(event.payload.subagents) !== JSON.stringify(original.payload.subagents)
+      const next = subagentsChanged ? event : original
+      if (subagentsChanged) {
+        this.applyEvent(event, source, env, version)
+      }
+      this.scheduleCodexSubagentPoll(source, body, next, env, version)
+    }, CODEX_SUBAGENT_POLL_MS)
+    this.codexSubagentPollTimers.set(original.paneKey, timer)
+    if (typeof timer.unref === 'function') {
+      timer.unref()
+    }
   }
 
   private scheduleAssistantMessageRetry(

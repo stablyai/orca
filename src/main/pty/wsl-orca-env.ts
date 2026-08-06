@@ -1,3 +1,14 @@
+import {
+  ORCHESTRATION_COMPATIBILITY_ATTACHMENT_ENV,
+  ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV,
+  ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV,
+  ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV
+} from '../../shared/orchestration-compatibility-evidence'
+import {
+  SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
+  SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
+} from '../../shared/setup-agent-sequencing'
+
 const WSLENV_ENTRY_SEPARATOR = ':'
 
 function parseWslenvEntries(value: string | undefined): string[] {
@@ -70,6 +81,11 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
     'ORCA_TAB_ID/u',
     'ORCA_WORKTREE_ID/u',
     'ORCA_AGENT_LAUNCH_TOKEN/u',
+    `${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}/u`,
+    `${SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV}/u`,
+    'ORCA_ORCHESTRATION_COMPATIBILITY_HOST_KIND/u',
+    'ORCA_ORCHESTRATION_COMPATIBILITY_HOST_ID/u',
+    'ORCA_ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION/u',
     'ORCA_AGENT_HOOK_PORT/u',
     'ORCA_AGENT_HOOK_TOKEN/u',
     'ORCA_AGENT_HOOK_ENV/u',
@@ -83,4 +99,23 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
     ...worktreeSetupWslenvEntries(env)
   ]
   applyWslenvPassthrough(env, passthroughEntries)
+}
+
+export function stampWslOrchestrationCompatibilityHost(
+  env: Record<string, string>,
+  hostId: string | null | undefined,
+  distro: string | null | undefined
+): void {
+  delete env[ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV]
+  delete env[ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV]
+  delete env[ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV]
+  delete env[ORCHESTRATION_COMPATIBILITY_ATTACHMENT_ENV]
+  const normalizedHostId = hostId?.trim()
+  const normalizedDistro = distro?.trim()
+  if (!normalizedHostId || !normalizedDistro) {
+    return
+  }
+  env[ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV] = 'wsl'
+  env[ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV] = normalizedHostId
+  env[ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV] = normalizedDistro
 }

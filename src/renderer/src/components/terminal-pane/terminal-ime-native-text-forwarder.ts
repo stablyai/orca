@@ -20,6 +20,9 @@ type ClaimedKeyPress = {
   code?: string
 }
 
+export const XTERM_COMPOSITION_TRANSACTION_ACCEPTED_EVENT = 'xterm-composition-transaction-accepted'
+export const XTERM_COMPOSITION_TRANSACTION_SETTLED_EVENT = 'xterm-composition-transaction-settled'
+
 export type TerminalImeNativeTextForwarder = IDisposable & {
   /**
    * Returns true when this keyboard event belongs to a direct native text
@@ -68,6 +71,7 @@ export function installTerminalImeNativeTextForwarder(args: {
   const terminalElement = args.terminalElement
   let pendingForward = false
   let pendingForwardClearTimer: number | null = null
+  let compositionTransactionPending = false
   let claimedPress: ClaimedKeyPress | null = null
 
   const clearPendingForwardTimer = (): void => {
@@ -90,6 +94,14 @@ export function installTerminalImeNativeTextForwarder(args: {
       pendingForward = false
       pendingForwardClearTimer = null
     }, 100)
+  }
+
+  const markCompositionTransactionAccepted = (): void => {
+    compositionTransactionPending = true
+  }
+
+  const markCompositionTransactionSettled = (): void => {
+    compositionTransactionPending = false
   }
 
   const claimKeyEvent = (event: ImeNativeTextKeyEvent): boolean => {
@@ -138,6 +150,11 @@ export function installTerminalImeNativeTextForwarder(args: {
     if (!(event instanceof InputEvent)) {
       return
     }
+    if (compositionTransactionPending && event.inputType === 'insertText') {
+      disarmPendingForward()
+      event.stopImmediatePropagation()
+      return
+    }
     if (!pendingForward) {
       return
     }
@@ -159,9 +176,20 @@ export function installTerminalImeNativeTextForwarder(args: {
 
   const cancelPending = (): void => {
     disarmPendingForward()
+    compositionTransactionPending = false
     claimedPress = null
   }
 
+  terminalElement.addEventListener(
+    XTERM_COMPOSITION_TRANSACTION_ACCEPTED_EVENT,
+    markCompositionTransactionAccepted,
+    true
+  )
+  terminalElement.addEventListener(
+    XTERM_COMPOSITION_TRANSACTION_SETTLED_EVENT,
+    markCompositionTransactionSettled,
+    true
+  )
   terminalElement.addEventListener('input', forwardCommittedText, true)
   terminalElement.addEventListener('blur', cancelPending, true)
 
@@ -169,6 +197,16 @@ export function installTerminalImeNativeTextForwarder(args: {
     claimKeyEvent,
     dispose: () => {
       cancelPending()
+      terminalElement.removeEventListener(
+        XTERM_COMPOSITION_TRANSACTION_ACCEPTED_EVENT,
+        markCompositionTransactionAccepted,
+        true
+      )
+      terminalElement.removeEventListener(
+        XTERM_COMPOSITION_TRANSACTION_SETTLED_EVENT,
+        markCompositionTransactionSettled,
+        true
+      )
       terminalElement.removeEventListener('input', forwardCommittedText, true)
       terminalElement.removeEventListener('blur', cancelPending, true)
     }

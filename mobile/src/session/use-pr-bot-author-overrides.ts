@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { ConnectionState } from '../transport/types'
-import type { RpcSuccess } from '../transport/types'
+import type { ConnectionState, RpcSuccess } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { createBotAuthorOverrideSet } from '../../../src/shared/pr-bot-author-overrides'
 

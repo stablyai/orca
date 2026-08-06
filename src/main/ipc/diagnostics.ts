@@ -20,8 +20,7 @@
 
 import { app, dialog, ipcMain, shell } from 'electron'
 import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs'
-import { arch as osArch, platform as osPlatform, release as osRelease } from 'node:os'
-import { tmpdir } from 'node:os'
+import { arch as osArch, platform as osPlatform, release as osRelease, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   collectDiagnosticBundle,

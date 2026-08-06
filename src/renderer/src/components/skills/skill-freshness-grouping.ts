@@ -1,9 +1,15 @@
-import type { SkillFreshnessInstallation } from '../../../../shared/skill-freshness'
+import {
+  isOwnerManagedSkillScope,
+  isSkillCopyNeedingAttention,
+  skillPlacementParticipatesInGlobalFreshness,
+  type SkillFreshnessInstallation
+} from '../../../../shared/skill-freshness'
 
 export type SkillGroupStatus = 'update-available' | 'cannot-update'
 
 export type SkillLocationChip =
   | 'current'
+  | 'newer'
   | 'unrecognized'
   | 'inaccessible'
   | 'duplicate'
@@ -17,6 +23,9 @@ export type SkillLocationRow = {
   id: string
   path: string
   chip: SkillLocationChip | null
+  /** False for a project-owned copy: listed for visibility, but never judged, so it
+   * cannot be the reason a skill was skipped. */
+  participatesInGlobalFreshness: boolean
 }
 
 export type SkillFreshnessGroupModel = {
@@ -25,14 +34,15 @@ export type SkillFreshnessGroupModel = {
   locations: SkillLocationRow[]
 }
 
+// Why: an owner-managed scope outranks 'unrecognized', or a project copy reads "may be
+// modified — remove it" over content its own repo owns. A read failure outranks both, so
+// that rule cannot hide a genuine fault.
 export function locationChip(installation: SkillFreshnessInstallation): SkillLocationChip | null {
-  // Why: a location's own status wins over its topology — "the contents don't
-  // match" is more useful to the user than "it's a duplicate".
-  if (installation.status === 'unrecognized') {
-    return 'unrecognized'
-  }
   if (installation.status === 'inaccessible') {
     return 'inaccessible'
+  }
+  if (!isOwnerManagedSkillScope(installation.topology) && installation.status === 'unrecognized') {
+    return 'unrecognized'
   }
   switch (installation.topology) {
     case 'independent-copy':
@@ -49,23 +59,41 @@ export function locationChip(installation: SkillFreshnessInstallation): SkillLoc
       return 'plugin-cache'
     case 'canonical-copy':
     case 'provider-alias':
-      // Why: a supported location only needs a chip when it's already up to date,
-      // to explain why the update won't touch it; the out-of-date main copy is bare.
-      return installation.status === 'current' ? 'current' : null
+      // Why: a supported location only needs a chip when the update won't touch it —
+      // already current, or ahead of what this build knows. The out-of-date main copy
+      // is bare, and 'newer' is what keeps a bare chip meaning "behind, and fixable":
+      // reinstalling a copy that is ahead would quietly roll the user back.
+      if (installation.status === 'current') {
+        return 'current'
+      }
+      return installation.status === 'newer-known' ? 'newer' : null
   }
 }
 
 /**
- * Groups installations by skill for the update modal and derives each skill's
- * update disposition. Only skills with an out-of-date official copy are returned —
- * up-to-date, unrecognized-only, and unreadable-only skills have nothing to change
- * here, so they are omitted entirely.
+ * Groups installations by skill for the review modal and derives each skill's
+ * update disposition. A skill appears when a copy is out of date, or when a copy is
+ * wrong in a way the update cannot fix — an edited copy, one Orca could not read.
+ *
+ * That second half is what the badge already reports: it turns amber and offers
+ * Details, and Details opens this modal. Returning only out-of-date skills left that
+ * modal saying every skill was up to date over an empty list, contradicting the badge
+ * that sent the user there. Skills where every copy is current are still omitted, as
+ * is a plugin's own copy of a same-named skill, and a project's own copy — neither is the
+ * user's to fix through the global update.
+ *
+ * `alwaysIncludeNames` overrides that filter. A successful update makes every
+ * targeted skill current, which would otherwise drop its row the instant the
+ * re-scan lands — the dialog passes the running/finished run's names so the same
+ * rows stay put from "update available" through to the result.
  */
 export function groupSkillFreshness(
   installations: readonly SkillFreshnessInstallation[],
-  eligibleUpdateNames: readonly string[]
+  eligibleUpdateNames: readonly string[],
+  alwaysIncludeNames: readonly string[] = []
 ): SkillFreshnessGroupModel[] {
   const eligible = new Set(eligibleUpdateNames)
+  const pinned = new Set(alwaysIncludeNames)
   const byName = new Map<string, SkillFreshnessInstallation[]>()
   for (const installation of installations) {
     const entries = byName.get(installation.name) ?? []
@@ -74,11 +102,26 @@ export function groupSkillFreshness(
   }
   const groups: SkillFreshnessGroupModel[] = []
   for (const [name, entries] of byName) {
-    if (!entries.some((entry) => entry.status === 'outdated')) {
+    // Why: the inclusion test only consults placements the global update can reach, so a
+    // skill whose only finding is a project-owned copy raises no row at all — a "Skipped"
+    // row would assert Orca considered an update it never could. Locations below are still
+    // listed in full, so a project copy stays visible whenever some other placement earns
+    // the group.
+    if (
+      !pinned.has(name) &&
+      !entries
+        .filter(skillPlacementParticipatesInGlobalFreshness)
+        .some((entry) => entry.status === 'outdated' || isSkillCopyNeedingAttention(entry))
+    ) {
       continue
     }
     const locations = entries
-      .map((entry) => ({ id: entry.id, path: entry.unresolvedPath, chip: locationChip(entry) }))
+      .map((entry) => ({
+        id: entry.id,
+        path: entry.unresolvedPath,
+        chip: locationChip(entry),
+        participatesInGlobalFreshness: skillPlacementParticipatesInGlobalFreshness(entry)
+      }))
       .sort((left, right) => left.path.localeCompare(right.path, 'en'))
     groups.push({
       name,

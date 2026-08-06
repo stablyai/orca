@@ -141,10 +141,10 @@ describe('isMarkdownPreviewSystemBrowserModifier', () => {
 })
 
 describe('resolveMarkdownPreviewHttpOpenOptions', () => {
-  // forceSystemBrowser -> shell.openExternal (system default browser);
-  // worktreeId (no force) -> openHttpLink routes into the Orca browser per the
-  // openLinksInApp setting. See http-link-routing.test.ts for that mapping.
-  it('forces the system browser on Cmd+Shift-click on macOS', () => {
+  // modifierHeld -> openHttpLink resolves the escape hatch against the
+  // openLinksInApp / openLinksInAppModifierInverts pair; worktreeId (no
+  // modifier) routes per the setting. See http-link-routing.test.ts.
+  it('marks the modifier held on Cmd+Shift-click on macOS', () => {
     expect(
       resolveMarkdownPreviewHttpOpenOptions(
         { metaKey: true, ctrlKey: false, shiftKey: true },
@@ -152,10 +152,10 @@ describe('resolveMarkdownPreviewHttpOpenOptions', () => {
         'wt-1',
         { kind: 'local' }
       )
-    ).toEqual({ forceSystemBrowser: true, sourceOwner: { kind: 'local' } })
+    ).toEqual({ worktreeId: 'wt-1', modifierHeld: true, sourceOwner: { kind: 'local' } })
   })
 
-  it('forces the system browser on Ctrl+Shift-click on Linux/Windows', () => {
+  it('marks the modifier held on Ctrl+Shift-click on Linux/Windows', () => {
     expect(
       resolveMarkdownPreviewHttpOpenOptions(
         { metaKey: false, ctrlKey: true, shiftKey: true },
@@ -163,7 +163,7 @@ describe('resolveMarkdownPreviewHttpOpenOptions', () => {
         'wt-1',
         { kind: 'local' }
       )
-    ).toEqual({ forceSystemBrowser: true, sourceOwner: { kind: 'local' } })
+    ).toEqual({ worktreeId: 'wt-1', modifierHeld: true, sourceOwner: { kind: 'local' } })
   })
 
   it('routes a plain Cmd-click through the worktree so it can open in Orca', () => {

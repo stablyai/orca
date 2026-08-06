@@ -2,11 +2,13 @@ import { app, ipcMain } from 'electron'
 import type { Store } from '../persistence'
 import {
   getEphemeralVmRecipeResultConnection,
-  getEphemeralVmRecipeResultWarnings,
-  redactEphemeralVmRecipeDiagnosticText,
-  type EphemeralVmRecipeResultWarning,
   type EphemeralVmRecipeDoctorResult
 } from '../../shared/ephemeral-vm-recipes'
+import {
+  getEphemeralVmRecipeResultWarnings,
+  redactEphemeralVmRecipeDiagnosticText,
+  type EphemeralVmRecipeResultWarning
+} from '../../shared/ephemeral-vm-recipe-diagnostics'
 // Why: import directly from the doctor module (not the barrel) — it uses Node
 // fs/path and must stay out of the browser bundle that imports the barrel.
 import { doctorEphemeralVmRecipe } from '../../shared/ephemeral-vm-recipe-doctor'

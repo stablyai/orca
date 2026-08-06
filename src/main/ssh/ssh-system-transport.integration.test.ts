@@ -54,6 +54,8 @@ exec /bin/sh -c "$cmd"
 }
 
 function writeFakeRelay(dir: string): void {
+  writeFileSync(join(dir, 'relay-watcher.js'), '')
+  writeFileSync(join(dir, 'managed-hook-runtime.js'), '')
   writeFileSync(
     join(dir, 'relay.js'),
     `
@@ -72,7 +74,8 @@ function encode(msg) {
   return Buffer.concat([header, payload]);
 }
 
-function serve(socket) {
+function serve(socket, onResolved) {
+  socket.on('error', () => {});
   socket.write(sentinel);
   let buffer = Buffer.alloc(0);
   socket.on('data', (chunk) => {
@@ -86,7 +89,10 @@ function serve(socket) {
       if (type !== 1) continue;
       const message = JSON.parse(payload.toString('utf8'));
       if (message.method === 'session.resolveHome') {
-        socket.write(encode({ jsonrpc: '2.0', id: message.id, result: process.env.HOME }));
+        socket.write(
+          encode({ jsonrpc: '2.0', id: message.id, result: process.env.HOME }),
+          onResolved
+        );
       }
     }
   });
@@ -94,27 +100,18 @@ function serve(socket) {
 
 if (process.argv.includes('--detached')) {
   try { fs.unlinkSync(sockPath); } catch {}
-  const server = net.createServer(serve);
-  server.listen(sockPath);
-  setTimeout(() => process.exit(0), 20000).unref();
-} else if (process.argv.includes('--connect')) {
-  process.stdout.write(sentinel);
-  let buffer = Buffer.alloc(0);
-  process.stdin.on('data', (chunk) => {
-    buffer = Buffer.concat([buffer, chunk]);
-    while (buffer.length >= 13) {
-      const type = buffer[0];
-      const length = buffer.readUInt32BE(9);
-      if (buffer.length < 13 + length) return;
-      const payload = buffer.subarray(13, 13 + length);
-      buffer = buffer.subarray(13 + length);
-      if (type !== 1) continue;
-      const message = JSON.parse(payload.toString('utf8'));
-      if (message.method === 'session.resolveHome') {
-        process.stdout.write(encode({ jsonrpc: '2.0', id: message.id, result: process.env.HOME }));
-      }
-    }
+  const server = net.createServer((socket) => {
+    serve(socket, () => server.close());
   });
+  server.listen(sockPath);
+} else if (process.argv.includes('--connect')) {
+  const socket = net.createConnection(sockPath);
+  socket.on('error', (error) => {
+    process.stderr.write(error.message);
+    process.exit(1);
+  });
+  process.stdin.pipe(socket);
+  socket.pipe(process.stdout);
 }
 `
   )
@@ -137,12 +134,15 @@ function createRelayTree(root: string, remoteHome: string): void {
   }
 
   const remoteDir = join(remoteHome, '.orca-remote', `relay-${RELAY_VERSION}`)
-  mkdirSync(join(remoteDir, 'node_modules', 'node-pty'), { recursive: true })
+  mkdirSync(join(remoteDir, 'node_modules', 'node-pty', 'lib'), { recursive: true })
   mkdirSync(join(remoteDir, 'node_modules', '@parcel', 'watcher'), { recursive: true })
   writeFileSync(join(remoteDir, 'node_modules', 'node-pty', 'index.js'), '')
+  writeFileSync(
+    join(remoteDir, 'node_modules', 'node-pty', 'lib', 'utils.js'),
+    'exports.loadNativeModule = () => ({})\n'
+  )
   writeFileSync(join(remoteDir, 'node_modules', '@parcel', 'watcher', 'index.js'), '')
   writeFileSync(join(remoteDir, '.install-complete'), '')
-  writeFileSync(join(remoteDir, 'managed-hook-runtime.js'), '')
   writeFakeRelay(remoteDir)
 }
 
@@ -205,10 +205,14 @@ describe('system SSH transport integration', () => {
     'deploys and speaks relay RPC over a system ssh process for ProxyUseFdpass targets',
     async () => {
       const conn = new SshConnection(makeTarget(), { onStateChange: vi.fn() })
+      const onProgress = vi.fn()
       await conn.connect()
       expect(conn.usesSystemSshTransport()).toBe(true)
 
-      const result = await deployAndLaunchRelay(conn, undefined, 60, makeTarget().id)
+      const result = await deployAndLaunchRelay(conn, onProgress, 60, makeTarget().id)
+      expect(onProgress).toHaveBeenCalledWith('Starting relay...')
+      expect(onProgress).not.toHaveBeenCalledWith('Uploading relay...')
+      expect(onProgress).not.toHaveBeenCalledWith('Installing native dependencies...')
       const mux = new SshChannelMultiplexer(result.transport)
       try {
         await expect(mux.request('session.resolveHome', { path: '~' })).resolves.toBe(
@@ -227,7 +231,7 @@ describe('system SSH transport integration', () => {
     async () => {
       delete process.env.ORCA_SSH_FORCE_SYSTEM_TRANSPORT
       const conn = new SshConnection(
-        { ...makeTarget(), gssapiAuthentication: true },
+        { ...makeTarget(), source: 'manual', gssapiAuthentication: true },
         { onStateChange: vi.fn() }
       )
       await conn.connect()

@@ -2,12 +2,11 @@
 import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '../store'
-import { shouldRetryPaneSpawnOnSshReconnect } from './ssh-reconnect-pane-retry'
 import { getTabIdsAwaitingHostHydrationRemount } from '@/lib/parked-terminal-host-hydration'
 import { applyWorktreeHeadIdentities } from './worktree-head-identity-apply'
 import { getWorktreeMapFromState, getRepoMapFromState } from '@/store/selectors'
 import { applyUIZoom } from '@/lib/ui-zoom'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateAndRevealWorktree, activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { buildLinearIssueLinkedWorkItem } from '@/lib/linear-linked-work-item'
 import { runWorktreeDelete } from '@/components/sidebar/delete-worktree-flow'
 import { runSleepWorktree } from '@/components/sidebar/sleep-worktree-flow'
@@ -16,30 +15,34 @@ import { OPEN_WORKSPACE_BOARD_EVENT } from '@/components/sidebar/useWorkspaceBoa
 import { SPLIT_TERMINAL_PANE_EVENT, CLOSE_TERMINAL_PANE_EVENT } from '@/constants/terminal'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
 import { planMobileTerminalTabMount } from '@/lib/mobile-terminal-tab-mount'
-import { hasRegisteredRuntimeTerminalTab } from '@/runtime/sync-runtime-graph'
+import { resolveTerminalTabPtyOwnership } from '@/lib/terminal-tab-for-pty-id'
+import {
+  hasRegisteredRuntimeTerminalTab,
+  focusRuntimeTerminalSurface
+} from '@/runtime/sync-runtime-graph'
 import type { SplitTerminalPaneDetail, CloseTerminalPaneDetail } from '@/constants/terminal'
 import { getVisibleWorktreeIds } from '@/components/sidebar/visible-worktrees'
 import { activateTabNumberShortcut } from '@/lib/tab-number-shortcuts'
 import { nextEditorFontZoomLevel, computeEditorFontSize } from '@/lib/editor-font-zoom'
+import { canConnectSshStatus } from '@/ssh/ssh-connection-recoverability'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
-  UpdateStatus,
-  WorkspaceSessionState
+  UpdateStatus
 } from '../../../shared/types'
-import type {
-  RemoteWorkspacePatchResult,
-  RemoteWorkspaceSnapshot
-} from '../../../shared/remote-workspace-types'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
-import type { SshConnectionState } from '../../../shared/ssh-types'
+import type { DirectSshAuthority, SshConnectionState } from '../../../shared/ssh-types'
+import {
+  toRuntimeExecutionHostId,
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
 import { isWslHookRelayConnectionId } from '../../../shared/wsl-hook-relay-contract'
 import type {
   RuntimeBrowserDriverState,
   RuntimeTerminalPresentation,
   RuntimeTerminalDriverState
 } from '../../../shared/runtime-types'
-import { importRemoteWorkspaceSession } from '../../../shared/remote-workspace-session-projection'
 import { zoomLevelToPercent } from '@/components/settings/SettingsConstants'
 import { stepUIZoomLevel } from '../../../shared/ui-zoom-level'
 import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
@@ -72,7 +75,6 @@ import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import { TOGGLE_QUICK_COMMANDS_MENU_EVENT } from '@/lib/quick-commands-menu-events'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
-import { focusRuntimeTerminalSurface } from '@/runtime/sync-runtime-graph'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
 import { getEnvironmentSshStateGeneration } from '@/store/slices/runtime-environment-ssh'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
@@ -91,12 +93,18 @@ import { attachMobileMarkdownBridge } from '@/runtime/mobile-markdown-bridge'
 import { closeMobileSessionTabInStore } from '@/runtime/mobile-session-tab-close'
 import { createWorktreeChangeRefreshQueue } from './worktree-change-refresh-queue'
 import { subscribeRuntimeClientEvents } from '@/runtime/runtime-client-events'
+import { applyNativeChatLaunchDraftResolved } from '@/runtime/native-chat-launch-draft-runtime-resolution'
+import { toRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
+import { dispatchTerminalSideEffectBatch } from '@/components/terminal-pane/terminal-side-effect-facts-handler'
 import { subscribeToUnpairedDeviceAuthNotification } from './unpaired-device-auth-notification'
 import {
   applyRuntimeEnvironmentSshStateChanged,
   hydrateRuntimeEnvironmentSshState
 } from '@/runtime/runtime-environment-ssh-state'
-import { createRuntimeProjectRefreshScheduler } from './runtime-project-refresh-scheduler'
+import {
+  createRuntimeProjectRefreshScheduler,
+  refreshRuntimeProjectWorktrees
+} from './runtime-project-refresh-scheduler'
 import { createRuntimeClientEventsSync } from './runtime-client-events-sync'
 import { detectLanguage } from '@/lib/language-detect'
 import { makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
@@ -105,9 +113,14 @@ import { track } from '@/lib/telemetry'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { persistWorkspaceSessionByHost } from '@/lib/workspace-session-host-persistence'
+import { verifyTerminalRevealIdentity } from '@/lib/terminal-reveal-identity'
 import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import { applyHostWorktreeTerminalSleepState } from '@/components/terminal-pane/pty-shutdown-exit-deferral'
+import {
+  resolveLegacyWorkerTerminalRecoveryAction,
+  rollbackLegacyWorkerTerminalSurfaceInStore
+} from './legacy-worker-terminal-recovery-event'
 import type { AppState } from '../store/types'
 import { guardPinnedTabClose, resolvePinnedTabLabel } from '../store/pinned-tab-close-guard'
 import {
@@ -122,8 +135,13 @@ import {
   createFloatingWorkspaceTerminalTab,
   isEmptyFloatingWorkspacePanelVisible,
   isFloatingWorkspacePanelFocused,
+  resolveFloatingWorkspaceBrowserWorkspaceId,
   switchFloatingWorkspaceTab
 } from '@/lib/floating-workspace-terminal-actions'
+import {
+  dispatchFloatingWorkspaceGuestClose,
+  dispatchFloatingWorkspaceGuestSelectIndex
+} from '@/lib/floating-workspace-guest-bridge'
 import {
   observeAgentHookCompletionForNotification,
   resetAgentHookCompletionNotificationCoordinators,
@@ -141,6 +159,27 @@ import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
 import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
+import { acquireDirectSshDetectedWorktreeRefresh } from '@/store/slices/worktrees'
+import { createDirectSshWorktreeRefreshScheduler } from './direct-ssh-worktree-refresh-scheduler'
+import {
+  createDirectSshReconnectCoordinator,
+  type DirectSshPreparationInput,
+  type DirectSshPreparationReason
+} from './direct-ssh-reconnect-coordinator'
+import { directSshAuthoritiesEqual } from './direct-ssh-reconnect-tokens'
+import { createDirectSshHostHydration } from './direct-ssh-host-hydration'
+import { createDirectSshReconnectProductTelemetryAdapter } from '@/lib/direct-ssh-reconnect-product-telemetry'
+import {
+  createRemoteWorkspaceTargetSync,
+  isDirectSshRemoteWorkspaceApplyInProgress,
+  type RemoteWorkspaceTargetSync
+} from './remote-workspace-target-sync'
+import {
+  registerDirectSshWakeRouting,
+  routeDirectSshConnectedState,
+  type DirectSshConnectedStateOrigin
+} from './direct-ssh-state-routing'
+import { isDirectSshReconnectCoordinatorRoutingEnabled } from './direct-ssh-reconnect-rollout'
 
 function getShortcutPlatform(): NodeJS.Platform {
   if (navigator.userAgent.includes('Mac')) {
@@ -153,15 +192,18 @@ function getShortcutPlatform(): NodeJS.Platform {
 }
 
 const BROWSER_AUTOMATION_BOOTSTRAP_LEASE_MS = 10_000
-const RUNTIME_PROJECT_REFRESH_CONCURRENCY = 5
 const browserAutomationBootstrapLeaseByPageId = new Map<string, { token: string; timer: number }>()
 
 function resolveTerminalPresentation(data: {
   presentation?: RuntimeTerminalPresentation
   activate?: boolean
+  focus?: boolean
 }): RuntimeTerminalPresentation | undefined {
   if (data.presentation) {
     return data.presentation
+  }
+  if (data.focus !== undefined) {
+    return data.focus ? 'focused' : 'background'
   }
   if (data.activate === true) {
     return 'focused'
@@ -247,14 +289,16 @@ export { resolveZoomTarget } from './resolve-zoom-target'
 const PENDING_AGENT_STATUS_RETRY_MS = 100
 const PENDING_AGENT_STATUS_TTL_MS = 15_000
 const MAX_PENDING_AGENT_STATUS_EVENTS = 100
+// Why: each live status event is its own IPC task, so a multi-agent burst pays
+// one full render pass per event; same-task commits batch to ONE pass (React
+// flushes external-store updates at the microtask boundary). One frame of
+// buffering collapses a burst; the leading event still applies immediately.
+const LIVE_AGENT_STATUS_BURST_WINDOW_MS = 33
 // Why: mobile driver hydration is async; cap replay so a stuck IPC snapshot can't retain an unbounded startup buffer.
 const MAX_PENDING_MOBILE_STATE_EVENTS = 300
 // Why: a rename's event burst lags the on-disk move; shield both ids from the deletion diff for a grace window.
 const WORKTREE_RENAME_PURGE_GRACE_MS = 20_000
 const recentlyRenamedWorktreeIdExpiry = new Map<string, number>()
-let remoteWorkspaceSnapshotApplyDepth = 0
-let remoteWorkspaceSnapshotWriteSuppressUntil = 0
-const REMOTE_WORKSPACE_SNAPSHOT_WRITE_SUPPRESS_MS = 1000
 
 function isAgentStatusForRecentlyClosedTab(
   store: Pick<AppState, 'recentlyClosedAgentStatusTabIds' | 'recentlyRetiredAgentStatusPaneKeys'>,
@@ -413,262 +457,7 @@ function activateExistingLeafInLayout(
 }
 
 export function isRemoteWorkspaceSnapshotApplyInProgress(): boolean {
-  return (
-    remoteWorkspaceSnapshotApplyDepth > 0 || Date.now() < remoteWorkspaceSnapshotWriteSuppressUntil
-  )
-}
-
-async function waitForWorkspaceSessionReady(): Promise<boolean> {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    if (useAppStore.getState().workspaceSessionReady) {
-      return true
-    }
-    await new Promise((resolve) => window.setTimeout(resolve, 100))
-  }
-  return useAppStore.getState().workspaceSessionReady
-}
-
-async function prepareRemoteWorkspaceTarget(targetId: string): Promise<boolean> {
-  if (!(await waitForWorkspaceSessionReady())) {
-    return false
-  }
-  const store = useAppStore.getState()
-  let repos = store.repos.filter((repo) => repo.connectionId === targetId)
-  if (repos.length === 0) {
-    await store.fetchRepos()
-    repos = useAppStore.getState().repos.filter((repo) => repo.connectionId === targetId)
-  }
-  await Promise.all(repos.map((repo) => useAppStore.getState().fetchWorktrees(repo.id)))
-  await useAppStore.getState().fetchWorktreeLineage()
-  return true
-}
-
-function targetRepoIds(targetId: string): Set<string> {
-  return new Set(
-    useAppStore
-      .getState()
-      .repos.filter((repo) => repo.connectionId === targetId)
-      .map((repo) => repo.id)
-  )
-}
-
-function targetWorktreeIds(targetId: string): Set<string> {
-  const repoIds = targetRepoIds(targetId)
-  return new Set(
-    Object.values(useAppStore.getState().worktreesByRepo)
-      .flat()
-      .filter((worktree) => repoIds.has(worktree.repoId))
-      .map((worktree) => worktree.id)
-  )
-}
-
-function mergeRemoteWorkspaceSession(
-  current: WorkspaceSessionState,
-  remote: WorkspaceSessionState,
-  targetId: string
-): WorkspaceSessionState {
-  const replaceWorktreeIds = targetWorktreeIds(targetId)
-  const remoteTabIds = new Set(
-    Object.values(remote.tabsByWorktree)
-      .flat()
-      .map((tab) => tab.id)
-  )
-  const replacedTabIds = new Set([
-    ...remoteTabIds,
-    ...Object.entries(current.tabsByWorktree)
-      .filter(([worktreeId]) => replaceWorktreeIds.has(worktreeId))
-      .flatMap(([, tabs]) => tabs.map((tab) => tab.id))
-  ])
-  const omitTargetWorktrees = <T>(record: Record<string, T> | undefined): Record<string, T> =>
-    Object.fromEntries(
-      Object.entries(record ?? {}).filter(([worktreeId]) => !replaceWorktreeIds.has(worktreeId))
-    )
-
-  return {
-    ...current,
-    activeRepoId:
-      remote.activeRepoId ??
-      (current.activeWorktreeId && replaceWorktreeIds.has(current.activeWorktreeId)
-        ? null
-        : current.activeRepoId),
-    activeWorktreeId:
-      remote.activeWorktreeId ??
-      (current.activeWorktreeId && replaceWorktreeIds.has(current.activeWorktreeId)
-        ? null
-        : current.activeWorktreeId),
-    activeTabId:
-      remote.activeTabId ??
-      (current.activeTabId && replacedTabIds.has(current.activeTabId) ? null : current.activeTabId),
-    tabsByWorktree: {
-      ...omitTargetWorktrees(current.tabsByWorktree),
-      ...remote.tabsByWorktree
-    },
-    terminalLayoutsByTabId: {
-      ...Object.fromEntries(
-        Object.entries(current.terminalLayoutsByTabId).filter(
-          ([tabId]) => !replacedTabIds.has(tabId)
-        )
-      ),
-      ...remote.terminalLayoutsByTabId
-    },
-    activeWorktreeIdsOnShutdown: [
-      ...(current.activeWorktreeIdsOnShutdown ?? []).filter((id) => !replaceWorktreeIds.has(id)),
-      ...(remote.activeWorktreeIdsOnShutdown ?? [])
-    ],
-    activeTabIdByWorktree: {
-      ...omitTargetWorktrees(current.activeTabIdByWorktree),
-      ...remote.activeTabIdByWorktree
-    },
-    remoteSessionIdsByTabId: {
-      ...Object.fromEntries(
-        Object.entries(current.remoteSessionIdsByTabId ?? {}).filter(
-          ([tabId]) => !replacedTabIds.has(tabId)
-        )
-      ),
-      ...remote.remoteSessionIdsByTabId
-    },
-    lastVisitedAtByWorktreeId: {
-      ...omitTargetWorktrees(current.lastVisitedAtByWorktreeId),
-      ...remote.lastVisitedAtByWorktreeId
-    }
-  }
-}
-
-async function applyRemoteWorkspaceSnapshot(
-  targetId: string,
-  snapshot: RemoteWorkspaceSnapshot
-): Promise<void> {
-  if (!(await prepareRemoteWorkspaceTarget(targetId))) {
-    throw new Error('Workspace sync waited for local session hydration and timed out')
-  }
-  const worktreeIds = targetWorktreeIds(targetId)
-  const localByPath = new Map(
-    Array.from(worktreeIds).map((worktreeId) => {
-      const separator = worktreeId.indexOf('::')
-      return [separator === -1 ? worktreeId : worktreeId.slice(separator + 2), worktreeId] as const
-    })
-  )
-  const remoteSession = importRemoteWorkspaceSession(snapshot.session, {
-    resolveWorktreeId: (worktreePath) => localByPath.get(worktreePath) ?? null
-  })
-  const current = buildWorkspaceSessionPayload(useAppStore.getState())
-  const merged = mergeRemoteWorkspaceSession(current, remoteSession, targetId)
-  const store = useAppStore.getState()
-  remoteWorkspaceSnapshotApplyDepth += 1
-  try {
-    store.hydrateWorkspaceSession(merged)
-    store.hydrateTabsSession(merged)
-    store.hydrateEditorSession(merged)
-    store.hydrateBrowserSession(merged)
-    store.markRemoteWorkspaceHydrated(targetId)
-    store.setRemoteWorkspaceSyncStatus(targetId, {
-      phase: 'synced',
-      direction: 'pull',
-      revision: snapshot.revision,
-      updatedAt: snapshot.updatedAt,
-      lastSyncedAt: Date.now(),
-      message: translate('auto.hooks.useIpcEvents.4f78ba5885', 'Workspace synced')
-    })
-    await useAppStore.getState().reconnectPersistedTerminals()
-  } finally {
-    // Why: reattach updates pty ids/titles after hydration; they came from the snapshot, don't echo back as a new revision.
-    remoteWorkspaceSnapshotWriteSuppressUntil =
-      Date.now() + REMOTE_WORKSPACE_SNAPSHOT_WRITE_SUPPRESS_MS
-    remoteWorkspaceSnapshotApplyDepth -= 1
-  }
-}
-
-async function syncRemoteWorkspaceAfterConnect(targetId: string): Promise<void> {
-  const store = useAppStore.getState()
-  if (!(await prepareRemoteWorkspaceTarget(targetId))) {
-    store.setRemoteWorkspaceSyncStatus(targetId, {
-      phase: 'error',
-      direction: 'pull',
-      message: translate(
-        'auto.hooks.useIpcEvents.88214a785b',
-        'Workspace sync waited for local session hydration and timed out'
-      )
-    })
-    return
-  }
-  store.setRemoteWorkspaceSyncStatus(targetId, { phase: 'pulling', direction: 'pull' })
-  const worktreeIds = targetWorktreeIds(targetId)
-  const hasLocalTabs = Array.from(worktreeIds).some(
-    (worktreeId) => (useAppStore.getState().tabsByWorktree[worktreeId] ?? []).length > 0
-  )
-  const snapshot = await window.api.remoteWorkspace.get({ targetId })
-  if (!snapshot) {
-    useAppStore.getState().setRemoteWorkspaceSyncStatus(targetId, {
-      phase: 'offline',
-      direction: 'pull',
-      message: translate('auto.hooks.useIpcEvents.2fe88c2e06', 'Remote workspace sync unavailable')
-    })
-    return
-  }
-  if (snapshot.revision > 0) {
-    await applyRemoteWorkspaceSnapshot(targetId, snapshot)
-    return
-  }
-
-  useAppStore.getState().markRemoteWorkspaceHydrated(targetId)
-  if (hasLocalTabs) {
-    // Why: read the relay before publishing local tabs, or a reconnect can overwrite a newer snapshot with stale local state.
-    const session = buildWorkspaceSessionPayload(useAppStore.getState())
-    const results = await window.api.remoteWorkspace.setForConnectedTargets({
-      session,
-      hydratedTargetIds: [targetId]
-    })
-    const result = results.find((entry) => entry.targetId === targetId)?.result
-    applyRemoteWorkspacePatchStatus(targetId, result)
-    if (result?.ok) {
-      useAppStore.getState().markRemoteWorkspaceHydrated(targetId)
-    }
-    return
-  }
-  useAppStore.getState().setRemoteWorkspaceSyncStatus(targetId, {
-    phase: 'idle',
-    revision: snapshot.revision,
-    updatedAt: snapshot.updatedAt,
-    message: translate('auto.hooks.useIpcEvents.2ec42e1c52', 'No remote workspace yet')
-  })
-}
-
-function applyRemoteWorkspacePatchStatus(
-  targetId: string,
-  result: RemoteWorkspacePatchResult | undefined
-): void {
-  if (!result) {
-    useAppStore.getState().setRemoteWorkspaceSyncStatus(targetId, {
-      phase: 'offline',
-      direction: 'push',
-      lastSyncedAt: Date.now(),
-      message: translate('auto.hooks.useIpcEvents.2fe88c2e06', 'Remote workspace sync unavailable')
-    })
-    return
-  }
-  if (result.ok) {
-    useAppStore.getState().setRemoteWorkspaceSyncStatus(targetId, {
-      phase: 'synced',
-      direction: 'push',
-      revision: result.snapshot.revision,
-      updatedAt: result.snapshot.updatedAt,
-      lastSyncedAt: Date.now(),
-      message: translate('auto.hooks.useIpcEvents.f8aaf2bde3', 'Workspace uploaded')
-    })
-    return
-  }
-  useAppStore.getState().setRemoteWorkspaceSyncStatus(targetId, {
-    phase: result.reason === 'stale-revision' ? 'conflict' : 'offline',
-    direction: 'push',
-    revision: result.snapshot?.revision,
-    updatedAt: result.snapshot?.updatedAt,
-    lastSyncedAt: Date.now(),
-    message:
-      result.message ??
-      (result.reason === 'stale-revision'
-        ? 'Workspace changed on another device'
-        : 'Remote workspace sync unavailable')
-  })
+  return isDirectSshRemoteWorkspaceApplyInProgress()
 }
 
 type BrowserSessionTabTarget =
@@ -811,36 +600,6 @@ export function getRuntimeProjectRefreshEnvironmentIds(args: {
   ]
 }
 
-async function refreshRuntimeProjectWorktrees(repos: readonly { id: string }[]): Promise<void> {
-  let nextIndex = 0
-  const failures: { repoId: string; error: unknown }[] = []
-  const workerCount = Math.min(RUNTIME_PROJECT_REFRESH_CONCURRENCY, repos.length)
-
-  // Why: one coalesced repo event can represent many repos; bound the probes so idle refresh never floods the renderer.
-  await Promise.all(
-    Array.from({ length: workerCount }, async () => {
-      while (nextIndex < repos.length) {
-        const index = nextIndex
-        nextIndex += 1
-        const repoId = repos[index].id
-        try {
-          await useAppStore.getState().fetchWorktrees(repoId)
-        } catch (error) {
-          failures.push({ repoId, error })
-        }
-      }
-    })
-  )
-  if (failures.length > 0) {
-    throw new AggregateError(
-      failures.map((failure) => failure.error),
-      `Failed to refresh ${failures.length} runtime project worktree(s): ${failures
-        .map((failure) => failure.repoId)
-        .join(', ')}`
-    )
-  }
-}
-
 function getWorktreeRuntimeEnvironmentId(worktreeId: string | null | undefined): string | null {
   return getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), worktreeId)
 }
@@ -848,6 +607,149 @@ function getWorktreeRuntimeEnvironmentId(worktreeId: string | null | undefined):
 export function useIpcEvents(): void {
   useEffect(() => {
     const unsubs: (() => void)[] = []
+    const reconnectAuthorityByTarget = new Map<string, DirectSshAuthority>()
+    const authorityReconciliationDeadlines = new Set<{
+      timer: ReturnType<typeof setTimeout>
+      settle: () => void
+    }>()
+    let directSshEffectStopped = false
+    const currentDirectSshAuthority = (targetId: string): DirectSshAuthority | null => {
+      const state = useAppStore.getState().sshConnectionStates?.get(targetId)
+      if (
+        state?.status !== 'connected' ||
+        state.targetId !== targetId ||
+        !state.providerEpoch ||
+        state.connectionGeneration === undefined
+      ) {
+        return null
+      }
+      return {
+        targetId,
+        providerEpoch: state.providerEpoch,
+        connectionGeneration: state.connectionGeneration
+      }
+    }
+    const scheduler = createDirectSshWorktreeRefreshScheduler({
+      startAttempt: (key) => {
+        const acquired = acquireDirectSshDetectedWorktreeRefresh(useAppStore, {
+          repoId: key.repoId,
+          executionHostId: key.executionHostId,
+          authority: {
+            targetId: key.targetId,
+            providerEpoch: key.providerEpoch,
+            connectionGeneration: key.connectionGeneration
+          },
+          requireAuthoritative: key.authorityRequirement === 'required'
+        })
+        return {
+          providerRequestId: acquired.providerRequestId,
+          result: acquired.result.then((result) => acquired.merge(result)),
+          cancel: acquired.release
+        }
+      }
+    })
+    const hostHydration = createDirectSshHostHydration({
+      store: useAppStore,
+      isCurrentAuthority: (authority) =>
+        directSshAuthoritiesEqual(currentDirectSshAuthority(authority.targetId), authority),
+      listRepos: (authority) => {
+        const executionHostId = toSshExecutionHostId(authority.targetId)
+        return (
+          window.api.repos.listForExecutionHost?.({
+            executionHostId,
+            expectedAuthority: authority
+          }) ??
+          Promise.resolve({
+            authoritative: false,
+            executionHostId,
+            reason: 'unavailable' as const
+          })
+        )
+      },
+      listLineage: (authority) => {
+        const executionHostId = toSshExecutionHostId(authority.targetId)
+        return (
+          window.api.worktrees.listLineageForHost?.({
+            executionHostId,
+            expectedAuthority: authority
+          }) ??
+          Promise.resolve({
+            authoritative: false,
+            executionHostId,
+            reason: 'unavailable' as const
+          })
+        )
+      }
+    })
+    type DirectSshTerminalActions = Partial<
+      Pick<AppState, 'invalidateStaleDirectSshTargetPtyBindings' | 'retryDirectSshTargetPanes'>
+    >
+    const directSshTerminalActions = (): DirectSshTerminalActions =>
+      useAppStore.getState() as DirectSshTerminalActions
+    let remoteWorkspaceTargetSync: RemoteWorkspaceTargetSync | null = null
+    const reconnectCoordinator = createDirectSshReconnectCoordinator({
+      scheduler,
+      isCurrentConnectedAuthority: (authority) =>
+        directSshAuthoritiesEqual(currentDirectSshAuthority(authority.targetId), authority),
+      capturePreparationInput: hostHydration.capturePreparationInput,
+      readHostScopedLineage: hostHydration.readHostScopedLineage,
+      invalidateStaleTerminalBindings: (authority) =>
+        directSshTerminalActions().invalidateStaleDirectSshTargetPtyBindings?.(authority) ?? 0,
+      retryTargetPanes: (authority) =>
+        directSshTerminalActions().retryDirectSshTargetPanes?.(authority) ?? 0,
+      finalizeHydratedTerminalPanes: (authority) =>
+        directSshTerminalActions().retryDirectSshTargetPanes?.(authority) ?? 0,
+      correctUnboundTerminalPanes: (authority) =>
+        directSshTerminalActions().retryDirectSshTargetPanes?.(authority) ?? 0,
+      syncRemoteWorkspaceAfterConnect: (token) =>
+        remoteWorkspaceTargetSync?.syncAfterConnect(token),
+      onTelemetry: createDirectSshReconnectProductTelemetryAdapter()
+    })
+    const remoteWorkspaceApi = window.api.remoteWorkspace
+    if (remoteWorkspaceApi) {
+      remoteWorkspaceTargetSync = createRemoteWorkspaceTargetSync({
+        store: useAppStore,
+        remoteWorkspace: remoteWorkspaceApi,
+        getCurrentAuthority: currentDirectSshAuthority,
+        isPreparationTokenCurrent: hostHydration.isPreparationTokenCurrent,
+        capturePreparationInput: (authority, reason, snapshotRevision) =>
+          hostHydration.capturePreparationInput(authority, reason, snapshotRevision),
+        prepareOnly: reconnectCoordinator.prepareOnly,
+        finalizeHydratedTerminals: (authority) =>
+          directSshAuthoritiesEqual(reconnectAuthorityByTarget.get(authority.targetId), authority)
+            ? reconnectCoordinator.finalizeHydratedTerminals(authority)
+            : 0
+      })
+    }
+    const prepareAndSyncDirectSshTarget = async (
+      authority: DirectSshAuthority,
+      reason: DirectSshPreparationReason,
+      options?: { authorityAlreadyReplaced?: boolean }
+    ): Promise<void> => {
+      try {
+        if (!options?.authorityAlreadyReplaced) {
+          reconnectCoordinator.replaceAuthority(authority)
+        }
+        const input: DirectSshPreparationInput | null = await hostHydration.capturePreparationInput(
+          authority,
+          reason
+        )
+        if (!input) {
+          return
+        }
+        const prepared = await reconnectCoordinator.prepareOnly(input)
+        if (prepared.token && hostHydration.isPreparationTokenCurrent(prepared.token)) {
+          await remoteWorkspaceTargetSync?.syncAfterConnect(prepared.token)
+        }
+      } catch (error) {
+        if (directSshAuthoritiesEqual(currentDirectSshAuthority(authority.targetId), authority)) {
+          useAppStore.getState().setRemoteWorkspaceSyncStatus(authority.targetId, {
+            phase: 'error',
+            message: error instanceof Error ? error.message : 'Workspace sync failed'
+          })
+        }
+      }
+    }
     const backgroundSleepingAgentWakeDispatcher = createBackgroundSleepingAgentWakeDispatcher()
     unsubs.push(backgroundSleepingAgentWakeDispatcher.dispose)
     type PendingAgentStatusEvent = {
@@ -862,13 +764,16 @@ export function useIpcEvents(): void {
     let pendingAgentStatusRetryTimer: ReturnType<typeof setTimeout> | null = null
     // Why: setAgentStatus notifies synchronously and re-enters this flush mid-drain; guard re-entrancy (crash 9fc89529).
     let isFlushingAgentStatuses = false
+    const liveAgentStatusBurstQueue: AgentStatusIpcPayload[] = []
+    let liveAgentStatusBurstTimer: ReturnType<typeof setTimeout> | null = null
+    let lastLiveAgentStatusApplyAt = 0
 
     unsubs.push(attachMobileMarkdownBridge())
 
     const handleWorktreesChanged = async (
       repoId: string,
       renamed?: { oldWorktreeId: string; newWorktreeId: string },
-      options?: { forceLocalOwner?: boolean }
+      options?: { forceLocalOwner?: boolean; executionHostId?: ExecutionHostId }
     ): Promise<void> => {
       const localRefreshStartedWithRuntime =
         options?.forceLocalOwner === true && isRuntimeEnvironmentActive()
@@ -889,11 +794,21 @@ export function useIpcEvents(): void {
         getVisibleWorktreeIdsForRepo(state, repoId)
       await state.fetchWorktrees(
         repoId,
-        options?.forceLocalOwner ? { forceLocalOwner: true } : undefined
+        options?.forceLocalOwner
+          ? { forceLocalOwner: true }
+          : options?.executionHostId
+            ? { executionHostId: options.executionHostId }
+            : undefined
       )
       await useAppStore
         .getState()
-        .fetchWorktreeLineage(options?.forceLocalOwner ? { forceLocalOwner: true } : undefined)
+        .fetchWorktreeLineage(
+          options?.forceLocalOwner
+            ? { forceLocalOwner: true }
+            : options?.executionHostId
+              ? { executionHostId: options.executionHostId }
+              : undefined
+        )
       // Why: an id change unmounts the active pane; re-activate so the tab reconciles, else it vanishes until re-select.
       if (renamedWasActive && renamed) {
         useAppStore.getState().setActiveWorktree(renamed.newWorktreeId)
@@ -989,8 +904,12 @@ export function useIpcEvents(): void {
         // Why: refresh the env's SSH bucket on (re)connect so a pre-drop snapshot can't keep a reconnect overlay stale.
         void hydrateRuntimeEnvironmentSshState(environmentId, { force: true }).catch(() => {})
         const repos = await useAppStore.getState().fetchRuntimeEnvironmentRepos(environmentId)
-        await refreshRuntimeProjectWorktrees(repos)
-        await useAppStore.getState().fetchWorktreeLineage()
+        await refreshRuntimeProjectWorktrees(environmentId, repos, (repoId, options) =>
+          useAppStore.getState().fetchWorktrees(repoId, options)
+        )
+        await useAppStore.getState().fetchWorktreeLineage({
+          executionHostId: toRuntimeExecutionHostId(environmentId)
+        })
       },
       onError: (error) => {
         console.error('Failed to refresh runtime projects:', error)
@@ -1010,6 +929,17 @@ export function useIpcEvents(): void {
         applyHostWorktreeTerminalSleepState(environmentId, event)
         return
       }
+      if (event.type === 'terminalSideEffects') {
+        dispatchTerminalSideEffectBatch({
+          ...event.batch,
+          ptyId: toRemoteRuntimePtyId(event.batch.ptyId, environmentId)
+        })
+        return
+      }
+      if (event.type === 'nativeChatLaunchDraftResolved') {
+        applyNativeChatLaunchDraftResolved(useAppStore.getState(), event)
+        return
+      }
       if (event.type === 'reposChanged') {
         runtimeProjectRefreshScheduler.request(environmentId)
         return
@@ -1025,7 +955,10 @@ export function useIpcEvents(): void {
       }
       if (event.type === 'worktreesChanged') {
         void ensureRuntimeEventRepoKnown(environmentId, event.repoId).then(() =>
-          worktreeChangeRefreshQueue.enqueue({ repoId: event.repoId })
+          worktreeChangeRefreshQueue.enqueue({
+            repoId: event.repoId,
+            executionHostId: toRuntimeExecutionHostId(environmentId)
+          })
         )
         return
       }
@@ -1089,40 +1022,38 @@ export function useIpcEvents(): void {
     let reachableRuntimeEnvironmentKey = buildRuntimeClientEventEnvironmentKey(
       reachableRuntimeEnvironmentIds
     )
-    unsubs.push(
-      useAppStore.subscribe(() => {
-        const nextEnvironmentIds = getRuntimeClientEventEnvironmentIds()
-        const nextKey = buildRuntimeClientEventEnvironmentKey(nextEnvironmentIds)
-        const nextReachableEnvironmentIds = getReachableRuntimeEnvironmentIds()
-        const nextReachableKey = buildRuntimeClientEventEnvironmentKey(nextReachableEnvironmentIds)
-        if (
-          nextKey === runtimeClientEventEnvironmentKey &&
-          nextReachableKey === reachableRuntimeEnvironmentKey
-        ) {
-          return
-        }
-        for (const environmentId of getRuntimeProjectRefreshEnvironmentIds({
-          previousDesired: runtimeClientEventEnvironmentIds,
-          nextDesired: nextEnvironmentIds,
-          previousReachable: reachableRuntimeEnvironmentIds,
-          nextReachable: nextReachableEnvironmentIds
-        })) {
-          runtimeProjectRefreshScheduler.request(environmentId)
-        }
-        for (const environmentId of getNewlyDisconnectedRuntimeEnvironmentIds(
-          reachableRuntimeEnvironmentIds,
-          nextReachableEnvironmentIds
-        )) {
-          // No-op when the environment has no SSH bucket (e.g. web client).
-          useAppStore.getState().markEnvironmentSshStateStale(environmentId)
-        }
-        runtimeClientEventEnvironmentIds = nextEnvironmentIds
-        runtimeClientEventEnvironmentKey = nextKey
-        reachableRuntimeEnvironmentIds = nextReachableEnvironmentIds
-        reachableRuntimeEnvironmentKey = nextReachableKey
-        runtimeClientEventsSync.sync()
-      })
-    )
+    const unsubscribeRuntimeEnvironmentStore = useAppStore.subscribe(() => {
+      const nextEnvironmentIds = getRuntimeClientEventEnvironmentIds()
+      const nextKey = buildRuntimeClientEventEnvironmentKey(nextEnvironmentIds)
+      const nextReachableEnvironmentIds = getReachableRuntimeEnvironmentIds()
+      const nextReachableKey = buildRuntimeClientEventEnvironmentKey(nextReachableEnvironmentIds)
+      if (
+        nextKey === runtimeClientEventEnvironmentKey &&
+        nextReachableKey === reachableRuntimeEnvironmentKey
+      ) {
+        return
+      }
+      for (const environmentId of getRuntimeProjectRefreshEnvironmentIds({
+        previousDesired: runtimeClientEventEnvironmentIds,
+        nextDesired: nextEnvironmentIds,
+        previousReachable: reachableRuntimeEnvironmentIds,
+        nextReachable: nextReachableEnvironmentIds
+      })) {
+        runtimeProjectRefreshScheduler.request(environmentId)
+      }
+      for (const environmentId of getNewlyDisconnectedRuntimeEnvironmentIds(
+        reachableRuntimeEnvironmentIds,
+        nextReachableEnvironmentIds
+      )) {
+        // No-op when the environment has no SSH bucket (e.g. web client).
+        useAppStore.getState().markEnvironmentSshStateStale(environmentId)
+      }
+      runtimeClientEventEnvironmentIds = nextEnvironmentIds
+      runtimeClientEventEnvironmentKey = nextKey
+      reachableRuntimeEnvironmentIds = nextReachableEnvironmentIds
+      reachableRuntimeEnvironmentKey = nextReachableKey
+      runtimeClientEventsSync.sync()
+    })
     unsubs.push(runtimeClientEventsSync.stop)
     unsubs.push(runtimeProjectRefreshScheduler.stop)
 
@@ -1423,7 +1354,7 @@ export function useIpcEvents(): void {
         }
         const visibleIds = getVisibleWorktreeIds()
         if (index < visibleIds.length) {
-          activateAndRevealWorktree(visibleIds[index])
+          activateAndRevealWorkspace(visibleIds[index])
         }
       })
     )
@@ -1490,7 +1421,9 @@ export function useIpcEvents(): void {
           title,
           ptyId,
           activate,
+          focus,
           presentation,
+          surfaceOwner,
           tabId,
           leafId,
           splitFromLeafId,
@@ -1499,20 +1432,32 @@ export function useIpcEvents(): void {
         }) => {
           try {
             const store = useAppStore.getState()
-            const terminalPresentation = resolveTerminalPresentation({ presentation, activate })
+            const terminalPresentation = resolveTerminalPresentation({
+              presentation,
+              activate,
+              focus
+            })
             const shouldActivate = terminalPresentation === 'focused'
-            const shouldSurfaceOwner = terminalPresentation !== 'background'
+            const shouldSurfaceOwner =
+              terminalPresentation !== 'background' && surfaceOwner !== false
             if (shouldActivate) {
               activateTerminalInitiatedWorktree(store, worktreeId)
             }
             const worktreeTabs = store.tabsByWorktree[worktreeId] ?? []
-            const existingTab = ptyId
-              ? worktreeTabs.find(
-                  (candidate) =>
-                    candidate.ptyId === ptyId ||
-                    (store.ptyIdsByTabId[candidate.id] ?? []).includes(ptyId)
+            // Why: a split pane revealed from mobile is only bound in the persisted
+            // layout until its pane mounts; missing it minted a duplicate tab (#10486).
+            const ownership = ptyId
+              ? resolveTerminalTabPtyOwnership(
+                  store,
+                  worktreeId,
+                  ptyId,
+                  tabId !== undefined ? { preferTabId: tabId } : {}
                 )
-              : undefined
+              : { kind: 'none' as const }
+            const existingTab =
+              ownership.kind === 'owned'
+                ? worktreeTabs.find((candidate) => candidate.id === ownership.tabId)
+                : undefined
             const isSplitReveal = Boolean(ptyId && tabId && leafId && splitFromLeafId)
             const splitTargetTab = isSplitReveal
               ? worktreeTabs.find((candidate) => candidate.id === tabId)
@@ -1520,18 +1465,7 @@ export function useIpcEvents(): void {
             if (isSplitReveal && !splitTargetTab) {
               throw new Error(`Terminal tab ${tabId} not found`)
             }
-            const hintedPendingTab =
-              ptyId && tabId && !isSplitReveal
-                ? worktreeTabs.find((candidate) => {
-                    if (candidate.id !== tabId) {
-                      return false
-                    }
-                    const candidatePtyIds = store.ptyIdsByTabId[candidate.id] ?? []
-                    return candidate.ptyId == null && candidatePtyIds.length === 0
-                  })
-                : undefined
-            // Why: runtime fallback reveals a PTY for a renderer-created pending tab; adopt only when the hinted tab has no PTY yet.
-            const reusedTab = existingTab ?? splitTargetTab ?? hintedPendingTab
+            const reusedTab = existingTab ?? splitTargetTab
             const tab =
               reusedTab ??
               (ptyId
@@ -1662,11 +1596,25 @@ export function useIpcEvents(): void {
                 ...(launchAgent ? { launchAgent } : {})
               })
             }
+            if (ptyId && terminalPresentation === 'background') {
+              requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: [tab.id] })
+            }
             if (requestId) {
+              // Why: attest the actual binding; recovery callers compare it with their expected identity.
+              const identity =
+                ptyId && tabId && leafId
+                  ? verifyTerminalRevealIdentity(useAppStore.getState(), {
+                      worktreeId,
+                      tabId: tab.id,
+                      leafId,
+                      ptyId
+                    })
+                  : undefined
               window.api.ui.replyTerminalCreate({
                 requestId,
                 tabId: tab.id,
-                title: title ?? tab.title
+                title: title ?? tab.title,
+                ...(identity ? { identity } : {})
               })
             }
           } catch (err) {
@@ -1743,7 +1691,8 @@ export function useIpcEvents(): void {
           }
           const terminalPresentation = resolveTerminalPresentation(data)
           const shouldActivate = terminalPresentation === 'focused'
-          const shouldSurfaceOwner = terminalPresentation !== 'background'
+          const shouldSurfaceOwner =
+            terminalPresentation !== 'background' && data.surfaceOwner !== false
           if (shouldActivate) {
             activateTerminalInitiatedWorktree(store, worktreeId)
           }
@@ -2017,7 +1966,8 @@ export function useIpcEvents(): void {
           const detail: CloseTerminalPaneDetail = { tabId, paneRuntimeId }
           window.dispatchEvent(new CustomEvent(CLOSE_TERMINAL_PANE_EVENT, { detail }))
         } else {
-          closeTerminalTab(tabId)
+          // Why: the CLI/RPC caller is answered immediately, so it cannot wait on a modal.
+          closeTerminalTab(tabId, { skipRunningProcessConfirm: true })
         }
       })
     )
@@ -2603,6 +2553,27 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(
+      window.api.ui.onCloseFloatingItem(({ sourceId }) => {
+        // Main forwards the guest's browser *page* id; resolve it to the owning live floating
+        // browser workspace (the id space the panel closes by), then hand off to the mounted
+        // panel's own close closure (pin guard + reclaim intent). Stale id = no-op.
+        const workspaceId = resolveFloatingWorkspaceBrowserWorkspaceId(
+          useAppStore.getState(),
+          sourceId
+        )
+        if (!workspaceId) {
+          return
+        }
+        dispatchFloatingWorkspaceGuestClose({ sourceId: workspaceId })
+      })
+    )
+    unsubs.push(
+      window.api.ui.onSelectFloatingIndex(({ index }) => {
+        dispatchFloatingWorkspaceGuestSelectIndex({ index })
+      })
+    )
+
+    unsubs.push(
       window.api.ui.onSwitchTab((direction) => {
         const store = useAppStore.getState()
         if (isFloatingWorkspacePanelFocused()) {
@@ -2662,41 +2633,75 @@ export function useIpcEvents(): void {
       unsubs.push(unsubscribeWorkspaceSpaceProgress)
     }
 
+    const sshStateWatermarkByTargetId = new Map<string, number>()
+    const pendingPortHydrationByTargetId = new Map<
+      string,
+      { receivedForwardPush: boolean; receivedDetectedPush: boolean }
+    >()
+    const hydrateSshPorts = (targetId: string, authority: DirectSshAuthority): void => {
+      const pendingPortHydration = {
+        receivedForwardPush: false,
+        receivedDetectedPush: false
+      }
+      pendingPortHydrationByTargetId.set(targetId, pendingPortHydration)
+      const isHydrationAuthorityCurrent = (): boolean =>
+        !directSshEffectStopped &&
+        directSshAuthoritiesEqual(currentDirectSshAuthority(targetId), authority)
+      const forwardHydration = window.api.ssh.listPortForwards({ targetId }).then((forwards) => {
+        // Why: if the session disconnected while awaiting the snapshot, applying it would resurrect a dead session's ports.
+        if (isHydrationAuthorityCurrent() && !pendingPortHydration.receivedForwardPush) {
+          useAppStore.getState().setPortForwards(targetId, forwards)
+        }
+      })
+      const detectedHydration = window.api.ssh.listDetectedPorts({ targetId }).then((detected) => {
+        if (isHydrationAuthorityCurrent() && !pendingPortHydration.receivedDetectedPush) {
+          useAppStore.getState().setDetectedPorts(targetId, detected)
+        }
+      })
+      // Why: one failed or stalled port stream must not block the other stream or later targets.
+      void Promise.allSettled([forwardHydration, detectedHydration]).then(() => {
+        if (pendingPortHydrationByTargetId.get(targetId) === pendingPortHydration) {
+          pendingPortHydrationByTargetId.delete(targetId)
+        }
+      })
+    }
+    let applySshConnectionStateChange!: (
+      targetId: string,
+      state: SshConnectionState,
+      origin: DirectSshConnectedStateOrigin
+    ) => void
+
     // Why: hydrate initial SSH state for all targets so worktree cards show correct connect state on launch.
     void (async () => {
       try {
         const targets = await window.api.ssh.listTargets()
+        if (directSshEffectStopped) {
+          return
+        }
         useAppStore.getState().setSshTargetsMetadata(targets)
         // Why: ghost-host UI (removed target still referenced by a workspace) shows a tombstone name instead of the raw id.
         try {
           const removedLabels = await window.api.ssh.listRemovedTargetLabels()
+          if (directSshEffectStopped) {
+            return
+          }
           useAppStore.getState().setRemovedSshTargetLabels(removedLabels)
         } catch {
           // Best-effort — a missing map just falls back to the raw target id.
         }
         for (const target of targets) {
+          const hydrationWatermark = sshStateWatermarkByTargetId.get(target.id) ?? 0
           const state = await window.api.ssh.getState({ targetId: target.id })
-          if (state) {
-            useAppStore.getState().setSshConnectionState(target.id, state as SshConnectionState)
-            // Why: ports arrive only via push events; on reattach to a live session fetch snapshots or the Ports panel shows empty.
-            if ((state as SshConnectionState).status === 'connected') {
-              const [forwards, detected] = await Promise.all([
-                window.api.ssh.listPortForwards({ targetId: target.id }),
-                window.api.ssh.listDetectedPorts({ targetId: target.id })
-              ])
-              // Why: if the session disconnected while awaiting the snapshot, applying it would resurrect a dead session's ports.
-              const currentState = useAppStore.getState().sshConnectionStates.get(target.id)
-              if (currentState?.status === 'connected') {
-                useAppStore.getState().setPortForwards(target.id, forwards)
-                useAppStore.getState().setDetectedPorts(target.id, detected)
-              }
-              void syncRemoteWorkspaceAfterConnect(target.id).catch((err) => {
-                useAppStore.getState().setRemoteWorkspaceSyncStatus(target.id, {
-                  phase: 'error',
-                  message: err instanceof Error ? err.message : 'Workspace sync failed'
-                })
-              })
-            }
+          if (
+            !directSshEffectStopped &&
+            state &&
+            (sshStateWatermarkByTargetId.get(target.id) ?? 0) === hydrationWatermark
+          ) {
+            applySshConnectionStateChange(
+              target.id,
+              state as SshConnectionState,
+              'initial-hydration'
+            )
           }
         }
       } catch {
@@ -2718,22 +2723,93 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.ssh.onPortForwardsChanged(({ targetId, forwards }) => {
+        const pendingPortHydration = pendingPortHydrationByTargetId.get(targetId)
+        if (pendingPortHydration) {
+          pendingPortHydration.receivedForwardPush = true
+        }
         useAppStore.getState().setPortForwards(targetId, forwards)
       })
     )
 
     unsubs.push(
       window.api.ssh.onDetectedPortsChanged(({ targetId, ports }) => {
+        const pendingPortHydration = pendingPortHydrationByTargetId.get(targetId)
+        if (pendingPortHydration) {
+          pendingPortHydration.receivedDetectedPush = true
+        }
         useAppStore.getState().setDetectedPorts(targetId, ports)
       })
     )
 
-    const applySshConnectionStateChange = (targetId: string, state: SshConnectionState): void => {
-      const store = useAppStore.getState()
-      store.setSshConnectionState(targetId, state)
-      const remoteRepos = store.repos.filter((r) => r.connectionId === targetId)
+    const reconcileSshAuthority = (
+      targetId: string,
+      initiatingState: SshConnectionState,
+      origin: DirectSshConnectedStateOrigin,
+      watermark: number
+    ): void => {
+      let pendingDeadline: { timer: ReturnType<typeof setTimeout>; settle: () => void } | undefined
+      const deadline = new Promise<null>((resolve) => {
+        const settle = (): void => resolve(null)
+        const timer = setTimeout(settle, 5_000)
+        pendingDeadline = { timer, settle }
+        authorityReconciliationDeadlines.add(pendingDeadline)
+      })
+      void Promise.race([window.api.ssh.getState({ targetId }).catch(() => null), deadline])
+        .then((latest) => {
+          if (
+            directSshEffectStopped ||
+            latest?.targetId !== targetId ||
+            !latest?.providerEpoch ||
+            latest.connectionGeneration === undefined ||
+            (sshStateWatermarkByTargetId.get(targetId) ?? 0) !== watermark
+          ) {
+            return
+          }
+          const current = useAppStore.getState().sshConnectionStates?.get(targetId)
+          if (
+            current?.status !== initiatingState.status ||
+            latest.status !== initiatingState.status ||
+            current.providerEpoch !== initiatingState.providerEpoch ||
+            current.connectionGeneration !== initiatingState.connectionGeneration ||
+            (current.providerEpoch !== undefined &&
+              current.providerEpoch !== null &&
+              current.providerEpoch !== latest.providerEpoch) ||
+            (current.connectionGeneration !== undefined &&
+              current.connectionGeneration !== latest.connectionGeneration)
+          ) {
+            return
+          }
+          applySshConnectionStateChange(
+            targetId,
+            {
+              ...current,
+              providerEpoch: latest.providerEpoch,
+              connectionGeneration: latest.connectionGeneration
+            },
+            origin
+          )
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          if (pendingDeadline) {
+            clearTimeout(pendingDeadline.timer)
+            authorityReconciliationDeadlines.delete(pendingDeadline)
+          }
+        })
+    }
 
-      if (['disconnected', 'auth-failed', 'reconnection-failed', 'error'].includes(state.status)) {
+    applySshConnectionStateChange = (
+      targetId: string,
+      state: SshConnectionState,
+      origin: DirectSshConnectedStateOrigin
+    ): void => {
+      const store = useAppStore.getState()
+      const previous = store.sshConnectionStates?.get(targetId)
+      store.setSshConnectionState(targetId, state)
+
+      if (canConnectSshStatus(state.status)) {
+        reconnectAuthorityByTarget.delete(targetId)
+        reconnectCoordinator.invalidate(targetId)
         // Why: remote agent list is tied to a live relay; clear on disconnect so reconnect re-detects against the new relay.
         store.clearRemoteDetectedAgents(targetId)
 
@@ -2741,61 +2817,57 @@ export function useIpcEvents(): void {
         store.clearPortForwards(targetId)
         store.setDetectedPorts(targetId, [])
 
-        // Why: SSH teardown fires no per-PTY exit events; clear stale PTY ids so reconnect remounts rather than reattach a dead PTY.
-        const remoteWorktreeIds = new Set(
-          Object.values(store.worktreesByRepo)
-            .flat()
-            .filter((w) => remoteRepos.some((r) => r.id === w.repoId))
-            .map((w) => w.id)
-        )
-        for (const worktreeId of remoteWorktreeIds) {
-          const tabs = useAppStore.getState().tabsByWorktree[worktreeId] ?? []
-          for (const tab of tabs) {
-            if (tab.ptyId) {
-              useAppStore.getState().clearTabPtyId(tab.id)
-            }
-          }
-        }
+        // SSH teardown has no per-PTY exits; clear only exact-target bindings in one store publication.
+        store.clearDirectSshTargetPtyBindings(targetId)
+        return
       }
 
-      if (state.status === 'connected') {
-        void Promise.all(remoteRepos.map((r) => store.fetchWorktrees(r.id))).then(async () => {
-          await useAppStore.getState().fetchWorktreeLineage()
-          // Why: panes that never spawned (no PTY provider at cold start) or whose deferred reattach never ran sit inert.
-          // Bumping generation remounts TerminalPane so the deferred-connect gate reattaches or spawns fresh now that the provider exists.
-          const freshStore = useAppStore.getState()
-          const remoteRepoIds = new Set(remoteRepos.map((r) => r.id))
-          const worktreeIds = Object.values(freshStore.worktreesByRepo)
-            .flat()
-            .filter((w) => remoteRepoIds.has(w.repoId))
-            .map((w) => w.id)
-
-          for (const worktreeId of worktreeIds) {
-            const tabs = freshStore.tabsByWorktree[worktreeId] ?? []
-            const needsRetry = (t: { id: string; ptyId?: string | null }): boolean =>
-              shouldRetryPaneSpawnOnSshReconnect({
-                targetId,
-                tabPtyId: t.ptyId,
-                deferredSessionId: freshStore.deferredSshSessionIdsByTabId[t.id]
-              })
-            if (tabs.some(needsRetry)) {
-              useAppStore.setState((s) => ({
-                tabsByWorktree: {
-                  ...s.tabsByWorktree,
-                  [worktreeId]: (s.tabsByWorktree[worktreeId] ?? []).map((t) =>
-                    needsRetry(t) ? { ...t, generation: (t.generation ?? 0) + 1 } : t
-                  )
-                }
-              }))
+      if (state.status !== 'connected') {
+        return
+      }
+      const authority = currentDirectSshAuthority(targetId)
+      if (!authority) {
+        reconcileSshAuthority(
+          targetId,
+          state,
+          origin,
+          sshStateWatermarkByTargetId.get(targetId) ?? 0
+        )
+        return
+      }
+      const previousAuthority =
+        previous?.status === 'connected' &&
+        previous.providerEpoch &&
+        previous.connectionGeneration !== undefined
+          ? {
+              targetId,
+              providerEpoch: previous.providerEpoch,
+              connectionGeneration: previous.connectionGeneration
+            }
+          : null
+      routeDirectSshConnectedState(
+        {
+          coordinator: reconnectCoordinator,
+          coordinatorRoutingEnabled: isDirectSshReconnectCoordinatorRoutingEnabled(),
+          invalidateStaleTerminalBindings: (nextAuthority) =>
+            directSshTerminalActions().invalidateStaleDirectSshTargetPtyBindings?.(nextAuthority) ??
+            0,
+          retryTargetPanes: (nextAuthority) =>
+            directSshTerminalActions().retryDirectSshTargetPanes?.(nextAuthority) ?? 0,
+          prepareAndSync: prepareAndSyncDirectSshTarget,
+          rememberReconnectAuthority: (nextAuthority) => {
+            if (nextAuthority) {
+              reconnectAuthorityByTarget.set(targetId, nextAuthority)
+            } else {
+              reconnectAuthorityByTarget.delete(targetId)
             }
           }
-          void syncRemoteWorkspaceAfterConnect(targetId).catch((err) => {
-            useAppStore.getState().setRemoteWorkspaceSyncStatus(targetId, {
-              phase: 'error',
-              message: err instanceof Error ? err.message : 'Workspace sync failed'
-            })
-          })
-        })
+        },
+        { authority, previousAuthority, origin }
+      )
+      // Why: initial connected state can be partial; hydrate only after reconciliation yields a complete authority.
+      if (origin === 'initial-hydration') {
+        hydrateSshPorts(targetId, authority)
       }
     }
 
@@ -2806,6 +2878,10 @@ export function useIpcEvents(): void {
       const store = useAppStore.getState()
       const state = data.state as SshConnectionState
       const stateEventId = ++sshTargetStateEventId
+      sshStateWatermarkByTargetId.set(
+        data.targetId,
+        (sshStateWatermarkByTargetId.get(data.targetId) ?? 0) + 1
+      )
       latestSshTargetStateEventByTargetId.set(data.targetId, stateEventId)
       if (!store.sshTargetLabels.has(data.targetId)) {
         // Why: unknown target id could be a post-boot add or a removed target racing disconnect; confirm with main first.
@@ -2818,6 +2894,9 @@ export function useIpcEvents(): void {
               return
             }
             latestSshTargetStateEventByTargetId.delete(data.targetId)
+            if (directSshEffectStopped) {
+              return
+            }
             const latestStore = useAppStore.getState()
             if (!targets.some((target) => target.id === data.targetId)) {
               // Why: state events can race after target removal; absence from main's target list means deletion, not a new target.
@@ -2825,22 +2904,37 @@ export function useIpcEvents(): void {
               return
             }
             latestStore.setSshTargetsMetadata(targets)
-            applySshConnectionStateChange(data.targetId, state)
+            applySshConnectionStateChange(data.targetId, state, 'push')
           })
           .catch(() => {
-            if (latestSshTargetStateEventByTargetId.get(data.targetId) === stateEventId) {
+            if (
+              !directSshEffectStopped &&
+              latestSshTargetStateEventByTargetId.get(data.targetId) === stateEventId
+            ) {
               latestSshTargetStateEventByTargetId.delete(data.targetId)
-              applySshConnectionStateChange(data.targetId, state)
+              applySshConnectionStateChange(data.targetId, state, 'push')
             }
           })
         return
       }
 
       latestSshTargetStateEventByTargetId.delete(data.targetId)
-      applySshConnectionStateChange(data.targetId, state)
+      applySshConnectionStateChange(data.targetId, state, 'push')
     }
 
     unsubs.push(window.api.ssh.onStateChanged(handleSshStateChangedEvent))
+    unsubs.push(
+      registerDirectSshWakeRouting({
+        getConnectionStates: () => useAppStore.getState().sshConnectionStates ?? [],
+        wakeAuthority: (authority) => {
+          reconnectCoordinator.correctUnboundTerminals(authority, 'wake-refresh')
+          void prepareAndSyncDirectSshTarget(authority, 'wake-refresh')
+        },
+        ...(typeof window.api.ui.onSystemResumed === 'function'
+          ? { onSystemResumed: (callback: () => void) => window.api.ui.onSystemResumed(callback) }
+          : {})
+      })
+    )
 
     let remoteWorkspaceClientId: string | null = null
     let remoteWorkspaceClientIdPromise: Promise<string | null> | null = null
@@ -2871,13 +2965,15 @@ export function useIpcEvents(): void {
             if (event.sourceClientId && clientId && event.sourceClientId === clientId) {
               return
             }
-            await applyRemoteWorkspaceSnapshot(event.targetId, event.snapshot).catch((err) => {
-              useAppStore.getState().setRemoteWorkspaceSyncStatus(event.targetId, {
-                phase: 'error',
-                revision: event.snapshot.revision,
-                message: err instanceof Error ? err.message : 'Failed to apply remote workspace'
+            await remoteWorkspaceTargetSync
+              ?.applyUnsolicitedSnapshot(event.targetId, event.snapshot)
+              .catch((err) => {
+                useAppStore.getState().setRemoteWorkspaceSyncStatus(event.targetId, {
+                  phase: 'error',
+                  revision: event.snapshot.revision,
+                  message: err instanceof Error ? err.message : 'Failed to apply remote workspace'
+                })
               })
-            })
           })()
         })
       )
@@ -3004,6 +3100,7 @@ export function useIpcEvents(): void {
         interactivePrompt: data.interactivePrompt,
         lastAssistantMessage: data.lastAssistantMessage,
         interrupted: data.interrupted,
+        sessionBoundary: data.sessionBoundary,
         // Why: same trap as interactivePrompt — this rebuild is a field whitelist, so subagent child rows vanish if omitted.
         subagents: data.subagents
       })
@@ -3117,12 +3214,18 @@ export function useIpcEvents(): void {
       const statusPayloadWithTurnBoundary = data.promptInteractionKey
         ? { ...statusPayload, promptInteractionKey: data.promptInteractionKey }
         : statusPayload
+      // Why: hydrated-unconfirmed provenance is envelope data the payload whitelist above drops; re-thread it or freshness gates confirm restored rows.
+      const statusPayloadWithProvenance =
+        data.restoredUnconfirmed === true
+          ? { ...statusPayloadWithTurnBoundary, restoredUnconfirmed: true }
+          : statusPayloadWithTurnBoundary
       const identity = resolveAgentStatusIdentity({
         existing: existingStatus
           ? {
               agentType: existingStatus.agentType,
               state: existingStatus.state,
-              updatedAt: existingStatus.updatedAt
+              updatedAt: existingStatus.updatedAt,
+              restoredUnconfirmed: existingStatus.restoredUnconfirmed
             }
           : undefined,
         incoming: statusPayload.agentType,
@@ -3155,7 +3258,7 @@ export function useIpcEvents(): void {
       const statusWorktreeId = data.worktreeId ?? owningWorktreeId
       store.setAgentStatus(
         paneKey,
-        statusPayloadWithTurnBoundary,
+        statusPayloadWithProvenance,
         terminalTitle,
         {
           updatedAt: data.receivedAt,
@@ -3245,9 +3348,67 @@ export function useIpcEvents(): void {
         })
     }
 
+    function flushLiveAgentStatusBurst(): void {
+      liveAgentStatusBurstTimer = null
+      lastLiveAgentStatusApplyAt = Date.now()
+      // Why: splice before applying — applyAgentStatus can synchronously
+      // re-enter the queue via subscribers, and it must not see this batch.
+      const batch = liveAgentStatusBurstQueue.splice(0)
+      let anyApplied = false
+      for (const data of batch) {
+        if (applyAgentStatus(data) === 'applied') {
+          anyApplied = true
+        }
+      }
+      if (!anyApplied) {
+        lastLiveAgentStatusApplyAt = 0
+      }
+    }
+
+    function drainQueuedLiveAgentStatusesForPane(paneKey: string): void {
+      const queuedForPane: AgentStatusIpcPayload[] = []
+      const remaining: AgentStatusIpcPayload[] = []
+      for (const queued of liveAgentStatusBurstQueue) {
+        if (queued.paneKey === paneKey) {
+          queuedForPane.push(queued)
+        } else {
+          remaining.push(queued)
+        }
+      }
+      liveAgentStatusBurstQueue.length = 0
+      liveAgentStatusBurstQueue.push(...remaining)
+      for (const queued of queuedForPane) {
+        applyAgentStatus(queued)
+      }
+    }
+
+    function enqueueLiveAgentStatus(data: AgentStatusIpcPayload): void {
+      const now = Date.now()
+      if (
+        liveAgentStatusBurstTimer === null &&
+        now - lastLiveAgentStatusApplyAt >= LIVE_AGENT_STATUS_BURST_WINDOW_MS
+      ) {
+        lastLiveAgentStatusApplyAt = now
+        // Why: only an applied event commits state and costs a render pass —
+        // a dropped/pending leading edge must not make its successor pay
+        // burst latency (startup replay and unmounted panes stay immediate).
+        if (applyAgentStatus(data) !== 'applied') {
+          lastLiveAgentStatusApplyAt = 0
+        }
+        return
+      }
+      liveAgentStatusBurstQueue.push(data)
+      if (liveAgentStatusBurstTimer === null) {
+        liveAgentStatusBurstTimer = globalThis.setTimeout(
+          flushLiveAgentStatusBurst,
+          LIVE_AGENT_STATUS_BURST_WINDOW_MS
+        )
+      }
+    }
+
     unsubs.push(
       window.api.agentStatus.onSet((data) => {
-        applyAgentStatus(data)
+        enqueueLiveAgentStatus(data)
       })
     )
     const unsubscribeAgentStatusClear = window.api.agentStatus.onClear?.(
@@ -3276,11 +3437,29 @@ export function useIpcEvents(): void {
               pendingAgentStatusEvents.splice(index, 1)
             }
           }
+          for (let index = liveAgentStatusBurstQueue.length - 1; index >= 0; index -= 1) {
+            const queued = liveAgentStatusBurstQueue[index]
+            if (
+              queued.connectionId === data.connectionId &&
+              queued.receivedAt <= effectiveWatermark
+            ) {
+              liveAgentStatusBurstQueue.splice(index, 1)
+            }
+          }
           useAppStore.getState().clearTransientAgentStatuses(data.connectionId, effectiveWatermark)
           return
         }
         if (!('paneKey' in data) || typeof data.paneKey !== 'string') {
           return
+        }
+        // Why: preserve set→clear FIFO so a queued completion still survives pane teardown.
+        if (liveAgentStatusBurstQueue.some((queued) => queued.paneKey === data.paneKey)) {
+          drainQueuedLiveAgentStatusesForPane(data.paneKey)
+        }
+        for (let index = pendingAgentStatusEvents.length - 1; index >= 0; index -= 1) {
+          if (pendingAgentStatusEvents[index].data.paneKey === data.paneKey) {
+            pendingAgentStatusEvents.splice(index, 1)
+          }
         }
         const store = useAppStore.getState()
         if (store.agentStatusByPaneKey[data.paneKey]?.state === 'done') {
@@ -3313,16 +3492,29 @@ export function useIpcEvents(): void {
     if (unsubscribeMigrationUnsupportedClear) {
       unsubs.push(unsubscribeMigrationUnsupportedClear)
     }
+    const unsubscribeLegacyWorkerTerminalRecovery =
+      window.api.agentStatus.onLegacyWorkerTerminalRecovery?.((event) => {
+        const action = resolveLegacyWorkerTerminalRecoveryAction(event)
+        if (action.kind === 'rollback-surface') {
+          window.dispatchEvent(
+            new CustomEvent(CLOSE_TERMINAL_PANE_EVENT, { detail: action.detail })
+          )
+          rollbackLegacyWorkerTerminalSurfaceInStore(useAppStore.getState(), action.detail)
+        } else if (action.kind === 'clear-sleeping') {
+          useAppStore.getState().clearSleepingAgentSession(action.paneKey)
+        }
+      })
+    if (unsubscribeLegacyWorkerTerminalRecovery) {
+      unsubs.push(unsubscribeLegacyWorkerTerminalRecovery)
+    }
 
     // Why: main hook server is the durable source of truth; pull the snapshot only after tabs are ready so early startup pushes can be ignored, not buffered.
     requestAgentStatusSnapshotIfReady()
-    unsubs.push(
-      useAppStore.subscribe((state, previousState) => {
-        requestAgentStatusSnapshotIfReady()
-        flushPendingAgentStatuses()
-        syncAgentHookCompletionNotificationsForStoreUpdate(state, previousState)
-      })
-    )
+    const unsubscribeAgentStatusStore = useAppStore.subscribe((state, previousState) => {
+      requestAgentStatusSnapshotIfReady()
+      flushPendingAgentStatuses()
+      syncAgentHookCompletionNotificationsForStoreUpdate(state, previousState)
+    })
 
     let mobileStateHydrated = isRuntimeEnvironmentActive()
     type PendingMobileStateEvent =
@@ -3400,6 +3592,18 @@ export function useIpcEvents(): void {
       })
     )
 
+    const unsubscribeLaunchDraftResolution = window.api.runtime.onNativeChatLaunchDraftResolved?.(
+      (event) => {
+        applyNativeChatLaunchDraftResolved(useAppStore.getState(), {
+          type: 'nativeChatLaunchDraftResolved',
+          ...event
+        })
+      }
+    )
+    if (unsubscribeLaunchDraftResolution) {
+      unsubs.push(unsubscribeLaunchDraftResolution)
+    }
+
     unsubs.push(
       window.api.runtime.onBrowserDriverChanged((event) => {
         if (isRuntimeEnvironmentActive()) {
@@ -3448,9 +3652,26 @@ export function useIpcEvents(): void {
         globalThis.clearTimeout(pendingAgentStatusRetryTimer)
       }
       pendingAgentStatusEvents.length = 0
+      if (liveAgentStatusBurstTimer !== null) {
+        globalThis.clearTimeout(liveAgentStatusBurstTimer)
+        liveAgentStatusBurstTimer = null
+      }
+      liveAgentStatusBurstQueue.length = 0
       mobileStateHydrationDisposed = true
       pendingMobileStateEvents.length = 0
+      unsubscribeRuntimeEnvironmentStore()
+      unsubscribeAgentStatusStore()
       unsubs.forEach((fn) => fn())
+      directSshEffectStopped = true
+      for (const deadline of authorityReconciliationDeadlines) {
+        clearTimeout(deadline.timer)
+        deadline.settle()
+      }
+      authorityReconciliationDeadlines.clear()
+      remoteWorkspaceTargetSync?.stop()
+      hostHydration.stop()
+      reconnectCoordinator.stop()
+      reconnectAuthorityByTarget.clear()
       resetAgentHookCompletionNotificationCoordinators()
     }
   }, [])

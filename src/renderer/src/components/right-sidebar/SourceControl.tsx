@@ -111,8 +111,9 @@ import { useSourceControlSubmoduleStatus } from './useSourceControlSubmoduleStat
 import {
   buildSourceControlDisplaySections,
   getSourceControlSectionViewAction,
-  resolveSourceControlGroupOrder,
+  mergeUntrackedIntoChanges,
   SOURCE_CONTROL_AREAS,
+  SOURCE_CONTROL_GROUP_ORDER,
   type SourceControlDisplaySectionId,
   type SourceControlEntryGroups,
   type SourceControlSectionArea
@@ -124,8 +125,8 @@ import {
   buildActiveOpenRowKeys
 } from './source-control-active-open-file-keys'
 import {
+  filterAndSortSourceControlPathEntries,
   filterSourceControlGroupedPathEntries,
-  filterSourceControlPathEntries,
   getSourceControlFileFilterState
 } from './source-control-file-filter'
 import { getCommitMessageTextareaRows } from './source-control-commit-message-rows'
@@ -149,7 +150,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { BaseRefPicker } from '@/components/settings/BaseRefPicker'
-import { useConfirmationDialog } from '@/components/confirmation-dialog'
+import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { formatDiffComment, formatDiffComments } from '@/lib/diff-comments-format'
 import { getDiffCommentLineLabel, getDiffCommentSource } from '@/lib/diff-comment-compat'
 import { DiffNotesSendMenu } from '@/components/editor/DiffNotesSendMenu'
@@ -264,12 +265,16 @@ import {
   getCreatePrIntentCommitFailureNoticeMessage,
   getCreatePrIntentStagePaths,
   resolveCreatePrIntentReviewBase,
+  resolveCreatePrIntentGeneratedReviewFields,
   resolveCreatePrIntentRemoteStep,
+  shouldAttemptCreateHostedReviewForIntent,
+  shouldGenerateHostedReviewDetailsForIntent,
   type CreatePrIntentRunToken
 } from './source-control-create-pr-intent-flow'
 import { resolveVisibleCreatePrHeaderAction } from './source-control-create-pr-intent-state'
 import { resolveBlockedCreateReviewNoticeMessage } from './source-control-create-review-blocked-action'
 import {
+  buildCreatePrIntentUnavailableEligibility,
   buildLoadingHostedReviewCreationEligibility,
   buildLocalBlockerHostedReviewCreationEligibility,
   resolveHostedReviewCreationProviderForTarget
@@ -292,6 +297,7 @@ import {
 } from './source-control-hosted-review-push-target'
 import { buildSourceControlManualReviewUrlFromContext } from './source-control-manual-review-url'
 import { parseRemoteRepo } from './source-control-remote-repo'
+import { setBranchLineTotalMergeBase } from './branch-line-total-request-gate'
 export { HostedReviewHeaderLink } from './hosted-review-header-chrome'
 import {
   createRunningCommitMessageGenerationRecord,
@@ -639,6 +645,11 @@ type SourceControlDirectoryActionPaths = {
   stagePaths: string[]
   unstagePaths: string[]
   discardPaths: string[]
+  discardHasUntracked: boolean
+}
+
+function discardAllAreaFilter(area: DiscardAllArea): DiscardAllArea | readonly DiscardAllArea[] {
+  return area === 'unstaged' ? (['unstaged', 'untracked'] as const) : area
 }
 
 function getSourceControlDirectoryActionPaths(
@@ -650,8 +661,9 @@ function getSourceControlDirectoryActionPaths(
     unstagePaths: getUnstageAllPaths(entries),
     discardPaths:
       node.area === 'unstaged' || node.area === 'untracked'
-        ? getDiscardAllPaths(entries, node.area)
-        : []
+        ? getDiscardAllPaths(entries, discardAllAreaFilter(node.area))
+        : [],
+    discardHasUntracked: entries.some((entry) => entry.area === 'untracked')
   }
 }
 
@@ -831,6 +843,15 @@ function SourceControlInner(): React.JSX.Element {
   const branchSummary = useAppStore((s) =>
     activeWorktreeId ? (s.gitBranchCompareSummaryByWorktree[activeWorktreeId] ?? null) : null
   )
+  const publishedBranchLineTotal = useAppStore((s) =>
+    activeWorktreeId ? (s.gitBranchLineTotalByWorktree?.[activeWorktreeId] ?? null) : null
+  )
+  // Why: status and branch compare refresh on different cadences, so a total can
+  // outlive the fork point it measured. Drop it rather than render a stale number.
+  const branchLineTotal =
+    publishedBranchLineTotal && publishedBranchLineTotal.mergeBase === branchSummary?.mergeBase
+      ? publishedBranchLineTotal
+      : null
   const conflictOperation = useAppStore((s) =>
     activeWorktreeId ? (s.gitConflictOperationByWorktree[activeWorktreeId] ?? 'unknown') : 'unknown'
   )
@@ -1046,7 +1067,6 @@ function SourceControlInner(): React.JSX.Element {
     settings?.sourceControlViewMode
   )
   const sourceControlViewMode = persistedSourceControlViewMode
-  const sourceControlGroupOrder = resolveSourceControlGroupOrder(settings?.sourceControlGroupOrder)
   const [collapsedTreeDirs, setCollapsedTreeDirs] = useState<Set<string>>(new Set())
   const [baseRefDialogOpen, setBaseRefDialogOpen] = useState(false)
   const [pendingDiscard, setPendingDiscard] = useState<PendingDiscardConfirmation | null>(null)
@@ -1247,6 +1267,22 @@ function SourceControlInner(): React.JSX.Element {
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   // Why: the sidebar stays mounted when closed, so gate polling on tab AND open or branchCompare/PR fetch would run with no visible consumer.
   const isBranchVisible = rightSidebarTab === 'source-control' && rightSidebarOpen
+
+  // Why: the merge base IS the request gate — no OID on the status request means
+  // the host runs no ranged diff, so a hidden chip costs a background worktree nothing.
+  const requestedBranchLineTotalMergeBase =
+    isBranchVisible && !isFolder && branchSummary?.status === 'ready'
+      ? branchSummary.mergeBase
+      : null
+  useEffect(() => {
+    if (!activeWorktreeId) {
+      return
+    }
+    setBranchLineTotalMergeBase(activeWorktreeId, requestedBranchLineTotalMergeBase)
+    return () => {
+      setBranchLineTotalMergeBase(activeWorktreeId, null)
+    }
+  }, [activeWorktreeId, requestedBranchLineTotalMergeBase])
 
   const refreshActiveGitStatus = useCallback(
     async (signal?: AbortSignal): Promise<void> => {
@@ -1580,6 +1616,7 @@ function SourceControlInner(): React.JSX.Element {
     resolveHostedReviewCreationProviderForTarget(
       hostedReviewCreationProviderHintRef.current,
       { repoId: activeRepoId, worktreeId: activeWorktreeId ?? null, branch: branchName },
+      // Why: provisional already infers the remote host and defaults to github; never fall back to unsupported mid-load.
       provisionalHostedReviewProvider
     )
   )
@@ -1717,7 +1754,10 @@ function SourceControlInner(): React.JSX.Element {
       linkedBitbucketPR,
       linkedAzureDevOpsPR,
       linkedGiteaPR,
-      staleWhileRevalidate: true
+      staleWhileRevalidate: true,
+      // Why: scoped to the active worktree, so it earns the host's fast
+      // re-check tier instead of the O(N) card pacing (#11532).
+      active: true
     })
     // Why: keep the GitHub cache refresh behind the coordinator so Source Control doesn't bypass pacing.
     enqueueGitHubPRRefresh(activeWorktreeId, 'swr', 30)
@@ -1762,13 +1802,19 @@ function SourceControlInner(): React.JSX.Element {
     [fileFilterState, grouped]
   )
 
+  const mergedGrouped = useMemo(() => mergeUntrackedIntoChanges(grouped), [grouped])
+  const mergedFilteredGrouped = useMemo(
+    () => mergeUntrackedIntoChanges(filteredGrouped),
+    [filteredGrouped]
+  )
+
   const displaySections = useMemo(
-    () => buildSourceControlDisplaySections(filteredGrouped, sourceControlGroupOrder),
-    [filteredGrouped, sourceControlGroupOrder]
+    () => buildSourceControlDisplaySections(mergedFilteredGrouped, SOURCE_CONTROL_GROUP_ORDER),
+    [mergedFilteredGrouped]
   )
   const unfilteredDisplaySections = useMemo(
-    () => buildSourceControlDisplaySections(grouped, sourceControlGroupOrder),
-    [grouped, sourceControlGroupOrder]
+    () => buildSourceControlDisplaySections(mergedGrouped, SOURCE_CONTROL_GROUP_ORDER),
+    [mergedGrouped]
   )
   const unfilteredDisplaySectionsById = useMemo(
     () => new Map(unfilteredDisplaySections.map((section) => [section.id, section])),
@@ -1776,7 +1822,7 @@ function SourceControlInner(): React.JSX.Element {
   )
 
   const filteredBranchEntries = useMemo(
-    () => filterSourceControlPathEntries(branchEntries, fileFilterState),
+    () => filterAndSortSourceControlPathEntries(branchEntries, fileFilterState),
     [branchEntries, fileFilterState]
   )
 
@@ -3409,7 +3455,7 @@ function SourceControlInner(): React.JSX.Element {
       token: CreatePrIntentRunToken,
       eligibility: HostedReviewCreationEligibility
     ): Promise<boolean> => {
-      if (!activeRepo || !token.branch || !eligibility.canCreate) {
+      if (!activeRepo || !token.branch || !shouldAttemptCreateHostedReviewForIntent(eligibility)) {
         return false
       }
 
@@ -3441,6 +3487,7 @@ function SourceControlInner(): React.JSX.Element {
       }
 
       if (
+        shouldGenerateHostedReviewDetailsForIntent(eligibility) &&
         hasConfiguredSourceControlTextGenerationDefaults({
           actionId: 'pullRequest',
           settings,
@@ -3471,17 +3518,33 @@ function SourceControlInner(): React.JSX.Element {
             })
             return false
           }
-          if (generated.success) {
-            fields = {
-              // Why: intent auto-submits, so generated details must not retarget the review without confirmation.
-              base: fields.base,
-              title: generated.fields.title.trim() || fields.title,
-              body: generated.fields.body,
-              draft: generated.fields.draft
-            }
+          const resolved = resolveCreatePrIntentGeneratedReviewFields(fields, generated)
+          if (!resolved.ok) {
+            setCreatePrIntentNoticeForWorktree(token.worktreeId, {
+              tone: 'destructive',
+              message:
+                resolved.error ??
+                translate(
+                  'auto.components.right.sidebar.SourceControl.createPrIntentEmptyGeneratedBody',
+                  'Generated review details did not include a description. Retry Create PR.'
+                )
+            })
+            return false
           }
+          fields = resolved.fields
         } catch (error) {
           console.warn('[SourceControl] Create PR intent detail generation failed', error)
+          setCreatePrIntentNoticeForWorktree(token.worktreeId, {
+            tone: 'destructive',
+            message:
+              error instanceof Error
+                ? error.message
+                : translate(
+                    'auto.components.right.sidebar.SourceControl.createPrIntentGenerateDetailsFailed',
+                    'Could not generate review details. Retry Create PR.'
+                  )
+          })
+          return false
         }
       }
 
@@ -3651,23 +3714,43 @@ function SourceControlInner(): React.JSX.Element {
       if (!activeRepo || !token.branch) {
         return null
       }
-      const result = await getHostedReviewCreationEligibility({
-        repoPath: activeRepo.path,
-        repoId: activeRepo.id,
-        worktreePath: token.worktreePath,
-        branch: token.branch,
-        base: token.baseRef ?? null,
-        hasUncommittedChanges,
-        hasUpstream: upstreamStatus?.hasUpstream,
-        ahead: upstreamStatus?.ahead,
-        behind: upstreamStatus?.behind,
-        linkedGitHubPR,
-        fallbackGitHubPR: fallbackGitHubPRNumber,
-        linkedGitLabMR,
-        linkedBitbucketPR,
-        linkedAzureDevOpsPR,
-        linkedGiteaPR
-      })
+      let result: HostedReviewCreationEligibility
+      try {
+        result = await getHostedReviewCreationEligibility({
+          repoPath: activeRepo.path,
+          repoId: activeRepo.id,
+          worktreePath: token.worktreePath,
+          branch: token.branch,
+          base: token.baseRef ?? null,
+          hasUncommittedChanges,
+          hasUpstream: upstreamStatus?.hasUpstream,
+          ahead: upstreamStatus?.ahead,
+          behind: upstreamStatus?.behind,
+          linkedGitHubPR,
+          fallbackGitHubPR: fallbackGitHubPRNumber,
+          linkedGitLabMR,
+          linkedBitbucketPR,
+          linkedAzureDevOpsPR,
+          linkedGiteaPR
+        })
+      } catch (error) {
+        console.warn('[SourceControl] Create PR intent eligibility failed', error)
+        // Why: when local status still yields a prep step (dirty/push/sync), keep the intent
+        // moving. If nothing actionable can be synthesized, rethrow so the outer intent
+        // catch surfaces a retry notice instead of leaving "Preparing…" stuck forever.
+        const fallback = buildCreatePrIntentUnavailableEligibility(token.provider, {
+          branch: token.branch,
+          baseRef: token.baseRef,
+          hasUncommittedChanges,
+          hasUpstream: upstreamStatus?.hasUpstream,
+          ahead: upstreamStatus?.ahead,
+          behind: upstreamStatus?.behind
+        })
+        if (!fallback) {
+          throw error
+        }
+        result = fallback
+      }
       setHostedReviewCreationState({
         repoId: activeRepo.id,
         worktreeId: token.worktreeId,
@@ -3739,6 +3822,9 @@ function SourceControlInner(): React.JSX.Element {
       worktreeId: activeWorktreeId,
       worktreePath,
       branch: branchName,
+      // Why: token carries the same provisional provider used for UI copy so a failed
+      // eligibility IPC can synthesize local prep steps for the correct host.
+      provider: provisionalHostedReviewProvider,
       // Why: intent crosses async commit/push steps, so the base stays tied to what was selected when the run started.
       baseRef: effectiveBaseRef ?? null
     })
@@ -3939,19 +4025,25 @@ function SourceControlInner(): React.JSX.Element {
         }
       }
 
-      const branchAhead = await refreshBranchCompareForCreatePrIntent(token)
-      if (abortIfStale()) {
-        return
-      }
       let eligibility = await readHostedReviewCreationEligibilityForIntent({
         token,
         hasUncommittedChanges: latestStatusEntries.length > 0,
         upstreamStatus: latestUpstreamStatus
       })
-      if (abortIfStale() || !eligibility) {
+      if (abortIfStale()) {
         return
       }
-      if (eligibility.canCreate) {
+      if (!eligibility) {
+        setCreatePrIntentNoticeForWorktree(token.worktreeId, {
+          tone: 'destructive',
+          message: translate(
+            'auto.components.right.sidebar.SourceControl.d7492cafce',
+            'Could not refresh Source Control. Retry Create PR.'
+          )
+        })
+        return
+      }
+      if (shouldAttemptCreateHostedReviewForIntent(eligibility)) {
         await createHostedReviewForCreatePrIntent(token, eligibility)
         if (abortIfStale()) {
           return
@@ -3963,6 +4055,13 @@ function SourceControlInner(): React.JSX.Element {
         return
       }
 
+      const branchAhead =
+        eligibility.blockedReason === 'no_upstream'
+          ? await refreshBranchCompareForCreatePrIntent(token)
+          : undefined
+      if (abortIfStale()) {
+        return
+      }
       const remoteStep = resolveCreatePrIntentRemoteStep({
         upstreamStatus: latestUpstreamStatus,
         hostedReviewCreation: eligibility,
@@ -4047,19 +4146,23 @@ function SourceControlInner(): React.JSX.Element {
       if (abortIfStale()) {
         return
       }
-      if (eligibility?.canCreate) {
+      if (eligibility && shouldAttemptCreateHostedReviewForIntent(eligibility)) {
         await createHostedReviewForCreatePrIntent(token, eligibility)
         if (abortIfStale()) {
           return
         }
         return
       }
+      // Why: prefer the blocked-reason notice (incl. unavailable lookup) over a generic stop.
+      const blockedNotice = resolveBlockedCreateReviewNoticeMessage(eligibility)
       setCreatePrIntentNoticeForWorktree(token.worktreeId, {
-        tone: 'muted',
-        message: translate(
-          'auto.components.right.sidebar.SourceControl.995c5e67ec',
-          'Review setup needs attention.'
-        )
+        tone: blockedNotice ? 'destructive' : 'muted',
+        message:
+          blockedNotice ??
+          translate(
+            'auto.components.right.sidebar.SourceControl.995c5e67ec',
+            'Review setup needs attention.'
+          )
       })
     } catch (error) {
       console.warn('[SourceControl] Create PR intent failed', error)
@@ -4106,6 +4209,7 @@ function SourceControlInner(): React.JSX.Element {
     readHostedReviewCreationEligibilityForIntent,
     refreshGitStatusForCreatePrIntent,
     refreshBranchCompareForCreatePrIntent,
+    provisionalHostedReviewProvider,
     remoteStatus,
     runRemoteAction,
     setCreatePrIntentNoticeForWorktree,
@@ -5308,7 +5412,9 @@ function SourceControlInner(): React.JSX.Element {
       if (!worktreePath || !activeWorktreeId || isExecutingBulk) {
         return
       }
-      const paths = confirmedPaths ? [...confirmedPaths] : getDiscardAllPaths(grouped[area], area)
+      const paths = confirmedPaths
+        ? [...confirmedPaths]
+        : getDiscardAllPaths(mergedGrouped[area], discardAllAreaFilter(area))
       if (paths.length === 0) {
         return
       }
@@ -5380,7 +5486,7 @@ function SourceControlInner(): React.JSX.Element {
       activeRepoSettings,
       worktreePath,
       activeWorktreeId,
-      grouped,
+      mergedGrouped,
       isExecutingBulk,
       clearSelection,
       discardMany,
@@ -5394,13 +5500,21 @@ function SourceControlInner(): React.JSX.Element {
       if (!worktreePath || !activeWorktreeId || isExecutingBulk) {
         return
       }
-      const paths = confirmedPaths ? [...confirmedPaths] : getDiscardAllPaths(grouped[area], area)
+      const paths = confirmedPaths
+        ? [...confirmedPaths]
+        : getDiscardAllPaths(mergedGrouped[area], discardAllAreaFilter(area))
       if (paths.length === 0) {
         return
       }
-      setPendingDiscard({ kind: 'area', area, paths })
+      setPendingDiscard({
+        kind: 'area',
+        area,
+        paths,
+        hasUntracked:
+          area === 'unstaged' && mergedGrouped.unstaged.some((entry) => entry.area === 'untracked')
+      })
     },
-    [activeWorktreeId, grouped, isExecutingBulk, worktreePath]
+    [activeWorktreeId, isExecutingBulk, mergedGrouped, worktreePath]
   )
 
   const requestDiscardEntry = useCallback(
@@ -5483,6 +5597,7 @@ function SourceControlInner(): React.JSX.Element {
           diffCommentCount={diffCommentCount}
           onExpandNotes={() => setDiffCommentsExpanded(true)}
           branchSummary={branchSummary}
+          branchLineTotal={branchLineTotal}
           compareBaseRef={compareBaseRef}
           headDisplay={gitIdentityDisplay}
           upstreamStatus={remoteStatus}
@@ -5821,7 +5936,8 @@ function SourceControlInner(): React.JSX.Element {
                   .filter(isStageableStatusEntry)
                   .map((entry) => entry.path)
                 const unstageAllPaths = getUnstageAllPaths(actionItems)
-                const discardAllPaths = getDiscardAllPaths(actionItems, area)
+                const discardAllPaths = getDiscardAllPaths(actionItems, discardAllAreaFilter(area))
+                const discardHasUntracked = actionItems.some((entry) => entry.area === 'untracked')
                 const canStageAll = !normalizedFilter && stageAllPaths.length > 0
                 const canUnstageAll = !normalizedFilter && unstageAllPaths.length > 0
                 const canRevertAll = !normalizedFilter && discardAllPaths.length > 0
@@ -5844,7 +5960,7 @@ function SourceControlInner(): React.JSX.Element {
                           <div className="flex items-center can-hover:opacity-0 transition-opacity group-hover/section:opacity-100 focus-within:opacity-100">
                             {canRevertAll && (
                               <ActionButton
-                                icon={area === 'untracked' ? Trash : Undo2}
+                                icon={discardHasUntracked ? Trash : Undo2}
                                 // Why: for untracked files, discard deletes outright (rm -rf), so label the destructive variant explicitly.
                                 title={
                                   area === 'untracked'
@@ -5852,10 +5968,15 @@ function SourceControlInner(): React.JSX.Element {
                                         'auto.components.right.sidebar.SourceControl.2f609a2e7c',
                                         'Delete all untracked'
                                       )
-                                    : translate(
-                                        'auto.components.right.sidebar.SourceControl.ce41708855',
-                                        'Discard all'
-                                      )
+                                    : discardHasUntracked
+                                      ? translate(
+                                          'auto.components.right.sidebar.SourceControl.discardAllMixedUntracked',
+                                          'Discard changes and delete untracked files'
+                                        )
+                                      : translate(
+                                          'auto.components.right.sidebar.SourceControl.ce41708855',
+                                          'Discard all'
+                                        )
                                 }
                                 onClick={(event) => {
                                   event.stopPropagation()
@@ -5962,11 +6083,12 @@ function SourceControlInner(): React.JSX.Element {
                                   isExecutingBulk={isExecutingBulk}
                                   isCollapsed={collapsedTreeDirs.has(node.key)}
                                   onToggle={() => toggleTreeDir(node.key)}
-                                  onRequestDiscardPaths={(discardArea, paths) =>
+                                  onRequestDiscardPaths={(discardArea, paths, hasUntracked) =>
                                     setPendingDiscard({
                                       kind: 'area',
                                       area: discardArea,
-                                      paths
+                                      paths,
+                                      hasUntracked
                                     })
                                   }
                                   onStagePaths={handleStageAllPaths}
@@ -7605,7 +7727,11 @@ function SourceControlTreeDirectoryRow({
   isExecutingBulk: boolean
   isCollapsed: boolean
   onToggle: () => void
-  onRequestDiscardPaths: (area: DiscardAllArea, paths: readonly string[]) => void
+  onRequestDiscardPaths: (
+    area: DiscardAllArea,
+    paths: readonly string[],
+    hasUntracked: boolean
+  ) => void
   onStagePaths: (paths: readonly string[]) => Promise<void>
   onUnstagePaths: (paths: readonly string[]) => Promise<void>
 }): React.JSX.Element {
@@ -7644,21 +7770,30 @@ function SourceControlTreeDirectoryRow({
         <div className={SOURCE_CONTROL_ROW_ACTION_OVERLAY_CLASS}>
           {canDiscard && (
             <ActionButton
-              icon={node.area === 'untracked' ? Trash : Undo2}
+              icon={actionPaths.discardHasUntracked ? Trash : Undo2}
               title={
                 node.area === 'untracked'
                   ? translate(
                       'auto.components.right.sidebar.SourceControl.9b367363b6',
                       'Delete untracked in folder'
                     )
-                  : translate(
-                      'auto.components.right.sidebar.SourceControl.6d7f2a47e5',
-                      'Discard folder'
-                    )
+                  : actionPaths.discardHasUntracked
+                    ? translate(
+                        'auto.components.right.sidebar.SourceControl.discardFolderMixedUntracked',
+                        'Discard changes and delete untracked files in folder'
+                      )
+                    : translate(
+                        'auto.components.right.sidebar.SourceControl.6d7f2a47e5',
+                        'Discard folder'
+                      )
               }
               onClick={(event) => {
                 event.stopPropagation()
-                onRequestDiscardPaths(node.area, actionPaths.discardPaths)
+                onRequestDiscardPaths(
+                  node.area,
+                  actionPaths.discardPaths,
+                  actionPaths.discardHasUntracked
+                )
               }}
               disabled={isExecutingBulk}
             />

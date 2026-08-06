@@ -1,5 +1,5 @@
 import type { RuntimeClient } from './runtime-client'
-import { RuntimeClientError } from './runtime-client'
+import { RuntimeClientError } from './runtime/types'
 import { HANDLER_GROUPS, type HandlerGroup } from './handler-group-manifest'
 
 export type HandlerContext = {

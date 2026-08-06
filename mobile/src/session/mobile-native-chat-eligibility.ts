@@ -25,6 +25,9 @@ export type MobileNativeChatTab = {
   type: string
   launchAgent?: string | null
   agentStatus?: AgentStatusEntry | null
+  /** Host-provided launch context still parked as an unsent TUI-input draft. */
+  launchDraft?: string
+  launchDraftCreatedAt?: number
 }
 
 /** Resolve a session tab to the transcript identity native chat needs, or

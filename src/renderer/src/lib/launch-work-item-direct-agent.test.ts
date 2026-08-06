@@ -36,4 +36,26 @@ describe('buildDirectWorkItemStartupOpts', () => {
       }
     })
   })
+
+  it('carries launchDraftText for a natively-prefilled draft launch', () => {
+    // Why: the draft is already inside launchCommand, so draftPrompt stays unset
+    // and launchDraftText is the only signal the view-mode gate can read.
+    const plan: AgentStartupPlan = {
+      agent: 'claude',
+      launchCommand: "claude --prefill 'https://github.com/o/r/issues/12'",
+      expectedProcess: 'claude',
+      followupPrompt: null,
+      launchConfig: { agentArgs: '', agentEnv: {} }
+    }
+
+    const opts = buildDirectWorkItemStartupOpts(
+      'claude',
+      plan,
+      'task_page',
+      'https://github.com/o/r/issues/12'
+    )
+
+    expect(opts.startup?.draftPrompt).toBeUndefined()
+    expect(opts.startup?.launchDraftText).toBe('https://github.com/o/r/issues/12')
+  })
 })

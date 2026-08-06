@@ -21,13 +21,13 @@ import {
 } from 'lucide-react'
 import CacheTimer, { usePromptCacheCountdownStartedAt } from './CacheTimer'
 import WorktreeContextMenu from './WorktreeContextMenu'
-import { SshDisconnectedDialog } from './SshDisconnectedDialog'
 import { AutoRenameFailedDialog } from './AutoRenameFailedDialog'
 import { LinearAgentSkillSetupPrompt } from './LinearAgentSkillSetupPrompt'
 import WorktreeCardAgents from './WorktreeCardAgents'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
 import { WorktreeCardStatusSlot } from './WorktreeCardStatusSlot'
 import { cn } from '@/lib/utils'
+import { WorktreeCardSshHostControl } from './WorktreeCardSshHostControl'
 import { activateWorktreeFromSidebar } from '@/lib/sidebar-worktree-activation'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
@@ -47,6 +47,7 @@ import {
   WorktreeCardMetaBadges,
   type WorktreeCardIssueDisplay
 } from './WorktreeCardMeta'
+import { getWorktreeCardJiraIssueDisplay } from './worktree-card-jira-issue-display'
 import { WorktreeCardPortsDetails, WorktreeCardPortsTrigger } from './WorktreeCardPorts'
 import { writeWorkspaceDragData } from './workspace-status'
 import {
@@ -83,6 +84,7 @@ import { translate } from '@/i18n/i18n'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-diagnostics'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
+  getRepoExecutionHostId,
   isRuntimeOwnedSshTargetId,
   parseExecutionHostId,
   toRuntimeExecutionHostId
@@ -92,7 +94,8 @@ import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../shared/constant
 import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import {
   selectRuntimeAwareSshStatus,
-  selectRuntimeAwareSshTargetLabel
+  selectRuntimeAwareSshTargetLabel,
+  selectRuntimeAwareSshTargetRemoved
 } from '@/store/slices/runtime-environment-ssh'
 import { hydrateRuntimeEnvironmentSshState } from '@/runtime/runtime-environment-ssh-state'
 
@@ -262,6 +265,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
       e.stopPropagation()
       openModal('edit-meta', {
         worktreeId: worktree.id,
+        // Why: the same workspace ID can exist under two hosts. Naming the owner
+        // keeps the dialog on the clicked row instead of the ambiguous lookup.
+        repoId: worktree.repoId,
         currentDisplayName: worktree.displayName,
         currentIssue: worktree.linkedIssue,
         currentPR: worktree.linkedPR,
@@ -277,6 +283,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
       e.stopPropagation()
       openModal('edit-meta', {
         worktreeId: worktree.id,
+        repoId: worktree.repoId,
         currentDisplayName: worktree.displayName,
         currentIssue: worktree.linkedIssue,
         currentPR: worktree.linkedPR,
@@ -360,9 +367,13 @@ const WorktreeCard = React.memo(function WorktreeCard({
     }
   }, [sshOwnerEnvironmentId])
   const isSshDisconnected = sshStatus != null && sshStatus !== 'connected'
-  // Why: terminal views have their own reconnect overlay; reserve the blocking dialog for non-terminal views (default to terminal when ambiguous).
-  const activeViewIsTerminal = useAppStore(
-    (s) => (s.activeTabTypeByWorktree?.[worktree.id] ?? 'terminal') === 'terminal'
+  // Why: only reported on positive evidence, so a removed host never offers a Connect that can
+  // only fail. Runtime-owned targets are excluded for the same reason sshStatus excludes them —
+  // ssh:listTargets filters them out, so "absent from the target list" is not evidence of removal.
+  const sshTargetRemoved = useAppStore((s) =>
+    repo?.connectionId && !isRuntimeOwnedSshTargetId(repo.connectionId)
+      ? selectRuntimeAwareSshTargetRemoved(s, sshOwnerEnvironmentId, repo.connectionId)
+      : false
   )
 
   const parsedRepoHost = parseExecutionHostId(repo?.executionHostId)
@@ -388,8 +399,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
     }
     return !s.runtimeStatusByEnvironmentId.get(runtimeOwnerEnvironmentId)?.status
   })
-  // Why: the reconnect dialog blocks, so it never auto-shows for the active card (would steal app-wide focus); opens only on deliberate focus (handleClick).
-  const [showDisconnectedDialog, setShowDisconnectedDialog] = useState(false)
   const [titleRenaming, setTitleRenaming] = useState(false)
   const [showRenameErrorDialog, setShowRenameErrorDialog] = useState(false)
   // Why: read the target label from its owning host's store instead of exposing HUB-private SSH metadata as client-local state.
@@ -618,10 +627,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
           url: linearIssueUrlFallback
         }
     : null
+  const jiraIssueDisplay = getWorktreeCardJiraIssueDisplay(worktree)
   const cardTitleDisplay = getWorktreeCardTitleDisplay({
     storedDisplayName: worktree.displayName,
     branchName: branch,
     linearIssueTitle: linearIssueDisplay?.title,
+    jiraIssueTitle: jiraIssueDisplay?.title,
     issueTitle: issueDisplay?.title,
     reviewTitle: prDisplay?.title
   })
@@ -637,6 +648,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const showStatus = cardProps.includes('status')
   const showIssue = cardProps.includes('issue')
   const showLinearIssue = cardProps.includes('linear-issue')
+  const showJiraIssue = cardProps.includes('jira-issue')
   const showPR = cardProps.includes('pr')
   const showAutomation = cardProps.includes('automation')
   const showCli = cardProps.includes('cli')
@@ -868,22 +880,22 @@ const WorktreeCard = React.memo(function WorktreeCard({
         sshDisconnected: isSshDisconnected
       })
       onImmediateActivate?.(worktree.id, activationRowKey)
-      void activateWorktreeFromSidebar(worktree.id)
-      // Why: a deliberate card click warrants the blocking reconnect prompt; skip it when a terminal already shows the overlay.
-      if (isSshDisconnected && !activeViewIsTerminal) {
-        setShowDisconnectedDialog(true)
-      }
+      void activateWorktreeFromSidebar(
+        worktree.id,
+        worktree.hostId ?? (repo ? getRepoExecutionHostId(repo) : undefined)
+      )
       onActivate?.()
     },
     [
       affiliateListMode,
       worktree.id,
       worktree.repoId,
+      worktree.hostId,
+      repo,
       isActive,
       isDeleting,
       activationRowKey,
       isSshDisconnected,
-      activeViewIsTerminal,
       onActivate,
       onImmediateActivate,
       onSelectionGesture
@@ -891,7 +903,11 @@ const WorktreeCard = React.memo(function WorktreeCard({
   )
 
   const handleRenameTitle = useCallback(
-    (displayName: string) => updateWorktreeMeta(worktree.id, { displayName }),
+    // Inline rename has no surface for the failure; the store already logs and
+    // refetches, which reverts the optimistic title in place.
+    async (displayName: string): Promise<void> => {
+      await updateWorktreeMeta(worktree.id, { displayName })
+    },
     [updateWorktreeMeta, worktree.id]
   )
 
@@ -905,6 +921,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
       }
       openModal('edit-meta', {
         worktreeId: worktree.id,
+        repoId: worktree.repoId,
         currentDisplayName: worktree.displayName,
         currentIssue: worktree.linkedIssue,
         currentPR: worktree.linkedPR,
@@ -918,7 +935,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
       worktree.displayName,
       worktree.id,
       worktree.linkedIssue,
-      worktree.linkedPR
+      worktree.linkedPR,
+      worktree.repoId
     ]
   )
 
@@ -1049,11 +1067,13 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const showUnreadEmphasis = showStatus && worktree.isUnread
   const hoverIssue = issueDisplay
   const hoverLinearIssue = linearIssueDisplay
+  const hoverJiraIssue = jiraIssueDisplay
   const hoverReview = prDisplay
   const statusLaneReview = statusPrDisplay ?? hoverReview
   const hoverComment = worktree.comment
   const metaIssue = showIssue ? hoverIssue : null
   const metaLinearIssue = showLinearIssue ? hoverLinearIssue : null
+  const metaJiraIssue = showJiraIssue ? hoverJiraIssue : null
   const metaReview = showPR ? hoverReview : null
   const metaAutomationProvenance = showAutomation ? worktree.automationProvenance : null
   const metaCliProvenance = showCli ? worktree.cliProvenance : null
@@ -1114,14 +1134,15 @@ const WorktreeCard = React.memo(function WorktreeCard({
     },
     [hoverReview, openTaskPage, repo]
   )
+  const hoverReviewProvider = hoverReview?.provider
   const hasExplicitLinkedReview =
-    (hoverReview?.provider === 'github' && worktree.linkedPR !== null) ||
-    (hoverReview?.provider === 'gitlab' && linkedGitLabMR !== null) ||
-    (hoverReview?.provider === 'bitbucket' && linkedBitbucketPR !== null) ||
-    (hoverReview?.provider === 'azure-devops' && linkedAzureDevOpsPR !== null) ||
-    (hoverReview?.provider === 'gitea' && linkedGiteaPR !== null)
+    (hoverReviewProvider === 'github' && worktree.linkedPR !== null) ||
+    (hoverReviewProvider === 'gitlab' && linkedGitLabMR !== null) ||
+    (hoverReviewProvider === 'bitbucket' && linkedBitbucketPR !== null) ||
+    (hoverReviewProvider === 'azure-devops' && linkedAzureDevOpsPR !== null) ||
+    (hoverReviewProvider === 'gitea' && linkedGiteaPR !== null)
   const handleUnlinkReview = useCallback(() => {
-    switch (hoverReview?.provider) {
+    switch (hoverReviewProvider) {
       case 'github':
         void updateWorktreeMeta(worktree.id, { linkedPR: null })
         return
@@ -1136,12 +1157,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
         return
       case 'gitea':
         void updateWorktreeMeta(worktree.id, { linkedGiteaPR: null })
-        return
+        break
       case 'unsupported':
       case undefined:
         break
     }
-  }, [hoverReview?.provider, updateWorktreeMeta, worktree.id])
+  }, [hoverReviewProvider, updateWorktreeMeta, worktree.id])
   const handleOpenLinearIssueInOrca = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -1155,6 +1176,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const hasDetails = hasWorktreeCardDetails({
     issue: metaIssue,
     linearIssue: metaLinearIssue,
+    jiraIssue: metaJiraIssue,
     review: newCardStyle ? null : metaReview,
     comment: metaComment,
     automationProvenance: metaAutomationProvenance,
@@ -1228,6 +1250,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
     (hasWorktreeCardDetails({
       issue: hoverIssue,
       linearIssue: hoverLinearIssue,
+      jiraIssue: hoverJiraIssue,
       review: hoverReview,
       comment: hoverComment,
       automationProvenance: metaAutomationProvenance,
@@ -1245,6 +1268,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
           <WorktreeCardDetailsHover
             issue={metaIssue}
             linearIssue={metaLinearIssue}
+            jiraIssue={metaJiraIssue}
             review={metaReview}
             comment={metaComment}
             automationProvenance={metaAutomationProvenance}
@@ -1301,6 +1325,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
           <WorktreeCardMetaBadges
             issue={metaIssue}
             linearIssue={metaLinearIssue}
+            jiraIssue={metaJiraIssue}
             review={newCardStyle ? null : metaReview}
             comment={metaComment}
             automationProvenance={metaAutomationProvenance}
@@ -1315,6 +1340,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
       <WorktreeCardDetailsHover
         issue={metaIssue}
         linearIssue={metaLinearIssue}
+        jiraIssue={metaJiraIssue}
         review={metaReview}
         comment={metaComment}
         automationProvenance={metaAutomationProvenance}
@@ -1410,28 +1436,15 @@ const WorktreeCard = React.memo(function WorktreeCard({
             )}
 
             {repo?.connectionId && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="shrink-0 inline-flex items-center">
-                    {isSshDisconnected ? (
-                      <ServerOff className="size-3 text-red-400" />
-                    ) : (
-                      <Server className="size-3 text-muted-foreground" />
-                    )}
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="right" sideOffset={8}>
-                  {isSshDisconnected
-                    ? translate(
-                        'auto.components.sidebar.WorktreeCard.021538e1d1',
-                        'SSH disconnected'
-                      )
-                    : translate(
-                        'auto.components.sidebar.WorktreeCard.ca74db7550',
-                        'Project on SSH host'
-                      )}
-                </TooltipContent>
-              </Tooltip>
+              <WorktreeCardSshHostControl
+                targetId={repo.connectionId}
+                targetLabel={sshTargetLabel || repo.displayName}
+                status={sshStatus}
+                targetRemoved={sshTargetRemoved}
+                sshOwnerEnvironmentId={sshOwnerEnvironmentId}
+                iconOnly={compactCards || newCardStyle}
+                onPointerDown={stopQuickActionPointerPropagation}
+              />
             )}
 
             {!repo?.connectionId && parsedRepoHost?.kind === 'runtime' && (
@@ -1439,7 +1452,10 @@ const WorktreeCard = React.memo(function WorktreeCard({
                 <TooltipTrigger asChild>
                   <span className="shrink-0 inline-flex items-center">
                     {isRuntimeDisconnected ? (
-                      <ServerOff className="size-3 text-red-400" />
+                      // Passive by design: runtime ("Orca server") hosts have no
+                      // renderer-reachable connect API, unlike the SSH glyph above which is
+                      // now a control. Don't "fix" the inconsistency by wiring one up.
+                      <ServerOff className="size-3 text-destructive" />
                     ) : (
                       <Server className="size-3 text-muted-foreground" />
                     )}
@@ -1809,6 +1825,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
       <WorktreeCardDetailsHover
         issue={hoverIssue}
         linearIssue={hoverLinearIssue}
+        jiraIssue={hoverJiraIssue}
         review={hoverReview}
         comment={hoverComment}
         automationProvenance={metaAutomationProvenance}
@@ -1870,7 +1887,10 @@ const WorktreeCard = React.memo(function WorktreeCard({
         ],
         titleRenaming && '!border-transparent !bg-transparent !shadow-none !ring-0',
         isDeleting && 'opacity-50 grayscale cursor-not-allowed',
-        (isSshDisconnected || isRuntimeDisconnected) && !isDeleting && 'opacity-60'
+        // Why: no SSH dim — the inline host control now states the disconnected state
+        // explicitly, and a subtree opacity would composite its destructive tint and spinner
+        // down to an illegible alpha (a descendant cannot escape an ancestor's opacity).
+        isRuntimeDisconnected && !isDeleting && 'opacity-60'
       )}
       data-worktree-card-surface="true"
       data-worktree-card-active={isActiveSurface ? activeSurfaceVariant : undefined}
@@ -1919,16 +1939,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
         >
           {cardBody}
         </WorktreeContextMenu>
-      )}
-
-      {repo?.connectionId && (
-        <SshDisconnectedDialog
-          open={showDisconnectedDialog && isSshDisconnected}
-          onOpenChange={setShowDisconnectedDialog}
-          targetId={repo.connectionId}
-          targetLabel={sshTargetLabel || repo.displayName}
-          status={sshStatus ?? 'disconnected'}
-        />
       )}
 
       {typeof worktree.firstAgentMessageRenameError === 'string' &&

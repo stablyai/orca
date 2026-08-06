@@ -77,6 +77,7 @@ describe('CombinedDiffFileTree navigation mapping', () => {
   it('expands a collapsed target section and scrolls to its index', () => {
     const entry: GitBranchChangeEntry = { path: 'src/view.ts', status: 'modified' }
     const toggleSection = vi.fn()
+    const loadSection = vi.fn()
     const scrollToIndex = vi.fn()
     const index = handleCombinedDiffFileTreeNavigation({
       mode: 'branch',
@@ -87,11 +88,13 @@ describe('CombinedDiffFileTree navigation mapping', () => {
         { key: 'combined-branch:src/view.ts' }
       ]),
       toggleSection,
+      loadSection,
       scrollToIndex
     })
 
     expect(index).toBe(1)
     expect(toggleSection).toHaveBeenCalledWith(1)
+    expect(loadSection).toHaveBeenCalledWith(1)
     expect(scrollToIndex).toHaveBeenCalledWith(1)
   })
 

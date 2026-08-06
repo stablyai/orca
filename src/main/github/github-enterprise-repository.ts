@@ -49,11 +49,6 @@ export function _resetGitHubHostAuthCache(): void {
   hostAuthInFlight.clear()
 }
 
-/** @internal - exposed for cache-bound tests only */
-export function _getGitHubHostAuthCacheSize(): number {
-  return hostAuthCache.size
-}
-
 function pruneHostAuthCache(now: number): void {
   for (const [key, entry] of hostAuthCache) {
     if (entry.expiresAt <= now) {

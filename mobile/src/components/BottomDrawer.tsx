@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { resolveBottomDrawerMounted } from './bottom-drawer-mount-state'
 import { MountedBottomDrawer } from './mounted-bottom-drawer'
 
@@ -31,6 +31,37 @@ export function BottomDrawer({
   zIndex
 }: Props) {
   const [mounted, setMounted] = useState(visible)
+  const onAfterCloseRef = useRef(onAfterClose)
+  const hiddenHandledRef = useRef(false)
+  const afterClosePendingRef = useRef(false)
+
+  useEffect(() => {
+    onAfterCloseRef.current = onAfterClose
+  }, [onAfterClose])
+
+  useEffect(() => {
+    if (visible) {
+      hiddenHandledRef.current = false
+      afterClosePendingRef.current = false
+    }
+  }, [visible])
+
+  useEffect(() => {
+    if (mounted || !afterClosePendingRef.current) {
+      return
+    }
+    afterClosePendingRef.current = false
+    onAfterCloseRef.current?.()
+  }, [mounted])
+
+  const handleHidden = useCallback(() => {
+    if (hiddenHandledRef.current) {
+      return
+    }
+    hiddenHandledRef.current = true
+    afterClosePendingRef.current = true
+    setMounted(false)
+  }, [])
   const resolvedMounted = resolveBottomDrawerMounted(visible, mounted)
 
   // Why: opening drawers should mount before commit; waiting for a passive
@@ -49,10 +80,7 @@ export function BottomDrawer({
     <MountedBottomDrawer
       visible={visible}
       onClose={onClose}
-      onHidden={() => {
-        setMounted(false)
-        onAfterClose?.()
-      }}
+      onHidden={handleHidden}
       dragContentToDismiss={dragContentToDismiss}
       contentScrollable={contentScrollable}
       fillAvailable={fillAvailable}

@@ -141,23 +141,7 @@ jobs:
           if-no-files-found: error
 
       - name: Install SignPath PowerShell module
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-          $useResourceGet = $null -ne (Get-Command -Name Install-PSResource -ErrorAction SilentlyContinue)
-          if ($useResourceGet) {
-            if ($null -eq (Get-PSResourceRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
-              Register-PSResourceRepository -PSGallery -Trusted
-            } else {
-              Set-PSResourceRepository -Name PSGallery -Trusted
-            }
-            Install-PSResource -Name SignPath -Version '[4.0.0,5.0.0)' -Repository PSGallery -Scope CurrentUser -TrustRepository -Reinstall -ErrorAction Stop
-          } else {
-            Install-Module -Name SignPath -Repository PSGallery -MinimumVersion 4.0.0 -MaximumVersion 4.999.999 -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop
-          }
-          Import-Module SignPath -ErrorAction Stop
-          Get-Command -Name Get-SignedArtifact -Module SignPath -ErrorAction Stop
+        uses: ./.github/actions/install-signpath-module
 
       - name: Submit inner binaries signing request
         id: submit-inner-signing
@@ -325,7 +309,16 @@ jobs:
 
           # Extract the signed installer and verify the files a user actually
           # gets on disk — including the exact file from issue #7785.
-          $7za = 'node_modules/7zip-bin/win/x64/7za.exe'
+          # electron-builder 26.9+ removed the bundled 7zip-bin package (#6487).
+          $7zaOutput = node config/scripts/resolve-7za-path.mjs
+          $7zaExitCode = $LASTEXITCODE
+          if ($7zaExitCode -ne 0) {
+            throw "The 7za resolver exited with code $7zaExitCode for the signing rehearsal."
+          }
+          $7za = ($7zaOutput | Out-String).Trim()
+          if ([string]::IsNullOrWhiteSpace($7za) -or -not (Test-Path -LiteralPath $7za -PathType Leaf)) {
+            throw "The 7za resolver returned an invalid path for the signing rehearsal: $7za"
+          }
           New-Item -ItemType Directory -Path extracted-app -Force | Out-Null
           & $7za x 'dist/orca-windows-setup.exe' '-oextracted-app' -y | Out-Null
 

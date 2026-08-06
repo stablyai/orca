@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { encodeNdjson, createNdjsonParser, NDJSON_MAX_LINE_BYTES } from './ndjson'
+import {
+  encodeNdjson,
+  createNdjsonParser,
+  NDJSON_MAX_LINE_BYTES,
+  NdjsonLineTooLongError
+} from './ndjson'
 
 describe('encodeNdjson', () => {
   it('encodes an object as a JSON line ending with newline', () => {
@@ -12,6 +17,20 @@ describe('encodeNdjson', () => {
     const result = encodeNdjson(msg)
     expect(result.endsWith('\n')).toBe(true)
     expect(JSON.parse(result.trim())).toEqual(msg)
+  })
+
+  it('accepts the exact line-byte limit and rejects one byte more', () => {
+    const emptyBytes = Buffer.byteLength(JSON.stringify({ data: '' }), 'utf8')
+    expect(encodeNdjson({ data: 'abc' }, emptyBytes + 3)).toBe('{"data":"abc"}\n')
+    expect(() => encodeNdjson({ data: 'abcd' }, emptyBytes + 3)).toThrow(NdjsonLineTooLongError)
+  })
+
+  // Why: the cap is UTF-8 bytes, not characters — a code-unit count would let a 4-byte emoji slip past.
+  it('measures multibyte payloads in UTF-8 bytes, not characters', () => {
+    const emptyBytes = Buffer.byteLength(JSON.stringify({ data: '' }), 'utf8')
+    expect(encodeNdjson({ data: '🐙' }, emptyBytes + 4)).toBe('{"data":"🐙"}\n')
+    expect(() => encodeNdjson({ data: '🐙' }, emptyBytes + 3)).toThrow(NdjsonLineTooLongError)
+    expect(() => encodeNdjson({ data: 'é' }, emptyBytes + 1)).toThrow(NdjsonLineTooLongError)
   })
 })
 

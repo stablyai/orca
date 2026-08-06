@@ -21,6 +21,7 @@ import {
   replaceRuntimePairingInPlace,
   type SameIdPairingReplacement
 } from './nested-runtime-same-id-pairing'
+import { createPairedWebClientUrl, type PairedWebClientOptions } from './paired-web-client-url'
 
 export type { SameIdPairingReplacement } from './nested-runtime-same-id-pairing'
 
@@ -92,35 +93,49 @@ export async function createRuntimeDesktopPairingOffer(
 
 export async function launchPairedWebClient(
   hubApp: ElectronApplication,
-  offer: RuntimeDesktopPairingOffer
+  offer: RuntimeDesktopPairingOffer,
+  options: PairedWebClientOptions = {}
 ): Promise<PairedWebClient> {
   if (!offer.webClientUrl) {
     throw new Error('HUB runtime did not provide a paired web client URL')
   }
-  const pagePromise = hubApp.waitForEvent('window')
-  await hubApp.evaluate(
-    async ({ BrowserWindow }, { partition, url }) => {
-      const clientWindow = new BrowserWindow({
-        height: 1200,
-        show: false,
-        width: 1440,
-        webPreferences: {
-          contextIsolation: true,
-          nodeIntegration: false,
-          partition,
-          sandbox: true
-        }
-      })
-      await clientWindow.loadURL(url)
-    },
-    {
-      partition: `e2e-nested-runtime-web-${randomUUID()}`,
-      url: offer.webClientUrl
+  const clientUrl = createPairedWebClientUrl(offer.webClientUrl, options)
+  let page: Page | undefined
+  const pagePromise = hubApp.waitForEvent('window').then((candidate) => (page = candidate))
+  try {
+    await hubApp.evaluate(
+      async ({ BrowserWindow }, { partition, url }) => {
+        const clientWindow = new BrowserWindow({
+          height: 1200,
+          show: false,
+          width: 1440,
+          webPreferences: {
+            contextIsolation: true,
+            nodeIntegration: false,
+            partition,
+            sandbox: true
+          }
+        })
+        await clientWindow.loadURL(url).catch((error) => {
+          clientWindow.destroy()
+          throw error
+        })
+      },
+      {
+        partition: `e2e-nested-runtime-web-${randomUUID()}`,
+        url: clientUrl
+      }
+    )
+    page = await pagePromise
+    if (options.waitForWorkspace !== false) {
+      await page.locator('[data-worktree-sidebar]').waitFor({ state: 'visible', timeout: 30_000 })
     }
-  )
-  const page = await pagePromise
-  await page.locator('[data-worktree-sidebar]').waitFor({ state: 'visible', timeout: 30_000 })
-  return { page, dispose: () => page.close() }
+    return { page, dispose: () => page?.close() ?? Promise.resolve() }
+  } catch (error) {
+    void pagePromise.catch(() => undefined)
+    await page?.close().catch(() => undefined)
+    throw error
+  }
 }
 
 export async function launchPairedElectronClient(
@@ -140,8 +155,7 @@ export async function launchPairedElectronClient(
     inheritedEnv: cleanEnv,
     launchEnv: {},
     extraEnv: {},
-    userDataDir,
-    codexRealHomeEnabled: false
+    userDataDir
   })
   const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
   const app = await electron.launch({
@@ -198,7 +212,9 @@ export async function launchPairedElectronClient(
         if (!(await store.getState().refreshRuntimeEnvironmentStatus(result.environment.id))) {
           throw new Error('Paired desktop could not reach the HUB runtime')
         }
-        if (!(await store.getState().switchRuntimeEnvironment(result.environment.id))) {
+        if (
+          !(await store.getState().setActiveRuntimeEnvironmentPreference(result.environment.id))
+        ) {
           throw new Error('Paired desktop could not select the HUB runtime')
         }
         return result.environment.id
@@ -263,7 +279,7 @@ export async function rePairPairedElectronClient(
       if (!(await store.getState().refreshRuntimeEnvironmentStatus(result.environment.id))) {
         throw new Error('Re-paired desktop could not reach the HUB runtime')
       }
-      if (!(await store.getState().switchRuntimeEnvironment(result.environment.id))) {
+      if (!(await store.getState().setActiveRuntimeEnvironmentPreference(result.environment.id))) {
         throw new Error('Re-paired desktop could not select the HUB runtime')
       }
       return result.environment.id
@@ -291,7 +307,7 @@ export async function rePairPairedElectronClient(
     if (!(await store.getState().refreshRuntimeEnvironmentStatus(nextEnvironmentId))) {
       return false
     }
-    return store.getState().switchRuntimeEnvironment(nextEnvironmentId)
+    return store.getState().setActiveRuntimeEnvironmentPreference(nextEnvironmentId)
   }, environmentId)
   if (!reachable) {
     throw new Error('Re-paired desktop could not reach the HUB after reload')

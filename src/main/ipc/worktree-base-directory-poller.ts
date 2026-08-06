@@ -59,6 +59,8 @@ export type WorktreeBasePollerOptions = {
   pollIntervalMs?: number
   platform?: NodeJS.Platform
   visibility?: WorktreePollerWindowVisibility
+  getGitStatusRefPaths?: () => readonly string[]
+  onWatchError?: (error: Error) => void
   /** Test hook: called whenever a full snapshot scan runs (vs. a gated skip). */
   onFullScan?: () => void
 }
@@ -349,7 +351,9 @@ export async function startWorktreeBaseDirectoryPoller(
       pollIntervalMs,
       platform,
       visibility,
-      options.onFullScan
+      options.onFullScan,
+      options.getGitStatusRefPaths,
+      options.onWatchError
     )
   }
   return startBasePoller(target, getRepos, onEvents, pollIntervalMs, visibility, options.onFullScan)

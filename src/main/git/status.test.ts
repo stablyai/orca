@@ -11,6 +11,7 @@ import {
 const {
   gitExecFileAsyncMock,
   gitExecFileAsyncBufferMock,
+  gitStreamOptionsMock,
   lstatMock,
   realpathMock,
   readFileMock,
@@ -20,6 +21,7 @@ const {
 } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn(),
   gitExecFileAsyncBufferMock: vi.fn(),
+  gitStreamOptionsMock: vi.fn(),
   lstatMock: vi.fn(),
   realpathMock: vi.fn(),
   readFileMock: vi.fn(),
@@ -37,10 +39,11 @@ vi.mock('./runner', () => ({
   // keep working unchanged and call ordering (status, then numstat) is preserved.
   gitStreamStdout: async (
     args: string[],
-    options: { onStdout: (chunk: string) => boolean | void }
+    options: { signal?: AbortSignal; onStdout: (chunk: string) => boolean | void }
   ) => {
     // Forward args so arg-routing mock implementations (e.g. `args.includes`)
     // still match the status read.
+    gitStreamOptionsMock(options)
     const { stdout } = await gitExecFileAsyncMock(args)
     const stoppedEarly = options.onStdout(stdout ?? '') === true
     return { stoppedEarly }
@@ -991,6 +994,7 @@ describe('getSubmoduleStatus', () => {
     clearEffectiveUpstreamStatusCacheForTests()
     gitExecFileAsyncMock.mockReset()
     gitExecFileAsyncBufferMock.mockReset()
+    gitStreamOptionsMock.mockReset()
     lstatMock.mockReset()
     readFileMock.mockReset()
     existsSyncMock.mockReset()
@@ -1105,6 +1109,7 @@ describe('getStatus', () => {
     clearEffectiveUpstreamStatusCacheForTests()
     gitExecFileAsyncMock.mockReset()
     gitExecFileAsyncBufferMock.mockReset()
+    gitStreamOptionsMock.mockReset()
     lstatMock.mockReset()
     readFileMock.mockReset()
     existsSyncMock.mockReset()
@@ -1133,12 +1138,22 @@ describe('getStatus', () => {
       return Promise.resolve({ stdout: '' })
     })
 
+    const runBurst = async (withSignals: boolean): Promise<number> => {
+      gitExecFileAsyncMock.mockClear()
+      await Promise.all(
+        Array.from({ length: 10 }, () =>
+          getStatus('/repo', withSignals ? { signal: new AbortController().signal } : {})
+        )
+      )
+      return gitExecFileAsyncMock.mock.calls.filter(([args]) =>
+        (args as string[]).includes('status')
+      ).length
+    }
+
     const startedAt = performance.now()
-    await Promise.all(Array.from({ length: 10 }, () => getStatus('/repo')))
+    const unsignalledStatusCommandCalls = await runBurst(false)
+    const signalledStatusCommandCalls = await runBurst(true)
     const durationMs = performance.now() - startedAt
-    const statusCommandCalls = gitExecFileAsyncMock.mock.calls.filter(([args]) =>
-      (args as string[]).includes('status')
-    ).length
     const { mkdirSync, writeFileSync } = await vi.importActual<typeof NodeFs>('fs')
     mkdirSync(path.dirname(benchPath), { recursive: true })
     writeFileSync(
@@ -1146,7 +1161,16 @@ describe('getStatus', () => {
       JSON.stringify({
         scenario: 'git-status-concurrent-burst',
         concurrentCalls: 10,
-        statusCommandCalls,
+        unsignalledStatusCommandCalls,
+        signalledStatusCommandCalls,
+        statusArgs: [
+          '-c',
+          'core.quotePath=false',
+          'status',
+          '--porcelain=v2',
+          '--branch',
+          '--untracked-files=all'
+        ],
         durationMs
       })
     )
@@ -1183,6 +1207,133 @@ describe('getStatus', () => {
     expect(statusCommandCalls).toBe(2)
   })
 
+  it('shares one physical status read across distinct caller signals', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(false)
+    let releaseStatus!: () => void
+    let statusCommandCalls = 0
+    gitExecFileAsyncMock.mockImplementation((args: string[]) => {
+      if (args.includes('status')) {
+        statusCommandCalls += 1
+        return new Promise<{ stdout: string }>((resolve) => {
+          releaseStatus = () => resolve({ stdout: '' })
+        })
+      }
+      return Promise.resolve({ stdout: '' })
+    })
+    const firstController = new AbortController()
+    const secondController = new AbortController()
+    const firstError = new Error('first caller cancelled')
+    const first = getStatus('/repo', { signal: firstController.signal })
+    const second = getStatus('/repo', { signal: secondController.signal })
+
+    await vi.waitFor(() => expect(statusCommandCalls).toBe(1))
+    const underlyingSignal = gitStreamOptionsMock.mock.calls[0]?.[0].signal as AbortSignal
+    firstController.abort(firstError)
+    await expect(first).rejects.toBe(firstError)
+    expect(underlyingSignal?.aborted).toBe(false)
+
+    releaseStatus()
+    await expect(second).resolves.toMatchObject({ entries: [] })
+    expect(statusCommandCalls).toBe(1)
+  })
+
+  it('aborts physical status work after its last live caller cancels', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(false)
+    let statusCommandCalls = 0
+    let rejectStatus!: (error: unknown) => void
+    gitExecFileAsyncMock.mockImplementation((args: string[]) => {
+      if (!args.includes('status')) {
+        return Promise.resolve({ stdout: '' })
+      }
+      statusCommandCalls += 1
+      if (statusCommandCalls > 1) {
+        return Promise.resolve({ stdout: '' })
+      }
+      return new Promise<{ stdout: string }>((_resolve, reject) => {
+        rejectStatus = reject
+      })
+    })
+    const firstController = new AbortController()
+    const secondController = new AbortController()
+    const first = getStatus('/repo', { signal: firstController.signal })
+    const second = getStatus('/repo', { signal: secondController.signal })
+
+    await vi.waitFor(() => expect(statusCommandCalls).toBe(1))
+    const underlyingSignal = gitStreamOptionsMock.mock.calls[0]?.[0].signal as AbortSignal
+    underlyingSignal.addEventListener('abort', () => rejectStatus(underlyingSignal.reason), {
+      once: true
+    })
+    firstController.abort(new Error('first cancelled'))
+    await expect(first).rejects.toThrow('first cancelled')
+    expect(underlyingSignal.aborted).toBe(false)
+    secondController.abort(new Error('second cancelled'))
+    await expect(second).rejects.toThrow('second cancelled')
+    expect(underlyingSignal.aborted).toBe(true)
+
+    await expect(getStatus('/repo')).resolves.toMatchObject({ entries: [] })
+    expect(statusCommandCalls).toBe(2)
+  })
+
+  it('rejects a pre-aborted caller without starting or joining status work', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(false)
+    let releaseStatus!: () => void
+    let statusCommandCalls = 0
+    gitExecFileAsyncMock.mockImplementation((args: string[]) => {
+      if (args.includes('status')) {
+        statusCommandCalls += 1
+        return new Promise<{ stdout: string }>((resolve) => {
+          releaseStatus = () => resolve({ stdout: '' })
+        })
+      }
+      return Promise.resolve({ stdout: '' })
+    })
+    const active = getStatus('/repo')
+    await vi.waitFor(() => expect(statusCommandCalls).toBe(1))
+    const controller = new AbortController()
+    const abortError = new Error('already cancelled')
+    controller.abort(abortError)
+
+    await expect(getStatus('/repo', { signal: controller.signal })).rejects.toBe(abortError)
+    expect(statusCommandCalls).toBe(1)
+
+    releaseStatus()
+    await active
+  })
+
+  it('isolates status reads by worktree, host, and output-affecting options', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(false)
+    let statusCommandCalls = 0
+    const releases: (() => void)[] = []
+    gitExecFileAsyncMock.mockImplementation((args: string[]) => {
+      if (args.includes('status')) {
+        statusCommandCalls += 1
+        return new Promise<{ stdout: string }>((resolve) => {
+          releases.push(() => resolve({ stdout: '' }))
+        })
+      }
+      return Promise.resolve({ stdout: '' })
+    })
+    const reads = [
+      getStatus('/repo'),
+      getStatus('/other-repo'),
+      getStatus('/repo', { wslDistro: 'Ubuntu' }),
+      getStatus('/repo', { includeIgnored: true }),
+      getStatus('/repo', { reuseLineStats: true }),
+      getStatus('/repo', { bypassEffectiveUpstreamNegativeCache: true }),
+      getStatus('/repo', { limit: 1 }),
+      getStatus('/repo', { sharedLinkPaths: ['node_modules'] })
+    ]
+
+    await vi.waitFor(() => expect(statusCommandCalls).toBe(8))
+    releases.splice(0).forEach((release) => release())
+    await Promise.all(reads)
+    expect(statusCommandCalls).toBe(8)
+  })
+
   it('clears in-flight status reads when a mutation runs', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
     existsSyncMock.mockReturnValue(false)
@@ -1211,6 +1362,42 @@ describe('getStatus', () => {
     releaseStatusReads.splice(0).forEach((release) => release())
     await Promise.all([first, second])
     expect(statusCommandCalls).toBe(2)
+  })
+
+  it('fences reads started before, during, and after a concurrent mutation', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(false)
+    let statusCommandCalls = 0
+    let releaseMutation!: () => void
+    const releaseStatusReads: (() => void)[] = []
+    gitExecFileAsyncMock.mockImplementation((args: string[]) => {
+      if (args.includes('status')) {
+        statusCommandCalls += 1
+        return new Promise<{ stdout: string }>((resolve) => {
+          releaseStatusReads.push(() => resolve({ stdout: '' }))
+        })
+      }
+      if (args.includes('add')) {
+        return new Promise<{ stdout: string }>((resolve) => {
+          releaseMutation = () => resolve({ stdout: '' })
+        })
+      }
+      return Promise.resolve({ stdout: '' })
+    })
+
+    const beforeMutation = getStatus('/repo', { signal: new AbortController().signal })
+    await vi.waitFor(() => expect(statusCommandCalls).toBe(1))
+    const mutation = stageFile('/repo', 'src/file.ts')
+    const duringMutation = getStatus('/repo', { signal: new AbortController().signal })
+    await vi.waitFor(() => expect(statusCommandCalls).toBe(2))
+    releaseMutation()
+    await mutation
+    const afterMutation = getStatus('/repo', { signal: new AbortController().signal })
+    await vi.waitFor(() => expect(statusCommandCalls).toBe(3))
+
+    releaseStatusReads.splice(0).forEach((release) => release())
+    await Promise.all([beforeMutation, duringMutation, afterMutation])
+    expect(statusCommandCalls).toBe(3)
   })
 
   it('parses unmerged porcelain v2 entries into unresolved conflict rows', async () => {
@@ -1631,7 +1818,10 @@ describe('getStatus', () => {
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['-c', 'core.quotePath=false', 'diff', '-z', '--numstat', '-M'],
-      { cwd: '/repo', env: expect.objectContaining({ GIT_OPTIONAL_LOCKS: '0' }) }
+      expect.objectContaining({
+        cwd: '/repo',
+        env: expect.objectContaining({ GIT_OPTIONAL_LOCKS: '0' })
+      })
     )
     expect(result.entries).toEqual([
       { path: 'docs/a => b.txt', status: 'modified', area: 'unstaged', added: 1, removed: 0 }
@@ -1929,21 +2119,72 @@ describe('getBranchCompare', () => {
     readFileMock.mockReset()
   })
 
+  // Why dispatch on args instead of mockResolvedValueOnce chains: getBranchCompare now
+  // issues its head-of-chain reads concurrently, so a positional mock would encode call
+  // order rather than behaviour and break on any safe reordering.
+  type BranchCompareGitResponses = {
+    branch?: string | Error
+    probe?: Record<string, string | Error>
+    headOid?: string | Error
+    baseOid?: string | Error
+    mergeBase?: string | Error
+    nameStatus?: string | Error
+    numstat?: string | Error
+    revList?: string | Error
+  }
+
+  function mockBranchCompareGit(responses: BranchCompareGitResponses): void {
+    const reply = (
+      value: string | Error | undefined,
+      label: string
+    ): Promise<{ stdout: string }> => {
+      if (value === undefined) {
+        throw new Error(`unexpected git call: ${label}`)
+      }
+      return value instanceof Error ? Promise.reject(value) : Promise.resolve({ stdout: value })
+    }
+    gitExecFileAsyncMock.mockImplementation((args: string[]) => {
+      if (args[0] === 'branch') {
+        return reply(responses.branch, 'branch --show-current')
+      }
+      if (args[0] === 'rev-parse' && args.includes('--quiet')) {
+        const probed = args.find((arg) => arg.endsWith('^{commit}')) ?? ''
+        return reply(responses.probe?.[probed], `probe ${probed}`)
+      }
+      if (args[0] === 'rev-parse' && args.includes('HEAD')) {
+        return reply(responses.headOid, 'rev-parse HEAD')
+      }
+      if (args[0] === 'rev-parse') {
+        return reply(responses.baseOid, `rev-parse ${args.at(-1)}`)
+      }
+      if (args[0] === 'merge-base') {
+        return reply(responses.mergeBase, 'merge-base')
+      }
+      if (args.includes('--name-status')) {
+        return reply(responses.nameStatus, 'diff --name-status')
+      }
+      if (args.includes('--numstat')) {
+        return reply(responses.numstat, 'diff --numstat')
+      }
+      if (args[0] === 'rev-list') {
+        return reply(responses.revList, 'rev-list')
+      }
+      throw new Error(`unexpected git args: ${args.join(' ')}`)
+    })
+  }
+
   it('returns a pinned branch compare snapshot and parsed branch entries', async () => {
-    gitExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: 'main\n' })
-      .mockResolvedValueOnce({ stdout: 'remote-base-oid\n' })
-      .mockResolvedValueOnce({ stdout: 'head-oid\n' })
-      .mockResolvedValueOnce({ stdout: 'base-oid\n' })
-      .mockResolvedValueOnce({ stdout: 'merge-base-oid\n' })
-      .mockResolvedValueOnce({
-        stdout: 'M\tfile-a.ts\nR100\told-name.ts\tnew-name.ts\nC100\told-copy.ts\tnew-copy.ts\n'
-      })
-      .mockResolvedValueOnce({
-        stdout:
-          '10\t2\tfile-a.ts\n1\t1\told-name.ts => new-name.ts\n3\t0\told-copy.ts => new-copy.ts\n'
-      })
-      .mockResolvedValueOnce({ stdout: '7\n' })
+    mockBranchCompareGit({
+      branch: 'main\n',
+      probe: { 'refs/remotes/origin/main^{commit}': 'base-oid\n' },
+      headOid: 'head-oid\n',
+      baseOid: 'base-oid\n',
+      mergeBase: 'merge-base-oid\n',
+      nameStatus: 'M\tfile-a.ts\nR100\told-name.ts\tnew-name.ts\nC100\told-copy.ts\tnew-copy.ts\n',
+      numstat:
+        '10\t2\tfile-a.ts\n1\t1\told-name.ts => new-name.ts\n3\t0\told-copy.ts => new-copy.ts\n',
+      revList: '7\n'
+    })
 
     const result = await getBranchCompare('/repo', 'origin/main')
 
@@ -1965,12 +2206,15 @@ describe('getBranchCompare', () => {
   })
 
   it('returns invalid-base when the compare ref does not resolve', async () => {
-    gitExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: 'main\n' })
-      .mockRejectedValueOnce(new Error('missing remote base'))
-      .mockRejectedValueOnce(new Error('missing local base'))
-      .mockResolvedValueOnce({ stdout: 'head-oid\n' })
-      .mockRejectedValueOnce(new Error('missing base'))
+    mockBranchCompareGit({
+      branch: 'main\n',
+      probe: {
+        'refs/remotes/origin/missing^{commit}': new Error('missing remote base'),
+        'refs/heads/origin/missing^{commit}': new Error('missing local base')
+      },
+      headOid: 'head-oid\n',
+      baseOid: new Error('missing base')
+    })
 
     const result = await getBranchCompare('/repo', 'origin/missing')
 
@@ -1980,11 +2224,13 @@ describe('getBranchCompare', () => {
   })
 
   it('returns unborn-head when HEAD cannot be resolved', async () => {
-    gitExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: 'main\n' })
-      .mockResolvedValueOnce({ stdout: 'remote-base-oid\n' })
-      .mockRejectedValueOnce(new Error('unborn'))
-      .mockRejectedValueOnce(new Error('missing base'))
+    mockBranchCompareGit({
+      branch: 'main\n',
+      // Why the probe fails here: a proven base ref would resolve, giving 'ready'.
+      probe: { 'refs/remotes/origin/main^{commit}': new Error('missing base') },
+      headOid: new Error('unborn'),
+      baseOid: new Error('missing base')
+    })
 
     const result = await getBranchCompare('/repo', 'origin/main')
 
@@ -1994,11 +2240,12 @@ describe('getBranchCompare', () => {
   })
 
   it('treats an unborn branch with a resolvable base as having no committed branch changes', async () => {
-    gitExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: 'feature\n' })
-      .mockResolvedValueOnce({ stdout: 'remote-base-oid\n' })
-      .mockRejectedValueOnce(new Error('unborn'))
-      .mockResolvedValueOnce({ stdout: 'base-oid\n' })
+    mockBranchCompareGit({
+      branch: 'feature\n',
+      probe: { 'refs/remotes/origin/main^{commit}': 'base-oid\n' },
+      headOid: new Error('unborn'),
+      baseOid: 'base-oid\n'
+    })
 
     const result = await getBranchCompare('/repo', 'origin/main')
 
@@ -2016,12 +2263,13 @@ describe('getBranchCompare', () => {
   })
 
   it('returns no-merge-base when histories do not intersect', async () => {
-    gitExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: 'main\n' })
-      .mockResolvedValueOnce({ stdout: 'remote-base-oid\n' })
-      .mockResolvedValueOnce({ stdout: 'head-oid\n' })
-      .mockResolvedValueOnce({ stdout: 'base-oid\n' })
-      .mockRejectedValueOnce(new Error('no merge base'))
+    mockBranchCompareGit({
+      branch: 'main\n',
+      probe: { 'refs/remotes/origin/main^{commit}': 'base-oid\n' },
+      headOid: 'head-oid\n',
+      baseOid: 'base-oid\n',
+      mergeBase: new Error('no merge base')
+    })
 
     const result = await getBranchCompare('/repo', 'origin/main')
 
@@ -2031,20 +2279,20 @@ describe('getBranchCompare', () => {
   })
 
   it('passes core.quotePath=false to diff --name-status and parses UTF-8 paths', async () => {
-    gitExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: 'main\n' })
-      .mockResolvedValueOnce({ stdout: 'remote-base-oid\n' })
-      .mockResolvedValueOnce({ stdout: 'head-oid\n' })
-      .mockResolvedValueOnce({ stdout: 'base-oid\n' })
-      .mockResolvedValueOnce({ stdout: 'merge-base-oid\n' })
-      .mockResolvedValueOnce({ stdout: 'M\tdocs/日本語/sample.md\n' })
-      .mockResolvedValueOnce({ stdout: '2\t1\tdocs/日本語/sample.md\n' })
-      .mockResolvedValueOnce({ stdout: '1\n' })
+    mockBranchCompareGit({
+      branch: 'main\n',
+      probe: { 'refs/remotes/origin/main^{commit}': 'base-oid\n' },
+      headOid: 'head-oid\n',
+      baseOid: 'base-oid\n',
+      mergeBase: 'merge-base-oid\n',
+      nameStatus: 'M\tdocs/日本語/sample.md\n',
+      numstat: '2\t1\tdocs/日本語/sample.md\n',
+      revList: '1\n'
+    })
 
     const result = await getBranchCompare('/repo', 'origin/main')
 
-    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
-      6,
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       [
         '-c',
         'core.quotePath=false',
@@ -2062,7 +2310,70 @@ describe('getBranchCompare', () => {
     ])
   })
 
-  it('compares short remote labels through fully qualified remote-tracking refs', async () => {
+  // Why: the base oid now comes from the probe, so the probe must never report a ref it
+  // did not actually resolve -- an empty rev-parse --quiet stdout means "not found".
+  it('treats an empty probe result as an unresolved base ref', async () => {
+    mockBranchCompareGit({
+      branch: 'main\n',
+      probe: {
+        'refs/remotes/origin/main^{commit}': '\n',
+        'refs/heads/origin/main^{commit}': '\n'
+      },
+      headOid: 'head-oid\n',
+      baseOid: new Error('missing base')
+    })
+
+    const result = await getBranchCompare('/repo', 'origin/main')
+
+    expect(result.summary.status).toBe('invalid-base')
+  })
+
+  // Why: the probe tries refs/remotes first, then refs/heads. Reusing "the last probed
+  // oid" rather than the oid for the ref that won would return the wrong commit.
+  it('reuses only the oid of the ref the probe actually resolved', async () => {
+    mockBranchCompareGit({
+      branch: 'feature\n',
+      probe: {
+        'refs/remotes/origin/main^{commit}': new Error('no remote-tracking ref'),
+        'refs/heads/origin/main^{commit}': 'local-branch-oid\n'
+      },
+      headOid: 'head-oid\n',
+      mergeBase: 'merge-base-oid\n',
+      nameStatus: '',
+      numstat: '',
+      revList: '0\n'
+    })
+
+    const result = await getBranchCompare('/repo', 'origin/main')
+
+    expect(result.summary).toMatchObject({
+      baseOid: 'local-branch-oid',
+      status: 'ready'
+    })
+  })
+
+  // Why: an already-qualified base ref skips the probe entirely, so its oid must still
+  // come from rev-parse rather than from a stale or absent probe entry.
+  it('resolves an already-qualified base ref without a probe', async () => {
+    mockBranchCompareGit({
+      branch: 'main\n',
+      headOid: 'head-oid\n',
+      baseOid: 'qualified-base-oid\n',
+      mergeBase: 'merge-base-oid\n',
+      nameStatus: '',
+      numstat: '',
+      revList: '0\n'
+    })
+
+    const result = await getBranchCompare('/repo', 'refs/remotes/origin/main')
+
+    expect(result.summary).toMatchObject({
+      baseOid: 'qualified-base-oid',
+      status: 'ready'
+    })
+  })
+
+  it('resolves remote-tracking refs separately after probing their commit target', async () => {
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
       if (args[0] === 'branch') {
         return Promise.resolve({ stdout: 'feature\n' })
@@ -2072,13 +2383,13 @@ describe('getBranchCompare', () => {
         args.includes('--quiet') &&
         args.includes('refs/remotes/origin/main^{commit}')
       ) {
-        return Promise.resolve({ stdout: 'remote-base-oid\n' })
+        return Promise.resolve({ stdout: 'peeled-base-oid\n' })
       }
       if (args[0] === 'rev-parse' && args.includes('HEAD')) {
         return Promise.resolve({ stdout: 'head-oid\n' })
       }
       if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/main')) {
-        return Promise.resolve({ stdout: 'base-oid\n' })
+        return Promise.resolve({ stdout: 'raw-base-oid\n' })
       }
       if (args[0] === 'merge-base') {
         return Promise.resolve({ stdout: 'merge-base-oid\n' })
@@ -2099,9 +2410,13 @@ describe('getBranchCompare', () => {
 
     expect(result.summary).toMatchObject({
       baseRef: 'origin/main',
-      baseOid: 'base-oid',
+      baseOid: 'raw-base-oid',
       status: 'ready'
     })
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'],
+      { cwd: '/repo' }
+    )
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['rev-parse', '--verify', '--end-of-options', 'refs/remotes/origin/main'],
       { cwd: '/repo' }
