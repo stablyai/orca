@@ -81,6 +81,46 @@ const ListAccountsParams = z.object({
   refreshUsage: z.boolean().default(true)
 })
 
+// Why: caps how long accounts.list waits on the forced refresh so the reply
+// lands well inside the local-socket idle window even on a cold host with
+// several managed accounts; the refresh itself keeps running to warm the
+// cache and set the fetch debounce for the next call (#8884).
+export const ACCOUNTS_LIST_REFRESH_BUDGET_MS = 10_000
+
+// Why: races the refresh against the budget instead of cancelling it — a late
+// rejection must not surface as an unhandled rejection, and the timer must
+// never keep the process alive nor leak once the refresh wins the race.
+function awaitAccountsRefreshWithinBudget(refresh: Promise<void>): Promise<void> {
+  return new Promise((resolve) => {
+    let settled = false
+    const timer = setTimeout(() => {
+      settled = true
+      resolve()
+    }, ACCOUNTS_LIST_REFRESH_BUDGET_MS)
+    if (typeof timer.unref === 'function') {
+      timer.unref()
+    }
+    void refresh.then(
+      () => {
+        if (settled) {
+          return
+        }
+        settled = true
+        clearTimeout(timer)
+        resolve()
+      },
+      () => {
+        if (settled) {
+          return
+        }
+        settled = true
+        clearTimeout(timer)
+        resolve()
+      }
+    )
+  })
+}
+
 const AccountsUnsubscribeParams = z.object({
   subscriptionId: z
     .unknown()
@@ -129,7 +169,7 @@ export const ACCOUNT_METHODS: readonly RpcAnyMethod[] = [
       // inactive-account caches only fill on AccountsPane open, so without
       // this the mobile UI would render stale nulls / zeroes.
       if (params.refreshUsage) {
-        await runtime.refreshAccountsForMobile()
+        await awaitAccountsRefreshWithinBudget(runtime.refreshAccountsForMobile())
       }
       return runtime.getAccountsSnapshot()
     }

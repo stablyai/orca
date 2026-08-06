@@ -462,6 +462,17 @@ function longPollClassOf(request: RpcRequest): LongPollClass | null {
   return null
 }
 
+// Why: methods whose bounded (not blocking-wait) work can still approach the
+// socket idle timeout on a slow host, so they need keepalive framing without
+// being admitted as a long-poll — they must not consume a terminal.wait / ask
+// slot. accounts.list's forced refresh is capped in accounts.ts (Layer 2) but
+// keepalive is the backstop if that cap is ever exceeded. See #8884.
+const KEEPALIVE_ONLY_METHODS = new Set(['accounts.list'])
+
+function needsKeepaliveOnly(request: RpcRequest): boolean {
+  return KEEPALIVE_ONLY_METHODS.has(request.method)
+}
+
 // Why: status.get has no per-connection context in the dispatcher, so stamp the scope here at the transport boundary.
 function injectDeviceScope(response: string, scope: DeviceScope): string {
   try {
@@ -1535,8 +1546,8 @@ export class OrcaRuntimeRpcServer {
     if (rejection) {
       return this.buildError(request.id, 'runtime_busy', rejection)
     }
-    if (longPoll) {
-      // Why: arm keepalive only for long-polls; short RPCs never create the setInterval. See §3.1.
+    if (longPoll || needsKeepaliveOnly(request)) {
+      // Why: arm keepalive for long-polls and bounded-but-slow methods; other short RPCs never create the setInterval. See §3.1.
       context?.startKeepalive()
     }
 
