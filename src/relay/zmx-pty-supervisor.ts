@@ -44,19 +44,31 @@ function isMetadata(value: unknown): value is ZmxPtySessionMetadata {
     return false
   }
   const input = value as Record<string, unknown>
+  const optionalString = (field: unknown): boolean =>
+    field === undefined || typeof field === 'string'
   return (
     input.version === METADATA_VERSION &&
     typeof input.id === 'string' &&
     PTY_ID_PATTERN.test(input.id) &&
     typeof input.incarnationId === 'string' &&
     typeof input.initialCwd === 'string' &&
-    typeof input.cols === 'number' &&
-    typeof input.rows === 'number' &&
+    Number.isInteger(input.cols) &&
+    (input.cols as number) > 0 &&
+    Number.isInteger(input.rows) &&
+    (input.rows as number) > 0 &&
     typeof input.shell === 'string' &&
     Array.isArray(input.envToDelete) &&
     input.envToDelete.every((entry) => typeof entry === 'string') &&
     typeof input.gitCredentialPromptGuarded === 'boolean' &&
-    typeof input.createdAt === 'number'
+    typeof input.createdAt === 'number' &&
+    // Why: recovery and shutdown sweeps dereference these without re-checking;
+    // a same-user-corrupted file must fail validation, not throw mid-sweep.
+    optionalString(input.paneKey) &&
+    optionalString(input.tabId) &&
+    optionalString(input.attachIdentity) &&
+    optionalString(input.worktreeId) &&
+    optionalString(input.terminalHandle) &&
+    optionalString(input.explicitTerm)
   )
 }
 
@@ -153,7 +165,14 @@ export class ZmxPtySupervisor {
     const entries = await readdir(this.metadataDir, { withFileTypes: true })
     const metadata = await Promise.all(
       entries
-        .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
+        // Why: a foreign .json in the metadata dir must be ignored, not throw —
+        // one stray file would otherwise wedge every listing and recovery sweep.
+        .filter(
+          (entry) =>
+            entry.isFile() &&
+            entry.name.endsWith('.json') &&
+            PTY_ID_PATTERN.test(basename(entry.name, '.json'))
+        )
         .map((entry) => this.readMetadata(basename(entry.name, '.json')))
     )
     return metadata.filter((entry): entry is ZmxPtySessionMetadata => entry !== null)

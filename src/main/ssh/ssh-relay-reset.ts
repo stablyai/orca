@@ -55,9 +55,6 @@ export async function forceStopRelayForTarget(
     '    fi',
     '    rm -f "$sock" "$sock.pty-backend"',
     '  done',
-    // Why: markers describing force-stopped (or rebooted-away) relays must not
-    // linger — a stale zmx marker would re-fence every later relay connect.
-    '  rm -f "$base"/relay-*/"$sock_name".pty-backend "$base"/"$sock_name".pty-backend',
     'fi',
     ...(options.preserveZmxSessions
       ? []
@@ -103,7 +100,13 @@ export async function forceStopRelayForTarget(
           '  fi',
           'fi',
           'rm -f "$zmx_metadata_dir"/pty-*.json'
-        ])
+        ]),
+    // Why: marker cleanup runs LAST — if the zmx-kill branch exits 1 above, the
+    // surviving zmx marker keeps fencing relay-backed connects so the sessions
+    // it describes stay reachable instead of being silently orphaned.
+    'if [ -d "$base" ]; then',
+    '  rm -f "$base"/relay-*/"$sock_name".pty-backend "$base"/"$sock_name".pty-backend',
+    'fi'
   ].join('\n')
 
   const output = await execCommand(conn, script)

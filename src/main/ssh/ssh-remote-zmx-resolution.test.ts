@@ -21,10 +21,30 @@ describe('resolveRemoteZmxPath', () => {
     vi.mocked(execCommand)
       .mockResolvedValueOnce('')
       .mockResolvedValueOnce('/bin/zsh\n')
-      .mockResolvedValueOnce('/custom/bin/zmx\n')
+      .mockResolvedValueOnce('ORCA_ZMX_PATH:/custom/bin/zmx\n')
 
     await expect(resolveRemoteZmxPath(conn)).resolves.toBe('/custom/bin/zmx')
     expect(vi.mocked(execCommand).mock.calls[2]?.[2]).toMatchObject({ wrapCommand: false })
+  })
+
+  it('ignores absolute-path rc noise without the sentinel', async () => {
+    // Why: dotfiles can print '/'-prefixed lines before command -v answers;
+    // only the sentinel-marked executability-checked result may be trusted.
+    vi.mocked(execCommand)
+      .mockResolvedValueOnce('')
+      .mockResolvedValueOnce('/bin/zsh\n')
+      .mockResolvedValueOnce('/home/user/dotfiles\n/etc/profile.d/motd\n')
+
+    await expect(resolveRemoteZmxPath(conn)).rejects.toThrow('not found in the remote login PATH')
+  })
+
+  it('prefers the last sentinel line when rc noise fakes one', async () => {
+    vi.mocked(execCommand)
+      .mockResolvedValueOnce('')
+      .mockResolvedValueOnce('/bin/zsh\n')
+      .mockResolvedValueOnce('ORCA_ZMX_PATH:/fake/rc/zmx\nORCA_ZMX_PATH:/real/bin/zmx\n')
+
+    await expect(resolveRemoteZmxPath(conn)).resolves.toBe('/real/bin/zmx')
   })
 
   it('reports an actionable error when zmx is unavailable', async () => {

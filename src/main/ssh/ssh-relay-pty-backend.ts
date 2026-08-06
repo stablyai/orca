@@ -40,9 +40,19 @@ export function assertRelayPtyBackend(
 
 export function parseRemoteZmxPath(output: string): string {
   const path = output.trim()
-  if (!path.startsWith('/') || path.includes('\n') || path.includes('\r')) {
-    throw new Error(
-      'zmx terminal persistence is enabled, but zmx was not found in the remote login PATH'
+  // Why: login-shell probes can emit dotfile noise; only an absolute path whose
+  // final component is the zmx binary may become the relay's --zmx-path.
+  if (
+    !path.startsWith('/') ||
+    path.includes('\n') ||
+    path.includes('\r') ||
+    path.split('/').at(-1) !== 'zmx'
+  ) {
+    // Why: deterministic until the user installs zmx or disables the setting;
+    // terminal classification skips the relay-lost backoff and releases fences.
+    throw new RelayPtyBackendMismatchError(
+      'zmx terminal persistence is enabled, but zmx was not found in the remote login PATH',
+      'zmx'
     )
   }
   return path

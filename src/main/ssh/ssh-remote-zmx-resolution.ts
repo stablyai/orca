@@ -37,15 +37,24 @@ export async function resolveRemoteZmxPath(
       : { timeoutMs: ZMX_PROBE_TIMEOUT_MS, wrapCommand: false }
     const loginResult = await execCommand(
       conn,
-      buildSshLoginShellCommand(shell.split(/\r?\n/, 1)[0], 'command -v zmx'),
+      buildSshLoginShellCommand(
+        shell.split(/\r?\n/, 1)[0],
+        // Why: rc noise can emit absolute-path-looking lines before command -v
+        // prints; a sentinel plus an executability check isolates the result.
+        'p=$(command -v zmx 2>/dev/null); [ -n "$p" ] && [ -x "$p" ] && printf \'ORCA_ZMX_PATH:%s\\n\' "$p"'
+      ),
       loginOptions
     ).catch(() => '')
     signal?.throwIfAborted()
-    for (const line of loginResult.split(/\r?\n/)) {
+    const sentinelLines = loginResult
+      .split(/\r?\n/)
+      .filter((line) => line.startsWith('ORCA_ZMX_PATH:'))
+    // Why: prefer the last sentinel — anything earlier is rc-file noise.
+    for (const line of sentinelLines.toReversed()) {
       try {
-        return parseRemoteZmxPath(line)
+        return parseRemoteZmxPath(line.slice('ORCA_ZMX_PATH:'.length))
       } catch {
-        // Login shells may print startup noise before the path.
+        // A noisy line may still fake the sentinel; keep scanning.
       }
     }
   }

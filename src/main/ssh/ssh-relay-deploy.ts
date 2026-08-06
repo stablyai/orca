@@ -1406,7 +1406,12 @@ async function launchRelay(
   const credentialFile = joinRemotePath(hostPlatform, remoteDir, `${sockName}.credential`)
 
   if (requestedPtyBackend === 'zmx' && isWindowsRemoteHost(hostPlatform)) {
-    throw new Error('zmx terminal persistence is available only on macOS and Linux SSH hosts')
+    // Why: deterministic — backoff retries cannot fix the host OS; the terminal
+    // classification releases the deploy fences and surfaces actionable copy.
+    throw new RelayPtyBackendMismatchError(
+      'zmx terminal persistence is available only on macOS and Linux SSH hosts',
+      'zmx'
+    )
   }
 
   if (isWindowsRemoteHost(hostPlatform)) {

@@ -28,6 +28,10 @@ describe('SSH relay PTY backend', () => {
     expect(() => parseRemoteZmxPath('/usr/bin/zmx\n/other/zmx')).toThrow(
       'not found in the remote login PATH'
     )
+    // Why: only a path whose final component is the zmx binary may launch.
+    expect(() => parseRemoteZmxPath('/home/user/dotfiles')).toThrow(
+      'not found in the remote login PATH'
+    )
   })
 
   it('builds launch flags only for zmx', () => {
