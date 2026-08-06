@@ -29,7 +29,7 @@ describe('TerminalContextMenuLinkActions', () => {
     const onCopyLinkTarget = vi.fn()
     render(
       <TerminalContextMenuLinkActions
-        linkTarget={{ kind: 'http', url: 'https://example.com' }}
+        linkTarget={{ kind: 'http', url: 'https://example.com', sourceOwner: { kind: 'local' } }}
         onOpenLinkTarget={onOpenLinkTarget}
         onCopyLinkTarget={onCopyLinkTarget}
         onRevealLinkTarget={vi.fn()}

@@ -9,7 +9,11 @@ import { useCallback, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import { openRoutedHttpLink } from '@/lib/browser/navigation/http-link-destinations'
 import { openDetectedFilePath } from '../links/files/terminal-file-open-routing'
-import { resolveTerminalLinkRuntimeEnvironmentId } from '../links/http/terminal-http-link-source-owner'
+import {
+  resolveTerminalHttpLinkSourceOwner,
+  resolveTerminalLinkRuntimeEnvironmentId
+} from '../links/http/terminal-http-link-source-owner'
+import { runTerminalCopy } from '../clipboard/terminal-copy-rejection-guards'
 import {
   getTerminalContextMenuLinkCopyText,
   resolveTerminalContextMenuLinkTarget,
@@ -132,6 +136,9 @@ export function useTerminalPaneContextMenu({
               paneTransportsRef.current.get(clickedPane.id),
               state,
               worktreeId
+            ),
+            sourceOwner: resolveTerminalHttpLinkSourceOwner(
+              paneTransportsRef.current.get(clickedPane.id)
             )
           })
         : null
@@ -146,7 +153,11 @@ export function useTerminalPaneContextMenu({
       return
     }
     if (linkTarget.kind === 'http') {
-      openRoutedHttpLink(linkTarget.url, { worktreeId, requestOpenLinksInAppPreference })
+      openRoutedHttpLink(linkTarget.url, {
+        worktreeId,
+        sourceOwner: linkTarget.sourceOwner,
+        requestOpenLinksInAppPreference
+      })
       return
     }
     const state = useAppStore.getState()
@@ -171,8 +182,16 @@ export function useTerminalPaneContextMenu({
     if (!linkTarget) {
       return
     }
-    await window.api.ui.writeClipboardText(getTerminalContextMenuLinkCopyText(linkTarget))
-    resolveMenuPane()?.terminal.focus()
+    const pane = resolveMenuPane()
+    if (!pane) {
+      return
+    }
+    await runTerminalCopy({
+      selection: getTerminalContextMenuLinkCopyText(linkTarget),
+      writeClipboardText: window.api.ui.writeClipboardText,
+      // Why: a rejected clipboard write must not leave xterm unfocused after Radix closes the menu.
+      focus: () => pane.terminal.focus()
+    })
   }, [linkTarget, resolveMenuPane])
 
   const onRevealLinkTarget = useCallback((): void => {

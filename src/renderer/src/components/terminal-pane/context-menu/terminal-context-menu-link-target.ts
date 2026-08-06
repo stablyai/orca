@@ -1,4 +1,5 @@
 import type { Terminal } from '@xterm/xterm'
+import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import {
   findTerminalFileLinksAtBufferPosition,
   findTerminalHttpLinkAtBufferPosition
@@ -13,6 +14,7 @@ import { resolveFileLinkTarget } from '../links/files/terminal-file-link-target'
 export type TerminalContextMenuHttpLinkTarget = {
   kind: 'http'
   url: string
+  sourceOwner: HttpLinkSourceOwner
 }
 
 export type TerminalContextMenuFileLinkTarget = {
@@ -33,6 +35,7 @@ export type ResolveTerminalContextMenuLinkTargetDeps = {
   worktreePath: string
   terminalHomePath?: string | null
   runtimeEnvironmentId?: string | null
+  sourceOwner?: HttpLinkSourceOwner
   wslDistro?: string | null
   pathExistsCache?: TerminalPathExistsCache
 }
@@ -62,7 +65,7 @@ export function resolveTerminalContextMenuLinkTarget(
   const buffer = terminal.buffer.active
   const httpUrl = findTerminalHttpLinkAtBufferPosition(buffer, position, terminal.cols)
   if (httpUrl) {
-    return { kind: 'http', url: httpUrl }
+    return { kind: 'http', url: httpUrl, sourceOwner: deps.sourceOwner ?? { kind: 'local' } }
   }
   if (!deps.startupCwd) {
     return null
