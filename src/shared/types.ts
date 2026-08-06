@@ -2757,6 +2757,9 @@ export type GlobalSettings = {
   editorAutoSave: boolean
   editorAutoSaveDelayMs: number
   editorMinimapEnabled: boolean
+  /** Defaults to following the resolved app theme for profiles created before
+   *  independent Monaco color themes were configurable. */
+  editorTheme?: 'app' | 'light' | 'dark' | 'high-contrast-light' | 'high-contrast-dark' | 'dracula'
   /** Opt-in code-editor font; empty (the default) keeps following `terminalFontFamily`. */
   editorFontFamily?: string
   /** Defaults on for profiles saved before file-editor wrapping became configurable. */

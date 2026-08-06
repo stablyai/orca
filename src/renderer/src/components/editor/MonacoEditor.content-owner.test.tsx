@@ -14,7 +14,12 @@ vi.mock('@monaco-editor/react', () => ({
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
-      settings: { theme: 'dark', terminalFontSize: 13, terminalFontFamily: 'monospace' },
+      settings: {
+        theme: 'dark',
+        editorTheme: 'dracula',
+        terminalFontSize: 13,
+        terminalFontFamily: 'monospace'
+      },
       editorFontZoomLevel: 0,
       setPendingEditorReveal: vi.fn(),
       setEditorCursorLine: vi.fn(),
@@ -58,5 +63,6 @@ describe('MonacoEditor content ownership', () => {
 
     expect(editorProps.current?.defaultValue).toBe('initial content')
     expect(editorProps.current).not.toHaveProperty('value')
+    expect(editorProps.current?.theme).toBe('orca-dracula')
   })
 })

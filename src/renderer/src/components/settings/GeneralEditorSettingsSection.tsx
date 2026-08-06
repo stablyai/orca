@@ -18,6 +18,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { RichMarkdownSpellcheckSetting } from './RichMarkdownSpellcheckSetting'
 import { EditorWordWrapSetting } from './EditorWordWrapSetting'
+import { EditorThemeSetting } from './EditorThemeSetting'
 import { EditorFontFamilySetting } from './EditorFontFamilySetting'
 import {
   createAutoSaveDelayDraftState,
@@ -95,6 +96,8 @@ export function GeneralEditorSettingsSection({
           'Configure how Orca persists file edits.'
         )}
       />
+
+      <EditorThemeSetting settings={settings} updateSettings={updateSettings} />
 
       <SearchableSetting
         title={translate(

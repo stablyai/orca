@@ -9618,6 +9618,16 @@
           "testFlight": "TestFlight",
           "androidApk": "Android APK"
         },
+        "EditorThemeSetting": {
+          "0fe1885fc8": "Follow app",
+          "b440871212": "Light",
+          "2f2077c751": "Dark",
+          "c926ce36fe": "High Contrast Light",
+          "50fda83310": "High Contrast Dark",
+          "079325a73f": "Dracula",
+          "1fdb8f6275": "Editor Theme",
+          "80410e712b": "Choose a color theme for file, diff, and notebook code editors."
+        },
         "SkillUsageExampleDialog": {
           "copiedPrompt": "复制示例提示。",
           "copyFailed": "复制提示失败。",

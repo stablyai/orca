@@ -87,6 +87,42 @@ installMonacoPeekReferencesPreviewOptions()
 // so right-click Paste works like Cmd+V (which already works via native events).
 installMonacoContextMenuPaste(monaco)
 
+// Why: Monaco only bundles its VS themes. Register Dracula here so every file,
+// diff, and notebook editor can resolve the same persisted theme name.
+monaco.editor.defineTheme('orca-dracula', {
+  base: 'vs-dark',
+  inherit: true,
+  rules: [
+    { token: 'comment', foreground: '6272A4', fontStyle: 'italic' },
+    { token: 'string', foreground: 'F1FA8C' },
+    { token: 'number', foreground: 'BD93F9' },
+    { token: 'regexp', foreground: 'F1FA8C' },
+    { token: 'keyword', foreground: 'FF79C6' },
+    { token: 'operator', foreground: 'FF79C6' },
+    { token: 'type', foreground: '8BE9FD', fontStyle: 'italic' },
+    { token: 'type.identifier', foreground: '8BE9FD', fontStyle: 'italic' },
+    { token: 'function', foreground: '50FA7B' },
+    { token: 'variable.predefined', foreground: 'BD93F9', fontStyle: 'italic' },
+    { token: 'tag', foreground: 'FF79C6' },
+    { token: 'attribute.name', foreground: '50FA7B' },
+    { token: 'attribute.value', foreground: 'F1FA8C' }
+  ],
+  colors: {
+    'editor.background': '#282A36',
+    'editor.foreground': '#F8F8F2',
+    'editorLineNumber.foreground': '#6272A4',
+    'editor.selectionBackground': '#44475A',
+    'editor.selectionHighlightBackground': '#424450',
+    'editor.lineHighlightBorder': '#44475A',
+    'editor.findMatchBackground': '#FFB86CCC',
+    'editor.findMatchHighlightBackground': '#FFFFFF66',
+    'editorCursor.foreground': '#F8F8F2',
+    'editorWhitespace.foreground': '#FFFFFF1A',
+    'editorIndentGuide.background1': '#FFFFFF1A',
+    'editorIndentGuide.activeBackground1': '#FFFFFF73'
+  }
+})
+
 // Configure Monaco to use the locally bundled editor instead of CDN
 loader.config({ monaco })
 

@@ -25,6 +25,7 @@ import { getDiffViewerLargeDiffSaveAction } from './diff-viewer-large-diff-save-
 import type { DiffViewerProps } from './diff-viewer-props'
 import { buildDiffEditorWordWrapOptions } from './diff-editor-word-wrap-options'
 import { useDiffEditorRegistration } from './diff-navigation-context'
+import { resolveCurrentMonacoTheme } from '@/lib/editor-theme'
 import { preserveDiffViewStateAcrossModelSwaps } from './diff-model-swap-view-state'
 import { monacoFindOptions } from './monaco-find-options'
 
@@ -66,9 +67,7 @@ export default function DiffViewer({
   )
   const terminalFontSize = settings?.terminalFontSize ?? 13
   const diffEditorFontSize = computeDiffEditorFontSize(terminalFontSize, editorFontZoomLevel)
-  const isDark =
-    settings?.theme === 'dark' ||
-    (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+  const monacoTheme = resolveCurrentMonacoTheme(settings)
 
   const diffEditorRef = useRef<editor.IStandaloneDiffEditor | null>(null)
   const { registerDiffEditor, unregisterDiffEditor } = useDiffEditorRegistration()
@@ -408,7 +407,7 @@ export default function DiffViewer({
             language={language}
             original={originalContent}
             modified={modifiedContent}
-            theme={isDark ? 'vs-dark' : 'vs'}
+            theme={monacoTheme}
             onMount={handleMount}
             // Why: a file can have multiple live diff tabs, so key models off tab identity (not file path) to avoid cross-tab reuse.
             // Why: Changes mode rotates only the original-side model after HEAD moves, preserving the modified side's undo stack.

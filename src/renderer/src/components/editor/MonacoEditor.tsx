@@ -64,6 +64,7 @@ import {
   isMonacoAutoHeightCapped
 } from './monaco-auto-height'
 import { installMonacoE2EProbe } from './monaco-e2e-probe'
+import { resolveCurrentMonacoTheme } from '@/lib/editor-theme'
 import { monacoFindOptions } from './monaco-find-options'
 import { matchesPendingEditorFocusRequest } from './pending-editor-focus-request'
 
@@ -193,9 +194,7 @@ export default function MonacoEditor({
   useEffect(() => {
     commentPopoverRef.current = commentPopover
   }, [commentPopover])
-  const isDark =
-    settings?.theme === 'dark' ||
-    (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+  const monacoTheme = resolveCurrentMonacoTheme(settings)
 
   const updateMarkdownCompletionDocuments = useCallback((): void => {
     const modelKey = editorRef.current?.getModel()?.uri.toString() ?? null
@@ -839,7 +838,7 @@ export default function MonacoEditor({
         language={language}
         // Why: defaultValue, not controlled value — Orca owns post-mount content sync; a controlled path would double setValue.
         defaultValue={content}
-        theme={isDark ? 'vs-dark' : 'vs'}
+        theme={monacoTheme}
         onChange={handleChange}
         onMount={handleMount}
         options={{
