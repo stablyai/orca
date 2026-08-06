@@ -1181,6 +1181,7 @@ export class SshRelaySession {
     ownsAttempt: () => boolean
   ): Promise<SshPtyConsumerAdmission> {
     const startedAtMs = Date.now()
+    let retriedRefusal = false
     try {
       const admission = await retrySshOwnerRecoveryWhileBlocked(
         () =>
@@ -1197,14 +1198,18 @@ export class SshRelaySession {
           }),
         {
           isCurrent: () => ownsAttempt() && !mux.isDisposed(),
-          onClosed: (listener) => mux.onDispose(listener)
+          onClosed: (listener) => mux.onDispose(listener),
+          onRetry: () => {
+            retriedRefusal = true
+          }
         }
       )
       // Why logged on success: a disconnected incumbent can hold admission for its whole grace, so a
       // reconnect may legitimately idle here for tens of seconds. Without this line that wait is
-      // indistinguishable from a hang in a bug report's logs.
+      // indistinguishable from a hang in a bug report's logs. Admission that was never refused only
+      // measures round-trip latency, which says nothing about owner contention.
       const waitedMs = Date.now() - startedAtMs
-      if (waitedMs >= 1_000) {
+      if (retriedRefusal && waitedMs >= 1_000) {
         console.log(
           `[ssh-relay-session] PTY owner admission for ${this.targetId} granted after ${waitedMs}ms of retrying refusals`
         )

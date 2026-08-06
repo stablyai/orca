@@ -58,6 +58,9 @@ const SSH_OWNER_RECOVERY_MAX_DELAY_MS = 250
 type SshOwnerRecoveryRetryGate = {
   isCurrent: () => boolean
   onClosed: (listener: () => void) => () => void
+  // Why callers observe this: the first attempt runs before any wait, so elapsed time alone cannot
+  // tell a refusal that was waited out from a single slow round trip. Only this signals contention.
+  onRetry?: (reason: SshOwnerRecoveryRetryReason) => void
   onRetryExhausted?: (reason: SshOwnerRecoveryRetryReason) => void
 }
 
@@ -117,6 +120,7 @@ export async function retrySshOwnerRecoveryWhileBlocked<T>(
         gate.onRetryExhausted?.(reason)
         throw error
       }
+      gate.onRetry?.(reason)
       await waitForRetry(Math.min(delayMs, remainingMs), gate)
       if (!gate.isCurrent()) {
         throw error

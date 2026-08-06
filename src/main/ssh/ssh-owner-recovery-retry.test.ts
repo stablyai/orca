@@ -159,6 +159,30 @@ describe('SSH owner recovery retry', () => {
     expect(SSH_OWNER_HELD_DISCONNECTED_WAIT_MS).toBeGreaterThan(PTY_CONSUMER_OWNER_GRACE_MS)
   })
 
+  it('signals a retry only once an attempt has actually been refused', async () => {
+    vi.useFakeTimers()
+    const onRetry = vi.fn()
+
+    await expect(
+      retrySshOwnerRecoveryWhileBlocked(async () => 'recovered', { ...openGate(), onRetry })
+    ).resolves.toBe('recovered')
+    // Why an unrefused admission must stay silent: the caller reports owner contention off this
+    // signal, and the first attempt runs before any wait, so elapsed time alone would report a
+    // single slow round trip as a refusal that was waited out.
+    expect(onRetry).not.toHaveBeenCalled()
+
+    const attempt = vi
+      .fn<() => Promise<string>>()
+      .mockRejectedValueOnce(heldError(PTY_CONSUMER_OWNER_HELD_DISCONNECTED_ERROR))
+      .mockResolvedValue('recovered')
+    const recovery = retrySshOwnerRecoveryWhileBlocked(attempt, { ...openGate(), onRetry })
+    await vi.advanceTimersByTimeAsync(25)
+
+    await expect(recovery).resolves.toBe('recovered')
+    expect(onRetry).toHaveBeenCalledTimes(1)
+    expect(onRetry).toHaveBeenCalledWith('disconnected-holder')
+  })
+
   it('reports each exhausted retry budget under its own reason', async () => {
     vi.useFakeTimers()
     const exhausted: string[] = []
