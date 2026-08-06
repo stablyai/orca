@@ -97,6 +97,8 @@ type GitLabMRRaw = {
   sha?: string
   has_conflicts?: boolean
   detailed_merge_status?: string
+  /** Deprecated since GitLab 15.6, but the only merge signal older instances return. */
+  merge_status?: string
   description?: string | null
   target_branch?: string
   author?: { username?: string | null; avatar_url?: string | null } | null
@@ -139,6 +141,13 @@ function deriveMergeable(data: GitLabMRRaw): MRInfo['mergeable'] {
   }
   if (data.detailed_merge_status === 'broken_status' || data.detailed_merge_status === 'conflict') {
     return 'CONFLICTING'
+  }
+  // Why: `detailed_merge_status` only exists from GitLab 15.6. Without this fallback an older
+  // instance reports UNKNOWN forever, and the merge UI (which now gates on MERGEABLE) would
+  // permanently show "Checking" with no merge button. Only the positive legacy value is trusted;
+  // `cannot_be_merged` stays UNKNOWN because `has_conflicts` above already owns the conflict case.
+  if (data.detailed_merge_status === undefined && data.merge_status === 'can_be_merged') {
+    return 'MERGEABLE'
   }
   return 'UNKNOWN'
 }

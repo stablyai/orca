@@ -17,7 +17,10 @@ function blockedPresentation(label: string, tooltip: string): MergePresentation 
 }
 
 /** Map GitLab detailed_merge_status (stored on mergeStateStatus) to a blocked/checking label. */
-function presentUnknownMergeState(mergeStateStatus: string | null | undefined): MergePresentation {
+function presentUnknownMergeState(
+  mergeStateStatus: string | null | undefined,
+  checksStatus: GitLabMRMergeStateReview['status']
+): MergePresentation {
   const status = (mergeStateStatus ?? '').toLowerCase()
   switch (status) {
     case 'not_approved':
@@ -118,6 +121,20 @@ function presentUnknownMergeState(mergeStateStatus: string | null | undefined): 
         )
       )
     default:
+      // Why: with no usable reason from GitLab, a red pipeline is the most actionable thing we
+      // know — reporting a bare "Checking" hid the failure the user actually has to fix.
+      if (checksStatus === 'failure') {
+        return blockedPresentation(
+          translate(
+            'auto.components.right.sidebar.gitlab.mr.merge.state.49ac4fec10',
+            'Checks failed'
+          ),
+          translate(
+            'auto.components.right.sidebar.gitlab.mr.merge.state.804ecf93e8',
+            'GitLab has not reported a final merge status'
+          )
+        )
+      }
       return blockedPresentation(
         translate('auto.components.right.sidebar.gitlab.mr.merge.state.195917574e', 'Checking'),
         translate(
@@ -175,7 +192,7 @@ export function presentGitLabMRMergeState(review: GitLabMRMergeStateReview): Mer
   // Why: only GitLab's explicit `mergeable` projects to MERGEABLE. UNKNOWN used to fall through
   // to "Able to merge", so not_approved / discussions_not_resolved / ci_must_pass looked ready.
   if (review.mergeable !== 'MERGEABLE') {
-    return presentUnknownMergeState(review.mergeStateStatus)
+    return presentUnknownMergeState(review.mergeStateStatus, review.status)
   }
   if (review.status === 'failure') {
     return {

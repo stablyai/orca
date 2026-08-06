@@ -35,6 +35,44 @@ describe('presentGitLabMRMergeState', () => {
     ).toBe('Unresolved threads')
   })
 
+  // Why: an unrecognised/absent reason used to render a bare "Checking", hiding the red pipeline
+  // that is the actual thing the user has to act on.
+  it('surfaces a failed pipeline when GitLab reports no usable merge reason', () => {
+    expect(
+      presentGitLabMRMergeState({
+        state: 'open',
+        status: 'failure',
+        mergeable: 'UNKNOWN',
+        mergeStateStatus: undefined
+      })
+    ).toMatchObject({
+      label: 'Checks failed',
+      directMergeAvailable: false
+    })
+  })
+
+  it('still reports Checking when there is no reason and no failing pipeline', () => {
+    expect(
+      presentGitLabMRMergeState({
+        state: 'open',
+        status: 'pending',
+        mergeable: 'UNKNOWN',
+        mergeStateStatus: undefined
+      }).label
+    ).toBe('Checking')
+  })
+
+  it('keeps an explicit GitLab reason ahead of the pipeline result', () => {
+    expect(
+      presentGitLabMRMergeState({
+        state: 'open',
+        status: 'failure',
+        mergeable: 'UNKNOWN',
+        mergeStateStatus: 'not_approved'
+      }).label
+    ).toBe('Approval required')
+  })
+
   it('only offers direct merge when GitLab reports MERGEABLE', () => {
     expect(
       presentGitLabMRMergeState({

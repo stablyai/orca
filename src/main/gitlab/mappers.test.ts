@@ -183,6 +183,39 @@ describe('mapMRInfo', () => {
     expect(info.mergeStateStatus).toBe('checking')
   })
 
+  // Why: GitLab < 15.6 has no detailed_merge_status. Without the legacy fallback these MRs stay
+  // UNKNOWN, and the merge UI (which gates on MERGEABLE) shows "Checking" with no merge button.
+  it('falls back to legacy merge_status when detailed_merge_status is absent', () => {
+    const info = mapMRInfo(
+      { iid: 1, title: 't', state: 'opened', merge_status: 'can_be_merged' },
+      'success'
+    )
+    expect(info.mergeable).toBe('MERGEABLE')
+  })
+
+  it('does not let legacy merge_status override a present detailed_merge_status', () => {
+    const info = mapMRInfo(
+      {
+        iid: 1,
+        title: 't',
+        state: 'opened',
+        detailed_merge_status: 'not_approved',
+        merge_status: 'can_be_merged'
+      },
+      'success'
+    )
+    expect(info.mergeable).toBe('UNKNOWN')
+    expect(info.mergeStateStatus).toBe('not_approved')
+  })
+
+  it('keeps legacy cannot_be_merged as UNKNOWN rather than guessing a conflict', () => {
+    const info = mapMRInfo(
+      { iid: 1, title: 't', state: 'opened', merge_status: 'cannot_be_merged' },
+      'success'
+    )
+    expect(info.mergeable).toBe('UNKNOWN')
+  })
+
   it('returns draft state when draft flag is set', () => {
     const info = mapMRInfo({ iid: 1, title: 't', state: 'opened', draft: true }, 'neutral')
     expect(info.state).toBe('draft')

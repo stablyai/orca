@@ -252,6 +252,70 @@ describe('getWorkItemDetails', () => {
     })
   })
 
+  // Why: each fetch spawns a `glab` binary (a remote exec over SSH) and this runs on the Checks
+  // poll timer, so a bridge-heavy MR must trickle its children rather than burst them.
+  it('bounds concurrent child-pipeline fetches', async () => {
+    const BRIDGE_COUNT = 25
+    let inFlightJobPages = 0
+    let peakJobPages = 0
+
+    glabExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      const endpoint = args.at(-1) as string
+      if (endpoint === 'projects/g%2Fp/merge_requests/12') {
+        return {
+          stdout: JSON.stringify({
+            iid: 12,
+            title: 'Fan out',
+            state: 'opened',
+            web_url: 'https://gitlab.com/g/p/-/merge_requests/12',
+            updated_at: '2026-05-31T12:00:00Z',
+            source_branch: 'f',
+            target_branch: 'main',
+            sha: 'head-sha',
+            head_pipeline: { id: 99 }
+          })
+        }
+      }
+      if (endpoint === 'projects/g%2Fp/pipelines/99/bridges?per_page=100') {
+        return {
+          stdout: JSON.stringify(
+            Array.from({ length: BRIDGE_COUNT }, (_, i) => ({
+              id: 500 + i,
+              name: `trigger-${i}`,
+              stage: 'trigger',
+              status: 'success',
+              downstream_pipeline: {
+                id: 1000 + i,
+                status: 'running',
+                web_url: `https://gitlab.com/g/p/-/pipelines/${1000 + i}`
+              }
+            }))
+          )
+        }
+      }
+      if (/pipelines\/\d+\/jobs/.test(endpoint)) {
+        inFlightJobPages += 1
+        peakJobPages = Math.max(peakJobPages, inFlightJobPages)
+        await new Promise((resolve) => setTimeout(resolve, 2))
+        inFlightJobPages -= 1
+        return { stdout: '[]' }
+      }
+      if (endpoint.endsWith('/approvals')) {
+        return { stdout: JSON.stringify({ approvals_required: 0, approvals_left: 0 }) }
+      }
+      if (endpoint.endsWith('/approval_state')) {
+        return { stdout: JSON.stringify({ rules: [] }) }
+      }
+      return { stdout: '[]' }
+    })
+
+    const details = await getWorkItemDetails('/repo', 12, 'mr')
+    // Parent page can overlap the capped child pool, so allow one above the child limit.
+    expect(peakJobPages).toBeLessThanOrEqual(5)
+    // Every bridge still gets a rollup row even past the 20-child expansion cap.
+    expect(details?.pipelineJobs).toHaveLength(BRIDGE_COUNT)
+  })
+
   it('routes local WSL MR detail fetches through project resolution and glab options', async () => {
     const localGitOptions = { wslDistro: 'Ubuntu' }
     glabExecFileAsyncMock.mockImplementation(async (args: string[]) => {

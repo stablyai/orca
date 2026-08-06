@@ -113,6 +113,10 @@ async function fetchDiscussions(
 const PIPELINE_JOB_PAGE_SIZE = 100
 /** Cap expanded child-pipeline fan-out so one MR details load stays bounded. */
 const MAX_CHILD_PIPELINES_TO_EXPAND = 20
+// Why: every fetch spawns a `glab` binary (a remote exec over SSH), and this runs on
+// the Checks poll timer. Match gl-utils' MAX_CONCURRENT so a bridge-heavy MR trickles
+// its children instead of bursting 20 processes at once.
+const MAX_CONCURRENT_CHILD_FETCHES = 4
 
 type GitLabRawJob = {
   id?: number
@@ -262,6 +266,26 @@ function childPipelineTarget(
   return { projectRef: parentProjectRef, pipelineId: childId }
 }
 
+/** Results stay in input order; a shared cursor keeps fast workers from idling behind a slow batch. */
+async function mapWithConcurrencyLimit<T, R>(
+  items: T[],
+  limit: number,
+  run: (item: T) => Promise<R>
+): Promise<R[]> {
+  const out = Array.from({ length: items.length }) as R[]
+  let cursor = 0
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (cursor < items.length) {
+        const index = cursor
+        cursor += 1
+        out[index] = await run(items[index])
+      }
+    })
+  )
+  return out
+}
+
 async function fetchPipelineJobs(
   repoPath: string,
   projectRef: ProjectRef,
@@ -291,8 +315,10 @@ async function fetchPipelineJobs(
     }
   }
 
-  const childJobBatches = await Promise.all(
-    childTargets.map((target) =>
+  const childJobBatches = await mapWithConcurrencyLimit(
+    childTargets,
+    MAX_CONCURRENT_CHILD_FETCHES,
+    (target) =>
       fetchPipelineJobPage(
         repoPath,
         target.projectRef,
@@ -300,7 +326,6 @@ async function fetchPipelineJobs(
         connectionId,
         localGitOptions
       ).catch(() => [] as GitLabPipelineJob[])
-    )
   )
 
   // Parent jobs first, then each child's jobs. Bridge rollup rows last and only
