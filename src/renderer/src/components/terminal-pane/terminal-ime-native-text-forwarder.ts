@@ -96,13 +96,6 @@ export function installTerminalImeNativeTextForwarder(args: {
     }, 100)
   }
 
-  // Why: this forwarder only owns text macOS commits *outside* a composition.
-  // A jamo keydown claims its physical key before compositionstart can say
-  // otherwise, so retire the claim as soon as the CompositionHelper takes over.
-  const releaseClaimToComposition = (): void => {
-    claimedPress = null
-  }
-
   const markCompositionTransactionAccepted = (): void => {
     compositionTransactionPending = true
   }
@@ -200,7 +193,6 @@ export function installTerminalImeNativeTextForwarder(args: {
     markCompositionTransactionSettled,
     true
   )
-  terminalElement.addEventListener('compositionstart', releaseClaimToComposition, true)
   terminalElement.addEventListener('input', forwardCommittedText, true)
   terminalElement.addEventListener('blur', cancelPending, true)
 
@@ -218,7 +210,6 @@ export function installTerminalImeNativeTextForwarder(args: {
         markCompositionTransactionSettled,
         true
       )
-      terminalElement.removeEventListener('compositionstart', releaseClaimToComposition, true)
       terminalElement.removeEventListener('input', forwardCommittedText, true)
       terminalElement.removeEventListener('blur', cancelPending, true)
     }
