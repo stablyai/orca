@@ -839,6 +839,33 @@ describe('fetchWorktrees', () => {
     expect(store.getState().tabsByWorktree[deleted.id]).toBeUndefined()
   })
 
+  // Why: `listWorktrees` maps "not a git repository" to `[]`, which happens while `.git` is
+  // briefly moved aside. A readable repo always lists its own main worktree, so an empty scan is
+  // a failed read — reconciling against it killed every live terminal in the workspace.
+  it('keeps terminals and rows when an authoritative scan lists no worktrees', async () => {
+    const store = createTestStore()
+    const live = makeWorktree({ id: 'repo1::/p/live', repoId: 'repo1', path: '/p/live' })
+
+    store.setState({
+      repos: [{ id: 'repo1', path: '/p/repo1', displayName: 'R', badgeColor: '#000', addedAt: 0 }],
+      worktreesByRepo: { repo1: [live] },
+      detectedWorktreesByRepo: { repo1: makeDetectedResult('repo1', [live]) },
+      tabsByWorktree: { [live.id]: [{ id: 'tab-l', worktreeId: live.id }] }
+    } as unknown as Partial<AppState>)
+
+    mockApi.worktrees.listDetected.mockImplementationOnce(async (args) =>
+      qualifyDetectedResult(args, makeDetectedResult('repo1', []))
+    )
+
+    await store.getState().fetchWorktrees('repo1')
+
+    expect(mockApi.runtime.call).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'worktree.teardownMissingTerminals' })
+    )
+    expect(store.getState().tabsByWorktree[live.id]).toBeDefined()
+    expect(store.getState().worktreesByRepo.repo1).toHaveLength(1)
+  })
+
   // Why: teardown rides outside the scan coalescer, so identical fan-out requests
   // must share one host sweep instead of re-scanning the host per caller.
   it('shares one teardown sweep across identical concurrent refreshes', async () => {
