@@ -31847,12 +31847,19 @@ export class OrcaRuntimeService {
         .then((absent) => {
           this.probeDeferredDeliveryPtyIds.delete(probedPtyId)
           if (!absent && leaf.ptyId === probedPtyId) {
-            // Why no reservedTypes here: the snapshot exists for a waiter resolved
-            // inside one microtask drain, and this continuation runs after an
-            // awaited probe — many macrotasks later. Carrying it would suppress a
-            // row whose waiter is long gone, and the dedup above already swallowed
-            // the notify that would have retried it, stranding the row.
-            this.deliverPendingMessages(leaf, true)
+            // Why a macrotask and not the stale reservation snapshot: a `remote:`
+            // pty answers the probe null before its first await, so this chain can
+            // settle in microtasks and overtake the resumption of a check resolved
+            // meanwhile — that check's waiter is already out of the map and its
+            // rows are not yet read, so the push would inject what it returns.
+            // Yielding the turn lets every queued check mark its rows read first;
+            // re-reading then (rather than replaying a reservation this probe may
+            // have outlived) is what keeps an orphaned row from stranding.
+            setTimeout(() => {
+              if (leaf.ptyId === probedPtyId) {
+                this.deliverPendingMessages(leaf, true)
+              }
+            }, 0)
           }
         })
         .catch(() => {

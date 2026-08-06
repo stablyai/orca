@@ -263,8 +263,9 @@ function makeOrchestrationDbStub(toHandle: () => string) {
       })
     },
     db: {
+      // Mirrors the real query: `read = 0 AND delivered_at IS NULL`.
       getUndeliveredUnreadMessages: (handle: string) =>
-        rows.filter((row) => row.to_handle === handle && !row.delivered_at),
+        rows.filter((row) => row.to_handle === handle && row.read === 0 && !row.delivered_at),
       getActiveCoordinatorRun: () => null,
       // Consulted by onPtyExit's dispatch-failure path.
       getActiveDispatchForTerminal: () => null,
@@ -288,6 +289,48 @@ describe('push-on-idle orchestration delivery absence gate', () => {
     runtime.onPtyData(STALE_PTY_ID, '\x1b]0;Codex done\x07', 101)
     return { runtime, handle, write, stub }
   }
+
+  // Why: a `remote:` pty answers probePtyLiveness with null before its first
+  // await (ipc/pty.ts), so the probe settles on a pure microtask chain. Without a
+  // macrotask hop the continuation runs BEFORE the resumption of a check resolved
+  // in the meantime — the waiter is already out of the map and its rows are not
+  // yet read, so the push injects exactly what that check is about to return.
+  it('waits a macrotask before delivering so a resolved check consumes its rows first', async () => {
+    const { runtime, handle, write, stub } = await makeIdleLeafWithoutPtyRecord({
+      probePtyLiveness: async () => null
+    })
+
+    const pulled: string[] = []
+    const checkResumed = runtime
+      .waitForMessage(handle, { typeFilter: ['worker_done'], timeoutMs: 60_000 })
+      .then(() => {
+        for (const row of stub.rows) {
+          if (row.type === 'worker_done' && row.read === 0) {
+            row.read = 1
+            pulled.push(row.subject)
+          }
+        }
+      })
+
+    stub.insert('unclaimed status')
+    runtime.notifyMessageArrived(handle, 'status')
+    // Land the completion while the probe chain is mid-flight — the slot where
+    // the continuation would otherwise overtake the check's resumption.
+    await Promise.resolve()
+    await Promise.resolve()
+    stub.insert('worker completion', 'worker_done')
+    runtime.notifyMessageArrived(handle, 'worker_done')
+
+    await checkResumed
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(pulled).toEqual(['worker completion'])
+    const payloads = write.mock.calls
+      .map(([, data]) => data)
+      .filter((data): data is string => typeof data === 'string')
+    expect(payloads.some((data) => data.includes('Subject: unclaimed status'))).toBe(true)
+    expect(payloads.some((data) => data.includes('Subject: worker completion'))).toBe(false)
+  })
 
   // Why: the notify-time reservation snapshot exists for a waiter resolved inside
   // one microtask drain. The probe continuation runs many macrotasks later, and
@@ -321,6 +364,8 @@ describe('push-on-idle orchestration delivery absence gate', () => {
 
     resolveProbe(null)
     await new Promise((resolve) => setTimeout(resolve, 0))
+    // Why twice: the probe continuation yields a turn before delivering.
+    await new Promise((resolve) => setTimeout(resolve, 0))
 
     const payloads = write.mock.calls
       .map(([, data]) => data)
@@ -350,6 +395,8 @@ describe('push-on-idle orchestration delivery absence gate', () => {
     stub.insert('hello')
 
     runtime.deliverPendingMessagesForHandle(handle)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    // Why twice: the probe continuation yields a turn before delivering.
     await new Promise((resolve) => setTimeout(resolve, 0))
 
     expect(write).toHaveBeenCalledWith(STALE_PTY_ID, expect.stringContaining('Subject: hello'))
