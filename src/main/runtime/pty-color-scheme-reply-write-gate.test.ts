@@ -66,13 +66,30 @@ describe('pty color-scheme reply write gate', () => {
     expect(shouldDropStalePtyColorSchemeReply('pty-1', DARK_REPORT)).toBe(false)
   })
 
-  it('a data gap resets the scan carry without forgetting the last verdict', () => {
+  it('a data gap resets the scan carry and fails the raw verdict open', () => {
     observePtyOutputForColorSchemeProtocol('pty-1', '\x1b[?2031h')
     // Half-open escape, then a gap: the carry must not resolve across it.
     observePtyOutputForColorSchemeProtocol('pty-1', '\x1b[?20')
     notePtyColorSchemeScanGap('pty-1')
     observePtyOutputForColorSchemeProtocol('pty-1', '31l')
     expect(shouldDropStalePtyColorSchemeReply('pty-1', DARK_REPORT)).toBe(false)
+  })
+
+  it('a gap clears an unsubscribed raw verdict — the gap may have hidden a ?2031h', () => {
+    observePtyOutputForColorSchemeProtocol('pty-1', '\x1b[?2031l')
+    expect(shouldDropStalePtyColorSchemeReply('pty-1', DARK_REPORT)).toBe(true)
+    notePtyColorSchemeScanGap('pty-1')
+    expect(shouldDropStalePtyColorSchemeReply('pty-1', DARK_REPORT)).toBe(false)
+    // A fresh authoritative decision re-arms the gate.
+    observePtyOutputForColorSchemeProtocol('pty-1', '\x1b[?2031l')
+    expect(shouldDropStalePtyColorSchemeReply('pty-1', DARK_REPORT)).toBe(true)
+  })
+
+  it('a gap while delegated keeps the daemon-relayed verdict', () => {
+    setPtyColorSchemeScanDelegated('pty-1', true)
+    observePtyMode2031Decision('pty-1', 'unsubscribed')
+    notePtyColorSchemeScanGap('pty-1')
+    expect(shouldDropStalePtyColorSchemeReply('pty-1', DARK_REPORT)).toBe(true)
   })
 
   it('lets one report through per observed ?996n query even while unsubscribed', () => {
@@ -89,6 +106,38 @@ describe('pty color-scheme reply write gate', () => {
     observePtyOutputForColorSchemeProtocol('pty-1', '\x1b[?996n\x9b?996n')
     expect(shouldDropStalePtyColorSchemeReply('pty-1', DARK_REPORT)).toBe(false)
     expect(shouldDropStalePtyColorSchemeReply('pty-1', LIGHT_REPORT)).toBe(false)
+    expect(shouldDropStalePtyColorSchemeReply('pty-1', DARK_REPORT)).toBe(true)
+  })
+
+  it('recognizes a ?996n query split across chunks', () => {
+    observePtyOutputForColorSchemeProtocol('pty-1', '\x1b[?2031l')
+    observePtyOutputForColorSchemeProtocol('pty-1', 'prompt \x1b[?99')
+    observePtyOutputForColorSchemeProtocol('pty-1', '6n tail')
+    expect(shouldDropStalePtyColorSchemeReply('pty-1', DARK_REPORT)).toBe(false)
+    expect(shouldDropStalePtyColorSchemeReply('pty-1', DARK_REPORT)).toBe(true)
+  })
+
+  it('does not double-count a completed query held next to a following chunk', () => {
+    observePtyOutputForColorSchemeProtocol('pty-1', '\x1b[?2031l')
+    observePtyOutputForColorSchemeProtocol('pty-1', '\x1b[?996n')
+    observePtyOutputForColorSchemeProtocol('pty-1', ' tail')
+    expect(shouldDropStalePtyColorSchemeReply('pty-1', DARK_REPORT)).toBe(false)
+    expect(shouldDropStalePtyColorSchemeReply('pty-1', DARK_REPORT)).toBe(true)
+  })
+
+  it('a gap discards a split ?996n query carry', () => {
+    observePtyOutputForColorSchemeProtocol('pty-1', '\x1b[?99')
+    notePtyColorSchemeScanGap('pty-1')
+    observePtyOutputForColorSchemeProtocol('pty-1', '6n')
+    observePtyOutputForColorSchemeProtocol('pty-1', '\x1b[?2031l')
+    expect(shouldDropStalePtyColorSchemeReply('pty-1', DARK_REPORT)).toBe(true)
+  })
+
+  it('a delegation toggle discards a split ?996n query carry', () => {
+    observePtyOutputForColorSchemeProtocol('pty-1', '\x1b[?99')
+    setPtyColorSchemeScanDelegated('pty-1', true)
+    observePtyOutputForColorSchemeProtocol('pty-1', '6n')
+    observePtyMode2031Decision('pty-1', 'unsubscribed')
     expect(shouldDropStalePtyColorSchemeReply('pty-1', DARK_REPORT)).toBe(true)
   })
 

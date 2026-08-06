@@ -36,11 +36,35 @@ const MODE_2031_REPORTS: ReadonlySet<string> = new Set([
 // Bound pending query slots: DSR answers are immediate, so real depth is 1.
 const MAX_PENDING_COLOR_SCHEME_QUERY_REPLIES = 4
 
+const COLOR_SCHEME_QUERY_SEQUENCES = ['\x1b[?996n', '\x9b?996n'] as const
+
+/**
+ * Longest input suffix that is a strict prefix of a ?996n query — the bounded
+ * (≤6 chars) carry that lets a query split across chunks still bank its slot.
+ * A complete query never carries: it was already counted.
+ */
+function incompleteColorSchemeQuerySuffix(input: string): string {
+  const window = input.slice(-6)
+  for (let start = 0; start < window.length; start += 1) {
+    const candidate = window.slice(start)
+    if (
+      COLOR_SCHEME_QUERY_SEQUENCES.some(
+        (query) => query.length > candidate.length && query.startsWith(candidate)
+      )
+    ) {
+      return candidate
+    }
+  }
+  return ''
+}
+
 type PtyColorSchemeReplyGateState = {
   mode2031FinalState: 'subscribed' | 'unsubscribed' | null
   scanState: Mode2031ReplyScanState
   scanDelegated: boolean
   pendingColorSchemeQueryReplies: number
+  /** Chunk-spanning carry: an incomplete ?996n query prefix ending the last chunk. */
+  queryScanTail: string
 }
 
 const gateStatesByPtyId = new Map<string, PtyColorSchemeReplyGateState>()
@@ -52,7 +76,8 @@ function getOrCreateState(ptyId: string): PtyColorSchemeReplyGateState {
       mode2031FinalState: null,
       scanState: INITIAL_MODE_2031_REPLY_SCAN_STATE,
       scanDelegated: false,
-      pendingColorSchemeQueryReplies: 0
+      pendingColorSchemeQueryReplies: 0,
+      queryScanTail: ''
     }
     gateStatesByPtyId.set(ptyId, state)
   }
@@ -77,13 +102,22 @@ export function setPtyColorSchemeScanDelegated(ptyId: string, delegated: boolean
   const state = getOrCreateState(ptyId)
   state.scanDelegated = delegated
   state.scanState = INITIAL_MODE_2031_REPLY_SCAN_STATE
+  state.queryScanTail = ''
 }
 
-/** A gap in delivered output invalidates the raw-scan carry. */
+/**
+ * A gap in delivered output invalidates every cross-chunk carry. The gap may
+ * also have hidden a ?2031h, so a raw-scan verdict fails open until the scan
+ * mints a new decision; a delegated verdict is daemon fact-relayed and stands.
+ */
 export function notePtyColorSchemeScanGap(ptyId: string): void {
   const state = gateStatesByPtyId.get(ptyId)
   if (state) {
     state.scanState = INITIAL_MODE_2031_REPLY_SCAN_STATE
+    state.queryScanTail = ''
+    if (!state.scanDelegated) {
+      state.mode2031FinalState = null
+    }
   }
 }
 
@@ -94,8 +128,9 @@ export function notePtyColorSchemeScanGap(ptyId: string): void {
  */
 export function observePtyOutputForColorSchemeProtocol(ptyId: string, data: string): void {
   const tracked = gateStatesByPtyId.get(ptyId)
+  const hasEscapeByte = data.includes('\x1b') || data.includes('\x9b')
   // Hot path: ordinary output touches no state and allocates nothing.
-  if (!tracked && !data.includes('\x1b') && !data.includes('\x9b')) {
+  if (!tracked && !hasEscapeByte) {
     return
   }
   const state = tracked ?? getOrCreateState(ptyId)
@@ -106,18 +141,27 @@ export function observePtyOutputForColorSchemeProtocol(ptyId: string, data: stri
       state.mode2031FinalState = result.decision
     }
   }
-  if (data.includes('\x1b[?996n') || data.includes('\x9b?996n')) {
-    let count = 0
-    for (let index = data.indexOf('996n'); index !== -1; index = data.indexOf('996n', index + 4)) {
-      const prefix = data.slice(Math.max(0, index - 3), index)
-      if (prefix.endsWith('\x1b[?') || prefix.endsWith('\x9b?')) {
-        count += 1
+  if (hasEscapeByte || state.queryScanTail) {
+    // Queries split across chunks must still bank a slot: scan carry + data.
+    const input = state.queryScanTail ? `${state.queryScanTail}${data}` : data
+    if (input.includes('\x1b[?996n') || input.includes('\x9b?996n')) {
+      let count = 0
+      for (
+        let index = input.indexOf('996n');
+        index !== -1;
+        index = input.indexOf('996n', index + 4)
+      ) {
+        const prefix = input.slice(Math.max(0, index - 3), index)
+        if (prefix.endsWith('\x1b[?') || prefix.endsWith('\x9b?')) {
+          count += 1
+        }
       }
+      state.pendingColorSchemeQueryReplies = Math.min(
+        state.pendingColorSchemeQueryReplies + count,
+        MAX_PENDING_COLOR_SCHEME_QUERY_REPLIES
+      )
     }
-    state.pendingColorSchemeQueryReplies = Math.min(
-      state.pendingColorSchemeQueryReplies + count,
-      MAX_PENDING_COLOR_SCHEME_QUERY_REPLIES
-    )
+    state.queryScanTail = incompleteColorSchemeQuerySuffix(input)
   }
 }
 
