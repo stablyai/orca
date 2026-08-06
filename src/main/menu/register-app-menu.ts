@@ -186,6 +186,8 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
             return
           }
 
+          // Why: a macOS native panel (open/save, Go to Folder) leaves no focused
+          // BrowserWindow, so overriding the paste role would strand Cmd+V as a no-op.
           if (isMac) {
             Menu.sendActionToFirstResponder('paste:')
           }

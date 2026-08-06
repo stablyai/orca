@@ -226,24 +226,30 @@ describe('registerAppMenu', () => {
     expect(paletteItem?.accelerator).toBeUndefined()
   })
 
-  it('routes Edit > Paste through Orca coordinated paste ownership', () => {
-    const send = vi.fn()
-    getFocusedWindowMock.mockReturnValue({ webContents: { send } })
-    registerAppMenu(buildMenuOptions())
+  // Why: pin the platform on every case — CI runs this suite on Linux only, so an
+  // unpinned test leaves the other platforms' branches entirely uncovered.
+  it.each(['darwin', 'linux', 'win32'] as const)(
+    'routes Edit > Paste through Orca coordinated paste ownership on %s',
+    (platform) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      const send = vi.fn()
+      getFocusedWindowMock.mockReturnValue({ webContents: { send } })
+      registerAppMenu(buildMenuOptions())
 
-    const editSubmenu = getSubmenu(getTemplate(), 'Edit')
-    const pasteItem = editSubmenu.find((item) => item.label === 'Paste')
+      const editSubmenu = getSubmenu(getTemplate(), 'Edit')
+      const pasteItem = editSubmenu.find((item) => item.label === 'Paste')
 
-    expect(pasteItem).toBeDefined()
-    expect(pasteItem?.role).toBeUndefined()
-    expect(pasteItem?.accelerator).toBe('CmdOrCtrl+V')
+      expect(pasteItem).toBeDefined()
+      expect(pasteItem?.role).toBeUndefined()
+      expect(pasteItem?.accelerator).toBe('CmdOrCtrl+V')
 
-    pasteItem?.click?.({} as never, {} as never, {} as never)
+      pasteItem?.click?.({} as never, {} as never, {} as never)
 
-    expect(send).toHaveBeenCalledOnce()
-    expect(send).toHaveBeenCalledWith('ui:appMenuPaste')
-    expect(sendActionToFirstResponderMock).not.toHaveBeenCalled()
-  })
+      expect(send).toHaveBeenCalledOnce()
+      expect(send).toHaveBeenCalledWith('ui:appMenuPaste')
+      expect(sendActionToFirstResponderMock).not.toHaveBeenCalled()
+    }
+  )
 
   it('routes Edit > Paste to the native first responder once on macOS without a focused window', () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
@@ -265,6 +271,8 @@ describe('registerAppMenu', () => {
       registerAppMenu(buildMenuOptions())
 
       const pasteItem = getSubmenu(getTemplate(), 'Edit').find((item) => item.label === 'Paste')
+      // Why: this case asserts only a negative, so it would pass green if the item vanished.
+      expect(pasteItem).toBeDefined()
       pasteItem?.click?.({} as never, {} as never, {} as never)
 
       expect(sendActionToFirstResponderMock).not.toHaveBeenCalled()
