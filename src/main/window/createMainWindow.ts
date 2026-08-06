@@ -19,6 +19,7 @@ import { translateMain } from '../i18n/main-i18n'
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../shared/browser-guest-web-preferences'
 import { isCrashReportReason } from '../../shared/crash-reporting'
+import { markSystemSessionEnding } from '../crash-reporting/expected-teardown-state'
 import {
   DEFAULT_RENDERER_RECOVERY_MAX_RECOVERIES,
   DEFAULT_RENDERER_RECOVERY_WINDOW_MS,
@@ -303,6 +304,11 @@ export function createMainWindow(
   const rendererWebContentsId = mainWindow.webContents.id
   // Why: native paste fallback is privileged IPC; only the top-level renderer may request it.
   setTrustedUIRendererWebContentsId(rendererWebContentsId)
+
+  // Unlike query-session-end, session-end cannot be canceled before this signal is recorded.
+  if (process.platform === 'win32') {
+    mainWindow.on('session-end', markSystemSessionEnding)
+  }
 
   if (process.platform === 'darwin') {
     // Why: preserve hidden-window power savings; stable native sizing and frame-only invalidation
