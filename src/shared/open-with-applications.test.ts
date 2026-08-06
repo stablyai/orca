@@ -145,3 +145,36 @@ describe('removeOpenWithApplication', () => {
     expect(removeOpenWithApplication([preview], 'other')).toEqual([preview])
   })
 })
+
+describe('adopted Open in editors', () => {
+  const vscode: OpenWithApplication = {
+    id: 'vscode',
+    label: 'VS Code',
+    command: 'code',
+    applicationPath: ''
+  }
+
+  it('survives normalization without a bundle path so its rule can resolve', () => {
+    const result = normalizeOpenWithSettings([vscode], { '.ts': 'vscode' })
+
+    expect(result.openWithApplications).toEqual([vscode])
+    expect(result.openWithDefaults).toEqual({ '.ts': 'vscode' })
+    expect(resolveOpenWithDefaultApplication('/repo/a.ts', [vscode], { '.ts': 'vscode' })).toBe(
+      vscode
+    )
+  })
+
+  it('dedupes on command when there is no bundle path to compare', () => {
+    const next = addOpenWithApplication([vscode], { ...vscode, id: 'fresh', label: 'VS Code 2' })
+
+    expect(next).toHaveLength(1)
+    expect(next[0]).toMatchObject({ id: 'vscode', label: 'VS Code 2' })
+  })
+
+  it('still rejects a row with no command at all', () => {
+    expect(
+      normalizeOpenWithSettings([{ id: 'broken', label: 'No command', applicationPath: '/x' }], {})
+        .openWithApplications
+    ).toEqual([])
+  })
+})

@@ -55,7 +55,7 @@ function createOpenInApplicationId(): string {
   )
 }
 
-function normalizeSettingsUpdates(
+export function normalizeSettingsUpdates(
   updates: Partial<GlobalSettings>,
   currentSettings: GlobalSettings | null
 ): Partial<GlobalSettings> {
@@ -92,7 +92,15 @@ function normalizeSettingsUpdates(
     })
   }
   if ('openWithApplications' in updates || 'openWithDefaults' in updates) {
-    const merged = normalizeOpenWithSettings(updates.openWithApplications, updates.openWithDefaults)
+    // Why: the two fields are cross-validated, so an update touching only one
+    // must read the other from current settings — normalizing a missing app
+    // list as empty would drop every rule that names a still-installed app.
+    const merged = normalizeOpenWithSettings(
+      'openWithApplications' in updates
+        ? updates.openWithApplications
+        : currentSettings?.openWithApplications,
+      'openWithDefaults' in updates ? updates.openWithDefaults : currentSettings?.openWithDefaults
+    )
     if ('openWithApplications' in updates) {
       sanitizedUpdates.openWithApplications = merged.openWithApplications
     }

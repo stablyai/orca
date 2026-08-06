@@ -73,8 +73,11 @@ export function normalizeOpenWithApplications(value: unknown): OpenWithApplicati
       continue
     }
     const command = normalizeToken((row as { command?: unknown }).command)
+    // Why: an entry adopted from the workspace "Open in" list has a command but
+    // no bundle path, and it still has to survive normalization or the rule
+    // pinned to it gets dropped on the next load.
     const applicationPath = normalizeToken((row as { applicationPath?: unknown }).applicationPath)
-    if (!command || !applicationPath) {
+    if (!command) {
       continue
     }
     const rawId = normalizeToken((row as { id?: unknown }).id)
@@ -127,13 +130,17 @@ export function normalizeOpenWithSettings(
   }
 }
 
+/** Bundle path when the app was picked, else the command it was adopted with. */
+function openWithIdentity(application: OpenWithApplication): string {
+  return application.applicationPath || application.command
+}
+
 export function addOpenWithApplication(
   applications: readonly OpenWithApplication[],
   application: OpenWithApplication
 ): OpenWithApplication[] {
-  const existingIndex = applications.findIndex(
-    (entry) => entry.applicationPath === application.applicationPath
-  )
+  const identity = openWithIdentity(application)
+  const existingIndex = applications.findIndex((entry) => openWithIdentity(entry) === identity)
   if (existingIndex !== -1) {
     // Why: re-picking the same bundle should reuse its id so existing
     // per-type defaults keep pointing at it.

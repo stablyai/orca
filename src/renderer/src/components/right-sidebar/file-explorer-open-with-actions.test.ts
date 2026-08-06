@@ -114,6 +114,43 @@ describe('openPathWithPreferredApplication', () => {
 })
 
 describe('openPathWithApplication', () => {
+  it('refuses a remote-runtime path with no connection to launch through', async () => {
+    mocks.getState.mockReturnValue(
+      stateWith({
+        settings: {
+          activeRuntimeEnvironmentId: 'runtime-1',
+          openWithApplications: [preview],
+          openWithDefaults: {}
+        }
+      })
+    )
+
+    await openPathWithApplication('/repo/a.png', preview, null)
+
+    expect(mocks.openInExternalEditor).not.toHaveBeenCalled()
+    expect(mocks.toastError).toHaveBeenCalledWith(
+      'Opening remote paths in the local OS is not available.'
+    )
+  })
+
+  it('still launches on a remote runtime when an SSH connection is given', async () => {
+    mocks.getState.mockReturnValue(
+      stateWith({
+        settings: {
+          activeRuntimeEnvironmentId: 'runtime-1',
+          openWithApplications: [preview],
+          openWithDefaults: {}
+        }
+      })
+    )
+
+    await openPathWithApplication('/repo/a.png', preview, 'ssh-1')
+
+    expect(mocks.openInExternalEditor).toHaveBeenCalledWith(
+      expect.objectContaining({ connectionId: 'ssh-1' })
+    )
+  })
+
   it('names the app when the launch fails', async () => {
     mocks.openInExternalEditor.mockResolvedValue({ ok: false, reason: 'launch-failed' })
 
@@ -149,19 +186,51 @@ describe('pickAndRegisterOpenWithApplication', () => {
 
 describe('toggleOpenWithDefault', () => {
   it('clears the rule when the app is already the default', async () => {
-    expect(await toggleOpenWithDefault('/repo/a.png', 'app-preview')).toBeNull()
+    expect(await toggleOpenWithDefault('/repo/a.png', preview)).toBeNull()
     expect(mocks.updateSettings).toHaveBeenCalledWith({ openWithDefaults: {} })
   })
 
-  it('pins a different app for the type', async () => {
-    expect(await toggleOpenWithDefault('/repo/a.png', 'app-other')).toBe('app-other')
+  it('pins a different registered app without re-adding it', async () => {
+    const typora: OpenWithApplication = {
+      id: 'app-typora',
+      label: 'Typora',
+      command: `open -a '/Applications/Typora.app'`,
+      applicationPath: '/Applications/Typora.app'
+    }
+    mocks.getState.mockReturnValue(
+      stateWith({
+        settings: {
+          activeRuntimeEnvironmentId: null,
+          openWithApplications: [preview, typora],
+          openWithDefaults: { '.png': 'app-preview' }
+        }
+      })
+    )
+
+    expect(await toggleOpenWithDefault('/repo/a.png', typora)).toBe('app-typora')
     expect(mocks.updateSettings).toHaveBeenCalledWith({
-      openWithDefaults: { '.png': 'app-other' }
+      openWithApplications: [preview, typora],
+      openWithDefaults: { '.png': 'app-typora' }
+    })
+  })
+
+  it('adopts a workspace Open in editor so the rule can actually resolve', async () => {
+    const vscode: OpenWithApplication = {
+      id: 'vscode',
+      label: 'VS Code',
+      command: 'code',
+      applicationPath: ''
+    }
+
+    expect(await toggleOpenWithDefault('/repo/a.ts', vscode)).toBe('vscode')
+    expect(mocks.updateSettings).toHaveBeenCalledWith({
+      openWithApplications: [preview, vscode],
+      openWithDefaults: { '.png': 'app-preview', '.ts': 'vscode' }
     })
   })
 
   it('does nothing for an entry with no extension', async () => {
-    expect(await toggleOpenWithDefault('/repo/Makefile', 'app-preview')).toBeNull()
+    expect(await toggleOpenWithDefault('/repo/Makefile', preview)).toBeNull()
     expect(mocks.updateSettings).not.toHaveBeenCalled()
   })
 })

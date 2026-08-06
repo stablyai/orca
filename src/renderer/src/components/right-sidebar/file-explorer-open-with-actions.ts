@@ -54,6 +54,13 @@ export async function openPathWithApplication(
   application: OpenWithApplication,
   connectionId: string | null
 ): Promise<void> {
+  // Why: without an SSH connection to launch through, a remote-runtime path
+  // belongs to another machine — say so here rather than letting the launcher
+  // reject it and surface a generic failure.
+  if (!connectionId && isFileExplorerLocalOpenBlocked(useAppStore.getState())) {
+    showLocalPathOpenBlockedToast()
+    return
+  }
   const result = await window.api.shell.openInExternalEditor({
     path,
     command: application.command,
@@ -81,12 +88,6 @@ export async function openPathWithPreferredApplication(
   }
   const resolvedConnectionId =
     connectionId === undefined ? resolveActiveWorkspaceConnectionId(state) : connectionId
-  // Why: without an SSH connection to hand the launcher, the path is a local
-  // one — a remote runtime makes it belong to another machine entirely.
-  if (!resolvedConnectionId && isFileExplorerLocalOpenBlocked(state)) {
-    showLocalPathOpenBlockedToast()
-    return
-  }
   await openPathWithApplication(path, application, resolvedConnectionId)
 }
 
@@ -122,19 +123,31 @@ export async function pickAndRegisterOpenWithApplication(): Promise<OpenWithAppl
 /** Pins the app as the handler for this entry's extension (toggles off when already set). */
 export async function toggleOpenWithDefault(
   path: string,
-  applicationId: string
+  application: OpenWithApplication
 ): Promise<string | null> {
   const fileTypeKey = getOpenWithFileTypeKey(path)
   if (!fileTypeKey) {
     return null
   }
   const state = useAppStore.getState()
-  const current = state.settings?.openWithDefaults?.[fileTypeKey]
-  const nextId = current === applicationId ? null : applicationId
+  const registered = state.settings?.openWithApplications ?? NO_OPEN_WITH_APPLICATIONS
+  const defaults = state.settings?.openWithDefaults
+  if (defaults?.[fileTypeKey] === application.id) {
+    await state.updateSettings({
+      openWithDefaults: setOpenWithDefault(defaults, fileTypeKey, null)
+    })
+    return null
+  }
+  // Why: the menu also offers workspace "Open in" editors, which live in a
+  // different setting. Adopt the pick so the rule resolves and survives
+  // normalization instead of silently falling back to the OS default.
   await state.updateSettings({
-    openWithDefaults: setOpenWithDefault(state.settings?.openWithDefaults, fileTypeKey, nextId)
+    openWithApplications: registered.some((entry) => entry.id === application.id)
+      ? [...registered]
+      : addOpenWithApplication(registered, application),
+    openWithDefaults: setOpenWithDefault(defaults, fileTypeKey, application.id)
   })
-  return nextId
+  return application.id
 }
 
 export { buildOpenWithCommand, getOpenWithFileTypeKey, resolveOpenWithDefaultApplication }

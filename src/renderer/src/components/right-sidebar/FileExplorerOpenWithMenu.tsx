@@ -106,8 +106,9 @@ export function FileExplorerOpenWithMenu({
                 <ContextMenuRadioItem
                   value={SYSTEM_DEFAULT_VALUE}
                   onSelect={() => {
-                    if (defaultApplicationId) {
-                      void toggleOpenWithDefault(path, defaultApplicationId)
+                    const pinned = entries.find((entry) => entry.id === defaultApplicationId)
+                    if (pinned) {
+                      void toggleOpenWithDefault(path, pinned)
                     }
                   }}
                 >
@@ -120,7 +121,7 @@ export function FileExplorerOpenWithMenu({
                   <ContextMenuRadioItem
                     key={entry.id}
                     value={entry.id}
-                    onSelect={() => void toggleOpenWithDefault(path, entry.id)}
+                    onSelect={() => void toggleOpenWithDefault(path, entry)}
                   >
                     <span className="min-w-0 truncate">{entry.label}</span>
                   </ContextMenuRadioItem>
