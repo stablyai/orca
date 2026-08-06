@@ -35,6 +35,8 @@ function isLeadStep(step: BrowserRecorderStep): boolean {
       )
     case 'element-selected':
     case 'annotation-added':
+    case 'annotation-removed':
+    case 'markup':
     case 'console':
     case 'network-request':
     case 'network-summary':
@@ -55,6 +57,8 @@ function isClosingStep(step: BrowserRecorderStep): boolean {
   switch (step.detail.kind) {
     case 'element-selected':
     case 'annotation-added':
+    case 'annotation-removed':
+    case 'markup':
     case 'network-summary':
       return true
     case 'recording-started':

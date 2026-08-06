@@ -46,15 +46,33 @@ describe('formatBrowserRecorderStepsAsMarkdown', () => {
           comment: 'Make the button green',
           intent: 'change'
         }
+      }),
+      makeStep({ detail: { kind: 'annotation-removed', comment: 'Wrong element' } }),
+      makeStep({
+        detail: {
+          kind: 'markup',
+          shapes: [
+            {
+              kind: 'arrow',
+              from: { x: 120, y: 340 },
+              to: { x: 410, y: 380 },
+              element: { tagName: 'button', selector: 'button#submit', textSnippet: 'Kaydet' }
+            }
+          ]
+        }
       })
     ])
     const lines = output.split('\n').filter((line) => /^\d+\. /.test(line))
     expect(lines).toEqual([
       '1. recording started @ example.com/checkout',
       '2. navigate `example.com/cart` → `example.com/checkout` @ example.com/checkout',
-      '3. selected button "Submit order" @ example.com/checkout',
-      '4. annotated button "Submit order": "Make the button green" @ example.com/checkout'
+      '3. selected button "Submit order" ([type="submit"]) @ example.com/checkout',
+      '4. annotated button "Submit order" ([type="submit"]) [change]: "Make the button green" @ example.com/checkout',
+      '5. removed annotation: "Wrong element" @ example.com/checkout',
+      '6. markup (1 shape) @ example.com/checkout'
     ])
+    // Why: markup shapes render as a tree hanging off the numbered lead.
+    expect(output).toContain('  └ arrow (120,340)→(410,380) → button "Kaydet" (#submit)')
   })
 
   it('annotates steps with the gap since the previous step (+Ns / +Ms)', () => {
@@ -79,10 +97,30 @@ describe('formatBrowserRecorderStepsAsMarkdown', () => {
     ])
     const lines = output.split('\n').filter((line) => /^\d+\./.test(line))
     expect(lines[0]).toContain('1. recording started')
-    expect(lines[1]).toBe('2. (+5s) selected button "Submit order" @ example.com/checkout')
-    expect(lines[2]).toBe('3. (+1m10s) selected button "Submit order" @ example.com/checkout')
+    expect(lines[1]).toBe(
+      '2. (+5s) selected button "Submit order" ([type="submit"]) @ example.com/checkout'
+    )
+    expect(lines[2]).toBe(
+      '3. (+1m10s) selected button "Submit order" ([type="submit"]) @ example.com/checkout'
+    )
     // Sub-second gap renders without a label.
-    expect(lines[3]).toBe('4. selected button "Submit order" @ example.com/checkout')
+    expect(lines[3]).toBe(
+      '4. selected button "Submit order" ([type="submit"]) @ example.com/checkout'
+    )
+  })
+
+  it('caps the markup shape tree and reports the overflow', () => {
+    const shapes = Array.from({ length: 13 }, (_, index) => ({
+      kind: 'text' as const,
+      at: { x: index, y: index },
+      text: `s${index}`
+    }))
+    const output = formatBrowserRecorderStepsAsMarkdown([
+      makeStep({ detail: { kind: 'markup', shapes } })
+    ])
+    expect(output).toContain('markup (13 shapes)')
+    expect(output).toContain('  └ text "s9" @ 9,9')
+    expect(output).toContain('  └ +3 more')
   })
 
   it('renders an automation action with result, diff, and per-field changes on one line', () => {

@@ -197,6 +197,7 @@ import { useMarkupMode, type MarkupCaptureContext } from './markup/useMarkupMode
 import { MarkupOverlay } from './markup/MarkupOverlay'
 import { MarkupDrawButton } from './markup/MarkupDrawButton'
 import { deliverMarkupToClipboard } from './markup/markup-clipboard-delivery'
+import { markupShapeToLog, resolveMarkupShapeElements } from './markup/markup-element-resolution'
 import { BrowserLoadFailureOverlay } from './browser-load-failure-overlay'
 import {
   BROWSER_GUEST_RECOVERY_ERROR_CODE,
@@ -2943,6 +2944,10 @@ function BrowserPagePane({
   const { recordStep: recordRecorderStep } = recorder
   const [recorderCopied, setRecorderCopied] = useState(false)
   const recorderCopyTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+  // Why: recorder.recording is a state the markup/grab callbacks close over;
+  // a ref keeps the latest value without recreating the callbacks on change.
+  const recorderRecordingRef = useRef(recorder.recording)
+  recorderRecordingRef.current = recorder.recording
 
   const markup = useMarkupMode({
     getCaptureContext: useCallback((): MarkupCaptureContext | null => {
@@ -2962,7 +2967,29 @@ function BrowserPagePane({
         outputScale: window.devicePixelRatio || 1
       }
     }, []),
-    onDeliver: deliverMarkupToClipboard
+    onDeliver: async (result) => {
+      // Why: while recording, markup is logged as text (shapes + target
+      // elements) instead of copied — the clipboard flow is skipped entirely.
+      if (recorderRecordingRef.current) {
+        return
+      }
+      await deliverMarkupToClipboard(result)
+    },
+    // Why: log the markup as a completed step only after the composited image
+    // reached the clipboard; a cancelled/failed session must not be recorded.
+    onCompleted: async ({ shapes }) => {
+      if (!recorderRecordingRef.current || shapes.length === 0) {
+        return
+      }
+      const webview = webviewRef.current
+      const shapeLogs = webview
+        ? await resolveMarkupShapeElements(webview, shapes)
+        : shapes.map(markupShapeToLog)
+      recordRecorderStep(
+        { kind: 'markup', shapes: shapeLogs },
+        { pageUrl: browserTab.url, pageTitle: browserTab.title }
+      )
+    }
   })
   const [grabIntent, setGrabIntent] = useState<GrabIntent>('copy')
   const grabIntentRef = useRef(grabIntent)
@@ -3139,6 +3166,12 @@ function BrowserPagePane({
       return
     }
     if (grabIntent === 'annotate') {
+      // Why: the annotate flow skips the copy path below, but the pick itself
+      // is still a user action — log it so pick → comment reads as one story.
+      recordRecorderStep(
+        { kind: 'element-selected', element: summarizeBrowserGrabTarget(grab.payload.target) },
+        { pageUrl: grab.payload.page.sanitizedUrl, pageTitle: grab.payload.page.title }
+      )
       setPendingAnnotationPayload(grab.payload)
       return
     }
@@ -3150,10 +3183,15 @@ function BrowserPagePane({
       { pageUrl: grab.payload.page.sanitizedUrl, pageTitle: grab.payload.page.title }
     )
     if (!grab.contextMenu) {
-      const text = formatGrabPayloadAsText(grab.payload)
-      void window.api.ui.writeClipboardText(text)
-      recordFeatureInteraction('browser-grab')
-      showGrabToast('Copied', 'success', grab.payload)
+      if (recorderRecordingRef.current) {
+        // Why: while recording the pick is logged (above) but not copied.
+        showGrabToast('Added to recording log', 'success', grab.payload)
+      } else {
+        const text = formatGrabPayloadAsText(grab.payload)
+        void window.api.ui.writeClipboardText(text)
+        recordFeatureInteraction('browser-grab')
+        showGrabToast('Copied', 'success', grab.payload)
+      }
     }
   }, [
     grab.state,
@@ -3172,7 +3210,7 @@ function BrowserPagePane({
   }, [grab.state])
 
   useEffect(() => {
-    if (browserAnnotations.length === 0) {
+    if (browserAnnotations.length === 0 && !recorderRecordingRef.current) {
       setBrowserAnnotationTrayOpen(true)
       setBrowserAnnotationsCopied(false)
       clearTimeout(annotationCopyTimerRef.current)
@@ -4434,6 +4472,10 @@ function BrowserPagePane({
       recordFeatureInteraction(nextIntent === 'annotate' ? 'browser-annotations' : 'browser-grab')
       if (nextIntent === 'copy') {
         setPendingAnnotationPayload(null)
+      } else if (recorderRecordingRef.current) {
+        // Why: while recording annotations land in the session log — keep the
+        // annotations tray closed through the whole annotate flow.
+        setBrowserAnnotationTrayOpen(false)
       } else {
         setBrowserAnnotationTrayOpen(true)
       }
@@ -4505,6 +4547,12 @@ function BrowserPagePane({
         return
       }
       const copyFromPayload = (payload: BrowserGrabPayload): void => {
+        // Why: while recording the grab logs the element (hover path logs it
+        // above) instead of copying it.
+        if (recorderRecordingRef.current) {
+          showGrabToast('Added to recording log', 'success', payload)
+          return
+        }
         if (key === 'c') {
           const text = formatGrabPayloadAsText(payload)
           void window.api.ui.writeClipboardText(text)
@@ -4623,6 +4671,11 @@ function BrowserPagePane({
     if (!payload) {
       return
     }
+    if (recorderRecordingRef.current) {
+      showGrabToast('Added to recording log', 'success', payload)
+      grab.rearm()
+      return
+    }
     const text = formatGrabPayloadAsText(payload)
     void window.api.ui.writeClipboardText(text)
     recordFeatureInteraction('browser-grab')
@@ -4634,6 +4687,11 @@ function BrowserPagePane({
     grabMenuActionTakenRef.current = true
     const payload = grabPayloadRef.current
     if (!payload) {
+      return
+    }
+    if (recorderRecordingRef.current) {
+      showGrabToast('Added to recording log', 'success', payload)
+      grab.rearm()
       return
     }
     const dataUrl = payload.screenshot?.dataUrl
@@ -4672,9 +4730,17 @@ function BrowserPagePane({
         { pageUrl: payload.page.sanitizedUrl, pageTitle: payload.page.title }
       )
       setPendingAnnotationPayload(null)
-      setBrowserAnnotationTrayOpen(true)
-      recordFeatureInteraction('browser-annotations')
-      showGrabToast('Annotation added', 'success', payload)
+      if (recorderRecordingRef.current) {
+        // Why: while recording the annotation already lands in the session
+        // log — keep the tray closed (it may have been open before) and
+        // confirm via toast instead.
+        setBrowserAnnotationTrayOpen(false)
+        showGrabToast('Annotation added to recording log', 'success', payload)
+      } else {
+        setBrowserAnnotationTrayOpen(true)
+        recordFeatureInteraction('browser-annotations')
+        showGrabToast('Annotation added', 'success', payload)
+      }
       grab.rearm()
     },
     [
@@ -4803,8 +4869,6 @@ function BrowserPagePane({
 
   // Why: recording is a per-pane session; leaving the pane must not leave the
   // main-process recorder capturing actions into the void.
-  const recorderRecordingRef = useRef(recorder.recording)
-  recorderRecordingRef.current = recorder.recording
   useEffect(() => {
     return () => {
       if (recorderRecordingRef.current) {
@@ -4911,10 +4975,26 @@ function BrowserPagePane({
 
   const handleDeleteBrowserAnnotation = useCallback(
     (annotationId: string): void => {
+      const annotation = browserAnnotationsRef.current.find((a) => a.id === annotationId)
       deleteBrowserPageAnnotation(browserTab.id, annotationId)
       recordFeatureInteraction('browser-annotations')
+      // Why: removing an annotation is a user action on the page — keep the
+      // session log truthful about what happened to the recorded flow.
+      if (annotation) {
+        recordRecorderStep(
+          { kind: 'annotation-removed', comment: annotation.comment },
+          { pageUrl: browserTab.url, pageTitle: browserTab.title }
+        )
+      }
     },
-    [browserTab.id, deleteBrowserPageAnnotation, recordFeatureInteraction]
+    [
+      browserTab.id,
+      browserTab.title,
+      browserTab.url,
+      deleteBrowserPageAnnotation,
+      recordFeatureInteraction,
+      recordRecorderStep
+    ]
   )
 
   const navigateToUrl = useCallback(
@@ -5424,7 +5504,12 @@ function BrowserPagePane({
                   )}
                   data-contextual-tour-target="browser-grab-control"
                 >
-                  <Crosshair className="size-4" />
+                  <Crosshair
+                    className={cn(
+                      'size-4',
+                      recorder.recording && grab.state === 'idle' && 'text-destructive'
+                    )}
+                  />
                 </Button>
               </span>
             </TooltipTrigger>
@@ -5458,7 +5543,12 @@ function BrowserPagePane({
                   )}
                   data-contextual-tour-target="browser-annotation-control"
                 >
-                  <MessageSquarePlus className="size-4" />
+                  <MessageSquarePlus
+                    className={cn(
+                      'size-4',
+                      recorder.recording && grab.state === 'idle' && 'text-destructive'
+                    )}
+                  />
                   {browserAnnotations.length > 0 ? (
                     <span className="absolute -top-1 -right-1 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] leading-4 text-primary-foreground">
                       {browserAnnotations.length}
@@ -5528,6 +5618,7 @@ function BrowserPagePane({
             onClick={() => (markup.isActive ? markup.cancel() : void markup.start())}
             disabled={isBlankTab || grab.state !== 'idle'}
             active={markup.isActive}
+            recordActive={recorder.recording}
             surfaceActive={isActive}
           />
 
@@ -5864,6 +5955,7 @@ function BrowserPagePane({
                 <MarkupOverlay
                   baseImage={markup.baseImage}
                   busy={markup.state === 'composing'}
+                  recording={recorder.recording}
                   onComplete={(input) => void markup.complete(input)}
                   onCancel={markup.cancel}
                 />

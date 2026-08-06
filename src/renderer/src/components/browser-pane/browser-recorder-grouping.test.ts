@@ -107,6 +107,24 @@ describe('groupRecorderSteps', () => {
     expect(groups[2]?.items.map((item) => item.step.id)).toEqual(['r-2'])
   })
 
+  it('closes the group at an annotation-removed or markup separator', () => {
+    const removed = makeStep('removed-1', { kind: 'annotation-removed', comment: 'x' })
+    const markup = makeStep('markup-1', {
+      kind: 'markup',
+      shapes: [{ kind: 'text', at: { x: 0, y: 0 }, text: 'a' }]
+    })
+    const groups = groupRecorderSteps([click, request('r-1'), removed, markup, request('r-2')])
+    expect(groups).toHaveLength(4)
+    expect(groups[0]?.lead?.id).toBe('click-1')
+    expect(groups[0]?.items.map((item) => item.step.id)).toEqual(['r-1'])
+    expect(groups[1]?.lead).toBeNull()
+    expect(groups[1]?.items.map((item) => item.step.id)).toEqual(['removed-1'])
+    expect(groups[2]?.lead).toBeNull()
+    expect(groups[2]?.items.map((item) => item.step.id)).toEqual(['markup-1'])
+    expect(groups[3]?.lead).toBeNull()
+    expect(groups[3]?.items.map((item) => item.step.id)).toEqual(['r-2'])
+  })
+
   it('treats a request before any lead as standalone', () => {
     const groups = groupRecorderSteps([request('r-0'), click])
     expect(groups).toHaveLength(2)

@@ -8,8 +8,10 @@ import {
   CornerDownRight,
   Crosshair,
   MessageSquarePlus,
+  MessageSquareX,
   MousePointerClick,
   Navigation,
+  PenLine,
   Trash2
 } from 'lucide-react'
 
@@ -30,6 +32,10 @@ function StepIcon({ step }: { step: BrowserRecorderStep }): React.JSX.Element {
       return <Crosshair className={className} />
     case 'annotation-added':
       return <MessageSquarePlus className={className} />
+    case 'annotation-removed':
+      return <MessageSquareX className={className} />
+    case 'markup':
+      return <PenLine className={className} />
     case 'automation-action':
       return <MousePointerClick className={className} />
     case 'interaction':
@@ -282,7 +288,17 @@ function CollapsedTrayBar({
         >
           <Trash2 className="size-3" />
         </button>
-        <ChevronUp className="size-3 shrink-0 text-muted-foreground" aria-hidden />
+        <button
+          type="button"
+          onClick={onExpand}
+          className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
+          aria-label={translate(
+            'auto.components.browser.pane.BrowserRecorderTray.expand',
+            'Expand log'
+          )}
+        >
+          <ChevronUp className="size-3 shrink-0" aria-hidden />
+        </button>
       </div>
     </div>
   )

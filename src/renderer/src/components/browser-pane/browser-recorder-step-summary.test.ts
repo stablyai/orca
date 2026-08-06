@@ -20,14 +20,36 @@ describe('formatBrowserRecorderStepSummary', () => {
     ).toBe('Navigated example.com/a → example.com/b')
     expect(
       formatBrowserRecorderStepSummary(makeStep({ detail: { kind: 'element-selected', element } }))
-    ).toBe('Selected button "Submit order"')
+    ).toBe('Selected button "Submit order" ([type="submit"])')
     expect(
       formatBrowserRecorderStepSummary(
         makeStep({
           detail: { kind: 'annotation-added', element, comment: 'x', intent: 'fix' }
         })
       )
-    ).toBe('Annotated button "Submit order"')
+    ).toBe('Annotated button "Submit order" ([type="submit"]) [fix]')
+    expect(
+      formatBrowserRecorderStepSummary(
+        makeStep({ detail: { kind: 'annotation-removed', comment: 'x' } })
+      )
+    ).toBe('Removed annotation')
+    expect(
+      formatBrowserRecorderStepSummary(
+        makeStep({
+          detail: {
+            kind: 'markup',
+            shapes: [{ kind: 'arrow', from: { x: 0, y: 0 }, to: { x: 10, y: 10 } }]
+          }
+        })
+      )
+    ).toBe('Markup copied (1 shape)')
+    expect(
+      formatBrowserRecorderStepSummary(
+        makeStep({
+          detail: { kind: 'markup', shapes: [{ kind: 'text', at: { x: 1, y: 2 }, text: 'x' }] }
+        })
+      )
+    ).toBe('Markup copied (1 shape)')
     expect(
       formatBrowserRecorderStepSummary(
         makeStep({

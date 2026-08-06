@@ -24,11 +24,32 @@ export type BrowserRecorderElementSummary = {
   rectViewport: BrowserGrabRect
 }
 
+/** Element resolved from a markup shape's target point via elementFromPoint. */
+export type BrowserRecorderMarkupElement = {
+  tagName: string
+  selector: string
+  accessibleName?: string | null
+  textSnippet: string
+}
+
+/** One drawn markup shape's textual trace: geometry, content, and target element. */
+export type BrowserRecorderMarkupShapeLog = {
+  kind: 'pen' | 'highlight' | 'arrow' | 'rect' | 'ellipse' | 'text'
+  from?: { x: number; y: number }
+  to?: { x: number; y: number }
+  at?: { x: number; y: number }
+  text?: string
+  pointCount?: number
+  element?: BrowserRecorderMarkupElement | null
+}
+
 export type BrowserRecorderStepKind =
   | 'recording-started'
   | 'navigation'
   | 'element-selected'
   | 'annotation-added'
+  | 'annotation-removed'
+  | 'markup'
   | 'automation-action'
   | 'interaction'
   | 'console'
@@ -45,6 +66,8 @@ export type BrowserRecorderStepDetail =
       comment: string
       intent: BrowserAnnotationIntent
     }
+  | { kind: 'annotation-removed'; comment: string }
+  | { kind: 'markup'; shapes: BrowserRecorderMarkupShapeLog[] }
   | { kind: 'automation-action'; action: BrowserRecorderAutomationAction }
   | { kind: 'interaction'; interaction: BrowserRecorderInteraction }
   | { kind: 'console'; entry: BrowserRecorderConsoleEntry }

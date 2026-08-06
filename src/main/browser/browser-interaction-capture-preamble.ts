@@ -43,6 +43,12 @@ export const INTERACTION_CAPTURE_PREAMBLE = `(() => {
     var name = String(el.name || el.id || '')
     return /password|passwd|sifre|parola/i.test(name)
   }
+  // Why: the recorder's own injected UI (grab overlay host and friends) must
+  // not appear in the session log as if the user interacted with the page.
+  function isOrcaHostElement(el) {
+    if (!el || !el.closest) { return false }
+    return !!el.closest('[id^="__orca-"]')
+  }
   function elementInfo(el) {
     if (!el || !el.tagName) { return null }
     var classes = typeof el.className === 'string' ? el.className.trim().split(/\\s+/).filter(Boolean).slice(0, 5) : []
@@ -96,6 +102,7 @@ export const INTERACTION_CAPTURE_PREAMBLE = `(() => {
   document.addEventListener('keydown', function (e) {
     if (!e.isTrusted) { flushTyping(); return }
     var active = document.activeElement
+    if (isOrcaHostElement(active)) { flushTyping(); return }
     var target = summarize(active)
     if (isPrintableKey(e.key)) {
       // Why: never leak typed password content into the recording log; keep
@@ -122,6 +129,7 @@ export const INTERACTION_CAPTURE_PREAMBLE = `(() => {
     // actions — log only trusted clicks so the flow stays truthful.
     if (!e.isTrusted) { return }
     var t = e.target
+    if (isOrcaHostElement(t)) { return }
     report('click', { x: e.clientX, y: e.clientY, target: summarize(t), tagName: t && t.tagName ? t.tagName.toLowerCase() : '', el: elementInfo(t) })
   }, true)
   // ── text selection ──
@@ -167,6 +175,7 @@ export const INTERACTION_CAPTURE_PREAMBLE = `(() => {
   }
   document.addEventListener('mouseover', function (e) {
     if (!e.isTrusted) { return }
+    if (isOrcaHostElement(e.target)) { cancelHover(); return }
     var target = summarize(e.target)
     if (target === hoverTarget) { return }
     if (hoverTimer) { clearTimeout(hoverTimer) }

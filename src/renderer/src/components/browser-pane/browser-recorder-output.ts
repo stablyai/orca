@@ -1,4 +1,4 @@
-import type { BrowserRecorderElementSummary, BrowserRecorderStep } from './browser-recorder-types'
+import type { BrowserRecorderStep } from './browser-recorder-types'
 import type { BrowserRecorderAutomationAction } from '../../../../shared/browser-recorder-automation'
 import { groupRecorderSteps } from './browser-recorder-grouping'
 import {
@@ -7,17 +7,8 @@ import {
   compactNetworkSummary,
   formatInteractionSummary
 } from './browser-recorder-stream-output'
+import { elementLabel, formatMarkupShapesTree } from './browser-recorder-element-format'
 import { formatPageUrl, formatTime, inlineCode, inlineText } from './browser-recorder-text'
-
-function elementLabel(element: BrowserRecorderElementSummary): string {
-  const accessibleName = element.accessibleName?.trim()
-  const base = accessibleName
-    ? `${element.tagName} "${accessibleName}"`
-    : element.textSnippet.trim()
-      ? `${element.tagName} "${inlineText(element.textSnippet).slice(0, 60)}"`
-      : element.tagName
-  return base
-}
 
 /** Format the gap: '' for sub-second, '(+Ns)' for seconds, '(+Ms)' for minutes. */
 export function stepGapLabel(currentAt: string, previousAt?: string): string {
@@ -163,7 +154,14 @@ export function computeSessionSummary(
 export function formatCompactStepLine(step: BrowserRecorderStep): string {
   const body = compactStepBody(step)
   const page = inlineText(formatPageUrl(step.pageUrl), 200)
-  return body ? `${body} @ ${page}` : `@ ${page}`
+  if (!body) {
+    return `@ ${page}`
+  }
+  // Why: tree steps (markup shapes) span several lines — the page suffix goes
+  // on the first line so every numbered line still ends with its location.
+  const lines = body.split('\n')
+  lines[0] = `${lines[0]} @ ${page}`
+  return lines.join('\n')
 }
 
 function compactStepBody(step: BrowserRecorderStep): string {
@@ -177,7 +175,11 @@ function compactStepBody(step: BrowserRecorderStep): string {
     case 'element-selected':
       return `selected ${elementLabel(step.detail.element)}`
     case 'annotation-added':
-      return `annotated ${elementLabel(step.detail.element)}: "${inlineText(step.detail.comment, 80)}"`
+      return `annotated ${elementLabel(step.detail.element)} [${step.detail.intent}]: "${inlineText(step.detail.comment, 80)}"`
+    case 'annotation-removed':
+      return `removed annotation: "${inlineText(step.detail.comment, 80)}"`
+    case 'markup':
+      return formatMarkupShapesTree(step.detail.shapes)
     case 'automation-action':
       return compactAutomationAction(step.detail.action)
     case 'interaction':
@@ -255,7 +257,11 @@ export function formatBrowserRecorderStepSummary(step: BrowserRecorderStep): str
     case 'element-selected':
       return `Selected ${elementLabel(step.detail.element)}`
     case 'annotation-added':
-      return `Annotated ${elementLabel(step.detail.element)}`
+      return `Annotated ${elementLabel(step.detail.element)} [${step.detail.intent}]`
+    case 'annotation-removed':
+      return `Removed annotation`
+    case 'markup':
+      return `Markup copied (${step.detail.shapes.length} shape${step.detail.shapes.length === 1 ? '' : 's'})`
     case 'automation-action':
       return formatAutomationActionSummary(step.detail.action)
     case 'interaction':

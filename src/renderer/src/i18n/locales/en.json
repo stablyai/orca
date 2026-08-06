@@ -14609,7 +14609,9 @@
             "text": "Text"
           },
           "undo": "Undo",
-          "widthOption": "{{value0}} px"
+          "widthOption": "{{value0}} px",
+          "hintRecording": "Draw on the page, then add it to the recording log.",
+          "logButton": "Add to Recording Log"
         },
         "grab": {
           "errorNotReady": "This page isn't ready for element selection yet.",

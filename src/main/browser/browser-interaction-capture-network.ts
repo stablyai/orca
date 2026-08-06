@@ -282,8 +282,12 @@ export const INTERACTION_CAPTURE_NETWORK = `  function originStack() {
   // ── localStorage/sessionStorage writes ──
   var nativeSetItem = window.Storage && window.Storage.prototype.setItem
   if (typeof nativeSetItem === 'function') {
-    var lastStorage = { key: '', value: '', at: 0 }
-    var STORAGE_THROTTLE_MS = 2000
+    // Why: storage-heavy apps (session heartbeat, UI state) rewrite the same
+    // keys constantly; reporting each write floods the log. Throttle on the
+    // key+value pair: an unchanged pair reports at most once per window, while
+    // a value change still reports immediately (the state transition matters).
+    var storageLastReported = {}
+    var STORAGE_KEY_THROTTLE_MS = 30000
     window.Storage.prototype.setItem = function (key, value) {
       try {
         var k = String(key || '').slice(0, 80)
@@ -291,11 +295,12 @@ export const INTERACTION_CAPTURE_NETWORK = `  function originStack() {
         if (k.length === 0 || v.length === 0) { return nativeSetItem.apply(this, arguments) }  // empty write
         if (/password|passwd|sifre|parola|token|key/i.test(k)) { v = '••••••' }
         var now = Date.now()
-        if (k === lastStorage.key && v === lastStorage.value && now - lastStorage.at < STORAGE_THROTTLE_MS) {
-          return nativeSetItem.apply(this, arguments)  // debounce
+        var last = storageLastReported[k]
+        if (last && last.value === v && now - last.at < STORAGE_KEY_THROTTLE_MS) {
+          return nativeSetItem.apply(this, arguments)  // unchanged pair reported recently
         }
-        lastStorage = { key: k, value: v, at: now }
-        report('storage', { key: k, value: v })
+        storageLastReported[k] = { value: v, at: now }
+        report('storage', { storageKey: k, storageValue: v })
       } catch (err) {}
       return nativeSetItem.apply(this, arguments)
     }

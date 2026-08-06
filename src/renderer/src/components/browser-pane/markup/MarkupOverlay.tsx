@@ -12,6 +12,8 @@ import { useMarkupEditor } from './useMarkupEditor'
 export type MarkupOverlayProps = {
   baseImage: MarkupBaseImage
   busy: boolean
+  /** While a recorder session is active, Done logs the markup instead of copying it. */
+  recording?: boolean
   onComplete: (input: { imageElement: HTMLImageElement; shapes: MarkupShape[] }) => void
   onCancel: () => void
 }
@@ -19,6 +21,7 @@ export type MarkupOverlayProps = {
 export function MarkupOverlay({
   baseImage,
   busy,
+  recording = false,
   onComplete,
   onCancel
 }: MarkupOverlayProps): React.JSX.Element {
@@ -139,10 +142,15 @@ export function MarkupOverlay({
         </div>
         <div className="pointer-events-auto flex items-center gap-2 rounded-md border border-border bg-card/95 p-1.5 shadow-md backdrop-blur">
           <span className="px-1 text-xs text-muted-foreground">
-            {translate(
-              'auto.components.browser-pane.markup.hint',
-              'Draw on the page, then copy the markup to paste into your agent.'
-            )}
+            {recording
+              ? translate(
+                  'auto.components.browser-pane.markup.hintRecording',
+                  'Draw on the page, then add it to the recording log.'
+                )
+              : translate(
+                  'auto.components.browser-pane.markup.hint',
+                  'Draw on the page, then copy the markup to paste into your agent.'
+                )}
           </span>
           <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={busy}>
             <X className="size-4" />
@@ -150,7 +158,9 @@ export function MarkupOverlay({
           </Button>
           <Button type="button" size="sm" onClick={handleDone} disabled={busy || !baseLoaded}>
             <Check className="size-4" />
-            {translate('auto.components.browser-pane.markup.copy', 'Copy Markup')}
+            {recording
+              ? translate('auto.components.browser-pane.markup.logButton', 'Add to Recording Log')
+              : translate('auto.components.browser-pane.markup.copy', 'Copy Markup')}
           </Button>
         </div>
       </div>
