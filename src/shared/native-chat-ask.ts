@@ -131,6 +131,15 @@ export function extractPendingAsk(messages: readonly NativeChatMessage[]): AskPr
   return pending
 }
 
+/** Prefers live status and consults transcript history only after its read settles. */
+export function resolveNativeChatAsk(args: {
+  liveAsk: AskPrompt | null
+  messages: readonly NativeChatMessage[]
+  transcriptSettled: boolean
+}): AskPrompt | null {
+  return args.liveAsk ?? (args.transcriptSettled ? extractPendingAsk(args.messages) : null)
+}
+
 /** One question's chosen answer, normalized for delivery: the selected option
  *  indices (in option order) plus any free-text "other" answer. Index-based (not
  *  label text) so the answer can be delivered by the selector's stable option

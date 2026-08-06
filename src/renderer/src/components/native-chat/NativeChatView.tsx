@@ -3,7 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
 import { useNativeChatLaunchDraftSignal } from './use-native-chat-launch-draft-adoption'
 import type { NativeChatSession } from '../../../../shared/native-chat-types'
-import { useNativeChatLiveSession } from './use-native-chat-live-session'
+import { useNativeChatRetainedSession } from './use-native-chat-retained-session'
 import { selectNativeChatViewState } from './native-chat-view-state'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { NativeChatComposer, type NativeChatComposerHandle } from './NativeChatComposer'
@@ -131,7 +131,7 @@ function NativeChatResolvedView({
   const runtimeEnvironmentId = useAppStore((s) =>
     selectNativeChatRuntimeEnvironmentId(s, terminalTabId)
   )
-  const session = useNativeChatLiveSession({
+  const session = useNativeChatRetainedSession({
     paneKey,
     agent,
     sessionId,
@@ -430,6 +430,7 @@ function NativeChatResolvedView({
         send={interactiveSend}
         canSend={canSend}
         messages={sessionAfterCommandBoundaries.messages}
+        transcriptSettled={session.readPhase === 'ready'}
         onShowingQuestionChange={setQuestionActive}
         answerInputRef={questionAnswerInputRef}
       />

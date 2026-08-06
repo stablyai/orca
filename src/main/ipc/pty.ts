@@ -93,6 +93,7 @@ import {
 import { resolveWslSessionContext } from '../daemon/wsl-session-context'
 import { addNodePtyRecoveryHint } from '../daemon/node-pty-error-hints'
 import { recordDaemonStreamBacklogEvent } from '../daemon/daemon-stream-backlog-probe'
+import { TerminalSessionOwnerUnverifiedError } from '../daemon/daemon-errors'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
 import { CLAUDE_AUTH_ENV_VARS, hasClaudeAuthEnvConflict } from '../claude-accounts/environment'
@@ -599,6 +600,9 @@ type StablePaneOwner = {
   leafId: string
   ptyId: string
   incarnationId?: string
+  hasPersistedBinding?: true
+  persistedIncarnationId?: string
+  runtimeIncarnationId?: string
 }
 type StablePaneAdoption = {
   result: PtySpawnResult
@@ -677,13 +681,6 @@ function resolveStablePaneOwner(
     throw new Error('terminal_pane_owner_host_mismatch')
   }
   const runtimeIncarnationId = ptyIncarnationById.get(ptyId)
-  if (
-    runtimeIncarnationId &&
-    persisted?.incarnationId &&
-    runtimeIncarnationId !== persisted.incarnationId
-  ) {
-    throw new Error('terminal_pane_owner_conflict')
-  }
   const parsed = parsePaneKey(paneKey)
   if (!parsed) {
     return null
@@ -695,7 +692,10 @@ function resolveStablePaneOwner(
     ptyId,
     ...(runtimeIncarnationId || persisted?.incarnationId
       ? { incarnationId: runtimeIncarnationId ?? persisted?.incarnationId }
-      : {})
+      : {}),
+    ...(persisted ? { hasPersistedBinding: true as const } : {}),
+    ...(persisted?.incarnationId ? { persistedIncarnationId: persisted.incarnationId } : {}),
+    ...(runtimeIncarnationId ? { runtimeIncarnationId } : {})
   }
 }
 
@@ -717,7 +717,7 @@ function retirePersistedStablePaneOwner(
     // not a competing owner. Reporting failure here strands the pane after its PTY is proven dead.
     return true
   }
-  if (current.ptyId !== owner.ptyId || current.incarnationId !== owner.incarnationId) {
+  if (current.ptyId !== owner.ptyId || current.incarnationId !== owner.persistedIncarnationId) {
     return false
   }
   const session = store.getWorkspaceSession(hostId)
@@ -726,7 +726,7 @@ function retirePersistedStablePaneOwner(
     parentTabId: owner.tabId,
     leafId: owner.leafId,
     ptyId: owner.ptyId,
-    ...(owner.incarnationId ? { incarnationId: owner.incarnationId } : {})
+    ...(current.incarnationId ? { incarnationId: current.incarnationId } : {})
   })
   if (retired === session) {
     return false
@@ -748,6 +748,47 @@ type StablePaneSpawnContext = {
   onFreshSpawn?: (result: PtySpawnResult) => void
 }
 
+function stablePanePersistenceFence(
+  owner: StablePaneOwner | null
+): { ptyId: string; incarnationId?: string } | undefined {
+  return owner?.hasPersistedBinding
+    ? {
+        ptyId: owner.ptyId,
+        ...(owner.persistedIncarnationId ? { incarnationId: owner.persistedIncarnationId } : {})
+      }
+    : undefined
+}
+
+function persistAdmittedStablePaneBinding(args: {
+  store: Store | undefined
+  owner: StablePaneOwner | null
+  result: PtySpawnResult
+  worktreeId: string | undefined
+  startupCwd: string | undefined
+  connectionId: string | null | undefined
+}): boolean {
+  const expectedBinding = stablePanePersistenceFence(args.owner)
+  if (!args.store || !args.owner || !args.worktreeId || !expectedBinding) {
+    return false
+  }
+  const persisted = args.store.persistPtyBinding(
+    {
+      worktreeId: args.worktreeId,
+      tabId: args.owner.tabId,
+      leafId: args.owner.leafId,
+      ptyId: args.result.id,
+      ...(args.result.incarnationId ? { incarnationId: args.result.incarnationId } : {}),
+      ...(args.startupCwd ? { startupCwd: args.startupCwd } : {}),
+      expectedBinding
+    },
+    args.connectionId ? toSshExecutionHostId(args.connectionId) : undefined
+  )
+  if (persisted === false) {
+    throw new Error('terminal_pane_owner_changed')
+  }
+  return true
+}
+
 async function attachStablePaneOwner(
   args: StablePaneSpawnContext & { owner: StablePaneOwner }
 ): Promise<{ result: PtySpawnResult; owner: StablePaneOwner } | null> {
@@ -758,6 +799,8 @@ async function attachStablePaneOwner(
       ...spawnOptions,
       sessionId: owner.ptyId,
       attachOnly: true,
+      expectedIncarnationId: owner.runtimeIncarnationId ?? owner.persistedIncarnationId,
+      expectedIncarnationIsAuthoritative: owner.runtimeIncarnationId !== undefined,
       isNewSession: undefined,
       command: undefined,
       commandDelivery: undefined,
@@ -769,25 +812,19 @@ async function attachStablePaneOwner(
       onPtySpawnCommitted: undefined
     })
   } catch (error) {
+    if (error instanceof TerminalSessionOwnerUnverifiedError) {
+      throw new Error('terminal_pane_owner_unverified')
+    }
     if (!isPtyAlreadyGoneError(error)) {
       throw error
-    }
-    // Why: "Session not found" only proves the provider we asked has no such PTY — and a
-    // degraded router answers unmapped ids from the local fallback, which never owned a
-    // daemon session. Retiring on that would signal exit and delete a live agent's pane
-    // binding. Absence must be proven across every possible owner first; `null` (nobody
-    // could answer) is not absence. Providers without a probe are their own sole owner,
-    // so their refusal stays authoritative.
-    if (provider.probePtyLiveness && (await provider.probePtyLiveness(owner.ptyId)) !== false) {
-      throw new Error('terminal_pane_owner_unverified')
     }
     const ownerBeforeRetire = args.resolveOwner?.()
     if (
       ownerBeforeRetire &&
       (ownerBeforeRetire.ptyId !== owner.ptyId ||
-        (ownerBeforeRetire.incarnationId !== undefined &&
-          owner.incarnationId !== undefined &&
-          ownerBeforeRetire.incarnationId !== owner.incarnationId))
+        ownerBeforeRetire.runtimeIncarnationId !== owner.runtimeIncarnationId ||
+        ownerBeforeRetire.hasPersistedBinding !== owner.hasPersistedBinding ||
+        ownerBeforeRetire.persistedIncarnationId !== owner.persistedIncarnationId)
     ) {
       throw new Error('terminal_pane_owner_changed')
     }
@@ -808,7 +845,9 @@ async function attachStablePaneOwner(
   if (
     result.id !== owner.ptyId ||
     result.isReattach !== true ||
-    (owner.incarnationId !== undefined && result.incarnationId !== owner.incarnationId)
+    (owner.runtimeIncarnationId !== undefined &&
+      result.incarnationId !== owner.runtimeIncarnationId) ||
+    (result.incarnationId === undefined && owner.incarnationId !== undefined)
   ) {
     throw new Error('terminal_pane_owner_changed')
   }
@@ -4680,6 +4719,7 @@ export function registerPtyHandlers(
         : null
       let result: PtySpawnResult
       let stablePaneOwner: StablePaneOwner | null = null
+      let stablePaneBindingPersisted = false
       let rejectedRegistrationCandidate: PtySpawnResult | null = null
       let pendingRegistrationPtyId: string | null = null
       let preparedProvisionalExecutionContext = false
@@ -4902,6 +4942,24 @@ export function registerPtyHandlers(
             trustedTerminalHandleEnv.delete(args.preAllocatedHandle)
           }
         }
+        try {
+          stablePaneBindingPersisted = persistAdmittedStablePaneBinding({
+            store: hostSessionBinding?.store,
+            owner: stablePaneOwner,
+            result,
+            worktreeId: hostSessionBinding?.worktreeId,
+            startupCwd: cwd,
+            connectionId: args.connectionId
+          })
+        } catch (error) {
+          if (error instanceof Error && error.message === 'terminal_pane_owner_changed') {
+            throw error
+          }
+          console.error('[pty] failed to persist runtime PTY binding after attach:', error)
+          throw Object.assign(new Error(createTerminalSessionStateSaveFailureMessage()), {
+            agentSessionOperationOutcome: 'unknown' as const
+          })
+        }
         if (result.agentSessionEnsure?.disposition === 'adopted') {
           const owner = result.agentSessionEnsure.owner
           ptyOwnership.set(result.id, args.connectionId ?? ptyOwnership.get(result.id) ?? null)
@@ -4969,7 +5027,7 @@ export function registerPtyHandlers(
           target: codexSelectionTarget,
           settings: getSettings?.()
         })
-        if (hostSessionBinding) {
+        if (hostSessionBinding && !stablePaneBindingPersisted) {
           try {
             const binding = {
               worktreeId: hostSessionBinding.worktreeId,
@@ -5625,6 +5683,7 @@ export function registerPtyHandlers(
       let finishTerminalInstall = (): void => {}
       let result: PtySpawnResult
       let stablePaneOwner: StablePaneOwner | null = null
+      let stablePaneBindingPersisted = false
       let rejectedRegistrationCandidate: PtySpawnResult | null = null
       let pendingRegistrationPtyId: string | null = null
       let preparedProvisionalExecutionContext = false
@@ -6245,6 +6304,24 @@ export function registerPtyHandlers(
             trustedTerminalHandleEnv.delete(preAllocatedHandle)
           }
         }
+        try {
+          stablePaneBindingPersisted = persistAdmittedStablePaneBinding({
+            store,
+            owner: stablePaneOwner,
+            result,
+            worktreeId: args.worktreeId,
+            startupCwd: cwd,
+            connectionId: args.connectionId
+          })
+        } catch (error) {
+          if (error instanceof Error && error.message === 'terminal_pane_owner_changed') {
+            throw error
+          }
+          console.error('[pty] failed to persist PTY binding after attach:', error)
+          throw Object.assign(new Error(createTerminalSessionStateSaveFailureMessage()), {
+            agentSessionOperationOutcome: 'unknown' as const
+          })
+        }
         spawnTiming.log(result.id, {
           daemon: isDaemonHostSpawn,
           reattach: result.isReattach ?? false
@@ -6303,7 +6380,8 @@ export function registerPtyHandlers(
           store &&
           typeof args.worktreeId === 'string' &&
           typeof args.tabId === 'string' &&
-          validatedLeafId !== null
+          validatedLeafId !== null &&
+          !stablePaneBindingPersisted
         ) {
           try {
             const binding = {

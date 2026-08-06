@@ -24,6 +24,7 @@ import {
   developerPermissionStatusClass,
   developerPermissionStatusLabel
 } from './developer-permission-status'
+import { TerminalTccAttributionNotice } from './TerminalTccAttributionNotice'
 export { getDeveloperPermissionsPaneSearchEntries } from './developer-permissions-search'
 
 type DeveloperPermissionsPaneProps = {
@@ -329,6 +330,7 @@ export function DeveloperPermissionsPane({
 
   return (
     <div className="space-y-5">
+      <TerminalTccAttributionNotice />
       <div className="flex items-start justify-between gap-4 rounded-lg border border-border/60 bg-muted/25 px-4 py-3">
         <div className="space-y-1">
           <div className="flex items-center gap-2 text-sm font-medium">

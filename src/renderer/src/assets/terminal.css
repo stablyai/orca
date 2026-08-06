@@ -6,6 +6,12 @@
   position: relative;
 }
 
+/* Why: .pane-manager-root matches no live element, so a var declared there
+   never resolves and every calc() using it is dropped. Keep it on :root. */
+:root {
+  --orca-terminal-link-tooltip-height: 25px;
+}
+
 /* Ensure pane manager root fills its absolutely-positioned container */
 .pane-manager-root {
   width: 100% !important;
@@ -497,9 +503,10 @@
    so Ghostty-imported window-padding-x/y can be applied without inline styles.
    The fallback 4px preserves the legacy default. */
 .xterm-container {
+  box-sizing: border-box;
   position: relative;
   width: calc(100% - var(--pane-padding-x, 4px));
-  height: calc(100% - var(--pane-padding-y, 4px));
+  height: calc(100% - var(--pane-padding-y, 4px) - var(--orca-terminal-link-tooltip-height, 25px));
   margin-top: var(--pane-padding-y, 4px);
   margin-left: var(--pane-padding-x, 4px);
 }
@@ -510,12 +517,15 @@
    same amount to prevent overflow/clipping. */
 .pane[data-has-title] .xterm-container {
   margin-top: var(--orca-pane-title-height);
-  height: calc(100% - var(--orca-pane-title-height)); /* match margin-top */
+  height: calc(
+    100% - var(--orca-pane-title-height) - var(--orca-terminal-link-tooltip-height, 25px)
+  ); /* match margin-top and the tooltip reserve */
 }
 
 /* Ghostty-style URL hover: glued to the pane's true bottom-left corner. */
 .pane-link-tooltip {
   position: absolute;
+  box-sizing: border-box;
   bottom: 0;
   left: 0;
   z-index: 40;
@@ -526,6 +536,8 @@
   border-bottom: none;
   border-left: none;
   padding: 4px 8px;
+  height: var(--orca-terminal-link-tooltip-height);
+  line-height: 15px;
   max-width: 80%;
   overflow: hidden;
   text-overflow: ellipsis;

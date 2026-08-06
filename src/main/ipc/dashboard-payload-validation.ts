@@ -1,9 +1,11 @@
 import {
   DASHBOARD_MAX_LABEL_LENGTH,
   type DashboardRevealAgentArgs,
+  type DashboardSleepWorkspaceArgs,
   type DashboardSnapshot
 } from '../../shared/dashboard-snapshot'
 import { BoundedMap } from '../../shared/bounded-map'
+import { normalizeExecutionHostId } from '../../shared/execution-host'
 import { sanitizeRepoIcon } from '../../shared/repo-icon'
 import {
   AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH,
@@ -11,11 +13,17 @@ import {
   AGENT_STATUS_MAX_FIELD_LENGTH,
   AGENT_TYPE_MAX_LENGTH
 } from '../../shared/agent-status-types'
+import { isDashboardLaunchOptions } from './dashboard-agent-launch-validation'
+import {
+  admitDashboardWorkspaces,
+  isDashboardWorkspaceList
+} from './dashboard-workspace-payload-validation'
+import { isDashboardFilterOptions } from './dashboard-filter-payload-validation'
+export { isDashboardSpawnAgentArgs } from './dashboard-agent-launch-validation'
 
 const MAX_DASHBOARD_CARDS = 1_000
 const MAX_DASHBOARD_SUBAGENTS = 100
 const MAX_DASHBOARD_REPO_ICONS = 500
-const MAX_DASHBOARD_FILTER_OPTIONS = 500
 // Why: sanitizing an image icon base64-decodes the whole data URI to read a
 // 24-byte header, and the renderer republishes the same icons every 250 ms.
 const MAX_CACHED_ICON_SRC_BYTES = 8 * 1024 * 1024
@@ -28,6 +36,8 @@ const MAX_ID_LENGTH = 4_096
 const MAX_LABEL_LENGTH = DASHBOARD_MAX_LABEL_LENGTH
 const DASHBOARD_BUCKETS = new Set(['attention', 'working', 'done', 'idle'])
 const DASHBOARD_DOT_STATES = new Set(['working', 'blocked', 'waiting', 'done', 'idle'])
+const DASHBOARD_HOST_KINDS = new Set(['local', 'ssh', 'wsl', 'remote'])
+const DASHBOARD_WORKSPACE_KINDS = new Set(['worktree', 'folder'])
 const DASHBOARD_REVIEW_STATES = new Set(['open', 'closed', 'merged', 'draft'])
 const DASHBOARD_HOST_PLATFORMS = new Set([
   'aix',
@@ -64,6 +74,9 @@ export function isDashboardRevealAgentArgs(value: unknown): value is DashboardRe
   return (
     isBoundedString(args.repoId, MAX_ID_LENGTH) &&
     isBoundedString(args.worktreeId, MAX_ID_LENGTH) &&
+    (args.executionHostId === undefined ||
+      (isBoundedString(args.executionHostId, MAX_ID_LENGTH) &&
+        normalizeExecutionHostId(args.executionHostId) !== null)) &&
     isBoundedString(args.tabId, MAX_ID_LENGTH) &&
     (args.leafId === null || isBoundedString(args.leafId, MAX_ID_LENGTH))
   )
@@ -71,6 +84,15 @@ export function isDashboardRevealAgentArgs(value: unknown): value is DashboardRe
 
 export function isDashboardPaneKey(value: unknown): value is string {
   return isBoundedString(value, MAX_ID_LENGTH)
+}
+
+export function isDashboardSleepWorkspaceArgs(
+  value: unknown
+): value is DashboardSleepWorkspaceArgs {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false
+  }
+  return isBoundedString((value as Record<string, unknown>).worktreeId, MAX_ID_LENGTH)
 }
 
 export function isDashboardSnapshot(value: unknown): value is DashboardSnapshot {
@@ -83,8 +105,10 @@ export function isDashboardSnapshot(value: unknown): value is DashboardSnapshot 
     Array.isArray(snapshot.cards) &&
     snapshot.cards.length <= MAX_DASHBOARD_CARDS &&
     snapshot.cards.every(isDashboardCard) &&
+    isDashboardWorkspaceList(snapshot.workspaces) &&
     (snapshot.showIdle === undefined || typeof snapshot.showIdle === 'boolean') &&
     isDashboardFilterOptions(snapshot.filterOptions) &&
+    isDashboardLaunchOptions(snapshot.launchableAgentsByWorktreeId) &&
     isDashboardRepoIcons(snapshot.repoIconsByRepoId)
   )
 }
@@ -107,53 +131,28 @@ export function admitDashboardSnapshot(value: unknown): DashboardSnapshotAdmissi
     return null
   }
   const snapshot = value as Record<string, unknown>
+  const workspaces = admitDashboardWorkspaces(snapshot.workspaces)
   if (
     !isFiniteNumber(snapshot.generatedAt) ||
     !Array.isArray(snapshot.cards) ||
     snapshot.cards.length > MAX_DASHBOARD_CARDS ||
+    workspaces === null ||
     (snapshot.showIdle !== undefined && typeof snapshot.showIdle !== 'boolean') ||
     !isDashboardFilterOptions(snapshot.filterOptions) ||
+    !isDashboardLaunchOptions(snapshot.launchableAgentsByWorktreeId) ||
     !isDashboardRepoIcons(snapshot.repoIconsByRepoId)
   ) {
     return null
   }
   const cards = snapshot.cards.filter(isDashboardCard)
   return {
-    snapshot: { ...(snapshot as unknown as DashboardSnapshot), cards },
+    snapshot: {
+      ...(snapshot as unknown as DashboardSnapshot),
+      cards,
+      ...(workspaces ? { workspaces } : {})
+    },
     droppedCardCount: snapshot.cards.length - cards.length
   }
-}
-
-function isDashboardFilterOptions(value: unknown): boolean {
-  if (value === undefined) {
-    return true
-  }
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return false
-  }
-  const options = value as Record<string, unknown>
-  return (
-    isDashboardFilterOptionList(options.projects) &&
-    isDashboardFilterOptionList(options.workspaceStatuses)
-  )
-}
-
-function isDashboardFilterOptionList(value: unknown): boolean {
-  return (
-    Array.isArray(value) &&
-    value.length <= MAX_DASHBOARD_FILTER_OPTIONS &&
-    value.every((entry) => {
-      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
-        return false
-      }
-      const option = entry as Record<string, unknown>
-      return (
-        isBoundedString(option.id, MAX_ID_LENGTH) &&
-        isBoundedString(option.label, MAX_LABEL_LENGTH, true) &&
-        isOptionalBoundedString(option.color, MAX_ID_LENGTH)
-      )
-    })
-  )
 }
 
 /** Repo icons reach the pop-out's `<img src>`, so each one must survive the
@@ -264,8 +263,18 @@ function isDashboardCard(value: unknown): boolean {
     isBoundedString(card.worktreeId, MAX_ID_LENGTH) &&
     isBoundedString(card.tabId, MAX_ID_LENGTH) &&
     (card.leafId === null || isBoundedString(card.leafId, MAX_ID_LENGTH)) &&
+    isOptionalBoundedString(card.parentPaneKey, MAX_ID_LENGTH) &&
+    isOptionalBoundedString(card.parentWorktreeId, MAX_ID_LENGTH) &&
     isBoundedString(card.repoName, MAX_LABEL_LENGTH, true) &&
     isBoundedString(card.worktreeName, MAX_LABEL_LENGTH, true) &&
+    (card.hostKind === undefined ||
+      (typeof card.hostKind === 'string' && DASHBOARD_HOST_KINDS.has(card.hostKind))) &&
+    (card.executionHostId === undefined ||
+      (isBoundedString(card.executionHostId, MAX_ID_LENGTH) &&
+        normalizeExecutionHostId(card.executionHostId) !== null)) &&
+    (card.workspaceKind === undefined ||
+      (typeof card.workspaceKind === 'string' &&
+        DASHBOARD_WORKSPACE_KINDS.has(card.workspaceKind))) &&
     isOptionalBoundedString(card.workspaceStatusId, MAX_ID_LENGTH) &&
     isOptionalBoundedString(card.workspaceStatusLabel, MAX_LABEL_LENGTH) &&
     isOptionalBoundedString(card.workspaceStatusColor, MAX_ID_LENGTH) &&
@@ -275,6 +284,7 @@ function isDashboardCard(value: unknown): boolean {
     isFiniteNumber(card.startedAt) &&
     (card.finishedAt === null || isFiniteNumber(card.finishedAt)) &&
     isFiniteNumber(card.stateChangedAt) &&
+    (card.statusUpdatedAt === undefined || isFiniteNumber(card.statusUpdatedAt)) &&
     typeof card.unseen === 'boolean' &&
     isOptionalBoundedString(card.askSummary, AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH) &&
     isOptionalBoundedString(card.conversationName, MAX_LABEL_LENGTH) &&

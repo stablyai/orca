@@ -64,6 +64,10 @@ export type PtySpawnOptions = {
   isNewSession?: boolean
   /** Attach the named session atomically or fail without creating a process. */
   attachOnly?: boolean
+  /** Exact persisted owner expected by an attach-only routing decision. */
+  expectedIncarnationId?: PtyIncarnationId
+  /** True when runtime state makes the expected incarnation a hard attach fence. */
+  expectedIncarnationIsAuthoritative?: boolean
   /** Why: allows the renderer to request a specific shell for a single new
    *  terminal tab (e.g. "open this tab in WSL" from the "+" submenu) without
    *  changing the user's persistent default shell setting. Only consulted on

@@ -129,11 +129,16 @@ export class SshGitProvider implements IGitProvider {
       ? { bypassEffectiveUpstreamNegativeCache: true }
       : {}
     const lineStatsReuseArgs = options?.reuseLineStats ? { reuseLineStats: true } : {}
+    const branchLineTotalArgs =
+      options?.branchLineTotalMergeBase === undefined
+        ? {}
+        : { branchLineTotalMergeBase: options.branchLineTotalMergeBase }
     const request = {
       worktreePath,
       ...includeIgnoredArgs,
       ...upstreamCacheBypassArgs,
-      ...lineStatsReuseArgs
+      ...lineStatsReuseArgs,
+      ...branchLineTotalArgs
     }
     return (await (options?.signal
       ? this.mux.request('git.status', request, { signal: options.signal })

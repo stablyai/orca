@@ -75,6 +75,13 @@ export type HostProfile = {
   relay?: MobileRelayHostOverlay['relay']
 }
 
+export type HostCredentialStatus = 'ready' | 'temporarily-unavailable' | 'missing'
+
+export type HostCatalogEntry = Omit<HostProfile, 'deviceToken'> & {
+  credentialStatus: HostCredentialStatus
+  profile: HostProfile | null
+}
+
 export const HostProfileSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),

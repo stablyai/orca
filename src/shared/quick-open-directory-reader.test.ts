@@ -22,6 +22,29 @@ beforeEach(() => {
 })
 
 describe('quick-open streaming directory reader', () => {
+  it('orders numbered entries naturally before the recursive walk', async () => {
+    opendirMock.mockResolvedValue({
+      async *[Symbol.asyncIterator]() {
+        for (const name of ['100 - notes', '9 - notes', '99 - notes']) {
+          yield {
+            name,
+            isDirectory: () => true,
+            isFile: () => false,
+            isSymbolicLink: () => false
+          }
+        }
+      }
+    })
+
+    const entries = await readQuickOpenDirectoryEntries({
+      absPath: '/numbered',
+      allowSymlinkedRoot: false,
+      budget: createQuickOpenReaddirBudget()
+    })
+
+    expect(entries.map((entry) => entry.name)).toEqual(['9 - notes', '99 - notes', '100 - notes'])
+  })
+
   it('stops a huge directory one entry beyond the exact cap and closes its iterator', async () => {
     let produced = 0
     let closed = false
