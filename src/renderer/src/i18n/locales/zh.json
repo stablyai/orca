@@ -7711,7 +7711,7 @@
               "description": "已固定的工作树会保留在 Pinned 中，同时也显示在全部、项目、状态和 PR 中。"
             },
             "antigravityUsageTitle": "Antigravity 使用情况",
-            "antigravityUsageDescription": "在状态栏中显示 Antigravity 订阅使用量。",
+            "antigravityUsageDescription": "在状态栏中显示 Antigravity 订阅使用情况。",
             "antigravityKeyword": "antigravity",
             "f8e2a1c4b6": "Grok 使用情况",
             "e7d1b0f3a5": "显示来自 Grok CLI OAuth 的 Grok 每周额度使用量。",
