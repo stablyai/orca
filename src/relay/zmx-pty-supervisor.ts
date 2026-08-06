@@ -51,6 +51,13 @@ function isMetadata(value: unknown): value is ZmxPtySessionMetadata {
   const input = value as Record<string, unknown>
   const optionalString = (field: unknown): boolean =>
     field === undefined || typeof field === 'string'
+  const optionalAttachIdentity = (field: unknown): boolean =>
+    field === undefined ||
+    (typeof field === 'object' &&
+      field !== null &&
+      !Array.isArray(field) &&
+      optionalString((field as Record<string, unknown>).paneKey) &&
+      optionalString((field as Record<string, unknown>).tabId))
   return (
     input.version === METADATA_VERSION &&
     typeof input.id === 'string' &&
@@ -70,7 +77,7 @@ function isMetadata(value: unknown): value is ZmxPtySessionMetadata {
     // a same-user-corrupted file must fail validation, not throw mid-sweep.
     optionalString(input.paneKey) &&
     optionalString(input.tabId) &&
-    optionalString(input.attachIdentity) &&
+    optionalAttachIdentity(input.attachIdentity) &&
     optionalString(input.worktreeId) &&
     optionalString(input.terminalHandle) &&
     optionalString(input.explicitTerm) &&
