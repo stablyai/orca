@@ -15,7 +15,17 @@ vi.mock('@/i18n/i18n', () => ({
   }
 }))
 
-import { getProviderUsageErrorMessage, getProviderUsageStatusLabel } from './usage-error-copy'
+import {
+  getProviderDisplayName,
+  getProviderUsageErrorMessage,
+  getProviderUsageStatusLabel
+} from './usage-error-copy'
+
+describe('getProviderDisplayName', () => {
+  it('returns the DeepSeek brand name', () => {
+    expect(getProviderDisplayName('deepseek')).toBe('DeepSeek')
+  })
+})
 
 describe('structured failure kinds over message wording', () => {
   // Captured from codex-cli 0.162.0 `app-server` behind an unreachable proxy.
