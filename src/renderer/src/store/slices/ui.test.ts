@@ -23,6 +23,7 @@ import { buildAgentNotificationId } from '../../../../shared/agent-notification-
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import { getSetupScriptPromptDismissalKey } from '../../lib/setup-script-prompt'
+import { getRepoHostIdentityForParts } from './repo-host-identity'
 
 const mocks = vi.hoisted(() => ({
   sendNotesToActiveAgentSession: vi.fn(),
@@ -77,6 +78,7 @@ function createUIStore(): StoreApi<AppState> {
     rightSidebarOpen: false,
     rightSidebarWidth: 280,
     markdownTocPanelWidth: 240,
+    combinedDiffFileTreeWidth: 256,
     rightSidebarTab: 'explorer',
     rightSidebarExplorerView: 'files',
     ...createSettingsSearchState(args[0]),
@@ -719,6 +721,33 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().showSleepingWorkspaces).toBe(true)
   })
 
+  it('defaults the default-branch sleeping exemption to on', () => {
+    expect(getDefaultUIState().alwaysShowDefaultBranchWorkspace).toBe(true)
+    expect(createUIStore().getState().alwaysShowDefaultBranchWorkspace).toBe(true)
+  })
+
+  it('treats a legacy profile with no default-branch exemption key as opted in', () => {
+    // Why: profiles written before #8873 are exactly the ones showing the bug,
+    // so an absent key must hydrate to on rather than silently re-hiding main.
+    const store = createUIStore()
+    const legacy = makePersistedUI()
+    delete (legacy as Partial<PersistedUIState>).alwaysShowDefaultBranchWorkspace
+
+    store.getState().hydratePersistedUI(legacy, 'startup')
+
+    expect(store.getState().alwaysShowDefaultBranchWorkspace).toBe(true)
+  })
+
+  it('preserves an explicit default-branch exemption opt-out on hydration', () => {
+    const store = createUIStore()
+
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ alwaysShowDefaultBranchWorkspace: false }), 'startup')
+
+    expect(store.getState().alwaysShowDefaultBranchWorkspace).toBe(false)
+  })
+
   it('defaults workspace host scope to all hosts', () => {
     expect(getDefaultUIState().workspaceHostScope).toBe('all')
     expect(createUIStore().getState().workspaceHostScope).toBe('all')
@@ -859,7 +888,9 @@ describe('createUISlice hydratePersistedUI', () => {
 
   it('preserves persisted repo filters until repos are loaded', () => {
     const store = createUIStore()
-    const remoteDismissalKey = getSetupScriptPromptDismissalKey('remote-repo')
+    const remoteDismissalKey = getSetupScriptPromptDismissalKey(
+      getRepoHostIdentityForParts('remote-repo', 'runtime:env-1')
+    )
 
     store.getState().hydratePersistedUI(
       makePersistedUI({
@@ -881,8 +912,12 @@ describe('createUISlice hydratePersistedUI', () => {
 
   it('validates persisted repo filters when repos are already loaded', () => {
     const store = createUIStore()
-    const localDismissalKey = getSetupScriptPromptDismissalKey('local-repo')
-    const staleDismissalKey = getSetupScriptPromptDismissalKey('stale-repo')
+    const localDismissalKey = getSetupScriptPromptDismissalKey(
+      getRepoHostIdentityForParts('local-repo', 'local')
+    )
+    const staleDismissalKey = getSetupScriptPromptDismissalKey(
+      getRepoHostIdentityForParts('stale-repo', 'local')
+    )
     store.setState({
       repos: [
         { id: 'local-repo', path: '/local', displayName: 'Local', badgeColor: '#000', addedAt: 1 }
@@ -1226,6 +1261,16 @@ describe('createUISlice hydratePersistedUI', () => {
     )
 
     expect(store.getState().markdownTocPanelWidth).toBe(200)
+  })
+
+  it('clamps persisted combined diff file tree widths into the supported range', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ combinedDiffFileTreeWidth: 100 }))
+    expect(store.getState().combinedDiffFileTreeWidth).toBe(200)
+
+    store.getState().hydratePersistedUI(makePersistedUI({ combinedDiffFileTreeWidth: 5_000 }))
+    expect(store.getState().combinedDiffFileTreeWidth).toBe(640)
   })
 
   it('preserves right sidebar widths above the former 500px cap', () => {
@@ -1909,6 +1954,28 @@ describe('createUISlice hydratePersistedUI', () => {
 })
 
 describe('createUISlice settings navigation', () => {
+  it('accepts a host-qualified setup guide target', () => {
+    const store = createUIStore()
+    store.getState().openSettingsTarget({ pane: 'setup-guide', repoId: null, hostId: 'ssh:host-1' })
+    expect(store.getState().settingsNavigationTarget).toEqual({
+      pane: 'setup-guide',
+      repoId: null,
+      hostId: 'ssh:host-1'
+    })
+  })
+
+  it('rejects malformed settings targets before storing them', () => {
+    const store = createUIStore()
+    const openSettingsTarget = store.getState().openSettingsTarget as unknown as (
+      target: unknown
+    ) => void
+
+    expect(() =>
+      openSettingsTarget({ pane: 'repo', repoId: 'repo-1', hostId: 'invalid' })
+    ).toThrowError('openSettingsTarget received an invalid navigation target')
+    expect(store.getState().settingsNavigationTarget).toBeNull()
+  })
+
   it('prefetches the restored default task source when provider settings drifted', () => {
     const store = createUIStore()
     const prefetchWorkItems = vi.fn()
@@ -2126,6 +2193,53 @@ describe('createUISlice new workspace draft', () => {
       number: 42,
       title: 'Legacy issue',
       url: 'https://github.com/acme/repo/issues/42'
+    })
+  })
+
+  it('preserves serializable Jira identity and bound source context in drafts', () => {
+    const store = createUIStore()
+    const linkedTaskSourceContext = {
+      kind: 'task-source' as const,
+      provider: 'jira' as const,
+      projectId: 'project-1',
+      hostId: 'runtime:env-1' as const,
+      providerIdentity: {
+        provider: 'jira' as const,
+        siteId: 'site-1',
+        siteUrl: 'https://company.atlassian.net',
+        projectKey: 'ORCA'
+      },
+      accountLabel: 'ada@example.com'
+    }
+
+    store.getState().setNewWorkspaceDraft({
+      repoId: 'repo-1',
+      name: 'orca-123-link-jira',
+      prompt: '',
+      note: '',
+      attachments: [],
+      linkedWorkItem: {
+        provider: 'jira',
+        type: 'issue',
+        number: 0,
+        title: 'ORCA-123 Link Jira',
+        url: 'https://company.atlassian.net/browse/ORCA-123',
+        jiraIdentifier: 'ORCA-123'
+      },
+      linkedTaskSourceContext,
+      agent: 'claude',
+      linkedIssue: '',
+      linkedPR: null,
+      linkedGitLabIssue: null,
+      linkedGitLabMR: null
+    })
+
+    expect(store.getState().newWorkspaceDraft).toMatchObject({
+      linkedWorkItem: {
+        provider: 'jira',
+        jiraIdentifier: 'ORCA-123'
+      },
+      linkedTaskSourceContext
     })
   })
 })

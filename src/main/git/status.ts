@@ -38,19 +38,29 @@ import {
   gitStreamStdout
 } from './runner'
 import { StatusPorcelainParser } from '../../shared/git-status-porcelain-parser'
+import { findExistingWorktreeSymlinkPaths } from './worktree-symlink-detection'
 import { capGitStatusEntries, resolveGitStatusLimit } from '../../shared/git-status-limit'
 import { describeMaxBufferOverflowError, isMaxBufferOverflowError } from './max-buffer-overflow'
 import {
   removeSafeUntrackedDiscardTarget,
   removeSafeUntrackedDiscardTargets
 } from '../../shared/git-discard-path-safety'
+import { readBranchCompareHead } from '../../shared/git-branch-compare-head'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
-import { hasWorktreeBaseCommitRef } from './worktree-base-ref-probe'
+import { resolveWorktreeBaseCommitOid } from './worktree-base-ref-probe'
 import { getLargeDiffRenderLimit } from '../../shared/large-diff-render-limit'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
 import type { GitRuntimeOptions } from './git-runtime-options'
 import { gitOptionsForWorktree } from './git-runtime-options'
+import { GitStatusReadLeaseOwner } from './git-status-read-lease-owner'
 import { parseGitRevListFirstParentOid } from '../../shared/git-rev-list-output'
+import {
+  computeGitBranchLineTotal,
+  invalidateGitBranchLineTotalInFlight,
+  readGitBranchLineTotalMergeBaseParam,
+  GIT_BRANCH_LINE_TOTAL_TIMEOUT_MS,
+  type GitBranchLineTotal
+} from '../../shared/git-branch-line-total'
 import {
   beginGitStatusLineStatsCacheWrite,
   clearGitStatusLineStatsCache,
@@ -90,12 +100,14 @@ const effectiveUpstreamStatusInFlight = new Map<string, Promise<GitUpstreamStatu
 const retiredEffectiveUpstreamStatusInFlight = new Map<string, Promise<GitUpstreamStatus>>()
 const gitDiffReadDedupe = new InFlightPromiseDedupe<GitDiffResult>()
 const effectiveUpstreamStatusWriteGeneration = new Map<string, number>()
-const statusReadsInFlight = new Map<string, Promise<GitStatusResult>>()
+const statusReadLeaseOwner = new GitStatusReadLeaseOwner<GitStatusResult>()
 
-// Why: clear both diff and status in-flight caches; clearing only diff would let getStatus() join a pre-mutation read.
+// Why: clear every in-flight git read cache; clearing only some would let a post-mutation
+// getStatus() join a pre-mutation read and publish it as current.
 export function invalidateGitReadCaches(): void {
   gitDiffReadDedupe.clear()
-  statusReadsInFlight.clear()
+  statusReadLeaseOwner.invalidate()
+  invalidateGitBranchLineTotalInFlight()
   clearGitStatusLineStatsCache()
   clearSubmodulePathsCache()
   resolvedUpstreamNameCache.clear()
@@ -192,12 +204,21 @@ export function getEffectiveUpstreamStatusGenerationCountForTests(): number {
 export type GetStatusOptions = GitRuntimeOptions & {
   includeIgnored?: boolean
   reuseLineStats?: boolean
+  /** Merge-base OID the caller wants the branch line total measured against;
+   *  omitted means the chip is hidden, so no ranged diff runs at all. */
+  branchLineTotalMergeBase?: string
   /**
    * Max changed-file entries before git is stopped and the result is marked
    * `didHitLimit`. Defaults to DEFAULT_GIT_STATUS_LIMIT; 0 disables the cap.
    */
   limit?: number
   bypassEffectiveUpstreamNegativeCache?: boolean
+  /** Paths Orca may have symlinked into this worktree (per-user shared paths
+   *  plus `orca.yaml` shared directories). Untracked entries that are one of
+   *  these *and* really symlinks are dropped: Git cannot ignore them when the
+   *  repo's rule is directory-only (`node_modules/`), but they are Orca's own
+   *  artifacts, not user work. */
+  sharedLinkPaths?: readonly string[]
 }
 
 /**
@@ -208,38 +229,61 @@ export async function getStatus(
   options: GetStatusOptions = {}
 ): Promise<GitStatusResult> {
   gitDiffReadDedupe.clear()
-  if (options.signal) {
-    return runGetStatus(worktreePath, options)
-  }
   // Why: dedupe only concurrent identical reads; after settle, callers must run a fresh read.
   const cacheKey = getStatusReadKey(worktreePath, options)
-  const inFlightStatus = statusReadsInFlight.get(cacheKey)
-  if (inFlightStatus) {
-    return inFlightStatus
-  }
-
-  const statusPromise = runGetStatus(worktreePath, options)
-  statusReadsInFlight.set(cacheKey, statusPromise)
-  try {
-    return await statusPromise
-  } finally {
-    if (statusReadsInFlight.get(cacheKey) === statusPromise) {
-      statusReadsInFlight.delete(cacheKey)
-    }
-  }
+  return statusReadLeaseOwner.lease(cacheKey, options.signal, (sharedSignal) =>
+    runGetStatus(worktreePath, { ...options, signal: sharedSignal })
+  )
 }
 
 function getStatusReadKey(worktreePath: string, options: GetStatusOptions): string {
   // Why: each key part can change the output shape or runtime routing.
   const limit = resolveGitStatusLimit(options.limit)
-  return [
+  return stableInFlightKey([
     worktreePath,
     options.wslDistro ?? '',
     options.includeIgnored === true,
     options.reuseLineStats === true,
+    // Why: the result carries a total only for callers who asked, and only for
+    // this fork point, so a shared lease must never serve one to the other.
+    options.branchLineTotalMergeBase ?? '',
     options.bypassEffectiveUpstreamNegativeCache === true,
-    limit
-  ].join('\0')
+    limit,
+    // Why: this changes which entries survive, so it must not share a cache slot.
+    options.sharedLinkPaths ?? []
+  ])
+}
+
+/** Remove untracked entries that are shared symlinks Orca created.
+ *
+ *  Why this can't be left to Git: a directory-only ignore rule (`node_modules/`)
+ *  matches the primary checkout's real directory but never the worktree's
+ *  symlink, so Git reports it untracked forever — a phantom row in the diff and
+ *  a permanently "dirty" worktree.
+ *
+ *  Tight on both axes: an entry must be configured as shared *and* actually be a
+ *  symlink. A regular file the user created at a configured name still shows up,
+ *  and so does a symlink at a path nobody declared shared. Mutates `entries`. */
+async function dropSharedSymlinkUntrackedEntries(
+  worktreePath: string,
+  entries: GitStatusEntry[],
+  sharedLinkPaths: readonly string[]
+): Promise<void> {
+  // Why: a clean tree has no untracked entries, so this costs nothing on the
+  // common status-poll path — no syscall, no config read, no subprocess.
+  if (sharedLinkPaths.length === 0 || !entries.some((entry) => entry.area === 'untracked')) {
+    return
+  }
+  const sharedLinks = new Set(await findExistingWorktreeSymlinkPaths(worktreePath, sharedLinkPaths))
+  if (sharedLinks.size === 0) {
+    return
+  }
+  for (let index = entries.length - 1; index >= 0; index--) {
+    const entry = entries[index]
+    if (entry.area === 'untracked' && sharedLinks.has(entry.path)) {
+      entries.splice(index, 1)
+    }
+  }
 }
 
 async function runGetStatus(
@@ -314,6 +358,8 @@ async function runGetStatus(
     }
   }
 
+  await dropSharedSymlinkUntrackedEntries(worktreePath, entries, options.sharedLinkPaths ?? [])
+
   if (statusSucceeded && !didHitLimit && shouldProbeEffectiveUpstreamStatus(branch, upstreamName)) {
     const branchName = getShortBranchName(branch)
     if (branchName) {
@@ -340,16 +386,25 @@ async function runGetStatus(
   }
 
   // Why: line counts run only for areas with entries (clean tree = 0 calls); skip past the limit to avoid numstat over a huge set.
+  let branchLineTotal: GitBranchLineTotal | undefined
   if (!didHitLimit) {
-    await reuseOrRecomputeGitStatusLineStats({
+    const branchLineTotalInput = createBranchLineTotalInput(
+      worktreePath,
+      entries,
+      options,
+      statusSucceeded
+    )
+    const lineStats = await reuseOrRecomputeGitStatusLineStats({
       cacheKey: lineStatsCacheKey,
       head,
       entries,
       writeToken: lineStatsWriteToken,
       reuse: options.reuseLineStats === true,
       isAborted: () => options.signal?.aborted === true,
-      recompute: () => attachLineStats(worktreePath, entries, options)
+      recompute: () => attachLineStats(worktreePath, entries, options),
+      ...(branchLineTotalInput ? { branchLineTotal: branchLineTotalInput } : {})
     })
+    branchLineTotal = lineStats.branchLineTotal
   } else {
     clearGitStatusLineStatsCacheKey(lineStatsCacheKey, lineStatsWriteToken)
   }
@@ -367,6 +422,7 @@ async function runGetStatus(
     head,
     branch,
     ...(options.includeIgnored ? { ignoredPaths: parser.ignoredPaths } : {}),
+    ...(branchLineTotal ? { branchLineTotal } : {}),
     ...(didHitLimit ? { didHitLimit: true, statusLength: parser.statusLength } : {}),
     ...(statusSucceeded
       ? {
@@ -382,6 +438,43 @@ async function runGetStatus(
               : { hasUpstream: false, ahead: 0, behind: 0 })
         }
       : {})
+  }
+}
+
+/** Undefined — and therefore zero extra work — unless the caller asked for a total we can know exact. */
+function createBranchLineTotalInput(
+  worktreePath: string,
+  entries: GitStatusEntry[],
+  options: GetStatusOptions,
+  statusSucceeded: boolean
+): { mergeBase: string; compute: () => Promise<GitBranchLineTotal | undefined> } | undefined {
+  const mergeBase = readGitBranchLineTotalMergeBaseParam(options.branchLineTotalMergeBase)
+  // Why: a failed status scan leaves the untracked list untrustworthy, so the
+  // total would silently under-count rather than be absent.
+  if (mergeBase === undefined || !statusSucceeded) {
+    return undefined
+  }
+  return {
+    mergeBase,
+    compute: () =>
+      computeGitBranchLineTotal({
+        worktreePath,
+        // Why: the same path can be a different filesystem per WSL distro.
+        hostKey: options.wslDistro ?? 'native',
+        mergeBase,
+        untrackedPaths: entries
+          .filter((entry) => entry.area === 'untracked')
+          .map((entry) => entry.path),
+        runDiffNumstat: (args, signal) =>
+          gitExecFileAsync(args, {
+            ...gitOptionsForWorktree(worktreePath, options),
+            // Why: after the spread, so the shared lease signal wins over this caller's own.
+            signal,
+            env: gitOptionalLocksDisabledEnv(),
+            timeout: GIT_BRANCH_LINE_TOTAL_TIMEOUT_MS
+          }).then((result) => result.stdout),
+        ...(options.signal ? { signal: options.signal } : {})
+      })
   }
 }
 
@@ -1304,29 +1397,44 @@ export async function getBranchCompare(
     status: 'loading'
   }
 
-  const compareRef = await resolveCompareRef(worktreePath, options)
+  // The base-ref probe peels to a commit. Only branch refs are guaranteed to store
+  // commits; remote-tracking refs may store annotated tags whose raw oid must be preserved.
+  const reusableProbedOidByRef = new Map<string, string>()
+  const { compareRef, headOidResult, baseOidResult } = await readBranchCompareHead({
+    readCompareRef: () => resolveCompareRef(worktreePath, options),
+    resolveBaseRef: () =>
+      // Why: short refs like "origin/main" can collide with a local branch; use the proven remote-tracking ref.
+      resolveWorktreeAddBaseRef(baseRef, async (qualifiedRef) => {
+        const oid = await resolveWorktreeBaseCommitOid(worktreePath, qualifiedRef, options)
+        if (oid !== null && qualifiedRef.startsWith('refs/heads/')) {
+          reusableProbedOidByRef.set(qualifiedRef, oid)
+        }
+        return oid !== null
+      }),
+    readHeadOid: () => resolveRefOid(worktreePath, 'HEAD', options),
+    readBaseOid: (ref) => {
+      const reusableOid = reusableProbedOidByRef.get(ref)
+      return reusableOid === undefined
+        ? resolveRefOid(worktreePath, ref, options)
+        : Promise.resolve(reusableOid)
+    }
+  })
   summary.compareRef = compareRef
-  // Why: short refs like "origin/main" can collide with a local branch; use the proven remote-tracking ref.
-  const resolvedBaseRef = await resolveWorktreeAddBaseRef(baseRef, (qualifiedRef) =>
-    hasWorktreeBaseCommitRef(worktreePath, qualifiedRef, options)
-  )
 
   let headOid = ''
   let baseOid = ''
-  try {
-    headOid = await resolveRefOid(worktreePath, 'HEAD', options)
+  if (headOidResult.ok) {
+    headOid = headOidResult.oid
     summary.headOid = headOid
-  } catch {
-    try {
-      baseOid = await resolveRefOid(worktreePath, resolvedBaseRef, options)
+  } else {
+    if (baseOidResult.ok) {
+      baseOid = baseOidResult.oid
       summary.baseOid = baseOid
       // Why: an unborn branch (new remote worktree) has no changes yet; a compare error would look broken.
       summary.changedFiles = 0
       summary.commitsAhead = 0
       summary.status = 'ready'
       return { summary, entries: [] }
-    } catch {
-      // Preserve the unborn-head message when even the base is unresolvable.
     }
     summary.status = 'unborn-head'
     summary.errorMessage =
@@ -1334,10 +1442,10 @@ export async function getBranchCompare(
     return { summary, entries: [] }
   }
 
-  try {
-    baseOid = await resolveRefOid(worktreePath, resolvedBaseRef, options)
+  if (baseOidResult.ok) {
+    baseOid = baseOidResult.oid
     summary.baseOid = baseOid
-  } catch {
+  } else {
     summary.status = 'invalid-base'
     summary.errorMessage = `Base ref ${baseRef} could not be resolved in this repository.`
     return { summary, entries: [] }

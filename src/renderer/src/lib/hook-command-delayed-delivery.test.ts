@@ -59,6 +59,24 @@ describe('queueHookCommandsForFirstWorktreeTab', () => {
     expect(deliver).toHaveBeenCalledWith(expect.anything(), 'tab-1')
   })
 
+  it('keeps every delivery queued for the same worktree', () => {
+    // A runtime-owned create can have setup/issue commands AND an agent-tab seed
+    // waiting on the same first mirrored tab; neither may evict the other.
+    markWorktreeKnown('wt-1')
+    setStorePartial({ tabsByWorktree: {} })
+    const deliverFirst = vi.fn()
+    const deliverSecond = vi.fn()
+
+    queueHookCommandsForFirstWorktreeTab({ worktreeId: 'wt-1', deliver: deliverFirst })
+    queueHookCommandsForFirstWorktreeTab({ worktreeId: 'wt-1', deliver: deliverSecond })
+
+    setStorePartial({ tabsByWorktree: { 'wt-1': [{ id: 'mirror-tab-1' }] } })
+
+    expect(deliverFirst).toHaveBeenCalledTimes(1)
+    expect(deliverSecond).toHaveBeenCalledTimes(1)
+    expect(deliverSecond).toHaveBeenCalledWith(expect.anything(), 'mirror-tab-1')
+  })
+
   it('drops the pending delivery when the worktree is no longer known', () => {
     setStorePartial({
       tabsByWorktree: {},

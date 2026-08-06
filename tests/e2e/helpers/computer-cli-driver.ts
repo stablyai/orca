@@ -174,8 +174,7 @@ async function createComputerE2ERuntimeEnv(): Promise<NodeJS.ProcessEnv> {
     inheritedEnv,
     launchEnv: {},
     extraEnv: {},
-    userDataDir,
-    codexRealHomeEnabled: false
+    userDataDir
   })
   return {
     ...isolation.env,

@@ -1,7 +1,12 @@
-import * as SecureStore from 'expo-secure-store'
 import { Platform } from 'react-native'
 import { z } from 'zod'
 import { hashMobileRelayCredential } from './mobile-relay-credential-hash'
+import {
+  deletePairingKeychainItem,
+  readPairingKeychainItem,
+  writePairingKeychainItem
+} from './pairing-keychain'
+import { markHostCredentialWrite } from './host-credential-write-revision'
 
 const Base64Url32ByteSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
 
@@ -16,10 +21,6 @@ export const MobileRelayDirectUpgradeJournalSchema = z
   .strict()
 
 export type MobileRelayDirectUpgradeJournal = z.infer<typeof MobileRelayDirectUpgradeJournalSchema>
-
-const KEYCHAIN_OPTIONS: SecureStore.SecureStoreOptions = {
-  keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY
-}
 
 function journalKey(hostId: string): string {
   return `orca.mobile-relay.direct-upgrade.${hostId}`
@@ -43,7 +44,7 @@ export async function readMobileRelayDirectUpgradeJournal(
   hostId: string
 ): Promise<MobileRelayDirectUpgradeJournal | null> {
   requireNativeSecretStore()
-  const raw = await SecureStore.getItemAsync(journalKey(hostId), KEYCHAIN_OPTIONS)
+  const raw = await readPairingKeychainItem(journalKey(hostId))
   if (!raw) {
     return null
   }
@@ -60,18 +61,15 @@ export async function writeMobileRelayDirectUpgradeJournal(
 ): Promise<void> {
   requireNativeSecretStore()
   const parsed = MobileRelayDirectUpgradeJournalSchema.parse(journal)
-  await SecureStore.setItemAsync(
-    journalKey(parsed.hostId),
-    JSON.stringify(parsed),
-    KEYCHAIN_OPTIONS
-  )
+  markHostCredentialWrite(parsed.hostId)
+  await writePairingKeychainItem(journalKey(parsed.hostId), JSON.stringify(parsed))
 }
 
 export async function deleteMobileRelayDirectUpgradeJournal(hostId: string): Promise<void> {
   if (Platform.OS === 'web') {
     return
   }
-  await SecureStore.deleteItemAsync(journalKey(hostId), KEYCHAIN_OPTIONS)
+  await deletePairingKeychainItem(journalKey(hostId))
 }
 
 function encodeBase64Url(value: Uint8Array): string {

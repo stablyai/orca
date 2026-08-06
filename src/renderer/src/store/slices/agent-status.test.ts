@@ -265,6 +265,99 @@ describe('agent status runtime orchestration metadata', () => {
     })
   })
 
+  it('clears stale lineage when the authoritative runtime snapshot loses its Run binding', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
+
+    store.getState().setAgentStatus(childPaneKey, {
+      state: 'working',
+      prompt: 'child agent',
+      agentType: 'codex',
+      orchestration: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        dispatchStatus: 'dispatched',
+        parentTerminalHandle: 'term-old-coordinator',
+        parentPaneKey: 'tab-parent:22222222-2222-4222-8222-222222222222',
+        coordinatorHandle: 'term-old-coordinator',
+        orchestrationRunId: 'run-1'
+      }
+    })
+    store.getState().setRuntimeAgentOrchestrationByPaneKey({
+      [childPaneKey]: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        dispatchStatus: 'dispatched',
+        orchestrationRunId: 'run-1'
+      }
+    })
+
+    expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toEqual({
+      taskId: 'task-1',
+      dispatchId: 'ctx-1',
+      dispatchStatus: 'dispatched',
+      orchestrationRunId: 'run-1'
+    })
+  })
+
+  it('updates runtime status for the same dispatch', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
+
+    store.getState().setAgentStatus(childPaneKey, {
+      state: 'done',
+      prompt: 'child agent',
+      agentType: 'claude',
+      orchestration: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        dispatchStatus: 'dispatched'
+      }
+    })
+    store.getState().setRuntimeAgentOrchestrationByPaneKey({
+      [childPaneKey]: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        dispatchStatus: 'completed'
+      }
+    })
+
+    expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toMatchObject({
+      taskId: 'task-1',
+      dispatchId: 'ctx-1',
+      dispatchStatus: 'completed'
+    })
+  })
+
+  it.each(['failed', 'circuit_broken'] as const)(
+    'updates runtime status to %s for the same dispatch',
+    (dispatchStatus) => {
+      vi.useFakeTimers()
+      const store = createTestStore()
+      const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
+
+      store.getState().setAgentStatus(childPaneKey, {
+        state: 'done',
+        prompt: 'child agent',
+        agentType: 'claude',
+        orchestration: {
+          taskId: 'task-1',
+          dispatchId: 'ctx-1',
+          dispatchStatus: 'dispatched'
+        }
+      })
+      store.getState().setRuntimeAgentOrchestrationByPaneKey({
+        [childPaneKey]: { taskId: 'task-1', dispatchId: 'ctx-1', dispatchStatus }
+      })
+
+      expect(
+        store.getState().agentStatusByPaneKey[childPaneKey].orchestration?.dispatchStatus
+      ).toBe(dispatchStatus)
+    }
+  )
+
   it('keeps current payload orchestration ahead of a stale runtime map entry', () => {
     vi.useFakeTimers()
     const store = createTestStore()
@@ -544,6 +637,38 @@ describe('agent status tool + assistant fields', () => {
     expect(store.getState().agentStatusEpoch).toBe(firstEpoch)
     expect(setGeneratedTabTitleFromAgentPrompt).toHaveBeenCalledTimes(1)
     expect(setGeneratedTabTitleFromAgentPrompt).toHaveBeenLastCalledWith('tab-1:1', 'parent codex')
+  })
+
+  it('does not let restored-unconfirmed identity suppress a live terminal status', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    store.getState().setAgentStatus(
+      'tab-1:1',
+      {
+        state: 'working',
+        prompt: 'stale codex turn',
+        agentType: 'codex',
+        restoredUnconfirmed: true
+      },
+      'codex',
+      { updatedAt: 1_000, stateStartedAt: 1_000 }
+    )
+
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:1',
+        { state: 'done', prompt: 'live claude turn', agentType: 'claude' },
+        'claude',
+        { updatedAt: 1_100, stateStartedAt: 1_100 }
+      )
+
+    expect(store.getState().agentStatusByPaneKey['tab-1:1']).toMatchObject({
+      state: 'done',
+      prompt: 'live claude turn',
+      agentType: 'claude'
+    })
+    expect(store.getState().agentStatusByPaneKey['tab-1:1'].restoredUnconfirmed).toBeUndefined()
   })
 
   it('allows pane agentType to change after the prior turn is done', () => {
@@ -1272,5 +1397,105 @@ describe('agent status retention + prefix sweep', () => {
     expect(retained['tab-a:0']).toBeDefined()
     expect(retained['tab-a:0'].worktreeId).toBe('wt-a')
     expect(retained['tab-b:0']).toBeUndefined()
+  })
+})
+
+describe('session-boundary done semantics (STA-3386)', () => {
+  const PANE = 'tab-1:11111111-1111-4111-8111-111111111111'
+
+  it('keeps the launch config registry entry alive across a session-boundary done', () => {
+    const store = createTestStore()
+    store.setState({
+      agentLaunchConfigByPaneKey: {
+        [PANE]: {
+          launchConfig: { agentArgs: '', agentEnv: {} },
+          identity: { agentType: 'claude' },
+          launchToken: 'token-1'
+        }
+      }
+    } as unknown as Partial<AppState>)
+
+    store.getState().setAgentStatus(PANE, {
+      state: 'done',
+      prompt: '',
+      agentType: 'claude',
+      sessionBoundary: true
+    })
+    // Why: the session just CONNECTED — the registered-launch-agent identity must survive
+    // or an idle resumed TUI loses its pane identity evidence at startup.
+    expect(store.getState().agentLaunchConfigByPaneKey[PANE]).toBeDefined()
+
+    store.getState().setAgentStatus(PANE, {
+      state: 'done',
+      prompt: 'fix bug',
+      agentType: 'claude',
+      lastAssistantMessage: 'Done.'
+    })
+    expect(store.getState().agentLaunchConfigByPaneKey[PANE]).toBeUndefined()
+  })
+
+  it('pushes a real completion into history when a session boundary lands on it', () => {
+    const store = createTestStore()
+    store
+      .getState()
+      .setAgentStatus(PANE, { state: 'working', prompt: 'fix bug', agentType: 'claude' })
+    store.getState().setAgentStatus(PANE, {
+      state: 'done',
+      prompt: 'fix bug',
+      agentType: 'claude',
+      lastAssistantMessage: 'Done.'
+    })
+
+    store.getState().setAgentStatus(PANE, {
+      state: 'done',
+      prompt: '',
+      agentType: 'claude',
+      sessionBoundary: true
+    })
+
+    const entry = store.getState().agentStatusByPaneKey[PANE]
+    expect(entry.sessionBoundary).toBe(true)
+    // Why: the finished timestamp and unread badge fall through to history for boundary
+    // entries — losing the real done here erases an unacknowledged completion.
+    expect(entry.stateHistory.some((h) => h.state === 'done')).toBe(true)
+  })
+
+  it('never records a session boundary itself in state history', () => {
+    const store = createTestStore()
+    store.getState().setAgentStatus(PANE, {
+      state: 'done',
+      prompt: '',
+      agentType: 'claude',
+      sessionBoundary: true
+    })
+    store
+      .getState()
+      .setAgentStatus(PANE, { state: 'working', prompt: 'fix bug', agentType: 'claude' })
+
+    const entry = store.getState().agentStatusByPaneKey[PANE]
+    expect(entry.stateHistory.some((h) => h.state === 'done')).toBe(false)
+  })
+
+  it('carries the flag across metadata-less done repaints but yields to turn evidence', () => {
+    const store = createTestStore()
+    store.getState().setAgentStatus(PANE, {
+      state: 'done',
+      prompt: '',
+      agentType: 'claude',
+      sessionBoundary: true
+    })
+
+    // Why: OSC 9999 repaints and reconnect replays re-deliver a metadata-less done.
+    store.getState().setAgentStatus(PANE, { state: 'done', prompt: '', agentType: 'claude' })
+    expect(store.getState().agentStatusByPaneKey[PANE].sessionBoundary).toBe(true)
+
+    // Why: an assistant message proves a REAL completion — the flag must not suppress it.
+    store.getState().setAgentStatus(PANE, {
+      state: 'done',
+      prompt: '',
+      agentType: 'claude',
+      lastAssistantMessage: 'Done.'
+    })
+    expect(store.getState().agentStatusByPaneKey[PANE].sessionBoundary).toBeUndefined()
   })
 })

@@ -17,6 +17,7 @@ describe('getMacNativeTextInputSourceFeatures', () => {
       'com.apple.inputmethod.Korean.2SetKorean'
     ]) {
       expect(getMacNativeTextInputSourceFeatures(sourceId)).toEqual({
+        forwardHangulJamo: sourceId.includes('Korean'),
         forwardAsciiPunctuation: true,
         forwardShortTextReplacements: false
       })
@@ -25,18 +26,22 @@ describe('getMacNativeTextInputSourceFeatures', () => {
 
   it('accepts common third-party CJK input source IDs', () => {
     expect(getMacNativeTextInputSourceFeatures('com.google.inputmethod.Japanese.base')).toEqual({
+      forwardHangulJamo: false,
       forwardAsciiPunctuation: true,
       forwardShortTextReplacements: false
     })
     expect(getMacNativeTextInputSourceFeatures('com.sogou.inputmethod.sogou.pinyin')).toEqual({
+      forwardHangulJamo: false,
       forwardAsciiPunctuation: true,
       forwardShortTextReplacements: false
     })
     expect(getMacNativeTextInputSourceFeatures('com.bytedance.inputmethod.Doubao')).toEqual({
+      forwardHangulJamo: false,
       forwardAsciiPunctuation: true,
       forwardShortTextReplacements: false
     })
     expect(getMacNativeTextInputSourceFeatures('im.rime.inputmethod.Squirrel.Rime')).toEqual({
+      forwardHangulJamo: false,
       forwardAsciiPunctuation: true,
       forwardShortTextReplacements: false
     })
@@ -50,6 +55,7 @@ describe('getMacNativeTextInputSourceFeatures', () => {
       'org.unikey.inputmethod.Unikey'
     ]) {
       expect(getMacNativeTextInputSourceFeatures(sourceId)).toEqual({
+        forwardHangulJamo: false,
         forwardAsciiPunctuation: false,
         forwardShortTextReplacements: true
       })
@@ -58,6 +64,7 @@ describe('getMacNativeTextInputSourceFeatures', () => {
 
   it('rejects plain keyboard layouts and unrelated input methods', () => {
     const disabled = {
+      forwardHangulJamo: false,
       forwardAsciiPunctuation: false,
       forwardShortTextReplacements: false
     }
@@ -90,6 +97,7 @@ describe('createMacNativeTextInputSourceTracker', () => {
     await tracker.refresh()
     expect(tracker.isActive()).toBe(false)
     expect(tracker.getFeatures()).toEqual({
+      forwardHangulJamo: false,
       forwardAsciiPunctuation: false,
       forwardShortTextReplacements: false
     })
@@ -98,6 +106,7 @@ describe('createMacNativeTextInputSourceTracker', () => {
     await tracker.refresh()
     expect(tracker.isActive()).toBe(true)
     expect(tracker.getFeatures()).toEqual({
+      forwardHangulJamo: false,
       forwardAsciiPunctuation: true,
       forwardShortTextReplacements: false
     })
@@ -106,6 +115,7 @@ describe('createMacNativeTextInputSourceTracker', () => {
     await tracker.refresh()
     expect(tracker.isActive()).toBe(true)
     expect(tracker.getFeatures()).toEqual({
+      forwardHangulJamo: false,
       forwardAsciiPunctuation: false,
       forwardShortTextReplacements: true
     })
@@ -140,6 +150,7 @@ describe('createMacNativeTextInputSourceTracker', () => {
 
     await vi.waitFor(() =>
       expect(tracker.getFeatures()).toEqual({
+        forwardHangulJamo: false,
         forwardAsciiPunctuation: true,
         forwardShortTextReplacements: false
       })

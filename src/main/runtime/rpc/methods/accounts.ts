@@ -57,6 +57,30 @@ const ConsumeCodexResetCreditParams = z
   })
   .strict()
 
+const AddClaudeFromConfigDirParams = z.object({
+  configDir: z.string().min(1, 'Missing configDir'),
+  runtime: z.enum(['host', 'wsl']).optional(),
+  wslDistro: z.string().nullish(),
+  previousLegacyCredentialsSha256: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/, 'Invalid legacy credential digest')
+    .nullable()
+    .optional()
+})
+
+const AddCodexFromHomeParams = z.object({
+  sourceHome: z.string().min(1, 'Missing sourceHome'),
+  runtime: z.enum(['host', 'wsl']).optional(),
+  wslDistro: z.string().nullish()
+})
+
+// Why: `orca account list` prints only emails and the active ids, so it opts out
+// of the forced all-provider usage refresh below — that lane bypasses the poll
+// throttle and Retry-After gate and costs one serial round-trip per account.
+const ListAccountsParams = z.object({
+  refreshUsage: z.boolean().default(true)
+})
+
 const AccountsUnsubscribeParams = z.object({
   subscriptionId: z
     .unknown()
@@ -84,22 +108,29 @@ const SubmitLoginInputParams = z.object({
 })
 
 // Why: bridges the desktop ClaudeAccountService / CodexAccountService /
-// RateLimitService into the mobile WebSocket RPC and the headless CLI.
-// Add/re-auth still spawn `claude login` / `codex login`, which need a real
-// OAuth browser round-trip — accounts.addCodex/addClaude kick that off and
-// return a loginId immediately, and accounts.pollAdd long-polls the result
-// (the one-shot CLI transport can't hold a streaming method open; see plan
-// in spec doc for issue #1438).
+// RateLimitService into the WebSocket / local-socket RPC and the headless
+// CLI. Read + switch + remove work for all clients. accounts.addCodex /
+// addClaude still spawn `claude login` / `codex login`, which need a real
+// OAuth browser round-trip — they return a loginId immediately and
+// accounts.pollAdd long-polls the result (the one-shot CLI transport can't
+// hold a streaming method open; see plan in spec doc for issue #1438).
+// `accounts.addClaudeFromConfigDir` / `accounts.addCodexFromHome` cover the
+// no-PTY case: they capture an already-authenticated CLAUDE_CONFIG_DIR /
+// Codex home so the local `orca account add` CLI can register accounts on a
+// headless host; both are gated to the local runtime connection, never a
+// mobile device token.
 export const ACCOUNT_METHODS: readonly RpcAnyMethod[] = [
   defineMethod({
     name: 'accounts.list',
-    params: null,
-    handler: async (_params, { runtime }) => {
+    params: ListAccountsParams,
+    handler: async (params, { runtime }) => {
       // Why: ensure the snapshot reflects the latest provider state before
       // returning. Desktop polling pauses when the window is unfocused and
       // inactive-account caches only fill on AccountsPane open, so without
       // this the mobile UI would render stale nulls / zeroes.
-      await runtime.refreshAccountsForMobile()
+      if (params.refreshUsage) {
+        await runtime.refreshAccountsForMobile()
+      }
       return runtime.getAccountsSnapshot()
     }
   }),
@@ -136,6 +167,35 @@ export const ACCOUNT_METHODS: readonly RpcAnyMethod[] = [
     name: 'accounts.removeCodex',
     params: RemoveAccountParams,
     handler: async (params, { runtime }) => runtime.removeCodexAccount(params.accountId)
+  }),
+  defineMethod({
+    name: 'accounts.addClaudeFromConfigDir',
+    params: AddClaudeFromConfigDirParams,
+    handler: async (params, { runtime, clientKind }) => {
+      // Why: capturing a host filesystem path is local-socket-only; paired
+      // mobile and remote-runtime tokens must never read host credential paths.
+      if (clientKind !== undefined) {
+        throw new Error('Adding Claude accounts is only available on the Orca host runtime.')
+      }
+      return runtime.addClaudeAccountFromConfigDir(params.configDir, {
+        runtime: params.runtime,
+        wslDistro: params.wslDistro ?? null,
+        previousLegacyCredentialsSha256: params.previousLegacyCredentialsSha256
+      })
+    }
+  }),
+  defineMethod({
+    name: 'accounts.addCodexFromHome',
+    params: AddCodexFromHomeParams,
+    handler: async (params, { runtime, clientKind }) => {
+      if (clientKind !== undefined) {
+        throw new Error('Adding Codex accounts is only available on the Orca host runtime.')
+      }
+      return runtime.addCodexAccountFromHome(params.sourceHome, {
+        runtime: params.runtime,
+        wslDistro: params.wslDistro ?? null
+      })
+    }
   }),
   defineMethod({
     name: 'accounts.addCodex',

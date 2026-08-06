@@ -1,5 +1,5 @@
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
-import { combineUnsubscribes } from './combine-unsubscribes'
+import { DaemonPtyAdapterSubscriptionFanout } from './daemon-pty-adapter-subscription-fanout'
 import type {
   IPtyProvider,
   PtyBackgroundStreamEvent,
@@ -8,68 +8,45 @@ import type {
   PtySpawnOptions,
   PtySpawnResult
 } from '../providers/types'
-import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
+import { shouldHandoffDaemonHistory } from './daemon-history-handoff'
+import type { DaemonPtyRouterDataEvent, DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
+import { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
 
 export class DaemonPtyRouter implements IPtyProvider {
   private current: DaemonPtyAdapter
   private legacy: DaemonPtyAdapter[]
   private sessionAdapters = new Map<string, DaemonPtyAdapter>()
-  private unsubscribers: (() => void)[] = []
-  private dataListeners: ((payload: {
-    id: string
-    data: string
-    sequenceChars?: number
-    transformed?: boolean
-    seq?: number
-  }) => void)[] = []
-  private exitListeners: ((payload: {
-    id: string
-    code: number
-    incarnationId?: PtyIncarnationId
-  }) => void)[] = []
+  private readonly ownerResolver: DaemonSessionOwnerResolver<DaemonPtyAdapter>
+  private readonly subscriptions: DaemonPtyAdapterSubscriptionFanout
 
   constructor(opts: { current: DaemonPtyAdapter; legacy: DaemonPtyAdapter[] }) {
     this.current = opts.current
     this.legacy = opts.legacy
-
-    for (const adapter of this.allAdapters()) {
-      this.unsubscribers.push(
-        adapter.onData((payload) => {
-          for (const listener of this.dataListeners) {
-            listener(payload)
-          }
-        }),
-        adapter.onExit((payload) => {
-          this.sessionAdapters.delete(payload.id)
-          for (const listener of this.exitListeners) {
-            listener(payload)
-          }
-        })
-      )
-    }
+    this.ownerResolver = new DaemonSessionOwnerResolver(this.allAdapters(), this.sessionAdapters)
+    this.subscriptions = new DaemonPtyAdapterSubscriptionFanout(
+      this.allAdapters(),
+      (id) => {
+        this.ownerResolver.forgetRoute(id)
+      },
+      (adapter) => this.ownerResolver.invalidateProvider(adapter)
+    )
   }
 
   async discoverLegacySessions(): Promise<void> {
-    for (const adapter of this.legacy) {
-      try {
-        const sessions = await adapter.listProcesses()
-        for (const session of sessions) {
-          this.sessionAdapters.set(session.id, adapter)
-        }
-      } catch (error) {
-        console.warn('[daemon] Failed to discover legacy daemon sessions', error)
-      }
-    }
+    await this.ownerResolver.discoverRoutes()
   }
 
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
+    if (opts.attachOnly && opts.sessionId) {
+      return await this.ownerResolver.spawnAttachOnly({ ...opts, sessionId: opts.sessionId })
+    }
     const adapter = opts.sessionId ? this.sessionAdapters.get(opts.sessionId) : undefined
     const target = adapter ?? this.current
     const result = await target.spawn(opts)
     // Why: the adapter filters intentional recovery exits and canonical-ID races before publishing proof.
     if (!result.exitedBeforeSpawnReply) {
-      this.sessionAdapters.set(result.id, target)
+      this.ownerResolver.recordRoute(result.id, target, result.incarnationId)
     }
     return result
   }
@@ -108,6 +85,10 @@ export class DaemonPtyRouter implements IPtyProvider {
     return this.current.hasPty(id) || this.legacy.some((adapter) => adapter.hasPty(id))
   }
 
+  async probePtyLiveness(id: string): Promise<boolean | null> {
+    return await this.ownerResolver.probe(id)
+  }
+
   write(id: string, data: string): void {
     this.adapterFor(id).write(id, data)
   }
@@ -132,15 +113,16 @@ export class DaemonPtyRouter implements IPtyProvider {
     id: string,
     opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
   ): Promise<void> {
-    await this.adapterFor(id).shutdown(id, opts)
-    // Why: sleep passes keepHistory=true and re-spawns against the same
-    // sessionId on wake. If we delete the routing entry here, adapterFor()
-    // falls back to `this.current` on wake — for a session that originally
-    // lived on a legacy adapter (different protocolVersion), the wake-side
-    // createOrAttach lands on the wrong adapter and creates a fresh session,
-    // losing the cold-restore from the legacy adapter's history dir.
-    if (!opts.keepHistory) {
-      this.sessionAdapters.delete(id)
+    const adapter = this.adapterFor(id)
+    const migrateHistory = shouldHandoffDaemonHistory(opts.keepHistory, adapter, this.current)
+    await adapter.shutdown(id, opts)
+    if (!opts.keepHistory || migrateHistory) {
+      if (migrateHistory) {
+        adapter.ackColdRestore(id)
+      }
+      if (this.sessionAdapters.get(id) === adapter) {
+        this.ownerResolver.forgetRoute(id, adapter)
+      }
     }
   }
 
@@ -224,52 +206,24 @@ export class DaemonPtyRouter implements IPtyProvider {
     return this.current.getProfiles()
   }
 
-  onData(
-    callback: (payload: {
-      id: string
-      data: string
-      sequenceChars?: number
-      transformed?: boolean
-      seq?: number
-    }) => void
-  ): () => void {
-    this.dataListeners.push(callback)
-    return () => {
-      const idx = this.dataListeners.indexOf(callback)
-      if (idx !== -1) {
-        this.dataListeners.splice(idx, 1)
-      }
-    }
+  onData(callback: (payload: DaemonPtyRouterDataEvent) => void): () => void {
+    return this.subscriptions.onData(callback)
   }
 
   onBackgroundStreamEvent(callback: (payload: PtyBackgroundStreamEvent) => void): () => void {
-    return combineUnsubscribes(
-      this.allAdapters().map((adapter) => adapter.onBackgroundStreamEvent(callback))
-    )
+    return this.subscriptions.onBackgroundStreamEvent(callback)
   }
 
-  // Why: main subscribes on the routed provider, so without this the dead-endpoint
-  // fan-out never reaches the renderer and only the written pane recovers (STA-2373).
   onWriteUnavailable(callback: (payload: { id: string }) => void): () => void {
-    return combineUnsubscribes(
-      this.allAdapters().map((adapter) => adapter.onWriteUnavailable(callback))
-    )
+    return this.subscriptions.onWriteUnavailable(callback)
   }
 
-  onReplay(_callback: (payload: { id: string; data: string }) => void): () => void {
-    return () => {}
+  onReplay(callback: (payload: { id: string; data: string }) => void): () => void {
+    return this.subscriptions.onReplay(callback)
   }
 
-  onExit(
-    callback: (payload: { id: string; code: number; incarnationId?: PtyIncarnationId }) => void
-  ): () => void {
-    this.exitListeners.push(callback)
-    return () => {
-      const idx = this.exitListeners.indexOf(callback)
-      if (idx !== -1) {
-        this.exitListeners.splice(idx, 1)
-      }
-    }
+  onExit(callback: (payload: DaemonPtyRouterExitEvent) => void): () => void {
+    return this.subscriptions.onExit(callback)
   }
 
   ackColdRestore(sessionId: string): void {
@@ -286,6 +240,7 @@ export class DaemonPtyRouter implements IPtyProvider {
   }> {
     const alive: string[] = []
     const killed: string[] = []
+    const aliveProviders = new Map<string, Set<DaemonPtyAdapter>>()
     for (const adapter of this.allAdapters()) {
       const result = await adapter.reconcileOnStartup(validWorktreeIds)
       // Why: daemon startup can reconcile many restored sessions; spreading
@@ -297,19 +252,24 @@ export class DaemonPtyRouter implements IPtyProvider {
         killed.push(id)
       }
       for (const id of result.alive) {
-        this.sessionAdapters.set(id, adapter)
+        const providers = aliveProviders.get(id) ?? new Set<DaemonPtyAdapter>()
+        providers.add(adapter)
+        aliveProviders.set(id, providers)
       }
-      for (const id of result.killed) {
-        this.sessionAdapters.delete(id)
+    }
+    for (const id of new Set([...alive, ...killed])) {
+      const providers = aliveProviders.get(id)
+      if (providers?.size === 1) {
+        this.ownerResolver.recordRoute(id, providers.values().next().value!)
+      } else {
+        this.ownerResolver.forgetRoute(id)
       }
     }
     return { alive, killed }
   }
 
   dispose(): void {
-    for (const unsubscribe of this.unsubscribers.splice(0)) {
-      unsubscribe()
-    }
+    this.subscriptions.dispose()
     for (const adapter of this.allAdapters()) {
       adapter.dispose()
     }
@@ -323,15 +283,11 @@ export class DaemonPtyRouter implements IPtyProvider {
   // Without this, each restart leaked a router instance pinned by the legacy
   // adapters' listener arrays (one pair per adapter per restart).
   disposeRouterOnly(): void {
-    for (const unsubscribe of this.unsubscribers.splice(0)) {
-      unsubscribe()
-    }
+    this.subscriptions.dispose()
   }
 
   async disconnectOnly(): Promise<void> {
-    for (const unsubscribe of this.unsubscribers.splice(0)) {
-      unsubscribe()
-    }
+    this.subscriptions.dispose()
     await Promise.all([...this.allAdapters()].map((adapter) => adapter.disconnectOnly()))
   }
 

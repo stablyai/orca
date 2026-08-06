@@ -9,7 +9,6 @@ import {
   open,
   readdir,
   realpath,
-  rename,
   rm,
   unlink,
   writeFile
@@ -21,9 +20,9 @@ import { authorizeExternalPath, resolveAuthorizedPath, isENOENT } from './filesy
 import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { resolveLocalDroppedPathsForAgent } from './dropped-path-resolution'
 import { importExternalPathsSsh } from './filesystem-import-ssh'
-import { assertNoClobberRenameDestinationAvailable } from '../../shared/filesystem-rename-collision'
 import type { SshMutationExpectation } from '../../shared/ssh-types'
 import { assertSshMutationExpectation } from '../ssh/ssh-connection-generation'
+import { renameLocalPathSerializedByDestination } from '../destination-serialized-local-rename'
 
 /**
  * Re-throw filesystem errors with user-friendly messages.
@@ -146,8 +145,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
       // accidentally write into a symlinked destination name.
       const oldPath = await resolveAuthorizedPath(args.oldPath, store, { preserveSymlink: true })
       const newPath = await resolveAuthorizedPath(args.newPath, store, { preserveSymlink: true })
-      await assertNoClobberRenameDestinationAvailable(oldPath, newPath)
-      await rename(oldPath, newPath)
+      await renameLocalPathSerializedByDestination(oldPath, newPath)
     }
   )
 

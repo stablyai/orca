@@ -2,17 +2,33 @@
 // 13-byte framing header matching VS Code's PersistentProtocol wire format.
 // See design-ssh-support.md § JSON-RPC Protocol Specification.
 
-import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../../shared/ssh-types'
+import {
+  FrameDecoder,
+  FrameDecoderContinuationError,
+  HEADER_LENGTH,
+  MAX_MESSAGE_SIZE,
+  FRAME_DECODER_MAX_FRAMES_PER_TURN,
+  FRAME_DECODER_MAX_BYTES_PER_TURN,
+  FRAME_DECODER_MAX_TURN_MS,
+  FRAME_DECODER_MAX_RETAINED_BYTES
+} from '../../shared/relay-frame-decoder'
+
+export {
+  FrameDecoder,
+  FrameDecoderContinuationError,
+  HEADER_LENGTH,
+  MAX_MESSAGE_SIZE,
+  FRAME_DECODER_MAX_FRAMES_PER_TURN,
+  FRAME_DECODER_MAX_BYTES_PER_TURN,
+  FRAME_DECODER_MAX_TURN_MS,
+  FRAME_DECODER_MAX_RETAINED_BYTES
+}
+export type { DecodedFrame, FrameDecoderOptions } from '../../shared/relay-frame-decoder'
 
 export const RELAY_VERSION = '0.1.0'
 export const RELAY_SENTINEL = `ORCA-RELAY v${RELAY_VERSION} READY\n`
 export const RELAY_SENTINEL_TIMEOUT_MS = 10_000
 export const RELAY_REMOTE_DIR = '.orca-remote'
-
-// ── Framing constants (VS Code ProtocolConstants) ───────────────────
-
-export const HEADER_LENGTH = 13
-export const MAX_MESSAGE_SIZE = 16 * 1024 * 1024 // 16 MB
 
 /** Message type byte. */
 export const MessageType = {
@@ -23,9 +39,6 @@ export const MessageType = {
 /** Keepalive/timeout (VS Code ProtocolConstants). */
 export const KEEPALIVE_SEND_MS = 5_000
 export const TIMEOUT_MS = 20_000
-
-/** Reconnection grace period (default, overridable by relay --grace-time). */
-export const DEFAULT_GRACE_TIME_MS = DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
 
 // ── Relay error codes ───────────────────────────────────────────────
 
@@ -155,153 +168,11 @@ export function encodeKeepAliveFrame(id: number, ack: number): Buffer {
   return encodeFrame(MessageType.KeepAlive, id, ack, Buffer.alloc(0))
 }
 
-export type DecodedFrame = {
-  type: number
-  id: number
-  ack: number
-  payload: Buffer
-}
-
-/**
- * Incremental frame parser. Feed it chunks of data; it emits complete frames.
- */
-export class FrameDecoder {
-  // Why: feed() runs on the Electron main thread for every SSH channel data
-  // event. Rebuilding one contiguous buffer per feed (Buffer.concat) re-copies
-  // every already-buffered byte for each incoming ~32KB TCP chunk — O(n²) per
-  // large frame (a 340KB fs.streamChunk frame cost ~2MB of memcpy). A chunk
-  // list assembles each frame exactly once instead.
-  private chunks: Buffer[] = []
-  private bufferedLength = 0
-  private onFrame: (frame: DecodedFrame) => void
-  private onError: ((err: Error) => void) | null
-
-  constructor(onFrame: (frame: DecodedFrame) => void, onError?: (err: Error) => void) {
-    this.onFrame = onFrame
-    this.onError = onError ?? null
-  }
-
-  feed(chunk: Buffer | Uint8Array): void {
-    const buf = Buffer.isBuffer(chunk)
-      ? chunk
-      : Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength)
-    if (buf.length > 0) {
-      this.chunks.push(buf)
-      this.bufferedLength += buf.length
-    }
-
-    while (this.bufferedLength >= HEADER_LENGTH) {
-      const header = this.peekBytes(HEADER_LENGTH)
-      const length = header.readUInt32BE(9)
-      const totalLength = HEADER_LENGTH + length
-
-      if (this.bufferedLength < totalLength) {
-        // Not fully received yet (also holds oversized frames until they can
-        // be skipped whole, keeping the decoder synchronized).
-        break
-      }
-
-      // Why: throwing here would leave the buffer in a partially consumed
-      // state — subsequent feed() calls would try to parse leftover payload
-      // bytes as a new header, corrupting every future frame. Instead we
-      // skip the entire oversized frame so the decoder stays synchronized.
-      if (length > MAX_MESSAGE_SIZE) {
-        this.discardBytes(totalLength)
-        const err = new Error(`Frame payload too large: ${length} bytes — discarded`)
-        if (this.onError) {
-          this.onError(err)
-        }
-        continue
-      }
-
-      const framed = this.takeBytes(totalLength)
-      const frame: DecodedFrame = {
-        type: framed[0],
-        id: framed.readUInt32BE(1),
-        ack: framed.readUInt32BE(5),
-        payload: framed.subarray(HEADER_LENGTH, totalLength)
-      }
-      this.onFrame(frame)
-    }
-  }
-
-  reset(): void {
-    this.chunks = []
-    this.bufferedLength = 0
-  }
-
-  /** View of the first `count` buffered bytes without consuming them. */
-  private peekBytes(count: number): Buffer {
-    const first = this.chunks[0]
-    if (first.length >= count) {
-      return first
-    }
-    const out = Buffer.allocUnsafe(count)
-    let copied = 0
-    for (const part of this.chunks) {
-      copied += part.copy(out, copied, 0, Math.min(part.length, count - copied))
-      if (copied >= count) {
-        break
-      }
-    }
-    return out
-  }
-
-  /** Consume and return the first `count` buffered bytes (single copy). */
-  private takeBytes(count: number): Buffer {
-    const first = this.chunks[0]
-    if (first.length === count) {
-      this.chunks.shift()
-      this.bufferedLength -= count
-      return first
-    }
-    if (first.length > count) {
-      this.chunks[0] = first.subarray(count)
-      this.bufferedLength -= count
-      return first.subarray(0, count)
-    }
-    const out = Buffer.allocUnsafe(count)
-    let copied = 0
-    while (copied < count) {
-      const part = this.chunks[0]
-      const take = Math.min(part.length, count - copied)
-      part.copy(out, copied, 0, take)
-      copied += take
-      if (take === part.length) {
-        this.chunks.shift()
-      } else {
-        this.chunks[0] = part.subarray(take)
-      }
-    }
-    this.bufferedLength -= count
-    return out
-  }
-
-  /** Consume the first `count` buffered bytes without assembling them. */
-  private discardBytes(count: number): void {
-    let remaining = count
-    while (remaining > 0) {
-      const part = this.chunks[0]
-      if (part.length <= remaining) {
-        this.chunks.shift()
-        remaining -= part.length
-      } else {
-        this.chunks[0] = part.subarray(remaining)
-        remaining = 0
-      }
-    }
-    this.bufferedLength -= count
-  }
-}
-
-/**
- * Parse a JSON-RPC message from a frame payload.
- */
 export function parseJsonRpcMessage(payload: Buffer): JsonRpcMessage {
   const text = payload.toString('utf-8')
   const msg = JSON.parse(text) as JsonRpcMessage
   if (msg.jsonrpc !== '2.0') {
-    throw new Error(`Invalid JSON-RPC version: ${(msg as Record<string, unknown>).jsonrpc}`)
+    throw new Error(`Invalid JSON-RPC version: ${String((msg as Record<string, unknown>).jsonrpc)}`)
   }
   return msg
 }

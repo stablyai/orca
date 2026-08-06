@@ -86,7 +86,9 @@ import { rememberLiveBrowserUrl } from './browser-runtime'
 import { ensureBrowserPageWebview } from './browser-page-webview'
 import {
   destroyPersistentWebview,
+  isBrowserPageRendererRecoveryPending,
   moveFocusToRendererBeforeWebviewDetach,
+  replacePersistentWebview,
   registeredWebContentsIds
 } from './webview-registry'
 import {
@@ -141,7 +143,9 @@ import {
   browserPageZoomLevelToPercent,
   DEFAULT_BROWSER_PAGE_ZOOM_LEVEL,
   getBrowserPageZoomIndicatorState,
+  getExplicitBrowserPageZoomLevel,
   normalizeBrowserPageZoomLevel,
+  rememberExplicitBrowserPageZoomLevel,
   setBrowserPageZoomLevel,
   type BrowserPageZoomDirection
 } from './browser-page-zoom'
@@ -186,6 +190,17 @@ import { MarkupOverlay } from './markup/MarkupOverlay'
 import { MarkupDrawButton } from './markup/MarkupDrawButton'
 import { deliverMarkupToClipboard } from './markup/markup-clipboard-delivery'
 import { BrowserLoadFailureOverlay } from './browser-load-failure-overlay'
+import {
+  BROWSER_GUEST_RECOVERY_ERROR_CODE,
+  createBrowserPageGuestRecovery
+} from './browser-page-guest-recovery'
+import { subscribeBrowserSystemResume } from './browser-system-resume'
+import {
+  type BrowserReloadTrigger,
+  reloadBrowserPageWebview,
+  resolveBrowserReloadButtonLabelKind,
+  resolveBrowserReloadIntent
+} from './browser-reload-action'
 
 type BrowserTabPageState = Partial<
   Pick<
@@ -193,6 +208,12 @@ type BrowserTabPageState = Partial<
     'title' | 'loading' | 'faviconUrl' | 'canGoBack' | 'canGoForward' | 'loadError'
   >
 >
+
+type BrowserPageUrlSetter = (
+  tabId: string,
+  url: string,
+  options?: { preserveLoadError?: boolean }
+) => void
 
 type BrowserDownloadState = Omit<BrowserDownloadRequestedEvent, 'status' | 'savePath'> & {
   receivedBytes: number
@@ -751,13 +772,31 @@ function retryBrowserTabLoad(
   webview.src = retryUrl
 }
 
+export type BrowserFindShortcutScope = 'focused' | 'inactive' | 'owned-target'
+
+function browserOverlayOwnsShortcutTarget(
+  target: EventTarget | null,
+  browserTabId: string
+): boolean {
+  if (!(target instanceof Element)) {
+    return false
+  }
+  return (
+    target.closest('[data-browser-overlay-tab-id]')?.getAttribute('data-browser-overlay-tab-id') ===
+    browserTabId
+  )
+}
+
 export default function BrowserPane({
   browserTab,
-  isActive
+  isActive,
+  findShortcutScope
 }: {
   browserTab: BrowserWorkspaceState
   isActive: boolean
+  findShortcutScope?: BrowserFindShortcutScope
 }): React.JSX.Element {
+  const resolvedFindShortcutScope = findShortcutScope ?? (isActive ? 'focused' : 'inactive')
   const activeRuntimeEnvironmentId = useAppStore((s) =>
     getRuntimeEnvironmentIdForWorktree(s, browserTab.worktreeId)
   )
@@ -850,6 +889,9 @@ export default function BrowserPane({
               sessionProfileId={browserTab.sessionProfileId ?? null}
               sessionPartition={browserTab.sessionPartition ?? null}
               isActive={isActive && page.id === activeBrowserPage?.id}
+              findShortcutScope={
+                page.id === activeBrowserPage?.id ? resolvedFindShortcutScope : 'inactive'
+              }
               isAutomationVisible={automationVisiblePageIds.has(page.id)}
               isMobileDriven={mobileDrivenPageIds.has(page.id)}
               inputLocked={activeBrowserDriver.kind === 'mobile'}
@@ -880,7 +922,7 @@ function RemoteBrowserPagePane({
   worktreeId: string
   isActive: boolean
   onUpdatePageState: (tabId: string, updates: BrowserTabPageState) => void
-  onSetUrl: (tabId: string, url: string) => void
+  onSetUrl: BrowserPageUrlSetter
 }): React.JSX.Element {
   const activeRuntimeEnvironmentId = runtimeEnvironmentId
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
@@ -2577,18 +2619,31 @@ function RemoteBrowserPagePane({
         >
           <ArrowRight className="size-4" />
         </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-7 w-7"
-          onClick={() => void runRemoteNavigation('browser.reload')}
-        >
-          {busy || browserTab.loading ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <RefreshCw className="size-4" />
-          )}
-        </Button>
+        {/* Why: no ignore-cache RPC exists for remote pages, and this pane binds no reload chord, so there is
+            nothing truthful to put in a menu or a shortcut hint here — tooltip only. */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7"
+              aria-label={translate(
+                'auto.components.browser.pane.BrowserPane.0e080d820e',
+                'Reload'
+              )}
+              onClick={() => void runRemoteNavigation('browser.reload')}
+            >
+              {busy || browserTab.loading ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <RefreshCw className="size-4" />
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={4}>
+            {translate('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
+          </TooltipContent>
+        </Tooltip>
         <BrowserAddressBar
           value={addressBarValue}
           onChange={setAddressBarValue}
@@ -2753,6 +2808,7 @@ function BrowserPagePane({
   sessionProfileId,
   sessionPartition,
   isActive,
+  findShortcutScope,
   isAutomationVisible,
   isMobileDriven,
   inputLocked,
@@ -2765,11 +2821,12 @@ function BrowserPagePane({
   sessionProfileId: string | null
   sessionPartition: string | null
   isActive: boolean
+  findShortcutScope: BrowserFindShortcutScope
   isAutomationVisible: boolean
   isMobileDriven: boolean
   inputLocked: boolean
   onUpdatePageState: (tabId: string, updates: BrowserTabPageState) => void
-  onSetUrl: (tabId: string, url: string) => void
+  onSetUrl: BrowserPageUrlSetter
 }): React.JSX.Element {
   const isPaintable = isBrowserPagePanePaintable({
     isActive,
@@ -2793,6 +2850,11 @@ function BrowserPagePane({
   const [slotViewportReady, setSlotViewportReady] = useState(
     () => getBrowserOverlaySlotViewport(workspaceId) !== null
   )
+  const [guestRecoveryGeneration, setGuestRecoveryGeneration] = useState(0)
+  const guestRecoveryPendingRef = useRef(false)
+  const validateVisibleGuestRegistrationRef = useRef<() => void>(() => {})
+  const retryGuestRecoveryRef = useRef<() => void>(() => {})
+  const wasPaintableForGuestValidationRef = useRef(isPaintable)
   useLayoutEffect(() => {
     if (getBrowserOverlaySlotViewport(workspaceId)) {
       setSlotViewportReady(true)
@@ -2827,13 +2889,27 @@ function BrowserPagePane({
   const setBrowserDefaultZoomLevel = useAppStore((state) => state.setBrowserDefaultZoomLevel)
   const normalizedBrowserDefaultZoomLevel = normalizeBrowserPageZoomLevel(browserDefaultZoomLevel)
   const browserDefaultZoomPercent = browserPageZoomLevelToPercent(normalizedBrowserDefaultZoomLevel)
-  const browserDefaultZoomLevelRef = useRef(normalizedBrowserDefaultZoomLevel)
-  browserDefaultZoomLevelRef.current = normalizedBrowserDefaultZoomLevel
+  // Why: the level THIS pane should hold. Seeded from the configured default ("applied to newly
+  // opened browser tabs") and moved only by zooming this pane, so a reload can't broadcast another
+  // tab's zoom through the shared setting. Why the module-level lookup: the guest webview outlives
+  // this component (worktree switch, Settings visit), so re-seeding on remount would let a later
+  // Settings change retroactively hijack a tab the user already zoomed.
+  const paneZoomLevelRef = useRef(
+    getExplicitBrowserPageZoomLevel(browserTab.id) ?? normalizedBrowserDefaultZoomLevel
+  )
   const grabElementShortcut = useShortcutLabel('browser.grabElement')
+  const reloadShortcut = useShortcutLabel('browser.reload')
+  const hardReloadShortcut = useShortcutLabel('browser.hardReload')
+  const [reloadMenuOpen, setReloadMenuOpen] = useState(false)
   const faviconUrlRef = useRef<string | null>(browserTab.faviconUrl)
   const initialBrowserUrlRef = useRef(browserTab.url)
   const browserTabUrlRef = useRef(browserTab.url)
   const activeLoadFailureRef = useRef<BrowserLoadError | null>(browserTab.loadError)
+  const recoveryNavigationValidationRef = useRef<{
+    committed: boolean
+    started: boolean
+    targetUrl: string
+  } | null>(null)
   // Why: CDP viewport emulation doesn't survive renderer process swaps, so reapply the preset from this ref on every dom-ready.
   const viewportPresetIdRef = useRef(browserTab.viewportPresetId ?? null)
   viewportPresetIdRef.current = browserTab.viewportPresetId ?? null
@@ -2861,6 +2937,61 @@ function BrowserPagePane({
   const contextMenuRef = useRef<HTMLDivElement>(null)
   const [findOpen, setFindOpen] = useState(false)
   const grab = useGrabMode(browserTab.id)
+
+  const reloadState = useMemo(
+    () => ({ loading: browserTab.loading, loadErrorCode: browserTab.loadError?.code ?? null }),
+    [browserTab.loading, browserTab.loadError]
+  )
+  const reloadWebviewOrRecoverGuest = useCallback(
+    (ignoreCache: boolean) => {
+      const webview = webviewRef.current
+      if (!webview) {
+        return
+      }
+      if (reloadBrowserPageWebview(webview, { ignoreCache }) === 'guest-missing') {
+        // Why: reload cannot revive a destroyed guest (STA-3448) — recreate it instead.
+        onUpdatePageStateRef.current(browserTab.id, { loading: true })
+        retryGuestRecoveryRef.current()
+      }
+    },
+    [browserTab.id]
+  )
+  const runReloadTrigger = useCallback(
+    (trigger: BrowserReloadTrigger) => {
+      const webview = webviewRef.current
+      if (!webview) {
+        return
+      }
+      switch (resolveBrowserReloadIntent(trigger, reloadState)) {
+        case 'stop':
+          webview.stop()
+          break
+        case 'retry-guest-recovery':
+          onUpdatePageStateRef.current(browserTab.id, { loading: true })
+          retryGuestRecoveryRef.current()
+          break
+        case 'retry-load':
+          retryBrowserTabLoad(webview, browserTab, onUpdatePageStateRef.current)
+          break
+        case 'hard-reload':
+          reloadWebviewOrRecoverGuest(true)
+          break
+        case 'reload':
+          reloadWebviewOrRecoverGuest(false)
+          break
+      }
+    },
+    [browserTab, reloadState, reloadWebviewOrRecoverGuest]
+  )
+
+  // Keep the accessible name honest: the same button is Stop mid-load and Retry after a failure.
+  const reloadButtonLabelKind = resolveBrowserReloadButtonLabelKind(reloadState)
+  const reloadButtonLabel =
+    reloadButtonLabelKind === 'stop'
+      ? translate('auto.components.browser.pane.BrowserPane.b7e4d9c1a2', 'Stop')
+      : reloadButtonLabelKind === 'retry'
+        ? translate('auto.components.browser.pane.BrowserPane.781d6459ad', 'Retry')
+        : translate('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')
 
   const markup = useMarkupMode({
     getCaptureContext: useCallback((): MarkupCaptureContext | null => {
@@ -2896,6 +3027,10 @@ function BrowserPagePane({
   })
   const isActiveRef = useRef(isActive)
   isActiveRef.current = isActive
+  const isPaintableRef = useRef(isPaintable)
+  useLayoutEffect(() => {
+    isPaintableRef.current = isPaintable
+  }, [isPaintable])
   const annotationViewportBridgeTokenRef = useRef(createBrowserUuid().replaceAll('-', ''))
   const browserAnnotations = useAppStore(
     (s) => s.browserAnnotationsByPageId[browserTab.id] ?? EMPTY_BROWSER_ANNOTATIONS
@@ -3334,7 +3469,12 @@ function BrowserPagePane({
       return false
     }
     addressBarInputRef.current?.blur()
-    webview.focus()
+    try {
+      webview.focus()
+    } catch {
+      // Why: WebViewElement.focus() reads null internals once the guest is destroyed (STA-3448).
+      return false
+    }
     return document.activeElement === webview
   }, [])
 
@@ -3439,12 +3579,18 @@ function BrowserPagePane({
   // Cmd/Ctrl+F — find in page (renderer path: focus on browser chrome)
   // Why: unlike bare C/S grab shortcuts, Cmd+F should always open find even from the address bar (matches Chrome/Safari).
   useEffect(() => {
-    if (!isActive) {
+    if (findShortcutScope === 'inactive') {
       return
     }
     const shortcutPlatform = getShortcutPlatform()
     const handleKeyDown = (e: KeyboardEvent): void => {
       if (!keybindingMatchesAction('browser.find', e, shortcutPlatform, keybindings)) {
+        return
+      }
+      if (
+        findShortcutScope === 'owned-target' &&
+        !browserOverlayOwnsShortcutTarget(e.target, workspaceId)
+      ) {
         return
       }
       e.preventDefault()
@@ -3453,7 +3599,7 @@ function BrowserPagePane({
     }
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [isActive, keybindings])
+  }, [findShortcutScope, keybindings, workspaceId])
 
   // Cmd/Ctrl+F — find in page (IPC path: focus inside webview guest)
   // Why: a focused guest is a separate Chromium process, so main forwards the chord back here.
@@ -3461,10 +3607,13 @@ function BrowserPagePane({
     if (!isActive) {
       return
     }
-    return window.api.ui.onFindInBrowserPage(() => {
-      setFindOpen(true)
-    })
-  }, [isActive])
+    return window.api.ui.onFindInBrowserPage(
+      { browserPageId: browserTab.id, browserWorkspaceId: workspaceId },
+      () => {
+        setFindOpen(true)
+      }
+    )
+  }, [browserTab.id, isActive, workspaceId])
 
   // Browser history shortcuts (renderer path: focus on browser chrome)
   // Why: macOS can't deliver Logitech side-buttons to Electron; Logi Options+ remaps them to history chords, handled here when chrome is focused.
@@ -3531,15 +3680,11 @@ function BrowserPagePane({
       }
       e.preventDefault()
       e.stopPropagation()
-      if (isHardReload) {
-        webviewRef.current?.reloadIgnoringCache()
-      } else {
-        webviewRef.current?.reload()
-      }
+      reloadWebviewOrRecoverGuest(isHardReload)
     }
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [isActive, keybindings])
+  }, [isActive, keybindings, reloadWebviewOrRecoverGuest])
 
   // Cmd/Ctrl+R — reload (IPC path: focus inside webview guest)
   // Why: a focused guest is a separate Chromium process, so main forwards the chord back here.
@@ -3548,9 +3693,9 @@ function BrowserPagePane({
       return
     }
     return window.api.ui.onReloadBrowserPage(() => {
-      webviewRef.current?.reload()
+      reloadWebviewOrRecoverGuest(false)
     })
-  }, [isActive])
+  }, [isActive, reloadWebviewOrRecoverGuest])
 
   useEffect(() => {
     if (!isActive) {
@@ -3560,8 +3705,11 @@ function BrowserPagePane({
       if (!isActiveRef.current) {
         return
       }
+      // Why: reset targets 100% like Chromium; the configured default is a new-tab seed, not a reset target.
       const nextLevel = applyBrowserPageZoom(webviewRef.current, direction)
       if (nextLevel !== null) {
+        paneZoomLevelRef.current = nextLevel
+        rememberExplicitBrowserPageZoomLevel(browserTabIdRef.current, nextLevel)
         setBrowserDefaultZoomLevel(nextLevel)
         showBrowserZoomFeedback(nextLevel)
       }
@@ -3584,9 +3732,9 @@ function BrowserPagePane({
       return
     }
     return window.api.ui.onHardReloadBrowserPage(() => {
-      webviewRef.current?.reloadIgnoringCache()
+      reloadWebviewOrRecoverGuest(true)
     })
-  }, [isActive])
+  }, [isActive, reloadWebviewOrRecoverGuest])
 
   useEffect(() => {
     onUpdatePageStateRef.current = onUpdatePageState
@@ -3659,7 +3807,6 @@ function BrowserPagePane({
     container = ensuredWebview.container
     const webview = ensuredWebview.webview
     const needsInitialNavigation = ensuredWebview.created
-    let needsInitialDefaultZoom = ensuredWebview.created
 
     if (!ensuredWebview.created) {
       // pointerEvents already applied inside ensureBrowserPageWebview for the reused-webview path.
@@ -3687,11 +3834,16 @@ function BrowserPagePane({
       dismissAddressBarSuggestionsRef.current?.()
     }
 
-    let registrationInFlight: { webContentsId: number; promise: Promise<boolean> } | null = null
-    const registerGuest = (): Promise<boolean> => {
-      const webContentsId = webview.getWebContentsId()
-      if (registeredWebContentsIds.get(browserTab.id) === webContentsId) {
-        return Promise.resolve(true)
+    let registrationInFlight: {
+      webContentsId: number
+      promise: Promise<boolean | null>
+    } | null = null
+    const registerGuest = (): Promise<boolean | null> => {
+      let webContentsId: number
+      try {
+        webContentsId = webview.getWebContentsId()
+      } catch {
+        return Promise.resolve(null)
       }
       if (registrationInFlight?.webContentsId === webContentsId) {
         return registrationInFlight.promise
@@ -3707,11 +3859,12 @@ function BrowserPagePane({
         .then((registered) => {
           if (registered) {
             registeredWebContentsIds.set(browserTab.id, webContentsId)
+            return true
           }
-          return registered
+          return null
         })
-        // Why: normalize IPC rejection to false so the dom-ready fallback can retry attach-policy races.
-        .catch(() => false)
+        // Why: registration rejection can be an attach-policy race; only validation of an identified guest proves loss.
+        .catch(() => null)
         .finally(() => {
           if (registrationInFlight?.promise === promise) {
             registrationInFlight = null
@@ -3721,16 +3874,110 @@ function BrowserPagePane({
       return promise
     }
 
+    const clearGuestRecoveryError = (): void => {
+      if (activeLoadFailureRef.current?.code !== BROWSER_GUEST_RECOVERY_ERROR_CODE) {
+        return
+      }
+      activeLoadFailureRef.current = null
+      onUpdatePageStateRef.current(browserTab.id, { loading: false, loadError: null })
+    }
+
+    const guestRecovery = createBrowserPageGuestRecovery({
+      webview,
+      browserPageExists: () => browserPageExists(browserTab.id),
+      shouldValidate: () => isPaintableRef.current,
+      isCurrentWebview: () => webviewRef.current === webview,
+      isPending: () => guestRecoveryPendingRef.current,
+      setPending: (pending) => {
+        guestRecoveryPendingRef.current = pending
+      },
+      validateRegistration: async () => {
+        let webContentsId: number
+        try {
+          webContentsId = webview.getWebContentsId()
+        } catch {
+          // Why: a reused webview can remount before dom-ready; only an identified guest can be declared missing.
+          return null
+        }
+        if (registeredWebContentsIds.get(browserTab.id) !== webContentsId) {
+          return registerGuest()
+        }
+        const registered = await window.api.browser.isGuestRegistered({
+          browserPageId: browserTab.id,
+          webContentsId
+        })
+        if (registered) {
+          return true
+        }
+        return window.api.browser.repairGuestRegistration({
+          browserPageId: browserTab.id,
+          workspaceId,
+          worktreeId,
+          sessionProfileId,
+          webContentsId
+        })
+      },
+      replaceGuest: () => replacePersistentWebview(browserTab.id),
+      onReplacementReady: () => setGuestRecoveryGeneration((generation) => generation + 1),
+      onRecoveryFailed: () => {
+        const loadError = {
+          code: BROWSER_GUEST_RECOVERY_ERROR_CODE,
+          description: translate(
+            'browser.guestRecovery.failed',
+            'The browser page stopped unexpectedly. Retry to restore it.'
+          ),
+          validatedUrl: redactKagiSessionToken(
+            browserTabUrlRef.current || addressBarValueRef.current || 'about:blank'
+          )
+        }
+        activeLoadFailureRef.current = loadError
+        onUpdatePageStateRef.current(browserTab.id, { loading: false, loadError })
+      },
+      onRecoverySucceeded: clearGuestRecoveryError
+    })
+
     const handleDidAttach = (): void => {
       // Why: register at attach since cert failures can precede dom-ready; the dom-ready path stays an idempotent fallback.
-      void registerGuest().finally(() => syncBrowserAnnotationViewportBridge())
+      void registerGuest().then((registered) => {
+        if (registered === true) {
+          guestRecovery.confirmRegistration()
+        }
+        syncBrowserAnnotationViewportBridge()
+      })
     }
 
     const handleDomReady = (): void => {
+      const validateRecoveryAfterNavigation =
+        recoveryNavigationValidationRef.current?.committed === true
+      if (validateRecoveryAfterNavigation) {
+        recoveryNavigationValidationRef.current = null
+      }
+      let liveWebContentsId: number | null = null
+      try {
+        liveWebContentsId = webview.getWebContentsId()
+      } catch {
+        // Why: the guest can detach between dom-ready and registration.
+      }
       const queuedAnnotationViewportBridgeSync =
-        registeredWebContentsIds.get(browserTab.id) !== webview.getWebContentsId()
+        liveWebContentsId === null ||
+        registeredWebContentsIds.get(browserTab.id) !== liveWebContentsId
       if (queuedAnnotationViewportBridgeSync) {
-        void registerGuest().finally(() => syncBrowserAnnotationViewportBridge())
+        void registerGuest().then((registered) => {
+          const completedRecovery = guestRecovery.finish()
+          if (registered === true) {
+            guestRecovery.confirmRegistration()
+            clearGuestRecoveryError()
+          }
+          if (registered === null || completedRecovery || validateRecoveryAfterNavigation) {
+            guestRecovery.validateAfterResume()
+          }
+          syncBrowserAnnotationViewportBridge()
+        })
+      } else {
+        const completedRecovery = guestRecovery.finish()
+        if (completedRecovery || validateRecoveryAfterNavigation) {
+          guestRecovery.validateAfterResume()
+        }
       }
       syncNavigationState(webview)
       if (keepAddressBarFocusRef.current) {
@@ -3739,12 +3986,12 @@ function BrowserPagePane({
       if (!queuedAnnotationViewportBridgeSync) {
         syncBrowserAnnotationViewportBridge()
       }
-      if (needsInitialDefaultZoom) {
-        const appliedLevel = setBrowserPageZoomLevel(webview, browserDefaultZoomLevelRef.current)
-        if (appliedLevel !== null) {
-          setBrowserZoomPercent(browserPageZoomLevelToPercent(appliedLevel))
-        }
-        needsInitialDefaultZoom = false
+      // Why: Chromium restores per-origin zoom on reload/navigation, so reassert THIS pane's level after
+      // every guest load. Uses the pane-local level, not the shared setting, so reloading one tab never
+      // adopts a zoom the user applied to a different tab.
+      const appliedLevel = setBrowserPageZoomLevel(webview, paneZoomLevelRef.current)
+      if (appliedLevel !== null) {
+        setBrowserZoomPercent(browserPageZoomLevelToPercent(appliedLevel))
       }
       // Why: CDP viewport overrides are scoped to the debugger session and don't survive cross-origin nav, so reapply (idempotently) on dom-ready.
       const presetId = viewportPresetIdRef.current
@@ -3794,7 +4041,18 @@ function BrowserPagePane({
         })
         return
       }
-      if (activeLoadFailure) {
+      if (activeLoadFailure?.code === BROWSER_GUEST_RECOVERY_ERROR_CODE) {
+        trackNextLoadingEventRef.current = false
+        onUpdatePageStateRef.current(browserTab.id, {
+          loading: false,
+          title: getBrowserDisplayTitle(webview.getTitle(), browserModelUrl),
+          faviconUrl: faviconUrlRef.current,
+          canGoBack: webview.canGoBack(),
+          canGoForward: webview.canGoForward(),
+          loadError: activeLoadFailure
+        })
+        return
+      } else if (activeLoadFailure) {
         const normalizedAttemptedUrl =
           normalizeBrowserNavigationUrl(activeLoadFailure.validatedUrl) ??
           activeLoadFailure.validatedUrl
@@ -3839,7 +4097,23 @@ function BrowserPagePane({
       })
     }
 
-    const handleDidNavigate = (event: { url?: string; isMainFrame?: boolean }): void => {
+    const handleDidStartNavigation = (event: Electron.DidStartNavigationEvent): void => {
+      if (!event.isMainFrame || event.isInPlace || !event.url) {
+        return
+      }
+      const pendingRecoveryNavigation = recoveryNavigationValidationRef.current
+      const browserStartedUrl = redactKagiSessionToken(event.url)
+      const startedUrl = normalizeBrowserNavigationUrl(browserStartedUrl) ?? browserStartedUrl
+      if (pendingRecoveryNavigation?.targetUrl === startedUrl) {
+        pendingRecoveryNavigation.started = true
+      }
+    }
+
+    const handleDidNavigate = (
+      event: { url?: string; isMainFrame?: boolean },
+      persistUrl = true,
+      preserveLoadError = false
+    ): void => {
       if (event.isMainFrame === false) {
         return
       }
@@ -3848,19 +4122,38 @@ function BrowserPagePane({
         return
       }
       const browserModelUrl = redactKagiSessionToken(currentUrl)
-      lastKnownWebviewUrlRef.current =
+      const normalizedBrowserModelUrl =
         normalizeBrowserNavigationUrl(browserModelUrl) ?? browserModelUrl
+      lastKnownWebviewUrlRef.current = normalizedBrowserModelUrl
       rememberLiveBrowserUrl(browserTab.id, browserModelUrl)
       // Why: don't overwrite in-progress typing (see above).
       if (document.activeElement !== addressBarInputRef.current) {
         setAddressBarValue(toDisplayUrl(browserModelUrl))
       }
-      onSetUrlRef.current(browserTab.id, browserModelUrl)
+      if (persistUrl) {
+        onSetUrlRef.current(browserTab.id, browserModelUrl, { preserveLoadError })
+      }
       onUpdatePageStateRef.current(browserTab.id, {
         title: webview.getTitle() || browserModelUrl,
         canGoBack: webview.canGoBack(),
         canGoForward: webview.canGoForward()
       })
+    }
+
+    const handleFullDidNavigate = (event: { url?: string; isMainFrame?: boolean }): void => {
+      const pendingRecoveryNavigation = recoveryNavigationValidationRef.current
+      if (event.isMainFrame !== false && pendingRecoveryNavigation?.started) {
+        pendingRecoveryNavigation.committed = true
+      }
+      const preserveRecoveryError =
+        activeLoadFailureRef.current?.code === BROWSER_GUEST_RECOVERY_ERROR_CODE
+      handleDidNavigate(event, true, preserveRecoveryError)
+    }
+
+    const handleDidNavigateInPage = (event: { url?: string; isMainFrame?: boolean }): void => {
+      const preserveRecoveryError =
+        activeLoadFailureRef.current?.code === BROWSER_GUEST_RECOVERY_ERROR_CODE
+      handleDidNavigate(event, !preserveRecoveryError)
     }
 
     const handleTitleUpdate = (event: { title?: string }): void => {
@@ -3901,6 +4194,10 @@ function BrowserPagePane({
         return
       }
       trackNextLoadingEventRef.current = false
+      const pendingRecoveryNavigation = recoveryNavigationValidationRef.current
+      if (pendingRecoveryNavigation?.started) {
+        recoveryNavigationValidationRef.current = null
+      }
       const loadError = buildLoadError(event)
       activeLoadFailureRef.current = loadError
       onUpdatePageStateRef.current(browserTab.id, {
@@ -3935,19 +4232,33 @@ function BrowserPagePane({
       }
     }
 
+    const unsubscribeSystemResumed = subscribeBrowserSystemResume(guestRecovery.validateAfterResume)
+    validateVisibleGuestRegistrationRef.current = guestRecovery.validateAfterResume
+    retryGuestRecoveryRef.current = guestRecovery.retryRecovery
+
+    const handleGuestDestroyed = (): void => {
+      // Why: a guest can be destroyed without render-process-gone (detach/reattach race,
+      // guest-side close). Skip intentional teardown, where the element already left the DOM.
+      if (webview.isConnected) {
+        guestRecovery.recoverRenderer()
+      }
+    }
     webview.addEventListener('did-attach', handleDidAttach)
     webview.addEventListener('dom-ready', handleDomReady)
+    webview.addEventListener('render-process-gone', guestRecovery.recoverRenderer)
+    webview.addEventListener('destroyed', handleGuestDestroyed)
     webview.addEventListener('focus', dismissAddressBarSuggestions)
     webview.addEventListener('did-start-loading', handleDidStartLoading)
+    webview.addEventListener('did-start-navigation', handleDidStartNavigation)
     webview.addEventListener('did-stop-loading', handleDidStopLoading)
     // Why: close find only on full 'did-navigate', not the shared handler, which also fires on SPA in-page hash/pushState changes.
     const handleFindCloseOnNavigate = (): void => {
       setFindOpen(false)
     }
 
-    webview.addEventListener('did-navigate', handleDidNavigate)
+    webview.addEventListener('did-navigate', handleFullDidNavigate)
     webview.addEventListener('did-navigate', handleFindCloseOnNavigate)
-    webview.addEventListener('did-navigate-in-page', handleDidNavigate)
+    webview.addEventListener('did-navigate-in-page', handleDidNavigateInPage)
     webview.addEventListener('page-title-updated', handleTitleUpdate)
     webview.addEventListener('page-favicon-updated', handleFaviconUpdate)
     webview.addEventListener('did-fail-load', handleFailLoad)
@@ -3960,23 +4271,40 @@ function BrowserPagePane({
       trackNextLoadingEventRef.current = initialUrl !== ORCA_BROWSER_BLANK_URL
       lastKnownWebviewUrlRef.current = initialUrl
       webview.src = initialUrl
+    } else if (isPaintableRef.current) {
+      if (isBrowserPageRendererRecoveryPending(browserTab.id)) {
+        guestRecovery.recoverRenderer()
+      } else {
+        guestRecovery.validateAfterResume()
+      }
     }
 
     return () => {
       webview.removeEventListener('did-attach', handleDidAttach)
       webview.removeEventListener('dom-ready', handleDomReady)
+      webview.removeEventListener('render-process-gone', guestRecovery.recoverRenderer)
+      webview.removeEventListener('destroyed', handleGuestDestroyed)
       webview.removeEventListener('focus', dismissAddressBarSuggestions)
       webview.removeEventListener('did-start-loading', handleDidStartLoading)
+      webview.removeEventListener('did-start-navigation', handleDidStartNavigation)
       webview.removeEventListener('did-stop-loading', handleDidStopLoading)
-      webview.removeEventListener('did-navigate', handleDidNavigate)
+      webview.removeEventListener('did-navigate', handleFullDidNavigate)
       webview.removeEventListener('did-navigate', handleFindCloseOnNavigate)
-      webview.removeEventListener('did-navigate-in-page', handleDidNavigate)
+      webview.removeEventListener('did-navigate-in-page', handleDidNavigateInPage)
       webview.removeEventListener('page-title-updated', handleTitleUpdate)
       webview.removeEventListener('page-favicon-updated', handleFaviconUpdate)
       webview.removeEventListener('did-fail-load', handleFailLoad)
       webview.removeEventListener('console-message', handleAnnotationViewportMessage)
       container.removeEventListener('dragover', onContainerDragOver)
       container.removeEventListener('drop', onContainerDrop)
+      unsubscribeSystemResumed()
+      guestRecovery.dispose()
+      if (validateVisibleGuestRegistrationRef.current === guestRecovery.validateAfterResume) {
+        validateVisibleGuestRegistrationRef.current = () => {}
+      }
+      if (retryGuestRecoveryRef.current === guestRecovery.retryRecovery) {
+        retryGuestRecoveryRef.current = () => {}
+      }
 
       if (webviewRef.current === webview) {
         webviewRef.current = null
@@ -3991,6 +4319,7 @@ function BrowserPagePane({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     browserTab.id,
+    guestRecoveryGeneration,
     workspaceId,
     slotViewportReady,
     webviewPartition,
@@ -4001,6 +4330,14 @@ function BrowserPagePane({
     syncNavigationState,
     syncBrowserAnnotationViewportBridge
   ])
+
+  useEffect(() => {
+    const becamePaintable = isPaintable && !wasPaintableForGuestValidationRef.current
+    wasPaintableForGuestValidationRef.current = isPaintable
+    if (becamePaintable) {
+      validateVisibleGuestRegistrationRef.current()
+    }
+  }, [isPaintable])
 
   useLayoutEffect(() => {
     applyBrowserPageViewportLayout(browserTab.id, { paintable: isPaintable, active: isActive })
@@ -4483,11 +4820,17 @@ function BrowserPagePane({
     (url: string): void => {
       const navigateBrowserUrl = (targetUrl: string): void => {
         const browserModelUrl = redactKagiSessionToken(targetUrl)
+        const normalizedBrowserModelUrl =
+          normalizeBrowserNavigationUrl(browserModelUrl) ?? browserModelUrl
+        const recoveryLoadError =
+          activeLoadFailureRef.current?.code === BROWSER_GUEST_RECOVERY_ERROR_CODE
+            ? activeLoadFailureRef.current
+            : null
         setAddressBarValue(toDisplayUrl(browserModelUrl))
         onSetUrlRef.current(browserTab.id, browserModelUrl)
         onUpdatePageStateRef.current(browserTab.id, {
           loading: true,
-          loadError: null,
+          loadError: recoveryLoadError,
           title: getBrowserDisplayTitle(browserModelUrl, browserModelUrl)
         })
         setResourceNotice(null)
@@ -4497,8 +4840,10 @@ function BrowserPagePane({
           return
         }
         trackNextLoadingEventRef.current = targetUrl !== ORCA_BROWSER_BLANK_URL
-        lastKnownWebviewUrlRef.current =
-          normalizeBrowserNavigationUrl(browserModelUrl) ?? browserModelUrl
+        lastKnownWebviewUrlRef.current = normalizedBrowserModelUrl
+        recoveryNavigationValidationRef.current = recoveryLoadError
+          ? { committed: false, started: false, targetUrl: normalizedBrowserModelUrl }
+          : null
         webview.src = targetUrl
         if (targetUrl !== ORCA_BROWSER_BLANK_URL) {
           focusWebviewNow()
@@ -4726,6 +5071,7 @@ function BrowserPagePane({
 
   return (
     <div
+      data-browser-page-pane-id={browserTab.id}
       className={cn(
         'absolute inset-0 flex min-h-0 flex-1 flex-col',
         isActive
@@ -4840,7 +5186,7 @@ function BrowserPagePane({
                   role="menuitem"
                   className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
                   onClick={() => {
-                    webviewRef.current?.reload()
+                    reloadWebviewOrRecoverGuest(false)
                     setContextMenu(null)
                   }}
                 >
@@ -4916,30 +5262,62 @@ function BrowserPagePane({
           >
             <ArrowRight className="size-4" />
           </Button>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-7 w-7"
-            onClick={() => {
-              const webview = webviewRef.current
-              if (!webview) {
-                return
-              }
-              if (browserTab.loading) {
-                webview.stop()
-              } else if (browserTab.loadError) {
-                retryBrowserTabLoad(webview, browserTab, onUpdatePageStateRef.current)
-              } else {
-                webview.reload()
-              }
-            }}
-          >
-            {browserTab.loading ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <RefreshCw className="size-4" />
-            )}
-          </Button>
+          <DropdownMenu modal={false} open={reloadMenuOpen} onOpenChange={setReloadMenuOpen}>
+            {/* Why: suppress the tooltip while the menu is open — both anchor below the button and would overlap. */}
+            <Tooltip open={reloadMenuOpen ? false : undefined}>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7"
+                    aria-label={reloadButtonLabel}
+                    // Why: preventDefault suppresses Radix's open-on-left-click (composeEventHandlers skips its
+                    // handler once defaultPrevented), keeping left-click on the primary action and the menu on right-click.
+                    onPointerDown={(e) => {
+                      if (e.button === 0) {
+                        e.preventDefault()
+                      }
+                    }}
+                    // Why: same trick for Radix's open-on-Enter/Space, which would otherwise preventDefault the
+                    // synthesized click and strand keyboard users. ArrowDown still falls through to open the menu.
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        runReloadTrigger('button')
+                      }
+                    }}
+                    onClick={() => runReloadTrigger('button')}
+                    onContextMenu={(e) => {
+                      e.preventDefault()
+                      setReloadMenuOpen(true)
+                    }}
+                  >
+                    {browserTab.loading ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="size-4" />
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={4}>
+                {reloadButtonLabel}
+                {/* Why: the chord maps to plain reload(), which is not what Stop or Retry do — only hint when they match. */}
+                {reloadShortcut && reloadButtonLabelKind === 'reload' ? ` · ${reloadShortcut}` : ''}
+              </TooltipContent>
+            </Tooltip>
+            <DropdownMenuContent align="start" alignOffset={-4}>
+              <DropdownMenuItem onClick={() => runReloadTrigger('reload')}>
+                {translate('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
+                <DropdownMenuShortcut>{reloadShortcut}</DropdownMenuShortcut>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => runReloadTrigger('hard-reload')}>
+                {translate('auto.components.browser.pane.BrowserPane.a1f3c2e4b5', 'Hard Reload')}
+                <DropdownMenuShortcut>{hardReloadShortcut}</DropdownMenuShortcut>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           <BrowserAddressBar
             value={addressBarValue}
@@ -5395,6 +5773,10 @@ function BrowserPagePane({
                       return
                     }
                     onUpdatePageStateRef.current(browserTab.id, { loading: true })
+                    if (browserTab.loadError?.code === BROWSER_GUEST_RECOVERY_ERROR_CODE) {
+                      retryGuestRecoveryRef.current()
+                      return
+                    }
                     retryBrowserTabLoad(webview, browserTab, onUpdatePageStateRef.current)
                   }}
                   onTryHttps={navigateToUrl}

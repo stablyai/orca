@@ -17,19 +17,18 @@ function renderDotClassNames(status: Status): string[] {
 }
 
 describe('StatusIndicator', () => {
-  it('renders working as a clock-driven yellow spinner ring', () => {
+  it('renders working as a yellow spinner ring', () => {
     const markup = renderMarkup('working')
 
     expect(markup).toContain('border-yellow-500')
     expect(markup).toContain('border-t-transparent')
-    // Why: rotation comes from the shared agent-spinner clock, not a
-    // per-element CSS animation that would keep the compositor awake.
+    // Why: rotation must come from the compositor-driven CSS animation, not a
+    // JS clock writing per-element styles on the input thread (STA-3328).
+    expect(markup).toContain('agent-working-spinner')
     expect(markup).toContain('data-agent-spinner')
     // Why: under reduced motion the top border is filled so the static ring
     // reads as a complete marker, not a broken partial spinner (#9515).
     expect(markup).toContain('motion-reduce:border-t-yellow-500')
-    expect(markup).not.toContain('animate-spin')
-    expect(markup).not.toContain('animation:spin')
   })
 
   it('renders permission as an amber question glyph', () => {

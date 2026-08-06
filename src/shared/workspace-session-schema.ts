@@ -18,6 +18,7 @@ import type {
   WorkspaceSessionState
 } from './types'
 import { isValidTerminalTabId } from './terminal-tab-id'
+import { parseExecutionHostId, type ExecutionHostId } from './execution-host'
 import { isTuiAgent } from './tui-agent-config'
 import { normalizeBrowserHistoryEntries } from './workspace-session-browser-history'
 import { isWorkspaceKey } from './workspace-scope'
@@ -250,6 +251,12 @@ const browserHistoryEntriesSchema = z
 export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.object({
   activeRepoId: z.string().nullable(),
   activeWorkspaceKey: workspaceKeySchema.nullable().optional(),
+  activeWorkspaceExecutionHostId: z
+    .custom<ExecutionHostId>(
+      (value) => typeof value === 'string' && Boolean(parseExecutionHostId(value))
+    )
+    .nullable()
+    .optional(),
   activeWorktreeId: z.string().nullable(),
   activeTabId: z.string().nullable(),
   tabsByWorktree: z.record(z.string(), z.array(terminalTabSchema)),

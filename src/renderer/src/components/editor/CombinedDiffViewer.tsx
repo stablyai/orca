@@ -79,6 +79,10 @@ import {
   beginCombinedDiffScrollbarDrag,
   type CombinedDiffScrollbarDragCleanup
 } from './combined-diff-scrollbar-drag'
+import {
+  isUnchangedDiffSectionReload,
+  shouldRequestCombinedDiffSectionLoad
+} from './combined-diff-section-load-state'
 import { translate } from '@/i18n/i18n'
 
 type CachedCombinedDiffViewState = {
@@ -161,6 +165,15 @@ let combinedDiffSideBySidePreference: boolean | null = null
 let combinedDiffFileTreeCollapsedPreference: boolean | null = null
 // Why: local Electron IPC has no RPC timeout; a hung git diff must become a retryable row error, not permanent "Loading...".
 const COMBINED_DIFF_SECTION_LOAD_TIMEOUT_MS = 30_000
+// Why: git rewrites a path several times during a rebase; refetch once the writes stop.
+const COMBINED_DIFF_SECTION_RELOAD_COALESCE_MS = 300
+
+function clearPendingSectionReloadTimers(timers: Map<number, number>): void {
+  for (const timer of timers.values()) {
+    window.clearTimeout(timer)
+  }
+  timers.clear()
+}
 
 class CombinedDiffSectionLoadTimeoutError extends Error {
   constructor() {
@@ -295,8 +308,13 @@ export default function CombinedDiffViewer({
   const loadingIndicesRef = useRef<Set<number>>(new Set())
   const sectionsRef = useRef<DiffSection[]>([])
   const generationRef = useRef(0)
+  // Why: per-section reload token, so a sibling's reload can't discard this section's in-flight load.
+  const sectionLoadTokensRef = useRef<Map<number, number>>(new Map())
+  const renderedIndicesRef = useRef<Set<number>>(new Set())
+  const reloadTimersRef = useRef<Map<number, number>>(new Map())
   const loadSectionRef = useRef<(index: number) => Promise<void>>(async () => {})
   const retrySectionRef = useRef<(index: number) => void>(() => {})
+  const requestSectionReloadRef = useRef<(index: number) => void>(() => {})
   const updateCombinedDiffScrollbar = useCallback(() => {
     const container = scrollContainerRef.current
     if (!container || container.scrollHeight <= container.clientHeight + 1) {
@@ -563,6 +581,8 @@ export default function CombinedDiffViewer({
     setSectionHeights({})
     loadedIndicesRef.current.clear()
     loadingIndicesRef.current.clear()
+    sectionLoadTokensRef.current.clear()
+    clearPendingSectionReloadTimers(reloadTimersRef.current)
     loadSchedulerRef.current.reset()
     generationRef.current += 1
     setGeneration((prev) => prev + 1)
@@ -584,6 +604,7 @@ export default function CombinedDiffViewer({
       loadingIndicesRef.current.add(index)
 
       const gen = generationRef.current
+      const loadToken = sectionLoadTokensRef.current.get(index) ?? 0
       const entries = isAllMode
         ? allEntries
         : isBranchMode
@@ -681,13 +702,41 @@ export default function CombinedDiffViewer({
             }))
           : null
 
-      loadingIndicesRef.current.delete(index)
       if (generationRef.current !== gen) {
+        // Why: the generation reset already cleared the in-flight set, and a newer load for this
+        // index may own the entry now — deleting it here would hide that load from the guard above.
+        return
+      }
+      loadingIndicesRef.current.delete(index)
+      if ((sectionLoadTokensRef.current.get(index) ?? 0) !== loadToken) {
+        // Why: an invalidation landed mid-flight and deferred its reload to this settle point, so
+        // the refetch happens once here instead of racing a second fetch against this one.
+        requestSectionReloadRef.current(index)
         return
       }
       const storedContent = getStoredTextDiffContent(result, largeDiffRenderLimit)
       const storedResult = getStoredTextDiffResult(result, largeDiffRenderLimit)
       loadedIndicesRef.current.add(index)
+      const current = sectionsRef.current[index]
+      // A revalidation lands on a section that is already showing content. If the refetch matches
+      // what's on screen, committing it would swap Monaco models and re-measure for nothing.
+      const wasShowingContent = current !== undefined && !current.loading
+      if (
+        wasShowingContent &&
+        isUnchangedDiffSectionReload(current, {
+          diffResult: storedResult,
+          error,
+          largeDiffRenderLimit,
+          originalContent: storedContent.originalContent,
+          modifiedContent: storedContent.modifiedContent
+        })
+      ) {
+        return
+      }
+      if (wasShowingContent) {
+        // Why: content really changed, so the old Monaco height no longer describes this row.
+        setSectionHeights((prev) => removeDiffSectionMeasuredHeight(prev, index))
+      }
       setSections((prev) => {
         return prev.map((s, i) =>
           i === index
@@ -698,7 +747,11 @@ export default function CombinedDiffViewer({
                 modifiedContent: storedContent.modifiedContent,
                 loading: false,
                 error,
-                largeDiffRenderLimit
+                largeDiffRenderLimit,
+                // Why: models are keyed by path, so a changed refetch must not reuse the old model.
+                contentGeneration: wasShowingContent
+                  ? (s.contentGeneration ?? 0) + 1
+                  : s.contentGeneration
               }
             : s
         )
@@ -727,8 +780,12 @@ export default function CombinedDiffViewer({
   useEffect(() => {
     // Why: React StrictMode replays effect cleanup in dev; reset revives the scheduler for the replayed mount.
     const scheduler = loadSchedulerRef.current
+    const reloadTimers = reloadTimersRef.current
     scheduler.reset()
-    return () => scheduler.dispose()
+    return () => {
+      clearPendingSectionReloadTimers(reloadTimers)
+      scheduler.dispose()
+    }
   }, [])
 
   // Progressive loading: queue diff content when a section becomes visible.
@@ -770,8 +827,14 @@ export default function CombinedDiffViewer({
       loadedIndicesRef.current.delete(index)
       loadingIndicesRef.current.delete(index)
       invalidateCombinedDiffViewStateCache()
-      generationRef.current += 1
-      setGeneration((prev) => prev + 1)
+      // Why: reloading one section must not bump the global generation — that is part of
+      // the virtualizer item key, so it would remount every rendered Monaco editor (STA-3420).
+      sectionLoadTokensRef.current.set(index, (sectionLoadTokensRef.current.get(index) ?? 0) + 1)
+      const coalesced = reloadTimersRef.current.get(index)
+      if (coalesced !== undefined) {
+        window.clearTimeout(coalesced)
+        reloadTimersRef.current.delete(index)
+      }
       setSectionHeights((prev) => removeDiffSectionMeasuredHeight(prev, index))
       setSections((prev) =>
         prev.map((section, sectionIndex) =>
@@ -839,10 +902,16 @@ export default function CombinedDiffViewer({
       if (!section) {
         return `${index}:${generation}`
       }
-      return `${section.key}:${section.collapsed ? 'collapsed' : 'expanded'}:${generation}`
+      // Why: contentGeneration is per-section, so a single row's reload remounts only that row.
+      return `${section.key}:${section.collapsed ? 'collapsed' : 'expanded'}:${generation}:${section.contentGeneration ?? 0}`
     }
   })
   const combinedDiffTotalSize = virtualizer.getTotalSize()
+  const combinedDiffVirtualItems = virtualizer.getVirtualItems()
+  // Why: keep render pure (React Doctor); retrySection still needs the on-screen set without the virtualizer as a dep.
+  useLayoutEffect(() => {
+    renderedIndicesRef.current = new Set(combinedDiffVirtualItems.map((item) => item.index))
+  }, [combinedDiffVirtualItems])
   const getCombinedDiffSectionKey = useCallback((section: DiffSection): string => section.key, [])
   const getCombinedDiffSectionElementKey = useCallback(
     (element: Element): string | null =>
@@ -928,8 +997,13 @@ export default function CombinedDiffViewer({
   // Why: restore only on structural changes — restoring on measurement churn overwrote scrollTop during active wheel input.
   const combinedDiffRestoreSignal = useMemo(
     () =>
+      // Why: a single-section reload drops that row's measured height, so it shifts rows
+      // below it — still a structural change even though `generation` no longer moves.
       `${generation}|${sideBySide ? 'sbs' : 'inline'}|${clampRestoreCount}|${sections
-        .map((section) => `${section.key}:${section.collapsed ? 'c' : 'e'}`)
+        .map(
+          (section) =>
+            `${section.key}:${section.collapsed ? 'c' : 'e'}:${section.contentGeneration ?? 0}`
+        )
         .join(',')}`,
     [clampRestoreCount, generation, sections, sideBySide]
   )
@@ -970,12 +1044,52 @@ export default function CombinedDiffViewer({
   )
   const sectionIndexByKeyRef = useRef(sectionIndexByKey)
   sectionIndexByKeyRef.current = sectionIndexByKey
-  const requestCombinedDiffSectionReload = useCallback((index: number): void => {
+  // Why: invalidation (rebase/commit/external write) revalidates in place — it must not tear the
+  // section down first. Clearing content up front forces a Monaco remodel even when the refetched
+  // diff is identical, which is what wedged the renderer during a rebase (STA-3420).
+  const requestCombinedDiffSectionReload = useCallback(
+    (index: number): void => {
+      const section = sectionsRef.current[index]
+      if (!section || section.dirty) {
+        return
+      }
+      loadedIndicesRef.current.delete(index)
+      invalidateCombinedDiffViewStateCache()
+      sectionLoadTokensRef.current.set(index, (sectionLoadTokensRef.current.get(index) ?? 0) + 1)
+      if (loadingIndicesRef.current.has(index)) {
+        // Why: the in-flight load now carries a stale token, so it re-drives this reload when it
+        // settles. Scheduling one here would fetch the same large diff a second time.
+        return
+      }
+      if (section.collapsed || !renderedIndicesRef.current.has(index)) {
+        // Why: a rebase invalidates every touched path at once. Refetching off-screen sections is
+        // unbounded work nobody can see; the row reloads on mount once it scrolls into view.
+        return
+      }
+      // Why: a rebase touches the same path many times over a few seconds. Without coalescing
+      // each touch refetches a whole diff, and the payload churn alone stalls the renderer.
+      const pending = reloadTimersRef.current.get(index)
+      if (pending !== undefined) {
+        window.clearTimeout(pending)
+      }
+      reloadTimersRef.current.set(
+        index,
+        window.setTimeout(() => {
+          reloadTimersRef.current.delete(index)
+          loadSchedulerRef.current.rerequest(index)
+        }, COMBINED_DIFF_SECTION_RELOAD_COALESCE_MS)
+      )
+    },
+    [invalidateCombinedDiffViewStateCache]
+  )
+  requestSectionReloadRef.current = requestCombinedDiffSectionReload
+  const ensureCombinedDiffSectionLoaded = useCallback((index: number): void => {
     const section = sectionsRef.current[index]
-    if (!section || section.dirty) {
+    if (!shouldRequestCombinedDiffSectionLoad(section, loadingIndicesRef.current.has(index))) {
       return
     }
-    retrySectionRef.current(index)
+    loadedIndicesRef.current.delete(index)
+    loadSchedulerRef.current.request(index)
   }, [])
   const [activeTreeSectionState, setActiveTreeSectionState] = useState<{
     entrySignature: string
@@ -1000,6 +1114,7 @@ export default function CombinedDiffViewer({
         sections: sectionsRef.current,
         sectionIndexByKey,
         toggleSection,
+        loadSection: ensureCombinedDiffSectionLoaded,
         scrollToIndex: (index) => {
           scrollAnchorRef.current = null
           latestDomScrollAnchorRef.current = null
@@ -1013,8 +1128,6 @@ export default function CombinedDiffViewer({
         }
       })
       if (navigatedIndex !== null) {
-        // Why: re-selecting an already-loaded row must refetch — the file or git index may have changed while it stayed mounted.
-        requestCombinedDiffSectionReload(navigatedIndex)
         setActiveTreeSectionState({
           entrySignature,
           key: sectionsRef.current[navigatedIndex]?.key ?? null
@@ -1022,9 +1135,9 @@ export default function CombinedDiffViewer({
       }
     },
     [
+      ensureCombinedDiffSectionLoaded,
       entrySignature,
       markDirectScrollInput,
-      requestCombinedDiffSectionReload,
       sectionIndexByKey,
       toggleSection,
       treeMode,
@@ -1878,7 +1991,7 @@ export default function CombinedDiffViewer({
             >
               {skippedConflictNotice}
               <div className="relative w-full" style={{ height: `${combinedDiffTotalSize}px` }}>
-                {virtualizer.getVirtualItems().map((virtualItem) => {
+                {combinedDiffVirtualItems.map((virtualItem) => {
                   const section = sections[virtualItem.index]
                   if (!section) {
                     return null

@@ -1,6 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { radii, spacing } from '../theme/mobile-theme'
 import { MobileNativeChatComposer } from './MobileNativeChatComposer'
 
 vi.mock('react-native', async () => {
@@ -8,6 +9,7 @@ vi.mock('react-native', async () => {
   return {
     ActivityIndicator: 'ActivityIndicator',
     Image: 'Image',
+    Keyboard: { dismiss: vi.fn() },
     Pressable: 'Pressable',
     ScrollView: ({ children, ...props }: { children?: unknown }) =>
       React.createElement('ScrollView', props, children),
@@ -23,11 +25,23 @@ vi.mock('react-native', async () => {
 
 vi.mock('lucide-react-native', () => ({
   ArrowUp: 'ArrowUp',
+  Check: 'Check',
+  ChevronDown: 'ChevronDown',
+  ChevronLeft: 'ChevronLeft',
+  ChevronRight: 'ChevronRight',
   ImagePlus: 'ImagePlus',
   Mic: 'Mic',
   Square: 'Square',
   X: 'X'
 }))
+
+vi.mock('../components/BottomDrawer', async () => {
+  const React = await import('react')
+  return {
+    BottomDrawer: ({ visible, children }: { visible: boolean; children?: unknown }) =>
+      visible ? React.createElement('BottomDrawer', { visible }, children) : null
+  }
+})
 
 function suppressRendererWarning(): () => void {
   const original = console.error
@@ -90,8 +104,147 @@ describe('MobileNativeChatComposer', () => {
 
     await act(async () => sendButton().props.onPress())
 
-    expect(onSend).toHaveBeenCalledWith('hello')
+    expect(onSend).toHaveBeenCalledWith(' hello')
     expect(onChangeText).not.toHaveBeenCalled()
+  })
+
+  it('stacks the input above the composer action row', async () => {
+    await render(vi.fn().mockResolvedValue(true), vi.fn())
+
+    const composer = renderer!.root.findByProps({ testID: 'native-chat-composer' })
+    const inset = renderer!.root.findByProps({ testID: 'native-chat-composer-inset' })
+    const actions = renderer!.root.findByProps({ testID: 'native-chat-composer-actions' })
+    expect(composer.findAllByType('TextInput')).toHaveLength(1)
+    expect(composer.children[1]).toBe(actions)
+    expect(inset.props.style).toMatchObject({
+      paddingHorizontal: spacing.md,
+      paddingTop: spacing.sm,
+      paddingBottom: spacing.md
+    })
+    expect(composer.props.style).toMatchObject({
+      borderWidth: 1,
+      borderRadius: radii.card,
+      overflow: 'hidden'
+    })
+  })
+
+  it('preserves leading whitespace so prose is not turned into a slash command', async () => {
+    const onSend = vi.fn().mockResolvedValue(true)
+    const restore = suppressRendererWarning()
+    try {
+      await act(async () => {
+        renderer = create(
+          createElement(MobileNativeChatComposer, {
+            value: ' /clear is prose ',
+            onChangeText: vi.fn(),
+            onSend
+          })
+        )
+      })
+    } finally {
+      restore()
+    }
+    await act(async () => sendButton().props.onPress())
+    expect(onSend).toHaveBeenCalledWith(' /clear is prose')
+  })
+
+  it('locks the option pickers while a composer send is in flight', async () => {
+    // The reverse of the test below. The host spaces a send's body and its Enter
+    // ~500ms apart, so an apply tapped inside that window would be submitted as
+    // part of the user's prompt instead of running as its own command.
+    let releaseSend: ((accepted: boolean) => void) | undefined
+    const onSend = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          releaseSend = resolve
+        })
+    )
+    const controller = {
+      snapshot: [
+        {
+          id: 'model',
+          label: 'Model',
+          category: 'model' as const,
+          kind: {
+            type: 'select' as const,
+            choices: [
+              { value: 'sonnet', label: 'Sonnet 5' },
+              { value: 'opus', label: 'Opus 4.8' }
+            ]
+          },
+          valueSource: 'unknown' as const,
+          settable: true
+        }
+      ],
+      pendingId: null,
+      setOption: vi.fn(),
+      invokeAction: vi.fn(),
+      recordCommand: vi.fn()
+    }
+    const restore = suppressRendererWarning()
+    try {
+      await act(async () => {
+        renderer = create(
+          createElement(MobileNativeChatComposer, {
+            value: 'run the tests',
+            onChangeText: vi.fn(),
+            onSend,
+            sessionOptions: { isWorking: false, controller }
+          })
+        )
+      })
+      const modelPill = (): { props: { accessibilityState: { disabled: boolean } } } =>
+        renderer!.root.find(
+          (node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Model, Model'
+        ) as { props: { accessibilityState: { disabled: boolean } } }
+      expect(modelPill().props.accessibilityState).toMatchObject({ disabled: false })
+      // Start the send but don't await it — it stays in flight on purpose.
+      let pressed!: Promise<void>
+      await act(async () => {
+        pressed = sendButton().props.onPress()
+        await Promise.resolve()
+      })
+      expect(onSend).toHaveBeenCalled()
+      expect(modelPill().props.accessibilityState).toMatchObject({ disabled: true })
+      await act(async () => {
+        releaseSend?.(true)
+        await pressed
+      })
+      expect(modelPill().props.accessibilityState).toMatchObject({ disabled: false })
+    } finally {
+      restore()
+    }
+  })
+
+  it('blocks composer submission while a session-option command is pending', async () => {
+    const onSend = vi.fn().mockResolvedValue(true)
+    const restore = suppressRendererWarning()
+    try {
+      await act(async () => {
+        renderer = create(
+          createElement(MobileNativeChatComposer, {
+            value: 'hello',
+            onChangeText: vi.fn(),
+            onSend,
+            sessionOptions: {
+              isWorking: false,
+              controller: {
+                snapshot: [],
+                pendingId: 'model',
+                setOption: vi.fn(),
+                invokeAction: vi.fn(),
+                recordCommand: vi.fn()
+              }
+            }
+          })
+        )
+      })
+    } finally {
+      restore()
+    }
+    expect(sendButton().props).toMatchObject({ disabled: true })
+    await act(async () => sendButton().props.onPress())
+    expect(onSend).not.toHaveBeenCalled()
   })
 
   it('keeps the draft when the send is rejected', async () => {
@@ -101,7 +254,7 @@ describe('MobileNativeChatComposer', () => {
 
     await act(async () => sendButton().props.onPress())
 
-    expect(onSend).toHaveBeenCalledWith('hello')
+    expect(onSend).toHaveBeenCalledWith(' hello')
     expect(onChangeText).not.toHaveBeenCalled()
   })
 
@@ -202,7 +355,8 @@ describe('MobileNativeChatComposer', () => {
           createElement(MobileNativeChatComposer, {
             value: '/c',
             onChangeText: vi.fn(),
-            onSend: vi.fn().mockResolvedValue(true)
+            onSend: vi.fn().mockResolvedValue(true),
+            agent: 'claude'
           })
         )
       })
@@ -233,6 +387,36 @@ describe('MobileNativeChatComposer', () => {
       input().props.onSelectionChange({ nativeEvent: { selection: { end: 7 } } })
     )
     expect(input().props.selection).toBeUndefined()
+  })
+
+  it('serves the active agent’s shared command catalog with descriptions', async () => {
+    const restore = suppressRendererWarning()
+    try {
+      await act(async () => {
+        renderer = create(
+          createElement(MobileNativeChatComposer, {
+            value: '/',
+            onChangeText: vi.fn(),
+            onSend: vi.fn().mockResolvedValue(true),
+            agent: 'codex'
+          })
+        )
+      })
+    } finally {
+      restore()
+    }
+    const input = renderer!.root.find((node) => node.type === 'TextInput') as {
+      props: { onSelectionChange: (e: { nativeEvent: { selection: { end: number } } }) => void }
+    }
+    await act(async () => input.props.onSelectionChange({ nativeEvent: { selection: { end: 1 } } }))
+    const texts = renderer!.root
+      .findAll((node) => node.type === 'Text')
+      .map((node) => (node.props as { children?: unknown }).children)
+    // Codex-only commands from the shared catalog, with their description rows —
+    // and none of the old hardcoded provider-agnostic list's phantom entries.
+    expect(texts).toContain('/permissions')
+    expect(texts).toContain('Choose what Codex is allowed to do')
+    expect(texts).not.toContain('/cost')
   })
 
   it('wires the mic for hold vs toggle dictation like the terminal composer', async () => {

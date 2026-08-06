@@ -1,5 +1,6 @@
 import type { FolderWorkspace, Worktree } from './types'
 import { folderWorkspaceKey } from './workspace-scope'
+import { toSshExecutionHostId } from './execution-host'
 
 export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Worktree {
   const linkedTask = folderWorkspace.linkedTask
@@ -19,6 +20,8 @@ export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Wor
     linkedBitbucketPR: null,
     linkedAzureDevOpsPR: null,
     linkedGiteaPR: null,
+    linkedWorkItem: linkedTask,
+    linkedTaskSourceContext: folderWorkspace.linkedTaskSourceContext ?? null,
     isArchived: folderWorkspace.isArchived,
     isUnread: folderWorkspace.isUnread,
     isPinned: folderWorkspace.isPinned,
@@ -35,6 +38,9 @@ export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Wor
     branch: '',
     isBare: false,
     isSparse: false,
-    isMainWorktree: false
+    isMainWorktree: false,
+    hostId:
+      folderWorkspace.executionHostId ??
+      (folderWorkspace.connectionId ? toSshExecutionHostId(folderWorkspace.connectionId) : 'local')
   }
 }

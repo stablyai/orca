@@ -15,6 +15,7 @@ export type RelayAuthContext = {
 
 export type CoordinatedRelayBroker = {
   closeNow(): void
+  isLive?(): boolean
 }
 
 type RelayAuthCoordinatorOptions = {
@@ -91,6 +92,22 @@ export class RelayAuthCoordinator {
     return this.ownership?.valid ? this.ownership.broker : null
   }
 
+  // Why: some broker deaths end with no retry timer — an auth refresh that
+  // fails past token expiry (laptop sleep), or a transient context read that
+  // returned null at open. Periodic/power-resume callers use this as a
+  // dead-man's switch; it never disturbs a live broker, a scheduled retry,
+  // or an open already in flight.
+  ensureLive(): void {
+    if (this.stopped || this.retryTimer || this.pendingOwnerships.size > 0) {
+      return
+    }
+    const ownership = this.ownership
+    if (ownership?.valid && (ownership.broker?.isLive?.() ?? true)) {
+      return
+    }
+    this.beginReconcile(false)
+  }
+
   async waitForActiveBroker(): Promise<CoordinatedRelayBroker | null> {
     while (!this.stopped) {
       const broker = this.getActiveBroker()
@@ -143,7 +160,13 @@ export class RelayAuthCoordinator {
         return
       }
       this.cancelLinger()
-      if (this.ownership?.valid && this.ownership.identityKey === nextIdentityKey) {
+      if (
+        this.ownership?.valid &&
+        this.ownership.identityKey === nextIdentityKey &&
+        // Why: registered must be provable; a broker whose control died without
+        // recovering falls through and is replaced instead of republished.
+        (this.ownership.broker?.isLive?.() ?? true)
+      ) {
         this.retryAttempt = 0
         this.options.onStatus('registered')
         return
@@ -181,6 +204,12 @@ export class RelayAuthCoordinator {
       this.options.onStatus('registered')
     } catch (error) {
       if (this.isEpochCurrent(epoch)) {
+        // Why: silent broker-open failures made a dead relay look like standby
+        // during incident diagnosis; the message carries operation + status.
+        console.warn(
+          '[relay] broker reconcile failed:',
+          error instanceof Error ? error.message : String(error)
+        )
         this.options.onStatus('offline')
         if (shouldRetryRelayConnectionError(error)) {
           const retryAfterMs = error instanceof RelayHttpError ? (error.retryAfterMs ?? 0) : 0

@@ -21,9 +21,8 @@ import {
   getTerminalWindowSearchEntries
 } from './terminal-search'
 import { Button } from '../ui/button'
-import { SettingsRow, SettingsSubsectionHeader } from './SettingsFormControls'
+import { SettingsRow, SettingsSubsectionHeader, FontAutocomplete } from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
-import { FontAutocomplete } from './SettingsFormControls'
 import { TerminalFontSizeSetting } from './TerminalFontSizeSetting'
 import { TerminalAdvancedTypographyControls } from './TerminalAdvancedTypographyControls'
 import { TerminalThemeCatalogSection } from './TerminalThemeSections'

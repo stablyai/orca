@@ -64,7 +64,9 @@ export class PluginService {
 
   constructor(options: PluginServiceOptions) {
     this.options = options
-    this.contentPacks = new PluginContentPackRegistry(this.contentVerifier)
+    this.contentPacks = new PluginContentPackRegistry(this.contentVerifier, (pluginKey) =>
+      Boolean(this.options.getPluginKillListEntry?.(pluginKey))
+    )
     this.audit = new PluginAuditLog(getPluginsDataDir(options.userDataPath))
     this.panels = new PluginPanelController({
       resolveApprovedPlugin: (pluginKey) => {

@@ -313,4 +313,32 @@ describe('gitlab RPC methods', () => {
     )
     expect(runtime.listGitLabRepoIssues).toHaveBeenNthCalledWith(2, 'id:repo-1', 'opened', '@me', 1)
   })
+
+  // Regression for #7732: the WS/relay transports close the connection on frames
+  // over 1 MB, so the excerpt must be produced before the response is serialised.
+  it('bounds the job trace before it crosses the transport when logExcerpt is set', async () => {
+    const noisyTrace = [
+      'section_start:1699000000:build\r\u001b[0K$ pnpm build',
+      ...Array.from({ length: 400 }, (_, index) => `line ${index}`),
+      'ERROR: Job failed: exit code 1'
+    ].join('\n')
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getGitLabRepoJobTrace: vi.fn().mockResolvedValue({ ok: true, trace: noisyTrace })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GITLAB_METHODS })
+
+    const raw = await dispatcher.dispatch(
+      makeRequest('gitlab.jobTrace', { repo: 'id:repo-1', jobId: 99 })
+    )
+    const excerpt = await dispatcher.dispatch(
+      makeRequest('gitlab.jobTrace', { repo: 'id:repo-1', jobId: 99, logExcerpt: true })
+    )
+
+    expect((raw as { result: { trace: string } }).result.trace).toBe(noisyTrace)
+    const bounded = (excerpt as { result: { trace: string } }).result.trace
+    expect(bounded).toContain('ERROR: Job failed: exit code 1')
+    expect(bounded).not.toContain('section_start')
+    expect(bounded).not.toContain('line 0\n')
+  })
 })

@@ -16,7 +16,7 @@ import {
   type TestInfo
 } from '@stablyai/playwright-test'
 import { execSync } from 'node:child_process'
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
@@ -48,6 +48,7 @@ type LaunchOptions = {
 
 type RestartSession = {
   userDataDir: string
+  seedCodexResumeRollout: (sessionId: string, cwd: string) => string
   launch: (options?: LaunchOptions) => Promise<LaunchedOrca>
   /** Gracefully close a launch, letting beforeunload flush session state. */
   close: (app: ElectronApplication) => Promise<void>
@@ -119,8 +120,7 @@ function createRestartLaunchIsolation(
       ...(headful ? { ORCA_E2E_HEADFUL: '1' } : { ORCA_E2E_HEADLESS: '1' })
     },
     extraEnv: {},
-    userDataDir,
-    codexRealHomeEnabled: false
+    userDataDir
   })
 }
 
@@ -148,6 +148,28 @@ export function createRestartSession(
     path.join(userDataDir, 'orca-data.json'),
     `${JSON.stringify(getE2ECompletedOnboardingProfile(), null, 2)}\n`
   )
+
+  const seedCodexResumeRollout = (sessionId: string, cwd: string): string => {
+    const sessionsDir = path.join(
+      homeIsolation.isolatedHome,
+      '.codex',
+      'sessions',
+      '2026',
+      '07',
+      '28'
+    )
+    mkdirSync(sessionsDir, { recursive: true })
+    const transcriptPath = path.join(sessionsDir, `rollout-2026-07-28T00-00-00-${sessionId}.jsonl`)
+    writeFileSync(
+      transcriptPath,
+      `${JSON.stringify({
+        timestamp: '2026-07-28T00:00:00.000Z',
+        type: 'session_meta',
+        payload: { id: sessionId, cwd }
+      })}\n`
+    )
+    return transcriptPath
+  }
 
   const launch = async (options?: LaunchOptions): Promise<LaunchedOrca> => {
     runtimeWsPort ??= await reserveRestartRuntimeWsPort()
@@ -193,7 +215,7 @@ export function createRestartSession(
     }
   }
 
-  return { userDataDir, launch, close, dispose }
+  return { userDataDir, seedCodexResumeRollout, launch, close, dispose }
 }
 
 /**

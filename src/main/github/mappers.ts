@@ -1,4 +1,5 @@
 import type { PRInfo, IssueInfo, CheckStatus, PRCheckDetail } from '../../shared/types'
+import { derivePRCheckStatusFromRollup } from '../../shared/pr-check-status'
 
 // ── REST API check-runs mapping ───────────────────────────────────────
 // The REST check-runs endpoint returns separate status + conclusion fields
@@ -132,55 +133,18 @@ export function mapIssueInfo(data: {
   url?: string
   html_url?: string
   labels?: { name: string }[]
+  body?: string | null
 }): IssueInfo {
   return {
     number: data.number,
     title: data.title,
     state: data.state?.toLowerCase() === 'open' ? 'open' : 'closed',
     url: data.html_url ?? data.url ?? '',
-    labels: (data.labels || []).map((l) => l.name)
+    labels: (data.labels || []).map((l) => l.name),
+    ...(typeof data.body === 'string' ? { description: data.body } : {})
   }
 }
 
 export function deriveCheckStatus(rollup: unknown[] | null | undefined): CheckStatus {
-  if (!rollup || !Array.isArray(rollup) || rollup.length === 0) {
-    return 'neutral'
-  }
-
-  let hasFailure = false
-  let hasPending = false
-
-  for (const check of rollup as { status?: string; conclusion?: string; state?: string }[]) {
-    const conclusion = check.conclusion?.toUpperCase()
-    const status = check.status?.toUpperCase()
-    const state = check.state?.toUpperCase()
-
-    if (
-      conclusion === 'FAILURE' ||
-      conclusion === 'TIMED_OUT' ||
-      conclusion === 'CANCELLED' ||
-      // Why: action_required (e.g. an unapproved workflow run) blocks merge until
-      // someone acts; treat it as needs-attention rather than a silent pass.
-      conclusion === 'ACTION_REQUIRED' ||
-      state === 'FAILURE' ||
-      state === 'ERROR'
-    ) {
-      hasFailure = true
-    } else if (
-      status === 'IN_PROGRESS' ||
-      status === 'QUEUED' ||
-      status === 'PENDING' ||
-      state === 'PENDING'
-    ) {
-      hasPending = true
-    }
-  }
-
-  if (hasFailure) {
-    return 'failure'
-  }
-  if (hasPending) {
-    return 'pending'
-  }
-  return 'success'
+  return derivePRCheckStatusFromRollup(rollup)
 }

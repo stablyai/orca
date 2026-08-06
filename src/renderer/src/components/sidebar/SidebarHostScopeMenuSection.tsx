@@ -1,8 +1,6 @@
 import type React from 'react'
 import {
   DropdownMenuCheckboxItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger
@@ -13,7 +11,6 @@ import { getSidebarHostHealthLabel, type SidebarHostOption } from './sidebar-hos
 import { translate } from '@/i18n/i18n'
 
 type SidebarHostScopeMenuSectionProps = {
-  hostOptionsCount: number
   hostVisibilityLabel: string
   hostOptions: readonly SidebarHostOption[]
   preserveWorkspaceBoardOpen: boolean
@@ -54,7 +51,6 @@ function getHostMetadata(host: SidebarHostOption): string {
 }
 
 export function SidebarHostScopeMenuSection({
-  hostOptionsCount,
   hostVisibilityLabel,
   hostOptions,
   preserveWorkspaceBoardOpen,
@@ -93,63 +89,60 @@ export function SidebarHostScopeMenuSection({
     setVisibleWorkspaceHostIds(next.size === hostOptions.length ? null : [...next])
   }
 
+  // Why: one Sort-by-style row (label left, value right) — nested panel holds
+  // the multi-select, so the parent menu stays a flat list of single rows.
   return (
-    <>
-      <DropdownMenuLabel>
-        {translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.hosts', 'Hosts')}
-      </DropdownMenuLabel>
-      <DropdownMenuSub>
-        <DropdownMenuSubTrigger>
-          <span className="flex flex-1 items-center justify-between gap-3">
-            <span className="min-w-0 truncate">{hostVisibilityLabel}</span>
-            <span className="text-[11px] font-medium text-muted-foreground">
-              {hostOptionsCount}
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger>
+        <span className="flex flex-1 items-center justify-between gap-3">
+          <span>
+            {translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.hosts', 'Hosts')}
+          </span>
+          <span className="min-w-0 truncate text-[11px] font-medium text-muted-foreground">
+            {hostVisibilityLabel}
+          </span>
+        </span>
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent
+        className="w-56"
+        data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
+      >
+        <DropdownMenuCheckboxItem
+          checked={allVisible}
+          onCheckedChange={toggleAllHosts}
+          onSelect={(e) => e.preventDefault()}
+          className="min-h-11 items-start py-1.5"
+        >
+          <span className="flex min-w-0 flex-col gap-0.5">
+            <span className="truncate">
+              {translate('auto.components.sidebar.sidebarHostOptions.3e102f111c', 'All hosts')}
+            </span>
+            <span className="truncate text-[11px] font-normal text-muted-foreground">
+              {translate(
+                'auto.components.sidebar.SidebarWorkspaceOptionsMenu.allHostsDetail',
+                'Show every host'
+              )}
             </span>
           </span>
-        </DropdownMenuSubTrigger>
-        <DropdownMenuSubContent
-          className="w-56"
-          data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
-        >
+        </DropdownMenuCheckboxItem>
+        {hostOptions.map((host) => (
           <DropdownMenuCheckboxItem
-            checked={allVisible}
-            onCheckedChange={toggleAllHosts}
+            key={host.id}
+            checked={visibleHostIdSet.has(host.id)}
+            disabled={!allVisible && visibleHostIdSet.has(host.id) && visibleHostIdSet.size <= 1}
+            onCheckedChange={() => toggleHost(host.id)}
             onSelect={(e) => e.preventDefault()}
             className="min-h-11 items-start py-1.5"
           >
             <span className="flex min-w-0 flex-col gap-0.5">
-              <span className="truncate">
-                {translate('auto.components.sidebar.sidebarHostOptions.3e102f111c', 'All hosts')}
-              </span>
-              <span className="truncate text-[11px] font-normal text-muted-foreground">
-                {translate(
-                  'auto.components.sidebar.SidebarWorkspaceOptionsMenu.allHostsDetail',
-                  'Show every host'
-                )}
+              <span className="truncate">{host.label}</span>
+              <span className="text-[11px] font-normal text-muted-foreground">
+                {getHostMetadata(host)}
               </span>
             </span>
           </DropdownMenuCheckboxItem>
-          {hostOptions.map((host) => (
-            <DropdownMenuCheckboxItem
-              key={host.id}
-              checked={visibleHostIdSet.has(host.id)}
-              disabled={!allVisible && visibleHostIdSet.has(host.id) && visibleHostIdSet.size <= 1}
-              onCheckedChange={() => toggleHost(host.id)}
-              onSelect={(e) => e.preventDefault()}
-              className="min-h-11 items-start py-1.5"
-            >
-              <span className="flex min-w-0 flex-col gap-0.5">
-                <span className="truncate">{host.label}</span>
-                <span className="text-[11px] font-normal text-muted-foreground">
-                  {getHostMetadata(host)}
-                </span>
-              </span>
-            </DropdownMenuCheckboxItem>
-          ))}
-        </DropdownMenuSubContent>
-      </DropdownMenuSub>
-
-      <DropdownMenuSeparator />
-    </>
+        ))}
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
   )
 }

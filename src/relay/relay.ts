@@ -10,7 +10,15 @@
 
 import { createServer, createConnection, type Socket, type Server } from 'node:net'
 import { join } from 'node:path'
-import { unlinkSync, existsSync, statSync } from 'node:fs'
+import {
+  unlinkSync,
+  existsSync,
+  statSync,
+  readFileSync,
+  chmodSync,
+  closeSync,
+  openSync
+} from 'node:fs'
 import {
   RELAY_SENTINEL,
   FrameDecoder,
@@ -32,27 +40,39 @@ import { ExternalAutomationsHandler } from './external-automations-handler'
 import { PortScanHandler } from './port-scan-handler'
 import { AgentExecHandler } from './agent-exec-handler'
 import { WorkspaceSessionHandler } from './workspace-session-handler'
+import { AiVaultHandler } from './ai-vault-handler'
 import { endpointDirForRelaySocket, RelayAgentHookServer } from './agent-hook-server'
-import { PluginOverlayManager, getRelayPiStatusExtensionPath } from './plugin-overlay'
+import { PluginOverlayManager } from './plugin-overlay'
 import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
-  AGENT_HOOK_NOTIFICATION_METHOD,
   AGENT_HOOK_REQUEST_REPLAY_METHOD
 } from '../shared/agent-hook-relay'
+import { publishAgentHookEnvelope } from './agent-hook-envelope-publication'
 import {
   DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
   SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD
 } from '../shared/ssh-types'
 import { assertPluginSourceUnderByteCap } from './plugin-source-limit'
 import { resolveOpenCodeSourceConfigDir, resolvePiSourceAgentDir } from './plugin-overlay-env'
-import { detectPiAgentKindFromCommand } from '../shared/pi-agent-kind'
+import {
+  detectExplicitPiAgentKindFromCommand,
+  isPiCompatibleAgentType
+} from '../shared/pi-agent-kind'
 import { resolveSetupAgentSequenceLaunchCommand } from '../shared/setup-agent-sequencing'
 import { pickRemoteCliEnv } from './remote-cli-env'
+import {
+  applyRelayGraceTimeConfiguration,
+  decideRelayGrace,
+  type RelayGraceBranch
+} from './relay-grace-branch'
 import { relayLogLine } from './relay-diagnostic-log'
 import { remoteCliRequestTimeoutMs } from './remote-cli-timeout'
 import { shouldReadRemoteCliStdin } from './remote-cli-stdin'
 import { registerManagedHookInstaller } from './managed-hook-installer'
 import { registerRelayPluginHostCallHandlers } from './plugin-host-call-handler'
+import { DispatcherClientWriter } from './dispatcher-client-writer'
+import { SshPtyConsumerSessionAdapter } from './ssh-pty-consumer-session-adapter'
+import { RelayPtySourcePublication } from './relay-pty-source-publication'
 
 const DEFAULT_GRACE_MS = DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
 const SOCK_NAME = 'relay.sock'
@@ -62,6 +82,9 @@ const EMPTY_DETACHED_STARTUP_GRACE_MS = parseNonNegativeIntEnv(
   'ORCA_RELAY_EMPTY_STARTUP_GRACE_MS',
   60_000
 )
+// Why: a relay holding zero PTYs preserves nothing, so an unlimited grace only accumulates idle daemons.
+// The env override is test-only — the remote relay is launched over a non-interactive SSH exec channel that carries no client env.
+const IDLE_RELAY_GRACE_MS = parseNonNegativeIntEnv('ORCA_RELAY_IDLE_GRACE_MS', 15 * 60_000)
 
 type SocketIdentity = {
   dev: bigint
@@ -106,6 +129,7 @@ function parseArgs(argv: string[]): {
   sockPath: string
   endpointDir?: string
   logFile?: string
+  credentialFile?: string
 } {
   let graceTimeMs = DEFAULT_GRACE_MS
   let connectMode = false
@@ -114,6 +138,7 @@ function parseArgs(argv: string[]): {
   let sockPath = ''
   let endpointDir: string | undefined
   let logFile: string | undefined
+  let credentialFile: string | undefined
   for (let i = 2; i < argv.length; i++) {
     if (argv[i] === '--grace-time' && argv[i + 1]) {
       const parsed = Number.parseInt(argv[i + 1], 10)
@@ -137,20 +162,65 @@ function parseArgs(argv: string[]): {
     } else if (argv[i] === '--log-file' && argv[i + 1]) {
       logFile = argv[i + 1]
       i++
+    } else if (argv[i] === '--credential-file' && argv[i + 1]) {
+      credentialFile = argv[i + 1]
+      i++
     }
   }
   if (!sockPath) {
     sockPath = join(process.cwd(), SOCK_NAME)
   }
-  return { graceTimeMs, connectMode, detached, cliMode, sockPath, endpointDir, logFile }
+  return {
+    graceTimeMs,
+    connectMode,
+    detached,
+    cliMode,
+    sockPath,
+    endpointDir,
+    logFile,
+    credentialFile
+  }
+}
+
+function readEndpointCredential(credentialFile: string | undefined): string | undefined {
+  if (!credentialFile) {
+    return undefined
+  }
+  const credential = readFileSync(credentialFile, 'utf8').trim()
+  if (!/^[A-Za-z0-9_-]{32,256}$/.test(credential)) {
+    throw new Error('Relay endpoint credential is missing or invalid')
+  }
+  if (process.platform !== 'win32') {
+    chmodSync(credentialFile, 0o600)
+  }
+  return credential
 }
 
 // ── Connect mode ─────────────────────────────────────────────────────
 // Why: --connect bridges a new SSH channel's stdin/stdout to the existing relay's socket so the client keeps talking to the process that owns the live PTYs.
 
-function runConnectMode(sockPath: string): void {
+function runConnectMode(sockPath: string, endpointCredential?: string): void {
   const myVersion = readLaunchVersion()
   const sock = createConnection({ path: sockPath })
+  const stdoutWriter = new DispatcherClientWriter(
+    (data, onSettled) =>
+      process.stdout.write(data, (error) => {
+        onSettled(error ? { ok: false, error } : { ok: true })
+      }),
+    {
+      supportsWriteCallback: true,
+      writableLength: () => process.stdout.writableLength,
+      writableHighWaterMark: () => process.stdout.writableHighWaterMark,
+      waitWriteDrain: (callback) => {
+        process.stdout.once('drain', callback)
+        return () => process.stdout.off('drain', callback)
+      }
+    },
+    () => {
+      sock.destroy()
+      process.exit(1)
+    }
+  )
 
   const connectTimeout = setTimeout(() => {
     process.stderr.write(`[relay-connect] Connection timed out after ${CONNECT_TIMEOUT_MS}ms\n`)
@@ -160,24 +230,58 @@ function runConnectMode(sockPath: string): void {
 
   sock.on('connect', () => {
     clearTimeout(connectTimeout)
-    runConnectHandshake(sock, myVersion, {
-      onAccepted: (leftover: Buffer) => {
-        // Why: write RELAY_SENTINEL only after the handshake passes, so a version mismatch is a clean exit-42 instead of a false sentinel + channel drop.
-        process.stdout.write(RELAY_SENTINEL)
-        // Why: forward handshake-buffered leftover bytes before sock.pipe(process.stdout) so the downstream mux sees them in order.
-        if (leftover.length > 0) {
-          process.stdout.write(leftover)
+    runConnectHandshake(
+      sock,
+      myVersion,
+      {
+        onAccepted: (leftover: Buffer) => {
+          stdoutWriter.enqueue('control', () => Buffer.from(RELAY_SENTINEL), RELAY_SENTINEL.length)
+          if (leftover.length > 0) {
+            stdoutWriter.enqueue('control', () => leftover, leftover.length)
+          }
+          process.stdin.pipe(sock)
+          sock.on('data', (data: Buffer) => {
+            sock.pause()
+            let offset = 0
+            const writeNext = (): void => {
+              if (offset >= data.length) {
+                sock.resume()
+                return
+              }
+              const bytes = Math.min(stdoutWriter.producerFrameCapacity, data.length - offset)
+              if (bytes <= 0) {
+                stdoutWriter.close(new Error('Relay stdout has no producer capacity'))
+                return
+              }
+              const chunk = data.subarray(offset, offset + bytes)
+              if (
+                !stdoutWriter.enqueue(
+                  'ordinary',
+                  () => chunk,
+                  chunk.length,
+                  (result) => {
+                    if (!result.ok) {
+                      return
+                    }
+                    offset += bytes
+                    writeNext()
+                  }
+                )
+              ) {
+                stdoutWriter.close(new Error('Relay stdout bridge capacity exceeded'))
+              }
+            }
+            writeNext()
+          })
         }
-        process.stdin.pipe(sock)
-        sock.pipe(process.stdout)
-      }
-    })
+      },
+      endpointCredential
+    )
   })
 
   // Why: Node swallows EPIPE on stdout, so the bridge would zombie and drop frames; exit on stdout error so the relay enters grace promptly.
   process.stdout.on('error', () => {
-    sock.destroy()
-    process.exit(1)
+    stdoutWriter.close(new Error('Relay stdout closed'))
   })
 
   sock.on('error', (err) => {
@@ -186,18 +290,41 @@ function runConnectMode(sockPath: string): void {
     process.exit(1)
   })
 
-  sock.on('close', () => {
+  sock.on('close', async () => {
+    await stdoutWriter.waitForIdle()
     process.exit(0)
   })
 }
 
-async function runOrcaCliMode(sockPath: string, argv: string[]): Promise<void> {
+async function runOrcaCliMode(
+  sockPath: string,
+  argv: string[],
+  endpointCredential?: string
+): Promise<void> {
   const myVersion = readLaunchVersion()
   const stdin = shouldReadRemoteCliStdin(argv) ? await readOrcaCliStdin() : undefined
   const sock = createConnection({ path: sockPath })
+  const stdoutWriter = new DispatcherClientWriter(
+    (data, onSettled) =>
+      process.stdout.write(data, (error) => {
+        onSettled(error ? { ok: false, error } : { ok: true })
+      }),
+    {
+      supportsWriteCallback: true,
+      writableLength: () => process.stdout.writableLength,
+      writableHighWaterMark: () => process.stdout.writableHighWaterMark,
+      waitWriteDrain: (callback) => {
+        process.stdout.once('drain', callback)
+        return () => process.stdout.off('drain', callback)
+      }
+    },
+    () => process.exit(1)
+  )
   let nextSeq = 1
   let highestReceivedSeq = 0
   const requestId = 1
+  const postOutputRequestId = 2
+  let initialExitCode = 0
 
   const sendRequest = (): void => {
     const env = pickRemoteCliEnv(process.env)
@@ -219,6 +346,67 @@ async function runOrcaCliMode(sockPath: string, argv: string[]): Promise<void> {
     sock.write(frame)
   }
 
+  const finish = (exitCode: number): void => {
+    sock.destroy()
+    process.exit(exitCode)
+  }
+
+  const sendPostOutput = (postOutput: unknown): void => {
+    sock.write(
+      encodeJsonRpcFrame(
+        {
+          jsonrpc: '2.0',
+          id: postOutputRequestId,
+          method: 'orca.cli.postOutput',
+          params: { postOutput, env: pickRemoteCliEnv(process.env) }
+        },
+        nextSeq++,
+        highestReceivedSeq
+      )
+    )
+  }
+
+  const writeOutput = (
+    result: { stdout?: unknown; stderr?: unknown },
+    onFlushed: (error?: Error) => void
+  ): void => {
+    let pending = 0
+    let completed = false
+    const settle = (error?: Error): void => {
+      if (completed) {
+        return
+      }
+      if (error) {
+        completed = true
+        onFlushed(error)
+        return
+      }
+      pending -= 1
+      if (pending === 0) {
+        completed = true
+        onFlushed()
+      }
+    }
+    if (typeof result.stdout === 'string' && result.stdout.length > 0) {
+      pending += 1
+      const output = Buffer.from(result.stdout)
+      stdoutWriter.enqueue(
+        'control',
+        () => output,
+        output.length,
+        (settlement) => settle(settlement.ok ? undefined : settlement.error)
+      )
+    }
+    if (typeof result.stderr === 'string' && result.stderr.length > 0) {
+      pending += 1
+      process.stderr.write(result.stderr, 'utf8', (error) => settle(error ?? undefined))
+    }
+    if (pending === 0) {
+      completed = true
+      onFlushed()
+    }
+  }
+
   const decoder = new FrameDecoder((frame: DecodedFrame) => {
     if (frame.id > highestReceivedSeq) {
       highestReceivedSeq = frame.id
@@ -227,28 +415,41 @@ async function runOrcaCliMode(sockPath: string, argv: string[]): Promise<void> {
       return
     }
     const msg = parseJsonRpcMessage(frame.payload)
-    if (!('id' in msg) || msg.id !== requestId || !('result' in msg || 'error' in msg)) {
+    if (
+      !('id' in msg) ||
+      (msg.id !== requestId && msg.id !== postOutputRequestId) ||
+      !('result' in msg || 'error' in msg)
+    ) {
       return
     }
     const response = msg as JsonRpcResponse
     if (response.error) {
       process.stderr.write(`${response.error.message}\n`)
-      sock.destroy()
-      process.exit(1)
+      finish(1)
+      return
+    }
+    if (response.id === postOutputRequestId) {
+      finish(initialExitCode)
+      return
     }
     const result = (response.result ?? {}) as {
       stdout?: unknown
       stderr?: unknown
       exitCode?: unknown
+      postOutput?: unknown
     }
-    if (typeof result.stdout === 'string' && result.stdout.length > 0) {
-      process.stdout.write(result.stdout)
-    }
-    if (typeof result.stderr === 'string' && result.stderr.length > 0) {
-      process.stderr.write(result.stderr)
-    }
-    sock.destroy()
-    process.exit(typeof result.exitCode === 'number' ? result.exitCode : 0)
+    initialExitCode = typeof result.exitCode === 'number' ? result.exitCode : 0
+    writeOutput(result, (error) => {
+      if (error) {
+        finish(1)
+        return
+      }
+      if (result.postOutput === undefined) {
+        finish(initialExitCode)
+        return
+      }
+      sendPostOutput(result.postOutput)
+    })
   })
 
   const connectTimeout = setTimeout(() => {
@@ -259,17 +460,22 @@ async function runOrcaCliMode(sockPath: string, argv: string[]): Promise<void> {
 
   sock.on('connect', () => {
     clearTimeout(connectTimeout)
-    runConnectHandshake(sock, myVersion, {
-      onAccepted: (leftover) => {
-        if (leftover.length > 0) {
-          decoder.feed(leftover)
+    runConnectHandshake(
+      sock,
+      myVersion,
+      {
+        onAccepted: (leftover) => {
+          if (leftover.length > 0) {
+            decoder.feed(leftover)
+          }
+          sock.on('data', (chunk) =>
+            decoder.feed(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+          )
+          sendRequest()
         }
-        sock.on('data', (chunk) =>
-          decoder.feed(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
-        )
-        sendRequest()
-      }
-    })
+      },
+      endpointCredential
+    )
   })
 
   sock.on('error', (err) => {
@@ -293,17 +499,29 @@ async function readOrcaCliStdin(): Promise<string | undefined> {
 // ── Normal mode ──────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  const { graceTimeMs, connectMode, detached, cliMode, sockPath, endpointDir, logFile } = parseArgs(
-    process.argv
-  )
+  const {
+    graceTimeMs,
+    connectMode,
+    detached,
+    cliMode,
+    sockPath,
+    endpointDir,
+    logFile,
+    credentialFile
+  } = parseArgs(process.argv)
+  const endpointCredential = readEndpointCredential(credentialFile)
 
   if (connectMode) {
-    runConnectMode(sockPath)
+    runConnectMode(sockPath, endpointCredential)
     return
   }
   if (cliMode) {
     const marker = process.argv.indexOf('--orca-cli')
-    await runOrcaCliMode(sockPath, marker >= 0 ? process.argv.slice(marker + 1) : [])
+    await runOrcaCliMode(
+      sockPath,
+      marker >= 0 ? process.argv.slice(marker + 1) : [],
+      endpointCredential
+    )
     return
   }
 
@@ -342,7 +560,7 @@ async function main(): Promise<void> {
   })
 
   process.on('unhandledRejection', (reason) => {
-    relayLogLine(`[relay] Unhandled rejection: ${reason}`)
+    relayLogLine(`[relay] Unhandled rejection: ${String(reason)}`)
   })
 
   // Why: guards writes after the stdin/SSH channel drops so keepalive/pty.data frames don't hit a dead pipe (EPIPE).
@@ -357,29 +575,67 @@ async function main(): Promise<void> {
   }
   process.stdout.on('drain', flushStdoutDrainWaiters)
   const dispatcher = new RelayDispatcher(
-    (data) => {
+    (data, onSettled) => {
       if (!stdoutAlive) {
-        return
+        onSettled({ ok: false, error: new Error('Relay stdout is closed') })
+        return false
       }
       try {
-        // Why: surface Node's backpressure so bulk frames (fs.streamChunk) wait for drain instead of queueing ahead of interactive pty.data.
-        return process.stdout.write(data)
-      } catch {
+        return process.stdout.write(data, (error) => {
+          onSettled(error ? { ok: false, error } : { ok: true })
+        })
+      } catch (error) {
         stdoutAlive = false
         flushStdoutDrainWaiters()
-        return undefined
+        onSettled({
+          ok: false,
+          error: error instanceof Error ? error : new Error(String(error))
+        })
+        return false
       }
     },
     {
+      supportsWriteCallback: true,
+      writableLength: () => process.stdout.writableLength,
+      writableHighWaterMark: () => process.stdout.writableHighWaterMark,
       waitWriteDrain: (cb) => {
         if (!stdoutAlive) {
           cb()
           return
         }
         stdoutDrainWaiters.add(cb)
+        return () => stdoutDrainWaiters.delete(cb)
+      },
+      close: () => {
+        stdoutAlive = false
+        flushStdoutDrainWaiters()
+        // Why close then re-pin: the SSH peer must see EOF, but a long-lived daemon that
+        // frees fds 0/1 lets accept()/open() recycle them while Node still treats
+        // process.stdin/stdout as those numbers — corrupting socket clients and shutdown.
+        for (const fd of [process.stdin.fd, process.stdout.fd]) {
+          try {
+            closeSync(fd)
+          } catch {
+            // Already closed by the peer.
+          }
+        }
+        const devNull = process.platform === 'win32' ? 'NUL' : '/dev/null'
+        try {
+          openSync(devNull, 'r')
+        } catch {
+          /* best-effort pin of the lowest free fd (normally 0) */
+        }
+        try {
+          openSync(devNull, 'w')
+        } catch {
+          /* best-effort pin of the next free fd (normally 1) */
+        }
       }
-    }
+    },
+    undefined,
+    { pauseReads: () => process.stdin.pause(), resumeReads: () => process.stdin.resume() }
   )
+  const launchVersion = readLaunchVersion()
 
   const context = new RelayContext()
 
@@ -409,6 +665,18 @@ async function main(): Promise<void> {
   })
 
   const ptyHandler = new PtyHandler(dispatcher, graceTimeMs)
+  const ptyConsumerSessionAdapter = new SshPtyConsumerSessionAdapter(
+    dispatcher,
+    launchVersion,
+    (id, paused) => ptyHandler.setConsumerDeliveryPaused(id, paused),
+    (id) => ptyHandler.handleSourceCreditAvailable(id)
+  )
+  const ptySourcePublication = new RelayPtySourcePublication(
+    dispatcher,
+    ptyConsumerSessionAdapter,
+    (id) => ptyHandler.handleSourcePublicationCapacity(id)
+  )
+  ptyHandler.setSourcePublication(ptySourcePublication)
   const fsHandler = new FsHandler(dispatcher, context)
   const watchRegistry = fsHandler.getWatchRegistry()
   ptyHandler.setWorktreeRemovalCoordinator(watchRegistry)
@@ -429,6 +697,9 @@ async function main(): Promise<void> {
   const _workspaceSessionHandler = new WorkspaceSessionHandler(dispatcher)
   void _workspaceSessionHandler
 
+  const _aiVaultHandler = new AiVaultHandler(dispatcher)
+  void _aiVaultHandler
+
   // Why: relay-hosted plugin provisioning is a later phase. Register the
   // enforcement boundary now with no consented identities or runtime services.
   registerRelayPluginHostCallHandlers(
@@ -443,14 +714,22 @@ async function main(): Promise<void> {
       timeoutMs: remoteCliRequestTimeoutMs(params)
     })
   })
+  dispatcher.onRequest('orca.cli.postOutput', async (params, context) => {
+    return await dispatcher.requestAnyClient('orca.cli.postOutput', params, {
+      excludeClientId: context.clientId,
+      timeoutMs: remoteCliRequestTimeoutMs(params)
+    })
+  })
 
   function configureRelayGraceTime(params: Record<string, unknown>): { graceTimeMs: number } {
-    const seconds = Number(params.graceTimeSeconds)
-    if (Number.isFinite(seconds) && seconds >= 0) {
-      // Why: the host sends 0 before system sleep so live remote PTYs survive longer than the ordinary grace window.
-      ptyHandler.setGraceTimeMs(Math.floor(seconds) * 1000)
-    }
-    return { graceTimeMs: ptyHandler.configuredGraceTimeMs }
+    return applyRelayGraceTimeConfiguration(params.graceTimeSeconds, {
+      readConfiguredGraceMs: () => ptyHandler.configuredGraceTimeMs,
+      writeConfiguredGraceMs: (graceMs) => ptyHandler.setGraceTimeMs(graceMs),
+      isGraceTimerArmed: () => graceDeadlineAt !== null && graceReason !== null,
+      isShutdownInFlight: () => shutdownInFlight,
+      readGraceBranch: () => graceBranch,
+      startGrace
+    })
   }
 
   dispatcher.onNotification(SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD, (params) => {
@@ -465,13 +744,8 @@ async function main(): Promise<void> {
   const hookServer = new RelayAgentHookServer({
     // Why: scope endpoint.env/cmd by socket path so multiple relay daemons on one account can't overwrite each other's hook tokens.
     endpointDir: endpointDir ?? endpointDirForRelaySocket(sockPath),
-    forward: (envelope) => {
-      // Why: notify is fire-and-forget and drops during reconnect; the per-paneKey cache lets us replay last status after --connect.
-      dispatcher.notify(
-        AGENT_HOOK_NOTIFICATION_METHOD,
-        envelope as unknown as Record<string, unknown>
-      )
-    }
+    // Why: publication is fire-and-forget and drops during reconnect; the per-paneKey cache lets us replay last status after --connect.
+    forward: (envelope) => publishAgentHookEnvelope(dispatcher, envelope)
   })
   // Why: await the bind before announcing readiness so the first PTY spawn already sees ORCA_AGENT_HOOK_* env; bind failure is soft (log and continue).
   try {
@@ -505,15 +779,24 @@ async function main(): Promise<void> {
     if (pluginOverlay.hasPiSource()) {
       // Why: install Orca's guarded extension into the launched agent's (Pi vs OMP) real remote dir without redirecting PI_CODING_AGENT_DIR.
       const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(ctx.env, ctx.command)
-      const kind = detectPiAgentKindFromCommand(launchCommandHint)
+      const explicitKind = isPiCompatibleAgentType(ctx.launchAgent)
+        ? ctx.launchAgent
+        : ctx.launchAgent === undefined
+          ? detectExplicitPiAgentKindFromCommand(launchCommandHint)
+          : null
+      const kind = explicitKind ?? 'pi'
       const hasLaunchCommand =
         typeof launchCommandHint === 'string' && launchCommandHint.trim().length > 0
       const shouldPrepareOmpShadow = kind === 'omp' || !hasLaunchCommand
       if (kind === 'pi') {
         const sourceDir = resolvePiSourceAgentDir(ctx.env, ctx.shell, 'pi')
-        const dir = pluginOverlay.materializePi(overlayId, sourceDir, 'pi')
-        if (dir) {
-          env.ORCA_PI_SOURCE_AGENT_DIR = dir
+        // Why: do not mkdir ~/.<agent> on bare shells when the agent home is
+        // missing — unused agents kept recreating deleted homes (#10196).
+        const result = pluginOverlay.materializePi(overlayId, sourceDir, 'pi', {
+          materializeDefaultHome: explicitKind === 'pi'
+        })
+        if (result?.sourceAgentDir) {
+          env.ORCA_PI_SOURCE_AGENT_DIR = result.sourceAgentDir
         }
       }
       if (shouldPrepareOmpShadow) {
@@ -522,10 +805,16 @@ async function main(): Promise<void> {
           kind === 'omp'
             ? resolvePiSourceAgentDir(ctx.env, ctx.shell, 'omp')
             : ctx.env.ORCA_OMP_SOURCE_AGENT_DIR
-        const dir = pluginOverlay.materializePi(overlayId, sourceDir, 'omp')
-        if (dir) {
-          env.ORCA_OMP_STATUS_EXTENSION = getRelayPiStatusExtensionPath(dir)
-          env.ORCA_OMP_SOURCE_AGENT_DIR = dir
+        const result = pluginOverlay.materializePi(overlayId, sourceDir, 'omp', {
+          materializeDefaultHome: explicitKind === 'omp'
+        })
+        // Why: status-only fallback (no sourceAgentDir) is intentional for bare
+        // shells without ~/.omp — still export ORCA_OMP_STATUS_EXTENSION (#10196).
+        if (result?.statusExtensionPath) {
+          env.ORCA_OMP_STATUS_EXTENSION = result.statusExtensionPath
+        }
+        if (result?.sourceAgentDir) {
+          env.ORCA_OMP_SOURCE_AGENT_DIR = result.sourceAgentDir
         }
       }
     }
@@ -577,12 +866,14 @@ async function main(): Promise<void> {
 
   const socketClients = new Map<Socket, number>()
   let socketServer: Server | null = null
-  const launchVersion = readLaunchVersion()
   const startedAt = Date.now()
   let acceptedSocketConnections = 0
   let hasAcceptedSocketClient = false
   let graceDeadlineAt: number | null = null
   let graceReason: string | null = null
+  // Why: only the idle branch is a "nothing left to preserve" bet, so only it may be revoked when a
+  // PTY appears mid-window; the other branches keep their armed deadline.
+  let graceBranch: RelayGraceBranch | null = null
 
   dispatcher.onRequest('relay.status', async () => ({
     pid: process.pid,
@@ -592,6 +883,11 @@ async function main(): Promise<void> {
     memory: process.memoryUsage(),
     ptys: {
       active: ptyHandler.activePtyCount
+    },
+    ptySourceCredit: {
+      enabled: true,
+      session: ptyConsumerSessionAdapter.getDebugSnapshot(),
+      publication: ptySourcePublication.getDebugSnapshot()
     },
     socket: {
       path: sockPath,
@@ -613,6 +909,7 @@ async function main(): Promise<void> {
     }
     graceDeadlineAt = null
     graceReason = null
+    graceBranch = null
     ptyHandler.cancelGraceTimer()
   }
 
@@ -640,20 +937,38 @@ async function main(): Promise<void> {
     sock.on('close', flushSockDrainWaiters)
     sock.on('error', flushSockDrainWaiters)
     const clientId = dispatcher.attachClient(
-      (data) => {
+      (data, onSettled) => {
         if (!sock.destroyed) {
-          return sock.write(data)
+          return sock.write(data, (error) => {
+            onSettled(error ? { ok: false, error } : { ok: true })
+          })
         }
-        return undefined
+        onSettled({ ok: false, error: new Error('Relay socket is closed') })
+        return false
       },
       {
+        supportsWriteCallback: true,
+        writableLength: () => sock.writableLength,
+        writableHighWaterMark: () => sock.writableHighWaterMark,
+        close: () => sock.destroy(),
         waitWriteDrain: (cb) => {
           if (sock.destroyed) {
             cb()
             return
           }
           sockDrainWaiters.add(cb)
+          return () => sockDrainWaiters.delete(cb)
         }
+      },
+      {
+        principal: `relay-endpoint:${launchVersion}`,
+        authenticated: endpointCredential !== undefined,
+        allowSessionOwner: endpointCredential !== undefined,
+        authenticationKind: endpointCredential ? 'endpoint-credential' : 'unproved'
+      },
+      {
+        pauseReads: () => sock.pause(),
+        resumeReads: () => sock.resume()
       }
     )
     socketClients.set(sock, clientId)
@@ -672,7 +987,11 @@ async function main(): Promise<void> {
   async function startSocketServer(): Promise<Server> {
     const server = createServer((sock) => {
       // Why: pre-dispatcher version handshake — see relay-handshake.ts.
-      setupDaemonHandshake(sock, { launchVersion, onAccepted: attachAcceptedSocket })
+      setupDaemonHandshake(sock, {
+        launchVersion,
+        endpointCredential,
+        onAccepted: attachAcceptedSocket
+      })
 
       // Why: destroy on 'end' (FIN from --connect's dying channel) so the 'close' handler fires promptly and the daemon enters grace.
       sock.on('end', () => {
@@ -689,7 +1008,9 @@ async function main(): Promise<void> {
         const clientId = socketClients.get(sock)
         socketClients.delete(sock)
         if (clientId !== undefined) {
-          dispatcher.detachClient(clientId)
+          // Why 'peer-closed' only here: the socket itself ended, which is the one signal that
+          // actually says the client is gone rather than merely slow.
+          dispatcher.detachClient(clientId, 'peer-closed')
         }
         relayLogLine(`[relay] Socket client closed (clients=${socketClients.size})`)
         if (!stdoutAlive && socketClients.size === 0) {
@@ -840,32 +1161,50 @@ async function main(): Promise<void> {
   process.stdout.on('error', () => {
     stdoutAlive = false
     flushStdoutDrainWaiters()
-    dispatcher.invalidateClient()
+    dispatcher.invalidateClient('peer-closed')
   })
 
-  function startGrace(reason: string): void {
-    const startupEmptyDetached =
-      detached && !hasAcceptedSocketClient && ptyHandler.activePtyCount === 0
-    // Why: a detached relay that never accepted a client has no PTY state and shouldn't linger forever.
-    const timeoutMs = startupEmptyDetached
-      ? graceTimeMs === 0
-        ? EMPTY_DETACHED_STARTUP_GRACE_MS
-        : Math.min(graceTimeMs, EMPTY_DETACHED_STARTUP_GRACE_MS)
-      : graceTimeMs
+  function startGrace(reason: string, options?: { retryDeferredShutdown?: boolean }): void {
+    // Why: the live configured value, not the launch-time argv closure — the host can raise the grace
+    // after launch via relay.configureGraceTime, and a zero-only gate reading a stale zero would be
+    // zero-at-launch-only, i.e. correct only by coincidence.
+    const decision = decideRelayGrace({
+      configuredGraceMs: ptyHandler.configuredGraceTimeMs,
+      relayIdle: isRelayIdle(),
+      detached,
+      hasAcceptedSocketClient,
+      activePtyCount: ptyHandler.activePtyCount,
+      retryDeferredShutdown: options?.retryDeferredShutdown === true,
+      emptyDetachedStartupGraceMs: EMPTY_DETACHED_STARTUP_GRACE_MS,
+      idleRelayGraceMs: IDLE_RELAY_GRACE_MS
+    })
+    graceBranch = decision.branch
+    const timeoutMs = decision.timeoutMs
     graceDeadlineAt = timeoutMs === 0 ? null : Date.now() + timeoutMs
     graceReason = reason
     relayLogLine(
-      `[relay] Grace started (${reason}): timeoutMs=${timeoutMs}, startupEmptyDetached=${startupEmptyDetached}, ptys=${ptyHandler.activePtyCount}, clients=${socketClients.size}`
+      `[relay] Grace started (${reason}): timeoutMs=${timeoutMs}, branch=${graceBranch}, ptys=${ptyHandler.activePtyCount}, clients=${socketClients.size}`
     )
     ptyHandler.startGraceTimer(() => {
+      // Why: last line of defense for the idle cap — a PTY that appeared without announcing itself
+      // must not be killed by a timer armed while the relay was still empty (#6955).
+      if (graceBranch === 'idle-no-ptys' && !isRelayIdle()) {
+        relayLogLine(`[relay] Grace expired (${reason}) but relay is no longer idle; re-evaluating`)
+        startGrace(reason)
+        return
+      }
       relayLogLine(`[relay] Grace expired (${reason}); shutting down`)
       shutdown()
     }, timeoutMs)
   }
 
+  // Why: a creation admitted but not yet pooled already owns a shell, so it counts as non-idle.
+  function isRelayIdle(): boolean {
+    return ptyHandler.activePtyCount === 0 && ptyHandler.pendingPtyCreationCount === 0
+  }
+
   if (detached) {
     // Why: detached stdin is /dev/null, so listening would EOF → grace → shutdown before --connect arrives; use the socket instead.
-    stdoutAlive = false
     startGrace('detached startup')
   } else {
     process.stdin.on('data', (chunk: Buffer) => {
@@ -877,7 +1216,7 @@ async function main(): Promise<void> {
       // Why: stdin close means the SSH channel is gone; mark stdout dead so its write callback no-ops instead of hitting a dead pipe.
       stdoutAlive = false
       flushStdoutDrainWaiters()
-      dispatcher.invalidateClient()
+      dispatcher.invalidateClient('peer-closed')
       if (socketClients.size === 0) {
         startGrace('stdin ended')
       }
@@ -886,7 +1225,7 @@ async function main(): Promise<void> {
     process.stdin.on('error', () => {
       stdoutAlive = false
       flushStdoutDrainWaiters()
-      dispatcher.invalidateClient()
+      dispatcher.invalidateClient('peer-closed')
       if (socketClients.size === 0) {
         startGrace('stdin error')
       }
@@ -904,9 +1243,12 @@ async function main(): Promise<void> {
     )
     graceDeadlineAt = null
     graceReason = null
+    graceBranch = null
     void ptyHandler
       .dispose()
       .then(() => {
+        stopPoolWatch()
+        stopPoolActiveWatch()
         dispatcher.dispose()
         fsHandler.dispose()
         gitHandler.dispose()
@@ -920,12 +1262,40 @@ async function main(): Promise<void> {
       })
       .catch((error) => {
         // Why: keep owning a PTY whose native kill was rejected so a transient signal failure doesn't orphan a remote shell.
+        // Why: the pool watches stay registered — the socket server is still listening, so a client can
+        // reconnect and cancel this grace, and that revived relay still needs both re-evaluations.
         shutdownInFlight = false
         relayLogLine(
           `[relay] Shutdown deferred: ${error instanceof Error ? error.message : String(error)}`
         )
+        // Why: shutdown() already cleared graceReason, so without re-arming a client-less relay
+        // whose kill was refused would stay resident forever with nothing left to retry it.
+        if (socketClients.size === 0) {
+          startGrace('shutdown deferred', { retryDeferredShutdown: true })
+        }
       })
   }
+
+  // Why: with the shipped unlimited default the grace timer is never armed, so an expiry can't
+  // notice the pool emptying; re-evaluate on the last exit instead. graceReason (not
+  // graceTimerActive) is the only signal that a grace window is open in that configuration.
+  // Why: a null deadline is exactly that unlimited case; re-arming a scheduled one would restart
+  // an explicitly configured window and double it.
+  const stopPoolWatch = ptyHandler.onPtyPoolEmpty(() => {
+    if (graceReason !== null && graceDeadlineAt === null && !shutdownInFlight) {
+      startGrace('last pty exited')
+    }
+  })
+
+  // Why: the idle cap is armed on an empty pool, but creation is asynchronous — a spawn or revive
+  // admitted after that decision (the client dropped mid-`pty.revive`, say) makes the relay non-idle
+  // again, and re-evaluating disarms the timer instead of letting it kill a live PTY (#6955).
+  // The grace window itself stays open, so the PTY's own exit still re-arms the cap.
+  const stopPoolActiveWatch = ptyHandler.onPtyPoolActive(() => {
+    if (graceBranch === 'idle-no-ptys' && graceReason !== null && !shutdownInFlight) {
+      startGrace(graceReason)
+    }
+  })
 
   process.on('SIGTERM', shutdown)
   process.on('SIGINT', shutdown)
@@ -937,8 +1307,11 @@ async function main(): Promise<void> {
     relayLogLine(`[relay] Process exiting with code ${code}`)
   })
 
-  // Why: the client waits for this exact sentinel string before sending framed data.
-  process.stdout.write(RELAY_SENTINEL)
+  dispatcher.writePrimaryBytes(Buffer.from(RELAY_SENTINEL))
+  if (detached) {
+    stdoutAlive = false
+    dispatcher.invalidateClient()
+  }
 }
 
 function cleanupSocket(sockPath: string): void {

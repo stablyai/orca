@@ -707,6 +707,47 @@ describe('mobile rpc-client connection timeout', () => {
       client.close()
     })
 
+    it('reconnects when the half-open socket omits its close callback', async () => {
+      const client = connect('ws://desktop.invalid', 'token', 'server-key')
+      const socket = mockSockets[0]!
+      openAndAuthenticate(socket)
+      socket.emitCloseOnClose = false
+
+      client.notifyForeground()
+      await vi.advanceTimersByTimeAsync(8_000)
+
+      expect(socket.close).toHaveBeenCalledTimes(1)
+      expect(client.getState()).toBe('reconnecting')
+      socket.onclose?.()
+      expect(client.getState()).toBe('reconnecting')
+
+      await vi.advanceTimersByTimeAsync(500)
+      expect(mockSockets).toHaveLength(2)
+      openAndAuthenticate(mockSockets[1]!)
+      expect(client.getState()).toBe('connected')
+      expect(client.getReconnectAttempt()).toBe(0)
+
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(mockSockets).toHaveLength(2)
+
+      client.close()
+    })
+
+    it('coalesces repeated foreground probes while one probe is pending', async () => {
+      const client = connectAuthenticated().client
+      const socket = mockSockets[0]!
+      client.notifyForeground()
+      client.notifyForeground()
+      client.notifyForeground()
+      expect(sentRequests(socket, 'status.get')).toHaveLength(1)
+      await vi.advanceTimersByTimeAsync(8_000)
+      expect(socket.close).toHaveBeenCalledTimes(1)
+      expect(client.getState()).toBe('reconnecting')
+
+      await vi.advanceTimersByTimeAsync(500)
+      expect(mockSockets).toHaveLength(2)
+      client.close()
+    })
     it('keeps a healthy connection when the foreground probe is answered', async () => {
       const { client, socket } = connectAuthenticated()
 
@@ -875,9 +916,11 @@ describe('mobile rpc-client connection timeout', () => {
       const client = connect('ws://desktop.invalid', 'token', 'server-key')
 
       // Three consecutive handshake rejections (AUTH_RETRY_BUDGET = 3).
+      // Why 1_000: failed handshakes grow the backoff since issue #10119 —
+      // cycle 2 waits RECONNECT_DELAYS[1].
       for (let i = 0; i < 3; i++) {
         if (i > 0) {
-          await vi.advanceTimersByTimeAsync(500)
+          await vi.advanceTimersByTimeAsync(1_000)
         }
         const socket = mockSockets[mockSockets.length - 1]!
         socket.open()
@@ -894,16 +937,17 @@ describe('mobile rpc-client connection timeout', () => {
       const client = connect('ws://desktop.invalid', 'token', 'server-key')
 
       // Two rejections, then a clean connect resets the budget...
+      // Why 1_000: failed handshakes grow the backoff since issue #10119.
       for (let i = 0; i < 2; i++) {
         if (i > 0) {
-          await vi.advanceTimersByTimeAsync(500)
+          await vi.advanceTimersByTimeAsync(1_000)
         }
         const socket = mockSockets[mockSockets.length - 1]!
         socket.open()
         socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
         socket.receive('encrypted:{"type":"e2ee_error","error":{"code":"unauthorized"}}')
       }
-      await vi.advanceTimersByTimeAsync(500)
+      await vi.advanceTimersByTimeAsync(1_000)
       authenticate(mockSockets[mockSockets.length - 1]!)
       expect(client.getState()).toBe('connected')
 

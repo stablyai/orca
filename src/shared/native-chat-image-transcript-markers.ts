@@ -1,7 +1,7 @@
 import { isTextBlock, type NativeChatBlock, type NativeChatMessage } from './native-chat-types'
 
 const IMAGE_SOURCE_MARKER = /^\[Image:\s*source:\s*(.+?)\]\s*$/
-const IMAGE_PROMPT_MARKER = /^\[Image #\d+\]\s*/
+const IMAGE_PROMPT_MARKERS = /^(?:\[Image #\d+\]\s*)+/
 
 function soleText(message: NativeChatMessage): string | null {
   return message.blocks.length === 1 && isTextBlock(message.blocks[0])
@@ -14,10 +14,12 @@ export function imageSourcePathFromText(text: string): string | null {
 }
 
 export function stripImagePromptMarker(text: string): string {
-  return text.replace(IMAGE_PROMPT_MARKER, '')
+  return text.replace(IMAGE_PROMPT_MARKERS, '')
 }
 
-function stripFirstImagePromptMarker(blocks: readonly NativeChatBlock[]): NativeChatBlock[] {
+function stripImagePromptMarkersFromFirstText(
+  blocks: readonly NativeChatBlock[]
+): NativeChatBlock[] {
   let stripped = false
   const next: NativeChatBlock[] = []
   for (const block of blocks) {
@@ -36,13 +38,11 @@ function stripFirstImagePromptMarker(blocks: readonly NativeChatBlock[]): Native
 
 function imagePromptMarkerStartsMessage(message: NativeChatMessage): boolean {
   const firstText = message.blocks.find(isTextBlock)
-  return firstText ? IMAGE_PROMPT_MARKER.test(firstText.text) : false
+  return firstText ? IMAGE_PROMPT_MARKERS.test(firstText.text) : false
 }
 
-/** Claude records an attached image as two user transcript turns:
- *  `[Image: source: /path]` and then `[Image #1] prompt`. Merge them back into
- *  one native turn so the UI keeps the same chip+text shape as the optimistic
- *  send and does not show raw TUI marker text after a view remount. */
+/** Claude records image paths as source turns followed by one marker-prefixed
+ *  prompt. Merge the whole run back into one native user turn. */
 export function normalizeImageTranscriptMessages(
   messages: readonly NativeChatMessage[]
 ): NativeChatMessage[] {
@@ -54,27 +54,34 @@ export function normalizeImageTranscriptMessages(
       continue
     }
     const imagePath = imageSourcePathFromText(soleText(message) ?? '')
-    const next = messages[index + 1]
-    if (
-      imagePath &&
-      next?.role === 'user' &&
-      next.source === message.source &&
-      imagePromptMarkerStartsMessage(next)
-    ) {
-      normalized.push({
-        ...next,
-        blocks: [
-          { type: 'image-ref', path: imagePath },
-          ...stripFirstImagePromptMarker(next.blocks)
-        ]
-      })
-      index += 1
-      continue
-    }
-    // A lone `[Image: source: /path]` turn (no following `[Image #1]` prompt —
-    // e.g. an image sent with no caption) still renders as an image chip rather
-    // than the raw marker text.
     if (imagePath) {
+      const imagePaths = [imagePath]
+      let nextIndex = index + 1
+      while (nextIndex < messages.length) {
+        const candidate = messages[nextIndex]!
+        const candidatePath = imageSourcePathFromText(soleText(candidate) ?? '')
+        if (candidate.role !== 'user' || candidate.source !== message.source || !candidatePath) {
+          break
+        }
+        imagePaths.push(candidatePath)
+        nextIndex += 1
+      }
+      const prompt = messages[nextIndex]
+      if (
+        prompt?.role === 'user' &&
+        prompt.source === message.source &&
+        imagePromptMarkerStartsMessage(prompt)
+      ) {
+        normalized.push({
+          ...prompt,
+          blocks: [
+            ...imagePaths.map((path) => ({ type: 'image-ref' as const, path })),
+            ...stripImagePromptMarkersFromFirstText(prompt.blocks)
+          ]
+        })
+        index = nextIndex
+        continue
+      }
       normalized.push({
         ...message,
         blocks: [{ type: 'image-ref', path: imagePath }]
@@ -83,7 +90,7 @@ export function normalizeImageTranscriptMessages(
     }
     normalized.push({
       ...message,
-      blocks: stripFirstImagePromptMarker(message.blocks)
+      blocks: stripImagePromptMarkersFromFirstText(message.blocks)
     })
   }
   return normalized

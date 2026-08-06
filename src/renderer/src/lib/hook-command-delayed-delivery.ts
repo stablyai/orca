@@ -12,13 +12,21 @@ type PendingWorktreeHookCommandDelivery = {
 // the delivery until the first mirrored terminal tab lands instead of
 // dropping it. Mirrors agent-startup-delayed-delivery's lazy-subscription
 // shape: subscribed only while something is pending.
-const pendingHookCommandDeliveries = new Map<string, PendingWorktreeHookCommandDelivery>()
+// Queued per worktree rather than one-per-worktree: a runtime-owned create can
+// have both setup/issue commands and an agent-tab seed waiting on the same
+// first mirrored tab, and neither may evict the other.
+const pendingHookCommandDeliveries = new Map<string, PendingWorktreeHookCommandDelivery[]>()
 let unsubscribePendingHookCommandDeliveries: (() => void) | null = null
 
 export function queueHookCommandsForFirstWorktreeTab(
   delivery: PendingWorktreeHookCommandDelivery
 ): void {
-  pendingHookCommandDeliveries.set(delivery.worktreeId, delivery)
+  const queued = pendingHookCommandDeliveries.get(delivery.worktreeId)
+  if (queued) {
+    queued.push(delivery)
+  } else {
+    pendingHookCommandDeliveries.set(delivery.worktreeId, [delivery])
+  }
   ensurePendingHookCommandSubscription()
   flushPendingHookCommandDeliveries()
 }
@@ -72,7 +80,7 @@ function stopPendingHookCommandSubscriptionIfIdle(): void {
 
 function flushPendingHookCommandDeliveries(): void {
   const state = useAppStore.getState()
-  for (const [worktreeId, delivery] of pendingHookCommandDeliveries) {
+  for (const [worktreeId, deliveries] of pendingHookCommandDeliveries) {
     const firstTerminalTabId = state.tabsByWorktree[worktreeId]?.[0]?.id
     if (!firstTerminalTabId) {
       // Why: a worktree can be removed before its tabs ever mirror; drop the
@@ -83,9 +91,11 @@ function flushPendingHookCommandDeliveries(): void {
       continue
     }
     // Delete before delivering so store writes inside deliver cannot re-enter
-    // this entry through the subscription.
+    // these entries through the subscription.
     pendingHookCommandDeliveries.delete(worktreeId)
-    delivery.deliver(state, firstTerminalTabId)
+    for (const delivery of deliveries) {
+      delivery.deliver(state, firstTerminalTabId)
+    }
   }
   stopPendingHookCommandSubscriptionIfIdle()
 }

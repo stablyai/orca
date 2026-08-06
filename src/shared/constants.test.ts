@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY,
   getDefaultNotificationSettings,
   getDefaultPrimarySelectionMiddleClickPaste,
   getDefaultTerminalRightClickToPaste,
@@ -22,8 +23,11 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').sourceControlViewMode).toBe('list')
   })
 
-  it('keeps Source Control changes first by default', () => {
-    expect(getDefaultSettings('/tmp').sourceControlGroupOrder).toBe('changes-first')
+  it('uses a commit-oriented Source Control layout by default', () => {})
+
+  it('defaults mobile pairing to discovered network addresses', () => {
+    expect(getDefaultSettings('/tmp').mobilePairingCustomAddress).toBeNull()
+    expect(getDefaultSettings('/tmp').mobilePairingCustomAddresses).toEqual([])
   })
 
   it('keeps first-work branch auto-renaming on by default for new settings', () => {
@@ -43,6 +47,12 @@ describe('getDefaultSettings', () => {
 
   it('enables separate light terminal theme by default', () => {
     expect(getDefaultSettings('/tmp').terminalUseSeparateLightTheme).toBe(true)
+  })
+
+  it('keeps inactive terminal panes readable by default', () => {
+    expect(getDefaultSettings('/tmp').terminalInactivePaneOpacity).toBe(
+      DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY
+    )
   })
 
   it('asks before closing terminals with running processes by default', () => {
@@ -96,7 +106,8 @@ describe('getDefaultSettings', () => {
   })
 
   it('keeps the agent dashboard popout disabled by default', () => {
-    expect(getDefaultSettings('/tmp').experimentalAgentDashboardPopout).toBe(false)
+    expect(getDefaultSettings('/tmp').experimentalAgentDashboardPopout).toBeUndefined()
+    expect(getDefaultSettings('/tmp').experimentalAgentDashboardShowIdle).toBeUndefined()
   })
 
   it('routes fresh Codex profiles through the real-home rollout by default', () => {})

@@ -2,6 +2,7 @@
 
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { getDefaultSettings } from '../../../../shared/constants'
@@ -20,7 +21,8 @@ const mocks = vi.hoisted(() => ({
   refreshPreflightStatus: vi.fn(),
   checkLinearConnection: vi.fn(),
   hasPairedMobileDevice: false,
-  agentBucketCounts: { attention: 0, working: 0, idle: 0 },
+  agentBucketCounts: { attention: 0, working: 0, done: 0, idle: 0 },
+  getAgentBucketCounts: vi.fn(),
   dismissMobileOnboardingBadge: vi.fn(),
   setSetupGuideSidebarDismissed: vi.fn()
 }))
@@ -41,7 +43,10 @@ vi.mock('@/components/activity/useActivityUnreadCount', () => ({
 }))
 
 vi.mock('@/components/dashboard/useAgentBucketCounts', () => ({
-  useAgentBucketCounts: () => mocks.agentBucketCounts
+  useAgentBucketCounts: () => {
+    mocks.getAgentBucketCounts()
+    return mocks.agentBucketCounts
+  }
 }))
 
 vi.mock('@/hooks/useShortcutLabel', () => ({
@@ -80,7 +85,7 @@ vi.mock('@/components/ui/context-menu', () => ({
   )
 }))
 
-import {
+import SidebarNav, {
   getSetupGuideSidebarEntryReady,
   shouldShowAgentDashboardButton,
   shouldShowAgentsButton,
@@ -88,7 +93,6 @@ import {
   shouldShowMobileButton,
   shouldShowSetupGuideEntry
 } from './SidebarNav'
-import SidebarNav from './SidebarNav'
 
 function gitRepo(): Repo {
   return {
@@ -208,7 +212,7 @@ describe('SidebarNav', () => {
     vi.clearAllMocks()
     await i18n.changeLanguage('en')
     mocks.hasPairedMobileDevice = false
-    mocks.agentBucketCounts = { attention: 0, working: 0, idle: 0 }
+    mocks.agentBucketCounts = { attention: 0, working: 0, done: 0, idle: 0 }
     setSidebarState()
   })
 
@@ -244,6 +248,7 @@ describe('SidebarNav', () => {
     const container = await renderSidebarNav()
 
     expect(queryButtonByText(container, 'Agent Dashboard')).toBeNull()
+    expect(mocks.getAgentBucketCounts).not.toHaveBeenCalled()
   })
 
   it('mounts the Agent Dashboard row after opt-in', async () => {
@@ -255,26 +260,34 @@ describe('SidebarNav', () => {
     })
     const container = await renderSidebarNav()
 
-    expect(queryButtonByText(container, 'Agent Dashboard')).not.toBeNull()
+    await waitFor(() => expect(queryButtonByText(container, 'Agent Dashboard')).not.toBeNull())
+    expect(mocks.getAgentBucketCounts).toHaveBeenCalledTimes(1)
   })
 
   it('uses a question glyph only for the Needs You count', async () => {
-    mocks.agentBucketCounts = { attention: 2, working: 3, idle: 4 }
+    mocks.agentBucketCounts = { attention: 2, working: 3, done: 1, idle: 4 }
     setSidebarState({
       settings: {
         ...getDefaultSettings('/tmp'),
-        experimentalAgentDashboardPopout: true
+        experimentalAgentDashboardPopout: true,
+        experimentalAgentDashboardShowIdle: true
       }
     })
     const container = await renderSidebarNav()
 
+    await waitFor(() =>
+      expect(container.querySelector('[aria-label="Needs You: 2"]')).not.toBeNull()
+    )
     const attention = container.querySelector('[aria-label="Needs You: 2"]')
     const working = container.querySelector('[aria-label="Working: 3"]')
+    const done = container.querySelector('[aria-label="Done: 1"]')
     const idle = container.querySelector('[aria-label="Idle: 4"]')
     expect(attention?.querySelector('.lucide-message-circle-question-mark')).not.toBeNull()
     expect(working?.querySelector('.rounded-full')).not.toBeNull()
+    expect(done?.querySelector('.rounded-full')).not.toBeNull()
     expect(idle?.querySelector('.rounded-full')).not.toBeNull()
     expect(working?.querySelector('svg')).toBeNull()
+    expect(done?.querySelector('svg')).toBeNull()
     expect(idle?.querySelector('svg')).toBeNull()
   })
 

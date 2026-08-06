@@ -13,9 +13,12 @@ import {
  * do, or refuse work it could, over a copy that is never at stake either way. A
  * blocked *convergent* copy still withholds it, because that is the placement the
  * command would write to and overwriting it is the real data-loss case.
+ * `globallyUpdatableNames` comes from the updater's lock; an unregistered copied
+ * bundle is installed but `skills update` cannot identify its source.
  */
 export function eligibleSkillUpdateNames(
-  installations: readonly SkillFreshnessInstallation[]
+  installations: readonly SkillFreshnessInstallation[],
+  globallyUpdatableNames: ReadonlySet<string>
 ): string[] {
   const byName = new Map<string, SkillFreshnessInstallation[]>()
   for (const installation of installations) {
@@ -26,6 +29,9 @@ export function eligibleSkillUpdateNames(
 
   const eligible: string[] = []
   for (const [, entries] of byName) {
+    if (!globallyUpdatableNames.has(entries[0].name)) {
+      continue
+    }
     const convergent = entries.filter((entry) =>
       SUPPORTED_GLOBAL_SKILL_TOPOLOGIES.has(entry.topology)
     )

@@ -65,6 +65,7 @@ import {
   updateMRReviewers
 } from './client'
 import { __resetRepoDefaultBranchCacheForTests } from '../source-control/repo-default-branch'
+import { _resetKnownHostsCache } from './gitlab-known-host-probe'
 
 /** Answer the real default-branch resolver probes (#9171 guard). */
 function primeGitDefaultBranch(defaultRef = 'refs/remotes/origin/main'): void {
@@ -92,6 +93,7 @@ describe('gitlab client — MR operations', () => {
     gitExecFileAsyncMock.mockReset()
     primeGitDefaultBranch()
     __resetRepoDefaultBranchCacheForTests()
+    _resetKnownHostsCache()
     _resetGitLabRateLimitCache()
     getGlabKnownHostsMock.mockResolvedValue(['gitlab.com'])
     resolveIssueSourceMock.mockResolvedValue({
@@ -287,6 +289,39 @@ describe('gitlab client — MR operations', () => {
       expect(glabExecFileAsyncMock).toHaveBeenCalledWith(['auth', 'status'], {
         allowDefaultWslFallback: false
       })
+    })
+
+    it('merges many authenticated hosts with one cache scan', async () => {
+      const hostCount = 256
+      glabExecFileAsyncMock.mockResolvedValueOnce({
+        stdout: Array.from(
+          { length: hostCount },
+          (_, index) => `Logged in to gitlab-${index}.example.test as user`
+        ).join('\n'),
+        stderr: ''
+      })
+      const originalMap = Array.prototype.map
+      let knownHostCacheScans = 0
+      const mapSpy = vi.spyOn(Array.prototype, 'map').mockImplementation(function (
+        this: unknown[],
+        callback: (value: unknown, index: number, array: unknown[]) => unknown,
+        thisArg?: unknown
+      ): unknown[] {
+        if (this[0] === 'gitlab.com' && this.every((value) => typeof value === 'string')) {
+          knownHostCacheScans += 1
+        }
+        return Reflect.apply(originalMap, this, [callback, thisArg])
+      })
+
+      try {
+        await expect(diagnoseAuth()).resolves.toMatchObject({
+          authenticated: true,
+          hosts: expect.any(Array)
+        })
+      } finally {
+        mapSpy.mockRestore()
+      }
+      expect(knownHostCacheScans).toBe(1)
     })
   })
 
@@ -1053,6 +1088,32 @@ describe('gitlab client — MR operations', () => {
         ['api', '--hostname', 'git.internal', 'projects/g%2Fp/jobs/99/trace'],
         {}
       )
+    })
+
+    // #7732: a job canceled before it started 404s; the Checks panel must show its
+    // benign empty state, not the issue-edit copy classifyGlabError would produce.
+    it('reports a 404 trace as an empty log rather than an error', async () => {
+      glabExecFileAsyncMock.mockRejectedValueOnce(new Error('HTTP 404 Not Found'))
+
+      await expect(getJobTrace('/repo', 99, 'upstream', 'conn-1')).resolves.toEqual({
+        ok: true,
+        trace: ''
+      })
+    })
+
+    it('keeps a missing project and a scope failure as errors, in job-log wording', async () => {
+      glabExecFileAsyncMock.mockRejectedValueOnce(new Error('HTTP 404: Project Not Found'))
+      await expect(getJobTrace('/repo', 99, 'upstream', 'conn-1')).resolves.toEqual({
+        ok: false,
+        error: "Could not find this job's GitLab project."
+      })
+
+      glabExecFileAsyncMock.mockRejectedValueOnce(new Error('HTTP 403 insufficient_scope'))
+      const forbidden = await getJobTrace('/repo', 99, 'upstream', 'conn-1')
+      expect(forbidden).toEqual({
+        ok: false,
+        error: "You don't have permission to read this job's log. Check your GitLab token scopes."
+      })
     })
 
     it('retries a job through the selected SSH GitLab host', async () => {

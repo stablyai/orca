@@ -76,6 +76,18 @@ export class SshConnectionManager {
     }
   }
 
+  /**
+   * Close one specific connection, clearing the pool entry only when it is still the registered one.
+   * Why: a cancelled connect whose transport opened late owns that exact connection — disconnecting
+   * by target id would tear down the replacement's live transport instead.
+   */
+  async disconnectConnection(targetId: string, conn: SshConnection): Promise<void> {
+    await conn.disconnect()
+    if (this.connections.get(targetId) === conn) {
+      this.connections.delete(targetId)
+    }
+  }
+
   async reconnect(targetId: string): Promise<void> {
     const conn = this.connections.get(targetId)
     if (!conn) {

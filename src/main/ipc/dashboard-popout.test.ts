@@ -53,6 +53,24 @@ const mainSender = { id: 1, send: vi.fn() }
 const popoutSender = { id: 2, send: vi.fn() }
 const untrustedSender = { id: 3, send: vi.fn() }
 const SNAPSHOT = { generatedAt: 1, cards: [] }
+const CARD = {
+  paneKey: 'tab-1:leaf-1',
+  ptyId: 'pty-1',
+  agentType: 'codex',
+  bucket: 'working',
+  dotState: 'working',
+  task: 'Ship it',
+  repoId: 'repo-1',
+  worktreeId: 'worktree-1',
+  tabId: 'tab-1',
+  leafId: 'leaf-1',
+  repoName: 'Orca',
+  worktreeName: 'Dashboard',
+  startedAt: 1,
+  finishedAt: null,
+  stateChangedAt: 1,
+  unseen: false
+}
 
 function makeWindow(sender: typeof mainSender) {
   return {
@@ -109,6 +127,15 @@ describe('registerDashboardPopoutHandlers', () => {
     expect(createPopoutMock).toHaveBeenCalledWith(store, undefined, {
       getKeybindings: expect.any(Function)
     })
+
+    handlers.get('dashboardPopout:open')!({ sender: mainSender } as never, 'map')
+    expect(createPopoutMock).toHaveBeenLastCalledWith(store, 'map', {
+      getKeybindings: expect.any(Function)
+    })
+
+    createPopoutMock.mockClear()
+    handlers.get('dashboardPopout:open')!({ sender: mainSender } as never, 'invalid')
+    expect(createPopoutMock).not.toHaveBeenCalled()
   })
 
   it('auto-closes the popout when the feature is disabled', () => {
@@ -131,6 +158,40 @@ describe('registerDashboardPopoutHandlers', () => {
     expect(popoutSender.send).toHaveBeenCalledWith('dashboard:snapshot', SNAPSHOT)
   })
 
+  // Why: an over-long label used to drop the whole snapshot silently, leaving
+  // the board frozen on its last good paint with nothing logged.
+  it('keeps publishing the board when one card is invalid, and says so', () => {
+    const popout = makeWindow(popoutSender)
+    getPopoutMock.mockReturnValue(popout)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const good = { ...CARD, paneKey: 'tab-1:leaf-1' }
+    const bad = { ...CARD, paneKey: 'tab-2:leaf-2', conversationName: 'x'.repeat(1_025) }
+
+    handlers.get('dashboard:publishSnapshot')!({ sender: mainSender } as never, {
+      generatedAt: 2,
+      cards: [good, bad]
+    })
+
+    expect(popoutSender.send).toHaveBeenCalledWith('dashboard:snapshot', {
+      generatedAt: 2,
+      cards: [good]
+    })
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('dropped 1 invalid card'))
+    warn.mockRestore()
+  })
+
+  it('logs when a snapshot is rejected outright', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    handlers.get('dashboard:publishSnapshot')!({ sender: mainSender } as never, {
+      generatedAt: Number.NaN,
+      cards: []
+    })
+
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('rejected malformed snapshot'))
+    warn.mockRestore()
+  })
+
   it('replays the cached snapshot only to the popout and nudges only the trusted main renderer', () => {
     const popout = makeWindow(popoutSender)
     getPopoutMock.mockReturnValue(popout)
@@ -142,6 +203,29 @@ describe('registerDashboardPopoutHandlers', () => {
     handlers.get('dashboard:requestSnapshot')!({ sender: popoutSender } as never)
     expect(popoutSender.send).toHaveBeenCalledWith('dashboard:snapshot', SNAPSHOT)
     expect(sendToTrustedMock).toHaveBeenCalledWith('dashboard:snapshotRequested', null)
+  })
+
+  it('replays the last repo icons when the cached snapshot omitted them', () => {
+    const popout = makeWindow(popoutSender)
+    getPopoutMock.mockReturnValue(popout)
+    const repoIconsByRepoId = { r1: { type: 'emoji', emoji: '🦑' } }
+    const publish = handlers.get('dashboard:publishSnapshot')!
+
+    publish({ sender: mainSender } as never, { ...SNAPSHOT, repoIconsByRepoId })
+    // A throttled republish drops the unchanged map — the popout on the wire
+    // still holds it, but one mounting now would have nothing to hold.
+    publish({ sender: mainSender } as never, { generatedAt: 2, cards: [] })
+    expect(popoutSender.send).toHaveBeenLastCalledWith('dashboard:snapshot', {
+      generatedAt: 2,
+      cards: []
+    })
+
+    handlers.get('dashboard:requestSnapshot')!({ sender: popoutSender } as never)
+    expect(popoutSender.send).toHaveBeenLastCalledWith('dashboard:snapshot', {
+      generatedAt: 2,
+      cards: [],
+      repoIconsByRepoId
+    })
   })
 
   it('reports open state only to the trusted main renderer', () => {
@@ -163,6 +247,31 @@ describe('registerDashboardPopoutHandlers', () => {
       paneKey: 'tab1:leaf1'
     })
     expect(sendToTrustedMock).toHaveBeenCalledWith('ui:ackDashboardAgent', 'tab1:leaf1')
+  })
+
+  it('relays only valid agent launches from the popout', () => {
+    const args = { worktreeId: 'worktree-1', agent: 'codex' }
+    handlers.get('dashboardPopout:spawnAgent')!({ sender: untrustedSender } as never, args)
+    handlers.get('dashboardPopout:spawnAgent')!({ sender: popoutSender } as never, {
+      ...args,
+      agent: 'unknown'
+    })
+    expect(sendToTrustedMock).not.toHaveBeenCalled()
+
+    handlers.get('dashboardPopout:spawnAgent')!({ sender: popoutSender } as never, args)
+    expect(sendToTrustedMock).toHaveBeenCalledWith('ui:spawnDashboardAgent', args)
+  })
+
+  it('relays only valid sleep requests from the popout', () => {
+    const args = { worktreeId: 'worktree-1' }
+    handlers.get('dashboardPopout:sleepWorkspace')!({ sender: untrustedSender } as never, args)
+    handlers.get('dashboardPopout:sleepWorkspace')!({ sender: popoutSender } as never, {
+      worktreeId: ''
+    })
+    expect(sendToTrustedMock).not.toHaveBeenCalled()
+
+    handlers.get('dashboardPopout:sleepWorkspace')!({ sender: popoutSender } as never, args)
+    expect(sendToTrustedMock).toHaveBeenCalledWith('ui:sleepDashboardWorkspace', args)
   })
 
   it('reveals an agent in only the trusted main window', () => {

@@ -1,11 +1,15 @@
+// @vitest-environment happy-dom
+import { cleanup, render } from '@testing-library/react'
+import { Suspense } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserTab as BrowserTabState, Tab, TabGroup } from '../../../../shared/types'
 
 type MockAppState = {
   browserTabsByWorktree: Record<string, readonly BrowserTabState[]>
   unifiedTabsByWorktree: Record<string, readonly Tab[]>
   groupsByWorktree: Record<string, readonly TabGroup[]>
+  activeGroupIdByWorktree: Record<string, string>
   focusGroup: (worktreeId: string, groupId: string) => void
 }
 
@@ -36,15 +40,24 @@ vi.mock('@/lib/pane-manager/browser-mobile-driver-state', () => ({
 }))
 
 vi.mock('./BrowserPane', () => ({
-  default: ({ browserTab, isActive }: { browserTab: BrowserTabState; isActive: boolean }) => (
+  default: ({
+    browserTab,
+    isActive,
+    findShortcutScope
+  }: {
+    browserTab: BrowserTabState
+    isActive: boolean
+    findShortcutScope?: string
+  }) => (
     <span
       data-browser-pane-id={browserTab.id}
       data-browser-pane-active={isActive ? 'true' : 'false'}
+      data-browser-find-shortcut-scope={findShortcutScope}
     />
   )
 }))
 
-import BrowserPaneOverlayLayer from './BrowserPaneOverlayLayer'
+import BrowserPaneOverlayLayer, { RetainedBrowserPaneOverlayLayer } from './BrowserPaneOverlayLayer'
 
 describe('BrowserPaneOverlayLayer', () => {
   beforeEach(() => {
@@ -54,6 +67,86 @@ describe('BrowserPaneOverlayLayer', () => {
     mocks.state = createState()
   })
 
+  afterEach(() => cleanup())
+
+  it('defers browser slots for a restricted hidden mount, then retains them after activation', () => {
+    const view = render(
+      <RetainedBrowserPaneOverlayLayer
+        worktreeId="wt-1"
+        isWorktreeActive={false}
+        mountEligible={false}
+      />
+    )
+
+    expect(view.container.querySelectorAll('[data-browser-overlay-tab-id]')).toHaveLength(0)
+
+    view.rerender(
+      <RetainedBrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive mountEligible />
+    )
+    expect(view.container.querySelectorAll('[data-browser-overlay-tab-id]')).toHaveLength(2)
+
+    view.rerender(
+      <RetainedBrowserPaneOverlayLayer
+        worktreeId="wt-1"
+        isWorktreeActive={false}
+        mountEligible={false}
+      />
+    )
+    expect(view.container.querySelectorAll('[data-browser-overlay-tab-id]')).toHaveLength(2)
+  })
+
+  it('discards the retained latch when the worktree surface unmounts', () => {
+    const view = render(
+      <RetainedBrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive mountEligible />
+    )
+    expect(view.container.querySelectorAll('[data-browser-overlay-tab-id]')).toHaveLength(2)
+
+    // Worktree removal (or Terminal teardown) unmounts the layer with its surface.
+    view.unmount()
+
+    // A remount starts a fresh layer: the latch must reset, deferring until eligible again.
+    const revisit = render(
+      <RetainedBrowserPaneOverlayLayer
+        worktreeId="wt-1"
+        isWorktreeActive={false}
+        mountEligible={false}
+      />
+    )
+    expect(revisit.container.querySelectorAll('[data-browser-overlay-tab-id]')).toHaveLength(0)
+
+    revisit.rerender(
+      <RetainedBrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive mountEligible />
+    )
+    expect(revisit.container.querySelectorAll('[data-browser-overlay-tab-id]')).toHaveLength(2)
+  })
+
+  it('does not retain browser slots from an eligible render that never commits', () => {
+    const pending = new Promise<never>(() => {})
+    const BlockCommit = ({ blocked }: { blocked: boolean }): null => {
+      if (blocked) {
+        throw pending
+      }
+      return null
+    }
+    const renderBoundary = (mountEligible: boolean, blocked: boolean) => (
+      <Suspense fallback={<span data-suspended />}>
+        <RetainedBrowserPaneOverlayLayer
+          worktreeId="wt-1"
+          isWorktreeActive={mountEligible}
+          mountEligible={mountEligible}
+        />
+        <BlockCommit blocked={blocked} />
+      </Suspense>
+    )
+    const view = render(renderBoundary(false, false))
+
+    view.rerender(renderBoundary(true, true))
+    expect(view.container.querySelector('[data-suspended]')).not.toBeNull()
+
+    view.rerender(renderBoundary(false, false))
+    expect(view.container.querySelectorAll('[data-browser-overlay-tab-id]')).toHaveLength(0)
+  })
+
   it('keeps inactive browser panes mounted for a visible worktree', () => {
     const markup = renderOverlay({ isWorktreeActive: true })
 
@@ -61,6 +154,88 @@ describe('BrowserPaneOverlayLayer', () => {
     expect(markup).toContain('data-browser-pane-active="true"')
     expect(markup).toContain('data-browser-pane-id="browser-b"')
     expect(markup).toContain('data-browser-pane-active="false"')
+  })
+
+  it('marks the active browser pane focused when its own group holds focus', () => {
+    const markup = renderOverlay({ isWorktreeActive: true })
+
+    // browser-a is the active tab of group-1, and group-1 is the focused split.
+    expect(markup).toContain(
+      'data-browser-pane-id="browser-a" data-browser-pane-active="true" data-browser-find-shortcut-scope="focused"'
+    )
+  })
+
+  it('keeps an active browser pane unfocused when another split holds focus (#11348)', () => {
+    mocks.state = createState()
+    mocks.state.groupsByWorktree = {
+      'wt-1': [
+        ...mocks.state.groupsByWorktree['wt-1'],
+        {
+          id: 'group-2',
+          worktreeId: 'wt-1',
+          activeTabId: null,
+          tabOrder: []
+        }
+      ]
+    }
+    mocks.state.activeGroupIdByWorktree = { 'wt-1': 'group-2' }
+
+    const markup = renderOverlay({ isWorktreeActive: true })
+
+    expect(markup).toContain(
+      'data-browser-pane-id="browser-a" data-browser-pane-active="true" data-browser-find-shortcut-scope="inactive"'
+    )
+  })
+
+  it('limits Find to the owning target while focused-group state is unavailable', () => {
+    mocks.state = createState()
+    mocks.state.activeGroupIdByWorktree = {}
+
+    const markup = renderOverlay({ isWorktreeActive: true })
+
+    expect(markup).toContain(
+      'data-browser-pane-id="browser-a" data-browser-pane-active="true" data-browser-find-shortcut-scope="owned-target"'
+    )
+  })
+
+  it('limits Find to the owning target when the focused-group ID is stale', () => {
+    mocks.state = createState()
+    mocks.state.activeGroupIdByWorktree = { 'wt-1': 'removed-group' }
+
+    const markup = renderOverlay({ isWorktreeActive: true })
+
+    expect(markup).toContain(
+      'data-browser-pane-id="browser-a" data-browser-pane-active="true" data-browser-find-shortcut-scope="owned-target"'
+    )
+  })
+
+  it('keeps Find ownership with group identities after split order changes', () => {
+    mocks.state = createState()
+    const [tabA, tabB] = mocks.state.unifiedTabsByWorktree['wt-1']
+    const [groupA] = mocks.state.groupsByWorktree['wt-1']
+    mocks.state.unifiedTabsByWorktree = {
+      'wt-1': [{ ...tabB, groupId: 'group-2' }, tabA]
+    }
+    mocks.state.groupsByWorktree = {
+      'wt-1': [
+        {
+          id: 'group-2',
+          worktreeId: 'wt-1',
+          activeTabId: tabB.id,
+          tabOrder: [tabB.id]
+        },
+        { ...groupA, tabOrder: [tabA.id] }
+      ]
+    }
+
+    const markup = renderOverlay({ isWorktreeActive: true })
+
+    expect(markup).toContain(
+      'data-browser-pane-id="browser-a" data-browser-pane-active="true" data-browser-find-shortcut-scope="focused"'
+    )
+    expect(markup).toContain(
+      'data-browser-pane-id="browser-b" data-browser-pane-active="true" data-browser-find-shortcut-scope="inactive"'
+    )
   })
 
   it('marks automation-visible inactive browser panes paintable without remounting them', () => {
@@ -126,6 +301,8 @@ function createState(): MockAppState {
         }
       ]
     },
+    // Default: the browser's own group holds focus, so active === focused.
+    activeGroupIdByWorktree: { 'wt-1': 'group-1' },
     focusGroup: mocks.focusGroup
   }
 }

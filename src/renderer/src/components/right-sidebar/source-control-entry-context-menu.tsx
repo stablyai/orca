@@ -14,6 +14,7 @@ import { useAppStore } from '@/store'
 import { OpenInApplicationIcon } from '@/lib/open-in-app-catalog'
 import { translate } from '@/i18n/i18n'
 import { getLocalFileManagerLabel } from '@/lib/local-file-manager-label'
+import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
 import {
   getOpenInEntryAvailability,
   getWorktreeOpenInEntries,
@@ -42,7 +43,9 @@ export function SourceControlEntryContextMenu({
   onOpenChange,
   children
 }: SourceControlEntryContextMenuProps): React.JSX.Element {
-  const openInApplications = useAppStore((s) => s.settings?.openInApplications ?? [])
+  const openInApplications = useAppStore(
+    (s) => s.settings?.openInApplications ?? NO_OPEN_IN_APPLICATIONS
+  )
   const settings = useAppStore((s) => s.settings)
   const fileManagerLabel = getLocalFileManagerLabel()
   const openInEntries = React.useMemo(

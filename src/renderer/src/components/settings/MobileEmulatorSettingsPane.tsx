@@ -35,7 +35,7 @@ type EmulatorAvailability = {
 
 type MobileEmulatorSettingsPaneProps = {
   settings: GlobalSettings
-  updateSettings: (updates: Partial<GlobalSettings>) => void
+  updateSettings: (updates: Partial<GlobalSettings>) => Promise<void>
 }
 
 const AUTOMATIC_DEVICE_VALUE = '__orca_automatic_emulator_device__'

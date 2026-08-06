@@ -49,6 +49,8 @@ globalThis.window = { api: mockApi }
 
 import { createTestStore, seedStore, makeWorktree, makeTab } from './store-test-helpers'
 import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
+import type { SshProviderEpoch } from '../../../../shared/ssh-types'
+import type { DirectSshPaneRetryAttemptId } from './direct-ssh-terminal-recovery'
 
 const WT1 = 'repo1::/path/wt1'
 const WT2 = 'repo1::/path/wt2'
@@ -62,6 +64,11 @@ const REMOTE_PTY2_SAME_HANDLE = 'remote:env-2@@terminal-wt1'
 const PTY2 = 'pty-wt2'
 
 function seedMaps(store: ReturnType<typeof createTestStore>): void {
+  const authority = {
+    targetId: 'target-a',
+    providerEpoch: 'epoch-a' as SshProviderEpoch,
+    connectionGeneration: 1
+  }
   seedStore(store, {
     worktreesByRepo: {
       repo1: [
@@ -133,6 +140,32 @@ function seedMaps(store: ReturnType<typeof createTestStore>): void {
       [PTY1_SPLIT]: true,
       [REMOTE_PTY1]: true,
       [PTY2]: true
+    },
+    directSshPaneRetryByTabId: {
+      [TAB1]: {
+        attemptId: 'attempt-1' as DirectSshPaneRetryAttemptId,
+        authority,
+        tabGeneration: 0,
+        startedAt: 1
+      }
+    },
+    directSshLivePtyBindingByTabId: {
+      [TAB1]: {
+        attemptId: 'attempt-1' as DirectSshPaneRetryAttemptId,
+        authority,
+        tabGeneration: 0,
+        ptyId: PTY1
+      },
+      [TAB2]: {
+        attemptId: 'attempt-2' as DirectSshPaneRetryAttemptId,
+        authority,
+        tabGeneration: 0,
+        ptyId: PTY2
+      }
+    },
+    directSshPaneRetryHistoryByTabId: {
+      [TAB1]: { authority, attemptedAt: [1] },
+      [TAB2]: { authority, attemptedAt: [2] }
     }
   })
 }
@@ -163,6 +196,9 @@ describe('bulk worktree purge evicts the per-tab/per-pty terminal maps it previo
     expect(s.pendingCodexPaneRestartIds[PTY1]).toBeUndefined()
     expect(s.pendingCodexPaneRestartIds[PTY1_SPLIT]).toBeUndefined()
     expect(s.pendingCodexPaneRestartIds[REMOTE_PTY1]).toBeUndefined()
+    expect(s.directSshPaneRetryByTabId[TAB1]).toBeUndefined()
+    expect(s.directSshLivePtyBindingByTabId[TAB1]).toBeUndefined()
+    expect(s.directSshPaneRetryHistoryByTabId[TAB1]).toBeUndefined()
 
     // Surviving worktree's tab/pty: every entry retained (no over-eviction).
     expect(s.lastKnownRelayPtyIdByTabId[TAB2]).toBe(PTY2)
@@ -176,6 +212,8 @@ describe('bulk worktree purge evicts the per-tab/per-pty terminal maps it previo
     expect(s.migrationUnsupportedByPtyId[PTY2]).toBeDefined()
     expect(s.suppressedPtyExitIds[PTY2]).toBe(true)
     expect(s.pendingCodexPaneRestartIds[PTY2]).toBe(true)
+    expect(s.directSshLivePtyBindingByTabId[TAB2]).toBeDefined()
+    expect(s.directSshPaneRetryHistoryByTabId[TAB2]).toBeDefined()
   })
 
   it('keeps environment-scoped remote guard identities independent', () => {
@@ -243,5 +281,22 @@ describe('bulk worktree purge evicts the per-tab/per-pty terminal maps it previo
     // Why: guard keys stay scoped to their environment, so purge can delete
     // exact identities without parsing aliases or scanning surviving terminals.
     expect(parseRemotePtyId).not.toHaveBeenCalled()
+  })
+
+  it('preserves direct SSH ledgers when a surviving worktree reuses the tab id', () => {
+    const store = createTestStore()
+    seedMaps(store)
+    store.setState((state) => ({
+      tabsByWorktree: {
+        ...state.tabsByWorktree,
+        [WT2]: [...state.tabsByWorktree[WT2], makeTab({ id: TAB1, worktreeId: WT2, ptyId: PTY2 })]
+      }
+    }))
+
+    store.getState().purgeWorktreeTerminalState([WT1])
+
+    expect(store.getState().directSshPaneRetryByTabId[TAB1]).toBeDefined()
+    expect(store.getState().directSshLivePtyBindingByTabId[TAB1]).toBeDefined()
+    expect(store.getState().directSshPaneRetryHistoryByTabId[TAB1]).toBeDefined()
   })
 })
