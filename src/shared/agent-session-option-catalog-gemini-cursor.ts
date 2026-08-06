@@ -26,7 +26,6 @@ export const GEMINI_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   modelApply: {
     launchArgs: (value) => ['-m', String(value)],
     agentArgsOverride: hasModelFlag,
-    removeAgentArgs: (tokens) => removeAgentArgOption(tokens, ['-m', '--model']),
     midSession: { kind: 'agent-picker', command: '/model' }
   }
 }
@@ -79,6 +78,7 @@ function parseCursorModels(stdout: string): CatalogModel[] {
 }
 
 export const CURSOR_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
+  supportsWorkerLaunchPreferences: true,
   models: [
     { id: 'auto', label: 'Auto', isDefault: true, options: [] },
     {

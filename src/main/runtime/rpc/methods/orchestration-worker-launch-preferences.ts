@@ -67,7 +67,7 @@ export function resolveWorkerLaunchPreferences(args: {
   }
 
   const catalog = getAgentSessionOptionCatalog(args.agent)
-  if (!catalog?.modelApply.launchArgs) {
+  if (!catalog?.supportsWorkerLaunchPreferences || !catalog.modelApply.launchArgs) {
     throw new OrchestrationError(
       'invalid_argument',
       `Agent ${args.agent} does not support launch-time model selection.`
