@@ -1910,6 +1910,19 @@ describe('registerPtyHandlers', () => {
     })
 
     it('passes the launch worktree to prepareClaudeAuth', async () => {
+      let exitCb: ((info: { exitCode: number }) => void) | undefined
+      spawnMock.mockReturnValue({
+        onData: vi.fn(() => makeDisposable()),
+        onExit: vi.fn((cb: (info: { exitCode: number }) => void) => {
+          exitCb = cb
+          return makeDisposable()
+        }),
+        write: vi.fn(),
+        resize: vi.fn(),
+        kill: vi.fn(() => exitCb?.({ exitCode: -1 })),
+        process: 'zsh',
+        pid: 12346
+      })
       const prepareClaudeAuth = vi.fn(async () => ({
         configDir: '/tmp/claude',
         envPatch: {},
@@ -1918,14 +1931,16 @@ describe('registerPtyHandlers', () => {
       }))
       registerPtyHandlers(mainWindow as never, undefined, undefined, undefined, prepareClaudeAuth)
 
-      await handlers.get('pty:spawn')!(null, {
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
         command: 'claude',
         worktreeId: 'wt-1'
-      })
+      })) as { id: string }
 
       expect(prepareClaudeAuth).toHaveBeenCalledWith(expect.anything(), { worktreeId: 'wt-1' })
+
+      await handlers.get('pty:kill')!(null, { id: spawnResult.id })
     })
 
     it('clears Claude live-PTY tracking from shared provider teardown', () => {

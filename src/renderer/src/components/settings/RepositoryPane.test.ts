@@ -70,10 +70,13 @@ beforeEach(() => {
   document.body.appendChild(container)
   root = createRoot(container)
   // WorktreeSymlinksSection reads window.api.fs on mount to suggest directory
-  // paths; provide a minimal renderer bridge so mounting the full pane doesn't
-  // throw in the test environment.
+  // paths, and RepositoryClaudeAccountSection reads the provider account
+  // rosters; provide a minimal renderer bridge so mounting the full pane
+  // doesn't throw in the test environment.
   ;(window as unknown as { api: unknown }).api = {
-    fs: { readDir: () => Promise.resolve([]) }
+    fs: { readDir: () => Promise.resolve([]) },
+    claudeAccounts: { list: () => Promise.resolve({ accounts: [], activeAccountId: null }) },
+    codexAccounts: { list: () => Promise.resolve({ accounts: [], activeAccountId: null }) }
   }
 })
 
