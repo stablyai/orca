@@ -6801,7 +6801,8 @@ describe('worktree remote runtime mutations', () => {
 
     expect(mockApi.worktrees.resolveMrBase).toHaveBeenCalledWith({
       repoId: 'repo1',
-      mrIid: 42
+      mrIid: 42,
+      executionHostId: 'local'
     })
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
       worktreeId: wt.id,
@@ -7223,11 +7224,59 @@ describe('worktree remote runtime mutations', () => {
 
     expect(mockApi.worktrees.resolveMrBase).toHaveBeenCalledWith({
       repoId: 'repo1',
-      mrIid: 42
+      mrIid: 42,
+      executionHostId: 'local'
     })
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
       worktreeId: wt.id,
       updates: { pushTarget }
+    })
+    expect(store.getState().worktreesByRepo.repo1[0]?.pushTarget).toEqual(pushTarget)
+  })
+
+  it('hydrates a linked GitLab MR through the exact SSH repository owner', async () => {
+    const store = createTestStore()
+    const pushTarget = { remoteName: 'upstream', branchName: 'feature/ssh-mr' }
+    const wt = makeWorktree({
+      id: 'repo1::/remote/wt1',
+      repoId: 'repo1',
+      path: '/remote/wt1',
+      hostId: 'ssh:builder',
+      linkedGitLabMR: 42
+    })
+    mockApi.worktrees.resolveMrBase.mockResolvedValueOnce({
+      baseBranch: 'upstream/feature/ssh-mr',
+      pushTarget
+    })
+    store.setState({
+      repos: [
+        {
+          id: 'repo1',
+          path: '/local/repo1',
+          displayName: 'Local Repo 1',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: 'local'
+        },
+        {
+          id: 'repo1',
+          path: '/remote/repo1',
+          displayName: 'SSH Repo 1',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'builder',
+          executionHostId: 'ssh:builder'
+        }
+      ],
+      worktreesByRepo: { repo1: [wt] }
+    } as Partial<AppState>)
+
+    await store.getState().ensureHostedReviewPushTarget(wt.id)
+
+    expect(mockApi.worktrees.resolveMrBase).toHaveBeenCalledWith({
+      repoId: 'repo1',
+      mrIid: 42,
+      executionHostId: 'ssh:builder'
     })
     expect(store.getState().worktreesByRepo.repo1[0]?.pushTarget).toEqual(pushTarget)
   })

@@ -69,6 +69,21 @@ describe('TaskPage GitHub work-item host identity', () => {
     ).toEqual(['open', 'closed'])
   })
 
+  it('keys the optimistic overlay by the item owner when source context differs', () => {
+    const local = item('local')
+    beginTaskPageGitHubWorkItemMutation({
+      item: local,
+      intent: { type: 'setState', state: 'closed' },
+      sourceContext: sourceContext('runtime:r-1'),
+      query,
+      queryKey: 'q',
+      viewerLogin: 'me',
+      patchWorkItem: () => {}
+    })
+
+    expect(applyPendingTaskPageGitHubMutationsToItems([local])[0]?.state).toBe('closed')
+  })
+
   it('retains same-id work items owned by different execution hosts', () => {
     const rows = materializeTaskPageItemList({
       networkItems: [item('local'), item('ssh:ssh-1')],

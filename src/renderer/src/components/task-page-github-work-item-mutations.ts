@@ -114,7 +114,7 @@ export function canStartTaskPageGitHubWorkItemMutation(args: {
   const itemKey = taskPageGitHubItemKey(
     args.item.repoId,
     args.item.id,
-    args.sourceContext?.hostId ?? args.item.repoExecutionHostId
+    args.item.repoExecutionHostId
   )
   const key = {
     sourceScope,
@@ -154,7 +154,7 @@ export function beginTaskPageGitHubWorkItemMutation(
   const itemKey = taskPageGitHubItemKey(
     args.item.repoId,
     args.item.id,
-    args.sourceContext?.hostId ?? args.item.repoExecutionHostId
+    args.item.repoExecutionHostId
   )
   const key = {
     sourceScope,

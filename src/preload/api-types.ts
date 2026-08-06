@@ -1447,6 +1447,7 @@ export type PreloadApi = {
      *  refs/merge-requests/<iid>/head and returns the SHA. */
     resolveMrBase: (args: {
       repoId: string
+      executionHostId?: ExecutionHostId
       mrIid: number
       sourceBranch?: string
       targetBranch?: string

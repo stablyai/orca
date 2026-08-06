@@ -176,6 +176,7 @@ describe('useComposerState host-context boundaries', () => {
 
     expect(section).toContain('const runRepo = selectedRepo ??')
     expect(section).toContain('repoId: runRepo.id')
+    expect(section).toContain('executionHostId: getRepoExecutionHostId(runRepo)')
     expect(section).toContain('getSettingsForRepoRuntimeOwner')
     expect(section).toContain('worktree.resolveMrBase')
     expect(section).toContain('repo: runRepo.id')

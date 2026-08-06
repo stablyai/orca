@@ -1843,13 +1843,14 @@ async function resolveGitHubReviewPushTarget(
 async function resolveGitLabReviewPushTarget(
   settings: AppState['settings'],
   repoId: string,
-  mrIid: number
+  mrIid: number,
+  executionHostId: ExecutionHostId = LOCAL_EXECUTION_HOST_ID
 ): Promise<GitPushTarget | undefined> {
   try {
     const target = getActiveRuntimeTarget(settings)
     const result =
       target.kind === 'local'
-        ? await window.api.worktrees.resolveMrBase({ repoId, mrIid })
+        ? await window.api.worktrees.resolveMrBase({ repoId, mrIid, executionHostId })
         : await callRuntimeRpc<
             | { baseBranch: string; compareBaseRef?: string; pushTarget?: GitPushTarget }
             | {
@@ -1902,7 +1903,8 @@ function getHostedReviewPushTargetLookup(
     const mrIid = worktree.linkedGitLabMR
     return {
       key: `${worktree.id}:${hostScope}:gitlab:${mrIid}`,
-      resolve: (settings) => resolveGitLabReviewPushTarget(settings, worktree.repoId, mrIid)
+      resolve: (settings) =>
+        resolveGitLabReviewPushTarget(settings, worktree.repoId, mrIid, executionHostId)
     }
   }
   return null

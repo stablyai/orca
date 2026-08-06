@@ -4661,6 +4661,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         repoPath,
         requestedHostId
       })
+      toast.error(
+        translate('auto.store.slices.github.d49ef4b944', 'Failed to save issue-source preference'),
+        { duration: ERROR_TOAST_DURATION }
+      )
       return
     }
     // Why: optimistically patch the local Repo so the segmented control updates this frame; resync via fetchRepos on IPC failure.

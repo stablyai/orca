@@ -3243,6 +3243,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         target.kind === 'local'
           ? window.api.worktrees.resolveMrBase({
               repoId: runRepo.id,
+              executionHostId: getRepoExecutionHostId(runRepo),
               mrIid: item.number,
               ...(item.branchName ? { sourceBranch: item.branchName } : {}),
               ...(item.baseRefName ? { targetBranch: item.baseRefName } : {}),

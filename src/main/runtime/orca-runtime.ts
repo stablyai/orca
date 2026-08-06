@@ -23486,6 +23486,7 @@ export class OrcaRuntimeService {
 
   async resolveManagedMrBase(args: {
     repoSelector: string
+    connectionId?: string | null
     mrIid: number
     sourceBranch?: string
     targetBranch?: string
@@ -23498,7 +23499,7 @@ export class OrcaRuntimeService {
     }
     let repo: Repo
     try {
-      repo = await this.resolveRepoSelector(args.repoSelector)
+      repo = await this.resolveRepoSelectorForConnection(args.repoSelector, args.connectionId)
     } catch {
       return { error: 'Repo not found' }
     }

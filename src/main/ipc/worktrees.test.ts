@@ -582,6 +582,41 @@ describe('registerWorktreeHandlers', () => {
     expect(handlers['worktrees:resolveMrBase']).toBeDefined()
   })
 
+  it('resolves a GitLab MR base through the requested SSH repository owner', async () => {
+    const localRepo = {
+      id: 'repo-1',
+      path: '/workspace/local-repo',
+      displayName: 'local',
+      badgeColor: '#000',
+      addedAt: 0,
+      executionHostId: 'local'
+    }
+    const sshRepo = {
+      ...localRepo,
+      path: '/workspace/ssh-repo',
+      displayName: 'ssh',
+      connectionId: 'connection-1',
+      executionHostId: 'ssh:connection-1'
+    }
+    store.getRepos.mockReturnValue([localRepo, sshRepo])
+    store.getRepo.mockReturnValue(localRepo)
+
+    await handlers['worktrees:resolveMrBase'](null, {
+      repoId: 'repo-1',
+      executionHostId: 'ssh:connection-1',
+      mrIid: 42
+    })
+
+    expect(runtimeStub.resolveManagedMrBase).toHaveBeenCalledWith({
+      repoSelector: 'path:/workspace/ssh-repo',
+      connectionId: 'connection-1',
+      mrIid: 42,
+      sourceBranch: undefined,
+      targetBranch: undefined,
+      isCrossRepository: undefined
+    })
+  })
+
   it('clears the branch rename failure-output handler before re-registering IPC handlers', () => {
     expect(removeHandlerMock).toHaveBeenCalledWith('worktrees:getBranchRenameFailureOutput')
     expect(handlers['worktrees:getBranchRenameFailureOutput']).toBeDefined()
@@ -4787,9 +4822,11 @@ describe('registerWorktreeHandlers', () => {
     })
 
     expect(runtimeStub.resolveManagedMrBase).toHaveBeenCalledWith({
-      repoSelector: 'id:repo-1',
+      repoSelector: 'path:/workspace/repo',
+      connectionId: null,
       mrIid: 42,
       sourceBranch: 'feature/mr',
+      targetBranch: undefined,
       isCrossRepository: true
     })
     expect(result).toMatchObject({

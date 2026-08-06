@@ -4,6 +4,12 @@ import type { AppState } from '../types'
 import { createGitHubSlice, workItemsCacheKey } from './github'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 
+const toastError = vi.hoisted(() => vi.fn())
+
+vi.mock('sonner', () => ({
+  toast: { error: toastError }
+}))
+
 const mockApi = {
   gh: {
     listWorkItems: vi.fn(),
@@ -187,6 +193,20 @@ describe('GitHub work-item host boundary', () => {
       hostId: 'ssh:ssh-1',
       updates: { issueSourcePreference: 'upstream' }
     })
+  })
+
+  it('reports an unresolved issue-source preference owner', async () => {
+    const store = createTestStore()
+    store.setState({ repos: duplicateRepos() } as Partial<AppState>)
+
+    await store.getState().setIssueSourcePreference('repo-1', '/shared/repo', 'upstream', {
+      executionHostId: 'ssh:missing'
+    })
+
+    expect(toastError).toHaveBeenCalledWith('Failed to save issue-source preference', {
+      duration: 60_000
+    })
+    expect(mockApi.repos.update).not.toHaveBeenCalled()
   })
 
   it('evicts host-scoped work-item cache entries when issue-source preference changes', async () => {

@@ -2400,6 +2400,7 @@ export function registerWorktreeHandlers(
       _event,
       args: {
         repoId: string
+        executionHostId?: ExecutionHostId
         mrIid: number
         sourceBranch?: string
         targetBranch?: string
@@ -2409,8 +2410,13 @@ export function registerWorktreeHandlers(
       | { baseBranch: string; compareBaseRef?: string; pushTarget?: GitPushTarget }
       | { error: string }
     > => {
+      const repo = findDesktopRepoOwner(store, args.repoId, args.executionHostId)
+      if (!repo) {
+        return { error: 'Repo not found' }
+      }
       return runtime.resolveManagedMrBase({
-        repoSelector: `id:${args.repoId}`,
+        repoSelector: `path:${repo.path}`,
+        connectionId: repo.connectionId ?? null,
         mrIid: args.mrIid,
         sourceBranch: args.sourceBranch,
         targetBranch: args.targetBranch,
