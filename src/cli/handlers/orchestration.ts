@@ -20,7 +20,8 @@ import type {
   OrchestrationWorkerReadSource
 } from '../../shared/orchestration-worker-output'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
-import type { RuntimeTerminalRead } from '../../shared/runtime-types'
+import type { RuntimeStatus, RuntimeTerminalRead } from '../../shared/runtime-types'
+import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 import { orchestrationMigrationData } from '../../shared/orchestration-rpc-contract'
 import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../../shared/orchestration-run-pagination'
 import {
@@ -852,6 +853,21 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
   },
 
   'orchestration worker-start': async ({ flags, client, cwd, json }) => {
+    const model = getOptionalStringFlag(flags, 'model')
+    const effort = getOptionalStringFlag(flags, 'effort')
+    if (model || effort) {
+      const status = await client.call<RuntimeStatus>('status.get')
+      if (
+        !status.result.capabilities?.includes(
+          ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY
+        )
+      ) {
+        throw new RuntimeClientError(
+          'incompatible_runtime',
+          'The connected Orca runtime does not support worker model or effort overrides. Update or restart Orca and try again.'
+        )
+      }
+    }
     const result = await callMutation<{
       runId: string
       taskId: string
@@ -873,6 +889,8 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       comment: getOptionalStringFlag(flags, 'comment'),
       setup: getOptionalStringFlag(flags, 'setup'),
       agent: getOptionalStringFlag(flags, 'agent'),
+      model,
+      effort,
       terminal: getOptionalStringFlag(flags, 'terminal'),
       retryOf: getOptionalStringFlag(flags, 'retry-of'),
       timeoutMs: getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms'),
