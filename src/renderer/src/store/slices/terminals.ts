@@ -29,6 +29,8 @@ import {
   worktreeWorkspaceKey
 } from '../../../../shared/workspace-scope'
 import { deriveGeneratedTabTitle } from '../../../../shared/agent-tab-title'
+import { isCursorAgentTitle } from '../../../../shared/agent-title-core'
+import { detectAgentStatusFromTitle } from '../../../../shared/agent-detection'
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-decorative-title-signature'
 import {
   isTerminalLeafId,
@@ -2001,6 +2003,18 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       }
       const nextTitle = title.trim() || getFallbackTabTitle(currentTab)
       const currentUnifiedTabs = s.unifiedTabsByWorktree[ownerWorktreeId] ?? []
+      // Why: synthetic ⠋ Cursor Agent / bare "Cursor Agent" must not stomp a
+      // descriptive working title — that alternation is the #11075 tab flicker.
+      if (
+        isCursorAgentTitle(nextTitle) &&
+        currentTab.title.trim() &&
+        !isCursorAgentTitle(currentTab.title)
+      ) {
+        const nextStatus = detectAgentStatusFromTitle(nextTitle)
+        if (nextStatus !== 'idle' && nextStatus !== 'permission') {
+          return s
+        }
+      }
       if (isDecorativeAgentTitleFrameChange(currentTab.title, nextTitle)) {
         const unifiedTabsWithCurrentLabel = updateUnifiedTerminalLabel(
           currentUnifiedTabs,

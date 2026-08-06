@@ -7,14 +7,18 @@ export function resolveTerminalTabTitle(
   fallback = ''
 ): string {
   const liveTitle = tab.title?.trim() ?? ''
-  return (
-    tab.customTitle?.trim() ||
-    tab.quickCommandLabel?.trim() ||
-    (isMeaningfulOpenCodeTerminalTitle(liveTitle) ? liveTitle : '') ||
-    (generatedTitlesEnabled ? tab.generatedTitle?.trim() : '') ||
-    liveTitle ||
-    fallback
-  )
+  // Why: with session titles on, never fall through to live OSC — that switches
+  // the tab between session name and working/status frames (#11075).
+  if (generatedTitlesEnabled) {
+    return (
+      tab.customTitle?.trim() ||
+      tab.quickCommandLabel?.trim() ||
+      (isMeaningfulOpenCodeTerminalTitle(liveTitle) ? liveTitle : '') ||
+      tab.generatedTitle?.trim() ||
+      ''
+    )
+  }
+  return tab.customTitle?.trim() || tab.quickCommandLabel?.trim() || liveTitle || fallback
 }
 
 export function resolveUnifiedTabLabel(
@@ -23,12 +27,14 @@ export function resolveUnifiedTabLabel(
   fallback = ''
 ): string {
   const liveLabel = tab?.label?.trim() ?? ''
-  return (
-    tab?.customLabel?.trim() ||
-    tab?.quickCommandLabel?.trim() ||
-    (isMeaningfulOpenCodeTerminalTitle(liveLabel) ? liveLabel : '') ||
-    (generatedTitlesEnabled ? tab?.generatedLabel?.trim() : '') ||
-    liveLabel ||
-    fallback
-  )
+  if (generatedTitlesEnabled) {
+    return (
+      tab?.customLabel?.trim() ||
+      tab?.quickCommandLabel?.trim() ||
+      (isMeaningfulOpenCodeTerminalTitle(liveLabel) ? liveLabel : '') ||
+      tab?.generatedLabel?.trim() ||
+      ''
+    )
+  }
+  return tab?.customLabel?.trim() || tab?.quickCommandLabel?.trim() || liveLabel || fallback
 }
