@@ -441,7 +441,8 @@ describe('restoreScrollbackBuffers', () => {
     }
     const manager = {
       getPanes: vi.fn(() => [pane]),
-      hasWebglRenderer: vi.fn(() => true)
+      hasWebglRenderer: vi.fn(() => true),
+      scheduleRevealRepaint: vi.fn()
     }
     const replayingPanesRef = { current: new Map<number, number>() }
     const restoredViewportBlankingPanesRef = { current: new Set<number>() }
