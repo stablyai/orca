@@ -226,4 +226,108 @@ describe('terminal shortcut bytes during an IME composition', () => {
     hook.unmount()
     harness.dispose()
   })
+
+  // Issue #12871: with "가나 다라 마바" committed and "사" still composing, a
+  // cursor-movement chord relocated the composing syllable to wherever the
+  // cursor landed — Option+← produced "가나 '사'다라 마바" and Cmd+← produced
+  // "'사'가나 다라 마바". The shell applies the movement bytes to the line it
+  // already has, so the commit must land before the chord travels.
+  describe('cursor-movement chords do not relocate the composing character', () => {
+    it.each([
+      {
+        name: 'Option+ArrowLeft word jump',
+        key: 'ArrowLeft',
+        keyCode: 37,
+        mods: { altKey: true },
+        sent: '\x1bb'
+      },
+      {
+        name: 'Option+ArrowRight word jump',
+        key: 'ArrowRight',
+        keyCode: 39,
+        mods: { altKey: true },
+        sent: '\x1bf'
+      },
+      {
+        name: 'Cmd+ArrowRight line-end jump',
+        key: 'ArrowRight',
+        keyCode: 39,
+        mods: { metaKey: true },
+        sent: '\x05'
+      }
+    ])('sequences a macOS $name behind the composing syllable', ({ key, keyCode, mods, sent }) => {
+      usePlatform('Macintosh')
+      const harness = createHarness()
+      const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
+      harness.startComposition()
+
+      harness.terminalInput.dispatchEvent(
+        keyboardEvent('keydown', {
+          key,
+          code: key,
+          keyCode,
+          timeStamp: 10,
+          isComposing: true,
+          ...mods
+        })
+      )
+      harness.commitComposition('사')
+      vi.runAllTimers()
+
+      expect(harness.order).toEqual([`commit:사`, `pty:${JSON.stringify(sent)}`])
+      hook.unmount()
+      harness.dispose()
+    })
+
+    // A Japanese preedit spans several characters before it commits; the
+    // relocated preedit overwrote the glyph at the destination cell. The
+    // whole preedit must commit in place before the cursor moves.
+    it('sequences a Cmd+ArrowLeft line-start jump behind a multi-character Japanese preedit', () => {
+      usePlatform('Macintosh')
+      const harness = createHarness()
+      const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
+      harness.startComposition()
+
+      harness.terminalInput.dispatchEvent(
+        keyboardEvent('keydown', {
+          key: 'ArrowLeft',
+          code: 'ArrowLeft',
+          keyCode: 37,
+          timeStamp: 10,
+          isComposing: true,
+          metaKey: true
+        })
+      )
+      harness.commitComposition('かな')
+      vi.runAllTimers()
+
+      expect(harness.order).toEqual(['commit:かな', 'pty:"\\u0001"'])
+      hook.unmount()
+      harness.dispose()
+    })
+
+    it('sequences a Ctrl+ArrowLeft word jump behind the composing syllable on Windows', () => {
+      usePlatform('Windows NT 10.0; Win64; x64')
+      const harness = createHarness()
+      const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
+      harness.startComposition()
+
+      harness.terminalInput.dispatchEvent(
+        keyboardEvent('keydown', {
+          key: 'ArrowLeft',
+          code: 'ArrowLeft',
+          keyCode: 37,
+          timeStamp: 10,
+          isComposing: true,
+          ctrlKey: true
+        })
+      )
+      harness.commitComposition('사')
+      vi.runAllTimers()
+
+      expect(harness.order).toEqual(['commit:사', 'pty:"\\u001bb"'])
+      hook.unmount()
+      harness.dispose()
+    })
+  })
 })
