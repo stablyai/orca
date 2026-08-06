@@ -25,8 +25,22 @@ import { getDiffCommentLineLabel } from '@/lib/diff-comment-compat'
 import {
   getRuntimeGitBranchDiff,
   getRuntimeGitCommitDiff,
-  getRuntimeGitDiff
+  getRuntimeGitDiff,
+  discardRuntimeGitPath,
+  stageRuntimeGitPath,
+  unstageRuntimeGitPath
 } from '@/runtime/runtime-git-client'
+import {
+  canDiscardStatusEntry,
+  canStageStatusEntry,
+  canUnstageStatusEntry
+} from '@/components/right-sidebar/source-control-entry-actions'
+import { refreshGitStatusForWorktree } from '@/components/right-sidebar/git-status-refresh'
+import {
+  SourceControlDiscardDialog,
+  type PendingDiscardConfirmation
+} from '@/components/right-sidebar/source-control-discard-dialog'
+import { notifyEditorExternalFileChange, requestEditorSaveQuiesce } from './editor-autosave'
 import '@/lib/monaco-setup'
 import { Button } from '@/components/ui/button'
 import {
@@ -46,7 +60,19 @@ import type {
   GitDiffResult,
   GitStatusEntry
 } from '../../../../shared/types'
-import { Check, Copy, MessageSquare, PanelLeftOpen, Sparkles, Trash2, WrapText } from 'lucide-react'
+import {
+  Check,
+  Copy,
+  MessageSquare,
+  Minus,
+  PanelLeftOpen,
+  Plus,
+  Sparkles,
+  Trash,
+  Trash2,
+  Undo2,
+  WrapText
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { DiffSectionItem } from './DiffSectionItem'
 import { DiffNotesSendMenu } from './DiffNotesSendMenu'
@@ -75,6 +101,10 @@ import { getInitialCombinedDiffSectionLoadIndices } from './combined-diff-initia
 import { removeDiffSectionMeasuredHeight } from './diff-section-height-cache'
 import { createCombinedDiffLoadScheduler } from './combined-diff-load-scheduler'
 import { combinedDiffSectionsMatchEntryMetadata } from './combined-diff-section-cache-match'
+import {
+  remapCombinedDiffSectionsForAreaMove,
+  remapCombinedDiffSectionHeights
+} from './combined-diff-section-area-remap'
 import {
   beginCombinedDiffScrollbarDrag,
   type CombinedDiffScrollbarDragCleanup
@@ -128,23 +158,6 @@ function invalidateCombinedDiffCachesForRelativePath(relativePath: string): void
       combinedDiffViewStateCache.delete(key)
     }
   }
-}
-
-function getRetainedResolvedSnapshotEntries(sections: readonly DiffSection[]): GitStatusEntry[] {
-  return sections.flatMap((section) =>
-    section.area === undefined
-      ? []
-      : [
-          {
-            path: section.path,
-            status: section.status as GitStatusEntry['status'],
-            area: section.area,
-            oldPath: section.oldPath,
-            added: section.added,
-            removed: section.removed
-          }
-        ]
-  )
 }
 
 if (typeof window !== 'undefined') {
@@ -432,11 +445,7 @@ export default function CombinedDiffViewer({
       return getCombinedUncommittedEntries(gitStatusEntries, file.combinedAreaFilter)
     }
     // Why: row load-state changes must not rebuild the snapshot list; the ref is consulted only when live Git status changes.
-    return resolveCombinedUncommittedSnapshotEntries(
-      snapshotEntries,
-      gitStatusEntries,
-      getRetainedResolvedSnapshotEntries(sectionsRef.current)
-    )
+    return resolveCombinedUncommittedSnapshotEntries(snapshotEntries, gitStatusEntries)
   }, [snapshotEntries, gitStatusEntries, file.combinedAreaFilter])
   const branchEntries = React.useMemo<GitBranchChangeEntry[]>(() => {
     return getCombinedBranchEntries(file.branchEntriesSnapshot, liveBranchEntries)
@@ -553,6 +562,24 @@ export default function CombinedDiffViewer({
       scrollOffsetRef.current = combinedDiffScrollTopCache.get(viewStateKey) ?? cached.scrollTop
       scrollAnchorRef.current = combinedDiffScrollAnchorCache.get(viewStateKey) ?? null
       latestDomScrollAnchorRef.current = scrollAnchorRef.current
+      return
+    }
+
+    // Why: stage/unstage/discard remaps or drops rows — keep loaded bodies to avoid flicker (#10276).
+    const remapped = remapCombinedDiffSectionsForAreaMove({
+      sections: sectionsRef.current,
+      entries,
+      treeMode
+    })
+    if (remapped) {
+      if (remapped.sections !== sectionsRef.current) {
+        // Why: same length can still permute (area group reorder); always follow sourceIndexes.
+        setSectionHeights((prev) => remapCombinedDiffSectionHeights(prev, remapped.sourceIndexes))
+        loadedIndicesRef.current = new Set(
+          remapped.sections.flatMap((section, index) => (section.loading ? [] : [index]))
+        )
+        setSections(remapped.sections)
+      }
       return
     }
 
@@ -1282,6 +1309,109 @@ export default function CombinedDiffViewer({
       openCommitDiff,
       openFile
     ]
+  )
+
+  // Why: whole-file stage/unstage/discard from the combined-diff header (#10276); same APIs as SC.
+  const stagingSectionKeysRef = useRef(new Set<string>())
+  const [pendingDiscard, setPendingDiscard] = useState<PendingDiscardConfirmation | null>(null)
+
+  const refreshWorktreeGitStatus = useCallback(async (): Promise<void> => {
+    const state = useAppStore.getState()
+    const fileSettings = settingsForRuntimeOwner(state.settings, file.runtimeEnvironmentId)
+    const worktree = findWorktreeById(state.worktreesByRepo, file.worktreeId)
+    await refreshGitStatusForWorktree({
+      settings: fileSettings,
+      worktreeId: file.worktreeId,
+      worktreePath: file.filePath,
+      connectionId: getCombinedDiffSectionConnectionId(file.worktreeId, file.filePath, '.'),
+      pushTarget: worktree?.pushTarget,
+      deps: {
+        setGitStatus: state.setGitStatus,
+        updateWorktreeGitIdentity: state.updateWorktreeGitIdentity,
+        setUpstreamStatus: state.setUpstreamStatus,
+        fetchUpstreamStatus: state.fetchUpstreamStatus
+      }
+    })
+  }, [file.filePath, file.runtimeEnvironmentId, file.worktreeId])
+
+  const stageOrUnstageSection = useCallback(
+    async (section: DiffSection, action: 'stage' | 'unstage') => {
+      const sectionKey = `${section.area ?? ''}\0${section.path}`
+      if (stagingSectionKeysRef.current.has(sectionKey)) {
+        return
+      }
+      stagingSectionKeysRef.current.add(sectionKey)
+      try {
+        const state = useAppStore.getState()
+        const fileSettings = settingsForRuntimeOwner(state.settings, file.runtimeEnvironmentId)
+        const connectionId = getCombinedDiffSectionConnectionId(
+          file.worktreeId,
+          file.filePath,
+          section.path
+        )
+        const context = {
+          settings: fileSettings,
+          worktreeId: file.worktreeId,
+          worktreePath: file.filePath,
+          connectionId
+        }
+        await (action === 'stage'
+          ? stageRuntimeGitPath(context, section.path)
+          : unstageRuntimeGitPath(context, section.path))
+        await refreshWorktreeGitStatus()
+      } catch {
+        // Why: match SC row handlers — failed git ops stay silent here.
+      } finally {
+        stagingSectionKeysRef.current.delete(sectionKey)
+      }
+    },
+    [file.filePath, file.runtimeEnvironmentId, file.worktreeId, refreshWorktreeGitStatus]
+  )
+
+  const discardSection = useCallback(
+    async (entry: GitStatusEntry) => {
+      const sectionKey = `discard\0${entry.path}`
+      if (stagingSectionKeysRef.current.has(sectionKey)) {
+        return
+      }
+      stagingSectionKeysRef.current.add(sectionKey)
+      try {
+        const state = useAppStore.getState()
+        const fileSettings = settingsForRuntimeOwner(state.settings, file.runtimeEnvironmentId)
+        const connectionId = getCombinedDiffSectionConnectionId(
+          file.worktreeId,
+          file.filePath,
+          entry.path
+        )
+        await requestEditorSaveQuiesce({
+          worktreeId: file.worktreeId,
+          worktreePath: file.filePath,
+          relativePath: entry.path,
+          runtimeEnvironmentId: file.runtimeEnvironmentId
+        })
+        await discardRuntimeGitPath(
+          {
+            settings: fileSettings,
+            worktreeId: file.worktreeId,
+            worktreePath: file.filePath,
+            connectionId
+          },
+          entry.path
+        )
+        notifyEditorExternalFileChange({
+          worktreeId: file.worktreeId,
+          worktreePath: file.filePath,
+          relativePath: entry.path,
+          runtimeEnvironmentId: file.runtimeEnvironmentId
+        })
+        await refreshWorktreeGitStatus()
+      } catch {
+        // Why: match SC row handlers — failed git ops stay silent here.
+      } finally {
+        stagingSectionKeysRef.current.delete(sectionKey)
+      }
+    },
+    [file.filePath, file.runtimeEnvironmentId, file.worktreeId, refreshWorktreeGitStatus]
   )
 
   const handleSectionSave = useCallback(
@@ -2032,16 +2162,109 @@ export default function CombinedDiffViewer({
                           const fileNotes = diffCommentsForWorktree.filter(
                             (comment) => comment.filePath === section.path
                           )
-                          return fileNotes.length > 0 ? (
-                            <DiffNotesSendMenu
-                              worktreeId={file.worktreeId}
-                              groupId={activeGroupId ?? file.worktreeId}
-                              comments={diffCommentsForWorktree}
-                              filePath={section.path}
-                              showFileScope
-                              triggerClassName="p-0.5 can-hover:opacity-0 group-hover:opacity-100"
-                            />
-                          ) : null
+                          const liveEntry =
+                            section.area === undefined
+                              ? undefined
+                              : gitStatusEntries.find(
+                                  (entry) =>
+                                    entry.path === section.path && entry.area === section.area
+                                )
+                          const canDiscard = liveEntry ? canDiscardStatusEntry(liveEntry) : false
+                          const canStage = liveEntry ? canStageStatusEntry(liveEntry) : false
+                          const canUnstage = liveEntry ? canUnstageStatusEntry(liveEntry) : false
+                          const discardTitle = !liveEntry
+                            ? ''
+                            : liveEntry.area === 'untracked'
+                              ? translate(
+                                  'auto.components.right.sidebar.SourceControl.11463f7a98',
+                                  'Delete untracked file'
+                                )
+                              : liveEntry.status === 'deleted'
+                                ? translate(
+                                    'auto.components.right.sidebar.SourceControl.989f3d5e34',
+                                    'Restore file'
+                                  )
+                                : translate(
+                                    'auto.components.right.sidebar.SourceControl.d54dd48b0b',
+                                    'Discard changes'
+                                  )
+                          const notesMenu =
+                            fileNotes.length > 0 ? (
+                              <DiffNotesSendMenu
+                                worktreeId={file.worktreeId}
+                                groupId={activeGroupId ?? file.worktreeId}
+                                comments={diffCommentsForWorktree}
+                                filePath={section.path}
+                                showFileScope
+                                triggerClassName="p-0.5 can-hover:opacity-0 group-hover:opacity-100"
+                              />
+                            ) : null
+                          if (!canDiscard && !canStage && !canUnstage && !notesMenu) {
+                            return null
+                          }
+                          return (
+                            <>
+                              {canDiscard && liveEntry && (
+                                <button
+                                  type="button"
+                                  className="p-0.5 rounded text-muted-foreground hover:text-foreground can-hover:opacity-0 group-hover:opacity-100 transition-opacity"
+                                  title={discardTitle}
+                                  aria-label={discardTitle}
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    setPendingDiscard({ kind: 'entry', entry: liveEntry })
+                                  }}
+                                >
+                                  {liveEntry.area === 'untracked' ? (
+                                    <Trash className="size-3.5" />
+                                  ) : (
+                                    <Undo2 className="size-3.5" />
+                                  )}
+                                </button>
+                              )}
+                              {canStage && (
+                                <button
+                                  type="button"
+                                  className="p-0.5 rounded text-muted-foreground hover:text-foreground can-hover:opacity-0 group-hover:opacity-100 transition-opacity"
+                                  title={translate(
+                                    'auto.components.right.sidebar.SourceControl.8cde1a2fb0',
+                                    'Stage'
+                                  )}
+                                  aria-label={translate(
+                                    'auto.components.right.sidebar.SourceControl.8cde1a2fb0',
+                                    'Stage'
+                                  )}
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    void stageOrUnstageSection(section, 'stage')
+                                  }}
+                                >
+                                  <Plus className="size-3.5" />
+                                </button>
+                              )}
+                              {canUnstage && (
+                                <button
+                                  type="button"
+                                  className="p-0.5 rounded text-muted-foreground hover:text-foreground can-hover:opacity-0 group-hover:opacity-100 transition-opacity"
+                                  title={translate(
+                                    'auto.components.right.sidebar.SourceControl.df5040e3c3',
+                                    'Unstage'
+                                  )}
+                                  aria-label={translate(
+                                    'auto.components.right.sidebar.SourceControl.df5040e3c3',
+                                    'Unstage'
+                                  )}
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    void stageOrUnstageSection(section, 'unstage')
+                                  }}
+                                >
+                                  <Minus className="size-3.5" />
+                                </button>
+                              )}
+                              {notesMenu}
+                            </>
+                          )
                         }}
                       />
                     </div>
@@ -2065,6 +2288,17 @@ export default function CombinedDiffViewer({
           </div>
         </div>
       </div>
+      <SourceControlDiscardDialog
+        pendingDiscard={pendingDiscard}
+        onCancel={() => setPendingDiscard(null)}
+        onConfirm={() => {
+          const pending = pendingDiscard
+          setPendingDiscard(null)
+          if (pending?.kind === 'entry') {
+            void discardSection(pending.entry)
+          }
+        }}
+      />
       <Dialog
         open={clearNotesDialogVisible}
         onOpenChange={(open) => {

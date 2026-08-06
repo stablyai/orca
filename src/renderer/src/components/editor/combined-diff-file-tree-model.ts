@@ -31,10 +31,28 @@ export function getCombinedDiffFileTreeSectionKey(
   return `${mode === 'commit' ? 'combined-commit' : 'combined-branch'}:${entry.path}`
 }
 
+/**
+ * Build section lookup keys for the combined-diff file tree.
+ *
+ * Indexes by stable Monaco section `key` and by `area:path` so navigation still
+ * finds a row after stage/unstage updates `area` without rewriting the key.
+ */
 export function createCombinedDiffSectionIndexMap(
-  sections: readonly { key: string }[]
+  sections: readonly { key: string; path?: string; area?: string }[]
 ): Map<string, number> {
-  return new Map(sections.map((section, index) => [section.key, index]))
+  const map = new Map<string, number>()
+  for (let index = 0; index < sections.length; index += 1) {
+    const section = sections[index]
+    if (!section) {
+      continue
+    }
+    map.set(section.key, index)
+    // Why: stage/unstage keeps the original key for Monaco identity while area updates.
+    if (section.area && section.path) {
+      map.set(`${section.area}:${section.path}`, index)
+    }
+  }
+  return map
 }
 
 export function getCombinedDiffFileTreeNavigationIndex({

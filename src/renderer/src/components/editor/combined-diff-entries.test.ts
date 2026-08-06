@@ -92,14 +92,17 @@ describe('resolveCombinedUncommittedSnapshotEntries', () => {
     )
   })
 
-  it('keeps a retained resolved area when live status no longer includes the path', () => {
+  it('drops snapshot rows when live status no longer includes the path', () => {
     const snapshotEntries: GitStatusEntry[] = [
-      { path: 'src/file.ts', status: 'modified', area: 'unstaged' }
+      { path: 'src/file.ts', status: 'modified', area: 'unstaged' },
+      { path: 'src/keep.ts', status: 'modified', area: 'staged' }
     ]
-    const retained: GitStatusEntry[] = [{ path: 'src/file.ts', status: 'modified', area: 'staged' }]
+    const liveEntries: GitStatusEntry[] = [
+      { path: 'src/keep.ts', status: 'modified', area: 'staged' }
+    ]
 
-    expect(resolveCombinedUncommittedSnapshotEntries(snapshotEntries, [], retained)).toEqual([
-      { path: 'src/file.ts', status: 'modified', area: 'staged' }
+    expect(resolveCombinedUncommittedSnapshotEntries(snapshotEntries, liveEntries)).toEqual([
+      { path: 'src/keep.ts', status: 'modified', area: 'staged' }
     ])
   })
 
@@ -127,45 +130,6 @@ describe('resolveCombinedUncommittedSnapshotEntries', () => {
         added: 3,
         removed: 1
       }
-    ])
-  })
-
-  it('keeps retained staged and unstaged sections distinct when live status disappears', () => {
-    const snapshotEntries: GitStatusEntry[] = [
-      { path: 'src/file.ts', status: 'modified', area: 'staged', added: 4 },
-      { path: 'src/file.ts', status: 'modified', area: 'unstaged', added: 2 }
-    ]
-    const retained: GitStatusEntry[] = [
-      { path: 'src/file.ts', status: 'modified', area: 'staged' },
-      { path: 'src/file.ts', status: 'modified', area: 'unstaged' }
-    ]
-
-    expect(resolveCombinedUncommittedSnapshotEntries(snapshotEntries, [], retained)).toEqual(
-      snapshotEntries
-    )
-  })
-
-  it('does not remap duplicate-path snapshots to a retained fallback area', () => {
-    const snapshotEntries: GitStatusEntry[] = [
-      { path: 'src/file.ts', status: 'modified', area: 'staged', added: 4 },
-      { path: 'src/file.ts', status: 'modified', area: 'unstaged', added: 2 }
-    ]
-    const retained: GitStatusEntry[] = [{ path: 'src/file.ts', status: 'modified', area: 'staged' }]
-
-    expect(resolveCombinedUncommittedSnapshotEntries(snapshotEntries, [], retained)).toEqual([
-      { path: 'src/file.ts', status: 'modified', area: 'staged', added: 4 }
-    ])
-  })
-
-  it('does not let a retained stale area duplicate an original target area', () => {
-    const snapshotEntries: GitStatusEntry[] = [
-      { path: 'src/file.ts', status: 'modified', area: 'unstaged', added: 2 },
-      { path: 'src/file.ts', status: 'modified', area: 'staged', added: 4 }
-    ]
-    const retained: GitStatusEntry[] = [{ path: 'src/file.ts', status: 'modified', area: 'staged' }]
-
-    expect(resolveCombinedUncommittedSnapshotEntries(snapshotEntries, [], retained)).toEqual([
-      { path: 'src/file.ts', status: 'modified', area: 'staged', added: 4 }
     ])
   })
 

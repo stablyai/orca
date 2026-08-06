@@ -19,13 +19,18 @@ export function getCombinedUncommittedEntries(
   })
 }
 
+/**
+ * Resolve a tab-open uncommitted snapshot against live git status.
+ *
+ * Keeps snapshot rows whose area still exists, remaps a row when its path only
+ * remains in another area (stage/unstage), and drops paths gone from live status
+ * (discard/delete/commit) so the combined view does not keep ghost sections.
+ */
 export function resolveCombinedUncommittedSnapshotEntries(
   snapshotEntries: readonly GitStatusEntry[],
-  liveEntries: readonly GitStatusEntry[],
-  retainedResolvedEntries: readonly GitStatusEntry[] = []
+  liveEntries: readonly GitStatusEntry[]
 ): GitStatusEntry[] {
   const liveEntriesByPath = getGitStatusEntriesByPath(liveEntries)
-  const retainedEntriesByPath = getGitStatusEntriesByPath(retainedResolvedEntries)
   const snapshotAreaKeys = new Set(snapshotEntries.map(getUncommittedAreaPathKey))
   const resolvedEntries: GitStatusEntry[] = []
   const resolvedAreaKeys = new Set<string>()
@@ -45,17 +50,12 @@ export function resolveCombinedUncommittedSnapshotEntries(
       continue
     }
 
-    const retainedPathEntries = retainedEntriesByPath.get(snapshotEntry.path) ?? []
-    if (
-      livePathEntries.length === 0 &&
-      retainedPathEntries.some((retainedEntry) => retainedEntry.area === snapshotEntry.area)
-    ) {
-      pushResolvedEntry(snapshotEntry)
+    // Why: discard/delete/commit removed the path — don't keep an empty ghost row.
+    if (livePathEntries.length === 0) {
       continue
     }
 
-    const movedEntry =
-      livePathEntries[0] ?? (retainedPathEntries.length === 1 ? retainedPathEntries[0] : undefined)
+    const movedEntry = livePathEntries[0]
     if (!movedEntry || movedEntry.area === snapshotEntry.area) {
       pushResolvedEntry(snapshotEntry)
       continue
@@ -107,6 +107,12 @@ function getUncommittedAreaPathKey(entry: Pick<GitStatusEntry, 'area' | 'path'>)
   return `${entry.area}\0${entry.path}`
 }
 
+/**
+ * Prefer an explicit branch-diff snapshot over live entries.
+ *
+ * An empty snapshot stays empty so a tab opened with no files does not drift
+ * when later Source Control refreshes populate live branch changes.
+ */
 export function getCombinedBranchEntries(
   snapshotEntries: readonly GitBranchChangeEntry[] | undefined,
   liveEntries: readonly GitBranchChangeEntry[]
@@ -116,6 +122,12 @@ export function getCombinedBranchEntries(
   return [...(snapshotEntries ?? liveEntries)]
 }
 
+/**
+ * Whether combined-diff should rebuild section content from live git status.
+ *
+ * Only non-snapshot uncommitted tabs auto-reload; snapshot-backed tabs keep the
+ * tab-open file list and rely on targeted remaps / editor-write reloads instead.
+ */
 export function shouldAutoReloadCombinedDiffFromGitStatus({
   mode,
   hasUncommittedEntriesSnapshot
