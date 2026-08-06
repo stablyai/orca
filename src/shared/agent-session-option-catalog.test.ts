@@ -108,6 +108,91 @@ describe('agent session option catalog', () => {
     expect(parse('garbage')).toEqual([])
   })
 
+  it('parses Codex discovery into model-specific reasoning options', () => {
+    const catalog = getAgentSessionOptionCatalog('codex')!
+    expect(catalog.listModels?.command).toBe('codex debug models')
+
+    const parsed = catalog.listModels!.parse(
+      JSON.stringify({
+        models: [
+          {
+            slug: 'gpt-account-frontier',
+            display_name: 'GPT Account Frontier',
+            default_reasoning_level: 'high',
+            supported_reasoning_levels: [
+              { effort: 'low' },
+              { effort: 'high' },
+              { effort: 'max' },
+              { effort: 'ultra' }
+            ]
+          },
+          {
+            slug: 'gpt-account-fast',
+            display_name: 'GPT Account Fast',
+            supported_reasoning_levels: [{ effort: 'minimal' }]
+          },
+          { slug: 'gpt-account-plain', display_name: 'GPT Account Plain' }
+        ]
+      })
+    )
+
+    expect(parsed.map(({ id }) => id)).toEqual([
+      'gpt-account-frontier',
+      'gpt-account-fast',
+      'gpt-account-plain'
+    ])
+    const frontierEffort = parsed[0].options[0]
+    expect(frontierEffort.kind).toMatchObject({ defaultValue: 'high' })
+    expect(
+      frontierEffort.kind.type === 'select'
+        ? frontierEffort.kind.choices.map(({ value, label }) => ({ value, label }))
+        : []
+    ).toEqual([
+      { value: 'low', label: 'Low' },
+      { value: 'high', label: 'High' },
+      { value: 'max', label: 'Max' },
+      { value: 'ultra', label: 'Ultra' }
+    ])
+    expect(parsed[1].options[0].kind).toMatchObject({
+      choices: [{ value: 'minimal', label: 'Minimal' }],
+      defaultValue: 'minimal'
+    })
+    expect(parsed[2].options).toEqual([])
+  })
+
+  it('keeps the Codex seed when model discovery output is malformed', () => {
+    const parse = getAgentSessionOptionCatalog('codex')!.listModels!.parse
+    expect(parse('')).toEqual([])
+    expect(parse('{"models":false}')).toEqual([])
+    expect(parse('garbage')).toEqual([])
+  })
+
+  it('deduplicates Codex models and reasoning levels from discovery', () => {
+    const parse = getAgentSessionOptionCatalog('codex')!.listModels!.parse
+    const parsed = parse(
+      JSON.stringify({
+        models: [
+          {
+            slug: 'gpt-account-frontier',
+            display_name: 'GPT Account Frontier',
+            supported_reasoning_levels: [{ effort: 'low' }, { effort: 'low' }, { effort: 'high' }]
+          },
+          { slug: 'gpt-account-frontier', display_name: 'Duplicate row' }
+        ]
+      })
+    )
+
+    expect(parsed).toHaveLength(1)
+    expect(parsed[0].label).toBe('GPT Account Frontier')
+    expect(parsed[0].options[0].kind).toMatchObject({
+      choices: [
+        { value: 'low', label: 'Low' },
+        { value: 'high', label: 'High' }
+      ],
+      defaultValue: 'low'
+    })
+  })
+
   it('merges discovered Claude variants after the seed and overlays matched labels', () => {
     const catalog = getAgentSessionOptionCatalog('claude')!
     const merged = mergeCatalogModels(catalog.models, [
