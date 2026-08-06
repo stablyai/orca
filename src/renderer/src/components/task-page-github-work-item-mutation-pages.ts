@@ -51,7 +51,7 @@ export function applyPendingTaskPageGitHubMutationsToItems(
   items: readonly GitHubWorkItem[]
 ): GitHubWorkItem[] {
   return items.map((item) => {
-    const sourceScope = resolveItemSourceScope(item.repoId, item.id)
+    const sourceScope = resolveItemSourceScope(item.repoId, item.id, item.repoExecutionHostId)
     return getRegistryMergedTaskPageGitHubWorkItem(item, sourceScope)
   })
 }
@@ -62,10 +62,10 @@ export function reapplyPendingTaskPageGitHubMutationsToCache(args: {
   sourceContextByRepoId?: ReadonlyMap<string, TaskSourceContext | null | undefined>
 }): void {
   for (const item of args.items) {
-    const sourceScope = resolveItemSourceScope(item.repoId, item.id)
+    const sourceScope = resolveItemSourceScope(item.repoId, item.id, item.repoExecutionHostId)
     const hasAuthority =
-      hasPendingTaskPageGitHubOpsForItem(item.repoId, item.id) ||
-      hasConfirmedAuthorityForItem(item.repoId, item.id)
+      hasPendingTaskPageGitHubOpsForItem(item.repoId, item.id, item.repoExecutionHostId) ||
+      hasConfirmedAuthorityForItem(item.repoId, item.id, item.repoExecutionHostId)
     if (!hasAuthority) {
       continue
     }
@@ -79,7 +79,10 @@ export function reapplyPendingTaskPageGitHubMutationsToCache(args: {
         autoMergeEnabled: merged.autoMergeEnabled
       },
       item.repoId,
-      { sourceContext: args.sourceContextByRepoId?.get(item.repoId) }
+      {
+        sourceContext: args.sourceContextByRepoId?.get(item.repoId),
+        repoExecutionHostId: item.repoExecutionHostId
+      }
     )
   }
 }
@@ -91,9 +94,14 @@ export function materializeTaskPageItemList(args: {
   queryKey: string
 }): GitHubWorkItem[] {
   const overlaid = applyPendingTaskPageGitHubMutationsToItems(args.networkItems)
-  const byKey = new Map(overlaid.map((item) => [taskPageGitHubItemKey(item.repoId, item.id), item]))
+  const byKey = new Map(
+    overlaid.map((item) => [
+      taskPageGitHubItemKey(item.repoId, item.id, item.repoExecutionHostId),
+      item
+    ])
+  )
   for (const item of args.previousItems) {
-    const k = taskPageGitHubItemKey(item.repoId, item.id)
+    const k = taskPageGitHubItemKey(item.repoId, item.id, item.repoExecutionHostId)
     if (byKey.has(k)) {
       continue
     }
@@ -101,14 +109,19 @@ export function materializeTaskPageItemList(args: {
     // confirmed rows soft-hidden by a sticky hide scoped to THIS query while
     // search lag omits them. Requiring the query-scoped sticky avoids retaining
     // non-membership confirms (e.g. auto-merge) as stale ghosts across refetch.
-    const hasPending = hasPendingTaskPageGitHubOpsForItem(item.repoId, item.id)
+    const hasPending = hasPendingTaskPageGitHubOpsForItem(
+      item.repoId,
+      item.id,
+      item.repoExecutionHostId
+    )
     const sticky = getStickyHideEntry(k)
     const hasConfirmedStickyHide =
-      hasConfirmedAuthorityForItem(item.repoId, item.id) && sticky?.queryKey === args.queryKey
+      hasConfirmedAuthorityForItem(item.repoId, item.id, item.repoExecutionHostId) &&
+      sticky?.queryKey === args.queryKey
     if (!hasPending && !hasConfirmedStickyHide) {
       continue
     }
-    const scope = resolveItemSourceScope(item.repoId, item.id)
+    const scope = resolveItemSourceScope(item.repoId, item.id, item.repoExecutionHostId)
     byKey.set(k, getRegistryMergedTaskPageGitHubWorkItem(item, scope))
   }
   return [...byKey.values()].sort(

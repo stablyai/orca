@@ -70,9 +70,11 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
   const muxByTargetId = new Map<string, { request: ReturnType<typeof vi.fn> }>()
   const getRepoMock = vi.fn<Store['getRepo']>()
   const getReposMock = vi.fn<Store['getRepos']>()
+  const getWorktreeMetaMock = vi.fn<Store['getWorktreeMeta']>()
   const store = {
     getRepo: getRepoMock,
-    getRepos: getReposMock
+    getRepos: getReposMock,
+    getWorktreeMeta: getWorktreeMetaMock
   } as unknown as Store
 
   const target: SshTarget = {
@@ -97,6 +99,7 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
       listTargets: () => [target]
     })
     getRepoMock.mockReset()
+    getWorktreeMetaMock.mockReset()
     getRepoMock.mockImplementation((repoId: string) =>
       repoId === 'repo-target-1'
         ? ({

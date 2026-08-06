@@ -152,10 +152,12 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
   const muxByTargetId = new Map<string, { request: ReturnType<typeof vi.fn> }>()
   const getRepoMock = vi.fn<Store['getRepo']>()
   const getReposMock = vi.fn<Store['getRepos']>()
+  const getWorktreeMetaMock = vi.fn<Store['getWorktreeMeta']>()
   const getWorkspaceSessionMock = vi.fn<Store['getWorkspaceSession']>()
   const store = {
     getRepo: getRepoMock,
     getRepos: getReposMock,
+    getWorktreeMeta: getWorktreeMetaMock,
     getWorkspaceSession: getWorkspaceSessionMock
   } as unknown as Store
 
@@ -174,6 +176,7 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
       listTargets: () => targets
     })
     getRepoMock.mockReset()
+    getWorktreeMetaMock.mockReset()
     getWorkspaceSessionMock.mockReset()
     getWorkspaceSessionMock.mockReturnValue(baseSession)
     getRepoMock.mockImplementation((repoId: string) =>
@@ -310,7 +313,7 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
     )
   })
 
-  it('fails closed for hostless worktrees when repository ids overlap across hosts', async () => {
+  it('keeps explicit SSH worktrees and rejects hostless siblings when repository ids overlap', async () => {
     const sshRepo = {
       id: 'shared-repo',
       path: '/remote/repo',
@@ -330,6 +333,11 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
         executionHostId: 'local'
       } as never
     ])
+    getWorktreeMetaMock.mockImplementation((worktreeId) =>
+      worktreeId === 'shared-repo::/remote/worktree'
+        ? ({ hostId: 'ssh:target-1' } as never)
+        : undefined
+    )
 
     await callSetForConnectedTargets({
       session: {
@@ -361,7 +369,9 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
       ?.mock.calls.find(([method]) => method === 'workspace.patch')
     const remoteSession = (patchCall?.[1] as { patch?: { session?: RemoteWorkspaceSession } })
       ?.patch?.session
-    expect(remoteSession?.tabsByWorktreePath).toEqual({})
-    expect(remoteSession?.activeWorktreePath).toBeNull()
+    expect(remoteSession?.tabsByWorktreePath).toEqual({
+      '/remote/worktree': [expect.objectContaining({ id: 'remote-tab', title: 'Remote shell' })]
+    })
+    expect(remoteSession?.activeWorktreePath).toBe('/remote/worktree')
   })
 })

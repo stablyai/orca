@@ -11,6 +11,7 @@ import {
   hasPendingTaskPageGitHubOpsForItem,
   listPendingTaskPageGitHubOpsForItem,
   notifyTaskPageGitHubMutationRegistry,
+  parseTaskPageGitHubItemKey,
   resolveItemSourceScope,
   updateSoftHiddenItemKey
 } from './task-page-github-work-item-mutation-registry'
@@ -27,13 +28,15 @@ export function clearTaskPageGitHubAuthorityAbsentFromLoadedItems(
     if (loadedItemKeys.has(itemKey)) {
       continue
     }
-    const separator = itemKey.indexOf('\0')
-    const repoId = itemKey.slice(0, separator)
-    const itemId = itemKey.slice(separator + 1)
-    if (hasPendingTaskPageGitHubOpsForItem(repoId, itemId)) {
+    const identity = parseTaskPageGitHubItemKey(itemKey)
+    if (!identity) {
       continue
     }
-    clearConfirmedAuthorityForItem(repoId, itemId)
+    const { repoId, itemId, repoExecutionHostId } = identity
+    if (hasPendingTaskPageGitHubOpsForItem(repoId, itemId, repoExecutionHostId)) {
+      continue
+    }
+    clearConfirmedAuthorityForItem(repoId, itemId, repoExecutionHostId)
     deleteStickyHideEntry(itemKey)
     updateSoftHiddenItemKey(itemKey, false)
     changed = true
@@ -49,13 +52,12 @@ export function getTaskPageGitHubRevalidatableAuthorityItemKeys(
   const keys = new Set<string>()
   const quiet = getQuietRevalidateState(queryKey)
   for (const itemKey of getTaskPageGitHubConfirmedAuthorityItemKeys()) {
-    const separator = itemKey.indexOf('\0')
-    if (separator < 0) {
+    const identity = parseTaskPageGitHubItemKey(itemKey)
+    if (!identity) {
       continue
     }
-    const repoId = itemKey.slice(0, separator)
-    const itemId = itemKey.slice(separator + 1)
-    const sourceScope = resolveItemSourceScope(repoId, itemId)
+    const { repoId, itemId, repoExecutionHostId } = identity
+    const sourceScope = resolveItemSourceScope(repoId, itemId, repoExecutionHostId)
     const activeFamilies = AUTHORITY_FAMILIES.filter((family) =>
       family === 'assignees' || family === 'reviewRequests'
         ? getConfirmedListSnapshot(sourceScope, repoId, itemId, family) !== undefined
@@ -80,10 +82,12 @@ export function clearTaskPageGitHubAuthorityThroughGeneration(
 ): void {
   const quiet = getQuietRevalidateState(queryKey)
   for (const itemKey of getTaskPageGitHubConfirmedAuthorityItemKeys()) {
-    const separator = itemKey.indexOf('\0')
-    const repoId = itemKey.slice(0, separator)
-    const itemId = itemKey.slice(separator + 1)
-    const sourceScope = resolveItemSourceScope(repoId, itemId)
+    const identity = parseTaskPageGitHubItemKey(itemKey)
+    if (!identity) {
+      continue
+    }
+    const { repoId, itemId, repoExecutionHostId } = identity
+    const sourceScope = resolveItemSourceScope(repoId, itemId, repoExecutionHostId)
     for (const family of AUTHORITY_FAMILIES) {
       const dirtyAt = quiet?.familyDirtyAt.get(taskPageGitHubFamilyDirtyKey(itemKey, family)) ?? 0
       if (dirtyAt > generation) {
@@ -99,14 +103,17 @@ export function clearTaskPageGitHubAuthorityThroughGeneration(
       getLastConfirmedClientValue(sourceScope, repoId, itemId, 'state') !== undefined ||
       getConfirmedListSnapshot(sourceScope, repoId, itemId, 'assignees') !== undefined ||
       getConfirmedListSnapshot(sourceScope, repoId, itemId, 'reviewRequests') !== undefined
-    const hasPendingMembership = listPendingTaskPageGitHubOpsForItem(repoId, itemId).some(
-      (op) => op.listOp !== undefined || op.key.opKey === 'state' || op.key.opKey === 'merge'
-    )
+    const hasPendingMembership = listPendingTaskPageGitHubOpsForItem(
+      repoId,
+      itemId,
+      undefined,
+      itemKey
+    ).some((op) => op.listOp !== undefined || op.key.opKey === 'state' || op.key.opKey === 'merge')
     if (!hasMembershipAuthority && !hasPendingMembership) {
       if (getStickyHideEntry(itemKey)?.queryKey === queryKey) {
         deleteStickyHideEntry(itemKey)
       }
-      if (!hasPendingTaskPageGitHubOpsForItem(repoId, itemId)) {
+      if (!hasPendingTaskPageGitHubOpsForItem(repoId, itemId, repoExecutionHostId)) {
         updateSoftHiddenItemKey(itemKey, false)
       }
     }

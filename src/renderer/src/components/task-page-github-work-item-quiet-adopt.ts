@@ -51,7 +51,11 @@ export function adoptQuietSearchFieldsForItem(args: {
   sourceContext?: TaskSourceContext | null
 }): { needTrailing: boolean } {
   const state = getOrCreateQuietRevalidateState(args.queryKey)
-  const itemKey = taskPageGitHubItemKey(args.item.repoId, args.item.id)
+  const itemKey = taskPageGitHubItemKey(
+    args.item.repoId,
+    args.item.id,
+    args.item.repoExecutionHostId
+  )
   let needTrailing = false
   const G0 = args.fetchStartedAtGeneration
   const tryFamily = (
@@ -91,7 +95,8 @@ export function adoptQuietSearchFieldsForItem(args: {
     'state',
     () => {
       args.patchWorkItem(args.item.id, { state: args.serverItem.state }, args.item.repoId, {
-        sourceContext: args.sourceContext
+        sourceContext: args.sourceContext,
+        repoExecutionHostId: args.item.repoExecutionHostId
       })
     },
     () => {
@@ -115,7 +120,10 @@ export function adoptQuietSearchFieldsForItem(args: {
         args.item.id,
         { autoMergeEnabled: args.serverItem.autoMergeEnabled },
         args.item.repoId,
-        { sourceContext: args.sourceContext }
+        {
+          sourceContext: args.sourceContext,
+          repoExecutionHostId: args.item.repoExecutionHostId
+        }
       )
     },
     () => {
@@ -147,7 +155,10 @@ export function adoptQuietSearchFieldsForItem(args: {
           args.item.id,
           family === 'assignees' ? { assignees: serverList } : { reviewRequests: serverList },
           args.item.repoId,
-          { sourceContext: args.sourceContext }
+          {
+            sourceContext: args.sourceContext,
+            repoExecutionHostId: args.item.repoExecutionHostId
+          }
         )
       },
       () => {

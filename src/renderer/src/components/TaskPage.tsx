@@ -5988,7 +5988,14 @@ export default function TaskPage(): React.JSX.Element {
       const [id, patch, repoId, options] = args
       useAppStore.getState().patchWorkItem(id, patch, repoId, options)
       if (repoId) {
-        patchTaskPageWorkItemRows({ id, repoId }, patch)
+        patchTaskPageWorkItemRows(
+          {
+            id,
+            repoId,
+            repoExecutionHostId: options?.repoExecutionHostId ?? options?.sourceContext?.hostId
+          },
+          patch
+        )
       }
     },
     [patchTaskPageWorkItemRows]
@@ -6341,7 +6348,7 @@ export default function TaskPage(): React.JSX.Element {
       typeFilteredCurrentPageItems.filter(
         (workItem) =>
           !githubWorkItemMutation.softHiddenItemKeys.has(
-            taskPageGitHubItemKey(workItem.repoId, workItem.id)
+            taskPageGitHubItemKey(workItem.repoId, workItem.id, workItem.repoExecutionHostId)
           )
       ),
     [githubWorkItemMutation.softHiddenItemKeys, typeFilteredCurrentPageItems]
@@ -6865,7 +6872,9 @@ export default function TaskPage(): React.JSX.Element {
     const quietState = getOrCreateQuietRevalidateState(githubWorkItemMutationQueryKey)
     const loadedItemKeys = new Set(
       pagesRef.current.flatMap((page) =>
-        (page ?? []).map((item) => taskPageGitHubItemKey(item.repoId, item.id))
+        (page ?? []).map((item) =>
+          taskPageGitHubItemKey(item.repoId, item.id, item.repoExecutionHostId)
+        )
       )
     )
     clearTaskPageGitHubAuthorityAbsentFromLoadedItems(loadedItemKeys)
@@ -6901,12 +6910,18 @@ export default function TaskPage(): React.JSX.Element {
       githubWorkItemMutationQueryKey
     )
     const authorityPage = pages.findIndex((page) =>
-      page?.some((item) => authorityItemKeys.has(taskPageGitHubItemKey(item.repoId, item.id)))
+      page?.some((item) =>
+        authorityItemKeys.has(taskPageGitHubItemKey(item.repoId, item.id, item.repoExecutionHostId))
+      )
     )
     const quietPage = authorityPage >= 0 ? authorityPage : currentPage
     const visiblePage = currentPage > quietPage ? currentPage : undefined
     const pageItemKeys = (page: number): Set<string> =>
-      new Set((pages[page] ?? []).map((item) => taskPageGitHubItemKey(item.repoId, item.id)))
+      new Set(
+        (pages[page] ?? []).map((item) =>
+          taskPageGitHubItemKey(item.repoId, item.id, item.repoExecutionHostId)
+        )
+      )
     const authorityPageItemKeys = pageItemKeys(quietPage)
     const visiblePageItemKeys = visiblePage === undefined ? undefined : pageItemKeys(visiblePage)
     const revalidatedItemKeys = new Set([...authorityPageItemKeys, ...(visiblePageItemKeys ?? [])])
@@ -6964,7 +6979,7 @@ export default function TaskPage(): React.JSX.Element {
           fetchedVisiblePage = latestVisiblePage
           const latestVisiblePageItemKeys = new Set(
             (pagesRef.current[latestVisiblePage] ?? []).map((item) =>
-              taskPageGitHubItemKey(item.repoId, item.id)
+              taskPageGitHubItemKey(item.repoId, item.id, item.repoExecutionHostId)
             )
           )
           fetchedVisiblePageItemKeys = latestVisiblePageItemKeys
@@ -6989,7 +7004,7 @@ export default function TaskPage(): React.JSX.Element {
             ? undefined
             : new Set(
                 (pagesRef.current[liveVisiblePage] ?? []).map((item) =>
-                  taskPageGitHubItemKey(item.repoId, item.id)
+                  taskPageGitHubItemKey(item.repoId, item.id, item.repoExecutionHostId)
                 )
               )
         quietState.networkFailureAttempts = 0
@@ -7011,13 +7026,19 @@ export default function TaskPage(): React.JSX.Element {
           revalidatedItemKeys
         })
         const networkItemKeys = new Set(
-          authorityItems.map((item) => taskPageGitHubItemKey(item.repoId, item.id))
+          authorityItems.map((item) =>
+            taskPageGitHubItemKey(item.repoId, item.id, item.repoExecutionHostId)
+          )
         )
         const visibleNetworkItemKeys = new Set(
-          (liveVisibleItems ?? []).map((item) => taskPageGitHubItemKey(item.repoId, item.id))
+          (liveVisibleItems ?? []).map((item) =>
+            taskPageGitHubItemKey(item.repoId, item.id, item.repoExecutionHostId)
+          )
         )
         const fetchedVisibleNetworkItemKeys = new Set(
-          (fetchedVisibleItems ?? []).map((item) => taskPageGitHubItemKey(item.repoId, item.id))
+          (fetchedVisibleItems ?? []).map((item) =>
+            taskPageGitHubItemKey(item.repoId, item.id, item.repoExecutionHostId)
+          )
         )
         const membershipChanged =
           networkItemKeys.size !== authorityPageItemKeys.size ||
@@ -7056,7 +7077,11 @@ export default function TaskPage(): React.JSX.Element {
             (itemKey) =>
               !revalidatedItemKeys.has(itemKey) &&
               pages.some((page) =>
-                page?.some((item) => taskPageGitHubItemKey(item.repoId, item.id) === itemKey)
+                page?.some(
+                  (item) =>
+                    taskPageGitHubItemKey(item.repoId, item.id, item.repoExecutionHostId) ===
+                    itemKey
+                )
               )
           )
         quietState.trailingQueued = false

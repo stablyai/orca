@@ -92,7 +92,8 @@ export function getRegistryMergedTaskPageGitHubWorkItem(
   item: GitHubWorkItem,
   sourceScope: string | null
 ): GitHubWorkItem {
-  const ops = listPendingTaskPageGitHubOpsForItem(item.repoId, item.id, sourceScope)
+  const itemKey = taskPageGitHubItemKey(item.repoId, item.id, item.repoExecutionHostId)
+  const ops = listPendingTaskPageGitHubOpsForItem(item.repoId, item.id, sourceScope, itemKey)
   let merged: GitHubWorkItem = { ...item }
 
   // Why: after confirm, pending is cleared but search may still lag — hold the
@@ -147,7 +148,11 @@ export function recomputeSoftHideForItem(args: {
   updateSticky: boolean
 }): boolean {
   const merged = getRegistryMergedTaskPageGitHubWorkItem(args.item, args.sourceScope)
-  const itemKey = taskPageGitHubItemKey(args.item.repoId, args.item.id)
+  const itemKey = taskPageGitHubItemKey(
+    args.item.repoId,
+    args.item.id,
+    args.item.repoExecutionHostId
+  )
   const membershipHide = shouldSoftHideTaskPageGitHubWorkItem({
     item: merged,
     query: args.query,
@@ -195,16 +200,18 @@ export function rebuildSoftHiddenKeysFromPendingAndSticky(args: {
     }
   }
   for (const item of args.items) {
-    const ops = listPendingTaskPageGitHubOpsForItem(item.repoId, item.id)
-    const itemKey = taskPageGitHubItemKey(item.repoId, item.id)
+    const itemKey = taskPageGitHubItemKey(item.repoId, item.id, item.repoExecutionHostId)
+    const ops = listPendingTaskPageGitHubOpsForItem(item.repoId, item.id, undefined, itemKey)
     if (
       ops.length === 0 &&
       !next.has(itemKey) &&
-      !hasConfirmedAuthorityForItem(item.repoId, item.id)
+      !hasConfirmedAuthorityForItem(item.repoId, item.id, item.repoExecutionHostId)
     ) {
       continue
     }
-    const sourceScope = ops[0]?.key.sourceScope ?? resolveItemSourceScope(item.repoId, item.id)
+    const sourceScope =
+      ops[0]?.key.sourceScope ??
+      resolveItemSourceScope(item.repoId, item.id, item.repoExecutionHostId)
     const skipMe = args.skipMeByItemKey?.get(itemKey) ?? ops[0]?.skipMeQualifiers ?? false
     const merged = getRegistryMergedTaskPageGitHubWorkItem(item, sourceScope)
     if (

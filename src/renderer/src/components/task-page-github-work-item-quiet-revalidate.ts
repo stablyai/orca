@@ -14,6 +14,7 @@ import {
   hasConfirmedAuthorityForItem,
   hasPendingTaskPageGitHubOpsForItem,
   notifyTaskPageGitHubMutationRegistry,
+  parseTaskPageGitHubItemKey,
   resolveItemSourceScope,
   taskPageGitHubItemKey
 } from './task-page-github-work-item-mutation-registry'
@@ -69,7 +70,7 @@ export function settleQuietSearchRevalidate(args: {
   for (const serverItem of args.networkItems) {
     const sourceScope =
       args.resolveSourceScope?.(serverItem) ??
-      resolveItemSourceScope(serverItem.repoId, serverItem.id)
+      resolveItemSourceScope(serverItem.repoId, serverItem.id, serverItem.repoExecutionHostId)
     const result = adoptQuietSearchFieldsForItem({
       item: serverItem,
       serverItem,
@@ -87,7 +88,9 @@ export function settleQuietSearchRevalidate(args: {
   // would unhide a successful close under Open. Keep sticky for omitted rows
   // that still have pending or confirmed authority.
   const pageKeys = new Set(
-    args.networkItems.map((item) => taskPageGitHubItemKey(item.repoId, item.id))
+    args.networkItems.map((item) =>
+      taskPageGitHubItemKey(item.repoId, item.id, item.repoExecutionHostId)
+    )
   )
   for (const [itemKey, entry] of getAllStickyHideEntries()) {
     if (
@@ -97,12 +100,16 @@ export function settleQuietSearchRevalidate(args: {
     ) {
       continue
     }
-    const separator = itemKey.indexOf('\0')
+    const identity = parseTaskPageGitHubItemKey(itemKey)
     if (
-      separator >= 0 &&
-      !hasPendingTaskPageGitHubOpsForItem(itemKey.slice(0, separator), itemKey.slice(separator + 1))
+      identity &&
+      !hasPendingTaskPageGitHubOpsForItem(
+        identity.repoId,
+        identity.itemId,
+        identity.repoExecutionHostId
+      )
     ) {
-      clearConfirmedAuthorityForItem(itemKey.slice(0, separator), itemKey.slice(separator + 1))
+      clearConfirmedAuthorityForItem(identity.repoId, identity.itemId, identity.repoExecutionHostId)
     }
   }
   const safeGcKeys = new Set(pageKeys)
@@ -110,15 +117,17 @@ export function settleQuietSearchRevalidate(args: {
     if (pageKeys.has(itemKey)) {
       continue
     }
-    const sep = itemKey.indexOf('\0')
-    if (sep < 0) {
+    const identity = parseTaskPageGitHubItemKey(itemKey)
+    if (!identity) {
       continue
     }
-    const repoId = itemKey.slice(0, sep)
-    const itemId = itemKey.slice(sep + 1)
     if (
-      hasPendingTaskPageGitHubOpsForItem(repoId, itemId) ||
-      hasConfirmedAuthorityForItem(repoId, itemId)
+      hasPendingTaskPageGitHubOpsForItem(
+        identity.repoId,
+        identity.itemId,
+        identity.repoExecutionHostId
+      ) ||
+      hasConfirmedAuthorityForItem(identity.repoId, identity.itemId, identity.repoExecutionHostId)
     ) {
       safeGcKeys.add(itemKey)
     }
@@ -133,13 +142,17 @@ export function settleQuietSearchRevalidate(args: {
     if (safeGcKeys.has(itemKey)) {
       continue
     }
-    const sep = itemKey.indexOf('\0')
-    if (sep < 0) {
+    const identity = parseTaskPageGitHubItemKey(itemKey)
+    if (!identity) {
       continue
     }
     if (
-      !hasPendingTaskPageGitHubOpsForItem(itemKey.slice(0, sep), itemKey.slice(sep + 1)) &&
-      !hasConfirmedAuthorityForItem(itemKey.slice(0, sep), itemKey.slice(sep + 1))
+      !hasPendingTaskPageGitHubOpsForItem(
+        identity.repoId,
+        identity.itemId,
+        identity.repoExecutionHostId
+      ) &&
+      !hasConfirmedAuthorityForItem(identity.repoId, identity.itemId, identity.repoExecutionHostId)
     ) {
       quiet.lagSkipAttempts.delete(lagKey)
     }

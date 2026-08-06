@@ -111,6 +111,11 @@ export function canStartTaskPageGitHubWorkItemMutation(args: {
   sourceContext?: TaskSourceContext | null
 }): boolean {
   const { sourceScope, built } = resolveTaskPageGitHubMutation(args)
+  const itemKey = taskPageGitHubItemKey(
+    args.item.repoId,
+    args.item.id,
+    args.sourceContext?.hostId ?? args.item.repoExecutionHostId
+  )
   const key = {
     sourceScope,
     repoId: args.item.repoId,
@@ -120,7 +125,12 @@ export function canStartTaskPageGitHubWorkItemMutation(args: {
   if (isTaskPageGitHubMutationPendingKey(key)) {
     return false
   }
-  const pending = listPendingTaskPageGitHubOpsForItem(args.item.repoId, args.item.id, sourceScope)
+  const pending = listPendingTaskPageGitHubOpsForItem(
+    args.item.repoId,
+    args.item.id,
+    sourceScope,
+    itemKey
+  )
   if (built.kind === 'list') {
     const affectedLogins = new Set(built.listOp.logins)
     return !pending.some(
@@ -141,6 +151,11 @@ export function beginTaskPageGitHubWorkItemMutation(
   setTaskPageGitHubMutationQueryKey(args.queryKey)
   const { sourceScope, built } = resolveTaskPageGitHubMutation(args)
   const skipMeQualifiers = args.skipMeQualifiers ?? false
+  const itemKey = taskPageGitHubItemKey(
+    args.item.repoId,
+    args.item.id,
+    args.sourceContext?.hostId ?? args.item.repoExecutionHostId
+  )
   const key = {
     sourceScope,
     repoId: args.item.repoId,
@@ -157,15 +172,28 @@ export function beginTaskPageGitHubWorkItemMutation(
       built.family
     )
     if (!existing) {
-      const ops = listPendingTaskPageGitHubOpsForItem(args.item.repoId, args.item.id, sourceScope)
+      const ops = listPendingTaskPageGitHubOpsForItem(
+        args.item.repoId,
+        args.item.id,
+        sourceScope,
+        itemKey
+      )
       const snapshot = stripFamilyPendingFromList(args.item, built.family, ops)
-      setConfirmedListSnapshot(sourceScope, args.item.repoId, args.item.id, built.family, snapshot)
+      setConfirmedListSnapshot(
+        sourceScope,
+        args.item.repoId,
+        args.item.id,
+        built.family,
+        snapshot,
+        itemKey
+      )
     }
   }
 
   const op: PendingOp = {
     generation,
     key,
+    itemKey,
     previous: built.previous,
     next: built.next,
     listOp: built.kind === 'list' ? built.listOp : undefined,
@@ -183,7 +211,8 @@ export function beginTaskPageGitHubWorkItemMutation(
       : built.next
 
   args.patchWorkItem(args.item.id, composedFields, args.item.repoId, {
-    sourceContext: args.sourceContext
+    sourceContext: args.sourceContext,
+    repoExecutionHostId: args.item.repoExecutionHostId
   })
 
   recomputeSoftHideForItem({
@@ -200,7 +229,7 @@ export function beginTaskPageGitHubWorkItemMutation(
   return {
     generation,
     opKey: built.opKey,
-    itemKey: taskPageGitHubItemKey(args.item.repoId, args.item.id),
+    itemKey,
     families: built.families,
     key
   }
