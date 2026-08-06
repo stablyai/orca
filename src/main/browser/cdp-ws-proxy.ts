@@ -5,6 +5,7 @@ import type { WebContents } from 'electron'
 import { captureScreenshot } from './cdp-screenshot'
 import { buildPrintToPdfOptions, CdpPdfStreamStore } from './cdp-print-to-pdf'
 import { ANTI_DETECTION_SCRIPT } from './anti-detection'
+import { isAllowedCdpProxyRequest } from './cdp-ws-proxy-access-guard'
 import { acquireElectronDebugger, type ElectronDebuggerLease } from './electron-debugger-lease'
 
 const LIFECYCLE_PRIMING_TIMEOUT_MS = 1_000
@@ -40,7 +41,16 @@ export class CdpWsProxy {
     await this.attachDebugger()
     return new Promise<string>((resolve, reject) => {
       this.httpServer = createServer((req, res) => this.handleHttpRequest(req, res))
-      this.wss = new WebSocketServer({ server: this.httpServer })
+      this.wss = new WebSocketServer({
+        server: this.httpServer,
+        verifyClient: ({ req }, done) => {
+          if (isAllowedCdpProxyRequest(req, this.port)) {
+            done(true)
+            return
+          }
+          done(false, 403, 'Forbidden')
+        }
+      })
       const failStart = (error: Error): void => {
         this.httpServer?.removeListener('error', onListenError)
         this.wss?.close()
@@ -175,6 +185,14 @@ export class CdpWsProxy {
   }
 
   private handleHttpRequest(req: IncomingMessage, res: ServerResponse): void {
+    // Why: discovery leaks the tab's live URL/title and the debugger endpoint, so it is
+    // gated exactly like the upgrade. A same-origin fetch after DNS rebinding sends no
+    // Origin header, which is why the Host check has to carry this path.
+    if (!isAllowedCdpProxyRequest(req, this.port)) {
+      res.writeHead(403)
+      res.end()
+      return
+    }
     const url = req.url ?? ''
     if (url === '/json/version' || url === '/json/version/') {
       res.writeHead(200, { 'Content-Type': 'application/json' })
