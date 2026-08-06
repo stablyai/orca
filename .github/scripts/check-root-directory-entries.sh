@@ -11,14 +11,24 @@ head_sha=$2
 git rev-parse --verify "${base_sha}^{tree}" >/dev/null
 git rev-parse --verify "${head_sha}^{tree}" >/dev/null
 
-declare -A base_entries=()
+# No associative arrays: the test suite and local hooks run this under whatever
+# `bash` is on PATH, and stock macOS ships /bin/bash 3.2 (no `declare -A`).
+# Root-level entries number in the dozens, so a linear scan is plenty.
+base_entries=()
 while IFS= read -r -d '' entry; do
-  base_entries["$entry"]=1
+  base_entries+=("$entry")
 done < <(git ls-tree -z --name-only "$base_sha")
 
 blocked_entries=()
 while IFS= read -r -d '' entry; do
-  if [[ -z "${base_entries[$entry]+present}" ]]; then
+  in_base=0
+  for base_entry in ${base_entries[@]+"${base_entries[@]}"}; do
+    if [[ "$base_entry" == "$entry" ]]; then
+      in_base=1
+      break
+    fi
+  done
+  if (( in_base == 0 )); then
     blocked_entries+=("$entry")
   fi
 done < <(git ls-tree -z --name-only "$head_sha")
