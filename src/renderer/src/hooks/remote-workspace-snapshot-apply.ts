@@ -153,6 +153,13 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
   if (!isArrivalCurrent(authority.targetId, arrival) || !isPreparationTokenCurrent(token)) {
     return
   }
+  // Why: the hydrate below marks the target hydrated and then awaits terminal reconnects for up to 30s; the pending paths must be registered first or the initial-terminal gate reads "hydrated, nothing pending" and creates a junk tab into a still-empty deferred worktree.
+  store
+    .getState()
+    .setPendingDeferredWorktreePaths(
+      authority.targetId,
+      deferredSnapshotTabPaths(state, authority, snapshot)
+    )
   await hydrateAndReconnectWorktrees(
     store,
     merged,
@@ -165,6 +172,7 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
 
   // Why: the import above silently drops snapshot paths the catalog cannot resolve yet; remote catalogs fill in asynchronously (often only on worktree activation), so retry those paths until they resolve or the deadline expires.
   let pendingPaths = deferredSnapshotTabPaths(store.getState(), authority, snapshot)
+  store.getState().setPendingDeferredWorktreePaths(authority.targetId, pendingPaths)
   if (pendingPaths.length === 0) {
     return
   }
@@ -194,6 +202,8 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
         '[remote-workspace] giving up on deferred snapshot tabs; their worktree paths never resolved in the catalog',
         pendingPaths
       )
+      // Why: an expired path will never hydrate — leaving it registered would suppress initial-terminal creation for that worktree indefinitely.
+      store.getState().setPendingDeferredWorktreePaths(authority.targetId, [])
       reportUnresolved()
       return
     }
@@ -205,6 +215,7 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
     const remaining = deferredSnapshotTabPaths(lateState, authority, snapshot)
     const departed = pendingPaths.filter((worktreePath) => !remaining.includes(worktreePath))
     pendingPaths = remaining
+    store.getState().setPendingDeferredWorktreePaths(authority.targetId, pendingPaths)
     if (departed.length === 0) {
       continue
     }

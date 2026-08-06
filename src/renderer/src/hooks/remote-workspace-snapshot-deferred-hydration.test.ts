@@ -195,6 +195,24 @@ describe('direct-SSH snapshot apply, deferred worktree hydration', () => {
     expect(syncStatuses.at(-1)?.phase).toBe('synced')
   })
 
+  it('registers the pending path for the initial-terminal gate and clears it on resolution', async () => {
+    const store = makeStore([])
+    seedCatalog(store, [EAGER_PATH])
+
+    const applyPromise = applySnapshot(
+      store,
+      snapshot(1, { [EAGER_PATH]: ['tab-e1'], [LATE_PATH]: ['tab-l1'] })
+    )
+    await vi.advanceTimersByTimeAsync(POLL_MS)
+    expect(store.getState().pendingDeferredWorktreePathsByTargetId[TARGET_ID]).toEqual([LATE_PATH])
+
+    seedCatalog(store, [EAGER_PATH, LATE_PATH])
+    await vi.advanceTimersByTimeAsync(POLL_MS)
+    await applyPromise
+
+    expect(store.getState().pendingDeferredWorktreePathsByTargetId[TARGET_ID]).toBeUndefined()
+  })
+
   it('sets an error sync status when a path never resolves before the deadline', async () => {
     const syncStatuses: RemoteWorkspaceSyncStatus[] = []
     const store = makeStore(syncStatuses)

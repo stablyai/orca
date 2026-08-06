@@ -14,7 +14,8 @@ import { useAppStore } from '../store'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { useAllWorktrees } from '../store/selectors'
-import { getConnectionId } from '../lib/connection-context'
+import { getConnectionId, getConnectionIdFromState } from '../lib/connection-context'
+import { shouldDeferInitialTerminalCreation } from '../lib/remote-workspace-pending-hydration'
 import { basename } from '../lib/path'
 import {
   Dialog,
@@ -313,6 +314,14 @@ function Terminal(): React.JSX.Element | null {
     [allWorktrees, folderWorkspaces]
   )
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const remoteWorkspaceHydratedTargetIds = useAppStore((s) => s.remoteWorkspaceHydratedTargetIds)
+  const pendingDeferredWorktreePathsByTargetId = useAppStore(
+    (s) => s.pendingDeferredWorktreePathsByTargetId
+  )
+  // Why: the initial-terminal gate defers on an unresolved owner; a selector keeps it reactive so a repo landing in the store re-runs the gate instead of leaving the worktree without a terminal.
+  const activeWorktreeConnectionId = useAppStore((s) =>
+    getConnectionIdFromState(s, activeWorktreeId)
+  )
   const renderedActiveWorktreeId = activeWorktreeId
   const activeWorktreeDeferralHostId = useAppStore((s) =>
     getResolvedExecutionHostIdForWorktree(s, renderedActiveWorktreeId)
@@ -1491,9 +1500,28 @@ function Terminal(): React.JSX.Element | null {
     if (!shouldAutoCreateInitialTerminal(renderableTabCount)) {
       return
     }
+    // Why: a remote worktree can activate before its snapshot tabs hydrate; a terminal created in that window buries the restored tabs behind a junk tab. All three gate inputs are effect deps, so this retries when the owner resolves or the snapshot lands.
+    if (
+      shouldDeferInitialTerminalCreation(
+        activeWorktreeId,
+        activeWorktreeConnectionId,
+        remoteWorkspaceHydratedTargetIds,
+        pendingDeferredWorktreePathsByTargetId
+      )
+    ) {
+      return
+    }
     // Why: tag this never-visited-worktree tab so its PTY spawn doesn't count as activity and reshuffle the sidebar (explicit New Tab still bumps).
     createTab(activeWorktreeId, undefined, undefined, { pendingActivationSpawn: true })
-  }, [workspaceSessionReady, activeWorktreeId, createTab, reconcileWorktreeTabModel])
+  }, [
+    workspaceSessionReady,
+    activeWorktreeId,
+    activeWorktreeConnectionId,
+    createTab,
+    reconcileWorktreeTabModel,
+    remoteWorkspaceHydratedTargetIds,
+    pendingDeferredWorktreePathsByTargetId
+  ])
 
   const startupResumeWorktreeIdsRef = useRef(new Set<string>())
   useEffect(() => {

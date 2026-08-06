@@ -43,6 +43,9 @@ export type SshSlice = {
    * only counts as removal evidence when this is set. */
   sshTargetsHydrated: boolean
   remoteWorkspaceHydratedTargetIds: Set<string>
+  /** Snapshot worktree paths still awaiting deferred hydration, per direct-SSH
+   * target. Gates initial-terminal auto-creation for those worktrees. */
+  pendingDeferredWorktreePathsByTargetId: Record<string, readonly string[]>
   remoteWorkspaceSyncStatusByTargetId: Record<string, RemoteWorkspaceSyncStatus>
   sshCredentialQueue: SshCredentialRequest[]
   /** Incremented when an SSH target transitions to 'connected'. Allows
@@ -63,6 +66,7 @@ export type SshSlice = {
   setSshTargetsMetadata: (targets: Pick<SshTarget, 'id' | 'label'>[]) => void
   clearRemovedSshTargetState: (targetId: string) => void
   markRemoteWorkspaceHydrated: (targetId: string) => void
+  setPendingDeferredWorktreePaths: (targetId: string, paths: readonly string[]) => void
   clearRemoteWorkspaceHydrated: (targetId: string) => void
   setRemoteWorkspaceSyncStatus: (targetId: string, status: RemoteWorkspaceSyncStatus) => void
   enqueueSshCredentialRequest: (req: SshCredentialRequest) => void
@@ -88,6 +92,7 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
   removedSshTargetLabels: new Map(),
   sshTargetsHydrated: false,
   remoteWorkspaceHydratedTargetIds: new Set(),
+  pendingDeferredWorktreePathsByTargetId: {},
   remoteWorkspaceSyncStatusByTargetId: {},
   sshCredentialQueue: [],
   sshConnectedGeneration: 0,
@@ -140,6 +145,24 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
       const next = new Set(s.remoteWorkspaceHydratedTargetIds)
       next.add(targetId)
       return { remoteWorkspaceHydratedTargetIds: next }
+    }),
+  setPendingDeferredWorktreePaths: (targetId, paths) =>
+    set((s) => {
+      const current = s.pendingDeferredWorktreePathsByTargetId[targetId]
+      // Why: the deferred-hydration watch re-reports every poll tick; only real membership changes may re-render subscribers.
+      if (
+        paths.length === (current?.length ?? 0) &&
+        paths.every((path, index) => current?.[index] === path)
+      ) {
+        return s
+      }
+      const next = { ...s.pendingDeferredWorktreePathsByTargetId }
+      if (paths.length === 0) {
+        delete next[targetId]
+      } else {
+        next[targetId] = [...paths]
+      }
+      return { pendingDeferredWorktreePathsByTargetId: next }
     }),
   clearRemoteWorkspaceHydrated: (targetId) =>
     set((s) => {

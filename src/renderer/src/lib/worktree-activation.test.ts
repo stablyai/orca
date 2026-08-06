@@ -6,6 +6,12 @@ import { activateAndRevealWorktree, ensureWorktreeHasInitialTerminal } from './w
 import { resetHookCommandDelayedDeliveryForTests } from './hook-command-delayed-delivery'
 import { useAppStore } from '@/store'
 
+// Why: these cases assert activation ordering for local worktrees; the fixtures never
+// register repos, which getConnectionId reports as unknown-owner and the
+// initial-terminal gate would defer on. Pin the owner to local by default.
+const mockConnectionId: { value: string | null | undefined } = { value: null }
+vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => mockConnectionId.value }))
+
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 
 const initialTabsByWorktree = useAppStore.getState().tabsByWorktree
@@ -25,6 +31,7 @@ function setSetupScriptLaunchMode(mode: SetupScriptLaunchMode | null): void {
 }
 
 afterEach(() => {
+  mockConnectionId.value = null
   delete (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
   useAppStore.setState((state) => ({
     settings: state.settings
@@ -45,6 +52,8 @@ function createMockStore(overrides: Record<string, unknown> = {}) {
   return {
     tabsByWorktree: {} as Record<string, { id: string }[]>,
     defaultTerminalTabsAppliedByWorktreeId: {} as Record<string, true>,
+    remoteWorkspaceHydratedTargetIds: new Set<string>(),
+    pendingDeferredWorktreePathsByTargetId: {} as Record<string, readonly string[]>,
     createTab: vi.fn(() => ({ id: 'tab-1' })),
     setActiveTab: vi.fn(),
     setTabCustomTitle: vi.fn(),
@@ -60,6 +69,68 @@ function createMockStore(overrides: Record<string, unknown> = {}) {
 }
 
 describe('ensureWorktreeHasInitialTerminal', () => {
+  it('creates nothing for a remote worktree whose target has not hydrated a snapshot', () => {
+    mockConnectionId.value = 'ssh-target-1'
+    const createTab = vi.fn(() => ({ id: 'tab-1' }))
+    const store = createMockStore({ createTab })
+
+    const result = ensureWorktreeHasInitialTerminal(store, 'wt-1')
+
+    expect(result).toBeNull()
+    expect(createTab).not.toHaveBeenCalled()
+    expect(store.markDefaultTerminalTabsApplied).not.toHaveBeenCalled()
+  })
+
+  it('still applies an explicit launch payload while the target is unhydrated', () => {
+    mockConnectionId.value = 'ssh-target-1'
+    const createTab = vi.fn(() => ({ id: 'tab-1' }))
+    const store = createMockStore({ createTab })
+
+    const result = ensureWorktreeHasInitialTerminal(
+      store,
+      'wt-1',
+      undefined,
+      undefined,
+      undefined,
+      {
+        runCommands: true,
+        tabs: [{ title: 'Server', command: 'pnpm dev' }]
+      }
+    )
+
+    expect(result).toBe('tab-1')
+    expect(store.markDefaultTerminalTabsApplied).toHaveBeenCalledWith('wt-1')
+  })
+
+  it('creates nothing while the worktree path awaits deferred snapshot hydration', () => {
+    mockConnectionId.value = 'ssh-target-1'
+    const createTab = vi.fn(() => ({ id: 'tab-1' }))
+    const store = createMockStore({
+      createTab,
+      remoteWorkspaceHydratedTargetIds: new Set(['ssh-target-1']),
+      pendingDeferredWorktreePathsByTargetId: { 'ssh-target-1': ['/tmp/worktrees/wt-1'] }
+    })
+
+    const result = ensureWorktreeHasInitialTerminal(store, 'repo-1::/tmp/worktrees/wt-1')
+
+    expect(result).toBeNull()
+    expect(createTab).not.toHaveBeenCalled()
+  })
+
+  it('creates the initial terminal for a remote worktree once its target has hydrated', () => {
+    mockConnectionId.value = 'ssh-target-1'
+    const createTab = vi.fn(() => ({ id: 'tab-1' }))
+    const store = createMockStore({
+      createTab,
+      remoteWorkspaceHydratedTargetIds: new Set(['ssh-target-1'])
+    })
+
+    const result = ensureWorktreeHasInitialTerminal(store, 'repo-1::/tmp/worktrees/wt-1')
+
+    expect(result).toBe('tab-1')
+    expect(createTab).toHaveBeenCalledTimes(1)
+  })
+
   it('creates a background Setup tab for newly created worktrees by default', () => {
     let createdIndex = 0
     const createTab = vi.fn(() => ({ id: `tab-${++createdIndex}` }))
