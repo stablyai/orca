@@ -185,6 +185,31 @@ describe('buildNotchSummary', () => {
     ).toBe(0)
   })
 
+  it('drops an unconfirmed hydrated row even when its timestamp is fresh', () => {
+    // Why: hydrateLastStatusFromDisk marks restored non-done rows restoredUnconfirmed — the
+    // turn may have ended while no receiver was up. Every other surface suppresses them.
+    const hydrated = payload('t1:a', 'working', {
+      receivedAt: 900,
+      stateStartedAt: 900,
+      restoredUnconfirmed: true
+    })
+
+    expect(
+      buildNotchSummary({ snapshot: [hydrated], acknowledgedAtByPaneKey: noAcks, now: 1_000 })
+        .counts.working
+    ).toBe(0)
+  })
+
+  it('ignores a session-boundary done row, which is idle, not a completed turn', () => {
+    // Why: Claude SessionStart (connect/resume/clear) lands as done + sessionBoundary. The
+    // unvisited-gated green lane is an unread-completion surface, which must skip it.
+    const boundary = payload('t1:a', 'done', { stateStartedAt: 5_000, sessionBoundary: true })
+
+    const summary = buildNotchSummary({ snapshot: [boundary], acknowledgedAtByPaneKey: noAcks })
+    expect(summary.counts.done).toBe(0)
+    expect(summary.sessions).toEqual([])
+  })
+
   it('keeps a done agent however old, since done is terminal not a heartbeat', () => {
     // Why: `done` means the turn finished; age doesn't make that untrue. It clears on visit.
     // stateStartedAt must be > 0: an unvisited row is ackAt < stateStartedAt, and a zero start

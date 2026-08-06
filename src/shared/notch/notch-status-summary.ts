@@ -102,6 +102,12 @@ export function buildNotchSummary({
     if (entry.providerSessionOnly) {
       continue
     }
+    // A session-boundary `done` (connect/resume/clear landing idle, STA-3386) is not a
+    // completed turn; the unvisited-gated green lane is exactly the unread-completion
+    // surface that contract says must ignore it.
+    if (entry.state === 'done' && entry.sessionBoundary === true) {
+      continue
+    }
     // Snapshots are keyed by pane upstream, but a duplicate would double-count silently.
     if (seen.has(entry.paneKey)) {
       continue
@@ -113,7 +119,16 @@ export function buildNotchSummary({
     // working agents, including straight after a cold start. The sidebar and dashboard already
     // decay the same map through isFreshNonDoneAgentStatus; sharing it is what keeps the notch
     // and the dashboard from reporting different numbers for the same agents.
-    if (!isFreshNonDoneAgentStatus({ state: entry.state, updatedAt: entry.receivedAt }, now)) {
+    if (
+      !isFreshNonDoneAgentStatus(
+        {
+          state: entry.state,
+          updatedAt: entry.receivedAt,
+          restoredUnconfirmed: entry.restoredUnconfirmed
+        },
+        now
+      )
+    ) {
       // `done` is exempt: it is a terminal state, not a heartbeat, and stays until acknowledged.
       if (entry.state !== 'done') {
         continue
