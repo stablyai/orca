@@ -14588,7 +14588,23 @@
         },
         "fileExplorerSystemOpen": {
           "failed": "No se pudo abrir «{{name}}» con la app predeterminada del sistema."
+        },
+        "fileExplorerOpenWith": {
+          "trigger": "Abrir con",
+          "systemDefault": "App predeterminada del sistema",
+          "choose": "Elegir app…",
+          "setDefault": "Abrir siempre {{type}} con",
+          "launchFailed": "No se pudo abrir el archivo con {{app}}."
         }
+      }
+    },
+    "settings": {
+      "openWithApplications": {
+        "title": "Apps de «Abrir con»",
+        "description": "Apps registradas desde el explorador de archivos y los tipos de archivo asignados.",
+        "empty": "Las apps que elijas en el menú «Abrir con» del explorador aparecerán aquí.",
+        "pinned": "Predeterminada para {{types}}",
+        "remove": "Quitar {{app}}"
       }
     }
   },

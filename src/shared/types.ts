@@ -2698,6 +2698,18 @@ export type OpenInApplication = {
   command: string
 }
 
+/**
+ * An app the user registered by picking it from the OS app picker, rather than
+ * by typing a CLI command. `applicationPath` is kept so the same bundle picked
+ * twice updates one row instead of stacking duplicates.
+ */
+export type OpenWithApplication = {
+  id: string
+  label: string
+  command: string
+  applicationPath: string
+}
+
 export type SourceControlViewMode = 'list' | 'tree'
 
 export type LeftSidebarAppearanceMode = 'default' | 'match-terminal' | 'tinted'
@@ -2879,6 +2891,10 @@ export type GlobalSettings = {
   nativeChatSessionOptions?: PersistedNativeChatSessionOptions
   /** Extra launcher rows for the worktree "Open in" submenu. VS Code is always shown first. */
   openInApplications?: OpenInApplication[]
+  /** Apps registered by picking a bundle/executable from the file explorer's "Open With" menu. */
+  openWithApplications?: OpenWithApplication[]
+  /** Lowercase file extension (with dot) → `openWithApplications` id used as that type's default. */
+  openWithDefaults?: Record<string, string>
   /** Deprecated: migration/backward-compat only. Use PersistedUIState.rightSidebarOpen. */
   rightSidebarOpenByDefault: boolean
   showGitIgnoredFiles?: boolean

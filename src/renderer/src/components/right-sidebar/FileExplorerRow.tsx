@@ -50,10 +50,9 @@ import { RENAME_HOTSPOT_ATTR } from './file-explorer-dir-toggle-timing'
 import type { TreeNode } from './file-explorer-types'
 import { useFileExplorerRowDrag } from './useFileExplorerRowDrag'
 import { showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
-import {
-  isFileExplorerLocalOpenBlocked,
-  openFileExplorerPathWithSystemDefault
-} from './file-explorer-system-open'
+import { isFileExplorerLocalOpenBlocked } from './file-explorer-system-open'
+import { openPathWithPreferredApplication } from './file-explorer-open-with-actions'
+import { FileExplorerOpenWithMenu } from './FileExplorerOpenWithMenu'
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/components/tab-bar/SortableTab'
@@ -812,7 +811,9 @@ export function FileExplorerRow({
             ) : null}
           </ContextMenuItem>
         )}
-        <ContextMenuItem onSelect={() => void openFileExplorerPathWithSystemDefault(node.path)}>
+        <ContextMenuItem
+          onSelect={() => void openPathWithPreferredApplication(node.path, connectionId ?? null)}
+        >
           <AppWindow />
           {node.isDirectory
             ? translate(
@@ -827,6 +828,9 @@ export function FileExplorerRow({
             <ContextMenuShortcut>{openWithSystemDefaultShortcutLabel}</ContextMenuShortcut>
           ) : null}
         </ContextMenuItem>
+        {!node.isDirectory && (
+          <FileExplorerOpenWithMenu path={node.path} connectionId={connectionId ?? null} />
+        )}
         <ContextMenuItem
           onSelect={() => {
             if (isFileExplorerLocalOpenBlocked(useAppStore.getState())) {

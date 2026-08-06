@@ -389,7 +389,8 @@ import type { SourceControlAiSettings } from '../shared/source-control-ai-types'
 import type {
   ShellOpenExternalEditorRequest,
   ShellOpenExternalEditorResult,
-  ShellOpenLocalPathResult
+  ShellOpenLocalPathResult,
+  ShellPickedApplication
 } from '../shared/shell-open-types'
 import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../shared/skills'
 import type {
@@ -411,7 +412,8 @@ import type { RendererHeapStatistics } from '../shared/renderer-heap-statistics'
 export type {
   ShellOpenExternalEditorRequest,
   ShellOpenExternalEditorResult,
-  ShellOpenLocalPathResult
+  ShellOpenLocalPathResult,
+  ShellPickedApplication
 } from '../shared/shell-open-types'
 
 type RuntimeEnvironmentSubscriptionHandle = {
@@ -2555,6 +2557,7 @@ export type PreloadApi = {
     openFilePath: (path: string) => Promise<boolean>
     openFileUri: (uri: string) => Promise<void>
     pathExists: (path: string) => Promise<boolean>
+    pickApplication: () => Promise<ShellPickedApplication | null>
     pickAttachment: () => Promise<string | null>
     pickImage: () => Promise<string | null>
     pickRepoIconImage: () => Promise<{ dataUrl: string; fileName: string } | null>

@@ -1,6 +1,7 @@
 import type React from 'react'
 import type { GlobalSettings } from '../../../../shared/types'
 import { OpenInMenuSetting } from './OpenInMenuSetting'
+import { OpenWithApplicationsSetting } from './OpenWithApplicationsSetting'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
 import { WorkspaceDirectorySetting } from './WorkspaceDirectorySetting'
@@ -150,6 +151,29 @@ export function GeneralWorkspaceSettingsSection({
         >
           <OpenInMenuSetting
             applications={settings.openInApplications}
+            updateSettings={updateSettings}
+          />
+        </SearchableSetting>
+
+        <SearchableSetting
+          title={translate('components.settings.openWithApplications.title', 'Open With Apps')}
+          description={translate(
+            'components.settings.openWithApplications.description',
+            'Apps registered from the file explorer, and the file types pinned to them.'
+          )}
+          keywords={[
+            'open with',
+            'default app',
+            'file type',
+            'extension',
+            'association',
+            'file explorer'
+          ]}
+          className="space-y-3"
+        >
+          <OpenWithApplicationsSetting
+            applications={settings.openWithApplications}
+            defaults={settings.openWithDefaults}
             updateSettings={updateSettings}
           />
         </SearchableSetting>

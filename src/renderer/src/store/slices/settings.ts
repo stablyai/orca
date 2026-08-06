@@ -13,6 +13,7 @@ import { normalizeTerminalQuickCommands } from '../../../../shared/terminal-quic
 import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-custom-themes'
 import { normalizeTaskProviderSettings } from '../../../../shared/task-providers'
 import { normalizeOpenInApplications } from '../../../../shared/open-in-applications'
+import { normalizeOpenWithSettings } from '../../../../shared/open-with-applications'
 import { createSettingsSearchState, type SettingsSearchState } from './settings-search-state'
 import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
 import {
@@ -89,6 +90,15 @@ function normalizeSettingsUpdates(
     sanitizedUpdates.openInApplications = normalizeOpenInApplications(updates.openInApplications, {
       createId: createOpenInApplicationId
     })
+  }
+  if ('openWithApplications' in updates || 'openWithDefaults' in updates) {
+    const merged = normalizeOpenWithSettings(updates.openWithApplications, updates.openWithDefaults)
+    if ('openWithApplications' in updates) {
+      sanitizedUpdates.openWithApplications = merged.openWithApplications
+    }
+    if ('openWithDefaults' in updates) {
+      sanitizedUpdates.openWithDefaults = merged.openWithDefaults
+    }
   }
   if ('disabledTuiAgents' in updates) {
     sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)

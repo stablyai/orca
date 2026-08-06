@@ -181,6 +181,7 @@ import {
   normalizeMobilePairingCustomAddresses
 } from '../shared/mobile-pairing-custom-address'
 import { normalizeOpenInApplications } from '../shared/open-in-applications'
+import { normalizeOpenWithSettings } from '../shared/open-with-applications'
 import { normalizeTerminalShortcutPolicy } from '../shared/keybindings'
 import { normalizeAppIconId } from '../shared/app-icon'
 import { normalizeTerminalCustomThemes } from '../shared/terminal-custom-themes'
@@ -3418,6 +3419,10 @@ export class Store {
             openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications, {
               seedDefaults: true
             }),
+            ...normalizeOpenWithSettings(
+              parsed.settings?.openWithApplications,
+              parsed.settings?.openWithDefaults
+            ),
             notifications: normalizeNotificationSettings(parsed.settings?.notifications),
             sourceControlAi: migratedSourceControlAi,
             // Why: rollback builds still read commitMessageAi, so refresh the legacy projection from sourceControlAi for compat.
@@ -5752,6 +5757,20 @@ export class Store {
     }
     if ('openInApplications' in updates) {
       sanitizedUpdates.openInApplications = normalizeOpenInApplications(updates.openInApplications)
+    }
+    if ('openWithApplications' in updates || 'openWithDefaults' in updates) {
+      // Why: the two fields are cross-validated, so a lone update still has to
+      // re-check the other against the stored value or a rule can outlive its app.
+      const merged = normalizeOpenWithSettings(
+        'openWithApplications' in updates
+          ? updates.openWithApplications
+          : this.state.settings.openWithApplications,
+        'openWithDefaults' in updates
+          ? updates.openWithDefaults
+          : this.state.settings.openWithDefaults
+      )
+      sanitizedUpdates.openWithApplications = merged.openWithApplications
+      sanitizedUpdates.openWithDefaults = merged.openWithDefaults
     }
     if ('terminalShortcutPolicy' in updates) {
       sanitizedUpdates.terminalShortcutPolicy = normalizeTerminalShortcutPolicy(

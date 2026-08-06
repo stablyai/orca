@@ -14588,7 +14588,23 @@
         },
         "fileExplorerSystemOpen": {
           "failed": "「{{name}}」をシステムの既定アプリで開けませんでした。"
+        },
+        "fileExplorerOpenWith": {
+          "trigger": "このアプリケーションで開く",
+          "systemDefault": "システム既定のアプリ",
+          "choose": "アプリを選択…",
+          "setDefault": "{{type}} を常にこのアプリで開く",
+          "launchFailed": "{{app}} でファイルを開けませんでした。"
         }
+      }
+    },
+    "settings": {
+      "openWithApplications": {
+        "title": "「このアプリで開く」のアプリ",
+        "description": "ファイルエクスプローラーから登録したアプリと、割り当てたファイルタイプ。",
+        "empty": "ファイルエクスプローラーの「このアプリケーションで開く」で選んだアプリがここに表示されます。",
+        "pinned": "{{types}} の既定アプリ",
+        "remove": "{{app}} を削除"
       }
     }
   },
