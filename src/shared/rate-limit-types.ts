@@ -54,6 +54,7 @@ export type ProviderRateLimits = {
     | 'kimi'
     | 'minimax'
     | 'grok'
+    | 'deepseek'
     | 'antigravity'
   /** 5-hour session window, null if not available. */
   session: RateLimitWindow | null
@@ -124,6 +125,7 @@ export type RateLimitState = {
   antigravity: ProviderRateLimits | null
   minimax: ProviderRateLimits | null
   grok: ProviderRateLimits | null
+  deepseek: ProviderRateLimits | null
   /**
    * True when a MiniMax session cookie is persisted on disk. The cookie lives
    * outside GlobalSettings, so this flag is the durable signal that the
@@ -133,6 +135,8 @@ export type RateLimitState = {
   minimaxCookieConfigured: boolean
   /** True when main finds a Grok CLI session file (~/.grok/auth.json or GROK_HOME). */
   grokAuthConfigured: boolean
+  /** True when DEEPSEEK_API_KEY is set in the environment for the main process. */
+  deepseekAuthConfigured: boolean
   claudeTarget: RateLimitRuntimeTarget
   codexTarget: RateLimitRuntimeTarget
   inactiveClaudeAccounts: InactiveAccountUsage[]

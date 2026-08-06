@@ -13,6 +13,7 @@ import { fetchKimiRateLimits } from './kimi-fetcher'
 import { fetchMiniMaxRateLimits } from './minimax-fetcher'
 import { fetchGrokRateLimits } from './grok-fetcher'
 import { readGrokAuthSession } from './grok-auth'
+import { fetchDeepSeekRateLimits } from './deepseek-fetcher'
 import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
 import { hasMiniMaxSessionCookie } from '../minimax/minimax-cookie-store'
 
@@ -44,6 +45,11 @@ vi.mock('./minimax-fetcher', () => ({
 
 vi.mock('./grok-fetcher', () => ({
   fetchGrokRateLimits: vi.fn()
+}))
+
+vi.mock('./deepseek-fetcher', () => ({
+  fetchDeepSeekRateLimits: vi.fn(),
+  isDeepSeekAuthConfigured: vi.fn(() => false)
 }))
 
 vi.mock('./grok-auth', () => ({
@@ -132,6 +138,7 @@ function mockFreshBackgroundProviderFetches(): void {
   vi.mocked(fetchKimiRateLimits).mockImplementation(async () => okProvider('kimi', 0))
   vi.mocked(fetchMiniMaxRateLimits).mockImplementation(async () => okProvider('minimax', 0))
   vi.mocked(fetchGrokRateLimits).mockImplementation(async () => unavailableProvider('grok'))
+  vi.mocked(fetchDeepSeekRateLimits).mockImplementation(async () => unavailableProvider('deepseek'))
 }
 
 function serviceInternals(service: RateLimitService): { fetchAll: () => Promise<void> } {
@@ -179,6 +186,14 @@ describe('RateLimitService', () => {
     vi.mocked(fetchMiniMaxRateLimits).mockResolvedValue(okProvider('minimax', 0, Date.now()))
     vi.mocked(fetchGrokRateLimits).mockResolvedValue({
       provider: 'grok',
+      session: null,
+      weekly: null,
+      updatedAt: Date.now(),
+      error: null,
+      status: 'unavailable'
+    })
+    vi.mocked(fetchDeepSeekRateLimits).mockResolvedValue({
+      provider: 'deepseek',
       session: null,
       weekly: null,
       updatedAt: Date.now(),
@@ -239,6 +254,7 @@ describe('RateLimitService', () => {
     expect(fetchOpenCodeGoRateLimits).not.toHaveBeenCalled()
     expect(fetchKimiRateLimits).not.toHaveBeenCalled()
     expect(fetchMiniMaxRateLimits).not.toHaveBeenCalled()
+    expect(fetchDeepSeekRateLimits).not.toHaveBeenCalled()
     expect(service.getState().grokAuthConfigured).toBe(true)
     expect(service.getState().grok?.status).toBe('ok')
   })

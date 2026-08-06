@@ -21,5 +21,8 @@ export function getUsageProviderAccountsSectionId(
     case 'kimi':
       // Why: Orca must not mutate Kimi's CLI-owned credential lifecycle.
       return null
+    case 'deepseek':
+      // Why: v1 uses DEEPSEEK_API_KEY env only — no Accounts UI yet.
+      return null
   }
 }
