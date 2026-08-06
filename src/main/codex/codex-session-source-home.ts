@@ -1,3 +1,5 @@
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import type { GlobalSettings } from '../../shared/types'
 
 /**
@@ -14,7 +16,7 @@ import type { GlobalSettings } from '../../shared/types'
 export function resolveHostCodexSessionSourceHome(
   settings: Pick<GlobalSettings, 'codexSessionSourceHome'>
 ): string | undefined {
-  return normalizeSourceHome(settings.codexSessionSourceHome?.host)
+  return expandHostHomePrefix(normalizeSourceHome(settings.codexSessionSourceHome?.host))
 }
 
 /** Per-distro WSL override; returns undefined to keep the default <wslHome>/.codex source. */
@@ -40,4 +42,20 @@ export function resolveWslCodexSessionSourceHome(
 function normalizeSourceHome(value: string | undefined): string | undefined {
   const trimmed = value?.trim()
   return trimmed ? trimmed : undefined
+}
+
+/**
+ * Why: the settings field's placeholder is literally `~/.codex`, so a leading
+ * `~` is the natural thing to type. Nothing else expands it, so an unexpanded
+ * one silently resolves to no sessions at all — the very symptom the override
+ * exists to fix. Host-only: a WSL override names a path inside the distro.
+ */
+function expandHostHomePrefix(value: string | undefined): string | undefined {
+  if (value === '~') {
+    return homedir()
+  }
+  if (!value?.startsWith('~/') && !value?.startsWith('~\\')) {
+    return value
+  }
+  return join(homedir(), value.slice(2))
 }

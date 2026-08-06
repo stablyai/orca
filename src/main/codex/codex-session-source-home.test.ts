@@ -1,3 +1,5 @@
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   resolveHostCodexSessionSourceHome,
@@ -20,6 +22,26 @@ describe('resolveHostCodexSessionSourceHome', () => {
     expect(
       resolveHostCodexSessionSourceHome({ codexSessionSourceHome: { host: '  /custom/codex  ' } })
     ).toBe('/custom/codex')
+  })
+
+  // The field's placeholder is `~/.codex`, so `~` is what users type; nothing
+  // downstream expands it, and an unexpanded path finds no sessions.
+  it('expands a leading ~ against the host home', () => {
+    expect(
+      resolveHostCodexSessionSourceHome({ codexSessionSourceHome: { host: '~/.codex-chatgpt' } })
+    ).toBe(join(homedir(), '.codex-chatgpt'))
+    expect(resolveHostCodexSessionSourceHome({ codexSessionSourceHome: { host: '~' } })).toBe(
+      homedir()
+    )
+  })
+
+  it('leaves a ~ that is not a home prefix alone', () => {
+    expect(
+      resolveHostCodexSessionSourceHome({ codexSessionSourceHome: { host: '/codex/~backup' } })
+    ).toBe('/codex/~backup')
+    expect(resolveHostCodexSessionSourceHome({ codexSessionSourceHome: { host: '~codex' } })).toBe(
+      '~codex'
+    )
   })
 })
 
