@@ -309,6 +309,9 @@ describe('registerWorktreeHandlers', () => {
     getWorktreeMeta: vi.fn(),
     getAllWorktreeMeta: vi.fn(),
     setWorktreeMeta: vi.fn(),
+    setWorktreeLineage: vi.fn(),
+    setWorkspaceLineage: vi.fn(),
+    getFolderWorkspace: vi.fn(),
     getProjectHostSetups: vi.fn(),
     removeWorktreeMeta: vi.fn(),
     removeWorkspaceSessionStateForWorktree: vi.fn(),
@@ -332,6 +335,7 @@ describe('registerWorktreeHandlers', () => {
     createTerminal: ReturnType<typeof vi.fn>
     splitTerminal: ReturnType<typeof vi.fn>
     notifyWorktreesChangedForRemoteClients: ReturnType<typeof vi.fn>
+    invalidateWorktreeCachesForRepo: ReturnType<typeof vi.fn>
     closeFileWatchersForRemoval: ReturnType<typeof vi.fn>
     acquireFileWatcherRemoval: ReturnType<typeof vi.fn>
     hydrateInferredWorktreeLineage: ReturnType<typeof vi.fn>
@@ -392,6 +396,9 @@ describe('registerWorktreeHandlers', () => {
       store.getWorktreeMeta,
       store.getAllWorktreeMeta,
       store.setWorktreeMeta,
+      store.setWorktreeLineage,
+      store.setWorkspaceLineage,
+      store.getFolderWorkspace,
       store.getProjectHostSetups,
       store.removeWorktreeMeta,
       store.removeWorkspaceSessionStateForWorktree,
@@ -449,6 +456,9 @@ describe('registerWorktreeHandlers', () => {
     store.getWorktreeMeta.mockReturnValue(undefined)
     store.getAllWorktreeMeta.mockReturnValue({})
     store.setWorktreeMeta.mockReturnValue({})
+    store.setWorktreeLineage.mockImplementation((_worktreeId, lineage) => lineage)
+    store.setWorkspaceLineage.mockImplementation((lineage) => lineage)
+    store.getFolderWorkspace.mockReturnValue(undefined)
     store.getProjectHostSetups.mockReturnValue([
       {
         id: 'repo-1',
@@ -557,6 +567,7 @@ describe('registerWorktreeHandlers', () => {
         paneRuntimeId: -1
       }),
       notifyWorktreesChangedForRemoteClients: vi.fn(),
+      invalidateWorktreeCachesForRepo: vi.fn(),
       closeFileWatchersForRemoval: vi.fn().mockResolvedValue(undefined),
       acquireFileWatcherRemoval: vi.fn(),
       hydrateInferredWorktreeLineage: vi.fn().mockResolvedValue(undefined)
@@ -896,6 +907,54 @@ describe('registerWorktreeHandlers', () => {
     )?.[1]
     expect(persistedMeta).toBeDefined()
     expect(persistedMeta).not.toHaveProperty('automationProvenance')
+  })
+
+  it('records worktree and workspace lineage when creating a child worktree', async () => {
+    const parentId = 'repo-1::/workspace/repo'
+    const childId = 'repo-1::/workspace/child-feature'
+    store.getWorktreeMeta.mockImplementation((worktreeId) =>
+      worktreeId === parentId ? { instanceId: 'parent-instance' } : undefined
+    )
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => ({
+      ...meta,
+      instanceId: 'child-instance'
+    }))
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/child-feature',
+        head: 'abc123',
+        branch: 'child-feature',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = (await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'child-feature',
+      parentWorkspace: `worktree:${parentId}`
+    })) as CreateWorktreeResult
+
+    expect(store.setWorktreeLineage).toHaveBeenCalledWith(
+      childId,
+      expect.objectContaining({
+        worktreeId: childId,
+        worktreeInstanceId: 'child-instance',
+        parentWorktreeId: parentId,
+        parentWorktreeInstanceId: 'parent-instance'
+      })
+    )
+    expect(store.setWorkspaceLineage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        childWorkspaceKey: `worktree:${childId}`,
+        childInstanceId: 'child-instance',
+        parentWorkspaceKey: `worktree:${parentId}`,
+        parentInstanceId: 'parent-instance'
+      })
+    )
+    expect(runtimeStub.invalidateWorktreeCachesForRepo).toHaveBeenCalledWith('repo-1')
+    expect(result.worktree.parentWorktreeId).toBe(parentId)
+    expect(result.lineage).toBe(result.worktree.lineage)
   })
 
   it('auto-suffixes the branch name when the first choice collides with a remote branch', async () => {
@@ -4555,14 +4614,22 @@ describe('registerWorktreeHandlers', () => {
       request: vi.fn().mockResolvedValue(undefined),
       notify: vi.fn()
     }
-    store.getRepos.mockReturnValue([repo])
-    store.getRepo.mockReturnValue(repo)
+    const localRepo = {
+      ...repo,
+      path: '/local/repo',
+      displayName: 'local',
+      connectionId: undefined,
+      executionHostId: 'local' as const
+    }
+    store.getRepos.mockReturnValue([localRepo, repo])
+    store.getRepo.mockReturnValue(localRepo)
     getSshGitProviderMock.mockReturnValue(provider)
     getActiveMultiplexerMock.mockReturnValue(mux)
     store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
 
     const result = await handlers['worktrees:create'](null, {
       repoId: 'repo-ssh',
+      executionHostId: 'ssh:conn-1',
       name: 'improve-dashboard',
       linkedIssue: 123,
       linkedPR: 456,

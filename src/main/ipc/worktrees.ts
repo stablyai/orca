@@ -2176,7 +2176,9 @@ export function registerWorktreeHandlers(
       const args = normalizeLinkedWorkItemFields(rawArgs)
       // Why span here: parent the child git spans for the trace tree; don't attach branch name/remote URL (user content) — repo ID is the safer correlator.
       return withWorktreeSpan({ stage: 'create' }, async () => {
-        const repo = store.getRepo(args.repoId)
+        const repo = args.executionHostId
+          ? findExactRepoOwner(store, args.repoId, args.executionHostId)
+          : store.getRepo(args.repoId)
         if (!repo) {
           throw new Error(`Repo not found: ${args.repoId}`)
         }
@@ -2201,7 +2203,7 @@ export function registerWorktreeHandlers(
           result = isFolderRepo(repo)
             ? createFolderWorkspace(createArgs, repo, store)
             : repo.connectionId
-              ? await createRemoteWorktree(createArgs, repo, store, mainWindow)
+              ? await createRemoteWorktree(createArgs, repo, store, mainWindow, runtime)
               : await createLocalWorktree(createArgs, repo, store, mainWindow, runtime)
         } catch (error) {
           releaseAutomationWorkspaceProvenanceRequest(args.automationProvenanceRequest)

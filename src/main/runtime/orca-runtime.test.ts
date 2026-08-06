@@ -37982,6 +37982,71 @@ describe('OrcaRuntimeService', () => {
     expect(listWorktrees).toHaveBeenCalledTimes(1)
   })
 
+  it('worktree scan cache: does not prune lineage from a cached pre-create scan', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    const childId = `${TEST_REPO_ID}::/tmp/worktree-child`
+    const lineageById: Record<string, WorktreeLineage> = {}
+    const removeWorktreeLineage = vi.fn((worktreeId: string) => {
+      delete lineageById[worktreeId]
+    })
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getAllWorktreeLineage: () => lineageById,
+      removeWorktreeLineage
+    } as never)
+
+    await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+    lineageById[childId] = {
+      worktreeId: childId,
+      worktreeInstanceId: 'child-instance',
+      parentWorktreeId: TEST_WORKTREE_ID,
+      parentWorktreeInstanceId: 'parent-instance',
+      origin: 'manual',
+      capture: { source: 'manual-action', confidence: 'explicit' },
+      createdAt: 1
+    }
+    await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+
+    expect(listWorktrees).toHaveBeenCalledTimes(1)
+    expect(removeWorktreeLineage).not.toHaveBeenCalled()
+    expect(lineageById[childId]).toBeTruthy()
+  })
+
+  it('worktree scan cache: does not prune lineage from an invalidated in-flight scan', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    const childId = `${TEST_REPO_ID}::/tmp/worktree-child`
+    const pending = deferred<ReturnType<typeof makeWorktreeInfo>[]>()
+    const lineageById: Record<string, WorktreeLineage> = {
+      [childId]: {
+        worktreeId: childId,
+        worktreeInstanceId: 'child-instance',
+        parentWorktreeId: TEST_WORKTREE_ID,
+        parentWorktreeInstanceId: 'parent-instance',
+        origin: 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt: 1
+      }
+    }
+    const removeWorktreeLineage = vi.fn((worktreeId: string) => {
+      delete lineageById[worktreeId]
+    })
+    vi.mocked(listWorktrees).mockReturnValueOnce(pending.promise)
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getAllWorktreeLineage: () => lineageById,
+      removeWorktreeLineage
+    } as never)
+
+    const detected = runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+    await Promise.resolve()
+    runtime.notifyWorktreesChangedForRemoteClients(TEST_REPO_ID)
+    pending.resolve([makeWorktreeInfo(TEST_WORKTREE_PATH)])
+    await detected
+
+    expect(removeWorktreeLineage).not.toHaveBeenCalled()
+    expect(lineageById[childId]).toBeTruthy()
+  })
+
   it('worktree scan cache: rescans immediately after worktree invalidation', async () => {
     vi.mocked(listWorktrees).mockClear()
     const runtime = createRuntime()
@@ -38015,14 +38080,14 @@ describe('OrcaRuntimeService', () => {
     expect(listWorktrees).toHaveBeenNthCalledWith(3, '/tmp/repo-a')
   })
 
-  it('worktree scan cache: metadata invalidation preserves raw scans', async () => {
+  it('worktree scan cache: worktree changes invalidate raw scans', async () => {
     vi.mocked(listWorktrees).mockClear()
     const runtime = createRuntime()
     await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
     runtime.notifyWorktreesChangedForRemoteClients(TEST_REPO_ID)
     await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
 
-    expect(listWorktrees).toHaveBeenCalledTimes(1)
+    expect(listWorktrees).toHaveBeenCalledTimes(2)
   })
 
   // #11994: the host renderer already applied its own repos:changed, so re-notifying it
@@ -43880,6 +43945,37 @@ describe('OrcaRuntimeService', () => {
 
       expect(worktree.id).toBe(`${TEST_REPO_ID}::${duplicatePath}`)
       expect(worktree.path).toBe(duplicatePath)
+    } finally {
+      getRepos.mockRestore()
+    }
+  })
+
+  it('resolves duplicate repo ids by execution host', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const getRepos = vi.spyOn(store, 'getRepos').mockReturnValue([
+      {
+        id: TEST_REPO_ID,
+        path: TEST_REPO_PATH,
+        displayName: 'local repo',
+        badgeColor: 'blue',
+        addedAt: 1
+      },
+      {
+        id: TEST_REPO_ID,
+        path: '/srv/nested/repo',
+        displayName: 'nested repo',
+        badgeColor: 'red',
+        addedAt: 2,
+        connectionId: 'nested-host'
+      }
+    ] as never)
+
+    try {
+      await expect(runtime.showRepo(TEST_REPO_ID)).rejects.toThrow('selector_ambiguous')
+      await expect(runtime.showRepo(TEST_REPO_ID, 'ssh:nested-host')).resolves.toMatchObject({
+        path: '/srv/nested/repo',
+        connectionId: 'nested-host'
+      })
     } finally {
       getRepos.mockRestore()
     }

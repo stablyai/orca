@@ -198,6 +198,10 @@ export type WorktreeSlice = {
       automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest']
       linkedWorkItem?: WorkspaceLinkedItem | null
       linkedTaskSourceContext?: TaskSourceContext | null
+      /** Explicit lineage placement. null keeps the new worktree at repo root. */
+      parentWorkspace?: CreateWorktreeArgs['parentWorkspace'] | null
+      executionHostId?: ExecutionHostId
+      runtimeOwnerEnvironmentId?: string | null
     }
   ) => Promise<CreateWorktreeResult>
   /** Register an in-flight background creation and make it the active surface. */

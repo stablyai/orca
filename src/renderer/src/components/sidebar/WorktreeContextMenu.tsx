@@ -28,7 +28,9 @@ import {
   Workflow,
   FolderInput,
   FolderPlus,
-  FolderTree
+  FolderTree,
+  GitBranchPlus,
+  GitFork
 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
@@ -54,6 +56,11 @@ import { WorktreeOpenInSubMenu } from './WorktreeOpenInMenu'
 import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
 import { WorktreeParentPickerPopover } from './WorktreeParentPickerPopover'
 import { WorktreeDeveloperMenu } from './WorktreeDeveloperMenu'
+import { RelativeWorktreeCreateDialog } from './RelativeWorktreeCreateDialog'
+import {
+  getRelativeWorktreeParent,
+  type RelativeWorktreeCreateKind
+} from './worktree-relative-create'
 import { getEligibleWorktreeParents } from './worktree-parent-candidates'
 import {
   hasSleepableWorkspaceActivity,
@@ -345,6 +352,10 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     effectiveSelectedWorktrees
   )
   const [createGroupDialogOpen, setCreateGroupDialogOpen] = useState(false)
+  const [relativeCreateRequest, setRelativeCreateRequest] = useState<{
+    kind: RelativeWorktreeCreateKind
+    parentWorkspace: ReturnType<typeof getRelativeWorktreeParent>
+  } | null>(null)
   const [parentPicker, setParentPicker] = useState<{
     childWorktreeId: string
     anchorElement: HTMLElement
@@ -470,6 +481,13 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     [cyclicLineageIds, worktree, worktreeLineageById, worktreeMap]
   )
   const validParentWorktreeId = lineageInfo.state === 'valid' ? lineageInfo.parent.id : null
+  const contextWorkspaceLineage = workspaceLineageByChildKey[worktreeWorkspaceKey(worktree.id)]
+  const relativeCreateDisabled =
+    isDeleting ||
+    repo?.kind === 'folder' ||
+    !worktree.branch?.trim() ||
+    worktree.isArchived ||
+    worktree.isBare
   const hasAnyContextLineage = activeContextWorktrees.some((item) =>
     hasWorktreeParentLink(item, worktreeLineageById, workspaceLineageByChildKey)
   )
@@ -616,6 +634,21 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     worktree.comment,
     openModal
   ])
+
+  const handleRelativeCreate = useCallback(
+    (kind: RelativeWorktreeCreateKind) => {
+      setRelativeCreateRequest({
+        kind,
+        parentWorkspace: getRelativeWorktreeParent({
+          kind,
+          worktree,
+          workspaceLineage: contextWorkspaceLineage,
+          validParentWorktreeId
+        })
+      })
+    },
+    [contextWorkspaceLineage, validParentWorktreeId, worktree]
+  )
 
   const sleepWorktreesAfterMenuClose = useCallback(
     (worktreeIds: string[]) => {
@@ -832,10 +865,29 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
             {translate('auto.components.sidebar.WorktreeContextMenu.workspaceSection', 'Workspace')}
           </DropdownMenuLabel>
           {!isMultiContext && (
-            <DropdownMenuItem onSelect={handleRename} disabled={isDeleting}>
-              <Pencil className="size-3.5" />
-              {translate('auto.components.sidebar.WorktreeContextMenu.439fa94d53', 'Update')}
-            </DropdownMenuItem>
+            <>
+              <DropdownMenuItem onSelect={handleRename} disabled={isDeleting}>
+                <Pencil className="size-3.5" />
+                {translate('auto.components.sidebar.WorktreeContextMenu.439fa94d53', 'Update')}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => handleRelativeCreate('fork')}
+                disabled={relativeCreateDisabled}
+              >
+                <GitFork className="size-3.5" />
+                {translate('auto.components.sidebar.WorktreeContextMenu.forkWorktree', 'Fork')}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => handleRelativeCreate('child')}
+                disabled={relativeCreateDisabled}
+              >
+                <GitBranchPlus className="size-3.5" />
+                {translate(
+                  'auto.components.sidebar.WorktreeContextMenu.createChildWorktree',
+                  'Create Child'
+                )}
+              </DropdownMenuItem>
+            </>
           )}
           <DropdownMenuSub>
             <DropdownMenuSubTrigger disabled={deletingContext}>
@@ -1091,6 +1143,18 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
         onOpenChange={setCreateGroupDialogOpen}
         onSubmit={handleSubmitNewProjectGroup}
       />
+      {relativeCreateRequest ? (
+        <RelativeWorktreeCreateDialog
+          kind={relativeCreateRequest.kind}
+          worktree={worktree}
+          parentWorkspace={relativeCreateRequest.parentWorkspace}
+          onOpenChange={(open) => {
+            if (!open) {
+              setRelativeCreateRequest(null)
+            }
+          }}
+        />
+      ) : null}
       {/* Why: mounted only while open — one instance of this lives behind every
           worktree card, and each one subscribes to the worktree and lineage
           maps just to compute parent candidates it will never show. Closing

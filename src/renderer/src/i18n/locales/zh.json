@@ -4539,10 +4539,23 @@
           "697d0f6e1b": "取消固定",
           "250de158fd": "移除工作区",
           "changeParentWorkspace": "更改父工作树...",
+          "createChildWorktree": "创建子工作树",
+          "forkWorktree": "Fork 工作树",
           "setParentWorkspace": "设置父工作树...",
           "workspaceSection": "工作区",
           "primaryDeleteDisabled": "主工作树不能删除。请改为移除项目。",
           "deleteWorktree": "删除工作树"
+        },
+        "RelativeWorktreeCreateDialog": {
+          "branchName": "分支名称",
+          "cancel": "取消",
+          "childAction": "创建子工作树",
+          "childTitle": "创建子工作树",
+          "createFailed": "无法创建工作树。",
+          "creating": "正在创建…",
+          "description": "从当前分支创建一个新工作树。",
+          "forkAction": "Fork",
+          "forkTitle": "Fork 工作树"
         },
         "WorktreeList": {
           "d880ea0744": "创建一个组并将该项目移入其中。",

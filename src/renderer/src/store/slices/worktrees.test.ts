@@ -163,6 +163,7 @@ import {
   resetAuthoritativelyRemovedWorktreeMemoryForTests,
   resetHostedReviewLinkMutationGenerationForTests
 } from './worktrees'
+import { resolveCreateParentWorkspace } from './worktree-create-parent-workspace'
 import type { PendingWorktreeCreation } from '@/lib/pending-worktree-creation'
 import { getHostedReviewCacheKey } from './hosted-review'
 import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from './github-cache-key'
@@ -4541,6 +4542,16 @@ describe('createWorktree base status merge', () => {
     })
   })
 
+  it('honors explicit parent placement over the active folder workspace', () => {
+    expect(
+      resolveCreateParentWorkspace(
+        folderWorkspaceKey('active-folder'),
+        worktreeWorkspaceKey('repo1::/path/parent')
+      )
+    ).toBe(worktreeWorkspaceKey('repo1::/path/parent'))
+    expect(resolveCreateParentWorkspace(folderWorkspaceKey('active-folder'), null)).toBeUndefined()
+  })
+
   it('merges create result metadata into a worktree inserted by the watcher race', async () => {
     const store = createTestStore()
     const watcherWorktree = makeWorktree({
@@ -5557,6 +5568,114 @@ describe('worktree remote runtime mutations', () => {
     expect(mockApi.worktrees.create).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo.repo1).toEqual([wt])
   })
+
+  it('routes creation through the selected worktree runtime owner instead of the focused runtime', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/feature',
+      repoId: 'repo1',
+      path: '/path/feature',
+      hostId: 'ssh:ssh-1'
+    })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-create-selected-owner',
+      ok: true,
+      result: { worktree: wt },
+      _meta: { runtimeId: 'runtime-selected' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-focused' } as never,
+      repos: [
+        {
+          id: 'repo1',
+          path: '/focused/repo',
+          displayName: 'focused',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: 'runtime:env-focused'
+        },
+        {
+          id: 'repo1',
+          path: '/selected/repo',
+          displayName: 'selected',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: 'runtime:env-selected'
+        }
+      ],
+      worktreesByRepo: { repo1: [] }
+    } as Partial<AppState>)
+    const args: Parameters<AppState['createWorktree']> = ['repo1', 'feature', 'origin/main']
+    args[25] = {
+      executionHostId: 'ssh:ssh-1',
+      runtimeOwnerEnvironmentId: 'env-selected'
+    }
+
+    await store.getState().createWorktree(...args)
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'env-selected',
+        method: 'worktree.create',
+        params: expect.objectContaining({
+          repo: 'repo1',
+          executionHostId: 'ssh:ssh-1'
+        })
+      })
+    )
+    expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
+      hostId: 'ssh:ssh-1',
+      runtimeOwnerEnvironmentId: 'env-selected'
+    })
+  })
+
+  it.each(['local', 'ssh:ssh-1'] as const)(
+    'keeps %s creation on the desktop provider when a runtime is focused',
+    async (executionHostId) => {
+      const store = createTestStore()
+      const wt = makeWorktree({
+        id: 'repo1::/path/feature',
+        repoId: 'repo1',
+        path: '/path/feature',
+        hostId: executionHostId
+      })
+      store.setState({
+        settings: { activeRuntimeEnvironmentId: 'env-focused' } as never,
+        repos: [
+          {
+            id: 'repo1',
+            path: '/focused/repo',
+            displayName: 'focused',
+            badgeColor: '#000',
+            addedAt: 0,
+            executionHostId: 'runtime:env-focused'
+          },
+          {
+            id: 'repo1',
+            path: '/selected/repo',
+            displayName: 'selected',
+            badgeColor: '#000',
+            addedAt: 0,
+            ...(executionHostId === 'local'
+              ? { executionHostId: 'local' as const }
+              : { connectionId: 'ssh-1', executionHostId })
+          }
+        ],
+        worktreesByRepo: { repo1: [] }
+      } as Partial<AppState>)
+      mockApi.worktrees.create.mockResolvedValue({ worktree: wt })
+      const args: Parameters<AppState['createWorktree']> = ['repo1', 'feature', 'origin/main']
+      args[25] = { executionHostId }
+
+      await store.getState().createWorktree(...args)
+
+      expect(mockApi.worktrees.create).toHaveBeenCalledWith(
+        expect.objectContaining({ executionHostId })
+      )
+      expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+      expect(store.getState().worktreesByRepo.repo1[0]?.hostId).toBe(executionHostId)
+    }
+  )
 
   it('persists Jira item and source context through paired-runtime create', async () => {
     const store = createTestStore()

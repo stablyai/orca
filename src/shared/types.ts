@@ -2233,6 +2233,8 @@ export type SparsePreset = {
 
 export type CreateWorktreeArgs = {
   repoId: string
+  /** Desktop execution host that owns this repo when repo IDs are duplicated across hosts. */
+  executionHostId?: ExecutionHostId
   name: string
   /** Optional user-facing label to persist separately from the git-safe
    *  branch/path seed. Used when a workspace is created from a GitHub or

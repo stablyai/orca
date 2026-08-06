@@ -2081,6 +2081,23 @@ function runtimeRepoMatchesExecutionHost(
   return repo.connectionId == null
 }
 
+function runtimeRepoMatchesResolvedExecutionHost(
+  repo: Pick<Repo, 'connectionId' | 'executionHostId'>,
+  executionHostId?: ExecutionHostId | null
+): boolean {
+  if (executionHostId == null) {
+    return true
+  }
+  if (repo.executionHostId != null) {
+    return repo.executionHostId === executionHostId
+  }
+  const parsedHost = parseExecutionHostId(executionHostId)
+  if (parsedHost?.kind === 'ssh') {
+    return repo.connectionId === parsedHost.targetId
+  }
+  return repo.connectionId == null
+}
+
 // Why: this runtime only has local git and local fs, so an ssh: host here would clone and
 // probe the wrong machine and then register the result as remote. SSH setup is owned by the
 // desktop IPC path (addRemoteRepoFromPath / cloneRemoteRepo), which the renderer routes to;
@@ -2572,8 +2589,8 @@ type WorktreeLineageResolution =
     }
 
 type RuntimeWorktreeScanResult =
-  | { ok: true; worktrees: GitWorktreeInfo[] }
-  | { ok: false; worktrees: GitWorktreeInfo[] }
+  | { ok: true; worktrees: GitWorktreeInfo[]; authoritativeForPrune?: boolean }
+  | { ok: false; worktrees: GitWorktreeInfo[]; authoritativeForPrune?: boolean }
 
 type RuntimeWorktreeScanCache = {
   generation: number
@@ -5290,7 +5307,7 @@ export class OrcaRuntimeService {
   // notifier (the renderer already applied them optimistically), but remote
   // clients hold no optimistic copy and need the invalidation event.
   notifyWorktreesChangedForRemoteClients(repoId: string): void {
-    this.invalidateResolvedWorktreeCache()
+    this.invalidateWorktreeCachesForRepo(repoId)
     this.emitClientEvent({ type: 'worktreesChanged', repoId })
   }
 
@@ -5299,6 +5316,11 @@ export class OrcaRuntimeService {
   // got its own repos:changed and must not be re-notified (#11994).
   notifyReposChangedForRemoteClients(): void {
     this.emitClientEvent({ type: 'reposChanged' })
+  }
+
+  invalidateWorktreeCachesForRepo(repoId: string): void {
+    this.invalidateResolvedWorktreeCache()
+    this.invalidateWorktreeScanCacheForRepo(repoId)
   }
 
   private notifyActivateWorktree(
@@ -18775,8 +18797,8 @@ export class OrcaRuntimeService {
     return this.store.getRepo(repo.id) ?? repo
   }
 
-  async showRepo(repoSelector: string): Promise<Repo> {
-    return await this.resolveRepoSelector(repoSelector)
+  async showRepo(repoSelector: string, executionHostId?: ExecutionHostId): Promise<Repo> {
+    return await this.resolveRepoSelector(repoSelector, executionHostId)
   }
 
   async setRepoBaseRef(repoSelector: string, baseRef: string): Promise<Repo> {
@@ -20311,8 +20333,8 @@ export class OrcaRuntimeService {
     }
   }
 
-  async checkRepoHooks(repoSelector: string) {
-    const repo = await this.resolveRepoSelector(repoSelector)
+  async checkRepoHooks(repoSelector: string, executionHostId?: ExecutionHostId) {
+    const repo = await this.resolveRepoSelector(repoSelector, executionHostId)
     if (isFolderRepo(repo)) {
       return { status: 'ok' as const, hasHooks: false, hooks: null, mayNeedUpdate: false }
     }
@@ -20356,8 +20378,8 @@ export class OrcaRuntimeService {
     }
   }
 
-  async inspectRepoSetupScriptImports(repoSelector: string) {
-    const repo = await this.resolveRepoSelector(repoSelector)
+  async inspectRepoSetupScriptImports(repoSelector: string, executionHostId?: ExecutionHostId) {
+    const repo = await this.resolveRepoSelector(repoSelector, executionHostId)
     if (isFolderRepo(repo)) {
       return []
     }
@@ -20388,8 +20410,8 @@ export class OrcaRuntimeService {
     })
   }
 
-  async readRepoIssueCommand(repoSelector: string) {
-    const repo = await this.resolveRepoSelector(repoSelector)
+  async readRepoIssueCommand(repoSelector: string, executionHostId?: ExecutionHostId) {
+    const repo = await this.resolveRepoSelector(repoSelector, executionHostId)
     if (isFolderRepo(repo)) {
       return {
         localContent: null,
@@ -20461,8 +20483,12 @@ export class OrcaRuntimeService {
     }
   }
 
-  async writeRepoIssueCommand(repoSelector: string, content: string): Promise<{ ok: true }> {
-    const repo = await this.resolveRepoSelector(repoSelector)
+  async writeRepoIssueCommand(
+    repoSelector: string,
+    content: string,
+    executionHostId?: ExecutionHostId
+  ): Promise<{ ok: true }> {
+    const repo = await this.resolveRepoSelector(repoSelector, executionHostId)
     if (isFolderRepo(repo)) {
       return { ok: true }
     }
@@ -20608,7 +20634,7 @@ export class OrcaRuntimeService {
     } catch {
       scan = { ok: false, worktrees: [] }
     }
-    if (scan.ok) {
+    if (scan.authoritativeForPrune) {
       this.pruneLineageForMissingRepoWorktrees(repo, scan.worktrees)
     }
     const agentScratchWorktreePathMatcher = createAgentScratchWorktreePathMatcher([
@@ -21388,6 +21414,7 @@ export class OrcaRuntimeService {
 
   async createManagedWorktree(args: {
     repoSelector: string
+    executionHostId?: ExecutionHostId
     name: string
     baseBranch?: string
     compareBaseRef?: string
@@ -21431,7 +21458,7 @@ export class OrcaRuntimeService {
       throw new Error('runtime_unavailable')
     }
 
-    const repo = await this.resolveRepoSelector(args.repoSelector)
+    const repo = await this.resolveRepoSelector(args.repoSelector, args.executionHostId)
     const createSettings = this.store.getSettings()
     const requestedAgent = args.startupAgent ?? args.createdWithAgent
     const requestedAgentEnabled =
@@ -22580,7 +22607,8 @@ export class OrcaRuntimeService {
       },
       repo,
       this.store as unknown as Store,
-      headlessWindow
+      headlessWindow,
+      this
     )
 
     if (args.comment !== undefined) {
@@ -28407,11 +28435,16 @@ export class OrcaRuntimeService {
     )
   }
 
-  private async resolveRepoSelector(selector: string): Promise<Repo> {
+  private async resolveRepoSelector(
+    selector: string,
+    executionHostId?: ExecutionHostId
+  ): Promise<Repo> {
     if (!this.store) {
       throw new Error('repo_not_found')
     }
-    const candidates = this.selectReposBySelector(selector)
+    const candidates = this.selectReposBySelector(selector).filter((repo) =>
+      runtimeRepoMatchesResolvedExecutionHost(repo, executionHostId)
+    )
 
     if (candidates.length === 1) {
       return candidates[0]
@@ -28571,7 +28604,7 @@ export class OrcaRuntimeService {
             null
           )) ?? { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) }
         const gitWorktrees = scan.worktrees
-        if (scan.ok) {
+        if (scan.authoritativeForPrune) {
           this.pruneLineageForMissingRepoWorktrees(repo, gitWorktrees)
         }
         return gitWorktrees.map((gitWorktree) => {
@@ -28685,11 +28718,18 @@ export class OrcaRuntimeService {
       cached.runtimeKey === runtimeKey &&
       cached.expiresAt > now
     ) {
-      return cached.result
+      return { ...cached.result, authoritativeForPrune: false }
     }
     const inFlight = this.worktreeScanInFlight.get(repo.id)
     if (inFlight?.generation === generation && inFlight.runtimeKey === runtimeKey) {
-      return inFlight.promise
+      const result = await inFlight.promise
+      return {
+        ...result,
+        authoritativeForPrune:
+          result.ok &&
+          generation === (this.worktreeScanGenerations.get(repo.id) ?? 0) &&
+          this.worktreeScanInFlight.get(repo.id)?.promise === inFlight.promise
+      }
     }
     const promise = this.listRepoWorktreesForResolutionUncached(repo, projectRuntime)
     this.worktreeScanInFlight.set(repo.id, { generation, runtimeKey, promise })
@@ -28707,7 +28747,13 @@ export class OrcaRuntimeService {
           expiresAt: Date.now() + resolveWorktreeScanCacheTtlMs(repo)
         })
       }
-      return result
+      return {
+        ...result,
+        authoritativeForPrune:
+          result.ok &&
+          generation === (this.worktreeScanGenerations.get(repo.id) ?? 0) &&
+          this.worktreeScanInFlight.get(repo.id)?.promise === promise
+      }
     } finally {
       if (this.worktreeScanInFlight.get(repo.id)?.promise === promise) {
         this.worktreeScanInFlight.delete(repo.id)

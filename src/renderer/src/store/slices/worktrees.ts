@@ -83,6 +83,7 @@ import {
   getSettingsFocusedExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
+  toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
@@ -103,6 +104,7 @@ import {
   worktreeWorkspaceKey
 } from '../../../../shared/workspace-scope'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
+import { projectWorkspaceLineageRecord } from '../../../../shared/workspace-lineage-worktree-projection'
 import {
   CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS,
   getClientWorktreeCreateCandidate,
@@ -114,6 +116,7 @@ import {
   isLockedWorktreeRemovalError
 } from '../../../../shared/worktree-removal'
 import { FolderWorkspaceActivityPersistence } from './folder-workspace-activity-persistence'
+import { resolveCreateParentWorkspace } from './worktree-create-parent-workspace'
 import {
   createDetectedWorktreeRefreshLeaseRegistry,
   type DetectedWorktreeRefreshLease
@@ -422,10 +425,16 @@ function withRepoHostOwnership<
     projectId?: string
     projectHostSetupId?: string
   }
->(worktree: T, hostId: ExecutionHostId, setup?: ProjectHostSetup): T {
+>(
+  worktree: T,
+  hostId: ExecutionHostId,
+  setup?: ProjectHostSetup,
+  transportOwnerEnvironmentId?: string | null
+): T {
   const parsedOwner = parseExecutionHostId(hostId)
   const runtimeOwnerEnvironmentId =
-    parsedOwner?.kind === 'runtime' ? parsedOwner.environmentId : undefined
+    transportOwnerEnvironmentId?.trim() ||
+    (parsedOwner?.kind === 'runtime' ? parsedOwner.environmentId : undefined)
   const worktreeHost = parseExecutionHostId(worktree.hostId)
   // Why: an SSH worktree reached through a paired HUB has two owners; retain the SSH execution host and stamp the HUB transport separately.
   const nextHostId =
@@ -1608,8 +1617,14 @@ async function refreshWorktreeLineageForSettings(
 ): Promise<void> {
   const lineage = await listWorktreeLineageForRuntime(settings, options)
   const hostId = getSettingsFocusedExecutionHostId(settings)
+  const projectedWorkspaceLineage = projectWorkspaceLineageRecord(
+    lineage.workspaceLineageByChildKey
+  )
   set((s) => ({
-    worktreeLineageById: mergeLineageForHost(s, hostId, lineage.worktreeLineageById),
+    worktreeLineageById: mergeLineageForHost(s, hostId, {
+      ...projectedWorkspaceLineage,
+      ...lineage.worktreeLineageById
+    }),
     workspaceLineageByChildKey: mergeWorkspaceLineageForHost(
       s,
       hostId,
@@ -1630,8 +1645,14 @@ async function refreshRemoteWorktreeLineageBestEffort(
       reuseRecentCompatibilityFailure: true
     })
     const hostId = getSettingsFocusedExecutionHostId(settings)
+    const projectedWorkspaceLineage = projectWorkspaceLineageRecord(
+      lineage.workspaceLineageByChildKey
+    )
     set((s) => ({
-      worktreeLineageById: mergeLineageForHost(s, hostId, lineage.worktreeLineageById),
+      worktreeLineageById: mergeLineageForHost(s, hostId, {
+        ...projectedWorkspaceLineage,
+        ...lineage.worktreeLineageById
+      }),
       workspaceLineageByChildKey: mergeWorkspaceLineageForHost(
         s,
         hostId,
@@ -3920,6 +3941,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     const automationProvenanceRequest = options?.automationProvenanceRequest
     const linkedWorkItem = options?.linkedWorkItem
     const linkedTaskSourceContext = options?.linkedTaskSourceContext
+    const runtimeOwnerEnvironmentId = options?.runtimeOwnerEnvironmentId?.trim() || null
     try {
       for (let attempt = 0; attempt < CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS; attempt += 1) {
         const candidateName = getClientWorktreeCreateCandidate(name, attempt)
@@ -3930,13 +3952,13 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         try {
           // Why: manual sort is user-authored order; stamp new workspaces at the top rather than relying on sortOrder fallback.
           const manualOrder = get().sortBy === 'manual' ? Date.now() : undefined
-          const activeScope = parseWorkspaceKey(get().activeWorkspaceKey ?? '')
-          const parentWorkspace =
-            activeScope?.type === 'folder'
-              ? folderWorkspaceKey(activeScope.folderWorkspaceId)
-              : undefined
+          const parentWorkspace = resolveCreateParentWorkspace(
+            get().activeWorkspaceKey,
+            options?.parentWorkspace
+          )
           const createArgs = {
             repoId,
+            ...(options?.executionHostId ? { executionHostId: options.executionHostId } : {}),
             name: candidateName,
             baseBranch,
             ...(compareBaseRef ? { compareBaseRef } : {}),
@@ -3973,7 +3995,12 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             ...(creationId ? { creationId } : {}),
             ...(automationProvenanceRequest ? { automationProvenanceRequest } : {})
           }
-          const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), repoId))
+          const ownerSettings = runtimeOwnerEnvironmentId
+            ? get().settings
+              ? { ...get().settings, activeRuntimeEnvironmentId: runtimeOwnerEnvironmentId }
+              : ({ activeRuntimeEnvironmentId: runtimeOwnerEnvironmentId } as AppState['settings'])
+            : settingsForRepoOwner(get(), repoId, options?.executionHostId, true)
+          const target = getActiveRuntimeTarget(ownerSettings)
           if (
             target.kind === 'environment' &&
             (linkedWorkItem?.provider === 'jira' || linkedTaskSourceContext?.provider === 'jira')
@@ -3992,6 +4019,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                   'worktree.create',
                   {
                     repo: repoId,
+                    ...(options?.executionHostId
+                      ? { executionHostId: options.executionHostId }
+                      : {}),
                     name: candidateName,
                     baseBranch,
                     ...(compareBaseRef ? { compareBaseRef } : {}),
@@ -4045,26 +4075,53 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                 )
           // Why: worktrees.onChanged can add this worktree before this callback runs; appending blindly would duplicate it (React key clash).
           set((s) => {
-            const hostId = repoHostId(s, repoId)
+            const hostId =
+              options?.executionHostId ??
+              (runtimeOwnerEnvironmentId
+                ? toRuntimeExecutionHostId(runtimeOwnerEnvironmentId)
+                : repoHostId(s, repoId))
             const createdWorktree = withRepoHostOwnership(
               result.worktree,
               hostId,
-              getProjectHostSetupForRepoHost(s, repoId, hostId)
+              getProjectHostSetupForRepoHost(s, repoId, hostId),
+              runtimeOwnerEnvironmentId
             )
             const current = s.worktreesByRepo[repoId] ?? []
-            const alreadyPresent = current.some((w) => w.id === createdWorktree.id)
+            const hostMatchOptions = worktreeHostMatchOptions(s, repoId, hostId)
+            const alreadyPresent = current.some(
+              (worktree) =>
+                worktree.id === createdWorktree.id &&
+                worktreeMatchesHost(worktree, hostId, hostMatchOptions)
+            )
             const nextWorktrees = alreadyPresent
               ? current.map((worktree) =>
-                  worktree.id === createdWorktree.id
+                  worktree.id === createdWorktree.id &&
+                  worktreeMatchesHost(worktree, hostId, hostMatchOptions)
                     ? { ...worktree, ...createdWorktree }
                     : worktree
                 )
               : [...current, createdWorktree]
+            const projectedCreatedLineage = result.workspaceLineage
+              ? projectWorkspaceLineageRecord({
+                  [result.workspaceLineage.childWorkspaceKey]: result.workspaceLineage
+                })
+              : {}
+            const createdLineage = result.lineage
+              ? { [result.lineage.worktreeId]: result.lineage }
+              : projectedCreatedLineage
             return {
               worktreesByRepo: {
                 ...s.worktreesByRepo,
                 [repoId]: nextWorktrees
               },
+              ...(Object.keys(createdLineage).length > 0
+                ? {
+                    worktreeLineageById: {
+                      ...s.worktreeLineageById,
+                      ...createdLineage
+                    }
+                  }
+                : {}),
               ...(result.workspaceLineage
                 ? {
                     workspaceLineageByChildKey: {
