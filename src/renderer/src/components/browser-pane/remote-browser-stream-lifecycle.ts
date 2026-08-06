@@ -3,7 +3,11 @@ import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import { RemoteBrowserPageSession } from './remote-browser-page-session'
 import { openRemoteBrowserScreencastStream } from './remote-browser-screencast-subscription'
 import { RemoteBrowserStreamRestartScheduler } from './remote-browser-stream-restart-scheduler'
-import { REMOTE_BROWSER_STREAM_UNREACHABLE_MESSAGE } from './remote-browser-stream-messages'
+import {
+  announceRemoteBrowserStreamStopped,
+  REMOTE_BROWSER_STREAM_LOST_MESSAGE,
+  REMOTE_BROWSER_STREAM_UNREACHABLE_MESSAGE
+} from './remote-browser-stream-messages'
 import {
   isPermanentRemoteBrowserStreamFailure,
   isRemoteBrowserPageMissingError,
@@ -34,8 +38,11 @@ export class RemoteBrowserStreamLifecycle {
   constructor(private readonly deps: RemoteBrowserStreamLifecycleDeps) {
     this.tokens = new RemoteBrowserOperationTokens(deps.identity)
     this.session = new RemoteBrowserPageSession({ ...deps, tokens: this.tokens })
+    // Why a message here and not just the flag: a budget can drain without any attempt throwing —
+    // each restart subscribes fine, then the stream ends before 'ready', so the catch that normally
+    // reports never runs.
     this.restartScheduler = new RemoteBrowserStreamRestartScheduler(undefined, () =>
-      deps.setReconnectAvailable(true)
+      announceRemoteBrowserStreamStopped(deps, REMOTE_BROWSER_STREAM_LOST_MESSAGE())
     )
   }
 
@@ -102,13 +109,12 @@ export class RemoteBrowserStreamLifecycle {
         // "Unreachable" rather than "lost": nothing was ever established here. And this path never
         // had a stream, so the retry budget never runs — without the affordance below, nothing else
         // would ever offer a way back and the pane strands on a bare error.
-        deps.setError(
+        announceRemoteBrowserStreamStopped(
+          deps,
           permanent && error instanceof Error
             ? error.message
             : REMOTE_BROWSER_STREAM_UNREACHABLE_MESSAGE()
         )
-        deps.setReconnectAvailable(true)
-        deps.setBusy(false)
       })
     return () => {
       cancelled = true
@@ -158,10 +164,11 @@ export class RemoteBrowserStreamLifecycle {
           this.deps.closeMissingRemotePage(pageId)
           return
         }
-        this.deps.setError(
+        // A resize during a blip tears down a live subscription and never reaches the budget.
+        announceRemoteBrowserStreamStopped(
+          this.deps,
           error instanceof Error ? error.message : 'Failed to resize remote browser stream.'
         )
-        this.deps.setBusy(false)
       })
   }
 
@@ -247,14 +254,14 @@ export class RemoteBrowserStreamLifecycle {
             deps.setBusy(false)
           },
           onEnded: () => this.handleStreamClosed(token, true),
+          // Why these two announce a stop: neither runs the retry budget, so nothing else in this
+          // class would ever hand the user a way back. The host's own message is kept — it is more
+          // specific than anything the pane could substitute.
           onFailed: (message) => {
-            deps.setError(message)
+            announceRemoteBrowserStreamStopped(deps, message)
             this.handleStreamClosed(token, false)
           },
-          onTransportError: (message) => {
-            deps.setError(message)
-            deps.setBusy(false)
-          },
+          onTransportError: (message) => announceRemoteBrowserStreamStopped(deps, message),
           onPageMissing: () => deps.closeMissingRemotePage(pageId),
           onFrame: (bytes) => deps.handleFrameBytes(token, bytes),
           onClosed: () => this.handleStreamClosed(token, true)
@@ -329,14 +336,15 @@ export class RemoteBrowserStreamLifecycle {
           // out of reach, since nothing else records it.
           console.warn('[browser-pane] remote stream restart failed:', error)
         }
-        deps.setError(failure.message)
-        // Why also when we stop: giving up on automatic retries is not the same as taking away the
-        // user's last resort. A classification we got wrong would otherwise strand the pane exactly
-        // as it did before this work.
-        if (!failure.shouldRetry) {
-          deps.setReconnectAvailable(true)
+        // Why a stop is announced when we give up: abandoning automatic retries is not the same as
+        // taking away the user's last resort, and a classification we got wrong would otherwise
+        // strand the pane exactly as it did before this work.
+        if (failure.shouldRetry) {
+          deps.setError(failure.message)
+          deps.setBusy(false)
+        } else {
+          announceRemoteBrowserStreamStopped(deps, failure.message)
         }
-        deps.setBusy(false)
         return failure.shouldRetry
       }
     })

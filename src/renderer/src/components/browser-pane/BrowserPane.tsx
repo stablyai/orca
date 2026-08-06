@@ -1451,6 +1451,18 @@ function RemoteBrowserPagePane({
     setRemoteError(null)
   }, [])
 
+  // The other half of the same guard. Once the stream is down and we are offering a reconnect, every
+  // input RPC fails as a matter of course, and each failure would repaint the raw transport string
+  // over the message the pane chose — verified: clicking the frozen frame put "Runtime environment
+  // is manually disconnected." back on screen next to the Reconnect button. These failures are a
+  // consequence of the state the user is already being told about, so they are noise here.
+  const reportIncidentalRemoteError = useCallback((message: string): void => {
+    if (streamReconnectAvailableRef.current) {
+      return
+    }
+    setRemoteError(message)
+  }, [])
+
   const reconnectRemoteStream = useCallback((): void => {
     setStreamReconnectAvailable(false)
     setRemoteError(null)
@@ -1571,7 +1583,7 @@ function RemoteBrowserPagePane({
           return
         }
         const message = error instanceof Error ? error.message : 'Remote browser command failed.'
-        setRemoteError(message)
+        reportIncidentalRemoteError(message)
         onUpdatePageState(browserTab.id, {
           loading: false,
           // Why: validatedUrl is persisted, so redact the Kagi session token like the main-process failure path does.
@@ -1598,7 +1610,8 @@ function RemoteBrowserPagePane({
       isCurrentRemoteOperationToken,
       onUpdatePageState,
       runtimeTarget,
-      runtimeWorktree
+      runtimeWorktree,
+      reportIncidentalRemoteError
     ]
   )
 
@@ -1641,7 +1654,7 @@ function RemoteBrowserPagePane({
     })
     if (!nextUrl) {
       const message = 'Enter a valid http(s) or localhost URL.'
-      setRemoteError(message)
+      reportIncidentalRemoteError(message)
       onUpdatePageState(browserTab.id, {
         loadError: {
           code: 0,
@@ -1698,7 +1711,9 @@ function RemoteBrowserPagePane({
             closeMissingRemotePage(pageId)
             return
           }
-          setRemoteError(error instanceof Error ? error.message : 'Remote mouse input failed.')
+          reportIncidentalRemoteError(
+            error instanceof Error ? error.message : 'Remote mouse input failed.'
+          )
         }
       }
     })
@@ -1746,7 +1761,9 @@ function RemoteBrowserPagePane({
             closeMissingRemotePage(pageId)
             return
           }
-          setRemoteError(error instanceof Error ? error.message : 'Remote mouse input failed.')
+          reportIncidentalRemoteError(
+            error instanceof Error ? error.message : 'Remote mouse input failed.'
+          )
         }
       }
     })
@@ -1857,7 +1874,9 @@ function RemoteBrowserPagePane({
             closeMissingRemotePage(pageId)
             return
           }
-          setRemoteError(error instanceof Error ? error.message : 'Remote keyboard input failed.')
+          reportIncidentalRemoteError(
+            error instanceof Error ? error.message : 'Remote keyboard input failed.'
+          )
         }
       }
     })
@@ -1905,7 +1924,9 @@ function RemoteBrowserPagePane({
               closeMissingRemotePage(pageId)
               return
             }
-            setRemoteError(error instanceof Error ? error.message : 'Remote scroll failed.')
+            reportIncidentalRemoteError(
+              error instanceof Error ? error.message : 'Remote scroll failed.'
+            )
           }
         }
       }).finally(() => {
@@ -1919,6 +1940,7 @@ function RemoteBrowserPagePane({
     closeMissingRemotePage,
     enqueueRemoteInput,
     isCurrentRemoteOperationToken,
+    reportIncidentalRemoteError,
     scheduleRemoteTabInfoRefresh,
     runtimeWorktree
   ])

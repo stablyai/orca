@@ -20,3 +20,23 @@ export const REMOTE_BROWSER_STREAM_UNREACHABLE_MESSAGE = (): string =>
     'auto.components.BrowserPane.streamConnectionUnreachable',
     'Cannot reach the remote server.'
   )
+
+type RemoteBrowserStreamStopSurface = {
+  setError: (message: string | null) => void
+  setBusy: (busy: boolean) => void
+  setReconnectAvailable: (available: boolean) => void
+}
+
+// Why one helper for every stop: "the pane is no longer trying" is a single user-visible state, and
+// it needs all three of these together. Reporting the message without the affordance strands the
+// user; setting the affordance without a message makes it unrenderable, since the control lives
+// inside the error toast; leaving busy on spins a dead pane and blocks its input handlers. Each of
+// those was a real defect found in review, from a site that did two of the three.
+export function announceRemoteBrowserStreamStopped(
+  surface: RemoteBrowserStreamStopSurface,
+  message: string
+): void {
+  surface.setError(message)
+  surface.setReconnectAvailable(true)
+  surface.setBusy(false)
+}

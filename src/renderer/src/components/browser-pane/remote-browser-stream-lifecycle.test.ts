@@ -582,3 +582,33 @@ describe('RemoteBrowserStreamLifecycle reconnect affordance', () => {
     expect(harness.reconnectOffered).toBe(false)
   })
 })
+
+// NEW-1 repro: a budget can drain without any attempt throwing. Each restart subscribes fine, then
+// the stream ends before 'ready'. The catch never runs, so setError is never called — and the
+// Reconnect control renders only inside the error toast, so exhaustion produces an invisible
+// affordance, busy stuck true, and no further retries. On main this cycle retried forever and
+// self-healed, so it is a regression in the exact class this work exists to remove.
+describe('RemoteBrowserStreamLifecycle silent budget drain', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('reports a failure when the budget drains without any attempt throwing', async () => {
+    const harness = createHarness()
+    await openStreamAndConfirmReady(harness)
+
+    for (let round = 0; round < 6; round++) {
+      harness.streams.at(-1)!.emitEnd()
+      await vi.advanceTimersByTimeAsync(20_000)
+    }
+
+    expect(harness.reconnectOffered).toBe(true)
+    // Without a message the button cannot render at all.
+    expect(harness.currentError).not.toBeNull()
+    // A spinner left running over a frozen frame also blocks the pane's input handlers.
+    expect(harness.busyLog.at(-1)).toBe(false)
+  })
+})

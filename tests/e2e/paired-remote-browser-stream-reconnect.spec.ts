@@ -133,6 +133,14 @@ test('bounds remote browser stream retries, then offers reconnect', async ({
     await page.waitForTimeout(15_000)
     await expect(reconnectButton).toBeVisible()
 
+    // Clicking the frozen frame is the natural reaction to a stuck pane, and the input handlers
+    // clear the error optimistically — so without a guard this exact gesture deletes the user's only
+    // way back, then repaints the raw transport string once the queued RPC fails.
+    await remoteFrame.click({ position: { x: 40, y: 40 }, force: true })
+    await page.waitForTimeout(1_000)
+    await expect(reconnectButton).toBeVisible()
+    await expect(errorToast).not.toContainText('Runtime environment')
+
     await expect
       .poll(
         () =>
