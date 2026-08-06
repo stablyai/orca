@@ -164,6 +164,7 @@ export function nativeZoomCommandMatchesKeybindings(
   )
 }
 
+/** Resolves a window keybinding input to its shortcut action, or null when it matches no action. */
 export function resolveWindowShortcutAction(
   input: WindowShortcutInput,
   platform: NodeJS.Platform,

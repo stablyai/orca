@@ -605,6 +605,7 @@ function getWorktreeRuntimeEnvironmentId(worktreeId: string | null | undefined):
   return getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), worktreeId)
 }
 
+/** Subscribes the renderer to all main-process UI IPC events for the lifetime of the app shell. */
 export function useIpcEvents(): void {
   useEffect(() => {
     const unsubs: (() => void)[] = []

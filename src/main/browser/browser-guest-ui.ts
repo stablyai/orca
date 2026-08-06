@@ -255,7 +255,10 @@ export function setupGrabShortcutForwarding(args: {
   }
 }
 
-// Why: a focused webview guest is its own Chromium process whose key events never reach the renderer; forward shortcuts from here.
+/**
+ * Forwards window shortcuts from focused webview guests to the renderer.
+ * A focused guest is its own Chromium process whose key events never reach the renderer, so they must be forwarded from here.
+ */
 export function setupGuestShortcutForwarding(args: {
   browserTabId: string
   guest: Electron.WebContents

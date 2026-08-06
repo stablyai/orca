@@ -220,6 +220,7 @@ export function loadMainWindow(mainWindow: BrowserWindow): void {
   }
 }
 
+/** Creates the main application window and wires its shortcut/action IPC dispatch. */
 export function createMainWindow(
   store: Store | null,
   opts?: CreateMainWindowOptions

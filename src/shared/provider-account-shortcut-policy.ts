@@ -11,8 +11,10 @@ export type ProviderAccountShortcutAction = {
   index: number
 }
 
-// Why: split out of window-shortcut-policy.ts to stay under its line budget;
-// mirrors the workspace/tab digit-index resolution there.
+/**
+ * Resolves a digit-index keybinding input into a provider account switch action, or null.
+ * Mirrors the workspace/tab digit-index resolution; split out to stay under the line budget.
+ */
 export function resolveAccountShortcut(
   input: KeybindingInput,
   platform: NodeJS.Platform,

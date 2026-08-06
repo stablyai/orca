@@ -1,13 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { getStateMock, toastMock, fetchSnapshotMock, selectClaudeMock, selectCodexMock } =
-  vi.hoisted(() => ({
-    getStateMock: vi.fn(),
-    toastMock: vi.fn(),
-    fetchSnapshotMock: vi.fn(),
-    selectClaudeMock: vi.fn(),
-    selectCodexMock: vi.fn()
-  }))
+  vi.hoisted(() => {
+    const toastErrorMock = vi.fn()
+    const toast = vi.fn() as ReturnType<typeof vi.fn> & { error: ReturnType<typeof vi.fn> }
+    toast.error = toastErrorMock
+    return {
+      getStateMock: vi.fn(),
+      toastMock: toast,
+      toastErrorMock,
+      fetchSnapshotMock: vi.fn(),
+      selectClaudeMock: vi.fn(),
+      selectCodexMock: vi.fn()
+    }
+  })
 
 vi.mock('@/store', () => ({
   useAppStore: { getState: getStateMock }
@@ -130,5 +136,30 @@ describe('switchProviderAccountByIndex', () => {
       'Switched to Codex account',
       expect.objectContaining({ description: 'codex@example.com' })
     )
+  })
+
+  it('shows an error toast when the snapshot fetch fails', async () => {
+    fetchSnapshotMock.mockRejectedValue(new Error('snapshot failed'))
+
+    await switchProviderAccountByIndex('claude', 0)
+
+    expect(toastMock.error).toHaveBeenCalledWith('Could not switch Claude account')
+    expect(toastMock).not.toHaveBeenCalled()
+  })
+
+  it('shows an error toast when the account switch fails', async () => {
+    fetchSnapshotMock.mockResolvedValue({
+      claude: {
+        accounts: [hostAccount('a1', 'first@example.com')],
+        activeAccountId: 'a2'
+      },
+      codex: { accounts: [], activeAccountId: null }
+    })
+    selectClaudeMock.mockRejectedValue(new Error('switch failed'))
+
+    await switchProviderAccountByIndex('claude', 0)
+
+    expect(toastMock.error).toHaveBeenCalledWith('Could not switch Claude account')
+    expect(toastMock).not.toHaveBeenCalled()
   })
 })
