@@ -71,14 +71,15 @@ function makePersistedTerminalTab() {
 type RuntimeInternals = {
   buildHeadlessMobileSessionTerminalTabs: (
     worktreeId: string,
-    persistedTabs: unknown[]
+    persistedTabs: unknown[],
+    session: WorkspaceSessionState
   ) => RuntimeMobileSessionTerminalTab[]
   publishPtyBackedMobileSessionTerminal: (
     worktreeId: string,
     pty: unknown,
     args: Record<string, unknown>
   ) => void
-  createHeadlessMobileSessionTerminal: (
+  createRuntimeOwnedMobileSessionTerminal: (
     worktreeId: string,
     activate: boolean,
     afterTabId?: string,
@@ -94,10 +95,14 @@ type RuntimeInternals = {
 function hydrateTerminalTab(
   settings: Record<string, unknown>
 ): RuntimeMobileSessionTerminalTab | undefined {
-  const runtime = new OrcaRuntimeService(makeStore(settings))
-  return (runtime as unknown as RuntimeInternals).buildHeadlessMobileSessionTerminalTabs(WT, [
-    makePersistedTerminalTab()
-  ])[0]
+  const store = makeStore(settings)
+  const runtime = new OrcaRuntimeService(store)
+  const session = store.getWorkspaceSession() as WorkspaceSessionState
+  return (runtime as unknown as RuntimeInternals).buildHeadlessMobileSessionTerminalTabs(
+    WT,
+    [makePersistedTerminalTab()],
+    session
+  )[0]
 }
 
 describe('headless mobile terminal theme', () => {
@@ -185,10 +190,26 @@ describe('headless mobile terminal theme', () => {
       pty: { ptyId: 'pty-1', tabId: 'tab-1', paneKey: `tab-1:${LEAF}`, title: 'Terminal' }
     })
 
-    const created = await internals.createHeadlessMobileSessionTerminal(WT, true)
+    const created = await internals.createRuntimeOwnedMobileSessionTerminal(WT, true)
     expect(created.tab.terminalTheme).toMatchObject({
       mode: 'dark',
       theme: { background: '#1a1b26' }
     })
   })
+
+  it('re-resolves the host palette on a settings-only change between hydrates', () => {
+    // Why: resolveRuntimeMobileTerminalTheme keys on the settings object (and the
+    // renderer cache compares state.settings identity). A palette rename must not
+    // stick to a prior projection when only settings changed.
+    const tokyo = hydrateTerminalTab({ theme: 'dark', terminalThemeDark: 'Tokyo Night' })
+    const ghostty = hydrateTerminalTab({
+      theme: 'dark',
+      terminalThemeDark: 'Ghostty Default Style Dark'
+    })
+    expect(tokyo?.terminalTheme?.theme.background).toBe('#1a1b26')
+    expect(ghostty?.terminalTheme?.theme.background).not.toBe(
+      tokyo?.terminalTheme?.theme.background
+    )
+  })
+
 })
