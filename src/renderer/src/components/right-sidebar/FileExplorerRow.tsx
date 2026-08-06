@@ -363,17 +363,20 @@ export async function downloadRemoteFile(
     if (result.canceled) {
       return
     }
+    // Why: the save dialog lets the user rename, and remote names are sanitized for
+    // the local filesystem — report what actually landed so the label matches Open.
+    const savedName = basename(result.destinationPath) || node.name
     toast.success(
       node.isDirectory
         ? translate(
             'auto.components.right.sidebar.FileExplorerRow.a4029c996b',
             "Downloaded folder '{{value0}}'",
-            { value0: node.name }
+            { value0: savedName }
           )
         : translate(
             'auto.components.right.sidebar.FileExplorerRow.bce4d4e44f',
             "Downloaded '{{value0}}'",
-            { value0: node.name }
+            { value0: savedName }
           ),
       {
         action: {

@@ -713,6 +713,56 @@ describe('FileExplorerRow collapse folder action', () => {
     expect(toastErrorMock).not.toHaveBeenCalled()
   })
 
+  it('reports the name the user chose in the save dialog, not the remote name', async () => {
+    const downloadFile = vi
+      .fn()
+      .mockResolvedValue({ canceled: false, destinationPath: '/downloads/renamed-entry.ts' })
+    const openPath = vi.fn().mockResolvedValue(undefined)
+    ;(
+      globalThis as unknown as {
+        window: {
+          api: {
+            fs: { downloadFile: typeof downloadFile }
+            shell: { openPath: typeof openPath }
+          }
+        }
+      }
+    ).window = { api: { fs: { downloadFile }, shell: { openPath } } }
+
+    await downloadRemoteFile(fileNode, 'ssh-1')
+
+    expect(toastSuccessMock).toHaveBeenCalledWith("Downloaded 'renamed-entry.ts'", {
+      action: {
+        label: 'Open',
+        onClick: expect.any(Function)
+      }
+    })
+    const action = toastSuccessMock.mock.calls[0]?.[1]?.action as
+      | { onClick: () => void }
+      | undefined
+    action?.onClick()
+    expect(openPath).toHaveBeenCalledWith('/downloads/renamed-entry.ts')
+  })
+
+  it('reports the saved folder name from a Windows destination path', async () => {
+    const downloadFolder = vi.fn().mockResolvedValue({
+      canceled: false,
+      destinationPath: 'C:\\Users\\dev\\Downloads\\src-copy'
+    })
+    ;(
+      globalThis as unknown as {
+        window: { api: { fs: { downloadFolder: typeof downloadFolder } } }
+      }
+    ).window = { api: { fs: { downloadFolder } } }
+
+    await downloadRemoteFile(directoryNode, 'ssh-1')
+
+    expect(toastSuccessMock).toHaveBeenCalledWith(
+      "Downloaded folder 'src-copy'",
+      expect.objectContaining({ action: expect.anything() })
+    )
+  })
+
   it('calls the preload folder download API for SSH directory rows', async () => {
     const downloadFolder = vi.fn().mockResolvedValue({
       canceled: false,
