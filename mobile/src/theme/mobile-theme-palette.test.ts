@@ -71,12 +71,14 @@ const CONTRAST_PAIRS: ReadonlyArray<{
   { fg: 'textPrimary', bg: 'bgBase', dark: 4.5, light: 4.5 },
   { fg: 'textPrimary', bg: 'bgPanel', dark: 4.5, light: 4.5 },
   { fg: 'textPrimary', bg: 'bgRaised', dark: 4.5, light: 4.5 },
+  // Why dark textSecondary/textMuted floors: #11651 raised dark secondary/muted
+  // (#a1a1a1 / #8c8c8c); floors are measured ratios (rounded down 0.01).
   { fg: 'textSecondary', bg: 'bgBase', dark: 4.5, light: 4.5 },
   { fg: 'textSecondary', bg: 'bgPanel', dark: 4.5, light: 4.34 },
-  { fg: 'textSecondary', bg: 'bgRaised', dark: 4.37, light: 3.93 },
-  { fg: 'textMuted', bg: 'bgBase', dark: 2.52, light: 3.0 },
-  { fg: 'textMuted', bg: 'bgPanel', dark: 2.32, light: 3.0 },
-  { fg: 'textMuted', bg: 'bgRaised', dark: 2.07, light: 3.0 },
+  { fg: 'textSecondary', bg: 'bgRaised', dark: 4.5, light: 3.93 },
+  { fg: 'textMuted', bg: 'bgBase', dark: 4.5, light: 3.0 },
+  { fg: 'textMuted', bg: 'bgPanel', dark: 4.5, light: 3.0 },
+  { fg: 'textMuted', bg: 'bgRaised', dark: 4.5, light: 3.0 },
   { fg: 'accentBlue', bg: 'bgBase', dark: 4.5, light: 4.5 },
   { fg: 'accentBlue', bg: 'bgPanel', dark: 4.5, light: 4.5 },
   // Why dark floor 4.21: measured 4.221 — already sub-4.5 on bgRaised.
