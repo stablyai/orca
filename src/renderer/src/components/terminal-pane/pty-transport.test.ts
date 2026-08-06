@@ -598,6 +598,23 @@ describe('createIpcPtyTransport', () => {
     expect(flushed).not.toContain('A') // oldest chunk trimmed
   })
 
+  it('exposes registered capture dims on the eager buffer handle', async () => {
+    // Why: attach-time replay re-parses eager-buffered bytes at the grid the
+    // background PTY was spawned at, so inline-TUI cursor rows survive
+    // adoption into a differently-sized pane.
+    const { registerEagerPtyBuffer, getEagerPtyBufferHandle } = await import('./pty-transport')
+
+    const handle = registerEagerPtyBuffer('pty-restored', vi.fn(), {
+      captureDims: { cols: 120, rows: 40 }
+    })
+
+    expect(handle.captureDims).toEqual({ cols: 120, rows: 40 })
+    expect(getEagerPtyBufferHandle('pty-restored')?.captureDims).toEqual({ cols: 120, rows: 40 })
+
+    const noDimsHandle = registerEagerPtyBuffer('pty-no-dims', vi.fn())
+    expect(noDimsHandle.captureDims).toBeUndefined()
+  })
+
   it('caps a single oversized eager chunk to its most-recent tail', async () => {
     const { registerEagerPtyBuffer } = await import('./pty-transport')
     const cap = 512 * 1024

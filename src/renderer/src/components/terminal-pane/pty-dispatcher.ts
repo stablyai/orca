@@ -194,7 +194,15 @@ export function subscribeToPtyExit(ptyId: string, watcher: (code: number) => voi
 // (prompt, MOTD) arrives via pty:data before xterm exists. These helpers buffer
 // that output so transport.attach() can replay it when the pane finally mounts.
 
-export type EagerPtyHandle = { flush: () => string; dispose: () => void }
+export type EagerPtyCaptureDims = { cols: number; rows: number }
+export type EagerPtyHandle = {
+  flush: () => string
+  dispose: () => void
+  // Grid the PTY was spawned at while buffering. Attach replays the buffer at
+  // these dims so inline-TUI cursor math survives adoption into a
+  // differently-sized pane.
+  captureDims?: EagerPtyCaptureDims
+}
 const eagerPtyHandles = new Map<string, EagerPtyHandle>()
 
 export function getEagerPtyBufferHandle(ptyId: string): EagerPtyHandle | undefined {
@@ -208,7 +216,8 @@ const EAGER_BUFFER_MAX_BYTES = TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
 
 export function registerEagerPtyBuffer(
   ptyId: string,
-  onExit: (ptyId: string, code: number) => void
+  onExit: (ptyId: string, code: number) => void,
+  options?: { captureDims?: EagerPtyCaptureDims }
 ): EagerPtyHandle {
   ensurePtyDispatcher()
 
@@ -250,6 +259,7 @@ export function registerEagerPtyBuffer(
   ptyExitHandlers.set(ptyId, exitHandler)
 
   const handle: EagerPtyHandle = {
+    ...(options?.captureDims ? { captureDims: options.captureDims } : {}),
     flush() {
       const data = chunks
         .slice(head)

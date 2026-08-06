@@ -3764,6 +3764,104 @@ describe('connectPanePty', () => {
     expect(hasPtySerializer(eagerPtyId)).toBe(true)
   })
 
+  it('replays an eager background buffer at its capture dims before fitting back to the pane grid', async () => {
+    // Why: background agents spawn at a fixed grid and their TUI renders the
+    // eager buffer at that size. Replaying those bytes at the pane's fitted
+    // grid rewraps rows, so inline TUIs (Cursor CLI) anchor their block cursor
+    // below the input box. Adoption must replay at capture dims, then fit back.
+    const eagerPtyId = 'auto-eager-pty'
+    vi.mocked(getEagerPtyBufferHandle).mockImplementation((ptyId: string) =>
+      ptyId === eagerPtyId
+        ? { flush: () => '', dispose: () => {}, captureDims: { cols: 120, rows: 40 } }
+        : undefined
+    )
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: eagerPtyId }] },
+      ptyIdsByTabId: { 'tab-1': [eagerPtyId] },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: LEAF_1 },
+          activeLeafId: LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_1]: eagerPtyId }
+        }
+      }
+    } as StoreState
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: eagerPtyId }
+    })
+
+    const pane = createPane(1)
+    pane.terminal.cols = 80
+    pane.terminal.rows = 24
+    pane.terminal.resize = vi.fn((cols: number, rows: number) => {
+      pane.terminal.cols = cols
+      pane.terminal.rows = rows
+    }) as typeof pane.terminal.resize
+    ;(
+      pane.fitAddon as unknown as {
+        proposeDimensions: () => { cols: number; rows: number }
+      }
+    ).proposeDimensions = vi.fn(() => ({ cols: 80, rows: 24 }))
+    pane.fitAddon.fit = vi.fn(() => {
+      pane.terminal.cols = 80
+      pane.terminal.rows = 24
+    })
+
+    connectPanePty(pane as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks()
+
+    expect(transport.attach).toHaveBeenCalledWith(
+      expect.objectContaining({ existingPtyId: eagerPtyId, cols: 80, rows: 24 })
+    )
+    // xterm must be at the buffer's capture grid when attach replays it...
+    expect(pane.terminal.resize).toHaveBeenCalledWith(120, 40)
+    const resizeOrder = vi.mocked(pane.terminal.resize).mock.invocationCallOrder[0]
+    const attachOrder = transport.attach.mock.invocationCallOrder[0]
+    expect(resizeOrder).toBeLessThan(attachOrder)
+    // ...and fitted back to the pane grid afterwards.
+    const fitOrders = vi.mocked(pane.fitAddon.fit).mock.invocationCallOrder
+    expect(fitOrders.some((order) => order > attachOrder)).toBe(true)
+    expect(pane.terminal.cols).toBe(80)
+    expect(pane.terminal.rows).toBe(24)
+  })
+
+  it('does not pre-resize when adopting an eager buffer without capture dims', async () => {
+    const eagerPtyId = 'auto-eager-pty'
+    vi.mocked(getEagerPtyBufferHandle).mockImplementation((ptyId: string) =>
+      ptyId === eagerPtyId ? { flush: () => '', dispose: () => {} } : undefined
+    )
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: eagerPtyId }] },
+      ptyIdsByTabId: { 'tab-1': [eagerPtyId] }
+    } as StoreState
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: eagerPtyId }
+    })
+
+    const pane = createPane(1)
+    pane.terminal.cols = 80
+    pane.terminal.rows = 24
+
+    connectPanePty(pane as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks()
+
+    expect(transport.attach).toHaveBeenCalledWith(
+      expect.objectContaining({ existingPtyId: eagerPtyId })
+    )
+    expect(pane.terminal.resize).not.toHaveBeenCalled()
+  })
+
   it('does not adopt another tab live eager PTY from a stale restored leaf binding', async () => {
     // Why: restored leaf bindings can outlive tab ownership. A global eager
     // buffer only proves the PTY is alive; ptyIdsByTabId proves this tab owns it.
@@ -4066,6 +4164,67 @@ describe('connectPanePty', () => {
       POST_REPLAY_MODE_RESET,
       expect.any(Function)
     )
+  })
+
+  it('replays the daemon snapshot at its capture dims before fitting back to the pane grid', async () => {
+    // Why: the daemon snapshot encodes row layout at its capture grid. Parsing
+    // it at the pane's grid rewraps lines and desyncs the live TUI's
+    // relative-cursor repaints (block cursor drifts below the input box).
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      if (sessionId) {
+        return { id: sessionId, snapshot: 'snapshot-payload', snapshotCols: 132, snapshotRows: 43 }
+      }
+      return null
+    })
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty' }]
+      }
+    } as StoreState
+
+    const pane = createPane(1)
+    pane.terminal.cols = 80
+    pane.terminal.rows = 24
+    const gridAtWrite = new Map<string, { cols: number; rows: number }>()
+    pane.terminal.resize = vi.fn((cols: number, rows: number) => {
+      pane.terminal.cols = cols
+      pane.terminal.rows = rows
+    }) as typeof pane.terminal.resize
+    pane.terminal.write = vi.fn((data: string, callback?: () => void) => {
+      if (!gridAtWrite.has(data)) {
+        gridAtWrite.set(data, { cols: pane.terminal.cols, rows: pane.terminal.rows })
+      }
+      callback?.()
+    }) as typeof pane.terminal.write
+    ;(
+      pane.fitAddon as unknown as {
+        proposeDimensions: () => { cols: number; rows: number }
+      }
+    ).proposeDimensions = vi.fn(() => ({ cols: 80, rows: 24 }))
+    pane.fitAddon.fit = vi.fn(() => {
+      pane.terminal.cols = 80
+      pane.terminal.rows = 24
+    })
+
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+    })
+
+    connectPanePty(pane as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(20)
+
+    // Snapshot bytes parsed at capture dims, not the pane grid.
+    expect(gridAtWrite.get('snapshot-payload')).toEqual({ cols: 132, rows: 43 })
+    // Fitted back to the pane grid and SIGWINCHed for the live TUI repaint.
+    expect(pane.terminal.cols).toBe(80)
+    expect(pane.terminal.rows).toBe(24)
+    expect(transport.resize).toHaveBeenCalledWith(80, 24)
+    expect(window.api.pty.signal).toHaveBeenCalledWith('tab-pty', 'SIGWINCH')
   })
 
   it('resets an already-idle agent cursor again after reattach SIGWINCH repaint', async () => {

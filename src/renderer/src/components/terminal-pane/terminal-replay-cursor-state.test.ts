@@ -200,4 +200,50 @@ describe('terminal replay state reset', () => {
       term.dispose()
     }
   })
+
+  it('keeps absolute cursor rows when capture-grid bytes are replayed at their capture dims', async () => {
+    // Why: background agents / daemon snapshots encode layout at their source
+    // grid. Replaying those bytes into a differently-sized xterm rewraps or
+    // clamps CUP targets, so inline TUIs (Cursor CLI) park the block cursor
+    // below the input box. Capture-size replay then fit-back is the fix.
+    const captureCols = 120
+    const captureRows = 40
+    const paneCols = 80
+    const paneRows = 24
+    // Absolute CUP to the bottom input row of a 40-row screen, then type.
+    const frame = '\x1b[2J\x1b[H\x1b[38;1H> prompt'
+
+    const mismatched = new Terminal({
+      cols: paneCols,
+      rows: paneRows,
+      allowProposedApi: true
+    })
+    const matched = new Terminal({
+      cols: paneCols,
+      rows: paneRows,
+      allowProposedApi: true
+    })
+
+    try {
+      await writeTerminal(mismatched, frame)
+      // CUP 38 clamps on a 24-row terminal — cursor lands on the last row.
+      expect(mismatched.buffer.active.cursorY).toBe(paneRows - 1)
+
+      matched.resize(captureCols, captureRows)
+      await writeTerminal(matched, frame)
+      // Same frame at capture dims parks the cursor on row 38 (0-indexed 37).
+      expect(matched.buffer.active.cursorY).toBe(37)
+      expect(matched.buffer.active.getLine(37)?.translateToString(true)).toContain('> prompt')
+
+      // Fit-back to the pane grid (mirrors safeFit after capture-size replay).
+      // The live TUI then receives a SIGWINCH and repaints from the correctly
+      // placed cursor model — the bug path never reaches that point because
+      // the mismatched parse already clamped CUP 38 onto the last pane row.
+      matched.resize(paneCols, paneRows)
+      expect(mismatched.buffer.active.cursorY).not.toBe(37)
+    } finally {
+      mismatched.dispose()
+      matched.dispose()
+    }
+  })
 })

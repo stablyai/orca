@@ -4553,6 +4553,27 @@ export function connectPanePty(
       // the daemon and relay are by definition tracking the same session
       // and only the freshest source belongs on screen.
       if (connectResult?.snapshot) {
+        const snapshotCols = connectResult.snapshotCols
+        const snapshotRows = connectResult.snapshotRows
+        if (
+          typeof snapshotCols === 'number' &&
+          typeof snapshotRows === 'number' &&
+          snapshotCols > 0 &&
+          snapshotRows > 0 &&
+          (pane.terminal.cols !== snapshotCols || pane.terminal.rows !== snapshotRows)
+        ) {
+          // Why: the daemon snapshot encodes layout at its capture dimensions.
+          // Replaying it at the pane's grid rewraps rows and desyncs the live
+          // TUI's cursor anchoring. Replay at capture dims first; the safeFit +
+          // resize + SIGWINCH below repaints at the pane grid. This xterm-only
+          // resize must not SIGWINCH the live TUI.
+          suppressSnapshotReplayPtyResize = true
+          try {
+            pane.terminal.resize(snapshotCols, snapshotRows)
+          } finally {
+            suppressSnapshotReplayPtyResize = false
+          }
+        }
         writeReplayData('\x1b[2J\x1b[3J\x1b[H')
         writeReplayData(connectResult.snapshot)
         // Snapshot reattach keeps a live session, so avoid the broader mode
@@ -5072,6 +5093,28 @@ export function connectPanePty(
       try {
         clearPaneMode2031State()
         clearHiddenOutputRestoreState()
+        // Why: eager-buffered bytes were rendered by a TUI at the background
+        // spawn grid. Replaying them at the pane's fitted grid rewraps rows,
+        // so inline TUIs (Cursor CLI) anchor their cursor rows below the input
+        // box. Replay at capture dims, then fit back; attach's PTY resize to
+        // the pane grid delivers the SIGWINCH repaint at the final size.
+        const eagerCaptureDims = getEagerPtyBufferHandle(attachPtyId)?.captureDims
+        const replayAtCaptureDims = Boolean(
+          eagerCaptureDims &&
+          eagerCaptureDims.cols > 0 &&
+          eagerCaptureDims.rows > 0 &&
+          (pane.terminal.cols !== eagerCaptureDims.cols ||
+            pane.terminal.rows !== eagerCaptureDims.rows)
+        )
+        if (replayAtCaptureDims && eagerCaptureDims) {
+          // This xterm-only resize must not SIGWINCH the live TUI.
+          suppressSnapshotReplayPtyResize = true
+          try {
+            pane.terminal.resize(eagerCaptureDims.cols, eagerCaptureDims.rows)
+          } finally {
+            suppressSnapshotReplayPtyResize = false
+          }
+        }
         transport.attach({
           existingPtyId: attachPtyId,
           cols,
@@ -5082,6 +5125,9 @@ export function connectPanePty(
             onError: reportError
           }
         })
+        if (replayAtCaptureDims) {
+          safeFit(pane)
+        }
         bindActivePanePty(attachPtyId, { updateTabPtyId: 'if-missing' })
         if (attachPtyId === eagerLivePtyId) {
           registerPaneSerializerFor(attachPtyId)

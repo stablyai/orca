@@ -182,6 +182,8 @@ describe('launchAgentBackgroundSession', () => {
     )
     expect(mockSpawn).toHaveBeenCalledWith(
       expect.objectContaining({
+        cols: 120,
+        rows: 40,
         cwd: '/repo/worktree',
         command: "claude '--dangerously-skip-permissions' 'run the automation'",
         env: expect.objectContaining({
@@ -220,7 +222,11 @@ describe('launchAgentBackgroundSession', () => {
       recordInteraction: false
     })
     expect(mockUpdateTabPtyId).toHaveBeenCalledWith('tab-1', 'pty-1')
-    expect(mockRegisterEagerPtyBuffer).toHaveBeenCalledWith('pty-1', expect.any(Function))
+    // Why: replaying the eager buffer at its spawn grid keeps inline-TUI
+    // cursor rows correct when the pane later adopts the PTY.
+    expect(mockRegisterEagerPtyBuffer).toHaveBeenCalledWith('pty-1', expect.any(Function), {
+      captureDims: { cols: 120, rows: 40 }
+    })
     expect(mockSubscribeToPtyData).toHaveBeenCalledWith('pty-1', expect.any(Function))
     expect(mockSubscribeToPtyExit).toHaveBeenCalledWith('pty-1', expect.any(Function))
     expect(result).toMatchObject({ tabId: 'tab-1', paneKey, ptyId: 'pty-1' })

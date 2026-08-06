@@ -37,6 +37,7 @@ import { createAgentStatusOscProcessor } from '../../../shared/agent-status-osc'
 import type { RuntimeTerminalCreate } from '../../../shared/runtime-types'
 import { createSshBackgroundStartupDelivery } from '@/lib/ssh-background-startup-delivery'
 import { shouldUseShellReadyStartupDelivery } from '../../../shared/codex-startup-delivery'
+import { BACKGROUND_PTY_SPAWN_SIZE } from '@/lib/background-pty-spawn-size'
 
 export async function launchAgentBackgroundSession(
   args: LaunchAgentBackgroundSessionArgs
@@ -189,8 +190,8 @@ export async function launchAgentBackgroundSession(
       ptyId = toRemoteRuntimePtyId(created.terminal.handle, runtimeTarget.environmentId)
     } else {
       const result = await window.api.pty.spawn({
-        cols: 120,
-        rows: 40,
+        cols: BACKGROUND_PTY_SPAWN_SIZE.cols,
+        rows: BACKGROUND_PTY_SPAWN_SIZE.rows,
         cwd: worktree.path,
         command: startupPlan.launchCommand,
         ...(!startupPlan.startupCommandDelivery
@@ -290,7 +291,7 @@ export async function launchAgentBackgroundSession(
       .then((result) => handleExit(ptyId, result.wait.exitCode ?? 0))
       .catch(() => {})
   } else {
-    registerEagerPtyBuffer(ptyId, handleExit)
+    registerEagerPtyBuffer(ptyId, handleExit, { captureDims: BACKGROUND_PTY_SPAWN_SIZE })
     unsubscribeData = subscribeToPtyData(ptyId, handleData)
     // Why: opening the workspace attaches a real terminal transport and disposes
     // the eager exit handler. This sidecar keeps automation completion tracking
