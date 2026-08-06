@@ -484,7 +484,6 @@ describe('PtyHandler', () => {
       dispatcher.callRequest('pty.confirmForegroundProcess', { id: 'missing' })
     ).resolves.toBeNull()
   })
-  })
 
   it('normalizes a missing native binding as degraded node-pty availability', async () => {
     mockPtySpawn.mockImplementationOnce(() => {
