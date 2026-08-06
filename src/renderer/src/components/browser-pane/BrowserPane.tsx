@@ -1041,13 +1041,13 @@ function RemoteBrowserPagePane({
       getDeviceScaleFactor: getRemoteBrowserDeviceScaleFactor,
       setStatus: (status) => {
         setStreamStatus(status)
-        // Why the pane's notice is cleared on a fresh start or a recovery: it has no other owner,
-        // and without this a validation warning or a failed-input string from while the stream was
-        // down reappears over a healthy stream with nothing to dismiss it. This is what onReady's
-        // and open()'s setError(null) used to do before the notices were split.
-        if (status.kind === 'live' || status.kind === 'opening') {
-          setPaneNotice(null)
-        }
+        // Why every status change clears the pane's notice, not just the recovering ones: a pane
+        // notice describes the situation the PREVIOUS status described, so any transition makes it
+        // stale. Clearing only on live/opening left a 'direct' notice — which outranks the stream's
+        // own — on screen after the stream stopped, so a stranded pane showed "Enter a valid http(s)
+        // or localhost URL." beside its Reconnect button and never showed the actual cause.
+        // It also has no other owner: nothing else would dismiss it.
+        setPaneNotice(null)
       },
       applyTabInfo: (tab) => streamBridgeRef.current.applyTabInfo(tab),
       clearFrame: () => streamBridgeRef.current.clearFrame(),
@@ -2065,7 +2065,12 @@ function RemoteBrowserPagePane({
   })
 
   return (
-    <div className="relative flex h-full min-h-0 flex-1 flex-col bg-background">
+    // The testid scopes E2E queries to this pane: a workspace can hold more than one browser pane,
+    // and controls like the address bar are otherwise ambiguous across them.
+    <div
+      data-testid="remote-browser-pane"
+      className="relative flex h-full min-h-0 flex-1 flex-col bg-background"
+    >
       {contextMenu
         ? createPortal(
             <>
@@ -2384,10 +2389,17 @@ function RemoteBrowserPagePane({
             }}
           />
         ) : null}
-        {remoteError ? (
+        {/* Why the reconnect control also opens this toast: the control renders inside it, so
+            gating the toast on the message alone made an empty message ('' from a host that failed
+            with no text) swallow the user's only way back — the original stranding bug, reachable
+            through three sites that forward host-supplied text into `stopped`. */}
+        {remoteError || canReconnectRemoteBrowserStream(streamStatus) ? (
           <div
             data-testid="remote-browser-stream-error"
-            className="absolute bottom-4 left-1/2 flex max-w-md -translate-x-1/2 items-center gap-2 rounded-md border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md"
+            // Why z-30: the load-failure overlay is a z-20 full-pane sheet, so without this the
+            // Reconnect control renders beneath it and silently swallows every click — the user's
+            // only way back, present but unusable, whenever the page also failed to load.
+            className="absolute bottom-4 left-1/2 z-30 flex max-w-md -translate-x-1/2 items-center gap-2 rounded-md border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md"
           >
             <span>{remoteError}</span>
             {canReconnectRemoteBrowserStream(streamStatus) ? (

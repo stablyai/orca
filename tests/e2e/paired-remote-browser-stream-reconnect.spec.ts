@@ -106,6 +106,21 @@ test('bounds remote browser stream retries, then offers reconnect', async ({
     const reconnectButton = page.getByRole('button', { name: 'Reconnect' })
     await expect(reconnectButton).toHaveCount(0)
 
+    // Leave a pane-owned notice on screen before the drop. It outranks the stream's own message by
+    // design (it is the only response to what the user typed), so if nothing clears it on a status
+    // change, the stranded pane below reports a stale URL complaint next to its Reconnect button and
+    // never says what actually happened. The 'Lost connection' assertion after the drop is what
+    // catches that.
+    // Scoped to the pane holding the remote frame: a workspace can hold more than one browser pane.
+    const remotePane = page
+      .getByTestId('remote-browser-pane')
+      .filter({ has: page.locator('img.cursor-default.bg-white') })
+    const addressBar = remotePane.locator('[data-orca-browser-address-bar="true"]')
+    await addressBar.click()
+    await addressBar.fill('about:config')
+    await addressBar.press('Enter')
+    await expect(errorToast).toContainText('Enter a valid http(s) or localhost URL.')
+
     // Drop the runtime connection: the stream closes and every restart attempt now genuinely fails.
     await page.evaluate(async (selector) => {
       await window.api.runtimeEnvironments.disconnect({ selector })

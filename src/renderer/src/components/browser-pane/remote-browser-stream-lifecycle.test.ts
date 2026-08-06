@@ -68,6 +68,7 @@ function createHarness() {
   let persistentSubscribeError: unknown = null
   const subscribeErrorQueue: unknown[] = []
   let subscribeAttempts = 0
+  let closeBeforeNextSubscribeRejects = false
 
   const callRpc = (async (_target: unknown, method: string) => {
     rpcLog.push(method)
@@ -95,6 +96,16 @@ function createHarness() {
 
   const subscribeScreencast: RemoteBrowserScreencastSubscribe = async (args, callbacks) => {
     subscribeAttempts += 1
+    // Models the host closing the subscription and only then rejecting the request, which is what
+    // src/main/ipc/runtime-environments.ts does on a stale pairing.
+    if (closeBeforeNextSubscribeRejects) {
+      closeBeforeNextSubscribeRejects = false
+      callbacks.onClose?.()
+      throw rpcError(
+        'runtime_unavailable',
+        'Runtime environment pairing changed; refresh and try again'
+      )
+    }
     const error = subscribeErrorQueue.shift() ?? persistentSubscribeError
     if (error) {
       throw error
@@ -207,6 +218,9 @@ function createHarness() {
     },
     failEverySubscribe: (error: unknown) => {
       persistentSubscribeError = error
+    },
+    closeThenRejectNextSubscribe: () => {
+      closeBeforeNextSubscribeRejects = true
     },
     holdNextStatusGet: (): Gate => {
       const gate = createGate()
@@ -359,7 +373,7 @@ describe('RemoteBrowserStreamLifecycle', () => {
     expect(harness.currentError).toBeNull()
   })
 
-  // A confirmed-live stream must forget prior failures, or the next drop inherits their backoff.
+  // A stream that lasted must forget prior failures, or the next drop inherits their backoff.
   it('backs off from scratch after a stream is confirmed live again', async () => {
     const harness = createHarness()
     await openStreamAndConfirmReady(harness)
@@ -369,7 +383,8 @@ describe('RemoteBrowserStreamLifecycle', () => {
     await vi.advanceTimersByTimeAsync(500)
     await vi.advanceTimersByTimeAsync(1000)
     harness.streams[1].emitReady()
-    await settle()
+    // Why the wait: 'ready' alone no longer refills the budget — only a stream that stayed up does.
+    await vi.advanceTimersByTimeAsync(15_000)
 
     harness.streams[1].emitEnd()
     await settle()
@@ -718,6 +733,144 @@ describe('RemoteBrowserStreamLifecycle stop announcements', () => {
     await vi.advanceTimersByTimeAsync(60_000)
 
     // A resize during a blip tears down a live subscription and never reaches the retry budget.
+    expect(harness.reconnectOffered).toBe(true)
+    expect(harness.busyLog.at(-1)).toBe(false)
+  })
+
+  // This was the one failure path still forwarding raw transport text, which is written for logs and
+  // names our internals. The pane speaks for itself everywhere else.
+  it('speaks for itself when a viewport restart fails transiently', async () => {
+    const harness = createHarness()
+    await openStreamAndConfirmReady(harness)
+
+    harness.failEverySubscribe(
+      rpcError('runtime_unavailable', 'Runtime environment pairing changed; refresh and try again')
+    )
+    harness.setViewportSize({ width: 1400, height: 900 })
+    harness.lifecycle.restartForViewport(harness.streams[0].pageId)
+    await vi.advanceTimersByTimeAsync(60_000)
+
+    expect(harness.currentError).toBe('Lost connection to the remote server.')
+  })
+
+  // ...but a failure we classified ourselves keeps its own message, which says something true.
+  it('keeps a permanent viewport-restart failure specific', async () => {
+    const harness = createHarness()
+    await openStreamAndConfirmReady(harness)
+
+    harness.failEverySubscribe(rpcError('worktree_not_found_on_server', 'worktree is gone'))
+    harness.setViewportSize({ width: 1400, height: 900 })
+    harness.lifecycle.restartForViewport(harness.streams[0].pageId)
+    await vi.advanceTimersByTimeAsync(60_000)
+
+    expect(harness.currentError).toBe('worktree is gone')
+  })
+})
+
+// Two writers, one value — the shape every round of this review has found. The stream token is
+// claimed before subscribe is awaited, so a close can arrive and arm a restart while the subscribe
+// promise is still rejecting. The host does exactly this: it closes the subscription and only then
+// throws (src/main/ipc/runtime-environments.ts, stale pairing).
+describe('RemoteBrowserStreamLifecycle close racing a rejected subscribe', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('does not offer reconnect over a restart that is already armed', async () => {
+    const harness = createHarness()
+    harness.closeThenRejectNextSubscribe()
+    harness.lifecycle.open()
+    await settle()
+
+    // The armed restart owns the status: offering a manual control here shows it for one backoff
+    // step and then swaps it for a spinner, which is the state this pane must never present.
+    expect(harness.reconnectOffered).toBe(false)
+    expect(harness.busyLog.at(-1)).toBe(true)
+    expect(harness.currentError).toBeNull()
+  })
+
+  it('still reaches a reconnect once that restart budget is spent', async () => {
+    const harness = createHarness()
+    harness.closeThenRejectNextSubscribe()
+    harness.lifecycle.open()
+    await settle()
+    harness.failEverySubscribe(rpcError('runtime_unavailable', 'still down'))
+
+    await vi.advanceTimersByTimeAsync(60_000)
+
+    expect(harness.reconnectOffered).toBe(true)
+    expect(harness.currentError).toBe('Lost connection to the remote server.')
+  })
+})
+
+// A subscribe resolves as soon as the request is sent, so a host that accepts and then goes silent
+// is bounded by nothing on the client. Both busy states hide the reconnect, so this stranded the
+// pane behind a permanent spinner with dead input handlers — the exact failure this work removes.
+describe('RemoteBrowserStreamLifecycle host that never says ready', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('does not sit busy forever when the host accepts the subscribe and goes silent', async () => {
+    const harness = createHarness()
+    harness.lifecycle.open()
+    await settle()
+    expect(harness.streams).toHaveLength(1)
+
+    // Nothing has failed yet, so the pane is right to still be working.
+    await vi.advanceTimersByTimeAsync(20_000)
+    expect(harness.reconnectOffered).toBe(false)
+    expect(harness.busyLog.at(-1)).toBe(true)
+
+    await vi.advanceTimersByTimeAsync(400_000)
+
+    expect(harness.reconnectOffered).toBe(true)
+    expect(harness.busyLog.at(-1)).toBe(false)
+    expect(harness.currentError).not.toBeNull()
+  })
+
+  it('releases the hung subscription rather than leaking it', async () => {
+    const harness = createHarness()
+    harness.lifecycle.open()
+    await settle()
+
+    await vi.advanceTimersByTimeAsync(400_000)
+
+    expect(harness.streams[0].unsubscribeCount).toBeGreaterThan(0)
+  })
+})
+
+// 'ready' proves the host accepted the subscribe, not that the stream is sustained. CDP allows one
+// screencast per page, so a second subscriber on the same remote page evicts the first on every
+// attempt. Refilling the budget on 'ready' turned that into the unbounded retry loop the budget
+// exists to prevent.
+describe('RemoteBrowserStreamLifecycle flapping host', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('stops a host that flaps ready-then-end instead of retrying forever', async () => {
+    const harness = createHarness()
+    await openStreamAndConfirmReady(harness)
+
+    for (let round = 0; round < 8; round++) {
+      harness.streams.at(-1)!.emitEnd()
+      // Long enough for the next backoff step to fire, short enough that the stream never proves
+      // itself healthy.
+      await vi.advanceTimersByTimeAsync(9_000)
+      harness.streams.at(-1)!.emitReady()
+      await settle()
+    }
+
     expect(harness.reconnectOffered).toBe(true)
     expect(harness.busyLog.at(-1)).toBe(false)
   })
