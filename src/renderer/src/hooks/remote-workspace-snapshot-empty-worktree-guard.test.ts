@@ -12,7 +12,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RemoteWorkspaceSnapshot } from '../../../shared/remote-workspace-types'
 import type { DirectSshAuthority, SshProviderEpoch } from '../../../shared/ssh-types'
-import type { TerminalTab } from '../../../shared/types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { createTestStore, makeTab, makeWorktree } from '../store/slices/store-test-helpers'
 import type { DirectSshSnapshotApplyToken } from './direct-ssh-reconnect-coordinator-types'
 import { applyDirectSshRemoteWorkspaceSnapshot } from './remote-workspace-snapshot-apply'

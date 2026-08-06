@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { TerminalTab, WorkspaceSessionState } from '../../../shared/types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import {
   mergeDirectSshRemoteWorkspaceSession,
   narrowDirectSshReplaceWorktreeIds
@@ -79,6 +80,7 @@ describe('narrowDirectSshReplaceWorktreeIds', () => {
 describe('mergeDirectSshRemoteWorkspaceSession', () => {
   it('keeps local state for a worktree the narrowing removed from the replace scope', () => {
     const localTabs = [tab('tab-1', WT), tab('tab-2', WT)]
+    const expectedTabs = structuredClone(localTabs)
     const current = session({
       tabsByWorktree: { [WT]: localTabs },
       terminalLayoutsByTabId: { 'tab-1': { activeLeafId: 'leaf-1' } as never },
@@ -98,7 +100,7 @@ describe('mergeDirectSshRemoteWorkspaceSession', () => {
     })
 
     expect([...replaceWorktreeIds]).toEqual([])
-    expect(merged.tabsByWorktree[WT]).toEqual(localTabs)
+    expect(merged.tabsByWorktree[WT]).toEqual(expectedTabs)
     expect(merged.terminalLayoutsByTabId['tab-1']).toEqual({ activeLeafId: 'leaf-1' })
     expect(merged.activeTabIdByWorktree?.[WT]).toBe('tab-1')
     expect(merged.lastVisitedAtByWorktreeId?.[WT]).toBe(111)
@@ -108,12 +110,13 @@ describe('mergeDirectSshRemoteWorkspaceSession', () => {
 
   it('keeps local tabs for an in-scope worktree the remote snapshot omits entirely', () => {
     const localTabs = [tab('tab-1', WT)]
+    const expectedTabs = structuredClone(localTabs)
     const current = session({ tabsByWorktree: { [WT]: localTabs } })
     const remote = session()
 
     const { merged } = narrowAndMerge(current, remote, new Set([WT]), { [WT]: localTabs })
 
-    expect(merged.tabsByWorktree[WT]).toEqual(localTabs)
+    expect(merged.tabsByWorktree[WT]).toEqual(expectedTabs)
   })
 
   it('keeps current active-tab state when the active worktree left the replace scope', () => {
@@ -137,6 +140,8 @@ describe('mergeDirectSshRemoteWorkspaceSession', () => {
 
   it('narrows the replace scope itself when the caller hands it an un-narrowed set', () => {
     const localTabs = [tab('tab-1', WT)]
+    // Why: the expectation must not alias the merge input — a merge that mutates the array would otherwise compare the value against itself.
+    const expectedTabs = structuredClone(localTabs)
     const merged = mergeDirectSshRemoteWorkspaceSession(
       session({ tabsByWorktree: { [WT]: localTabs } }),
       session({ tabsByWorktree: { [WT]: [] } }),
@@ -145,7 +150,8 @@ describe('mergeDirectSshRemoteWorkspaceSession', () => {
       new Set()
     )
 
-    expect(merged.tabsByWorktree[WT]).toEqual(localTabs)
+    expect(merged.tabsByWorktree[WT]).toEqual(expectedTabs)
+    expect(localTabs).toEqual(expectedTabs)
   })
 
   it('still replaces a worktree when the remote snapshot has tabs for it', () => {
@@ -173,6 +179,7 @@ describe('mergeDirectSshRemoteWorkspaceSession', () => {
 
   it('scopes the guard per worktree, replacing populated ones while keeping the emptied one', () => {
     const keptTabs = [tab('tab-kept', WT)]
+    const expectedKeptTabs = structuredClone(keptTabs)
     const replacedRemote = [tab('tab-remote', OTHER_WT, { generation: 3 })]
     const current = session({
       tabsByWorktree: { [WT]: keptTabs, [OTHER_WT]: [tab('tab-old', OTHER_WT)] },
@@ -192,7 +199,7 @@ describe('mergeDirectSshRemoteWorkspaceSession', () => {
     )
 
     expect([...replaceWorktreeIds]).toEqual([OTHER_WT])
-    expect(merged.tabsByWorktree[WT]).toEqual(keptTabs)
+    expect(merged.tabsByWorktree[WT]).toEqual(expectedKeptTabs)
     expect(merged.tabsByWorktree[OTHER_WT].map((t) => t.id)).toEqual(['tab-remote'])
     // Per-worktree records follow the same scope: the kept worktree's entries stay local, the
     // replaced worktree's entries come from the remote.
