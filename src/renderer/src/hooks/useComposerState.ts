@@ -1355,8 +1355,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   selectedRepoPathRef.current = selectedRepoPath
   const selectedRepoSettingsRef = useRef(selectedRepoSettings)
   selectedRepoSettingsRef.current = selectedRepoSettings
-  const selectedRepoExecutionHostIdRef = useRef(selectedRepoExecutionHostId)
-  selectedRepoExecutionHostIdRef.current = selectedRepoExecutionHostId
 
   // Why: depend on the persisted policy *value*, not the selectedRepo object. Background repo
   // refetches (git polling) hand back a new repo reference with the same hookSettings; keying on
@@ -1379,7 +1377,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     async (
       policy: SetupAgentStartupPolicy = setupAgentStartupPolicyRef.current
     ): Promise<boolean> => {
-      const executionHostId = selectedRepoExecutionHostIdRef.current
+      const executionHostId = selectedRepoExecutionHostId
       if (!executionHostId) {
         return true
       }
@@ -1455,13 +1453,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         return saved
       }
     },
-    [repoId, updateRepo]
+    [repoId, selectedRepoExecutionHostId, updateRepo]
   )
 
   const handleSetupAgentStartupPolicyChange = useCallback(
     (policy: SetupAgentStartupPolicy) => {
       setupAgentStartupPolicyRef.current = policy
-      const executionHostId = selectedRepoExecutionHostIdRef.current
+      const executionHostId = selectedRepoExecutionHostId
       if (repoId && executionHostId) {
         setupAgentStartupPolicyDraftRef.current = { repoId, hostId: executionHostId, policy }
       }
@@ -1477,7 +1475,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         }
       })
     },
-    [persistSetupAgentStartupPolicy, repoId]
+    [persistSetupAgentStartupPolicy, repoId, selectedRepoExecutionHostId]
   )
 
   const cancelPromptCaretFrame = useCallback((): void => {

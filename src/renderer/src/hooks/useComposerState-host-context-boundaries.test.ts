@@ -431,15 +431,7 @@ describe('useComposerState host-context boundaries', () => {
   })
 
   it('saves setup startup policy before creating a workspace', () => {
-    const ownerRefSection = sourceBetween(
-      HOOK_SOURCE,
-      'const selectedRepoExecutionHostIdRef',
-      '// Why: depend on the persisted policy'
-    )
-    expect(ownerRefSection).toContain(
-      'selectedRepoExecutionHostIdRef.current = selectedRepoExecutionHostId'
-    )
-    expect(ownerRefSection).not.toContain('useEffect')
+    expect(HOOK_SOURCE).not.toContain('selectedRepoExecutionHostIdRef')
 
     const persistSection = sourceBetween(
       HOOK_SOURCE,
@@ -447,6 +439,7 @@ describe('useComposerState host-context boundaries', () => {
       'const handleSetupAgentStartupPolicyChange'
     )
     expect(persistSection).toContain('setupAgentStartupPolicySaveRef.current')
+    expect(persistSection).toContain('const executionHostId = selectedRepoExecutionHostId')
     expect(persistSection).toContain('pendingSave.repoId === currentRepo.id')
     expect(persistSection).toContain('pendingSave.hostId === executionHostId')
     expect(persistSection).toContain('findRepoForHost(currentStore.repos, repoId')
@@ -454,6 +447,7 @@ describe('useComposerState host-context boundaries', () => {
     expect(persistSection).toContain('pendingSave.policy === policy')
     expect(persistSection).toContain('await pendingSave.promise')
     expect(persistSection).toContain('continue')
+    expect(persistSection).toContain('[repoId, selectedRepoExecutionHostId, updateRepo]')
     expect(HOOK_SOURCE).toContain('setupAgentStartupPolicyDraftRef.current')
 
     const fullSubmit = sourceBetween(
