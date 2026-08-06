@@ -55,6 +55,7 @@ export type DaemonServerOptions = {
   /** Reported in the hello so a repaired PID record can carry the real owner's metadata. */
   entryPath?: string
   appVersion?: string
+  spawnerExecPath?: string
   /** Direct-construction seam for protocol fixture tests; production never overrides it. */
   protocolVersion?: number
   onIdleShutdown?: () => void
@@ -120,6 +121,7 @@ export class DaemonServer {
   private publishEndpointOwnership: () => void
   private entryPath: string | null
   private appVersion: string | null
+  private spawnerExecPath: string | null
   private ownedSocketIdentity: DaemonSocketIdentity | null = null
   private endpointOwnershipTimer: ReturnType<typeof setInterval> | null = null
   private endpointOwnershipLossStreak = 0
@@ -197,6 +199,7 @@ export class DaemonServer {
     this.publishEndpointOwnership = opts.publishEndpointOwnership ?? (() => {})
     this.entryPath = opts.entryPath ?? null
     this.appVersion = opts.appVersion ?? null
+    this.spawnerExecPath = opts.spawnerExecPath ?? null
     this.onIdleShutdown = opts.onIdleShutdown ?? (() => {})
     this.onRpcShutdown = opts.onRpcShutdown ?? (() => {})
     this.initialAdoptionTimeoutMs =
@@ -610,7 +613,8 @@ export class DaemonServer {
                 startedAtMs: this.startedAtMs,
                 launchNonce: this.launchNonce,
                 ...(this.entryPath ? { entryPath: this.entryPath } : {}),
-                ...(this.appVersion ? { appVersion: this.appVersion } : {})
+                ...(this.appVersion ? { appVersion: this.appVersion } : {}),
+                ...(this.spawnerExecPath ? { spawnerExecPath: this.spawnerExecPath } : {})
               }
             }
           : {})

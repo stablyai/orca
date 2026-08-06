@@ -29,11 +29,13 @@ import {
 } from './types'
 import {
   getMacDaemonSystemResolverHealth,
+  getMacDaemonTccAttributionHealth,
   getDaemonLaunchIdentity,
   checkDaemonHealth,
   isDaemonStaleForCurrentBundle,
   killStaleDaemon,
-  parseDaemonPidFile
+  parseDaemonPidFile,
+  type MacDaemonTccAttributionHealth
 } from './daemon-health'
 import {
   collectPinnedDaemonVersions,
@@ -279,6 +281,9 @@ async function readDaemonOwnerMetadata(
   }
   if (identity.appVersion) {
     metadata.appVersion = identity.appVersion
+  }
+  if (identity.spawnerExecPath) {
+    metadata.spawnerExecPath = identity.spawnerExecPath
   }
   const incarnation = await readDaemonProcessIncarnation(identity.pid)
   if (incarnation) {
@@ -544,8 +549,31 @@ function createOutOfProcessLauncher(
             confirmedReplacement = (await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION))
               .cleaned
           } else {
-            // Why: healthy daemon from a previous session answered a protocol ping — safe to reuse.
-            return preserveDaemon()
+            const attributionHealth = await getMacDaemonTccAttributionHealth(
+              runtimeDir,
+              socketPath,
+              tokenPath,
+              app.isPackaged ? app.getVersion() : null
+            )
+            if (attributionHealth === 'severed') {
+              // Why: replacing with live sessions would kill them; Settings → Developer
+              // Permissions surfaces the Manage Sessions → Restart remedy instead.
+              const liveSessionCount = await getAliveDaemonSessionCount(socketPath, tokenPath)
+              if (liveSessionCount === 0) {
+                console.warn(
+                  '[daemon] Replacing daemon whose macOS TCC attribution is severed (spawning app binary no longer exists)'
+                )
+                pendingReplacement = { reason: 'severed_tcc_attribution', liveSessionCount }
+                confirmedReplacement = (
+                  await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
+                ).cleaned
+              } else {
+                return preserveDaemon()
+              }
+            } else {
+              // Why: healthy daemon from a previous session answered a protocol ping — safe to reuse.
+              return preserveDaemon()
+            }
           }
         }
       } else {
@@ -655,6 +683,8 @@ function createOutOfProcessLauncher(
           entryPath,
           '--app-version',
           app.getVersion(),
+          '--spawner-exec-path',
+          process.execPath,
           ...(macosLoginSessionWatch ? ['--login-session-watch'] : []),
           ...daemonLogArgs()
         ],
@@ -981,6 +1011,18 @@ async function reconcileSeededClaudeLivePtys(provider: DaemonProvider): Promise<
 // Why: a narrow getter (not a raw export) keeps the "swap on restart" invariant in one place (replaceDaemonProvider).
 export function getDaemonProvider(): DaemonProvider | null {
   return adapter
+}
+
+// Why: computed from the pid record on demand (not cached at adoption) so the Settings
+// remedy surface always reflects the daemon actually serving terminals right now.
+export async function getCurrentDaemonMacTccAttributionHealth(): Promise<MacDaemonTccAttributionHealth> {
+  const runtimeDir = getRuntimeDir()
+  return getMacDaemonTccAttributionHealth(
+    runtimeDir,
+    getDaemonSocketPath(runtimeDir),
+    getDaemonTokenPath(runtimeDir),
+    app.isPackaged ? app.getVersion() : null
+  )
 }
 
 /** Returns null unless every daemon generation supplied an authoritative inventory. */

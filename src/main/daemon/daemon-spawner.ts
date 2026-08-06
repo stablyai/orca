@@ -24,6 +24,8 @@ export type DaemonPidFile = {
   launchNonce?: string
   linuxStartTicks?: string
   bootId?: string
+  /** Forking app's binary — macOS pins the daemon's TCC responsible process to it (STA-3491). */
+  spawnerExecPath?: string
 }
 
 export type DaemonProcessHandle = {

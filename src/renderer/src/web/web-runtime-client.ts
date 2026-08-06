@@ -14,7 +14,10 @@ import {
   publicKeyFromBase64,
   publicKeyToBase64
 } from './web-e2ee'
-import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import {
+  AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+  SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY
+} from '../../../shared/protocol-version'
 import { createWebRuntimeUnauthorizedError } from './web-runtime-client-error'
 import { withReconnectJitter } from '../../../shared/reconnect-jitter'
 
@@ -456,7 +459,10 @@ export class WebRuntimeClient {
           this.sendEncrypted({
             type: 'e2ee_auth',
             deviceToken: this.pairing.deviceToken,
-            clientCapabilities: [SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY]
+            clientCapabilities: [
+              SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+              AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY
+            ]
           })
           return
         }

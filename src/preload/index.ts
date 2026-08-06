@@ -4,7 +4,12 @@ import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
 import { glApi } from './gitlab'
 import type { AppIdentity } from '../shared/app-identity'
-import type { DashboardSnapshot, DashboardRevealAgentArgs } from '../shared/dashboard-snapshot'
+import type {
+  DashboardRevealAgentArgs,
+  DashboardSleepWorkspaceArgs,
+  DashboardSnapshot,
+  DashboardSpawnAgentArgs
+} from '../shared/dashboard-snapshot'
 import type {
   TerminalPreviewConnectResult,
   TerminalPreviewDataPayload
@@ -1251,7 +1256,8 @@ const api = {
       listSessions: () => ipcRenderer.invoke('pty:management:listSessions'),
       killAll: () => ipcRenderer.invoke('pty:management:killAll'),
       killOne: (args: { sessionId: string }) => ipcRenderer.invoke('pty:management:killOne', args),
-      restart: () => ipcRenderer.invoke('pty:management:restart')
+      restart: () => ipcRenderer.invoke('pty:management:restart'),
+      macTccAttribution: () => ipcRenderer.invoke('pty:management:macTccAttribution')
     }
   },
 
@@ -2292,7 +2298,8 @@ const api = {
 
   dashboard: {
     // Open the pop-out dashboard window, or focus it if already open.
-    openPopout: (): Promise<void> => ipcRenderer.invoke('dashboardPopout:open'),
+    openPopout: (view?: 'board' | 'map'): Promise<void> =>
+      ipcRenderer.invoke('dashboardPopout:open', view),
 
     // ── Producer side (main window) ──────────────────────────────────────
     publishSnapshot: (snapshot: DashboardSnapshot): Promise<void> =>
@@ -2320,6 +2327,20 @@ const api = {
       ipcRenderer.on('ui:ackDashboardAgent', listener)
       return () => ipcRenderer.removeListener('ui:ackDashboardAgent', listener)
     },
+    onSpawnAgent: (callback: (args: DashboardSpawnAgentArgs) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, args: DashboardSpawnAgentArgs): void =>
+        callback(args)
+      ipcRenderer.on('ui:spawnDashboardAgent', listener)
+      return () => ipcRenderer.removeListener('ui:spawnDashboardAgent', listener)
+    },
+    onSleepWorkspace: (callback: (args: DashboardSleepWorkspaceArgs) => void): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        args: DashboardSleepWorkspaceArgs
+      ): void => callback(args)
+      ipcRenderer.on('ui:sleepDashboardWorkspace', listener)
+      return () => ipcRenderer.removeListener('ui:sleepDashboardWorkspace', listener)
+    },
 
     // ── Consumer side (pop-out window) ───────────────────────────────────
     requestSnapshot: (): Promise<void> => ipcRenderer.invoke('dashboard:requestSnapshot'),
@@ -2329,10 +2350,20 @@ const api = {
       ipcRenderer.on('dashboard:snapshot', listener)
       return () => ipcRenderer.removeListener('dashboard:snapshot', listener)
     },
+    onViewRequested: (callback: (view: 'board' | 'map') => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, view: 'board' | 'map'): void =>
+        callback(view)
+      ipcRenderer.on('dashboard:viewRequested', listener)
+      return () => ipcRenderer.removeListener('dashboard:viewRequested', listener)
+    },
     revealAgent: (args: DashboardRevealAgentArgs): Promise<void> =>
       ipcRenderer.invoke('dashboardPopout:revealAgent', args),
     ackAgent: (paneKey: string): Promise<void> =>
-      ipcRenderer.invoke('dashboardPopout:ackAgent', { paneKey })
+      ipcRenderer.invoke('dashboardPopout:ackAgent', { paneKey }),
+    spawnAgent: (args: DashboardSpawnAgentArgs): Promise<void> =>
+      ipcRenderer.invoke('dashboardPopout:spawnAgent', args),
+    sleepWorkspace: (args: DashboardSleepWorkspaceArgs): Promise<void> =>
+      ipcRenderer.invoke('dashboardPopout:sleepWorkspace', args)
   },
 
   terminalPreview: {

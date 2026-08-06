@@ -51,6 +51,7 @@ export type ParsedDaemonPid = {
   launchNonce: string | null
   linuxStartTicks: string | null
   bootId: string | null
+  spawnerExecPath: string | null
 }
 
 /**
@@ -344,6 +345,7 @@ export function parseDaemonPidFile(contents: string): ParsedDaemonPid | null {
       launchNonce?: unknown
       linuxStartTicks?: unknown
       bootId?: unknown
+      spawnerExecPath?: unknown
     }
     if (typeof parsed.pid === 'number' && Number.isFinite(parsed.pid)) {
       return {
@@ -356,7 +358,8 @@ export function parseDaemonPidFile(contents: string): ParsedDaemonPid | null {
         appVersion: typeof parsed.appVersion === 'string' ? parsed.appVersion : null,
         launchNonce: typeof parsed.launchNonce === 'string' ? parsed.launchNonce : null,
         linuxStartTicks: typeof parsed.linuxStartTicks === 'string' ? parsed.linuxStartTicks : null,
-        bootId: typeof parsed.bootId === 'string' ? parsed.bootId : null
+        bootId: typeof parsed.bootId === 'string' ? parsed.bootId : null,
+        spawnerExecPath: typeof parsed.spawnerExecPath === 'string' ? parsed.spawnerExecPath : null
       }
     }
   } catch {
@@ -372,7 +375,8 @@ export function parseDaemonPidFile(contents: string): ParsedDaemonPid | null {
         appVersion: null,
         launchNonce: null,
         linuxStartTicks: null,
-        bootId: null
+        bootId: null,
+        spawnerExecPath: null
       }
     : null
 }
@@ -435,16 +439,7 @@ export function getProcessStartedAtMs(pid: number): number | null {
     return null
   }
 
-  try {
-    const output = execFileSync('ps', ['-p', String(pid), '-o', 'lstart='], {
-      encoding: 'utf8',
-      timeout: 2_000
-    }).trim()
-    const startedAtMs = Date.parse(output)
-    return Number.isFinite(startedAtMs) ? startedAtMs : null
-  } catch {
-    return null
-  }
+  return getPsProcessIdentity(pid)?.startedAtMs ?? null
 }
 
 export function startTimeMatches(pid: number, expectedStartedAtMs: number | null): boolean {
@@ -473,6 +468,29 @@ const execFileAsync = promisify(execFile)
 export type WindowsProcessIdentity = {
   commandLine: string
   startedAtMs: number | null
+}
+
+type PsProcessIdentity = {
+  commandLine: string
+  startedAtMs: number | null
+}
+
+function getPsProcessIdentity(pid: number): PsProcessIdentity | null {
+  try {
+    const output = execFileSync('ps', ['-p', String(pid), '-o', 'lstart=', '-o', 'command='], {
+      encoding: 'utf8',
+      timeout: 2_000
+    })
+    // BSD ps formats lstart as a fixed-width 24-character timestamp.
+    const startedAtMs = Date.parse(output.slice(0, 24))
+    const commandLine = output.slice(24).trim()
+    return {
+      commandLine,
+      startedAtMs: Number.isFinite(startedAtMs) ? startedAtMs : null
+    }
+  } catch {
+    return null
+  }
 }
 
 export function parseWindowsProcessIdentityJson(stdout: string): WindowsProcessIdentity | null {
@@ -567,18 +585,14 @@ async function isDaemonProcess(
       commandLineMatchesDaemon(cmdline, socketPath, tokenPath) && startTimeMatches(pid, startedAtMs)
     )
   } catch {
-    try {
-      const output = execFileSync('ps', ['-p', String(pid), '-o', 'command='], {
-        encoding: 'utf8',
-        timeout: 2_000
-      })
-      return (
-        commandLineMatchesDaemon(output, socketPath, tokenPath) &&
-        startTimeMatches(pid, startedAtMs)
-      )
-    } catch {
+    const identity = getPsProcessIdentity(pid)
+    if (!identity) {
       return false
     }
+    return (
+      commandLineMatchesDaemon(identity.commandLine, socketPath, tokenPath) &&
+      startTimesWithinTolerance(identity.startedAtMs, startedAtMs, START_TIME_TOLERANCE_MS)
+    )
   }
 }
 
@@ -590,14 +604,7 @@ async function getDaemonCommandLine(pid: number): Promise<string | null> {
   try {
     return readFileSync(`/proc/${pid}/cmdline`, 'utf8')
   } catch {
-    try {
-      return execFileSync('ps', ['-p', String(pid), '-o', 'command='], {
-        encoding: 'utf8',
-        timeout: 2_000
-      })
-    } catch {
-      return null
-    }
+    return getPsProcessIdentity(pid)?.commandLine ?? null
   }
 }
 
@@ -675,6 +682,47 @@ export async function isDaemonStaleForCurrentBundle(
   // marker. Replacing them once prevents archive-preserved mtimes from
   // reusing stale native modules across the first metadata-aware upgrade.
   return true
+}
+
+// 'severed': macOS can no longer resolve the daemon's TCC responsible process, so
+// Accessibility/Automation grants on Orca silently stop covering its terminals (STA-3491).
+// 'unknown' fails open: legacy pid files and probe failures must not trigger replacement.
+export type MacDaemonTccAttributionHealth = 'intact' | 'severed' | 'unknown'
+
+/**
+ * macOS pins a process's TCC "responsible process" to the binary that forked it,
+ * by file reference. The detached daemon outlives that app instance, and once the
+ * spawning binary is deleted (every packaged update replaces the bundle) tccd
+ * can't resolve the grant subject — `osascript`/System Events from every terminal
+ * hosted by that daemon is silently denied (-25211) no matter what the user grants.
+ */
+export async function getMacDaemonTccAttributionHealth(
+  runtimeDir: string,
+  socketPath: string,
+  tokenPath: string,
+  packagedAppVersion: string | null,
+  protocolVersion = PROTOCOL_VERSION
+): Promise<MacDaemonTccAttributionHealth> {
+  if (process.platform !== 'darwin') {
+    return 'unknown'
+  }
+  const parsedPid = await readVerifiedDaemonPid(runtimeDir, socketPath, tokenPath, protocolVersion)
+  if (!parsedPid) {
+    return 'unknown'
+  }
+  // Packaged updates can replace the bundle at the same path, so path existence
+  // alone cannot prove the recorded spawning binary still backs this daemon.
+  if (
+    packagedAppVersion !== null &&
+    parsedPid.appVersion !== null &&
+    parsedPid.appVersion !== packagedAppVersion
+  ) {
+    return 'severed'
+  }
+  if (parsedPid.spawnerExecPath) {
+    return existsSync(parsedPid.spawnerExecPath) ? 'intact' : 'severed'
+  }
+  return 'unknown'
 }
 
 function isNoSuchProcessError(error: unknown): boolean {

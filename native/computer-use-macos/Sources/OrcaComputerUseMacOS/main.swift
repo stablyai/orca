@@ -740,25 +740,30 @@ final class Provider {
             }
             if let point = center(record.localFrame, in: snapshot.windowBounds) {
                 try Input.click(
-                    pid: snapshot.app.pid,
                     at: point,
                     button: mouseButton(button),
                     count: count,
                     modifiers: modifiers
                 )
-                return actionMetadata(path: "synthetic", fallbackReason: "actionUnsupported")
+                return actionMetadata(
+                    path: "synthetic",
+                    fallbackReason: "actionUnsupported",
+                    verification: unverifiedAction(reason: "synthetic_input")
+                )
             }
             throw ProviderError.coded("element_not_clickable", "element \(record.index) has no clickable frame")
         }
         let point = try coordinatePoint(params: params, xKey: "x", yKey: "y", snapshot: snapshot)
         try Input.click(
-            pid: snapshot.app.pid,
             at: point,
             button: mouseButton(button),
             count: count,
             modifiers: modifiers
         )
-        return actionMetadata(path: "synthetic")
+        return actionMetadata(
+            path: "synthetic",
+            verification: unverifiedAction(reason: "synthetic_input")
+        )
     }
 
     private func performClickAction(record: ElementRecord, mouseButton: String) throws -> String? {
@@ -2286,7 +2291,6 @@ private func resizePng(_ image: CGImage, scale: CGFloat) -> BoundedPNG? {
 
 private enum Input {
     static func click(
-        pid: pid_t,
         at point: CGPoint,
         button: MouseButton,
         count: Int,
@@ -2298,10 +2302,32 @@ private enum Input {
         let flags = modifiers.reduce(into: CGEventFlags()) { result, modifier in
             result.insert(modifier.flag)
         }
-        for _ in 0..<max(count, 1) {
-            try mouse(.mouseMoved, source: source, point: point, button: button.cgButton, flags: flags, pid: pid)
-            try mouse(button.downEvent, source: source, point: point, button: button.cgButton, flags: flags, pid: pid)
-            try mouse(button.upEvent, source: source, point: point, button: button.cgButton, flags: flags, pid: pid)
+        // Why HID tap + pacing: see SyntheticMouseClickDelivery (STA-3433).
+        for step in SyntheticMouseClickDelivery.steps(clickCount: count) {
+            let type: CGEventType
+            switch step {
+            case .move:
+                type = .mouseMoved
+            case .buttonDown:
+                type = button.downEvent
+            case .buttonUp:
+                type = button.upEvent
+            }
+            guard let event = CGEvent(
+                mouseEventSource: source,
+                mouseType: type,
+                mouseCursorPosition: point,
+                mouseButton: button.cgButton
+            ) else {
+                throw ProviderError.coded("accessibility_error", "failed to create mouse event")
+            }
+            event.flags = flags
+            let clickState = SyntheticMouseClickDelivery.clickState(for: step)
+            if clickState > 0 {
+                event.setIntegerValueField(.mouseEventClickState, value: clickState)
+            }
+            event.post(tap: .cghidEventTap)
+            usleep(SyntheticMouseClickDelivery.interEventPauseMicroseconds)
         }
     }
 

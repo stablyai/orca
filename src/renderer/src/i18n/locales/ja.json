@@ -14603,6 +14603,29 @@
     }
   },
   "dashboardPopout": {
+    "view": {
+      "label": "ダッシュボード表示",
+      "board": "ダッシュボード",
+      "map": "エージェントマップ"
+    },
+    "map": {
+      "host": {
+        "all": "すべてのホスト",
+        "local": "ローカル",
+        "ssh": "SSH",
+        "wsl": "WSL",
+        "remote": "リモート"
+      },
+      "liveContainmentMap": "ライブ包含マップ",
+      "hostFilter": "ホストフィルター",
+      "empty": "現在のフィルターに一致するエージェントはありません。",
+      "canvasLabel": "プロジェクト、ワークスペース、エージェントの入れ子マップ",
+      "zoomOut": "縮小",
+      "zoomIn": "拡大",
+      "fit": "全体表示",
+      "projectCount": "{{agents}}件のエージェント · {{workspaces}}件のワークスペース",
+      "agentCount": "{{count}}件のエージェント"
+    },
     "placeholder": {
       "title": "Agent dashboard",
       "description": "This is where all your agents will show up at a glance. The board is coming soon."
@@ -14639,7 +14662,7 @@
     },
     "terminal": {
       "closed": "No live terminal — this agent's pane has closed.",
-      "focusWorktree": "Focus worktree",
+      "focusWorktree": "Open worktree",
       "close": "Close"
     },
     "close": "Close dashboard",

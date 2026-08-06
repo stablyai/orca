@@ -38,6 +38,7 @@ import {
 } from '../shared/automation-schedules'
 import { getAutomationLegacyRepoId } from '../shared/automation-run-identity'
 import { normalizeAutomationPrecheck } from '../shared/automation-precheck'
+import { normalizeProxyUrl } from '../shared/network-proxy'
 import type {
   PersistedState,
   Project,
@@ -279,8 +280,19 @@ import { track } from './telemetry/client'
 import { getCohortAtEmit } from './telemetry/cohort-classifier'
 import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from './startup/startup-diagnostics'
 
+// Why (STA-3442): isEncryptionAvailable() itself can throw (keychain/API errors, pre-ready
+// use); an uncaught throw here failed the entire save/load, silently losing every setting.
+function safeStorageEncryptionAvailable(): boolean {
+  try {
+    return safeStorage.isEncryptionAvailable()
+  } catch (err) {
+    console.warn('[persistence] safeStorage availability check failed:', err)
+    return false
+  }
+}
+
 function encrypt(plaintext: string): string {
-  if (!plaintext || !safeStorage.isEncryptionAvailable()) {
+  if (!plaintext || !safeStorageEncryptionAvailable()) {
     return plaintext
   }
   try {
@@ -292,7 +304,7 @@ function encrypt(plaintext: string): string {
 }
 
 function decrypt(ciphertext: string): string {
-  if (!ciphertext || !safeStorage.isEncryptionAvailable()) {
+  if (!ciphertext || !safeStorageEncryptionAvailable()) {
     return ciphertext
   }
   try {
@@ -3067,7 +3079,19 @@ export class Store {
           parsed.settings.opencodeSessionCookie = decrypt(parsed.settings.opencodeSessionCookie)
         }
         if (parsed.settings?.httpProxyUrl) {
-          parsed.settings.httpProxyUrl = decrypt(parsed.settings.httpProxyUrl)
+          const decryptedProxyUrl = decrypt(parsed.settings.httpProxyUrl)
+          // Why (STA-3442): after a keychain reset decrypt returns raw ciphertext; a non-URL
+          // value must not masquerade as a configured proxy (silent DIRECT fallback) or
+          // re-persist as garbage. Plaintext URLs still pass, preserving the upgrade path.
+          if (normalizeProxyUrl(decryptedProxyUrl).ok) {
+            parsed.settings.httpProxyUrl = decryptedProxyUrl
+          } else {
+            console.warn(
+              '[persistence] httpProxyUrl could not be decrypted — clearing the stored proxy URL. Re-enter it in Settings > Advanced > Network.'
+            )
+            parsed.settings.httpProxyUrl = ''
+            this.loadNeedsSave = true
+          }
         }
         if (parsed.ui?.browserKagiSessionLink) {
           parsed.ui.browserKagiSessionLink = decryptOptionalSecret(parsed.ui.browserKagiSessionLink)

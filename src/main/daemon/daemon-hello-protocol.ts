@@ -13,6 +13,7 @@ export type DaemonEndpointIdentity = {
   /** Optional launch metadata. Absent from daemons that predate it; readers must fall back. */
   entryPath?: string
   appVersion?: string
+  spawnerExecPath?: string
 }
 
 export type HelloResponse = {

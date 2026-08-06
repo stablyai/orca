@@ -1369,6 +1369,96 @@ describe('shared agent-hook-listener', () => {
     expect(event?.payload.lastAssistantMessage).toBeUndefined()
   })
 
+  it('maps Claude SessionStart to an idle done row so a resumed session earns its sidebar row before the first prompt', () => {
+    const event = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'SessionStart',
+          source: 'resume',
+          session_id: '44444444-4444-4444-8444-444444444444'
+        }
+      },
+      'production'
+    )
+
+    // Why: 'working' would show a phantom spinner on an idle TUI; a session-boundary
+    // 'done' renders the row idle, which is the truth at SessionStart.
+    expect(event?.payload).toMatchObject({
+      state: 'done',
+      prompt: '',
+      agentType: 'claude',
+      sessionBoundary: true
+    })
+    expect(event?.payload.interrupted).toBeUndefined()
+    expect(event?.hookEventName).toBe('SessionStart')
+    // Why: SessionStart carries resume identity, so in-app resume works before any prompt.
+    expect(event?.providerSession).toMatchObject({
+      key: 'session_id',
+      id: '44444444-4444-4444-8444-444444444444'
+    })
+  })
+
+  it('resets stale Claude turn state when SessionStart announces a new session on the pane', () => {
+    normalizeAndAccept(state, 'claude', { hook_event_name: 'UserPromptSubmit', prompt: 'fix bug' })
+    normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'PreToolUse',
+      tool_name: 'Bash',
+      tool_input: { command: 'ls' }
+    })
+    normalizeAndAccept(state, 'claude', { hook_event_name: 'SubagentStart', agent_id: 'agent-1' })
+
+    const event = normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'SessionStart',
+      source: 'startup'
+    })
+
+    // Why: a new process owns the pane; stale prompt/tool/children must not survive
+    // into the fresh session's idle row or gate it back up to 'working'.
+    expect(event?.payload.state).toBe('done')
+    expect(event?.payload.prompt).toBe('')
+    expect(event?.payload.toolName).toBeUndefined()
+    expect(event?.payload.subagents).toBeUndefined()
+  })
+
+  it('keeps the running Claude turn when SessionStart comes from a compact restart or a child session', () => {
+    normalizeAndAccept(state, 'claude', { hook_event_name: 'UserPromptSubmit', prompt: 'say hi' })
+
+    const compacted = normalizeHookPayload(
+      state,
+      'claude',
+      { paneKey: PANE_KEY, payload: { hook_event_name: 'SessionStart', source: 'compact' } },
+      'production'
+    )
+    // Why: unknown/missing sources fail closed — only startup/resume/clear are idle boundaries.
+    const unknownSource = normalizeHookPayload(
+      state,
+      'claude',
+      { paneKey: PANE_KEY, payload: { hook_event_name: 'SessionStart' } },
+      'production'
+    )
+    const child = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'SessionStart', source: 'startup', agent_id: 'agent-7' }
+      },
+      'production'
+    )
+    const stopped = normalizeAndAccept(state, 'claude', { hook_event_name: 'Stop' })
+
+    // Why: auto-compact restarts mid-turn (PreCompact/PostCompact own that lifecycle) and a
+    // child-attributed SessionStart must not flip the lead's live turn to an idle row.
+    expect(compacted).toBeNull()
+    expect(unknownSource).toBeNull()
+    expect(child).toBeNull()
+    expect(stopped?.payload).toMatchObject({ state: 'done', prompt: 'say hi' })
+    expect(stopped?.payload.sessionBoundary).toBeUndefined()
+  })
+
   it('normalizes Devin documented lifecycle events', () => {
     const started = normalizeHookPayload(
       state,

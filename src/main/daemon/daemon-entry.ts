@@ -29,6 +29,7 @@ export type ParsedDaemonArgs = {
   launchNonce?: string
   entryPath?: string
   appVersion?: string
+  spawnerExecPath?: string
   /** GUI-spawned daemons only — headless serve/SSH daemons must survive session loss. */
   loginSessionWatch?: boolean
   /** Optional — absent for adopted old daemons and tests, which log nothing. */
@@ -43,6 +44,7 @@ export function parseArgs(argv: string[]): ParsedDaemonArgs {
   let launchNonce = ''
   let entryPath = ''
   let appVersion = ''
+  let spawnerExecPath = ''
   let loginSessionWatch = false
 
   for (let i = 0; i < argv.length; i++) {
@@ -67,6 +69,9 @@ export function parseArgs(argv: string[]): ParsedDaemonArgs {
     } else if (argv[i] === '--app-version' && argv[i + 1]) {
       appVersion = argv[i + 1]
       i++
+    } else if (argv[i] === '--spawner-exec-path' && argv[i + 1]) {
+      spawnerExecPath = argv[i + 1]
+      i++
     } else if (argv[i] === '--login-session-watch') {
       loginSessionWatch = true
     }
@@ -86,6 +91,7 @@ export function parseArgs(argv: string[]): ParsedDaemonArgs {
     ...(pidPath ? { pidPath, launchNonce } : {}),
     ...(entryPath ? { entryPath } : {}),
     ...(appVersion ? { appVersion } : {}),
+    ...(spawnerExecPath ? { spawnerExecPath } : {}),
     ...(loginSessionWatch ? { loginSessionWatch } : {}),
     ...(logFilePath ? { logFilePath } : {})
   }
@@ -106,6 +112,7 @@ async function main(): Promise<void> {
     launchNonce,
     entryPath,
     appVersion,
+    spawnerExecPath,
     loginSessionWatch,
     logFilePath
   } = parseArgs(process.argv.slice(2))
@@ -259,6 +266,7 @@ async function main(): Promise<void> {
     ...(pidPath ? { startedAtMs } : {}),
     ...(entryPath ? { entryPath } : {}),
     ...(appVersion ? { appVersion } : {}),
+    ...(spawnerExecPath ? { spawnerExecPath } : {}),
     ...(pidPath && launchNonce
       ? {
           publishEndpointOwnership: () =>
@@ -267,6 +275,7 @@ async function main(): Promise<void> {
               ...readyIdentity,
               ...(entryPath ? { entryPath } : {}),
               ...(appVersion ? { appVersion } : {}),
+              ...(spawnerExecPath ? { spawnerExecPath } : {}),
               launchNonce
             })
         }
