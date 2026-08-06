@@ -1,5 +1,5 @@
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-client'
-import { REMOTE_BROWSER_STREAM_LOST_MESSAGE } from './remote-browser-stream-messages'
+import { remoteBrowserStreamLostNotice } from './remote-browser-stream-status'
 
 // Why: a runtime lacking browser.screencast.v1 will not grow it while this connection lives, so
 // retrying that failure is unbounded work with a visible error each round. Tagged rather than
@@ -100,5 +100,5 @@ export function resolveRemoteBrowserStreamRestartFailure(
       logRawError: false
     }
   }
-  return { message: REMOTE_BROWSER_STREAM_LOST_MESSAGE(), shouldRetry: true, logRawError: true }
+  return { message: remoteBrowserStreamLostNotice(), shouldRetry: true, logRawError: true }
 }

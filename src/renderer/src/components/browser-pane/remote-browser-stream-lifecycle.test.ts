@@ -3,6 +3,12 @@ import { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
 import type { RemoteBrowserPageHandle, RemoteBrowserRpcCall } from './remote-browser-page-session'
 import type { RemoteBrowserScreencastSubscribe } from './remote-browser-screencast-subscription'
 import type { RemoteBrowserViewportSize } from './remote-browser-stream-tokens'
+import {
+  canReconnectRemoteBrowserStream,
+  isRemoteBrowserStreamBusy,
+  remoteBrowserStreamNotice,
+  type RemoteBrowserStreamStatus
+} from './remote-browser-stream-status'
 import { isBrowserPaneUiRuntimeRpcParams } from '../../../../shared/runtime-rpc-feature-interaction-source'
 
 type Gate = {
@@ -48,9 +54,7 @@ function createHarness() {
     environmentId: 'env-1' as string | null,
     pageExists: true
   }
-  const busyLog: boolean[] = []
-  const errorLog: (string | null)[] = []
-  const reconnectAvailableLog: boolean[] = []
+  const statusLog: RemoteBrowserStreamStatus[] = []
   const appliedTitles: string[] = []
   const closedPages: (string | null)[] = []
   const streams: FakeScreencastStream[] = []
@@ -160,9 +164,7 @@ function createHarness() {
     readViewportSize: () => viewportSize,
     syncViewport: async () => {},
     getDeviceScaleFactor: () => 1,
-    setBusy: (value) => busyLog.push(value),
-    setError: (message) => errorLog.push(message),
-    setReconnectAvailable: (available) => reconnectAvailableLog.push(available),
+    setStatus: (status) => statusLog.push(status),
     clearFrame: () => {},
     handleFrameBytes: () => {}
   })
@@ -170,9 +172,7 @@ function createHarness() {
   return {
     lifecycle,
     identity,
-    busyLog,
-    errorLog,
-    reconnectAvailableLog,
+    statusLog,
     appliedTitles,
     closedPages,
     streams,
@@ -180,11 +180,21 @@ function createHarness() {
     get subscribeAttempts(): number {
       return subscribeAttempts
     },
+    // Kept as accessors so the assertions written against the old three-variable shape still read
+    // naturally — they now derive from the one status, which is the point of the change.
+    get errorLog(): (string | null)[] {
+      return statusLog.map(remoteBrowserStreamNotice)
+    },
+    get busyLog(): boolean[] {
+      return statusLog.map(isRemoteBrowserStreamBusy)
+    },
     get reconnectOffered(): boolean {
-      return reconnectAvailableLog.at(-1) === true
+      const status = statusLog.at(-1)
+      return status ? canReconnectRemoteBrowserStream(status) : false
     },
     get currentError(): string | null {
-      return errorLog.length > 0 ? (errorLog.at(-1) ?? null) : null
+      const status = statusLog.at(-1)
+      return status ? remoteBrowserStreamNotice(status) : null
     },
     setCapabilities: (next: string[]) => {
       capabilities = next

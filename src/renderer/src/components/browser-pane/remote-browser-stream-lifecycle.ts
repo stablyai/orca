@@ -4,10 +4,14 @@ import { RemoteBrowserPageSession } from './remote-browser-page-session'
 import { openRemoteBrowserScreencastStream } from './remote-browser-screencast-subscription'
 import { RemoteBrowserStreamRestartScheduler } from './remote-browser-stream-restart-scheduler'
 import {
-  announceRemoteBrowserStreamStopped,
-  REMOTE_BROWSER_STREAM_LOST_MESSAGE,
-  REMOTE_BROWSER_STREAM_UNREACHABLE_MESSAGE
-} from './remote-browser-stream-messages'
+  REMOTE_BROWSER_STREAM_LIVE,
+  REMOTE_BROWSER_STREAM_OPENING,
+  remoteBrowserStreamLostNotice,
+  remoteBrowserStreamRetrying,
+  remoteBrowserStreamStopped,
+  remoteBrowserStreamUnreachableNotice,
+  REMOTE_BROWSER_STREAM_IDLE
+} from './remote-browser-stream-status'
 import {
   isPermanentRemoteBrowserStreamFailure,
   isRemoteBrowserPageMissingError,
@@ -38,16 +42,12 @@ export class RemoteBrowserStreamLifecycle {
   constructor(private readonly deps: RemoteBrowserStreamLifecycleDeps) {
     this.tokens = new RemoteBrowserOperationTokens(deps.identity)
     this.session = new RemoteBrowserPageSession({ ...deps, tokens: this.tokens })
-    // Why a message here and not just the flag: a budget can drain without any attempt throwing —
+    // Why exhaustion publishes a message too: a budget can drain without any attempt throwing —
     // each restart subscribes fine, then the stream ends before 'ready', so the catch that normally
-    // reports never runs.
+    // reports never runs. 'stopped' carries its notice, so that case cannot go silent.
     this.restartScheduler = new RemoteBrowserStreamRestartScheduler(undefined, () =>
-      announceRemoteBrowserStreamStopped(deps, REMOTE_BROWSER_STREAM_LOST_MESSAGE())
+      deps.setStatus(remoteBrowserStreamStopped(remoteBrowserStreamLostNotice()))
     )
-  }
-
-  get restartAttemptCount(): number {
-    return this.restartScheduler.attemptCount
   }
 
   forgetStreamViewportSize(): void {
@@ -58,16 +58,13 @@ export class RemoteBrowserStreamLifecycle {
   open(): () => void {
     let cancelled = false
     const { tokens, deps } = this
-    deps.setBusy(true)
-    deps.setError(null)
-    // Why cleared here: a reopen (tab switch, environment or worktree change, or Reconnect) starts a
-    // fresh budget, so a flag left over from a previous exhaustion would show the control while
-    // attempts remain — the one state the pane must never present.
-    deps.setReconnectAvailable(false)
+    // A reopen (tab switch, environment or worktree change, or Reconnect) starts a fresh budget, so
+    // 'opening' replaces whatever the previous attempt ended on — including a spent 'stopped'.
+    deps.setStatus(REMOTE_BROWSER_STREAM_OPENING)
     this.retireInFlightWork()?.unsubscribe()
     const operationToken = tokens.createOperationToken()
     if (!operationToken) {
-      deps.setBusy(false)
+      deps.setStatus(REMOTE_BROWSER_STREAM_IDLE)
       return () => {}
     }
     void this.session
@@ -107,13 +104,13 @@ export class RemoteBrowserStreamLifecycle {
           console.warn('[browser-pane] remote browser failed to open:', error)
         }
         // "Unreachable" rather than "lost": nothing was ever established here. And this path never
-        // had a stream, so the retry budget never runs — without the affordance below, nothing else
-        // would ever offer a way back and the pane strands on a bare error.
-        announceRemoteBrowserStreamStopped(
-          deps,
-          permanent && error instanceof Error
-            ? error.message
-            : REMOTE_BROWSER_STREAM_UNREACHABLE_MESSAGE()
+        // had a stream, so the retry budget never runs — 'stopped' is what hands the user a way back.
+        deps.setStatus(
+          remoteBrowserStreamStopped(
+            permanent && error instanceof Error
+              ? error.message
+              : remoteBrowserStreamUnreachableNotice()
+          )
         )
       })
     return () => {
@@ -144,13 +141,13 @@ export class RemoteBrowserStreamLifecycle {
     // Why: without a token the .then/.catch below would mutate busy/remoteError on behalf of a
     // restart that a newer operation has already replaced.
     const restartToken = this.tokens.createOperationToken(pageId)
-    this.deps.setBusy(true)
+    this.deps.setStatus(REMOTE_BROWSER_STREAM_OPENING)
     current.unsubscribe()
     void this.startStream(pageId)
       .then((subscription) => {
         if (!subscription) {
           if (restartToken && this.tokens.isCurrent(restartToken)) {
-            this.deps.setBusy(false)
+            this.deps.setStatus(REMOTE_BROWSER_STREAM_IDLE)
           }
           return
         }
@@ -165,9 +162,10 @@ export class RemoteBrowserStreamLifecycle {
           return
         }
         // A resize during a blip tears down a live subscription and never reaches the budget.
-        announceRemoteBrowserStreamStopped(
-          this.deps,
-          error instanceof Error ? error.message : 'Failed to resize remote browser stream.'
+        this.deps.setStatus(
+          remoteBrowserStreamStopped(
+            error instanceof Error ? error.message : 'Failed to resize remote browser stream.'
+          )
         )
       })
   }
@@ -244,24 +242,20 @@ export class RemoteBrowserStreamLifecycle {
         {
           isCurrent: () => tokens.isCurrentStreamToken(token),
           onReady: (event) => {
-            // Why: a confirmed-live stream forgets prior restart failures and the failure they
-            // reported, or a recovered pane keeps showing a toast it already healed (STA-3483).
+            // A confirmed-live stream forgets prior restart failures, so the next drop backs off
+            // from scratch — and 'live' carries no notice, so a toast it already healed cannot
+            // survive (STA-3483).
             this.restartScheduler.reset()
-            deps.setError(null)
-            // Defence-in-depth, not a load-bearing clear: every path that raises the flag today
-            // stops the scheduler, so the only route back to a live stream is open(), which clears
-            // it first. Kept so a future in-place recovery cannot leave the control stranded on.
-            deps.setReconnectAvailable(false)
+            deps.setStatus(REMOTE_BROWSER_STREAM_LIVE)
             deps.applyTabInfo(event.tab)
             void deps.syncViewport(event.browserPageId).catch(() => {})
-            deps.setBusy(false)
           },
           onEnded: () => this.handleStreamClosed(token, true),
           // Why onFailed announces a stop: the runtime reported the stream itself failed, and the
           // close below is deliberately non-restarting, so nothing else would hand the user a way
           // back. Its message is the host's own, which is more specific than any substitute.
           onFailed: (message) => {
-            announceRemoteBrowserStreamStopped(deps, message)
+            deps.setStatus(remoteBrowserStreamStopped(message))
             this.handleStreamClosed(token, false)
           },
           // Why this one does NOT announce a stop: a transport error is not a stop. The client
@@ -269,10 +263,8 @@ export class RemoteBrowserStreamLifecycle {
           // starts the retry budget. Announcing here would raise the reconnect control before the
           // first automatic attempt — the exact state open() clears the flag to prevent — and would
           // put raw transport copy on screen. Exhaustion owns the affordance.
-          onTransportError: () => {
-            deps.setError(REMOTE_BROWSER_STREAM_LOST_MESSAGE())
-            deps.setBusy(false)
-          },
+          onTransportError: () =>
+            deps.setStatus(remoteBrowserStreamRetrying(0, remoteBrowserStreamLostNotice())),
           onPageMissing: () => deps.closeMissingRemotePage(pageId),
           onFrame: (bytes) => deps.handleFrameBytes(token, bytes),
           onClosed: () => this.handleStreamClosed(token, true)
@@ -291,7 +283,11 @@ export class RemoteBrowserStreamLifecycle {
     if (!this.tokens.isCurrentStreamToken(token)) {
       return
     }
-    this.deps.setBusy(restart)
+    // 'retrying' with attempt 0 means "the budget is about to start"; the first scheduled attempt
+    // replaces it. A non-restarting close leaves whatever the caller already published.
+    if (restart) {
+      this.deps.setStatus(remoteBrowserStreamRetrying(0, remoteBrowserStreamLostNotice()))
+    }
     const current = this.subscription
     this.subscription = null
     this.tokens.releaseStreamToken()
@@ -314,11 +310,11 @@ export class RemoteBrowserStreamLifecycle {
     }
     // Why: a failed self-heal attempt must keep retrying with bounded backoff (STA-3483) instead of
     // leaving the pane holding a dead subscription with no way back.
-    this.restartScheduler.schedule(async (): Promise<boolean> => {
+    this.restartScheduler.schedule(async ({ attempt }): Promise<boolean> => {
       if (!tokens.isCurrentStreamOperation(token)) {
         return false
       }
-      deps.setBusy(true)
+      deps.setStatus(remoteBrowserStreamRetrying(attempt, remoteBrowserStreamLostNotice()))
       const operationToken = toOperationToken(token)
       try {
         const tab = await this.session.fetchTabInfo(operationToken).catch(() => null)
@@ -347,15 +343,15 @@ export class RemoteBrowserStreamLifecycle {
           // out of reach, since nothing else records it.
           console.warn('[browser-pane] remote stream restart failed:', error)
         }
-        // Why a stop is announced when we give up: abandoning automatic retries is not the same as
-        // taking away the user's last resort, and a classification we got wrong would otherwise
-        // strand the pane exactly as it did before this work.
-        if (failure.shouldRetry) {
-          deps.setError(failure.message)
-          deps.setBusy(false)
-        } else {
-          announceRemoteBrowserStreamStopped(deps, failure.message)
-        }
+        // Why giving up publishes 'stopped': abandoning automatic retries is not the same as taking
+        // away the user's last resort, and a classification we got wrong would otherwise strand the
+        // pane exactly as it did before this work. While attempts remain it stays 'retrying', which
+        // reports the failure without offering a control that competes with the next attempt.
+        deps.setStatus(
+          failure.shouldRetry
+            ? remoteBrowserStreamRetrying(attempt, failure.message)
+            : remoteBrowserStreamStopped(failure.message)
+        )
         return failure.shouldRetry
       }
     })
