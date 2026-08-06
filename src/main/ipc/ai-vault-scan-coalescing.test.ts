@@ -71,7 +71,7 @@ describe('Agent Session History scan coalescing', () => {
     await vi.waitFor(() => expect(resolveScans).toHaveLength(2))
 
     expect(mocks.scanAiVaultSessions.mock.calls[1]?.[0]).toMatchObject({
-      codexSessionsDir: join('/custom/codex/b', 'sessions')
+      additionalCodexSessionsDirs: [join('/custom/codex/b', 'sessions')]
     })
     resolveScans.forEach((resolve) => resolve(EMPTY_RESULT))
     await Promise.all([first, second])

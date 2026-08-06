@@ -296,7 +296,7 @@ describe('aiVault.listSessions handler + shared cache', () => {
     })
     await runtime.listAiVaultSessions({})
     const options = scanAiVaultSessions.mock.calls[0]?.[0] as AiVaultScanOptions
-    expect(options.codexSessionsDir).toBe(join('/custom/codex/home', 'sessions'))
+    expect(options.additionalCodexSessionsDirs).toContain(join('/custom/codex/home', 'sessions'))
     expect(options.additionalCodexSessionsDirs).toContain('/ctor/codex/home/sessions')
   })
 })

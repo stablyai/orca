@@ -21,6 +21,8 @@ const AI_VAULT_CACHE_TTL_MS = 15_000
 // path — `orca serve` never runs that path, so sourcing it there would silently
 // drop managed-Codex sessions from remote/SSH results.
 export type AiVaultSessionSources = {
+  // Why: separate from the managed-home list because that list also feeds
+  // resume's trusted-CODEX_HOME set; this override is history-import only.
   getCodexSessionSourceHomePath?: () => string | undefined
   getAdditionalCodexHomePaths?: () => readonly string[]
 }
@@ -36,22 +38,20 @@ let cachedList: CachedAiVaultList | null = null
 let scanCoordinator = new AiVaultScanCoordinator()
 let sources: AiVaultSessionSources = {}
 
-type ResolvedCodexSessionDirs = {
-  codexSessionsDir: string | undefined
-  additionalCodexSessionsDirs: string[]
-}
-
 export function configureAiVaultSessionSources(next: AiVaultSessionSources): void {
   sources = next
 }
 
-function resolveCodexSessionDirs(): ResolvedCodexSessionDirs {
+// Why: the configured source home is an EXTRA root, never a replacement for
+// ~/.codex. Users who set it still have real history in ~/.codex (the reporter
+// of #12186 had 229 sessions there), and this panel is a union of every
+// discoverable Codex home — swapping the default root out would hide them.
+function resolveCodexSessionDirs(): string[] {
   const sourceHomePath = sources.getCodexSessionSourceHomePath?.()
-  return {
-    codexSessionsDir: sourceHomePath ? join(sourceHomePath, 'sessions') : undefined,
-    additionalCodexSessionsDirs:
-      sources.getAdditionalCodexHomePaths?.().map((homePath) => join(homePath, 'sessions')) ?? []
-  }
+  return [
+    ...(sourceHomePath ? [sourceHomePath] : []),
+    ...(sources.getAdditionalCodexHomePaths?.() ?? [])
+  ].map((homePath) => join(homePath, 'sessions'))
 }
 
 export function getAiVaultSessionSourcesCacheKey(): string {
@@ -62,11 +62,10 @@ export async function listAiVaultSessions(
   args?: AiVaultListArgs,
   options: { signal?: AbortSignal } = {}
 ): Promise<AiVaultListResult> {
-  const { codexSessionsDir, additionalCodexSessionsDirs } = resolveCodexSessionDirs()
+  const additionalCodexSessionsDirs = resolveCodexSessionDirs()
   // Scope and source paths both change the result set, so they belong in the cache key.
   const key = JSON.stringify({
     scopePaths: [...new Set(args?.scopePaths ?? [])].sort(),
-    codexSessionsDir: codexSessionsDir ?? null,
     additionalCodexSessionsDirs
   })
   const depth = requestedAiVaultSessionDepth(args)
@@ -91,7 +90,6 @@ export async function listAiVaultSessions(
         limit: args?.limit,
         unlimited: args?.unlimited,
         scopePaths: args?.scopePaths,
-        codexSessionsDir,
         additionalCodexSessionsDirs,
         wslHomeDirs: await getAiVaultWslHomeDirs(),
         // Cancelled/superseded callers must stop the parse, not just stop

@@ -30,15 +30,22 @@ describe('cached Agent History source configuration', () => {
     scanAiVaultSessions.mockResolvedValue(EMPTY_RESULT)
   })
 
-  it('scans the configured host Codex session source', async () => {
+  it('scans the configured host Codex session source alongside the default home', async () => {
     configureAiVaultSessionSources({
-      getCodexSessionSourceHomePath: () => '/custom/codex/home'
+      getCodexSessionSourceHomePath: () => '/custom/codex/home',
+      getAdditionalCodexHomePaths: () => ['/runtime/codex/home']
     })
 
     await listAiVaultSessions({ force: true })
 
     const options = scanAiVaultSessions.mock.calls[0]?.[0] as AiVaultScanOptions
-    expect(options.codexSessionsDir).toBe(join('/custom/codex/home', 'sessions'))
+    expect(options.additionalCodexSessionsDirs).toEqual([
+      join('/custom/codex/home', 'sessions'),
+      join('/runtime/codex/home', 'sessions')
+    ])
+    // The override adds a root. Overriding codexSessionsDir instead would drop
+    // the user's real ~/.codex history from the panel.
+    expect(options.codexSessionsDir).toBeUndefined()
   })
 
   it('rescans immediately when the configured source changes', async () => {
@@ -51,7 +58,7 @@ describe('cached Agent History source configuration', () => {
 
     expect(scanAiVaultSessions).toHaveBeenCalledTimes(2)
     expect(scanAiVaultSessions.mock.calls[1]?.[0]).toMatchObject({
-      codexSessionsDir: join('/custom/codex/b', 'sessions')
+      additionalCodexSessionsDirs: [join('/custom/codex/b', 'sessions')]
     })
   })
 
