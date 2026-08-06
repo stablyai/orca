@@ -43,18 +43,27 @@ describe('legacy takeover by current runtime authority', () => {
 
     // Legacy compatibility mutations still require a hook observation.
     expect(runtime.verifyOrchestrationCompatibilityCaller(proof)).toBeNull()
-    expect(
-      runtime.verifyOrchestrationCompatibilityCaller(
-        { ...proof, launchToken: 'forged-token' },
-        { currentRuntimeLaunchSufficient: true }
+    for (const [invocationId, forgedProof] of [
+      ['forged-token', { ...proof, launchToken: 'forged-token' }],
+      ['forged-pane', { ...proof, paneKey: 'tab_forged:66666666-6666-4666-8666-666666666666' }]
+    ] as const) {
+      const rejected = await dispatcher.dispatch(
+        request(
+          'orchestration.runUse',
+          {
+            id: harness.adoptedRunId,
+            from: CURRENT_COORDINATOR_HANDLE,
+            takeoverLegacy: true
+          },
+          forgedProof,
+          invocationId
+        )
       )
-    ).toBeNull()
-    expect(
-      runtime.verifyOrchestrationCompatibilityCaller(
-        { ...proof, paneKey: 'tab_forged:66666666-6666-4666-8666-666666666666' },
-        { currentRuntimeLaunchSufficient: true }
-      )
-    ).toBeNull()
+      expect(rejected).toMatchObject({
+        ok: false,
+        error: { code: 'legacy_read_only', data: { effectsApplied: false } }
+      })
+    }
 
     const response = await dispatcher.dispatch(
       request(
@@ -81,7 +90,8 @@ describe('legacy takeover by current runtime authority', () => {
     })
   })
 
-  it('requires a runtime-issued SSH attachment for fresh launch proof', () => {
+  it('requires a runtime-issued SSH attachment for fresh launch proof', async () => {
+    const harness = createHarness()
     const runtime = new OrcaRuntimeService()
     const proof = currentEvidence('coordinator')
     const launchTokenHash = createHash('sha256').update(proof.launchToken!).digest('hex')
@@ -99,18 +109,31 @@ describe('legacy takeover by current runtime authority', () => {
       launchTokenHash,
       hostScope: { kind: 'ssh', targetId: 'saved-target' }
     })
+    runtime.setOrchestrationDb(harness.db)
+    vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue(CURRENT_COORDINATOR_PANE)
+    const dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
 
-    expect(
-      runtime.verifyOrchestrationCompatibilityCaller(
-        { ...proof, host },
-        { currentRuntimeLaunchSufficient: true }
-      )
-    ).toMatchObject({ hostScope: { kind: 'ssh', targetId: 'saved-target' } })
-    expect(
-      runtime.verifyOrchestrationCompatibilityCaller(
+    const params = {
+      id: harness.adoptedRunId,
+      from: CURRENT_COORDINATOR_HANDLE,
+      takeoverLegacy: true
+    }
+    const rejected = await dispatcher.dispatch(
+      request(
+        'orchestration.runUse',
+        params,
         { ...proof, host: { ...host, attachmentId: 'caller-chosen' } },
-        { currentRuntimeLaunchSufficient: true }
+        'forged-ssh-attachment'
       )
-    ).toBeNull()
+    )
+    expect(rejected).toMatchObject({
+      ok: false,
+      error: { code: 'legacy_read_only', data: { effectsApplied: false } }
+    })
+
+    const response = await dispatcher.dispatch(
+      request('orchestration.runUse', params, { ...proof, host }, 'valid-ssh-attachment')
+    )
+    expect(response).toMatchObject({ ok: true })
   })
 })

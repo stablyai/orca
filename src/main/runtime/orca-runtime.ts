@@ -12023,13 +12023,15 @@ export class OrcaRuntimeService {
       terminalProvenance === 'current_runtime' &&
       claimedPaneKey === terminal.paneKey
     ) {
-      return Object.freeze({
-        hostScope: Object.freeze({ ...terminal.hostScope }),
-        paneKey: claimedPaneKey,
+      // Why: the checks above bind a fresh launch to its live PTY, host, and
+      // launch secret. Only an exact live-pane match may skip hook attestation.
+      return this.freezeOrchestrationCompatibilityCallerAuthority(
+        terminal,
+        terminal.processIncarnation,
+        claimedPaneKey,
         terminalHandle,
-        processIncarnation: terminal.processIncarnation,
         launchTokenHash
-      })
+      )
     }
     const attestation = this.attestAgentHookCompatibilityAuthorityFn?.({
       paneKey: claimedPaneKey,
@@ -12040,11 +12042,27 @@ export class OrcaRuntimeService {
     if (!attestation || attestation.paneKey !== terminal.paneKey) {
       return null
     }
+    return this.freezeOrchestrationCompatibilityCallerAuthority(
+      terminal,
+      terminal.processIncarnation,
+      attestation.paneKey,
+      terminalHandle,
+      launchTokenHash
+    )
+  }
+
+  private freezeOrchestrationCompatibilityCallerAuthority(
+    terminal: OrchestrationCompatibilityTerminalAuthority,
+    processIncarnation: string,
+    paneKey: string,
+    terminalHandle: string,
+    launchTokenHash: string
+  ): OrchestrationCompatibilityCallerAuthority {
     return Object.freeze({
       hostScope: Object.freeze({ ...terminal.hostScope }),
-      paneKey: attestation.paneKey,
+      paneKey,
       terminalHandle,
-      processIncarnation: terminal.processIncarnation,
+      processIncarnation,
       launchTokenHash
     })
   }
