@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { SourceControlHeaderToolbar } from './source-control-header-toolbar'
 import type { GitBranchCompareSummary } from '../../../../shared/types'
+import type { GitBranchLineTotal } from '../../../../shared/git-status-types'
 import type { WorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 import type { PrimaryAction } from './source-control-primary-action'
 
@@ -38,6 +39,7 @@ function renderToolbar(options?: {
   headDisplay?: WorktreeGitIdentityDisplay | null
   branchSummary?: GitBranchCompareSummary | null
   compareBaseRef?: string | null
+  branchLineTotal?: GitBranchLineTotal | null
 }): string {
   return renderToStaticMarkup(
     <SourceControlHeaderToolbar
@@ -66,6 +68,7 @@ function renderToolbar(options?: {
           ? { kind: 'branch', branchName: 'brennanb2025/source-control-branch-name' }
           : options.headDisplay
       }
+      branchLineTotal={options?.branchLineTotal}
     />
   )
 }
@@ -124,5 +127,18 @@ describe('SourceControlHeaderToolbar branch identity', () => {
     expect(markup).not.toContain('data-testid="source-control-head-identity"')
     expect(markup).not.toContain('→')
     expect(markup).toContain('Create PR')
+  })
+
+  it('threads the branch line total down to the base-ref line', () => {
+    const markup = renderToolbar({ branchLineTotal: { added: 24, removed: 3, mergeBase: 'base' } })
+
+    expect(markup).toContain('aria-label="24 additions, 3 deletions"')
+    expect(markup).toContain('+24')
+    expect(markup).toContain('-3')
+  })
+
+  it('renders exactly as before when no branch line total is supplied', () => {
+    expect(renderToolbar({ branchLineTotal: undefined })).toBe(renderToolbar())
+    expect(renderToolbar()).not.toContain('data-testid="source-control-branch-line-total"')
   })
 })

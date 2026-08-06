@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildFolderWorkspaceLinkedStartupPlan } from './folder-workspace-composer-submit'
+import { buildFolderWorkspaceLinkedStartupPlan } from './folder-workspace-linked-startup-plan'
 
 describe('buildFolderWorkspaceLinkedStartupPlan', () => {
   it('uses cmd quoting for configured arguments on local Windows', () => {

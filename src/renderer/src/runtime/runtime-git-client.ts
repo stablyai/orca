@@ -139,6 +139,7 @@ export async function getRuntimeGitStatus(
     includeIgnored?: boolean
     bypassEffectiveUpstreamNegativeCache?: boolean
     reuseLineStats?: boolean
+    branchLineTotalMergeBase?: string
     signal?: AbortSignal
   }
 ): Promise<GitStatusResult> {
@@ -148,6 +149,9 @@ export async function getRuntimeGitStatus(
     ? { bypassEffectiveUpstreamNegativeCache: true }
     : {}
   const lineStatsReuseArgs = options?.reuseLineStats ? { reuseLineStats: true } : {}
+  const branchLineTotalArgs = options?.branchLineTotalMergeBase
+    ? { branchLineTotalMergeBase: options.branchLineTotalMergeBase }
+    : {}
   if (target.kind === 'local' || !context.worktreeId) {
     return callLocalGitStatus(
       {
@@ -155,7 +159,8 @@ export async function getRuntimeGitStatus(
         connectionId: context.connectionId,
         ...includeIgnoredArgs,
         ...upstreamCacheBypassArgs,
-        ...lineStatsReuseArgs
+        ...lineStatsReuseArgs,
+        ...branchLineTotalArgs
       },
       options?.signal
     )
@@ -167,7 +172,8 @@ export async function getRuntimeGitStatus(
       worktree: toRuntimeWorktreeSelector(context.worktreeId),
       ...includeIgnoredArgs,
       ...upstreamCacheBypassArgs,
-      ...lineStatsReuseArgs
+      ...lineStatsReuseArgs,
+      ...branchLineTotalArgs
     },
     {
       timeoutMs: 15_000,

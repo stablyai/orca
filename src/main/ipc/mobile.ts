@@ -35,6 +35,19 @@ function isProxyFakeIpIPv4Address(address: string): boolean {
   return /^198\.(?:18|19)\./.test(address)
 }
 
+// Why: container/VM bridges are host-local — a phone can never reach docker0 or
+// vmnet8 — but they enumerate as ordinary non-internal IPv4, so advertising one
+// makes the direct path silently lose the pairing race and every session relay.
+// Keyed on interface name, not subnet: Docker's 172.16/12 pool overlaps real
+// corporate LANs, so an address test would demote genuine addresses. These stay
+// pickable in the UI; they are only ranked below a real LAN address.
+const VIRTUAL_BRIDGE_INTERFACE_PATTERN =
+  /^(?:docker|br-|virbr|vmnet|vboxnet|veth|lxcbr|cni|flannel|cali|bridge)|^vEthernet |VMware Network Adapter|VirtualBox Host-Only/i
+
+function isVirtualBridgeInterface(name: string): boolean {
+  return VIRTUAL_BRIDGE_INTERFACE_PATTERN.test(name)
+}
+
 // Why: the WebSocket transport advertises 0.0.0.0 as its endpoint, which isn't
 // connectable from a mobile device. We enumerate all non-internal IPv4 and
 // (non-link-local) IPv6 addresses so the user can choose which one to advertise
@@ -64,15 +77,17 @@ function getNetworkInterfaces(): NetworkInterface[] {
     }
   }
   // Why: prefer tailnet IPv4 first (most portable across networks), then other
-  // IPv4, then IPv6 as a fallback for IPv6-only environments.
-  return result.sort((a, b) => rankAddress(a.address) - rankAddress(b.address))
+  // IPv4, then IPv6 as a fallback for IPv6-only environments. Virtual bridges
+  // sort below both so they are never the auto-advertised default.
+  return result.sort((a, b) => rankInterface(a) - rankInterface(b))
 }
 
-function rankAddress(address: string): number {
+function rankInterface({ name, address }: NetworkInterface): number {
   if (isTailnetIPv4Address(address)) {
     return 0
   }
-  return address.includes(':') ? 2 : 1
+  const bridgePenalty = isVirtualBridgeInterface(name) ? 2 : 0
+  return (address.includes(':') ? 2 : 1) + bridgePenalty
 }
 
 function getDefaultPairingAddress(): string | null {

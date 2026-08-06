@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  humanizeTerminalError,
   isSshReconnectOwnedTerminalError,
   shouldOfferDaemonRestart,
   stripSshReconnectOwnedErrorLines
@@ -33,6 +34,24 @@ describe('isSshReconnectOwnedTerminalError', () => {
   it('leaves unrelated terminal errors for the toast', () => {
     expect(isSshReconnectOwnedTerminalError('Paste failed.')).toBe(false)
     expect(isSshReconnectOwnedTerminalError('node-pty: open_slave failed: EMFILE')).toBe(false)
+  })
+})
+
+describe('humanizeTerminalError', () => {
+  it('replaces the pane-owner-unverified code with actionable copy', () => {
+    const humanized = humanizeTerminalError('terminal_pane_owner_unverified')
+    expect(humanized).not.toContain('terminal_pane_owner_unverified')
+    expect(humanized).toContain('Reopen this pane to retry')
+  })
+
+  it('humanizes an IPC-wrapped pane-owner-unverified error', () => {
+    const wrapped =
+      "Error invoking remote method 'pty:spawn': Error: terminal_pane_owner_unverified"
+    expect(humanizeTerminalError(wrapped)).not.toContain('terminal_pane_owner_unverified')
+  })
+
+  it('leaves other errors untouched', () => {
+    expect(humanizeTerminalError('Paste failed.')).toBe('Paste failed.')
   })
 })
 

@@ -23,6 +23,7 @@ export type DashboardAgentRow = {
   startedAt: number
   lineage?: {
     depth: 0 | 1
+    parentPaneKey?: string
     isFirstSibling: boolean
     isLastSibling: boolean
     childCount: number

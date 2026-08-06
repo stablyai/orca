@@ -1,7 +1,6 @@
 import { app, ipcMain } from 'electron'
 import {
   configureAiVaultSessionSources,
-  listAiVaultSessions as listCachedLocalAiVaultSessions,
   resetAiVaultSessionListCacheForTests,
   type AiVaultSessionSources
 } from '../ai-vault/cached-session-list'
@@ -21,6 +20,10 @@ import {
 } from '../../shared/ai-vault-types'
 import { handleAiVaultGetFirstUserPrompt } from '../ai-vault/session-first-user-prompt-read'
 import { registerAiVaultResumeHandler, type AiVaultResumeHandlerOptions } from './ai-vault-resume'
+import {
+  scanLocalAiVaultSessions,
+  scanLocalAiVaultSessionsForAllScope
+} from './ai-vault-local-scan-leg'
 import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostScope,
@@ -249,45 +252,6 @@ function getActiveSshAiVaultHostInfosResult(): AiVaultHostDiscoveryResult<{ targ
     path: 'SSH hosts',
     fallbackMessage: 'SSH hosts are unavailable.'
   })
-}
-
-// Why: the SSH legs already degrade to an issue row so one bad host can't take
-// the shared Promise.all down; the local leg can throw too (parse-cache load,
-// WSL home resolution) and would otherwise discard every host's sessions.
-async function scanLocalAiVaultSessionsForAllScope(
-  args: AiVaultListArgs | undefined,
-  signal: AbortSignal | undefined
-): Promise<AiVaultListResult> {
-  try {
-    return await scanLocalAiVaultSessions(args, signal)
-  } catch (error) {
-    if (isAiVaultScanCancelledError(error)) {
-      throw error
-    }
-    return aiVaultScanIssueResult({
-      executionHostId: LOCAL_EXECUTION_HOST_ID,
-      path: 'this computer',
-      message: error instanceof Error ? error.message : 'Local session scan failed.'
-    })
-  }
-}
-
-async function scanLocalAiVaultSessions(
-  args?: AiVaultListArgs,
-  signal?: AbortSignal
-): Promise<AiVaultListResult> {
-  // Why: the shared cache module owns codex-home/WSL sourcing and the local
-  // scan cache, so the desktop IPC path and the runtime RPC method (mobile)
-  // share one cache instance and one source of managed-Codex homes.
-  return listCachedLocalAiVaultSessions(
-    {
-      limit: args?.limit,
-      unlimited: args?.unlimited,
-      force: shouldForceAiVaultHost(args, LOCAL_EXECUTION_HOST_ID),
-      scopePaths: args?.scopePaths
-    },
-    { signal }
-  )
 }
 
 function withAiVaultHostForce(

@@ -1,5 +1,4 @@
-import { normalizeSourceControlGroupOrder } from '../../../../shared/source-control-group-order'
-import type { GitStatusEntry, SourceControlGroupOrder } from '../../../../shared/types'
+import type { GitStatusEntry } from '../../../../shared/types'
 
 export const SOURCE_CONTROL_AREAS = ['unstaged', 'staged', 'untracked'] as const
 export type SourceControlSectionArea = (typeof SOURCE_CONTROL_AREAS)[number]
@@ -22,16 +21,23 @@ export type SourceControlSectionViewAction =
   | { kind: 'conflict-review'; entries: SourceControlConflictReviewEntry[] }
   | { kind: 'combined-diff'; area?: SourceControlSectionArea; entries: GitStatusEntry[] }
 
-const ORDER_BY_PRESET: Record<SourceControlGroupOrder, readonly SourceControlSectionArea[]> = {
-  'changes-first': ['unstaged', 'staged', 'untracked'],
-  'staged-first': ['staged', 'unstaged', 'untracked'],
-  'untracked-first': ['untracked', 'unstaged', 'staged']
-}
+export const SOURCE_CONTROL_GROUP_ORDER: readonly SourceControlSectionArea[] = [
+  'unstaged',
+  'staged',
+  'untracked'
+]
 
-export function resolveSourceControlGroupOrder(
-  value: SourceControlGroupOrder | null | undefined
-): readonly SourceControlSectionArea[] {
-  return ORDER_BY_PRESET[normalizeSourceControlGroupOrder(value)]
+export function mergeUntrackedIntoChanges(
+  groups: SourceControlEntryGroups
+): SourceControlEntryGroups {
+  if (groups.untracked.length === 0) {
+    return groups
+  }
+  return {
+    staged: groups.staged,
+    unstaged: [...groups.unstaged, ...groups.untracked],
+    untracked: []
+  }
 }
 
 export function isPinnedConflictEntry(entry: GitStatusEntry): boolean {

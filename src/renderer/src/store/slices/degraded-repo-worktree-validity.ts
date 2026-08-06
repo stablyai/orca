@@ -45,13 +45,21 @@ export function buildValidWorktreeIdsForSessionHydration(
       .map((worktree) => worktree.id)
   )
   const knownRepoIds = new Set(catalog.repos.map((repo) => repo.id))
+  const detectedWorktreesByRepo = catalog.detectedWorktreesByRepo ?? {}
   const repoIdsWithLoadedWorktrees = new Set(
     Object.entries(worktreesByRepo)
-      .filter(([, worktrees]) => worktrees.length > 0)
+      // Why (#1158): a metadata fallback can be non-empty yet partial (host-less metas are skipped on
+      // multi-owner repos, agent-scratch stays hidden), so it cannot prove deletion the way a real listing can.
+      // Only an explicitly non-authoritative result is disqualified; a repo with no detection entry at all
+      // still counts as loaded, as before.
+      .filter(
+        ([repoId, worktrees]) =>
+          worktrees.length > 0 && detectedWorktreesByRepo[repoId]?.authoritative !== false
+      )
       .map(([repoId]) => repoId)
   )
   const repoIdsWithAuthoritativeDetectedWorktrees = new Set(
-    Object.entries(catalog.detectedWorktreesByRepo ?? {})
+    Object.entries(detectedWorktreesByRepo)
       .filter(([, detected]) => detected?.authoritative)
       .map(([repoId]) => repoId)
   )

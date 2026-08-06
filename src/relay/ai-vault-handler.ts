@@ -13,6 +13,7 @@ import type { RemoteSessionFilesystemProvider } from '../main/ai-vault/remote-se
 import { getRemoteHostPlatform, type RemoteHostPlatform } from '../main/ssh/ssh-remote-platform'
 import { parseUnameToRelayPlatform } from '../main/ssh/relay-protocol'
 import { readRelayFileContent } from './fs-handler-file-read'
+import { scanCursorSidecars } from './cursor-sidecar-scan'
 import { relayLogLine } from './relay-diagnostic-log'
 import type { RelayDispatcher } from './dispatcher'
 import { AiVaultScanCoordinator } from '../main/ai-vault/ai-vault-scan-coordinator'
@@ -143,6 +144,11 @@ function createRelayAiVaultFilesystemProvider(): RemoteSessionFilesystemProvider
       }))
     },
     readFile: readRelayFileContent,
+    // Why: the relay scans its own filesystem in-process, so it must serve this
+    // capability locally. Leaving it off made every relay host report Cursor
+    // metadata as unavailable and advise an Orca update that could not fix it.
+    scanCursorSidecars: (request, options) =>
+      scanCursorSidecars(request, { isStale: () => false, signal: options?.signal }),
     async stat(filePath) {
       const stats = await lstat(filePath)
       return {

@@ -159,7 +159,7 @@ describe('AgentKanbanCard', () => {
     expect(screen.queryByRole('img', { name: 'In review' })).not.toBeInTheDocument()
   })
 
-  it('tints attention amber and done green, leaving every other state neutral', () => {
+  it('tints unseen Done green and keeps acknowledged Done neutral as Idle', () => {
     const { container: attention } = renderCard({
       card: card({ bucket: 'attention', dotState: 'waiting' }),
       now: 2_000
@@ -168,14 +168,14 @@ describe('AgentKanbanCard', () => {
 
     cleanup()
     const { container: done } = renderCard({
-      card: card({ bucket: 'idle', dotState: 'done' }),
+      card: card({ bucket: 'done', dotState: 'done', unseen: true }),
       now: 2_000
     })
     expect(done.firstElementChild?.className).toContain('border-emerald-500/40')
 
     cleanup()
     const { container: idle } = renderCard({
-      card: card({ bucket: 'idle', dotState: 'idle' }),
+      card: card({ bucket: 'idle', dotState: 'done', unseen: false }),
       now: 2_000
     })
     const idleClassName = idle.firstElementChild?.className ?? ''

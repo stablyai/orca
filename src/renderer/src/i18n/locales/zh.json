@@ -5963,11 +5963,6 @@
           "3d172725cc": "没有任何",
           "1f32ba27a6": "自定义",
           "a182c5125e": "git用户名",
-          "sourceControlGroupOrderTitle": "源代码管理分组顺序",
-          "sourceControlGroupOrderDescription": "选择在源代码管理中优先显示“更改”、“已暂存更改”还是“未跟踪文件”。",
-          "changesFirst": "更改优先",
-          "stagedFirst": "已暂存优先",
-          "untrackedFirst": "未跟踪优先",
           "compareAgainstUpstreamTitle": "默认对比基准",
           "compareAgainstUpstreamDescription": "选择源代码管理在比较已提交变更时默认使用的基准。分支上游会自动跟随当前分支；如果没有上游，则回退到仓库默认分支。你仍然可以在对应 worktree 的 Git 面板中按 worktree 更改对比基准。Pull Request 和变基目标不会改变。",
           "compareBaseRepositoryDefault": "仓库默认",
@@ -8233,14 +8228,7 @@
             "f83c8937c4": "分支命名",
             "5ecd91c5ef": "创建工作树时添加到分支名称的前缀。",
             "68bd65fdb8": "分支前缀",
-            "sourceControlGroupOrderTitle": "源代码管理分组顺序",
-            "sourceControlGroupOrderDescription": "选择在源代码管理中优先显示“更改”、“已暂存更改”还是“未跟踪文件”。",
-            "groupOrder": "分组顺序",
-            "changesFirst": "更改优先",
-            "stagedFirst": "已暂存优先",
-            "untrackedFirst": "未跟踪优先",
             "sourceControl": "源代码管理",
-            "gitChanges": "git 更改",
             "compareAgainstUpstreamTitle": "默认对比基准",
             "compareAgainstUpstreamDescription": "选择源代码管理在比较已提交变更时默认使用的基准。分支上游会自动跟随当前分支；如果没有上游，则回退到仓库默认分支。你仍然可以在对应 worktree 的 Git 面板中按 worktree 更改对比基准。Pull Request 和变基目标不会改变。",
             "compareBase": "对比基准",
@@ -9601,14 +9589,14 @@
           "available": "可用",
           "reconnecting": "正在重新连接",
           "unavailable": "不可用",
-          "signIn": "登录",
-          "localDescription": "手机必须连接此 Wi‑Fi 或您的 Tailscale。无需登录。",
+          "signIn": "登录以使用 Relay",
+          "localDescription": "手机必须连接此 Wi‑Fi 或通过 Tailscale。无需账号。",
           "pathGroup": "手机访问此电脑的方式",
           "anywhereTitle": "Orca Relay",
-          "anywhereDescription": "手机可通过蜂窝网络或任意 Wi‑Fi 连接。需要登录。",
-          "signInRequired": "请登录以使用 Orca Mobile Relay。",
+          "anywhereDescription": "手机可通过蜂窝网络或任意 Wi‑Fi 连接。仅 Relay 需要登录。",
+          "signInRequired": "仅 Relay 需要 — 局域网无需账号。",
           "relayUnavailable": "此版本不支持 Orca Relay。请使用局域网。",
-          "signInAgain": "重新登录",
+          "signInAgain": "重新登录以使用 Relay",
           "localTitle": "局域网"
         },
         "MobilePairingSetupSection": {
@@ -9619,8 +9607,9 @@
           "overview": "生成二维码，然后在 Orca Mobile 的 Pair Desktop 中扫描。",
           "step1Title": "连接方式",
           "step2Title": "此电脑的地址",
-          "step2RelayDescription": "距离较近时用于快速直接连接。Relay 覆盖远程访问。",
-          "step2LocalDescription": "手机必须能通过 Wi‑Fi 或 Tailscale 访问此地址。"
+          "step2LocalDescription": "手机必须能通过 Tailscale 或 Wi‑Fi 访问此地址。",
+          "step2RelayDescription": "可选。选择手机在附近（同一 Wi‑Fi 或 Tailscale）时使用的地址，通常比 Relay 更快。外出时仍走 Relay。",
+          "step2RelayDisclosure": "也可使用更快的本地连接"
         },
         "MobileRelayBetaAvailability": {
           "about": "关于 Orca Relay 测试版",
@@ -11788,7 +11777,9 @@
             "stable": "稳定版"
           },
           "relayDegradedNotice": "无法连接 Relay — 此二维码仅在局域网或 Tailscale 内可用。",
-          "pairingQrError": "无法将此配对码呈现为二维码。请改为将其复制到 Orca Mobile。"
+          "pairingQrError": "无法将此配对码呈现为二维码。请改为将其复制到 Orca Mobile。",
+          "directAddressDisclosure": "也可使用更快的本地连接",
+          "directAddressHint": "可选。选择手机在附近（同一 Wi‑Fi 或 Tailscale）时使用的地址，通常比 Relay 更快。外出时仍走 Relay。"
         },
         "MobilePage": {
           "e17393c6a3": "手机预览",
@@ -11931,7 +11922,8 @@
           "repair-unverified": "无法验证 Windows 防火墙访问权限",
           "blocked-title": "Windows 可能正在阻止 Orca Mobile",
           "blocked-description": "现有的入站阻止规则可能会覆盖配对例外。修复将移除此 Orca 应用的冲突 TCP 规则，然后在专用网络上允许端口 {{port}}。",
-          "repair": "修复防火墙访问权限"
+          "repair": "修复防火墙访问权限",
+          "relay-note": "配对仍可通过 Orca Relay 进行 — 允许后只是额外获得更快的本地连接。"
         }
       },
       "gitlab": {
@@ -14546,7 +14538,7 @@
         "other": "其他…",
         "otherPlaceholder": "输入你的回答",
         "cancel": "取消",
-        "send": "发送回答",
+        "send": "提交",
         "next": "下一步",
         "skip": "跳过",
         "sending": "正在发送…"
@@ -14614,6 +14606,29 @@
     }
   },
   "dashboardPopout": {
+    "view": {
+      "label": "仪表盘视图",
+      "board": "仪表盘",
+      "map": "智能体地图"
+    },
+    "map": {
+      "host": {
+        "all": "所有主机",
+        "local": "本地",
+        "ssh": "SSH",
+        "wsl": "WSL",
+        "remote": "远程"
+      },
+      "liveContainmentMap": "实时包含关系图",
+      "hostFilter": "主机筛选",
+      "empty": "没有智能体符合当前筛选条件。",
+      "canvasLabel": "项目、工作区和智能体的嵌套关系图",
+      "zoomOut": "缩小",
+      "zoomIn": "放大",
+      "fit": "适应",
+      "projectCount": "{{agents}} 个智能体 · {{workspaces}} 个工作区",
+      "agentCount": "{{count}} 个智能体"
+    },
     "placeholder": {
       "title": "Agent dashboard",
       "description": "你的所有智能体都会在这里一览无余。看板即将上线。"
@@ -14650,7 +14665,7 @@
     },
     "terminal": {
       "closed": "没有活动的终端 — 该智能体的窗格已关闭。",
-      "focusWorktree": "Focus worktree",
+      "focusWorktree": "Open worktree",
       "close": "Close"
     },
     "close": "Close dashboard",

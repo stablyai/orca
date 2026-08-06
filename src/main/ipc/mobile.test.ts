@@ -126,6 +126,51 @@ describe('registerMobileHandlers', () => {
     })
   })
 
+  it('ranks container and VM bridges below every reachable address', () => {
+    // Why: a phone can never reach docker0, so advertising it makes the direct
+    // path lose the pairing race and silently relays every session.
+    networkInterfacesMock.mockReturnValue({
+      docker0: [{ family: 'IPv4', internal: false, address: '172.17.0.1' }],
+      'vEthernet (Default Switch)': [{ family: 'IPv4', internal: false, address: '172.28.80.1' }],
+      bridge0: [{ family: 'IPv4', internal: false, address: '169.254.60.1' }],
+      en0: [
+        { family: 'IPv6', internal: false, address: '2605:340:cd51:2a01:0:2b13:f279:c096' },
+        { family: 'IPv4', internal: false, address: '192.168.1.24' }
+      ]
+    })
+
+    registerMobileHandlers({} as never)
+
+    // Real IPv6 outranks a bridge IPv4: the phone can reach one, never the other.
+    expect(handlers.get('mobile:listNetworkInterfaces')?.()).toEqual({
+      interfaces: [
+        { name: 'en0', address: '192.168.1.24' },
+        { name: 'en0', address: '2605:340:cd51:2a01:0:2b13:f279:c096' },
+        { name: 'docker0', address: '172.17.0.1' },
+        { name: 'vEthernet (Default Switch)', address: '172.28.80.1' },
+        { name: 'bridge0', address: '169.254.60.1' }
+      ]
+    })
+  })
+
+  it('keeps a real LAN address that merely overlaps a container subnet', () => {
+    // Why: Docker's 172.16/12 pool overlaps genuine corporate LANs, so the
+    // bridge check keys on interface name — a subnet test would demote this.
+    networkInterfacesMock.mockReturnValue({
+      eth0: [{ family: 'IPv4', internal: false, address: '172.17.4.9' }],
+      docker0: [{ family: 'IPv4', internal: false, address: '172.17.0.1' }]
+    })
+
+    registerMobileHandlers({} as never)
+
+    expect(handlers.get('mobile:listNetworkInterfaces')?.()).toEqual({
+      interfaces: [
+        { name: 'eth0', address: '172.17.4.9' },
+        { name: 'docker0', address: '172.17.0.1' }
+      ]
+    })
+  })
+
   it('returns an IPv6 interface on an IPv6-only host (regression: was empty, breaking mobile pairing)', () => {
     networkInterfacesMock.mockReturnValue({
       eth0: [

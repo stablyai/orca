@@ -29,13 +29,13 @@ import { projectHostSetupProjectionFromRepos } from '../../../shared/project-hos
 import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import { resolveCursorCommandOverrides } from '@/lib/ai-vault-cursor-command'
 
+type AppState = ReturnType<typeof useAppStore.getState>
+
 export type GitHubWorkItemBackgroundStoreSnapshot = {
   repos: readonly Repo[]
   pendingWorktreeCreations: Record<string, PendingWorktreeCreation>
-  sshConnectionStates: ReturnType<typeof useAppStore.getState>['sshConnectionStates']
-  runtimeStatusByEnvironmentId: ReturnType<
-    typeof useAppStore.getState
-  >['runtimeStatusByEnvironmentId']
+  sshConnectionStates: AppState['sshConnectionStates']
+  runtimeStatusByEnvironmentId: AppState['runtimeStatusByEnvironmentId']
   settings:
     | Partial<
         Pick<
@@ -51,21 +51,13 @@ export type GitHubWorkItemBackgroundStoreSnapshot = {
       >
     | null
     | undefined
-  ensureDetectedAgents: ReturnType<typeof useAppStore.getState>['ensureDetectedAgents']
-  ensureRemoteDetectedAgents: ReturnType<typeof useAppStore.getState>['ensureRemoteDetectedAgents']
-  ensureRuntimeDetectedAgents: ReturnType<
-    typeof useAppStore.getState
-  >['ensureRuntimeDetectedAgents']
-  detectedAgentCommands?: ReturnType<typeof useAppStore.getState>['detectedAgentCommands']
-  detectedAgentCommandsByContext?: ReturnType<
-    typeof useAppStore.getState
-  >['detectedAgentCommandsByContext']
-  remoteDetectedAgentCommands?: ReturnType<
-    typeof useAppStore.getState
-  >['remoteDetectedAgentCommands']
-  runtimeDetectedAgentCommands?: ReturnType<
-    typeof useAppStore.getState
-  >['runtimeDetectedAgentCommands']
+  ensureDetectedAgents: AppState['ensureDetectedAgents']
+  ensureRemoteDetectedAgents: AppState['ensureRemoteDetectedAgents']
+  ensureRuntimeDetectedAgents: AppState['ensureRuntimeDetectedAgents']
+  detectedAgentCommands?: AppState['detectedAgentCommands']
+  detectedAgentCommandsByContext?: AppState['detectedAgentCommandsByContext']
+  remoteDetectedAgentCommands?: AppState['remoteDetectedAgentCommands']
+  runtimeDetectedAgentCommands?: AppState['runtimeDetectedAgentCommands']
 }
 
 export type BuildInitialGitHubWorkItemRequestArgs = {

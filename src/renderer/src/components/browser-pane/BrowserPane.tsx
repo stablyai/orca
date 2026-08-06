@@ -197,6 +197,7 @@ import {
 import { subscribeBrowserSystemResume } from './browser-system-resume'
 import {
   type BrowserReloadTrigger,
+  reloadBrowserPageWebview,
   resolveBrowserReloadButtonLabelKind,
   resolveBrowserReloadIntent
 } from './browser-reload-action'
@@ -2941,6 +2942,20 @@ function BrowserPagePane({
     () => ({ loading: browserTab.loading, loadErrorCode: browserTab.loadError?.code ?? null }),
     [browserTab.loading, browserTab.loadError]
   )
+  const reloadWebviewOrRecoverGuest = useCallback(
+    (ignoreCache: boolean) => {
+      const webview = webviewRef.current
+      if (!webview) {
+        return
+      }
+      if (reloadBrowserPageWebview(webview, { ignoreCache }) === 'guest-missing') {
+        // Why: reload cannot revive a destroyed guest (STA-3448) — recreate it instead.
+        onUpdatePageStateRef.current(browserTab.id, { loading: true })
+        retryGuestRecoveryRef.current()
+      }
+    },
+    [browserTab.id]
+  )
   const runReloadTrigger = useCallback(
     (trigger: BrowserReloadTrigger) => {
       const webview = webviewRef.current
@@ -2959,14 +2974,14 @@ function BrowserPagePane({
           retryBrowserTabLoad(webview, browserTab, onUpdatePageStateRef.current)
           break
         case 'hard-reload':
-          webview.reloadIgnoringCache()
+          reloadWebviewOrRecoverGuest(true)
           break
         case 'reload':
-          webview.reload()
+          reloadWebviewOrRecoverGuest(false)
           break
       }
     },
-    [browserTab, reloadState]
+    [browserTab, reloadState, reloadWebviewOrRecoverGuest]
   )
 
   // Keep the accessible name honest: the same button is Stop mid-load and Retry after a failure.
@@ -3454,7 +3469,12 @@ function BrowserPagePane({
       return false
     }
     addressBarInputRef.current?.blur()
-    webview.focus()
+    try {
+      webview.focus()
+    } catch {
+      // Why: WebViewElement.focus() reads null internals once the guest is destroyed (STA-3448).
+      return false
+    }
     return document.activeElement === webview
   }, [])
 
@@ -3660,15 +3680,11 @@ function BrowserPagePane({
       }
       e.preventDefault()
       e.stopPropagation()
-      if (isHardReload) {
-        webviewRef.current?.reloadIgnoringCache()
-      } else {
-        webviewRef.current?.reload()
-      }
+      reloadWebviewOrRecoverGuest(isHardReload)
     }
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [isActive, keybindings])
+  }, [isActive, keybindings, reloadWebviewOrRecoverGuest])
 
   // Cmd/Ctrl+R — reload (IPC path: focus inside webview guest)
   // Why: a focused guest is a separate Chromium process, so main forwards the chord back here.
@@ -3677,9 +3693,9 @@ function BrowserPagePane({
       return
     }
     return window.api.ui.onReloadBrowserPage(() => {
-      webviewRef.current?.reload()
+      reloadWebviewOrRecoverGuest(false)
     })
-  }, [isActive])
+  }, [isActive, reloadWebviewOrRecoverGuest])
 
   useEffect(() => {
     if (!isActive) {
@@ -3716,9 +3732,9 @@ function BrowserPagePane({
       return
     }
     return window.api.ui.onHardReloadBrowserPage(() => {
-      webviewRef.current?.reloadIgnoringCache()
+      reloadWebviewOrRecoverGuest(true)
     })
-  }, [isActive])
+  }, [isActive, reloadWebviewOrRecoverGuest])
 
   useEffect(() => {
     onUpdatePageStateRef.current = onUpdatePageState
@@ -4220,9 +4236,17 @@ function BrowserPagePane({
     validateVisibleGuestRegistrationRef.current = guestRecovery.validateAfterResume
     retryGuestRecoveryRef.current = guestRecovery.retryRecovery
 
+    const handleGuestDestroyed = (): void => {
+      // Why: a guest can be destroyed without render-process-gone (detach/reattach race,
+      // guest-side close). Skip intentional teardown, where the element already left the DOM.
+      if (webview.isConnected) {
+        guestRecovery.recoverRenderer()
+      }
+    }
     webview.addEventListener('did-attach', handleDidAttach)
     webview.addEventListener('dom-ready', handleDomReady)
     webview.addEventListener('render-process-gone', guestRecovery.recoverRenderer)
+    webview.addEventListener('destroyed', handleGuestDestroyed)
     webview.addEventListener('focus', dismissAddressBarSuggestions)
     webview.addEventListener('did-start-loading', handleDidStartLoading)
     webview.addEventListener('did-start-navigation', handleDidStartNavigation)
@@ -4259,6 +4283,7 @@ function BrowserPagePane({
       webview.removeEventListener('did-attach', handleDidAttach)
       webview.removeEventListener('dom-ready', handleDomReady)
       webview.removeEventListener('render-process-gone', guestRecovery.recoverRenderer)
+      webview.removeEventListener('destroyed', handleGuestDestroyed)
       webview.removeEventListener('focus', dismissAddressBarSuggestions)
       webview.removeEventListener('did-start-loading', handleDidStartLoading)
       webview.removeEventListener('did-start-navigation', handleDidStartNavigation)
@@ -5161,7 +5186,7 @@ function BrowserPagePane({
                   role="menuitem"
                   className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
                   onClick={() => {
-                    webviewRef.current?.reload()
+                    reloadWebviewOrRecoverGuest(false)
                     setContextMenu(null)
                   }}
                 >

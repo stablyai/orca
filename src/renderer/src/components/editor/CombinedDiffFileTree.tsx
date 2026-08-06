@@ -10,7 +10,7 @@ import {
   compactSourceControlTree,
   flattenSourceControlTree
 } from '@/components/right-sidebar/source-control-tree'
-import type { GitBranchChangeEntry, GitStagingArea, GitStatusEntry } from '../../../../shared/types'
+import type { GitBranchChangeEntry, GitStagingArea } from '../../../../shared/types'
 import {
   getEntryExtension,
   getFilteredCombinedDiffFileTreeEntries,
@@ -22,6 +22,11 @@ import {
 import { CombinedDiffFileTreeRow, type CombinedDiffTreeNode } from './combined-diff-file-tree-row'
 import { useCombinedDiffFileTreeResize } from './use-combined-diff-file-tree-resize'
 import { translate } from '@/i18n/i18n'
+import {
+  mergeUntrackedIntoChanges,
+  SOURCE_CONTROL_GROUP_ORDER,
+  type SourceControlEntryGroups
+} from '@/components/right-sidebar/source-control-section-order'
 
 export {
   createCombinedDiffSectionIndexMap,
@@ -30,7 +35,6 @@ export {
   handleCombinedDiffFileTreeNavigation
 } from './combined-diff-file-tree-model'
 
-const UNCOMMITTED_AREA_ORDER: readonly GitStagingArea[] = ['unstaged', 'staged', 'untracked']
 const UNCOMMITTED_AREA_LABELS: Record<GitStagingArea, string> = {
   unstaged: 'Changes',
   staged: 'Staged Changes',
@@ -39,26 +43,35 @@ const UNCOMMITTED_AREA_LABELS: Record<GitStagingArea, string> = {
 
 function buildUncommittedRows(
   entries: readonly CombinedDiffFileTreeEntry[],
-  collapsedDirectoryKeys: ReadonlySet<string>
+  collapsedDirectoryKeys: ReadonlySet<string>,
+  areaOrder: readonly GitStagingArea[]
 ): { area: GitStagingArea; label: string; rows: CombinedDiffTreeNode[] }[] {
-  return UNCOMMITTED_AREA_ORDER.map((area) => {
-    const areaEntries = entries.filter(
-      (entry): entry is GitStatusEntry => isGitStatusEntry(entry) && entry.area === area
-    )
-    if (areaEntries.length === 0) {
-      return null
+  const groups: SourceControlEntryGroups = { staged: [], unstaged: [], untracked: [] }
+  for (const entry of entries) {
+    if (isGitStatusEntry(entry)) {
+      groups[entry.area].push(entry)
     }
+  }
+  const displayGroups = mergeUntrackedIntoChanges(groups)
 
-    const roots = compactSourceControlTree(buildGitStatusSourceControlTree(area, areaEntries))
-    return {
-      area,
-      label: UNCOMMITTED_AREA_LABELS[area],
-      rows: flattenSourceControlTree(roots, collapsedDirectoryKeys) as CombinedDiffTreeNode[]
-    }
-  }).filter(
-    (group): group is { area: GitStagingArea; label: string; rows: CombinedDiffTreeNode[] } =>
-      Boolean(group)
-  )
+  return areaOrder
+    .map((area) => {
+      const areaEntries = displayGroups[area]
+      if (areaEntries.length === 0) {
+        return null
+      }
+
+      const roots = compactSourceControlTree(buildGitStatusSourceControlTree(area, areaEntries))
+      return {
+        area,
+        label: UNCOMMITTED_AREA_LABELS[area],
+        rows: flattenSourceControlTree(roots, collapsedDirectoryKeys) as CombinedDiffTreeNode[]
+      }
+    })
+    .filter(
+      (group): group is { area: GitStagingArea; label: string; rows: CombinedDiffTreeNode[] } =>
+        Boolean(group)
+    )
 }
 
 function buildBranchRows(
@@ -153,7 +166,7 @@ export function CombinedDiffFileTree({
   const uncommittedGroups = React.useMemo(
     () =>
       mode === 'all' || mode === 'uncommitted'
-        ? buildUncommittedRows(filteredEntries, collapsedDirectoryKeys)
+        ? buildUncommittedRows(filteredEntries, collapsedDirectoryKeys, SOURCE_CONTROL_GROUP_ORDER)
         : [],
     [collapsedDirectoryKeys, filteredEntries, mode]
   )

@@ -16,6 +16,12 @@ import {
   loadIpcEventsHarness,
   type HarnessStoreState
 } from './ipc-events-test-harness'
+import {
+  createTestStore,
+  makeTab,
+  makeWorktree,
+  TEST_REPO
+} from '../store/slices/store-test-helpers'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import type { AgentStatusClearIpcPayload } from '../../../shared/agent-status-types'
 import type { TuiAgent } from '../../../shared/types'
@@ -4949,6 +4955,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     toolInput?: string
     lastAssistantMessage?: string
     interrupted?: boolean
+    sessionBoundary?: boolean
     terminalHandle?: string
     launchToken?: string
     providerSession?: { key: 'session_id'; id: string }
@@ -7840,6 +7847,96 @@ describe('useIpcEvents agent status snapshot integration', () => {
       expectWorktreeRouting('wt-1'),
       undefined
     )
+  })
+
+  it('preserves a SessionStart boundary from snapshot IPC without completion side effects', async () => {
+    const now = Date.now()
+    const refreshGitHubForWorktreeIfStale = vi.fn()
+    const observeAgentHookCompletionForNotification = vi.fn()
+    const store = createTestStore()
+    store.setState({
+      workspaceSessionReady: true,
+      repos: [{ ...TEST_REPO, connectionId: null, executionHostId: 'local' }],
+      worktreesByRepo: {
+        [TEST_REPO.id]: [makeWorktree({ id: 'wt-1', repoId: TEST_REPO.id })]
+      },
+      tabsByWorktree: {
+        'wt-1': [
+          makeTab({
+            id: 'tab-future',
+            ptyId: 'pty-1',
+            worktreeId: 'wt-1',
+            title: 'Claude'
+          })
+        ]
+      },
+      terminalLayoutsByTabId: {
+        'tab-future': {
+          root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+          activeLeafId: FUTURE_LEAF_ID,
+          expandedLeafId: null
+        }
+      },
+      refreshGitHubForWorktreeIfStale
+    })
+    store
+      .getState()
+      .setAgentStatus(
+        FUTURE_PANE_KEY,
+        { state: 'working', prompt: 'resumed task', agentType: 'claude' },
+        'Claude',
+        { updatedAt: now - 2, stateStartedAt: now - 2 },
+        { tabId: 'tab-future', worktreeId: 'wt-1' }
+      )
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: store.subscribe,
+        getState: store.getState
+      }
+    }))
+    vi.doMock('./agent-hook-completion-notifications', () => ({
+      observeAgentHookCompletionForNotification,
+      resetAgentHookCompletionNotificationCoordinators: vi.fn(),
+      syncAgentHookCompletionNotificationSettings: vi.fn(),
+      syncAgentHookCompletionNotificationsForStoreUpdate: vi.fn()
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        getSnapshot: () =>
+          Promise.resolve([
+            {
+              paneKey: FUTURE_PANE_KEY,
+              tabId: 'tab-future',
+              worktreeId: 'wt-1',
+              state: 'done',
+              prompt: '',
+              agentType: 'claude',
+              sessionBoundary: true,
+              receivedAt: now,
+              stateStartedAt: now
+            }
+          ]),
+        onSet: () => () => {}
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+    useIpcEvents()
+
+    await vi.waitFor(() => {
+      expect(store.getState().agentStatusByPaneKey[FUTURE_PANE_KEY]).toMatchObject({
+        state: 'done',
+        sessionBoundary: true
+      })
+    })
+    await Promise.resolve()
+
+    expect(refreshGitHubForWorktreeIfStale).not.toHaveBeenCalled()
+    expect(observeAgentHookCompletionForNotification).not.toHaveBeenCalled()
   })
 
   it('queues replayed startup snapshots until the pane hydrates', async () => {

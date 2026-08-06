@@ -38,6 +38,7 @@ import type { ShellReadySignal } from './local-pty-shell-ready'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
 import { stripInheritedBuildModeEnv } from '../pty/build-mode-env'
+import { SessionNotFoundError } from '../daemon/daemon-errors'
 import { resolvePathEnvKey } from '../pty/windows-environment-path'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-wsl-env'
 import { addWslEnvKeys } from '../wsl-env'
@@ -546,7 +547,7 @@ export class LocalPtyProvider implements IPtyProvider {
       }
     }
     if (args.attachOnly) {
-      throw new Error(`Session not found: ${args.sessionId ?? ''}`)
+      throw new SessionNotFoundError(args.sessionId ?? '')
     }
     const id = allocatePtyId(reattachId ?? undefined)
     const incarnationId = randomUUID()
