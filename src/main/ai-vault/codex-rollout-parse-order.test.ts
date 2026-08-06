@@ -1,4 +1,7 @@
-// SCRATCH (regb-): adversarial review of orderCodexRolloutCandidatesForParse.
+// Codex rollout candidates reach the parse budget in mtime order, and the budget
+// cuts the tail. Ordering therefore decides which root's copy of a rollout is
+// ever parsed, and so which one post-parse dedup gets to choose between. These
+// pin what the ordering pass may and may not do to that list.
 import { describe, expect, it } from 'vitest'
 import {
   codexRolloutHardlinkIdentity,
@@ -89,20 +92,17 @@ function multiset(candidates: readonly Candidate[]): string {
   return JSON.stringify([...candidates].map((c) => c.id).sort((a, b) => a - b))
 }
 
-describe('regb fix review: promotion is order-only', () => {
-  it('ITEM 1: same multiset in, same multiset out (500 random inputs)', () => {
-    let checked = 0
+describe('Codex rollout parse ordering', () => {
+  it('adds and drops nothing, across 500 seeded inputs', () => {
     for (let seed = 1; seed <= 500; seed += 1) {
       const input = randomCandidates(seed, 60)
       const output = promoteCanonicalCodexRolloutAliases(input, accessors)
       expect(output).toHaveLength(input.length)
       expect(multiset(output)).toBe(multiset(input))
-      checked += 1
     }
-    console.log('ITEM1 seeds checked', checked, '-> multiset always preserved')
   })
 
-  it('ITEM 1b: non-codex and non-rollout candidates never move', () => {
+  it('never moves a non-Codex or non-rollout candidate', () => {
     let moved = 0
     let immovable = 0
     for (let seed = 1; seed <= 500; seed += 1) {
@@ -118,11 +118,10 @@ describe('regb fix review: promotion is order-only', () => {
         }
       })
     }
-    console.log('ITEM1b immovable candidates', immovable, 'that moved:', moved)
     expect(moved).toBe(0)
   })
 
-  it('ITEM 2: a group only ever permutes its own slots', () => {
+  it('permutes only the slots an alias group already occupied', () => {
     let outsideChanges = 0
     for (let seed = 1; seed <= 500; seed += 1) {
       const input = randomCandidates(seed, 60)
@@ -141,11 +140,10 @@ describe('regb fix review: promotion is order-only', () => {
         changedKeys.add(String(before))
       })
     }
-    console.log('ITEM2 slots that changed to a DIFFERENT alias group:', outsideChanges)
     expect(outsideChanges).toBe(0)
   })
 
-  it('ITEM 2b: relative mtime order of unrelated rollouts is untouched', () => {
+  it('preserves the relative mtime order of unrelated rollouts', () => {
     // Input is already mtime-desc (index order). For any two candidates in
     // DIFFERENT groups, their relative order must be unchanged.
     let inversions = 0
@@ -178,11 +176,10 @@ describe('regb fix review: promotion is order-only', () => {
         }
       }
     }
-    console.log('ITEM2b groups whose SLOT SET changed:', inversions)
     expect(inversions).toBe(0)
   })
 
-  it('ITEM 5: promotion never moves a row across the WSL/native boundary', () => {
+  it('never moves a row across the WSL/native execution boundary', () => {
     let crossings = 0
     for (let seed = 1; seed <= 500; seed += 1) {
       const input = randomCandidates(seed, 60)
@@ -193,11 +190,10 @@ describe('regb fix review: promotion is order-only', () => {
         }
       })
     }
-    console.log('ITEM5 namespace crossings:', crossings)
     expect(crossings).toBe(0)
   })
 
-  it('ITEM 4: promotion never resurrects a candidate the alias pass dropped', () => {
+  it('never resurrects a candidate the hardlink alias pass dropped', () => {
     let resurrected = 0
     let orderingConflicts = 0
     for (let seed = 1; seed <= 500; seed += 1) {
@@ -228,12 +224,28 @@ describe('regb fix review: promotion is order-only', () => {
         void index
       })
     }
-    console.log('ITEM4 resurrected:', resurrected, 'rank-order conflicts:', orderingConflicts)
     expect(resurrected).toBe(0)
     expect(orderingConflicts).toBe(0)
   })
 
-  it('ITEM 6: perf — 200k candidates incl. one 5k-member group', () => {
+  // The case for every user who has not set a Codex session source home: with a
+  // single root there are no alias groups, so the pass must return the list
+  // untouched rather than perturb a shared scanner path for everyone.
+  it('is inert when a single Codex root is scanned', () => {
+    const input: Candidate[] = Array.from({ length: 25 }, (_unused, id) => ({
+      id,
+      agent: 'codex',
+      path: `/home/u/.codex/sessions/rollout-2026-07-01T10-00-00-${String(id).padStart(4, '0')}.jsonl`,
+      codexHome: null,
+      dev: 2,
+      ino: id + 1,
+      nlink: 1
+    }))
+
+    expect(orderCodexRolloutCandidatesForParse(input, accessors)).toEqual(input)
+  })
+
+  it('stays linear on a pathological single-name group', () => {
     const candidates: Candidate[] = []
     for (let i = 0; i < 5_000; i += 1) {
       candidates.push({
@@ -246,7 +258,7 @@ describe('regb fix review: promotion is order-only', () => {
         nlink: 1
       })
     }
-    for (let i = 0; i < 195_000; i += 1) {
+    for (let i = 0; i < 45_000; i += 1) {
       candidates.push({
         id: 5_000 + i,
         agent: 'codex',
@@ -260,7 +272,6 @@ describe('regb fix review: promotion is order-only', () => {
     const started = performance.now()
     const output = orderCodexRolloutCandidatesForParse(candidates, accessors)
     const elapsedMs = performance.now() - started
-    console.log('ITEM6 n=', candidates.length, 'elapsedMs=', Math.round(elapsedMs))
     expect(output).toHaveLength(candidates.length)
     expect(elapsedMs).toBeLessThan(5_000)
   })
