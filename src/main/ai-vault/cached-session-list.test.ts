@@ -76,6 +76,11 @@ describe('cached Agent History source configuration', () => {
     const second = listAiVaultSessions()
     await vi.waitFor(() => expect(resolveScans).toHaveLength(2))
 
+    // The point is not just that a second scan started, but that it started
+    // against the NEW source rather than re-reading the superseded one.
+    expect(scanAiVaultSessions.mock.calls[1]?.[0]).toMatchObject({
+      additionalCodexSessionsDirs: [join('/custom/codex/b', 'sessions')]
+    })
     resolveScans.forEach((resolve) => resolve(EMPTY_RESULT))
     await Promise.all([first, second])
   })

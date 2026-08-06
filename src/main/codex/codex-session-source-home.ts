@@ -1,5 +1,5 @@
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { isAbsolute, join, sep } from 'node:path'
 import type { GlobalSettings } from '../../shared/types'
 
 /**
@@ -16,7 +16,12 @@ import type { GlobalSettings } from '../../shared/types'
 export function resolveHostCodexSessionSourceHome(
   settings: Pick<GlobalSettings, 'codexSessionSourceHome'>
 ): string | undefined {
-  return expandHostHomePrefix(normalizeSourceHome(settings.codexSessionSourceHome?.host))
+  const expanded = expandHostHomePrefix(normalizeSourceHome(settings.codexSessionSourceHome?.host))
+  // Why: consumers both scan and WRITE through this value (the session backfill
+  // resolves <home>/sessions as its target), so an unanchored one would walk and
+  // mkdir under whatever cwd the app happens to have. Drop it and let every
+  // caller fall back to the system home instead.
+  return expanded && isAbsolute(expanded) ? expanded : undefined
 }
 
 /** Per-distro WSL override; returns undefined to keep the default <wslHome>/.codex source. */
@@ -54,7 +59,10 @@ function expandHostHomePrefix(value: string | undefined): string | undefined {
   if (value === '~') {
     return homedir()
   }
-  if (!value?.startsWith('~/') && !value?.startsWith('~\\')) {
+  // `~\` is a home prefix only where `\` separates paths; on POSIX it is a
+  // legal filename character, so rewriting it would retarget a path the user
+  // really typed.
+  if (!value?.startsWith('~/') && !(sep === '\\' && value?.startsWith('~\\'))) {
     return value
   }
   return join(homedir(), value.slice(2))

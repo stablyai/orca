@@ -42,10 +42,12 @@ export function configureAiVaultSessionSources(next: AiVaultSessionSources): voi
   sources = next
 }
 
-// Why: the configured source home is an EXTRA root, never a replacement for
-// ~/.codex. Users who set it still have real history in ~/.codex (the reporter
-// of #12186 had 229 sessions there), and this panel is a union of every
-// discoverable Codex home — swapping the default root out would hide them.
+// Why: the configured source home is an EXTRA root, never a replacement for the
+// default one — users who set it still have real history in ~/.codex (the
+// #12186 reporter had 229 sessions there), so swapping the default out hides
+// them. The default root is itself `process.env.CODEX_HOME || ~/.codex`, so
+// ~/.codex stays unscanned when Orca's own env carries a custom CODEX_HOME;
+// that gap predates this seam and this override cannot reach it.
 function resolveCodexSessionDirs(): string[] {
   const sourceHomePath = sources.getCodexSessionSourceHomePath?.()
   return [

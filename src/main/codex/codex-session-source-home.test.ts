@@ -1,5 +1,5 @@
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   resolveHostCodexSessionSourceHome,
@@ -39,9 +39,25 @@ describe('resolveHostCodexSessionSourceHome', () => {
     expect(
       resolveHostCodexSessionSourceHome({ codexSessionSourceHome: { host: '/codex/~backup' } })
     ).toBe('/codex/~backup')
-    expect(resolveHostCodexSessionSourceHome({ codexSessionSourceHome: { host: '~codex' } })).toBe(
-      '~codex'
-    )
+  })
+
+  // `\` is a legal filename character on POSIX, so only a backslash-separated
+  // platform may read `~\` as a home prefix.
+  it('expands a ~\\ prefix only where the backslash separates paths', () => {
+    expect(
+      resolveHostCodexSessionSourceHome({ codexSessionSourceHome: { host: '~\\.codex-chatgpt' } })
+    ).toBe(sep === '\\' ? join(homedir(), '.codex-chatgpt') : undefined)
+  })
+
+  // A relative value is never a real Codex home, and the session backfill uses
+  // this path as a WRITE target — resolving it against cwd would mkdir a stray tree.
+  it('ignores a value that is still relative after expansion', () => {
+    expect(
+      resolveHostCodexSessionSourceHome({ codexSessionSourceHome: { host: '~codex' } })
+    ).toBeUndefined()
+    expect(
+      resolveHostCodexSessionSourceHome({ codexSessionSourceHome: { host: 'my-codex-home' } })
+    ).toBeUndefined()
   })
 })
 
