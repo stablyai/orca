@@ -56,32 +56,43 @@ export async function adoptStrandedSshHostPartitions(
   )
   let session = merged
   for (const [hostId, slice] of sshSlices) {
-    const adoption = adoptOrphanedWorkspaceSessionPartition(session, slice)
-    if (adoption.session === session) {
-      continue
-    }
+    // Why: the boot snapshot can predate writes that landed on the owner
+    // partition. Folding a fresh owner read in first keeps the hydrated session
+    // and the owner partition agreeing on which worktrees are still empty and
+    // which tabs are retired. Adopting into a worktree the owner repopulated
+    // would hand the renderer a copy the owner patch refuses to persist, and
+    // the first debounced write would push that stale copy back over the live
+    // one.
+    const ownerSession = api.patch ? await readOwnerPartition(api, hostId) : null
+    const adoption = adoptOrphanedWorkspaceSessionPartition(
+      ownerSession ? foldOwnerPartition(session, ownerSession) : session,
+      slice
+    )
     session = adoption.session
-    if (!api.patch) {
+    if (!api.patch || !ownerSession) {
       continue
     }
     try {
-      // Why: both patches replace whole fields, so each is built from a fresh
-      // read taken just before the write — a boot-time snapshot would clobber
-      // any write that landed on the partition in between. The owner (local)
+      // Why: both patches replace whole fields, so each is built from a read
+      // taken after the boot snapshot — a boot-time snapshot would clobber any
+      // write that landed on the partition in between. The owner (local)
       // partition persists every adopted field before the source sheds them,
       // so a crash between the two writes cannot strand the adopted tabs with
-      // no persisted copy on either side.
+      // no persisted copy on either side. The source sheds exactly what the
+      // owner patch landed, plus the tabs a tombstone retired.
       const ownerPatch = buildAdoptedWorkspaceSessionOwnerPatch(
-        await api.get(),
+        ownerSession,
         session,
         adoption.adoptedTabIdsByWorktreeId
       )
-      if (ownerPatch) {
-        await api.patch(ownerPatch)
+      if (!ownerPatch) {
+        continue
       }
+      await api.patch(ownerPatch.patch)
       const prune = pruneAdoptedWorkspaceSessionPartitionEntries(
         await api.get(hostId),
-        adoption.adoptedTabIdsByWorktreeId
+        ownerPatch.landedTabIdsByWorktreeId,
+        adoption.retiredTabIds
       )
       if (prune) {
         await api.patch(prune, hostId)
@@ -91,4 +102,38 @@ export async function adoptStrandedSshHostPartitions(
     }
   }
   return session
+}
+
+/** Merge a fresh owner read into the boot snapshot: adopt the entries the
+ *  snapshot lacks, and take the owner's tombstones so a pane retired since the
+ *  snapshot still fences its tab out of the adoption. */
+function foldOwnerPartition(
+  session: WorkspaceSessionState,
+  ownerSession: WorkspaceSessionState
+): WorkspaceSessionState {
+  const folded = adoptOrphanedWorkspaceSessionPartition(session, ownerSession).session
+  if (!ownerSession.terminalSurfaceTombstonesByPaneKey) {
+    return folded
+  }
+  return {
+    ...folded,
+    terminalSurfaceTombstonesByPaneKey: {
+      ...folded.terminalSurfaceTombstonesByPaneKey,
+      ...ownerSession.terminalSurfaceTombstonesByPaneKey
+    }
+  }
+}
+
+/** Read the owner (local) partition, or null when it is unreadable — a failed
+ *  read only costs this host its durable move, never the boot. */
+async function readOwnerPartition(
+  api: SshPartitionHydrationApi,
+  hostId: ExecutionHostId
+): Promise<WorkspaceSessionState | null> {
+  try {
+    return await api.get()
+  } catch (err) {
+    console.warn(`[session] skipping adoption move for ${hostId}, owner read failed:`, err)
+    return null
+  }
 }

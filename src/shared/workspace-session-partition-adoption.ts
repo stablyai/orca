@@ -27,6 +27,8 @@ export type WorkspaceSessionPartitionAdoption = {
   session: WorkspaceSessionState
   /** Tab ids adopted per worktree; empty when the base was returned unchanged. */
   adoptedTabIdsByWorktreeId: Record<string, string[]>
+  /** Tab ids fenced by a tombstone on either side — retired, never adopted. */
+  retiredTabIds: string[]
 }
 
 function tombstonedTabIds(session: WorkspaceSessionState): Set<string> {
@@ -67,7 +69,7 @@ export function adoptOrphanedWorkspaceSessionPartition(
   partition: WorkspaceSessionState | null | undefined
 ): WorkspaceSessionPartitionAdoption {
   if (!partition) {
-    return { session: base, adoptedTabIdsByWorktreeId: {} }
+    return { session: base, adoptedTabIdsByWorktreeId: {}, retiredTabIds: [] }
   }
   const retiredTabIds = new Set([...tombstonedTabIds(base), ...tombstonedTabIds(partition)])
   const adoptedTabsByWorktreeId: Record<string, TerminalTab[]> = {}
@@ -85,7 +87,7 @@ export function adoptOrphanedWorkspaceSessionPartition(
   }
   const adoptedWorktreeIds = Object.keys(adoptedTabsByWorktreeId)
   if (adoptedWorktreeIds.length === 0) {
-    return { session: base, adoptedTabIdsByWorktreeId: {} }
+    return { session: base, adoptedTabIdsByWorktreeId: {}, retiredTabIds: [...retiredTabIds] }
   }
   const adoptedTabIds = new Set(Object.values(adoptedTabIdsByWorktreeId).flat())
 
@@ -121,25 +123,44 @@ export function adoptOrphanedWorkspaceSessionPartition(
       ...base.remoteSessionIdsByTabId
     }
   }
-  return { session, adoptedTabIdsByWorktreeId }
+  return { session, adoptedTabIdsByWorktreeId, retiredTabIds: [...retiredTabIds] }
+}
+
+export type AdoptedWorkspaceSessionOwnerPatch = {
+  patch: WorkspaceSessionPatch
+  /** Tab ids the patch lands, per worktree — the exact set the source may shed. */
+  landedTabIdsByWorktreeId: Record<string, string[]>
 }
 
 /**
  * Build the owner-partition patch that lands every adopted field durably.
  * `ownerSession` must be a fresh read of the owning partition — the patch
  * replaces whole fields, so building it from a stale snapshot would clobber
- * writes that landed in between. Returns null when nothing was adopted.
+ * writes that landed in between. Worktrees the fresh read already populates
+ * drop out of the patch, so only what this patch lands may later be pruned
+ * from the source. Returns null when nothing is left to land.
  */
 export function buildAdoptedWorkspaceSessionOwnerPatch(
   ownerSession: WorkspaceSessionState,
   adoptedSession: WorkspaceSessionState,
   adoptedTabIdsByWorktreeId: Record<string, string[]>
-): WorkspaceSessionPatch | null {
-  const adoptedWorktreeIds = Object.keys(adoptedTabIdsByWorktreeId)
+): AdoptedWorkspaceSessionOwnerPatch | null {
+  // Why: base-wins holds against the fresh read too — a concurrent write can
+  // populate an adopted worktree after the boot snapshot, and this patch
+  // replaces the whole field, so keeping the snapshot would drop those tabs.
+  const adoptedWorktreeIds = Object.keys(adoptedTabIdsByWorktreeId).filter(
+    (worktreeId) => (ownerSession.tabsByWorktree?.[worktreeId] ?? []).length === 0
+  )
   if (adoptedWorktreeIds.length === 0) {
     return null
   }
-  const adoptedTabIds = new Set(Object.values(adoptedTabIdsByWorktreeId).flat())
+  const landedTabIdsByWorktreeId = Object.fromEntries(
+    adoptedWorktreeIds.map((worktreeId) => [
+      worktreeId,
+      adoptedTabIdsByWorktreeId[worktreeId] ?? []
+    ])
+  )
+  const adoptedTabIds = new Set(Object.values(landedTabIdsByWorktreeId).flat())
   const adoptedTabsByWorktree = Object.fromEntries(
     adoptedWorktreeIds.map((worktreeId) => [
       worktreeId,
@@ -175,41 +196,60 @@ export function buildAdoptedWorkspaceSessionOwnerPatch(
       adoptedWorktreeIds
     )
   }
-  return patch
+  return { patch, landedTabIdsByWorktreeId }
 }
 
 /**
  * Build the partition patch that completes an adoption as a move. Leaving the
- * adopted entries behind would re-adopt them on every read once the base's own
+ * adopted tabs behind would re-adopt them on every read once the base's own
  * copy empties again — resurrecting tabs the user deliberately closed.
- * Returns null when nothing was adopted. Only the adopted worktree entries and
- * the adopted tabs' records are dropped; everything else stays untouched.
+ * `partition` must be a fresh read of the source. Returns null when nothing was
+ * adopted. An adopted worktree sheds the tabs the owner took plus the ones a
+ * tombstone retired; every other tab stays, including one a concurrent write
+ * added to that worktree after the adoption read.
  */
 export function pruneAdoptedWorkspaceSessionPartitionEntries(
   partition: WorkspaceSessionState,
-  adoptedTabIdsByWorktreeId: Record<string, string[]>
+  adoptedTabIdsByWorktreeId: Record<string, string[]>,
+  retiredTabIds: readonly string[] = []
 ): WorkspaceSessionPatch | null {
-  const adoptedWorktreeIds = new Set(Object.keys(adoptedTabIdsByWorktreeId))
-  if (adoptedWorktreeIds.size === 0) {
+  if (Object.keys(adoptedTabIdsByWorktreeId).length === 0) {
     return null
   }
-  const adoptedTabIds = new Set(Object.values(adoptedTabIdsByWorktreeId).flat())
+  const shed = new Set([...Object.values(adoptedTabIdsByWorktreeId).flat(), ...retiredTabIds])
+  const droppedTabIds = new Set<string>()
+  const tabsByWorktree: Record<string, TerminalTab[]> = {}
+  for (const [worktreeId, tabs] of Object.entries(partition.tabsByWorktree ?? {})) {
+    if (!Object.hasOwn(adoptedTabIdsByWorktreeId, worktreeId)) {
+      tabsByWorktree[worktreeId] = tabs
+      continue
+    }
+    // Why: a tab the source gained after the adoption read was never moved —
+    // dropping the whole entry would delete it with no copy on the owner side.
+    const retained: TerminalTab[] = []
+    for (const tab of tabs ?? []) {
+      if (shed.has(tab.id)) {
+        droppedTabIds.add(tab.id)
+      } else {
+        retained.push(tab)
+      }
+    }
+    if (retained.length > 0) {
+      tabsByWorktree[worktreeId] = retained
+    }
+  }
   const patch: WorkspaceSessionPatch = {
-    tabsByWorktree: Object.fromEntries(
-      Object.entries(partition.tabsByWorktree ?? {}).filter(
-        ([worktreeId]) => !adoptedWorktreeIds.has(worktreeId)
-      )
-    ),
+    tabsByWorktree,
     terminalLayoutsByTabId: Object.fromEntries(
       Object.entries(partition.terminalLayoutsByTabId ?? {}).filter(
-        ([tabId]) => !adoptedTabIds.has(tabId)
+        ([tabId]) => !droppedTabIds.has(tabId)
       )
     )
   }
   if (partition.remoteSessionIdsByTabId) {
     patch.remoteSessionIdsByTabId = Object.fromEntries(
       Object.entries(partition.remoteSessionIdsByTabId).filter(
-        ([tabId]) => !adoptedTabIds.has(tabId)
+        ([tabId]) => !droppedTabIds.has(tabId)
       )
     )
   }

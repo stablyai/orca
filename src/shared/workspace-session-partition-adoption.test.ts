@@ -154,12 +154,14 @@ describe('buildAdoptedWorkspaceSessionOwnerPatch', () => {
       tabsByWorktree: { [OTHER_WORKTREE_ID]: [tab('new-tab', OTHER_WORKTREE_ID)] }
     })
 
-    const patch = buildAdoptedWorkspaceSessionOwnerPatch(
+    const owner = buildAdoptedWorkspaceSessionOwnerPatch(
       freshOwner,
       adoption.session,
       adoption.adoptedTabIdsByWorktreeId
     )
+    const patch = owner?.patch
 
+    expect(owner?.landedTabIdsByWorktreeId).toEqual({ [WORKTREE_ID]: ['tab-1'] })
     expect(patch?.tabsByWorktree?.[WORKTREE_ID]).toHaveLength(1)
     expect(patch?.tabsByWorktree?.[OTHER_WORKTREE_ID]).toHaveLength(1)
     expect(patch?.terminalLayoutsByTabId?.['tab-1']).toBeDefined()
@@ -167,6 +169,50 @@ describe('buildAdoptedWorkspaceSessionOwnerPatch', () => {
     expect(patch?.activeTabIdByWorktree?.[WORKTREE_ID]).toBe('tab-1')
     expect(patch?.lastVisitedAtByWorktreeId?.[WORKTREE_ID]).toBe(42)
     expect(patch?.defaultTerminalTabsAppliedByWorktreeId?.[WORKTREE_ID]).toBe(true)
+  })
+
+  it('keeps an owner entry a concurrent write populated after adoption started', () => {
+    const partition = session({
+      tabsByWorktree: { [WORKTREE_ID]: [tab('stale-tab')] },
+      terminalLayoutsByTabId: { 'stale-tab': { root: null } as never },
+      remoteSessionIdsByTabId: { 'stale-tab': 'session-1' },
+      activeTabIdByWorktree: { [WORKTREE_ID]: 'stale-tab' }
+    })
+    const adoption = adoptOrphanedWorkspaceSessionPartition(session({}), partition)
+    const freshOwner = session({ tabsByWorktree: { [WORKTREE_ID]: [tab('live-tab')] } })
+
+    const owner = buildAdoptedWorkspaceSessionOwnerPatch(
+      freshOwner,
+      adoption.session,
+      adoption.adoptedTabIdsByWorktreeId
+    )
+
+    expect(owner).toBeNull()
+  })
+
+  it('lands only the worktrees the fresh owner read left empty', () => {
+    const partition = session({
+      tabsByWorktree: {
+        [WORKTREE_ID]: [tab('stale-tab')],
+        [OTHER_WORKTREE_ID]: [tab('orphan-tab', OTHER_WORKTREE_ID)]
+      },
+      activeTabIdByWorktree: { [WORKTREE_ID]: 'stale-tab' },
+      lastVisitedAtByWorktreeId: { [WORKTREE_ID]: 42 }
+    })
+    const adoption = adoptOrphanedWorkspaceSessionPartition(session({}), partition)
+    const freshOwner = session({ tabsByWorktree: { [WORKTREE_ID]: [tab('live-tab')] } })
+
+    const owner = buildAdoptedWorkspaceSessionOwnerPatch(
+      freshOwner,
+      adoption.session,
+      adoption.adoptedTabIdsByWorktreeId
+    )
+
+    expect(owner?.landedTabIdsByWorktreeId).toEqual({ [OTHER_WORKTREE_ID]: ['orphan-tab'] })
+    expect(owner?.patch.tabsByWorktree?.[WORKTREE_ID]).toEqual([tab('live-tab')])
+    expect(owner?.patch.tabsByWorktree?.[OTHER_WORKTREE_ID]).toHaveLength(1)
+    expect(owner?.patch.activeTabIdByWorktree?.[WORKTREE_ID]).toBeUndefined()
+    expect(owner?.patch.lastVisitedAtByWorktreeId?.[WORKTREE_ID]).toBeUndefined()
   })
 })
 
@@ -196,5 +242,66 @@ describe('pruneAdoptedWorkspaceSessionPartitionEntries', () => {
     expect(Object.keys(patch?.tabsByWorktree ?? {})).toEqual([OTHER_WORKTREE_ID])
     expect(Object.keys(patch?.terminalLayoutsByTabId ?? {})).toEqual(['kept-tab'])
     expect(patch?.remoteSessionIdsByTabId).toEqual({ 'kept-tab': 'session-2' })
+  })
+
+  it('retains a tab a concurrent write added to an adopted worktree', () => {
+    const partition = session({
+      tabsByWorktree: { [WORKTREE_ID]: [tab('tab-1'), tab('written-during-adoption')] },
+      terminalLayoutsByTabId: {
+        'tab-1': { root: null } as never,
+        'written-during-adoption': { root: null } as never
+      },
+      remoteSessionIdsByTabId: { 'tab-1': 'session-1', 'written-during-adoption': 'session-3' }
+    })
+
+    const patch = pruneAdoptedWorkspaceSessionPartitionEntries(partition, {
+      [WORKTREE_ID]: ['tab-1']
+    })
+
+    expect(patch?.tabsByWorktree?.[WORKTREE_ID]?.map((entry) => entry.id)).toEqual([
+      'written-during-adoption'
+    ])
+    expect(Object.keys(patch?.terminalLayoutsByTabId ?? {})).toEqual(['written-during-adoption'])
+    expect(patch?.remoteSessionIdsByTabId).toEqual({ 'written-during-adoption': 'session-3' })
+  })
+
+  it('sheds retired tabs of an adopted worktree along with the adopted ones', () => {
+    const partition = session({
+      tabsByWorktree: { [WORKTREE_ID]: [tab('tab-1'), tab('retired-tab')] },
+      terminalLayoutsByTabId: {
+        'tab-1': { root: null } as never,
+        'retired-tab': { root: null } as never
+      },
+      remoteSessionIdsByTabId: { 'tab-1': 'session-1', 'retired-tab': 'session-2' }
+    })
+
+    const patch = pruneAdoptedWorkspaceSessionPartitionEntries(
+      partition,
+      { [WORKTREE_ID]: ['tab-1'] },
+      ['retired-tab']
+    )
+
+    expect(patch?.tabsByWorktree).toEqual({})
+    expect(patch?.terminalLayoutsByTabId).toEqual({})
+    expect(patch?.remoteSessionIdsByTabId).toEqual({})
+  })
+
+  it('keeps a retired tab that belongs to a worktree the adoption did not touch', () => {
+    const partition = session({
+      tabsByWorktree: {
+        [WORKTREE_ID]: [tab('tab-1')],
+        [OTHER_WORKTREE_ID]: [tab('retired-tab', OTHER_WORKTREE_ID)]
+      },
+      terminalLayoutsByTabId: { 'retired-tab': { root: null } as never }
+    })
+
+    const patch = pruneAdoptedWorkspaceSessionPartitionEntries(
+      partition,
+      { [WORKTREE_ID]: ['tab-1'] },
+      ['retired-tab']
+    )
+
+    expect(patch?.tabsByWorktree?.[OTHER_WORKTREE_ID]).toHaveLength(1)
+    expect(Object.keys(patch?.terminalLayoutsByTabId ?? {})).toEqual(['retired-tab'])
   })
 })
