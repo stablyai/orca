@@ -226,6 +226,28 @@ describe('Claude background task status', () => {
     expect(state.claudeActiveSessionCronPaneKeys.has(SOURCE_PANE)).toBe(false)
   })
 
+  it('drains a reported cron inventory mid-turn, not only at a turn boundary', () => {
+    const state = createHookListenerState()
+
+    claudeEvent(state, SOURCE_PANE, {
+      hook_event_name: 'Stop',
+      session_crons: [{ id: 'cron-1' }]
+    })
+    expect(state.claudeActiveSessionCronPaneKeys.has(SOURCE_PANE)).toBe(true)
+
+    expect(
+      claudeEvent(state, SOURCE_PANE, {
+        hook_event_name: 'PostToolUse',
+        session_crons: []
+      })?.state
+    ).toBe('working')
+    expect(state.claudeActiveSessionCronPaneKeys.has(SOURCE_PANE)).toBe(false)
+
+    // Why: the mid-turn drain must survive to the next boundary — a Stop that reports
+    // nothing is the case where a stale cron flag would pin the pane 'working'.
+    expect(claudeEvent(state, SOURCE_PANE, { hook_event_name: 'Stop' })?.state).toBe('done')
+  })
+
   it('only infers an omitted cron inventory is drained from modern lead Stop payloads', () => {
     const createCronState = (): HookListenerState => {
       const state = createHookListenerState()

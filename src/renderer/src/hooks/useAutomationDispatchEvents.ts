@@ -416,6 +416,10 @@ export function useAutomationDispatchEvents(): void {
                 }
                 if (
                   entry.state === 'done' &&
+                  // Why: a session-boundary done is the agent CONNECTING (Claude SessionStart
+                  // fires at launch, before the argv prompt submits) — completing here would
+                  // close the tab and record an empty run result.
+                  entry.sessionBoundary !== true &&
                   (!options?.requireWorkingAfterStart || sawWorkingAfterStart)
                 ) {
                   latestAssistantMessage =
@@ -528,7 +532,8 @@ export function useAutomationDispatchEvents(): void {
             onAgentStatus: (payload) => {
               latestAssistantMessage =
                 payload.lastAssistantMessage?.trim() || latestAssistantMessage
-              if (payload.state !== 'done') {
+              // Why: session-boundary done = launch connect, not run completion (see observeAgentStatus).
+              if (payload.state !== 'done' || payload.sessionBoundary === true) {
                 return
               }
               handleAgentDone()

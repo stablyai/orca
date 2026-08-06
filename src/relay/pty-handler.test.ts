@@ -34,6 +34,10 @@ vi.mock('node-pty', () => ({
   spawn: mockPtySpawn
 }))
 
+vi.mock('../main/pty/posix-pty-process-groups', () => ({
+  forceKillPosixPtyProcessGroups: vi.fn((_pid: number, fallback: () => void) => fallback())
+}))
+
 import {
   IMMEDIATE_PTY_EXIT_TIMEOUT_MS,
   MAX_RELAY_PTY_SESSIONS,
@@ -102,6 +106,7 @@ function createMockDispatcher() {
 describe('PtyHandler', () => {
   let dispatcher: ReturnType<typeof createMockDispatcher>
   let handler: PtyHandler
+  let originalPlatform: PropertyDescriptor | undefined
 
   async function spawnPty(
     params: Record<string, unknown> = {}
@@ -122,6 +127,8 @@ describe('PtyHandler', () => {
   }
 
   beforeEach(() => {
+    originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     vi.useFakeTimers()
     mockPtySpawn.mockReset()
     mockPtyInstance.onData.mockReset()
@@ -132,6 +139,7 @@ describe('PtyHandler', () => {
     mockPtyInstance.clear.mockReset()
     mockPtyInstance.pause.mockReset()
     mockPtyInstance.resume.mockReset()
+    vi.spyOn(ptyShellUtils, 'processHasChildren').mockResolvedValue(false)
 
     mockPtySpawn.mockReturnValue({ ...mockPtyInstance })
 
@@ -144,6 +152,10 @@ describe('PtyHandler', () => {
     await vi.runAllTimersAsync()
     await cleanup.catch(() => {})
     vi.useRealTimers()
+    vi.restoreAllMocks()
+    if (originalPlatform) {
+      Object.defineProperty(process, 'platform', originalPlatform)
+    }
   })
 
   it('registers all expected handlers', () => {
@@ -680,6 +692,60 @@ describe('PtyHandler', () => {
       ).rejects.toThrow('Unsupported Windows shell override')
       expect(mockPtySpawn).not.toHaveBeenCalled()
     } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
+  // Why: both spellings classify as a POSIX startup family, so the relay must not be the one host
+  // that hard-fails a setting the local and daemon PTYs accept.
+  it.each(['bash', 'bash.exe'])(
+    'accepts the %s shell override and routes it through Git Bash resolution',
+    async (shellOverride) => {
+      const originalPlatform = process.platform
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: 'win32'
+      })
+      const resolveGitBashSpy = vi
+        .spyOn(gitBash, 'resolveWindowsGitBashShellPath')
+        .mockReturnValue('C:\\Program Files\\Git\\bin\\bash.exe')
+      try {
+        await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24, shellOverride })
+
+        expect(resolveGitBashSpy).toHaveBeenCalledWith(shellOverride)
+        expect(mockPtySpawn).toHaveBeenCalledWith(
+          'C:\\Program Files\\Git\\bin\\bash.exe',
+          expect.any(Array),
+          expect.any(Object)
+        )
+      } finally {
+        resolveGitBashSpy.mockRestore()
+        Object.defineProperty(process, 'platform', {
+          configurable: true,
+          value: originalPlatform
+        })
+      }
+    }
+  )
+
+  it('falls back to the literal bash override when Git Bash is not installed', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    const resolveGitBashSpy = vi
+      .spyOn(gitBash, 'resolveWindowsGitBashShellPath')
+      .mockReturnValue(null)
+    try {
+      await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24, shellOverride: 'bash' })
+
+      expect(mockPtySpawn).toHaveBeenCalledWith('bash', expect.any(Array), expect.any(Object))
+    } finally {
+      resolveGitBashSpy.mockRestore()
       Object.defineProperty(process, 'platform', {
         configurable: true,
         value: originalPlatform
@@ -2501,6 +2567,27 @@ describe('PtyHandler', () => {
     expect(spawnEnv.name).toBe('xterm-256color')
     expect(spawnEnv.env.TERM).toBe('xterm-256color')
     expect(spawnEnv.env.TERM_PROGRAM).toBe('Orca')
+  })
+
+  it('expands variables in PATH before spawning a Windows relay shell', async () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        env: {
+          ORCA_PATH_ROOT: 'C:\\Users\\orca\\AppData\\Local',
+          PATH: '%orca_path_root%\\agy\\bin;C:\\Windows'
+        }
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    const spawnEnv = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
+    expect(spawnEnv.env.PATH).toBe('C:\\Users\\orca\\AppData\\Local\\agy\\bin;C:\\Windows')
   })
 
   it('uses the safe terminal default when TERM is deleted without a custom value', async () => {

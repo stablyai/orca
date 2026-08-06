@@ -195,6 +195,7 @@ ORCA terminal close --terminal <handle> --json
 Terminal rules:
 
 - `--terminal` is optional for most commands; omitted means the active terminal in the current worktree.
+- `terminal list --json` omits `visualLayouts` to keep the common agent payload bounded. Add `--include-visual-layouts` only when tab and pane topology is required.
 - Use `terminal read` before `terminal send` unless the next input is obvious.
 - Use `terminal send` only for direct terminal input or one-off prompts where no task state, inbox, or reply tracking is needed.
 - For structured coordination, invoke the `orchestration` skill; it uses `orca orchestration ...` commands for messages, handoffs, task DAGs, dispatches, inbox/reply flows, and coordinator loops. A receiving agent can run `orca orchestration check --unread --inject` to render its unread mail in agent-readable form; this checks the caller's inbox and does not remotely deliver input to another terminal.

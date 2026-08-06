@@ -14,7 +14,12 @@
     "../src/main/ipc/worktree-path-comparison.ts",
     "../src/main/wsl-distro-list-output.ts",
     "../src/main/wsl-distro-retry.ts",
-    "../src/main/wsl.ts"
+    "../src/main/wsl.ts",
+    "../src/main/startup/serve-desktop-activation.ts",
+    "../src/main/startup/single-instance-lock.ts",
+    "../src/main/startup/startup-diagnostics.ts",
+    "../src/main/window/focus-existing-window.ts",
+    "../src/main/window/macos-app-activation.ts"
   ],
   "compilerOptions": {
     "paths": {

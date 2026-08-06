@@ -92,7 +92,6 @@ import RecentTabSwitcher from './components/tab-bar/RecentTabSwitcher'
 import { useGitStatusPolling } from './components/right-sidebar/useGitStatusPolling'
 import { useEditorExternalWatch } from './hooks/useEditorExternalWatch'
 import { useAutoAckViewedAgent } from './hooks/useAutoAckViewedAgent'
-import { useDashboardPopoutBridge } from './components/dashboard/useDashboardPopoutBridge'
 import { useUnreadDockBadge } from './hooks/useUnreadDockBadge'
 import {
   resolvePrimarySelectionMiddleClickPaste,
@@ -123,6 +122,8 @@ import {
   shouldPersistWorkspaceSession
 } from './lib/workspace-session'
 import { createSessionWriteSubscriber } from './lib/session-write-subscriber'
+import { sweepRestoredCodexPanesForStaleAccounts } from './lib/codex-stale-pane-sweep'
+import { installCodexDetachedPaneRestartExecutor } from '@/components/terminal-pane/codex-detached-pane-restart-scheduler'
 import { buildActiveViewUnloadPatch } from './lib/active-view-persist'
 import {
   buildWorkspaceSessionHostSnapshots,
@@ -205,6 +206,7 @@ import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut
 import { resolveMountedLazyModalIds, type LazyModalId } from './lazy-modal-mount-state'
 import { translate } from '@/i18n/i18n'
 import PinnedTabCloseDialog from './components/terminal-pane/PinnedTabCloseDialog'
+import RunningTerminalCloseDialog from './components/terminal-pane/RunningTerminalCloseDialog'
 import WorktreeBaseFallbackDialog from './components/WorktreeBaseFallbackDialog'
 import { useOsc52ClipboardDefaultOnNotice } from './components/terminal-pane/osc52-clipboard-default-on-notice'
 import {
@@ -213,7 +215,7 @@ import {
 } from './components/terminal/background-terminal-worktree-mount'
 import {
   collectTerminalProviderSnapshotPtyIds,
-  synchronizeTerminalProviderSnapshotCapabilities
+  refreshTerminalProviderSnapshotCapabilities
 } from './components/terminal/terminal-provider-snapshot-capability'
 import { useRemoteRuntimeRecoveryTriggers } from './runtime/use-remote-runtime-recovery-triggers'
 
@@ -386,6 +388,7 @@ const FloatingTerminalPanel = lazy(() =>
 )
 // Why: lazy so the WebP asset + overlay module aren't fetched unless the experimental flag is on.
 const PetOverlay = lazy(() => import('./components/pet/PetOverlay'))
+const DashboardPopoutBridge = lazy(() => import('./components/dashboard/DashboardPopoutBridge'))
 // Why: lazy so onboarding's step modules + assets aren't fetched for users past first-launch.
 const OnboardingFlow = lazy(() => import('./components/onboarding/OnboardingFlow'))
 
@@ -658,6 +661,7 @@ function App(): React.JSX.Element {
   const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
   const hideCliCreatedWorkspaces = useAppStore((s) => s.hideCliCreatedWorkspaces)
   const hideDetachedHeadWorkspaces = useAppStore((s) => s.hideDetachedHeadWorkspaces)
+  const alwaysShowDefaultBranchWorkspace = useAppStore((s) => s.alwaysShowDefaultBranchWorkspace)
   const showDotfilesByWorktree = useAppStore((s) => s.showDotfilesByWorktree)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const acknowledgedAgentsByPaneKey = useAppStore((s) => s.acknowledgedAgentsByPaneKey)
@@ -753,8 +757,6 @@ function App(): React.JSX.Element {
   useEditorExternalWatch()
   useGlobalFileDrop()
   useAutoAckViewedAgent()
-  useDashboardPopoutBridge(settings?.experimentalAgentDashboardPopout === true)
-
   useEffect(() => {
     return onOnboardingReopened(setOnboarding)
   }, [])
@@ -1079,7 +1081,7 @@ function App(): React.JSX.Element {
             window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
           )
           await timeRendererStartupStep('terminal-provider-snapshot-capabilities', () => {
-            return synchronizeTerminalProviderSnapshotCapabilities(
+            return refreshTerminalProviderSnapshotCapabilities(
               collectTerminalProviderSnapshotPtyIds(useAppStore.getState())
             )
           })
@@ -1090,6 +1092,9 @@ function App(): React.JSX.Element {
           await timeRendererStartupStep('recover-legacy-worker-terminals-post-reconnect', () =>
             window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
           )
+          // Why here: reconnect just published restored PTY ids; sweeping them now
+          // re-offers stale Codex panes whose tabs never mount this session.
+          sweepRestoredCodexPanesForStaleAccounts(useAppStore.getState())
           syncZoomCSSVar()
           // Why (issue #1158): unlock the session writer only after hydration and all dependent steps succeeded, so a mid-startup throw can't serialize partially-mutated state to disk.
           actions.setHydrationSucceeded(true)
@@ -1165,6 +1170,9 @@ function App(): React.JSX.Element {
             try {
               await window.api.app.awaitFirstWindowStartupServices()
               await window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
+              await refreshTerminalProviderSnapshotCapabilities(
+                collectTerminalProviderSnapshotPtyIds(useAppStore.getState())
+              )
               await actions.reconnectPersistedTerminals(abortController.signal)
               await window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
             } catch (reconnectErr) {
@@ -1209,6 +1217,8 @@ function App(): React.JSX.Element {
       setRuntimeGraphStoreStateGetter(null)
     }
   }, [])
+
+  useEffect(() => installCodexDetachedPaneRestartExecutor(), [])
 
   useEffect(() => {
     let previousKey = getRuntimeMobileSessionSyncKey(useAppStore.getState())
@@ -1380,6 +1390,7 @@ function App(): React.JSX.Element {
         hideAutomationGeneratedWorkspaces,
         hideCliCreatedWorkspaces,
         hideDetachedHeadWorkspaces,
+        alwaysShowDefaultBranchWorkspace,
         showDotfilesByWorktree,
         filterRepoIds,
         // Why (#9002): activeView is deliberately NOT included here. It used to
@@ -1413,6 +1424,7 @@ function App(): React.JSX.Element {
     hideAutomationGeneratedWorkspaces,
     hideCliCreatedWorkspaces,
     hideDetachedHeadWorkspaces,
+    alwaysShowDefaultBranchWorkspace,
     showDotfilesByWorktree,
     filterRepoIds,
     acknowledgedAgentsByPaneKey
@@ -2235,6 +2247,11 @@ function App(): React.JSX.Element {
             <MacosTccPromptNoticeHost />
             {/* Why: leaf-mounted retention sync keeps agent-status subscriptions out of the App render tree. */}
             <RetainedAgentsSyncGate />
+            {settings?.experimentalAgentDashboardPopout === true ? (
+              <Suspense fallback={null}>
+                <DashboardPopoutBridge />
+              </Suspense>
+            ) : null}
             <AgentHibernationGate />
             {/* Why: workspace activation is a hot path; activeWorktreeId in reset keys would remount whole surfaces during wake. */}
             <RecoverableRenderErrorBoundary
@@ -2779,6 +2796,7 @@ function App(): React.JSX.Element {
       <SkillFreshnessNudge />
       <WorktreeBaseFallbackDialog />
       <PinnedTabCloseDialog />
+      <RunningTerminalCloseDialog />
       {/* Why: Electron's drag-region hit-test is DOM-order-based (ignores z-index); render last so WindowControls stay clickable. */}
       {hasCustomTitleBar && <WindowControls />}
     </div>

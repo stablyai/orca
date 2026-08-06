@@ -14,6 +14,7 @@ import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-
 import { useGitStatusFileWatchRefresh } from './git-status-file-watch-refresh'
 import { useGitStatusPushSignalRefresh } from './git-status-push-signal-refresh'
 import { useStaleConflictOperationPolling } from './stale-conflict-operation-poll'
+import { useGitStatusUpstreamRefWatch } from './use-git-status-upstream-ref-watch'
 import {
   createGitStatusRefreshPacing,
   createGitStatusRefreshScheduler,
@@ -102,6 +103,13 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
     activeGitStatusPollingArgs
   )
 
+  const publishUpstreamRefWatch = useGitStatusUpstreamRefWatch({
+    enabled: canFetchActiveWorktreeGitStatus,
+    executionHostId: activeExecutionHostId,
+    worktreeId: activeWorktreeId,
+    worktreePath
+  })
+
   const runFetchStatus = useCallback(
     async (request: {
       reason: GitStatusRefreshReason
@@ -121,8 +129,9 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
       }
       try {
         const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+        const runtimeSettings = getRightSidebarWorktreeRuntimeSettings(activeWorktreeId)
         await refreshGitStatusForWorktree({
-          settings: getRightSidebarWorktreeRuntimeSettings(activeWorktreeId),
+          settings: runtimeSettings,
           worktreeId: activeWorktreeId,
           worktreePath,
           connectionId,
@@ -136,7 +145,8 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
           request: {
             ...(request.reason === 'safety' ? { reuseLineStats: true } : {}),
             signal: request.signal,
-            shouldApply: request.shouldApply
+            shouldApply: request.shouldApply,
+            onStatusAccepted: publishUpstreamRefWatch
           }
         })
       } catch {
@@ -148,6 +158,7 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
       activeWorktreeId,
       fetchUpstreamStatus,
       canFetchActiveWorktreeGitStatus,
+      publishUpstreamRefWatch,
       worktreePath,
       setGitStatus,
       setUpstreamStatus,

@@ -19,7 +19,7 @@ import {
 } from './skill-freshness-placement-observation'
 import { scanKnownPluginSkillCandidates } from './skill-plugin-cache-scan'
 import { convergableSkillNames } from './skill-update-convergence'
-import { readGloballyUpdatableSkillLocks } from './skill-update-registration'
+import { matchesUpdaterLock, readGloballyUpdatableSkillLocks } from './skill-update-registration'
 
 export const MAXIMUM_REPOSITORY_SKILL_ROOTS = 128
 
@@ -35,8 +35,7 @@ function trustLockInstalledRevision(
 ): SkillFreshnessInstallation {
   return installation.status === 'unrecognized' &&
     SUPPORTED_GLOBAL_SKILL_TOPOLOGIES.has(installation.topology) &&
-    installation.observedGitTreeSha != null &&
-    installation.observedGitTreeSha === globalSkillLocks.get(installation.name)
+    matchesUpdaterLock(installation, globalSkillLocks.get(installation.name))
     ? { ...installation, status: 'newer-known' }
     : installation
 }

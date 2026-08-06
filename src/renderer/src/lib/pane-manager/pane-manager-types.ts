@@ -62,8 +62,10 @@ export type PaneManagerOptions = {
   /** Resolved per hover so link-routing setting changes apply without recreating panes. */
   // Why: required so dropping the wiring is a compile error — an optional hint with a
   // default would silently serve stale copy that no test can distinguish.
-  linkOpenHint: () => string
+  // Why: paneId-scoped because the hovered pane's host decides where its links can go.
+  linkOpenHint: (paneId: number) => string
   formatLinkTooltip?: (
+    paneId: number,
     url: string,
     openLinkHint: string
   ) => string | null | undefined | Promise<string | null | undefined>
@@ -174,6 +176,9 @@ export type ManagedPaneInternal = {
   linkifierHoverResetDisposable?: IDisposable | null
   // Stored because mouseleave does not bubble from xterm's screen.
   linkifierMouseLeaveResetDisposable?: IDisposable | null
+  // Stored because a window blur may strand xterm's active link without a
+  // follow-up mouse event.
+  linkifierWindowBlurResetDisposable?: IDisposable | null
   // Stored so disposePane() can deregister the joiner; terminal.dispose()
   // does not remove registered character joiners.
   arabicShapingJoinerCleanup?: (() => void) | null

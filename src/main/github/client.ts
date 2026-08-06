@@ -38,7 +38,7 @@ import {
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { sliceCheckLogTail } from './check-job-log-tail-slice'
+import { sliceCheckLogTail } from '../../shared/check-job-log-tail-slice'
 import {
   classifyPRRefreshError,
   safePRRefreshErrorMessage

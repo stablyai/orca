@@ -22,6 +22,12 @@ import {
   stepPdfScalePreference,
   type PdfScalePreference
 } from './pdf-scale-preference'
+import { pdfViewPositionCache, setWithLRU } from '@/lib/scroll-cache'
+import {
+  buildPdfScrollDestination,
+  clampPdfViewPosition,
+  createPdfViewPositionRecorder
+} from './pdf-view-position'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
 
@@ -30,12 +36,23 @@ const MAX_SCALE = 5
 const SCALE_STEP = 1.25
 const SCALE_BOUNDS = { min: MIN_SCALE, max: MAX_SCALE, step: SCALE_STEP }
 
+// Why: these are the inputs that actually move this container's scroll; a
+// window-level keydown would also fire for typing in an unrelated pane.
+const USER_SCROLL_INPUT_EVENTS = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const
+
 type PdfViewerProps = {
   content: string
   filePath: string
+  // Why: absent means "no scroll memory" — the diff and conflict-review callers
+  // mount several viewers on one path, so a shared key would cross-write.
+  scrollCacheKey?: string | null
 }
 
-export default function PdfViewer({ content, filePath }: PdfViewerProps): JSX.Element {
+export default function PdfViewer({
+  content,
+  filePath,
+  scrollCacheKey = null
+}: PdfViewerProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewerDivRef = useRef<HTMLDivElement>(null)
   const [pdfError, setPdfError] = useState<string | null>(null)
@@ -115,6 +132,115 @@ export default function PdfViewer({ content, filePath }: PdfViewerProps): JSX.El
     }
     eventBus.on('scalechanging', handleScaleChanging)
 
+    // Why: read the key from this effect's own closure, never a ref — the ref
+    // would already hold the next file's key by the time this setup runs.
+    const recorder = scrollCacheKey
+      ? createPdfViewPositionRecorder({
+          key: scrollCacheKey,
+          write: (key, position) => setWithLRU(pdfViewPositionCache, key, position)
+        })
+      : null
+
+    const handleUpdateViewArea = (evt: { location?: unknown }): void => {
+      recorder?.record(evt?.location)
+    }
+
+    let restored: ReturnType<typeof buildPdfScrollDestination> | null = null
+    let userMoved = false
+    let detachInputWatcher: (() => void) | null = null
+    const markUserMoved = (): void => {
+      userMoved = true
+      detachInputWatcher?.()
+      recorder?.arm()
+    }
+
+    const handlePagesInit = (): void => {
+      const cached = scrollCacheKey ? pdfViewPositionCache.get(scrollCacheKey) : undefined
+      const clamped = cached ? clampPdfViewPosition(cached, viewer.pagesCount) : null
+      if (!clamped) {
+        recorder?.arm()
+        return
+      }
+      restored = buildPdfScrollDestination(clamped)
+      viewer.scrollPageIntoView(restored)
+      // Why: stays disarmed until the restore settles (below). pdf.js dispatches
+      // updateviewarea synchronously after this handler, so arming here would
+      // record the restore's own scroll — which on a mixed-page-size document is
+      // the provisional, wrong position, and a tab switch before pagesloaded
+      // would then flush it over the good cached one.
+      for (const type of USER_SCROLL_INPUT_EVENTS) {
+        container.addEventListener(type, markUserMoved, { passive: true })
+      }
+      detachInputWatcher = (): void => {
+        detachInputWatcher = null
+        for (const type of USER_SCROLL_INPUT_EVENTS) {
+          container.removeEventListener(type, markUserMoved)
+        }
+      }
+    }
+
+    let visibilityObserver: ResizeObserver | null = null
+    const disconnectVisibilityObserver = (): void => {
+      visibilityObserver?.disconnect()
+      visibilityObserver = null
+    }
+    // Why: a display:none pane regaining a layout box fires no scroll or resize
+    // event — ResizeObserver's no-box/box transition is the only signal for it.
+    const observeVisibility = (): void => {
+      if (visibilityObserver) {
+        return
+      }
+      visibilityObserver = new ResizeObserver(() => {
+        if (container.clientHeight > 0) {
+          handlePagesLoaded()
+        }
+      })
+      visibilityObserver.observe(container)
+    }
+
+    // Why: pagesinit lays every page out with page 1's dimensions, so on a
+    // mixed-page-size document the restore above lands short. pagesloaded is the
+    // first point with real per-page heights — but it can arrive seconds later,
+    // so re-apply only if the reader has not touched the scroller since.
+    const handlePagesLoaded = (): void => {
+      // Why: an editor in a background worktree stays mounted under display:none,
+      // where pdf.js can neither scroll nor recompute its location. Arming there
+      // would let the reader's first zoom persist a page-1 position over the
+      // cached one, so stay disarmed — and hold `restored` and the input watcher
+      // — until the observer above sees this pane land on screen.
+      if (container.clientHeight === 0) {
+        observeVisibility()
+        return
+      }
+      disconnectVisibilityObserver()
+      const destination = restored
+      restored = null
+      detachInputWatcher?.()
+      if (cancelled) {
+        return
+      }
+      if (destination && !userMoved) {
+        viewer.scrollPageIntoView(destination)
+        // Why: scrollPageIntoView nulls pdf.js's own `_location` whenever
+        // `currentScaleValue` is unset, and it stays unset here because
+        // page-width resolves against a not-yet-built page list. A null
+        // `_location` makes the next zoom fall back to scrolling the page top,
+        // losing the intra-page offset. update() recomputes it; on a
+        // uniform-page document the re-apply moves nothing, so no scroll event
+        // would otherwise fire to do it for us.
+        viewer.update()
+      }
+      recorder?.arm()
+    }
+
+    eventBus.on('pagesinit', handlePagesInit)
+    eventBus.on('pagesloaded', handlePagesLoaded)
+    eventBus.on('updateviewarea', handleUpdateViewArea)
+    // Why: the find controller scrolls to a match programmatically, and the find
+    // bar sits outside this container — so a search is reader movement that no
+    // input listener above can see.
+    eventBus.on('find', markUserMoved)
+
     const loadingTask = pdfjsLib.getDocument({ data: bytes })
 
     loadingTask.promise
@@ -142,6 +268,15 @@ export default function PdfViewer({ content, filePath }: PdfViewerProps): JSX.El
 
     return () => {
       cancelled = true
+      // Why: flush before setDocument(null) below, so nothing dispatched during
+      // pdf.js teardown can overwrite the position we just persisted.
+      detachInputWatcher?.()
+      disconnectVisibilityObserver()
+      recorder?.dispose()
+      eventBus.off('pagesinit', handlePagesInit)
+      eventBus.off('pagesloaded', handlePagesLoaded)
+      eventBus.off('updateviewarea', handleUpdateViewArea)
+      eventBus.off('find', markUserMoved)
       setFindOpen(false)
       loadingTask.destroy().catch(() => {})
       if (pdfDocument) {
@@ -158,7 +293,10 @@ export default function PdfViewer({ content, filePath }: PdfViewerProps): JSX.El
       findControllerRef.current = null
       pdfViewerRef.current = null
     }
-  }, [cleanedContent])
+    // Why: scrollCacheKey is a dependency because two distinct paths can hold
+    // identical bytes — without it this effect would not re-run on the switch,
+    // and the second file would restore to the first file's position.
+  }, [cleanedContent, scrollCacheKey])
 
   const closeFindBar = useCallback(() => {
     const eventBus = eventBusRef.current

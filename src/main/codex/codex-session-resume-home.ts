@@ -17,10 +17,11 @@ const CODEX_ROLLOUT_LAYOUT_PATH = new RegExp(`(?:^|/)sessions/${CLAIMED_CODEX_RO
 /** `resume` pins CODEX_HOME to the account that owns the rollout. `fresh` means
  *  provenance could not be verified, so the caller drops the resume argv — an
  *  unverifiable rollout must never resume under whichever account is selected now.
+ *  `reconcileSharedRuntimeAuth` revalidates mutable shared-home auth before spawn.
  *  `claimedCodexProvenance` gates the user-facing notice: a path that claimed real
  *  Codex layout is worth reporting, stale cross-agent metadata is not. */
 export type CodexSessionResumePreparation =
-  | { outcome: 'resume'; codexHomePath: string }
+  | { outcome: 'resume'; codexHomePath: string; reconcileSharedRuntimeAuth?: boolean }
   | { outcome: 'fresh'; claimedCodexProvenance: boolean }
 
 // Why: fold only Win32's extended drive spelling; \\.\ device namespaces and every other \\?\ form

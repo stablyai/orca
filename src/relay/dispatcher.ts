@@ -27,6 +27,7 @@ import {
   LegacyRelayPublicationLedger,
   type LegacyPublicationLease
 } from './legacy-relay-publication-ledger'
+import type { PtyConsumerCloseCause } from '../shared/pty-consumer-session-contract'
 
 export type {
   RelayClientSinkOptions,
@@ -53,6 +54,11 @@ export type RelayClientSourceOptions = {
   pauseReads?: () => void
   resumeReads?: () => void
 }
+
+export type PtyDataPublicationAdmission = (
+  clientId: number,
+  params: Readonly<Record<string, unknown>>
+) => boolean
 
 export type MethodHandler = (
   params: Record<string, unknown>,
@@ -101,10 +107,13 @@ export class RelayDispatcher {
   private readonly requestAborts = new ClientRequestAborts()
   private readonly publicationLedger = new LegacyRelayPublicationLedger()
   private pendingRelayRequests = new Map<number, PendingRelayRequest>()
-  private clientDetachListeners = new Set<(clientId: number) => void>()
+  private clientDetachListeners = new Set<
+    (clientId: number, cause: PtyConsumerCloseCause) => void
+  >()
   private disposeListeners = new Set<() => void>()
   private legacyCapacityListeners = new Set<() => void>()
   private clientCapacityListeners = new Map<number, Set<() => void>>()
+  private ptyDataPublicationAdmission: PtyDataPublicationAdmission | null = null
   private publicationTransactionDepth = 0
   private deferredLegacyCapacity = false
   private deferredForcedLegacyCapacity = false
@@ -137,8 +146,13 @@ export class RelayDispatcher {
   }
 
   // Why: mark in-flight requests stale on disconnect so a late pty.spawn/fs.watch can't create unowned remote state.
-  invalidateClient(): void {
-    this.closeClient(this.primaryClient, new Error('Relay primary client invalidated'), false)
+  invalidateClient(cause: PtyConsumerCloseCause = 'local'): void {
+    this.closeClient(
+      this.primaryClient,
+      new Error('Relay primary client invalidated'),
+      false,
+      cause
+    )
   }
 
   // Why: seq numbers and request ids are per SSH channel, so each attached client needs independent protocol state.
@@ -153,12 +167,22 @@ export class RelayDispatcher {
     return client.id
   }
 
-  detachClient(clientId: number): void {
+  detachClient(clientId: number, cause: PtyConsumerCloseCause = 'local'): void {
     const client = this.clients.get(clientId)
     if (!client || client === this.primaryClient) {
       return
     }
-    this.closeClient(client, new Error('Relay client detached'), true)
+    this.closeClient(client, new Error('Relay client detached'), true, cause)
+  }
+
+  // Why: a displaced owner must lose its transport whichever client holds it, and the launch channel is
+  // often the half-open one. The primary keeps its id for setWrite() revival, so invalidate it instead.
+  releaseDisplacedClient(clientId: number): void {
+    if (clientId === this.primaryClient.id) {
+      this.invalidateClient()
+      return
+    }
+    this.detachClient(clientId)
   }
 
   feedClient(clientId: number, data: Buffer): void {
@@ -177,7 +201,7 @@ export class RelayDispatcher {
     this.notificationHandlers.set(method, handler)
   }
 
-  onClientDetached(listener: (clientId: number) => void): () => void {
+  onClientDetached(listener: (clientId: number, cause: PtyConsumerCloseCause) => void): () => void {
     this.clientDetachListeners.add(listener)
     return () => this.clientDetachListeners.delete(listener)
   }
@@ -185,6 +209,20 @@ export class RelayDispatcher {
   onDisposed(listener: () => void): () => void {
     this.disposeListeners.add(listener)
     return () => this.disposeListeners.delete(listener)
+  }
+
+  // Why single-slot rather than a listener set: admission is a veto, so two registrations would have
+  // to agree on precedence. One owner (the PTY consumer session) holds it for the dispatcher's life.
+  registerPtyDataPublicationAdmission(admission: PtyDataPublicationAdmission): () => void {
+    if (this.ptyDataPublicationAdmission) {
+      throw new Error('PTY data publication admission is already registered')
+    }
+    this.ptyDataPublicationAdmission = admission
+    return () => {
+      if (this.ptyDataPublicationAdmission === admission) {
+        this.ptyDataPublicationAdmission = null
+      }
+    }
   }
 
   onLegacyPtyCapacity(listener: () => void): () => void {
@@ -263,7 +301,9 @@ export class RelayDispatcher {
     data: string,
     limit = data.length
   ): number {
-    const clients = this.activeClients()
+    const clients = this.activeClients().filter((client) =>
+      this.admitsPtyDataPublication(client.id, params)
+    )
     const max = Math.min(data.length, limit)
     if (clients.length === 0) {
       return max
@@ -313,7 +353,7 @@ export class RelayDispatcher {
       params
     }
     return this.tryPublishToClients(
-      this.activeClients(),
+      this.activeClients().filter((client) => this.admitsPtyDataPublication(client.id, params)),
       msg,
       options.interactive ? 'interactive' : 'ordinary'
     )
@@ -328,7 +368,9 @@ export class RelayDispatcher {
       return false
     }
     return this.tryPublishToClients(
-      this.activeClients().filter((client) => matchesClient(client.id)),
+      this.activeClients().filter(
+        (client) => matchesClient(client.id) && this.admitsPtyDataPublication(client.id, params)
+      ),
       { jsonrpc: '2.0', method: 'pty.data', params },
       options.interactive ? 'interactive' : 'ordinary'
     )
@@ -343,7 +385,9 @@ export class RelayDispatcher {
       return false
     }
     return this.projectToClients(
-      this.activeClients().filter((client) => matchesClient(client.id)),
+      this.activeClients().filter(
+        (client) => matchesClient(client.id) && this.admitsPtyDataPublication(client.id, params)
+      ),
       { jsonrpc: '2.0', method: 'pty.data', params },
       options.interactive ? 'interactive' : 'ordinary'
     )
@@ -361,6 +405,10 @@ export class RelayDispatcher {
     const client = this.clients.get(clientId)
     if (!client || client.closed) {
       onSettled({ ok: false, error: new Error('Relay client is not connected') })
+      return false
+    }
+    if (!this.admitsPtyDataPublication(clientId, params)) {
+      onSettled({ ok: false, error: new Error('PTY publication is not admitted') })
       return false
     }
     return this.publishToClient(
@@ -529,6 +577,9 @@ export class RelayDispatcher {
         if (client.closed) {
           continue
         }
+        if (method === 'pty.data' && !this.admitsPtyDataPublication(client.id, params ?? {})) {
+          continue
+        }
         if (method === 'pty.replay') {
           // Why: replay is never re-sent, so it takes the control lane where overflow is fatal — the
           // writer closes the client and reconnect reloads history rather than stranding a short buffer.
@@ -565,6 +616,9 @@ export class RelayDispatcher {
       jsonrpc: '2.0',
       method,
       ...(params !== undefined ? { params } : {})
+    }
+    if (method === 'pty.data' && !this.admitsPtyDataPublication(client.id, params ?? {})) {
+      return false
     }
     const frameBytes = this.estimateFrameBytes(msg)
     if (this.publishToClient(client, msg, 'ordinary', undefined, frameBytes)) {
@@ -1037,12 +1091,17 @@ export class RelayDispatcher {
       const seq = client.nextOutgoingSeq++
       return encodeJsonRpcFrame(msg, seq, client.highestReceivedSeq)
     }
+    const isStillAdmitted =
+      'method' in msg && msg.method === 'pty.data'
+        ? () => this.admitsPtyDataPublication(client.id, msg.params ?? {})
+        : undefined
     return client.writer.enqueue(
       lane,
       encode,
       frameBytes,
       onSettled,
-      lane === 'control' && controlOverflow === 'reject'
+      lane === 'control' && controlOverflow === 'reject',
+      isStillAdmitted
     )
   }
 
@@ -1071,6 +1130,13 @@ export class RelayDispatcher {
 
   private activeClients(): RelayClient[] {
     return Array.from(this.clients.values()).filter((client) => !client.closed)
+  }
+
+  private admitsPtyDataPublication(
+    clientId: number,
+    params: Readonly<Record<string, unknown>>
+  ): boolean {
+    return this.ptyDataPublicationAdmission?.(clientId, params) ?? true
   }
 
   private activeClientKeys(): string[] {
@@ -1259,7 +1325,14 @@ export class RelayDispatcher {
     }
   }
 
-  private closeClient(client: RelayClient, error: Error, remove: boolean): void {
+  private closeClient(
+    client: RelayClient,
+    error: Error,
+    remove: boolean,
+    // Why the default is the cautious one: most closes here are the relay's own doing, and only the
+    // callers holding real evidence of a peer-side transport end may say so.
+    cause: PtyConsumerCloseCause = 'local'
+  ): void {
     if (client.closed) {
       return
     }
@@ -1270,7 +1343,7 @@ export class RelayDispatcher {
     if (remove) {
       this.clients.delete(client.id)
     }
-    this.notifyClientDetached(client.id)
+    this.notifyClientDetached(client.id, cause)
     if (remove) {
       // Only for a client that is gone for good: an invalidated primary is revived by setWrite, and a
       // frame stranded by its retired sink must stay armed to retry. After the detach fan-out, so a
@@ -1319,10 +1392,10 @@ export class RelayDispatcher {
     }
   }
 
-  private notifyClientDetached(clientId: number): void {
+  private notifyClientDetached(clientId: number, cause: PtyConsumerCloseCause): void {
     for (const listener of this.clientDetachListeners) {
       try {
-        listener(clientId)
+        listener(clientId, cause)
       } catch (err) {
         process.stderr.write(
           `[relay] Client detach listener failed: ${err instanceof Error ? err.message : String(err)}\n`

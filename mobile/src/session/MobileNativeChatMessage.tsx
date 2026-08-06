@@ -14,12 +14,12 @@ import {
 } from './mobile-native-chat-blocks'
 import { diffFromText, diffFromToolCall, type DiffLine } from './mobile-native-chat-diff'
 import { isRenderableImageUri } from './mobile-native-chat-image-preview'
-import { MAX_TOOL_RESULT_CHARS, styles, TEXT_SIZE } from './mobile-native-chat-message-styles'
+import { styles, TEXT_SIZE } from './mobile-native-chat-message-styles'
 import { nativeChatMessageText } from './mobile-native-chat-message-text'
 import {
-  summarizeToolInput,
+  createToolInputDisplay,
   summarizeToolRun,
-  toolFilePath
+  truncateToolDetail
 } from './mobile-native-chat-tool-summary'
 
 const MAX_VISIBLE_TOOL_PAIRS = 6
@@ -63,11 +63,7 @@ function ResultBody({
   }
   return (
     <View style={[styles.toolResult, isError && styles.toolResultError]}>
-      <Text style={styles.mono}>
-        {output.length > MAX_TOOL_RESULT_CHARS
-          ? `${output.slice(0, MAX_TOOL_RESULT_CHARS)}…`
-          : output}
-      </Text>
+      <Text style={styles.mono}>{truncateToolDetail(output)}</Text>
     </View>
   )
 }
@@ -88,17 +84,21 @@ function ToolLine({
   const [expanded, setExpanded] = useState(defaultExpanded)
   const { call, result } = pair
   const name = call ? call.name : 'Result'
-  const preview = call
-    ? summarizeToolInput(call.input)
-    : (result?.output.split('\n')[0]?.slice(0, 80) ?? '')
+  const inputDisplay = call ? createToolInputDisplay(call.input) : null
+  const preview = inputDisplay?.label ?? result?.output.split('\n')[0]?.slice(0, 80) ?? ''
   // Why: collapsed tool rows are the common path; defer bounded diff parsing
-  // until the user asks to reveal the detail.
+  // and detail formatting until the user asks to reveal the detail.
   const callDiff = expanded && call ? diffFromToolCall(call.name, call.input, diffLineLimit) : null
   const resultDiff = expanded && result ? diffFromText(result.output, diffLineLimit) : null
-  const hasDetail = callDiff !== null || result !== undefined || preview.length > 40
+  const callDetail = expanded && inputDisplay && !callDiff ? inputDisplay.formatDetail() : undefined
+  const hasDetail = callDiff !== null || result !== undefined || inputDisplay?.hasDetail === true
+  // The group toggle opens every line at once, bypassing the tap guard, so the
+  // panel has to consult it too — else a detail-less row echoes its own label
+  // under itself and no tap can dismiss it.
+  const showDetail = hasDetail && expanded
   // A tool that targets a file (Read/Edit/Write…) renders its preview as a
   // tappable link that opens the file, independent of the line's expand tap.
-  const filePath = call ? toolFilePath(call.input) : null
+  const filePath = inputDisplay?.filePath ?? null
   const openable = filePath !== null && onOpenFile !== undefined
   return (
     <View>
@@ -107,7 +107,7 @@ function ToolLine({
         onPress={() => hasDetail && setExpanded((v) => !v)}
         hitSlop={6}
       >
-        {expanded ? (
+        {showDetail ? (
           <ChevronDown size={15} color={colors.textMuted} strokeWidth={2} />
         ) : (
           <SquareChevronRight size={15} color={colors.textMuted} strokeWidth={2} />
@@ -124,10 +124,10 @@ function ToolLine({
           </Text>
         ) : null}
       </Pressable>
-      {expanded ? (
+      {showDetail ? (
         <View style={styles.toolDetail}>
           {callDiff ? <DiffView lines={callDiff} /> : null}
-          {!callDiff && call && preview ? <Text style={styles.mono}>{preview}</Text> : null}
+          {callDetail ? <Text style={styles.mono}>{callDetail}</Text> : null}
           {result ? (
             <ResultBody output={result.output} isError={result.isError} diff={resultDiff} />
           ) : null}

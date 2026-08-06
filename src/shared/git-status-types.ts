@@ -52,6 +52,15 @@ export type GitUncommittedEntry = {
 
 export type GitStatusEntry = GitUncommittedEntry
 
+// `mergeBase(base, HEAD) → working tree`, deduplicated, so committing doesn't move it.
+// Matches the per-file rows rather than git: binary and >2MB untracked count zero.
+// `mergeBase` is echoed so a renderer can drop a moved fork point.
+export type GitBranchLineTotal = {
+  added: number
+  removed: number
+  mergeBase: string
+}
+
 export type GitStatusResult = {
   entries: GitStatusEntry[]
   conflictOperation: GitConflictOperation
@@ -69,6 +78,9 @@ export type GitStatusResult = {
   // "too many changes" state.
   didHitLimit?: boolean
   statusLength?: number
+  // Only computed when the request carried a merge-base OID (the renderer's
+  // visibility gate), and omitted — never zeroed — whenever it cannot be trusted.
+  branchLineTotal?: GitBranchLineTotal
 }
 
 // Why: when hasUpstream is false, ahead/behind are placeholder zeros, not a

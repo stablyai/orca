@@ -9,11 +9,11 @@ import { parseDroidSessionContent } from './session-scanner-droid-parser'
 import { parseMessageGraphSessionContent } from './session-scanner-graph-parsers'
 import { parseClaudeSessionContent } from './session-scanner-primary-parsers'
 import { parseGeminiSessionContent } from './session-scanner-gemini-parsers'
-import {
-  parseCopilotSessionContent,
-  parseCursorSessionContent,
-  parseHermesSessionContent
-} from './session-scanner-secondary-parsers'
+import { parseCopilotSessionContent } from './session-scanner-copilot-parser'
+import { parseCursorSessionContent } from './session-scanner-cursor-parser'
+import { parseHermesSessionContent } from './session-scanner-hermes-parser'
+import { partitionSubagentTranscriptPaths } from './session-scanner-subagent-transcripts'
+import { partitionOmpSubagentTranscriptPaths } from './session-scanner-omp-subagent-transcripts'
 import type { FileWithMtime } from './session-scanner-types'
 import { normalizeAgentSessionsDir } from './session-scanner-values'
 import { remoteCodexIndexTitles } from './remote-session-scanner-codex-index'
@@ -27,7 +27,9 @@ type RemoteContentParser = (
   file: FileWithMtime,
   content: string,
   platform: NodeJS.Platform,
-  options: RemoteParserOptions
+  options: RemoteParserOptions,
+  // Line-based parsers iterate cancellably; whole-document parsers ignore it.
+  signal?: AbortSignal
 ) => Promise<AiVaultSession | null> | AiVaultSession | null
 
 export function remoteSessionSources(
@@ -49,7 +51,7 @@ export function remoteSessionSources(
       // subagent counts instead. Partitioning also prunes the subagent
       // transcripts themselves, which would otherwise list as phantom
       // top-level sessions carrying the parent's sessionId.
-      collectSubagentSiblingCounts: true
+      partitionSubagentTranscripts: partitionSubagentTranscriptPaths
     },
     remoteAntigravitySource(remoteHome, hostPlatform),
     source(
@@ -92,7 +94,13 @@ export function remoteSessionSources(
       parseDevinSessionContent
     ),
     jsonlSource('pi', remoteHome, hostPlatform, remotePiSessionsSegments(), piParser),
-    jsonlSource('omp', remoteHome, hostPlatform, remoteOmpSessionsSegments(), ompParser),
+    {
+      ...jsonlSource('omp', remoteHome, hostPlatform, remoteOmpSessionsSegments(), ompParser),
+      // Same posture as Claude above: OMP stores task-subagent transcripts in
+      // the session's same-named artifact dir; the walk supplies counts and the
+      // partition keeps the children out of the top-level list (#9330).
+      partitionSubagentTranscripts: partitionOmpSubagentTranscriptPaths
+    },
     jsonlSource(
       'droid',
       remoteHome,
@@ -128,7 +136,8 @@ function remoteAntigravitySource(
         file,
         content,
         context.hostPlatform.os,
-        parserOptions(context)
+        parserOptions(context),
+        context.signal
       )
       return session ? context.antigravityWorkspaceResolver.enrich(session, historyPath) : null
     }
@@ -152,7 +161,9 @@ function source(
     filePredicate,
     directoryPredicate,
     parse: (file, content, context) =>
-      Promise.resolve(parseContent(file, content, context.hostPlatform.os, parserOptions(context)))
+      Promise.resolve(
+        parseContent(file, content, context.hostPlatform.os, parserOptions(context), context.signal)
+      )
   }
 }
 
@@ -195,13 +206,15 @@ function remoteCodexSources(
         codexHome,
         executionHostId: context.executionHostId,
         executionHostPlatform: context.hostPlatform.os,
+        signal: context.signal,
         readIndexedTitle: async (sessionId) =>
           (
             await remoteCodexIndexTitles({
               provider: context.provider,
               codexHome,
               hostPlatform,
-              titleCaches: context.titleCaches
+              titleCaches: context.titleCaches,
+              signal: context.signal
             })
           ).get(sessionId) ?? null
       })
@@ -235,27 +248,30 @@ function piParser(
   file: FileWithMtime,
   content: string,
   platform: NodeJS.Platform,
-  options: RemoteParserOptions
+  options: RemoteParserOptions,
+  signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
-  return parseMessageGraphSessionContent('pi', file, content, platform, options)
+  return parseMessageGraphSessionContent('pi', file, content, platform, options, signal)
 }
 
 function ompParser(
   file: FileWithMtime,
   content: string,
   platform: NodeJS.Platform,
-  options: RemoteParserOptions
+  options: RemoteParserOptions,
+  signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
-  return parseMessageGraphSessionContent('omp', file, content, platform, options)
+  return parseMessageGraphSessionContent('omp', file, content, platform, options, signal)
 }
 
 function openClawParser(
   file: FileWithMtime,
   content: string,
   platform: NodeJS.Platform,
-  options: RemoteParserOptions
+  options: RemoteParserOptions,
+  signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
-  return parseMessageGraphSessionContent('openclaw', file, content, platform, options)
+  return parseMessageGraphSessionContent('openclaw', file, content, platform, options, signal)
 }
 
 function remotePathSegments(path: string): string[] {

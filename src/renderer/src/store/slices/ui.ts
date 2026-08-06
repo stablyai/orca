@@ -319,7 +319,8 @@ const VALID_LINEAR_PRESETS = new Set<NonNullable<TaskResumeState['linearPreset']
 const VALID_LINEAR_MODES = new Set<NonNullable<TaskResumeState['linearMode']>>([
   'issues',
   'projects',
-  'views'
+  'views',
+  'in-orca'
 ])
 const VALID_JIRA_PRESETS = new Set<NonNullable<TaskResumeState['jiraPreset']>>([
   'assigned',
@@ -875,6 +876,8 @@ export type UISlice = {
   setHideCliCreatedWorkspaces: (v: boolean) => void
   hideDetachedHeadWorkspaces: boolean
   setHideDetachedHeadWorkspaces: (v: boolean) => void
+  alwaysShowDefaultBranchWorkspace: boolean
+  setAlwaysShowDefaultBranchWorkspace: (v: boolean) => void
   showDotfilesByWorktree: Record<string, boolean>
   setShowDotfilesForWorktree: (worktreeId: string, showDotfiles: boolean) => void
   toggleShowDotfilesForWorktree: (worktreeId: string) => void
@@ -2053,6 +2056,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   setHideCliCreatedWorkspaces: (v) => set({ hideCliCreatedWorkspaces: v }),
   hideDetachedHeadWorkspaces: false,
   setHideDetachedHeadWorkspaces: (v) => set({ hideDetachedHeadWorkspaces: v }),
+  alwaysShowDefaultBranchWorkspace: true,
+  setAlwaysShowDefaultBranchWorkspace: (v) => set({ alwaysShowDefaultBranchWorkspace: v }),
 
   showDotfilesByWorktree: {},
   setShowDotfilesForWorktree: (worktreeId, showDotfiles) =>
@@ -2459,6 +2464,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         hideAutomationGeneratedWorkspaces: ui.hideAutomationGeneratedWorkspaces === true,
         hideCliCreatedWorkspaces: ui.hideCliCreatedWorkspaces === true,
         hideDetachedHeadWorkspaces: ui.hideDetachedHeadWorkspaces === true,
+        // Why !== false: profiles written before #8873 have no key, and they are
+        // precisely the ones showing the bug, so absence must mean "exempt".
+        alwaysShowDefaultBranchWorkspace: ui.alwaysShowDefaultBranchWorkspace !== false,
         showDotfilesByWorktree: sanitizeShowDotfilesByWorktree(ui.showDotfilesByWorktree),
         // Why: startup hydrates UI before repo catalogs, so defer repo-filter validation to the all-host refresh.
         filterRepoIds:

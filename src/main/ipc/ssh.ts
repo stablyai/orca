@@ -3,15 +3,21 @@ import { ipcMain, powerMonitor, type BrowserWindow } from 'electron'
 import { appendFileSync } from 'node:fs'
 import type { Store } from '../persistence'
 import { SshConnectionStore } from '../ssh/ssh-connection-store'
-import type { SshConnectionCallbacks } from '../ssh/ssh-connection'
+import {
+  listUserSshConfigHostSummaries,
+  resolveUserSshConfigHost
+} from '../ssh/ssh-config-host-picker'
+import type { SshConnection, SshConnectionCallbacks } from '../ssh/ssh-connection'
 import { SshConnectionManager } from '../ssh/ssh-connection-manager'
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { SshRelaySession, type SshRelayAiVaultHostInfo } from '../ssh/ssh-relay-session'
+import type { SshAiVaultRelayListParams } from '../../shared/ssh-ai-vault-relay'
 import { SshPortForwardManager } from '../ssh/ssh-port-forward'
 import type {
   DetectedPort,
   EnrichedDetectedPort,
   SavedPortForward,
+  SshConfigHostListArgs,
   SshRepoReadoption,
   SshTarget,
   SshConnectionStatus,
@@ -19,6 +25,7 @@ import type {
   DirectSshAuthority
 } from '../../shared/ssh-types'
 import { SSH_TERMINATE_RECONNECT_REQUIRED } from '../../shared/constants'
+import { quitTeardownStartGate } from '../quit-teardown-start-gate'
 import { isRuntimeOwnedSshTargetId } from '../../shared/execution-host'
 import { isAuthError } from '../ssh/ssh-connection-utils'
 import { createCancelledConnectAttemptError } from '../ssh/ssh-connect-attempt-cancellation'
@@ -70,6 +77,8 @@ const SSH_IPC_CHANNELS = [
   'ssh:updateTarget',
   'ssh:removeTarget',
   'ssh:importConfig',
+  'ssh:listConfigHosts',
+  'ssh:resolveConfigHost',
   'ssh:connect',
   'ssh:disconnect',
   'ssh:terminateSessions',
@@ -159,6 +168,21 @@ export function getActiveSshAiVaultHostInfos(): SshRelayAiVaultHostInfo[] {
     const info = session.getAiVaultHostInfo()
     return info ? [info] : []
   })
+}
+
+export async function requestActiveSshAiVaultSessionList(
+  targetId: string,
+  params: SshAiVaultRelayListParams,
+  options: { signal?: AbortSignal; timeoutMs?: number } = {}
+): Promise<unknown | null> {
+  if (isRuntimeOwnedSshTargetId(targetId)) {
+    return null
+  }
+  const session = activeSessions.get(targetId)
+  if (!session) {
+    throw new Error('SSH relay is not ready')
+  }
+  return session.requestAiVaultSessionList(params, options)
 }
 
 function runTargetLifecycle(targetId: string, operation: () => Promise<void>): Promise<void> {
@@ -269,6 +293,33 @@ async function abandonFailedSshSession(targetId: string, session: SshRelaySessio
   }
 }
 
+// Why: a connect cancelled after its transport already opened still owns that transport and its
+// unpublished session — nothing else will reach them, so it has to close them itself. Why only the
+// connection it minted, and by identity: disconnecting by target id (or closing a transport it merely
+// reused) would tear down the replacement connect's live transport.
+async function abandonCancelledConnectAttempt(
+  targetId: string,
+  session: SshRelaySession,
+  mintedConnection: SshConnection | null
+): Promise<void> {
+  // Why the identity guard: every path that removes a session from activeSessions detaches it first,
+  // so re-detaching a superseded session would only clobber the replacement's lease state.
+  if (activeSessions.get(targetId) === session) {
+    await abandonFailedSshSession(targetId, session)
+  }
+  if (!mintedConnection) {
+    return
+  }
+  try {
+    await connectionManager!.disconnectConnection(targetId, mintedConnection)
+  } catch (error) {
+    // Why: the caller is about to throw the cancellation; a teardown throw must not replace it.
+    console.warn(
+      `[ssh] Failed to disconnect cancelled connect transport for ${targetId}: ${error instanceof Error ? error.message : String(error)}`
+    )
+  }
+}
+
 function relayGracePeriodForTarget(target: SshTarget | null | undefined): number | undefined {
   return target?.relayGracePeriodSeconds
 }
@@ -282,6 +333,15 @@ type ConnectAttempt = {
 
 const connectInFlight = new Map<string, ConnectAttempt>()
 const pendingTransportReconnects = new Set<string>()
+
+// Why the quit gate rather than a local latch: "the committed quit has begun" already has an owner,
+// and a private copy could be set by something that is not actually quitting — leaving SSH connects
+// refused for the rest of the process lifetime.
+function assertSshConnectsNotFenced(): void {
+  if (quitTeardownStartGate.hasStarted()) {
+    throw new Error('SSH connects are closed for app shutdown')
+  }
+}
 
 function invalidateConnectAttempt(targetId: string): void {
   rotateSshProviderAuthority(targetId)
@@ -299,6 +359,7 @@ const resetRelayInFlight = new Map<string, Promise<void>>()
 
 // Why: ssh:testConnection connects then disconnects; suppressing broadcasts during the test avoids worktree cards flashing connected → disconnected.
 const testingTargets = new Set<string>()
+const testConnectionProbes = new Set<Promise<unknown>>()
 
 // Why: without backoff, a relay channel that keeps dying reconnects as fast as the network allows, hammering local + remote sshd; track attempts and back off to end the loop recoverably.
 type RelayLostBackoffState = {
@@ -967,6 +1028,21 @@ export function registerSshHandlers(
     return { targets, repoReadoptions }
   })
 
+  // Why: add-host dialog picks one config entry to prefill the form; does not
+  // mutate the target store (bulk sync stays on Settings → Import).
+  ipcMain.handle('ssh:listConfigHosts', (_event, args?: SshConfigHostListArgs) => {
+    return listUserSshConfigHostSummaries(
+      sshStore!.listTargets(),
+      args?.query,
+      sshStore!.listSuppressedSshConfigAliases(),
+      { refresh: args?.refresh === true }
+    )
+  })
+
+  ipcMain.handle('ssh:resolveConfigHost', (_event, args: { alias: string }) => {
+    return resolveUserSshConfigHost(args.alias)
+  })
+
   // ── Connection lifecycle ───────────────────────────────────────────
 
   async function connectTarget(targetId: string): Promise<SshConnectionState> {
@@ -1004,6 +1080,9 @@ export function registerSshHandlers(
     if (!isCurrentSshProviderAuthority(observedAuthority)) {
       throw createCancelledConnectAttemptError()
     }
+    // Why: the shutdown drain fences and snapshots synchronously, so a connect either registers in
+    // connectInFlight below (and gets joined) or fails here — it can never slip between the two.
+    assertSshConnectsNotFenced()
 
     pendingTransportReconnects.delete(targetId)
     const promise = doConnect(targetId, replacePendingTransport)
@@ -1092,6 +1171,11 @@ export function registerSshHandlers(
       }
     }
 
+    // Why here and not only at entry: this is the publication point, and it is the last statement
+    // before the transport opens. Checking it in the same synchronous block as activeSessions.set
+    // means a connect either registers before the shutdown drain snapshots, or registers never and
+    // owns nothing to clean up.
+    assertSshConnectsNotFenced()
     // Why: create the session early so onStateChange sees it in 'deploying' and skips reconnect logic.
     const session = new SshRelaySession(
       targetId,
@@ -1106,6 +1190,12 @@ export function registerSshHandlers(
     const ownsSession = (): boolean =>
       isCurrentConnectAttempt(targetId, authority) && activeSessions.get(targetId) === session
 
+    // Why captured here and not with existingState: connect() reuses an already-connected transport,
+    // and only a transport this attempt opened is this attempt's to close when it loses the race.
+    const priorConnection = connectionManager!.getConnection(targetId)
+    const mintedConnection = (): SshConnection | null =>
+      conn && conn !== priorConnection ? conn : null
+
     try {
       conn = await connectionManager!.connect(target)
       if (!ownsSession()) {
@@ -1116,6 +1206,7 @@ export function registerSshHandlers(
       const errObj = err instanceof Error ? err : new Error(String(err))
       const status: SshConnectionStatus = isAuthError(errObj) ? 'auth-failed' : 'error'
       if (!ownsSession()) {
+        await abandonCancelledConnectAttempt(targetId, session, mintedConnection())
         throw createCancelledConnectAttemptError()
       }
       // Why: clear this failed connect's flag so a later non-prompting connect isn't deferred.
@@ -1156,6 +1247,7 @@ export function registerSshHandlers(
       })
     } catch (err) {
       if (!ownsSession()) {
+        await abandonCancelledConnectAttempt(targetId, session, mintedConnection())
         throw createCancelledConnectAttemptError()
       }
       await abandonFailedSshSession(targetId, session)
@@ -1187,28 +1279,37 @@ export function registerSshHandlers(
     invalidateConnectAttempt(args.targetId)
     await runTargetLifecycle(args.targetId, async () => {
       const provider = getSshPtyProvider(args.targetId)
-      const leasedIds = persistedStore!
-        .getSshRemotePtyLeases(args.targetId)
-        .filter((lease) => lease.state !== 'terminated' && lease.state !== 'expired')
-        .map((lease) => lease.ptyId)
+      const leases = persistedStore!.getSshRemotePtyLeases(args.targetId)
       const ptyIdsByRelayId = new Map<string, string>()
-      for (const ptyId of getPtyIdsForConnection(args.targetId)) {
+      // Why: only leases the app still believes it owns may force a reconnect; 'expired' ones are
+      // swept opportunistically because they can name a host that is gone for good (issue #2626).
+      const ownedRelayIds = new Set<string>()
+      const trackPtyId = (ptyId: string, owned: boolean): void => {
         const relayPtyId = toRelaySshPtyId(args.targetId, ptyId)
-        ptyIdsByRelayId.set(relayPtyId, toAppSshPtyId(args.targetId, ptyId))
+        if (!ptyIdsByRelayId.has(relayPtyId)) {
+          ptyIdsByRelayId.set(relayPtyId, toAppSshPtyId(args.targetId, ptyId))
+        }
+        if (owned) {
+          ownedRelayIds.add(relayPtyId)
+        }
       }
-      for (const ptyId of leasedIds) {
-        const relayPtyId = toRelaySshPtyId(args.targetId, ptyId)
-        ptyIdsByRelayId.set(
-          relayPtyId,
-          ptyIdsByRelayId.get(relayPtyId) ?? toAppSshPtyId(args.targetId, ptyId)
-        )
+      for (const ptyId of getPtyIdsForConnection(args.targetId)) {
+        trackPtyId(ptyId, true)
+      }
+      for (const lease of leases) {
+        if (lease.state === 'terminated') {
+          continue
+        }
+        // Why: 'expired' records that reattach gave up, never that the remote shell died — those are
+        // precisely the orphans, so the user's terminate action has to be able to reach them.
+        trackPtyId(lease.ptyId, lease.state !== 'expired')
       }
       const ptyIds = Array.from(ptyIdsByRelayId, ([relayPtyId, appPtyId]) => ({
         relayPtyId,
         appPtyId
       }))
 
-      if (ptyIds.length > 0 && !provider) {
+      if (ownedRelayIds.size > 0 && !provider) {
         throw new Error(
           `${SSH_TERMINATE_RECONNECT_REQUIRED}: SSH relay is not connected; reconnect before terminating remote sessions.`
         )
@@ -1262,7 +1363,13 @@ export function registerSshHandlers(
     }
 
     const existingConn = connectionManager!.getConnection(targetId)
-    const conn = existingConn ?? (await connectionManager!.connect(target))
+    let conn = existingConn
+    if (!conn) {
+      // Why re-check: admission fenced this reset before it parked on the in-flight connect, so shutdown
+      // may have started (and drained) while we waited — opening a transport now would outlive the drain.
+      assertSshConnectsNotFenced()
+      conn = await connectionManager!.connect(target)
+    }
     try {
       await forceStopRelayForTarget(conn, targetId)
     } finally {
@@ -1295,6 +1402,8 @@ export function registerSshHandlers(
     if (!target) {
       throw new Error(`SSH target "${args.targetId}" not found`)
     }
+    // Why: reset opens its own transport, so it must be fenced by shutdown the same way connect is.
+    assertSshConnectsNotFenced()
 
     let resetPromise: Promise<void>
     resetPromise = runTargetLifecycle(args.targetId, () =>
@@ -1354,17 +1463,26 @@ export function registerSshHandlers(
     }
 
     testingTargets.add(args.targetId)
-    try {
+    // Why a tracked promise and not just the id: a probe holds a real transport that no session owns,
+    // so shutdown has to be able to join it before the final drain disconnects what is left.
+    const probe = (async () => {
+      // Why: a probe transport opened after the shutdown drain would outlive orderly teardown.
+      assertSshConnectsNotFenced()
       const conn = await connectionManager!.connect(target)
       const state = conn.getState()
       await connectionManager!.disconnect(args.targetId)
-      return { success: true, state }
+      return state
+    })()
+    testConnectionProbes.add(probe)
+    try {
+      return { success: true, state: await probe }
     } catch (err) {
       return {
         success: false,
         error: err instanceof Error ? err.message : String(err)
       }
     } finally {
+      testConnectionProbes.delete(probe)
       testingTargets.delete(args.targetId)
       // Why: clear so a test's credential prompt doesn't leave lastRequiredPassphrase=true and defer this target at startup.
       credentialRequestedForTarget.delete(args.targetId)
@@ -1472,6 +1590,151 @@ export function getSshConnectionManager(): SshConnectionManager | null {
   return connectionManager
 }
 
+// Why one budget for the whole sequence rather than one per phase: an invalidated connect only
+// observes its cancellation at the next checkpoint, and one blocked in the transport handshake can
+// sit there for the whole SSH timeout. A per-phase timeout lets any single phase consume the global
+// quit deadline; a shared absolute deadline cannot.
+export const SSH_SHUTDOWN_BUDGET_MS = 6_000
+
+export type SshShutdownPhase = 'drain' | 'in-flight-join' | 'final-drain'
+export type SshShutdownUnfinished = { targetId: string; phase: SshShutdownPhase }
+export type SshShutdownResult = {
+  unfinished: readonly SshShutdownUnfinished[]
+  errors: readonly unknown[]
+}
+
+type SshShutdownTask = { targetId: string; promise: Promise<unknown> }
+
+let sshShutdownDrain: Promise<SshShutdownResult> | null = null
+
+async function settleTasksWithinMs(
+  tasks: readonly SshShutdownTask[],
+  timeoutMs: number
+): Promise<{ timedOut: SshShutdownTask[]; errors: unknown[] }> {
+  const pending = new Set(tasks)
+  const errors: unknown[] = []
+  if (tasks.length === 0) {
+    return { timedOut: [], errors }
+  }
+  const tracked = tasks.map(async (task) => {
+    try {
+      await task.promise
+    } catch (error) {
+      errors.push(error)
+    }
+    pending.delete(task)
+  })
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    await Promise.race([
+      Promise.all(tracked),
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, timeoutMs)
+        timer.unref?.()
+      })
+    ])
+  } finally {
+    clearTimeout(timer)
+  }
+  return { timedOut: [...pending], errors }
+}
+
+function sshShutdownTasks(targetIds: readonly string[]): SshShutdownTask[] {
+  return [
+    ...targetIds
+      .filter((targetId) => activeSessions.has(targetId))
+      .map((targetId) => ({
+        targetId,
+        promise: teardownActiveSshSession(targetId, (session) => session.detachAndPersist())
+      })),
+    { targetId: '*transports', promise: connectionManager?.disconnectAll() ?? Promise.resolve() }
+  ]
+}
+
+async function drainSshShutdown(
+  targetIds: readonly string[],
+  inFlight: readonly SshShutdownTask[],
+  detachErrors: readonly unknown[] = []
+): Promise<SshShutdownResult> {
+  const deadline = Date.now() + SSH_SHUTDOWN_BUDGET_MS
+  const unfinished: SshShutdownUnfinished[] = []
+  const errors: unknown[] = [...detachErrors]
+  const runPhase = async (
+    phase: SshShutdownPhase,
+    tasks: readonly SshShutdownTask[]
+  ): Promise<boolean> => {
+    const remainingMs = deadline - Date.now()
+    if (remainingMs <= 0) {
+      unfinished.push(...tasks.map((task) => ({ targetId: task.targetId, phase })))
+      return false
+    }
+    const settled = await settleTasksWithinMs(tasks, remainingMs)
+    errors.push(...settled.errors)
+    unfinished.push(...settled.timedOut.map((task) => ({ targetId: task.targetId, phase })))
+    return settled.timedOut.length === 0
+  }
+
+  await runPhase('drain', sshShutdownTasks(targetIds))
+  // Why a second drain after the join: a connect paused in old-session teardown still publishes its
+  // replacement session and opens a transport before it reaches the cancellation checkpoint, so the
+  // first drain can miss both.
+  if (await runPhase('in-flight-join', inFlight)) {
+    await runPhase('final-drain', sshShutdownTasks([...activeSessions.keys()]))
+  }
+
+  if (errors.length > 0 || unfinished.length > 0) {
+    // Why one aggregate line: per-target logging on the quit path competes with the final flush for
+    // the little time that remains.
+    console.warn(
+      `[ssh] Shutdown drain finished with ${errors.length} error(s); unfinished: ${
+        unfinished.map((entry) => `${entry.targetId}/${entry.phase}`).join(', ') || 'none'
+      }`
+    )
+  }
+  return { unfinished, errors }
+}
+
+// Why one entry point that returns rather than awaits: every in-memory transition the final store
+// flush must snapshot happens synchronously here, before this returns, so the caller can start that
+// flush with no await in between. Idempotent — a later call joins the same drain and repeats no
+// state transition.
+//
+// Why no fence latch here: the committed quit path sets it before calling this, so it is already on
+// for the snapshot below. Called without that gate (tests), this degrades to a plain drain.
+export function beginSshShutdown(): Promise<SshShutdownResult> {
+  if (sshShutdownDrain) {
+    return sshShutdownDrain
+  }
+  const inFlight: SshShutdownTask[] = [
+    ...[...connectInFlight.entries()].map(([targetId, attempt]) => ({
+      targetId,
+      promise: attempt.promise
+    })),
+    ...[...resetRelayInFlight.entries()].map(([targetId, promise]) => ({ targetId, promise })),
+    ...[...testConnectionProbes].map((promise) => ({ targetId: '*probe', promise }))
+  ]
+  for (const targetId of Array.from(connectInFlight.keys())) {
+    invalidateConnectAttempt(targetId)
+  }
+  const targetIds = [...activeSessions.keys()]
+  // Why before any await: this is the whole point of the split. Each session marks its recovery lease
+  // detached in memory now, and the final flush persists it — the remote PTYs keep running.
+  const detachErrors: unknown[] = []
+  for (const session of activeSessions.values()) {
+    // Why per-session: this runs synchronously inside a non-async will-quit listener, so one throw
+    // (teardownProviders -> webContents.send on a destroyed renderer, routine on quit) would escape
+    // it and skip every later session, the drain assignment, and the store flush that persists all
+    // of this. Collect and keep going; the drain reports them.
+    try {
+      session.beginShutdownDetach()
+    } catch (error) {
+      detachErrors.push(error)
+    }
+  }
+  sshShutdownDrain = drainSshShutdown(targetIds, inFlight, detachErrors)
+  return sshShutdownDrain
+}
+
 export async function resetSshHandlerStateForTests(): Promise<void> {
   advertisedUrlWatcherUnsubscribe?.()
   advertisedUrlWatcherUnsubscribe = null
@@ -1498,7 +1761,10 @@ export async function resetSshHandlerStateForTests(): Promise<void> {
   resetSshProviderAuthorities()
   resetRelayInFlight.clear()
   testingTargets.clear()
+  testConnectionProbes.clear()
   credentialRequestedForTarget.clear()
+  quitTeardownStartGate.resetForTests()
+  sshShutdownDrain = null
 
   await connectionManager?.disconnectAll()
   portForwardManager?.dispose()

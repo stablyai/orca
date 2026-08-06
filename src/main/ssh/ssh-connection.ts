@@ -33,13 +33,12 @@ import {
   isPassphraseError,
   sleep,
   buildConnectConfig,
-  resolveEffectiveProxy,
-  spawnProxyCommand,
   wrapRemoteCommandForPosixShell,
   createSshOperationAbortError,
   type SshExecOptions,
   type SshConnectionCallbacks
 } from './ssh-connection-utils'
+import { resolveEffectiveProxy, spawnProxyCommand } from './ssh-proxy-command'
 import {
   createCancelledConnectAttemptError,
   isCancelledConnectAttemptError
@@ -978,11 +977,7 @@ export class SshConnection {
     try {
       await this.doSystemSshProbe(connectGeneration)
     } catch (err) {
-      if (
-        !controlPath ||
-        this.disposed ||
-        connectGeneration !== this.connectGeneration
-      ) {
+      if (!controlPath || this.disposed || connectGeneration !== this.connectGeneration) {
         throw err
       }
       removeControlSocketPath(controlPath)

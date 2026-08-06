@@ -387,18 +387,29 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
     params: SendParams,
     handler: async (
       params,
-      { runtime, orchestrationCapability, legacyCoordinatorRunId, revalidateLegacyCoordinator }
+      {
+        runtime,
+        orchestrationCapability,
+        legacyCoordinatorRunId,
+        revalidateLegacyCoordinator,
+        orchestrationCompatibilityCallerAuthority
+      }
     ) => {
       const db = runtime.getOrchestrationDb()
       const from = params.from ?? 'unknown'
-      // Why: caller-supplied pane fields are only compatibility metadata; lifecycle authority uses the runtime-observed pane plus capability.
-      const senderPaneKey = runtime.getTerminalPaneKey(from) ?? undefined
+      const attestedCaller =
+        orchestrationCompatibilityCallerAuthority?.terminalHandle === from
+          ? orchestrationCompatibilityCallerAuthority
+          : undefined
+      // Why: attested hook identity survives graph remount; caller params never supply lifecycle authority.
+      const senderPaneKey = attestedCaller?.paneKey ?? runtime.getTerminalPaneKey(from) ?? undefined
       const remoteAttachment = senderPaneKey
         ? db.findActiveRemoteAttachmentForPane(senderPaneKey)
         : undefined
       if (remoteAttachment) {
         rejectFederatedExplicitTarget(params)
-        const processIncarnation = runtime.getTerminalProcessIncarnation(from)
+        const processIncarnation =
+          attestedCaller?.processIncarnation ?? runtime.getTerminalProcessIncarnation(from)
         if (
           !db.verifyRemoteAttachmentAuthority({
             dispatchId: remoteAttachment.dispatch_id,
@@ -582,7 +593,10 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             dispatchId: dispatch.id,
             capability: orchestrationCapability,
             paneKey: senderPaneKey,
-            processIncarnation: runtime.getTerminalProcessIncarnation(from) ?? undefined
+            processIncarnation:
+              attestedCaller?.processIncarnation ??
+              runtime.getTerminalProcessIncarnation(from) ??
+              undefined
           })
           if (!authority.valid) {
             const rejection =
@@ -620,7 +634,9 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       }
 
       // Why: fan out one message per recipient (independent read-tracking) but share a thread_id for correlation (Section 4.5).
-      const { terminals } = await runtime.listTerminals()
+      const { terminals } = await runtime.listTerminals(undefined, undefined, {
+        includeVisualLayouts: false
+      })
       const handles = resolveGroupAddress(to, from, terminals, (handle: string) =>
         runtime.getAgentStatusForHandle(handle)
       )
@@ -1086,6 +1102,16 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           throw new Error('Invalid --deps: must be a JSON array of task IDs')
         }
       }
+      const run = resolveRunScope(runtime, {
+        runId: params.run,
+        callerTerminalHandle: params.callerTerminalHandle,
+        requireCurrentConsumer: true,
+        legacyCoordinatorRunId,
+        callerEvidence: orchestrationCompatibilityEvidence
+      })
+      const creatorAuthority = params.callerTerminalHandle
+        ? runtime.getOrchestrationDispatchAuthority(params.callerTerminalHandle)
+        : null
       const task = db.createTask({
         spec: params.spec,
         taskTitle: params.taskTitle,
@@ -1093,13 +1119,14 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         deps,
         parentId: params.parent,
         createdByTerminalHandle: params.callerTerminalHandle,
-        runId: resolveRunScope(runtime, {
-          runId: params.run,
-          callerTerminalHandle: params.callerTerminalHandle,
-          requireCurrentConsumer: true,
-          legacyCoordinatorRunId,
-          callerEvidence: orchestrationCompatibilityEvidence
-        }).id
+        ...(creatorAuthority?.paneKey && creatorAuthority.processIncarnation
+          ? {
+              createdByPaneKey: creatorAuthority.paneKey,
+              createdByProcessIncarnation: creatorAuthority.processIncarnation,
+              createdByRunGeneration: run.consumer_generation
+            }
+          : {}),
+        runId: run.id
       })
       return { task }
     }
@@ -1242,9 +1269,9 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       const assigneePaneKey =
         dispatchAuthority?.paneKey ?? runtime.getTerminalPaneKey(to) ?? undefined
       const processIncarnation =
-        dispatchAuthority?.processIncarnation ??
-        runtime.getTerminalProcessIncarnation(to) ??
-        undefined
+        dispatchAuthority?.paneKey && dispatchAuthority.processIncarnation
+          ? dispatchAuthority.processIncarnation
+          : undefined
       if (params.inject && (!assigneePaneKey || !processIncarnation)) {
         throw new OrchestrationError(
           'stable_pane_required',
@@ -1257,7 +1284,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         params.task,
         to,
         assigneePaneKey,
-        dispatchAuthority?.launchTokenHash ?? undefined
+        dispatchAuthority?.launchTokenHash ?? undefined,
+        processIncarnation
       )
       const dispatchCapability = params.inject
         ? db.mintDispatchCapability({

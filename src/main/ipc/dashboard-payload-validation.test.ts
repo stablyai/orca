@@ -19,6 +19,7 @@ vi.mock('../../shared/repo-icon', async (importOriginal) => {
 import {
   admitDashboardSnapshot,
   isDashboardRevealAgentArgs,
+  isDashboardSpawnAgentArgs,
   isDashboardSnapshot
 } from './dashboard-payload-validation'
 
@@ -38,8 +39,13 @@ const SNAPSHOT = {
       worktreeId: 'worktree-1',
       tabId: 'tab-1',
       leafId: 'leaf-1',
+      parentPaneKey: 'tab-parent:leaf-parent',
+      parentWorktreeId: 'parent-worktree-1',
       repoName: 'Orca',
       worktreeName: 'Dashboard',
+      hostKind: 'ssh',
+      executionHostId: 'ssh:build-box',
+      workspaceKind: 'worktree',
       workspaceStatusId: 'in-review',
       workspaceStatusLabel: 'In review',
       workspaceStatusColor: 'emerald',
@@ -51,6 +57,23 @@ const SNAPSHOT = {
       stateChangedAt: 1_699_999_500_000,
       unseen: true,
       askSummary: '{"question":"Proceed?"}'
+    }
+  ],
+  workspaces: [
+    {
+      repoId: 'repo-1',
+      worktreeId: 'worktree-1',
+      repoName: 'Orca',
+      worktreeName: 'Dashboard',
+      parentWorktreeId: 'parent-worktree-1',
+      hostKind: 'ssh',
+      executionHostId: 'ssh:build-box',
+      workspaceKind: 'worktree',
+      workspaceStatusId: 'in-review',
+      workspaceStatusLabel: 'In review',
+      workspaceStatusColor: 'emerald',
+      hasReview: true,
+      review: { number: 11012, state: 'open' }
     }
   ],
   showIdle: false,
@@ -100,6 +123,42 @@ describe('dashboard payload validation', () => {
       isDashboardSnapshot({
         ...SNAPSHOT,
         cards: [{ ...SNAPSHOT.cards[0], subagents: [{ id: '', name: 'bad', dotState: 'idle' }] }]
+      })
+    ).toBe(false)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        cards: [{ ...SNAPSHOT.cards[0], hostKind: 'satellite' }]
+      })
+    ).toBe(false)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        cards: [{ ...SNAPSHOT.cards[0], executionHostId: 'build-box' }]
+      })
+    ).toBe(false)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        cards: [{ ...SNAPSHOT.cards[0], executionHostId: `ssh:${'x'.repeat(4_097)}` }]
+      })
+    ).toBe(false)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        cards: [{ ...SNAPSHOT.cards[0], parentWorktreeId: 'x'.repeat(4_097) }]
+      })
+    ).toBe(false)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        cards: [{ ...SNAPSHOT.cards[0], workspaceKind: 'repository' }]
+      })
+    ).toBe(false)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        cards: [{ ...SNAPSHOT.cards[0], parentPaneKey: 'x'.repeat(4_097) }]
       })
     ).toBe(false)
   })
@@ -160,6 +219,43 @@ describe('dashboard payload validation', () => {
         }
       })
     ).toBe(false)
+  })
+
+  it('validates bounded map workspace metadata independently of cards', () => {
+    expect(isDashboardSnapshot({ ...SNAPSHOT, cards: [] })).toBe(true)
+    expect(isDashboardSnapshot({ ...SNAPSHOT, workspaces: undefined })).toBe(true)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        workspaces: [{ ...SNAPSHOT.workspaces[0], executionHostId: 'build-box' }]
+      })
+    ).toBe(false)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        workspaces: [{ ...SNAPSHOT.workspaces[0], worktreeName: 'x'.repeat(1_025) }]
+      })
+    ).toBe(false)
+  })
+
+  it('validates bounded launch choices and spawn requests', () => {
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        launchableAgentsByWorktreeId: { 'worktree-1': ['codex', 'claude'] }
+      })
+    ).toBe(true)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        launchableAgentsByWorktreeId: { 'worktree-1': ['not-an-agent'] }
+      })
+    ).toBe(false)
+    expect(isDashboardSnapshot({ ...SNAPSHOT, launchableAgentsByWorktreeId: [] })).toBe(false)
+
+    expect(isDashboardSpawnAgentArgs({ worktreeId: 'worktree-1', agent: 'codex' })).toBe(true)
+    expect(isDashboardSpawnAgentArgs({ worktreeId: '', agent: 'codex' })).toBe(false)
+    expect(isDashboardSpawnAgentArgs({ worktreeId: 'worktree-1', agent: 'unknown' })).toBe(false)
   })
 
   it('bounds the conversation name', () => {
@@ -239,6 +335,19 @@ describe('dashboard payload validation', () => {
 
       expect(admitted?.droppedCardCount).toBe(1)
       expect(admitted?.snapshot.cards.map((card) => card.paneKey)).toEqual(['tab-1:leaf-1'])
+    })
+
+    it('drops only malformed optional workspace metadata', () => {
+      const admitted = admitDashboardSnapshot({
+        ...SNAPSHOT,
+        workspaces: [
+          SNAPSHOT.workspaces[0],
+          { ...SNAPSHOT.workspaces[0], worktreeId: '', worktreeName: 'Invalid' }
+        ]
+      })
+
+      expect(admitted?.droppedCardCount).toBe(0)
+      expect(admitted?.snapshot.workspaces).toEqual([SNAPSHOT.workspaces[0]])
     })
 
     it('reports nothing dropped for a fully valid snapshot', () => {
@@ -406,10 +515,20 @@ describe('dashboard payload validation', () => {
       isDashboardRevealAgentArgs({
         repoId: 'repo-1',
         worktreeId: 'worktree-1',
+        executionHostId: 'runtime:env-1',
         tabId: 'tab-1',
         leafId: null
       })
     ).toBe(true)
+    expect(
+      isDashboardRevealAgentArgs({
+        repoId: 'repo-1',
+        worktreeId: 'worktree-1',
+        executionHostId: 'runtime:',
+        tabId: 'tab-1',
+        leafId: null
+      })
+    ).toBe(false)
     expect(
       isDashboardRevealAgentArgs({ repoId: 'repo-1', worktreeId: 'worktree-1', tabId: '' })
     ).toBe(false)

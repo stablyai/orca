@@ -378,6 +378,9 @@ describe('ClaudeHookService.installRemote', () => {
     // Code rejects unknown shapes silently and the agent-hooks pipeline
     // goes dark.
     for (const event of [
+      // Why: SessionStart is the only signal a resumed/idle session ever emits;
+      // without it the sidebar row waits for the first prompt (STA-3386).
+      'SessionStart',
       'UserPromptSubmit',
       'Stop',
       'StopFailure',

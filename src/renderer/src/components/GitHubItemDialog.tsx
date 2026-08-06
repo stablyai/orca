@@ -133,6 +133,11 @@ import {
   getCommentReplyTargetCandidates,
   resolveCommentReplyTarget
 } from '@/components/comment-reply-target-state'
+import {
+  attachPRReviewReplyParent,
+  canPostPRReviewThreadReply
+} from '@/components/right-sidebar/pr-comments-ai-launch-ack'
+import { buildPRCommentConversationReplyBody } from '@/components/right-sidebar/pr-comment-fixing-reply-body'
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/selectors'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
@@ -205,6 +210,7 @@ import {
   validateTaskPageGitHubDuplicateTarget,
   type TaskPageGitHubCloseAction
 } from '@/components/task-page-github-status-actions'
+import { assertTaskPageGitHubDialogStateAuthority } from '@/components/task-page-github-dialog-state-authority'
 import { sortChecksBySeverity } from '../../../shared/pr-check-severity-order'
 import {
   getCheckConclusion,
@@ -2125,29 +2131,32 @@ function ConversationTab({
         )
         return false
       }
-      const result =
-        comment.path && item.type === 'pr'
-          ? await addPRReviewCommentReplyForRepo({
-              repoPath: repoPath ?? '',
-              repoId: item.repoId,
-              sourceContext,
-              prNumber: item.number,
-              prRepo,
-              commentId: comment.id,
-              body: replyBody,
-              threadId: comment.threadId,
-              path: comment.path,
-              line: comment.line
-            })
-          : await addIssueCommentForRepo({
-              repoPath: repoPath ?? '',
-              repoId: item.repoId,
-              sourceContext,
-              number: item.number,
-              body: `@${comment.author} ${replyBody}`,
-              type: item.type,
-              prRepo
-            })
+      // Why: nest under review threads (path/threadId/discussion_r); never post a
+      // separate top-level conversation comment for those.
+      const isReviewThreadReply = item.type === 'pr' && canPostPRReviewThreadReply(comment)
+      const result = isReviewThreadReply
+        ? await addPRReviewCommentReplyForRepo({
+            repoPath: repoPath ?? '',
+            repoId: item.repoId,
+            sourceContext,
+            prNumber: item.number,
+            prRepo,
+            commentId: comment.id,
+            body: replyBody,
+            threadId: comment.threadId,
+            path: comment.path,
+            line: comment.line
+          })
+        : await addIssueCommentForRepo({
+            repoPath: repoPath ?? '',
+            repoId: item.repoId,
+            sourceContext,
+            number: item.number,
+            // Why: a GitHub App login carries a [bot] suffix that never resolves as a mention.
+            body: buildPRCommentConversationReplyBody(comment.author, replyBody),
+            type: item.type,
+            prRepo
+          })
 
       if (!result.ok) {
         toast.error(
@@ -2156,7 +2165,9 @@ function ConversationTab({
         )
         return false
       }
-      onCommentAdded(result.comment)
+      onCommentAdded(
+        isReviewThreadReply ? attachPRReviewReplyParent(result.comment, comment) : result.comment
+      )
       setReplyingTo(null)
       toast.success(translate('auto.components.GitHubItemDialog.10f4ff5be8', 'Reply posted.'))
       return true
@@ -2824,6 +2835,14 @@ function PRActionsPanel({
     }
     const previousState = localState
     setStatePending(true)
+    // Why: without registry authority a search-lagged Tasks refetch silently
+    // reverts this row to its pre-mutation state (STA-3343).
+    const authority = assertTaskPageGitHubDialogStateAuthority({
+      repoId: item.repoId,
+      itemId: item.id,
+      state: nextState,
+      sourceContext
+    })
     applyStatePatch(nextState)
     try {
       await runPullRequestStateUpdate({
@@ -2843,7 +2862,9 @@ function PRActionsPanel({
       )
       onMutated()
     } catch (err) {
-      applyStatePatch(previousState)
+      if (authority.revert()) {
+        applyStatePatch(previousState)
+      }
       toast.error(
         err instanceof Error
           ? err.message
@@ -2903,6 +2924,13 @@ function PRActionsPanel({
         toast.error(result.error)
         return
       }
+      // Why: merge is confirmed here; hold 'merged' against search-lagged refetches.
+      assertTaskPageGitHubDialogStateAuthority({
+        repoId: item.repoId,
+        itemId: item.id,
+        state: 'merged',
+        sourceContext
+      })
       applyStatePatch('merged')
       if (mergeTarget.kind === 'environment') {
         notifyWorkItemDetailsMutation(
@@ -4165,6 +4193,9 @@ function GHEditSection({
         return
       }
       const prevState = localState
+      // Why: without registry authority a search-lagged Tasks refetch silently
+      // reverts this row to its pre-mutation state (STA-3343).
+      let authority: { revert: () => boolean } | null = null
       run('state', {
         mutate: () =>
           runIssueUpdate({
@@ -4179,14 +4210,22 @@ function GHEditSection({
                 : { state: newState }
           }),
         onOptimistic: () => {
+          authority = assertTaskPageGitHubDialogStateAuthority({
+            repoId: item.repoId,
+            itemId: item.id,
+            state: newState,
+            sourceContext
+          })
           onStateChange(newState)
           patchWorkItem(item.id, { state: newState }, item.repoId, { sourceContext })
           patchProjectRowIfNeeded({ state: newState })
         },
         onRevert: () => {
-          onStateChange(prevState)
-          patchWorkItem(item.id, { state: prevState }, item.repoId, { sourceContext })
-          patchProjectRowIfNeeded({ state: prevState })
+          if (authority?.revert()) {
+            onStateChange(prevState)
+            patchWorkItem(item.id, { state: prevState }, item.repoId, { sourceContext })
+            patchProjectRowIfNeeded({ state: prevState })
+          }
         },
         onSuccess: () => {
           useAppStore.getState().recordFeatureInteraction('github-tasks')

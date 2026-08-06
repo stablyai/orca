@@ -10,7 +10,12 @@ import type {
 } from '../shared/hosted-review'
 import type { NativeFileDropPayload } from '../shared/native-file-drop'
 import type { BrowserFindSource } from '../shared/browser-find-source'
-import type { DashboardSnapshot, DashboardRevealAgentArgs } from '../shared/dashboard-snapshot'
+import type {
+  DashboardRevealAgentArgs,
+  DashboardSleepWorkspaceArgs,
+  DashboardSnapshot,
+  DashboardSpawnAgentArgs
+} from '../shared/dashboard-snapshot'
 import type {
   TerminalPreviewConnectResult,
   TerminalPreviewDataPayload
@@ -30,8 +35,12 @@ import type { ReadClipboardTextOptions } from '../shared/clipboard-text'
 import type { AppIdentity } from '../shared/app-identity'
 import type { ReleaseChannel } from '../shared/release-channel'
 import type {
+  ForgetRemovedWorktreesForExecutionHostArgs,
+  ForgetRemovedWorktreesForExecutionHostResult,
+  HostQualifiedKnownWorktreeResult,
   HostQualifiedDetectedWorktreeResult,
   LegacyDetectedWorktreeRequest,
+  ListKnownWorktreesForExecutionHostArgs,
   ListDetectedWorktreesArgs,
   ProviderRequestId
 } from '../shared/detected-worktree-provider-contract'
@@ -49,11 +58,15 @@ import type {
 } from '../shared/terminal-render-desync-evidence'
 import type { MobileRelayStatus } from '../shared/mobile-relay-status'
 import type { MobilePairingConnectionMode } from '../shared/mobile-pairing-connection-mode'
+import type { RuntimePairingReach } from '../shared/runtime-pairing-reach'
 import type { MobileRelayMintFailure } from '../shared/mobile-relay-mint-failure'
 import type { VerifyAndAddRuntimeEnvironmentResult } from '../shared/remote-pairing-verification'
 import type {
   SshMutationExpectation,
   SshConnectionState,
+  SshConfigHostListArgs,
+  SshConfigHostListResult,
+  SshConfigHostResolution,
   SshConfigImportResult,
   SshTargetAddResult,
   SshTarget,
@@ -120,6 +133,7 @@ import type {
   BrowserCertificateProceedResult,
   BrowserLoadError,
   BrowserSessionProfile,
+  BrowserSessionProfileCreateOptions,
   BrowserSessionProfileScope,
   BrowserSessionProfileSource,
   BrowserViewportOverride,
@@ -271,7 +285,8 @@ import type {
   WorktreeSetupLaunch,
   WorktreeStartupLaunch,
   WorkspaceSessionPatch,
-  WorkspaceSessionState
+  WorkspaceSessionState,
+  LinuxPackageInstallInstructions
 } from '../shared/types'
 import type { PtyModelRestoreNeededEvent } from '../shared/pty-model-restore-marker'
 import type { PtyListedSession } from '../shared/pty-listed-session'
@@ -324,7 +339,10 @@ import type {
   UpdatePullRequestBySlugArgs,
   UpdateProjectItemFieldArgs
 } from '../shared/github-project-types'
-import type { RichMarkdownContextMenuCommandPayload } from '../shared/rich-markdown-context-menu'
+import type {
+  RichMarkdownContextMenuCommandPayload,
+  RichMarkdownContextMenuTableTarget
+} from '../shared/rich-markdown-context-menu'
 import type {
   BrowserSetGrabModeArgs,
   BrowserSetGrabModeResult,
@@ -551,6 +569,14 @@ export type BrowserApi = {
     sessionProfileId?: string | null
     webContentsId: number
   }) => Promise<boolean>
+  isGuestRegistered: (args: { browserPageId: string; webContentsId: number }) => Promise<boolean>
+  repairGuestRegistration: (args: {
+    browserPageId: string
+    workspaceId: string
+    worktreeId: string
+    sessionProfileId?: string | null
+    webContentsId: number
+  }) => Promise<boolean>
   unregisterGuest: (args: { browserPageId: string }) => Promise<void>
   openDevTools: (args: { browserPageId: string }) => Promise<boolean>
   setViewportOverride: (args: {
@@ -604,10 +630,12 @@ export type BrowserApi = {
     callback: (args: { browserPageId: string; key: 'c' | 's' }) => void
   ) => () => void
   sessionListProfiles: () => Promise<BrowserSessionProfile[]>
-  sessionCreateProfile: (args: {
-    scope: BrowserSessionProfileScope
-    label: string
-  }) => Promise<BrowserSessionProfile | null>
+  sessionCreateProfile: (
+    args: {
+      scope: BrowserSessionProfileScope
+      label: string
+    } & BrowserSessionProfileCreateOptions
+  ) => Promise<BrowserSessionProfile | null>
   sessionDeleteProfile: (args: { profileId: string }) => Promise<boolean>
   sessionImportCookies: (args: { profileId: string }) => Promise<BrowserCookieImportResult>
   sessionResolvePartition: (args: { profileId: string | null }) => Promise<string | null>
@@ -738,6 +766,10 @@ export type PtyManagementSession = {
   protocolVersion: number
 }
 
+// 'severed': macOS can no longer attribute daemon terminals to Orca, so Accessibility/
+// Automation grants silently stop applying until the daemon is restarted (STA-3491).
+export type PtyManagementMacTccAttributionHealth = 'intact' | 'severed' | 'unknown'
+
 export type PtyManagementApi = {
   // `degraded`: daemon is alive but can't spawn fresh PTYs, so new terminals run locally without daemon persistence.
   listSessions: () => Promise<{ sessions: PtyManagementSession[]; degraded: boolean }>
@@ -748,6 +780,7 @@ export type PtyManagementApi = {
   }>
   killOne: (args: { sessionId: string }) => Promise<{ success: boolean }>
   restart: () => Promise<{ success: boolean }>
+  macTccAttribution: () => Promise<{ health: PtyManagementMacTccAttributionHealth }>
 }
 
 export type ExportApi = {
@@ -881,6 +914,7 @@ export type OpenCodeUsageApi = {
 
 export type AiVaultApi = {
   listSessions: (args?: AiVaultListArgs) => Promise<AiVaultListResult>
+  cancelListSessions: (args: { requestToken: string }) => Promise<void>
   prepareSessionResume: (
     args: AiVaultPrepareSessionResumeArgs
   ) => Promise<AiVaultPrepareSessionResumeResult>
@@ -977,6 +1011,9 @@ export type AppApi = {
     sessions: { state: WorkspaceSessionState; hostId?: ExecutionHostId }[]
     ui: Partial<PersistedUIState>
   }) => void
+  /** Resolves once the last staged checkpoint is durably written; rejects if that
+   *  write failed, so a reload/restart can abort instead of losing the snapshot. */
+  awaitBeforeUnloadCheckpoint: () => Promise<void>
   /** Resolves when the daemon PTY provider and hook receiver have either
    *  started or failed open for the first BrowserWindow. */
   awaitFirstWindowStartupServices: () => Promise<void>
@@ -1376,6 +1413,13 @@ export type PreloadApi = {
       ): Promise<HostQualifiedDetectedWorktreeResult | DetectedWorktreeListResult>
       (args: LegacyDetectedWorktreeRequest): Promise<DetectedWorktreeListResult>
     }
+    listKnownForExecutionHost?: (
+      args: ListKnownWorktreesForExecutionHostArgs
+    ) => Promise<HostQualifiedKnownWorktreeResult>
+    /** Retires the persisted metadata an authoritative scan proved gone, so it stops feeding the read above. */
+    forgetRemovedForExecutionHost?: (
+      args: ForgetRemovedWorktreesForExecutionHostArgs
+    ) => Promise<ForgetRemovedWorktreesForExecutionHostResult>
     cancelListDetected?: (args: { providerRequestId: ProviderRequestId }) => Promise<void>
     listAll: () => Promise<Worktree[]>
     create: (args: CreateWorktreeArgs) => Promise<CreateWorktreeResult>
@@ -1409,6 +1453,10 @@ export type PreloadApi = {
       worktreeId: string
       hostId?: ExecutionHostId
       force?: boolean
+      // Why (#11960): distinct from `force`, which the plain Delete confirmation
+      // already sets to skip the dirty-file prompt. Only an explicit Force Delete
+      // may waive the proof that every PTY stopped.
+      allowUnverifiedPtyStop?: boolean
       skipArchive?: boolean
     }) => Promise<RemoveWorktreeResult>
     // Forget a workspace from Orca only (no remote Git/FS work) — for workspaces pinned to a removed/disconnected SSH host.
@@ -2109,6 +2157,8 @@ export type PreloadApi = {
       args: GitLabRepoSelectorArgs & {
         jobId: number
         projectRef?: GitLabProjectRef | null
+        /** Bound the trace in main to a readable excerpt (see gitLabJobTraceToLogExcerpt). */
+        logExcerpt?: boolean
       }
     ) => Promise<GitLabJobTraceResult>
     retryJob: (
@@ -2463,17 +2513,22 @@ export type PreloadApi = {
     ) => Promise<OnboardingState>
   }
   dashboard: {
-    openPopout: () => Promise<void>
+    openPopout: (view?: 'board' | 'map') => Promise<void>
     publishSnapshot: (snapshot: DashboardSnapshot) => Promise<void>
     getPopoutOpen: () => Promise<boolean>
     onPopoutOpenChanged: (callback: (open: boolean) => void) => () => void
     onSnapshotRequested: (callback: () => void) => () => void
     onRevealAgent: (callback: (args: DashboardRevealAgentArgs) => void) => () => void
     onAckAgent: (callback: (paneKey: string) => void) => () => void
+    onSpawnAgent: (callback: (args: DashboardSpawnAgentArgs) => void) => () => void
+    onSleepWorkspace: (callback: (args: DashboardSleepWorkspaceArgs) => void) => () => void
     requestSnapshot: () => Promise<void>
     onSnapshot: (callback: (snapshot: DashboardSnapshot) => void) => () => void
+    onViewRequested: (callback: (view: 'board' | 'map') => void) => () => void
     revealAgent: (args: DashboardRevealAgentArgs) => Promise<void>
     ackAgent: (paneKey: string) => Promise<void>
+    spawnAgent: (args: DashboardSpawnAgentArgs) => Promise<void>
+    sleepWorkspace: (args: DashboardSleepWorkspaceArgs) => Promise<void>
   }
   terminalPreview: {
     connect: (
@@ -2681,7 +2736,12 @@ export type PreloadApi = {
     quitAndInstall: () => Promise<void>
     dismissNudge: () => Promise<void>
     dismissAvailableUpdate: () => Promise<void>
+    /** Desktop-only. Rejects unless the current status carries `linux-package-install` recovery. */
+    getLinuxPackageInstallInstructions: () => Promise<LinuxPackageInstallInstructions>
+    /** Desktop-only. Reveals the revalidated cached package in the native file manager. */
+    showLinuxPackage: () => Promise<void>
     listBuilds: (channel: ReleaseChannel) => Promise<ReleaseBuildListResult>
+
     onStatus: (callback: (status: UpdateStatus) => void) => () => void
     onClearDismissal: (callback: () => void) => () => void
   }
@@ -2864,9 +2924,19 @@ export type PreloadApi = {
       includeIgnored?: boolean
       bypassEffectiveUpstreamNegativeCache?: boolean
       reuseLineStats?: boolean
+      /** Merge-base OID to measure the branch line total against; omit to skip the work. */
+      branchLineTotalMergeBase?: string
       requestToken?: string
     }) => Promise<GitStatusResult>
     cancelStatus: (args: { requestToken: string }) => Promise<void>
+    setStatusUpstreamRefWatch: (args: {
+      worktreeId: string
+      worktreePath: string
+      executionHostId: string
+      connectionId?: string
+      branch?: string
+      upstreamName?: string
+    }) => Promise<void>
     submoduleStatus: (args: {
       worktreePath: string
       submodulePath: string
@@ -2991,6 +3061,7 @@ export type PreloadApi = {
           capability: CommitMessageAgentCapability
           models: CommitMessageModelCapability[]
           defaultModelId: string
+          catalogOrigin: 'probe' | 'spec'
         }
       | { success: false; error: string }
     >
@@ -3269,6 +3340,7 @@ export type PreloadApi = {
     setZoomLevel: (level: number) => void
     syncTrafficLights: (zoomFactor: number) => void
     setMarkdownEditorFocused: (focused: boolean) => void
+    setRichMarkdownContextMenuTarget: (target: RichMarkdownContextMenuTableTarget | null) => void
     setTerminalInputFocused: (focused: boolean) => void
     setFloatingFocus: (state: { panelFocused: boolean; terminalFocused: boolean }) => void
     setShortcutRecorderFocused: (focused: boolean) => void
@@ -3406,6 +3478,8 @@ export type PreloadApi = {
     }) => Promise<SshTarget>
     removeTarget: (args: { id: string }) => Promise<void>
     importConfig: (args?: { reAdopt?: boolean }) => Promise<SshConfigImportResult>
+    listConfigHosts: (args?: SshConfigHostListArgs) => Promise<SshConfigHostListResult>
+    resolveConfigHost: (args: { alias: string }) => Promise<SshConfigHostResolution | null>
     connect: (args: { targetId: string }) => Promise<SshConnectionState | null>
     disconnect: (args: { targetId: string }) => Promise<void>
     terminateSessions: (args: { targetId: string }) => Promise<void>
@@ -3621,8 +3695,12 @@ export type PreloadApi = {
       { ok: true } | { ok: false; reason: 'cancelled' | 'failed' | 'unsupported' }
     >
     openWindowsNetworkSettings: () => Promise<boolean>
-    getRuntimePairingUrl: (args?: { address?: string; rotate?: boolean }) => Promise<
-      | { available: false }
+    getRuntimePairingUrl: (args?: {
+      address?: string
+      rotate?: boolean
+      reach?: RuntimePairingReach
+    }) => Promise<
+      | { available: false; reason?: 'network_exposure_failed'; guidance?: string }
       | {
           available: true
           pairingUrl: string

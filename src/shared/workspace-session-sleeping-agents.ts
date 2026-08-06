@@ -98,7 +98,8 @@ const sleepingAgentSessionRecordSchema = z
     connectionId: z.string().nullable().optional(),
     launchConfig: sleepingAgentLaunchConfigSchema.optional(),
     origin: z.enum(['worktree-sleep', 'quit', 'live']).optional(),
-    automaticResumeBlockedBy: z.enum(['legacy-orchestration-worker']).optional()
+    automaticResumeBlockedBy: z.enum(['legacy-orchestration-worker']).optional(),
+    restoreOnTabOpenOnly: z.boolean().optional()
   })
   .refine(
     (record) => getAgentResumeArgv(record.agent, record.providerSession) !== null,

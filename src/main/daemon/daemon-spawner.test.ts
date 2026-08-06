@@ -1,14 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { randomUUID } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createServer, connect, type Server } from 'node:net'
 import {
   DaemonSpawner,
   getDaemonPidPath,
   getDaemonSocketPath,
   getDaemonTokenPath,
+  publishDaemonPidFile,
+  replaceDaemonPidFile,
   restoreClaimedDaemonArtifact
 } from './daemon-spawner'
+import {
+  getDaemonSocketBindPath,
+  publishDaemonSocketPath,
+  sweepAbandonedDaemonClaims,
+  unlinkOwnedDaemonSocketPath
+} from './daemon-endpoint-ownership'
 import { startDaemon, type DaemonHandle } from './daemon-main'
 import { DaemonClient } from './client'
 import type { SubprocessHandle } from './session'
@@ -233,5 +243,216 @@ describe('restoreClaimedDaemonArtifact', () => {
         canonicalExists: () => true
       })
     ).toBe(true)
+  })
+})
+
+describe('daemon PID publication', () => {
+  it('publishes ownership exclusively', () => {
+    const dir = createTestDir()
+    const pidPath = join(dir, 'daemon.pid')
+    try {
+      publishDaemonPidFile(pidPath, {
+        pid: 101,
+        startedAtMs: 1_000,
+        launchNonce: 'launch-a'
+      })
+
+      expect(() =>
+        publishDaemonPidFile(pidPath, {
+          pid: 202,
+          startedAtMs: 2_000,
+          launchNonce: 'launch-b'
+        })
+      ).toThrow()
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('atomically replaces stale ownership with the authenticated endpoint identity', () => {
+    const dir = createTestDir()
+    const pidPath = join(dir, 'daemon.pid')
+    const endpointIdentity = {
+      pid: 202,
+      startedAtMs: 2_000,
+      launchNonce: 'launch-b'
+    }
+    try {
+      writeFileSync(pidPath, '{"pid":101,"launchNonce":"launch-a"}')
+
+      expect(replaceDaemonPidFile(pidPath, endpointIdentity)).toBe(true)
+      expect(JSON.parse(readFileSync(pidPath, 'utf8'))).toEqual(endpointIdentity)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('reports failure and preserves the record when the rename claim fails for any reason but absence', () => {
+    // A read-only parent denies the rename with EACCES, standing in for the Windows
+    // AV/indexer lock that fails the claim on a record which is merely open.
+    if (process.platform === 'win32' || process.getuid?.() === 0) {
+      return
+    }
+    const dir = createTestDir()
+    const pidPath = join(dir, 'daemon.pid')
+    const existingRecord = '{"pid":101,"launchNonce":"launch-a"}'
+    writeFileSync(pidPath, existingRecord)
+    try {
+      chmodSync(dir, 0o500)
+
+      expect(
+        replaceDaemonPidFile(pidPath, { pid: 202, startedAtMs: 2_000, launchNonce: 'launch-b' })
+      ).toBe(false)
+      expect(readFileSync(pidPath, 'utf8')).toBe(existingRecord)
+    } finally {
+      chmodSync(dir, 0o700)
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})
+
+function listenOnSocketPath(server: Server, socketPath: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(socketPath, () => {
+      server.off('error', reject)
+      resolve()
+    })
+  })
+}
+
+function closeSocketServer(server: Server): Promise<void> {
+  return new Promise((resolve) => {
+    if (!server.listening) {
+      resolve()
+      return
+    }
+    server.close(() => resolve())
+  })
+}
+
+function connectsToSocketPath(socketPath: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = connect({ path: socketPath })
+    const timer = setTimeout(() => {
+      socket.destroy()
+      resolve(false)
+    }, 500)
+    socket.on('connect', () => {
+      clearTimeout(timer)
+      socket.destroy()
+      resolve(true)
+    })
+    socket.on('error', () => {
+      clearTimeout(timer)
+      resolve(false)
+    })
+  })
+}
+
+describe('daemon socket publication', () => {
+  it('keeps the bind name shorter than the canonical endpoint', () => {
+    // sockaddr_un caps the path, so the private bind name must never extend it.
+    const canonicalPath = getDaemonSocketPath('/tmp/orca-daemon-runtime')
+
+    expect(getDaemonSocketBindPath(canonicalPath).length).toBeLessThan(canonicalPath.length)
+  })
+
+  it('publishes a bound listener under the canonical endpoint and reclaims only its own entry', async () => {
+    if (process.platform === 'win32') {
+      return
+    }
+    const dir = createTestDir()
+    const canonicalPath = getDaemonSocketPath(dir)
+    const first = createServer((socket) => socket.end())
+    const second = createServer((socket) => socket.end())
+    try {
+      const firstBindPath = getDaemonSocketBindPath(canonicalPath)
+      await listenOnSocketPath(first, firstBindPath)
+
+      const firstIdentity = publishDaemonSocketPath(firstBindPath, canonicalPath)
+      expect(firstIdentity).not.toBeNull()
+      expect(existsSync(canonicalPath)).toBe(true)
+      expect(existsSync(firstBindPath)).toBe(false)
+      await expect(connectsToSocketPath(canonicalPath)).resolves.toBe(true)
+
+      const secondBindPath = getDaemonSocketBindPath(canonicalPath)
+      await listenOnSocketPath(second, secondBindPath)
+      let publishError: NodeJS.ErrnoException | null = null
+      try {
+        publishDaemonSocketPath(secondBindPath, canonicalPath)
+      } catch (error) {
+        publishError = error as NodeJS.ErrnoException
+      }
+      expect(publishError?.code).toBe('EEXIST')
+
+      expect(unlinkOwnedDaemonSocketPath(canonicalPath, firstIdentity)).toBe(true)
+      expect(existsSync(canonicalPath)).toBe(false)
+
+      // The endpoint name now resolves to a different listener's inode.
+      const secondIdentity = publishDaemonSocketPath(secondBindPath, canonicalPath)
+      expect(secondIdentity).not.toEqual(firstIdentity)
+      expect(unlinkOwnedDaemonSocketPath(canonicalPath, firstIdentity)).toBe(false)
+      expect(existsSync(canonicalPath)).toBe(true)
+      await expect(connectsToSocketPath(canonicalPath)).resolves.toBe(true)
+    } finally {
+      await closeSocketServer(first)
+      await closeSocketServer(second)
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('sweepAbandonedDaemonClaims', () => {
+  const claimNames = [
+    `daemon-v${PROTOCOL_VERSION}.pid.cleanup-123-${randomUUID()}`,
+    `daemon-v${PROTOCOL_VERSION}.pid.replace-123-${randomUUID()}`,
+    '.b0123456789'
+  ]
+  const preservedNames = [`daemon-v${PROTOCOL_VERSION}.pid`, `daemon-v${PROTOCOL_VERSION}.token`]
+
+  function seedClaimDir(): string {
+    const dir = createTestDir()
+    for (const name of [...claimNames, ...preservedNames]) {
+      writeFileSync(join(dir, name), 'x')
+    }
+    return dir
+  }
+
+  it('removes aged claim and bind scratch names without touching daemon artifacts', () => {
+    const dir = seedClaimDir()
+    try {
+      expect(sweepAbandonedDaemonClaims(dir, undefined, Date.now() + 24 * 60 * 60 * 1000)).toBe(
+        claimNames.length
+      )
+
+      for (const name of claimNames) {
+        expect(existsSync(join(dir, name))).toBe(false)
+      }
+      for (const name of preservedNames) {
+        expect(existsSync(join(dir, name))).toBe(true)
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('leaves freshly written claims alone so an in-flight claim is never stolen', () => {
+    const dir = seedClaimDir()
+    try {
+      expect(sweepAbandonedDaemonClaims(dir)).toBe(0)
+
+      for (const name of [...claimNames, ...preservedNames]) {
+        expect(existsSync(join(dir, name))).toBe(true)
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('returns zero for an unreadable runtime dir', () => {
+    expect(sweepAbandonedDaemonClaims(join(tmpdir(), `daemon-sweep-missing-${randomUUID()}`))).toBe(
+      0
+    )
   })
 })

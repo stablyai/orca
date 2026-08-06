@@ -59,6 +59,10 @@ export type ConnectionState =
   | 'reconnecting'
   | 'auth-failed'
 
+// Why: a user-attention nudge must not tear down a healthy relay (probe it); only a
+// network-change nudge marks the socket suspect enough to replace it.
+export type ForegroundNudgeReason = 'focus' | 'app-resume' | 'network-change'
+
 export type HostProfile = {
   id: string
   name: string
@@ -69,6 +73,13 @@ export type HostProfile = {
   endpoints?: MobileAccessEndpoint[]
   relayHostId?: MobileRelayHostOverlay['relayHostId']
   relay?: MobileRelayHostOverlay['relay']
+}
+
+export type HostCredentialStatus = 'ready' | 'temporarily-unavailable' | 'missing'
+
+export type HostCatalogEntry = Omit<HostProfile, 'deviceToken'> & {
+  credentialStatus: HostCredentialStatus
+  profile: HostProfile | null
 }
 
 export const HostProfileSchema = z.object({

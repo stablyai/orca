@@ -1,14 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import {
-  View,
-  Text,
-  StyleSheet,
-  SectionList,
-  Pressable,
-  ActivityIndicator,
-  Alert,
-  RefreshControl
-} from 'react-native'
+import { View, Text, StyleSheet, SectionList, Pressable, Alert, RefreshControl } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, usePathname, useRouter } from 'expo-router'
 import {
@@ -64,6 +55,8 @@ import { ConfirmModal } from '../../../src/components/ConfirmModal'
 import { BottomDrawer } from '../../../src/components/BottomDrawer'
 import { useHostProtocolGates } from '../../../src/components/HostProtocolGate'
 import { AuthFailedBanner } from '../../../src/components/AuthFailedBanner'
+import { HostRouteNoticeBanner } from '../../../src/components/HostRouteNoticeBanner'
+import { visibleHostRouteNotice } from '../../../src/host-route-notice'
 import { MobileSearchField } from '../../../src/components/MobileSearchField'
 import { WorkspaceDetailPlaceholder } from '../../../src/components/WorkspaceDetailPlaceholder'
 import { getCachedWorktrees, setCachedWorktrees } from '../../../src/cache/worktree-cache'
@@ -95,6 +88,7 @@ import { useWorkspaceSections } from '../../../src/worktree/use-workspace-sectio
 import { getMobileWorkspaceLineageGroupKey } from '../../../src/worktree/mobile-workspace-lineage'
 import { areWorktreeListsEqual } from '../../../src/worktree/worktree-list-snapshot'
 import { WorktreeCatalogSnapshotClient } from '../../../src/worktree/worktree-catalog-snapshot-client'
+import { HostWorkspaceListStates } from '../../../src/worktree/host-workspace-list-states'
 import { repoColor } from '../../../src/worktree/repo-color'
 import {
   WORKSPACE_GROUP_OPTIONS as GROUP_OPTIONS,
@@ -125,9 +119,12 @@ export function HostScreen({
   action: actionProp,
   onHideSidebar
 }: HostScreenProps = {}) {
-  const params = useLocalSearchParams<{ hostId: string; action?: string }>()
+  const params = useLocalSearchParams<{ hostId: string; action?: string; notice?: string }>()
   const hostId = hostIdProp ?? params.hostId
   const action = actionProp ?? params.action
+  const [dismissedNotice, setDismissedNotice] = useState<string | null>(null)
+  const noticeParam = params.notice?.trim()
+  const routeNotice = visibleHostRouteNotice(embedded, noticeParam, dismissedNotice)
   const router = useRouter()
   const pathname = usePathname()
   const insets = useSafeAreaInsets()
@@ -154,6 +151,9 @@ export function HostScreen({
   const forceReconnectHost = useForceReconnect()
   const [worktrees, setWorktrees] = useState<Worktree[]>(initialCache ?? [])
   const [worktreesLoaded, setWorktreesLoaded] = useState(initialCache != null)
+  // Why (STA-3123): error code of the last failed worktree.ps, so a broken catalog
+  // path renders as a failure instead of an empty host. Cleared on the next success.
+  const [catalogError, setCatalogError] = useState<string | null>(null)
   // Why: track the locally-opened worktree so the active-row highlight moves instantly instead of waiting for the next poll.
   const [optimisticActiveWorktreeId, setOptimisticActiveWorktreeId] = useState<string | null>(null)
   // One tick drives every visible agent row's relative timestamp.
@@ -169,7 +169,8 @@ export function HostScreen({
   const [filters, setFilters] = useState<FilterState>({
     filterRepoIds: new Set(),
     hideSleeping: false,
-    hideDefaultBranch: false
+    hideDefaultBranch: false,
+    alwaysShowDefaultBranch: true
   })
   const [groupMode, setGroupMode] = useState<MobileGroupMode>('repo')
   const [workspaceStatuses, setWorkspaceStatuses] = useState<readonly WorkspaceStatusDefinition[]>(
@@ -200,6 +201,7 @@ export function HostScreen({
     sortMode: 'recent',
     hideSleeping: false,
     hideDefaultBranch: false,
+    alwaysShowDefaultBranch: true,
     filterRepoIds: [],
     collapsedGroups: [],
     workspaceStatuses: DEFAULT_MOBILE_WORKSPACE_STATUSES
@@ -211,6 +213,7 @@ export function HostScreen({
       sortMode,
       hideSleeping: filters.hideSleeping,
       hideDefaultBranch: filters.hideDefaultBranch,
+      alwaysShowDefaultBranch: filters.alwaysShowDefaultBranch !== false,
       filterRepoIds: [...filters.filterRepoIds],
       collapsedGroups: [...collapsedGroups],
       workspaceStatuses
@@ -227,7 +230,8 @@ export function HostScreen({
     setFilters({
       filterRepoIds: new Set(next.filterRepoIds),
       hideSleeping: next.hideSleeping,
-      hideDefaultBranch: next.hideDefaultBranch
+      hideDefaultBranch: next.hideDefaultBranch,
+      alwaysShowDefaultBranch: next.alwaysShowDefaultBranch
     })
   }, [])
 
@@ -239,6 +243,9 @@ export function HostScreen({
       if (!client) {
         return
       }
+      // alwaysShowDefaultBranchWorkspace is deliberately absent: mobile reads it
+      // but has no toggle, so echoing its local default would silently revert a
+      // desktop opt-out on the first filter tap before ui.get lands (#8873).
       const payload: WorkspaceViewSettings = {
         groupBy: groupModeToDesktop(next.groupMode),
         sortBy: next.sortMode,
@@ -326,6 +333,7 @@ export function HostScreen({
     repoMetadataFetchedAtRef.current = 0
     // Why: useState initializer runs only on first mount, so re-seed the cache when Expo Router reuses this screen for a new hostId.
     const freshCache = hostId ? (getCachedWorktrees(hostId) as Worktree[] | null) : null
+    setCatalogError(null)
     if (freshCache) {
       setWorktrees(freshCache)
       setLastKnownWorktrees(freshCache)
@@ -427,17 +435,27 @@ export function HostScreen({
       const requestHostId = hostId
 
       try {
-        const pendingCatalog = await worktreeCatalogRef.current.fetch(requestClient, requestHostId)
+        const fetched = await worktreeCatalogRef.current.fetch(requestClient, requestHostId)
         if (clientRef.current !== requestClient || hostId !== requestHostId) {
           return
         }
         if (!options.allowDuringModal && newWorktreeModalVisibleRef.current) {
           return
         }
+        // Why (STA-3123): a failed catalog request must not pass for "0 worktrees";
+        // surface it so a broken remote host is diagnosable instead of looking empty.
+        if (fetched.kind === 'request_failed') {
+          setCatalogError(fetched.code)
+          return
+        }
+        if (fetched.pending.admission.kind === 'invalid') {
+          setCatalogError('invalid_response')
+        }
         // Why: unchanged responses still yield the confirmed rows, so every poll reasserts
         // host truth over optimistic local edits regardless of payload size.
-        const confirmed = worktreeCatalogRef.current.admit(pendingCatalog)
+        const confirmed = worktreeCatalogRef.current.admit(fetched.pending)
         if (confirmed) {
+          setCatalogError(null)
           // Why: reuse the existing array on identical snapshots to keep SectionList/sort rebuilds off the tap path.
           setWorktrees((current) =>
             areWorktreeListsEqual(current, confirmed) ? current : confirmed
@@ -448,7 +466,7 @@ export function HostScreen({
           setWorktreesLoaded(true)
           // Why (#8498): overwrite the home-written cache with the confirmed snapshot so a reconnect/remount can't serve a stale list.
           if (hostId) {
-            setCachedWorktrees(hostId, confirmed)
+            setCachedWorktrees(hostId, confirmed, { proven: true })
           }
           // Drop the optimistic active override once the host reports it active, so later desktop changes win.
           setOptimisticActiveWorktreeId((pending) =>
@@ -486,6 +504,9 @@ export function HostScreen({
         }
       } catch {
         // Will retry on reconnect
+        if (clientRef.current === requestClient && hostId === requestHostId) {
+          setCatalogError('network_error')
+        }
       } finally {
         fetchWorktreesInFlightRef.current = false
       }
@@ -496,7 +517,8 @@ export function HostScreen({
   useFocusEffect(
     useCallback(() => {
       // Why: focus nudges reconnect and probes a possibly half-open socket; empty deps fire per focus, not per state flip (which defeats backoff).
-      clientRef.current?.notifyForeground()
+      // 'focus' keeps a healthy relay green — probe, never suspend (S2 grey blink).
+      clientRef.current?.notifyForeground('focus')
     }, [])
   )
 
@@ -718,10 +740,9 @@ export function HostScreen({
   )
 
   const displayWorktrees = useMemo(() => {
-    const base =
-      connState === 'disconnected' || connState === 'reconnecting' || connState === 'auth-failed'
-        ? lastKnownWorktrees
-        : worktrees
+    // Why: live `worktrees` is authoritative only while connected; under the amber
+    // mount default, connecting/handshaking must keep the pre-reconnect list too.
+    const base = connState === 'connected' ? worktrees : lastKnownWorktrees
     if (sleptIds.size === 0 && optimisticActiveWorktreeId === null) {
       return base
     }
@@ -1084,6 +1105,14 @@ export function HostScreen({
         />
       )}
 
+      {/* Why a bounced route landed here (e.g. the workspace was deleted on the desktop). */}
+      {routeNotice && (
+        <HostRouteNoticeBanner
+          message={routeNotice}
+          onDismiss={() => setDismissedNotice(noticeParam ?? null)}
+        />
+      )}
+
       {/* Search bar */}
       {showSearch && (
         <View style={styles.searchBar}>
@@ -1099,27 +1128,15 @@ export function HostScreen({
         </View>
       )}
 
-      {/* Loading state */}
-      {((connState === 'connecting' || connState === 'reconnecting') &&
-        displayWorktrees.length === 0) ||
-      (connState === 'connected' && !worktreesLoaded && displayWorktrees.length === 0) ? (
-        <View style={styles.centered}>
-          <ActivityIndicator size="small" color={colors.textSecondary} />
-        </View>
-      ) : null}
-
-      {/* Empty state */}
-      {connState === 'connected' && worktreesLoaded && sections.length === 0 && (
-        <View style={styles.centered}>
-          <Text style={styles.emptyText}>
-            {search
-              ? 'No matching worktrees'
-              : activeFilterCount > 0
-                ? 'No worktrees match filters'
-                : 'No worktrees'}
-          </Text>
-        </View>
-      )}
+      <HostWorkspaceListStates
+        connState={connState}
+        worktreesLoaded={worktreesLoaded}
+        displayCount={displayWorktrees.length}
+        sectionCount={sections.length}
+        catalogError={catalogError}
+        search={search}
+        activeFilterCount={activeFilterCount}
+      />
 
       {sections.length > 0 && (
         <SectionList

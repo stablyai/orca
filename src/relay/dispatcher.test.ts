@@ -411,7 +411,9 @@ describe('RelayDispatcher', () => {
 
     dispatcher.invalidateClient()
 
-    expect(listener).toHaveBeenCalledWith(1)
+    // Why the cause is asserted: an unqualified invalidate is the relay's own decision, and only a
+    // caller that watched the peer's transport end may report 'peer-closed'.
+    expect(listener).toHaveBeenCalledWith(1, 'local')
   })
 
   it('detaches the primary client when its write throws (frame lost, trigger reconnect)', () => {
@@ -436,7 +438,8 @@ describe('RelayDispatcher', () => {
 
       // Fix: the write failure detaches the primary so the reconnect/reattach
       // machinery runs promptly instead of waiting for keepalive timeout.
-      expect(detachListener).toHaveBeenCalledWith(1)
+      // Why 'local': a throwing sink is this relay's write failing, not observed proof the peer left.
+      expect(detachListener).toHaveBeenCalledWith(1, 'local')
 
       // Recovery: a reconnecting socket swaps the write via setWrite; the client
       // is usable again and later frames flow to the new sink.

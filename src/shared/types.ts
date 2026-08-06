@@ -51,6 +51,7 @@ import type { StatusBarUsageMode } from './status-bar-usage-mode'
 import type { PersistedNativeChatSessionOptions } from './native-chat-session-options'
 import type { CodexResetCreditAttemptLedger } from './codex-reset-credit-attempt-ledger'
 import type { TaskSourceContext } from './task-source-context'
+import type { SetupRunnerShell } from './setup-runner-command'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -1025,6 +1026,12 @@ export type BrowserTab = BrowserWorkspace
 
 export type BrowserSessionProfileScope = 'default' | 'isolated' | 'imported'
 
+export type BrowserSessionUserAgentMode = 'clean' | 'native'
+
+export type BrowserSessionProfileCreateOptions = {
+  userAgentMode?: BrowserSessionUserAgentMode
+}
+
 export type BrowserSessionProfileSource = {
   browserFamily:
     | 'chrome'
@@ -1046,6 +1053,7 @@ export type BrowserSessionProfile = {
   partition: string
   label: string
   source: BrowserSessionProfileSource | null
+  userAgentMode?: BrowserSessionUserAgentMode
 }
 
 export type BrowserCookieImportSummary = {
@@ -1407,6 +1415,9 @@ export type PRCheckDetail = {
   url: string | null
   checkRunId?: number
   workflowRunId?: number
+  // Why: the GitLab job trace API is addressed by numeric job id only, so the
+  // Checks panel cannot load a job log without carrying it on the row.
+  gitlabJobId?: number
 }
 
 export type PRCheckAnnotation = {
@@ -1538,6 +1549,8 @@ export type IssueInfo = {
   state: IssueState
   url: string
   labels: string[]
+  /** Full markdown body when fetched through the single-issue endpoint. */
+  description?: string
 }
 
 export type GitHubViewer = {
@@ -2166,6 +2179,7 @@ export type RepoHookSettings = {
 export type WorktreeSetupLaunch = {
   runnerScriptPath: string
   envVars: Record<string, string>
+  shell?: SetupRunnerShell
   command?: string
   waitForAgentStartup?: boolean
 }
@@ -2392,6 +2406,29 @@ export type UpdateCheckOptions = {
  *  channel with its own repo cannot be reported as an ordinary release. */
 export type UpdateSource = 'local' | DedicatedRepoChannel
 
+/** Root-package Linux install formats whose update installs need privilege escalation. */
+export type LinuxRootPackageType = 'deb' | 'rpm'
+
+export type LinuxPackageInstallFailureReason =
+  | 'authentication-agent-unavailable'
+  | 'authentication-denied'
+  | 'package-install-failed'
+
+// Why: the renderer must not infer "no polkit agent" from copy alone — main classifies and the card branches on this discriminant.
+export type LinuxPackageInstallRecovery = {
+  kind: 'linux-package-install'
+  packageType: LinuxRootPackageType
+  reason: LinuxPackageInstallFailureReason
+  version: string
+}
+
+/** Why: only these two mean no safe command exists here; every other failure clears recovery entirely. */
+export type LinuxPackageCommandUnavailableReason = 'no-sudo' | 'no-package-manager'
+
+export type LinuxPackageInstallInstructions =
+  | { ok: true; command: string; packageFileName: string }
+  | { ok: false; reason: LinuxPackageCommandUnavailableReason; message: string }
+
 export type UpdateStatus = (
   | { state: 'idle' }
   | { state: 'checking'; userInitiated?: boolean }
@@ -2414,7 +2451,13 @@ export type UpdateStatus = (
   | { state: 'not-available'; userInitiated?: boolean }
   | { state: 'downloading'; percent: number; version: string; activeNudgeId?: string }
   | { state: 'downloaded'; version: string; releaseUrl?: string; activeNudgeId?: string }
-  | { state: 'error'; message: string; userInitiated?: boolean; activeNudgeId?: string }
+  | {
+      state: 'error'
+      message: string
+      userInitiated?: boolean
+      activeNudgeId?: string
+      recovery?: LinuxPackageInstallRecovery
+    }
 ) & { source?: UpdateSource }
 
 export type ReleaseBuildListResult =
@@ -2656,7 +2699,6 @@ export type OpenInApplication = {
 }
 
 export type SourceControlViewMode = 'list' | 'tree'
-export type SourceControlGroupOrder = 'changes-first' | 'staged-first' | 'untracked-first'
 
 export type LeftSidebarAppearanceMode = 'default' | 'match-terminal' | 'tinted'
 
@@ -2842,8 +2884,6 @@ export type GlobalSettings = {
   showGitIgnoredFiles?: boolean
   /** Preferred Source Control changes layout. Per-user, not per-workspace. */
   sourceControlViewMode: SourceControlViewMode
-  /** Preferred Source Control group order. Per-user, not per-workspace. */
-  sourceControlGroupOrder: SourceControlGroupOrder
   /** Compare base defaults to the branch upstream instead of the repo default; affects only the compare/diff view, not the PR/rebase target. Per-user. */
   sourceControlCompareAgainstUpstream: boolean
   /** Whether to show the Orca app name in the titlebar. */
@@ -2900,6 +2940,8 @@ export type GlobalSettings = {
   terminalSshViewParking?: boolean
   /** Kill switch for the hidden-worktree retention budget (C1): force-parks the least-recently-hidden un-parkable worktrees beyond a count budget or TTL. */
   terminalHiddenWorktreeRetentionBudget?: boolean
+  /** Kill switch for the browser-guest worktree retention budget: destroys the least-recently-activated hidden worktrees' webview guests beyond an LRU count budget. */
+  browserGuestWorktreeRetentionBudget?: boolean
   /** Kill switch for main-process PTY side-effect authority; on (default) = title/bell/agent facts via pty:sideEffect channel, not renderer byte parsing. */
   terminalMainSideEffectAuthority?: boolean
   /** Kill switch for main's hidden-delivery gate (Phase 4): drops PTY bytes to hidden views after model ingestion; requires terminalMainSideEffectAuthority. */
@@ -3272,7 +3314,7 @@ export type TaskResumeState = {
   githubItemsPreset?: TaskViewPresetId | null
   githubItemsQuery?: string
   githubProjectHiddenFieldIdsByView?: Record<string, string[]>
-  linearMode?: 'issues' | 'projects' | 'views'
+  linearMode?: 'issues' | 'projects' | 'views' | 'in-orca'
   linearPreset?: 'assigned' | 'created' | 'all' | 'completed'
   linearQuery?: string
   linearContext?: {
@@ -3360,6 +3402,8 @@ export type PersistedUIState = {
   hideCliCreatedWorkspaces?: boolean
   /** Hide workspaces sitting on a detached HEAD; folder workspaces (no head at all) are unaffected. */
   hideDetachedHeadWorkspaces?: boolean
+  /** Keep each project's main workspace out of the "Hide sleeping" sweep. Absent means on (#8873). */
+  alwaysShowDefaultBranchWorkspace?: boolean
   /** Per-worktree Explorer dotfile visibility. Missing entries inherit the default: show. */
   showDotfilesByWorktree?: Record<string, boolean>
   filterRepoIds: string[]

@@ -219,7 +219,6 @@ async function runValidation(mode) {
             ORCA_DEV_USER_DATA_PATH: userDataPath,
             HOME: isolatedHome,
             USERPROFILE: isolatedHome,
-            ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME: '0',
             ELECTRON_ENABLE_LOGGING: '1',
             ELECTRON_ENABLE_STACK_DUMPING: '1',
             ELECTRON_OZONE_PLATFORM_HINT: 'wayland',
