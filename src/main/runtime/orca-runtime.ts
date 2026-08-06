@@ -36996,7 +36996,14 @@ function classifyAgentTitle(title: string | null): 'agent' | 'management' | 'neu
   if (isClaudeManagementTitle(title)) {
     return 'management'
   }
-  return detectAgentStatusFromTitle(title) !== null ? 'agent' : 'neutral'
+  if (detectAgentStatusFromTitle(title) !== null) {
+    return 'agent'
+  }
+  // Why: Cursor hooks own status, so the native status-null title still proves agent identity.
+  if (isCursorAgentTitle(title)) {
+    return 'agent'
+  }
+  return 'neutral'
 }
 
 function terminalTitleBlocksExplicitAgentStatus(title: string | null): boolean {

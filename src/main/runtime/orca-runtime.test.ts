@@ -21878,6 +21878,25 @@ describe('OrcaRuntimeService', () => {
     await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(true)
   })
 
+  it('recognizes bare Cursor Agent native titles as a running agent session', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    // Why: Cursor's native title proves identity even though hooks own its status.
+    syncSinglePty(runtime, 'pty-1', { paneTitle: 'Cursor Agent' })
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    await expect(runtime.isTerminalRunningAgent(terminal.handle)).resolves.toBe(true)
+    await expect(runtime.getTerminalAgentStatus(terminal.handle)).resolves.toEqual({
+      handle: terminal.handle,
+      isRunningAgent: true,
+      status: null
+    })
+  })
+
   it('does not recognize runtime-created Claude agents management screens as agents', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
