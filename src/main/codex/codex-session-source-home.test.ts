@@ -1,5 +1,5 @@
 import { homedir } from 'node:os'
-import { join, sep } from 'node:path'
+import { basename, join, sep } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   resolveHostCodexSessionSourceHome,
@@ -30,9 +30,17 @@ describe('resolveHostCodexSessionSourceHome', () => {
     expect(
       resolveHostCodexSessionSourceHome({ codexSessionSourceHome: { host: '~/.codex-chatgpt' } })
     ).toBe(join(homedir(), '.codex-chatgpt'))
-    expect(resolveHostCodexSessionSourceHome({ codexSessionSourceHome: { host: '~' } })).toBe(
-      homedir()
-    )
+  })
+
+  // The home directory is never a Codex home, and the session backfill WRITES
+  // through this value — accepting it would put a `sessions` tree at the top of
+  // the user's home.
+  it('ignores a value that resolves to the home directory itself', () => {
+    for (const host of ['~', '~/', '~/.', `~/../${basename(homedir())}`, homedir()]) {
+      expect(
+        resolveHostCodexSessionSourceHome({ codexSessionSourceHome: { host } })
+      ).toBeUndefined()
+    }
   })
 
   it('leaves a ~ that is not a home prefix alone', () => {

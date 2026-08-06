@@ -1,5 +1,6 @@
 import { homedir } from 'node:os'
-import { isAbsolute, join, sep } from 'node:path'
+import { isAbsolute, join, resolve, sep } from 'node:path'
+import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import type { GlobalSettings } from '../../shared/types'
 
 /**
@@ -18,10 +19,20 @@ export function resolveHostCodexSessionSourceHome(
 ): string | undefined {
   const expanded = expandHostHomePrefix(normalizeSourceHome(settings.codexSessionSourceHome?.host))
   // Why: consumers both scan and WRITE through this value (the session backfill
-  // resolves <home>/sessions as its target), so an unanchored one would walk and
-  // mkdir under whatever cwd the app happens to have. Drop it and let every
-  // caller fall back to the system home instead.
-  return expanded && isAbsolute(expanded) ? expanded : undefined
+  // resolves <home>/sessions as its target). An unanchored value would mkdir
+  // under whatever cwd the app happens to have, and the home directory itself is
+  // never a Codex home — accepting `~` would drop a `sessions` tree at the top of
+  // the user's home. Reject both; callers fall back to the system home.
+  return expanded && isAbsolute(expanded) && !isHostHomeDir(expanded) ? expanded : undefined
+}
+
+// Callers check isAbsolute first, so resolve() only normalizes `.`/`..` here —
+// it never consults the cwd, and `~/..`-style values still collapse correctly.
+function isHostHomeDir(value: string): boolean {
+  return (
+    normalizeRuntimePathForComparison(resolve(value)) ===
+    normalizeRuntimePathForComparison(resolve(homedir()))
+  )
 }
 
 /** Per-distro WSL override; returns undefined to keep the default <wslHome>/.codex source. */
