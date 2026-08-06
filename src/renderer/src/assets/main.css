@@ -586,8 +586,11 @@
 
 /* ── Editor-style scrollbar (matches Monaco) ────────── */
 
-.scrollbar-editor,
-.xterm .xterm-viewport {
+/* Why: standard scrollbar-width/color disable ::-webkit-scrollbar* in
+   Chromium >=121. Keep them on .scrollbar-editor (Firefox/non-webkit), but
+   style .xterm .xterm-viewport with webkit pseudos only so the custom thumb
+   paints and the gutter/track stays transparent (#7876 intent, fixes #12635). */
+.scrollbar-editor {
   scrollbar-width: thin;
   scrollbar-color: rgba(121, 121, 121, 0.4) transparent;
 }
