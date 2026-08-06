@@ -36,11 +36,39 @@ describe('resolveHostCodexSessionSourceHome', () => {
   // through this value — accepting it would put a `sessions` tree at the top of
   // the user's home.
   it('ignores a value that resolves to the home directory itself', () => {
-    for (const host of ['~', '~/', '~/.', `~/../${basename(homedir())}`, homedir()]) {
+    for (const host of [
+      '~',
+      '~/',
+      '~/.',
+      `~/../${basename(homedir())}`,
+      // No tilde, so expandHostHomePrefix returns it verbatim and only the
+      // resolve() inside isHostHomeDir can fold it back to the home dir.
+      `${homedir()}/../${basename(homedir())}`,
+      homedir()
+    ]) {
       expect(
         resolveHostCodexSessionSourceHome({ codexSessionSourceHome: { host } })
       ).toBeUndefined()
     }
+  })
+
+  // On win32 a rooted-but-driveless value resolves against the CURRENT DRIVE,
+  // so it is no better anchored than a relative one.
+  it('rejects a win32 driveless-rooted value but keeps drive and UNC roots', () => {
+    const driveless = resolveHostCodexSessionSourceHome({
+      codexSessionSourceHome: { host: '\\codex' }
+    })
+    expect(driveless).toBeUndefined()
+    expect(
+      resolveHostCodexSessionSourceHome({
+        codexSessionSourceHome: { host: 'C:\\Users\\me\\.codex' }
+      })
+    ).toBe(sep === '\\' ? 'C:\\Users\\me\\.codex' : undefined)
+    expect(
+      resolveHostCodexSessionSourceHome({
+        codexSessionSourceHome: { host: '\\\\wsl.localhost\\Ubuntu\\home\\me\\.codex' }
+      })
+    ).toBe(sep === '\\' ? '\\\\wsl.localhost\\Ubuntu\\home\\me\\.codex' : undefined)
   })
 
   it('leaves a ~ that is not a home prefix alone', () => {

@@ -23,11 +23,23 @@ export function resolveHostCodexSessionSourceHome(
   // under whatever cwd the app happens to have, and the home directory itself is
   // never a Codex home — accepting `~` would drop a `sessions` tree at the top of
   // the user's home. Reject both; callers fall back to the system home.
-  return expanded && isAbsolute(expanded) && !isHostHomeDir(expanded) ? expanded : undefined
+  return expanded && isAnchoredAbsolute(expanded) && !isHostHomeDir(expanded) ? expanded : undefined
 }
 
-// Callers check isAbsolute first, so resolve() only normalizes `.`/`..` here —
-// it never consults the cwd, and `~/..`-style values still collapse correctly.
+// Why not plain isAbsolute: on win32 a rooted-but-driveless `\codex` passes it
+// yet still resolves against the CURRENT DRIVE, so it is no better anchored than
+// `codex` — and resolving it reads the cwd, which throws if that directory is
+// gone. Require a drive or a UNC root there; POSIX is unchanged.
+function isAnchoredAbsolute(value: string): boolean {
+  if (!isAbsolute(value)) {
+    return false
+  }
+  return sep !== '\\' || /^[A-Za-z]:[\\/]/.test(value) || /^[\\/]{2}/.test(value)
+}
+
+// Callers prove the value is drive/UNC-anchored first, so resolve() only folds
+// `.`/`..` here and never reads the cwd. It is load-bearing for a RAW absolute
+// value carrying dot segments; `~/..` spellings were already folded by join().
 function isHostHomeDir(value: string): boolean {
   return (
     normalizeRuntimePathForComparison(resolve(value)) ===
