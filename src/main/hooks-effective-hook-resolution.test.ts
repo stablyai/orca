@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { getDefaultTabsLaunch } from './effective-hook-config'
+import type { OrcaHooks } from '../shared/orca-yaml-hook-types'
+import { getDefaultTabCommandTrustContent, getDefaultTabsLaunch } from './effective-hook-config'
 import {
   makeHookTestRepo,
   TEST_REPO_ORCA_YAML_PATH,
@@ -398,5 +399,33 @@ describe('getDefaultTabsLaunch', () => {
       tabs: hooks.defaultTabs,
       runCommands: false
     })
+  })
+})
+
+describe('getDefaultTabCommandTrustContent', () => {
+  it('includes tab env in the trust content so env changes re-prompt trust', () => {
+    const hooks = {
+      scripts: {},
+      defaultTabs: [
+        {
+          title: 'Claude',
+          command: 'claude',
+          env: { ANTHROPIC_API_KEY: 'op://Private/Anthropic/api-key' }
+        }
+      ]
+    } as unknown as OrcaHooks
+
+    const content = getDefaultTabCommandTrustContent(hooks)
+    expect(content).toContain('ANTHROPIC_API_KEY=op://Private/Anthropic/api-key')
+    expect(content).toContain('claude')
+  })
+
+  it('covers env-only tabs that have no command', () => {
+    const hooks = {
+      scripts: {},
+      defaultTabs: [{ title: 'Shell', env: { LD_PRELOAD: '/evil.so' } }]
+    } as unknown as OrcaHooks
+
+    expect(getDefaultTabCommandTrustContent(hooks)).toContain('LD_PRELOAD=/evil.so')
   })
 })

@@ -26,6 +26,8 @@ export type OrcaDefaultTabTemplate = {
   title?: string
   color?: string
   command?: string
+  /** Values may be 1Password op:// secret references, resolved at spawn via `op run` when the integration is enabled. */
+  env?: Record<string, string>
 }
 
 export type EphemeralVmCheckoutMode = 'orca-worktree' | 'provisioned-root'

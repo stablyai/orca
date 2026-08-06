@@ -178,6 +178,34 @@ describe('parseOrcaYaml', () => {
     })
   })
 
+  it('parses default tab env maps, dropping invalid names and non-string values', () => {
+    const yaml = [
+      'defaultTabs:',
+      '  - title: Claude',
+      '    command: claude',
+      '    env:',
+      '      ANTHROPIC_API_KEY: op://Private/Anthropic/api-key',
+      '      PLAIN_VALUE: hello',
+      '      "BAD NAME": nope',
+      '      NUMERIC: 42',
+      '  - title: NoEnv',
+      '    command: pnpm dev',
+      '    env: []'
+    ].join('\n')
+
+    expect(parseOrcaYaml(yaml)).toEqual({
+      scripts: {},
+      defaultTabs: [
+        {
+          title: 'Claude',
+          command: 'claude',
+          env: { ANTHROPIC_API_KEY: 'op://Private/Anthropic/api-key', PLAIN_VALUE: 'hello' }
+        },
+        { title: 'NoEnv', command: 'pnpm dev' }
+      ]
+    })
+  })
+
   it('parses environmentRecipes from orca.yaml', () => {
     const yaml = [
       'environmentRecipes:',

@@ -18,6 +18,7 @@ import {
 } from '../pane/spawn-reservation'
 import { ptySizes } from '../delivery/visibility-state'
 import { getStartupTerminalColorQueryReplyColors } from '../../terminal-startup-color-query-replies'
+import { maybeWrapStartupCommandWithOpRun } from '../../../pty/op-run-secret-injection'
 import type { PtyIpcSpawnState } from './spawn-state'
 
 export async function buildPtyIpcSpawnOptions(
@@ -66,7 +67,10 @@ export async function buildPtyIpcSpawnOptions(
     ctx.spawnOptions.envToDelete = ctx.combinedEnvToDelete
   }
   if (ctx.launchCommand !== undefined) {
-    ctx.spawnOptions.command = ctx.launchCommand
+    ctx.spawnOptions.command = maybeWrapStartupCommandWithOpRun(ctx.launchCommand, ctx.spawnEnv, {
+      enabled: ctx.deps.getSettings?.()?.onePasswordSecretsEnabled ?? false,
+      connectionId: args.connectionId
+    })
   }
   if (args.commandDelivery !== undefined) {
     ctx.spawnOptions.commandDelivery = args.commandDelivery

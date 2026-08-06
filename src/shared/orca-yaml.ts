@@ -71,6 +71,23 @@ function normalizeSharedDirectories(value: unknown): string[] {
   return Array.from(seen)
 }
 
+const ENV_VAR_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/
+
+function normalizeTabEnv(value: unknown): Record<string, string> | undefined {
+  const record = asRecord(value)
+  if (!record) {
+    return undefined
+  }
+  const env: Record<string, string> = {}
+  for (const [key, raw] of Object.entries(record).slice(0, MAX_ORCA_YAML_COLLECTION_ENTRIES)) {
+    if (!ENV_VAR_NAME_RE.test(key) || typeof raw !== 'string') {
+      continue
+    }
+    env[key] = raw
+  }
+  return Object.keys(env).length > 0 ? env : undefined
+}
+
 function normalizeDefaultTabs(value: unknown): OrcaDefaultTabTemplate[] {
   if (!Array.isArray(value) || value.length > MAX_ORCA_YAML_COLLECTION_ENTRIES) {
     return []
@@ -86,13 +103,15 @@ function normalizeDefaultTabs(value: unknown): OrcaDefaultTabTemplate[] {
       const command = asTrimmedString(record.command)
       const color = asTrimmedString(record.color)
       const normalizedColor = color && DEFAULT_TAB_COLOR_RE.test(color) ? color : undefined
-      if (!title && !command && !normalizedColor) {
+      const env = normalizeTabEnv(record.env)
+      if (!title && !command && !normalizedColor && !env) {
         return null
       }
       return {
         ...(title ? { title } : {}),
         ...(normalizedColor ? { color: normalizedColor } : {}),
-        ...(command ? { command } : {})
+        ...(command ? { command } : {}),
+        ...(env ? { env } : {})
       }
     })
     .filter((entry): entry is OrcaDefaultTabTemplate => entry !== null)

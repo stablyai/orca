@@ -153,6 +153,39 @@ describe('launchWorktreeBackgroundTerminals', () => {
     expect(mockRegisterEagerPtyBuffer).toHaveBeenCalledTimes(2)
   })
 
+  it('injects tab env only when shared commands are trusted to run', async () => {
+    const { launchWorktreeBackgroundTerminals } =
+      await import('./launch-worktree-background-terminals')
+    const tabEnv = { ANTHROPIC_API_KEY: 'op://Private/Anthropic/api-key' }
+
+    await launchWorktreeBackgroundTerminals({
+      worktreeId: 'wt-1',
+      defaultTabs: {
+        runCommands: true,
+        tabs: [{ title: 'Claude', command: 'claude', env: tabEnv }]
+      }
+    })
+    expect(mockSpawn).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ command: 'claude', env: expect.objectContaining(tabEnv) })
+    )
+
+    mockSpawn.mockClear()
+    await launchWorktreeBackgroundTerminals({
+      worktreeId: 'wt-1',
+      defaultTabs: {
+        runCommands: false,
+        tabs: [{ title: 'Claude', command: 'claude', env: tabEnv }]
+      }
+    })
+    expect(mockSpawn).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        env: expect.not.objectContaining({ ANTHROPIC_API_KEY: expect.anything() })
+      })
+    )
+  })
+
   it('spawns setup in a split when setup launch mode requests a split', async () => {
     state.settings = { activeRuntimeEnvironmentId: null, setupScriptLaunchMode: 'split-horizontal' }
     const { launchWorktreeBackgroundTerminals } =
