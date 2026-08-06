@@ -23,6 +23,9 @@ const HEALTH_CHECK_TIMEOUT_MS = 3_000
 const RESOLVER_HEALTH_CHECK_TIMEOUT_MS = 3_000
 const KILL_WAIT_MS = 3_000
 const KILL_POLL_MS = 100
+// Why: SIGKILL is delivered on return from an uninterruptible syscall, so confirm the exit
+// rather than assume it — but keep the wait short, it only guards the rare wedged case.
+const SIGKILL_CONFIRM_WAIT_MS = 1_000
 const START_TIME_TOLERANCE_MS = 1_500
 // Why: e2e forces the failed-health preserve path without SIGSTOP races —
 // a stopped daemon also blocks listSessions, so the unhealthy guard cannot
@@ -50,10 +53,17 @@ export type ParsedDaemonPid = {
   bootId: string | null
 }
 
-function canConnectSocket(socketPath: string): Promise<boolean> {
+/**
+ * 'connected' — something is listening. 'missing'/'refused' — nothing is, and the endpoint
+ * name is safe to reclaim. 'unknown' — the probe itself failed (timeout on a loaded host,
+ * EPERM); the endpoint must be left alone because absence of proof is not proof of death.
+ */
+type SocketProbeOutcome = 'connected' | 'missing' | 'refused' | 'unknown'
+
+function probeSocketConnect(socketPath: string): Promise<SocketProbeOutcome> {
   return new Promise((resolve) => {
     if (process.platform !== 'win32' && !existsSync(socketPath)) {
-      resolve(false)
+      resolve('missing')
       return
     }
     const sock = connect({ path: socketPath })
@@ -63,7 +73,7 @@ function canConnectSocket(socketPath: string): Promise<boolean> {
       sock.off('connect', onConnect)
       sock.off('error', onError)
     }
-    const settle = (result: boolean): void => {
+    const settle = (result: SocketProbeOutcome): void => {
       if (settled) {
         return
       }
@@ -72,14 +82,16 @@ function canConnectSocket(socketPath: string): Promise<boolean> {
       resolve(result)
     }
     const onConnect = (): void => {
-      settle(true)
+      settle('connected')
       sock.destroy()
     }
-    const onError = (): void => {
-      settle(false)
+    const onError = (error: NodeJS.ErrnoException): void => {
+      settle(
+        error.code === 'ECONNREFUSED' ? 'refused' : error.code === 'ENOENT' ? 'missing' : 'unknown'
+      )
     }
     const timer = setTimeout(() => {
-      settle(false)
+      settle('unknown')
       sock.destroy()
     }, 500)
     sock.on('connect', onConnect)
@@ -278,7 +290,12 @@ export function getMacDaemonSystemResolverHealth(
           }
           // Why: the daemon must report health from inside its own process;
           // external launchctl bsexec probes can misclassify healthy PTYs.
-          sock?.write(encodeNdjson({ id: 'resolver-health-1', type: 'systemResolverHealth' }))
+          sock?.write(
+            encodeNdjson({
+              id: 'resolver-health-1',
+              type: 'systemResolverHealth'
+            })
+          )
           continue
         }
 
@@ -366,7 +383,10 @@ function getLinuxProcessStartedAtMs(pid: number): number | null {
     const startTicks = parseLinuxProcStartTicks(stat)
     const bootTimeSeconds = parseLinuxBootTimeSeconds(readFileSync('/proc/stat', 'utf8'))
     const ticksPerSecond = Number(
-      execFileSync('getconf', ['CLK_TCK'], { encoding: 'utf8', timeout: 1_000 }).trim()
+      execFileSync('getconf', ['CLK_TCK'], {
+        encoding: 'utf8',
+        timeout: 1_000
+      }).trim()
     )
     if (
       !Number.isFinite(startTicks) ||
@@ -657,14 +677,45 @@ export async function isDaemonStaleForCurrentBundle(
   return true
 }
 
+function isNoSuchProcessError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ESRCH'
+}
+
+async function waitForProcessExit(pid: number, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    try {
+      process.kill(pid, 0)
+    } catch {
+      return true
+    }
+    if (Date.now() >= deadline) {
+      return false
+    }
+    await new Promise((resolve) => setTimeout(resolve, KILL_POLL_MS))
+  }
+}
+
+export type StaleDaemonKillOutcome = {
+  /** A daemon was positively confirmed gone. Drives replacement telemetry. */
+  killed: boolean
+  /**
+   * We could not prove the recorded daemon is gone. Its PID record and endpoint are left
+   * intact and the caller must not fork a replacement beside it — that is exactly how two
+   * daemons end up alive with one owning the socket and the other hosting the sessions.
+   */
+  liveOwnerSurvived: boolean
+}
+
 export async function killStaleDaemon(
   runtimeDir: string,
   socketPath: string,
   tokenPath: string,
   protocolVersion = PROTOCOL_VERSION
-): Promise<boolean> {
+): Promise<StaleDaemonKillOutcome> {
   const pidPath = getDaemonPidPath(runtimeDir, protocolVersion)
   let killedDaemon = false
+  let liveOwnerSurvived = false
   try {
     const parsedPid = parseDaemonPidFile(readFileSync(pidPath, 'utf8'))
     if (
@@ -672,7 +723,16 @@ export async function killStaleDaemon(
       (await isDaemonProcess(parsedPid.pid, socketPath, tokenPath, parsedPid.startedAtMs))
     ) {
       const { pid, startedAtMs } = parsedPid
-      process.kill(pid, 'SIGTERM')
+      try {
+        process.kill(pid, 'SIGTERM')
+      } catch (error) {
+        // Why: ESRCH means it is already gone. Anything else (EPERM from a daemon owned by
+        // another user) means it is alive and we cannot stop it — falling through to the
+        // blanket catch would report "nothing alive" and authorize a duplicate beside it.
+        if (!isNoSuchProcessError(error)) {
+          return { killed: false, liveOwnerSurvived: true }
+        }
+      }
       const deadline = Date.now() + KILL_WAIT_MS
       let exited = false
       while (Date.now() < deadline) {
@@ -690,22 +750,50 @@ export async function killStaleDaemon(
         // daemon died during the wait. Without this, we'd SIGKILL an unrelated
         // process that happens to now own the same pid.
         if (!(await isDaemonProcess(pid, socketPath, tokenPath, startedAtMs))) {
-          console.warn('[daemon] Skipping SIGKILL for stale daemon: reason=pid_recycled')
-          exited = true
-          killedDaemon = true
+          // Why: a failed identity probe has two causes with opposite correct actions —
+          // the pid really was recycled (daemon dead, reclaim the endpoint), or the probe
+          // itself failed under load (`ps` has a 2s timeout). The endpoint settles it: if
+          // something still answers the socket, a daemon is alive and must be preserved.
+          if ((await probeSocketConnect(socketPath)) === 'connected') {
+            console.warn(
+              '[daemon] Preserving daemon that could not be identified: reason=identity_probe_failed'
+            )
+            liveOwnerSurvived = true
+          } else {
+            console.warn('[daemon] Skipping SIGKILL for stale daemon: reason=pid_recycled')
+            exited = true
+          }
         } else {
           try {
             process.kill(pid, 'SIGKILL')
-            exited = true
           } catch {
             // Already dead
+            exited = true
+          }
+          // Why: issuing SIGKILL is not proof of death — a process blocked in an
+          // uninterruptible syscall only dies once it returns. Claiming the kill without
+          // confirming it is what let the endpoint be reclaimed out from under a daemon
+          // that was still alive and still serving.
+          exited = exited || (await waitForProcessExit(pid, SIGKILL_CONFIRM_WAIT_MS))
+          if (!exited) {
+            console.warn('[daemon] Daemon survived SIGKILL: reason=unconfirmed_exit')
           }
         }
       }
-      killedDaemon = killedDaemon || exited
+      killedDaemon = exited
+      // Why: SIGTERM and SIGKILL both failed to produce an exit, so the daemon is still out
+      // there holding the endpoint. Treat it as the owner rather than racing it.
+      liveOwnerSurvived = liveOwnerSurvived || !exited
     }
   } catch {
     // PID file missing or process already dead
+  }
+
+  if (liveOwnerSurvived) {
+    // Why: removing the record of a daemon we failed to kill is what let a replacement
+    // publish its own ownership beside it. Leaving it intact keeps the exclusive PID claim
+    // held, so a duplicate cannot take the endpoint.
+    return { killed: killedDaemon, liveOwnerSurvived }
   }
 
   try {
@@ -714,13 +802,18 @@ export async function killStaleDaemon(
     // Best-effort
   }
 
-  const socketIsLive = await canConnectSocket(socketPath)
-  if (process.platform !== 'win32' && existsSync(socketPath) && (killedDaemon || !socketIsLive)) {
+  const socketOutcome = await probeSocketConnect(socketPath)
+  // Why: only positive evidence of a dead endpoint authorizes reclaiming the name. A probe
+  // that merely timed out leaves a live daemon's endpoint in place instead of unlinking it
+  // and forking a duplicate onto the freed path.
+  const endpointIsReclaimable =
+    killedDaemon || socketOutcome === 'refused' || socketOutcome === 'missing'
+  if (process.platform !== 'win32' && existsSync(socketPath) && endpointIsReclaimable) {
     try {
       unlinkSync(socketPath)
     } catch {
       // Best-effort
     }
   }
-  return killedDaemon
+  return { killed: killedDaemon, liveOwnerSurvived }
 }

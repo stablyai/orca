@@ -9033,6 +9033,221 @@ describe('Store', () => {
     ).toBeUndefined()
   })
 
+  it('reconciles only the incarnation of an unchanged durable PTY binding', async () => {
+    const store = await createStore()
+    const paneKey = `tab1:${TEST_LEAF_1}`
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty-1' })]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty-1' }
+        }
+      },
+      terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-stale' }
+    })
+
+    expect(
+      store.persistPtyBinding({
+        worktreeId: 'wt1',
+        tabId: 'tab1',
+        leafId: TEST_LEAF_1,
+        ptyId: 'pty-1',
+        incarnationId: 'inc-live',
+        expectedBinding: { ptyId: 'pty-1', incarnationId: 'inc-stale' }
+      })
+    ).toBe(true)
+
+    expect(store.getWorkspaceSession().terminalPtyIncarnationsByPaneKey?.[paneKey]).toBe('inc-live')
+    const reloaded = await createStore()
+    expect(reloaded.getWorkspaceSession().terminalPtyIncarnationsByPaneKey?.[paneKey]).toBe(
+      'inc-live'
+    )
+  })
+
+  it('rejects competing PTY and incarnation changes during reconciliation', async () => {
+    const store = await createStore()
+    const paneKey = `tab1:${TEST_LEAF_1}`
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty-current' })]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty-current' }
+        }
+      },
+      terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-current' }
+    })
+
+    for (const competing of [
+      { ptyId: 'pty-replaced', expectedIncarnationId: 'inc-current' },
+      { ptyId: 'pty-current', expectedIncarnationId: 'inc-replaced' }
+    ]) {
+      expect(
+        store.persistPtyBinding({
+          worktreeId: 'wt1',
+          tabId: 'tab1',
+          leafId: TEST_LEAF_1,
+          ptyId: competing.ptyId,
+          incarnationId: 'inc-live',
+          expectedBinding: {
+            ptyId: competing.ptyId,
+            incarnationId: competing.expectedIncarnationId
+          }
+        })
+      ).toBe(false)
+    }
+    expect(store.getWorkspaceSession().terminalPtyIncarnationsByPaneKey?.[paneKey]).toBe(
+      'inc-current'
+    )
+  })
+
+  it('reconciles only the requested execution-host partition', async () => {
+    const store = await createStore()
+    const paneKey = `tab1:${TEST_LEAF_1}`
+    const session = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty-1' })]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf' as const, leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty-1' }
+        }
+      },
+      terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-stale' }
+    }
+    store.setWorkspaceSession(structuredClone(session), 'local')
+    store.setWorkspaceSession(structuredClone(session), 'ssh:ssh-1')
+
+    expect(
+      store.persistPtyBinding(
+        {
+          worktreeId: 'wt1',
+          tabId: 'tab1',
+          leafId: TEST_LEAF_1,
+          ptyId: 'pty-1',
+          incarnationId: 'inc-remote-live',
+          expectedBinding: { ptyId: 'pty-1', incarnationId: 'inc-stale' }
+        },
+        'ssh:ssh-1'
+      )
+    ).toBe(true)
+
+    expect(store.getWorkspaceSession('local').terminalPtyIncarnationsByPaneKey?.[paneKey]).toBe(
+      'inc-stale'
+    )
+    expect(store.getWorkspaceSession('ssh:ssh-1').terminalPtyIncarnationsByPaneKey?.[paneKey]).toBe(
+      'inc-remote-live'
+    )
+  })
+
+  it.each([
+    { label: 'local', hostId: undefined },
+    { label: 'SSH', hostId: 'ssh:ssh-1' }
+  ])(
+    'preserves a reconciled incarnation across a renderer snapshot ($label)',
+    async ({ hostId }) => {
+      const store = await createStore()
+      const paneKey = `tab1:${TEST_LEAF_1}`
+      store.setWorkspaceSession(
+        {
+          ...getDefaultWorkspaceSession(),
+          tabsByWorktree: {
+            wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty-1' })]
+          },
+          terminalLayoutsByTabId: {
+            tab1: {
+              root: { type: 'leaf', leafId: TEST_LEAF_1 },
+              activeLeafId: TEST_LEAF_1,
+              expandedLeafId: null,
+              ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty-1' }
+            }
+          },
+          terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-stale' }
+        },
+        hostId
+      )
+
+      expect(
+        store.persistPtyBinding(
+          {
+            worktreeId: 'wt1',
+            tabId: 'tab1',
+            leafId: TEST_LEAF_1,
+            ptyId: 'pty-1',
+            incarnationId: 'inc-live',
+            expectedBinding: { ptyId: 'pty-1', incarnationId: 'inc-stale' }
+          },
+          hostId
+        )
+      ).toBe(true)
+
+      const rendererSnapshot = structuredClone(store.getWorkspaceSession(hostId))
+      delete rendererSnapshot.terminalPtyIncarnationsByPaneKey
+      delete rendererSnapshot.terminalTopologyRevisionByRepoId
+      store.setWorkspaceSession(rendererSnapshot, hostId)
+
+      expect(store.getWorkspaceSession(hostId).terminalPtyIncarnationsByPaneKey?.[paneKey]).toBe(
+        'inc-live'
+      )
+      const reloaded = await createStore()
+      expect(reloaded.getWorkspaceSession(hostId).terminalPtyIncarnationsByPaneKey?.[paneKey]).toBe(
+        'inc-live'
+      )
+    }
+  )
+
+  it('rolls back incarnation reconciliation when the durability barrier fails', async () => {
+    const store = await createStore()
+    const paneKey = `tab1:${TEST_LEAF_1}`
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty-1' })]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty-1' }
+        }
+      },
+      terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-stale' }
+    })
+    vi.spyOn(store, 'flushOrThrow').mockImplementationOnce(() => {
+      throw new Error('disk full')
+    })
+
+    expect(() =>
+      store.persistPtyBinding({
+        worktreeId: 'wt1',
+        tabId: 'tab1',
+        leafId: TEST_LEAF_1,
+        ptyId: 'pty-1',
+        incarnationId: 'inc-live',
+        expectedBinding: { ptyId: 'pty-1', incarnationId: 'inc-stale' }
+      })
+    ).toThrow('disk full')
+    expect(store.getWorkspaceSession().terminalPtyIncarnationsByPaneKey?.[paneKey]).toBe(
+      'inc-stale'
+    )
+  })
+
   it('adds a missing split leaf to the durable root when a new pane spawns before layout debounce', async () => {
     const store = await createStore()
     store.setWorkspaceSession({

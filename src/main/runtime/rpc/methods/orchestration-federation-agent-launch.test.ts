@@ -61,7 +61,9 @@ describe('federated worker agent launch', () => {
         taskSpec: 'remote cursor worker',
         protocolVersion: 1,
         worktree: 'id:repo::remote-worktree',
-        agent: 'cursor'
+        agent: 'cursor',
+        model: 'gpt-5.3-codex',
+        effort: 'high'
       }),
       {
         runtime,
@@ -72,14 +74,28 @@ describe('federated worker agent launch', () => {
           payloadHash: 'remote_payload'
         }
       }
-    )) as { state: string; failedStage?: string; lastError?: string }
+    )) as {
+      state: string
+      failedStage?: string
+      lastError?: string
+      launch: unknown
+    }
 
     // Why: assert the worker actually reached ready — a spy-only assertion would
     // stay green even if every stage after terminal_create regressed.
-    expect(result).toMatchObject({ state: 'ready' })
+    expect(result).toMatchObject({
+      state: 'ready',
+      launch: {
+        requested: { agent: 'cursor', model: 'gpt-5.3-codex', effort: 'high' },
+        effective: { agent: 'cursor', model: 'gpt-5.3-codex', effort: 'high' }
+      }
+    })
     expect(createTerminal).toHaveBeenCalledWith(
       'id:repo::remote-worktree',
-      expect.objectContaining({ startupAgent: 'cursor' })
+      expect.objectContaining({
+        startupAgent: 'cursor',
+        launchPreferences: { model: 'gpt-5.3-codex', effort: 'high' }
+      })
     )
     expect(createTerminal).toHaveBeenCalledWith(
       'id:repo::remote-worktree',

@@ -8,8 +8,8 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
 import type { OrchestrationEnvironmentTransport } from '../../orchestration/environment-transport'
 import { RpcDispatcher } from '../dispatcher'
-import type { RpcRequest } from '../core'
 import { ORCHESTRATION_METHODS } from './orchestration'
+import { createFederationWorkerStartRequest as startRequest } from './orchestration-federation-test-request'
 
 describe('orchestration federation', () => {
   const databases: OrchestrationDb[] = []
@@ -95,26 +95,6 @@ describe('orchestration federation', () => {
       coordinatorPaneKey: 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
     })
     return homeDb.createTask({ spec: 'Audit Windows behavior', runId: run.id })
-  }
-
-  function startRequest(taskId: string, overrides: Record<string, unknown> = {}): RpcRequest {
-    return {
-      id: 'rpc_worker_start',
-      authToken: 'coordinator-token',
-      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-      orchestrationRequestId: 'request_windows_worker',
-      method: 'orchestration.workerStart',
-      params: {
-        task: taskId,
-        from: 'term_coord',
-        on: 'windows',
-        worktree: 'new-top-level',
-        repo: 'id:windows-repo',
-        name: 'windows-audit',
-        agent: 'codex',
-        ...overrides
-      }
-    }
   }
 
   function configureWorkerRuntime(runtime: OrcaRuntimeService): void {
@@ -228,6 +208,25 @@ describe('orchestration federation', () => {
       'term_windows_worker',
       expect.stringContaining(`Your task ID is: ${task.id}`)
     )
+  })
+
+  it('does not report remotely rejected preferences as effective', async () => {
+    const task = createHomeTask()
+
+    const response = await homeDispatcher.dispatch(
+      startRequest(task.id, { agent: 'grok', model: 'unsupported-model' })
+    )
+
+    expect(response).toMatchObject({
+      ok: true,
+      result: {
+        state: 'failed',
+        launch: {
+          requested: { agent: 'grok', model: 'unsupported-model', effort: null },
+          effective: null
+        }
+      }
+    })
   })
 
   it('preserves wait-for-setup gating on the connected worker server', async () => {

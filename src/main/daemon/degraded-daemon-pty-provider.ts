@@ -14,12 +14,11 @@ import type {
 import {
   adoptOwningProvider,
   attachDaemonOwnedSession,
-  discoverDegradedDaemonSessions,
   findDaemonAdapter,
   listProviderSessionIds
 } from './degraded-daemon-session-routing'
-import { probePtyOwners } from './daemon-pty-liveness-probe'
 import { DegradedDaemonFreshSpawnRouter } from './degraded-daemon-fresh-spawn-routing'
+import { DegradedDaemonOwnerRecovery } from './degraded-daemon-owner-recovery'
 
 export class DegradedDaemonPtyProvider implements IPtyProvider {
   readonly isDegraded = true
@@ -29,6 +28,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   private fallback: IPtyProvider
   private sessionProviders = new Map<string, IPtyProvider>()
   private freshSpawns: DegradedDaemonFreshSpawnRouter
+  private ownerRecovery: DegradedDaemonOwnerRecovery
   private unsubscribers: (() => void)[] = []
   private dataListeners: ((payload: PtyDataEvent) => void)[] = []
   private exitListeners: ((payload: { id: string; code: number }) => void)[] = []
@@ -48,26 +48,27 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
       this.sessionProviders,
       opts.probeCurrentDaemonSpawn ?? null
     )
+    this.ownerRecovery = new DegradedDaemonOwnerRecovery(
+      this.allProviders(),
+      this.allDaemonAdapters(),
+      this.sessionProviders,
+      (spawnOpts) => this.freshSpawns.spawn(spawnOpts)
+    )
 
     for (const provider of this.allProviders()) {
       this.unsubscribers.push(
-        provider.onData((payload) => {
-          for (const listener of this.dataListeners) {
-            listener(payload)
-          }
-        }),
+        provider.onData((payload) => this.dataListeners.forEach((listener) => listener(payload))),
         provider.onExit((payload) => {
-          this.sessionProviders.delete(payload.id)
-          for (const listener of this.exitListeners) {
-            listener(payload)
-          }
+          this.ownerRecovery.forgetRoute(payload.id)
+          this.exitListeners.forEach((listener) => listener(payload))
         })
       )
     }
+    this.unsubscribers.push(...this.ownerRecovery.subscribeIdentityChanges())
   }
 
-  discoverDaemonSessions(): Promise<void> {
-    return discoverDegradedDaemonSessions(this.allDaemonAdapters(), this.sessionProviders)
+  async discoverDaemonSessions(): Promise<void> {
+    await this.ownerRecovery.discoverRoutes()
   }
 
   get routesFreshSpawnsToLocalProvider(): true | undefined {
@@ -82,7 +83,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   canProvideAuthoritativeBufferSnapshot = (id: string): boolean =>
     this.freshSpawns.canProvideSnapshot(id)
 
-  spawn = (opts: PtySpawnOptions): Promise<PtySpawnResult> => this.freshSpawns.spawn(opts)
+  spawn = (opts: PtySpawnOptions): Promise<PtySpawnResult> => this.ownerRecovery.spawn(opts)
 
   // Why refuse the fallback route (unknown ids resolve to it): see attachDaemonOwnedSession.
   attach = (id: string): Promise<void> =>
@@ -94,7 +95,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   }
 
   async probePtyLiveness(id: string): Promise<boolean | null> {
-    return await probePtyOwners(id, this.sessionProviders.get(id), this.allDaemonAdapters())
+    return await this.ownerRecovery.probe(id)
   }
 
   // Why: an unknown id cannot borrow listing authority from the fresh-spawn provider.
@@ -275,20 +276,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     alive: string[]
     killed: string[]
   }> {
-    const alive: string[] = []
-    const killed: string[] = []
-    for (const adapter of this.allDaemonAdapters()) {
-      const result = await adapter.reconcileOnStartup(validWorktreeIds)
-      for (const id of result.alive) {
-        alive.push(id)
-        this.sessionProviders.set(id, adapter)
-      }
-      for (const id of result.killed) {
-        killed.push(id)
-        this.sessionProviders.delete(id)
-      }
-    }
-    return { alive, killed }
+    return await this.ownerRecovery.reconcileOnStartup(validWorktreeIds)
   }
 
   dispose(): void {
