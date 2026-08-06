@@ -115,6 +115,7 @@ import {
   queuePanePtyResizeIfHeld,
   type PanePtyResizeHoldFlushDetail
 } from '@/lib/pane-manager/pane-pty-resize-hold'
+import { CSI_SEQUENCE_PATTERN } from '../../../../shared/ansi-escape-sequences'
 import {
   buildPostReplayLiveAgentReattachReset,
   POST_REPLAY_LIVE_AGENT_SNAPSHOT_RESET,
@@ -469,33 +470,22 @@ function terminalOwnsDomFocus(terminal: TerminalWithFocusMode): boolean {
   return document.activeElement === terminal.textarea
 }
 
-function stripAnsiCsiSequences(data: string): string {
-  let normalized = ''
-  let index = 0
-  while (index < data.length) {
-    if (data.charCodeAt(index) === 0x1b && data[index + 1] === '[') {
-      index += 2
-      while (index < data.length) {
-        const code = data.charCodeAt(index)
-        index += 1
-        if (code >= 0x40 && code <= 0x7e) {
-          break
-        }
-      }
-      continue
-    }
-    normalized += data[index]
-    index += 1
-  }
-  return normalized
-}
-
 const CURSOR_AGENT_REATTACH_HEADER = 'Cursor Agent'
 const CURSOR_AGENT_REATTACH_INPUT_MARKER = '→'
 const CURSOR_AGENT_REATTACH_SCREEN_SIGNAL_MAX_CHARS = 5000
+// Why bounded: reattach payloads reach multiple MB, but every replay puts the current screen last
+// and only the header nearest the end matters. 256KB clears even a fully SGR-styled frame by ~2x,
+// so the cut only ever drops stale scrollback — which would have been rejected anyway.
+const CURSOR_AGENT_REATTACH_SCAN_TAIL_LIMIT_CHARS = 256 * 1024
 
 function hasCursorAgentReattachPayloadScreenSignal(data: string): boolean {
-  const normalized = stripAnsiCsiSequences(data)
+  const tail =
+    data.length > CURSOR_AGENT_REATTACH_SCAN_TAIL_LIMIT_CHARS
+      ? data.slice(-CURSOR_AGENT_REATTACH_SCAN_TAIL_LIMIT_CHARS)
+      : data
+  // Why CSI only: OSC-carried titles must keep counting as a header occurrence, as they did when
+  // this stripped CSI by hand.
+  const normalized = tail.replace(CSI_SEQUENCE_PATTERN, '')
   // Why: anchor on the LAST header occurrence — replay buffers keep scrollback,
   // and an earlier finished run must not classify the current screen.
   const headerIndex = normalized.lastIndexOf(CURSOR_AGENT_REATTACH_HEADER)

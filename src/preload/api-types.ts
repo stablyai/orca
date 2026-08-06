@@ -35,6 +35,8 @@ import type { ReadClipboardTextOptions } from '../shared/clipboard-text'
 import type { AppIdentity } from '../shared/app-identity'
 import type { ReleaseChannel } from '../shared/release-channel'
 import type {
+  ForgetRemovedWorktreesForExecutionHostArgs,
+  ForgetRemovedWorktreesForExecutionHostResult,
   HostQualifiedKnownWorktreeResult,
   HostQualifiedDetectedWorktreeResult,
   LegacyDetectedWorktreeRequest,
@@ -1415,6 +1417,10 @@ export type PreloadApi = {
     listKnownForExecutionHost?: (
       args: ListKnownWorktreesForExecutionHostArgs
     ) => Promise<HostQualifiedKnownWorktreeResult>
+    /** Retires the persisted metadata an authoritative scan proved gone, so it stops feeding the read above. */
+    forgetRemovedForExecutionHost?: (
+      args: ForgetRemovedWorktreesForExecutionHostArgs
+    ) => Promise<ForgetRemovedWorktreesForExecutionHostResult>
     cancelListDetected?: (args: { providerRequestId: ProviderRequestId }) => Promise<void>
     listAll: () => Promise<Worktree[]>
     create: (args: CreateWorktreeArgs) => Promise<CreateWorktreeResult>

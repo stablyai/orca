@@ -774,6 +774,9 @@ const api = {
     listKnownForExecutionHost: (args) =>
       ipcRenderer.invoke('worktrees:listKnownForExecutionHost', args),
 
+    forgetRemovedForExecutionHost: (args) =>
+      ipcRenderer.invoke('worktrees:forgetRemovedForExecutionHost', args),
+
     cancelListDetected: (args) => ipcRenderer.invoke('worktrees:cancelListDetected', args),
 
     listAll: () => ipcRenderer.invoke('worktrees:listAll'),
