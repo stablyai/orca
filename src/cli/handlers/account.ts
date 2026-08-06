@@ -22,45 +22,24 @@ import {
   WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL
 } from '../../shared/windows-batch-spawn'
 import { ACCOUNT_IMPORT_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
-import type { RuntimeStatus } from '../../shared/runtime-types'
+import type {
+  RuntimeAccountProvider,
+  RuntimeAccountsSnapshot,
+  RuntimeStatus
+} from '../../shared/runtime-types'
 import type { ClaudeRateLimitAccountsState, CodexRateLimitAccountsState } from '../../shared/types'
+import { getRequiredStringFlag } from '../flags'
+import {
+  formatAccountRemoveResult,
+  formatAccountSelectResult,
+  formatAccountsBlock,
+  formatAccountsList
+} from '../accounts-format'
+import { addAccountRemote } from './account-remote-login'
 import {
   type InteractiveLoginSession,
   withInteractiveLoginCleanup
 } from './interactive-login-interruption'
-
-// Why: add returns just that provider's state; list returns the full snapshot.
-type AccountsListSnapshot = {
-  claude: ClaudeRateLimitAccountsState
-  codex: CodexRateLimitAccountsState
-}
-
-// Why: Claude and Codex managed-account summaries both carry id+email+active id,
-// so one formatter renders either provider's block.
-type AccountsBlock = {
-  accounts: readonly { id: string; email: string }[]
-  activeAccountId: string | null
-  activeAccountIdsByRuntime?: {
-    host: string | null
-    wsl: Record<string, string | null>
-  }
-}
-
-/** Renders a provider's managed-account list as a human-readable block, marking the active account. */
-function formatAccountsBlock(label: string, block: AccountsBlock): string {
-  if (block.accounts.length === 0) {
-    return `No managed ${label} accounts.`
-  }
-  const activeAccountIds = new Set([
-    block.activeAccountId,
-    block.activeAccountIdsByRuntime?.host,
-    ...Object.values(block.activeAccountIdsByRuntime?.wsl ?? {})
-  ])
-  const lines = block.accounts.map(
-    (account) => `  ${account.email}${activeAccountIds.has(account.id) ? ' (active)' : ''}`
-  )
-  return `Managed ${label} accounts (${block.accounts.length}):\n${lines.join('\n')}`
-}
 
 function addAgentNodePaths(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const pathKey =
@@ -252,24 +231,6 @@ async function addCodexAccount({ client, json }: HandlerContext): Promise<void> 
   printResult(result, json, (state) => formatAccountsBlock('Codex', state))
 }
 
-/**
- * Rejects the runtime-selector flags instead of ignoring them. shouldIgnoreRemoteSelection
- * pins account commands to the local runtime, so honoring `--environment homelab`
- * silently would target the laptop rather than the host the user named — the exact
- * mistake this feature exists to avoid. A `--help` note does not reach someone who
- * already typed the flag.
- */
-function rejectRemoteSelectionFlags(ctx: HandlerContext, command: string): void {
-  for (const flag of ['environment', 'pairing-code']) {
-    if (ctx.flags.has(flag)) {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        `\`--${flag}\` does not retarget \`${command}\`. Run it on the host whose accounts you want to manage.`
-      )
-    }
-  }
-}
-
 async function assertAccountImportSupported({ client }: HandlerContext): Promise<void> {
   const status = await client.call<RuntimeStatus>('status.get')
   if (!status.result.capabilities?.includes(ACCOUNT_IMPORT_RUNTIME_CAPABILITY)) {
@@ -280,44 +241,86 @@ async function assertAccountImportSupported({ client }: HandlerContext): Promise
   }
 }
 
-/** CLI handlers for `orca account add [--agent claude|codex]` and `orca account list`. */
+/**
+ * Reads and validates `--agent`. A valueless `--agent` parses as boolean
+ * true; defaulting or accepting it would silently run a full OAuth login (or
+ * RPC) for a provider the user did not ask for, so it is rejected instead.
+ */
+function getAgentFlag(flags: Map<string, string | boolean>): RuntimeAccountProvider | undefined {
+  const value = flags.get('agent')
+  if (value === undefined) {
+    return undefined
+  }
+  if (typeof value !== 'string') {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      'Missing a value for --agent. Use `--agent claude` or `--agent codex`.'
+    )
+  }
+  if (value !== 'claude' && value !== 'codex') {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `Unsupported --agent "${value}". Use "claude" or "codex".`
+    )
+  }
+  return value
+}
+
+function requireAgentFlag(flags: Map<string, string | boolean>): RuntimeAccountProvider {
+  const agent = getAgentFlag(flags)
+  if (!agent) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      'Missing required --agent. Use `--agent claude` or `--agent codex`.'
+    )
+  }
+  return agent
+}
+
+/** CLI handlers for `orca account add|list|select|rm [--agent claude|codex]`. */
 export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
   'account add': async (ctx) => {
-    const agentFlag = ctx.flags.get('agent')
-    // Why: a valueless `--agent` parses as boolean true; defaulting it to claude
-    // would silently run a full OAuth login for the provider the user did not ask for.
-    if (agentFlag !== undefined && typeof agentFlag !== 'string') {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        'Missing a value for --agent. Use `--agent claude` or `--agent codex`.'
-      )
+    const agent = getAgentFlag(ctx.flags) ?? 'claude'
+    // Why: main's import RPCs take a filesystem path that only resolves on
+    // this CLI's own machine, so a runtime-selector flag means the user wants
+    // the login to happen on the remote runtime host instead — the PR's
+    // server-side login (accounts.addCodex/addClaude) is the only flow that
+    // can honor that.
+    if (ctx.flags.has('environment') || ctx.flags.has('pairing-code')) {
+      await addAccountRemote(ctx.client, agent, ctx.json)
+      return
     }
-    const agent = agentFlag ?? 'claude'
-    if (agent !== 'claude' && agent !== 'codex') {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        `Unsupported --agent "${agent}". Use "claude" or "codex".`
-      )
-    }
-    rejectRemoteSelectionFlags(ctx, 'orca account add')
     // Why: fail on runtime version skew before burning a full OAuth round trip.
     await assertAccountImportSupported(ctx)
     await ctx.client.call('accounts.list', { refreshUsage: false })
     await (agent === 'claude' ? addClaudeAccount(ctx) : addCodexAccount(ctx))
   },
   'account list': async (ctx) => {
-    rejectRemoteSelectionFlags(ctx, 'orca account list')
+    const agent = getAgentFlag(ctx.flags)
     const { client, json } = ctx
-    // Why: this command renders no usage numbers, so skip the forced provider
-    // refresh — it is one serial network round-trip per managed account.
-    const result = await client.call<AccountsListSnapshot>('accounts.list', {
-      refreshUsage: false
+    // Why: this now renders usage numbers, so it needs the forced refresh
+    // (unlike the pre-consolidation local-only listing).
+    const result = await client.call<RuntimeAccountsSnapshot>('accounts.list', {
+      refreshUsage: true
     })
-    printResult(
-      result,
-      json,
-      (snapshot) =>
-        `${formatAccountsBlock('Claude', snapshot.claude)}\n\n${formatAccountsBlock('Codex', snapshot.codex)}`
+    printResult(result, json, (snapshot) => formatAccountsList(snapshot, agent))
+  },
+  'account select': async ({ flags, client, json }) => {
+    const agent = requireAgentFlag(flags)
+    const accountId = getRequiredStringFlag(flags, 'id')
+    const result = await client.call<CodexRateLimitAccountsState | ClaudeRateLimitAccountsState>(
+      agent === 'codex' ? 'accounts.selectCodex' : 'accounts.selectClaude',
+      { accountId }
     )
+    printResult(result, json, (state) => formatAccountSelectResult(agent, state))
+  },
+  'account rm': async ({ flags, client, json }) => {
+    const agent = requireAgentFlag(flags)
+    const accountId = getRequiredStringFlag(flags, 'id')
+    const result = await client.call<CodexRateLimitAccountsState | ClaudeRateLimitAccountsState>(
+      agent === 'codex' ? 'accounts.removeCodex' : 'accounts.removeClaude',
+      { accountId }
+    )
+    printResult(result, json, (state) => formatAccountRemoveResult(agent, state))
   }
 }

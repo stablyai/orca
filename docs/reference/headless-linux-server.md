@@ -318,58 +318,51 @@ depend on an interactive shell profile.
 
 ## Managing Agent Accounts
 
-Use the `accounts` commands to manage the Codex and Claude accounts a headless
+Use the `account` commands to manage the Codex and Claude accounts a headless
 server signs agents in with. They work the same way whether you run the
 AppImage directly or a separately installed CLI:
 
 ```bash
-/opt/orca/orca-linux.AppImage accounts list --json
-/opt/orca/orca-linux.AppImage accounts add --provider codex
-/opt/orca/orca-linux.AppImage accounts add --provider claude --json
-/opt/orca/orca-linux.AppImage accounts select --provider codex --id <accountId>
-/opt/orca/orca-linux.AppImage accounts rm --provider claude --id <accountId>
+/opt/orca/orca-linux.AppImage account list --json
+/opt/orca/orca-linux.AppImage account add --agent codex
+/opt/orca/orca-linux.AppImage account add --agent claude --json
+/opt/orca/orca-linux.AppImage account select --agent codex --id <accountId>
+/opt/orca/orca-linux.AppImage account rm --agent claude --id <accountId>
 ```
 
-`accounts list` shows every managed account per provider, which one is active,
-and its rate-limit usage when the server has already fetched it.
+`--agent` names the account provider — `claude` or `codex` (default
+`claude`) — not a coding agent to act on. `account rm` is the canonical verb;
+`account remove` stays available as an alias.
 
-`accounts add` runs the provider's login on the server and streams its raw
-output to your terminal live. For Codex, that login is `codex login
---device-auth` (OAuth device-code authorization) rather than plain `codex
-login`: plain `codex login` starts a local OAuth callback server bound to the
-headless machine's `localhost`, so completing sign-in in a browser on a
-*different* device can never redirect back to it — the login would hang until
-timeout. Device-code auth has no local callback server at all; the terminal
-shows a static URL (open it on any device) and a short one-time code (valid
-about 15 minutes) to enter there, and Codex polls a remote endpoint until you
-approve it. Because that code can take up to 15 minutes to use, `accounts add`
-now waits up to about 16 minutes for Codex before timing out.
+`account list` shows every managed account per agent, which one is active,
+and its rate-limit/usage state. On a cold server the first call can take a
+few seconds while usage is fetched for each account; an account whose usage
+hasn't arrived yet shows as still loading rather than as 0%.
 
-Claude's login (`claude auth login --claudeai`) has no equivalent device-code
-flag today: it prints a real login URL (safe to open on any device) but then
-blocks waiting for you to paste back the code that page shows, on the same
-terminal running the login. For a headless server that terminal is the
-server process, not yours, so `orca accounts add --provider claude` detects
-that "Paste code here if prompted" prompt in the streamed output and
-interactively prompts you (in your own terminal) to paste the code once it
-appears, then forwards it to the server automatically — this works the same
-whether you're running the CLI locally on the same host as `orca serve` or
-remotely (e.g. over SSH or `--environment`/pairing). This means `accounts add
---provider claude` is **not** fully non-interactive even with `--json`: it
-still needs to read the pasted code from your terminal's stdin, though
-`--json` keeps stdout as clean JSON and routes the prompt itself to stderr.
-Because pasting the code back can take a while, `accounts add` now waits up
-to about 16 minutes for Claude before timing out, the same budget as Codex.
+`account add` has two different flows, depending on where the login runs:
 
-`--json` mode suppresses the live stdout stream and prints one final JSON
-result once the login settles, with the detected login URL included — but the
-login URL and (for Codex) one-time code are also announced on stderr as soon
-as they're detected, so you don't have to wait for completion to see them.
+- **On the server** — run it locally, or over SSH, with no `--environment`
+  or `--pairing-code`: the real provider login runs attached to your
+  terminal — `claude auth login --claudeai` for Claude, `codex login
+  --device-auth` for Codex — into a temporary config directory, and the
+  captured credentials are then registered with the local Orca runtime.
+  Codex uses device authorization specifically so the browser step can be
+  completed from a different machine: it prints a static URL and a
+  short-lived one-time code instead of binding a localhost OAuth callback a
+  remote browser could never reach. Claude's CLI polls Anthropic's OAuth
+  backend on its own and usually completes within seconds of authorizing in
+  any browser; its "paste the code" prompt is a rare fallback, not the
+  expected path.
+- **Targeting a remote host** — with `--environment <name>` or
+  `--pairing-code`: the login instead runs on the remote Orca host, and its
+  output is streamed back to your terminal, because the local flow's
+  credential import needs a filesystem path that only exists on the machine
+  running the CLI. The Codex device code still carries a real ~15-minute
+  server-side expiry in this mode.
 
-`accounts select` and `accounts rm` take `--provider codex|claude` and `--id
-<accountId>` (from `accounts list --json`) to switch the active account or
-remove one. `accounts rm` is destructive — it permanently deletes the managed
-account's stored credentials.
+`account select` and `account rm` take `--agent claude|codex` and `--id
+<accountId>` (from `account list --json`) to switch the active account or
+remove one.
 
 ## Upgrade
 
@@ -887,6 +880,10 @@ refuse to run there and print the command to run on the machine you want.
   `orca` user and that `/opt/orca` is readable by that user.
 - Clients cannot connect: make sure `--pairing-address` is an address reachable
   from the client, and make sure firewalls allow the selected `--port`.
+- `orca account list` seems slow to return on a busy or cold server: the first
+  call fetches rate-limit usage for every managed account, which can take a
+  few seconds. It no longer drops the connection while doing so — that was a
+  bug fixed in this change — so re-running the command is always safe.
 - Journal shows `Another Orca instance is already running for this userData
   profile` and the unit exits `3`: another process already owns the profile, so
   `RestartPreventExitStatus=3` leaves the unit `failed` on purpose. Find the

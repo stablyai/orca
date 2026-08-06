@@ -19,9 +19,12 @@ export { buildCurrentWorktreeSelector, normalizeWorktreeSelector } from './selec
 
 const COMMAND_PATHS = COMMAND_SPECS.flatMap((spec) => specPaths(spec))
 
+// Why: `account` used to be pinned here too, but its handlers now resolve
+// remote-vs-local themselves (`account add` branches on the flags; list/
+// select/rm are pure RPC), so it must fall through to normal remote
+// resolution below rather than have --environment/--pairing-code suppressed.
 function shouldIgnoreRemoteSelection(commandPath: string[]): boolean {
   return (
-    commandPath[0] === 'account' ||
     commandPath[0] === 'environment' ||
     commandPath[0] === 'serve' ||
     commandPath[0] === 'agent' ||

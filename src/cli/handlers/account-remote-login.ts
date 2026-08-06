@@ -2,20 +2,10 @@ import * as readline from 'node:readline/promises'
 import type {
   RuntimeAccountAddStarted,
   RuntimeAccountPollAddResult,
-  RuntimeAccountProvider,
-  RuntimeAccountsSnapshot
+  RuntimeAccountProvider
 } from '../../shared/runtime-types'
-import type { ClaudeRateLimitAccountsState, CodexRateLimitAccountsState } from '../../shared/types'
-import type { CommandHandler } from '../dispatch'
-import {
-  formatAccountAddResult,
-  formatAccountAddStarted,
-  formatAccountRemoveResult,
-  formatAccountSelectResult,
-  formatAccountsList,
-  printResult
-} from '../format'
-import { getRequiredStringFlag } from '../flags'
+import { formatAccountAddResult, formatAccountAddStarted } from '../accounts-format'
+import { printResult } from '../format'
 import { RuntimeClientError } from '../runtime-client'
 import type { RuntimeClient, RuntimeRpcSuccess } from '../runtime-client'
 
@@ -73,17 +63,6 @@ const PASTE_CODE_PROMPT_PATTERN = /paste code/i
 
 function stripAnsi(text: string): string {
   return text.replace(ANSI_SGR_PATTERN, '').replace(OSC_HYPERLINK_PATTERN, '')
-}
-
-function getProviderFlag(flags: Map<string, string | boolean>): RuntimeAccountProvider {
-  const value = getRequiredStringFlag(flags, 'provider')
-  if (value !== 'codex' && value !== 'claude') {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      `--provider must be codex or claude, got "${value}"`
-    )
-  }
-  return value
 }
 
 function extractLoginUrl(outputTail: string): string | undefined {
@@ -249,7 +228,7 @@ async function pollAccountAdd(
       if (remainingMs <= 0) {
         throw new RuntimeClientError(
           'timeout',
-          `Timed out waiting for the ${provider} login to finish. Run \`orca accounts add --provider ${provider}\` again.`
+          `Timed out waiting for the ${provider} login to finish. Run \`orca account add --agent ${provider}\` again.`
         )
       }
       const pollTimeoutMs = Math.min(POLL_WINDOW_MS, remainingMs)
@@ -329,57 +308,41 @@ async function pollAccountAdd(
   }
 }
 
-export const ACCOUNTS_HANDLERS: Record<string, CommandHandler> = {
-  'accounts list': async ({ client, json }) => {
-    const result = await client.call<RuntimeAccountsSnapshot>('accounts.list')
-    printResult(result, json, formatAccountsList)
-  },
-  'accounts select': async ({ flags, client, json }) => {
-    const provider = getProviderFlag(flags)
-    const accountId = getRequiredStringFlag(flags, 'id')
-    const result = await client.call<CodexRateLimitAccountsState | ClaudeRateLimitAccountsState>(
-      provider === 'codex' ? 'accounts.selectCodex' : 'accounts.selectClaude',
-      { accountId }
-    )
-    printResult(result, json, (state) => formatAccountSelectResult(provider, state))
-  },
-  'accounts rm': async ({ flags, client, json }) => {
-    const provider = getProviderFlag(flags)
-    const accountId = getRequiredStringFlag(flags, 'id')
-    const result = await client.call<CodexRateLimitAccountsState | ClaudeRateLimitAccountsState>(
-      provider === 'codex' ? 'accounts.removeCodex' : 'accounts.removeClaude',
-      { accountId }
-    )
-    printResult(result, json, (state) => formatAccountRemoveResult(provider, state))
-  },
-  'accounts add': async ({ flags, client, json }) => {
-    const provider = getProviderFlag(flags)
-    const started = await client.call<RuntimeAccountAddStarted>(
-      provider === 'codex' ? 'accounts.addCodex' : 'accounts.addClaude',
-      {}
-    )
-    if (!json) {
-      console.log(formatAccountAddStarted(provider, started.result.loginId))
-    }
+/**
+ * Server-side login for `orca account add --environment/--pairing-code`: the
+ * runtime host (not this CLI's machine) runs the actual login, since main's
+ * local import RPCs take a filesystem path that only resolves on this host.
+ */
+export async function addAccountRemote(
+  client: RuntimeClient,
+  agent: RuntimeAccountProvider,
+  json: boolean
+): Promise<void> {
+  const started = await client.call<RuntimeAccountAddStarted>(
+    agent === 'codex' ? 'accounts.addCodex' : 'accounts.addClaude',
+    {}
+  )
+  if (!json) {
+    console.log(formatAccountAddStarted(agent, started.result.loginId))
+  }
 
-    const { response: finalResponse, announcedLoginUrl } = await pollAccountAdd(
-      client,
-      provider,
-      started.result.loginId,
-      json
-    )
-    const loginUrl = extractLoginUrl(finalResponse.result.outputTail)
-    const augmentedResponse: RuntimeRpcSuccess<RuntimeAccountPollAddResult> = {
-      ...finalResponse,
-      result: { ...finalResponse.result, ...(loginUrl ? { loginUrl } : {}) }
-    }
-    // Why: JSON output always carries loginUrl; only the human-readable summary
-    // omits it when the live poll already announced it, to avoid printing it twice.
-    printResult(augmentedResponse, json, (result) =>
-      formatAccountAddResult(result, { omitLoginUrl: announcedLoginUrl })
-    )
-    if (finalResponse.result.status === 'failed') {
-      process.exitCode = 1
-    }
+  const { response: finalResponse, announcedLoginUrl } = await pollAccountAdd(
+    client,
+    agent,
+    started.result.loginId,
+    json
+  )
+  const loginUrl = extractLoginUrl(finalResponse.result.outputTail)
+  const augmentedResponse: RuntimeRpcSuccess<RuntimeAccountPollAddResult> = {
+    ...finalResponse,
+    result: { ...finalResponse.result, ...(loginUrl ? { loginUrl } : {}) }
+  }
+  // Why: JSON output always carries loginUrl; only the human-readable summary
+  // omits it when the live poll already announced it, to avoid printing it twice.
+  printResult(augmentedResponse, json, (result) =>
+    formatAccountAddResult(result, { omitLoginUrl: announcedLoginUrl })
+  )
+  if (finalResponse.result.status === 'failed') {
+    process.exitCode = 1
   }
 }
