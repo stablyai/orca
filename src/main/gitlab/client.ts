@@ -404,6 +404,17 @@ function mrListStateFlags(state: MRListState): string[] {
   }
 }
 
+// Why: glab/GitLab can return a JSON object (error body, redirect page) instead of a list on
+// exit 0; catching that as a plain TypeError from `.map` hides what actually came back.
+function asJsonArray(parsed: unknown, context: string): unknown[] {
+  if (!Array.isArray(parsed)) {
+    throw new Error(
+      `GitLab API returned an unexpected ${context} response: ${JSON.stringify(parsed).slice(0, 300)}`
+    )
+  }
+  return parsed
+}
+
 /** List merge requests for a project via glab CLI, which handles self-hosted auth and project selection. */
 export async function listMergeRequests(
   repoPath: string,
@@ -464,7 +475,10 @@ export async function listMergeRequests(
         ],
         glabRepoExecOptions(repoPath, connectionId, localGitOptions)
       )
-      const data = JSON.parse(stdout) as Parameters<typeof mapMRToWorkItem>[0][]
+      const data = asJsonArray(
+        JSON.parse(stdout),
+        'merge requests'
+      ) as Parameters<typeof mapMRToWorkItem>[0][]
       return {
         items: data.map((d) => mapMRToWorkItem(d, 'unknown')),
         page,
@@ -501,7 +515,10 @@ export async function listMergeRequests(
       [...glabHostnameArgs(projectRef, connectionId), path],
       glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
-    const data = JSON.parse(body) as Parameters<typeof mapMRToWorkItem>[0][]
+    const data = asJsonArray(
+      JSON.parse(body),
+      'merge requests'
+    ) as Parameters<typeof mapMRToWorkItem>[0][]
     return {
       items: data.map((d) => mapMRToWorkItem(d, repoId, projectRef)),
       page,
@@ -684,7 +701,10 @@ export async function fetchIssuesAsWorkItems(
       ],
       glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
-    const data = JSON.parse(stdout) as Parameters<typeof mapIssueToWorkItem>[0][]
+    const data = asJsonArray(
+      JSON.parse(stdout),
+      'issues'
+    ) as Parameters<typeof mapIssueToWorkItem>[0][]
     return {
       items: data.map((d) => mapIssueToWorkItem(d, projectRef.path, projectRef)),
       error: undefined

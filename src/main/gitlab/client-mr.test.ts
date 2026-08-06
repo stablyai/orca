@@ -899,6 +899,16 @@ describe('gitlab client — MR operations', () => {
       expect(result.error?.type).toBe('permission_denied')
       expect(result.items).toEqual([])
     })
+
+    it('surfaces a readable error instead of crashing when the API returns a non-array body', async () => {
+      glabApiWithHeadersMock.mockResolvedValueOnce({
+        body: JSON.stringify({ data: [], total: 0 }),
+        headers: {}
+      })
+      const result = await listMergeRequests('/repo', 'opened')
+      expect(result.items).toEqual([])
+      expect(result.error?.message).toContain('"data":[]')
+    })
   })
 
   describe('updateMR', () => {
