@@ -187,7 +187,7 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): Reac
           disabled={!canAdvance}
         >
           <Text style={[styles.nextText, !canAdvance && styles.nextTextDisabled]}>
-            {isLast ? 'Send answer' : 'Next'}
+            {isLast ? 'Submit' : 'Next'}
           </Text>
         </Pressable>
       </View>

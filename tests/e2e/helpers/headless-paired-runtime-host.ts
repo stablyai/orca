@@ -201,8 +201,7 @@ export async function launchHeadlessPairedRuntimeHost(): Promise<HeadlessPairedR
         ORCA_E2E_HEADLESS: '1'
       },
       extraEnv: {},
-      userDataDir,
-      codexRealHomeEnabled: false
+      userDataDir
     })
     const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
     app = await electron.launch({

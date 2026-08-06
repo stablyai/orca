@@ -111,6 +111,7 @@ function createFakeRelay(): FakeRelay {
         ? (params.resume as { ownerGeneration: number }).ownerGeneration + 1
         : 1,
     ownerLease: 'test-owner-lease',
+    resumed: params.resume !== undefined,
     capabilities: {
       outputFlowControl: { version: 1, windowSu: DEFAULT_PTY_SOURCE_WINDOW_SU }
     }

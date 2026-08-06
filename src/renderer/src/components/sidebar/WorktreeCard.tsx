@@ -26,6 +26,7 @@ import { LinearAgentSkillSetupPrompt } from './LinearAgentSkillSetupPrompt'
 import WorktreeCardAgents from './WorktreeCardAgents'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
 import { WorktreeCardStatusSlot } from './WorktreeCardStatusSlot'
+import { WorktreeCardReviewStatus } from './WorktreeCardReviewStatus'
 import { cn } from '@/lib/utils'
 import { WorktreeCardSshHostControl } from './WorktreeCardSshHostControl'
 import { activateWorktreeFromSidebar } from '@/lib/sidebar-worktree-activation'
@@ -1207,11 +1208,13 @@ const WorktreeCard = React.memo(function WorktreeCard({
     !!conflictOperation && conflictOperation !== 'unknown' && conflictOperation !== 'rebase'
   const hasMetadataBadge = showConflictOperationBadge
   const showUnreadQuickAction = !affiliateListMode && showStatus && !newCardStyle
-  // Why: the slot owns the unread/status lane; legacy keeps the bell toggle, the new card keeps the glyph passive.
+  // Why: the slot owns activity and unread; review/check state has its own title-row indicator.
   const showCombinedStatusSlot = showStatus
+  const showReviewStatus = newCardStyle && showStatus && statusLaneReview !== null
   const showTitleRowPrimary = compactCards && worktree.isMainWorktree && !isFolder
   const showMetaRowDetails = !newCardStyle && !compactCards && (hasDetails || hasPorts)
-  const showTitleRowIndicators = (newCardStyle || compactCards) && (hasDetails || hasPorts)
+  const showTitleRowIndicators =
+    (newCardStyle || compactCards) && (hasDetails || hasPorts || showReviewStatus)
   // Why: grouped views can hide the repo badge; don't reserve a blank metadata lane unless there's real content.
   const hasDetailedMetaRowContent = Boolean(
     (showRepoBadgeInMetaRow && repo) ||
@@ -1370,7 +1373,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
       detailsAndPortsContent
     )
   const titleRowIndicators = showTitleRowIndicators ? (
-    <div className="ml-auto flex shrink-0 items-center gap-1 pr-1.5">{detailsAndPorts}</div>
+    <div className="ml-auto flex shrink-0 items-center gap-1 pr-1.5">
+      {showReviewStatus && statusLaneReview ? (
+        <WorktreeCardReviewStatus review={statusLaneReview} />
+      ) : null}
+      {detailsAndPorts}
+    </div>
   ) : null
   const hasSecondaryCardContent =
     hasMetaRow || !!remoteBranchConflict || showInlineAgentList || showLineageChildChip
@@ -1404,9 +1412,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
             unreadTooltip={unreadTooltip}
             onPointerDown={stopQuickActionPointerPropagation}
             onToggleUnread={handleToggleUnreadQuick}
-            prDisplay={statusLaneReview}
             newCardStyle={newCardStyle}
-            hasBranchIdentity={Boolean(branchIdentityDisplay)}
+            hasBranchIdentity={hasPathIdentityEnabled && Boolean(branchIdentityDisplay)}
           />
         </div>
       ) : null}

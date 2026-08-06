@@ -2,6 +2,8 @@ import { translate } from '@/i18n/i18n'
 const SSH_PREFIX = 'SSH connection is not active'
 // Produced by pty-connection.ts reportError() when a PTY reattach can't reach its SSH host.
 const SSH_CONNECT_FAILURE_PREFIX = 'SSH connection failed'
+// Matched with includes(): this arrives IPC-wrapped ("Error invoking remote method 'pty:…': Error: …").
+const SSH_RELAY_LOST_MARKER = 'SSH connection lost, reconnecting'
 const STALE_NODE_PTY_DAEMON_MARKERS = [
   "Daemon's node-pty install is gone",
   'node-pty: posix_spawn failed: ENOENT'
@@ -12,12 +14,16 @@ const STALE_DAEMON_CWD_MARKERS = [
 ]
 
 function isSshError(error: string): boolean {
-  return error.startsWith(SSH_PREFIX)
+  return error.startsWith(SSH_PREFIX) || error.includes(SSH_RELAY_LOST_MARKER)
 }
 
 /** A single error line the SSH reconnect banner already covers — hide instead of stacking under/over it. */
 export function isSshReconnectOwnedTerminalError(error: string): boolean {
-  return error.startsWith(SSH_CONNECT_FAILURE_PREFIX) || error.startsWith(SSH_PREFIX)
+  return (
+    error.startsWith(SSH_CONNECT_FAILURE_PREFIX) ||
+    error.startsWith(SSH_PREFIX) ||
+    error.includes(SSH_RELAY_LOST_MARKER)
+  )
 }
 
 // Why: onPtyError aggregates errors into one newline-joined string, so classify per line —

@@ -321,6 +321,7 @@ Browser Options:
   --page <id>               Stable browser page id (preferred for concurrent workflows)
   --profile <id>            Browser profile id
   --show-profile            Include the tab's browser profile in text output
+  --no-ua-spoof             Keep Electron's native user agent for a new profile
   --format <png|jpeg>       Screenshot image format
   --from <ref>              Drag source element ref
   --to <ref>                Drag target element ref
@@ -616,6 +617,7 @@ export function formatFlagHelp(flag: string): string {
     page: '--page <id>            Stable browser page id from `orca tab list --json`',
     profile: '--profile <id>        Browser profile id',
     'show-profile': '--show-profile        Include tab profile in text output',
+    'no-ua-spoof': "--no-ua-spoof         Keep Electron's native user agent",
     format: '--format <png|jpeg>    Screenshot image format'
   }
 

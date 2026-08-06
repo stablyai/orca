@@ -1,3 +1,4 @@
+import type { TabActivationIntent } from '../../../src/shared/tab-activation-intent'
 import type { RpcClient } from '../transport/rpc-client'
 import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import type { RpcResponse } from '../transport/types'
@@ -15,6 +16,8 @@ type MobileSessionTabActivationParams = {
   leafId?: string
   notifyClients: false
   navigation: 'caller'
+  /** Required so each call site declares whether a user asked for this. */
+  intent: TabActivationIntent
 }
 
 async function retryIdempotentActivationAfterCutover(

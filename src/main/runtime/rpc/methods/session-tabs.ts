@@ -34,6 +34,7 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
       runtime.activateMobileSessionTab(params.worktree, params.tabId, params.leafId, {
         notifyClients: params.notifyClients !== false,
         clientNavigationId: pairedDeviceId,
+        ...(params.intent ? { intent: params.intent } : {}),
         navigation: resolveRuntimeNavigationTarget({
           navigation: params.navigation,
           notifyClients: params.notifyClients,

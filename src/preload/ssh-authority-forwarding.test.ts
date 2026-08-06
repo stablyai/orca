@@ -68,6 +68,16 @@ describe('native preload SSH authority forwarding', () => {
     >()
   })
 
+  it('forwards host-qualified metadata-only worktree reads', async () => {
+    await import('./index')
+    const api = exposeInMainWorld.mock.calls.find(([name]) => name === 'api')?.[1] as PreloadApi
+    const args = { repoId: 'repo-1', executionHostId: 'ssh:ssh-1' as const }
+
+    await api.worktrees.listKnownForExecutionHost?.(args)
+
+    expect(invoke).toHaveBeenCalledWith('worktrees:listKnownForExecutionHost', args)
+  })
+
   it('forwards full-pair get and push states without cloning away authority', async () => {
     const state: SshConnectionState = {
       targetId: 'ssh-1',

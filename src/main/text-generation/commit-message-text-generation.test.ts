@@ -7,6 +7,7 @@ import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../shared/constants'
 import { sourceControlAiSettingsFromLegacy } from '../../shared/source-control-ai'
+import { SSH_MUX_REQUEST_TIMEOUT_CODE } from '../ssh/ssh-channel-multiplexer'
 import type { GlobalSettings } from '../../shared/types'
 import {
   cancelGenerateCommitMessageLocal,
@@ -717,6 +718,27 @@ describe('generateCommitMessageFromContext', () => {
     })
   })
 
+  it('reports remote model discovery transport timeouts without PATH guidance', async () => {
+    const transportTimeout = Object.assign(
+      new Error('Request "agent.execNonInteractive" timed out after 65000ms'),
+      { code: SSH_MUX_REQUEST_TIMEOUT_CODE }
+    )
+    const result = await discoverCommitMessageModelsRemote(
+      'cursor',
+      '/remote/repo',
+      async () => {
+        throw transportTimeout
+      },
+      'npx cursor-agent'
+    )
+
+    expect(result).toEqual({
+      success: false,
+      error:
+        'Cursor model discovery took longer than 60s and may still be running on the remote host.'
+    })
+  })
+
   it('reports remote model discovery spawn failures with remote install guidance', async () => {
     const result = await discoverCommitMessageModelsRemote('cursor', '/remote/repo', async () => ({
       stdout: '',
@@ -1226,6 +1248,39 @@ describe('generateCommitMessageFromContext', () => {
     expect(result).toEqual({
       success: false,
       error: 'agent returned an empty message.'
+    })
+  })
+
+  it('reports a remote transport timeout without claiming the agent is unreachable', async () => {
+    const transportTimeout = Object.assign(
+      new Error('Request "agent.execNonInteractive" timed out after 65000ms'),
+      { code: SSH_MUX_REQUEST_TIMEOUT_CODE }
+    )
+    const result = await generateCommitMessageFromContext(
+      {
+        branch: 'main',
+        stagedSummary: 'M\tREADME.md',
+        stagedPatch: '+hello'
+      },
+      {
+        agentId: 'custom',
+        model: '',
+        customAgentCommand: 'agent'
+      },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async () => {
+          throw transportTimeout
+        }
+      }
+    )
+
+    expect(result).toEqual({
+      success: false,
+      error: 'agent took longer than 60s to respond and may still be running on the remote host.',
+      canceled: undefined
     })
   })
 
@@ -2307,18 +2362,32 @@ describe('linkedIssue template substitution', () => {
     expect(prompt).not.toContain('linkedIssue')
   })
 
-  it('leaves the built-in pull-request prompt free of issue guidance', async () => {
+  it('includes the linked issue in the built-in pull-request prompt', async () => {
     let prompt = ''
     await generatePullRequestFieldsFromContext(
-      { ...PULL_REQUEST_CONTEXT, linkedIssue: BUILT_IN_PROMPT_SENTINEL_ISSUE },
+      {
+        ...PULL_REQUEST_CONTEXT,
+        linkedIssue: BUILT_IN_PROMPT_SENTINEL_ISSUE,
+        provider: 'gitlab',
+        linkedIssueDetails: {
+          provider: 'gitlab',
+          number: BUILT_IN_PROMPT_SENTINEL_ISSUE,
+          title: 'Stop phantom polling',
+          description: 'Avoid paths that cannot exist on this host.'
+        }
+      },
       builtInPromptParams,
       capturingTarget((value) => {
         prompt = value
       })
     )
 
-    expect(prompt).not.toContain(String(BUILT_IN_PROMPT_SENTINEL_ISSUE))
-    expect(prompt).not.toContain('linkedIssue')
+    expect(prompt).toContain(`Linked GitLab issue: #${BUILT_IN_PROMPT_SENTINEL_ISSUE}`)
+    expect(prompt).toContain(`Closes #${BUILT_IN_PROMPT_SENTINEL_ISSUE}`)
+    expect(prompt).toContain(`Related to #${BUILT_IN_PROMPT_SENTINEL_ISSUE}`)
+    expect(prompt).toContain('Stop phantom polling')
+    expect(prompt).toContain('Avoid paths that cannot exist on this host.')
+    expect(prompt).not.toContain('GitHub issue')
   })
 
   it('substitutes the linked issue into the pull-request prompt', async () => {

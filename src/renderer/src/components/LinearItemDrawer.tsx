@@ -1,12 +1,14 @@
 /* eslint-disable max-lines -- Why: the Linear drawer co-locates read-only preview, edit controls, and comment input so the full issue surface stays in one file. */
 /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: Linear drawer state hydrates full issue details and comments from provider IPC for the selected issue. */
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowRight,
   ChevronDown,
   ExternalLink,
+  FolderOpen,
   Gauge,
   LoaderCircle,
+  Plus,
   Send,
   Tag,
   UserRound,
@@ -15,6 +17,13 @@ import {
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
+import { ButtonGroup } from '@/components/ui/button-group'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { LinearIssueTextEditor } from '@/components/LinearIssueTextEditor'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
@@ -27,7 +36,14 @@ import {
   getCommentBodySubmitState,
   hasBoundedCommentBodyText
 } from '@/lib/comment-body-submit-state'
+import {
+  findLinearIssueWorkspaceAttachment,
+  getLinearIssueWorkspaceAttachmentLabel
+} from '@/lib/linear-issue-workspace-attachment'
+import { openLinearIssueWorkspaceOrStart } from '@/lib/linear-issue-workspace-open'
+import { folderWorkspaceToWorktree } from '../../../shared/folder-workspace-worktree'
 import { useAppStore } from '@/store'
+import { useAllWorktrees } from '@/store/selectors'
 import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import {
@@ -1234,6 +1250,12 @@ export default function LinearItemDrawer({
   const optimisticCommentsRef = useRef<LinearComment[]>([])
   const settings = useAppStore((s) => s.settings)
   const providerSettings = sourceContext ?? settings
+  const allWorktrees = useAllWorktrees()
+  const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
+  const attachmentWorkspaces = useMemo(
+    () => [...allWorktrees, ...folderWorkspaces.map(folderWorkspaceToWorktree)],
+    [allWorktrees, folderWorkspaces]
+  )
 
   const handleEditStateChange = useCallback((patch: Partial<LinearEditState>) => {
     hasEditedRef.current = true
@@ -1357,6 +1379,20 @@ export default function LinearItemDrawer({
   }, [])
 
   const displayed = fullIssue ?? issue
+  const attachedWorkspace = useMemo(
+    () => (displayed ? findLinearIssueWorkspaceAttachment(attachmentWorkspaces, displayed) : null),
+    [attachmentWorkspaces, displayed]
+  )
+  const attachedWorkspaceLabel = attachedWorkspace
+    ? getLinearIssueWorkspaceAttachmentLabel(attachedWorkspace)
+    : null
+
+  const handleOpenOrUseIssue = useCallback((): void => {
+    if (!displayed) {
+      return
+    }
+    openLinearIssueWorkspaceOrStart(displayed, () => onUse(displayed))
+  }, [displayed, onUse])
 
   return (
     <Sheet open={issue !== null} onOpenChange={(open) => !open && onClose()}>
@@ -1526,28 +1562,75 @@ export default function LinearItemDrawer({
               </div>
             </div>
 
-            {/* Comment footer + Start workspace */}
+            {/* Comment footer + Start/Open workspace */}
             <LinearIssueCommentFooter
               issueId={displayed.id}
               workspaceId={displayed.workspaceId}
               onCommentAdded={handleCommentAdded}
               sourceContext={sourceContext}
             />
-            <div className="flex-none border-t border-border/60 bg-background/40 px-4 py-3">
-              <Button
-                onClick={() => onUse(displayed)}
-                className="w-full justify-center gap-2"
-                aria-label={translate(
-                  'auto.components.LinearItemDrawer.04008e6c46',
-                  'Start workspace from issue'
-                )}
-              >
-                {translate(
-                  'auto.components.LinearItemDrawer.04008e6c46',
-                  'Start workspace from issue'
-                )}
-                <ArrowRight className="size-4" />
-              </Button>
+            <div className="flex-none space-y-2 border-t border-border/60 bg-background/40 px-4 py-3">
+              {attachedWorkspaceLabel ? (
+                <div className="flex min-w-0 items-center gap-1.5 text-[12px] text-muted-foreground">
+                  <FolderOpen className="size-3.5 shrink-0" />
+                  <span className="truncate">{attachedWorkspaceLabel}</span>
+                </div>
+              ) : null}
+              {attachedWorkspace ? (
+                <DropdownMenu modal={false}>
+                  <ButtonGroup className="w-full">
+                    <Button
+                      onClick={handleOpenOrUseIssue}
+                      className="flex-1 justify-center gap-2"
+                      aria-label={translate(
+                        'auto.components.LinearItemDrawer.openAttachedWorkspace',
+                        'Open workspace attached to issue'
+                      )}
+                    >
+                      <FolderOpen className="size-4" />
+                      {translate(
+                        'auto.components.LinearItemDrawer.openWorkspace',
+                        'Open workspace'
+                      )}
+                    </Button>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        size="icon"
+                        aria-label={translate(
+                          'auto.components.LinearItemDrawer.moreWorkspaceActions',
+                          'More issue workspace actions'
+                        )}
+                      >
+                        <ChevronDown className="size-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                  </ButtonGroup>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onSelect={() => onUse(displayed)}>
+                      <Plus className="size-4" />
+                      {translate(
+                        'auto.components.LinearItemDrawer.startNewWorkspace',
+                        'Start new workspace'
+                      )}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : (
+                <Button
+                  onClick={handleOpenOrUseIssue}
+                  className="w-full justify-center gap-2"
+                  aria-label={translate(
+                    'auto.components.LinearItemDrawer.04008e6c46',
+                    'Start workspace from issue'
+                  )}
+                >
+                  {translate(
+                    'auto.components.LinearItemDrawer.04008e6c46',
+                    'Start workspace from issue'
+                  )}
+                  <ArrowRight className="size-4" />
+                </Button>
+              )}
             </div>
           </div>
         )}

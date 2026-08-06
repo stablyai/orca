@@ -41,6 +41,21 @@ export type NotificationHandler = (method: string, params: Record<string, unknow
 export type MethodNotificationHandler = (params: Record<string, unknown>) => void
 export type RequestHandler = (params: Record<string, unknown>) => Promise<unknown> | unknown
 
+export type MultiplexerDisposeReason = 'shutdown' | 'connection_lost'
+
+// Why: the renderer uses the message/code to distinguish temporary disconnects
+// (show reconnection overlay) from permanent shutdown (show error toast), so
+// every producer of a disposal rejection must mint it here — a divergent copy
+// silently downgrades the relay-lost UI to a bug-report toast.
+export function createSshDisposalError(reason: MultiplexerDisposeReason): Error & { code: string } {
+  const lost = reason === 'connection_lost'
+  const err = new Error(
+    lost ? 'SSH connection lost, reconnecting...' : 'Multiplexer disposed'
+  ) as Error & { code: string }
+  err.code = lost ? 'CONNECTION_LOST' : 'DISPOSED'
+  return err
+}
+
 const REQUEST_TIMEOUT_MS = 30_000
 const MAX_ORDINARY_UNACKED_TIMESTAMPS = 4095
 const MAX_UNACKED_TIMESTAMPS = MAX_ORDINARY_UNACKED_TIMESTAMPS + 1
@@ -85,6 +100,7 @@ export class SshChannelMultiplexer {
   private disposeHandlers: ((reason: 'shutdown' | 'connection_lost') => void)[] = []
   private connectionHealthTimer: ReturnType<typeof setInterval> | null = null
   private disposed = false
+  private disposeReason: 'shutdown' | 'connection_lost' | null = null
   private decoderReadPaused = false
   private writerSaturated = false
 
@@ -181,6 +197,12 @@ export class SshChannelMultiplexer {
   // never fires the reconnect logic.
   onDispose(handler: (reason: 'shutdown' | 'connection_lost') => void): () => void {
     if (this.disposed) {
+      // Why: a late subscriber must still learn the channel died; retaining it would leak the closure (#11953).
+      try {
+        handler(this.disposeReason ?? 'shutdown')
+      } catch {
+        // Don't let a handler error escape into the subscriber's registration path
+      }
       return () => {}
     }
     this.disposeHandlers.push(handler)
@@ -201,7 +223,7 @@ export class SshChannelMultiplexer {
     options?: SshMultiplexerRequestOptions
   ): Promise<unknown> {
     if (this.disposed) {
-      throw new Error('Multiplexer disposed')
+      throw this.disposedError()
     }
     if (options?.signal?.aborted) {
       const error = new Error(`Request "${method}" was cancelled`) as Error & { name: string }
@@ -289,7 +311,7 @@ export class SshChannelMultiplexer {
     onSettled: (result: { ok: true } | { ok: false; error: Error }) => void
   ): void {
     if (this.disposed) {
-      onSettled({ ok: false, error: new Error('Multiplexer disposed') })
+      onSettled({ ok: false, error: this.disposedError() })
       return
     }
     this.sendMessage(
@@ -338,17 +360,12 @@ export class SshChannelMultiplexer {
       )
     }
     this.disposed = true
+    this.disposeReason = reason
 
     if (this.connectionHealthTimer) {
       clearInterval(this.connectionHealthTimer)
       this.connectionHealthTimer = null
     }
-
-    // Why: the renderer uses the error code to distinguish temporary disconnects
-    // (show reconnection overlay) from permanent shutdown (show error toast).
-    const errorMessage =
-      reason === 'connection_lost' ? 'SSH connection lost, reconnecting...' : 'Multiplexer disposed'
-    const errorCode = reason === 'connection_lost' ? 'CONNECTION_LOST' : 'DISPOSED'
 
     for (const waiter of this.livenessProbeWaiters.splice(0)) {
       waiter.fail()
@@ -356,15 +373,11 @@ export class SshChannelMultiplexer {
 
     for (const [id, pending] of this.pendingRequests) {
       pending.cleanup()
-      const err = new Error(errorMessage) as Error & { code: string }
-      err.code = errorCode
-      pending.reject(err)
+      pending.reject(this.disposedError())
       this.pendingRequests.delete(id)
     }
 
-    const writerError = new Error(errorMessage) as Error & { code: string }
-    writerError.code = errorCode
-    this.writer.dispose(writerError)
+    this.writer.dispose(this.disposedError())
     this.unackedTimestamps.clear()
     // Why: relay teardown can race with late provider registration; disposed
     // muxes must not retain provider/session closures through subscribers.
@@ -388,6 +401,10 @@ export class SshChannelMultiplexer {
   }
 
   // ── Private ───────────────────────────────────────────────────────
+
+  private disposedError(): Error & { code: string } {
+    return createSshDisposalError(this.disposeReason ?? 'shutdown')
+  }
 
   private sendMessage(
     msg: JsonRpcMessage,

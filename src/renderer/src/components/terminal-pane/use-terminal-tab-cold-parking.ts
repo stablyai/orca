@@ -24,6 +24,7 @@ import {
   recordParkVerdictFlips,
   type ParkVerdictFlipRecord
 } from './terminal-park-verdict-flip-telemetry'
+import { withholdUnparkableTerminalTabs } from './terminal-cold-park-withheld-tabs'
 import { getTerminalParkingPolicyOverrides } from './terminal-parking-e2e-overrides'
 import {
   selectEvictionExemptTerminalTabIds,
@@ -209,28 +210,22 @@ export function useTerminalTabColdParking(args: {
       },
       ...overrides
     })
-    // Why: a tab the byte watchers cannot cover (no capture, no layout
-    // snapshot, legacy leaf ids) must never park — it would go silent for
-    // bells/titles/completions, the failure that sank the first attempt.
-    for (const terminalTab of terminalTabs) {
-      if (
-        nextColdParkedTerminalTabIds.has(terminalTab.id) &&
-        !canWatcherCoverParkedTerminalTab(worktreeId, terminalTab)
-      ) {
-        nextColdParkedTerminalTabIds.delete(terminalTab.id)
-      }
-    }
+    const { parkedTabIds, parkVerdictPinUntilMsByTabId } = withholdUnparkableTerminalTabs({
+      worktreeId,
+      terminalTabs,
+      coldParkedTabIds: nextColdParkedTerminalTabIds,
+      parkVerdictRecords: parkVerdictRecordsRef.current,
+      nowMs
+    })
     setColdParkedTerminalTabIds((current) =>
-      haveSameTerminalTabIds(current, nextColdParkedTerminalTabIds)
-        ? current
-        : nextColdParkedTerminalTabIds
+      haveSameTerminalTabIds(current, parkedTabIds) ? current : parkedTabIds
     )
 
     for (const candidate of candidates) {
       if (
         candidate.isVisible ||
         candidate.hasActivityTerminalPortal ||
-        nextColdParkedTerminalTabIds.has(candidate.id)
+        parkedTabIds.has(candidate.id)
       ) {
         continue
       }
@@ -238,6 +233,8 @@ export function useTerminalTabColdParking(args: {
         parkingEnabled: terminalParkingEnabled,
         hiddenSinceMs: candidate.hiddenSinceMs,
         parkCooldownUntilMs: measureParkCooldownUntilRef.current,
+        // Why: pin expiry may be the only remaining wakeup after damping stops churn.
+        parkVerdictPinUntilMs: parkVerdictPinUntilMsByTabId.get(candidate.id) ?? null,
         nowMs,
         ...overrides
       })

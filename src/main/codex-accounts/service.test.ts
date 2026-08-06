@@ -46,33 +46,10 @@ function decodeEncodedWslBashCommand(command: string): string {
   return encoded ? Buffer.from(encoded, 'base64').toString('utf8') : command
 }
 
-// Why: the shipped code no longer reads a settings flag — the legacy mirror
-// lane is reachable only through the test-rig env override. Route the old
-// per-test override key to that env var so lane coverage keeps working.
-type TestSettingsOverrides = Partial<GlobalSettings> & {
-  codexSystemDefaultRealHomeEnabled?: boolean
-}
-
-function setRealHomeLaneForTest(enabled: boolean): void {
-  process.env.ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME = enabled ? '1' : '0'
-}
-
-const initialRealHomeLaneEnv = process.env.ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME
-afterEach(() => {
-  if (initialRealHomeLaneEnv === undefined) {
-    delete process.env.ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME
-  } else {
-    process.env.ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME = initialRealHomeLaneEnv
-  }
-})
-
-function createSettings(overrides: TestSettingsOverrides = {}): GlobalSettings {
+function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings {
   const appFontFamily = overrides.appFontFamily ?? 'Geist'
   const agentStatusHooksEnabled = overrides.agentStatusHooksEnabled ?? true
   const tabAutoGenerateTitle = overrides.tabAutoGenerateTitle ?? false
-  // Config-sync/hot-swap tests assert the shared-mirror path; production is
-  // real-home always, so opt these managed cases out unless a test overrides it.
-  setRealHomeLaneForTest(overrides.codexSystemDefaultRealHomeEnabled ?? false)
   return {
     workspaceDir: testState.fakeHomeDir,
     nestWorkspaces: false,
@@ -120,7 +97,6 @@ function createSettings(overrides: TestSettingsOverrides = {}): GlobalSettings {
     openLinksInAppPreferencePrompted: false,
     rightSidebarOpenByDefault: true,
     sourceControlViewMode: 'list',
-    sourceControlGroupOrder: 'changes-first',
     sourceControlCompareAgainstUpstream: false,
     showTitlebarAppName: true,
     showTasksButton: true,
@@ -430,7 +406,6 @@ describe('CodexAccountService config sync', () => {
       'approval_policy = "on-request"\n'
     )
     const settings = createSettings({
-      codexSystemDefaultRealHomeEnabled: true,
       codexManagedAccounts: [
         {
           id: 'account-1',
@@ -476,43 +451,6 @@ describe('CodexAccountService config sync', () => {
     expectSanitizedManagedConfig()
   })
 
-  it('keeps flag-off config mirroring byte-identical', async () => {
-    const fixture = await createCanonicalHookTrustFixture()
-    const canonicalConfigPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
-    writeFileSync(canonicalConfigPath, fixture.config, 'utf-8')
-    const managedHomePath = createManagedHome(
-      testState.userDataDir,
-      'account-1',
-      'approval_policy = "on-request"\n'
-    )
-    const settings = createSettings({
-      codexSystemDefaultRealHomeEnabled: false,
-      codexManagedAccounts: [
-        {
-          id: 'account-1',
-          email: 'user@example.com',
-          managedHomePath,
-          providerAccountId: null,
-          workspaceLabel: null,
-          workspaceAccountId: null,
-          createdAt: 1,
-          updatedAt: 1,
-          lastAuthenticatedAt: 1
-        }
-      ]
-    })
-
-    const { CodexAccountService } = await import('./service')
-    new CodexAccountService(
-      createStore(settings) as never,
-      createRateLimits() as never,
-      createRuntimeHome() as never
-    )
-
-    expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')).toBe(fixture.config)
-    expect(readFileSync(canonicalConfigPath, 'utf-8')).toBe(fixture.config)
-  })
-
   it('rewrites relative path config values when syncing into managed homes', async () => {
     const canonicalConfigPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
     writeFileSync(
@@ -556,7 +494,7 @@ describe('CodexAccountService config sync', () => {
     expect(managedConfig).toContain('sandbox_mode = "danger-full-access"')
   })
 
-  it('does not rewrite managed configs that already match canonical config', async () => {
+  it('does not rewrite a managed config the previous mirror pass already settled', async () => {
     const canonicalConfigPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
     const { escapeTomlString } = await import('../codex/config-toml-trust')
     const userHookKey = `${join(testState.fakeHomeDir, '.codex', 'user-hooks.json')}:stop:0:0`
@@ -575,8 +513,6 @@ describe('CodexAccountService config sync', () => {
       '{"account":"managed"}\n'
     )
     const managedConfigPath = join(managedHomePath, 'config.toml')
-    const oldDate = new Date('2024-01-01T00:00:00.000Z')
-    utimesSync(managedConfigPath, oldDate, oldDate)
     const settings = createSettings({
       codexManagedAccounts: [
         {
@@ -600,6 +536,15 @@ describe('CodexAccountService config sync', () => {
     const { CodexAccountService } = await import('./service')
     new CodexAccountService(store as never, rateLimits as never, runtimeHome as never)
 
+    // The first pass remaps the user hook-trust entry into this home; once that
+    // has settled, a later pass must leave the file completely untouched.
+    const settledConfig = readFileSync(managedConfigPath, 'utf-8')
+    const oldDate = new Date('2024-01-01T00:00:00.000Z')
+    utimesSync(managedConfigPath, oldDate, oldDate)
+
+    new CodexAccountService(store as never, rateLimits as never, runtimeHome as never)
+
+    expect(readFileSync(managedConfigPath, 'utf-8')).toBe(settledConfig)
     expect(statSync(managedConfigPath).mtimeMs).toBeLessThan(Date.now() - 60_000)
   })
 
@@ -659,8 +604,7 @@ describe('CodexAccountService config sync', () => {
 
   it('re-syncs config when selecting an account', async () => {
     const canonicalConfigPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
-    const canonicalConfig = 'approval_policy = "never"\nsandbox_mode = "danger-full-access"\n'
-    writeFileSync(canonicalConfigPath, canonicalConfig, 'utf-8')
+    writeFileSync(canonicalConfigPath, 'sandbox_mode = "danger-full-access"\n', 'utf-8')
     const managedHomePath = createManagedHome(
       testState.userDataDir,
       'account-1',
@@ -696,7 +640,11 @@ describe('CodexAccountService config sync', () => {
 
     await service.selectAccount('account-1')
 
-    expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')).toBe(canonicalConfig)
+    // Selecting merges canonical settings into the account's own home rather
+    // than overwriting it, so its local approval_policy survives the re-sync.
+    expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')).toBe(
+      'sandbox_mode = "danger-full-access"\napproval_policy = "untrusted"\n'
+    )
     expect(rateLimits.refreshForCodexAccountChange).toHaveBeenCalledTimes(1)
     expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalledTimes(1)
   })
@@ -855,7 +803,7 @@ describe('CodexAccountService config sync', () => {
     readHookTrustEntries = (await import('../codex/config-toml-trust')).readHookTrustEntries
     writeFileSync(join(testState.fakeHomeDir, '.codex', 'config.toml'), fixture.config, 'utf-8')
 
-    const store = createStore(createSettings({ codexSystemDefaultRealHomeEnabled: true }))
+    const store = createStore(createSettings())
     const rateLimits = createRateLimits()
     const runtimeHome = createRuntimeHome()
     const { CodexAccountService } = await import('./service')
@@ -1842,7 +1790,7 @@ describe('CodexAccountService config sync', () => {
     expect(onHostSystemDefaultSelected).toHaveBeenCalledOnce()
   })
 
-  it('selectAccount immediately rewrites the shared runtime auth for existing terminals', async () => {
+  it('selectAccount switches managed accounts without routing auth through the shared mirror', async () => {
     const firstAuth = createCodexAuthJson('one@example.com', 'acct-one', 'one')
     const secondAuth = createCodexAuthJson('two@example.com', 'acct-two', 'two')
     const firstManagedHomePath = createManagedHome(
@@ -1890,7 +1838,7 @@ describe('CodexAccountService config sync', () => {
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const runtimeHome = new CodexRuntimeHomeService(store as never)
     const runtimeAuthPath = join(testState.userDataDir, 'codex-runtime-home', 'home', 'auth.json')
-    expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe(firstAuth)
+    expect(existsSync(runtimeAuthPath)).toBe(false)
 
     const { CodexAccountService } = await import('./service')
     const service = new CodexAccountService(
@@ -1901,7 +1849,11 @@ describe('CodexAccountService config sync', () => {
 
     await service.selectAccount('account-2')
 
-    expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe(secondAuth)
+    // Each managed host account launches against its own home, so a switch must
+    // leave both credential files alone and never copy either into the mirror.
+    expect(existsSync(runtimeAuthPath)).toBe(false)
+    expect(readFileSync(join(firstManagedHomePath, 'auth.json'), 'utf-8')).toBe(firstAuth)
+    expect(readFileSync(join(secondManagedHomePath, 'auth.json'), 'utf-8')).toBe(secondAuth)
     expect(existsSync(join(testState.userDataDir, 'codex-runtime-home', 'launch'))).toBe(false)
     expect(existsSync(join(testState.userDataDir, 'codex-runtime-home', 'active'))).toBe(false)
   })

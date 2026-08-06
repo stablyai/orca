@@ -43,6 +43,10 @@ import {
   type ProcessedAgentStatusChunk
 } from '../../../../shared/agent-status-osc'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import {
+  registerPtySideEffectPendingGauge,
+  type PtySideEffectGauge
+} from './pty-side-effect-pending-census'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 
 // Re-export public API so existing consumers keep working.
@@ -153,6 +157,7 @@ export function createPtyOutputProcessor({
   flushPendingSideEffects: () => void
   resetBellDetector: () => void
   resetAgentStatusCarry: () => void
+  disposePendingSideEffectGauge: () => void
 } {
   const bellDetector = createBellDetector()
   // Why let: a model-restore marker drops bytes; recreating the parser stops a partial OSC-9999 carry from swallowing the next chunk's head.
@@ -165,6 +170,12 @@ export function createPtyOutputProcessor({
   let pendingSideEffects: PendingPtySideEffect[] = []
   let pendingSideEffectIndex = 0
   let pendingWorkingTitleSideEffects = 0
+  // Why both counts: drained entries survive until compaction, so depth alone understates what the array retains.
+  const pendingSideEffectGauge: PtySideEffectGauge = {
+    pending: () => pendingSideEffects.length - pendingSideEffectIndex,
+    retained: () => pendingSideEffects.length
+  }
+  const disposePendingSideEffectGauge = registerPtySideEffectPendingGauge(pendingSideEffectGauge)
   const agentTracker =
     onAgentBecameIdle || onAgentBecameWorking || onAgentExited
       ? createAgentStatusTracker(
@@ -507,7 +518,8 @@ export function createPtyOutputProcessor({
     resetBellDetector: () => bellDetector.reset(),
     resetAgentStatusCarry: () => {
       processAgentStatusChunk = createAgentStatusOscProcessor()
-    }
+    },
+    disposePendingSideEffectGauge
   }
 }
 
@@ -989,6 +1001,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     },
 
     detach(options) {
+      // Why first: the successor transport owns the PTY after detach, and nothing below may
+      // throw its way past the census drop — a stranded gauge outlives the transport.
+      outputProcessor.disposePendingSideEffectGauge()
       clearAccumulatedState()
       inputWriteQueue.clear()
       if (ptyId) {
@@ -1086,7 +1101,13 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
 
     destroy() {
       destroyed = true
-      this.disconnect()
+      // Why finally: disconnect runs pty.kill IPC and consumer onDisconnect callbacks; a throw
+      // there must not strand the gauge in the very path where teardown already went wrong.
+      try {
+        this.disconnect()
+      } finally {
+        outputProcessor.disposePendingSideEffectGauge()
+      }
     }
   }
 }

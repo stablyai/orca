@@ -15,7 +15,9 @@ const mocks = vi.hoisted(() => ({
     >
   },
   exemptTabIds: new Set<string>(),
-  exemptSelectCalls: 0
+  exemptSelectCalls: 0,
+  /** Toggled to churn the park verdict the way the crash cluster does. */
+  watcherCoverage: true
 }))
 
 vi.mock('../../store', () => ({
@@ -39,15 +41,23 @@ vi.mock('./terminal-eviction-exempt-tabs', () => ({
 }))
 
 vi.mock('./terminal-parked-tab-watchers', () => ({
-  canWatcherCoverParkedTerminalTab: () => true,
+  canWatcherCoverParkedTerminalTab: () => mocks.watcherCoverage,
   disposeParkedTerminalWatchersForWorktree: vi.fn(),
   syncParkedTerminalTabWatchers: vi.fn()
+}))
+
+vi.mock('@/lib/crash-breadcrumb-recorder', () => ({
+  recordRendererCrashBreadcrumb: vi.fn()
 }))
 
 import {
   TERMINAL_TAB_COLD_PARK_DELAY_MS,
   TERMINAL_TAB_HOT_RETAIN_MS
 } from './terminal-hidden-view-parking'
+import {
+  TERMINAL_TAB_PARK_FLIP_BURST_LIMIT,
+  TERMINAL_TAB_PARK_FLIP_WINDOW_MS
+} from './terminal-park-verdict-flip-telemetry'
 import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
 
 const WORKTREE_ID = 'wt-1'
@@ -79,6 +89,7 @@ describe('useTerminalTabColdParking measure-clock contract', () => {
     vi.useRealTimers()
     mocks.exemptTabIds = new Set()
     mocks.exemptSelectCalls = 0
+    mocks.watcherCoverage = true
     mocks.storeState.terminalLayoutsByTabId = {}
     mocks.storeState.sleepingAgentSessionsByPaneKey = {}
     mocks.storeState.runtimeStatusByEnvironmentId = new Map()
@@ -109,6 +120,41 @@ describe('useTerminalTabColdParking measure-clock contract', () => {
       expect(result.current).toEqual(expected)
       unmount()
     }
+  })
+
+  // Why: the flip-damping pin removes the tab from the parked set, and every
+  // hysteresis deadline of a long-hidden tab is already past — so the pin
+  // deadline is the only wakeup that can ever re-park it. Without scheduling
+  // it, damping silently becomes a permanent unpark: the pane (~4-5MB) stays
+  // mounted for the life of the window, which is the renderer-OOM cluster.
+  it('re-parks a damped tab once the pin expires with no other store change', () => {
+    const { result, rerender } = renderHook(
+      (args: ReturnType<typeof hookArgs>) => useTerminalTabColdParking(args),
+      { initialProps: hookArgs(false) }
+    )
+    act(() => {
+      vi.advanceTimersByTime(TERMINAL_TAB_HOT_RETAIN_MS + 1)
+    })
+    expect(result.current).toEqual(new Set(['tab-2']))
+
+    // Churn the coverage veto at render cadence — no clock advance, so every
+    // flip lands inside the burst window and damping engages.
+    for (let flip = 0; flip <= TERMINAL_TAB_PARK_FLIP_BURST_LIMIT + 1; flip += 1) {
+      mocks.watcherCoverage = flip % 2 === 1
+      act(() => {
+        rerender(hookArgs(false))
+      })
+    }
+    mocks.watcherCoverage = true
+    act(() => {
+      rerender(hookArgs(false))
+    })
+    expect(result.current.size).toBe(0)
+
+    act(() => {
+      vi.advanceTimersByTime(TERMINAL_TAB_PARK_FLIP_WINDOW_MS)
+    })
+    expect(result.current).toEqual(new Set(['tab-2']))
   })
 
   // Why: the worktree layer preserves hiddenSince through a background-measure

@@ -1,12 +1,14 @@
 import React from 'react'
 import { ExternalLink, Loader2, RefreshCw } from 'lucide-react'
 import type { GitBranchCompareSummary, GitUpstreamStatus } from '../../../../shared/types'
+import type { GitBranchLineTotal } from '../../../../shared/git-status-types'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
 import type { WorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 import { SourceControlHeaderIconButton } from './source-control-header-icon-button'
+import { SourceControlBranchLineTotalChip } from './source-control-branch-line-total-chip'
 import {
   buildSourceControlBranchContextStats,
   formatSourceControlRefLabel,
@@ -49,9 +51,7 @@ function ContextStat({
 }): React.JSX.Element {
   const className = cn(
     'shrink-0 tabular-nums text-muted-foreground',
-    stat.tone === 'muted' && 'text-muted-foreground/70',
-    stat.tone === 'ahead' && 'text-[color:var(--git-decoration-added)]',
-    stat.tone === 'behind' && 'text-[color:var(--git-decoration-deleted)]'
+    stat.tone === 'muted' && 'text-muted-foreground/70'
   )
 
   if (!stat.title) {
@@ -218,7 +218,8 @@ function StackedCompareFlow({
   onChangeBaseRef,
   changeBaseTitle,
   leading,
-  trailing
+  trailing,
+  headTrailing
 }: {
   headDisplay: WorktreeGitIdentityDisplay | null
   baseRef: string
@@ -227,6 +228,7 @@ function StackedCompareFlow({
   changeBaseTitle: string
   leading?: React.ReactNode
   trailing?: React.ReactNode
+  headTrailing?: React.ReactNode
 }): React.JSX.Element {
   if (!headDisplay) {
     return (
@@ -237,15 +239,27 @@ function StackedCompareFlow({
         changeBaseTitle={changeBaseTitle}
         showArrow={false}
         leading={leading}
-        trailing={trailing}
+        // Why: no head line exists to host it, so fold it onto the base line
+        // rather than dropping it.
+        trailing={
+          <>
+            {headTrailing}
+            {trailing}
+          </>
+        }
       />
     )
   }
 
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-      <div className="min-w-0">
-        <HeadIdentity display={headDisplay} />
+      {/* Why: the line total belongs beside HEAD — it measures this branch's work.
+          The base line keeps the commit count, which measures the comparison. */}
+      <div className="flex min-w-0 items-center gap-1.5">
+        <span className="min-w-0 flex-1">
+          <HeadIdentity display={headDisplay} />
+        </span>
+        {headTrailing}
       </div>
       {/* Why: spinner/actions sit on the base line — they describe compare state, not HEAD. */}
       <BaseLine
@@ -267,6 +281,7 @@ export function SourceControlBranchContextRow({
   headDisplay = null,
   upstreamStatus,
   manualReviewUrl,
+  branchLineTotal,
   onChangeBaseRef,
   onRetry
 }: {
@@ -275,6 +290,7 @@ export function SourceControlBranchContextRow({
   headDisplay?: WorktreeGitIdentityDisplay | null
   upstreamStatus?: GitUpstreamStatus
   manualReviewUrl?: string | null
+  branchLineTotal?: GitBranchLineTotal | null
   onChangeBaseRef: () => void
   onRetry: () => void
 }): React.JSX.Element | null {
@@ -397,6 +413,7 @@ export function SourceControlBranchContextRow({
         onChangeBaseRef={onChangeBaseRef}
         changeBaseTitle={changeBaseTitle}
         trailing={trailing}
+        headTrailing={<SourceControlBranchLineTotalChip branchLineTotal={branchLineTotal} />}
       />
     </CompareFlowGroup>
   )

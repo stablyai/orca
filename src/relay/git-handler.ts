@@ -89,6 +89,7 @@ import { GitResponseStreamRegistry } from './git-response-stream'
 import { GIT_RESPONSE_STREAM_THRESHOLD } from './protocol'
 import { endSubprocessStdin } from '../shared/subprocess-stdin-write'
 import { clearGitStatusLineStatsCache } from '../shared/git-status-line-stats-cache'
+import { invalidateGitBranchLineTotalInFlight } from '../shared/git-branch-line-total'
 import { streamRelayGitStdout } from './git-stdout-stream'
 
 const execFileAsync = promisify(execFile)
@@ -298,6 +299,7 @@ export class GitHandler {
 
   private clearGitMutationReadCaches(): void {
     this.gitDiffReadDedupe.clear()
+    invalidateGitBranchLineTotalInFlight()
     clearGitStatusLineStatsCache()
     clearSubmodulePathsCache(this.submodulePathsCache)
   }

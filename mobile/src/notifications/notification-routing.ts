@@ -1,3 +1,6 @@
+import type { HostStackRouteTarget } from '../navigation/host-stack-navigation'
+import { mobileSessionRouteTarget } from '../session/mobile-session-route'
+
 export type DesktopNotificationSource = 'agent-task-complete' | 'terminal-bell' | 'test'
 
 export type DesktopNotificationEvent = {
@@ -38,10 +41,17 @@ export function buildLocalNotificationData(
   return data
 }
 
-export function getNotificationNavigationPath(
+/** Where a tap should land. `sessionTarget` is null for a host-only notification, whose
+ *  `/h/<id>` push is shallow enough to need no host-stack coordination. */
+export type NotificationNavigationTarget = Readonly<{
+  hostId: string
+  sessionTarget: HostStackRouteTarget | null
+}>
+
+export function getNotificationNavigationTarget(
   data: unknown,
   options: NotificationNavigationOptions = {}
-): string | null {
+): NotificationNavigationTarget | null {
   if (!data || typeof data !== 'object') {
     return null
   }
@@ -55,11 +65,9 @@ export function getNotificationNavigationPath(
     return null
   }
 
-  const hostPath = `/h/${encodeURIComponent(hostId)}`
   const worktreeId = readNonEmptyString(record.worktreeId)
-  if (!worktreeId) {
-    return hostPath
+  return {
+    hostId,
+    sessionTarget: worktreeId ? mobileSessionRouteTarget({ hostId, worktreeId }) : null
   }
-
-  return `${hostPath}/session/${encodeURIComponent(worktreeId)}`
 }

@@ -33,6 +33,7 @@ import { getRemoteRuntimePtyEnvironmentId, toRemoteRuntimePtyId } from './runtim
 import { sanitizeTerminalLayoutPaneTitlesForLabels } from '@/lib/terminal-pane-title-sanitization'
 import { terminalLayoutEqual } from '@/lib/terminal-layout-equality'
 import { normalizeTerminalLayoutPtyOwnership } from '@/components/terminal-pane/terminal-layout-pty-ownership'
+import { isClientAuthoritativeAgentStatusPane } from '@/components/terminal-pane/renderer-owned-agent-status-registry'
 import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getReachableRuntimeSessionMirrorTargets } from '@/lib/runtime-session-mirror-targets'
 import {
@@ -649,6 +650,9 @@ function buildMirroredTerminalTabs(
         worktreeId: snapshot.worktree,
         title,
         defaultTitle: existing?.defaultTitle ?? title,
+        // Why: the host transport carries no generated title, so rebuilding the tab
+        // without this dropped the client's agent-prompt label on every snapshot.
+        ...(existing?.generatedTitle ? { generatedTitle: existing.generatedTitle } : {}),
         ...(quickCommandLabel ? { quickCommandLabel } : {}),
         ...(startupCwd ? { startupCwd } : {}),
         customTitle: existing?.customTitle ?? null,
@@ -703,6 +707,33 @@ function isMirroredAgentPaneKeyForTabs(paneKey: string, tabIds: ReadonlySet<stri
   return parsed !== null && tabIds.has(parsed.tabId)
 }
 
+/** Host states the client's byte pipeline cannot observe: permission blocks and
+ *  interactive question cards reach the host over its HTTP agent hook, never
+ *  through PTY bytes, so they must pierce the client-authority fence. */
+function hostAgentStatusPiercesClientAuthority(entry: AgentStatusEntry): boolean {
+  return entry.state === 'blocked' || entry.interactivePrompt != null
+}
+
+/** True while this renderer's own byte-derived status owns the pane: it claimed
+ *  the pane at transport creation and wrote status from bytes. The claim is
+ *  released on pane teardown, which is how the host takes the pane back. */
+function isClientOwnedAgentStatus(
+  paneKey: string,
+  existing: AgentStatusEntry | undefined
+): existing is AgentStatusEntry {
+  return existing !== undefined && isClientAuthoritativeAgentStatusPane(paneKey)
+}
+
+/** Owned AND still fresh — the arbitration rule for a pane the host also has an
+ *  opinion about: an OSC-silent dead agent hands that contest back to the host. */
+function isFencedClientAgentStatus(
+  paneKey: string,
+  existing: AgentStatusEntry | undefined,
+  now: number
+): existing is AgentStatusEntry {
+  return isClientOwnedAgentStatus(paneKey, existing) && isAgentStatusFresh(existing, now)
+}
+
 /** Generates a state patch for mirrored agent statuses, merging host entries with client overrides. */
 function buildMirroredAgentStatusPatch(
   state: WebSessionTabsSyncState,
@@ -753,8 +784,15 @@ function buildMirroredAgentStatusPatch(
       entry.state === 'done' &&
       existing.state !== 'done' &&
       existing.stateStartedAt > entry.stateStartedAt
+    // Why: cross-machine wall clocks are not comparable, so the host frame could
+    // outrank live client status forever; a proven client writer keeps its own
+    // state (still adopting the host's identity fields below) unless the host
+    // carries a state class the client's bytes can never see.
+    const clientOwnsEntry =
+      isFencedClientAgentStatus(entry.paneKey, existing, now) &&
+      !hostAgentStatusPiercesClientAuthority(entry)
     const nextEntry =
-      existing && existing.updatedAt > entry.updatedAt
+      existing && (clientOwnsEntry || existing.updatedAt > entry.updatedAt)
         ? {
             ...normalizeCompatibleAgentStatusEntryForOwner(existing, entry.agentType),
             paneKey: entry.paneKey,
@@ -778,6 +816,16 @@ function buildMirroredAgentStatusPatch(
       continue
     }
     if (nextByPaneKey.has(paneKey)) {
+      continue
+    }
+    // Why: the host surface carrying no status is not proof the agent stopped —
+    // hook-only hosts publish nothing for OSC-driven panes. Keep a live entry
+    // this renderer owns; it decays through the normal freshness boundary.
+    // Ownership, not freshness, is the gate here: with no competing host value
+    // there is nothing to arbitrate, and a client asleep past the stale
+    // boundary would otherwise erase every pane it owns on the first snapshot
+    // after wake (STA-3107) instead of decaying it like a local pane.
+    if (isClientOwnedAgentStatus(paneKey, state.agentStatusByPaneKey[paneKey])) {
       continue
     }
     if (nextAgentStatusByPaneKey === state.agentStatusByPaneKey) {
@@ -1624,6 +1672,9 @@ function tabEqual(a: Tab, b: Tab): boolean {
     a.worktreeId === b.worktreeId &&
     a.contentType === b.contentType &&
     a.label === b.label &&
+    // Why: the generated label is the visible tab title; ignoring it let the
+    // equality bail keep a unified tab that disagreed with its terminal tab.
+    a.generatedLabel === b.generatedLabel &&
     a.customLabel === b.customLabel &&
     a.color === b.color &&
     a.sortOrder === b.sortOrder &&

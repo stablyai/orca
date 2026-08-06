@@ -7,6 +7,9 @@ import {
 
 const SSH_FAILURE =
   "SSH connection failed: Error invoking remote method 'ssh:connect': Error: Relay package for linux-x64 not found locally."
+// Relay loss reaches reportError already IPC-wrapped, so the marker is mid-string.
+const RELAY_LOST =
+  "Error invoking remote method 'pty:attach': Error: SSH connection lost, reconnecting..."
 
 describe('isSshReconnectOwnedTerminalError', () => {
   it('matches raw ssh:connect failures and inactive-host messages', () => {
@@ -20,6 +23,11 @@ describe('isSshReconnectOwnedTerminalError', () => {
         'SSH connection is not active. Use the reconnect dialog or Settings to connect.'
       )
     ).toBe(true)
+  })
+
+  it('matches an IPC-wrapped relay-loss message', () => {
+    expect(isSshReconnectOwnedTerminalError(RELAY_LOST)).toBe(true)
+    expect(isSshReconnectOwnedTerminalError('SSH connection lost, reconnecting...')).toBe(true)
   })
 
   it('leaves unrelated terminal errors for the toast', () => {
@@ -47,6 +55,11 @@ describe('stripSshReconnectOwnedErrorLines', () => {
         `${SSH_FAILURE}\nPaste failed.\nSSH connection is not active. Use the reconnect dialog.`
       )
     ).toBe('Paste failed.')
+  })
+
+  it('drops an IPC-wrapped relay-loss line and keeps the rest', () => {
+    expect(stripSshReconnectOwnedErrorLines(RELAY_LOST)).toBeNull()
+    expect(stripSshReconnectOwnedErrorLines(`Paste failed.\n${RELAY_LOST}`)).toBe('Paste failed.')
   })
 
   it('leaves an error with no SSH text untouched', () => {

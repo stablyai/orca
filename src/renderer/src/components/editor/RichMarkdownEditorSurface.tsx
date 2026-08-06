@@ -11,6 +11,7 @@ import { MarkdownTableOfContentsPanel } from './MarkdownTableOfContentsPanel'
 import { RichMarkdownAnnotationOverlay } from './RichMarkdownAnnotationOverlay'
 import { RichMarkdownReviewNoteLayer } from './RichMarkdownReviewNoteLayer'
 import { RichMarkdownReviewRailActions } from './RichMarkdownReviewRailActions'
+import { RichMarkdownTableControls } from './RichMarkdownTableControls'
 import type { DocLinkMenuRow, DocLinkMenuState } from './rich-markdown-commands'
 import type { SlashCommand, SlashMenuState } from './rich-markdown-slash-commands'
 import type { MarkdownTocItem } from './markdown-table-of-contents'
@@ -217,6 +218,7 @@ export function RichMarkdownEditorSurface({
             }}
           >
             <EditorContent editor={editor} />
+            <RichMarkdownTableControls editor={editor} scrollContainerRef={scrollContainerRef} />
             {reviewRailVisible && notePositions.length > 0 ? (
               <RichMarkdownReviewNoteLayer
                 positions={notePositions}

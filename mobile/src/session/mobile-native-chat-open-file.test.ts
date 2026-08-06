@@ -60,7 +60,7 @@ describe('openMobileNativeChatFileTap', () => {
 
     expect(sendRequest).toHaveBeenCalledWith(
       'files.resolveTerminalPath',
-      { worktree: 'id:wt-1', pathText: 'src/app.ts' },
+      { worktree: 'id:wt-1', pathText: 'src/app.ts', crossWorkspace: true },
       { timeoutMs: 10_000 }
     )
   })
@@ -74,7 +74,7 @@ describe('openMobileNativeChatFileTap', () => {
 
     expect(sendRequest).toHaveBeenCalledWith(
       'files.resolveTerminalPath',
-      { worktree: 'id:wt-1', pathText: 'src/app.ts' },
+      { worktree: 'id:wt-1', pathText: 'src/app.ts', crossWorkspace: true },
       { timeoutMs: 10_000 }
     )
     expect(options.triggerOpenFeedback).toHaveBeenCalledTimes(1)

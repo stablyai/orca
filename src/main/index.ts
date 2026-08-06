@@ -174,7 +174,10 @@ import {
 } from './startup/startup-diagnostics'
 import { ensureWindowsUserDataAclGrant } from './startup/windows-user-data-acl'
 import { shouldQuitWhenAllWindowsClosed } from './startup/window-all-closed-quit-policy'
-import { createServeDesktopActivationGate } from './startup/serve-desktop-activation'
+import {
+  createServeDesktopActivationGate,
+  settleServeDesktopActivation as settleServeDesktopActivationGate
+} from './startup/serve-desktop-activation'
 import { RateLimitService } from './rate-limits/service'
 import { readMiniMaxSessionCookie } from './minimax/minimax-cookie-store'
 import { getInitialClaudeRateLimitTarget } from './rate-limits/claude-rate-limit-target'
@@ -255,7 +258,7 @@ import { AgentAwakeService } from './agent-awake-service'
 import { registerSystemResumeBroadcast } from './system-resume-broadcast'
 import { settleTeardownWithinDeadline } from './quit-teardown-deadline'
 import { quitTeardownStartGate } from './quit-teardown-start-gate'
-import { detachAllSshSessionsForShutdown } from './ipc/ssh'
+import { beginSshShutdown } from './ipc/ssh'
 import { PluginService } from './plugins/plugin-service'
 import { PluginKillListService } from './plugins/plugin-kill-list-service'
 import { getPluginsDataDir } from './plugins/plugin-discovery'
@@ -630,11 +633,9 @@ function getDesktopWindowStatus(): RuntimeDesktopWindowStatus {
 }
 
 function settleServeDesktopActivation(): void {
-  if (getLocalPtyProvider() instanceof LocalPtyProvider) {
-    desktopActivationGate.markBlocked('persistent PTY provider unavailable')
-    return
-  }
-  desktopActivationGate.markReady()
+  settleServeDesktopActivationGate(desktopActivationGate, {
+    hasPersistentPtyProvider: !(getLocalPtyProvider() instanceof LocalPtyProvider)
+  })
 }
 
 // Why: webContents-scoped auto-expiring flag so an intent can't leak to a later renderer load; `consume` clears on match for one-shot signals.
@@ -2983,8 +2984,6 @@ app.on('before-quit', () => {
   isQuitting = true
   desktopRelayService?.fenceAndCloseNow()
   runtimeRpc?.setMobileRelayPairingProvider(null)
-  unsubscribeSystemResumeBroadcast?.()
-  unsubscribeSystemResumeBroadcast = null
   unsubscribeAgentAwakeStatusChanges?.()
   unsubscribeAgentAwakeStatusChanges = null
   agentAwakeService?.dispose()
@@ -3010,6 +3009,8 @@ app.on('will-quit', (e) => {
   if (!quitTeardownStartGate.tryStart(e)) {
     return
   }
+  unsubscribeSystemResumeBroadcast?.()
+  unsubscribeSystemResumeBroadcast = null
   // Why: renderer guards can still cancel before this committed phase; `log stream` must survive those vetoes.
   stopTccPromptNotice()
   const updateQuitInProgress = isQuittingForUpdate()
@@ -3046,7 +3047,9 @@ app.on('will-quit', (e) => {
   runtime?.getOffscreenBrowserBackend()?.destroyAll?.()
   browserManager.setBrowserGuestStateChangedListener(null)
   const emulatorShutdown = runtime?.getEmulatorBridge()?.destroyAllSessions() ?? Promise.resolve()
-  const sshShutdown = detachAllSshSessionsForShutdown()
+  // Why immediately before store.flushAsync() with no await in between: beginSshShutdown() marks every
+  // active SSH lease detached in memory synchronously, and that flush is what persists it.
+  const sshShutdown = beginSshShutdown()
   killAllPty()
   const watcherShutdown = shutdownWatchersOnce()
   const storeFlush = store?.flushAsync() ?? Promise.resolve()

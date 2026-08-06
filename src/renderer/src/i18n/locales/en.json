@@ -109,6 +109,33 @@
       "mr": "MR",
       "port": "Port",
       "pr": "PR"
+    },
+    "renderCapOverflow": "{{value0}} more - keep typing or add a filter to narrow",
+    "filter": {
+      "emptyTitle": "No results match the active filter",
+      "emptySubtitle": "Clear the filter above, or widen it to more hosts and projects.",
+      "tabKey": "Tab",
+      "label": "Filter",
+      "activeCount": "{{value0}} active",
+      "removeChip": "Remove filter {{value0}}",
+      "chipOverflow": "+{{value0}}",
+      "clearAll": "Clear all",
+      "hosts": "Hosts",
+      "projects": "Projects",
+      "trigger": "Filter results",
+      "search": "Filter by host or project...",
+      "searchHosts": "Filter hosts...",
+      "searchProjects": "Filter projects...",
+      "noOptions": "No matching hosts or projects",
+      "noHosts": "No matching hosts",
+      "noProjects": "No matching projects",
+      "moreOptions": "{{value0}} more - keep typing to narrow",
+      "selectAllMatching": "Select all matching ({{value0}})",
+      "selectedCollapsed": "{{value0}} selected — remove via chips or Clear",
+      "clearHosts": "Clear hosts",
+      "clearProjects": "Clear projects",
+      "back": "Back",
+      "ariaActive": "Filter: {{value0}} active."
     }
   },
   "auto": {
@@ -672,6 +699,13 @@
             "attachPrPrompt": "Use {{value0}} to attach this pull or merge request to the linked Linear issue.",
             "triageFollowupsSummary": "Set assignee, priority, or estimate, and file parented follow-up tickets.",
             "triageFollowupsPrompt": "Use {{value0}} to triage the linked Linear issue — set priority and estimate — and create a parented follow-up ticket for the deferred cleanup."
+          }
+        },
+        "issue": {
+          "workspace": {
+            "open": {
+              "4f2c1d8a3b": "Unable to open the workspace attached to this issue."
+            }
           }
         }
       },
@@ -1256,7 +1290,13 @@
         "af6e02c44a": "page",
         "76ffd3c937": "Search for a project to add.",
         "c11b4e3cc2": "No projects found.",
-        "519c3587f3": "Add to project"
+        "519c3587f3": "Add to project",
+        "openAttachedWorkspace": "Open workspace attached to issue",
+        "openWorkspace": "Open workspace",
+        "moreWorkspaceActions": "More issue workspace actions",
+        "startNewWorkspace": "Start new workspace",
+        "workspaceSection": "Workspace",
+        "noWorkspaceYet": "None yet"
       },
       "LinearItemDrawer": {
         "04008e6c46": "Start workspace from issue",
@@ -1288,7 +1328,11 @@
         "39883467f4": "Linear issue",
         "fda549766e": "{{value0}} to comment",
         "d71cd3003e": "+ Assignee",
-        "commentTooLarge": "Comment is too large to submit safely."
+        "commentTooLarge": "Comment is too large to submit safely.",
+        "openAttachedWorkspace": "Open workspace attached to issue",
+        "openWorkspace": "Open workspace",
+        "moreWorkspaceActions": "More issue workspace actions",
+        "startNewWorkspace": "Start new workspace"
       },
       "NewWorkspaceComposerCard": {
         "reuseExistingBranch": "Reuse branch",
@@ -1908,7 +1952,15 @@
         "jiraLinkSourceUnavailable": "Couldn’t link this Jira issue. Reconnect Jira or pick the matching site, then try again.",
         "loadPageUnreachable": "Page {{value0}} is beyond what GitHub search can return.",
         "loadPageFailed": "Page {{value0}} could not be loaded from GitHub.",
-        "loadPageNoMoreResults": "No more results on page {{value0}}."
+        "loadPageNoMoreResults": "No more results on page {{value0}}.",
+        "linearHasWorktreeLoadFailed": "Unable to load Linear issues linked to an Orca workspace.",
+        "linearHasWorktreePartialLoadFailed": "Some Linear issues linked to an Orca workspace could not be loaded. Refresh to try again.",
+        "linearHasWorktreeSearchPlaceholder": "Filter issues linked to an Orca workspace...",
+        "linearModeHasWorktree": "Has Workspace",
+        "linearModeHasWorktreeTooltip": "Linear tickets linked to an Orca workspace",
+        "linearEmptyHasWorktree": "No Linear tickets are linked to an Orca workspace yet. Start work from a Linear issue to see it here.",
+        "linearOpenAttachedWorkspace": "Open workspace attached to {{value0}}",
+        "linearWorktreesColumn": "Workspaces"
       },
       "Terminal": {
         "73768427cf": "Close",
@@ -4347,7 +4399,9 @@
           "83a820fa71": "Filter projects...",
           "5a273fbfce": "Add project...",
           "4815c70605": "No projects match",
-          "bbbc6e8e3b": "No unselected projects match"
+          "bbbc6e8e3b": "No unselected projects match",
+          "allProjects": "All projects",
+          "selectedProjectsCount": "{{value0}} projects"
         },
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Restart Orca",
@@ -4394,6 +4448,7 @@
         },
         "SidebarWorkspaceOptionsMenu": {
           "hosts": "Hosts",
+          "showSection": "Show",
           "allHostsDetail": "Show every host",
           "configuredSshHost": "Configured SSH",
           "projectSshHost": "Project SSH",
@@ -5637,7 +5692,8 @@
           "b4c167764d": "Imported {{value0}} cookies from file into {{value1}}.",
           "a3f8c2d1e0b4": "Imported {{value0}} cookies from {{value1}} ({{value2}}) into {{value3}}.",
           "b4e9d3f2a1c5": "Imported {{value0}} cookies from {{value1}} into {{value2}}.",
-          "c5a273a809": "From {{value0}}"
+          "c5a273a809": "From {{value0}}",
+          "b5c0479e21": "Unmodified user agent"
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "Open Computer Use",
@@ -6129,11 +6185,6 @@
           "3d172725cc": "None",
           "1f32ba27a6": "Custom",
           "a182c5125e": "Git Username",
-          "sourceControlGroupOrderTitle": "Source Control Group Order",
-          "sourceControlGroupOrderDescription": "Choose whether Changes, Staged Changes, or Untracked Files appear first in Source Control.",
-          "changesFirst": "Changes first",
-          "stagedFirst": "Staged first",
-          "untrackedFirst": "Untracked first",
           "compareAgainstUpstreamTitle": "Default Compare Base",
           "compareAgainstUpstreamDescription": "Choose which base Source Control uses by default for committed-change comparisons. Branch upstream follows the current branch automatically and falls back to the repository default branch when no upstream exists. You can still change the compare base per worktree from that worktree's Git panel. Pull Request and rebase targets don't change.",
           "compareBaseRepositoryDefault": "Repository default",
@@ -8409,14 +8460,7 @@
             "f83c8937c4": "branch naming",
             "5ecd91c5ef": "Prefix added to branch names when creating worktrees.",
             "68bd65fdb8": "Branch Prefix",
-            "sourceControlGroupOrderTitle": "Source Control Group Order",
-            "sourceControlGroupOrderDescription": "Choose whether Changes, Staged Changes, or Untracked Files appear first in Source Control.",
-            "groupOrder": "group order",
-            "changesFirst": "changes first",
-            "stagedFirst": "staged first",
-            "untrackedFirst": "untracked first",
             "sourceControl": "source control",
-            "gitChanges": "git changes",
             "compareAgainstUpstreamTitle": "Default Compare Base",
             "compareAgainstUpstreamDescription": "Choose which base Source Control uses by default for committed-change comparisons. Branch upstream follows the current branch automatically and falls back to the repository default branch when no upstream exists. You can still change the compare base per worktree from that worktree's Git panel. Pull Request and rebase targets don't change.",
             "compareBase": "compare base",
@@ -10750,7 +10794,11 @@
             "b8c2e1a904": "{{value0}} → {{value1}}",
             "a4e93c21d7": "Current branch: {{value0}}",
             "c7d4e2f801": "Change base ref: {{value0}}",
-            "f3a1b8c204": "upstream"
+            "f3a1b8c204": "upstream",
+            "discardAllMixedUntracked": "Discard changes and delete untracked files",
+            "discardFolderMixedUntracked": "Discard changes and delete untracked files in folder",
+            "createPrIntentEmptyGeneratedBody": "Generated review details did not include a description. Retry Create PR.",
+            "createPrIntentGenerateDetailsFailed": "Could not generate review details. Retry Create PR."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",
@@ -11174,7 +11222,10 @@
                   "40e9357b2a": "This will restore the file from HEAD and discard the deletion. This cannot be undone.",
                   "5c0bdbc4cb": "Restore \"{{value0}}\"?",
                   "d97bf697c9": "This will permanently delete this file. This cannot be undone.",
-                  "96c772bee9": "Delete \"{{value0}}\"?"
+                  "96c772bee9": "Delete \"{{value0}}\"?",
+                  "mixedTitle": "Discard changes and delete untracked files?",
+                  "mixedDescription": "Tracked changes will be reverted and untracked files will be permanently deleted. This cannot be undone.",
+                  "mixedConfirm": "Delete and discard"
                 },
                 "dialog": {
                   "3bc61dc989": "Cancel",
@@ -11242,6 +11293,17 @@
                   "f0c6e2a581": "This branch is not ready for a {{value0}} yet.",
                   "8f9a0b1c2d": "Nothing to commit. Branch is up to date.",
                   "h3i4j5k607": "Checking whether this branch can create a {{value0}}…"
+                }
+              },
+              "branch": {
+                "line": {
+                  "total": {
+                    "chip": {
+                      "daa8e8e59b": "{{value0}} additions, {{value1}} deletions",
+                      "8a9b97b666": "{{value0}} additions",
+                      "52c366d88d": "{{value0}} deletions"
+                    }
+                  }
                 }
               }
             }
@@ -13421,6 +13483,20 @@
               }
             }
           }
+        },
+        "RichMarkdownTableControls": {
+          "deleteTable": "Delete table",
+          "tableActions": "Table actions",
+          "addColumn": "Add column",
+          "addRow": "Add row",
+          "rowActions": "Row actions",
+          "columnActions": "Column actions",
+          "insertRowAbove": "Insert row above",
+          "insertColumnLeft": "Insert column left",
+          "insertRowBelow": "Insert row below",
+          "insertColumnRight": "Insert column right",
+          "deleteRow": "Delete row",
+          "deleteColumn": "Delete column"
         }
       },
       "diff": {
@@ -13666,6 +13742,8 @@
             "1b179ab561": "Copy Page URL",
             "f7ab83f7ed": "Open Page In Default Browser",
             "0e080d820e": "Reload",
+            "a1f3c2e4b5": "Hard Reload",
+            "b7e4d9c1a2": "Stop",
             "250a9b3e42": "Forward",
             "40edfa75cb": "Back",
             "efb0e8f7f3": "Copy Link Address",
@@ -13770,6 +13848,16 @@
                 "suggestions": {
                   "87fcdd0da9": "{{value0}} Search"
                 }
+              }
+            }
+          }
+        },
+        "profile": {
+          "user": {
+            "agent": {
+              "option": {
+                "04af3dc12b": "Use unmodified user agent",
+                "5bf47a3c91": "May improve Google sign-in, but can reduce compatibility with bot-protected sites."
               }
             }
           }
@@ -14652,6 +14740,20 @@
         "connect": "Connect",
         "connecting": "Connecting…"
       }
+    },
+    "main": {
+      "window": {
+        "editableContextMenu": {
+          "table": "Table",
+          "insertRowAbove": "Insert row above",
+          "insertRowBelow": "Insert row below",
+          "deleteRow": "Delete row",
+          "insertColumnLeft": "Insert column left",
+          "insertColumnRight": "Insert column right",
+          "deleteColumn": "Delete column",
+          "deleteTable": "Delete table"
+        }
+      }
     }
   },
   "components": {
@@ -14760,7 +14862,7 @@
         "other": "Other…",
         "otherPlaceholder": "Type your answer",
         "cancel": "Cancel",
-        "send": "Send answer",
+        "send": "Submit",
         "next": "Next",
         "skip": "Skip",
         "sending": "Sending…"

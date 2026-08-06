@@ -33,23 +33,32 @@ const DRAFT = 'Linked Linear issue: ABC-123\nhttps://linear.app/x/issue/ABC-123'
 describe('useMobileNativeChatMessageSend', () => {
   let renderer: ReactTestRenderer | null = null
   let api: Send | null = null
+  const acceptSend = vi.fn()
+  const holdUnconfirmedSend = vi.fn()
+  const onCommandSend = vi.fn()
+  const commandSendRef = { current: onCommandSend }
+  const agentRef = { current: null as string | null }
   let onSendError = vi.fn()
 
   const mount = (
-    readSeededLaunchDraftSeed: () => { text: string; createdAt: number | null } | null
+    readSeededLaunchDraftSeed: () => { text: string; createdAt: number | null } | null,
+    agent: string | null = 'claude'
   ): void => {
+    agentRef.current = agent
     function Probe(): null {
       api = useMobileNativeChatMessageSend({
         client: { sendRequest: vi.fn() } as never,
         enabled: true,
         handleRef: { current: 'term' },
         deviceTokenRef: { current: 'device' },
+        agentRef,
+        commandSendRef,
         captureSendOrigin: () => ({ draftKey: 'k', pendingKey: 'p' }) as never,
         readSeededLaunchDraftSeed,
         clearDraftForSend: () => {},
         restoreRejectedDraft: () => {},
-        acceptSend: () => {},
-        holdUnconfirmedSend: () => {},
+        acceptSend,
+        holdUnconfirmedSend,
         onSendError
       })
       return null
@@ -76,6 +85,10 @@ describe('useMobileNativeChatMessageSend', () => {
     sendWithOutcome.mockResolvedValue('accepted')
     clearInputWrite.mockReset()
     clearInputWrite.mockResolvedValue(true)
+    acceptSend.mockReset()
+    holdUnconfirmedSend.mockReset()
+    onCommandSend.mockReset()
+    commandSendRef.current = onCommandSend
     onSendError = vi.fn()
     resetMobileNativeChatTerminalWritesForTests()
   })
@@ -180,6 +193,117 @@ describe('useMobileNativeChatMessageSend', () => {
       await api!.answerQuestion('1')
     })
     expect(sentArgs().resolvedLaunchDraft).toBeUndefined()
+  })
+
+  it('creates an optimistic echo for an ordinary chat send', async () => {
+    mount(() => null)
+    await act(async () => {
+      await api!.send('hello')
+    })
+    expect(acceptSend).toHaveBeenCalledTimes(1)
+    expect(onCommandSend).not.toHaveBeenCalled()
+  })
+
+  // The STA-3332 "Queued forever" regression: command sends dispatch into the
+  // agent's TUI and never echo as user turns, so they must not create a pending
+  // bubble that no transcript match can ever retire.
+  it('never creates an optimistic echo for a catalog command send', async () => {
+    mount(() => null)
+    await act(async () => {
+      await api!.send('/clear')
+    })
+    expect(acceptSend).not.toHaveBeenCalled()
+    expect(onCommandSend).toHaveBeenCalledWith('/clear')
+  })
+
+  it('never creates an optimistic echo for an unknown slash token', async () => {
+    // `/model` is not in Claude's autocomplete catalog, but the session-option
+    // recorder still recognizes it without claiming a generic command ran.
+    mount(() => null)
+    await act(async () => {
+      await api!.send('/model sonnet')
+    })
+    expect(acceptSend).not.toHaveBeenCalled()
+    expect(onCommandSend).toHaveBeenCalledWith('/model sonnet')
+  })
+
+  it('classifies per agent: /model is a catalog command for Codex', async () => {
+    mount(() => null, 'codex')
+    await act(async () => {
+      await api!.send('/model')
+    })
+    expect(acceptSend).not.toHaveBeenCalled()
+    expect(onCommandSend).toHaveBeenCalledWith('/model')
+  })
+
+  it('holds only chat sends for transcript confirmation on a lost ack', async () => {
+    sendWithOutcome.mockResolvedValue('unknown')
+    mount(() => null)
+    await act(async () => {
+      await api!.send('/clear')
+    })
+    expect(holdUnconfirmedSend).not.toHaveBeenCalled()
+    await act(async () => {
+      await api!.send('hello')
+    })
+    expect(holdUnconfirmedSend).toHaveBeenCalledTimes(1)
+  })
+
+  it('dispatchCommand surfaces the outcome without echo or composer sync', async () => {
+    mount(() => ({ text: DRAFT, createdAt: 1 }))
+    let outcome: string | undefined
+    await act(async () => {
+      outcome = await api!.dispatchCommand('/model sonnet')
+    })
+    expect(outcome).toBe('accepted')
+    expect(acceptSend).not.toHaveBeenCalled()
+    expect(onCommandSend).not.toHaveBeenCalled()
+    expect(sentArgs().resolvedLaunchDraft).toBeUndefined()
+  })
+
+  it('binds classification to the agent that started the send', async () => {
+    let resolveSend!: (outcome: MobileNativeChatSendOutcome) => void
+    sendWithOutcome.mockReturnValue(
+      new Promise<MobileNativeChatSendOutcome>((resolve) => {
+        resolveSend = resolve
+      })
+    )
+    mount(() => null, 'claude')
+    let sending!: Promise<boolean>
+    act(() => {
+      sending = api!.send('$skill')
+    })
+    agentRef.current = 'codex'
+    await act(async () => {
+      resolveSend('accepted')
+      await sending
+    })
+    expect(acceptSend).toHaveBeenCalledTimes(1)
+  })
+
+  it('records a command against the tab that started the send', async () => {
+    let resolveSend!: (outcome: MobileNativeChatSendOutcome) => void
+    sendWithOutcome.mockReturnValue(
+      new Promise<MobileNativeChatSendOutcome>((resolve) => {
+        resolveSend = resolve
+      })
+    )
+    const originalRecorder = vi.fn()
+    const nextRecorder = vi.fn()
+    commandSendRef.current = originalRecorder
+    mount(() => null)
+    commandSendRef.current = originalRecorder
+    let sending!: Promise<boolean>
+    act(() => {
+      sending = api!.send('/clear')
+    })
+    commandSendRef.current = nextRecorder
+    await act(async () => {
+      resolveSend('accepted')
+      await sending
+    })
+    expect(originalRecorder).toHaveBeenCalledWith('/clear')
+    expect(nextRecorder).not.toHaveBeenCalled()
   })
 
   it('rejects a question answer while another composed write holds the terminal', async () => {

@@ -2,7 +2,8 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ConnectionVerdict } from '../transport/connection-health'
-import type { HostProfile } from '../transport/types'
+import type { MobileConnectionPath } from '../transport/stable-logical-rpc-client'
+import type { ConnectionState, HostProfile } from '../transport/types'
 import {
   markHomeWorktreeCatalogUnavailable,
   type HostWorktreeInfo
@@ -47,14 +48,21 @@ describe('MobileHostCard', () => {
     renderer = null
   })
 
-  async function renderCard(worktreeInfo: HostWorktreeInfo | undefined): Promise<string[]> {
+  async function renderCard(
+    worktreeInfo: HostWorktreeInfo | undefined,
+    overrides?: {
+      state?: ConnectionState
+      verdict?: ConnectionVerdict
+      path?: MobileConnectionPath
+    }
+  ): Promise<string[]> {
     await act(async () => {
       renderer = create(
         createElement(MobileHostCard, {
           host,
-          state: 'connected',
-          verdict,
-          path: 'lan',
+          state: overrides?.state ?? 'connected',
+          verdict: overrides?.verdict ?? verdict,
+          path: overrides?.path ?? 'lan',
           worktreeInfo,
           onPress: () => {},
           onLongPress: () => {}
@@ -82,6 +90,47 @@ describe('MobileHostCard', () => {
     expect(await renderCard(markHomeWorktreeCatalogUnavailable(undefined, 'host-1'))).toContain(
       'Worktree list unavailable'
     )
+  })
+
+  it('names the relay while the dial is still in flight', async () => {
+    const lines = await renderCard(undefined, {
+      state: 'connecting',
+      verdict: { kind: 'normal', label: 'Connecting…' },
+      path: 'relay'
+    })
+
+    expect(lines).toContain('Connecting…')
+    expect(lines).toContain(' · Orca Relay')
+  })
+
+  it('names the relay while a failed direct dial is still retrying', async () => {
+    const lines = await renderCard(undefined, {
+      state: 'reconnecting',
+      verdict: { kind: 'normal', label: 'Reconnecting…' },
+      path: 'relay'
+    })
+
+    expect(lines).toContain(' · Orca Relay')
+  })
+
+  it('leaves an idle disconnected host unlabelled', async () => {
+    const lines = await renderCard(undefined, {
+      state: 'disconnected',
+      verdict: { kind: 'normal', label: 'Disconnected' },
+      path: 'relay'
+    })
+
+    expect(lines).not.toContain(' · Orca Relay')
+  })
+
+  it('does not guess a direct path before the dial resolves', async () => {
+    const lines = await renderCard(undefined, {
+      state: 'connecting',
+      verdict: { kind: 'normal', label: 'Connecting…' },
+      path: 'lan'
+    })
+
+    expect(lines).not.toContain(' · Direct · LAN')
   })
 
   it('shows no worktree line before the first read lands', async () => {

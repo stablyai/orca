@@ -50,8 +50,13 @@ vi.mock('./MobileAgentWorkingIndicator', () => ({
 vi.mock('./MobileNativeChatComposer', async () => {
   const React = await import('react')
   return {
-    MobileNativeChatComposer: (props: { onSend: (text: string) => Promise<boolean> }) =>
+    MobileNativeChatComposer: (props: {
+      onSend: (text: string) => Promise<boolean>
+      disabled?: boolean
+      placeholder?: string
+    }) =>
       React.createElement('Composer', {
+        ...props,
         accessibilityLabel: 'Send message',
         onPress: () => props.onSend('hi')
       })
@@ -136,6 +141,10 @@ describe('MobileNativeChatView', () => {
     return renderer!.root.findAll((node) => node.props.accessibilityRole === 'alert')
   }
 
+  function composer(): ReactTestInstance {
+    return renderer!.root.find((node) => node.type === 'Composer')
+  }
+
   function bannerText(): string {
     const [alert, ...rest] = banners()
     expect(rest).toHaveLength(0)
@@ -196,5 +205,43 @@ describe('MobileNativeChatView', () => {
     await update({ folded, streaming: 'The tests' })
 
     expect(listIds()).toEqual(['a1', 'streaming'])
+  })
+
+  it('keeps a visible lock through a subscribed-end lease blip', async () => {
+    vi.useFakeTimers()
+    try {
+      await render({ inputLockReason: 'waiting' })
+      await act(async () => vi.advanceTimersByTime(600))
+      expect(composer().props.disabled).toBe(true)
+
+      await update({ inputLockReason: null })
+      expect(composer().props.disabled).toBe(true)
+      await act(async () => vi.advanceTimersByTime(300))
+      await update({ inputLockReason: 'waiting' })
+      await act(async () => vi.advanceTimersByTime(600))
+
+      expect(composer().props.disabled).toBe(true)
+      expect(composer().props.placeholder).toBe('Waiting for terminal…')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('unlocks after the lease stays ready', async () => {
+    vi.useFakeTimers()
+    try {
+      await render({ inputLockReason: 'waiting' })
+      await act(async () => vi.advanceTimersByTime(600))
+      await update({ inputLockReason: null })
+      await act(async () => vi.advanceTimersByTime(599))
+      expect(composer().props.disabled).toBe(true)
+
+      await act(async () => vi.advanceTimersByTime(1))
+
+      expect(composer().props.disabled).toBe(false)
+      expect(composer().props.placeholder).toBe('Message, @files, /commands')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

@@ -75,6 +75,8 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
     {
       worktree,
       pathText: options.pathText,
+      // Why: opts into sibling-workspace resolutions; this caller honors resolved.worktree.
+      crossWorkspace: true,
       ...(options.terminalHandle && options.terminalHandle.trim().length > 0
         ? { terminal: options.terminalHandle }
         : {}),

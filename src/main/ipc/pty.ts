@@ -198,7 +198,6 @@ import {
 } from '../codex/codex-pane-account-registry'
 import { resolveCodexPaneLaunchAccount } from '../codex/codex-pane-launch-account'
 import { getSystemCodexHomePath } from '../codex/codex-home-paths'
-import { isCodexSystemDefaultRealHomeEnabled } from '../codex/codex-real-home-flag'
 import {
   environmentCodexHomeOverrideContextsEqual,
   getCustomCodexHomeOverrideForLaunch,
@@ -712,7 +711,13 @@ function retirePersistedStablePaneOwner(
   const paneKey = makePaneKey(owner.tabId, owner.leafId)
   const hostId = connectionId ? toSshExecutionHostId(connectionId) : undefined
   const current = resolvePersistedStablePaneOwner(store, paneKey, worktreeId, connectionId)
-  if (current?.ptyId !== owner.ptyId || current.incarnationId !== owner.incarnationId) {
+  if (!current) {
+    // Why: persistence already dropped this pane binding (an earlier stop retired it while the
+    // runtime kept history), so there is nothing left to clear — that is a completed retirement,
+    // not a competing owner. Reporting failure here strands the pane after its PTY is proven dead.
+    return true
+  }
+  if (current.ptyId !== owner.ptyId || current.incarnationId !== owner.incarnationId) {
     return false
   }
   const session = store.getWorkspaceSession(hostId)
@@ -1111,10 +1116,7 @@ function shouldStripInheritedOrcaCodexHome(args: {
   settings: GlobalSettings | undefined
 }): boolean {
   return (
-    args.target.runtime === 'host' &&
-    args.selectedCodexHomePath === null &&
-    !args.skipCodexHomeEnv &&
-    isCodexSystemDefaultRealHomeEnabled()
+    args.target.runtime === 'host' && args.selectedCodexHomePath === null && !args.skipCodexHomeEnv
   )
 }
 
@@ -7153,6 +7155,13 @@ export function registerPtyHandlers(
   )
 
   ipcMain.handle('pty:hasPty', async (_event, args: { id: string }): Promise<boolean | null> => {
+    if (typeof args?.id !== 'string' || args.id.startsWith('remote:')) {
+      // Why: same routing hazard pty:kill guards against — ptyOwnership never holds
+      // a runtime terminal handle and parseAppSshPtyId ignores it, so the lookup
+      // falls through to the local provider and its "not in my table" reads as an
+      // authoritative dead. That is a fabricated answer about another host's PTY.
+      return null
+    }
     const ownedConnectionId = ptyOwnership.get(args.id)
     const parsedSshId = ownedConnectionId === undefined ? parseAppSshPtyId(args.id) : null
     const provider = parsedSshId

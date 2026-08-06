@@ -98,7 +98,13 @@ describe('useMobileFileTapHandlers', () => {
 
     expect(sendRequest).toHaveBeenCalledWith(
       'files.resolveTerminalPath',
-      { worktree: 'id:wt-1', pathText: 'index.ts', terminal: 'terminal-1', cwd: '/repo/sub' },
+      {
+        worktree: 'id:wt-1',
+        pathText: 'index.ts',
+        terminal: 'terminal-1',
+        cwd: '/repo/sub',
+        crossWorkspace: true
+      },
       { timeoutMs: 10_000 }
     )
   })
@@ -126,7 +132,7 @@ describe('useMobileFileTapHandlers', () => {
 
     expect(sendRequest).toHaveBeenCalledWith(
       'files.resolveTerminalPath',
-      { worktree: 'id:wt-1', pathText: 'mobile/src/x.ts' },
+      { worktree: 'id:wt-1', pathText: 'mobile/src/x.ts', crossWorkspace: true },
       { timeoutMs: 10_000 }
     )
     expect(options.reportChatTapFailure).toHaveBeenCalledWith("Couldn't open mobile/src/x.ts:12")
