@@ -31847,7 +31847,12 @@ export class OrcaRuntimeService {
         .then((absent) => {
           this.probeDeferredDeliveryPtyIds.delete(probedPtyId)
           if (!absent && leaf.ptyId === probedPtyId) {
-            this.deliverPendingMessages(leaf, true, reservedTypes)
+            // Why no reservedTypes here: the snapshot exists for a waiter resolved
+            // inside one microtask drain, and this continuation runs after an
+            // awaited probe — many macrotasks later. Carrying it would suppress a
+            // row whose waiter is long gone, and the dedup above already swallowed
+            // the notify that would have retried it, stranding the row.
+            this.deliverPendingMessages(leaf, true)
           }
         })
         .catch(() => {

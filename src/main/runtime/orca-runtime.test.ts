@@ -33252,6 +33252,53 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  it('skips rows claimed by a waiter that registered after the notify', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new InMemoryOrchestrationMessages()
+      const write = vi.fn().mockReturnValue(true)
+      setInMemoryOrchestrationMessages(runtime, db)
+      runtime.setPtyController({
+        write,
+        kill: vi.fn(),
+        getForegroundProcess: async () => null
+      })
+      syncSinglePty(runtime)
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+      runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
+      await runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle' })
+      write.mockClear()
+
+      const message = db.insertMessage({
+        from: 'sender',
+        to: terminal.handle,
+        subject: 'claimed late',
+        type: 'status'
+      })
+      // Why: the notify snapshot is empty — no waiter existed yet. A check that
+      // blocks before the deferred push runs still owns this row, so only the
+      // push-time read of live waiters can keep it out of the pane.
+      runtime.notifyMessageArrived(terminal.handle, 'status')
+      const waitPromise = runtime.waitForMessage(terminal.handle, {
+        typeFilter: ['status'],
+        timeoutMs: 5_000
+      })
+      await Promise.resolve()
+
+      expect(write).not.toHaveBeenCalled()
+      expect(message.delivered_at).toBeNull()
+
+      await vi.advanceTimersByTimeAsync(5_000)
+      await expect(waitPromise).resolves.toBe('timed_out')
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('keeps live idle authority across a renderer graph republish', async () => {
     vi.useFakeTimers()
     try {

@@ -243,7 +243,7 @@ function makeOrchestrationDbStub(toHandle: () => string) {
   return {
     rows,
     markAsDelivered,
-    insert(subject: string): void {
+    insert(subject: string, type: StoredMessageRow['type'] = 'status'): void {
       rows.push({
         id: `msg_${rows.length + 1}`,
         run_id: 'run_test',
@@ -251,7 +251,7 @@ function makeOrchestrationDbStub(toHandle: () => string) {
         to_handle: toHandle(),
         subject,
         body: '',
-        type: 'status',
+        type,
         priority: 'normal',
         thread_id: null,
         payload: null,
@@ -288,6 +288,46 @@ describe('push-on-idle orchestration delivery absence gate', () => {
     runtime.onPtyData(STALE_PTY_ID, '\x1b]0;Codex done\x07', 101)
     return { runtime, handle, write, stub }
   }
+
+  // Why: the notify-time reservation snapshot exists for a waiter resolved inside
+  // one microtask drain. The probe continuation runs many macrotasks later, and
+  // the probe dedup swallows every notify arriving meanwhile — so a reservation
+  // carried in here would skip a row with nothing left to retry it (#12536 again).
+  it('does not carry a stale waiter reservation into the probe continuation', async () => {
+    let resolveProbe!: (value: boolean | null) => void
+    const { runtime, handle, write, stub } = await makeIdleLeafWithoutPtyRecord({
+      probePtyLiveness: () =>
+        new Promise<boolean | null>((resolve) => {
+          resolveProbe = resolve
+        })
+    })
+
+    const waitPromise = runtime.waitForMessage(handle, {
+      typeFilter: ['worker_done'],
+      timeoutMs: 60_000
+    })
+    stub.insert('unclaimed status')
+    runtime.notifyMessageArrived(handle, 'status')
+    await Promise.resolve()
+    expect(write).not.toHaveBeenCalled()
+
+    // The reserving waiter goes away, then its type finally arrives — and the
+    // probe dedup drops this notify, so only the continuation can deliver it.
+    runtime.cancelMessageWaiters(handle)
+    await expect(waitPromise).resolves.toBe('cancelled')
+    stub.insert('late completion', 'worker_done')
+    runtime.notifyMessageArrived(handle, 'worker_done')
+    await Promise.resolve()
+
+    resolveProbe(null)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    const payloads = write.mock.calls
+      .map(([, data]) => data)
+      .filter((data): data is string => typeof data === 'string')
+    expect(payloads.some((data) => data.includes('Subject: unclaimed status'))).toBe(true)
+    expect(payloads.some((data) => data.includes('Subject: late completion'))).toBe(true)
+  })
 
   it('keeps messages queued instead of marking a proven-absent pty delivered', async () => {
     const { runtime, handle, write, stub } = await makeIdleLeafWithoutPtyRecord({
