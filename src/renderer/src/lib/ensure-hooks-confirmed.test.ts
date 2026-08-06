@@ -286,6 +286,29 @@ describe('ensureHooksConfirmed', () => {
     expect(pending).toHaveLength(0)
   })
 
+  it('checks nested SSH hooks through the paired runtime owner', async () => {
+    const { state } = createTestState({
+      settings: { activeRuntimeEnvironmentId: 'focused-env' },
+      repos: [{ id: 'repo-1', displayName: 'Nested SSH', connectionId: 'nested-host' }]
+    } as unknown as Partial<AppState>)
+    runtimeEnvironmentCallMock.mockResolvedValue({
+      id: 'rpc-nested-hooks',
+      ok: true,
+      result: { hasHooks: true, hooks: { scripts: {} }, mayNeedUpdate: false },
+      _meta: { runtimeId: 'runtime-owner' }
+    })
+
+    await ensureHooksConfirmed(state, 'repo-1', 'archive', 'ssh:nested-host', 'owner-runtime')
+
+    expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
+      selector: 'owner-runtime',
+      method: 'repo.hooksCheck',
+      params: { repo: 'repo-1', executionHostId: 'ssh:nested-host' },
+      timeoutMs: 15_000
+    })
+    expect(hooksCheckMock).not.toHaveBeenCalled()
+  })
+
   it('does not prompt for orca.yaml when the repo uses local commands only', async () => {
     const { state, pending } = createTestState({
       repos: [

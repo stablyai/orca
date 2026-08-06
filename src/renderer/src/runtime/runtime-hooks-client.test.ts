@@ -153,4 +153,28 @@ describe('runtime hooks client', () => {
       hostId: 'ssh:server'
     })
   })
+
+  it('routes a nested SSH repo through its paired runtime owner', async () => {
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-nested-hooks',
+      ok: true,
+      result: { hasHooks: false, hooks: null, mayNeedUpdate: false },
+      _meta: { runtimeId: 'runtime-owner' }
+    })
+
+    await checkRuntimeHooks(
+      { activeRuntimeEnvironmentId: 'focused-elsewhere' },
+      'same-repo',
+      'ssh:nested-host',
+      'owner-runtime'
+    )
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'owner-runtime',
+      method: 'repo.hooksCheck',
+      params: { repo: 'same-repo', executionHostId: 'ssh:nested-host' },
+      timeoutMs: 15_000
+    })
+    expect(hooksCheck).not.toHaveBeenCalled()
+  })
 })

@@ -214,31 +214,43 @@ function recordWorkspaceLineageForCreatedWorktree(
   args: CreateWorktreeArgs,
   worktree: Worktree,
   createdAt: number
-): CreateWorktreeResult['workspaceLineage'] {
+): Pick<CreateWorktreeResult, 'lineage' | 'workspaceLineage'> {
   if (!args.parentWorkspace || !worktree.instanceId) {
-    return null
+    return { lineage: null, workspaceLineage: null }
   }
   const childWorkspaceKey = worktreeWorkspaceKey(worktree.id)
   if (args.parentWorkspace === childWorkspaceKey) {
     console.warn(`[worktree-create] refusing to attach ${worktree.id} to itself`)
-    return null
+    return { lineage: null, workspaceLineage: null }
   }
   const parentScope = parseWorkspaceKey(args.parentWorkspace)
   if (!parentScope) {
     console.warn(`[worktree-create] ignoring invalid parent workspace ${args.parentWorkspace}`)
-    return null
+    return { lineage: null, workspaceLineage: null }
   }
   if (parentScope.type === 'folder' && !store.getFolderWorkspace(parentScope.folderWorkspaceId)) {
     console.warn(`[worktree-create] parent folder workspace disappeared: ${args.parentWorkspace}`)
-    return null
+    return { lineage: null, workspaceLineage: null }
   }
   const parentWorktreeMeta =
     parentScope.type === 'worktree' ? store.getWorktreeMeta(parentScope.worktreeId) : null
   if (parentScope.type === 'worktree' && !parentWorktreeMeta) {
     console.warn(`[worktree-create] parent worktree workspace disappeared: ${args.parentWorkspace}`)
-    return null
+    return { lineage: null, workspaceLineage: null }
   }
-  return store.setWorkspaceLineage({
+  const lineage =
+    parentScope.type === 'worktree' && parentWorktreeMeta?.instanceId
+      ? store.setWorktreeLineage(worktree.id, {
+          worktreeId: worktree.id,
+          worktreeInstanceId: worktree.instanceId,
+          parentWorktreeId: parentScope.worktreeId,
+          parentWorktreeInstanceId: parentWorktreeMeta.instanceId,
+          origin: 'manual',
+          capture: { source: 'active-workspace', confidence: 'explicit' },
+          createdAt
+        })
+      : null
+  const workspaceLineage = store.setWorkspaceLineage({
     childWorkspaceKey,
     childInstanceId: worktree.instanceId,
     parentWorkspaceKey: args.parentWorkspace,
@@ -247,6 +259,7 @@ function recordWorkspaceLineageForCreatedWorktree(
     capture: { source: 'active-workspace', confidence: 'explicit' },
     createdAt
   })
+  return { lineage, workspaceLineage }
 }
 
 function countNonEmptyGitOutputLines(output: string): number {
@@ -1485,7 +1498,8 @@ export async function createRemoteWorktree(
   args: CreateWorktreeArgsWithSystemProvenance,
   repo: Repo,
   store: Store,
-  mainWindow: BrowserWindow
+  mainWindow: BrowserWindow,
+  runtime?: OrcaRuntimeService
 ): Promise<CreateWorktreeResult> {
   const timing = createWorktreeCreateTimingRecorder()
   const provider = requireSshGitProvider(repo.connectionId!)
@@ -1833,7 +1847,13 @@ export async function createRemoteWorktree(
     const meta = store.setWorktreeMeta(worktreeId, metaUpdates)
     return { worktree: mergeWorktree(repo.id, created, meta) }
   })
-  const workspaceLineage = recordWorkspaceLineageForCreatedWorktree(store, args, worktree, now)
+  const { lineage, workspaceLineage } = recordWorkspaceLineageForCreatedWorktree(
+    store,
+    args,
+    worktree,
+    now
+  )
+  runtime?.invalidateWorktreeCachesForRepo(repo.id)
 
   // Why: shared/symlink paths, `orca.yaml` shared directories, and `.worktreeinclude` copies are local-only; remote (SSH) support needs a new relay method + auth surface, so all are skipped here.
 
@@ -1880,7 +1900,12 @@ export async function createRemoteWorktree(
 
   notifyWorktreesChanged(mainWindow, repo.id)
   return {
-    worktree: { ...worktree, workspaceLineage },
+    worktree: {
+      ...worktree,
+      ...(lineage ? { parentWorktreeId: lineage.parentWorktreeId, lineage } : {}),
+      workspaceLineage
+    },
+    ...(lineage ? { lineage } : {}),
     ...(workspaceLineage ? { workspaceLineage } : {}),
     ...(setup ? { setup } : {}),
     ...(defaultTabs ? { defaultTabs } : {}),
@@ -2441,7 +2466,13 @@ export async function createLocalWorktree(
     const meta = store.setWorktreeMeta(worktreeId, metaUpdates)
     return { worktree: mergeWorktree(repo.id, created, meta) }
   })
-  const workspaceLineage = recordWorkspaceLineageForCreatedWorktree(store, args, worktree, now)
+  const { lineage, workspaceLineage } = recordWorkspaceLineageForCreatedWorktree(
+    store,
+    args,
+    worktree,
+    now
+  )
+  runtime?.invalidateWorktreeCachesForRepo(repo.id)
   // Why: reuse the roots creation already paid for via `git worktree list` so later IPC doesn't lazily rescan and trip macOS privacy prompts.
   registerWorktreeRootsForRepo(store, repo.id, [
     repo.path,
@@ -2544,7 +2575,12 @@ export async function createLocalWorktree(
 
   notifyWorktreesChanged(mainWindow, repo.id)
   return {
-    worktree: { ...worktree, workspaceLineage },
+    worktree: {
+      ...worktree,
+      ...(lineage ? { parentWorktreeId: lineage.parentWorktreeId, lineage } : {}),
+      workspaceLineage
+    },
+    ...(lineage ? { lineage } : {}),
     ...(workspaceLineage ? { workspaceLineage } : {}),
     ...(stagedStartup.activationSetup
       ? { setup: stagedStartup.activationSetup }

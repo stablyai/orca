@@ -468,6 +468,51 @@ describe('project host setup projection', () => {
       projectHostSetupId: 'remote-repo'
     })
   })
+
+  it('selects setup ownership from the repo execution host', () => {
+    const targetRepo = repo({
+      id: 'same-repo',
+      path: '/srv/remote/orca',
+      displayName: 'orca',
+      connectionId: 'remote-box'
+    })
+
+    expect(
+      getProjectHostSetupWorktreeMeta(
+        [
+          {
+            id: 'local-setup',
+            projectId: 'project-1',
+            hostId: 'local',
+            repoId: 'same-repo',
+            path: '/Users/alice/orca',
+            displayName: 'orca',
+            setupState: 'ready',
+            setupMethod: 'legacy-repo',
+            createdAt: 1,
+            updatedAt: 1
+          },
+          {
+            id: 'ssh-setup',
+            projectId: 'project-1',
+            hostId: 'ssh:remote-box',
+            repoId: 'same-repo',
+            path: '/srv/remote/orca',
+            displayName: 'orca',
+            setupState: 'ready',
+            setupMethod: 'legacy-repo',
+            createdAt: 1,
+            updatedAt: 1
+          }
+        ],
+        targetRepo
+      )
+    ).toEqual({
+      projectId: 'project-1',
+      hostId: 'ssh:remote-box',
+      projectHostSetupId: 'ssh-setup'
+    })
+  })
 })
 
 describe('isGitHubBackedRepo', () => {

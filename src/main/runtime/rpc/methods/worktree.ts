@@ -101,7 +101,7 @@ export const WORKTREE_METHODS: RpcMethod[] = [
       // the same clientMutationId; dedupe so the host returns the in-flight/created
       // worktree instead of spawning a duplicate. No key (desktop/CLI) runs plainly.
       runtime.dedupeWorktreeCreate(params.repo, params.clientMutationId, async () => {
-        const repo = await runtime.showRepo(params.repo)
+        const repo = await runtime.showRepo(params.repo, params.executionHostId)
         const automationProvenance = resolveAutomationWorkspaceProvenance({
           authority: runtime,
           repoSelector: params.repo,
@@ -113,6 +113,7 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         try {
           const result = await runtime.createManagedWorktree({
             repoSelector: params.repo,
+            executionHostId: params.executionHostId,
             name: params.name ?? '',
             baseBranch: params.baseBranch,
             compareBaseRef: params.compareBaseRef,

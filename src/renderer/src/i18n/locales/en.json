@@ -4666,6 +4666,8 @@
           "697d0f6e1b": "Unpin",
           "250de158fd": "Remove Workspace",
           "changeParentWorkspace": "Change Parent Worktree...",
+          "createChildWorktree": "Create Child",
+          "forkWorktree": "Fork",
           "setParentWorkspace": "Set Parent Worktree...",
           "workspaceSection": "Workspace",
           "primaryDeleteDisabled": "Primary worktree — can't be deleted. Remove the project instead.",
@@ -4673,6 +4675,17 @@
           "sleepWithDescendants": "Sleep with Descendants ({{value0}})",
           "sleepWithDescendantsDescription": "Close active panels in this workspace and every nested descendant to free up memory and CPU.",
           "deleteWithDescendants": "Delete with Descendants…"
+        },
+        "RelativeWorktreeCreateDialog": {
+          "branchName": "Branch name",
+          "cancel": "Cancel",
+          "childAction": "Create Child",
+          "childTitle": "Create Child Worktree",
+          "createFailed": "Failed to create worktree.",
+          "creating": "Creating…",
+          "description": "Create a new worktree from the current branch.",
+          "forkAction": "Fork",
+          "forkTitle": "Fork Worktree"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",

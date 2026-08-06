@@ -228,13 +228,29 @@ describe('repo RPC methods', () => {
     const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
 
     const hooksResponse = await dispatcher.dispatch(makeRequest('repo.hooks', { repo: 'repo-1' }))
-    await dispatcher.dispatch(makeRequest('repo.hooksCheck', { repo: 'repo-1' }))
-    await dispatcher.dispatch(makeRequest('repo.setupScriptImports', { repo: 'repo-1' }))
-    await dispatcher.dispatch(makeRequest('repo.issueCommandRead', { repo: 'repo-1' }))
+    await dispatcher.dispatch(
+      makeRequest('repo.hooksCheck', {
+        repo: 'repo-1',
+        executionHostId: 'ssh:nested-host'
+      })
+    )
+    await dispatcher.dispatch(
+      makeRequest('repo.setupScriptImports', {
+        repo: 'repo-1',
+        executionHostId: 'ssh:nested-host'
+      })
+    )
+    await dispatcher.dispatch(
+      makeRequest('repo.issueCommandRead', {
+        repo: 'repo-1',
+        executionHostId: 'ssh:nested-host'
+      })
+    )
     await dispatcher.dispatch(
       makeRequest('repo.issueCommandWrite', {
         repo: 'repo-1',
-        content: 'Fix it'
+        content: 'Fix it',
+        executionHostId: 'ssh:nested-host'
       })
     )
 
@@ -243,10 +259,14 @@ describe('repo RPC methods', () => {
       ok: true,
       result: { setupTrust: { contentHash: 'hash-1', scriptContent: 'pnpm install' } }
     })
-    expect(runtime.checkRepoHooks).toHaveBeenCalledWith('repo-1')
-    expect(runtime.inspectRepoSetupScriptImports).toHaveBeenCalledWith('repo-1')
-    expect(runtime.readRepoIssueCommand).toHaveBeenCalledWith('repo-1')
-    expect(runtime.writeRepoIssueCommand).toHaveBeenCalledWith('repo-1', 'Fix it')
+    expect(runtime.checkRepoHooks).toHaveBeenCalledWith('repo-1', 'ssh:nested-host')
+    expect(runtime.inspectRepoSetupScriptImports).toHaveBeenCalledWith('repo-1', 'ssh:nested-host')
+    expect(runtime.readRepoIssueCommand).toHaveBeenCalledWith('repo-1', 'ssh:nested-host')
+    expect(runtime.writeRepoIssueCommand).toHaveBeenCalledWith(
+      'repo-1',
+      'Fix it',
+      'ssh:nested-host'
+    )
   })
 
   it('persists GitHub issue source preference updates', async () => {

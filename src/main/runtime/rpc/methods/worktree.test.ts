@@ -109,6 +109,7 @@ describe('worktree RPC methods', () => {
     await dispatcher.dispatch(
       makeRequest('worktree.create', {
         repo: 'repo-1',
+        executionHostId: 'ssh:ssh-target-1',
         name: 'feature',
         branchNameOverride: 'feature/something',
         baseBranch: 'origin/main',
@@ -130,6 +131,7 @@ describe('worktree RPC methods', () => {
 
     expect(runtime.createManagedWorktree).toHaveBeenCalledWith({
       repoSelector: 'repo-1',
+      executionHostId: 'ssh:ssh-target-1',
       name: 'feature',
       branchNameOverride: 'feature/something',
       baseBranch: 'origin/main',
@@ -164,6 +166,7 @@ describe('worktree RPC methods', () => {
         orchestrationContext: undefined
       }
     })
+    expect(runtime.showRepo).toHaveBeenCalledWith('repo-1', 'ssh:ssh-target-1')
   })
 
   it('mints automation provenance from a valid dispatch request on worktree creation', async () => {

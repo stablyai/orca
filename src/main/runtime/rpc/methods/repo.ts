@@ -1,12 +1,18 @@
 import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
-import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
+import {
+  OptionalExecutionHostId,
+  OptionalFiniteNumber,
+  OptionalString,
+  requiredString
+} from '../schemas'
 import { PROJECT_RUNTIME_METHODS } from './project-runtime-rpc-methods'
 import { FOLDER_WORKSPACE_METHODS } from './folder-workspace'
 import { createRepoUpdateSchema } from './repo-update-schema'
 
 const RepoSelector = z.object({
-  repo: requiredString('Missing repo selector')
+  repo: requiredString('Missing repo selector'),
+  executionHostId: OptionalExecutionHostId
 })
 
 const RepoPath = z.object({
@@ -250,22 +256,25 @@ export const REPO_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'repo.hooksCheck',
     params: RepoSelector,
-    handler: async (params, { runtime }) => runtime.checkRepoHooks(params.repo)
+    handler: async (params, { runtime }) =>
+      runtime.checkRepoHooks(params.repo, params.executionHostId)
   }),
   defineMethod({
     name: 'repo.setupScriptImports',
     params: RepoSelector,
-    handler: async (params, { runtime }) => runtime.inspectRepoSetupScriptImports(params.repo)
+    handler: async (params, { runtime }) =>
+      runtime.inspectRepoSetupScriptImports(params.repo, params.executionHostId)
   }),
   defineMethod({
     name: 'repo.issueCommandRead',
     params: RepoSelector,
-    handler: async (params, { runtime }) => runtime.readRepoIssueCommand(params.repo)
+    handler: async (params, { runtime }) =>
+      runtime.readRepoIssueCommand(params.repo, params.executionHostId)
   }),
   defineMethod({
     name: 'repo.issueCommandWrite',
     params: RepoIssueCommandWrite,
     handler: async (params, { runtime }) =>
-      runtime.writeRepoIssueCommand(params.repo, params.content)
+      runtime.writeRepoIssueCommand(params.repo, params.content, params.executionHostId)
   })
 ]

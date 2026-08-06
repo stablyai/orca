@@ -247,7 +247,8 @@ export async function ensureHooksConfirmed(
         const result = await readRuntimeIssueCommand(
           settingsForHookRepoOwner(state, repoId, hostId, runtimeOwnerEnvironmentId),
           repoId,
-          hostId
+          hostId,
+          runtimeOwnerEnvironmentId
         )
         if (result.source === 'local') {
           return 'run'
@@ -274,7 +275,8 @@ export async function ensureHooksConfirmed(
         const result = await checkRuntimeHooks(
           settingsForHookRepoOwner(state, repoId, hostId, runtimeOwnerEnvironmentId),
           repoId,
-          hostId
+          hostId,
+          runtimeOwnerEnvironmentId
         )
         if (result.status === 'error') {
           return 'skip'
