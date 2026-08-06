@@ -331,12 +331,13 @@ describe('WslCliInstaller', () => {
     expect(launcher.indexOf('ORCA_WSL_CWD=$(pwd -P')).toBeLessThan(
       launcher.indexOf('ORCA_BRIDGE_PS1_WIN=$(wslpath')
     )
-    expect(launcher).toContain('"$ORCA_WIN_LAUNCHER" -WslCwd "$ORCA_WSL_CWD_WIN" "$@"')
+    expect(launcher).toContain(
+      `ORCA_INVOCATION_B64=$(printf '%s\\0' "$ORCA_WIN_LAUNCHER" "$ORCA_WSL_CWD_WIN" "$@" | base64 | tr -d '\\n')`
+    )
+    expect(launcher).toContain(
+      '-File "$ORCA_BRIDGE_PS1_WIN" --orca-invocation-b64 "$ORCA_INVOCATION_B64"'
+    )
     expect(launcher).not.toContain('-Command')
-    expect(bridge).toContain('[CmdletBinding(PositionalBinding=$false)]')
-    expect(bridge).toContain('[Parameter(Mandatory=$true, Position=0)]')
-    expect(bridge).toContain('[string]$WslCwd')
-    expect(bridge).toContain('[Parameter(ValueFromRemainingArguments=$true)]')
     expect(bridge).toContain('if ([string]::IsNullOrEmpty($WslCwd))')
     expect(bridge).toContain('$env:ORCA_CLI_CWD = $WslCwd')
     expect(bridge).toContain('Push-Location -LiteralPath (Split-Path -Parent $OrcaLauncher)')

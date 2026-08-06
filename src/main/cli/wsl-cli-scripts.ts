@@ -1,6 +1,11 @@
 const MANAGED_MARKER = '# Orca managed WSL CLI launcher'
 const BRIDGE_MANAGED_MARKER = '# Orca managed WSL CLI PowerShell bridge'
 
+// Why: PowerShell's binder prefix-matches parameter names, so forwarding argv as
+// real arguments lets a CLI flag bind the bridge's own parameters -- `--for` is a
+// prefix of `-ForwardArgs`. One opaque record keeps every token out of the binder.
+export const WSL_BRIDGE_INVOCATION_FLAG = '--orca-invocation-b64'
+
 export function buildWslLauncher(
   windowsLauncherPath: string,
   bridgePath = '${XDG_DATA_HOME:-$HOME/.local/share}/orca/orca-wsl-bridge.ps1'
@@ -28,25 +33,40 @@ ORCA_WSL_CWD=$(pwd -P 2>/dev/null) || {
 }
 ORCA_BRIDGE_PS1_WIN=$(wslpath -w "$ORCA_BRIDGE_PS1")
 ORCA_WSL_CWD_WIN=$(wslpath -w "$ORCA_WSL_CWD")
-exec "$ORCA_POWERSHELL" -NoProfile -ExecutionPolicy Bypass -File "$ORCA_BRIDGE_PS1_WIN" "$ORCA_WIN_LAUNCHER" -WslCwd "$ORCA_WSL_CWD_WIN" "$@"
+# Why: every record is NUL-terminated so an empty trailing argument survives.
+ORCA_INVOCATION_B64=$(printf '%s\\0' "$ORCA_WIN_LAUNCHER" "$ORCA_WSL_CWD_WIN" "$@" | base64 | tr -d '\\n')
+exec "$ORCA_POWERSHELL" -NoProfile -ExecutionPolicy Bypass -File "$ORCA_BRIDGE_PS1_WIN" ${WSL_BRIDGE_INVOCATION_FLAG} "$ORCA_INVOCATION_B64"
 `
 }
 
 export function buildWslBridgeScript(): string {
+  // Why: no param() block. A declared parameter makes PowerShell's binder read
+  // forwarded flags as parameter names, which corrupts or drops CLI arguments.
   return `${BRIDGE_MANAGED_MARKER}
-[CmdletBinding(PositionalBinding=$false)]
-param(
-  [Parameter(Mandatory=$true, Position=0)]
-  [string]$OrcaLauncher,
-
-  [string]$WslCwd,
-
-  [Parameter(ValueFromRemainingArguments=$true)]
-  [string[]]$ForwardArgs
-)
-
 $exitCode = 0
 try {
+  if ($args.Count -eq 2 -and $args[0] -eq '${WSL_BRIDGE_INVOCATION_FLAG}') {
+    $records = @([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($args[1])).Split([char]0))
+    if ($records.Count -lt 3) {
+      throw 'Orca WSL bridge received a malformed invocation payload.'
+    }
+    # Why: the launcher terminates every record, leaving one trailing empty slot.
+    $records = @($records[0..($records.Count - 2)])
+    $OrcaLauncher = $records[0]
+    $WslCwd = $records[1]
+    $ForwardArgs = @($records | Select-Object -Skip 2)
+  } else {
+    # Why: an interrupted upgrade can pair this bridge with the previous launcher,
+    # which passed the target positionally ahead of -WslCwd.
+    $OrcaLauncher = $args[0]
+    $ForwardArgs = @($args | Select-Object -Skip 1)
+    $WslCwd = ''
+    if ($ForwardArgs.Count -ge 2 -and $ForwardArgs[0] -eq '-WslCwd') {
+      $WslCwd = $ForwardArgs[1]
+      $ForwardArgs = @($ForwardArgs | Select-Object -Skip 2)
+    }
+  }
+
   if ([string]::IsNullOrEmpty($WslCwd)) {
     Remove-Item Env:ORCA_CLI_CWD -ErrorAction SilentlyContinue
   } else {
