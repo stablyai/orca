@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  REMOTE_BROWSER_STREAM_RESTART_DELAYS_MS,
-  RemoteBrowserStreamRestartScheduler
-} from './remote-browser-stream-restart-scheduler'
+import { RemoteBrowserStreamRestartScheduler } from './remote-browser-stream-restart-scheduler'
 
 afterEach(() => {
   vi.useRealTimers()
@@ -41,13 +38,13 @@ describe('RemoteBrowserStreamRestartScheduler', () => {
     scheduler.schedule(run)
     await vi.advanceTimersByTimeAsync(60_000)
 
-    expect(run).toHaveBeenCalledTimes(REMOTE_BROWSER_STREAM_RESTART_DELAYS_MS.length)
+    expect(run).toHaveBeenCalledTimes(5)
     expect(onExhausted).toHaveBeenCalledTimes(1)
     expect(scheduler.isBudgetExhausted).toBe(true)
     expect(scheduler.isScheduled).toBe(false)
 
     await vi.advanceTimersByTimeAsync(300_000)
-    expect(run).toHaveBeenCalledTimes(REMOTE_BROWSER_STREAM_RESTART_DELAYS_MS.length)
+    expect(run).toHaveBeenCalledTimes(5)
   })
 
   it('marks only the final attempt as final', async () => {
@@ -147,7 +144,7 @@ describe('RemoteBrowserStreamRestartScheduler', () => {
     const run = vi.fn(async () => true)
 
     const observedDelays: number[] = []
-    for (let i = 0; i < REMOTE_BROWSER_STREAM_RESTART_DELAYS_MS.length + 3; i++) {
+    for (let i = 0; i < 12; i++) {
       const before = setTimeoutSpy.mock.calls.length
       scheduler.schedule(run)
       const call = setTimeoutSpy.mock.calls.at(-1)
@@ -158,7 +155,10 @@ describe('RemoteBrowserStreamRestartScheduler', () => {
       vi.advanceTimersByTime(call?.[1] as number)
     }
 
-    expect(observedDelays).toEqual([...REMOTE_BROWSER_STREAM_RESTART_DELAYS_MS])
+    // Literal on purpose: asserting against the constant under test makes the ladder self-certifying
+    // — verified, a change to 12 flat 1s attempts passed the whole suite. The budget's size and shape
+    // are user-visible (how long the pane waits before handing control back), so they get pinned here.
+    expect(observedDelays).toEqual([500, 1_000, 2_000, 4_000, 8_000])
   })
 
   it('does not double-schedule while a restart is already pending', () => {

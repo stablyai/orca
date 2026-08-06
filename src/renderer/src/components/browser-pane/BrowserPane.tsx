@@ -911,6 +911,7 @@ function RemoteBrowserPagePane({
   const [streamReconnectAvailable, setStreamReconnectAvailable] = useState(false)
   // Bumped by Reconnect to re-run the open effect from scratch. See reconnectRemoteStream.
   const [reopenNonce, setReopenNonce] = useState(0)
+  const streamReconnectAvailableRef = useRef(false)
   const [contextMenu, setContextMenu] = useState<RemoteBrowserContextMenu | null>(null)
   const [busy, setBusy] = useState(false)
   const contextMenuRef = useRef<HTMLDivElement>(null)
@@ -1438,6 +1439,18 @@ function RemoteBrowserPagePane({
     syncViewport: syncRemoteViewport
   }
 
+  streamReconnectAvailableRef.current = streamReconnectAvailable
+  // Why not a plain setRemoteError(null): the input and navigation handlers clear optimistically on
+  // every interaction, but while a reconnect offer stands that toast carries the user's only way
+  // back. Clicking the frozen frame — the natural reaction — would otherwise delete the control,
+  // and the RPC it queues then fails anyway and repaints the raw transport string in its place.
+  const clearIncidentalRemoteError = useCallback((): void => {
+    if (streamReconnectAvailableRef.current) {
+      return
+    }
+    setRemoteError(null)
+  }, [])
+
   const reconnectRemoteStream = useCallback((): void => {
     setStreamReconnectAvailable(false)
     setRemoteError(null)
@@ -1536,7 +1549,7 @@ function RemoteBrowserPagePane({
         return
       }
       setBusy(true)
-      setRemoteError(null)
+      clearIncidentalRemoteError()
       onUpdatePageState(browserTab.id, { loading: true, loadError: null })
       try {
         const params =
@@ -1575,6 +1588,7 @@ function RemoteBrowserPagePane({
       }
     },
     [
+      clearIncidentalRemoteError,
       applyRemoteTabInfo,
       browserTab.id,
       browserTab.url,
@@ -1659,7 +1673,7 @@ function RemoteBrowserPagePane({
     event.preventDefault()
     image.focus()
     setContextMenu(null)
-    setRemoteError(null)
+    clearIncidentalRemoteError()
     enqueueRemoteInput(async () => {
       if (!isCurrentRemoteOperationToken(operationToken)) {
         return
@@ -1706,7 +1720,7 @@ function RemoteBrowserPagePane({
       return
     }
     event.preventDefault()
-    setRemoteError(null)
+    clearIncidentalRemoteError()
     enqueueRemoteInput(async () => {
       if (!isCurrentRemoteOperationToken(operationToken)) {
         return
@@ -1750,7 +1764,7 @@ function RemoteBrowserPagePane({
     }
     event.preventDefault()
     imageRef.current?.focus()
-    setRemoteError(null)
+    clearIncidentalRemoteError()
     setContextMenu({
       x: event.clientX,
       y: event.clientY,
@@ -1816,7 +1830,7 @@ function RemoteBrowserPagePane({
       return
     }
     event.preventDefault()
-    setRemoteError(null)
+    clearIncidentalRemoteError()
     enqueueRemoteInput(async () => {
       if (!isCurrentRemoteOperationToken(operationToken)) {
         return
@@ -1923,7 +1937,7 @@ function RemoteBrowserPagePane({
         return
       }
       event.preventDefault()
-      setRemoteError(null)
+      clearIncidentalRemoteError()
       const deltaMultiplier =
         event.deltaMode === WHEEL_DELTA_LINE
           ? 16
@@ -1962,6 +1976,7 @@ function RemoteBrowserPagePane({
       createRemoteOperationToken,
       getRemoteImagePoint,
       lifecycle,
+      clearIncidentalRemoteError,
       runtimeTarget,
       schedulePendingRemoteWheel
     ]

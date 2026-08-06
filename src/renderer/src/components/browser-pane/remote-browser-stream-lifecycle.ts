@@ -5,6 +5,7 @@ import { openRemoteBrowserScreencastStream } from './remote-browser-screencast-s
 import { RemoteBrowserStreamRestartScheduler } from './remote-browser-stream-restart-scheduler'
 import { REMOTE_BROWSER_STREAM_UNREACHABLE_MESSAGE } from './remote-browser-stream-messages'
 import {
+  isPermanentRemoteBrowserStreamFailure,
   isRemoteBrowserPageMissingError,
   remoteBrowserStreamUnsupportedError,
   resolveRemoteBrowserStreamRestartFailure
@@ -52,6 +53,10 @@ export class RemoteBrowserStreamLifecycle {
     const { tokens, deps } = this
     deps.setBusy(true)
     deps.setError(null)
+    // Why cleared here: a reopen (tab switch, environment or worktree change, or Reconnect) starts a
+    // fresh budget, so a flag left over from a previous exhaustion would show the control while
+    // attempts remain — the one state the pane must never present.
+    deps.setReconnectAvailable(false)
     this.retireInFlightWork()?.unsubscribe()
     const operationToken = tokens.createOperationToken()
     if (!operationToken) {
@@ -87,11 +92,21 @@ export class RemoteBrowserStreamLifecycle {
           deps.closeMissingRemotePage(tokens.remotePage)
           return
         }
-        console.warn('[browser-pane] remote browser failed to open:', error)
+        // Why classified here too: the same condition (a host that cannot stream) reaches both this
+        // path and the restart path, and it must not read as "unreachable" here and as its own
+        // specific message there.
+        const permanent = isPermanentRemoteBrowserStreamFailure(error)
+        if (!permanent) {
+          console.warn('[browser-pane] remote browser failed to open:', error)
+        }
         // "Unreachable" rather than "lost": nothing was ever established here. And this path never
         // had a stream, so the retry budget never runs — without the affordance below, nothing else
         // would ever offer a way back and the pane strands on a bare error.
-        deps.setError(REMOTE_BROWSER_STREAM_UNREACHABLE_MESSAGE())
+        deps.setError(
+          permanent && error instanceof Error
+            ? error.message
+            : REMOTE_BROWSER_STREAM_UNREACHABLE_MESSAGE()
+        )
         deps.setReconnectAvailable(true)
         deps.setBusy(false)
       })
@@ -309,12 +324,18 @@ export class RemoteBrowserStreamLifecycle {
           return false
         }
         const failure = resolveRemoteBrowserStreamRestartFailure(error)
-        if (failure.shouldRetry) {
+        if (failure.logRawError) {
           // The raw text is transport-level and written for logs; keep it out of the UI but not
           // out of reach, since nothing else records it.
           console.warn('[browser-pane] remote stream restart failed:', error)
         }
         deps.setError(failure.message)
+        // Why also when we stop: giving up on automatic retries is not the same as taking away the
+        // user's last resort. A classification we got wrong would otherwise strand the pane exactly
+        // as it did before this work.
+        if (!failure.shouldRetry) {
+          deps.setReconnectAvailable(true)
+        }
         deps.setBusy(false)
         return failure.shouldRetry
       }

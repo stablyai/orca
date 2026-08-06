@@ -74,6 +74,8 @@ export type RemoteBrowserStreamRestartFailure = {
   message: string
   /** False once the failure is proven unrecoverable on this connection. */
   shouldRetry: boolean
+  /** Whether the raw error is worth logging — true only when the pane replaced the message. */
+  logRawError: boolean
 }
 
 // Why the message is decided here rather than at the call site: whether a failure is permanent and
@@ -82,14 +84,21 @@ export type RemoteBrowserStreamRestartFailure = {
 // support remote browser streaming."); flattening that to "Lost connection" would be vaguer and
 // wrong, since nothing was lost. Everything else carries a raw transport string written for logs,
 // so the pane speaks for itself there and the raw text is left to the caller to log.
+//
+// Note what this deliberately does NOT decide: whether the user is offered a way back. Stopping
+// automatic retries and removing the user's only recovery are different things, and conflating them
+// is what stranded the pane in the first place. `selector_not_found` already had to be walked back
+// out of the permanent set once (08260a54bf) — proof this classification can be wrong — so a
+// misjudgement here must stay recoverable by hand.
 export function resolveRemoteBrowserStreamRestartFailure(
   error: unknown
 ): RemoteBrowserStreamRestartFailure {
   if (isPermanentRemoteBrowserStreamFailure(error)) {
     return {
       message: error instanceof Error ? error.message : 'Failed to restart remote browser stream.',
-      shouldRetry: false
+      shouldRetry: false,
+      logRawError: false
     }
   }
-  return { message: REMOTE_BROWSER_STREAM_LOST_MESSAGE(), shouldRetry: true }
+  return { message: REMOTE_BROWSER_STREAM_LOST_MESSAGE(), shouldRetry: true, logRawError: true }
 }

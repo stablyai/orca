@@ -172,12 +172,16 @@ function createHarness() {
     identity,
     busyLog,
     errorLog,
+    reconnectAvailableLog,
     appliedTitles,
     closedPages,
     streams,
     rpcLog,
     get subscribeAttempts(): number {
       return subscribeAttempts
+    },
+    get reconnectOffered(): boolean {
+      return reconnectAvailableLog.at(-1) === true
     },
     get currentError(): string | null {
       return errorLog.length > 0 ? (errorLog.at(-1) ?? null) : null
@@ -488,5 +492,93 @@ describe('RemoteBrowserStreamLifecycle', () => {
 
     expect(harness.errorLog).toHaveLength(errorsBeforeUnmount)
     expect(harness.subscribeAttempts).toBe(1)
+  })
+})
+
+// Why these exist: deleting every setReconnectAvailable call site left the whole suite green, so the
+// affordance had no unit coverage at all — only two E2E paths. Each test below fails if its own call
+// site is removed.
+describe('RemoteBrowserStreamLifecycle reconnect affordance', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('withholds reconnect while retries remain, then offers it once the budget is spent', async () => {
+    const harness = createHarness()
+    await openStreamAndConfirmReady(harness)
+    harness.failEverySubscribe(rpcError('runtime_unavailable', 'socket died'))
+
+    harness.streams[0].emitEnd()
+    await vi.advanceTimersByTimeAsync(500)
+    // One attempt spent, four remain: offering a control here invites fighting the retry loop.
+    expect(harness.reconnectOffered).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(harness.reconnectOffered).toBe(true)
+    expect(harness.currentError).toBe('Lost connection to the remote server.')
+  })
+
+  // The regression the review caught: stopping automatic retries is not the same as removing the
+  // user's last resort. selector_not_found already had to leave the permanent set once, so a
+  // misclassification here must stay recoverable by hand.
+  it('offers reconnect even when it stops retrying a permanent failure', async () => {
+    const harness = createHarness()
+    await openStreamAndConfirmReady(harness)
+    harness.failEverySubscribe(rpcError('worktree_not_found_on_server', 'worktree is gone'))
+
+    harness.streams[0].emitEnd()
+    await vi.advanceTimersByTimeAsync(60_000)
+
+    expect(harness.reconnectOffered).toBe(true)
+    // The specific message survives: it says something true that "Lost connection" would not.
+    expect(harness.currentError).toBe('worktree is gone')
+  })
+
+  it('offers reconnect when the stream never opened at all', async () => {
+    const harness = createHarness()
+    harness.failEverySubscribe(rpcError('runtime_unavailable', 'host is down'))
+    harness.lifecycle.open()
+    await vi.advanceTimersByTimeAsync(60_000)
+
+    expect(harness.reconnectOffered).toBe(true)
+    expect(harness.currentError).toBe('Cannot reach the remote server.')
+  })
+
+  it('clears the offer once a stream goes live again', async () => {
+    const harness = createHarness()
+    await openStreamAndConfirmReady(harness)
+    harness.failEverySubscribe(rpcError('runtime_unavailable', 'socket died'))
+    harness.streams[0].emitEnd()
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(harness.reconnectOffered).toBe(true)
+
+    harness.failEverySubscribe(null)
+    harness.lifecycle.open()
+    await settle()
+    harness.streams.at(-1)!.emitReady()
+    await settle()
+
+    expect(harness.reconnectOffered).toBe(false)
+  })
+
+  // A reopen starts a fresh budget, so a flag left over from a previous exhaustion would show the
+  // control while attempts remain.
+  it('does not carry a spent offer into the next open', async () => {
+    const harness = createHarness()
+    await openStreamAndConfirmReady(harness)
+    harness.failEverySubscribe(rpcError('runtime_unavailable', 'socket died'))
+    harness.streams[0].emitEnd()
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(harness.reconnectOffered).toBe(true)
+
+    // Failures cleared and no 'ready' emitted yet: the flag must already be down from open() alone,
+    // not from the later confirmation.
+    harness.failEverySubscribe(null)
+    harness.lifecycle.open()
+    await settle()
+    expect(harness.reconnectOffered).toBe(false)
   })
 })
