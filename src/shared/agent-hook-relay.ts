@@ -27,6 +27,7 @@ import { createHash } from 'node:crypto'
 import type { AgentSubagentSnapshot, ParsedAgentStatusPayload } from './agent-status-types'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { AgentHookTarget } from './agent-hook-types'
+import type { ExplicitCodexApprovalReviewer } from './codex-approval-reviewer'
 
 // Why: the local hook server knows the discriminator from URL pathname routing
 // (`/hook/<source>`); the relay equally must tag each forwarded notification

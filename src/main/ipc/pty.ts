@@ -6201,6 +6201,19 @@ export function registerPtyHandlers(
             }
           }
         }
+        if (baseEnv) {
+          delete baseEnv[ORCA_CODEX_APPROVAL_REVIEWER_ENV]
+        }
+        const codexApprovalReviewer =
+          args.launchAgent === 'codex' && (!args.connectionId || isRemoteAgentHooksEnabled())
+            ? resolveCodexApprovalReviewer(effectiveLaunchConfig?.agentArgs)
+            : 'unknown'
+        if (codexApprovalReviewer !== 'unknown') {
+          baseEnv = {
+            ...baseEnv,
+            [ORCA_CODEX_APPROVAL_REVIEWER_ENV]: codexApprovalReviewer
+          }
+        }
         const requestedAgentTeamsPath = baseEnv?.ORCA_AGENT_TEAMS_TEAM_ID
           ? baseEnv[resolvePathEnvKey(baseEnv, process.platform)]
           : undefined
@@ -6225,6 +6238,7 @@ export function registerPtyHandlers(
           delete baseEnv.ORCA_TAB_ID
           delete baseEnv.ORCA_WORKTREE_ID
           delete baseEnv.ORCA_AGENT_LAUNCH_TOKEN
+          delete baseEnv[ORCA_CODEX_APPROVAL_REVIEWER_ENV]
         }
         const validatedPaneKey = stablePaneKey
         // Why: SSH can strip ORCA_PANE_KEY when remote hooks are off; IPC tab/leaf metadata still names the pane.

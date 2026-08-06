@@ -105,6 +105,43 @@ describe('RelayAgentHookServer', () => {
     }
   })
 
+  it('forwards validated Codex reviewer ownership through the relay envelope', async () => {
+    const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    await server.start()
+    try {
+      const { port, token } = server.getCoordinates()
+      const res = await fetch(`http://127.0.0.1:${port}/hook/codex`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': token
+        },
+        body: JSON.stringify({
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          codexApprovalReviewer: 'auto_review',
+          payload: {
+            hook_event_name: 'PermissionRequest',
+            tool_name: 'exec_command'
+          }
+        })
+      })
+
+      expect(res.status).toBe(204)
+      expect(forward).toHaveBeenCalledWith(
+        expect.objectContaining({
+          source: 'codex',
+          codexApprovalReviewer: 'auto_review',
+          hookEventName: 'PermissionRequest',
+          payload: expect.objectContaining({ state: 'waiting', agentType: 'codex' })
+        })
+      )
+    } finally {
+      server.stop()
+    }
+  })
+
   it('rejects requests with the wrong bearer token (403)', async () => {
     const forward = vi.fn()
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })

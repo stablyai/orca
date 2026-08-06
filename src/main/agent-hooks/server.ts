@@ -321,6 +321,10 @@ function sanitizeHydratedEntry(
   return {
     paneKey,
     source,
+    codexApprovalReviewer:
+      payload.agentType === 'codex'
+        ? parseExplicitCodexApprovalReviewer(record.codexApprovalReviewer)
+        : undefined,
     tabId: typeof tabId === 'string' ? tabId : undefined,
     worktreeId: typeof worktreeId === 'string' ? worktreeId : undefined,
     connectionId,
@@ -2047,6 +2051,10 @@ export class AgentHookServer {
       paneKey,
       source,
       launchToken: statusDisposition === 'restart' ? undefined : envelope.launchToken,
+      codexApprovalReviewer:
+        normalizedPayload.agentType === 'codex'
+          ? parseExplicitCodexApprovalReviewer(envelope.codexApprovalReviewer)
+          : undefined,
       tabId,
       worktreeId,
       connectionId: trimmedConnectionId,

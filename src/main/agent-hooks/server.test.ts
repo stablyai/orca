@@ -61,6 +61,7 @@ const RUNNING_SHELL = { id: 'shell-1', type: 'shell', status: 'running' }
 type Body = {
   paneKey: string
   launchToken?: string
+  codexApprovalReviewer?: 'auto_review' | 'user'
   tabId?: string
   worktreeId?: string
   env?: string
@@ -6765,6 +6766,57 @@ describe('Last-status persistence', () => {
       expect(file.entries[PANE].claudeRunningNonAgentTask).toBeUndefined()
       expect(readFileSync(lastStatusPath(), 'utf8')).not.toContain('claudeRunningNonAgentTask')
       expect(readFileSync(lastStatusPath(), 'utf8')).not.toContain('launch-bearer-must-not-persist')
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('hydrates Codex reviewer ownership without persisting the launch bearer', async () => {
+    const firstServer = new AgentHookServer()
+    await firstServer.start({ env: 'production', userDataPath })
+    await postHookEvent(
+      firstServer,
+      buildBody(
+        { hook_event_name: 'PermissionRequest', tool_name: 'exec_command' },
+        {
+          launchToken: 'reviewer-launch-bearer',
+          codexApprovalReviewer: 'auto_review'
+        }
+      ),
+      '/hook/codex'
+    )
+    firstServer.flushStatusPersistSync()
+    firstServer.stop()
+
+    const persisted = readFileSync(lastStatusPath(), 'utf8')
+    expect(persisted).not.toContain('reviewer-launch-bearer')
+    expect(JSON.parse(persisted).entries[PANE]).toMatchObject({
+      codexApprovalReviewer: 'auto_review',
+      hookEventName: 'PermissionRequest'
+    })
+
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      const listener = vi.fn()
+      server.setListener(listener)
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          codexApprovalReviewer: 'auto_review',
+          hookEventName: 'PermissionRequest',
+          isReplay: true,
+          payload: expect.objectContaining({ state: 'waiting', agentType: 'codex' })
+        })
+      )
+      expect(listener.mock.calls[0]?.[0]).not.toHaveProperty('launchToken')
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          codexApprovalReviewer: 'auto_review',
+          hookEventName: 'PermissionRequest',
+          state: 'waiting',
+          agentType: 'codex'
+        })
+      ])
     } finally {
       server.stop()
     }

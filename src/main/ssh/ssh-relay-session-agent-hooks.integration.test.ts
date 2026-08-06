@@ -589,6 +589,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     relay = createFakeRelay()
     vi.mocked(deployAndLaunchRelay).mockResolvedValue({
       transport: relay.transport,
+      serverBuildId: 'test-relay-build',
       platform: 'linux-x64'
     })
     const ingestSpy = vi.spyOn(agentHookServer, 'ingestRemote')

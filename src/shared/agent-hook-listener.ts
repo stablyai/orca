@@ -55,6 +55,10 @@ import {
 import { ORCA_HOOK_PROTOCOL_VERSION } from './agent-hook-types'
 import { REMOTE_AGENT_HOOK_ENV, type AgentHookSource } from './agent-hook-relay'
 import {
+  parseExplicitCodexApprovalReviewer,
+  type ExplicitCodexApprovalReviewer
+} from './codex-approval-reviewer'
+import {
   agentProviderSessionsEqual,
   extractAgentProviderSession,
   type AgentProviderSessionMetadata
