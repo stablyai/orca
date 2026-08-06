@@ -27440,6 +27440,56 @@ describe('OrcaRuntimeService', () => {
     expect(closeTerminalTab).not.toHaveBeenCalled()
   })
 
+  it('closes the exact PTY when its restored renderer tab is no longer persisted', async () => {
+    const kill = vi.fn(() => true)
+    const closeTerminal = vi.fn()
+    const closeTerminalTab = vi.fn(async () => {})
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setNotifier({ closeTerminal, closeTerminalTab } as never)
+    runtime.setPtyController({
+      write: () => true,
+      kill,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [
+        {
+          id: 'restored-live-pty',
+          cwd: TEST_WORKTREE_PATH,
+          title: 'Codex'
+        }
+      ]
+    })
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'missing-persisted-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Codex',
+          activeLeafId: HEADLESS_LEAF_ID,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'missing-persisted-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: HEADLESS_LEAF_ID,
+          paneRuntimeId: -1,
+          ptyId: 'restored-live-pty'
+        }
+      ]
+    })
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    await expect(runtime.closeTerminalTab(terminal.handle)).resolves.toEqual({
+      handle: terminal.handle,
+      tabId: 'missing-persisted-tab',
+      ptyKilled: true
+    })
+    expect(kill).toHaveBeenCalledWith('restored-live-pty')
+    expect(closeTerminal).toHaveBeenCalled()
+    expect(closeTerminalTab).not.toHaveBeenCalled()
+  })
+
   it('durably closes every split leaf without a renderer', async () => {
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({

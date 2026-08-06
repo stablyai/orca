@@ -26815,22 +26815,36 @@ export class OrcaRuntimeService {
 
   async closeTerminalTab(handle: string): Promise<RuntimeTerminalClose> {
     const pty = this.getLivePtyForHandle(handle)
+    let tabId: string
+    let worktreeId: string
     if (pty) {
-      const tabId = pty.pty.tabId
-      if (!tabId) {
+      const registeredTabId = pty.pty.tabId
+      if (!registeredTabId) {
         return this.closeTerminal(handle)
       }
-      // Why: a handle-addressed CLI/automation close is an explicit intent, so
-      // it must stay destructive under the non-user close adjudication gate.
-      await this.closeMobileSessionTab(`id:${pty.pty.worktreeId}`, tabId, { reason: 'user' })
-      this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
-      return { handle, tabId, closeMode: 'tab', ptyKilled: false }
+      tabId = registeredTabId
+      worktreeId = pty.pty.worktreeId
+    } else {
+      this.assertGraphReady()
+      const { leaf } = this.getLiveLeafForHandle(handle)
+      tabId = leaf.tabId
+      worktreeId = leaf.worktreeId
     }
-    this.assertGraphReady()
-    const { leaf } = this.getLiveLeafForHandle(handle)
-    await this.closeMobileSessionTab(`id:${leaf.worktreeId}`, leaf.tabId, { reason: 'user' })
+
+    // Why: a handle-addressed CLI/automation close is an explicit intent, so
+    // it must stay destructive under the non-user close adjudication gate.
+    try {
+      await this.closeMobileSessionTab(`id:${worktreeId}`, tabId, { reason: 'user' })
+    } catch (error) {
+      // Why: restored daemon PTYs can outlive their durable renderer tab, whether
+      // registered directly or represented only in the renderer graph.
+      if (error instanceof Error && error.message === 'tab_not_found') {
+        return this.closeTerminal(handle)
+      }
+      throw error
+    }
     this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
-    return { handle, tabId: leaf.tabId, closeMode: 'tab', ptyKilled: false }
+    return { handle, tabId, closeMode: 'tab', ptyKilled: false }
   }
 
   async splitTerminal(
