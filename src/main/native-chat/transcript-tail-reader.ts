@@ -4,38 +4,27 @@ import type {
   NativeChatMessage,
   NativeChatTurnLifecycle
 } from '../../shared/native-chat-types'
-import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
 import {
-  decodeClaudeTranscriptLine,
-  decodeCodexTranscriptLine,
-  decodeGrokTranscriptLine
-} from './transcript-line-decoders'
+  nativeChatTranscriptAdapterForAgent,
+  type NativeChatLineDecoder
+} from './native-chat-transcript-adapters'
 import { transcriptFallbackId } from './transcript-fallback-id'
-import {
-  nativeChatTurnLifecycleDecoderForAgent,
-  type NativeChatTurnLifecycleDecoder
-} from './transcript-turn-lifecycle'
+import type { NativeChatTurnLifecycleDecoder } from './transcript-turn-lifecycle'
 
 export const MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES = 2 * 1024 * 1024
 const TAIL_CHUNK_BYTES = 64 * 1024
 
-export type NativeChatLineDecoder = (line: string, fallbackId: string) => NativeChatMessage | null
+export type { NativeChatLineDecoder } from './native-chat-transcript-adapters'
 
+/** Resolves the registered line decoder while preserving the legacy tail-reader API. */
 export function nativeChatLineDecoderForAgent(agent: AgentType): NativeChatLineDecoder | null {
-  const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
-  if (transcriptAgent === 'claude') {
-    return decodeClaudeTranscriptLine
-  }
-  if (transcriptAgent === 'codex') {
-    return decodeCodexTranscriptLine
-  }
-  if (transcriptAgent === 'grok') {
-    return decodeGrokTranscriptLine
-  }
-  return null
+  return nativeChatTranscriptAdapterForAgent(agent)?.decodeLine ?? null
 }
 
+/**
+ * Reads a bounded transcript window from the end of a file, including optional lifecycle state.
+ */
 export async function readNativeChatTranscriptTailFile(
   filePath: string,
   limit: number,
@@ -115,6 +104,7 @@ export async function readNativeChatTranscriptTailFile(
     await handle.close()
   }
 
+  /** Retains one reverse-scanned line segment unless the record exceeds the byte limit. */
   function retainPart(part: Buffer): void {
     if (lineOversized) {
       return
@@ -129,12 +119,14 @@ export async function readNativeChatTranscriptTailFile(
     lineParts.push(part)
   }
 
+  /** Clears reverse-scan state before collecting the next transcript record. */
   function resetLine(): void {
     lineParts.length = 0
     lineBytes = 0
     lineOversized = false
   }
 
+  /** Decodes one reconstructed line and records its message and lifecycle state. */
   function decodeLine(
     lineOffset: number,
     messages: { message: NativeChatMessage; offset: number }[]
@@ -169,6 +161,7 @@ export async function readNativeChatTranscriptTailFile(
   }
 }
 
+/** Finds the byte offset immediately after the final complete newline-delimited record. */
 async function findLastCompleteLineEnd(
   handle: Awaited<ReturnType<typeof open>>,
   end: number
@@ -192,6 +185,7 @@ async function findLastCompleteLineEnd(
   return 0
 }
 
+/** Resolves an agent transcript and returns its bounded, paginated tail snapshot. */
 export async function readNativeChatTranscriptTail(
   args: ResolveSessionFileOptions & {
     agent: AgentType
@@ -210,8 +204,9 @@ export async function readNativeChatTranscriptTail(
     }
   | { error: string; notFound?: true }
 > {
-  const decode = nativeChatLineDecoderForAgent(args.agent)
-  const decodeLifecycle = nativeChatTurnLifecycleDecoderForAgent(args.agent)
+  const adapter = nativeChatTranscriptAdapterForAgent(args.agent)
+  const decode = adapter?.decodeLine ?? null
+  const decodeLifecycle = adapter?.decodeLifecycle ?? null
   const filePath = args.filePath ?? (await resolveSessionFilePath(args.agent, args.sessionId, args))
   if (!decode) {
     return { error: 'Transcript unavailable' }
