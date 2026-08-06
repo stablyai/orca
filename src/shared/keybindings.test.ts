@@ -1148,6 +1148,47 @@ describe('keybindings', () => {
     ).toBe(true)
   })
 
+  it('matches the default open-with-default-app shortcut', () => {
+    expect(
+      getEffectiveKeybindingsForAction('fileExplorer.openWithSystemDefault', 'darwin')
+    ).toEqual(['Mod+O'])
+    expect(
+      keybindingMatchesAction(
+        'fileExplorer.openWithSystemDefault',
+        { key: 'o', code: 'KeyO', control: false, meta: true, alt: false, shift: false },
+        'darwin'
+      )
+    ).toBe(true)
+    expect(
+      keybindingMatchesAction(
+        'fileExplorer.openWithSystemDefault',
+        { key: 'o', code: 'KeyO', control: true, meta: false, alt: false, shift: false },
+        'linux'
+      )
+    ).toBe(true)
+    // Mod+Shift+O stays with tab.openMarkdown.
+    expect(
+      keybindingMatchesAction(
+        'fileExplorer.openWithSystemDefault',
+        { key: 'O', code: 'KeyO', control: false, meta: true, alt: false, shift: true },
+        'darwin'
+      )
+    ).toBe(false)
+  })
+
+  it('keeps the open-with-default-app chord free of other file explorer bindings', () => {
+    for (const platform of ['darwin', 'linux', 'win32'] as const) {
+      expect(
+        findKeybindingConflicts(platform, {
+          'fileExplorer.openWithSystemDefault': getEffectiveKeybindingsForAction(
+            'fileExplorer.openWithSystemDefault',
+            platform
+          )
+        })
+      ).toEqual([])
+    }
+  })
+
   it('matches file explorer undo and redo by produced logical key', () => {
     expect(getEffectiveKeybindingsForAction('fileExplorer.undo', 'darwin')).toEqual(['Mod+Z'])
     expect(getEffectiveKeybindingsForAction('fileExplorer.redo', 'darwin')).toEqual(['Mod+Shift+Z'])

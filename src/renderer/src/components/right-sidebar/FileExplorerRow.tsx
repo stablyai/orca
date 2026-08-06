@@ -2,6 +2,7 @@
 import React, { useCallback, useRef } from 'react'
 import { basename } from '@/lib/path'
 import {
+  AppWindow,
   ChevronRight,
   CircleSlash,
   Copy,
@@ -48,7 +49,11 @@ import { STATUS_LABELS } from './status-display'
 import { RENAME_HOTSPOT_ATTR } from './file-explorer-dir-toggle-timing'
 import type { TreeNode } from './file-explorer-types'
 import { useFileExplorerRowDrag } from './useFileExplorerRowDrag'
-import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
+import { showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
+import {
+  isFileExplorerLocalOpenBlocked,
+  openFileExplorerPathWithSystemDefault
+} from './file-explorer-system-open'
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/components/tab-bar/SortableTab'
@@ -468,6 +473,7 @@ export function FileExplorerRow({
   const copyPathShortcutLabel = useShortcutLabel('fileExplorer.copyPath')
   const copyRelativePathShortcutLabel = useShortcutLabel('fileExplorer.copyRelativePath')
   const findInFolderShortcutLabel = useShortcutLabel('sidebar.search.toggle')
+  const openWithSystemDefaultShortcutLabel = useShortcutLabel('fileExplorer.openWithSystemDefault')
   const FileIcon = getFileTypeIcon(node.relativePath || node.name)
   const rowDropDir = node.isDirectory ? node.path : targetDir
   const showRemoteDownloadAction = shouldShowRemoteDownloadAction(
@@ -806,20 +812,24 @@ export function FileExplorerRow({
             ) : null}
           </ContextMenuItem>
         )}
+        <ContextMenuItem onSelect={() => void openFileExplorerPathWithSystemDefault(node.path)}>
+          <AppWindow />
+          {node.isDirectory
+            ? translate(
+                'components.right.sidebar.FileExplorerRow.openFolderWithDefaultApp',
+                'Open Folder with Default App'
+              )
+            : translate(
+                'components.right.sidebar.FileExplorerRow.openWithDefaultApp',
+                'Open with Default App'
+              )}
+          {openWithSystemDefaultShortcutLabel !== 'Unassigned' ? (
+            <ContextMenuShortcut>{openWithSystemDefaultShortcutLabel}</ContextMenuShortcut>
+          ) : null}
+        </ContextMenuItem>
         <ContextMenuItem
           onSelect={() => {
-            const state = useAppStore.getState()
-            const activeWorktree = Object.values(state.worktreesByRepo)
-              .flat()
-              .find((worktree) => worktree.id === activeWorktreeId)
-            const activeRepo = activeWorktree
-              ? state.repos.find((repo) => repo.id === activeWorktree.repoId)
-              : null
-            if (
-              isLocalPathOpenBlocked(state.settings, {
-                connectionId: activeRepo?.connectionId ?? null
-              })
-            ) {
+            if (isFileExplorerLocalOpenBlocked(useAppStore.getState())) {
               showLocalPathOpenBlockedToast()
               return
             }

@@ -14925,6 +14925,17 @@
       "sent": "Session context sent to {{agent}} in a new session.",
       "deliveryFailed": "The new {{agent}} session started, but its context could not be sent.",
       "launchFailed": "Could not start a new {{agent}} session."
+    },
+    "right": {
+      "sidebar": {
+        "FileExplorerRow": {
+          "openWithDefaultApp": "Open with Default App",
+          "openFolderWithDefaultApp": "Open Folder with Default App"
+        },
+        "fileExplorerSystemOpen": {
+          "failed": "Couldn't open '{{name}}' with the system default app."
+        }
+      }
     }
   },
   "dashboardPopout": {

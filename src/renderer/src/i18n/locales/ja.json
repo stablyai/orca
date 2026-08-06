@@ -14579,6 +14579,17 @@
       "sent": "セッションコンテキストを新しい {{agent}} セッションに送信しました。",
       "deliveryFailed": "新しい {{agent}} セッションは開始しましたが、コンテキストを送信できませんでした。",
       "launchFailed": "新しい {{agent}} セッションを開始できませんでした。"
+    },
+    "right": {
+      "sidebar": {
+        "FileExplorerRow": {
+          "openWithDefaultApp": "既定のアプリで開く",
+          "openFolderWithDefaultApp": "既定のアプリでフォルダーを開く"
+        },
+        "fileExplorerSystemOpen": {
+          "failed": "「{{name}}」をシステムの既定アプリで開けませんでした。"
+        }
+      }
     }
   },
   "dashboardPopout": {

@@ -14579,6 +14579,17 @@
       "sent": "El contexto de la sesión se envió a {{agent}} en una sesión nueva.",
       "deliveryFailed": "La nueva sesión de {{agent}} se inició, pero no se pudo enviar su contexto.",
       "launchFailed": "No se pudo iniciar una sesión nueva de {{agent}}."
+    },
+    "right": {
+      "sidebar": {
+        "FileExplorerRow": {
+          "openWithDefaultApp": "Abrir con la app predeterminada",
+          "openFolderWithDefaultApp": "Abrir carpeta con la app predeterminada"
+        },
+        "fileExplorerSystemOpen": {
+          "failed": "No se pudo abrir «{{name}}» con la app predeterminada del sistema."
+        }
+      }
     }
   },
   "dashboardPopout": {

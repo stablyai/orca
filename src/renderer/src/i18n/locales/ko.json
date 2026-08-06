@@ -14590,6 +14590,17 @@
       "sent": "세션 컨텍스트를 새 {{agent}} 세션으로 보냈습니다.",
       "deliveryFailed": "새 {{agent}} 세션은 시작되었지만 컨텍스트를 보내지 못했습니다.",
       "launchFailed": "새 {{agent}} 세션을 시작할 수 없습니다."
+    },
+    "right": {
+      "sidebar": {
+        "FileExplorerRow": {
+          "openWithDefaultApp": "기본 앱으로 열기",
+          "openFolderWithDefaultApp": "기본 앱으로 폴더 열기"
+        },
+        "fileExplorerSystemOpen": {
+          "failed": "'{{name}}'을(를) 시스템 기본 앱으로 열 수 없습니다."
+        }
+      }
     }
   },
   "dashboardPopout": {

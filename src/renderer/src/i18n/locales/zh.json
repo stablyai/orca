@@ -14599,6 +14599,17 @@
       "sent": "已将会话上下文发送到新的 {{agent}} 会话。",
       "deliveryFailed": "新的 {{agent}} 会话已启动，但无法发送上下文。",
       "launchFailed": "无法启动新的 {{agent}} 会话。"
+    },
+    "right": {
+      "sidebar": {
+        "FileExplorerRow": {
+          "openWithDefaultApp": "用默认应用打开",
+          "openFolderWithDefaultApp": "用默认应用打开文件夹"
+        },
+        "fileExplorerSystemOpen": {
+          "failed": "无法使用系统默认应用打开“{{name}}”。"
+        }
+      }
     }
   },
   "dashboardPopout": {
