@@ -21,7 +21,7 @@ describe('RepoIconGlyph', () => {
     fireEvent.error(image as HTMLImageElement)
 
     expect(container.querySelector('img')).toBeNull()
-    expect(container.querySelector('svg')).not.toBeNull()
+    expect(container.querySelector('svg')?.getAttribute('class')).toContain('lucide-folder')
   })
 
   it('retries the image when the icon changes to a different src', () => {
@@ -58,6 +58,12 @@ describe('RepoIconGlyph', () => {
     const { container: lucide } = render(
       <RepoIconGlyph repoIcon={{ type: 'lucide', name: 'Database' }} />
     )
-    expect(lucide.querySelector('svg')).not.toBeNull()
+    expect(lucide.querySelector('svg')?.getAttribute('class')).toContain('lucide-database')
+  })
+
+  it('falls back to Folder for an unknown lucide name', () => {
+    const { container } = render(<RepoIconGlyph repoIcon={{ type: 'lucide', name: 'NotAnIcon' }} />)
+
+    expect(container.querySelector('svg')?.getAttribute('class')).toContain('lucide-folder')
   })
 })
