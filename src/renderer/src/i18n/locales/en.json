@@ -844,7 +844,8 @@
         "ef223fbb6b": "A device tried to connect but is not paired",
         "11992d0337": "If this was your phone or another Orca client, re-pair it from Settings → Mobile.",
         "6573cfe955": "Open Mobile Settings",
-        "unresolvedTerminalWorktreeOwner": "Terminal creation is unavailable because the worktree owner could not be resolved"
+        "unresolvedTerminalWorktreeOwner": "Terminal creation is unavailable because the worktree owner could not be resolved",
+        "deferredWorktreeTabsUnresolved": "Some remote worktree tabs were not restored because their worktrees never appeared in the catalog"
       },
       "useSettingsNavigationMetadata": {
         "4a728cd56b": "New features that are still taking shape. Give them a try.",
