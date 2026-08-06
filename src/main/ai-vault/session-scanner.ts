@@ -9,8 +9,8 @@ import { withSpan } from '../observability/tracer'
 import { sessionSortTime } from './session-scanner-accumulator'
 import {
   codexRolloutHardlinkIdentity,
-  dedupeCodexRolloutFileAliases,
-  dedupeCodexSessionsBySessionId
+  dedupeCodexSessionsBySessionId,
+  orderCodexRolloutCandidatesForParse
 } from './codex-session-root-dedup'
 import {
   createAntigravityWorkspaceResolver,
@@ -79,7 +79,7 @@ export async function scanAiVaultSessions(
     const discoveries = await discoverAiVaultSessionSources({ options, limitPerAgent, issues })
     throwIfAiVaultScanCancelled(options.signal)
 
-    const candidates = dedupeCodexRolloutFileAliases(
+    const candidates = orderCodexRolloutCandidatesForParse(
       discoveries
         .flatMap((discovery) =>
           discovery.files.map(

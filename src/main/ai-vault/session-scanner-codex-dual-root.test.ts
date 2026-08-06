@@ -1,6 +1,6 @@
 import { copyFile, link, mkdtemp, mkdir, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { scanAiVaultSessions } from './session-scanner'
 import { isolatedScanRoots, jsonLines } from './session-scanner-test-fixtures'
@@ -259,6 +259,69 @@ describe('scanAiVaultSessions codex dual-root dedup', () => {
         codexHome: null,
         filePath: realAliasPath
       }
+    )
+  })
+})
+
+// A user migrating to a custom CODEX_HOME typically does `cp -r ~/.codex <new>`,
+// which stamps every copy newer than its original. Copies share no inode, so the
+// pre-parse alias pass cannot collapse them, and the parse budget cuts by mtime —
+// without root-rank promotion the real-home originals are never parsed and every
+// row resumes against the import copy, which has no refreshed auth.json.
+describe('scanAiVaultSessions configured-import-home attribution', () => {
+  it('keeps real-home attribution when fresher copies fill the parse budget', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-import-attr-'))
+    tempRoots.push(root)
+    const realHome = join(root, 'real-codex-home')
+    const importHome = join(root, 'import-codex-home')
+    const base = Date.UTC(2026, 6, 1, 10, 0, 0)
+    const total = 40
+
+    for (let index = 0; index < total; index += 1) {
+      const sessionId = `019f0000-1111-7222-8333-${String(index + 1).padStart(12, '0')}`
+      const name = `rollout-2026-07-01T10-00-00-${sessionId}.jsonl`
+      const original = join(realHome, 'sessions', '2026', '07', '01', name)
+      await mkdir(dirname(original), { recursive: true })
+      await writeFile(
+        original,
+        jsonLines([
+          {
+            timestamp: '2026-07-01T10:00:00.000Z',
+            type: 'session_meta',
+            payload: { id: sessionId, cwd: '/repo/app' }
+          },
+          {
+            timestamp: '2026-07-01T10:00:01.000Z',
+            type: 'response_item',
+            payload: { type: 'message', role: 'user', content: [{ type: 'text', text: 'work' }] }
+          }
+        ])
+      )
+      const oldSeconds = (base - (index + 1) * 60_000) / 1000
+      await utimes(original, oldSeconds, oldSeconds)
+
+      const copied = join(importHome, 'sessions', '2026', '07', '01', name)
+      await mkdir(dirname(copied), { recursive: true })
+      await copyFile(original, copied)
+      const freshSeconds = (base + 3_600_000 + index * 1_000) / 1000
+      await utimes(copied, freshSeconds, freshSeconds)
+    }
+
+    const result = await scanAiVaultSessions({
+      ...isolatedScanRoots(root),
+      codexSessionsDir: join(realHome, 'sessions'),
+      defaultCodexHomeDir: realHome,
+      additionalCodexSessionsDirs: [join(importHome, 'sessions')],
+      // Budget pressure: half the rollouts fit, so ordering decides attribution.
+      limit: total / 2,
+      platform: 'darwin'
+    })
+
+    const codexSessions = result.sessions.filter((session) => session.agent === 'codex')
+    expect(codexSessions).toHaveLength(total / 2)
+    expect(codexSessions.every((session) => session.codexHome === null)).toBe(true)
+    expect(codexSessions.some((session) => session.resumeCommand?.includes('CODEX_HOME='))).toBe(
+      false
     )
   })
 })

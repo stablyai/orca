@@ -121,6 +121,65 @@ export function dedupeCodexRolloutFileAliases<T>(
 }
 
 /**
+ * Reorders same-rollout candidates so the best-ranked root is parsed first.
+ *
+ * Why: post-parse dedup can only prefer the canonical root among rollouts it
+ * actually sees, and copies (no shared inode, so the pre-parse alias pass can't
+ * touch them) are ordered purely by mtime. A user-supplied import home is the
+ * first scan root whose mtimes Orca does not control — `cp -r ~/.codex ~/import`
+ * stamps every copy newer than every original, so under the parse budget the
+ * originals are never reached and every row resumes against the import copy.
+ *
+ * Only order changes: no candidate is added or dropped, and slots are reused so
+ * mtime ordering across unrelated rollouts is preserved.
+ */
+export function promoteCanonicalCodexRolloutAliases<T>(
+  candidates: readonly T[],
+  accessors: {
+    isCodex: (candidate: T) => boolean
+    getFilePath: (candidate: T) => string
+    getCodexHome: (candidate: T) => string | null
+  }
+): T[] {
+  const slotsByAlias = new Map<string, number[]>()
+  for (const [index, candidate] of candidates.entries()) {
+    if (!accessors.isCodex(candidate)) {
+      continue
+    }
+    const filePath = accessors.getFilePath(candidate)
+    const fileName = lastPathSegment(filePath)
+    if (!CODEX_ROLLOUT_FILE_NAME_PATTERN.test(fileName)) {
+      continue
+    }
+    const aliasKey = `${codexPathExecutionNamespace(filePath)}\0${fileName}`
+    const slots = slotsByAlias.get(aliasKey)
+    if (slots) {
+      slots.push(index)
+    } else {
+      slotsByAlias.set(aliasKey, [index])
+    }
+  }
+  const promoted = [...candidates]
+  for (const slots of slotsByAlias.values()) {
+    if (slots.length < 2) {
+      continue
+    }
+    const ranked = slots
+      .map((index) => ({ index, candidate: candidates[index]! }))
+      .sort(
+        (left, right) =>
+          codexSessionRootRank(accessors.getCodexHome(left.candidate)) -
+            codexSessionRootRank(accessors.getCodexHome(right.candidate)) ||
+          left.index - right.index
+      )
+    slots.forEach((slot, position) => {
+      promoted[slot] = ranked[position]!.candidate
+    })
+  }
+  return promoted
+}
+
+/**
  * Collapses parsed Codex sessions that share a rollout name and session id on
  * one execution host, keeping the canonical root's row. Requiring both the
  * parsed id and rollout name preserves id collisions and same-name files whose
@@ -172,4 +231,25 @@ function codexSessionAliasBeats(candidate: AiVaultSession, best: AiVaultSession)
     return candidateTime > bestTime
   }
   return candidate.filePath < best.filePath
+}
+
+/**
+ * Prepares Codex rollout candidates for the mtime-ordered parse budget: drop
+ * proven hardlink aliases, then promote the best-ranked root of every remaining
+ * same-rollout group so the canonical row is parsed even when a lower-ranked
+ * copy sorts ahead of it.
+ */
+export function orderCodexRolloutCandidatesForParse<T>(
+  candidates: readonly T[],
+  accessors: {
+    isCodex: (candidate: T) => boolean
+    getFilePath: (candidate: T) => string
+    getCodexHome: (candidate: T) => string | null
+    getHardlinkIdentity: (candidate: T) => string | null
+  }
+): T[] {
+  return promoteCanonicalCodexRolloutAliases(
+    dedupeCodexRolloutFileAliases(candidates, accessors),
+    accessors
+  )
 }
