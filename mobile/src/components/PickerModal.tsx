@@ -72,6 +72,8 @@ function PickerModalContent<T extends string = string>({
           <View key={opt.value}>
             {i > 0 && <View style={styles.separator} />}
             <Pressable
+              accessibilityRole="radio"
+              accessibilityState={{ checked: isSelected, disabled: Boolean(opt.disabled) }}
               disabled={opt.disabled}
               style={({ pressed }) => [
                 styles.row,
