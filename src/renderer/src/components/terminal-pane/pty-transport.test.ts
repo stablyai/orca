@@ -1358,6 +1358,17 @@ describe('createIpcPtyTransport', () => {
     expect(noDimsHandle.captureDims).toBeUndefined()
   })
 
+  it('peeks eager-buffered bytes without clearing them', async () => {
+    const { registerEagerPtyBuffer } = await import('./pty-transport')
+    const handle = registerEagerPtyBuffer('pty-peek', vi.fn())
+    onData?.({ id: 'pty-peek', data: 'Cursor Agent\x1b[?25l' })
+
+    expect(handle.peek()).toBe('Cursor Agent\x1b[?25l')
+    expect(handle.peek()).toBe('Cursor Agent\x1b[?25l')
+    expect(handle.flush()).toBe('Cursor Agent\x1b[?25l')
+    expect(handle.peek()).toBe('')
+  })
+
   it('caps a single oversized eager chunk to its most-recent tail', async () => {
     const { registerEagerPtyBuffer } = await import('./pty-transport')
     const cap = 512 * 1024

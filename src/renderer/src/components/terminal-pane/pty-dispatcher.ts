@@ -250,6 +250,9 @@ export function subscribeToPtyExit(
 
 export type EagerPtyCaptureDims = { cols: number; rows: number }
 export type EagerPtyHandle = {
+  // Non-destructive read of buffered bytes so adopt can inspect DECTCEM / screen
+  // shape before flush() empties the buffer inside transport.attach().
+  peek: () => string
   flush: () => string
   dispose: () => void
   // Grid the PTY was spawned at while buffering. Attach replays the buffer at
@@ -308,13 +311,17 @@ export function registerEagerPtyBuffer(
   ptyDataHandlers.set(ptyId, dataHandler)
   ptyExitHandlers.set(ptyId, exitHandler)
 
+  const readBufferedData = (): string =>
+    chunks
+      .slice(head)
+      .map((chunk) => chunk.data)
+      .join('')
+
   const handle: EagerPtyHandle = {
     ...(options?.captureDims ? { captureDims: options.captureDims } : {}),
+    peek: readBufferedData,
     flush() {
-      const data = chunks
-        .slice(head)
-        .map((chunk) => chunk.data)
-        .join('')
+      const data = readBufferedData()
       chunks.length = 0
       head = 0
       bufferBytes = 0

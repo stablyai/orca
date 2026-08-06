@@ -7861,7 +7861,7 @@ describe('connectPanePty', () => {
     // Why: a live eager buffer means "attach + replay", not "reattach" — else first mount mis-routes to daemon-reattach and orphans the eager agent PTY.
     const eagerPtyId = 'auto-eager-pty'
     vi.mocked(getEagerPtyBufferHandle).mockImplementation((ptyId: string) =>
-      ptyId === eagerPtyId ? { flush: () => '', dispose: () => {} } : undefined
+      ptyId === eagerPtyId ? { peek: () => '', flush: () => '', dispose: () => {} } : undefined
     )
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
@@ -7920,7 +7920,12 @@ describe('connectPanePty', () => {
     const eagerPtyId = 'auto-eager-pty'
     vi.mocked(getEagerPtyBufferHandle).mockImplementation((ptyId: string) =>
       ptyId === eagerPtyId
-        ? { flush: () => '', dispose: () => {}, captureDims: { cols: 120, rows: 40 } }
+        ? {
+            peek: () => '',
+            flush: () => '',
+            dispose: () => {},
+            captureDims: { cols: 120, rows: 40 }
+          }
         : undefined
     )
     const { connectPanePty } = await import('./pty-connection')
@@ -7960,9 +7965,11 @@ describe('connectPanePty', () => {
     connectPanePty(pane as never, createManager(1) as never, deps as never)
     await flushAsyncTicks()
 
+    // Why: defer PTY cols/rows until after capture-dim replay finishes.
     expect(transport.attach).toHaveBeenCalledWith(
-      expect.objectContaining({ existingPtyId: eagerPtyId, cols: 80, rows: 24 })
+      expect.objectContaining({ existingPtyId: eagerPtyId })
     )
+    expect(transport.attach.mock.calls[0]?.[0]).not.toHaveProperty('cols')
     expect(pane.terminal.resize).toHaveBeenCalledWith(120, 40)
     const resizeToCaptureCall = pane.terminal.resize.mock.invocationCallOrder.find(
       (_order, index) => {
@@ -7975,15 +7982,78 @@ describe('connectPanePty', () => {
     expect(resizeToCaptureCall as number).toBeLessThan(attachOrder)
     const fitOrders = vi.mocked(pane.fitAddon.fit).mock.invocationCallOrder
     expect(fitOrders.some((order) => order > attachOrder)).toBe(true)
+    expect(transport.resize).toHaveBeenCalledWith(80, 24)
     expect(pane.terminal.cols).toBe(80)
     expect(pane.terminal.rows).toBe(24)
+  })
+
+  it('re-parks the real cursor after eager adopt when the buffer ends with ?25l', async () => {
+    // Why: Cursor Agent paints its own input caret and hides the real terminal
+    // cursor. If adopt/fit leaves DECTCEM shown, a stray block appears under the
+    // footer (dual cursor) while the painted caret stays in the input.
+    const eagerPtyId = 'auto-eager-pty'
+    const parkedAgentFrame = 'Cursor Agent\r\n→ prompt text\x1b[?25l'
+    vi.mocked(getEagerPtyBufferHandle).mockImplementation((ptyId: string) =>
+      ptyId === eagerPtyId
+        ? {
+            peek: () => parkedAgentFrame,
+            flush: () => parkedAgentFrame,
+            dispose: () => {},
+            captureDims: { cols: 120, rows: 40 }
+          }
+        : undefined
+    )
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: eagerPtyId }] },
+      ptyIdsByTabId: { 'tab-1': [eagerPtyId] },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: LEAF_1 },
+          activeLeafId: LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_1]: eagerPtyId }
+        }
+      }
+    } as StoreState
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: eagerPtyId }
+    })
+
+    const pane = createPane(1)
+    pane.terminal.cols = 80
+    pane.terminal.rows = 24
+    pane.fitAddon.proposeDimensions = vi.fn(() => ({ cols: 80, rows: 24 })) as never
+    pane.fitAddon.fit = vi.fn(() => {
+      pane.terminal.cols = 80
+      pane.terminal.rows = 24
+    })
+
+    connectPanePty(pane as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(20)
+
+    expect(pane.terminal.write).toHaveBeenCalledWith('\x1b[?25l', expect.any(Function))
+    const hideOrders = (pane.terminal.write as ReturnType<typeof vi.fn>).mock.invocationCallOrder
+    const hideCallOrder = (pane.terminal.write as ReturnType<typeof vi.fn>).mock.calls.findIndex(
+      ([data]) => data === '\x1b[?25l'
+    )
+    expect(hideCallOrder).toBeGreaterThanOrEqual(0)
+    const attachOrder = transport.attach.mock.invocationCallOrder[0]
+    expect(hideOrders[hideCallOrder]).toBeGreaterThan(attachOrder)
+    expect(transport.resize).toHaveBeenCalled()
   })
 
   it('does not adopt another tab live eager PTY from a stale restored leaf binding', async () => {
     // Why: restored leaf bindings can outlive tab ownership; a global eager buffer proves the PTY is alive, ptyIdsByTabId proves this tab owns it.
     const otherTabPtyId = 'other-tab-eager-pty'
     vi.mocked(getEagerPtyBufferHandle).mockImplementation((ptyId: string) =>
-      ptyId === otherTabPtyId ? { flush: () => '', dispose: () => {} } : undefined
+      ptyId === otherTabPtyId
+        ? { peek: () => '', flush: () => '', dispose: () => {} }
+        : undefined
     )
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()

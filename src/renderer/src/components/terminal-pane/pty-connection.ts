@@ -123,7 +123,8 @@ import {
   POST_REPLAY_REATTACH_RESET,
   POST_REPLAY_REATTACH_RESET_KEEP_MOUSE,
   RESET_KITTY_KEYBOARD_PROTOCOL,
-  RESET_TERMINAL_CURSOR_STYLE
+  RESET_TERMINAL_CURSOR_STYLE,
+  replayPayloadEndsWithCursorHidden
 } from '../../../../shared/terminal-mode-reset-profiles'
 import { buildFreshShellViewportBlankingSequence } from './terminal-restored-viewport'
 import { createShellReadyMarkerScanState, scanForShellReadyMarker } from './shell-ready-marker-scan'
@@ -9069,9 +9070,18 @@ export function connectPanePty(
           // Why: eager-buffered bytes were rendered by a TUI at the background
           // spawn grid. Replaying them at the pane's fitted grid rewraps rows,
           // so inline TUIs (Cursor CLI) anchor their cursor rows below the input
-          // box. Replay at capture dims, then fit back; attach's PTY resize to
-          // the pane grid delivers the SIGWINCH repaint at the final size.
-          const eagerBufferCaptureDims = getEagerPtyBufferHandle(attachPtyId)?.captureDims
+          // box. Replay at capture dims, then fit back; defer the PTY resize so
+          // SIGWINCH lands after xterm has the correctly-parsed frame.
+          const isEagerAdopt = attachPtyId === eagerLivePtyId
+          const eagerBufferHandle = isEagerAdopt
+            ? getEagerPtyBufferHandle(attachPtyId)
+            : undefined
+          const eagerPeek = eagerBufferHandle?.peek() ?? ''
+          // Why: Cursor Agent paints its own caret and parks the real cursor with
+          // ?25l. A post-replay reset or fit that re-shows it leaves a stray
+          // block under the footer (dual cursor). Peek before attach flush.
+          const eagerEndsWithCursorHidden = replayPayloadEndsWithCursorHidden(eagerPeek)
+          const eagerBufferCaptureDims = eagerBufferHandle?.captureDims
           const eagerCaptureDims = resolvePositiveTerminalDimensions(
             eagerBufferCaptureDims?.cols,
             eagerBufferCaptureDims?.rows
@@ -9093,12 +9103,32 @@ export function connectPanePty(
           const outputCallbacks = captureTransportOutputCallbacks(reportError)
           transport.attach({
             existingPtyId: attachPtyId,
-            cols,
-            rows,
+            // Why: for eager adopt, defer PTY resize until after the async
+            // replay drain finishes at capture dims — otherwise SIGWINCH races
+            // ahead of the xterm parse and the fit undoes capture-dim replay.
+            ...(isEagerAdopt ? {} : { cols, rows }),
             callbacks: outputCallbacks.callbacks
           })
-          if (replayAtCaptureDims) {
-            safeFit(pane)
+          const finishEagerAdopt = (): void => {
+            if (disposed) {
+              return
+            }
+            if (replayAtCaptureDims) {
+              safeFit(pane)
+            }
+            if (eagerEndsWithCursorHidden) {
+              // Why: fit/reset can leave DECTCEM shown; re-park so only the
+              // TUI's painted caret remains visible.
+              writeReplayData(CURSOR_HIDE_SEQUENCE)
+            }
+            const fittedCols = pane.terminal.cols
+            const fittedRows = pane.terminal.rows
+            if (fittedCols > 0 && fittedRows > 0) {
+              transport.resize(fittedCols, fittedRows)
+            }
+          }
+          if (isEagerAdopt) {
+            void replayWriteQueue.catch(() => undefined).then(finishEagerAdopt)
           }
           const attachedPtyId = transport.getPtyId() ?? attachPtyId
           bindActivePanePty(attachedPtyId, {
