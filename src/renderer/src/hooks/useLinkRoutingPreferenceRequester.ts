@@ -3,6 +3,7 @@ import { useLinkRoutingPreferenceDialog } from '@/components/link-routing-prefer
 import type { TerminalLinkRoutingPreferenceRequester } from '@/components/terminal-pane/terminal-url-link-hit-testing'
 import { useAppStore } from '@/store'
 
+/** Deduplicates and persists the first link-routing preference request. */
 export function useLinkRoutingPreferenceRequester(): TerminalLinkRoutingPreferenceRequester {
   const settings = useAppStore((state) => state.settings)
   const updateSettings = useAppStore((state) => state.updateSettings)
@@ -31,9 +32,10 @@ export function useLinkRoutingPreferenceRequester(): TerminalLinkRoutingPreferen
         return openInOrca
       })()
       preferencePromiseRef.current = preferencePromise
-      void preferencePromise.finally(() => {
+      const clearPreferencePromise = (): void => {
         preferencePromiseRef.current = null
-      })
+      }
+      void preferencePromise.then(clearPreferencePromise, clearPreferencePromise)
       return preferencePromise
     },
     [requestLinkRoutingPreference, updateSettings]

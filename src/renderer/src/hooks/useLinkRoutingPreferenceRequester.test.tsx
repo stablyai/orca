@@ -83,4 +83,21 @@ describe('useLinkRoutingPreferenceRequester', () => {
       await first
     })
   })
+
+  it('clears a rejected preference request without an unhandled cleanup rejection', async () => {
+    const failure = new Error('dialog failed')
+    mocks.requestPreference.mockRejectedValueOnce(failure)
+    const { result } = renderHook(() => useLinkRoutingPreferenceRequester())
+
+    await act(async () => {
+      await expect(result.current('https://example.com/first')).rejects.toBe(failure)
+    })
+
+    mocks.requestPreference.mockResolvedValueOnce(false)
+    await act(async () => {
+      await expect(result.current('https://example.com/second')).resolves.toBe(false)
+    })
+
+    expect(mocks.requestPreference).toHaveBeenCalledTimes(2)
+  })
 })

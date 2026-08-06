@@ -23,6 +23,7 @@ type NativeChatLinkClickContext = {
   requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
 }
 
+/** Routes native-chat file and web links through the owning workspace policies. */
 export function handleNativeChatLinkClick(
   event: Parameters<CommentMarkdownLinkClickHandler>[0],
   href: Parameters<CommentMarkdownLinkClickHandler>[1],
@@ -59,6 +60,7 @@ export function handleNativeChatLinkClick(
   })
 }
 
+/** Binds native-chat link routing to its terminal tab and runtime owner. */
 export function useNativeChatLinkClick(
   terminalTabId: string,
   runtimeEnvironmentId: string | null
