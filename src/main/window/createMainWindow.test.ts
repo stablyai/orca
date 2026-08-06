@@ -3293,7 +3293,7 @@ describe('createMainWindow', () => {
     consoleError.mockRestore()
   })
 
-  it('bounds renderer launch-failed recovery with the crash-loop breaker', () => {
+  it('escalates again when a launch failure follows the host-driven manual retry', () => {
     vi.useFakeTimers()
 
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -3320,15 +3320,52 @@ describe('createMainWindow', () => {
       }
 
       driveLaunchFailure()
-      driveLaunchFailure()
-      driveLaunchFailure()
-      expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(4)
+      expect(onRendererRecoveryExhausted).toHaveBeenCalledOnce()
 
+      // The field sequence: user answers the prompt with Reload, and the fresh renderer fails to launch too.
+      windowHandlers['did-finish-load']?.()
       driveLaunchFailure()
-      expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(4)
+
+      expect(onRendererRecoveryExhausted).toHaveBeenCalledTimes(2)
+      expect(onRendererRecoveryExhausted).toHaveBeenLastCalledWith(
+        expect.objectContaining({ details, recommendedAction: 'relaunch' })
+      )
+      // Escalation never reloads the dead webContents; only the initial load ran.
+      expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(1)
+    } finally {
+      consoleError.mockRestore()
+    }
+  })
+
+  it('escalates renderer launch-failed to a relaunch instead of reloading the dead webContents', () => {
+    vi.useFakeTimers()
+
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const onRendererRecoveryExhausted = vi.fn()
+    const { browserWindowInstance, windowHandlers } = createRendererRecoveryWindowHarness()
+
+    try {
+      createMainWindow(null, {
+        onRendererRecoveryExhausted,
+        shouldRecoverRenderer: (details) =>
+          shouldRecoverRendererAfterProcessGone({
+            reason: details.reason,
+            expectedTeardown: 'none'
+          })
+      })
+
+      const details = {
+        reason: 'launch-failed',
+        exitCode: 18
+      } as Electron.RenderProcessGoneDetails
+      windowHandlers['render-process-gone']?.({} as never, details)
+      vi.advanceTimersByTime(250)
+
+      // Only the initial load; a reload cannot spawn a process that failed to launch.
+      expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(1)
       expect(onRendererRecoveryExhausted).toHaveBeenCalledOnce()
       expect(onRendererRecoveryExhausted).toHaveBeenCalledWith(
-        expect.objectContaining({ details, recentRecoveryCount: 3 })
+        expect.objectContaining({ details, recommendedAction: 'relaunch' })
       )
     } finally {
       consoleError.mockRestore()

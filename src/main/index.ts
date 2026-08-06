@@ -188,6 +188,11 @@ import {
   ensureAutoUpdaterConfigured
 } from './window/attach-main-window-services'
 import { createMainWindow, loadMainWindow } from './window/createMainWindow'
+import {
+  planRendererRecoveryPrompt,
+  RendererRecoveryPromptGate,
+  type RendererRecoveryAction
+} from './window/renderer-recovery-escalation'
 import { zoomDashboardPopoutIfFocused } from './window/dashboard-popout-window'
 import {
   createSystemTray,
@@ -1246,13 +1251,14 @@ function openMainWindow(): BrowserWindow {
         reason: details.reason,
         expectedTeardown: getExpectedTeardownScope(webContentsId)
       }),
-    onRendererRecoveryExhausted: ({ details, recentRecoveryCount }) => {
+    onRendererRecoveryExhausted: ({ details, recentRecoveryCount, recommendedAction }) => {
       recordDurableCrashBreadcrumb('renderer_recovery_circuit_breaker_open', {
         reason: details.reason,
         exitCode: details.exitCode ?? null,
-        recentRecoveryCount
+        recentRecoveryCount,
+        recommendedAction
       })
-      void presentRendererRecoveryPrompt(recentRecoveryCount)
+      void presentRendererRecoveryPrompt(recentRecoveryCount, recommendedAction)
     },
     deferLoad: true,
     title: devInstanceIdentity.name,
@@ -1527,28 +1533,43 @@ function sendOpenCrashReport(targetWindow?: BrowserWindow | null): void {
   webContents?.send('ui:openCrashReport')
 }
 
+const rendererRecoveryPromptGate = new RendererRecoveryPromptGate()
+
 // Why: on renderer crash-loop the breaker stops auto-reloading and the window goes blank, so a main-process dialog is the only retry/quit surface.
-async function presentRendererRecoveryPrompt(recentRecoveryCount: number): Promise<void> {
+async function presentRendererRecoveryPrompt(
+  recentRecoveryCount: number,
+  recommendedAction: RendererRecoveryAction
+): Promise<void> {
   if (isQuitting) {
     return
   }
   const window = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined
+  const plan = planRendererRecoveryPrompt({ action: recommendedAction, recentRecoveryCount })
   const options = {
     type: 'error' as const,
-    buttons: ['Reload', 'Quit'],
-    defaultId: 0,
-    cancelId: 1,
+    buttons: plan.buttons,
+    defaultId: plan.defaultId,
+    cancelId: plan.cancelId,
     title: 'Orca keeps failing to load',
-    message: 'The app window crashed repeatedly and stopped reloading automatically.',
-    detail: `Orca tried to recover ${recentRecoveryCount} times in a row without success. This is often a graphics-driver or installation problem. Reload to try again, or quit and relaunch Orca.`
+    message: plan.message,
+    detail: plan.detail
   }
-  const { response } = window
-    ? await dialog.showMessageBox(window, options)
-    : await dialog.showMessageBox(options)
-  if (response === 0 && mainWindow && !mainWindow.isDestroyed()) {
+  const result = await rendererRecoveryPromptGate.show(() =>
+    window ? dialog.showMessageBox(window, options) : dialog.showMessageBox(options)
+  )
+  if (!result) {
+    return
+  }
+  const choice = plan.responses[result.response]
+  if (choice === 'relaunch') {
+    recordDurableCrashBreadcrumb('renderer_recovery_relaunch')
+    isQuitting = true
+    relaunchApp('renderer-launch-failed')
+    app.quit()
+  } else if (choice === 'reload' && mainWindow && !mainWindow.isDestroyed()) {
     recordDurableCrashBreadcrumb('renderer_recovery_manual_retry')
     loadMainWindow(mainWindow)
-  } else if (response === 1) {
+  } else if (choice === 'quit') {
     isQuitting = true
     app.quit()
   }

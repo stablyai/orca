@@ -7,6 +7,7 @@ export type AppRelaunchReason =
   | 'gpu-fallback'
   | 'profile-switch'
   | 'profile-transfer'
+  | 'renderer-launch-failed'
   | 'renderer-request'
 
 export function relaunchApp(reason: AppRelaunchReason, data?: CrashReportBreadcrumbData): void {

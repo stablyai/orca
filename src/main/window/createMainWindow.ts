@@ -52,6 +52,10 @@ import {
   type RichMarkdownContextMenuTableTarget
 } from '../../shared/rich-markdown-context-menu'
 import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
+import {
+  getRendererRecoveryAction,
+  type RendererRecoveryAction
+} from './renderer-recovery-escalation'
 import { resolveWindowCloseAction } from './window-close-decision'
 import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
 import { closeDashboardPopout } from './dashboard-popout-window'
@@ -197,11 +201,12 @@ type CreateMainWindowOptions = {
     details: Electron.RenderProcessGoneDetails,
     webContentsId: number
   ) => boolean
-  /** Called when consecutive auto-recoveries hit the circuit-breaker limit so the host can prompt instead of crash-looping. */
+  /** Called when auto-recovery stops — breaker limit hit, or a launch failure a reload can't fix — so the host can prompt instead of crash-looping. */
   onRendererRecoveryExhausted?: (info: {
     details: Electron.RenderProcessGoneDetails
     webContentsId: number
     recentRecoveryCount: number
+    recommendedAction: RendererRecoveryAction
   }) => void
   /** Defer renderer load until IPC handlers are registered, or eager renderer calls race into missing channels. */
   deferLoad?: boolean
@@ -610,13 +615,26 @@ export function createMainWindow(
       ) {
         return
       }
+      const recommendedAction = getRendererRecoveryAction(details.reason)
+      if (recommendedAction === 'relaunch') {
+        // Why: the renderer never spawned, so reloading the same webContents can only burn retries and leave a blank window.
+        // Every launch failure escalates — the host dedupes the dialog, so a failure after the user retried still gets a prompt.
+        opts?.onRendererRecoveryExhausted?.({
+          details,
+          webContentsId: rendererWebContentsId,
+          recentRecoveryCount: rendererRecoveryCircuitBreaker.recentRecoveryCount(Date.now()),
+          recommendedAction
+        })
+        return
+      }
       const recovery = rendererRecoveryCircuitBreaker.registerRecoveryAttempt(Date.now())
       if (!recovery.allowed) {
         // Why: too many reloads means it will just crash again; stop and let the host surface a recovery prompt.
         opts?.onRendererRecoveryExhausted?.({
           details,
           webContentsId: rendererWebContentsId,
-          recentRecoveryCount: recovery.recentRecoveryCount
+          recentRecoveryCount: recovery.recentRecoveryCount,
+          recommendedAction
         })
         return
       }
