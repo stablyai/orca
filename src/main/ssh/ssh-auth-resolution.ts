@@ -217,12 +217,20 @@ export function resolveAgentConfigValue(
     return agentSocket
   }
 
-  const filtered = createIdentityFilteredAgent(agentSocket, resolveIdentityFilePaths(target, resolved))
+  const identityFilePaths = resolveIdentityFilePaths(target, resolved)
+  const filtered = createIdentityFilteredAgent(agentSocket, identityFilePaths)
   if (filtered) {
     return filtered
   }
   // Why: ssh -G injects default identity paths even when none are configured, so
-  // only explicit files count as a deliberate restriction — agent-only keys (e.g.
-  // 1Password) keep the raw agent; an explicit file that won't parse fails closed.
-  return resolveExplicitPrivateKeyPaths(target, resolved).length === 0 ? agentSocket : undefined
+  // a deliberate restriction is only evidenced by an explicit non-default path or
+  // a default-named file that exists on disk yet yields no usable key — both fail
+  // closed; otherwise agent-only keys (e.g. 1Password) keep the raw agent.
+  const restrictedToFiles =
+    resolveExplicitPrivateKeyPaths(target, resolved).length > 0 ||
+    identityFilePaths.some((keyPath) => {
+      const resolvedPath = resolveSshConfigHomePath(keyPath)
+      return EXPANDED_DEFAULT_KEY_PATHS.includes(resolvedPath) && existsSync(resolvedPath)
+    })
+  return restrictedToFiles ? undefined : agentSocket
 }

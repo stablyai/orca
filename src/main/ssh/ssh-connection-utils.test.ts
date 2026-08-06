@@ -35,10 +35,7 @@ import {
   INITIAL_RETRY_DELAY_MS,
   RECONNECT_BACKOFF_MS
 } from './ssh-connection-utils'
-import {
-  _resetProbedAgentSocket,
-  _setProbedAgentSocketForTest
-} from './ssh-agent-socket-probe'
+import { _resetProbedAgentSocket, _setProbedAgentSocketForTest } from './ssh-agent-socket-probe'
 import { resolveEffectiveProxy } from './ssh-proxy-command'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './ssh-config-parser'
@@ -650,6 +647,20 @@ describe('buildConnectConfig', () => {
       })
     )
     expect(config.agent).toBe('/tmp/env-agent.sock')
+  })
+
+  it('fails closed when an existing default-named IdentitiesOnly file yields no usable key', () => {
+    // Why: an explicitly configured ~/.ssh/id_* path looks identical to an ssh -G
+    // injected default; the file existing on disk is the evidence of intent.
+    mockExistsSync.mockImplementation(
+      (path: unknown) => path === testHomePath('.ssh', 'id_ed25519')
+    )
+    mockReadFileSync.mockReturnValue(Buffer.from('not-a-key'))
+    const config = buildConnectConfig(
+      makeTarget({ source: 'ssh-config', configHost: 'work' }),
+      makeResolved({ identityFile: [testHomePath('.ssh', 'id_ed25519')], identitiesOnly: true })
+    )
+    expect(config.agent).toBeUndefined()
   })
 
   it('fails closed when a config-backed target has an explicit unparseable IdentitiesOnly file', () => {
