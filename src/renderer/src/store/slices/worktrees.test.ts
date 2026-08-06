@@ -20,6 +20,8 @@ import {
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type {
+  ForgetRemovedWorktreesForExecutionHostArgs,
+  ForgetRemovedWorktreesForExecutionHostResult,
   HostQualifiedDetectedWorktreeResult,
   HostQualifiedKnownWorktreeResult,
   ListKnownWorktreesForExecutionHostArgs,
@@ -111,6 +113,12 @@ const listKnownForExecutionHostMock = vi.fn<
   (args: ListKnownWorktreesForExecutionHostArgs) => Promise<HostQualifiedKnownWorktreeResult>
 >(async (args) => ({ status: 'rejected', ...args }))
 
+const forgetRemovedForExecutionHostMock = vi.fn<
+  (
+    args: ForgetRemovedWorktreesForExecutionHostArgs
+  ) => Promise<ForgetRemovedWorktreesForExecutionHostResult>
+>(async () => ({ forgottenWorktreeIds: [] }))
+
 const mockApi = {
   worktrees: {
     create: vi.fn(),
@@ -118,6 +126,7 @@ const mockApi = {
     list: worktreeListMock,
     listDetected: listDetectedMock,
     listKnownForExecutionHost: listKnownForExecutionHostMock,
+    forgetRemovedForExecutionHost: forgetRemovedForExecutionHostMock,
     cancelListDetected: vi.fn().mockResolvedValue(undefined),
     listLineage: vi.fn().mockResolvedValue({}),
     remove: vi.fn().mockResolvedValue(undefined),
@@ -183,6 +192,12 @@ function resetRemoteRuntimeMocks() {
     return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
   })
 }
+
+// Why: both the metadata fallback and removeWorktree write this module-level memory, so a leaked entry from an
+// earlier describe would silently suppress a row here. Reset for every case, not just the fetch suites.
+beforeEach(() => {
+  resetAuthoritativelyRemovedWorktreeMemoryForTests()
+})
 
 function createTestStore() {
   return create<AppState>()(
@@ -447,7 +462,6 @@ describe('fetchWorktrees', () => {
     vi.clearAllMocks()
     resetRemoteRuntimeMocks()
     clearHugeRepoWarningDismissalsForTests()
-    resetAuthoritativelyRemovedWorktreeMemoryForTests()
   })
 
   it('does not notify subscribers when the fetched payload is unchanged', async () => {
@@ -1716,6 +1730,112 @@ describe('fetchWorktrees', () => {
     await store.getState().fetchWorktrees(sshRepo.id)
 
     expect(store.getState().worktreesByRepo[sshRepo.id]).toEqual([live])
+  })
+
+  it('retires persisted metadata for worktrees an authoritative SSH scan proved gone', async () => {
+    const store = createTestStore()
+    const sshRepo = {
+      id: 'repo-ssh',
+      path: '/home/orca/repo',
+      displayName: 'SSH Repo',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'ssh-1'
+    }
+    const live = makeWorktree({
+      id: 'repo-ssh::/home/orca/live',
+      repoId: 'repo-ssh',
+      path: '/home/orca/live',
+      hostId: 'ssh:ssh-1'
+    })
+    const deletedOnRemote = makeWorktree({
+      id: 'repo-ssh::/home/orca/deleted',
+      repoId: 'repo-ssh',
+      path: '/home/orca/deleted'
+    })
+    const connectedStates = createTestStore().getState().sshConnectionStates
+    listKnownForExecutionHostMock.mockResolvedValueOnce({
+      status: 'complete',
+      repoId: sshRepo.id,
+      executionHostId: 'ssh:ssh-1',
+      result: makeDetectedResult(sshRepo.id, [deletedOnRemote], {
+        authoritative: false,
+        source: 'metadata-fallback'
+      })
+    })
+    store.setState({ repos: [sshRepo], sshConnectionStates: new Map() } as Partial<AppState>)
+    await store.getState().fetchWorktrees(sshRepo.id)
+
+    // The non-authoritative fallback saw the same absence but must not act on it.
+    expect(forgetRemovedForExecutionHostMock).not.toHaveBeenCalled()
+
+    worktreeListMock.mockResolvedValueOnce([live])
+    store.setState({ sshConnectionStates: connectedStates } as Partial<AppState>)
+    await store.getState().fetchWorktrees(sshRepo.id)
+
+    // Why: the renderer's suppression memory dies with the reload, so the metadata itself has to go.
+    expect(forgetRemovedForExecutionHostMock).toHaveBeenCalledExactlyOnceWith({
+      repoId: sshRepo.id,
+      executionHostId: 'ssh:ssh-1',
+      worktreeIds: [deletedOnRemote.id]
+    })
+  })
+
+  it('leaves local metadata to the persistence GC after an authoritative local scan', async () => {
+    const store = createTestStore()
+    const localRepo = {
+      id: 'repo-local',
+      path: '/local/repo',
+      displayName: 'Local Repo',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    const removed = makeWorktree({
+      id: 'repo-local::/local/removed',
+      repoId: localRepo.id,
+      path: '/local/removed'
+    })
+    const survivor = makeWorktree({
+      id: 'repo-local::/local/survivor',
+      repoId: localRepo.id,
+      path: '/local/survivor'
+    })
+    store.setState({
+      repos: [localRepo],
+      worktreesByRepo: { [localRepo.id]: [removed, survivor] }
+    } as Partial<AppState>)
+    worktreeListMock.mockResolvedValueOnce([survivor])
+
+    await store.getState().fetchWorktrees(localRepo.id)
+
+    expect(store.getState().worktreesByRepo[localRepo.id]).toEqual([survivor])
+    // Local metas are GC-eligible on their own; only the SSH exemption needs this IPC.
+    expect(forgetRemovedForExecutionHostMock).not.toHaveBeenCalled()
+  })
+
+  it('skips the metadata fallback entirely for authoritative-only callers', async () => {
+    const store = createTestStore()
+    const sshRepo = {
+      id: 'repo-ssh',
+      path: '/home/orca/repo',
+      displayName: 'SSH Repo',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'ssh-1'
+    }
+    store.setState({ repos: [sshRepo], sshConnectionStates: new Map() } as Partial<AppState>)
+    const worktreesByRepo = store.getState().worktreesByRepo
+    const detectedWorktreesByRepo = store.getState().detectedWorktreesByRepo
+
+    await expect(
+      store.getState().fetchWorktrees(sshRepo.id, { requireAuthoritative: true })
+    ).resolves.toBe(false)
+
+    // Why: these callers asked for authoritative-or-nothing; non-authoritative rows must not land as a side effect.
+    expect(listKnownForExecutionHostMock).not.toHaveBeenCalled()
+    expect(mockApi.worktrees.listDetected).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo).toBe(worktreesByRepo)
+    expect(store.getState().detectedWorktreesByRepo).toBe(detectedWorktreesByRepo)
   })
 
   it('keeps worktree maps byte-identical for stale and malformed direct results', async () => {

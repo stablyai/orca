@@ -46,12 +46,12 @@ import {
   waitForAutomationRerunPendingVisibility
 } from './automation-run-view-state'
 import {
-  automationRunMatchesPaneKey,
   buildAutomationRunOpenLayout,
   canOpenAutomationRunOpenTarget,
   getAutomationRunOpenTabId,
   resolveAutomationRunOpenTarget
 } from './automation-run-open-target'
+import { hasAutomationRunCompletionEvidence } from './automation-run-completion-evidence'
 import { getAutomationRunWorkspaceDisplay } from './automation-run-workspace-display'
 import {
   AutomationEditorDialog,
@@ -903,21 +903,12 @@ export default function AutomationsPage(): React.JSX.Element {
       if (dispatchedAt === null) {
         return false
       }
-      const liveDone = Object.entries(agentStatusByPaneKey).some(
-        ([paneKey, entry]) =>
-          automationRunMatchesPaneKey(run, paneKey) &&
-          entry.state === 'done' &&
-          entry.updatedAt >= dispatchedAt
-      )
-      if (liveDone) {
-        return true
-      }
-      return Object.entries(retainedAgentsByPaneKey).some(
-        ([paneKey, retained]) =>
-          automationRunMatchesPaneKey(run, paneKey) &&
-          retained.entry.state === 'done' &&
-          retained.entry.updatedAt >= dispatchedAt
-      )
+      return hasAutomationRunCompletionEvidence({
+        run,
+        dispatchedAt,
+        agentStatusByPaneKey,
+        retainedAgentsByPaneKey
+      })
     })
     if (completedRuns.length === 0) {
       return

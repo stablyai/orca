@@ -176,6 +176,9 @@ export type ManagedPaneInternal = {
   linkifierHoverResetDisposable?: IDisposable | null
   // Stored because mouseleave does not bubble from xterm's screen.
   linkifierMouseLeaveResetDisposable?: IDisposable | null
+  // Stored because a window blur may strand xterm's active link without a
+  // follow-up mouse event.
+  linkifierWindowBlurResetDisposable?: IDisposable | null
   // Stored so disposePane() can deregister the joiner; terminal.dispose()
   // does not remove registered character joiners.
   arabicShapingJoinerCleanup?: (() => void) | null

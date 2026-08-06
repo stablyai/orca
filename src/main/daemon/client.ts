@@ -18,6 +18,7 @@ import type {
   DaemonEvent
 } from './types'
 import { addNodePtyRecoveryHint } from './node-pty-error-hints'
+import { decodeDaemonResponseError } from './daemon-errors'
 
 const CONNECT_TIMEOUT_MS = 5000
 const CONNECTION_ATTEMPT_WAIT_MS = CONNECT_TIMEOUT_MS * 4
@@ -429,7 +430,12 @@ export class DaemonClient {
             if (response.ok) {
               pending.resolve(response.payload)
             } else {
-              pending.reject(new DaemonProtocolError(addNodePtyRecoveryHint(response.error)))
+              const decoded = decodeDaemonResponseError(response.error)
+              pending.reject(
+                decoded instanceof DaemonProtocolError
+                  ? new DaemonProtocolError(addNodePtyRecoveryHint(response.error))
+                  : decoded
+              )
             }
           }
         }
@@ -503,7 +509,14 @@ function parseDaemonEndpointIdentity(value: unknown): DaemonEndpointIdentity | n
   if (!value || typeof value !== 'object') {
     return null
   }
-  const identity = value as { pid?: unknown; startedAtMs?: unknown; launchNonce?: unknown }
+  const identity = value as {
+    pid?: unknown
+    startedAtMs?: unknown
+    launchNonce?: unknown
+    entryPath?: unknown
+    appVersion?: unknown
+    spawnerExecPath?: unknown
+  }
   if (
     !Number.isSafeInteger(identity.pid) ||
     (identity.pid as number) <= 0 ||
@@ -518,7 +531,16 @@ function parseDaemonEndpointIdentity(value: unknown): DaemonEndpointIdentity | n
   return {
     pid: identity.pid as number,
     startedAtMs: identity.startedAtMs,
-    launchNonce: identity.launchNonce
+    launchNonce: identity.launchNonce,
+    ...(typeof identity.entryPath === 'string' && identity.entryPath.length > 0
+      ? { entryPath: identity.entryPath }
+      : {}),
+    ...(typeof identity.appVersion === 'string' && identity.appVersion.length > 0
+      ? { appVersion: identity.appVersion }
+      : {}),
+    ...(typeof identity.spawnerExecPath === 'string' && identity.spawnerExecPath.length > 0
+      ? { spawnerExecPath: identity.spawnerExecPath }
+      : {})
   }
 }
 

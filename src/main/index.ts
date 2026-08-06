@@ -188,7 +188,10 @@ import {
   ensureAutoUpdaterConfigured
 } from './window/attach-main-window-services'
 import { createMainWindow, loadMainWindow } from './window/createMainWindow'
-import { zoomDashboardPopoutIfFocused } from './window/dashboard-popout-window'
+import {
+  getDashboardPopoutWindow,
+  zoomDashboardPopoutIfFocused
+} from './window/dashboard-popout-window'
 import {
   createSystemTray,
   destroySystemTray,
@@ -303,6 +306,7 @@ import {
 } from '../shared/synthetic-agent-title'
 import type { AgentStatusState } from '../shared/agent-status-types'
 import { resolveTuiAgentPermissionMode } from '../shared/tui-agent-permissions'
+import { isAskUserQuestionTool } from '../shared/agent-question-answered-intent'
 import type { TerminalSideEffectBatch } from '../shared/terminal-side-effect-facts'
 import {
   HEADLESS_RUNTIME_WINDOW_ID,
@@ -1450,7 +1454,16 @@ function openMainWindow(): BrowserWindow {
       maybeAutoRenameBranchOnFirstWorkFromHook({ paneKey, tabId, worktreeId, payload, isReplay })
       const orchestration = runtime?.getAgentStatusOrchestrationContextForPaneKey(paneKey)
       const terminalHandle = runtime?.getAgentStatusTerminalHandleForPaneKey(paneKey)
-      mainWindow?.webContents.send('agentStatus:set', {
+      const suppressSyntheticCodexAutoApprovalTitle =
+        payload.agentType === 'codex' &&
+        (payload.state === 'waiting' || payload.state === 'blocked')
+          ? shouldSuppressCodexAutoApprovalSyntheticTitleFromHook({
+              agentType: payload.agentType,
+              state: payload.state,
+              launchConfig: runtime?.getAgentStatusLaunchConfigForPaneKey(paneKey, { launchToken })
+            })
+          : false
+      const statusEvent = {
         ...payload,
         paneKey,
         ...(launchToken ? { launchToken } : {}),
@@ -1464,19 +1477,14 @@ function openMainWindow(): BrowserWindow {
         ...(promptInteractionKey ? { promptInteractionKey } : {}),
         ...(restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
         ...(orchestration ? { orchestration } : {})
-      })
+      }
+      mainWindow?.webContents.send('agentStatus:set', statusEvent)
+      if (!suppressSyntheticCodexAutoApprovalTitle || isAskUserQuestionTool(payload.toolName)) {
+        getDashboardPopoutWindow()?.webContents.send('agentStatus:set', statusEvent)
+      }
       recordAgentStateCrashBreadcrumb(payload.agentType ?? 'unknown', payload.state)
       // Why: native OSC titles miss some idle/permission frames, so inject hook-derived ones to keep the renderer title tracker in sync.
       const profile = getSyntheticAgentTitleProfile(payload.agentType)
-      const suppressSyntheticCodexAutoApprovalTitle =
-        payload.agentType === 'codex' &&
-        (payload.state === 'waiting' || payload.state === 'blocked')
-          ? shouldSuppressCodexAutoApprovalSyntheticTitleFromHook({
-              agentType: payload.agentType,
-              state: payload.state,
-              launchConfig: runtime?.getAgentStatusLaunchConfigForPaneKey(paneKey, { launchToken })
-            })
-          : false
       if (
         profile &&
         shouldDriveSyntheticAgentTitleFromHook(payload.agentType, payload.state) &&
@@ -1491,6 +1499,7 @@ function openMainWindow(): BrowserWindow {
       return
     }
     mainWindow?.webContents.send('agentStatus:clear', clear)
+    getDashboardPopoutWindow()?.webContents.send('agentStatus:clear', clear)
   })
   setMigrationUnsupportedPtyListener((event) => {
     if (mainWindow?.isDestroyed()) {
@@ -2098,7 +2107,11 @@ void app.whenReady().then(async () => {
   }
   try {
     // Why: Dock/Launchpad launches don't inherit shell proxy env vars, so apply the persisted proxy before any app-owned network fetchers run.
-    await applyElectronProxySettings(store.getSettings())
+    const proxyApplyResult = await applyElectronProxySettings(store.getSettings())
+    if (proxyApplyResult.source === 'invalid-settings') {
+      // Why (STA-3442): a silent DIRECT fallback made a dead configured proxy undiagnosable.
+      console.warn('[proxy] persisted proxy settings are invalid; using direct networking')
+    }
   } catch {
     console.warn('[proxy] Failed to apply network proxy settings')
   }

@@ -138,7 +138,7 @@ describe('ExperimentalPane', () => {
       <ExperimentalPane settings={settings} updateSettings={vi.fn()} />
     )
 
-    expect(settings.experimentalAgentDashboardPopout).toBe(false)
+    expect(settings.experimentalAgentDashboardPopout).toBeUndefined()
     expect(markup).toContain('Agent Dashboard')
     expect(markup).toContain('Monitor agents that need you, are working, or are done')
     expect(getExperimentalPaneSearchEntries().map((entry) => entry.title)).toContain(

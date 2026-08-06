@@ -249,6 +249,31 @@ describe('SourceControlBranchContextRow branch line total', () => {
     expect(markup).not.toContain('<button type="button" data-testid="source-control-branch')
   })
 
+  // `truncate` clips nothing on an inline box, so an inline head identity let a
+  // long branch name overflow its flex item and run under the chip.
+  it('gives the head identity a block box so long names ellipsize instead of overlapping', () => {
+    const markup = renderToStaticMarkup(
+      <SourceControlBranchContextRow
+        summary={readySummary}
+        compareBaseRef={null}
+        headDisplay={{
+          kind: 'branch',
+          branchName: 'refactor-remove-legacy-gemini-cli-current-model-plumbing'
+        }}
+        branchLineTotal={{ added: 16, removed: 1541, mergeBase: 'base' }}
+        onChangeBaseRef={vi.fn()}
+        onRetry={vi.fn()}
+      />
+    )
+
+    const identityClasses =
+      /class="([^"]*)"[^>]*data-testid="source-control-head-identity"/.exec(markup)?.[1] ?? ''
+
+    expect(identityClasses).toContain('block')
+    expect(identityClasses).toContain('truncate')
+    expect(identityClasses).toContain('min-w-0')
+  })
+
   it('keeps full precision instead of a compact 8.3k form', () => {
     const markup = renderWithLineTotal({ added: 123456, removed: 0, mergeBase: 'base' })
 

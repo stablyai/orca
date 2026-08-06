@@ -2235,6 +2235,61 @@ describe('orchestration RPC methods', () => {
       )
     })
 
+    it('applies and reports opaque per-invocation model preferences', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      const task = db.createTask({ spec: 'launch a custom model' })
+
+      const result = (await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        agent: 'claude',
+        model: 'aws-bedrock-opus-5',
+        effort: 'high'
+      })) as {
+        dispatchId: string
+        state: string
+        launch: {
+          requested: { agent: string; model: string; effort: string }
+          effective: { agent: string; model: string; effort: string }
+        }
+      }
+
+      expect(result).toMatchObject({
+        state: 'ready',
+        launch: {
+          requested: { agent: 'claude', model: 'aws-bedrock-opus-5', effort: 'high' },
+          effective: { agent: 'claude', model: 'aws-bedrock-opus-5', effort: 'high' }
+        }
+      })
+      expect(runtime.createTerminal).toHaveBeenCalledWith(
+        'id:repo::worktree',
+        expect.objectContaining({
+          startupAgent: 'claude',
+          launchPreferences: { model: 'aws-bedrock-opus-5', effort: 'high' }
+        })
+      )
+      expect(JSON.parse(db.getWorkerDispatch(result.dispatchId)!.start_options)).toMatchObject({
+        launch: result.launch
+      })
+    })
+
+    it('rejects launch preferences for an existing terminal before creating a Dispatch', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      const task = db.createTask({ spec: 'reuse exact worker' })
+
+      await expect(
+        call('orchestration.workerStart', {
+          task: task.id,
+          from: 'term_coord',
+          terminal: 'term_worker',
+          model: 'gpt-5.6-sol'
+        })
+      ).rejects.toMatchObject({ code: 'invalid_argument' })
+      expect(db.getDispatchContext(task.id)).toBeUndefined()
+    })
+
     // Why: `cursor` on PATH is the Cursor desktop app; passing the agent id as a
     // shell command opened the IDE and left a blank shell (issue #11926).
     it('never passes the agent id to the worker terminal as a shell command', async () => {

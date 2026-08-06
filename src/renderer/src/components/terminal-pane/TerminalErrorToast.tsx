@@ -12,6 +12,8 @@ const STALE_DAEMON_CWD_MARKERS = [
   "Daemon's working directory is gone",
   'node-pty: daemon_cwd failed: ENOENT'
 ]
+// Thrown by ipc/pty.ts when a persisted pane owner can't be proven alive or dead (STA-3536).
+const PANE_OWNER_UNVERIFIED_MARKER = 'terminal_pane_owner_unverified'
 
 function isSshError(error: string): boolean {
   return error.startsWith(SSH_PREFIX) || error.includes(SSH_RELAY_LOST_MARKER)
@@ -42,6 +44,20 @@ export function shouldOfferDaemonRestart(error: string): boolean {
   )
 }
 
+/** Swaps the raw pane-owner-unverified code for copy a user can act on. */
+export function humanizeTerminalError(error: string): string {
+  if (!error.includes(PANE_OWNER_UNVERIFIED_MARKER)) {
+    return error
+  }
+  return error.replace(
+    PANE_OWNER_UNVERIFIED_MARKER,
+    translate(
+      'auto.components.terminal.pane.TerminalErrorToast.7ee11bc0db',
+      "Orca couldn't confirm whether this terminal's previous session is still running, so it left the session untouched. Reopen this pane to retry."
+    )
+  )
+}
+
 export function TerminalErrorToast({
   error,
   onDismiss,
@@ -53,6 +69,7 @@ export function TerminalErrorToast({
 }): React.JSX.Element {
   const ssh = isSshError(error)
   const showDaemonRestart = !ssh && onRestartDaemon && shouldOfferDaemonRestart(error)
+  const displayError = humanizeTerminalError(error)
 
   return (
     <div
@@ -75,7 +92,7 @@ export function TerminalErrorToast({
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
         <span style={{ minWidth: 0 }}>
-          {error}
+          {displayError}
           {showDaemonRestart ? (
             <>
               {'\n'}

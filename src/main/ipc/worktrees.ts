@@ -49,6 +49,8 @@ import {
 import {
   PROVIDER_REQUEST_ID_MAX_UTF8_BYTES,
   type DirectSshDetectedWorktreeRequest,
+  type ForgetRemovedWorktreesForExecutionHostArgs,
+  type ForgetRemovedWorktreesForExecutionHostResult,
   type HostQualifiedKnownWorktreeResult,
   type HostQualifiedDetectedWorktreeResult,
   type ListKnownWorktreesForExecutionHostArgs,
@@ -1846,6 +1848,7 @@ export function registerWorktreeHandlers(
   ipcMain.removeHandler('worktrees:list')
   ipcMain.removeHandler('worktrees:listDetected')
   ipcMain.removeHandler('worktrees:listKnownForExecutionHost')
+  ipcMain.removeHandler('worktrees:forgetRemovedForExecutionHost')
   ipcMain.removeHandler('worktrees:cancelListDetected')
   ipcMain.removeHandler('worktrees:create')
   ipcMain.removeHandler('worktrees:prefetchCreateBase')
@@ -2047,6 +2050,51 @@ export function registerWorktreeHandlers(
           listDisconnectedSshWorktrees(store, repo, metaIndex)
         )
       )
+    }
+  )
+
+  // Why: gcStaleWorktreeMeta cannot stat a remote path, so SSH metadata outlives the worktree and the fallback
+  // above re-lists a worktree deleted outside Orca on every launch. An authoritative scan is the only proof of
+  // absence, so the renderer reports what it retired here and the row is dropped like a local GC would.
+  ipcMain.handle(
+    'worktrees:forgetRemovedForExecutionHost',
+    (
+      _event,
+      args: ForgetRemovedWorktreesForExecutionHostArgs
+    ): ForgetRemovedWorktreesForExecutionHostResult => {
+      const nothingForgotten: ForgetRemovedWorktreesForExecutionHostResult = {
+        forgottenWorktreeIds: []
+      }
+      const requestedExecutionHostId = args?.executionHostId ?? 'ssh:'
+      const worktreeIds = Array.isArray(args?.worktreeIds) ? args.worktreeIds : []
+      const parsedHost = parseExecutionHostId(requestedExecutionHostId)
+      if (parsedHost?.kind !== 'ssh' || worktreeIds.length === 0) {
+        return nothingForgotten
+      }
+      const repo = findExactRepoOwner(store, args?.repoId ?? '', requestedExecutionHostId)
+      if (!repo || repo.connectionId !== parsedHost.targetId) {
+        return nothingForgotten
+      }
+      // Why: a folder workspace's meta IS the workspace record, not a checkout row — gcStaleWorktreeMeta skips
+      // those keys for the same reason, and no remote scan can retire one.
+      if (isFolderRepo(repo)) {
+        return nothingForgotten
+      }
+      const allMeta = store.getAllWorktreeMeta()
+      const forgottenWorktreeIds: string[] = []
+      for (const worktreeId of worktreeIds) {
+        const meta = typeof worktreeId === 'string' ? allMeta[worktreeId] : undefined
+        if (!meta || getRepoIdFromWorktreeId(worktreeId) !== repo.id) {
+          continue
+        }
+        // An unhosted meta belongs to this repo's only owner; a foreign hostId needs that host's own scan.
+        if (meta.hostId && meta.hostId !== requestedExecutionHostId) {
+          continue
+        }
+        store.removeWorktreeMeta(worktreeId, requestedExecutionHostId)
+        forgottenWorktreeIds.push(worktreeId)
+      }
+      return { forgottenWorktreeIds }
     }
   )
 

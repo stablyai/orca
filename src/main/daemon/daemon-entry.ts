@@ -20,12 +20,16 @@ import {
 import { MacosLoginSessionDeathWatch } from './macos-login-session-death-watch'
 import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-system-resolver-health'
 import { readCurrentDaemonReadyIdentity } from './daemon-ready-identity'
+import { publishDaemonPidFile } from './daemon-spawner'
 
 export type ParsedDaemonArgs = {
   socketPath: string
   tokenPath: string
   pidPath?: string
   launchNonce?: string
+  entryPath?: string
+  appVersion?: string
+  spawnerExecPath?: string
   /** GUI-spawned daemons only — headless serve/SSH daemons must survive session loss. */
   loginSessionWatch?: boolean
   /** Optional — absent for adopted old daemons and tests, which log nothing. */
@@ -38,6 +42,9 @@ export function parseArgs(argv: string[]): ParsedDaemonArgs {
   let logFilePath = ''
   let pidPath = ''
   let launchNonce = ''
+  let entryPath = ''
+  let appVersion = ''
+  let spawnerExecPath = ''
   let loginSessionWatch = false
 
   for (let i = 0; i < argv.length; i++) {
@@ -56,6 +63,15 @@ export function parseArgs(argv: string[]): ParsedDaemonArgs {
     } else if (argv[i] === '--launch-nonce' && argv[i + 1]) {
       launchNonce = argv[i + 1]
       i++
+    } else if (argv[i] === '--entry-path' && argv[i + 1]) {
+      entryPath = argv[i + 1]
+      i++
+    } else if (argv[i] === '--app-version' && argv[i + 1]) {
+      appVersion = argv[i + 1]
+      i++
+    } else if (argv[i] === '--spawner-exec-path' && argv[i + 1]) {
+      spawnerExecPath = argv[i + 1]
+      i++
     } else if (argv[i] === '--login-session-watch') {
       loginSessionWatch = true
     }
@@ -73,6 +89,9 @@ export function parseArgs(argv: string[]): ParsedDaemonArgs {
     socketPath,
     tokenPath,
     ...(pidPath ? { pidPath, launchNonce } : {}),
+    ...(entryPath ? { entryPath } : {}),
+    ...(appVersion ? { appVersion } : {}),
+    ...(spawnerExecPath ? { spawnerExecPath } : {}),
     ...(loginSessionWatch ? { loginSessionWatch } : {}),
     ...(logFilePath ? { logFilePath } : {})
   }
@@ -86,10 +105,19 @@ async function main(): Promise<void> {
   // an otherwise healthy detached daemon. Swallow it: stderr is diagnostic only.
   process.stderr.on('error', () => {})
 
-  const { socketPath, tokenPath, pidPath, launchNonce, loginSessionWatch, logFilePath } = parseArgs(
-    process.argv.slice(2)
-  )
+  const {
+    socketPath,
+    tokenPath,
+    pidPath,
+    launchNonce,
+    entryPath,
+    appVersion,
+    spawnerExecPath,
+    loginSessionWatch,
+    logFilePath
+  } = parseArgs(process.argv.slice(2))
   const startedAtMs = Date.now() - process.uptime() * 1000
+  const readyIdentity = await readCurrentDaemonReadyIdentity(startedAtMs)
   // Fail-open: a broken log path must never block daemon startup.
   const daemonLog = logFilePath ? createDaemonFileLog(logFilePath) : createNoopDaemonFileLog()
   daemonLog.log('startup', { protocolVersion: PROTOCOL_VERSION, socketPath })
@@ -236,6 +264,22 @@ async function main(): Promise<void> {
     ...(pidPath ? { pidPath } : {}),
     ...(launchNonce ? { launchNonce } : {}),
     ...(pidPath ? { startedAtMs } : {}),
+    ...(entryPath ? { entryPath } : {}),
+    ...(appVersion ? { appVersion } : {}),
+    ...(spawnerExecPath ? { spawnerExecPath } : {}),
+    ...(pidPath && launchNonce
+      ? {
+          publishEndpointOwnership: () =>
+            publishDaemonPidFile(pidPath, {
+              pid: process.pid,
+              ...readyIdentity,
+              ...(entryPath ? { entryPath } : {}),
+              ...(appVersion ? { appVersion } : {}),
+              ...(spawnerExecPath ? { spawnerExecPath } : {}),
+              launchNonce
+            })
+        }
+      : {}),
     log: daemonLog,
     preparePtySpawn: runMacosLoginPreflight,
     ...(deathWatch
@@ -260,13 +304,18 @@ async function main(): Promise<void> {
       daemonLog.log('shutdown', { reason: 'idle' })
       daemonLog.close()
       process.exit(0)
+    },
+    onRpcShutdown: () => {
+      deathWatch?.stop()
+      shuttingDown = true
+      daemonLog.close()
+      process.exit(0)
     }
   })
   deathWatch?.start()
 
   // Signal readiness to parent via IPC (if available)
   if (process.send) {
-    const readyIdentity = await readCurrentDaemonReadyIdentity(startedAtMs)
     process.send({ type: 'ready', ...readyIdentity })
   }
   daemonLog.log('ready')

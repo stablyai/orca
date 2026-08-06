@@ -2990,13 +2990,14 @@ function mergeFetchedWorktrees(
     // Why: applied outside the updater so a repeated updater call cannot double-apply the removal memory.
     forgetAuthoritativelyRemovedWorktrees(args.hostId, authoritativelySeenIds)
     rememberAuthoritativelyRemovedWorktrees(args.hostId, authoritativelyRemovedIds)
+    forgetPersistedWorktreeMetaForRemovals(args.repoId, args.hostId, authoritativelyRemovedIds)
   }
   return admitted
 }
 
-// Why: an authoritative scan is the only proof a remote worktree is gone, but SSH WorktreeMeta is exempt from
-// gcStaleWorktreeMeta (persistence.ts:407,415), so without this memory the metadata fallback re-appends every
-// deleted row on the next disconnect — forever.
+// Why: main retires the persisted SSH metadata a scan proved gone, but that IPC is async and the next fallback
+// read can already be in flight, so this session memory covers the window until the delete lands. It is not the
+// durable half: reloads start empty and rely on the metadata itself being gone.
 const AUTHORITATIVE_REMOVAL_MEMORY_LIMIT = 512
 const authoritativelyRemovedWorktreeIdsByHost = new Map<ExecutionHostId, Set<string>>()
 
@@ -3042,6 +3043,29 @@ function forgetAuthoritativelyRemovedWorktrees(
 /** Test-only: module-level removal memory would otherwise leak across cases in one file. */
 export function resetAuthoritativelyRemovedWorktreeMemoryForTests(): void {
   authoritativelyRemovedWorktreeIdsByHost.clear()
+}
+
+// Why: SSH WorktreeMeta is exempt from gcStaleWorktreeMeta (persistence.ts:407,415) and outlives the remote
+// worktree, so a scan-proven removal must retire the metadata itself — otherwise the next launch's fallback
+// re-lists the deleted row before the host connects, and the in-memory suppression above is already gone.
+function forgetPersistedWorktreeMetaForRemovals(
+  repoId: string,
+  hostId: ExecutionHostId,
+  worktreeIds: readonly string[]
+): void {
+  const parsedHost = parseExecutionHostId(hostId)
+  if (worktreeIds.length === 0 || parsedHost?.kind !== 'ssh') {
+    return
+  }
+  const forget = window.api.worktrees.forgetRemovedForExecutionHost
+  if (typeof forget !== 'function') {
+    return
+  }
+  void forget({ repoId, executionHostId: parsedHost.id, worktreeIds: [...worktreeIds] }).catch(
+    (err) => {
+      console.warn(`Failed to forget metadata for removed worktrees in repo ${repoId}:`, err)
+    }
+  )
 }
 
 function appendMissingWorktreesForHost<
@@ -3099,7 +3123,7 @@ async function fetchKnownSshWorktreesForRepo(
   repoId: string,
   executionHostId: SshExecutionHostId
 ): Promise<DetectedWorktreeListResult | null> {
-  const coalesceKey = `${repoId} ${executionHostId}`
+  const coalesceKey = `${repoId}\0${executionHostId}`
   const inflight = inflightKnownSshWorktreeFetches.get(coalesceKey)
   if (inflight) {
     return await inflight

@@ -208,4 +208,3 @@ export function scheduleSharedControlReconnect(args: {
   }
   return { timer, reconnectAttempt: args.reconnectAttempt + 1 }
 }
-

@@ -15,7 +15,8 @@ import {
   UsageBar
 } from '../src/components/AccountUsage'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { loadHosts } from '../src/transport/host-store'
+import { loadHostCatalog } from '../src/transport/host-store'
+import { selectConnectableHostProfiles } from '../src/transport/host-catalog-selection'
 import { useOpenMobileHostEdit } from '../src/transport/use-open-mobile-host-edit'
 import { removeHostAndCloseClient } from '../src/transport/host-removal-lifecycle'
 import { fetchHomeHostWorktreeInfo } from '../src/worktree/home-host-worktree-fetch'
@@ -26,13 +27,17 @@ import { createHostConnectRefetchGate } from '../src/transport/host-connect-refe
 import { sendSingleFlightRequest } from '../src/transport/request-single-flight'
 import { useCloseHost, useForceReconnect, usePrimeHosts } from '../src/transport/client-context'
 import { useAllHostClients } from '../src/transport/use-all-host-clients'
+import {
+  resolveHomeHostConnectionState,
+  selectHomeAutoConnectHostIds
+} from '../src/transport/home-host-auto-connect'
 import { classifyConnection } from '../src/transport/connection-health'
 import { subscribeToDesktopNotifications } from '../src/notifications/mobile-notifications'
 import {
   loadMobileOnboardingSteps,
   mobileOnboardingDestination
 } from '../src/onboarding/mobile-onboarding-plan'
-import type { ConnectionState, HostProfile } from '../src/transport/types'
+import type { ConnectionState, HostCatalogEntry, HostProfile } from '../src/transport/types'
 import { triggerMediumImpact } from '../src/platform/haptics'
 import { OrcaLogo } from '../src/components/OrcaLogo'
 import { MobileHostCard } from '../src/components/MobileHostCard'
@@ -224,9 +229,9 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets()
   // Why: cap/center content on wide/tablet canvases so cards don't stretch edge-to-edge on iPad.
   const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
-  const [hosts, setHosts] = useState<HostProfile[]>([])
+  const [hostCatalog, setHostCatalog] = useState<HostCatalogEntry[]>([])
   const [actionTarget, setActionTarget] = useState<HostProfile | null>(null)
-  const [confirmRemove, setConfirmRemove] = useState<HostProfile | null>(null)
+  const [confirmRemove, setConfirmRemove] = useState<{ id: string; name: string } | null>(null)
   const [hostStates, setHostStates] = useState<Record<string, ConnectionState>>({})
   const [hostAttempts, setHostAttempts] = useState<Record<string, number>>({})
   const [hostLastConnected, setHostLastConnected] = useState<Record<string, number | null>>({})
@@ -242,10 +247,15 @@ export default function HomeScreen() {
   const onboardingOptInCheckedRef = useRef(false)
 
   // Why: shared clients from the per-host store, not N independent WebSockets. See docs/mobile-shared-client-per-host.md.
+  const hosts = useMemo(() => selectConnectableHostProfiles(hostCatalog), [hostCatalog])
   const hostIds = useMemo(() => hosts.map((h) => h.id), [hosts])
   // Why: scoped to the paired hosts so an unpaired desktop's cached reply leaves the header total.
   const stats = useMemo(() => totalHomeStats(statsByHost, hostIds), [statsByHost, hostIds])
-  const allClients = useAllHostClients(hostIds)
+  const autoConnectHostIds = useMemo(() => selectHomeAutoConnectHostIds(hosts), [hosts])
+  const allClients = useAllHostClients(hostIds, {
+    autoConnectHostIds,
+    closeUnusedOnRelease: true
+  })
   const hostPaths = useMemo(
     () => Object.fromEntries(allClients.map(({ hostId, path }) => [hostId, path])),
     [allClients]
@@ -308,12 +318,12 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       let stale = false
-      void loadHosts().then(async (h) => {
+      void loadHostCatalog().then(async (catalog) => {
         if (stale) {
           return
         }
-        setHosts(h)
-        if (h.length === 0 || onboardingOptInCheckedRef.current) {
+        setHostCatalog(catalog)
+        if (catalog.length === 0 || onboardingOptInCheckedRef.current) {
           return
         }
         onboardingOptInCheckedRef.current = true
@@ -350,6 +360,10 @@ export default function HomeScreen() {
   const sortedHosts = useMemo(
     () => [...hosts].sort((a, b) => b.lastConnected - a.lastConnected),
     [hosts]
+  )
+  const sortedHostCatalog = useMemo(
+    () => [...hostCatalog].sort((a, b) => b.lastConnected - a.lastConnected),
+    [hostCatalog]
   )
 
   // Why: mirror per-host connection state into hostStates so existing render code (status dots) keeps working.
@@ -389,13 +403,20 @@ export default function HomeScreen() {
         }
       }
       // Why: reflect hosts that dropped from allClients, but only if already tracked — else the initial-acquire frame flips all to 'disconnected'.
-      for (const host of hosts) {
+      for (const host of hostCatalog) {
         if (liveIds.has(host.id)) {
           continue
         }
-        if (!host.publicKeyB64 || !host.deviceToken) {
+        if (host.credentialStatus === 'missing') {
           if (next[host.id] !== 'auth-failed') {
             next[host.id] = 'auth-failed'
+            changed = true
+          }
+          continue
+        }
+        if (host.credentialStatus === 'temporarily-unavailable') {
+          if (next[host.id] !== 'disconnected') {
+            next[host.id] = 'disconnected'
             changed = true
           }
           continue
@@ -408,14 +429,14 @@ export default function HomeScreen() {
       }
       // Drop entries for hosts we no longer track at all.
       for (const id of Object.keys(next)) {
-        if (!liveIds.has(id) && hosts.some((h) => h.id === id) === false) {
+        if (!liveIds.has(id) && hostCatalog.some((h) => h.id === id) === false) {
           delete next[id]
           changed = true
         }
       }
       return changed ? next : prev
     })
-  }, [allClients, hosts])
+  }, [allClients, hostCatalog])
 
   // Notif/accounts subs + a snapshot read per connect for one host. Lives outside the effect body
   // because react-doctor's effect-needs-cleanup false-positives on `subscribe` inside one; the
@@ -629,7 +650,7 @@ export default function HomeScreen() {
     try {
       await removeHostAndCloseClient(hostToRemove.id, closeHostClient)
       setConfirmRemove(null)
-      setHosts(await loadHosts())
+      setHostCatalog(await loadHostCatalog())
     } catch {
       // Why: ConfirmModal closes on confirm; re-open for retry so the failure isn't silent.
       setConfirmRemove(hostToRemove)
@@ -655,7 +676,7 @@ export default function HomeScreen() {
         </Pressable>
       </View>
 
-      {hosts.length === 0 ? (
+      {hostCatalog.length === 0 ? (
         /* ─── Empty state: onboarding ─── */
         <View
           style={[
@@ -694,7 +715,7 @@ export default function HomeScreen() {
       ) : (
         /* ─── Populated state ─── */
         <FlatList
-          data={sortedHosts}
+          data={sortedHostCatalog}
           keyExtractor={(h) => h.id}
           // Why: reserve insets.bottom so the last row stays reachable above the system nav bar / home indicator.
           contentContainerStyle={[
@@ -732,7 +753,11 @@ export default function HomeScreen() {
           }
           ItemSeparatorComponent={CardGap}
           renderItem={({ item }) => {
-            const state = hostStates[item.id] ?? 'connecting'
+            const state = resolveHomeHostConnectionState(
+              item.id,
+              hostStates[item.id],
+              autoConnectHostIds
+            )
             const attempts = hostAttempts[item.id] ?? 0
             const lastConnectedAt = hostLastConnected[item.id] ?? null
             const verdict = classifyConnection({
@@ -744,14 +769,36 @@ export default function HomeScreen() {
             return (
               <MobileHostCard
                 host={item}
+                credentialStatus={item.credentialStatus}
                 state={state}
                 verdict={verdict}
                 path={hostPaths[item.id] ?? 'lan'}
                 worktreeInfo={worktreeInfo[item.id]}
-                onPress={() => router.push(`/h/${item.id}`)}
+                onPress={() => {
+                  if (item.credentialStatus === 'missing') {
+                    router.push('/pair-scan')
+                  } else if (item.credentialStatus === 'temporarily-unavailable') {
+                    void loadHostCatalog()
+                      .then(setHostCatalog)
+                      .catch(() => Alert.alert('Could not check pairing', 'Please try again.'))
+                  } else {
+                    router.push(`/h/${item.id}`)
+                  }
+                }}
                 onLongPress={() => {
                   triggerMediumImpact()
-                  setActionTarget(item)
+                  if (item.profile) {
+                    setActionTarget(item.profile)
+                  } else {
+                    setConfirmRemove(item)
+                  }
+                }}
+                onOpenActions={() => {
+                  if (item.profile) {
+                    setActionTarget(item.profile)
+                  } else {
+                    setConfirmRemove(item)
+                  }
                 }}
               />
             )
@@ -920,7 +967,13 @@ export default function HomeScreen() {
         message={actionTarget ? endpointLabel(actionTarget.endpoint) : undefined}
         actions={getHostListActionSheetActions({
           host: actionTarget,
-          state: actionTarget ? (hostStates[actionTarget.id] ?? 'connecting') : 'disconnected',
+          state: actionTarget
+            ? resolveHomeHostConnectionState(
+                actionTarget.id,
+                hostStates[actionTarget.id],
+                autoConnectHostIds
+              )
+            : 'disconnected',
           hasEverConnected: actionTarget
             ? (hostLastConnected[actionTarget.id] ?? null) != null
             : false,
@@ -928,7 +981,7 @@ export default function HomeScreen() {
           onReconnect: (hostId) => void forceReconnectHost(hostId),
           onDisconnect: closeHostClient,
           onEdit: openMobileHostEdit,
-          onRemove: setConfirmRemove
+          onRemove: (host) => setConfirmRemove(host)
         })}
         onClose={() => setActionTarget(null)}
       />

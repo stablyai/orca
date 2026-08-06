@@ -9577,14 +9577,14 @@
           "available": "Disponible",
           "reconnecting": "Reconectando",
           "unavailable": "No disponible",
-          "signIn": "Iniciar sesión",
-          "localDescription": "El teléfono debe estar en esta Wi‑Fi o en tu Tailscale. No requiere inicio de sesión.",
+          "signIn": "Iniciar sesión para Relay",
+          "localDescription": "El teléfono debe estar en esta Wi‑Fi o conectado por Tailscale. No se necesita cuenta.",
           "pathGroup": "Cómo llega el teléfono a este ordenador",
           "anywhereTitle": "Orca Relay",
-          "anywhereDescription": "El teléfono puede estar en datos móviles o cualquier Wi‑Fi. Se requiere inicio de sesión.",
-          "signInRequired": "Inicia sesión para usar Orca Mobile Relay.",
+          "anywhereDescription": "El teléfono puede estar en datos móviles o cualquier Wi‑Fi. El inicio de sesión solo es necesario para Relay.",
+          "signInRequired": "Solo Relay — LAN no necesita una cuenta.",
           "relayUnavailable": "Orca Relay no está disponible en esta compilación. Usa LAN.",
-          "signInAgain": "Iniciar sesión de nuevo",
+          "signInAgain": "Volver a iniciar sesión para Relay",
           "localTitle": "LAN"
         },
         "MobilePairingSetupSection": {
@@ -9595,8 +9595,9 @@
           "overview": "Genera un código QR, luego escanéalo en Orca Mobile en Pair Desktop.",
           "step1Title": "Método de conexión",
           "step2Title": "Dirección de este ordenador",
-          "step2RelayDescription": "Se usa para una ruta directa más rápida cuando está cerca. Relay cubre el acceso remoto.",
-          "step2LocalDescription": "El teléfono debe poder alcanzar esta dirección por Wi‑Fi o Tailscale."
+          "step2LocalDescription": "El teléfono debe poder alcanzar esta dirección por Tailscale o Wi‑Fi.",
+          "step2RelayDescription": "Opcional. Elige la dirección Wi‑Fi o Tailscale que el teléfono usará cuando esté cerca — suele ser más rápido que Relay. Relay sigue funcionando cuando estás fuera.",
+          "step2RelayDisclosure": "También usar una ruta local más rápida"
         },
         "MobileRelayBetaAvailability": {
           "about": "Acerca de la beta de Orca Relay",
@@ -11756,7 +11757,9 @@
             "stable": "Estable"
           },
           "relayDegradedNotice": "No se pudo contactar con Relay: este código solo funciona en tu LAN o Tailscale.",
-          "pairingQrError": "Este código de emparejamiento no se pudo representar como código QR. Cópialo en Orca Mobile."
+          "pairingQrError": "Este código de emparejamiento no se pudo representar como código QR. Cópialo en Orca Mobile.",
+          "directAddressDisclosure": "También usar una ruta local más rápida",
+          "directAddressHint": "Opcional. Elige la dirección Wi‑Fi o Tailscale que el teléfono usará cuando esté cerca — suele ser más rápido que Relay. Relay sigue funcionando cuando estás fuera."
         },
         "MobilePage": {
           "e17393c6a3": "Vista previa del teléfono",
@@ -11899,7 +11902,8 @@
           "repair-unverified": "Windows Firewall access could not be verified",
           "blocked-title": "Windows may be blocking Orca Mobile",
           "blocked-description": "An existing inbound Block rule can override the pairing exception. Repair removes conflicting TCP rules for this Orca app, then allows port {{port}} on Private networks.",
-          "repair": "Repair firewall access"
+          "repair": "Repair firewall access",
+          "relay-note": "El emparejamiento sigue funcionando por Orca Relay: permitirlo solo añade la conexión local más rápida."
         }
       },
       "gitlab": {
@@ -14582,6 +14586,29 @@
     }
   },
   "dashboardPopout": {
+    "view": {
+      "label": "Vista del panel",
+      "board": "Panel",
+      "map": "Mapa de agentes"
+    },
+    "map": {
+      "host": {
+        "all": "Todos los hosts",
+        "local": "Local",
+        "ssh": "SSH",
+        "wsl": "WSL",
+        "remote": "Remoto"
+      },
+      "liveContainmentMap": "Mapa de contención en vivo",
+      "hostFilter": "Filtro de host",
+      "empty": "Ningún agente coincide con los filtros actuales.",
+      "canvasLabel": "Mapa anidado de proyectos, espacios de trabajo y agentes",
+      "zoomOut": "Alejar",
+      "zoomIn": "Acercar",
+      "fit": "Ajustar",
+      "projectCount": "{{agents}} agentes · {{workspaces}} espacios de trabajo",
+      "agentCount": "{{count}} agentes"
+    },
     "placeholder": {
       "title": "Agent dashboard",
       "description": "This is where all your agents will show up at a glance. The board is coming soon."
@@ -14618,7 +14645,7 @@
     },
     "terminal": {
       "closed": "No live terminal — this agent's pane has closed.",
-      "focusWorktree": "Focus worktree",
+      "focusWorktree": "Open worktree",
       "close": "Close"
     },
     "close": "Close dashboard",
