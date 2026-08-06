@@ -17,21 +17,22 @@
  * covered in src/main/runtime/orca-runtime.test.ts. What lives here is every
  * behavior that needs a real process, a real title, or a real pane.
  */
-import { test as base, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/orca-app'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { waitForSessionReady, waitForActiveWorktree, ensureTerminalVisible } from './helpers/store'
-import { waitForActiveTerminalManager } from './helpers/terminal'
+import {
+  execInTerminal,
+  waitForActivePaneHookDescriptor,
+  waitForActivePanePtyId,
+  waitForActiveTerminalManager
+} from './helpers/terminal'
 import { RuntimeClient } from '../../src/cli/runtime-client'
-import type {
-  RuntimeTerminalCreate,
-  RuntimeTerminalListResult
-} from '../../src/shared/runtime-types'
+import type { RuntimeTerminalListResult } from '../../src/shared/runtime-types'
 import {
   CODEX_IDLE_TITLE,
   CODEX_WORKING_TITLE,
   CURSOR_IDLE_TITLE,
-  MAIL_AGENT_LAUNCH_ENV,
-  mailPaneAgent,
+  createMailPaneAgent,
   type MailPaneAgent
 } from './helpers/orchestration-mail-pane-agent'
 import {
@@ -39,10 +40,7 @@ import {
   readMailRow,
   startCoordinatorRun
 } from './helpers/orchestration-mail-store'
-
-const test = base.extend({
-  launchEnv: [MAIL_AGENT_LAUNCH_ENV, { option: true }]
-})
+import { waitForPtyShellEcho } from './terminal-pty-readiness'
 
 /** The wrapper `formatMessagesForInjection` puts around every pushed batch. */
 const BANNER_PREFIX = '--- Orchestration Messages'
@@ -57,7 +55,7 @@ const NO_DELIVERY_SETTLE_MS = 3_000
 type AgentPane = {
   handle: string
   agent: MailPaneAgent
-  ptyId: string | null
+  ptyId: string
 }
 
 type MailFixture = {
@@ -113,35 +111,25 @@ async function setUpMailFixture(
     .toBe(true)
 
   const openAgentPane = async (): Promise<AgentPane> => {
-    const created = await client.call<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
-      worktree: `id:${worktreeId}`,
-      // Why a bare command and not `launchAgent`: launchAgent is only metadata
-      // on an otherwise caller-supplied launch, so it spawns no agent. A bare
-      // agent name is what resolveBareAgentLaunchCommand turns into a real
-      // agent startup plan — the same path the agent launcher uses.
-      command: 'codex',
-      activate: true,
-      focus: true
+    // The fixture's pane is already mounted, so its leaf exists — which is what
+    // push delivery resolves the write target through.
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    const { paneKey } = await waitForActivePaneHookDescriptor(orcaPage)
+    const resolved = await client.call<{ terminal: { handle: string } }>('terminal.resolvePane', {
+      paneKey
     })
-    const handle = created.result.terminal.handle
-    // Why poll `writable`: an RPC-created pane the renderer has not mounted yet
-    // has no graph leaf, and push delivery resolves its target through that leaf
-    // — asserting on a pane in that state fails for a reason the spec is not about.
-    await expect
-      .poll(
-        async () => {
-          const listed = await client.call<RuntimeTerminalListResult>('terminal.list')
-          return listed.result.terminals.find((entry) => entry.handle === handle)?.writable ?? false
-        },
-        { timeout: 30_000, message: 'agent pane never became writable' }
-      )
-      .toBe(true)
+    const handle = resolved.result.terminal.handle
 
-    const agent = mailPaneAgent(handle)
+    // Why prove the shell echoes first: keystrokes typed at a shell that has not
+    // reached its prompt are simply dropped, and the agent then never starts for
+    // a reason unrelated to anything under test.
+    await waitForPtyShellEcho(orcaPage, ptyId, 60_000)
+    const agent = createMailPaneAgent()
+    await execInTerminal(orcaPage, ptyId, agent.launchCommand)
     await expect
-      .poll(() => agent.hasStarted(), { timeout: 30_000, message: 'fake agent never started' })
+      .poll(() => agent.hasStarted(), { timeout: 60_000, message: 'agent never started' })
       .toBe(true)
-    return { handle, agent, ptyId: created.result.terminal.ptyId ?? null }
+    return { handle, agent, ptyId }
   }
 
   return { client, userDataDir, worktreeId, openAgentPane }

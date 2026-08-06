@@ -1,28 +1,27 @@
 /**
- * A scriptable stand-in for the `codex` CLI, for orchestration push-delivery E2E.
+ * A scriptable stand-in for an agent CLI, for orchestration push-delivery E2E.
  *
- * Why a fake agent binary and not a bare shell emitting titles: push-on-idle is
- * gated on the status Orca infers from live OSC titles and delivers by writing
- * into the pane's foreground process. A shell echoes rather than records, so it
- * can prove the gate but never the payload. This process owns both sides — the
- * test drives its title through a control file and it appends every stdin chunk
- * to a ledger, which is what makes "the banner and the Enter actually reached
- * the agent" an assertion instead of an inference.
+ * Why a purpose-built process and not a bare shell emitting titles: push-on-idle
+ * is gated on the status Orca infers from live OSC titles and delivers by
+ * writing into the pane's foreground process. A shell echoes rather than
+ * records, so it can prove the gate but never the payload. This process owns
+ * both sides — the test drives its title through a control file and it appends
+ * every stdin chunk to a ledger, which is what makes "the banner and the Enter
+ * reached the agent" an assertion instead of an inference.
  *
  * Titles come from a polled file, not stdin, because orchestration writes to
  * stdin itself; a stdin control channel could not tell a test command apart from
- * the delivery under test. Both files are keyed by ORCA_TERMINAL_HANDLE so panes
- * in the same spec never share a ledger.
+ * the delivery under test.
+ *
+ * Why it runs in the pane the fixture already opened, rather than a pane created
+ * for it: terminal.create waits up to 10s for a renderer graph sync to bind the
+ * new tab's handle, and a headless CI renderer misses that deadline — every spec
+ * here died on 'Timed out waiting for terminal handle after creation'. Nothing
+ * on the delivery path reads a pane's agent metadata (it resolves the leaf, the
+ * OSC title, and PTY liveness), so a foreground process in a mounted pane
+ * exercises the same code with none of that startup race.
  */
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync
-} from 'node:fs'
+import { mkdtempSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
@@ -36,26 +35,14 @@ export type AgentLedgerEntry = {
   pid: number
   at: number
   event: 'start' | 'stdin' | 'title'
-  handle?: string | null
   data?: string
   title?: string
 }
 
 const AGENT_SOURCE = `
 const { appendFileSync, existsSync, readFileSync, statSync } = require('node:fs')
-const path = require('node:path')
 
-// Orca probes for the modern protocol before falling back to the TUI; the real
-// CLI fails this the same way, and answering it would strand the pane.
-if (process.argv.slice(2).includes('app-server')) {
-  process.stderr.write("error: unrecognized subcommand 'app-server'\\n")
-  process.exit(2)
-}
-
-const dir = process.env.ORCA_E2E_MAIL_AGENT_DIR
-const handle = process.env.ORCA_TERMINAL_HANDLE || 'unknown'
-const ledgerPath = path.join(dir, handle + '.jsonl')
-const controlPath = path.join(dir, handle + '.title')
+const [ledgerPath, controlPath] = process.argv.slice(2)
 
 function log(entry) {
   try {
@@ -63,8 +50,7 @@ function log(entry) {
   } catch {}
 }
 
-log({ event: 'start', handle })
-process.stdout.write('OpenAI Codex\\nmodel: e2e\\ndirectory: e2e\\n')
+log({ event: 'start' })
 
 // Raw mode is what every agent TUI does, and it is load-bearing here: a cooked
 // PTY applies ICRNL, so the synthesized Enter would arrive as \\n and be
@@ -78,10 +64,9 @@ process.stdin.on('data', (chunk) => log({ event: 'stdin', data: chunk.toString()
 process.stdin.resume()
 
 // No title is emitted until the test asks for one, so a pane can be held in the
-// "no live agent status yet" state the seeded-restore cases depend on.
-// Keyed on mtime rather than content so a test can re-emit the SAME title — a
-// restored pane already reads idle, and proving it needed a LIVE frame means
-// emitting that same idle again.
+// "no live agent status yet" state some cases depend on. Keyed on mtime rather
+// than content so a test can re-emit the SAME title: proving a restored pane
+// needed a LIVE frame means sending an idle it already appears to have.
 let lastStamp = null
 setInterval(() => {
   if (!existsSync(controlPath)) return
@@ -103,37 +88,9 @@ setInterval(() => {
 setInterval(() => {}, 60_000)
 `
 
-const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-mail-cli-'))
-const agentStateDir = path.join(fakeCliDir, 'state')
-mkdirSync(agentStateDir, { recursive: true })
-
-if (process.platform === 'win32') {
-  writeFileSync(path.join(fakeCliDir, 'fake-codex.js'), AGENT_SOURCE)
-  writeFileSync(
-    path.join(fakeCliDir, 'codex.cmd'),
-    '@echo off\r\nnode "%~dp0\\fake-codex.js" %*\r\n'
-  )
-} else {
-  const executable = path.join(fakeCliDir, 'codex')
-  writeFileSync(executable, `#!/usr/bin/env node\n${AGENT_SOURCE}`)
-  chmodSync(executable, 0o755)
-}
-
-/** Spread into the `launchEnv` fixture so every PTY the app spawns finds it. */
-export const MAIL_AGENT_LAUNCH_ENV: Record<string, string> = {
-  PATH: `${fakeCliDir}${path.delimiter}${process.env.PATH ?? ''}`,
-  ORCA_E2E_MAIL_AGENT_DIR: agentStateDir
-}
-
-// Why worker exit and not a spec's afterAll: Playwright reuses a worker across
-// spec files, so this module is one instance shared by every spec in it. An
-// afterAll teardown would delete the CLI out from under a spec that has not run
-// yet — which surfaces as a fake agent that mysteriously never starts.
-process.once('exit', () => {
-  rmSync(fakeCliDir, { recursive: true, force: true })
-})
-
 export type MailPaneAgent = {
+  /** Shell-agnostic command that starts the agent; no trailing carriage return. */
+  launchCommand: string
   /** Emit `title` as an OSC title from the live process. */
   setTitle: (title: string) => void
   readLedger: () => AgentLedgerEntry[]
@@ -144,10 +101,29 @@ export type MailPaneAgent = {
   titleEmitCount: () => number
 }
 
-/** Observation handle for the agent running in the pane addressed by `handle`. */
-export function mailPaneAgent(handle: string): MailPaneAgent {
-  const ledgerPath = path.join(agentStateDir, `${handle}.jsonl`)
-  const controlPath = path.join(agentStateDir, `${handle}.title`)
+// Why worker exit and not a spec's afterAll: Playwright reuses a worker across
+// spec files, and a temp dir removed while another spec still polls its ledger
+// surfaces as an agent that mysteriously stopped reporting.
+const agentDirs: string[] = []
+process.once('exit', () => {
+  for (const dir of agentDirs) {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+/** One isolated agent: its own script copy, ledger, and control file. */
+export function createMailPaneAgent(): MailPaneAgent {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-mail-agent-'))
+  agentDirs.push(dir)
+  const scriptPath = path.join(dir, 'agent.cjs')
+  const ledgerPath = path.join(dir, 'ledger.jsonl')
+  const controlPath = path.join(dir, 'title')
+  writeFileSync(scriptPath, AGENT_SOURCE)
+  writeFileSync(ledgerPath, '')
+
+  // Why forward slashes: valid for node on Windows and parsed identically by
+  // PowerShell, cmd, and POSIX shells, where raw backslashes would be eaten.
+  const quote = (value: string): string => `"${value.replaceAll('\\', '/')}"`
 
   const readLedger = (): AgentLedgerEntry[] => {
     if (!existsSync(ledgerPath)) {
@@ -167,6 +143,7 @@ export function mailPaneAgent(handle: string): MailPaneAgent {
   }
 
   return {
+    launchCommand: `node ${quote(scriptPath)} ${quote(ledgerPath)} ${quote(controlPath)}`,
     setTitle: (title: string) => writeFileSync(controlPath, title),
     readLedger,
     readStdin: () =>

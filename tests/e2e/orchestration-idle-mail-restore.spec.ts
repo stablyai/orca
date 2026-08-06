@@ -24,18 +24,20 @@ import type { ElectronApplication } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { TEST_REPO_PATH_FILE } from './global-setup'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
+import {
+  execInTerminal,
+  waitForActivePaneHookDescriptor,
+  waitForActivePanePtyId
+} from './helpers/terminal'
 import { RuntimeClient } from '../../src/cli/runtime-client'
-import type {
-  RuntimeTerminalCreate,
-  RuntimeTerminalListResult
-} from '../../src/shared/runtime-types'
+import type { RuntimeTerminalListResult } from '../../src/shared/runtime-types'
 import {
   CODEX_IDLE_TITLE,
   CODEX_WORKING_TITLE,
-  MAIL_AGENT_LAUNCH_ENV,
-  mailPaneAgent
+  createMailPaneAgent
 } from './helpers/orchestration-mail-pane-agent'
 import { mailDisposition, readMailRow } from './helpers/orchestration-mail-store'
+import { waitForPtyShellEcho } from './terminal-pty-readiness'
 
 const BANNER_PREFIX = '--- Orchestration Messages'
 const NO_DELIVERY_SETTLE_MS = 5_000
@@ -79,7 +81,7 @@ test('keeps mail pending across a restart and delivers it when the agent reports
     : ''
   test.skip(!repoPath || !existsSync(repoPath), 'Global setup did not produce a seeded test repo')
 
-  const session = createRestartSession(testInfo, MAIL_AGENT_LAUNCH_ENV)
+  const session = createRestartSession(testInfo)
   let firstApp: ElectronApplication | null = null
   let secondApp: ElectronApplication | null = null
 
@@ -90,34 +92,22 @@ test('keeps mail pending across a restart and delivers it when the agent reports
     const firstClient = new RuntimeClient(session.userDataDir, 30_000, null, null)
     await waitForRegisteredWorktree(firstClient, worktreeId)
 
-    const created = await firstClient.call<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
-      worktree: `id:${worktreeId}`,
-      command: 'codex',
-      activate: true,
-      focus: true
-    })
-    const originalHandle = created.result.terminal.handle
-    // Why from the list and not the create result: the PTY is bound
-    // asynchronously, so create can answer before an id exists.
-    let originalPtyId: string | null = null
-    await expect
-      .poll(
-        async () => {
-          const listed = await firstClient.call<RuntimeTerminalListResult>('terminal.list')
-          const entry = listed.result.terminals.find((item) => item.handle === originalHandle)
-          originalPtyId = entry?.ptyId ?? null
-          return Boolean(entry?.writable && originalPtyId)
-        },
-        { timeout: 60_000, message: 'agent pane never became writable' }
-      )
-      .toBe(true)
+    // The pane attachRepoAndOpenTerminal already opened is mounted, so its leaf
+    // exists; terminal.create would instead race a 10s renderer graph-sync wait
+    // that a headless CI renderer loses.
+    const ptyId = await waitForActivePanePtyId(first.page)
+    const { paneKey } = await waitForActivePaneHookDescriptor(first.page)
+    const originalHandle = (
+      await firstClient.call<{ terminal: { handle: string } }>('terminal.resolvePane', { paneKey })
+    ).result.terminal.handle
+    const originalPtyId = ptyId
 
-    // The ledger and control file are keyed by the handle exported into the
-    // agent's environment at spawn, which the surviving process keeps across the
-    // restart even if the runtime remints its own handle for the restored pane.
-    const agent = mailPaneAgent(originalHandle)
+    // Keystrokes typed before the shell reaches its prompt are dropped outright.
+    await waitForPtyShellEcho(first.page, ptyId, 60_000)
+    const agent = createMailPaneAgent()
+    await execInTerminal(first.page, ptyId, agent.launchCommand)
     await expect
-      .poll(() => agent.hasStarted(), { timeout: 60_000, message: 'fake agent never started' })
+      .poll(() => agent.hasStarted(), { timeout: 60_000, message: 'agent never started' })
       .toBe(true)
 
     agent.setTitle(CODEX_WORKING_TITLE)
