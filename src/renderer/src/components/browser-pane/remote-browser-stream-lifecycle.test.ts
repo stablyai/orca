@@ -293,12 +293,14 @@ describe('RemoteBrowserStreamLifecycle', () => {
     )
   })
 
-  // Fix 2: a worktree deleted on the remote host answers selector_not_found forever, so retrying it
-  // is unbounded work with a permanent error toast.
+  // Fix 2: a worktree the host reports as genuinely gone cannot come back on this connection, so
+  // retrying it is unbounded work with a permanent error toast. Note the code used here is one the
+  // host only sends about the thing itself — `selector_not_found` is deliberately excluded, because
+  // it also covers a resolution that merely failed right now.
   it('stops retrying when the runtime reports the stream target is gone', async () => {
     const harness = createHarness()
     await openStreamAndConfirmReady(harness)
-    harness.failEverySubscribe(rpcError('selector_not_found', 'worktree is gone'))
+    harness.failEverySubscribe(rpcError('worktree_not_found_on_server', 'worktree is gone'))
 
     harness.streams[0].emitEnd()
     await vi.advanceTimersByTimeAsync(500)

@@ -1443,6 +1443,12 @@ function RemoteBrowserPagePane({
     }
     // Why: the lifecycle reads tab/environment/worktree live, so it only needs to reopen when the
     // pane's identity actually changes — not when an unrelated callback identity does.
+    //
+    // CAREFUL: `browserTab.id` is load-bearing but invisible to tooling. The body never reads it —
+    // `lifecycle.open()` reaches tab identity through refs — so removing it keeps every test green
+    // AND passes react-hooks/exhaustive-deps, while silently failing to reopen the stream when the
+    // pane switches tabs. Verified: that exact deletion survives all 282 tests and the lint. Only a
+    // test that changes the tab id while environment and worktree hold steady can catch it.
   }, [
     activeRuntimeEnvironmentId,
     browserTab.id,

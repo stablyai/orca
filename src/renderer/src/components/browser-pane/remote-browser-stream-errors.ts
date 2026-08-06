@@ -9,8 +9,13 @@ export const REMOTE_BROWSER_STREAM_UNSUPPORTED = 'remote_browser_stream_unsuppor
 // host (worktree deleted, repo unregistered, capability absent). Retrying cannot bring it back, so
 // they are permanent for this connection exactly like the capability tag above. Codes come from
 // src/main/runtime/rpc/errors.ts rather than being invented here.
+// Why `selector_not_found` is NOT here: it means "I could not resolve this right now", which is
+// UNKNOWN, not proof the target is gone. Its producer is a live worktree scan behind a 1s-TTL cache,
+// and the connectionId-gated fallback that shields SSH repos from scan lag does not cover purely
+// local ones — so a slow scan can surface it transiently. Treating that as permanent would strand
+// the pane forever, which is the exact bug this file exists to prevent. The three below are
+// unambiguous: the host is telling us the thing itself no longer exists.
 const REMOTE_BROWSER_STREAM_TARGET_GONE_CODES: ReadonlySet<string> = new Set([
-  'selector_not_found',
   'worktree_not_found_on_server',
   'repo_not_found',
   'capability_unsupported'
