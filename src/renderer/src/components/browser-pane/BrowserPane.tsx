@@ -1718,6 +1718,9 @@ function RemoteBrowserPagePane({
       streamGenerationRef.current = token.generation
       activeStreamTokenRef.current = token
       try {
+        // Why: the handle is stored in streamSubscriptionRef and released on unmount and at every
+        // supersession site, so the rule's "no cleanup path" premise does not hold here.
+        // oxlint-disable-next-line react-doctor/effect-needs-cleanup
         const subscription = await window.api.runtimeEnvironments.subscribe(
           {
             selector: target.environmentId,
