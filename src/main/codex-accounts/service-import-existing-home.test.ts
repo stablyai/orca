@@ -84,6 +84,54 @@ describe('CodexAccountService.importAccountFromExistingHome', () => {
     }
   })
 
+  it('rejects an imported OAuth home that pins a custom provider without canonical config', async () => {
+    vi.resetModules()
+    vi.doMock('node:crypto', () => ({ randomUUID: () => 'should-not-create' }))
+    const spawnMock = vi.fn()
+    vi.doMock('node:child_process', () => ({ execFileSync: vi.fn(), spawn: spawnMock }))
+
+    try {
+      const sourceHome = join(testState.fakeHomeDir, '.codex-custom-provider')
+      const sourceConfig = [
+        'model_provider = "codex-lb"',
+        '',
+        '[model_providers.codex-lb]',
+        'base_url = "https://codex-lb.example.test/v1"',
+        'env_key = "CODEX_LB_API_KEY"',
+        ''
+      ].join('\n')
+      mkdirSync(sourceHome, { recursive: true })
+      writeFileSync(
+        join(sourceHome, 'auth.json'),
+        createCodexAuthJson('imported@example.com', 'provider-imported', 'refresh-imported'),
+        'utf-8'
+      )
+      writeFileSync(join(sourceHome, 'config.toml'), sourceConfig, 'utf-8')
+
+      const store = createStore(createSettings())
+      const { CodexAccountService } = await import('./service')
+      const service = new CodexAccountService(
+        store as never,
+        createRateLimits() as never,
+        createRuntimeHome() as never
+      )
+
+      await expect(service.importAccountFromExistingHome(sourceHome)).rejects.toThrow(
+        'Orca cannot add a Codex OAuth account while the active Codex config pins the custom provider "codex-lb".'
+      )
+
+      expect(spawnMock).not.toHaveBeenCalled()
+      expect(store.updateSettings).not.toHaveBeenCalled()
+      expect(existsSync(join(testState.userDataDir, 'codex-accounts', 'should-not-create'))).toBe(
+        false
+      )
+      expect(readFileSync(join(sourceHome, 'config.toml'), 'utf-8')).toBe(sourceConfig)
+    } finally {
+      vi.doUnmock('node:crypto')
+      vi.doUnmock('node:child_process')
+    }
+  })
+
   it('rejects import when the selected home has no resolvable OAuth email', async () => {
     vi.resetModules()
     vi.doMock('node:crypto', () => ({ randomUUID: () => 'should-not-create' }))
