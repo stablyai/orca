@@ -1,5 +1,6 @@
 import * as Notifications from 'expo-notifications'
 import { Platform } from 'react-native'
+import { t } from '../i18n/mobile-i18n'
 import { loadPushNotificationsEnabled } from '../storage/preferences'
 import { buildLocalNotificationData, type DesktopNotificationSource } from './notification-routing'
 import { ensureNotificationPermissions } from './notification-permissions'
@@ -65,7 +66,7 @@ export function setScheduledNotificationsMaxForTests(max?: number): void {
 export function configureNotificationChannel(): void {
   if (Platform.OS === 'android') {
     void Notifications.setNotificationChannelAsync('orca-desktop', {
-      name: 'Desktop Notifications',
+      name: t('localNotificationScheduling.desktopNotifications'),
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250],
       lightColor: '#6366f1'

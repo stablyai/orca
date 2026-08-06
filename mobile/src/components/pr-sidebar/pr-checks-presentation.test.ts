@@ -1,7 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { PRCheckDetail } from '../../../../src/shared/types'
+import { mobileI18n } from '../../i18n/mobile-i18n'
 import {
   checkOutcome,
+  checkStatusLabel,
   firstFailingCheckKey,
   getPRReviewerRows,
   prCheckKey,
@@ -19,6 +21,12 @@ function check(over: Partial<PRCheckDetail>): PRCheckDetail {
     ...over
   }
 }
+
+const INITIAL_LOCALE = mobileI18n.language
+
+afterEach(async () => {
+  await mobileI18n.changeLanguage(INITIAL_LOCALE)
+})
 
 describe('checkOutcome', () => {
   it('treats a completed null-conclusion check as neutral, not failure', () => {
@@ -39,6 +47,12 @@ describe('checkOutcome', () => {
   it('maps skipped to success and neutral to neutral (desktop parity)', () => {
     expect(checkOutcome(check({ conclusion: 'skipped' }))).toBe('success')
     expect(checkOutcome(check({ conclusion: 'neutral' }))).toBe('neutral')
+  })
+})
+
+describe('checkStatusLabel', () => {
+  it('keeps the shared action-required conclusion in the mobile catalog', () => {
+    expect(checkStatusLabel(check({ conclusion: 'action_required' }))).toBe('Action required')
   })
 })
 
@@ -134,6 +148,18 @@ describe('summarizePRChecks', () => {
     ])
     expect(summary).toMatchObject({ total: 3, passed: 3, outcome: 'success' })
     expect(summary.label).toBe('3 passed')
+  })
+  it('uses localized plural-aware check summary fragments', async () => {
+    await mobileI18n.changeLanguage('es')
+
+    const summary = summarizePRChecks([
+      check({ conclusion: 'success' }),
+      check({ conclusion: 'success' }),
+      check({ status: 'in_progress', conclusion: null }),
+      check({ conclusion: 'failure' })
+    ])
+
+    expect(summary.label).toBe('1 con errores · 1 pendiente · 2 aprobadas')
   })
 })
 

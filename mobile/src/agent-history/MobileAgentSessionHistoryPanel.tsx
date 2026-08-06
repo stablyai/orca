@@ -28,14 +28,13 @@ import { useMobileAgentHistoryState } from './use-mobile-agent-history-state'
 import { buildMobileAgentHistorySections } from './agent-history-sections'
 import { shouldShowMobileCurrentWorktreeBadge } from './agent-history-current-worktree-badge'
 import { MobileAgentSessionHistoryList } from './MobileAgentSessionHistoryList'
-import {
-  resolveMobileAiVaultSessionResumeTarget,
-  type MobileAiVaultResumeFolderWorkspace,
-  type MobileAiVaultResumeProjectGroup,
-  type MobileAiVaultResumeRepo
-} from './agent-history-resume-target'
+import { resolveMobileAiVaultSessionResumeTarget } from './agent-history-resume-target'
+import type * as ResumeTarget from './agent-history-resume-target'
 import { buildMobileAgentHistoryResumeActionState } from './agent-history-session-card'
 import { styles } from './agent-history-styles'
+import { createMobileTranslator } from '@/i18n/mobile-i18n'
+
+const tr = createMobileTranslator('agentHistory')
 
 export type MobileAgentSessionHistoryPanelProps = {
   hostId: string
@@ -44,9 +43,9 @@ export type MobileAgentSessionHistoryPanelProps = {
 }
 
 const SCOPE_TABS: { scope: AiVaultScope; label: string }[] = [
-  { scope: 'workspace', label: 'Workspace' },
-  { scope: 'project', label: 'Project' },
-  { scope: 'all', label: 'All' }
+  { scope: 'workspace', label: tr('workspace') },
+  { scope: 'project', label: tr('project') },
+  { scope: 'all', label: tr('all') }
 ]
 
 export function MobileAgentSessionHistoryPanel({
@@ -150,12 +149,12 @@ export function MobileAgentSessionHistoryPanel({
         return
       }
       if (!client || connState !== 'connected') {
-        setResumeMessage('Waiting for host...')
+        setResumeMessage(tr('waiting'))
         triggerError()
         return
       }
       if (!session.sessionId) {
-        setResumeMessage('This session is missing a resume id.')
+        setResumeMessage(tr('session'))
         triggerError()
         return
       }
@@ -195,7 +194,7 @@ export function MobileAgentSessionHistoryPanel({
           target.terminalPlatform
         )
         if (!platform) {
-          setResumeMessage('Unable to determine host platform.')
+          setResumeMessage(tr('unableDetermine'))
           triggerError()
           return
         }
@@ -213,7 +212,7 @@ export function MobileAgentSessionHistoryPanel({
         })
         resumeMutationRegistryRef.current.releaseOnSuccess(session.id)
         triggerSuccess()
-        setResumeMessage('Agent session queued.')
+        setResumeMessage(tr('agentSessionQueued'))
         router.push(
           `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(target.worktreeId)}` as Parameters<
             typeof router.push
@@ -221,7 +220,7 @@ export function MobileAgentSessionHistoryPanel({
         )
       } catch (err) {
         triggerError()
-        setResumeMessage(err instanceof Error ? err.message : 'Failed to resume session.')
+        setResumeMessage(err instanceof Error ? err.message : tr('failed'))
       } finally {
         resumeLaunchInFlightRef.current = false
         setResumingSessionId(null)
@@ -247,13 +246,13 @@ export function MobileAgentSessionHistoryPanel({
             style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
             onPress={() => router.back()}
             hitSlop={8}
-            accessibilityLabel="Back"
+            accessibilityLabel={tr('back')}
           >
             <ChevronLeft size={22} color={colors.textSecondary} strokeWidth={2.2} />
           </Pressable>
           <View style={styles.titleBlock}>
             <Text style={styles.title} numberOfLines={1}>
-              Agent Session History
+              {tr('agentSessionHistory')}
             </Text>
             <Text style={styles.meta} numberOfLines={1}>
               {worktreeLabel}
@@ -263,7 +262,7 @@ export function MobileAgentSessionHistoryPanel({
             style={({ pressed }) => [styles.refreshButton, pressed && styles.refreshButtonPressed]}
             onPress={() => void onRefresh()}
             hitSlop={8}
-            accessibilityLabel="Refresh agent sessions"
+            accessibilityLabel={tr('refresh')}
           >
             <RefreshCw size={18} color={colors.textSecondary} strokeWidth={2.1} />
           </Pressable>
@@ -276,17 +275,15 @@ export function MobileAgentSessionHistoryPanel({
         </View>
       ) : screenState.kind === 'unsupported' ? (
         <View style={styles.state}>
-          <Text style={styles.stateTitle}>Agent Session History Unavailable</Text>
-          <Text style={styles.stateText}>
-            Update Orca on this host to browse agent session history.
-          </Text>
+          <Text style={styles.stateTitle}>{tr('agentSessionHistoryUnavailable')}</Text>
+          <Text style={styles.stateText}>{tr('update')}</Text>
         </View>
       ) : screenState.kind === 'error' ? (
         <View style={styles.state}>
-          <Text style={styles.stateTitle}>Unable to Load</Text>
+          <Text style={styles.stateTitle}>{tr('unableLoad')}</Text>
           <Text style={styles.stateText}>{screenState.message}</Text>
           <Pressable style={styles.retryButton} onPress={retry}>
-            <Text style={styles.retryText}>Retry</Text>
+            <Text style={styles.retryText}>{tr('retry')}</Text>
           </Pressable>
         </View>
       ) : (
@@ -312,7 +309,7 @@ export function MobileAgentSessionHistoryPanel({
               style={styles.searchInput}
               value={query}
               onChangeText={setQuery}
-              placeholder="Search sessions, repo:, path:"
+              placeholder={tr('search')}
               placeholderTextColor={colors.textMuted}
               autoCapitalize="none"
               autoCorrect={false}
@@ -321,7 +318,9 @@ export function MobileAgentSessionHistoryPanel({
           {issues.length > 0 ? (
             <View style={styles.noticeBanner}>
               <Text style={styles.noticeText}>
-                {issues.length} {issues.length === 1 ? 'transcript' : 'transcripts'} skipped
+                {tr(issues.length === 1 ? 'issueCountTranscript' : 'issueCountTranscripts', {
+                  issueCount: issues.length
+                })}
               </Text>
             </View>
           ) : null}
@@ -332,10 +331,8 @@ export function MobileAgentSessionHistoryPanel({
           ) : null}
           {sections.length === 0 ? (
             <View style={styles.state}>
-              <Text style={styles.stateTitle}>No agent sessions</Text>
-              <Text style={styles.stateText}>
-                {query ? 'No sessions match your search.' : 'No past agent sessions in this scope.'}
-              </Text>
+              <Text style={styles.stateTitle}>{tr('noAgent')}</Text>
+              <Text style={styles.stateText}>{query ? tr('noSessions') : tr('noPast')}</Text>
             </View>
           ) : (
             <MobileAgentSessionHistoryList
@@ -358,9 +355,9 @@ const EMPTY_SESSIONS: AiVaultSession[] = []
 const EMPTY_ISSUES: { agent: AiVaultSession['agent']; path: string; message: string }[] = []
 
 async function loadMobileResumeMetadata(client: Pick<RpcClient, 'sendRequest'>): Promise<{
-  repos: MobileAiVaultResumeRepo[]
-  folderWorkspaces: MobileAiVaultResumeFolderWorkspace[]
-  projectGroups: MobileAiVaultResumeProjectGroup[]
+  repos: ResumeTarget.MobileAiVaultResumeRepo[]
+  folderWorkspaces: ResumeTarget.MobileAiVaultResumeFolderWorkspace[]
+  projectGroups: ResumeTarget.MobileAiVaultResumeProjectGroup[]
   settings: MobileAiVaultResumeSettings | null
   worktrees: Worktree[] | null
 }> {
@@ -390,18 +387,18 @@ async function loadMobileResumeMetadata(client: Pick<RpcClient, 'sendRequest'>):
       .catch(() => null)
   ])
   if (!repoResponse.ok) {
-    throw new Error(repoResponse.error?.message || 'Unable to load workspace metadata.')
+    throw new Error(repoResponse.error?.message || tr('unableLoadWorkspace'))
   }
-  const repoResult = repoResponse.result as { repos?: MobileAiVaultResumeRepo[] }
+  const repoResult = repoResponse.result as { repos?: ResumeTarget.MobileAiVaultResumeRepo[] }
   const folderWorkspaceResult =
     folderWorkspaceResponse?.ok === true
       ? (folderWorkspaceResponse.result as {
-          folderWorkspaces?: MobileAiVaultResumeFolderWorkspace[]
+          folderWorkspaces?: ResumeTarget.MobileAiVaultResumeFolderWorkspace[]
         })
       : null
   const projectGroupResult =
     projectGroupResponse?.ok === true
-      ? (projectGroupResponse.result as { groups?: MobileAiVaultResumeProjectGroup[] })
+      ? (projectGroupResponse.result as { groups?: ResumeTarget.MobileAiVaultResumeProjectGroup[] })
       : null
   const settingsResult =
     settingsResponse?.ok === true

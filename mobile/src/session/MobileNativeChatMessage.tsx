@@ -21,6 +21,7 @@ import {
   summarizeToolRun,
   truncateToolDetail
 } from './mobile-native-chat-tool-summary'
+import { t } from '@/i18n/mobile-i18n'
 
 const MAX_VISIBLE_TOOL_PAIRS = 6
 const MAX_TOOL_RUN_DIFF_ROWS = 240
@@ -83,7 +84,7 @@ function ToolLine({
 }): React.JSX.Element {
   const [expanded, setExpanded] = useState(defaultExpanded)
   const { call, result } = pair
-  const name = call ? call.name : 'Result'
+  const name = call ? call.name : t('nativeChat.toolResultLabel')
   const inputDisplay = call ? createToolInputDisplay(call.input) : null
   const preview = inputDisplay?.label ?? result?.output.split('\n')[0]?.slice(0, 80) ?? ''
   // Why: collapsed tool rows are the common path; defer bounded diff parsing
@@ -170,13 +171,13 @@ function Prose({
           source={{ uri }}
           style={styles.imageThumb}
           resizeMode="contain"
-          accessibilityLabel={block.alt ?? 'Attached image'}
+          accessibilityLabel={block.alt ?? t('mobileNativeChatMessage.attached')}
         />
       )
     }
     return (
       <Text style={[styles.imageRef, { fontSize: TEXT_SIZE * fontScale }]}>
-        🖼 {block.alt ?? block.path ?? block.url ?? 'image'}
+        🖼 {block.alt ?? block.path ?? block.url ?? t('mobileNativeChatMessage.image')}
       </Text>
     )
   }
@@ -217,9 +218,17 @@ function ToolRun({
           ) : (
             <SquareChevronRight size={15} color={colors.textMuted} strokeWidth={2} />
           )}
-          <Text style={styles.toolRunCount}>{callCount}×</Text>
+          <Text style={styles.toolRunCount}>
+            {t('mobileNativeChatMessage.callCountTimes', { callCount: callCount })}
+          </Text>
           <Text style={styles.toolRunLabel} numberOfLines={1}>
-            {summary || `${callCount} tool ${callCount === 1 ? 'call' : 'calls'}`}
+            {summary ||
+              t(
+                callCount === 1
+                  ? 'mobileNativeChatMessage.callCountToolCall'
+                  : 'mobileNativeChatMessage.callCountToolCalls',
+                { callCount: callCount }
+              )}
           </Text>
         </Pressable>
         {trailing}
@@ -236,7 +245,11 @@ function ToolRun({
             />
           ))}
           {callCount > pairs.length ? (
-            <Text style={styles.toolPreview}>… {callCount - pairs.length} more tool calls</Text>
+            <Text style={styles.toolPreview}>
+              {t('mobileNativeChatMessage.remaining', {
+                remainingToolCallCount: callCount - pairs.length
+              })}
+            </Text>
           ) : null}
         </View>
       ) : null}
@@ -259,7 +272,7 @@ function AgentControls({
         style={({ pressed }) => [styles.controlButton, pressed && styles.controlPressed]}
         onPress={onCopy}
         hitSlop={8}
-        accessibilityLabel="Copy message"
+        accessibilityLabel={t('mobileNativeChatMessage.copy')}
       >
         <Copy size={14} color={colors.textMuted} strokeWidth={2} />
       </Pressable>
@@ -268,7 +281,7 @@ function AgentControls({
           style={({ pressed }) => [styles.controlButton, pressed && styles.controlPressed]}
           onPress={onScrollToTop}
           hitSlop={8}
-          accessibilityLabel="Scroll this message to top"
+          accessibilityLabel={t('mobileNativeChatMessage.scroll')}
         >
           <ArrowUp size={14} color={colors.textMuted} strokeWidth={2} />
         </Pressable>
@@ -345,7 +358,9 @@ function MobileNativeChatMessageImpl({
 
   return (
     <View style={[styles.row, isUser && styles.rowUser]}>
-      {isUser && queued ? <Text style={styles.queuedTag}>Queued</Text> : null}
+      {isUser && queued ? (
+        <Text style={styles.queuedTag}>{t('mobileNativeChatMessage.queued')}</Text>
+      ) : null}
       <View
         style={[
           styles.content,

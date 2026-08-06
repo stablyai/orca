@@ -27,6 +27,7 @@ import {
   type MobileNativeChatSessionOptionPickersProps
 } from './MobileNativeChatSessionOptionPickers'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
+import { t } from '@/i18n/mobile-i18n'
 
 const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
@@ -75,7 +76,7 @@ export function MobileNativeChatComposer({
   onMicPressIn,
   onMicPressOut,
   disabled = false,
-  placeholder = 'Message, @files, /commands',
+  placeholder = t('mobileNativeChatComposer.message'),
   filePaths = NO_FILE_PATHS,
   onNeedFiles
 }: Props): React.JSX.Element {
@@ -183,7 +184,7 @@ export function MobileNativeChatComposer({
               />
               {onRemoveAttachment ? (
                 <Pressable
-                  accessibilityLabel="Remove image"
+                  accessibilityLabel={t('mobileNativeChatComposer.remove')}
                   style={styles.attachmentRemove}
                   onPress={() => onRemoveAttachment(attachment.id)}
                   hitSlop={8}
@@ -219,7 +220,7 @@ export function MobileNativeChatComposer({
           <View style={styles.actionRow} testID="native-chat-composer-actions">
             {onAttachImage ? (
               <Pressable
-                accessibilityLabel="Attach image"
+                accessibilityLabel={t('mobileNativeChatComposer.attach')}
                 style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
                 onPress={onAttachImage}
                 disabled={isAttaching || disabled}
@@ -240,7 +241,11 @@ export function MobileNativeChatComposer({
             <View style={styles.actionSpacer} />
             {onMicPress ? (
               <Pressable
-                accessibilityLabel={micActive ? 'Stop dictation' : 'Dictate'}
+                accessibilityLabel={
+                  micActive
+                    ? t('mobileNativeChatComposer.stop')
+                    : t('mobileNativeChatComposer.dictate')
+                }
                 style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
                 // Hold mode is walkie-talkie (press-in/out); toggle mode taps.
                 onPress={dictationMode === 'hold' ? undefined : onMicPress}
@@ -261,7 +266,7 @@ export function MobileNativeChatComposer({
               </Pressable>
             ) : null}
             <Pressable
-              accessibilityLabel="Send message"
+              accessibilityLabel={t('mobileNativeChatComposer.send')}
               style={({ pressed }) => [
                 styles.sendButton,
                 !canSend && styles.sendButtonDisabled,

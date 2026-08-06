@@ -15,6 +15,7 @@ import {
 import { isMobileMermaidLanguage } from './mobile-mermaid-language'
 import { parseMobileMarkdown } from './mobile-markdown-parser'
 import { MermaidDiagram } from './pr-sidebar/MermaidDiagram'
+import { t } from '@/i18n/mobile-i18n'
 
 type Props = {
   content?: string
@@ -106,7 +107,7 @@ function renderInline(text: string, onOpenFile?: (pathText: string) => void): Re
     if (image) {
       parts.push(
         <Text key={key} style={styles.link} onPress={() => openMarkdownHref(image[2]!, onOpenFile)}>
-          {image[1] || 'image'}
+          {image[1] || t('mobileMarkdown.image')}
         </Text>
       )
     } else if (link) {
@@ -234,7 +235,7 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
               style={styles.imageFrame}
               onPress={() => openMarkdownHref(block.url, onOpenFile)}
             >
-              <Text style={styles.link}>{block.alt || 'Open image'}</Text>
+              <Text style={styles.link}>{block.alt || t('mobileMarkdown.open')}</Text>
               <Text style={styles.imageCaption} numberOfLines={1}>
                 {block.url}
               </Text>
@@ -267,9 +268,17 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
                 ))}
                 {hiddenRows > 0 || hiddenColumns > 0 ? (
                   <Text style={styles.tableTruncated}>
-                    {hiddenRows > 0 ? `${hiddenRows} more rows` : ''}
+                    {hiddenRows > 0
+                      ? t('mobileMarkdown.hiddenRow', {
+                          hiddenRowCount: hiddenRows
+                        })
+                      : ''}
                     {hiddenRows > 0 && hiddenColumns > 0 ? ' · ' : ''}
-                    {hiddenColumns > 0 ? `${hiddenColumns} more columns` : ''}
+                    {hiddenColumns > 0
+                      ? t('mobileMarkdown.hiddenColumn', {
+                          hiddenColumnCount: hiddenColumns
+                        })
+                      : ''}
                   </Text>
                 ) : null}
               </View>
@@ -287,7 +296,7 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
                         ? `${itemIndex + 1}.`
                         : '-'
                       : item.checked
-                        ? '[x]'
+                        ? t('mobileMarkdown.x')
                         : '[ ]'}
                   </Text>
                   <Text style={[styles.listText, listScale]}>

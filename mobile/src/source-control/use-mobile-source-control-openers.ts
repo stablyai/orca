@@ -24,6 +24,7 @@ import type {
   MobileBranchCompareState,
   MobileBranchDiffPreviewState
 } from './mobile-source-control-screen-state'
+import { t } from '@/i18n/mobile-i18n'
 
 type Params = {
   client: RpcClient | null
@@ -87,7 +88,7 @@ export function useMobileSourceControlOpeners(params: Params) {
         if (!mountedRef.current) {
           return
         }
-        setActionError('Waiting for desktop...')
+        setActionError(t('useMobileSourceControlOpeners.waiting'))
         return
       }
       openingPathRef.current = entry.path
@@ -125,7 +126,7 @@ export function useMobileSourceControlOpeners(params: Params) {
           openedTabMode = 'edit'
         }
         if (!response.ok) {
-          throw new Error(response.error?.message || 'Unable to open diff')
+          throw new Error(response.error?.message || t('useMobileSourceControlOpeners.unableOpen'))
         }
         if (!mountedRef.current) {
           return
@@ -143,7 +144,7 @@ export function useMobileSourceControlOpeners(params: Params) {
           return
         }
         if (revealResult === 'timeout') {
-          throw new Error("The file opened, but its tab isn't ready yet. Try again.")
+          throw new Error(t('useMobileSourceControlOpeners.tabNotReady'))
         }
         triggerSelection()
         // Why: when launched from the session screen, opening a file dismisses
@@ -162,7 +163,9 @@ export function useMobileSourceControlOpeners(params: Params) {
           return
         }
         triggerError()
-        setActionError(err instanceof Error ? err.message : 'Unable to open diff')
+        setActionError(
+          err instanceof Error ? err.message : t('useMobileSourceControlOpeners.unableOpen')
+        )
       } finally {
         if (openingPathRef.current === entry.path) {
           openingPathRef.current = null
@@ -199,7 +202,7 @@ export function useMobileSourceControlOpeners(params: Params) {
         if (!mountedRef.current) {
           return
         }
-        setActionError('Waiting for desktop...')
+        setActionError(t('useMobileSourceControlOpeners.waiting'))
         return
       }
       if (branchCompareState.kind !== 'ready') {
@@ -243,11 +246,11 @@ export function useMobileSourceControlOpeners(params: Params) {
           }
         })
         if (!response.ok) {
-          throw new Error(response.error?.message || 'Unable to load committed diff')
+          throw new Error(response.error?.message || t('useMobileSourceControlOpeners.unableLoad'))
         }
         const result = (response as RpcSuccess).result as GitDiffTextResult | { kind: 'binary' }
         if (result.kind !== 'text') {
-          throw new Error('Binary branch diff preview unavailable on mobile')
+          throw new Error(t('useMobileSourceControlOpeners.binary'))
         }
         const diff = buildMobileDiffLines(result.originalContent, result.modifiedContent)
         const syntaxLanguage = resolveMobileSyntaxLanguage(entry.path)
@@ -270,7 +273,8 @@ export function useMobileSourceControlOpeners(params: Params) {
         setBranchDiffPreview({
           kind: 'error',
           entry,
-          message: err instanceof Error ? err.message : 'Unable to load committed diff'
+          message:
+            err instanceof Error ? err.message : t('useMobileSourceControlOpeners.unableLoad')
         })
       } finally {
         if (openingBranchPathRef.current === entry.path) {

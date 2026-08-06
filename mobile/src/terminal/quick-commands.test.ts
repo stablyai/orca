@@ -1,11 +1,18 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { TerminalQuickCommand } from '../../../src/shared/types'
+import { mobileI18n } from '../i18n/mobile-i18n'
 import {
   buildMobileQuickCommandLaunch,
   getQuickCommandDisplayPreview,
   getQuickCommandPreview,
   supportsMobileQuickCommands
 } from './quick-commands'
+
+const INITIAL_LOCALE = mobileI18n.language
+
+afterEach(async () => {
+  await mobileI18n.changeLanguage(INITIAL_LOCALE)
+})
 
 function command(overrides: Partial<TerminalQuickCommand> = {}): TerminalQuickCommand {
   return {
@@ -56,6 +63,16 @@ describe('mobile quick-command launch', () => {
     ).toEqual({
       options: { initialPrompt: multiline, enter: false, successToast: 'Command inserted' }
     })
+  })
+
+  it('localizes the unsubmitted-command confirmation', async () => {
+    await mobileI18n.changeLanguage('es')
+
+    expect(buildMobileQuickCommandLaunch(command({ label: '', appendEnter: false }))).toMatchObject(
+      {
+        options: { successToast: 'Comando rápido insertado' }
+      }
+    )
   })
 
   it('injects supported agent prompts into the host-built launch command', () => {

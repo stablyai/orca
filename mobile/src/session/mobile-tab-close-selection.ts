@@ -1,10 +1,11 @@
+import { t } from '@/i18n/mobile-i18n'
 export type BulkTabCloseMode = 'others' | 'left' | 'right'
 
 /** Long-press sheet entries, in display order. */
 export const BULK_TAB_CLOSE_ACTIONS: { mode: BulkTabCloseMode; label: string }[] = [
-  { mode: 'others', label: 'Close Other Tabs' },
-  { mode: 'left', label: 'Close Tabs to the Left' },
-  { mode: 'right', label: 'Close Tabs to the Right' }
+  { mode: 'others', label: t('mobileTabCloseSelection.closeOther') },
+  { mode: 'left', label: t('mobileTabCloseSelection.closeTabsLeft') },
+  { mode: 'right', label: t('mobileTabCloseSelection.closeTabsRight') }
 ]
 
 type BulkClosableTab = {

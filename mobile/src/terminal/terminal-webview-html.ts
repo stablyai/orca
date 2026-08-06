@@ -1,5 +1,7 @@
 // xterm.js WebView document + default Tokyonight theme; extracted from TerminalWebView.tsx for the max-lines budget.
 import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-types'
+import { escapeEmbeddedHtmlCopy } from '../i18n/embedded-webview-copy'
+import { getActiveMobileUiLanguageTag, t } from '../i18n/mobile-i18n'
 import { colors } from '../theme/mobile-theme'
 import { TERMINAL_TEXT_SCALES } from '../storage/preferences'
 import { TERMINAL_PATH_TAP_JS } from './terminal-path-tap-injected'
@@ -49,8 +51,9 @@ export const MOBILE_TERMINAL_CARET_OPTIONS = {
 } as const
 
 // Why: TUI escape codes assume the desktop's cols/rows, so init xterm at those dims and fit the phone via a measured CSS scale() instead of resizing.
-export const XTERM_HTML = `<!DOCTYPE html>
-<html>
+export function buildTerminalWebViewHtml(): string {
+  return `<!DOCTYPE html>
+<html lang="${getActiveMobileUiLanguageTag()}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
@@ -203,8 +206,8 @@ window.onerror = function(msg) {
   <div id="sel-handle-start" class="sel-handle start"></div>
   <div id="sel-handle-end" class="sel-handle end"></div>
   <div id="sel-menu">
-    <button id="sel-menu-copy">Copy</button>
-    <button id="sel-menu-all">Select All</button>
+    <button id="sel-menu-copy">${escapeEmbeddedHtmlCopy(t('terminal.selection.copy'))}</button>
+    <button id="sel-menu-all">${escapeEmbeddedHtmlCopy(t('terminal.selection.selectAll'))}</button>
   </div>
 </div>
 <script>${XTERM_ENGINE_JS}</script>
@@ -1879,6 +1882,9 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
 </script>
 </body>
 </html>`
+}
+
+export const XTERM_HTML = buildTerminalWebViewHtml()
 
 // Why: some WebViews treat source identity as page identity; keep this stable so re-renders don't reload xterm.
 export const XTERM_WEBVIEW_SOURCE = { html: XTERM_HTML }

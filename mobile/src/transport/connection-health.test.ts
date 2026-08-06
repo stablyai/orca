@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { classifyConnection, verdictDisplayLabel } from './connection-health'
+import {
+  classifyConnection,
+  isConnectionErrorVerdict,
+  verdictDisplayLabel
+} from './connection-health'
+
+it('classifies only actionable connection failures as errors', () => {
+  expect(isConnectionErrorVerdict({ kind: 'normal', label: 'Connected' })).toBe(false)
+  expect(isConnectionErrorVerdict({ kind: 'warning', label: 'Cannot connect' })).toBe(true)
+  expect(
+    isConnectionErrorVerdict({ kind: 'unreachable', label: 'Unreachable', reason: 'stale' })
+  ).toBe(true)
+  expect(isConnectionErrorVerdict({ kind: 'auth-failed', label: 'Pairing invalid' })).toBe(true)
+})
 
 describe('classifyConnection auth-failed verdict', () => {
   it('tells the user to re-pair instead of showing a generic auth error', () => {

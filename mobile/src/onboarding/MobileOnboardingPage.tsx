@@ -4,6 +4,7 @@ import type { MobileOnboardingStep } from './mobile-onboarding-plan'
 import { mobileOnboardingStyles as styles } from './mobile-onboarding-styles'
 import type { MobileSessionView } from '../storage/session-view-preferences'
 import { colors } from '../theme/mobile-theme'
+import { t } from '@/i18n/mobile-i18n'
 
 export type NotificationOnboardingChoice = 'enable' | 'skip'
 export type MobileOnboardingBusyChoice = MobileSessionView | NotificationOnboardingChoice | null
@@ -47,12 +48,10 @@ export function MobileOnboardingPage({
           )}
         </View>
         <Text style={styles.title}>
-          {isSessionView ? 'How should sessions open?' : 'Stay updated while away'}
+          {isSessionView ? t('mobileOnboardingPage.how') : t('mobileOnboardingPage.stay')}
         </Text>
         <Text style={styles.body}>
-          {isSessionView
-            ? 'Choose whether supported agent sessions open in the terminal or Chat UI on this device. Press and hold a session tab to switch its view, or change the default later in Settings.'
-            : 'Get notified on this device when an agent needs your input or finishes a task.'}
+          {isSessionView ? t('mobileOnboardingPage.choose') : t('mobileOnboardingPage.get')}
         </Text>
       </View>
 
@@ -88,16 +87,16 @@ function SessionViewChoices({
   return (
     <>
       <ChoiceButton
-        label="Use Chat UI"
-        accessibilityLabel="Open sessions in Chat UI"
+        label={t('mobileOnboardingPage.use')}
+        accessibilityLabel={t('mobileOnboardingPage.openSessionsChat')}
         primary
         busy={busyChoice === 'chat'}
         disabled={disabled}
         onPress={() => onChoice('chat')}
       />
       <ChoiceButton
-        label="Keep terminal"
-        accessibilityLabel="Open sessions in the terminal"
+        label={t('mobileOnboardingPage.keep')}
+        accessibilityLabel={t('mobileOnboardingPage.openSessionsTerminal')}
         busy={busyChoice === 'terminal'}
         disabled={disabled}
         onPress={() => onChoice('terminal')}
@@ -118,16 +117,16 @@ function NotificationChoices({
   return (
     <>
       <ChoiceButton
-        label="Enable notifications"
-        accessibilityLabel="Enable agent notifications"
+        label={t('mobileOnboardingPage.enableNotifications')}
+        accessibilityLabel={t('mobileOnboardingPage.enableAgent')}
         primary
         busy={busyChoice === 'enable'}
         disabled={disabled}
         onPress={() => onChoice('enable')}
       />
       <ChoiceButton
-        label="Not now"
-        accessibilityLabel="Skip notifications for now"
+        label={t('mobileOnboardingPage.not')}
+        accessibilityLabel={t('mobileOnboardingPage.skip')}
         busy={busyChoice === 'skip'}
         disabled={disabled}
         onPress={() => onChoice('skip')}

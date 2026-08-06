@@ -1,5 +1,6 @@
 import type { MobileTerminalTheme } from '../terminal/terminal-webview-contract'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
+import { t } from '@/i18n/mobile-i18n'
 
 export type TerminalRecord = {
   handle: string
@@ -157,6 +158,13 @@ export function mergeTerminalRecordsByCurrentOrder(
   ]
 }
 
+export function removeTerminalRecordByHandle(
+  terminals: readonly TerminalRecord[],
+  handle: string
+): TerminalRecord[] {
+  return terminals.filter((terminal) => terminal.handle !== handle)
+}
+
 export function getTerminalRecordsFromSessionTabs(
   tabs: readonly MobileSessionTabLike[]
 ): TerminalRecord[] {
@@ -167,7 +175,7 @@ export function getTerminalRecordsFromSessionTabs(
     return [
       {
         handle: tab.terminal,
-        title: tab.title || 'Terminal',
+        title: tab.title || t('mobileTerminalRecords.terminal'),
         terminalTheme: tab.terminalTheme,
         isActive: tab.isActive === true
       }

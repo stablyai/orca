@@ -6,6 +6,23 @@ import process from 'node:process'
 // TypeScript 7 is a native CLI; AST consumers still need the legacy JavaScript API.
 import ts from 'typescript-api'
 
+import { collectMobileEmbeddedDocumentCandidates } from './mobile-embedded-document-candidates.mjs'
+import { classifyMobileStringNode } from './mobile-localization-candidate-rules.mjs'
+import {
+  isAssignedToRenderedVariable,
+  isRenderedJsxExpression
+} from './mobile-localization-rendered-variable.mjs'
+import {
+  collectMobileTranslationBindings,
+  isMobileTranslationCall,
+  isPotentialMobileTranslationCall
+} from './mobile-localization-translation-bindings.mjs'
+import {
+  findNewLocalizationCandidates,
+  findStaleLocalizationAllowlistEntries,
+  formatStaleLocalizationAllowlistEntries
+} from './localization-allowlist-drift.mjs'
+
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mts', '.cts'])
 const SKIP_PATH_PARTS = new Set(['.git', 'dist', 'node_modules', 'out', '__snapshots__', 'assets'])
 const LOCALIZATION_CALL_NAMES = new Set(['t', 'translate'])
@@ -110,6 +127,9 @@ function hasHumanLanguageText(text) {
   if (/^[\d\s!-/:-@[-`{-~]+$/.test(trimmed)) {
     return false
   }
+  if (/^[a-z0-9]+(?:_[a-z0-9]+)+$/.test(trimmed)) {
+    return false
+  }
   return /[A-Za-z\u00C0-\u024F\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/.test(trimmed)
 }
 
@@ -155,18 +175,43 @@ function stringParts(node) {
   ]
 }
 
-function isInsideLocalizationCall(node) {
+function isInsideLocalizationCall(node, sourceFile, mobileBindings) {
   let current = node.parent
   while (current) {
     if (ts.isCallExpression(current)) {
+      if (mobileBindings && isMobileTranslationCall(current, sourceFile, mobileBindings)) {
+        return true
+      }
       const name = expressionNameText(current.expression)
-      if (name && LOCALIZATION_CALL_NAMES.has(name.split('.').at(-1) ?? name)) {
+      if (!mobileBindings && name && LOCALIZATION_CALL_NAMES.has(name.split('.').at(-1) ?? name)) {
         return true
       }
     }
     current = current.parent
   }
   return false
+}
+
+function isUnboundRenderedTranslationArgument(node, sourceFile, mobileBindings) {
+  const call = findAncestor(node, ts.isCallExpression)
+  if (!call) {
+    return false
+  }
+  const resemblesTranslator =
+    isPotentialMobileTranslationCall(call, mobileBindings) ||
+    (ts.isIdentifier(call.expression) &&
+      (LOCALIZATION_CALL_NAMES.has(call.expression.text) ||
+        mobileBindings.translatorNames.has(call.expression.text))) ||
+    (ts.isPropertyAccessExpression(call.expression) &&
+      call.expression.name.text === 't' &&
+      mobileBindings.namespaceNames.has(
+        expressionNameText(call.expression.expression)?.split('.')[0] ?? ''
+      ))
+  return (
+    resemblesTranslator &&
+    !isMobileTranslationCall(call, sourceFile, mobileBindings) &&
+    (isRenderedJsxExpression(call) || isAssignedToRenderedVariable(call))
+  )
 }
 
 function isJsxAttributeValue(node) {
@@ -201,40 +246,6 @@ function ancestorJsxAttributeName(node) {
     return undefined
   }
   return undefined
-}
-
-function isRenderedJsxExpression(node) {
-  let current = node.parent
-  while (current) {
-    if (ts.isJsxExpression(current)) {
-      return (
-        ts.isJsxElement(current.parent) ||
-        ts.isJsxFragment(current.parent) ||
-        ts.isJsxSelfClosingElement(current.parent)
-      )
-    }
-    if (
-      ts.isConditionalExpression(current) ||
-      ts.isParenthesizedExpression(current) ||
-      ts.isTemplateExpression(current) ||
-      ts.isNoSubstitutionTemplateLiteral(current)
-    ) {
-      if (ts.isConditionalExpression(current) && current.condition === node) {
-        return false
-      }
-      current = current.parent
-      continue
-    }
-    if (ts.isBinaryExpression(current)) {
-      if (current.operatorToken.kind !== ts.SyntaxKind.PlusToken) {
-        return false
-      }
-      current = current.parent
-      continue
-    }
-    return false
-  }
-  return false
 }
 
 function nearestObjectPropertyName(node) {
@@ -393,10 +404,21 @@ export function collectLocalizationCandidates(filePath, sourceText, root = proce
   )
   const reports = []
   const relativePath = normalizePath(root, filePath)
+  const mobileSource =
+    relativePath.startsWith('mobile/app/') || relativePath.startsWith('mobile/src/')
+  const userVisibleErrorSource =
+    relativePath.startsWith('mobile/app/') ||
+    /^mobile\/src\/(?:agent-history|browser|components|dictation|files|hooks|session|source-control|tasks)\//.test(
+      relativePath
+    )
+  const mobileBindings = mobileSource ? collectMobileTranslationBindings(sourceFile) : undefined
 
   function pushReport(node, kind, text, dynamic = false) {
     const value = compactText(text)
-    if (!hasHumanLanguageText(value) || isInsideLocalizationCall(node)) {
+    if (
+      !hasHumanLanguageText(value) ||
+      isInsideLocalizationCall(node, sourceFile, mobileBindings)
+    ) {
       return
     }
     const position = lineAndColumn(sourceFile, node)
@@ -419,7 +441,12 @@ export function collectLocalizationCandidates(filePath, sourceText, root = proce
       return
     }
 
-    const kind = classifyStringNode(node)
+    const kind = mobileSource
+      ? (classifyMobileStringNode(node, userVisibleErrorSource, mobileBindings) ??
+        (isUnboundRenderedTranslationArgument(node, sourceFile, mobileBindings)
+          ? 'unbound-localization-call'
+          : undefined))
+      : classifyStringNode(node)
     if (kind) {
       for (const part of stringParts(node)) {
         pushReport(node, kind, part.text, part.dynamic)
@@ -430,6 +457,23 @@ export function collectLocalizationCandidates(filePath, sourceText, root = proce
   }
 
   visit(sourceFile)
+  if (mobileSource) {
+    for (const candidate of collectMobileEmbeddedDocumentCandidates(relativePath, sourceText)) {
+      const value = compactText(candidate.text)
+      if (!hasHumanLanguageText(value)) {
+        continue
+      }
+      const position = sourceFile.getLineAndCharacterOfPosition(candidate.start)
+      reports.push({
+        area: areaForFile(relativePath),
+        filePath: relativePath,
+        ...candidate,
+        line: position.line + 1,
+        column: position.character + 1,
+        text: value
+      })
+    }
+  }
   return reports
 }
 
@@ -516,56 +560,10 @@ function parseArgs(argv) {
   return options
 }
 
-function candidateSignature(candidate) {
-  return JSON.stringify({
-    filePath: candidate.filePath,
-    kind: candidate.kind,
-    text: candidate.text,
-    dynamic: candidate.dynamic
-  })
-}
-
-function countBySignature(reports) {
-  const counts = new Map()
-  for (const report of reports) {
-    const signature = candidateSignature(report)
-    counts.set(signature, (counts.get(signature) ?? 0) + 1)
-  }
-  return counts
-}
-
 async function readAllowlist(root, allowlistPath) {
   const absolutePath = path.resolve(root, allowlistPath)
   const raw = await fs.readFile(absolutePath, 'utf8')
   return JSON.parse(raw)
-}
-
-function findNewCandidates(reports, allowlist) {
-  const allowedCounts = new Map(
-    allowlist.map((entry) => [
-      JSON.stringify({
-        filePath: entry.filePath,
-        kind: entry.kind,
-        text: entry.text,
-        dynamic: entry.dynamic
-      }),
-      entry.count
-    ])
-  )
-  const seenCounts = countBySignature(reports)
-  const newCandidates = []
-
-  for (const report of reports) {
-    const signature = candidateSignature(report)
-    const seenCount = seenCounts.get(signature) ?? 0
-    const allowedCount = allowedCounts.get(signature) ?? 0
-    if (seenCount > allowedCount) {
-      newCandidates.push(report)
-      seenCounts.set(signature, seenCount - 1)
-    }
-  }
-
-  return newCandidates
 }
 
 export async function main(root = process.cwd(), argv = process.argv.slice(2)) {
@@ -580,13 +578,24 @@ export async function main(root = process.cwd(), argv = process.argv.slice(2)) {
   }
 
   if (options.check) {
-    const allowlist = await readAllowlist(root, options.allowlistPath)
-    const newCandidates = findNewCandidates(reports, allowlist)
+    const sourcePrefix = normalizePath(root, absoluteSourceRoot)
+    const allowlist = (await readAllowlist(root, options.allowlistPath)).filter(
+      (entry) => entry.filePath === sourcePrefix || entry.filePath.startsWith(`${sourcePrefix}/`)
+    )
+    const newCandidates = findNewLocalizationCandidates(reports, allowlist)
     if (newCandidates.length > 0) {
-      console.error('New unlocalized renderer strings were found.')
+      console.error('New unlocalized UI strings were found.')
       console.error('Localize them or add a reviewed exclusion to the localization allowlist.')
       console.error('')
       console.error(formatReports(root, newCandidates))
+      return 1
+    }
+    const staleEntries = findStaleLocalizationAllowlistEntries(reports, allowlist)
+    if (staleEntries.length > 0) {
+      console.error('Stale localization allowlist entries were found.')
+      console.error('Remove entries or lower counts that no longer match source candidates.')
+      console.error('')
+      console.error(formatStaleLocalizationAllowlistEntries(staleEntries))
       return 1
     }
     console.log(`Localization coverage check passed with ${reports.length} allowlisted candidates.`)

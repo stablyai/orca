@@ -10,6 +10,7 @@ import type {
 import type { MobileDiffReviewFileDescriptor } from './mobile-diff-review-state'
 import type { MobileHighlightedDiffLine } from './mobile-file-syntax'
 import type { MobileReviewTerminalTab } from './mobile-diff-review-rpc'
+import { t } from '@/i18n/mobile-i18n'
 
 export type ReviewScreenState =
   | { kind: 'loading' }
@@ -109,11 +110,40 @@ export function nextReviewIndexAfterMarkReviewed({
 
 export function mobileReviewScopeLabel(item: MobileDiffReviewQueueItem): string {
   if (item.scope === 'branch') {
-    return 'Branch'
+    return t('mobileDiffReviewScreenModel.branch')
   }
-  return item.scope === 'staged' ? 'Staged' : 'Unstaged'
+  return item.scope === 'staged'
+    ? t('mobileDiffReviewScreenModel.staged')
+    : t('mobileDiffReviewScreenModel.unstaged')
 }
 
-export function mobileReviewCountLabel(count: number, singular: string, plural: string): string {
-  return `${count} ${count === 1 ? singular : plural}`
+export function mobileReviewFilterLabel(filter: MobileDiffReviewQueueFilter): string {
+  switch (filter) {
+    case 'all':
+      return t('mobileDiffReviewScreenModel.all')
+    case 'unreviewed':
+      return t('mobileDiffReviewScreenModel.unreviewed')
+    case 'notes':
+      return t('mobileDiffReviewScreenModel.notes')
+    case 'unstaged':
+      return t('mobileDiffReviewScreenModel.unstaged')
+    case 'staged':
+      return t('mobileDiffReviewScreenModel.staged')
+    case 'branch':
+      return t('mobileDiffReviewScreenModel.branch')
+  }
+}
+
+export function mobileReviewUnsentNoteCountLabel(count: number): string {
+  return count === 1
+    ? t('mobileDiffReviewScreenModel.unsent', { unsentCount: count })
+    : t('mobileDiffReviewDrawers.unsent', {
+        unsentCommentCount: count
+      })
+}
+
+export function mobileReviewNoteCountLabel(count: number): string {
+  return count === 1
+    ? t('mobileDiffReviewScreenModel.noteCountNote', { noteCount: count })
+    : t('mobileDiffReviewScreenModel.noteCountNotes', { noteCount: count })
 }

@@ -10,6 +10,7 @@ import { canEditPRTitle } from '../../session/pr-title-edit'
 import { openMobilePrUrl } from '../MobilePrComposeSheet'
 import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
 import { prCommentComposerStyles as composerStyles } from './pr-comment-composer-styles'
+import { t } from '@/i18n/mobile-i18n'
 
 type Props = {
   pr: PRInfo
@@ -49,7 +50,9 @@ export function PRSidebarHeader({
             onPress={openPr}
             disabled={!openPr}
             accessibilityRole="link"
-            accessibilityLabel={`Open pull request #${pr.number} on the web`}
+            accessibilityLabel={t('prsidebarHeader.open', {
+              pullRequestNumber: pr.number
+            })}
             style={({ pressed }) => [
               styles.badge,
               { borderColor: badgeColor },
@@ -62,7 +65,9 @@ export function PRSidebarHeader({
             style={styles.prMetaStrong}
             onPress={openPr}
             accessibilityRole="link"
-            accessibilityLabel={`Open pull request #${pr.number} on the web`}
+            accessibilityLabel={t('prsidebarHeader.open', {
+              pullRequestNumber: pr.number
+            })}
           >
             #{pr.number}
           </Text>
@@ -73,7 +78,9 @@ export function PRSidebarHeader({
             onPress={openPr}
             hitSlop={8}
             accessibilityRole="link"
-            accessibilityLabel={`Open pull request #${pr.number} in browser`}
+            accessibilityLabel={t('prsidebarHeader.open', {
+              pullRequestNumber: pr.number
+            })}
             style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.6 }]}
           >
             <ExternalLink size={16} color={colors.textSecondary} strokeWidth={2.2} />
@@ -153,21 +160,21 @@ function PRTitle({
             onPress={cancel}
             disabled={titleAction.saving}
             accessibilityRole="button"
-            accessibilityLabel="Cancel editing title"
+            accessibilityLabel={t('prsidebarHeader.cancelEditing')}
           >
-            <Text style={composerStyles.cancelText}>Cancel</Text>
+            <Text style={composerStyles.cancelText}>{t('prsidebarHeader.cancel')}</Text>
           </Pressable>
           <Pressable
             style={({ pressed }) => [composerStyles.submit, pressed && composerStyles.pressed]}
             onPress={() => void save()}
             disabled={titleAction.saving}
             accessibilityRole="button"
-            accessibilityLabel="Save title"
+            accessibilityLabel={t('prsidebarHeader.saveTitle')}
           >
             {titleAction.saving ? (
               <ActivityIndicator size="small" color={colors.bgBase} />
             ) : (
-              <Text style={composerStyles.submitText}>Save</Text>
+              <Text style={composerStyles.submitText}>{t('prsidebarHeader.save')}</Text>
             )}
           </Pressable>
         </View>
@@ -181,7 +188,7 @@ function PRTitle({
       onPress={editable ? startEdit : undefined}
       disabled={!editable}
       accessibilityRole={editable ? 'button' : undefined}
-      accessibilityLabel={editable ? 'Edit pull request title' : undefined}
+      accessibilityLabel={editable ? t('prsidebarHeader.edit') : undefined}
     >
       <Text style={styles.prTitle}>{title}</Text>
       {editable ? (

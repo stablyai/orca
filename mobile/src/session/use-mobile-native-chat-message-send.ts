@@ -13,6 +13,7 @@ import {
   releaseMobileNativeChatTerminalWrite
 } from './mobile-native-chat-terminal-write-lock'
 import type { MobileNativeChatSendOrigin } from './use-mobile-native-chat-drafts'
+import { t } from '@/i18n/mobile-i18n'
 import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
 import { buildAgentTuiClearInputForText } from '../../../src/shared/agent-tui-input-clear'
 
@@ -93,7 +94,7 @@ export function useMobileNativeChatMessageSend(args: {
       // answer (which reaches this send directly) would otherwise burn the whole
       // 15s heal+send budget waiting on a socket that is already gone.
       if (!client || !handle || !origin || !enabled) {
-        onSendError('Message not sent (disconnected)')
+        onSendError(t('useMobileNativeChatMessageSend.messageNotSentDisconnected'))
         return 'rejected'
       }
       // The agent's input may still hold an orphaned image paste from an earlier
@@ -111,7 +112,7 @@ export function useMobileNativeChatMessageSend(args: {
         deadline
       }
       if (!(await healMobileNativeChatStaleInput(healArgs))) {
-        onSendError('Message not sent')
+        onSendError(t('useMobileNativeChatMessageSend.messageNotSent'))
         return 'rejected'
       }
       // Why: empty the composer at send time, not on the ack — over relay the
@@ -146,7 +147,7 @@ export function useMobileNativeChatMessageSend(args: {
           if (syncComposer) {
             restoreRejectedDraft(origin, text)
           }
-          onSendError('Message not sent')
+          onSendError(t('useMobileNativeChatMessageSend.messageNotSent'))
           return 'rejected'
         }
       }
@@ -189,7 +190,7 @@ export function useMobileNativeChatMessageSend(args: {
           // Why: an ack-lost send usually WAS delivered (issue seen on cellular
           // relay) — verify via the transcript echo instead of a false "not sent".
           holdUnconfirmedSend(origin, text, () =>
-            onSendError('Delivery unconfirmed — check chat before retrying')
+            onSendError(t('useMobileNativeChatMessageSend.delivery'))
           )
         }
         return 'unknown'
@@ -198,7 +199,7 @@ export function useMobileNativeChatMessageSend(args: {
         if (syncComposer) {
           restoreRejectedDraft(origin, text)
         }
-        onSendError('Message not sent')
+        onSendError(t('useMobileNativeChatMessageSend.messageNotSent'))
         return 'rejected'
       }
       if (classification === 'chat') {
@@ -251,7 +252,7 @@ export function useMobileNativeChatMessageSend(args: {
     async (text: string): Promise<boolean> => {
       const terminal = handleRef.current
       if (terminal && !acquireMobileNativeChatTerminalWrite(terminal)) {
-        onSendError('Answer not sent')
+        onSendError(t('useMobileNativeChatAnswerSend.answerNotSent'))
         return false
       }
       try {

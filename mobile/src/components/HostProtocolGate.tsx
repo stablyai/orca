@@ -4,6 +4,7 @@ import { useHostClient } from '../transport/client-context'
 import { useHostStatusGates, type HostStatusGates } from '../transport/host-status-gates'
 import { colors } from '../theme/mobile-theme'
 import { ProtocolBlockScreen } from './ProtocolBlockScreen'
+import { t } from '@/i18n/mobile-i18n'
 
 type Props = {
   hostId: string | undefined
@@ -15,7 +16,8 @@ const HostStatusGatesContext = createContext<HostStatusGates | null>(null)
 export function useHostProtocolGates(): HostStatusGates {
   const gates = useContext(HostStatusGatesContext)
   if (!gates) {
-    throw new Error('useHostProtocolGates must be used inside <HostProtocolGate>')
+    const invariantViolation = new Error(t('hostProtocolGate.use'))
+    throw invariantViolation
   }
   return gates
 }
@@ -56,7 +58,7 @@ export function HostProtocolGate({ hostId, children }: Props) {
       <View style={styles.pending}>
         <ActivityIndicator
           color={colors.textSecondary}
-          accessibilityLabel="Checking host compatibility"
+          accessibilityLabel={t('hostProtocolGate.checking')}
         />
       </View>
     )
@@ -90,7 +92,7 @@ export function HostProtocolGate({ hostId, children }: Props) {
           >
             <ActivityIndicator
               color={colors.textSecondary}
-              accessibilityLabel="Checking host compatibility"
+              accessibilityLabel={t('hostProtocolGate.checking')}
             />
           </View>
         ) : null}

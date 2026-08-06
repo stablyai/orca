@@ -170,6 +170,7 @@ describe('useMobileDiffReviewSendActions', () => {
     expect(sendRequest).toHaveBeenCalledTimes(1)
     expect(sendRequest.mock.calls[0]?.[0]).toBe('terminal.send')
     expect(sendRequest.mock.calls[0]?.[1]).toMatchObject({ terminal: 'terminal-1', enter: true })
+    expect(sendRequest.mock.calls[0]?.[2]).toBeUndefined()
     expect(saveCommentsAndReviewState).toHaveBeenCalledTimes(1)
     expect(setActionError).toHaveBeenCalledWith('Review notes sent')
     expect(setSendSheet).toHaveBeenCalledWith(null)
@@ -203,6 +204,27 @@ describe('useMobileDiffReviewSendActions', () => {
 
     expect((error as Error).message).toBe('Terminal input is locked')
     expect(saveCommentsAndReviewState).not.toHaveBeenCalled()
+  })
+
+  it('keeps normal RPC timeouts independent for terminal creation and note delivery', async () => {
+    const sendRequest = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: 'create',
+        ok: true,
+        result: { tab: { id: 'tab-1', type: 'terminal', terminal: 'terminal-1' } }
+      })
+      .mockResolvedValueOnce(sendResponse(true))
+    await mount({ sendRequest } as unknown as RpcClient)
+
+    await act(async () => {
+      await actions?.createTerminalAndSend([COMMENT])
+    })
+
+    expect(sendRequest.mock.calls[0]?.[0]).toBe('session.tabs.createTerminal')
+    expect(sendRequest.mock.calls[0]?.[2]).toBeUndefined()
+    expect(sendRequest.mock.calls[1]?.[0]).toBe('terminal.send')
+    expect(sendRequest.mock.calls[1]?.[2]).toBeUndefined()
   })
 
   it('reports a failed terminal.send response', async () => {

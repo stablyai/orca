@@ -5,6 +5,7 @@ import { colors, radii, spacing } from '../theme/mobile-theme'
 import { agentDotState } from '../worktree/agent-row-display'
 import { AgentStateDot } from './AgentStateDot'
 import { MobileAgentIcon } from './MobileAgentIcon'
+import { t } from '@/i18n/mobile-i18n'
 
 const MAX_VISIBLE_AGENTS = 3
 
@@ -18,7 +19,9 @@ type Props = {
 export function WorktreeAgentSummary({ agents, expanded, now, onToggle }: Props) {
   const visibleAgents = agents.slice(0, MAX_VISIBLE_AGENTS)
   const hiddenCount = agents.length - visibleAgents.length
-  const subject = `${agents.length} agents`
+  const subject = t(agents.length === 1 ? 'agents.count.one' : 'agents.count.other', {
+    count: agents.length
+  })
 
   return (
     <Pressable
@@ -28,7 +31,9 @@ export function WorktreeAgentSummary({ agents, expanded, now, onToggle }: Props)
         pressed && styles.summaryPressed
       ]}
       accessibilityRole="button"
-      accessibilityLabel={`${expanded ? 'Collapse' : 'Expand'} ${subject}`}
+      accessibilityLabel={t(expanded ? 'agents.collapseSummary' : 'agents.expandSummary', {
+        agentCountLabel: subject
+      })}
       accessibilityState={{ expanded }}
       onPress={(event) => {
         event.stopPropagation()

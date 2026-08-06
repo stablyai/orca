@@ -10,6 +10,13 @@ export function getHostListActionSheetActions(args: {
   state: ConnectionState
   /** Label "Connect" (not "Reconnect") when never connected this session, so the verb matches the action. */
   hasEverConnected: boolean
+  labels: {
+    connect: string
+    reconnect: string
+    disconnect: string
+    editHost: string
+    remove: string
+  }
   onDismiss: () => void
   onReconnect: (hostId: string) => void
   onDisconnect: (hostId: string) => void
@@ -28,7 +35,7 @@ export function getHostListActionSheetActions(args: {
 
   return [
     {
-      label: args.hasEverConnected && isLive ? 'Reconnect' : 'Connect',
+      label: args.hasEverConnected && isLive ? args.labels.reconnect : args.labels.connect,
       icon: RefreshCw,
       onPress: () => {
         args.onDismiss()
@@ -38,7 +45,7 @@ export function getHostListActionSheetActions(args: {
     ...(isLive
       ? [
           {
-            label: 'Disconnect',
+            label: args.labels.disconnect,
             icon: PowerOff,
             onPress: () => {
               args.onDismiss()
@@ -48,7 +55,7 @@ export function getHostListActionSheetActions(args: {
         ]
       : []),
     {
-      label: 'Edit host',
+      label: args.labels.editHost,
       icon: Edit3,
       closeBeforePress: true,
       onPress: () => {
@@ -57,7 +64,7 @@ export function getHostListActionSheetActions(args: {
       }
     },
     {
-      label: 'Remove',
+      label: args.labels.remove,
       destructive: true,
       closeBeforePress: true,
       onPress: () => {

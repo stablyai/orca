@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import { formatDiffComment as formatDesktopDiffComment } from '../../../src/shared/diff-comments-format'
 import type { DiffComment } from '../../../src/shared/types'
+import { mobileI18n } from '../i18n/mobile-i18n'
 import {
   addMobileDiffComment,
   formatDiffComments,
@@ -8,6 +10,12 @@ import {
   removeDeliveredMobileDiffComments,
   removeMobileDiffComments
 } from './mobile-diff-comments'
+
+const INITIAL_LOCALE = mobileI18n.language
+
+afterEach(async () => {
+  await mobileI18n.changeLanguage(INITIAL_LOCALE)
+})
 
 function comment(overrides: Partial<DiffComment> & Pick<DiffComment, 'id'>): DiffComment {
   const { id, ...rest } = overrides
@@ -121,6 +129,18 @@ describe('mobile diff comments', () => {
     expect(formatDiffComments([comment({ id: 'a', body: 'quote "this"' })])).toBe(
       ['File: src/app.ts', 'Line: 4', 'User comment: "quote \\"this\\""'].join('\n')
     )
+  })
+
+  it('keeps the agent envelope canonical when the mobile UI is translated', async () => {
+    const note = comment({ id: 'a', startLine: 2, lineNumber: 4 })
+    await mobileI18n.changeLanguage('es')
+
+    expect(
+      mobileI18n.t('pairConfirm.pairingFailed', {
+        errorMessage: 'fallo'
+      })
+    ).toBe('Error de emparejamiento: fallo')
+    expect(formatDiffComments([note])).toBe(formatDesktopDiffComment(note))
   })
 
   it('formats file-level notes with file scope', () => {

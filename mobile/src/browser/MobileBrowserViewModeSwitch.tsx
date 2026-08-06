@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { colors, radii, spacing } from '../theme/mobile-theme'
 import type { MobileBrowserViewMode } from './browser-screencast-request'
+import { t } from '@/i18n/mobile-i18n'
 
 type Props = {
   disabled: boolean
@@ -8,19 +9,18 @@ type Props = {
   onChange: (mode: MobileBrowserViewMode) => void
 }
 
-const VIEW_MODES: { id: MobileBrowserViewMode; label: string }[] = [
-  { id: 'web', label: 'Web' },
-  { id: 'mobile', label: 'Mobile' }
-]
-
 export function MobileBrowserViewModeSwitch({
   disabled,
   value,
   onChange
 }: Props): React.JSX.Element {
+  const viewModes: { id: MobileBrowserViewMode; label: string }[] = [
+    { id: 'web', label: t('mobileBrowserViewModeSwitch.web') },
+    { id: 'mobile', label: t('mobileBrowserViewModeSwitch.mobile') }
+  ]
   return (
     <View style={styles.switch}>
-      {VIEW_MODES.map((mode) => (
+      {viewModes.map((mode) => (
         <ViewModeButton
           key={mode.id}
           label={mode.label}
@@ -56,7 +56,9 @@ function ViewModeButton({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityState={{ selected, disabled }}
-      accessibilityLabel={`Show ${label.toLowerCase()} website view`}
+      accessibilityLabel={t('mobileBrowserViewModeSwitch.show', {
+        browserLabel: label.toLowerCase()
+      })}
     >
       <Text style={[styles.buttonText, selected && styles.buttonTextSelected]}>{label}</Text>
     </Pressable>

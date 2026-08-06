@@ -1,14 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import {
-  HOST_ROUTE_NOTICES,
   hostRouteNoticeMessage,
   hostRouteWithNotice,
   visibleHostRouteNotice
 } from './host-route-notice'
 
+const MISSING_WORKSPACE_NOTICE = 'That workspace no longer exists on this host.'
+
 describe('hostRouteNoticeMessage', () => {
   it('maps a known code to its banner text', () => {
-    expect(hostRouteNoticeMessage('worktree-missing')).toBe(HOST_ROUTE_NOTICES['worktree-missing'])
+    expect(hostRouteNoticeMessage('worktree-missing')).toBe(MISSING_WORKSPACE_NOTICE)
   })
 
   it('renders nothing for absent or unrecognized codes', () => {
@@ -35,10 +36,8 @@ describe('hostRouteWithNotice', () => {
 })
 
 describe('visibleHostRouteNotice', () => {
-  const message = HOST_ROUTE_NOTICES['worktree-missing']
-
   it('shows a notice the user has not dismissed', () => {
-    expect(visibleHostRouteNotice(false, 'worktree-missing', null)).toBe(message)
+    expect(visibleHostRouteNotice(false, 'worktree-missing', null)).toBe(MISSING_WORKSPACE_NOTICE)
   })
 
   it('stays silent once that code is dismissed', () => {
@@ -47,7 +46,9 @@ describe('visibleHostRouteNotice', () => {
 
   // Dismissal is keyed by code so a later, different bounce still gets to speak.
   it('still shows a different code after one was dismissed', () => {
-    expect(visibleHostRouteNotice(false, 'worktree-missing', 'some-other-code')).toBe(message)
+    expect(visibleHostRouteNotice(false, 'worktree-missing', 'some-other-code')).toBe(
+      MISSING_WORKSPACE_NOTICE
+    )
   })
 
   it('draws nothing in the embedded sidebar, which shares the route', () => {

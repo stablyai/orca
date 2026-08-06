@@ -31,7 +31,8 @@ import {
   testHostReachability,
   unreachableHostDetail
 } from '../src/diagnostics/host-reachability'
-import { troubleshootCommonIssues } from '../src/diagnostics/troubleshoot-common-issues'
+import { getTroubleshootCommonIssues } from '../src/diagnostics/troubleshoot-common-issues'
+import { t } from '@/i18n/mobile-i18n'
 
 type DiagnosticStatus = 'idle' | 'running' | 'done'
 
@@ -94,11 +95,23 @@ export default function TroubleshootScreen() {
       const hosts = await loadHosts()
       results.push(
         hosts.length > 0
-          ? { label: 'Paired hosts', status: 'pass', detail: `${hosts.length} paired` }
-          : { label: 'Paired hosts', status: 'fail', detail: 'None — scan a QR to pair' }
+          ? {
+              label: t('troubleshoot.paired'),
+              status: 'pass',
+              detail: t('troubleshoot.host', { hostCount: hosts.length })
+            }
+          : {
+              label: t('troubleshoot.paired'),
+              status: 'fail',
+              detail: t('troubleshoot.none')
+            }
       )
     } catch {
-      results.push({ label: 'Paired hosts', status: 'warn', detail: 'Could not read host data' })
+      results.push({
+        label: t('troubleshoot.paired'),
+        status: 'warn',
+        detail: t('troubleshoot.couldNotRead')
+      })
     }
 
     if (!isCurrentRun()) {
@@ -117,14 +130,26 @@ export default function TroubleshootScreen() {
       }
       results.push(
         resp.ok
-          ? { label: 'Internet', status: 'pass', detail: 'Connected' }
-          : { label: 'Internet', status: 'warn', detail: 'Unexpected response' }
+          ? {
+              label: t('troubleshoot.internet'),
+              status: 'pass',
+              detail: t('troubleshoot.connected')
+            }
+          : {
+              label: t('troubleshoot.internet'),
+              status: 'warn',
+              detail: t('troubleshoot.unexpected')
+            }
       )
     } catch {
       if (!isCurrentRun()) {
         return
       }
-      results.push({ label: 'Internet', status: 'fail', detail: 'No connection' })
+      results.push({
+        label: t('troubleshoot.internet'),
+        status: 'fail',
+        detail: t('troubleshoot.no')
+      })
     } finally {
       internetCheck.dispose()
       if (activeInternetCheckRef.current === internetCheck) {
@@ -151,13 +176,19 @@ export default function TroubleshootScreen() {
           label: host.name,
           status: reachable ? 'pass' : 'fail',
           detail: reachable
-            ? `Reachable at ${formatEndpoint(host.endpoint)}`
+            ? t('troubleshoot.reachable', {
+                endpoint: formatEndpoint(host.endpoint)
+              })
             : unreachableHostDetail(host.endpoint)
         })
         setChecks([...results])
       }
     } catch {
-      results.push({ label: 'Hosts', status: 'warn', detail: 'Could not test' })
+      results.push({
+        label: t('troubleshoot.hosts'),
+        status: 'warn',
+        detail: t('troubleshoot.couldNotTest')
+      })
     }
 
     if (!isCurrentRun()) {
@@ -165,7 +196,7 @@ export default function TroubleshootScreen() {
     }
 
     results.push({
-      label: 'Platform',
+      label: t('troubleshoot.platform'),
       status: 'pass',
       detail: `${Platform.OS} ${Platform.Version ?? ''}`
     })
@@ -183,7 +214,7 @@ export default function TroubleshootScreen() {
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <ChevronLeft size={22} color={colors.textSecondary} />
         </Pressable>
-        <Text style={styles.heading}>Troubleshooting</Text>
+        <Text style={styles.heading}>{t('troubleshoot.troubleshooting')}</Text>
       </View>
 
       <ScrollView
@@ -207,10 +238,10 @@ export default function TroubleshootScreen() {
           )}
           <Text style={styles.diagnosticButtonLabel}>
             {diagnosticStatus === 'running'
-              ? 'Running…'
+              ? t('troubleshoot.running')
               : diagnosticStatus === 'done'
-                ? 'Run again'
-                : 'Run diagnostics'}
+                ? t('troubleshoot.runAgain')
+                : t('troubleshoot.runDiagnostics')}
           </Text>
         </Pressable>
 
@@ -222,7 +253,7 @@ export default function TroubleshootScreen() {
           onPress={() => router.push('/connection-log')}
         >
           <ScrollText size={16} color={colors.textPrimary} />
-          <Text style={styles.diagnosticButtonLabel}>View connection log</Text>
+          <Text style={styles.diagnosticButtonLabel}>{t('troubleshoot.view')}</Text>
         </Pressable>
 
         {checks.length > 0 && (
@@ -244,10 +275,10 @@ export default function TroubleshootScreen() {
           </View>
         )}
 
-        <Text style={styles.sectionHeading}>Common issues</Text>
+        <Text style={styles.sectionHeading}>{t('troubleshoot.common')}</Text>
 
         <View style={styles.section}>
-          {troubleshootCommonIssues.map((section, i) => (
+          {getTroubleshootCommonIssues().map((section, i) => (
             <View key={section.id}>
               {i > 0 && <View style={styles.separator} />}
               <Pressable
@@ -264,7 +295,7 @@ export default function TroubleshootScreen() {
               </Pressable>
               {expandedId === section.id && (
                 <View style={styles.accordionBody}>
-                  {section.steps.map((step, j) => (
+                  {section.instructions.map((step, j) => (
                     <View key={j} style={styles.stepRow}>
                       <Text style={styles.bullet}>•</Text>
                       <Text style={styles.stepText}>{step}</Text>

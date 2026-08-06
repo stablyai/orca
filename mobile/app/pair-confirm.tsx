@@ -16,6 +16,7 @@ import {
   loadMobileOnboardingSteps,
   mobileOnboardingDestination
 } from '../src/onboarding/mobile-onboarding-plan'
+import { t } from '@/i18n/mobile-i18n'
 
 type Status = 'awaiting-confirm' | 'connecting' | 'error'
 
@@ -135,8 +136,12 @@ export default function PairConfirmScreen() {
       setStatus('error')
       setErrorMessage(
         timedOut
-          ? `Couldn't connect within ${PAIRING_OVERALL_TIMEOUT_MS / 1000}s — see log below for where it stalled`
-          : `Pairing failed: ${err instanceof Error ? err.message : String(err)}`
+          ? t('pairConfirm.could', {
+              pairingOverallTimeoutSeconds: PAIRING_OVERALL_TIMEOUT_MS / 1000
+            })
+          : t('pairConfirm.pairingFailed', {
+              errorMessage: err instanceof Error ? err.message : String(err)
+            })
       )
     }
   }
@@ -152,16 +157,14 @@ export default function PairConfirmScreen() {
       <View style={styles.content}>
         {offer && resolvedStatus === 'awaiting-confirm' && (
           <>
-            <Text style={styles.title}>Pair with this desktop?</Text>
-            <Text style={styles.subtitle}>
-              You opened a pairing link from your desktop. Confirm to add it to your hosts.
-            </Text>
+            <Text style={styles.title}>{t('pairConfirm.pairDesktop')}</Text>
+            <Text style={styles.subtitle}>{t('pairConfirm.confirmDesktopPairingLink')}</Text>
             <View style={styles.actionStack}>
               <Pressable style={styles.primaryButton} onPress={() => void confirm()}>
-                <Text style={styles.primaryButtonText}>Pair</Text>
+                <Text style={styles.primaryButtonText}>{t('pairConfirm.pair')}</Text>
               </Pressable>
               <Pressable style={styles.secondaryButton} onPress={cancel}>
-                <Text style={styles.secondaryButtonText}>Cancel</Text>
+                <Text style={styles.secondaryButtonText}>{t('pairConfirm.cancel')}</Text>
               </Pressable>
             </View>
           </>
@@ -170,9 +173,9 @@ export default function PairConfirmScreen() {
         {resolvedStatus === 'connecting' && (
           <>
             <ActivityIndicator size="large" color={colors.textSecondary} />
-            <Text style={styles.connectingText}>Connecting…</Text>
+            <Text style={styles.connectingText}>{t('pairConfirm.connecting')}</Text>
             <View style={styles.logSlot}>
-              <ConnectionLog entries={logs} title="Pairing log" />
+              <ConnectionLog entries={logs} title={t('pairConfirm.pairingLog')} />
             </View>
           </>
         )}
@@ -182,12 +185,12 @@ export default function PairConfirmScreen() {
             <Text style={styles.errorText}>{resolvedErrorMessage}</Text>
             {logs.length > 0 && (
               <View style={styles.logSlot}>
-                <ConnectionLog entries={logs} title="Pairing log" />
+                <ConnectionLog entries={logs} title={t('pairConfirm.pairingLog')} />
               </View>
             )}
             <View style={styles.actionStack}>
               <Pressable style={styles.primaryButton} onPress={cancel}>
-                <Text style={styles.primaryButtonText}>Back to home</Text>
+                <Text style={styles.primaryButtonText}>{t('pairConfirm.back')}</Text>
               </Pressable>
             </View>
           </>

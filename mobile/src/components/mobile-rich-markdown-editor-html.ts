@@ -1,13 +1,15 @@
 import { colors } from '../theme/mobile-theme'
+import { escapeEmbeddedHtmlCopy } from '../i18n/embedded-webview-copy'
+import { getActiveMobileUiLanguageTag, t } from '../i18n/mobile-i18n'
 import { MOBILE_RICH_MARKDOWN_KEYBOARD_INSET_SCRIPT } from './mobile-rich-markdown-editor-keyboard-inset-script'
 
 export function escapeInjectedJavaScriptString(value: string): string {
-  return JSON.stringify(value).replace(/<\/script/gi, '<\\/script')
+  return JSON.stringify(value).replaceAll('<', '\\u003c')
 }
 
 export function buildMobileRichMarkdownEditorHtml(): string {
   return `<!doctype html>
-<html>
+<html lang="${getActiveMobileUiLanguageTag()}">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
@@ -204,7 +206,7 @@ export function buildMobileRichMarkdownEditorHtml(): string {
   </style>
 </head>
 <body>
-  <main id="editor" contenteditable="true" data-placeholder="Start writing..."></main>
+  <main id="editor" contenteditable="true" data-placeholder="${escapeEmbeddedHtmlCopy(t('richMarkdown.startWriting'))}"></main>
   <script>
     (function () {
       var editor = document.getElementById('editor');
@@ -618,13 +620,13 @@ export function buildMobileRichMarkdownEditorHtml(): string {
         else if (command === 'orderedList') document.execCommand('insertOrderedList');
         else if (command === 'quote') document.execCommand('formatBlock', false, 'blockquote');
         else if (command === 'inlineCode') wrapSelection('code');
-        else if (command === 'codeBlock') document.execCommand('insertHTML', false, '<pre data-language=""><code>code</code></pre><p><br></p>');
-        else if (command === 'taskList') document.execCommand('insertHTML', false, '<ul data-type="taskList"><li data-checked="false"><label contenteditable="false"><input type="checkbox" /></label><div><p>Task</p></div></li></ul>');
+        else if (command === 'codeBlock') document.execCommand('insertHTML', false, '<pre data-language=""><code>' + ${escapeInjectedJavaScriptString(escapeEmbeddedHtmlCopy(t('richMarkdown.codePlaceholder')))} + '</code></pre><p><br></p>');
+        else if (command === 'taskList') document.execCommand('insertHTML', false, '<ul data-type="taskList"><li data-checked="false"><label contenteditable="false"><input type="checkbox" /></label><div><p>' + ${escapeInjectedJavaScriptString(escapeEmbeddedHtmlCopy(t('richMarkdown.taskPlaceholder')))} + '</p></div></li></ul>');
         else if (command === 'link') {
-          var href = window.prompt('Link URL');
+          var href = window.prompt(${escapeInjectedJavaScriptString(t('richMarkdown.linkUrlPrompt'))});
           if (href && isSafeUrl(href)) document.execCommand('createLink', false, href);
         } else if (command === 'image') {
-          var src = window.prompt('Image URL');
+          var src = window.prompt(${escapeInjectedJavaScriptString(t('richMarkdown.imageUrlPrompt'))});
           if (src && isSafeUrl(src)) document.execCommand('insertImage', false, src);
         }
         syncTaskCheckboxesDisabled();

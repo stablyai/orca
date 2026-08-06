@@ -1,13 +1,11 @@
 import { formatAgentTypeLabel } from '../../../src/shared/agent-type-label'
-import {
-  formatNativeChatEmptyStateCopy,
-  type NativeChatEmptyStateCopy
-} from '../../../src/shared/native-chat-empty-state'
+import type { NativeChatEmptyStateCopy } from '../../../src/shared/native-chat-empty-state'
 import { isImageRefBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { foldToolMessages } from './mobile-native-chat-blocks'
 import { normalizeImageTranscriptMessages } from './mobile-native-chat-image-transcript-markers'
 import { stripNoiseMessages } from './mobile-native-chat-noise'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
+import { t } from '@/i18n/mobile-i18n'
 
 /** The centered empty-state copy for a chat with no messages, mirroring the
  *  desktop `NativeChatEmptyState` (shared copy + agent label) so the two surfaces
@@ -18,17 +16,22 @@ export function mobileNativeChatEmptyState(
   agent: string | null,
   error?: string
 ): NativeChatEmptyStateCopy | null {
-  const agentLabel = agent ? formatAgentTypeLabel(agent) : 'the agent'
+  const agentLabel = agent ? formatAgentTypeLabel(agent) : t('mobileNativeChatRenderData.agent')
   switch (status) {
     // A live agent with no transcript yet — and a loaded-but-empty transcript —
     // are both "start a chat"; invite the first message instead of implying the
     // agent is still starting up.
     case 'waiting-session':
     case 'ready':
-      return formatNativeChatEmptyStateCopy('empty', agentLabel)
+      return {
+        title: t('nativeChat.empty.title', { agentLabel }),
+        subtitle: t('nativeChat.empty.subtitle', { agentLabel })
+      }
     case 'error': {
-      const copy = formatNativeChatEmptyStateCopy('error', agentLabel)
-      return error ? { ...copy, subtitle: error } : copy
+      return {
+        title: t('nativeChat.error.title'),
+        subtitle: error || t('nativeChat.error.subtitle')
+      }
     }
     default:
       return null

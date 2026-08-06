@@ -4,6 +4,9 @@ import type { RpcClient } from '../transport/rpc-client'
 import { loadMobileDiffReviewDiff } from './mobile-diff-review-loaders'
 import type { MobileDiffReviewQueueItem } from './mobile-diff-review-queue'
 import type { ReviewDiffState, ReviewScreenState } from './mobile-diff-review-screen-model'
+import { createMobileTranslator } from '@/i18n/mobile-i18n'
+
+const tr = createMobileTranslator('diffReview')
 
 type DiffLoadingInput = {
   client: RpcClient | null
@@ -42,7 +45,7 @@ export function useMobileDiffReviewDiffLoading(input: DiffLoadingInput): ReviewD
     const keepLoadedDiff = (fallback: ReviewDiffState) => (prev: ReviewDiffState) =>
       prev.kind === 'ready' && prev.itemKey === itemKey ? prev : fallback
     if (!client || connState !== 'connected') {
-      setDiffState(keepLoadedDiff({ kind: 'error', itemKey, message: 'Waiting for desktop...' }))
+      setDiffState(keepLoadedDiff({ kind: 'error', itemKey, message: tr('waiting') }))
       return
     }
     let stale = false
@@ -65,7 +68,7 @@ export function useMobileDiffReviewDiffLoading(input: DiffLoadingInput): ReviewD
             keepLoadedDiff({
               kind: 'error',
               itemKey,
-              message: err instanceof Error ? err.message : 'Unable to load diff'
+              message: err instanceof Error ? err.message : tr('unableLoadDiff')
             })
           )
         }

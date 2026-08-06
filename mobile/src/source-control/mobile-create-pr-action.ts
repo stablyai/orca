@@ -2,6 +2,7 @@ import type { HostedReviewCreationEligibility } from '../../../src/shared/hosted
 import { supportsHostedReviewCreation } from '../../../src/shared/hosted-review-creation-providers'
 import { hostedReviewCopy } from './hosted-review-copy'
 import { getMobilePrCreateBlockMessage } from './mobile-pr-create'
+import { t } from '@/i18n/mobile-i18n'
 
 export type MobileCreatePrEligibilityState =
   | { kind: 'idle' }
@@ -31,7 +32,7 @@ const BUSY_ACTIONS = new Set(['create-pr', 'push-create-pr'])
 function hiddenAction(onPress: () => void): MobileCreatePrAction {
   return {
     visible: false,
-    label: 'Create Pull Request',
+    label: t('mobileCreatePrAction.createPull'),
     disabled: true,
     loading: false,
     pushFirst: false,
@@ -52,7 +53,7 @@ export function buildMobileCreatePrAction({
   if (eligibilityState.kind === 'error') {
     return {
       visible: true,
-      label: 'Review status unavailable',
+      label: t('sourceControl.reviewStatus.unavailable'),
       disabled: true,
       loading: false,
       pushFirst: false,
@@ -63,7 +64,7 @@ export function buildMobileCreatePrAction({
   if (!eligibility) {
     return {
       visible: true,
-      label: 'Checking review status…',
+      label: t('sourceControl.reviewStatus.checking'),
       disabled: true,
       loading: true,
       pushFirst: false,
@@ -76,7 +77,7 @@ export function buildMobileCreatePrAction({
   if (!supportsHostedReviewCreation(eligibility.provider)) {
     return {
       visible: true,
-      label: 'Review creation unavailable for this provider',
+      label: t('sourceControl.reviewStatus.unsupportedProvider'),
       disabled: true,
       loading: false,
       pushFirst: false,
@@ -84,7 +85,9 @@ export function buildMobileCreatePrAction({
     }
   }
   const copy = hostedReviewCopy(eligibility.provider)
-  const label = `Create ${copy.titleLabel}`
+  const label = t('mobileCreatePrAction.createReview', {
+    reviewType: copy.titleLabel
+  })
   // Any in-flight git work blocks the action: runGitWorkflow no-ops while
   // busyActionRef is set, so an enabled-looking button would silently do nothing.
   const busy = busyAction !== null
@@ -118,7 +121,10 @@ export function buildMobileCreatePrAction({
       canCreate: false,
       blockedReason: eligibility.blockedReason,
       nextAction: eligibility.nextAction
-    }) ?? `This branch is not ready for a ${copy.reviewLabel} yet.`
+    }) ??
+    t('mobileCreatePrAction.branch', {
+      reviewType: copy.reviewLabel
+    })
 
   return {
     visible: true,

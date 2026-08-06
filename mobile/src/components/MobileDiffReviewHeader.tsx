@@ -2,9 +2,14 @@ import { FlatList, Pressable, Text, View } from 'react-native'
 import { ChevronLeft, ListChecks, MoreHorizontal } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import type { MobileDiffReviewQueueFilter } from '../session/mobile-diff-review-queue'
-import { REVIEW_FILTERS, mobileReviewCountLabel } from '../session/mobile-diff-review-screen-model'
+import {
+  REVIEW_FILTERS,
+  mobileReviewFilterLabel,
+  mobileReviewUnsentNoteCountLabel
+} from '../session/mobile-diff-review-screen-model'
 import { shouldShowTrigger } from './mobile-pr-sidebar-presentation'
 import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
+import { t } from '@/i18n/mobile-i18n'
 
 type Props = {
   filter: MobileDiffReviewQueueFilter
@@ -49,13 +54,13 @@ export function MobileDiffReviewHeader({
           style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
           onPress={onBack}
           accessibilityRole="button"
-          accessibilityLabel="Back"
+          accessibilityLabel={t('mobileDiffReviewHeader.back')}
         >
           <ChevronLeft size={19} color={colors.textPrimary} strokeWidth={2.2} />
         </Pressable>
         <View style={styles.titleBlock}>
           <Text style={styles.title} numberOfLines={1}>
-            Changes
+            {t('mobileDiffReviewHeader.changes')}
           </Text>
           <Text style={styles.subtitle} numberOfLines={1}>
             {worktreeLabel}
@@ -66,7 +71,7 @@ export function MobileDiffReviewHeader({
             style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
             onPress={onOpenPRSidebar}
             accessibilityRole="button"
-            accessibilityLabel="Open pull request sidebar"
+            accessibilityLabel={t('mobileDiffReviewHeader.openPull')}
           >
             <ListChecks size={19} color={colors.textPrimary} strokeWidth={2.2} />
           </Pressable>
@@ -75,18 +80,19 @@ export function MobileDiffReviewHeader({
           style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
           onPress={onOpenActions}
           accessibilityRole="button"
-          accessibilityLabel="Open review actions"
+          accessibilityLabel={t('mobileDiffReviewHeader.openReview')}
         >
           <MoreHorizontal size={19} color={colors.textPrimary} strokeWidth={2.2} />
         </Pressable>
       </View>
       <View style={styles.progressRow}>
         <Text style={styles.progressText}>
-          {reviewedCount}/{queueLength} reviewed
+          {t('mobileDiffReviewHeader.reviewed', {
+            reviewedCount: reviewedCount,
+            queueLength: queueLength
+          })}
         </Text>
-        <Text style={styles.progressText}>
-          {mobileReviewCountLabel(unsentCount, 'unsent note', 'unsent notes')}
-        </Text>
+        <Text style={styles.progressText}>{mobileReviewUnsentNoteCountLabel(unsentCount)}</Text>
       </View>
       <FlatList
         data={REVIEW_FILTERS}
@@ -104,10 +110,12 @@ export function MobileDiffReviewHeader({
             onPress={() => onSelectFilter(item)}
             accessibilityRole="button"
             accessibilityState={{ selected: filter === item }}
-            accessibilityLabel={`Show ${item} review files`}
+            accessibilityLabel={t('mobileDiffReviewHeader.show', {
+              mobileReviewFilterLabel: mobileReviewFilterLabel(item)
+            })}
           >
             <Text style={[styles.filterText, filter === item && styles.filterTextActive]}>
-              {item === 'all' ? 'All' : item[0]?.toUpperCase() + item.slice(1)}
+              {mobileReviewFilterLabel(item)}
             </Text>
           </Pressable>
         )}

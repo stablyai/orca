@@ -1,5 +1,5 @@
 import type { ProviderCheckSummary, PRMergeableState } from '../../../src/shared/types'
-import { getProviderChecksLabel } from '../../../src/shared/provider-check-summary'
+import { t } from '@/i18n/mobile-i18n'
 
 export type MobileHostedReviewStatus = {
   checksSummary?: ProviderCheckSummary
@@ -12,35 +12,62 @@ export type MobileHostedReviewStatus = {
 
 export function getHostedReviewLabel(item: MobileHostedReviewStatus): string {
   if (item.reviewDecision === 'approved' || item.reviewDecision === 'APPROVED') {
-    return 'Approved'
+    return t('task.approved')
   }
   if (item.reviewDecision === 'changes_requested' || item.reviewDecision === 'CHANGES_REQUESTED') {
-    return 'Changes requested'
+    return t('task.changes')
   }
   if (item.reviewDecision === 'review_required' || item.reviewDecision === 'REVIEW_REQUIRED') {
-    return 'Review required'
+    return t('mobileHostedCheckStatus.review')
   }
   const reviewerCount = item.reviewerCount ?? item.reviewRequests?.length
   return reviewerCount
-    ? `${reviewerCount} reviewer${reviewerCount === 1 ? '' : 's'}`
-    : 'No reviewers'
+    ? t(
+        reviewerCount === 1
+          ? 'mobileHostedCheckStatus.reviewerCountReviewer'
+          : 'mobileHostedCheckStatus.reviewerCountReviewers',
+        { reviewerCount: reviewerCount }
+      )
+    : t('task.noReviewers')
 }
 
 export function getHostedMergeLabel(item: MobileHostedReviewStatus): string {
   if (item.mergeable === 'CONFLICTING' || item.mergeStateStatus === 'BLOCKED') {
-    return 'Conflicts'
+    return t('task.conflicts')
   }
   if (item.mergeStateStatus === 'BEHIND' || item.checksSummary?.state === 'pending') {
-    return 'Behind'
+    return t('task.behind')
   }
   if (item.mergeable === 'MERGEABLE' || item.mergeStateStatus === 'CLEAN') {
-    return 'Able to merge'
+    return t('task.able')
   }
-  return 'Unknown'
+  return t('task.unknown')
 }
 
 export function getHostedChecksLabel(item: { checksSummary?: ProviderCheckSummary }): string {
-  return getProviderChecksLabel(item.checksSummary)
+  const summary = item.checksSummary
+  if (!summary) {
+    return t('task.checks')
+  }
+  if (summary.total === 0) {
+    return t('mobilePrChipSummary.no')
+  }
+  if (summary.failed > 0) {
+    return t('mobilePrChipSummary.failing', {
+      failingCheckCount: summary.failed
+    })
+  }
+  if (summary.pending > 0) {
+    return t('mobileHostedCheckStatus.pending', {
+      pendingCheckCount: summary.pending
+    })
+  }
+  return summary.state === 'neutral'
+    ? t('mobilePrChipSummary.unresolved')
+    : t('mobileHostedCheckStatus.passed', {
+        passedCheckCount: summary.passed,
+        totalCheckCount: summary.total
+      })
 }
 
 export function getHostedReviewSignalTone(

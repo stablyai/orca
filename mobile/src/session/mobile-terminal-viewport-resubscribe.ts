@@ -3,6 +3,7 @@
  *  forever — it broke gesture recognition and drained battery at ~25 cycles/s. */
 
 import type { MobileTerminalDiagnostics } from './mobile-terminal-diagnostics'
+import { t } from '@/i18n/mobile-i18n'
 
 export const MAX_TERMINAL_VIEWPORT_RESUBSCRIBE_ATTEMPTS = 3
 
@@ -223,7 +224,7 @@ export function runTerminalViewportFitPass(args: TerminalViewportFitPassArgs): v
   if (decision.kind === 'exhausted') {
     diagnostics.streamResubscribeExhausted(handle, seq, budget.attempts(handle))
     if (budget.shouldAnnounceExhaustion(handle)) {
-      args.showToast("Couldn't fit the terminal to this screen", 4000)
+      args.showToast(t('mobileTerminalViewportResubscribe.fitFailed'), 4000)
     }
     return
   }

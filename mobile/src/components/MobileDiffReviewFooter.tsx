@@ -13,6 +13,7 @@ import type { MobileDiffReviewQueueItem } from '../session/mobile-diff-review-qu
 import type { GitMutationMethod } from '../session/mobile-diff-review-screen-model'
 import { colors, spacing } from '../theme/mobile-theme'
 import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
+import { t } from '@/i18n/mobile-i18n'
 
 type Props = {
   busyAction: string | null
@@ -43,10 +44,10 @@ export function MobileDiffReviewFooter({
             disabled={busyAction !== null}
             onPress={() => onGitMutation('git.stage', item)}
             accessibilityRole="button"
-            accessibilityLabel="Stage file"
+            accessibilityLabel={t('mobileDiffReviewFooter.stageFile')}
           >
             <Plus size={14} color={colors.textSecondary} strokeWidth={2.2} />
-            <Text style={styles.secondaryButtonText}>Stage</Text>
+            <Text style={styles.secondaryButtonText}>{t('mobileDiffReviewFooter.stage')}</Text>
           </Pressable>
         ) : null}
         {item.canUnstage ? (
@@ -55,10 +56,10 @@ export function MobileDiffReviewFooter({
             disabled={busyAction !== null}
             onPress={() => onGitMutation('git.unstage', item)}
             accessibilityRole="button"
-            accessibilityLabel="Unstage file"
+            accessibilityLabel={t('mobileDiffReviewFooter.unstageFile')}
           >
             <Undo2 size={14} color={colors.textSecondary} strokeWidth={2.2} />
-            <Text style={styles.secondaryButtonText}>Unstage</Text>
+            <Text style={styles.secondaryButtonText}>{t('mobileDiffReviewFooter.unstage')}</Text>
           </Pressable>
         ) : null}
         {item.canDiscard ? (
@@ -67,10 +68,10 @@ export function MobileDiffReviewFooter({
             disabled={busyAction !== null}
             onPress={() => onDiscard(item)}
             accessibilityRole="button"
-            accessibilityLabel="Discard file"
+            accessibilityLabel={t('mobileDiffReviewFooter.discardFile')}
           >
             <Trash2 size={14} color={colors.statusRed} strokeWidth={2.2} />
-            <Text style={styles.destructiveText}>Discard</Text>
+            <Text style={styles.destructiveText}>{t('mobileDiffReviewFooter.discard')}</Text>
           </Pressable>
         ) : null}
       </View>
@@ -79,7 +80,7 @@ export function MobileDiffReviewFooter({
           style={({ pressed }) => [styles.navButton, pressed && styles.buttonPressed]}
           onPress={() => onMoveFile('previous')}
           accessibilityRole="button"
-          accessibilityLabel="Previous file"
+          accessibilityLabel={t('mobileDiffReviewFooter.previous')}
         >
           <ChevronLeft size={17} color={colors.textPrimary} strokeWidth={2.2} />
         </Pressable>
@@ -87,10 +88,10 @@ export function MobileDiffReviewFooter({
           style={({ pressed }) => [styles.footerButton, pressed && styles.buttonPressed]}
           onPress={onAddFileNote}
           accessibilityRole="button"
-          accessibilityLabel="Add file note"
+          accessibilityLabel={t('mobileDiffReviewFooter.add')}
         >
           <FileText size={14} color={colors.textSecondary} strokeWidth={2.2} />
-          <Text style={styles.footerButtonText}>Note</Text>
+          <Text style={styles.footerButtonText}>{t('mobileDiffReviewFooter.note')}</Text>
         </Pressable>
         <Pressable
           style={({ pressed }) => [
@@ -100,18 +101,20 @@ export function MobileDiffReviewFooter({
           ]}
           onPress={onMarkReviewed}
           accessibilityRole="button"
-          accessibilityLabel="Mark file reviewed"
+          accessibilityLabel={t('mobileDiffReviewFooter.markFile')}
         >
           <Check size={14} color={colors.bgBase} strokeWidth={2.2} />
           <Text style={styles.primaryButtonText}>
-            {item.isReviewed ? 'Reviewed' : 'Mark Reviewed'}
+            {item.isReviewed
+              ? t('mobileDiffReviewFooter.reviewed')
+              : t('mobileDiffReviewFooter.markReviewed')}
           </Text>
         </Pressable>
         <Pressable
           style={({ pressed }) => [styles.navButton, pressed && styles.buttonPressed]}
           onPress={() => onMoveFile('next')}
           accessibilityRole="button"
-          accessibilityLabel="Next file"
+          accessibilityLabel={t('mobileDiffReviewFooter.next')}
         >
           <ChevronRight size={17} color={colors.textPrimary} strokeWidth={2.2} />
         </Pressable>

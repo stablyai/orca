@@ -1,3 +1,4 @@
+import { t } from '@/i18n/mobile-i18n'
 // Relative timestamp for PR comments (ISO string in, "Xm/Xh/Xd/Xmo/Xy" out),
 // mirroring the desktop formatRelativeTime so the timeline reads the same. Pure +
 // unit-testable; nowMs is passed in (Date.now() is unavailable in some contexts).
@@ -8,23 +9,25 @@ export function formatPrCommentRelativeTime(iso: string, nowMs: number): string 
   }
   const delta = nowMs - ts
   if (delta < 60_000) {
-    return 'just now'
+    return t('prCommentTime.just')
   }
   const minutes = Math.floor(delta / 60_000)
   if (minutes < 60) {
-    return `${minutes}m ago`
+    return t('prCommentTime.minutes', { minutes: minutes })
   }
   const hours = Math.floor(minutes / 60)
   if (hours < 24) {
-    return `${hours}h ago`
+    return t('prCommentTime.hours', { hours: hours })
   }
   const days = Math.floor(hours / 24)
   if (days < 30) {
-    return `${days}d ago`
+    return t('prCommentTime.days', { days: days })
   }
   const months = Math.floor(days / 30)
   if (months < 12) {
-    return `${months}mo ago`
+    return t('prCommentTime.months', { months: months })
   }
-  return `${Math.floor(months / 12)}y ago`
+  return t('prCommentTime.years', {
+    years: Math.floor(months / 12)
+  })
 }

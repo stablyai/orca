@@ -1,0 +1,12 @@
+{
+  "ios": {
+    "CFBundleDisplayName": "Orca",
+    "NSCameraUsageDescription": "Permite que Orca use la cámara para escanear códigos QR.",
+    "NSLocalNetworkUsageDescription": "Orca se conecta a la aplicación de escritorio en tu red local.",
+    "NSMicrophoneUsageDescription": "Permite que Orca grabe el dictado por voz y lo transcriba en tu ordenador emparejado.",
+    "NSPhotoLibraryUsageDescription": "Permite que Orca adjunte fotos de tu fototeca a una sesión de terminal en tu ordenador emparejado."
+  },
+  "android": {
+    "app_name": "Orca"
+  }
+}

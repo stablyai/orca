@@ -9,6 +9,7 @@ import {
 } from './rpc-client-terminal-subscription'
 import type { RpcClient } from './rpc-client'
 import type { RpcResponse, RpcSuccess } from './types'
+import { t } from '@/i18n/mobile-i18n'
 
 type StreamRecord = {
   method: string
@@ -58,11 +59,12 @@ export class MobileRelayRpcStreams {
       .waitForConnected()
       .then(() => {
         if (!stream.cancelled && !this.options.sendFrame({ id, method, params: stream.params })) {
-          this.fail(id, stream, 'Connection interrupted')
+          this.fail(id, stream, t('mobileRelayRpcStreams.connection'))
         }
       })
       .catch((error: unknown) => {
-        const message = error instanceof Error ? error.message : 'Connection interrupted'
+        const message =
+          error instanceof Error ? error.message : t('mobileRelayRpcStreams.connection')
         this.fail(id, stream, message, error)
       })
     return () => this.cancel(id)

@@ -1,10 +1,17 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import { mobileI18n } from '../i18n/mobile-i18n'
 import {
   displayHostEndpoint,
   endpointPort,
   endpointScheme,
   normalizeHostEndpoint
 } from './host-endpoint'
+
+const INITIAL_LOCALE = mobileI18n.language
+
+afterEach(async () => {
+  await mobileI18n.changeLanguage(INITIAL_LOCALE)
+})
 
 describe('displayHostEndpoint', () => {
   it('shows host:port for websocket URLs', () => {
@@ -154,6 +161,14 @@ describe('normalizeHostEndpoint', () => {
     expect(normalizeHostEndpoint('desk name')).toEqual({
       ok: false,
       error: 'Not a valid hostname.'
+    })
+  })
+
+  it('localizes hostname validation errors', async () => {
+    await mobileI18n.changeLanguage('es')
+    expect(normalizeHostEndpoint('desk name')).toEqual({
+      ok: false,
+      error: 'No es un nombre de host válido.'
     })
   })
 

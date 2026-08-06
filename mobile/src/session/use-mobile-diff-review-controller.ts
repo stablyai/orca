@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FlatList } from 'react-native'
 import type { DiffComment } from '../../../src/shared/types'
-import type { ConnectionState } from '../transport/types'
-import type { RpcClient } from '../transport/rpc-client'
 import { getWorktreeLabel } from './worktree-label'
 import { getUnsentMobileDiffComments } from './mobile-diff-comment-edit'
 import {
@@ -12,10 +10,8 @@ import {
   type MobileDiffReviewQueueFilter,
   type MobileDiffReviewQueueItem
 } from './mobile-diff-review-queue'
-import {
-  findMobileDiffReviewInitialIndex,
-  type MobileDiffReviewInitialTarget
-} from './mobile-diff-review-positioning'
+import { findMobileDiffReviewInitialIndex } from './mobile-diff-review-positioning'
+import type { MobileDiffReviewControllerInput } from './mobile-diff-review-controller-input'
 import { loadMobileDiffReviewSnapshot } from './mobile-diff-review-loaders'
 import { useMobileDiffReviewDiffLoading } from './use-mobile-diff-review-diff-loading'
 import { canOpenMobileBranchCompareDiff } from '../source-control/mobile-branch-compare'
@@ -27,20 +23,11 @@ import type {
 } from './mobile-diff-review-screen-model'
 import { useMobileDiffReviewInteractions } from './use-mobile-diff-review-interactions'
 import { useMobilePrSidebarController } from './use-mobile-pr-sidebar-controller'
+import { createMobileTranslator } from '@/i18n/mobile-i18n'
 
-type ControllerInput = {
-  client: RpcClient | null
-  connState: ConnectionState
-  hostId: string
-  worktreeId: string
-  name: string
-  initialFilter: MobileDiffReviewQueueFilter
-  initialTarget: MobileDiffReviewInitialTarget | null
-  onOpenSession: () => void
-  onReconnect: (hostId: string) => void | Promise<void>
-}
+const tr = createMobileTranslator('diffReview')
 
-export function useMobileDiffReviewController(input: ControllerInput) {
+export function useMobileDiffReviewController(input: MobileDiffReviewControllerInput) {
   const {
     client,
     connState,
@@ -75,7 +62,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     loadGenerationRef.current = generation
     const isCurrent = () => generation === loadGenerationRef.current
     if (!worktreeId) {
-      setScreenState({ kind: 'error', message: 'Missing worktree' })
+      setScreenState({ kind: 'error', message: tr('missing') })
       return
     }
     // Why (F10): a loaded review outlives a blip — the waiting state is for a screen with nothing
@@ -83,7 +70,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     const keepReady = (fallback: ReviewScreenState) => (prev: ReviewScreenState) =>
       prev.kind === 'ready' ? prev : fallback
     if (!client || connState !== 'connected') {
-      setScreenState(keepReady({ kind: 'error', message: 'Waiting for desktop...' }))
+      setScreenState(keepReady({ kind: 'error', message: tr('waiting') }))
       return
     }
     setScreenState(keepReady({ kind: 'loading' }))
@@ -101,7 +88,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
         setScreenState(
           keepReady({
             kind: 'error',
-            message: err instanceof Error ? err.message : 'Unable to load review'
+            message: err instanceof Error ? err.message : tr('unableLoadReview')
           })
         )
       }

@@ -23,6 +23,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { MobileDiffReviewQueueItem } from './mobile-diff-review-queue'
 import type { ReviewDiffState, ReviewScreenState } from './mobile-diff-review-screen-model'
 import { reviewDescriptorFromItem } from './mobile-diff-review-screen-model'
+import { t } from '@/i18n/mobile-i18n'
 
 type BranchCompareLoadResult = {
   result: MobileGitBranchCompareResult | null
@@ -53,14 +54,24 @@ export async function loadMobileDiffReviewBranchCompare(
       if (isMobileGitUnavailable(response.error?.code, response.error?.message)) {
         return { result: null }
       }
-      return { result: null, error: response.error?.message || 'Committed changes unavailable' }
+      return {
+        result: null,
+        error: response.error?.message || t('mobileDiffReviewLoaders.committedChangesUnavailable')
+      }
     }
     const parsed = readMobileBranchCompareResult(response.result)
     return parsed
       ? { result: parsed }
-      : { result: null, error: 'Committed changes response was invalid' }
+      : {
+          result: null,
+          error: t('mobileDiffReviewLoaders.committedChangesResponse')
+        }
   } catch (err) {
-    return { result: null, error: err instanceof Error ? err.message : 'Committed changes failed' }
+    return {
+      result: null,
+      error:
+        err instanceof Error ? err.message : t('mobileDiffReviewLoaders.committedChangesFailed')
+    }
   }
 }
 
@@ -71,13 +82,16 @@ export async function loadMobileDiffReviewSnapshot(
   const statusResponse = await client.sendRequest('git.status', { worktree: `id:${worktreeId}` })
   if (!statusResponse.ok) {
     if (isMobileGitUnavailable(statusResponse.error?.code, statusResponse.error?.message)) {
-      return { kind: 'unavailable', message: 'Update Orca desktop to review changes on mobile.' }
+      return {
+        kind: 'unavailable',
+        message: t('mobileDiffReviewLoaders.update')
+      }
     }
-    throw new Error(statusResponse.error?.message || 'Unable to load changes')
+    throw new Error(statusResponse.error?.message || t('mobileDiffReviewLoaders.unableLoadChanges'))
   }
   const status = readMobileGitStatusResult(statusResponse.result)
   if (!status) {
-    throw new Error('Source control response was invalid')
+    throw new Error(t('mobileDiffReviewLoaders.source'))
   }
 
   const [branch, worktreeResponse] = await Promise.all([
@@ -85,7 +99,9 @@ export async function loadMobileDiffReviewSnapshot(
     client.sendRequest('worktree.show', { worktree: `id:${worktreeId}` })
   ])
   if (!worktreeResponse.ok) {
-    throw new Error(worktreeResponse.error?.message || 'Unable to load review notes')
+    throw new Error(
+      worktreeResponse.error?.message || t('mobileDiffReviewLoaders.unableLoadReview')
+    )
   }
 
   const metadata = readMobileReviewWorktreeMetadata(worktreeResponse.result)
@@ -133,11 +149,11 @@ export async function loadMobileDiffReviewDiff(input: DiffLoadInput): Promise<Re
     if (item.status === 'deleted') {
       return { kind: 'deleted', itemKey: item.key }
     }
-    throw new Error(response.error?.message || 'Unable to load diff')
+    throw new Error(response.error?.message || t('mobileDiffReviewLoaders.unableLoadDiff'))
   }
   const result = readMobileReviewGitDiffResult(response.result)
   if (!result) {
-    throw new Error('Diff response was invalid')
+    throw new Error(t('mobileDiffReviewLoaders.diff'))
   }
   if (result.kind === 'binary') {
     return { kind: 'binary', itemKey: item.key }
@@ -164,7 +180,7 @@ async function loadBranchFileDiff(
 ) {
   const summary = branchCompare?.summary
   if (!summary || !summary.headOid || !summary.mergeBase) {
-    throw new Error('Committed diff is unavailable')
+    throw new Error(t('mobileDiffReviewLoaders.committedDiff'))
   }
   return client.sendRequest('git.branchDiff', {
     worktree: `id:${worktreeId}`,

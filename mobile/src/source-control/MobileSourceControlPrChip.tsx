@@ -12,6 +12,7 @@ import { colors } from '../theme/mobile-theme'
 import { statusColor } from '../components/pr-sidebar/pr-sidebar-status-color'
 import { hubStyles } from './mobile-source-control-hub-styles'
 import type { MobilePrChipRollup, MobilePrChipSummary } from './mobile-pr-chip-summary'
+import { t } from '@/i18n/mobile-i18n'
 
 type Props = {
   summary: MobilePrChipSummary
@@ -36,12 +37,12 @@ export function MobileSourceControlPrChip({ summary, onPress }: Props) {
         <>
           <ActivityIndicator size="small" color={colors.textSecondary} />
           <Text style={hubStyles.chipMutedText} numberOfLines={1}>
-            Loading pull request…
+            {t('mobileSourceControlPrChip.loadingPullRequest')}
           </Text>
         </>
       ) : summary.kind === 'none' ? (
         <>
-          <Text style={hubStyles.chipCreateText}>Create pull request</Text>
+          <Text style={hubStyles.chipCreateText}>{t('mobileSourceControlPrChip.create')}</Text>
           <View style={hubStyles.chipSpacer} />
           <ChevronRight size={16} color={colors.textMuted} strokeWidth={2.1} />
         </>
@@ -105,17 +106,29 @@ function RollupIcon({ kind, color }: { kind: MobilePrChipRollup['kind']; color: 
 function chipAccessibilityLabel(summary: MobilePrChipSummary): string {
   switch (summary.kind) {
     case 'loading':
-      return 'Loading pull request'
+      return t('mobileSourceControlPrChip.loadingPullRequestMessage')
     case 'none':
-      return 'Create pull request'
+      return t('mobileSourceControlPrChip.create')
     case 'unavailable':
-      return `Pull request unavailable: ${summary.message}`
+      return t('mobileSourceControlPrChip.pullRequestUnavailable', {
+        summaryMessage: summary.message
+      })
     case 'ready': {
       const comments =
         summary.commentCount != null && summary.commentCount > 0
-          ? `, ${summary.commentCount} unresolved comments`
+          ? t(
+              summary.commentCount === 1
+                ? 'pullRequest.unresolvedComments.one'
+                : 'pullRequest.unresolvedComments.other',
+              { count: summary.commentCount }
+            )
           : ''
-      return `Pull request #${summary.number}, ${summary.stateLabel}, ${summary.rollup.text}${comments}. Open pull request.`
+      return t('mobileSourceControlPrChip.pullRequestPull', {
+        pullRequestNumber: summary.number,
+        stateLabel: summary.stateLabel,
+        checkSummary: summary.rollup.text,
+        commentSummary: comments
+      })
     }
   }
 }

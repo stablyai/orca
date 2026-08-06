@@ -19,6 +19,7 @@ import { useMobilePrSidebarController } from '../session/use-mobile-pr-sidebar-c
 import { prSidebarDetailsNeedFetch } from '../session/mobile-pr-sidebar-state'
 import { MobilePrViewPanelBody } from '../components/pr-sidebar/MobilePrViewPanel'
 import { openMobilePrUrl } from '../components/MobilePrComposeSheet'
+import { t } from '@/i18n/mobile-i18n'
 
 export type MobileSourceControlPanelProps = {
   hostId: string
@@ -245,7 +246,9 @@ export function MobileSourceControlPanel({
     ) : screenState.kind === 'error' || screenState.kind === 'unavailable' ? (
       <View style={styles.state}>
         <Text style={styles.stateTitle}>
-          {screenState.kind === 'unavailable' ? 'Source Control Unavailable' : 'Unable to Load'}
+          {screenState.kind === 'unavailable'
+            ? t('mobileSourceControlPanel.source')
+            : t('mobileSourceControlPanel.unable')}
         </Text>
         <Text style={styles.stateText}>{screenState.message}</Text>
         {screenState.kind === 'error' ? (
@@ -260,7 +263,7 @@ export function MobileSourceControlPanel({
               void loadStatus()
             }}
           >
-            <Text style={styles.retryText}>Retry</Text>
+            <Text style={styles.retryText}>{t('mobileSourceControlPanel.retry')}</Text>
           </Pressable>
         ) : null}
       </View>

@@ -1,0 +1,58 @@
+[
+  {
+    "filePath": "mobile/src/transport/pairing-keychain.ts",
+    "kind": "object-property:error",
+    "text": "pairing keychain generation record is invalid",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/session/mobile-diff-comments.ts",
+    "kind": "user-visible-variable",
+    "text": "Scope: file",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/session/mobile-diff-comments.ts",
+    "kind": "user-visible-variable",
+    "text": "Lines:",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/session/mobile-diff-comments.ts",
+    "kind": "user-visible-variable",
+    "text": "Line:",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/components/MobileDictationSetupSheet.tsx",
+    "kind": "rendered-function-return",
+    "text": "MB",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/host-route-notice.ts",
+    "kind": "user-visible-return",
+    "text": "/h/",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/host-route-notice.ts",
+    "kind": "user-visible-return",
+    "text": "?notice=",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/transport/mobile-relay-recovery-log.ts",
+    "kind": "object-property:message",
+    "text": "Relay:",
+    "dynamic": true,
+    "count": 1
+  }
+]

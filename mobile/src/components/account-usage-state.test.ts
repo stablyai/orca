@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
+import { mobileI18n } from '../i18n/mobile-i18n'
 import {
   getInactiveProviderUsage,
   getUsageBarState,
@@ -10,6 +11,12 @@ import {
   type InactiveAccountUsage,
   type ProviderRateLimits
 } from './account-usage-state'
+
+const INITIAL_LOCALE = mobileI18n.language
+
+afterEach(async () => {
+  await mobileI18n.changeLanguage(INITIAL_LOCALE)
+})
 
 function makeLimits(overrides: Partial<ProviderRateLimits> = {}): ProviderRateLimits {
   return {
@@ -179,6 +186,21 @@ describe('getWindowResetLabel', () => {
     expect(
       getWindowResetLabel(makeLimits({ session: makeWindow(now - min) }), 'session', now)
     ).toBe('Resets now')
+  })
+
+  it('localizes the complete reset countdown sentence', async () => {
+    await mobileI18n.changeLanguage('es')
+
+    expect(
+      getWindowResetLabel(
+        makeLimits({ session: makeWindow(now + 3 * hour + 54 * min) }),
+        'session',
+        now
+      )
+    ).toBe('Se restablece en 3h 54m')
+    expect(
+      getWindowResetLabel(makeLimits({ session: makeWindow(now - min) }), 'session', now)
+    ).toBe('Se restablece ahora')
   })
 
   it('reads the requested window only', () => {

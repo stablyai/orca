@@ -32,6 +32,7 @@ import type { MobileChatPermission } from './mobile-native-chat-permission'
 import { MobileNativeChatQuestion } from './MobileNativeChatQuestion'
 import { mobileChatQuestionKey, type MobileChatQuestion } from './mobile-native-chat-question'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
+import { t } from '@/i18n/mobile-i18n'
 
 const INPUT_LOCK_SETTLE_MS = 600
 
@@ -325,7 +326,7 @@ export function MobileNativeChatView({
                     {loadingEarlier ? (
                       <ActivityIndicator size="small" color={colors.textMuted} />
                     ) : (
-                      <Text style={styles.loadEarlierText}>Load earlier messages</Text>
+                      <Text style={styles.loadEarlierText}>{t('mobileNativeChatView.load')}</Text>
                     )}
                   </Pressable>
                 ) : null
@@ -344,7 +345,7 @@ export function MobileNativeChatView({
               per-message (the up-arrow in each agent message's controls). */}
           {!atBottom ? (
             <Pressable
-              accessibilityLabel="Scroll to latest"
+              accessibilityLabel={t('mobileNativeChatView.scroll')}
               style={[styles.fab, styles.fabBottom]}
               onPress={() => listRef.current?.scrollToEnd({ animated: true })}
             >
@@ -404,7 +405,9 @@ export function MobileNativeChatView({
             ) : (
               <ChevronsUpDown size={14} color={colors.textMuted} strokeWidth={2} />
             )}
-            <Text style={styles.chromeToggleLabel}>{toolsExpanded ? 'Collapse' : 'Tools'}</Text>
+            <Text style={styles.chromeToggleLabel}>
+              {toolsExpanded ? t('mobileNativeChatView.collapse') : t('mobileNativeChatView.tools')}
+            </Text>
           </Pressable>
         </View>
         {agentWorking ? (
@@ -412,10 +415,10 @@ export function MobileNativeChatView({
             style={({ pressed }) => [styles.stopButton, pressed && styles.pressed]}
             onPress={onStop}
             hitSlop={8}
-            accessibilityLabel="Stop the agent"
+            accessibilityLabel={t('mobileNativeChatView.stopAgent')}
           >
             <Square size={13} color={colors.statusRed} strokeWidth={2.4} fill={colors.statusRed} />
-            <Text style={styles.stopLabel}>Stop</Text>
+            <Text style={styles.stopLabel}>{t('mobileNativeChatView.stop')}</Text>
           </Pressable>
         ) : null}
       </View>
@@ -447,10 +450,10 @@ export function MobileNativeChatView({
         disabled={lockReason !== null}
         placeholder={
           lockReason === 'disconnected'
-            ? 'Reconnecting…'
+            ? t('mobileNativeChatView.reconnecting')
             : lockReason === 'waiting'
-              ? 'Waiting for terminal…'
-              : 'Message, @files, /commands'
+              ? t('mobileNativeChatView.waiting')
+              : t('mobileNativeChatView.message')
         }
         filePaths={filePaths}
         onNeedFiles={onNeedFiles}

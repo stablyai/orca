@@ -5,7 +5,8 @@ import {
   CLIPBOARD_IMAGE_MAX_SOURCE_BYTES,
   assertClipboardImageBase64LengthWithinLimit,
   assertClipboardImageByteLengthWithinLimit,
-  assertClipboardImageDimensionsWithinLimit
+  assertClipboardImageDimensionsWithinLimit,
+  isClipboardImageTooLargeError
 } from './clipboard-image'
 
 describe('clipboard image limits', () => {
@@ -26,6 +27,11 @@ describe('clipboard image limits', () => {
     expect(() =>
       assertClipboardImageByteLengthWithinLimit(CLIPBOARD_IMAGE_MAX_SOURCE_BYTES + 1)
     ).toThrow('Clipboard image is too large')
+  })
+
+  it('classifies only the stable internal oversized-image sentinel', () => {
+    expect(isClipboardImageTooLargeError(new Error('Clipboard image is too large'))).toBe(true)
+    expect(isClipboardImageTooLargeError(new Error('La imagen es demasiado grande'))).toBe(false)
   })
 
   it('rejects invalid or oversized image dimensions before pixel allocation', () => {

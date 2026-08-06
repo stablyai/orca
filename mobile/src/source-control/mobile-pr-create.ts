@@ -11,6 +11,7 @@ import {
   type MobileHostedReviewEligibilityInput,
   type MobileHostedReviewPrefill
 } from './mobile-hosted-review-service'
+import { t } from '@/i18n/mobile-i18n'
 
 export type MobilePrEligibilityInput = MobileHostedReviewEligibilityInput
 export type MobilePrPrefill = MobileHostedReviewPrefill
@@ -33,11 +34,18 @@ export function getMobilePrCreateSuccessWarning(
   const copy = hostedReviewCopy(provider)
   if (outcome.existing) {
     return outcome.number
-      ? `${copy.titleLabel} #${outcome.number} is already open.`
-      : `${copy.titleLabel} is already open.`
+      ? t('mobilePrCreate.reviewTypePull', {
+          reviewType: copy.titleLabel,
+          pullRequestNumber: outcome.number
+        })
+      : t('mobilePrCreate.reviewTypeAlreadyOpen', {
+          reviewType: copy.titleLabel
+        })
   }
   if (outcome.linkError) {
-    return `${copy.titleLabel} created, but Orca could not refresh it yet.`
+    return t('mobilePrCreate.reviewTypeCreated', {
+      reviewType: copy.titleLabel
+    })
   }
   return undefined
 }
@@ -51,38 +59,62 @@ export function getMobilePrCreateBlockMessage(prefill: MobilePrPrefill): string 
     // mobile has no refresh/review-lookup signal of its own, so it must not
     // offer create, or the needs_push Push & Create path would slip through.
     if (prefill.reviewLookupOutcome !== 'not_found') {
-      return `Orca could not confirm whether this branch already has a ${copy.reviewLabel}. Try again in a moment.`
+      return t('mobilePrCreate.orca', { reviewType: copy.reviewLabel })
     }
     return null
   }
   switch (prefill.blockedReason) {
     case 'dirty':
-      return `Commit changes before creating a ${copy.reviewLabel}.`
+      return t('mobilePrCreate.commit', {
+        reviewType: copy.reviewLabel
+      })
     case 'detached_head':
-      return `Check out a branch before creating a ${copy.reviewLabel}.`
+      return t('mobilePrCreate.check', {
+        reviewType: copy.reviewLabel
+      })
     case 'default_branch':
-      return `Switch to a feature branch before creating a ${copy.reviewLabel}.`
+      return t('mobilePrCreate.switch', {
+        reviewType: copy.reviewLabel
+      })
     case 'no_upstream':
-      return `Publish commits before creating a ${copy.reviewLabel}.`
+      return t('mobilePrCreate.publish', {
+        reviewType: copy.reviewLabel
+      })
     case 'needs_sync':
-      return `Sync this branch before creating a ${copy.reviewLabel}.`
+      return t('mobilePrCreate.sync', {
+        reviewType: copy.reviewLabel
+      })
     case 'auth_required':
-      return `Authenticate before creating a ${copy.reviewLabel}.`
+      return t('mobilePrCreate.authenticate', {
+        reviewType: copy.reviewLabel
+      })
     case 'unsupported_provider':
-      return `Creating ${copy.reviewLabel}s is not supported for this repo.`
+      return t('mobilePrCreate.creatingReviewTypeS', {
+        reviewType: copy.reviewLabel
+      })
     case 'existing_review':
-      return `A ${copy.reviewLabel} already exists for this branch.`
+      return t('mobilePrCreate.reviewTypeAlreadyExists', {
+        reviewType: copy.reviewLabel
+      })
     case 'fork_head_unsupported':
-      return `Creating a ${copy.reviewLabel} from this fork is not supported.`
+      return t('mobilePrCreate.creatingReviewTypeFork', {
+        reviewType: copy.reviewLabel
+      })
     case 'base_not_on_remote':
-      return `Push the base branch before creating a ${copy.reviewLabel}.`
+      return t('mobilePrCreate.push', {
+        reviewType: copy.reviewLabel
+      })
     case 'needs_push':
     case null:
     case undefined:
-      return `This branch is not ready for a ${copy.reviewLabel} yet.`
+      return t('mobilePrCreate.branch', {
+        reviewType: copy.reviewLabel
+      })
     default:
       // Why: desktop can add blocked reasons before a long-lived mobile branch
       // catches up; remain safely blocked while preserving merge-ref typechecks.
-      return `This branch is not ready for a ${copy.reviewLabel} yet.`
+      return t('mobilePrCreate.branch', {
+        reviewType: copy.reviewLabel
+      })
   }
 }

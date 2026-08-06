@@ -1,3 +1,5 @@
+import { mobileI18n, t } from '@/i18n/mobile-i18n'
+export { TERMINAL_ACCESSORY_KEYS } from './terminal-accessory-key-catalog'
 export type TerminalAccessoryKey = {
   id: string
   label: string
@@ -26,12 +28,14 @@ export type TerminalShortcutSpecialKey = {
 }
 
 const ESC = '\x1b'
+const canonicalTerminalLabel = mobileI18n.getFixedT('en')
 
-const MODIFIER_LABELS: Record<TerminalShortcutModifier, string> = {
-  ctrl: 'Ctrl',
-  alt: 'Alt',
-  shift: 'Shift'
-}
+export const TERMINAL_SHORTCUT_MODIFIER_LABELS: Readonly<Record<TerminalShortcutModifier, string>> =
+  {
+    ctrl: canonicalTerminalLabel('terminalAccessoryKeys.ctrl'),
+    alt: canonicalTerminalLabel('terminalAccessoryKeys.alt'),
+    shift: canonicalTerminalLabel('terminalAccessoryKeys.shift')
+  }
 
 const MODIFIER_ORDER: TerminalShortcutModifier[] = ['ctrl', 'alt', 'shift']
 
@@ -76,63 +80,63 @@ const CTRL_PRINTABLE_BYTES: Record<string, string> = {
 }
 
 const SPECIAL_KEY_LABELS: Record<string, string> = {
-  escape: 'Esc',
-  tab: 'Tab',
-  enter: 'Enter',
+  escape: canonicalTerminalLabel('terminalAccessoryKeyCatalog.esc'),
+  tab: canonicalTerminalLabel('terminalAccessoryKeyCatalog.tab'),
+  enter: canonicalTerminalLabel('terminalAccessoryKeyCatalog.enter'),
   backspace: '⌫',
-  delete: 'Del',
-  insert: 'Ins',
+  delete: canonicalTerminalLabel('terminalAccessoryKeyCatalog.del'),
+  insert: canonicalTerminalLabel('terminalAccessoryKeys.ins'),
   arrowUp: '↑',
   arrowDown: '↓',
   arrowLeft: '←',
   arrowRight: '→',
-  home: 'Home',
-  end: 'End',
-  pageUp: 'PgUp',
-  pageDown: 'PgDn',
-  space: 'Space',
-  f1: 'F1',
-  f2: 'F2',
-  f3: 'F3',
-  f4: 'F4',
-  f5: 'F5',
-  f6: 'F6',
-  f7: 'F7',
-  f8: 'F8',
-  f9: 'F9',
-  f10: 'F10',
-  f11: 'F11',
-  f12: 'F12'
+  home: canonicalTerminalLabel('terminalAccessoryKeys.home'),
+  end: canonicalTerminalLabel('terminalAccessoryKeys.end'),
+  pageUp: canonicalTerminalLabel('terminalAccessoryKeys.pgUp'),
+  pageDown: canonicalTerminalLabel('terminalAccessoryKeys.pgDn'),
+  space: canonicalTerminalLabel('terminalAccessoryKeyCatalog.space'),
+  f1: canonicalTerminalLabel('terminalAccessoryKeys.f1'),
+  f2: canonicalTerminalLabel('terminalAccessoryKeys.f2'),
+  f3: canonicalTerminalLabel('terminalAccessoryKeys.f3'),
+  f4: canonicalTerminalLabel('terminalAccessoryKeys.f4'),
+  f5: canonicalTerminalLabel('terminalAccessoryKeys.f5'),
+  f6: canonicalTerminalLabel('terminalAccessoryKeys.f6'),
+  f7: canonicalTerminalLabel('terminalAccessoryKeys.f7'),
+  f8: canonicalTerminalLabel('terminalAccessoryKeys.f8'),
+  f9: canonicalTerminalLabel('terminalAccessoryKeys.f9'),
+  f10: canonicalTerminalLabel('terminalAccessoryKeys.f10'),
+  f11: canonicalTerminalLabel('terminalAccessoryKeys.f11'),
+  f12: canonicalTerminalLabel('terminalAccessoryKeys.f12')
 }
 
 const SPECIAL_KEY_ACCESSIBILITY_LABELS: Record<string, string> = {
-  escape: 'Escape',
-  tab: 'Tab',
-  enter: 'Enter',
-  backspace: 'Backspace',
-  delete: 'Forward delete',
-  insert: 'Insert',
-  arrowUp: 'Arrow up',
-  arrowDown: 'Arrow down',
-  arrowLeft: 'Arrow left',
-  arrowRight: 'Arrow right',
-  home: 'Home',
-  end: 'End',
-  pageUp: 'Page up',
-  pageDown: 'Page down',
-  space: 'Space',
-  f1: 'F1',
-  f2: 'F2',
-  f3: 'F3',
-  f4: 'F4',
-  f5: 'F5',
-  f6: 'F6',
-  f7: 'F7',
-  f8: 'F8',
-  f9: 'F9',
-  f10: 'F10',
-  f11: 'F11',
-  f12: 'F12'
+  escape: t('terminalAccessoryKeyCatalog.escape'),
+  tab: t('terminalAccessoryKeyCatalog.tab'),
+  enter: t('terminalAccessoryKeyCatalog.enter'),
+  backspace: t('terminalAccessoryKeyCatalog.backspace'),
+  delete: t('terminalAccessoryKeyCatalog.forward'),
+  insert: t('terminalAccessoryKeys.insert'),
+  arrowUp: t('terminalAccessoryKeys.arrowUp'),
+  arrowDown: t('terminalAccessoryKeys.arrowDown'),
+  arrowLeft: t('terminalAccessoryKeys.arrowLeft'),
+  arrowRight: t('terminalAccessoryKeys.arrowRight'),
+  home: t('terminalAccessoryKeys.home'),
+  end: t('terminalAccessoryKeys.end'),
+  pageUp: t('terminalAccessoryKeys.pageUp'),
+  pageDown: t('terminalAccessoryKeys.pageDown'),
+  space: t('terminalAccessoryKeyCatalog.space'),
+  f1: t('terminalAccessoryKeys.f1'),
+  f2: t('terminalAccessoryKeys.f2'),
+  f3: t('terminalAccessoryKeys.f3'),
+  f4: t('terminalAccessoryKeys.f4'),
+  f5: t('terminalAccessoryKeys.f5'),
+  f6: t('terminalAccessoryKeys.f6'),
+  f7: t('terminalAccessoryKeys.f7'),
+  f8: t('terminalAccessoryKeys.f8'),
+  f9: t('terminalAccessoryKeys.f9'),
+  f10: t('terminalAccessoryKeys.f10'),
+  f11: t('terminalAccessoryKeys.f11'),
+  f12: t('terminalAccessoryKeys.f12')
 }
 
 const CSI_FINAL_SPECIAL_KEYS: Record<string, string> = {
@@ -198,54 +202,6 @@ export const TERMINAL_SHORTCUT_SPECIAL_KEYS: TerminalShortcutSpecialKey[] = [
   label: SPECIAL_KEY_LABELS[id]!,
   accessibilityLabel: SPECIAL_KEY_ACCESSIBILITY_LABELS[id]!
 }))
-
-export const TERMINAL_ACCESSORY_KEYS: TerminalAccessoryKey[] = [
-  { id: 'escape', label: 'Esc', bytes: '\x1b', accessibilityLabel: 'Escape' },
-  { id: 'tab', label: 'Tab', bytes: '\t', accessibilityLabel: 'Tab' },
-  { id: 'enter', label: 'Enter', bytes: '\r', accessibilityLabel: 'Enter' },
-  // Why: terminal apps recognize ESC [ Z as the reverse-tab sequence.
-  { id: 'shiftTab', label: 'Shift+Tab', bytes: '\x1b[Z', accessibilityLabel: 'Shift Tab' },
-  { id: 'space', label: 'Space', bytes: ' ', accessibilityLabel: 'Space' },
-  { id: 'backspace', label: '⌫', bytes: '\x7f', accessibilityLabel: 'Backspace', repeatable: true },
-  {
-    id: 'delete',
-    label: 'Del',
-    bytes: '\x1b[3~',
-    accessibilityLabel: 'Forward delete',
-    repeatable: true
-  },
-  { id: 'arrowUp', label: '↑', bytes: '\x1b[A', accessibilityLabel: 'Arrow Up', repeatable: true },
-  {
-    id: 'arrowDown',
-    label: '↓',
-    bytes: '\x1b[B',
-    accessibilityLabel: 'Arrow Down',
-    repeatable: true
-  },
-  {
-    id: 'arrowLeft',
-    label: '←',
-    bytes: '\x1b[D',
-    accessibilityLabel: 'Arrow Left',
-    repeatable: true
-  },
-  {
-    id: 'arrowRight',
-    label: '→',
-    bytes: '\x1b[C',
-    accessibilityLabel: 'Arrow Right',
-    repeatable: true
-  },
-  { id: 'ctrlC', label: 'Ctrl+C', bytes: '\x03', accessibilityLabel: 'Interrupt terminal' },
-  { id: 'ctrlD', label: 'Ctrl+D', bytes: '\x04', accessibilityLabel: 'Send EOF' },
-  { id: 'ctrlL', label: 'Ctrl+L', bytes: '\x0c', accessibilityLabel: 'Clear screen' },
-  { id: 'ctrlZ', label: 'Ctrl+Z', bytes: '\x1a', accessibilityLabel: 'Suspend process' },
-  { id: 'ctrlR', label: 'Ctrl+R', bytes: '\x12', accessibilityLabel: 'Reverse search' },
-  { id: 'ctrlA', label: 'Ctrl+A', bytes: '\x01', accessibilityLabel: 'Start of line' },
-  { id: 'ctrlE', label: 'Ctrl+E', bytes: '\x05', accessibilityLabel: 'End of line' },
-  { id: 'ctrlW', label: 'Ctrl+W', bytes: '\x17', accessibilityLabel: 'Delete word backward' },
-  { id: 'ctrlU', label: 'Ctrl+U', bytes: '\x15', accessibilityLabel: 'Clear line before cursor' }
-]
 
 export function buildTerminalShortcutKey(
   binding: TerminalShortcutBinding
@@ -382,6 +338,9 @@ function normalizeModifiers(modifiers: TerminalShortcutModifier[]): TerminalShor
 }
 
 function normalizeShortcutKey(key: string): string | null {
+  if (key === ' ') {
+    return 'space'
+  }
   if (SPECIAL_KEY_LABELS[key]) {
     return key
   }
@@ -396,16 +355,13 @@ function isPrintableShortcutKey(key: string): boolean {
 }
 
 function formatShortcutLabel(key: string, modifiers: TerminalShortcutModifier[]): string {
-  const modifierLabels = modifiers.map((modifier) => MODIFIER_LABELS[modifier])
+  const modifierLabels = modifiers.map((modifier) => TERMINAL_SHORTCUT_MODIFIER_LABELS[modifier])
   return [...modifierLabels, displayKeyLabel(key)].join('+')
 }
 
 function displayKeyLabel(key: string): string {
   if (SPECIAL_KEY_LABELS[key]) {
     return SPECIAL_KEY_LABELS[key]
-  }
-  if (key === ' ') {
-    return 'Space'
   }
   return key.length === 1 && key >= 'a' && key <= 'z' ? key.toUpperCase() : key
 }

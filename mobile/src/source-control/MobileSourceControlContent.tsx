@@ -16,6 +16,7 @@ import { makeRenderFileRow, BranchCompareFooter } from './MobileSourceControlFil
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
 import { styles } from './mobile-source-control-styles'
 import { hubStyles } from './mobile-source-control-hub-styles'
+import { t } from '@/i18n/mobile-i18n'
 
 type Props = {
   state: MobileSourceControlState
@@ -82,7 +83,9 @@ export function MobileSourceControlContent({ state }: Props) {
         // Surface the reconnect state where the user is looking.
         <View style={styles.reconnectBanner}>
           <ActivityIndicator size="small" color={colors.statusAmber} />
-          <Text style={styles.reconnectBannerText}>Reconnecting to desktop...</Text>
+          <Text style={styles.reconnectBannerText}>
+            {t('mobileSourceControlContent.reconnecting')}
+          </Text>
         </View>
       ) : null}
       <View style={hubStyles.changesControls}>
@@ -114,7 +117,7 @@ export function MobileSourceControlContent({ state }: Props) {
             ) : (
               <Plus size={15} color={colors.textPrimary} strokeWidth={2.2} />
             )}
-            <Text style={styles.bulkButtonText}>Stage All</Text>
+            <Text style={styles.bulkButtonText}>{t('mobileSourceControlContent.stage')}</Text>
           </Pressable>
           <Pressable
             style={({ pressed }) => [
@@ -130,7 +133,7 @@ export function MobileSourceControlContent({ state }: Props) {
             ) : (
               <Minus size={15} color={colors.textPrimary} strokeWidth={2.2} />
             )}
-            <Text style={styles.bulkButtonText}>Unstage All</Text>
+            <Text style={styles.bulkButtonText}>{t('mobileSourceControlContent.unstage')}</Text>
           </Pressable>
           <Pressable
             style={({ pressed }) => [
@@ -141,7 +144,7 @@ export function MobileSourceControlContent({ state }: Props) {
             onPress={() => setShowActionSheet(true)}
             disabled={ioBusy}
             hitSlop={8}
-            accessibilityLabel="Open source control actions"
+            accessibilityLabel={t('mobileSourceControlContent.open')}
           >
             <MoreHorizontal size={18} color={colors.textPrimary} strokeWidth={2.1} />
           </Pressable>
@@ -150,8 +153,8 @@ export function MobileSourceControlContent({ state }: Props) {
 
       {!hasVisibleChanges ? (
         <View style={styles.state}>
-          <Text style={styles.stateTitle}>No local changes</Text>
-          <Text style={styles.stateText}>Working tree is clean.</Text>
+          <Text style={styles.stateTitle}>{t('mobileSourceControlContent.noLocal')}</Text>
+          <Text style={styles.stateText}>{t('mobileSourceControlContent.working')}</Text>
         </View>
       ) : sections.length === 0 ? (
         // Why: RN SectionList with empty `sections` often skips ListFooterComponent,
@@ -199,16 +202,18 @@ export function MobileSourceControlContent({ state }: Props) {
               style={[styles.commitInput, styles.commitInputDisabled]}
               accessibilityRole="text"
               accessibilityState={{ disabled: true }}
-              accessibilityLabel="Commit message disabled. No staged files."
+              accessibilityLabel={t('mobileSourceControlContent.commitMessageDisabled')}
             >
-              <Text style={styles.commitInputDisabledText}>No staged files</Text>
+              <Text style={styles.commitInputDisabledText}>
+                {t('mobileSourceControlContent.noStaged')}
+              </Text>
             </View>
           ) : (
             <TextInput
               style={styles.commitInput}
               value={commitMessage}
               onChangeText={setCommitMessage}
-              placeholder="Commit message"
+              placeholder={t('mobileSourceControlContent.commitMessage')}
               placeholderTextColor={colors.textMuted}
               editable={busyAction === null && openingPath === null && openingBranchPath === null}
               returnKeyType="done"
@@ -230,8 +235,8 @@ export function MobileSourceControlContent({ state }: Props) {
               }
               accessibilityLabel={
                 generatingMessage
-                  ? 'Cancel commit message generation'
-                  : 'Generate commit message with AI'
+                  ? t('mobileSourceControlContent.cancel')
+                  : t('mobileSourceControlContent.generate')
               }
             >
               {generatingMessage ? (

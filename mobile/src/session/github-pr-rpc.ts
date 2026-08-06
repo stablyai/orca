@@ -21,6 +21,7 @@ import {
   readPRForBranch,
   readWorkItemDetails
 } from './github-pr-parsers'
+import { t } from '@/i18n/mobile-i18n'
 
 // Re-export the defensive parsers so consumers (and tests) have a single entry
 // point for the github.* PR RPC surface.
@@ -98,13 +99,20 @@ async function sendGithubPrRead<T>(
   try {
     const response = await client.sendRequest(method, params)
     if (!response.ok) {
-      return { ok: false, error: response.error?.message || `Request failed: ${method}` }
+      return {
+        ok: false,
+        error: response.error?.message || t('githubPrRpc.request', { requestMethod: method })
+      }
     }
     return { ok: true, result: parse((response as RpcSuccess).result) }
   } catch (err) {
     // Why: a transport drop or a parser throw must not escape as an unhandled
     // rejection — normalize to the `{ ok:false, error }` contract callers expect.
-    return { ok: false, error: err instanceof Error ? err.message : `Request failed: ${method}` }
+    return {
+      ok: false,
+      error:
+        err instanceof Error ? err.message : t('githubPrRpc.request', { requestMethod: method })
+    }
   }
 }
 
@@ -176,7 +184,7 @@ export async function fetchPRForBranch(
       }
       const pr = readPRForBranch(outcome.pr)
       if (!pr) {
-        throw new Error('GitHub returned an invalid pull request response.')
+        throw new Error(t('githubPrRpc.invalidPullRequestResponse'))
       }
       return pr
     }

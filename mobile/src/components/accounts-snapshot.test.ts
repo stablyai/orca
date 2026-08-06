@@ -1,6 +1,13 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
-import { decodeAccountsSnapshot } from './accounts-snapshot'
+import { mobileI18n } from '../i18n/mobile-i18n'
+import { decodeAccountsSnapshot, isInvalidAccountsSnapshotError } from './accounts-snapshot'
+
+const INITIAL_LOCALE = mobileI18n.language
+
+afterEach(async () => {
+  await mobileI18n.changeLanguage(INITIAL_LOCALE)
+})
 
 function makeSnapshot(): unknown {
   return {
@@ -81,6 +88,21 @@ function setPath(root: unknown, path: string[], value: unknown): void {
 }
 
 describe('decodeAccountsSnapshot', () => {
+  it('classifies an invalid snapshot independently of its localized message', async () => {
+    await mobileI18n.changeLanguage('es')
+
+    let thrown: unknown
+    try {
+      decodeAccountsSnapshot(null)
+    } catch (error) {
+      thrown = error
+    }
+
+    expect(isInvalidAccountsSnapshotError(thrown)).toBe(true)
+    expect(thrown).toBeInstanceOf(Error)
+    expect((thrown as Error).message).not.toBe('Invalid accounts snapshot from host')
+  })
+
   it('validates nested account/rate-limit state and preserves forward-compatible fields', () => {
     const snapshot = decodeAccountsSnapshot(makeSnapshot())
 

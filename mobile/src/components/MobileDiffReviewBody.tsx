@@ -11,6 +11,7 @@ import type {
 } from '../session/mobile-diff-review-screen-model'
 import type { MobileDiffReviewQueueItem } from '../session/mobile-diff-review-queue'
 import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
+import { t } from '@/i18n/mobile-i18n'
 
 type Props = {
   activeHunkIndex: number | null
@@ -40,22 +41,28 @@ export function MobileDiffReviewBody({
   onRetry
 }: Props) {
   if (screenState.kind === 'loading') {
-    return <CenteredState text="Loading review..." busy />
+    return <CenteredState text={t('mobileDiffReviewBody.loadingReview')} busy />
   }
   if (screenState.kind === 'error' || screenState.kind === 'unavailable') {
     return (
       <CenteredState
-        title={screenState.kind === 'unavailable' ? 'Review Unavailable' : 'Unable to Load Review'}
+        title={
+          screenState.kind === 'unavailable'
+            ? t('mobileDiffReviewBody.review')
+            : t('mobileDiffReviewBody.unable')
+        }
         text={screenState.message}
         onRetry={onRetry}
       />
     )
   }
   if (filteredCount === 0) {
-    return <CenteredState title="No Reviewable Changes" text="Try a different review filter." />
+    return (
+      <CenteredState title={t('mobileDiffReviewBody.no')} text={t('mobileDiffReviewBody.try')} />
+    )
   }
   if (diffState.kind === 'loading') {
-    return <CenteredState text="Loading diff..." busy muted />
+    return <CenteredState text={t('mobileDiffReviewBody.loadingDiff')} busy muted />
   }
   if (diffState.kind !== 'ready') {
     return <DiffUnavailableState diffState={diffState} onRetry={onRetry} />
@@ -91,7 +98,7 @@ export function MobileDiffReviewBody({
       }}
       ListFooterComponent={
         diffState.truncated ? (
-          <Text style={styles.truncatedText}>Diff truncated for mobile preview.</Text>
+          <Text style={styles.truncatedText}>{t('mobileDiffReviewBody.diffTruncated')}</Text>
         ) : null
       }
     />
@@ -107,22 +114,22 @@ function DiffUnavailableState({
 }) {
   const title =
     diffState.kind === 'binary'
-      ? 'Binary Diff'
+      ? t('mobileDiffReviewBody.binary')
       : diffState.kind === 'too-large'
-        ? 'Diff Too Large'
+        ? t('mobileDiffReviewBody.diffTooLarge')
         : diffState.kind === 'deleted'
-          ? 'Deleted File'
-          : 'Diff Unavailable'
+          ? t('mobileDiffReviewBody.deleted')
+          : t('mobileDiffReviewBody.diffUnavailable')
   const text =
     diffState.kind === 'binary'
-      ? 'This file cannot be rendered as text on mobile.'
+      ? t('mobileDiffReviewBody.fileCannot')
       : diffState.kind === 'too-large'
-        ? 'This diff is too large for the mobile preview.'
+        ? t('mobileDiffReviewBody.diffTooLargeMobile')
         : diffState.kind === 'deleted'
-          ? 'This file was deleted. Add a file note or mark it reviewed.'
+          ? t('mobileDiffReviewBody.fileDeleted')
           : diffState.kind === 'error'
             ? diffState.message
-            : 'Select a file to review.'
+            : t('mobileDiffReviewBody.select')
   return <CenteredState title={title} text={text} onRetry={onRetry} />
 }
 
@@ -151,10 +158,10 @@ function CenteredState({
           style={({ pressed }) => [styles.retryButton, pressed && styles.buttonPressed]}
           onPress={onRetry}
           accessibilityRole="button"
-          accessibilityLabel="Retry loading review"
+          accessibilityLabel={t('mobileDiffReviewBody.retryLoading')}
         >
           <RefreshCw size={14} color={colors.textPrimary} strokeWidth={2.2} />
-          <Text style={styles.retryText}>Retry</Text>
+          <Text style={styles.retryText}>{t('mobileDiffReviewBody.retry')}</Text>
         </Pressable>
       ) : null}
     </View>

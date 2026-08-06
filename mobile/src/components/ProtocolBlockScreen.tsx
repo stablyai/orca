@@ -2,6 +2,7 @@ import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-nati
 import { router } from 'expo-router'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import type { CompatVerdict } from '../transport/protocol-compat'
+import { t } from '@/i18n/mobile-i18n'
 
 const RELEASES_URL = 'https://github.com/stablyai/orca/releases'
 const IOS_APP_STORE_URL = 'itms-apps://apps.apple.com/app/orca-ide/id6766130217'
@@ -15,18 +16,27 @@ export function ProtocolBlockScreen({ verdict }: Props) {
   // Why: Android APKs ship through GitHub Releases until a Play Store listing exists.
   const mobileUpdateTarget =
     Platform.OS === 'ios'
-      ? { label: 'Open App Store', url: IOS_APP_STORE_URL, storeName: 'the App Store' }
-      : { label: 'Open GitHub Releases', url: RELEASES_URL, storeName: 'GitHub Releases' }
+      ? {
+          label: t('protocolBlockScreen.openApp'),
+          url: IOS_APP_STORE_URL,
+          storeName: t('protocol.block.appStoreName')
+        }
+      : {
+          label: t('protocolBlockScreen.openGit'),
+          url: RELEASES_URL,
+          storeName: t('protocol.block.githubReleasesName')
+        }
   const primaryAction = isMobileTooOld
     ? { label: mobileUpdateTarget.label, url: mobileUpdateTarget.url }
-    : { label: 'Open GitHub Releases', url: RELEASES_URL }
+    : { label: t('protocolBlockScreen.openGit'), url: RELEASES_URL }
 
-  const title = isMobileTooOld ? 'Update Orca Mobile' : 'Update Orca on your computer'
+  const title = isMobileTooOld
+    ? t('protocolBlockScreen.updateOrcaMobile')
+    : t('protocolBlockScreen.updateOrcaYour')
   const body = isMobileTooOld
-    ? `This desktop needs a newer Orca Mobile app. Update Orca Mobile from ${mobileUpdateTarget.storeName}, then try this host again.`
-    : 'This paired desktop app is too old for your current Orca Mobile app. Update Orca on your computer, then try this host again.'
-  const recoveryNote =
-    'Already updated? Go back to Hosts and refresh the connection. If this message stays, remove this host and pair it again.'
+    ? t('protocol.block.mobileTooOldBody', { storeName: mobileUpdateTarget.storeName })
+    : t('protocol.block.desktopTooOldBody')
+  const recoveryNote = t('protocol.block.recoveryNote')
 
   return (
     <View style={styles.container}>
@@ -49,7 +59,7 @@ export function ProtocolBlockScreen({ verdict }: Props) {
             router.replace('/')
           }}
         >
-          <Text style={styles.secondaryButtonText}>Back to hosts</Text>
+          <Text style={styles.secondaryButtonText}>{t('protocolBlockScreen.back')}</Text>
         </Pressable>
         <Text style={styles.recoveryNote}>{recoveryNote}</Text>
       </View>

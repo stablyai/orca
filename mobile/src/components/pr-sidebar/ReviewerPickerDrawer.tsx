@@ -7,6 +7,7 @@ import type { RpcClient } from '../../transport/rpc-client'
 import { fetchAssignableUsers } from '../../session/github-pr-rpc'
 import { BottomDrawer } from '../BottomDrawer'
 import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
+import { t } from '@/i18n/mobile-i18n'
 
 type Props = {
   visible: boolean
@@ -61,7 +62,10 @@ export function ReviewerPickerDrawer({
       })
       .catch(() => {
         if (!cancelled) {
-          setLoad({ status: 'error', message: 'Failed to load people' })
+          setLoad({
+            status: 'error',
+            message: t('reviewerPickerDrawer.failed')
+          })
         }
       })
     return () => {
@@ -91,12 +95,12 @@ export function ReviewerPickerDrawer({
 
   return (
     <BottomDrawer visible={visible} onClose={onClose} dragContentToDismiss={false}>
-      <Text style={styles.pickerTitle}>Reviewers</Text>
+      <Text style={styles.pickerTitle}>{t('reviewerPickerDrawer.reviewers')}</Text>
       <TextInput
         style={styles.pickerSearch}
         value={query}
         onChangeText={setQuery}
-        placeholder="Search people"
+        placeholder={t('reviewerPickerDrawer.search')}
         placeholderTextColor={colors.textMuted}
         autoCapitalize="none"
         autoCorrect={false}
@@ -111,7 +115,7 @@ export function ReviewerPickerDrawer({
         </View>
       ) : ordered.length === 0 ? (
         <View style={styles.pickerStateArea}>
-          <Text style={styles.emptyText}>No matching people</Text>
+          <Text style={styles.emptyText}>{t('reviewerPickerDrawer.no')}</Text>
         </View>
       ) : (
         <View style={styles.pickerList}>
@@ -124,7 +128,13 @@ export function ReviewerPickerDrawer({
                 onPress={() => onToggle(item.login)}
                 accessibilityRole="button"
                 accessibilityState={{ selected: requested }}
-                accessibilityLabel={`${requested ? 'Remove' : 'Request'} ${item.login}`}
+                accessibilityLabel={
+                  requested
+                    ? t('prreviewersSection.remove', {
+                        login: item.login
+                      })
+                    : t('review.requestReviewer', { login: item.login })
+                }
               >
                 <View style={styles.rowTrailing}>
                   {requested ? (

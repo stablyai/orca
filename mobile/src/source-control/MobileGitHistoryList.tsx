@@ -12,6 +12,7 @@ import {
 } from './mobile-git-history'
 import { resolveMobileHistoryScreenView } from './mobile-history-screen-state'
 import type { GitBranchChangeEntry } from '../../../src/shared/types'
+import { t } from '@/i18n/mobile-i18n'
 
 type Props = {
   client: RpcClient | null
@@ -70,7 +71,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
         }
       } catch (err) {
         if (active) {
-          setError(err instanceof Error ? err.message : 'Failed to load history')
+          setError(err instanceof Error ? err.message : t('mobileGitHistoryList.failed'))
         }
       }
     })()
@@ -161,10 +162,10 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
                 connected ? (
                   <ActivityIndicator size="small" color={colors.textSecondary} />
                 ) : (
-                  <Text style={styles.empty}>Waiting for desktop...</Text>
+                  <Text style={styles.empty}>{t('mobileGitHistoryList.waiting')}</Text>
                 )
               ) : files.length === 0 ? (
-                <Text style={styles.empty}>No file changes</Text>
+                <Text style={styles.empty}>{t('mobileGitHistoryList.noFile')}</Text>
               ) : (
                 files.map((file) => (
                   <View key={file.path} style={styles.fileRow}>
@@ -192,10 +193,14 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
     return (
       <View style={styles.state}>
         <Text style={styles.stateText}>
-          {view.kind === 'waiting' ? 'Waiting for desktop...' : view.message}
+          {view.kind === 'waiting' ? t('mobileGitHistoryList.waiting') : view.message}
         </Text>
-        <Pressable style={styles.retryButton} onPress={retry} accessibilityLabel="Retry">
-          <Text style={styles.retryText}>Retry</Text>
+        <Pressable
+          style={styles.retryButton}
+          onPress={retry}
+          accessibilityLabel={t('mobileGitHistoryList.retry')}
+        >
+          <Text style={styles.retryText}>{t('mobileGitHistoryList.retry')}</Text>
         </Pressable>
       </View>
     )
@@ -210,7 +215,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
   if (view.kind === 'empty') {
     return (
       <View style={styles.state}>
-        <Text style={styles.stateText}>No commits.</Text>
+        <Text style={styles.stateText}>{t('mobileGitHistoryList.noCommits')}</Text>
       </View>
     )
   }

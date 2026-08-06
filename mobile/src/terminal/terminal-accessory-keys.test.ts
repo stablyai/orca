@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildTerminalShortcutKey, TERMINAL_ACCESSORY_KEYS } from './terminal-accessory-keys'
+import {
+  buildTerminalShortcutKey,
+  normalizeShortcutKeyInput,
+  TERMINAL_ACCESSORY_KEYS
+} from './terminal-accessory-keys'
 
 describe('TERMINAL_ACCESSORY_KEYS', () => {
   it('sends reverse-tab with a non-repeatable Shift+Tab key', () => {
@@ -98,6 +102,18 @@ describe('TERMINAL_ACCESSORY_KEYS', () => {
       bytes: '\x1b ',
       accessibilityLabel: 'Alt Space'
     })
+    expect(buildTerminalShortcutKey({ key: ' ', modifiers: ['ctrl'] })).toEqual({
+      label: 'Ctrl+Space',
+      bytes: '\x00',
+      accessibilityLabel: 'Ctrl Space'
+    })
+  })
+
+  it('normalizes a typed space before the custom-key persistence path builds its label', () => {
+    const key = normalizeShortcutKeyInput(' ')
+
+    expect(key).toBe('space')
+    expect(buildTerminalShortcutKey({ key: key!, modifiers: ['ctrl'] })?.label).toBe('Ctrl+Space')
   })
 
   it('builds modified special-key terminal sequences', () => {

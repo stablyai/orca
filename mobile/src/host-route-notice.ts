@@ -1,21 +1,21 @@
 // Why a route param rather than a toast: the screen that learns the bad news (the session)
 // unmounts as it bounces, so the message has to travel with the navigation to survive.
+import { t } from '@/i18n/mobile-i18n'
 
-export const HOST_ROUTE_NOTICES = {
-  'worktree-missing': 'That workspace no longer exists on this host.'
-} as const
+export type HostRouteNotice = 'worktree-missing'
 
-export type HostRouteNotice = keyof typeof HOST_ROUTE_NOTICES
+function isHostRouteNotice(notice: string): notice is HostRouteNotice {
+  return notice === 'worktree-missing'
+}
 
 /** The banner text for a route param, or null when absent/unrecognized — an unknown code
  *  from a future build must render nothing rather than leak the raw param. */
 export function hostRouteNoticeMessage(notice: string | undefined): string | null {
-  // Why hasOwn: the param is attacker-adjacent URL text, and a plain lookup of 'toString'
-  // would hand the banner a function off the prototype instead of missing.
-  if (!notice || !Object.hasOwn(HOST_ROUTE_NOTICES, notice)) {
+  // Why exact match: this is attacker-adjacent URL text and unknown codes must stay silent.
+  if (!notice || !isHostRouteNotice(notice)) {
     return null
   }
-  return HOST_ROUTE_NOTICES[notice as HostRouteNotice]
+  return t('hostRouteNotice.worktreeMissing')
 }
 
 export function hostRouteWithNotice(hostId: string, notice: HostRouteNotice): string {

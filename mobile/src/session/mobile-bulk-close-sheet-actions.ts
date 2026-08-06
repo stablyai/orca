@@ -5,6 +5,7 @@ import {
   selectBulkCloseTabs,
   type BulkTabCloseMode
 } from './mobile-tab-close-selection'
+import { t } from '@/i18n/mobile-i18n'
 
 /** Session-route state the bulk close orchestration reads and drives. */
 type BulkCloseSheetDeps = {
@@ -79,7 +80,7 @@ export function createCloseWithBulkActions(
 ) {
   return (target: MobileSessionTab | null, dismiss: () => void): ActionSheetAction[] => [
     {
-      label: 'Close',
+      label: t('mobileBulkCloseSheetActions.close'),
       destructive: true,
       onPress: () => {
         dismiss()

@@ -3,6 +3,7 @@ import { CaseSensitive, GitBranch, Sparkles } from 'lucide-react-native'
 import type { SmartWorkspaceSourceRow as SourceRow } from '../../../src/shared/new-workspace/smart-workspace-source-results'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { TaskProviderLogo } from './TaskProviderLogo'
+import { t } from '@/i18n/mobile-i18n'
 
 type Props = {
   row: SourceRow
@@ -21,27 +22,29 @@ function resolveRowContent(row: SourceRow): RowContent {
     case 'use-name':
       return {
         icon: <Sparkles size={16} color={colors.textSecondary} />,
-        title: `Use "${row.name}"`,
-        subtitle: 'Name this workspace'
+        title: t('smartWorkspaceSourceRow.use', { rowName: row.name }),
+        subtitle: t('smartWorkspaceSourceRow.name')
       }
     case 'create-branch':
       return {
         icon: <GitBranch size={16} color={colors.accentBlue} />,
-        title: `Create branch "${row.name}"`,
-        subtitle: 'New branch'
+        title: t('smartWorkspaceSourceRow.create', {
+          rowName: row.name
+        }),
+        subtitle: t('smartWorkspaceSourceRow.new')
       }
     case 'github':
       return {
         icon: <TaskProviderLogo provider="github" size={16} color={colors.textSecondary} />,
         title: row.item.title,
-        subtitle: `${row.item.type === 'pr' ? 'PR #' : 'Issue #'}${row.item.number}`,
+        subtitle: `${row.item.type === 'pr' ? t('smartWorkspaceSourceRow.pr') : t('smartWorkspaceSourceRow.issue')}${row.item.number}`,
         status: row.item.state
       }
     case 'gitlab':
       return {
         icon: <TaskProviderLogo provider="gitlab" size={16} color={colors.textSecondary} />,
         title: row.item.title,
-        subtitle: `${row.item.type === 'mr' ? 'MR !' : 'Issue #'}${row.item.number}`,
+        subtitle: `${row.item.type === 'mr' ? t('smartWorkspaceSourceRow.mr') : t('smartWorkspaceSourceRow.issue')}${row.item.number}`,
         status: row.item.state
       }
     case 'branch':
@@ -54,7 +57,7 @@ function resolveRowContent(row: SourceRow): RowContent {
       return {
         icon: <TaskProviderLogo provider="linear" size={16} color={colors.textSecondary} />,
         title: row.issue.title,
-        subtitle: `${row.issue.identifier} · ${row.issue.team?.key ?? 'Linear'}`,
+        subtitle: `${row.issue.identifier} · ${row.issue.team?.key ?? t('smartWorkspaceSourceRow.linear')}`,
         status: row.issue.state?.name
       }
     default:

@@ -3,6 +3,7 @@ import {
   createBotAuthorOverrideSet,
   normalizePRCommentAuthorLogin
 } from '../../../../src/shared/pr-bot-author-overrides'
+import { t } from '@/i18n/mobile-i18n'
 
 export { createBotAuthorOverrideSet }
 
@@ -13,9 +14,9 @@ export { createBotAuthorOverrideSet }
 export type PRCommentAudienceFilter = 'all' | 'human' | 'bot'
 
 export const PR_COMMENT_AUDIENCE_FILTERS: { value: PRCommentAudienceFilter; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'human', label: 'Humans' },
-  { value: 'bot', label: 'Bots' }
+  { value: 'all', label: t('prCommentAudience.all') },
+  { value: 'human', label: t('prCommentAudience.humans') },
+  { value: 'bot', label: t('prCommentAudience.bots') }
 ]
 
 const BOT_LOGIN_SUFFIX = '[bot]'
@@ -99,10 +100,10 @@ export function filterPRCommentsByAudience(
 export function getPRCommentAudienceEmptyLabel(filter: PRCommentAudienceFilter): string {
   switch (filter) {
     case 'bot':
-      return 'No bot comments.'
+      return t('prCommentAudience.noBot')
     case 'human':
-      return 'No human comments.'
+      return t('prCommentAudience.noHuman')
     case 'all':
-      return 'No comments yet.'
+      return t('prCommentAudience.noComments')
   }
 }

@@ -12,6 +12,7 @@ import {
 } from '../../src/storage/preferences'
 import { HostProtocolGate } from '../../src/components/HostProtocolGate'
 import { HostScreen } from './[hostId]/index'
+import { t } from '@/i18n/mobile-i18n'
 
 // Keep at least this much room for the detail pane when resizing the sidebar.
 const MIN_DETAIL_WIDTH = 320
@@ -39,21 +40,24 @@ function HostStack({ animation }: { animation: 'none' | 'default' }) {
         animation
       }}
     >
-      <Stack.Screen name="[hostId]/index" options={{ title: 'Host' }} />
-      <Stack.Screen name="[hostId]/edit" options={{ title: 'Edit host' }} />
-      <Stack.Screen name="[hostId]/accounts" options={{ title: 'Accounts' }} />
-      <Stack.Screen name="[hostId]/tasks" options={{ title: 'Tasks' }} />
-      <Stack.Screen name="[hostId]/session/[worktreeId]" options={{ title: 'Terminal' }} />
+      <Stack.Screen name="[hostId]/index" options={{ title: t('accounts.host') }} />
+      <Stack.Screen name="[hostId]/edit" options={{ title: t('layout.edit') }} />
+      <Stack.Screen name="[hostId]/accounts" options={{ title: t('layout.accounts') }} />
+      <Stack.Screen name="[hostId]/tasks" options={{ title: t('layout.tasks') }} />
+      <Stack.Screen
+        name="[hostId]/session/[worktreeId]"
+        options={{ title: t('layout.terminal') }}
+      />
       <Stack.Screen
         name="[hostId]/source-control/[worktreeId]"
-        options={{ title: 'Source Control' }}
+        options={{ title: t('layout.source') }}
       />
       <Stack.Screen
         name="[hostId]/agent-history/[worktreeId]"
-        options={{ title: 'Agent Session History' }}
+        options={{ title: t('layout.agent') }}
       />
-      <Stack.Screen name="[hostId]/review/[worktreeId]" options={{ title: 'Changes' }} />
-      <Stack.Screen name="[hostId]/pr/[worktreeId]" options={{ title: 'Pull Request' }} />
+      <Stack.Screen name="[hostId]/review/[worktreeId]" options={{ title: t('layout.changes') }} />
+      <Stack.Screen name="[hostId]/pr/[worktreeId]" options={{ title: t('task.pullRequest') }} />
     </Stack>
   )
 }

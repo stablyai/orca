@@ -1,6 +1,7 @@
 import type { GitHistoryItem, GitHistoryResult } from '../../../src/shared/git-history-types'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
+import { t } from '@/i18n/mobile-i18n'
 
 export type MobileCommitRow = {
   id: string
@@ -19,7 +20,7 @@ export function formatCommitTime(timestampSeconds: number | undefined, nowMs: nu
   }
   const delta = nowMs - timestampSeconds * 1000
   if (delta < 60_000) {
-    return 'just now'
+    return t('mobileGitHistory.just')
   }
   const minutes = Math.floor(delta / 60_000)
   if (minutes < 60) {
@@ -35,7 +36,7 @@ export function formatCommitTime(timestampSeconds: number | undefined, nowMs: nu
   }
   const months = Math.floor(days / 30)
   if (months < 12) {
-    return `${months}mo`
+    return t('mobileGitHistory.months', { months: months })
   }
   return `${Math.floor(months / 12)}y`
 }
@@ -44,7 +45,7 @@ export function toMobileCommitRow(item: GitHistoryItem, nowMs: number): MobileCo
   return {
     id: item.id,
     shortId: item.displayId ?? item.id.slice(0, 7),
-    subject: item.subject || '(no commit message)',
+    subject: item.subject || t('sourceControl.history.noCommitMessage'),
     author: item.author ?? '',
     parentId: item.parentIds[0] ?? null,
     relativeTime: formatCommitTime(item.timestamp, nowMs)
@@ -65,7 +66,7 @@ export async function fetchMobileGitHistory(
     limit
   })
   if (!response.ok) {
-    throw new Error(response.error?.message || 'Failed to load commit history')
+    throw new Error(response.error?.message || t('mobileGitHistory.failed'))
   }
   return (response as RpcSuccess).result as GitHistoryResult
 }

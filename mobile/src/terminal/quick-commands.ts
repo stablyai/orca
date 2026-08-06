@@ -13,6 +13,7 @@ import {
   type TerminalQuickCommandMutation
 } from '../../../src/shared/terminal-quick-commands'
 import { TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
+import { t } from '../i18n/mobile-i18n'
 import { MOBILE_TUI_AGENT_LABELS } from '../tasks/mobile-tui-agents'
 
 // Reuse the canonical desktop quick-command logic (pure, no heavy deps) so
@@ -66,7 +67,9 @@ export function buildMobileQuickCommandLaunch(
         options: {
           initialPrompt: command.command,
           enter: false,
-          successToast: `${command.label.trim() || 'Quick command'} inserted`
+          successToast: t('mobileQuickCommandLaunch.inserted', {
+            commandLabel: command.label.trim() || t('mobileQuickCommandLaunch.quickCommand')
+          })
         }
       }
     : {

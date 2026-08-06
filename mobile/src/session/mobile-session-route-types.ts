@@ -150,3 +150,37 @@ export type TerminalGestureInputQueue = {
   timer: ReturnType<typeof setTimeout> | null
   lastUpdatedMs: number
 }
+
+export type MarkdownReaderProps = {
+  documentId: string
+  doc: MarkdownDocState | undefined
+  onRefresh: () => void
+  onChange: (content: string) => void
+  onSave: () => void
+  onCopy: () => void
+  onDiscard: () => void
+  keyboardLift: number
+}
+
+export type DiffLineRowProps = {
+  line: RenderableDiffLine
+  title: string
+  index: number
+  comments: DiffComment[]
+  activeCommentLine: number | null
+  commentDraft: string
+  commentsBusy: boolean
+  onStartComment: (lineNumber: number) => void
+  onCancelComment: () => void
+  onDraftChange: (value: string) => void
+  onSubmitComment: (lineNumber: number) => void
+  onDeleteComment: (commentId: string) => void
+}
+
+export type FileReaderProps = {
+  doc: FileDocState | undefined
+  title: string
+  relativePath: string
+  language?: string
+  diffCommentActions?: DiffCommentActions
+}

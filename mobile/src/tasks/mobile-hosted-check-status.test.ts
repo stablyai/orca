@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { HostedReviewDecision } from '../../../src/shared/hosted-review'
+import { mobileI18n } from '../i18n/mobile-i18n'
 import {
   getHostedChecksLabel,
   getHostedReviewLabel,
@@ -18,6 +19,27 @@ describe('mobile hosted check status', () => {
     }
     expect(getHostedChecksLabel({ checksSummary: summary })).toBe('Unresolved checks')
     expect(getHostedReviewSignalTone({ checksSummary: summary }, 'checks')).toBe('neutral')
+  })
+
+  it('keeps shared provider summaries localized on mobile', async () => {
+    const initialLocale = mobileI18n.language
+    await mobileI18n.changeLanguage('es')
+    try {
+      expect(
+        getHostedChecksLabel({
+          checksSummary: {
+            state: 'success',
+            total: 2,
+            passed: 2,
+            failed: 0,
+            pending: 0,
+            neutral: 0
+          }
+        })
+      ).toBe('2/2 pasó')
+    } finally {
+      await mobileI18n.changeLanguage(initialLocale)
+    }
   })
 
   it('accepts provider-neutral GitHub status fields without a shared work-item type', () => {

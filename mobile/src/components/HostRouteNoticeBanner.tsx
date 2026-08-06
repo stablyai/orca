@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { X } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
+import { t } from '@/i18n/mobile-i18n'
 
 // Informational, not an error: the host is healthy and the user's target simply went away,
 // so this stays monochrome rather than borrowing the auth-failed red.
@@ -17,7 +18,7 @@ export function HostRouteNoticeBanner({
       <Pressable
         onPress={onDismiss}
         accessibilityRole="button"
-        accessibilityLabel="Dismiss notice"
+        accessibilityLabel={t('hostRouteNotice.dismiss')}
         hitSlop={spacing.sm}
         style={styles.dismiss}
       >

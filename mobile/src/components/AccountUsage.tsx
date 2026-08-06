@@ -15,6 +15,7 @@ export type {
 } from './account-usage-state'
 export {
   decodeAccountsSnapshot,
+  isInvalidAccountsSnapshotError,
   getActiveProviderRateLimits,
   getInactiveProviderUsage,
   getUsageBarState,

@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { GitHubWorkItemDetails, PRComment } from '../../../../src/shared/types'
+import { mobileI18n } from '../../i18n/mobile-i18n'
 import { PRCommentsSection } from './PRCommentsSection'
 
 vi.mock('react-native', () => ({
@@ -127,5 +128,18 @@ describe('PRCommentsSection', () => {
     // Retapping the active tab used to leave the page size alone; retain that behavior.
     await press(audienceTabs(renderer)[1])
     expect(renderer.root.findAllByType('PRCommentCard')).toHaveLength(24)
+  })
+
+  it('renders a complete localized pagination message', async () => {
+    const initialLocale = mobileI18n.language
+    await mobileI18n.changeLanguage('es')
+    try {
+      renderer = await renderComments(detailsWithComments(25))
+      expect(showMoreButton(renderer).findByType('Text').children.join('')).toBe(
+        'Mostrar 12 más de 13'
+      )
+    } finally {
+      await mobileI18n.changeLanguage(initialLocale)
+    }
   })
 })

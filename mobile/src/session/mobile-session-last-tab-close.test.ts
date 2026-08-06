@@ -25,5 +25,7 @@ describe('mobile session last-tab close', () => {
     )
     expect(block).toContain('activeSessionTabIdRef.current = null')
     expect(block).toContain('activeHandleRef.current = null')
+    expect(block).toContain('removeTerminalRecordByHandle')
+    expect(block).toContain('setTerminals(nextTerminals)')
   })
 })

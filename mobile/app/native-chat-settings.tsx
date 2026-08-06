@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../src/theme/mobile-theme'
 import { useMobileDefaultSessionViewPreference } from '../src/session/use-mobile-default-session-view-preference'
+import { t } from '@/i18n/mobile-i18n'
 
 export default function NativeChatSettingsScreen() {
   const router = useRouter()
@@ -17,33 +18,31 @@ export default function NativeChatSettingsScreen() {
       <View style={styles.topRow}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Back"
+          accessibilityLabel={t('nativeChatSettings.back')}
           style={styles.backButton}
           onPress={() => router.back()}
         >
           <ChevronLeft size={22} color={colors.textSecondary} />
         </Pressable>
-        <Text style={styles.heading}>Chat UI</Text>
+        <Text style={styles.heading}>{t('nativeChatSettings.chat')}</Text>
       </View>
 
       <ScrollView
         contentContainerStyle={{ paddingBottom: insets.bottom + spacing.lg }}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.groupHeading}>DEFAULT VIEW</Text>
-        <Text style={styles.groupDescription}>
-          Choose how supported agent sessions (Claude, Codex, and other chat-capable agents) open on
-          this device. Terminal shows the raw CLI; Chat UI shows a chat interface like the desktop
-          app. You can still switch any individual session from its long-press menu.
-        </Text>
+        <Text style={styles.groupHeading}>{t('nativeChatSettings.default')}</Text>
+        <Text style={styles.groupDescription}>{t('nativeChatSettings.choose')}</Text>
         <View style={[styles.section, styles.sectionTopGap]}>
           <View style={styles.row}>
             <View style={styles.rowContent}>
-              <Text style={styles.rowLabel}>Open sessions in Chat UI</Text>
-              <Text style={styles.rowSublabel}>{chatDefault ? 'On' : 'Off'}</Text>
+              <Text style={styles.rowLabel}>{t('nativeChatSettings.open')}</Text>
+              <Text style={styles.rowSublabel}>
+                {chatDefault ? t('nativeChatSettings.on') : t('nativeChatSettings.off')}
+              </Text>
             </View>
             <Switch
-              accessibilityLabel="Open sessions in Chat UI"
+              accessibilityLabel={t('nativeChatSettings.open')}
               value={chatDefault}
               onValueChange={(next) => setDefaultView(next ? 'chat' : 'terminal')}
               trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}

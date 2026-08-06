@@ -9,6 +9,7 @@ import {
   isAgentQuickCommand,
   supportsTerminalAgentQuickCommand
 } from '../terminal/quick-commands'
+import { t } from '@/i18n/mobile-i18n'
 
 export const QUICK_COMMAND_SUPPORTED_AGENTS = MOBILE_AGENT_CATALOG.filter((entry) =>
   supportsTerminalAgentQuickCommand(entry.id)
@@ -61,7 +62,7 @@ export function QuickCommandsList({
             style={styles.searchInput}
             value={query}
             onChangeText={onQueryChange}
-            placeholder="Search quick commands..."
+            placeholder={t('quickCommandsList.search')}
             placeholderTextColor={colors.textMuted}
             autoCapitalize="none"
             autoCorrect={false}
@@ -79,16 +80,16 @@ export function QuickCommandsList({
       ) : null}
 
       {!loading && totalCount === 0 ? (
-        <Text style={styles.empty}>No quick commands yet.</Text>
+        <Text style={styles.empty}>{t('quickCommandsList.noQuick')}</Text>
       ) : null}
 
       {!loading && totalCount > 0 && !hasVisible ? (
-        <Text style={styles.empty}>No matching quick commands.</Text>
+        <Text style={styles.empty}>{t('quickCommandsList.noMatching')}</Text>
       ) : null}
 
       {repoCommands.length > 0 ? (
         <QuickCommandGroup
-          label="This project"
+          label={t('quickCommandsList.project')}
           commands={repoCommands}
           onLaunch={onLaunch}
           onEdit={onEdit}
@@ -99,7 +100,7 @@ export function QuickCommandsList({
 
       {globalCommands.length > 0 ? (
         <QuickCommandGroup
-          label="Global"
+          label={t('quickCommandsList.global')}
           commands={globalCommands}
           onLaunch={onLaunch}
           onEdit={onEdit}
@@ -120,7 +121,7 @@ export function QuickCommandsList({
       >
         <Plus size={18} color={colors.textSecondary} />
         <Text style={styles.addText}>
-          {canAdd ? 'New quick command' : 'Quick command limit reached'}
+          {canAdd ? t('quickCommandsList.new') : t('quickCommandsList.quick')}
         </Text>
       </Pressable>
     </View>
@@ -185,7 +186,9 @@ function QuickCommandRow({
         disabled={disabled}
         onPress={() => onLaunch(command)}
         accessibilityRole="button"
-        accessibilityLabel={`Run ${command.label}`}
+        accessibilityLabel={t('quickCommandsList.run', {
+          commandLabel: command.label
+        })}
       >
         <View style={styles.rowIcon}>
           {isAgent ? (
@@ -207,7 +210,9 @@ function QuickCommandRow({
         style={({ pressed }) => [styles.rowAction, pressed && !disabled && styles.pressed]}
         disabled={disabled}
         onPress={() => onEdit(command)}
-        accessibilityLabel={`Edit ${command.label}`}
+        accessibilityLabel={t('quickCommandsList.edit', {
+          commandLabel: command.label
+        })}
       >
         <Pencil size={15} color={colors.textSecondary} />
       </Pressable>
@@ -215,7 +220,9 @@ function QuickCommandRow({
         style={({ pressed }) => [styles.rowAction, pressed && !disabled && styles.pressed]}
         disabled={disabled}
         onPress={() => onDelete(command)}
-        accessibilityLabel={`Delete ${command.label}`}
+        accessibilityLabel={t('voiceModelList.delete', {
+          commandLabel: command.label
+        })}
       >
         <Trash2 size={15} color={colors.statusRed} />
       </Pressable>

@@ -1,7 +1,14 @@
-import { describe, it, expect } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { PRCheckDetail, PRComment, PRInfo } from '../../../src/shared/types'
+import { mobileI18n } from '../i18n/mobile-i18n'
 import type { PrSidebarState } from '../session/mobile-pr-sidebar-state'
 import { buildMobilePrChipSummary, countUnresolvedReviewThreads } from './mobile-pr-chip-summary'
+
+const INITIAL_LOCALE = mobileI18n.language
+
+afterEach(async () => {
+  await mobileI18n.changeLanguage(INITIAL_LOCALE)
+})
 
 function pr(overrides: Partial<PRInfo> = {}): PRInfo {
   return {
@@ -119,6 +126,15 @@ describe('buildMobilePrChipSummary', () => {
       throw new Error('expected ready')
     }
     expect(summary.rollup).toEqual({ kind: 'none', text: 'No checks', token: 'textSecondary' })
+  })
+
+  it('localizes user-visible rollup labels', async () => {
+    await mobileI18n.changeLanguage('es')
+    const summary = buildMobilePrChipSummary(ready(pr(), [check('failure')]))
+    if (summary.kind !== 'ready') {
+      throw new Error('expected ready')
+    }
+    expect(summary.rollup.text).toBe('1 fallando')
   })
 
   it('passes through the unresolved comment count', () => {

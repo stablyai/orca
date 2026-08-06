@@ -10,6 +10,8 @@ import {
 import type { RpcClient } from '../transport/rpc-client'
 import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import type { RpcFailure, RpcResponse, RpcSuccess } from '../transport/types'
+import { isClipboardImageTooLargeError } from '../../../src/shared/clipboard-image'
+import { mobileI18n } from '../i18n/mobile-i18n'
 
 function ok(id: string, result: unknown): RpcSuccess {
   return { id, ok: true, result, _meta: { runtimeId: 'runtime-1' } }
@@ -37,6 +39,21 @@ function clientWithResponses(responses: RpcResponse[]): Pick<RpcClient, 'sendReq
 }
 
 describe('mobile clipboard image paste helpers', () => {
+  it('keeps the oversized-image classifier stable in a translated locale', async () => {
+    const initialLocale = mobileI18n.language
+    await mobileI18n.changeLanguage('es')
+    let thrown: unknown
+    try {
+      normalizeMobileClipboardImageBase64('a'.repeat(24 * 1024 * 1024 + 1))
+    } catch (error) {
+      thrown = error
+    } finally {
+      await mobileI18n.changeLanguage(initialLocale)
+    }
+
+    expect(isClipboardImageTooLargeError(thrown)).toBe(true)
+  })
+
   it('strips data URL image prefixes', () => {
     expect(normalizeMobileClipboardImageBase64('data:image/png;base64,aGVsbG8=')).toBe('aGVsbG8=')
   })

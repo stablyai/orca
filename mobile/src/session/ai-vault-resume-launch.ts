@@ -23,6 +23,7 @@ import {
   type MobileReviewTerminalTab
 } from './mobile-diff-review-rpc'
 import type { MobileAiVaultResumeTargetStatus } from '../agent-history/agent-history-resume-target'
+import { t } from '@/i18n/mobile-i18n'
 
 const NODE_PLATFORMS = new Set<NodeJS.Platform>([
   'aix',
@@ -185,11 +186,11 @@ export async function resumeAiVaultSessionInTerminal(
     { timeoutMs: RESUME_RPC_TIMEOUT_MS }
   )
   if (!created.ok) {
-    throw new Error(created.error?.message || 'Failed to create terminal')
+    throw new Error(created.error?.message || t('aiVaultResumeLaunch.failedCreate'))
   }
   const terminalTab = readMobileReviewCreatedTerminal(created.result)
   if (!terminalTab) {
-    throw new Error('Created terminal response was invalid')
+    throw new Error(t('aiVaultResumeLaunch.created'))
   }
   const sent = await client.sendRequest(
     'terminal.send',
@@ -201,10 +202,10 @@ export async function resumeAiVaultSessionInTerminal(
     { timeoutMs: RESUME_RPC_TIMEOUT_MS }
   )
   if (!sent.ok) {
-    throw new Error(sent.error?.message || 'Failed to send resume command')
+    throw new Error(sent.error?.message || t('aiVaultResumeLaunch.failedSend'))
   }
   if (!readMobileReviewTerminalSendAccepted(sent.result)) {
-    throw new Error('Terminal input is locked')
+    throw new Error(t('aiVaultResumeLaunch.terminal'))
   }
   return terminalTab
 }

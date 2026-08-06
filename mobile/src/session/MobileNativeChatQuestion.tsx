@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { ArrowUp, Check, CircleHelp } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { formatQuestionAnswer, type MobileChatQuestion } from './mobile-native-chat-question'
+import { t } from '@/i18n/mobile-i18n'
 
 type Props = {
   question: MobileChatQuestion
@@ -109,7 +110,7 @@ export function MobileNativeChatQuestion({ question, onAnswer }: Props): React.J
 
       {question.multiSelect && hasOptions ? (
         <Pressable
-          accessibilityLabel="Submit selected options"
+          accessibilityLabel={t('mobileNativeChatQuestion.submitSelectedOptions')}
           style={({ pressed }) => [
             styles.submit,
             !canSubmitMulti && styles.submitDisabled,
@@ -119,7 +120,9 @@ export function MobileNativeChatQuestion({ question, onAnswer }: Props): React.J
           disabled={!canSubmitMulti}
         >
           <Text style={[styles.submitText, !canSubmitMulti && styles.submitTextDisabled]}>
-            Submit{selected.length > 0 ? ` (${selected.length})` : ''}
+            {t('mobileNativeChatQuestion.submitSelectedCommand', {
+              selectedCommandCount: selected.length > 0 ? ` (${selected.length})` : ''
+            })}
           </Text>
         </Pressable>
       ) : null}
@@ -129,7 +132,11 @@ export function MobileNativeChatQuestion({ question, onAnswer }: Props): React.J
           style={styles.freeInput}
           value={freeText}
           onChangeText={setFreeText}
-          placeholder={hasOptions ? 'Or type a reply…' : 'Type your reply…'}
+          placeholder={
+            hasOptions
+              ? t('mobileNativeChatQuestion.typeReply')
+              : t('mobileNativeChatQuestion.typeYour')
+          }
           placeholderTextColor={colors.textMuted}
           selectionColor={colors.accentBlue}
           onSubmitEditing={submitFreeText}
@@ -137,7 +144,7 @@ export function MobileNativeChatQuestion({ question, onAnswer }: Props): React.J
           multiline
         />
         <Pressable
-          accessibilityLabel="Send reply"
+          accessibilityLabel={t('mobileNativeChatQuestion.send')}
           style={({ pressed }) => [
             styles.freeSend,
             !canSendFreeText && styles.freeSendDisabled,

@@ -8,6 +8,7 @@ import type { ConnectionState, HostProfile } from '../transport/types'
 import { colors, radii, spacing } from '../theme/mobile-theme'
 import { homeHostWorktreeSummary, type HostWorktreeInfo } from '../worktree/home-worktree-info'
 import { StatusDot } from './StatusDot'
+import { t } from '@/i18n/mobile-i18n'
 
 export function MobileHostCard(props: {
   host: HostProfile
@@ -59,7 +60,7 @@ export function MobileHostCard(props: {
         ) : null}
         {props.verdict.kind === 'unreachable' && !props.host.relay ? (
           <Text style={styles.discoveryHint} numberOfLines={2}>
-            Update desktop Orca and sign in to connect from anywhere
+            {t('mobileHostCard.update')}
           </Text>
         ) : null}
       </View>

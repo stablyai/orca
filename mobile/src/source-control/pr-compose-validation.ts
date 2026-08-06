@@ -1,3 +1,4 @@
+import { t } from '@/i18n/mobile-i18n'
 // Ref normalizers ported from src/shared/hosted-review-refs.ts (value-imported, not
 // referenced across the package boundary — Metro's resolver is rooted at mobile/ and
 // can't bundle a runtime import from repo-root/src, unlike erased `import type`s).
@@ -40,16 +41,18 @@ export function getPrComposeDisabledReason({
   reviewLabel: string
 }): string | null {
   if (generating) {
-    return 'Wait for generation to finish.'
+    return t('prComposeValidation.wait')
   }
   if (title.trim().length === 0) {
-    return `Enter a ${reviewLabel} title.`
+    return t('prComposeValidation.enter', {
+      reviewType: reviewLabel
+    })
   }
   if (base.trim().length === 0) {
-    return 'Choose a base branch.'
+    return t('prComposeValidation.choose')
   }
   if (!isBaseHeadDistinct(base, head)) {
-    return 'Base branch must differ from the head branch.'
+    return t('prComposeValidation.base')
   }
   return null
 }

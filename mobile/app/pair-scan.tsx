@@ -26,6 +26,7 @@ import {
   loadMobileOnboardingSteps,
   mobileOnboardingDestination
 } from '../src/onboarding/mobile-onboarding-plan'
+import { t } from '@/i18n/mobile-i18n'
 
 // Why: see pair-confirm.tsx — cap initial-pair "Connecting…" so a broken
 // route surfaces as a real error with the log visible instead of a
@@ -82,7 +83,7 @@ export default function PairScanScreen() {
       const offer = decodePairingUrl(data)
       if (!offer) {
         setStatus('error')
-        setErrorMessage('Not a valid Orca QR code')
+        setErrorMessage(t('pairScan.notValidOrca'))
         processingRef.current = false
         return
       }
@@ -102,7 +103,7 @@ export default function PairScanScreen() {
     const offer = parsePairingCode(input)
     if (!offer) {
       setStatus('error')
-      setErrorMessage('Not a valid pairing code — copy it from your computer and paste again')
+      setErrorMessage(t('pairScan.notValidPairing'))
       processingRef.current = false
       return
     }
@@ -179,8 +180,12 @@ export default function PairScanScreen() {
       setStatus('error')
       setErrorMessage(
         timedOut
-          ? `Couldn't connect within ${PAIRING_OVERALL_TIMEOUT_MS / 1000}s — see log below for where it stalled`
-          : `Pairing failed: ${err instanceof Error ? err.message : String(err)}`
+          ? t('pairScan.could', {
+              pairingOverallTimeoutSeconds: PAIRING_OVERALL_TIMEOUT_MS / 1000
+            })
+          : t('pairScan.pairingFailed', {
+              errorMessage: err instanceof Error ? err.message : String(err)
+            })
       )
       processingRef.current = false
     }
@@ -225,12 +230,10 @@ export default function PairScanScreen() {
         </Pressable>
         <View style={styles.centered}>
           <Text style={styles.title}>
-            {canAskAgain ? 'Pair with desktop' : 'Camera Access Disabled'}
+            {canAskAgain ? t('pairScan.pair') : t('pairScan.camera')}
           </Text>
           <Text style={styles.subtitle}>
-            {canAskAgain
-              ? 'Scan the QR code from Orca on your desktop, or paste the pairing code instead.'
-              : 'Enable camera access in Settings, or paste the pairing code instead.'}
+            {canAskAgain ? t('pairScan.scanOrPastePairingCode') : t('pairScan.enable')}
           </Text>
           <Pressable
             style={styles.primaryButton}
@@ -238,7 +241,7 @@ export default function PairScanScreen() {
           >
             {canAskAgain && <QrCode size={16} color={colors.bgBase} />}
             <Text style={styles.primaryButtonText}>
-              {canAskAgain ? 'Continue' : 'Open Settings'}
+              {canAskAgain ? t('pairScan.continue') : t('pairScan.openSettings')}
             </Text>
           </Pressable>
           <Pressable
@@ -246,14 +249,14 @@ export default function PairScanScreen() {
             onPress={() => setPasteVisible(true)}
           >
             <ClipboardIcon size={16} color={colors.textSecondary} />
-            <Text style={styles.pasteButtonText}>Paste code instead</Text>
+            <Text style={styles.pasteButtonText}>{t('pairScan.pasteCode')}</Text>
           </Pressable>
         </View>
         <TextInputModal
           visible={pasteVisible}
-          title="Paste pairing code"
-          message="Copy the code shown under the QR on your computer."
-          placeholder="orca://pair?code=... or paste the code"
+          title={t('pairScan.pastePairingCode')}
+          message={t('pairScan.copy')}
+          placeholder={t('pairScan.orca')}
           onSubmit={handlePasteSubmit}
           onCancel={() => setPasteVisible(false)}
         />
@@ -268,9 +271,9 @@ export default function PairScanScreen() {
       </Pressable>
 
       <View style={styles.steps}>
-        <Step number={1} text="Open Orca on your computer" />
-        <Step number={2} text="Go to Settings → Mobile" />
-        <Step number={3} text="Scan the QR code" />
+        <Step number={1} text={t('pairScan.openOrca')} />
+        <Step number={2} text={t('pairScan.go')} />
+        <Step number={3} text={t('pairScan.scan')} />
       </View>
 
       {status === 'scanning' && (
@@ -304,7 +307,7 @@ export default function PairScanScreen() {
             onPress={() => setPasteVisible(true)}
           >
             <ClipboardIcon size={16} color={colors.textSecondary} />
-            <Text style={styles.pasteButtonText}>Or paste pairing code</Text>
+            <Text style={styles.pasteButtonText}>{t('pairScan.pastePairingCodeMessage')}</Text>
           </Pressable>
         </>
       )}
@@ -312,9 +315,9 @@ export default function PairScanScreen() {
       {status === 'connecting' && (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={colors.textSecondary} />
-          <Text style={styles.connectingText}>Connecting…</Text>
+          <Text style={styles.connectingText}>{t('pairScan.connecting')}</Text>
           <View style={styles.logSlot}>
-            <ConnectionLog entries={logs} title="Pairing log" />
+            <ConnectionLog entries={logs} title={t('pairScan.pairingLog')} />
           </View>
         </View>
       )}
@@ -324,12 +327,12 @@ export default function PairScanScreen() {
           <Text style={styles.errorText}>{errorMessage}</Text>
           {logs.length > 0 && (
             <View style={styles.logSlot}>
-              <ConnectionLog entries={logs} title="Pairing log" />
+              <ConnectionLog entries={logs} title={t('pairScan.pairingLog')} />
             </View>
           )}
           <View style={styles.errorActions}>
             <Pressable style={styles.primaryButton} onPress={retry}>
-              <Text style={styles.primaryButtonText}>Try Again</Text>
+              <Text style={styles.primaryButtonText}>{t('pairScan.try')}</Text>
             </Pressable>
             <Pressable
               style={({ pressed }) => [
@@ -341,7 +344,7 @@ export default function PairScanScreen() {
                 setPasteVisible(true)
               }}
             >
-              <Text style={styles.secondaryButtonText}>Paste code instead</Text>
+              <Text style={styles.secondaryButtonText}>{t('pairScan.pasteCode')}</Text>
             </Pressable>
           </View>
         </View>
@@ -349,9 +352,9 @@ export default function PairScanScreen() {
 
       <TextInputModal
         visible={pasteVisible}
-        title="Paste pairing code"
-        message="Copy the code shown under the QR on your computer."
-        placeholder="orca://pair?code=... or paste the code"
+        title={t('pairScan.pastePairingCode')}
+        message={t('pairScan.copy')}
+        placeholder={t('pairScan.orca')}
         onSubmit={handlePasteSubmit}
         onCancel={() => setPasteVisible(false)}
       />

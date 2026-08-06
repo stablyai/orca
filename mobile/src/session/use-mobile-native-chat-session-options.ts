@@ -8,6 +8,7 @@ import type {
   SessionOptionDescriptor,
   SessionOptionValue
 } from '../../../src/shared/native-chat-session-options'
+import { t } from '@/i18n/mobile-i18n'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import {
   buildNativeChatSessionOptionCommand,
@@ -161,7 +162,7 @@ export function useMobileNativeChatSessionOptions(args: {
       models: activeModels(catalog, record),
       record,
       mode: 'live',
-      modelLabel: 'Model'
+      modelLabel: t('mobileNativeChatSessionOptions.model')
     })
   }, [agent, catalog, scopeKey, version])
 

@@ -65,10 +65,7 @@ export function isTransientError(err: Error): boolean {
   if (code && TRANSIENT_ERROR_CODES.has(code)) {
     return true
   }
-  if (err.message.includes('ETIMEDOUT')) {
-    return true
-  }
-  if (err.message.includes('ECONNREFUSED')) {
+  if (err.message.includes('ETIMEDOUT') || err.message.includes('ECONNREFUSED')) {
     return true
   }
   if (err.message.includes('ECONNRESET')) {

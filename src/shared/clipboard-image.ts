@@ -5,6 +5,10 @@ export const CLIPBOARD_IMAGE_MAX_SOURCE_BYTES = Math.floor(
 export const CLIPBOARD_IMAGE_MAX_PIXELS = 32 * 1024 * 1024
 export const CLIPBOARD_IMAGE_TOO_LARGE_ERROR = 'Clipboard image is too large'
 
+export function isClipboardImageTooLargeError(error: unknown): boolean {
+  return error instanceof Error && error.message === CLIPBOARD_IMAGE_TOO_LARGE_ERROR
+}
+
 export type ClipboardImageDimensions = {
   height: number
   width: number

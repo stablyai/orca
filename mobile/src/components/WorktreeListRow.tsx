@@ -9,6 +9,7 @@ import { AgentSpinner } from './AgentSpinner'
 import { MobileRepoIcon } from './MobileRepoIcon'
 import { WorktreeAgentList } from './WorktreeAgentList'
 import { WorktreeMetaGlyphs, prStateColor } from './WorktreeMetaGlyphs'
+import { t } from '@/i18n/mobile-i18n'
 
 // Strip the refs/heads/ prefix for display, matching the desktop sidebar
 // (WorktreeCardHelpers.formatBranchName).
@@ -130,7 +131,7 @@ function WorktreeListRowComponent<T extends WorktreeListRowItem>({
           )}
           {isFolderWorkspace && (
             <View style={styles.folderBadge}>
-              <Text style={styles.folderBadgeText}>Folder</Text>
+              <Text style={styles.folderBadgeText}>{t('worktreeListRow.folder')}</Text>
             </View>
           )}
           <WorktreeMetaGlyphs
@@ -145,7 +146,7 @@ function WorktreeListRowComponent<T extends WorktreeListRowItem>({
           {lineageDepth > 0 && (
             <View style={styles.childBadge}>
               <GitBranch size={10} color={colors.textMuted} />
-              <Text style={styles.childBadgeText}>Child</Text>
+              <Text style={styles.childBadgeText}>{t('worktreeListRow.child')}</Text>
             </View>
           )}
           {/* Repo glyph+name only when not already grouped under this repo;
@@ -183,7 +184,12 @@ function WorktreeListRowComponent<T extends WorktreeListRowItem>({
             )}
             <GitBranch size={12} color={colors.textSecondary} />
             <Text style={styles.lineageToggleText}>
-              {lineageChildCount} {lineageChildCount === 1 ? 'child' : 'children'}
+              {t(
+                lineageChildCount === 1
+                  ? 'workspace.lineage.childCount.one'
+                  : 'workspace.lineage.childCount.other',
+                { count: lineageChildCount }
+              )}
             </Text>
           </Pressable>
         ) : null}

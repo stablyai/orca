@@ -15,6 +15,7 @@ import { createTerminalWebViewPendingMessages } from './terminal-webview-pending
 import { dispatchTerminalWebViewNotification } from './terminal-webview-notification-dispatch'
 import { routeTerminalQueryReply } from './terminal-webview-query-reply-routing'
 import { createTerminalWriteCoalescer } from './terminal-write-coalescer'
+import { t } from '@/i18n/mobile-i18n'
 
 type Props = TerminalWebViewProps
 
@@ -381,10 +382,14 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
         textZoom={100}
         onLoadStart={handleLoadStart}
         onMessage={handleMessage}
-        onError={(event) => reportNativeEngineError('Terminal WebView load failed', event)}
-        onHttpError={(event) => reportNativeEngineError('Terminal WebView HTTP error', event)}
+        onError={(event) =>
+          reportNativeEngineError(t('terminalWebView.terminalWebViewLoad'), event)
+        }
+        onHttpError={(event) =>
+          reportNativeEngineError(t('terminalWebView.terminalWebViewHttp'), event)
+        }
         onRenderProcessGone={(event) =>
-          reportNativeEngineError('Terminal WebView render process ended', event)
+          reportNativeEngineError(t('terminalWebView.terminalWebViewRender'), event)
         }
         onContentProcessDidTerminate={handleContentProcessDidTerminate}
       />

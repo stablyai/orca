@@ -8,6 +8,13 @@
     "userInterfaceStyle": "automatic",
     "scheme": "orca",
     "newArchEnabled": true,
+    "locales": {
+      "en": "./locales/en.json",
+      "es": "./locales/es.json",
+      "ja": "./locales/ja.json",
+      "ko": "./locales/ko.json",
+      "zh-Hans": "./locales/zh-Hans.json"
+    },
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -18,7 +25,8 @@
       "bundleIdentifier": "com.stably.orca.mobile",
       "buildNumber": "1",
       "infoPlist": {
-        "NSLocalNetworkUsageDescription": "Orca connects to the desktop app on your LAN.",
+        "CFBundleAllowMixedLocalizations": true,
+        "NSLocalNetworkUsageDescription": "Orca connects to the desktop app on your local network.",
         "NSMicrophoneUsageDescription": "Allow Orca to record voice dictation and transcribe it on your paired desktop.",
         "NSPhotoLibraryUsageDescription": "Allow Orca to attach photos from your library to a terminal session on your paired desktop.",
         "NSAppTransportSecurity": {
@@ -79,6 +87,12 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-localization",
+        {
+          "supportedLocales": ["en", "es", "ja", "ko", "zh-Hans"]
+        }
+      ],
       "./plugins/android-respect-rotation-lock.js",
       [
         "expo-splash-screen",
@@ -91,7 +105,7 @@
         "expo-camera",
         {
           "cameraPermission": "Allow Orca to use the camera for QR code scanning.",
-          "microphonePermission": "Allow Orca to use your microphone for voice dictation sent to your paired desktop for transcription.",
+          "microphonePermission": "Allow Orca to record voice dictation and transcribe it on your paired desktop.",
           "recordAudioAndroid": false
         }
       ],

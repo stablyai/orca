@@ -94,7 +94,7 @@ describe('session route offline-compose wiring', () => {
   })
 
   it('keeps the send button connection-gated so held text cannot fire into a dead link', () => {
-    const sendButton = routeSlice('styles.sendButton,', 'accessibilityLabel="Send command"')
+    const sendButton = routeSlice('styles.sendButton,', 'onPress={() => void handleSend()}')
     expect(sendButton).toContain('disabled={!canSend}')
   })
 

@@ -6,6 +6,7 @@ import { MobileSyntaxSegments } from '../components/MobileSyntaxSegments'
 import { mobileDiffLineNumber, mobileDiffLinePrefix } from './mobile-diff-format'
 import type { MobileBranchDiffPreviewState } from './mobile-source-control-screen-state'
 import { styles } from './mobile-source-control-styles'
+import { t } from '@/i18n/mobile-i18n'
 
 type Props = {
   branchDiffPreview: MobileBranchDiffPreviewState | null
@@ -31,15 +32,17 @@ export function MobileBranchDiffPreviewDrawer({ branchDiffPreview, onClose }: Pr
           </Text>
           <Text style={styles.diffDrawerMeta} numberOfLines={1}>
             {branchDiffPreview.kind === 'ready'
-              ? `${branchDiffPreview.summary.baseRef}..HEAD`
-              : 'Committed on branch'}
+              ? t('mobileBranchDiffPreviewDrawer.base', {
+                  baseRef: branchDiffPreview.summary.baseRef
+                })
+              : t('mobileBranchDiffPreviewDrawer.committed')}
           </Text>
         </View>
         <Pressable
           style={({ pressed }) => [styles.diffCloseButton, pressed && styles.iconButtonPressed]}
           onPress={onClose}
           hitSlop={8}
-          accessibilityLabel="Close committed diff preview"
+          accessibilityLabel={t('mobileBranchDiffPreviewDrawer.close')}
         >
           <X size={18} color={colors.textSecondary} strokeWidth={2.1} />
         </Pressable>
@@ -50,13 +53,13 @@ export function MobileBranchDiffPreviewDrawer({ branchDiffPreview, onClose }: Pr
         </View>
       ) : branchDiffPreview.kind === 'error' ? (
         <View style={styles.diffState}>
-          <Text style={styles.stateTitle}>Unable to Load Diff</Text>
+          <Text style={styles.stateTitle}>{t('mobileBranchDiffPreviewDrawer.unable')}</Text>
           <Text style={styles.stateText}>{branchDiffPreview.message}</Text>
         </View>
       ) : (
         <View style={styles.diffLines}>
           {branchDiffPreview.truncated ? (
-            <Text style={styles.diffTruncatedText}>Diff truncated for mobile preview.</Text>
+            <Text style={styles.diffTruncatedText}>{t('mobileBranchDiffPreviewDrawer.diff')}</Text>
           ) : null}
           {branchDiffPreview.lines.map((line, index) => (
             <View

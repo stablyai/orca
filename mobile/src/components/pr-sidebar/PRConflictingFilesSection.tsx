@@ -8,6 +8,7 @@ import { PRSection } from './PRSection'
 import { resolveConflictDisplay } from './pr-conflict-presentation'
 import { prConflictStyles as styles } from './pr-conflict-styles'
 import { prAiTriageStyles as triageStyles } from './pr-ai-triage-styles'
+import { t } from '@/i18n/mobile-i18n'
 
 // Launches the "Resolve conflicts with AI" agent. Absent for display-only usages.
 export type PrConflictsTriage = {
@@ -44,12 +45,11 @@ export function PRConflictingFilesSection({ pr, isRefreshing = false, triage }: 
   if (!conflict) {
     return null
   }
-  let noticeBody = 'Conflict file details are unavailable'
+  let noticeBody = t('pullRequest.conflicts.fileDetailsUnavailable')
   if (isRefreshing) {
-    noticeBody = 'Refreshing conflict details…'
+    noticeBody = t('pullRequest.conflicts.refreshing')
   } else if (conflict.localMergeClean) {
-    noticeBody =
-      'GitHub reports conflicts, but local Git did not reproduce them. Refresh the PR or push the branch to recalculate mergeability.'
+    noticeBody = t('pullRequest.conflicts.localMergeClean')
   }
 
   const copyRefreshCommands = async () => {
@@ -72,22 +72,29 @@ export function PRConflictingFilesSection({ pr, isRefreshing = false, triage }: 
   }
 
   return (
-    <PRSection title="Conflicts">
+    <PRSection title={t('prconflictingFilesSection.conflicts')}>
       {conflict.commitsBehind !== null && conflict.baseCommit !== null ? (
         <Text style={styles.meta}>
-          {conflict.commitsBehind} commit{conflict.commitsBehind === 1 ? '' : 's'} behind (base
-          commit: <Text style={styles.metaMono}>{conflict.baseCommit}</Text>)
+          {t(
+            conflict.commitsBehind === 1
+              ? 'prconflictingFilesSection.commitsBehindCommit'
+              : 'prconflictingFilesSection.commitsBehindCommits',
+            {
+              commitsBehind: conflict.commitsBehind
+            }
+          )}{' '}
+          <Text style={styles.metaMono}>{conflict.baseCommit}</Text>)
         </Text>
       ) : null}
 
       {conflict.fileDetailsUnavailable ? (
         <View>
-          <Text style={styles.noticeTitle}>This branch has conflicts that must be resolved</Text>
+          <Text style={styles.noticeTitle}>{t('prconflictingFilesSection.branch')}</Text>
           <Text style={styles.noticeBody}>{noticeBody}</Text>
           {conflict.mergeabilityRefreshCommands ? (
             <View style={styles.commandBox}>
               <View style={styles.commandHeader}>
-                <Text style={styles.commandLabel}>Run from this worktree</Text>
+                <Text style={styles.commandLabel}>{t('prconflictingFilesSection.run')}</Text>
                 <Pressable
                   style={({ pressed }) => [
                     styles.copyCommandButton,
@@ -95,7 +102,7 @@ export function PRConflictingFilesSection({ pr, isRefreshing = false, triage }: 
                   ]}
                   onPress={() => void copyRefreshCommands()}
                   accessibilityRole="button"
-                  accessibilityLabel="Copy mergeability refresh commands"
+                  accessibilityLabel={t('prconflictingFilesSection.copyMergeability')}
                 >
                   {commandsCopied ? (
                     <Check size={13} color={colors.textPrimary} strokeWidth={2.2} />
@@ -103,7 +110,9 @@ export function PRConflictingFilesSection({ pr, isRefreshing = false, triage }: 
                     <Copy size={13} color={colors.textPrimary} strokeWidth={2.2} />
                   )}
                   <Text style={styles.copyCommandText}>
-                    {commandsCopied ? 'Copied' : 'Copy commands'}
+                    {commandsCopied
+                      ? t('prconflictingFilesSection.copied')
+                      : t('prconflictingFilesSection.copyCommands')}
                   </Text>
                 </Pressable>
               </View>
@@ -117,7 +126,7 @@ export function PRConflictingFilesSection({ pr, isRefreshing = false, triage }: 
         <View>
           <View style={styles.filesHeader}>
             <FileWarning size={14} color={colors.textSecondary} strokeWidth={2} />
-            <Text style={styles.filesHeaderText}>Conflicting files</Text>
+            <Text style={styles.filesHeaderText}>{t('prconflictingFilesSection.conflicting')}</Text>
           </View>
           <ScrollView
             style={styles.fileList}
@@ -146,14 +155,16 @@ export function PRConflictingFilesSection({ pr, isRefreshing = false, triage }: 
             onPress={triage.resolveConflicts}
             disabled={triage.isBusy}
             accessibilityRole="button"
-            accessibilityLabel="Resolve conflicts with AI"
+            accessibilityLabel={t('prconflictingFilesSection.resolve')}
           >
             {triage.isBusy ? (
               <ActivityIndicator color={colors.textSecondary} />
             ) : (
               <Sparkles size={14} color={colors.textSecondary} strokeWidth={2.2} />
             )}
-            <Text style={triageStyles.triageButtonText}>Resolve conflicts with AI</Text>
+            <Text style={triageStyles.triageButtonText}>
+              {t('prconflictingFilesSection.resolve')}
+            </Text>
           </Pressable>
           {triage.error ? <Text style={triageStyles.triageError}>{triage.error}</Text> : null}
         </View>

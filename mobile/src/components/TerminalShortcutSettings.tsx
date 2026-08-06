@@ -27,6 +27,7 @@ import {
   setTerminalAccessoryBuiltInVisible,
   type TerminalAccessoryLayout
 } from '../terminal/terminal-accessory-layout'
+import { t } from '@/i18n/mobile-i18n'
 
 // Why: DragReorderList absolutely positions rows, so every row in a
 // reorderable section must share one fixed height.
@@ -222,11 +223,10 @@ export function TerminalShortcutSettings({
 
   return (
     <>
-      <Text style={[styles.groupHeading, styles.groupTopGap]}>SHORTCUT BAR</Text>
-      <Text style={styles.groupDescription}>
-        Toggle keys to show or hide them, and hold the grip to drag a key into the order you want on
-        the terminal shortcut bar.
+      <Text style={[styles.groupHeading, styles.groupTopGap]}>
+        {t('terminalShortcutSettings.shortcut')}
       </Text>
+      <Text style={styles.groupDescription}>{t('terminalShortcutSettings.toggle')}</Text>
       <View style={[styles.section, styles.sectionTopGap]}>
         <DragReorderList
           items={orderedAccessoryKeys}
@@ -250,20 +250,20 @@ export function TerminalShortcutSettings({
           onPress={resetBuiltInKeys}
         >
           <View style={styles.rowContent}>
-            <Text style={styles.rowLabel}>Reset Defaults</Text>
-            <Text style={styles.rowSublabel}>
-              Show every built-in shortcut key in the original order
-            </Text>
+            <Text style={styles.rowLabel}>{t('terminalShortcutSettings.reset')}</Text>
+            <Text style={styles.rowSublabel}>{t('terminalShortcutSettings.show')}</Text>
           </View>
         </Pressable>
       </View>
 
-      <Text style={[styles.groupHeading, styles.groupTopGap]}>CUSTOM SHORTCUTS</Text>
+      <Text style={[styles.groupHeading, styles.groupTopGap]}>
+        {t('terminalShortcutSettings.custom')}
+      </Text>
       <View style={[styles.section, styles.sectionTopGap]}>
         {customKeys.length === 0 ? (
           <>
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No custom shortcuts defined yet.</Text>
+              <Text style={styles.emptyText}>{t('terminalShortcutSettings.no')}</Text>
             </View>
             <View style={styles.separator} />
           </>
@@ -306,8 +306,8 @@ export function TerminalShortcutSettings({
           onPress={() => setShowCustomKeyModal(true)}
         >
           <View style={styles.rowContent}>
-            <Text style={styles.rowLabel}>Add Custom Shortcut…</Text>
-            <Text style={styles.rowSublabel}>Create key combo or text macro</Text>
+            <Text style={styles.rowLabel}>{t('terminalShortcutSettings.add')}</Text>
+            <Text style={styles.rowSublabel}>{t('terminalShortcutSettings.create')}</Text>
           </View>
           <ChevronRight size={16} color={colors.textMuted} />
         </Pressable>

@@ -5,7 +5,7 @@ import {
   type MobileViewState,
   type WorkspaceViewSettings
 } from './workspace-view-settings'
-import { DEFAULT_MOBILE_WORKSPACE_STATUSES } from './mobile-workspace-statuses'
+import { getDefaultMobileWorkspaceStatuses } from './mobile-workspace-statuses'
 
 // Regression guard for "host page shows lots of worktrees, repo shows only a
 // few". The removed getHostScopedWorktrees filtered the list to worktrees whose
@@ -43,7 +43,7 @@ const base: MobileViewState = {
   hideDefaultBranch: false,
   filterRepoIds: [],
   collapsedGroups: [],
-  workspaceStatuses: DEFAULT_MOBILE_WORKSPACE_STATUSES
+  workspaceStatuses: getDefaultMobileWorkspaceStatuses()
 }
 
 // Reconstruct the list the host screen renders: apply the synced desktop

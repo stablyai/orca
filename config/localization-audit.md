@@ -49,6 +49,24 @@ Run the maintained coverage gate:
 pnpm run verify:localization-coverage
 ```
 
+The gate scans the desktop renderer plus both mobile source roots. Mobile uses
+`config/mobile-localization-coverage-allowlist.json`, which contains one reviewed
+internal pairing-keychain diagnostic and three canonical diff-note envelope
+labels sent to agents; none is translated UI copy.
+
+Verify mobile catalog references, conditional keys, interpolation options,
+protected technical literals, and non-empty translations. The same gate checks
+Expo native locale mappings, required permission keys, and English fallbacks:
+
+```sh
+pnpm run verify:mobile-localization-catalog
+```
+
+The checked-in mobile runtime JSON is a temporary bridge to the canonical PO
+source and read-only compiler. Feature work updates English only;
+missing target values intentionally use runtime English fallback. Whole-catalog
+translation commands are not part of the maintained workflow.
+
 Sync catalog keys after adding or removing `translate(...)` calls:
 
 ```sh
@@ -84,10 +102,11 @@ language-name search keywords, and four reviewed product-name search
 keywords): new candidates fail the check and must be localized or added with
 a reviewed reason in the same change.
 
-The script scans `src/renderer/src` by default. That is the primary UI surface.
-Use `--source-root src` for a wider audit when checking renderer-adjacent shared
-copy, then classify non-renderer findings carefully because many are diagnostics
-or external tool text.
+The script scans `src/renderer/src` by default. Use `--source-root mobile/app`
+or `--source-root mobile/src` for either mobile surface. Use `--source-root src`
+for a wider audit when checking renderer-adjacent shared copy, then classify
+non-renderer findings carefully because many are diagnostics or external tool
+text.
 
 ## Migration States
 

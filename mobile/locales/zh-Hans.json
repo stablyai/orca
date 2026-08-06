@@ -1,0 +1,12 @@
+{
+  "ios": {
+    "CFBundleDisplayName": "Orca",
+    "NSCameraUsageDescription": "允许 Orca 使用相机扫描二维码。",
+    "NSLocalNetworkUsageDescription": "Orca 会连接到您本地网络上的桌面应用。",
+    "NSMicrophoneUsageDescription": "允许 Orca 录制语音听写，并在已配对的桌面设备上将其转写为文字。",
+    "NSPhotoLibraryUsageDescription": "允许 Orca 从照片图库中选择照片，并将其附加到已配对桌面设备上的终端会话。"
+  },
+  "android": {
+    "app_name": "Orca"
+  }
+}

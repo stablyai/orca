@@ -5,16 +5,18 @@
 // Pure state/selectors live here (no React Native imports) so they can be
 // unit-tested directly; AccountUsage.tsx re-exports them alongside the
 // UsageBar component.
-import { formatResetCountdown } from '../../../src/shared/rate-limit-reset-format'
+import { formatResetDuration } from '../../../src/shared/rate-limit-reset-format'
 import type {
   AccountsSnapshot,
   InactiveAccountUsage,
   ProviderRateLimits
 } from './accounts-snapshot'
+import { t } from '@/i18n/mobile-i18n'
 
 export {
   AccountsSnapshotSchema,
   decodeAccountsSnapshot,
+  isInvalidAccountsSnapshotError,
   ProviderRateLimitsSchema,
   RateLimitRuntimeTargetSchema,
   type AccountsSnapshot,
@@ -95,9 +97,8 @@ export function getUsageBarState(
  * or null when the window has no reset timestamp (so the UI degrades to
  * today's bars-only layout).
  *
- * Why: shares formatResetCountdown with the desktop status-bar tooltip so the
- * copy stays identical across surfaces. `now` is a parameter so the function
- * stays pure and unit-testable.
+ * Why: shares compact duration rules with desktop while the surrounding mobile
+ * sentence remains localizable. `now` is a parameter for deterministic tests.
  */
 export function getWindowResetLabel(
   limits: ProviderRateLimits | null,
@@ -108,7 +109,8 @@ export function getWindowResetLabel(
   if (resetsAt == null) {
     return null
   }
-  return formatResetCountdown(resetsAt - now)
+  const duration = formatResetDuration(resetsAt - now)
+  return duration === 'now' ? t('accountUsage.resetNow') : t('accountUsage.resetIn', { duration })
 }
 
 // Why: the usage UI must render for the system-default login, not only for

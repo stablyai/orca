@@ -1,5 +1,6 @@
 import { parsePairingCode } from './pairing'
 import type { PairingOffer } from './types'
+import { t } from '@/i18n/mobile-i18n'
 
 export type PairConfirmRouteState =
   | { kind: 'ready'; offer: PairingOffer; errorMessage: '' }
@@ -7,12 +8,20 @@ export type PairConfirmRouteState =
 
 export function resolvePairConfirmRouteState(code: string | undefined): PairConfirmRouteState {
   if (!code) {
-    return { kind: 'error', offer: null, errorMessage: 'Missing pairing code' }
+    return {
+      kind: 'error',
+      offer: null,
+      errorMessage: t('pairConfirmState.missing')
+    }
   }
 
   const offer = parsePairingCode(code)
   if (!offer) {
-    return { kind: 'error', offer: null, errorMessage: 'Not a valid pairing code' }
+    return {
+      kind: 'error',
+      offer: null,
+      errorMessage: t('pairConfirmState.not')
+    }
   }
 
   return { kind: 'ready', offer, errorMessage: '' }

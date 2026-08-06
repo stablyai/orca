@@ -1,4 +1,5 @@
 import type { HostedReviewProvider } from '../../../src/shared/hosted-review'
+import { t } from '@/i18n/mobile-i18n'
 
 // Provider-aware review labels, ported from the desktop localized-copy mapping
 // (src/renderer/src/i18n/hosted-review-localized-copy.ts) minus i18n. GitLab uses
@@ -11,15 +12,15 @@ export type HostedReviewCopy = {
 }
 
 const PR_COPY: HostedReviewCopy = {
-  shortLabel: 'PR',
-  reviewLabel: 'pull request',
-  titleLabel: 'Pull Request'
+  shortLabel: t('hostedReviewCopy.pr'),
+  reviewLabel: t('hostedReviewCopy.pullRequest'),
+  titleLabel: t('hostedReviewCopy.pullRequestTitle')
 }
 
 const MR_COPY: HostedReviewCopy = {
-  shortLabel: 'MR',
-  reviewLabel: 'merge request',
-  titleLabel: 'Merge Request'
+  shortLabel: t('hostedReviewCopy.mr'),
+  reviewLabel: t('hostedReviewCopy.mergeRequest'),
+  titleLabel: t('hostedReviewCopy.mergeRequestTitle')
 }
 
 export function hostedReviewCopy(provider: HostedReviewProvider | undefined): HostedReviewCopy {

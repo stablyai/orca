@@ -5,6 +5,7 @@ import { styles } from './mobile-source-control-styles'
 import { MobileSourceControlPrChip } from './MobileSourceControlPrChip'
 import type { MobilePrChipSummary } from './mobile-pr-chip-summary'
 import { mobileConflictAbortLabel } from './mobile-source-control-conflict-abort'
+import { t } from '@/i18n/mobile-i18n'
 
 type Props = {
   branchLabel: string
@@ -52,9 +53,23 @@ export function MobileSourceControlBranchCard({
         {syncLabel ? <Text style={styles.syncText}>{syncLabel}</Text> : null}
       </View>
       <View style={styles.countRow}>
-        <Text style={styles.countText}>{unstagedCount} changed</Text>
-        <Text style={styles.countText}>{stagedCount} staged</Text>
-        {branchCount > 0 ? <Text style={styles.countText}>{branchCount} on branch</Text> : null}
+        <Text style={styles.countText}>
+          {t('mobileSourceControlBranchCard.unstaged', {
+            unstagedCount: unstagedCount
+          })}
+        </Text>
+        <Text style={styles.countText}>
+          {t('mobileSourceControlBranchCard.staged', {
+            stagedCount: stagedCount
+          })}
+        </Text>
+        {branchCount > 0 ? (
+          <Text style={styles.countText}>
+            {t('mobileSourceControlBranchCard.branch', {
+              branchCount: branchCount
+            })}
+          </Text>
+        ) : null}
       </View>
       {/* Own row so Abort never overflows past the card when counts are long. */}
       {showConflict ? (

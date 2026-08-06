@@ -25,6 +25,7 @@ import {
 } from '../../source-control/pr-compose-validation'
 import { MobilePrBasePicker } from '../MobilePrBasePicker'
 import { mobilePrComposeFormStyles as styles } from './mobile-pr-compose-form-styles'
+import { t } from '@/i18n/mobile-i18n'
 
 export type PrComposePrefill = MobilePrPrefill
 
@@ -77,7 +78,7 @@ export function MobilePrComposeForm({
         draft
       })
       if (!response.ok) {
-        setError(response.error?.message || 'Failed to generate PR fields')
+        setError(response.error?.message || t('mobilePrComposeForm.failed'))
         return
       }
       const result = (response as RpcSuccess).result as {
@@ -95,7 +96,7 @@ export function MobilePrComposeForm({
       }
     } catch (err) {
       triggerError()
-      setError(err instanceof Error ? err.message : 'Failed to generate PR fields')
+      setError(err instanceof Error ? err.message : t('mobilePrComposeForm.failed'))
     } finally {
       setGenerating(false)
     }
@@ -166,7 +167,11 @@ export function MobilePrComposeForm({
       <View style={styles.headingRow}>
         <View style={styles.headingTitle}>
           <ReviewIcon size={14} color={colors.textSecondary} strokeWidth={2.2} />
-          <Text style={styles.heading}>New {copy.reviewLabel}</Text>
+          <Text style={styles.heading}>
+            {t('mobilePrComposeForm.new', {
+              reviewType: copy.reviewLabel
+            })}
+          </Text>
         </View>
         <View style={styles.headingActions}>
           <Pressable
@@ -174,21 +179,25 @@ export function MobilePrComposeForm({
             disabled={generating || submitting}
             onPress={() => void generate()}
             accessibilityRole="button"
-            accessibilityLabel={`Generate ${copy.reviewLabel} details with AI`}
+            accessibilityLabel={t('mobilePrComposeForm.generateReview', {
+              reviewType: copy.reviewLabel
+            })}
           >
             {generating ? (
               <ActivityIndicator size="small" color={colors.textSecondary} />
             ) : (
               <Sparkles size={13} color={colors.textSecondary} strokeWidth={2.1} />
             )}
-            <Text style={styles.genButtonText}>{generating ? 'Generating…' : 'Generate'}</Text>
+            <Text style={styles.genButtonText}>
+              {generating ? t('mobilePrComposeForm.generating') : t('mobilePrComposeForm.generate')}
+            </Text>
           </Pressable>
           <Pressable
             style={styles.iconButton}
             onPress={onCancel}
             disabled={submitting}
             accessibilityRole="button"
-            accessibilityLabel="Cancel"
+            accessibilityLabel={t('mobilePrComposeForm.cancel')}
             hitSlop={8}
           >
             <X size={16} color={colors.textSecondary} strokeWidth={2.2} />
@@ -206,7 +215,7 @@ export function MobilePrComposeForm({
             style={[styles.branchToken, baseConflict && styles.branchTokenError]}
             numberOfLines={1}
           >
-            {base || 'base'}
+            {base || t('task.base')}
           </Text>
         </View>
       ) : null}
@@ -216,32 +225,36 @@ export function MobilePrComposeForm({
           style={styles.titleInput}
           value={title}
           onChangeText={setTitle}
-          placeholder="Title"
+          placeholder={t('mobilePrComposeForm.title')}
           placeholderTextColor={colors.textMuted}
           editable={!fieldsLocked}
-          accessibilityLabel={`${copy.titleLabel} title`}
+          accessibilityLabel={t('mobilePrComposeForm.reviewTypeTitle', {
+            reviewType: copy.titleLabel
+          })}
         />
         <TextInput
           style={styles.bodyInput}
           value={body}
           onChangeText={setBody}
-          placeholder="Description (optional)"
+          placeholder={t('mobilePrComposeForm.description')}
           placeholderTextColor={colors.textMuted}
           multiline
           editable={!fieldsLocked}
-          accessibilityLabel={`${copy.titleLabel} description`}
+          accessibilityLabel={t('mobilePrComposeForm.reviewTypeDescription', {
+            reviewType: copy.titleLabel
+          })}
         />
       </View>
 
       {generating ? (
         <View style={styles.notice}>
           <Sparkles size={13} color={colors.textSecondary} strokeWidth={2.1} />
-          <Text style={styles.noticeText}>Generating title and description…</Text>
+          <Text style={styles.noticeText}>{t('mobilePrComposeForm.generatingTitle')}</Text>
         </View>
       ) : null}
 
       <View style={styles.baseRow}>
-        <Text style={styles.baseLabel}>Base</Text>
+        <Text style={styles.baseLabel}>{t('mobilePrComposeForm.base')}</Text>
         <View style={styles.baseControl}>
           <MobilePrBasePicker
             client={client}
@@ -254,7 +267,7 @@ export function MobilePrComposeForm({
       </View>
 
       <View style={styles.draftRow}>
-        <Text style={styles.draftText}>Create as draft</Text>
+        <Text style={styles.draftText}>{t('mobilePrComposeForm.createDraft')}</Text>
         <Switch value={draft} onValueChange={setDraft} disabled={fieldsLocked} />
       </View>
       {error || submitDisabledReason ? (
@@ -281,11 +294,19 @@ export function MobilePrComposeForm({
         <Text style={styles.submitText}>
           {pushBeforeCreate
             ? draft
-              ? `Push & create draft ${copy.shortLabel}`
-              : `Push & create ${copy.shortLabel}`
+              ? t('mobilePrComposeForm.pushCreateDraft', {
+                  reviewType: copy.shortLabel
+                })
+              : t('mobilePrComposeForm.pushCreateReview', {
+                  reviewType: copy.shortLabel
+                })
             : draft
-              ? `Create draft ${copy.shortLabel}`
-              : `Create ${copy.shortLabel}`}
+              ? t('mobilePrComposeForm.createDraftReview', {
+                  reviewType: copy.shortLabel
+                })
+              : t('mobilePrComposeForm.createReview', {
+                  reviewType: copy.shortLabel
+                })}
         </Text>
       </Pressable>
     </View>

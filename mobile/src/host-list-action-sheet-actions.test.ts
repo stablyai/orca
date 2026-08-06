@@ -17,6 +17,14 @@ const HOST: HostProfile = {
   lastConnected: 0
 }
 
+const LABELS = {
+  connect: 'Connect',
+  reconnect: 'Reconnect',
+  disconnect: 'Disconnect',
+  editHost: 'Edit host',
+  remove: 'Remove'
+}
+
 function build(overrides: { state?: ConnectionState; hasEverConnected?: boolean } = {}) {
   const spies = {
     onDismiss: vi.fn(),
@@ -29,6 +37,7 @@ function build(overrides: { state?: ConnectionState; hasEverConnected?: boolean 
     host: HOST,
     state: overrides.state ?? 'connected',
     hasEverConnected: overrides.hasEverConnected ?? true,
+    labels: LABELS,
     ...spies
   })
   return { actions, spies }
@@ -90,6 +99,7 @@ describe('getHostListActionSheetActions', () => {
         host: null,
         state: 'disconnected',
         hasEverConnected: false,
+        labels: LABELS,
         onDismiss: vi.fn(),
         onReconnect: vi.fn(),
         onDisconnect: vi.fn(),

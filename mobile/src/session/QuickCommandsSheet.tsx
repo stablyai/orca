@@ -19,6 +19,7 @@ import {
   quickCommandToDraft,
   type QuickCommandDraft
 } from './quick-command-draft'
+import { t } from '@/i18n/mobile-i18n'
 
 type Props = {
   visible: boolean
@@ -104,12 +105,14 @@ export function QuickCommandsSheet({
     // Why: quick commands sync with desktop, so an accidental one-tap delete
     // removes shared data rather than only dismissing a local row.
     Alert.alert(
-      `Delete "${command.label || 'Untitled'}"?`,
-      'This quick command will be removed from your saved list.',
+      t('quickCommandsSheet.deleteDelete', {
+        deleteLabel: command.label || t('quickCommandsSheet.untitled')
+      }),
+      t('quickCommandsSheet.quickCommand'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('quickCommandsSheet.cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('quickCommandsSheet.delete'),
           style: 'destructive',
           onPress: () => {
             void persist({ type: 'delete', id: command.id })
@@ -145,11 +148,11 @@ export function QuickCommandsSheet({
   const title =
     view === 'editor'
       ? draft?.id
-        ? 'Edit Quick Command'
-        : 'Add Quick Command'
+        ? t('quickCommandsSheet.edit')
+        : t('quickCommandsSheet.add')
       : view === 'agent'
-        ? 'Choose Agent'
-        : 'Quick Commands'
+        ? t('quickCommandsSheet.choose')
+        : t('quickCommandsSheet.quickCommands')
 
   return (
     <BottomDrawer visible={visible} onClose={onClose}>
@@ -160,7 +163,7 @@ export function QuickCommandsSheet({
           <Pressable
             style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
             onPress={() => setView(view === 'agent' ? 'editor' : 'list')}
-            accessibilityLabel="Back"
+            accessibilityLabel={t('quickCommandsSheet.back')}
           >
             <ChevronLeft size={18} color={colors.textSecondary} />
           </Pressable>
@@ -171,9 +174,7 @@ export function QuickCommandsSheet({
 
       {view === 'editor' && draft ? (
         <View style={styles.editorDesc}>
-          <Text style={styles.descText}>
-            Save terminal commands or agent prompts for quick access.
-          </Text>
+          <Text style={styles.descText}>{t('quickCommandsSheet.save')}</Text>
         </View>
       ) : null}
 

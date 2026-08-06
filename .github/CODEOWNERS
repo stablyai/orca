@@ -1,5 +1,9 @@
 # Product source remains owned by its normal reviewers; localization inputs need focused review.
 /src/renderer/src/i18n/locales/ @brennanb2025
+/mobile/src/i18n/locales/ @brennanb2025
+/mobile/locales/ @brennanb2025
 /config/scripts/*localization*.mjs @brennanb2025
 /config/scripts/*locale*.mjs @brennanb2025
+/config/scripts/mobile-embedded-document-candidates.mjs @brennanb2025
+/config/mobile-localization-coverage-allowlist.json @brennanb2025
 /config/i18next.config.ts @brennanb2025

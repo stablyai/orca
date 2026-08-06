@@ -3,6 +3,7 @@ import {
   readMobileReviewCreatedTerminal,
   readMobileReviewTerminalSendAccepted
 } from './mobile-diff-review-rpc'
+import { t } from '@/i18n/mobile-i18n'
 
 // Pure launch path for the PR triage actions ("Fix checks with AI" / "Resolve
 // conflicts with AI"). Reuses the same two RPCs the diff-review send flow uses —
@@ -22,11 +23,11 @@ export async function createTerminalAndSendPrompt(
     navigation: 'caller'
   })
   if (!created.ok) {
-    throw new Error(created.error?.message || 'Failed to create terminal')
+    throw new Error(created.error?.message || t('prAiTriageLaunch.failedCreate'))
   }
   const terminalTab = readMobileReviewCreatedTerminal(created.result)
   if (!terminalTab) {
-    throw new Error('Created terminal response was invalid')
+    throw new Error(t('prAiTriageLaunch.created'))
   }
   const sent = await client.sendRequest('terminal.send', {
     terminal: terminalTab.terminal,
@@ -34,9 +35,9 @@ export async function createTerminalAndSendPrompt(
     enter: true
   })
   if (!sent.ok) {
-    throw new Error(sent.error?.message || 'Failed to send prompt')
+    throw new Error(sent.error?.message || t('prAiTriageLaunch.failedSend'))
   }
   if (!readMobileReviewTerminalSendAccepted(sent.result)) {
-    throw new Error('Terminal input is locked')
+    throw new Error(t('prAiTriageLaunch.terminal'))
   }
 }

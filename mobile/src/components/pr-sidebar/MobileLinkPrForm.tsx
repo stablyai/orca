@@ -5,6 +5,7 @@ import type { RpcClient } from '../../transport/rpc-client'
 import { triggerError, triggerSuccess } from '../../platform/haptics'
 import { parseGitHubPrReference } from '../../source-control/github-pr-link-parse'
 import { linkMobilePr } from '../../source-control/mobile-pr-link'
+import { t } from '@/i18n/mobile-i18n'
 
 type Props = {
   client: RpcClient | null
@@ -46,23 +47,23 @@ export function MobileLinkPrForm({ client, worktreeId, onCancel, onLinked }: Pro
   return (
     <View>
       <View style={styles.headingRow}>
-        <Text style={styles.heading}>Link existing pull request</Text>
+        <Text style={styles.heading}>{t('mobileLinkPrForm.linkExisting')}</Text>
         <Pressable
           onPress={onCancel}
           disabled={submitting}
           accessibilityRole="button"
-          accessibilityLabel="Cancel"
+          accessibilityLabel={t('mobileLinkPrForm.cancel')}
           hitSlop={8}
         >
-          <Text style={styles.cancelText}>Cancel</Text>
+          <Text style={styles.cancelText}>{t('mobileLinkPrForm.cancel')}</Text>
         </Pressable>
       </View>
-      <Text style={styles.label}>PR number or GitHub URL</Text>
+      <Text style={styles.label}>{t('mobileLinkPrForm.pr')}</Text>
       <TextInput
         style={styles.input}
         value={input}
         onChangeText={setInput}
-        placeholder="#123 or https://github.com/owner/repo/pull/123"
+        placeholder={t('mobileLinkPrForm.pull')}
         placeholderTextColor={colors.textMuted}
         autoCapitalize="none"
         autoCorrect={false}
@@ -81,7 +82,13 @@ export function MobileLinkPrForm({ client, worktreeId, onCancel, onLinked }: Pro
         {submitting ? (
           <ActivityIndicator size="small" color={colors.bgBase} />
         ) : (
-          <Text style={styles.submitText}>{parsed ? `Link #${parsed}` : 'Link pull request'}</Text>
+          <Text style={styles.submitText}>
+            {parsed
+              ? t('mobileLinkPrForm.linkLinked', {
+                  linkedItemNumber: parsed
+                })
+              : t('mobileLinkPrForm.linkPull')}
+          </Text>
         )}
       </Pressable>
     </View>

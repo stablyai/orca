@@ -1,4 +1,5 @@
 import type { MobileGitUpstreamStatus } from './mobile-git-status'
+import { t } from '@/i18n/mobile-i18n'
 
 // Icon identifier resolved to a lucide component by the screen. Kept as a string
 // here so this module stays free of the native lucide import and unit-testable.
@@ -66,24 +67,24 @@ export function buildMobileSourceControlActions(
   const busy =
     args.busyAction !== null || args.openingPath !== null || args.openingBranchPath !== null
   const commitHint = !hasStaged
-    ? 'Stage at least one file'
+    ? t('mobileSourceControlActions.stage')
     : !hasMessage
-      ? 'Enter a commit message'
+      ? t('mobileSourceControlActions.enter')
       : undefined
   const remoteHint = !upstreamKnown
-    ? 'Checking branch status...'
+    ? t('mobileSourceControlActions.checking')
     : hasUpstream
       ? undefined
-      : 'Publish Branch first'
+      : t('mobileSourceControlActions.publishBranchFirst')
   const prHint = !upstreamKnown
-    ? 'Checking branch status...'
+    ? t('mobileSourceControlActions.checking')
     : !args.prAvailable
-      ? 'Pull requests are not available for this repo'
+      ? t('mobileSourceControlActions.pullRequests')
       : undefined
 
   return [
     {
-      label: 'Commit',
+      label: t('mobileSourceControlActions.commit'),
       iconKey: 'commit',
       disabled: busy || !!commitHint,
       hint: commitHint,
@@ -92,7 +93,7 @@ export function buildMobileSourceControlActions(
       onPress: handlers.commit
     },
     {
-      label: 'Commit & Push',
+      label: t('mobileSourceControlActions.commitPush'),
       iconKey: 'push',
       disabled: busy || !!commitHint || !upstreamKnown || !hasUpstream,
       hint: commitHint ?? remoteHint,
@@ -101,7 +102,7 @@ export function buildMobileSourceControlActions(
       onPress: handlers.commitPush
     },
     {
-      label: 'Commit & Sync',
+      label: t('mobileSourceControlActions.commitSync'),
       iconKey: 'sync',
       disabled: busy || !!commitHint || !upstreamKnown || !hasUpstream || behind === 0,
       hint:
@@ -109,23 +110,32 @@ export function buildMobileSourceControlActions(
         (!upstreamKnown || !hasUpstream
           ? remoteHint
           : behind === 0
-            ? 'Nothing to pull'
+            ? t('mobileSourceControlActions.nothingPull')
             : undefined),
       loading: args.busyAction === 'commit-sync',
       skipAutoClose: true,
       onPress: handlers.commitSync
     },
     {
-      label: ahead > 0 ? `Push (${ahead})` : 'Push',
+      label:
+        ahead > 0
+          ? t('mobileSourceControlActions.pushAhead', {
+              aheadCommitCount: ahead
+            })
+          : t('mobileSourceControlActions.push'),
       iconKey: 'push',
       disabled: busy || !upstreamKnown || !hasUpstream || ahead === 0,
-      hint: !hasUpstream ? remoteHint : ahead === 0 ? 'Nothing to push' : undefined,
+      hint: !hasUpstream
+        ? remoteHint
+        : ahead === 0
+          ? t('mobileSourceControlActions.nothingPush')
+          : undefined,
       loading: args.busyAction === 'push',
       skipAutoClose: true,
       onPress: handlers.push
     },
     {
-      label: 'Create PR',
+      label: t('mobileSourceControlActions.create'),
       iconKey: 'pr',
       disabled: busy || !args.prAvailable,
       hint: prHint,
@@ -134,7 +144,7 @@ export function buildMobileSourceControlActions(
       onPress: handlers.createPr
     },
     {
-      label: 'Push & Create PR',
+      label: t('mobileSourceControlActions.pushCreate'),
       iconKey: 'pr',
       disabled: busy || !upstreamKnown || !hasUpstream || ahead === 0 || !args.prAvailable,
       hint: prHint ?? (!hasUpstream ? remoteHint : undefined),
@@ -143,30 +153,45 @@ export function buildMobileSourceControlActions(
       onPress: handlers.pushAndCreatePr
     },
     {
-      label: behind > 0 ? `Pull (${behind})` : 'Pull',
+      label:
+        behind > 0
+          ? t('mobileSourceControlActions.pullBehind', {
+              behindCommitCount: behind
+            })
+          : t('mobileSourceControlActions.pull'),
       iconKey: 'pull',
       disabled: busy || !upstreamKnown || !hasUpstream || behind === 0,
-      hint: !hasUpstream ? remoteHint : behind === 0 ? 'Nothing to pull' : undefined,
+      hint: !hasUpstream
+        ? remoteHint
+        : behind === 0
+          ? t('mobileSourceControlActions.nothingPull')
+          : undefined,
       loading: args.busyAction === 'pull',
       skipAutoClose: true,
       onPress: handlers.pull
     },
     {
-      label: ahead > 0 || behind > 0 ? `Sync (↓${behind} ↑${ahead})` : 'Sync',
+      label:
+        ahead > 0 || behind > 0
+          ? t('mobileSourceControlActions.syncBehind', {
+              behindCommitCount: behind,
+              aheadCommitCount: ahead
+            })
+          : t('mobileSourceControlActions.sync'),
       iconKey: 'sync',
       disabled: busy || !upstreamKnown || !hasUpstream || (ahead === 0 && behind === 0),
       hint:
         !upstreamKnown || !hasUpstream
           ? remoteHint
           : ahead === 0 && behind === 0
-            ? 'Branch is up to date'
+            ? t('mobileSourceControlActions.branchUp')
             : undefined,
       loading: args.busyAction === 'sync',
       skipAutoClose: true,
       onPress: handlers.sync
     },
     {
-      label: 'Fetch',
+      label: t('mobileSourceControlActions.fetch'),
       iconKey: 'fetch',
       disabled: busy,
       loading: args.busyAction === 'fetch',
@@ -174,35 +199,40 @@ export function buildMobileSourceControlActions(
       onPress: handlers.fetch
     },
     {
-      label: 'Publish Branch',
+      label: t('mobileSourceControlActions.publishBranch'),
       iconKey: 'publish',
       disabled: busy || !upstreamKnown || hasUpstream,
       hint: !upstreamKnown
-        ? 'Checking branch status...'
+        ? t('mobileSourceControlActions.checking')
         : hasUpstream
-          ? 'Branch is already published'
+          ? t('mobileSourceControlActions.branchAlready')
           : undefined,
       loading: args.busyAction === 'publish',
       skipAutoClose: true,
       onPress: handlers.publish
     },
     {
-      label: behind > 0 ? `Fast-forward (${behind})` : 'Fast-forward',
+      label:
+        behind > 0
+          ? t('mobileSourceControlActions.fastForwardBehind', {
+              behindCommitCount: behind
+            })
+          : t('mobileSourceControlActions.fastForward'),
       iconKey: 'pull',
       disabled: busy || !upstreamKnown || !hasUpstream || behind === 0 || ahead > 0,
       hint: !hasUpstream
         ? remoteHint
         : behind === 0
-          ? 'Nothing to fast-forward'
+          ? t('mobileSourceControlActions.nothingFast')
           : ahead > 0
-            ? 'Local commits would be lost; pull instead'
+            ? t('mobileSourceControlActions.local')
             : undefined,
       loading: args.busyAction === 'fast-forward',
       skipAutoClose: true,
       onPress: handlers.fastForward
     },
     {
-      label: 'Rebase onto base',
+      label: t('mobileSourceControlActions.rebase'),
       iconKey: 'branch',
       disabled: busy,
       loading: args.busyAction === 'rebase',
@@ -210,14 +240,14 @@ export function buildMobileSourceControlActions(
       onPress: handlers.rebase
     },
     {
-      label: 'Switch branch',
+      label: t('mobileSourceControlActions.switch'),
       iconKey: 'branch',
       disabled: busy,
       skipAutoClose: true,
       onPress: handlers.checkout
     },
     {
-      label: 'Commits',
+      label: t('mobileSourceControlActions.commits'),
       iconKey: 'history',
       disabled: busy,
       onPress: handlers.history

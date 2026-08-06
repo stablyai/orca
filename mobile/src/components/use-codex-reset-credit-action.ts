@@ -10,14 +10,19 @@ import {
   requestCodexResetCredit
 } from './codex-reset-credit'
 import { useCodexResetCreditCapability } from './codex-reset-credit-capability'
+import { appendCodexResetCleanupWarning } from './codex-reset-cleanup-warning'
+import { t } from '@/i18n/mobile-i18n'
 
 function describeScope(snapshot: AccountsSnapshot, scope: CodexResetCreditExpectedScope): string {
   const account = snapshot.codex.accounts.find((candidate) => candidate.id === scope.accountId)
-  const identity = account?.email ?? 'the selected managed account'
+  const identity = account?.email ?? t('accounts.selectedManagedAccount')
   if (scope.target.runtime === 'host') {
-    return `${identity} on the host`
+    return t('useCodexResetCreditAction.identityHost', { identity: identity })
   }
-  return `${identity} on WSL ${scope.target.wslDistro}`
+  return t('useCodexResetCreditAction.identityWsl', {
+    identity: identity,
+    wslDistro: scope.target.wslDistro
+  })
 }
 
 export function useCodexResetCreditAction({
@@ -69,22 +74,25 @@ export function useCodexResetCreditAction({
         onSnapshot(result.snapshot)
         if ('status' in result) {
           const cleanupWarning = result.attemptJournalRetained
-            ? '\n\nThis phone could not clear the discarded retry record. Retrying it is safe, but the record must be cleared before a new reset can be confirmed for this account.'
+            ? t('useCodexResetCreditAction.phone')
             : ''
           Alert.alert(
-            'Reset details changed',
-            `The account or reset offer changed before the host contacted Codex. Review the updated details, then confirm again.${cleanupWarning}`
+            t('useCodexResetCreditAction.reset'),
+            appendCodexResetCleanupWarning(
+              t('useCodexResetCreditAction.account', { cleanupWarning: '' }),
+              cleanupWarning
+            )
           )
           return
         }
         const copy = getCodexResetCreditOutcomeCopy(result.outcome)
         const cleanupWarning = result.attemptJournalRetained
-          ? '\n\nThe host confirmed this attempt, but this phone could not clear its retry record. A later retry will reuse the same safe operation ID.'
+          ? t('useCodexResetCreditAction.host')
           : ''
-        Alert.alert(copy.title, `${copy.message}${cleanupWarning}`)
+        Alert.alert(copy.title, appendCodexResetCleanupWarning(copy.message, cleanupWarning))
       } catch (error) {
         Alert.alert(
-          'Could not reset rate limits',
+          t('useCodexResetCreditAction.could'),
           error instanceof Error ? error.message : String(error)
         )
       } finally {
@@ -102,11 +110,16 @@ export function useCodexResetCreditAction({
     const confirmedScope = resetScope
     const confirmedLabel = describeScope(snapshot, confirmedScope)
     Alert.alert(
-      'Use a rate-limit reset?',
-      `This spends one earned reset for ${confirmedLabel} and immediately resets eligible rate-limit windows.`,
+      t('useCodexResetCreditAction.useRate'),
+      t('useCodexResetCreditAction.spends', {
+        confirmedLabel: confirmedLabel
+      }),
       [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Use reset', onPress: () => void consume(confirmedScope) }
+        { text: t('useCodexResetCreditAction.cancel'), style: 'cancel' },
+        {
+          text: t('useCodexResetCreditAction.useReset'),
+          onPress: () => void consume(confirmedScope)
+        }
       ]
     )
   }, [accountMutationBusy, connected, consume, resetScope, resetting, snapshot, supported])

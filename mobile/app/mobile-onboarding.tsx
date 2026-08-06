@@ -23,6 +23,7 @@ import {
   type MobileSessionView
 } from '../src/storage/session-view-preferences'
 import { savePushNotificationsEnabled } from '../src/storage/preferences'
+import { t } from '@/i18n/mobile-i18n'
 
 const SLIDE_DURATION_MS = 280
 
@@ -109,7 +110,7 @@ function MobileOnboardingFlow({
         await saveDefaultSessionView(view)
         advanceOrContinue()
       } catch {
-        setError('Your choice could not be saved. Try again.')
+        setError(t('mobileOnboarding.your'))
         setBusyChoice(null)
         choiceInFlightRef.current = false
       }
@@ -130,7 +131,7 @@ function MobileOnboardingFlow({
         await savePushNotificationsEnabled(enabled)
         advanceOrContinue()
       } catch {
-        setError('Notification settings could not be updated. Try again.')
+        setError(t('mobileOnboarding.notification'))
         setBusyChoice(null)
         choiceInFlightRef.current = false
       }
@@ -144,13 +145,18 @@ function MobileOnboardingFlow({
     <SafeAreaView style={styles.container}>
       <View style={styles.brandRow}>
         <OrcaLogo size={22} />
-        <Text style={styles.brandName}>Orca</Text>
+        <Text style={styles.brandName}>{t('mobileOnboarding.orca')}</Text>
         {steps.length > 1 ? (
           <View
             accessible
             accessibilityRole="progressbar"
-            accessibilityLabel="Onboarding progress"
-            accessibilityValue={{ text: `Step ${activeIndex + 1} of ${steps.length}` }}
+            accessibilityLabel={t('mobileOnboarding.onboarding')}
+            accessibilityValue={{
+              text: t('onboarding.progress', {
+                currentStep: activeIndex + 1,
+                totalSteps: steps.length
+              })
+            }}
             style={styles.progress}
           >
             {steps.map((step, index) => (

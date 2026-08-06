@@ -25,8 +25,10 @@ import {
   isMobileGitStageableEntry,
   type MobileGitFileStatus,
   type MobileGitStatusEntry,
-  type MobileGitStatusResult
+  type MobileGitStatusResult,
+  type MobileGitUpstreamStatus
 } from './mobile-git-status'
+import { t } from '@/i18n/mobile-i18n'
 
 export type ScreenState =
   | { kind: 'loading' }
@@ -131,7 +133,21 @@ export function formatBranchLabel(branch: string | undefined, head: string | und
   if (branch?.startsWith('refs/heads/')) {
     return branch.slice('refs/heads/'.length)
   }
-  return branch || head?.slice(0, 7) || 'No branch'
+  return branch || head?.slice(0, 7) || t('mobileSourceControlScreenState.noBranch')
+}
+
+export function formatMobileUpstreamSyncLabel(
+  upstream: MobileGitUpstreamStatus | undefined
+): string | null {
+  if (!upstream) {
+    return null
+  }
+  return upstream.hasUpstream
+    ? t('mobileSourceControlScreenState.ahead', {
+        aheadCommitCount: upstream.ahead,
+        behindCommitCount: upstream.behind
+      })
+    : t('mobileSourceControlScreenState.noUpstream')
 }
 
 export function statusColor(status: MobileGitFileStatus): string {

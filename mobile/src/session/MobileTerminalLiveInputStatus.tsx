@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native'
 import { colors, typography } from '../theme/mobile-theme'
+import { t } from '@/i18n/mobile-i18n'
 
 type DictationStatus = {
   readonly isStarting: boolean
@@ -19,21 +20,21 @@ export function MobileTerminalLiveInputStatus({
   liveInputText
 }: MobileTerminalLiveInputStatusProps) {
   const title = dictation.isRecording
-    ? 'Listening'
+    ? t('mobileTerminalLiveInputStatus.listening')
     : dictation.isProcessing
-      ? 'Processing'
+      ? t('mobileTerminalLiveInputStatus.processing')
       : dictation.isStarting
-        ? 'Starting mic'
-        : 'Live input'
+        ? t('mobileTerminalLiveInputStatus.starting')
+        : t('mobileTerminalLiveInputStatus.live')
   const detail = dictation.isRecording
-    ? 'Tap mic to stop'
+    ? t('mobileTerminalLiveInputStatus.tapMic')
     : dictation.isProcessing
-      ? 'Transcribing on desktop'
+      ? t('mobileTerminalLiveInputStatus.transcribing')
       : dictation.isStarting
-        ? 'Preparing microphone'
+        ? t('mobileTerminalLiveInputStatus.preparing')
         : isAttaching
-          ? 'Uploading image to host'
-          : liveInputText || 'Tap to show keyboard'
+          ? t('mobileTerminalLiveInputStatus.uploading')
+          : liveInputText || t('mobileTerminalLiveInputStatus.tapShow')
 
   return (
     <View style={styles.status}>

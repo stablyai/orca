@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { BottomDrawer } from './BottomDrawer'
+import { t } from '@/i18n/mobile-i18n'
 
 export type SetupTrustPrompt = {
   repoId: string
@@ -40,18 +41,21 @@ export function SetupHookTrustDrawer({
           <View style={styles.trustHeader}>
             <Text style={styles.title}>
               {prompt.previouslyApproved
-                ? `${prompt.repoName}'s setup script changed`
-                : `Run setup from ${prompt.repoName}?`}
+                ? t('setupHookTrustDrawer.repo', {
+                    repoName: prompt.repoName
+                  })
+                : t('setupHookTrustDrawer.runSetup', {
+                    repoName: prompt.repoName
+                  })}
             </Text>
-            <Text style={styles.subtitle}>
-              This repository's orca.yaml runs before the workspace starts. Only run it if you trust
-              this repository.
-            </Text>
+            <Text style={styles.subtitle}>{t('setupHookTrustDrawer.repositorys')}</Text>
           </View>
 
           <View style={styles.trustScriptBox}>
             <Text style={styles.trustScriptLabel}>
-              {prompt.previouslyApproved ? 'New setup script' : 'Setup script'}
+              {prompt.previouslyApproved
+                ? t('setupHookTrustDrawer.new')
+                : t('setupHookTrustDrawer.setup')}
             </Text>
             <Text style={styles.trustScriptText}>{prompt.scriptContent}</Text>
           </View>
@@ -59,16 +63,16 @@ export function SetupHookTrustDrawer({
           <View style={styles.trustActionGroup}>
             <Pressable style={styles.trustActionRow} disabled={busy} onPress={onRunOnce}>
               <Check size={16} color={colors.textPrimary} />
-              <Text style={styles.trustActionText}>Run hooks</Text>
+              <Text style={styles.trustActionText}>{t('setupHookTrustDrawer.runHooks')}</Text>
             </Pressable>
             <View style={styles.trustActionSeparator} />
             <Pressable style={styles.trustActionRow} disabled={busy} onPress={onAlwaysTrust}>
               <Check size={16} color={colors.textPrimary} />
-              <Text style={styles.trustActionText}>Always trust and run</Text>
+              <Text style={styles.trustActionText}>{t('setupHookTrustDrawer.always')}</Text>
             </Pressable>
             <View style={styles.trustActionSeparator} />
             <Pressable style={styles.trustActionRow} disabled={busy} onPress={onDontRun}>
-              <Text style={styles.trustActionText}>Don't run</Text>
+              <Text style={styles.trustActionText}>{t('setupHookTrustDrawer.do')}</Text>
             </Pressable>
           </View>
         </View>

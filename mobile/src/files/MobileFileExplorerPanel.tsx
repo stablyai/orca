@@ -36,6 +36,7 @@ import {
 import { fileExplorerStyles as styles } from './mobile-file-explorer-styles'
 import { MobileFileExplorerRow } from './mobile-file-explorer-row'
 import { navigateToMobileFilePreview } from './mobile-file-preview-navigation'
+import { t } from '@/i18n/mobile-i18n'
 
 export function MobileFileExplorerPanel(props: {
   hostId: string
@@ -69,7 +70,9 @@ export function MobileFileExplorerPanel(props: {
 
       if (!client || connState !== 'connected') {
         const message =
-          connState === 'connected' ? 'Connecting to desktop...' : 'Waiting for desktop...'
+          connState === 'connected'
+            ? t('mobileFileExplorerPanel.connecting')
+            : t('mobileFileExplorerPanel.waiting')
         if (rootLoad) {
           const hasLoadedRoot =
             (getDirectoryCacheState(directoryCacheRef.current, '')?.entries.length ?? 0) > 0
@@ -140,10 +143,12 @@ export function MobileFileExplorerPanel(props: {
               return
             }
             throw new Error(
-              legacy.error?.message || response.error?.message || 'Unable to load files'
+              legacy.error?.message ||
+                response.error?.message ||
+                t('mobileFileExplorerPanel.unable')
             )
           }
-          throw new Error(response.error?.message || 'Unable to load files')
+          throw new Error(response.error?.message || t('mobileFileExplorerPanel.unable'))
         }
         if (
           !isCurrentDirectoryLoad(directoryLoadRevisionsRef.current, scopeRef.current, loadToken)
@@ -164,7 +169,7 @@ export function MobileFileExplorerPanel(props: {
         ) {
           return
         }
-        const message = err instanceof Error ? err.message : 'Unable to load files'
+        const message = err instanceof Error ? err.message : t('mobileFileExplorerPanel.unable')
         if (rootLoad) {
           // Why: a failed background refresh keeps the cached tree browsable;
           // only a cold load surfaces the full-screen error.
@@ -293,7 +298,7 @@ export function MobileFileExplorerPanel(props: {
           style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
           onPress={() => onRequestClose?.()}
           hitSlop={8}
-          accessibilityLabel="Close files"
+          accessibilityLabel={t('mobileFileExplorerPanel.close')}
         >
           <X size={20} color={colors.textSecondary} strokeWidth={2.2} />
         </Pressable>
@@ -302,18 +307,18 @@ export function MobileFileExplorerPanel(props: {
           style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
           onPress={() => router.back()}
           hitSlop={8}
-          accessibilityLabel="Back to session"
+          accessibilityLabel={t('mobileFileExplorerPanel.back')}
         >
           <ChevronLeft size={22} color={colors.textSecondary} strokeWidth={2.2} />
         </Pressable>
       )}
       <View style={styles.titleBlock}>
         <Text style={styles.title} numberOfLines={1}>
-          Files
+          {t('mobileFileExplorerPanel.files')}
         </Text>
         <Text style={styles.meta} numberOfLines={1}>
           {worktreeLabel}
-          {legacyListTruncated ? ' - Showing first 5000' : ''}
+          {legacyListTruncated ? t('mobileFileExplorerPanel.showing') : ''}
         </Text>
       </View>
     </View>
@@ -335,12 +340,12 @@ export function MobileFileExplorerPanel(props: {
           connState !== 'connected' && hostId ? void forceReconnect(hostId) : void loadDirectory('')
         }
       >
-        <Text style={styles.retryText}>Retry</Text>
+        <Text style={styles.retryText}>{t('mobileFileExplorerPanel.retry')}</Text>
       </Pressable>
     </View>
   ) : rows.length === 0 ? (
     <View style={styles.state}>
-      <Text style={styles.emptyText}>No files found</Text>
+      <Text style={styles.emptyText}>{t('mobileFileExplorerPanel.no')}</Text>
     </View>
   ) : (
     <FlatList

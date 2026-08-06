@@ -1,3 +1,4 @@
+import { t } from '@/i18n/mobile-i18n'
 // Tiny, dependency-free markdown model for PR comment bodies. We render GitHub
 // markdown without a third-party RN markdown library (the previous dependency hung
 // the JS thread when a comment list mounted). Scope is deliberately small — the
@@ -67,9 +68,13 @@ function parseSegment(text: string): MarkdownBlock[] {
     }
     if (m[1].toLowerCase() === 'details') {
       const sm = SUMMARY.exec(m[2])
-      const summary = sm ? stripHtmlTags(sm[1]).trim() : 'Details'
+      const summary = sm ? stripHtmlTags(sm[1]).trim() : t('markdownBlocks.details')
       const body = m[2].replace(SUMMARY, '')
-      blocks.push({ kind: 'details', summary: summary || 'Details', body: parseSegment(body) })
+      blocks.push({
+        kind: 'details',
+        summary: summary || t('markdownBlocks.details'),
+        body: parseSegment(body)
+      })
     } else {
       blocks.push({ kind: 'quote', text: stripHtmlTags(m[2]).trim() })
     }

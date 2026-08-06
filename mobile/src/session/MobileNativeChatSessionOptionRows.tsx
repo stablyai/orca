@@ -8,6 +8,13 @@ import type {
   SessionOptionDescriptor,
   SessionOptionValue
 } from '../../../src/shared/native-chat-session-options'
+import {
+  mobileSessionChoiceLabel,
+  mobileSessionOptionLabel
+} from './mobile-native-chat-session-option-labels'
+import { createMobileTranslator } from '@/i18n/mobile-i18n'
+
+const tr = createMobileTranslator('mobileNativeChatSessionOptions')
 
 /** Muted one-liner above a group — dispatch state, or why a row is locked. */
 export function SessionOptionCaption({ children }: { children: string }): React.JSX.Element {
@@ -173,7 +180,7 @@ export function DescriptorRows({
   if (descriptor.action?.type === 'toggle-command') {
     return (
       <ActionRow
-        label={`Toggle ${descriptor.label.toLowerCase()}`}
+        label={tr('toggleOption', { optionLabel: mobileSessionOptionLabel(descriptor) })}
         disabled={locked}
         grouped={grouped}
         onPress={onInvokeAction}
@@ -184,7 +191,7 @@ export function DescriptorRows({
   if (descriptor.action?.type === 'agent-picker') {
     return (
       <ActionRow
-        label="Choose in agent picker…"
+        label={tr('chooseInAgentPicker')}
         disabled={locked}
         grouped={grouped}
         onPress={onInvokeAction}
@@ -197,10 +204,10 @@ export function DescriptorRows({
     return (
       <>
         {current === undefined ? (
-          <SessionOptionCaption>Current value unknown — pick On or Off</SessionOptionCaption>
+          <SessionOptionCaption>{tr('valueUnknown')}</SessionOptionCaption>
         ) : null}
         <ChoiceRow
-          label="On"
+          label={tr('optionValue.on')}
           selected={current === true}
           disabled={locked}
           grouped={grouped}
@@ -208,7 +215,7 @@ export function DescriptorRows({
           onPress={() => onSetOption(true)}
         />
         <ChoiceRow
-          label="Off"
+          label={tr('optionValue.off')}
           selected={current === false}
           disabled={locked}
           grouped={grouped}
@@ -224,7 +231,7 @@ export function DescriptorRows({
       {choices.map((choice, index) => (
         <ChoiceRow
           key={choice.value}
-          label={choice.label}
+          label={mobileSessionChoiceLabel(choice)}
           description={choice.description}
           selected={choice.value === currentValue}
           disabled={locked}

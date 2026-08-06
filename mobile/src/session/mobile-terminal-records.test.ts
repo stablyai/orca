@@ -4,6 +4,7 @@ import {
   mergeTerminalListWithKnownRecords,
   mergeTerminalRecordsByCurrentOrder,
   mobileSessionTabsEqual,
+  removeTerminalRecordByHandle,
   type MobileTerminalSessionTab,
   type TerminalRecord
 } from './mobile-terminal-records'
@@ -25,6 +26,17 @@ const darkTheme = {
 }
 
 describe('mobile terminal records', () => {
+  it('prunes a closed session-tab terminal immediately', () => {
+    const terminals: TerminalRecord[] = [
+      { handle: 'pty-1', title: 'One', isActive: true },
+      { handle: 'pty-2', title: 'Two', isActive: false }
+    ]
+
+    expect(removeTerminalRecordByHandle(terminals, 'pty-1')).toEqual([
+      { handle: 'pty-2', title: 'Two', isActive: false }
+    ])
+  })
+
   it('keeps the known theme when a session-tab snapshot omits it', () => {
     const known: TerminalRecord[] = [
       { handle: 'pty-1', title: 'Old title', terminalTheme: darkTheme, isActive: false }

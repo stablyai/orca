@@ -1,18 +1,21 @@
 import type { WorkspaceStatusDefinition } from '../../../src/shared/types'
+import { t } from '@/i18n/mobile-i18n'
 import {
-  DEFAULT_MOBILE_WORKSPACE_STATUSES,
   coerceMobileWorkspaceStatuses,
+  getDefaultMobileWorkspaceStatuses,
   getMobileWorkspaceStatus,
   getMobileWorkspaceStatusGroupKey
 } from './mobile-workspace-statuses'
 import { applyMobileWorkspaceLineage } from './mobile-workspace-lineage'
-import { getPRGroupKey, PR_GROUP_LABELS, PR_GROUP_ORDER } from './workspace-pr-status-groups'
+import { getPRGroupKey, getPRGroupLabel, PR_GROUP_ORDER } from './workspace-pr-status-groups'
 import type { FilterState, Section, Worktree } from './workspace-list-types'
 import type { MobileGroupMode, MobileSortMode } from './workspace-view-settings'
 import { sortWorktrees } from './workspace-list-ordering'
 
 export type { FilterState, Section, Worktree } from './workspace-list-types'
 export { CREATE_GRACE_MS, getWorktreeStatus, sortWorktrees } from './workspace-list-ordering'
+
+const MISSING_REPOSITORY_GROUP_KEY = '\0missing-repository'
 
 function makeSection(
   key: string,
@@ -127,7 +130,7 @@ export function buildSections(
   groupMode: MobileGroupMode,
   pinnedIds: Set<string>,
   repoIdsByName: ReadonlyMap<string, string> = new Map(),
-  workspaceStatuses: readonly WorkspaceStatusDefinition[] = DEFAULT_MOBILE_WORKSPACE_STATUSES,
+  workspaceStatuses: readonly WorkspaceStatusDefinition[] = getDefaultMobileWorkspaceStatuses(),
   collapsedGroups: ReadonlySet<string> = new Set()
 ): Section[] {
   const filtered = filterWorktrees(worktrees, filters, search)
@@ -140,17 +143,25 @@ export function buildSections(
 
   const sections: Section[] = []
   if (pinned.length > 0) {
-    sections.push(makeSection('pinned', 'Pinned', pinned, 'pin'))
+    sections.push(makeSection('pinned', t('task.pinned'), pinned, 'pin'))
   }
 
   if (groupMode === 'none') {
     if (canonicalGroupWorktrees.length > 0) {
-      sections.push(makeSection('all', 'All', canonicalGroupWorktrees, undefined, collapsedGroups))
+      sections.push(
+        makeSection(
+          'all',
+          t('mobileSmartSourceModes.all'),
+          canonicalGroupWorktrees,
+          undefined,
+          collapsedGroups
+        )
+      )
     }
   } else if (groupMode === 'repo') {
     const byRepo = new Map<string, Worktree[]>()
     for (const w of canonicalGroupWorktrees) {
-      const key = w.repo || 'Unknown'
+      const key = w.repo || MISSING_REPOSITORY_GROUP_KEY
       const list = byRepo.get(key)
       if (list) {
         list.push(w)
@@ -174,8 +185,10 @@ export function buildSections(
         byRepo.set(displayName, [])
       }
     }
-    for (const [repo, items] of byRepo) {
-      const key = `repo:${repoIdsByName.get(repo) ?? repo}`
+    for (const [repoIdentity, items] of byRepo) {
+      const missingRepository = repoIdentity === MISSING_REPOSITORY_GROUP_KEY
+      const repo = missingRepository ? t('task.unknown') : repoIdentity
+      const key = missingRepository ? 'repo:missing' : `repo:${repoIdsByName.get(repo) ?? repo}`
       sections.push(
         makeSection(key, repo, orderMainWorktreeFirst(items), undefined, collapsedGroups)
       )
@@ -223,7 +236,7 @@ export function buildSections(
         sections.push(
           makeSection(
             `pr:${groupKey}`,
-            PR_GROUP_LABELS[groupKey],
+            getPRGroupLabel(groupKey),
             items,
             undefined,
             collapsedGroups

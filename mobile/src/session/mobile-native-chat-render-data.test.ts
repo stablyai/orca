@@ -1,10 +1,17 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { mobileI18n } from '../i18n/mobile-i18n'
 import {
   buildMobileNativeChatTransientData,
   foldMobileNativeChatMessages,
   mobileNativeChatEmptyState
 } from './mobile-native-chat-render-data'
+
+const INITIAL_LOCALE = mobileI18n.language
+
+afterEach(async () => {
+  await mobileI18n.changeLanguage(INITIAL_LOCALE)
+})
 
 function assistant(id: string, text: string): NativeChatMessage {
   return {
@@ -36,6 +43,19 @@ describe('mobileNativeChatEmptyState', () => {
     expect(mobileNativeChatEmptyState('waiting-session', null)?.title).toBe(
       'Start a chat with the agent'
     )
+  })
+
+  it('localizes the complete empty-state templates', async () => {
+    await mobileI18n.changeLanguage('es')
+
+    expect(mobileNativeChatEmptyState('waiting-session', null)).toEqual({
+      title: 'Inicia un chat con un agente',
+      subtitle: 'Pide a un agente que inspeccione código, explique resultados o haga un cambio.'
+    })
+    expect(mobileNativeChatEmptyState('error', 'claude')).toEqual({
+      title: 'No se pudo cargar la conversación',
+      subtitle: 'No se pudo leer la transcripción. Vuelve al terminal para seguir trabajando.'
+    })
   })
 
   it('prefers the provided error message over the default subtitle', () => {
