@@ -13,16 +13,18 @@ import {
   cursorSidecarScanResponseSchema
 } from '../shared/cursor-sidecar-scan'
 import { readVerifiedBoundedTextFile } from '../shared/node-verified-bounded-text-file'
-import type { RequestContext } from './dispatcher'
 import {
   discoverCursorSidecarCandidates,
   type CursorSidecarScanCandidate,
-  type CursorSidecarScanCaps
+  type CursorSidecarScanCaps,
+  type CursorSidecarScanContext
 } from './cursor-sidecar-scan-discovery'
+
+export type { CursorSidecarScanContext }
 
 export async function scanCursorSidecars(
   input: unknown,
-  context: RequestContext
+  context: CursorSidecarScanContext
 ): Promise<CursorSidecarScanResponse> {
   const request = cursorSidecarScanRequestSchema.parse(input)
   const startedAt = Date.now()
@@ -56,7 +58,7 @@ async function readCandidates(
   rootRealPath: string,
   caps: CursorSidecarScanCaps,
   response: CursorSidecarScanResponse,
-  context: RequestContext
+  context: CursorSidecarScanContext
 ): Promise<void> {
   for (let index = 0; index < candidates.length; index += 1) {
     throwIfCancelled(context)
@@ -150,7 +152,7 @@ function isMissing(error: unknown): boolean {
   return code === 'ENOENT' || code === 'ENOTDIR'
 }
 
-function throwIfCancelled(context: RequestContext): void {
+function throwIfCancelled(context: CursorSidecarScanContext): void {
   if (context.isStale() || context.signal?.aborted) {
     throw new Error('cursor_sidecar_scan_cancelled')
   }

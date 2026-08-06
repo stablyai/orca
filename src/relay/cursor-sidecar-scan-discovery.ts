@@ -8,6 +8,11 @@ import type {
 } from '../shared/cursor-sidecar-scan'
 import type { RequestContext } from './dispatcher'
 
+/** Why: the relay also runs this scan in-process for its own Agent Session
+ *  History handler, which has no dispatcher request behind it. Narrow to the
+ *  cancellation surface so both callers can satisfy it. */
+export type CursorSidecarScanContext = Pick<RequestContext, 'isStale' | 'signal'>
+
 const BUCKET_PATTERN = /^[0-9a-f]{32}$/u
 const BUCKET_READ_CONCURRENCY = 8
 
@@ -32,7 +37,7 @@ export async function discoverCursorSidecarCandidates(args: {
   request: CursorSidecarScanRequest
   caps: CursorSidecarScanCaps
   response: CursorSidecarScanResponse
-  context: RequestContext
+  context: CursorSidecarScanContext
 }): Promise<{ rootRealPath: string; candidates: CursorSidecarScanCandidate[] } | null> {
   const chatsRoot = args.request.chatsRoot
   let rootRealPath: string
@@ -62,7 +67,7 @@ async function scopeBuckets(
   args: {
     caps: CursorSidecarScanCaps
     response: CursorSidecarScanResponse
-    context: RequestContext
+    context: CursorSidecarScanContext
   }
 ): Promise<Map<string, Bucket>> {
   const paths = [...new Set(request.scopePaths.map((value) => value.trim()).filter(Boolean))].sort()
@@ -121,7 +126,7 @@ async function retainSessions(
   args: {
     caps: CursorSidecarScanCaps
     response: CursorSidecarScanResponse
-    context: RequestContext
+    context: CursorSidecarScanContext
   }
 ): Promise<(Bucket & { sessionId: string })[]> {
   const retained: (Bucket & { sessionId: string })[] = []
@@ -179,7 +184,7 @@ async function eligibleCandidates(
   args: {
     caps: CursorSidecarScanCaps
     response: CursorSidecarScanResponse
-    context: RequestContext
+    context: CursorSidecarScanContext
   }
 ): Promise<CursorSidecarScanCandidate[]> {
   const candidates: CursorSidecarScanCandidate[] = []
@@ -271,7 +276,7 @@ function isMissing(error: unknown): boolean {
   return code === 'ENOENT' || code === 'ENOTDIR'
 }
 
-function throwIfCancelled(context: RequestContext): void {
+function throwIfCancelled(context: CursorSidecarScanContext): void {
   if (context.isStale() || context.signal?.aborted) {
     throw new Error('cursor_sidecar_scan_cancelled')
   }

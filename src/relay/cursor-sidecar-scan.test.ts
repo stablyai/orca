@@ -7,7 +7,7 @@ import { defaultCursorSidecarScanRequest } from '../shared/cursor-sidecar-scan'
 import { cursorBucketForCwd } from '../main/ai-vault/session-scanner-cursor-paths'
 
 const roots: string[] = []
-const context = { clientId: 1, isStale: () => false }
+const context = { isStale: () => false }
 
 async function createRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-cursor-scan-'))
@@ -249,7 +249,6 @@ describe('scanCursorSidecars', () => {
 
     await expect(
       scanCursorSidecars(defaultCursorSidecarScanRequest(chatsRoot, [], process.platform), {
-        clientId: 1,
         isStale: () => true
       })
     ).rejects.toThrow('cursor_sidecar_scan_cancelled')

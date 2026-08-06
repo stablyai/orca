@@ -93,6 +93,8 @@ import {
 } from '../../shared/agent-prompt-injection'
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../shared/clipboard-text'
 import { projectHostSetupProjectionFromRepos } from '../../shared/project-host-setup-projection'
+import { detectedAgentInventory } from '../../shared/detected-agent-inventory'
+import { resetRuntimeCursorCommandCacheForTests } from './runtime-cursor-command'
 import {
   registerSshFilesystemProvider,
   unregisterSshFilesystemProvider
@@ -268,6 +270,8 @@ const {
   applyAgentStatusHooksEnabledMock,
   detectInstalledAgentsWithShellPathHydrationMock,
   detectRemoteAgentsMock,
+  detectInstalledAgentCommandsWithShellPathHydrationMock,
+  detectRemoteAgentCommandsMock,
   markCodexProjectTrustedMock,
   markCopilotFolderTrustedMock,
   markCursorWorkspaceTrustedMock,
@@ -375,6 +379,8 @@ const {
     applyAgentStatusHooksEnabledMock: vi.fn(),
     detectInstalledAgentsWithShellPathHydrationMock: vi.fn(),
     detectRemoteAgentsMock: vi.fn(),
+    detectInstalledAgentCommandsWithShellPathHydrationMock: vi.fn(),
+    detectRemoteAgentCommandsMock: vi.fn(),
     markCodexProjectTrustedMock: vi.fn(),
     markCopilotFolderTrustedMock: vi.fn(),
     markCursorWorkspaceTrustedMock: vi.fn(),
@@ -444,6 +450,14 @@ vi.mock('../ipc/ssh', () => ({
 vi.mock('../ipc/preflight', () => ({
   detectInstalledAgentsWithShellPathHydration: detectInstalledAgentsWithShellPathHydrationMock,
   detectRemoteAgents: detectRemoteAgentsMock
+}))
+
+// Why: Cursor has no static launch command — every launch resolves it from the
+// detected inventory, so an unstubbed probe leaves the agent unlaunchable here.
+vi.mock('../ipc/tui-agent-inventory-detection', () => ({
+  detectInstalledAgentCommandsWithShellPathHydration:
+    detectInstalledAgentCommandsWithShellPathHydrationMock,
+  detectRemoteAgentCommands: detectRemoteAgentCommandsMock
 }))
 
 vi.mock('../agent-hooks/managed-agent-hook-controls', () => ({
@@ -795,6 +809,16 @@ function resetRuntimeTestMocks(): void {
   detectInstalledAgentsWithShellPathHydrationMock.mockResolvedValue([])
   detectRemoteAgentsMock.mockReset()
   detectRemoteAgentsMock.mockResolvedValue([])
+  // The probe is cached for 30s, so a stale entry would outlive these resets.
+  resetRuntimeCursorCommandCacheForTests()
+  detectInstalledAgentCommandsWithShellPathHydrationMock.mockReset()
+  detectInstalledAgentCommandsWithShellPathHydrationMock.mockResolvedValue(
+    detectedAgentInventory(['cursor'], { cursor: 'cursor-agent' })
+  )
+  detectRemoteAgentCommandsMock.mockReset()
+  detectRemoteAgentCommandsMock.mockResolvedValue(
+    detectedAgentInventory(['cursor'], { cursor: 'cursor-agent' })
+  )
   markCodexProjectTrustedMock.mockReset()
   markCopilotFolderTrustedMock.mockReset()
   markCursorWorkspaceTrustedMock.mockReset()

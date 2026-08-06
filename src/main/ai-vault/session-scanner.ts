@@ -5,7 +5,7 @@ import type {
   AiVaultSession
 } from '../../shared/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
-import { buildAiVaultSessionId } from '../../shared/ai-vault-session-id'
+import { withSessionExecutionHost } from './session-scanner-execution-host'
 import { withSpan } from '../observability/tracer'
 import { sessionSortTime } from './session-scanner-accumulator'
 import { mergeAiVaultSessions } from './session-list-results'
@@ -315,26 +315,6 @@ async function readOptionalTextFile(path: string): Promise<string | null> {
     return await readFile(path, 'utf-8')
   } catch {
     return null
-  }
-}
-
-function withSessionExecutionHost(
-  session: AiVaultSession,
-  executionHostId: ExecutionHostId
-): AiVaultSession {
-  if (session.executionHostId === executionHostId) {
-    return session
-  }
-  return {
-    ...session,
-    executionHostId,
-    id: buildAiVaultSessionId({
-      executionHostId,
-      agent: session.agent,
-      sessionId: session.sessionId,
-      filePath: session.filePath,
-      previousId: session.id
-    })
   }
 }
 
