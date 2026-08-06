@@ -12104,6 +12104,46 @@ describe('Store host-partitioned workspace sessions', () => {
     // Bad partition collapses to defaults rather than poisoning the map.
     expect(store.getWorkspaceSession('runtime:bad').activeRepoId).toBeNull()
   })
+
+  it('persists the salvaged session back to disk instead of re-salvaging every launch', async () => {
+    const worktreeId = 'repo-1::/worktree'
+    writeDataFile({
+      schemaVersion: 1,
+      workspaceSession: {
+        ...makeHostSession('local-repo'),
+        tabsByWorktree: {
+          [worktreeId]: [makeTerminalTab({ id: 'tab-keep', worktreeId }), { id: 'tab-corrupt' }]
+        }
+      },
+      workspaceSessionsByHostId: {
+        'runtime:env-a': {
+          ...makeHostSession('host-repo'),
+          tabsByWorktree: {
+            [worktreeId]: [makeTerminalTab({ id: 'host-keep', worktreeId }), { id: 'host-corrupt' }]
+          }
+        }
+      }
+    })
+
+    const store = await createStore()
+    store.flush()
+    const persisted = readDataFile() as {
+      workspaceSession?: { tabsByWorktree?: Record<string, { id: string }[]> }
+      workspaceSessionsByHostId?: Record<
+        string,
+        { tabsByWorktree?: Record<string, { id: string }[]> }
+      >
+    }
+
+    expect(persisted.workspaceSession?.tabsByWorktree?.[worktreeId]?.map((tab) => tab.id)).toEqual([
+      'tab-keep'
+    ])
+    expect(
+      persisted.workspaceSessionsByHostId?.['runtime:env-a']?.tabsByWorktree?.[worktreeId]?.map(
+        (tab) => tab.id
+      )
+    ).toEqual(['host-keep'])
+  })
 })
 
 describe('Store native-chat tab viewMode persistence', () => {

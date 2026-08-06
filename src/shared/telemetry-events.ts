@@ -1418,6 +1418,14 @@ const directSshReconnectOperationSchema = z
   })
   .strict()
 
+// Why: recurring salvage for one install signals a live corruption writer; paths stay out of telemetry, only the count travels.
+const workspaceSessionSalvagedSchema = z
+  .object({
+    host_kind: z.enum(['local', 'ssh', 'runtime']),
+    dropped_count: z.number().int().positive()
+  })
+  .strict()
+
 // ── Event registry: the one record the validator consumes ───────────────
 // Versioning: breaking changes (rename/re-mean/remove a key) need a new event name; in-place edits blend pre/post rows unmixably. Additive-optional fields are safe.
 export const eventSchemas = {
@@ -1425,6 +1433,8 @@ export const eventSchemas = {
   app_starred_orca: appStarredOrcaSchema,
   star_nag_outcome: starNagOutcomeEventSchema,
   feature_interaction_usage_bucket_reached: featureInteractionUsageBucketReachedSchema,
+
+  workspace_session_salvaged: workspaceSessionSalvagedSchema,
 
   repo_added: repoAddedSchema,
   add_repo_setup_step_action: addRepoSetupStepActionEventSchema,

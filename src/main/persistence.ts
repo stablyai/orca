@@ -133,7 +133,7 @@ import {
   ONBOARDING_FLOW_VERSION,
   ONBOARDING_FINAL_STEP
 } from '../shared/constants'
-import { parseWorkspaceSession } from '../shared/workspace-session-schema'
+import { parseWorkspaceSessionSalvaging } from '../shared/workspace-session-salvage'
 import { normalizeUsagePercentageDisplay } from '../shared/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../shared/status-bar-usage-mode'
 import { isExistingPersistedProfile } from '../shared/project-order-manual-default-notice'
@@ -579,13 +579,35 @@ function workspaceSessionPatchNeedsFullNormalization(patch: WorkspaceSessionPatc
 
 /** Normalize non-'local' host partitions; 'local' (the legacy workspaceSession blob) is dropped so the two surfaces never diverge.
  *  Each partition is zod-validated independently, so one corrupt host drops to defaults without taking out the others. Idempotent. */
+// Why: session parsing runs inside the Store constructor, before initTelemetry — track()
+// would drop these silently, so the events are collected and emitted once telemetry is up.
+const pendingWorkspaceSessionSalvageEvents: {
+  host_kind: 'local' | 'ssh' | 'runtime'
+  dropped_count: number
+}[] = []
+
+function recordWorkspaceSessionSalvage(
+  hostKind: 'local' | 'ssh' | 'runtime',
+  droppedCount: number
+): void {
+  pendingWorkspaceSessionSalvageEvents.push({ host_kind: hostKind, dropped_count: droppedCount })
+}
+
+/** Emit the salvage events collected during session load. Call after initTelemetry. */
+export function flushWorkspaceSessionSalvageTelemetry(): void {
+  for (const event of pendingWorkspaceSessionSalvageEvents.splice(0)) {
+    track('workspace_session_salvaged', event)
+  }
+}
+
 function parseWorkspaceSessionsByHostId(
   raw: unknown,
   defaults: WorkspaceSessionState
-): Partial<Record<ExecutionHostId, WorkspaceSessionState>> {
+): { partitions: Partial<Record<ExecutionHostId, WorkspaceSessionState>>; salvaged: boolean } {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return {}
+    return { partitions: {}, salvaged: false }
   }
+  let salvaged = false
   const partitions: Partial<Record<ExecutionHostId, WorkspaceSessionState>> = {}
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
     const hostId = normalizeExecutionHostId(key)
@@ -593,7 +615,7 @@ function parseWorkspaceSessionsByHostId(
     if (!hostId || hostId === LOCAL_EXECUTION_HOST_ID) {
       continue
     }
-    const result = parseWorkspaceSession(value)
+    const result = parseWorkspaceSessionSalvaging(value)
     if (!result.ok) {
       console.error(
         `[persistence] Corrupt workspace session for host ${hostId}, using defaults:`,
@@ -601,9 +623,20 @@ function parseWorkspaceSessionsByHostId(
       )
       continue
     }
+    if (result.droppedPaths.length > 0) {
+      console.warn(
+        `[persistence] Salvaged workspace session for host ${hostId}; dropped corrupt entries:`,
+        result.droppedPaths
+      )
+      recordWorkspaceSessionSalvage(
+        hostId.startsWith('runtime:') ? 'runtime' : 'ssh',
+        result.droppedPaths.length
+      )
+      salvaged = true
+    }
     partitions[hostId] = { ...defaults, ...result.value }
   }
-  return partitions
+  return { partitions, salvaged }
 }
 
 function backupPath(dataFile: string, index: number): string {
@@ -3631,7 +3664,7 @@ export class Store {
             if (parsed.workspaceSession === undefined) {
               return defaults.workspaceSession
             }
-            const result = parseWorkspaceSession(parsed.workspaceSession)
+            const result = parseWorkspaceSessionSalvaging(parsed.workspaceSession)
             if (!result.ok) {
               console.error(
                 '[persistence] Corrupt workspace session, using defaults:',
@@ -3639,13 +3672,29 @@ export class Store {
               )
               return defaults.workspaceSession
             }
+            if (result.droppedPaths.length > 0) {
+              console.warn(
+                '[persistence] Salvaged workspace session; dropped corrupt entries:',
+                result.droppedPaths
+              )
+              recordWorkspaceSessionSalvage('local', result.droppedPaths.length)
+              // Why: salvage repairs only the in-memory session; without a save the corrupt entries stay on disk and get re-dropped every launch.
+              this.loadNeedsSave = true
+            }
             return { ...defaults.workspaceSession, ...result.value }
           })(),
           // Why: per-host session partitions, validated independently; 'local' stays in workspaceSession for downgrade compat.
-          workspaceSessionsByHostId: parseWorkspaceSessionsByHostId(
-            parsed.workspaceSessionsByHostId,
-            defaults.workspaceSession
-          ),
+          workspaceSessionsByHostId: (() => {
+            const { partitions, salvaged } = parseWorkspaceSessionsByHostId(
+              parsed.workspaceSessionsByHostId,
+              defaults.workspaceSession
+            )
+            if (salvaged) {
+              // Why: salvage repairs only the in-memory partitions; without a save the corrupt entries stay on disk and get re-dropped every launch.
+              this.loadNeedsSave = true
+            }
+            return partitions
+          })(),
           sshTargets: (parsed.sshTargets ?? []).map(normalizeSshTarget),
           deletedSshConfigAliases: Array.isArray(parsed.deletedSshConfigAliases)
             ? parsed.deletedSshConfigAliases.filter(

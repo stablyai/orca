@@ -9,6 +9,7 @@ import {
   Store,
   initDataPath,
   getCanonicalUserDataPath,
+  flushWorkspaceSessionSalvageTelemetry,
   migrateMobilePairingDataToCanonicalUserDataPath
 } from './persistence'
 import { initSessionParseCachePersistence } from './ai-vault/session-parse-cache-persistence'
@@ -2178,6 +2179,8 @@ void app.whenReady().then(async () => {
   }
   // Why: telemetry must init before any IPC handler/renderer can call track(); it's a no-op in dev and while TELEMETRY_ENABLED is false, so it's safe early.
   initTelemetry(store)
+  // Why: session salvage happens during Store construction, before track() is wired.
+  flushWorkspaceSessionSalvageTelemetry()
   // Why: the breadcrumb alone never leaves the machine — it rides crash reports, and a hang is not
   // a crash (the app is force-quit, so no report is ever generated). Without this the incidence
   // number the watchdog exists to produce would sit unread on the user's disk. Must run after
