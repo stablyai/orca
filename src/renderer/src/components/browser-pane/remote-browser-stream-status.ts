@@ -18,8 +18,9 @@ export type RemoteBrowserStreamStatus =
   | { kind: 'opening' }
   /** A confirmed-live stream; the host has sent 'ready'. */
   | { kind: 'live' }
-  /** Automatic recovery is still running. The user is told, but not asked to act. */
-  | { kind: 'retrying'; attempt: number; notice: string }
+  // Automatic recovery is running. The notice is null until an attempt has actually failed, so a
+  // blip the budget absorbs in 500ms stays invisible — which is the whole point of having a budget.
+  | { kind: 'retrying'; notice: string | null }
   /** Automatic recovery is over. This is the only state that offers a reconnect. */
   | { kind: 'stopped'; notice: string }
 
@@ -27,11 +28,8 @@ export const REMOTE_BROWSER_STREAM_IDLE: RemoteBrowserStreamStatus = { kind: 'id
 export const REMOTE_BROWSER_STREAM_OPENING: RemoteBrowserStreamStatus = { kind: 'opening' }
 export const REMOTE_BROWSER_STREAM_LIVE: RemoteBrowserStreamStatus = { kind: 'live' }
 
-export function remoteBrowserStreamRetrying(
-  attempt: number,
-  notice: string
-): RemoteBrowserStreamStatus {
-  return { kind: 'retrying', attempt, notice }
+export function remoteBrowserStreamRetrying(notice: string | null): RemoteBrowserStreamStatus {
+  return { kind: 'retrying', notice }
 }
 
 export function remoteBrowserStreamStopped(notice: string): RemoteBrowserStreamStatus {
@@ -45,7 +43,10 @@ export function isRemoteBrowserStreamBusy(status: RemoteBrowserStreamStatus): bo
 
 /** The stream's own message. Incidental notices (input failures, URL validation) are separate. */
 export function remoteBrowserStreamNotice(status: RemoteBrowserStreamStatus): string | null {
-  return status.kind === 'retrying' || status.kind === 'stopped' ? status.notice : null
+  if (status.kind === 'stopped') {
+    return status.notice
+  }
+  return status.kind === 'retrying' ? status.notice : null
 }
 
 // Why only 'stopped': while attempts remain, a manual control competes with the automatic recovery

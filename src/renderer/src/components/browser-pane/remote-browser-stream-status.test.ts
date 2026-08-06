@@ -18,7 +18,7 @@ const ALL: RemoteBrowserStreamStatus[] = [
   REMOTE_BROWSER_STREAM_IDLE,
   REMOTE_BROWSER_STREAM_OPENING,
   REMOTE_BROWSER_STREAM_LIVE,
-  remoteBrowserStreamRetrying(3, 'Lost connection to the remote server.'),
+  remoteBrowserStreamRetrying('Lost connection to the remote server.'),
   remoteBrowserStreamStopped('Lost connection to the remote server.')
 ]
 
@@ -28,7 +28,14 @@ describe('remote browser stream status', () => {
   // the render coupling is the part no unit test can see.
   it('always carries a notice in the states that report a failure', () => {
     expect(remoteBrowserStreamNotice(remoteBrowserStreamStopped('gone'))).toBe('gone')
-    expect(remoteBrowserStreamNotice(remoteBrowserStreamRetrying(1, 'dropped'))).toBe('dropped')
+    expect(remoteBrowserStreamNotice(remoteBrowserStreamRetrying('dropped'))).toBe('dropped')
+  })
+
+  // The budget exists to absorb a blip invisibly, so a retry that has not failed yet says nothing.
+  it('stays silent while retrying until an attempt has actually failed', () => {
+    expect(remoteBrowserStreamNotice(remoteBrowserStreamRetrying(null))).toBeNull()
+    expect(isRemoteBrowserStreamBusy(remoteBrowserStreamRetrying(null))).toBe(true)
+    expect(canReconnectRemoteBrowserStream(remoteBrowserStreamRetrying(null))).toBe(false)
   })
 
   it('reports no notice while nothing has failed', () => {
@@ -59,7 +66,7 @@ describe('remote browser stream status', () => {
 
   it('is busy exactly while recovery is in flight', () => {
     expect(isRemoteBrowserStreamBusy(REMOTE_BROWSER_STREAM_OPENING)).toBe(true)
-    expect(isRemoteBrowserStreamBusy(remoteBrowserStreamRetrying(1, 'dropped'))).toBe(true)
+    expect(isRemoteBrowserStreamBusy(remoteBrowserStreamRetrying('dropped'))).toBe(true)
   })
 
   // The combination that must never be derivable: something to act on, with no way to act.

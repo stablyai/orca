@@ -47,18 +47,6 @@ describe('RemoteBrowserStreamRestartScheduler', () => {
     expect(run).toHaveBeenCalledTimes(5)
   })
 
-  it('marks only the final attempt as final', async () => {
-    vi.useFakeTimers()
-    const scheduler = new RemoteBrowserStreamRestartScheduler([10, 20, 40])
-    const seen: boolean[] = []
-    scheduler.schedule(async ({ isFinalAttempt }) => {
-      seen.push(isFinalAttempt)
-      return true
-    })
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(seen).toEqual([false, false, true])
-  })
-
   it('reset gives a spent scheduler its budget back so the user can ask again', async () => {
     vi.useFakeTimers()
     const scheduler = new RemoteBrowserStreamRestartScheduler([10, 20])

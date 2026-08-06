@@ -13,11 +13,7 @@ export const REMOTE_BROWSER_STREAM_RESTART_DELAYS_MS: readonly number[] = [
   500, 1_000, 2_000, 4_000, 8_000
 ]
 
-export type RemoteBrowserStreamRestartAttempt = (attempt: {
-  /** 1-based, for surfacing progress. */
-  attempt: number
-  isFinalAttempt: boolean
-}) => Promise<boolean>
+export type RemoteBrowserStreamRestartAttempt = () => Promise<boolean>
 
 export class RemoteBrowserStreamRestartScheduler {
   private attempt = 0
@@ -31,6 +27,8 @@ export class RemoteBrowserStreamRestartScheduler {
     private readonly onBudgetExhausted: () => void = () => {}
   ) {}
 
+  // Kept for tests: reset()/cancel() restoring the budget is behaviour worth asserting directly,
+  // and the counter is the only honest way to observe it.
   get attemptCount(): number {
     return this.attempt
   }
@@ -54,15 +52,14 @@ export class RemoteBrowserStreamRestartScheduler {
       return
     }
     const delayMs = this.delaysMs[this.attempt]!
-    const attempt = this.attempt + 1
-    this.attempt = attempt
+    this.attempt += 1
     const generation = this.generation
     this.timer = setTimeout(() => {
       this.timer = null
       if (generation !== this.generation) {
         return
       }
-      void run({ attempt, isFinalAttempt: attempt >= this.delaysMs.length })
+      void run()
         .then((shouldRetry) => {
           if (generation !== this.generation || !shouldRetry) {
             return

@@ -912,11 +912,19 @@ function RemoteBrowserPagePane({
   const [addressBarValue, setAddressBarValue] = useState(toDisplayUrl(browserTab.url))
   const [frameUrl, setFrameUrl] = useState<string | null>(null)
   const [frameMetadata, setFrameMetadata] = useState<BrowserScreencastFrameMetadata | null>(null)
-  // Pane-owned notices: navigation failures, input RPC failures, URL validation. Deliberately a
-  // separate channel from the stream's own notice — mixing them is what let an input failure repaint
-  // raw transport text over the stream's message, and what made the reconnect control depend on an
-  // unrelated string being non-null.
-  const [incidentalNotice, setIncidentalNotice] = useState<string | null>(null)
+  // Pane-owned notices, split by what they are ABOUT, because that decides who outranks whom:
+  //
+  //   'direct'      — feedback on what the user just did (URL validation). Always shown: it is the
+  //                   only response to their action, and suppressing it makes Enter look broken.
+  //   'consequence' — an operation that failed BECAUSE the stream is down (input, navigation RPCs).
+  //                   Outranked by the stream's own notice, which explains the cause; otherwise
+  //                   these repaint raw transport text over it on every stray click.
+  //
+  // Kept as one slot so the newest notice replaces the previous one, as a single toast should.
+  const [paneNotice, setPaneNotice] = useState<{
+    kind: 'direct' | 'consequence'
+    text: string
+  } | null>(null)
   // The single source for what the stream is doing. busy, the notice, and whether the reconnect
   // control renders are all derived below, so they cannot disagree — see
   // remote-browser-stream-status.ts for the four ways they used to.
@@ -930,8 +938,15 @@ function RemoteBrowserPagePane({
   // Derived, never stored. The stream's own notice wins over an incidental one: while the stream is
   // down every input RPC fails as a matter of course, and those failures must not overwrite the
   // message that explains why — nor can the reconnect control depend on one of them being present.
-  const busy = paneBusy || isRemoteBrowserStreamBusy(streamStatus)
-  const remoteError = remoteBrowserStreamNotice(streamStatus) ?? incidentalNotice
+  // Why 'stopped' forces busy off rather than OR-ing: paneBusy has its own clear paths, and a
+  // stopped stream delivers no frames to run them, so a navigation abandoned mid-flight could
+  // otherwise leave a spinner over a dead pane forever — the fourth defect, which the previous
+  // revision claimed to have made unwritable and had not.
+  const busy =
+    streamStatus.kind === 'stopped' ? false : paneBusy || isRemoteBrowserStreamBusy(streamStatus)
+  const streamNotice = remoteBrowserStreamNotice(streamStatus)
+  const remoteError =
+    paneNotice?.kind === 'direct' ? paneNotice.text : (streamNotice ?? paneNotice?.text ?? null)
   const contextMenuRef = useRef<HTMLDivElement>(null)
   const remoteViewportSizeRef = useRef<RemoteBrowserViewportSize | null>(null)
   const remoteCssViewportSizeRef = useRef<RemoteBrowserViewportSize | null>(null)
@@ -1024,7 +1039,16 @@ function RemoteBrowserPagePane({
           .removeRemoteBrowserPageHandle(currentBrowserTabIdRef.current, remotePageId)
       },
       getDeviceScaleFactor: getRemoteBrowserDeviceScaleFactor,
-      setStatus: setStreamStatus,
+      setStatus: (status) => {
+        setStreamStatus(status)
+        // Why the pane's notice is cleared on a fresh start or a recovery: it has no other owner,
+        // and without this a validation warning or a failed-input string from while the stream was
+        // down reappears over a healthy stream with nothing to dismiss it. This is what onReady's
+        // and open()'s setError(null) used to do before the notices were split.
+        if (status.kind === 'live' || status.kind === 'opening') {
+          setPaneNotice(null)
+        }
+      },
       applyTabInfo: (tab) => streamBridgeRef.current.applyTabInfo(tab),
       clearFrame: () => streamBridgeRef.current.clearFrame(),
       handleFrameBytes: (token, bytes) => streamBridgeRef.current.handleFrameBytes(token, bytes),
@@ -1081,7 +1105,7 @@ function RemoteBrowserPagePane({
       }
       remoteInputQueueRef.current = Promise.resolve()
       clearStreamFrame()
-      setIncidentalNotice(null)
+      setPaneNotice(null)
       setPaneBusy(false)
       // Why: a runtime-side tab close mirrors closing the visible tab; don't leave a dead pane behind.
       const workspacePageCount = state.browserPagesByWorkspace[browserTab.workspaceId]?.length ?? 0
@@ -1458,7 +1482,7 @@ function RemoteBrowserPagePane({
   const reconnectRemoteStream = useCallback((): void => {
     // No status write here: bumping the nonce re-runs the open effect, and open() publishes
     // 'opening'. Setting it from two places is how the old three-variable version drifted.
-    setIncidentalNotice(null)
+    setPaneNotice(null)
     // Why re-run the whole open effect rather than resume the stream: reconnect has to work in the
     // cases where there is nothing to resume — the remote page was never created, or the very first
     // open failed. Resuming a token only covers a stream that once existed.
@@ -1555,7 +1579,7 @@ function RemoteBrowserPagePane({
         return
       }
       setPaneBusy(true)
-      setIncidentalNotice(null)
+      setPaneNotice(null)
       onUpdatePageState(browserTab.id, { loading: true, loadError: null })
       try {
         const params =
@@ -1577,7 +1601,7 @@ function RemoteBrowserPagePane({
           return
         }
         const message = error instanceof Error ? error.message : 'Remote browser command failed.'
-        setIncidentalNotice(message)
+        setPaneNotice({ kind: 'consequence', text: message })
         onUpdatePageState(browserTab.id, {
           loading: false,
           // Why: validatedUrl is persisted, so redact the Kagi session token like the main-process failure path does.
@@ -1646,10 +1670,9 @@ function RemoteBrowserPagePane({
     })
     if (!nextUrl) {
       const message = 'Enter a valid http(s) or localhost URL.'
-      // Not guarded: this is feedback on what the user just typed, not a consequence of the stream
-      // being down, so suppressing it behind a reconnect offer would leave Enter doing nothing
-      // visible when the typed value is empty and no load-error overlay appears.
-      setIncidentalNotice(message)
+      // 'direct': the only response to what the user just typed. With an empty address bar no
+      // load-error overlay renders either, so outranking this would make Enter do nothing visible.
+      setPaneNotice({ kind: 'direct', text: message })
       onUpdatePageState(browserTab.id, {
         loadError: {
           code: 0,
@@ -1681,7 +1704,7 @@ function RemoteBrowserPagePane({
     event.preventDefault()
     image.focus()
     setContextMenu(null)
-    setIncidentalNotice(null)
+    setPaneNotice(null)
     enqueueRemoteInput(async () => {
       if (!isCurrentRemoteOperationToken(operationToken)) {
         return
@@ -1706,7 +1729,10 @@ function RemoteBrowserPagePane({
             closeMissingRemotePage(pageId)
             return
           }
-          setIncidentalNotice(error instanceof Error ? error.message : 'Remote mouse input failed.')
+          setPaneNotice({
+            kind: 'consequence',
+            text: error instanceof Error ? error.message : 'Remote mouse input failed.'
+          })
         }
       }
     })
@@ -1728,7 +1754,7 @@ function RemoteBrowserPagePane({
       return
     }
     event.preventDefault()
-    setIncidentalNotice(null)
+    setPaneNotice(null)
     enqueueRemoteInput(async () => {
       if (!isCurrentRemoteOperationToken(operationToken)) {
         return
@@ -1754,7 +1780,10 @@ function RemoteBrowserPagePane({
             closeMissingRemotePage(pageId)
             return
           }
-          setIncidentalNotice(error instanceof Error ? error.message : 'Remote mouse input failed.')
+          setPaneNotice({
+            kind: 'consequence',
+            text: error instanceof Error ? error.message : 'Remote mouse input failed.'
+          })
         }
       }
     })
@@ -1772,7 +1801,7 @@ function RemoteBrowserPagePane({
     }
     event.preventDefault()
     imageRef.current?.focus()
-    setIncidentalNotice(null)
+    setPaneNotice(null)
     setContextMenu({
       x: event.clientX,
       y: event.clientY,
@@ -1838,7 +1867,7 @@ function RemoteBrowserPagePane({
       return
     }
     event.preventDefault()
-    setIncidentalNotice(null)
+    setPaneNotice(null)
     enqueueRemoteInput(async () => {
       if (!isCurrentRemoteOperationToken(operationToken)) {
         return
@@ -1865,9 +1894,10 @@ function RemoteBrowserPagePane({
             closeMissingRemotePage(pageId)
             return
           }
-          setIncidentalNotice(
-            error instanceof Error ? error.message : 'Remote keyboard input failed.'
-          )
+          setPaneNotice({
+            kind: 'consequence',
+            text: error instanceof Error ? error.message : 'Remote keyboard input failed.'
+          })
         }
       }
     })
@@ -1915,7 +1945,10 @@ function RemoteBrowserPagePane({
               closeMissingRemotePage(pageId)
               return
             }
-            setIncidentalNotice(error instanceof Error ? error.message : 'Remote scroll failed.')
+            setPaneNotice({
+              kind: 'consequence',
+              text: error instanceof Error ? error.message : 'Remote scroll failed.'
+            })
           }
         }
       }).finally(() => {
@@ -1947,7 +1980,7 @@ function RemoteBrowserPagePane({
         return
       }
       event.preventDefault()
-      setIncidentalNotice(null)
+      setPaneNotice(null)
       const deltaMultiplier =
         event.deltaMode === WHEEL_DELTA_LINE
           ? 16

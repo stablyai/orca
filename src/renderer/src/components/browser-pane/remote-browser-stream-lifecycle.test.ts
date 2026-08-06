@@ -479,7 +479,10 @@ describe('RemoteBrowserStreamLifecycle', () => {
     expect(harness.subscribeAttempts).toBe(1)
   })
 
-  it('reports a transport error without tearing the stream down', async () => {
+  // A transport error is NOT guaranteed to be followed by a close: the web client's
+  // notifySubscriptionsError clears its subscription map and then delivers onError only. So this
+  // must land somewhere the user can act from, or the pane is stranded busy with no way back.
+  it('leaves a transport error actionable when no close follows it', async () => {
     const harness = createHarness()
     await openStreamAndConfirmReady(harness)
 
@@ -490,8 +493,9 @@ describe('RemoteBrowserStreamLifecycle', () => {
     // the user nothing they can act on.
     expect(harness.currentError).toBe('Lost connection to the remote server.')
     expect(harness.subscribeAttempts).toBe(1)
-    // And no stop is announced here — the close that follows owns the retry budget.
-    expect(harness.reconnectOffered).toBe(false)
+    expect(harness.reconnectOffered).toBe(true)
+    // Critically: not busy. A spinner here would also disable the pane's own input handlers.
+    expect(harness.busyLog.at(-1)).toBe(false)
   })
 
   it('ignores stream events once the pane is unmounted', async () => {
@@ -645,23 +649,39 @@ describe('RemoteBrowserStreamLifecycle transport error', () => {
     vi.useRealTimers()
   })
 
-  it('does not offer reconnect before the retry budget has run', async () => {
+  // The usual case: a close does follow. It must take the control back down for the whole ladder,
+  // so the user is not offered a manual retry that competes with the automatic one about to run.
+  it('withdraws the offer once the close starts the retry budget', async () => {
     const harness = createHarness()
     await openStreamAndConfirmReady(harness)
 
     harness.streams[0].emitTransportError('runtime_unavailable', 'socket reset by peer')
     await settle()
-    expect(harness.reconnectOffered).toBe(false)
-    expect(harness.currentError).toBe('Lost connection to the remote server.')
+    expect(harness.reconnectOffered).toBe(true)
 
-    // The close that follows starts the budget; the control stays down for its whole ladder.
     harness.failEverySubscribe(rpcError('runtime_unavailable', 'still down'))
     harness.streams[0].emitClose()
+    await settle()
+    expect(harness.reconnectOffered).toBe(false)
+
     await vi.advanceTimersByTimeAsync(600)
     expect(harness.reconnectOffered).toBe(false)
 
     await vi.advanceTimersByTimeAsync(60_000)
     expect(harness.reconnectOffered).toBe(true)
+  })
+
+  // The budget absorbs a blip invisibly: a drop whose first retry succeeds must say nothing at all.
+  it('says nothing when the first retry succeeds', async () => {
+    const harness = createHarness()
+    await openStreamAndConfirmReady(harness)
+
+    harness.streams[0].emitClose()
+    await vi.advanceTimersByTimeAsync(600)
+    harness.streams.at(-1)!.emitReady()
+    await settle()
+
+    expect(harness.errorLog.filter((entry) => entry !== null)).toEqual([])
   })
 })
 
