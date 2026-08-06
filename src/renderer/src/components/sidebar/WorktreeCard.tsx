@@ -131,7 +131,11 @@ type WorktreeCardProps = {
   onLineageToggle?: (event: React.MouseEvent<HTMLButtonElement>) => void
   isLineageDropTarget?: boolean
   onActivate?: () => void
-  onImmediateActivate?: (worktreeId: string, rowKey: string | undefined) => void
+  onImmediateActivate?: (
+    worktreeId: string,
+    rowKey: string | undefined,
+    navigationIntent: number
+  ) => void
   onSelectionGesture?: (event: React.MouseEvent<HTMLElement>, worktreeId: string) => boolean
   onContextMenuSelect?: (
     event: React.MouseEvent<HTMLElement>,
@@ -879,10 +883,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
         wasActive: isActive,
         sshDisconnected: isSshDisconnected
       })
-      onImmediateActivate?.(worktree.id, activationRowKey)
       void activateWorktreeFromSidebar(
         worktree.id,
-        worktree.hostId ?? (repo ? getRepoExecutionHostId(repo) : undefined)
+        worktree.hostId ?? (repo ? getRepoExecutionHostId(repo) : undefined),
+        (navigationIntent) => {
+          onImmediateActivate?.(worktree.id, activationRowKey, navigationIntent)
+        }
       )
       onActivate?.()
     },

@@ -359,6 +359,28 @@ describe('runtime-status slice', () => {
     expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration).toBe(1)
   })
 
+  it('does not publish a status result after its navigation guard is superseded', async () => {
+    const getStatus = vi
+      .fn()
+      .mockResolvedValue(createCompatibleRuntimeStatusResponse('runtime-new'))
+    stubRuntimeEnvironmentApi({ getStatus })
+    const store = createSliceStore()
+    store.getState().setRuntimeEnvironmentStatus('env-a', {
+      status: makeStatus({ runtimeId: 'runtime-old' }),
+      checkedAt: 1
+    })
+
+    const reachable = await store
+      .getState()
+      .refreshRuntimeEnvironmentStatus('env-a', 5_000, () => false)
+
+    expect(reachable).toBe(true)
+    expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.status?.runtimeId).toBe(
+      'runtime-old'
+    )
+    expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.checkedAt).toBe(1)
+  })
+
   it('advances connection generation after recovery without churning stable status polls', () => {
     const store = createSliceStore()
     store.getState().setRuntimeEnvironmentStatus('env-a', {

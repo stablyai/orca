@@ -1098,6 +1098,14 @@ describe('activateAndRevealWorktree', () => {
     })
 
     expect(result).toEqual({ primaryTabId: 'tab-1' })
+    const navigationIntent = vi.mocked(useAppStore.getState().setActiveView).mock.calls[0]?.[1]
+      ?.navigationIntent
+    expect(navigationIntent).toEqual(expect.any(Number))
+    expect(useAppStore.getState().setActiveWorktree).toHaveBeenCalledWith(
+      'wt-1',
+      undefined,
+      expect.objectContaining({ navigationIntent })
+    )
     expect(queueTabInitialCwd).toHaveBeenCalledWith('tab-1', '/repo/packages/web')
   })
 })

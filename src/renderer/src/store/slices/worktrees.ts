@@ -78,6 +78,7 @@ import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/loca
 import { showPreservedBranchToast } from '@/components/sidebar/preserved-branch-toast'
 import { requestWorktreeBaseFallbackNotice } from '@/components/worktree-base-fallback-notice'
 import { translate } from '@/i18n/i18n'
+import { beginNavigationIntent, isCurrentNavigationIntent } from '@/lib/navigation-intent'
 import {
   getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId,
@@ -5510,6 +5511,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   },
 
   setActiveWorktree: (worktreeId, executionHostId, options) => {
+    const navigationIntent = options?.navigationIntent ?? beginNavigationIntent()
+    if (!isCurrentNavigationIntent(navigationIntent)) {
+      return false
+    }
     const stateTransition = options?.stateTransition?.(get())
     if (stateTransition && !stateTransition.activate) {
       if (Object.keys(stateTransition.patch).length > 0) {
@@ -5852,7 +5857,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     return true
   },
 
-  setActiveFolderWorkspace: (folderWorkspaceId, executionHostId) => {
+  setActiveFolderWorkspace: (folderWorkspaceId, executionHostId, options) => {
+    const navigationIntent = options?.navigationIntent ?? beginNavigationIntent()
+    if (!isCurrentNavigationIntent(navigationIntent)) {
+      return
+    }
     const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
     const workspace = findKnownWorktreeById(get(), workspaceKey, executionHostId)
     if (!workspace) {

@@ -27,7 +27,7 @@ vi.mock('@/store', () => ({
 }))
 
 import { activateWorktreeFromSidebar } from './sidebar-worktree-activation'
-import { beginWorkspaceActivationIntent } from './workspace-activation-intent'
+import { beginNavigationIntent } from './navigation-intent'
 
 describe('sidebar worktree activation', () => {
   beforeEach(() => {
@@ -53,9 +53,10 @@ describe('sidebar worktree activation', () => {
   it('activates a clicked worktree without sidebar reveal', async () => {
     await activateWorktreeFromSidebar('wt-live')
 
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-live', {
-      revealInSidebar: false
-    })
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(
+      'wt-live',
+      expect.objectContaining({ revealInSidebar: false, navigationIntent: expect.any(Number) })
+    )
     expect(mocks.activateAndRevealFolderWorkspace).not.toHaveBeenCalled()
   })
 
@@ -65,9 +66,10 @@ describe('sidebar worktree activation', () => {
     // Why: setActiveWorktree already defers terminal prep where needed. The
     // sidebar click itself must switch app state immediately.
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledTimes(1)
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-slept', {
-      revealInSidebar: false
-    })
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(
+      'wt-slept',
+      expect.objectContaining({ revealInSidebar: false, navigationIntent: expect.any(Number) })
+    )
   })
 
   it('does not let a late VM resume override a newer workspace click', async () => {
@@ -87,9 +89,10 @@ describe('sidebar worktree activation', () => {
     await staleActivation
 
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledTimes(1)
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-local', {
-      revealInSidebar: false
-    })
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(
+      'wt-local',
+      expect.objectContaining({ revealInSidebar: false, navigationIntent: expect.any(Number) })
+    )
   })
 
   it('does not let a late VM resume override another activation path', async () => {
@@ -102,7 +105,7 @@ describe('sidebar worktree activation', () => {
     )
 
     const staleActivation = activateWorktreeFromSidebar('wt-vm')
-    beginWorkspaceActivationIntent()
+    beginNavigationIntent()
     releaseResume()
     await staleActivation
 
@@ -121,12 +124,34 @@ describe('sidebar worktree activation', () => {
 
     const staleActivation = activateWorktreeFromSidebar('wt-vm')
     await vi.waitFor(() => expect(mocks.listRuntimeEnvironments).toHaveBeenCalledTimes(1))
-    beginWorkspaceActivationIntent()
+    beginNavigationIntent()
     releaseList([])
     await staleActivation
 
     expect(mocks.setRuntimeEnvironments).not.toHaveBeenCalled()
     expect(mocks.refreshRuntimeEnvironmentStatus).not.toHaveBeenCalled()
+    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+  })
+
+  it('gates an in-flight runtime status write after newer navigation', async () => {
+    let releaseRefresh = () => {}
+    let shouldApplyRefresh: (() => boolean) | undefined
+    mocks.resumeWorkspace.mockResolvedValueOnce({ runtimeEnvironmentId: 'runtime-vm' })
+    mocks.refreshRuntimeEnvironmentStatus.mockImplementationOnce(
+      (_runtimeEnvironmentId: string, _timeoutMs: number | undefined, shouldApply: () => boolean) =>
+        new Promise<void>((resolve) => {
+          shouldApplyRefresh = shouldApply
+          releaseRefresh = resolve
+        })
+    )
+
+    const staleActivation = activateWorktreeFromSidebar('wt-vm')
+    await vi.waitFor(() => expect(shouldApplyRefresh).toEqual(expect.any(Function)))
+    beginNavigationIntent()
+
+    expect(shouldApplyRefresh?.()).toBe(false)
+    releaseRefresh()
+    await staleActivation
     expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
   })
 
@@ -150,9 +175,10 @@ describe('sidebar worktree activation', () => {
     // would blame the workspace the user has already navigated away from.
     expect(mocks.toastError).not.toHaveBeenCalled()
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledTimes(1)
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-local', {
-      revealInSidebar: false
-    })
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(
+      'wt-local',
+      expect.objectContaining({ revealInSidebar: false, navigationIntent: expect.any(Number) })
+    )
   })
 
   it('toasts a wake failure for the current workspace click', async () => {
@@ -167,7 +193,10 @@ describe('sidebar worktree activation', () => {
   it('routes folder workspace activation through the guarded folder path', async () => {
     await activateWorktreeFromSidebar('folder:folder-workspace-1')
 
-    expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith('folder-workspace-1')
+    expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith(
+      'folder-workspace-1',
+      expect.objectContaining({ navigationIntent: expect.any(Number) })
+    )
     expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
   })
 })

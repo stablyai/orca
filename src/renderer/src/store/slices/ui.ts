@@ -37,6 +37,7 @@ import {
 } from '../../../../shared/manual-repo-order'
 import { isTopLevelView } from '../../../../shared/top-level-view'
 import { isReleaseChannel, type ReleaseChannel } from '../../../../shared/release-channel'
+import { beginNavigationIntent, isCurrentNavigationIntent } from '@/lib/navigation-intent'
 import type { UsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
 import {
   DEFAULT_USAGE_PERCENTAGE_DISPLAY,
@@ -666,7 +667,7 @@ export type UISlice = {
     | 'automations'
     | 'space'
     | 'skills'
-  setActiveView: (view: UISlice['activeView']) => void
+  setActiveView: (view: UISlice['activeView'], options?: { navigationIntent?: number }) => void
   taskPageData: {
     preselectedRepoId?: string
     prefilledName?: string
@@ -1236,12 +1237,19 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   previousViewBeforeSpace: 'terminal',
   previousViewBeforeSkills: 'terminal',
   previousViewBeforeMobile: 'terminal',
-  setActiveView: (view) => set({ activeView: view }),
+  setActiveView: (view, options) => {
+    const navigationIntent = options?.navigationIntent ?? beginNavigationIntent()
+    if (!isCurrentNavigationIntent(navigationIntent)) {
+      return
+    }
+    set({ activeView: view })
+  },
   taskPageData: {},
   taskResumeState: undefined,
   githubTaskDrawerWorkItem: null,
   newWorkspaceDraft: null,
   openTaskPage: (data = {}, options = {}) => {
+    beginNavigationIntent()
     if (options.recordTasksInteraction !== false) {
       const wasTasksPreviouslyInteracted = hasFeatureInteraction(get().featureInteractions, 'tasks')
       set((state) => ({
@@ -1394,7 +1402,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       return { taskResumeState: next }
     }),
   setGithubTaskDrawerWorkItem: (item) => set({ githubTaskDrawerWorkItem: item }),
-  closeTaskPage: () =>
+  closeTaskPage: () => {
+    beginNavigationIntent()
     set((state) => {
       // Why: if parked on a 'tasks' entry, rewind the history index so Back/Forward aren't no-ops; keep 0 if it's the only entry.
       const currentEntry = state.worktreeNavHistory[state.worktreeNavHistoryIndex]
@@ -1416,8 +1425,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         githubTaskDrawerWorkItem: null,
         worktreeNavHistoryIndex: nextHistoryIndex
       }
-    }),
+    })
+  },
   openActivityPage: () => {
+    beginNavigationIntent()
     if (get().settings?.experimentalActivity !== true) {
       return
     }
@@ -1427,16 +1438,19 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         state.activeView === 'activity' ? state.previousViewBeforeActivity : state.activeView
     }))
   },
-  closeActivityPage: () =>
+  closeActivityPage: () => {
+    beginNavigationIntent()
     set((state) => ({
       activeView: state.previousViewBeforeActivity
-    })),
+    }))
+  },
   selectedAutomationId: null,
   setSelectedAutomationId: (id) => set({ selectedAutomationId: id }),
   pendingAutomationRunNavigation: null,
   setPendingAutomationRunNavigation: (navigation) =>
     set({ pendingAutomationRunNavigation: navigation }),
   openAutomationsPage: () => {
+    beginNavigationIntent()
     get().recordViewVisit('automations')
     set((state) => ({
       activeView: 'automations',
@@ -1444,7 +1458,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         state.activeView === 'automations' ? state.previousViewBeforeAutomations : state.activeView
     }))
   },
-  closeAutomationsPage: () =>
+  closeAutomationsPage: () => {
+    beginNavigationIntent()
     set((state) => {
       const currentEntry = state.worktreeNavHistory[state.worktreeNavHistoryIndex]
       let nextHistoryIndex = state.worktreeNavHistoryIndex
@@ -1458,8 +1473,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         activeView: state.previousViewBeforeAutomations,
         worktreeNavHistoryIndex: nextHistoryIndex
       }
-    }),
+    })
+  },
   openSpacePage: () => {
+    beginNavigationIntent()
     get().recordFeatureInteraction?.('workspace-cleanup')
     set((state) => ({
       activeView: 'space',
@@ -1467,33 +1484,44 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         state.activeView === 'space' ? state.previousViewBeforeSpace : state.activeView
     }))
   },
-  closeSpacePage: () =>
+  closeSpacePage: () => {
+    beginNavigationIntent()
     set((state) => ({
       activeView: state.previousViewBeforeSpace
-    })),
-  openSkillsPage: () =>
+    }))
+  },
+  openSkillsPage: () => {
+    beginNavigationIntent()
     set((state) => ({
       activeView: 'skills',
       previousViewBeforeSkills:
         state.activeView === 'skills' ? state.previousViewBeforeSkills : state.activeView
-    })),
-  closeSkillsPage: () =>
+    }))
+  },
+  closeSkillsPage: () => {
+    beginNavigationIntent()
     set((state) => ({
       activeView: state.previousViewBeforeSkills
-    })),
-  openMobilePage: () =>
+    }))
+  },
+  openMobilePage: () => {
+    beginNavigationIntent()
     set((state) => ({
       activeView: 'mobile',
       previousViewBeforeMobile:
         state.activeView === 'mobile' ? state.previousViewBeforeMobile : state.activeView
-    })),
-  closeMobilePage: () =>
+    }))
+  },
+  closeMobilePage: () => {
+    beginNavigationIntent()
     set((state) => ({
       activeView: state.previousViewBeforeMobile
-    })),
+    }))
+  },
   setNewWorkspaceDraft: (draft) => set({ newWorkspaceDraft: draft }),
   clearNewWorkspaceDraft: () => set({ newWorkspaceDraft: null }),
   openSettingsPage: () => {
+    beginNavigationIntent()
     // Why: settings search is a transient filter; opening Settings shouldn't inherit hidden sections from last visit.
     get().setSettingsSearchQuery('')
     set((state) => ({
@@ -1503,7 +1531,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         state.activeView === 'settings' ? state.previousViewBeforeSettings : state.activeView
     }))
   },
-  closeSettingsPage: () =>
+  closeSettingsPage: () => {
+    beginNavigationIntent()
     set((state) => {
       const previousView =
         state.previousViewBeforeSettings === 'activity' &&
@@ -1511,7 +1540,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           ? 'terminal'
           : state.previousViewBeforeSettings
       return { activeView: previousView }
-    }),
+    })
+  },
   settingsNavigationTarget: null,
   openSettingsTarget: (target) => {
     if (!isSettingsNavigationTarget(target)) {

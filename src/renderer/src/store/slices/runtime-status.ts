@@ -57,7 +57,11 @@ export type RuntimeStatusSlice = {
   /** Drops every entry whose id is not in the saved-environments set. */
   retainRuntimeEnvironmentStatuses: (environmentIds: Iterable<string>) => void
   /** Probes one saved runtime and records the latest reachable/unreachable state. */
-  refreshRuntimeEnvironmentStatus: (environmentId: string, timeoutMs?: number) => Promise<boolean>
+  refreshRuntimeEnvironmentStatus: (
+    environmentId: string,
+    timeoutMs?: number,
+    shouldApply?: () => boolean
+  ) => Promise<boolean>
   /** Best-effort: list saved environments and probe each so the sidebar shows
    * live health at boot, before the settings pane is ever opened. */
   hydrateRuntimeEnvironmentStatuses: () => Promise<void>
@@ -319,18 +323,28 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
     })
   },
 
-  refreshRuntimeEnvironmentStatus: async (environmentId, timeoutMs = 10_000) => {
+  refreshRuntimeEnvironmentStatus: async (
+    environmentId,
+    timeoutMs = 10_000,
+    shouldApply = () => true
+  ) => {
     try {
       const response = await window.api.runtimeEnvironments.getStatus({
         selector: environmentId,
         timeoutMs
       })
       const status = unwrapRuntimeRpcResult<RuntimeStatus>(response)
+      if (!shouldApply()) {
+        return status !== null
+      }
       // setRuntimeEnvironmentStatus drops any stale compat failure on a non-null
       // (reachable) status, so a recovered host's reuse-flagged refetches re-probe.
       get().setRuntimeEnvironmentStatus(environmentId, { status, checkedAt: Date.now() })
       return true
     } catch {
+      if (!shouldApply()) {
+        return false
+      }
       get().setRuntimeEnvironmentStatus(environmentId, {
         status: null,
         checkedAt: Date.now()

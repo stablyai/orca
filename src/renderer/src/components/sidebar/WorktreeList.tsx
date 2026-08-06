@@ -141,6 +141,11 @@ import {
   type VirtualizedScrollAnchor
 } from '@/hooks/useVirtualizedScrollAnchor'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { getCurrentNavigationIntent, subscribeNavigationIntent } from '@/lib/navigation-intent'
+import {
+  reconcileSidebarActiveRowIntent,
+  type SidebarActiveRowIntent
+} from '@/lib/sidebar-active-row-intent'
 import { useFolderWorkspacePathStatusCacheExpiryTick } from '@/lib/folder-workspace-path-status-cache-expiry'
 import {
   getFolderWorkspacePathStatusDescription,
@@ -1733,18 +1738,17 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     onCommitProjectGroupTabOrder: commitProjectGroupHeaderOrder,
     getScrollContainer: () => scrollRef.current
   })
-  const [primaryActiveWorktreeRow, setPrimaryActiveWorktreeRow] = useState<{
-    worktreeId: string
-    rowKey: string
-  } | null>(null)
+  const [primaryActiveWorktreeRow, setPrimaryActiveWorktreeRow] =
+    useState<SidebarActiveRowIntent | null>(null)
+  const currentNavigationIntent = React.useSyncExternalStore(
+    subscribeNavigationIntent,
+    getCurrentNavigationIntent,
+    getCurrentNavigationIntent
+  )
   useEffect(() => {
-    if (activeWorktreeId === null) {
-      setPrimaryActiveWorktreeRow(null)
-      return
-    }
     setPrimaryActiveWorktreeRow((current) => {
-      if (current === null || current.worktreeId !== activeWorktreeId) {
-        return null
+      if (current === null) {
+        return current
       }
       const rowStillVisible = rows.some(
         (row) =>
@@ -1752,9 +1756,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
           row.worktree.id === current.worktreeId &&
           row.rowKey === current.rowKey
       )
-      return rowStillVisible ? current : null
+      return reconcileSidebarActiveRowIntent(current, currentNavigationIntent, rowStillVisible)
     })
-  }, [activeWorktreeId, rows])
+  }, [currentNavigationIntent, rows])
   const getActiveSurfaceVariant = useCallback(
     (row: WorktreeItemRow): ActiveSurfaceVariant => {
       if (primaryActiveWorktreeRow?.worktreeId === row.worktree.id) {
@@ -1772,10 +1776,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     [activeWorktreeId, pinnedDisplayPolicy, primaryActiveWorktreeRow]
   )
   const handleWorktreeRowActivationIntent = useCallback(
-    (worktreeId: string, rowKey: string | undefined): void => {
+    (worktreeId: string, rowKey: string | undefined, navigationIntent: number): void => {
       // Why: remember which duplicate row the user chose, but keep active
       // styling store-driven so the sidebar cannot outrun the workspace surface.
-      setPrimaryActiveWorktreeRow(rowKey ? { worktreeId, rowKey } : null)
+      setPrimaryActiveWorktreeRow(rowKey ? { worktreeId, rowKey, navigationIntent } : null)
     },
     []
   )

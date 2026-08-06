@@ -292,7 +292,10 @@ export type WorktreeSlice = {
   setActiveWorktree: (
     worktreeId: string | null,
     executionHostId?: ExecutionHostId,
-    options?: { stateTransition?: ActiveWorktreeStateTransition }
+    options?: {
+      stateTransition?: ActiveWorktreeStateTransition
+      navigationIntent?: number
+    }
   ) => boolean
   /**
    * Health-driven remount of one terminal tab: bumps the tab's generation so
@@ -302,7 +305,11 @@ export type WorktreeSlice = {
    * undeliverable while the PTY is alive. Returns false when the tab is gone.
    */
   remountTerminalTabForRecovery: (tabId: string) => boolean
-  setActiveFolderWorkspace: (folderWorkspaceId: string, executionHostId?: ExecutionHostId) => void
+  setActiveFolderWorkspace: (
+    folderWorkspaceId: string,
+    executionHostId?: ExecutionHostId,
+    options?: { navigationIntent?: number }
+  ) => void
   setRenamingWorktreeId: (request: string | WorktreeRenameRequest | null) => void
   allWorktrees: () => Worktree[]
   getKnownWorktreeById: (

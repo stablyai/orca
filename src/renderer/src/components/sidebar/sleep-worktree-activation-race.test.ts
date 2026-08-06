@@ -88,7 +88,8 @@ describe('sleep flow vs slept-workspace activation', () => {
     expect(mocks.resumeWorkspace).toHaveBeenCalledWith({ workspaceId: 'wt-parent' })
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledTimes(1)
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-parent', {
-      revealInSidebar: false
+      revealInSidebar: false,
+      navigationIntent: expect.any(Number)
     })
 
     await runSleepWorktrees(['wt-child-1', 'wt-child-2', 'wt-child-3'])

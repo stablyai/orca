@@ -58,7 +58,7 @@ import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/na
 import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { findFolderWorkspaceOwner } from './folder-workspace-runtime-owner'
-import { beginWorkspaceActivationIntent } from './workspace-activation-intent
+import { beginNavigationIntent, isCurrentNavigationIntent } from './navigation-intent'
 
 /** Telemetry threaded from the launch site to `pty:spawn`; main fires `agent_started`
  *  only after the spawn succeeds. See telemetry-plan.md§Agent launch semantics. */
@@ -206,9 +206,13 @@ export function activateAndRevealFolderWorkspace(
     startup?: WorktreeStartupPayload
     runtimeEnvironmentId?: string | null
     executionHostId?: ExecutionHostId
+    navigationIntent?: number
   }
 ): ActivateAndRevealResult | false {
-  beginWorkspaceActivationIntent()
+  const navigationIntent = opts?.navigationIntent ?? beginNavigationIntent()
+  if (!isCurrentNavigationIntent(navigationIntent)) {
+    return false
+  }
   const state = useAppStore.getState()
   const folderWorkspaceOwner = findFolderWorkspaceOwner(
     state,
@@ -240,10 +244,12 @@ export function activateAndRevealFolderWorkspace(
   }
 
   if (state.activeView !== 'terminal') {
-    state.setActiveView('terminal')
+    state.setActiveView('terminal', { navigationIntent })
   }
 
-  state.setActiveFolderWorkspace(folderWorkspaceId, opts?.executionHostId)
+  state.setActiveFolderWorkspace(folderWorkspaceId, opts?.executionHostId, {
+    navigationIntent
+  })
 
   const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
   state.markWorktreeVisited(workspaceKey)
@@ -274,9 +280,13 @@ export function activateAndRevealWorktree(
     notifyHostRuntime?: boolean
     revealInSidebar?: boolean
     executionHostId?: ExecutionHostId
+    navigationIntent?: number
   }
 ): ActivateAndRevealResult | false {
-  beginWorkspaceActivationIntent()
+  const navigationIntent = opts?.navigationIntent ?? beginNavigationIntent()
+  if (!isCurrentNavigationIntent(navigationIntent)) {
+    return false
+  }
   const state = useAppStore.getState()
   const wt = state.getKnownWorktreeById(worktreeId, opts?.executionHostId)
   if (!wt) {
@@ -300,11 +310,11 @@ export function activateAndRevealWorktree(
 
   // 2. Switch any non-terminal view back to terminal
   if (state.activeView !== 'terminal') {
-    state.setActiveView('terminal')
+    state.setActiveView('terminal', { navigationIntent })
   }
 
   // 3. Core activation: setActiveWorktree also restores per-worktree state, clears unread, bumps dead PTY generations, refreshes GitHub
-  state.setActiveWorktree(worktreeId, opts?.executionHostId)
+  state.setActiveWorktree(worktreeId, opts?.executionHostId, { navigationIntent })
   const postActivationState = useAppStore.getState()
   const ownerRuntimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(postActivationState, wt.id)
   if (opts?.notifyHostRuntime !== false && isWebRuntimeSessionActive(ownerRuntimeEnvironmentId)) {
@@ -736,6 +746,7 @@ setWorktreeNavActivator(activateAndRevealWorkspace)
 
 // Why: page entries replay via setActiveView (not open*Page) so back/forward doesn't mutate previousViewBefore* or duplicate history (see navigateToIndex).
 setWorktreeNavViewActivator((entry) => {
+  beginNavigationIntent()
   if (entry === 'automations') {
     useAppStore.getState().setActiveView(entry)
     return
