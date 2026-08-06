@@ -52,21 +52,20 @@ export class RemoteRuntimeServerHeartbeat {
     const tickAt = this.now()
     const elapsedMs = tickAt - (this.lastTickAt ?? tickAt)
     this.lastTickAt = tickAt
-    const resumedFromPause = elapsedMs < 0 || elapsedMs > this.intervalMs * 1.5
+    // Why: a delayed tick cannot infer that clients missed a probe they had no chance to answer, so
+    // this sweep must not charge one. It must not *forgive* either: clearing banked misses lets a host
+    // that stalls once every few ticks protect a dead socket forever, which is the connection leak the
+    // reaper exists to prevent. Skipping the charge is enough — a live client clears its own count by
+    // answering the probe still sent below.
+    const stalledTick = elapsedMs < 0 || elapsedMs > this.intervalMs * 1.5
     let reaped = 0
     let clientCount = 0
     for (const socket of clients) {
       clientCount += 1
-      if (resumedFromPause) {
-        // Why: a delayed server tick cannot infer that clients missed a probe they had no chance to
-        // answer. Seeding alive also clears any misses banked before the pause, so a suspend can never
-        // top up a budget the client was never given a chance to defend.
-        this.alive.add(socket)
-      }
       if (this.alive.has(socket)) {
         this.alive.delete(socket)
         this.missedProbes.delete(socket)
-      } else {
+      } else if (!stalledTick) {
         const missed = (this.missedProbes.get(socket) ?? 0) + 1
         if (missed >= this.missedProbeLimit) {
           this.missedProbes.delete(socket)
