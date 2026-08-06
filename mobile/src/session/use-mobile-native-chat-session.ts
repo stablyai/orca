@@ -1,4 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  createNativeChatTranscriptRetention,
+  encodeNativeChatTranscriptIdentity
+} from '../../../src/shared/native-chat-transcript-retention'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { buildNativeChatSubscriptionId } from '../../../src/shared/native-chat-stream-unsubscribe'
 import type { RpcClient } from '../transport/rpc-client'
@@ -28,9 +32,6 @@ export type MobileNativeChatSession = {
   loadEarlier: () => void
 }
 
-// Stable empty reference so a not-yet-current read doesn't churn consumers.
-const EMPTY_MESSAGES: NativeChatMessage[] = []
-
 // Small first page for a fast first paint; grows by a page as the user scrolls.
 const INITIAL_LIMIT = 40
 const PAGE = 60
@@ -45,13 +46,20 @@ type ReadSessionResult =
  *  an ordered tail); live appends merge by id so order stays stable. */
 export function useMobileNativeChatSession(args: {
   client: RpcClient | null
+  /** Stable host/workspace source; unlike `client`, it survives manual reconnect. */
+  sourceIdentity: string
   agent: string | null
   sessionId: string | null
   transcriptPath: string | null
 }): MobileNativeChatSession {
-  const { client, agent, sessionId, transcriptPath } = args
+  const { client, sourceIdentity, agent, sessionId, transcriptPath } = args
   const [messages, setMessages] = useState<NativeChatMessage[]>([])
-  const identity = `${agent ?? ''}\0${sessionId ?? ''}\0${transcriptPath ?? ''}`
+  const identity = encodeNativeChatTranscriptIdentity([
+    sourceIdentity,
+    agent,
+    sessionId,
+    transcriptPath
+  ])
   // Pre-read status is a pure function of the props, so derive it rather than
   // letting the effect write it a commit later.
   const initialStatus: MobileNativeChatStatus =
@@ -95,6 +103,13 @@ export function useMobileNativeChatSession(args: {
   // Whether this subscription already delivered its base snapshot; later
   // snapshots on the same subscription are reconnect replays, not fresh bases.
   const snapshotSeenRef = useRef(false)
+  const transcriptRetentionRef = useRef(createNativeChatTranscriptRetention())
+  const settledReady = settled?.status === 'ready'
+  useEffect(() => {
+    if (settledReady) {
+      transcriptRetentionRef.current.capture(identity, messages)
+    }
+  }, [identity, messages, settledReady])
 
   // Replace the base list (read results are an ordered tail). Resets the merger
   // cache so the index is rebuilt once over the new base.
@@ -258,10 +273,17 @@ export function useMobileNativeChatSession(args: {
     })()
   }, [client, agent, sessionId, transcriptPath, hasMore, setList])
 
+  const visibleMessages = transcriptRetentionRef.current.visible({
+    identity,
+    messages,
+    settled: settledReady,
+    loading: status === 'loading'
+  })
+
   return {
     // Withheld until the settled read belongs to this identity: the effect that
     // clears the previous tab's list is passive, so `messages` lags a commit.
-    messages: settled ? messages : EMPTY_MESSAGES,
+    messages: visibleMessages,
     status,
     transcriptLoading: status === 'loading',
     error,

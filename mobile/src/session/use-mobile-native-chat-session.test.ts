@@ -36,6 +36,7 @@ describe('useMobileNativeChatSession', () => {
   function Harness({ client }: { client: RpcClient | null }): null {
     state = useMobileNativeChatSession({
       client,
+      sourceIdentity: 'host-a\0workspace-a',
       agent: 'claude',
       sessionId: 'session',
       transcriptPath: null
@@ -456,14 +457,17 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
   function Harness({
     client,
     sessionId,
-    agent = 'claude'
+    agent = 'claude',
+    sourceIdentity = 'host-a\0workspace-a'
   }: {
     client: RpcClient | null
     sessionId: string | null
     agent?: string | null
+    sourceIdentity?: string
   }): null {
     const session = useMobileNativeChatSession({
       client,
+      sourceIdentity,
       agent,
       sessionId,
       transcriptPath: null
@@ -506,7 +510,8 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
   it('re-reads instead of resurfacing a settled read when the same identity returns', async () => {
     // Leaving chat view nulls the agent, then returning restores the identity a
     // settled read already matched — but its list was cleared, so trusting it
-    // would report 'ready' over an empty transcript.
+    // would report 'ready' over an empty transcript. The last settled list for
+    // this identity keeps rendering while the re-read is in flight.
     const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
       onData({ type: 'snapshot', messages: [message('a-1')], hasMore: false })
       return () => {}
@@ -524,12 +529,17 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
       renderer?.update(createElement(Harness, { client, sessionId: 'session-a', agent: 'claude' }))
     )
 
-    expect(renders[0]).toMatchObject({ status: 'loading', transcriptLoading: true, ids: [] })
+    expect(renders[0]).toMatchObject({
+      status: 'loading',
+      transcriptLoading: true,
+      ids: ['a-1']
+    })
   })
 
-  it('re-reads instead of resurfacing a settled read after a reconnect', async () => {
-    // A reconnect swaps the client without moving the identity; the effect
-    // re-subscribes and clears the list, so the old outcome must not stand.
+  it('keeps the last settled list rendered while a swapped client re-reads', async () => {
+    // A manual-retry reconnect swaps the client without moving the identity; the
+    // old outcome must not stand ('loading', not 'ready'), but the cached
+    // transcript keeps rendering instead of collapsing to a full-screen spinner.
     const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
       onData({ type: 'snapshot', messages: [message('a-1')], hasMore: false })
       return () => {}
@@ -538,13 +548,61 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
     await mountAt(client, 'session-a')
     expect(renders.at(-1)).toMatchObject({ status: 'ready' })
 
-    const reconnected = { subscribe: vi.fn(() => () => {}) } as unknown as RpcClient
+    let emitFresh: (frame: unknown) => void = () => {}
+    const reconnected = {
+      subscribe: vi.fn((_method: string, _params: unknown, onData: (frame: unknown) => void) => {
+        emitFresh = onData
+        return () => {}
+      })
+    } as unknown as RpcClient
     renders.length = 0
     await act(async () =>
       renderer?.update(createElement(Harness, { client: reconnected, sessionId: 'session-a' }))
     )
 
-    expect(renders[0]).toMatchObject({ status: 'loading', transcriptLoading: true, ids: [] })
+    expect(renders[0]).toMatchObject({
+      status: 'loading',
+      transcriptLoading: true,
+      ids: ['a-1']
+    })
+    // Every commit of the window, not just the first: the re-subscribe lands a
+    // commit after it, so clearing the cache there blanks the transcript the
+    // user actually sees while leaving a first-frame assertion green.
+    expect([...new Set(renders.map((entry) => entry.ids.join(',')))]).toEqual(['a-1'])
+
+    // The fresh client's snapshot supersedes the held list.
+    await act(async () =>
+      emitFresh({ type: 'snapshot', messages: [message('a-1'), message('a-2')], hasMore: false })
+    )
+    expect(renders.at(-1)).toMatchObject({
+      status: 'ready',
+      transcriptLoading: false,
+      ids: ['a-1', 'a-2']
+    })
+  })
+
+  it('never holds a cached list across a host/workspace source change', async () => {
+    const firstClient = {
+      subscribe: vi.fn((_method: string, _params: unknown, onData: (frame: unknown) => void) => {
+        onData({ type: 'snapshot', messages: [message('source-a')], hasMore: false })
+        return () => {}
+      })
+    } as unknown as RpcClient
+    await mountAt(firstClient, 'session-a')
+
+    const secondClient = { subscribe: vi.fn(() => () => {}) } as unknown as RpcClient
+    renders.length = 0
+    await act(async () =>
+      renderer?.update(
+        createElement(Harness, {
+          client: secondClient,
+          sessionId: 'session-a',
+          sourceIdentity: 'host-b\0workspace-b'
+        })
+      )
+    )
+
+    expect(renders[0]).toMatchObject({ status: 'loading', ids: [] })
   })
 
   it('never hands out the previous session’s messages under the new session id', async () => {

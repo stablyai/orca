@@ -127,8 +127,8 @@ import {
   buildActiveOpenRowKeys
 } from './source-control-active-open-file-keys'
 import {
+  filterAndSortSourceControlPathEntries,
   filterSourceControlGroupedPathEntries,
-  filterSourceControlPathEntries,
   getSourceControlFileFilterState
 } from './source-control-file-filter'
 import { getCommitMessageTextareaRows } from './source-control-commit-message-rows'
@@ -1832,7 +1832,7 @@ function SourceControlInner(): React.JSX.Element {
   )
 
   const filteredBranchEntries = useMemo(
-    () => filterSourceControlPathEntries(branchEntries, fileFilterState),
+    () => filterAndSortSourceControlPathEntries(branchEntries, fileFilterState),
     [branchEntries, fileFilterState]
   )
 

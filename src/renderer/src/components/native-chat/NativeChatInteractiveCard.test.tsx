@@ -48,13 +48,15 @@ function renderCard(canSend = true): ReturnType<typeof render> {
 function cardElement(
   canSend = true,
   messages?: readonly NativeChatMessage[],
-  onShowingQuestionChange?: (showing: boolean) => void
+  onShowingQuestionChange?: (showing: boolean) => void,
+  transcriptSettled = true
 ): React.JSX.Element {
   return (
     <NativeChatInteractiveCard
       paneKey="tab-1:leaf-1"
       canSend={canSend}
       messages={messages}
+      transcriptSettled={transcriptSettled}
       onShowingQuestionChange={onShowingQuestionChange}
       send={{
         sendAnswer: mocks.sendAnswer,
@@ -231,6 +233,12 @@ describe('NativeChatInteractiveCard transcript fallback', () => {
 
     expect(screen.getByText('Tabs or spaces?')).toBeInTheDocument()
     expect(onShowingQuestionChange).toHaveBeenCalledWith(true)
+  })
+
+  it('withholds a retained transcript ask while its replacement read is unsettled', () => {
+    render(cardElement(true, [askCallMessage('Stale transcript question?')], undefined, false))
+
+    expect(screen.queryByText('Stale transcript question?')).not.toBeInTheDocument()
   })
 
   it('prefers live status over the transcript when both carry a prompt', () => {

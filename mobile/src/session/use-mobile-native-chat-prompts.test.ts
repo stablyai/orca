@@ -15,14 +15,16 @@ const ASK = JSON.stringify({
 
 function promptsFor(
   status: Partial<AgentStatusEntry> | null,
-  messages: NativeChatMessage[] = []
+  messages: NativeChatMessage[] = [],
+  transcriptLoading = false
 ): ReturnType<typeof useMobileNativeChatPrompts> {
   let captured: ReturnType<typeof useMobileNativeChatPrompts> | undefined
   function Probe(): null {
     captured = useMobileNativeChatPrompts({
       enabled: true,
       status: status as AgentStatusEntry | null,
-      messages
+      messages,
+      transcriptLoading
     })
     return null
   }
@@ -116,6 +118,18 @@ describe('useMobileNativeChatPrompts ask state gate', () => {
     expect(promptsFor({ state: 'done' }, askMessages).ask).not.toBeNull()
     expect(promptsFor({ state: 'working' }, askMessages).ask).not.toBeNull()
     expect(promptsFor(null, askMessages).ask).not.toBeNull()
+  })
+
+  it('withholds retained transcript asks while the replacement read is unsettled', () => {
+    const prompts = promptsFor({ state: 'done' }, askMessages, true)
+    expect(prompts.ask).toBeNull()
+    expect(prompts.detectedAsk).toBeNull()
+  })
+
+  it('keeps a paused live status ask authoritative while the read is unsettled', () => {
+    const prompts = promptsFor({ state: 'waiting', interactivePrompt: ASK }, askMessages, true)
+    expect(prompts.ask).toMatchObject({ questions: [{ question: 'Which path?' }] })
+    expect(prompts.detectedAsk).not.toBeNull()
   })
 
   it('does not leak a paused-out sticky status prompt through the transcript fallback', () => {

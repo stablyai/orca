@@ -210,6 +210,8 @@ describe('WebRuntimeClient', () => {
     }
     timerWindow.setTimeout = setTimeout
     timerWindow.clearTimeout = clearTimeout
+    // Pin the one-sided reconnect jitter to zero so the redial lands on its exact backoff step.
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0)
     const client = new WebRuntimeClient({
       v: 2,
       endpoint: 'ws://127.0.0.1:6768',
@@ -235,6 +237,7 @@ describe('WebRuntimeClient', () => {
       expect(replacementSocket.send).toHaveBeenCalledTimes(1)
     } finally {
       client.close()
+      random.mockRestore()
       vi.useRealTimers()
     }
   })
