@@ -2882,6 +2882,8 @@ export type GlobalSettings = {
   /** Deprecated: migration/backward-compat only. Use PersistedUIState.rightSidebarOpen. */
   rightSidebarOpenByDefault: boolean
   showGitIgnoredFiles?: boolean
+  /** Double-clicking a File Explorer name renames it. Off makes folder toggles fire immediately, since no click has to wait out the double-click window. */
+  fileExplorerRenameOnDoubleClick?: boolean
   /** Preferred Source Control changes layout. Per-user, not per-workspace. */
   sourceControlViewMode: SourceControlViewMode
   /** Compare base defaults to the branch upstream instead of the repo default; affects only the compare/diff view, not the PR/rebase target. Per-user. */

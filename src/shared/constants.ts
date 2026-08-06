@@ -270,6 +270,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     openInApplications: [...DEFAULT_OPEN_IN_APPLICATIONS],
     rightSidebarOpenByDefault: true,
     showGitIgnoredFiles: true,
+    fileExplorerRenameOnDoubleClick: true,
     sourceControlViewMode: 'list',
     sourceControlCompareAgainstUpstream: false,
     showTitlebarAppName: true,
