@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import type { Dirent } from 'node:fs'
-import { mkdir, readdir, rm, stat } from 'node:fs/promises'
+import type { Dir } from 'node:fs'
+import { mkdir, opendir, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { app } from 'electron'
@@ -17,6 +17,7 @@ type RemoteClipboardFileDeps = Omit<ClipboardFileDeps, 'resolveFilePath'>
 
 const REMOTE_CLIPBOARD_FILE_TTL_MS = 60 * 60 * 1000
 const REMOTE_CLIPBOARD_FILE_PREFIX = 'orca-clipboard-file-'
+const REMOTE_CLIPBOARD_CLEANUP_CONCURRENCY = 8
 const WINDOWS_RESERVED_LOCAL_BASENAME = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i
 const LOCAL_FILENAME_REPLACEMENT_CHARS = new Set(['<', '>', ':', '"', '/', '\\', '|', '?', '*'])
 
@@ -79,32 +80,52 @@ export async function writeRemoteFileToClipboard({
   }
 }
 
+// Why: the OS temp root is shared with every other program and routinely holds
+// millions of unrelated entries on long-lived machines, so this startup sweep
+// streams it and only ever retains work for entries it actually owns.
 export async function cleanupExpiredRemoteClipboardFiles(nowMs = Date.now()): Promise<void> {
   const tempRoot = app.getPath('temp')
-  let entries: Dirent[]
+  let tempRootDir: Dir
   try {
-    entries = await readdir(tempRoot, { withFileTypes: true })
+    tempRootDir = await opendir(tempRoot)
   } catch {
     return
   }
 
-  await Promise.all(
-    entries.map(async (entry) => {
+  const pending = new Set<Promise<void>>()
+  try {
+    for await (const entry of tempRootDir) {
       if (!entry.isDirectory() || !entry.name.startsWith(REMOTE_CLIPBOARD_FILE_PREFIX)) {
-        return
+        continue
       }
-      const tempDir = join(tempRoot, entry.name)
-      try {
-        const tempStats = await stat(tempDir)
-        if (nowMs - tempStats.mtimeMs < REMOTE_CLIPBOARD_FILE_TTL_MS) {
-          return
-        }
-        await rm(tempDir, { recursive: true, force: true })
-      } catch {
-        // Why: stale staged SSH files should not make startup cleanup noisy.
+      const cleanup = cleanupExpiredRemoteClipboardDirectory(join(tempRoot, entry.name), nowMs)
+      pending.add(cleanup)
+      void cleanup.finally(() => pending.delete(cleanup))
+      if (pending.size >= REMOTE_CLIPBOARD_CLEANUP_CONCURRENCY) {
+        await Promise.race(pending)
       }
-    })
-  )
+    }
+  } catch {
+    // Why: a partial best-effort sweep beats failing startup on a temp-root read error.
+  } finally {
+    // Why: exhausting the iterator already closes the handle; closing again is harmless.
+    await tempRootDir.close().catch(() => undefined)
+  }
+  await Promise.all(pending)
+}
+
+async function cleanupExpiredRemoteClipboardDirectory(
+  tempDir: string,
+  nowMs: number
+): Promise<void> {
+  try {
+    const tempStats = await stat(tempDir)
+    if (nowMs - tempStats.mtimeMs >= REMOTE_CLIPBOARD_FILE_TTL_MS) {
+      await rm(tempDir, { recursive: true, force: true })
+    }
+  } catch {
+    // Why: stale staged SSH files should not make startup cleanup noisy.
+  }
 }
 
 function sanitizeLocalClipboardFilename(remoteBasename: string): string {
