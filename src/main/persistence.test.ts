@@ -5125,6 +5125,167 @@ describe('Store', () => {
     ])
   })
 
+  it('rewrites partially normalized deleted-folder tombstones', async () => {
+    const initial = await createStore()
+    initial.flush()
+    const state = readDataFile() as PersistedState
+    state.deletedFolderWorkspaceSessionTombstones = {
+      'folder:partial-tombstone': {
+        connectionId: null,
+        deletedAt: undefined as unknown as number,
+        evidenceTruncated: undefined as unknown as boolean,
+        hostIds: ['local'],
+        tabConnectionIdsByHostId: {
+          local: { valid: null, invalid: 42 as unknown as string }
+        }
+      }
+    }
+    writeDataFile(state)
+
+    vi.useFakeTimers()
+    try {
+      const restored = await createStore()
+      await vi.advanceTimersByTimeAsync(1_000)
+      await restored.waitForPendingWrite()
+    } finally {
+      vi.useRealTimers()
+    }
+
+    expect(
+      (readDataFile() as PersistedState).deletedFolderWorkspaceSessionTombstones?.[
+        'folder:partial-tombstone'
+      ]
+    ).toEqual({
+      connectionId: null,
+      deletedAt: expect.any(Number),
+      evidenceTruncated: false,
+      hostIds: ['local'],
+      tabConnectionIdsByHostId: { local: { valid: null } }
+    })
+  })
+
+  it('keeps only the newest deleted-folder tombstones when loading older state', async () => {
+    const initial = await createStore()
+    initial.flush()
+    const state = readDataFile() as PersistedState
+    const workspaceKeys = Array.from({ length: 514 }, (_, index) =>
+      folderWorkspaceKey(`deleted-${index}`)
+    )
+    const deletedAt = Date.now() - 2 * 24 * 60 * 60 * 1000
+    state.deletedFolderWorkspaceSessionTombstones = Object.fromEntries(
+      workspaceKeys.map((workspaceKey, index) => [
+        workspaceKey,
+        {
+          connectionId: null,
+          deletedAt: deletedAt + index,
+          evidenceTruncated: false,
+          hostIds: ['local'],
+          tabConnectionIdsByHostId: {}
+        }
+      ])
+    ) as PersistedState['deletedFolderWorkspaceSessionTombstones']
+    writeDataFile(state)
+
+    vi.useFakeTimers()
+    try {
+      const restored = await createStore()
+      await vi.advanceTimersByTimeAsync(1_000)
+      await restored.waitForPendingWrite()
+    } finally {
+      vi.useRealTimers()
+    }
+
+    const tombstones = (readDataFile() as PersistedState).deletedFolderWorkspaceSessionTombstones
+    expect(Object.keys(tombstones ?? {})).toHaveLength(512)
+    expect(tombstones?.[workspaceKeys[0]!]).toBeUndefined()
+    expect(tombstones?.[workspaceKeys[1]!]).toBeUndefined()
+    expect(tombstones?.[workspaceKeys.at(-1)!]).toBeDefined()
+    const overflowBuckets = (readDataFile() as PersistedState)
+      .deletedFolderWorkspaceSessionTombstoneOverflowBuckets
+    expect(overflowBuckets).toHaveLength(1)
+    expect(overflowBuckets?.[0]?.expiresAt).toBe(deletedAt + 1 + 30 * 24 * 60 * 60 * 1000)
+  })
+
+  it('hard-bounds recent deletion fences with conservative overflow evidence', async () => {
+    const store = await createStore()
+    const group = store.createProjectGroup({
+      name: 'Tombstone churn',
+      parentPath: '/workspace/churn',
+      createdFrom: 'folder-scan'
+    })
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
+      const workspaceKeys: ReturnType<typeof folderWorkspaceKey>[] = []
+      for (let index = 0; index < 514; index += 1) {
+        const workspace = store.createFolderWorkspace({
+          projectGroupId: group.id,
+          name: `Deleted ${index}`
+        })
+        workspaceKeys.push(folderWorkspaceKey(workspace.id))
+        expect(store.removeFolderWorkspace(workspace.id)).toBe(true)
+      }
+      store.flush()
+      let tombstones = (readDataFile() as PersistedState).deletedFolderWorkspaceSessionTombstones
+      expect(Object.keys(tombstones ?? {})).toHaveLength(512)
+      expect(tombstones?.[workspaceKeys[0]!]).toBeUndefined()
+      const overflowBuckets = (readDataFile() as PersistedState)
+        .deletedFolderWorkspaceSessionTombstoneOverflowBuckets
+      expect(overflowBuckets).toHaveLength(1)
+      expect(overflowBuckets?.[0]?.expiresAt).toBeGreaterThan(Date.now())
+
+      vi.setSystemTime(new Date('2026-01-02T00:00:00.001Z'))
+      const latest = store.createFolderWorkspace({ projectGroupId: group.id, name: 'Latest' })
+      expect(store.removeFolderWorkspace(latest.id)).toBe(true)
+      store.flush()
+
+      tombstones = (readDataFile() as PersistedState).deletedFolderWorkspaceSessionTombstones
+      expect(Object.keys(tombstones ?? {})).toHaveLength(512)
+      expect(tombstones?.[workspaceKeys[0]!]).toBeUndefined()
+      expect(tombstones?.[folderWorkspaceKey(latest.id)]).toBeDefined()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('removes deleted-folder tombstones after the stale-write retention window', async () => {
+    const initial = await createStore()
+    initial.flush()
+    const state = readDataFile() as PersistedState
+    state.deletedFolderWorkspaceSessionTombstones = {
+      'folder:expired-tombstone': {
+        connectionId: null,
+        deletedAt: Date.now() - 31 * 24 * 60 * 60 * 1000,
+        evidenceTruncated: false,
+        hostIds: ['local'],
+        tabConnectionIdsByHostId: {}
+      }
+    }
+    state.deletedFolderWorkspaceSessionTombstoneOverflowBuckets = [
+      {
+        bucketStart: Date.now() - 31 * 24 * 60 * 60 * 1000,
+        expiresAt: Date.now() - 24 * 60 * 60 * 1000,
+        workspaceKeys: [],
+        tabOwnerKeys: [],
+        connectionIds: []
+      }
+    ]
+    writeDataFile(state)
+
+    vi.useFakeTimers()
+    try {
+      const restored = await createStore()
+      await vi.advanceTimersByTimeAsync(1_000)
+      await restored.waitForPendingWrite()
+    } finally {
+      vi.useRealTimers()
+    }
+
+    const persisted = readDataFile() as PersistedState
+    expect(persisted.deletedFolderWorkspaceSessionTombstones).toEqual({})
+    expect(persisted.deletedFolderWorkspaceSessionTombstoneOverflowBuckets).toBeUndefined()
+  })
+
   it('backfills folder-scope SSH provenance from unambiguous child repos on load', async () => {
     writeDataFile({
       schemaVersion: 1,
@@ -5267,6 +5428,7 @@ describe('Store', () => {
     store.setWorkspaceSession({
       ...getDefaultWorkspaceSession(),
       activeWorkspaceKey: key,
+      activeWorkspaceExecutionHostId: toRuntimeExecutionHostId('deleted-folder-owner'),
       activeWorktreeId: key,
       activeTabId: tab.id,
       tabsByWorktree: { [key]: [tab], 'repo::/wt': [makeTerminalTab({ id: 'repo-tab' })] },
@@ -5308,7 +5470,44 @@ describe('Store', () => {
         ]
       },
       activeTabIdByWorktree: { [key]: tab.id },
-      lastVisitedAtByWorktreeId: { [key]: 10 }
+      lastVisitedAtByWorktreeId: { [key]: 10 },
+      remoteSessionIdsByTabId: {
+        'folder-tab': 'ssh:deleted-folder-target@@folder-pty',
+        'repo-tab': 'ssh:retained-target@@repo-pty'
+      },
+      activeConnectionIdsAtShutdown: ['deleted-folder-target', 'retained-target']
+    })
+    const remoteHostId = toRuntimeExecutionHostId('folder-owner')
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: {
+          [key]: [makeTerminalTab({ id: 'remote-folder-tab', worktreeId: key })],
+          'remote-repo::/wt': [makeTerminalTab({ id: 'remote-repo-tab' })]
+        },
+        remoteSessionIdsByTabId: {
+          'remote-folder-tab': 'ssh:remote-deleted-target@@folder-pty',
+          'remote-repo-tab': 'ssh:remote-retained-target@@repo-pty'
+        },
+        activeConnectionIdsAtShutdown: ['remote-deleted-target', 'remote-retained-target']
+      },
+      remoteHostId
+    )
+    store.upsertSshRemotePtyLease({
+      targetId: 'deleted-folder-target',
+      ptyId: 'folder-pty',
+      worktreeId: key,
+      tabId: 'folder-tab',
+      leafId: TEST_LEAF_1,
+      state: 'detached'
+    })
+    store.upsertSshRemotePtyLease({
+      targetId: 'retained-target',
+      ptyId: 'repo-pty',
+      worktreeId: 'repo::/wt',
+      tabId: 'repo-tab',
+      leafId: TEST_LEAF_2,
+      state: 'detached'
     })
 
     expect(store.removeFolderWorkspace(workspace.id)).toBe(true)
@@ -5318,6 +5517,7 @@ describe('Store', () => {
     expect(store.getProjectGroups()).toHaveLength(1)
     expect(store.getRepo('api')?.projectGroupId).toBe(group.id)
     expect(session.activeWorkspaceKey).toBeNull()
+    expect(session.activeWorkspaceExecutionHostId).toBeNull()
     expect(session.activeWorktreeId).toBeNull()
     expect(session.activeTabId).toBeNull()
     expect(session.tabsByWorktree[key]).toBeUndefined()
@@ -5325,9 +5525,1755 @@ describe('Store', () => {
     expect(session.terminalLayoutsByTabId['folder-tab']).toBeUndefined()
     expect(session.terminalLayoutsByTabId['repo-tab']).toBeDefined()
     expect(session.browserPagesByWorkspace?.['browser-workspace']).toBeUndefined()
+    expect(session.remoteSessionIdsByTabId).toEqual({
+      'repo-tab': 'ssh:retained-target@@repo-pty'
+    })
+    expect(session.activeConnectionIdsAtShutdown).toEqual(['retained-target'])
+    const remoteSession = store.getWorkspaceSession(remoteHostId)
+    expect(remoteSession.tabsByWorktree[key]).toBeUndefined()
+    expect(remoteSession.tabsByWorktree['remote-repo::/wt']).toHaveLength(1)
+    expect(remoteSession.remoteSessionIdsByTabId).toEqual({
+      'remote-repo-tab': 'ssh:remote-retained-target@@repo-pty'
+    })
+    expect(remoteSession.activeConnectionIdsAtShutdown).toEqual(['remote-retained-target'])
+    expect(store.getSshRemotePtyLeases()).toMatchObject([
+      {
+        targetId: 'retained-target',
+        ptyId: 'repo-pty',
+        worktreeId: 'repo::/wt',
+        tabId: 'repo-tab'
+      }
+    ])
+  })
+
+  it('preserves active host ownership for legacy Git session owners', async () => {
+    const store = await createStore()
+    const hostId = toRuntimeExecutionHostId('legacy-active-owner')
+    const worktreeId = 'legacy-active-repo::/remote/worktrees/feature'
+    store.addRepo(
+      makeRepo({
+        id: 'legacy-active-repo',
+        path: '/remote/repo',
+        connectionId: 'legacy-active-transport',
+        executionHostId: hostId
+      })
+    )
+
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        activeWorkspaceKey: null,
+        activeWorkspaceExecutionHostId: hostId,
+        activeWorktreeId: worktreeId
+      },
+      hostId
+    )
+
+    expect(store.getWorkspaceSession(hostId)).toMatchObject({
+      activeWorkspaceKey: null,
+      activeWorkspaceExecutionHostId: hostId,
+      activeWorktreeId: worktreeId
+    })
+  })
+
+  it('removes only contextless SSH leases exclusively bound to a deleted folder', async () => {
+    const store = await createStore()
+    const connectionId = 'contextless-folder-target'
+    const group = store.createProjectGroup({
+      name: 'Contextless lease folder',
+      parentPath: '/remote/contextless-folder',
+      connectionId,
+      createdFrom: 'folder-scan'
+    })
+    const workspace = store.createFolderWorkspace({ projectGroupId: group.id, connectionId })
+    const workspaceKey = folderWorkspaceKey(workspace.id)
+    const retainedWorkspace = store.createFolderWorkspace({
+      projectGroupId: group.id,
+      connectionId
+    })
+    const retainedWorkspaceKey = folderWorkspaceKey(retainedWorkspace.id)
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [workspaceKey]: [
+          makeTerminalTab({ id: 'contextless-folder-tab', worktreeId: workspaceKey }),
+          makeTerminalTab({ id: 'shared-folder-tab', worktreeId: workspaceKey })
+        ],
+        [retainedWorkspaceKey]: [
+          makeTerminalTab({ id: 'shared-retained-tab', worktreeId: retainedWorkspaceKey })
+        ]
+      },
+      remoteSessionIdsByTabId: {
+        'contextless-folder-tab': `ssh:${connectionId}@@deleted-folder-pty`,
+        'shared-folder-tab': `ssh:${connectionId}@@shared-pty`,
+        'shared-retained-tab': `ssh:${connectionId}@@shared-pty`
+      }
+    })
+    store.upsertSshRemotePtyLease({
+      targetId: connectionId,
+      ptyId: 'deleted-folder-pty',
+      state: 'detached'
+    })
+    store.upsertSshRemotePtyLease({
+      targetId: connectionId,
+      ptyId: 'shared-pty',
+      state: 'detached'
+    })
+    store.upsertSshRemotePtyLease({
+      targetId: connectionId,
+      ptyId: 'retained-pty',
+      state: 'detached'
+    })
+
+    expect(store.removeFolderWorkspace(workspace.id)).toBe(true)
+
+    expect(store.getSshRemotePtyLeases().map((lease) => lease.ptyId)).toEqual([
+      'shared-pty',
+      'retained-pty'
+    ])
+  })
+
+  it('removes a contextless SSH lease owned only by a deleted folder tombstone', async () => {
+    const store = await createStore()
+    const connectionId = 'tombstone-only-folder-target'
+    const group = store.createProjectGroup({
+      name: 'Tombstone-only lease folder',
+      parentPath: '/remote/tombstone-only-folder',
+      connectionId,
+      createdFrom: 'folder-scan'
+    })
+    const workspace = store.createFolderWorkspace({ projectGroupId: group.id, connectionId })
+    const workspaceKey = folderWorkspaceKey(workspace.id)
+    const ptyId = `ssh:${connectionId}@@tombstone-only-pty`
+    const internals = store as unknown as { state: PersistedState }
+    internals.state.workspaceSession = {
+      ...getDefaultWorkspaceSession(),
+      terminalSurfaceTombstonesByPaneKey: {
+        [makePaneKey('tombstone-only-tab', TEST_LEAF_1)]: {
+          worktreeId: workspaceKey,
+          parentTabId: 'tombstone-only-tab',
+          leafId: TEST_LEAF_1,
+          ptyId,
+          incarnationId: 'tombstone-only-incarnation',
+          retiredAt: 1
+        }
+      }
+    }
+    store.upsertSshRemotePtyLease({
+      targetId: connectionId,
+      ptyId: 'tombstone-only-pty',
+      state: 'detached'
+    })
+
+    expect(store.removeFolderWorkspace(workspace.id)).toBe(true)
+    expect(store.getSshRemotePtyLeases()).toEqual([])
+  })
+
+  it('preserves retained terminal state when a deleted folder reuses its tab id', async () => {
+    const store = await createStore()
+    const group = store.createProjectGroup({
+      name: 'Colliding folder',
+      parentPath: '/workspace/colliding-folder',
+      createdFrom: 'folder-scan'
+    })
+    const workspace = store.createFolderWorkspace({ projectGroupId: group.id })
+    const folderKey = folderWorkspaceKey(workspace.id)
+    const retainedWorktreeId = 'retained-repo::/retained'
+    const tabId = 'shared-tab-id'
+    const paneKey = makePaneKey(tabId, TEST_LEAF_1)
+    const staleSession = {
+      ...getDefaultWorkspaceSession(),
+      activeTabId: tabId,
+      tabsByWorktree: {
+        [folderKey]: [makeTerminalTab({ id: tabId, worktreeId: folderKey })],
+        [retainedWorktreeId]: [makeTerminalTab({ id: tabId, worktreeId: retainedWorktreeId })]
+      },
+      terminalLayoutsByTabId: {
+        [tabId]: { root: null, activeLeafId: null, expandedLeafId: null }
+      },
+      remoteSessionIdsByTabId: { [tabId]: 'retained-pty' },
+      terminalPtyIncarnationsByPaneKey: { [paneKey]: 'retained-incarnation' }
+    } satisfies WorkspaceSessionState
+    store.setWorkspaceSession(staleSession)
+
+    expect(store.removeFolderWorkspace(workspace.id)).toBe(true)
+
+    const session = store.getWorkspaceSession()
+    expect(session.tabsByWorktree[retainedWorktreeId]).toHaveLength(1)
+    expect(session.terminalLayoutsByTabId[tabId]).toBeDefined()
+    expect(session.remoteSessionIdsByTabId).toEqual({ [tabId]: 'retained-pty' })
+    expect(session.activeTabId).toBe(tabId)
+    expect(session.terminalPtyIncarnationsByPaneKey).toEqual({
+      [paneKey]: 'retained-incarnation'
+    })
+
+    store.patchWorkspaceSession({ activeTabId: tabId })
+    store.patchWorkspaceSession({
+      terminalPtyIncarnationsByPaneKey: { [paneKey]: 'updated-retained-incarnation' }
+    })
+
+    expect(store.getWorkspaceSession().activeTabId).toBe(tabId)
+    expect(store.getWorkspaceSession().terminalPtyIncarnationsByPaneKey).toEqual({
+      [paneKey]: 'updated-retained-incarnation'
+    })
+
+    store.setWorkspaceSession(staleSession)
+
+    const delayedSession = store.getWorkspaceSession()
+    expect(delayedSession.tabsByWorktree[folderKey]).toBeUndefined()
+    expect(delayedSession.tabsByWorktree[retainedWorktreeId]).toHaveLength(1)
+    expect(delayedSession.terminalLayoutsByTabId[tabId]).toBeDefined()
+    expect(delayedSession.remoteSessionIdsByTabId).toEqual({ [tabId]: 'retained-pty' })
+    expect(delayedSession.activeTabId).toBe(tabId)
+  })
+
+  it('preserves ownerless terminal state retained by a colliding unified tab', async () => {
+    const store = await createStore()
+    const group = store.createProjectGroup({
+      name: 'Unified collision folder',
+      parentPath: '/workspace/unified-collision',
+      createdFrom: 'folder-scan'
+    })
+    const workspace = store.createFolderWorkspace({ projectGroupId: group.id })
+    const folderKey = folderWorkspaceKey(workspace.id)
+    const retainedWorktreeId = 'retained-unified-repo::/retained'
+    const tabId = 'shared-unified-tab'
+    const paneKey = makePaneKey(tabId, TEST_LEAF_1)
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [folderKey]: [makeTerminalTab({ id: tabId, worktreeId: folderKey })]
+      },
+      terminalLayoutsByTabId: {
+        [tabId]: { root: null, activeLeafId: null, expandedLeafId: null }
+      }
+    })
+
+    expect(store.removeFolderWorkspace(workspace.id)).toBe(true)
+
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      activeTabId: tabId,
+      activeTabIdByWorktree: { [retainedWorktreeId]: tabId },
+      unifiedTabs: {
+        [retainedWorktreeId]: [
+          {
+            id: tabId,
+            entityId: tabId,
+            groupId: 'retained-group',
+            worktreeId: retainedWorktreeId,
+            contentType: 'terminal',
+            label: 'Retained terminal',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        [tabId]: { root: null, activeLeafId: null, expandedLeafId: null }
+      },
+      remoteSessionIdsByTabId: { [tabId]: 'retained-unified-pty' },
+      terminalPtyIncarnationsByPaneKey: { [paneKey]: 'retained-unified-incarnation' }
+    })
+
+    const session = store.getWorkspaceSession()
+    expect(session.terminalLayoutsByTabId[tabId]).toBeDefined()
+    expect(session.remoteSessionIdsByTabId).toEqual({ [tabId]: 'retained-unified-pty' })
+    expect(session.terminalPtyIncarnationsByPaneKey).toEqual({
+      [paneKey]: 'retained-unified-incarnation'
+    })
+    expect(session.activeTabId).toBe(tabId)
+  })
+
+  it('durably prunes owner-bearing folder tab state without a terminal tab row', async () => {
+    const store = await createStore()
+    const connectionId = 'orphaned-folder-surface-target'
+    const group = store.createProjectGroup({
+      name: 'Orphaned folder surface',
+      parentPath: '/remote/orphaned-folder-surface',
+      connectionId,
+      createdFrom: 'folder-scan'
+    })
+    const workspace = store.createFolderWorkspace({ projectGroupId: group.id, connectionId })
+    const workspaceKey = folderWorkspaceKey(workspace.id)
+    const tabId = 'orphaned-folder-tab'
+    const paneKey = makePaneKey(tabId, TEST_LEAF_1)
+    const layout = {
+      root: { type: 'leaf' as const, leafId: TEST_LEAF_1 },
+      activeLeafId: TEST_LEAF_1,
+      expandedLeafId: null,
+      ptyIdsByLeafId: { [TEST_LEAF_1]: `ssh:${connectionId}@@orphaned-folder-pty` }
+    }
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      sleepingAgentSessionsByPaneKey: {
+        [paneKey]: {
+          paneKey,
+          tabId,
+          worktreeId: workspaceKey,
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'orphaned-folder-session' },
+          prompt: 'Continue',
+          state: 'done',
+          capturedAt: 1,
+          updatedAt: 1,
+          connectionId
+        }
+      }
+    })
+    store.patchWorkspaceSession({
+      remoteSessionIdsByTabId: {
+        [tabId]: `ssh:${connectionId}@@orphaned-folder-pty`
+      },
+      terminalPtyIncarnationsByPaneKey: { [paneKey]: 'orphaned-folder-incarnation' }
+    })
+    expect(store.getWorkspaceSession().tabsByWorktree[workspaceKey]).toBeUndefined()
+    expect(store.getWorkspaceSession().sleepingAgentSessionsByPaneKey).toHaveProperty(paneKey)
+    expect(store.getWorkspaceSession().remoteSessionIdsByTabId).toHaveProperty(tabId)
+    expect(store.getWorkspaceSession().terminalPtyIncarnationsByPaneKey).toHaveProperty(paneKey)
+
+    expect(store.removeFolderWorkspace(workspace.id)).toBe(true)
+    expect(store.getWorkspaceSession().terminalLayoutsByTabId).toEqual({})
+    expect(store.getWorkspaceSession().remoteSessionIdsByTabId).toEqual({})
+    expect(store.getWorkspaceSession().terminalPtyIncarnationsByPaneKey).toEqual({})
+
+    store.flush()
+    const reloaded = await createStore()
+    reloaded.patchWorkspaceSession({
+      terminalLayoutsByTabId: { [tabId]: layout },
+      remoteSessionIdsByTabId: {
+        [tabId]: `ssh:${connectionId}@@orphaned-folder-pty`
+      },
+      terminalPtyIncarnationsByPaneKey: { [paneKey]: 'delayed-orphaned-incarnation' }
+    })
+
+    expect(reloaded.getWorkspaceSession().terminalLayoutsByTabId).toEqual({})
+    expect(reloaded.getWorkspaceSession().remoteSessionIdsByTabId).toEqual({})
+    expect(reloaded.getWorkspaceSession().terminalPtyIncarnationsByPaneKey).toEqual({})
+  })
+
+  it('durably prunes folder state owned only by the active workspace', async () => {
+    const store = await createStore()
+    const connectionId = 'active-only-folder-target'
+    const group = store.createProjectGroup({
+      name: 'Active-only folder surface',
+      parentPath: '/remote/active-only-folder',
+      connectionId,
+      createdFrom: 'folder-scan'
+    })
+    const workspace = store.createFolderWorkspace({ projectGroupId: group.id, connectionId })
+    const workspaceKey = folderWorkspaceKey(workspace.id)
+    const tabId = 'active-only-folder-tab'
+    const paneKey = makePaneKey(tabId, TEST_LEAF_1)
+    const terminalLayoutsByTabId = {
+      [tabId]: {
+        root: { type: 'leaf' as const, leafId: TEST_LEAF_1 },
+        activeLeafId: TEST_LEAF_1,
+        expandedLeafId: null,
+        ptyIdsByLeafId: { [TEST_LEAF_1]: `ssh:${connectionId}@@active-only-folder-pty` }
+      }
+    }
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      activeWorkspaceKey: workspaceKey,
+      activeWorktreeId: workspaceKey,
+      activeTabId: tabId,
+      terminalLayoutsByTabId,
+      remoteSessionIdsByTabId: {
+        [tabId]: `ssh:${connectionId}@@active-only-folder-pty`
+      },
+      terminalPtyIncarnationsByPaneKey: { [paneKey]: 'active-only-incarnation' }
+    })
+    store.upsertSshRemotePtyLease({
+      targetId: connectionId,
+      ptyId: 'active-only-folder-pty',
+      state: 'detached'
+    })
+
+    expect(store.removeFolderWorkspace(workspace.id)).toBe(true)
+    expect(store.getWorkspaceSession().terminalLayoutsByTabId).toEqual({})
+    expect(store.getWorkspaceSession().remoteSessionIdsByTabId).toEqual({})
+    expect(store.getWorkspaceSession().terminalPtyIncarnationsByPaneKey).toEqual({})
+    expect(store.getWorkspaceSession().activeTabId).toBeNull()
+    expect(store.getSshRemotePtyLeases()).toEqual([])
+
+    store.flush()
+    const reloaded = await createStore()
+    reloaded.patchWorkspaceSession({
+      terminalLayoutsByTabId,
+      remoteSessionIdsByTabId: {
+        [tabId]: `ssh:${connectionId}@@active-only-folder-pty`
+      },
+      terminalPtyIncarnationsByPaneKey: { [paneKey]: 'delayed-active-only-incarnation' }
+    })
+
+    expect(reloaded.getWorkspaceSession().terminalLayoutsByTabId).toEqual({})
+    expect(reloaded.getWorkspaceSession().remoteSessionIdsByTabId).toEqual({})
+    expect(reloaded.getWorkspaceSession().terminalPtyIncarnationsByPaneKey).toEqual({})
+  })
+
+  it('prunes global reconnect targets across host partitions with unprefixed relay ids', async () => {
+    const store = await createStore()
+    const group = store.createProjectGroup({
+      name: 'Remote platform',
+      parentPath: '/remote/platform',
+      connectionId: 'shared-target',
+      createdFrom: 'folder-scan'
+    })
+    const workspace = store.createFolderWorkspace({
+      projectGroupId: group.id,
+      name: 'Remote folder',
+      connectionId: 'shared-target'
+    })
+    const key = folderWorkspaceKey(workspace.id)
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      activeConnectionIdsAtShutdown: ['shared-target', 'deleted-only-target']
+    })
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        activeConnectionIdsAtShutdown: ['shared-target'],
+        tabsByWorktree: {
+          [key]: [makeTerminalTab({ id: 'shared-folder-tab', worktreeId: key })],
+          'retained-repo::/wt': [makeTerminalTab({ id: 'shared-retained-tab' })]
+        },
+        remoteSessionIdsByTabId: {
+          'shared-folder-tab': 'unprefixed-folder-relay',
+          'shared-retained-tab': 'unprefixed-retained-relay'
+        }
+      },
+      toSshExecutionHostId('shared-target')
+    )
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        activeConnectionIdsAtShutdown: ['deleted-only-target'],
+        tabsByWorktree: {
+          [key]: [makeTerminalTab({ id: 'deleted-only-folder-tab', worktreeId: key })]
+        },
+        remoteSessionIdsByTabId: {
+          'deleted-only-folder-tab': 'unprefixed-deleted-only-relay'
+        }
+      },
+      toSshExecutionHostId('deleted-only-target')
+    )
+
+    expect(store.removeFolderWorkspace(workspace.id)).toBe(true)
+
+    expect(store.getWorkspaceSession().activeConnectionIdsAtShutdown).toEqual(['shared-target'])
+    expect(
+      store.getWorkspaceSession(toSshExecutionHostId('shared-target')).remoteSessionIdsByTabId
+    ).toEqual({ 'shared-retained-tab': 'unprefixed-retained-relay' })
+    expect(
+      store.getWorkspaceSession(toSshExecutionHostId('shared-target')).activeConnectionIdsAtShutdown
+    ).toEqual(['shared-target'])
+    expect(
+      store.getWorkspaceSession(toSshExecutionHostId('deleted-only-target')).remoteSessionIdsByTabId
+    ).toEqual({})
+    expect(
+      store.getWorkspaceSession(toSshExecutionHostId('deleted-only-target'))
+        .activeConnectionIdsAtShutdown
+    ).toBeUndefined()
+  })
+
+  it('keeps cross-host reconnect ownership through a delayed deleted-folder write', async () => {
+    const store = await createStore()
+    const connectionId = 'cross-host-retained-target'
+    const runtimeHostId = toRuntimeExecutionHostId('cross-host-retained-owner')
+    const group = store.createProjectGroup({
+      name: 'Cross-host folder',
+      parentPath: '/remote/cross-host-folder',
+      connectionId,
+      createdFrom: 'folder-scan'
+    })
+    const workspace = store.createFolderWorkspace({
+      projectGroupId: group.id,
+      connectionId
+    })
+    const folderKey = folderWorkspaceKey(workspace.id)
+    const retainedWorktreeId = 'cross-host-repo::/remote/cross-host-repo'
+    store.addRepo(
+      makeRepo({
+        id: 'cross-host-repo',
+        path: '/remote/cross-host-repo',
+        connectionId,
+        executionHostId: runtimeHostId
+      })
+    )
+    const staleLocalSession = {
+      ...getDefaultWorkspaceSession(),
+      activeConnectionIdsAtShutdown: [connectionId],
+      tabsByWorktree: {
+        [folderKey]: [makeTerminalTab({ id: 'deleted-folder-tab', worktreeId: folderKey })]
+      },
+      remoteSessionIdsByTabId: { 'deleted-folder-tab': 'unprefixed-deleted-folder-pty' }
+    } satisfies WorkspaceSessionState
+    store.setWorkspaceSession(staleLocalSession)
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: {
+          [retainedWorktreeId]: [
+            makeTerminalTab({ id: 'retained-runtime-tab', worktreeId: retainedWorktreeId })
+          ]
+        },
+        remoteSessionIdsByTabId: { 'retained-runtime-tab': 'unprefixed-retained-runtime-pty' }
+      },
+      runtimeHostId
+    )
+
+    expect(store.removeFolderWorkspace(workspace.id)).toBe(true)
+    expect(store.getWorkspaceSession().activeConnectionIdsAtShutdown).toEqual([connectionId])
+
+    store.setWorkspaceSession(staleLocalSession)
+
+    expect(store.getWorkspaceSession().activeConnectionIdsAtShutdown).toEqual([connectionId])
+    expect(store.getWorkspaceSession().tabsByWorktree[folderKey]).toBeUndefined()
   })
 
   // ── 9. Settings: get/update ────────────────────────────────────────
+
+  it('retains a runtime-host reconnect target when duplicate repo ids span hosts', async () => {
+    const store = await createStore()
+    const connectionId = 'runtime-transport'
+    const runtimeHostId = toRuntimeExecutionHostId('runtime-owner')
+    const group = store.createProjectGroup({
+      name: 'Runtime platform',
+      parentPath: '/runtime/platform',
+      connectionId,
+      createdFrom: 'folder-scan'
+    })
+    const workspace = store.createFolderWorkspace({
+      projectGroupId: group.id,
+      name: 'Runtime folder',
+      connectionId
+    })
+    const folderKey = folderWorkspaceKey(workspace.id)
+    const retainedWorktreeId = 'duplicate-runtime-repo::/runtime/platform/feature'
+    store.addRepo(
+      makeRepo({ id: 'duplicate-runtime-repo', path: '/local/duplicate', connectionId: null })
+    )
+    store.addRepo(
+      makeRepo({
+        id: 'duplicate-runtime-repo',
+        path: '/runtime/platform',
+        connectionId,
+        executionHostId: runtimeHostId
+      })
+    )
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      activeConnectionIdsAtShutdown: [connectionId]
+    })
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        activeConnectionIdsAtShutdown: [connectionId],
+        tabsByWorktree: {
+          [folderKey]: [makeTerminalTab({ id: 'runtime-folder-tab', worktreeId: folderKey })],
+          [retainedWorktreeId]: [
+            makeTerminalTab({ id: 'runtime-retained-tab', worktreeId: retainedWorktreeId })
+          ]
+        },
+        remoteSessionIdsByTabId: {
+          'runtime-folder-tab': 'unprefixed-folder-pty',
+          'runtime-retained-tab': 'unprefixed-retained-pty'
+        }
+      },
+      runtimeHostId
+    )
+
+    expect(store.removeFolderWorkspace(workspace.id)).toBe(true)
+
+    expect(store.getWorkspaceSession().activeConnectionIdsAtShutdown).toEqual([connectionId])
+    expect(store.getWorkspaceSession(runtimeHostId).activeConnectionIdsAtShutdown).toEqual([
+      connectionId
+    ])
+    expect(store.getWorkspaceSession(runtimeHostId).remoteSessionIdsByTabId).toEqual({
+      'runtime-retained-tab': 'unprefixed-retained-pty'
+    })
+  })
+
+  it('accepts a runtime-owned folder session without a local folder catalog entry', async () => {
+    const store = await createStore()
+    const hostId = toRuntimeExecutionHostId('remote-folder-catalog')
+    const folderKey = 'folder:remote-runtime-folder'
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: {
+          [folderKey]: [makeTerminalTab({ id: 'remote-runtime-tab', worktreeId: folderKey })]
+        },
+        remoteSessionIdsByTabId: { 'remote-runtime-tab': 'remote-runtime-pty' }
+      },
+      hostId
+    )
+
+    expect(store.getWorkspaceSession(hostId).tabsByWorktree[folderKey]).toHaveLength(1)
+    expect(store.getWorkspaceSession(hostId).remoteSessionIdsByTabId).toEqual({
+      'remote-runtime-tab': 'remote-runtime-pty'
+    })
+  })
+
+  it('fences a deleted folder in a previously unseen runtime partition', async () => {
+    const store = await createStore()
+    const group = store.createProjectGroup({
+      name: 'Late runtime folder',
+      parentPath: '/workspace/late-runtime-folder',
+      createdFrom: 'folder-scan'
+    })
+    const workspace = store.createFolderWorkspace({ projectGroupId: group.id })
+    const folderKey = folderWorkspaceKey(workspace.id)
+    const hostId = toRuntimeExecutionHostId('previously-unseen-folder-owner')
+    const tabId = 'late-runtime-tab'
+    const paneKey = makePaneKey(tabId, TEST_LEAF_1)
+    expect(store.removeFolderWorkspace(workspace.id)).toBe(true)
+    store.flush()
+
+    const reloaded = await createStore()
+    reloaded.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: {
+          [folderKey]: [makeTerminalTab({ id: tabId, worktreeId: folderKey })]
+        },
+        remoteSessionIdsByTabId: { [tabId]: 'late-runtime-pty' }
+      },
+      hostId
+    )
+    reloaded.patchWorkspaceSession(
+      {
+        terminalLayoutsByTabId: {
+          [tabId]: {
+            root: { type: 'leaf', leafId: TEST_LEAF_1 },
+            activeLeafId: TEST_LEAF_1,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [TEST_LEAF_1]: 'late-runtime-pty' }
+          }
+        },
+        terminalPtyIncarnationsByPaneKey: { [paneKey]: 'late-runtime-incarnation' }
+      },
+      hostId
+    )
+
+    expect(reloaded.getWorkspaceSession(hostId).tabsByWorktree[folderKey]).toBeUndefined()
+    expect(reloaded.getWorkspaceSession(hostId).terminalLayoutsByTabId).toEqual({})
+    expect(reloaded.getWorkspaceSession(hostId).remoteSessionIdsByTabId).toEqual({})
+    expect(reloaded.getWorkspaceSession(hostId).terminalPtyIncarnationsByPaneKey).toEqual({})
+  })
+
+  it('keeps a shared reconnect target when a retained Git tab has an unprefixed relay id', async () => {
+    const store = await createStore()
+    const removedWorktreeId = 'removed-repo::/removed'
+    const retainedWorktreeId = 'retained-repo::/retained'
+    store.addRepo(makeRepo({ id: 'removed-repo', path: '/removed', connectionId: 'shared-target' }))
+    store.addRepo(
+      makeRepo({ id: 'retained-repo', path: '/retained', connectionId: 'shared-target' })
+    )
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [removedWorktreeId]: [makeTerminalTab({ id: 'removed-tab' })],
+        [retainedWorktreeId]: [makeTerminalTab({ id: 'retained-tab' })]
+      },
+      remoteSessionIdsByTabId: {
+        'removed-tab': 'ssh:shared-target@@removed-pty',
+        'retained-tab': 'unprefixed-retained-pty'
+      },
+      activeConnectionIdsAtShutdown: ['shared-target']
+    })
+
+    store.removeWorktreeMeta(removedWorktreeId)
+
+    expect(store.getWorkspaceSession().remoteSessionIdsByTabId).toEqual({
+      'retained-tab': 'unprefixed-retained-pty'
+    })
+    expect(store.getWorkspaceSession().activeConnectionIdsAtShutdown).toEqual(['shared-target'])
+  })
+
+  it('removes Git session state only from its declared host partition', async () => {
+    const store = await createStore()
+    const worktreeId = 'partitioned-repo::/remote/feature'
+    const remoteHostId = toRuntimeExecutionHostId('partitioned-owner')
+    store.addRepo(makeRepo({ id: 'partitioned-repo', path: '/local/repo' }))
+    store.addRepo(
+      makeRepo({
+        id: 'partitioned-repo',
+        path: '/remote/repo',
+        connectionId: 'partitioned-transport',
+        executionHostId: remoteHostId
+      })
+    )
+    store.setWorktreeMeta(worktreeId, { hostId: remoteHostId })
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [worktreeId]: [makeTerminalTab({ id: 'local-collision-tab', worktreeId })]
+      }
+    })
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: {
+          [worktreeId]: [makeTerminalTab({ id: 'remote-owner-tab', worktreeId })]
+        },
+        remoteSessionIdsByTabId: {
+          'remote-owner-tab': 'unprefixed-remote-pty'
+        }
+      },
+      remoteHostId
+    )
+
+    store.removeWorktreeMeta(worktreeId)
+
+    expect(store.getWorkspaceSession().tabsByWorktree[worktreeId]).toMatchObject([
+      { id: 'local-collision-tab' }
+    ])
+    expect(store.getWorkspaceSession(remoteHostId).tabsByWorktree[worktreeId]).toBeUndefined()
+    expect(store.getWorkspaceSession(remoteHostId).remoteSessionIdsByTabId).toEqual({})
+  })
+
+  it('removes session-only Git ownership from the deleted SSH repo partition', async () => {
+    const store = await createStore()
+    const repoId = 'session-only-owner-repo'
+    const worktreeId = `${repoId}::/remote/feature`
+    const workspaceKey = worktreeWorkspaceKey(worktreeId)
+    const remoteHostId = toSshExecutionHostId('session-only-owner-target')
+    store.addRepo(makeRepo({ id: repoId, path: '/local/repo' }))
+    store.addRepo(
+      makeRepo({
+        id: repoId,
+        path: '/remote/repo',
+        connectionId: 'session-only-owner-target'
+      })
+    )
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        activeWorkspaceKey: workspaceKey,
+        activeTabId: 'session-only-owner-tab',
+        activeWorktreeIdsOnShutdown: [workspaceKey],
+        browserPagesByWorkspace: {
+          'session-only-browser': [
+            {
+              id: 'session-only-page',
+              workspaceId: 'session-only-browser',
+              worktreeId: workspaceKey,
+              url: 'about:blank',
+              title: 'Session only',
+              loading: false,
+              faviconUrl: null,
+              canGoBack: false,
+              canGoForward: false,
+              loadError: null,
+              createdAt: 1
+            }
+          ]
+        }
+      },
+      remoteHostId
+    )
+
+    store.removeProjectForHost(repoId, remoteHostId)
+
+    expect(store.getRepos().filter((repo) => repo.id === repoId)).toHaveLength(1)
+    expect(store.getWorkspaceSession(remoteHostId)).toMatchObject({
+      activeWorkspaceKey: null,
+      activeTabId: null,
+      activeWorktreeIdsOnShutdown: [],
+      browserPagesByWorkspace: {}
+    })
+  })
+
+  it('removes canonical workspace-key aliases with their raw Git owner', async () => {
+    const store = await createStore()
+    const worktreeId = 'canonical-owner-repo::/worktrees/feature'
+    const workspaceKey = worktreeWorkspaceKey(worktreeId)
+    store.addRepo(
+      makeRepo({
+        id: 'canonical-owner-repo',
+        path: '/worktrees/feature',
+        connectionId: 'canonical-owner-target'
+      })
+    )
+    store.setWorktreeMeta(worktreeId, { displayName: 'Canonical owner' })
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      activeWorkspaceKey: workspaceKey,
+      activeTabId: 'canonical-owner-tab',
+      tabsByWorktree: {
+        [workspaceKey]: [
+          makeTerminalTab({
+            id: 'canonical-owner-tab',
+            ptyId: 'ssh:canonical-owner-target@@canonical-owner-pty',
+            worktreeId: workspaceKey
+          })
+        ]
+      },
+      unifiedTabs: {
+        [workspaceKey]: [
+          {
+            id: 'canonical-owner-tab',
+            entityId: 'canonical-owner-tab',
+            groupId: 'canonical-owner-group',
+            worktreeId: workspaceKey,
+            contentType: 'terminal',
+            label: 'Terminal',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        'canonical-owner-tab': {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: {
+            [TEST_LEAF_1]: 'ssh:canonical-owner-target@@canonical-owner-pty'
+          }
+        }
+      },
+      remoteSessionIdsByTabId: {
+        'canonical-owner-tab': 'ssh:canonical-owner-target@@canonical-owner-pty'
+      },
+      activeConnectionIdsAtShutdown: ['canonical-owner-target']
+    })
+
+    store.removeWorktreeMeta(worktreeId)
+
+    expect(store.getWorkspaceSession()).toMatchObject({
+      activeWorkspaceKey: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      unifiedTabs: {},
+      terminalLayoutsByTabId: {},
+      remoteSessionIdsByTabId: {}
+    })
+  })
+
+  it('preserves a workspace-key owner collision until one Git host is authoritative', async () => {
+    const store = await createStore()
+    const worktreeId = 'aliased-owner-repo::/remote/worktrees/feature'
+    const remoteHostId = toRuntimeExecutionHostId('aliased-partition-owner')
+    store.addRepo(makeRepo({ id: 'aliased-owner-repo', path: '/local/repo' }))
+    store.addRepo(
+      makeRepo({
+        id: 'aliased-owner-repo',
+        path: '/remote/repo',
+        connectionId: 'aliased-owner-transport',
+        executionHostId: remoteHostId
+      })
+    )
+    store.setWorktreeMeta(worktreeId, { displayName: 'Aliased remote worktree' })
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [worktreeId]: [makeTerminalTab({ id: 'retained-local-alias', worktreeId })]
+      }
+    })
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        activeWorkspaceKey: worktreeWorkspaceKey(worktreeId),
+        activeWorkspaceExecutionHostId: remoteHostId,
+        activeTabId: 'removed-remote-alias',
+        terminalLayoutsByTabId: {
+          'removed-remote-alias': {
+            root: { type: 'leaf', leafId: TEST_LEAF_1 },
+            activeLeafId: TEST_LEAF_1,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [TEST_LEAF_1]: 'removed-remote-alias-pty' }
+          }
+        },
+        remoteSessionIdsByTabId: {
+          'removed-remote-alias': 'removed-remote-alias-pty'
+        }
+      },
+      remoteHostId
+    )
+
+    store.removeWorktreeMeta(worktreeId)
+
+    expect(store.getWorkspaceSession().tabsByWorktree[worktreeId]).toMatchObject([
+      { id: 'retained-local-alias' }
+    ])
+    expect(store.getWorkspaceSession(remoteHostId)).toMatchObject({
+      activeWorkspaceKey: worktreeWorkspaceKey(worktreeId),
+      activeWorkspaceExecutionHostId: remoteHostId,
+      activeTabId: 'removed-remote-alias',
+      remoteSessionIdsByTabId: {
+        'removed-remote-alias': 'removed-remote-alias-pty'
+      }
+    })
+
+    store.setWorkspaceSession(getDefaultWorkspaceSession())
+    store.setWorktreeMeta(worktreeId, { displayName: 'Aliased remote worktree' })
+    store.removeWorktreeMeta(worktreeId)
+
+    expect(store.getWorkspaceSession(remoteHostId)).toMatchObject({
+      activeWorkspaceKey: null,
+      activeWorkspaceExecutionHostId: null,
+      activeTabId: null,
+      terminalLayoutsByTabId: {},
+      remoteSessionIdsByTabId: {}
+    })
+  })
+
+  it('keeps a colliding local Git session when the only repo row declares a remote owner', async () => {
+    const store = await createStore()
+    const worktreeId = 'single-owner-repo::/runtime/feature'
+    const remoteHostId = toRuntimeExecutionHostId('single-partitioned-owner')
+    store.addRepo(
+      makeRepo({
+        id: 'single-owner-repo',
+        path: '/runtime/repo',
+        connectionId: 'single-owner-transport',
+        executionHostId: remoteHostId
+      })
+    )
+    store.setWorktreeMeta(worktreeId, { hostId: remoteHostId })
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [worktreeId]: [makeTerminalTab({ id: 'unowned-local-collision', worktreeId })]
+      }
+    })
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: {
+          [worktreeId]: [makeTerminalTab({ id: 'declared-remote-tab', worktreeId })]
+        }
+      },
+      remoteHostId
+    )
+
+    store.removeWorktreeMeta(worktreeId)
+
+    expect(store.getWorkspaceSession().tabsByWorktree[worktreeId]).toMatchObject([
+      { id: 'unowned-local-collision' }
+    ])
+    expect(store.getWorkspaceSession(remoteHostId).tabsByWorktree[worktreeId]).toBeUndefined()
+  })
+
+  it('uses a single repo host only after persisted and exact-path ownership stay ambiguous', async () => {
+    const store = await createStore()
+    const worktreeId = 'legacy-single-repo::/remote/worktrees/feature'
+    const remoteHostId = toRuntimeExecutionHostId('legacy-single-owner')
+    store.addRepo(
+      makeRepo({
+        id: 'legacy-single-repo',
+        path: '/remote/repo',
+        connectionId: 'legacy-single-transport',
+        executionHostId: remoteHostId
+      })
+    )
+    store.setWorktreeMeta(worktreeId, { displayName: 'Legacy remote worktree' })
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [worktreeId]: [makeTerminalTab({ id: 'retained-local-collision', worktreeId })]
+      }
+    })
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: {
+          [worktreeId]: [makeTerminalTab({ id: 'removed-remote-owner', worktreeId })]
+        }
+      },
+      remoteHostId
+    )
+
+    store.removeWorktreeMeta(worktreeId)
+
+    expect(store.getWorkspaceSession().tabsByWorktree[worktreeId]).toMatchObject([
+      { id: 'retained-local-collision' }
+    ])
+    expect(store.getWorkspaceSession(remoteHostId).tabsByWorktree[worktreeId]).toBeUndefined()
+  })
+
+  it('uses unique persisted ownership for legacy duplicate-repo Git deletion', async () => {
+    const store = await createStore()
+    const worktreeId = 'legacy-duplicate-repo::/remote/repo'
+    const remoteHostId = toSshExecutionHostId('legacy-duplicate-owner')
+    store.addRepo(makeRepo({ id: 'legacy-duplicate-repo', path: '/local/repo' }))
+    store.addRepo(
+      makeRepo({
+        id: 'legacy-duplicate-repo',
+        path: '/remote/repo',
+        connectionId: 'legacy-duplicate-owner'
+      })
+    )
+    store.setWorktreeMeta(worktreeId, { displayName: 'Legacy remote worktree' })
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: {
+          [worktreeId]: [makeTerminalTab({ id: 'legacy-remote-tab', worktreeId })]
+        }
+      },
+      remoteHostId
+    )
+
+    store.removeWorktreeMeta(worktreeId)
+
+    expect(store.getWorkspaceSession(remoteHostId).tabsByWorktree[worktreeId]).toBeUndefined()
+  })
+
+  it('fences delayed legacy Git writes in the exact remote repo partition', async () => {
+    const store = await createStore()
+    const repoId = 'legacy-empty-duplicate-repo'
+    const worktreeId = `${repoId}::/remote/repo`
+    const remoteHostId = toSshExecutionHostId('legacy-empty-owner')
+    store.addRepo(makeRepo({ id: repoId, path: '/local/repo' }))
+    store.addRepo(
+      makeRepo({
+        id: repoId,
+        path: '/remote/repo',
+        connectionId: 'legacy-empty-owner'
+      })
+    )
+    store.setWorktreeMeta(worktreeId, { displayName: 'Legacy empty remote worktree' })
+    store.setWorkspaceSession(getDefaultWorkspaceSession(), remoteHostId)
+    const delayed = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [worktreeId]: [makeTerminalTab({ id: 'delayed-legacy-remote-tab', worktreeId })]
+      }
+    }
+
+    store.removeWorktreeMeta(worktreeId)
+    store.setWorkspaceSession(delayed, remoteHostId)
+
+    expect(store.getWorkspaceSession().terminalTopologyRevisionByRepoId?.[repoId]).toBeUndefined()
+    expect(store.getWorkspaceSession(remoteHostId).terminalTopologyRevisionByRepoId?.[repoId]).toBe(
+      1
+    )
+    expect(store.getWorkspaceSession(remoteHostId).tabsByWorktree[worktreeId]).toEqual([])
+  })
+
+  it('keeps a shared reconnect target for a retained Git repo without an open tab', async () => {
+    const store = await createStore()
+    const connectionId = 'shared-repo-target'
+    const group = store.createProjectGroup({
+      name: 'Shared repo folder',
+      parentPath: '/remote/shared-repo-folder',
+      connectionId,
+      createdFrom: 'folder-scan'
+    })
+    const workspace = store.createFolderWorkspace({
+      projectGroupId: group.id,
+      connectionId
+    })
+    const folderKey = folderWorkspaceKey(workspace.id)
+    store.addRepo(makeRepo({ id: 'retained-shared-repo', path: '/remote/retained', connectionId }))
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      activeConnectionIdsAtShutdown: [connectionId],
+      tabsByWorktree: {
+        [folderKey]: [makeTerminalTab({ id: 'shared-folder-tab', worktreeId: folderKey })]
+      },
+      remoteSessionIdsByTabId: {
+        'shared-folder-tab': `ssh:${connectionId}@@folder-pty`
+      }
+    })
+
+    expect(store.removeFolderWorkspace(workspace.id)).toBe(true)
+    expect(store.getWorkspaceSession().activeConnectionIdsAtShutdown).toEqual([connectionId])
+
+    store.patchWorkspaceSession({ activeConnectionIdsAtShutdown: [connectionId] })
+
+    expect(store.getWorkspaceSession().activeConnectionIdsAtShutdown).toEqual([connectionId])
+  })
+
+  it('prunes a deleted folder reconnect target stored only on its terminal tab', async () => {
+    const store = await createStore()
+    const connectionId = 'tab-binding-only-target'
+    const group = store.createProjectGroup({
+      name: 'Tab binding folder',
+      parentPath: '/remote/tab-binding-folder',
+      connectionId,
+      createdFrom: 'folder-scan'
+    })
+    const workspace = store.createFolderWorkspace({
+      projectGroupId: group.id,
+      connectionId
+    })
+    const folderKey = folderWorkspaceKey(workspace.id)
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [folderKey]: [
+          makeTerminalTab({
+            id: 'tab-binding-only-tab',
+            worktreeId: folderKey,
+            ptyId: `ssh:${connectionId}@@folder-pty`
+          })
+        ]
+      },
+      activeConnectionIdsAtShutdown: [connectionId]
+    })
+
+    expect(store.removeFolderWorkspace(workspace.id)).toBe(true)
+    expect(store.getWorkspaceSession().activeConnectionIdsAtShutdown).toBeUndefined()
+  })
+
+  it('rejects delayed session and PTY binding writes for a deleted folder', async () => {
+    const store = await createStore()
+    const connectionId = 'deleted-folder-relay'
+    const hostId = toRuntimeExecutionHostId('deleted-folder-runtime')
+    const group = store.createProjectGroup({
+      name: 'Deleted folder platform',
+      parentPath: '/remote/deleted-folder',
+      connectionId,
+      createdFrom: 'folder-scan'
+    })
+    const workspace = store.createFolderWorkspace({
+      projectGroupId: group.id,
+      name: 'Deleted folder',
+      connectionId
+    })
+    const key = folderWorkspaceKey(workspace.id)
+    const staleSession = {
+      ...getDefaultWorkspaceSession(),
+      activeWorkspaceKey: key,
+      activeWorktreeId: key,
+      activeWorktreeIdsOnShutdown: [key],
+      activeConnectionIdsAtShutdown: [connectionId],
+      tabsByWorktree: {
+        [key]: [makeTerminalTab({ id: 'delayed-folder-tab', worktreeId: key })]
+      },
+      remoteSessionIdsByTabId: {
+        'delayed-folder-tab': 'unprefixed-delayed-pty'
+      }
+    } satisfies WorkspaceSessionState
+    store.setWorkspaceSession(staleSession, hostId)
+    expect(store.removeFolderWorkspace(workspace.id)).toBe(true)
+
+    const delayedPaneKey = makePaneKey('delayed-folder-tab', TEST_LEAF_1)
+    store.patchWorkspaceSession(
+      {
+        terminalPtyIncarnationsByPaneKey: { [delayedPaneKey]: 'delayed-incarnation' }
+      },
+      hostId
+    )
+    store.patchWorkspaceSession({ activeTabId: 'delayed-folder-tab' }, hostId)
+    store.patchWorkspaceSession({ activeConnectionIdsAtShutdown: [connectionId] }, hostId)
+    store.upsertSshRemotePtyLease({
+      targetId: connectionId,
+      ptyId: 'delayed-folder-pty',
+      worktreeId: key,
+      tabId: 'delayed-folder-tab',
+      leafId: TEST_LEAF_1,
+      state: 'detached'
+    })
+
+    expect(store.getWorkspaceSession(hostId).terminalPtyIncarnationsByPaneKey).toEqual({})
+    expect(store.getWorkspaceSession(hostId).activeTabId).toBeNull()
+    expect(store.getWorkspaceSession(hostId).activeConnectionIdsAtShutdown).toBeUndefined()
+    expect(store.getSshRemotePtyLeases()).toEqual([])
+
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        activeConnectionIdsAtShutdown: [connectionId]
+      },
+      hostId
+    )
+    expect(store.getWorkspaceSession(hostId).activeConnectionIdsAtShutdown).toBeUndefined()
+
+    store.patchWorkspaceSession(
+      {
+        activeWorkspaceKey: key,
+        activeWorktreeId: key,
+        activeWorktreeIdsOnShutdown: [key],
+        activeConnectionIdsAtShutdown: [connectionId],
+        remoteSessionIdsByTabId: {
+          'delayed-folder-tab': 'unprefixed-delayed-pty'
+        },
+        lastVisitedAtByWorktreeId: { [key]: 100 }
+      },
+      hostId
+    )
+    const patchedSession = store.getWorkspaceSession(hostId)
+    expect(patchedSession.activeWorkspaceKey).toBeNull()
+    expect(patchedSession.activeWorktreeId).toBeNull()
+    expect(patchedSession.activeWorktreeIdsOnShutdown).toEqual([])
+    expect(patchedSession.activeConnectionIdsAtShutdown).toBeUndefined()
+    expect(patchedSession.remoteSessionIdsByTabId).toEqual({})
+    expect(patchedSession.lastVisitedAtByWorktreeId?.[key]).toBeUndefined()
+
+    store.patchWorkspaceSession(
+      {
+        terminalLayoutsByTabId: {
+          'delayed-folder-tab': {
+            root: { type: 'leaf', leafId: TEST_LEAF_1 },
+            activeLeafId: TEST_LEAF_1,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [TEST_LEAF_1]: 'unprefixed-delayed-pty' }
+          }
+        },
+        terminalPtyIncarnationsByPaneKey: { [delayedPaneKey]: 'delayed-incarnation' }
+      },
+      hostId
+    )
+    expect(store.getWorkspaceSession(hostId).terminalLayoutsByTabId).toEqual({})
+    expect(store.getWorkspaceSession(hostId).terminalPtyIncarnationsByPaneKey).toEqual({})
+
+    store.setWorkspaceSession(staleSession, hostId)
+
+    const session = store.getWorkspaceSession(hostId)
+    expect(session.tabsByWorktree[key]).toBeUndefined()
+    expect(session.remoteSessionIdsByTabId).toEqual({})
+    expect(session.activeWorktreeIdsOnShutdown).toEqual([])
+    expect(session.activeConnectionIdsAtShutdown).toBeUndefined()
+
+    const laterTabId = 'later-delayed-folder-tab'
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: {
+          [key]: [makeTerminalTab({ id: laterTabId, worktreeId: key })]
+        },
+        remoteSessionIdsByTabId: { [laterTabId]: 'unprefixed-later-delayed-pty' }
+      },
+      hostId
+    )
+    store.patchWorkspaceSession(
+      {
+        activeConnectionIdsAtShutdown: [connectionId],
+        remoteSessionIdsByTabId: { [laterTabId]: 'unprefixed-later-delayed-pty' }
+      },
+      hostId
+    )
+    store.patchWorkspaceSession(
+      {
+        browserPagesByWorkspace: {
+          'delayed-browser-workspace': [
+            {
+              id: 'delayed-page',
+              workspaceId: 'delayed-browser-workspace',
+              worktreeId: key,
+              url: 'about:blank',
+              title: 'Delayed',
+              loading: false,
+              faviconUrl: null,
+              canGoBack: false,
+              canGoForward: false,
+              loadError: null,
+              createdAt: 1
+            }
+          ]
+        }
+      },
+      hostId
+    )
+    store.patchWorkspaceSession({ activeWorkspaceExecutionHostId: hostId }, hostId)
+
+    expect(store.getWorkspaceSession(hostId).remoteSessionIdsByTabId).toEqual({})
+    expect(store.getWorkspaceSession(hostId).activeConnectionIdsAtShutdown).toBeUndefined()
+    expect(store.getWorkspaceSession(hostId).browserPagesByWorkspace).toEqual({})
+    expect(store.getWorkspaceSession(hostId).activeWorkspaceExecutionHostId).toBeNull()
+
+    store.flush()
+    const reloaded = await createStore()
+    reloaded.patchWorkspaceSession({ activeConnectionIdsAtShutdown: [connectionId] }, hostId)
+    reloaded.upsertSshRemotePtyLease({
+      targetId: connectionId,
+      ptyId: 'restarted-delayed-folder-pty',
+      worktreeId: key,
+      tabId: 'delayed-folder-tab',
+      leafId: TEST_LEAF_1,
+      state: 'detached'
+    })
+
+    expect(reloaded.getWorkspaceSession(hostId).activeConnectionIdsAtShutdown).toBeUndefined()
+    expect(reloaded.getSshRemotePtyLeases()).toEqual([])
+
+    reloaded.patchWorkspaceSession(
+      {
+        activeConnectionIdsAtShutdown: [connectionId],
+        remoteSessionIdsByTabId: { [laterTabId]: 'unprefixed-later-delayed-pty' },
+        browserPagesByWorkspace: {
+          'restarted-delayed-browser-workspace': [
+            {
+              id: 'restarted-delayed-page',
+              workspaceId: 'restarted-delayed-browser-workspace',
+              worktreeId: key,
+              url: 'about:blank',
+              title: 'Restarted delayed',
+              loading: false,
+              faviconUrl: null,
+              canGoBack: false,
+              canGoForward: false,
+              loadError: null,
+              createdAt: 1
+            }
+          ]
+        }
+      },
+      hostId
+    )
+
+    expect(reloaded.getWorkspaceSession(hostId).remoteSessionIdsByTabId).toEqual({})
+    expect(reloaded.getWorkspaceSession(hostId).activeConnectionIdsAtShutdown).toBeUndefined()
+    expect(reloaded.getWorkspaceSession(hostId).browserPagesByWorkspace).toEqual({})
+    expect(() =>
+      reloaded.persistPtyBinding(
+        {
+          worktreeId: key,
+          tabId: 'delayed-folder-tab',
+          leafId: TEST_LEAF_1,
+          ptyId: 'unprefixed-delayed-pty'
+        },
+        hostId
+      )
+    ).toThrow('folder_workspace_not_found')
+  })
+
+  it('keeps a recent remote stale-write fence through rapid folder deletion churn', async () => {
+    const store = await createStore()
+    const connectionId = 'rapid-churn-remote'
+    const hostId = toRuntimeExecutionHostId('rapid-churn-runtime')
+    const group = store.createProjectGroup({
+      name: 'Rapid churn',
+      parentPath: '/remote/rapid-churn',
+      connectionId,
+      createdFrom: 'folder-scan'
+    })
+    const workspace = store.createFolderWorkspace({ projectGroupId: group.id, connectionId })
+    const workspaceKey = folderWorkspaceKey(workspace.id)
+    const staleSession = {
+      ...getDefaultWorkspaceSession(),
+      activeWorkspaceKey: workspaceKey,
+      activeConnectionIdsAtShutdown: [connectionId],
+      tabsByWorktree: {
+        [workspaceKey]: [makeTerminalTab({ id: 'rapid-churn-stale-tab', worktreeId: workspaceKey })]
+      }
+    } satisfies WorkspaceSessionState
+    store.setWorkspaceSession(staleSession, hostId)
+    expect(store.removeFolderWorkspace(workspace.id)).toBe(true)
+    for (let index = 0; index < 512; index += 1) {
+      const churned = store.createFolderWorkspace({
+        projectGroupId: group.id,
+        name: `Churned ${index}`
+      })
+      expect(store.removeFolderWorkspace(churned.id)).toBe(true)
+    }
+    const persisted = (store as unknown as { state: PersistedState }).state
+    expect(persisted.deletedFolderWorkspaceSessionTombstones?.[workspaceKey]).toBeUndefined()
+    expect(persisted.deletedFolderWorkspaceSessionTombstoneOverflowBuckets).toHaveLength(1)
+    expect(
+      persisted.deletedFolderWorkspaceSessionTombstoneOverflowBuckets?.[0]?.expiresAt
+    ).toBeGreaterThan(Date.now())
+
+    store.patchWorkspaceSession(
+      {
+        terminalLayoutsByTabId: {
+          'rapid-churn-stale-tab': {
+            root: { type: 'leaf', leafId: TEST_LEAF_1 },
+            activeLeafId: TEST_LEAF_1,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [TEST_LEAF_1]: 'rapid-churn-stale-pty' }
+          }
+        }
+      },
+      hostId
+    )
+    expect(store.getWorkspaceSession(hostId).terminalLayoutsByTabId).toEqual({})
+
+    store.setWorkspaceSession(staleSession, hostId)
+    store.upsertSshRemotePtyLease({
+      targetId: connectionId,
+      ptyId: 'rapid-churn-stale-pty',
+      worktreeId: workspaceKey,
+      tabId: 'rapid-churn-stale-tab',
+      leafId: TEST_LEAF_1,
+      state: 'detached'
+    })
+
+    expect(store.getWorkspaceSession(hostId).tabsByWorktree[workspaceKey]).toBeUndefined()
+    expect(store.getWorkspaceSession(hostId).activeConnectionIdsAtShutdown).toBeUndefined()
+    expect(store.getSshRemotePtyLeases()).toEqual([])
+  })
+
+  it('preserves unrelated runtime-owned folders through deletion overflow', async () => {
+    const store = await createStore()
+    vi.useFakeTimers()
+    try {
+      const group = store.createProjectGroup({
+        name: 'Unrelated churn',
+        parentPath: '/workspace/unrelated-churn',
+        createdFrom: 'folder-scan'
+      })
+      for (let index = 0; index < 513; index += 1) {
+        const workspace = store.createFolderWorkspace({
+          projectGroupId: group.id,
+          name: `Unrelated ${index}`
+        })
+        expect(store.removeFolderWorkspace(workspace.id)).toBe(true)
+      }
+      const hostId = toRuntimeExecutionHostId('unrelated-runtime-folder')
+      const workspaceKey = 'folder:runtime-owned-without-local-catalog'
+      const connectionId = 'unrelated-runtime-connection'
+      store.setWorkspaceSession(
+        {
+          ...getDefaultWorkspaceSession(),
+          activeConnectionIdsAtShutdown: [connectionId],
+          tabsByWorktree: {
+            [workspaceKey]: [
+              makeTerminalTab({ id: 'unrelated-runtime-tab', worktreeId: workspaceKey })
+            ]
+          },
+          remoteSessionIdsByTabId: { 'unrelated-runtime-tab': 'unrelated-runtime-pty' }
+        },
+        hostId
+      )
+      store.upsertSshRemotePtyLease({
+        targetId: connectionId,
+        ptyId: 'unrelated-runtime-pty',
+        worktreeId: workspaceKey,
+        tabId: 'unrelated-runtime-tab',
+        leafId: TEST_LEAF_1,
+        state: 'detached'
+      })
+
+      expect(store.getWorkspaceSession(hostId).tabsByWorktree[workspaceKey]).toHaveLength(1)
+      expect(store.getWorkspaceSession(hostId).activeConnectionIdsAtShutdown).toEqual([
+        connectionId
+      ])
+      expect(store.getSshRemotePtyLeases()).toHaveLength(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('batches deletion evidence commits for folders with many tabs', async () => {
+    const store = await createStore()
+    const group = store.createProjectGroup({
+      name: 'Many tabs',
+      parentPath: '/workspace/many-tabs',
+      createdFrom: 'folder-scan'
+    })
+    const workspace = store.createFolderWorkspace({ projectGroupId: group.id })
+    const workspaceKey = folderWorkspaceKey(workspace.id)
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [workspaceKey]: Array.from({ length: 256 }, (_, index) =>
+          makeTerminalTab({ id: `many-tabs-${index}`, worktreeId: workspaceKey })
+        )
+      }
+    })
+    const tombstoneSetter = vi.spyOn(
+      store as unknown as {
+        setDeletedFolderWorkspaceSessionTombstone: (
+          workspaceKey: string,
+          tombstone: unknown
+        ) => void
+      },
+      'setDeletedFolderWorkspaceSessionTombstone'
+    )
+
+    expect(store.removeFolderWorkspace(workspace.id)).toBe(true)
+
+    expect(tombstoneSetter).toHaveBeenCalledTimes(2)
+  })
+
+  it('bounds detailed tab-owner evidence for one deleted folder', async () => {
+    const store = await createStore()
+    const hostId = toRuntimeExecutionHostId('tab-evidence-runtime')
+    const group = store.createProjectGroup({
+      name: 'Tab evidence',
+      parentPath: '/remote/tab-evidence',
+      createdFrom: 'folder-scan'
+    })
+    const workspace = store.createFolderWorkspace({ projectGroupId: group.id })
+    const workspaceKey = folderWorkspaceKey(workspace.id)
+    expect(store.removeFolderWorkspace(workspace.id)).toBe(true)
+
+    for (let index = 0; index < 300; index += 1) {
+      const tabId = `delayed-tab-${index}`
+      store.setWorkspaceSession(
+        {
+          ...getDefaultWorkspaceSession(),
+          tabsByWorktree: {
+            [workspaceKey]: [makeTerminalTab({ id: tabId, worktreeId: workspaceKey })]
+          }
+        },
+        hostId
+      )
+    }
+    store.flush()
+
+    const tombstone = (readDataFile() as PersistedState).deletedFolderWorkspaceSessionTombstones?.[
+      workspaceKey
+    ]
+    expect(tombstone?.evidenceTruncated).toBe(true)
+    expect(Object.keys(tombstone?.tabConnectionIdsByHostId[hostId] ?? {})).toHaveLength(256)
+    const ownerIndex = (
+      store as unknown as {
+        deletedFolderOwnersByHostAndTabId: Map<string, Map<string, unknown>>
+      }
+    ).deletedFolderOwnersByHostAndTabId
+    expect(ownerIndex.get(hostId)?.size).toBe(256)
+
+    const evictedTabId = 'delayed-tab-0'
+    const evictedPaneKey = makePaneKey(evictedTabId, TEST_LEAF_1)
+    store.patchWorkspaceSession(
+      {
+        terminalLayoutsByTabId: {
+          [evictedTabId]: {
+            root: { type: 'leaf', leafId: TEST_LEAF_1 },
+            activeLeafId: TEST_LEAF_1,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [TEST_LEAF_1]: 'evicted-delayed-pty' }
+          }
+        },
+        terminalPtyIncarnationsByPaneKey: { [evictedPaneKey]: 'evicted-incarnation' }
+      },
+      hostId
+    )
+    expect(store.getWorkspaceSession(hostId).terminalLayoutsByTabId).toEqual({})
+    expect(store.getWorkspaceSession(hostId).terminalPtyIncarnationsByPaneKey).toEqual({})
+
+    store.patchWorkspaceSession(
+      {
+        terminalLayoutsByTabId: {
+          'unrelated-ownerless-tab': {
+            root: { type: 'leaf', leafId: TEST_LEAF_1 },
+            activeLeafId: TEST_LEAF_1,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [TEST_LEAF_1]: 'unrelated-ownerless-pty' }
+          }
+        }
+      },
+      hostId
+    )
+    expect(store.getWorkspaceSession(hostId).terminalLayoutsByTabId).toHaveProperty(
+      'unrelated-ownerless-tab'
+    )
+  })
+
+  it('bounds host-partition evidence for one deleted folder', async () => {
+    const store = await createStore()
+    const group = store.createProjectGroup({
+      name: 'Host evidence',
+      parentPath: '/remote/host-evidence',
+      createdFrom: 'folder-scan'
+    })
+    const workspace = store.createFolderWorkspace({ projectGroupId: group.id })
+    const workspaceKey = folderWorkspaceKey(workspace.id)
+    expect(store.removeFolderWorkspace(workspace.id)).toBe(true)
+
+    for (let index = 0; index < 40; index += 1) {
+      const hostId = toRuntimeExecutionHostId(`host-evidence-${index}`)
+      const tabId = `host-evidence-tab-${index}`
+      store.setWorkspaceSession(
+        {
+          ...getDefaultWorkspaceSession(),
+          tabsByWorktree: {
+            [workspaceKey]: [makeTerminalTab({ id: tabId, worktreeId: workspaceKey })]
+          }
+        },
+        hostId
+      )
+    }
+    store.flush()
+
+    const tombstone = (readDataFile() as PersistedState).deletedFolderWorkspaceSessionTombstones?.[
+      workspaceKey
+    ]
+    expect(tombstone?.evidenceTruncated).toBe(true)
+    expect(tombstone?.hostIds).toHaveLength(32)
+    expect(Object.keys(tombstone?.tabConnectionIdsByHostId ?? {})).toHaveLength(32)
+    const ownerIndex = (
+      store as unknown as {
+        deletedFolderOwnersByHostAndTabId: Map<string, Map<string, unknown>>
+      }
+    ).deletedFolderOwnersByHostAndTabId
+    expect(ownerIndex.size).toBe(32)
+
+    const evictedHostId = toRuntimeExecutionHostId('host-evidence-0')
+    const evictedTabId = 'host-evidence-tab-0'
+    store.patchWorkspaceSession(
+      {
+        terminalLayoutsByTabId: {
+          [evictedTabId]: {
+            root: { type: 'leaf', leafId: TEST_LEAF_1 },
+            activeLeafId: TEST_LEAF_1,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [TEST_LEAF_1]: 'evicted-host-pty' }
+          }
+        }
+      },
+      evictedHostId
+    )
+    expect(store.getWorkspaceSession(evictedHostId).terminalLayoutsByTabId).toEqual({})
+  })
+
+  it('durably fences a delayed unified-only folder tab before a layout-only write', async () => {
+    const store = await createStore()
+    const connectionId = 'unified-only-delayed-target'
+    const hostId = toRuntimeExecutionHostId('unified-only-delayed-owner')
+    const group = store.createProjectGroup({
+      name: 'Unified-only delayed folder',
+      parentPath: '/remote/unified-only-delayed',
+      connectionId,
+      createdFrom: 'folder-scan'
+    })
+    group.executionHostId = hostId
+    const workspace = store.createFolderWorkspace({ projectGroupId: group.id, connectionId })
+    const workspaceKey = folderWorkspaceKey(workspace.id)
+    const tabId = 'unified-only-delayed-tab'
+    const paneKey = makePaneKey(tabId, TEST_LEAF_1)
+    const layout = {
+      root: { type: 'leaf' as const, leafId: TEST_LEAF_1 },
+      activeLeafId: TEST_LEAF_1,
+      expandedLeafId: null,
+      ptyIdsByLeafId: { [TEST_LEAF_1]: 'unified-only-delayed-pty' }
+    }
+
+    expect(store.removeFolderWorkspace(workspace.id)).toBe(true)
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        unifiedTabs: {
+          [workspaceKey]: [
+            {
+              id: tabId,
+              entityId: tabId,
+              groupId: 'unified-only-delayed-group',
+              worktreeId: workspaceKey,
+              contentType: 'terminal',
+              label: 'Delayed terminal',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        terminalLayoutsByTabId: { [tabId]: layout },
+        remoteSessionIdsByTabId: { [tabId]: 'unified-only-delayed-pty' },
+        terminalPtyIncarnationsByPaneKey: { [paneKey]: 'unified-only-delayed-incarnation' }
+      },
+      hostId
+    )
+    expect(store.getWorkspaceSession(hostId).terminalLayoutsByTabId).toEqual({})
+
+    store.flush()
+    const reloaded = await createStore()
+    reloaded.patchWorkspaceSession(
+      {
+        terminalLayoutsByTabId: { [tabId]: layout },
+        remoteSessionIdsByTabId: { [tabId]: 'unified-only-delayed-pty' },
+        terminalPtyIncarnationsByPaneKey: { [paneKey]: 'later-unified-only-incarnation' }
+      },
+      hostId
+    )
+
+    expect(reloaded.getWorkspaceSession(hostId).terminalLayoutsByTabId).toEqual({})
+    expect(reloaded.getWorkspaceSession(hostId).remoteSessionIdsByTabId).toEqual({})
+    expect(reloaded.getWorkspaceSession(hostId).terminalPtyIncarnationsByPaneKey).toEqual({})
+  })
+
+  it('rejects a delayed SSH-partition write for a runtime-owned deleted folder', async () => {
+    const store = await createStore()
+    const connectionId = 'runtime-folder-transport'
+    const runtimeHostId = toRuntimeExecutionHostId('runtime-folder-owner')
+    const sshHostId = toSshExecutionHostId(connectionId)
+    const group = store.createProjectGroup({
+      name: 'Runtime folder transport',
+      parentPath: '/remote/runtime-folder',
+      connectionId,
+      createdFrom: 'folder-scan'
+    })
+    group.executionHostId = runtimeHostId
+    const workspace = store.createFolderWorkspace({ projectGroupId: group.id, connectionId })
+    const workspaceKey = folderWorkspaceKey(workspace.id)
+
+    expect(store.removeFolderWorkspace(workspace.id)).toBe(true)
+
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: {
+          [workspaceKey]: [
+            makeTerminalTab({ id: 'delayed-transport-tab', worktreeId: workspaceKey })
+          ]
+        },
+        remoteSessionIdsByTabId: {
+          'delayed-transport-tab': 'unprefixed-delayed-transport-pty'
+        },
+        activeConnectionIdsAtShutdown: [connectionId]
+      },
+      sshHostId
+    )
+
+    expect(store.getWorkspaceSession(sshHostId).tabsByWorktree[workspaceKey]).toBeUndefined()
+    expect(store.getWorkspaceSession(sshHostId).remoteSessionIdsByTabId).toEqual({})
+    expect(store.getWorkspaceSession(sshHostId).activeConnectionIdsAtShutdown).toBeUndefined()
+  })
+
+  it('fences the SSH partition when deleted-folder transport is known only by its PTY', async () => {
+    const store = await createStore()
+    const connectionId = 'pty-only-folder-transport'
+    const runtimeHostId = toRuntimeExecutionHostId('pty-only-folder-owner')
+    const sshHostId = toSshExecutionHostId(connectionId)
+    const group = store.createProjectGroup({
+      name: 'PTY-only folder transport',
+      parentPath: '/remote/pty-only-folder',
+      createdFrom: 'folder-scan'
+    })
+    group.executionHostId = runtimeHostId
+    const workspace = store.createFolderWorkspace({ projectGroupId: group.id })
+    const workspaceKey = folderWorkspaceKey(workspace.id)
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: {
+          [workspaceKey]: [
+            makeTerminalTab({
+              id: 'pty-only-folder-tab',
+              worktreeId: workspaceKey,
+              ptyId: `ssh:${connectionId}@@pty-only-folder-pty`
+            })
+          ]
+        }
+      },
+      runtimeHostId
+    )
+
+    expect(store.removeFolderWorkspace(workspace.id)).toBe(true)
+
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: {
+          [workspaceKey]: [
+            makeTerminalTab({ id: 'delayed-pty-only-tab', worktreeId: workspaceKey })
+          ]
+        },
+        remoteSessionIdsByTabId: {
+          'delayed-pty-only-tab': 'unprefixed-delayed-pty'
+        },
+        activeConnectionIdsAtShutdown: [connectionId]
+      },
+      sshHostId
+    )
+
+    expect(store.getWorkspaceSession(sshHostId).tabsByWorktree[workspaceKey]).toBeUndefined()
+    expect(store.getWorkspaceSession(sshHostId).remoteSessionIdsByTabId).toEqual({})
+    expect(store.getWorkspaceSession(sshHostId).activeConnectionIdsAtShutdown).toBeUndefined()
+  })
 
   it('updateSettings merges partial updates', async () => {
     const store = await createStore()
@@ -8942,6 +10888,207 @@ describe('Store', () => {
       expandedLeafId: null,
       ptyIdsByLeafId: { [TEST_LEAF_1]: 'daemon-pty' }
     })
+  })
+
+  it('persists a raw Git PTY binding through its scoped owner alias', async () => {
+    const store = await createStore()
+    const worktreeId = 'binding-alias-repo::/worktrees/feature'
+    const workspaceKey = worktreeWorkspaceKey(worktreeId)
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [workspaceKey]: [
+          makeTerminalTab({ id: 'binding-alias-tab', worktreeId: workspaceKey, ptyId: null })
+        ]
+      }
+    })
+
+    store.persistPtyBinding({
+      worktreeId,
+      tabId: 'binding-alias-tab',
+      leafId: TEST_LEAF_1,
+      ptyId: 'binding-alias-pty'
+    })
+
+    const session = store.getWorkspaceSession()
+    expect(session.tabsByWorktree[worktreeId]).toBeUndefined()
+    expect(session.tabsByWorktree[workspaceKey]).toEqual([
+      expect.objectContaining({ id: 'binding-alias-tab', ptyId: 'binding-alias-pty' })
+    ])
+  })
+
+  it('rolls back only the exact fresh PTY binding and incarnation', async () => {
+    const store = await createStore()
+    store.persistPtyBinding({
+      worktreeId: 'wt1',
+      tabId: 'fresh-binding-tab',
+      leafId: TEST_LEAF_1,
+      ptyId: 'fresh-pty',
+      incarnationId: 'fresh-incarnation'
+    })
+    store.persistPtyBinding({
+      worktreeId: 'wt1',
+      tabId: 'fresh-binding-tab',
+      leafId: TEST_LEAF_1,
+      ptyId: 'fresh-pty',
+      incarnationId: 'replacement-incarnation'
+    })
+
+    store.removePtyBindingIfMatches({
+      worktreeId: 'wt1',
+      tabId: 'fresh-binding-tab',
+      leafId: TEST_LEAF_1,
+      ptyId: 'fresh-pty',
+      incarnationId: 'fresh-incarnation'
+    })
+    let session = store.getWorkspaceSession()
+    expect(session.tabsByWorktree.wt1[0].ptyId).toBe('fresh-pty')
+    expect(session.terminalPtyIncarnationsByPaneKey?.[`fresh-binding-tab:${TEST_LEAF_1}`]).toBe(
+      'replacement-incarnation'
+    )
+
+    store.removePtyBindingIfMatches({
+      worktreeId: 'wt1',
+      tabId: 'fresh-binding-tab',
+      leafId: TEST_LEAF_1,
+      ptyId: 'fresh-pty',
+      incarnationId: 'replacement-incarnation'
+    })
+    session = store.getWorkspaceSession()
+    expect(session.tabsByWorktree.wt1[0].ptyId).toBeNull()
+    expect(session.terminalLayoutsByTabId['fresh-binding-tab'].ptyIdsByLeafId).toEqual({})
+    expect(session.terminalPtyIncarnationsByPaneKey).toEqual({})
+  })
+
+  it('preserves a durable PTY when a stale write switches Git owner aliases', async () => {
+    const store = await createStore()
+    const worktreeId = 'stale-binding-alias-repo::/worktrees/feature'
+    const workspaceKey = worktreeWorkspaceKey(worktreeId)
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [workspaceKey]: [
+          makeTerminalTab({
+            id: 'stale-binding-alias-tab',
+            worktreeId: workspaceKey,
+            ptyId: 'stale-binding-alias-pty'
+          })
+        ]
+      }
+    })
+
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [worktreeId]: [
+          makeTerminalTab({
+            id: 'stale-binding-alias-tab',
+            worktreeId,
+            ptyId: null
+          })
+        ]
+      }
+    })
+
+    expect(store.getWorkspaceSession().tabsByWorktree[worktreeId]).toEqual([
+      expect.objectContaining({ ptyId: 'stale-binding-alias-pty' })
+    ])
+  })
+
+  it('does not restore a terminated PTY lease through its Git owner alias', async () => {
+    const store = await createStore()
+    const worktreeId = 'terminated-binding-alias-repo::/worktrees/feature'
+    const workspaceKey = worktreeWorkspaceKey(worktreeId)
+    const targetId = 'terminated-binding-alias-target'
+    const relayPtyId = 'terminated-binding-alias-pty'
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [workspaceKey]: [
+          makeTerminalTab({
+            id: 'terminated-binding-alias-tab',
+            worktreeId: workspaceKey,
+            ptyId: `ssh:${targetId}@@${relayPtyId}`
+          })
+        ]
+      }
+    })
+    store.upsertSshRemotePtyLease({
+      targetId,
+      ptyId: relayPtyId,
+      worktreeId: workspaceKey,
+      tabId: 'terminated-binding-alias-tab',
+      state: 'terminated'
+    })
+
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [worktreeId]: [
+          makeTerminalTab({
+            id: 'terminated-binding-alias-tab',
+            worktreeId,
+            ptyId: null
+          })
+        ]
+      }
+    })
+
+    expect(store.getWorkspaceSession().tabsByWorktree[worktreeId]).toEqual([
+      expect.objectContaining({ ptyId: null })
+    ])
+  })
+
+  it('rejects a PTY binding write when raw and scoped Git owners collide', async () => {
+    const store = await createStore()
+    const worktreeId = 'binding-collision-repo::/worktrees/feature'
+    const workspaceKey = worktreeWorkspaceKey(worktreeId)
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [worktreeId]: [makeTerminalTab({ id: 'raw-binding-tab', worktreeId, ptyId: null })],
+        [workspaceKey]: [
+          makeTerminalTab({ id: 'scoped-binding-tab', worktreeId: workspaceKey, ptyId: null })
+        ]
+      }
+    })
+
+    expect(() =>
+      store.persistPtyBinding({
+        worktreeId,
+        tabId: 'raw-binding-tab',
+        leafId: TEST_LEAF_1,
+        ptyId: 'ambiguous-binding-pty'
+      })
+    ).toThrow('workspace_session_owner_ambiguous')
+    expect(store.getWorkspaceSession().terminalLayoutsByTabId).toEqual({})
+  })
+
+  it('rejects a PTY binding write when the tab id has a competing workspace owner', async () => {
+    const store = await createStore()
+    const targetOwner = 'binding-tab-owner-repo::/worktrees/target'
+    const competingOwner = 'binding-tab-owner-repo::/worktrees/competing'
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [targetOwner]: [
+          makeTerminalTab({ id: 'shared-binding-tab', worktreeId: targetOwner, ptyId: null })
+        ],
+        [competingOwner]: [
+          makeTerminalTab({ id: 'shared-binding-tab', worktreeId: competingOwner, ptyId: null })
+        ]
+      }
+    })
+
+    expect(() =>
+      store.persistPtyBinding({
+        worktreeId: targetOwner,
+        tabId: 'shared-binding-tab',
+        leafId: TEST_LEAF_1,
+        ptyId: 'ambiguous-tab-owner-pty'
+      })
+    ).toThrow('workspace_session_tab_owner_ambiguous')
+    expect(store.getWorkspaceSession().terminalLayoutsByTabId).toEqual({})
   })
 
   it('admits a fresh host spawn after retirement while rejecting an older renderer topology', async () => {

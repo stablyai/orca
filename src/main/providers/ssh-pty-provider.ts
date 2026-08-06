@@ -23,6 +23,7 @@ import { SshPtySpawnExitRaceTracker } from './ssh-pty-spawn-exit-race'
 import { SshAgentSessionCapabilities } from './ssh-agent-session-capabilities'
 import type { PtyProcessInspection } from './pty-process-inspection'
 import { SSH_SESSION_EXPIRED_ERROR } from './ssh-pty-errors'
+import type { RemotePathFlavor } from '../ssh/ssh-remote-platform'
 
 // Why: sequential relay teardown calls share one absolute budget; convert to the mux-relative timeout only at dispatch.
 function relayTimeoutOptions(deadlineMs: number | undefined): { timeoutMs: number } | undefined {
@@ -43,7 +44,9 @@ export class SshPtyProvider implements IPtyProvider {
     connectionId: string,
     mux: SshChannelMultiplexer,
     private readonly remoteCliBridgeEnv?: RemoteCliBridgeEnv,
-    readonly providerGeneration = 1
+    readonly providerGeneration = 1,
+    private readonly executionHostPathFlavor: RemotePathFlavor | null = remoteCliBridgeEnv
+      ?.hostPlatform?.pathFlavor ?? null
   ) {
     this.connectionId = connectionId
     this.mux = mux
@@ -66,6 +69,7 @@ export class SshPtyProvider implements IPtyProvider {
   }
 
   getConnectionId = (): string => this.connectionId
+  getExecutionHostPathFlavor = (): RemotePathFlavor | null => this.executionHostPathFlavor
 
   canProvideAuthoritativeBufferSnapshot = (_id: string): boolean => false
 

@@ -54,6 +54,7 @@ import type {
   Repo,
   ProjectGroup,
   FolderWorkspace,
+  DeletedFolderWorkspaceSessionTombstone,
   SparsePreset,
   PersistedMobileClientTabSelections,
   WorktreeMeta,
@@ -93,6 +94,18 @@ import {
 import { isWorkspaceLinkedItemSourceContextMatch } from '../shared/workspace-linked-item-source-context'
 import type { MigrationUnsupportedPtyEntry } from '../shared/agent-status-types'
 import { MOBILE_PAIRING_USERDATA_FILES } from './runtime/mobile-pairing-files'
+import {
+  addDeletedFolderTombstoneOverflowEntries,
+  type DeletedFolderTombstoneOverflowEntry,
+  getBoundedDeletedFolderTombstoneEvidence,
+  getDeletedFolderTombstoneEviction,
+  hasDeletedFolderConnectionOverflowEvidence,
+  hasDeletedFolderTabOwnerOverflowEvidence,
+  hasDeletedFolderWorkspaceKeyOverflowEvidence,
+  pruneDeletedFolderTombstoneOverflowBuckets,
+  MAX_DELETED_FOLDER_TOMBSTONE_RETENTION_MS
+} from './deleted-folder-session-tombstones'
+import { normalizeDeletedFolderTombstoneOverflowBuckets } from './deleted-folder-tombstone-overflow-normalization'
 import { normalizePersistedMobileClientTabSelections } from './runtime/client-session-tab-selection-persistence'
 import { sanitizeWorkspaceSessionTerminalRetirements } from './runtime/mobile-session-terminal-persistence-retirement'
 import {
@@ -139,7 +152,7 @@ import { normalizeStatusBarUsageMode } from '../shared/status-bar-usage-mode'
 import { isExistingPersistedProfile } from '../shared/project-order-manual-default-notice'
 import { resolveUsagePercentageDisplayChangeNoticeDismissed } from '../shared/usage-percentage-display-change-notice'
 import { normalizePRBotAuthorOverrides } from '../shared/pr-bot-author-overrides'
-import { toRelaySshPtyId } from './providers/ssh-pty-id'
+import { parseAppSshPtyId, toRelaySshPtyId } from './providers/ssh-pty-id'
 import {
   migrateUiHostScopeSshTargetId,
   migrateWorkspaceSessionSshTargetId
@@ -166,7 +179,8 @@ import { pruneWorkspaceSessionBrowserHistory } from '../shared/workspace-session
 import {
   FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
   getRepoIdFromWorktreeId,
-  getWorktreePathBasenameFromId
+  getWorktreePathBasenameFromId,
+  splitWorktreeIdForFilesystem
 } from '../shared/worktree-id'
 import {
   isPathInsideOrEqual,
@@ -561,7 +575,32 @@ const WORKSPACE_SESSION_PATCH_FULL_NORMALIZATION_KEYS = new Set<keyof WorkspaceS
   'tabsByWorktree',
   'terminalLayoutsByTabId'
 ])
-
+const WORKSPACE_SESSION_PATCH_OWNER_KEYS = new Set<keyof WorkspaceSessionState>([
+  'activeWorkspaceKey',
+  'activeWorktreeId',
+  'activeTabId',
+  'tabsByWorktree',
+  'activeWorktreeIdsOnShutdown',
+  'openFilesByWorktree',
+  'activeFileIdByWorktree',
+  'browserTabsByWorktree',
+  'activeBrowserTabIdByWorktree',
+  'activeTabTypeByWorktree',
+  'activeTabIdByWorktree',
+  'unifiedTabs',
+  'tabGroups',
+  'tabGroupLayouts',
+  'activeGroupIdByWorktree',
+  'browserPagesByWorkspace',
+  'remoteSessionIdsByTabId',
+  'activeConnectionIdsAtShutdown',
+  'lastVisitedAtByWorktreeId',
+  'defaultTerminalTabsAppliedByWorktreeId',
+  'sleepingAgentSessionsByPaneKey',
+  'terminalPtyIncarnationsByPaneKey',
+  'terminalSurfaceTombstonesByPaneKey',
+  'activeWorkspaceExecutionHostId'
+])
 function logPersistenceStartupMilestone(
   event: string,
   details: Record<string, unknown> = {}
@@ -574,6 +613,12 @@ function logPersistenceStartupMilestone(
 function workspaceSessionPatchNeedsFullNormalization(patch: WorkspaceSessionPatch): boolean {
   return Object.keys(patch).some((key) =>
     WORKSPACE_SESSION_PATCH_FULL_NORMALIZATION_KEYS.has(key as keyof WorkspaceSessionState)
+  )
+}
+
+function workspaceSessionPatchMayRestoreDeletedOwner(patch: WorkspaceSessionPatch): boolean {
+  return Object.keys(patch).some((key) =>
+    WORKSPACE_SESSION_PATCH_OWNER_KEYS.has(key as keyof WorkspaceSessionState)
   )
 }
 
@@ -2519,6 +2564,111 @@ function cloneWorkspaceSessionState(session: WorkspaceSessionState): WorkspaceSe
   return structuredClone(session)
 }
 
+function workspaceSessionOwnerKeysEqual(left: string, right: string): boolean {
+  if (left === right) {
+    return true
+  }
+  const leftScope = parseWorkspaceKey(left)
+  const rightScope = parseWorkspaceKey(right)
+  if (leftScope?.type === 'worktree') {
+    return leftScope.worktreeId === right
+  }
+  return rightScope?.type === 'worktree' && rightScope.worktreeId === left
+}
+
+function getWorkspaceSessionOwnerAliasKeys(ownerKey: string): string[] {
+  const scope = parseWorkspaceKey(ownerKey)
+  if (scope?.type === 'worktree') {
+    return [ownerKey, scope.worktreeId]
+  }
+  return splitWorktreeIdForFilesystem(ownerKey)
+    ? [ownerKey, worktreeWorkspaceKey(ownerKey)]
+    : [ownerKey]
+}
+
+function resolveWorkspaceSessionRecordOwnerKey(
+  record: Readonly<Record<string, unknown>> | null | undefined,
+  ownerKey: string
+): string | null {
+  const matches = getWorkspaceSessionOwnerAliasKeys(ownerKey).filter((aliasKey) =>
+    Object.hasOwn(record ?? {}, aliasKey)
+  )
+  return matches.length > 1 ? null : (matches[0] ?? ownerKey)
+}
+
+function workspaceSessionTabHasCompetingOwner(
+  session: WorkspaceSessionState,
+  tabId: string,
+  ownerKey: string
+): boolean {
+  const ownerKeys = [
+    ...Object.entries(session.tabsByWorktree ?? {}).flatMap(([candidateOwner, tabs]) =>
+      tabs.some((tab) => tab.id === tabId) ? [candidateOwner] : []
+    ),
+    ...Object.entries(session.unifiedTabs ?? {}).flatMap(([candidateOwner, tabs]) =>
+      tabs.some((tab) => tab.contentType === 'terminal' && tab.entityId === tabId)
+        ? [candidateOwner]
+        : []
+    ),
+    ...Object.entries(session.activeTabIdByWorktree ?? {}).flatMap(
+      ([candidateOwner, activeTabId]) => (activeTabId === tabId ? [candidateOwner] : [])
+    ),
+    ...Object.values(session.terminalSurfaceTombstonesByPaneKey ?? {}).flatMap((tombstone) =>
+      tombstone.parentTabId === tabId ? [tombstone.worktreeId] : []
+    ),
+    ...Object.entries(session.sleepingAgentSessionsByPaneKey ?? {}).flatMap(
+      ([paneKey, sleepingAgent]) =>
+        (sleepingAgent.tabId ?? parsePaneKey(paneKey)?.tabId) === tabId
+          ? [sleepingAgent.worktreeId]
+          : []
+    )
+  ]
+  if (session.activeTabId === tabId) {
+    ownerKeys.push(
+      ...[session.activeWorkspaceKey, session.activeWorktreeId].filter(
+        (candidate): candidate is string => typeof candidate === 'string'
+      )
+    )
+  }
+  return ownerKeys.some(
+    (candidateOwner) => !workspaceSessionOwnerKeysEqual(candidateOwner, ownerKey)
+  )
+}
+
+function getWorkspaceSessionOwnerKeys(session: WorkspaceSessionState | undefined): Set<string> {
+  const ownerKeyedRecords = [
+    session?.tabsByWorktree,
+    session?.openFilesByWorktree,
+    session?.activeFileIdByWorktree,
+    session?.browserTabsByWorktree,
+    session?.activeBrowserTabIdByWorktree,
+    session?.activeTabTypeByWorktree,
+    session?.activeTabIdByWorktree,
+    session?.unifiedTabs,
+    session?.tabGroups,
+    session?.tabGroupLayouts,
+    session?.activeGroupIdByWorktree,
+    session?.lastVisitedAtByWorktreeId,
+    session?.defaultTerminalTabsAppliedByWorktreeId
+  ]
+  return new Set([
+    ...ownerKeyedRecords.flatMap((record) => Object.keys(record ?? {})),
+    ...[session?.activeWorkspaceKey, session?.activeWorktreeId].filter(
+      (ownerKey): ownerKey is string => typeof ownerKey === 'string'
+    ),
+    ...(session?.activeWorktreeIdsOnShutdown ?? []),
+    ...Object.values(session?.browserPagesByWorkspace ?? {}).flatMap((pages) =>
+      pages.map((page) => page.worktreeId)
+    ),
+    ...Object.values(session?.terminalSurfaceTombstonesByPaneKey ?? {}).map(
+      (tombstone) => tombstone.worktreeId
+    ),
+    ...Object.values(session?.sleepingAgentSessionsByPaneKey ?? {}).map(
+      (sleepingAgent) => sleepingAgent.worktreeId
+    )
+  ])
+}
+
 // Deletes the O(1) owner-keyed fields for `ownerKey` from an already-cloned
 // session in place, recording removed tab ids into `removedTabIds`. The
 // pane-key-scanned maps (pty incarnations, surface tombstones, sleeping agents)
@@ -2530,71 +2680,70 @@ function deleteOwnerKeyedSessionFields(
   removedTabIds: Set<string>,
   options: { advanceTerminalTopologyRevision?: boolean } = {}
 ): void {
-  const removedTerminalTabs = next.tabsByWorktree?.[ownerKey] ?? []
-  if (next.tabsByWorktree) {
-    delete next.tabsByWorktree[ownerKey]
+  const ownerAliasKeys = getWorkspaceSessionOwnerAliasKeys(ownerKey)
+  if (
+    next.activeTabId &&
+    ((next.activeWorkspaceKey &&
+      workspaceSessionOwnerKeysEqual(next.activeWorkspaceKey, ownerKey)) ||
+      (next.activeWorktreeId && workspaceSessionOwnerKeysEqual(next.activeWorktreeId, ownerKey)))
+  ) {
+    removedTabIds.add(next.activeTabId)
+  }
+  const removedTerminalTabs = ownerAliasKeys.flatMap(
+    (aliasKey) => next.tabsByWorktree?.[aliasKey] ?? []
+  )
+  for (const aliasKey of ownerAliasKeys) {
+    delete next.tabsByWorktree[aliasKey]
   }
   for (const tab of removedTerminalTabs) {
     removedTabIds.add(tab.id)
-    delete next.terminalLayoutsByTabId[tab.id]
-    if (next.activeTabId === tab.id) {
-      next.activeTabId = null
+  }
+  for (const aliasKey of ownerAliasKeys) {
+    for (const tab of next.unifiedTabs?.[aliasKey] ?? []) {
+      if (tab.contentType === 'terminal') {
+        removedTabIds.add(tab.entityId)
+      }
+    }
+  }
+  for (const aliasKey of ownerAliasKeys) {
+    const activeTerminalTabId = next.activeTabIdByWorktree?.[aliasKey]
+    if (activeTerminalTabId) {
+      removedTabIds.add(activeTerminalTabId)
     }
   }
   if (options.advanceTerminalTopologyRevision) {
-    const repoId = getRepoIdFromWorktreeId(ownerKey)
+    const ownerScope = parseWorkspaceKey(ownerKey)
+    const repoId = getRepoIdFromWorktreeId(
+      ownerScope?.type === 'worktree' ? ownerScope.worktreeId : ownerKey
+    )
     const previousTopologyRevision = next.terminalTopologyRevisionByRepoId?.[repoId] ?? 0
     next.terminalTopologyRevisionByRepoId = {
       ...next.terminalTopologyRevisionByRepoId,
       [repoId]: previousTopologyRevision + 1
     }
   }
-  if (next.openFilesByWorktree) {
-    delete next.openFilesByWorktree[ownerKey]
+  for (const aliasKey of ownerAliasKeys) {
+    delete next.openFilesByWorktree?.[aliasKey]
+    delete next.activeFileIdByWorktree?.[aliasKey]
+    delete next.browserTabsByWorktree?.[aliasKey]
+    delete next.activeBrowserTabIdByWorktree?.[aliasKey]
+    delete next.activeTabTypeByWorktree?.[aliasKey]
+    delete next.activeTabIdByWorktree?.[aliasKey]
+    delete next.unifiedTabs?.[aliasKey]
+    delete next.tabGroups?.[aliasKey]
+    delete next.tabGroupLayouts?.[aliasKey]
+    delete next.activeGroupIdByWorktree?.[aliasKey]
+    delete next.lastVisitedAtByWorktreeId?.[aliasKey]
+    delete next.defaultTerminalTabsAppliedByWorktreeId?.[aliasKey]
   }
-  if (next.activeFileIdByWorktree) {
-    delete next.activeFileIdByWorktree[ownerKey]
-  }
-  const browserWorkspaces = next.browserTabsByWorktree?.[ownerKey] ?? []
-  if (next.browserTabsByWorktree) {
-    delete next.browserTabsByWorktree[ownerKey]
-  }
-  if (next.browserPagesByWorkspace) {
-    for (const workspace of browserWorkspaces) {
-      delete next.browserPagesByWorkspace[workspace.id]
-    }
-  }
-  if (next.activeBrowserTabIdByWorktree) {
-    delete next.activeBrowserTabIdByWorktree[ownerKey]
-  }
-  if (next.activeTabTypeByWorktree) {
-    delete next.activeTabTypeByWorktree[ownerKey]
-  }
-  if (next.activeTabIdByWorktree) {
-    delete next.activeTabIdByWorktree[ownerKey]
-  }
-  if (next.unifiedTabs) {
-    delete next.unifiedTabs[ownerKey]
-  }
-  if (next.tabGroups) {
-    delete next.tabGroups[ownerKey]
-  }
-  if (next.tabGroupLayouts) {
-    delete next.tabGroupLayouts[ownerKey]
-  }
-  if (next.activeGroupIdByWorktree) {
-    delete next.activeGroupIdByWorktree[ownerKey]
-  }
-  if (next.lastVisitedAtByWorktreeId) {
-    delete next.lastVisitedAtByWorktreeId[ownerKey]
-  }
-  if (next.defaultTerminalTabsAppliedByWorktreeId) {
-    delete next.defaultTerminalTabsAppliedByWorktreeId[ownerKey]
-  }
-  if (next.activeWorkspaceKey === ownerKey) {
+  if (
+    next.activeWorkspaceKey &&
+    workspaceSessionOwnerKeysEqual(next.activeWorkspaceKey, ownerKey)
+  ) {
     next.activeWorkspaceKey = null
+    next.activeWorkspaceExecutionHostId = null
   }
-  if (next.activeWorktreeId === ownerKey) {
+  if (next.activeWorktreeId && workspaceSessionOwnerKeysEqual(next.activeWorktreeId, ownerKey)) {
     next.activeWorktreeId = null
   }
 }
@@ -2608,11 +2757,66 @@ function deleteScannedSessionFieldsForOwners(
   removedTabIds: ReadonlySet<string>,
   isRemovedOwner: (worktreeId: string) => boolean
 ): void {
+  const removedOwnedTabIds = new Set(removedTabIds)
+  const retainedTabIds = new Set(
+    Object.values(next.tabsByWorktree ?? {}).flatMap((tabs) => tabs.map((tab) => tab.id))
+  )
+  for (const tabs of Object.values(next.unifiedTabs ?? {})) {
+    for (const tab of tabs) {
+      if (tab.contentType === 'terminal') {
+        retainedTabIds.add(tab.entityId)
+      }
+    }
+  }
+  for (const tabId of Object.values(next.activeTabIdByWorktree ?? {})) {
+    if (tabId) {
+      retainedTabIds.add(tabId)
+    }
+  }
+  if (next.activeTabId && (next.activeWorkspaceKey || next.activeWorktreeId)) {
+    retainedTabIds.add(next.activeTabId)
+  }
+  for (const tombstone of Object.values(next.terminalSurfaceTombstonesByPaneKey ?? {})) {
+    const destination = isRemovedOwner(tombstone.worktreeId) ? removedOwnedTabIds : retainedTabIds
+    destination.add(tombstone.parentTabId)
+  }
+  for (const [paneKey, record] of Object.entries(next.sleepingAgentSessionsByPaneKey ?? {})) {
+    const tabId = record.tabId ?? parsePaneKey(paneKey)?.tabId
+    if (!tabId) {
+      continue
+    }
+    const destination = isRemovedOwner(record.worktreeId) ? removedOwnedTabIds : retainedTabIds
+    destination.add(tabId)
+  }
+  const exclusivelyRemovedTabIds = new Set(
+    [...removedOwnedTabIds].filter((tabId) => !retainedTabIds.has(tabId))
+  )
+  for (const tabId of exclusivelyRemovedTabIds) {
+    delete next.terminalLayoutsByTabId[tabId]
+    if (next.activeTabId === tabId) {
+      next.activeTabId = null
+    }
+  }
+  if (next.remoteSessionIdsByTabId) {
+    next.remoteSessionIdsByTabId = Object.fromEntries(
+      Object.entries(next.remoteSessionIdsByTabId).filter(
+        ([tabId]) => !exclusivelyRemovedTabIds.has(tabId)
+      )
+    )
+  }
+  if (next.browserPagesByWorkspace) {
+    next.browserPagesByWorkspace = Object.fromEntries(
+      Object.entries(next.browserPagesByWorkspace).flatMap(([workspaceId, pages]) => {
+        const retained = pages.filter((page) => !isRemovedOwner(page.worktreeId))
+        return retained.length > 0 ? [[workspaceId, retained]] : []
+      })
+    )
+  }
   if (next.terminalPtyIncarnationsByPaneKey) {
     next.terminalPtyIncarnationsByPaneKey = Object.fromEntries(
       Object.entries(next.terminalPtyIncarnationsByPaneKey).filter(([paneKey]) => {
         const separator = paneKey.lastIndexOf(':')
-        return separator < 1 || !removedTabIds.has(paneKey.slice(0, separator))
+        return separator < 1 || !exclusivelyRemovedTabIds.has(paneKey.slice(0, separator))
       })
     )
   }
@@ -2660,7 +2864,9 @@ function removeWorkspaceSessionOwner(
   const next = cloneWorkspaceSessionState(session)
   const removedTabIds = new Set<string>()
   deleteOwnerKeyedSessionFields(next, ownerKey, removedTabIds, options)
-  deleteScannedSessionFieldsForOwners(next, removedTabIds, (worktreeId) => worktreeId === ownerKey)
+  deleteScannedSessionFieldsForOwners(next, removedTabIds, (worktreeId) =>
+    workspaceSessionOwnerKeysEqual(worktreeId, ownerKey)
+  )
   return next
 }
 
@@ -2680,8 +2886,9 @@ function removeWorkspaceSessionOwners(
   for (const ownerKey of ownerKeys) {
     deleteOwnerKeyedSessionFields(next, ownerKey, removedTabIds)
   }
+  const ownerAliasKeys = new Set([...ownerKeys].flatMap(getWorkspaceSessionOwnerAliasKeys))
   deleteScannedSessionFieldsForOwners(next, removedTabIds, (worktreeId) =>
-    ownerKeys.has(worktreeId)
+    ownerAliasKeys.has(worktreeId)
   )
   return next
 }
@@ -2767,6 +2974,113 @@ function backfillFolderScopeConnectionIds(state: PersistedState): {
   }
 }
 
+function normalizeDeletedFolderWorkspaceSessionTombstones(
+  value: unknown,
+  liveFolderIds: ReadonlySet<string>,
+  rawOverflowBuckets: unknown
+): {
+  tombstones: NonNullable<PersistedState['deletedFolderWorkspaceSessionTombstones']>
+  overflowBuckets: NonNullable<
+    PersistedState['deletedFolderWorkspaceSessionTombstoneOverflowBuckets']
+  >
+  changed: boolean
+} {
+  const now = Date.now()
+  const tombstones: NonNullable<PersistedState['deletedFolderWorkspaceSessionTombstones']> = {}
+  const boundedOverflowEntries: DeletedFolderTombstoneOverflowEntry[] = []
+  const normalizedOverflow = normalizeDeletedFolderTombstoneOverflowBuckets(rawOverflowBuckets, now)
+  let changed =
+    normalizedOverflow.changed ||
+    (value !== undefined && (!value || typeof value !== 'object' || Array.isArray(value)))
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return { tombstones, overflowBuckets: normalizedOverflow.buckets, changed }
+  }
+  for (const [workspaceKey, rawTombstone] of Object.entries(value)) {
+    const scope = parseWorkspaceKey(workspaceKey)
+    if (
+      scope?.type !== 'folder' ||
+      liveFolderIds.has(scope.folderWorkspaceId) ||
+      !rawTombstone ||
+      typeof rawTombstone !== 'object' ||
+      Array.isArray(rawTombstone)
+    ) {
+      changed = true
+      continue
+    }
+    const raw = rawTombstone as Partial<DeletedFolderWorkspaceSessionTombstone>
+    const connectionId = typeof raw.connectionId === 'string' ? raw.connectionId : null
+    const deletedAt =
+      typeof raw.deletedAt === 'number' &&
+      Number.isFinite(raw.deletedAt) &&
+      raw.deletedAt >= 0 &&
+      raw.deletedAt <= now
+        ? raw.deletedAt
+        : now
+    if (now - deletedAt >= MAX_DELETED_FOLDER_TOMBSTONE_RETENTION_MS) {
+      changed = true
+      continue
+    }
+    const hostIds = new Set<ExecutionHostId>()
+    for (const rawHostId of Array.isArray(raw.hostIds) ? raw.hostIds : []) {
+      const hostId = normalizeExecutionHostId(rawHostId)
+      if (hostId) {
+        hostIds.add(hostId)
+      } else {
+        changed = true
+      }
+    }
+    const tabConnectionIdsByHostId: DeletedFolderWorkspaceSessionTombstone['tabConnectionIdsByHostId'] =
+      {}
+    if (
+      raw.tabConnectionIdsByHostId &&
+      typeof raw.tabConnectionIdsByHostId === 'object' &&
+      !Array.isArray(raw.tabConnectionIdsByHostId)
+    ) {
+      for (const [rawHostId, rawTabs] of Object.entries(raw.tabConnectionIdsByHostId)) {
+        const hostId = normalizeExecutionHostId(rawHostId)
+        if (!hostId || !rawTabs || typeof rawTabs !== 'object' || Array.isArray(rawTabs)) {
+          changed = true
+          continue
+        }
+        hostIds.add(hostId)
+        tabConnectionIdsByHostId[hostId] = Object.fromEntries(
+          Object.entries(rawTabs).flatMap(([tabId, tabConnectionId]) =>
+            typeof tabConnectionId === 'string' || tabConnectionId === null
+              ? [[tabId, tabConnectionId]]
+              : []
+          )
+        )
+      }
+    }
+    const boundedEvidence = getBoundedDeletedFolderTombstoneEvidence({
+      connectionId,
+      deletedAt,
+      evidenceTruncated: raw.evidenceTruncated === true,
+      hostIds: [...hostIds],
+      tabConnectionIdsByHostId
+    })
+    const normalizedTombstone = boundedEvidence.tombstone
+    if (boundedEvidence.overflowEntry) {
+      boundedOverflowEntries.push(boundedEvidence.overflowEntry)
+    }
+    tombstones[workspaceKey as WorkspaceKey] = normalizedTombstone
+    if (JSON.stringify(rawTombstone) !== JSON.stringify(normalizedTombstone)) {
+      changed = true
+    }
+  }
+  const eviction = getDeletedFolderTombstoneEviction(tombstones, now)
+  for (const workspaceKey of eviction.workspaceKeys) {
+    delete tombstones[workspaceKey]
+    changed = true
+  }
+  const overflowBuckets = addDeletedFolderTombstoneOverflowEntries(
+    normalizedOverflow.buckets,
+    [...boundedOverflowEntries, ...eviction.overflowEntries],
+    now
+  )
+  return { tombstones, overflowBuckets, changed }
+}
+
 function deleteRemovedTerminalScrollbackSnapshots(
   prior: WorkspaceSessionState | undefined,
   next: WorkspaceSessionState,
@@ -2814,6 +3128,11 @@ export class Store {
   private pendingGithubCacheWrite: Promise<void> | null = null
   private readonly staleGithubCacheTempCleanup: Promise<void>
   private gitUsernameCache = new Map<string, string>()
+  private deletedFolderConnectionIdByWorkspaceKey = new Map<string, string>()
+  private deletedFolderOwnersByHostAndTabId = new Map<
+    ExecutionHostId,
+    Map<string, Map<string, string | null>>
+  >()
   private loadNeedsSave = false
   private settingsChangeListeners = new Set<
     (
@@ -2843,6 +3162,7 @@ export class Store {
     const loaded = this.load()
     const normalized = normalizePersistedPaneIdentityState(loaded)
     this.state = normalized.state
+    this.restoreDeletedFolderWorkspaceSessionTombstones()
     // Why: activeView is a frequent, tiny preference; keeping it beside the
     // profile avoids serializing the multi-MB recovery store on navigation.
     this.activeViewPreference = new ActiveViewPreference(this.dataFile, this.state.ui?.activeView)
@@ -2864,6 +3184,39 @@ export class Store {
     if (normalized.changed || this.loadNeedsSave || adaptedProjectGroups) {
       // Why: rewrite legacy pane:1 leaves so older renderer writes can't revive them; other migrations also set loadNeedsSave.
       this.scheduleSave()
+    }
+  }
+
+  private restoreDeletedFolderWorkspaceSessionTombstones(): void {
+    for (const [workspaceKey, tombstone] of Object.entries(
+      this.state.deletedFolderWorkspaceSessionTombstones ?? {}
+    )) {
+      if (!tombstone) {
+        continue
+      }
+      this.indexDeletedFolderWorkspaceSessionTombstone(workspaceKey, tombstone)
+    }
+  }
+
+  private indexDeletedFolderWorkspaceSessionTombstone(
+    workspaceKey: string,
+    tombstone: DeletedFolderWorkspaceSessionTombstone
+  ): void {
+    if (tombstone.connectionId) {
+      this.deletedFolderConnectionIdByWorkspaceKey.set(workspaceKey, tombstone.connectionId)
+    }
+    for (const [hostId, tabConnectionIds] of Object.entries(tombstone.tabConnectionIdsByHostId)) {
+      const resolvedHostId = normalizeExecutionHostId(hostId)
+      if (!resolvedHostId) {
+        continue
+      }
+      const ownersByTabId = this.deletedFolderOwnersByHostAndTabId.get(resolvedHostId) ?? new Map()
+      for (const [tabId, connectionId] of Object.entries(tabConnectionIds ?? {})) {
+        const owners = ownersByTabId.get(tabId) ?? new Map<string, string | null>()
+        owners.set(workspaceKey, connectionId)
+        ownersByTabId.set(tabId, owners)
+      }
+      this.deletedFolderOwnersByHostAndTabId.set(resolvedHostId, ownersByTabId)
     }
   }
 
@@ -3317,6 +3670,18 @@ export class Store {
           this.loadNeedsSave = true
         }
         const normalizedProjectGroups = normalizeProjectGroups(parsed.projectGroups)
+        const normalizedFolderWorkspaces = normalizeFolderWorkspaces(
+          parsed.folderWorkspaces,
+          normalizedProjectGroups
+        )
+        const normalizedDeletedFolderTombstones = normalizeDeletedFolderWorkspaceSessionTombstones(
+          parsed.deletedFolderWorkspaceSessionTombstones,
+          new Set(normalizedFolderWorkspaces.map((workspace) => workspace.id)),
+          parsed.deletedFolderWorkspaceSessionTombstoneOverflowBuckets
+        )
+        if (normalizedDeletedFolderTombstones.changed) {
+          this.loadNeedsSave = true
+        }
         const loadedCompactWorktreeCards =
           parsed.settings?.compactWorktreeCards ??
           parsed.settings?.experimentalCompactWorktreeCards ??
@@ -3356,10 +3721,12 @@ export class Store {
             parsed.featureInteractionTelemetryBuckets
           ),
           projectGroups: normalizedProjectGroups,
-          folderWorkspaces: normalizeFolderWorkspaces(
-            parsed.folderWorkspaces,
-            normalizedProjectGroups
-          ),
+          folderWorkspaces: normalizedFolderWorkspaces,
+          deletedFolderWorkspaceSessionTombstones: normalizedDeletedFolderTombstones.tombstones,
+          deletedFolderWorkspaceSessionTombstoneOverflowBuckets:
+            normalizedDeletedFolderTombstones.overflowBuckets.length > 0
+              ? normalizedDeletedFolderTombstones.overflowBuckets
+              : undefined,
           worktreeLineageById: parsed.worktreeLineageById ?? {},
           mobileClientTabSelectionsByDeviceId: normalizePersistedMobileClientTabSelections(
             parsed.mobileClientTabSelectionsByDeviceId
@@ -4337,31 +4704,30 @@ export class Store {
   }
 
   deleteProjectGroup(groupId: string): boolean {
-    const before = this.state.projectGroups?.length ?? 0
+    if (!(this.state.projectGroups ?? []).some((group) => group.id === groupId)) {
+      return false
+    }
     const deletedGroupIds = getProjectGroupSubtreeIds(this.state.projectGroups ?? [], groupId)
+    const removedFolderWorkspaceKeys = new Set<string>()
+    for (const workspace of this.state.folderWorkspaces ?? []) {
+      if (deletedGroupIds.has(workspace.projectGroupId)) {
+        const workspaceKey = folderWorkspaceKey(workspace.id)
+        removedFolderWorkspaceKeys.add(workspaceKey)
+        this.rememberDeletedFolderConnectionId(workspace, workspaceKey)
+        this.removeWorkspaceLineageForFolderParent(workspace.id)
+      }
+    }
+    this.removeSshRemotePtyLeasesForWorkspaceOwners(removedFolderWorkspaceKeys)
+    this.removeWorkspaceSessionOwnersFromEveryHostPartition(removedFolderWorkspaceKeys)
     this.state.projectGroups = (this.state.projectGroups ?? []).filter(
       (group) => !deletedGroupIds.has(group.id)
     )
-    if ((this.state.projectGroups?.length ?? 0) === before) {
-      return false
-    }
     // Why: groups are sidebar organization only, so deleting one ungroups its repos rather than deleting them.
     this.state.repos = this.state.repos.map((repo) =>
       repo.projectGroupId && deletedGroupIds.has(repo.projectGroupId)
         ? { ...repo, projectGroupId: null }
         : repo
     )
-    const removedFolderWorkspaceKeys = new Set<string>()
-    for (const workspace of this.state.folderWorkspaces ?? []) {
-      if (deletedGroupIds.has(workspace.projectGroupId)) {
-        removedFolderWorkspaceKeys.add(folderWorkspaceKey(workspace.id))
-        this.state.workspaceSession = removeWorkspaceSessionOwner(
-          this.state.workspaceSession,
-          folderWorkspaceKey(workspace.id)
-        )!
-        this.removeWorkspaceLineageForFolderParent(workspace.id)
-      }
-    }
     this.state.folderWorkspaces = (this.state.folderWorkspaces ?? []).filter(
       (workspace) => !deletedGroupIds.has(workspace.projectGroupId)
     )
@@ -4374,6 +4740,952 @@ export class Store {
     return [...(this.state.folderWorkspaces ?? [])].sort(
       (left, right) => right.sortOrder - left.sortOrder || left.name.localeCompare(right.name)
     )
+  }
+
+  private resolveWorkspaceSessionPtyConnectionId(
+    hostId: ExecutionHostId,
+    worktreeId: string,
+    ptyId: string
+  ): string | null {
+    const appConnectionId = parseAppSshPtyId(ptyId)?.connectionId
+    if (appConnectionId) {
+      return appConnectionId
+    }
+    const parsedHost = parseExecutionHostId(hostId)
+    if (parsedHost?.kind === 'ssh') {
+      return parsedHost.targetId
+    }
+    const scope = parseWorkspaceKey(worktreeId)
+    if (scope?.type === 'folder') {
+      const workspace = (this.state.folderWorkspaces ?? []).find(
+        (candidate) => candidate.id === scope.folderWorkspaceId
+      )
+      if (!workspace) {
+        return this.deletedFolderConnectionIdByWorkspaceKey.get(worktreeId) ?? null
+      }
+      const group = (this.state.projectGroups ?? []).find(
+        (candidate) => candidate.id === workspace.projectGroupId
+      )
+      return (
+        workspace.connectionId ??
+        group?.connectionId ??
+        inferFolderScopeConnectionIdForMigration({
+          folderPath: workspace.folderPath,
+          projectGroupId: workspace.projectGroupId,
+          projectGroups: this.state.projectGroups ?? [],
+          repos: this.state.repos
+        })
+      )
+    }
+    const repoId = getRepoIdFromWorktreeId(
+      scope?.type === 'worktree' ? scope.worktreeId : worktreeId
+    )
+    const declaredHostId = parseExecutionHostId(
+      this.state.worktreeMeta[scope?.type === 'worktree' ? scope.worktreeId : worktreeId]?.hostId
+    )?.id
+    const ownerHostId = declaredHostId ?? hostId
+    const repoCandidates = this.state.repos.filter((repo) => repo.id === repoId)
+    const ownerRepos = repoCandidates.filter(
+      (repo) => repo.id === repoId && getRepoExecutionHostId(repo) === ownerHostId
+    )
+    if (declaredHostId) {
+      const declaredHost = parseExecutionHostId(declaredHostId)
+      if (declaredHost?.kind === 'ssh') {
+        return declaredHost.targetId
+      }
+    }
+    const connectionIds = new Set<string | null>(
+      (ownerRepos.length > 0 ? ownerRepos : repoCandidates).map((repo) => repo.connectionId ?? null)
+    )
+    return connectionIds.size === 1 ? [...connectionIds][0]! : null
+  }
+
+  private rememberDeletedFolderConnectionId(
+    workspace: FolderWorkspace,
+    workspaceKey = folderWorkspaceKey(workspace.id)
+  ): void {
+    const connectionId = this.resolveWorkspaceSessionPtyConnectionId(
+      LOCAL_EXECUTION_HOST_ID,
+      workspaceKey,
+      ''
+    )
+    if (connectionId) {
+      this.deletedFolderConnectionIdByWorkspaceKey.set(workspaceKey, connectionId)
+    }
+    const partitions = this.getWorkspaceSessionPartitions()
+    const hostIds = new Set<ExecutionHostId>([LOCAL_EXECUTION_HOST_ID])
+    const group = (this.state.projectGroups ?? []).find(
+      (candidate) => candidate.id === workspace.projectGroupId
+    )
+    const declaredHostId = parseExecutionHostId(
+      workspace.executionHostId ?? group?.executionHostId
+    )?.id
+    if (declaredHostId) {
+      hostIds.add(declaredHostId)
+    }
+    if (connectionId) {
+      hostIds.add(toSshExecutionHostId(connectionId))
+    }
+    for (const { hostId, session } of partitions) {
+      if (this.workspaceSessionReferencesOwner(session, workspaceKey)) {
+        hostIds.add(hostId)
+      }
+    }
+    const prior = this.state.deletedFolderWorkspaceSessionTombstones?.[workspaceKey as WorkspaceKey]
+    this.setDeletedFolderWorkspaceSessionTombstone(workspaceKey, {
+      connectionId: connectionId ?? prior?.connectionId ?? null,
+      deletedAt: prior?.deletedAt ?? Date.now(),
+      evidenceTruncated: prior?.evidenceTruncated ?? false,
+      hostIds: [...new Set([...(prior?.hostIds ?? []), ...hostIds])],
+      tabConnectionIdsByHostId: prior?.tabConnectionIdsByHostId ?? {}
+    })
+    const tabOwners: {
+      hostId: ExecutionHostId
+      tabId: string
+      workspaceKey: string
+      connectionId: string | null
+    }[] = []
+    for (const { hostId, session } of partitions) {
+      const tabIds = new Set<string>()
+      const tabPtyIdByTabId = new Map<string, string>()
+      const tabConnectionIdByTabId = new Map<string, string>()
+      for (const tab of session.tabsByWorktree?.[workspaceKey] ?? []) {
+        tabIds.add(tab.id)
+        if (tab.ptyId) {
+          tabPtyIdByTabId.set(tab.id, tab.ptyId)
+        }
+      }
+      for (const tab of session.unifiedTabs?.[workspaceKey] ?? []) {
+        if (tab.contentType === 'terminal') {
+          tabIds.add(tab.entityId)
+        }
+      }
+      const activeTerminalTabId = session.activeTabIdByWorktree?.[workspaceKey]
+      if (activeTerminalTabId) {
+        tabIds.add(activeTerminalTabId)
+      }
+      if (
+        session.activeTabId &&
+        (session.activeWorkspaceKey === workspaceKey || session.activeWorktreeId === workspaceKey)
+      ) {
+        tabIds.add(session.activeTabId)
+      }
+      for (const tombstone of Object.values(session.terminalSurfaceTombstonesByPaneKey ?? {})) {
+        if (tombstone.worktreeId === workspaceKey) {
+          tabIds.add(tombstone.parentTabId)
+          tabPtyIdByTabId.set(tombstone.parentTabId, tombstone.ptyId)
+        }
+      }
+      for (const [paneKey, record] of Object.entries(
+        session.sleepingAgentSessionsByPaneKey ?? {}
+      )) {
+        if (record.worktreeId !== workspaceKey) {
+          continue
+        }
+        const tabId = record.tabId ?? parsePaneKey(paneKey)?.tabId
+        if (tabId) {
+          tabIds.add(tabId)
+          if (record.connectionId) {
+            tabConnectionIdByTabId.set(tabId, record.connectionId)
+          }
+        }
+      }
+      for (const tabId of tabIds) {
+        const layoutPtyId = Object.values(
+          session.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId ?? {}
+        )[0]
+        const ptyId =
+          session.remoteSessionIdsByTabId?.[tabId] ??
+          tabPtyIdByTabId.get(tabId) ??
+          layoutPtyId ??
+          ''
+        tabOwners.push({
+          hostId,
+          tabId,
+          workspaceKey,
+          connectionId:
+            this.resolveWorkspaceSessionPtyConnectionId(hostId, workspaceKey, ptyId) ??
+            tabConnectionIdByTabId.get(tabId) ??
+            connectionId
+        })
+      }
+    }
+    this.rememberDeletedFolderTabOwners(tabOwners)
+  }
+
+  private workspaceSessionReferencesOwner(
+    session: WorkspaceSessionState,
+    workspaceKey: string
+  ): boolean {
+    if (
+      (session.activeWorkspaceKey &&
+        workspaceSessionOwnerKeysEqual(session.activeWorkspaceKey, workspaceKey)) ||
+      (session.activeWorktreeId &&
+        workspaceSessionOwnerKeysEqual(session.activeWorktreeId, workspaceKey)) ||
+      session.activeWorktreeIdsOnShutdown?.some((ownerKey) =>
+        workspaceSessionOwnerKeysEqual(ownerKey, workspaceKey)
+      )
+    ) {
+      return true
+    }
+    const ownerKeyedRecords = [
+      session.tabsByWorktree,
+      session.openFilesByWorktree,
+      session.activeFileIdByWorktree,
+      session.browserTabsByWorktree,
+      session.activeBrowserTabIdByWorktree,
+      session.activeTabTypeByWorktree,
+      session.activeTabIdByWorktree,
+      session.unifiedTabs,
+      session.tabGroups,
+      session.tabGroupLayouts,
+      session.activeGroupIdByWorktree,
+      session.lastVisitedAtByWorktreeId,
+      session.defaultTerminalTabsAppliedByWorktreeId
+    ]
+    if (
+      ownerKeyedRecords.some((record) =>
+        Object.keys(record ?? {}).some((ownerKey) =>
+          workspaceSessionOwnerKeysEqual(ownerKey, workspaceKey)
+        )
+      )
+    ) {
+      return true
+    }
+    return (
+      Object.values(session.browserPagesByWorkspace ?? {}).some((pages) =>
+        pages.some((page) => workspaceSessionOwnerKeysEqual(page.worktreeId, workspaceKey))
+      ) ||
+      Object.values(session.terminalSurfaceTombstonesByPaneKey ?? {}).some((tombstone) =>
+        workspaceSessionOwnerKeysEqual(tombstone.worktreeId, workspaceKey)
+      ) ||
+      Object.values(session.sleepingAgentSessionsByPaneKey ?? {}).some((sleepingAgent) =>
+        workspaceSessionOwnerKeysEqual(sleepingAgent.worktreeId, workspaceKey)
+      )
+    )
+  }
+
+  private rememberDeletedFolderTabOwners(
+    records: readonly {
+      hostId: ExecutionHostId
+      tabId: string
+      workspaceKey: string
+      connectionId: string | null
+    }[]
+  ): void {
+    const pendingByWorkspaceKey = new Map<string, DeletedFolderWorkspaceSessionTombstone>()
+    for (const { hostId, tabId, workspaceKey, connectionId } of records) {
+      let pending = pendingByWorkspaceKey.get(workspaceKey)
+      if (!pending) {
+        const prior =
+          this.state.deletedFolderWorkspaceSessionTombstones?.[workspaceKey as WorkspaceKey]
+        pending = {
+          connectionId: prior?.connectionId ?? connectionId,
+          deletedAt: prior?.deletedAt ?? Date.now(),
+          evidenceTruncated: prior?.evidenceTruncated ?? false,
+          hostIds: [...(prior?.hostIds ?? [])],
+          tabConnectionIdsByHostId: Object.fromEntries(
+            Object.entries(prior?.tabConnectionIdsByHostId ?? {}).map(([priorHostId, tabs]) => [
+              priorHostId,
+              { ...tabs }
+            ])
+          )
+        }
+        pendingByWorkspaceKey.set(workspaceKey, pending)
+      }
+      pending.connectionId ??= connectionId
+      const tabConnectionIds = pending.tabConnectionIdsByHostId[hostId] ?? {}
+      const retainedConnectionId = connectionId ?? tabConnectionIds[tabId] ?? null
+      delete tabConnectionIds[tabId]
+      tabConnectionIds[tabId] = retainedConnectionId
+      delete pending.tabConnectionIdsByHostId[hostId]
+      pending.tabConnectionIdsByHostId[hostId] = tabConnectionIds
+      const connectionHostId = connectionId ? toSshExecutionHostId(connectionId) : null
+      pending.hostIds = [
+        ...new Set([
+          ...pending.hostIds.filter(
+            (retainedHostId) => retainedHostId !== hostId && retainedHostId !== connectionHostId
+          ),
+          hostId,
+          ...(connectionHostId ? [connectionHostId] : [])
+        ])
+      ]
+    }
+    for (const [workspaceKey, tombstone] of pendingByWorkspaceKey) {
+      this.setDeletedFolderWorkspaceSessionTombstone(workspaceKey, tombstone)
+    }
+  }
+
+  private setDeletedFolderWorkspaceSessionTombstone(
+    workspaceKey: string,
+    tombstone: DeletedFolderWorkspaceSessionTombstone
+  ): void {
+    const boundedEvidence = getBoundedDeletedFolderTombstoneEvidence(tombstone)
+    tombstone = boundedEvidence.tombstone
+    const tombstones = { ...this.state.deletedFolderWorkspaceSessionTombstones }
+    delete tombstones[workspaceKey as WorkspaceKey]
+    tombstones[workspaceKey as WorkspaceKey] = tombstone
+    this.forgetDeletedFolderWorkspaceSessionTombstone(workspaceKey)
+    this.indexDeletedFolderWorkspaceSessionTombstone(workspaceKey, tombstone)
+    const eviction = getDeletedFolderTombstoneEviction(tombstones, Date.now())
+    for (const evictedWorkspaceKey of eviction.workspaceKeys) {
+      delete tombstones[evictedWorkspaceKey]
+      this.forgetDeletedFolderWorkspaceSessionTombstone(evictedWorkspaceKey)
+    }
+    const overflowBuckets = addDeletedFolderTombstoneOverflowEntries(
+      this.state.deletedFolderWorkspaceSessionTombstoneOverflowBuckets,
+      [
+        ...(boundedEvidence.overflowEntry ? [boundedEvidence.overflowEntry] : []),
+        ...eviction.overflowEntries
+      ],
+      Date.now()
+    )
+    if (overflowBuckets.length > 0) {
+      this.state.deletedFolderWorkspaceSessionTombstoneOverflowBuckets = overflowBuckets
+    } else {
+      delete this.state.deletedFolderWorkspaceSessionTombstoneOverflowBuckets
+    }
+    this.state.deletedFolderWorkspaceSessionTombstones = tombstones
+  }
+
+  private pruneDeletedFolderWorkspaceSessionTombstones(): void {
+    const now = Date.now()
+    const current = this.state.deletedFolderWorkspaceSessionTombstones ?? {}
+    const eviction = getDeletedFolderTombstoneEviction(current, now)
+    const currentOverflow = this.state.deletedFolderWorkspaceSessionTombstoneOverflowBuckets
+    const prunedOverflow = pruneDeletedFolderTombstoneOverflowBuckets(currentOverflow, now)
+    if (
+      eviction.workspaceKeys.length === 0 &&
+      eviction.overflowEntries.length === 0 &&
+      prunedOverflow === currentOverflow
+    ) {
+      return
+    }
+    const tombstones = { ...current }
+    for (const workspaceKey of eviction.workspaceKeys) {
+      delete tombstones[workspaceKey]
+      this.forgetDeletedFolderWorkspaceSessionTombstone(workspaceKey)
+    }
+    const overflowBuckets = addDeletedFolderTombstoneOverflowEntries(
+      prunedOverflow,
+      eviction.overflowEntries,
+      now
+    )
+    if (overflowBuckets.length > 0) {
+      this.state.deletedFolderWorkspaceSessionTombstoneOverflowBuckets = overflowBuckets
+    } else {
+      delete this.state.deletedFolderWorkspaceSessionTombstoneOverflowBuckets
+    }
+    this.state.deletedFolderWorkspaceSessionTombstones = tombstones
+    this.scheduleSave()
+  }
+
+  private hasDeletedFolderWorkspaceKeyOverflowEvidence(workspaceKey: string): boolean {
+    return hasDeletedFolderWorkspaceKeyOverflowEvidence(
+      this.state.deletedFolderWorkspaceSessionTombstoneOverflowBuckets,
+      workspaceKey,
+      Date.now()
+    )
+  }
+
+  private forgetDeletedFolderWorkspaceSessionTombstone(workspaceKey: string): void {
+    this.deletedFolderConnectionIdByWorkspaceKey.delete(workspaceKey)
+    for (const [hostId, ownersByTabId] of this.deletedFolderOwnersByHostAndTabId) {
+      for (const [tabId, owners] of ownersByTabId) {
+        owners.delete(workspaceKey)
+        if (owners.size === 0) {
+          ownersByTabId.delete(tabId)
+        }
+      }
+      if (ownersByTabId.size === 0) {
+        this.deletedFolderOwnersByHostAndTabId.delete(hostId)
+      }
+    }
+  }
+
+  private removeSshRemotePtyLeasesForWorkspaceOwners(ownerKeys: ReadonlySet<string>): void {
+    if (ownerKeys.size === 0 || !this.state.sshRemotePtyLeases) {
+      return
+    }
+    const removedBindingKeys = new Set<string>()
+    const retainedBindingKeys = new Set<string>()
+    for (const { hostId, session } of this.getWorkspaceSessionPartitions()) {
+      const recordBinding = (
+        worktreeId: string,
+        tabId: string,
+        directPtyIds: readonly (string | null | undefined)[] = []
+      ): void => {
+        const destination = ownerKeys.has(worktreeId) ? removedBindingKeys : retainedBindingKeys
+        const ptyIds = new Set([
+          ...directPtyIds,
+          session.remoteSessionIdsByTabId?.[tabId],
+          ...Object.values(session.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId ?? {})
+        ])
+        for (const ptyId of ptyIds) {
+          if (!ptyId) {
+            continue
+          }
+          const connectionId = this.resolveWorkspaceSessionPtyConnectionId(
+            hostId,
+            worktreeId,
+            ptyId
+          )
+          if (!connectionId) {
+            continue
+          }
+          destination.add(
+            JSON.stringify([
+              connectionId,
+              this.getRelayPtyIdForSshLeaseComparison(connectionId, ptyId)
+            ])
+          )
+        }
+      }
+      for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
+        for (const tab of tabs) {
+          recordBinding(worktreeId, tab.id, [tab.ptyId])
+        }
+      }
+      for (const [worktreeId, tabs] of Object.entries(session.unifiedTabs ?? {})) {
+        for (const tab of tabs) {
+          if (tab.contentType === 'terminal') {
+            recordBinding(worktreeId, tab.entityId)
+          }
+        }
+      }
+      for (const [worktreeId, tabId] of Object.entries(session.activeTabIdByWorktree ?? {})) {
+        if (tabId) {
+          recordBinding(worktreeId, tabId)
+        }
+      }
+      if (session.activeTabId) {
+        for (const worktreeId of new Set(
+          [session.activeWorkspaceKey, session.activeWorktreeId].filter(
+            (candidate): candidate is string => typeof candidate === 'string'
+          )
+        )) {
+          recordBinding(worktreeId, session.activeTabId)
+        }
+      }
+      for (const tombstone of Object.values(session.terminalSurfaceTombstonesByPaneKey ?? {})) {
+        recordBinding(tombstone.worktreeId, tombstone.parentTabId, [tombstone.ptyId])
+      }
+      for (const [paneKey, sleepingAgent] of Object.entries(
+        session.sleepingAgentSessionsByPaneKey ?? {}
+      )) {
+        const tabId = sleepingAgent.tabId ?? parsePaneKey(paneKey)?.tabId
+        if (tabId) {
+          recordBinding(sleepingAgent.worktreeId, tabId)
+        }
+      }
+    }
+    this.state.sshRemotePtyLeases = this.state.sshRemotePtyLeases.filter(
+      (lease) =>
+        (!lease.worktreeId || !ownerKeys.has(lease.worktreeId)) &&
+        !(
+          removedBindingKeys.has(JSON.stringify([lease.targetId, lease.ptyId])) &&
+          !retainedBindingKeys.has(JSON.stringify([lease.targetId, lease.ptyId]))
+        )
+    )
+  }
+
+  private collectWorkspaceSessionRemoteConnectionIds(
+    partitions: readonly { hostId: ExecutionHostId; session: WorkspaceSessionState }[],
+    includeOwner: (worktreeId: string) => boolean
+  ): Set<string> {
+    const connectionIds = new Set<string>()
+    for (const { hostId, session } of partitions) {
+      for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
+        if (!includeOwner(worktreeId)) {
+          continue
+        }
+        for (const tab of tabs) {
+          const ptyId = session.remoteSessionIdsByTabId?.[tab.id] ?? tab.ptyId
+          if (!ptyId) {
+            continue
+          }
+          const connectionId = this.resolveWorkspaceSessionPtyConnectionId(
+            hostId,
+            worktreeId,
+            ptyId
+          )
+          if (connectionId) {
+            connectionIds.add(connectionId)
+          }
+        }
+      }
+    }
+    return connectionIds
+  }
+
+  private isDeletedFolderWorkspaceKey(worktreeId: string): boolean {
+    this.pruneDeletedFolderWorkspaceSessionTombstones()
+    return this.isDeletedFolderWorkspaceKeyWithoutPruning(worktreeId)
+  }
+
+  private isDeletedFolderWorkspaceKeyWithoutPruning(worktreeId: string): boolean {
+    const scope = parseWorkspaceKey(worktreeId)
+    return Boolean(
+      scope?.type === 'folder' &&
+      !(this.state.folderWorkspaces ?? []).some(
+        (workspace) => workspace.id === scope.folderWorkspaceId
+      ) &&
+      (this.state.deletedFolderWorkspaceSessionTombstones?.[worktreeId as WorkspaceKey] ||
+        this.hasDeletedFolderWorkspaceKeyOverflowEvidence(worktreeId))
+    )
+  }
+
+  private getDeletedFolderConnectionIdsForHost(hostId: ExecutionHostId): Set<string> {
+    const connectionIds = new Set<string>()
+    const liveFolderIds = new Set(
+      (this.state.folderWorkspaces ?? []).map((workspace) => workspace.id)
+    )
+    for (const [workspaceKey, tombstone] of Object.entries(
+      this.state.deletedFolderWorkspaceSessionTombstones ?? {}
+    )) {
+      const scope = parseWorkspaceKey(workspaceKey)
+      if (
+        !tombstone ||
+        scope?.type !== 'folder' ||
+        liveFolderIds.has(scope.folderWorkspaceId) ||
+        !tombstone.hostIds.includes(hostId)
+      ) {
+        continue
+      }
+      if (tombstone.connectionId) {
+        connectionIds.add(tombstone.connectionId)
+      }
+      for (const connectionId of Object.values(tombstone.tabConnectionIdsByHostId[hostId] ?? {})) {
+        if (connectionId) {
+          connectionIds.add(connectionId)
+        }
+      }
+    }
+    return connectionIds
+  }
+
+  private pruneDeletedFolderReconnectTargets(
+    session: WorkspaceSessionState,
+    hostId: ExecutionHostId,
+    removedConnectionIds: ReadonlySet<string>,
+    removedOwnerKeys: ReadonlySet<string>
+  ): WorkspaceSessionState {
+    const originalConnectionIds = session.activeConnectionIdsAtShutdown
+    if (!originalConnectionIds) {
+      return session
+    }
+    const removalCandidates = new Set(removedConnectionIds)
+    for (const connectionId of originalConnectionIds) {
+      if (
+        hasDeletedFolderConnectionOverflowEvidence(
+          this.state.deletedFolderWorkspaceSessionTombstoneOverflowBuckets,
+          connectionId,
+          Date.now()
+        )
+      ) {
+        removalCandidates.add(connectionId)
+      }
+    }
+    if (removalCandidates.size === 0) {
+      return session
+    }
+    const retainedPartitions = [
+      ...this.getWorkspaceSessionPartitions().filter((partition) => partition.hostId !== hostId),
+      { hostId, session }
+    ]
+    const retainedConnectionIds = this.collectWorkspaceSessionRemoteConnectionIds(
+      retainedPartitions,
+      (worktreeId) =>
+        !removedOwnerKeys.has(worktreeId) &&
+        !this.isDeletedFolderWorkspaceKeyWithoutPruning(worktreeId)
+    )
+    for (const connectionId of this.collectCatalogConnectionIds(removedOwnerKeys)) {
+      retainedConnectionIds.add(connectionId)
+    }
+    const activeConnectionIdsAtShutdown = originalConnectionIds.filter(
+      (connectionId) =>
+        !removalCandidates.has(connectionId) || retainedConnectionIds.has(connectionId)
+    )
+    if (
+      activeConnectionIdsAtShutdown.length === originalConnectionIds.length &&
+      activeConnectionIdsAtShutdown.every(
+        (connectionId, index) => connectionId === originalConnectionIds[index]
+      )
+    ) {
+      return session
+    }
+    return {
+      ...session,
+      activeConnectionIdsAtShutdown:
+        activeConnectionIdsAtShutdown.length > 0 ? activeConnectionIdsAtShutdown : undefined
+    }
+  }
+
+  private collectCatalogConnectionIds(excludedOwnerKeys: ReadonlySet<string>): Set<string> {
+    const connectionIds = new Set(
+      this.state.repos.flatMap((repo) => (repo.connectionId ? [repo.connectionId] : []))
+    )
+    for (const workspace of this.state.folderWorkspaces ?? []) {
+      const workspaceKey = folderWorkspaceKey(workspace.id)
+      if (excludedOwnerKeys.has(workspaceKey)) {
+        continue
+      }
+      const connectionId = this.resolveWorkspaceSessionPtyConnectionId(
+        LOCAL_EXECUTION_HOST_ID,
+        workspaceKey,
+        ''
+      )
+      if (connectionId) {
+        connectionIds.add(connectionId)
+      }
+    }
+    return connectionIds
+  }
+
+  private getWorkspaceSessionPartitions(): {
+    hostId: ExecutionHostId
+    session: WorkspaceSessionState
+  }[] {
+    const partitions: { hostId: ExecutionHostId; session: WorkspaceSessionState }[] = []
+    if (this.state.workspaceSession) {
+      partitions.push({ hostId: LOCAL_EXECUTION_HOST_ID, session: this.state.workspaceSession })
+    }
+    for (const [hostId, session] of Object.entries(this.state.workspaceSessionsByHostId ?? {})) {
+      if (session) {
+        partitions.push({
+          hostId: normalizeExecutionHostId(hostId) ?? LOCAL_EXECUTION_HOST_ID,
+          session
+        })
+      }
+    }
+    return partitions
+  }
+
+  private removeWorkspaceSessionOwnersFromEveryHostPartition(ownerKeys: ReadonlySet<string>): void {
+    const originalPartitions = this.getWorkspaceSessionPartitions()
+    const removedConnectionIds = this.collectWorkspaceSessionRemoteConnectionIds(
+      originalPartitions,
+      (worktreeId) => ownerKeys.has(worktreeId)
+    )
+    for (const ownerKey of ownerKeys) {
+      const tombstone =
+        this.state.deletedFolderWorkspaceSessionTombstones?.[ownerKey as WorkspaceKey]
+      if (tombstone?.connectionId) {
+        removedConnectionIds.add(tombstone.connectionId)
+      }
+      for (const tabConnectionIds of Object.values(tombstone?.tabConnectionIdsByHostId ?? {})) {
+        for (const connectionId of Object.values(tabConnectionIds ?? {})) {
+          if (connectionId) {
+            removedConnectionIds.add(connectionId)
+          }
+        }
+      }
+    }
+    this.state.workspaceSession = removeWorkspaceSessionOwners(
+      this.state.workspaceSession,
+      ownerKeys
+    )!
+    if (this.state.workspaceSessionsByHostId) {
+      this.state.workspaceSessionsByHostId = Object.fromEntries(
+        Object.entries(this.state.workspaceSessionsByHostId).map(([hostId, session]) => [
+          hostId,
+          removeWorkspaceSessionOwners(session, ownerKeys)!
+        ])
+      )
+    }
+    this.pruneRemovedWorkspaceSessionReconnectTargets(
+      originalPartitions,
+      removedConnectionIds,
+      ownerKeys
+    )
+  }
+
+  private pruneRemovedWorkspaceSessionReconnectTargets(
+    originalPartitions: readonly { hostId: ExecutionHostId; session: WorkspaceSessionState }[],
+    removedConnectionIds: ReadonlySet<string>,
+    removedOwnerKeys: ReadonlySet<string>
+  ): void {
+    if (removedConnectionIds.size === 0) {
+      return
+    }
+    const originalActiveConnectionIdsByHostId = new Map(
+      originalPartitions.map(({ hostId, session }) => [
+        hostId,
+        session.activeConnectionIdsAtShutdown
+      ])
+    )
+    const retainedPartitions = this.getWorkspaceSessionPartitions()
+    const retainedConnectionIds = this.collectWorkspaceSessionRemoteConnectionIds(
+      retainedPartitions,
+      () => true
+    )
+    for (const connectionId of this.collectCatalogConnectionIds(removedOwnerKeys)) {
+      retainedConnectionIds.add(connectionId)
+    }
+    for (const { hostId, session } of retainedPartitions) {
+      const originalActiveConnectionIds = originalActiveConnectionIdsByHostId.get(hostId)
+      if (!originalActiveConnectionIds) {
+        continue
+      }
+      const activeConnectionIdsAtShutdown = originalActiveConnectionIds.filter(
+        (connectionId) =>
+          !removedConnectionIds.has(connectionId) || retainedConnectionIds.has(connectionId)
+      )
+      session.activeConnectionIdsAtShutdown =
+        activeConnectionIdsAtShutdown.length > 0 ? activeConnectionIdsAtShutdown : undefined
+    }
+  }
+
+  private pruneDeletedFolderWorkspaceSessionOwners(
+    session: WorkspaceSessionState,
+    hostId: ExecutionHostId
+  ): WorkspaceSessionState {
+    this.pruneDeletedFolderWorkspaceSessionTombstones()
+    const liveFolderIds = new Set(
+      (this.state.folderWorkspaces ?? []).map((workspace) => workspace.id)
+    )
+    const deletedFolderTombstones = this.state.deletedFolderWorkspaceSessionTombstones ?? {}
+    const ownerKeys = new Set<string>()
+    const ownerKeysByTabId = new Map<string, Set<string>>()
+    const directPtyIdsByOwnerAndTabId = new Map<string, Map<string, string>>()
+    const directConnectionIdsByOwnerAndTabId = new Map<string, Map<string, string>>()
+    const recordTabOwner = (
+      tabId: string | null | undefined,
+      worktreeId: string,
+      directPtyId?: string | null,
+      directConnectionId?: string | null
+    ): void => {
+      if (!tabId) {
+        return
+      }
+      const tabOwners = ownerKeysByTabId.get(tabId) ?? new Set<string>()
+      tabOwners.add(worktreeId)
+      ownerKeysByTabId.set(tabId, tabOwners)
+      if (directPtyId) {
+        const ptyIdsByTabId = directPtyIdsByOwnerAndTabId.get(worktreeId) ?? new Map()
+        ptyIdsByTabId.set(tabId, directPtyId)
+        directPtyIdsByOwnerAndTabId.set(worktreeId, ptyIdsByTabId)
+      }
+      if (directConnectionId) {
+        const connectionIdsByTabId = directConnectionIdsByOwnerAndTabId.get(worktreeId) ?? new Map()
+        connectionIdsByTabId.set(tabId, directConnectionId)
+        directConnectionIdsByOwnerAndTabId.set(worktreeId, connectionIdsByTabId)
+      }
+    }
+    const collectOwnerKey = (worktreeId: string | null | undefined): void => {
+      if (!worktreeId) {
+        return
+      }
+      const scope = parseWorkspaceKey(worktreeId)
+      const tombstone = deletedFolderTombstones[worktreeId as WorkspaceKey]
+      if (
+        scope?.type === 'folder' &&
+        !liveFolderIds.has(scope.folderWorkspaceId) &&
+        (hostId === LOCAL_EXECUTION_HOST_ID ||
+          tombstone !== undefined ||
+          this.hasDeletedFolderWorkspaceKeyOverflowEvidence(worktreeId))
+      ) {
+        ownerKeys.add(worktreeId)
+      }
+    }
+    const ownerKeyedRecords = [
+      session.tabsByWorktree,
+      session.openFilesByWorktree,
+      session.activeFileIdByWorktree,
+      session.browserTabsByWorktree,
+      session.activeBrowserTabIdByWorktree,
+      session.activeTabTypeByWorktree,
+      session.activeTabIdByWorktree,
+      session.unifiedTabs,
+      session.tabGroups,
+      session.tabGroupLayouts,
+      session.activeGroupIdByWorktree,
+      session.lastVisitedAtByWorktreeId,
+      session.defaultTerminalTabsAppliedByWorktreeId
+    ]
+    for (const record of ownerKeyedRecords) {
+      for (const worktreeId of Object.keys(record ?? {})) {
+        collectOwnerKey(worktreeId)
+      }
+    }
+    for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
+      for (const tab of tabs) {
+        recordTabOwner(tab.id, worktreeId, tab.ptyId)
+      }
+    }
+    for (const [worktreeId, tabs] of Object.entries(session.unifiedTabs ?? {})) {
+      for (const tab of tabs) {
+        if (tab.contentType === 'terminal') {
+          recordTabOwner(tab.entityId, worktreeId)
+        }
+      }
+    }
+    for (const [worktreeId, tabId] of Object.entries(session.activeTabIdByWorktree ?? {})) {
+      recordTabOwner(tabId, worktreeId)
+    }
+    if (session.activeTabId) {
+      if (session.activeWorkspaceKey) {
+        recordTabOwner(session.activeTabId, session.activeWorkspaceKey)
+      }
+      if (session.activeWorktreeId) {
+        recordTabOwner(session.activeTabId, session.activeWorktreeId)
+      }
+    }
+    for (const pages of Object.values(session.browserPagesByWorkspace ?? {})) {
+      for (const page of pages) {
+        collectOwnerKey(page.worktreeId)
+      }
+    }
+    collectOwnerKey(session.activeWorkspaceKey)
+    collectOwnerKey(session.activeWorktreeId)
+    for (const worktreeId of session.activeWorktreeIdsOnShutdown ?? []) {
+      collectOwnerKey(worktreeId)
+    }
+    for (const tombstone of Object.values(session.terminalSurfaceTombstonesByPaneKey ?? {})) {
+      collectOwnerKey(tombstone.worktreeId)
+      recordTabOwner(tombstone.parentTabId, tombstone.worktreeId, tombstone.ptyId)
+    }
+    for (const [paneKey, sleepingAgent] of Object.entries(
+      session.sleepingAgentSessionsByPaneKey ?? {}
+    )) {
+      collectOwnerKey(sleepingAgent.worktreeId)
+      recordTabOwner(
+        sleepingAgent.tabId ?? parsePaneKey(paneKey)?.tabId,
+        sleepingAgent.worktreeId,
+        null,
+        sleepingAgent.connectionId
+      )
+    }
+    const deletedOwnersByTabId = this.deletedFolderOwnersByHostAndTabId.get(hostId)
+    const tabScopedStateIds = new Set([
+      ...(session.activeTabId ? [session.activeTabId] : []),
+      ...Object.keys(session.terminalLayoutsByTabId),
+      ...Object.keys(session.remoteSessionIdsByTabId ?? {}),
+      ...Object.keys(session.terminalPtyIncarnationsByPaneKey ?? {}).flatMap((paneKey) => {
+        const separator = paneKey.lastIndexOf(':')
+        return separator > 0 ? [paneKey.slice(0, separator)] : []
+      })
+    ])
+    for (const tabId of tabScopedStateIds) {
+      const hasRetainedOwner = [...(ownerKeysByTabId.get(tabId) ?? [])].some(
+        (worktreeId) => !ownerKeys.has(worktreeId)
+      )
+      if (hasRetainedOwner) {
+        continue
+      }
+      for (const workspaceKey of deletedOwnersByTabId?.get(tabId)?.keys() ?? []) {
+        collectOwnerKey(workspaceKey)
+      }
+    }
+    const hasOverflowTabOwner = (tabId: string): boolean =>
+      hasDeletedFolderTabOwnerOverflowEvidence(
+        this.state.deletedFolderWorkspaceSessionTombstoneOverflowBuckets,
+        hostId,
+        tabId,
+        Date.now()
+      )
+    const hasUnownedDeletedTabState = [...tabScopedStateIds].some(
+      (tabId) => (ownerKeysByTabId.get(tabId)?.size ?? 0) === 0 && hasOverflowTabOwner(tabId)
+    )
+    if (
+      !session.activeWorkspaceKey &&
+      !session.activeWorktreeId &&
+      session.activeWorkspaceExecutionHostId
+    ) {
+      session = { ...session, activeWorkspaceExecutionHostId: null }
+    }
+    const tombstonedConnectionIds = this.getDeletedFolderConnectionIdsForHost(hostId)
+    if (ownerKeys.size === 0 && !hasUnownedDeletedTabState) {
+      return this.pruneDeletedFolderReconnectTargets(
+        session,
+        hostId,
+        tombstonedConnectionIds,
+        ownerKeys
+      )
+    }
+    const deletedTabOwners: {
+      hostId: ExecutionHostId
+      tabId: string
+      workspaceKey: string
+      connectionId: string | null
+    }[] = []
+    for (const [tabId, tabOwners] of ownerKeysByTabId) {
+      for (const ownerKey of tabOwners) {
+        if (!ownerKeys.has(ownerKey)) {
+          continue
+        }
+        const directPtyId = directPtyIdsByOwnerAndTabId.get(ownerKey)?.get(tabId)
+        const sharedPtyId =
+          tabOwners.size === 1
+            ? (session.remoteSessionIdsByTabId?.[tabId] ??
+              Object.values(session.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId ?? {})[0])
+            : undefined
+        deletedTabOwners.push({
+          hostId,
+          tabId,
+          workspaceKey: ownerKey,
+          connectionId:
+            this.resolveWorkspaceSessionPtyConnectionId(
+              hostId,
+              ownerKey,
+              directPtyId ?? sharedPtyId ?? ''
+            ) ??
+            directConnectionIdsByOwnerAndTabId.get(ownerKey)?.get(tabId) ??
+            null
+        })
+      }
+    }
+    this.rememberDeletedFolderTabOwners(deletedTabOwners)
+    const removedConnectionIds = this.collectWorkspaceSessionRemoteConnectionIds(
+      [{ hostId, session }],
+      (worktreeId) => ownerKeys.has(worktreeId)
+    )
+    for (const connectionId of tombstonedConnectionIds) {
+      removedConnectionIds.add(connectionId)
+    }
+    const pruned =
+      ownerKeys.size > 0
+        ? removeWorkspaceSessionOwners(session, ownerKeys)!
+        : cloneWorkspaceSessionState(session)
+    const currentDeletedOwnersByTabId = this.deletedFolderOwnersByHostAndTabId.get(hostId)
+    const exclusivelyDeletedTabIds = new Set<string>()
+    for (const tabId of tabScopedStateIds) {
+      const hasRetainedOwner = [...(ownerKeysByTabId.get(tabId) ?? [])].some(
+        (worktreeId) => !ownerKeys.has(worktreeId)
+      )
+      if (hasRetainedOwner) {
+        continue
+      }
+      const deletedOwner = [...(currentDeletedOwnersByTabId?.get(tabId)?.entries() ?? [])].find(
+        ([workspaceKey]) => ownerKeys.has(workspaceKey)
+      )
+      if (!deletedOwner && !hasOverflowTabOwner(tabId)) {
+        continue
+      }
+      exclusivelyDeletedTabIds.add(tabId)
+      const ptyId = pruned.remoteSessionIdsByTabId?.[tabId]
+      const connectionId =
+        (ptyId ? parseAppSshPtyId(ptyId)?.connectionId : null) ?? deletedOwner?.[1]
+      if (connectionId) {
+        removedConnectionIds.add(connectionId)
+      }
+      delete pruned.terminalLayoutsByTabId[tabId]
+      if (pruned.remoteSessionIdsByTabId) {
+        delete pruned.remoteSessionIdsByTabId[tabId]
+      }
+    }
+    if (exclusivelyDeletedTabIds.has(pruned.activeTabId ?? '')) {
+      pruned.activeTabId = null
+    }
+    if (pruned.terminalPtyIncarnationsByPaneKey) {
+      pruned.terminalPtyIncarnationsByPaneKey = Object.fromEntries(
+        Object.entries(pruned.terminalPtyIncarnationsByPaneKey).filter(([paneKey]) => {
+          const separator = paneKey.lastIndexOf(':')
+          return separator < 1 || !exclusivelyDeletedTabIds.has(paneKey.slice(0, separator))
+        })
+      )
+    }
+    return this.pruneDeletedFolderReconnectTargets(pruned, hostId, removedConnectionIds, ownerKeys)
   }
 
   getFolderWorkspace(id: string): FolderWorkspace | undefined {
@@ -4530,17 +5842,18 @@ export class Store {
   }
 
   removeFolderWorkspace(id: string): boolean {
-    const before = this.state.folderWorkspaces?.length ?? 0
+    const workspace = (this.state.folderWorkspaces ?? []).find((candidate) => candidate.id === id)
+    if (!workspace) {
+      return false
+    }
+    const workspaceKey = folderWorkspaceKey(id)
+    const removedWorkspaceKeys = new Set([workspaceKey])
+    this.rememberDeletedFolderConnectionId(workspace, workspaceKey)
+    this.removeSshRemotePtyLeasesForWorkspaceOwners(removedWorkspaceKeys)
+    this.removeWorkspaceSessionOwnersFromEveryHostPartition(removedWorkspaceKeys)
     this.state.folderWorkspaces = (this.state.folderWorkspaces ?? []).filter(
       (workspace) => workspace.id !== id
     )
-    if ((this.state.folderWorkspaces?.length ?? 0) === before) {
-      return false
-    }
-    this.state.workspaceSession = removeWorkspaceSessionOwner(
-      this.state.workspaceSession,
-      folderWorkspaceKey(id)
-    )!
     this.removeWorkspaceLineageForFolderParent(id)
     this.pruneMobileClientTabSelections((worktreeId) => worktreeId === folderWorkspaceKey(id))
     this.scheduleSave()
@@ -4715,15 +6028,17 @@ export class Store {
     const ownerKeysToPrune = new Set<string>()
     const collectPrefixedKeys = (keys: Iterable<string>): void => {
       for (const key of keys) {
-        if (key.startsWith(prefix)) {
+        const scope = parseWorkspaceKey(key)
+        const worktreeId = scope?.type === 'worktree' ? scope.worktreeId : key
+        if (worktreeId.startsWith(prefix)) {
           ownerKeysToPrune.add(key)
         }
       }
     }
     collectPrefixedKeys(Object.keys(this.state.worktreeMeta))
-    collectPrefixedKeys(Object.keys(this.state.workspaceSession?.lastVisitedAtByWorktreeId ?? {}))
+    collectPrefixedKeys(getWorkspaceSessionOwnerKeys(this.state.workspaceSession))
     for (const session of Object.values(this.state.workspaceSessionsByHostId ?? {})) {
-      collectPrefixedKeys(Object.keys(session?.lastVisitedAtByWorktreeId ?? {}))
+      collectPrefixedKeys(getWorkspaceSessionOwnerKeys(session))
     }
 
     for (const key of Object.keys(this.state.worktreeMeta)) {
@@ -5385,18 +6700,71 @@ export class Store {
     return updated
   }
 
+  private getWorkspaceSessionHostIdsForWorktreeRemoval(
+    worktreeId: string,
+    partitions: readonly { hostId: ExecutionHostId; session: WorkspaceSessionState }[]
+  ): Set<ExecutionHostId> {
+    const declaredHostId = parseExecutionHostId(this.state.worktreeMeta[worktreeId]?.hostId)?.id
+    if (declaredHostId) {
+      return new Set([declaredHostId])
+    }
+    const repoId = getRepoIdFromWorktreeId(worktreeId)
+    const repoHostIds = new Set(
+      this.state.repos
+        .filter((repo) => repo.id === repoId)
+        .map((repo) => getRepoExecutionHostId(repo))
+    )
+    const persistedHostIds = partitions
+      .filter(({ session }) => this.workspaceSessionReferencesOwner(session, worktreeId))
+      .map(({ hostId }) => hostId)
+    if (persistedHostIds.length === 1) {
+      return new Set(persistedHostIds)
+    }
+    const parsed = splitWorktreeIdForFilesystem(worktreeId)
+    const exactHostIds = new Set(
+      parsed
+        ? this.state.repos
+            .filter(
+              (repo) =>
+                repo.id === parsed.repoId &&
+                normalizeRuntimePathForComparison(repo.path) ===
+                  normalizeRuntimePathForComparison(parsed.worktreePath)
+            )
+            .map((repo) => getRepoExecutionHostId(repo))
+        : []
+    )
+    if (exactHostIds.size === 1) {
+      return exactHostIds
+    }
+    if (repoHostIds.size === 1) {
+      return repoHostIds
+    }
+    return repoHostIds.size === 0 ? new Set([LOCAL_EXECUTION_HOST_ID]) : new Set()
+  }
+
   removeWorktreeMeta(worktreeId: string, hostId?: ExecutionHostId | null): void {
     // Persisted ownership beats stale live routing; hostId is only an ownerless fallback.
     const owner = this.state.worktreeMeta[worktreeId]?.hostId ?? hostId
+    const originalPartitions = this.getWorkspaceSessionPartitions()
+    const repoId = getRepoIdFromWorktreeId(worktreeId)
+    // Legacy callers lack an explicit route; catalog evidence must not erase a same-id local workspace.
+    const inferredRemovalHostIds =
+      (hostId === undefined || hostId === null) &&
+      this.state.repos.some((repo) => repo.id === repoId)
+        ? this.getWorkspaceSessionHostIdsForWorktreeRemoval(worktreeId, originalPartitions)
+        : null
     // Skip partitions main never wrote: materializing one fences every sibling worktree of the repo.
     const partitions = new Set<ExecutionHostId>(
-      workspaceSessionPartitionIdsForHost(owner).filter((partition) =>
-        this.hasPersistedWorkspaceSession(partition)
+      [...(inferredRemovalHostIds ?? workspaceSessionPartitionIdsForHost(owner))].filter(
+        (partition) => this.hasPersistedWorkspaceSession(partition)
       )
     )
     // A repo-wide fence must not rebase a sibling's unpersisted tabs onto main's copy, and a spill
     // partition that never held this worktree has no claim on the repo at all.
-    const ownerPartition = workspaceSessionOwnerPartitionForHost(owner)
+    const ownerPartition =
+      inferredRemovalHostIds?.size === 1
+        ? [...inferredRemovalHostIds][0]
+        : workspaceSessionOwnerPartitionForHost(owner)
     const fencedPartitions = new Set(
       [...partitions].filter(
         (partition) =>
@@ -5404,6 +6772,10 @@ export class Store {
           (partition === ownerPartition &&
             !this.partitionHasOtherRepoWorktreeTabs(worktreeId, partition))
       )
+    )
+    const removedConnectionIds = this.collectWorkspaceSessionRemoteConnectionIds(
+      originalPartitions.filter(({ hostId: partition }) => partitions.has(partition)),
+      (ownerKey) => workspaceSessionOwnerKeysEqual(ownerKey, worktreeId)
     )
     delete this.state.worktreeMeta[worktreeId]
     delete this.state.worktreeLineageById[worktreeId]
@@ -5413,6 +6785,11 @@ export class Store {
         advanceTerminalTopologyRevision: fencedPartitions.has(partition)
       })
     }
+    this.pruneRemovedWorkspaceSessionReconnectTargets(
+      originalPartitions,
+      removedConnectionIds,
+      new Set([worktreeId])
+    )
     this.scheduleSave()
   }
 
@@ -6277,6 +7654,7 @@ export class Store {
 
   /** Persist a non-'local' host partition; remote hosts skip setLocalWorkspaceSession's local-daemon PTY-binding race guards. */
   private setHostWorkspaceSession(hostId: ExecutionHostId, session: WorkspaceSessionState): void {
+    session = this.pruneDeletedFolderWorkspaceSessionOwners(session, hostId)
     // Why: each partition owns its topology fence; renderer writes omit it and must rebase locally.
     session = sanitizeWorkspaceSessionTerminalRetirements(
       session,
@@ -6297,6 +7675,7 @@ export class Store {
     deferSnapshotFiles = false
   ): void {
     const prior = this.state.workspaceSession
+    session = this.pruneDeletedFolderWorkspaceSessionOwners(session, LOCAL_EXECUTION_HOST_ID)
     session = sanitizeWorkspaceSessionTerminalRetirements(session, prior)
     session = pruneWorkspaceSessionBrowserHistory(
       pruneLocalTerminalScrollbackBuffers(session, this.state.repos)
@@ -6336,13 +7715,28 @@ export class Store {
       const priorTabs = prior.tabsByWorktree ?? {}
       const nextTabs = session.tabsByWorktree ?? {}
       const worktreeIdByTabId = new Map<string, string>()
-      for (const [worktreeId, tabs] of Object.entries({ ...priorTabs, ...nextTabs })) {
-        for (const tab of tabs) {
-          worktreeIdByTabId.set(tab.id, worktreeId)
+      const ambiguousTabIds = new Set<string>()
+      const recordTabOwners = (record: Readonly<Record<string, readonly TerminalTab[]>>): void => {
+        for (const [worktreeId, tabs] of Object.entries(record)) {
+          for (const tab of tabs) {
+            if (ambiguousTabIds.has(tab.id)) {
+              continue
+            }
+            const existingOwner = worktreeIdByTabId.get(tab.id)
+            if (existingOwner && !workspaceSessionOwnerKeysEqual(existingOwner, worktreeId)) {
+              worktreeIdByTabId.delete(tab.id)
+              ambiguousTabIds.add(tab.id)
+              continue
+            }
+            worktreeIdByTabId.set(tab.id, worktreeId)
+          }
         }
       }
+      recordTabOwners(priorTabs)
+      recordTabOwners(nextTabs)
       for (const [worktreeId, tabs] of Object.entries(nextTabs)) {
-        const priorList = priorTabs[worktreeId]
+        const priorOwnerKey = resolveWorkspaceSessionRecordOwnerKey(priorTabs, worktreeId)
+        const priorList = priorOwnerKey ? priorTabs[priorOwnerKey] : undefined
         if (!priorList) {
           continue
         }
@@ -6505,6 +7899,9 @@ export class Store {
       this.setWorkspaceSession(next, resolved)
       return
     }
+    if (workspaceSessionPatchMayRestoreDeletedOwner(patch)) {
+      next = this.pruneDeletedFolderWorkspaceSessionOwners(next, resolved)
+    }
     if (Object.hasOwn(patch, 'browserUrlHistory')) {
       next = pruneWorkspaceSessionBrowserHistory(next)
     }
@@ -6582,7 +7979,11 @@ export class Store {
       (binding.targetId === undefined ||
         binding.targetId === null ||
         lease.targetId === binding.targetId) &&
-      (binding.worktreeId === undefined || lease.worktreeId === binding.worktreeId) &&
+      (binding.worktreeId === undefined ||
+        lease.worktreeId === binding.worktreeId ||
+        Boolean(
+          lease.worktreeId && workspaceSessionOwnerKeysEqual(lease.worktreeId, binding.worktreeId)
+        )) &&
       (binding.tabId === undefined || lease.tabId === binding.tabId) &&
       (binding.leafId === undefined || lease.leafId === binding.leafId)
     )
@@ -6623,7 +8024,7 @@ export class Store {
     return (
       (binding.worktreeId === undefined ||
         lease.worktreeId === undefined ||
-        lease.worktreeId === binding.worktreeId) &&
+        workspaceSessionOwnerKeysEqual(lease.worktreeId, binding.worktreeId)) &&
       (binding.tabId === undefined || lease.tabId === undefined || lease.tabId === binding.tabId) &&
       (binding.leafId === undefined ||
         lease.leafId === undefined ||
@@ -6632,8 +8033,7 @@ export class Store {
   }
 
   private getConnectionIdForWorktree(worktreeId: string): string | null {
-    const repoId = getRepoIdFromWorktreeId(worktreeId)
-    return this.state.repos.find((repo) => repo.id === repoId)?.connectionId ?? null
+    return this.resolveWorkspaceSessionPtyConnectionId(LOCAL_EXECUTION_HOST_ID, worktreeId, '')
   }
 
   // Why: sync-flush the pty binding before pty:spawn returns to close the spawn/persist SIGKILL race (Issue #217).
@@ -6649,13 +8049,32 @@ export class Store {
     },
     hostId?: string | null
   ): boolean {
+    const scope = parseWorkspaceKey(args.worktreeId)
+    const rawOwnerKey = scope?.type === 'worktree' ? scope.worktreeId : args.worktreeId
+    if (
+      scope?.type === 'folder' &&
+      !(this.state.folderWorkspaces ?? []).some(
+        (workspace) => workspace.id === scope.folderWorkspaceId
+      )
+    ) {
+      throw new Error('folder_workspace_not_found')
+    }
     const resolvedHostId = this.resolveHostId(hostId)
     const session = this.getWorkspaceSession(resolvedHostId)
     const paneKey = `${args.tabId}:${args.leafId}`
+    const terminalOwnerKey = resolveWorkspaceSessionRecordOwnerKey(
+      session.tabsByWorktree,
+      args.worktreeId
+    )
+    if (!terminalOwnerKey) {
+      throw new Error('workspace_session_owner_ambiguous')
+    }
+    if (workspaceSessionTabHasCompetingOwner(session, args.tabId, args.worktreeId)) {
+      throw new Error('workspace_session_tab_owner_ambiguous')
+    }
+    const tabs = session.tabsByWorktree?.[terminalOwnerKey]
+    const tab = tabs?.find((candidate) => candidate.id === args.tabId)
     if (args.expectedBinding) {
-      const tab = session.tabsByWorktree?.[args.worktreeId]?.find(
-        (candidate) => candidate.id === args.tabId && candidate.worktreeId === args.worktreeId
-      )
       const boundPtyId = session.terminalLayoutsByTabId?.[args.tabId]?.ptyIdsByLeafId?.[args.leafId]
       if (
         !tab ||
@@ -6664,6 +8083,12 @@ export class Store {
       ) {
         return false
       }
+    }
+    const activeTerminalOwnerKey = tab
+      ? null
+      : resolveWorkspaceSessionRecordOwnerKey(session.activeTabIdByWorktree, args.worktreeId)
+    if (!tab && !activeTerminalOwnerKey) {
+      throw new Error('workspace_session_owner_ambiguous')
     }
     if (resolvedHostId !== LOCAL_EXECUTION_HOST_ID) {
       this.state.workspaceSessionsByHostId = {
@@ -6677,7 +8102,7 @@ export class Store {
       args.incarnationId !== args.expectedBinding.incarnationId
     let terminalMembershipChanged = false
     const advanceTopologyFence = (): void => {
-      const repoId = getRepoIdFromWorktreeId(args.worktreeId)
+      const repoId = getRepoIdFromWorktreeId(rawOwnerKey)
       const currentRevision = session.terminalTopologyRevisionByRepoId?.[repoId] ?? 0
       if (!reconciledIncarnation && (!terminalMembershipChanged || currentRevision <= 0)) {
         return
@@ -6710,8 +8135,6 @@ export class Store {
         delete session.terminalSurfaceTombstonesByPaneKey[paneKey]
       }
     }
-    const tabs = session.tabsByWorktree?.[args.worktreeId]
-    const tab = tabs?.find((t) => t.id === args.tabId)
     if (tab) {
       tab.ptyId = args.ptyId
     } else {
@@ -6721,18 +8144,20 @@ export class Store {
         ...(tabs ?? []),
         createMinimalPersistedTerminalTab({
           ...args,
+          worktreeId: terminalOwnerKey,
           existingTabCount: tabs?.length ?? 0
         })
       ]
       session.tabsByWorktree = {
         ...session.tabsByWorktree,
-        [args.worktreeId]: nextTabs
+        [terminalOwnerKey]: nextTabs
       }
-      session.activeWorktreeId ??= args.worktreeId
+      session.activeWorktreeId ??= rawOwnerKey
       session.activeTabId ??= args.tabId
       session.activeTabIdByWorktree = {
         ...session.activeTabIdByWorktree,
-        [args.worktreeId]: session.activeTabIdByWorktree?.[args.worktreeId] ?? args.tabId
+        [activeTerminalOwnerKey!]:
+          session.activeTabIdByWorktree?.[activeTerminalOwnerKey!] ?? args.tabId
       }
     }
     if (!isTerminalLeafId(args.leafId)) {
@@ -6793,6 +8218,58 @@ export class Store {
       throw err
     }
     return true
+  }
+
+  // ── PTY Binding Rollback ───────────────────────────────────────────
+
+  // Why: failed fresh-spawn setup may only erase its exact binding, never a replacement incarnation.
+  removePtyBindingIfMatches(
+    args: {
+      worktreeId: string
+      tabId: string
+      leafId: string
+      ptyId: string
+      incarnationId?: string
+    },
+    hostId?: string | null
+  ): void {
+    const session = this.getWorkspaceSession(this.resolveHostId(hostId))
+    const ownerKey = resolveWorkspaceSessionRecordOwnerKey(session.tabsByWorktree, args.worktreeId)
+    if (!ownerKey) {
+      return
+    }
+    let changed = false
+    const paneKey = `${args.tabId}:${args.leafId}`
+    if (
+      args.incarnationId &&
+      session.terminalPtyIncarnationsByPaneKey?.[paneKey] !== args.incarnationId
+    ) {
+      return
+    }
+    const tab = session.tabsByWorktree[ownerKey]?.find((candidate) => candidate.id === args.tabId)
+    if (tab?.ptyId === args.ptyId) {
+      tab.ptyId = null
+      changed = true
+    }
+    const layout = session.terminalLayoutsByTabId[args.tabId]
+    if (layout?.ptyIdsByLeafId?.[args.leafId] === args.ptyId) {
+      layout.ptyIdsByLeafId = { ...layout.ptyIdsByLeafId }
+      delete layout.ptyIdsByLeafId[args.leafId]
+      changed = true
+    }
+    if (
+      args.incarnationId &&
+      session.terminalPtyIncarnationsByPaneKey?.[paneKey] === args.incarnationId
+    ) {
+      session.terminalPtyIncarnationsByPaneKey = {
+        ...session.terminalPtyIncarnationsByPaneKey
+      }
+      delete session.terminalPtyIncarnationsByPaneKey[paneKey]
+      changed = true
+    }
+    if (changed) {
+      this.flush()
+    }
   }
 
   // ── SSH Targets ────────────────────────────────────────────────────
@@ -7075,6 +8552,9 @@ export class Store {
     lease: Omit<SshRemotePtyLease, 'createdAt' | 'updatedAt'> &
       Partial<Pick<SshRemotePtyLease, 'createdAt' | 'updatedAt'>>
   ): void {
+    if (lease.worktreeId && this.isDeletedFolderWorkspaceKey(lease.worktreeId)) {
+      return
+    }
     this.state.sshRemotePtyLeases ??= []
     const normalizedLease = { ...lease }
     if (normalizedLease.leafId !== undefined && !isTerminalLeafId(normalizedLease.leafId)) {

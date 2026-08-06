@@ -128,6 +128,7 @@ export async function launchAgentBackgroundSession(
   let ptyId = '',
     runtimeTerminalHandle: string | null = null
   let returnedLaunchConfig: typeof startupPlan.launchConfig | undefined
+  let spawnRetirementToken: string | undefined
   let tab: ReturnType<typeof store.createTab> | null = null
   let exitHandled = false,
     eagerPtyBuffer: EagerPtyHandle | null = null
@@ -219,6 +220,7 @@ export async function launchAgentBackgroundSession(
         }
       })
       ptyId = result.id
+      spawnRetirementToken = result.spawnRetirementToken
       returnedLaunchConfig = result.launchConfig
     }
     const adopted = await adoptAgentBackgroundSessionTab({
@@ -231,6 +233,7 @@ export async function launchAgentBackgroundSession(
       launchRegistration,
       runtimeTarget,
       runtimeTerminalHandle,
+      spawnRetirementToken,
       onRetire: () => {
         exitHandled = true
         sshStartupDelivery.clear()
@@ -238,6 +241,7 @@ export async function launchAgentBackgroundSession(
       },
       ...(title ? { title } : {})
     })
+    spawnRetirementToken = undefined
     if (!adopted) {
       return null
     }
@@ -310,9 +314,7 @@ export async function launchAgentBackgroundSession(
       runBestEffortAgentBackgroundCleanups(() => store.clearTabPtyId(createdTab.id, ptyId))
     }
     runBestEffortAgentBackgroundCleanups(() => store.clearAgentLaunchConfig(paneKey))
-    if (ptyId) {
-      await retireProvider({ ptyId, runtimeTarget, runtimeTerminalHandle })
-    }
+    await retireProvider({ ptyId, runtimeTarget, runtimeTerminalHandle, spawnRetirementToken })
     if (createdTab) {
       // Cleanup closes must not enter the reopen stack.
       runBestEffortAgentBackgroundCleanups(() =>

@@ -3621,6 +3621,22 @@ export type PersistedMobileClientTabSelections = Record<
   Record<string, PersistedMobileClientTabSelection>
 >
 
+export type DeletedFolderWorkspaceSessionTombstone = {
+  connectionId: string | null
+  deletedAt: number
+  evidenceTruncated: boolean
+  hostIds: ExecutionHostId[]
+  tabConnectionIdsByHostId: Partial<Record<ExecutionHostId, Record<string, string | null>>>
+}
+
+export type DeletedFolderWorkspaceSessionTombstoneOverflowBucket = {
+  bucketStart: number
+  expiresAt: number
+  workspaceKeys: WorkspaceKey[]
+  tabOwnerKeys: string[]
+  connectionIds: string[]
+}
+
 // ─── Persistence shape ──────────────────────────────────────────────
 export type PersistedState = {
   schemaVersion: number
@@ -3629,6 +3645,10 @@ export type PersistedState = {
   projectHostSetups: ProjectHostSetup[]
   projectGroups: ProjectGroup[]
   folderWorkspaces: FolderWorkspace[]
+  deletedFolderWorkspaceSessionTombstones?: Partial<
+    Record<WorkspaceKey, DeletedFolderWorkspaceSessionTombstone>
+  >
+  deletedFolderWorkspaceSessionTombstoneOverflowBuckets?: DeletedFolderWorkspaceSessionTombstoneOverflowBucket[]
   /** Sparse-checkout presets keyed by repoId. */
   sparsePresetsByRepo: Record<string, SparsePreset[]>
   /** Per paired device last tab selection by worktree; keeps mobile navigation across host restarts. */

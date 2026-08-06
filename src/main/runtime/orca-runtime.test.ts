@@ -29999,9 +29999,234 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
-  it('reattaches hydrated SSH headless terminals with the persisted relay identity', async () => {
+  it('reattaches an inventory-restored serve terminal once before accepting input', async () => {
+    const ptyId = 'serve-restarted-git-pty'
+    const priorPtyId = 'serve-prior-git-pty'
+    const incarnationId = '91919191-9191-4919-8919-919191919191'
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({
+        activeTabId: 'prior-tab',
+        activeTabIdByWorktree: { [TEST_WORKTREE_ID]: 'prior-tab' },
+        tabsByWorktree: {
+          [TEST_WORKTREE_ID]: [
+            {
+              id: 'host-tab',
+              ptyId,
+              worktreeId: TEST_WORKTREE_ID,
+              title: 'Restored Git Terminal',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            },
+            {
+              id: 'prior-tab',
+              ptyId: priorPtyId,
+              worktreeId: TEST_WORKTREE_ID,
+              title: 'Prior Git Terminal',
+              customTitle: null,
+              color: null,
+              sortOrder: 1,
+              createdAt: 1
+            }
+          ]
+        },
+        terminalLayoutsByTabId: {
+          'host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: ptyId }),
+          'prior-tab': makeHeadlessTerminalLayout({ [HEADLESS_SECOND_LEAF_ID]: priorPtyId })
+        },
+        terminalPtyIncarnationsByPaneKey: {
+          [makePaneKey('host-tab', HEADLESS_LEAF_ID)]: incarnationId
+        }
+      })
+    )
+    let attached = false
+    let releaseAttach!: () => void
+    const attach = new Promise<void>((resolve) => {
+      releaseAttach = resolve
+    })
+    const spawn = vi.fn(async () => {
+      await attach
+      attached = true
+      return { id: ptyId, incarnationId }
+    })
+    const listProcesses = vi.fn(async () => [
+      {
+        id: ptyId,
+        cwd: TEST_WORKTREE_PATH,
+        title: 'Restored Git Terminal',
+        worktreeId: TEST_WORKTREE_ID,
+        terminalHandle: 'term_restarted_git',
+        incarnationId
+      }
+    ])
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.setPtyController({
+      spawn,
+      write: () => attached,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses
+    })
+
+    const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+    const listedTab = listed.tabs.find(
+      (candidate) => candidate.type === 'terminal' && candidate.parentTabId === 'host-tab'
+    )
+    expect(listedTab).toMatchObject({ status: 'ready', terminal: 'term_restarted_git' })
+    await expect(
+      runtime.sendTerminal(listedTab?.type === 'terminal' ? listedTab.terminal! : 'missing', {
+        text: 'before attach'
+      })
+    ).rejects.toThrow('terminal_not_writable')
+
+    const pendingGet = vi.spyOn(runtime['pendingMobileTerminalMaterializations'], 'get')
+    const navigationActivation = runtime.activateMobileSessionTab(
+      `id:${TEST_WORKTREE_ID}`,
+      'host-tab',
+      undefined,
+      { navigation: 'caller' }
+    )
+    await vi.waitFor(() => expect(spawn).toHaveBeenCalledOnce())
+    const hostActivation = runtime.activateMobileSessionTab(
+      `id:${TEST_WORKTREE_ID}`,
+      'host-tab',
+      undefined,
+      { navigation: 'host' }
+    )
+    await vi.waitFor(() => expect(pendingGet).toHaveBeenCalledTimes(2))
+    releaseAttach()
+    const activated = await Promise.all([navigationActivation, hostActivation])
+    const activatedTab = activated[0].tabs.find(
+      (candidate) => candidate.type === 'terminal' && candidate.parentTabId === 'host-tab'
+    )
+    expect(activated[1].activeTabId).toBe(`host-tab::${HEADLESS_LEAF_ID}`)
+    await expect(
+      runtime.sendTerminal(activatedTab?.type === 'terminal' ? activatedTab.terminal! : 'missing', {
+        text: 'after attach'
+      })
+    ).resolves.toMatchObject({ accepted: true, bytesWritten: 12 })
+    expect(spawn).toHaveBeenCalledOnce()
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: ptyId,
+        tabId: 'host-tab',
+        leafId: HEADLESS_LEAF_ID,
+        worktreeId: TEST_WORKTREE_ID
+      })
+    )
+    expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).activeTabId).toBe(
+      `host-tab::${HEADLESS_LEAF_ID}`
+    )
+  })
+
+  // Why: terminal.send carries no activation ordering, so a client holding a
+  // handle can type while the reattach is still in flight. The send must wait
+  // for that reattach rather than land on the unattached session and vanish.
+  it('holds a concurrent send until the in-flight reattach lands', async () => {
+    const ptyId = 'serve-concurrent-send-pty'
+    const incarnationId = '93939393-9393-4939-8939-939393939393'
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal({
+        tabsByWorktree: {
+          [TEST_WORKTREE_ID]: [
+            {
+              id: 'host-tab',
+              ptyId,
+              worktreeId: TEST_WORKTREE_ID,
+              title: 'Restored Git Terminal',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        terminalLayoutsByTabId: {
+          'host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: ptyId })
+        },
+        terminalPtyIncarnationsByPaneKey: {
+          [makePaneKey('host-tab', HEADLESS_LEAF_ID)]: incarnationId
+        }
+      })
+    )
+    let attached = false
+    let releaseAttach!: () => void
+    const attach = new Promise<void>((resolve) => {
+      releaseAttach = resolve
+    })
+    const spawn = vi.fn(async () => {
+      await attach
+      attached = true
+      return { id: ptyId, incarnationId }
+    })
+    const write = vi.fn(() => attached)
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.setPtyController({
+      spawn,
+      write,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [
+        {
+          id: ptyId,
+          cwd: TEST_WORKTREE_PATH,
+          title: 'Restored Git Terminal',
+          worktreeId: TEST_WORKTREE_ID,
+          terminalHandle: 'term_concurrent_send',
+          incarnationId
+        }
+      ]
+    })
+
+    const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+    const listedTab = listed.tabs.find(
+      (candidate) => candidate.type === 'terminal' && candidate.parentTabId === 'host-tab'
+    )
+    const handle = listedTab?.type === 'terminal' ? listedTab.terminal! : 'missing'
+
+    const activation = runtime.activateMobileSessionTab(
+      `id:${TEST_WORKTREE_ID}`,
+      'host-tab',
+      undefined,
+      { navigation: 'caller' }
+    )
+    await vi.waitFor(() => expect(spawn).toHaveBeenCalledOnce())
+    // Why: issued mid-reattach with no activation await — the pre-barrier bug.
+    let settled: 'pending' | 'resolved' | 'rejected' = 'pending'
+    const send = runtime.sendTerminal(handle, { text: 'typed mid-reattach' }).then(
+      (result) => {
+        settled = 'resolved'
+        return result
+      },
+      (error) => {
+        settled = 'rejected'
+        throw error
+      }
+    )
+    // Why: drain every queued microtask/macrotask the send could resolve on.
+    // Without the barrier it runs to completion here and rejects on the
+    // unattached session; with it, the send is still parked on the reattach.
+    for (let tick = 0; tick < 20; tick += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+    expect(settled).toBe('pending')
+    expect(write).not.toHaveBeenCalled()
+
+    releaseAttach()
+    await expect(send).resolves.toMatchObject({ accepted: true })
+    await activation
+    expect(write).toHaveBeenCalled()
+    expect(spawn).toHaveBeenCalledOnce()
+  })
+
+  it('reattaches hydrated SSH headless terminals with the persisted relay identity', async () => {
+    const incarnationId = '92929292-9292-4929-8929-929292929292'
+    const priorPtyId = 'ssh:ssh-1@@prior-relay-pty'
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal({
+        activeTabId: 'prior-tab',
+        activeTabIdByWorktree: { [TEST_WORKTREE_ID]: 'prior-tab' },
         tabsByWorktree: {
           [TEST_WORKTREE_ID]: [
             {
@@ -30013,13 +30238,27 @@ describe('OrcaRuntimeService', () => {
               color: null,
               sortOrder: 0,
               createdAt: 1
+            },
+            {
+              id: 'prior-tab',
+              ptyId: priorPtyId,
+              worktreeId: TEST_WORKTREE_ID,
+              title: 'Prior Remote Terminal',
+              customTitle: null,
+              color: null,
+              sortOrder: 1,
+              createdAt: 1
             }
           ]
         },
         terminalLayoutsByTabId: {
           'host-tab': makeHeadlessTerminalLayout({
             [HEADLESS_LEAF_ID]: 'ssh:ssh-1@@relay-pty'
-          })
+          }),
+          'prior-tab': makeHeadlessTerminalLayout({ [HEADLESS_SECOND_LEAF_ID]: priorPtyId })
+        },
+        terminalPtyIncarnationsByPaneKey: {
+          [makePaneKey('host-tab', HEADLESS_LEAF_ID)]: incarnationId
         }
       }),
       'ssh:ssh-1'
@@ -30030,19 +30269,59 @@ describe('OrcaRuntimeService', () => {
       getRepos: () => [remoteRepo],
       getRepo: (id: string) => (id === TEST_REPO_ID ? remoteRepo : undefined)
     }
-    const spawn = vi.fn().mockResolvedValue({ id: 'ssh:ssh-1@@relay-pty', isReattach: true })
+    let releaseAttach!: () => void
+    const attachResult = new Promise<void>((resolve) => {
+      releaseAttach = resolve
+    })
+    const ptyAttach = vi.fn(async () => {
+      if (ptyAttach.mock.calls.length > 1) {
+        throw new Error('Unknown or stale SSH PTY source token')
+      }
+      await attachResult
+    })
+    const spawn = vi.fn(async () => {
+      await ptyAttach()
+      return { id: 'ssh:ssh-1@@relay-pty', isReattach: true }
+    })
+    const listProcesses = vi.fn(async () => [
+      {
+        id: 'ssh:ssh-1@@relay-pty',
+        cwd: TEST_WORKTREE_PATH,
+        title: 'Remote Terminal',
+        worktreeId: TEST_WORKTREE_ID,
+        terminalHandle: 'term_restarted_ssh',
+        incarnationId
+      }
+    ])
     const runtime = new OrcaRuntimeService(remoteStore as never)
     runtime.setPtyController({
       spawn,
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null,
-      listProcesses: async () => []
+      listProcesses
     })
-    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
 
-    await runtime.activateMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab')
+    const pendingGet = vi.spyOn(runtime['pendingMobileTerminalMaterializations'], 'get')
+    const navigationActivation = runtime.activateMobileSessionTab(
+      `id:${TEST_WORKTREE_ID}`,
+      'host-tab',
+      undefined,
+      { navigation: 'caller' }
+    )
+    await vi.waitFor(() => expect(ptyAttach).toHaveBeenCalledOnce())
+    const hostActivation = runtime.activateMobileSessionTab(
+      `id:${TEST_WORKTREE_ID}`,
+      'host-tab',
+      undefined,
+      { navigation: 'host' }
+    )
+    await vi.waitFor(() => expect(pendingGet).toHaveBeenCalledTimes(2))
+    releaseAttach()
+    await expect(Promise.all([navigationActivation, hostActivation])).resolves.toHaveLength(2)
 
+    expect(spawn).toHaveBeenCalledOnce()
+    expect(ptyAttach).toHaveBeenCalledOnce()
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
         connectionId: 'ssh-1',
@@ -30051,6 +30330,9 @@ describe('OrcaRuntimeService', () => {
         sessionId: 'ssh:ssh-1@@relay-pty',
         persistHostSessionBinding: true
       })
+    )
+    expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).activeTabId).toBe(
+      `host-tab::${HEADLESS_LEAF_ID}`
     )
   })
 
@@ -30084,9 +30366,14 @@ describe('OrcaRuntimeService', () => {
       getRepos: () => [remoteRepo],
       getRepo: (id: string) => (id === TEST_REPO_ID ? remoteRepo : undefined)
     }
+    let releaseFirstAttach!: () => void
+    const firstAttach = new Promise<void>((resolve) => {
+      releaseFirstAttach = resolve
+    })
     const spawn = vi
       .fn()
       .mockImplementationOnce(async () => {
+        await firstAttach
         const session = getSession()
         ;(runtimeStore.setWorkspaceSession as unknown as (next: WorkspaceSessionState) => void)({
           ...session,
@@ -30117,9 +30404,16 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
 
-    await expect(
+    const firstActivations = Promise.allSettled([
+      runtime.activateMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab'),
       runtime.activateMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab')
-    ).rejects.toThrow('SSH session expired')
+    ])
+    await vi.waitFor(() => expect(spawn).toHaveBeenCalledOnce())
+    releaseFirstAttach()
+    await expect(firstActivations).resolves.toEqual([
+      expect.objectContaining({ status: 'rejected', reason: expect.any(Error) }),
+      expect.objectContaining({ status: 'rejected', reason: expect.any(Error) })
+    ])
     await runtime.activateMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab')
 
     expect(spawn).toHaveBeenNthCalledWith(

@@ -42,6 +42,8 @@ describe('createIpcPtyTransport', () => {
         pty: {
           ...originalWindow?.api?.pty,
           spawn: vi.fn().mockResolvedValue({ id: 'pty-1' }),
+          adoptSpawnReservation: vi.fn(() => true),
+          releaseSpawnReservation: vi.fn(() => true),
           write: vi.fn(),
           writeAccepted: vi.fn().mockResolvedValue(true),
           onWriteUnavailable: vi.fn((callback: (payload: { id: string }) => void) => {
@@ -394,7 +396,11 @@ describe('createIpcPtyTransport', () => {
     const onPtySpawn = vi.fn()
     const onDataCallback = vi.fn()
     const onExitCallback = vi.fn()
-    spawn.mockResolvedValueOnce({ id: 'pty-fresh-fallback', sessionExpired: true })
+    spawn.mockResolvedValueOnce({
+      id: 'pty-fresh-fallback',
+      sessionExpired: true,
+      spawnDisposition: 'created'
+    })
     const transport = createIpcPtyTransport({ onPtySpawn })
 
     const result = await transport.connect({
@@ -406,7 +412,11 @@ describe('createIpcPtyTransport', () => {
     onData?.({ id: 'pty-fresh-fallback', data: 'orphaned output' })
     onExit?.({ id: 'pty-fresh-fallback', code: 0 })
 
-    expect(result).toEqual({ id: 'pty-fresh-fallback', sessionExpired: true })
+    expect(result).toEqual({
+      id: 'pty-fresh-fallback',
+      sessionExpired: true,
+      spawnDisposition: 'created'
+    })
     expect(kill).toHaveBeenCalledExactlyOnceWith('pty-fresh-fallback')
     expect(onPtySpawn).not.toHaveBeenCalled()
     expect(onDataCallback).not.toHaveBeenCalled()
@@ -424,7 +434,11 @@ describe('createIpcPtyTransport', () => {
     const onExitCallback = vi.fn()
     const onErrorCallback = vi.fn()
     const retirementError = new Error('provider shutdown refused')
-    spawn.mockResolvedValueOnce({ id: 'pty-fresh-fallback', sessionExpired: true })
+    spawn.mockResolvedValueOnce({
+      id: 'pty-fresh-fallback',
+      sessionExpired: true,
+      spawnDisposition: 'created'
+    })
     kill.mockRejectedValueOnce(retirementError)
     const transport = createIpcPtyTransport({ onPtySpawn })
 
@@ -1833,9 +1847,15 @@ describe('createIpcPtyTransport', () => {
   it('does not kill a pre-existing session when a reattach resolves after destroy', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawnControls: {
-      resolve: ((value: { id: string; isReattach: true }) => void) | null
+      resolve:
+        | ((value: { id: string; isReattach: true; spawnDisposition: 'reattached' }) => void)
+        | null
     } = { resolve: null }
-    const spawnPromise = new Promise<{ id: string; isReattach: true }>((resolve) => {
+    const spawnPromise = new Promise<{
+      id: string
+      isReattach: true
+      spawnDisposition: 'reattached'
+    }>((resolve) => {
       spawnControls.resolve = resolve
     })
     const spawnMock = vi.fn().mockReturnValue(spawnPromise)
@@ -1870,18 +1890,127 @@ describe('createIpcPtyTransport', () => {
     if (!spawnControls.resolve) {
       throw new Error('Expected spawn resolver to be captured')
     }
-    spawnControls.resolve({ id: 'pty-preexisting', isReattach: true })
+    spawnControls.resolve({
+      id: 'pty-preexisting',
+      isReattach: true,
+      spawnDisposition: 'reattached'
+    })
     await connectPromise
 
     expect(killMock).not.toHaveBeenCalledWith('pty-preexisting')
   })
 
+  it('does not kill a shared fresh spawn when an awaited connect resolves after destroy', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    let resolveSpawn!: (value: { id: string; spawnDisposition: 'awaited' }) => void
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    const kill = window.api.pty.kill as unknown as ReturnType<typeof vi.fn>
+    spawn.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveSpawn = resolve
+      })
+    )
+    const transport = createIpcPtyTransport({})
+    const connect = transport.connect({ url: '', callbacks: {} })
+
+    transport.destroy?.()
+    resolveSpawn({ id: 'pty-shared-fresh', spawnDisposition: 'awaited' })
+    await connect
+
+    expect(kill).not.toHaveBeenCalledWith('pty-shared-fresh')
+  })
+
+  it('adopts a shared fresh spawn before publishing a live transport', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    const adopt = window.api.pty.adoptSpawnReservation as unknown as ReturnType<typeof vi.fn>
+    spawn.mockResolvedValueOnce({
+      id: 'pty-shared-adopted',
+      spawnDisposition: 'awaited',
+      spawnRetirementToken: 'waiter-adoption'
+    })
+    const transport = createIpcPtyTransport({})
+
+    await transport.connect({ url: '', callbacks: {} })
+
+    expect(adopt).toHaveBeenCalledExactlyOnceWith('pty-shared-adopted', 'waiter-adoption')
+    expect(transport.getPtyId()).toBe('pty-shared-adopted')
+  })
+
+  it('releases a destroyed creator without killing a spawn reserved by a live waiter', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    let resolveSpawn!: (value: {
+      id: string
+      spawnDisposition: 'created'
+      spawnRetirementToken: string
+    }) => void
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    const release = window.api.pty.releaseSpawnReservation as unknown as ReturnType<typeof vi.fn>
+    const kill = window.api.pty.kill as unknown as ReturnType<typeof vi.fn>
+    release.mockReturnValueOnce(false)
+    spawn.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveSpawn = resolve
+      })
+    )
+    const transport = createIpcPtyTransport({})
+    const connect = transport.connect({ url: '', callbacks: {} })
+
+    transport.destroy?.()
+    resolveSpawn({
+      id: 'pty-live-waiter',
+      spawnDisposition: 'created',
+      spawnRetirementToken: 'creator-token'
+    })
+    await connect
+
+    expect(release).toHaveBeenCalledExactlyOnceWith('pty-live-waiter', 'creator-token')
+    expect(kill).not.toHaveBeenCalledWith('pty-live-waiter')
+  })
+
+  it('kills a shared spawn when the destroyed waiter releases the final reservation', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    let resolveSpawn!: (value: {
+      id: string
+      spawnDisposition: 'awaited'
+      spawnRetirementToken: string
+    }) => void
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    const release = window.api.pty.releaseSpawnReservation as unknown as ReturnType<typeof vi.fn>
+    const kill = window.api.pty.kill as unknown as ReturnType<typeof vi.fn>
+    release.mockReturnValueOnce(true)
+    spawn.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveSpawn = resolve
+      })
+    )
+    const transport = createIpcPtyTransport({})
+    const connect = transport.connect({ url: '', callbacks: {} })
+
+    transport.destroy?.()
+    resolveSpawn({
+      id: 'pty-all-retired',
+      spawnDisposition: 'awaited',
+      spawnRetirementToken: 'waiter-token'
+    })
+    await connect
+
+    expect(release).toHaveBeenCalledExactlyOnceWith('pty-all-retired', 'waiter-token')
+    expect(kill).toHaveBeenCalledExactlyOnceWith('pty-all-retired')
+  })
+
   it('kills a fresh session fallback that resolves after the transport was destroyed', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawnControls: {
-      resolve: ((value: { id: string; sessionExpired: true }) => void) | null
+      resolve:
+        | ((value: { id: string; sessionExpired: true; spawnDisposition: 'created' }) => void)
+        | null
     } = { resolve: null }
-    const spawnPromise = new Promise<{ id: string; sessionExpired: true }>((resolve) => {
+    const spawnPromise = new Promise<{
+      id: string
+      sessionExpired: true
+      spawnDisposition: 'created'
+    }>((resolve) => {
       spawnControls.resolve = resolve
     })
     const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
@@ -1898,7 +2027,11 @@ describe('createIpcPtyTransport', () => {
     if (!spawnControls.resolve) {
       throw new Error('Expected spawn resolver to be captured')
     }
-    spawnControls.resolve({ id: 'pty-fresh-fallback', sessionExpired: true })
+    spawnControls.resolve({
+      id: 'pty-fresh-fallback',
+      sessionExpired: true,
+      spawnDisposition: 'created'
+    })
     await connectPromise
 
     expect(kill).toHaveBeenCalledExactlyOnceWith('pty-fresh-fallback')

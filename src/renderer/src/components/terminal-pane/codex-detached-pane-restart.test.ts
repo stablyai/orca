@@ -79,7 +79,7 @@ describe('codex detached pane restart executor', () => {
         pty: {
           ...originalWindow?.api?.pty,
           getSize: vi.fn().mockResolvedValue({ cols: 120, rows: 30 }),
-          spawn: vi.fn().mockResolvedValue({ id: NEW_PTY }),
+          spawn: vi.fn().mockResolvedValue({ id: NEW_PTY, spawnDisposition: 'created' }),
           kill: vi.fn().mockResolvedValue(undefined)
         }
       }
@@ -312,7 +312,7 @@ describe('codex detached pane restart executor', () => {
 
   it('reaps a detached spawn and requeues when a pane mounts during the spawn', async () => {
     seedQueuedRestart()
-    const pendingSpawn = deferred<{ id: string }>()
+    const pendingSpawn = deferred<{ id: string; spawnDisposition: 'created' }>()
     const pendingKill = deferred<void>()
     vi.mocked(window.api.pty.spawn).mockReturnValue(pendingSpawn.promise)
     vi.mocked(window.api.pty.kill).mockReturnValue(pendingKill.promise)
@@ -327,7 +327,7 @@ describe('codex detached pane restart executor', () => {
       getPtyIdForPane: () => OLD_PTY
     })
     try {
-      pendingSpawn.resolve({ id: NEW_PTY })
+      pendingSpawn.resolve({ id: NEW_PTY, spawnDisposition: 'created' })
       await vi.waitFor(() => expect(window.api.pty.kill).toHaveBeenCalledExactlyOnceWith(NEW_PTY))
 
       expect(useAppStore.getState().ptyIdsByTabId['tab-1']).toEqual([OLD_PTY])
@@ -341,7 +341,7 @@ describe('codex detached pane restart executor', () => {
 
   it('rejects a detached spawn after the tab generation and leaf owner change', async () => {
     seedQueuedRestart()
-    const pendingSpawn = deferred<{ id: string }>()
+    const pendingSpawn = deferred<{ id: string; spawnDisposition: 'created' }>()
     const pendingKill = deferred<void>()
     vi.mocked(window.api.pty.spawn).mockReturnValue(pendingSpawn.promise)
     vi.mocked(window.api.pty.kill).mockReturnValue(pendingKill.promise)
@@ -364,7 +364,7 @@ describe('codex detached pane restart executor', () => {
       codexRestartNoticeByPtyId: { 'wt1@@successor': notice! }
     })
 
-    pendingSpawn.resolve({ id: NEW_PTY })
+    pendingSpawn.resolve({ id: NEW_PTY, spawnDisposition: 'created' })
     await vi.waitFor(() => expect(window.api.pty.kill).toHaveBeenCalledExactlyOnceWith(NEW_PTY))
 
     const after = useAppStore.getState()

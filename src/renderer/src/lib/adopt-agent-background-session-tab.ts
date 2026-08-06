@@ -63,6 +63,7 @@ export async function adoptAgentBackgroundSessionTab(args: {
   launchRegistration: NonNullable<RegisterArgs[2]>
   runtimeTarget: RuntimeClientTarget
   runtimeTerminalHandle: string | null
+  spawnRetirementToken?: string
   onRetire: () => void
   title?: string
 }): Promise<{
@@ -78,6 +79,7 @@ export async function adoptAgentBackgroundSessionTab(args: {
       ptyId,
       runtimeTarget: args.runtimeTarget,
       runtimeTerminalHandle: args.runtimeTerminalHandle,
+      spawnRetirementToken: args.spawnRetirementToken,
       onRetire: args.onRetire
     })
   ) {
@@ -90,7 +92,8 @@ export async function adoptAgentBackgroundSessionTab(args: {
     await retireProvider({
       ptyId,
       runtimeTarget: args.runtimeTarget,
-      runtimeTerminalHandle: args.runtimeTerminalHandle
+      runtimeTerminalHandle: args.runtimeTerminalHandle,
+      spawnRetirementToken: args.spawnRetirementToken
     })
     return null
   }
@@ -109,5 +112,8 @@ export async function adoptAgentBackgroundSessionTab(args: {
     args.runtimeTarget.kind,
     args.title
   )
+  if (args.spawnRetirementToken) {
+    window.api.pty.adoptSpawnReservation(ptyId, args.spawnRetirementToken)
+  }
   return { tab, paneKey, terminalOwnership }
 }

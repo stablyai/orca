@@ -8,6 +8,7 @@ import type {
   HostedReviewInfo,
   HostedReviewProvider
 } from '../shared/hosted-review'
+import type { PtySpawnDisposition } from '../shared/pty-spawn-disposition'
 import type { NativeFileDropPayload } from '../shared/native-file-drop'
 import type { BrowserFindSource } from '../shared/browser-find-source'
 import type {
@@ -1548,6 +1549,8 @@ export type PreloadApi = {
       telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
     }) => Promise<{
       id: string
+      spawnDisposition: PtySpawnDisposition
+      spawnRetirementToken?: string
       launchAgent?: TuiAgent
       launchConfig?: SleepingAgentLaunchConfig
       snapshot?: string
@@ -1561,6 +1564,8 @@ export type PreloadApi = {
       startupCwdFallback?: { kind: 'worktree'; cwd: string }
       agentResumeUnavailable?: true
     }>
+    adoptSpawnReservation: (id: string, token: string) => boolean
+    releaseSpawnReservation: (id: string, token: string) => boolean
     write: (id: string, data: string) => void
     writeAccepted: (id: string, data: string) => Promise<boolean>
     onWriteUnavailable?: (callback: (payload: { id: string }) => void) => () => void

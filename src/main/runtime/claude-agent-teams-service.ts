@@ -84,6 +84,15 @@ export class ClaudeAgentTeamsService {
     }
   }
 
+  removeTeamForLaunchEnv(env: Readonly<Record<string, string>>): void {
+    const teamId = env.ORCA_AGENT_TEAMS_TEAM_ID
+    const token = env.ORCA_AGENT_TEAMS_TOKEN
+    const team = teamId ? this.teams.get(teamId) : undefined
+    if (team && team.token === token) {
+      this.teams.delete(teamId)
+    }
+  }
+
   getActiveTeamCount(): number {
     return this.teams.size
   }

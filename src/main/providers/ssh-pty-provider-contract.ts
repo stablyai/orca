@@ -1,4 +1,5 @@
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import type { RemoteHostPlatform } from '../ssh/ssh-remote-platform'
 
 export type RemoteCliBridgeEnv = {
   binDir: string
@@ -7,6 +8,7 @@ export type RemoteCliBridgeEnv = {
   sockPath: string
   credentialFile?: string
   pathDelimiter?: ':' | ';'
+  hostPlatform?: RemoteHostPlatform
 }
 
 export type SshPtyDataCallback = (payload: {

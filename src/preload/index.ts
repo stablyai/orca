@@ -29,6 +29,7 @@ import type { MobileRelayStatus } from '../shared/mobile-relay-status'
 import type { MobilePairingConnectionMode } from '../shared/mobile-pairing-connection-mode'
 import type { RuntimePairingReach } from '../shared/runtime-pairing-reach'
 import type { MobileRelayMintFailure } from '../shared/mobile-relay-mint-failure'
+import type { PtySpawnDisposition } from '../shared/pty-spawn-disposition'
 import type { VerifyAndAddRuntimeEnvironmentResult } from '../shared/remote-pairing-verification'
 import type {
   SshMutationExpectation,
@@ -952,6 +953,8 @@ const api = {
       telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
     }): Promise<{
       id: string
+      spawnDisposition: PtySpawnDisposition
+      spawnRetirementToken?: string
       launchConfig?: SleepingAgentLaunchConfig
       snapshot?: string
       snapshotCols?: number
@@ -964,6 +967,12 @@ const api = {
       startupCwdFallback?: { kind: 'worktree'; cwd: string }
       agentResumeUnavailable?: true
     }> => ipcRenderer.invoke('pty:spawn', opts),
+
+    adoptSpawnReservation: (id: string, token: string): boolean =>
+      ipcRenderer.sendSync('pty:adoptSpawnReservationSync', { id, token }),
+
+    releaseSpawnReservation: (id: string, token: string): boolean =>
+      ipcRenderer.sendSync('pty:releaseSpawnReservationSync', { id, token }),
 
     write: (id: string, data: string): void => {
       ipcRenderer.send('pty:write', { id, data })

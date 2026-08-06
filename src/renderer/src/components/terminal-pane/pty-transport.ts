@@ -816,8 +816,16 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         const resultLaunchAgent = isTuiAgent(spawnResult.launchAgent)
           ? spawnResult.launchAgent
           : undefined
+        const spawnDisposition =
+          spawnResult.spawnDisposition ?? (spawnResult.isReattach ? 'reattached' : 'created')
         const retireFreshSpawn = async (): Promise<void> => {
-          if (!spawnResult.isReattach && !spawnResult.coldRestore) {
+          const shouldKill = spawnResult.spawnRetirementToken
+            ? window.api.pty.releaseSpawnReservation(
+                spawnResult.id,
+                spawnResult.spawnRetirementToken
+              )
+            : spawnDisposition === 'created'
+          if (shouldKill && !spawnResult.coldRestore) {
             await window.api.pty.kill(spawnResult.id)
           }
         }
@@ -834,6 +842,10 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           return spawnResult
         }
 
+        if (spawnResult.spawnRetirementToken) {
+          window.api.pty.adoptSpawnReservation(spawnResult.id, spawnResult.spawnRetirementToken)
+        }
+
         if (spawnResult.isReattach && !admittedSessionId) {
           storedCallbacks.onReattachDetermined?.()
         }
@@ -841,7 +853,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         connected = true
 
         // Why: skip onPtySpawn for reattach/coldRestore — it would reset lastActivityAt and destroy the recency sort order.
-        if (!spawnResult.isReattach && !spawnResult.coldRestore) {
+        if (spawnDisposition === 'created' && !spawnResult.coldRestore) {
           onPtySpawn?.(spawnResult.id)
         }
 
@@ -860,6 +872,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         if (spawnResult.isReattach || spawnResult.coldRestore || spawnResult.sessionExpired) {
           return {
             id: spawnResult.id,
+            ...(spawnResult.spawnDisposition ? { spawnDisposition } : {}),
             // Why: recovery needs to distinguish an attach that ignored startup intent from a fresh spawn that ran it.
             ...(spawnResult.isReattach ? { isReattach: true } : {}),
             ...(resultLaunchAgent ? { launchAgent: resultLaunchAgent } : {}),
@@ -885,6 +898,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         ) {
           return {
             id: spawnResult.id,
+            ...(spawnResult.spawnDisposition ? { spawnDisposition } : {}),
             ...(resultLaunchAgent ? { launchAgent: resultLaunchAgent } : {}),
             ...(spawnResult.launchConfig ? { launchConfig: spawnResult.launchConfig } : {}),
             ...(spawnResult.startupCwdFallback

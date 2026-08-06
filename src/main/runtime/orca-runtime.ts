@@ -246,6 +246,8 @@ import {
   navigationTargetsHost,
   type RuntimeNavigationTarget
 } from '../../shared/runtime-navigation'
+import { mobileTerminalMaterializationKey } from './mobile-terminal-materialization-key'
+import { terminalSpawnReservationFreshness } from '../../shared/terminal-spawn-reservation-freshness'
 import {
   isAutomaticTabActivation,
   type TabActivationIntent
@@ -381,7 +383,7 @@ import {
   parseLegacyNumericPaneKey,
   parsePaneKey
 } from '../../shared/stable-pane-id'
-import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
+import { parseAppSshPtyId, toAppSshPtyId } from '../../shared/ssh-pty-id'
 import { isValidHostTerminalTabId, isValidTerminalTabId } from '../../shared/terminal-tab-id'
 import { isWslHookRelayConnectionId } from '../../shared/wsl-hook-relay-contract'
 import {
@@ -390,6 +392,7 @@ import {
   type TerminalQuickCommandMutation
 } from '../../shared/terminal-quick-commands'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import type { PtySpawnDisposition } from '../../shared/pty-spawn-disposition'
 import {
   buildAgentDraftLaunchPlan,
   buildAgentResumeStartupPlan,
@@ -857,6 +860,7 @@ import {
 import {
   DEFAULT_REPO_BADGE_COLOR,
   FLOATING_TERMINAL_WORKTREE_ID,
+  getDefaultWorkspaceSession,
   getDefaultVoiceSettings
 } from '../../shared/constants'
 import { listRepoWorktrees } from '../repo-worktrees'
@@ -1318,6 +1322,8 @@ type TerminalCreateOptions = {
   agentSessionClaim?: AgentSessionExecutionClaim
   agentSessionCreateOperationId?: string
   signal?: AbortSignal
+  acceptWorkspaceInventory?: () => boolean
+  spawnReservationFreshness?: string
   // Why: idempotent create operations must retain their fence after the PTY
   // exists, even if later runtime publication fails.
   onPtySpawnCommitted?: () => void
@@ -1619,6 +1625,8 @@ type RuntimePtyController = {
     }
     agentSessionCreateOperationId?: string
     signal?: AbortSignal
+    acceptWorkspaceInventory?: () => boolean
+    spawnReservationFreshness?: string
     onPtySpawnCommitted?: () => void
     adoptedStablePane?: {
       result: PtySpawnResult
@@ -1634,10 +1642,15 @@ type RuntimePtyController = {
   }): Promise<{
     id: string
     incarnationId?: PtyIncarnationId
-    wslDistro?: string
+    wslDistro?: string | null
+    isReattach?: boolean
+    spawnDisposition?: PtySpawnDisposition
+    spawnRetirementToken?: string
     stablePaneOwner?: { handle: string; tabId: string; leafId: string }
     agentSessionEnsure?: AgentSessionClaimedSpawnResult
   }>
+  adoptSpawnReservation?(ptyId: string, token: string): boolean
+  releaseSpawnReservation?(ptyId: string, token: string): boolean
   write(ptyId: string, data: string): boolean
   /** Attach-only adoption of a live local daemon session so its output streams
    *  to main without a renderer pane; never creates, resizes, or focuses.
@@ -2715,6 +2728,87 @@ type NativeChatLaunchDraftResolutionTombstone = RuntimeNativeChatLaunchDraftReso
   worktreeId: string
 }
 
+type KnownWorkspaceSessionWorktrees = {
+  worktreeIds: Set<string>
+  sessionByWorktreeId: Map<string, WorkspaceSessionState>
+  sessionByHostId: Map<ExecutionHostId, WorkspaceSessionState>
+  hostIdsByWorktreeId: Map<string, Set<ExecutionHostId>>
+  ambiguousHostWorktreeIds: Set<string>
+}
+
+function getWorkspaceSessionOwnerInventory(session: WorkspaceSessionState | null | undefined): {
+  ownerKeys: Set<string>
+  ambiguousIdentityKeys: Set<string>
+} {
+  const ownerKeyedRecords = [
+    session?.tabsByWorktree,
+    session?.openFilesByWorktree,
+    session?.activeFileIdByWorktree,
+    session?.browserTabsByWorktree,
+    session?.activeBrowserTabIdByWorktree,
+    session?.activeTabTypeByWorktree,
+    session?.activeTabIdByWorktree,
+    session?.unifiedTabs,
+    session?.tabGroups,
+    session?.tabGroupLayouts,
+    session?.activeGroupIdByWorktree,
+    session?.lastVisitedAtByWorktreeId,
+    session?.defaultTerminalTabsAppliedByWorktreeId
+  ]
+  const ownerKeys = new Set<string>(
+    [
+      session?.activeWorkspaceKey,
+      session?.activeWorktreeId,
+      ...(session?.activeWorktreeIdsOnShutdown ?? []),
+      ...Object.values(session?.browserPagesByWorkspace ?? {}).flatMap((pages) =>
+        pages.map((page) => page.worktreeId)
+      ),
+      ...Object.values(session?.terminalSurfaceTombstonesByPaneKey ?? {}).map(
+        (tombstone) => tombstone.worktreeId
+      ),
+      ...Object.values(session?.sleepingAgentSessionsByPaneKey ?? {}).map(
+        (sleepingAgent) => sleepingAgent.worktreeId
+      )
+    ].filter((owner): owner is string => typeof owner === 'string')
+  )
+  const ambiguousIdentityKeys = new Set<string>()
+  for (const record of ownerKeyedRecords) {
+    const ownerKeyByIdentity = new Map<string, string>()
+    for (const ownerKey of Object.keys(record ?? {})) {
+      ownerKeys.add(ownerKey)
+      const identityKey = runtimeWorktreeIdentityKey(ownerKey)
+      const existingOwnerKey = ownerKeyByIdentity.get(identityKey)
+      if (existingOwnerKey && existingOwnerKey !== ownerKey) {
+        ambiguousIdentityKeys.add(identityKey)
+      } else {
+        ownerKeyByIdentity.set(identityKey, ownerKey)
+      }
+    }
+  }
+  return { ownerKeys, ambiguousIdentityKeys }
+}
+
+function getWorkspaceSessionOwnerKeys(
+  session: WorkspaceSessionState | null | undefined
+): Set<string> {
+  return getWorkspaceSessionOwnerInventory(session).ownerKeys
+}
+
+function normalizeWorkspaceSessionOwnerKey(ownerKey: string): string {
+  const scope = parseWorkspaceKey(ownerKey)
+  return scope?.type === 'worktree' ? scope.worktreeId : ownerKey
+}
+
+function resolveWorkspaceSessionRecordOwnerKey(
+  record: Readonly<Record<string, unknown>> | null | undefined,
+  targetWorktreeId: string
+): string | null {
+  const matches = Object.keys(record ?? {}).filter((ownerKey) =>
+    runtimeWorktreeIdsEqual(ownerKey, targetWorktreeId)
+  )
+  return matches.length > 1 ? null : (matches[0] ?? targetWorktreeId)
+}
+
 const MAX_NATIVE_CHAT_LAUNCH_DRAFT_RESOLUTION_TOMBSTONES = 200
 
 async function hasLocalWorktreeBaseRef(
@@ -2761,6 +2855,12 @@ export class OrcaRuntimeService {
   private readonly rendererPublicationThrottle = new RendererPublicationThrottle()
   private tabs = new Map<string, RuntimeSyncedTab>()
   private mobileSessionTabsByWorktree = new Map<string, RuntimeMobileSessionTabsSnapshot>()
+  private removedMobileSessionTabsByWorktree = new Map<
+    string,
+    RuntimeMobileSessionTabsRemovedResult
+  >()
+  private knownFolderWorkspaceIdsForMobileSessionTabs: Set<string> | null = null
+  private recoveredPersistedFolderMobileSessionTabs = new Set<string>()
   // Why: renderer publication ordering must be judged against the renderer's
   // own last-accepted (epoch, version) — never against the stored snapshot's
   // version, which main-local touches bump independently and can push
@@ -2840,13 +2940,25 @@ export class OrcaRuntimeService {
     createMobileSessionTabsNotifyCoalescer((worktreeId) =>
       this.notifyMobileSessionTabsChangedNow(worktreeId)
     )
+  private pendingMobileSessionPtyInventoryRefreshes = new Map<
+    string,
+    {
+      refresh: Promise<Set<string> | null>
+      fence: (() => boolean) | null
+    }
+  >()
+  private pendingMobileTerminalMaterializations = new Map<string, Promise<void>>()
+  // Why: PTY inventory proves the process survived, not that this runtime
+  // generation attached to it — an unattached session accepts writes into a
+  // void. Senders await the in-flight reattach here rather than relying on the
+  // caller having activated the tab first; terminal.send has no such ordering.
+  private pendingPtyReattachBySessionId = new Map<string, Promise<void>>()
   // Why: concurrent host terminal.focus storms (CLI switch fan-out / bulk open)
   // each await a full host reveal; only one terminal can be focused, so latest-wins
   // single-flight bounds host work. Does not replace cheaper activation or
   // reconnect-scan bounding for sequential soft freezes.
   private readonly terminalFocusNavigationCoalescer =
     new TerminalFocusNavigationCoalescer<RuntimeTerminalFocus>()
-  private pendingMobileSessionPtyInventoryRefresh: Promise<Set<string> | null> | null = null
   private leaves = new Map<string, RuntimeLeafRecord>()
   // Why: PTY output is a per-keystroke hot path. Looking up affected leaves by
   // ptyId keeps active TUI redraws independent of the total open terminal count.
@@ -3309,8 +3421,8 @@ export class OrcaRuntimeService {
     RestoredOrchestrationAuthorityReceipt
   >()
   private ptyControllerInventorySequence = 0
-  private ptyControllerAggregateInventoryGeneration = 0
-  private ptyControllerInventoryGenerationByProvider = new Map<string, number>()
+  private ptyControllerAcceptedAggregateInventoryGeneration = 0
+  private ptyControllerAcceptedInventoryGenerationByProvider = new Map<string, number>()
   private accountServices: RuntimeAccountServices | null = null
   private commitMessageAgentEnv: CommitMessageAgentEnvironmentResolvers | null = null
   private automationService: AutomationService | null = null
@@ -4729,11 +4841,51 @@ export class OrcaRuntimeService {
       if (!workspace) {
         return null
       }
-      const connectionId = this.resolveFolderWorkspaceConnectionId(workspace)
-      return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
+      return this.getWorkspaceSessionHostIdForFolderWorkspace(workspace)
     }
     const resolvedWorktreeId = scope?.type === 'worktree' ? scope.worktreeId : worktreeId
-    const repo = this.store?.getRepo?.(getRepoIdFromWorktreeId(resolvedWorktreeId))
+    const declaredHostId = parseExecutionHostId(
+      this.store?.getWorktreeMeta?.(resolvedWorktreeId)?.hostId
+    )?.id
+    if (declaredHostId) {
+      return declaredHostId
+    }
+    const parsed = splitWorktreeIdForFilesystem(resolvedWorktreeId)
+    const repos = parsed
+      ? (this.store?.getRepos?.() ?? []).filter((repo) => repo.id === parsed.repoId)
+      : []
+    if (repos.length > 1 && parsed) {
+      const persistedHostIds = (this.store?.getWorkspaceSessionHostIds?.() ?? []).filter(
+        (hostId) => {
+          const session = this.store?.getWorkspaceSession?.(hostId)
+          return [...getWorkspaceSessionOwnerKeys(session)].some((ownerKey) => {
+            const ownerScope = parseWorkspaceKey(ownerKey)
+            const ownerWorktreeId =
+              ownerScope?.type === 'worktree' ? ownerScope.worktreeId : ownerKey
+            return runtimeWorktreeIdsEqual(ownerWorktreeId, resolvedWorktreeId)
+          })
+        }
+      )
+      const uniquePersistedHostIds = [...new Set(persistedHostIds)]
+      if (uniquePersistedHostIds.length === 1) {
+        return uniquePersistedHostIds[0]!
+      }
+      if (uniquePersistedHostIds.length > 1) {
+        throw new Error('workspace_session_host_ambiguous')
+      }
+      const exactHostIds = [
+        ...new Set(
+          repos
+            .filter((repo) => areWorktreePathsEqual(repo.path, parsed.worktreePath))
+            .map((repo) => getRepoExecutionHostId(repo))
+        )
+      ]
+      if (exactHostIds.length === 1) {
+        return exactHostIds[0]!
+      }
+      throw new Error('workspace_session_host_ambiguous')
+    }
+    const repo = repos[0] ?? this.store?.getRepo?.(getRepoIdFromWorktreeId(resolvedWorktreeId))
     return repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID
   }
 
@@ -4757,70 +4909,321 @@ export class OrcaRuntimeService {
     )
   }
 
-  private getKnownWorkspaceSessionWorktreeIds(): Set<string> {
+  private getWorkspaceSessionHostIdForFolderWorkspace(
+    workspace: FolderWorkspace,
+    inventory?: {
+      repos: readonly Repo[]
+      projectGroups: readonly ProjectGroup[]
+    }
+  ): ExecutionHostId {
+    const projectGroups = inventory?.projectGroups ?? this.store?.getProjectGroups?.() ?? []
+    const projectGroup = projectGroups.find((group) => group.id === workspace.projectGroupId)
+    const declaredHostId = parseExecutionHostId(
+      workspace.executionHostId ?? projectGroup?.executionHostId
+    )?.id
+    if (declaredHostId) {
+      return declaredHostId
+    }
+    const connectionId = this.resolveFolderWorkspaceConnectionId(workspace, inventory)
+    return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
+  }
+
+  private getKnownWorkspaceSessionWorktrees(
+    folderWorkspaces: readonly FolderWorkspace[] = this.store?.getFolderWorkspaces?.() ?? []
+  ): KnownWorkspaceSessionWorktrees {
     const repos = this.store?.getRepos?.() ?? []
     const repoIds = new Set(repos.map((repo) => repo.id))
-    const hostIds = new Set<ExecutionHostId>(['local'])
+    const folderWorkspaceIds = new Set(folderWorkspaces.map((workspace) => workspace.id))
+    const folderWorkspaceById = new Map(
+      folderWorkspaces.map((workspace) => [workspace.id, workspace] as const)
+    )
+    const repoHostIdsByRepoId = new Map<string, Set<ExecutionHostId>>()
     for (const repo of repos) {
+      const hostIds = repoHostIdsByRepoId.get(repo.id) ?? new Set<ExecutionHostId>()
       hostIds.add(getRepoExecutionHostId(repo))
+      repoHostIdsByRepoId.set(repo.id, hostIds)
     }
-    const worktreeIds = new Set<string>()
-    for (const hostId of hostIds) {
-      const session = this.store?.getWorkspaceSession?.(hostId)
-      for (const worktreeId of Object.keys(session?.tabsByWorktree ?? {})) {
-        if (repoIds.has(getRepoIdFromWorktreeId(worktreeId))) {
-          worktreeIds.add(worktreeId)
+    let projectGroups: readonly ProjectGroup[] | null = null
+    const hostIds = new Set<ExecutionHostId>([LOCAL_EXECUTION_HOST_ID])
+    const persistedHostIds = this.store?.getWorkspaceSessionHostIds?.()
+    if (persistedHostIds) {
+      for (const hostId of persistedHostIds) {
+        hostIds.add(hostId)
+      }
+    } else {
+      const projectGroups = this.store?.getProjectGroups?.() ?? []
+      for (const repo of repos) {
+        hostIds.add(getRepoExecutionHostId(repo))
+      }
+      for (const folderWorkspace of folderWorkspaces) {
+        try {
+          hostIds.add(
+            this.getWorkspaceSessionHostIdForFolderWorkspace(folderWorkspace, {
+              repos,
+              projectGroups
+            })
+          )
+        } catch {
+          continue
         }
       }
     }
-    return worktreeIds
+    const worktreeIds = new Set<string>()
+    const sessionByWorktreeId = new Map<string, WorkspaceSessionState>()
+    const sessionByHostId = new Map<ExecutionHostId, WorkspaceSessionState>()
+    const hostIdsByWorktreeId = new Map<string, Set<ExecutionHostId>>()
+    const ambiguousSessionWorktreeIds = new Set<string>()
+    for (const hostId of hostIds) {
+      const session = this.store?.getWorkspaceSession?.(hostId)
+      if (session) {
+        sessionByHostId.set(hostId, session)
+      }
+      const { ownerKeys: sessionOwnerKeys, ambiguousIdentityKeys: ambiguousOwnerIdentityKeys } =
+        getWorkspaceSessionOwnerInventory(session)
+      for (const ownerKey of sessionOwnerKeys) {
+        const ownerScope = parseWorkspaceKey(ownerKey)
+        const worktreeId = ownerScope?.type === 'worktree' ? ownerScope.worktreeId : ownerKey
+        const scope = parseWorkspaceKey(worktreeId)
+        const isKnownWorkspace =
+          scope?.type === 'folder'
+            ? folderWorkspaceIds.has(scope.folderWorkspaceId)
+            : repoIds.has(
+                getRepoIdFromWorktreeId(scope?.type === 'worktree' ? scope.worktreeId : worktreeId)
+              )
+        if (isKnownWorkspace) {
+          worktreeIds.add(worktreeId)
+        }
+        if (!worktreeIds.has(worktreeId) || !session) {
+          continue
+        }
+        const worktreeHostIds = hostIdsByWorktreeId.get(worktreeId) ?? new Set<ExecutionHostId>()
+        worktreeHostIds.add(hostId)
+        hostIdsByWorktreeId.set(worktreeId, worktreeHostIds)
+        if (scope?.type === 'folder') {
+          const workspace = folderWorkspaceById.get(scope.folderWorkspaceId)
+          if (!workspace) {
+            continue
+          }
+          projectGroups ??= this.store?.getProjectGroups?.() ?? []
+          try {
+            if (
+              this.getWorkspaceSessionHostIdForFolderWorkspace(workspace, {
+                repos,
+                projectGroups
+              }) !== hostId
+            ) {
+              continue
+            }
+          } catch {
+            continue
+          }
+        } else {
+          const persistedWorktreeId = scope?.type === 'worktree' ? scope.worktreeId : worktreeId
+          const declaredHostId = parseExecutionHostId(
+            this.store?.getWorktreeMeta?.(persistedWorktreeId)?.hostId
+          )?.id
+          if (declaredHostId && declaredHostId !== hostId) {
+            continue
+          }
+          const repoHostIds = repoHostIdsByRepoId.get(getRepoIdFromWorktreeId(persistedWorktreeId))
+          if (!declaredHostId && repoHostIds?.size === 1 && !repoHostIds.has(hostId)) {
+            continue
+          }
+        }
+        if (ambiguousOwnerIdentityKeys.has(runtimeWorktreeIdentityKey(worktreeId))) {
+          sessionByWorktreeId.delete(worktreeId)
+          ambiguousSessionWorktreeIds.add(worktreeId)
+          continue
+        }
+        if (ambiguousSessionWorktreeIds.has(worktreeId)) {
+          continue
+        }
+        const existingSession = sessionByWorktreeId.get(worktreeId)
+        if (existingSession && existingSession !== session) {
+          sessionByWorktreeId.delete(worktreeId)
+          ambiguousSessionWorktreeIds.add(worktreeId)
+        } else if (!existingSession) {
+          sessionByWorktreeId.set(worktreeId, session)
+        }
+      }
+    }
+    return {
+      worktreeIds,
+      sessionByWorktreeId,
+      sessionByHostId,
+      hostIdsByWorktreeId,
+      ambiguousHostWorktreeIds: ambiguousSessionWorktreeIds
+    }
+  }
+
+  private pruneRemovedFolderMobileSessionTabs(
+    folderWorkspaces: readonly FolderWorkspace[]
+  ): Set<string> {
+    const recreatedFolderWorktreeIds = new Set<string>()
+    const liveFolderIds = new Set(folderWorkspaces.map((workspace) => workspace.id))
+    const removedFolderWorktreeIds = new Set(
+      [...(this.knownFolderWorkspaceIdsForMobileSessionTabs ?? [])]
+        .filter((folderId) => !liveFolderIds.has(folderId))
+        .map((folderId) => `folder:${folderId}`)
+    )
+    for (const folderId of liveFolderIds) {
+      if (this.knownFolderWorkspaceIdsForMobileSessionTabs?.has(folderId) === false) {
+        const worktreeId = `folder:${folderId}`
+        const clearedTombstone = this.removedMobileSessionTabsByWorktree.delete(worktreeId)
+        if (clearedTombstone) {
+          recreatedFolderWorktreeIds.add(worktreeId)
+        }
+        if (clearedTombstone && !this.mobileSessionTabsByWorktree.has(worktreeId)) {
+          this.notifyMobileSessionTabsEmpty(worktreeId)
+        }
+      }
+    }
+    this.knownFolderWorkspaceIdsForMobileSessionTabs = liveFolderIds
+    for (const worktreeId of [...this.mobileSessionTabsByWorktree.keys()]) {
+      const scope = parseWorkspaceKey(worktreeId)
+      if (scope?.type !== 'folder' || liveFolderIds.has(scope.folderWorkspaceId)) {
+        continue
+      }
+      this.mobileSessionTabsByWorktree.delete(worktreeId)
+      this.acceptedRendererMobileSnapshotByWorktree.delete(worktreeId)
+      this.recoveredPersistedFolderMobileSessionTabs.delete(worktreeId)
+      this.mobileSessionTabsNotifyCoalescer.cancel(worktreeId)
+      removedFolderWorktreeIds.delete(worktreeId)
+      this.notifyMobileSessionTabsRemoved(worktreeId, true)
+    }
+    for (const worktreeId of removedFolderWorktreeIds) {
+      this.notifyMobileSessionTabsRemoved(worktreeId, true)
+    }
+    return recreatedFolderWorktreeIds
+  }
+
+  private assertMobileSessionFolderWorkspaceExists(worktreeId: string): void {
+    const scope = parseWorkspaceKey(worktreeId)
+    if (scope?.type !== 'folder' || !this.store?.getFolderWorkspaces) {
+      return
+    }
+    const folderWorkspaces = this.store.getFolderWorkspaces()
+    this.pruneRemovedFolderMobileSessionTabs(folderWorkspaces)
+    if (folderWorkspaces.some((workspace) => workspace.id === scope.folderWorkspaceId)) {
+      return
+    }
+    this.rememberRemovedFolderMobileSessionTabs(worktreeId)
+    throw new Error('tab_not_found')
+  }
+
+  private getFolderWorkspaceInventoryFingerprint(
+    workspace: FolderWorkspace,
+    inventory = {
+      repos: this.store?.getRepos?.() ?? [],
+      projectGroups: this.store?.getProjectGroups?.() ?? []
+    }
+  ): string {
+    let connectionId: string | null | 'ambiguous' = 'ambiguous'
+    let hostId: ExecutionHostId | 'ambiguous' = 'ambiguous'
+    try {
+      connectionId = this.resolveFolderWorkspaceConnectionId(workspace, inventory)
+      hostId = this.getWorkspaceSessionHostIdForFolderWorkspace(workspace, inventory)
+    } catch {
+      // Why: a routing error is stable until the catalog fields below change.
+    }
+    return JSON.stringify([
+      workspace.projectGroupId,
+      workspace.folderPath,
+      workspace.connectionId,
+      workspace.executionHostId,
+      connectionId,
+      hostId
+    ])
+  }
+
+  private createMobileSessionFolderWorkspaceMutationFence(
+    worktreeId: string
+  ): { accept: () => boolean; freshness: string } | undefined {
+    const scope = parseWorkspaceKey(worktreeId)
+    if (scope?.type !== 'folder' || !this.store?.getFolderWorkspaces) {
+      return undefined
+    }
+    const workspace = this.store
+      .getFolderWorkspaces()
+      .find((candidate) => candidate.id === scope.folderWorkspaceId)
+    if (!workspace) {
+      return { accept: () => false, freshness: 'missing' }
+    }
+    const expectedFingerprint = this.getFolderWorkspaceInventoryFingerprint(workspace)
+    return {
+      freshness: expectedFingerprint,
+      accept: () => {
+        const current = this.store
+          ?.getFolderWorkspaces?.()
+          .find((candidate) => candidate.id === scope.folderWorkspaceId)
+        return Boolean(
+          current && this.getFolderWorkspaceInventoryFingerprint(current) === expectedFingerprint
+        )
+      }
+    }
+  }
+
+  getTerminalSpawnReservationFreshness(
+    worktreeId: string | undefined,
+    connectionId: string | null | undefined
+  ): string | null {
+    const workspaceFreshness = worktreeId
+      ? (this.createMobileSessionFolderWorkspaceMutationFence(worktreeId)?.freshness ?? null)
+      : null
+    const reconnectGeneration = connectionId
+      ? (this.sshRelayRecoveryGenerationByTargetId.get(connectionId) ?? 0)
+      : null
+    return terminalSpawnReservationFreshness({ workspaceFreshness, reconnectGeneration })
+  }
+
+  private createFolderWorkspaceInventoryFence(
+    folderWorkspaces: readonly FolderWorkspace[]
+  ): () => boolean {
+    if (folderWorkspaces.length === 0) {
+      return () => (this.store?.getFolderWorkspaces?.().length ?? 0) === 0
+    }
+    const capture = (workspaces: readonly FolderWorkspace[]): Map<string, string> => {
+      const inventory = {
+        repos: this.store?.getRepos?.() ?? [],
+        projectGroups: this.store?.getProjectGroups?.() ?? []
+      }
+      return new Map(
+        workspaces.map((workspace) => [
+          workspace.id,
+          this.getFolderWorkspaceInventoryFingerprint(workspace, inventory)
+        ])
+      )
+    }
+    const expectedById = capture(folderWorkspaces)
+    return () => {
+      const current = this.store?.getFolderWorkspaces?.()
+      if (!current) {
+        return true
+      }
+      if (current.length !== expectedById.size) {
+        return false
+      }
+      const currentById = capture(current)
+      return current.every(
+        (workspace) => expectedById.get(workspace.id) === currentById.get(workspace.id)
+      )
+    }
   }
 
   private getWorkspaceSessionHydrationTargets(
-    includeAllPersistedWorktrees: boolean
+    includeAllPersistedWorktrees: boolean,
+    knownWorktrees = this.getKnownWorkspaceSessionWorktrees()
   ): Map<string, WorkspaceSessionState> {
-    const repos = this.store?.getRepos?.() ?? []
-    const repoHostIdByRepoId = new Map(
-      repos.map((repo) => [repo.id, getRepoExecutionHostId(repo)] as const)
-    )
-    const folderHostIdByWorkspaceId = new Map(
-      (this.store?.getFolderWorkspaces?.() ?? []).map((workspace) => {
-        const connectionId = this.resolveFolderWorkspaceConnectionId(workspace)
-        return [
-          workspace.id,
-          connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
-        ] as const
-      })
-    )
-    const hostIds = new Set<ExecutionHostId>(['local'])
-    for (const repo of repos) {
-      hostIds.add(getRepoExecutionHostId(repo))
-    }
-    for (const hostId of this.store?.getWorkspaceSessionHostIds?.() ?? []) {
-      hostIds.add(hostId)
-    }
-
     const targets = new Map<string, WorkspaceSessionState>()
-    for (const hostId of hostIds) {
-      const session = this.store?.getWorkspaceSession?.(hostId)
-      if (!session) {
-        continue
-      }
-      for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
-        const scope = parseWorkspaceKey(worktreeId)
-        const ownerHostId =
-          scope?.type === 'folder'
-            ? (folderHostIdByWorkspaceId.get(scope.folderWorkspaceId) ?? null)
-            : (repoHostIdByRepoId.get(
-                getRepoIdFromWorktreeId(scope?.type === 'worktree' ? scope.worktreeId : worktreeId)
-              ) ?? LOCAL_EXECUTION_HOST_ID)
-        if (
-          ownerHostId === hostId &&
-          (includeAllPersistedWorktrees ||
-            this.workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate(session, worktreeId, tabs))
-        ) {
-          targets.set(worktreeId, session)
-        }
+    for (const [worktreeId, session] of knownWorktrees.sessionByWorktreeId) {
+      const ownerKey = resolveWorkspaceSessionRecordOwnerKey(session.tabsByWorktree, worktreeId)
+      const tabs = ownerKey ? (session.tabsByWorktree[ownerKey] ?? []) : []
+      if (
+        includeAllPersistedWorktrees ||
+        parseWorkspaceKey(worktreeId)?.type === 'folder' ||
+        this.workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate(session, worktreeId, tabs)
+      ) {
+        targets.set(worktreeId, session)
       }
     }
     return targets
@@ -5199,9 +5602,11 @@ export class OrcaRuntimeService {
 
   notifySshRelayReady(targetId: string): void {
     const generation = this.bumpSshRelayRecoveryGeneration(targetId)
+    const generationIsCurrent = () =>
+      this.sshRelayRecoveryGenerationByTargetId.get(targetId) === generation
     const publish = async (): Promise<void> => {
       try {
-        await this.publishRecoveredSshMobileSessionTabs(targetId, generation)
+        await this.publishRecoveredSshMobileSessionTabs(targetId, generation, generationIsCurrent)
       } catch (error) {
         if (this.sshRelayRecoveryGenerationByTargetId.get(targetId) === generation) {
           console.warn('[runtime] failed to publish recovered SSH session tabs', {
@@ -5243,23 +5648,33 @@ export class OrcaRuntimeService {
 
   private async publishRecoveredSshMobileSessionTabs(
     targetId: string,
-    generation: number
+    generation: number,
+    generationIsCurrent: () => boolean
   ): Promise<void> {
-    const repoIds = new Set(
-      (this.store?.getRepos() ?? [])
-        .filter((repo) => repo.connectionId === targetId)
-        .map((repo) => repo.id)
-    )
-    if (repoIds.size === 0) {
+    if (this.sshRelayRecoveryGenerationByTargetId.get(targetId) !== generation) {
       return
     }
+    const folderWorkspaces = this.store?.getFolderWorkspaces?.() ?? []
+    const folderInventoryIsCurrent = this.createFolderWorkspaceInventoryFence(folderWorkspaces)
+    if (this.store?.getFolderWorkspaces) {
+      this.pruneRemovedFolderMobileSessionTabs(folderWorkspaces)
+    }
+    const repos = this.store?.getRepos() ?? []
+    const projectGroups = this.store?.getProjectGroups?.() ?? []
+    const knownWorktrees = this.getKnownWorkspaceSessionWorktrees(folderWorkspaces)
     const worktreeIds = new Set<string>()
     for (const worktreeId of [
-      ...this.getKnownWorkspaceSessionWorktreeIds(),
+      ...knownWorktrees.worktreeIds,
       ...this.mobileSessionTabsByWorktree.keys()
     ]) {
-      const parsed = splitWorktreeId(worktreeId)
-      if (parsed && repoIds.has(parsed.repoId)) {
+      if (
+        this.workspaceUsesSshRelayTarget(
+          worktreeId,
+          targetId,
+          knownWorktrees.hostIdsByWorktreeId.get(worktreeId),
+          { folderWorkspaces, repos, projectGroups }
+        )
+      ) {
         worktreeIds.add(worktreeId)
       }
     }
@@ -5268,19 +5683,253 @@ export class OrcaRuntimeService {
     }
 
     // Why: relay readiness follows PTY reattach; rebuild the HUB-owned panes before paired clients consume the connected event.
-    for (const worktreeId of worktreeIds) {
-      this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, {
-        allowAttachedWindow: true,
-        onlyRuntimeOwnedTerminals: true
-      })
-    }
-    await this.refreshMobileSessionPtyRecords()
-    if (this.sshRelayRecoveryGenerationByTargetId.get(targetId) !== generation) {
+    const acceptInventory = () => generationIsCurrent() && folderInventoryIsCurrent()
+    let refreshedPtyIds = await this.refreshMobileSessionPtyRecords(null, acceptInventory, targetId)
+    if (!generationIsCurrent()) {
       return
     }
+    if (refreshedPtyIds === null && !folderInventoryIsCurrent()) {
+      const retryFolderWorkspaces = this.store?.getFolderWorkspaces?.() ?? []
+      const retryRepos = this.store?.getRepos() ?? []
+      const retryProjectGroups = this.store?.getProjectGroups?.() ?? []
+      const retryKnownWorktrees = this.getKnownWorkspaceSessionWorktrees(retryFolderWorkspaces)
+      const hasCurrentRecoveryOwner = [
+        ...retryKnownWorktrees.worktreeIds,
+        ...this.mobileSessionTabsByWorktree.keys()
+      ].some((worktreeId) =>
+        this.workspaceUsesSshRelayTarget(
+          worktreeId,
+          targetId,
+          retryKnownWorktrees.hostIdsByWorktreeId.get(worktreeId),
+          {
+            folderWorkspaces: retryFolderWorkspaces,
+            repos: retryRepos,
+            projectGroups: retryProjectGroups
+          }
+        )
+      )
+      if (!hasCurrentRecoveryOwner) {
+        return
+      }
+      const retryInventoryIsCurrent =
+        this.createFolderWorkspaceInventoryFence(retryFolderWorkspaces)
+      refreshedPtyIds = await this.refreshMobileSessionPtyRecords(
+        null,
+        () => generationIsCurrent() && retryInventoryIsCurrent(),
+        targetId
+      )
+      if (!generationIsCurrent() || refreshedPtyIds === null || !retryInventoryIsCurrent()) {
+        return
+      }
+    }
+    const currentFolderWorkspaces = this.store?.getFolderWorkspaces?.() ?? folderWorkspaces
+    const currentRepos = this.store?.getRepos() ?? repos
+    const currentProjectGroups = this.store?.getProjectGroups?.() ?? projectGroups
+    if (this.store?.getFolderWorkspaces) {
+      this.pruneRemovedFolderMobileSessionTabs(currentFolderWorkspaces)
+    }
+    const currentKnownWorktrees = this.getKnownWorkspaceSessionWorktrees(currentFolderWorkspaces)
+    worktreeIds.clear()
+    for (const worktreeId of [
+      ...currentKnownWorktrees.worktreeIds,
+      ...this.mobileSessionTabsByWorktree.keys()
+    ]) {
+      if (
+        this.workspaceUsesSshRelayTarget(
+          worktreeId,
+          targetId,
+          currentKnownWorktrees.hostIdsByWorktreeId.get(worktreeId),
+          {
+            folderWorkspaces: currentFolderWorkspaces,
+            repos: currentRepos,
+            projectGroups: currentProjectGroups
+          }
+        )
+      ) {
+        worktreeIds.add(worktreeId)
+      }
+    }
+    const recoveredWorktreeIds = new Set<string>()
     for (const worktreeId of worktreeIds) {
+      const workspaceSession =
+        this.getIndexedWorkspaceSessionForSshRelayTarget(
+          worktreeId,
+          targetId,
+          currentKnownWorktrees,
+          {
+            folderWorkspaces: currentFolderWorkspaces,
+            repos: currentRepos,
+            projectGroups: currentProjectGroups
+          }
+        ) ?? currentKnownWorktrees.sessionByWorktreeId.get(worktreeId)
+      if (
+        !workspaceSession &&
+        (currentKnownWorktrees.hostIdsByWorktreeId.get(worktreeId)?.size ?? 0) > 0
+      ) {
+        continue
+      }
+      if (workspaceSession) {
+        this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, {
+          allowAttachedWindow: true,
+          onlyRuntimeOwnedTerminals: true,
+          workspaceSession
+        })
+      }
+      recoveredWorktreeIds.add(worktreeId)
+    }
+    for (const worktreeId of recoveredWorktreeIds) {
       this.notifyMobileSessionTabsChangedNow(worktreeId)
     }
+  }
+
+  private getIndexedWorkspaceSessionForSshRelayTarget(
+    worktreeId: string,
+    targetId: string,
+    knownWorktrees: KnownWorkspaceSessionWorktrees,
+    inventory: {
+      folderWorkspaces: readonly FolderWorkspace[]
+      repos: readonly Repo[]
+      projectGroups: readonly ProjectGroup[]
+    }
+  ): WorkspaceSessionState | undefined {
+    const persistedHostIds = knownWorktrees.hostIdsByWorktreeId.get(worktreeId)
+    if (!persistedHostIds) {
+      return undefined
+    }
+    const sshHostId = toSshExecutionHostId(targetId)
+    const scope = parseWorkspaceKey(worktreeId)
+    let candidateHostIds: ExecutionHostId[] = []
+    if (scope?.type === 'folder') {
+      const workspace = inventory.folderWorkspaces.find(
+        (candidate) => candidate.id === scope.folderWorkspaceId
+      )
+      if (workspace) {
+        try {
+          const transportConnectionId = this.resolveFolderWorkspaceConnectionId(
+            workspace,
+            inventory
+          )
+          if (!transportConnectionId || transportConnectionId === targetId) {
+            candidateHostIds = [
+              this.getWorkspaceSessionHostIdForFolderWorkspace(workspace, inventory)
+            ]
+          }
+        } catch {
+          return undefined
+        }
+      }
+    } else {
+      const persistedWorktreeId = scope?.type === 'worktree' ? scope.worktreeId : worktreeId
+      const declaredHostId = parseExecutionHostId(
+        this.store?.getWorktreeMeta?.(persistedWorktreeId)?.hostId
+      )?.id
+      if (declaredHostId && persistedHostIds.has(declaredHostId)) {
+        return knownWorktrees.sessionByHostId.get(declaredHostId)
+      }
+      const parsed = splitWorktreeIdForFilesystem(persistedWorktreeId)
+      if (parsed) {
+        const transportRepos = inventory.repos.filter(
+          (repo) => repo.id === parsed.repoId && repo.connectionId === targetId
+        )
+        const targetRepos =
+          transportRepos.length > 0
+            ? transportRepos
+            : inventory.repos.filter(
+                (repo) =>
+                  repo.id === parsed.repoId &&
+                  parseExecutionHostId(repo.executionHostId)?.id === sshHostId
+              )
+        const exactTargetRepos = targetRepos.filter((repo) =>
+          areWorktreePathsEqual(repo.path, parsed.worktreePath)
+        )
+        const candidates = exactTargetRepos.length > 0 ? exactTargetRepos : targetRepos
+        candidateHostIds = candidates.map((repo) => getRepoExecutionHostId(repo))
+      }
+    }
+    const matchingHostIds = [
+      ...new Set(candidateHostIds.filter((hostId) => persistedHostIds.has(hostId)))
+    ]
+    return matchingHostIds.length === 1
+      ? knownWorktrees.sessionByHostId.get(matchingHostIds[0]!)
+      : undefined
+  }
+
+  private workspaceUsesSshRelayTarget(
+    worktreeId: string,
+    targetId: string,
+    persistedHostIds: ReadonlySet<ExecutionHostId> | undefined,
+    inventory: {
+      folderWorkspaces: readonly FolderWorkspace[]
+      repos: readonly Repo[]
+      projectGroups: readonly ProjectGroup[]
+    }
+  ): boolean {
+    const sshHostId = toSshExecutionHostId(targetId)
+    const scope = parseWorkspaceKey(worktreeId)
+    if (scope?.type === 'folder') {
+      const workspace = inventory.folderWorkspaces.find(
+        (candidate) => candidate.id === scope.folderWorkspaceId
+      )
+      if (!workspace) {
+        return false
+      }
+      try {
+        const transportConnectionId = this.resolveFolderWorkspaceConnectionId(workspace, inventory)
+        if (transportConnectionId) {
+          return transportConnectionId === targetId
+        }
+        return (
+          this.getWorkspaceSessionHostIdForFolderWorkspace(workspace, inventory) === sshHostId &&
+          (!persistedHostIds || persistedHostIds.has(sshHostId))
+        )
+      } catch {
+        return false
+      }
+    }
+    const persistedWorktreeId = scope?.type === 'worktree' ? scope.worktreeId : worktreeId
+    const parsed = splitWorktreeIdForFilesystem(persistedWorktreeId)
+    if (!parsed) {
+      return false
+    }
+    const declaredHostId = parseExecutionHostId(
+      this.store?.getWorktreeMeta?.(persistedWorktreeId)?.hostId
+    )?.id
+    if (
+      declaredHostId === sshHostId &&
+      (!persistedHostIds || persistedHostIds.has(declaredHostId))
+    ) {
+      return true
+    }
+    const repoCandidates = inventory.repos.filter((repo) => repo.id === parsed.repoId)
+    const transportCandidates = repoCandidates.filter((repo) => repo.connectionId)
+    if (transportCandidates.length > 0) {
+      const ownerTransportCandidates = transportCandidates.filter((repo) =>
+        declaredHostId
+          ? getRepoExecutionHostId(repo) === declaredHostId
+          : persistedHostIds?.has(getRepoExecutionHostId(repo))
+      )
+      const candidates =
+        ownerTransportCandidates.length > 0
+          ? ownerTransportCandidates
+          : parseExecutionHostId(declaredHostId)?.kind === 'runtime' &&
+              transportCandidates.length === 1
+            ? transportCandidates
+            : !declaredHostId && !persistedHostIds
+              ? transportCandidates
+              : []
+      return transportCandidates.some(
+        (repo) =>
+          candidates.includes(repo) &&
+          repo.connectionId === targetId &&
+          (!persistedHostIds ||
+            persistedHostIds.has(declaredHostId ?? getRepoExecutionHostId(repo)))
+      )
+    }
+    return repoCandidates.some(
+      (repo) =>
+        parseExecutionHostId(repo.executionHostId)?.id === sshHostId &&
+        (!persistedHostIds || persistedHostIds.has(sshHostId))
+    )
   }
 
   invalidateSshWorktreeScanCache(targetId: string): void {
@@ -5372,6 +6021,7 @@ export class OrcaRuntimeService {
       // Why: a promoted serve can close and later reopen its window while new
       // background PTYs keep arriving; every windowless gap needs this handoff.
       this.persistWindowlessPtyBindingsForDesktopAttach()
+      this.recoveredPersistedFolderMobileSessionTabs.clear()
       this.authoritativeWindowId = windowId
     }
   }
@@ -5388,11 +6038,17 @@ export class OrcaRuntimeService {
       if (!pty.connected || !pty.tabId) {
         continue
       }
-      const hostId = this.getWorkspaceSessionHostIdForWorktree(pty.worktreeId)
+      let hostId: ExecutionHostId
+      try {
+        hostId = this.getWorkspaceSessionHostIdForWorktree(pty.worktreeId)
+      } catch {
+        continue
+      }
       const session = this.store.getWorkspaceSession(hostId)
-      const tab = session.tabsByWorktree[pty.worktreeId]?.find(
-        (candidate) => candidate.id === pty.tabId
-      )
+      const ownerKey = resolveWorkspaceSessionRecordOwnerKey(session.tabsByWorktree, pty.worktreeId)
+      const tab =
+        ownerKey &&
+        session.tabsByWorktree[ownerKey]?.find((candidate) => candidate.id === pty.tabId)
       if (!tab) {
         continue
       }
@@ -5452,8 +6108,16 @@ export class OrcaRuntimeService {
 
     const previousTabs = this.tabs
     const previousLeaves = this.leaves
-    this.tabs = new Map(graph.tabs.map((tab) => [tab.tabId, tab]))
-    const lifecycleLeaves = this.reconcileMobileSessionRetirementFences(graph.leaves)
+    const normalizedTabs = graph.tabs.map((tab) => ({
+      ...tab,
+      worktreeId: normalizeWorkspaceSessionOwnerKey(tab.worktreeId)
+    }))
+    const normalizedLeaves = graph.leaves.map((leaf) => ({
+      ...leaf,
+      worktreeId: normalizeWorkspaceSessionOwnerKey(leaf.worktreeId)
+    }))
+    this.tabs = new Map(normalizedTabs.map((tab) => [tab.tabId, tab]))
+    const lifecycleLeaves = this.reconcileMobileSessionRetirementFences(normalizedLeaves)
     const mobileSessionResyncWorktrees = new Set<string>()
     const changedMobileWorktrees = this.syncMobileSessionTabs(
       graph.mobileSessionTabs,
@@ -5688,12 +6352,69 @@ export class OrcaRuntimeService {
   ): Promise<RuntimeMobileSessionTabsResult> {
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
     if (explicitWorktreeId) {
-      this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(explicitWorktreeId, {
-        allowAttachedWindow: true,
-        onlyRuntimeOwnedTerminals: true
-      })
-      this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(explicitWorktreeId)
-      await this.refreshMobileSessionPtyRecords(explicitWorktreeId)
+      const explicitScope = parseWorkspaceKey(explicitWorktreeId)
+      let acceptInventory: (() => boolean) | undefined
+      let recreatedFolder = false
+      if (explicitScope?.type === 'folder' && this.store?.getFolderWorkspaces) {
+        const folderWorkspaces = this.store.getFolderWorkspaces()
+        recreatedFolder =
+          this.pruneRemovedFolderMobileSessionTabs(folderWorkspaces).has(explicitWorktreeId)
+        const folderWorkspace = folderWorkspaces.find(
+          (workspace) => workspace.id === explicitScope.folderWorkspaceId
+        )
+        const removed =
+          this.removedMobileSessionTabsByWorktree.get(explicitWorktreeId) ??
+          (folderWorkspace
+            ? undefined
+            : this.rememberRemovedFolderMobileSessionTabs(explicitWorktreeId))
+        if (removed) {
+          return this.clientSessionTabSelections.project(removed, clientNavigationId)
+        }
+        acceptInventory = this.createFolderWorkspaceInventoryFence(folderWorkspaces)
+      }
+      if (explicitScope?.type !== 'folder') {
+        if (explicitWorktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {
+          const knownWorktrees = this.getKnownWorkspaceSessionWorktrees()
+          this.pruneUnownedWorkspaceSessionMobileSnapshots(knownWorktrees)
+          if (
+            knownWorktrees.worktreeIds.has(explicitWorktreeId) &&
+            !knownWorktrees.sessionByWorktreeId.has(explicitWorktreeId)
+          ) {
+            return this.getMobileSessionTabsForWorktree(explicitWorktreeId, clientNavigationId)
+          }
+        }
+        this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(explicitWorktreeId, {
+          allowAttachedWindow: true,
+          onlyRuntimeOwnedTerminals: true
+        })
+        this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(explicitWorktreeId)
+      }
+      await this.refreshMobileSessionPtyRecords(explicitWorktreeId, acceptInventory)
+      if (explicitScope?.type === 'folder' && this.store?.getFolderWorkspaces) {
+        recreatedFolder =
+          this.pruneRemovedFolderMobileSessionTabs(this.store.getFolderWorkspaces()).has(
+            explicitWorktreeId
+          ) || recreatedFolder
+        const removed = this.removedMobileSessionTabsByWorktree.get(explicitWorktreeId)
+        if (removed) {
+          return this.clientSessionTabSelections.project(removed, clientNavigationId)
+        }
+      }
+      if (explicitScope?.type === 'folder') {
+        const folderWorkspaceSession = this.getWorkspaceSessionForWorktree(explicitWorktreeId)
+        this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(explicitWorktreeId, {
+          allowAttachedWindow: true,
+          onlyRuntimeOwnedTerminals: true,
+          ...(folderWorkspaceSession ? { workspaceSession: folderWorkspaceSession } : {})
+        })
+        this.recoverPersistedFolderMobileSessionTabsOnce(
+          explicitWorktreeId,
+          folderWorkspaceSession ?? undefined
+        )
+        if (recreatedFolder && this.mobileSessionTabsByWorktree.has(explicitWorktreeId)) {
+          this.notifyMobileSessionTabsChangedNow(explicitWorktreeId)
+        }
+      }
       this.restoreLivePairedRendererSessionOwnedMobileTerminals(explicitWorktreeId)
       return this.getMobileSessionTabsForWorktree(explicitWorktreeId, clientNavigationId)
     }
@@ -5711,20 +6432,190 @@ export class OrcaRuntimeService {
   async listAllMobileSessionTabs(
     clientNavigationId?: string
   ): Promise<RuntimeMobileSessionTabsResult[]> {
-    for (const worktreeId of this.getKnownWorkspaceSessionWorktreeIds()) {
+    const folderWorkspaces = this.store?.getFolderWorkspaces?.() ?? []
+    const recreatedFolderWorktreeIds = new Set<string>()
+    if (this.store?.getFolderWorkspaces) {
+      for (const worktreeId of this.pruneRemovedFolderMobileSessionTabs(folderWorkspaces)) {
+        recreatedFolderWorktreeIds.add(worktreeId)
+      }
+    }
+    const acceptInventory = this.store?.getFolderWorkspaces
+      ? this.createFolderWorkspaceInventoryFence(folderWorkspaces)
+      : undefined
+    await this.refreshMobileSessionPtyRecords(null, acceptInventory)
+    const currentFolderWorkspaces = this.store?.getFolderWorkspaces?.() ?? folderWorkspaces
+    if (this.store?.getFolderWorkspaces) {
+      for (const worktreeId of this.pruneRemovedFolderMobileSessionTabs(currentFolderWorkspaces)) {
+        recreatedFolderWorktreeIds.add(worktreeId)
+      }
+    }
+    const knownWorktrees = this.getKnownWorkspaceSessionWorktrees(currentFolderWorkspaces)
+    this.pruneUnownedWorkspaceSessionMobileSnapshots(knownWorktrees)
+    const worktreeIdsToHydrate = new Set(knownWorktrees.sessionByWorktreeId.keys())
+    const liveFolderIds = new Set(currentFolderWorkspaces.map((workspace) => workspace.id))
+    for (const worktreeId of this.mobileSessionTabsByWorktree.keys()) {
+      const scope = parseWorkspaceKey(worktreeId)
+      if (scope?.type === 'folder' && liveFolderIds.has(scope.folderWorkspaceId)) {
+        worktreeIdsToHydrate.add(worktreeId)
+      }
+    }
+    for (const worktreeId of worktreeIdsToHydrate) {
+      let workspaceSession = knownWorktrees.sessionByWorktreeId.get(worktreeId)
+      if (!workspaceSession && parseWorkspaceKey(worktreeId)?.type === 'folder') {
+        try {
+          workspaceSession = this.getWorkspaceSessionForWorktree(worktreeId) ?? undefined
+        } catch {
+          continue
+        }
+      }
+      if (!workspaceSession) {
+        continue
+      }
       this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, {
         allowAttachedWindow: true,
-        onlyRuntimeOwnedTerminals: true
+        onlyRuntimeOwnedTerminals: true,
+        ...(workspaceSession ? { workspaceSession } : {})
       })
+      if (parseWorkspaceKey(worktreeId)?.type === 'folder') {
+        this.recoverPersistedFolderMobileSessionTabsOnce(worktreeId, workspaceSession)
+      }
     }
-    this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession()
-    await this.refreshMobileSessionPtyRecords()
-    return [...this.mobileSessionTabsByWorktree.values()].map((snapshot) =>
+    this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(undefined, {
+      excludeFolderWorkspaces: true,
+      excludeWorktreeIds: this.getExcludedLocalSessionWorktreeIds(knownWorktrees)
+    })
+    const liveSnapshots = [...this.mobileSessionTabsByWorktree.values()].map((snapshot) =>
       this.clientSessionTabSelections.project(
         this.toMobileSessionTabsResult(snapshot),
         clientNavigationId
       )
     )
+    const removedSnapshots = [...this.removedMobileSessionTabsByWorktree.values()]
+      .filter((snapshot) => !this.mobileSessionTabsByWorktree.has(snapshot.worktree))
+      .map((snapshot) => this.clientSessionTabSelections.project(snapshot, clientNavigationId))
+    for (const worktreeId of recreatedFolderWorktreeIds) {
+      if (this.mobileSessionTabsByWorktree.has(worktreeId)) {
+        this.notifyMobileSessionTabsChangedNow(worktreeId)
+      }
+    }
+    return [...liveSnapshots, ...removedSnapshots]
+  }
+
+  private getExcludedLocalSessionWorktreeIds(
+    knownWorktrees: KnownWorkspaceSessionWorktrees
+  ): Set<string> {
+    const excluded = new Set(knownWorktrees.ambiguousHostWorktreeIds)
+    const localSession = knownWorktrees.sessionByHostId.get(LOCAL_EXECUTION_HOST_ID)
+    if (!localSession) {
+      return excluded
+    }
+    for (const ownerKey of Object.keys(localSession.tabsByWorktree ?? {})) {
+      const worktreeId = normalizeWorkspaceSessionOwnerKey(ownerKey)
+      if (
+        knownWorktrees.worktreeIds.has(worktreeId) &&
+        knownWorktrees.sessionByWorktreeId.get(worktreeId) !== localSession
+      ) {
+        excluded.add(worktreeId)
+      }
+    }
+    return excluded
+  }
+
+  private pruneUnownedWorkspaceSessionMobileSnapshots(
+    knownWorktrees: KnownWorkspaceSessionWorktrees
+  ): void {
+    const knownIdentities = new Set([...knownWorktrees.worktreeIds].map(runtimeWorktreeIdentityKey))
+    const ownedIdentities = new Set(
+      [...knownWorktrees.sessionByWorktreeId.keys()].map(runtimeWorktreeIdentityKey)
+    )
+    for (const worktreeId of [...this.mobileSessionTabsByWorktree.keys()]) {
+      const identity = runtimeWorktreeIdentityKey(worktreeId)
+      if (
+        !knownIdentities.has(identity) ||
+        ownedIdentities.has(identity) ||
+        !this.mobileSessionTabsByWorktree.delete(worktreeId)
+      ) {
+        continue
+      }
+      this.acceptedRendererMobileSnapshotByWorktree.delete(worktreeId)
+      this.recoveredPersistedFolderMobileSessionTabs.delete(worktreeId)
+      this.mobileSessionTabsNotifyCoalescer.cancel(worktreeId)
+      this.notifyMobileSessionTabsRemoved(worktreeId)
+    }
+  }
+
+  private recoverPersistedFolderMobileSessionTabsOnce(
+    worktreeId: string,
+    workspaceSession?: WorkspaceSessionState
+  ): void {
+    if (parseWorkspaceKey(worktreeId)?.type !== 'folder') {
+      return
+    }
+    const session = workspaceSession ?? this.getWorkspaceSessionForWorktree(worktreeId)
+    const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
+    if (
+      this.recoveredPersistedFolderMobileSessionTabs.has(worktreeId) &&
+      ((existing && !this.isHeadlessBuiltMobileSessionPublicationBase(existing.publicationEpoch)) ||
+        this.persistedTerminalProjectionMatchesMobileSnapshot(worktreeId, session, existing))
+    ) {
+      return
+    }
+    this.recoveredPersistedFolderMobileSessionTabs.add(worktreeId)
+    this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, {
+      allowAttachedWindow: true,
+      clearWhenEmpty: true,
+      force: true,
+      ...(session ? { workspaceSession: session } : {})
+    })
+  }
+
+  private persistedTerminalProjectionMatchesMobileSnapshot(
+    worktreeId: string,
+    session: WorkspaceSessionState | null | undefined,
+    snapshot: RuntimeMobileSessionTabsSnapshot | undefined
+  ): boolean {
+    if (!session) {
+      return false
+    }
+    const ownerKey = resolveWorkspaceSessionRecordOwnerKey(session.tabsByWorktree, worktreeId)
+    if (!ownerKey) {
+      return false
+    }
+    const persistedTabs = session.tabsByWorktree[ownerKey] ?? []
+    const expectedTabs = this.buildHeadlessMobileSessionTerminalTabs(
+      worktreeId,
+      persistedTabs,
+      session,
+      ownerKey
+    )
+    const snapshotTabs =
+      snapshot?.tabs.filter(
+        (tab): tab is RuntimeMobileSessionTerminalTab => tab.type === 'terminal'
+      ) ?? []
+    if (expectedTabs.length !== snapshotTabs.length) {
+      return false
+    }
+    for (let index = 0; index < expectedTabs.length; index += 1) {
+      const expected = expectedTabs[index]!
+      const actual = snapshotTabs[index]!
+      if (
+        expected.id !== actual.id ||
+        expected.parentTabId !== actual.parentTabId ||
+        expected.leafId !== actual.leafId ||
+        expected.title !== actual.title ||
+        expected.ptyId !== actual.ptyId ||
+        expected.startupCwd !== actual.startupCwd ||
+        expected.launchAgent !== actual.launchAgent ||
+        expected.color !== actual.color ||
+        expected.isPinned !== actual.isPinned ||
+        expected.viewMode !== actual.viewMode ||
+        expected.isActive !== actual.isActive ||
+        !this.mobileSnapshotValueEqual(expected.parentLayout, actual.parentLayout)
+      ) {
+        return false
+      }
+    }
+    return true
   }
 
   private hydrateHeadlessMobileSessionTabsFromWorkspaceSession(
@@ -5735,6 +6626,9 @@ export class OrcaRuntimeService {
       onlyRuntimeOwnedTerminals?: boolean
       runtimeOwnedTerminalCandidateKnown?: boolean
       workspaceSession?: WorkspaceSessionState
+      excludeFolderWorkspaces?: boolean
+      excludeWorktreeIds?: ReadonlySet<string>
+      clearWhenEmpty?: boolean
     } = {}
   ): Set<string> {
     // Why: report which worktrees were reconciled in place so callers don't
@@ -5756,6 +6650,9 @@ export class OrcaRuntimeService {
     // every worktree — skip the per-worktree rebuild entirely (hot on every
     // graph sync). Scoped to onlyRuntimeOwnedTerminals so full hydrates are
     // untouched.
+    const scopedOwnerKey = worktreeId
+      ? resolveWorkspaceSessionRecordOwnerKey(session.tabsByWorktree, worktreeId)
+      : null
     if (
       options.onlyRuntimeOwnedTerminals === true &&
       !this.offscreenBrowserBackend &&
@@ -5764,16 +6661,26 @@ export class OrcaRuntimeService {
         ? this.workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate(
             session,
             worktreeId,
-            session.tabsByWorktree[worktreeId] ?? []
+            scopedOwnerKey ? (session.tabsByWorktree[scopedOwnerKey] ?? []) : []
           )
         : this.workspaceSessionHasRuntimeOwnedPtyCandidate(session))
     ) {
       return reconciledWorktreeIds
     }
-    const entries =
+    const entries: readonly (readonly [string, string, readonly TerminalTab[]])[] =
       worktreeId !== undefined
-        ? ([[worktreeId, session.tabsByWorktree[worktreeId] ?? []]] as const)
-        : Object.entries(session.tabsByWorktree ?? {})
+        ? scopedOwnerKey
+          ? [[worktreeId, scopedOwnerKey, session.tabsByWorktree[scopedOwnerKey] ?? []]]
+          : []
+        : Object.entries(session.tabsByWorktree ?? {}).flatMap(([ownerKey, tabs]) => {
+            const normalizedOwnerKey = normalizeWorkspaceSessionOwnerKey(ownerKey)
+            return resolveWorkspaceSessionRecordOwnerKey(
+              session.tabsByWorktree,
+              normalizedOwnerKey
+            ) === ownerKey
+              ? [[normalizedOwnerKey, ownerKey, tabs] as const]
+              : []
+          })
     // Why: workspaceSession keys are `${repoId}::${path}` and are not pruned when
     // a repo disappears from this client's view (e.g. removed on another client,
     // or a stale browser-persisted session). Hydrating such a key would surface a
@@ -5783,7 +6690,16 @@ export class OrcaRuntimeService {
     // repo inventory on the hot poll path, and `null` when the store cannot
     // report repos — an unavailable list must not read as "every repo is gone".
     let liveRepoIds: Set<string> | null | undefined
-    for (const [entryWorktreeId, persistedTabs] of entries) {
+    for (const [entryWorktreeId, ownerKey, persistedTabs] of entries) {
+      if (
+        options.excludeFolderWorkspaces === true &&
+        parseWorkspaceKey(entryWorktreeId)?.type === 'folder'
+      ) {
+        continue
+      }
+      if (options.excludeWorktreeIds?.has(entryWorktreeId)) {
+        continue
+      }
       const ownerRepoId = splitWorktreeIdForFilesystem(entryWorktreeId)?.repoId
       if (ownerRepoId) {
         if (liveRepoIds === undefined) {
@@ -5812,7 +6728,8 @@ export class OrcaRuntimeService {
       const terminalTabs = this.buildHeadlessMobileSessionTerminalTabs(
         entryWorktreeId,
         persistedTabs,
-        session
+        session,
+        ownerKey
       ).filter(
         (tab) =>
           options.onlyRuntimeOwnedTerminals !== true ||
@@ -5825,6 +6742,12 @@ export class OrcaRuntimeService {
       const browserTabs = this.buildHeadlessMobileSessionBrowserTabs(entryWorktreeId)
       const tabs: RuntimeMobileSessionSnapshotTab[] = [...terminalTabs, ...browserTabs]
       if (tabs.length === 0) {
+        if (options.clearWhenEmpty === true && existing) {
+          this.mobileSessionTabsByWorktree.delete(entryWorktreeId)
+          this.acceptedRendererMobileSnapshotByWorktree.delete(entryWorktreeId)
+          this.mobileSessionTabsNotifyCoalescer.cancel(entryWorktreeId)
+          this.notifyMobileSessionTabsEmpty(entryWorktreeId)
+        }
         continue
       }
       const activeTab = this.pickHeadlessActiveTerminalTab(terminalTabs)
@@ -5851,8 +6774,16 @@ export class OrcaRuntimeService {
       // Why: a persisted multi-group split must be restored on cold rebuild, or
       // the headless serve coalesces the user's group layout back into one group
       // (the persisted tabGroups/tabGroupLayouts would otherwise be write-only).
-      const persistedGroups = session.tabGroups?.[entryWorktreeId]
-      const persistedLayout = session.tabGroupLayouts?.[entryWorktreeId]
+      const groupOwnerKey = resolveWorkspaceSessionRecordOwnerKey(
+        session.tabGroups,
+        entryWorktreeId
+      )
+      const layoutOwnerKey = resolveWorkspaceSessionRecordOwnerKey(
+        session.tabGroupLayouts,
+        entryWorktreeId
+      )
+      const persistedGroups = groupOwnerKey ? session.tabGroups?.[groupOwnerKey] : undefined
+      const persistedLayout = layoutOwnerKey ? session.tabGroupLayouts?.[layoutOwnerKey] : undefined
       const hasPersistedSplit =
         options.onlyRuntimeOwnedTerminals !== true &&
         persistedGroups !== undefined &&
@@ -5934,6 +6865,7 @@ export class OrcaRuntimeService {
       if (existing && this.headlessMobileSnapshotContentUnchanged(existing, nextSnapshot)) {
         continue
       }
+      this.removedMobileSessionTabsByWorktree.delete(entryWorktreeId)
       this.mobileSessionTabsByWorktree.set(entryWorktreeId, nextSnapshot)
     }
     return reconciledWorktreeIds
@@ -6161,7 +7093,7 @@ export class OrcaRuntimeService {
         .find(
           (lease) =>
             lease.state === 'expired' &&
-            lease.worktreeId === worktreeId &&
+            Boolean(lease.worktreeId && runtimeWorktreeIdsEqual(lease.worktreeId, worktreeId)) &&
             lease.tabId === tabId &&
             (ptyId === undefined || lease.ptyId === ptyId) &&
             (leafId === undefined || lease.leafId === undefined || lease.leafId === leafId) &&
@@ -6204,7 +7136,8 @@ export class OrcaRuntimeService {
   // binding is still re-hydratable, so it stays preserved).
   private hasLiveOrPersistedServeOrSshOwnedPtyBinding(
     worktreeId: string,
-    tab: RuntimeMobileSessionTerminalTab
+    tab: RuntimeMobileSessionTerminalTab,
+    workspaceSession?: WorkspaceSessionState
   ): boolean {
     const boundPtyIds = [
       tab.ptyId,
@@ -6246,11 +7179,12 @@ export class OrcaRuntimeService {
       // Why: after a HUB restart, failed SSH reattach can remove persistence before the fresh runtime records an exit; keep the pane reachable for ensure.
       return true
     }
-    const session = this.getWorkspaceSessionForWorktree(worktreeId)
+    const session = workspaceSession ?? this.getWorkspaceSessionForWorktree(worktreeId)
     if (!session) {
       return false
     }
-    const persistedTab = (session.tabsByWorktree?.[worktreeId] ?? []).find(
+    const ownerKey = resolveWorkspaceSessionRecordOwnerKey(session.tabsByWorktree, worktreeId)
+    const persistedTab = (ownerKey ? session.tabsByWorktree[ownerKey] : undefined)?.find(
       (candidate) => candidate.id === tab.parentTabId
     )
     if (!persistedTab) {
@@ -6822,7 +7756,8 @@ export class OrcaRuntimeService {
   private buildHeadlessMobileSessionTerminalTabs(
     worktreeId: string,
     persistedTabs: readonly TerminalTab[],
-    session: WorkspaceSessionState
+    session: WorkspaceSessionState,
+    ownerKey = worktreeId
   ): RuntimeMobileSessionTerminalTab[] {
     return [...persistedTabs]
       .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt)
@@ -6857,7 +7792,7 @@ export class OrcaRuntimeService {
               ...(tab.viewMode ? { viewMode: tab.viewMode } : {}),
               isActive: this.isPersistedTerminalLeafActive(
                 session,
-                worktreeId,
+                ownerKey,
                 tab.id,
                 leafId,
                 layout
@@ -6975,10 +7910,14 @@ export class OrcaRuntimeService {
     worktreeId: string,
     tabId: string
   ): Pick<Tab, 'color' | 'isPinned'> | null {
+    const session = this.getWorkspaceSessionForWorktree(worktreeId)
+    const ownerKey = resolveWorkspaceSessionRecordOwnerKey(session?.unifiedTabs, worktreeId)
     const tab =
-      this.getWorkspaceSessionForWorktree(worktreeId)?.unifiedTabs?.[worktreeId]?.find(
-        (candidate) => candidate.id === tabId || candidate.entityId === tabId
-      ) ?? null
+      (ownerKey &&
+        session?.unifiedTabs?.[ownerKey]?.find(
+          (candidate) => candidate.id === tabId || candidate.entityId === tabId
+        )) ??
+      null
     return tab ? { color: tab.color, isPinned: tab.isPinned } : null
   }
 
@@ -7056,7 +7995,16 @@ export class OrcaRuntimeService {
     leafId: string,
     layout: TerminalLayoutSnapshot | undefined
   ): boolean {
-    const activeTabId = session.activeTabIdByWorktree?.[worktreeId] ?? session.activeTabId
+    const ownerKey = resolveWorkspaceSessionRecordOwnerKey(
+      session.activeTabIdByWorktree,
+      worktreeId
+    )
+    const activeOwnerKey = session.activeWorkspaceKey ?? session.activeWorktreeId
+    const activeTabId =
+      (ownerKey ? session.activeTabIdByWorktree?.[ownerKey] : undefined) ??
+      (activeOwnerKey && runtimeWorktreeIdsEqual(activeOwnerKey, worktreeId)
+        ? session.activeTabId
+        : undefined)
     return activeTabId === tabId && (!layout?.activeLeafId || layout.activeLeafId === leafId)
   }
 
@@ -7241,7 +8189,11 @@ export class OrcaRuntimeService {
     if (!session || !this.store?.setWorkspaceSession) {
       throw new Error('workspace_session_unavailable')
     }
-    const result = closeTerminalTabInWorkspaceSession(session, worktreeId, parentTabId)
+    const ownerKey = resolveTerminalSessionWorktreeId(session, worktreeId)
+    if (!ownerKey) {
+      throw new Error('tab_not_found')
+    }
+    const result = closeTerminalTabInWorkspaceSession(session, ownerKey, parentTabId)
     if (result.pinned) {
       throw new Error('terminal_tab_pinned')
     }
@@ -7263,8 +8215,12 @@ export class OrcaRuntimeService {
     if (!session || !this.store?.setWorkspaceSession) {
       return
     }
+    const ownerKey = resolveWorkspaceSessionRecordOwnerKey(session.tabsByWorktree, worktreeId)
+    if (!ownerKey) {
+      return
+    }
     const orderIndexByTabId = new Map(tabOrder.map((tabId, index) => [tabId, index]))
-    const tabs = session.tabsByWorktree[worktreeId] ?? []
+    const tabs = session.tabsByWorktree[ownerKey] ?? []
     const reordered = [...tabs]
       .sort((a, b) => {
         const aIndex = orderIndexByTabId.get(a.id) ?? Number.MAX_SAFE_INTEGER
@@ -7279,7 +8235,7 @@ export class OrcaRuntimeService {
       ...session,
       tabsByWorktree: {
         ...session.tabsByWorktree,
-        [worktreeId]: reordered
+        [ownerKey]: reordered
       }
     })
   }
@@ -7297,28 +8253,69 @@ export class OrcaRuntimeService {
   }
 
   private async refreshMobileSessionPtyRecords(
-    targetWorktreeId: string | null = null
+    targetWorktreeId: string | null = null,
+    acceptInventory?: () => boolean,
+    connectionId?: string | null
   ): Promise<Set<string> | null> {
+    const effectiveFence =
+      targetWorktreeId === FLOATING_TERMINAL_WORKTREE_ID
+        ? acceptInventory
+        : (acceptInventory ??
+          (this.store?.getFolderWorkspaces
+            ? this.createFolderWorkspaceInventoryFence(this.store.getFolderWorkspaces())
+            : undefined))
     if (targetWorktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {
-      const pending = this.pendingMobileSessionPtyInventoryRefresh
+      const providerKey =
+        connectionId === undefined
+          ? 'aggregate'
+          : connectionId === null
+            ? 'local'
+            : `ssh:${connectionId}`
+      const inventoryKey = providerKey
+      const pending = this.pendingMobileSessionPtyInventoryRefreshes.get(inventoryKey)
       if (pending) {
-        return pending
+        const inventory = await pending.refresh
+        if (effectiveFence === undefined) {
+          return inventory
+        }
+        const acceptPendingInventory = pending.fence?.() === true && effectiveFence()
+        if (inventory !== null && acceptPendingInventory) {
+          return inventory
+        }
+        if (!effectiveFence()) {
+          return null
+        }
+        // Why: relay recovery must observe an inventory started in its own readiness generation.
+        return this.refreshMobileSessionPtyRecords(targetWorktreeId, effectiveFence, connectionId)
       }
       // Why: reconnect exit bursts share one authoritative daemon inventory
       // instead of multiplying a full cross-generation list RPC per stale tab.
-      const refresh = this.performMobileSessionPtyRecordsRefresh(targetWorktreeId).finally(() => {
-        if (this.pendingMobileSessionPtyInventoryRefresh === refresh) {
-          this.pendingMobileSessionPtyInventoryRefresh = null
+      const refresh = this.performMobileSessionPtyRecordsRefresh(
+        targetWorktreeId,
+        effectiveFence,
+        connectionId
+      ).finally(() => {
+        if (this.pendingMobileSessionPtyInventoryRefreshes.get(inventoryKey)?.refresh === refresh) {
+          this.pendingMobileSessionPtyInventoryRefreshes.delete(inventoryKey)
         }
       })
-      this.pendingMobileSessionPtyInventoryRefresh = refresh
+      this.pendingMobileSessionPtyInventoryRefreshes.set(inventoryKey, {
+        refresh,
+        fence: effectiveFence ?? null
+      })
       return refresh
     }
-    return await this.performMobileSessionPtyRecordsRefresh(targetWorktreeId)
+    return await this.performMobileSessionPtyRecordsRefresh(
+      targetWorktreeId,
+      effectiveFence,
+      connectionId
+    )
   }
 
   private async performMobileSessionPtyRecordsRefresh(
-    targetWorktreeId: string | null
+    targetWorktreeId: string | null,
+    acceptInventory?: () => boolean,
+    connectionId?: string | null
   ): Promise<Set<string> | null> {
     if (!this.ptyController?.listProcesses && !this.ptyController?.hasPty) {
       return null
@@ -7326,9 +8323,15 @@ export class OrcaRuntimeService {
     // Why: floating PTY identity is explicit, so polling must not resolve every Git/SSH worktree.
     const isFloatingWorkspace = targetWorktreeId === FLOATING_TERMINAL_WORKTREE_ID
     const resolvedWorktrees = isFloatingWorkspace ? [] : await this.listResolvedWorktrees()
+    if (acceptInventory && !acceptInventory()) {
+      return null
+    }
     return await this.refreshPtyWorktreeRecordsFromController(
       resolvedWorktrees,
-      isFloatingWorkspace ? targetWorktreeId : null
+      isFloatingWorkspace ? targetWorktreeId : null,
+      undefined,
+      acceptInventory,
+      connectionId
     )
   }
 
@@ -7348,8 +8351,15 @@ export class OrcaRuntimeService {
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
+    this.assertMobileSessionFolderWorkspaceExists(worktreeId)
+    const workspaceMutationFence = this.createMobileSessionFolderWorkspaceMutationFence(worktreeId)
+    const acceptWorkspaceInventory = workspaceMutationFence?.accept
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
     await this.refreshMobileSessionPtyRecords(worktreeId)
+    this.assertMobileSessionFolderWorkspaceExists(worktreeId)
+    if (acceptWorkspaceInventory?.() === false) {
+      throw new Error('tab_not_found')
+    }
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     const directTab = snapshot?.tabs.find((candidate) => candidate.id === tabId)
     const tab = leafId
@@ -7379,9 +8389,12 @@ export class OrcaRuntimeService {
       // their tab id, so focusing the renderer would silently no-op.
       // Phone-local activation also needs this path for inactive restored tabs:
       // desktop focus is intentionally suppressed, but the PTY still must exist.
+      // PTY inventory proves liveness, not attachment to this runtime generation.
       const shouldMaterializePendingTerminal =
         publicTab?.type === 'terminal' &&
-        publicTab.status !== 'ready' &&
+        (publicTab.status !== 'ready' ||
+          (this.hasServeOrSshOwnedBinding(tab) &&
+            !this.hasLiveRuntimeSessionOwnedPtyBinding(worktreeId, tab))) &&
         // Why: opening a tab is the documented wake gesture for a slept pane
         // (#11598), so only a background probe may be refused for one.
         (!isAutomaticTabActivation(opts.intent) ||
@@ -7391,43 +8404,114 @@ export class OrcaRuntimeService {
           this.shouldMaterializeHeadlessMobileSessionTab(snapshot!, tab))
       if (shouldMaterializePendingTerminal) {
         const sessionId = tab.ptyId ?? tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] ?? undefined
+        const sshConnectionId = sessionId ? parseAppSshPtyId(sessionId)?.connectionId : undefined
         const targetGroupId = snapshot?.tabGroups?.find((group) =>
           group.tabOrder.includes(tab.parentTabId)
         )?.id
-        // Why: a pending agent tab may exist without its startup command ever
-        // having been delivered (the create's renderer stalled, #7587), so a
-        // bare materialize would put a plain shell under the agent icon.
-        // Re-resolve the launch like the create path; providers skip startup
-        // commands when attaching to live sessions, so this cannot double-launch.
-        let agentStartup: Awaited<
-          ReturnType<OrcaRuntimeService['resolveMobileSessionTerminalCommand']>
-        > = {}
-        if (tab.launchAgent) {
-          try {
-            const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
-            agentStartup = await this.resolveMobileSessionTerminalCommand(workspace, {
-              agent: tab.launchAgent
-            })
-          } catch {
-            // Why: a disabled or unresolvable agent must not make the tab
-            // untappable; fall back to the plain-shell materialize.
+        const executionHostId = this.getWorkspaceSessionHostIdForWorktree(worktreeId)
+        const parsedExecutionHost = parseExecutionHostId(executionHostId)
+        const connectionId =
+          sshConnectionId ??
+          (parsedExecutionHost?.kind === 'ssh' ? parsedExecutionHost.targetId : null)
+        const reconnectGeneration = connectionId
+          ? (this.sshRelayRecoveryGenerationByTargetId.get(connectionId) ?? 0)
+          : null
+        const acceptMaterialization = () =>
+          acceptWorkspaceInventory?.() !== false &&
+          (connectionId === null ||
+            (this.sshRelayRecoveryGenerationByTargetId.get(connectionId) ?? 0) ===
+              reconnectGeneration)
+        const spawnReservationFreshness = terminalSpawnReservationFreshness({
+          workspaceFreshness: workspaceMutationFence?.freshness ?? null,
+          reconnectGeneration
+        })
+        const materializationKey = mobileTerminalMaterializationKey({
+          executionHostId,
+          connectionId,
+          worktreeId,
+          parentTabId: tab.parentTabId,
+          leafId: tab.leafId,
+          sessionId,
+          workspaceFreshness: workspaceMutationFence?.freshness ?? null,
+          reconnectGeneration
+        })
+        let materialization = this.pendingMobileTerminalMaterializations.get(materializationKey)
+        if (!materialization) {
+          materialization = (async () => {
+            // Why: a stalled renderer may leave a pending agent tab without its startup command.
+            let agentStartup: Awaited<
+              ReturnType<OrcaRuntimeService['resolveMobileSessionTerminalCommand']>
+            > = {}
+            if (tab.launchAgent) {
+              try {
+                const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
+                agentStartup = await this.resolveMobileSessionTerminalCommand(workspace, {
+                  agent: tab.launchAgent
+                })
+              } catch {
+                // Why: an unavailable agent must not make its restored tab untappable.
+              }
+            }
+            if (this.hasLiveRuntimeSessionOwnedPtyBinding(worktreeId, tab)) {
+              return
+            }
+            try {
+              // Why: coalescing shares attachment, not a caller's host navigation intent.
+              await this.createRuntimeOwnedMobileSessionTerminal(worktreeId, false, undefined, {
+                identity: {
+                  tabId: tab.parentTabId,
+                  leafId: tab.leafId,
+                  sessionId
+                },
+                cwd: tab.startupCwd,
+                command: agentStartup.command,
+                env: agentStartup.env,
+                startupCommandDelivery: agentStartup.startupCommandDelivery,
+                launchConfig: agentStartup.launchConfig,
+                launchAgent: tab.launchAgent,
+                targetGroupId,
+                spawnReservationFreshness,
+                acceptWorkspaceInventory: () =>
+                  acceptMaterialization() &&
+                  !this.hasLiveRuntimeSessionOwnedPtyBinding(worktreeId, tab)
+              })
+            } catch (error) {
+              if (
+                error instanceof Error &&
+                error.message === 'tab_not_found' &&
+                acceptMaterialization() &&
+                this.hasLiveRuntimeSessionOwnedPtyBinding(worktreeId, tab)
+              ) {
+                return
+              }
+              throw error
+            }
+          })()
+          this.pendingMobileTerminalMaterializations.set(materializationKey, materialization)
+          // Why: keyed by the persisted session id a sender resolves from the
+          // leaf, so a concurrent terminal.send blocks on this exact reattach.
+          if (sessionId) {
+            this.pendingPtyReattachBySessionId.set(sessionId, materialization)
           }
+          void materialization
+            .finally(() => {
+              if (
+                this.pendingMobileTerminalMaterializations.get(materializationKey) ===
+                materialization
+              ) {
+                this.pendingMobileTerminalMaterializations.delete(materializationKey)
+              }
+              if (
+                sessionId &&
+                this.pendingPtyReattachBySessionId.get(sessionId) === materialization
+              ) {
+                this.pendingPtyReattachBySessionId.delete(sessionId)
+              }
+            })
+            .catch(() => undefined)
         }
         try {
-          await this.createRuntimeOwnedMobileSessionTerminal(worktreeId, targetsHost, undefined, {
-            identity: {
-              tabId: tab.parentTabId,
-              leafId: tab.leafId,
-              sessionId
-            },
-            cwd: tab.startupCwd,
-            command: agentStartup.command,
-            env: agentStartup.env,
-            startupCommandDelivery: agentStartup.startupCommandDelivery,
-            launchConfig: agentStartup.launchConfig,
-            launchAgent: tab.launchAgent,
-            targetGroupId
-          })
+          await materialization
         } catch (err) {
           if (sessionId && parseAppSshPtyId(sessionId)) {
             // Why: an expired SSH reattach clears durable bindings in the store,
@@ -7436,9 +8520,33 @@ export class OrcaRuntimeService {
           }
           throw err
         }
+        if (!acceptMaterialization()) {
+          throw new Error('tab_not_found')
+        }
+        const materializedSnapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+        const materializedTab = materializedSnapshot?.tabs.find(
+          (candidate): candidate is RuntimeMobileSessionTerminalTab =>
+            candidate.type === 'terminal' && candidate.id === tab.id
+        )
+        if (!materializedSnapshot || !materializedTab) {
+          throw new Error('tab_not_found')
+        }
+        if (targetsHost && !materializedTab.isActive) {
+          this.activateHeadlessMobileSessionTerminalTab(
+            worktreeId,
+            materializedSnapshot,
+            materializedTab,
+            {
+              persistWorkspaceSession: this.shouldPersistHeadlessMobileSessionActivation(
+                materializedSnapshot,
+                materializedTab
+              )
+            }
+          )
+        }
         return this.applyMobileSessionTabNavigation(
           this.getMobileSessionTabsForWorktree(worktreeId),
-          tab.id,
+          materializedTab.id,
           navigation,
           opts.clientNavigationId
         )
@@ -7588,7 +8696,8 @@ export class OrcaRuntimeService {
   private activateHeadlessMobileSessionTerminalTab(
     worktreeId: string,
     snapshot: RuntimeMobileSessionTabsSnapshot,
-    activeTab: RuntimeMobileSessionTerminalTab
+    activeTab: RuntimeMobileSessionTerminalTab,
+    options: { persistWorkspaceSession?: boolean } = {}
   ): void {
     const tabs = snapshot.tabs.map((candidate) => ({
       ...candidate,
@@ -7608,7 +8717,9 @@ export class OrcaRuntimeService {
       ),
       tabs
     }
-    this.persistHeadlessTerminalActiveLeaf(worktreeId, activeTab)
+    if (options.persistWorkspaceSession !== false) {
+      this.persistHeadlessTerminalActiveLeaf(worktreeId, activeTab)
+    }
     this.mobileSessionTabsByWorktree.set(worktreeId, nextSnapshot)
     this.emitMobileSessionTabsSnapshot(nextSnapshot)
   }
@@ -7653,6 +8764,13 @@ export class OrcaRuntimeService {
       return
     }
     const existingLayout = session.terminalLayoutsByTabId?.[tab.parentTabId]
+    const activeOwnerKey = resolveWorkspaceSessionRecordOwnerKey(
+      session.activeTabIdByWorktree,
+      worktreeId
+    )
+    if (!activeOwnerKey) {
+      return
+    }
     const nextLayouts = existingLayout
       ? {
           ...session.terminalLayoutsByTabId,
@@ -7667,7 +8785,7 @@ export class OrcaRuntimeService {
       activeTabId: tab.parentTabId,
       activeTabIdByWorktree: {
         ...session.activeTabIdByWorktree,
-        [worktreeId]: tab.parentTabId
+        [activeOwnerKey]: tab.parentTabId
       },
       terminalLayoutsByTabId: nextLayouts
     })
@@ -7712,8 +8830,15 @@ export class OrcaRuntimeService {
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
+    this.assertMobileSessionFolderWorkspaceExists(worktreeId)
+    const acceptWorkspaceInventory =
+      this.createMobileSessionFolderWorkspaceMutationFence(worktreeId)?.accept
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
     const observedPtyIds = await this.refreshMobileSessionPtyRecords()
+    this.assertMobileSessionFolderWorkspaceExists(worktreeId)
+    if (acceptWorkspaceInventory?.() === false) {
+      throw new Error('tab_not_found')
+    }
     if (graphEpoch !== null) {
       this.assertStableReadyGraph(graphEpoch)
     }
@@ -8236,14 +9361,19 @@ export class OrcaRuntimeService {
     if (!session || !this.store?.setWorkspaceSession) {
       return
     }
-    const tabs = session.tabsByWorktree[worktreeId]
+    const terminalOwnerKey = resolveWorkspaceSessionRecordOwnerKey(
+      session.tabsByWorktree,
+      worktreeId
+    )
+    const unifiedOwnerKey = resolveWorkspaceSessionRecordOwnerKey(session.unifiedTabs, worktreeId)
+    const tabs = terminalOwnerKey ? session.tabsByWorktree[terminalOwnerKey] : undefined
     const nextSession: WorkspaceSessionState = { ...session }
     let changed = false
-    if (tabs?.some((tab) => tab.id === tabId)) {
+    if (terminalOwnerKey && tabs?.some((tab) => tab.id === tabId)) {
       changed = true
       nextSession.tabsByWorktree = {
         ...session.tabsByWorktree,
-        [worktreeId]: tabs.map((tab) =>
+        [terminalOwnerKey]: tabs.map((tab) =>
           tab.id === tabId
             ? {
                 ...tab,
@@ -8256,12 +9386,12 @@ export class OrcaRuntimeService {
       }
     }
 
-    const unifiedTabs = session.unifiedTabs?.[worktreeId]
-    if (unifiedTabs?.some((tab) => tab.id === tabId || tab.entityId === tabId)) {
+    const unifiedTabs = unifiedOwnerKey ? session.unifiedTabs?.[unifiedOwnerKey] : undefined
+    if (unifiedOwnerKey && unifiedTabs?.some((tab) => tab.id === tabId || tab.entityId === tabId)) {
       changed = true
       nextSession.unifiedTabs = {
         ...session.unifiedTabs,
-        [worktreeId]: unifiedTabs.map((tab) =>
+        [unifiedOwnerKey]: unifiedTabs.map((tab) =>
           tab.id === tabId || tab.entityId === tabId
             ? {
                 ...tab,
@@ -8548,13 +9678,21 @@ export class OrcaRuntimeService {
     if (!session || !this.store?.setWorkspaceSession) {
       return
     }
+    const groupOwnerKey = resolveWorkspaceSessionRecordOwnerKey(session.tabGroups, worktreeId)
+    const layoutOwnerKey = resolveWorkspaceSessionRecordOwnerKey(
+      session.tabGroupLayouts,
+      worktreeId
+    )
+    if (!groupOwnerKey || !layoutOwnerKey) {
+      return
+    }
     this.setWorkspaceSessionForWorktree(worktreeId, {
       ...session,
       tabGroups: {
         ...session.tabGroups,
-        [worktreeId]: groups.map((group) => ({
+        [groupOwnerKey]: groups.map((group) => ({
           id: group.id,
-          worktreeId,
+          worktreeId: groupOwnerKey,
           activeTabId: group.activeTabId,
           tabOrder: [...group.tabOrder],
           ...(group.recentTabIds ? { recentTabIds: [...group.recentTabIds] } : {})
@@ -8562,7 +9700,7 @@ export class OrcaRuntimeService {
       },
       tabGroupLayouts: {
         ...session.tabGroupLayouts,
-        [worktreeId]: layout
+        [layoutOwnerKey]: layout
       }
     })
   }
@@ -8578,7 +9716,11 @@ export class OrcaRuntimeService {
     if (!session || !this.store?.setWorkspaceSession) {
       return
     }
-    const tabs = session.tabsByWorktree[worktreeId]
+    const ownerKey = resolveWorkspaceSessionRecordOwnerKey(session.tabsByWorktree, worktreeId)
+    if (!ownerKey) {
+      return
+    }
+    const tabs = session.tabsByWorktree[ownerKey]
     if (!tabs?.some((tab) => tab.id === tabId)) {
       return
     }
@@ -8586,7 +9728,7 @@ export class OrcaRuntimeService {
       ...session,
       tabsByWorktree: {
         ...session.tabsByWorktree,
-        [worktreeId]: tabs.map((tab) => (tab.id === tabId ? { ...tab, customTitle: title } : tab))
+        [ownerKey]: tabs.map((tab) => (tab.id === tabId ? { ...tab, customTitle: title } : tab))
       }
     })
   }
@@ -9300,6 +10442,7 @@ export class OrcaRuntimeService {
     binding?: { tabId: string; leafId: string; incarnationId?: PtyIncarnationId },
     isWsl?: boolean
   ): void {
+    worktreeId = normalizeWorkspaceSessionOwnerKey(worktreeId)
     this.assertPtyDidNotExitBeforeRegistration(ptyId, binding?.incarnationId)
     this.spawnPublishedPtys.add(ptyId)
     // Why: record the renderer pane identity at spawn time so a stalled graph
@@ -9388,6 +10531,26 @@ export class OrcaRuntimeService {
     ) {
       this.earlyExitedPtyIncarnations.delete(ptyId)
     }
+  }
+
+  retireFreshPtyRegistration(ptyId: string, incarnationId?: PtyIncarnationId): void {
+    const pty = this.ptysById.get(ptyId)
+    if (incarnationId && pty?.incarnationId && pty.incarnationId !== incarnationId) {
+      return
+    }
+    const pending = this.pendingPtyRegistrationIncarnations.get(ptyId)
+    const hasMatchingPending =
+      this.pendingPtyRegistrationIncarnations.has(ptyId) &&
+      (pending === null || incarnationId === undefined || pending === incarnationId)
+    this.cancelPendingPtyRegistration(ptyId, incarnationId)
+    if (!pty?.connected) {
+      if (hasMatchingPending) {
+        this.invalidateAllHandlesForPty(ptyId)
+        this.disposeHeadlessTerminal(ptyId)
+      }
+      return
+    }
+    this.onPtyExit(ptyId, 1, incarnationId)
   }
 
   private assertPtyDidNotExitBeforeRegistration(
@@ -16410,6 +17573,7 @@ export class OrcaRuntimeService {
         throw new Error('invalid_terminal_send')
       }
       await assertTerminalInputWithinLimitWithYield(action.text)
+      await this.awaitPendingPtyReattach(pty.pty.ptyId)
       await this.writeTerminalAction(pty.pty.ptyId, action, payload, options)
       return {
         handle,
@@ -16427,6 +17591,9 @@ export class OrcaRuntimeService {
       throw new Error('invalid_terminal_send')
     }
     await assertTerminalInputWithinLimitWithYield(action.text)
+    // Why: settle the reattach before the absence probe, else a session mid-attach
+    // reads as absent and a legitimate send is rejected.
+    await this.awaitPendingPtyReattach(leaf.ptyId)
     // Why: leaf.writable mirrors the renderer graph, which can still answer for
     // a prior process's ptyId — and provider writes to unknown ids are accepted
     // no-ops. Only controller-proven absence rejects; unknown proceeds (a
@@ -16442,6 +17609,16 @@ export class OrcaRuntimeService {
       accepted: true,
       bytesWritten: Buffer.byteLength(payload, 'utf8')
     }
+  }
+
+  // Why: holds a send behind an in-flight reattach so input can't land on a
+  // session this generation restored from inventory but has not attached.
+  // Returns undefined on the common path so a settled session adds no await.
+  private awaitPendingPtyReattach(ptyId: string): Promise<void> | undefined {
+    const pending = this.pendingPtyReattachBySessionId.get(ptyId)
+    // Why: a failed reattach must not swallow the send — the write below still
+    // reports terminal_not_writable when the session is genuinely gone.
+    return pending ? pending.catch(() => undefined) : undefined
   }
 
   async sendTerminalAgentPrompt(
@@ -16460,6 +17637,7 @@ export class OrcaRuntimeService {
         throw new Error('terminal_not_writable')
       }
       await assertTerminalInputWithinLimitWithYield(payload)
+      await this.awaitPendingPtyReattach(pty.pty.ptyId)
       await this.writeTerminalAgentPrompt(pty.pty.ptyId, payload, options)
       return { handle, accepted: true, bytesWritten }
     }
@@ -16469,6 +17647,8 @@ export class OrcaRuntimeService {
       throw new Error('terminal_not_writable')
     }
     await assertTerminalInputWithinLimitWithYield(payload)
+    // Why: same reattach barrier as sendTerminal — settle before the absence probe.
+    await this.awaitPendingPtyReattach(leaf.ptyId)
     // Why: same absence gate as sendTerminal — a stale graph mirror must not
     // accept a prompt into a void; unknown liveness still proceeds.
     if (await this.isLeafPtyProvenAbsent(leaf.ptyId)) {
@@ -18085,8 +19265,14 @@ export class OrcaRuntimeService {
     if (!this.store?.deleteProjectGroup) {
       throw new Error('runtime_unavailable')
     }
+    if (this.store.getFolderWorkspaces) {
+      this.pruneRemovedFolderMobileSessionTabs(this.store.getFolderWorkspaces())
+    }
     const deleted = this.store.deleteProjectGroup(groupId)
     if (deleted) {
+      if (this.store.getFolderWorkspaces) {
+        this.pruneRemovedFolderMobileSessionTabs(this.store.getFolderWorkspaces())
+      }
       this.notifyReposChanged()
     }
     return { deleted }
@@ -18216,8 +19402,14 @@ export class OrcaRuntimeService {
     if (!this.store?.removeFolderWorkspace) {
       throw new Error('runtime_unavailable')
     }
+    if (this.store.getFolderWorkspaces) {
+      this.pruneRemovedFolderMobileSessionTabs(this.store.getFolderWorkspaces())
+    }
     const deleted = this.store.removeFolderWorkspace(folderWorkspaceId)
     if (deleted) {
+      if (this.store.getFolderWorkspaces) {
+        this.pruneRemovedFolderMobileSessionTabs(this.store.getFolderWorkspaces())
+      }
       this.notifyReposChanged()
     }
     return { deleted }
@@ -25108,6 +26300,12 @@ export class OrcaRuntimeService {
       let tabId = canAdoptPaneIdentity ? (hintedTabId as string) : randomUUID()
       let leafId = canAdoptPaneIdentity ? (launchOpts.leafId as string) : randomUUID()
       let paneKey = makePaneKey(tabId, leafId)
+      const getPreAdoptionRejection = (): string | null => {
+        if (launchOpts.signal?.aborted) {
+          return 'client_disconnected'
+        }
+        return launchOpts.acceptWorkspaceInventory?.() === false ? 'tab_not_found' : null
+      }
       const claimedStablePaneCreate = this.ptyController.claimStablePaneCreate?.({
         worktreeId: workspace.id,
         connectionId: workspace.connectionId,
@@ -25123,9 +26321,6 @@ export class OrcaRuntimeService {
         claimedStablePaneCreate?.()
       }
       try {
-        if (launchOpts.signal?.aborted) {
-          throw new Error('client_disconnected')
-        }
         const adoptedBeforeLaunch = await this.ptyController.adoptStablePane?.({
           cols: 120,
           rows: 40,
@@ -25154,30 +26349,33 @@ export class OrcaRuntimeService {
           claudeAgentTeamsMode
         )
         let agentTeamsPlan: Awaited<ReturnType<typeof buildClaudeAgentTeamsLaunchPlan>> | undefined
-        try {
-          agentTeamsPlan = adoptedBeforeLaunch
-            ? undefined
-            : await buildClaudeAgentTeamsLaunchPlan({
-                command: claudeAgentTeamsSourceCommand,
-                mode: effectiveClaudeAgentTeamsMode,
-                baseEnv: {
-                  ...process.env,
-                  ...baseEnv
-                },
-                createTeamEnv: (shimDir, shimBin) =>
-                  this.claudeAgentTeams.createLaunchEnv({
-                    leaderHandle: preAllocatedHandle,
-                    baseEnv: {
-                      ...process.env,
-                      ...baseEnv
-                    },
-                    shimDir,
-                    shimBin
-                  }).env
-              })
-        } catch (error) {
-          releaseStablePaneCreate?.()
-          throw error
+        agentTeamsPlan = adoptedBeforeLaunch
+          ? undefined
+          : await buildClaudeAgentTeamsLaunchPlan({
+              command: claudeAgentTeamsSourceCommand,
+              mode: effectiveClaudeAgentTeamsMode,
+              baseEnv: {
+                ...process.env,
+                ...baseEnv
+              },
+              createTeamEnv: (shimDir, shimBin) =>
+                this.claudeAgentTeams.createLaunchEnv({
+                  leaderHandle: preAllocatedHandle,
+                  baseEnv: {
+                    ...process.env,
+                    ...baseEnv
+                  },
+                  shimDir,
+                  shimBin
+                }).env
+            })
+        let ownsProvisionalAgentTeam = agentTeamsPlan !== undefined && agentTeamsPlan !== null
+        const discardProvisionalAgentTeam = (): void => {
+          if (!ownsProvisionalAgentTeam || !agentTeamsPlan) {
+            return
+          }
+          ownsProvisionalAgentTeam = false
+          this.claudeAgentTeams.removeTeamForLaunchEnv(agentTeamsPlan.env)
         }
         const sequencedStartupCommand =
           agentTeamsPlan &&
@@ -25218,8 +26416,10 @@ export class OrcaRuntimeService {
         )
         const terminalColorQueryReplies =
           launchOpts.terminalColorQueryReplies ?? getTerminalViewColorQueryReplyColors()
-        if (launchOpts.signal?.aborted) {
-          throw new Error('client_disconnected')
+        const preSpawnRejection = getPreAdoptionRejection()
+        if (preSpawnRejection) {
+          discardProvisionalAgentTeam()
+          throw new Error(preSpawnRejection)
         }
         const persistHostSessionBinding =
           launchOpts.persistHostSessionBinding ||
@@ -25267,6 +26467,12 @@ export class OrcaRuntimeService {
               ? { agentSessionCreateOperationId: launchOpts.agentSessionCreateOperationId }
               : {}),
             ...(launchOpts.signal ? { signal: launchOpts.signal } : {}),
+            ...(launchOpts.acceptWorkspaceInventory
+              ? { acceptWorkspaceInventory: launchOpts.acceptWorkspaceInventory }
+              : {}),
+            ...(launchOpts.spawnReservationFreshness
+              ? { spawnReservationFreshness: launchOpts.spawnReservationFreshness }
+              : {}),
             ...(launchOpts.onPtySpawnCommitted
               ? { onPtySpawnCommitted: reportPtySpawnCommitted }
               : {}),
@@ -25280,13 +26486,72 @@ export class OrcaRuntimeService {
             // awaits above if the authoritative window is destroyed mid-spawn.
             ...(persistHostSessionBinding ? { persistHostSessionBinding: true } : {})
           })
+        } catch (error) {
+          discardProvisionalAgentTeam()
+          throw error
         } finally {
-          releaseStablePaneCreate?.()
+          releaseStablePaneCreate()
+        }
+        const postSpawnRejection = getPreAdoptionRejection()
+        if (postSpawnRejection) {
+          discardProvisionalAgentTeam()
+          const shouldKill = result.spawnRetirementToken
+            ? this.ptyController.releaseSpawnReservation?.(
+                result.id,
+                result.spawnRetirementToken
+              ) === true
+            : result.spawnDisposition === 'created'
+          if (shouldKill) {
+            this.ptyController.kill(result.id)
+          }
+          if (result.spawnDisposition === 'created') {
+            this.releaseRejectedPtyRegistrationFence(result.id, result.incarnationId)
+          }
+          throw new Error(postSpawnRejection)
+        }
+        if (result.spawnDisposition === 'awaited' && !result.stablePaneOwner) {
+          discardProvisionalAgentTeam()
+          const creatorPty = this.ptysById.get(result.id)
+          if (!creatorPty) {
+            if (
+              result.spawnRetirementToken &&
+              this.ptyController.releaseSpawnReservation?.(
+                result.id,
+                result.spawnRetirementToken
+              ) === true
+            ) {
+              this.ptyController.kill(result.id)
+            }
+            throw new Error('terminal_not_found')
+          }
+          if (result.spawnRetirementToken) {
+            this.ptyController.adoptSpawnReservation?.(result.id, result.spawnRetirementToken)
+          }
+          reportPtySpawnCommitted()
+          return {
+            handle: this.issuePtyHandle(creatorPty),
+            ...(creatorPty.tabId ? { tabId: creatorPty.tabId } : {}),
+            paneKey: creatorPty.paneKey,
+            ptyId: creatorPty.ptyId,
+            worktreeId: creatorPty.worktreeId,
+            title: getLatestPtyTitle(creatorPty),
+            ...this.getPtyExecutionHostMetadata(creatorPty.ptyId),
+            surface: 'background',
+            ...(result.agentSessionEnsure
+              ? { agentSessionDisposition: result.agentSessionEnsure.disposition }
+              : {})
+          }
+        }
+        if (result.spawnRetirementToken) {
+          this.ptyController.adoptSpawnReservation?.(result.id, result.spawnRetirementToken)
         }
         if (!result.stablePaneOwner) {
           reportPtySpawnCommitted()
         }
         const adoptedStablePane = Boolean(result.stablePaneOwner)
+        if (adoptedStablePane) {
+          discardProvisionalAgentTeam()
+        }
         if (result.agentSessionEnsure) {
           const canonicalSurface = result.agentSessionEnsure.owner.surface
           preAllocatedHandle = canonicalSurface.terminalHandle
@@ -25302,12 +26567,14 @@ export class OrcaRuntimeService {
         try {
           this.assertPtyDidNotExitBeforeRegistration(result.id, result.incarnationId)
         } catch (error) {
+          discardProvisionalAgentTeam()
           if (error instanceof Error && error.message === 'agent_session_exited_during_start') {
             this.releaseRejectedPtyRegistrationFence(result.id, result.incarnationId)
           }
           throw error
         }
         this.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
+        ownsProvisionalAgentTeam = false
         if (result.wslDistro) {
           this.preparePtyExecutionContext(result.id, result.wslDistro)
         }
@@ -25318,7 +26585,7 @@ export class OrcaRuntimeService {
         })
         const pty = this.getOrCreatePtyWorktreeRecord(result.id)
         if (pty) {
-          if (persistHostSessionBinding) {
+          if (persistHostSessionBinding && !adoptedStablePane) {
             pty.runtimeSessionOwned = true
           }
           if (!adoptedStablePane) {
@@ -26037,6 +27304,8 @@ export class OrcaRuntimeService {
       targetGroupId?: string
       launchConfig?: SleepingAgentLaunchConfig
       signal?: AbortSignal
+      acceptWorkspaceInventory?: () => boolean
+      spawnReservationFreshness?: string | null
     } = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
@@ -26068,7 +27337,11 @@ export class OrcaRuntimeService {
       persistHostSessionBinding: true,
       // Why: this method publishes the authoritative snapshot below; skip the intermediate publish to avoid a wrong-group flash.
       deferMobileSessionPublish: true,
-      signal: opts.signal
+      signal: opts.signal,
+      acceptWorkspaceInventory: opts.acceptWorkspaceInventory,
+      ...(opts.spawnReservationFreshness
+        ? { spawnReservationFreshness: opts.spawnReservationFreshness }
+        : {})
     })
     const livePty = this.getLivePtyForHandle(terminal.handle)
     if (!livePty) {
@@ -26948,8 +28221,17 @@ export class OrcaRuntimeService {
       })
     } catch (error) {
       this.setPairedRendererSessionOwnership(result.id, false)
-      this.ptyController.kill?.(result.id)
+      const shouldKill = result.spawnRetirementToken
+        ? this.ptyController.releaseSpawnReservation?.(result.id, result.spawnRetirementToken) ===
+          true
+        : true
+      if (shouldKill) {
+        this.ptyController.kill?.(result.id)
+      }
       throw error
+    }
+    if (result.spawnRetirementToken) {
+      this.ptyController.adoptSpawnReservation?.(result.id, result.spawnRetirementToken)
     }
     if (createdPty) {
       this.publishPtyBackedMobileSessionTerminal(workspace.id, createdPty, {
@@ -27016,6 +28298,10 @@ export class OrcaRuntimeService {
       shimDir,
       shimBin
     })
+  }
+
+  discardClaudeAgentTeamsLeaderForHandle(handle: string): void {
+    this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
   }
 
   private waitForNewLeafInTab(
@@ -27718,6 +29004,7 @@ export class OrcaRuntimeService {
     if (this.graphStatus !== 'ready') {
       return
     }
+    this.recoveredPersistedFolderMobileSessionTabs.clear()
     // Why: a renderer reload tears down the live graph, so live handles must go stale immediately, not be reused against the rebuild.
     this.rendererGraphEpoch += 1
     this.graphStatus = 'reloading'
@@ -27750,6 +29037,7 @@ export class OrcaRuntimeService {
     this.graphStatus = 'unavailable'
     this.setTerminalSideEffectConsumerAvailable(false)
     this.authoritativeWindowId = null
+    this.recoveredPersistedFolderMobileSessionTabs.clear()
     this.rememberDetachedPreAllocatedLeaves()
     this.tabs.clear()
     this.leaves.clear()
@@ -27777,13 +29065,20 @@ export class OrcaRuntimeService {
     }
   }
 
-  private resolveFolderWorkspaceConnectionId(workspace: FolderWorkspace): string | null {
-    const repos = this.store?.getRepos() ?? []
-    const projectGroups = this.store?.getProjectGroups?.() ?? []
+  private resolveFolderWorkspaceConnectionId(
+    workspace: FolderWorkspace,
+    inventory?: {
+      repos: readonly Repo[]
+      projectGroups: readonly ProjectGroup[]
+    }
+  ): string | null {
+    const repos = inventory?.repos ?? this.store?.getRepos() ?? []
+    const projectGroups = inventory?.projectGroups ?? this.store?.getProjectGroups?.() ?? []
+    const projectGroup = projectGroups.find((group) => group.id === workspace.projectGroupId)
     const connection = inferFolderWorkspacePathConnection({
       folderPath: workspace.folderPath,
       projectGroupId: workspace.projectGroupId,
-      connectionId: workspace.connectionId ?? null,
+      connectionId: workspace.connectionId ?? projectGroup?.connectionId ?? null,
       projectGroups,
       repos
     })
@@ -27917,7 +29212,10 @@ export class OrcaRuntimeService {
   }
 
   private getValidatedExplicitWorktreeIdSelector(selector: string | undefined): string | null {
-    const worktreeId = getExplicitWorktreeIdSelector(selector)
+    const selectedWorktreeId = getExplicitWorktreeIdSelector(selector)
+    const worktreeId = selectedWorktreeId
+      ? normalizeWorkspaceSessionOwnerKey(selectedWorktreeId)
+      : null
     if (
       worktreeId &&
       !worktreeId.includes(WORKTREE_ID_SEPARATOR) &&
@@ -28860,6 +30158,7 @@ export class OrcaRuntimeService {
       >
     > = {}
   ): RuntimePtyWorktreeRecord {
+    worktreeId = normalizeWorkspaceSessionOwnerKey(worktreeId)
     let pty = this.ptysById.get(ptyId)
     if (!pty) {
       const titleObservedAt = state.title ? this.nextTitleObservationSequence() : null
@@ -29003,12 +30302,16 @@ export class OrcaRuntimeService {
   private async refreshPtyWorktreeRecordsFromController(
     resolvedWorktrees: ResolvedWorktree[],
     targetWorktreeId: string | null = null,
-    deadline?: number
+    deadline?: number,
+    acceptInventory?: () => boolean,
+    connectionId?: string | null
   ): Promise<Set<string> | null> {
     const inventory = await this.refreshPtyWorktreeRecordsWithControllerInventory(
       resolvedWorktrees,
       targetWorktreeId,
-      deadline
+      deadline,
+      connectionId,
+      acceptInventory
     )
     return inventory ? new Set(inventory.livePtyIds) : null
   }
@@ -29017,7 +30320,8 @@ export class OrcaRuntimeService {
     resolvedWorktrees: ResolvedWorktree[],
     targetWorktreeId: string | null = null,
     deadline?: number,
-    connectionId?: string | null
+    connectionId?: string | null,
+    acceptInventory?: () => boolean
   ): Promise<PtyControllerInventory | null> {
     if (targetWorktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
       const targetedLiveness = this.refreshFloatingWorkspacePtyLiveness()
@@ -29035,11 +30339,6 @@ export class OrcaRuntimeService {
     const inventoryGeneration = this.ptyControllerInventorySequence + 1
     this.ptyControllerInventorySequence = inventoryGeneration
     const providerKey = typeof connectionId === 'string' ? `ssh:${connectionId}` : 'local'
-    if (connectionId === undefined) {
-      this.ptyControllerAggregateInventoryGeneration = inventoryGeneration
-    } else {
-      this.ptyControllerInventoryGenerationByProvider.set(providerKey, inventoryGeneration)
-    }
     const sessionsResult = await withTimeoutResult(
       this.ptyController.listProcesses(connectionId),
       deadline === undefined
@@ -29050,17 +30349,25 @@ export class OrcaRuntimeService {
       // Why: a transient controller failure is not evidence that retained PTYs exited.
       return null
     }
-    const isCurrentInventory =
+    if (acceptInventory && !acceptInventory()) {
+      return null
+    }
+    const hasNewerAcceptedInventory =
       connectionId === undefined
-        ? this.ptyControllerAggregateInventoryGeneration === inventoryGeneration &&
-          ![...this.ptyControllerInventoryGenerationByProvider.values()].some(
+        ? this.ptyControllerAcceptedAggregateInventoryGeneration > inventoryGeneration ||
+          [...this.ptyControllerAcceptedInventoryGenerationByProvider.values()].some(
             (generation) => generation > inventoryGeneration
           )
-        : this.ptyControllerInventoryGenerationByProvider.get(providerKey) ===
-            inventoryGeneration &&
-          this.ptyControllerAggregateInventoryGeneration <= inventoryGeneration
-    if (!isCurrentInventory) {
+        : (this.ptyControllerAcceptedInventoryGenerationByProvider.get(providerKey) ?? 0) >
+            inventoryGeneration ||
+          this.ptyControllerAcceptedAggregateInventoryGeneration > inventoryGeneration
+    if (hasNewerAcceptedInventory) {
       return null
+    }
+    if (connectionId === undefined) {
+      this.ptyControllerAcceptedAggregateInventoryGeneration = inventoryGeneration
+    } else {
+      this.ptyControllerAcceptedInventoryGenerationByProvider.set(providerKey, inventoryGeneration)
     }
     const sessions = sessionsResult.value
     const controllerIdentityByPtyId = new Map<string, PtyControllerTerminalIdentity>()
@@ -29094,37 +30401,164 @@ export class OrcaRuntimeService {
     for (const ptyId of ambiguousControllerPtyIds) {
       controllerIdentityByPtyId.delete(ptyId)
     }
-    const persistedIndexesByHostId = new Map<
-      ExecutionHostId,
-      {
-        worktreeIdByPtyId: ReadonlyMap<string, string>
-        surfaceByPtyId: ReturnType<typeof indexPersistedPtySurfaceBindings>
-      }
-    >()
+    const persistedIndexesByHostId = new Map<ExecutionHostId, PersistedPtyBindings>()
     const getPersistedIndexes = (hostId: ExecutionHostId) => {
       const existing = persistedIndexesByHostId.get(hostId)
       if (existing) {
         return existing
       }
       const persistedSession = this.store?.getWorkspaceSession?.(hostId)
-      const indexes = {
-        worktreeIdByPtyId: indexPersistedPtyWorktreeBindings(persistedSession),
-        surfaceByPtyId: indexPersistedPtySurfaceBindings(persistedSession)
-      }
+      const indexes = indexPersistedPtyBindings(persistedSession)
       persistedIndexesByHostId.set(hostId, indexes)
       return indexes
     }
     const allLivePtyIds = new Set(sessions.map((session) => session.id))
     const selectedLivePtyIds = new Set<string>()
+    let declaredHostIdByFolderWorkspaceId: Map<string, ExecutionHostId> | null = null
+    let reposById: Map<string, Repo[]> | null = null
+    const getDeclaredWorkspaceHostId = (
+      worktreeId: string,
+      transportConnectionId: string | null
+    ): ExecutionHostId | null => {
+      const scope = parseWorkspaceKey(worktreeId)
+      if (scope?.type === 'folder') {
+        if (!declaredHostIdByFolderWorkspaceId) {
+          const projectGroupById = new Map(
+            (this.store?.getProjectGroups?.() ?? []).map((group) => [group.id, group])
+          )
+          declaredHostIdByFolderWorkspaceId = new Map()
+          for (const workspace of this.store?.getFolderWorkspaces?.() ?? []) {
+            const declaredHostId = parseExecutionHostId(
+              workspace.executionHostId ??
+                projectGroupById.get(workspace.projectGroupId)?.executionHostId
+            )?.id
+            if (declaredHostId) {
+              declaredHostIdByFolderWorkspaceId.set(workspace.id, declaredHostId)
+            }
+          }
+        }
+        return declaredHostIdByFolderWorkspaceId.get(scope.folderWorkspaceId) ?? null
+      }
+      const persistedWorktreeId = scope?.type === 'worktree' ? scope.worktreeId : worktreeId
+      const parsed = splitWorktreeIdForFilesystem(persistedWorktreeId)
+      if (!parsed) {
+        return null
+      }
+      const declaredHostId = parseExecutionHostId(
+        this.store?.getWorktreeMeta?.(persistedWorktreeId)?.hostId
+      )?.id
+      if (declaredHostId) {
+        return declaredHostId
+      }
+      if (!reposById) {
+        reposById = new Map()
+        for (const repo of this.store?.getRepos?.() ?? []) {
+          const candidates = reposById.get(repo.id)
+          if (candidates) {
+            candidates.push(repo)
+          } else {
+            reposById.set(repo.id, [repo])
+          }
+        }
+      }
+      const candidates = reposById.get(parsed.repoId) ?? []
+      const ownerCandidates = transportConnectionId
+        ? candidates.filter((repo) => repo.connectionId === transportConnectionId)
+        : candidates
+      const exactCandidates = ownerCandidates.filter((repo) =>
+        areWorktreePathsEqual(repo.path, parsed.worktreePath)
+      )
+      const owner =
+        exactCandidates.length === 1
+          ? exactCandidates[0]
+          : ownerCandidates.length === 1
+            ? ownerCandidates[0]
+            : null
+      return parseExecutionHostId(owner?.executionHostId)?.id ?? null
+    }
+    let ptyOwnershipInventory: {
+      folderWorkspaces: readonly FolderWorkspace[]
+      repos: readonly Repo[]
+      projectGroups: readonly ProjectGroup[]
+    } | null = null
+    const getPtyOwnershipInventory = () => {
+      ptyOwnershipInventory ??= {
+        folderWorkspaces: this.store?.getFolderWorkspaces?.() ?? [],
+        repos: this.store?.getRepos?.() ?? [],
+        projectGroups: this.store?.getProjectGroups?.() ?? []
+      }
+      return ptyOwnershipInventory
+    }
+    const findPersistedPtyOwner = (
+      ptyId: string,
+      transportConnectionId: string | null,
+      providerHostId: ExecutionHostId
+    ) => {
+      const hostIds = new Set<ExecutionHostId>([
+        providerHostId,
+        ...(this.store?.getWorkspaceSessionHostIds?.() ?? [])
+      ])
+      const candidates: {
+        hostId: ExecutionHostId
+        indexes: PersistedPtyBindings
+        worktreeId: string
+        surface: PersistedPtySurfaceBinding | undefined
+      }[] = []
+      for (const hostId of hostIds) {
+        const indexes = getPersistedIndexes(hostId)
+        const worktreeId = lookupPersistedPtyWorktreeId(indexes, ptyId, transportConnectionId)
+        if (!worktreeId) {
+          continue
+        }
+        const declaredHostId = getDeclaredWorkspaceHostId(worktreeId, transportConnectionId)
+        if (declaredHostId ? declaredHostId !== hostId : hostId !== providerHostId) {
+          continue
+        }
+        if (
+          hostId !== providerHostId &&
+          (!transportConnectionId ||
+            !this.workspaceUsesSshRelayTarget(
+              worktreeId,
+              transportConnectionId,
+              new Set([hostId]),
+              getPtyOwnershipInventory()
+            ))
+        ) {
+          continue
+        }
+        candidates.push({
+          hostId,
+          indexes,
+          worktreeId,
+          surface: lookupPersistedPtySurface(indexes, ptyId, transportConnectionId)
+        })
+      }
+      return candidates.length === 1 ? candidates[0] : null
+    }
     for (const session of sessions) {
       const sessionConnectionId =
         parseAppSshPtyId(session.id)?.connectionId ??
         (typeof connectionId === 'string' ? connectionId : null)
-      const persistedIndexes = getPersistedIndexes(
-        sessionConnectionId ? toSshExecutionHostId(sessionConnectionId) : LOCAL_EXECUTION_HOST_ID
-      )
+      const declaredHostId = session.worktreeId
+        ? getDeclaredWorkspaceHostId(session.worktreeId, sessionConnectionId)
+        : null
+      const providerHostId =
+        connectionId !== undefined
+          ? connectionId
+            ? toSshExecutionHostId(connectionId)
+            : LOCAL_EXECUTION_HOST_ID
+          : sessionConnectionId
+            ? toSshExecutionHostId(sessionConnectionId)
+            : LOCAL_EXECUTION_HOST_ID
+      const indexedOwner = session.worktreeId
+        ? null
+        : findPersistedPtyOwner(session.id, sessionConnectionId, providerHostId)
+      const inventoryHostId = declaredHostId ?? indexedOwner?.hostId ?? providerHostId
+      const persistedIndexes = getPersistedIndexes(inventoryHostId)
       const controllerIdentity = controllerIdentityByPtyId.get(session.id)
-      const persistedWorktreeId = persistedIndexes.worktreeIdByPtyId.get(session.id)
+      const persistedWorktreeId =
+        indexedOwner?.worktreeId ??
+        lookupPersistedPtyWorktreeId(persistedIndexes, session.id, sessionConnectionId)
       const providerWorktree = resolvedWorktrees.find(
         (worktree) => session.worktreeId && runtimeWorktreeIdsEqual(worktree.id, session.worktreeId)
       )
@@ -29146,10 +30580,13 @@ export class OrcaRuntimeService {
         : hasMigrationEvidence
           ? (persistedWorktree?.id ?? null)
           : (session.worktreeId ??
+            indexedOwner?.worktreeId ??
             persistedWorktree?.id ??
             inferredWorktreeId ??
             findResolvedWorktreeIdForPath(resolvedWorktrees, session.cwd))
-      const persistedSurface = persistedIndexes.surfaceByPtyId.get(session.id)
+      const persistedSurface =
+        indexedOwner?.surface ??
+        lookupPersistedPtySurface(persistedIndexes, session.id, sessionConnectionId)
       const restoresExactSurface =
         persistedSurface &&
         session.incarnationId &&
@@ -29182,6 +30619,11 @@ export class OrcaRuntimeService {
       if (worktreeId) {
         const pty = this.recordPtyWorktree(session.id, worktreeId, {
           connected: true,
+          ...((connectionId !== undefined &&
+            (sessionConnectionId !== null || targetWorktreeId === null)) ||
+          sessionConnectionId
+            ? { connectionId: sessionConnectionId }
+            : {}),
           ...(session.incarnationId ? { incarnationId: session.incarnationId } : {}),
           ...(session.wslDistro !== undefined
             ? { isWsl: Boolean(session.wslDistro), wslDistro: session.wslDistro }
@@ -29504,6 +30946,21 @@ export class OrcaRuntimeService {
     if (snapshots === undefined) {
       return changedWorktreeIds
     }
+    const folderWorkspaces = this.store?.getFolderWorkspaces?.() ?? []
+    const liveFolderIds = this.store?.getFolderWorkspaces
+      ? new Set(folderWorkspaces.map((workspace) => workspace.id))
+      : null
+    if (liveFolderIds) {
+      this.pruneRemovedFolderMobileSessionTabs(folderWorkspaces)
+    }
+    const isRemovedFolder = (worktreeId: string): boolean => {
+      const scope = parseWorkspaceKey(worktreeId)
+      return (
+        liveFolderIds !== null &&
+        scope?.type === 'folder' &&
+        !liveFolderIds.has(scope.folderWorkspaceId)
+      )
+    }
     // Why: snapshots are immutable — every writer replaces the map entry with a
     // new object, and the accept gate below drops semantically-unchanged
     // renderer resends before they replace an entry — so reference identity
@@ -29513,13 +30970,41 @@ export class OrcaRuntimeService {
       missingSnapshotOnly: true,
       notify: false
     })
-    // Why: graph sync must scan each persisted host session once, not once per workspace.
-    const worktreeSessionsToHydrate = new Map<string, WorkspaceSessionState | null>(
-      this.getWorkspaceSessionHydrationTargets(Boolean(this.offscreenBrowserBackend))
+    const knownWorktrees = this.getKnownWorkspaceSessionWorktrees(folderWorkspaces)
+    const normalizedRendererSnapshots = snapshots.map((snapshot) => {
+      const worktree = normalizeWorkspaceSessionOwnerKey(snapshot.worktree)
+      return worktree === snapshot.worktree ? snapshot : { ...snapshot, worktree }
+    })
+    const rendererSnapshotCountByWorktree = new Map<string, number>()
+    for (const snapshot of normalizedRendererSnapshots) {
+      rendererSnapshotCountByWorktree.set(
+        snapshot.worktree,
+        (rendererSnapshotCountByWorktree.get(snapshot.worktree) ?? 0) + 1
+      )
+    }
+    // Why: raw/scoped duplicate owners are ambiguous; accepting either can publish the wrong tab set.
+    const rendererSnapshots = normalizedRendererSnapshots.filter(
+      (snapshot) => rendererSnapshotCountByWorktree.get(snapshot.worktree) === 1
     )
-    if (this.offscreenBrowserBackend) {
-      for (const snapshot of snapshots) {
-        if (!worktreeSessionsToHydrate.has(snapshot.worktree)) {
+    this.pruneUnownedWorkspaceSessionMobileSnapshots(knownWorktrees)
+    const isUnownedPersistedWorktree = (worktreeId: string): boolean =>
+      knownWorktrees.worktreeIds.has(worktreeId) &&
+      !knownWorktrees.sessionByWorktreeId.has(worktreeId)
+    // Why: graph sync scans each host session once, while missing folder snapshots still need full persisted recovery.
+    const worktreeSessionsToHydrate = new Map<string, WorkspaceSessionState | null>(
+      this.getWorkspaceSessionHydrationTargets(
+        Boolean(this.offscreenBrowserBackend),
+        knownWorktrees
+      )
+    )
+    const rendererWorktreeIds = new Set<string>()
+    for (const snapshot of rendererSnapshots) {
+      if (!isRemovedFolder(snapshot.worktree) && !isUnownedPersistedWorktree(snapshot.worktree)) {
+        rendererWorktreeIds.add(snapshot.worktree)
+        if (parseWorkspaceKey(snapshot.worktree)?.type === 'folder') {
+          this.recoveredPersistedFolderMobileSessionTabs.add(snapshot.worktree)
+        }
+        if (this.offscreenBrowserBackend && !worktreeSessionsToHydrate.has(snapshot.worktree)) {
           worktreeSessionsToHydrate.set(snapshot.worktree, null)
         }
       }
@@ -29531,14 +31016,21 @@ export class OrcaRuntimeService {
         onlyRuntimeOwnedTerminals: true,
         ...(workspaceSession ? { runtimeOwnedTerminalCandidateKnown: true, workspaceSession } : {})
       })
+      if (workspaceSession && !rendererWorktreeIds.has(worktreeId)) {
+        this.recoverPersistedFolderMobileSessionTabsOnce(worktreeId, workspaceSession)
+      }
     }
     const nextWorktrees = new Set<string>()
-    const incomingWorktreeIds = new Set(snapshots.map((snapshot) => snapshot.worktree))
+    const incomingWorktreeIds = new Set(rendererSnapshots.map((snapshot) => snapshot.worktree))
     // Why: the renderer withholds unchanged snapshots to keep the graph payload
     // small, so these worktrees are still live and must not fall into the prune
     // below. Ask for a republish when main no longer holds that accepted renderer
     // publication or a formerly-preserved runtime tab has gone stale.
-    for (const worktreeId of unchangedWorktreeIds ?? []) {
+    for (const rendererWorktreeId of unchangedWorktreeIds ?? []) {
+      const worktreeId = normalizeWorkspaceSessionOwnerKey(rendererWorktreeId)
+      if (isRemovedFolder(worktreeId) || isUnownedPersistedWorktree(worktreeId)) {
+        continue
+      }
       const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
       const accepted = this.acceptedRendererMobileSnapshotByWorktree.get(worktreeId)
       if (existing) {
@@ -29553,19 +31045,25 @@ export class OrcaRuntimeService {
         (existing.tabs.length === accepted.rendererTabCount ||
           !this.storedMobileSnapshotHasStalePreservedTab(
             existing,
-            accepted.rendererTabIdentityKeys
+            accepted.rendererTabIdentityKeys,
+            knownWorktrees.sessionByWorktreeId.get(worktreeId) ?? getDefaultWorkspaceSession()
           ))
       ) {
         continue
       }
       if (!incomingWorktreeIds.has(worktreeId)) {
-        resyncWorktreeIds.add(worktreeId)
+        // Why: the renderer keys its delivery memo by the id it published, so a
+        // resync request must echo that raw id, not main's normalized owner key.
+        resyncWorktreeIds.add(rendererWorktreeId)
       }
       // Why: the accept gate compares against the renderer's last accepted pair,
       // which outlives the dropped snapshot and would reject the republish.
       this.acceptedRendererMobileSnapshotByWorktree.delete(worktreeId)
     }
-    for (const snapshot of snapshots) {
+    for (const snapshot of rendererSnapshots) {
+      if (isRemovedFolder(snapshot.worktree) || isUnownedPersistedWorktree(snapshot.worktree)) {
+        continue
+      }
       nextWorktrees.add(snapshot.worktree)
       const existing = this.mobileSessionTabsByWorktree.get(snapshot.worktree)
       // Why: judge renderer publication ordering against the renderer's own
@@ -29589,7 +31087,12 @@ export class OrcaRuntimeService {
         !(
           existing &&
           snapshot.snapshotVersion === accepted.rendererVersion &&
-          this.storedMobileSnapshotHasStalePreservedTab(existing, accepted.rendererTabIdentityKeys)
+          this.storedMobileSnapshotHasStalePreservedTab(
+            existing,
+            accepted.rendererTabIdentityKeys,
+            knownWorktrees.sessionByWorktreeId.get(snapshot.worktree) ??
+              getDefaultWorkspaceSession()
+          )
         )
       ) {
         continue
@@ -29597,7 +31100,11 @@ export class OrcaRuntimeService {
       this.reconcileNativeChatLaunchDraftResolutionTombstones(snapshot)
       const launchDraftFencedSnapshot = this.applyNativeChatLaunchDraftResolutionFence(snapshot)
       const fencedSnapshot = this.applyMobileSessionRetirementFences(launchDraftFencedSnapshot)
-      const nextSnapshot = this.mergePreservedHeadlessMobileSessionTabs(fencedSnapshot, existing)
+      const nextSnapshot = this.mergePreservedHeadlessMobileSessionTabs(
+        fencedSnapshot,
+        existing,
+        knownWorktrees.sessionByWorktreeId.get(snapshot.worktree) ?? getDefaultWorkspaceSession()
+      )
       // Why: clients drop same-epoch frames whose version isn't strictly newer,
       // and main-local touches may already have emitted a higher version than
       // the renderer's counter — keep the stored version strictly monotonic so
@@ -29611,6 +31118,7 @@ export class OrcaRuntimeService {
           ? nextSnapshot
           : { ...nextSnapshot, snapshotVersion: storedVersion }
       )
+      this.removedMobileSessionTabsByWorktree.delete(snapshot.worktree)
       this.acceptedRendererMobileSnapshotByWorktree.set(snapshot.worktree, {
         publicationEpoch: snapshot.publicationEpoch,
         rendererVersion: snapshot.snapshotVersion,
@@ -29622,7 +31130,10 @@ export class OrcaRuntimeService {
     }
     for (const [worktreeId, existing] of [...this.mobileSessionTabsByWorktree.entries()]) {
       if (!nextWorktrees.has(worktreeId)) {
-        const preserved = this.buildPreservedHeadlessMobileSessionSnapshot(existing)
+        const preserved = this.buildPreservedHeadlessMobileSessionSnapshot(
+          existing,
+          knownWorktrees.sessionByWorktreeId.get(worktreeId) ?? getDefaultWorkspaceSession()
+        )
         if (preserved) {
           // Why: preservation filters existing.tabs in place (same objects) and
           // the merge epoch hashes the preserved identities idempotently, so an
@@ -29658,12 +31169,17 @@ export class OrcaRuntimeService {
 
   private mergePreservedHeadlessMobileSessionTabs(
     snapshot: RuntimeMobileSessionTabsSnapshot,
-    existing: RuntimeMobileSessionTabsSnapshot | undefined
+    existing: RuntimeMobileSessionTabsSnapshot | undefined,
+    workspaceSession?: WorkspaceSessionState
   ): RuntimeMobileSessionTabsSnapshot {
     if (!existing) {
       return snapshot
     }
-    const preservedTabs = this.collectPreservedHeadlessMobileSessionTabs(existing, snapshot)
+    const preservedTabs = this.collectPreservedHeadlessMobileSessionTabs(
+      existing,
+      snapshot,
+      workspaceSession
+    )
     if (preservedTabs.length === 0) {
       return snapshot
     }
@@ -29705,9 +31221,14 @@ export class OrcaRuntimeService {
   }
 
   private buildPreservedHeadlessMobileSessionSnapshot(
-    existing: RuntimeMobileSessionTabsSnapshot
+    existing: RuntimeMobileSessionTabsSnapshot,
+    workspaceSession?: WorkspaceSessionState
   ): RuntimeMobileSessionTabsSnapshot | null {
-    const tabs = this.collectPreservedHeadlessMobileSessionTabs(existing)
+    const tabs = this.collectPreservedHeadlessMobileSessionTabs(
+      existing,
+      undefined,
+      workspaceSession
+    )
     if (tabs.length === 0) {
       return null
     }
@@ -29745,19 +31266,21 @@ export class OrcaRuntimeService {
   // and persisted session, or browser page closed), the stored snapshot is stale.
   private storedMobileSnapshotHasStalePreservedTab(
     existing: RuntimeMobileSessionTabsSnapshot,
-    rendererTabIdentityKeys: ReadonlySet<string>
+    rendererTabIdentityKeys: ReadonlySet<string>,
+    workspaceSession?: WorkspaceSessionState
   ): boolean {
     return existing.tabs.some(
       (tab) =>
         !this.getMobileSessionSnapshotTabIdentityKeys(tab).some((id) =>
           rendererTabIdentityKeys.has(id)
-        ) && !this.shouldPreserveHeadlessMobileSessionTab(existing, tab)
+        ) && !this.shouldPreserveHeadlessMobileSessionTab(existing, tab, workspaceSession)
     )
   }
 
   private collectPreservedHeadlessMobileSessionTabs(
     existing: RuntimeMobileSessionTabsSnapshot,
-    incoming?: RuntimeMobileSessionTabsSnapshot
+    incoming?: RuntimeMobileSessionTabsSnapshot,
+    workspaceSession?: WorkspaceSessionState
   ): RuntimeMobileSessionSnapshotTab[] {
     const incomingIds = new Set(
       incoming?.tabs.flatMap((tab) => this.getMobileSessionSnapshotTabIdentityKeys(tab)) ?? []
@@ -29766,13 +31289,14 @@ export class OrcaRuntimeService {
       if (this.getMobileSessionSnapshotTabIdentityKeys(tab).some((id) => incomingIds.has(id))) {
         return false
       }
-      return this.shouldPreserveHeadlessMobileSessionTab(existing, tab)
+      return this.shouldPreserveHeadlessMobileSessionTab(existing, tab, workspaceSession)
     })
   }
 
   private shouldPreserveHeadlessMobileSessionTab(
     snapshot: RuntimeMobileSessionTabsSnapshot,
-    tab: RuntimeMobileSessionSnapshotTab
+    tab: RuntimeMobileSessionSnapshotTab,
+    workspaceSession?: WorkspaceSessionState
   ): boolean {
     // Why: headless offscreen browser tabs exist only server-side, so a renderer-graph merge must keep them, not prune as "not in the graph".
     if (tab.type === 'browser') {
@@ -29798,11 +31322,47 @@ export class OrcaRuntimeService {
     // preservation applies only to genuinely headless-built snapshots; in a
     // renderer-based one, only tabs with a live-or-persisted serve/SSH binding
     // are runtime-owned and preservable.
-    return (
-      this.isHeadlessBuiltMobileSessionPublicationBase(snapshot.publicationEpoch) ||
-      this.hasLiveRuntimeSessionOwnedPtyBinding(snapshot.worktree, tab) ||
-      this.hasLiveOrPersistedServeOrSshOwnedPtyBinding(snapshot.worktree, tab)
+    const broadlyHeadlessOwned = this.isHeadlessBuiltMobileSessionPublicationBase(
+      snapshot.publicationEpoch
     )
+    const attachedFolderRecovery =
+      broadlyHeadlessOwned &&
+      parseWorkspaceKey(snapshot.worktree)?.type === 'folder' &&
+      this.getAvailableAuthoritativeWindow() !== null
+    return (
+      (broadlyHeadlessOwned &&
+        (!attachedFolderRecovery ||
+          this.hasPersistedWorkspaceSessionTerminalSurface(
+            snapshot.worktree,
+            tab,
+            workspaceSession
+          ))) ||
+      this.hasLiveRuntimeSessionOwnedPtyBinding(snapshot.worktree, tab) ||
+      this.hasLiveOrPersistedServeOrSshOwnedPtyBinding(snapshot.worktree, tab, workspaceSession)
+    )
+  }
+
+  private hasPersistedWorkspaceSessionTerminalSurface(
+    worktreeId: string,
+    tab: RuntimeMobileSessionTerminalTab,
+    workspaceSession?: WorkspaceSessionState
+  ): boolean {
+    const session = workspaceSession ?? this.getWorkspaceSessionForWorktree(worktreeId)
+    const ownerKey = resolveWorkspaceSessionRecordOwnerKey(session?.tabsByWorktree, worktreeId)
+    const persistedTab = (ownerKey ? session?.tabsByWorktree?.[ownerKey] : undefined)?.find(
+      (candidate) => candidate.id === tab.parentTabId
+    )
+    if (!session || !persistedTab) {
+      return false
+    }
+    const layout = session.terminalLayoutsByTabId?.[persistedTab.id]
+    const leafIds = this.collectPersistedTerminalLeafIds(layout)
+    if (leafIds.length > 0 && !leafIds.includes(tab.leafId)) {
+      return false
+    }
+    const persistedPtyId =
+      layout?.ptyIdsByLeafId?.[tab.leafId] ?? (leafIds.length <= 1 ? persistedTab.ptyId : null)
+    return !tab.ptyId || !persistedPtyId || tab.ptyId === persistedPtyId
   }
 
   private isHeadlessMobileSessionPublication(publicationEpoch: string): boolean {
@@ -29843,8 +31403,10 @@ export class OrcaRuntimeService {
     return `${normalizedPublicationEpoch}:headless-merge:${signature}`
   }
 
-  private notifyMobileSessionTabsRemoved(worktreeId: string): void {
-    const removed: RuntimeMobileSessionTabsRemovedResult = {
+  private createMobileSessionTabsRemovedResult(
+    worktreeId: string
+  ): RuntimeMobileSessionTabsRemovedResult {
+    return {
       worktree: worktreeId,
       publicationEpoch: `removed:${Date.now().toString(36)}`,
       snapshotVersion: 0,
@@ -29854,9 +31416,52 @@ export class OrcaRuntimeService {
       activeTabType: null,
       tabs: []
     }
+  }
+
+  private rememberRemovedFolderMobileSessionTabs(
+    worktreeId: string
+  ): RuntimeMobileSessionTabsRemovedResult {
+    const existing = this.removedMobileSessionTabsByWorktree.get(worktreeId)
+    if (existing) {
+      return existing
+    }
+    const removed = this.createMobileSessionTabsRemovedResult(worktreeId)
+    this.removedMobileSessionTabsByWorktree.set(worktreeId, removed)
+    while (this.removedMobileSessionTabsByWorktree.size > 512) {
+      const oldestWorktreeId = this.removedMobileSessionTabsByWorktree.keys().next().value
+      if (typeof oldestWorktreeId !== 'string') {
+        break
+      }
+      this.removedMobileSessionTabsByWorktree.delete(oldestWorktreeId)
+    }
+    return removed
+  }
+
+  private notifyMobileSessionTabsRemoved(worktreeId: string, retainFolderTombstone = false): void {
+    const removed = retainFolderTombstone
+      ? this.rememberRemovedFolderMobileSessionTabs(worktreeId)
+      : this.createMobileSessionTabsRemovedResult(worktreeId)
     for (const subscription of this.mobileSessionTabListeners) {
       subscription.listener(
         this.clientSessionTabSelections.project(removed, subscription.clientNavigationId)
+      )
+    }
+    this.clientSessionTabSelections.forgetWorktree(worktreeId)
+  }
+
+  private notifyMobileSessionTabsEmpty(worktreeId: string): void {
+    const empty: RuntimeMobileSessionTabsResult = {
+      worktree: worktreeId,
+      publicationEpoch: `empty:${Date.now().toString(36)}`,
+      snapshotVersion: 0,
+      activeGroupId: null,
+      activeTabId: null,
+      activeTabType: null,
+      tabs: []
+    }
+    for (const subscription of this.mobileSessionTabListeners) {
+      subscription.listener(
+        this.clientSessionTabSelections.project(empty, subscription.clientNavigationId)
       )
     }
     this.clientSessionTabSelections.forgetWorktree(worktreeId)
@@ -29867,6 +31472,7 @@ export class OrcaRuntimeService {
       this.notifyMobileSessionTabSnapshots()
       return
     }
+    worktreeId = normalizeWorkspaceSessionOwnerKey(worktreeId)
     if (this.offscreenBrowserBackend) {
       const reconciled = this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
       // Why: hydrate already reconciles an existing snapshot in place; only reconcile here when it didn't (fresh build or early-returned hydrate).
@@ -36668,19 +38274,22 @@ function runtimePathsEqual(left: string, right: string): boolean {
 }
 
 function runtimeWorktreeIdsEqual(left: string, right: string): boolean {
-  const parsedLeft = splitWorktreeIdForFilesystem(left)
-  const parsedRight = splitWorktreeIdForFilesystem(right)
+  const normalizedLeft = normalizeWorkspaceSessionOwnerKey(left)
+  const normalizedRight = normalizeWorkspaceSessionOwnerKey(right)
+  const parsedLeft = splitWorktreeIdForFilesystem(normalizedLeft)
+  const parsedRight = splitWorktreeIdForFilesystem(normalizedRight)
   return parsedLeft && parsedRight
     ? parsedLeft.repoId === parsedRight.repoId &&
         runtimePathsEqual(parsedLeft.worktreePath, parsedRight.worktreePath)
-    : left === right
+    : normalizedLeft === normalizedRight
 }
 
 function runtimeWorktreeIdentityKey(worktreeId: string): string {
-  const parsed = splitWorktreeIdForFilesystem(worktreeId)
+  const normalizedWorktreeId = normalizeWorkspaceSessionOwnerKey(worktreeId)
+  const parsed = splitWorktreeIdForFilesystem(normalizedWorktreeId)
   return parsed
     ? `${parsed.repoId}\0${normalizeRuntimePathForComparison(parsed.worktreePath)}`
-    : worktreeId
+    : normalizedWorktreeId
 }
 
 function resolveTerminalSessionWorktreeId(
@@ -36740,79 +38349,180 @@ function inferWorktreeIdFromPtyId(ptyId: string): string | null {
   return parsePtySessionId(ptyId).worktreeId
 }
 
-function indexPersistedPtyWorktreeBindings(
+type PersistedPtySurfaceBinding = {
+  worktreeId: string
+  tabId: string
+  paneKey: string
+  incarnationId: string
+}
+
+type PersistedPtyBindings = {
+  worktreeIdByPtyId: ReadonlyMap<string, string>
+  ambiguousPtyIds: ReadonlySet<string>
+  surfaceByPtyId: ReadonlyMap<string, PersistedPtySurfaceBinding>
+  ambiguousSurfacePtyIds: ReadonlySet<string>
+}
+
+function indexPersistedPtyBindings(
   session: WorkspaceSessionState | null | undefined
-): ReadonlyMap<string, string> {
+): PersistedPtyBindings {
   const worktreeIdByPtyId = new Map<string, string>()
   const ambiguousPtyIds = new Set<string>()
+  const worktreeIdByTabId = new Map<string, string>()
+  const ambiguousTabIds = new Set<string>()
+  const surfaceByPtyId = new Map<string, PersistedPtySurfaceBinding>()
+  const ambiguousSurfacePtyIds = new Set<string>()
+  const normalizeOwner = (ownerKey: string): string => {
+    const scope = parseWorkspaceKey(ownerKey)
+    return scope?.type === 'worktree' ? scope.worktreeId : ownerKey
+  }
+  const ownTab = (
+    tabId: string | null | undefined,
+    worktreeId: string | null | undefined
+  ): void => {
+    if (!tabId || !worktreeId || ambiguousTabIds.has(tabId)) {
+      return
+    }
+    const ownerWorktreeId = normalizeOwner(worktreeId)
+    const existingWorktreeId = worktreeIdByTabId.get(tabId)
+    if (existingWorktreeId && !runtimeWorktreeIdsEqual(existingWorktreeId, ownerWorktreeId)) {
+      worktreeIdByTabId.delete(tabId)
+      ambiguousTabIds.add(tabId)
+      return
+    }
+    worktreeIdByTabId.set(tabId, ownerWorktreeId)
+  }
   const bind = (ptyId: string | null | undefined, worktreeId: string): void => {
     if (!ptyId || ambiguousPtyIds.has(ptyId)) {
       return
     }
+    const ownerWorktreeId = normalizeOwner(worktreeId)
     const existingWorktreeId = worktreeIdByPtyId.get(ptyId)
-    if (existingWorktreeId && existingWorktreeId !== worktreeId) {
+    if (existingWorktreeId && !runtimeWorktreeIdsEqual(existingWorktreeId, ownerWorktreeId)) {
       // Why: a corrupt/stale duplicate binding must not attribute a live PTY to whichever workspace was visited first.
       worktreeIdByPtyId.delete(ptyId)
       ambiguousPtyIds.add(ptyId)
       return
     }
-    worktreeIdByPtyId.set(ptyId, worktreeId)
+    worktreeIdByPtyId.set(ptyId, ownerWorktreeId)
   }
 
   for (const [worktreeId, tabs] of Object.entries(session?.tabsByWorktree ?? {})) {
     for (const tab of tabs) {
+      ownTab(tab.id, worktreeId)
       bind(tab.ptyId, worktreeId)
-      bind(session?.remoteSessionIdsByTabId?.[tab.id], worktreeId)
-      const layout = session?.terminalLayoutsByTabId[tab.id]
-      for (const ptyId of Object.values(layout?.ptyIdsByLeafId ?? {})) {
-        bind(ptyId, worktreeId)
+    }
+  }
+  for (const [worktreeId, tabs] of Object.entries(session?.unifiedTabs ?? {})) {
+    for (const tab of tabs) {
+      if (tab.contentType === 'terminal') {
+        ownTab(tab.entityId, worktreeId)
       }
     }
   }
-  return worktreeIdByPtyId
+  for (const [worktreeId, tabId] of Object.entries(session?.activeTabIdByWorktree ?? {})) {
+    ownTab(tabId, worktreeId)
+  }
+  if (session?.activeTabId) {
+    ownTab(session.activeTabId, session.activeWorkspaceKey)
+    ownTab(session.activeTabId, session.activeWorktreeId)
+  }
+  for (const tombstone of Object.values(session?.terminalSurfaceTombstonesByPaneKey ?? {})) {
+    ownTab(tombstone.parentTabId, tombstone.worktreeId)
+    bind(tombstone.ptyId, tombstone.worktreeId)
+  }
+  for (const [paneKey, sleepingAgent] of Object.entries(
+    session?.sleepingAgentSessionsByPaneKey ?? {}
+  )) {
+    ownTab(sleepingAgent.tabId ?? parsePaneKey(paneKey)?.tabId, sleepingAgent.worktreeId)
+  }
+  for (const [tabId, worktreeId] of worktreeIdByTabId) {
+    bind(session?.remoteSessionIdsByTabId?.[tabId], worktreeId)
+    for (const [leafId, ptyId] of Object.entries(
+      session?.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId ?? {}
+    )) {
+      bind(ptyId, worktreeId)
+      if (!ptyId || ambiguousSurfacePtyIds.has(ptyId)) {
+        continue
+      }
+      const paneKey = makePaneKey(tabId, leafId)
+      const incarnationId = session?.terminalPtyIncarnationsByPaneKey?.[paneKey]
+      if (!incarnationId) {
+        continue
+      }
+      const tombstone = session?.terminalSurfaceTombstonesByPaneKey?.[paneKey]
+      if (tombstone?.ptyId === ptyId && tombstone.incarnationId === incarnationId) {
+        continue
+      }
+      const binding = { worktreeId, tabId, paneKey, incarnationId }
+      const existing = surfaceByPtyId.get(ptyId)
+      if (
+        existing &&
+        (!runtimeWorktreeIdsEqual(existing.worktreeId, worktreeId) ||
+          existing.paneKey !== paneKey ||
+          existing.incarnationId !== incarnationId)
+      ) {
+        surfaceByPtyId.delete(ptyId)
+        ambiguousSurfacePtyIds.add(ptyId)
+        continue
+      }
+      surfaceByPtyId.set(ptyId, binding)
+    }
+  }
+  return { worktreeIdByPtyId, ambiguousPtyIds, surfaceByPtyId, ambiguousSurfacePtyIds }
 }
 
-function indexPersistedPtySurfaceBindings(
-  session: WorkspaceSessionState | null | undefined
-): ReadonlyMap<
-  string,
-  { worktreeId: string; tabId: string; paneKey: string; incarnationId: string }
-> {
-  const bindingByPtyId = new Map<
-    string,
-    { worktreeId: string; tabId: string; paneKey: string; incarnationId: string }
-  >()
-  const ambiguousPtyIds = new Set<string>()
-  for (const [worktreeId, tabs] of Object.entries(session?.tabsByWorktree ?? {})) {
-    for (const tab of tabs) {
-      for (const [leafId, ptyId] of Object.entries(
-        session?.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId ?? {}
-      )) {
-        if (!ptyId || ambiguousPtyIds.has(ptyId)) {
-          continue
-        }
-        const paneKey = makePaneKey(tab.id, leafId)
-        const incarnationId = session?.terminalPtyIncarnationsByPaneKey?.[paneKey]
-        if (!incarnationId) {
-          continue
-        }
-        const binding = { worktreeId, tabId: tab.id, paneKey, incarnationId }
-        const existing = bindingByPtyId.get(ptyId)
-        if (
-          existing &&
-          (existing.worktreeId !== worktreeId ||
-            existing.paneKey !== paneKey ||
-            existing.incarnationId !== incarnationId)
-        ) {
-          bindingByPtyId.delete(ptyId)
-          ambiguousPtyIds.add(ptyId)
-          continue
-        }
-        bindingByPtyId.set(ptyId, binding)
-      }
-    }
+function getPersistedPtyLookupIds(ptyId: string, connectionId: string | null): string[] {
+  if (!connectionId) {
+    return [ptyId]
   }
-  return bindingByPtyId
+  const parsed = parseAppSshPtyId(ptyId)
+  if (parsed) {
+    return parsed.connectionId === connectionId ? [ptyId, parsed.relayPtyId] : [ptyId]
+  }
+  return [ptyId, toAppSshPtyId(connectionId, ptyId)]
+}
+
+function lookupPersistedPtyWorktreeId(
+  indexes: PersistedPtyBindings,
+  ptyId: string,
+  connectionId: string | null
+): string | undefined {
+  const lookupIds = getPersistedPtyLookupIds(ptyId, connectionId)
+  if (lookupIds.some((candidate) => indexes.ambiguousPtyIds.has(candidate))) {
+    return undefined
+  }
+  const candidates = lookupIds
+    .map((candidate) => indexes.worktreeIdByPtyId.get(candidate))
+    .filter((candidate): candidate is string => Boolean(candidate))
+  const first = candidates[0]
+  return first && candidates.every((candidate) => runtimeWorktreeIdsEqual(candidate, first))
+    ? first
+    : undefined
+}
+
+function lookupPersistedPtySurface(
+  indexes: PersistedPtyBindings,
+  ptyId: string,
+  connectionId: string | null
+): PersistedPtySurfaceBinding | undefined {
+  const lookupIds = getPersistedPtyLookupIds(ptyId, connectionId)
+  if (lookupIds.some((candidate) => indexes.ambiguousSurfacePtyIds.has(candidate))) {
+    return undefined
+  }
+  const candidates = lookupIds
+    .map((candidate) => indexes.surfaceByPtyId.get(candidate))
+    .filter((candidate): candidate is PersistedPtySurfaceBinding => Boolean(candidate))
+  const first = candidates[0]
+  return first &&
+    candidates.every(
+      (candidate) =>
+        runtimeWorktreeIdsEqual(candidate.worktreeId, first.worktreeId) &&
+        candidate.paneKey === first.paneKey &&
+        candidate.incarnationId === first.incarnationId
+    )
+    ? first
+    : undefined
 }
 
 function setsEqual<T>(a: ReadonlySet<T>, b: ReadonlySet<T>): boolean {

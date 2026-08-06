@@ -73,6 +73,28 @@ function createServiceWithLeader(): {
 }
 
 describe('ClaudeAgentTeamsService', () => {
+  it('removes only the team named by its launch identity', () => {
+    const service = new ClaudeAgentTeamsService()
+    const first = service.createLaunchEnv({
+      leaderHandle: 'shared-handle',
+      baseEnv: {},
+      shimDir: '/tmp/orca-shim',
+      shimBin: 'orca'
+    })
+    const second = service.createLaunchEnv({
+      leaderHandle: 'shared-handle',
+      baseEnv: {},
+      shimDir: '/tmp/orca-shim',
+      shimBin: 'orca'
+    })
+
+    service.removeTeamForLaunchEnv(first.env)
+
+    expect(service.getActiveTeamCount()).toBe(1)
+    service.removeTeamForLaunchEnv(second.env)
+    expect(service.getActiveTeamCount()).toBe(0)
+  })
+
   it('supports Claude core tmux teammate sequence with native splits', async () => {
     const { service, teamId, token, leaderPane, api, splitCalls } = createServiceWithLeader()
     const request = (argv: string[]) =>

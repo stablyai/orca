@@ -963,7 +963,8 @@ export class SshRelaySession {
       this.targetId,
       mux,
       this.remoteCliBridgeEnv ?? undefined,
-      providerGeneration
+      providerGeneration,
+      this.getHostPlatform()?.pathFlavor ?? null
     )
     const consumerOwnerState = this.activePtyConsumerOwner()
     if (consumerOwnerState) {
