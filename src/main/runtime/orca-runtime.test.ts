@@ -33064,6 +33064,45 @@ describe('OrcaRuntimeService', () => {
     db.close()
   })
 
+  it('delivers on a first live idle frame that follows a seeded idle with no transition', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new InMemoryOrchestrationMessages()
+      const write = vi.fn().mockReturnValue(true)
+      setInMemoryOrchestrationMessages(runtime, db)
+      runtime.setPtyController({
+        write,
+        kill: vi.fn(),
+        getForegroundProcess: async () => null
+      })
+      syncSinglePty(runtime)
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      runtime.seedTerminalRestoreTail('pty-1', { lastTitle: 'Codex done' })
+      const message = db.insertMessage({
+        from: 'sender',
+        to: terminal.handle,
+        subject: 'restored idle'
+      })
+      runtime.notifyMessageArrived(terminal.handle, 'status')
+      await Promise.resolve()
+      write.mockClear()
+
+      // Why no working frame: a resumed agent sitting at its prompt emits an
+      // already-idle title first. The seed left lastAgentStatus 'idle', so there
+      // is no transition — only the liveness edge can release the row (#12536).
+      runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 100)
+
+      expect(write).toHaveBeenCalledWith('pty-1', expect.stringContaining('Subject: restored idle'))
+      await vi.advanceTimersByTimeAsync(600)
+      expect(message.delivered_at).not.toBeNull()
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('does not push on a cold-restore seeded idle status with no live observation', async () => {
     vi.useFakeTimers()
     try {
@@ -33240,9 +33279,10 @@ describe('OrcaRuntimeService', () => {
       await vi.advanceTimersByTimeAsync(600)
       expect(message.delivered_at).toBeNull()
 
-      // The replacement's first live idle frame re-authorizes delivery.
-      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 200)
-      runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 201)
+      // The replacement's first live idle frame re-authorizes delivery — with no
+      // working frame, since exit keeps lastAgentStatus 'idle' for `ps` and the
+      // replacement can come up straight at an idle prompt (no transition).
+      runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 200)
       expect(write).toHaveBeenCalledWith(
         'pty-1',
         expect.stringContaining('Subject: after same id respawn')
