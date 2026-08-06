@@ -15,6 +15,10 @@ vi.mock('node:child_process', () => ({
 
 const execFileMock = vi.mocked(execFile)
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+// Why: the Keychain account name is derived from the environment, so pin it here
+// instead of recomputing it in every assertion — otherwise the expectations only
+// hold on machines whose own username happens to take the same branch.
+const TEST_KEYCHAIN_ACCOUNT = 'orca-test-user'
 
 function setPlatform(platform: NodeJS.Platform): void {
   Object.defineProperty(process, 'platform', {
@@ -42,10 +46,13 @@ describe('Claude Keychain credentials', () => {
   beforeEach(() => {
     setPlatform('darwin')
     execFileMock.mockReset()
+    vi.stubEnv('USER', TEST_KEYCHAIN_ACCOUNT)
+    vi.stubEnv('USERNAME', TEST_KEYCHAIN_ACCOUNT)
   })
 
   afterEach(() => {
     vi.useRealTimers()
+    vi.unstubAllEnvs()
     if (originalPlatform) {
       Object.defineProperty(process, 'platform', originalPlatform)
     }
@@ -69,7 +76,7 @@ describe('Claude Keychain credentials', () => {
       '-s',
       scopedService,
       '-a',
-      process.env.USER || process.env.USERNAME || 'user',
+      TEST_KEYCHAIN_ACCOUNT,
       '-w'
     ])
   })
@@ -94,7 +101,7 @@ describe('Claude Keychain credentials', () => {
       '-s',
       'Claude Code-credentials',
       '-a',
-      process.env.USER || process.env.USERNAME || 'user',
+      TEST_KEYCHAIN_ACCOUNT,
       '-w'
     ])
   })
@@ -115,7 +122,7 @@ describe('Claude Keychain credentials', () => {
       '-s',
       scopedService,
       '-a',
-      process.env.USER || process.env.USERNAME || 'user',
+      TEST_KEYCHAIN_ACCOUNT,
       '-w',
       'credentials-json'
     ])
@@ -138,7 +145,7 @@ describe('Claude Keychain credentials', () => {
         '-s',
         scopedService,
         '-a',
-        process.env.USER || process.env.USERNAME || 'user',
+        TEST_KEYCHAIN_ACCOUNT,
         '-w',
         'credentials-json'
       ],
@@ -148,7 +155,7 @@ describe('Claude Keychain credentials', () => {
         '-s',
         'Claude Code-credentials',
         '-a',
-        process.env.USER || process.env.USERNAME || 'user',
+        TEST_KEYCHAIN_ACCOUNT,
         '-w',
         'credentials-json'
       ]
@@ -171,9 +178,39 @@ describe('Claude Keychain credentials', () => {
       '-s',
       scopedService,
       '-a',
-      process.env.USER || process.env.USERNAME || 'user',
+      TEST_KEYCHAIN_ACCOUNT,
       '-w'
     ])
+  })
+
+  it('looks up the Claude Code fallback account when $USER is not a valid keychain account', async () => {
+    // Why: Claude Code rejects account names outside /^[a-zA-Z0-9._-]+$/ and stores
+    // the item under 'claude-code-user' instead. Reading with the raw value misses
+    // it, so account add fails with "no OAuth credentials were captured".
+    vi.stubEnv('USER', 'first@example.com')
+    vi.stubEnv('USERNAME', 'first@example.com')
+    execFileMock.mockImplementationOnce((_file, _args, _options, callback) => {
+      invokeExecFileCallback(callback, null, 'scoped\n', '')
+      return null as never
+    })
+
+    await expect(
+      readActiveClaudeKeychainCredentialsStrict('/tmp/orca-claude-login-test')
+    ).resolves.toBe('scoped')
+
+    expect(execFileMock.mock.calls[0][1]).toContain('claude-code-user')
+  })
+
+  it('keeps a valid $USER as the keychain account', async () => {
+    vi.stubEnv('USER', 'first.last_1-2')
+    execFileMock.mockImplementationOnce((_file, _args, _options, callback) => {
+      invokeExecFileCallback(callback, null, 'scoped\n', '')
+      return null as never
+    })
+
+    await readActiveClaudeKeychainCredentialsStrict('/tmp/orca-claude-login-test')
+
+    expect(execFileMock.mock.calls[0][1]).toContain('first.last_1-2')
   })
 
   it('rejects when a keychain read never reports completion', async () => {
@@ -217,20 +254,8 @@ describe('Claude Keychain credentials', () => {
     await deleteActiveClaudeKeychainCredentials(configDir)
 
     expect(execFileMock.mock.calls.map((call) => call[1])).toEqual([
-      [
-        'delete-generic-password',
-        '-s',
-        scopedService,
-        '-a',
-        process.env.USER || process.env.USERNAME || 'user'
-      ],
-      [
-        'delete-generic-password',
-        '-s',
-        'Claude Code-credentials',
-        '-a',
-        process.env.USER || process.env.USERNAME || 'user'
-      ]
+      ['delete-generic-password', '-s', scopedService, '-a', TEST_KEYCHAIN_ACCOUNT],
+      ['delete-generic-password', '-s', 'Claude Code-credentials', '-a', TEST_KEYCHAIN_ACCOUNT]
     ])
   })
 })
