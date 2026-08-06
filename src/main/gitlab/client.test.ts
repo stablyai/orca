@@ -173,6 +173,34 @@ describe('gitlab client — viewer & paste-URL lookup', () => {
       )
     })
 
+    // Why: pins that a ported host reaches glab without a connectionId — the
+    // redirect into GITLAB_HOST is not an SSH-only path.
+    it('passes a ported self-hosted hostname through the local WSL lookup', async () => {
+      glabExecFileAsyncMock.mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          id: 202,
+          iid: 9,
+          title: 'ported bug',
+          state: 'opened',
+          web_url: 'https://gitlab.internal:8443/g/p/-/issues/9'
+        })
+      })
+
+      await getWorkItemByProjectRef(
+        '/repo',
+        { host: 'gitlab.internal:8443', path: 'g/p' },
+        9,
+        'issue',
+        null,
+        { wslDistro: 'Ubuntu' }
+      )
+
+      expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
+        ['api', '--hostname', 'gitlab.internal:8443', 'projects/g%2Fp/issues/9'],
+        { cwd: '/repo', wslDistro: 'Ubuntu' }
+      )
+    })
+
     it('returns null when the API errors', async () => {
       glabExecFileAsyncMock.mockRejectedValueOnce(new Error('not found'))
       const item = await getWorkItemByProjectRef(
