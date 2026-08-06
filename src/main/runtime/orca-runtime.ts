@@ -31856,8 +31856,19 @@ export class OrcaRuntimeService {
             // re-reading then (rather than replaying a reservation this probe may
             // have outlived) is what keeps an orphaned row from stranding.
             setTimeout(() => {
-              if (leaf.ptyId === probedPtyId) {
-                this.deliverPendingMessages(leaf, true)
+              // Why current state, not the closure: the gate that authorized this
+              // push ran before the probe. A same-id cold restore inside the probe
+              // window keeps ptyId identical and makes the leaf writable again, so
+              // an id-only check would type the payload plus Enter into a process
+              // whose idle was never observed — and stamp the row delivered, which
+              // loses it. Re-read the leaf and re-apply the live-idle gate.
+              const currentLeaf = this.leaves.get(this.getLeafKey(leaf.tabId, leaf.leafId))
+              if (
+                currentLeaf?.ptyId === probedPtyId &&
+                currentLeaf.lastAgentStatus === 'idle' &&
+                currentLeaf.lastAgentStatusObservedLive
+              ) {
+                this.deliverPendingMessages(currentLeaf, true)
               }
             }, 0)
           }

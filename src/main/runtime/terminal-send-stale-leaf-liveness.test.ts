@@ -290,6 +290,47 @@ describe('push-on-idle orchestration delivery absence gate', () => {
     return { runtime, handle, write, stub }
   }
 
+  // Why: the gate that authorizes a push runs BEFORE the probe defers, so a
+  // same-id cold restore inside the probe window would otherwise be written to on
+  // the dead process's authority — ptyId is exactly what a same-id respawn keeps.
+  it('re-applies the live-idle gate when the probe answers after a same-id respawn', async () => {
+    let resolveProbe!: (value: boolean | null) => void
+    const { runtime, handle, write, stub } = await makeIdleLeafWithoutPtyRecord({
+      probePtyLiveness: () =>
+        new Promise<boolean | null>((resolve) => {
+          resolveProbe = resolve
+        })
+    })
+    stub.insert('for the old session')
+
+    runtime.notifyMessageArrived(handle, 'status')
+    await Promise.resolve()
+    expect(write).not.toHaveBeenCalled()
+
+    // The session dies and cold-restores under the same id while the probe is out.
+    runtime.onPtyExit(STALE_PTY_ID, 0)
+    runtime.onPtySpawned(STALE_PTY_ID, undefined, { awaitsRegistration: false })
+
+    resolveProbe(null)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(write).not.toHaveBeenCalled()
+    expect(stub.rows[0].delivered_at).toBeNull()
+
+    // The replacement's own live idle frame releases the row — through a fresh
+    // probe, since this leaf's pty is still unknown to the provider.
+    runtime.onPtyData(STALE_PTY_ID, '\x1b]0;Codex done\x07', 200)
+    resolveProbe(null)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(write).toHaveBeenCalledWith(
+      STALE_PTY_ID,
+      expect.stringContaining('Subject: for the old session')
+    )
+  })
+
   // Why: a `remote:` pty answers probePtyLiveness with null before its first
   // await (ipc/pty.ts), so the probe settles on a pure microtask chain. Without a
   // macrotask hop the continuation runs BEFORE the resumption of a check resolved
