@@ -2612,6 +2612,8 @@ export type TuiAgent =
   | 'kimi' // Kimi
   | 'mistral-vibe' // Mistral Vibe
   | 'qwen-code' // Qwen Code
+  | 'qodercli' // Qoder CLI
+  | 'qoderclicn' // Qoder CLI CN
   | 'rovo' // Rovo Dev
   | 'hermes' // Hermes Agent
   | 'openclaw' // OpenClaw

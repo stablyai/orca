@@ -272,6 +272,25 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://github.com/QwenLM/qwen-code'
   },
   {
+    id: 'qodercli',
+    label: translate('auto.lib.agent.catalog.21b68240dc', 'Qoder CLI'),
+    cmd: 'qodercli',
+    faviconDomain: 'qoder.com',
+    homepageUrl: 'https://qoder.com'
+  },
+  {
+    id: 'qoderclicn',
+    // Why: a trailing "CN" word contains the substring `cn`, which is Continue's
+    // catalog command — the picker would rank this agent above Continue for that
+    // query (agent-picker-search guards the collision class). "China" avoids it.
+    label: translate('auto.lib.agent.catalog.d7712286cc', 'Qoder CLI China'),
+    // Why: the CN build is a separate binary (`qoderclicn`) with its own config
+    // root (~/.qoder-cn), so it gets its own entry instead of aliasing qodercli.
+    cmd: 'qoderclicn',
+    faviconDomain: 'qoder.com',
+    homepageUrl: 'https://qoder.com'
+  },
+  {
     id: 'rovo',
     label: translate('auto.lib.agent.catalog.4e63c7b956', 'Rovo Dev'),
     cmd: 'rovo',

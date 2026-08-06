@@ -12,9 +12,23 @@ import {
   type HooksConfig
 } from '../agent-hooks/installer-utils'
 
+export type ClaudeCompatibleHookEvent = {
+  readonly eventName: string
+  readonly definition: HookDefinition
+}
+
 export type ClaudeCompatibleHookSettings = {
-  configDirName: '.claude' | '.openclaude'
-  scriptBaseName: 'claude-hook' | 'openclaude-hook'
+  configDirName: '.claude' | '.openclaude' | '.qwen' | '.qoder-cli' | '.qoder-cn'
+  scriptBaseName:
+    | 'claude-hook'
+    | 'openclaude-hook'
+    | 'qwen-code-hook'
+    | 'qodercli-hook'
+    | 'qoderclicn-hook'
+  // Why: StopFailure/TeammateIdle are OpenClaude-specific names. Compatible CLIs
+  // whose documented event set is narrower (Qwen Code) pass their own list instead
+  // of relying on the target tolerating unregistered event names.
+  events?: readonly ClaudeCompatibleHookEvent[]
 }
 
 export const CLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
@@ -27,7 +41,51 @@ export const OPENCLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
   scriptBaseName: 'openclaude-hook'
 }
 
-export const CLAUDE_EVENTS = [
+// Why: Qwen Code reads Claude-shaped command hooks from ~/.qwen/settings.json
+// (https://github.com/QwenLM/qwen-code docs/users/features/hooks.md).
+export const QWEN_CODE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
+  configDirName: '.qwen',
+  scriptBaseName: 'qwen-code-hook',
+  events: [
+    { eventName: 'SessionStart', definition: { hooks: [{ type: 'command', command: '' }] } },
+    { eventName: 'UserPromptSubmit', definition: { hooks: [{ type: 'command', command: '' }] } },
+    { eventName: 'Stop', definition: { hooks: [{ type: 'command', command: '' }] } },
+    { eventName: 'SubagentStart', definition: { hooks: [{ type: 'command', command: '' }] } },
+    { eventName: 'SubagentStop', definition: { hooks: [{ type: 'command', command: '' }] } },
+    {
+      eventName: 'PreToolUse',
+      definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
+    },
+    {
+      eventName: 'PostToolUse',
+      definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
+    },
+    {
+      eventName: 'PostToolUseFailure',
+      definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
+    },
+    {
+      eventName: 'PermissionRequest',
+      definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
+    }
+  ]
+}
+
+// Why: Qoder CLI (international) is Claude Code-compatible — it ships
+// `qodercli hooks migrate --from-claude` — and stores settings in ~/.qoder-cli.
+export const QODERCLI_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
+  configDirName: '.qoder-cli',
+  scriptBaseName: 'qodercli-hook'
+}
+
+// Why: the CN build (qoderclicn) is the same Claude-compatible CLI with its own
+// config root at ~/.qoder-cn (installed binary lives under ~/.qoder-cn/bin).
+export const QODERCLICN_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
+  configDirName: '.qoder-cn',
+  scriptBaseName: 'qoderclicn-hook'
+}
+
+export const CLAUDE_EVENTS: readonly ClaudeCompatibleHookEvent[] = [
   // Why: SessionStart is the only event a resumed/idle session emits before the
   // first prompt; without it the sidebar row can't exist until the user types (STA-3386).
   { eventName: 'SessionStart', definition: { hooks: [{ type: 'command', command: '' }] } },
@@ -62,7 +120,7 @@ export const CLAUDE_EVENTS = [
     eventName: 'PermissionRequest',
     definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
   }
-] as const
+]
 
 export function getConfigPath(settings = CLAUDE_HOOK_SETTINGS): string {
   return join(homedir(), settings.configDirName, 'settings.json')
@@ -117,12 +175,13 @@ export function getRemoteManagedCommand(scriptPath: string): string {
 export function applyManagedHooks(
   config: HooksConfig,
   command: string,
-  scriptFileName = getManagedScriptFileName()
+  scriptFileName = getManagedScriptFileName(),
+  events: readonly ClaudeCompatibleHookEvent[] = CLAUDE_EVENTS
 ): HooksConfig {
   const nextHooks = { ...config.hooks }
   const isManagedCommand = createManagedCommandMatcher(scriptFileName)
 
-  for (const event of CLAUDE_EVENTS) {
+  for (const event of events) {
     const current = Array.isArray(nextHooks[event.eventName]) ? nextHooks[event.eventName] : []
     const cleaned = removeManagedCommands(current, isManagedCommand)
     const definition: HookDefinition = {
