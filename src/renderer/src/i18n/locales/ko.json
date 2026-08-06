@@ -4267,7 +4267,9 @@
           "83a820fa71": "프로젝트 필터링...",
           "5a273fbfce": "프로젝트 추가...",
           "4815c70605": "일치하는 프로젝트가 없습니다.",
-          "bbbc6e8e3b": "선택되지 않은 일치하는 프로젝트가 없습니다."
+          "bbbc6e8e3b": "선택되지 않은 일치하는 프로젝트가 없습니다.",
+          "allProjects": "모든 프로젝트",
+          "selectedProjectsCount": "프로젝트 {{value0}}개"
         },
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Orca 재시작",
@@ -4345,6 +4347,7 @@
           "680043342f": "콤팩트",
           "c7591b6014": "repo",
           "hosts": "호스트",
+          "showSection": "표시",
           "allHostsDetail": "모든 호스트 표시",
           "configuredSshHost": "구성된 SSH",
           "projectSshHost": "프로젝트 SSH",
@@ -5948,11 +5951,6 @@
           "3d172725cc": "없음",
           "1f32ba27a6": "사용자 정의",
           "a182c5125e": "Git 사용자 이름",
-          "sourceControlGroupOrderTitle": "소스 제어 그룹 순서",
-          "sourceControlGroupOrderDescription": "소스 제어에서 변경 사항, 스테이징된 변경 사항 또는 추적되지 않는 파일 중 무엇을 먼저 표시할지 선택합니다.",
-          "changesFirst": "변경 사항 먼저",
-          "stagedFirst": "스테이징된 항목 먼저",
-          "untrackedFirst": "추적되지 않는 파일 먼저",
           "compareAgainstUpstreamTitle": "기본 비교 기준",
           "compareAgainstUpstreamDescription": "소스 제어가 커밋된 변경 사항 비교에 기본으로 사용할 기준을 선택합니다. 브랜치 업스트림은 현재 브랜치를 자동으로 따라가며, 업스트림이 없으면 저장소 기본 브랜치로 돌아갑니다. 비교 기준은 해당 worktree의 Git 패널에서 worktree별로 변경할 수 있습니다. Pull Request 및 리베이스 대상은 변경되지 않습니다.",
           "compareBaseRepositoryDefault": "저장소 기본값",
@@ -8218,14 +8216,7 @@
             "f83c8937c4": "브랜치 이름 지정",
             "5ecd91c5ef": "작업 트리를 생성할 때 브랜치 이름에 접두사가 추가됩니다.",
             "68bd65fdb8": "브랜치 접두사",
-            "sourceControlGroupOrderTitle": "소스 제어 그룹 순서",
-            "sourceControlGroupOrderDescription": "소스 제어에서 변경 사항, 스테이징된 변경 사항 또는 추적되지 않는 파일 중 무엇을 먼저 표시할지 선택합니다.",
-            "groupOrder": "그룹 순서",
-            "changesFirst": "변경 사항 먼저",
-            "stagedFirst": "스테이징된 항목 먼저",
-            "untrackedFirst": "추적되지 않는 파일 먼저",
             "sourceControl": "소스 제어",
-            "gitChanges": "git 변경 사항",
             "compareAgainstUpstreamTitle": "기본 비교 기준",
             "compareAgainstUpstreamDescription": "소스 제어가 커밋된 변경 사항 비교에 기본으로 사용할 기준을 선택합니다. 브랜치 업스트림은 현재 브랜치를 자동으로 따라가며, 업스트림이 없으면 저장소 기본 브랜치로 돌아갑니다. 비교 기준은 해당 worktree의 Git 패널에서 worktree별로 변경할 수 있습니다. Pull Request 및 리베이스 대상은 변경되지 않습니다.",
             "compareBase": "비교 기준",
@@ -10560,7 +10551,9 @@
             "b8c2e1a904": "{{value0}} → {{value1}}",
             "a4e93c21d7": "현재 브랜치: {{value0}}",
             "c7d4e2f801": "베이스 ref 변경: {{value0}}",
-            "f3a1b8c204": "upstream"
+            "f3a1b8c204": "upstream",
+            "createPrIntentEmptyGeneratedBody": "생성된 검토 세부 정보에 설명이 포함되지 않았습니다. PR 생성을 다시 시도하세요.",
+            "createPrIntentGenerateDetailsFailed": "검토 세부 정보를 생성할 수 없습니다. PR 생성을 다시 시도하세요."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "선택한 agent를 시작할 수 없습니다.",
@@ -12981,6 +12974,20 @@
           "6bbf827ef5": "제목 5",
           "d1bbf9a835": "접을 수 있는 섹션"
         },
+        "RichMarkdownTableControls": {
+          "deleteTable": "표 삭제",
+          "tableActions": "표 작업",
+          "addColumn": "열 추가",
+          "addRow": "행 추가",
+          "rowActions": "행 작업",
+          "columnActions": "열 작업",
+          "insertRowAbove": "위에 행 삽입",
+          "insertColumnLeft": "왼쪽에 열 삽입",
+          "insertRowBelow": "아래에 행 삽입",
+          "insertColumnRight": "오른쪽에 열 삽입",
+          "deleteRow": "행 삭제",
+          "deleteColumn": "열 삭제"
+        },
         "UntitledFileRenameDialog": {
           "a7dd27b0bc": "저장",
           "949711deb4": "취소",
@@ -13447,6 +13454,8 @@
             "1b179ab561": "페이지 URL 복사",
             "f7ab83f7ed": "기본 브라우저에서 페이지 열기",
             "0e080d820e": "새로고침",
+            "a1f3c2e4b5": "강제 새로고침",
+            "b7e4d9c1a2": "중지",
             "250a9b3e42": "앞으로",
             "40edfa75cb": "뒤로",
             "efb0e8f7f3": "링크 주소 복사",
@@ -14396,6 +14405,20 @@
         "reconnect": "다시 연결",
         "retry": "재시도"
       }
+    },
+    "main": {
+      "window": {
+        "editableContextMenu": {
+          "table": "표",
+          "insertRowAbove": "위에 행 삽입",
+          "insertRowBelow": "아래에 행 삽입",
+          "deleteRow": "행 삭제",
+          "insertColumnLeft": "왼쪽에 열 삽입",
+          "insertColumnRight": "오른쪽에 열 삽입",
+          "deleteColumn": "열 삭제",
+          "deleteTable": "표 삭제"
+        }
+      }
     }
   },
   "components": {
@@ -14502,7 +14525,7 @@
         "other": "다른…",
         "otherPlaceholder": "답변을 입력하세요",
         "cancel": "취소",
-        "send": "답변 보내기",
+        "send": "제출",
         "next": "다음",
         "skip": "건너뛰기",
         "sending": "전송 중…"

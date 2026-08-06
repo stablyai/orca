@@ -23,6 +23,24 @@ export type ListDetectedWorktreesArgs =
   | LocalDetectedWorktreeRequest
   | DirectSshDetectedWorktreeRequest
 
+export type ListKnownWorktreesForExecutionHostArgs = {
+  repoId: string
+  executionHostId: SshExecutionHostId
+}
+
+export type HostQualifiedKnownWorktreeResult =
+  | {
+      status: 'complete'
+      repoId: string
+      executionHostId: SshExecutionHostId
+      result: DetectedWorktreeListResult
+    }
+  | {
+      status: 'rejected'
+      repoId: string
+      executionHostId: SshExecutionHostId
+    }
+
 export type AuthoritativeDetectedWorktreeHost =
   | {
       kind: 'local'

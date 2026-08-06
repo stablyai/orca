@@ -35,6 +35,52 @@ describe('normalizeImageTranscriptMessages', () => {
     ])
   })
 
+  it('folds every source and strips every prompt marker for a multi-image send', () => {
+    const out = normalizeImageTranscriptMessages([
+      userText('a', '[Image: source: /tmp/a.png]'),
+      userText('b', '[Image: source: /tmp/b.png]'),
+      userText('c', '[Image: source: /tmp/c.png]'),
+      userText('prompt', '[Image #1] [Image #2] [Image #3] compare these')
+    ])
+
+    expect(out).toHaveLength(1)
+    expect(out[0]).toMatchObject({ id: 'prompt' })
+    expect(out[0]!.blocks).toEqual([
+      { type: 'image-ref', path: '/tmp/a.png' },
+      { type: 'image-ref', path: '/tmp/b.png' },
+      { type: 'image-ref', path: '/tmp/c.png' },
+      { type: 'text', text: 'compare these' }
+    ])
+  })
+
+  it('keeps all image refs when a multi-image send has no caption', () => {
+    const out = normalizeImageTranscriptMessages([
+      userText('a', '[Image: source: /tmp/a.png]'),
+      userText('b', '[Image: source: /tmp/b.png]'),
+      userText('prompt', '[Image #1] [Image #2]')
+    ])
+
+    expect(out).toHaveLength(1)
+    expect(out[0]!.blocks).toEqual([
+      { type: 'image-ref', path: '/tmp/a.png' },
+      { type: 'image-ref', path: '/tmp/b.png' }
+    ])
+  })
+
+  it('preserves adjacent standalone image turns without a prompt marker', () => {
+    const out = normalizeImageTranscriptMessages([
+      userText('a', '[Image: source: /tmp/a.png]'),
+      userText('b', '[Image: source: /tmp/b.png]')
+    ])
+
+    expect(out).toHaveLength(2)
+    expect(out.map((message) => message.id)).toEqual(['a', 'b'])
+    expect(out.map((message) => message.blocks)).toEqual([
+      [{ type: 'image-ref', path: '/tmp/a.png' }],
+      [{ type: 'image-ref', path: '/tmp/b.png' }]
+    ])
+  })
+
   it('leaves ordinary user text untouched', () => {
     const out = normalizeImageTranscriptMessages([userText('a', 'how about this')])
     expect(out[0]!.blocks).toEqual([{ type: 'text', text: 'how about this' }])

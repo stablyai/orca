@@ -101,7 +101,7 @@ function askResultMessage(): NativeChatMessage {
 
 function chooseSpacesAndSubmit(): void {
   fireEvent.click(screen.getByRole('button', { name: /Spaces/ }))
-  fireEvent.click(screen.getByRole('button', { name: 'Send answer' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
 }
 
 describe('NativeChatInteractiveCard answer lifecycle', () => {
@@ -122,7 +122,7 @@ describe('NativeChatInteractiveCard answer lifecycle', () => {
     chooseSpacesAndSubmit()
     expect(screen.getByText('Tabs or spaces?')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Send answer' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
     expect(mocks.sendAnswer).toHaveBeenCalledTimes(2)
   })
 
@@ -205,7 +205,7 @@ describe('NativeChatInteractiveCard answer lifecycle', () => {
     chooseSpacesAndSubmit()
     act(() => settleDelivery?.(false))
 
-    expect(screen.getByRole('button', { name: 'Send answer' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Submit' })).toBeEnabled()
     expect(screen.getByText('Tabs or spaces?')).toBeInTheDocument()
   })
 })

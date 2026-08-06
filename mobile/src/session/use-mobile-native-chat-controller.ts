@@ -50,6 +50,7 @@ export type MobileNativeChatController = {
   chatComposerText: string
   setChatComposerText: Dispatch<SetStateAction<string>>
   chatPending: MobileNativeChatPendingMessage[]
+  chatImagePreviewsByMessageId: Record<string, string[]>
   nativeChatSession: ReturnType<typeof useMobileNativeChatSession>
   nativeChatAgentWorking: boolean
   nativeChatStreamingText?: string
@@ -160,6 +161,7 @@ export function useMobileNativeChatController(args: {
     composerText: chatComposerText,
     setComposerText: setChatComposerText,
     pending: chatPending,
+    imagePreviewsByMessageId: chatImagePreviewsByMessageId,
     captureSendOrigin,
     readSeededLaunchDraft,
     readSeededLaunchDraftSeed,
@@ -295,8 +297,7 @@ export function useMobileNativeChatController(args: {
     onSendError
   })
 
-  // A Codex-style model change happens in the agent's own TUI picker — bring
-  // the terminal view forward so the dispatched `/model` selector is visible.
+  // Bring the terminal view forward when an agent-owned picker command is used.
   const handleAgentPicker = useCallback(() => {
     if (activeSessionTabId && isTabChatView(activeSessionTabId)) {
       toggleTabChatView(activeSessionTabId)
@@ -327,6 +328,7 @@ export function useMobileNativeChatController(args: {
     chatComposerText,
     setChatComposerText,
     chatPending,
+    chatImagePreviewsByMessageId,
     nativeChatSession,
     nativeChatAgentWorking,
     nativeChatStreamingText,

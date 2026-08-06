@@ -4279,7 +4279,9 @@
           "83a820fa71": "筛选项目...",
           "5a273fbfce": "添加项目...",
           "4815c70605": "没有匹配的项目",
-          "bbbc6e8e3b": "没有匹配的未选择项目"
+          "bbbc6e8e3b": "没有匹配的未选择项目",
+          "allProjects": "所有项目",
+          "selectedProjectsCount": "{{value0}} 个项目"
         },
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "重启 Orca",
@@ -4357,6 +4359,7 @@
           "680043342f": "紧凑",
           "c7591b6014": "仓库",
           "hosts": "主机",
+          "showSection": "显示",
           "allHostsDetail": "显示所有主机",
           "configuredSshHost": "已配置 SSH",
           "projectSshHost": "项目 SSH",
@@ -5960,11 +5963,6 @@
           "3d172725cc": "没有任何",
           "1f32ba27a6": "自定义",
           "a182c5125e": "git用户名",
-          "sourceControlGroupOrderTitle": "源代码管理分组顺序",
-          "sourceControlGroupOrderDescription": "选择在源代码管理中优先显示“更改”、“已暂存更改”还是“未跟踪文件”。",
-          "changesFirst": "更改优先",
-          "stagedFirst": "已暂存优先",
-          "untrackedFirst": "未跟踪优先",
           "compareAgainstUpstreamTitle": "默认对比基准",
           "compareAgainstUpstreamDescription": "选择源代码管理在比较已提交变更时默认使用的基准。分支上游会自动跟随当前分支；如果没有上游，则回退到仓库默认分支。你仍然可以在对应 worktree 的 Git 面板中按 worktree 更改对比基准。Pull Request 和变基目标不会改变。",
           "compareBaseRepositoryDefault": "仓库默认",
@@ -8230,14 +8228,7 @@
             "f83c8937c4": "分支命名",
             "5ecd91c5ef": "创建工作树时添加到分支名称的前缀。",
             "68bd65fdb8": "分支前缀",
-            "sourceControlGroupOrderTitle": "源代码管理分组顺序",
-            "sourceControlGroupOrderDescription": "选择在源代码管理中优先显示“更改”、“已暂存更改”还是“未跟踪文件”。",
-            "groupOrder": "分组顺序",
-            "changesFirst": "更改优先",
-            "stagedFirst": "已暂存优先",
-            "untrackedFirst": "未跟踪优先",
             "sourceControl": "源代码管理",
-            "gitChanges": "git 更改",
             "compareAgainstUpstreamTitle": "默认对比基准",
             "compareAgainstUpstreamDescription": "选择源代码管理在比较已提交变更时默认使用的基准。分支上游会自动跟随当前分支；如果没有上游，则回退到仓库默认分支。你仍然可以在对应 worktree 的 Git 面板中按 worktree 更改对比基准。Pull Request 和变基目标不会改变。",
             "compareBase": "对比基准",
@@ -10580,7 +10571,9 @@
             "b8c2e1a904": "{{value0}} → {{value1}}",
             "a4e93c21d7": "当前分支：{{value0}}",
             "c7d4e2f801": "更改基引用：{{value0}}",
-            "f3a1b8c204": "upstream"
+            "f3a1b8c204": "upstream",
+            "createPrIntentEmptyGeneratedBody": "生成的评审详情未包含描述。请重试创建 PR。",
+            "createPrIntentGenerateDetailsFailed": "无法生成评审详情。请重试创建 PR。"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的智能体。",
@@ -13001,6 +12994,20 @@
           "6bbf827ef5": "标题 5",
           "d1bbf9a835": "可折叠小节"
         },
+        "RichMarkdownTableControls": {
+          "deleteTable": "删除表格",
+          "tableActions": "表格操作",
+          "addColumn": "添加列",
+          "addRow": "添加行",
+          "rowActions": "行操作",
+          "columnActions": "列操作",
+          "insertRowAbove": "在上方插入行",
+          "insertColumnLeft": "在左侧插入列",
+          "insertRowBelow": "在下方插入行",
+          "insertColumnRight": "在右侧插入列",
+          "deleteRow": "删除行",
+          "deleteColumn": "删除列"
+        },
         "UntitledFileRenameDialog": {
           "a7dd27b0bc": "保存",
           "949711deb4": "取消",
@@ -13456,6 +13463,8 @@
             "1b179ab561": "复制页面网址",
             "f7ab83f7ed": "在默认浏览器中打开页面",
             "0e080d820e": "重新加载",
+            "a1f3c2e4b5": "硬刷新",
+            "b7e4d9c1a2": "停止",
             "250a9b3e42": "向前",
             "40edfa75cb": "返回",
             "efb0e8f7f3": "复制链接地址",
@@ -14405,6 +14414,20 @@
         "reconnect": "重新连接",
         "retry": "重试"
       }
+    },
+    "main": {
+      "window": {
+        "editableContextMenu": {
+          "table": "表格",
+          "insertRowAbove": "在上方插入行",
+          "insertRowBelow": "在下方插入行",
+          "deleteRow": "删除行",
+          "insertColumnLeft": "在左侧插入列",
+          "insertColumnRight": "在右侧插入列",
+          "deleteColumn": "删除列",
+          "deleteTable": "删除表格"
+        }
+      }
     }
   },
   "components": {
@@ -14511,7 +14534,7 @@
         "other": "其他…",
         "otherPlaceholder": "输入你的回答",
         "cancel": "取消",
-        "send": "发送回答",
+        "send": "提交",
         "next": "下一步",
         "skip": "跳过",
         "sending": "正在发送…"

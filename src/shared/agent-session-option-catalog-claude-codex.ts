@@ -203,6 +203,11 @@ export const CODEX_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   modelApply: {
     launchArgs: (value) => ['-m', String(value)],
     agentArgsOverride: (tokens) => hasFlag(tokens, ['-m', '--model']),
-    midSession: { kind: 'agent-picker', command: '/model' }
+    // Codex accepts a model argument in its live /model command.
+    midSession: {
+      kind: 'command',
+      build: (value) => `/model ${String(value)}`,
+      pickerCommand: '/model'
+    }
   }
 }

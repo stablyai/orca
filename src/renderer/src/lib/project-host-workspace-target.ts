@@ -1,5 +1,6 @@
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
+  getRepoExecutionHostId,
   type ExecutionHostId,
   type ExecutionHostScope
 } from '../../../shared/execution-host'
@@ -78,9 +79,12 @@ function isReadySetup(setup: ProjectHostSetup): boolean {
 
 function createTarget(
   setup: ProjectHostSetup,
-  repoById: ReadonlyMap<string, Repo>
+  reposById: ReadonlyMap<string, readonly Repo[]>
 ): WorkspaceCreationTarget | null {
-  const repo = repoById.get(setup.repoId)
+  const candidates = reposById.get(setup.repoId) ?? []
+  const repo =
+    candidates.find((candidate) => getRepoExecutionHostId(candidate) === setup.hostId) ??
+    (candidates.length === 1 ? candidates[0] : null)
   if (!repo) {
     return null
   }
@@ -96,14 +100,14 @@ function createTarget(
 
 function findReadySetupTarget(
   setups: readonly ProjectHostSetup[],
-  repoById: ReadonlyMap<string, Repo>,
+  reposById: ReadonlyMap<string, readonly Repo[]>,
   predicate: (setup: ProjectHostSetup) => boolean
 ): WorkspaceCreationTarget | null {
   for (const setup of setups) {
     if (!isReadySetup(setup) || !predicate(setup)) {
       continue
     }
-    const target = createTarget(setup, repoById)
+    const target = createTarget(setup, reposById)
     if (target) {
       return target
     }
@@ -120,7 +124,12 @@ export function resolveWorkspaceCreationTarget(
   }
 
   const model = getProjectSetupModel(input)
-  const repoById = new Map(eligibleRepos.map((repo) => [repo.id, repo]))
+  const reposById = new Map<string, Repo[]>()
+  for (const repo of eligibleRepos) {
+    const candidates = reposById.get(repo.id) ?? []
+    candidates.push(repo)
+    reposById.set(repo.id, candidates)
+  }
   const actionableHostIds = input.actionableHostIds
   const allSetups = model?.setups ?? []
   const setups = actionableHostIds
@@ -147,9 +156,9 @@ export function resolveWorkspaceCreationTarget(
     const canonical =
       findReadySetupTarget(
         setups,
-        repoById,
+        reposById,
         (entry) => entry.projectId === setup.projectId && entry.hostId === setup.hostId
-      ) ?? createTarget(setup, repoById)
+      ) ?? createTarget(setup, reposById)
     if (canonical) {
       return { status: 'ready', target: canonical }
     }
@@ -169,7 +178,7 @@ export function resolveWorkspaceCreationTarget(
     }
     const target = findReadySetupTarget(
       setups,
-      repoById,
+      reposById,
       (setup) => setup.projectId === projectId && setup.hostId === hostId
     )
     if (target) {
@@ -184,14 +193,14 @@ export function resolveWorkspaceCreationTarget(
     const focusedTarget = focusedHostId
       ? findReadySetupTarget(
           setups,
-          repoById,
+          reposById,
           (setup) => setup.projectId === projectId && setup.hostId === focusedHostId
         )
       : null
     if (focusedTarget) {
       return { status: 'ready', target: focusedTarget }
     }
-    const target = findReadySetupTarget(setups, repoById, (setup) => setup.projectId === projectId)
+    const target = findReadySetupTarget(setups, reposById, (setup) => setup.projectId === projectId)
     if (target) {
       return { status: 'ready', target }
     }
@@ -199,7 +208,7 @@ export function resolveWorkspaceCreationTarget(
   }
 
   if (hostId) {
-    const target = findReadySetupTarget(setups, repoById, (setup) => setup.hostId === hostId)
+    const target = findReadySetupTarget(setups, reposById, (setup) => setup.hostId === hostId)
     if (target) {
       return { status: 'ready', target }
     }
@@ -209,27 +218,38 @@ export function resolveWorkspaceCreationTarget(
   }
 
   const repoId = resolveComposerRepoId(input)
-  const legacyRepo = repoId ? repoById.get(repoId) : null
-  if (!legacyRepo) {
-    return { status: 'unavailable', reason: 'no-eligible-repo' }
+  const legacyCandidates = repoId ? (reposById.get(repoId) ?? []) : []
+  const focusedLegacyRepo =
+    focusedHostScope && focusedHostScope !== ALL_EXECUTION_HOSTS_SCOPE
+      ? legacyCandidates.find((candidate) => getRepoExecutionHostId(candidate) === focusedHostScope)
+      : null
+  const legacyRepo =
+    focusedLegacyRepo ?? (legacyCandidates.length === 1 ? legacyCandidates[0] : null)
+  let legacyTarget: WorkspaceCreationTarget | null = null
+  if (legacyRepo) {
+    const projectedLegacySetup = projectHostSetupProjectionFromRepos([legacyRepo]).setups[0]
+    const legacyHostId = getRepoExecutionHostId(legacyRepo)
+    const legacySetup =
+      setups.find(
+        (setup) =>
+          setup.repoId === legacyRepo.id && setup.hostId === legacyHostId && isReadySetup(setup)
+      ) ??
+      (!actionableHostIds || actionableHostIds.has(projectedLegacySetup.hostId)
+        ? projectedLegacySetup
+        : null)
+    legacyTarget = legacySetup ? createTarget(legacySetup, reposById) : null
+  } else if (repoId) {
+    // Why: duplicate repo ids across hosts leave no single legacy repo. Stay on the resolved id's
+    // own setup instead of failing closed and letting the composer re-pick an arbitrary repo.
+    legacyTarget = findReadySetupTarget(setups, reposById, (setup) => setup.repoId === repoId)
   }
-
-  const projectedLegacySetup = projectHostSetupProjectionFromRepos([legacyRepo]).setups[0]
-  const legacySetup =
-    setups.find((setup) => setup.repoId === legacyRepo.id && isReadySetup(setup)) ??
-    (!actionableHostIds || actionableHostIds.has(projectedLegacySetup.hostId)
-      ? projectedLegacySetup
-      : null)
-  const legacyTarget = legacySetup ? createTarget(legacySetup, repoById) : null
   if (legacyTarget) {
     return { status: 'ready', target: legacyTarget }
   }
-  const fallbackTarget = actionableHostIds
-    ? findReadySetupTarget(setups, repoById, () => true)
-    : null
+  const fallbackTarget = findReadySetupTarget(setups, reposById, () => true)
   return fallbackTarget
     ? { status: 'ready', target: fallbackTarget }
-    : { status: 'unavailable', reason: 'setup-not-found' }
+    : { status: 'unavailable', reason: legacyRepo ? 'setup-not-found' : 'no-eligible-repo' }
 }
 
 export function resolveWorkspaceCreationRepoId(input: ProjectHostWorkspaceTargetInput): string {

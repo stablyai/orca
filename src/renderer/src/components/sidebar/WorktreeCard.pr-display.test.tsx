@@ -24,6 +24,7 @@ let issueCache: Record<string, unknown> = {}
 let prCache: Record<string, unknown> = {}
 let workspacePortScan: WorkspacePortScanResult | null = null
 let settings: Partial<GlobalSettings> | null = null
+let activityStatus = 'inactive'
 
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: unknown) => unknown) =>
@@ -60,7 +61,7 @@ vi.mock('@/components/ui/tooltip', () => ({
 }))
 
 vi.mock('./use-worktree-activity-status', () => ({
-  useWorktreeActivityStatus: () => 'inactive'
+  useWorktreeActivityStatus: () => activityStatus
 }))
 
 vi.mock('./CacheTimer', () => ({
@@ -162,6 +163,7 @@ describe('WorktreeCard linked PR display', () => {
     prCache = {}
     workspacePortScan = null
     settings = null
+    activityStatus = 'inactive'
   })
 
   it('keeps linked GH PR status out of the left status slot by default', async () => {
@@ -229,11 +231,10 @@ describe('WorktreeCard linked PR display', () => {
     )
 
     expect(unreadMarkup).not.toContain('aria-label="Mark as read"')
-    expect(unreadMarkup).toContain('PR checks: Failed · Unread')
+    expect(unreadMarkup).toContain('Inactive · Unread')
+    expect(unreadMarkup).toContain('PR checks: Failed')
     expect(unreadMarkup).not.toContain('Mark read')
-    expect(unreadMarkup).toContain('size-[13px] translate-x-px')
-    expect(unreadMarkup).not.toContain('lucide-bell')
-    expect(unreadMarkup).not.toContain('text-amber-500')
+    expect(unreadMarkup).toContain('size-[13px]')
     expect(unreadMarkup).toContain('data-worktree-status-lane-unread=""')
     expect(unreadMarkup).toContain('data-worktree-unread-alert=""')
     expect(unreadMarkup).toContain('bg-amber-500')
@@ -241,7 +242,7 @@ describe('WorktreeCard linked PR display', () => {
     expect(getInlineRenameTitleTag(readMarkup)).toContain('font-normal text-foreground/80')
   }, 20_000)
 
-  it('shows linked GH PR status in the left status slot before hosted review details are cached when new card style is on', async () => {
+  it('shows linked GH PR status in the title row before hosted review details are cached when new card style is on', async () => {
     settings = { experimentalNewWorktreeCardStyle: true }
     const { default: WorktreeCard } = await import('./WorktreeCard')
 
@@ -629,9 +630,10 @@ describe('WorktreeCard linked PR display', () => {
     expect(markup).not.toContain('58941')
   })
 
-  it('renders linked PR status in the left status slot instead of the right metadata list', async () => {
+  it('renders activity and linked PR status in independent sidebar lanes', async () => {
     settings = { experimentalNewWorktreeCardStyle: true }
     worktreeCardProperties = ['status']
+    activityStatus = 'active'
     hostedReviewCache = {
       'local::repo-1::feature/local-branch': {
         data: makeHostedReview({ status: 'failure' }),
@@ -645,12 +647,13 @@ describe('WorktreeCard linked PR display', () => {
     )
 
     expect(markup).toContain('PR checks: Failed')
-    expect(markup).toContain('text-rose-500/85')
+    expect(markup).toContain('Active')
+    expect(markup).toContain('bg-emerald-500')
+    expect(markup).toContain('data-worktree-card-review-status=""')
     expect(markup).not.toContain('Linked PR #456')
-    expect(markup).not.toContain('CI checks')
   })
 
-  it('uses branch PR cache for the status slot before hosted-review metadata warms', async () => {
+  it('uses branch PR cache for the title-row status before hosted-review metadata warms', async () => {
     settings = { experimentalNewWorktreeCardStyle: true }
     worktreeCardProperties = ['status']
     prCache = {

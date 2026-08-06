@@ -35,8 +35,14 @@ export type HostStackRootNavigation = {
 
 export type HostStackHostRoute = `/h/${string}`
 
+export type HostStackRouteHref = Readonly<{
+  pathname: `/h/${string}`
+  params: Readonly<Record<string, string>>
+}>
+
 export type HostStackRouter = {
   push: (route: HostStackHostRoute) => void
+  replace: (route: HostStackRouteHref) => void
 }
 
 export type HostStackNavigationController = Readonly<{
@@ -52,6 +58,10 @@ export type PendingHostStackNavigation = Readonly<{
 
 export function hostStackHostRoute(hostId: string): HostStackHostRoute {
   return `/h/${encodeURIComponent(hostId)}`
+}
+
+export function hostStackRouteHref(target: HostStackRouteTarget): HostStackRouteHref {
+  return { pathname: `/h/${target.name}`, params: target.params }
 }
 
 // Why: the host is pushed as an encoded segment, so the committed route may hold
@@ -144,6 +154,10 @@ export function navigateToHostStackRoute(
     }
     const hostStack = hostContainer && mountedHostStack(hostContainer, hostId)
     if (!hostStack) {
+      if (hostContainer && hostParamMatches(hostContainer.params?.hostId, hostId)) {
+        dispose()
+        router.replace(hostStackRouteHref(selectedTarget))
+      }
       return
     }
     dispose()

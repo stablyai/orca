@@ -172,7 +172,7 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
     })
   })
 
-  it('exposes Codex model changes as an agent-picker action', () => {
+  it('exposes Codex model changes as native selectable values', () => {
     const snapshot = buildNativeChatSessionOptionSnapshot({
       catalog: CODEX_SESSION_OPTION_CATALOG,
       models: CODEX_SESSION_OPTION_CATALOG.models,
@@ -180,7 +180,12 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
       mode: 'live',
       modelLabel: 'Model'
     })
-    expect(snapshot[0]).toMatchObject({ settable: true, action: { type: 'agent-picker' } })
+    expect(snapshot[0]).toMatchObject({ settable: true })
+    expect(snapshot[0]?.action).toBeUndefined()
+    expect(snapshot[0]?.kind).toMatchObject({
+      type: 'select',
+      choices: expect.arrayContaining([{ value: 'gpt-5.5', label: 'GPT-5.5' }])
+    })
   })
 
   it('marks flip-only toggles without a baseline as toggle actions', () => {

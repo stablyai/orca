@@ -52,7 +52,7 @@ describe('mobile host edit navigation', () => {
     const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
     const push = vi.fn()
 
-    navigateToMobileHostEdit(harness.navigation, { push }, 'host/1')
+    navigateToMobileHostEdit(harness.navigation, { push, replace: vi.fn() }, 'host/1')
 
     expect(push).toHaveBeenCalledWith(mobileHostEditHostRoute('host/1'))
     expect(harness.navigation.dispatch).not.toHaveBeenCalled()
@@ -75,7 +75,7 @@ describe('mobile host edit navigation', () => {
   it('does not replace an unrelated host route', () => {
     const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
 
-    navigateToMobileHostEdit(harness.navigation, { push: vi.fn() }, 'host-1')
+    navigateToMobileHostEdit(harness.navigation, { push: vi.fn(), replace: vi.fn() }, 'host-1')
     harness.setState(committedHostState('host-2'))
 
     expect(harness.navigation.dispatch).not.toHaveBeenCalled()
@@ -83,7 +83,7 @@ describe('mobile host edit navigation', () => {
 
   it('disposes itself when navigation leaves the host flow without cancel()', () => {
     const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
-    navigateToMobileHostEdit(harness.navigation, { push: vi.fn() }, 'host-1')
+    navigateToMobileHostEdit(harness.navigation, { push: vi.fn(), replace: vi.fn() }, 'host-1')
 
     // Enter the host flow for a different host, then leave it entirely.
     harness.setState(committedHostState('host-2'))
@@ -97,7 +97,11 @@ describe('mobile host edit navigation', () => {
 
   it('cancels a pending replacement when navigation leaves the host flow', () => {
     const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
-    const controller = navigateToMobileHostEdit(harness.navigation, { push: vi.fn() }, 'host-1')
+    const controller = navigateToMobileHostEdit(
+      harness.navigation,
+      { push: vi.fn(), replace: vi.fn() },
+      'host-1'
+    )
 
     harness.setState(committedHostState('host-2'))
     controller.cancel()

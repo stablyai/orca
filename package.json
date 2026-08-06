@@ -1,6 +1,6 @@
 {
   "name": "orca",
-  "version": "1.4.169-rc.0",
+  "version": "1.4.174-rc.0",
   "description": "Next-gen IDE for parallel agentic development",
   "homepage": "https://github.com/stablyai/orca",
   "author": "stablyai",
@@ -136,6 +136,7 @@
     "jsonc-parser": "^3.3.1",
     "node-pty": "^1.1.0",
     "posthog-node": "^5.33.3",
+    "psl": "1.15.0",
     "qrcode": "^1.5.4",
     "react-i18next": "^17.0.8",
     "serve-sim": "^0.1.40",

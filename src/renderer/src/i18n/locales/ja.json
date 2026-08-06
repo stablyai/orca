@@ -4267,7 +4267,9 @@
           "83a820fa71": "プロジェクトをフィルタリング...",
           "5a273fbfce": "プロジェクトを追加...",
           "4815c70605": "一致するプロジェクトはありません",
-          "bbbc6e8e3b": "選択されていないプロジェクトは一致しません"
+          "bbbc6e8e3b": "選択されていないプロジェクトは一致しません",
+          "allProjects": "すべてのプロジェクト",
+          "selectedProjectsCount": "{{value0}} 件のプロジェクト"
         },
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Orca を再起動",
@@ -4345,6 +4347,7 @@
           "680043342f": "コンパクト",
           "c7591b6014": "repo",
           "hosts": "ホスト",
+          "showSection": "表示",
           "allHostsDetail": "すべてのホストを表示",
           "configuredSshHost": "設定済み SSH",
           "projectSshHost": "プロジェクト SSH",
@@ -5985,11 +5988,6 @@
           "3d172725cc": "なし",
           "1f32ba27a6": "カスタム",
           "a182c5125e": "Gitのユーザー名",
-          "sourceControlGroupOrderTitle": "ソース管理のグループ順序",
-          "sourceControlGroupOrderDescription": "ソース管理で「変更」「ステージ済みの変更」「未追跡ファイル」のどれを先に表示するかを選択します。",
-          "changesFirst": "変更を先頭",
-          "stagedFirst": "ステージ済みを先頭",
-          "untrackedFirst": "未追跡を先頭",
           "compareAgainstUpstreamTitle": "既定の比較ベース",
           "compareAgainstUpstreamDescription": "ソース管理がコミット済み変更の比較に既定で使うベースを選択します。ブランチの上流は現在のブランチに自動的に追従し、上流がない場合はリポジトリの既定ブランチにフォールバックします。比較ベースは各 worktree の Git パネルから worktree ごとに変更できます。Pull Request やリベースの対象は変更されません。",
           "compareBaseRepositoryDefault": "リポジトリ既定",
@@ -8255,14 +8253,7 @@
             "f83c8937c4": "ブランチの命名",
             "5ecd91c5ef": "ワークツリーの作成時にブランチ名に追加されるプレフィックス。",
             "68bd65fdb8": "ブランチプレフィックス",
-            "sourceControlGroupOrderTitle": "ソース管理のグループ順序",
-            "sourceControlGroupOrderDescription": "ソース管理で「変更」「ステージ済みの変更」「未追跡ファイル」のどれを先に表示するかを選択します。",
-            "groupOrder": "グループ順序",
-            "changesFirst": "変更を先頭",
-            "stagedFirst": "ステージ済みを先頭",
-            "untrackedFirst": "未追跡を先頭",
             "sourceControl": "ソース管理",
-            "gitChanges": "git の変更",
             "compareAgainstUpstreamTitle": "既定の比較ベース",
             "compareAgainstUpstreamDescription": "ソース管理がコミット済み変更の比較に既定で使うベースを選択します。ブランチの上流は現在のブランチに自動的に追従し、上流がない場合はリポジトリの既定ブランチにフォールバックします。比較ベースは各 worktree の Git パネルから worktree ごとに変更できます。Pull Request やリベースの対象は変更されません。",
             "compareBase": "比較基準",
@@ -10560,7 +10551,9 @@
             "b8c2e1a904": "{{value0}} → {{value1}}",
             "a4e93c21d7": "現在のブランチ: {{value0}}",
             "c7d4e2f801": "ベース ref を変更: {{value0}}",
-            "f3a1b8c204": "upstream"
+            "f3a1b8c204": "upstream",
+            "createPrIntentEmptyGeneratedBody": "生成されたレビューの詳細に説明が含まれていませんでした。PRの作成を再試行してください。",
+            "createPrIntentGenerateDetailsFailed": "レビューの詳細を生成できませんでした。PRの作成を再試行してください。"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "選択した agent を開始できませんでした。",
@@ -12981,6 +12974,20 @@
           "6bbf827ef5": "見出し 5",
           "d1bbf9a835": "折りたたみ可能なセクション"
         },
+        "RichMarkdownTableControls": {
+          "deleteTable": "テーブルを削除",
+          "tableActions": "テーブル操作",
+          "addColumn": "列を追加",
+          "addRow": "行を追加",
+          "rowActions": "行の操作",
+          "columnActions": "列の操作",
+          "insertRowAbove": "上に行を挿入",
+          "insertColumnLeft": "左に列を挿入",
+          "insertRowBelow": "下に行を挿入",
+          "insertColumnRight": "右に列を挿入",
+          "deleteRow": "行を削除",
+          "deleteColumn": "列を削除"
+        },
         "UntitledFileRenameDialog": {
           "a7dd27b0bc": "保存",
           "949711deb4": "キャンセル",
@@ -13436,6 +13443,8 @@
             "1b179ab561": "ページの URL をコピー",
             "f7ab83f7ed": "デフォルトのブラウザでページを開く",
             "0e080d820e": "リロード",
+            "a1f3c2e4b5": "ハードリロード",
+            "b7e4d9c1a2": "停止",
             "250a9b3e42": "進む",
             "40edfa75cb": "戻る",
             "efb0e8f7f3": "リンクアドレスをコピーする",
@@ -14385,6 +14394,20 @@
         "reconnect": "再接続",
         "retry": "再試行"
       }
+    },
+    "main": {
+      "window": {
+        "editableContextMenu": {
+          "table": "テーブル",
+          "insertRowAbove": "上に行を挿入",
+          "insertRowBelow": "下に行を挿入",
+          "deleteRow": "行を削除",
+          "insertColumnLeft": "左に列を挿入",
+          "insertColumnRight": "右に列を挿入",
+          "deleteColumn": "列を削除",
+          "deleteTable": "テーブルを削除"
+        }
+      }
     }
   },
   "components": {
@@ -14491,7 +14514,7 @@
         "other": "他の…",
         "otherPlaceholder": "答えを入力してください",
         "cancel": "キャンセル",
-        "send": "回答を送信する",
+        "send": "送信",
         "next": "次へ",
         "skip": "スキップ",
         "sending": "送信中…"

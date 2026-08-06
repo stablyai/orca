@@ -40,6 +40,7 @@ vi.mock('./use-mobile-native-chat-drafts', () => ({
       composerText: '',
       setComposerText: vi.fn(),
       pending: [],
+      imagePreviewsByMessageId: {},
       captureSendOrigin,
       readSeededLaunchDraft: () => null,
       readSeededLaunchDraftSeed: () => null,

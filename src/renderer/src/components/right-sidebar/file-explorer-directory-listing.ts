@@ -1,5 +1,6 @@
 import { joinPath, normalizeRelativePath } from '@/lib/path'
 import type { DirEntry } from '../../../../shared/types'
+import { sortDirEntries } from '../../../../shared/file-name-sort'
 import { readRuntimeDirectory } from '@/runtime/runtime-file-client'
 import type { FileExplorerOperationOwner, TreeNode } from './file-explorer-types'
 import { shouldIncludeFileExplorerEntry } from './file-explorer-entries'
@@ -56,5 +57,8 @@ export async function readFileExplorerDirectory(
     },
     dirPath
   )
-  return { entries, operationOwner }
+  // Why: remote-runtime and paired-web routes return the host's order verbatim,
+  // and an older host may still sort lexicographically; re-sorting an already
+  // sorted local listing is near-free (adaptive sort).
+  return { entries: sortDirEntries(entries), operationOwner }
 }

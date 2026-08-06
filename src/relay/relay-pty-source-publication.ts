@@ -71,7 +71,7 @@ export class RelayPtySourcePublication {
     }
     const mode = this.session.deliveryMode(context.clientId)
     let current = this.deliveries.get(id)
-    if (mode === 'subscriber') {
+    if (mode === 'unadmitted' || mode === 'subscriber') {
       this.sender.releaseRotationFence(current)
       return false
     }

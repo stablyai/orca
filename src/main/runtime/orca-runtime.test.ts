@@ -8835,6 +8835,99 @@ describe('OrcaRuntimeService', () => {
       expect(runtime.getPtyOutputSequence('pty-1')).toBe(0)
     })
 
+    it('confirms title-based agent exits against the foreground process', async () => {
+      const { runtime, batches } = createSideEffectRuntime()
+      syncSinglePty(runtime)
+
+      runtime.ingestSyntheticTitleFrame('pty-1', '\x1b]0;Codex ready\x07')
+      runtime.onPtyData('pty-1', '\x1b]0;⠋ bichir\x07', 100)
+      runtime.ingestSyntheticTitleFrame('pty-1', '\x1b]0;Codex ready\x07')
+      batches.length = 0
+
+      const getForegroundProcess = vi.fn().mockResolvedValueOnce('codex')
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess
+      })
+      runtime.onPtyData('pty-1', '\x1b]0;bichir\x07', 101)
+
+      await vi.waitFor(() => expect(getForegroundProcess).toHaveBeenCalledOnce())
+      await vi.waitFor(() =>
+        expect(batches.flatMap((batch) => batch.facts)).toEqual([
+          { kind: 'title', normalizedTitle: 'bichir', rawTitle: 'bichir' }
+        ])
+      )
+      await vi.waitFor(() =>
+        expect(
+          (
+            runtime as unknown as {
+              ptyForegroundProcessReads: Map<string, unknown>
+            }
+          ).ptyForegroundProcessReads.size
+        ).toBe(0)
+      )
+      await Promise.resolve()
+
+      getForegroundProcess.mockResolvedValueOnce('zsh')
+      runtime.onPtyData('pty-1', '\x1b]0;other cwd\x07', 102)
+
+      await vi.waitFor(() =>
+        expect(batches.flatMap((batch) => batch.facts)).toContainEqual({ kind: 'agent-exited' })
+      )
+      expect(getForegroundProcess).toHaveBeenCalledTimes(2)
+    })
+
+    it('does not confirm an agent exit from a foreground read predating its title', async () => {
+      const { runtime, batches } = createSideEffectRuntime()
+      syncSinglePty(runtime)
+      let resolveStaleRead!: (process: string) => void
+      const staleRead = new Promise<string>((resolve) => {
+        resolveStaleRead = resolve
+      })
+      const getForegroundProcess = vi
+        .fn()
+        .mockReturnValueOnce(staleRead)
+        .mockResolvedValueOnce('zsh')
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess
+      })
+
+      runtime.ingestSyntheticTitleFrame('pty-1', '\x1b]0;Codex ready\x07')
+      runtime.onPtyData('pty-1', '\x1b]0;bichir\x07', 100)
+      expect(getForegroundProcess).toHaveBeenCalledOnce()
+
+      resolveStaleRead('codex')
+
+      await vi.waitFor(() => expect(getForegroundProcess).toHaveBeenCalledTimes(2))
+      await vi.waitFor(() =>
+        expect(batches.flatMap((batch) => batch.facts)).toContainEqual({ kind: 'agent-exited' })
+      )
+    })
+
+    it('treats synchronous foreground read failures as unavailable', async () => {
+      const { runtime, batches } = createSideEffectRuntime()
+      syncSinglePty(runtime)
+      runtime.ingestSyntheticTitleFrame('pty-1', '\x1b]0;Codex ready\x07')
+      const getForegroundProcess = vi.fn(() => {
+        throw new TypeError('getForegroundProcess is unavailable')
+      })
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess
+      })
+
+      runtime.onPtyData('pty-1', '\x1b]0;bichir\x07', 100)
+
+      await vi.waitFor(() =>
+        expect(batches.flatMap((batch) => batch.facts)).toContainEqual({ kind: 'agent-exited' })
+      )
+      expect(getForegroundProcess).toHaveBeenCalledOnce()
+    })
+
     it('aligns a restored session and pre-response bytes to the provider sequence', async () => {
       const { runtime } = createSideEffectRuntime()
 

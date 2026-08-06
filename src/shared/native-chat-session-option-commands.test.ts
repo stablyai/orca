@@ -67,7 +67,7 @@ describe('buildNativeChatSessionOptionCommand', () => {
     ).toBe('/fast')
   })
 
-  it('has no absolute command for agent-picker applies (Codex model)', () => {
+  it('builds an absolute command for live Codex model changes', () => {
     expect(
       buildNativeChatSessionOptionCommand({
         optionId: 'model',
@@ -78,7 +78,7 @@ describe('buildNativeChatSessionOptionCommand', () => {
         models: CODEX_SESSION_OPTION_CATALOG.models,
         record: createNativeChatSessionOptionRecord('codex')
       })
-    ).toBeNull()
+    ).toBe('/model gpt-5.5')
   })
 })
 

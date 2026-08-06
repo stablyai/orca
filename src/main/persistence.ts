@@ -182,7 +182,6 @@ import {
 } from '../shared/mobile-pairing-custom-address'
 import { normalizeOpenInApplications } from '../shared/open-in-applications'
 import { normalizeTerminalShortcutPolicy } from '../shared/keybindings'
-import { normalizeSourceControlGroupOrder } from '../shared/source-control-group-order'
 import { normalizeAppIconId } from '../shared/app-icon'
 import { normalizeTerminalCustomThemes } from '../shared/terminal-custom-themes'
 import {
@@ -650,12 +649,22 @@ function readLegacyTerminalScrollbackSettings(settings: unknown): LegacyTerminal
     : {}
 }
 
-function stripLegacyTerminalScrollbackBytes(
+function stripRetiredSettingsFields(
   settings: Partial<GlobalSettings> | undefined
 ): Partial<GlobalSettings> {
-  const { terminalScrollbackBytes: _legacyScrollbackBytes, ...rest } = (settings ??
-    {}) as Partial<GlobalSettings> & { terminalScrollbackBytes?: unknown }
+  const {
+    terminalScrollbackBytes: _legacyScrollbackBytes,
+    sourceControlGroupOrder: _sourceControlGroupOrder,
+    sourceControlHierarchyDefaultedV2: _sourceControlHierarchyDefaultedV2,
+    ...rest
+  } = (settings ?? {}) as Partial<GlobalSettings> & {
+    terminalScrollbackBytes?: unknown
+    sourceControlGroupOrder?: unknown
+    sourceControlHierarchyDefaultedV2?: unknown
+  }
   void _legacyScrollbackBytes
+  void _sourceControlGroupOrder
+  void _sourceControlHierarchyDefaultedV2
   return rest
 }
 
@@ -3316,15 +3325,6 @@ export class Store {
         ) {
           this.loadNeedsSave = true
         }
-        const normalizedSourceControlGroupOrder = normalizeSourceControlGroupOrder(
-          parsed.settings?.sourceControlGroupOrder
-        )
-        if (
-          parsed.settings?.sourceControlGroupOrder !== undefined &&
-          parsed.settings.sourceControlGroupOrder !== normalizedSourceControlGroupOrder
-        ) {
-          this.loadNeedsSave = true
-        }
         result = {
           ...defaults,
           ...parsed,
@@ -3346,7 +3346,7 @@ export class Store {
           settings: {
             ...defaults.settings,
             // Why (#7977): keep persisted experimentalNewWorktreeCardStyle:true — v1.4.130's onboarding auto-wrote it as a plain boolean, so it's indistinguishable from a real opt-in; only the default changed.
-            ...stripLegacyTerminalScrollbackBytes(parsed.settings),
+            ...stripRetiredSettingsFields(parsed.settings),
             prBotAuthorOverrides: normalizePRBotAuthorOverrides(
               parsed.settings?.prBotAuthorOverrides
             ),
@@ -3420,7 +3420,6 @@ export class Store {
             }),
             notifications: normalizeNotificationSettings(parsed.settings?.notifications),
             sourceControlAi: migratedSourceControlAi,
-            sourceControlGroupOrder: normalizedSourceControlGroupOrder,
             // Why: rollback builds still read commitMessageAi, so refresh the legacy projection from sourceControlAi for compat.
             commitMessageAi: projectSourceControlAiToLegacyCommitMessageAi(
               migratedSourceControlAi,
@@ -5691,7 +5690,7 @@ export class Store {
     updates: Partial<GlobalSettings>,
     options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
   ): GlobalSettings {
-    const sanitizedUpdates = stripLegacyTerminalScrollbackBytes(updates)
+    const sanitizedUpdates = stripRetiredSettingsFields(updates)
     // Why: coerce to boolean here (not the IPC edge) so every write path is covered and a truthy non-bool can't persist as "tray-minimize on".
     if ('minimizeToTrayOnClose' in updates) {
       sanitizedUpdates.minimizeToTrayOnClose = updates.minimizeToTrayOnClose === true
@@ -5757,11 +5756,6 @@ export class Store {
     if ('terminalShortcutPolicy' in updates) {
       sanitizedUpdates.terminalShortcutPolicy = normalizeTerminalShortcutPolicy(
         updates.terminalShortcutPolicy
-      )
-    }
-    if ('sourceControlGroupOrder' in updates) {
-      sanitizedUpdates.sourceControlGroupOrder = normalizeSourceControlGroupOrder(
-        updates.sourceControlGroupOrder
       )
     }
     if ('appIcon' in updates) {
@@ -7073,6 +7067,13 @@ export class Store {
     if (this.updateSshRemotePtyLeaseStates(targetId, state)) {
       this.flush()
     }
+  }
+
+  // Why no write of its own: the committed quit path calls this immediately before the final store
+  // flush, and that flush is what persists it. A durable write here would race the flush and be
+  // rejected the moment it latches, which is exactly how an attached lease used to survive quit.
+  markSshRemotePtyLeasesForShutdown(targetId: string, state: SshRemotePtyLease['state']): void {
+    this.updateSshRemotePtyLeaseStates(targetId, state)
   }
 
   async markSshRemotePtyLeasesAsync(
