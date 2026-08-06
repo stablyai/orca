@@ -1451,11 +1451,12 @@ function RemoteBrowserPagePane({
     setRemoteError(null)
   }, [])
 
-  // The other half of the same guard. Once the stream is down and we are offering a reconnect, every
-  // input RPC fails as a matter of course, and each failure would repaint the raw transport string
-  // over the message the pane chose — verified: clicking the frozen frame put "Runtime environment
-  // is manually disconnected." back on screen next to the Reconnect button. These failures are a
-  // consequence of the state the user is already being told about, so they are noise here.
+  // The other half of the same guard, for REMOTE INPUT failures only. Once the stream is down and we
+  // are offering a reconnect, every input RPC fails as a matter of course, and each failure would
+  // repaint the raw transport string over the message the pane chose — verified: clicking the frozen
+  // frame put "Runtime environment is manually disconnected." back on screen next to the Reconnect
+  // button. Those are a consequence of the state the user is already being told about. Messages
+  // about what the user just did (URL validation) must NOT come through here.
   const reportIncidentalRemoteError = useCallback((message: string): void => {
     if (streamReconnectAvailableRef.current) {
       return
@@ -1490,9 +1491,10 @@ function RemoteBrowserPagePane({
     // pane switches tabs. Verified: that exact deletion survives all 282 tests and the lint. Only a
     // test that changes the tab id while environment and worktree hold steady can catch it.
     //
-    // `reopenNonce` is load-bearing in the same invisible way: it is the only thing the Reconnect
-    // button changes, so dropping it makes the button silently do nothing, and oxlint does not
-    // flag that either. Verified by mutation.
+    // `reopenNonce` is load-bearing too, but unlike browserTab.id it is NOT invisible: deleting it
+    // trips oxlint's no-unused-vars on the state declaration, and silencing that fails both E2E
+    // tests. Verified by mutation. (An earlier version of this comment claimed oxlint missed it —
+    // that was wrong, and a review caught it.)
   }, [
     activeRuntimeEnvironmentId,
     browserTab.id,
@@ -1654,7 +1656,10 @@ function RemoteBrowserPagePane({
     })
     if (!nextUrl) {
       const message = 'Enter a valid http(s) or localhost URL.'
-      reportIncidentalRemoteError(message)
+      // Not guarded: this is feedback on what the user just typed, not a consequence of the stream
+      // being down, so suppressing it behind a reconnect offer would leave Enter doing nothing
+      // visible when the typed value is empty and no load-error overlay appears.
+      setRemoteError(message)
       onUpdatePageState(browserTab.id, {
         loadError: {
           code: 0,

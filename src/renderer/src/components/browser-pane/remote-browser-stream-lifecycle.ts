@@ -248,20 +248,31 @@ export class RemoteBrowserStreamLifecycle {
             // reported, or a recovered pane keeps showing a toast it already healed (STA-3483).
             this.restartScheduler.reset()
             deps.setError(null)
+            // Defence-in-depth, not a load-bearing clear: every path that raises the flag today
+            // stops the scheduler, so the only route back to a live stream is open(), which clears
+            // it first. Kept so a future in-place recovery cannot leave the control stranded on.
             deps.setReconnectAvailable(false)
             deps.applyTabInfo(event.tab)
             void deps.syncViewport(event.browserPageId).catch(() => {})
             deps.setBusy(false)
           },
           onEnded: () => this.handleStreamClosed(token, true),
-          // Why these two announce a stop: neither runs the retry budget, so nothing else in this
-          // class would ever hand the user a way back. The host's own message is kept — it is more
-          // specific than anything the pane could substitute.
+          // Why onFailed announces a stop: the runtime reported the stream itself failed, and the
+          // close below is deliberately non-restarting, so nothing else would hand the user a way
+          // back. Its message is the host's own, which is more specific than any substitute.
           onFailed: (message) => {
             announceRemoteBrowserStreamStopped(deps, message)
             this.handleStreamClosed(token, false)
           },
-          onTransportError: (message) => announceRemoteBrowserStreamStopped(deps, message),
+          // Why this one does NOT announce a stop: a transport error is not a stop. The client
+          // raises it and then closes (remote-runtime-client.ts fail()), and it is the close that
+          // starts the retry budget. Announcing here would raise the reconnect control before the
+          // first automatic attempt — the exact state open() clears the flag to prevent — and would
+          // put raw transport copy on screen. Exhaustion owns the affordance.
+          onTransportError: () => {
+            deps.setError(REMOTE_BROWSER_STREAM_LOST_MESSAGE())
+            deps.setBusy(false)
+          },
           onPageMissing: () => deps.closeMissingRemotePage(pageId),
           onFrame: (bytes) => deps.handleFrameBytes(token, bytes),
           onClosed: () => this.handleStreamClosed(token, true)

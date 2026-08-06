@@ -476,8 +476,12 @@ describe('RemoteBrowserStreamLifecycle', () => {
     harness.streams[0].emitTransportError('runtime_timeout', 'socket hiccup')
     await vi.advanceTimersByTimeAsync(120_000)
 
-    expect(harness.currentError).toBe('socket hiccup')
+    // Pane-authored, not the transport's own string: 'socket hiccup' names our plumbing and tells
+    // the user nothing they can act on.
+    expect(harness.currentError).toBe('Lost connection to the remote server.')
     expect(harness.subscribeAttempts).toBe(1)
+    // And no stop is announced here — the close that follows owns the retry budget.
+    expect(harness.reconnectOffered).toBe(false)
   })
 
   it('ignores stream events once the pane is unmounted', async () => {
@@ -547,7 +551,7 @@ describe('RemoteBrowserStreamLifecycle reconnect affordance', () => {
     expect(harness.currentError).toBe('Cannot reach the remote server.')
   })
 
-  it('clears the offer once a stream goes live again', async () => {
+  it('clears the offer when the pane reopens and the stream comes back', async () => {
     const harness = createHarness()
     await openStreamAndConfirmReady(harness)
     harness.failEverySubscribe(rpcError('runtime_unavailable', 'socket died'))
@@ -555,6 +559,10 @@ describe('RemoteBrowserStreamLifecycle reconnect affordance', () => {
     await vi.advanceTimersByTimeAsync(60_000)
     expect(harness.reconnectOffered).toBe(true)
 
+    // NOTE ON WHAT THIS PINS: the clear comes from open(), not from onReady. Once the budget is
+    // spent the scheduler has stopped, so nothing reaches onReady except a fresh open() — which
+    // clears first. onReady's own clear is therefore defence-in-depth against a future path that
+    // sets the flag and then recovers in place; it is deliberately NOT claimed as covered.
     harness.failEverySubscribe(null)
     harness.lifecycle.open()
     await settle()
@@ -609,6 +617,78 @@ describe('RemoteBrowserStreamLifecycle silent budget drain', () => {
     // Without a message the button cannot render at all.
     expect(harness.currentError).not.toBeNull()
     // A spinner left running over a frozen frame also blocks the pane's input handlers.
+    expect(harness.busyLog.at(-1)).toBe(false)
+  })
+})
+
+// A transport error is NOT a stop. On a real socket failure the client calls onError and then
+// onClose (src/shared/remote-runtime-client.ts fail()), and it is onClose that starts the retry
+// budget. Announcing a stop on the error therefore raises the reconnect control ~500ms before the
+// first automatic attempt — the one state this pane must never present, and with raw transport copy
+// the pane exists to keep out of the UI. The E2E cannot see this: manual disconnect delivers close
+// without error, which is the single drop shape where the bug is absent.
+describe('RemoteBrowserStreamLifecycle transport error', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('does not offer reconnect before the retry budget has run', async () => {
+    const harness = createHarness()
+    await openStreamAndConfirmReady(harness)
+
+    harness.streams[0].emitTransportError('runtime_unavailable', 'socket reset by peer')
+    await settle()
+    expect(harness.reconnectOffered).toBe(false)
+    expect(harness.currentError).toBe('Lost connection to the remote server.')
+
+    // The close that follows starts the budget; the control stays down for its whole ladder.
+    harness.failEverySubscribe(rpcError('runtime_unavailable', 'still down'))
+    harness.streams[0].emitClose()
+    await vi.advanceTimersByTimeAsync(600)
+    expect(harness.reconnectOffered).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(harness.reconnectOffered).toBe(true)
+  })
+})
+
+// These pin the remaining announce sites. Each was verified to leave the suite green when its
+// announce was downgraded to a bare setError — the gap that let a wrong one ship.
+describe('RemoteBrowserStreamLifecycle stop announcements', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('offers reconnect when the runtime reports the stream itself failed', async () => {
+    const harness = createHarness()
+    await openStreamAndConfirmReady(harness)
+
+    harness.streams[0].emitStreamError('screencast pipeline exploded')
+    await vi.advanceTimersByTimeAsync(60_000)
+
+    // Non-restarting by design, so nothing else would ever hand the user a way back.
+    expect(harness.reconnectOffered).toBe(true)
+    expect(harness.currentError).toBe('screencast pipeline exploded')
+    expect(harness.busyLog.at(-1)).toBe(false)
+  })
+
+  it('offers reconnect when a viewport restart cannot re-subscribe', async () => {
+    const harness = createHarness()
+    await openStreamAndConfirmReady(harness)
+
+    harness.failEverySubscribe(rpcError('runtime_unavailable', 'resize refused'))
+    harness.setViewportSize({ width: 1400, height: 900 })
+    harness.lifecycle.restartForViewport(harness.streams[0].pageId)
+    await vi.advanceTimersByTimeAsync(60_000)
+
+    // A resize during a blip tears down a live subscription and never reaches the retry budget.
+    expect(harness.reconnectOffered).toBe(true)
     expect(harness.busyLog.at(-1)).toBe(false)
   })
 })
