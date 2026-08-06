@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import {
   dedupeCodexRolloutFileAliases,
-  dedupeCodexSessionsBySessionId
+  dedupeCodexSessionsBySessionId,
+  orderCodexRolloutCandidatesForParse
 } from './codex-session-root-dedup'
 
 const REAL_HOME_ROLLOUT =
@@ -316,5 +317,83 @@ describe('dedupeCodexSessionsBySessionId', () => {
     })
 
     expect(dedupeCodexSessionsBySessionId([host, wsl])).toEqual([host, wsl])
+  })
+})
+
+type OrderingCandidate = {
+  agent: string
+  path: string
+  home: string | null
+  id: string
+}
+
+const ORDERING_ACCESSORS = {
+  isCodex: (candidate: OrderingCandidate) => candidate.agent === 'codex',
+  getFilePath: (candidate: OrderingCandidate) => candidate.path,
+  getCodexHome: (candidate: OrderingCandidate) => candidate.home,
+  getHardlinkIdentity: () => null
+}
+
+function rolloutPath(root: string, index: number): string {
+  const sessionId = `019f0000-1111-7222-8333-${String(index).padStart(12, '0')}`
+  return `${root}/sessions/2026/07/01/rollout-2026-07-01T10-00-00-${sessionId}.jsonl`
+}
+
+// The parse budget cuts this list by mtime, so ordering decides which root's
+// copy of a rollout is ever parsed — and therefore which one post-parse dedup
+// gets to choose between. These pin the invariants that makes safe.
+describe('orderCodexRolloutCandidatesForParse', () => {
+  it('reorders only within an alias group, leaving every other slot alone', () => {
+    const candidate = (
+      agent: string,
+      path: string,
+      home: string | null,
+      id: string
+    ): OrderingCandidate => ({ agent, path, home, id })
+    const input = [
+      candidate('claude', '/projects/a.jsonl', null, 'claude-1'),
+      candidate('codex', rolloutPath('/import-home', 1), '/import-home', 'import'),
+      candidate('gemini', '/gemini/b.json', null, 'gemini-1'),
+      candidate('codex', rolloutPath('/Users/ada/.codex', 1), null, 'real'),
+      candidate('claude', '/projects/c.jsonl', null, 'claude-2')
+    ]
+
+    expect(
+      orderCodexRolloutCandidatesForParse(input, ORDERING_ACCESSORS).map((entry) => entry.id)
+    ).toEqual(['claude-1', 'real', 'gemini-1', 'import', 'claude-2'])
+  })
+
+  it('is inert when a single Codex root is scanned', () => {
+    const input = Array.from({ length: 25 }, (_, index) => ({
+      agent: 'codex',
+      path: rolloutPath('/Users/ada/.codex', index),
+      home: null,
+      id: `session-${index}`
+    }))
+
+    expect(orderCodexRolloutCandidatesForParse(input, ORDERING_ACCESSORS)).toEqual(input)
+  })
+
+  it('never adds or drops a candidate', () => {
+    const roots: [string, string | null][] = [
+      ['/Users/ada/.codex', null],
+      ['/import-home', '/import-home'],
+      ['/ud/codex-runtime-home/home', '/ud/codex-runtime-home/home']
+    ]
+    const input = Array.from({ length: 60 }, (_, index) => {
+      const [root, home] = roots[index % roots.length]!
+      const isCodex = index % 4 !== 0
+      return {
+        agent: isCodex ? 'codex' : 'claude',
+        path: isCodex ? rolloutPath(root, index % 7) : `${root}/notes-${index}.txt`,
+        home,
+        id: `entry-${index}`
+      }
+    })
+
+    const ordered = orderCodexRolloutCandidatesForParse(input, ORDERING_ACCESSORS)
+
+    expect(ordered).toHaveLength(input.length)
+    expect(ordered.map((entry) => entry.id).sort()).toEqual(input.map((entry) => entry.id).sort())
   })
 })
