@@ -67,7 +67,8 @@ export function buildAgentStatusIpcPayload(
       stateStartedAt: event.stateStartedAt,
       ...(event.providerSession ? { providerSession: event.providerSession } : {}),
       ...(event.providerSessionOnly ? { providerSessionOnly: true } : {}),
-      ...(event.promptInteractionKey ? { promptInteractionKey: event.promptInteractionKey } : {})
+      ...(event.promptInteractionKey ? { promptInteractionKey: event.promptInteractionKey } : {}),
+      ...(event.restoredUnconfirmed ? { restoredUnconfirmed: true } : {})
     },
     runtime
   )

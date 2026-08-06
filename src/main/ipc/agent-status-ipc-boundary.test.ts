@@ -102,6 +102,30 @@ describe('agent status IPC boundary', () => {
     expect(getAgentStatusLaunchConfigForPaneKey).not.toHaveBeenCalled()
   })
 
+  it('preserves resume-only restoration metadata', () => {
+    const result = buildAgentStatusIpcPayload(
+      {
+        paneKey: 'tab-1:leaf-1',
+        connectionId: null,
+        payload: { state: 'working', prompt: '', agentType: 'codex' },
+        promptInteractionKey: 'prompt-1',
+        providerSession: { key: 'session_id', id: 'session-1' },
+        providerSessionOnly: true,
+        receivedAt: 100,
+        restoredUnconfirmed: true,
+        stateStartedAt: 90
+      },
+      undefined
+    )
+
+    expect(result).toMatchObject({
+      promptInteractionKey: 'prompt-1',
+      providerSession: { key: 'session_id', id: 'session-1' },
+      providerSessionOnly: true,
+      restoredUnconfirmed: true
+    })
+  })
+
   it('preserves explicit user review and skips reviewer lookup for other agents', () => {
     const getAgentStatusLaunchConfigForPaneKey = vi.fn(() => ({
       agentArgs: `-c 'approvals_reviewer="user"'`,
