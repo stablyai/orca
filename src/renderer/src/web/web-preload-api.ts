@@ -2927,7 +2927,15 @@ function createDeveloperPermissionsApi(): NonNullable<Partial<PreloadApi>['devel
     getStatus: () => Promise.resolve([]),
     request: ({ id }) =>
       Promise.resolve({ id, status: 'unsupported', openedSystemSettings: false } as const),
-    openSettings: () => Promise.resolve()
+    openSettings: () => Promise.resolve(),
+    testLocalNetworkConnection: ({ host, port }) =>
+      Promise.resolve({
+        ok: false,
+        host,
+        port,
+        testedAt: Date.now(),
+        failure: 'unsupported'
+      } as const)
   }
 }
 

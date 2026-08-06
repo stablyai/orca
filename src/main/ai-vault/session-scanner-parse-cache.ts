@@ -13,6 +13,7 @@ import { createCursorSessionResumeState } from './session-scanner-cursor-parser'
 import { countSubagentTranscripts } from './session-scanner-subagent-transcripts'
 import { countOmpSubagentTranscripts } from './session-scanner-omp-subagent-transcripts'
 import type { ResumableSessionParseState, SessionFileCandidate } from './session-scanner-types'
+import { refreshCachedCodexTitle } from './session-scanner-codex-cached-title'
 
 // Sized past the default recency cap (1000) plus the in-scope cap (2000) so a
 // full steady-state result set stays resident between forced rescans.
@@ -197,6 +198,9 @@ export async function parseAgentSessionFileCached(
       ) {
         entry.session = { ...entry.session, subagentTranscriptCount }
       }
+    }
+    if (entry.session && candidate.agent === 'codex') {
+      entry.session = await refreshCachedCodexTitle(candidate, entry.session)
     }
     storeEntry(file.path, entry)
     return entry.session

@@ -30940,6 +30940,10 @@ export class OrcaRuntimeService {
         return false
       }
       const fg = await this.ptyController.getForegroundProcess(leaf.ptyId)
+      // Why: a bare `Cursor Agent` title is identity, not liveness — it reads the same
+      // whether cursor-agent is parked or long exited with the shell back. A null
+      // foreground is untracked, not alive, so no-evidence must stay a refusal. A live
+      // pane wrongly refused here means the read failed; fix that, not this.
       if (!fg) {
         return false
       }
@@ -31001,6 +31005,8 @@ export class OrcaRuntimeService {
       return false
     }
     const fg = await this.ptyController.getForegroundProcess(pty.ptyId)
+    // Why: mirrors the leaf path — an unreadable foreground is indistinguishable from an
+    // exited one, so a bare Cursor identity title never substitutes for corroboration.
     if (!fg) {
       return false
     }

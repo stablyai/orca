@@ -5,6 +5,7 @@ import { chmodSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { subscribeViaWatcherProcess } from './parcel-watcher-process'
+import { WatcherProcessFailure } from './parcel-watcher-process-failure'
 import type {
   WatcherProcessCallback,
   WatcherProcessHooks
@@ -271,6 +272,75 @@ describe('worktree git-common narrow watch (darwin)', () => {
 
     expect(onWatchError).toHaveBeenCalledWith(error)
     expect(received).toEqual([])
+  })
+
+  it('falls back to structural polling after the watcher crash fuse opens', async () => {
+    installSubscribeMock()
+    const commonDir = await makeCommonDir(true)
+    const worktreesDir = join(commonDir, 'worktrees')
+    const visibility = createVisibilityHarness()
+    const received: WorktreeBasePollEvent[][] = []
+    const watch = await startGitCommonWatch(
+      makeTarget(commonDir),
+      (events) => received.push(events),
+      POLL_MS,
+      'darwin',
+      visibility.source
+    )
+
+    childSubscriptions[0].callback(
+      new WatcherProcessFailure(
+        'watcher process crashed repeatedly',
+        'supervisor',
+        'supervisor_crash_fuse'
+      ),
+      []
+    )
+    await vi.waitFor(() => {
+      expect(childSubscriptions[0].unsubscribe).toHaveBeenCalledOnce()
+      expect(visibility.listenerCount()).toBe(3)
+    })
+
+    const entryPath = join(worktreesDir, 'fallback-entry')
+    await mkdir(entryPath)
+    await vi.waitFor(() => {
+      expect(received.flat()).toContainEqual({ type: 'create', path: entryPath })
+    })
+    await rm(entryPath, { recursive: true })
+    await vi.waitFor(() => {
+      expect(received.flat()).toContainEqual({ type: 'delete', path: entryPath })
+    })
+    expect(subscribeMock).toHaveBeenCalledOnce()
+    await watch.unsubscribe()
+    expect(visibility.listenerCount()).toBe(0)
+  })
+
+  it('starts structural polling when the watcher process is already unavailable', async () => {
+    subscribeMock.mockRejectedValue(
+      new WatcherProcessFailure('watcher process unavailable', 'supervisor', 'process_unavailable')
+    )
+    const commonDir = await makeCommonDir(true)
+    const worktreesDir = join(commonDir, 'worktrees')
+    const visibility = createVisibilityHarness()
+    const received: WorktreeBasePollEvent[][] = []
+    const watch = await startGitCommonWatch(
+      makeTarget(commonDir),
+      (events) => received.push(events),
+      POLL_MS,
+      'darwin',
+      visibility.source
+    )
+
+    const entryPath = join(worktreesDir, 'fallback-entry')
+    await mkdir(entryPath)
+    await vi.waitFor(() => {
+      expect(received.flat()).toContainEqual({ type: 'create', path: entryPath })
+    })
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS * 2))
+    expect(subscribeMock).toHaveBeenCalledOnce()
+
+    await watch.unsubscribe()
+    expect(visibility.listenerCount()).toBe(0)
   })
 
   it('reports a structural change after a watcher-child interruption', async () => {

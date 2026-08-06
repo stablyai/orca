@@ -1,8 +1,12 @@
 import { translate } from '@/i18n/i18n'
-import type { DeveloperPermissionStatus } from '../../../../shared/developer-permissions-types'
+import type {
+  DeveloperPermissionId,
+  DeveloperPermissionStatus
+} from '../../../../shared/developer-permissions-types'
 
 /** Status copy and tone for the macOS developer permission rows. */
 export function developerPermissionStatusLabel(
+  id: DeveloperPermissionId,
   status: DeveloperPermissionStatus | undefined
 ): string {
   switch (status) {
@@ -32,6 +36,12 @@ export function developerPermissionStatusLabel(
       )
     case 'unknown':
     case undefined:
+      if (id === 'local-network') {
+        return translate(
+          'auto.components.settings.DeveloperPermissionsPane.statusManagedByMacOS',
+          'Managed by macOS'
+        )
+      }
       return translate(
         'auto.components.settings.DeveloperPermissionsPane.statusCheckManually',
         'Check manually'
