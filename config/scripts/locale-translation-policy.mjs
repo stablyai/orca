@@ -163,7 +163,21 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'lint',
   'MD',
   '/home/user/projects',
-  'Claude Code'
+  'Claude Code',
+  // Why: these are commands and paths the user types verbatim — a translated one does not run.
+  'pnpm install',
+  'glab auth login',
+  'packages/web shared/ui',
+  // Why: identifiers, class names and code samples. Translating them changes a toast dedup id,
+  // a Tailwind class or a branch-name example into something that no longer matches or runs.
+  'stale-agent-row-{{value0}}',
+  'text-foreground',
+  'source-control',
+  'combined-branch',
+  'pr-view',
+  'fix-login-flow',
+  'my-project',
+  'serve-sim'
 ])
 
 export const BRAND_MISTRANSLATIONS = {
@@ -333,6 +347,13 @@ export function isEnglishOnlyKey(key) {
   return ENGLISH_ONLY_KEY_PREFIXES.some((prefix) => key.startsWith(prefix))
 }
 
+// Why: a style block is code. MT rewrote a selector to [データスラッシュメニュー], `background:` to
+// `背景:` and a keyframe name to ブラウザフラッシュ, silently breaking the view in that locale only.
+// Matches at-rules, bare selectors (with or without a following block) and declaration blocks,
+// since MT damages all three — a selector alone has no braces to key off.
+const STYLE_BLOCK =
+  /@(keyframes|media|supports|font-face)\b|[.#][a-zA-Z][\w-]*[^{}]*\{[^{}]*[a-z-]+\s*:|\[[a-z-]+=["'][^"']*["']\]|\{[^{}]*[a-z-]+\s*:\s*[^{}]*[;}]/
+
 export function shouldPreserveEnglishValue(enValue, key = '') {
   if (!enValue?.trim()) {
     return true
@@ -341,6 +362,9 @@ export function shouldPreserveEnglishValue(enValue, key = '') {
     return true
   }
   if (isEnglishOnlyKey(key)) {
+    return true
+  }
+  if (STYLE_BLOCK.test(enValue)) {
     return true
   }
   return NEVER_TRANSLATE_VALUES.has(enValue)

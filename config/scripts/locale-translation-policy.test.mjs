@@ -88,7 +88,7 @@ describe('locale-translation-policy', () => {
         localeValue: '電話機からターミナルとエージェントを制御します。',
         locale: 'ja'
       })
-    ).toBe('スマートフォンからターミナルとエージェントを操作')
+    ).toBe('スマートフォンからターミナルとエージェントを操作します。')
     expect(
       repairTranslatedValue({
         key: 'auto.components.GitHubItemDialog.934add88b6',
@@ -398,7 +398,7 @@ describe('locale-translation-policy', () => {
         localeValue: 'コンピューターと携帯電話で。',
         locale: 'ja'
       })
-    ).toBe('コンピューターとスマートフォンで。')
+    ).toBe('コンピュータとスマートフォンで。')
     expect(
       repairTranslatedValue({
         key: 'auto.components.GitHubItemDialog.3ab6ac0fc8',

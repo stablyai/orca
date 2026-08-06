@@ -1,6 +1,38 @@
 // Japanese phrase fixes from high-visibility UI audit rounds 1–4.
 // Why: keep locale-phrase-fixes.mjs under max-lines while preserving repair coverage.
+
+const JA_SENTENCE_CHAR = '[぀-ヿ一-龯、。・「」（）]'
+
+// Why: #12113 reverted these renderings to Latin inside Japanese sentences before the
+// canonical-rendering guard landed, so ~700 values still read "terminal を閉じる". The guard stops
+// new damage; this heals what the catalog already carries. Both sides are anchored on an adjacent
+// Japanese character and reject a `-`, word char or `.` neighbour, so command samples (`--agent`),
+// filenames (agents.md) and Latin-only labels ("Agent SDK") keep their spelling.
+const RELOCALIZED_GENERIC_TERMS = [
+  ['[Tt]erminals?', 'ターミナル', 'terminal'],
+  ['[Aa]gents?', 'エージェント', 'agent'],
+  ['[Cc]ommits?', 'コミット', 'commit'],
+  ['[Rr]epos?', 'リポジトリ', 'repo']
+].flatMap(([latin, katakana, whenEnIncludes]) => [
+  {
+    // Why: the trailing space only goes when Japanese follows — "ターミナル {{value0}} 件" keeps its
+    // 和欧間スペース, while "ローカル terminal の" closes up to "ローカルターミナルの".
+    pattern: new RegExp(
+      `(?<=${JA_SENTENCE_CHAR}) ?${latin}(?![-\\w.])(?: (?=${JA_SENTENCE_CHAR}))?`,
+      'g'
+    ),
+    replacement: katakana,
+    whenEnIncludes
+  },
+  {
+    pattern: new RegExp(`(?<![-\\w])${latin}(?![-\\w.]) ?(?=${JA_SENTENCE_CHAR})`, 'g'),
+    replacement: katakana,
+    whenEnIncludes
+  }
+])
+
 export const JA_PHRASE_FIXES = [
+  ...RELOCALIZED_GENERIC_TERMS,
   { pattern: /解雇/g, replacement: '閉じる', whenEnIncludes: 'Dismiss' },
   { pattern: /却下/g, replacement: '閉じる', whenEnIncludes: 'Dismiss' },
   { pattern: /代理人/g, replacement: 'エージェント', whenEnIncludes: 'agent' },
@@ -198,7 +230,7 @@ export const JA_PHRASE_FIXES = [
   { pattern: /電話サイズ/g, replacement: 'スマートフォンサイズ', whenEnIncludes: 'phone' },
   {
     pattern: /コンピュータと電話/g,
-    replacement: 'コンピューターとスマートフォン',
+    replacement: 'コンピュータとスマートフォン',
     whenEnIncludes: 'phone'
   },
   { pattern: /前の問題/g, replacement: 'フロントマター', whenEnIncludes: 'Front Matter' },
@@ -235,11 +267,37 @@ export const JA_PHRASE_FIXES = [
     whenEnIncludes: 'More PR actions'
   },
   { pattern: /アクション/g, replacement: '操作', whenEnIncludes: 'action' },
-  { pattern: /を選択してください/g, replacement: 'を選択', whenEnIncludes: 'Select' },
-  { pattern: /を選択してください/g, replacement: 'を選択', whenEnIncludes: 'Choose' },
-  { pattern: /入力してください/g, replacement: '入力', whenEnIncludes: 'Enter' },
-  { pattern: /追加してください/g, replacement: '追加', whenEnIncludes: 'Add' },
-  { pattern: /試してください/g, replacement: '試す', whenEnIncludes: 'Try' },
+  { pattern: /紛争/g, replacement: '競合', whenEnIncludes: 'conflict' },
+  { pattern: /資格情報/g, replacement: '認証情報', whenEnIncludes: 'credential' },
+  { pattern: /未知/g, replacement: '不明', whenEnIncludes: 'unknown' },
+  { pattern: /クッキー/g, replacement: 'Cookie', whenEnIncludes: 'cookie' },
+  { pattern: /プロフィール/g, replacement: 'プロファイル', whenEnIncludes: 'profile' },
+  // Why: 「読み込み」が多数派。ダウンロード/アップロード/リロードの語尾は巻き込まない。
+  { pattern: /(?<![ンプリ])ロード中/g, replacement: '読み込み中', whenEnIncludes: 'load' },
+  {
+    pattern: /(?<![ンプリ])ロードしています/g,
+    replacement: '読み込んでいます',
+    whenEnIncludes: 'load'
+  },
+  { pattern: /構成されて/g, replacement: '設定されて', whenEnIncludes: 'configur' },
+  { pattern: /第一方/g, replacement: 'ファーストパーティ', whenEnIncludes: 'first-party' },
+  // Why: Git's fast-forward is kept in Latin here; 早送り reads as video scrubbing.
+  { pattern: /早送り/g, replacement: 'fast-forward', whenEnIncludes: 'fast-forward' },
+  { pattern: /ファストフォワード/g, replacement: 'fast-forward', whenEnIncludes: 'fast-forward' },
+  // Why: Japanese uses the full-width ellipsis. Anchoring on a preceding Japanese character keeps
+  // URLs, token samples (sk-...) and git ranges (main...HEAD) out of it.
+  { pattern: /([぀-ヿ一-龯])\.\.\./g, replacement: '$1…', whenEnMatches: /./ },
+  // Why: Japanese compound katakana is written solid — MT inserts Microsoft-style separator spaces.
+  { pattern: /([゠-ヿ]) (?=[゠-ヿ])/g, replacement: '$1', whenEnMatches: /./ },
+  // Why: the long-vowel mark differs per word in Japanese usage, so each one follows the catalog majority.
+  { pattern: /サーバ(?!ー)/g, replacement: 'サーバー', whenEnMatches: /./ },
+  { pattern: /フォルダ(?!ー)/g, replacement: 'フォルダー', whenEnMatches: /./ },
+  { pattern: /エディタ(?!ー)/g, replacement: 'エディター', whenEnMatches: /./ },
+  { pattern: /レンダラ(?!ー)/g, replacement: 'レンダラー', whenEnMatches: /./ },
+  { pattern: /ブラウザー/g, replacement: 'ブラウザ', whenEnMatches: /./ },
+  { pattern: /エミュレーター/g, replacement: 'エミュレータ', whenEnMatches: /./ },
+  { pattern: /コンピューター/g, replacement: 'コンピュータ', whenEnMatches: /./ },
+  { pattern: /インターフェイス/g, replacement: 'インターフェース', whenEnMatches: /./ },
   // Why: JP engineers use "Issue" in Latin, not katakana. Runs last so all *→イシュー fixes above normalize to Issue.
   { pattern: /イシュー/g, replacement: 'Issue', whenEnIncludes: 'issue' }
 ]

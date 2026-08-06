@@ -10,12 +10,12 @@ export const JA_VALUE_OVERRIDES = {
   'Pick your default agent': 'デフォルトのエージェントを選択',
   'Complete {{artifact_url}}': '{{artifact_url}} を完了',
   'Control terminals and agents from your phone.':
-    'スマートフォンからターミナルとエージェントを操作',
+    'スマートフォンからターミナルとエージェントを操作します。',
   'Add reviewer': 'レビュアーを追加',
   Reviewer: 'レビュアー',
   Reviewers: 'レビュアー',
   'Fix broken checks': '失敗したチェックを修正',
-  'No broken checks to fix.': '修正が必要な失敗したチェックはありません',
+  'No broken checks to fix.': '修正が必要なチェックはありません。',
   'Started an AI agent for the broken checks.':
     '失敗したチェックに対して AI エージェントを開始しました。',
   'Failed to start an AI agent for the broken checks: {{value0}}':
@@ -234,5 +234,152 @@ export const JA_VALUE_OVERRIDES = {
   'Cursor Opacity': 'カーソルの不透明度',
   'Cursor Shape': 'カーソル形状',
   'Blinking Cursor': 'カーソルの点滅',
-  'Terminal Cursor': 'Terminal カーソル'
+  'Terminal Cursor': 'ターミナルのカーソル',
+  // Round 7: strings the Latin-noun revert left broken, plus commands MT translated into unrunnable text.
+  'Local folders and Git repositories': 'ローカルフォルダーと Git リポジトリ',
+  'Started an AI agent for the conflicts.': '競合の解決のために AI エージェントを開始しました。',
+  'Previous conflict': '前の競合',
+  '1 commit ahead of {{value0}}': '{{value0}} より 1 コミット進んでいます',
+  '1 commit behind {{value0}}': '{{value0}} より 1 コミット遅れています',
+  '3 commits ahead': '3 コミット進んでいます',
+  'Fast-forwarded {{branch}} by 1 commit.': '{{branch}} を 1 コミット分 fast-forward しました。',
+  'e.g. cloudflared access ssh --hostname %h': '例: cloudflared access ssh --hostname %h',
+  'Git is not installed': 'Git がインストールされていません',
+  'CLI not installed': 'CLI がインストールされていません',
+  'Locate SDK folder': 'SDK フォルダーを選択',
+  'Not found. Install Android Studio, then create a Virtual Device.':
+    '見つかりません。Android Studio をインストールしてから、仮想デバイスを作成してください。',
+  'ANSI blue color': 'ANSI青色',
+  // Round 8: dev-domain homographs MT got wrong — MR read as a courtesy title, State as a US state.
+  'MR !{{value0}}': 'MR !{{value0}}',
+  mrs: 'MR',
+  'No human comments.': 'ユーザーによるコメントはありません。',
+  'Any state': 'すべての状態',
+  State: '状態',
+  on: 'オン',
+  Health: '健全性',
+  Ordering: '並べ替え',
+  Start: '開始',
+  'Local {{value0}} is behind {{value1}}': 'ローカル {{value0}} は {{value1}} より遅れています',
+  'behind main': 'main より遅れています',
+  'behind (base commit:': '遅れ (ベースコミット:',
+  'No pending todos. You’re all caught up!': '保留中の ToDo はありません。すべて完了しています！',
+  // 優先度は「高い/中くらい/低い」ではなくラベルとして「高/中/低」
+  High: '高',
+  Medium: '中',
+  Low: '低',
+  // 分割操作は「スプリット〜」の音写と「〜に分割」が混在していた
+  'Split Terminal Down': 'ターミナルを下に分割',
+  'Split Terminal Right': 'ターミナルを右に分割',
+  'Split Up': '上に分割',
+  'Split Down': '下に分割',
+  // Browser Use is a feature name; MT translated it and lost the sentence structure.
+  "Install the Browser Use skill so agents can operate Orca's browser.":
+    'Browser Use スキルをインストールすると、エージェントが Orca のブラウザを操作できるようになります。',
+  'bold ·': '太字 ·',
+  // Issue は Latin 表記に統一する（末尾の phrase fix は原文に "issue" がある場合しか効かない）
+  'Duplicate of another issue in this repository': 'このリポジトリ内の別の Issue と重複',
+  'Choose a different issue.': '別の Issue を選択してください。',
+  'No matching issues loaded.': '一致する Issue がありません。',
+  'Duplicate of another issue': '別の Issue と重複',
+  'mentioned this': 'がこの Issue をメンションしました',
+  'closed this': 'がこの Issue をクローズしました',
+  'reopened this': 'がこの Issue を再オープンしました',
+  'moved this': 'がこの Issue を移動しました',
+  // 句点の欠落（他 2,300 件超は句点で終わる）
+  'Failed to save setup startup behavior.': 'セットアップ時の起動設定を保存できませんでした。',
+  'Failed to resolve MR base.': 'MR のベースブランチを特定できませんでした。',
+  'Failed to copy context.': 'コンテキストのコピーに失敗しました。',
+  // 検索結果なしは [前半][検索語]["] の3分割で描画される。閉じ側は既に 」 なので前半で文を完結させる。
+  'No settings found for "': '検索条件に一致する設定が見つかりませんでした:「',
+  // Round 9: 英語原文が更新されたのに旧原文が残っていた箇所（訳ですらなかった）
+  'This SSH host is not connected.': 'この SSH ホストは接続されていません。',
+  "Doesn't apply to agents where you've overridden launch arguments.":
+    '起動引数を上書きしているエージェントには適用されません。',
+  'Check for Server Updates': 'サーバーの更新を確認',
+  'All servers are up to date.': 'すべてのサーバーが最新です。',
+  'Open worktree': 'ワークツリーを開く',
+  'Update this server': 'このサーバーを更新',
+  'Git repository': 'Git リポジトリ',
+  '{{host}} is no longer a saved SSH host, so this workspace is no longer connected to a live host. It can only be removed from Orca — files and branches on the remote are left untouched.':
+    '{{host}} は保存済みの SSH ホストではなくなったため、このワークスペースは稼働中のホストに接続されていません。Orca から削除することのみ可能です。リモート上のファイルとブランチはそのまま残ります。',
+  // Round 9: 直訳調・語順・助詞の調整
+  'The app shell could not finish rendering. Retry to remount it, or relaunch Orca if the error persists.':
+    'アプリシェルのレンダリングを完了できませんでした。再マウントを試すか、エラーが解決しない場合は Orca を再起動してください。',
+  'Workspaces are unavailable on a mobile-scope pairing. Reconnect using the browser access link from Settings → Runtime Environments → Share this Orca server.':
+    'モバイル向けペアリングではワークスペースを使用できません。[設定] → [リモート Orca サーバー] → [この Orca サーバーを共有する] から、ブラウザ用リンクで再接続してください。',
+  'Change this later in Settings → Browser.': '後で [設定] → [ブラウザ] から変更できます。',
+  'Orca Cloud sign-in is not configured': 'Orca Cloud へのサインインが設定されていません',
+  '{{provider}} could not authenticate the credentials available in this environment. Check the {{provider}} login or environment token, then retry.':
+    '{{provider}} はこの環境で利用できる認証情報で認証できませんでした。{{provider}} のログインまたは環境トークンを確認して、再試行してください。',
+  // コマンド例は実行できる形のまま残す
+  'e.g. ollama run llama3.1 {prompt}': '例: ollama run llama3.1 {prompt}',
+  'e.g. ollama run llama3.1 {{value0}}': '例: ollama run llama3.1 {{value0}}',
+  'Connecting terminal...': 'ターミナルに接続中...',
+  // 三点リーダーは原文の字種に合わせる（英語側が ... と … を混在させている）
+  'Starring…': 'スターを付けています…',
+  // 設定検索の語: カタログ内の既存訳・並びの他項目に合わせる
+  'self-hosted': 'セルフホスト',
+  'not-authenticated': '未認証',
+  'side-by-side': '左右に並べて',
+  'Side-by-side': '左右に並べて',
+  // Round 10: 名詞句を動詞に読み違えた訳と、UI 用語の直訳
+  'Pull requests and commit statuses via the Gitea REST API.':
+    'Gitea REST API 経由の PR とコミットステータス。',
+  Key: 'キー',
+  slug: 'スラッグ',
+  // 環境変数の説明は [断片][変数名][断片] の連結で描画される。1キーに統合するのが本筋だが、
+  // それまでの間、連結して日本語として読める割り当てにしておく（2 つのカードが同じ断片を共有）。
+  'Public repositories are detected from their git remote. Set':
+    'パブリックリポジトリは git リモートから検出されます。設定:',
+  'for private repositories, and set': '（プライベートリポジトリ用）。また、',
+  'only when Orca cannot derive the API base URL from the git remote.':
+    'は、Orca が git リモートから API のベース URL を取得できない場合のみ設定します。',
+  'only when Orca cannot derive the API URL from the remote.':
+    'は、Orca がリモートから API URL を取得できない場合のみ設定します。',
+  Set: '設定:',
+  '. Set': '。設定:',
+  ', or set': '、または',
+  and: 'と',
+  'Use your current': '現在のアカウントを使用',
+  Running: '実行中',
+  'Back to runs': '実行一覧に戻る',
+  Failed: '失敗',
+  Unknown: '不明',
+  'Identity file': '秘密鍵ファイル',
+  'Identity File': '秘密鍵ファイル',
+  key: 'キー',
+  failing: '失敗',
+  'Selected host': '選択したホスト',
+  'Copied cleanup payload.': 'クリーンアップ用ペイロードをコピーしました。',
+  'Jump to...': '移動先...',
+  'Start work': '作業を開始',
+  'Remove {{value0}} contained {{value1}} from Orca':
+    '含まれている {{value1}} {{value0}} 件を Orca から削除',
+  'People in {{orgName}} who can collaborate on Orca.':
+    '{{orgName}} で Orca を共同利用できるメンバーです。',
+  'People in your organization who can collaborate on Orca.':
+    '組織内で Orca を共同利用できるメンバーです。',
+  'Adds action recipes for Source Control commit, pull request, branch-name, and fix actions.':
+    'ソース管理のコミット、PR、ブランチ名、修正操作に使うアクションレシピを追加します。',
+  'Repo fallback for text actions that select Custom command.':
+    '「カスタムコマンド」を選択したテキスト操作に使う、リポジトリ単位のフォールバック。',
+  'Recipe-created runtimes are workspace-owned. Clean up stale entries after crashes, failed creates, or manual recovery.':
+    'レシピで作成されたランタイムはワークスペースに紐づいています。クラッシュ、作成失敗、手動リカバリの後に残った古いエントリをクリーンアップします。',
+  'Failed to register the recipe-created project root on the runtime.':
+    'レシピによって作成されたプロジェクトルートをランタイムに登録できませんでした。',
+  'Update all {{value0}} servers': '{{value0}} 台のサーバーをすべて更新',
+  'This QR code grants limited (mobile) access. To use the full web app, open the browser access link from Settings → Runtime Environments → Share this Orca server → New Link.':
+    'この QR コードでは、モバイル向けの制限付きアクセスのみ利用できます。完全版の Web アプリを使用するには、[設定] → [リモート Orca サーバー] → [この Orca サーバーを共有する] → [新規リンク] から、ブラウザ用アクセスリンクを開いてください。',
+  'Enter an IP address or a hostname — a Tailscale MagicDNS name, a DDNS domain, or a LAN hostname — optionally with :port.':
+    'IP アドレスまたはホスト名（Tailscale の MagicDNS 名、DDNS ドメイン、LAN のホスト名など）を入力してください。必要に応じて :port を付けることもできます。',
+  'Loading skills...': 'スキルを読み込み中...',
+  'Start agents on your tasks without leaving Orca':
+    'Orca から離れずに、タスクからエージェントを開始',
+  'Workspace created from {{value0}}, but Orca could not fast-forward local {{value1}} because {{value2}}':
+    'ワークスペースは {{value0}} から作成されましたが、{{value2}} のため Orca はローカル {{value1}} を fast-forward できませんでした',
+  'Terminal, browser, or editor rendering failed in this workspace. Retry to remount it.':
+    'このワークスペースでは、ターミナル、ブラウザ、またはエディターのレンダリングに失敗しました。再マウントを試してください。',
+  'The dashboard could not finish rendering. Retry to remount it, or reopen it.':
+    'ダッシュボードのレンダリングを完了できませんでした。再マウントを試すか、開き直してください。'
 }
