@@ -1,41 +1,24 @@
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
-import {
-  RemoteBrowserPageSession,
-  type RemoteBrowserPageSessionDeps
-} from './remote-browser-page-session'
-import {
-  openRemoteBrowserScreencastStream,
-  type RemoteBrowserScreencastSubscribe
-} from './remote-browser-screencast-subscription'
+import { RemoteBrowserPageSession } from './remote-browser-page-session'
+import { openRemoteBrowserScreencastStream } from './remote-browser-screencast-subscription'
 import { RemoteBrowserStreamRestartScheduler } from './remote-browser-stream-restart-scheduler'
+import { REMOTE_BROWSER_STREAM_UNREACHABLE_MESSAGE } from './remote-browser-stream-messages'
 import {
-  isPermanentRemoteBrowserStreamFailure,
   isRemoteBrowserPageMissingError,
-  remoteBrowserStreamUnsupportedError
+  remoteBrowserStreamUnsupportedError,
+  resolveRemoteBrowserStreamRestartFailure
 } from './remote-browser-stream-errors'
 import {
   areRemoteViewportSizesNear,
   RemoteBrowserOperationTokens,
   toOperationToken,
-  type RemoteBrowserPaneIdentity,
   type RemoteBrowserStreamSubscription,
   type RemoteBrowserStreamToken,
   type RemoteBrowserViewportSize
 } from './remote-browser-stream-tokens'
-
-export type RemoteBrowserStreamLifecycleDeps = Omit<RemoteBrowserPageSessionDeps, 'tokens'> & {
-  identity: RemoteBrowserPaneIdentity
-  subscribeScreencast: RemoteBrowserScreencastSubscribe
-  waitForViewportSize: () => Promise<RemoteBrowserViewportSize | null>
-  readViewportSize: () => RemoteBrowserViewportSize | null
-  syncViewport: (pageId: string) => Promise<void>
-  getDeviceScaleFactor: () => number
-  setBusy: (busy: boolean) => void
-  setError: (message: string | null) => void
-  clearFrame: () => void
-  handleFrameBytes: (token: RemoteBrowserStreamToken, bytes: Uint8Array<ArrayBufferLike>) => void
-}
+export type { RemoteBrowserStreamLifecycleDeps } from './remote-browser-stream-lifecycle-deps'
+import type { RemoteBrowserStreamLifecycleDeps } from './remote-browser-stream-lifecycle-deps'
 
 // Owns the remote browser screencast lifecycle for one pane: opening the stream, self-healing a
 // dropped one with bounded backoff, restarting it after a viewport change, and tearing everything
@@ -50,7 +33,9 @@ export class RemoteBrowserStreamLifecycle {
   constructor(private readonly deps: RemoteBrowserStreamLifecycleDeps) {
     this.tokens = new RemoteBrowserOperationTokens(deps.identity)
     this.session = new RemoteBrowserPageSession({ ...deps, tokens: this.tokens })
-    this.restartScheduler = new RemoteBrowserStreamRestartScheduler()
+    this.restartScheduler = new RemoteBrowserStreamRestartScheduler(undefined, () =>
+      deps.setReconnectAvailable(true)
+    )
   }
 
   get restartAttemptCount(): number {
@@ -102,7 +87,12 @@ export class RemoteBrowserStreamLifecycle {
           deps.closeMissingRemotePage(tokens.remotePage)
           return
         }
-        deps.setError(error instanceof Error ? error.message : 'Failed to open remote browser.')
+        console.warn('[browser-pane] remote browser failed to open:', error)
+        // "Unreachable" rather than "lost": nothing was ever established here. And this path never
+        // had a stream, so the retry budget never runs — without the affordance below, nothing else
+        // would ever offer a way back and the pane strands on a bare error.
+        deps.setError(REMOTE_BROWSER_STREAM_UNREACHABLE_MESSAGE())
+        deps.setReconnectAvailable(true)
         deps.setBusy(false)
       })
     return () => {
@@ -236,6 +226,7 @@ export class RemoteBrowserStreamLifecycle {
             // reported, or a recovered pane keeps showing a toast it already healed (STA-3483).
             this.restartScheduler.reset()
             deps.setError(null)
+            deps.setReconnectAvailable(false)
             deps.applyTabInfo(event.tab)
             void deps.syncViewport(event.browserPageId).catch(() => {})
             deps.setBusy(false)
@@ -317,13 +308,15 @@ export class RemoteBrowserStreamLifecycle {
           deps.closeMissingRemotePage(token.remotePageId)
           return false
         }
-        deps.setError(
-          error instanceof Error ? error.message : 'Failed to restart remote browser stream.'
-        )
+        const failure = resolveRemoteBrowserStreamRestartFailure(error)
+        if (failure.shouldRetry) {
+          // The raw text is transport-level and written for logs; keep it out of the UI but not
+          // out of reach, since nothing else records it.
+          console.warn('[browser-pane] remote stream restart failed:', error)
+        }
+        deps.setError(failure.message)
         deps.setBusy(false)
-        // A capability the host lacks or a target that is gone cannot heal on this connection;
-        // everything else is unproven and must keep retrying rather than strand the pane.
-        return !isPermanentRemoteBrowserStreamFailure(error)
+        return failure.shouldRetry
       }
     })
   }

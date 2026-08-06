@@ -906,6 +906,11 @@ function RemoteBrowserPagePane({
   const [frameUrl, setFrameUrl] = useState<string | null>(null)
   const [frameMetadata, setFrameMetadata] = useState<BrowserScreencastFrameMetadata | null>(null)
   const [remoteError, setRemoteError] = useState<string | null>(null)
+  // Why separate from remoteError: only a spent retry budget offers reconnect. Errors raised while
+  // attempts remain are transient status, and a button there would invite fighting the retry loop.
+  const [streamReconnectAvailable, setStreamReconnectAvailable] = useState(false)
+  // Bumped by Reconnect to re-run the open effect from scratch. See reconnectRemoteStream.
+  const [reopenNonce, setReopenNonce] = useState(0)
   const [contextMenu, setContextMenu] = useState<RemoteBrowserContextMenu | null>(null)
   const [busy, setBusy] = useState(false)
   const contextMenuRef = useRef<HTMLDivElement>(null)
@@ -1002,6 +1007,7 @@ function RemoteBrowserPagePane({
       getDeviceScaleFactor: getRemoteBrowserDeviceScaleFactor,
       setBusy,
       setError: setRemoteError,
+      setReconnectAvailable: setStreamReconnectAvailable,
       applyTabInfo: (tab) => streamBridgeRef.current.applyTabInfo(tab),
       clearFrame: () => streamBridgeRef.current.clearFrame(),
       handleFrameBytes: (token, bytes) => streamBridgeRef.current.handleFrameBytes(token, bytes),
@@ -1432,6 +1438,15 @@ function RemoteBrowserPagePane({
     syncViewport: syncRemoteViewport
   }
 
+  const reconnectRemoteStream = useCallback((): void => {
+    setStreamReconnectAvailable(false)
+    setRemoteError(null)
+    // Why re-run the whole open effect rather than resume the stream: reconnect has to work in the
+    // cases where there is nothing to resume — the remote page was never created, or the very first
+    // open failed. Resuming a token only covers a stream that once existed.
+    setReopenNonce((nonce) => nonce + 1)
+  }, [])
+
   useEffect(() => {
     if (!isActive) {
       return
@@ -1449,12 +1464,17 @@ function RemoteBrowserPagePane({
     // AND passes react-hooks/exhaustive-deps, while silently failing to reopen the stream when the
     // pane switches tabs. Verified: that exact deletion survives all 282 tests and the lint. Only a
     // test that changes the tab id while environment and worktree hold steady can catch it.
+    //
+    // `reopenNonce` is load-bearing in the same invisible way: it is the only thing the Reconnect
+    // button changes, so dropping it makes the button silently do nothing, and oxlint does not
+    // flag that either. Verified by mutation.
   }, [
     activeRuntimeEnvironmentId,
     browserTab.id,
     clearPendingRemoteWheel,
     isActive,
     lifecycle,
+    reopenNonce,
     runtimeWorktree
   ])
 
@@ -2308,8 +2328,21 @@ function RemoteBrowserPagePane({
           />
         ) : null}
         {remoteError ? (
-          <div className="absolute bottom-4 left-1/2 max-w-md -translate-x-1/2 rounded-md border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md">
-            {remoteError}
+          <div
+            data-testid="remote-browser-stream-error"
+            className="absolute bottom-4 left-1/2 flex max-w-md -translate-x-1/2 items-center gap-2 rounded-md border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md"
+          >
+            <span>{remoteError}</span>
+            {streamReconnectAvailable ? (
+              <Button
+                size="sm"
+                variant="secondary"
+                className="h-6 shrink-0 px-2 text-xs"
+                onClick={reconnectRemoteStream}
+              >
+                {translate('auto.components.BrowserPane.streamReconnect', 'Reconnect')}
+              </Button>
+            ) : null}
           </div>
         ) : null}
       </div>

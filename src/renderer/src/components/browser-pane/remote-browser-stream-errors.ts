@@ -1,4 +1,5 @@
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-client'
+import { REMOTE_BROWSER_STREAM_LOST_MESSAGE } from './remote-browser-stream-messages'
 
 // Why: a runtime lacking browser.screencast.v1 will not grow it while this connection lives, so
 // retrying that failure is unbounded work with a visible error each round. Tagged rather than
@@ -66,4 +67,29 @@ export function isPermanentRemoteBrowserStreamFailure(error: unknown): boolean {
   return (
     code === REMOTE_BROWSER_STREAM_UNSUPPORTED || REMOTE_BROWSER_STREAM_TARGET_GONE_CODES.has(code)
   )
+}
+
+export type RemoteBrowserStreamRestartFailure = {
+  /** What the pane shows. */
+  message: string
+  /** False once the failure is proven unrecoverable on this connection. */
+  shouldRetry: boolean
+}
+
+// Why the message is decided here rather than at the call site: whether a failure is permanent and
+// what the user should be told are the same judgement. A permanent failure is one we classified and
+// understand, so its own message says something true and specific ("The selected runtime does not
+// support remote browser streaming."); flattening that to "Lost connection" would be vaguer and
+// wrong, since nothing was lost. Everything else carries a raw transport string written for logs,
+// so the pane speaks for itself there and the raw text is left to the caller to log.
+export function resolveRemoteBrowserStreamRestartFailure(
+  error: unknown
+): RemoteBrowserStreamRestartFailure {
+  if (isPermanentRemoteBrowserStreamFailure(error)) {
+    return {
+      message: error instanceof Error ? error.message : 'Failed to restart remote browser stream.',
+      shouldRetry: false
+    }
+  }
+  return { message: REMOTE_BROWSER_STREAM_LOST_MESSAGE(), shouldRetry: true }
 }

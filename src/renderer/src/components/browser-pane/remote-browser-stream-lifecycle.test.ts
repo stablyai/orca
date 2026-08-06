@@ -50,6 +50,7 @@ function createHarness() {
   }
   const busyLog: boolean[] = []
   const errorLog: (string | null)[] = []
+  const reconnectAvailableLog: boolean[] = []
   const appliedTitles: string[] = []
   const closedPages: (string | null)[] = []
   const streams: FakeScreencastStream[] = []
@@ -161,6 +162,7 @@ function createHarness() {
     getDeviceScaleFactor: () => 1,
     setBusy: (value) => busyLog.push(value),
     setError: (message) => errorLog.push(message),
+    setReconnectAvailable: (available) => reconnectAvailableLog.push(available),
     clearFrame: () => {},
     handleFrameBytes: () => {}
   })
@@ -334,7 +336,7 @@ describe('RemoteBrowserStreamLifecycle', () => {
 
     harness.streams[0].emitEnd()
     await vi.advanceTimersByTimeAsync(500)
-    expect(harness.currentError).toBe('stream refused')
+    expect(harness.currentError).toBe('Lost connection to the remote server.')
 
     await vi.advanceTimersByTimeAsync(1000)
     harness.streams[1].emitReady()
