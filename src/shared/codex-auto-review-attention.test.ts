@@ -72,4 +72,31 @@ describe('Codex auto-review attention', () => {
       })
     ).toBe(false)
   })
+
+  it('limits yolo title suppression to permission-request events', () => {
+    const yoloLaunchConfig = {
+      agentArgs: '--dangerously-bypass-approvals-and-sandbox',
+      agentEnv: {}
+    }
+    expect(
+      shouldSuppressCodexPermissionSyntheticTitle({
+        agentType: 'codex',
+        state: 'waiting',
+        hookEventName: 'PermissionRequest',
+        toolName: 'exec_command',
+        reviewer: 'user',
+        launchConfig: yoloLaunchConfig
+      })
+    ).toBe(true)
+    expect(
+      shouldSuppressCodexPermissionSyntheticTitle({
+        agentType: 'codex',
+        state: 'waiting',
+        hookEventName: 'AfterToolUse',
+        toolName: 'exec_command',
+        reviewer: 'user',
+        launchConfig: yoloLaunchConfig
+      })
+    ).toBe(false)
+  })
 })

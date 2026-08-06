@@ -42,6 +42,7 @@ export function shouldSuppressCodexPermissionSyntheticTitle(args: {
   if (
     args.agentType !== 'codex' ||
     !isCodexPermissionAttentionState(args.state) ||
+    args.hookEventName !== CODEX_PERMISSION_REQUEST_HOOK ||
     isAskUserQuestionTool(args.toolName)
   ) {
     return false
