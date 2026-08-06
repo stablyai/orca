@@ -494,15 +494,13 @@ export class SshRelaySession {
         sockPath,
         credentialFile,
         hostPlatform
-      } = await (terminalPersistenceBackend
-        ? deployAndLaunchRelay(
-            conn,
-            undefined,
-            graceTimeSeconds,
-            this.targetId,
-            terminalPersistenceBackend
-          )
-        : deployAndLaunchRelay(conn, undefined, graceTimeSeconds, this.targetId))
+      } = await deployAndLaunchRelay(
+        conn,
+        undefined,
+        graceTimeSeconds,
+        this.targetId,
+        terminalPersistenceBackend
+      )
       this.hostPlatform = hostPlatform ?? null
       this.remoteCliBridgeEnv =
         remoteHome && remoteRelayDir && nodePath && sockPath && hostPlatform
@@ -655,15 +653,13 @@ export class SshRelaySession {
         sockPath,
         credentialFile,
         hostPlatform
-      } = await (terminalPersistenceBackend
-        ? deployAndLaunchRelay(
-            conn,
-            undefined,
-            graceTimeSeconds,
-            this.targetId,
-            terminalPersistenceBackend
-          )
-        : deployAndLaunchRelay(conn, undefined, graceTimeSeconds, this.targetId))
+      } = await deployAndLaunchRelay(
+        conn,
+        undefined,
+        graceTimeSeconds,
+        this.targetId,
+        terminalPersistenceBackend
+      )
       this.hostPlatform = hostPlatform ?? null
       this.remoteCliBridgeEnv =
         remoteHome && remoteRelayDir && nodePath && sockPath && hostPlatform

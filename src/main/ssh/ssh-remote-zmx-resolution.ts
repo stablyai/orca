@@ -9,7 +9,9 @@ export async function resolveRemoteZmxPath(
   conn: SshConnection,
   signal?: AbortSignal
 ): Promise<string> {
-  const options = signal ? { signal, timeoutMs: ZMX_PROBE_TIMEOUT_MS } : undefined
+  const options = signal
+    ? { signal, timeoutMs: ZMX_PROBE_TIMEOUT_MS }
+    : { timeoutMs: ZMX_PROBE_TIMEOUT_MS }
   const knownPathProbe = [
     'command -v zmx 2>/dev/null',
     'for candidate in /opt/homebrew/bin/zmx /usr/local/bin/zmx "$HOME/.local/bin/zmx" "$HOME/bin/zmx"; do',

@@ -83,7 +83,7 @@ export async function forceStopRelayForTarget(
           // so retries do not fail forever after the relay is already gone.
           '      holder=""',
           '      if command -v lsof >/dev/null 2>&1; then',
-          '        holder=$(lsof -t -a -U "$zmx_sock" 2>/dev/null | tr "\n" " ")',
+          '        holder=$(lsof -t -a -U "$zmx_sock" 2>/dev/null | tr "\\n" " ")',
           '      fi',
           '      if [ -n "$holder" ]; then',
           '        echo "zmx is required to end persistent Orca terminals" >&2',

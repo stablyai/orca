@@ -107,6 +107,31 @@ describe('relay PTY backend transition', () => {
     expect(abandonInstall).toHaveBeenCalledTimes(1)
   })
 
+  it('fences a relay-backed launch over a dead relay whose marker says zmx', async () => {
+    const connection = makeConnection()
+    queueBootstrap('DEAD:zmx', true)
+
+    await expect(
+      deployAndLaunchRelay(connection, undefined, 0, 'target-a', 'relay')
+    ).rejects.toThrow('durable zmx terminals from a previous session')
+
+    expect(abandonInstall).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the install lock on an ordinary launch failure', async () => {
+    const connection = makeConnection()
+    queueBootstrap('DEAD', true)
+    vi.mocked(execCommand).mockRejectedValueOnce(new Error('launch exploded'))
+
+    await expect(
+      deployAndLaunchRelay(connection, undefined, 0, 'target-a', 'relay')
+    ).rejects.toThrow()
+
+    // Why: the detached start may still be running; only pre-launch
+    // deterministic rejections may release the fences.
+    expect(abandonInstall).not.toHaveBeenCalled()
+  })
+
   it('releases an acquired GC claim after a backend mismatch', async () => {
     const connection = makeConnection()
     vi.mocked(tryAcquireRelayRepairLock).mockResolvedValueOnce('busy')

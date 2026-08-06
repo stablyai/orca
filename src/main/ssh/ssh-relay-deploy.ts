@@ -1448,9 +1448,11 @@ async function launchRelay(
 
   // Why: after a restart the relay may still be alive in its grace period; --connect to its socket preserves PTY state and scrollback.
   try {
-    // Why: a dead relay's marker may sit in an older versioned install dir, so
-    // the DEAD branch scans every relay-*/ marker for this socket name.
-    const deadMarkerScan = `b=relay; for m in "$HOME/.orca-remote"/relay-*/${shellEscape(sockName)}.pty-backend ${shellEscape(ptyBackendFile)}; do [ -f "$m" ] && IFS= read -r b < "$m" && break; done; printf '%s' "$b"`
+    // Why: a dead relay's marker may sit in an older versioned install dir;
+    // scan siblings of the resolved install dir (not $HOME, which can differ
+    // from the resolved remote home) for this socket's marker.
+    const relayBaseDir = remoteDir.slice(0, remoteDir.lastIndexOf('/'))
+    const deadMarkerScan = `b=relay; for m in ${shellEscape(relayBaseDir)}/relay-*/${shellEscape(sockName)}.pty-backend ${shellEscape(ptyBackendFile)}; do [ -f "$m" ] && IFS= read -r b < "$m" && break; done; printf '%s' "$b"`
     const probeOutput = await execCommand(
       conn,
       `test -S ${shellEscape(sockFile)} && { printf 'ALIVE:'; cat ${shellEscape(ptyBackendFile)} 2>/dev/null || printf 'relay'; } || { printf 'DEAD:'; ${deadMarkerScan}; }`,

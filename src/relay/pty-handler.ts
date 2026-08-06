@@ -533,6 +533,9 @@ export class PtyHandler {
 
   private managedFromZmxMetadata(metadata: ZmxPtySessionMetadata, pty: IPty): ManagedPty {
     return {
+      ...(metadata.agentSessionOwners?.length
+        ? { agentSessionOwners: metadata.agentSessionOwners }
+        : {}),
       id: metadata.id,
       incarnationId: metadata.incarnationId,
       pty,
@@ -555,6 +558,22 @@ export class PtyHandler {
       }),
       zmxSession: { metadata }
     }
+  }
+
+  /** Mirror live owner bindings into the durable session record so a
+   *  replacement relay can re-adopt the running agent. */
+  private persistZmxAgentSessionOwners(managed: ManagedPty): void {
+    const metadata = managed.zmxSession?.metadata
+    if (!metadata || !this.zmxSupervisor) {
+      return
+    }
+    const owners = managed.agentSessionOwners ?? []
+    metadata.agentSessionOwners = owners.length ? owners : undefined
+    void this.zmxSupervisor.writeMetadata(metadata).catch((error) => {
+      process.stderr.write(
+        `[pty-handler] failed to persist agent owners for ${managed.id}: ${error instanceof Error ? error.message : String(error)}\n`
+      )
+    })
   }
 
   private async recoverZmxPty(id: string): Promise<ManagedPty | null> {
@@ -612,6 +631,12 @@ export class PtyHandler {
       )
       const managed = this.managedFromZmxMetadata(metadata, this.spawnZmxClient(pty, metadata, env))
       this.wireAndStore(managed)
+      // Why: a replacement relay starts with an empty owner registry; without
+      // re-registering, ensure() would mint a duplicate agent for a session
+      // that is still running inside the preserved zmx PTY.
+      for (const owner of managed.agentSessionOwners ?? []) {
+        this.agentSessionOwners.register(owner)
+      }
       const match = id.match(/^pty-(\d+)$/)
       if (match) {
         this.nextId = Math.max(this.nextId, Number.parseInt(match[1], 10) + 1)
@@ -1644,6 +1669,7 @@ export class PtyHandler {
         throw new Error('agent_session_exited_during_start')
       }
       managed.agentSessionOwners = this.agentSessionOwners.listForPty(managed.id)
+      this.persistZmxAgentSessionOwners(managed)
       const adoptedReplay = result.disposition === 'adopted' ? managed.buffered.read() : ''
       this.sourcePublication?.activate(managed.id, managed.incarnationId, context)
       const sourceActivation =
@@ -2101,7 +2127,18 @@ export class PtyHandler {
       if (!info) {
         throw new Error(`PTY "${id}" not found`)
       }
-      process.kill(-info.pid, signal)
+      // Why: zmx starts each session's shell as its own session/group leader,
+      // so pid doubles as the pgid. Interactive signals (Ctrl+C) normally flow
+      // as bytes through the pty; this explicit path is a best-effort fallback,
+      // and a shell that re-grouped falls back to a direct-pid signal.
+      try {
+        process.kill(-info.pid, signal)
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ESRCH') {
+          throw error
+        }
+        process.kill(info.pid, signal)
+      }
       return
     }
     managed.pty.kill(signal)

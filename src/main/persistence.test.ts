@@ -10472,6 +10472,57 @@ describe('Store', () => {
     expect(session.tabsByWorktree[workspaceKey]?.map((tab) => tab.id)).toEqual(['folder-tab'])
   })
 
+  it('delegates ambiguous folder-workspace scopes so possibly-SSH membership is never fenced away', async () => {
+    const store = await createStore()
+    // Mixed connections under one folder scope -> 'ambiguous' classification.
+    store.addRepo(makeRepo({ id: 'local-repo', path: '/srv/projects/local-app' }))
+    store.addRepo(
+      makeRepo({ id: 'remote-repo', path: '/srv/projects/remote-app', connectionId: 'ssh-1' })
+    )
+    const group = store.createProjectGroup({
+      name: 'Mixed group',
+      parentPath: '/srv/projects',
+      createdFrom: 'manual'
+    })
+    const workspace = store.createFolderWorkspace({
+      projectGroupId: group.id,
+      name: 'Mixed folder',
+      folderPath: '/srv/projects'
+    })
+    const workspaceKey = `folder:${workspace.id}`
+    const folderTab = {
+      id: 'folder-tab',
+      worktreeId: workspaceKey,
+      title: 'Terminal',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 1,
+      ptyId: 'ssh:ssh-1@@pty-3'
+    }
+    store.setWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: { [workspaceKey]: [] },
+      terminalLayoutsByTabId: {},
+      terminalTopologyRevisionByRepoId: { [workspaceKey]: 3 }
+    })
+
+    store.setWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: { [workspaceKey]: [folderTab] },
+      terminalLayoutsByTabId: {}
+    })
+
+    // Why: fencing an ambiguous (possibly SSH) scope risks rebasing durable
+    // membership onto a frozen snapshot; delegation is the documented bias.
+    const session = store.getWorkspaceSession()
+    expect(session.tabsByWorktree[workspaceKey]?.map((tab) => tab.id)).toEqual(['folder-tab'])
+  })
+
   it('clears relay-session tab mappings when marking an SSH remote PTY lease expired', async () => {
     const store = await createStore()
     store.upsertSshRemotePtyLease({

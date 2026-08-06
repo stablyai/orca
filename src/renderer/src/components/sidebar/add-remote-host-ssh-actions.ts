@@ -96,7 +96,9 @@ export async function saveNewSshHostFromForm({
     ...(identityFile ? { identityFile } : {}),
     ...(proxyCommand ? { proxyCommand } : {}),
     ...(jumpHost ? { jumpHost } : {}),
-    ...(systemSshConnectionReuse === false ? { systemSshConnectionReuse } : {})
+    ...(systemSshConnectionReuse === false ? { systemSshConnectionReuse } : {}),
+    // Why: persist only the non-default opt-in, mirroring the settings pane.
+    ...(form.zmxTerminalPersistence ? { terminalPersistenceBackend: 'zmx' as const } : {})
   }
 
   try {

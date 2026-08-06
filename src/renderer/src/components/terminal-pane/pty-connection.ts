@@ -8091,7 +8091,10 @@ export function connectPanePty(
           paneId: pane.id,
           ptyId: staleSessionId ?? null
         })
-        if (connectionId) {
+        // Why: only defer to the direct-SSH retry machinery when it owns this
+        // pane; an ordinary SSH reattach with no retry lease must keep the
+        // stale-session cleanup and fresh-spawn fallback below.
+        if (connectionId && directSshRetryAttempt) {
           settleDirectSshPaneRetryAttempt(directSshRetryAttempt, 'failed')
           return false
         }

@@ -7,6 +7,8 @@ import { basename, join } from 'node:path'
 const METADATA_VERSION = 1
 const PTY_ID_PATTERN = /^pty-\d+$/
 
+import type { AgentSessionOwnerBinding } from '../shared/agent-session-host-authority'
+
 export type ZmxPtySessionMetadata = {
   version: typeof METADATA_VERSION
   id: string
@@ -24,6 +26,9 @@ export type ZmxPtySessionMetadata = {
   envToDelete: string[]
   gitCredentialPromptGuarded: boolean
   createdAt: number
+  /** Live agent-session owner bindings; restored so a replacement relay
+   *  re-adopts the running agent instead of minting a duplicate owner. */
+  agentSessionOwners?: AgentSessionOwnerBinding[]
 }
 
 export type ZmxSessionInfo = {
@@ -68,7 +73,10 @@ function isMetadata(value: unknown): value is ZmxPtySessionMetadata {
     optionalString(input.attachIdentity) &&
     optionalString(input.worktreeId) &&
     optionalString(input.terminalHandle) &&
-    optionalString(input.explicitTerm)
+    optionalString(input.explicitTerm) &&
+    (input.agentSessionOwners === undefined ||
+      (Array.isArray(input.agentSessionOwners) &&
+        input.agentSessionOwners.every((owner) => typeof owner === 'object' && owner !== null)))
   )
 }
 
