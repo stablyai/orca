@@ -205,16 +205,16 @@ export function buildAgentResumeStartupPlan(args: {
   const shell = resolveStartupShell(args.platform, args.shell)
   const config = TUI_AGENT_CONFIG[args.agent]
   const resolvedAgentCommand = args.agentCommand?.trim()
-  const baseCommand = resolvedAgentCommand
-    ? ({ ok: true, command: resolvedAgentCommand } as const)
-    : resolveAgentLaunchCommand({
-        agent: args.agent,
-        cmdOverrides: args.cmdOverrides,
-        platform: args.platform,
-        shell,
-        agentArgs: args.agentArgs,
-        isRemote: args.isRemote
-      })
+  const baseCommand = resolveAgentLaunchCommand({
+    agent: args.agent,
+    cmdOverrides: resolvedAgentCommand
+      ? { ...args.cmdOverrides, [args.agent]: resolvedAgentCommand }
+      : args.cmdOverrides,
+    platform: args.platform,
+    shell,
+    agentArgs: resolvedAgentCommand ? null : args.agentArgs,
+    isRemote: args.isRemote
+  })
   if (!baseCommand.ok) {
     return null
   }

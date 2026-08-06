@@ -18,6 +18,57 @@ export type ResolvedAgentLaunchCommand =
     }
   | { ok: false; error: string }
 
+const REMOTE_CODEX_HOOK_FEATURE_ARGS = '${ORCA_AGENT_HOOK_PORT:+--enable hooks}'
+
+function hasCodexHooksFeatureOverride(tokens: readonly string[]): boolean {
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index]
+    const next = tokens[index + 1]
+    if (
+      ((token === '--enable' || token === '--disable') && next === 'hooks') ||
+      token === '--enable=hooks' ||
+      token === '--disable=hooks' ||
+      ((token === '-c' || token === '--config') && next?.startsWith('features.hooks=')) ||
+      token.startsWith('-cfeatures.hooks=') ||
+      token.startsWith('--config=features.hooks=')
+    ) {
+      return true
+    }
+  }
+  return false
+}
+
+function commandHasCodexHooksFeatureOverride(command: string, shell: AgentStartupShell): boolean {
+  if (command.includes(REMOTE_CODEX_HOOK_FEATURE_ARGS)) {
+    return true
+  }
+  const tokenized = tokenizeStartupCommand(command, shell)
+  return tokenized.ok && hasCodexHooksFeatureOverride(tokenized.tokens)
+}
+
+function enableRemoteCodexHooksForOrcaPty(args: {
+  agent: TuiAgent
+  command: string
+  shell: AgentStartupShell
+  isRemote?: boolean
+  trailingTokens?: readonly string[]
+}): string {
+  if (
+    args.agent !== 'codex' ||
+    args.isRemote !== true ||
+    args.shell !== 'posix' ||
+    commandHasCodexHooksFeatureOverride(args.command, args.shell) ||
+    hasCodexHooksFeatureOverride(args.trailingTokens ?? [])
+  ) {
+    return args.command
+  }
+  // Why: remote Codex can reuse a long-lived app-server that predates the PTY
+  // and therefore lacks Orca's per-pane hook env. A launch-only feature flag
+  // keeps hook execution in the PTY environment, while the POSIX expansion
+  // emits no arguments when agent status hooks are disabled for that PTY.
+  return `${args.command} ${REMOTE_CODEX_HOOK_FEATURE_ARGS}`
+}
+
 export function resolveAgentLaunchCommand(args: {
   agent: TuiAgent
   cmdOverrides: Partial<Record<TuiAgent, string>>
@@ -48,9 +99,18 @@ export function resolveAgentLaunchCommand(args: {
     args.sessionOptions,
     trailingTokens.tokens
   )
+  const hookAwareCommand = enableRemoteCodexHooksForOrcaPty({
+    agent: args.agent,
+    command,
+    shell: args.shell,
+    isRemote: args.isRemote,
+    trailingTokens: trailingTokens.tokens
+  })
   const optionSuffix = resolvedOptions.args.map((arg) => quoteStartupArg(arg, args.shell)).join(' ')
-  const commandWithOptions = optionSuffix ? `${command} ${optionSuffix}` : command
-  const commandWithoutSessionOptions = suffix.suffix ? `${command} ${suffix.suffix}` : command
+  const commandWithOptions = optionSuffix ? `${hookAwareCommand} ${optionSuffix}` : hookAwareCommand
+  const commandWithoutSessionOptions = suffix.suffix
+    ? `${hookAwareCommand} ${suffix.suffix}`
+    : hookAwareCommand
   // Why: session flags precede the free-form suffix so the user's explicit
   // repeated flag remains the final, winning occurrence.
   return {
