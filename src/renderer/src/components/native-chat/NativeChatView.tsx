@@ -48,10 +48,9 @@ import {
   useNativeChatContextMenu
 } from './use-native-chat-context-menu'
 import type { NativeChatContextMenuActions } from './use-native-chat-context-menu'
-import { resolveNativeChatFileLinkContext } from './native-chat-file-link'
 import { selectNativeChatRuntimeEnvironmentId } from './native-chat-runtime-owner'
 import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
-import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
+import { useNativeChatLinkClick } from './use-native-chat-link-click'
 import type { NativeChatViewProps } from './native-chat-view-types'
 
 export type { NativeChatViewProps } from './native-chat-view-types'
@@ -126,8 +125,7 @@ function NativeChatResolvedView({
   readTerminalScreen?: () => string | null
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
 }): React.JSX.Element {
-  // Primitive owner selection (no useShallow): routes the pane's read/subscribe to
-  // the remote runtime host for a runtime-owned pane; null keeps the local path.
+  // Route native-chat reads and subscriptions to the pane's runtime owner.
   const runtimeEnvironmentId = useAppStore((s) =>
     selectNativeChatRuntimeEnvironmentId(s, terminalTabId)
   )
@@ -141,20 +139,16 @@ function NativeChatResolvedView({
   const launchPrompt = useAppStore((s) => s.nativeChatLaunchPromptByTabId[terminalTabId] ?? null)
   const clearNativeChatLaunchPrompt = useAppStore((s) => s.clearNativeChatLaunchPrompt)
   const paneLaunchPrompt = launchPrompt?.agent === agent ? launchPrompt : null
-  // Launch context prefilled into the TUI input as an unsent draft; the
-  // composer adopts it so the GUI view shows the same context as the TUI.
-  // Shape matches NativeChatComposer's two launch-draft props, so it spreads.
+  // Mirror the TUI's unsent launch context into the native composer draft.
   const launchDraftSignal = useNativeChatLaunchDraftSignal({
     terminalTabId,
     agent,
     messages: session.messages,
     transcriptLoading: session.readPhase === 'loading'
   })
-  // The live-session merge reconciles hooks with replayable transcript turn
-  // boundaries; all working consumers must use that one lifecycle decision.
+  // Keep all working-state consumers on the replay-aware session lifecycle.
   const liveWorking = session.status === 'working'
-  // The agent's in-progress reply preview (hook), shown as a live streaming
-  // bubble while it works — before the completed turn flushes to the transcript.
+  // Show the hook preview until the completed reply reaches the transcript.
   const hookPreview = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.lastAssistantMessage)
   // Why: Stop suppression must clear on a newer working epoch even when status
   // never leaves 'working' (interrupt + immediate next turn coalesced).
@@ -174,9 +168,7 @@ function NativeChatResolvedView({
   // The question card's free-text row; keeps Paste working while the card
   // replaces the composer.
   const questionAnswerInputRef = useRef<HTMLInputElement>(null)
-  const fileLinkContext = useAppStore(
-    useShallow((s) => resolveNativeChatFileLinkContext(s, terminalTabId))
-  )
+  const links = useNativeChatLinkClick(terminalTabId, runtimeEnvironmentId)
   const pasteClipboardIntoComposer = useNativeChatPasteBridge({
     rootRef,
     composerRef,
@@ -360,8 +352,6 @@ function NativeChatResolvedView({
     setPending(writePendingSendCache(pendingScope, []))
     interactiveSend.cancel()
   }, [interactiveSend, pendingScope])
-  const nativeChatFileLinkClick = useNativeChatFileLinkClick(fileLinkContext)
-
   // Chat-only font zoom via Cmd/Ctrl +/-/0, gated to the live conversation so
   // the chord is inert on the loading/empty/error states and elsewhere.
   const fontScale = useNativeChatFontScale(isConversation)
@@ -416,8 +406,8 @@ function NativeChatResolvedView({
             isWorking={isWorking}
             expandSignal={false}
             fontScale={fontScale.scale}
-            onLinkClick={nativeChatFileLinkClick}
-            allowFileUriLinks={fileLinkContext !== null}
+            onLinkClick={links.onLinkClick}
+            allowFileUriLinks={links.allowFileUriLinks}
             failedDeliveryMessageIds={failedLaunchPromptMessageIds}
           />
         )}

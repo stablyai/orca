@@ -14,7 +14,7 @@ import { createPortal } from 'react-dom'
 import type { CSSProperties } from 'react'
 import type { IDisposable } from '@xterm/xterm'
 import { useAppStore } from '../../store'
-import { useLinkRoutingPreferenceDialog } from '@/components/link-routing-preference-dialog'
+import { useLinkRoutingPreferenceRequester } from '@/hooks/useLinkRoutingPreferenceRequester'
 import { DaemonActionDialog, useDaemonActions } from '@/components/shared/useDaemonActions'
 import {
   DEFAULT_TERMINAL_DIVIDER_DARK,
@@ -702,7 +702,7 @@ function TerminalPane(
   const refreshWorkspaceSpace = useAppStore((store) => store.refreshWorkspaceSpace)
   const settings = useAppStore((store) => store.settings)
   const updateSettings = useAppStore((store) => store.updateSettings)
-  const requestLinkRoutingPreference = useLinkRoutingPreferenceDialog()
+  const requestOpenLinksInAppPreference = useLinkRoutingPreferenceRequester()
   const keybindings = useAppStore((store) => store.keybindings)
   const rightClickToPaste = settings?.terminalRightClickToPaste ?? isWindowsUserAgent()
   // Why: Windows ConPTY doesn't forward DECSET 2004 from TUIs, so xterm may not know multi-line paste needs bracketed protection.
@@ -831,38 +831,6 @@ function TerminalPane(
 
   const settingsRef = useRef(settings)
   settingsRef.current = settings
-  const openLinksInAppPreferencePromiseRef = useRef<Promise<boolean> | null>(null)
-
-  const requestOpenLinksInAppPreference = useCallback(
-    (url: string): Promise<boolean> | null => {
-      if (settingsRef.current?.openLinksInAppPreferencePrompted === true) {
-        return null
-      }
-      if (!settingsRef.current) {
-        return null
-      }
-      if (openLinksInAppPreferencePromiseRef.current) {
-        return openLinksInAppPreferencePromiseRef.current
-      }
-      const preferencePromise = (async () => {
-        const openInOrca = await requestLinkRoutingPreference({
-          openLinksInAppDefault: settingsRef.current?.openLinksInApp === true,
-          url
-        })
-        await updateSettings({
-          openLinksInApp: openInOrca,
-          openLinksInAppPreferencePrompted: true
-        })
-        return openInOrca
-      })()
-      openLinksInAppPreferencePromiseRef.current = preferencePromise
-      void preferencePromise.finally(() => {
-        openLinksInAppPreferencePromiseRef.current = null
-      })
-      return preferencePromise
-    },
-    [requestLinkRoutingPreference, updateSettings]
-  )
   // Why: 'auto' resolves to true/false by keyboard layout (US → alt); the ref tracks that effective value, not the raw setting.
   const effectiveMacOptionAsAlt = useEffectiveMacOptionAsAlt(settings?.terminalMacOptionAsAlt)
   const macOptionAsAltRef = useRef<MacOptionAsAlt>(effectiveMacOptionAsAlt)
