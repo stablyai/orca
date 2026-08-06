@@ -11,9 +11,11 @@ const LOOPBACK_PROXY_HOSTNAMES = new Set(['127.0.0.1', 'localhost', '[::1]', '::
  * A browser always sends `Origin` on a WebSocket handshake and on cross-origin fetches;
  * CDP clients (agent-browser, Playwright, chrome-remote-interface) never do. Any request
  * carrying `Origin` therefore came from web content and must not reach the debugger.
+ * Presence is the whole signal — the value is never inspected, so an empty or `null`
+ * Origin is rejected exactly like a named one.
  */
 function hasBrowserOrigin(req: IncomingMessage): boolean {
-  return typeof req.headers.origin === 'string' && req.headers.origin.length > 0
+  return req.headers.origin !== undefined
 }
 
 /**

@@ -67,6 +67,24 @@ describe('CdpWsProxy access guard', () => {
     expect(getSendCommandMethods(mock)).not.toContain('Runtime.evaluate')
   })
 
+  it('rejects an upgrade carrying an empty Origin header', async () => {
+    // Presence is the signal, not content: a CDP client sends no Origin at all.
+    const error = await connectFailure(endpoint, { headers: { origin: '' } })
+
+    expect(error.message).toContain('403')
+  })
+
+  it('rejects an upgrade from an opaque origin', async () => {
+    // Sandboxed iframes and data: URLs send the literal string "null".
+    const error = await connectFailure(endpoint, { headers: { origin: 'null' } })
+
+    expect(error.message).toContain('403')
+  })
+
+  it('rejects discovery requests carrying an empty Origin header', async () => {
+    await expect(httpStatus('/json/version', { origin: '' })).resolves.toBe(403)
+  })
+
   it('rejects a websocket upgrade whose Host is not the bound loopback port', async () => {
     // A DNS-rebound page connects to 127.0.0.1 but still names the attacker's host.
     const error = await connectFailure(endpoint, { headers: { host: `rebind.evil:${port}` } })
