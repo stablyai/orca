@@ -31064,10 +31064,13 @@ export class OrcaRuntimeService {
     // deliver now (#12536). deliverPendingMessagesForHandle no-ops when the
     // leaf is not idle. Main's messageDeliveryFlights serialize mid-Enter
     // re-notifies without a separate settle barrier.
-    this.deliverPendingMessagesForHandle(handle)
-
+    // Why skip when a waiter is live: deliverPendingMessages stamps delivered_at
+    // but not read, so a blocked orchestration.check --wait would still re-read
+    // the row and the pane would also receive it (double delivery). The pull
+    // wins; the push stays pending for a later notify once the waiter is gone.
     const waiters = this.messageWaitersByHandle.get(handle)
     if (!waiters || waiters.size === 0) {
+      this.deliverPendingMessagesForHandle(handle)
       return
     }
     for (const waiter of [...waiters]) {

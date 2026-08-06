@@ -33045,13 +33045,59 @@ describe('OrcaRuntimeService', () => {
 
     const [terminal] = (await runtime.listTerminals()).terminals
     runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
-    db.insertMessage({ from: 'sender', to: terminal.handle, subject: 'while working' })
+    const message = db.insertMessage({
+      from: 'sender',
+      to: terminal.handle,
+      subject: 'while working'
+    })
     write.mockClear()
 
     runtime.notifyMessageArrived(terminal.handle, 'status')
 
     expect(write).not.toHaveBeenCalled()
+    // Why: busy must leave the row undelivered so a later idle can push it;
+    // a stamp-without-write would suppress later delivery (#12584 CodeRabbit).
+    expect(message.delivered_at).toBeNull()
     db.close()
+  })
+
+  it('resolves a registered waiter without PTY-injecting when the leaf is already idle', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new InMemoryOrchestrationMessages()
+      const write = vi.fn().mockReturnValue(true)
+      setInMemoryOrchestrationMessages(runtime, db)
+      runtime.setPtyController({
+        write,
+        kill: vi.fn(),
+        getForegroundProcess: async () => null
+      })
+      syncSinglePty(runtime)
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+      runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
+      await runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle' })
+      const message = db.insertMessage({
+        from: 'sender',
+        to: terminal.handle,
+        subject: 'for check wait'
+      })
+      write.mockClear()
+
+      // Why: blocked orchestration.check --wait is an explicit pull; push must
+      // not stamp delivered_at or type into the pane (double delivery, #12584).
+      const waitPromise = runtime.waitForMessage(terminal.handle, { timeoutMs: 5_000 })
+      runtime.notifyMessageArrived(terminal.handle, 'status')
+
+      await expect(waitPromise).resolves.toBe('notified')
+      expect(write).not.toHaveBeenCalled()
+      expect(message.delivered_at).toBeNull()
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('does not re-inject the same message when notify fires again during Enter delay', async () => {
@@ -33123,7 +33169,10 @@ describe('OrcaRuntimeService', () => {
       ).toHaveLength(0)
       expect(second.delivered_at).toBeNull()
 
-      await vi.advanceTimersByTimeAsync(500)
+      // Why: release must not require another agent-status OSC — only the
+      // delayed-Enter flight timer. Advancing 3s with no status output covers
+      // timer-only settle (CodeRabbit settling-timeout gap, #12584).
+      await vi.advanceTimersByTimeAsync(3_000)
       expect(write).toHaveBeenCalledWith('pty-1', '\r')
       expect(first.delivered_at).not.toBeNull()
       expect(
@@ -33131,7 +33180,6 @@ describe('OrcaRuntimeService', () => {
           ([, payload]) => typeof payload === 'string' && payload.includes('Subject: second')
         )
       ).toHaveLength(1)
-      await vi.advanceTimersByTimeAsync(500)
       expect(second.delivered_at).not.toBeNull()
       db.close()
     } finally {
