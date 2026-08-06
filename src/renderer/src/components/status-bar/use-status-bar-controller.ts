@@ -110,6 +110,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok, cursor, zcode } =
     rateLimits
   const muse = rateLimits.muse
+  const deepseek = rateLimits.deepseek
 
   // Antigravity has no saved credential; the checked item and detected CLI establish setup.
   const antigravityUsageConfigured =
@@ -125,6 +126,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     opencodeGoApiKeyConfigured: rateLimits.opencodeGoApiKeyConfigured,
     grokAuthConfigured: rateLimits.grokAuthConfigured,
     cursorAuthConfigured: rateLimits.cursorAuthConfigured,
+    deepseekAuthConfigured: rateLimits.deepseekAuthConfigured,
     zcodePlanApiKeyConfigured: rateLimits.zcodePlanApiKeyConfigured
   }
   const visibleClaude = getVisibleUsageProvider('claude', claude, usageSettings)
@@ -137,6 +139,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const visibleCursor = getVisibleUsageProvider('cursor', cursor, usageSettings)
   const visibleZcode = getVisibleUsageProvider('zcode', zcode, usageSettings)
   const visibleMuse = getVisibleUsageProvider('muse', muse, usageSettings)
+  const visibleDeepSeek = getVisibleUsageProvider('deepseek', deepseek, usageSettings)
   const showClaude =
     visibleClaude !== null &&
     statusBarItems.includes('claude') &&
@@ -174,6 +177,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     visibleMuse !== null &&
     statusBarItems.includes('muse') &&
     isStatusBarItemAvailable('muse', detectedAgentIds)
+  // DeepSeek is env API-key auth, not a TuiAgent on PATH.
+  const showDeepSeek = visibleDeepSeek !== null && statusBarItems.includes('deepseek')
   // OpenCode Go usage can use web credentials independently of CLI detection.
   const visibleOpencodeGo = getVisibleUsageProvider('opencode-go', opencodeGo, usageSettings)
   const showOpencodeGo = visibleOpencodeGo !== null && statusBarItems.includes('opencode-go')
@@ -194,11 +199,12 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showGrok ||
     showCursor ||
     showZcode ||
+    showDeepSeek ||
     showMuse
   const anyVisible = hasVisibleUsageMeters || showResourceUsage
   // Why: include Settings so durable managed accounts count — a configured user isn't shown the empty state while snapshots hydrate.
   const isEmptyUsageState = isUsageEmptyState(
-    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok, cursor, zcode, muse },
+    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok, cursor, zcode, muse, deepseek },
     usageSettings
   )
   // Why: one-time nudge — once dismissed, stays hidden even if providers reconnect later.
@@ -214,6 +220,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     grok?.status === 'fetching' ||
     cursor?.status === 'fetching' ||
     zcode?.status === 'fetching' ||
+    deepseek?.status === 'fetching' ||
     muse?.status === 'fetching'
 
   const floatingTerminalActionLabel = floatingTerminalOpen
@@ -233,6 +240,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showGrok ? visibleGrok : null,
     showCursor ? visibleCursor : null,
     showZcode ? visibleZcode : null,
+    showDeepSeek ? visibleDeepSeek : null,
     showMuse ? visibleMuse : null
   ]
     .filter((p): p is ProviderRateLimits => p !== null)

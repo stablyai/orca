@@ -96,6 +96,7 @@ export type ProviderRateLimits = {
     | 'kimi'
     | 'minimax'
     | 'grok'
+    | 'deepseek'
     | 'antigravity'
     | 'cursor'
     | 'zcode'
@@ -194,6 +195,7 @@ export type RateLimitState = {
   grok: ProviderRateLimits | null
   cursor: ProviderRateLimits | null
   zcode: ProviderRateLimits | null
+  deepseek: ProviderRateLimits | null
   muse: ProviderRateLimits | null
   /** Cookie is stored outside GlobalSettings; this durable flag keeps MiniMax visible across reloads/snapshot refreshes. */
   minimaxCookieConfigured: boolean
@@ -206,7 +208,9 @@ export type RateLimitState = {
   /** Presence of Cursor Keychain/legacy auth/IDE login only; tokens never leave main. */
   cursorAuthConfigured: boolean
   /** Expose GLM Coding Plan key presence only; retain secret in main and keep ZCode visible across reloads/refreshes. */
-  zcodePlanApiKeyConfigured?: boolean
+  zcodePlanApiKeyConfigured?: boolean,
+  /** True when DEEPSEEK_API_KEY is set in the environment for the main process. */
+  deepseekAuthConfigured: boolean
   claudeTarget: RateLimitRuntimeTarget
   codexTarget: RateLimitRuntimeTarget
   inactiveClaudeAccounts: InactiveAccountUsage[]
