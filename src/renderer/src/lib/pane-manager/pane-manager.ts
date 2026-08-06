@@ -22,7 +22,7 @@ import { cancelActivePaneDrag, createDragReorderState, handlePaneDrop } from './
 import { beginPaneDragFromPointerDown } from './pane-drag-pointer'
 import { createPaneDOM, openTerminal, setLigaturesEnabled, disposePane } from './pane-lifecycle'
 import { shouldFollowMouseFocus } from './focus-follows-mouse'
-import { paneContainerOwnsFocus } from './pane-pointer-focus'
+import { focusPaneSurface } from './pane-surface-focus'
 import { getTerminalWebglAutoDecision } from './terminal-webgl-auto-policy'
 import {
   equalizePaneSplitSizes,
@@ -320,10 +320,9 @@ export class PaneManager {
     this.activePaneId = paneId
     applyPaneOpacity(this.panes.values(), this.activePaneId, this.styleOptions)
 
-    // Why: a pane whose app control (e.g. the native chat composer) owns
-    // focus must not have it stolen back onto the hidden xterm underneath.
-    if (opts?.focus !== false && !paneContainerOwnsFocus(pane.container)) {
-      pane.terminal.focus()
+    // Why: a chat-owned pane gets its composer, not the hidden xterm.
+    if (opts?.focus !== false) {
+      focusPaneSurface(pane.container, () => pane.terminal.focus())
     }
 
     if (changed) {

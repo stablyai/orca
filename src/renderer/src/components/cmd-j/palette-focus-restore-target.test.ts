@@ -58,21 +58,52 @@ describe('resolvePaletteFocusRestoreTarget', () => {
     expect(resolvePaletteFocusRestoreTarget(null)).toBeNull()
   })
 
-  it('skips a terminal whose pane composer owns focus, falling back to the editor', () => {
+  it('redirects a chat-owned pane to its composer instead of the hidden xterm', () => {
     const pane = document.createElement('div')
     pane.className = 'pane'
     const owner = document.createElement('div')
     owner.setAttribute('data-pane-prevent-terminal-focus', 'true')
+    owner.tabIndex = -1
+    const composer = document.createElement('textarea')
+    composer.setAttribute('data-native-chat-composer-input', 'true')
+    owner.appendChild(composer)
     pane.appendChild(owner)
     const terminal = addTerminal('chat-owned')
     pane.appendChild(terminal)
     document.body.appendChild(pane)
-    const editor = document.createElement('div')
-    editor.className = 'monaco-editor'
-    const editorTextarea = document.createElement('textarea')
-    editor.appendChild(editorTextarea)
-    document.body.appendChild(editor)
 
-    expect(resolvePaletteFocusRestoreTarget(null)).toBe(editorTextarea)
+    expect(resolvePaletteFocusRestoreTarget(null)).toBe(composer)
+  })
+
+  it('redirects a captured xterm helper whose pane switched to chat mode', () => {
+    const pane = document.createElement('div')
+    pane.className = 'pane'
+    const terminal = addTerminal('was-terminal')
+    pane.appendChild(terminal)
+    const owner = document.createElement('div')
+    owner.setAttribute('data-pane-prevent-terminal-focus', 'true')
+    owner.tabIndex = -1
+    const composer = document.createElement('textarea')
+    composer.setAttribute('data-native-chat-composer-input', 'true')
+    owner.appendChild(composer)
+    pane.appendChild(owner)
+    document.body.appendChild(pane)
+
+    expect(resolvePaletteFocusRestoreTarget(terminal)).toBe(composer)
+  })
+
+  it('skips a hidden pane so the visible plain terminal is chosen', () => {
+    const hiddenPane = document.createElement('div')
+    hiddenPane.className = 'pane'
+    hiddenPane.style.display = 'none'
+    hiddenPane.appendChild(addTerminal('hidden'))
+    document.body.appendChild(hiddenPane)
+    const visiblePane = document.createElement('div')
+    visiblePane.className = 'pane'
+    const visibleTerminal = addTerminal('visible')
+    visiblePane.appendChild(visibleTerminal)
+    document.body.appendChild(visiblePane)
+
+    expect(resolvePaletteFocusRestoreTarget(null)).toBe(visibleTerminal)
   })
 })

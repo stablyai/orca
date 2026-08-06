@@ -4,6 +4,7 @@
 import { useEffect } from 'react'
 import type { IDisposable } from '@xterm/xterm'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
+import { focusPaneSurface } from '@/lib/pane-manager/pane-surface-focus'
 import type { PtyTransport } from './pty-transport'
 import { safeFind } from '../terminal-search-safe-find'
 import { resolveTerminalShortcutAction } from './terminal-shortcut-policy'
@@ -545,7 +546,7 @@ export function useTerminalKeyboardShortcuts({
           return
         }
         runTerminalSearchNavigation(pane, direction, searchStateRef.current)
-        pane.terminal.focus()
+        focusPaneSurface(pane.container, () => pane.terminal.focus())
         return
       }
 
@@ -706,7 +707,9 @@ export function useTerminalKeyboardShortcuts({
         }
         manager.equalizePaneSizes()
         const paneToFocus = manager.getActivePane() ?? manager.getPanes()[0]
-        paneToFocus?.terminal.focus()
+        if (paneToFocus) {
+          focusPaneSurface(paneToFocus.container, () => paneToFocus.terminal.focus())
+        }
         return
       }
 

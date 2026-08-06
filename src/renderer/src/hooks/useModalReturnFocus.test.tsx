@@ -198,10 +198,11 @@ describe('useModalReturnFocus', () => {
     expect(focusTerminalTabSurface).toHaveBeenCalledWith('terminal-1', 'leaf-1')
   })
 
-  it('does not steal focus from a pane whose composer owns focus in the generic surface fallback', async () => {
+  it('focuses the composer, not the hidden xterm, for a chat-owned pane in the surface fallback', async () => {
     // Why: regression — the generic 'surface' fallback used a document-wide
     // .xterm-helper-textarea query with no awareness of the native chat
-    // composer owning that pane's focus.
+    // composer owning that pane's focus. It must redirect there, not merely
+    // skip (a veto would leave focus nowhere).
     installAnimationFrameStubs()
     useAppStore.setState({
       activeWorktreeId: 'wt-1',
@@ -213,6 +214,10 @@ describe('useModalReturnFocus', () => {
     pane.className = 'pane'
     const owner = document.createElement('div')
     owner.setAttribute('data-pane-prevent-terminal-focus', 'true')
+    owner.tabIndex = -1
+    const composer = document.createElement('textarea')
+    composer.setAttribute('data-native-chat-composer-input', 'true')
+    owner.append(composer)
     pane.append(owner)
     const terminalTextarea = document.createElement('textarea')
     terminalTextarea.className = 'xterm-helper-textarea'
@@ -223,7 +228,7 @@ describe('useModalReturnFocus', () => {
     await renderProbe(false)
     flushAnimationFrames()
 
-    expect(document.activeElement).not.toBe(terminalTextarea)
+    expect(document.activeElement).toBe(composer)
   })
 
   it('skips return focus when the close action already moved focus', async () => {

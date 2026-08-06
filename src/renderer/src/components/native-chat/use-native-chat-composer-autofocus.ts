@@ -1,9 +1,16 @@
-import { useEffect, type RefObject } from 'react'
+import { useEffect, useRef, type RefObject } from 'react'
+import { PANE_CONTAINER_SELECTOR } from '@/lib/pane-manager/pane-surface-focus'
 import { shouldAutofocusNativeChatComposer } from './native-chat-composer-autofocus'
 import type { NativeChatComposerHandle } from './NativeChatComposer'
 
-/** Autofocuses the composer on new-session launch and on switching back to
- *  this chat tab/pane; retries once the pty binds or a question card closes.
+/** Autofocuses the composer when this chat surface becomes active (new
+ *  session, switching back to the tab/pane).
+ *
+ *  One-shot intent: activation arms a pending-focus flag that the first
+ *  attempt consumes. The attempt is deferred until the composer is enabled
+ *  (pty bound, no mobile presence-lock) and no question card owns the input —
+ *  but a later enable flip with the intent already consumed (e.g. a mobile
+ *  lock releasing minutes after activation) must not steal focus again.
  *
  *  Why double-rAF: switching FROM another chat tab hides its composer via
  *  display:none, which blurs it back to the browser — but that blur is not
@@ -11,7 +18,7 @@ import type { NativeChatComposerHandle } from './NativeChatComposer'
  *  passive effects don't wait for an actual paint, especially for updates
  *  originating outside a DOM event, e.g. the Cmd+Shift+[/] IPC tab-cycle).
  *  Checking activeElement too early sees the old tab's real textarea still
- *  focused and its politeness check correctly-but-wrongly declines to steal
+ *  focused and the politeness check correctly-but-wrongly declines to steal
  *  it. Same race focus-terminal-tab-surface.ts already waits out. */
 export function useNativeChatComposerAutofocus(args: {
   chatSurfaceActive: boolean
@@ -21,12 +28,28 @@ export function useNativeChatComposerAutofocus(args: {
   composerRef: RefObject<NativeChatComposerHandle | null>
 }): void {
   const { chatSurfaceActive, composerEnabled, questionActive, rootRef, composerRef } = args
+  const pendingFocusIntentRef = useRef(false)
+  const wasActiveRef = useRef(false)
   useEffect(() => {
-    if (!chatSurfaceActive || !composerEnabled) {
+    if (chatSurfaceActive && !wasActiveRef.current) {
+      pendingFocusIntentRef.current = true
+    }
+    wasActiveRef.current = chatSurfaceActive
+    if (!chatSurfaceActive) {
+      pendingFocusIntentRef.current = false
+      return
+    }
+    if (!pendingFocusIntentRef.current || !composerEnabled || questionActive) {
       return
     }
     let frameId = requestAnimationFrame(() => {
       frameId = requestAnimationFrame(() => {
+        if (!pendingFocusIntentRef.current) {
+          return
+        }
+        // Consumed on attempt either way: a politeness decline (user typing
+        // elsewhere) must not turn into a delayed steal on a later dep flip.
+        pendingFocusIntentRef.current = false
         if (
           !shouldAutofocusNativeChatComposer({
             chatSurfaceActive,
@@ -37,7 +60,7 @@ export function useNativeChatComposerAutofocus(args: {
             // (both children of .pane), not an ancestor of the helper textarea —
             // scope the politeness check to .pane so this same pane's xterm is
             // recognized as stealable, not mistaken for a focus elsewhere.
-            focusScope: rootRef.current?.closest('.pane') ?? rootRef.current
+            focusScope: rootRef.current?.closest(PANE_CONTAINER_SELECTOR) ?? rootRef.current
           })
         ) {
           return

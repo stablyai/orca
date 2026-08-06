@@ -79,17 +79,20 @@ describe('fitAndFocusPanes', () => {
   function makeManager(args?: { activeContainerHasFocusOwner?: boolean }): {
     manager: PaneManager
     terminal: { focus: ReturnType<typeof vi.fn> }
+    focusOwner: { focus: ReturnType<typeof vi.fn> }
   } {
     const terminal = { focus: vi.fn() }
+    // Shaped like the chat root: focusable, no enabled composer input inside.
+    const focusOwner = { focus: vi.fn(), querySelector: vi.fn(() => null) }
     const container = {
-      querySelector: vi.fn(() => (args?.activeContainerHasFocusOwner ? {} : null))
+      querySelector: vi.fn(() => (args?.activeContainerHasFocusOwner ? focusOwner : null))
     }
     const manager = {
       fitAllPanes: vi.fn(),
       getActivePane: () => ({ terminal, container }),
       getPanes: () => [{ terminal, container }]
     } as unknown as PaneManager
-    return { manager, terminal }
+    return { manager, terminal, focusOwner }
   }
 
   function stubDocument(activeElement: Element | null, renameInputMounted = false): void {
@@ -139,13 +142,14 @@ describe('fitAndFocusPanes', () => {
     expect(terminal.focus).toHaveBeenCalled()
   })
 
-  it('does not steal focus from a pane showing the native chat composer', () => {
+  it('focuses the chat surface, not xterm, for a pane showing the native chat composer', () => {
     stubDocument(null)
-    const { manager, terminal } = makeManager({ activeContainerHasFocusOwner: true })
+    const { manager, terminal, focusOwner } = makeManager({ activeContainerHasFocusOwner: true })
 
     fitAndFocusPanes(manager)
 
     expect(manager.fitAllPanes).toHaveBeenCalled()
     expect(terminal.focus).not.toHaveBeenCalled()
+    expect(focusOwner.focus).toHaveBeenCalled()
   })
 })

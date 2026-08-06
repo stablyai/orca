@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
+import { focusPaneSurface } from '@/lib/pane-manager/pane-surface-focus'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 
 type ExpandCollapseState = {
@@ -142,7 +143,10 @@ export function createExpandCollapseActions(state: ExpandCollapseState) {
       }
       if (focusActive) {
         const active = manager.getActivePane() ?? panes[0]
-        active?.terminal.focus()
+        if (active) {
+          // Why: a chat-owned pane gets its composer, not the hidden xterm.
+          focusPaneSurface(active.container, () => active.terminal.focus())
+        }
       }
     })
   }

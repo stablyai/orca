@@ -3,20 +3,20 @@ import { focusTerminalTabSurface } from './focus-terminal-tab-surface'
 
 const mocks = vi.hoisted(() => ({
   refreshTerminalImeInputContext: vi.fn(),
-  isInsideFocusOwnedPane: vi.fn(() => false)
+  resolvePaneSurfaceFocusTarget: vi.fn((): { focus: () => void } | null => null)
 }))
 
 vi.mock('@/components/terminal-pane/terminal-ime-input-context-refresh', () => ({
   refreshTerminalImeInputContext: mocks.refreshTerminalImeInputContext
 }))
 
-vi.mock('@/lib/pane-manager/pane-pointer-focus', () => ({
-  isInsideFocusOwnedPane: mocks.isInsideFocusOwnedPane
+vi.mock('@/lib/pane-manager/pane-surface-focus', () => ({
+  PANE_CONTAINER_SELECTOR: '.pane',
+  resolvePaneSurfaceFocusTarget: mocks.resolvePaneSurfaceFocusTarget
 }))
 
-// Why: `closest` is unused directly (isInsideFocusOwnedPane mock above stands
-// in for the real .pane lookup) but kept so callers matching a `.closest`
-// shape don't throw.
+// Why: `closest` resolves the fake .pane container handed to the (mocked)
+// pane-surface resolver.
 function fakeHelper(): { focus: ReturnType<typeof vi.fn>; closest: ReturnType<typeof vi.fn> } {
   return { focus: vi.fn(), closest: vi.fn(() => ({})) }
 }
@@ -24,7 +24,7 @@ function fakeHelper(): { focus: ReturnType<typeof vi.fn>; closest: ReturnType<ty
 describe('focusTerminalTabSurface', () => {
   afterEach(() => {
     mocks.refreshTerminalImeInputContext.mockClear()
-    mocks.isInsideFocusOwnedPane.mockReset().mockReturnValue(false)
+    mocks.resolvePaneSurfaceFocusTarget.mockReset().mockReturnValue(null)
     vi.unstubAllGlobals()
   })
 
@@ -94,13 +94,14 @@ describe('focusTerminalTabSurface', () => {
     expect(textarea.focus).not.toHaveBeenCalled()
   })
 
-  it('does not steal focus onto a pane whose composer owns focus', () => {
+  it('redirects to the composer for a pane whose chat surface owns focus', () => {
     // Why: regression for the real-world miss — the composer overlay is a DOM
     // sibling of the xterm container (both children of .pane), not an
-    // ancestor of the helper textarea, so this must check the shared .pane
-    // container rather than helper.closest(marker) directly.
+    // ancestor of the helper textarea, so this must resolve the shared .pane
+    // container; and it must redirect, not veto, or focus lands nowhere.
     flushAnimationFrames()
-    mocks.isInsideFocusOwnedPane.mockReturnValue(true)
+    const composer = { focus: vi.fn() }
+    mocks.resolvePaneSurfaceFocusTarget.mockReturnValue(composer)
     const textarea = fakeHelper()
     vi.stubGlobal('document', {
       querySelector: vi.fn((selector: string) =>
@@ -110,7 +111,8 @@ describe('focusTerminalTabSurface', () => {
 
     focusTerminalTabSurface('tab-1')
 
-    expect(mocks.isInsideFocusOwnedPane).toHaveBeenCalledWith(textarea)
+    expect(textarea.closest).toHaveBeenCalledWith('.pane')
+    expect(composer.focus).toHaveBeenCalled()
     expect(textarea.focus).not.toHaveBeenCalled()
   })
 

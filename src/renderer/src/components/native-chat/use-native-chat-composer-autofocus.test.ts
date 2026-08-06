@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useNativeChatComposerAutofocus } from './use-native-chat-composer-autofocus'
 import type { NativeChatComposerHandle } from './NativeChatComposer'
 
-function installAnimationFrameStubs(): { flushOneFrame: () => void } {
+function installAnimationFrameStubs(): { flushOneFrame: () => void; flushAll: () => void } {
   const pending: FrameRequestCallback[] = []
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback): number => {
     pending.push(callback)
@@ -14,37 +14,51 @@ function installAnimationFrameStubs(): { flushOneFrame: () => void } {
   vi.stubGlobal('cancelAnimationFrame', vi.fn())
   return {
     flushOneFrame: () => {
-      const callback = pending.shift()
-      callback?.(0)
+      pending.shift()?.(0)
+    },
+    flushAll: () => {
+      for (let i = 0; i < 10 && pending.length > 0; i += 1) {
+        pending.shift()?.(0)
+      }
     }
   }
 }
 
-function renderAutofocus(args: {
-  chatSurfaceActive: boolean
-  composerEnabled: boolean
-  root: HTMLElement
-}): { composerRef: React.RefObject<NativeChatComposerHandle | null> } {
+type HookProps = { chatSurfaceActive: boolean; composerEnabled: boolean; questionActive: boolean }
+
+function renderAutofocus(initial: Partial<HookProps> & { root: HTMLElement }): {
+  composerRef: React.RefObject<NativeChatComposerHandle | null>
+  rerender: (next: Partial<HookProps>) => void
+} {
   const rootRef = createRef<HTMLElement>()
-  rootRef.current = args.root
+  rootRef.current = initial.root
   const composerRef = createRef<NativeChatComposerHandle>()
-  const composerHandle: NativeChatComposerHandle = {
+  composerRef.current = {
     focus: vi.fn(() => true),
     insertTypedText: vi.fn(() => true),
     handlePasteEvent: vi.fn(),
     pasteFromClipboard: vi.fn()
   }
-  composerRef.current = composerHandle
-  renderHook(() =>
-    useNativeChatComposerAutofocus({
-      chatSurfaceActive: args.chatSurfaceActive,
-      composerEnabled: args.composerEnabled,
-      questionActive: false,
-      rootRef,
-      composerRef
-    })
+  const props: HookProps = {
+    chatSurfaceActive: initial.chatSurfaceActive ?? false,
+    composerEnabled: initial.composerEnabled ?? true,
+    questionActive: initial.questionActive ?? false
+  }
+  const rendered = renderHook(
+    (current: HookProps) =>
+      useNativeChatComposerAutofocus({
+        chatSurfaceActive: current.chatSurfaceActive,
+        composerEnabled: current.composerEnabled,
+        questionActive: current.questionActive,
+        rootRef,
+        composerRef
+      }),
+    { initialProps: props }
   )
-  return { composerRef }
+  return {
+    composerRef,
+    rerender: (next) => rendered.rerender({ ...props, ...Object.assign(props, next) })
+  }
 }
 
 describe('useNativeChatComposerAutofocus', () => {
@@ -126,5 +140,66 @@ describe('useNativeChatComposerAutofocus', () => {
 
     expect(composerRef.current?.focus).not.toHaveBeenCalled()
     expect(document.activeElement).toBe(unrelatedInput)
+  })
+
+  it('waits for the composer to enable, then focuses once (new-session flow)', () => {
+    const { flushAll } = installAnimationFrameStubs()
+    const root = document.createElement('div')
+    document.body.append(root)
+
+    const { composerRef, rerender } = renderAutofocus({
+      chatSurfaceActive: true,
+      composerEnabled: false,
+      root
+    })
+
+    flushAll()
+    expect(composerRef.current?.focus).not.toHaveBeenCalled()
+
+    rerender({ composerEnabled: true })
+    flushAll()
+    expect(composerRef.current?.focus).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not re-steal focus on a later enable flip once the activation intent is consumed', () => {
+    // Why: composerEnabled tracks the async mobile presence-lock; a release
+    // minutes after activation must not yank focus (codex review finding).
+    const { flushAll } = installAnimationFrameStubs()
+    const root = document.createElement('div')
+    document.body.append(root)
+
+    const { composerRef, rerender } = renderAutofocus({
+      chatSurfaceActive: true,
+      composerEnabled: true,
+      root
+    })
+
+    flushAll()
+    expect(composerRef.current?.focus).toHaveBeenCalledTimes(1)
+
+    rerender({ composerEnabled: false })
+    rerender({ composerEnabled: true })
+    flushAll()
+
+    expect(composerRef.current?.focus).toHaveBeenCalledTimes(1)
+  })
+
+  it('re-arms the intent on the next activation', () => {
+    const { flushAll } = installAnimationFrameStubs()
+    const root = document.createElement('div')
+    document.body.append(root)
+
+    const { composerRef, rerender } = renderAutofocus({
+      chatSurfaceActive: true,
+      composerEnabled: true,
+      root
+    })
+
+    flushAll()
+    rerender({ chatSurfaceActive: false })
+    rerender({ chatSurfaceActive: true })
+    flushAll()
+
+    expect(composerRef.current?.focus).toHaveBeenCalledTimes(2)
   })
 })

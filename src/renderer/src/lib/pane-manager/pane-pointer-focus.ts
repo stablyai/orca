@@ -23,19 +23,9 @@ export function shouldFocusTerminalFromPanePointerDown(target: EventTarget | nul
 }
 
 /** Whether a pane's own app control (e.g. the native chat composer overlay)
- *  currently claims focus ownership — imperative focus calls (tab switch,
- *  visibility resume, setActivePane) must not steal it back onto the hidden
- *  xterm underneath. */
+ *  currently claims focus ownership. Imperative focus paths route through
+ *  focusPaneSurface (pane-surface-focus.ts), which uses this to pick the
+ *  owning surface instead of the hidden xterm. */
 export function paneContainerOwnsFocus(container: HTMLElement): boolean {
   return container.querySelector(PANE_PREVENT_TERMINAL_FOCUS_SELECTOR) !== null
-}
-
-/** Whether `element` (typically a candidate .xterm-helper-textarea found via
- *  an unscoped `document.querySelector`) sits inside a pane whose app control
- *  owns focus. Global "restore terminal focus" fallbacks — command palettes,
- *  modal close, sidebar keyboard navigation — must skip such candidates
- *  rather than stealing focus back from e.g. the native chat composer. */
-export function isInsideFocusOwnedPane(element: Element): boolean {
-  const pane = element.closest('.pane') as HTMLElement | null
-  return pane !== null && paneContainerOwnsFocus(pane)
 }

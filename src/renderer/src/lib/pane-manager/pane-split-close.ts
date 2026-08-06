@@ -16,6 +16,7 @@ import {
 } from './pane-tree-ops'
 import { applyDividerStyles, applyPaneOpacity } from './pane-divider'
 import { disposePane, openTerminal } from './pane-lifecycle'
+import { focusPaneSurface } from './pane-surface-focus'
 import { disposeWebgl } from './pane-webgl-renderer'
 import { clearPendingSplitScrollRestore, scheduleSplitScrollRestore } from './pane-split-scroll'
 import { reattachWebglIfNeeded } from './pane-webgl-reattach'
@@ -240,6 +241,9 @@ function activateReplacementPane(args: CloseManagedPaneArgs): number | null {
   const next = args.panes.values().next().value as ManagedPaneInternal | undefined
   const nextActivePaneId = next?.id ?? null
   args.setActivePaneId(nextActivePaneId)
-  next?.terminal.focus()
+  if (next) {
+    // Why: the surviving pane can be chat-owned; its composer gets the focus.
+    focusPaneSurface(next.container, () => next.terminal.focus())
+  }
   return nextActivePaneId
 }

@@ -166,6 +166,8 @@ export function NativeChatComposerField({
               ref={textareaRef}
               value={draft}
               disabled={disabled}
+              // Why: stable hook for imperative focus routing (focusPaneSurface).
+              data-native-chat-composer-input="true"
               rows={2}
               onChange={(e) => onDraftChange(e.target.value, e.currentTarget)}
               onKeyDown={onKeyDown}

@@ -81,7 +81,7 @@ import { track } from '@/lib/telemetry'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { deriveRunningAgentSendTargets } from '@/lib/running-agent-targets'
 import { rightSidebarShowsPullRequestData } from '@/lib/right-sidebar-visibility'
-import { isInsideFocusOwnedPane } from '@/lib/pane-manager/pane-pointer-focus'
+import { resolveVisibleTerminalSurfaceTarget } from '@/lib/pane-manager/pane-surface-focus'
 import {
   type Row,
   type ProjectGroupingModel,
@@ -2567,13 +2567,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         navigateWorktree(e.key === 'ArrowUp' ? 'up' : 'down')
         e.preventDefault()
       } else if (e.key === 'Enter') {
-        const helper = document.querySelector(
-          '.xterm-helper-textarea'
-        ) as HTMLTextAreaElement | null
-        // Why: don't steal focus from a pane whose native chat composer owns it.
-        if (helper && !isInsideFocusOwnedPane(helper)) {
-          helper.focus()
-        }
+        // Why: skips hidden panes; a chat-owned pane yields its composer.
+        resolveVisibleTerminalSurfaceTarget(document)?.focus()
         e.preventDefault()
       } else if (['PageUp', 'PageDown', 'Home', 'End', ' '].includes(e.key)) {
         markDirectScrollInput()

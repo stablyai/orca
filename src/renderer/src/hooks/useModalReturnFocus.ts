@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react'
 
 import { useAppStore } from '../store'
 import { focusTerminalTabSurface } from '../lib/focus-terminal-tab-surface'
-import { isInsideFocusOwnedPane } from '../lib/pane-manager/pane-pointer-focus'
+import { resolveVisibleTerminalSurfaceTarget } from '../lib/pane-manager/pane-surface-focus'
 import {
   ORCA_BROWSER_FOCUS_REQUEST_EVENT,
   queueBrowserFocusRequest,
@@ -67,10 +67,14 @@ export function useModalReturnFocus(visible: boolean): {
         innerFrameRef.current = requestAnimationFrame(() => {
           innerFrameRef.current = null
           for (const selector of selectors) {
-            const target = document.querySelector(selector) as HTMLElement | null
-            // Why: an xterm-helper-textarea candidate can belong to a pane
-            // whose native chat composer owns focus — don't steal it back.
-            if (!target || isInsideFocusOwnedPane(target)) {
+            // Why: terminal candidates route through the visible-surface
+            // resolver so hidden panes are skipped and a chat-owned pane
+            // yields its composer instead of the hidden xterm.
+            const target =
+              selector === '.xterm-helper-textarea'
+                ? resolveVisibleTerminalSurfaceTarget(document)
+                : (document.querySelector(selector) as HTMLElement | null)
+            if (!target) {
               continue
             }
             target.focus()

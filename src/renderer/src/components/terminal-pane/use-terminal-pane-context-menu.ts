@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
+import { focusPaneSurface } from '@/lib/pane-manager/pane-surface-focus'
 import type { PtyTransport } from './pty-transport'
 import { getConnectionId } from '@/lib/connection-context'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
@@ -168,7 +169,7 @@ export function useTerminalPaneContextMenu({
       // close, but xterm.js only accepts input when its own helper textarea is
       // focused. Without this, the user has to click the pane again before
       // typing works (see #592).
-      focus: () => pane.terminal.focus()
+      focus: () => focusPaneSurface(pane.container, () => pane.terminal.focus())
     })
   }
 
@@ -198,7 +199,7 @@ export function useTerminalPaneContextMenu({
             'Unable to copy pane ID'
           )
         ),
-      focus: () => pane.terminal.focus()
+      focus: () => focusPaneSurface(pane.container, () => pane.terminal.focus())
     })
   }
 
@@ -301,7 +302,7 @@ export function useTerminalPaneContextMenu({
         )
       )
     } finally {
-      pane.terminal.focus()
+      focusPaneSurface(pane.container, () => pane.terminal.focus())
     }
   }
 
@@ -337,7 +338,7 @@ export function useTerminalPaneContextMenu({
     // Why: Radix returns focus to the menu trigger (the pane container) on
     // close. Refocus only after a completed paste so rejected async targets
     // do not steal focus from the user's new control.
-    pane.terminal.focus()
+    focusPaneSurface(pane.container, () => pane.terminal.focus())
   }
 
   const onPaste = async (): Promise<void> => pasteResolvedPane('context-menu')
@@ -392,7 +393,7 @@ export function useTerminalPaneContextMenu({
       return
     }
     manager.equalizePaneSizes()
-    pane.terminal.focus()
+    focusPaneSurface(pane.container, () => pane.terminal.focus())
   }
 
   const onClosePane = (): void => {

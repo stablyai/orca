@@ -1,5 +1,8 @@
 import { refreshTerminalImeInputContext } from '@/components/terminal-pane/terminal-ime-input-context-refresh'
-import { isInsideFocusOwnedPane } from '@/lib/pane-manager/pane-pointer-focus'
+import {
+  PANE_CONTAINER_SELECTOR,
+  resolvePaneSurfaceFocusTarget
+} from '@/lib/pane-manager/pane-surface-focus'
 
 /**
  * Move keyboard focus into the xterm instance for a freshly-mounted terminal
@@ -27,10 +30,13 @@ function focusTerminalHelper(helper: HTMLElement, options: FocusTerminalTabSurfa
       return
     }
   }
-  // Why: a pane showing the native chat composer owns its own focus (see
-  // shouldAutofocusNativeChatComposer) — this double-rAF-delayed reclaim must
-  // not steal it back onto the hidden xterm underneath.
-  if (isInsideFocusOwnedPane(helper)) {
+  // Why: a chat-owned pane's keyboard surface is its composer — redirect this
+  // delayed reclaim there instead of stealing onto the hidden xterm (or, with
+  // a veto, leaving focus nowhere).
+  const pane = helper.closest(PANE_CONTAINER_SELECTOR) as HTMLElement | null
+  const ownedTarget = pane ? resolvePaneSurfaceFocusTarget(pane) : null
+  if (ownedTarget) {
+    ownedTarget.focus()
     return
   }
   helper.focus()
