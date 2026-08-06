@@ -33061,6 +33061,101 @@ describe('OrcaRuntimeService', () => {
     db.close()
   })
 
+  it('does not push on a cold-restore seeded idle status with no live observation', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new InMemoryOrchestrationMessages()
+      const write = vi.fn().mockReturnValue(true)
+      setInMemoryOrchestrationMessages(runtime, db)
+      runtime.setPtyController({
+        write,
+        kill: vi.fn(),
+        getForegroundProcess: async () => null
+      })
+      syncSinglePty(runtime)
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      // Why: the persisted title is historical — the agent may have gone busy
+      // across the relaunch, so a seeded 'idle' must not authorize a PTY write.
+      runtime.seedTerminalRestoreTail('pty-1', { lastTitle: 'Codex done' })
+      const message = db.insertMessage({
+        from: 'sender',
+        to: terminal.handle,
+        subject: 'seeded idle'
+      })
+      write.mockClear()
+
+      runtime.notifyMessageArrived(terminal.handle, 'status')
+
+      expect(write).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(600)
+      expect(message.delivered_at).toBeNull()
+
+      // The first live idle frame authorizes it and the row still delivers.
+      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+      runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
+      expect(write).toHaveBeenCalledWith('pty-1', expect.stringContaining('Subject: seeded idle'))
+      await vi.advanceTimersByTimeAsync(600)
+      expect(message.delivered_at).not.toBeNull()
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('pushes to an idle pane when the only live waiter filters out the message type', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new InMemoryOrchestrationMessages()
+      const write = vi.fn().mockReturnValue(true)
+      setInMemoryOrchestrationMessages(runtime, db)
+      runtime.setPtyController({
+        write,
+        kill: vi.fn(),
+        getForegroundProcess: async () => null
+      })
+      syncSinglePty(runtime)
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+      runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
+      await runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle' })
+
+      // Why: a `check --wait --types worker_done` waiter never returns a status
+      // row — check re-reads under the same filter — so it is not the consumer
+      // and treating it as one would strand the message (#12536).
+      const waitPromise = runtime.waitForMessage(terminal.handle, {
+        typeFilter: ['worker_done'],
+        timeoutMs: 5_000
+      })
+      const message = db.insertMessage({
+        from: 'sender',
+        to: terminal.handle,
+        subject: 'unfiltered status',
+        type: 'status'
+      })
+      write.mockClear()
+
+      runtime.notifyMessageArrived(terminal.handle, 'status')
+
+      expect(write).toHaveBeenCalledWith(
+        'pty-1',
+        expect.stringContaining('Subject: unfiltered status')
+      )
+      await vi.advanceTimersByTimeAsync(600)
+      expect(message.delivered_at).not.toBeNull()
+
+      // The filtered waiter stays blocked; the push did not consume its wake.
+      await vi.advanceTimersByTimeAsync(5_000)
+      await expect(waitPromise).resolves.toBe('timed_out')
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('resolves a registered waiter without PTY-injecting when the leaf is already idle', async () => {
     vi.useFakeTimers()
     try {

@@ -1214,6 +1214,10 @@ type RuntimeLeafRecord = RuntimeSyncedLeaf & {
   // full tail. See computeTerminalTailWaitState.
   tailWaitState?: TerminalTailWaitState
   lastAgentStatus: AgentStatus | null
+  // Why: seeded status is a historical title replayed on restore, so it cannot
+  // authorize a PTY write. Only a live OSC observation sets this true; push
+  // delivery reads it so a cold-restored `idle` never types into a working agent.
+  lastAgentStatusObservedLive: boolean
   // Why: the most recent OSC title observed on this leaf's PTY data. Used by
   // worktree.ps so daemon-hosted terminals (no renderer pushing pane titles)
   // still recompute working/idle from the live title each call instead of
@@ -1253,6 +1257,8 @@ type RuntimePtyWorktreeRecord = {
   disconnectedAt: number | null
   lastExitCode: number | null
   lastAgentStatus: AgentStatus | null
+  /** False until a live OSC frame sets the status; restore seeds never set it. */
+  lastAgentStatusObservedLive: boolean
   lastOscTitle: string | null
   lastOscTitleAt: number | null
   // Why a second stamp: `lastOscTitleAt` is a title-observation sequence number,
@@ -5498,6 +5504,7 @@ export class OrcaRuntimeService {
         preview: tailSource?.preview ?? '',
         waitBlockedAt: tailSource?.waitBlockedAt ?? null,
         lastAgentStatus: tailSource?.lastAgentStatus ?? null,
+        lastAgentStatusObservedLive: tailSource?.lastAgentStatusObservedLive ?? false,
         lastOscTitle: tailSource?.lastOscTitle ?? null,
         lastOscTitleAt: tailSource?.lastOscTitleAt ?? null,
         paneTitleUpdatedAt:
@@ -10228,6 +10235,7 @@ export class OrcaRuntimeService {
       pty.lastOscTitleAt = observedAt
       pty.lastOscTitleEpochMs = Date.now()
       pty.lastAgentStatus = agentStatus
+      pty.lastAgentStatusObservedLive = true
       this.setPtyManagementTitleFromObservedTitle(pty, normalizedTitle, observedAt)
       ptyRecordChanged = prevTitle !== normalizedTitle || prevStatus !== agentStatus
       if (agentStatus === 'idle' && prevStatus !== 'idle') {
@@ -10273,6 +10281,7 @@ export class OrcaRuntimeService {
       // exits would observe the cleared value, and they correctly fall
       // back to title-based detection / polling.
       leaf.lastAgentStatus = agentStatus
+      leaf.lastAgentStatusObservedLive = true
       // Why: resolve tui-idle on any transition TO idle (not just working→idle).
       // Claude Code may skip "working" entirely on fast tasks, going null→idle,
       // and the coordinator's tui-idle waiter would hang forever waiting for a
@@ -10310,6 +10319,9 @@ export class OrcaRuntimeService {
       pty.lastOscTitleAt = null
       pty.lastOscTitleEpochMs = null
       pty.lastAgentStatus = null
+      // Why: the prior process's live frames say nothing about the replacement,
+      // so the seed a same-id restore applies must not inherit its authority.
+      pty.lastAgentStatusObservedLive = false
       pty.managementTitle = null
       pty.managementTitleAt = null
     }
@@ -10317,6 +10329,7 @@ export class OrcaRuntimeService {
       leaf.lastOscTitle = null
       leaf.lastOscTitleAt = null
       leaf.lastAgentStatus = null
+      leaf.lastAgentStatusObservedLive = false
     }
     this.clearAgentRowSnapshotsForPty(ptyId)
   }
@@ -11195,10 +11208,11 @@ export class OrcaRuntimeService {
 
   // Why: seed-derived agent status reflects historical state. Orchestration
   // waiters (resolveTuiIdleWaiters, deliverPendingMessages) must only react
-  // to LIVE transitions, so this helper writes leaf.lastAgentStatus only and
-  // never resolves waiters. detectAgentStatusFromTitle wrap mirrors the live
-  // path so seeded and live values are the same union member, keeping
-  // downstream `=== 'idle'` checks correct.
+  // to LIVE transitions, so this helper writes leaf.lastAgentStatus only,
+  // leaves lastAgentStatusObservedLive untouched, and never resolves waiters.
+  // detectAgentStatusFromTitle wrap mirrors the live path so seeded and live
+  // values are the same union member, keeping downstream `=== 'idle'` checks
+  // correct.
   private applySeededAgentStatus(ptyId: string, title: string): void {
     if (!title) {
       return
@@ -28877,6 +28891,7 @@ export class OrcaRuntimeService {
         disconnectedAt: state.connected === false ? Date.now() : null,
         lastExitCode: null,
         lastAgentStatus: null,
+        lastAgentStatusObservedLive: false,
         lastOscTitle: null,
         lastOscTitleAt: null,
         lastOscTitleEpochMs: null,
@@ -31047,9 +31062,21 @@ export class OrcaRuntimeService {
   }
 
   deliverPendingMessagesForHandle(handle: string): void {
+    // Why before the try: `dispatch:`/`run:` mailbox addresses are never terminal
+    // handles, and federation sync notifies once per relayed item — letting each
+    // one build and discard a `terminal_handle_stale` Error (stack capture) is
+    // pure waste. getLiveLeafForHandle would reject them on the same lookup.
+    if (!this.handles.has(handle)) {
+      return
+    }
     try {
       const { leaf } = this.getLiveLeafForHandle(handle)
-      if (leaf.lastAgentStatus === 'idle') {
+      // Why lastAgentStatusObservedLive: a cold restore seeds `idle` from the
+      // title persisted at snapshot time, so an agent that went busy across the
+      // relaunch still reads idle until its first live frame. Pushing on that
+      // would type a message plus Enter into a working agent and stamp the row
+      // delivered. Seeded state waits for a live observation to authorize it.
+      if (leaf.lastAgentStatus === 'idle' && leaf.lastAgentStatusObservedLive) {
         this.deliverPendingMessages(leaf)
       }
     } catch {
@@ -31064,20 +31091,26 @@ export class OrcaRuntimeService {
     // deliver now (#12536). deliverPendingMessagesForHandle no-ops when the
     // leaf is not idle. Main's messageDeliveryFlights serialize mid-Enter
     // re-notifies without a separate settle barrier.
-    // Why skip when a waiter is live: deliverPendingMessages stamps delivered_at
-    // but not read, so a blocked orchestration.check --wait would still re-read
-    // the row and the pane would also receive it (double delivery). The pull
-    // wins; the push stays pending for a later notify once the waiter is gone.
+    // Why skip when a waiter will consume this: deliverPendingMessages stamps
+    // delivered_at but not read, so a blocked orchestration.check --wait would
+    // still re-read the row and the pane would also receive it (double
+    // delivery). The pull wins; the push stays pending for a later notify.
+    // Why "will consume" and not "exists": a waiter filtered to other types
+    // never returns this row — check re-reads under the same filter on timeout
+    // — so treating it as the consumer strands the message in exactly the
+    // already-idle state #12536 is about.
     const waiters = this.messageWaitersByHandle.get(handle)
-    if (!waiters || waiters.size === 0) {
+    // Why: don't wake a coordinator waiting for worker_done/escalation on heartbeat noise it would misread as idleness.
+    const consumers = waiters
+      ? [...waiters].filter(
+          (waiter) => !messageType || !waiter.typeFilter || waiter.typeFilter.includes(messageType)
+        )
+      : []
+    if (consumers.length === 0) {
       this.deliverPendingMessagesForHandle(handle)
       return
     }
-    for (const waiter of [...waiters]) {
-      // Why: don't wake a coordinator waiting for worker_done/escalation on heartbeat noise it would misread as idleness.
-      if (messageType && waiter.typeFilter && !waiter.typeFilter.includes(messageType)) {
-        continue
-      }
+    for (const waiter of consumers) {
       this.resolveMessageWaiter(waiter, 'notified')
     }
   }
