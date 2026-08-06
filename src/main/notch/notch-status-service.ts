@@ -2,7 +2,7 @@
 //
 // Why main and not a renderer relay: agentStatus:set/:clear are targeted at the main window's
 // webContents and detached when it closes, so a second window subscribing through window.api
-// would go permanently silent. subscribeEnrichedStatus/subscribeStatusCleared are additive and
+// would go permanently silent. subscribeEnrichedStatus/subscribePaneStatusClear are additive and
 // survive, which is the whole point of a status surface you can see with the app closed.
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import {
@@ -14,7 +14,7 @@ import {
 export type NotchStatusSource = {
   getStatusSnapshot(): AgentStatusIpcPayload[]
   subscribeEnrichedStatus(listener: (payload: unknown) => void): () => void
-  subscribeStatusCleared(listener: (clear: unknown) => void): () => void
+  subscribePaneStatusClear(listener: (clear: unknown) => void): () => void
 }
 
 export type NotchStatusServiceOptions = {
@@ -73,7 +73,7 @@ export class NotchStatusService {
     // and an update can never disagree about what the bar shows.
     this.unsubscribes.push(
       this.source.subscribeEnrichedStatus(() => this.requestRecompute()),
-      this.source.subscribeStatusCleared(() => this.requestRecompute())
+      this.source.subscribePaneStatusClear(() => this.requestRecompute())
     )
     this.stopStaleTicker = this.startStaleTicker(() => this.recompute())
     this.recompute()

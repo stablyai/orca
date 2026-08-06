@@ -1,7 +1,13 @@
 /* eslint-disable max-lines */
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import { pushRecentlyClosedTabKind } from './recently-closed-tabs'
+import {
+  createRecentlyClosedTabPositionIndex,
+  getRecentlyClosedTabPosition,
+  restoreRecentlyClosedTabPosition,
+  pushRecentlyClosedTabKind
+} from './recently-closed-tabs'
+import type { RecentlyClosedTabPosition } from './recently-closed-tabs'
 import { joinPath } from '@/lib/path'
 import { toast } from 'sonner'
 import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
@@ -9,6 +15,8 @@ import { resolveMarkdownLinkTarget } from '@/components/editor/markdown-internal
 import {
   buildCheckRunDetailsTabId,
   getCheckRunDetailsTabLabel,
+  isSameGitLabProjectRef,
+  type CheckRunDetailsTabPatch,
   type OpenCheckRunDetailsState
 } from '@/components/editor/check-run-details-tab'
 import { openHttpLink, type HttpLinkSourceOwner } from '@/lib/http-link-routing'
@@ -37,6 +45,7 @@ import type {
   WorkspaceSessionState,
   WorkspaceVisibleTabType
 } from '../../../../shared/types'
+import type { GitBranchLineTotal } from '../../../../shared/git-status-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { clampMarkdownTocPanelWidth } from '../../../../shared/markdown-toc-panel-width'
 import {
@@ -44,6 +53,7 @@ import {
   COMBINED_DIFF_FILE_TREE_DEFAULT_WIDTH
 } from '../../../../shared/combined-diff-file-tree-width'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { RemoteOpKind } from '@/components/right-sidebar/source-control-primary-action'
 import { invalidateAutomaticPushTargetUpstreamStatusCache } from '@/components/right-sidebar/push-target-upstream-refresh-cache'
 import {
@@ -67,8 +77,16 @@ import {
 } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { notifyHostOfMirroredEditorClose } from '@/runtime/close-mirrored-editor-tab'
-import { findWorktreeById, getRepoIdFromWorktreeId } from './worktree-helpers'
-import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  findWorktreeById,
+  getRepoIdFromWorktreeId,
+  type ActiveWorktreeStateTransition
+} from './worktree-helpers'
+import {
+  getExplicitRuntimeEnvironmentIdForWorktree,
+  getSettingsForWorktreeRuntimeOwner
+} from '@/lib/worktree-runtime-owner'
+import { loadGitLabJobLogDetails } from '@/runtime/gitlab-job-trace-client'
 import {
   addAdditionalValidWorkspaceKeys,
   type WorkspaceSessionHydrationOptions
@@ -84,6 +102,9 @@ import {
   captureEditorFileOperationProvenance,
   getEditorFileOperationContext
 } from '@/lib/editor-file-operation-owner'
+import { createBrowserUuid } from '@/lib/browser-uuid'
+import { pruneTabGroupLayoutForGroups } from './tabs-hydration'
+import { sanitizeRecentTabIds } from './tab-group-state'
 
 export type {
   ActiveRightSidebarTab,
@@ -252,6 +273,8 @@ export type OpenFile = {
   pendingDiskBaselineVerification?: boolean
   /** Why: gates autosave during a live self-move echo's disk verification; separate flag from the restored scan's so the two can't clear each other's gate. Not persisted. */
   pendingLiveDiskVerification?: boolean
+  /** Blocks saves while a restored tab's filesystem authority is being replaced. */
+  pendingOwnerMigration?: boolean
   /** Why: routes an Orca-owned move's destination-watcher echo into content verification. On the tab so it survives the atomic rekey; operationId supersedes a stale verification on re-move. Not persisted. */
   pendingSelfMoveEcho?: { operationId: string; targetPath: string }
   /** Why: diff bodies are cached in EditorPanel; bump this on re-select so the panel refetches instead of reusing a stale snapshot. */
@@ -276,12 +299,15 @@ export type MarkdownViewMode = 'source' | 'rich' | 'preview'
 // Why: orthogonal to MarkdownViewMode; 'changes' renders diff-vs-HEAD in place of the editor without a separate tab. See reviews/changes-view-mode-plan.md.
 export type EditorViewMode = 'edit' | 'changes'
 
-/** Enough state to restore a tab via `openFile` after `closeFile` (id is always filePath). */
+/** Enough state to restore a tab via `openFile` after `closeFile`. */
 // Why: omit mirroredFromRuntimeSession so a user-reopened tab isn't treated as host-owned and culled by the next web session sync.
 export type ClosedEditorTabSnapshot = Omit<
   OpenFile,
   'id' | 'isDirty' | 'mirroredFromRuntimeSession'
->
+> & {
+  reopenId?: string
+  position?: RecentlyClosedTabPosition
+}
 
 const MAX_RECENT_CLOSED_EDITOR_TABS = 10
 
@@ -464,8 +490,9 @@ export type EditorSlice = {
       suppressActiveRuntimeFallback?: boolean
       forceContentReload?: boolean
       focusEditor?: boolean
+      reopenId?: string
     }
-  ) => void
+  ) => string
   openNewMarkdownInActiveWorkspace: (groupId: string) => Promise<void>
   // Why: sequences openFile/setMarkdownViewMode/reveal around an async Monaco remount. See docs/markdown-internal-link-opening-design.md.
   activateMarkdownLink: (
@@ -512,6 +539,8 @@ export type EditorSlice = {
     /** When set, dirty autosave-capable destinations get move-echo provenance + a synchronous autosave gate so the watcher can content-verify the echo. */
     moveOperationId?: string
   }) => RekeyOpenFilesResult
+  setRestoredEditorOwnerMigrationPending: (fileId: string, pending: boolean) => boolean
+  reparentRestoredEditorFileOwner: (args: RestoredEditorOwnerMigration) => RestoredEditorOwnerResult
   clearUntitled: (fileId: string) => void
   openDiff: (
     worktreeId: string,
@@ -568,13 +597,13 @@ export type EditorSlice = {
     worktreeId: string,
     contextKey: string,
     check: OpenCheckRunDetailsState['check'],
-    state: Pick<OpenCheckRunDetailsState, 'details' | 'loading' | 'error'>
+    state: CheckRunDetailsTabPatch
   ) => void
   patchOpenCheckRunDetails: (
     worktreeId: string,
     contextKey: string,
     check: OpenCheckRunDetailsState['check'],
-    state: Pick<OpenCheckRunDetailsState, 'details' | 'loading' | 'error'>
+    state: CheckRunDetailsTabPatch
   ) => void
   reloadOpenCheckRunDetailsTab: (fileId: string) => Promise<void>
   openBranchAllDiffs: (
@@ -601,6 +630,8 @@ export type EditorSlice = {
   gitStatusHeadByWorktree: Record<string, string>
   // Why: set when status hit the entry limit; SCM shows "too many changes" and pauses polling. `{ limit }` when huge, else absent.
   gitStatusHugeByWorktree: Record<string, { limit: number }>
+  // Why: absent means "not known exact" (stale fork point, old server, capped listing); never fall back to a previous total.
+  gitBranchLineTotalByWorktree: Record<string, GitBranchLineTotal | null>
   gitIgnoredPathsByWorktree: Record<string, string[]>
   gitConflictOperationByWorktree: Record<string, GitConflictOperation>
   trackedConflictPathsByWorktree: Record<string, Record<string, GitConflictKind>>
@@ -1297,6 +1328,19 @@ export type OpenFilePathRekey = {
 
 export type RekeyOpenFilesResult = { ok: true } | { ok: false; reason: 'collision' | 'stale' }
 
+export type RestoredEditorOwnerMigration = {
+  fileId: string
+  targetWorktreeId: string
+  targetRelativePath: string
+  targetExecutionHostId: ExecutionHostId
+  targetRuntimeEnvironmentId: string | null
+  targetOperationProvenance: EditorFileOperationProvenance
+}
+
+export type RestoredEditorOwnerResult =
+  | { ok: true; fileId: string }
+  | { ok: false; reason: 'collision' | 'owner-changed' | 'stale' }
+
 function rekeyFileIdRecord<T>(
   record: Record<string, T>,
   migrations: ReadonlyMap<string, string>
@@ -1313,6 +1357,41 @@ function rekeyFileIdRecord<T>(
     }
   }
   return changed ? next : record
+}
+
+function nextActiveIdAfterRemoval(
+  ids: readonly string[],
+  recentIds: readonly string[] | undefined,
+  removedIds: ReadonlySet<string>
+): string | null {
+  const recent = (recentIds ?? []).toReversed().find((id) => !removedIds.has(id))
+  return recent ?? ids.find((id) => !removedIds.has(id)) ?? null
+}
+
+function removeEmptyEditorGroups(
+  previousGroups: TabGroup[],
+  groups: TabGroup[],
+  movedTabIds: ReadonlySet<string>,
+  layout: AppState['layoutByWorktree'][string] | undefined
+): { groups: TabGroup[]; layout: AppState['layoutByWorktree'][string] | undefined } {
+  const emptiedGroupIds = new Set(
+    previousGroups
+      .filter(
+        (group) =>
+          group.tabOrder.some((id) => movedTabIds.has(id)) &&
+          groups.find((candidate) => candidate.id === group.id)?.tabOrder.length === 0
+      )
+      .map((group) => group.id)
+  )
+  const remaining = groups.filter((group) => !emptiedGroupIds.has(group.id))
+  if (remaining.length === 0) {
+    return { groups: [], layout: undefined }
+  }
+  const validIds = new Set(remaining.map((group) => group.id))
+  return {
+    groups: remaining,
+    layout: layout ? (pruneTabGroupLayoutForGroups(layout, validIds) ?? undefined) : undefined
+  }
 }
 
 function deleteUntouchedUntitledFile(state: AppState, file: OpenFile): void {
@@ -1668,13 +1747,18 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           matchesEditorMode(f, reusableOpenFileModes) &&
           isSameEditorOwner(f, worktreeId, runtimeEnvironmentId)
       )
-      const id = resolveEditorFileIdForOwner(
-        s,
-        file.filePath,
-        worktreeId,
-        runtimeEnvironmentId,
-        reusableOpenFileModes
-      )
+      // Why: a snapshot's reopenId can be a stale shape — the same path is bare in whichever worktree opened it first and namespaced elsewhere — so honoring it while this owner's tab is already open would strand activeFileId and the unified tab on an id no OpenFile has.
+      const id = existing
+        ? existing.id
+        : options?.reopenId && !s.openFiles.some((candidate) => candidate.id === options.reopenId)
+          ? options.reopenId
+          : resolveEditorFileIdForOwner(
+              s,
+              file.filePath,
+              worktreeId,
+              runtimeEnvironmentId,
+              reusableOpenFileModes
+            )
       editorItemFileId = id
       const isPreview = options?.preview ?? false
       const recordReplacedPreview = options?.recordReplacedPreview ?? false
@@ -1799,12 +1883,17 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
               ...snap
             } = replacedPreview
             const stack = s.recentlyClosedEditorTabsByWorktree[worktreeId] ?? []
+            const position = getRecentlyClosedTabPosition(s, worktreeId, replacedPreview.id)
             nextRecentlyClosed = {
               ...s.recentlyClosedEditorTabsByWorktree,
-              [worktreeId]: [snap as ClosedEditorTabSnapshot, ...stack].slice(
-                0,
-                MAX_RECENT_CLOSED_EDITOR_TABS
-              )
+              [worktreeId]: [
+                {
+                  ...(snap as ClosedEditorTabSnapshot),
+                  reopenId: replacedPreview.id,
+                  ...(position ? { position } : {})
+                },
+                ...stack
+              ].slice(0, MAX_RECENT_CLOSED_EDITOR_TABS)
             }
             nextRecentlyClosedKinds = pushRecentlyClosedTabKind(
               s.recentlyClosedTabKindsByWorktree,
@@ -1886,6 +1975,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         }
       })
     }
+    return editorItemFileId
   },
 
   openNewMarkdownInActiveWorkspace: async (groupId) => {
@@ -2188,12 +2278,17 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           ...snap
         } = closedFile
         const stack = s.recentlyClosedEditorTabsByWorktree[wtRecent] ?? []
+        const position = getRecentlyClosedTabPosition(s, wtRecent, fileId)
         nextRecentlyClosed = {
           ...s.recentlyClosedEditorTabsByWorktree,
-          [wtRecent]: [snap as ClosedEditorTabSnapshot, ...stack].slice(
-            0,
-            MAX_RECENT_CLOSED_EDITOR_TABS
-          )
+          [wtRecent]: [
+            {
+              ...(snap as ClosedEditorTabSnapshot),
+              reopenId: fileId,
+              ...(position ? { position } : {})
+            },
+            ...stack
+          ].slice(0, MAX_RECENT_CLOSED_EDITOR_TABS)
         }
         nextRecentlyClosedKinds = pushRecentlyClosedTabKind(
           s.recentlyClosedTabKindsByWorktree,
@@ -2264,7 +2359,12 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         [worktreeId]: (s.recentlyClosedEditorTabsByWorktree[worktreeId] ?? []).slice(1)
       }
     }))
-    get().openFile(next)
+    const { position, reopenId, ...file } = next
+    const restoredFileId = get().openFile(file, {
+      targetGroupId: position?.groupId,
+      reopenId
+    })
+    restoreRecentlyClosedTabPosition(get, worktreeId, restoredFileId, position)
     return true
   },
 
@@ -2366,6 +2466,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const closingFiles = s.openFiles.filter((f) => f.worktreeId === activeWorktreeId)
       let nextRecentClosed = s.recentlyClosedEditorTabsByWorktree[activeWorktreeId] ?? []
       let capturedCloseCount = 0
+      // Why: one shared index — a per-file position lookup rescans tab order and group membership, making close-all cubic.
+      const positionIndex = createRecentlyClosedTabPositionIndex(s, activeWorktreeId)
       for (const f of [...closingFiles].toReversed()) {
         // Why: skip untitled non-dirty files (deleted from disk after close) and ephemeral preview tabs so the reopen stack has no vanished/junk paths.
         if (
@@ -2375,10 +2477,15 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           continue
         }
         const { id: _id, isDirty: _dirty, mirroredFromRuntimeSession: _mirrored, ...snap } = f
-        nextRecentClosed = [snap as ClosedEditorTabSnapshot, ...nextRecentClosed].slice(
-          0,
-          MAX_RECENT_CLOSED_EDITOR_TABS
-        )
+        const position = positionIndex.positionFor(f.id)
+        nextRecentClosed = [
+          {
+            ...(snap as ClosedEditorTabSnapshot),
+            reopenId: f.id,
+            ...(position ? { position } : {})
+          },
+          ...nextRecentClosed
+        ].slice(0, MAX_RECENT_CLOSED_EDITOR_TABS)
         capturedCloseCount += 1
       }
 
@@ -2601,6 +2708,327 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         )
       }
     }),
+
+  setRestoredEditorOwnerMigrationPending: (fileId, pending) => {
+    let changed = false
+    set((s) => {
+      const file = s.openFiles.find((candidate) => candidate.id === fileId)
+      const next = pending || undefined
+      if (!file || file.pendingOwnerMigration === next) {
+        return s
+      }
+      changed = true
+      return {
+        openFiles: s.openFiles.map((candidate) =>
+          candidate.id === fileId ? { ...candidate, pendingOwnerMigration: next } : candidate
+        )
+      }
+    })
+    return changed
+  },
+
+  reparentRestoredEditorFileOwner: (args) => {
+    let result: RestoredEditorOwnerResult = { ok: false, reason: 'stale' }
+    const projectReparent: ActiveWorktreeStateTransition = (s) => {
+      const source = s.openFiles.find((file) => file.id === args.fileId)
+      if (!source) {
+        return { patch: {}, activate: false }
+      }
+
+      try {
+        const currentRoute = assertEditorFileOperationCurrent(
+          s,
+          args.targetWorktreeId,
+          args.targetOperationProvenance
+        )
+        if (
+          currentRoute.executionHostId !== args.targetExecutionHostId ||
+          currentRoute.runtimeEnvironmentId !== args.targetRuntimeEnvironmentId
+        ) {
+          throw new Error('owner changed')
+        }
+      } catch {
+        result = { ok: false, reason: 'owner-changed' }
+        return {
+          patch: {
+            openFiles: s.openFiles.map((file) =>
+              file.id === args.fileId ? { ...file, pendingOwnerMigration: undefined } : file
+            )
+          },
+          activate: false
+        }
+      }
+      const operationProvenance = args.targetOperationProvenance
+
+      const destinationCollision = s.openFiles.some(
+        (file) =>
+          file.id !== source.id &&
+          file.filePath === source.filePath &&
+          file.worktreeId === args.targetWorktreeId &&
+          (file.runtimeEnvironmentId?.trim() || null) === args.targetRuntimeEnvironmentId
+      )
+      const newFileId = buildOwnedEditorFileId(
+        source.filePath,
+        args.targetWorktreeId,
+        args.targetRuntimeEnvironmentId
+      )
+      const dependentPreviews = s.openFiles.filter(
+        (file) => file.markdownPreviewSourceFileId === source.id
+      )
+      const previewIdMigrations = new Map(
+        dependentPreviews.map((preview) => [preview.id, `markdown-preview::${newFileId}`])
+      )
+      const destinationIds = new Set([newFileId, ...previewIdMigrations.values()])
+      if (
+        destinationCollision ||
+        s.openFiles.some(
+          (file) =>
+            destinationIds.has(file.id) &&
+            file.id !== source.id &&
+            !previewIdMigrations.has(file.id)
+        )
+      ) {
+        result = { ok: false, reason: 'collision' }
+        return {
+          patch: {
+            openFiles: s.openFiles.map((file) =>
+              file.id === args.fileId ? { ...file, pendingOwnerMigration: undefined } : file
+            )
+          },
+          activate: false
+        }
+      }
+
+      const parsedHost = parseExecutionHostId(args.targetExecutionHostId)
+      const externalSshTargetId =
+        parsedHost?.kind === 'ssh' && args.targetRuntimeEnvironmentId === null
+          ? parsedHost.targetId
+          : undefined
+      const migrations = new Map([[source.id, newFileId], ...previewIdMigrations])
+      const movedFileIds = new Set(migrations.keys())
+      const sourceWorktreeId = source.worktreeId
+      const targetWorktreeId = args.targetWorktreeId
+      const movedTabs = (s.unifiedTabsByWorktree[sourceWorktreeId] ?? []).filter((tab) =>
+        movedFileIds.has(tab.entityId)
+      )
+      const movedTabIds = new Set(movedTabs.map((tab) => tab.id))
+      const tabIdMigration = new Map(
+        movedTabs.map((tab) => [tab.id, migrations.get(tab.id) ?? tab.id])
+      )
+      const mappedMovedTabIds = movedTabs.map((tab) => tabIdMigration.get(tab.id) ?? tab.id)
+      const mappedMovedTabBarIds = movedTabs.map(
+        (tab) => migrations.get(tab.entityId) ?? tab.entityId
+      )
+      const targetGroups = s.groupsByWorktree[targetWorktreeId] ?? []
+      const targetGroupId =
+        s.activeGroupIdByWorktree[targetWorktreeId] ?? targetGroups[0]?.id ?? createBrowserUuid()
+      const targetGroup = targetGroups.find((group) => group.id === targetGroupId) ?? {
+        id: targetGroupId,
+        worktreeId: targetWorktreeId,
+        activeTabId: null,
+        tabOrder: []
+      }
+
+      const previousSourceGroups = s.groupsByWorktree[sourceWorktreeId] ?? []
+      const updatedSourceGroups = previousSourceGroups.map((group) => {
+        const tabOrder = group.tabOrder.filter((id) => !movedTabIds.has(id))
+        const activeTabId =
+          group.activeTabId && movedTabIds.has(group.activeTabId)
+            ? nextActiveIdAfterRemoval(group.tabOrder, group.recentTabIds, movedTabIds)
+            : group.activeTabId
+        return {
+          ...group,
+          activeTabId,
+          tabOrder,
+          recentTabIds: sanitizeRecentTabIds(
+            (group.recentTabIds ?? []).filter((id) => !movedTabIds.has(id)),
+            tabOrder
+          )
+        }
+      })
+      const sourceGroupState = removeEmptyEditorGroups(
+        previousSourceGroups,
+        updatedSourceGroups,
+        movedTabIds,
+        s.layoutByWorktree[sourceWorktreeId]
+      )
+      const destinationOrder = [
+        ...targetGroup.tabOrder.filter((id) => !mappedMovedTabIds.includes(id)),
+        ...mappedMovedTabIds
+      ]
+      const updatedTargetGroup: TabGroup = {
+        ...targetGroup,
+        activeTabId: mappedMovedTabIds.at(-1) ?? targetGroup.activeTabId,
+        tabOrder: destinationOrder,
+        recentTabIds: sanitizeRecentTabIds(
+          [...(targetGroup.recentTabIds ?? []), ...mappedMovedTabIds],
+          destinationOrder
+        )
+      }
+      const nextTargetGroups = targetGroups.some((group) => group.id === targetGroupId)
+        ? targetGroups.map((group) => (group.id === targetGroupId ? updatedTargetGroup : group))
+        : [...targetGroups, updatedTargetGroup]
+
+      const nextUnifiedTabsByWorktree = { ...s.unifiedTabsByWorktree }
+      nextUnifiedTabsByWorktree[sourceWorktreeId] = (
+        nextUnifiedTabsByWorktree[sourceWorktreeId] ?? []
+      ).filter((tab) => !movedTabIds.has(tab.id))
+      nextUnifiedTabsByWorktree[targetWorktreeId] = [
+        ...(nextUnifiedTabsByWorktree[targetWorktreeId] ?? []),
+        ...movedTabs.map((tab) => ({
+          ...tab,
+          id: tabIdMigration.get(tab.id) ?? tab.id,
+          entityId: migrations.get(tab.entityId) ?? tab.entityId,
+          groupId: targetGroupId
+        }))
+      ]
+
+      const nextGroupsByWorktree = {
+        ...s.groupsByWorktree,
+        [sourceWorktreeId]: sourceGroupState.groups,
+        [targetWorktreeId]: nextTargetGroups
+      }
+      const nextLayoutByWorktree = { ...s.layoutByWorktree }
+      if (sourceGroupState.layout) {
+        nextLayoutByWorktree[sourceWorktreeId] = sourceGroupState.layout
+      } else {
+        delete nextLayoutByWorktree[sourceWorktreeId]
+      }
+      if (targetGroups.length === 0 || !nextLayoutByWorktree[targetWorktreeId]) {
+        nextLayoutByWorktree[targetWorktreeId] = { type: 'leaf', groupId: targetGroupId }
+      }
+
+      const nextActiveFileIdByWorktree = { ...s.activeFileIdByWorktree }
+      const sourceActiveFileId = nextActiveFileIdByWorktree[sourceWorktreeId]
+      if (sourceActiveFileId && movedFileIds.has(sourceActiveFileId)) {
+        nextActiveFileIdByWorktree[sourceWorktreeId] =
+          s.openFiles.find(
+            (file) => !movedFileIds.has(file.id) && file.worktreeId === sourceWorktreeId
+          )?.id ?? null
+      }
+      nextActiveFileIdByWorktree[targetWorktreeId] = newFileId
+      const nextTabBarOrderByWorktree = { ...s.tabBarOrderByWorktree }
+      nextTabBarOrderByWorktree[sourceWorktreeId] = (
+        nextTabBarOrderByWorktree[sourceWorktreeId] ?? []
+      ).filter((id) => !movedFileIds.has(id) && !movedTabIds.has(id))
+      nextTabBarOrderByWorktree[targetWorktreeId] = [
+        ...(nextTabBarOrderByWorktree[targetWorktreeId] ?? []).filter(
+          (id) => !mappedMovedTabBarIds.includes(id)
+        ),
+        ...mappedMovedTabBarIds
+      ]
+      const nextActiveGroupIdByWorktree = { ...s.activeGroupIdByWorktree }
+      if (sourceGroupState.groups.length > 0) {
+        const previousActiveGroupId = nextActiveGroupIdByWorktree[sourceWorktreeId]
+        nextActiveGroupIdByWorktree[sourceWorktreeId] = sourceGroupState.groups.some(
+          (group) => group.id === previousActiveGroupId
+        )
+          ? previousActiveGroupId
+          : sourceGroupState.groups[0].id
+      } else {
+        delete nextActiveGroupIdByWorktree[sourceWorktreeId]
+      }
+      nextActiveGroupIdByWorktree[targetWorktreeId] = targetGroupId
+
+      result = { ok: true, fileId: newFileId }
+      return {
+        patch: {
+          openFiles: s.openFiles.map((file) =>
+            file.id === source.id
+              ? {
+                  ...file,
+                  id: newFileId,
+                  worktreeId: targetWorktreeId,
+                  relativePath: args.targetRelativePath,
+                  runtimeEnvironmentId: args.targetRuntimeEnvironmentId,
+                  externalSshTargetId,
+                  operationProvenance,
+                  pendingOwnerMigration: undefined,
+                  mirroredFromRuntimeSession: undefined
+                }
+              : file.markdownPreviewSourceFileId === source.id
+                ? {
+                    ...file,
+                    id: previewIdMigrations.get(file.id) ?? file.id,
+                    worktreeId: targetWorktreeId,
+                    relativePath: args.targetRelativePath,
+                    runtimeEnvironmentId: args.targetRuntimeEnvironmentId,
+                    externalSshTargetId,
+                    operationProvenance,
+                    markdownPreviewSourceFileId: newFileId,
+                    pendingOwnerMigration: undefined,
+                    mirroredFromRuntimeSession: undefined
+                  }
+                : file
+          ),
+          editorDrafts: rekeyFileIdRecord(s.editorDrafts, migrations),
+          editorCursorLine: rekeyFileIdRecord(s.editorCursorLine, migrations),
+          markdownViewMode: rekeyFileIdRecord(s.markdownViewMode, migrations),
+          editorViewMode: rekeyFileIdRecord(s.editorViewMode, migrations),
+          markdownFrontmatterVisible: rekeyFileIdRecord(s.markdownFrontmatterVisible, migrations),
+          markdownTableOfContentsVisible: rekeyFileIdRecord(
+            s.markdownTableOfContentsVisible,
+            migrations
+          ),
+          activeFileId: s.activeFileId ? (migrations.get(s.activeFileId) ?? s.activeFileId) : null,
+          activeFileIdByWorktree: nextActiveFileIdByWorktree,
+          activeTabTypeByWorktree: {
+            ...s.activeTabTypeByWorktree,
+            [targetWorktreeId]: 'editor'
+          },
+          unifiedTabsByWorktree: nextUnifiedTabsByWorktree,
+          groupsByWorktree: nextGroupsByWorktree,
+          layoutByWorktree: nextLayoutByWorktree,
+          activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
+          tabBarOrderByWorktree: nextTabBarOrderByWorktree,
+          ...(s.pendingEditorReveal?.fileId && migrations.has(s.pendingEditorReveal.fileId)
+            ? {
+                pendingEditorReveal: {
+                  ...s.pendingEditorReveal,
+                  fileId: migrations.get(s.pendingEditorReveal.fileId)!,
+                  filePath: source.filePath
+                }
+              }
+            : {}),
+          ...(s.pendingEditorFocusRequest?.fileId &&
+          migrations.has(s.pendingEditorFocusRequest.fileId)
+            ? {
+                pendingEditorFocusRequest: {
+                  ...s.pendingEditorFocusRequest,
+                  fileId: migrations.get(s.pendingEditorFocusRequest.fileId)!,
+                  worktreeId: targetWorktreeId
+                }
+              }
+            : {}),
+          ...(s.pendingExplorerReveal?.filePath === source.filePath &&
+          s.pendingExplorerReveal.worktreeId === sourceWorktreeId
+            ? {
+                pendingExplorerReveal: {
+                  ...s.pendingExplorerReveal,
+                  worktreeId: targetWorktreeId
+                }
+              }
+            : {})
+        },
+        activate: true,
+        preferredActiveUnifiedTabId: mappedMovedTabIds.at(-1)
+      }
+    }
+    const initialSource = get().openFiles.find((file) => file.id === args.fileId)
+    const activatesTargetWorkspace = Boolean(
+      initialSource &&
+      get().activeWorktreeId === initialSource.worktreeId &&
+      get().activeFileId === initialSource.id
+    )
+    if (activatesTargetWorkspace) {
+      get().setActiveWorktree(args.targetWorktreeId, args.targetExecutionHostId, {
+        stateTransition: projectReparent
+      })
+    } else {
+      set((state) => projectReparent(state).patch)
+    }
+    return result
+  },
 
   rekeyOpenFilesForPathChange: ({ rekeys, moveOperationId }) => {
     if (rekeys.length === 0) {
@@ -3376,7 +3804,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       check,
       details: state.details,
       loading: state.loading,
-      error: state.error
+      error: state.error,
+      gitlabProjectRef: state.gitlabProjectRef ?? null
     }
     set((s) => {
       const existing = s.openFiles.find((f) => f.id === id)
@@ -3425,26 +3854,31 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   // Why: sidebar detail fetches can finish after the full-details tab is open; update the snapshot without stealing focus.
   patchOpenCheckRunDetails: (worktreeId, contextKey, check, state) => {
     const id = buildCheckRunDetailsTabId(worktreeId, check)
-    const nextCheckRunDetails: OpenCheckRunDetailsState = {
-      contextKey,
-      check,
-      details: state.details,
-      loading: state.loading,
-      error: state.error
-    }
     set((s) => {
       const existing = s.openFiles.find((f) => f.id === id)
       if (!existing?.checkRunDetails) {
         return s
       }
       const current = existing.checkRunDetails
+      // Why: the sidebar resolves the MR's project asynchronously, so an early patch
+      // must not blank a ref we already know.
+      const gitlabProjectRef = state.gitlabProjectRef ?? current.gitlabProjectRef ?? null
+      const nextCheckRunDetails: OpenCheckRunDetailsState = {
+        contextKey,
+        check,
+        details: state.details,
+        loading: state.loading,
+        error: state.error,
+        gitlabProjectRef
+      }
       if (
         current.contextKey === nextCheckRunDetails.contextKey &&
         current.check.status === nextCheckRunDetails.check.status &&
         current.check.conclusion === nextCheckRunDetails.check.conclusion &&
         current.loading === nextCheckRunDetails.loading &&
         current.error === nextCheckRunDetails.error &&
-        current.details === nextCheckRunDetails.details
+        current.details === nextCheckRunDetails.details &&
+        isSameGitLabProjectRef(current.gitlabProjectRef ?? null, gitlabProjectRef)
       ) {
         return s
       }
@@ -3470,22 +3904,33 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       return
     }
     const { contextKey, check } = checkRunDetails
-    const patch = (next: Pick<OpenCheckRunDetailsState, 'details' | 'loading' | 'error'>): void => {
+    const patch = (next: CheckRunDetailsTabPatch): void => {
       get().patchOpenCheckRunDetails(file.worktreeId, contextKey, check, next)
     }
     patch({ details: checkRunDetails.details, loading: true, error: null })
     try {
-      const details = await get().fetchPRCheckDetails(
-        repo.path,
-        {
-          checkRunId: check.checkRunId,
-          workflowRunId: check.workflowRunId,
-          checkName: check.name,
-          url: check.url,
-          prRepo: null
-        },
-        { repoId: repo.id }
-      )
+      // Why: refreshing a GitLab job tab through the GitHub check-runs API returns
+      // null and would blank the tab the user just asked to reload.
+      const details = check.gitlabJobId
+        ? await loadGitLabJobLogDetails({
+            repoPath: repo.path,
+            repoId: repo.id,
+            settings: getSettingsForWorktreeRuntimeOwner(state, file.worktreeId),
+            check,
+            // Why: a fork MR's job lives in the source project, not the repo's own.
+            projectRef: checkRunDetails.gitlabProjectRef ?? null
+          })
+        : await get().fetchPRCheckDetails(
+            repo.path,
+            {
+              checkRunId: check.checkRunId,
+              workflowRunId: check.workflowRunId,
+              checkName: check.name,
+              url: check.url,
+              prRepo: null
+            },
+            { repoId: repo.id }
+          )
       patch({
         details,
         loading: false,
@@ -3644,6 +4089,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   gitStatusByWorktree: {},
   gitStatusHeadByWorktree: {},
   gitStatusHugeByWorktree: {},
+  gitBranchLineTotalByWorktree: {},
   gitIgnoredPathsByWorktree: {},
   gitConflictOperationByWorktree: {},
   trackedConflictPathsByWorktree: {},
@@ -3745,6 +4191,18 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const prevHuge = s.gitStatusHugeByWorktree[worktreeId]
       const nextHuge = status.didHitLimit ? { limit: nextEntries.length } : undefined
       const hugeUnchanged = (prevHuge?.limit ?? null) === (nextHuge?.limit ?? null)
+
+      const prevBranchLineTotal = s.gitBranchLineTotalByWorktree[worktreeId] ?? null
+      // Why: an omitted field means "not known exact"; keeping the old total would render a confidently wrong chip.
+      const nextBranchLineTotal = status.branchLineTotal ?? null
+      const branchLineTotalUnchanged =
+        prevBranchLineTotal === nextBranchLineTotal ||
+        (prevBranchLineTotal !== null &&
+          nextBranchLineTotal !== null &&
+          prevBranchLineTotal.added === nextBranchLineTotal.added &&
+          prevBranchLineTotal.removed === nextBranchLineTotal.removed &&
+          prevBranchLineTotal.mergeBase === nextBranchLineTotal.mergeBase)
+
       const prevStatusHead = s.gitStatusHeadByWorktree[worktreeId]
       const nextStatusHead = getKnownGitHead(status.head)
       const statusHeadUnchanged = prevStatusHead === nextStatusHead
@@ -3764,11 +4222,22 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         operationUnchanged &&
         ignoredUnchanged &&
         hugeUnchanged &&
+        branchLineTotalUnchanged &&
         statusHeadUnchanged &&
         !shouldInvalidateBranchCompare
       ) {
         return s
       }
+
+      const nextBranchLineTotalMap = branchLineTotalUnchanged
+        ? s.gitBranchLineTotalByWorktree
+        : nextBranchLineTotal
+          ? { ...s.gitBranchLineTotalByWorktree, [worktreeId]: nextBranchLineTotal }
+          : (() => {
+              const copy = { ...s.gitBranchLineTotalByWorktree }
+              delete copy[worktreeId]
+              return copy
+            })()
 
       const nextHugeMap = hugeUnchanged
         ? s.gitStatusHugeByWorktree
@@ -3802,6 +4271,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       return {
         openFiles: nextOpenFiles,
         gitStatusHugeByWorktree: nextHugeMap,
+        gitBranchLineTotalByWorktree: nextBranchLineTotalMap,
         gitStatusHeadByWorktree: nextStatusHeadMap,
         gitStatusByWorktree: statusUnchanged
           ? s.gitStatusByWorktree

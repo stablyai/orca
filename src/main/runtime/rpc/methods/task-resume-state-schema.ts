@@ -9,7 +9,7 @@ export const TaskResumeState = z
     githubItemsPreset: z.string().nullable().optional(),
     githubItemsQuery: z.string().optional(),
     githubProjectHiddenFieldIdsByView: z.record(z.string(), z.array(z.string())).optional(),
-    linearMode: z.enum(['issues', 'projects', 'views']).optional(),
+    linearMode: z.enum(['issues', 'projects', 'views', 'in-orca']).optional(),
     linearPreset: z.enum(['assigned', 'created', 'all', 'completed']).optional(),
     linearQuery: z.string().optional(),
     linearContext: z

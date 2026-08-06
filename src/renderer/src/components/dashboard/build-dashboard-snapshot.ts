@@ -1,25 +1,23 @@
 import type { AppState } from '@/store/types'
 import {
-  DASHBOARD_MAX_LABEL_LENGTH,
-  type DashboardBucket,
+  DASHBOARD_MAX_MAP_WORKSPACES,
+  dashboardCardDisplayState,
   type DashboardCard,
   type DashboardCardDotState,
   type DashboardCardSubagent,
-  type DashboardSnapshot
+  type DashboardSnapshot,
+  type DashboardWorkspace
 } from '../../../../shared/dashboard-snapshot'
 import type { RepoIcon } from '../../../../shared/repo-icon'
-import { DEFAULT_WORKSPACE_STATUSES } from '../../../../shared/workspace-statuses'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import {
   resolveDashboardCardTerminalInput,
   type DashboardCardTerminalInputState
 } from './dashboard-card-terminal-input'
 import { readDashboardClientHost } from './dashboard-client-host'
-import { getAgentRowConversationName } from '../../../../shared/agent-row-conversation-name'
 import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
-import { applyAgentRowLineage } from './agent-row-lineage'
+import { applyAgentRowLineage, dashboardCardParentPaneKey } from './agent-row-lineage'
 import { lastEnteredDoneAt } from './agent-finished-timestamp'
-import type { DashboardAgentRow } from './useDashboardData'
 import { buildWorktreeAgentRows } from '../sidebar/worktree-agent-rows'
 import {
   selectLiveAgentStatusEntriesForWorktree,
@@ -41,6 +39,23 @@ import {
   resolveDashboardCardContext,
   type DashboardCardContextState
 } from './dashboard-card-context'
+import {
+  dashboardCardMapWorkspaceMetadata,
+  collectActiveDashboardWorkspaces
+} from './dashboard-snapshot-workspaces'
+import {
+  boundedLabel,
+  boundedLabelOrUndefined,
+  nonEmpty,
+  rowConversationName,
+  rowTask
+} from './dashboard-card-labels'
+import {
+  buildDashboardWorktreeLaunchOptions,
+  type DashboardLaunchDetectionState
+} from './dashboard-worktree-launch-options'
+import { buildDashboardSnapshotFilterOptions } from './dashboard-snapshot-filter-options'
+import { dashboardBucketForDotState } from './dashboard-card-bucket'
 
 /** The store slices the snapshot builder reads. Kept as a Pick so unit tests
  *  can pass a partial store without constructing the whole AppState. */
@@ -60,68 +75,14 @@ export type DashboardSnapshotState = Pick<
   | 'settings'
 > &
   DashboardCardContextState &
-  Partial<DashboardCardTerminalInputState>
-
-function bucketForState(state: DashboardAgentRow['state']): DashboardBucket {
-  switch (state) {
-    case 'working':
-      return 'working'
-    case 'done':
-      return 'done'
-    case 'idle':
-      return 'idle'
-    // blocked | waiting — the agent needs the user.
-    case 'blocked':
-    case 'waiting':
-      return 'attention'
-  }
-}
-
-function rowTask(row: DashboardAgentRow): string {
-  return (row.entry.orchestration?.taskTitle ?? '').trim() || (row.entry.prompt ?? '').trim()
-}
-
-function nonEmpty(value: string | undefined): string | undefined {
-  const trimmed = (value ?? '').trim()
-  return trimmed.length > 0 ? trimmed : undefined
-}
-
-/** Why: these labels come from unbounded sources (`terminal rename`, OSC titles,
- *  display names). Over the validator's bound the card would be dropped. */
-function boundedLabel(value: string): string {
-  return value.length > DASHBOARD_MAX_LABEL_LENGTH
-    ? value.slice(0, DASHBOARD_MAX_LABEL_LENGTH)
-    : value
-}
-
-function boundedLabelOrUndefined(value: string | undefined): string | undefined {
-  return value === undefined ? undefined : boundedLabel(value)
-}
-
-/** Mirrors useAgentRowConversationName so the board and the sidebar label the
- *  same agent with the same name. */
-function rowConversationName(
-  row: DashboardAgentRow,
-  generatedTitlesEnabled: boolean
-): string | undefined {
-  const parentPaneKey = row.entry.orchestration?.parentPaneKey
-  // Why: a child row rendered on its parent's tab does not own that tab's name.
-  if (
-    row.lineage?.depth === 1 &&
-    parentPaneKey !== undefined &&
-    parsePaneKey(parentPaneKey)?.tabId === row.tab.id
-  ) {
-    return undefined
-  }
-  return getAgentRowConversationName(row.tab, row.agentType, generatedTitlesEnabled) ?? undefined
-}
+  Partial<DashboardCardTerminalInputState & DashboardLaunchDetectionState>
 
 /**
  * Derive the serializable dashboard snapshot from the live renderer store.
  * Reuses the exact per-worktree row machinery the sidebar uses
  * (buildWorktreeAgentRows + the indexed selectors), then flattens every
- * worktree's rows into presentational cards. Subagent/child rows are excluded
- * from the board (out of scope for v1).
+ * worktree's rows into presentational cards. Provider subagents without their
+ * own terminal stay folded into their spawning card.
  */
 export function buildDashboardSnapshot(
   state: DashboardSnapshotState,
@@ -129,40 +90,18 @@ export function buildDashboardSnapshot(
   options: { includeCardDetails?: boolean; includeFilterOptions?: boolean } = {}
 ): DashboardSnapshot {
   const cards: DashboardCard[] = []
+  const workspaces: DashboardWorkspace[] | undefined =
+    options.includeCardDetails === false ? undefined : []
   const clientHost = readDashboardClientHost()
   const repoIconsByRepoId: Record<string, RepoIcon | null> = {}
   const includeCardDetails = options.includeCardDetails !== false
   const generatedTitlesEnabled = state.settings?.tabAutoGenerateTitle === true
-  const activeWorktrees: {
-    repo: AppState['repos'][number]
-    worktree: AppState['worktreesByRepo'][string][number]
-  }[] = []
-
-  for (const repo of state.repos ?? []) {
-    for (const worktree of state.worktreesByRepo?.[repo.id] ?? []) {
-      if (!worktree.isArchived) {
-        activeWorktrees.push({ repo, worktree })
-      }
-    }
-  }
+  const showIdle = state.settings?.experimentalAgentDashboardShowIdle === true
+  const activeWorktrees = collectActiveDashboardWorkspaces(state, includeCardDetails)
   const filterOptions =
     options.includeFilterOptions === false
       ? undefined
-      : {
-          // Why: filterOptions is snapshot-level, so an over-long project label
-          // costs the WHOLE board, not one card. Bound it at the producer.
-          projects: [...new Map(activeWorktrees.map(({ repo }) => [repo.id, repo])).values()].map(
-            (repo) => ({ id: repo.id, label: boundedLabel(repo.displayName) })
-          ),
-          workspaceStatuses: (state.workspaceStatuses && state.workspaceStatuses.length > 0
-            ? state.workspaceStatuses
-            : DEFAULT_WORKSPACE_STATUSES
-          ).map((status) => ({
-            id: status.id,
-            label: status.label,
-            color: status.color
-          }))
-        }
+      : buildDashboardSnapshotFilterOptions(state, activeWorktrees)
   let singletonOrchestration: ReturnType<typeof selectRuntimeAgentOrchestrationForWorktree> | null =
     null
   let orchestrationByWorktree: ReturnType<typeof selectRuntimeAgentOrchestrationBatch> | null = null
@@ -181,8 +120,10 @@ export function buildDashboardSnapshot(
     }
   }
 
-  for (const { repo, worktree } of activeWorktrees) {
+  for (const workspace of activeWorktrees) {
+    const { repo, worktree } = workspace
     const worktreeId = worktree.id
+    const parentWorktreeId = worktree.parentWorktreeId
     const liveEntries = selectLiveAgentStatusEntriesForWorktree(state, worktreeId)
     const migrationUnsupported = selectMigrationUnsupportedEntriesForWorktree(state, worktreeId)
     const entries =
@@ -243,6 +184,21 @@ export function buildDashboardSnapshot(
     const context = includeCardDetails
       ? resolveDashboardCardContext(state, repo, worktree)
       : undefined
+    if (workspaces && workspaces.length < DASHBOARD_MAX_MAP_WORKSPACES) {
+      workspaces.push({
+        repoId: workspace.projectId,
+        worktreeId,
+        repoName: boundedLabel(workspace.projectName),
+        worktreeName: boundedLabel(worktree.displayName),
+        ...(parentWorktreeId ? { parentWorktreeId } : {}),
+        ...dashboardCardMapWorkspaceMetadata(workspace, null, undefined, clientHost.platform),
+        workspaceStatusId: context?.workspaceStatus.id,
+        workspaceStatusLabel: context?.workspaceStatus.label,
+        workspaceStatusColor: context?.workspaceStatus.color,
+        hasReview: context?.hasReview,
+        review: context?.review
+      })
+    }
 
     for (const row of rows) {
       // Child rows have no pane of their own; the board lists top-level agents.
@@ -268,7 +224,10 @@ export function buildDashboardSnapshot(
           ? layoutPtyId
           : null
       const dotState = row.state as DashboardCardDotState
-      const bucket = bucketForState(row.state)
+      const unseen =
+        !isTitleDerived &&
+        (state.acknowledgedAgentsByPaneKey?.[row.paneKey] ?? 0) < row.entry.stateStartedAt
+      const bucket = dashboardBucketForDotState(dashboardCardDisplayState({ dotState, unseen }))
       // Why: only a live pty can open a preview terminal, and only a
       // card-rendering caller can open one — the sidebar's bucket counts must
       // not pay host resolution on every agent-status tick.
@@ -286,8 +245,9 @@ export function buildDashboardSnapshot(
               osRelease: clientHost.osRelease
             })
           : null
+      const finishedAt = lastEnteredDoneAt(row)
       // Only repos that actually contribute a card ship their icon.
-      repoIconsByRepoId[repo.id] = repo.repoIcon ?? null
+      repoIconsByRepoId[workspace.projectId] = workspace.repoIcon
 
       cards.push({
         paneKey: row.paneKey,
@@ -296,12 +256,24 @@ export function buildDashboardSnapshot(
         bucket,
         dotState,
         task: isTitleDerived ? '' : rowTask(row),
-        repoId: repo.id,
+        repoId: workspace.projectId,
         worktreeId,
         tabId,
         leafId,
-        repoName: boundedLabel(repo.displayName),
+        repoName: boundedLabel(workspace.projectName),
         worktreeName: boundedLabel(worktree.displayName),
+        ...(includeCardDetails
+          ? {
+              parentPaneKey: dashboardCardParentPaneKey(row),
+              ...(parentWorktreeId ? { parentWorktreeId } : {}),
+              ...dashboardCardMapWorkspaceMetadata(
+                workspace,
+                ptyId,
+                terminalInput ?? undefined,
+                clientHost.platform
+              )
+            }
+          : {}),
         workspaceStatusId: context?.workspaceStatus.id,
         workspaceStatusLabel: context?.workspaceStatus.label,
         workspaceStatusColor: context?.workspaceStatus.color,
@@ -311,13 +283,12 @@ export function buildDashboardSnapshot(
         lastUserMessage: isTitleDerived ? undefined : nonEmpty(row.entry.prompt),
         lastAgentMessage: isTitleDerived ? undefined : nonEmpty(row.entry.lastAssistantMessage),
         startedAt: row.startedAt,
-        finishedAt: lastEnteredDoneAt(row),
+        finishedAt,
         stateChangedAt: row.entry.stateStartedAt || row.startedAt,
+        statusUpdatedAt: row.entry.updatedAt,
         // Same derivation as WorktreeCardAgents' unvisitedByPaneKey, so the
         // board and the sidebar bold/mute the same agents at the same time.
-        unseen:
-          !isTitleDerived &&
-          (state.acknowledgedAgentsByPaneKey?.[row.paneKey] ?? 0) < row.entry.stateStartedAt,
+        unseen,
         askSummary: bucket === 'attention' ? (row.entry.interactivePrompt ?? undefined) : undefined,
         conversationName: boundedLabelOrUndefined(rowConversationName(row, generatedTitlesEnabled)),
         ...(terminalInput ? { terminalInput } : {})
@@ -328,8 +299,20 @@ export function buildDashboardSnapshot(
   return {
     generatedAt: now,
     cards,
-    showIdle: state.settings?.experimentalAgentDashboardShowIdle === true,
+    ...(workspaces ? { workspaces } : {}),
+    showIdle,
     filterOptions,
+    // Only the dashboard surfaces offer a launcher; the count-only rebuild that
+    // feeds the sidebar must not pay for host-detection lookups.
+    ...(includeCardDetails
+      ? {
+          launchableAgentsByWorktreeId: buildDashboardWorktreeLaunchOptions(
+            state,
+            cards,
+            workspaces
+          )
+        }
+      : {}),
     repoIconsByRepoId
   }
 }

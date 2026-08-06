@@ -30,7 +30,7 @@ function makeSource(initial: AgentStatusIpcPayload[]) {
       enriched.push(listener as () => void)
       return () => undefined
     },
-    subscribeStatusCleared: (listener) => {
+    subscribePaneStatusClear: (listener) => {
       cleared.push(listener as () => void)
       return () => undefined
     }

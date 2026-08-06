@@ -248,6 +248,7 @@ describe('createMainWindow', () => {
     expect(allowBlankPrefs).toMatchObject({
       disableHtmlFullscreenWindowResize: true,
       partition: 'persist:orca-browser',
+      preload: expect.stringMatching(/browser-window-close-preload\.js$/),
       sandbox: true
     })
 
@@ -262,6 +263,27 @@ describe('createMainWindow', () => {
     const guest = { marker: 'guest' }
     windowHandlers['did-attach-webview']({} as never, guest as never)
     expect(attachGuestPoliciesMock).toHaveBeenCalledWith(guest)
+
+    const untrustedPreloadParams = {
+      src: 'data:text/html,',
+      preload: 'file:///tmp/untrusted-preload.js'
+    }
+    const hardenedPrefs = {
+      partition: 'persist:orca-browser',
+      preload: '/tmp/untrusted-preload.js'
+    }
+    windowHandlers['will-attach-webview'](
+      { preventDefault: vi.fn() } as never,
+      hardenedPrefs as never,
+      untrustedPreloadParams as never
+    )
+    expect(untrustedPreloadParams.preload).toBeUndefined()
+    expect(hardenedPrefs.preload).toMatch(/browser-window-close-preload\.js$/)
+    expect(hardenedPrefs.preload).not.toContain('untrusted-preload')
+
+    const secondGuest = { marker: 'second-guest' }
+    windowHandlers['did-attach-webview']({} as never, secondGuest as never)
+    expect(attachGuestPoliciesMock).toHaveBeenLastCalledWith(secondGuest)
   })
 
   it('sets platform-specific titlebar and frame options for every desktop platform', () => {
@@ -2720,7 +2742,7 @@ describe('createMainWindow', () => {
     expect(webContents.send).toHaveBeenCalledWith('ui:toggleLeftSidebar')
   })
 
-  it('shows spellcheck context menu for editable text without relying on markdown focus mirror', () => {
+  it('opens a table-aware context menu synchronously without a renderer query', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
       on: vi.fn((event, handler) => {
@@ -2756,12 +2778,22 @@ describe('createMainWindow', () => {
 
     createMainWindow(null)
 
+    const tableTargetListener = vi
+      .mocked(ipcMain.on)
+      .mock.calls.find(([channel]) => channel === 'rich-markdown:context-target')?.[1]
+    tableTargetListener?.({ sender: webContents } as never, {
+      cellType: 'body',
+      targetId: 'table-target',
+      x: 42,
+      y: 84
+    })
     windowHandlers['context-menu'](
       {} as never,
       {
         x: 42,
         y: 84,
         isEditable: true,
+        formControlType: 'none',
         spellcheckEnabled: true,
         dictionarySuggestions: ['reference'],
         misspelledWord: 'refrence'
@@ -2769,7 +2801,10 @@ describe('createMainWindow', () => {
     )
 
     expect(buildFromTemplateMock).toHaveBeenCalledWith(
-      expect.arrayContaining([expect.objectContaining({ label: 'reference' })])
+      expect.arrayContaining([
+        expect.objectContaining({ label: 'reference' }),
+        expect.objectContaining({ label: 'Table' })
+      ])
     )
     expect(menuPopupMock).toHaveBeenCalledWith({ window: browserWindowInstance, x: 42, y: 84 })
   })

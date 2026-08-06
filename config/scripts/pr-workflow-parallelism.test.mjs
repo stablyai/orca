@@ -22,7 +22,7 @@ const testFilePatterns = [
   'config/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}',
   'src/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}',
   'tests/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}',
-  'tools/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}'
+  'tests/tools/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}'
 ]
 const realZshUsage =
   /(?:spawnSync|execFileSync|spawn)\(\s*['"](?:\/(?:usr\/)?bin\/)?zsh['"]|spawnSync\(\s*['"]which['"]\s*,\s*\[\s*['"]zsh['"]|name:\s*['"]zsh['"]\s*,\s*path:\s*executablePath/
@@ -173,11 +173,13 @@ describe('PR workflow parallelism', () => {
   it('keeps verify as the aggregate required check', () => {
     expect(workflow.jobs.verify.needs).toEqual([
       'static_analysis',
+      'root_directory_guard',
       'typecheck',
       'git_compatibility',
       'shell_contracts',
       'test',
-      'package'
+      'package',
+      'package_windows'
     ])
   })
 })

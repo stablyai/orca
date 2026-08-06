@@ -21,6 +21,7 @@ export function requestSharedControl<TResult>(args: {
   timeoutMs: number
   ensureReady: () => Promise<void>
   send: (requestId: string) => void
+  retireRequestId?: (requestId: string) => void
   // Why: default off — ordinary short RPCs keep an absolute deadline. Only
   // long-polls routed through this path opt in so keepalives extend them.
   refreshTimeoutOnKeepalive?: boolean
@@ -48,6 +49,7 @@ export function requestSharedControl<TResult>(args: {
       }
       pendingRequests.delete(requestId)
       releaseRemoteRuntimePreparedRequest(pending)
+      args.retireRequestId?.(requestId)
       // Why: one stalled method does not prove the shared socket is dead;
       // socket liveness owns connection-wide teardown so other RPCs survive.
       pending.reject(remoteRuntimeTimeoutError())

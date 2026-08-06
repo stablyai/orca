@@ -1,4 +1,5 @@
 import type { ManagedPane, ManagedPaneInternal, ScrollState } from './pane-manager-types'
+import { isManagedPaneDisplayNone } from './pane-display-visibility'
 import { getFitOverrideForPty } from './mobile-fit-overrides'
 import {
   armPaneFitContinuationRetry,
@@ -230,7 +231,7 @@ function pruneStaleSafeFitContinuations(pane: ManagedPane): void {
     return
   }
   for (const [operationKey, pending] of operations) {
-    if (!pending.shouldContinue()) {
+    if (!pending.shouldContinue() || isManagedPaneDisplayNone(pane)) {
       settlePendingSafeFitContinuation(pane, operationKey, pending, false)
     }
   }
@@ -314,7 +315,11 @@ export function safeFitAndThen(
       () => {
         if (pendingSafeFitContinuations.get(pane)?.get(operationKey) === pending) {
           if (!safeFit(pane) && options.retryIfUnmeasurable) {
-            armSafeFitContinuationRetry(pane)
+            if (isManagedPaneDisplayNone(pane)) {
+              cancel()
+            } else {
+              armSafeFitContinuationRetry(pane)
+            }
           }
         }
       }
@@ -323,7 +328,11 @@ export function safeFitAndThen(
     return { completion, cancel }
   }
   if (!safeFit(pane) && options.retryIfUnmeasurable) {
-    armSafeFitContinuationRetry(pane)
+    if (isManagedPaneDisplayNone(pane)) {
+      cancel()
+    } else {
+      armSafeFitContinuationRetry(pane)
+    }
   }
   return { completion, cancel }
 }

@@ -271,9 +271,10 @@ describe('removeSettingsProjectFromAllHosts', () => {
 
     await removeSettingsProjectFromAllHosts(setups, removeProject)
 
+    // errorFeedback: this is a user-initiated removal, so a failure must surface (#11994).
     expect(removeProject.mock.calls).toEqual([
-      ['local-1', { hostId: 'local' }],
-      ['remote-9', { hostId: 'runtime:home-mac' }]
+      ['local-1', { hostId: 'local', errorFeedback: 'toast' }],
+      ['remote-9', { hostId: 'runtime:home-mac', errorFeedback: 'toast' }]
     ])
   })
 

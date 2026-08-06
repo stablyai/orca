@@ -1,38 +1,11 @@
+import { summarizeProviderChecks } from './provider-check-summary'
 import type { CheckStatus, PRCheckDetail } from './types'
 
 /** Derives the review status from the normalized check contract. */
 export function derivePRCheckStatus(checks: readonly PRCheckDetail[]): CheckStatus {
-  if (checks.length === 0) {
-    return 'neutral'
-  }
-
-  let hasPending = false
-  let hasSuccess = false
-  for (const check of checks) {
-    if (
-      check.conclusion === 'failure' ||
-      check.conclusion === 'timed_out' ||
-      check.conclusion === 'cancelled' ||
-      check.conclusion === 'action_required'
-    ) {
-      return 'failure'
-    }
-    if (
-      check.status === 'queued' ||
-      check.status === 'in_progress' ||
-      check.conclusion === 'pending'
-    ) {
-      hasPending = true
-    }
-    if (check.conclusion === 'success') {
-      hasSuccess = true
-    }
-  }
-
-  if (hasPending) {
-    return 'pending'
-  }
-  return hasSuccess ? 'success' : 'neutral'
+  const { state } = summarizeProviderChecks(checks)
+  // Why: CheckStatus has no 'none'; an empty rollup carries the same "nothing to report" meaning.
+  return state === 'none' ? 'neutral' : state
 }
 
 type RawCheckRollup = { status?: unknown; conclusion?: unknown; state?: unknown }
@@ -42,8 +15,14 @@ function normalizeRollupCheck(raw: RawCheckRollup, index: number): PRCheckDetail
   const state = String(raw.state ?? '').toLowerCase()
   const conclusion = String(raw.conclusion ?? '').toLowerCase()
   const normalizedConclusion =
-    conclusion ||
-    (state === 'failure' || state === 'error' ? 'failure' : state === 'success' ? 'success' : '')
+    conclusion === 'error' || conclusion === 'startup_failure'
+      ? 'failure'
+      : conclusion ||
+        (state === 'failure' || state === 'error'
+          ? 'failure'
+          : state === 'success'
+            ? 'success'
+            : '')
   const isPending =
     status === 'queued' ||
     status === 'in_progress' ||

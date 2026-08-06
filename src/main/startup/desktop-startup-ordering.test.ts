@@ -95,6 +95,28 @@ describe('startup ordering', () => {
     )
   })
 
+  it('reconciles retained Codex homes after authoritative daemon inventory', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const daemonInitIndex = source.indexOf('await initDaemonPtyProvider(signal')
+    const routeGateIndex = source.indexOf(
+      'codexRuntimeHome?.isHostSystemDefaultRealHome()',
+      daemonInitIndex
+    )
+    const inventoryIndex = source.indexOf('await listLiveDaemonPtyIds()', daemonInitIndex)
+    const reconciliation = 'codexRuntimeHome?.reconcileLegacySharedHomeForRetainedPanes()'
+    const reconciliationIndex = source.indexOf(reconciliation, inventoryIndex)
+    const serveIndex = source.indexOf('if (serveOptions) {', reconciliationIndex)
+    const desktopIndex = source.indexOf('Promise.resolve(openMainWindow())', serveIndex)
+
+    expect(daemonInitIndex).toBeGreaterThanOrEqual(0)
+    expect(routeGateIndex).toBeGreaterThan(daemonInitIndex)
+    expect(inventoryIndex).toBeGreaterThan(routeGateIndex)
+    expect(reconciliationIndex).toBeGreaterThan(inventoryIndex)
+    expect(serveIndex).toBeGreaterThan(reconciliationIndex)
+    expect(desktopIndex).toBeGreaterThan(serveIndex)
+    expect(source.split(reconciliation)).toHaveLength(2)
+  })
+
   it('exposes managed WSL reconciliation status to headless serve clients and diagnostics', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
 
@@ -152,6 +174,24 @@ describe('startup ordering', () => {
     const windowAllClosedStart = source.indexOf("app.on('window-all-closed'", willQuitStart)
     expect(source.slice(willQuitStart, windowAllClosedStart)).toContain('stopTccPromptNotice()')
     expect(source.slice(0, willQuitStart)).not.toContain('stopTccPromptNoticeForQuit')
+  })
+
+  it('keeps the power bridge through vetoable before-quit and disposes after commit', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const beforeQuitStart = source.indexOf("app.on('before-quit'")
+    const willQuitStart = source.indexOf("app.on('will-quit'", beforeQuitStart)
+    const windowAllClosedStart = source.indexOf("app.on('window-all-closed'", willQuitStart)
+    const beforeQuit = source.slice(beforeQuitStart, willQuitStart)
+    const willQuit = source.slice(willQuitStart, windowAllClosedStart)
+    const commitIndex = willQuit.indexOf('quitTeardownStartGate.tryStart(e)')
+    const disposeIndex = willQuit.indexOf('unsubscribeSystemResumeBroadcast?.()')
+
+    expect(beforeQuitStart).toBeGreaterThanOrEqual(0)
+    expect(willQuitStart).toBeGreaterThan(beforeQuitStart)
+    expect(windowAllClosedStart).toBeGreaterThan(willQuitStart)
+    expect(beforeQuit).not.toContain('unsubscribeSystemResumeBroadcast')
+    expect(commitIndex).toBeGreaterThanOrEqual(0)
+    expect(disposeIndex).toBeGreaterThan(commitIndex)
   })
 
   it('starts the automation scheduler before headless serve reports ready', () => {

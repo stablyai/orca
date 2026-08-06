@@ -12,6 +12,7 @@ import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 import { useAgentRowConversationName } from './use-agent-row-conversation-name'
+import { lastEnteredDoneAt } from './agent-finished-timestamp'
 
 // Why: narrow the dashboard's rollup states to shared dot states, defaulting unknowns to 'idle' so a row never crashes.
 function asDotState(state: AgentStatusState | 'idle'): AgentDotState {
@@ -41,24 +42,6 @@ function formatTimeAgo(ts: number, now: number): string {
   }
   const days = Math.floor(hours / 24)
   return `${days}d ago`
-}
-
-// Why: use stateStartedAt (not updatedAt, which drifts on within-state pings) for the true done-transition time.
-function lastEnteredDoneAt(agent: DashboardAgentRowData): number | null {
-  // Why: idle subagents are alive-but-idle (persist between turns); don't label them as done.
-  if (agent.rowSource === 'subagent' && agent.state === 'idle') {
-    return null
-  }
-  const entry = agent.entry
-  if (entry.state === 'done') {
-    return entry.stateStartedAt
-  }
-  for (let i = entry.stateHistory.length - 1; i >= 0; i--) {
-    if (entry.stateHistory[i].state === 'done') {
-      return entry.stateHistory[i].startedAt
-    }
-  }
-  return null
 }
 
 function stateDotTooltipLabel(agent: DashboardAgentRowData, dotState: AgentDotState): string {

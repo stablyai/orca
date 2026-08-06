@@ -29,7 +29,6 @@ import {
   DEFAULT_LEFT_SIDEBAR_TINT_COLOR,
   DEFAULT_LEFT_SIDEBAR_TINT_OPACITY
 } from './left-sidebar-appearance'
-import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from './source-control-group-order'
 import { DEFAULT_SETUP_AGENT_STARTUP_POLICY } from './setup-agent-startup-policy'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from './terminal-scrollback-policy'
 import { DEFAULT_USAGE_PERCENTAGE_DISPLAY } from './usage-percentage-display'
@@ -275,7 +274,6 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     rightSidebarOpenByDefault: true,
     showGitIgnoredFiles: true,
     sourceControlViewMode: 'list',
-    sourceControlGroupOrder: DEFAULT_SOURCE_CONTROL_GROUP_ORDER,
     sourceControlCompareAgainstUpstream: false,
     showTitlebarAppName: true,
     showTasksButton: true,
@@ -309,6 +307,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // settings objects (which omit them) keep the default-on behavior.
     terminalSshViewParking: true,
     terminalHiddenWorktreeRetentionBudget: true,
+    browserGuestWorktreeRetentionBudget: true,
     terminalMainSideEffectAuthority: true,
     terminalHiddenDeliveryGate: true,
     terminalModelQueryAuthority: true,
@@ -354,13 +353,11 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     mobileAutoRestoreFitMs: null,
     // Why: Anywhere (Relay + local) is the default; local-only is written only on explicit same-network choice.
     mobilePairingConnectionMode: 'automatic',
+    mobilePairingCustomAddress: null,
+    mobilePairingCustomAddresses: [],
     // Why: off keeps the cosmetic overlay unmounted for users who never opt in.
     experimentalPet: false,
     experimentalActivity: false,
-    experimentalAgentDashboardPopout: false,
-    // Why: in-window screen popover is the default surface; users opt into a separate pop-out window.
-    experimentalAgentDashboardMode: 'in-window',
-    experimentalAgentDashboardShowIdle: false,
     experimentalActivityDefaultedOffForAllUsers: true,
     experimentalTerminalAttention: false,
     experimentalAgentHibernation: false,
@@ -403,7 +400,9 @@ export function getDefaultVoiceSettings(): VoiceSettings {
     dictationMode: 'toggle' as const,
     terminalConfirmBeforeInsert: false,
     userModels: [],
-    openAiApiKeyConfigured: false
+    openAiApiKeyConfigured: false,
+    microphoneDeviceId: null,
+    microphoneDeviceLabel: null
   }
 }
 
@@ -439,6 +438,7 @@ export function getDefaultPersistedState(homedir: string): PersistedState {
     sshTargets: [],
     deletedSshConfigAliases: [],
     sshRemotePtyLeases: [],
+    sshPtyConsumerRecoveries: [],
     claudeLivePtySessionIds: [],
     migrationUnsupportedPtyEntries: [],
     legacyPaneKeyAliasEntries: [],
@@ -476,6 +476,7 @@ export function getDefaultUIState(): PersistedUIState {
     hideAutomationGeneratedWorkspaces: false,
     hideCliCreatedWorkspaces: false,
     hideDetachedHeadWorkspaces: false,
+    alwaysShowDefaultBranchWorkspace: true,
     showDotfilesByWorktree: {},
     filterRepoIds: [],
     collapsedGroups: [],

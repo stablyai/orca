@@ -3,12 +3,14 @@ import { resolve } from 'node:path'
 import { defineConfig, type UserConfig } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import { createPlainNodeEntryGuardPlugin } from './build-plugins/plain-node-entry-guard'
+import { createBootstrapFatalExitBanner } from './config/build-plugins/bootstrap-fatal-exit-banner'
+import { createPlainNodeEntryGuardPlugin } from './config/build-plugins/plain-node-entry-guard'
 import packageJson from './package.json' with { type: 'json' }
 
 const BUNDLED_MAIN_DEPENDENCIES = new Set([
   '@xterm/headless',
   '@xterm/addon-serialize',
+  'psl',
   // Why: Windows NSIS deploys app.asar before external resources; bootstrap must
   // not race the later resources/node_modules copy.
   'zod'
@@ -16,7 +18,6 @@ const BUNDLED_MAIN_DEPENDENCIES = new Set([
 const EXTERNAL_MAIN_DEPENDENCIES = Object.keys(packageJson.dependencies).filter(
   (dependency) => !BUNDLED_MAIN_DEPENDENCIES.has(dependency)
 )
-const BOOTSTRAP_FATAL_EXIT_GUARD_KEY = '__ORCA_BOOTSTRAP_FATAL_EXIT_GUARD__'
 
 function isExternalMainModule(source: string): boolean {
   if (isBuiltin(source) || source === 'electron' || source.startsWith('electron/')) {
@@ -171,32 +172,6 @@ function createStartupDiagnosticsBanner(chunkName: string): string {
 `
 }
 
-export function createBootstrapFatalExitBanner(): string {
-  // Why: Electron's pre-import error dialog can leave main resident and block NSIS replacement.
-  return `
-;(() => {
-  const guardKey = ${JSON.stringify(BOOTSTRAP_FATAL_EXIT_GUARD_KEY)}
-  if (typeof globalThis[guardKey] === 'function') {
-    return
-  }
-  let exitScheduled = false
-  const exitAfterBootstrapFailure = () => {
-    if (exitScheduled) {
-      return
-    }
-    exitScheduled = true
-    process.exitCode = 1
-    setImmediate(() => process.exit(1))
-  }
-  globalThis[guardKey] = () => {
-    process.off('uncaughtException', exitAfterBootstrapFailure)
-    delete globalThis[guardKey]
-  }
-  process.once('uncaughtException', exitAfterBootstrapFailure)
-})();
-`
-}
-
 function createMainBootstrapPlugin() {
   return {
     name: 'orca-main-bootstrap',
@@ -232,6 +207,8 @@ export const electronViteConfig: UserConfig = {
         external: isExternalMainModule,
         input: {
           index: resolve('src/main/index.ts'),
+          // Why: sandboxed webview preloads cannot load Rollup helper chunks.
+          'browser-window-close-preload': resolve('src/preload/browser-window-close.ts'),
           'daemon-entry': resolve('src/main/daemon/daemon-entry.ts'),
           'plugin-host-entry': resolve('src/main/plugins/plugin-host-entry.ts'),
           'computer-sidecar': resolve('src/main/computer/sidecar-entry.ts'),
@@ -240,12 +217,16 @@ export const electronViteConfig: UserConfig = {
           'session-scanner-opencode-sqlite-worker-entry': resolve(
             'src/main/ai-vault/session-scanner-opencode-sqlite-worker-entry.ts'
           ),
+          // Why: libuv spawns processes inline on the calling loop, so the port
+          // scan's probe commands run on a worker thread instead of the UI one.
+          'port-scan-command-worker-entry': resolve(
+            'src/main/ports/port-scan-command-worker-entry.ts'
+          ),
           // Why: forked with ELECTRON_RUN_AS_NODE so @parcel/watcher faults
           // can't take down the main process (issue #7547).
           'parcel-watcher-process-entry': resolve('src/main/ipc/parcel-watcher-process-entry.ts'),
-          // Why: forked with ELECTRON_RUN_AS_NODE so it survives a deadlocked
-          // main thread (macOS 26 AppKit scene-update deadlock) and can record
-          // the stall for the next launch to report.
+          // Why: a worker thread survives the macOS 26 AppKit main-thread deadlock
+          // without paying for another Electron process.
           'main-thread-hang-watchdog-entry': resolve(
             'src/main/hang-watchdog/main-thread-hang-watchdog-entry.ts'
           ),
@@ -260,16 +241,8 @@ export const electronViteConfig: UserConfig = {
           'agent-hooks/managed-agent-hook-controls': resolve(
             'src/main/agent-hooks/managed-agent-hook-controls.ts'
           ),
-          'ipc/local-agent-install-dir-detection': resolve(
-            'src/main/ipc/local-agent-install-dir-detection.ts'
-          ),
-          'ipc/tui-agent-detection-commands': resolve(
-            'src/main/ipc/tui-agent-detection-commands.ts'
-          ),
-          // Why: same rule — `orca account add` / `account list` import these.
-          'claude-accounts/keychain': resolve('src/main/claude-accounts/keychain.ts'),
-          'codex-cli/command': resolve('src/main/codex-cli/command.ts'),
-          'win32-utils': resolve('src/main/win32-utils.ts')
+          // Why: account import mutates the user's macOS Keychain from the CLI.
+          'claude-accounts/keychain': resolve('src/main/claude-accounts/keychain.ts')
         },
         // Why: Rolldown's SSR default is ESM, but Electron and sidecar launchers
         // consume these stable CommonJS paths.

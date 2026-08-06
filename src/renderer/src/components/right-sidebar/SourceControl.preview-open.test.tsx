@@ -78,7 +78,7 @@ vi.mock('@/store/selectors', () => ({
   useWorktreeMap: () => new Map([[mocks.activeWorktree.id, mocks.activeWorktree]])
 }))
 
-vi.mock('@/components/confirmation-dialog', () => ({
+vi.mock('@/components/confirmation-dialog-context', () => ({
   useConfirmationDialog: () => vi.fn().mockResolvedValue(true)
 }))
 
@@ -156,6 +156,7 @@ function resetState(overrides: Partial<Record<string, unknown>> = {}): void {
     gitStatusByWorktree: { [mocks.activeWorktree.id]: [] },
     gitBranchChangesByWorktree: { [mocks.activeWorktree.id]: [] },
     gitBranchCompareSummaryByWorktree: { [mocks.activeWorktree.id]: null },
+    gitBranchLineTotalByWorktree: {},
     gitConflictOperationByWorktree: {},
     remoteStatusesByWorktree: {},
     isRemoteOperationActive: false,

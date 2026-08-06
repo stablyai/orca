@@ -34,11 +34,14 @@ function makeState(overrides: Partial<AddRepoSkipFinalizationState>): AddRepoSki
     filterRepoIds: [],
     showActiveOnly: false,
     hideDefaultBranchWorkspace: false,
+    showSleepingWorkspaces: true,
+    alwaysShowDefaultBranchWorkspace: true,
     worktreesByRepo: {},
     setActiveRepo: vi.fn(),
     setFilterRepoIds: vi.fn(),
     setShowActiveOnly: vi.fn(),
     setHideDefaultBranchWorkspace: vi.fn(),
+    setAlwaysShowDefaultBranchWorkspace: vi.fn(),
     ...overrides
   }
 }
@@ -81,6 +84,48 @@ describe('finalizeImportedRepoAfterSkip', () => {
     finalizeImportedRepoAfterSkip(state, 'repo-new')
 
     expect(state.setHideDefaultBranchWorkspace).toHaveBeenCalledWith(false)
+  })
+
+  it('re-enables the default-branch exemption when the import would land asleep and hidden', () => {
+    const state = makeState({
+      showSleepingWorkspaces: false,
+      alwaysShowDefaultBranchWorkspace: false,
+      worktreesByRepo: {
+        'repo-new': [
+          makeWorktree({
+            id: 'repo-new::/repo/main',
+            repoId: 'repo-new',
+            isMainWorktree: true,
+            branch: 'refs/heads/main'
+          })
+        ]
+      }
+    })
+
+    finalizeImportedRepoAfterSkip(state, 'repo-new')
+
+    expect(state.setAlwaysShowDefaultBranchWorkspace).toHaveBeenCalledWith(true)
+  })
+
+  it('leaves the default-branch exemption alone when sleeping workspaces are shown', () => {
+    const state = makeState({
+      showSleepingWorkspaces: true,
+      alwaysShowDefaultBranchWorkspace: false,
+      worktreesByRepo: {
+        'repo-new': [
+          makeWorktree({
+            id: 'repo-new::/repo/main',
+            repoId: 'repo-new',
+            isMainWorktree: true,
+            branch: 'refs/heads/main'
+          })
+        ]
+      }
+    })
+
+    finalizeImportedRepoAfterSkip(state, 'repo-new')
+
+    expect(state.setAlwaysShowDefaultBranchWorkspace).not.toHaveBeenCalled()
   })
 
   it('still reveals the imported repo when it has no discovered worktrees yet', () => {

@@ -52,7 +52,6 @@ vi.mock('node:fs/promises', async () => {
 })
 
 vi.mock('./scanner', () => ({
-  createWorktreeRefs: vi.fn(() => []),
   scanCodexUsageFiles: vi.fn()
 }))
 

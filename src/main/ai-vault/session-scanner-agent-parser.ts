@@ -10,12 +10,10 @@ import { parseOpenCodeSqliteSessionViaWorker } from './session-scanner-opencode-
 import { parseClaudeSessionFile } from './session-scanner-primary-parsers'
 import { parseGeminiSessionFile } from './session-scanner-gemini-parsers'
 import { parseCodexSessionFile } from './session-scanner-codex-parser'
-import {
-  parseCopilotSessionFile,
-  parseCursorSessionFile,
-  parseHermesSessionFile,
-  parseOpenCodeSessionFile
-} from './session-scanner-secondary-parsers'
+import { parseCopilotSessionFile } from './session-scanner-copilot-parser'
+import { parseCursorSessionFile } from './session-scanner-cursor-parser'
+import { parseHermesSessionFile } from './session-scanner-hermes-parser'
+import { parseOpenCodeSessionFile } from './session-scanner-opencode-parser'
 import type { SessionFileCandidate } from './session-scanner-types'
 
 /**

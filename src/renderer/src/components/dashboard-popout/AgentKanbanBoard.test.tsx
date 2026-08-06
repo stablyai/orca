@@ -3,14 +3,19 @@
 import '@testing-library/jest-dom/vitest'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import type {
   DashboardCard,
   DashboardFilterOptions,
-  DashboardSnapshot
+  DashboardSnapshot,
+  DashboardWorkspace
 } from '../../../../shared/dashboard-snapshot'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import { i18n } from '@/i18n/i18n'
 import { AgentKanbanBoard } from './AgentKanbanBoard'
+
+const MAP_LOAD_TIMEOUT = { timeout: 5_000 }
 
 // Stub the card and dialog so the board test stays free of xterm / Radix
 // machinery while still exercising the board-owned dialog wiring.
@@ -54,6 +59,17 @@ vi.mock('./AgentTerminalDialog', () => ({
     >
       <button data-testid="terminal-dialog-close" onClick={() => onOpenChange(false)} />
     </div>
+  ),
+  AgentTerminalPanel: ({
+    card,
+    onOpenChange
+  }: {
+    card: DashboardCard | null
+    onOpenChange: (open: boolean) => void
+  }) => (
+    <div data-testid="terminal-panel" data-pty-id={card?.ptyId ?? undefined}>
+      <button data-testid="terminal-panel-close" onClick={() => onOpenChange(false)} />
+    </div>
   )
 }))
 
@@ -79,12 +95,26 @@ function card(overrides: Partial<DashboardCard>): DashboardCard {
   }
 }
 
+function workspace(overrides: Partial<DashboardWorkspace> = {}): DashboardWorkspace {
+  return {
+    repoId: 'r1',
+    worktreeId: 'w1',
+    repoName: 'Repo',
+    worktreeName: 'wt',
+    hostKind: 'local',
+    executionHostId: 'local',
+    workspaceKind: 'worktree',
+    ...overrides
+  }
+}
+
 function renderBoard(
   cards: DashboardCard[],
   options: {
     showIdle?: boolean
     repoIconsByRepoId?: Record<string, RepoIcon | null>
     filterOptions?: DashboardFilterOptions
+    workspaces?: DashboardWorkspace[]
   } = {}
 ): void {
   const snapshot: DashboardSnapshot = { generatedAt: 1, cards, ...options }
@@ -96,6 +126,11 @@ const ackAgent = vi.fn(async () => {})
 describe('AgentKanbanBoard', () => {
   beforeEach(async () => {
     await i18n.changeLanguage('en')
+    localStorage.clear()
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
+    )
     // The board relays seen-acks through the dashboard preload API.
     ;(window as unknown as { api: unknown }).api = { dashboard: { ackAgent } }
   })
@@ -104,12 +139,167 @@ describe('AgentKanbanBoard', () => {
     vi.useRealTimers()
     vi.clearAllMocks()
     vi.restoreAllMocks()
+    vi.unstubAllGlobals()
   })
 
   it('renders the three default columns in order', () => {
     renderBoard([])
     const headers = screen.getAllByText(/Needs You|Working|Done/)
     expect(headers.map((h) => h.textContent)).toEqual(['Needs You', 'Working', 'Done'])
+  })
+
+  it('loads the map as a recoverable dynamic chunk', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/renderer/src/components/dashboard-popout/AgentKanbanBoard.tsx'),
+      'utf8'
+    )
+
+    expect(source).toContain("import { lazyWithRetry } from '@/lib/lazy-with-retry'")
+    expect(source).toMatch(/import\('\.\/AgentDashboardMapView'\)/)
+    expect(source).not.toMatch(/from\s+['"]\.\/(?:AgentMap|useAgentMap|agent-map-)/)
+  })
+
+  it('keeps the dashboard and map available as separate views', async () => {
+    renderBoard([])
+
+    fireEvent.click(screen.getByRole('button', { name: 'Agent Map' }))
+    expect(
+      await screen.findByText('0 of 0 agents shown', undefined, MAP_LOAD_TIMEOUT)
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Live containment map')).not.toBeInTheDocument()
+    // The map has no rail of its own; its filters live in the shared toolbar.
+    expect(screen.queryByRole('complementary', { name: 'Map filters' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Agent states')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dashboard' }))
+    expect(screen.getByText('Needs You')).toBeInTheDocument()
+  })
+
+  it('filters the map from the shared toolbar filter, not a rail', async () => {
+    renderBoard([
+      card({ paneKey: 'busy', worktreeName: 'busy-wt', worktreeId: 'w-busy' }),
+      card({
+        paneKey: 'finished',
+        worktreeName: 'done-wt',
+        worktreeId: 'w-done',
+        bucket: 'done',
+        dotState: 'done',
+        finishedAt: 5,
+        unseen: true
+      })
+    ])
+    fireEvent.click(screen.getByRole('button', { name: 'Agent Map' }))
+    expect(
+      await screen.findByText('2 of 2 agents shown', undefined, MAP_LOAD_TIMEOUT)
+    ).toBeInTheDocument()
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: /^Filter/ }))
+    fireEvent.click(await screen.findByRole('menuitemcheckbox', { name: /Working/ }))
+
+    expect(await screen.findByText('1 of 2 agents shown')).toBeInTheDocument()
+    // A muted state counts toward the Filter badge like any other filter. The
+    // open menu hides the trigger from the a11y tree, so read it by its label.
+    expect(screen.getByRole('menu')).toHaveAccessibleName('Filter 1')
+  })
+
+  it('offers agent states only on the map, where no column separates them', async () => {
+    renderBoard([card({ paneKey: 'busy' })])
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: /^Filter/ }))
+    expect(await screen.findByText('Project')).toBeInTheDocument()
+    expect(screen.queryByText('Agent states')).not.toBeInTheDocument()
+
+    fireEvent.keyDown(document.body, { key: 'Escape' })
+    fireEvent.click(screen.getByRole('button', { name: 'Agent Map' }))
+    fireEvent.pointerDown(screen.getByRole('button', { name: /^Filter/ }))
+
+    expect(await screen.findByText('Agent states')).toBeInTheDocument()
+  })
+
+  it('toggles workspaces without agents from the shared map filter', async () => {
+    renderBoard([card({ paneKey: 'busy' })], {
+      workspaces: [workspace(), workspace({ worktreeId: 'empty', worktreeName: 'Empty child' })]
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Agent Map' }))
+
+    expect(
+      screen.queryByRole('button', { name: 'Open Empty child worktree details' })
+    ).not.toBeInTheDocument()
+    fireEvent.pointerDown(screen.getByRole('button', { name: /^Filter/ }))
+    const workspaceToggle = await screen.findByRole('menuitemcheckbox', {
+      name: /Workspaces without agents/
+    })
+    fireEvent.click(workspaceToggle)
+
+    expect(workspaceToggle).toHaveAttribute('aria-checked', 'true')
+    fireEvent.keyDown(document.body, { key: 'Escape' })
+
+    expect(
+      await screen.findByRole(
+        'button',
+        { name: 'Open Empty child worktree details' },
+        MAP_LOAD_TIMEOUT
+      )
+    ).toBeInTheDocument()
+    expect(screen.getByText('Workspaces without agents')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
+    expect(
+      screen.queryByRole('button', { name: 'Open Empty child worktree details' })
+    ).not.toBeInTheDocument()
+  })
+
+  it('keeps the selected map visible beside its terminal panel', async () => {
+    const agent = card({ paneKey: 'map-agent', conversationName: 'Map agent' })
+    render(<AgentKanbanBoard snapshot={{ generatedAt: 1, cards: [agent] }} initialView="map" />)
+
+    fireEvent.click(await screen.findByRole('button', { name: /Map agent/ }, MAP_LOAD_TIMEOUT))
+
+    expect(screen.getByLabelText('Nested project, workspace, and agent map')).toBeInTheDocument()
+    const terminalPanel = screen.getByTestId('terminal-panel')
+    expect(terminalPanel).toHaveAttribute('data-pty-id', 'p1')
+    expect(terminalPanel.parentElement).toHaveClass('flex-row-reverse')
+    expect(
+      screen.getByLabelText('Nested project, workspace, and agent map').closest('section')
+    ).toHaveClass('w-1/2', 'flex-none')
+    expect(screen.getByRole('button', { name: /Map agent/ })).toHaveClass('is-selected')
+    expect(screen.getByRole('button', { name: /Map agent/ })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    )
+    expect(screen.getByText('200%')).toBeInTheDocument()
+    expect(screen.queryByText('Map filters')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('terminal-dialog')).not.toBeInTheDocument()
+  })
+
+  it('closes the adjacent terminal instead of turning it into a board dialog', async () => {
+    const agent = card({ paneKey: 'map-agent', conversationName: 'Map agent' })
+    render(<AgentKanbanBoard snapshot={{ generatedAt: 1, cards: [agent] }} initialView="map" />)
+
+    fireEvent.click(await screen.findByRole('button', { name: /Map agent/ }, MAP_LOAD_TIMEOUT))
+    expect(screen.getByTestId('terminal-panel')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Agent Map' }))
+    expect(screen.getByTestId('terminal-panel')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dashboard' }))
+
+    expect(screen.queryByTestId('terminal-panel')).not.toBeInTheDocument()
+    expect(screen.getByTestId('terminal-dialog')).toHaveAttribute('data-open', 'false')
+  })
+
+  it('focuses search with Ctrl+K without taking focus from response fields', () => {
+    renderBoard([])
+    const search = screen.getByLabelText('Search agents')
+
+    fireEvent.keyDown(document.body, { key: 'k', ctrlKey: true })
+    expect(search).toHaveFocus()
+
+    const response = document.createElement('textarea')
+    document.body.append(response)
+    response.focus()
+    fireEvent.keyDown(response, { key: 'k', ctrlKey: true })
+    expect(response).toHaveFocus()
+    response.remove()
   })
 
   it('places cards in their bucket column and counts them', () => {
@@ -252,7 +442,9 @@ describe('AgentKanbanBoard', () => {
 
   it('keeps the terminal dialog open across bucket moves and card removal', () => {
     const agent = card({ paneKey: 'pk-1', bucket: 'done', worktreeName: 'wt1' })
-    const { rerender } = render(<AgentKanbanBoard snapshot={{ generatedAt: 1, cards: [agent] }} />)
+    const { rerender } = render(
+      <AgentKanbanBoard snapshot={{ generatedAt: 1, cards: [agent], showIdle: true }} />
+    )
     expect(screen.getByTestId('terminal-dialog').dataset.open).toBe('false')
 
     fireEvent.click(screen.getByTestId('card'))
@@ -284,9 +476,16 @@ describe('AgentKanbanBoard', () => {
 
     // The ack round-trips through the main window; the next snapshot mutes it.
     rerender(
-      <AgentKanbanBoard snapshot={{ generatedAt: 2, cards: [{ ...agent, unseen: false }] }} />
+      <AgentKanbanBoard
+        snapshot={{
+          generatedAt: 2,
+          cards: [{ ...agent, bucket: 'idle', unseen: false }],
+          showIdle: true
+        }}
+      />
     )
     expect(screen.getByTestId('card').dataset.unseen).toBe('false')
+    expect(screen.getByTestId('card').dataset.bucket).toBe('idle')
     expect(ackAgent).not.toHaveBeenCalled()
 
     // A state change while the dialog is open re-acks (watching counts as
@@ -295,10 +494,55 @@ describe('AgentKanbanBoard', () => {
       <AgentKanbanBoard
         snapshot={{
           generatedAt: 3,
-          cards: [{ ...agent, bucket: 'working' as const, stateChangedAt: 2000, unseen: true }]
+          cards: [{ ...agent, bucket: 'working' as const, stateChangedAt: 2000, unseen: true }],
+          showIdle: true
         }}
       />
     )
     expect(ackAgent).toHaveBeenCalledWith('pk-ack')
+  })
+
+  it('keeps an acknowledged result visible as Idle in the map without review state', async () => {
+    const fresh = card({
+      paneKey: 'fresh-result',
+      bucket: 'done',
+      dotState: 'done',
+      conversationName: 'Fresh result',
+      finishedAt: 900,
+      unseen: true
+    })
+    const view = render(
+      <AgentKanbanBoard snapshot={{ generatedAt: 1, cards: [fresh] }} initialView="map" />
+    )
+
+    expect(
+      await screen.findByRole('button', { name: /Fresh result/ }, MAP_LOAD_TIMEOUT)
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Fresh result/ }))
+    expect(ackAgent).toHaveBeenCalledWith('fresh-result')
+
+    view.rerender(
+      <AgentKanbanBoard
+        snapshot={{
+          generatedAt: 2,
+          cards: [{ ...fresh, bucket: 'idle', unseen: false }]
+        }}
+        initialView="map"
+      />
+    )
+    expect(screen.getByRole('button', { name: /Fresh result/ })).toHaveClass('fleet-status-idle')
+    expect(screen.getByTestId('terminal-panel')).toBeInTheDocument()
+
+    view.unmount()
+    render(
+      <AgentKanbanBoard
+        snapshot={{
+          generatedAt: 3,
+          cards: [{ ...fresh, bucket: 'idle', unseen: false }]
+        }}
+        initialView="map"
+      />
+    )
+    expect(screen.getByRole('button', { name: /Fresh result/ })).toHaveClass('fleet-status-idle')
   })
 })

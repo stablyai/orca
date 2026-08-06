@@ -61,6 +61,7 @@ export function BrowserToolbarMenu({
 
   const [newProfileDialogOpen, setNewProfileDialogOpen] = useState(false)
   const [newProfileName, setNewProfileName] = useState('')
+  const [useNativeUserAgent, setUseNativeUserAgent] = useState(false)
   const [isCreatingProfile, setIsCreatingProfile] = useState(false)
   const [pendingSwitchProfileId, setPendingSwitchProfileId] = useState<string | null | undefined>(
     undefined
@@ -79,6 +80,14 @@ export function BrowserToolbarMenu({
       return
     }
     setMenuOpen(open)
+  }
+
+  const handleNewProfileDialogOpenChange = (open: boolean): void => {
+    setNewProfileDialogOpen(open)
+    if (!open) {
+      setNewProfileName('')
+      setUseNativeUserAgent(false)
+    }
   }
 
   const effectiveProfileId = currentProfileId ?? 'default'
@@ -129,7 +138,11 @@ export function BrowserToolbarMenu({
 
     setIsCreatingProfile(true)
     try {
-      const profile = await createBrowserSessionProfile('isolated', trimmed)
+      const profile = await createBrowserSessionProfile(
+        'isolated',
+        trimmed,
+        useNativeUserAgent ? { userAgentMode: 'native' } : undefined
+      )
       if (!profile) {
         if (mountedRef.current) {
           toast.error(
@@ -148,6 +161,7 @@ export function BrowserToolbarMenu({
 
       setNewProfileDialogOpen(false)
       setNewProfileName('')
+      setUseNativeUserAgent(false)
 
       onDestroyWebview()
       switchBrowserTabProfile(workspaceId, profile.id, profile.partition)
@@ -239,14 +253,17 @@ export function BrowserToolbarMenu({
         onPendingSwitchChange={() => setPendingSwitchProfileId(undefined)}
         onConfirmSwitch={confirmSwitchProfile}
         newProfileDialogOpen={newProfileDialogOpen}
-        onNewProfileDialogOpenChange={setNewProfileDialogOpen}
+        onNewProfileDialogOpenChange={handleNewProfileDialogOpenChange}
         newProfileName={newProfileName}
         onNewProfileNameChange={setNewProfileName}
+        useNativeUserAgent={useNativeUserAgent}
+        onUseNativeUserAgentChange={setUseNativeUserAgent}
         isCreatingProfile={isCreatingProfile}
         onCreateProfile={() => void handleCreateProfile()}
         onCancelNewProfile={() => {
           setNewProfileDialogOpen(false)
           setNewProfileName('')
+          setUseNativeUserAgent(false)
         }}
       />
     </>

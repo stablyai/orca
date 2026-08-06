@@ -1,0 +1,335 @@
+.agent-map-canvas {
+  background-image: radial-gradient(
+    color-mix(in srgb, var(--muted-foreground) 16%, transparent) 0.6px,
+    transparent 0.6px
+  );
+  background-size: 20px 20px;
+}
+
+.agent-map-canvas::before {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle at 45% 48%,
+    color-mix(in srgb, var(--muted) 34%, transparent),
+    transparent 70%
+  );
+  content: '';
+  pointer-events: none;
+}
+
+.agent-map-project-ring {
+  fill: color-mix(in srgb, var(--card) 22%, transparent);
+  stroke: color-mix(in srgb, var(--ring) 58%, transparent);
+  stroke-width: 1.25;
+  vector-effect: non-scaling-stroke;
+}
+
+.agent-map-worktree-label {
+  fill: var(--foreground);
+  font-family: Geist, var(--font-sans);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  paint-order: stroke fill;
+  pointer-events: none;
+  stroke: var(--background);
+  stroke-linejoin: round;
+  stroke-width: 4px;
+}
+
+.agent-map-project-label-frame {
+  overflow: visible;
+  pointer-events: none;
+}
+
+.agent-map-project-label {
+  display: flex;
+  width: max-content;
+  max-width: calc(100% - 8px);
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-inline: auto;
+  color: var(--foreground);
+  font-family: Geist, var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.agent-map-project-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  -webkit-text-stroke: 4px var(--background);
+  paint-order: stroke fill;
+}
+
+.agent-map-project-count,
+.agent-map-worktree-count {
+  fill: var(--muted-foreground);
+  font-family: Geist, var(--font-sans);
+  letter-spacing: 0.05em;
+  paint-order: stroke fill;
+  pointer-events: none;
+  stroke: var(--background);
+  stroke-linejoin: round;
+  stroke-width: 4px;
+}
+
+.agent-map-project-count {
+  font-size: 11px;
+  text-anchor: middle;
+}
+
+.agent-map-worktree-ring {
+  cursor: pointer;
+  fill: color-mix(in srgb, var(--card) 48%, transparent);
+  outline: none;
+  stroke: color-mix(in srgb, var(--muted-foreground) 42%, transparent);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.agent-map-worktree-status-glow {
+  fill: none;
+  pointer-events: none;
+  stroke-width: 9;
+  vector-effect: non-scaling-stroke;
+}
+
+.agent-map-worktree-status-glow.fleet-status-blocked {
+  stroke: color-mix(in srgb, var(--color-red-500) 28%, transparent);
+}
+
+.agent-map-worktree-status-glow.fleet-status-waiting {
+  stroke: color-mix(in srgb, var(--color-amber-500) 28%, transparent);
+}
+
+.agent-map-worktree-status-glow.fleet-status-working {
+  stroke: color-mix(in srgb, var(--color-yellow-500) 28%, transparent);
+}
+
+.agent-map-worktree-ring:hover {
+  fill: color-mix(in srgb, var(--card) 72%, transparent);
+  stroke: var(--ring);
+}
+
+.agent-map-worktree-ring:focus-visible {
+  fill: color-mix(in srgb, var(--ring) 8%, var(--card));
+  outline: none;
+  stroke: var(--ring);
+  stroke-width: 2;
+}
+
+.agent-map-worktree-ring.is-selected {
+  fill: color-mix(in srgb, var(--ring) 6%, var(--card));
+  stroke: var(--ring);
+  stroke-width: 1.5;
+}
+
+.agent-map-worktree-ring.is-open {
+  fill: color-mix(in srgb, var(--ring) 18%, var(--card));
+  stroke: var(--ring);
+  stroke-width: 2.5;
+}
+
+.agent-map-worktree-ring.is-working {
+  stroke: var(--color-yellow-500);
+}
+
+.agent-map-worktree-ring.is-waiting {
+  stroke: var(--color-amber-500);
+}
+
+.agent-map-worktree-ring.is-blocked {
+  stroke: var(--color-red-500);
+}
+
+.agent-map-worktree-label {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  text-anchor: middle;
+}
+
+.agent-map-worktree-count {
+  font-size: 11px;
+  text-anchor: middle;
+}
+
+.agent-map-worktree-label-group {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.agent-map-worktree-label-group.is-visible,
+.agent-map-worktree-label-group.is-active {
+  opacity: 1;
+}
+
+.agent-map-worktree-count {
+  opacity: 0;
+}
+
+.agent-map-worktree-label-group.is-count-visible .agent-map-worktree-count {
+  opacity: 1;
+}
+
+.agent-map-agent-node {
+  cursor: pointer;
+  outline: none;
+}
+
+.agent-map-worktree-lineage-link {
+  fill: none;
+  pointer-events: none;
+  stroke: color-mix(in srgb, var(--muted-foreground) 34%, transparent);
+  stroke-linecap: round;
+  stroke-width: 1.25;
+  vector-effect: non-scaling-stroke;
+}
+
+.agent-map-lineage-link {
+  fill: none;
+  pointer-events: none;
+  stroke: color-mix(in srgb, var(--muted-foreground) 42%, transparent);
+  stroke-dasharray: 1 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.agent-map-lineage-link.is-subagent {
+  stroke-dasharray: none;
+}
+
+.agent-map-agent-hit {
+  fill: transparent;
+  stroke: transparent;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.agent-map-agent-mark {
+  fill: var(--background);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.agent-map-agent-working-glow {
+  fill: none;
+  pointer-events: none;
+  stroke: color-mix(in srgb, var(--color-yellow-500) 32%, transparent);
+  stroke-width: 7;
+  vector-effect: non-scaling-stroke;
+}
+
+.agent-map-agent-icon {
+  overflow: visible;
+  pointer-events: none;
+}
+
+.agent-map-agent-icon > div {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  color: var(--foreground);
+}
+
+.agent-map-agent-node:hover .agent-map-agent-hit,
+.agent-map-agent-node:focus-visible .agent-map-agent-hit {
+  fill: color-mix(in srgb, var(--ring) 10%, transparent);
+  stroke: var(--ring);
+}
+
+.agent-map-agent-node.is-selected .agent-map-agent-hit {
+  fill: color-mix(in srgb, var(--ring) 18%, transparent);
+  stroke: var(--ring);
+  stroke-width: 3;
+}
+
+.agent-map-agent-node.is-selected .agent-map-agent-mark {
+  fill: color-mix(in srgb, var(--ring) 10%, var(--background));
+}
+
+.fleet-status-working .agent-map-agent-mark {
+  stroke: var(--color-yellow-500);
+}
+
+.fleet-status-blocked .agent-map-agent-mark {
+  stroke: var(--color-red-500);
+}
+
+.fleet-status-waiting .agent-map-agent-mark {
+  stroke: var(--color-amber-500);
+}
+
+.fleet-status-done .agent-map-agent-mark {
+  stroke: var(--color-emerald-500);
+}
+
+.fleet-status-idle .agent-map-agent-mark {
+  stroke: color-mix(in srgb, var(--color-neutral-500) 55%, transparent);
+}
+
+.agent-map-agent-unread-mark {
+  fill: var(--color-amber-500);
+  pointer-events: none;
+  stroke: var(--background);
+  stroke-width: 2;
+}
+
+.agent-map-aggregate-node circle {
+  fill: color-mix(in srgb, var(--muted-foreground) 12%, var(--card));
+  stroke: color-mix(in srgb, var(--muted-foreground) 46%, transparent);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.agent-map-aggregate-node text {
+  fill: var(--muted-foreground);
+  font-family: Geist, var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  text-anchor: middle;
+}
+
+.agent-map-legend-dot {
+  display: block;
+  width: 7px;
+  height: 7px;
+  border-radius: 9999px;
+  background: var(--muted-foreground);
+  opacity: 0.42;
+}
+
+.agent-map-legend-dot.fleet-status-working {
+  border: 2px solid var(--color-yellow-500);
+  border-top-color: transparent;
+  background: transparent;
+  opacity: 1;
+}
+
+.agent-map-legend-dot.fleet-status-blocked {
+  background: var(--color-red-500);
+  opacity: 1;
+}
+
+.agent-map-legend-dot.fleet-status-waiting {
+  background: var(--color-amber-500);
+  box-shadow: 0 0 4px color-mix(in srgb, var(--color-amber-500) 72%, transparent);
+  opacity: 1;
+}
+
+.agent-map-legend-dot.fleet-status-done {
+  background: var(--color-emerald-500);
+  opacity: 1;
+}

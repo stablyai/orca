@@ -34,8 +34,7 @@ import { useDaemonActions, DaemonActionDialog } from '../shared/useDaemonActions
 import type { AppMemory, BrowserWorkspace, UsageValues, Worktree } from '../../../../shared/types'
 import { ORPHAN_WORKTREE_ID } from '../../../../shared/constants'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
-import { isFolderRepo } from '../../../../shared/repo-kind'
-import { isWorkspaceOldForCleanup } from '../../../../shared/workspace-cleanup'
+import { countEstimatedInactiveWorkspaces } from '../workspace-cleanup/inactive-workspace-estimate'
 import { mergeSnapshotAndSessions, UNATTRIBUTED_REPO_ID } from './mergeSnapshotAndSessions'
 import type {
   Metric,
@@ -825,9 +824,6 @@ export function ResourceUsageStatusSegment({
       clearSessionsError()
       void fetchSnapshot()
       void refreshSessions()
-    },
-    onKillAllSettled: () => {
-      void refreshSessions()
     }
   })
 
@@ -917,20 +913,10 @@ export function ResourceUsageStatusSegment({
     [allWorktrees]
   )
 
-  const oldWorkspaceCount = useMemo(() => {
-    const now = Date.now()
-    let count = 0
-    for (const worktree of allWorktrees) {
-      const repo = repoById.get(worktree.repoId)
-      if (!repo || isFolderRepo(repo) || worktree.isMainWorktree) {
-        continue
-      }
-      if (isWorkspaceOldForCleanup(worktree, now)) {
-        count += 1
-      }
-    }
-    return count
-  }, [allWorktrees, repoById])
+  const oldWorkspaceCount = useMemo(
+    () => countEstimatedInactiveWorkspaces(allWorktrees, repoById, Date.now()),
+    [allWorktrees, repoById]
+  )
 
   // Why: skip the merge when closed; the always-mounted segment recomputing on every keystroke-driven store mutation made the app laggy.
   const unifiedRepos = useMemo(

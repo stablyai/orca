@@ -214,6 +214,7 @@ export type WorktreeRemoveStage =
   | 'git_remove'
   | 'metadata_purge'
   | 'pty_sweep'
+  | 'trash_rename'
   | 'watcher_gate'
 
 /** Wrap one stage of a worktree removal. Children share the parent's `kind` so `kind`-filtered
@@ -226,32 +227,6 @@ export async function withWorktreeRemoveStageSpan<T>(
   return withSpan(`worktree.remove.${stage}`, fn, {
     attributes: { kind: 'worktree', 'worktree.flow': flow }
   })
-}
-
-export type PtySpanArgs = {
-  readonly stage: 'spawn' | 'exit' | 'recover'
-  readonly shell?: string
-  readonly cwd?: string
-}
-
-/** Wrap a PTY-lifecycle event in a `pty.<stage>` span. The lifecycle is
- *  long-lived; callers typically use `startSpan` directly for the live
- *  session and call `withPtySpan` only for the spawn/exit moments. */
-export async function withPtySpan<T>(meta: PtySpanArgs, fn: () => Promise<T> | T): Promise<T> {
-  return withSpan(
-    `pty.${meta.stage}`,
-    async (span) => {
-      span.setAttribute('pty.stage', meta.stage)
-      if (meta.shell) {
-        span.setAttribute('pty.shell', meta.shell)
-      }
-      if (meta.cwd) {
-        span.setAttribute('cwd', meta.cwd)
-      }
-      return await fn()
-    },
-    { attributes: { kind: 'pty' } }
-  )
 }
 
 export type UpdaterSpanArgs = {

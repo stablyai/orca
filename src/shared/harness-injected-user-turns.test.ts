@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { isKnownHarnessInjectedUserTurnText } from './harness-injected-user-turns'
+import {
+  isCompactContinuationUserTurnText,
+  isKnownHarnessInjectedUserTurnText
+} from './harness-injected-user-turns'
 
 describe('isKnownHarnessInjectedUserTurnText', () => {
   it('matches every known harness tag, including attribute-carrying forms', () => {
@@ -59,6 +62,16 @@ describe('isKnownHarnessInjectedUserTurnText', () => {
     ).toBe(true)
   })
 
+  it('distinguishes compact continuation from other harness turns', () => {
+    expect(
+      isCompactContinuationUserTurnText(
+        'This session is being continued from a previous conversation. Summary follows.'
+      )
+    ).toBe(true)
+    expect(isCompactContinuationUserTurnText('<task-notification>done')).toBe(false)
+    expect(isCompactContinuationUserTurnText('<command-name>/review</command-name>')).toBe(false)
+  })
+
   it('is case-insensitive and ignores surrounding whitespace', () => {
     expect(isKnownHarnessInjectedUserTurnText('  <TASK-NOTIFICATION> done')).toBe(true)
     expect(isKnownHarnessInjectedUserTurnText('\n<System-Reminder> hi')).toBe(true)
@@ -71,6 +84,12 @@ describe('isKnownHarnessInjectedUserTurnText', () => {
     ).toBe(false)
     expect(isKnownHarnessInjectedUserTurnText('')).toBe(false)
     expect(isKnownHarnessInjectedUserTurnText('   ')).toBe(false)
+  })
+
+  it('classifies from a bounded head so multi-KB pastes stay cheap', () => {
+    const largePrompt = `<task-notification>done</task-notification>\n${'x'.repeat(20_000)}`
+    expect(isKnownHarnessInjectedUserTurnText(largePrompt)).toBe(true)
+    expect(isKnownHarnessInjectedUserTurnText(`fix login ${'y'.repeat(20_000)}`)).toBe(false)
   })
 
   it('keeps single-word tag pastes, custom elements, and underscore wrappers', () => {

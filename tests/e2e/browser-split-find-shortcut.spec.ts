@@ -12,6 +12,7 @@ type SplitFindFixture = {
 }
 
 type BrowserSplitFixture = {
+  firstBrowserPageId: string
   firstBrowserTabId: string
   secondBrowserTabId: string
 }
@@ -76,6 +77,7 @@ async function createBrowserSplit(page: Page): Promise<BrowserSplitFixture> {
       targetGroupId: secondBrowserGroupId
     })
     return {
+      firstBrowserPageId: firstBrowserTab.activePageId,
       firstBrowserTabId: firstBrowserTab.id,
       secondBrowserTabId: secondBrowserTab.id
     }
@@ -86,6 +88,17 @@ function browserAddressBar(page: Page, browserTabId: string) {
   return page.locator(
     `[data-browser-overlay-tab-id="${browserTabId}"] [data-orca-browser-address-bar="true"]`
   )
+}
+
+async function focusBrowserAddressBar(page: Page, browserTabId: string): Promise<void> {
+  const browserOverlay = page.locator(`[data-browser-overlay-tab-id="${browserTabId}"]`)
+  const addressBar = browserAddressBar(page, browserTabId)
+  const addressBarForm = browserOverlay.locator(
+    'form:has(> [data-orca-browser-address-bar="true"])'
+  )
+  await expect(addressBarForm).toBeVisible()
+  await addressBarForm.click()
+  await expect(addressBar).toBeFocused()
 }
 
 function browserFindInput(page: Page) {
@@ -102,42 +115,55 @@ function browserSplitFindInput(page: Page, browserTabId: string) {
     .getByPlaceholder('Find in page...')
 }
 
-async function pressFindInBrowserGuest(page: Page, browserTabId: string): Promise<void> {
+async function pressFindInBrowserGuest(
+  page: Page,
+  browserTabId: string,
+  browserPageId: string
+): Promise<void> {
   await expect
     .poll(() =>
-      page.evaluate((targetBrowserTabId) => {
-        const overlay = document.querySelector(
-          `[data-browser-overlay-tab-id="${targetBrowserTabId}"]`
-        )
-        const webview = overlay?.querySelector('webview') as Electron.WebviewTag | null
-        return webview?.getWebContentsId() ?? null
-      }, browserTabId)
-    )
-    .not.toBeNull()
-
-  await page.evaluate(
-    async ({ targetBrowserTabId, inputModifier }) => {
-      const overlay = document.querySelector(
-        `[data-browser-overlay-tab-id="${targetBrowserTabId}"]`
+      page.evaluate(
+        async ({ targetBrowserPageId, targetBrowserTabId, inputModifier }) => {
+          const overlay = document.querySelector(
+            `[data-browser-overlay-tab-id="${targetBrowserTabId}"]`
+          )
+          const webview = overlay?.querySelector('webview') as Electron.WebviewTag | null
+          try {
+            if (!webview) {
+              return false
+            }
+            const webContentsId = webview.getWebContentsId()
+            const registered = await window.api.browser.isGuestRegistered({
+              browserPageId: targetBrowserPageId,
+              webContentsId
+            })
+            if (!registered) {
+              return false
+            }
+            webview.focus()
+            await webview.sendInputEvent({
+              type: 'keyDown',
+              keyCode: 'F',
+              modifiers: [inputModifier]
+            })
+            await webview.sendInputEvent({
+              type: 'keyUp',
+              keyCode: 'F',
+              modifiers: [inputModifier]
+            })
+            return true
+          } catch {
+            return false
+          }
+        },
+        {
+          targetBrowserPageId: browserPageId,
+          targetBrowserTabId: browserTabId,
+          inputModifier: modifier.toLowerCase()
+        }
       )
-      const webview = overlay?.querySelector('webview') as Electron.WebviewTag | null
-      if (!webview) {
-        throw new Error(`Missing webview for browser tab ${targetBrowserTabId}`)
-      }
-      webview.focus()
-      await webview.sendInputEvent({
-        type: 'keyDown',
-        keyCode: 'F',
-        modifiers: [inputModifier]
-      })
-      await webview.sendInputEvent({
-        type: 'keyUp',
-        keyCode: 'F',
-        modifiers: [inputModifier]
-      })
-    },
-    { targetBrowserTabId: browserTabId, inputModifier: modifier.toLowerCase() }
-  )
+    )
+    .toBe(true)
 }
 
 function terminalFindInput(page: Page) {
@@ -200,9 +226,7 @@ test.describe('browser split Find shortcut', () => {
     await orcaPage.keyboard.press('Escape')
 
     await focusBrowserGroup(orcaPage, fixture.browserGroupId)
-    const browserAddress = browserAddressBar(orcaPage, fixture.browserTabId)
-    await expect(browserAddress).toBeVisible()
-    await browserAddress.click()
+    await focusBrowserAddressBar(orcaPage, fixture.browserTabId)
     await orcaPage.keyboard.press(`${modifier}+f`)
     await expect(browserFindInput(orcaPage)).toBeFocused()
     await expect(terminalFindInput(orcaPage)).toBeHidden()
@@ -231,10 +255,25 @@ test.describe('browser split Find shortcut', () => {
   }) => {
     const fixture = await createBrowserSplit(orcaPage)
 
-    await pressFindInBrowserGuest(orcaPage, fixture.firstBrowserTabId)
+    await pressFindInBrowserGuest(orcaPage, fixture.firstBrowserTabId, fixture.firstBrowserPageId)
 
     await expect(browserSplitFindInput(orcaPage, fixture.firstBrowserTabId)).toBeVisible()
     await expect(browserSplitFindInput(orcaPage, fixture.secondBrowserTabId)).toBeHidden()
+    await expect
+      .poll(() =>
+        orcaPage.evaluate(
+          ({ browserPageId, browserTabId }) =>
+            window.__store
+              ?.getState()
+              .browserPagesByWorkspace[browserTabId]?.find((page) => page.id === browserPageId)
+              ?.loadError?.code ?? null,
+          {
+            browserPageId: fixture.firstBrowserPageId,
+            browserTabId: fixture.firstBrowserTabId
+          }
+        )
+      )
+      .toBeNull()
   })
 
   test('keeps browser Find available when split focus state is temporarily missing', async ({
@@ -243,9 +282,7 @@ test.describe('browser split Find shortcut', () => {
     const fixture = await createTerminalBrowserSplit(orcaPage)
     await focusBrowserGroup(orcaPage, fixture.browserGroupId)
     const addressBar = browserAddressBar(orcaPage, fixture.browserTabId)
-    await expect(addressBar).toBeVisible()
-    await addressBar.click()
-    await expect(addressBar).toBeFocused()
+    await focusBrowserAddressBar(orcaPage, fixture.browserTabId)
 
     await orcaPage.evaluate(() => {
       const store = window.__store
@@ -270,9 +307,7 @@ test.describe('browser split Find shortcut', () => {
     const fixture = await createTerminalBrowserSplit(orcaPage)
     await focusBrowserGroup(orcaPage, fixture.browserGroupId)
     const addressBar = browserAddressBar(orcaPage, fixture.browserTabId)
-    await expect(addressBar).toBeVisible()
-    await addressBar.click()
-    await expect(addressBar).toBeFocused()
+    await focusBrowserAddressBar(orcaPage, fixture.browserTabId)
 
     await orcaPage.evaluate(() => {
       const store = window.__store

@@ -32,6 +32,10 @@ vi.mock('@/hooks/useSkillFreshness', () => ({
   })
 }))
 
+vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
+  useActiveProjectSkillRuntime: () => ({ canUseLocalSkillFreshness: true })
+}))
+
 vi.mock('@/hooks/useInstalledAgentSkills', () => ({
   notifyInstalledAgentSkillsChanged: mocks.notifyChanged
 }))

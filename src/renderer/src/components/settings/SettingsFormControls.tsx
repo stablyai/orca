@@ -179,7 +179,10 @@ export function SettingsSegmentedControl<T extends string | number>({
             role="radio"
             aria-checked={active}
             aria-label={opt.ariaLabel}
-            disabled={opt.disabled}
+            // Why aria-disabled, not disabled: a native disabled button leaves the tab
+            // order, so keyboard users can never focus it to open the tooltip explaining
+            // why the option is unavailable. The click guard below keeps it inert.
+            aria-disabled={opt.disabled}
             onClick={() => {
               if (!opt.disabled) {
                 onChange(opt.value)

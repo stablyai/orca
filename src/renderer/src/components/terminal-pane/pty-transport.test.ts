@@ -118,6 +118,43 @@ describe('createIpcPtyTransport', () => {
     expect(kill).not.toHaveBeenCalled()
   })
 
+  // Why: retained gauges would inflate every later high-water profile.
+  it.each(['detach', 'destroy'] as const)(
+    'drops its side-effect gauge from the census on %s',
+    async (teardown) => {
+      await import('./pty-side-effect-pending-census')
+      const { collectRendererMemoryProfileCounts } = await import('@/lib/renderer-memory-profile')
+      const { createIpcPtyTransport } = await import('./pty-transport')
+      expect(collectRendererMemoryProfileCounts()['ptySideEffects.processors']).toBe(0)
+
+      const transport = createIpcPtyTransport({})
+      await transport.connect({ url: '', callbacks: {} })
+      expect(collectRendererMemoryProfileCounts()['ptySideEffects.processors']).toBe(1)
+
+      transport[teardown]?.()
+
+      expect(collectRendererMemoryProfileCounts()['ptySideEffects.processors']).toBe(0)
+    }
+  )
+
+  // Why: teardown that already failed is exactly when a stranded gauge would pin the processor.
+  it('drops its side-effect gauge even when destroy throws mid-disconnect', async () => {
+    await import('./pty-side-effect-pending-census')
+    const { collectRendererMemoryProfileCounts } = await import('@/lib/renderer-memory-profile')
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const kill = window.api.pty.kill as unknown as ReturnType<typeof vi.fn>
+    const transport = createIpcPtyTransport({})
+    await transport.connect({ url: '', callbacks: {} })
+    expect(collectRendererMemoryProfileCounts()['ptySideEffects.processors']).toBe(1)
+
+    kill.mockImplementationOnce(() => {
+      throw new Error('ipc channel closed')
+    })
+
+    expect(() => transport.destroy?.()).toThrow('ipc channel closed')
+    expect(collectRendererMemoryProfileCounts()['ptySideEffects.processors']).toBe(0)
+  })
+
   it('retires an adopted PTY when recovery disconnects before a replacement spawn', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
@@ -131,6 +168,41 @@ describe('createIpcPtyTransport', () => {
     expect(kill).toHaveBeenCalledWith('empty-reattach')
     expect(transport.getPtyId()).toBeNull()
     expect(transport.isConnected()).toBe(false)
+  })
+
+  it('announces a daemon adoption before publishing its buffered PTY data', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    spawn.mockResolvedValueOnce({ id: 'adopted-pty', isReattach: true })
+    const order: string[] = []
+    const transport = createIpcPtyTransport({})
+    const connecting = transport.connect({
+      url: '',
+      callbacks: {
+        onReattachDetermined: () => order.push('adopt'),
+        onData: () => order.push('data')
+      }
+    })
+    onData?.({ id: 'adopted-pty', data: 'buffered' })
+    await connecting
+
+    expect(order).toEqual(['adopt', 'data'])
+  })
+
+  it('does not reannounce an explicit reattach already owned by its caller', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    spawn.mockResolvedValueOnce({ id: 'restored-pty', isReattach: true })
+    const onReattachDetermined = vi.fn()
+    const transport = createIpcPtyTransport({})
+
+    await transport.connect({
+      url: '',
+      sessionId: 'restored-pty',
+      callbacks: { onReattachDetermined }
+    })
+
+    expect(onReattachDetermined).not.toHaveBeenCalled()
   })
 
   it('forwards requested environment deletions to the PTY spawn', async () => {
@@ -2514,6 +2586,83 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(onReplayData).toHaveBeenCalledWith('hello')
     expect(onConnect).toHaveBeenCalled()
     expect(onData).toHaveBeenCalledWith(' world', expect.objectContaining({ seq: 4 }))
+  })
+
+  it('reports a host stable-pane adoption as reattach without fresh-spawn ownership', async () => {
+    runtimeCall.mockResolvedValue({
+      id: 'rpc-create',
+      ok: true,
+      result: {
+        terminal: {
+          handle: 'term-original',
+          worktreeId: 'repo1::/remote/wt',
+          title: 'Original',
+          surface: 'background',
+          isReattach: true
+        }
+      },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    const onPtySpawn = vi.fn()
+    const onReattachDetermined = vi.fn()
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'repo1::/remote/wt',
+      tabId: 'tab-1',
+      leafId: '11111111-1111-4111-8111-111111111111',
+      onPtySpawn
+    })
+
+    const result = await transport.connect({
+      url: '',
+      callbacks: { onReattachDetermined }
+    })
+
+    expect(result).toEqual({
+      id: 'remote:env-1@@term-original',
+      replay: '',
+      isReattach: true
+    })
+    expect(onReattachDetermined).toHaveBeenCalledOnce()
+    expect(onPtySpawn).not.toHaveBeenCalled()
+  })
+
+  it('does not close an adopted stable-pane owner when create resolves after destroy', async () => {
+    let resolveCreate!: (value: unknown) => void
+    runtimeCall.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveCreate = resolve
+        })
+    )
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'repo1::/remote/wt',
+      tabId: 'tab-1',
+      leafId: '11111111-1111-4111-8111-111111111111'
+    })
+
+    const connecting = transport.connect({ url: '', callbacks: {} })
+    transport.destroy?.()
+    resolveCreate({
+      id: 'rpc-create',
+      ok: true,
+      result: {
+        terminal: {
+          handle: 'term-original',
+          worktreeId: 'repo1::/remote/wt',
+          title: 'Original',
+          surface: 'background',
+          isReattach: true
+        }
+      },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    await connecting
+
+    expect(runtimeCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'terminal.close' })
+    )
   })
 
   it('suspends passive remote output until host sleep is cancelled', async () => {

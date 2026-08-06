@@ -31,7 +31,8 @@ import {
   isAutomationGeneratedWorkspace,
   isCliCreatedWorkspace,
   isDetachedHeadWorkspace,
-  isDefaultBranchWorkspace
+  isDefaultBranchWorkspace,
+  isSleepingSweepExemptWorkspace
 } from '@/components/sidebar/visible-worktrees'
 import { getLiveAgentStatusByWorktreeId, isInactiveWorkspace } from '@/lib/worktree-activity-state'
 import { orderEmptyQueryWorktrees } from '@/lib/order-empty-query-worktrees'
@@ -85,6 +86,19 @@ import {
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { buildSidebarHostOptions } from '@/components/sidebar/sidebar-host-options'
 import { getPaletteHostBadge, type PaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
+import PaletteFilterMenu from '@/components/cmd-j/PaletteFilterMenu'
+import PaletteFilterChips from '@/components/cmd-j/PaletteFilterChips'
+import { buildPaletteFilterModel } from '@/components/cmd-j/palette-filter-options'
+import { getProjectGroupExecutionHostIdForRows } from '@/components/sidebar/worktree-list-host-filtering'
+import {
+  buildPaletteFilterPredicate,
+  EMPTY_PALETTE_FILTER,
+  getPaletteFilterSelectionCount,
+  isPaletteFilterActive,
+  reconcilePaletteFilter,
+  type PaletteFilterState
+} from '@/components/cmd-j/palette-filter'
+import { capPaletteSection } from '@/components/cmd-j/palette-section-render-cap'
 import { useSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
 import { runWorktreeDelete } from '@/components/sidebar/delete-worktree-flow'
 import {
@@ -123,7 +137,10 @@ import {
 import { lookupGitHubWorkItemForSource } from '@/lib/github-work-item-source-lookup'
 import type { SettingsNavTarget } from '@/lib/settings-navigation-types'
 import { getHostDisplayLabelOverrides } from '../../../shared/host-setting-overrides'
-import { isRuntimeOwnedSshTargetId } from '../../../shared/execution-host'
+import {
+  getSettingsFocusedExecutionHostId,
+  isRuntimeOwnedSshTargetId
+} from '../../../shared/execution-host'
 import type { BrowserPage, BrowserWorkspace, Worktree } from '../../../shared/types'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { buildTaskSourceContextFromRepo } from '../../../shared/task-source-context'
@@ -404,6 +421,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const hideCliCreatedWorkspaces = useAppStore((s) => s.hideCliCreatedWorkspaces)
   const hideDetachedHeadWorkspaces = useAppStore((s) => s.hideDetachedHeadWorkspaces)
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
+  const alwaysShowDefaultBranchWorkspace = useAppStore((s) => s.alwaysShowDefaultBranchWorkspace)
   const lastVisitedAtByWorktreeId = useAppStore((s) => s.lastVisitedAtByWorktreeId)
   const workspacePortScan = useAppStore((s) => s.workspacePortScan?.result ?? null)
   const openNewBrowserTabInActiveWorkspace = useAppStore(
@@ -418,6 +436,10 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
   const [selectedItemId, setSelectedItemId] = useState('')
+  // Why: filters reset on close — a filter that survives reopen silently hides
+  // results in a surface people open reflexively.
+  const [rawFilter, setRawFilter] = useState<PaletteFilterState>(EMPTY_PALETTE_FILTER)
+  const [dialogElement, setDialogElement] = useState<HTMLElement | null>(null)
   const previousWorktreeIdRef = useRef<string | null>(null)
   const previousActiveTabTypeRef = useRef<'browser' | 'editor' | 'terminal' | 'simulator'>(
     'terminal'
@@ -430,6 +452,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const wasVisibleRef = useRef(false)
   const skipRestoreFocusRef = useRef(false)
   const listRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
   const fallbackFocusOuterFrameRef = useRef<number | null>(null)
   const fallbackFocusInnerFrameRef = useRef<number | null>(null)
   const createLookupGuard = useMemo(() => createWorktreePaletteRequestGuard(), [])
@@ -465,6 +488,54 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   )
   const canCreateWorktree = repos.length > 0
 
+  // Why: host-less repos and worktrees inherit the focused runtime host, exactly
+  // as the sidebar's host headers do — otherwise the two disagree on bucketing.
+  const defaultHostId = useMemo(() => getSettingsFocusedExecutionHostId(settings), [settings])
+  const filterModel = useMemo(
+    () =>
+      buildPaletteFilterModel({
+        repos,
+        worktrees: allWorktrees,
+        hostOptions,
+        projects,
+        projectHostSetups,
+        defaultHostId
+      }),
+    [allWorktrees, defaultHostId, hostOptions, projectHostSetups, projects, repos]
+  )
+  // Why: a selection whose repo or SSH target disappeared would otherwise keep
+  // the palette permanently empty with nothing on screen explaining it. Memoized
+  // because a prune allocates, and an unstable identity here would invalidate
+  // every downstream search memo on every render.
+  const filter = useMemo(
+    () => reconcilePaletteFilter(rawFilter, filterModel),
+    [rawFilter, filterModel]
+  )
+  // Why persist the prune: otherwise a dropped id lives on in rawFilter and
+  // silently re-activates — with no chip on screen — if its host or project
+  // comes back. Same-reference return on a no-op keeps this from re-rendering.
+  useEffect(() => {
+    setRawFilter((current) => reconcilePaletteFilter(current, filterModel))
+  }, [filterModel])
+  const filterActive = isPaletteFilterActive(filter)
+  const hostFilterActive = filter.hostIds.length > 0
+  const filterPredicate = useMemo(
+    () => buildPaletteFilterPredicate(filter, filterModel),
+    [filter, filterModel]
+  )
+  // Why: same resolver the sidebar's host filtering uses, so a group row lands on
+  // the host its header claims — including the host-less "inherit default" case.
+  const groupHostIdByGroupId = useMemo(
+    () =>
+      new Map(
+        projectGroups.map((group) => [
+          group.id,
+          getProjectGroupExecutionHostIdForRows(group, defaultHostId)
+        ])
+      ),
+    [defaultHostId, projectGroups]
+  )
+
   const hasQuery = deferredQuery.trim().length > 0
   const isLoading = repos.length > 0 && Object.keys(worktreesByRepo).length === 0
 
@@ -487,6 +558,11 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         if (worktree.isArchived) {
           return false
         }
+        // Why: filtering here (not after search) keeps the whole pipeline —
+        // smart-sort, search, tab indexing — working on the narrowed set.
+        if (filterPredicate && !filterPredicate.matchesWorktree(worktree)) {
+          return false
+        }
         if (hideDefaultBranchWorkspace && isDefaultBranchWorkspace(worktree)) {
           return false
         }
@@ -501,6 +577,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         }
         if (
           !showSleepingWorkspaces &&
+          // Why the exemption here too: Cmd+J re-implements the sidebar's
+          // filter pass, so the shared predicate is what keeps them in step.
+          !isSleepingSweepExemptWorkspace(worktree, alwaysShowDefaultBranchWorkspace) &&
           isInactiveWorkspace(
             worktree.id,
             tabsByWorktree,
@@ -515,7 +594,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       }),
     [
       allWorktrees,
+      alwaysShowDefaultBranchWorkspace,
       browserTabsByWorktree,
+      filterPredicate,
       hideAutomationGeneratedWorkspaces,
       hideCliCreatedWorkspaces,
       hideDefaultBranchWorkspace,
@@ -538,15 +619,16 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     [emptyQueryVisibleWorktrees, activeWorktreeId, lastVisitedAtByWorktreeId]
   )
 
-  const searchScopeWorktrees = useMemo(
-    () =>
-      getWorktreePaletteSearchScope({
-        hasQuery,
-        allWorktrees,
-        emptyQueryWorktrees: switchableWorktreesForRows
-      }),
-    [allWorktrees, hasQuery, switchableWorktreesForRows]
-  )
+  const searchScopeWorktrees = useMemo(() => {
+    const scope = getWorktreePaletteSearchScope({
+      hasQuery,
+      allWorktrees,
+      emptyQueryWorktrees: switchableWorktreesForRows
+    })
+    // Why: the typed-query branch widens back to allWorktrees, so the filter has
+    // to be re-applied there; the empty-query branch is already narrowed.
+    return hasQuery && filterPredicate ? scope.filter(filterPredicate.matchesWorktree) : scope
+  }, [allWorktrees, filterPredicate, hasQuery, switchableWorktreesForRows])
 
   // Why: typed queries route through sortWorktreesSmart — ranking only diverges on the empty-query branch.
   const sortedWorktrees = useMemo(
@@ -578,8 +660,12 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
 
   const browserSortedWorktrees = useMemo(() => {
     // Why: browser-tab search is cross-worktree, so keep indexing browser pages even when the owning worktree is archived/hidden.
+    // The filter still applies — narrowing before the sort also shrinks the open-tab index it feeds.
+    const scope = filterPredicate
+      ? allWorktrees.filter(filterPredicate.matchesWorktree)
+      : allWorktrees
     return sortWorktreesSmart(
-      allWorktrees,
+      scope,
       tabsByWorktree,
       repoMap,
       agentStatusByPaneKey,
@@ -590,6 +676,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     )
   }, [
     allWorktrees,
+    filterPredicate,
     tabsByWorktree,
     repoMap,
     agentStatusByPaneKey,
@@ -884,14 +971,29 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
             projects,
             projectHostSetups,
             renderableRepoIds: renderableProjectRepoIds
-          }).map((result) => ({
-            id: result.id,
-            type: 'project-target' as const,
-            result
-          }))
+          })
+            .filter((result) => {
+              if (!filterPredicate) {
+                return true
+              }
+              return result.kind === 'project'
+                ? filterPredicate.matchesProjectRowKey(result.rowKey)
+                : filterPredicate.matchesGroupHostId(
+                    groupHostIdByGroupId.get(result.id.slice('project-group:'.length)) ??
+                      defaultHostId
+                  )
+            })
+            .map((result) => ({
+              id: result.id,
+              type: 'project-target' as const,
+              result
+            }))
         : [],
     [
       deferredQuery,
+      defaultHostId,
+      filterPredicate,
+      groupHostIdByGroupId,
       hasQuery,
       projectGroups,
       projectHostSetups,
@@ -978,19 +1080,27 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const paletteSections = useMemo(() => {
     // Why: the worktree cap only matters when open tabs need above-the-fold protection; uncap with zero open tabs.
     const worktreeCap = !hasQuery && openTabItems.length > 0 ? EMPTY_QUERY_WORKTREE_CAP : Infinity
-    const visibleWorktreeItems = hasQuery ? worktreeItems : worktreeItems.slice(0, worktreeCap)
-    const visibleProjectTargetItems = hasQuery ? projectTargetItems : []
-    const visibleMiddleItems = hasQuery ? middleItems : []
-    const visibleOpenTabItems = hasQuery
-      ? openTabItems
-      : openTabItems.slice(0, EMPTY_QUERY_OPEN_TAB_CAP)
+    // Why: a typed query can match hundreds of rows; capping the rendered slice
+    // is what keeps a one-character search from building an unbounded DOM.
+    const worktrees = hasQuery
+      ? capPaletteSection(worktreeItems)
+      : { visible: worktreeItems.slice(0, worktreeCap), overflowCount: 0 }
+    const projectTargets = capPaletteSection(hasQuery ? projectTargetItems : [])
+    const middle = capPaletteSection(hasQuery ? middleItems : [])
+    const openTabs = hasQuery
+      ? capPaletteSection(openTabItems)
+      : { visible: openTabItems.slice(0, EMPTY_QUERY_OPEN_TAB_CAP), overflowCount: 0 }
     const showWorktreeHint = !hasQuery && worktreeItems.length > worktreeCap
 
     return {
-      visibleWorktreeItems,
-      visibleProjectTargetItems,
-      visibleMiddleItems,
-      visibleOpenTabItems,
+      visibleWorktreeItems: worktrees.visible as PaletteItem[],
+      worktreeOverflowCount: worktrees.overflowCount,
+      visibleProjectTargetItems: projectTargets.visible as PaletteItem[],
+      projectTargetOverflowCount: projectTargets.overflowCount,
+      visibleMiddleItems: middle.visible as PaletteItem[],
+      middleOverflowCount: middle.overflowCount,
+      visibleOpenTabItems: openTabs.visible as PaletteItem[],
+      openTabOverflowCount: openTabs.overflowCount,
       showWorktreeHint
     }
   }, [worktreeItems, projectTargetItems, middleItems, openTabItems, hasQuery])
@@ -1021,8 +1131,25 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       visibleProjectTargetItems,
       visibleMiddleItems,
       visibleOpenTabItems,
-      showWorktreeHint
+      showWorktreeHint,
+      worktreeOverflowCount,
+      projectTargetOverflowCount,
+      middleOverflowCount,
+      openTabOverflowCount
     } = paletteSections
+    const pushOverflowHint = (id: string, overflowCount: number): void => {
+      if (overflowCount > 0) {
+        entries.push({
+          id,
+          type: 'hint',
+          label: translate(
+            'worktreeJumpPalette.renderCapOverflow',
+            '{{value0}} more - keep typing or add a filter to narrow',
+            { value0: overflowCount }
+          )
+        })
+      }
+    }
     const visibleWorkspaceItemCount = visibleWorktreeItems.length + (showCreateAction ? 1 : 0)
     const populatedSectionCount = [
       visibleWorkspaceItemCount,
@@ -1067,6 +1194,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
           )
         })
       }
+      pushOverflowHint('__hint_worktree_overflow__', worktreeOverflowCount)
     }
     if (visibleProjectTargetItems.length > 0) {
       if (showProjectTargetHeader) {
@@ -1080,6 +1208,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         })
       }
       appendPaletteListEntries(entries, visibleProjectTargetItems)
+      pushOverflowHint('__hint_project_overflow__', projectTargetOverflowCount)
     }
     if (showCreateAction) {
       // Why: project/group jump targets are navigation results — keep them after worktree matches, before the creation fallback.
@@ -1094,6 +1223,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         })
       }
       appendPaletteListEntries(entries, visibleMiddleItems)
+      pushOverflowHint('__hint_middle_overflow__', middleOverflowCount)
     }
     if (visibleOpenTabItems.length > 0) {
       if (showOpenTabsHeader) {
@@ -1104,6 +1234,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         })
       }
       appendPaletteListEntries(entries, visibleOpenTabItems)
+      pushOverflowHint('__hint_open_tab_overflow__', openTabOverflowCount)
     }
     return entries
   }, [hasQuery, paletteSections, showCreateAction, worktreeItems.length])
@@ -1153,6 +1284,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       skipRestoreFocusRef.current = false
       setQuery('')
       setSelectedItemId('')
+      // Why: reset on open, not on close — closing races the fade-out, and a
+      // mid-animation reset would flash unfiltered rows behind the overlay.
+      setRawFilter(EMPTY_PALETTE_FILTER)
       listRef.current?.scrollTo(0, 0)
     }
 
@@ -1267,22 +1401,25 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   )
 
   const handleSelectWorktree = useCallback(
-    (worktreeId: string) => {
-      const worktree = findWorktreeById(useAppStore.getState().worktreesByRepo, worktreeId)
-      if (!worktree) {
+    (worktree: Worktree) => {
+      const current = useAppStore.getState().getKnownWorktreeById(worktree.id, worktree.hostId)
+      if (!current) {
         toast.error(
           translate('auto.components.WorktreeJumpPalette.2c38630a01', 'Workspace no longer exists')
         )
         return
       }
-      const activation = activateAndRevealWorktree(worktreeId)
+      const activation = activateAndRevealWorktree(
+        worktree.id,
+        worktree.hostId ? { executionHostId: worktree.hostId } : {}
+      )
       recordFeatureInteraction('cmd-j-workspace-open')
       skipRestoreFocusRef.current = true
       closeModal()
       setSelectedItemId('')
       // Why: #9939 — the unscoped fallback grabs the first terminal in the document, which is
       // often the worktree we just left, now hidden. Focus the destination's own tab instead.
-      if (!queueWorkspaceActivationTerminalFocus(worktreeId, activation)) {
+      if (!queueWorkspaceActivationTerminalFocus(worktree.id, activation)) {
         focusFallbackSurface()
       }
     },
@@ -1304,7 +1441,10 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       }
       // Why: capture page info before activateAndRevealWorktree mutates store state — a later findBrowserSelection would be unreliable.
       const { worktree, workspace, page } = selection
-      const activated = activateAndRevealWorktree(worktree.id)
+      const activated = activateAndRevealWorktree(
+        worktree.id,
+        worktree.hostId ? { executionHostId: worktree.hostId } : {}
+      )
       if (!activated) {
         toast.error(
           translate('auto.components.WorktreeJumpPalette.2c38630a01', 'Workspace no longer exists')
@@ -1470,7 +1610,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const handleSelectItem = useCallback(
     (item: PaletteItem) => {
       if (item.type === 'worktree') {
-        handleSelectWorktree(item.worktree.id)
+        handleSelectWorktree(item.worktree)
       } else if (item.type === 'project-target') {
         handleSelectProjectTarget(item.result)
       } else if (item.type === 'browser-page') {
@@ -1646,12 +1786,42 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     e.preventDefault()
   }, [])
 
+  const focusPaletteInput = useCallback(() => {
+    inputRef.current?.focus()
+  }, [])
+
+  // Why: the filter popover portals into the dialog element so the Dialog focus
+  // trap treats it as inside; anchoring off the trailing slot finds it without
+  // threading a ref through CommandDialog.
+  const setDialogElementFromNode = useCallback((node: HTMLDivElement | null) => {
+    setDialogElement(node?.closest<HTMLElement>('[role="dialog"]') ?? null)
+  }, [])
+
   const handleOpenAutoFocus = useCallback((_event: Event) => {
     // No-op: focus handled in the visible effect before Radix; exists only to satisfy the prop API.
   }, [])
 
-  const resultCount = selectableItems.length
+  // Why the split: on a query the render cap hides matches, so announcing the
+  // visible slice under-reports "results found". The empty-query list renders
+  // only its two capped sections, so there the visible count is the truth.
+  const resultCount = hasQuery
+    ? worktreeItems.length + projectTargetItems.length + middleItems.length + openTabItems.length
+    : selectableItems.length
   const emptyState = (() => {
+    // Why: a filter is the most likely reason a familiar query returns nothing,
+    // so name it before any other explanation and point at the way out.
+    if (filterActive) {
+      return {
+        title: translate(
+          'worktreeJumpPalette.filter.emptyTitle',
+          'No results match the active filter'
+        ),
+        subtitle: translate(
+          'worktreeJumpPalette.filter.emptySubtitle',
+          'Clear the filter above, or widen it to more hosts and projects.'
+        )
+      }
+    }
     if (
       (hasAnySearchableWorktrees ||
         hasAnyProjectSearchCandidates ||
@@ -1717,6 +1887,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       }}
     >
       <CommandInput
+        ref={inputRef}
         placeholder={translate(
           'auto.components.WorktreeJumpPalette.1ebe225fee',
           'Search worktrees, settings, tabs, and actions...'
@@ -1726,7 +1897,19 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         wrapperClassName="mx-3 mt-3 rounded-lg border border-border/55 bg-muted/28 px-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
         iconClassName="mr-2.5 h-4 w-4 text-muted-foreground/60"
         className="h-12 text-[14px] placeholder:text-muted-foreground/75"
+        trailing={
+          <div ref={setDialogElementFromNode}>
+            <PaletteFilterMenu
+              model={filterModel}
+              filter={filter}
+              onFilterChange={setRawFilter}
+              onRequestInputFocus={focusPaletteInput}
+              portalContainer={dialogElement}
+            />
+          </div>
+        }
       />
+      <PaletteFilterChips model={filterModel} filter={filter} onFilterChange={setRawFilter} />
       <CommandList ref={listRef} className="max-h-[min(460px,62vh)] px-2.5 pb-2.5 pt-2">
         {isLoading && selectableItems.length === 0 && !showCreateAction ? (
           <PaletteState
@@ -1819,7 +2002,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                   ? (sshConnectionStates.get(sshConnectionId)?.status ?? 'disconnected')
                   : null
                 const isSshDisconnected = sshStatus != null && sshStatus !== 'connected'
-                const hostBadge = getPaletteHostBadge(repo, hostOptions)
+                const hostBadge = getPaletteHostBadge(repo, hostOptions, hostFilterActive)
 
                 return (
                   <CommandItem
@@ -1832,7 +2015,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                       'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
                     )}
                   >
-                    <div className="flex w-4 shrink-0 items-center justify-center self-start pt-0.5">
+                    <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start">
                       <StatusIndicator status={status} aria-hidden="true" />
                       <span className="sr-only">{statusLabel}</span>
                     </div>
@@ -1946,7 +2129,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
               if (entry.type === 'project-target') {
                 const result = entry.result
                 const isProject = result.kind === 'project'
-                const hostBadge = isProject ? getPaletteHostBadge(result.repo, hostOptions) : null
+                const hostBadge = isProject
+                  ? getPaletteHostBadge(result.repo, hostOptions, hostFilterActive)
+                  : null
                 const badgeLabel = isProject
                   ? translate('auto.components.WorktreeJumpPalette.projectBadge', 'Project')
                   : translate('auto.components.WorktreeJumpPalette.repoGroupBadge', 'Repo group')
@@ -1960,7 +2145,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                       'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
                     )}
                   >
-                    <div className="flex w-4 shrink-0 items-center justify-center self-start pt-0.5 text-muted-foreground/85">
+                    <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start text-muted-foreground/85">
                       <FolderTree className="size-3.5" aria-hidden="true" />
                     </div>
                     <div className="min-w-0 flex-1">
@@ -2007,7 +2192,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                       'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
                     )}
                   >
-                    <div className="flex w-4 shrink-0 items-center justify-center self-start pt-0.5 text-muted-foreground/85">
+                    <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start text-muted-foreground/85">
                       <Icon className="size-3.5" aria-hidden="true" />
                     </div>
                     <div className="min-w-0 flex-1">
@@ -2034,7 +2219,11 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                   ? repoMap.get(workspaceTabWorktree.repoId)
                   : undefined
                 const workspaceTabRepoName = workspaceTabRepo?.displayName ?? result.repoName
-                const workspaceTabHostBadge = getPaletteHostBadge(workspaceTabRepo, hostOptions)
+                const workspaceTabHostBadge = getPaletteHostBadge(
+                  workspaceTabRepo,
+                  hostOptions,
+                  hostFilterActive
+                )
                 const WorkspaceTabIcon =
                   result.contentType === 'terminal' ? SquareTerminal : FileText
 
@@ -2048,7 +2237,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                       'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
                     )}
                   >
-                    <div className="flex w-4 shrink-0 items-center justify-center self-start pt-0.5 text-muted-foreground/85">
+                    <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start text-muted-foreground/85">
                       <WorkspaceTabIcon className="size-3.5" aria-hidden="true" />
                     </div>
                     <div className="min-w-0 flex-1">
@@ -2117,7 +2306,11 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                   ? repoMap.get(simulatorWorktree.repoId)
                   : undefined
                 const simulatorRepoName = simulatorRepo?.displayName ?? result.repoName
-                const simulatorHostBadge = getPaletteHostBadge(simulatorRepo, hostOptions)
+                const simulatorHostBadge = getPaletteHostBadge(
+                  simulatorRepo,
+                  hostOptions,
+                  hostFilterActive
+                )
 
                 return (
                   <CommandItem
@@ -2129,7 +2322,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                       'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
                     )}
                   >
-                    <div className="flex w-4 shrink-0 items-center justify-center self-start pt-0.5 text-muted-foreground/85">
+                    <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start text-muted-foreground/85">
                       <Smartphone className="size-3.5" aria-hidden="true" />
                     </div>
                     <div className="min-w-0 flex-1">
@@ -2195,7 +2388,11 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
               const browserWorktree = worktreeMap.get(result.worktreeId)
               const browserRepo = browserWorktree ? repoMap.get(browserWorktree.repoId) : undefined
               const browserRepoName = browserRepo?.displayName ?? result.repoName
-              const browserHostBadge = getPaletteHostBadge(browserRepo, hostOptions)
+              const browserHostBadge = getPaletteHostBadge(
+                browserRepo,
+                hostOptions,
+                hostFilterActive
+              )
 
               return (
                 <CommandItem
@@ -2207,7 +2404,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                     'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
                   )}
                 >
-                  <div className="flex w-4 shrink-0 items-center justify-center self-start pt-0.5 text-muted-foreground/85">
+                  <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start text-muted-foreground/85">
                     <Globe className="size-3.5" aria-hidden="true" />
                   </div>
                   <div className="min-w-0 flex-1">
@@ -2283,9 +2480,16 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
           <span>{translate('auto.components.WorktreeJumpPalette.75499e01d9', 'Close')}</span>
           <FooterKey>↑↓</FooterKey>
           <span>{translate('auto.components.WorktreeJumpPalette.ac037cfac2', 'Move')}</span>
+          <FooterKey>{translate('worktreeJumpPalette.filter.tabKey', 'Tab')}</FooterKey>
+          <span>{translate('worktreeJumpPalette.filter.label', 'Filter')}</span>
         </div>
       </div>
       <div aria-live="polite" className="sr-only">
+        {filterActive
+          ? `${translate('worktreeJumpPalette.filter.ariaActive', 'Filter: {{value0}} active.', {
+              value0: getPaletteFilterSelectionCount(filter)
+            })} `
+          : ''}
         {deferredQuery.trim()
           ? translate(
               'auto.components.WorktreeJumpPalette.bb72c08e63',

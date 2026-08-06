@@ -2,7 +2,7 @@
 import { existsSync, statSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
 import os from 'node:os'
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, type Tray } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, powerMonitor, type Tray } from 'electron'
 import { initTccPromptNotice, stopTccPromptNotice } from './macos-tcc-prompt-notice'
 import { electronApp, is } from '@electron-toolkit/utils'
 import {
@@ -28,14 +28,20 @@ import {
   registerPaneKeyTeardownListener,
   getLocalPtyProvider,
   getSshPtyProvider,
-  registerHeadlessPtyRuntime
+  registerHeadlessPtyRuntime,
+  type CodexHomeLaunchContext
 } from './ipc/pty'
 import {
   initDaemonPtyProvider,
   disconnectDaemon,
   getDaemonProvider,
+  listLiveDaemonPtyIds,
   shutdownDaemon
 } from './daemon/daemon-init'
+import {
+  hasRecordedLegacySharedCodexPane,
+  reconcileCodexPaneAccountsWithLivePtys
+} from './codex/codex-pane-account-registry'
 import { closeAllWatchers } from './ipc/filesystem-watcher'
 import { disposeWorktreeBaseDirectoryWatchers } from './ipc/worktree-base-directory-watcher'
 import { registerCoreHandlers } from './ipc/register-core-handlers'
@@ -87,6 +93,7 @@ import {
   registerAppMenu,
   rebuildAppMenu
 } from './menu/register-app-menu'
+import { createGpuAccelerationAboutPanelOptions } from './menu/gpu-acceleration-about-panel'
 import {
   checkForRemoteServerUpdate,
   checkForUpdatesFromMenu,
@@ -97,7 +104,7 @@ import {
   resolveUpdateInstallMode
 } from './updater'
 import { configureRemoteServerUpdater } from './runtime/remote-server-updater'
-import type { TuiAgent, UpdateCheckOptions } from '../shared/types'
+import type { UpdateCheckOptions } from '../shared/types'
 import { recordUpdaterLifecycle } from './updater-lifecycle-diagnostics'
 import {
   installServeSupervisorDisconnectQuit,
@@ -127,6 +134,7 @@ import {
   type GpuFallbackEnvironment,
   type WindowsGpuFallbackEnvironment
 } from './startup/gpu-fallback-marker'
+import { applyGpuFallbackCommandLineSwitches } from './startup/gpu-fallback-switches'
 import {
   DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD,
   DEFAULT_GPU_CRASH_FALLBACK_WINDOW_MS,
@@ -152,8 +160,10 @@ import {
   acquireSingleInstanceLock,
   logSingleInstanceLockBypass,
   logSingleInstanceLockFailure,
+  shouldActivateDesktopForSecondInstance,
   shouldBypassSingleInstanceLock,
-  shouldSkipSingleInstanceLock
+  shouldSkipSingleInstanceLock,
+  SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE
 } from './startup/single-instance-lock'
 import { startEventLoopStallProbe } from './startup/event-loop-stall-probe'
 import { startMainThreadChurnProbe } from './diagnostics/main-thread-churn-probe'
@@ -164,7 +174,10 @@ import {
 } from './startup/startup-diagnostics'
 import { ensureWindowsUserDataAclGrant } from './startup/windows-user-data-acl'
 import { shouldQuitWhenAllWindowsClosed } from './startup/window-all-closed-quit-policy'
-import { createServeDesktopActivationGate } from './startup/serve-desktop-activation'
+import {
+  createServeDesktopActivationGate,
+  settleServeDesktopActivation as settleServeDesktopActivationGate
+} from './startup/serve-desktop-activation'
 import { RateLimitService } from './rate-limits/service'
 import { readMiniMaxSessionCookie } from './minimax/minimax-cookie-store'
 import { getInitialClaudeRateLimitTarget } from './rate-limits/claude-rate-limit-target'
@@ -175,7 +188,10 @@ import {
   ensureAutoUpdaterConfigured
 } from './window/attach-main-window-services'
 import { createMainWindow, loadMainWindow } from './window/createMainWindow'
-import { zoomDashboardPopoutIfFocused } from './window/dashboard-popout-window'
+import {
+  getDashboardPopoutWindow,
+  zoomDashboardPopoutIfFocused
+} from './window/dashboard-popout-window'
 import {
   createSystemTray,
   destroySystemTray,
@@ -211,6 +227,7 @@ import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex/cod
 import { normalizeRuntimePathForComparison } from '../shared/cross-platform-path'
 import type { AgentProviderSessionMetadata } from '../shared/agent-session-resume'
 import { getDefaultWslDistro } from './wsl'
+import { collectWorktreeTrashSweepRoots, sweepStaleWorktreeTrash } from './worktree-trash'
 import { ClaudeAccountService } from './claude-accounts/service'
 import { ClaudeRuntimeAuthService } from './claude-accounts/runtime-auth-service'
 import {
@@ -241,6 +258,7 @@ import {
 } from '../shared/notch/notch-snapshot'
 import { getTrustedUIRendererWindow } from './ipc/ui'
 import { createHookProviderSessionInvalidator } from './agent-hooks/hook-provider-session-invalidation'
+import { createHookStatusSessionTabsInvalidator } from './agent-hooks/hook-status-session-tabs-invalidation'
 import { wslHookRelayManager } from './agent-hooks/wsl-hook-relay-manager'
 import { maybeAutoRenameBranchOnFirstWork } from './agent-hooks/first-work-branch-rename'
 import { rememberBranchRenameFailureOutput } from './agent-hooks/branch-rename-failure-output'
@@ -262,6 +280,8 @@ import { buildHeadlessAutomationWorktreeCreateArgs } from './automations/headles
 import { AgentAwakeService } from './agent-awake-service'
 import { registerSystemResumeBroadcast } from './system-resume-broadcast'
 import { settleTeardownWithinDeadline } from './quit-teardown-deadline'
+import { quitTeardownStartGate } from './quit-teardown-start-gate'
+import { beginSshShutdown } from './ipc/ssh'
 import { PluginService } from './plugins/plugin-service'
 import { PluginKillListService } from './plugins/plugin-kill-list-service'
 import { getPluginsDataDir } from './plugins/plugin-discovery'
@@ -306,6 +326,7 @@ import {
 } from '../shared/synthetic-agent-title'
 import type { AgentStatusState } from '../shared/agent-status-types'
 import { resolveTuiAgentPermissionMode } from '../shared/tui-agent-permissions'
+import { isAskUserQuestionTool } from '../shared/agent-question-answered-intent'
 import type { TerminalSideEffectBatch } from '../shared/terminal-side-effect-facts'
 import {
   HEADLESS_RUNTIME_WINDOW_ID,
@@ -378,10 +399,30 @@ const gpuCrashFallbackTracker = new GpuCrashFallbackTracker({
   threshold: DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD
 })
 let gpuFallbackActiveThisLaunch = false
+let gpuFeatureStatus: Electron.GPUFeatureStatus | null = null
 let localPtyStartupReady: Promise<void> = Promise.resolve()
 let localPtyProviderStartupReady: Promise<void> = Promise.resolve()
 const AGENT_STATE_CRASH_BREADCRUMB_MIN_INTERVAL_MS = 30_000
 const isServeMode = process.argv.includes('--serve')
+
+function updateGpuAccelerationAboutPanel(): void {
+  app.setAboutPanelOptions(
+    createGpuAccelerationAboutPanelOptions({
+      appName: app.name,
+      appVersion: app.getVersion(),
+      platform: process.platform,
+      gpuFallbackActive: gpuFallbackActiveThisLaunch,
+      gpuFeatureStatus
+    })
+  )
+}
+
+app.on('gpu-info-update', () => {
+  gpuFeatureStatus = app.getGPUFeatureStatus()
+  if (app.isReady()) {
+    updateGpuAccelerationAboutPanel()
+  }
+})
 if (isServeMode) {
   reserveServeStdoutForReadiness()
 }
@@ -597,7 +638,11 @@ function focusExistingWindow(): void {
   })
 }
 
-function requestDesktopActivation(): void {
+function requestDesktopActivation(argv: readonly string[] = []): void {
+  // Why: a duplicate `orca serve` must not drag a headless server into opening a desktop window (#11935).
+  if (!shouldActivateDesktopForSecondInstance(argv)) {
+    return
+  }
   desktopActivationGate.requestActivation()
 }
 
@@ -612,11 +657,9 @@ function getDesktopWindowStatus(): RuntimeDesktopWindowStatus {
 }
 
 function settleServeDesktopActivation(): void {
-  if (getLocalPtyProvider() instanceof LocalPtyProvider) {
-    desktopActivationGate.markBlocked('persistent PTY provider unavailable')
-    return
-  }
-  desktopActivationGate.markReady()
+  settleServeDesktopActivationGate(desktopActivationGate, {
+    hasPersistentPtyProvider: !(getLocalPtyProvider() instanceof LocalPtyProvider)
+  })
 }
 
 // Why: webContents-scoped auto-expiring flag so an intent can't leak to a later renderer load; `consume` clears on match for one-shot signals.
@@ -717,10 +760,11 @@ if (startupDiagnosticsEnabled) {
 if (!hasSingleInstanceLock) {
   // Why: a false-negative lock loss otherwise looks like a silent crash on packaged macOS; `open --stderr` can capture this line.
   logSingleInstanceLockFailure()
-  app.quit()
+  // Why: a graceful quit is deferred pre-ready, so this launch would still walk into Linux display init and SIGSEGV (#11935).
+  app.exit(SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE)
 }
 
-// Why: when another process holds the lock we've already quit; skip file-writing side effects so this transient process never touches userData.
+// Why: when another process holds the lock we've already exited; skip file-writing side effects so this transient process never touches userData.
 if (hasSingleInstanceLock) {
   // Why: couple to dev-parent only for electron-vite desktop runs; `orca serve`'s parent (CLI shim/background shell) isn't the intended server lifetime.
   const shouldCoupleToDevParent = is.dev && !isServeMode
@@ -841,6 +885,14 @@ function startTerminalRuntimeStartupServices(): Promise<void> {
       await initDaemonPtyProvider(signal, {
         macosLoginSessionWatch: process.platform === 'darwin' && !isServeMode
       })
+      if (codexRuntimeHome?.isHostSystemDefaultRealHome() && hasRecordedLegacySharedCodexPane()) {
+        const livePtyIds = await listLiveDaemonPtyIds()
+        if (livePtyIds) {
+          reconcileCodexPaneAccountsWithLivePtys(livePtyIds)
+        }
+      }
+      // Why: retained shells can invoke Codex immediately after the startup gate.
+      codexRuntimeHome?.reconcileLegacySharedHomeForRetainedPanes()
       logStartupMilestone('startup-service-done', { service: 'daemon-pty-provider' })
     },
     // Why: PTY spawn env reads ORCA_AGENT_HOOK_* from live server state, so the renderer awaits this before restored terminals reconnect.
@@ -888,7 +940,7 @@ function startTerminalRuntimeStartupServices(): Promise<void> {
 function prepareCodexRuntimeHomeForLaunch(
   target?: CodexAccountSelectionTarget,
   launchEnv?: NodeJS.ProcessEnv,
-  launchContext?: { workspacePath?: string; launchAgent?: TuiAgent }
+  launchContext?: CodexHomeLaunchContext
 ): string | null {
   if (
     target?.runtime !== 'wsl' &&
@@ -920,14 +972,18 @@ function prepareCodexRuntimeHomeForLaunch(
     return true
   }
   let realHomeHooksPrepared = ensureRealHomeHooksIfSelected()
-  let runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target, launchEnv)
+  let runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target, launchEnv, {
+    unavailableManagedHomePath: launchContext?.unavailableManagedHomePath
+  })
   if (runtimeHomePath === null && !realHomeHooksPrepared) {
-    // Why: a managed home can lose auth during launch prep, which clears its
-    // selection and falls through to real home. Establish hook capability for
-    // that newly selected lane, then re-resolve if the capability gate rejects it.
+    // Why: launch prep can reject an untrusted managed home and clear its
+    // selection. Establish hook capability for that newly selected lane, then
+    // re-resolve if the capability gate rejects it.
     realHomeHooksPrepared = ensureRealHomeHooksIfSelected()
     if (realHomeHooksPrepared) {
-      runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target, launchEnv)
+      runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target, launchEnv, {
+        unavailableManagedHomePath: launchContext?.unavailableManagedHomePath
+      })
     }
   }
   if (runtimeHomePath === null && target?.runtime !== 'wsl') {
@@ -990,7 +1046,7 @@ async function prepareCodexSessionResumeForLaunch(args: {
   const settingsStore = store
   // Why: a `fresh` outcome must skip migration, trust and hook repair entirely — there is
   // no verified origin home to prepare, so the PTY layer drops the resume argv (#10793).
-  return prepareCodexSessionResume({
+  const preparation = await prepareCodexSessionResume({
     sessionId: args.providerSession.id,
     transcriptPath: args.providerSession.transcriptPath,
     trustedCodexHomes: trustedHomes,
@@ -1052,6 +1108,14 @@ async function prepareCodexSessionResumeForLaunch(args: {
       return resumeHome
     }
   })
+  return preparation.outcome === 'resume'
+    ? {
+        ...preparation,
+        reconcileSharedRuntimeAuth:
+          normalizeRuntimePathForComparison(preparation.codexHomePath) ===
+          normalizeRuntimePathForComparison(getOrcaManagedCodexHomePath())
+      }
+    : preparation
 }
 
 // Why: restore the window the close handler may have hidden to tray, or reopen it (dock-reactivation style) if fully torn down.
@@ -1164,50 +1228,12 @@ function syncNotchStatus(showNotchStatus: boolean): void {
   })
 }
 
-// Quit handling for the notch. The teardown must happen on `before-quit` so `window-all-closed`
-// can fire and complete a deferred Cmd+Q; the restore below covers a quit that gets vetoed.
-let notchQuitCommitted = false
-let notchRestorePending = false
-
-app.on('will-quit', () => {
-  notchQuitCommitted = true
-})
-
 // Why both events: the notch panel is `focusable: false`, so it never gets a blur of its own
 // and would otherwise stay open behind whatever you did next. `did-resign-active` covers
 // switching to another app; `browser-window-focus` covers clicking back into Orca. Neither can
 // be emitted by the notch window itself, so this cannot fight the user's own click.
 app.on('did-resign-active', () => setNotchExpanded(false))
 app.on('browser-window-focus', () => setNotchExpanded(false))
-
-app.on('before-quit', () => {
-  // Why captured in the closure rather than read from module scope at fire time: two vetoed
-  // quits inside the grace window would otherwise cancel each other. The second `before-quit`
-  // finds the window already destroyed, and a shared flag would then read false when the first
-  // timer fires — leaving the bar hidden for the session with the settings switch still on.
-  // A restore already pending also counts as "was open", so the second attempt re-arms.
-  const wasOpen = getNotchWindow() !== null || notchRestorePending
-  closeNotchWindowForQuit()
-  if (!wasOpen) {
-    return
-  }
-  notchRestorePending = true
-  const timer = setTimeout(() => {
-    notchRestorePending = false
-    if (
-      shouldRestoreNotchAfterQuitAttempt({
-        quitCommitted: notchQuitCommitted,
-        hasAppWindow: findAppWindow() !== null,
-        settingEnabled: store?.getSettings().showNotchStatus === true,
-        wasOpenBeforeQuit: wasOpen
-      })
-    ) {
-      syncNotchStatus(true)
-    }
-  }, NOTCH_QUIT_ABORT_GRACE_MS)
-  // Why: unref'd so a committed quit is never delayed by this timer.
-  timer.unref?.()
-})
 
 // Why: clicking a notch row must work with the app window closed — that is the state the notch
 // exists for — so this reopens it rather than no-oping the way the pop-out relay does.
@@ -1518,6 +1544,7 @@ function openMainWindow(): BrowserWindow {
       providerSession,
       providerSessionOnly,
       promptInteractionKey,
+      restoredUnconfirmed,
       isReplay
     }) => {
       if (mainWindow?.isDestroyed()) {
@@ -1542,7 +1569,16 @@ function openMainWindow(): BrowserWindow {
       maybeAutoRenameBranchOnFirstWorkFromHook({ paneKey, tabId, worktreeId, payload, isReplay })
       const orchestration = runtime?.getAgentStatusOrchestrationContextForPaneKey(paneKey)
       const terminalHandle = runtime?.getAgentStatusTerminalHandleForPaneKey(paneKey)
-      mainWindow?.webContents.send('agentStatus:set', {
+      const suppressSyntheticCodexAutoApprovalTitle =
+        payload.agentType === 'codex' &&
+        (payload.state === 'waiting' || payload.state === 'blocked')
+          ? shouldSuppressCodexAutoApprovalSyntheticTitleFromHook({
+              agentType: payload.agentType,
+              state: payload.state,
+              launchConfig: runtime?.getAgentStatusLaunchConfigForPaneKey(paneKey, { launchToken })
+            })
+          : false
+      const statusEvent = {
         ...payload,
         paneKey,
         ...(launchToken ? { launchToken } : {}),
@@ -1554,20 +1590,16 @@ function openMainWindow(): BrowserWindow {
         stateStartedAt,
         ...(providerSession ? { providerSession } : {}),
         ...(promptInteractionKey ? { promptInteractionKey } : {}),
+        ...(restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
         ...(orchestration ? { orchestration } : {})
-      })
+      }
+      mainWindow?.webContents.send('agentStatus:set', statusEvent)
+      if (!suppressSyntheticCodexAutoApprovalTitle || isAskUserQuestionTool(payload.toolName)) {
+        getDashboardPopoutWindow()?.webContents.send('agentStatus:set', statusEvent)
+      }
       recordAgentStateCrashBreadcrumb(payload.agentType ?? 'unknown', payload.state)
       // Why: native OSC titles miss some idle/permission frames, so inject hook-derived ones to keep the renderer title tracker in sync.
       const profile = getSyntheticAgentTitleProfile(payload.agentType)
-      const suppressSyntheticCodexAutoApprovalTitle =
-        payload.agentType === 'codex' &&
-        (payload.state === 'waiting' || payload.state === 'blocked')
-          ? shouldSuppressCodexAutoApprovalSyntheticTitleFromHook({
-              agentType: payload.agentType,
-              state: payload.state,
-              launchConfig: runtime?.getAgentStatusLaunchConfigForPaneKey(paneKey, { launchToken })
-            })
-          : false
       if (
         profile &&
         shouldDriveSyntheticAgentTitleFromHook(payload.agentType, payload.state) &&
@@ -1582,6 +1614,7 @@ function openMainWindow(): BrowserWindow {
       return
     }
     mainWindow?.webContents.send('agentStatus:clear', clear)
+    getDashboardPopoutWindow()?.webContents.send('agentStatus:clear', clear)
   })
   setMigrationUnsupportedPtyListener((event) => {
     if (mainWindow?.isDestroyed()) {
@@ -1671,10 +1704,13 @@ function maybeApplyGpuFallbackForThisLaunch(): void {
     return
   }
   app.disableHardwareAcceleration()
-  app.commandLine.appendSwitch('disable-gpu')
+  const appliedSwitches = applyGpuFallbackCommandLineSwitches(app.commandLine, process.platform)
   gpuFallbackActiveThisLaunch = true
+  // Why: with no GPU child left, child-process-gone can't report a GPU fault, so
+  // name the applied switches in the trail any later crash report carries.
   recordCrashBreadcrumb('gpu_fallback_applied', {
-    crashesInWindow: marker.crashesInWindow
+    crashesInWindow: marker.crashesInWindow,
+    switches: appliedSwitches.join(',')
   })
 }
 
@@ -1694,23 +1730,6 @@ async function handleGpuChildCrash(reason: string, exitCode: number | null): Pro
     crashesInWindow: result.crashesInWindow
   })
   const engagedAt = Date.now()
-  const environment = getWindowsGpuFallbackEnvironment()
-  if (!environment) {
-    return
-  }
-  try {
-    writeGpuFallbackMarker(
-      app.getPath('userData'),
-      {
-        engagedAt,
-        crashesInWindow: result.crashesInWindow
-      },
-      environment
-    )
-  } catch (error) {
-    console.warn('[gpu-fallback] failed to persist marker:', error)
-    return
-  }
   const window = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined
   let restartDecision: GpuFallbackRestartDecision
   try {
@@ -1729,6 +1748,23 @@ async function handleGpuChildCrash(reason: string, exitCode: number | null): Pro
   }
   if (restartDecision !== 'restart') {
     recordDurableCrashBreadcrumb('gpu_fallback_restart_deferred', fallbackData)
+    return
+  }
+  const environment = getWindowsGpuFallbackEnvironment()
+  if (!environment) {
+    return
+  }
+  try {
+    writeGpuFallbackMarker(
+      app.getPath('userData'),
+      {
+        engagedAt,
+        crashesInWindow: result.crashesInWindow
+      },
+      environment
+    )
+  } catch (error) {
+    console.warn('[gpu-fallback] failed to persist marker:', error)
     return
   }
   isQuitting = true
@@ -2117,6 +2153,7 @@ void app.whenReady().then(async () => {
   electronApp.setAppUserModelId(devInstanceIdentity.appUserModelId)
   // Why: setName drives the macOS safeStorage Keychain item name; use the stable appName (not per-branch `name`) so dev branches share one key and don't re-prompt.
   app.setName(devInstanceIdentity.appName)
+  updateGpuAccelerationAboutPanel()
 
   // Why: managed WSL launchers live outside the Windows app bundle, so keep their launcher/bridge contract synced across app updates.
   managedWslCliReconciliationStatus = 'pending'
@@ -2188,7 +2225,11 @@ void app.whenReady().then(async () => {
   }
   try {
     // Why: Dock/Launchpad launches don't inherit shell proxy env vars, so apply the persisted proxy before any app-owned network fetchers run.
-    await applyElectronProxySettings(store.getSettings())
+    const proxyApplyResult = await applyElectronProxySettings(store.getSettings())
+    if (proxyApplyResult.source === 'invalid-settings') {
+      // Why (STA-3442): a silent DIRECT fallback made a dead configured proxy undiagnosable.
+      console.warn('[proxy] persisted proxy settings are invalid; using direct networking')
+    }
   } catch {
     console.warn('[proxy] Failed to apply network proxy settings')
   }
@@ -2212,7 +2253,9 @@ void app.whenReady().then(async () => {
         undefined
     }))
     for (const worktreeId of collectChangedProviderSessionWorktrees(ownedIdentities)) {
-      runtime?.notifyMobileSessionTabsChanged(worktreeId)
+      // Why not `notifyMobileSessionTabsChanged` alone: it re-emits at the unchanged
+      // `snapshotVersion`, which every client drops on its monotonic gate.
+      runtime?.touchMobileSessionTabsForWorktree(worktreeId, { immediate: true })
     }
   }
   const unsubscribeStatusChanges = agentHookServer.subscribeStatusChanges((statuses) => {
@@ -2224,9 +2267,32 @@ void app.whenReady().then(async () => {
       publishProviderSessionChanges(sessions)
     }
   )
+  // Why: hook rows are the only carrier of live agent state on a headless host, and
+  // nothing else republishes `session.tabs` when one changes — so a paired client
+  // would keep the pane's last projection until an unrelated PTY touch came along.
+  const hookStatusChangedSessionTabs = createHookStatusSessionTabsInvalidator()
+  const unsubscribeHookStatusSessionTabs = agentHookServer.subscribeEnrichedStatus((enriched) => {
+    if (hookStatusChangedSessionTabs(enriched)) {
+      runtime?.touchMobileSessionTabsForPane(enriched.paneKey, enriched.worktreeId ?? null)
+    }
+  })
+  // Teardown: agent exit, pane close, and the SSH transient-disconnect batch all land
+  // here. Without it the live state published above becomes a zombie question card.
+  const unsubscribeHookStatusClear = agentHookServer.subscribePaneStatusClear((clear) => {
+    const clearedPaneKeys =
+      'paneKey' in clear
+        ? [clear.paneKey]
+        : hookStatusChangedSessionTabs.forgetConnection(clear.connectionId)
+    for (const paneKey of clearedPaneKeys) {
+      hookStatusChangedSessionTabs.forgetPane(paneKey)
+      runtime?.touchMobileSessionTabsForPane(paneKey)
+    }
+  })
   unsubscribeAgentAwakeStatusChanges = () => {
     unsubscribeStatusChanges()
     unsubscribeProviderSessionChanges()
+    unsubscribeHookStatusSessionTabs()
+    unsubscribeHookStatusClear()
   }
   // Why: telemetry must init before any IPC handler/renderer can call track(); it's a no-op in dev and while TELEMETRY_ENABLED is false, so it's safe early.
   initTelemetry(store)
@@ -2702,6 +2768,13 @@ void app.whenReady().then(async () => {
   // Why: externally started serve-sim processes must stay independent — only Orca-managed/attached helpers belong to a workspace.
   const emulatorBridge = new EmulatorBridge()
   runtimeService.setEmulatorBridge(emulatorBridge)
+  // Why: worktree deletion renames the checkout aside and deletes it in the background, so a quit or
+  // crash mid-delete can leave the moved directory on disk.
+  void sweepStaleWorktreeTrash(
+    collectWorktreeTrashSweepRoots(store.getRepos(), store.getSettings())
+  ).catch((error) => {
+    console.warn('[worktrees] Failed to sweep leftover worktree directories:', error)
+  })
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
   if (codexRuntimeHome.isHostSystemDefaultRealHomeSelected()) {
     // Why: establish capability before managed-hook reconciliation so an
@@ -2852,6 +2925,9 @@ void app.whenReady().then(async () => {
     // Why: mobile pairing needs the stable pre-setName() path (getCanonicalUserDataPath), not a late app.getPath('userData') that drops paired devices across restarts.
     userDataPath: getCanonicalUserDataPath(),
     enableWebSocket: true,
+    // Why: STA-2370 — the desktop app binds the WS listener to loopback until the user pairs a device;
+    // `orca serve` is an explicit remote opt-in, and E2E keeps the wide bind its harness connects over.
+    exposeNetworkByDefault: Boolean(serveOptions) || isE2E,
     ...(isE2E ? { wsPort: e2eWsPort } : {}),
     ...(devWsPort !== undefined ? { wsPort: devWsPort } : {}),
     ...(serveOptions?.wsPort !== undefined
@@ -3003,6 +3079,9 @@ void app.whenReady().then(async () => {
         provisionRelay: (context, params) => relayService.provisionRelay(context, params)
       })
       relayService.start()
+      // Why: sleeping past relay-token expiry kills the broker with no retry
+      // timer; resume is the moment that state becomes recoverable.
+      powerMonitor.on('resume', () => desktopRelayService?.ensureLive())
     } catch (error) {
       console.warn(
         '[relay] Desktop relay startup unavailable:',
@@ -3036,8 +3115,6 @@ app.on('before-quit', () => {
   isQuitting = true
   desktopRelayService?.fenceAndCloseNow()
   runtimeRpc?.setMobileRelayPairingProvider(null)
-  unsubscribeSystemResumeBroadcast?.()
-  unsubscribeSystemResumeBroadcast = null
   unsubscribeAgentAwakeStatusChanges?.()
   unsubscribeAgentAwakeStatusChanges = null
   agentAwakeService?.dispose()
@@ -3046,9 +3123,25 @@ app.on('before-quit', () => {
   rateLimits?.stop()
 })
 
-// Why: will-quit fires twice — first pass runs sync cleanup + preventDefault to await checkpoint writes; second pass exits.
+// Why: will-quit fires twice — first pass preventDefaults and runs teardown; second pass exits.
 let daemonDisconnectDone = false
 app.on('will-quit', (e) => {
+  // Why return instead of re-running teardown: the second pass is Electron re-firing after
+  // our own app.quit(), so every step below already ran and every durable write already
+  // landed. Re-entering would start a fresh unawaited write that the exit then tears down.
+  if (daemonDisconnectDone) {
+    return
+  }
+  // Why preventDefault before any work: everything below must be free to await, and a
+  // synchronous durable write here parks the main thread — uninterruptibly, on a stalled
+  // network profile mount. The teardown deadline cannot rescue that, because its timer
+  // lives on the same thread it would need to bound (#9447 covers the wedged-transport
+  // half; this covers the blocked-syscall half).
+  if (!quitTeardownStartGate.tryStart(e)) {
+    return
+  }
+  unsubscribeSystemResumeBroadcast?.()
+  unsubscribeSystemResumeBroadcast = null
   // Why: renderer guards can still cancel before this committed phase; `log stream` must survive those vetoes.
   stopTccPromptNotice()
   const updateQuitInProgress = isQuittingForUpdate()
@@ -3061,7 +3154,7 @@ app.on('will-quit', (e) => {
   }
   // Why: before-quit can still be aborted by renderer beforeunload; only remove the Windows tray icon on the committed quit path.
   destroySystemTray()
-  // Why: stats.flush() must precede killAllPty() so still-running agents emit synthetic agent_stop events (killAllPty skips runtime.onPtyExit()).
+  // Why: stats.flushAsync() must precede killAllPty() so still-running agents emit synthetic agent_stop events (killAllPty skips runtime.onPtyExit()). It closes them out synchronously and only defers the write.
   starNag?.stop()
   automations?.stop()
   // Why: plugin hosts are forked children; dispose sends shutdown and
@@ -3078,16 +3171,19 @@ app.on('will-quit', (e) => {
   agentHookServer.stop()
   // Why: cancels relay restart/reinstall timers and kills wsl.exe children deterministically, not via stdio-pipe teardown.
   wslHookRelayManager.disposeAll()
-  stats?.flush()
+  const statsFlush = stats?.flushAsync() ?? Promise.resolve()
   // Why: agent-browser daemon processes would otherwise linger after quit, holding ports and stale session state on disk.
   runtime?.getAgentBrowserBridge()?.destroyAllSessions()
   // Why: headless offscreen browser windows are main-process owned; tear them down explicitly on quit.
   runtime?.getOffscreenBrowserBackend()?.destroyAll?.()
   browserManager.setBrowserGuestStateChangedListener(null)
   const emulatorShutdown = runtime?.getEmulatorBridge()?.destroyAllSessions() ?? Promise.resolve()
+  // Why immediately before store.flushAsync() with no await in between: beginSshShutdown() marks every
+  // active SSH lease detached in memory synchronously, and that flush is what persists it.
+  const sshShutdown = beginSshShutdown()
   killAllPty()
   const watcherShutdown = shutdownWatchersOnce()
-  store?.flush()
+  const storeFlush = store?.flushAsync() ?? Promise.resolve()
   // Why: usage-cache writes are queued off the main thread, so a quit right after setEnabled or a
   // scan completion would drop the final snapshot. Captured before any await; joins the barrier below.
   const usageCacheFlush = Promise.all([
@@ -3096,56 +3192,57 @@ app.on('will-quit', (e) => {
     openCodeUsage?.flush()
   ]).then(() => {})
 
-  // Why: preventDefault to await disconnectDaemon's async checkpoint writes (else data lost); guard prevents an infinite quit loop on the re-fired will-quit.
-  if (!daemonDisconnectDone) {
-    e.preventDefault()
-    // Why: capture pid/runtimeId synchronously (before any await) so a later teardown path can't null them out mid-chain.
-    const ownedPid = process.pid
-    const ownedRuntimeId = runtime?.getRuntimeId()
-    // Why: keep inside the !daemonDisconnectDone guard so the re-fired will-quit doesn't re-run RPC.stop()/metadata-clear against the updater's replacement process.
-    const rpcStopAndClear = runtimeRpc
-      ? runtimeRpc
-          .stop()
-          .then(() => awaitRuntimeFileWatcherUnsubscribes())
-          .then(() => {
-            if (ownedRuntimeId) {
-              // Why: must match the path the runtime server wrote metadata to (getCanonicalUserDataPath), not late app.getPath('userData').
-              clearRuntimeMetadataIfOwned(getCanonicalUserDataPath(), ownedPid, ownedRuntimeId)
-            }
-          })
-          .catch((error) => {
-            console.error('[runtime] Failed to stop local RPC transport:', error)
-          })
-      : Promise.resolve()
-    // Why: allSettled (not all) keeps fail-open — a daemon-disconnect rejection still quits instead of hanging.
-    // Why: telemetry flush folds in before app.quit() (bounded 2s); catch defensively so a flush failure can't cancel the quit chain.
-    // Why: normal quits keep the detached daemon for warm reattach, but a dead dev parent leaves the temp/dev profile ownerless.
-    const daemonTeardown = isDevParentShutdownRequested() ? shutdownDaemon() : disconnectDaemon()
-    // Why: a wedged transport (half-open post-sleep socket) can leave one
-    // member unsettled forever and block app.quit() until Force Quit (#9447).
-    settleTeardownWithinDeadline([
-      { name: 'daemon', promise: daemonTeardown },
-      { name: 'runtime-rpc', promise: rpcStopAndClear },
-      { name: 'watchers', promise: watcherShutdown },
-      { name: 'emulator', promise: emulatorShutdown },
-      { name: 'plugin-hosts', promise: pluginHostShutdown },
-      { name: 'usage-cache', promise: usageCacheFlush }
-    ])
-      .then((pendingTeardowns) => {
-        if (pendingTeardowns.length > 0) {
-          console.warn('[shutdown] Quit teardown deadline reached', { pendingTeardowns })
-        }
-      })
-      .then(() => shutdownTelemetry())
-      .then(() => shutdownObservability())
-      .catch(() => {
-        /* swallow — telemetry must never prevent app.quit() */
-      })
-      .then(() => {
-        daemonDisconnectDone = true
-        app.quit()
-      })
-  }
+  // Why: capture pid/runtimeId synchronously (before any await) so a later teardown path can't null them out mid-chain.
+  const ownedPid = process.pid
+  const ownedRuntimeId = runtime?.getRuntimeId()
+  const rpcStopAndClear = runtimeRpc
+    ? runtimeRpc
+        .stop()
+        .then(() => awaitRuntimeFileWatcherUnsubscribes())
+        .then(() => {
+          if (ownedRuntimeId) {
+            // Why: must match the path the runtime server wrote metadata to (getCanonicalUserDataPath), not late app.getPath('userData').
+            clearRuntimeMetadataIfOwned(getCanonicalUserDataPath(), ownedPid, ownedRuntimeId)
+          }
+        })
+        .catch((error) => {
+          console.error('[runtime] Failed to stop local RPC transport:', error)
+        })
+    : Promise.resolve()
+  // Why: allSettled (not all) keeps fail-open — a daemon-disconnect rejection still quits instead of hanging.
+  // Why: telemetry flush folds in before app.quit() (bounded 2s); catch defensively so a flush failure can't cancel the quit chain.
+  // Why: normal quits keep the detached daemon for warm reattach, but a dead dev parent leaves the temp/dev profile ownerless.
+  const daemonTeardown = isDevParentShutdownRequested() ? shutdownDaemon() : disconnectDaemon()
+  // Why: a wedged transport (half-open post-sleep socket) can leave one
+  // member unsettled forever and block app.quit() until Force Quit (#9447).
+  // Why stats/state join here: their writes are durable but not worth hanging the app for.
+  // Losing at most the last debounce interval beats a quit that never completes, and the
+  // temp+rename swap means a write cut short by the deadline leaves the old file intact.
+  settleTeardownWithinDeadline([
+    { name: 'daemon', promise: daemonTeardown },
+    { name: 'runtime-rpc', promise: rpcStopAndClear },
+    { name: 'watchers', promise: watcherShutdown },
+    { name: 'emulator', promise: emulatorShutdown },
+    { name: 'ssh', promise: sshShutdown },
+    { name: 'plugin-hosts', promise: pluginHostShutdown },
+    { name: 'usage-cache', promise: usageCacheFlush },
+    { name: 'stats', promise: statsFlush },
+    { name: 'state', promise: storeFlush }
+  ])
+    .then((pendingTeardowns) => {
+      if (pendingTeardowns.length > 0) {
+        console.warn('[shutdown] Quit teardown deadline reached', { pendingTeardowns })
+      }
+    })
+    .then(() => shutdownTelemetry())
+    .then(() => shutdownObservability())
+    .catch(() => {
+      /* swallow — telemetry must never prevent app.quit() */
+    })
+    .then(() => {
+      daemonDisconnectDone = true
+      app.quit()
+    })
 })
 
 app.on('window-all-closed', () => {
@@ -3160,4 +3257,44 @@ app.on('window-all-closed', () => {
   ) {
     app.quit()
   }
+})
+
+// Quit handling for the notch. The teardown must happen on `before-quit` so `window-all-closed`
+// can fire and complete a deferred Cmd+Q; the restore below covers a quit that gets vetoed.
+// Registered after the main quit handlers so those observe quit state first (and so the main
+// `before-quit` block stays the first in this file, which the startup-ordering test slices on).
+let notchQuitCommitted = false
+let notchRestorePending = false
+
+app.on('will-quit', () => {
+  notchQuitCommitted = true
+})
+
+app.on('before-quit', () => {
+  // Why captured in the closure rather than read from module scope at fire time: two vetoed
+  // quits inside the grace window would otherwise cancel each other. The second `before-quit`
+  // finds the window already destroyed, and a shared flag would then read false when the first
+  // timer fires — leaving the bar hidden for the session with the settings switch still on.
+  // A restore already pending also counts as "was open", so the second attempt re-arms.
+  const wasOpen = getNotchWindow() !== null || notchRestorePending
+  closeNotchWindowForQuit()
+  if (!wasOpen) {
+    return
+  }
+  notchRestorePending = true
+  const timer = setTimeout(() => {
+    notchRestorePending = false
+    if (
+      shouldRestoreNotchAfterQuitAttempt({
+        quitCommitted: notchQuitCommitted,
+        hasAppWindow: findAppWindow() !== null,
+        settingEnabled: store?.getSettings().showNotchStatus === true,
+        wasOpenBeforeQuit: wasOpen
+      })
+    ) {
+      syncNotchStatus(true)
+    }
+  }, NOTCH_QUIT_ABORT_GRACE_MS)
+  // Why: unref'd so a committed quit is never delayed by this timer.
+  timer.unref?.()
 })

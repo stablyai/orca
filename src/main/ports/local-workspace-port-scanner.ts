@@ -1,6 +1,5 @@
 /* eslint-disable max-lines -- Why: the platform-specific scan paths share parsing,
 attribution, and normalization rules that must stay in lockstep. */
-import { execFile } from 'node:child_process'
 import { readFile, readdir, readlink } from 'node:fs/promises'
 import path from 'node:path'
 import type {
@@ -11,14 +10,36 @@ import type {
 } from '../../shared/workspace-ports'
 import { getProcessOutputFields } from '../../shared/process-output-field-scanner'
 import { advertisedUrlWatcher, type AdvertisedUrlWatcher } from './advertised-url-watcher'
+import { isPortScanWorkerUnavailableError, runPortScanCommand } from './port-scan-command-client'
+import { PortScanCommandTimeoutError } from './port-scan-command-protocol'
 import { WorkspacePortScanTimeoutBackoff } from './workspace-port-scan-timeout-backoff'
 
-const COMMAND_TIMEOUT_MS = 4_000
+// Why (#11161): on an EDR-hooked host process creation alone can take seconds.
+// Past this, skip the scan's optional metadata commands for one cycle so a scan
+// costs roughly one stall instead of three.
+const SLOW_SPAWN_SKIP_METADATA_MS = 2_000
 const MAX_PORTS = 200
 const HTTP_PORTS = new Set([80, 3000, 3001, 4200, 5000, 5173, 5174, 8000, 8080, 8888])
 const HTTPS_PORTS = new Set([443, 8443])
 
 const commandTimeoutBackoff = new WorkspacePortScanTimeoutBackoff()
+let loggedWorkerUnavailable = false
+// Why (#11161): a hooked host stalls every spawn, so gating only on the current
+// scan would drop metadata forever. Never skip twice running, so attribution —
+// and the Stop action and advertised-URL matching that ride on it — recovers on
+// the next tick.
+let skippedMetadataOnLastScan = false
+// Why (#11161): a skipped cycle would otherwise report every listener as
+// external, so the panel flip-flops and the Stop action loses its owner. Carry
+// the previous cycle's metadata forward, keyed tightly enough that a recycled
+// pid cannot inherit it.
+let lastListenerMetadata = new Map<string, ProcessMetadata>()
+
+export type WorkspacePortScanOptions = {
+  /** Set by attribution-dependent callers (Stop, the localhost-label allowlist)
+   *  that must never trade owner metadata for scan latency. */
+  requireMetadata?: boolean
+}
 
 type RawListeningPort = {
   host: string
@@ -40,9 +61,16 @@ type NormalizedWorkspacePortProbe = {
   normalizedPath: string
 }
 
+type PlatformListeningPortScan = {
+  ports: RawListeningPort[]
+  /** False when a stalled spawn made the scan skip its cwd/command-line probes. */
+  metadataAvailable: boolean
+}
+
 export async function scanWorkspacePorts(
   worktrees: WorkspacePortProbe[],
-  urlWatcher: Pick<AdvertisedUrlWatcher, 'lookup' | 'reconcileScan'> = advertisedUrlWatcher
+  urlWatcher: Pick<AdvertisedUrlWatcher, 'lookup' | 'reconcileScan'> = advertisedUrlWatcher,
+  options: WorkspacePortScanOptions = {}
 ): Promise<WorkspacePortScanResult> {
   const cooldown = commandTimeoutBackoff.snapshot()
   if (cooldown.isCoolingDown) {
@@ -54,10 +82,15 @@ export async function scanWorkspacePorts(
   }
 
   try {
-    const rawPorts = await scanPlatformListeningPorts()
+    const { ports: rawPorts, metadataAvailable } = await scanPlatformListeningPorts(options)
     commandTimeoutBackoff.recordSuccess()
     const normalizedWorktrees = normalizeWorkspacePortProbes(worktrees)
-    reconcileAdvertisedUrls(rawPorts, normalizedWorktrees, urlWatcher)
+    // Why (#11161): without cwd/command-line every port looks unattributed, and
+    // reconciling that would read as "the listener vanished" and evict cached
+    // advertised URLs that only live PTY output can ever restore.
+    if (metadataAvailable) {
+      reconcileAdvertisedUrls(rawPorts, normalizedWorktrees, urlWatcher)
+    }
     const ports = rawPorts
       .map((port) => enrichPort(port, normalizedWorktrees, urlWatcher))
       .sort(compareWorkspacePorts)
@@ -67,13 +100,66 @@ export async function scanWorkspacePorts(
     if (isCommandTimeoutError(error)) {
       commandTimeoutBackoff.recordTimeout()
     }
-    console.warn('[workspace-ports] scan failed', error)
+    warnScanFailure(error)
     return makeUnavailableScan(`Port scanning is unavailable on ${process.platform}.`)
   }
 }
 
 export function resetWorkspacePortScanTimeoutBackoffForTests(): void {
   commandTimeoutBackoff.reset()
+  loggedWorkerUnavailable = false
+  skippedMetadataOnLastScan = false
+  lastListenerMetadata = new Map()
+}
+
+function shouldSkipMetadataCommands(spawnMs: number, opts: WorkspacePortScanOptions): boolean {
+  if (opts.requireMetadata) {
+    // Leave the skip parity alone: it belongs to the background scan cadence,
+    // and a one-shot user action must not shift which tick degrades.
+    return false
+  }
+  const skip = spawnMs > SLOW_SPAWN_SKIP_METADATA_MS && !skippedMetadataOnLastScan
+  skippedMetadataOnLastScan = skip
+  return skip
+}
+
+/** Identity tight enough that a recycled pid cannot inherit stale metadata. */
+function listenerMetadataKey(port: RawListeningPort): string {
+  return `${port.pid ?? 'unknown'}:${port.host}:${port.port}`
+}
+
+function rememberListenerMetadata(ports: readonly RawListeningPort[]): void {
+  lastListenerMetadata = new Map(
+    ports.map((port) => [
+      listenerMetadataKey(port),
+      { processName: port.processName, commandLine: port.commandLine, cwd: port.cwd }
+    ])
+  )
+}
+
+function recallListenerMetadata(port: RawListeningPort): RawListeningPort {
+  const remembered = lastListenerMetadata.get(listenerMetadataKey(port))
+  if (!remembered) {
+    return port
+  }
+  return {
+    ...port,
+    processName: port.processName ?? remembered.processName,
+    commandLine: port.commandLine ?? remembered.commandLine,
+    cwd: port.cwd ?? remembered.cwd
+  }
+}
+
+// Why: a mispackaged probe worker fails identically forever, so logging it on
+// every 30s scan tick is pure noise.
+function warnScanFailure(error: unknown): void {
+  if (isPortScanWorkerUnavailableError(error)) {
+    if (loggedWorkerUnavailable) {
+      return
+    }
+    loggedWorkerUnavailable = true
+  }
+  console.warn('[workspace-ports] scan failed', error)
 }
 
 function makeUnavailableScan(reason: string): WorkspacePortScanResult {
@@ -194,38 +280,73 @@ export function parseProcNetTcp(content: string): { host: string; port: number; 
   return results
 }
 
-async function scanPlatformListeningPorts(): Promise<RawListeningPort[]> {
+async function scanPlatformListeningPorts(
+  options: WorkspacePortScanOptions
+): Promise<PlatformListeningPortScan> {
+  const scan = await dispatchPlatformListeningPortScan(options)
+  if (scan.metadataAvailable) {
+    rememberListenerMetadata(scan.ports)
+    return scan
+  }
+  return { ...scan, ports: scan.ports.map(recallListenerMetadata) }
+}
+
+async function dispatchPlatformListeningPortScan(
+  options: WorkspacePortScanOptions
+): Promise<PlatformListeningPortScan> {
   if (process.platform === 'linux') {
     return scanLinuxProcPorts()
   }
   if (process.platform === 'darwin') {
-    return scanDarwinLsofPorts()
+    return scanDarwinLsofPorts(options)
   }
   if (process.platform === 'win32') {
-    return scanWindowsNetstatPorts()
+    return scanWindowsNetstatPorts(options)
   }
   throw new Error(`Port scanning is not supported on ${process.platform}`)
 }
 
-async function scanDarwinLsofPorts(): Promise<RawListeningPort[]> {
-  const { stdout } = await runCommand('lsof', ['-nP', '-iTCP', '-sTCP:LISTEN', '-F', 'pcn'])
+async function scanDarwinLsofPorts(
+  options: WorkspacePortScanOptions
+): Promise<PlatformListeningPortScan> {
+  const { stdout, spawnMs } = await runPortScanCommand('lsof', [
+    '-nP',
+    '-iTCP',
+    '-sTCP:LISTEN',
+    '-F',
+    'pcn'
+  ])
   const ports = parseLsofListeningOutput(stdout)
+  if (shouldSkipMetadataCommands(spawnMs, options)) {
+    return { ports, metadataAvailable: false }
+  }
   const metadata = await loadDarwinProcessMetadata(
     new Set(ports.flatMap((p) => (p.pid ? [p.pid] : [])))
   )
-  return ports.map((port) => ({ ...metadata.get(port.pid ?? -1), ...port }))
+  return {
+    ports: ports.map((port) => ({ ...metadata.get(port.pid ?? -1), ...port })),
+    metadataAvailable: true
+  }
 }
 
-async function scanWindowsNetstatPorts(): Promise<RawListeningPort[]> {
-  const { stdout } = await runCommand('netstat', ['-ano', '-p', 'tcp'])
+async function scanWindowsNetstatPorts(
+  options: WorkspacePortScanOptions
+): Promise<PlatformListeningPortScan> {
+  const { stdout, spawnMs } = await runPortScanCommand('netstat', ['-ano', '-p', 'tcp'])
   const ports = parseNetstatListeningOutput(stdout)
+  if (shouldSkipMetadataCommands(spawnMs, options)) {
+    return { ports, metadataAvailable: false }
+  }
   const metadata = await loadWindowsProcessMetadata(
     new Set(ports.flatMap((p) => (p.pid ? [p.pid] : [])))
   )
-  return ports.map((port) => ({ ...metadata.get(port.pid ?? -1), ...port }))
+  return {
+    ports: ports.map((port) => ({ ...metadata.get(port.pid ?? -1), ...port })),
+    metadataAvailable: true
+  }
 }
 
-async function scanLinuxProcPorts(): Promise<RawListeningPort[]> {
+async function scanLinuxProcPorts(): Promise<PlatformListeningPortScan> {
   const [tcp4, tcp6] = await Promise.all([
     readProcNet('/proc/net/tcp'),
     readProcNet('/proc/net/tcp6')
@@ -248,7 +369,7 @@ async function scanLinuxProcPorts(): Promise<RawListeningPort[]> {
     })
   }
 
-  return dedupeRawPorts(rawPorts)
+  return { ports: dedupeRawPorts(rawPorts), metadataAvailable: true }
 }
 
 async function readProcNet(
@@ -321,10 +442,24 @@ async function loadDarwinProcessMetadata(pids: Set<number>): Promise<Map<number,
     return result
   }
 
-  const [cwdOutput, commandOutput] = await Promise.all([
-    runCommand('lsof', ['-a', '-p', pidList, '-d', 'cwd', '-Fn']).catch(() => null),
-    runCommand('ps', ['-p', pidList, '-o', 'pid=', '-o', 'command=']).catch(() => null)
-  ])
+  // Why (#11161): sequential, not Promise.all — the probe worker dispatches one
+  // command at a time, so issuing both at once would only queue the second.
+  const cwdOutput = await runPortScanCommand('lsof', [
+    '-a',
+    '-p',
+    pidList,
+    '-d',
+    'cwd',
+    '-Fn'
+  ]).catch(() => null)
+  const commandOutput = await runPortScanCommand('ps', [
+    '-p',
+    pidList,
+    '-o',
+    'pid=',
+    '-o',
+    'command='
+  ]).catch(() => null)
 
   let currentPid: number | null = null
   for (const line of cwdOutput?.stdout.split('\n') ?? []) {
@@ -360,7 +495,7 @@ async function loadWindowsProcessMetadata(
       .filter(Number.isFinite)
       .map((pid) => `ProcessId=${pid}`)
       .join(' OR ')
-    const { stdout } = await runCommand('powershell.exe', [
+    const { stdout } = await runPortScanCommand('powershell.exe', [
       '-NoProfile',
       '-Command',
       `Get-CimInstance Win32_Process -Filter "${pidFilter}" | Select-Object ProcessId,Name,CommandLine | ConvertTo-Json -Compress`
@@ -382,62 +517,8 @@ async function loadWindowsProcessMetadata(
   return result
 }
 
-async function runCommand(command: string, args: string[]): Promise<{ stdout: string }> {
-  return await new Promise((resolve, reject) => {
-    let settled = false
-    let child: ReturnType<typeof execFile> | undefined
-    const timer = setTimeout(() => {
-      if (settled) {
-        return
-      }
-      settled = true
-      child?.kill()
-      reject(new CommandTimeoutError(command, COMMAND_TIMEOUT_MS))
-    }, COMMAND_TIMEOUT_MS)
-
-    const settle = (callback: () => void): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      clearTimeout(timer)
-      callback()
-    }
-
-    // Why: Node's execFile timeout only signals the child; if the callback
-    // never arrives, the workspace port scan would otherwise hang forever.
-    try {
-      child = execFile(
-        command,
-        args,
-        {
-          timeout: COMMAND_TIMEOUT_MS,
-          maxBuffer: 2 * 1024 * 1024,
-          windowsHide: true
-        },
-        (error, stdout) => {
-          if (error) {
-            settle(() => reject(error))
-            return
-          }
-          settle(() => resolve({ stdout: String(stdout) }))
-        }
-      )
-    } catch (error) {
-      settle(() => reject(error))
-    }
-  })
-}
-
-class CommandTimeoutError extends Error {
-  constructor(command: string, timeoutMs: number) {
-    super(`${command} timed out after ${timeoutMs}ms`)
-    this.name = 'CommandTimeoutError'
-  }
-}
-
 function isCommandTimeoutError(error: unknown): boolean {
-  return error instanceof CommandTimeoutError
+  return error instanceof PortScanCommandTimeoutError
 }
 
 async function readTextIfAvailable(filePath: string): Promise<string | undefined> {

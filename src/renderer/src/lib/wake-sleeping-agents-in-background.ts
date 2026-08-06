@@ -152,7 +152,9 @@ function getCanonicalPassiveWakeRecords(
  *  (b) background-mount the tabs holding passive hibernated records that are
  *      NOT currently mounted (post-restart / evicted) so they take the
  *      fresh-connect cold-restore path. The mount is targeted by tabId so one
- *      sleeping pane does not permanently mount every saved tab;
+ *      sleeping pane does not permanently mount every saved tab, and skips
+ *      `restoreOnTabOpenOnly` records so an explicit workspace sleep is not
+ *      undone wholesale by a phone opening the workspace;
  *  (c) resume the non-passive record classes (manual sleep of a still-working
  *      agent, `origin: 'quit'`) with navigation suppressed, skipping the
  *      claims from (a);
@@ -184,7 +186,14 @@ export function wakeSleepingAgentsForWorktreeInBackground(worktreeId: string): v
   // recovered by step (c) into a fresh tab, mounted in step (d).
   const passiveTabIds = new Set<string>()
   let hasUntargetablePassiveRecord = false
-  for (const record of getCanonicalPassiveWakeRecords(worktreeRecords, wokenClaimKeys)) {
+  // Why: a workspace the user explicitly slept must not respawn every finished agent because a
+  // phone opened it. Those panes cold-restore `--resume` when their own tab is opened, which is
+  // also what the desktop does (#11598). Filtering before canonicalization keeps a lazy record
+  // from winning — and deleting — the claim of a hibernated record that does need mounting.
+  const backgroundWakeRecords = worktreeRecords.filter(
+    (record) => record.restoreOnTabOpenOnly !== true
+  )
+  for (const record of getCanonicalPassiveWakeRecords(backgroundWakeRecords, wokenClaimKeys)) {
     const tabId = getSleepingRecordTabId(record)
     if (tabId) {
       passiveTabIds.add(tabId)

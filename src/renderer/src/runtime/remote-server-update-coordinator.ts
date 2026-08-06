@@ -1,5 +1,6 @@
 import {
   compareAppVersions,
+  hasReachedAppVersion,
   isPerfPrereleaseAppVersion,
   isPrereleaseAppVersion,
   isValidAppVersion
@@ -13,6 +14,7 @@ import type {
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import type { UpdateCheckOptions } from '../../../shared/types'
+import { waitForReplacementRuntime } from './remote-server-restart-wait'
 import { remoteServerUpdateErrorMessage } from './remote-server-update-errors'
 import { pollRemoteServerUpdater } from './remote-server-updater-polling'
 
@@ -45,7 +47,10 @@ export type RemoteServerUpdateEntry = {
 
 export type RemoteServerUpdateTransport = {
   getRuntimeStatus: (environmentId: string, timeoutMs?: number) => Promise<RuntimeStatus>
-  getUpdaterStatus: (environmentId: string) => Promise<RemoteServerUpdaterSnapshot>
+  getUpdaterStatus: (
+    environmentId: string,
+    timeoutMs?: number
+  ) => Promise<RemoteServerUpdaterSnapshot>
   check: (
     environmentId: string,
     options: UpdateCheckOptions
@@ -213,12 +218,7 @@ export async function runRemoteServerUpdate(
     if (available.status.state === 'not-available') {
       const status = await transport.getRuntimeStatus(entry.environmentId, 10_000)
       const currentVersion = status.appVersion?.trim() ?? ''
-      const reachedTarget =
-        entry.targetVersion !== null &&
-        isValidAppVersion(currentVersion) &&
-        isValidAppVersion(entry.targetVersion) &&
-        compareAppVersions(currentVersion, entry.targetVersion) >= 0
-      if (!reachedTarget) {
+      if (!hasReachedAppVersion(currentVersion, entry.targetVersion)) {
         throw new Error('remote_update_requested_version_unavailable')
       }
       next = {
@@ -267,34 +267,22 @@ export async function runRemoteServerUpdate(
     }
     onProgress(next)
 
-    const now = transport.now ?? Date.now
-    const reconnectDeadline = now() + timing.reconnectTimeoutMs
-    while (now() < reconnectDeadline) {
-      try {
-        const status = await transport.getRuntimeStatus(entry.environmentId, 10_000)
-        const version = status.appVersion?.trim() ?? ''
-        const reachedTarget =
-          isValidAppVersion(version) &&
-          isValidAppVersion(install.targetVersion) &&
-          compareAppVersions(version, install.targetVersion) >= 0
-        if (status.runtimeId !== install.runtimeId && reachedTarget) {
-          next = {
-            ...next,
-            phase: 'updated',
-            currentVersion: version,
-            runtimeId: status.runtimeId,
-            liveTabCount: status.liveTabCount,
-            liveLeafCount: status.liveLeafCount
-          }
-          onProgress(next)
-          return next
-        }
-      } catch {
-        // A refused connection is expected while the server process is being replaced.
-      }
-      await transport.wait(timing.pollIntervalMs)
+    const replacement = await waitForReplacementRuntime(
+      entry.environmentId,
+      transport,
+      install,
+      timing
+    )
+    next = {
+      ...next,
+      phase: 'updated',
+      currentVersion: replacement.appVersion?.trim() ?? '',
+      runtimeId: replacement.runtimeId,
+      liveTabCount: replacement.liveTabCount,
+      liveLeafCount: replacement.liveLeafCount
     }
-    throw new Error('remote_update_reconnect_timeout')
+    onProgress(next)
+    return next
   } catch (error) {
     next = {
       ...next,

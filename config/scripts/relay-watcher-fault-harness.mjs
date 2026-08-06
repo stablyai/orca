@@ -1,5 +1,6 @@
 import { build } from 'esbuild'
 import { spawn } from 'node:child_process'
+import { randomBytes } from 'node:crypto'
 import { createRequire } from 'node:module'
 import { existsSync } from 'node:fs'
 import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
@@ -8,6 +9,12 @@ import { dirname, join, resolve } from 'node:path'
 
 const WAIT_TIMEOUT_MS = 20_000
 const require = createRequire(import.meta.url)
+
+// Why: endpoint credentials are 32–256 base64url chars; openClient requires an authenticated
+// transport, and #12746 admits pty.data only after a consumer grant.
+function writeEndpointCredential(path) {
+  return writeFile(path, randomBytes(32).toString('base64url'), 'utf8')
+}
 
 function withTimeout(promise, label, stderr) {
   return new Promise((resolvePromise, rejectPromise) => {
@@ -68,14 +75,59 @@ async function loadProtocol(bundleDir) {
   return require(outfile)
 }
 
+function attachProcessStreams(proc) {
+  let stderr = ''
+  proc.stderr.on('data', (chunk) => {
+    stderr = `${stderr}${String(chunk)}`.slice(-8_000)
+  })
+  return {
+    stderr: () => stderr
+  }
+}
+
+function waitForStdoutSentinel(proc, protocol, stderr) {
+  let stdoutBuffer = Buffer.alloc(0)
+  return withTimeout(
+    new Promise((resolvePromise, rejectPromise) => {
+      let settled = false
+      const onData = (chunk) => {
+        stdoutBuffer = Buffer.concat([stdoutBuffer, chunk])
+        const sentinel = Buffer.from(protocol.RELAY_SENTINEL)
+        const index = stdoutBuffer.indexOf(sentinel)
+        if (index < 0) {
+          return
+        }
+        settled = true
+        proc.stdout.off('data', onData)
+        proc.off('exit', onExit)
+        resolvePromise(stdoutBuffer.subarray(index + sentinel.length))
+      }
+      const onExit = (code, signal) => {
+        if (settled) {
+          return
+        }
+        settled = true
+        proc.stdout.off('data', onData)
+        rejectPromise(
+          new Error(`process exited before sentinel (code=${code}, signal=${signal})\n${stderr()}`)
+        )
+      }
+      proc.stdout.on('data', onData)
+      proc.once('exit', onExit)
+    }),
+    'relay sentinel',
+    stderr
+  )
+}
+
 function createRelayClient(entryPath, args, env, protocol) {
   const proc = spawn(process.execPath, [entryPath, ...args], {
     cwd: dirname(entryPath),
     env,
     stdio: ['pipe', 'pipe', 'pipe']
   })
+  const streams = attachProcessStreams(proc)
   const messages = []
-  let stderr = ''
   let nextSequence = 1
   let stdoutBuffer = Buffer.alloc(0)
   let ready = false
@@ -87,9 +139,6 @@ function createRelayClient(entryPath, args, env, protocol) {
     if (frame.type === protocol.MessageType.Regular) {
       messages.push(protocol.parseJsonRpcMessage(frame.payload))
     }
-  })
-  proc.stderr.on('data', (chunk) => {
-    stderr = `${stderr}${String(chunk)}`.slice(-8_000)
   })
   proc.stdout.on('data', (chunk) => {
     if (ready) {
@@ -111,11 +160,7 @@ function createRelayClient(entryPath, args, env, protocol) {
   })
 
   const waitForMessage = (startIndex, predicate, label) =>
-    pollUntil(
-      () => messages.slice(startIndex).find(predicate),
-      label,
-      () => stderr
-    )
+    pollUntil(() => messages.slice(startIndex).find(predicate), label, streams.stderr)
 
   const request = async (method, params = {}) => {
     const id = nextSequence++
@@ -141,7 +186,7 @@ function createRelayClient(entryPath, args, env, protocol) {
     proc,
     request,
     notify,
-    sentinelReceived: withTimeout(sentinelReceived, 'relay sentinel', () => stderr),
+    sentinelReceived: withTimeout(sentinelReceived, 'relay sentinel', streams.stderr),
     messageCount: () => messages.length,
     waitForNotification: (startIndex, method, predicate = () => true) =>
       waitForMessage(
@@ -149,7 +194,20 @@ function createRelayClient(entryPath, args, env, protocol) {
         (message) => message.method === method && predicate(message.params ?? {}),
         `${method} notification`
       ),
-    stderr: () => stderr
+    stderr: streams.stderr
+  }
+}
+
+async function stopProcess(proc, stderr, label) {
+  if (!proc || proc.exitCode !== null || proc.signalCode !== null) {
+    return
+  }
+  proc.kill('SIGTERM')
+  try {
+    await withTimeout(waitForExit(proc), `${label} shutdown`, stderr)
+  } catch {
+    proc.kill('SIGKILL')
+    await withTimeout(waitForExit(proc), `forced ${label} shutdown`, stderr)
   }
 }
 
@@ -184,23 +242,63 @@ async function main() {
   }
 
   let tempRoot
+  let daemon
+  let daemonStreams
   let relay
   try {
     tempRoot = await mkdtemp(join(tmpdir(), 'orca-relay-watcher-fault-'))
     const watchRoot = await realpath(tempRoot)
     const pidFile = join(tempRoot, 'watcher.pid')
+    const credentialFile = join(tempRoot, 'endpoint.credential')
     const protocol = await loadProtocol(tempRoot)
     const socketPath =
       process.platform === 'win32'
         ? `\\\\.\\pipe\\orca-relay-watcher-fault-${process.pid}-${Date.now()}`
         : join(tempRoot, 'relay.sock')
+    await writeEndpointCredential(credentialFile)
+
+    // Why detached + --connect: the daemon primary stdio is unproved, so it cannot open a consumer
+    // session; only an endpoint-credential socket client is admitted for pty.data after #12746.
+    daemon = spawn(
+      process.execPath,
+      [
+        relayEntry,
+        '--detached',
+        '--grace-time',
+        '0',
+        '--sock-path',
+        socketPath,
+        '--endpoint-dir',
+        join(tempRoot, 'agent-hooks'),
+        '--credential-file',
+        credentialFile
+      ],
+      {
+        cwd: dirname(relayEntry),
+        env: { ...process.env, ORCA_WATCHER_CHILD_PID_FILE: pidFile },
+        stdio: ['ignore', 'pipe', 'pipe']
+      }
+    )
+    daemonStreams = attachProcessStreams(daemon)
+    await waitForStdoutSentinel(daemon, protocol, daemonStreams.stderr)
+
     relay = createRelayClient(
       relayEntry,
-      ['--sock-path', socketPath, '--endpoint-dir', join(tempRoot, 'agent-hooks')],
-      { ...process.env, ORCA_WATCHER_CHILD_PID_FILE: pidFile },
+      ['--connect', '--sock-path', socketPath, '--credential-file', credentialFile],
+      process.env,
       protocol
     )
     await relay.sentinelReceived
+
+    // Why no outputFlowControl: legacy owner grant admits plain pty.data without delivery tokens.
+    const grant = await relay.request('pty.openClient', {
+      protocolVersion: 1,
+      clientInstanceId: `relay-watcher-fault-${process.pid}`,
+      requestedRole: 'session-owner'
+    })
+    if (grant?.role !== 'session-owner') {
+      throw new Error(`expected session-owner grant, got ${JSON.stringify(grant)}`)
+    }
 
     const spawned = await relay.request('pty.spawn', { cols: 80, rows: 24, cwd: watchRoot })
     const beforePtyMarker = `ORCA_PTY_BEFORE_${Date.now()}`
@@ -213,7 +311,11 @@ async function main() {
     )
 
     await relay.request('fs.watch', { rootPath: watchRoot })
-    const firstWatcherPid = await waitForWatcherPid(pidFile, undefined, relay.stderr)
+    const firstWatcherPid = await waitForWatcherPid(
+      pidFile,
+      undefined,
+      () => `${daemonStreams.stderr()}\n${relay.stderr()}`
+    )
     const beforePath = join(watchRoot, 'before.txt')
     startIndex = relay.messageCount()
     await writeFile(beforePath, 'before')
@@ -224,7 +326,11 @@ async function main() {
     const faultSignal = process.platform === 'win32' ? 'SIGTERM' : 'SIGSEGV'
     startIndex = relay.messageCount()
     process.kill(firstWatcherPid, faultSignal)
-    const replacementWatcherPid = await waitForWatcherPid(pidFile, firstWatcherPid, relay.stderr)
+    const replacementWatcherPid = await waitForWatcherPid(
+      pidFile,
+      firstWatcherPid,
+      () => `${daemonStreams.stderr()}\n${relay.stderr()}`
+    )
     await relay.waitForNotification(startIndex, 'fs.changed', (params) =>
       Array.isArray(params.events)
         ? params.events.some(
@@ -234,7 +340,7 @@ async function main() {
     )
 
     const status = await relay.request('relay.status')
-    if (status.pid !== relay.proc.pid) {
+    if (status.pid !== daemon.pid) {
       throw new Error('relay.status did not come from the original surviving relay process')
     }
     const afterPtyMarker = `ORCA_PTY_AFTER_${Date.now()}`
@@ -257,7 +363,7 @@ async function main() {
     await relay.request('pty.shutdown', { id: spawned.id })
     console.log(
       JSON.stringify({
-        relayPid: relay.proc.pid,
+        relayPid: daemon.pid,
         killedWatcherPid: firstWatcherPid,
         replacementWatcherPid,
         faultSignal,
@@ -268,15 +374,8 @@ async function main() {
       })
     )
   } finally {
-    if (relay && relay.proc.exitCode === null && relay.proc.signalCode === null) {
-      relay.proc.kill('SIGTERM')
-      try {
-        await withTimeout(waitForExit(relay.proc), 'relay shutdown', relay.stderr)
-      } catch {
-        relay.proc.kill('SIGKILL')
-        await withTimeout(waitForExit(relay.proc), 'forced relay shutdown', relay.stderr)
-      }
-    }
+    await stopProcess(relay?.proc, relay?.stderr ?? (() => ''), 'connect bridge')
+    await stopProcess(daemon, daemonStreams?.stderr ?? (() => ''), 'relay daemon')
     if (tempRoot) {
       await rm(tempRoot, { recursive: true, force: true })
     }
