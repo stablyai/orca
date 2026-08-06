@@ -551,10 +551,13 @@ describe('resumeAiVaultSessionInTerminal', () => {
       'terminal.send',
       'terminal.rename'
     ])
-    expect(sendRequest).not.toHaveBeenCalledWith(
-      'terminal.ensureAgentSession',
-      expect.anything(),
-      expect.anything()
+    expect(sendRequest).toHaveBeenNthCalledWith(
+      2,
+      'terminal.send',
+      expect.objectContaining({
+        text: "cd '/home/ada/repo' && CODEX_HOME='/home/ada/.codex' codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-wsl-1'"
+      }),
+      { timeoutMs: RESUME_RPC_TIMEOUT_MS }
     )
   })
 
