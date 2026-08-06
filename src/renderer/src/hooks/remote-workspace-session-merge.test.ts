@@ -135,6 +135,19 @@ describe('mergeDirectSshRemoteWorkspaceSession', () => {
     expect(merged.activeTabId).toBe('tab-1')
   })
 
+  it('narrows the replace scope itself when the caller hands it an un-narrowed set', () => {
+    const localTabs = [tab('tab-1', WT)]
+    const merged = mergeDirectSshRemoteWorkspaceSession(
+      session({ tabsByWorktree: { [WT]: localTabs } }),
+      session({ tabsByWorktree: { [WT]: [] } }),
+      new Set([WT]),
+      { [WT]: localTabs },
+      new Set()
+    )
+
+    expect(merged.tabsByWorktree[WT]).toEqual(localTabs)
+  })
+
   it('still replaces a worktree when the remote snapshot has tabs for it', () => {
     const localTabs = [tab('tab-old', WT)]
     const remoteTabs = [tab('tab-new', WT, { generation: 2 })]

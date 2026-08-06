@@ -16,14 +16,10 @@ function preserveNewerLocalTerminalFields(remote: TerminalTab, local: TerminalTa
 }
 
 // Why a worktree with local tabs but no remote tabs leaves the replace scope: the snapshot carries
-// no tombstones, so "no tabs" from the remote is indistinguishable from a snapshot that regressed
-// or was poisoned by an earlier export bug — and honoring it deletes terminal surfaces the user can
-// see, unrecoverably. Keeping local state for that worktree is always recoverable: the next push
-// re-exports it, and a genuinely emptied worktree converges once the remote reports any tab for it.
-//
-// The caller must pass the narrowed set both to the merge and to every hydration step keyed by
-// replace scope (replaceWorkspaceKeys) — a protected worktree left in that scope still gets its live
-// tabs reset and swept into PTY reconnect by the hydration pipeline.
+// no tombstones, so "no tabs" cannot be told apart from a regressed or poisoned one, and honoring it
+// deletes live terminal surfaces unrecoverably. Resurrected tabs are visible and closable. See #12447.
+// Why callers need the narrowed set as a value: every hydration step keyed by replace scope
+// (replaceWorkspaceKeys) resets and reconnect-sweeps the worktrees left in it.
 export function narrowDirectSshReplaceWorktreeIds(
   requestedReplaceWorktreeIds: ReadonlySet<string>,
   current: WorkspaceSessionState,
@@ -41,12 +37,20 @@ export function narrowDirectSshReplaceWorktreeIds(
 export function mergeDirectSshRemoteWorkspaceSession(
   current: WorkspaceSessionState,
   remote: WorkspaceSessionState,
-  replaceWorktreeIds: ReadonlySet<string>,
+  requestedReplaceWorktreeIds: ReadonlySet<string>,
   liveTabsByWorktree: AppState['tabsByWorktree'],
   preserveLocalTerminalTabIds: ReadonlySet<string>
 ): WorkspaceSessionState {
+  // Why the merge narrows again: this is a data-loss boundary, and narrowing is idempotent, so a
+  // caller that already narrowed pays nothing while one that did not still cannot delete tabs here.
+  const replaceWorktreeIds = narrowDirectSshReplaceWorktreeIds(
+    requestedReplaceWorktreeIds,
+    current,
+    remote,
+    liveTabsByWorktree
+  )
   // Why remote records are filtered to the replace scope: the remote session may still carry entries
-  // for worktrees the caller narrowed out (e.g. an empty tab list), and spreading those over current
+  // for worktrees the narrowing removed (e.g. an empty tab list), and spreading those over current
   // would delete the very state the narrowing protects.
   const inReplaceScope = (worktreeId: string): boolean => replaceWorktreeIds.has(worktreeId)
   const scopedRemoteRecord = <T>(record: Record<string, T> | undefined): [string, T][] =>
