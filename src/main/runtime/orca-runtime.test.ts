@@ -33194,6 +33194,64 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  it('leaves rows a live filtered waiter reserved out of the pushed batch', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new InMemoryOrchestrationMessages()
+      const write = vi.fn().mockReturnValue(true)
+      setInMemoryOrchestrationMessages(runtime, db)
+      runtime.setPtyController({
+        write,
+        kill: vi.fn(),
+        getForegroundProcess: async () => null
+      })
+      syncSinglePty(runtime)
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+      runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
+      await runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle' })
+      write.mockClear()
+
+      // Why: the push reads every pending row, not just the one that woke it. A
+      // `status` notify is unclaimed and pushes, but the worker_done row landing
+      // in the same drain belongs to this waiter's check — injecting it too would
+      // deliver that completion twice (pane + check return).
+      const waitPromise = runtime.waitForMessage(terminal.handle, {
+        typeFilter: ['worker_done'],
+        timeoutMs: 5_000
+      })
+      const status = db.insertMessage({
+        from: 'sender',
+        to: terminal.handle,
+        subject: 'unclaimed status',
+        type: 'status'
+      })
+      runtime.notifyMessageArrived(terminal.handle, 'status')
+      const done = db.insertMessage({
+        from: 'sender',
+        to: terminal.handle,
+        subject: 'reserved completion',
+        type: 'worker_done'
+      })
+      runtime.notifyMessageArrived(terminal.handle, 'worker_done')
+
+      await expect(waitPromise).resolves.toBe('notified')
+      await vi.advanceTimersByTimeAsync(600)
+      const payloads = write.mock.calls
+        .map(([, data]) => data)
+        .filter((data): data is string => typeof data === 'string')
+      expect(payloads.some((data) => data.includes('Subject: unclaimed status'))).toBe(true)
+      expect(payloads.some((data) => data.includes('Subject: reserved completion'))).toBe(false)
+      expect(status.delivered_at).not.toBeNull()
+      expect(done.delivered_at).toBeNull()
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('keeps live idle authority across a renderer graph republish', async () => {
     vi.useFakeTimers()
     try {

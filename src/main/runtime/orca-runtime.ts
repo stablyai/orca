@@ -1981,6 +1981,24 @@ type MessageWaiter = {
 
 export type MessageWaitResult = 'notified' | 'timed_out' | 'cancelled' | 'waiter_exists'
 
+// Why: an unfiltered waiter claims every type. A row a live waiter will return
+// from orchestration.check must not also be pushed into the pane — check reads
+// by `read`, push stamps `delivered_at`, so neither hides the row from the other.
+function messageTypeHasLiveWaiter(
+  waiters: Set<MessageWaiter> | undefined,
+  messageType: string
+): boolean {
+  if (!waiters) {
+    return false
+  }
+  for (const waiter of waiters) {
+    if (!waiter.typeFilter || waiter.typeFilter.includes(messageType)) {
+      return true
+    }
+  }
+  return false
+}
+
 function omitUndefinedProperties<T extends Record<string, unknown>>(value: T): Partial<T> {
   return Object.fromEntries(
     Object.entries(value).filter(([, entry]) => entry !== undefined)
@@ -31076,7 +31094,7 @@ export class OrcaRuntimeService {
     return this.getLeavesForPty(ptyId)[0] ?? null
   }
 
-  deliverPendingMessagesForHandle(handle: string): void {
+  deliverPendingMessagesForHandle(handle: string, reservedTypes?: ReadonlySet<string>): void {
     // Why before the try: `dispatch:`/`run:` mailbox addresses are never terminal
     // handles, and federation sync notifies once per relayed item — letting each
     // one build and discard a `terminal_handle_stale` Error (stack capture) is
@@ -31092,7 +31110,7 @@ export class OrcaRuntimeService {
       // would type a message plus Enter into a working agent and stamp the row
       // delivered. Seeded state waits for a live observation to authorize it.
       if (leaf.lastAgentStatus === 'idle' && leaf.lastAgentStatusObservedLive) {
-        this.deliverPendingMessages(leaf)
+        this.deliverPendingMessages(leaf, false, reservedTypes)
       }
     } catch {
       // Unknown/stale handles can't be pushed now; the persisted message stays available via explicit check or future idle delivery.
@@ -31122,6 +31140,12 @@ export class OrcaRuntimeService {
         )
       : []
     if (consumers.length === 0) {
+      // Why snapshot the reservation here: every remaining waiter filters this
+      // type out, but the push reads ALL pending rows. A waiter resolved later in
+      // this same drain is gone by the time the push runs, so reading waiters
+      // then would miss what its check is about to return. Captured now, the
+      // types those waiters claim stay out of the batch.
+      const reservedTypes = new Set(waiters ? [...waiters].flatMap((w) => w.typeFilter ?? []) : [])
       // Why queueMicrotask: resolveMessageWaiter removes the waiter synchronously
       // but its check handler marks the rows read a microtask later. Two sends
       // that resumed adjacently off one shared in-flight promise (group send
@@ -31129,7 +31153,7 @@ export class OrcaRuntimeService {
       // synchronous push would inject rows the resolved check is about to return.
       // Deferring one hop puts the push behind any already-queued check, and it
       // re-reads undelivered rows when it runs so nothing strands.
-      queueMicrotask(() => this.deliverPendingMessagesForHandle(handle))
+      queueMicrotask(() => this.deliverPendingMessagesForHandle(handle, reservedTypes))
       return
     }
     for (const waiter of consumers) {
@@ -31762,7 +31786,11 @@ export class OrcaRuntimeService {
   }
 
   // Why: push-on-idle delivery is event-driven (no polling) because the runtime owns both the message store and terminal status detection.
-  private deliverPendingMessages(leaf: RuntimeLeafRecord, skipAbsenceProbe = false): void {
+  private deliverPendingMessages(
+    leaf: RuntimeLeafRecord,
+    skipAbsenceProbe = false,
+    reservedTypes?: ReadonlySet<string>
+  ): void {
     if (!this._orchestrationDb) {
       return
     }
@@ -31778,7 +31806,18 @@ export class OrcaRuntimeService {
       return
     }
 
-    const unread = this._orchestrationDb.getUndeliveredUnreadMessages(handle)
+    // Why filter here and not at the trigger: the push reads every pending row,
+    // not just the one that woke it, so a row a pull has claimed would be typed
+    // into the pane AND returned by that pull's check. Live waiters cover the
+    // still-blocked case; reservedTypes carries the notify-time snapshot for a
+    // waiter resolved later in the same drain, which is already gone from the map.
+    const waiters = this.messageWaitersByHandle.get(handle)
+    const unread = this._orchestrationDb
+      .getUndeliveredUnreadMessages(handle)
+      .filter(
+        (message) =>
+          !reservedTypes?.has(message.type) && !messageTypeHasLiveWaiter(waiters, message.type)
+      )
     if (unread.length === 0) {
       return
     }
@@ -31808,7 +31847,7 @@ export class OrcaRuntimeService {
         .then((absent) => {
           this.probeDeferredDeliveryPtyIds.delete(probedPtyId)
           if (!absent && leaf.ptyId === probedPtyId) {
-            this.deliverPendingMessages(leaf, true)
+            this.deliverPendingMessages(leaf, true, reservedTypes)
           }
         })
         .catch(() => {
