@@ -7964,9 +7964,15 @@ describe('connectPanePty', () => {
       expect.objectContaining({ existingPtyId: eagerPtyId, cols: 80, rows: 24 })
     )
     expect(pane.terminal.resize).toHaveBeenCalledWith(120, 40)
-    const resizeOrder = vi.mocked(pane.terminal.resize).mock.invocationCallOrder[0]
+    const resizeToCaptureCall = pane.terminal.resize.mock.invocationCallOrder.find(
+      (_order, index) => {
+        const [resizeCols, resizeRows] = pane.terminal.resize.mock.calls[index]
+        return resizeCols === 120 && resizeRows === 40
+      }
+    )
     const attachOrder = transport.attach.mock.invocationCallOrder[0]
-    expect(resizeOrder).toBeLessThan(attachOrder)
+    expect(resizeToCaptureCall).toBeDefined()
+    expect(resizeToCaptureCall as number).toBeLessThan(attachOrder)
     const fitOrders = vi.mocked(pane.fitAddon.fit).mock.invocationCallOrder
     expect(fitOrders.some((order) => order > attachOrder)).toBe(true)
     expect(pane.terminal.cols).toBe(80)
