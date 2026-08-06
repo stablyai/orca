@@ -11977,7 +11977,8 @@ export class OrcaRuntimeService {
   }
 
   verifyOrchestrationCompatibilityCaller(
-    evidence: OrchestrationCompatibilityEvidence | null | undefined
+    evidence: OrchestrationCompatibilityEvidence | null | undefined,
+    options?: { currentRuntimeLaunchSufficient?: boolean }
   ): OrchestrationCompatibilityCallerAuthority | null {
     const terminalHandle =
       typeof evidence?.terminalHandle === 'string' ? evidence.terminalHandle.trim() : ''
@@ -12016,6 +12017,19 @@ export class OrcaRuntimeService {
         return null
       }
       terminalProvenance = 'restored'
+    }
+    if (
+      options?.currentRuntimeLaunchSufficient &&
+      terminalProvenance === 'current_runtime' &&
+      claimedPaneKey === terminal.paneKey
+    ) {
+      return Object.freeze({
+        hostScope: Object.freeze({ ...terminal.hostScope }),
+        paneKey: claimedPaneKey,
+        terminalHandle,
+        processIncarnation: terminal.processIncarnation,
+        launchTokenHash
+      })
     }
     const attestation = this.attestAgentHookCompatibilityAuthorityFn?.({
       paneKey: claimedPaneKey,
