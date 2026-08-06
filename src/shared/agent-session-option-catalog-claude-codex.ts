@@ -3,6 +3,7 @@ import type {
   CatalogModel,
   CatalogOption
 } from './agent-session-option-catalog-types'
+import { agentArgOptionTokens, removeAgentArgOption } from './agent-session-option-agent-args'
 import {
   CLAUDE_MODEL_LIST_ARGS,
   CLAUDE_MODEL_LIST_STDIN,
@@ -10,7 +11,7 @@ import {
 } from './claude-model-list-probe'
 
 function hasFlag(tokens: readonly string[], flags: readonly string[]): boolean {
-  return tokens.some((token) =>
+  return agentArgOptionTokens(tokens).some((token) =>
     flags.some(
       (flag) =>
         token === flag ||
@@ -24,8 +25,9 @@ function hasCodexEffortOverride(tokens: readonly string[]): boolean {
   if (hasFlag(tokens, ['--reasoning-effort'])) {
     return true
   }
-  return tokens.some((token, index) => {
-    const previous = tokens[index - 1]
+  const optionTokens = agentArgOptionTokens(tokens)
+  return optionTokens.some((token, index) => {
+    const previous = optionTokens[index - 1]
     return (
       (token.startsWith('model_reasoning_effort=') &&
         (previous === '-c' || previous === '--config')) ||
@@ -34,6 +36,32 @@ function hasCodexEffortOverride(tokens: readonly string[]): boolean {
       token.startsWith('--config=model_reasoning_effort=')
     )
   })
+}
+
+function removeCodexEffortOverride(tokens: readonly string[]): string[] {
+  const withoutFlag = removeAgentArgOption(tokens, ['--reasoning-effort'])
+  const result: string[] = []
+  for (let index = 0; index < withoutFlag.length; index += 1) {
+    const token = withoutFlag[index]
+    if (token === '--') {
+      result.push(...withoutFlag.slice(index))
+      break
+    }
+    const next = withoutFlag[index + 1]
+    if ((token === '-c' || token === '--config') && next?.startsWith('model_reasoning_effort=')) {
+      index += 1
+      continue
+    }
+    if (
+      token.startsWith('-cmodel_reasoning_effort=') ||
+      token.startsWith('-c=model_reasoning_effort=') ||
+      token.startsWith('--config=model_reasoning_effort=')
+    ) {
+      continue
+    }
+    result.push(token)
+  }
+  return result
 }
 
 const STANDARD_EFFORT_CHOICES = [
@@ -67,6 +95,7 @@ function claudeEffortWithChoices(choices: typeof EXTENDED_EFFORT_CHOICES): Catal
     apply: {
       launchArgs: (value) => ['--effort', String(value)],
       agentArgsOverride: (tokens) => hasFlag(tokens, ['--effort']),
+      removeAgentArgs: (tokens) => removeAgentArgOption(tokens, ['--effort']),
       midSession: { kind: 'command', build: (value) => `/effort ${String(value)}` }
     }
   }
@@ -143,6 +172,7 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   modelApply: {
     launchArgs: (value) => ['--model', String(value)],
     agentArgsOverride: (tokens) => hasFlag(tokens, ['--model']),
+    removeAgentArgs: (tokens) => removeAgentArgOption(tokens, ['--model']),
     midSession: {
       kind: 'command',
       build: (value) => `/model ${String(value)}`,
@@ -152,6 +182,7 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
       detectAgentInteraction: 'claude-model-switch-confirmation'
     }
   },
+  unknownModelOptions: [claudeEffort(true)],
   listModels: {
     command: `echo '${CLAUDE_MODEL_LIST_STDIN.trim()}' | claude ${CLAUDE_MODEL_LIST_ARGS.join(' ')}`,
     parse: parseClaudeCatalogModels
@@ -181,6 +212,7 @@ function codexEffort(includeExtraHigh: boolean): CatalogOption {
     apply: {
       launchArgs: (value) => ['-c', `model_reasoning_effort=${String(value)}`],
       agentArgsOverride: hasCodexEffortOverride,
+      removeAgentArgs: removeCodexEffortOverride,
       midSession: { kind: 'agent-picker', command: '/model' }
     }
   }
@@ -203,11 +235,13 @@ export const CODEX_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   modelApply: {
     launchArgs: (value) => ['-m', String(value)],
     agentArgsOverride: (tokens) => hasFlag(tokens, ['-m', '--model']),
+    removeAgentArgs: (tokens) => removeAgentArgOption(tokens, ['-m', '--model']),
     // Codex accepts a model argument in its live /model command.
     midSession: {
       kind: 'command',
       build: (value) => `/model ${String(value)}`,
       pickerCommand: '/model'
     }
-  }
+  },
+  unknownModelOptions: [codexEffort(true)]
 }

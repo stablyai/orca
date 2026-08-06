@@ -1,3 +1,4 @@
+import type { AgentLaunchPreferences } from '../../../../shared/agent-session-host-authority'
 import type { TuiAgent } from '../../../../shared/types'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { OrchestrationDb } from '../../orchestration/db'
@@ -56,6 +57,7 @@ export async function createExistingWorktreeWorkerTerminal(args: {
   runtime: OrcaRuntimeService
   worktreeId: string
   agent: TuiAgent
+  launchPreferences?: AgentLaunchPreferences
   taskId: string
   effects: WorkerEffect[]
 }): Promise<{ handle: string; warning?: string }> {
@@ -64,6 +66,7 @@ export async function createExistingWorktreeWorkerTerminal(args: {
     // desktop app while its CLI is `cursor-agent`. Let the runtime build the
     // configured launcher instead of executing the raw id.
     startupAgent: args.agent,
+    ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
     title: `worker-${args.taskId}`,
     // Why: dispatching a worker is background work; it must not pull the sidebar
     // to the worker's workspace while the user is reading somewhere else.
@@ -117,6 +120,7 @@ export async function createWorkerWorktree(args: {
     from: string
   }
   agent: TuiAgent
+  launchPreferences?: AgentLaunchPreferences
   effects: WorkerEffect[]
 }): Promise<{
   worktree: Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>
@@ -139,6 +143,7 @@ export async function createWorkerWorktree(args: {
     observeSetupCompletion: true,
     createdWithAgent: args.agent,
     startupAgent: args.agent,
+    ...(args.launchPreferences ? { startupLaunchPreferences: args.launchPreferences } : {}),
     activate: false,
     lineage: {
       parentWorktree: requestedWorktree === 'new-child' ? coordinatorWorktree.id : undefined,

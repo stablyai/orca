@@ -23,6 +23,8 @@ export type CatalogOptionApply = {
   /** Why: later free-form args win, so the launch record must discard any
    * picker value that those args may have replaced. */
   agentArgsOverride?: (tokens: readonly string[]) => boolean
+  /** Removes conflicting defaults before a more specific launch choice is inserted. */
+  removeAgentArgs?: (tokens: readonly string[]) => string[]
   composedIntoModel?: true
   midSession?: CatalogMidSessionApply
 }
@@ -53,6 +55,8 @@ export type CatalogModel = {
 export type AgentSessionOptionCatalog = {
   models: CatalogModel[]
   modelApply: CatalogOptionApply
+  /** Launch-safe options for opaque model ids that are absent from the static catalog. */
+  unknownModelOptions?: CatalogOption[]
   composeModelValue?: (modelId: string, values: Record<string, SessionOptionValue>) => string
   listModels?: {
     command: string
