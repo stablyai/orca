@@ -1,6 +1,6 @@
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Created in vi.hoisted because session-scanner-source-discovery resolves
 // ~/.codex at module load, so the fake home must exist before that import runs.
@@ -13,6 +13,10 @@ const testHome = vi.hoisted(() => {
   mkdirSync(home, { recursive: true })
   process.env.ORCA_USER_DATA_PATH = joinPath(root, 'userdata')
   mkdirSync(process.env.ORCA_USER_DATA_PATH, { recursive: true })
+  // Why: that same module bakes `process.env.CODEX_HOME` into the default root
+  // at load, so an ambient value repoints the "default home" asserted below —
+  // and the users this fix targets are exactly the ones who set it.
+  delete process.env.CODEX_HOME
   return { root, home }
 })
 
@@ -72,6 +76,10 @@ beforeAll(async () => {
   )
 })
 
+afterAll(async () => {
+  await rm(testHome.root, { recursive: true, force: true })
+})
+
 beforeEach(() => {
   resetAiVaultSessionListCacheForTests()
 })
@@ -108,6 +116,10 @@ describe('Agent History discovery with a configured Codex session source home', 
     const custom = result.sessions.find((session) => session.title === CUSTOM_SESSION_TITLE)
 
     expect(custom?.codexHome).toBe(CUSTOM_HOME)
-    expect(custom?.resumeCommand).toContain(`CODEX_HOME='${CUSTOM_HOME}'`)
+    // The env prefix is shell-shaped: `CODEX_HOME='<home>'` on POSIX, but
+    // `set "CODEX_HOME=<home>"` inside a cmd wrapper on Windows.
+    expect(custom?.resumeCommand).toContain(
+      process.platform === 'win32' ? `CODEX_HOME=${CUSTOM_HOME}` : `CODEX_HOME='${CUSTOM_HOME}'`
+    )
   })
 })
