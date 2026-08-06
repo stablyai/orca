@@ -1,25 +1,16 @@
-import type { ManagedPane, ManagedPaneInternal, ScrollState } from './pane-manager-types'
+import type { ManagedPane, ManagedPaneInternal } from './pane-manager-types'
 import { getFitOverrideForPty } from './mobile-fit-overrides'
 import {
   armPaneFitContinuationRetry,
   clearPaneFitContinuationRetry
 } from './pane-fit-continuation-retry'
+import { resumePendingFitScrollRestoreAfterFit } from './pane-scroll'
+import { deferTerminalGeometryMutationDuringRebuild } from './terminal-scroll-intent-rebuild'
 import {
-  captureTerminalStructuralScrollIntent,
-  isTerminalStructuralScrollIntentCurrent,
-  markTerminalPinnedViewport,
-  restoreTerminalStructuralScrollIntent
-} from './terminal-scroll-intent'
-import {
-  captureScrollState,
-  releaseScrollStateMarker,
-  restoreScrollStateAfterFit,
-  resumePendingFitScrollRestoreAfterFit
-} from './pane-scroll'
-import {
-  deferTerminalGeometryMutationDuringRebuild,
-  isTerminalScrollIntentRebuildInFlight
-} from './terminal-scroll-intent-rebuild'
+  capturePaneFitScroll,
+  restorePaneFitScroll,
+  type PaneFitScrollCapture
+} from './pane-fit-scroll-restore'
 
 const MIN_PANE_FIT_WIDTH_PX = 48
 const MIN_PANE_FIT_HEIGHT_PX = 24
@@ -87,13 +78,6 @@ export function canMeasurePaneForFit(pane: ManagedPane): boolean {
   return dims.cols >= MIN_PANE_FIT_COLS && dims.rows >= MIN_PANE_FIT_ROWS
 }
 
-function canPreserveScrollIntentForFit(pane: ManagedPane): boolean {
-  // Why: split reparent has its own delayed restore; restoring here can fight that timer.
-  return !(
-    'pendingSplitScrollState' in pane && (pane as ManagedPaneInternal).pendingSplitScrollState
-  )
-}
-
 function performSafeFit(pane: ManagedPane): boolean {
   if (deferTerminalGeometryMutationDuringRebuild(pane.terminal, 'safe-fit', () => safeFit(pane))) {
     return false
@@ -101,26 +85,14 @@ function performSafeFit(pane: ManagedPane): boolean {
   if (!canMeasurePaneForFit(pane)) {
     return false
   }
-  let scrollIntent = null as ReturnType<typeof captureTerminalStructuralScrollIntent>
-  let pinnedScrollState: ScrollState | null = null
-  let shouldRestoreScroll = false
-  const captureScrollForFit = (): void => {
-    scrollIntent = captureTerminalStructuralScrollIntent(pane.terminal)
-    // Why: fit can reflow and renumber every buffer row; a marker tracks the
-    // pinned content itself, while a numeric line would point elsewhere after.
-    pinnedScrollState =
-      scrollIntent?.kind === 'pinnedViewport' ? captureScrollState(pane.terminal) : null
-    shouldRestoreScroll = true
-  }
+  let scrollCapture: PaneFitScrollCapture | null = null
   try {
     // Why: a mobile-owned PTY must stay at its phone grid on passive desktop panes.
     const ptyId = pane.container?.dataset?.ptyId
     const override = ptyId ? getFitOverrideForPty(ptyId) : null
     if (override) {
       if (pane.terminal.cols !== override.cols || pane.terminal.rows !== override.rows) {
-        if (canPreserveScrollIntentForFit(pane)) {
-          captureScrollForFit()
-        }
+        scrollCapture = capturePaneFitScroll(pane, pane.terminal.cols === override.cols)
         pane.terminal.resize(override.cols, override.rows)
       } else {
         resumePendingFitScrollRestoreAfterFit(pane.terminal)
@@ -134,42 +106,15 @@ function performSafeFit(pane: ManagedPane): boolean {
       resumePendingFitScrollRestoreAfterFit(pane.terminal)
       return true
     }
-    if (canPreserveScrollIntentForFit(pane)) {
-      captureScrollForFit()
-    }
+    scrollCapture = capturePaneFitScroll(pane, dims?.cols === pane.terminal.cols)
     pane.fitAddon.fit()
     return true
   } catch {
     // Container may not have dimensions yet.
     return false
   } finally {
-    if (shouldRestoreScroll) {
-      try {
-        if (resumePendingFitScrollRestoreAfterFit(pane.terminal)) {
-        } else if (pinnedScrollState) {
-          const state: ScrollState = pinnedScrollState
-          pinnedScrollState = null
-          restoreScrollStateAfterFit(pane.terminal, state, {
-            onRestored: () => {
-              // Why: do not replace a durable pre-replay pin with transient 0/0 geometry.
-              if (!state.wasAtBottom) {
-                markTerminalPinnedViewport(pane.terminal)
-              }
-            },
-            shouldRestore: () =>
-              !isTerminalScrollIntentRebuildInFlight(pane.terminal) &&
-              isTerminalStructuralScrollIntentCurrent(pane.terminal, scrollIntent)
-          })
-        } else {
-          restoreTerminalStructuralScrollIntent(pane.terminal, scrollIntent)
-        }
-      } catch {
-        // Why: SSH reattach can briefly expose xterm without renderer dimensions.
-      } finally {
-        if (pinnedScrollState) {
-          releaseScrollStateMarker(pinnedScrollState)
-        }
-      }
+    if (scrollCapture) {
+      restorePaneFitScroll(pane, scrollCapture)
     }
   }
 }

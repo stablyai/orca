@@ -95,6 +95,7 @@ describe('scheduleSplitScrollRestore', () => {
       return 1
     })
     restoreScrollState.mockClear()
+    restoreScrollState.mockReturnValue(true)
     releaseScrollStateMarker.mockClear()
   })
 
@@ -125,6 +126,34 @@ describe('scheduleSplitScrollRestore', () => {
     expect(reattachWebgl).toHaveBeenCalledWith(pane)
     expect(restoreScrollState).toHaveBeenCalledTimes(2)
     expect(pane.terminal.refresh).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not overwrite user scroll intent during the split settle window', () => {
+    const { pane } = createPane('normal')
+    const reattachWebgl = vi.fn()
+    let shouldRestore = true
+    const guard = {
+      onRestored: vi.fn(),
+      shouldRestore: vi.fn(() => shouldRestore)
+    }
+
+    scheduleSplitScrollRestore(
+      () => pane,
+      pane.id,
+      scrollState,
+      () => false,
+      reattachWebgl,
+      guard
+    )
+    expect(restoreScrollState).toHaveBeenCalledTimes(1)
+    expect(guard.onRestored).toHaveBeenCalledTimes(1)
+
+    shouldRestore = false
+    vi.advanceTimersByTime(200)
+
+    expect(restoreScrollState).toHaveBeenCalledTimes(1)
+    expect(pane.pendingSplitScrollState).toBeNull()
+    expect(reattachWebgl).toHaveBeenCalledWith(pane)
   })
 
   it('defers WebGL reattach and skips scroll restore for alternate-screen panes', () => {

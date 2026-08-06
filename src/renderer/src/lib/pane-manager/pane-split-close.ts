@@ -7,7 +7,7 @@ import type {
 import type { DragReorderCallbacks } from './pane-drag-reorder'
 import { updateMultiPaneState } from './pane-drag-reorder'
 import {
-  captureScrollState,
+  captureBottomLockedScrollState,
   findPaneChildren,
   promoteSibling,
   removeDividers,
@@ -17,13 +17,23 @@ import {
 import { applyDividerStyles, applyPaneOpacity } from './pane-divider'
 import { disposePane, openTerminal } from './pane-lifecycle'
 import { disposeWebgl } from './pane-webgl-renderer'
-import { clearPendingSplitScrollRestore, scheduleSplitScrollRestore } from './pane-split-scroll'
+import {
+  clearPendingSplitScrollRestore,
+  scheduleSplitScrollRestore,
+  type SplitScrollRestoreGuard
+} from './pane-split-scroll'
 import { reattachWebglIfNeeded } from './pane-webgl-reattach'
 import { toPublicPane } from './pane-public-view'
+import {
+  captureTerminalStructuralScrollIntent,
+  isTerminalStructuralScrollIntentCurrent,
+  markTerminalFollowOutput
+} from './terminal-scroll-intent'
 
 type MovedPaneSplitState = {
   pane: ManagedPaneInternal
-  scrollState: ReturnType<typeof captureScrollState>
+  restoreGuard: SplitScrollRestoreGuard
+  scrollState: ReturnType<typeof captureBottomLockedScrollState>
   hadWebgl: boolean
 }
 
@@ -73,7 +83,8 @@ export function splitManagedPane(args: SplitManagedPaneArgs): ManagedPane | null
       movedPaneState.pane.id,
       movedPaneState.scrollState,
       args.isDestroyed,
-      movedPaneState.hadWebgl ? reattachWebglIfNeeded : undefined
+      movedPaneState.hadWebgl ? reattachWebglIfNeeded : undefined,
+      movedPaneState.restoreGuard
     )
   }
 
@@ -93,7 +104,16 @@ function prepareMovedPanesForSplit(
   return movedPanes.map((pane) => {
     clearPendingSplitScrollRestore(pane)
     // Why: wrapInSplit reparents moved containers, resetting browser scrollTop.
-    const scrollState = captureScrollState(pane.terminal)
+    const scrollState = captureBottomLockedScrollState(pane.terminal)
+    let scrollIntent = captureTerminalStructuralScrollIntent(pane.terminal)
+    const restoreGuard: SplitScrollRestoreGuard = {
+      onRestored: () => {
+        markTerminalFollowOutput(pane.terminal)
+        scrollIntent = captureTerminalStructuralScrollIntent(pane.terminal)
+      },
+      shouldRestore: () =>
+        !scrollIntent || isTerminalStructuralScrollIntentCurrent(pane.terminal, scrollIntent)
+    }
     // Why: lock prevents safeFit/fitAllPanes from restoring scroll during the
     // async settle window; scheduleSplitScrollRestore owns the restore.
     pane.pendingSplitScrollState = scrollState
@@ -102,7 +122,7 @@ function prepareMovedPanesForSplit(
     // firing contextlost, so dispose before the move and reattach after settle.
     const hadWebgl = !!pane.webglAddon
     disposeWebgl(pane)
-    return { pane, scrollState, hadWebgl }
+    return { pane, restoreGuard, scrollState, hadWebgl }
   })
 }
 

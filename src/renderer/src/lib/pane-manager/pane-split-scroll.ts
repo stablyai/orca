@@ -2,6 +2,11 @@ import type { IBuffer, IDisposable } from '@xterm/xterm'
 import type { ManagedPaneInternal, ScrollState } from './pane-manager-types'
 import { releaseScrollStateMarker, restoreScrollState } from './pane-scroll'
 
+export type SplitScrollRestoreGuard = {
+  onRestored: () => void
+  shouldRestore: () => boolean
+}
+
 function refreshAfterReparent(pane: ManagedPaneInternal): void {
   try {
     pane.terminal.refresh(0, pane.terminal.rows - 1)
@@ -69,14 +74,21 @@ function runAfterNormalBuffer(
 function restoreCapturedScrollState(
   pane: ManagedPaneInternal,
   scrollState: ScrollState,
-  reattachWebgl?: (pane: ManagedPaneInternal) => void
+  reattachWebgl?: (pane: ManagedPaneInternal) => void,
+  guard?: SplitScrollRestoreGuard
 ): void {
   clearPendingSplitScrollBufferDisposable(pane)
   pane.pendingSplitScrollState = null
   if (reattachWebgl) {
     reattachWebgl(pane)
   }
-  restoreScrollState(pane.terminal, scrollState)
+  if (!guard || guard.shouldRestore()) {
+    if (restoreScrollState(pane.terminal, scrollState)) {
+      guard?.onRestored()
+    }
+  } else {
+    releaseScrollStateMarker(scrollState)
+  }
   refreshAfterReparent(pane)
 }
 
@@ -96,7 +108,8 @@ export function scheduleSplitScrollRestore(
   paneId: number,
   scrollState: ScrollState,
   isDestroyed: () => boolean,
-  reattachWebgl?: (pane: ManagedPaneInternal) => void
+  reattachWebgl?: (pane: ManagedPaneInternal) => void,
+  guard?: SplitScrollRestoreGuard
 ): void {
   const scheduledPane = getPaneById(paneId)
   if (scheduledPane) {
@@ -124,7 +137,12 @@ export function scheduleSplitScrollRestore(
       ) {
         return
       }
-      restoreScrollState(live.terminal, scrollState)
+      if (guard && !guard.shouldRestore()) {
+        return
+      }
+      if (restoreScrollState(live.terminal, scrollState)) {
+        guard?.onRestored()
+      }
       refreshAfterReparent(live)
     })
     if (liveAfterFirstFrame) {
@@ -172,11 +190,11 @@ export function scheduleSplitScrollRestore(
     }
     if (live.terminal.buffer.active.type === 'alternate') {
       runAfterNormalBuffer(live, getPaneById, paneId, isDestroyed, (normalPane) => {
-        restoreCapturedScrollState(normalPane, scrollState, reattachWebgl)
+        restoreCapturedScrollState(normalPane, scrollState, reattachWebgl, guard)
       })
       return
     }
-    restoreCapturedScrollState(live, scrollState, reattachWebgl)
+    restoreCapturedScrollState(live, scrollState, reattachWebgl, guard)
   }, 200)
   if (scheduledPane) {
     scheduledPane.pendingSplitScrollTimerId = settleTimerId

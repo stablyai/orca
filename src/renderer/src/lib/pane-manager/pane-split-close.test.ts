@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPaneInternal, ScrollState } from './pane-manager-types'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 
-const captureScrollState = vi.hoisted(() => vi.fn())
+const captureBottomLockedScrollState = vi.hoisted(() => vi.fn())
 const wrapInSplit = vi.hoisted(() => vi.fn())
 const openTerminal = vi.hoisted(() => vi.fn())
 const disposeWebgl = vi.hoisted(() => vi.fn())
@@ -13,7 +13,7 @@ const applyPaneOpacity = vi.hoisted(() => vi.fn())
 const applyDividerStyles = vi.hoisted(() => vi.fn())
 
 vi.mock('./pane-tree-ops', () => ({
-  captureScrollState,
+  captureBottomLockedScrollState,
   findPaneChildren: vi.fn(),
   promoteSibling: vi.fn(),
   removeDividers: vi.fn(),
@@ -135,7 +135,7 @@ describe('splitManagedPane', () => {
     ])
     const fallbackScrollState = createScrollState(11)
     const siblingScrollState = createScrollState(22)
-    captureScrollState
+    captureBottomLockedScrollState
       .mockReturnValueOnce(fallbackScrollState)
       .mockReturnValueOnce(siblingScrollState)
 
@@ -159,8 +159,8 @@ describe('splitManagedPane', () => {
     })
 
     expect(result?.id).toBe(newPane.id)
-    expect(captureScrollState).toHaveBeenCalledWith(fallbackPane.terminal)
-    expect(captureScrollState).toHaveBeenCalledWith(siblingPane.terminal)
+    expect(captureBottomLockedScrollState).toHaveBeenCalledWith(fallbackPane.terminal)
+    expect(captureBottomLockedScrollState).toHaveBeenCalledWith(siblingPane.terminal)
     expect(clearPendingSplitScrollRestore).toHaveBeenCalledWith(fallbackPane)
     expect(clearPendingSplitScrollRestore).toHaveBeenCalledWith(siblingPane)
     expect(fallbackPane.pendingSplitScrollState).toBe(fallbackScrollState)
@@ -181,7 +181,11 @@ describe('splitManagedPane', () => {
       fallbackPane.id,
       fallbackScrollState,
       expect.any(Function),
-      expect.any(Function)
+      expect.any(Function),
+      expect.objectContaining({
+        onRestored: expect.any(Function),
+        shouldRestore: expect.any(Function)
+      })
     )
     expect(scheduleSplitScrollRestore).toHaveBeenNthCalledWith(
       2,
@@ -189,7 +193,11 @@ describe('splitManagedPane', () => {
       siblingPane.id,
       siblingScrollState,
       expect.any(Function),
-      expect.any(Function)
+      expect.any(Function),
+      expect.objectContaining({
+        onRestored: expect.any(Function),
+        shouldRestore: expect.any(Function)
+      })
     )
   })
 })

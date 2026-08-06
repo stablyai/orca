@@ -3686,6 +3686,137 @@
       "demotionRule": "Demote or quarantine if the unit gate flakes without a product bug or harness bug filed to the owner."
     },
     {
+      "id": "terminal-scroll.resize-bottom-lock",
+      "title": "Terminal column resize deterministically follows output",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-rendering",
+      "layer": "renderer-unit-and-electron-e2e",
+      "surfaces": [
+        "terminal geometry",
+        "split layout",
+        "window resize",
+        "xterm reflow",
+        "scrollback"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "daemon"],
+      "coverageNotes": "Headless xterm coverage proves the renderer-owned policy independent of PTY provider. Electron coverage exercises local daemon-backed terminals on macOS, including window and split-divider resize paths; live SSH, WSL, remote-runtime, Linux, and Windows remain unproved.",
+      "motivatingLinks": ["manual-repro:terminal-scroll-resize"],
+      "invariant": "A successful fit that changes terminal columns moves the normal-buffer viewport to the live bottom and records follow-output intent. Row-only, pixel-only, failed, or grid-identical fits preserve pinned scroll, and a delayed split settle never overwrites newer user scroll intent.",
+      "oracle": "Renderer tests require failed and row-only fits to preserve a pinned viewport, column-changing fits to reach the live bottom after bounded scrollbar settlement, no-grid fits to remain no-ops, and split-settle retries to stop after user intent changes. Headless xterm and Electron journeys require narrow/wide window and one-column split resizes to finish at viewportY === baseY while live output continues.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/pane-manager/pane-fit.test.ts src/renderer/src/lib/pane-manager/pane-scroll.test.ts src/renderer/src/lib/pane-manager/pane-split-close.test.ts src/renderer/src/lib/pane-manager/pane-split-scroll.test.ts src/renderer/src/lib/pane-manager/xterm-scroll-resize-bottom-lock.test.ts",
+        "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-scroll-resize-bottom-lock.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-split-scroll-resize-bottom-lock.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1"
+      ],
+      "testFiles": [
+        "src/renderer/src/lib/pane-manager/pane-fit.test.ts",
+        "src/renderer/src/lib/pane-manager/pane-scroll.test.ts",
+        "src/renderer/src/lib/pane-manager/pane-split-close.test.ts",
+        "src/renderer/src/lib/pane-manager/pane-split-scroll.test.ts",
+        "src/renderer/src/lib/pane-manager/xterm-scroll-resize-bottom-lock.test.ts",
+        "tests/e2e/terminal-scroll-resize-bottom-lock.spec.ts",
+        "tests/e2e/terminal-split-scroll-resize-bottom-lock.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/lib/pane-manager/pane-fit.test.ts",
+          "assertions": [
+            "a fit failure that leaves the grid unchanged preserves pinned scroll instead of bottom-locking"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/pane-manager/pane-scroll.test.ts",
+          "assertions": [
+            "bottom lock retries when xterm accepts scrolling before its scrollbar geometry settles"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/pane-manager/pane-split-scroll.test.ts",
+          "assertions": [
+            "the authoritative split settle does not overwrite user scroll intent recorded after the first restore"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/pane-manager/xterm-scroll-resize-bottom-lock.test.ts",
+          "assertions": [
+            "real xterm preserves a pinned row-only resize, while column reflow at ordinary and capped scrollback sizes ends at the current bottom"
+          ]
+        },
+        {
+          "file": "tests/e2e/terminal-scroll-resize-bottom-lock.spec.ts",
+          "assertions": [
+            "narrow and wide window grid changes finish bottom-locked with the ready marker visible"
+          ]
+        },
+        {
+          "file": "tests/e2e/terminal-split-scroll-resize-bottom-lock.spec.ts",
+          "assertions": [
+            "a one-column split widen bottom-locks a wrapped live-output pane and output continues"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-01",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/pane-manager/pane-fit.test.ts src/renderer/src/lib/pane-manager/pane-scroll.test.ts src/renderer/src/lib/pane-manager/pane-split-close.test.ts src/renderer/src/lib/pane-manager/pane-split-scroll.test.ts src/renderer/src/lib/pane-manager/xterm-scroll-resize-bottom-lock.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.7,
+          "summary": "Five focused renderer files passed with 44 tests covering column-change bottom lock, row-only and failed-fit preservation, bounded retry, split cancellation, and real headless xterm reflow."
+        },
+        {
+          "date": "2026-08-01",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-scroll-resize-bottom-lock.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 14.6,
+          "summary": "The local Electron terminal passed narrow and wide window grid changes with the viewport at the live bottom and the final transcript marker visible."
+        },
+        {
+          "date": "2026-08-01",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-split-scroll-resize-bottom-lock.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
+          "result": "passed",
+          "durationSeconds": 11.6,
+          "summary": "The headful split journey passed immediate post-split resize and one-column live-output reflow with the viewport bottom-locked."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 120,
+        "scope": "focused renderer tests plus two isolated Electron journeys"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Focused renderer coverage and local Electron journeys passed during implementation; CI soak history is not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Manual real-terminal reproduction showed logical anchor restoration could land on different content after a one-column reflow. The failed-fit and stale split-intent regression tests were added from independent review, but saved intentional-break runs are not attached."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Column-changing fits add constant-time intent capture, one immediate scroll, and at most two requestAnimationFrame retries. Row-only pinned fits retain the existing logical-line marker capture. Split reparent keeps its bounded double-frame and 200 ms settle work; the intent guard adds constant-time revision checks and no polling, output parsing, provider calls, IPC, subprocesses, or full-buffer scans."
+      },
+      "promotionCriteria": [
+        "Collect stable CI soak history for the renderer and Electron commands.",
+        "Attach saved red/green evidence for failed-fit and stale split-intent regressions.",
+        "Run the Electron journeys on Linux and Windows and exercise live SSH and WSL terminals."
+      ],
+      "knownGaps": [
+        "Electron runtime evidence is local macOS only.",
+        "Live SSH, WSL, remote-runtime, Linux, and Windows terminal resize paths are not covered.",
+        "No packaged-build frame-time measurement was recorded during sustained live-output resize storms."
+      ],
+      "demotionRule": "Demote or quarantine if the renderer gate flakes without a product or harness bug, or if a grid-identical fit changes scroll position."
+    },
+    {
       "id": "terminal-scroll.streaming-refocus-intent",
       "title": "Streaming refocus preserves follow-output viewport intent",
       "maturity": "experimental",

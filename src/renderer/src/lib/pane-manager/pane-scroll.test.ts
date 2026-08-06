@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Terminal as HeadlessTerminal } from '@xterm/headless'
 import type { IMarker, Terminal } from '@xterm/xterm'
 import {
+  captureBottomLockedScrollState,
   captureScrollState,
   getTerminalOutputEpoch,
   recordTerminalOutput,
@@ -95,6 +96,18 @@ describe('scroll state', () => {
       baseY: 100
     })
     expect(terminal.registerMarker).toHaveBeenCalledWith(-65)
+  })
+
+  it('captures deterministic bottom-locked state', () => {
+    const terminal = createTerminal({ viewportY: 42, baseY: 100 })
+
+    expect(captureBottomLockedScrollState(terminal)).toEqual({
+      bufferType: 'normal',
+      wasAtBottom: true,
+      viewportY: 100,
+      baseY: 100
+    })
+    expect(terminal.registerMarker).not.toHaveBeenCalled()
   })
 
   it('tracks output epochs per terminal', () => {
@@ -359,6 +372,38 @@ describe('scroll state', () => {
 
     expect(() => frameCallbacks.shift()?.(0)).toThrow('unexpected asynchronous renderer failure')
     expect(marker.isDisposed).toBe(true)
+  })
+
+  it('retries bottom-lock when xterm scrollbar geometry has not settled', () => {
+    const frameCallbacks: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frameCallbacks.push(callback)
+      return frameCallbacks.length
+    })
+    const terminal = createTerminal({ viewportY: 10, baseY: 100 })
+    const activeBuffer = terminal.buffer.active as { viewportY: number }
+    vi.mocked(terminal.scrollToBottom)
+      .mockImplementationOnce(() => {})
+      .mockImplementation(() => {
+        activeBuffer.viewportY = 100
+      })
+    const onRestored = vi.fn()
+
+    restoreScrollStateAfterFit(
+      terminal,
+      {
+        bufferType: 'normal',
+        wasAtBottom: true,
+        viewportY: 100,
+        baseY: 100
+      },
+      { onRestored, shouldRestore: () => true }
+    )
+
+    expect(activeBuffer.viewportY).toBe(10)
+    frameCallbacks.shift()?.(0)
+    expect(activeBuffer.viewportY).toBe(100)
+    expect(onRestored).toHaveBeenCalledTimes(1)
   })
 
   it('scrolls to the current bottom when the pane was previously at bottom', () => {

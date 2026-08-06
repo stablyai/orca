@@ -1,10 +1,16 @@
 import type { Terminal } from '@xterm/xterm'
 import type { ScrollState } from './pane-manager-types'
 import {
-  captureLogicalLineAnchor,
-  resolveLogicalCellOffsetLine
-} from './terminal-reflow-scroll-anchor'
-import { forceTerminalViewportScrollbarSync } from './terminal-viewport-scrollbar-sync'
+  releaseScrollStateMarker,
+  restoreScrollStateNow,
+  type ScrollRestoreResult
+} from './terminal-scroll-state'
+
+export {
+  captureBottomLockedScrollState,
+  captureScrollState,
+  releaseScrollStateMarker
+} from './terminal-scroll-state'
 
 const terminalOutputEpochs = new WeakMap<Terminal, number>()
 const deferredScrollRestores = new WeakMap<
@@ -27,8 +33,6 @@ const pendingFitScrollRestores = new WeakMap<
   }
 >()
 const FIT_SCROLL_RESTORE_MAX_FRAMES = 2
-
-type ScrollRestoreResult = 'restored' | 'retry' | 'skipped'
 
 export function recordTerminalOutput(terminal: Terminal): void {
   terminalOutputEpochs.set(terminal, getTerminalOutputEpoch(terminal) + 1)
@@ -55,37 +59,6 @@ export function cancelDeferredScrollRestore(terminal: object): void {
   }
   releaseScrollStateMarker(pending.state)
   deferredScrollRestores.delete(terminal)
-}
-
-export function captureScrollState(terminal: Terminal): ScrollState {
-  const buf = terminal.buffer.active
-  const viewportY = buf.viewportY
-  const wasAtBottom = viewportY >= buf.baseY
-  const logicalAnchor =
-    !wasAtBottom && buf.type === 'normal'
-      ? captureLogicalLineAnchor(terminal, viewportY)
-      : undefined
-  const firstVisibleLineMarker =
-    !wasAtBottom && buf.type === 'normal'
-      ? terminal.registerMarker?.(viewportY - (buf.baseY + buf.cursorY))
-      : undefined
-  return {
-    bufferType: buf.type,
-    wasAtBottom,
-    viewportY,
-    baseY: buf.baseY,
-    // Why: continuation-row markers can be deleted or drift during reflow.
-    // Keep the physical marker for no-reflow ConPTY/cursor-line cases, and
-    // anchor reflowing content at the logical line's stable first row.
-    firstVisibleLineMarker,
-    firstVisibleLogicalLineMarker:
-      logicalAnchor?.lineY === viewportY
-        ? firstVisibleLineMarker
-        : logicalAnchor
-          ? terminal.registerMarker?.(logicalAnchor.lineY - (buf.baseY + buf.cursorY))
-          : undefined,
-    firstVisibleLogicalCellOffset: logicalAnchor?.cellOffset
-  }
 }
 
 export function restoreScrollState(terminal: Terminal, state: ScrollState): boolean {
@@ -245,82 +218,6 @@ export function restoreScrollStateAfterLayout(terminal: Terminal, state: ScrollS
   pending.rafIds.push(firstRaf)
   pending.timeoutIds.push(timeoutId)
   deferredScrollRestores.set(terminal, pending)
-}
-
-function restoreScrollStateNow(terminal: Terminal, state: ScrollState): ScrollRestoreResult {
-  if (!terminal.element) {
-    return 'retry'
-  }
-  const buf = terminal.buffer.active
-  if (state.bufferType === 'alternate' || buf.type !== state.bufferType) {
-    return 'skipped'
-  }
-
-  // Why: WebGL suspend disposes xterm's render service while leaving
-  // terminal.element attached, so scrollToBottom/scrollToLine/scrollLines all
-  // throw "cannot read dimensions" until the pane re-attaches. Swallow that
-  // window quietly — the next visibility flip re-fits and re-restores.
-  if (state.wasAtBottom) {
-    if (safeScrollCall(() => terminal.scrollToBottom())) {
-      forceTerminalViewportScrollbarSync(terminal)
-      return 'restored'
-    }
-    return 'retry'
-  }
-
-  const logicalMarkerLine =
-    state.firstVisibleLogicalLineMarker && !state.firstVisibleLogicalLineMarker.isDisposed
-      ? state.firstVisibleLogicalLineMarker.line
-      : -1
-  const markerLine =
-    state.firstVisibleLineMarker && !state.firstVisibleLineMarker.isDisposed
-      ? state.firstVisibleLineMarker.line
-      : -1
-  const logicalTargetLine =
-    logicalMarkerLine >= 0 && state.firstVisibleLogicalCellOffset !== undefined
-      ? resolveLogicalCellOffsetLine(
-          terminal,
-          logicalMarkerLine,
-          state.firstVisibleLogicalCellOffset
-        )
-      : null
-  const targetLine = Math.min(
-    logicalTargetLine ?? (markerLine >= 0 ? markerLine : state.viewportY),
-    buf.baseY
-  )
-  state.viewportY = targetLine
-  // Why: deferred rAF/timeout restores re-invoke this function after xterm
-  // reflow settles; keep the marker alive so each call consults the live
-  // line. Callers (restoreScrollState, the timeout in
-  // restoreScrollStateAfterLayout, cancelDeferredScrollRestore) own disposal.
-  if (safeScrollCall(() => terminal.scrollToLine(targetLine))) {
-    forceTerminalViewportScrollbarSync(terminal)
-    return 'restored'
-  }
-  return 'retry'
-}
-
-function safeScrollCall(fn: () => void): boolean {
-  try {
-    fn()
-    return true
-  } catch (err) {
-    // Why: xterm's renderer can null out internal dimensions during WebGL
-    // teardown, throwing "Cannot read properties of undefined (reading
-    // 'dimensions')". Tolerate that; surface anything else.
-    if (err instanceof TypeError && /dimensions/.test(err.message)) {
-      return false
-    }
-    throw err
-  }
-}
-
-export function releaseScrollStateMarker(state: ScrollState): void {
-  state.firstVisibleLineMarker?.dispose()
-  if (state.firstVisibleLogicalLineMarker !== state.firstVisibleLineMarker) {
-    state.firstVisibleLogicalLineMarker?.dispose()
-  }
-  state.firstVisibleLineMarker = state.firstVisibleLogicalLineMarker = undefined
 }
 
 function cancelPendingFitScrollRestore(terminal: object): void {

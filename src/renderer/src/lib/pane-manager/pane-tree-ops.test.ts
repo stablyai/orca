@@ -243,12 +243,12 @@ describe('safeFit', () => {
     expect(pane.fitAddon.fit).not.toHaveBeenCalled()
   })
 
-  it('restores the viewport if fit clobbers it during resize', () => {
+  it('restores the viewport if a row-only fit clobbers it', () => {
     const pane = createPane({
       proposedCols: 100,
       proposedRows: 32,
-      terminalCols: 120,
-      terminalRows: 32
+      terminalCols: 100,
+      terminalRows: 24
     })
     const activeBuffer = pane.terminal.buffer.active as { viewportY: number; baseY: number }
     activeBuffer.viewportY = 42
@@ -264,12 +264,12 @@ describe('safeFit', () => {
     expect(activeBuffer.viewportY).toBe(42)
   })
 
-  it('restores pinned content via marker when fit reflow renumbers buffer lines', () => {
+  it('restores pinned content via marker when a row-only fit renumbers buffer lines', () => {
     const pane = createPane({
       proposedCols: 100,
       proposedRows: 32,
-      terminalCols: 120,
-      terminalRows: 32
+      terminalCols: 100,
+      terminalRows: 24
     })
     const activeBuffer = pane.terminal.buffer.active as {
       viewportY: number
@@ -296,12 +296,12 @@ describe('safeFit', () => {
     expect(marker.dispose).toHaveBeenCalled()
   })
 
-  it('records the restored post-reflow pin when widening lowers baseY', () => {
+  it('records the restored pin when a row-only fit lowers baseY', () => {
     const pane = createPane({
       proposedCols: 160,
       proposedRows: 32,
-      terminalCols: 80,
-      terminalRows: 32
+      terminalCols: 160,
+      terminalRows: 24
     })
     const activeBuffer = pane.terminal.buffer.active as {
       viewportY: number
@@ -332,7 +332,7 @@ describe('safeFit', () => {
     const pane = createPane({
       proposedCols: 100,
       proposedRows: 32,
-      terminalCols: 80,
+      terminalCols: 100,
       terminalRows: 24
     })
     const activeBuffer = pane.terminal.buffer.active as {
@@ -360,8 +360,8 @@ describe('safeFit', () => {
     const pane = createPane({
       proposedCols: 100,
       proposedRows: 32,
-      terminalCols: 120,
-      terminalRows: 32
+      terminalCols: 100,
+      terminalRows: 24
     })
     const activeBuffer = pane.terminal.buffer.active as { viewportY: number; baseY: number }
     activeBuffer.viewportY = 100
@@ -385,8 +385,8 @@ describe('safeFit', () => {
     const pane = createPane({
       proposedCols: 100,
       proposedRows: 32,
-      terminalCols: 120,
-      terminalRows: 32
+      terminalCols: 100,
+      terminalRows: 24
     })
     const activeBuffer = pane.terminal.buffer.active as {
       viewportY: number
@@ -436,8 +436,8 @@ describe('safeFit', () => {
     const pane = createPane({
       proposedCols: 100,
       proposedRows: 32,
-      terminalCols: 120,
-      terminalRows: 32
+      terminalCols: 100,
+      terminalRows: 24
     })
     const activeBuffer = pane.terminal.buffer.active as {
       viewportY: number
@@ -477,8 +477,8 @@ describe('safeFit', () => {
     const pane = createPane({
       proposedCols: 100,
       proposedRows: 32,
-      terminalCols: 120,
-      terminalRows: 32
+      terminalCols: 100,
+      terminalRows: 24
     })
     const activeBuffer = pane.terminal.buffer.active as {
       viewportY: number
@@ -525,8 +525,8 @@ describe('safeFit', () => {
     const pane = createPane({
       proposedCols: 100,
       proposedRows: 32,
-      terminalCols: 120,
-      terminalRows: 32
+      terminalCols: 100,
+      terminalRows: 24
     })
     const activeBuffer = pane.terminal.buffer.active as {
       viewportY: number
@@ -537,7 +537,11 @@ describe('safeFit', () => {
     activeBuffer.baseY = 100
     activeBuffer.cursorY = 0
     const marker = { line: 30, isDisposed: false, dispose: vi.fn() }
-    ;(pane.terminal as unknown as { registerMarker: unknown }).registerMarker = vi.fn(() => marker)
+    const replacementMarker = { line: 30, isDisposed: false, dispose: vi.fn() }
+    ;(pane.terminal as unknown as { registerMarker: unknown }).registerMarker = vi
+      .fn()
+      .mockReturnValueOnce(marker)
+      .mockReturnValueOnce(replacementMarker)
     vi.mocked(pane.fitAddon.fit).mockImplementation(() => {
       activeBuffer.baseY = 70
       activeBuffer.viewportY = 0
@@ -559,6 +563,7 @@ describe('safeFit', () => {
     safeFit(pane)
     expect(activeBuffer.viewportY).toBe(30)
     expect(marker.dispose).toHaveBeenCalledTimes(1)
+    expect(replacementMarker.dispose).toHaveBeenCalledTimes(1)
   })
 
   it('releases a replacement marker when a resumed retry throws', () => {
@@ -571,8 +576,8 @@ describe('safeFit', () => {
     const pane = createPane({
       proposedCols: 100,
       proposedRows: 32,
-      terminalCols: 120,
-      terminalRows: 32
+      terminalCols: 100,
+      terminalRows: 24
     })
     const activeBuffer = pane.terminal.buffer.active as {
       viewportY: number

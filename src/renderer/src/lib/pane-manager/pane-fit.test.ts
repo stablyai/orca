@@ -217,6 +217,25 @@ describe('safeFitAndThen unmeasurable-pane retry', () => {
 })
 
 describe('paneFitClientSizeChanged (reveal fit gate)', () => {
+  it('preserves pinned scroll when fit fails before changing the grid', () => {
+    const pane = createPane({ rect: { width: 800, height: 600 } })
+    const scrollToBottom = vi.fn()
+    const activeBuffer = { type: 'normal', viewportY: 42, baseY: 100 }
+    Object.assign(pane.terminal, {
+      buffer: { active: activeBuffer },
+      element: {},
+      scrollToBottom,
+      scrollToLine: vi.fn()
+    })
+    vi.mocked(pane.fitAddon.fit).mockImplementation(() => {
+      throw new Error('fit failed')
+    })
+
+    expect(safeFit(pane)).toBe(false)
+    expect(activeBuffer.viewportY).toBe(42)
+    expect(scrollToBottom).not.toHaveBeenCalled()
+  })
+
   it('treats a pane with no recorded fit size as changed', () => {
     const pane = createPane({ rect: { width: 800, height: 600 } })
     expect(paneFitClientSizeChanged(pane)).toBe(true)
