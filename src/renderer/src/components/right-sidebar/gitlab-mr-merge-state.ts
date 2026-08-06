@@ -23,44 +23,44 @@ function presentUnknownMergeState(mergeStateStatus: string | null | undefined): 
     case 'not_approved':
       return blockedPresentation(
         translate(
-          'auto.components.right.sidebar.gitlab.mr.merge.state.approval.required',
+          'auto.components.right.sidebar.gitlab.mr.merge.state.5105b0e584',
           'Approval required'
         ),
         translate(
-          'auto.components.right.sidebar.gitlab.mr.merge.state.approval.required.tip',
+          'auto.components.right.sidebar.gitlab.mr.merge.state.46dc85711b',
           'GitLab requires approval before this MR can merge'
         )
       )
     case 'requested_changes':
       return blockedPresentation(
         translate(
-          'auto.components.right.sidebar.gitlab.mr.merge.state.changes.requested',
+          'auto.components.right.sidebar.gitlab.mr.merge.state.893a999c8c',
           'Changes requested'
         ),
         translate(
-          'auto.components.right.sidebar.gitlab.mr.merge.state.changes.requested.tip',
+          'auto.components.right.sidebar.gitlab.mr.merge.state.c65408a99d',
           'A reviewer requested changes on this merge request'
         )
       )
     case 'discussions_not_resolved':
       return blockedPresentation(
         translate(
-          'auto.components.right.sidebar.gitlab.mr.merge.state.unresolved',
+          'auto.components.right.sidebar.gitlab.mr.merge.state.01ab632a21',
           'Unresolved threads'
         ),
         translate(
-          'auto.components.right.sidebar.gitlab.mr.merge.state.unresolved.tip',
+          'auto.components.right.sidebar.gitlab.mr.merge.state.4191fdfcec',
           'GitLab requires unresolved discussions to be resolved before merge'
         )
       )
     case 'ci_must_pass':
       return blockedPresentation(
         translate(
-          'auto.components.right.sidebar.gitlab.mr.merge.state.checks.must.pass',
+          'auto.components.right.sidebar.gitlab.mr.merge.state.bf628700f6',
           'Checks must pass'
         ),
         translate(
-          'auto.components.right.sidebar.gitlab.mr.merge.state.checks.must.pass.tip',
+          'auto.components.right.sidebar.gitlab.mr.merge.state.37d8637c70',
           'GitLab requires the pipeline to succeed before this MR can merge'
         )
       )
@@ -71,15 +71,15 @@ function presentUnknownMergeState(mergeStateStatus: string | null | undefined): 
           'Checks pending'
         ),
         translate(
-          'auto.components.right.sidebar.gitlab.mr.merge.state.pipeline.running.tip',
+          'auto.components.right.sidebar.gitlab.mr.merge.state.049ea91a82',
           'The pipeline is still running'
         )
       )
     case 'need_rebase':
       return blockedPresentation(
-        translate('auto.components.right.sidebar.gitlab.mr.merge.state.behind', 'Behind'),
+        translate('auto.components.right.sidebar.gitlab.mr.merge.state.382c70faeb', 'Behind'),
         translate(
-          'auto.components.right.sidebar.gitlab.mr.merge.state.behind.tip',
+          'auto.components.right.sidebar.gitlab.mr.merge.state.2c61100b3a',
           'Update the branch before merging'
         )
       )
@@ -95,9 +95,9 @@ function presentUnknownMergeState(mergeStateStatus: string | null | undefined): 
     case 'unchecked':
     case 'preparing':
       return blockedPresentation(
-        translate('auto.components.right.sidebar.gitlab.mr.merge.state.checking', 'Checking'),
+        translate('auto.components.right.sidebar.gitlab.mr.merge.state.195917574e', 'Checking'),
         translate(
-          'auto.components.right.sidebar.gitlab.mr.merge.state.checking.tip',
+          'auto.components.right.sidebar.gitlab.mr.merge.state.ff6db2db63',
           'GitLab is still computing this merge request status'
         )
       )
@@ -111,17 +111,17 @@ function presentUnknownMergeState(mergeStateStatus: string | null | undefined): 
     case 'title_regex':
     case 'not_open':
       return blockedPresentation(
-        translate('auto.components.right.sidebar.gitlab.mr.merge.state.blocked', 'Blocked'),
+        translate('auto.components.right.sidebar.gitlab.mr.merge.state.4ecc0d90ee', 'Blocked'),
         translate(
-          'auto.components.right.sidebar.gitlab.mr.merge.state.blocked.tip',
+          'auto.components.right.sidebar.gitlab.mr.merge.state.a0f3de7023',
           'GitLab reports this merge request is blocked'
         )
       )
     default:
       return blockedPresentation(
-        translate('auto.components.right.sidebar.gitlab.mr.merge.state.checking', 'Checking'),
+        translate('auto.components.right.sidebar.gitlab.mr.merge.state.195917574e', 'Checking'),
         translate(
-          'auto.components.right.sidebar.gitlab.mr.merge.state.unknown.tip',
+          'auto.components.right.sidebar.gitlab.mr.merge.state.804ecf93e8',
           'GitLab has not reported a final merge status'
         )
       )
@@ -208,7 +208,10 @@ export function presentGitLabMRMergeState(review: GitLabMRMergeStateReview): Mer
       'auto.components.right.sidebar.gitlab.mr.merge.state.04a3015a12',
       'Able to merge'
     ),
-    tooltip: 'GitLab says this MR can merge',
+    tooltip: translate(
+      'auto.components.right.sidebar.gitlab.mr.merge.state.a5c049afe4',
+      'GitLab says this MR can merge'
+    ),
     directMergeAvailable: true
   }
 }
