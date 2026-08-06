@@ -33299,6 +33299,93 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  it('does not carry pty-record live authority into a rebuilt leaf after a same-id respawn', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new InMemoryOrchestrationMessages()
+      const write = vi.fn().mockReturnValue(true)
+      runtime.setPtyController({
+        write,
+        kill: vi.fn(),
+        getForegroundProcess: async () => null
+      })
+      // Why a UUID leaf id: the retirement fence's pty-candidate clause compares
+      // parsePaneKey(pty.paneKey).leafId to the republished leafId, and a non-UUID
+      // id falls back to `tabId:paneRuntimeId`, so it is always fenced after exit.
+      const leafId = '11111111-1111-1111-8111-111111111111'
+      const syncUuidLeaf = (): void => {
+        runtime.attachWindow(1)
+        runtime.syncWindowGraph(1, {
+          tabs: [
+            {
+              tabId: 'tab-1',
+              worktreeId: TEST_WORKTREE_ID,
+              title: 'Codex',
+              activeLeafId: leafId,
+              layout: null
+            }
+          ],
+          leaves: [
+            {
+              tabId: 'tab-1',
+              worktreeId: TEST_WORKTREE_ID,
+              leafId,
+              paneRuntimeId: 1,
+              ptyId: 'pty-1',
+              paneTitle: null
+            }
+          ]
+        })
+      }
+      syncUuidLeaf()
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+      runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
+      await runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle' })
+      write.mockClear()
+
+      runtime.onPtyExit('pty-1', 0)
+      runtime.onPtySpawned('pty-1', undefined, { awaitsRegistration: false })
+      // Drop the leaf, then republish it: the rebuilt record's tailSource is the
+      // PTY record rather than the previous leaf, which is what pins the clear
+      // onPtyExit applies at the pty level.
+      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+      syncUuidLeaf()
+
+      const leaves = (
+        runtime as unknown as {
+          leaves: Map<
+            string,
+            { lastAgentStatus: string | null; lastAgentStatusObservedLive: boolean }
+          >
+        }
+      ).leaves
+      expect(leaves.size).toBeGreaterThan(0)
+      const rebuilt = [...leaves.values()][0]
+      expect(rebuilt.lastAgentStatus).toBe('idle')
+      expect(rebuilt.lastAgentStatusObservedLive).toBe(false)
+
+      setInMemoryOrchestrationMessages(runtime, db)
+      const [republished] = (await runtime.listTerminals()).terminals
+      const message = db.insertMessage({
+        from: 'sender',
+        to: republished.handle,
+        subject: 'rebuilt leaf'
+      })
+      runtime.notifyMessageArrived(republished.handle, 'status')
+      await Promise.resolve()
+
+      expect(write).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(600)
+      expect(message.delivered_at).toBeNull()
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('keeps live idle authority across a renderer graph republish', async () => {
     vi.useFakeTimers()
     try {
