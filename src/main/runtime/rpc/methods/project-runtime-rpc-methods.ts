@@ -49,10 +49,16 @@ const LocalWindowsRuntimePreference = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('wsl'), distro: requiredString('Missing WSL distro') })
 ])
 
+const ClaudeAccountPreference = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('inherit-global') }),
+  z.object({ kind: z.literal('account'), accountId: requiredString('Missing account ID') })
+])
+
 const ProjectUpdate = z.object({
   projectId: requiredString('Missing project ID'),
   updates: z.object({
-    localWindowsRuntimePreference: LocalWindowsRuntimePreference.optional()
+    localWindowsRuntimePreference: LocalWindowsRuntimePreference.optional(),
+    claudeAccountPreference: ClaudeAccountPreference.optional()
   })
 })
 

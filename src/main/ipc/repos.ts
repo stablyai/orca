@@ -841,10 +841,16 @@ const LocalWindowsRuntimePreferenceIpcArgs = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('wsl'), distro: z.string().min(1) })
 ])
 
+const ClaudeAccountPreferenceIpcArgs = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('inherit-global') }),
+  z.object({ kind: z.literal('account'), accountId: z.string().min(1) })
+])
+
 const ProjectUpdateIpcArgs = z.object({
   projectId: z.string().min(1),
   updates: z.object({
-    localWindowsRuntimePreference: LocalWindowsRuntimePreferenceIpcArgs.optional()
+    localWindowsRuntimePreference: LocalWindowsRuntimePreferenceIpcArgs.optional(),
+    claudeAccountPreference: ClaudeAccountPreferenceIpcArgs.optional()
   })
 })
 

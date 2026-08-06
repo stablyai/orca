@@ -30,6 +30,7 @@ import { RepoSettingsDraftInput } from './RepositorySettingsDraftInput'
 import { RepositoryForkSyncSection } from './RepositoryForkSyncSection'
 import { translate } from '@/i18n/i18n'
 import { RepositoryWindowsRuntimeSection } from './RepositoryWindowsRuntimeSection'
+import { RepositoryClaudeAccountSection } from './RepositoryClaudeAccountSection'
 import { matchesRepositoryIdentitySearch } from './repository-identity-search'
 import { RepositoryWorktreeDefaultsSection } from './RepositoryWorktreeDefaultsSection'
 import { getProjectRuntimeSessionSummary } from './repository-runtime-session-summary'
@@ -191,6 +192,7 @@ export function RepositoryPane({
   const sourceControlAiEntries = allEntries.filter((entry) => entry.title === 'Git AI Author')
   const hostSetupEntries = allEntries.filter((entry) => entry.title === 'Available Hosts')
   const projectRuntimeEntries = allEntries.filter((entry) => entry.title === 'Project Runtime')
+  const claudeAccountEntries = allEntries.filter((entry) => entry.title === 'Claude Account')
   const removeProjectLabel =
     confirmingRemove === repo.id ? 'Confirm Remove Project' : 'Remove Project'
 
@@ -357,6 +359,15 @@ export function RepositoryPane({
             />
           </>
         ) : null}
+
+        <RepositoryClaudeAccountSection
+          repoDisplayName={repo.displayName}
+          project={project}
+          updateProject={updateProject}
+          forceVisible={forceFullPaneForRepoMatch}
+          searchQuery={searchQuery}
+          searchEntries={claudeAccountEntries}
+        />
       </section>
     ) : null,
     hooksSection,

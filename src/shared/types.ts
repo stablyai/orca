@@ -46,6 +46,7 @@ import type {
   GlobalWindowsRuntimeDefault,
   LocalWindowsRuntimePreference
 } from './project-execution-runtime'
+import type { ProjectClaudeAccountPreference } from './project-claude-account-preference'
 import type { UsagePercentageDisplay } from './usage-percentage-display'
 import type { StatusBarUsageMode } from './status-bar-usage-mode'
 import type { PersistedNativeChatSessionOptions } from './native-chat-session-options'
@@ -126,6 +127,8 @@ export type Project = {
   gitRemoteIdentity?: GitRemoteIdentity
   /** Local Windows projects inherit the global runtime default unless this override is set. */
   localWindowsRuntimePreference?: LocalWindowsRuntimePreference
+  /** Claude launches in this project switch to this managed account first; absent inherits the global selection. */
+  claudeAccountPreference?: ProjectClaudeAccountPreference
   sourceRepoIds: string[]
   createdAt: number
   updatedAt: number
@@ -133,7 +136,7 @@ export type Project = {
 
 export type ProjectUpdateArgs = {
   projectId: string
-  updates: Partial<Pick<Project, 'localWindowsRuntimePreference'>>
+  updates: Partial<Pick<Project, 'localWindowsRuntimePreference' | 'claudeAccountPreference'>>
 }
 
 export type ProjectHostSetupState = 'ready' | 'not-set-up' | 'setting-up' | 'error' | 'unsupported'

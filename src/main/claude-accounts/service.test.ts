@@ -495,7 +495,8 @@ describe('ClaudeAccountService credential capture', () => {
       updateSettings: vi.fn((updates: Partial<typeof settings>) => {
         settings = { ...settings, ...updates }
         return settings
-      })
+      }),
+      clearClaudeAccountPreferenceForAccount: vi.fn()
     }
     const runtimeAuth = {
       syncForCurrentSelection: vi.fn(async () => {}),
@@ -518,6 +519,7 @@ describe('ClaudeAccountService credential capture', () => {
     expect(rateLimits.refreshForClaudeAccountChange).toHaveBeenCalledWith('account-1', {
       runtime: 'host'
     })
+    expect(store.clearClaudeAccountPreferenceForAccount).toHaveBeenCalledWith('account-1')
     expect(settings).toMatchObject({
       claudeManagedAccounts: [],
       activeClaudeManagedAccountId: null
@@ -1262,7 +1264,8 @@ describe('ClaudeAccountService credential capture', () => {
       updateSettings: vi.fn((updates: Partial<typeof settings>) => {
         settings = { ...settings, ...updates }
         return settings
-      })
+      }),
+      clearClaudeAccountPreferenceForAccount: vi.fn()
     }
     const runtimeAuth = {
       syncForCurrentSelection: vi.fn(async () => {}),

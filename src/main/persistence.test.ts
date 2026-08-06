@@ -594,6 +594,109 @@ describe('Store', () => {
     })
   })
 
+  it('updates and persists a project Claude account preference', async () => {
+    const project = makeProject({ id: 'project-1', sourceRepoIds: ['r1'] })
+    writeDataFile({
+      ...getDefaultPersistedState(testState.dir),
+      projects: [project],
+      projectHostSetups: [
+        makeProjectHostSetup({
+          id: 'setup-1',
+          projectId: project.id,
+          repoId: ''
+        })
+      ]
+    })
+    const store = await createStore()
+
+    const updated = store.updateProject('project-1', {
+      claudeAccountPreference: { kind: 'account', accountId: 'acct-1' }
+    })
+
+    expect(updated?.claudeAccountPreference).toEqual({ kind: 'account', accountId: 'acct-1' })
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getProjects()[0]?.claudeAccountPreference).toEqual({
+      kind: 'account',
+      accountId: 'acct-1'
+    })
+  })
+
+  it('deletes the project Claude account preference for undefined, inherit-global, and malformed updates', async () => {
+    const project = makeProject({
+      id: 'project-1',
+      sourceRepoIds: ['r1'],
+      claudeAccountPreference: { kind: 'account', accountId: 'acct-1' }
+    })
+    writeDataFile({
+      ...getDefaultPersistedState(testState.dir),
+      projects: [project],
+      projectHostSetups: [
+        makeProjectHostSetup({
+          id: 'setup-1',
+          projectId: project.id,
+          repoId: ''
+        })
+      ]
+    })
+    const store = await createStore()
+
+    expect(
+      store.updateProject('project-1', { claudeAccountPreference: { kind: 'inherit-global' } })
+        ?.claudeAccountPreference
+    ).toBeUndefined()
+
+    store.updateProject('project-1', {
+      claudeAccountPreference: { kind: 'account', accountId: 'acct-1' }
+    })
+    expect(
+      store.updateProject('project-1', { claudeAccountPreference: undefined })
+        ?.claudeAccountPreference
+    ).toBeUndefined()
+
+    store.updateProject('project-1', {
+      claudeAccountPreference: { kind: 'account', accountId: 'acct-1' }
+    })
+    expect(
+      store.updateProject('project-1', {
+        claudeAccountPreference: { kind: 'account', accountId: '   ' }
+      })?.claudeAccountPreference
+    ).toBeUndefined()
+  })
+
+  it('clears matching project Claude account preferences when an account is removed', async () => {
+    const preferring = makeProject({
+      id: 'project-1',
+      sourceRepoIds: ['r1'],
+      claudeAccountPreference: { kind: 'account', accountId: 'acct-1' }
+    })
+    const other = makeProject({
+      id: 'project-2',
+      sourceRepoIds: ['r2'],
+      claudeAccountPreference: { kind: 'account', accountId: 'acct-2' }
+    })
+    writeDataFile({
+      ...getDefaultPersistedState(testState.dir),
+      projects: [preferring, other],
+      projectHostSetups: [
+        makeProjectHostSetup({ id: 'setup-1', projectId: preferring.id, repoId: '' }),
+        makeProjectHostSetup({ id: 'setup-2', projectId: other.id, repoId: '' })
+      ]
+    })
+    const store = await createStore()
+
+    store.clearClaudeAccountPreferenceForAccount('acct-1')
+
+    const projects = store.getProjects()
+    expect(
+      projects.find((entry) => entry.id === 'project-1')?.claudeAccountPreference
+    ).toBeUndefined()
+    expect(projects.find((entry) => entry.id === 'project-2')?.claudeAccountPreference).toEqual({
+      kind: 'account',
+      accountId: 'acct-2'
+    })
+  })
+
   it('migrates legacy WSL agent settings into the global Windows runtime default', async () => {
     writeDataFile({
       schemaVersion: 1,

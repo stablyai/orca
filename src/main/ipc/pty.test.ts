@@ -1909,6 +1909,25 @@ describe('registerPtyHandlers', () => {
       expect(hasLiveClaudePtys()).toBe(false)
     })
 
+    it('passes the launch worktree to prepareClaudeAuth', async () => {
+      const prepareClaudeAuth = vi.fn(async () => ({
+        configDir: '/tmp/claude',
+        envPatch: {},
+        stripAuthEnv: false,
+        provenance: 'managed:account-1'
+      }))
+      registerPtyHandlers(mainWindow as never, undefined, undefined, undefined, prepareClaudeAuth)
+
+      await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        command: 'claude',
+        worktreeId: 'wt-1'
+      })
+
+      expect(prepareClaudeAuth).toHaveBeenCalledWith(expect.anything(), { worktreeId: 'wt-1' })
+    })
+
     it('clears Claude live-PTY tracking from shared provider teardown', () => {
       markClaudePtySpawned('ssh-claude-pty')
       expect(hasLiveClaudePtys()).toBe(true)

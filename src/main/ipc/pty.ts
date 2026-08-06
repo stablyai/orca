@@ -1201,8 +1201,10 @@ export type PrepareCodexSessionResume = (args: {
   launchEnv?: NodeJS.ProcessEnv
   workspacePath?: string
 }) => Promise<CodexSessionResumePreparation | null>
+export type ClaudeLaunchContext = { worktreeId?: string }
 type PrepareClaudeAuth = (
-  target?: ClaudeAccountSelectionTarget
+  target?: ClaudeAccountSelectionTarget,
+  context?: ClaudeLaunchContext
 ) => Promise<ClaudeRuntimeAuthPreparation>
 
 function getCodexSelectionTargetForPty(
@@ -4397,7 +4399,9 @@ export function registerPtyHandlers(
       // notifyResumeUnavailable — runtime/relay panes start fresh without the notice.
       const launchCommand = codexResumeLaunch.command
       const claudeAuth =
-        isClaudeLaunch && prepareClaudeAuth ? await prepareClaudeAuth(codexSelectionTarget) : null
+        isClaudeLaunch && prepareClaudeAuth
+          ? await prepareClaudeAuth(codexSelectionTarget, { worktreeId: args.worktreeId })
+          : null
       if (isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
         throw new Error('A Claude account switch is in progress. Try again after it finishes.')
       }
@@ -5763,7 +5767,7 @@ export function registerPtyHandlers(
         )
         const claudeAuth =
           isClaudeLaunch && prepareClaudeAuth
-            ? await prepareClaudeAuth(initialSelectionTarget)
+            ? await prepareClaudeAuth(initialSelectionTarget, { worktreeId: args.worktreeId })
             : null
         spawnTiming.mark('auth')
         if (isClaudeLaunch && isClaudeAuthSwitchInProgress()) {

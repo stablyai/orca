@@ -449,6 +449,7 @@ export class ClaudeAccountService {
           : undefined,
         getClaudeSelectionTargetForAccount(account)
       )
+      this.store.clearClaudeAccountPreferenceForAccount(accountId)
       return this.getSnapshot()
     } catch (error) {
       this.restoreClaudeSettings(settings)

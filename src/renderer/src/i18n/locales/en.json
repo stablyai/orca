@@ -6795,7 +6795,9 @@
           "projectRuntimeDescription": "Choose whether this project runs on Windows or WSL.",
           "hostStateDisconnected": "Disconnected",
           "hostStateUnknown": "Unknown",
-          "nestedHostLabel": "{{value0}} via {{value1}}"
+          "nestedHostLabel": "{{value0}} via {{value1}}",
+          "claudeAccount": "Claude Account",
+          "claudeAccountDescription": "Choose which managed Claude account this project launches Claude Code with."
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "Command template",
@@ -8905,7 +8907,9 @@
             "keepForkUpToDate": "Keep Fork Up to Date",
             "keepForkUpToDateDescription": "Safely fast-forward this fork from upstream.",
             "projectRuntime": "Project Runtime",
-            "projectRuntimeDescription": "Choose whether this project runs on Windows or WSL."
+            "projectRuntimeDescription": "Choose whether this project runs on Windows or WSL.",
+            "claudeAccount": "Claude Account",
+            "claudeAccountDescription": "Choose which managed Claude account this project launches Claude Code with."
           }
         },
         "runtime": {
@@ -10295,6 +10299,16 @@
           "body": "The terminal daemon was started by an Orca install that no longer exists, so macOS can’t attribute its commands to Orca — Accessibility and Automation grants are silently ignored (osascript fails with error -25211). Restarting the daemon fixes this; running terminal sessions will close.",
           "openManageSessions": "Open Manage Sessions",
           "title": "macOS permission grants aren’t reaching terminals"
+        },
+        "ProjectClaudeAccountSetting": {
+          "claudeAccount": "Claude account",
+          "projectOverride": "Claude Code launches in this project switch to this account first.",
+          "inheritedAccount": "No project override. Claude Code uses the globally selected account.",
+          "defaultAccount": "Default (follow global account)",
+          "removedAccount": "Removed account",
+          "accountChangeHelp": "Applies when launching Claude Code in this project's workspaces. Orca switches the active Claude account before launch; running terminals keep their current account.",
+          "wslAccountWithDistro": "{{value0}} (WSL: {{value1}})",
+          "wslAccount": "{{value0}} (WSL)"
         }
       },
       "right": {

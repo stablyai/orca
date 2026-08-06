@@ -230,6 +230,7 @@ import { getDefaultWslDistro } from './wsl'
 import { collectWorktreeTrashSweepRoots, sweepStaleWorktreeTrash } from './worktree-trash'
 import { ClaudeAccountService } from './claude-accounts/service'
 import { ClaudeRuntimeAuthService } from './claude-accounts/runtime-auth-service'
+import { createProjectAwarePrepareClaudeAuth } from './claude-accounts/project-account-preference'
 import {
   attachClaudeLivePtyPersistence,
   onLiveClaudePtysDrained,
@@ -1368,7 +1369,11 @@ function openMainWindow(): BrowserWindow {
     store,
     runtime,
     prepareCodexRuntimeHomeForLaunch,
-    (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target),
+    createProjectAwarePrepareClaudeAuth({
+      getStore: () => store!,
+      getClaudeAccounts: () => claudeAccounts!,
+      prepare: (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target)
+    }),
     {
       prepareCodexSessionResume: prepareCodexSessionResumeForLaunch,
       awaitLocalPtyStartup: () => localPtyStartupReady,
@@ -2861,7 +2866,11 @@ void app.whenReady().then(async () => {
       runtime,
       prepareCodexRuntimeHomeForLaunch,
       () => store!.getSettings(),
-      (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target),
+      createProjectAwarePrepareClaudeAuth({
+        getStore: () => store!,
+        getClaudeAccounts: () => claudeAccounts!,
+        prepare: (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target)
+      }),
       store,
       prepareCodexSessionResumeForLaunch
     )

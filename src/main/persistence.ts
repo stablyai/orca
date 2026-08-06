@@ -77,6 +77,7 @@ import {
   deriveGlobalWindowsRuntimeDefaultFromLegacySettings,
   normalizeProjectRuntimePreference
 } from '../shared/project-execution-runtime'
+import { normalizeProjectClaudeAccountPreference } from '../shared/project-claude-account-preference'
 import { projectHostSetupProjectionFromRepos } from '../shared/project-host-setup-projection'
 import { isPluginPanelTabKey } from '../shared/plugins/plugin-manifest'
 import type { GitRemoteIdentity } from '../shared/git-remote-identity'
@@ -4150,9 +4151,35 @@ export class Store {
         )
       }
     }
+    if ('claudeAccountPreference' in updates) {
+      const preference = normalizeProjectClaudeAccountPreference(updates.claudeAccountPreference)
+      if (updates.claudeAccountPreference === undefined || preference.kind === 'inherit-global') {
+        delete project.claudeAccountPreference
+      } else {
+        project.claudeAccountPreference = preference
+      }
+    }
     project.updatedAt = Date.now()
     this.scheduleSave()
     return { ...project }
+  }
+
+  clearClaudeAccountPreferenceForAccount(accountId: string): void {
+    let changed = false
+    for (const project of this.state.projects) {
+      if (project.claudeAccountPreference?.kind !== 'account') {
+        continue
+      }
+      if (project.claudeAccountPreference.accountId !== accountId) {
+        continue
+      }
+      delete project.claudeAccountPreference
+      project.updatedAt = Date.now()
+      changed = true
+    }
+    if (changed) {
+      this.scheduleSave()
+    }
   }
 
   getProjectHostSetups(): ProjectHostSetup[] {

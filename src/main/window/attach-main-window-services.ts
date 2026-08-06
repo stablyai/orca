@@ -23,6 +23,7 @@ import { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
 import {
   getLocalPtyProvider,
   registerPtyHandlers,
+  type ClaudeLaunchContext,
   type GetSelectedCodexHomePath,
   type PrepareCodexSessionResume
 } from '../ipc/pty'
@@ -89,7 +90,8 @@ export function attachMainWindowServices(
   runtime: OrcaRuntimeService,
   getSelectedCodexHomePath?: GetSelectedCodexHomePath,
   prepareClaudeAuth?: (
-    target?: ClaudeAccountSelectionTarget
+    target?: ClaudeAccountSelectionTarget,
+    context?: ClaudeLaunchContext
   ) => Promise<ClaudeRuntimeAuthPreparation>,
   options?: {
     prepareCodexSessionResume?: PrepareCodexSessionResume

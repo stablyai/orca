@@ -162,6 +162,29 @@ export function getRepositoryPaneSearchEntries(
             ]
           }
         ]),
+    {
+      title: translate(
+        'auto.components.settings.repository.search.claudeAccount',
+        'Claude Account'
+      ),
+      description: translate(
+        'auto.components.settings.repository.search.claudeAccountDescription',
+        'Choose which managed Claude account this project launches Claude Code with.'
+      ),
+      keywords: [
+        repo.displayName,
+        ...translateSearchKeyword('auto.components.settings.repository.search.claude', 'claude'),
+        ...translateSearchKeyword('auto.components.settings.repository.search.account', 'account'),
+        ...translateSearchKeyword(
+          'auto.components.settings.repository.search.agentAccount',
+          'agent account'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.repository.search.anthropic',
+          'anthropic'
+        )
+      ]
+    },
     ...(isFolder ? [] : getRepositoryGitWorktreeSearchEntries(repo)),
     {
       title: translate('auto.components.settings.repository.search.c5266c2c9d', 'Remove Project'),
