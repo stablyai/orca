@@ -2,7 +2,6 @@ import { app, ipcMain } from 'electron'
 import { resolve } from 'node:path'
 import {
   configureAiVaultSessionSources,
-  getAiVaultSessionSourcesCacheKey,
   getAiVaultWslHomeDirs,
   listAiVaultSessions as listCachedLocalAiVaultSessions,
   resetAiVaultSessionListCacheForTests,
@@ -19,7 +18,6 @@ import {
 import { scanSshAiVaultSessions } from '../ai-vault/ssh-session-list'
 import { AiVaultScanCoordinator } from '../ai-vault/ai-vault-scan-coordinator'
 import {
-  AI_VAULT_SCOPE_PATHS_MAX_COUNT,
   isAiVaultScanCancelledError,
   type AiVaultFirstUserPromptArgs,
   type AiVaultListArgs,
@@ -47,6 +45,7 @@ import {
 } from './ai-vault-runtime-scan'
 import { resetAiVaultHostLegCacheForTests, scanHostLegWithCache } from './ai-vault-host-leg-cache'
 import { requestedAiVaultSessionDepth } from '../../shared/ai-vault-session-depth'
+import { buildAiVaultListCacheKeys } from './ai-vault-list-cache-keys'
 
 const AI_VAULT_ALL_HOST_RUNTIME_TIMEOUT_MS = 3_000
 // Why: a remote home with many agent roots routinely needs seconds to walk,
@@ -74,21 +73,8 @@ async function listAiVaultSessions(
   const executionHostScope = normalizeExecutionHostScope(
     args?.executionHostScope ?? LOCAL_EXECUTION_HOST_ID
   )
-  // Scope paths change the result set, so they must be part of the cache key.
-  // A scanner consumes at most 64 paths, so smaller equivalent workspace sets
-  // can share a snapshot regardless of which worktree was selected first.
   const scopePaths = args?.scopePaths ?? []
-  const key = JSON.stringify({
-    scopePaths:
-      scopePaths.length <= AI_VAULT_SCOPE_PATHS_MAX_COUNT
-        ? [...new Set(scopePaths)].sort()
-        : scopePaths,
-    executionHostScope,
-    localSessionSources:
-      executionHostScope === LOCAL_EXECUTION_HOST_ID || executionHostScope === 'all'
-        ? getAiVaultSessionSourcesCacheKey()
-        : null
-  })
+  const { key, remoteLegKey } = buildAiVaultListCacheKeys({ scopePaths, executionHostScope })
   const depth = requestedAiVaultSessionDepth(args)
   const scanKey = JSON.stringify({ key, depth })
   // Why: every renderer request carries its own cancellation signal, so
@@ -99,7 +85,8 @@ async function listAiVaultSessions(
     force: args?.force,
     signal: options.signal,
     start: (scanSignal) => {
-      const scan = () => scanAiVaultSessionsByHostScope(args, executionHostScope, scanSignal, key)
+      const scan = () =>
+        scanAiVaultSessionsByHostScope(args, executionHostScope, scanSignal, remoteLegKey)
       if (executionHostScope === LOCAL_EXECUTION_HOST_ID) {
         return scan()
       }

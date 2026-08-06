@@ -56,6 +56,41 @@ beforeEach(() => {
 })
 
 describe('Agent Session History scan coalescing', () => {
+  it('does not re-scan remote hosts when only the local Codex source changed', async () => {
+    let sourceHome = '/custom/codex/a'
+    registerAiVaultHandlers({
+      getCodexSessionSourceHomePath: () => sourceHome,
+      getActiveRuntimeAiVaultHostInfos: () => [],
+      scanRuntimeAiVaultSessions: mocks.scanRuntimeAiVaultSessions
+    })
+
+    await _internals.listAiVaultSessions({ executionHostScope: 'all' })
+    const remoteScansBefore = mocks.scanRemoteAiVaultSessions.mock.calls.length
+    sourceHome = '/custom/codex/b'
+    await _internals.listAiVaultSessions({ executionHostScope: 'all' })
+
+    // The local leg must rescan; the SSH leg holds no local sessions and is
+    // budgeted seconds, so a local settings change must not re-pay its walk.
+    expect(mocks.scanAiVaultSessions.mock.calls.length).toBeGreaterThan(1)
+    expect(mocks.scanRemoteAiVaultSessions.mock.calls.length).toBe(remoteScansBefore)
+  })
+
+  it('REGRESSION: a throwing local source getter must not empty the all-hosts panel', async () => {
+    mocks.scanRemoteAiVaultSessions.mockResolvedValue({
+      sessions: [{ sessionId: 'remote-1', agent: 'codex' }],
+      issues: [],
+      scannedAt: '2026-07-27T00:00:00.000Z'
+    } as never)
+    registerAiVaultHandlers({
+      getCodexSessionSourceHomePath: () => {
+        throw new Error('EACCES: permission denied, mkdir /userdata/codex-runtime-home')
+      }
+    })
+
+    const result = await _internals.listAiVaultSessions({ executionHostScope: 'all' })
+
+    expect(result.sessions.map((s) => s.sessionId)).toContain('remote-1')
+  })
   it('starts a new local scan when the configured Codex source changes', async () => {
     let sourceHome = '/custom/codex/a'
     const resolveScans: ((result: AiVaultListResult) => void)[] = []

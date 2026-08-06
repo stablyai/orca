@@ -456,7 +456,11 @@ export class CodexRuntimeHomeService {
   }
 
   getHostCodexHomePathsForSessionDiscovery(): string[] {
-    const homes = [this.getRuntimeHomePath()]
+    // Why: path only. Session discovery is read-only and now runs on the AI
+    // Vault cache-key path (every list request, cache hits included), so
+    // materializing the mirror here would re-create it behind the user's back
+    // on hosts that never launch Codex.
+    const homes = [resolveOrcaManagedCodexHomePath()]
     if (this.isHostSystemDefaultRealHome() || this.getSelfContainedManagedHostAccount()) {
       // Why: nested Orca processes can retain an ambient managed CODEX_HOME.
       // Per-account lanes no longer bridge real-home history into the shared

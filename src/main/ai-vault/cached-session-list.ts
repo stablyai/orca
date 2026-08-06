@@ -1,4 +1,4 @@
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { scanAiVaultSessions } from './session-scanner'
 import { getWslHomeAsync, listWslDistrosAsync } from '../wsl'
 import type { AiVaultListArgs, AiVaultListResult } from '../../shared/ai-vault-types'
@@ -56,19 +56,36 @@ function resolveCodexSessionDirs(): string[] {
   ].map((homePath) => join(homePath, 'sessions'))
 }
 
+// Why: order and duplicates move the key but never the scan — discovery unions
+// these roots and de-dupes them by resolve() — so an equivalent set has to key
+// identically. Pointing the override at a root already in the list (~/.codex is
+// the field's own placeholder) would otherwise evict the cache on every request.
+function codexSessionDirsCacheIdentity(dirs: readonly string[]): string[] {
+  return [...new Set(dirs.map((dir) => resolve(dir)))].sort()
+}
+
+// Why: this one runs at the IPC edge, OUTSIDE the all-hosts guard that stops a
+// failing local leg from discarding every host's sessions. Resolving sources
+// touches the filesystem and can throw, so degrade to a stable placeholder key
+// and let the scan itself report the failure as a local host issue.
 export function getAiVaultSessionSourcesCacheKey(): string {
-  return JSON.stringify(resolveCodexSessionDirs())
+  try {
+    return JSON.stringify(codexSessionDirsCacheIdentity(resolveCodexSessionDirs()))
+  } catch {
+    return JSON.stringify({ unresolvedSources: true })
+  }
 }
 
 export async function listAiVaultSessions(
   args?: AiVaultListArgs,
   options: { signal?: AbortSignal } = {}
 ): Promise<AiVaultListResult> {
+  // The scan keeps the ordered list (root precedence); only the key is canonical.
   const additionalCodexSessionsDirs = resolveCodexSessionDirs()
   // Scope and source paths both change the result set, so they belong in the cache key.
   const key = JSON.stringify({
     scopePaths: [...new Set(args?.scopePaths ?? [])].sort(),
-    additionalCodexSessionsDirs
+    codexSessionDirs: codexSessionDirsCacheIdentity(additionalCodexSessionsDirs)
   })
   const depth = requestedAiVaultSessionDepth(args)
   const scanKey = JSON.stringify({ key, depth })
