@@ -16,8 +16,9 @@ const testHome = vi.hoisted(() => {
   // Why: that same module bakes `process.env.CODEX_HOME` into the default root
   // at load, so an ambient value repoints the "default home" asserted below —
   // and the users this fix targets are exactly the ones who set it.
+  const previousCodexHome = process.env.CODEX_HOME
   delete process.env.CODEX_HOME
-  return { root, home }
+  return { root, home, previousCodexHome }
 })
 
 vi.mock('node:os', async () => {
@@ -77,6 +78,10 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
+  // Workers are reused across files, so leave the env as this one found it.
+  if (testHome.previousCodexHome !== undefined) {
+    process.env.CODEX_HOME = testHome.previousCodexHome
+  }
   await rm(testHome.root, { recursive: true, force: true })
 })
 
