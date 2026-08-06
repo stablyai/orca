@@ -4,6 +4,7 @@ import {
   decodeTerminalStreamFrame,
   decodeTerminalStreamJson,
   encodeTerminalStreamFrame,
+  encodeTerminalStreamJson,
   encodeTerminalStreamText
 } from '../../../shared/terminal-stream-protocol'
 import {
@@ -98,8 +99,25 @@ describe('remote runtime terminal data subscriptions', () => {
     const subscribeFrame = decodeTerminalStreamFrame(sendBinary.mock.calls[0][0])
     expect(subscribeFrame?.opcode).toBe(TerminalStreamOpcode.Subscribe)
     const subscribePayload =
-      subscribeFrame && decodeTerminalStreamJson<{ streamId: number }>(subscribeFrame.payload)
+      subscribeFrame &&
+      decodeTerminalStreamJson<{
+        streamId: number
+        capabilities?: {
+          ackOutput?: 1
+          ackOutputSourceRanges?: 1
+          desktopViewportClaims?: 1
+          outputPause?: 1
+          writeUnavailable?: 1
+        }
+      }>(subscribeFrame.payload)
     expect(subscribePayload?.streamId).toEqual(expect.any(Number))
+    expect(subscribePayload?.capabilities).toEqual({
+      ackOutput: 1,
+      ackOutputSourceRanges: 1,
+      desktopViewportClaims: 1,
+      outputPause: 1,
+      writeUnavailable: 1
+    })
 
     callbacks?.onBinary?.(
       encodeTerminalStreamFrame({
@@ -111,10 +129,121 @@ describe('remote runtime terminal data subscriptions', () => {
     )
 
     expect(watcher).toHaveBeenCalledWith('live')
+    await vi.waitFor(() =>
+      expect(
+        sendBinary.mock.calls
+          .slice(1)
+          .map((call) => decodeTerminalStreamFrame(call[0]))
+          .some((frame) => frame?.opcode === TerminalStreamOpcode.Ack)
+      ).toBe(true)
+    )
+    const ackFrame = sendBinary.mock.calls
+      .slice(1)
+      .map((call) => decodeTerminalStreamFrame(call[0]))
+      .find((frame) => frame?.opcode === TerminalStreamOpcode.Ack)
+    expect(ackFrame?.streamId).toBe(subscribePayload!.streamId)
+    expect(ackFrame && decodeTerminalStreamJson(ackFrame.payload)).toEqual({ bytes: 4 })
     expect(_getRemoteRuntimeTerminalMultiplexerCountForTest()).toBe(1)
     dispose()
     expect(unsubscribe).toHaveBeenCalled()
     expect(_getRemoteRuntimeTerminalMultiplexerCountForTest()).toBe(0)
+  })
+
+  it('echoes the opaque stream generation in cumulative source-range ACKs', async () => {
+    const dispose = await subscribeToRuntimeTerminalData(
+      { activeRuntimeEnvironmentId: 'env-fallback' },
+      'remote:env-1@@terminal-1',
+      'watcher-1',
+      vi.fn()
+    )
+    await vi.waitFor(() => expect(sendBinary).toHaveBeenCalled())
+    const subscribeFrame = decodeTerminalStreamFrame(sendBinary.mock.calls[0][0])
+    const subscribePayload =
+      subscribeFrame && decodeTerminalStreamJson<{ streamId: number }>(subscribeFrame.payload)
+    callbacks?.onResponse({
+      ok: true,
+      result: {
+        type: 'subscribed',
+        streamId: subscribePayload!.streamId,
+        streamGeneration: 'opaque-generation',
+        capabilities: { ackOutputSourceRanges: 1 }
+      }
+    })
+
+    callbacks?.onBinary?.(
+      encodeTerminalStreamFrame({
+        opcode: TerminalStreamOpcode.Output,
+        streamId: subscribePayload!.streamId,
+        seq: 4,
+        payload: encodeTerminalStreamText('live')
+      })
+    )
+
+    await vi.waitFor(() => {
+      const ack = sendBinary.mock.calls
+        .slice(1)
+        .map((call) => decodeTerminalStreamFrame(call[0]))
+        .find((frame) => frame?.opcode === TerminalStreamOpcode.Ack)
+      expect(ack && decodeTerminalStreamJson(ack.payload)).toEqual({
+        streamGeneration: 'opaque-generation',
+        ackedEndByte: 4
+      })
+    })
+    dispose()
+  })
+
+  it('can start at the live tail without replaying the initial snapshot', async () => {
+    const watcher = vi.fn()
+    const subscription = subscribeToRuntimeTerminalData(
+      { activeRuntimeEnvironmentId: 'env-fallback' },
+      'remote:env-1@@terminal-1',
+      'watcher-1',
+      watcher,
+      { startAtLiveTail: true }
+    )
+
+    await vi.waitFor(() => expect(sendBinary).toHaveBeenCalled())
+    const subscribeFrame = decodeTerminalStreamFrame(sendBinary.mock.calls[0][0])
+    const subscribePayload =
+      subscribeFrame && decodeTerminalStreamJson<{ streamId: number }>(subscribeFrame.payload)
+    const streamId = subscribePayload!.streamId
+    callbacks?.onBinary?.(
+      encodeTerminalStreamFrame({
+        opcode: TerminalStreamOpcode.SnapshotStart,
+        streamId,
+        seq: 0,
+        payload: encodeTerminalStreamJson({ seq: 0 })
+      })
+    )
+    callbacks?.onBinary?.(
+      encodeTerminalStreamFrame({
+        opcode: TerminalStreamOpcode.SnapshotChunk,
+        streamId,
+        seq: 0,
+        payload: encodeTerminalStreamText('historical')
+      })
+    )
+    callbacks?.onBinary?.(
+      encodeTerminalStreamFrame({
+        opcode: TerminalStreamOpcode.SnapshotEnd,
+        streamId,
+        seq: 0,
+        payload: new Uint8Array()
+      })
+    )
+    const dispose = await subscription
+
+    expect(watcher).not.toHaveBeenCalled()
+    callbacks?.onBinary?.(
+      encodeTerminalStreamFrame({
+        opcode: TerminalStreamOpcode.Output,
+        streamId,
+        seq: 4,
+        payload: encodeTerminalStreamText('live')
+      })
+    )
+    expect(watcher).toHaveBeenCalledWith('live')
+    dispose()
   })
 
   it('keeps the shared terminal multiplexer until the last watcher closes', async () => {
@@ -187,5 +316,301 @@ describe('remote runtime terminal data subscriptions', () => {
     await Promise.resolve()
 
     expect(unsubscribe).toHaveBeenCalledOnce()
+  })
+})
+
+describe('remote runtime terminal multiplex ACK gate', () => {
+  const runtimeSubscribe = vi.fn()
+  const sendBinary = vi.fn()
+  const unsubscribe = vi.fn()
+  let callbacks: {
+    onResponse: (response: unknown) => void
+    onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
+    onError?: (error: { message: string }) => void
+    onClose?: () => void
+  } | null = null
+
+  beforeEach(async () => {
+    vi.resetModules()
+    vi.clearAllMocks()
+    callbacks = null
+    runtimeSubscribe.mockImplementation(async (_args: unknown, nextCallbacks: typeof callbacks) => {
+      callbacks = nextCallbacks
+      queueMicrotask(() =>
+        callbacks?.onResponse({
+          ok: true,
+          result: { type: 'ready' }
+        })
+      )
+      return { unsubscribe, sendBinary }
+    })
+    vi.stubGlobal('window', {
+      api: {
+        e2e: {
+          getConfig: () => ({ exposeStore: true })
+        },
+        runtimeEnvironments: {
+          subscribe: runtimeSubscribe
+        }
+      }
+    })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.resetModules()
+  })
+
+  it('holds and releases ACKs for selected remote terminal streams only', async () => {
+    const { getRemoteRuntimeTerminalMultiplexer, resetRemoteRuntimeTerminalMultiplexersForTests } =
+      await import('./remote-runtime-terminal-multiplexer')
+    resetRemoteRuntimeTerminalMultiplexersForTests()
+
+    const multiplexer = getRemoteRuntimeTerminalMultiplexer('env-ack-gate')
+    const heldTerminal = await multiplexer.subscribeTerminal({
+      terminal: 'terminal-held',
+      client: { id: 'desktop-held', type: 'desktop' },
+      callbacks: {
+        onData: vi.fn(),
+        onSnapshot: vi.fn()
+      }
+    })
+    const liveTerminal = await multiplexer.subscribeTerminal({
+      terminal: 'terminal-live',
+      client: { id: 'desktop-live', type: 'desktop' },
+      callbacks: {
+        onData: vi.fn(),
+        onSnapshot: vi.fn()
+      }
+    })
+
+    await vi.waitFor(() => expect(sendBinary).toHaveBeenCalledTimes(2))
+    const heldStreamId = heldTerminal.streamId
+    const liveStreamId = liveTerminal.streamId
+    const gate = (
+      window as typeof window & {
+        __remoteTerminalMultiplexAckGate?: {
+          hold: (terminals: string[]) => void
+          release: () => void
+          snapshot: () => {
+            heldTerminalCount: number
+            heldStreamCount: number
+            heldAckChars: number
+            releasedAckChars: number
+          }
+        }
+      }
+    ).__remoteTerminalMultiplexAckGate
+    expect(gate).toBeDefined()
+    gate?.hold(['terminal-held'])
+    sendBinary.mockClear()
+
+    callbacks?.onBinary?.(
+      encodeTerminalStreamFrame({
+        opcode: TerminalStreamOpcode.Output,
+        streamId: heldStreamId,
+        seq: 1,
+        payload: encodeTerminalStreamText('held-output')
+      })
+    )
+    callbacks?.onBinary?.(
+      encodeTerminalStreamFrame({
+        opcode: TerminalStreamOpcode.Output,
+        streamId: liveStreamId,
+        seq: 2,
+        payload: encodeTerminalStreamText('live-output')
+      })
+    )
+
+    await vi.waitFor(() =>
+      expect(
+        sendBinary.mock.calls
+          .map((call) => decodeTerminalStreamFrame(call[0]))
+          .filter((frame) => frame?.opcode === TerminalStreamOpcode.Ack)
+      ).toHaveLength(1)
+    )
+    const immediateAckFrames = sendBinary.mock.calls
+      .map((call) => decodeTerminalStreamFrame(call[0]))
+      .filter((frame) => frame?.opcode === TerminalStreamOpcode.Ack)
+    expect(immediateAckFrames).toHaveLength(1)
+    expect(immediateAckFrames[0]?.streamId).toBe(liveStreamId)
+    expect(gate?.snapshot()).toMatchObject({
+      heldTerminalCount: 1,
+      heldStreamCount: 1,
+      heldAckChars: 'held-output'.length
+    })
+
+    gate?.release()
+    await vi.waitFor(() =>
+      expect(
+        sendBinary.mock.calls
+          .map((call) => decodeTerminalStreamFrame(call[0]))
+          .filter((frame) => frame?.opcode === TerminalStreamOpcode.Ack)
+      ).toHaveLength(2)
+    )
+    const allAckFrames = sendBinary.mock.calls
+      .map((call) => decodeTerminalStreamFrame(call[0]))
+      .filter((frame) => frame?.opcode === TerminalStreamOpcode.Ack)
+    const releasedAck = allAckFrames.find((frame) => frame?.streamId === heldStreamId)
+    expect(releasedAck && decodeTerminalStreamJson(releasedAck.payload)).toEqual({
+      bytes: 'held-output'.length
+    })
+    expect(gate?.snapshot()).toMatchObject({
+      heldTerminalCount: 0,
+      heldStreamCount: 0,
+      heldAckChars: 0,
+      releasedAckChars: 'held-output'.length
+    })
+
+    heldTerminal.close()
+    liveTerminal.close()
+  })
+
+  it('drops output only from the armed stream when its replacement reuses the stream ID', async () => {
+    const { getRemoteRuntimeTerminalMultiplexer, resetRemoteRuntimeTerminalMultiplexersForTests } =
+      await import('./remote-runtime-terminal-multiplexer')
+    resetRemoteRuntimeTerminalMultiplexersForTests()
+
+    const oldData = vi.fn()
+    const oldStream = await getRemoteRuntimeTerminalMultiplexer(
+      'env-output-drop-gate'
+    ).subscribeTerminal({
+      terminal: 'terminal-reused-stream-id',
+      client: { id: 'desktop-old', type: 'desktop' },
+      callbacks: { onData: oldData, onSnapshot: vi.fn() }
+    })
+    const gate = (
+      window as typeof window & {
+        __remoteTerminalMultiplexAckGate?: {
+          dropOutputUntilResubscribe: (terminals: string[]) => number
+          release: () => void
+        }
+      }
+    ).__remoteTerminalMultiplexAckGate
+    expect(gate?.dropOutputUntilResubscribe(['terminal-reused-stream-id'])).toBe(1)
+
+    callbacks?.onBinary?.(
+      encodeTerminalStreamFrame({
+        opcode: TerminalStreamOpcode.Output,
+        streamId: oldStream.streamId,
+        seq: 7,
+        payload: encodeTerminalStreamText('dropped')
+      })
+    )
+    expect(oldData).not.toHaveBeenCalled()
+    oldStream.close()
+
+    const replacementData = vi.fn()
+    const replacement = await getRemoteRuntimeTerminalMultiplexer(
+      'env-output-drop-gate'
+    ).subscribeTerminal({
+      terminal: 'terminal-reused-stream-id',
+      client: { id: 'desktop-new', type: 'desktop' },
+      callbacks: { onData: replacementData, onSnapshot: vi.fn() }
+    })
+    expect(replacement.streamId).toBe(oldStream.streamId)
+    callbacks?.onBinary?.(
+      encodeTerminalStreamFrame({
+        opcode: TerminalStreamOpcode.Output,
+        streamId: replacement.streamId,
+        seq: 9,
+        payload: encodeTerminalStreamText('delivered')
+      })
+    )
+
+    expect(replacementData).toHaveBeenCalledWith('delivered', { seq: 9, rawLength: 9 })
+    gate?.release()
+    replacement.close()
+  })
+
+  it('applies mid-session recovery snapshots without re-subscribing', async () => {
+    const { getRemoteRuntimeTerminalMultiplexer } =
+      await import('./remote-runtime-terminal-multiplexer')
+    resetRemoteRuntimeTerminalMultiplexersForTests()
+
+    const multiplexer = getRemoteRuntimeTerminalMultiplexer('env-recovery')
+    const onSnapshot = vi.fn()
+    const onSubscribed = vi.fn()
+    const stream = await multiplexer.subscribeTerminal({
+      terminal: 'terminal-recovery',
+      client: { id: 'desktop-recovery', type: 'desktop' },
+      callbacks: {
+        onData: vi.fn(),
+        onSnapshot,
+        onSubscribed
+      }
+    })
+    await vi.waitFor(() => expect(sendBinary).toHaveBeenCalled())
+    const streamId = stream.streamId
+
+    const injectSnapshot = (info: Record<string, unknown>, text: string): void => {
+      callbacks?.onBinary?.(
+        encodeTerminalStreamFrame({
+          opcode: TerminalStreamOpcode.SnapshotStart,
+          streamId,
+          seq: 1,
+          payload: encodeTerminalStreamJson(info)
+        })
+      )
+      callbacks?.onBinary?.(
+        encodeTerminalStreamFrame({
+          opcode: TerminalStreamOpcode.SnapshotChunk,
+          streamId,
+          seq: 2,
+          payload: encodeTerminalStreamText(text)
+        })
+      )
+      callbacks?.onBinary?.(
+        encodeTerminalStreamFrame({
+          opcode: TerminalStreamOpcode.SnapshotEnd,
+          streamId,
+          seq: 3,
+          payload: new Uint8Array(0)
+        })
+      )
+    }
+
+    injectSnapshot({ kind: 'scrollback', cols: 120, rows: 40, truncated: false }, 'initial state')
+    expect(onSnapshot).toHaveBeenCalledWith('initial state', {
+      pendingEscapeTailAnsi: undefined
+    })
+    expect(onSubscribed).toHaveBeenCalledTimes(1)
+
+    injectSnapshot(
+      {
+        kind: 'scrollback',
+        cols: 120,
+        rows: 40,
+        reason: 'ack-pending-overflow',
+        truncated: false
+      },
+      'recovered state'
+    )
+    // Why: an unsolicited recovery snapshot replaces terminal state, so it
+    // clears screen and scrollback first and must not replay the subscribe
+    // lifecycle.
+    expect(onSnapshot).toHaveBeenCalledWith(`\x1b[2J\x1b[3J\x1b[H${'recovered state'}`, {
+      pendingEscapeTailAnsi: undefined
+    })
+    expect(onSubscribed).toHaveBeenCalledTimes(1)
+
+    // Why: an empty recovery snapshot means the model terminal is blank, so
+    // the client must still clear stale dropped output.
+    injectSnapshot(
+      {
+        kind: 'scrollback',
+        cols: 120,
+        rows: 40,
+        reason: 'ack-pending-overflow',
+        truncated: false
+      },
+      ''
+    )
+    expect(onSnapshot).toHaveBeenCalledWith('\x1b[2J\x1b[3J\x1b[H', {
+      pendingEscapeTailAnsi: undefined
+    })
+    expect(onSubscribed).toHaveBeenCalledTimes(1)
+
+    stream.close()
   })
 })

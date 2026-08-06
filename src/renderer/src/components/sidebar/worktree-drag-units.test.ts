@@ -70,7 +70,26 @@ describe('getWorktreeDragUnitGroups', () => {
     ])
   })
 
-  it('ignores pinned overlay rows', () => {
+  it('includes pinned rows when they are the only rendered copy', () => {
+    const groups = getWorktreeDragUnitGroups([
+      header('pinned'),
+      item('pinned-copy', 0, 'pinned'),
+      item('other-pinned', 0, 'pinned')
+    ])
+
+    expect(groups).toEqual([
+      {
+        key: 'pinned',
+        worktreeIds: ['pinned-copy', 'other-pinned'],
+        units: [
+          { worktreeId: 'pinned-copy', worktreeIds: ['pinned-copy'] },
+          { worktreeId: 'other-pinned', worktreeIds: ['other-pinned'] }
+        ]
+      }
+    ])
+  })
+
+  it('uses natural drag units when pinned rows have duplicate natural copies', () => {
     const groups = getWorktreeDragUnitGroups([
       header('pinned'),
       item('pinned-copy', 0, 'pinned'),

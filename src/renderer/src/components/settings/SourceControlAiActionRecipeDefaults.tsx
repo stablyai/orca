@@ -1,6 +1,8 @@
+import { useMemo } from 'react'
 import type React from 'react'
 import { toast } from 'sonner'
 import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
+import { isFolderRepo } from '../../../../shared/repo-kind'
 import type {
   SourceControlAiSettings,
   SourceControlAiSettingsPatch
@@ -13,9 +15,17 @@ import {
   type SourceControlActionId
 } from '../../../../shared/source-control-ai-actions'
 import { Label } from '../ui/label'
+import { useAppStore } from '@/store'
+import { useRepos } from '@/store/selectors'
+import {
+  summarizeReposOverridingActionRecipe,
+  type SourceControlActionRecipeOverrideSummary
+} from '@/lib/source-control-launch-agent-selection'
 import { SearchableSetting } from './SearchableSetting'
+import { getRepositorySourceControlAiActionRecipeSectionId } from './repository-settings-targets'
 import { matchesSettingsSearch } from './settings-search'
 import { SourceControlActionRecipeRow } from './SourceControlActionRecipeRow'
+import { SourceControlActionRepoOverrideNote } from './SourceControlActionRepoOverrideNote'
 import { useSourceControlActionRecipeDraftState } from './source-control-action-recipe-draft-state'
 import { translate } from '@/i18n/i18n'
 
@@ -84,6 +94,22 @@ export function SourceControlAiActionRecipeDefaults({
   searchQuery,
   writeConfig
 }: SourceControlAiActionRecipeDefaultsProps): React.JSX.Element | null {
+  const allRepos = useRepos()
+  // Recomputes on every keystroke in the sibling recipe textareas otherwise, so
+  // memoize the filter and the O(actions × repos) override scan on `repos`.
+  const repos = useMemo(() => allRepos.filter((repo) => !isFolderRepo(repo)), [allRepos])
+  const overrideSummaries = useMemo(
+    () =>
+      Object.fromEntries(
+        SOURCE_CONTROL_ACTION_IDS.map((actionId) => [
+          actionId,
+          summarizeReposOverridingActionRecipe({ repos, actionId })
+        ])
+      ) as Record<SourceControlActionId, SourceControlActionRecipeOverrideSummary>,
+    [repos]
+  )
+  const openSettingsPage = useAppStore((state) => state.openSettingsPage)
+  const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
   const {
     actionRecipeDraftState,
     savingActionTemplateIds,
@@ -134,6 +160,18 @@ export function SourceControlAiActionRecipeDefaults({
     }
   }
 
+  const openRepoSourceControlAiSettings = (
+    repoId: string,
+    actionId: SourceControlActionId
+  ): void => {
+    openSettingsTarget({
+      pane: 'repo',
+      repoId,
+      sectionId: getRepositorySourceControlAiActionRecipeSectionId(repoId, actionId)
+    })
+    openSettingsPage()
+  }
+
   if (!config.enabled || !matchesSettingsSearch(searchQuery, ACTION_RECIPES_SEARCH_ENTRY)) {
     return null
   }
@@ -158,6 +196,7 @@ export function SourceControlAiActionRecipeDefaults({
         {SOURCE_CONTROL_ACTION_IDS.map((actionId) => {
           const recipe = config.actions?.[actionId]
           const selectedAgent = recipe?.agentId ?? null
+          const overrideSummary = overrideSummaries[actionId]
           return (
             <SourceControlActionRecipeRow
               key={actionId}
@@ -167,6 +206,12 @@ export function SourceControlAiActionRecipeDefaults({
               baseValue={actionRecipeDraftState.baseValues[actionId]}
               defaultTuiAgent={defaultTuiAgent}
               isSavingTemplate={savingActionTemplateIds[actionId] === true}
+              repoOverrideNote={
+                <SourceControlActionRepoOverrideNote
+                  summary={overrideSummary}
+                  onReviewRepo={(repoId) => openRepoSourceControlAiSettings(repoId, actionId)}
+                />
+              }
               onAgentChange={(id, value) => void onActionAgentChange(id, value)}
               onTemplateChange={onActionTemplateChange}
               onAgentArgsChange={onActionAgentArgsChange}

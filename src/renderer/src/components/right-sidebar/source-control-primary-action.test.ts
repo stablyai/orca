@@ -429,7 +429,8 @@ describe('resolvePrimaryAction', () => {
         review: null,
         canCreate: false,
         blockedReason: 'dirty',
-        nextAction: 'commit'
+        nextAction: 'commit',
+        reviewLookupOutcome: 'not_found'
       }
     })
 
@@ -455,7 +456,8 @@ describe('resolvePrimaryAction', () => {
         review: null,
         canCreate: false,
         blockedReason: 'dirty',
-        nextAction: 'commit'
+        nextAction: 'commit',
+        reviewLookupOutcome: 'not_found'
       }
     })
 
@@ -542,7 +544,8 @@ describe('resolvePrimaryAction', () => {
           review: null,
           canCreate: true,
           blockedReason: null,
-          nextAction: null
+          nextAction: null,
+          reviewLookupOutcome: 'not_found'
         }
       })
     )
@@ -563,7 +566,8 @@ describe('resolvePrimaryAction', () => {
           review: null,
           canCreate: true,
           blockedReason: null,
-          nextAction: null
+          nextAction: null,
+          reviewLookupOutcome: 'not_found'
         }
       })
     )
@@ -586,7 +590,8 @@ describe('resolvePrimaryAction', () => {
             review: null,
             canCreate: true,
             blockedReason: null,
-            nextAction: null
+            nextAction: null,
+            reviewLookupOutcome: 'not_found'
           }
         })
       )

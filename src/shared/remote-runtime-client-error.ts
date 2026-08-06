@@ -1,3 +1,5 @@
+export type RemoteRuntimePairingStage = 'connect' | 'host-identity' | 'access-grant' | 'runtime'
+
 /**
  * Error type for the remote-runtime client, split out from
  * `remote-runtime-client.ts` so type-only consumers can reference it without
@@ -7,10 +9,21 @@
  */
 export class RemoteRuntimeClientError extends Error {
   readonly code: string
+  readonly pairingStage?: RemoteRuntimePairingStage
+  readonly closeCode?: number
 
-  constructor(code: string, message: string) {
+  constructor(
+    code: string,
+    message: string,
+    details?: {
+      pairingStage?: RemoteRuntimePairingStage
+      closeCode?: number
+    }
+  ) {
     super(message)
     this.name = 'RemoteRuntimeClientError'
     this.code = code
+    this.pairingStage = details?.pairingStage
+    this.closeCode = details?.closeCode
   }
 }

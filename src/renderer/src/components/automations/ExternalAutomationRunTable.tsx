@@ -10,7 +10,11 @@ import type {
   ExternalAutomationManager,
   ExternalAutomationRun
 } from '../../../../shared/automations-types'
-import { formatAutomationDateTimeWithRelative } from './automation-page-parts'
+import {
+  formatExternalDate,
+  getExternalRunStatusLabel,
+  getExternalRunStatusVariant
+} from './external-automation-display'
 import {
   createExternalAutomationRunTableState,
   resolveExternalAutomationFetchedRuns,
@@ -39,41 +43,6 @@ type ExternalAutomationRunTableProps = {
   now: number
   onFetchRuns?: FetchExternalAutomationRuns
   onOpenRun?: (run: ExternalAutomationRun) => void
-}
-
-function formatExternalDate(value: string | null, now: number): string {
-  if (!value) {
-    return 'Never'
-  }
-  const parsed = Date.parse(value)
-  if (!Number.isFinite(parsed)) {
-    return value
-  }
-  return formatAutomationDateTimeWithRelative(parsed, now)
-}
-
-function getRunStatusLabel(run: ExternalAutomationRun): string {
-  switch (run.status) {
-    case 'completed':
-      return 'Completed'
-    case 'failed':
-      return 'Failed'
-    case 'unknown':
-      return 'Unknown'
-  }
-}
-
-function getRunStatusVariant(
-  run: ExternalAutomationRun
-): React.ComponentProps<typeof Badge>['variant'] {
-  switch (run.status) {
-    case 'completed':
-      return 'secondary'
-    case 'failed':
-      return 'destructive'
-    case 'unknown':
-      return 'outline'
-  }
 }
 
 function getRunSummary(run: ExternalAutomationRun): string {
@@ -263,7 +232,9 @@ export function ExternalAutomationRunTable({
                   <span className="min-w-0 truncate text-xs text-muted-foreground">
                     {getRunSummary(run)}
                   </span>
-                  <Badge variant={getRunStatusVariant(run)}>{getRunStatusLabel(run)}</Badge>
+                  <Badge variant={getExternalRunStatusVariant(run)}>
+                    {getExternalRunStatusLabel(run)}
+                  </Badge>
                 </button>
               ))}
             </div>
@@ -288,7 +259,7 @@ export function ExternalAutomationRunTable({
           <FileText className="size-3.5" />
           <span>
             {pageStart}-{pageEnd}{' '}
-            {translate('auto.components.automations.ExternalAutomationRunTable.7475c0ce96', 'of')}
+            {translate('auto.components.automations.ExternalAutomationRunTable.7475c0ce96', 'of')}{' '}
             {totalCount}
           </span>
         </div>

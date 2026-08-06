@@ -8,6 +8,7 @@ import type { SpeechModelManifest, SpeechModelState } from '../../../../shared/s
 import { getDefaultVoiceSettings } from '../../../../shared/constants'
 
 const toastErrorMock = vi.hoisted(() => vi.fn())
+const menuDismissMock = vi.hoisted(() => vi.fn())
 
 vi.mock('sonner', () => ({
   toast: {
@@ -32,7 +33,7 @@ vi.mock('../ui/dropdown-menu', () => ({
   }: {
     children: ReactNode
     disabled?: boolean
-    onSelect?: () => void
+    onSelect?: (event: Event) => void
     className?: string
   }) => (
     <div
@@ -41,7 +42,11 @@ vi.mock('../ui/dropdown-menu', () => ({
       role="option"
       onClick={() => {
         if (!disabled) {
-          onSelect?.()
+          const selectEvent = new Event('select', { cancelable: true })
+          onSelect?.(selectEvent)
+          if (!selectEvent.defaultPrevented) {
+            menuDismissMock()
+          }
         }
       }}
     >
@@ -73,6 +78,7 @@ const secondLocalModel: SpeechModelManifest = {
 
 function renderSection(args: {
   deleteModel: (modelId: string) => Promise<void>
+  downloadModel?: (modelId: string) => Promise<void>
   catalog?: SpeechModelManifest[]
   modelStates?: SpeechModelState[]
   refreshModelStates?: () => void
@@ -81,7 +87,7 @@ function renderSection(args: {
     api: {
       speech: {
         deleteModel: vi.fn(args.deleteModel),
-        downloadModel: vi.fn()
+        downloadModel: vi.fn(args.downloadModel ?? (() => Promise.resolve()))
       }
     }
   })
@@ -111,6 +117,7 @@ function renderSection(args: {
 describe('VoiceSpeechModelSection', () => {
   beforeEach(() => {
     toastErrorMock.mockReset()
+    menuDismissMock.mockReset()
   })
 
   afterEach(() => {
@@ -216,6 +223,23 @@ describe('VoiceSpeechModelSection', () => {
 
     expect(toastErrorMock).toHaveBeenCalledWith('Failed to delete model.')
     expect(refreshModelStates).not.toHaveBeenCalled()
+    root.unmount()
+  })
+
+  it('keeps the model menu open when starting a local model download', async () => {
+    const { container, root } = renderSection({
+      deleteModel: () => Promise.resolve(),
+      modelStates: [{ id: localModel.id, status: 'not-downloaded' }]
+    })
+    const modelOption = container.querySelector<HTMLElement>('[role="option"]')
+
+    await act(async () => {
+      modelOption!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+
+    expect(window.api.speech.downloadModel).toHaveBeenCalledWith(localModel.id)
+    expect(menuDismissMock).not.toHaveBeenCalled()
     root.unmount()
   })
 })

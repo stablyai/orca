@@ -21,6 +21,10 @@ if (args[0] === 'api' && args.includes('rate_limit')) {
   console.log(JSON.stringify({ resources: { core: { limit: 5000, remaining: 5000, reset: 0 }, graphql: { limit: 5000, remaining: 5000, reset: 0 }, search: { limit: 30, remaining: 30, reset: 0 } } }))
   process.exit(0)
 }
+if (args[0] === 'api' && joined.includes('search/issues')) {
+  console.log(JSON.stringify({ total_count: 0, incomplete_results: false, items: [] }))
+  process.exit(0)
+}
 if (args[0] === 'issue' && args[1] === 'list') {
   console.log('[]')
   process.exit(0)
@@ -113,20 +117,18 @@ test('GitHub Tasks drawer recovers when gh stalls on issue details', async ({
     return { repoId: repo.id }
   }, testRepoPath)
 
-  const drawer = orcaPage
-    .getByRole('dialog')
-    .filter({ hasText: 'Issue detail fetch that hangs in gh' })
-    .last()
-  await expect(drawer).toBeVisible()
+  // The item detail opens as an inline task-detail page (no longer a modal
+  // dialog): the item title heading proves it mounted.
+  const detailHeading = orcaPage.getByRole('heading', {
+    name: /Issue detail fetch that hangs in gh/
+  })
+  await expect(detailHeading).toBeVisible({ timeout: 10_000 })
 
-  // Why: this is the user-visible regression signal. Before ghExecFileAsync had
-  // a default timeout, the drawer's pending details promise never settled and
-  // the conversation pane stayed stuck in its loading shell. The main GitHub
-  // details service degrades failed detail fetches to an empty shell, so the
-  // stable visible proof is that the drawer becomes usable and stops spinning.
-  await expect(drawer.getByText('No description provided.')).toBeVisible({ timeout: 5_000 })
-  await expect(drawer.getByText('No comments yet.')).toBeVisible()
-  await expect(drawer.locator('.animate-spin')).toHaveCount(0)
+  // Why: the bounded gh timeout rejects instead of hanging, so this terminal
+  // error text (replacing the body, not a spinner) proves the stall recovered.
+  await expect(orcaPage.getByText('Unable to load details for this GitHub item.')).toBeVisible({
+    timeout: 5_000
+  })
 
   expect(repoId).toBeTruthy()
 })

@@ -1,5 +1,5 @@
 import type { CodexUsageSnapshot } from './session-scanner-types'
-import { asRecord } from './session-scanner-values'
+import { asRecord } from './session-scanner-record-value'
 
 export function tokenTotal(value: unknown): number {
   const usage = asRecord(value)
@@ -103,4 +103,17 @@ export function subtractCodexUsage(
 
 export function numberValue(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0
+}
+
+export function addCodexUsage(
+  base: CodexUsageSnapshot,
+  increment: CodexUsageSnapshot
+): CodexUsageSnapshot {
+  return {
+    inputTokens: base.inputTokens + increment.inputTokens,
+    cachedInputTokens: base.cachedInputTokens + increment.cachedInputTokens,
+    outputTokens: base.outputTokens + increment.outputTokens,
+    reasoningOutputTokens: base.reasoningOutputTokens + increment.reasoningOutputTokens,
+    totalTokens: base.totalTokens + increment.totalTokens
+  }
 }

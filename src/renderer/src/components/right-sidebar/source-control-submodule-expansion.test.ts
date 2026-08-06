@@ -195,6 +195,31 @@ describe('injectExpandedSubmoduleRows', () => {
     expect(child.entry.submoduleRoot).toBe('flutter_mine')
   })
 
+  it('shows that capped tree results omit additional submodule changes', () => {
+    const node = fileNode(submoduleEntry({ path: 'flutter_mine' }))
+    const statuses: Record<string, SubmoduleStatusState> = {
+      [FLUTTER_KEY]: {
+        status: 'loaded',
+        entries: [{ path: 'lib/main.dart', status: 'modified', area: 'unstaged' }],
+        didHitLimit: true
+      }
+    }
+
+    const result = injectExpandedSubmoduleRows(
+      [node],
+      new Set([FLUTTER_KEY]),
+      statuses,
+      LOADING,
+      EMPTY
+    )
+
+    expect(result.at(-1)).toMatchObject({
+      type: 'submodule-placeholder',
+      state: 'truncated',
+      submodulePath: 'flutter_mine'
+    })
+  })
+
   it('keeps inner staged rows staged for tree-view diff routing', () => {
     const node = fileNode(submoduleEntry({ path: 'flutter_mine' }))
     const statuses: Record<string, SubmoduleStatusState> = {
@@ -353,6 +378,31 @@ describe('injectExpandedSubmoduleEntries (list view)', () => {
       type: 'submodule-placeholder',
       state: 'empty',
       message: EMPTY
+    })
+  })
+
+  it('shows that capped list results omit additional submodule changes', () => {
+    const entry = submoduleEntry({ path: 'flutter_mine' })
+    const statuses: Record<string, SubmoduleStatusState> = {
+      [FLUTTER_KEY]: {
+        status: 'loaded',
+        entries: [{ path: 'lib/main.dart', status: 'modified', area: 'unstaged' }],
+        didHitLimit: true
+      }
+    }
+
+    const result = injectExpandedSubmoduleEntries(
+      [entry],
+      new Set([FLUTTER_KEY]),
+      statuses,
+      LOADING,
+      EMPTY
+    )
+
+    expect(result.at(-1)).toMatchObject({
+      type: 'submodule-placeholder',
+      state: 'truncated',
+      submodulePath: 'flutter_mine'
     })
   })
 })

@@ -1,5 +1,5 @@
 /**
- * Tests for GitHandler commit and bulk-staging operations.
+ * Tests for GitHandler commit and staging operations.
  *
  * Why: split from git-handler.test.ts to stay under the oxlint max-lines (300) limit.
  */
@@ -18,6 +18,32 @@ import {
   type MockDispatcher,
   type RelayDispatcher
 } from './git-handler-test-setup'
+
+const PATHSPEC_SELECTED_FILE = '[k]eep.log'
+const PATHSPEC_MATCHING_FILE = 'keep.log'
+const PATHSPEC_MUTATION_CASES = [
+  {
+    mode: 'single-file',
+    stageMethod: 'git.stage',
+    unstageMethod: 'git.unstage',
+    selection: { filePath: PATHSPEC_SELECTED_FILE }
+  },
+  {
+    mode: 'bulk',
+    stageMethod: 'git.bulkStage',
+    unstageMethod: 'git.bulkUnstage',
+    selection: { filePaths: [PATHSPEC_SELECTED_FILE] }
+  }
+] as const
+
+function createPathspecCollisionChanges(dir: string): void {
+  gitInit(dir)
+  writeFileSync(path.join(dir, PATHSPEC_SELECTED_FILE), 'selected')
+  writeFileSync(path.join(dir, PATHSPEC_MATCHING_FILE), 'matching')
+  gitCommit(dir, 'initial')
+  writeFileSync(path.join(dir, PATHSPEC_SELECTED_FILE), 'selected modified')
+  writeFileSync(path.join(dir, PATHSPEC_MATCHING_FILE), 'matching modified')
+}
 
 describe('GitHandler — commit & staging', () => {
   let dispatcher: MockDispatcher
@@ -77,7 +103,38 @@ describe('GitHandler — commit & staging', () => {
     })
   })
 
-  describe('bulkStage and bulkUnstage', () => {
+  describe('stage and unstage', () => {
+    it.each(PATHSPEC_MUTATION_CASES)(
+      'treats $mode stage paths with Git glob characters as literals',
+      async ({ stageMethod, selection }) => {
+        createPathspecCollisionChanges(tmpDir)
+
+        await dispatcher.callRequest(stageMethod, { worktreePath: tmpDir, ...selection })
+
+        const output = execFileSync('git', ['diff', '--cached', '--name-only'], {
+          cwd: tmpDir,
+          encoding: 'utf-8'
+        })
+        expect(output.trim()).toBe(PATHSPEC_SELECTED_FILE)
+      }
+    )
+
+    it.each(PATHSPEC_MUTATION_CASES)(
+      'treats $mode unstage paths with Git glob characters as literals',
+      async ({ unstageMethod, selection }) => {
+        createPathspecCollisionChanges(tmpDir)
+        execFileSync('git', ['add', '.'], { cwd: tmpDir, stdio: 'pipe' })
+
+        await dispatcher.callRequest(unstageMethod, { worktreePath: tmpDir, ...selection })
+
+        const output = execFileSync('git', ['diff', '--cached', '--name-only'], {
+          cwd: tmpDir,
+          encoding: 'utf-8'
+        })
+        expect(output.trim()).toBe(PATHSPEC_MATCHING_FILE)
+      }
+    )
+
     it('stages multiple files', async () => {
       gitInit(tmpDir)
       writeFileSync(path.join(tmpDir, 'a.txt'), 'a')

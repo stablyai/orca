@@ -32,6 +32,6 @@ ELECTRON_RUN_AS_NODE=1 exec "$APPIMAGE" -e ${quoteShell(APPIMAGE_CLI_SCRIPT)} --
 `
 }
 
-function quoteShell(value: string): string {
+export function quoteShell(value: string): string {
   return `'${value.replaceAll("'", `'"'"'`)}'`
 }

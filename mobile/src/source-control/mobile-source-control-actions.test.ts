@@ -52,7 +52,7 @@ describe('buildMobileSourceControlActions', () => {
     expect(labels.some((l) => l.startsWith('Fast-forward'))).toBe(true)
     expect(labels).toContain('Rebase onto base')
     expect(labels).toContain('Switch branch')
-    expect(labels).toContain('History')
+    expect(labels).toContain('Commits')
     expect(labels).toContain('Create PR')
   })
 
@@ -90,7 +90,7 @@ describe('buildMobileSourceControlActions', () => {
     const handlers = noopHandlers()
     const actions = buildMobileSourceControlActions(args({ handlers }))
     action(actions, 'Switch branch')?.onPress()
-    action(actions, 'History')?.onPress()
+    action(actions, 'Commits')?.onPress()
     expect(handlers.checkout).toHaveBeenCalled()
     expect(handlers.history).toHaveBeenCalled()
   })

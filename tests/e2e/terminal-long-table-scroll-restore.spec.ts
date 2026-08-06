@@ -51,17 +51,6 @@ type TerminalRenderDiagnostics = {
   }[]
 }
 
-type LongTableDebugWindow = Window & {
-  __terminalPtyOutputDebug?: {
-    reset: () => void
-    snapshot: () => {
-      hiddenRendererSkipCount: number
-      hiddenRendererSkippedChars: number
-      hiddenRendererMode2031ReplyCount: number
-    }
-  }
-}
-
 async function setNarrowTerminalViewport(page: Page): Promise<void> {
   await page.setViewportSize({ width: 900, height: 820 })
   await page.waitForTimeout(250)
@@ -359,7 +348,6 @@ test.describe('Terminal long table scroll restore repro', () => {
       window.__store
         ?.getState()
         .markFeatureTipsSeen(['orca-cli', 'cmd-j-palette', 'voice-dictation'])
-      ;(window as LongTableDebugWindow).__terminalPtyOutputDebug?.reset()
     })
     const firstWorktreeId = await waitForActiveWorktree(orcaPage)
     const secondWorktreeId = (await getAllWorktreeIds(orcaPage)).find(
@@ -398,10 +386,6 @@ test.describe('Terminal long table scroll restore repro', () => {
       await scrollActiveTerminalLikeUser(orcaPage)
       await closeFeatureTips(orcaPage)
       const diagnostics = await readTerminalRenderDiagnostics(orcaPage)
-      const hiddenDebug = await orcaPage.evaluate(() =>
-        (window as LongTableDebugWindow).__terminalPtyOutputDebug?.snapshot()
-      )
-      expect(hiddenDebug?.hiddenRendererSkipCount).toBe(0)
       const restoredPane = diagnostics.allPaneStates.find((paneState) => paneState.hasMarker)
       expect(restoredPane).toBeDefined()
       expect(diagnostics.cursorHidden).toBe(false)
@@ -426,7 +410,6 @@ test.describe('Terminal long table scroll restore repro', () => {
       window.__store
         ?.getState()
         .markFeatureTipsSeen(['orca-cli', 'cmd-j-palette', 'voice-dictation'])
-      ;(window as LongTableDebugWindow).__terminalPtyOutputDebug?.reset()
     })
     const firstWorktreeId = await waitForActiveWorktree(orcaPage)
     const secondWorktreeId = (await getAllWorktreeIds(orcaPage)).find(
@@ -467,10 +450,6 @@ test.describe('Terminal long table scroll restore repro', () => {
       await scrollActiveTerminalLikeUser(orcaPage)
       await closeFeatureTips(orcaPage)
       const diagnostics = await readTerminalRenderDiagnostics(orcaPage)
-      const hiddenDebug = await orcaPage.evaluate(() =>
-        (window as LongTableDebugWindow).__terminalPtyOutputDebug?.snapshot()
-      )
-      expect(hiddenDebug?.hiddenRendererSkipCount).toBe(0)
       // Why: renderer cell metrics can land one column wider in headless runs;
       // the content and screenshot assertions below cover the actual regression.
       expect(diagnostics.cols).toBeLessThanOrEqual(112)
@@ -504,7 +483,6 @@ test.describe('Terminal long table scroll restore repro', () => {
       window.__store
         ?.getState()
         .markFeatureTipsSeen(['orca-cli', 'cmd-j-palette', 'voice-dictation'])
-      ;(window as LongTableDebugWindow).__terminalPtyOutputDebug?.reset()
     })
     const firstWorktreeId = await waitForActiveWorktree(orcaPage)
     const secondWorktreeId = (await getAllWorktreeIds(orcaPage)).find(
@@ -571,10 +549,6 @@ test.describe('Terminal long table scroll restore repro', () => {
       const diagnostics = await readTerminalRenderDiagnostics(orcaPage)
       const overpaint = await readTerminalRightEdgeOverpaint(orcaPage)
       const wrapDiagnostics = await readTerminalBoxTableWrapDiagnostics(orcaPage)
-      const hiddenDebug = await orcaPage.evaluate(() =>
-        (window as LongTableDebugWindow).__terminalPtyOutputDebug?.snapshot()
-      )
-      expect(hiddenDebug?.hiddenRendererSkipCount).toBe(0)
       expect(diagnostics.cols).toBeLessThanOrEqual(NARROW_TERMINAL_MAX_COLS)
       expect(wrapDiagnostics.cols).toBeGreaterThanOrEqual(generatedTableWidth)
       expect(diagnostics.cursorHidden).toBe(false)

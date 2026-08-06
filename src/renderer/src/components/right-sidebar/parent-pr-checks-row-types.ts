@@ -7,6 +7,7 @@ export type ParentPrChecksCacheEntry<T> = {
   data: T | null
   fetchedAt: number
   headSha?: string
+  linkedReviewHintKey?: string
 }
 
 export type ParentPrChecksRefreshOutcome =
@@ -52,9 +53,11 @@ export type ParentPrChecksRow = {
   group: ParentPrChecksGroupKey
   checkTone: CheckStatus
   title: string
+  reviewNumber: number | null
   reviewLabel: string | null
   reviewUrl: string | null
   reviewState: HostedReviewInfo['state'] | null
+  reviewStatus: HostedReviewInfo['status'] | null
   provider: HostedReviewInfo['provider'] | null
   summary: string
   detailNames: string[]

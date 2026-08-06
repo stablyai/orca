@@ -75,7 +75,12 @@ describe('getHiddenImportedWorktrees', () => {
         hidden,
         detectedWorktree({ id: 'visible', visible: true }),
         detectedWorktree({ id: 'selected', selectedCheckout: true }),
-        detectedWorktree({ id: 'orca-managed', ownership: 'orca-managed' })
+        detectedWorktree({ id: 'orca-managed', ownership: 'orca-managed' }),
+        detectedWorktree({
+          id: 'agent-scratch',
+          path: '/repo/.claude/worktrees/agent-1',
+          ownership: 'agent-scratch'
+        })
       ])
     )
 
@@ -101,6 +106,24 @@ describe('buildImportedWorktreesCardCandidates', () => {
       repo: { id: repo.id },
       hiddenWorktrees: [{ id: 'repo-1::/repo-worktree' }]
     })
+  })
+
+  it('builds no candidate when the only hidden worktrees are agent scratch', () => {
+    const candidates = buildImportedWorktreesCardCandidates({
+      repos: [repo],
+      visibleWorktrees: [visibleWorktree],
+      detectedWorktreesByRepo: {
+        [repo.id]: detectedResult([
+          detectedWorktree({
+            id: 'agent-scratch',
+            path: '/repo/.claude/worktrees/agent-1',
+            ownership: 'agent-scratch'
+          })
+        ])
+      }
+    })
+
+    expect(candidates.size).toBe(0)
   })
 
   it('suppresses candidates after show, dismissal, folder repos, or repo filters exclude the repo', () => {

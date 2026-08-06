@@ -1,21 +1,16 @@
-/* eslint-disable max-lines -- Why: autosave owns the save queue, quiesce
-coordination, and dirty-file shutdown hooks; keeping those lifecycles together
-avoids split-brain saves across visible and hidden editors. */
+/* eslint-disable max-lines -- Why: keeping the save queue, quiesce coordination, and dirty-file shutdown hooks together avoids split-brain saves. */
 import type { StoreApi } from 'zustand'
 import type { AppState } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { getConnectionIdForFile } from '@/lib/connection-context'
-import {
-  buildWorkspaceSessionPayload,
-  shouldPersistWorkspaceSession
-} from '@/lib/workspace-session'
-import { persistWorkspaceSessionByHostSync } from '@/lib/workspace-session-host-persistence'
+import { shouldPersistWorkspaceSession } from '@/lib/workspace-session'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { writeRuntimeFile } from '@/runtime/runtime-file-client'
-import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
 import {
   canAutoSaveOpenFile,
   getOpenFilesForExternalFileChange,
+  isAutosaveSuspendedForFile,
   normalizeAutoSaveDelayMs,
   ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
   ORCA_EDITOR_FILE_SAVED_EVENT,
@@ -27,8 +22,16 @@ import {
   type EditorSaveFileDetail,
   type EditorSaveQuiesceDetail
 } from './editor-autosave'
+import { markFileChangedOnDisk } from './editor-changed-on-disk-mark'
 import { flushPendingEditorChange } from './editor-pending-flush'
-import { clearSelfWrite, recordSelfWrite } from './editor-self-write-registry'
+import {
+  clearSelfWrite,
+  hasRecentSelfWrite,
+  recordSelfWrite,
+  SELF_WRITE_REMOTE_TTL_MS
+} from './editor-self-write-registry'
+import { getDiskBaselineSignature } from './diff-content-signature'
+import { trackExternalChangeConflictAction } from './editor-external-change-telemetry'
 import {
   autosaveSubscriberInputsEqual,
   getAutosaveSubscriberInputs,
@@ -62,7 +65,11 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
     saveGeneration.set(fileId, (saveGeneration.get(fileId) ?? 0) + 1)
   }
 
-  const queueSave = (file: OpenFile, fallbackContent: string): Promise<void> => {
+  const queueSave = (
+    file: OpenFile,
+    fallbackContent: string,
+    trigger: 'autosave' | 'user' = 'user'
+  ): Promise<void> => {
     clearAutoSaveTimer(file.id)
     const queuedGeneration = saveGeneration.get(file.id) ?? 0
 
@@ -80,33 +87,42 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
           return
         }
 
+        // Why: read-only tabs (AI Vault View Log) must never write the agent-owned artifact through editor paths.
+        if (liveFile.readOnly === true) {
+          return
+        }
+
+        if (liveFile.pendingOwnerMigration === true) {
+          if (trigger === 'autosave') {
+            return
+          }
+          throw new Error('This file is still restoring its workspace owner. Try saving again.')
+        }
+
+        // Why: only autosave is blocked while suspended; explicit user saves proceed (the banner warned).
+        if (trigger === 'autosave' && isAutosaveSuspendedForFile(liveFile)) {
+          return
+        }
+
         const contentToSave = state.editorDrafts[file.id] ?? fallbackContent
-        const connectionId =
-          getConnectionIdForFile(liveFile.worktreeId, liveFile.filePath) ?? undefined
         const worktree = liveFile.worktreeId
           ? findWorktreeById(state.worktreesByRepo ?? {}, liveFile.worktreeId)
           : null
-        // Why: stamp before the write so the fs:changed event that our own
-        // write produces is ignored by useEditorExternalWatch instead of
-        // round-tripping back into a setContent that jumps the cursor to the
-        // end (and, under round-trip drift, can drop keystrokes typed in the
-        // debounce window). See editor-self-write-registry.
-        recordSelfWrite(liveFile.filePath, contentToSave, liveFile.runtimeEnvironmentId)
+        const fileContext = getEditorFileOperationContext(state, liveFile, worktree?.path ?? null)
+        const connectionId = fileContext.connectionId
+        // Why: stamp before writing so useEditorExternalWatch ignores our own fs:changed echo (editor-self-write-registry).
+        recordSelfWrite(
+          liveFile.filePath,
+          contentToSave,
+          liveFile.runtimeEnvironmentId,
+          connectionId || liveFile.runtimeEnvironmentId?.trim()
+            ? SELF_WRITE_REMOTE_TTL_MS
+            : undefined
+        )
         try {
-          await writeRuntimeFile(
-            {
-              settings: settingsForRuntimeOwner(state.settings, liveFile.runtimeEnvironmentId),
-              worktreeId: liveFile.worktreeId,
-              worktreePath: worktree?.path ?? null,
-              connectionId
-            },
-            liveFile.filePath,
-            contentToSave
-          )
+          await writeRuntimeFile(fileContext, liveFile.filePath, contentToSave)
         } catch (error) {
-          // Why: the self-write stamp is only valid if a disk write actually
-          // happened. Clearing it on failure keeps the external watcher from
-          // suppressing a real third-party update that lands during the TTL.
+          // Why: the self-write stamp is only valid after a real write; clear on failure so it can't suppress a real update.
           clearSelfWrite(liveFile.filePath, liveFile.runtimeEnvironmentId)
           throw error
         }
@@ -121,6 +137,15 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         nextState.markFileDirty(file.id, stillDirty)
         if (!stillDirty) {
           nextState.clearEditorDraft(file.id)
+        }
+        // Why: disk now holds contentToSave — rebaseline so our own save isn't flagged external; drop pending verification.
+        nextState.setLastKnownDiskSignature(file.id, getDiskBaselineSignature(contentToSave))
+        nextState.clearPendingDiskBaselineVerification(file.id)
+        // Why: the write made disk match the buffer, so clear any now-stale changed-on-disk conflict.
+        const savedFile = nextState.openFiles.find((openFile) => openFile.id === file.id)
+        if (savedFile?.externalMutation === 'changed') {
+          trackExternalChangeConflictAction(savedFile, 'save_overwrite')
+          nextState.setExternalMutation(file.id, null)
         }
 
         window.dispatchEvent(
@@ -141,9 +166,7 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
   }
 
   const quiesceFileSave = async (fileId: string): Promise<void> => {
-    // Why: rich markdown debounces serialization for typing performance, so a
-    // quiesce request must force any mounted editor to publish its pending
-    // draft before we cancel timers for rename/delete/discard flows.
+    // Why: rich markdown debounces serialization, so force the pending draft out before we cancel timers.
     flushPendingEditorChange(fileId)
     const pendingSave = saveQueue.get(fileId)
     clearAutoSaveTimer(fileId)
@@ -152,10 +175,7 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
   }
 
   const getLatestWritableContent = (file: OpenFile): string | null => {
-    // Why: only explicit user edits mark a tab dirty, and those edits are
-    // mirrored into editorDrafts on each change. The headless autosave
-    // controller deliberately depends on that narrow draft state instead of
-    // keeping the full editor UI mounted just to read component-local buffers.
+    // Why: headless controller reads editorDrafts rather than mounting the editor UI to read component-local buffers.
     return store.getState().editorDrafts[file.id] ?? null
   }
 
@@ -171,6 +191,8 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         file &&
         file.isDirty &&
         canAutoSaveOpenFile(file) &&
+        // Why: suspension holds until the user picks a side via the banner (or saves manually).
+        !isAutosaveSuspendedForFile(file) &&
         draft !== undefined
       if (!shouldKeepTimer) {
         clearAutoSaveTimer(fileId)
@@ -184,7 +206,12 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
     const autoSaveDelayMs = normalizeAutoSaveDelayMs(state.settings.editorAutoSaveDelayMs)
     for (const file of state.openFiles) {
       const draft = state.editorDrafts[file.id]
-      if (!file.isDirty || draft === undefined || !canAutoSaveOpenFile(file)) {
+      if (
+        !file.isDirty ||
+        draft === undefined ||
+        !canAutoSaveOpenFile(file) ||
+        isAutosaveSuspendedForFile(file)
+      ) {
         clearAutoSaveTimer(file.id)
         continue
       }
@@ -198,7 +225,7 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
       const timerId = window.setTimeout(() => {
         autoSaveTimers.delete(file.id)
         autoSaveScheduledContent.delete(file.id)
-        void queueSave(file, draft)
+        void queueSave(file, draft, 'autosave')
       }, autoSaveDelayMs)
       autoSaveTimers.set(file.id, timerId)
     }
@@ -226,10 +253,7 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
 
       const duplicateDirtySavePaths = getDuplicateDirtySavePaths(dirtyFiles)
       if (duplicateDirtySavePaths.length > 0) {
-        // Why: a hidden autosave controller still has to respect that edit tabs
-        // and unstaged diff tabs may point at the same path while holding
-        // different drafts. Refusing the restart is safer than choosing a
-        // winner implicitly and persisting whichever save races last.
+        // Why: edit and diff tabs can share a path with different drafts; refuse rather than race an implicit winner.
         detail.reject(
           'Some unsaved files are open in multiple dirty tabs. Save them manually before restarting.'
         )
@@ -284,17 +308,8 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         return
       }
 
-      // Why: restart/update may quit before the debounced session writer fires.
-      // Write the full session now so dirty drafts restore as unsaved tabs.
-      if (shouldPersistWorkspaceSession(state)) {
-        // Why: runtime-owned worktree slices persist under their host
-        // partition, mirroring the debounced writer's split.
-        persistWorkspaceSessionByHostSync(
-          window.api.session,
-          buildWorkspaceSessionPayload(state),
-          state
-        )
-      }
+      // Why: preload dispatches beforeunload immediately after this resolves;
+      // App owns the one combined session/UI checkpoint for restart and update.
       detail.resolve()
     } catch (error) {
       detail.reject(String((error as Error)?.message ?? error))
@@ -331,6 +346,10 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
       const file = store.getState().openFiles.find((openFile) => openFile.id === detail.fileId)
       if (!file) {
         detail.resolve()
+        return
+      }
+      if (file.pendingOwnerMigration === true) {
+        detail.reject('This file is still restoring its workspace owner. Try saving again.')
         return
       }
 
@@ -377,17 +396,31 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
       return
     }
 
+    // Why: keep dirty drafts on external writes (data-loss half of #7265); mark changed-on-disk as backstop for tabs turned dirty during the notify debounce.
+    const reloadingFiles = matchingFiles.filter((file) => !file.isDirty)
     for (const file of matchingFiles) {
+      if (file.isDirty) {
+        // Why: skip Orca's own-save echo, which routes here bypassing the watch hook's echo verification.
+        if (!hasRecentSelfWrite(file.filePath, file.runtimeEnvironmentId)) {
+          markFileChangedOnDisk(state, file, {
+            connectionId: getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined,
+            origin: 'live'
+          })
+        }
+        continue
+      }
       clearAutoSaveTimer(file.id)
       bumpSaveGeneration(file.id)
       state.markFileDirty(file.id, false)
+      // Why: about to reload fresh disk content, so a stale changed-on-disk mark is resolved.
+      if (file.externalMutation === 'changed') {
+        state.setExternalMutation(file.id, null)
+      }
     }
-    state.clearEditorDrafts(matchingFiles.map((file) => file.id))
+    state.clearEditorDrafts(reloadingFiles.map((file) => file.id))
   }
 
-  // Why: the root store subscriber fires for every terminal title/focus tick.
-  // Autosave only reads these four inputs, so skip the open-files scan when
-  // unrelated store slices change.
+  // Why: the root subscriber fires on every store tick; skip the scan unless the four autosave inputs changed.
   let previousAutosaveInputs = getAutosaveSubscriberInputs(store.getState())
   const unsubscribe = store.subscribe(() => {
     const nextAutosaveInputs = getAutosaveSubscriberInputs(store.getState())

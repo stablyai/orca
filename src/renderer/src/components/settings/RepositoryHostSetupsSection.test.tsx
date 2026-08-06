@@ -54,6 +54,15 @@ function makeSetup(
   }
 }
 
+function connectedSshState(targetId: string) {
+  return {
+    targetId,
+    status: 'connected' as const,
+    error: null,
+    reconnectAttempt: 0
+  }
+}
+
 beforeEach(() => {
   useAppStore.setState(useAppStore.getInitialState(), true)
   container = document.createElement('div')
@@ -69,11 +78,12 @@ afterEach(() => {
   useAppStore.setState(useAppStore.getInitialState(), true)
 })
 
-function renderSection(repo: Repo): void {
+function renderSection(repo: Repo, selectedProjectSetupId?: string): void {
   act(() => {
     root.render(
       React.createElement(RepositoryHostSetupsSection, {
         repo,
+        selectedProjectSetupId,
         forceVisible: true,
         searchQuery: '',
         searchEntries: []
@@ -147,9 +157,10 @@ describe('RepositoryHostSetupsSection', () => {
     expect(container.textContent).toContain(LOCAL_HOST_LABEL)
   })
 
-  it('opens the selected host setup settings pane through the setup repo id', () => {
+  it('selects the host in place instead of navigating to a separate repo pane', () => {
     const openSettingsPage = vi.fn()
     const openSettingsTarget = vi.fn()
+    const setSettingsProjectHostSelection = vi.fn()
     const localRepo = makeRepo({
       id: 'local-repo',
       displayName: 'Orca',
@@ -181,7 +192,8 @@ describe('RepositoryHostSetupsSection', () => {
         })
       ],
       openSettingsPage,
-      openSettingsTarget
+      openSettingsTarget,
+      setSettingsProjectHostSelection
     })
 
     renderSection(localRepo)
@@ -196,8 +208,143 @@ describe('RepositoryHostSetupsSection', () => {
       openButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
-    expect(openSettingsPage).toHaveBeenCalledTimes(1)
-    expect(openSettingsTarget).toHaveBeenCalledWith({ pane: 'repo', repoId: 'remote-repo' })
+    // The single project pane switches host in place — no navigation.
+    expect(setSettingsProjectHostSelection).toHaveBeenCalledWith(
+      'github:stablyai/orca',
+      toSshExecutionHostId('openclaw 2'),
+      'remote-repo'
+    )
+    expect(openSettingsPage).not.toHaveBeenCalled()
+    expect(openSettingsTarget).not.toHaveBeenCalled()
+  })
+
+  it('keeps nested SSH setups distinct and derives readiness from their HUB owner', () => {
+    const remoteRepo = makeRepo({
+      id: 'remote-repo',
+      displayName: 'Orca',
+      path: '/srv/orca',
+      executionHostId: 'runtime:hub'
+    })
+    useAppStore.setState({
+      repos: [remoteRepo],
+      projects: [makeProject({ id: 'github:stablyai/orca', sourceRepoIds: ['remote-repo'] })],
+      projectHostSetups: [
+        makeSetup({
+          id: 'direct-setup',
+          projectId: 'github:stablyai/orca',
+          repoId: 'remote-repo',
+          hostId: 'runtime:hub',
+          executionHostId: 'ssh:direct',
+          runtimeOwnerEnvironmentId: 'hub',
+          path: '/srv/orca'
+        }),
+        makeSetup({
+          id: 'jump-setup',
+          projectId: 'github:stablyai/orca',
+          repoId: 'remote-repo',
+          hostId: 'runtime:hub',
+          executionHostId: 'ssh:jump',
+          runtimeOwnerEnvironmentId: 'hub',
+          path: '/srv/orca'
+        })
+      ],
+      runtimeStatusByEnvironmentId: new Map([
+        [
+          'hub',
+          {
+            checkedAt: 1,
+            appVersion: '1.8.0',
+            status: {
+              runtimeId: 'runtime-hub',
+              rendererGraphEpoch: 1,
+              graphStatus: 'ready',
+              authoritativeWindowId: 1,
+              liveTabCount: 0,
+              liveLeafCount: 0,
+              runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+              minCompatibleRuntimeClientVersion: 1,
+              capabilities: []
+            }
+          }
+        ]
+      ]),
+      sshStateByEnvironment: new Map([
+        [
+          'hub',
+          {
+            connectionStates: new Map([
+              [
+                'direct',
+                {
+                  targetId: 'direct',
+                  status: 'connected',
+                  error: null,
+                  reconnectAttempt: 0
+                }
+              ],
+              [
+                'jump',
+                {
+                  targetId: 'jump',
+                  status: 'disconnected',
+                  error: null,
+                  reconnectAttempt: 0
+                }
+              ]
+            ]),
+            targetLabels: new Map([
+              ['direct', 'Direct box'],
+              ['jump', 'Jump box']
+            ]),
+            removedTargetLabels: new Map(),
+            targetsHydrated: true
+          }
+        ]
+      ])
+    })
+
+    renderSection(remoteRepo, 'jump-setup')
+
+    expect(container.textContent).toContain('Direct box')
+    expect(container.textContent).toContain('Jump box')
+    expect(container.textContent).toContain('Ready')
+    expect(container.textContent).toContain('Disconnected')
+    expect(findButton('Open')).toBeTruthy()
+    const currentSetup = container.querySelector('[data-current="true"]')
+    expect(currentSetup?.textContent).toContain('Jump box')
+    expect(currentSetup?.textContent).toContain('Disconnected')
+    expect(currentSetup?.textContent).not.toContain('Direct box')
+    expect(currentSetup?.textContent).not.toContain('Ready')
+  })
+
+  it('shows HUB-local setups as disconnected when their owning runtime is unreachable', () => {
+    const remoteRepo = makeRepo({
+      id: 'remote-repo',
+      displayName: 'Orca',
+      path: '/srv/orca',
+      executionHostId: 'runtime:hub'
+    })
+    useAppStore.setState({
+      repos: [remoteRepo],
+      projects: [makeProject({ id: 'github:stablyai/orca', sourceRepoIds: ['remote-repo'] })],
+      projectHostSetups: [
+        makeSetup({
+          id: 'hub-local-setup',
+          projectId: 'github:stablyai/orca',
+          repoId: 'remote-repo',
+          hostId: 'runtime:hub',
+          executionHostId: 'local',
+          runtimeOwnerEnvironmentId: 'hub',
+          path: '/srv/orca'
+        })
+      ],
+      runtimeStatusByEnvironmentId: new Map([['hub', { checkedAt: 1, status: null }]])
+    })
+
+    renderSection(remoteRepo)
+
+    expect(container.textContent).toContain('Disconnected')
+    expect(container.textContent).not.toContain('Ready')
   })
 
   it('removes independent setup metadata instead of opening an empty repo target', async () => {
@@ -264,6 +411,7 @@ describe('RepositoryHostSetupsSection', () => {
   it('sets up the project on another known host from an existing folder path', async () => {
     const openSettingsPage = vi.fn()
     const openSettingsTarget = vi.fn()
+    const setSettingsProjectHostSelection = vi.fn()
     const setupProjectExistingFolder = vi.fn().mockResolvedValue({
       project: makeProject({ id: 'github:stablyai/orca' }),
       setup: makeSetup({
@@ -298,8 +446,10 @@ describe('RepositoryHostSetupsSection', () => {
         })
       ],
       sshTargetLabels: new Map([['openclaw 2', 'openclaw 2']]),
+      sshConnectionStates: new Map([['openclaw 2', connectedSshState('openclaw 2')]]),
       openSettingsPage,
       openSettingsTarget,
+      setSettingsProjectHostSelection,
       setupProjectExistingFolder
     })
 
@@ -327,13 +477,18 @@ describe('RepositoryHostSetupsSection', () => {
       kind: 'git',
       displayName: 'Orca'
     })
-    expect(openSettingsPage).toHaveBeenCalledTimes(1)
-    expect(openSettingsTarget).toHaveBeenCalledWith({ pane: 'repo', repoId: 'remote-repo' })
+    expect(setSettingsProjectHostSelection).toHaveBeenCalledWith(
+      'github:stablyai/orca',
+      'ssh:openclaw%202'
+    )
+    expect(openSettingsPage).not.toHaveBeenCalled()
+    expect(openSettingsTarget).not.toHaveBeenCalled()
   })
 
   it('clones the project onto another known host from settings', async () => {
     const openSettingsPage = vi.fn()
     const openSettingsTarget = vi.fn()
+    const setSettingsProjectHostSelection = vi.fn()
     const setupProjectClone = vi.fn().mockResolvedValue({
       project: makeProject({ id: 'github:stablyai/orca' }),
       setup: makeSetup({
@@ -368,8 +523,10 @@ describe('RepositoryHostSetupsSection', () => {
         })
       ],
       sshTargetLabels: new Map([['openclaw 2', 'openclaw 2']]),
+      sshConnectionStates: new Map([['openclaw 2', connectedSshState('openclaw 2')]]),
       openSettingsPage,
       openSettingsTarget,
+      setSettingsProjectHostSelection,
       setupProjectClone
     })
 
@@ -402,8 +559,51 @@ describe('RepositoryHostSetupsSection', () => {
       destination: '/home/alice',
       displayName: 'Orca'
     })
-    expect(openSettingsPage).toHaveBeenCalledTimes(1)
-    expect(openSettingsTarget).toHaveBeenCalledWith({ pane: 'repo', repoId: 'remote-repo' })
+    expect(setSettingsProjectHostSelection).toHaveBeenCalledWith(
+      'github:stablyai/orca',
+      'ssh:openclaw%202'
+    )
+    expect(openSettingsPage).not.toHaveBeenCalled()
+    expect(openSettingsTarget).not.toHaveBeenCalled()
+  })
+
+  it('blocks path setup until an SSH host connects but keeps placeholders available', () => {
+    const localRepo = makeRepo({
+      id: 'local-repo',
+      displayName: 'Orca',
+      path: '/Users/alice/orca'
+    })
+    useAppStore.setState({
+      repos: [localRepo],
+      projects: [makeProject({ id: 'github:stablyai/orca' })],
+      projectHostSetups: [
+        makeSetup({
+          id: 'local-repo',
+          projectId: 'github:stablyai/orca',
+          repoId: 'local-repo',
+          hostId: 'local',
+          path: '/Users/alice/orca'
+        })
+      ],
+      sshTargetLabels: new Map([['openclaw 2', 'openclaw 2']])
+    })
+
+    renderSection(localRepo)
+    clickButton('Add to another host')
+
+    expect(container.textContent).toContain(
+      'Connect this host before importing or cloning the project'
+    )
+    expect(findButton('Browse folder')?.disabled).toBe(true)
+    expect(findButton('Clone from URL')?.disabled).toBe(true)
+    expect(findButton('Add host placeholder')?.disabled).toBe(false)
+
+    act(() => {
+      useAppStore.getState().setSshConnectionState('openclaw 2', connectedSshState('openclaw 2'))
+    })
+
+    expect(findButton('Browse folder')?.disabled).toBe(false)
+    expect(findButton('Clone from URL')?.disabled).toBe(false)
   })
 
   it('creates pending setup metadata for a known host without requiring a path', async () => {

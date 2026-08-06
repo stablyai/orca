@@ -1,5 +1,3 @@
-/* eslint-disable max-lines */
-
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { describe, expect, it } from 'vitest'
 import { createEditorSlice } from './editor'

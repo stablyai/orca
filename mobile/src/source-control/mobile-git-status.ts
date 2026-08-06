@@ -19,7 +19,7 @@ export type MobileSourceControlSection<TEntry extends MobileGitStatusEntry = Mob
     data: TEntry[]
   }
 
-const AREA_ORDER: MobileGitStagingArea[] = ['unstaged', 'untracked', 'staged']
+const AREA_ORDER: MobileGitStagingArea[] = ['unstaged', 'staged']
 
 const AREA_TITLES: Record<MobileGitStagingArea, string> = {
   unstaged: 'Changes',
@@ -59,7 +59,13 @@ export function buildMobileSourceControlSections<TEntry extends MobileGitStatusE
   return AREA_ORDER.map((area) => ({
     area,
     title: AREA_TITLES[area],
-    data: entries.filter((entry) => entry.area === area).sort(compareGitStatusEntries)
+    data: entries
+      .filter((entry) =>
+        area === 'unstaged'
+          ? entry.area === 'unstaged' || entry.area === 'untracked'
+          : entry.area === area
+      )
+      .sort(compareGitStatusEntries)
   })).filter((section) => section.data.length > 0)
 }
 
@@ -88,6 +94,12 @@ export function isMobileGitStageableEntry(entry: MobileGitStatusEntry): boolean 
 
 export function isMobileGitDiscardableEntry(entry: MobileGitStatusEntry): boolean {
   return entry.conflictStatus !== 'unresolved' && entry.conflictStatus !== 'resolved_locally'
+}
+
+// Why: unresolved conflicts are not a stable file to open. Deletions are —
+// git.diff still returns the pre-delete side (text or image via modifiedDeleted).
+export function canOpenMobileGitStatusEntry(entry: MobileGitStatusEntry): boolean {
+  return entry.conflictStatus !== 'unresolved'
 }
 
 export function isMobileGitUnavailable(code: string | undefined, message: string | undefined) {

@@ -1371,14 +1371,14 @@ function PortForwardForm({
       e.preventDefault()
       setError(null)
 
-      const rPort = parseInt(remotePort, 10)
-      const lPort = parseInt(localPort || remotePort, 10)
+      const rPort = Number.parseInt(remotePort, 10)
+      const lPort = Number.parseInt(localPort || remotePort, 10)
 
-      if (isNaN(rPort) || rPort < 1 || rPort > 65535) {
+      if (Number.isNaN(rPort) || rPort < 1 || rPort > 65535) {
         setError('Remote port must be 1\u201365535')
         return
       }
-      if (isNaN(lPort) || lPort < 1 || lPort > 65535) {
+      if (Number.isNaN(lPort) || lPort < 1 || lPort > 65535) {
         setError('Local port must be 1\u201365535')
         return
       }
@@ -1431,11 +1431,11 @@ function PortForwardForm({
             onChange={(e) => {
               const val = digitsOnly(e.target.value)
               setRemotePort(val)
-              const prev = parseInt(remotePort, 10)
-              const cur = parseInt(localPort, 10)
+              const prev = Number.parseInt(remotePort, 10)
+              const cur = Number.parseInt(localPort, 10)
               if (!localPort || cur === prev || cur === safeLocalPort(prev)) {
-                const parsed = parseInt(val, 10)
-                setLocalPort(isNaN(parsed) ? '' : safeLocalPort(parsed).toString())
+                const parsed = Number.parseInt(val, 10)
+                setLocalPort(Number.isNaN(parsed) ? '' : safeLocalPort(parsed).toString())
               }
             }}
             className={INPUT_CLASS}

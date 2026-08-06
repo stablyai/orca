@@ -1,41 +1,14 @@
 import type { AppState } from '../types'
-import type { PRCheckDetail, CheckStatus, GitHubOwnerRepo } from '../../../../shared/types'
+import type { PRCheckDetail, GitHubOwnerRepo } from '../../../../shared/types'
 import { getGitHubPRCacheKey } from './github-cache-key'
+import { githubRepoIdentityKey } from '../../../../shared/github-repository-identity-key'
+import { derivePRCheckStatus } from '../../../../shared/pr-check-status'
 
 export function normalizeBranchName(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')
 }
 
-export function deriveCheckStatusFromChecks(checks: PRCheckDetail[]): CheckStatus {
-  if (checks.length === 0) {
-    return 'neutral'
-  }
-
-  let hasPending = false
-
-  for (const check of checks) {
-    if (
-      check.conclusion === 'failure' ||
-      check.conclusion === 'timed_out' ||
-      check.conclusion === 'cancelled' ||
-      // Why: action_required (e.g. an unapproved workflow run) blocks merge until
-      // someone acts; treat it as needs-attention rather than a silent pass.
-      check.conclusion === 'action_required'
-    ) {
-      return 'failure'
-    }
-
-    if (
-      check.status === 'queued' ||
-      check.status === 'in_progress' ||
-      check.conclusion === 'pending'
-    ) {
-      hasPending = true
-    }
-  }
-
-  return hasPending ? 'pending' : 'success'
-}
+export const deriveCheckStatusFromChecks = derivePRCheckStatus
 
 export function syncPRChecksStatus(
   state: AppState,
@@ -97,10 +70,7 @@ export function syncPRChecksStatus(
 }
 
 function normalizedPRRepo(repo?: GitHubOwnerRepo | null): string | null {
-  if (!repo) {
-    return null
-  }
-  return `${repo.owner.toLowerCase()}/${repo.repo.toLowerCase()}`
+  return repo ? githubRepoIdentityKey(repo) : null
 }
 
 function samePRRepo(left?: GitHubOwnerRepo | null, right?: GitHubOwnerRepo | null): boolean {

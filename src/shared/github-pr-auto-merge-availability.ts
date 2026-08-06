@@ -18,6 +18,10 @@ function isConflicting(item: GitHubPRAutoMergeAvailabilityInput): boolean {
   return item.mergeable === 'CONFLICTING' || item.mergeStateStatus === 'DIRTY'
 }
 
+function isUnstable(item: GitHubPRAutoMergeAvailabilityInput): boolean {
+  return item.mergeStateStatus === 'UNSTABLE'
+}
+
 function hasReviewRequirement(item: GitHubPRAutoMergeAvailabilityInput): boolean {
   return item.reviewDecision === 'REVIEW_REQUIRED' || item.reviewDecision === 'CHANGES_REQUESTED'
 }
@@ -30,7 +34,9 @@ function canMergeImmediately(item: GitHubPRAutoMergeAvailabilityInput): boolean 
 }
 
 function canRequestWhenReady(item: GitHubPRAutoMergeAvailabilityInput): boolean {
-  if (!isOpenPR(item) || isConflicting(item)) {
+  // Why: GitHub auto-merge waits on unmet requirements; UNSTABLE is rejected
+  // by the mutation rather than becoming a waitable auto-merge request.
+  if (!isOpenPR(item) || isConflicting(item) || isUnstable(item)) {
     return false
   }
   if (item.mergeQueueRequired === true) {

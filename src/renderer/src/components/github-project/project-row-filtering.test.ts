@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { GitHubProjectRow, GitHubProjectTable } from '../../../../shared/github-project-types'
 import type { Repo } from '../../../../shared/types'
 import {
@@ -193,6 +193,21 @@ describe('resolveSelectedProjectRowRepo', () => {
     })
 
     expect(resolution).toMatchObject({ status: 'selected_match', repo: { id: 'repo-2' } })
+  })
+
+  it('passes the project host into repository matching', () => {
+    const lookupSlug = vi.fn(() => [repo('repo-1')])
+
+    expect(
+      resolveSelectedProjectRowRepo({
+        row: row('enterprise', 'acme/orca'),
+        lookupSlug,
+        host: 'ghe.example:8443',
+        slugIndexReady: true,
+        selectedRepoIds: new Set(['repo-1'])
+      })
+    ).toMatchObject({ status: 'selected_match' })
+    expect(lookupSlug).toHaveBeenCalledWith('acme/orca', 'ghe.example:8443')
   })
 
   it('reports ambiguity when multiple matching repos are selected', () => {

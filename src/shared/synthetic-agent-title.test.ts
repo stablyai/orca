@@ -15,6 +15,14 @@ describe('synthetic agent titles', () => {
     expect(shouldDriveSyntheticAgentTitleFromHook('codex', 'done')).toBe(true)
   })
 
+  it('does not synthesize OpenCode titles over native session titles', () => {
+    expect(getSyntheticAgentTerminalTitle('opencode', 'done')).toBeNull()
+    expect(getSyntheticAgentTerminalTitle('opencode', 'waiting')).toBeNull()
+    expect(shouldDriveSyntheticAgentTitleFromHook('opencode', 'working')).toBe(false)
+    expect(shouldDriveSyntheticAgentTitleFromHook('opencode', 'done')).toBe(false)
+    expect(shouldDriveSyntheticAgentTitleFromHook('opencode', 'waiting')).toBe(false)
+  })
+
   it('provides Devin titles for hook-driven status updates', () => {
     expect(getSyntheticAgentTerminalTitle('devin', 'done')).toBe('Devin ready')
     expect(getSyntheticAgentTerminalTitle('devin', 'waiting')).toBe('Devin - action required')

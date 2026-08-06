@@ -151,7 +151,8 @@ describe('source-control primary action decision', () => {
         review: null,
         canCreate: true,
         blockedReason: null,
-        nextAction: null
+        nextAction: null,
+        reviewLookupOutcome: 'not_found'
       }
     })
     expect(resolveSourceControlPrimaryActionDecision(input).kind).toBe('create_pr')
@@ -167,7 +168,8 @@ describe('source-control primary action decision', () => {
           review: null,
           canCreate: false,
           blockedReason: null,
-          nextAction: null
+          nextAction: null,
+          reviewLookupOutcome: 'not_found'
         },
         isHostedReviewCreationLoading: true
       })

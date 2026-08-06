@@ -16,10 +16,9 @@ export type WorkspaceViewSettings = {
   sortBy?: 'name' | 'smart' | 'recent' | 'repo' | 'manual'
   hideSleepingWorkspaces?: boolean
   hideDefaultBranchWorkspace?: boolean
+  alwaysShowDefaultBranchWorkspace?: boolean
   filterRepoIds?: string[]
   collapsedGroups?: string[]
-  workspaceHostScope?: string
-  visibleWorkspaceHostIds?: string[] | null
   workspaceStatuses?: WorkspaceStatusDefinition[]
 }
 
@@ -62,10 +61,9 @@ export type MobileViewState = {
   sortMode: MobileSortMode
   hideSleeping: boolean
   hideDefaultBranch: boolean
+  alwaysShowDefaultBranch: boolean
   filterRepoIds: string[]
   collapsedGroups: string[]
-  workspaceHostScope?: string
-  visibleWorkspaceHostIds?: string[] | null
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
 }
 
@@ -87,19 +85,11 @@ export function applyDesktopViewSettings(
     sortMode: sortMode ?? current.sortMode,
     hideSleeping: settings.hideSleepingWorkspaces ?? current.hideSleeping,
     hideDefaultBranch: settings.hideDefaultBranchWorkspace ?? current.hideDefaultBranch,
+    alwaysShowDefaultBranch:
+      settings.alwaysShowDefaultBranchWorkspace ?? current.alwaysShowDefaultBranch,
     filterRepoIds: settings.filterRepoIds ?? current.filterRepoIds,
     collapsedGroups: settings.collapsedGroups ?? current.collapsedGroups,
     workspaceStatuses
-  }
-  if (settings.workspaceHostScope !== undefined) {
-    next.workspaceHostScope = settings.workspaceHostScope
-  } else if (current.workspaceHostScope !== undefined) {
-    next.workspaceHostScope = current.workspaceHostScope
-  }
-  if (settings.visibleWorkspaceHostIds !== undefined) {
-    next.visibleWorkspaceHostIds = settings.visibleWorkspaceHostIds
-  } else if (current.visibleWorkspaceHostIds !== undefined) {
-    next.visibleWorkspaceHostIds = current.visibleWorkspaceHostIds
   }
   return next
 }

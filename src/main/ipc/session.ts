@@ -18,6 +18,12 @@ export function registerSessionHandlers(store: Store): void {
     store.patchWorkspaceSession(args, hostId)
   })
 
+  ipcMain.handle('session:flush', () => {
+    // Why: durable lifecycle RPCs must propagate disk failures instead of
+    // returning success through Store.flush(), which intentionally only logs.
+    store.flushOrThrow()
+  })
+
   // Synchronous variant for the renderer's beforeunload handler.
   // sendSync blocks the renderer until this returns, guaranteeing the
   // data (including terminal scrollback buffers) is persisted to disk

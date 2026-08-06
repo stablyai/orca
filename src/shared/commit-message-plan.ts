@@ -68,6 +68,69 @@ function planAdditionalAgentArgs(
   return { ok: true, args: tokenized.tokens }
 }
 
+const CODEX_MODEL_OPTION_ALIASES = ['--model', '-m'] as const
+
+function matchesOption(token: string, aliases: readonly string[]): boolean {
+  return aliases.some(
+    (alias) =>
+      token === alias ||
+      token.startsWith(`${alias}=`) ||
+      (alias.startsWith('-') &&
+        !alias.startsWith('--') &&
+        token.startsWith(alias) &&
+        token.length > alias.length)
+  )
+}
+
+function findOptionOccurrence(
+  tokens: string[],
+  aliases: readonly string[],
+  stopAtTerminator: boolean
+): { index: number; consumed: number } | null {
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index]
+    if (stopAtTerminator && token === '--') {
+      break
+    }
+    if (!matchesOption(token, aliases)) {
+      continue
+    }
+    const nextToken = tokens[index + 1]
+    const consumesNext =
+      aliases.includes(token) && nextToken !== undefined && !nextToken.startsWith('-')
+    return { index, consumed: consumesNext ? 2 : 1 }
+  }
+  return null
+}
+
+function applyRecipeOptionOverride(args: {
+  generatedArgs: string[]
+  recipeArgs: string[]
+  aliases: readonly string[]
+}): { generatedArgs: string[]; recipeArgs: string[] } {
+  const recipeOption = findOptionOccurrence(args.recipeArgs, args.aliases, true)
+  const generatedOption = findOptionOccurrence(args.generatedArgs, args.aliases, false)
+  if (!recipeOption || !generatedOption) {
+    return { generatedArgs: args.generatedArgs, recipeArgs: args.recipeArgs }
+  }
+
+  const overrideTokens = args.recipeArgs.slice(
+    recipeOption.index,
+    recipeOption.index + recipeOption.consumed
+  )
+  return {
+    generatedArgs: [
+      ...args.generatedArgs.slice(0, generatedOption.index),
+      ...overrideTokens,
+      ...args.generatedArgs.slice(generatedOption.index + generatedOption.consumed)
+    ],
+    recipeArgs: [
+      ...args.recipeArgs.slice(0, recipeOption.index),
+      ...args.recipeArgs.slice(recipeOption.index + recipeOption.consumed)
+    ]
+  }
+}
+
 function insertAdditionalAgentArgs(args: {
   baseArgs: string[]
   agentArgs: string[]
@@ -164,9 +227,19 @@ export function planCommitMessageGeneration(
   if (!agentArgs.ok) {
     return agentArgs
   }
+  // Why: Codex rejects repeated singleton model flags. Recipe CLI arguments
+  // are the more specific setting, so they replace Orca's generated model.
+  const overriddenArgs =
+    input.agentId === 'codex'
+      ? applyRecipeOptionOverride({
+          generatedArgs: baseArgs,
+          recipeArgs: agentArgs.args,
+          aliases: CODEX_MODEL_OPTION_ALIASES
+        })
+      : { generatedArgs: baseArgs, recipeArgs: agentArgs.args }
   const args = insertAdditionalAgentArgs({
-    baseArgs,
-    agentArgs: agentArgs.args,
+    baseArgs: overriddenArgs.generatedArgs,
+    agentArgs: overriddenArgs.recipeArgs,
     promptDelivery: spec.promptDelivery,
     prompt: argvPrompt
   })

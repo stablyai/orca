@@ -2,14 +2,29 @@ import { useMemo } from 'react'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree-id'
 import {
-  isPathInsideOrEqual,
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  normalizeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
+import {
+  createNormalizedPathInsideOrEqualMatcher,
   isRuntimePathAbsolute,
-  normalizeRuntimePathForComparison,
-  normalizeRuntimePathSeparators
+  normalizeRuntimePathForComparison
 } from '../../../../shared/cross-platform-path'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
-import type { Worktree } from '../../../../shared/types'
-import { translate } from '@/i18n/i18n'
+import type { Repo, Worktree } from '../../../../shared/types'
+import { aiVaultWorktreeCompactPath } from './ai-vault-session-worktree-affordances'
+
+export {
+  aiVaultWorktreeCompactPath,
+  aiVaultWorktreeJumpTooltip,
+  aiVaultWorktreeStatusLabel,
+  canJumpToAiVaultSessionWorktree,
+  isAiVaultSessionInCurrentWorktree,
+  shouldShowAiVaultSessionWorktreeLine,
+  shouldShowAiVaultWorktreeStatusBadge
+} from './ai-vault-session-worktree-affordances'
 
 export type AiVaultSessionWorktreeStatus = 'current' | 'active' | 'archived' | 'unavailable'
 
@@ -23,28 +38,61 @@ export type AiVaultSessionWorktreeInfo = {
 type WorktreeCandidate = {
   worktree: Worktree
   path: string
+  hostId: ExecutionHostId
   status: Exclude<AiVaultSessionWorktreeStatus, 'current'>
   source: 'current-path' | 'prior-path'
+  // Precomputed so a 500-session scan doesn't re-normalize ~500 roots per session.
+  ownsNormalizedCwd: (normalizedCwd: string) => boolean
+  normalizedPathLength: number
 }
 
 export function resolveAiVaultSessionWorktreeInfo({
   session,
+  repos = [],
   worktrees,
   activeWorktreeId
 }: {
   session: AiVaultSession
+  repos?: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
   worktrees: readonly Worktree[]
   activeWorktreeId: string | null
 }): AiVaultSessionWorktreeInfo | null {
+  return withAiVaultCurrentWorktreeStatus(
+    resolveWorktreeInfoFromCandidates(session, buildWorktreeCandidates(worktrees, repos)),
+    activeWorktreeId
+  )
+}
+
+/**
+ * Stamps `status: 'current'` at read time so the session→worktree map itself
+ * never depends on the active worktree — switching worktrees must not rebuild it.
+ */
+export function withAiVaultCurrentWorktreeStatus(
+  worktreeInfo: AiVaultSessionWorktreeInfo | null,
+  activeWorktreeId: string | null
+): AiVaultSessionWorktreeInfo | null {
+  if (!worktreeInfo?.worktreeId || worktreeInfo.worktreeId !== activeWorktreeId) {
+    return worktreeInfo
+  }
+  return worktreeInfo.status === 'current' ? worktreeInfo : { ...worktreeInfo, status: 'current' }
+}
+
+function resolveWorktreeInfoFromCandidates(
+  session: AiVaultSession,
+  candidates: readonly WorktreeCandidate[]
+): AiVaultSessionWorktreeInfo | null {
   if (!session.cwd) {
     return null
   }
 
-  const candidates = buildWorktreeCandidates(worktrees)
-    .filter((candidate) => isSessionInWorktreePath(candidate.path, session.cwd!))
+  const sessionHostId = normalizeExecutionHostId(session.executionHostId)
+  const normalizedCwd = normalizeRuntimePathForComparison(session.cwd)
+  const matched = candidates
+    .filter((candidate) => candidate.ownsNormalizedCwd(normalizedCwd))
+    .filter((candidate) => !sessionHostId || candidate.hostId === sessionHostId)
     .sort(compareWorktreeCandidates)
 
-  const best = candidates[0]
+  const best = matched[0]
   if (!best) {
     return {
       status: 'unavailable',
@@ -53,15 +101,8 @@ export function resolveAiVaultSessionWorktreeInfo({
     }
   }
 
-  const status =
-    best.worktree.id === activeWorktreeId
-      ? 'current'
-      : best.worktree.isArchived
-        ? 'archived'
-        : best.status
-
   return {
-    status,
+    status: best.status,
     label: best.worktree.displayName || compactPathLabel(best.path),
     path: best.path,
     worktreeId: best.worktree.id
@@ -85,25 +126,39 @@ export function extractWorktreePathFromSessionTitle(title: string): string | nul
 
 export function resolveAiVaultSessionWorktreeDisplay(args: {
   session: AiVaultSession
+  repos?: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
   worktrees: readonly Worktree[]
   activeWorktreeId: string | null
 }): AiVaultSessionWorktreeInfo | null {
-  const resolved = resolveAiVaultSessionWorktreeInfo(args)
+  return withAiVaultCurrentWorktreeStatus(
+    resolveWorktreeDisplayFromCandidates(
+      args.session,
+      buildWorktreeCandidates(args.worktrees, args.repos ?? [])
+    ),
+    args.activeWorktreeId
+  )
+}
+
+function resolveWorktreeDisplayFromCandidates(
+  session: AiVaultSession,
+  candidates: readonly WorktreeCandidate[]
+): AiVaultSessionWorktreeInfo | null {
+  const resolved = resolveWorktreeInfoFromCandidates(session, candidates)
   if (resolved) {
     return resolved
   }
 
-  const cwd = args.session.cwd?.trim()
+  const cwd = session.cwd?.trim()
   if (cwd) {
     return unavailableWorktreeInfo(cwd)
   }
 
-  const titlePath = extractWorktreePathFromSessionTitle(args.session.title)
+  const titlePath = extractWorktreePathFromSessionTitle(session.title)
   if (titlePath) {
     return unavailableWorktreeInfo(titlePath)
   }
 
-  const branch = args.session.branch?.trim()
+  const branch = session.branch?.trim()
   if (branch) {
     return {
       status: 'unavailable',
@@ -115,108 +170,80 @@ export function resolveAiVaultSessionWorktreeDisplay(args: {
   return null
 }
 
+/**
+ * Deliberately unaware of the active worktree: stamping `current` here would
+ * rebuild the whole map (candidates × sessions) on every worktree switch.
+ * Callers derive it per row via `withAiVaultCurrentWorktreeStatus`.
+ */
 export function useAiVaultSessionWorktreeMap({
   sessions,
-  worktrees,
-  activeWorktreeId
+  repos = [],
+  worktrees
 }: {
   sessions: readonly AiVaultSession[]
+  repos?: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
   worktrees: readonly Worktree[]
-  activeWorktreeId: string | null
 }): ReadonlyMap<string, AiVaultSessionWorktreeInfo> {
-  return useMemo(
-    () =>
-      new Map(
-        sessions.flatMap((session) => {
-          const worktreeInfo = resolveAiVaultSessionWorktreeDisplay({
-            session,
-            worktrees,
-            activeWorktreeId
-          })
-          return worktreeInfo ? [[session.id, worktreeInfo] as const] : []
-        })
-      ),
-    [activeWorktreeId, sessions, worktrees]
-  )
-}
-
-export function canJumpToAiVaultSessionWorktree(
-  worktreeInfo: AiVaultSessionWorktreeInfo | null
-): boolean {
-  return Boolean(
-    worktreeInfo?.worktreeId &&
-    worktreeInfo.status !== 'archived' &&
-    worktreeInfo.status !== 'unavailable'
-  )
-}
-
-// Why: a session in the worktree you're already viewing has nowhere to jump,
-// so we hide the affordance rather than offering a self-jump (the "Current
-// worktree" badge already signals where it lives).
-export function isAiVaultSessionInCurrentWorktree(
-  worktreeInfo: AiVaultSessionWorktreeInfo | null
-): boolean {
-  return worktreeInfo?.status === 'current'
-}
-
-export function aiVaultWorktreeJumpTooltip(
-  worktreeInfo: AiVaultSessionWorktreeInfo | null
-): string {
-  if (canJumpToAiVaultSessionWorktree(worktreeInfo)) {
-    return translate(
-      'auto.components.right.sidebar.AiVaultSessionWorktree.jumpToWorktree',
-      'Jump to Worktree'
-    )
-  }
-  if (!worktreeInfo) {
-    return translate(
-      'auto.components.right.sidebar.AiVaultSessionWorktree.noRecordedWorktree',
-      'No worktree was recorded for this session.'
-    )
-  }
-  if (worktreeInfo.status === 'archived') {
-    return translate(
-      'auto.components.right.sidebar.AiVaultSessionWorktree.archivedJumpUnavailable',
-      'This session is in an archived worktree.'
-    )
-  }
-  if (worktreeInfo.status === 'unavailable') {
-    return translate(
-      'auto.components.right.sidebar.AiVaultSessionWorktree.noActiveWorktreeMatch',
-      'No active worktree matches this session.'
-    )
-  }
-  return translate(
-    'auto.components.right.sidebar.AiVaultSessionWorktree.noActiveWorktreeTarget',
-    'No active worktree is available.'
-  )
-}
-
-function buildWorktreeCandidates(worktrees: readonly Worktree[]): WorktreeCandidate[] {
-  const candidates: WorktreeCandidate[] = []
-  for (const worktree of worktrees) {
-    if (hasUsablePath(worktree.path)) {
-      candidates.push({
-        worktree,
-        path: worktree.path,
-        status: worktree.isArchived ? 'archived' : 'active',
-        source: 'current-path'
+  return useMemo(() => {
+    // Hoisted out of the per-session loop: candidates and their normalized
+    // roots are session-independent.
+    const candidates = buildWorktreeCandidates(worktrees, repos)
+    return new Map(
+      sessions.flatMap((session) => {
+        const worktreeInfo = resolveWorktreeDisplayFromCandidates(session, candidates)
+        return worktreeInfo ? [[session.id, worktreeInfo] as const] : []
       })
+    )
+  }, [repos, sessions, worktrees])
+}
+
+function buildWorktreeCandidates(
+  worktrees: readonly Worktree[],
+  repos: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
+): WorktreeCandidate[] {
+  const candidates: WorktreeCandidate[] = []
+  const repoById = new Map(repos.map((repo) => [repo.id, repo]))
+  for (const worktree of worktrees) {
+    const repo = repoById.get(worktree.repoId)
+    const hostId =
+      normalizeExecutionHostId(worktree.hostId) ??
+      (repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID)
+    if (hasUsablePath(worktree.path)) {
+      candidates.push(makeWorktreeCandidate(worktree, worktree.path, hostId, 'current-path'))
     }
     for (const priorWorktreeId of worktree.priorWorktreeIds ?? []) {
       const parsed = splitWorktreeIdForFilesystem(priorWorktreeId)
       if (!parsed || parsed.repoId !== worktree.repoId || !hasUsablePath(parsed.worktreePath)) {
         continue
       }
-      candidates.push({
-        worktree,
-        path: parsed.worktreePath,
-        status: worktree.isArchived ? 'archived' : 'active',
-        source: 'prior-path'
-      })
+      candidates.push(makeWorktreeCandidate(worktree, parsed.worktreePath, hostId, 'prior-path'))
     }
   }
   return candidates
+}
+
+function makeWorktreeCandidate(
+  worktree: Worktree,
+  path: string,
+  hostId: ExecutionHostId,
+  source: WorktreeCandidate['source']
+): WorktreeCandidate {
+  const ownsCwd = createNormalizedPathInsideOrEqualMatcher(path)
+  // A WSL UNC root also owns sessions recorded under its Linux-native cwd.
+  const wslPath = parseWslUncPath(path)
+  const ownsCwdViaWslAlias = wslPath
+    ? createNormalizedPathInsideOrEqualMatcher(wslPath.linuxPath)
+    : null
+  return {
+    worktree,
+    path,
+    hostId,
+    status: worktree.isArchived ? 'archived' : 'active',
+    source,
+    ownsNormalizedCwd: (normalizedCwd) =>
+      ownsCwd(normalizedCwd) || (ownsCwdViaWslAlias?.(normalizedCwd) ?? false),
+    normalizedPathLength: normalizeRuntimePathForComparison(path).length
+  }
 }
 
 function hasUsablePath(pathValue: string): boolean {
@@ -224,18 +251,8 @@ function hasUsablePath(pathValue: string): boolean {
   return Boolean(trimmed && isRuntimePathAbsolute(trimmed))
 }
 
-function isSessionInWorktreePath(worktreePath: string, sessionCwd: string): boolean {
-  if (isPathInsideOrEqual(worktreePath, sessionCwd)) {
-    return true
-  }
-  const wslPath = parseWslUncPath(worktreePath)
-  return wslPath ? isPathInsideOrEqual(wslPath.linuxPath, sessionCwd) : false
-}
-
 function compareWorktreeCandidates(left: WorktreeCandidate, right: WorktreeCandidate): number {
-  const lengthDifference =
-    normalizeRuntimePathForComparison(right.path).length -
-    normalizeRuntimePathForComparison(left.path).length
+  const lengthDifference = right.normalizedPathLength - left.normalizedPathLength
   if (lengthDifference !== 0) {
     return lengthDifference
   }
@@ -243,21 +260,6 @@ function compareWorktreeCandidates(left: WorktreeCandidate, right: WorktreeCandi
     return 0
   }
   return left.source === 'current-path' ? -1 : 1
-}
-
-export function aiVaultWorktreeCompactPath(pathValue: string): string {
-  const parts = normalizeRuntimePathSeparators(pathValue).split('/').filter(Boolean)
-  if (parts.length >= 2) {
-    return parts.slice(-2).join('/')
-  }
-  return parts[0] ?? pathValue
-}
-
-export function shouldShowAiVaultWorktreeStatusBadge(
-  status: AiVaultSessionWorktreeStatus
-): boolean {
-  // Why: "active" repeats the branch label without adding scan value in dense rows.
-  return status !== 'active'
 }
 
 function unavailableWorktreeInfo(pathValue: string): AiVaultSessionWorktreeInfo {
@@ -270,29 +272,4 @@ function unavailableWorktreeInfo(pathValue: string): AiVaultSessionWorktreeInfo 
 
 function compactPathLabel(pathValue: string): string {
   return aiVaultWorktreeCompactPath(pathValue)
-}
-
-export function aiVaultWorktreeStatusLabel(status: AiVaultSessionWorktreeStatus): string {
-  if (status === 'current') {
-    return translate(
-      'auto.components.right.sidebar.AiVaultSessionWorktree.currentWorktree',
-      'Current worktree'
-    )
-  }
-  if (status === 'active') {
-    return translate(
-      'auto.components.right.sidebar.AiVaultSessionWorktree.activeWorktree',
-      'Active worktree'
-    )
-  }
-  if (status === 'archived') {
-    return translate(
-      'auto.components.right.sidebar.AiVaultSessionWorktree.archivedWorktree',
-      'Archived worktree'
-    )
-  }
-  return translate(
-    'auto.components.right.sidebar.AiVaultSessionWorktree.unavailableWorktree',
-    'Unavailable worktree'
-  )
 }

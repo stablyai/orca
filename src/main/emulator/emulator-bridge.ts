@@ -5,6 +5,7 @@ import type { SimulatorDevice } from './simctl-simulator-devices'
 import type { EmulatorBridgeOptions } from './emulator-bridge-types'
 import type { EmulatorGesturePoint } from './emulator-gesture-sender'
 import { EmulatorSessionRegistry } from './emulator-session-registry'
+import { deriveAxUrlFromStreamUrl } from './serve-sim-detached-session'
 import { IosEmulatorBackend } from './backends/ios-emulator-backend'
 import { AndroidEmulatorBackend } from './backends/android-emulator-backend'
 import type {
@@ -197,6 +198,32 @@ export class EmulatorBridge {
   async exec(command: string, opts?: EmulatorTargetOpts): Promise<unknown> {
     const { backend, device } = await this.resolveTarget(opts)
     return backend.exec(device, command)
+  }
+
+  async accessibilityTree(opts?: EmulatorTargetOpts): Promise<unknown> {
+    return this.runCapability('accessibilityTree', opts, async (backend, device) => {
+      if (backend.kind !== 'ios') {
+        return backend.accessibilityTree!(device)
+      }
+      const udid = await backend.resolveDeviceId(device)
+      const worktreeId = opts?.worktreeId
+      // Fall back to the udid-keyed session so an explicit --device read works
+      // from a worktree with no active emulator (matching tap/type reachability);
+      // sessions are stored once per udid, so both lookups hit the same state.
+      const session =
+        (worktreeId ? this.getActiveForWorktree(worktreeId) : null) ??
+        this.sessionRegistry.getSession(udid)
+      if (worktreeId && session && session.deviceUdid !== udid) {
+        throw new EmulatorError(
+          'emulator_no_active',
+          `iOS simulator ${udid} is not active for this worktree (active: ${session.deviceUdid}); attach the requested simulator first.`
+        )
+      }
+      // Heal sessions registered without an axUrl (parse-time derivation only
+      // covers fresh --detach output) by deriving it from the mjpeg stream URL.
+      const axUrl = session?.axUrl ?? deriveAxUrlFromStreamUrl(session?.streamUrl)
+      return backend.accessibilityTree!(udid, axUrl)
+    })
   }
 
   // Runs a capability-gated verb against the resolved target, rejecting backends

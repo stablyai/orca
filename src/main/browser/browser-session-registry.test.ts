@@ -21,13 +21,20 @@ vi.mock('electron', () => ({
 vi.mock('./browser-manager', () => ({
   browserManager: {
     notifyPermissionDenied: vi.fn(),
-    handleGuestWillDownload: vi.fn()
+    handleGuestWillDownload: vi.fn(),
+    installCertificateRequestGuard: vi.fn(),
+    removeCertificateRequestGuard: vi.fn()
   }
 }))
 
 import { browserSessionRegistry } from './browser-session-registry'
 import { setupClientHintsOverride } from './browser-session-ua'
 import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
+import {
+  DEFAULT_LOCAL_ORCA_PROFILE_ID,
+  getOrcaProfileBrowserDefaultPartition,
+  getOrcaProfileBrowserSessionPartition
+} from '../../shared/orca-profiles'
 
 describe('BrowserSessionRegistry', () => {
   beforeEach(() => {
@@ -78,6 +85,13 @@ describe('BrowserSessionRegistry', () => {
     expect(profile).toBeNull()
   })
 
+  it('rejects invalid user-agent modes at the registry boundary', () => {
+    const profile = browserSessionRegistry.createProfile('isolated', 'Invalid UA', {
+      userAgentMode: 'rotating' as never
+    })
+    expect(profile).toBeNull()
+  })
+
   it('allows created profile partitions', () => {
     const profile = browserSessionRegistry.createProfile('isolated', 'Allowed')
     expect(profile).not.toBeNull()
@@ -104,6 +118,17 @@ describe('BrowserSessionRegistry', () => {
 
   it('resolves default partition for unknown profileId', () => {
     expect(browserSessionRegistry.resolvePartition('nonexistent')).toBe(ORCA_BROWSER_PARTITION)
+  })
+
+  it('strictly resolves known profile partitions without downgrading unknown profiles', () => {
+    const profile = browserSessionRegistry.createProfile('isolated', 'Strict Resolve')
+    expect(profile).not.toBeNull()
+
+    expect(browserSessionRegistry.resolveKnownPartition(null)).toBe(ORCA_BROWSER_PARTITION)
+    expect(browserSessionRegistry.resolveKnownPartition(undefined)).toBe(ORCA_BROWSER_PARTITION)
+    expect(browserSessionRegistry.resolveKnownPartition('default')).toBe(ORCA_BROWSER_PARTITION)
+    expect(browserSessionRegistry.resolveKnownPartition(profile!.id)).toBe(profile!.partition)
+    expect(browserSessionRegistry.resolveKnownPartition('missing-profile')).toBeNull()
   })
 
   it('lists all profiles', () => {
@@ -181,6 +206,25 @@ describe('BrowserSessionRegistry', () => {
     expect(browserSessionRegistry.isAllowedPartition(fakeProfile.partition)).toBe(true)
   })
 
+  it('rejects a persisted profile whose partition belongs to a different profile id', () => {
+    const profileId = '00000000-0000-4000-8000-000000000021'
+    const claimedPartition = 'persist:orca-browser-session-00000000-0000-4000-8000-000000000022'
+
+    browserSessionRegistry.hydrateFromPersisted([
+      {
+        id: profileId,
+        scope: 'isolated',
+        partition: claimedPartition,
+        label: 'Conflicting identity',
+        source: null,
+        userAgentMode: 'native'
+      }
+    ])
+
+    expect(browserSessionRegistry.getProfile(profileId)).toBeNull()
+    expect(browserSessionRegistry.isAllowedPartition(claimedPartition)).toBe(false)
+  })
+
   it('sets up session policies for new partitions', () => {
     browserSessionRegistry.createProfile('isolated', 'Policy Test')
     expect(sessionFromPartitionMock).toHaveBeenCalled()
@@ -188,6 +232,20 @@ describe('BrowserSessionRegistry', () => {
     expect(mockSession?.setPermissionRequestHandler).toHaveBeenCalled()
     expect(mockSession?.setPermissionCheckHandler).toHaveBeenCalled()
     expect(mockSession?.setDevicePermissionHandler).toHaveBeenCalled()
+  })
+
+  it('auto-grants pointer lock for browser partitions', () => {
+    browserSessionRegistry.createProfile('isolated', 'Pointer Lock Test')
+    const mockSession = sessionFromPartitionMock.mock.results[0]?.value
+    const requestHandler = mockSession.setPermissionRequestHandler.mock.calls[0][0]
+    const checkHandler = mockSession.setPermissionCheckHandler.mock.calls[0][0]
+    const callback = vi.fn()
+    const guestWc = { id: 7, getURL: vi.fn(() => 'https://example.com/') }
+
+    requestHandler(guestWc, 'pointerLock', callback, {})
+
+    expect(callback).toHaveBeenCalledWith(true)
+    expect(checkHandler(null, 'pointerLock', '', {})).toBe(true)
   })
 
   it('routes media permission requests through macOS TCC for isolated partitions', async () => {
@@ -267,6 +325,30 @@ describe('BrowserSessionRegistry', () => {
       webAuthnCallback
     )
     expect(webAuthnCallback).toHaveBeenCalledWith('credential-1')
+  })
+
+  it('uses profile-owned partitions for non-default Orca profiles', () => {
+    const orcaProfileId = 'local-work'
+    browserSessionRegistry.configureForOrcaProfile({
+      orcaProfileId,
+      profileDirectory: '/profiles/local-work'
+    })
+
+    expect(browserSessionRegistry.getDefaultProfile().partition).toBe(
+      getOrcaProfileBrowserDefaultPartition(orcaProfileId)
+    )
+    expect(browserSessionRegistry.isAllowedPartition(ORCA_BROWSER_PARTITION)).toBe(false)
+
+    const profile = browserSessionRegistry.createProfile('isolated', 'Work Browser')
+    expect(profile).not.toBeNull()
+    expect(profile!.partition).toBe(
+      getOrcaProfileBrowserSessionPartition(orcaProfileId, profile!.id)
+    )
+
+    browserSessionRegistry.configureForOrcaProfile({
+      orcaProfileId: DEFAULT_LOCAL_ORCA_PROFILE_ID,
+      profileDirectory: '/profiles/local-default'
+    })
   })
 
   describe('setupClientHintsOverride', () => {

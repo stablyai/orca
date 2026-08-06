@@ -1,7 +1,8 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { ScrollView, Text } from 'react-native'
 import { MobileSyntaxSegments } from '../components/MobileSyntaxSegments'
 import { formatPreviewByteLength } from './mobile-file-preview-request'
+import { scrollOffsetForPreviewLine } from './mobile-file-preview-line-column'
 import { buildMobileFilePreviewSyntax } from './mobile-file-preview-syntax'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
 
@@ -9,19 +10,44 @@ export function MobileFilePreviewSourceText({
   relativePath,
   content,
   truncated,
-  byteLength
+  byteLength,
+  initialLine
 }: {
   relativePath: string
   content: string
   truncated?: boolean
   byteLength?: number
+  initialLine?: number
 }) {
+  const scrollRef = useRef<ScrollView>(null)
+  const revealedRef = useRef(false)
   const syntax = useMemo(
     () => buildMobileFilePreviewSyntax(relativePath, content),
     [content, relativePath]
   )
+
+  useEffect(() => {
+    revealedRef.current = false
+  }, [content, initialLine, relativePath])
+
+  const revealInitialLine = () => {
+    if (!initialLine || revealedRef.current) {
+      return
+    }
+    revealedRef.current = true
+    scrollRef.current?.scrollTo({
+      y: scrollOffsetForPreviewLine(initialLine),
+      animated: false
+    })
+  }
+
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.textContent}>
+    <ScrollView
+      ref={scrollRef}
+      style={styles.scroll}
+      contentContainerStyle={styles.textContent}
+      onContentSizeChange={revealInitialLine}
+    >
       {truncated ? (
         <MobileFilePreviewTruncatedNote byteLength={byteLength ?? content.length} />
       ) : null}

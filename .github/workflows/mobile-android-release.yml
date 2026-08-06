@@ -9,22 +9,8 @@ on:
       - 'mobile-android-v*'
   workflow_dispatch:
     inputs:
-      bump_patch_version:
-        description: 'Bump the mobile marketing version patch number before release'
-        required: false
-        default: false
-        type: boolean
       release_version:
-        description: 'Optional exact mobile marketing version override, e.g. 0.0.15'
-        required: false
-        type: string
-      bump_android_version_code:
-        description: 'Increment the Android versionCode before release'
-        required: false
-        default: false
-        type: boolean
-      android_version_code:
-        description: 'Optional exact Android versionCode override'
+        description: 'Optional exact mobile marketing version assertion, e.g. 0.0.22'
         required: false
         type: string
       publish_github_release:
@@ -69,9 +55,6 @@ jobs:
         id: release
         env:
           MOBILE_ANDROID_RELEASE_VERSION: ${{ github.event.inputs.release_version }}
-          MOBILE_ANDROID_BUMP_PATCH_VERSION: ${{ github.event.inputs.bump_patch_version }}
-          MOBILE_ANDROID_VERSION_CODE: ${{ github.event.inputs.android_version_code }}
-          MOBILE_ANDROID_BUMP_VERSION_CODE: ${{ github.event.inputs.bump_android_version_code }}
           MOBILE_ANDROID_PUBLISH_RELEASE: ${{ github.event.inputs.publish_github_release }}
         run: node scripts/prepare-android-release.mjs
 

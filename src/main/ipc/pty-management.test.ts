@@ -1,7 +1,3 @@
-/* eslint-disable max-lines -- Why: covers every pty:management IPC channel
-against shared mocks (electron, fs, daemon-init, DaemonPtyRouter). Splitting
-across files would duplicate the vi.hoisted setup and the shared helpers,
-with no meaningful ownership seam. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DaemonSessionInfo } from '../daemon/types'
 
@@ -48,10 +44,17 @@ vi.mock('../daemon/daemon-pty-router', () => {
 // subscribes to adapter events, so keep only the accessors pty-management uses.
 vi.mock('../daemon/degraded-daemon-pty-provider', () => {
   class DegradedDaemonPtyProvider {
-    readonly isDegraded = true
     private allAdapters: unknown[]
+    private routesFreshToFallback = true
     constructor(opts: { current: unknown; legacy: unknown[] }) {
       this.allAdapters = [opts.current, ...opts.legacy]
+    }
+    get routesFreshSpawnsToLocalProvider(): true | undefined {
+      return this.routesFreshToFallback ? true : undefined
+    }
+    async recoverFreshSpawnRouting(): Promise<boolean> {
+      this.routesFreshToFallback = false
+      return true
     }
     getAllAdapters() {
       return this.allAdapters
@@ -181,6 +184,19 @@ describe('pty:management IPC handlers', () => {
       expect(result.sessions.map((s) => s.sessionId)).toEqual(['preserved-1'])
     })
 
+    it('clears degraded mode after durable fresh-spawn routing recovers', async () => {
+      const current = makeAdapter(5, [makeSession('preserved-1')])
+      const provider = await makeDegradedProvider(current)
+      const { registerDaemonManagementHandlers } = await importFresh()
+      getDaemonProviderMock.mockReturnValue(provider)
+      registerDaemonManagementHandlers()
+      const handler = buildHandlerMap()['pty:management:listSessions']
+
+      await expect(handler({})).resolves.toMatchObject({ degraded: true })
+      await provider.recoverFreshSpawnRouting()
+      await expect(handler({})).resolves.toMatchObject({ degraded: false })
+    })
+
     it('returns empty list when no daemon provider is installed', async () => {
       getDaemonProviderMock.mockReturnValue(null)
 
@@ -230,10 +246,11 @@ describe('pty:management IPC handlers', () => {
     async function runKillAllWithPolls(
       handler: (event: unknown, args?: unknown) => unknown,
       pollCount: number = 65
-    ): Promise<{ killedCount: number; remainingCount: number }> {
+    ): Promise<{ killedCount: number; remainingCount: number; killedSessionIds: string[] }> {
       const resultPromise = handler({}) as Promise<{
         killedCount: number
         remainingCount: number
+        killedSessionIds: string[]
       }>
       // Why: advance the loop's sleeps one at a time. Between each sleep the
       // handler awaits collectSessions (a microtask), so we need to flush
@@ -279,7 +296,11 @@ describe('pty:management IPC handlers', () => {
       const handlers = buildHandlerMap()
       const result = await runKillAllWithPolls(handlers['pty:management:killAll'])
 
-      expect(result).toEqual({ killedCount: 3, remainingCount: 0 })
+      expect(result).toEqual({
+        killedCount: 3,
+        remainingCount: 0,
+        killedSessionIds: ['new-1', 'new-2', 'old-1']
+      })
       // Each initial session receives exactly one shutdown — no retries.
       expect(current.shutdown).toHaveBeenCalledTimes(2)
       expect(current.shutdown).toHaveBeenCalledWith('new-1', { immediate: true })
@@ -306,7 +327,7 @@ describe('pty:management IPC handlers', () => {
       const handlers = buildHandlerMap()
       const result = await runKillAllWithPolls(handlers['pty:management:killAll'])
 
-      expect(result).toEqual({ killedCount: 0, remainingCount: 1 })
+      expect(result).toEqual({ killedCount: 0, remainingCount: 1, killedSessionIds: [] })
       // One shutdown fired — no per-session retry. Initial-snapshot
       // accounting means the stuck session is counted once.
       expect(current.shutdown).toHaveBeenCalledTimes(1)
@@ -340,7 +361,11 @@ describe('pty:management IPC handlers', () => {
       const handlers = buildHandlerMap()
       const result = await runKillAllWithPolls(handlers['pty:management:killAll'])
 
-      expect(result).toEqual({ killedCount: 2, remainingCount: 0 })
+      expect(result).toEqual({
+        killedCount: 2,
+        remainingCount: 0,
+        killedSessionIds: ['a', 'b']
+      })
     })
 
     it('swallows per-session shutdown rejections without stopping the batch', async () => {
@@ -374,7 +399,11 @@ describe('pty:management IPC handlers', () => {
       expect(current.shutdown).toHaveBeenCalledWith('a', { immediate: true })
       expect(current.shutdown).toHaveBeenCalledWith('b', { immediate: true })
       // 'a' rejected and is still alive → counts as remaining; 'b' reaped.
-      expect(result).toEqual({ killedCount: 1, remainingCount: 1 })
+      expect(result).toEqual({
+        killedCount: 1,
+        remainingCount: 1,
+        killedSessionIds: ['b']
+      })
     })
   })
 

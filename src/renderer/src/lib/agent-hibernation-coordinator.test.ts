@@ -1,3 +1,5 @@
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/types'
@@ -24,6 +26,7 @@ import type { AppState } from '@/store/types'
 
 const NOW = 10_000_000
 const LEAF = '11111111-1111-4111-8111-111111111111'
+const PI_TRANSCRIPT_PATH = join(tmpdir(), 'pi-session-1.jsonl')
 
 const mockRuntimeEnvironmentCall = vi.fn()
 
@@ -77,12 +80,20 @@ function installEligibleState(
   overrides: Partial<AppState> = {}
 ): typeof shutdownCompletedAgentPaneForHibernation {
   const e = entry()
+  const runtimeOwnerEnvironmentId = overrides.settings?.activeRuntimeEnvironmentId ?? undefined
   useAppStore.setState({
     settings: {
       experimentalAgentHibernation: true,
       agentHibernationIdleMs: DEFAULT_AGENT_HIBERNATION_IDLE_MS
     } as never,
     activeWorktreeId: 'wt-active',
+    repos: [],
+    worktreesByRepo: {
+      'fixture-repo': [
+        { id: 'wt-bg', repoId: 'fixture-repo', hostId: 'local', runtimeOwnerEnvironmentId }
+      ]
+    } as never,
+    detectedWorktreesByRepo: {},
     tabsByWorktree: { 'wt-bg': [tab()] },
     terminalLayoutsByTabId: { 'tab-1': layout() },
     ptyIdsByTabId: { 'tab-1': ['pty-1'] },
@@ -190,6 +201,52 @@ describe('agent sleep coordinator', () => {
     expect(useAppStore.getState().shutdownWorktreeTerminals).not.toHaveBeenCalled()
   })
 
+  it('hibernates completed Pi after the periodic recovery capture', async () => {
+    vi.useFakeTimers()
+    const piEntry = {
+      ...entry(),
+      agentType: 'pi' as const,
+      providerSession: {
+        key: 'session_id' as const,
+        id: 'pi-session-1',
+        transcriptPath: PI_TRANSCRIPT_PATH
+      }
+    }
+    const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined), {
+      agentStatusByPaneKey: { [piEntry.paneKey]: piEntry },
+      sleepingAgentSessionsByPaneKey: {
+        [piEntry.paneKey]: {
+          paneKey: piEntry.paneKey,
+          tabId: piEntry.tabId,
+          worktreeId: piEntry.worktreeId!,
+          agent: 'pi',
+          providerSession: piEntry.providerSession,
+          prompt: '',
+          state: 'working',
+          capturedAt: piEntry.updatedAt,
+          updatedAt: piEntry.updatedAt,
+          origin: 'live'
+        }
+      }
+    })
+
+    const liveRecord = useAppStore.getState().sleepingAgentSessionsByPaneKey[piEntry.paneKey]
+    useAppStore.getState().captureAllSleepingAgentSessions('periodic')
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[piEntry.paneKey]).toBe(liveRecord)
+
+    startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(shutdown).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1000)
+
+    expect(shutdown).toHaveBeenCalledWith('wt-bg', {
+      paneKey: piEntry.paneKey,
+      tabId: 'tab-1',
+      leafId: LEAF,
+      ptyId: 'pty-1'
+    })
+  })
+
   it('hibernates an eligible pane when a sibling shell PTY is live', async () => {
     vi.useFakeTimers()
     const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined), {
@@ -294,6 +351,35 @@ describe('agent sleep coordinator', () => {
     })
 
     await vi.advanceTimersByTimeAsync(1000)
+    await vi.advanceTimersByTimeAsync(1000)
+
+    expect(shutdown).not.toHaveBeenCalled()
+  })
+
+  it('rechecks dispatch settlement before shutdown', async () => {
+    vi.useFakeTimers()
+    const completed = {
+      ...entry(),
+      orchestration: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        dispatchStatus: 'completed' as const
+      }
+    }
+    const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined), {
+      agentStatusByPaneKey: { [completed.paneKey]: completed }
+    })
+    startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
+
+    await vi.advanceTimersByTimeAsync(1000)
+    useAppStore.setState({
+      agentStatusByPaneKey: {
+        [completed.paneKey]: {
+          ...completed,
+          orchestration: { ...completed.orchestration, dispatchStatus: 'dispatched' }
+        }
+      }
+    })
     await vi.advanceTimersByTimeAsync(1000)
 
     expect(shutdown).not.toHaveBeenCalled()

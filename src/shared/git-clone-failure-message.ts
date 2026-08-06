@@ -1,10 +1,18 @@
+import { stripCredentialsFromMessage } from './git-remote-error'
+
 export function getGitCloneFailureMessage(
   stderr: string,
   options: { clonePath?: string | null } = {}
 ): string {
   let fallbackLine: string | null = null
 
-  for (const rawLine of iterateLinesFromEnd(stderr)) {
+  // Why: clone errors echo the URL the user typed, which is the most likely
+  // git error to embed a live token (`https://user:ghp_…@host/repo.git`).
+  // Scrub up-front so every return branch operates on already-redacted text,
+  // matching normalizeGitErrorMessage.
+  const scrubbedStderr = stripCredentialsFromMessage(stderr)
+
+  for (const rawLine of iterateLinesFromEnd(scrubbedStderr)) {
     const line = stripAnsi(rawLine).trim()
     if (!line) {
       continue

@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: this dropdown state machine keeps every action row in one table so priority and disabled-state regressions stay visible in tests. */
-// Why: split from source-control-primary-action because the primary and dropdown are independent derivations with different priority ladders; together they exceed the max-lines budget and tangle unrelated concerns.
+// Why: split from source-control-primary-action — primary and dropdown are independent derivations with different priority ladders.
 
 import type { PrimaryActionInputs } from './source-control-primary-action'
 import { canSubmitCommit, resolveCommitDisabledReason } from './source-control-commit-eligibility'
@@ -95,6 +95,14 @@ function formatManualForcePushTitle(ahead: number, behind: number, upstreamName?
   return `Force push ${commitText} with lease to update ${upstreamName ?? 'the remote branch'}.`
 }
 
+function formatUnpublishedForcePushTitle(branchCommitsAhead: number | undefined): string {
+  const countText =
+    branchCommitsAhead && branchCommitsAhead > 0
+      ? `${branchCommitsAhead} branch commit${branchCommitsAhead === 1 ? '' : 's'}`
+      : 'this branch'
+  return `Force push ${countText} with lease and set an upstream if needed.`
+}
+
 function formatRebaseBaseRef(baseRef: string): string {
   return baseRef.replace(/^refs\/remotes\//, '').replace(/^remotes\//, '')
 }
@@ -111,9 +119,8 @@ function reviewCopy(
 }
 
 /**
- * Resolve the chevron dropdown items. Every item is always rendered so the
- * menu shape stays stable across states; inapplicable rows are disabled
- * with a tooltip reason rather than hidden.
+ * Resolve the chevron dropdown items. Every row is always rendered — disabled with a
+ * tooltip reason rather than hidden — so the menu shape stays stable across states.
  */
 export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntry[] {
   const {
@@ -137,13 +144,7 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
 
   const hasStaged = stagedCount > 0
   const hasDirtyLocalChanges = hasStaged || inputs.hasUnstagedChanges
-  // Why: mirror the primary-action guard. When upstreamStatus is undefined,
-  // fetchUpstreamStatus hasn't resolved for this worktree yet. Collapsing that
-  // to hasUpstream=false would re-enable Publish Branch on an already-tracked
-  // branch during the post-worktree-switch transient window, and a click there
-  // would re-run `git push -u` and clobber the real upstream. Every
-  // upstream-dependent row disables itself while loading so the primary
-  // button's stable-frame guarantee extends to the dropdown.
+  // Why: undefined upstreamStatus means loading (transient after a worktree switch), not unpublished — treating it as hasUpstream=false would re-enable Publish Branch and clobber the real upstream.
   const upstreamLoading = upstreamStatus === undefined
   const hasUpstream = upstreamStatus?.hasUpstream ?? false
   const hasOpenHostedReview = prState === 'open' || prState === 'draft'
@@ -153,8 +154,9 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
     hasCurrentBranch &&
     branchCommitsAhead !== 0 &&
     canPushLinkedReviewWithoutUpstream
+  // Why: only a missing review head hard-blocks; branchCommitsAhead === 0 still means the target is known, so Push stays available.
   const pushBlockedByOpenHostedReviewTarget =
-    !hasUpstream && hasOpenHostedReview && !canPushUntrackedHostedReview
+    !hasUpstream && hasOpenHostedReview && !canPushLinkedReviewWithoutUpstream
   const publishBlockedByMergedPR = !hasUpstream && prState === 'merged'
   const publishBlockedByPRLoading = !hasUpstream && !!isPRStateLoading
   const publishBlockedByOpenHostedReview = !hasUpstream && hasOpenHostedReview
@@ -162,14 +164,17 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
   const ahead = upstreamStatus?.ahead ?? 0
   const behind = upstreamStatus?.behind ?? 0
   const shouldForcePushWithLease = shouldForcePushWithLeaseForUpstream(upstreamStatus)
+  // Why: prefer branch-compare for force-push counts — unpublished/loading branches report ahead=0 and patch-equivalent rewrites inflate upstream ahead.
   const pushLabelCount =
-    shouldForcePushWithLease && branchCommitsAhead !== undefined ? branchCommitsAhead : ahead
+    branchCommitsAhead !== undefined &&
+    branchCommitsAhead > 0 &&
+    (shouldForcePushWithLease || !hasUpstream)
+      ? branchCommitsAhead
+      : ahead
   const forcePushTitle = formatForcePushTitle(branchCommitsAhead, upstreamStatus?.upstreamName)
   const createReviewCopy = reviewCopy(hostedReviewCreation?.provider)
 
-  // Why: any in-flight commit or remote operation should lock the whole menu.
-  // A running push shouldn't let a second pull/sync click queue up behind it
-  // on a stale status snapshot.
+  // Why: lock the whole menu during any in-flight op so a second click can't queue on a stale status snapshot.
   const globalBusy = isCommitting || isRemoteOperationActive || isPullRequestOperationActive
 
   const commitDisabledReason = resolveCommitDisabledReason({
@@ -199,13 +204,7 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
     disabled: !canCommit
   }
 
-  // Why: compound commit labels omit counts because the commit itself changes
-  // ahead/behind — surfacing pre-commit numbers would be misleading (e.g.
-  // "Commit & Push (2)" would still read "2" after the commit lands at 3).
-  // On an unpublished branch, Commit & Push is unavailable: the user must
-  // Publish Branch first (offered via the primary action), after which
-  // Commit & Push becomes enabled. Tooltips mirror pushItem/syncItem copy
-  // so the "publish first" instruction is consistent across the menu.
+  // Why: compound commit labels omit counts — the commit itself changes ahead/behind, so pre-commit numbers would mislead.
   const commitPushTitle = upstreamLoading
     ? 'Checking branch status…'
     : publishBlockedByPRLoading
@@ -216,7 +215,7 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
           ? 'Check out a branch before pushing commits'
           : pushBlockedByOpenHostedReviewTarget
             ? 'Linked review branch target is unavailable'
-            : !hasUpstream && !canPushUntrackedHostedReview
+            : !hasUpstream && !(hasOpenHostedReview && canPushLinkedReviewWithoutUpstream)
               ? 'Publish the branch first to push commits'
               : (commitDisabledReason ??
                 (shouldForcePushWithLease
@@ -228,10 +227,11 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
     kind: 'commit_push',
     label: shouldForcePushWithLease ? 'Commit & Force Push' : 'Commit & Push',
     title: commitPushTitle,
+    // Why: match explicit Push — only an open linked review with a known head can commit+push without a git upstream.
     disabled:
       globalBusy ||
       upstreamLoading ||
-      (!hasUpstream && !canPushUntrackedHostedReview) ||
+      (!hasUpstream && !(hasOpenHostedReview && canPushLinkedReviewWithoutUpstream)) ||
       publishBlockedByDetachedHead ||
       publishBlockedByPRLoading ||
       publishBlockedByMergedPR ||
@@ -252,9 +252,7 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
       return 'Check out a branch before syncing commits'
     }
     if (!hasUpstream) {
-      // Why: mirror pushItem/syncItem — direct the user to Publish Branch
-      // (the primary action on an unpublished branch) rather than naming a
-      // nonexistent compound action.
+      // Why: direct the user to Publish Branch (the primary action) rather than naming a nonexistent compound action.
       return 'Publish the branch first to sync commits'
     }
     if (shouldForcePushWithLease) {
@@ -284,54 +282,45 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
   const pushItem: DropdownItem = {
     kind: 'push',
     label: formatCountLabel('Push', ahead),
-    title: upstreamLoading
-      ? 'Checking branch status…'
-      : publishBlockedByPRLoading
-        ? 'Checking PR status…'
-        : publishBlockedByMergedPR
-          ? 'PR is already merged'
-          : publishBlockedByDetachedHead
-            ? 'Check out a branch before pushing commits'
-            : canPushUntrackedHostedReview
-              ? 'Push updates to the linked review branch'
-              : pushBlockedByOpenHostedReviewTarget
-                ? 'Linked review branch target is unavailable'
-                : !hasUpstream
-                  ? 'Publish the branch first to push commits'
-                  : shouldForcePushWithLease
-                    ? 'Use Force Push — remote only has older copies of local commits'
-                    : behind > 0 && ahead > 0
-                      ? 'Push local commits; git may require syncing first'
-                      : ahead === 0
-                        ? `Nothing to push${upstreamStatus?.upstreamName ? ` to ${upstreamStatus.upstreamName}` : ''}`
-                        : describePushCount(ahead),
-    disabled:
-      globalBusy ||
-      upstreamLoading ||
-      (!hasUpstream && !canPushUntrackedHostedReview) ||
-      publishBlockedByDetachedHead ||
-      shouldForcePushWithLease
+    title: publishBlockedByDetachedHead
+      ? 'Check out a branch before pushing commits'
+      : pushBlockedByOpenHostedReviewTarget
+        ? 'Linked review branch target is unavailable'
+        : upstreamLoading
+          ? 'Push this branch and set an upstream if needed'
+          : canPushUntrackedHostedReview
+            ? 'Push updates to the linked review branch'
+            : !hasUpstream
+              ? 'Push this branch and set an upstream if needed'
+              : shouldForcePushWithLease
+                ? 'Try a regular push; git may require force push'
+                : behind > 0 && ahead > 0
+                  ? 'Push local commits; git may require syncing first'
+                  : ahead === 0
+                    ? `Nothing to push${upstreamStatus?.upstreamName ? ` to ${upstreamStatus.upstreamName}` : ''}`
+                    : describePushCount(ahead),
+    // Why: Push stays available without an upstream (git resolves --set-upstream) and under force-with-lease; only detached HEAD and unknown review targets block.
+    disabled: globalBusy || publishBlockedByDetachedHead || pushBlockedByOpenHostedReviewTarget
   }
 
   const forcePushItem: DropdownItem = {
     kind: 'force_push',
     label: formatCountLabel('Force Push', pushLabelCount),
-    title: upstreamLoading
-      ? 'Checking branch status…'
-      : publishBlockedByPRLoading
-        ? 'Checking PR status…'
-        : publishBlockedByMergedPR
-          ? 'PR is already merged'
-          : publishBlockedByDetachedHead
-            ? 'Check out a branch before force pushing commits'
-            : !hasUpstream
-              ? 'Publish the branch first to force push commits'
-              : ahead === 0
-                ? `Nothing to force push${upstreamStatus?.upstreamName ? ` to ${upstreamStatus.upstreamName}` : ''}`
-                : shouldForcePushWithLease
-                  ? forcePushTitle
-                  : formatManualForcePushTitle(ahead, behind, upstreamStatus?.upstreamName),
-    disabled: globalBusy || upstreamLoading || !hasUpstream || publishBlockedByDetachedHead
+    title: publishBlockedByDetachedHead
+      ? 'Check out a branch before force pushing commits'
+      : pushBlockedByOpenHostedReviewTarget
+        ? 'Linked review branch target is unavailable'
+        : upstreamLoading
+          ? formatUnpublishedForcePushTitle(branchCommitsAhead)
+          : !hasUpstream
+            ? formatUnpublishedForcePushTitle(branchCommitsAhead)
+            : pushLabelCount === 0
+              ? `Nothing to force push${upstreamStatus?.upstreamName ? ` to ${upstreamStatus.upstreamName}` : ''}`
+              : shouldForcePushWithLease
+                ? forcePushTitle
+                : formatManualForcePushTitle(pushLabelCount, behind, upstreamStatus?.upstreamName),
+    // Why: same target-safety gate as Push — force-with-lease to a wrong review head is worse than blocking; stays available without an upstream.
+    disabled: globalBusy || publishBlockedByDetachedHead || pushBlockedByOpenHostedReviewTarget
   }
 
   const pullItem: DropdownItem = {
@@ -491,6 +480,8 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
         return `A ${createReviewCopy.reviewLabel} already exists`
       case 'fork_head_unsupported':
         return 'Fork head unsupported'
+      case 'base_not_on_remote':
+        return 'Base branch is not on the remote'
       case null:
       case undefined:
         return upstreamLoading ? 'Checking branch status…' : 'Branch is not ready'

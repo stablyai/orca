@@ -19,6 +19,17 @@ export type PanelAction =
 
 export const SESSION_DOCK_MIN_MAIN_WIDTH = 360
 
+export function shouldShowSessionHeaderChecksAction(args: {
+  isFolderWorkspaceRoute: boolean
+  repoContextLoaded: boolean
+  hostedChecksSupported: boolean
+}): boolean {
+  // Why: the hosted checks panel is provider-gated and the pr-panel guard
+  // force-closes it for unsupported providers, so offering the action there
+  // (or before the provider probe resolves) would be a silent no-op.
+  return !args.isFolderWorkspaceRoute && args.repoContextLoaded && args.hostedChecksSupported
+}
+
 export function canDockSessionPanel(args: {
   isWideLayout: boolean
   availableWidth: number
@@ -47,13 +58,18 @@ export function resolvePanelAction(args: {
 
 // Single source of truth for each panel's expo-router pathname pattern so narrow-push
 // and any deep-linking agree; the caller supplies the [hostId]/[worktreeId] params.
-export function panelRouteDescriptor(panel: Exclude<ActivePanel, null>): { pathname: string } {
+// The Pull Request panel is a segment of the source-control hub, so its narrow-push
+// targets that route with `tab: 'pr'` rather than the standalone (redirecting) route.
+export function panelRouteDescriptor(panel: Exclude<ActivePanel, null>): {
+  pathname: string
+  params?: Record<string, string>
+} {
   switch (panel) {
     case 'sourceControl':
       return { pathname: '/h/[hostId]/source-control/[worktreeId]' }
     case 'files':
       return { pathname: '/h/[hostId]/files/[worktreeId]' }
     case 'pr':
-      return { pathname: '/h/[hostId]/pr/[worktreeId]' }
+      return { pathname: '/h/[hostId]/source-control/[worktreeId]', params: { tab: 'pr' } }
   }
 }

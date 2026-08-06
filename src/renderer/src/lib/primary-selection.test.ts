@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   PRIMARY_SELECTION_MAX_LENGTH,
+  armPrimarySelectionNativePasteSuppression,
+  consumePrimarySelectionNativePasteSuppression,
   getPrimarySelectionText,
   readPrimarySelectionText,
   resetPrimarySelectionForTests,
@@ -127,5 +129,79 @@ describe('primary selection buffer', () => {
 
     expect(setPrimarySelectionText('hello')).toBe(true)
     await expect(readPrimarySelectionText()).resolves.toBe('hello')
+  })
+})
+
+describe('primary-selection native paste suppression', () => {
+  beforeEach(() => {
+    resetPrimarySelectionForTests()
+    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (X11; Linux x86_64)' })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('does not arm suppression while primary selection is disabled', () => {
+    armPrimarySelectionNativePasteSuppression(1_000)
+    expect(consumePrimarySelectionNativePasteSuppression(1_000)).toBe(false)
+  })
+
+  it('does not arm suppression off Linux, where there is no native follow-up paste', () => {
+    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' })
+    setPrimarySelectionEnabled(true)
+    armPrimarySelectionNativePasteSuppression(1_000)
+    expect(consumePrimarySelectionNativePasteSuppression(1_000)).toBe(false)
+  })
+
+  it('suppresses the follow-up native paste within the armed window', () => {
+    setPrimarySelectionEnabled(true)
+    armPrimarySelectionNativePasteSuppression(1_000)
+
+    expect(consumePrimarySelectionNativePasteSuppression(1_000)).toBe(true)
+  })
+
+  it('suppresses a follow-up that arrives late in the armed window', () => {
+    setPrimarySelectionEnabled(true)
+    armPrimarySelectionNativePasteSuppression(1_000)
+
+    expect(consumePrimarySelectionNativePasteSuppression(1_700)).toBe(true)
+  })
+
+  it('lets a real paste through after the follow-up is consumed inside the window', () => {
+    setPrimarySelectionEnabled(true)
+    armPrimarySelectionNativePasteSuppression(1_000)
+
+    expect(consumePrimarySelectionNativePasteSuppression(1_000)).toBe(true)
+    expect(consumePrimarySelectionNativePasteSuppression(1_050)).toBe(false)
+    expect(consumePrimarySelectionNativePasteSuppression(1_700)).toBe(false)
+  })
+
+  it('consumes only one follow-up per arm across repeated middle-clicks', () => {
+    setPrimarySelectionEnabled(true)
+    armPrimarySelectionNativePasteSuppression(1_000)
+    expect(consumePrimarySelectionNativePasteSuppression(1_010)).toBe(true)
+    expect(consumePrimarySelectionNativePasteSuppression(1_020)).toBe(false)
+
+    armPrimarySelectionNativePasteSuppression(1_100)
+    expect(consumePrimarySelectionNativePasteSuppression(1_110)).toBe(true)
+    expect(consumePrimarySelectionNativePasteSuppression(1_120)).toBe(false)
+  })
+
+  it('stops suppressing once the armed window elapses', () => {
+    setPrimarySelectionEnabled(true)
+    armPrimarySelectionNativePasteSuppression(1_000)
+
+    expect(consumePrimarySelectionNativePasteSuppression(1_800)).toBe(false)
+  })
+
+  it('clears the armed window when primary selection is disabled', () => {
+    setPrimarySelectionEnabled(true)
+    armPrimarySelectionNativePasteSuppression(1_000)
+
+    setPrimarySelectionEnabled(false)
+    setPrimarySelectionEnabled(true)
+
+    expect(consumePrimarySelectionNativePasteSuppression(1_000)).toBe(false)
   })
 })

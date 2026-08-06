@@ -124,6 +124,34 @@ describe('prepareLocalCommitMessageAgentEnv', () => {
     })
   })
 
+  it('strips a nested-Orca CODEX_HOME override when the launch resolves to the real home', async () => {
+    process.env.CODEX_HOME = '/managed/runtime/home'
+    process.env.ORCA_CODEX_HOME = '/managed/runtime/home'
+
+    const result = await prepareLocalCommitMessageAgentEnv('codex', {
+      prepareForCodexLaunch: () => null
+    })
+
+    expect(result.ok).toBe(true)
+    const env = (result as { ok: true; env?: NodeJS.ProcessEnv }).env
+    expect(env).toBeDefined()
+    expect(env?.CODEX_HOME).toBeUndefined()
+    expect(env?.ORCA_CODEX_HOME).toBeUndefined()
+  })
+
+  it('preserves a user-owned CODEX_HOME when the launch resolves to the real home', async () => {
+    process.env.CODEX_HOME = '/home/me/.config/codex'
+    delete process.env.ORCA_CODEX_HOME
+
+    const result = await prepareLocalCommitMessageAgentEnv('codex', {
+      prepareForCodexLaunch: () => null
+    })
+
+    expect(result.ok).toBe(true)
+    const env = (result as { ok: true; env?: NodeJS.ProcessEnv }).env
+    expect(env?.CODEX_HOME).toBe('/home/me/.config/codex')
+  })
+
   it('does not pass WSL managed Codex homes to host-local commit generation', async () => {
     process.env.CODEX_HOME = 'C:\\Users\\tester\\.codex'
 

@@ -1,10 +1,12 @@
 import {
   deriveAzureDevOpsStatus,
   mapAzureDevOpsPullRequest,
+  mapAzureDevOpsPullRequestState,
   type AzureDevOpsPullRequestInfo,
   type RawAzureDevOpsPullRequest,
   type RawAzureDevOpsStatus
 } from './pull-request-mappers'
+import { shouldHideNonOpenReviewOnDefaultBranch } from '../source-control/repo-default-branch'
 import { getAzureDevOpsRepoRef, type AzureDevOpsRepoRef } from './repository-ref'
 import {
   getHostedReviewLocalGitOptions,
@@ -197,7 +199,8 @@ export async function getAzureDevOpsPullRequestForBranch(
   branch: string,
   linkedPRNumber?: number | null,
   connectionId?: string | null,
-  options: HostedReviewExecutionOptions = {}
+  options: HostedReviewExecutionOptions = {},
+  throwOnFailure = false
 ): Promise<AzureDevOpsPullRequestInfo | null> {
   const branchName = branch.replace(/^refs\/heads\//, '')
   if (!branchName && linkedPRNumber == null) {
@@ -224,11 +227,25 @@ export async function getAzureDevOpsPullRequestForBranch(
           'searchCriteria.status': 'all',
           $top: 10
         }
-      }
+      },
+      throwOnFailure
     )
     const raw = (list?.value ?? []).sort(sortPullRequestsForBranch)[0]
     if (raw) {
-      return normalizePullRequest(repo, repository.idOrName, repository.webBaseUrl, raw)
+      // Why (#9171): discard a non-open implicit branch match on the repo
+      // default branch and fall through to the linked-number fallback below.
+      const hideOnDefaultBranch = await shouldHideNonOpenReviewOnDefaultBranch({
+        state: mapAzureDevOpsPullRequestState(raw),
+        reviewNumber: raw.pullRequestId ?? null,
+        linkedReviewNumber: linkedPRNumber,
+        branchName,
+        repoPath,
+        connectionId,
+        localGitOptions: getHostedReviewLocalGitOptions(options)
+      })
+      if (!hideOnDefaultBranch) {
+        return normalizePullRequest(repo, repository.idOrName, repository.webBaseUrl, raw)
+      }
     }
   }
 
@@ -239,9 +256,33 @@ export async function getAzureDevOpsPullRequestForBranch(
     repo,
     `/_apis/git/repositories/${encodePathSegment(repository.idOrName)}/pullRequests/${encodePathSegment(
       String(linkedPRNumber)
-    )}`
+    )}`,
+    {},
+    throwOnFailure
   )
   return raw ? normalizePullRequest(repo, repository.idOrName, repository.webBaseUrl, raw) : null
+}
+
+/**
+ * Existing-review lookup that surfaces transport/auth failures instead of
+ * collapsing them to null, so a failed lookup becomes
+ * `reviewLookupOutcome: 'unavailable'` rather than a false "No pull request found".
+ */
+export function getAzureDevOpsPullRequestForBranchOrThrow(
+  repoPath: string,
+  branch: string,
+  linkedPRNumber?: number | null,
+  connectionId?: string | null,
+  options: HostedReviewExecutionOptions = {}
+): Promise<AzureDevOpsPullRequestInfo | null> {
+  return getAzureDevOpsPullRequestForBranch(
+    repoPath,
+    branch,
+    linkedPRNumber,
+    connectionId,
+    options,
+    true
+  )
 }
 
 export async function getAzureDevOpsRepoSlug(

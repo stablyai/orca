@@ -77,7 +77,8 @@ describe('run-terminal-scale-perf-report-gate', () => {
     expect(calls.map((call) => call.args[0])).toEqual([
       'config/scripts/run-terminal-scale-perf-e2e.mjs',
       'config/scripts/summarize-terminal-perf-report.mjs',
-      'config/scripts/check-terminal-perf-report-budgets.mjs'
+      'config/scripts/check-terminal-perf-report-budgets.mjs',
+      'config/scripts/generate-terminal-perf-html-report.mjs'
     ])
     expect(calls[0].args).toEqual([
       'config/scripts/run-terminal-scale-perf-e2e.mjs',
@@ -92,6 +93,12 @@ describe('run-terminal-scale-perf-report-gate', () => {
       'config/scripts/check-terminal-perf-report-budgets.mjs',
       reportPath
     ])
+    expect(calls[3].args).toEqual([
+      'config/scripts/generate-terminal-perf-html-report.mjs',
+      reportPath,
+      '--output',
+      'test-results/terminal-perf-impact-report.html'
+    ])
   })
 
   it('uses the report path from env when no flag is provided', () => {
@@ -105,6 +112,28 @@ describe('run-terminal-scale-perf-report-gate', () => {
 
     expect(status).toBe(0)
     expect(calls[1].args).toEqual(['config/scripts/summarize-terminal-perf-report.mjs', reportPath])
+  })
+
+  it('uses the HTML report path from env when provided', () => {
+    const reportPath = tempReportPath()
+    const { calls, spawnSyncImpl } = makeSpawnSync()
+
+    const status = runTerminalScalePerfReportGate({
+      env: {
+        ...process.env,
+        ORCA_E2E_TERMINAL_PERF_HTML_REPORT_PATH: 'tmp/terminal-report.html',
+        ORCA_E2E_TERMINAL_PERF_REPORT_PATH: reportPath
+      },
+      spawnSyncImpl
+    })
+
+    expect(status).toBe(0)
+    expect(calls[3].args).toEqual([
+      'config/scripts/generate-terminal-perf-html-report.mjs',
+      reportPath,
+      '--output',
+      'tmp/terminal-report.html'
+    ])
   })
 
   it('preserves the report when Playwright clears the target report directory', () => {

@@ -17,8 +17,8 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
       'recipe-json'
     ],
     notes: [
-      'Runs in the foreground and prints the runtime endpoint. Stop it with Ctrl+C.',
-      'Use --pairing-address when clients should connect through a LAN, Tailscale, SSH-forward, or public tunnel address.',
+      'Runs in the foreground and prints the bound endpoint, advertised endpoint, and pairing status. Stop it with Ctrl+C.',
+      '--pairing-address changes only the client-advertised address; use a reachable LAN, Tailscale, SSH-forward, or reverse-proxy endpoint.',
       'Use --recipe-json with --project-root from VM recipes to print the recipe result JSON and leave the server running.',
       'Use --mobile-pairing to print a mobile-scoped pairing QR/link instead of the default runtime-environment pairing link.',
       'When the web client bundle is available, the server also prints a browser URL with the pairing data embedded.'

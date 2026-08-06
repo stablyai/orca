@@ -39,6 +39,13 @@ export type SourceControlAgentActionDialogProps = {
     recipe: SourceControlActionRecipe
   ) => void | Promise<void>
   onOpenSettings?: () => void
+  /**
+   * Fires when the agent tab is created, before deferred prompt delivery finishes.
+   * Reversible bookkeeping only; irreversible host writes belong in onLaunched.
+   */
+  onLaunchAccepted?: () => void
+  /** Fires when an accepted launch later failed to deliver its prompt. */
+  onLaunchAborted?: () => void
   onLaunched?: () => void
   startLabel?: string
   onStart?: (args: {
@@ -65,6 +72,7 @@ export function SourceControlAgentActionDialog(
   const {
     handleOpenChange,
     shouldRenderDialog,
+    agentScopeNote,
     agentOptions,
     selectedAgent,
     hasEnabledAgents,
@@ -101,6 +109,7 @@ export function SourceControlAgentActionDialog(
           <SourceControlAgentActionDialogForm
             actionId={actionId}
             baseCommandInput={baseCommandInput}
+            agentScopeNote={agentScopeNote}
             agentOptions={agentOptions}
             selectedAgent={selectedAgent}
             hasEnabledAgents={hasEnabledAgents}

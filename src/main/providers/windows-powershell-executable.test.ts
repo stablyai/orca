@@ -19,6 +19,8 @@ const WINDOWS_POWERSHELL = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powe
 // The Microsoft Store App Execution Alias stub for pwsh — a zero-byte reparse
 // point under WindowsApps that ConPTY's CreateProcessW rejects with error 5.
 const PWSH_STORE_ALIAS = 'C:\\Users\\dev\\AppData\\Local\\Microsoft\\WindowsApps\\pwsh.exe'
+const PWSH_STORE_EXE =
+  'C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.6.3.0_x64__8wekyb3d8bbwe\\pwsh.exe'
 
 describe('resolveWindowsPowerShellExecutablePath', () => {
   it('returns null on non-Windows platforms', () => {
@@ -80,6 +82,35 @@ describe('resolveWindowsPowerShellExecutablePath', () => {
     expect(resolved).not.toBe(PWSH_STORE_ALIAS)
   })
 
+  it('repro: resolves a Store App Execution Alias to its real package executable', () => {
+    const resolved = resolveWindowsPowerShellExecutablePath('pwsh.exe', {
+      platform: 'win32',
+      env: {
+        ...WIN_ENV,
+        Path: 'C:\\Users\\dev\\AppData\\Local\\Microsoft\\WindowsApps'
+      },
+      isRealExecutable: (p) => p === PWSH_STORE_EXE,
+      resolveAppExecutionAlias: (p) => (p === PWSH_STORE_ALIAS ? PWSH_STORE_EXE : null)
+    })
+    expect(resolved).toBe(PWSH_STORE_EXE)
+  })
+
+  it.each(['pwsh.exe', PWSH_STORE_ALIAS, 'C:\\Tools\\powershell.exe'])(
+    'rejects unsafe Store alias target %s',
+    (target) => {
+      const resolved = resolveWindowsPowerShellExecutablePath('pwsh.exe', {
+        platform: 'win32',
+        env: {
+          ...WIN_ENV,
+          Path: 'C:\\Users\\dev\\AppData\\Local\\Microsoft\\WindowsApps'
+        },
+        isRealExecutable: (p) => p === target,
+        resolveAppExecutionAlias: (p) => (p === PWSH_STORE_ALIAS ? target : null)
+      })
+      expect(resolved).toBeNull()
+    }
+  )
+
   it('returns null for pwsh when no real executable is found', () => {
     expect(
       resolveWindowsPowerShellExecutablePath('pwsh.exe', {
@@ -110,6 +141,19 @@ describe('resolveWindowsPowerShellSpawnChain', () => {
     })
     expect(chain).toEqual([WINDOWS_POWERSHELL, WIN_ENV.ComSpec])
     expect(chain).not.toContain(PWSH_STORE_ALIAS)
+  })
+
+  it('uses the real Store package executable ahead of Windows PowerShell', () => {
+    const chain = resolveWindowsPowerShellSpawnChain('pwsh.exe', {
+      platform: 'win32',
+      env: {
+        ...WIN_ENV,
+        Path: 'C:\\Users\\dev\\AppData\\Local\\Microsoft\\WindowsApps'
+      },
+      isRealExecutable: (p) => p === PWSH_STORE_EXE || p === WINDOWS_POWERSHELL,
+      resolveAppExecutionAlias: (p) => (p === PWSH_STORE_ALIAS ? PWSH_STORE_EXE : null)
+    })
+    expect(chain).toEqual([PWSH_STORE_EXE, WINDOWS_POWERSHELL, WIN_ENV.ComSpec])
   })
 
   it('orders PATH-resolved pwsh before Windows PowerShell when standard roots miss', () => {

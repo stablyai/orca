@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { PRComment } from '../../../../src/shared/types'
 import {
+  createBotAuthorOverrideSet,
   filterPRCommentsByAudience,
   getPRCommentAudienceCounts,
   isBotPRComment
@@ -37,6 +38,15 @@ describe('pr comment audience', () => {
     expect(filterPRCommentsByAudience(comments, 'bot').map((c) => c.id)).toEqual([2])
     expect(filterPRCommentsByAudience(comments, 'human').map((c) => c.id)).toEqual([1, 3])
     expect(filterPRCommentsByAudience(comments, 'all')).toHaveLength(3)
+  })
+
+  it('classifies desktop-marked bot authors via overrides (desktop parity)', () => {
+    const overrides = createBotAuthorOverrideSet([' GretelFlux '])
+    const comments = [comment({ id: 1, author: 'alice' }), comment({ id: 2, author: 'gretelflux' })]
+    expect(isBotPRComment(comments[1])).toBe(false)
+    expect(isBotPRComment(comments[1], overrides)).toBe(true)
+    expect(getPRCommentAudienceCounts(comments, overrides)).toEqual({ all: 2, human: 1, bot: 1 })
+    expect(filterPRCommentsByAudience(comments, 'bot', overrides).map((c) => c.id)).toEqual([2])
   })
 })
 

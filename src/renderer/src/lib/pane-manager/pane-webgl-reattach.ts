@@ -1,5 +1,5 @@
 import type { ManagedPaneInternal } from './pane-manager-types'
-import { attachWebgl, disposeWebgl } from './pane-webgl-renderer'
+import { attachWebgl, clearTerminalWebglAttachBackoff, disposeWebgl } from './pane-webgl-renderer'
 
 export function reattachWebglIfNeeded(pane: ManagedPaneInternal): void {
   if (pane.gpuRenderingEnabled && !pane.webglAddon && !pane.webglDisabledAfterContextLoss) {
@@ -12,5 +12,8 @@ export function rebuildAttachedWebgl(pane: ManagedPaneInternal): void {
     return
   }
   disposeWebgl(pane)
+  // Why: the live addon just proved context creation works, so a stale attach
+  // backoff from an earlier failure must not downgrade this pane to DOM.
+  clearTerminalWebglAttachBackoff()
   attachWebgl(pane)
 }

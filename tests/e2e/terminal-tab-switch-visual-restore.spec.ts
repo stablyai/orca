@@ -1,6 +1,13 @@
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import {
+  buildAltScreenFrame,
+  describeAltScreenRenderPath,
+  readRenderedAltScreenFrame,
+  writeToPaneTerminal
+} from './helpers/alt-screen-frame'
+import { runNodeScriptInTerminal } from './helpers/run-node-script-in-terminal'
+import {
   ensureTerminalVisible,
   getActiveTabId,
   getActiveWorktreeId,
@@ -360,7 +367,8 @@ async function startHiddenPtyOutputBurst(page: Page, ptyId: string, runId: strin
     '},1);',
     '},30);'
   ].join('')
-  await sendToTerminal(page, ptyId, `node -e ${JSON.stringify(script)}\r`)
+  // Why: delivered via a temp file — `node -e` quoting is not PowerShell-safe (#8521).
+  await runNodeScriptInTerminal(page, ptyId, script, { prefix: 'orca-tab-switch-burst' })
 }
 
 async function writeStaticTabContent(
@@ -609,67 +617,50 @@ test.describe('Terminal tab switch visual restore', () => {
 
     const { firstTabId, secondTabId } = await ensureTwoTerminalTabs(orcaPage)
     await forceWebglOnActiveTab(orcaPage)
+    await waitForPanePtyIdOnTab(orcaPage, firstTabId)
 
     const runId = `${Date.now()}`
     const finalMarker = `${TAB_SWITCH_MARKER_PREFIX}_${runId}_ALT_24`
 
-    await orcaPage.evaluate(
-      ({ tabId, finalMarker }) => {
-        const manager = window.__paneManagers?.get(tabId)
-        const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0]
-        if (!pane) {
-          throw new Error(`No terminal pane for tab ${tabId}`)
-        }
-        const frames = Array.from({ length: 25 }, (_, frame) => {
-          const progress = `${'█'.repeat((frame % 8) + 1)}${'░'.repeat(8 - ((frame % 8) + 1))}`
-          return [
-            '\x1b[?2026h',
-            '\x1b[?1049h',
-            '\x1b[2J\x1b[H',
-            '\x1b[?25l',
-            `╭────────────────────────────────────────────────────────────────────╮`,
-            `│ ${finalMarker} frame ${String(frame).padStart(3, '0')} ${progress}                     │`,
-            `│ Dimension              │ Rating                                      │`,
-            `╰────────────────────────────────────────────────────────────────────╯`,
-            '\x1b[?2026l'
-          ].join('\r\n')
-        }).join('')
-        return new Promise<void>((resolve) => pane.terminal.write(frames, resolve))
-      },
-      { tabId: firstTabId, finalMarker }
+    await writeToPaneTerminal(
+      orcaPage,
+      firstTabId,
+      Array.from({ length: 25 }, (_, frame) => buildAltScreenFrame(finalMarker, frame)).join('')
     )
 
     const corruptionReports: string[] = []
+    const renderPaths: string[] = []
     for (let cycle = 0; cycle < 6; cycle += 1) {
+      const liveFrame = cycle * 4
+      const restoreFrame = liveFrame + 1
+      const redraw = buildAltScreenFrame(finalMarker, liveFrame)
+      // Why: this frame never transits the PTY, so a reveal restore would
+      // repaint main's model over it. Publish an equivalent frame as the
+      // snapshot so either path leaves a valid screen — numbered one higher so
+      // the readback still reports which one painted. Identity is re-read per
+      // cycle because a reattach would re-key the override.
+      const { ptyId, cols, rows } = await readPaneIdentityOnTab(orcaPage, firstTabId)
+      await setHiddenSnapshotOverride(orcaPage, ptyId, {
+        data: buildAltScreenFrame(finalMarker, restoreFrame),
+        cols,
+        rows
+      })
       await activateTerminalTab(orcaPage, secondTabId)
-      await orcaPage.evaluate(
-        ({ tabId, finalMarker, cycle }) => {
-          const manager = window.__paneManagers?.get(tabId)
-          const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0]
-          if (!pane) {
-            throw new Error(`No terminal pane for tab ${tabId}`)
-          }
-          const frame = cycle * 4
-          const progress = `${'█'.repeat((frame % 8) + 1)}${'░'.repeat(8 - ((frame % 8) + 1))}`
-          const redraw = [
-            '\x1b[?2026h',
-            '\x1b[?1049h',
-            '\x1b[2J\x1b[H',
-            '\x1b[?25l',
-            `╭────────────────────────────────────────────────────────────────────╮`,
-            `│ ${finalMarker} frame ${String(frame).padStart(3, '0')} ${progress}                     │`,
-            `│ Dimension              │ Rating                                      │`,
-            `╰────────────────────────────────────────────────────────────────────╯`,
-            '\x1b[?2026l'
-          ].join('\r\n')
-          return new Promise<void>((resolve) => pane.terminal.write(redraw, resolve))
-        },
-        { tabId: firstTabId, finalMarker, cycle }
-      )
+      await writeToPaneTerminal(orcaPage, firstTabId, redraw)
       await activateTerminalTab(orcaPage, firstTabId)
 
       const geometry = await readTabTerminalGeometry(orcaPage, firstTabId, `${runId}_ALT`)
-      const issue = geometryLooksCorrupted(geometry)
+      const renderedFrame = await readRenderedAltScreenFrame(orcaPage, firstTabId, finalMarker)
+      renderPaths.push(
+        `cycle ${cycle}: ${describeAltScreenRenderPath(renderedFrame, liveFrame, restoreFrame)}`
+      )
+      // Why: whichever path won must have painted its own frame. Anything else
+      // on screen means the restore replayed stale content.
+      const staleFrame =
+        renderedFrame !== null && renderedFrame !== liveFrame && renderedFrame !== restoreFrame
+          ? `alt-screen shows frame ${renderedFrame}, expected ${liveFrame} (live write) or ${restoreFrame} (reveal restore)`
+          : null
+      const issue = geometryLooksCorrupted(geometry) ?? staleFrame
       if (issue || !geometry.markerPresent) {
         corruptionReports.push(
           `cycle ${cycle}: ${issue ?? 'marker missing after alt-screen redraw'}`
@@ -682,6 +673,15 @@ test.describe('Terminal tab switch visual restore', () => {
         )
       }
     }
+
+    // Why: which cycles latched a restore is load-dependent, so it is recorded
+    // rather than asserted — without it a "both paths agree" run is opaque.
+    // Logged as well because the list reporter omits annotations.
+    testInfo.annotations.push({
+      type: 'alt-screen-render-path',
+      description: renderPaths.join(', ')
+    })
+    console.log('[tab-switch-repro] alt-screen render path:', renderPaths.join(', '))
 
     expect(
       corruptionReports,

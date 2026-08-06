@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Plus } from 'lucide-react'
+import { Play } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -14,7 +14,7 @@ import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { runQuickCommandInNewTab } from '@/lib/run-quick-command-in-new-tab'
 import type { TerminalQuickCommand } from '../../../../shared/types'
-import { useConfirmationDialog } from '@/components/confirmation-dialog'
+import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { translate } from '@/i18n/i18n'
 import { TabBarQuickCommandsMenu } from './TabBarQuickCommandsMenu'
 
@@ -136,7 +136,7 @@ export function TabBarQuickCommandsButton({
     return null
   }
 
-  // Empty state: single add button that opens the dialog directly.
+  // Empty state: single button that opens the dialog directly.
   if (!hasAnyCommands) {
     return (
       <>
@@ -151,11 +151,11 @@ export function TabBarQuickCommandsButton({
                 'Add quick command'
               )}
             >
-              <Plus className="size-3.5" />
+              <Play className="size-3.5" />
               <span className="text-[12px] font-medium">
                 {translate(
                   'auto.components.tab.bar.TabBarQuickCommandsButton.a2c7a33831',
-                  'Add Quick Command…'
+                  'Command'
                 )}
               </span>
             </button>

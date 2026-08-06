@@ -2,7 +2,11 @@ import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { net } from 'electron'
-import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
+import type {
+  ProviderRateLimits,
+  RateLimitWindow,
+  UsageRateLimitMetadata
+} from '../../shared/rate-limit-types'
 
 // Why: Kimi Code's managed coding plan exposes subscription usage at
 // `${base}/usages` (see packages/oauth/src/managed-usage.ts in the CLI bundle).
@@ -142,7 +146,7 @@ function parseResetDescription(isoString: string | undefined): string | null {
     return null
   }
   const date = new Date(isoString)
-  if (isNaN(date.getTime())) {
+  if (Number.isNaN(date.getTime())) {
     return null
   }
   const isToday = date.toDateString() === new Date().toDateString()
@@ -208,8 +212,20 @@ function mapUsageResponse(data: KimiUsageResponse): ProviderRateLimits {
   }
 }
 
-function result(status: ProviderRateLimits['status'], error: string | null): ProviderRateLimits {
-  return { provider: 'kimi', session: null, weekly: null, updatedAt: Date.now(), error, status }
+function result(
+  status: ProviderRateLimits['status'],
+  error: string | null,
+  usageMetadata?: UsageRateLimitMetadata
+): ProviderRateLimits {
+  return {
+    provider: 'kimi',
+    session: null,
+    weekly: null,
+    updatedAt: Date.now(),
+    error,
+    status,
+    ...(usageMetadata ? { usageMetadata } : {})
+  }
 }
 
 /**
@@ -239,17 +255,19 @@ export async function fetchKimiRateLimits(): Promise<ProviderRateLimits> {
     // Why: don't refresh — the CLI owns the token lifecycle. Report a transient
     // error so the rate-limit service keeps the last good snapshot (stale
     // policy) until the user next runs Kimi and the CLI refreshes the file.
-    return result('error', 'Kimi token expired — open Kimi to refresh')
+    return result(
+      'error',
+      'Kimi session expired — run kimi on the computer running Orca, then retry usage.',
+      { failureKind: 'delegated-refresh-required', source: 'oauth' }
+    )
   }
 
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS)
   try {
     const res = await net.fetch(`${KIMI_BASE_URL.replace(/\/$/, '')}/usages`, {
       // Why: identical to the CLI's fetchManagedUsage — bearer token + Accept.
       // No extra User-Agent: the usages endpoint authenticates by token only.
       headers: { Authorization: `Bearer ${creds.access_token}`, Accept: 'application/json' },
-      signal: controller.signal
+      signal: AbortSignal.timeout(API_TIMEOUT_MS)
     })
     if (res.status === 401 || res.status === 403) {
       return result('error', `Kimi usage request unauthorized (HTTP ${res.status})`)
@@ -261,7 +279,5 @@ export async function fetchKimiRateLimits(): Promise<ProviderRateLimits> {
     return mapUsageResponse(typeof data === 'object' && data !== null ? data : {})
   } catch (err) {
     return result('error', err instanceof Error ? err.message : 'Kimi usage request failed')
-  } finally {
-    clearTimeout(timeout)
   }
 }

@@ -5,8 +5,10 @@ import {
   formatLoadFailureDescription,
   formatLoadFailureRecoveryHint,
   formatPermissionNotice,
-  formatPopupNotice
+  formatPopupNotice,
+  isCertificateLoadError
 } from './browser-notices'
+import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from './browser-page-guest-recovery'
 
 describe('browser notice formatting', () => {
   it('formats denied permissions with safe copy', () => {
@@ -113,5 +115,44 @@ describe('browser notice formatting', () => {
         isLocalhostLike: false
       })
     ).toBeNull()
+  })
+
+  it('preserves the explicit guest recovery failure copy', () => {
+    const loadError = {
+      code: BROWSER_GUEST_RECOVERY_ERROR_CODE,
+      description: 'The browser page stopped unexpectedly. Retry to restore it.',
+      validatedUrl: 'http://localhost:3000'
+    }
+    expect(
+      formatLoadFailureDescription(loadError, { host: 'localhost:3000', isLocalhostLike: true })
+    ).toBe('The browser page stopped unexpectedly. Retry to restore it.')
+    expect(
+      formatLoadFailureRecoveryHint({ host: 'localhost:3000', isLocalhostLike: true }, loadError)
+    ).toBeNull()
+  })
+
+  it('formats certificate failures without local-server recovery advice', () => {
+    const meta = { host: 'localhost:3443', isLocalhostLike: true }
+    const loadError = (code: number) => ({
+      code,
+      description: 'certificate error',
+      validatedUrl: 'https://localhost:3443/'
+    })
+
+    expect(formatLoadFailureDescription(loadError(-200), meta)).toBe(
+      "The certificate doesn't match localhost:3443."
+    )
+    expect(formatLoadFailureDescription(loadError(-201), meta)).toBe(
+      "The certificate for localhost:3443 isn't valid at the current date and time."
+    )
+    expect(formatLoadFailureDescription(loadError(-202), meta)).toBe(
+      "Orca doesn't trust the authority that issued the certificate for localhost:3443."
+    )
+    expect(formatLoadFailureDescription(loadError(-208), meta)).toBe(
+      "Orca couldn't verify the certificate for localhost:3443."
+    )
+    expect(isCertificateLoadError(loadError(-219))).toBe(true)
+    expect(isCertificateLoadError(loadError(-215))).toBe(false)
+    expect(formatLoadFailureRecoveryHint(meta, loadError(-202))).toBeNull()
   })
 })

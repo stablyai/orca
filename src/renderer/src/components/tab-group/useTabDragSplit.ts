@@ -5,7 +5,6 @@ import { useCallback, useRef, useState, type RefObject } from 'react'
 import {
   closestCenter,
   pointerWithin,
-  PointerSensor,
   type CollisionDetection,
   type DragEndEvent,
   type DragMoveEvent,
@@ -15,9 +14,8 @@ import {
   useSensor,
   useSensors
 } from '@dnd-kit/core'
-import type { TabGroup, TuiAgent } from '../../../../shared/types'
+import type { TabGroup } from '../../../../shared/types'
 import { useAppStore } from '../../store'
-import type { TabSplitDirection } from '../../store/slices/tabs'
 import { mirrorWebRuntimeTabMove } from '../tab-bar/web-runtime-tab-move-mirror'
 import {
   resolveTabInsertion,
@@ -34,83 +32,39 @@ import {
 } from './tab-drag-preview-activation'
 import { resolveDragPreviewTabId, resolveSourceGroupRestoreOnDrop } from './tab-drag-preview-target'
 import { getDragPointer } from './tab-drag-pointer'
+import { TabDragPointerSensor } from './tab-drag-pointer-sensor'
 import {
   captureTabGroupPanelGeometrySnapshot,
   resolveActivePaneColumnSplitTarget,
   type ActivePaneColumnSplitTarget,
   type TabGroupPanelGeometrySnapshot
 } from './tab-group-panel-split-target'
+import {
+  canDropTabIntoPaneBody,
+  isPaneDropData,
+  isTabDragData,
+  type TabDragItemData,
+  type TabDropZone
+} from './tab-drag-data'
 
 export type { HoveredTabInsertion }
-
-export type TabDropZone = 'center' | TabSplitDirection
+export {
+  canDropTabIntoPaneBody,
+  isPaneDropData,
+  isTabDragData,
+  type TabDragItemData,
+  type TabDropZone,
+  type TabPaneDropData
+} from './tab-drag-data'
 
 // Why: tab activation waits for pointerup, so dnd-kit needs enough movement
 // tolerance to avoid treating ordinary click jitter as an intentional drag.
 export const TAB_DRAG_ACTIVATION_DISTANCE_PX = 12
 
-export type TabDragItemData = {
-  kind: 'tab'
-  worktreeId: string
-  groupId: string
-  unifiedTabId: string
-  visibleTabId: string
-  tabType: 'terminal' | 'editor' | 'browser' | 'simulator'
-  /** Rendered by the DragOverlay ghost that follows the cursor across
-   *  groups. Source tab strips use overflow-hidden, so without the overlay
-   *  the dragged tab would be invisible once the cursor leaves its own
-   *  group's strip. */
-  label: string
-  iconPath?: string
-  color?: string | null
-  /** Coding-harness agent running in a terminal tab, so the drag ghost shows
-   *  the provider glyph and matches the resting tab. Resolved per-tab in
-   *  SortableTab (not at the TabBar level) to avoid re-rendering the whole tab
-   *  strip on every agent-status ping. */
-  agent?: TuiAgent | null
-}
-
-export type TabPaneDropData = {
-  kind: 'pane-body'
-  worktreeId: string
-  groupId: string
-}
-
 export type HoveredTabDropTarget = {
   groupId: string
   zone: TabDropZone
   panelRect?: DOMRect
-}
-
-export function canDropTabIntoPaneBody({
-  activeDrag,
-  groupsByWorktree,
-  overGroupId,
-  worktreeId
-}: {
-  activeDrag: TabDragItemData | null
-  groupsByWorktree: Record<string, TabGroup[]>
-  overGroupId: string
-  worktreeId: string
-}): boolean {
-  if (!activeDrag || activeDrag.worktreeId !== worktreeId) {
-    return false
-  }
-
-  const overGroup = (groupsByWorktree[worktreeId] ?? []).find((group) => group.id === overGroupId)
-  if (!overGroup) {
-    return false
-  }
-
-  // Why: splitting the only tab in a group onto that same group's body is a
-  // visual no-op. The store already rejects that drop, so the hover layer must
-  // suppress the pane overlay too or the user sees a split affordance that can
-  // never produce a layout change.
-  if (activeDrag.groupId === overGroupId && overGroup.tabOrder.length <= 1) {
-    return false
-  }
-
-  return true
 }
 
 export function canDropTabForPaneColumnSplit(args: {
@@ -128,16 +82,6 @@ export function canDropTabForPaneColumnSplit(args: {
     overGroupId: args.targetGroupId,
     worktreeId: args.worktreeId
   })
-}
-
-export function isTabDragData(value: unknown): value is TabDragItemData {
-  return Boolean(value) && typeof value === 'object' && (value as TabDragItemData).kind === 'tab'
-}
-
-export function isPaneDropData(value: unknown): value is TabPaneDropData {
-  return (
-    Boolean(value) && typeof value === 'object' && (value as TabPaneDropData).kind === 'pane-body'
-  )
 }
 
 const collisionDetection: CollisionDetection = (args) => {
@@ -195,7 +139,7 @@ export function useTabDragSplit({
   // useSensors(ptr) / useSensors(), because dnd-kit internally spreads
   // the sensors array into a useEffect dependency list — changing its
   // length between renders violates React's rules of hooks.
-  const pointerSensor = useSensor(PointerSensor, {
+  const pointerSensor = useSensor(TabDragPointerSensor, {
     activationConstraint: { distance: getTabDragActivationDistance(enabled) }
   })
   const sensors = useSensors(pointerSensor)
@@ -233,6 +177,7 @@ export function useTabDragSplit({
     window.addEventListener('pointerup', clearIfDndMissedEnd)
     window.addEventListener('pointercancel', clearIfDndMissedEnd)
     window.addEventListener('blur', clearIfDndMissedEnd)
+    window.addEventListener('focus', clearIfDndMissedEnd)
     releaseMissedEndFallbackRef.current = () => {
       if (cleanupTimer !== null) {
         window.clearTimeout(cleanupTimer)
@@ -240,6 +185,7 @@ export function useTabDragSplit({
       window.removeEventListener('pointerup', clearIfDndMissedEnd)
       window.removeEventListener('pointercancel', clearIfDndMissedEnd)
       window.removeEventListener('blur', clearIfDndMissedEnd)
+      window.removeEventListener('focus', clearIfDndMissedEnd)
     }
   }, [releaseMissedEndFallback])
 

@@ -1,5 +1,3 @@
-/* oxlint-disable max-lines -- Why: keeping these mocked TabBar wiring cases
- * together avoids duplicating the lightweight renderer harness. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const appStoreSnapshot: {
@@ -22,6 +20,8 @@ const useAppStoreMock = vi.fn(
       activeTabId: string | null
       activeTabType: 'terminal' | 'editor' | 'browser' | 'simulator' | null
       gitStatusByWorktree: Record<string, never[]>
+      repos: never[]
+      worktreesByRepo: Record<string, never[]>
       unifiedTabsByWorktree: Record<string, unknown[]>
       activeGroupIdByWorktree: Record<string, string>
       pinTab: typeof pinTabMock
@@ -36,6 +36,8 @@ const useAppStoreMock = vi.fn(
       activeTabId: appStoreSnapshot.activeTabId,
       activeTabType: appStoreSnapshot.activeTabType,
       gitStatusByWorktree: {},
+      repos: [],
+      worktreesByRepo: {},
       unifiedTabsByWorktree: appStoreSnapshot.unifiedTabsByWorktree,
       activeGroupIdByWorktree: appStoreSnapshot.activeGroupIdByWorktree,
       pinTab: pinTabMock,
@@ -60,6 +62,12 @@ vi.mock('react', async () => {
     useState: <T>(initial: T) => [initial, vi.fn()] as const
   }
 })
+
+// The headless React mock above stubs hooks, so zustand's useShallow (which
+// calls useRef) has no dispatcher; make it a pass-through like the store mock.
+vi.mock('zustand/react/shallow', () => ({
+  useShallow: (selector: unknown) => selector
+}))
 
 vi.mock('lucide-react', () => ({
   FilePlus: function FilePlus() {
@@ -103,6 +111,8 @@ useAppStoreExport.getState = vi.fn(() => ({
   activeTabId: appStoreSnapshot.activeTabId,
   activeTabType: appStoreSnapshot.activeTabType,
   gitStatusByWorktree: {},
+  repos: [],
+  worktreesByRepo: {},
   unifiedTabsByWorktree: appStoreSnapshot.unifiedTabsByWorktree,
   activeGroupIdByWorktree: appStoreSnapshot.activeGroupIdByWorktree,
   pinTab: pinTabMock,
@@ -263,6 +273,7 @@ async function renderTabBar(props: Record<string, unknown>): Promise<unknown> {
     onClose: () => {},
     onCloseOthers: () => {},
     onCloseToRight: () => {},
+    onCloseToLeft: () => {},
     onNewTerminalTab: () => {},
     onNewBrowserTab: () => {},
     onSetCustomTitle: () => {},
@@ -318,6 +329,14 @@ describe('TabBar context menu wiring', () => {
   afterEach(() => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
+  })
+
+  it('wires the shared agent projection selector into the production TabBar', async () => {
+    const { selectTabBarAgentProjections } = await import('./tab-agent-types-by-tab-id')
+
+    await renderTabBar({ tabs: [], editorFiles: [], browserTabs: [], tabBarOrder: [] })
+
+    expect(useAppStoreMock).toHaveBeenCalledWith(selectTabBarAgentProjections)
   })
 
   it('counts every tab kind for SortableTab.tabCount', async () => {
@@ -379,6 +398,33 @@ describe('TabBar context menu wiring', () => {
     const onClose = editorTabs[0].props.onCloseToRight as () => void
     onClose()
     expect(onCloseToRight).toHaveBeenCalledWith('unified-editor-1')
+  })
+
+  it('wires onCloseToLeft/onCloseOthers and hasTabsToLeft by strip position', async () => {
+    const onCloseToLeft = vi.fn()
+    const onCloseOthers = vi.fn()
+    const element = await renderTabBar({
+      tabs: [TERMINAL_TAB],
+      editorFiles: [EDITOR_FILE],
+      browserTabs: [],
+      tabBarOrder: ['term-1', 'unified-editor-1'],
+      onCloseToLeft,
+      onCloseOthers
+    })
+
+    const sortable = findChildrenByType(element, 'SortableTab')
+    expect(sortable).toHaveLength(1)
+    // First tab in the strip: nothing to its left.
+    expect(sortable[0].props.hasTabsToLeft).toBe(false)
+
+    const editorTabs = findChildrenByType(element, 'EditorFileTab')
+    expect(editorTabs).toHaveLength(1)
+    expect(editorTabs[0].props.hasTabsToLeft).toBe(true)
+    expect(editorTabs[0].props.tabCount).toBe(2)
+    ;(editorTabs[0].props.onCloseToLeft as () => void)()
+    expect(onCloseToLeft).toHaveBeenCalledWith('unified-editor-1')
+    ;(editorTabs[0].props.onCloseOthers as () => void)()
+    expect(onCloseOthers).toHaveBeenCalledWith('unified-editor-1')
   })
 
   it('passes pinned state and toggles unpin through the unified tab id', async () => {

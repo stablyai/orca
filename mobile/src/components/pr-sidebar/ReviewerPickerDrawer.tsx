@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, FlatList, Pressable, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
 import type { GitHubAssignableUser } from '../../../../src/shared/types'
@@ -26,9 +26,10 @@ type LoadState =
   | { status: 'error'; message: string }
   | { status: 'loaded'; users: GitHubAssignableUser[] }
 
-// A search + FlatList of github.listAssignableUsers in a BottomDrawer (not a new
-// primitive). Seeded with already-requested/latest reviewers + author at the top.
-// Optimistic add/remove via onToggle.
+// Searchable assignable-user list in a BottomDrawer. Mapped rows (not FlatList):
+// this drawer is opened from the PR ScrollView, and a VirtualizedList nested in
+// that ScrollView throws and can leave the Reviewers section blank.
+// Seeded reviewers + author sort first for quick un-request.
 export function ReviewerPickerDrawer({
   visible,
   onClose,
@@ -47,16 +48,22 @@ export function ReviewerPickerDrawer({
     }
     let cancelled = false
     setLoad({ status: 'loading' })
-    void fetchAssignableUsers(client, worktreeId).then((outcome) => {
-      if (cancelled) {
-        return
-      }
-      setLoad(
-        outcome.ok
-          ? { status: 'loaded', users: outcome.result }
-          : { status: 'error', message: outcome.error }
-      )
-    })
+    void fetchAssignableUsers(client, worktreeId)
+      .then((outcome) => {
+        if (cancelled) {
+          return
+        }
+        setLoad(
+          outcome.ok
+            ? { status: 'loaded', users: outcome.result }
+            : { status: 'error', message: outcome.error }
+        )
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLoad({ status: 'error', message: 'Failed to load people' })
+        }
+      })
     return () => {
       cancelled = true
     }
@@ -107,15 +114,12 @@ export function ReviewerPickerDrawer({
           <Text style={styles.emptyText}>No matching people</Text>
         </View>
       ) : (
-        <FlatList
-          style={styles.pickerList}
-          data={ordered}
-          keyExtractor={(u) => u.login}
-          keyboardShouldPersistTaps="handled"
-          renderItem={({ item }) => {
+        <View style={styles.pickerList}>
+          {ordered.map((item) => {
             const requested = isRequested(item.login)
             return (
               <Pressable
+                key={item.login}
                 style={styles.pickerRow}
                 onPress={() => onToggle(item.login)}
                 accessibilityRole="button"
@@ -134,8 +138,8 @@ export function ReviewerPickerDrawer({
                 </View>
               </Pressable>
             )
-          }}
-        />
+          })}
+        </View>
       )}
     </BottomDrawer>
   )

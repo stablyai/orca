@@ -5,8 +5,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer } from '../../shared/pairing'
-import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../shared/protocol-version'
+import {
+  MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
+  REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY
+} from '../../shared/protocol-version'
 import * as environmentStore from '../../shared/runtime-environment-store'
+import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
+import { RuntimeRpcCallQueueOverloadError } from '../../shared/runtime-rpc-call-queue'
+import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 
 const {
   handleMock,
@@ -20,6 +26,8 @@ const {
   sendRemoteRuntimeSharedControlRequestMock,
   subscribeRemoteRuntimeSharedControlRequestMock,
   getRemoteRuntimeSharedControlDiagnosticsMock,
+  reconnectRemoteRuntimeSharedControlConnectionMock,
+  retryRemoteRuntimeSharedControlConnectionsNowMock,
   closeRemoteRuntimeRequestConnectionMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
@@ -33,6 +41,8 @@ const {
   sendRemoteRuntimeSharedControlRequestMock: vi.fn(),
   subscribeRemoteRuntimeSharedControlRequestMock: vi.fn(),
   getRemoteRuntimeSharedControlDiagnosticsMock: vi.fn(),
+  reconnectRemoteRuntimeSharedControlConnectionMock: vi.fn(),
+  retryRemoteRuntimeSharedControlConnectionsNowMock: vi.fn(),
   closeRemoteRuntimeRequestConnectionMock: vi.fn()
 }))
 
@@ -56,10 +66,15 @@ vi.mock('./runtime-environment-request-connections', () => ({
   sendRemoteRuntimeSharedControlRequest: sendRemoteRuntimeSharedControlRequestMock,
   subscribeRemoteRuntimeSharedControlRequest: subscribeRemoteRuntimeSharedControlRequestMock,
   getRemoteRuntimeSharedControlDiagnostics: getRemoteRuntimeSharedControlDiagnosticsMock,
+  reconnectRemoteRuntimeSharedControlConnection: reconnectRemoteRuntimeSharedControlConnectionMock,
+  retryRemoteRuntimeSharedControlConnectionsNow: retryRemoteRuntimeSharedControlConnectionsNowMock,
   closeRemoteRuntimeRequestConnection: closeRemoteRuntimeRequestConnectionMock
 }))
 
-import { registerRuntimeEnvironmentHandlers } from './runtime-environments'
+import {
+  invalidateRuntimeEnvironmentTransport,
+  registerRuntimeEnvironmentHandlers
+} from './runtime-environments'
 
 function pairingCode(endpoint = 'ws://127.0.0.1:6768'): string {
   return encodePairingOffer({
@@ -68,6 +83,18 @@ function pairingCode(endpoint = 'ws://127.0.0.1:6768'): string {
     deviceToken: 'device-token',
     publicKeyB64: Buffer.from(new Uint8Array(32).fill(1)).toString('base64')
   })
+}
+
+function runtimeStatus(): Record<string, unknown> {
+  return {
+    runtimeId: 'runtime-a',
+    rendererGraphEpoch: 1,
+    graphStatus: 'ready',
+    authoritativeWindowId: 1,
+    liveTabCount: 0,
+    liveLeafCount: 0,
+    protocolVersion: 999_999
+  }
 }
 
 function handler<TArgs, TResult>(
@@ -80,9 +107,21 @@ function handler<TArgs, TResult>(
 
 describe('registerRuntimeEnvironmentHandlers', () => {
   let userDataPath: string
+  let activeRuntimeEnvironmentId: string | null
+  let store: {
+    getSettings: () => { activeRuntimeEnvironmentId: string | null }
+    updateSettings: ReturnType<typeof vi.fn>
+  }
 
   beforeEach(() => {
     userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-ipc-'))
+    activeRuntimeEnvironmentId = null
+    store = {
+      getSettings: () => ({ activeRuntimeEnvironmentId }),
+      updateSettings: vi.fn((updates: { activeRuntimeEnvironmentId: string | null }) => {
+        activeRuntimeEnvironmentId = updates.activeRuntimeEnvironmentId
+      })
+    }
     getPathMock.mockReset()
     getPathMock.mockReturnValue(userDataPath)
     handleMock.mockReset()
@@ -96,6 +135,8 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     subscribeRemoteRuntimeSharedControlRequestMock.mockReset()
     getRemoteRuntimeSharedControlDiagnosticsMock.mockReset()
     getRemoteRuntimeSharedControlDiagnosticsMock.mockReturnValue(null)
+    reconnectRemoteRuntimeSharedControlConnectionMock.mockReset()
+    retryRemoteRuntimeSharedControlConnectionsNowMock.mockReset()
     closeRemoteRuntimeRequestConnectionMock.mockReset()
   })
 
@@ -104,14 +145,17 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('registers desktop runtime environment management handlers', () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
 
     expect(handleMock.mock.calls.map((call) => call[0])).toEqual([
       'runtimeEnvironments:list',
       'runtimeEnvironments:addFromPairingCode',
+      'runtimeEnvironments:verifyAndAddFromPairingCode',
       'runtimeEnvironments:resolve',
       'runtimeEnvironments:remove',
       'runtimeEnvironments:disconnect',
+      'runtimeEnvironments:connect',
+      'runtimeEnvironments:retryConnectionsNow',
       'runtimeEnvironments:getStatus',
       'runtimeEnvironments:call',
       'runtimeEnvironments:subscribe',
@@ -123,24 +167,36 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('clears stale IPC registrations before registering runtime environment handlers', () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
 
     expect(removeHandlerMock.mock.calls.map((call) => call[0])).toEqual([
       'runtimeEnvironments:list',
       'runtimeEnvironments:addFromPairingCode',
+      'runtimeEnvironments:verifyAndAddFromPairingCode',
       'runtimeEnvironments:resolve',
       'runtimeEnvironments:remove',
       'runtimeEnvironments:disconnect',
+      'runtimeEnvironments:connect',
       'runtimeEnvironments:getStatus',
       'runtimeEnvironments:call',
       'runtimeEnvironments:subscribe',
-      'runtimeEnvironments:unsubscribe'
+      'runtimeEnvironments:unsubscribe',
+      'runtimeEnvironments:retryConnectionsNow'
     ])
     expect(removeAllListenersMock).toHaveBeenCalledWith('runtimeEnvironments:subscriptionBinary')
   })
 
+  it('advances pending shared-control reconnects through IPC', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+
+    const retryConnectionsNow = handler<undefined, void>('runtimeEnvironments:retryConnectionsNow')
+    await retryConnectionsNow(null, undefined)
+
+    expect(retryRemoteRuntimeSharedControlConnectionsNowMock).toHaveBeenCalledTimes(1)
+  })
+
   it('stores, resolves, lists, and removes environments under Electron userData', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
 
     const add = handler<
       { name: string; pairingCode: string },
@@ -149,7 +205,6 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
     expect(JSON.stringify(added)).not.toContain('device-token')
     expect(JSON.stringify(added)).not.toContain('publicKeyB64')
-
     const list = handler<undefined, { id: string; name: string }[]>('runtimeEnvironments:list')
     expect(await list(null, undefined)).toMatchObject([{ id: added.environment.id, name: 'desk' }])
     expect(JSON.stringify(await list(null, undefined))).not.toContain('device-token')
@@ -170,13 +225,206 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     expect(removed).toMatchObject({
       removed: { id: added.environment.id, name: 'desk' }
     })
+    expect(activeRuntimeEnvironmentId).toBeNull()
     expect(closeRemoteRuntimeRequestConnectionMock).toHaveBeenCalledWith(added.environment.id)
     expect(JSON.stringify(removed)).not.toContain('device-token')
     expect(await list(null, undefined)).toEqual([])
   })
 
+  it('blocks loopback before verification unless an SSH tunnel is declared', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    const verifyAndAdd = handler<
+      { name: string; pairingCode: string; allowLoopback?: boolean },
+      { ok: boolean; kind?: string }
+    >('runtimeEnvironments:verifyAndAddFromPairingCode')
+
+    await expect(
+      verifyAndAdd(null, { name: 'desk', pairingCode: pairingCode() })
+    ).resolves.toMatchObject({
+      ok: false,
+      kind: 'host-unreachable'
+    })
+    expect(sendRemoteRuntimeRequestMock).not.toHaveBeenCalled()
+    expect(environmentStore.listEnvironments(userDataPath)).toEqual([])
+  })
+
+  it('verifies identity, access, status, and compatibility before saving', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    sendRemoteRuntimeRequestMock.mockResolvedValue({
+      id: 'status',
+      ok: true,
+      result: runtimeStatus(),
+      _meta: { runtimeId: 'runtime-a' }
+    })
+    const verifyAndAdd = handler<
+      { name: string; pairingCode: string; allowLoopback?: boolean },
+      { ok: boolean; environment?: { name: string; connectionDependency?: string } }
+    >('runtimeEnvironments:verifyAndAddFromPairingCode')
+
+    const result = await verifyAndAdd(null, {
+      name: 'desk',
+      pairingCode: pairingCode(),
+      allowLoopback: true
+    })
+
+    expect(result).toMatchObject({
+      ok: true,
+      environment: { name: 'desk', connectionDependency: 'ssh-tunnel' }
+    })
+    expect(sendRemoteRuntimeRequestMock).toHaveBeenCalledWith(
+      expect.objectContaining({ endpoint: 'ws://127.0.0.1:6768' }),
+      'status.get',
+      undefined,
+      15_000
+    )
+    expect(environmentStore.listEnvironments(userDataPath)).toHaveLength(1)
+  })
+
+  it('does not mark non-loopback hosts as SSH-tunnel dependent', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    sendRemoteRuntimeRequestMock.mockResolvedValue({
+      id: 'status',
+      ok: true,
+      result: runtimeStatus(),
+      _meta: { runtimeId: 'runtime-a' }
+    })
+    const verifyAndAdd = handler<
+      { name: string; pairingCode: string; allowLoopback?: boolean },
+      { ok: boolean; environment?: { connectionDependency?: string } }
+    >('runtimeEnvironments:verifyAndAddFromPairingCode')
+
+    const result = await verifyAndAdd(null, {
+      name: 'desk',
+      pairingCode: pairingCode('ws://100.76.32.125:6768'),
+      allowLoopback: true
+    })
+
+    expect(result).toMatchObject({ ok: true })
+    expect(result.environment).not.toHaveProperty('connectionDependency')
+  })
+
+  it.each([
+    [{ protocolVersion: MIN_COMPATIBLE_RUNTIME_SERVER_VERSION - 1 }, 'protocol-incompatible'],
+    [{ protocolVersion: 999_999, deviceScope: 'mobile' }, 'access-link-invalid'],
+    [null, 'connection-interrupted']
+  ])('does not save a host with rejected status %o', async (status, expectedKind) => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    sendRemoteRuntimeRequestMock.mockResolvedValue({
+      id: 'status',
+      ok: true,
+      result: status,
+      _meta: { runtimeId: 'runtime-a' }
+    })
+    const verifyAndAdd = handler<
+      { name: string; pairingCode: string },
+      { ok: boolean; kind?: string }
+    >('runtimeEnvironments:verifyAndAddFromPairingCode')
+
+    await expect(
+      verifyAndAdd(null, {
+        name: 'desk',
+        pairingCode: pairingCode('ws://100.76.32.125:6768')
+      })
+    ).resolves.toMatchObject({ ok: false, kind: expectedKind })
+    expect(environmentStore.listEnvironments(userDataPath)).toEqual([])
+  })
+
+  it.each([
+    [
+      new RemoteRuntimeClientError('remote_runtime_unavailable', 'closed', {
+        pairingStage: 'host-identity',
+        closeCode: 4001
+      }),
+      'host-identity-mismatch'
+    ],
+    [
+      new RemoteRuntimeClientError('unauthorized', 'rejected', {
+        pairingStage: 'access-grant'
+      }),
+      'access-link-invalid'
+    ],
+    [
+      new RemoteRuntimeClientError('remote_runtime_unavailable', 'offline', {
+        pairingStage: 'connect'
+      }),
+      'host-unreachable'
+    ],
+    [new Error('Invalid public key: expected 32 bytes, got 3'), 'access-link-invalid']
+  ] as const)('returns a structured pairing failure for %s', async (error, expectedKind) => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    sendRemoteRuntimeRequestMock.mockRejectedValue(error)
+    const verifyAndAdd = handler<
+      { name: string; pairingCode: string },
+      { ok: boolean; kind?: string; message?: string }
+    >('runtimeEnvironments:verifyAndAddFromPairingCode')
+
+    const result = await verifyAndAdd(null, {
+      name: 'desk',
+      pairingCode: pairingCode('ws://100.76.32.125:6768')
+    })
+
+    expect(result).toMatchObject({ ok: false, kind: expectedKind })
+    expect(result.message).not.toContain('4001')
+    expect(environmentStore.listEnvironments(userDataPath)).toEqual([])
+  })
+
+  it('returns a structured failure when a verified host cannot be persisted', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    environmentStore.addEnvironmentFromPairingCode(userDataPath, {
+      name: 'desk',
+      pairingCode: pairingCode('ws://100.76.32.125:6768')
+    })
+    sendRemoteRuntimeRequestMock.mockResolvedValue({
+      id: 'status',
+      ok: true,
+      result: runtimeStatus(),
+      _meta: { runtimeId: 'runtime-a' }
+    })
+    const verifyAndAdd = handler<
+      { name: string; pairingCode: string },
+      { ok: boolean; kind?: string; message?: string }
+    >('runtimeEnvironments:verifyAndAddFromPairingCode')
+
+    await expect(
+      verifyAndAdd(null, {
+        name: 'desk',
+        pairingCode: pairingCode('ws://100.76.32.125:6768')
+      })
+    ).resolves.toMatchObject({
+      ok: false,
+      kind: 'environment-save-failed',
+      message: 'A server named "desk" already exists.'
+    })
+    expect(environmentStore.listEnvironments(userDataPath)).toHaveLength(1)
+  })
+
+  it('requires an explicit Advanced selection before removing the Active Server', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
+    activeRuntimeEnvironmentId = added.environment.id
+    const remove = handler<{ selector: string }, { removed: { id: string } }>(
+      'runtimeEnvironments:remove'
+    )
+
+    expect(() => remove(null, { selector: added.environment.id })).toThrow(
+      'Choose another Active Server in Advanced'
+    )
+    expect(activeRuntimeEnvironmentId).toBe(added.environment.id)
+    expect(store.updateSettings).not.toHaveBeenCalled()
+  })
+
   it('disconnects a saved runtime without removing it', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
+    sendRemoteRuntimeRequestMock.mockResolvedValue({
+      id: 'status',
+      ok: true,
+      result: { runtimeId: 'runtime-remote' },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
 
     const add = handler<
       { name: string; pairingCode: string },
@@ -197,10 +445,43 @@ describe('registerRuntimeEnvironmentHandlers', () => {
 
     const list = handler<undefined, { id: string; name: string }[]>('runtimeEnvironments:list')
     expect(await list(null, undefined)).toMatchObject([{ id: added.environment.id, name: 'desk' }])
+
+    const getStatus = handler<{ selector: string }, { ok: boolean; error?: { code: string } }>(
+      'runtimeEnvironments:getStatus'
+    )
+    await expect(getStatus(null, { selector: 'desk' })).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'runtime_manually_disconnected' }
+    })
+    const call = handler<
+      { selector: string; method: string },
+      { ok: boolean; error?: { code: string } }
+    >('runtimeEnvironments:call')
+    await expect(call(null, { selector: 'desk', method: 'repo.list' })).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'runtime_manually_disconnected' }
+    })
+    const subscribe = handler<{ selector: string; method: string }, { subscriptionId: string }>(
+      'runtimeEnvironments:subscribe'
+    )
+    await expect(
+      subscribe(null, { selector: 'desk', method: 'terminal.multiplex' })
+    ).rejects.toThrow('runtime_manually_disconnected')
+    expect(sendRemoteRuntimeRequestMock).not.toHaveBeenCalled()
+    expect(subscribeRemoteRuntimeRequestMock).not.toHaveBeenCalled()
+
+    const connect = handler<{ selector: string }, { ok: boolean; result?: { runtimeId: string } }>(
+      'runtimeEnvironments:connect'
+    )
+    await expect(connect(null, { selector: 'desk' })).resolves.toMatchObject({
+      ok: true,
+      result: { runtimeId: 'runtime-remote' }
+    })
+    expect(sendRemoteRuntimeRequestMock).toHaveBeenCalledOnce()
   })
 
   it('marks environments owned by ephemeral VM runtimes in the public list', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
 
     // The ephemeral-VM provision flow persists `source: 'ephemeral-vm'` directly
     // on the environment record (ephemeral-vm.ts), so the public list reads it
@@ -221,7 +502,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('checks a saved remote runtime and records the runtime id on success', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     sendRemoteRuntimeRequestMock.mockResolvedValue({
       id: 'rpc-1',
       ok: true,
@@ -249,6 +530,9 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       undefined,
       50
     )
+    expect(reconnectRemoteRuntimeSharedControlConnectionMock).toHaveBeenCalledWith(
+      added.environment.id
+    )
 
     const resolve = handler<{ selector: string }, { id: string; runtimeId: string | null }>(
       'runtimeEnvironments:resolve'
@@ -260,7 +544,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('attaches shared-control diagnostics to saved remote runtime status', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     getRemoteRuntimeSharedControlDiagnosticsMock.mockReturnValue({
       state: 'reconnecting',
       pendingRequestCount: 1,
@@ -296,7 +580,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('attaches shared-control diagnostics to failed saved remote runtime status', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     getRemoteRuntimeSharedControlDiagnosticsMock.mockReturnValue({
       state: 'reconnecting',
       pendingRequestCount: 0,
@@ -334,7 +618,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('returns shared-control diagnostics when saved remote runtime status throws', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     getRemoteRuntimeSharedControlDiagnosticsMock.mockReturnValue({
       state: 'reconnecting',
       pendingRequestCount: 0,
@@ -367,7 +651,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('proxies generic one-shot RPC calls to the saved remote runtime', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     sendRemoteRuntimeRequestMock.mockResolvedValue({
       id: 'rpc-2',
       ok: true,
@@ -401,7 +685,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('falls back to one-shot RPC when the saved runtime lacks shared-control support', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     sendRemoteRuntimeRequestMock.mockImplementation(async (_pairing, method) => {
       if (method === 'status.get') {
         return {
@@ -442,7 +726,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('uses the cached request connection for terminal hot path RPCs', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     sendRemoteRuntimeConnectionRequestMock.mockResolvedValue({
       id: 'rpc-terminal',
       ok: true,
@@ -482,7 +766,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('keeps terminal hot path RPCs on the cached request connection when shared control is supported', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     sendRemoteRuntimeRequestMock.mockResolvedValue({
       id: 'status',
       ok: true,
@@ -545,7 +829,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('routes one-shot RPC calls through shared control when the runtime advertises support', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     sendRemoteRuntimeRequestMock.mockResolvedValue({
       id: 'status',
       ok: true,
@@ -599,7 +883,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('rechecks shared-control support when the saved runtime identity changes', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     let statusCalls = 0
     sendRemoteRuntimeRequestMock.mockImplementation(async (_pairing, method) => {
       if (method === 'status.get') {
@@ -653,8 +937,69 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     expect(sendRemoteRuntimeSharedControlRequestMock).toHaveBeenCalledTimes(1)
   })
 
+  it.each([
+    [
+      new RemoteRuntimeClientError(
+        'remote_runtime_unavailable',
+        'Transport vanished without legacy classifier wording.'
+      ),
+      'remote_runtime_unavailable',
+      'Transport vanished without legacy classifier wording.'
+    ],
+    [
+      Object.assign(new RuntimeRpcCallQueueOverloadError('selector'), {
+        message: 'Capacity rejected without legacy classifier wording.'
+      }),
+      'runtime_rpc_queue_overloaded',
+      'Capacity rejected without legacy classifier wording.'
+    ]
+  ])(
+    'returns coded transport failure %s so the renderer restores its identity',
+    async (transportError, expectedCode, expectedMessage) => {
+      registerRuntimeEnvironmentHandlers(store as never)
+      sendRemoteRuntimeRequestMock.mockRejectedValue(transportError)
+
+      const add = handler<
+        { name: string; pairingCode: string },
+        { environment: { id: string; name: string } }
+      >('runtimeEnvironments:addFromPairingCode')
+      await add(null, { name: 'desk', pairingCode: pairingCode() })
+      const call = handler<{ selector: string; method: string }, RuntimeRpcResponse<unknown>>(
+        'runtimeEnvironments:call'
+      )
+
+      const response = structuredClone(await call(null, { selector: 'desk', method: 'status.get' }))
+      expect(response).toMatchObject({
+        ok: false,
+        error: { code: expectedCode, message: expectedMessage }
+      })
+      expect(response.ok).toBe(false)
+      if (response.ok === false) {
+        expect(response.error).toEqual({ code: expectedCode, message: expectedMessage })
+      }
+    }
+  )
+
+  it('keeps uncoded call failures on the rejected IPC fallback path', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    sendRemoteRuntimeRequestMock.mockRejectedValue(new Error('shared down'))
+
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    await add(null, { name: 'desk', pairingCode: pairingCode() })
+    const call = handler<{ selector: string; method: string }, RuntimeRpcResponse<unknown>>(
+      'runtimeEnvironments:call'
+    )
+
+    await expect(call(null, { selector: 'desk', method: 'status.get' })).rejects.toThrow(
+      'shared down'
+    )
+  })
+
   it('does not fall back after a shared-control request fails on a supported runtime', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     sendRemoteRuntimeRequestMock.mockResolvedValue({
       id: 'status',
       ok: true,
@@ -690,8 +1035,42 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     )
   })
 
+  it('keeps session snapshot recovery on one-shot transport while shared control reconnects', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    sendRemoteRuntimeRequestMock.mockImplementation(async (_pairing, method) => ({
+      id: method,
+      ok: true,
+      result:
+        method === 'status.get'
+          ? {
+              runtimeId: 'runtime-remote',
+              capabilities: [REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY]
+            }
+          : { snapshots: [] },
+      _meta: { runtimeId: 'runtime-remote' }
+    }))
+
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    await add(null, { name: 'desk', pairingCode: pairingCode() })
+    const call = handler<
+      { selector: string; method: string; params?: unknown },
+      { ok: true; result: unknown }
+    >('runtimeEnvironments:call')
+
+    await expect(
+      call(null, { selector: 'desk', method: 'session.tabs.listAll' })
+    ).resolves.toMatchObject({ ok: true, result: { snapshots: [] } })
+    expect(sendRemoteRuntimeRequestMock.mock.calls.map((entry) => entry[1])).toEqual([
+      'session.tabs.listAll'
+    ])
+    expect(sendRemoteRuntimeSharedControlRequestMock).not.toHaveBeenCalled()
+  })
+
   it('keeps browser and terminal heavy streams on dedicated subscription sockets', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     const close = vi.fn()
     sendRemoteRuntimeRequestMock.mockResolvedValue({
       id: 'status',
@@ -761,7 +1140,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('routes passive subscriptions through shared control when supported', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     sendRemoteRuntimeRequestMock.mockResolvedValue({
       id: 'status',
       ok: true,
@@ -814,7 +1193,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('keeps shared-control subscriptions retained across transient errors until final close', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     const close = vi.fn()
     const senderSend = vi.fn()
     const destroyedListenerRemoved = vi.fn()
@@ -893,7 +1272,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('falls back to legacy passive subscriptions when shared control is unsupported', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     sendRemoteRuntimeRequestMock.mockResolvedValue({
       id: 'status',
       ok: true,
@@ -942,7 +1321,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('dedupes concurrent shared-control capability probes per environment', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     let resolveStatus: (value: unknown) => void = () => {}
     sendRemoteRuntimeRequestMock.mockImplementation((_pairing, method) => {
       if (method === 'status.get') {
@@ -989,7 +1368,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('clears rejected shared-control capability probes so a later call can retry', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     sendRemoteRuntimeRequestMock
       .mockRejectedValueOnce(new Error('probe failed'))
       .mockResolvedValueOnce({
@@ -1031,7 +1410,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('clears shared-control capability cache when a runtime is disconnected', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     sendRemoteRuntimeRequestMock.mockResolvedValue({
       id: 'status',
       ok: true,
@@ -1065,9 +1444,12 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { disconnected: { id: string; name: string } }
     >('runtimeEnvironments:disconnect')
     await disconnect(null, { selector: 'desk' })
+    const connect = handler<{ selector: string }, { ok: boolean }>('runtimeEnvironments:connect')
+    await connect(null, { selector: 'desk' })
     await call(null, { selector: 'desk', method: 'repo.list' })
 
     expect(sendRemoteRuntimeRequestMock.mock.calls.map((call) => call[1])).toEqual([
+      'status.get',
       'status.get',
       'status.get'
     ])
@@ -1075,7 +1457,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('clears shared-control capability cache when a runtime is removed and re-added', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     sendRemoteRuntimeRequestMock.mockResolvedValue({
       id: 'status',
       ok: true,
@@ -1119,7 +1501,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('limits background one-shot RPCs without blocking foreground runtime calls', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     const pendingBackground: ((value: unknown) => void)[] = []
     sendRemoteRuntimeRequestMock.mockImplementation(async (_pairing, method) => {
       if (method === 'status.get') {
@@ -1210,7 +1592,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('starts and stops streaming subscriptions for a saved remote runtime', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     const close = vi.fn()
     const sendBinary = vi.fn()
     const markUsedSpy = vi.spyOn(environmentStore, 'markEnvironmentUsed')
@@ -1307,7 +1689,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('closes streaming subscriptions when their saved runtime is removed', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     const close = vi.fn()
     const sendBinary = vi.fn()
     subscribeRemoteRuntimeRequestMock.mockResolvedValue({
@@ -1370,8 +1752,365 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     })
   })
 
+  it('tells the renderer when retiring the transport closes its streaming subscription', async () => {
+    // Why: disconnect advances the transport generation before closing sockets.
+    // Gating the terminal 'close' on that generation stranded the renderer with a
+    // handle it believed was open, so every later subscribe wrote into a socket
+    // main no longer owned — blank, wedged remote terminals after a reconnect.
+    registerRuntimeEnvironmentHandlers(store as never)
+    let transportCallbacks: {
+      onResponse: (response: Record<string, unknown>) => void
+      onClose: () => void
+    } | null = null
+    const close = vi.fn(() => {
+      transportCallbacks?.onClose()
+    })
+    subscribeRemoteRuntimeRequestMock.mockImplementation(
+      async (
+        _environment: unknown,
+        _method: string,
+        _params: unknown,
+        _timeoutMs: number,
+        callbacks: NonNullable<typeof transportCallbacks>
+      ) => {
+        transportCallbacks = callbacks
+        return { requestId: 'multiplex-1', close, sendBinary: vi.fn() }
+      }
+    )
+
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
+
+    const senderSend = vi.fn()
+    const subscribe = handler<
+      { selector: string; method: string; params?: unknown; subscriptionId?: string },
+      { subscriptionId: string; requestId: string }
+    >('runtimeEnvironments:subscribe')
+    const subscribed = await subscribe(
+      {
+        sender: {
+          id: 1,
+          isDestroyed: () => false,
+          send: senderSend,
+          once: vi.fn(),
+          removeListener: vi.fn()
+        }
+      },
+      {
+        selector: added.environment.id,
+        method: 'terminal.multiplex',
+        params: {},
+        subscriptionId: 'multiplex-sub'
+      }
+    )
+
+    const disconnect = handler<{ selector: string }, { disconnected: { id: string } }>(
+      'runtimeEnvironments:disconnect'
+    )
+    disconnect(null, { selector: added.environment.id })
+
+    const closeEvents = senderSend.mock.calls.filter(
+      (call) =>
+        call[0] === 'runtimeEnvironments:subscriptionEvent' &&
+        (call[1] as { type?: string }).type === 'close'
+    )
+    expect(closeEvents).toEqual([
+      [
+        'runtimeEnvironments:subscriptionEvent',
+        { subscriptionId: subscribed.subscriptionId, type: 'close' }
+      ]
+    ])
+  })
+
+  it("retires an environment's remaining subscriptions when one teardown throws", async () => {
+    // Why: the sweep exists to retire dead handles, so a single failing teardown
+    // must not strand the very sockets it was called to close.
+    registerRuntimeEnvironmentHandlers(store as never)
+    const closeCalls: string[] = []
+    let streamCount = 0
+    subscribeRemoteRuntimeRequestMock.mockImplementation(async () => {
+      streamCount += 1
+      const requestId = `stream-${streamCount}`
+      return {
+        requestId,
+        close: () => {
+          closeCalls.push(requestId)
+          if (requestId === 'stream-1') {
+            throw new Error('socket teardown exploded')
+          }
+        },
+        sendBinary: vi.fn()
+      }
+    })
+
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
+
+    const senderSend = vi.fn()
+    const subscribe = handler<
+      { selector: string; method: string; params?: unknown; subscriptionId?: string },
+      { subscriptionId: string; requestId: string }
+    >('runtimeEnvironments:subscribe')
+    const sender = {
+      sender: {
+        id: 1,
+        isDestroyed: () => false,
+        send: senderSend,
+        once: vi.fn(),
+        removeListener: vi.fn()
+      }
+    }
+    await subscribe(sender, {
+      selector: added.environment.id,
+      method: 'terminal.multiplex',
+      params: {},
+      subscriptionId: 'doomed-sub'
+    })
+    await subscribe(sender, {
+      selector: added.environment.id,
+      method: 'browser.screencast',
+      params: {},
+      subscriptionId: 'sibling-sub'
+    })
+
+    const disconnect = handler<{ selector: string }, { disconnected: { id: string } }>(
+      'runtimeEnvironments:disconnect'
+    )
+    expect(() => disconnect(null, { selector: added.environment.id })).not.toThrow()
+
+    expect(closeCalls).toEqual(['stream-1', 'stream-2'])
+    expect(
+      senderSend.mock.calls
+        .filter((call) => (call[1] as { type?: string }).type === 'close')
+        .map((call) => (call[1] as { subscriptionId: string }).subscriptionId)
+    ).toEqual(['doomed-sub', 'sibling-sub'])
+
+    // Both entries are gone, so a later unsubscribe finds nothing to release.
+    const unsubscribe = handler<{ subscriptionId: string }, { unsubscribed: boolean }>(
+      'runtimeEnvironments:unsubscribe'
+    )
+    expect(await unsubscribe({ sender: { id: 1 } }, { subscriptionId: 'sibling-sub' })).toEqual({
+      unsubscribed: false
+    })
+  })
+
+  it('contains a throwing renderer send on a host-initiated close', async () => {
+    // Why: this is the notifyClosed call site with no surrounding guard. A host
+    // close arriving on a disposed render frame would otherwise throw out through
+    // the transport's onClose and into the WebSocket close handler.
+    registerRuntimeEnvironmentHandlers(store as never)
+    let transportCallbacks: {
+      onResponse: (response: Record<string, unknown>) => void
+      onClose: () => void
+    } | null = null
+    subscribeRemoteRuntimeRequestMock.mockImplementation(
+      async (
+        _environment: unknown,
+        _method: string,
+        _params: unknown,
+        _timeoutMs: number,
+        callbacks: NonNullable<typeof transportCallbacks>
+      ) => {
+        transportCallbacks = callbacks
+        return { requestId: 'host-closed-stream', close: vi.fn(), sendBinary: vi.fn() }
+      }
+    )
+
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
+
+    const senderSend = vi.fn((_channel: string, payload: { type: string }) => {
+      if (payload.type === 'close') {
+        throw new Error('Render frame was disposed')
+      }
+    })
+    const subscribe = handler<
+      { selector: string; method: string; params?: unknown; subscriptionId?: string },
+      { subscriptionId: string; requestId: string }
+    >('runtimeEnvironments:subscribe')
+    await subscribe(
+      {
+        sender: {
+          id: 1,
+          isDestroyed: () => false,
+          send: senderSend,
+          once: vi.fn(),
+          removeListener: vi.fn()
+        }
+      },
+      {
+        selector: added.environment.id,
+        method: 'terminal.multiplex',
+        params: {},
+        subscriptionId: 'host-closed-sub'
+      }
+    )
+
+    // The host closes the stream on its own; nothing wraps this call site.
+    expect(() => transportCallbacks!.onClose()).not.toThrow()
+    expect(
+      senderSend.mock.calls.filter((call) => (call[1] as { type?: string }).type === 'close')
+    ).toHaveLength(1)
+
+    // The entry is still released, so a later unsubscribe finds nothing.
+    const unsubscribe = handler<{ subscriptionId: string }, { unsubscribed: boolean }>(
+      'runtimeEnvironments:unsubscribe'
+    )
+    expect(await unsubscribe({ sender: { id: 1 } }, { subscriptionId: 'host-closed-sub' })).toEqual(
+      {
+        unsubscribed: false
+      }
+    )
+  })
+
+  it('retires remaining subscriptions when a liveness probe inside notifyClosed throws', async () => {
+    // Why: notifyClosed guards its own send, but the sweep must not depend on
+    // everything else inside it staying throw-free -- that is how the abandoned
+    // -siblings defect comes back the next time a line is added there.
+    registerRuntimeEnvironmentHandlers(store as never)
+    const closedStreams: string[] = []
+    let streamCount = 0
+    subscribeRemoteRuntimeRequestMock.mockImplementation(async () => {
+      streamCount += 1
+      const requestId = `stream-${streamCount}`
+      return {
+        requestId,
+        close: () => closedStreams.push(requestId),
+        sendBinary: vi.fn()
+      }
+    })
+
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
+
+    const deliveredCloses: string[] = []
+    const senderSend = vi.fn(
+      (_channel: string, payload: { subscriptionId: string; type: string }) => {
+        if (payload.type === 'close') {
+          deliveredCloses.push(payload.subscriptionId)
+        }
+      }
+    )
+    let probeShouldThrow = false
+    const subscribe = handler<
+      { selector: string; method: string; params?: unknown; subscriptionId?: string },
+      { subscriptionId: string; requestId: string }
+    >('runtimeEnvironments:subscribe')
+    const sender = {
+      sender: {
+        id: 1,
+        isDestroyed: () => {
+          if (probeShouldThrow) {
+            throw new Error('WebContents liveness probe exploded')
+          }
+          return false
+        },
+        send: senderSend,
+        once: vi.fn(),
+        removeListener: vi.fn()
+      }
+    }
+    await subscribe(sender, {
+      selector: added.environment.id,
+      method: 'terminal.multiplex',
+      params: {},
+      subscriptionId: 'probe-throws-sub'
+    })
+    await subscribe(sender, {
+      selector: added.environment.id,
+      method: 'browser.screencast',
+      params: {},
+      subscriptionId: 'surviving-sub'
+    })
+    // Why: arm only after subscribe, whose own isDestroyed checks must succeed.
+    probeShouldThrow = true
+
+    const disconnect = handler<{ selector: string }, { disconnected: { id: string } }>(
+      'runtimeEnvironments:disconnect'
+    )
+    expect(() => disconnect(null, { selector: added.environment.id })).not.toThrow()
+
+    // Both transports still closed even though every notifyClosed probe threw.
+    expect(closedStreams).toEqual(['stream-1', 'stream-2'])
+    expect(deliveredCloses).toEqual([])
+  })
+
+  it('suppresses stale payloads from a retired transport but never re-sends its close', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    let transportCallbacks: {
+      onResponse: (response: Record<string, unknown>) => void
+      onClose: () => void
+    } | null = null
+    subscribeRemoteRuntimeRequestMock.mockImplementation(
+      async (
+        _environment: unknown,
+        _method: string,
+        _params: unknown,
+        _timeoutMs: number,
+        callbacks: NonNullable<typeof transportCallbacks>
+      ) => {
+        transportCallbacks = callbacks
+        return { requestId: 'multiplex-2', close: vi.fn(), sendBinary: vi.fn() }
+      }
+    )
+
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
+
+    const senderSend = vi.fn()
+    const subscribe = handler<
+      { selector: string; method: string; params?: unknown; subscriptionId?: string },
+      { subscriptionId: string; requestId: string }
+    >('runtimeEnvironments:subscribe')
+    await subscribe(
+      {
+        sender: {
+          id: 1,
+          isDestroyed: () => false,
+          send: senderSend,
+          once: vi.fn(),
+          removeListener: vi.fn()
+        }
+      },
+      {
+        selector: added.environment.id,
+        method: 'terminal.multiplex',
+        params: {},
+        subscriptionId: 'multiplex-stale'
+      }
+    )
+
+    invalidateRuntimeEnvironmentTransport(added.environment.id)
+    senderSend.mockClear()
+    // A late frame from the retired socket must not reach the renderer...
+    transportCallbacks!.onResponse({
+      id: 'r1',
+      ok: true,
+      result: {},
+      _meta: { runtimeId: 'runtime-a' }
+    })
+    // ...and its late close must not re-fire after the retirement already sent one.
+    transportCallbacks!.onClose()
+    expect(senderSend).not.toHaveBeenCalled()
+  })
+
   it('rejects cross-window streaming subscription control', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     const close = vi.fn()
     const sendBinary = vi.fn()
     subscribeRemoteRuntimeRequestMock.mockResolvedValue({
@@ -1441,7 +2180,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('closes a streaming subscription that resolves after the sender is destroyed', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     const close = vi.fn()
     let resolveSubscribe: (value: {
       requestId: string
@@ -1518,8 +2257,105 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     })
   })
 
+  it.each([
+    { method: 'terminal.multiplex', includeExpectedRevision: true },
+    { method: 'browser.screencast', includeExpectedRevision: true },
+    { method: 'terminal.multiplex', includeExpectedRevision: false },
+    { method: 'browser.screencast', includeExpectedRevision: false }
+  ])(
+    'closes a pending $method subscription after same-id re-pair (expected revision: $includeExpectedRevision)',
+    async ({ method, includeExpectedRevision }) => {
+      registerRuntimeEnvironmentHandlers(store as never)
+      const close = vi.fn()
+      const sendBinary = vi.fn(() => true)
+      let emitRemoteBinary: (bytes: Uint8Array<ArrayBufferLike>) => void = () => {}
+      let resolveSubscribe: (value: {
+        requestId: string
+        close: () => void
+        sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => boolean
+      }) => void = () => {}
+      subscribeRemoteRuntimeRequestMock.mockImplementation(
+        (_pairing, _method, _params, _timeoutMs, callbacks) => {
+          emitRemoteBinary = callbacks.onBinary
+          return new Promise((resolve) => {
+            resolveSubscribe = resolve
+          })
+        }
+      )
+
+      const add = handler<
+        { name: string; pairingCode: string },
+        { environment: { id: string; name: string } }
+      >('runtimeEnvironments:addFromPairingCode')
+      const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
+      const savedEnvironment = environmentStore.resolveEnvironment(
+        userDataPath,
+        added.environment.id
+      )
+      const pairingRevision = savedEnvironment.pairingRevision ?? savedEnvironment.createdAt
+      const senderSend = vi.fn()
+      const subscribe = handler<
+        {
+          selector: string
+          method: string
+          params?: unknown
+          subscriptionId: string
+          expectedEnvironmentPairingRevision?: number
+        },
+        { subscriptionId: string; requestId: string }
+      >('runtimeEnvironments:subscribe')
+      const resultPromise = subscribe(
+        {
+          sender: {
+            id: 1,
+            isDestroyed: () => false,
+            send: senderSend,
+            once: vi.fn(),
+            removeListener: vi.fn()
+          }
+        },
+        {
+          selector: added.environment.id,
+          method,
+          params: {},
+          subscriptionId: `pending-${method}-${includeExpectedRevision ? 'current' : 'legacy'}`,
+          ...(includeExpectedRevision
+            ? { expectedEnvironmentPairingRevision: pairingRevision }
+            : {})
+        }
+      )
+
+      await vi.waitFor(() => expect(subscribeRemoteRuntimeRequestMock).toHaveBeenCalledTimes(1))
+      environmentStore.updateEnvironmentFromPairingCode(userDataPath, added.environment.id, {
+        pairingCode: pairingCode('ws://127.0.0.1:7678')
+      })
+      invalidateRuntimeEnvironmentTransport(added.environment.id)
+
+      emitRemoteBinary(new Uint8Array([1, 2, 3]))
+      expect(senderSend).not.toHaveBeenCalled()
+      resolveSubscribe({ requestId: 'retired-stream', close, sendBinary })
+
+      await expect(resultPromise).rejects.toThrow(
+        'Runtime environment pairing changed; refresh and try again'
+      )
+      expect(close).toHaveBeenCalledTimes(1)
+
+      const binaryListener = onMock.mock.calls.find(
+        (call) => call[0] === 'runtimeEnvironments:subscriptionBinary'
+      )?.[1] as (_event: unknown, args: unknown) => void
+      binaryListener(
+        { sender: { id: 1 } },
+        {
+          subscriptionId: `pending-${method}-${includeExpectedRevision ? 'current' : 'legacy'}`,
+          bytes: new Uint8Array([4, 5, 6])
+        }
+      )
+      expect(sendBinary).not.toHaveBeenCalled()
+    }
+  )
+
   it('removes the destroyed listener when streaming subscription setup rejects', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     subscribeRemoteRuntimeRequestMock.mockRejectedValue(new Error('connect failed'))
 
     const add = handler<

@@ -1,17 +1,29 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   TERMINAL_LIVE_INPUT_MAX_BYTES,
+  applyDisabledTerminalLiveInputHandles,
   clearTerminalLiveInputFocusTimer,
   defaultTerminalLiveInputHandles,
+  filterTerminalLiveInputDefaultCandidates,
+  focusTerminalLiveInputTarget,
   getTerminalLiveSpecialKeyBytes,
   isTerminalLiveInputWithinByteLimit,
   pruneTerminalLiveInputHandles,
   scheduleTerminalLiveInputFocus,
+  type TerminalLiveInputFocusTarget,
   type TerminalLiveInputFocusTimerRef
 } from './terminal-live-input'
 
 function createTimerRef(): TerminalLiveInputFocusTimerRef {
   return { current: null }
+}
+
+function createFocusTarget(isFocused: () => boolean): TerminalLiveInputFocusTarget {
+  return {
+    blur: vi.fn(),
+    focus: vi.fn(),
+    isFocused
+  }
 }
 
 describe('terminal live input', () => {
@@ -101,6 +113,35 @@ describe('terminal live input', () => {
     expect(result.defaultedHandles).toBe(defaulted)
   })
 
+  it('does not default persisted buffered-mode handles back to live input on reentry', () => {
+    const defaultableHandles = filterTerminalLiveInputDefaultCandidates(
+      ['pty-1', 'pty-2'],
+      new Set(['pty-1'])
+    )
+
+    const result = defaultTerminalLiveInputHandles(
+      new Set(),
+      new Set(['pty-1']),
+      defaultableHandles
+    )
+
+    expect(defaultableHandles).toEqual(['pty-2'])
+    expect([...result.enabledHandles]).toEqual(['pty-2'])
+    expect([...result.defaultedHandles]).toEqual(['pty-1', 'pty-2'])
+  })
+
+  it('reconciles persisted buffered-mode handles with currently enabled live input', () => {
+    const result = applyDisabledTerminalLiveInputHandles(
+      new Set(['pty-1', 'pty-2']),
+      new Set(['pty-2']),
+      new Set(['pty-1'])
+    )
+
+    expect(result.changed).toBe(true)
+    expect([...result.enabledHandles]).toEqual(['pty-2'])
+    expect([...result.defaultedHandles]).toEqual(['pty-2', 'pty-1'])
+  })
+
   it('prunes terminal handles that disappear from session snapshots', () => {
     const result = pruneTerminalLiveInputHandles(
       new Set(['pty-1', 'pty-stale']),
@@ -149,5 +190,38 @@ describe('terminal live input', () => {
 
     expect(focus).not.toHaveBeenCalled()
     expect(timerRef.current).toBeNull()
+  })
+
+  it('refocuses an already-focused capture input when the keyboard is closed', () => {
+    const input = createFocusTarget(() => true)
+    const refocus = vi.fn()
+
+    focusTerminalLiveInputTarget(input, { keyboardHeight: 0, refocus })
+
+    expect(input.blur).toHaveBeenCalledTimes(1)
+    expect(input.focus).not.toHaveBeenCalled()
+    expect(refocus).toHaveBeenCalledTimes(1)
+  })
+
+  it('focuses the capture input directly when the keyboard is open', () => {
+    const input = createFocusTarget(() => true)
+    const refocus = vi.fn()
+
+    focusTerminalLiveInputTarget(input, { keyboardHeight: 240, refocus })
+
+    expect(input.blur).not.toHaveBeenCalled()
+    expect(input.focus).toHaveBeenCalledTimes(1)
+    expect(refocus).not.toHaveBeenCalled()
+  })
+
+  it('focuses the capture input directly when it is not already focused', () => {
+    const input = createFocusTarget(() => false)
+    const refocus = vi.fn()
+
+    focusTerminalLiveInputTarget(input, { keyboardHeight: 0, refocus })
+
+    expect(input.blur).not.toHaveBeenCalled()
+    expect(input.focus).toHaveBeenCalledTimes(1)
+    expect(refocus).not.toHaveBeenCalled()
   })
 })

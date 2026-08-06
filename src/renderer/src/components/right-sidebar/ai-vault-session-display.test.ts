@@ -4,11 +4,14 @@ import {
   latestSessionConversationTurn,
   recentSessionConversationTurns,
   sessionDetailConversationTurns,
+  sessionModelLabel,
+  sessionPromptPreview,
   sessionPreviewSearchText
 } from './ai-vault-session-display'
 
 const baseSession: AiVaultSession = {
   id: 'codex:1',
+  executionHostId: 'local',
   agent: 'codex',
   sessionId: 'session-1',
   title: 'Fix the flaky golden tests',
@@ -28,7 +31,10 @@ const baseSession: AiVaultSession = {
     { role: 'assistant', text: 'I updated the fixture ordering', timestamp: null },
     { role: 'system', text: 'hidden runtime bookkeeping', timestamp: null }
   ],
-  resumeCommand: "cd '/Users/ada/repo/app' && codex resume 'session-1'"
+  queuedMessageCount: 0,
+  subagentTranscriptCount: 0,
+  resumeCommand: "cd '/Users/ada/repo/app' && codex resume 'session-1'",
+  subagent: null
 }
 
 describe('ai vault session display', () => {
@@ -88,5 +94,71 @@ describe('ai vault session display', () => {
       'I updated the fixture ordering',
       'Added a regression test'
     ])
+  })
+
+  it('labels the session model only when the transcript recorded one', () => {
+    expect(sessionModelLabel(baseSession)).toBe('gpt-5.5')
+    expect(sessionModelLabel({ ...baseSession, model: null })).toBeNull()
+  })
+
+  it('prefers the stored firstUserPrompt over sliding preview turns', () => {
+    expect(
+      sessionPromptPreview({
+        ...baseSession,
+        firstUserPrompt: 'Original long first prompt that scrolled out of preview',
+        previewMessages: [
+          { role: 'user', text: 'Later user turn still in the preview window', timestamp: null },
+          { role: 'assistant', text: 'Later reply', timestamp: null }
+        ]
+      })
+    ).toEqual({
+      text: 'Original long first prompt that scrolled out of preview',
+      source: 'first-user-prompt'
+    })
+  })
+
+  it('marks list-scan fallback text as a preview-window prompt', () => {
+    expect(sessionPromptPreview(baseSession)).toEqual({
+      text: 'Please fix the flaky golden tests',
+      source: 'preview-window'
+    })
+    expect(
+      sessionPromptPreview({
+        ...baseSession,
+        previewMessages: [{ role: 'assistant', text: 'Only agent text', timestamp: null }]
+      })
+    ).toBeNull()
+  })
+
+  it('keeps a truncated sliding-window fallback available as a recent prompt', () => {
+    expect(
+      sessionPromptPreview({
+        ...baseSession,
+        previewMessagesTruncated: true,
+        previewMessages: [
+          { role: 'user', text: 'Later user turn still in the preview window', timestamp: null },
+          { role: 'assistant', text: 'Later reply', timestamp: null }
+        ]
+      })
+    ).toEqual({
+      text: 'Later user turn still in the preview window',
+      source: 'preview-window'
+    })
+  })
+
+  it('still prefers a stored firstUserPrompt when the window has truncated', () => {
+    expect(
+      sessionPromptPreview({
+        ...baseSession,
+        previewMessagesTruncated: true,
+        firstUserPrompt: 'Original long first prompt that scrolled out of preview',
+        previewMessages: [
+          { role: 'user', text: 'Later user turn still in the preview window', timestamp: null }
+        ]
+      })
+    ).toEqual({
+      text: 'Original long first prompt that scrolled out of preview',
+      source: 'first-user-prompt'
+    })
   })
 })

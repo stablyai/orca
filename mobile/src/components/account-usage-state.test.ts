@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   getInactiveProviderUsage,
   getUsageBarState,
+  getWindowResetLabel,
   hasActiveProviderUsage,
   hasRenderableUsage,
   type AccountsSnapshot,
@@ -34,11 +35,21 @@ function makeSnapshot(
   } = {}
 ): AccountsSnapshot {
   return {
-    claude: { accounts: overrides.claudeAccounts ?? [], activeAccountId: null },
-    codex: { accounts: overrides.codexAccounts ?? [], activeAccountId: null },
+    claude: {
+      accounts: overrides.claudeAccounts ?? [],
+      activeAccountId: null,
+      activeAccountIdsByRuntime: { host: null, wsl: {} }
+    },
+    codex: {
+      accounts: overrides.codexAccounts ?? [],
+      activeAccountId: null,
+      activeAccountIdsByRuntime: { host: null, wsl: {} }
+    },
     rateLimits: {
       claude: overrides.claudeLimits ?? null,
       codex: overrides.codexLimits ?? null,
+      claudeTarget: { runtime: 'host', wslDistro: null },
+      codexTarget: { runtime: 'host', wslDistro: null },
       inactiveClaudeAccounts: overrides.inactiveClaudeAccounts ?? [],
       inactiveCodexAccounts: overrides.inactiveCodexAccounts ?? []
     }
@@ -114,6 +125,65 @@ describe('getInactiveProviderUsage', () => {
     })
 
     expect(getInactiveProviderUsage(snapshot, 'claude', 'account-1')?.rateLimits).toBe(limits)
+  })
+})
+
+describe('getWindowResetLabel', () => {
+  const now = 1_700_000_000_000
+  const min = 60_000
+  const hour = 60 * min
+  const day = 24 * hour
+
+  function makeWindow(resetsAt: number | null): ProviderRateLimits['session'] {
+    return { usedPercent: 13, windowMinutes: 300, resetsAt, resetDescription: null }
+  }
+
+  it('is null when there are no limits or the window has no reset timestamp', () => {
+    expect(getWindowResetLabel(null, 'session', now)).toBe(null)
+    expect(getWindowResetLabel(makeLimits({ status: 'ok' }), 'session', now)).toBe(null)
+    expect(
+      getWindowResetLabel(makeLimits({ status: 'ok', session: makeWindow(null) }), 'session', now)
+    ).toBe(null)
+  })
+
+  it('formats minutes, hours+minutes, and days+hours like the desktop tooltip', () => {
+    expect(
+      getWindowResetLabel(makeLimits({ session: makeWindow(now + 47 * min) }), 'session', now)
+    ).toBe('Resets in 47m')
+    expect(
+      getWindowResetLabel(
+        makeLimits({ session: makeWindow(now + 3 * hour + 54 * min) }),
+        'session',
+        now
+      )
+    ).toBe('Resets in 3h 54m')
+    expect(
+      getWindowResetLabel(
+        makeLimits({ weekly: makeWindow(now + 6 * day + 7 * hour) }),
+        'weekly',
+        now
+      )
+    ).toBe('Resets in 6d 7h')
+  })
+
+  it('formats exact hours and exact days without a zero remainder', () => {
+    expect(
+      getWindowResetLabel(makeLimits({ session: makeWindow(now + 2 * hour) }), 'session', now)
+    ).toBe('Resets in 2h')
+    expect(
+      getWindowResetLabel(makeLimits({ weekly: makeWindow(now + 7 * day) }), 'weekly', now)
+    ).toBe('Resets in 7d')
+  })
+
+  it('reports "Resets now" for a reset timestamp in the past', () => {
+    expect(
+      getWindowResetLabel(makeLimits({ session: makeWindow(now - min) }), 'session', now)
+    ).toBe('Resets now')
+  })
+
+  it('reads the requested window only', () => {
+    const limits = makeLimits({ session: makeWindow(now + hour) })
+    expect(getWindowResetLabel(limits, 'weekly', now)).toBe(null)
   })
 })
 

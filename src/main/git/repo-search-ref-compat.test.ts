@@ -9,10 +9,12 @@ vi.mock('./runner', () => ({
   gitExecFileSync: vi.fn()
 }))
 
+import { clearGitCapabilityStateForTests } from './git-capability-state'
 import { searchBaseRefs } from './repo'
 
 describe('searchBaseRefs git compatibility', () => {
   afterEach(() => {
+    clearGitCapabilityStateForTests()
     gitExecFileAsyncMock.mockReset()
   })
 
@@ -36,12 +38,14 @@ describe('searchBaseRefs git compatibility', () => {
     })
 
     await expect(searchBaseRefs('/repo', '', 1)).resolves.toEqual(['origin/main'])
+    await expect(searchBaseRefs('/repo', '', 1)).resolves.toEqual(['origin/main'])
     const forEachRefCalls = gitExecFileAsyncMock.mock.calls.filter(
       (call) => (call[0] as string[])[0] === 'for-each-ref'
     )
-    expect(forEachRefCalls).toHaveLength(2)
+    expect(forEachRefCalls).toHaveLength(3)
     expect(forEachRefCalls[0][0]).toContain('--exclude=refs/remotes/**/HEAD')
     expect(forEachRefCalls[1][0]).not.toContain('--exclude=refs/remotes/**/HEAD')
     expect(forEachRefCalls[1][0]).toContain('--count=104')
+    expect(forEachRefCalls[2][0]).not.toContain('--exclude=refs/remotes/**/HEAD')
   })
 })

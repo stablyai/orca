@@ -6,15 +6,24 @@ import {
   escapeWslShCommandForWindows,
   quotePosixShell
 } from '../../shared/wsl-login-shell-command'
+import { ensureShellReadyWrappersAt } from './local-pty-shell-ready'
 import {
   encodePowerShellCommand,
   getPowerShellOsc133Bootstrap
 } from '../powershell-osc133-bootstrap'
+import { quoteStartupArg } from '../../shared/tui-agent-startup-shell'
 
 const CMD_EXE_COMMAND_LINE_MAX_CHARS = 8191
 const STARTUP_COMMAND_TEXT_MAX_CHARS = 6000
 const POWERSHELL_ENCODED_COMMAND_ARG_MAX_CHARS = 28_000
 const CMD_UTF8_SETUP_COMMAND = 'chcp 65001 > nul'
+// Why: Git for Windows' bash inherits the ConPTY console's OEM code page
+// (CP437), so a TUI that writes UTF-8 bytes straight to the console — agents
+// like Claude Code use WriteFile, not WriteConsoleW — renders as mojibake
+// (`❯` -> `Γ¥»`). Switch the console to UTF-8, then exec the normal interactive
+// login shell; cmd.exe and PowerShell already do the equivalent. The `;` (not
+// `&&`) keeps startup working even if chcp.com is missing.
+const GIT_BASH_UTF8_LOGIN_COMMAND = 'chcp.com 65001 >/dev/null 2>&1; exec "$BASH" --login -i'
 
 /** Result of resolving a Windows shell to its launch args + effective cwd.
  *
@@ -54,6 +63,11 @@ function getCmdShellArgStartupCommand(command?: string): string | null {
   if (!command || command.length > STARTUP_COMMAND_TEXT_MAX_CHARS) {
     return null
   }
+  // Why: node-pty's C-runtime argv escaping changes normal cmd quotes in `/K`
+  // delivery, while the interactive parser preserves them through stdin.
+  if (command.includes('"')) {
+    return null
+  }
   const commandArg = `${CMD_UTF8_SETUP_COMMAND} & ${command}`
   if (commandArg.length > CMD_EXE_COMMAND_LINE_MAX_CHARS) {
     return null
@@ -67,11 +81,22 @@ function getCmdShellArgStartupCommand(command?: string): string | null {
  * Short startup commands are appended to the bootstrap and marked as delivered;
  * large payloads return the bootstrap alone so stdin delivery remains available.
  */
-function getPowerShellEncodedCommand(startupCommand?: string): {
+function getPowerShellRestoreCwdCommand(cwd: string): string {
+  return [
+    '',
+    '# Profiles can change location; restore the PTY cwd after profile loading.',
+    `try { Set-Location -LiteralPath ${quoteStartupArg(cwd, 'powershell')} -ErrorAction Stop } catch { Write-Warning "Failed to restore working directory: $_" }`
+  ].join('\n')
+}
+
+function getPowerShellEncodedCommand(
+  cwd: string,
+  startupCommand?: string
+): {
   encodedCommand: string
   startupCommandDeliveredInShellArgs?: boolean
 } {
-  const bootstrap = getPowerShellOsc133Bootstrap()
+  const bootstrap = `${getPowerShellOsc133Bootstrap()}${getPowerShellRestoreCwdCommand(cwd)}`
   if (!startupCommand || startupCommand.length > STARTUP_COMMAND_TEXT_MAX_CHARS) {
     return { encodedCommand: encodePowerShellCommand(bootstrap) }
   }
@@ -94,6 +119,7 @@ function getPowerShellEncodedCommand(startupCommand?: string): {
  * Builds wsl.exe arguments that enter the target directory through the distro shell.
  */
 function buildWslShellArgs(linuxCwd: string, distro?: string): string[] {
+  ensureShellReadyWrappersAt()
   const setupCommand = [
     `cd ${quotePosixShell(linuxCwd)}`,
     'export PATH="$HOME/.local/bin:$PATH"',
@@ -154,7 +180,7 @@ export function resolveWindowsShellLaunchArgs(
   }
 
   if (shellBasename === 'powershell.exe' || shellBasename === 'pwsh.exe') {
-    const powerShellCommand = getPowerShellEncodedCommand(startupCommand)
+    const powerShellCommand = getPowerShellEncodedCommand(nativeCwd, startupCommand)
     // Why: foreground-process status on Windows depends on OSC 133 C/D, and
     // PowerShell needs a prompt/readline bootstrap after profiles finish.
     return {
@@ -169,7 +195,7 @@ export function resolveWindowsShellLaunchArgs(
 
   if (isWindowsGitBashShellPath(shellPath)) {
     return {
-      shellArgs: ['--login', '-i'],
+      shellArgs: ['-c', GIT_BASH_UTF8_LOGIN_COMMAND],
       effectiveCwd: nativeCwd,
       validationCwd: nativeCwd
     }

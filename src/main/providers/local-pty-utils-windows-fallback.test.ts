@@ -76,13 +76,13 @@ describe('spawnShellWithFallback on Windows', () => {
       1,
       PWSH7,
       attempts[0].shellArgs,
-      expect.objectContaining({ cwd: 'C:\\repo' })
+      expect.objectContaining({ cwd: 'C:\\repo', useConptyDll: true })
     )
     expect(ptySpawn).toHaveBeenNthCalledWith(
       2,
       WINDOWS_POWERSHELL,
       attempts[1].shellArgs,
-      expect.objectContaining({ cwd: 'C:\\repo' })
+      expect.objectContaining({ cwd: 'C:\\repo', useConptyDll: true })
     )
   })
 

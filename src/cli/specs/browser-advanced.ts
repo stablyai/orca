@@ -29,6 +29,7 @@ export const BROWSER_ADVANCED_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['cookie', 'delete'],
+    destructive: true,
     summary: 'Delete a cookie by name',
     usage:
       'orca cookie delete --name <n> [--domain <d>] [--url <u>] [--worktree <selector>] [--json]',
@@ -240,6 +241,7 @@ export const BROWSER_ADVANCED_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['storage', 'local', 'clear'],
+    destructive: true,
     summary: 'Clear all localStorage',
     usage: 'orca storage local clear [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'worktree']
@@ -258,6 +260,7 @@ export const BROWSER_ADVANCED_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['storage', 'session', 'clear'],
+    destructive: true,
     summary: 'Clear all sessionStorage',
     usage: 'orca storage session clear [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'worktree']

@@ -136,7 +136,7 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
                 {translate(
                   'auto.components.sidebar.OrcaYamlTrustDialog.aa3ffb33fb',
                   "This repository's"
-                )}
+                )}{' '}
                 <code>
                   {translate('auto.components.sidebar.OrcaYamlTrustDialog.79afc6772b', 'orca.yaml')}
                 </code>{' '}
@@ -148,7 +148,7 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
                 {translate(
                   'auto.components.sidebar.OrcaYamlTrustDialog.bf800b7e04',
                   '. Only run if you trust'
-                )}
+                )}{' '}
                 {repoName}.
               </>
             )}
@@ -190,12 +190,11 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
             onChange={(event) => setAlwaysTrust(event.target.checked)}
           />
           <span className="text-xs font-medium text-foreground">
-            {translate('auto.components.sidebar.OrcaYamlTrustDialog.531689199b', 'Always trust')}
+            {translate('auto.components.sidebar.OrcaYamlTrustDialog.531689199b', 'Always trust')}{' '}
             <code>
               {translate('auto.components.sidebar.OrcaYamlTrustDialog.79afc6772b', 'orca.yaml')}
             </code>{' '}
-            {translate('auto.components.sidebar.OrcaYamlTrustDialog.c494b3ccb1', 'in')}
-            {repoName}
+            {translate('auto.components.sidebar.OrcaYamlTrustDialog.c494b3ccb1', 'in')} {repoName}
           </span>
         </label>
 

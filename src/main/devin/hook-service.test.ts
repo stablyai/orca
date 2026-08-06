@@ -64,6 +64,11 @@ describe('DevinHookService', () => {
     }
     const script = readFileSync(getDevinManagedScriptPath(), 'utf8')
     expect(script).toContain('/hook/devin')
+    // Why: payload is piped to curl via stdin (`payload@-`) so it never lands
+    // on the curl command line (EDR oversized-command-line false positive).
+    expect(script).toContain('printf \'%s\' "$payload" | curl')
+    expect(script).toContain('--data-urlencode "payload@-"')
+    expect(script).not.toContain('--data-urlencode "payload=${payload}"')
   })
 
   it('preserves unrelated keys in Devin config when installing hooks', () => {
@@ -121,9 +126,12 @@ describe('DevinHookService', () => {
     Object.defineProperty(process, 'platform', { value: 'win32' })
     try {
       const scriptPath = 'C:\\Users\\Ada Lovelace\\.orca\\agent-hooks\\devin-hook.cmd'
-      expect(getDevinManagedCommand(scriptPath)).toBe(
-        'cmd /d /s /c ""C:\\Users\\Ada Lovelace\\.orca\\agent-hooks\\devin-hook.cmd""'
-      )
+      const command = getDevinManagedCommand(scriptPath)
+      const encoded = command.match(/ -EncodedCommand (\S+)$/)?.[1]
+      expect(encoded).toBeDefined()
+      const decoded = Buffer.from(encoded!, 'base64').toString('utf16le')
+      expect(decoded).toContain(`Test-Path -LiteralPath '${scriptPath}' -PathType Leaf`)
+      expect(decoded).toContain('[Console]::In.ReadToEnd() | Out-Null')
     } finally {
       Object.defineProperty(process, 'platform', { value: previous })
     }

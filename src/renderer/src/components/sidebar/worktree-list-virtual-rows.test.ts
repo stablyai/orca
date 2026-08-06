@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import type { VirtualItem } from '@tanstack/react-virtual'
 import {
   HOST_STICKY_PINNED_HEIGHT,
+  buildLineageRowRekeyMap,
   extractWorktreeVirtualRowIndexes,
   getActiveStickyIndexesForScroll,
+  getRenderRowKey,
   getStickyHeaderIndexes,
   pruneStaleVirtualRowElementCache,
   type RenderRow
@@ -127,6 +129,45 @@ describe('getActiveStickyIndexesForScroll', () => {
       })
     ).toEqual({ hostIndex: null, groupIndex: 0 })
   })
+
+  it('does not pin a Project header whose virtual item is not mounted yet (#10088)', () => {
+    // Why: after scrollToIndex/reveal, rangeStart can sit on group-b1 while
+    // TanStack has only mounted host-b (and maybe a later item) this frame.
+    const partialItems = [virtualItem(4, 400), virtualItem(6, 600)]
+    const result = getActiveStickyIndexesForScroll({
+      rows,
+      rangeStartIndex: 5,
+      scrollOffset: 500,
+      stickyHeaderIndexes,
+      virtualItems: partialItems
+    })
+    expect(result.hostIndex).toBe(4)
+    // group-b1 (index 5) must not become sticky without geometry — that is what
+    // paints the project label across the host card.
+    expect(result.groupIndex).toBeNull()
+  })
+
+  it('keeps the previous mounted Project sticky when the next group is unmounted', () => {
+    const multiGroupRows: RenderRow[] = [
+      hostRow('a'),
+      groupRow('a1'),
+      itemStub('wt-1'),
+      groupRow('a2'),
+      itemStub('wt-2')
+    ]
+    const multiSticky = getStickyHeaderIndexes(multiGroupRows)
+    // rangeStart points at a2 (index 3) but only host + a1 + item are mounted.
+    const partialItems = [virtualItem(0, 0), virtualItem(1, 100), virtualItem(2, 200)]
+    const result = getActiveStickyIndexesForScroll({
+      rows: multiGroupRows,
+      rangeStartIndex: 3,
+      scrollOffset: 250,
+      stickyHeaderIndexes: multiSticky,
+      virtualItems: partialItems
+    })
+    expect(result.hostIndex).toBe(0)
+    expect(result.groupIndex).toBe(1)
+  })
 })
 
 describe('extractWorktreeVirtualRowIndexes', () => {
@@ -143,6 +184,91 @@ describe('extractWorktreeVirtualRowIndexes', () => {
       rows
     })
     expect(indexes).toContain(0)
+  })
+})
+
+describe('buildLineageRowRekeyMap', () => {
+  // Mirrors buildWorktreeRow: rowKey is `${sectionKey}:${worktree.id}`.
+  function worktreeRow(sectionKey: string, worktreeId: string): RenderRow {
+    return {
+      type: 'item',
+      rowKey: `${sectionKey}:${worktreeId}`,
+      sectionKey,
+      worktree: { id: worktreeId },
+      depth: 0,
+      groupDepth: 0,
+      lineageTrail: [],
+      isLastLineageChild: true,
+      lineageChildCount: 0
+    } as unknown as RenderRow
+  }
+
+  function lineageGroupRow(sectionKey: string, parentId: string, childIds: string[]): RenderRow {
+    return {
+      type: 'lineage-group',
+      key: `${sectionKey}:lineage:${parentId}`,
+      rows: [parentId, ...childIds].map(
+        (id) => worktreeRow(sectionKey, id) as Extract<RenderRow, { type: 'item' }>
+      )
+    }
+  }
+
+  it('folds every lineage-group member onto the group key', () => {
+    const group = lineageGroupRow('all', 'p', ['c1', 'c2'])
+    const rekeys = buildLineageRowRekeyMap([group])
+
+    // The parent's own row key is what an anchor recorded before the child
+    // existed; all members now live inside the single group row.
+    expect(rekeys.get('wt:all:p')).toBe('lineage-group:all:lineage:p')
+    expect(rekeys.get('wt:all:c1')).toBe('lineage-group:all:lineage:p')
+    expect(rekeys.get('wt:all:c2')).toBe('lineage-group:all:lineage:p')
+    expect(getRenderRowKey(group)).toBe('lineage-group:all:lineage:p')
+  })
+
+  it('dissolves a group key back onto the plain item row', () => {
+    // Last child deleted: lineageChildCount is already 0, but an anchor still
+    // holds the group key, so the reverse mapping must be unguarded.
+    const rekeys = buildLineageRowRekeyMap([worktreeRow('all', 'p')])
+
+    expect(rekeys.get('lineage-group:all:lineage:p')).toBe('wt:all:p')
+  })
+
+  it('round-trips the fold and dissolve directions for the same worktree', () => {
+    const folded = buildLineageRowRekeyMap([lineageGroupRow('all', 'p', ['c1'])])
+    const dissolved = buildLineageRowRekeyMap([worktreeRow('all', 'p')])
+
+    expect(dissolved.get(folded.get('wt:all:p') as string)).toBe('wt:all:p')
+  })
+
+  it('keeps the same worktree distinct across sections', () => {
+    // The same worktree renders in both Pinned and All; rowKey embeds the
+    // section so a pinned anchor must never follow the All copy.
+    const rekeys = buildLineageRowRekeyMap([
+      lineageGroupRow('pinned', 'p', ['c1']),
+      lineageGroupRow('all', 'p', ['c1'])
+    ])
+
+    expect(rekeys.get('wt:pinned:p')).toBe('lineage-group:pinned:lineage:p')
+    expect(rekeys.get('wt:all:p')).toBe('lineage-group:all:lineage:p')
+    expect(rekeys.get('wt:pinned:c1')).toBe('lineage-group:pinned:lineage:p')
+    expect(rekeys.get('wt:all:c1')).toBe('lineage-group:all:lineage:p')
+
+    const dissolvedRekeys = buildLineageRowRekeyMap([
+      worktreeRow('pinned', 'p'),
+      worktreeRow('all', 'p')
+    ])
+    expect(dissolvedRekeys.get('lineage-group:pinned:lineage:p')).toBe('wt:pinned:p')
+    expect(dissolvedRekeys.get('lineage-group:all:lineage:p')).toBe('wt:all:p')
+  })
+
+  it('contributes nothing for non-lineage row types', () => {
+    expect(
+      buildLineageRowRekeyMap([hostRow('a'), groupRow('a1'), hostRow('b'), groupRow('b1')]).size
+    ).toBe(0)
+  })
+
+  it('is empty for an empty row list', () => {
+    expect(buildLineageRowRekeyMap([]).size).toBe(0)
   })
 })
 

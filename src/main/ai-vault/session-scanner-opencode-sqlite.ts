@@ -5,6 +5,10 @@ import {
   finalizeSession,
   updateTimeline
 } from './session-scanner-accumulator'
+import {
+  normalizeFullFirstUserPromptText,
+  shouldCaptureFullFirstUserPrompt
+} from './session-scanner-first-user-prompt'
 import { normalizeTitleText } from './session-scanner-values'
 import SyncDatabase from '../sqlite/sync-database'
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
@@ -16,6 +20,14 @@ import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
 // session-scanner-opencode-sqlite-discovery.ts.
 
 const OPENCODE_SQLITE_PREVIEW_LIMIT = 5
+// Why (#8864): a heavy session can hold ~10K parts (25-150 KB tool-output
+// blobs). Join preview parts against only the newest N messages instead of
+// scanning every part of the session, using the real (session_id, time_created,
+// id) index. Bounds the read to those messages' parts; the 15 s parse timeout
+// caps the residual for a single pathological giant part.
+const OPENCODE_SQLITE_PREVIEW_MESSAGE_WINDOW = 100
+// Bounds a pathological single message; a real typed prompt is a handful of parts.
+const FIRST_USER_PROMPT_PART_LIMIT = 512
 
 type SessionRow = {
   id: string
@@ -148,6 +160,58 @@ function extractPartText(partData: string): string | null {
   }
 }
 
+function readFirstUserPromptFromOpenCodeDb(db: SyncDatabase, sessionId: string): string | null {
+  if (
+    !canCountOpenCodeMessages(db) ||
+    !tableExists(db, 'part') ||
+    !columnExists(db, 'message', 'id') ||
+    !columnExists(db, 'part', 'message_id') ||
+    !columnExists(db, 'part', 'time_created') ||
+    !columnExists(db, 'part', 'data')
+  ) {
+    return null
+  }
+
+  try {
+    // Why: pin to the single earliest user message that actually has text parts,
+    // then take all of its parts. Ordering parts across every user message would
+    // pad a short first prompt with later turns and truncate a long one.
+    const rows = db
+      .prepare(
+        `SELECT p.data AS part_data
+         FROM part p
+         WHERE p.message_id = (
+                 SELECT m.id
+                 FROM message m
+                 JOIN part fp ON fp.message_id = m.id
+                 WHERE m.session_id = ?
+                   AND json_extract(m.data, '$.role') = 'user'
+                   AND json_extract(fp.data, '$.type') = 'text'
+                 ORDER BY m.time_created ASC, m.id ASC
+                 LIMIT 1
+               )
+           AND json_extract(p.data, '$.type') = 'text'
+         ORDER BY p.time_created ASC, p.rowid ASC
+         LIMIT ${FIRST_USER_PROMPT_PART_LIMIT}`
+      )
+      .all(sessionId) as { part_data: string }[]
+
+    const parts: string[] = []
+    for (const row of rows) {
+      const text = extractPartText(row.part_data)
+      if (text) {
+        parts.push(text)
+      }
+    }
+    if (parts.length === 0) {
+      return null
+    }
+    return normalizeFullFirstUserPromptText(parts.join('\n'))
+  } catch {
+    return null
+  }
+}
+
 function buildPreviewQuery(db: SyncDatabase): string | null {
   if (
     !canCountOpenCodeMessages(db) ||
@@ -164,10 +228,12 @@ function buildPreviewQuery(db: SyncDatabase): string | null {
                  p.time_created,
                  json_extract(m.data, '$.summary.title') AS summary_title,
                  json_extract(m.data, '$.summary.body') AS summary_body
-          FROM message m
+          FROM (SELECT id, data FROM message
+                WHERE session_id = ?
+                ORDER BY time_created DESC, id DESC
+                LIMIT ${OPENCODE_SQLITE_PREVIEW_MESSAGE_WINDOW}) m
           JOIN part p ON p.message_id = m.id
-          WHERE m.session_id = ?
-            AND json_extract(m.data, '$.role') IN ('user','assistant')
+          WHERE json_extract(m.data, '$.role') IN ('user','assistant')
             AND json_extract(p.data, '$.type') = 'text'
           ORDER BY p.time_created DESC
           LIMIT ?`
@@ -228,9 +294,17 @@ export async function parseOpenCodeSqliteSession(args: {
 
     const previewSql = buildPreviewQuery(db)
     if (previewSql) {
-      const previewRows = db
+      // Why: SQL already dropped anything older than the newest-N window, so the
+      // accumulator never shifts and cannot detect the truncation itself. Ask for
+      // one extra row so an exactly-full window is not mistaken for a trimmed one.
+      const probedRows = db
         .prepare(previewSql)
-        .all(sessionId, OPENCODE_SQLITE_PREVIEW_LIMIT) as PreviewRow[]
+        .all(sessionId, OPENCODE_SQLITE_PREVIEW_LIMIT + 1) as PreviewRow[]
+      if (probedRows.length > OPENCODE_SQLITE_PREVIEW_LIMIT) {
+        accumulator.previewMessagesTruncated = true
+      }
+      // Newest-first, so the probe row to drop is the oldest one at the tail.
+      const previewRows = probedRows.slice(0, OPENCODE_SQLITE_PREVIEW_LIMIT)
       // Why: query returns newest-first; push in chronological order so the
       // accumulator's ring buffer keeps the newest OPENCODE_SQLITE_PREVIEW_LIMIT
       // messages.
@@ -246,7 +320,9 @@ export async function parseOpenCodeSqliteSession(args: {
         addPreviewMessage(accumulator, {
           role: mapPreviewRole(previewRow.role),
           text,
-          timestamp: previewRow.time_created
+          timestamp: previewRow.time_created,
+          // Preview window is newest-N; first-prompt is loaded separately below.
+          seedFirstUserPrompt: false
         })
         if (previewRow.role === 'user' && !accumulator.title) {
           accumulator.title =
@@ -254,6 +330,12 @@ export async function parseOpenCodeSqliteSession(args: {
             normalizeTitleText(previewRow.summary_body ?? '')
         }
       }
+    }
+
+    // Why: list preview only joins the newest messages. On-demand copy needs the
+    // session's earliest real user text part, not a later turn still in the window.
+    if (shouldCaptureFullFirstUserPrompt()) {
+      accumulator.firstUserPrompt = readFirstUserPromptFromOpenCodeDb(db, sessionId)
     }
 
     return finalizeSession(accumulator, platform)

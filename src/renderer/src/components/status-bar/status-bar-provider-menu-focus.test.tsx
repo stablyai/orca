@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 const recordFeatureInteractionMock = vi.fn()
+const usagePercentageDisplayMock = 'used'
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
@@ -17,8 +18,15 @@ vi.mock('react', async () => {
 
 vi.mock('../../store', () => ({
   useAppStore: (
-    selector: (state: { recordFeatureInteraction: typeof recordFeatureInteractionMock }) => unknown
-  ) => selector({ recordFeatureInteraction: recordFeatureInteractionMock })
+    selector: (state: {
+      recordFeatureInteraction: typeof recordFeatureInteractionMock
+      usagePercentageDisplay: 'used'
+    }) => unknown
+  ) =>
+    selector({
+      recordFeatureInteraction: recordFeatureInteractionMock,
+      usagePercentageDisplay: usagePercentageDisplayMock
+    })
 }))
 
 vi.mock('./tooltip', () => ({
@@ -28,7 +36,8 @@ vi.mock('./tooltip', () => ({
   ProviderPanel: function ProviderPanel(props: Record<string, unknown>) {
     return { type: 'ProviderPanel', props }
   },
-  barColor: () => 'bg-green-500'
+  barColor: () => 'bg-green-500',
+  clampUsedPercent: (n: number) => Math.max(0, Math.min(100, Math.round(n)))
 }))
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
@@ -107,8 +116,10 @@ describe('ProviderDetailsMenu focus handoff', () => {
     const element = await renderProviderDetailsMenu()
     const dropdown = findChildByType(element, 'DropdownMenu')
     const content = findChildByType(element, 'DropdownMenuContent')
+    const providerPanel = findChildByType(element, 'ProviderPanel')
 
     expect(dropdown.props.modal).toBe(false)
+    expect(providerPanel.props.usagePercentageDisplay).toBe('used')
 
     const preventDefault = vi.fn()
     ;(content.props.onCloseAutoFocus as (event: { preventDefault: () => void }) => void)({

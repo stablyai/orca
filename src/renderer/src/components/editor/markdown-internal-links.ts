@@ -3,7 +3,10 @@ import {
   filesystemPathToFileUri,
   fileUriToFilesystemPath
 } from '../../../../shared/file-uri-path'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import {
+  isWindowsAbsolutePathLike,
+  relativePathInsideRoot
+} from '../../../../shared/cross-platform-path'
 
 // Pure classifier for markdown link targets. Called by the link-activation
 // dispatcher (activateMarkdownLink slice action) from three call sites —
@@ -31,13 +34,6 @@ export type MarkdownLinkTarget =
       column?: number
     }
 
-// Why: renderer runs with sandbox + contextIsolation, so process.platform is
-// unavailable. navigator.userAgent is the portable fallback (AGENTS.md).
-const ua = typeof navigator === 'undefined' ? '' : navigator.userAgent
-const isMacLike = ua.includes('Mac')
-const isWindowsLike = ua.includes('Windows')
-const caseInsensitiveFs = isMacLike || isWindowsLike
-
 const MARKDOWN_EXTENSIONS = new Set(['.md', '.mdx', '.markdown'])
 
 export function absolutePathToFileUri(filePath: string): string {
@@ -58,17 +54,6 @@ function normalizePathForCompare(p: string): string {
     np = np.slice(0, -1)
   }
   return np
-}
-
-function isDescendantOf(childAbs: string, parentAbs: string): boolean {
-  const child = normalizePathForCompare(childAbs)
-  const parent = normalizePathForCompare(parentAbs)
-  if (caseInsensitiveFs) {
-    const lc = child.toLowerCase()
-    const lp = parent.toLowerCase()
-    return lc === lp || lc.startsWith(`${lp}/`)
-  }
-  return child === parent || child.startsWith(`${parent}/`)
 }
 
 function hasMarkdownExtension(p: string): boolean {
@@ -125,25 +110,7 @@ function resolveRelativeToSource(rawHref: string, sourceFilePath: string): URL |
 }
 
 function computeRelativePath(absolutePath: string, worktreeRoot: string): string {
-  const parent = normalizePathForCompare(worktreeRoot)
-  const child = normalizePathForCompare(absolutePath)
-  const prefix = `${parent}/`
-  if (caseInsensitiveFs) {
-    if (child.toLowerCase() === parent.toLowerCase()) {
-      return ''
-    }
-    if (child.toLowerCase().startsWith(prefix.toLowerCase())) {
-      return child.slice(prefix.length)
-    }
-  } else {
-    if (child === parent) {
-      return ''
-    }
-    if (child.startsWith(prefix)) {
-      return child.slice(prefix.length)
-    }
-  }
-  return child
+  return relativePathInsideRoot(worktreeRoot, absolutePath) ?? normalizePathForCompare(absolutePath)
 }
 
 export function resolveMarkdownLinkTarget(
@@ -195,7 +162,7 @@ export function resolveMarkdownLinkTarget(
   if (
     worktreeRoot !== null &&
     hasMarkdownExtension(pathForClassification) &&
-    isDescendantOf(pathForClassification, worktreeRoot)
+    relativePathInsideRoot(worktreeRoot, pathForClassification) !== null
   ) {
     const relativePath = computeRelativePath(pathForClassification, worktreeRoot)
     return {
@@ -208,7 +175,7 @@ export function resolveMarkdownLinkTarget(
   }
 
   const relativePath =
-    worktreeRoot !== null && isDescendantOf(pathForClassification, worktreeRoot)
+    worktreeRoot !== null && relativePathInsideRoot(worktreeRoot, pathForClassification) !== null
       ? computeRelativePath(pathForClassification, worktreeRoot)
       : undefined
 
@@ -225,4 +192,53 @@ export function resolveMarkdownLinkTarget(
     line,
     column
   }
+}
+
+const HTML_ATTRIBUTE_WHITESPACE = /^[\t\n\f\r ]+|[\t\n\f\r ]+$/g
+
+export function projectMarkdownHrefForClipboard(href: string): string | null {
+  const projected = href.replace(HTML_ATTRIBUTE_WHITESPACE, '')
+  if (!projected || containsAsciiControl(projected)) {
+    return null
+  }
+  if (
+    isWindowsAbsolutePathLike(projected) ||
+    projected.startsWith('\\\\') ||
+    projected.startsWith('//')
+  ) {
+    return null
+  }
+  if (projected.startsWith('#')) {
+    return projected
+  }
+
+  const scheme = /^([A-Za-z][A-Za-z\d+.-]*):/.exec(projected)?.[1]?.toLowerCase()
+  if (!scheme) {
+    return projected
+  }
+  if (scheme !== 'http' && scheme !== 'https' && scheme !== 'file') {
+    return null
+  }
+  try {
+    const parsed = new URL(projected)
+    if (parsed.protocol !== `${scheme}:`) {
+      return null
+    }
+    if (scheme === 'file' && !parsed.pathname) {
+      return null
+    }
+    return projected
+  } catch {
+    return null
+  }
+}
+
+function containsAsciiControl(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    if (code <= 31 || code === 127) {
+      return true
+    }
+  }
+  return false
 }

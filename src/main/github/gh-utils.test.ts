@@ -3,10 +3,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { gitExecFileAsyncMock, getSshGitProviderMock } = vi.hoisted(() => ({
-  gitExecFileAsyncMock: vi.fn(),
-  getSshGitProviderMock: vi.fn()
-}))
+const { gitExecFileAsyncMock, getSshGitProviderGenerationMock, getSshGitProviderMock } = vi.hoisted(
+  () => ({
+    gitExecFileAsyncMock: vi.fn(),
+    getSshGitProviderGenerationMock: vi.fn(() => 0),
+    getSshGitProviderMock: vi.fn()
+  })
+)
 
 vi.mock('../git/runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock,
@@ -14,6 +17,7 @@ vi.mock('../git/runner', () => ({
 }))
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
+  getSshGitProviderGeneration: getSshGitProviderGenerationMock,
   getSshGitProvider: getSshGitProviderMock
 }))
 
@@ -34,10 +38,13 @@ import {
   __resetLocalGitConfigSignatureCacheForTests,
   readLocalGitConfigSignature
 } from './local-git-config-signature'
+import { GITHUB_SEARCH_RESULT_WINDOW_ERROR_PATTERN } from '../../shared/github-work-items-query-bounds'
 
 describe('github owner/repo resolution', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
+    getSshGitProviderGenerationMock.mockReset()
+    getSshGitProviderGenerationMock.mockReturnValue(0)
     getSshGitProviderMock.mockReset()
     _resetOwnerRepoCache()
     __resetLocalGitConfigSignatureCacheForTests()
@@ -89,25 +96,29 @@ describe('github owner/repo resolution', () => {
     expect(parseGitHubOwnerRepo('https://ghe.acme.internal/acme/orca.git')).toBeNull()
   })
 
-  it('keeps getOwnerRepo origin-based', async () => {
+  it('prefers upstream for PR owner/repo resolution (#7331)', async () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({
-      stdout: 'git@github.com:fork/orca.git\n'
+      stdout: 'git@github.com:stablyai/orca.git\n'
     })
 
-    await expect(getOwnerRepo('/repo')).resolves.toEqual({ owner: 'fork', repo: 'orca' })
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
-      cwd: '/repo'
+    await expect(getOwnerRepo('/repo')).resolves.toEqual({ owner: 'stablyai', repo: 'orca' })
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'upstream'], {
+      cwd: '/repo',
+      timeout: 30_000
     })
   })
 
   it('resolves GitHub HTTPS origin remotes with user info and a default port', async () => {
-    gitExecFileAsyncMock.mockResolvedValueOnce({
-      stdout: 'https://alice@github.com:443/acme/widgets.git\n'
-    })
+    gitExecFileAsyncMock
+      .mockRejectedValueOnce(new Error("fatal: No such remote 'upstream'"))
+      .mockResolvedValueOnce({
+        stdout: 'https://alice@github.com:443/acme/widgets.git\n'
+      })
 
     await expect(getOwnerRepo('/repo')).resolves.toEqual({ owner: 'acme', repo: 'widgets' })
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
-      cwd: '/repo'
+      cwd: '/repo',
+      timeout: 30_000
     })
   })
 
@@ -118,7 +129,8 @@ describe('github owner/repo resolution', () => {
 
     await expect(getIssueOwnerRepo('/repo')).resolves.toEqual({ owner: 'stablyai', repo: 'orca' })
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'upstream'], {
-      cwd: '/repo'
+      cwd: '/repo',
+      timeout: 30_000
     })
   })
 
@@ -129,10 +141,12 @@ describe('github owner/repo resolution', () => {
 
     await expect(getIssueOwnerRepo('/repo')).resolves.toEqual({ owner: 'fork', repo: 'orca' })
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(1, ['remote', 'get-url', 'upstream'], {
-      cwd: '/repo'
+      cwd: '/repo',
+      timeout: 30_000
     })
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(2, ['remote', 'get-url', 'origin'], {
-      cwd: '/repo'
+      cwd: '/repo',
+      timeout: 30_000
     })
   })
 
@@ -141,8 +155,14 @@ describe('github owner/repo resolution', () => {
       .mockResolvedValueOnce({ stdout: 'git@github.com:fork/orca.git\n' })
       .mockResolvedValueOnce({ stdout: 'git@github.com:stablyai/orca.git\n' })
 
-    await expect(getOwnerRepo('/repo')).resolves.toEqual({ owner: 'fork', repo: 'orca' })
-    await expect(getIssueOwnerRepo('/repo')).resolves.toEqual({ owner: 'stablyai', repo: 'orca' })
+    await expect(getOwnerRepoForRemote('/repo', 'origin')).resolves.toEqual({
+      owner: 'fork',
+      repo: 'orca'
+    })
+    await expect(getOwnerRepoForRemote('/repo', 'upstream')).resolves.toEqual({
+      owner: 'stablyai',
+      repo: 'orca'
+    })
   })
 
   it('coalesces concurrent missing remote probes for the same repo and remote', async () => {
@@ -162,7 +182,8 @@ describe('github owner/repo resolution', () => {
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'upstream'], {
-      cwd: '/repo'
+      cwd: '/repo',
+      timeout: 30_000
     })
 
     await expect(getOwnerRepoForRemote('/repo', 'upstream')).resolves.toBeNull()
@@ -171,7 +192,12 @@ describe('github owner/repo resolution', () => {
 
   it('resolves SSH repo remotes through the registered SSH git provider', async () => {
     const sshProvider = {
-      exec: vi.fn().mockResolvedValue({ stdout: 'git@github.com:stablyai/orca.git\n', stderr: '' })
+      exec: vi.fn(async (args: string[]) => {
+        if (args[2] === 'upstream') {
+          throw new Error("fatal: No such remote 'upstream'")
+        }
+        return { stdout: 'git@github.com:stablyai/orca.git\n', stderr: '' }
+      })
     }
     getSshGitProviderMock.mockReturnValue(sshProvider)
 
@@ -184,7 +210,10 @@ describe('github owner/repo resolution', () => {
     expect(getSshGitProviderMock).toHaveBeenCalledWith('openclaw-2')
     expect(sshProvider.exec).toHaveBeenCalledWith(
       ['remote', 'get-url', 'origin'],
-      '/home/user/orca'
+      '/home/user/orca',
+      {
+        signal: expect.any(AbortSignal)
+      }
     )
   })
 
@@ -200,9 +229,18 @@ describe('github owner/repo resolution', () => {
   })
 
   it('keeps local host and local WSL owner/repo cache entries separate for the same path', async () => {
-    gitExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: 'git@github.com:host/orca.git\n' })
-      .mockResolvedValueOnce({ stdout: 'git@github.com:wsl/orca.git\n' })
+    gitExecFileAsyncMock.mockImplementation(
+      async (args: string[], options: { wslDistro?: string } = {}) => {
+        if (args[2] === 'upstream') {
+          throw new Error("fatal: No such remote 'upstream'")
+        }
+        return {
+          stdout: options.wslDistro
+            ? 'git@github.com:wsl/orca.git\n'
+            : 'git@github.com:host/orca.git\n'
+        }
+      }
+    )
 
     await expect(getOwnerRepo('/repo')).resolves.toEqual({ owner: 'host', repo: 'orca' })
     await expect(getOwnerRepo('/repo', null, { wslDistro: 'Ubuntu' })).resolves.toEqual({
@@ -214,12 +252,15 @@ describe('github owner/repo resolution', () => {
       repo: 'orca'
     })
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
-    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(1, ['remote', 'get-url', 'origin'], {
-      cwd: '/repo'
-    })
-    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(2, ['remote', 'get-url', 'origin'], {
+    // 2 runtimes x (1 upstream miss + 1 origin hit); repeat WSL call is cached.
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(4)
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
       cwd: '/repo',
+      timeout: 30_000
+    })
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
+      cwd: '/repo',
+      timeout: 30_000,
       wslDistro: 'Ubuntu'
     })
   })
@@ -721,7 +762,8 @@ describe('resolveIssueSource', () => {
     })
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
-      cwd: '/repo'
+      cwd: '/repo',
+      timeout: 30_000
     })
   })
 
@@ -765,5 +807,18 @@ describe('gh error classification', () => {
       type: 'issues_disabled',
       message: 'Issues are disabled on this repository.'
     })
+  })
+
+  // Why: the renderer detects the Search API 1000-result window by matching
+  // GITHUB_SEARCH_RESULT_WINDOW_ERROR_PATTERN against this message (#11485) —
+  // trimming the raw stderr out of the validation_error copy, or drifting the
+  // pattern off GitHub's real wording, would silently downgrade every window
+  // 422 to a generic failure. The stderr stays verbatim so this pins both ends.
+  it('keeps the search-window phrase in validation_error list messages', () => {
+    const stderr =
+      'Command failed: gh api --hostname github.com search/issues\nValidation Failed: Only the first 1000 search results are available (HTTP 422)'
+    const classified = classifyListIssuesError(stderr)
+    expect(classified.type).toBe('validation_error')
+    expect(classified.message).toMatch(GITHUB_SEARCH_RESULT_WINDOW_ERROR_PATTERN)
   })
 })

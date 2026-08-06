@@ -26,12 +26,10 @@ export function isGitHubWorkItemsSshRemoteRequiredError(error: unknown): boolean
   return message.includes(GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE)
 }
 
-// Why: generic over the item shape because main-process callers emit items
-// without repoId (stamped by the renderer after IPC), while renderer callers
-// carry the full GitHubWorkItem. Both share only the updatedAt field needed
-// here.
-export function sortWorkItemsByUpdatedAt<T extends { updatedAt: string }>(items: T[]): T[] {
-  return [...items].sort((left, right) => {
-    return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()
-  })
+// Why: generic over item shape because main-process callers emit items without
+// repoId (stamped by the renderer after IPC), while renderer callers carry the
+// full GitHubWorkItem. Sorting by number descending matches GitHub's default
+// Issues view (newest issue number first).
+export function sortWorkItemsByNumber<T extends { number: number }>(items: T[]): T[] {
+  return [...items].sort((left, right) => right.number - left.number)
 }

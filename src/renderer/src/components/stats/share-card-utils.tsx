@@ -40,7 +40,7 @@ export function formatDateRange(range: string): string {
   if (range === 'all') {
     return `Through ${end}`
   }
-  const days = parseInt(range)
+  const days = Number.parseInt(range)
   if (Number.isNaN(days)) {
     return end
   }

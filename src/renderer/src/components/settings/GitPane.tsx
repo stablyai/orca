@@ -1,11 +1,12 @@
-import type { GlobalSettings, SourceControlGroupOrder } from '../../../../shared/types'
+import { useEffect, useRef, useState } from 'react'
+import type { GlobalSettings } from '../../../../shared/types'
 import type { SourceControlAiSettingsPatch } from '../../../../shared/source-control-ai-types'
-import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from '../../../../shared/source-control-group-order'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { useAppStore } from '../../store'
 import { getGitPaneSearchEntries } from './git-search'
 import { SearchableSetting } from './SearchableSetting'
+import { BranchPrefixFeedback } from './BranchPrefixFeedback'
 import { matchesSettingsSearch } from './settings-search'
 import { AutoRenameBranchFromWorkSetting } from './AutoRenameBranchFromWorkSetting'
 import {
@@ -18,7 +19,6 @@ import {
   getKeepLocalMainUpToDateTitle
 } from './keep-local-main-up-to-date-setting'
 import { translate } from '@/i18n/i18n'
-import { SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
 
 export { getGitPaneSearchEntries }
 
@@ -37,14 +37,6 @@ const KEEP_LOCAL_MAIN_UP_TO_DATE_KEYWORDS = [
   'fresh base',
   'safely',
   'worktree'
-]
-const SOURCE_CONTROL_GROUP_ORDER_KEYWORDS = [
-  'group order',
-  'changes first',
-  'staged first',
-  'untracked first',
-  'source control',
-  'git changes'
 ]
 
 export function shouldShowAutoRenameBranchSetting(
@@ -68,68 +60,6 @@ type GitPaneProps = {
   settingsSearchQuery?: string
 }
 
-export function SourceControlGroupOrderSetting({
-  settings,
-  updateSettings
-}: {
-  settings: GlobalSettings
-  updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
-}): React.JSX.Element {
-  const value = settings.sourceControlGroupOrder ?? DEFAULT_SOURCE_CONTROL_GROUP_ORDER
-  const title = translate(
-    'auto.components.settings.GitPane.sourceControlGroupOrderTitle',
-    'Source Control Group Order'
-  )
-  const description = translate(
-    'auto.components.settings.GitPane.sourceControlGroupOrderDescription',
-    'Choose whether Changes, Staged Changes, or Untracked Files appear first in Source Control.'
-  )
-
-  return (
-    <SearchableSetting
-      title={title}
-      description={description}
-      keywords={SOURCE_CONTROL_GROUP_ORDER_KEYWORDS}
-      className="max-w-none"
-    >
-      <SettingsRow
-        label={title}
-        description={description}
-        alignTop
-        control={
-          <SettingsSegmentedControl<SourceControlGroupOrder>
-            value={value}
-            onChange={(nextValue) => {
-              if (nextValue !== value) {
-                void updateSettings({ sourceControlGroupOrder: nextValue })
-              }
-            }}
-            ariaLabel={title}
-            size="sm"
-            options={[
-              {
-                value: 'changes-first',
-                label: translate('auto.components.settings.GitPane.changesFirst', 'Changes first')
-              },
-              {
-                value: 'staged-first',
-                label: translate('auto.components.settings.GitPane.stagedFirst', 'Staged first')
-              },
-              {
-                value: 'untracked-first',
-                label: translate(
-                  'auto.components.settings.GitPane.untrackedFirst',
-                  'Untracked first'
-                )
-              }
-            ]}
-          />
-        }
-      />
-    </SearchableSetting>
-  )
-}
-
 export function GitPane({
   settings,
   updateSettings,
@@ -143,6 +73,24 @@ export function GitPane({
   const storeSearchQuery = useAppStore((s) => s.settingsSearchQuery)
   const searchQuery = settingsSearchQuery ?? storeSearchQuery
   const keepLocalMainUpToDateTitle = getKeepLocalMainUpToDateTitle()
+
+  const isBranchPrefixInputMode = settings.branchPrefix !== 'none'
+  // Local draft for the editable custom prefix: updateSettings persists through
+  // an async IPC round-trip, so a directly-controlled value would only reflect
+  // the edit a tick later and React would then re-assign it, snapping the caret
+  // to the end. The draft keeps the caret put; the ref guard adopts only genuine
+  // external changes (settings reloaded/reset), not the async echo of our own
+  // keystrokes, which would clobber fast typing on slow (SSH) round-trips.
+  const [customPrefixDraft, setCustomPrefixDraft] = useState(settings.branchPrefixCustom)
+  const lastCommittedPrefixRef = useRef(settings.branchPrefixCustom)
+  useEffect(() => {
+    if (settings.branchPrefixCustom !== lastCommittedPrefixRef.current) {
+      lastCommittedPrefixRef.current = settings.branchPrefixCustom
+      setCustomPrefixDraft(settings.branchPrefixCustom)
+    }
+  }, [settings.branchPrefixCustom])
+  const branchPrefixInputValue =
+    settings.branchPrefix === 'git-username' ? displayedGitUsername : customPrefixDraft
 
   const visibleSections = [
     matchesSettingsSearch(searchQuery, {
@@ -195,14 +143,15 @@ export function GitPane({
             </button>
           ))}
         </div>
-        {(settings.branchPrefix === 'custom' || settings.branchPrefix === 'git-username') && (
+        {isBranchPrefixInputMode && (
           <Input
-            value={
-              settings.branchPrefix === 'git-username'
-                ? displayedGitUsername
-                : settings.branchPrefixCustom
-            }
-            onChange={(e) => updateSettings({ branchPrefixCustom: e.target.value })}
+            value={branchPrefixInputValue}
+            onChange={(e) => {
+              const next = e.target.value
+              lastCommittedPrefixRef.current = next
+              setCustomPrefixDraft(next)
+              updateSettings({ branchPrefixCustom: next })
+            }}
             placeholder={
               settings.branchPrefix === 'git-username'
                 ? translate(
@@ -215,6 +164,7 @@ export function GitPane({
             readOnly={settings.branchPrefix === 'git-username'}
           />
         )}
+        {isBranchPrefixInputMode && <BranchPrefixFeedback rawPrefix={branchPrefixInputValue} />}
       </SearchableSetting>
     ) : null,
     matchesSettingsSearch(searchQuery, {
@@ -236,11 +186,14 @@ export function GitPane({
             {translate(
               'auto.components.settings.GitPane.976afc6b3e',
               'When you create a workspace, Orca refreshes the remote base and safely fast-forwards your matching local branch, such as'
-            )}
+            )}{' '}
             <code>{translate('auto.components.settings.GitPane.ffba483bae', 'main')}</code>{' '}
-            {translate('auto.components.settings.GitPane.5bf885be48', 'or')}
+            {translate('auto.components.settings.GitPane.5bf885be48', 'or')}{' '}
             <code>{translate('auto.components.settings.GitPane.3ae3de8898', 'master')}</code>
-            {translate('auto.components.settings.GitPane.db3a127eb1', '. This keeps commands like')}
+            {translate(
+              'auto.components.settings.GitPane.db3a127eb1',
+              '. This keeps commands like'
+            )}{' '}
             <code>
               {translate('auto.components.settings.GitPane.d072a12995', 'git diff main...HEAD')}
             </code>{' '}
@@ -271,23 +224,6 @@ export function GitPane({
           />
         </button>
       </SearchableSetting>
-    ) : null,
-    matchesSettingsSearch(searchQuery, {
-      title: translate(
-        'auto.components.settings.GitPane.sourceControlGroupOrderTitle',
-        'Source Control Group Order'
-      ),
-      description: translate(
-        'auto.components.settings.GitPane.sourceControlGroupOrderDescription',
-        'Choose whether Changes, Staged Changes, or Untracked Files appear first in Source Control.'
-      ),
-      keywords: SOURCE_CONTROL_GROUP_ORDER_KEYWORDS
-    }) ? (
-      <SourceControlGroupOrderSetting
-        key="source-control-group-order"
-        settings={settings}
-        updateSettings={updateSettings}
-      />
     ) : null,
     compareAgainstUpstreamMatchesSearch(searchQuery) ? (
       <CompareAgainstUpstreamSetting

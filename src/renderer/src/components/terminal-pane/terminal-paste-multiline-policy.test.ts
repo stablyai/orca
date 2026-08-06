@@ -48,6 +48,8 @@ describe('terminal paste multiline policy', () => {
 
     expect(multilinePlan.mode).toBe('bracketed-terminal')
     expect(singleLinePlan.mode).toBe('direct')
+    expect(multilinePlan.newlinePolicy).toBe('terminal-cr')
+    expect(singleLinePlan.newlinePolicy).toBe('preserve')
     expect(pasteText).toHaveBeenNthCalledWith(1, 'one\r\ntwo', { forceBracketedPaste: true })
     expect(pasteText).toHaveBeenNthCalledWith(2, 'one', { forceBracketedPaste: false })
   })

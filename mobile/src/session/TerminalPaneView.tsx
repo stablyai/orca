@@ -1,12 +1,12 @@
 import { useCallback } from 'react'
 import { StyleSheet, View } from 'react-native'
-import {
-  TerminalWebView,
-  type MobileTerminalTheme,
-  type TerminalKeyboardAvoidanceMetrics,
-  type TerminalModes,
-  type TerminalWebViewHandle
-} from '../terminal/TerminalWebView'
+import { TerminalWebView } from '../terminal/TerminalWebView'
+import type {
+  MobileTerminalTheme,
+  TerminalKeyboardAvoidanceMetrics,
+  TerminalModes,
+  TerminalWebViewHandle
+} from '../terminal/terminal-webview-contract'
 
 type TerminalPaneViewProps = {
   handle: string
@@ -23,6 +23,7 @@ type TerminalPaneViewProps = {
   onKeyboardAvoidanceMetrics: (handle: string, metrics: TerminalKeyboardAvoidanceMetrics) => void
   onHaptic: (kind: 'selection' | 'success' | 'error' | 'edge-bump') => void
   onTerminalInput: (handle: string, bytes: string) => void
+  onTerminalQueryReply: (handle: string, bytes: string) => void
   onTerminalTap: (handle: string) => void
   onFileTap: (handle: string, pathText: string, line: number | null, column: number | null) => void
   onOpenUrl: (handle: string, url: string) => void
@@ -44,6 +45,7 @@ export function TerminalPaneView({
   onKeyboardAvoidanceMetrics,
   onHaptic,
   onTerminalInput,
+  onTerminalQueryReply,
   onTerminalTap,
   onFileTap,
   onOpenUrl,
@@ -80,6 +82,7 @@ export function TerminalPaneView({
         onKeyboardAvoidanceMetrics={(m) => onKeyboardAvoidanceMetrics(handle, m)}
         onHaptic={onHaptic}
         onTerminalInput={(bytes) => onTerminalInput(handle, bytes)}
+        onTerminalQueryReply={(bytes) => onTerminalQueryReply(handle, bytes)}
         onTerminalTap={() => onTerminalTap(handle)}
         onFileTap={(pathText, line, column) => onFileTap(handle, pathText, line, column)}
         onOpenUrl={(url) => onOpenUrl(handle, url)}

@@ -16,6 +16,7 @@
 
 require "base64"
 require "json"
+require_relative "ios_release_version"
 
 default_platform(:ios)
 
@@ -35,8 +36,15 @@ DEFAULT_TESTFLIGHT_CHANGELOG = "Latest Orca Mobile updates and fixes.".freeze
 # closed"). Only approved/released/removed states qualify: a version that is
 # merely IN_REVIEW / WAITING_FOR_REVIEW / PROCESSING_FOR_APP_STORE still accepts
 # TestFlight builds, so bumping on those would break normal beta iteration.
+#
+# Covers both vocabularies: `appStoreState` is deprecated as of App Store
+# Connect API 3.3 in favor of `appVersionState`, which renames the shipped state
+# (READY_FOR_SALE -> READY_FOR_DISTRIBUTION) and drops the removed-from-sale
+# ones. Reading whichever field Apple populates keeps the guard working through
+# the transition instead of silently finding zero closed versions.
 CLOSED_APP_STORE_STATES = %w[
   READY_FOR_SALE
+  READY_FOR_DISTRIBUTION
   PENDING_DEVELOPER_RELEASE
   PENDING_APPLE_RELEASE
   REPLACED_WITH_NEW_VERSION
@@ -66,41 +74,42 @@ def current_mobile_version(config)
   config.fetch("expo").fetch("version")
 end
 
-def truthy_option?(value)
-  %w[1 true yes on].include?(value.to_s.strip.downcase)
+# True when either state field reports a terminally closed train. `respond_to?`
+# guards the newer field, which older spaceship versions do not define.
+def closed_state?(app_store_version)
+  states = [app_store_version.app_store_state]
+  states << app_store_version.app_version_state if app_store_version.respond_to?(:app_version_state)
+
+  states.compact.any? { |state| CLOSED_APP_STORE_STATES.include?(state) }
 end
 
-def bump_patch_version(version)
-  match = version.match(/\A(\d+)\.(\d+)\.(\d+)\z/)
-  UI.user_error!("Cannot bump non-semver mobile version '#{version}'") unless match
+# Highest version whose App Store record is in a terminally closed state, or nil
+# when none is (or the lookup fails). Fetched once because the answer is a
+# property of the app, not of any single candidate version.
+#
+# Why the whole list rather than a per-version lookup: a version only gets an
+# App Store record once someone submits it. 0.0.34 was uploaded to TestFlight
+# but never submitted, so it had no record and a filtered lookup found nothing
+# closed — while 0.0.35 shipped, which closes 0.0.34 too (Apple: 90062 requires
+# a *higher* version than the last approved one).
+#
+# On a nil app or any API error, degrade to "open": we then proceed as before
+# this check existed — the upload either succeeds or fails with the same 90186
+# we have always seen, never worse than today's behavior.
+def highest_closed_app_store_version(app)
+  return nil unless app
 
-  "#{match[1]}.#{match[2]}.#{match[3].to_i + 1}"
-end
+  closed = app
+    .get_app_store_versions
+    .select { |app_store_version| closed_state?(app_store_version) }
+    .map(&:version_string)
 
-def resolve_requested_version(options, config)
-  requested = options[:version].to_s.strip
-  return requested unless requested.empty?
-
-  current_version = current_mobile_version(config)
-  truthy_option?(options[:bump_patch]) ? bump_patch_version(current_version) : current_version
-end
-
-# Returns true when `version`'s App Store train is closed to new build uploads.
-# `app` is a Spaceship::ConnectAPI::App the caller looks up (nil if lookup
-# failed). On a nil app or any API error, degrade to "open": we then proceed as
-# before this check existed — the upload either succeeds or fails with the same
-# 90186 we have always seen, never worse than today's behavior.
-def version_train_closed?(app, version)
-  return false unless app
-
-  app
-    .get_app_store_versions(filter: { versionString: version })
-    .any? { |app_store_version| CLOSED_APP_STORE_STATES.include?(app_store_version.app_store_state) }
+  IosReleaseVersion.max_version(closed)
 rescue StandardError => error
   # Loud, not silent: a swallowed error here un-fixes the 90186 guard, so the
   # degraded run must be visible rather than buried.
-  UI.error("Could not determine App Store state for #{version} (#{error.message}); assuming open and proceeding.")
-  false
+  UI.error("Could not determine closed App Store versions (#{error.message}); assuming open and proceeding.")
+  nil
 end
 
 def testflight_changelog
@@ -113,13 +122,7 @@ platform :ios do
   lane :prepare_release_version do |options|
     api_key = app_store_connect_api_key_from_env
     config = load_mobile_app_config
-    version = resolve_requested_version(options, config)
 
-    # Fail fast (seconds) if the resolved version's App Store train is already
-    # closed: Apple would otherwise reject the upload ~20 min later with 90186.
-    # Bumping the version is left to the human (the bump_patch input or a
-    # "Prepare mobile X" commit) so the marketing version stays a deliberate,
-    # release-notes-bearing decision rather than something CI invents.
     app =
       begin
         Spaceship::ConnectAPI::App.find(BUNDLE_ID)
@@ -127,11 +130,34 @@ platform :ios do
         UI.error("Could not look up App Store app #{BUNDLE_ID} (#{error.message}); skipping closed-train check.")
         nil
       end
-    if version_train_closed?(app, version)
+    highest_closed = highest_closed_app_store_version(app)
+    UI.message("Highest closed App Store version: #{highest_closed || 'none'}")
+
+    version =
+      begin
+        IosReleaseVersion.resolve(
+          requested: options[:version],
+          bump_patch: options[:bump_patch],
+          current_version: current_mobile_version(config),
+          train_closed: ->(candidate) { IosReleaseVersion.closed_train?(candidate, highest_closed) },
+        )
+      rescue ArgumentError => error
+        UI.user_error!(error.message)
+      end
+
+    # Explicit and checked-in versions still fail fast when closed. Patch bumps
+    # skip closed trains above because workflow-only releases can outpace Git.
+    if IosReleaseVersion.closed_train?(version, highest_closed)
+      retry_guidance =
+        if IosReleaseVersion.truthy?(options[:bump_patch])
+          "Use a higher release_version or land a \"Prepare mobile <version>\" commit."
+        else
+          "Re-dispatch with bump_patch_version: true (or a higher release_version), " \
+            "or land a \"Prepare mobile <version>\" commit."
+        end
       UI.user_error!(
-        "iOS version #{version} is already submitted/released on the App Store and cannot accept " \
-        "new builds. Re-dispatch with bump_patch_version: true (or a higher release_version), " \
-        "or land a \"Prepare mobile <version>\" commit.",
+        "iOS version #{version} is not higher than #{highest_closed}, which is already " \
+        "submitted/released on the App Store, so Apple will reject the upload. #{retry_guidance}",
       )
     end
 

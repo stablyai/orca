@@ -10,13 +10,18 @@ import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { useAppStore } from '@/store'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
+import {
+  DEFAULT_DISABLED_TUI_AGENTS,
+  isTuiAgentEnabled
+} from '../../../../shared/tui-agent-selection'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from '../../../../shared/tui-agent-launch-defaults'
 import { translate } from '@/i18n/i18n'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
+import { resolveNativeChatSessionOptionDefaults } from '../../../../shared/native-chat-session-option-defaults'
+import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 
 type FloatingTerminalWindowControlsProps = {
   maximized: boolean
@@ -43,10 +48,13 @@ export function FloatingTerminalWindowControls({
   const defaultTuiAgent = useAppStore((s) => s.settings?.defaultTuiAgent ?? null)
   const createTab = useAppStore((s) => s.createTab)
   const setActiveTabForWorktree = useAppStore((s) => s.setActiveTabForWorktree)
+  const activateTab = useAppStore((s) => s.activateTab)
   const maximizeShortcutLabel = useOptionalShortcutLabel('floatingWorkspace.maximize')
   const minimizeShortcutLabel = useOptionalShortcutLabel('floatingWorkspace.minimize')
 
-  const disabledTuiAgents = useAppStore((s) => s.settings?.disabledTuiAgents ?? [])
+  const disabledTuiAgents = useAppStore(
+    (s) => s.settings?.disabledTuiAgents ?? DEFAULT_DISABLED_TUI_AGENTS
+  )
   const defaultAgent =
     defaultTuiAgent &&
     defaultTuiAgent !== 'blank' &&
@@ -72,6 +80,10 @@ export function FloatingTerminalWindowControls({
       cmdOverrides: state.settings?.agentCmdOverrides ?? {},
       agentArgs: resolveTuiAgentLaunchArgs(defaultAgent, state.settings?.agentDefaultArgs),
       agentEnv: resolveTuiAgentLaunchEnv(defaultAgent, state.settings?.agentDefaultEnv),
+      sessionOptions: resolveNativeChatSessionOptionDefaults(
+        state.settings?.nativeChatSessionOptions,
+        defaultAgent
+      ),
       platform: CLIENT_PLATFORM,
       allowEmptyPromptLaunch: true
     })
@@ -86,6 +98,7 @@ export function FloatingTerminalWindowControls({
       return
     }
     const tab = createTab(FLOATING_TERMINAL_WORKTREE_ID, undefined, undefined, { activate: false })
+    seedNativeChatAppliedSessionOptions(tab.id, defaultAgent, startupPlan.sessionOptions)
     state.queueTabStartupCommand(tab.id, {
       command: startupPlan.launchCommand,
       ...(startupPlan.env ? { env: startupPlan.env } : {}),
@@ -100,7 +113,12 @@ export function FloatingTerminalWindowControls({
         request_kind: 'new'
       }
     })
+    // Why: the floating panel renders its visible tab from the unified group's
+    // activeTabId. setActiveTabForWorktree only writes activeTabIdByWorktree, so
+    // the new agent tab would be appended but never selected/focused. activateTab
+    // selects it within the group, matching the empty-state tab creators.
     setActiveTabForWorktree(FLOATING_TERMINAL_WORKTREE_ID, tab.id)
+    activateTab(tab.id)
     const fresh = useAppStore.getState()
     const currentTabs = fresh.tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []
     const stored = fresh.tabBarOrderByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []
@@ -114,7 +132,7 @@ export function FloatingTerminalWindowControls({
     order.push(tab.id)
     fresh.setTabBarOrder(FLOATING_TERMINAL_WORKTREE_ID, order)
     focusTerminalTabSurface(tab.id)
-  }, [createTab, defaultAgent, defaultAgentLabel, setActiveTabForWorktree])
+  }, [activateTab, createTab, defaultAgent, defaultAgentLabel, setActiveTabForWorktree])
 
   return (
     <div className="flex items-center gap-1 px-2" data-floating-terminal-no-drag>

@@ -286,6 +286,11 @@ test.describe('Tab Close Navigation', () => {
     // Sanity: confirm the worktree has no backing terminal/browser surfaces
     // before we close the last editor. Otherwise the deactivate branch would
     // not trigger for reasons unrelated to this regression.
+    //
+    // Why close inside the poll: the worktree's startup default-terminal spawn
+    // is async, so under CI load it can land *after* the setup close and re-add
+    // a terminal. Re-close any straggler each iteration so the drain converges
+    // regardless of when the in-flight spawn settles.
     await expect
       .poll(
         () =>
@@ -295,13 +300,20 @@ test.describe('Tab Close Navigation', () => {
               throw new Error('window.__store is not available')
             }
             const state = store.getState()
+            for (const tab of state.tabsByWorktree[wId] ?? []) {
+              state.closeTab(tab.id)
+            }
+            for (const bt of state.browserTabsByWorktree[wId] ?? []) {
+              state.closeBrowserTab(bt.id)
+            }
+            const next = store.getState()
             return {
-              terminals: (state.tabsByWorktree[wId] ?? []).length,
-              browserTabs: (state.browserTabsByWorktree[wId] ?? []).length
+              terminals: (next.tabsByWorktree[wId] ?? []).length,
+              browserTabs: (next.browserTabsByWorktree[wId] ?? []).length
             }
           }, worktreeId),
         {
-          timeout: 5_000,
+          timeout: 15_000,
           message: 'terminal/browser surfaces did not drain before last-editor close'
         }
       )

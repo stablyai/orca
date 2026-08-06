@@ -1,14 +1,11 @@
 import * as path from 'node:path'
 import type { RemoveWorktreeResult } from '../shared/types'
+import { assertWorktreeUnlockedForRemoval } from '../shared/worktree-removal'
+import { isSubmoduleWorktreeRemovalRefusal } from '../shared/worktree-submodule-removal'
 import { deleteAlreadyMergedRelayBranchAfterSafeDeleteFailure } from './git-handler-branch-cleanup'
 import type { GitExec } from './git-handler-ops'
-import { isUnsupportedWorktreeListZError, parseWorktreeList } from './git-handler-utils'
-
-type RelayWorktreeInfo = {
-  path: string
-  branch?: string
-  head?: string
-}
+import type { GitCapabilityCache } from '../shared/git-capability-cache'
+import { readRelayWorktreeList } from './git-handler-worktree-list'
 
 function getErrorText(error: unknown): string {
   if (typeof error === 'object' && error !== null) {
@@ -74,34 +71,13 @@ function areRelayWorktreePathsEqual(leftPath: string, rightPath: string): boolea
   return compareCaseInsensitive ? left.toLowerCase() === right.toLowerCase() : left === right
 }
 
-function normalizeRelayWorktrees(worktrees: Record<string, unknown>[]): RelayWorktreeInfo[] {
-  return worktrees
-    .map((worktree) => ({
-      path: typeof worktree.path === 'string' ? worktree.path : '',
-      head: typeof worktree.head === 'string' ? worktree.head : undefined,
-      branch: typeof worktree.branch === 'string' ? worktree.branch : undefined
-    }))
-    .filter((worktree) => worktree.path.length > 0)
-}
-
-async function readRelayWorktreeList(git: GitExec, repoPath: string): Promise<RelayWorktreeInfo[]> {
+async function listRelayWorktreesForRemoval(
+  git: GitExec,
+  repoPath: string,
+  capabilities: GitCapabilityCache
+) {
   try {
-    const { stdout } = await git(['worktree', 'list', '--porcelain', '-z'], repoPath)
-    return normalizeRelayWorktrees(parseWorktreeList(stdout, { nulDelimited: true }))
-  } catch (error) {
-    if (!isUnsupportedWorktreeListZError(error)) {
-      throw error
-    }
-  }
-
-  // Why: `-z` preserves newlines; fallback keeps Git <2.36 compatible.
-  const { stdout } = await git(['worktree', 'list', '--porcelain'], repoPath)
-  return normalizeRelayWorktrees(parseWorktreeList(stdout))
-}
-
-async function listRelayWorktreesForRemoval(git: GitExec, repoPath: string) {
-  try {
-    return await readRelayWorktreeList(git, repoPath)
+    return await readRelayWorktreeList(git, repoPath, capabilities)
   } catch {
     return []
   }
@@ -148,7 +124,8 @@ async function deleteRelayBranchAfterWorktreeRemoval(
 
 export async function removeWorktreeOp(
   git: GitExec,
-  params: Record<string, unknown>
+  params: Record<string, unknown>,
+  capabilities: GitCapabilityCache
 ): Promise<RemoveWorktreeResult> {
   const worktreePath = params.worktreePath as string
   const force = params.force as boolean | undefined
@@ -166,19 +143,37 @@ export async function removeWorktreeOp(
     // fall through with worktreePath as repo
   }
 
-  const worktreesBeforeRemoval = await listRelayWorktreesForRemoval(git, repoPath)
+  const worktreesBeforeRemoval = await listRelayWorktreesForRemoval(git, repoPath, capabilities)
   const removedWorktree = worktreesBeforeRemoval.find((worktree) =>
     areRelayWorktreePathsEqual(worktree.path, worktreePath)
   )
   const branchName = normalizeLocalBranchRef(removedWorktree?.branch ?? '')
   const branchHead = removedWorktree?.head ?? ''
 
+  assertWorktreeUnlockedForRemoval(removedWorktree)
+
   const args = ['worktree', 'remove']
   if (force) {
     args.push('--force')
   }
   args.push(worktreePath)
-  await git(args, repoPath)
+  try {
+    await git(args, repoPath)
+  } catch (error) {
+    if (force || !isSubmoduleWorktreeRemovalRefusal(error)) {
+      throw error
+    }
+    // Why: Git refuses non-force removal of any worktree with an initialised
+    // submodule even when everything is clean. Re-prove cleanliness (parent
+    // status reports dirty submodule content as ` M <sub>`), then --force.
+    const { stdout } = await git(['status', '--porcelain', '--untracked-files=all'], worktreePath)
+    if (stdout.trim()) {
+      const dirtyError = new Error('Worktree has uncommitted or untracked changes.')
+      ;(dirtyError as Error & { stdout?: string }).stdout = stdout
+      throw dirtyError
+    }
+    await git(['worktree', 'remove', '--force', worktreePath], repoPath)
+  }
 
   if (!branchName) {
     return {}
@@ -210,7 +205,8 @@ export async function removeWorktreeOp(
             git,
             repoPath,
             branchName,
-            branchHead
+            branchHead,
+            capabilities
           )
         ) {
           return {}

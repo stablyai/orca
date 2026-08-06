@@ -190,11 +190,13 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['tab', 'profile', 'create'],
     summary: 'Create a browser session profile for browser tabs',
-    usage: 'orca tab profile create --label <name> [--scope <isolated|imported>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'label', 'scope']
+    usage:
+      'orca tab profile create --label <name> [--scope <isolated|imported>] [--no-ua-spoof] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'label', 'scope', 'no-ua-spoof']
   },
   {
     path: ['tab', 'profile', 'delete'],
+    destructive: true,
     summary: 'Delete a browser session profile used by browser tabs',
     usage: 'orca tab profile delete --profile <id> [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'profile']

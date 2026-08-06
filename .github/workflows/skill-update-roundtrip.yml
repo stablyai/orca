@@ -1,0 +1,50 @@
+name: Skill update round trip
+
+on:
+  pull_request:
+    paths:
+      - 'skills/**'
+      - 'resources/skills/**'
+      - 'config/scripts/verify-skill-update-roundtrip.mjs'
+      - 'src/main/skills/skill-freshness-eligibility.ts'
+      - 'src/shared/skill-freshness.ts'
+      - '.github/workflows/skill-update-roundtrip.yml'
+  merge_group:
+  push:
+    branches:
+      - main
+
+jobs:
+  roundtrip:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+        shape: [symlink, copy]
+        autocrlf: ['false', 'true']
+        skills-cli: ['1.5.17']
+        include:
+          - os: ubuntu-latest
+            shape: symlink
+            autocrlf: 'false'
+            skills-cli: latest
+    continue-on-error: ${{ matrix.skills-cli == 'latest' }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+      - name: Verify targeted update convergence and copy behavior
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SKILL_UPDATE_SOURCE: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          SKILL_UPDATE_REF: ${{ github.head_ref || github.ref_name }}
+        run: >-
+          node config/scripts/verify-skill-update-roundtrip.mjs
+          --cli=${{ matrix.skills-cli }}
+          --autocrlf=${{ matrix.autocrlf }}
+          --shape=${{ matrix.shape }}

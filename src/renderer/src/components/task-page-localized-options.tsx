@@ -31,7 +31,7 @@ export type JiraPreset = { id: JiraPresetId; label: string }
 export type GitHubModeButton = { id: GitHubTaskKind | 'project'; label: string }
 
 export type LinearViewMode = 'list' | 'board'
-export type LinearMode = 'issues' | 'projects' | 'views'
+export type LinearMode = 'issues' | 'projects' | 'views' | 'in-orca'
 export type LinearGroupBy = 'none' | 'status' | 'assignee' | 'priority' | 'team'
 export type LinearOrderBy = 'priority' | 'updated' | 'identifier'
 export type LinearDisplayProperty =
@@ -144,7 +144,11 @@ export const getLinearModeOptions = createLocalizedCatalog(
   (): { id: LinearMode; label: string }[] => [
     { id: 'issues', label: translate('auto.components.TaskPage.dfc0c79bd8', 'Issues') },
     { id: 'projects', label: translate('auto.components.TaskPage.727069bee5', 'Projects') },
-    { id: 'views', label: translate('auto.components.TaskPage.e78ec261ed', 'Views') }
+    { id: 'views', label: translate('auto.components.TaskPage.e78ec261ed', 'Views') },
+    {
+      id: 'in-orca',
+      label: translate('auto.components.TaskPage.linearModeHasWorktree', 'Has Workspace')
+    }
   ]
 )
 

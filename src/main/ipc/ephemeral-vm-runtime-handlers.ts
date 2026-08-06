@@ -1,6 +1,5 @@
 import { app, ipcMain } from 'electron'
 import type { Store } from '../persistence'
-import { loadHooks } from '../hooks'
 import {
   listEphemeralVmRuntimes,
   updateEphemeralVmRuntimeStatus
@@ -28,7 +27,8 @@ import {
   disconnectRuntimeOwnedSshTarget,
   removeRuntimeOwnedSshTarget
 } from '../ephemeral-vm-runtime-ssh'
-import { getRecipeRepo, getRuntimeRecipeContext } from './ephemeral-vm-recipe-context'
+import { getRuntimeRecipeContext } from './ephemeral-vm-recipe-context'
+import { invalidateRuntimeEnvironmentTransport } from './runtime-environments'
 
 export type EphemeralVmCleanupCommandResult = {
   runtimeId: string
@@ -73,30 +73,21 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
       if (!runtime.repoId) {
         throw new Error(`Ephemeral VM runtime has no repo id: ${args.runtimeId}`)
       }
-      const repo = getRecipeRepo(store, runtime.repoId)
-      if (!repo.ok) {
+      let resolved: ReturnType<typeof getRuntimeRecipeContext>
+      try {
+        resolved = getRuntimeRecipeContext(store, userDataPath, runtime.id)
+      } catch (error) {
         return updateEphemeralVmRuntimeStatus(userDataPath, runtime.id, {
           status: 'cleanup_failed',
           cleanupStatus: 'failed',
           cleanupLastAttemptAt: Date.now(),
-          cleanupLastError: repo.message
-        })
-      }
-      const recipe = (loadHooks(repo.repo.path)?.environmentRecipes ?? []).find(
-        (entry) => entry.id === runtime.recipeId
-      )
-      if (!recipe) {
-        return updateEphemeralVmRuntimeStatus(userDataPath, runtime.id, {
-          status: 'cleanup_failed',
-          cleanupStatus: 'failed',
-          cleanupLastAttemptAt: Date.now(),
-          cleanupLastError: `Recipe not found: ${runtime.recipeId}`
+          cleanupLastError: error instanceof Error ? error.message : String(error)
         })
       }
       const result = await cleanupEphemeralVmRuntime({
         userDataPath,
-        repoPath: repo.repo.path,
-        recipe,
+        repoPath: resolved.repo.repo.path,
+        recipe: resolved.recipe,
         runtimeId: runtime.id
       })
       if (result.ok && runtime.runtimeEnvironmentId) {
@@ -190,6 +181,7 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
         updateEnvironmentFromPairingCode(userDataPath, runtime.runtimeEnvironmentId, {
           pairingCode
         })
+        invalidateRuntimeEnvironmentTransport(runtime.runtimeEnvironmentId)
       }
       const connection = getEphemeralVmRecipeResultConnection(result.runtime.recipeResult)
       if (!result.skipped && connection.type === 'ssh') {
@@ -215,7 +207,7 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
 
   ipcMain.handle(
     'ephemeralVm:getCleanupCommand',
-    (_event, args: { runtimeId: string }): EphemeralVmCleanupCommandResult => {
+    async (_event, args: { runtimeId: string }): Promise<EphemeralVmCleanupCommandResult> => {
       const userDataPath = app.getPath('userData')
       const resolved = getRuntimeRecipeContext(store, userDataPath, args.runtimeId)
       const payload = buildEphemeralVmRecipeCleanupPayload({

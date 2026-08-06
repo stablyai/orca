@@ -253,7 +253,7 @@ export function UsageOverviewPane(): React.JSX.Element {
             </h4>
             <p className="text-xs text-muted-foreground">
               {overview.enabledProviderCount}{' '}
-              {translate('auto.components.stats.UsageOverviewPane.ecb0cd8a4c', 'enabled -')}
+              {translate('auto.components.stats.UsageOverviewPane.ecb0cd8a4c', 'enabled -')}{' '}
               {overview.dataProviderCount}{' '}
               {translate('auto.components.stats.UsageOverviewPane.444585cb41', 'with data')}
             </p>

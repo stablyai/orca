@@ -45,6 +45,23 @@ export function buildWslInteractiveLoginShellCommand(): string {
     'if [ -z "$_orca_wsl_shell" ] || [ ! -x "$_orca_wsl_shell" ]; then',
     '  _orca_wsl_shell=/bin/sh',
     'fi',
+    '_orca_shell_ready_root=""',
+    'if [ -n "${ORCA_USER_DATA_PATH:-}" ]; then',
+    '  _orca_shell_ready_root="${ORCA_USER_DATA_PATH%/}/shell-ready"',
+    'fi',
+    '_orca_wsl_shell_name=$(basename "$_orca_wsl_shell" | tr "[:upper:]" "[:lower:]")',
+    'case "$_orca_wsl_shell_name" in',
+    '  bash)',
+    '    if [ -n "${_orca_shell_ready_root:-}" ] && [ -f "${_orca_shell_ready_root}/bash/rcfile" ]; then',
+    '      exec "$_orca_wsl_shell" --rcfile "${_orca_shell_ready_root}/bash/rcfile"',
+    '    fi',
+    '    ;;',
+    '  zsh)',
+    '    if [ -n "${_orca_shell_ready_root:-}" ] && [ -d "${_orca_shell_ready_root}/zsh" ]; then',
+    '      export ZDOTDIR="${_orca_shell_ready_root}/zsh"',
+    '    fi',
+    '    ;;',
+    'esac',
     'exec "$_orca_wsl_shell" -l'
   ].join('\n')
 }

@@ -78,6 +78,7 @@ export async function updateGitHubHostedReviewState(args: {
   repo: Repo
   prNumber: number
   nextState: 'open' | 'closed'
+  prRepo?: GitHubPRRepo | null
 }): Promise<Awaited<ReturnType<typeof window.api.gh.updatePRState>>> {
   const target = getGitHubActionTarget(args.repo)
   if (target.kind === 'environment') {
@@ -87,6 +88,7 @@ export async function updateGitHubHostedReviewState(args: {
       {
         repo: args.repo.id,
         prNumber: args.prNumber,
+        prRepo: args.prRepo ?? null,
         updates: { state: args.nextState }
       },
       { timeoutMs: 30_000 }
@@ -96,6 +98,7 @@ export async function updateGitHubHostedReviewState(args: {
     repoPath: args.repo.path,
     repoId: args.repo.id,
     prNumber: args.prNumber,
+    prRepo: args.prRepo ?? null,
     updates: { state: args.nextState }
   })
 }

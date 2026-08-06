@@ -68,6 +68,7 @@ async function renderTitleRename(props: {
   beginEditing: boolean
   disabled?: boolean
   onBeginEditingConsumed: () => void
+  onRename?: (displayName: string) => Promise<void> | void
 }): Promise<unknown> {
   reactHookRuntime.index = 0
   const module = await import('./WorktreeTitleInlineRename')
@@ -120,6 +121,27 @@ function findElementsByType(node: unknown, typeName: string): ReactElementLike[]
   return results
 }
 
+function pressInputKey(
+  input: ReactElementLike,
+  key: string,
+  options?: { isComposing?: boolean; keyCode?: number }
+): {
+  preventDefault: ReturnType<typeof vi.fn>
+  stopPropagation: ReturnType<typeof vi.fn>
+} {
+  const event = {
+    key,
+    nativeEvent: {
+      isComposing: options?.isComposing ?? false,
+      keyCode: options?.keyCode ?? 13
+    },
+    preventDefault: vi.fn(),
+    stopPropagation: vi.fn()
+  }
+  ;(input.props.onKeyDown as (nextEvent: typeof event) => void)(event)
+  return event
+}
+
 describe('WorktreeTitleInlineRename beginEditing', () => {
   beforeEach(() => {
     reactHookRuntime.states = []
@@ -151,5 +173,33 @@ describe('WorktreeTitleInlineRename beginEditing', () => {
 
     expect(onBeginEditingConsumed).toHaveBeenCalledTimes(1)
     expect(findElementsByType(rerender, 'input')).toHaveLength(0)
+  })
+
+  it('ignores IME composition Enter before committing the edited title', async () => {
+    const onBeginEditingConsumed = vi.fn()
+    const onRename = vi.fn()
+
+    await renderTitleRename({ beginEditing: true, onBeginEditingConsumed, onRename })
+    let rerender = expandNode(
+      await renderTitleRename({ beginEditing: false, onBeginEditingConsumed, onRename })
+    )
+    let input = findElementsByType(rerender, 'input')[0]
+    ;(input.props.onChange as (event: { target: { value: string } }) => void)({
+      target: { value: '日本語 workspace' }
+    })
+    rerender = expandNode(
+      await renderTitleRename({ beginEditing: false, onBeginEditingConsumed, onRename })
+    )
+    input = findElementsByType(rerender, 'input')[0]
+
+    const composingEvent = pressInputKey(input, 'Enter', { isComposing: true })
+
+    expect(composingEvent.preventDefault).not.toHaveBeenCalled()
+    expect(onRename).not.toHaveBeenCalled()
+
+    pressInputKey(input, 'Enter')
+    await Promise.resolve()
+
+    expect(onRename).toHaveBeenCalledWith('日本語 workspace')
   })
 })

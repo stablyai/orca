@@ -34,10 +34,12 @@ function buildManifest(tag: string): string {
 function respondWithAtom(
   tags: string[],
   missingManifestTags: string[] = [],
-  missingAssetTags: string[] = []
+  missingAssetTags: string[] = [],
+  unavailableManifestTags: string[] = []
 ): void {
   const missingManifests = new Set(missingManifestTags)
   const missingAssets = new Set(missingAssetTags)
+  const unavailableManifests = new Set(unavailableManifestTags)
   netFetchMock.mockImplementation((url: string, init?: { method?: string }) => {
     if (url === 'https://github.com/stablyai/orca/releases.atom') {
       return Promise.resolve({
@@ -49,8 +51,16 @@ function respondWithAtom(
     const manifestMatch = url.match(/\/releases\/download\/([^/]+)\/latest(?:-[a-z]+)?\.yml$/)
     if (manifestMatch) {
       const tag = decodeURIComponent(manifestMatch[1])
+      if (unavailableManifests.has(tag)) {
+        return Promise.resolve({
+          ok: false,
+          status: 503,
+          text: () => Promise.resolve('')
+        })
+      }
       return Promise.resolve({
         ok: !missingManifests.has(tag),
+        status: missingManifests.has(tag) ? 404 : 200,
         text: () => Promise.resolve(buildManifest(tag))
       })
     }
@@ -59,6 +69,7 @@ function respondWithAtom(
     if (assetMatch && init?.method === 'HEAD') {
       return Promise.resolve({
         ok: !missingAssets.has(decodeURIComponent(assetMatch[1])),
+        status: missingAssets.has(decodeURIComponent(assetMatch[1])) ? 404 : 200,
         text: () => Promise.resolve('')
       })
     }
@@ -187,6 +198,86 @@ describe('fetchNewerReleaseTag', () => {
     expect(await fetchNewerReleaseTag('1.3.19-rc.6')).toBe('v1.3.20-rc.1')
   })
 
+  it('ignores perf-tagged prereleases for regular RC checks', async () => {
+    respondWithAtom(['v1.4.121-rc.6.perf', 'v1.4.121-rc.6', 'v1.4.121-rc.5'])
+
+    const { fetchNewerReleaseTag } = await import('./updater-prerelease-feed')
+
+    expect(await fetchNewerReleaseTag('1.4.121-rc.5', { includePrerelease: true })).toBe(
+      'v1.4.121-rc.6'
+    )
+  })
+
+  it('reports no RC update when only perf-tagged prereleases are newer', async () => {
+    respondWithAtom(['v1.4.121-rc.6.perf', 'v1.4.121-rc.5'])
+
+    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
+
+    await expect(
+      fetchNewerReleaseTagsWithReadiness('1.4.121-rc.5', 1, { includePrerelease: true })
+    ).resolves.toEqual({
+      tags: [],
+      state: 'no-newer'
+    })
+  })
+
+  it('picks the semver-newest perf-tagged prerelease', async () => {
+    respondWithAtom([
+      'v1.4.121-rc.6.perf',
+      'v1.4.121-rc.7',
+      'v1.4.121-rc.5.perf',
+      'v1.4.121-rc.6',
+      'v1.4.122'
+    ])
+
+    const { fetchNewerReleaseTag } = await import('./updater-prerelease-feed')
+
+    expect(
+      await fetchNewerReleaseTag('1.4.120', {
+        includePrerelease: true,
+        releaseFilter: 'perf'
+      })
+    ).toBe('v1.4.121-rc.6.perf')
+  })
+
+  it('matches only literal rc.N.perf prerelease tags for perf checks', async () => {
+    respondWithAtom([
+      'v1.4.121-rc.7.performance',
+      'v1.4.121-beta.7.perf',
+      'v1.4.121-rc.7.perf.extra',
+      'v1.4.121-rc.6.perf'
+    ])
+
+    const { fetchNewerReleaseTag, isPerfPrereleaseTag } = await import('./updater-prerelease-feed')
+
+    expect(isPerfPrereleaseTag('v1.4.121-rc.6.perf')).toBe(true)
+    expect(isPerfPrereleaseTag('v1.4.121-rc.7.performance')).toBe(false)
+    expect(isPerfPrereleaseTag('v1.4.121-beta.7.perf')).toBe(false)
+    expect(isPerfPrereleaseTag('v1.4.121-rc.7.perf.extra')).toBe(false)
+    expect(
+      await fetchNewerReleaseTag('1.4.120', {
+        includePrerelease: true,
+        releaseFilter: 'perf'
+      })
+    ).toBe('v1.4.121-rc.6.perf')
+  })
+
+  it('reports no perf update instead of falling back to stable or RC tags', async () => {
+    respondWithAtom(['v1.4.122', 'v1.4.121-rc.7', 'v1.4.121'])
+
+    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
+
+    await expect(
+      fetchNewerReleaseTagsWithReadiness('1.4.120', 1, {
+        includePrerelease: true,
+        releaseFilter: 'perf'
+      })
+    ).resolves.toEqual({
+      tags: [],
+      state: 'no-newer'
+    })
+  })
+
   it('returns a bounded fallback candidate after the newest newer tag', async () => {
     respondWithAtom(['v1.3.51-rc.7', 'v1.3.51-rc.6', 'v1.3.51-rc.5'])
     const { fetchNewerReleaseTags } = await import('./updater-prerelease-feed')
@@ -207,6 +298,18 @@ describe('fetchNewerReleaseTag', () => {
       tags: [],
       state: 'not-ready',
       lastGoodTag: 'v1.4.1-rc.2'
+    })
+  })
+
+  it('reports manifest transport failures as unavailable', async () => {
+    respondWithAtom(['v1.4.2'], [], [], ['v1.4.2'])
+
+    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
+
+    await expect(fetchNewerReleaseTagsWithReadiness('1.4.0', 1)).resolves.toEqual({
+      tags: [],
+      state: 'unavailable',
+      unavailableReason: 'manifest'
     })
   })
 

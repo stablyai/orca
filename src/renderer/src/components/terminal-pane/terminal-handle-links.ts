@@ -275,5 +275,5 @@ async function focusRuntimeTerminalHandle(
     : ({ kind: 'local' } as const)
   // Why: main owns the `term_*` mapping. Defer to terminal.focus on click
   // instead of mirroring that state in renderer hover parsing.
-  await callRuntimeRpc(target, 'terminal.focus', { terminal: handle })
+  await callRuntimeRpc(target, 'terminal.focus', { terminal: handle, navigation: 'host' })
 }

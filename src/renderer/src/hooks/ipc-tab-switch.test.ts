@@ -1,6 +1,3 @@
-/* eslint-disable max-lines -- Why: tab-switch shortcut behavior is shared by
- * renderer and IPC entry points; keeping terminal, sequential, across-type,
- * and MRU cases together makes regressions obvious. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { getStateMock, getActiveTabNavOrderMock } = vi.hoisted(() => ({

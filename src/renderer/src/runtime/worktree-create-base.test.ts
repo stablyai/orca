@@ -1,42 +1,28 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { resolveWorktreeCreateBaseBranch } from './worktree-create-base'
 
 describe('resolveWorktreeCreateBaseBranch', () => {
-  it('uses an explicit Start-from selection before repo defaults', async () => {
-    const loadDefaultBaseRef = vi.fn().mockResolvedValue('origin/main')
-
+  it('uses an explicit Start-from selection', async () => {
     await expect(
       resolveWorktreeCreateBaseBranch({
-        explicitBaseBranch: 'origin/feature',
-        repoWorktreeBaseRef: 'dev',
-        loadDefaultBaseRef
+        explicitBaseBranch: ' origin/feature '
       })
     ).resolves.toBe('origin/feature')
-
-    expect(loadDefaultBaseRef).not.toHaveBeenCalled()
   })
 
-  it('uses the pinned repo worktree base before resolving the git primary', async () => {
-    const loadDefaultBaseRef = vi.fn().mockResolvedValue('origin/main')
-
+  it('omits repo defaults so backend create owns base selection', async () => {
     await expect(
       resolveWorktreeCreateBaseBranch({
-        explicitBaseBranch: undefined,
-        repoWorktreeBaseRef: ' dev ',
-        loadDefaultBaseRef
+        explicitBaseBranch: undefined
       })
-    ).resolves.toBe('dev')
-
-    expect(loadDefaultBaseRef).not.toHaveBeenCalled()
+    ).resolves.toBeUndefined()
   })
 
-  it('falls back to the git primary when no explicit or pinned base exists', async () => {
+  it('omits blank explicit selections', async () => {
     await expect(
       resolveWorktreeCreateBaseBranch({
-        explicitBaseBranch: undefined,
-        repoWorktreeBaseRef: undefined,
-        loadDefaultBaseRef: vi.fn().mockResolvedValue('origin/main')
+        explicitBaseBranch: '   '
       })
-    ).resolves.toBe('origin/main')
+    ).resolves.toBeUndefined()
   })
 })

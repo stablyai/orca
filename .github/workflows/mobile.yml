@@ -9,6 +9,9 @@ on:
       - ready_for_review
     paths:
       - 'mobile/**'
+      # Why: the mobile terminal link parsers are conformance-tested against
+      # these shared fixtures; desktop-side fixture edits must re-run this suite.
+      - 'src/shared/terminal-file-link-conformance.ts'
 
 jobs:
   verify:
@@ -26,6 +29,11 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -48,10 +56,13 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Typecheck
-        run: npx tsc --noEmit
+        run: pnpm typecheck
 
       - name: Test
         run: pnpm test
+
+      - name: Test iOS release version resolution
+        run: ruby fastlane/ios_release_version_test.rb
 
       - name: Lint
         run: pnpm lint

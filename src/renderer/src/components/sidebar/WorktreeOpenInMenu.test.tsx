@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DropdownMenuSubContent, DropdownMenuSubTrigger } from '@/components/ui/dropdown-menu'
 import {
   getWorktreeOpenInEntries,
+  getOpenInEntryAvailability,
   getLocalFileManagerLabel,
   openOpenInAppsSettings,
   openWorktreePath,
@@ -161,7 +162,11 @@ describe('WorktreeOpenInMenu', () => {
       connectionId: null
     })
 
-    expect(openInExternalEditorMock).toHaveBeenCalledWith('/tmp/workspace', undefined)
+    expect(openInExternalEditorMock).toHaveBeenCalledWith({
+      path: '/tmp/workspace',
+      command: undefined,
+      connectionId: null
+    })
     expect(toastErrorMock).toHaveBeenCalledWith('Could not open workspace folder.', {
       description: 'Check the editor command or file manager configuration on this machine.'
     })
@@ -198,7 +203,11 @@ describe('WorktreeOpenInMenu', () => {
       connectionId: null,
       command: 'cursor'
     })
-    expect(openInExternalEditorMock).toHaveBeenCalledWith('/tmp/workspace', 'cursor')
+    expect(openInExternalEditorMock).toHaveBeenCalledWith({
+      path: '/tmp/workspace',
+      command: 'cursor',
+      connectionId: null
+    })
   })
 
   it('blocks configured launchers in remote context before calling main IPC', async () => {
@@ -213,7 +222,89 @@ describe('WorktreeOpenInMenu', () => {
 
     expect(openInExternalEditorMock).not.toHaveBeenCalled()
     expect(toastErrorMock).toHaveBeenCalledWith(
-      'Opening remote paths in the local OS is not available.'
+      'Opening this path in a local app is not available.',
+      { description: 'Switch to a local or SSH workspace, then try again.' }
+    )
+  })
+
+  it('enables only VS Code-compatible launchers for SSH paths', () => {
+    const entries = getWorktreeOpenInEntries(
+      [
+        { id: 'renamed', label: 'My Remote Editor', command: 'code-insiders' },
+        { id: 'fake', label: 'VS Code', command: 'cursor' },
+        { id: 'compound', label: 'VS Code Reuse', command: 'code --reuse-window' }
+      ],
+      'Finder'
+    )
+
+    expect(getOpenInEntryAvailability(entries[0], mockState.settings, 'ssh-1')).toEqual({
+      disabled: false,
+      metadata: 'Remote SSH'
+    })
+    expect(getOpenInEntryAvailability(entries[1], mockState.settings, 'ssh-1')).toEqual({
+      disabled: true,
+      metadata: 'Local only'
+    })
+    expect(getOpenInEntryAvailability(entries[2], mockState.settings, 'ssh-1')).toEqual({
+      disabled: true,
+      metadata: 'Local only'
+    })
+    expect(getOpenInEntryAvailability(entries[3], mockState.settings, 'ssh-1')).toEqual({
+      disabled: true,
+      metadata: 'Local only'
+    })
+  })
+
+  it('forwards SSH context for a supported VS Code launcher', async () => {
+    await openWorktreePath({
+      target: 'external-editor',
+      worktreePath: '/home/ada/project',
+      connectionId: 'ssh-1',
+      command: 'code'
+    })
+
+    expect(openInExternalEditorMock).toHaveBeenCalledWith({
+      path: '/home/ada/project',
+      command: 'code',
+      connectionId: 'ssh-1'
+    })
+  })
+
+  it('blocks SSH local-only launchers before IPC with actionable copy', async () => {
+    await openWorktreePath({
+      target: 'external-editor',
+      worktreePath: '/home/ada/project',
+      connectionId: 'ssh-1',
+      command: 'cursor'
+    })
+
+    expect(openInExternalEditorMock).not.toHaveBeenCalled()
+    expect(toastErrorMock).toHaveBeenCalledWith('This app cannot open SSH workspaces.', {
+      description: 'Choose VS Code or use the app locally.'
+    })
+  })
+
+  it('shows the SSH alias recovery details returned by main', async () => {
+    openInExternalEditorMock.mockResolvedValueOnce({
+      ok: false,
+      reason: 'ssh-alias-required',
+      host: 'builder.example.com',
+      port: 2222
+    })
+
+    await openWorktreePath({
+      target: 'external-editor',
+      worktreePath: '/srv/project',
+      connectionId: 'ssh-1',
+      command: 'code'
+    })
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'VS Code needs an SSH config alias for this host.',
+      {
+        description:
+          'Add a Host alias for builder.example.com:2222 to your local SSH config, reconnect the workspace, then try again.'
+      }
     )
   })
 })

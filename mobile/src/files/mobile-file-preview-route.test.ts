@@ -22,8 +22,66 @@ describe('mobile-file-preview-route', () => {
         hostId: 'host-1',
         worktreeId: 'wt-1',
         relativePath,
+        source: 'worktree',
+        line: undefined,
+        column: undefined,
         name: 'note.md',
         worktreeName: 'Orca'
+      }
+    })
+  })
+
+  it('normalizes worktree preview line and column params', () => {
+    const route = normalizeMobileFilePreviewRouteParams({
+      hostId: 'host-1',
+      worktreeId: 'wt-1',
+      relativePath: 'src/app.ts',
+      line: '120',
+      column: '7'
+    })
+
+    expect(route).toEqual({
+      ok: true,
+      params: {
+        hostId: 'host-1',
+        worktreeId: 'wt-1',
+        relativePath: 'src/app.ts',
+        source: 'worktree',
+        line: '120',
+        column: '7',
+        name: undefined,
+        worktreeName: undefined
+      }
+    })
+  })
+
+  it('normalizes terminal artifact params without requiring a relative path', () => {
+    const route = normalizeMobileFilePreviewRouteParams({
+      hostId: 'host-1',
+      worktreeId: 'wt-1',
+      source: 'terminalArtifact',
+      absolutePath: '/tmp/result.json',
+      grantId: 'grant-1',
+      terminal: 'term-1',
+      pathText: 'result.json',
+      cwd: '/tmp/run',
+      line: '12',
+      column: '3'
+    })
+
+    expect(route).toEqual({
+      ok: true,
+      params: {
+        hostId: 'host-1',
+        worktreeId: 'wt-1',
+        source: 'terminalArtifact',
+        absolutePath: '/tmp/result.json',
+        grantId: 'grant-1',
+        terminal: 'term-1',
+        pathText: 'result.json',
+        cwd: '/tmp/run',
+        line: '12',
+        column: '3'
       }
     })
   })

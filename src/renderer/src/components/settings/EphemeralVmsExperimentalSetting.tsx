@@ -26,13 +26,10 @@ export function EphemeralVmsExperimentalSetting({
       className="max-w-none space-y-4 py-2"
       id="ephemeral-vms"
     >
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex max-w-3xl items-start justify-between gap-4">
         <div className="min-w-0 shrink space-y-0.5">
           <Label>
-            {translate(
-              'auto.components.settings.ephemeralVms.search.title',
-              'Per-Workspace Environments'
-            )}
+            {translate('auto.components.settings.ephemeralVms.search.cloudVmTitle', 'Cloud VM')}
           </Label>
           <p className="text-xs text-muted-foreground">
             {translate(
@@ -44,8 +41,8 @@ export function EphemeralVmsExperimentalSetting({
         <SettingsSwitch
           checked={enabled}
           ariaLabel={translate(
-            'auto.components.settings.ephemeralVmsExperimentalSetting.toggleLabel',
-            'Toggle per-workspace environments'
+            'auto.components.settings.ephemeralVmsExperimentalSetting.cloudVmToggleLabel',
+            'Toggle Cloud VM'
           )}
           onChange={() => updateSettings({ experimentalEphemeralVms: !enabled })}
         />

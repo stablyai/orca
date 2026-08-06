@@ -9,6 +9,10 @@ type LocalRepoWorktreeListOptions = {
   signal?: AbortSignal
 }
 
+function hasLocalRepoWorktreeListOptions(options: LocalRepoWorktreeListOptions | undefined) {
+  return options?.wslDistro !== undefined || options?.signal !== undefined
+}
+
 export function isRepoRoot(repos: Repo[], resolvedTarget: string): boolean {
   return repos.some(
     (repo) => !repo.connectionId && areWorktreePathsEqual(repo.path, resolvedTarget)
@@ -30,7 +34,7 @@ export function createFolderWorktree(repo: Repo): GitWorktreeInfo {
 
 export async function listRepoWorktrees(
   repo: Repo,
-  options: LocalRepoWorktreeListOptions = {}
+  options?: LocalRepoWorktreeListOptions
 ): Promise<GitWorktreeInfo[]> {
   if (isFolderRepo(repo)) {
     return [createFolderWorktree(repo)]
@@ -42,7 +46,7 @@ export async function listRepoWorktrees(
     // local git against a server path.
     return provider ? await provider.listWorktrees(repo.path) : []
   }
-  return options.wslDistro
+  return hasLocalRepoWorktreeListOptions(options)
     ? await listWorktrees(repo.path, options)
     : await listWorktrees(repo.path)
 }

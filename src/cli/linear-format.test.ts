@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   LinearCreateResult,
   LinearIssueContextResult,
+  LinearMcpIssueListResult,
   LinearProjectListResult,
   LinearSearchResult
 } from '../shared/linear-agent-access'
@@ -9,6 +10,7 @@ import {
   formatLinearCreate,
   formatLinearIssue,
   formatLinearProjectList,
+  printLinearMcpIssueListWarnings,
   printLinearSearchWarnings
 } from './linear-format'
 
@@ -34,6 +36,26 @@ describe('linear-format', () => {
     printLinearSearchWarnings(result)
 
     expect(console.error).not.toHaveBeenCalled()
+  })
+
+  it('binds a list continuation hint to its Linear workspace', () => {
+    printLinearMcpIssueListWarnings({
+      issues: [],
+      meta: {
+        limit: 20,
+        returned: 20,
+        hasMore: true,
+        nextCursor: 'next-page',
+        orderBy: 'updatedAt',
+        workspaceId: 'workspace-1',
+        partial: false,
+        workspaceErrors: []
+      }
+    } as LinearMcpIssueListResult)
+
+    expect(console.error).toHaveBeenCalledWith(
+      'warning: more results available; next cursor: next-page; continue with --workspace workspace-1'
+    )
   })
 
   it('includes task fields in issue readback text', () => {

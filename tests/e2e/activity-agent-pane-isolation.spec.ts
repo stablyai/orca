@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Activity E2E keeps the setup helpers beside the split-pane, split-group, and workspace-card routing assertions they support. */
 import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import {
@@ -307,14 +306,25 @@ test.describe('Activity Agent Pane Isolation', () => {
     await splitActiveTerminalPane(orcaPage, 'vertical')
     await waitForPaneCount(orcaPage, 2)
     const snapshot = await waitForPaneIdentitySnapshot(orcaPage, 2)
-    const firstPane = snapshot.panes[0]
-    if (!firstPane) {
+    // Why: useAutoAckViewedAgent (App.tsx) auto-acknowledges the agent on the
+    // store's *active* visible terminal leaf the instant its status lands, which
+    // clears the unread badge before we can assert it (flaky on focused xvfb CI
+    // windows). Seed on the non-active split pane — auto-ack only ever targets the
+    // active leaf — so the badge stays unread until the explicit acknowledgeAgents()
+    // call under test.
+    const activeLeafId = await orcaPage.evaluate(
+      (tabId) => window.__store?.getState().terminalLayoutsByTabId[tabId]?.activeLeafId ?? null,
+      snapshot.tabId
+    )
+    const targetPane =
+      snapshot.panes.find((pane) => pane.leafId !== activeLeafId) ?? snapshot.panes[0]
+    if (!targetPane) {
       throw new Error('Activity acknowledgement test needs a split pane')
     }
     const now = Date.now()
     const thread: SeededActivityThread = {
-      paneKey: `${snapshot.tabId}:${firstPane.leafId}`,
-      leafId: firstPane.leafId,
+      paneKey: `${snapshot.tabId}:${targetPane.leafId}`,
+      leafId: targetPane.leafId,
       prompt: `ACTIVITY_ACK_STABLE_PANE_${now}`
     }
 

@@ -8,6 +8,7 @@ import {
 
 export type RemoteRuntimePtyBatcher = {
   push: (data: string) => boolean
+  hasPendingValidation: () => boolean
   drain: () => Promise<void>
   takePending: () => string
   flush: () => void
@@ -145,6 +146,10 @@ export function createRemoteRuntimePtyTextBatcher(
       enqueueValidatedInput(data, tooLarge)
       return true
     },
+    // Why: earlier input can be mid async byte-length validation and not yet in
+    // `pending`. `takePending()` cannot see it, so callers that must preserve
+    // byte order (sendInputImmediate) check this before bypassing the queue.
+    hasPendingValidation: (): boolean => validationTail !== null,
     drain,
     takePending,
     flush,
@@ -168,6 +173,9 @@ export function createRemoteRuntimeViewportBatcher(
       clearTimeout(timer)
       timer = null
     }
+    // Why: also drop the queued viewport so a later flush()/reuse can't emit a
+    // stale resize after the batcher was cleared on teardown/resubscribe.
+    pending = null
   }
 
   const flush = (): void => {

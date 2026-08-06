@@ -3,7 +3,6 @@ import { useAppStore } from '@/store'
 import { clearWorktreeSleepIntent, markWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
 import { translate } from '@/i18n/i18n'
-import { PINNED_GROUP_KEY } from './worktree-list-groups'
 
 /**
  * Shared "sleep worktree" flow (close all panels to free memory / CPU)
@@ -28,13 +27,19 @@ function getSidebarWorktreeOptions(worktreeId: string): HTMLElement[] {
   )
 }
 
+function isPinnedSidebarWorktreeOption(element: HTMLElement): boolean {
+  // Why: duplicated pinned rows share a worktree id; the row-key prefix is the
+  // stable row-scoped signal that distinguishes the pinned copy from natural rows.
+  return element.dataset.worktreeRowKey?.startsWith('pinned:') === true
+}
+
 function findPrimarySidebarWorktreeOption(worktreeId: string): HTMLElement | null {
   const options = getSidebarWorktreeOptions(worktreeId)
   return (
     options.find((element) =>
       element.querySelector<HTMLElement>('[data-worktree-card-active="primary"]')
     ) ??
-    options.find((element) => element.dataset.worktreeSectionKey !== PINNED_GROUP_KEY) ??
+    options.find((element) => !isPinnedSidebarWorktreeOption(element)) ??
     options[0] ??
     null
   )
@@ -101,6 +106,31 @@ function preserveSidebarWorktreePosition(worktreeId: string): () => void {
   }
 }
 
+function describeSleepFailure(error: unknown): string {
+  const detail = error instanceof Error ? error.message : String(error)
+  if (detail.includes('legacy')) {
+    return translate(
+      'auto.components.sidebar.sleep.worktree.flow.legacy.unverified',
+      'The older host runtime could not confirm terminal shutdown. The workspace was kept open; update the host and try again.'
+    )
+  }
+  if (
+    detail.includes('terminal_') ||
+    detail.includes('runtime') ||
+    detail.includes('connection') ||
+    detail.includes('Daemon')
+  ) {
+    return translate(
+      'auto.components.sidebar.sleep.worktree.flow.host.unverified',
+      'The host could not confirm terminal shutdown. The workspace was kept open; check the connection and try again.'
+    )
+  }
+  return translate(
+    'auto.components.sidebar.sleep.worktree.flow.retry',
+    'The workspace was kept open. Try again; if the problem continues, check the host connection.'
+  )
+}
+
 export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise<void> {
   if (worktreeIds.length === 0) {
     return
@@ -124,6 +154,7 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
     restoreSidebarPosition()
   }
   const errors: string[] = []
+  const failedWorktreeIds = new Set<string>()
   try {
     for (const worktreeId of worktreeIds) {
       try {
@@ -134,7 +165,9 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
         // browserPagesByWorkspace entries and live webviews for the slept worktree.
         await shutdownWorktreeBrowsers(worktreeId)
       } catch (err) {
-        errors.push(err instanceof Error ? err.message : String(err))
+        console.error('[sleep-worktree] browser shutdown failed', { worktreeId, error: err })
+        failedWorktreeIds.add(worktreeId)
+        errors.push(describeSleepFailure(err))
         continue
       }
       try {
@@ -150,18 +183,25 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
           await window.api.ephemeralVm.suspendWorkspace({ workspaceId: worktreeId })
         }
       } catch (err) {
-        errors.push(err instanceof Error ? err.message : String(err))
+        console.error('[sleep-worktree] terminal or host suspension failed', {
+          worktreeId,
+          error: err
+        })
+        failedWorktreeIds.add(worktreeId)
+        errors.push(describeSleepFailure(err))
       }
     }
   } finally {
     if (activeSleepIntentWorktreeId) {
       clearWorktreeSleepIntent(activeSleepIntentWorktreeId)
+      if (failedWorktreeIds.has(activeSleepIntentWorktreeId)) {
+        // Why: any failed sleep step must leave the workspace visible and retryable.
+        setActiveWorktree(activeSleepIntentWorktreeId)
+      }
     }
   }
   if (errors.length > 0) {
-    // Why: callers are fire-and-forget; surface the failure as a toast and
-    // otherwise continue — the active-worktree reset already happened so we
-    // don't leave the UI in a stale state.
+    // Why: callers are fire-and-forget; surface actionable teardown failures after restoring retryable UI state.
     toast.error(
       worktreeIds.length === 1
         ? translate(

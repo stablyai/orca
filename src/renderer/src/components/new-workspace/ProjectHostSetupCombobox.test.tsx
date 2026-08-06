@@ -61,8 +61,9 @@ const needsSetupOption: NeedsSetupProjectHostOption = {
   projectId: 'project-1',
   hostId: 'ssh:builder',
   label: 'Builder',
-  detail: 'Project not set up on this host',
-  isAvailable: true
+  detail: 'Project location not set',
+  isAvailable: true,
+  attention: false
 }
 
 const unavailableOption: NeedsSetupProjectHostOption = {
@@ -72,7 +73,8 @@ const unavailableOption: NeedsSetupProjectHostOption = {
   hostId: 'runtime:old',
   label: 'Old server',
   detail: 'Update Orca on this host to set up projects',
-  isAvailable: false
+  isAvailable: false,
+  attention: false
 }
 
 beforeEach(() => {
@@ -127,7 +129,7 @@ describe('ProjectHostSetupCombobox', () => {
     expect(
       container.querySelector<HTMLButtonElement>('[data-command-value="needs-setup:ssh:builder"]')
     ).toBeNull()
-    expect(container.textContent).not.toContain('Project not set up on this host')
+    expect(container.textContent).not.toContain('Project location not set')
     expect(onValueChange).not.toHaveBeenCalled()
   })
 

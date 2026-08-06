@@ -1,6 +1,7 @@
 import type { IDisposable } from '@xterm/xterm'
 
 export type MacNativeTextInputSourceFeatures = Readonly<{
+  forwardHangulJamo: boolean
   forwardAsciiPunctuation: boolean
   forwardShortTextReplacements: boolean
 }>
@@ -14,16 +15,25 @@ export type MacNativeTextInputSourceTracker = IDisposable & {
 type KeyboardInputSourceReader = () => Promise<string | null>
 
 export const DISABLED_MAC_NATIVE_TEXT_INPUT_SOURCE_FEATURES = Object.freeze({
+  forwardHangulJamo: false,
   forwardAsciiPunctuation: false,
   forwardShortTextReplacements: false
 }) satisfies MacNativeTextInputSourceFeatures
 
 const CJK_NATIVE_TEXT_INPUT_SOURCE_FEATURES = Object.freeze({
+  forwardHangulJamo: false,
+  forwardAsciiPunctuation: true,
+  forwardShortTextReplacements: false
+}) satisfies MacNativeTextInputSourceFeatures
+
+const KOREAN_NATIVE_TEXT_INPUT_SOURCE_FEATURES = Object.freeze({
+  forwardHangulJamo: true,
   forwardAsciiPunctuation: true,
   forwardShortTextReplacements: false
 }) satisfies MacNativeTextInputSourceFeatures
 
 const VIETNAMESE_NATIVE_TEXT_INPUT_SOURCE_FEATURES = Object.freeze({
+  forwardHangulJamo: false,
   forwardAsciiPunctuation: false,
   forwardShortTextReplacements: true
 }) satisfies MacNativeTextInputSourceFeatures
@@ -55,6 +65,7 @@ const CJK_INPUT_SOURCE_TERMS = [
 ] as const
 
 const VIETNAMESE_INPUT_SOURCE_TERMS = ['telex', 'unikey', 'vietnam', 'vni'] as const
+const KOREAN_INPUT_SOURCE_TERMS = ['hangul', 'korean'] as const
 
 const KEYBOARD_ACTIVITY_REFRESH_COOLDOWN_MS = 1000
 
@@ -89,6 +100,9 @@ export function getMacNativeTextInputSourceFeatures(
   const normalized = id?.trim().toLowerCase()
   if (!normalized) {
     return DISABLED_MAC_NATIVE_TEXT_INPUT_SOURCE_FEATURES
+  }
+  if (KOREAN_INPUT_SOURCE_TERMS.some((term) => normalized.includes(term))) {
+    return KOREAN_NATIVE_TEXT_INPUT_SOURCE_FEATURES
   }
   if (CJK_INPUT_SOURCE_TERMS.some((term) => normalized.includes(term))) {
     return CJK_NATIVE_TEXT_INPUT_SOURCE_FEATURES
@@ -162,7 +176,11 @@ export function createMacNativeTextInputSourceTracker(
       requestKeyboardActivityRefresh(true)
       return
     }
-    if (!features.forwardAsciiPunctuation && !features.forwardShortTextReplacements) {
+    if (
+      !features.forwardHangulJamo &&
+      !features.forwardAsciiPunctuation &&
+      !features.forwardShortTextReplacements
+    ) {
       requestKeyboardActivityRefresh(false)
     }
   }
@@ -175,7 +193,10 @@ export function createMacNativeTextInputSourceTracker(
   requestRefresh()
 
   return {
-    isActive: () => features.forwardAsciiPunctuation || features.forwardShortTextReplacements,
+    isActive: () =>
+      features.forwardHangulJamo ||
+      features.forwardAsciiPunctuation ||
+      features.forwardShortTextReplacements,
     getFeatures: () => features,
     refresh,
     dispose: () => {

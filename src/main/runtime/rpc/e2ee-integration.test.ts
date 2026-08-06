@@ -44,7 +44,10 @@ describe('E2EE integration (simulated mobile ↔ desktop)', () => {
 
     channel = new E2EEChannel(mockWs as unknown as WebSocket, {
       serverSecretKey: serverKeys.secretKey,
-      validateToken: (token) => token === 'device-abc',
+      resolveAuthenticatedDevice: (token) =>
+        token === 'device-abc'
+          ? { deviceId: 'device-abc', deviceToken: token, scope: 'mobile' }
+          : null,
       onReady,
       onError
     })
@@ -118,7 +121,10 @@ describe('E2EE integration (simulated mobile ↔ desktop)', () => {
     const newMobileKeys = generateKeyPair()
     const newChannel = new E2EEChannel(mockWs as unknown as WebSocket, {
       serverSecretKey: serverKeys.secretKey,
-      validateToken: (token) => token === 'device-abc',
+      resolveAuthenticatedDevice: (token) =>
+        token === 'device-abc'
+          ? { deviceId: 'device-abc', deviceToken: token, scope: 'mobile' }
+          : null,
       onReady,
       onError
     })

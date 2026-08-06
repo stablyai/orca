@@ -5,6 +5,8 @@ import {
   type SleepingAgentSessionRecord
 } from '../../../shared/agent-session-resume'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { lastInputBlocksHibernation } from './agent-hibernation-input-guard'
+import { isCompletedPiCompatibleAgentWithLiveRecoveryRecord } from './pi-compatible-live-recovery-record'
 import type { GlobalSettings, TerminalLayoutSnapshot, TerminalTab } from '../../../shared/types'
 import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 
@@ -108,6 +110,12 @@ function getEntryTabId(entry: AgentStatusEntry): string | null {
   return parsePaneKey(entry.paneKey)?.tabId ?? null
 }
 
+// Why: provider done hooks can fire mid-Dispatch; only runtime-confirmed settlement makes sleep safe.
+const hasUnsettledOrUnknownDispatch = ({ orchestration }: AgentStatusEntry): boolean =>
+  orchestration
+    ? !['completed', 'failed', 'circuit_broken'].includes(orchestration.dispatchStatus ?? '')
+    : false
+
 function getEligiblePane(args: {
   entry: AgentStatusEntry
   tab: TerminalTab
@@ -130,10 +138,17 @@ function getEligiblePane(args: {
     foregroundTerminalLastSeenAtByTabId,
     mobileLockedPtyIds
   } = args
+  const sleepingRecord = sleepingAgentSessionsByPaneKey[entry.paneKey]
+  // Why: a Pi-compatible done hook ends a turn, not its TUI. Its live
+  // recovery checkpoint must not make the pane look already hibernated.
+  const hasOnlyLivePiCompatibleRecoveryIdentity =
+    isCompletedPiCompatibleAgentWithLiveRecoveryRecord(entry, sleepingRecord, tab.worktreeId)
   if (
     entry.state !== 'done' ||
     entry.interrupted === true ||
-    sleepingAgentSessionsByPaneKey[entry.paneKey]
+    Boolean(entry.subagents?.length) ||
+    hasUnsettledOrUnknownDispatch(entry) ||
+    (sleepingRecord && !hasOnlyLivePiCompatibleRecoveryIdentity)
   ) {
     return null
   }
@@ -162,7 +177,14 @@ function getEligiblePane(args: {
     return null
   }
   const inputAt = lastTerminalInputAtByPaneKey[entry.paneKey]
-  if (typeof inputAt === 'number' && Number.isFinite(inputAt) && inputAt > entry.updatedAt) {
+  // Why: killing the PTY discards the TUI composer's draft and any queued
+  // messages. The old input-after-done compare missed drafts typed while the
+  // agent was still working — the class that lost a user's draft in prod.
+  if (
+    typeof inputAt === 'number' &&
+    Number.isFinite(inputAt) &&
+    lastInputBlocksHibernation(entry, inputAt)
+  ) {
     return null
   }
   const livePane = getPaneLivePtyId(entry, layout)

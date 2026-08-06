@@ -62,8 +62,25 @@ export function getDiscardEntryConfirmationCopy(
 
 export function getDiscardAreaConfirmationCopy(
   area: DiscardAllArea,
-  count: number
+  count: number,
+  hasUntracked = false
 ): DiscardConfirmationCopy {
+  if (area === 'unstaged' && hasUntracked) {
+    return {
+      title: translate(
+        'auto.components.right.sidebar.source.control.discard.confirmation.mixedTitle',
+        'Discard changes and delete untracked files?'
+      ),
+      description: translate(
+        'auto.components.right.sidebar.source.control.discard.confirmation.mixedDescription',
+        'Tracked changes will be reverted and untracked files will be permanently deleted. This cannot be undone.'
+      ),
+      confirmLabel: translate(
+        'auto.components.right.sidebar.source.control.discard.confirmation.mixedConfirm',
+        'Delete and discard'
+      )
+    }
+  }
   switch (area) {
     case 'untracked':
       return {

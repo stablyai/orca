@@ -56,10 +56,26 @@ export function buildWindowsPtyCompatibilityOptions(
   if (!isLocalNativeWindowsConpty(context)) {
     return {}
   }
-  const buildNumber = parseWindowsBuildNumber(context.osRelease)
-  return {
-    windowsPty: buildXtermWindowsPtyOptions(buildNumber)
-  }
+  return buildLocalConptyTerminalOptions(context.osRelease)
+}
+
+/** ConPTY backend options for a pane already known to be local native Windows —
+ *  the dashboard preview resolves that verdict upstream and reuses this. */
+export function buildLocalConptyTerminalOptions(
+  osRelease: string | null | undefined
+): Partial<ITerminalOptions> {
+  return { windowsPty: buildXtermWindowsPtyOptions(parseWindowsBuildNumber(osRelease)) }
+}
+
+/** Mirror of main's effectiveShellOverride fold (pty.ts spawn handlers): a
+ *  tab-level shell override wins, else the global Windows shell setting
+ *  applies — so renderer and main classify a global-WSL default identically
+ *  (the main-side twin is isNativeWindowsLocalPtySpawn). */
+export function resolveWindowsShellOverride(
+  tabShellOverride: string | null | undefined,
+  globalWindowsShell: string | null | undefined
+): string | undefined {
+  return tabShellOverride ?? globalWindowsShell ?? undefined
 }
 
 /**

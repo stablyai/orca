@@ -14,28 +14,27 @@ describe('resource manager terminal copy', () => {
   it('points users from the status-bar count back to workspace terminals', () => {
     expect(
       getResourceManagerTooltipLines({
-        memoryLabel: '512 MB',
+        memoryLabel: '512 MB · Σ RSS',
         sessionCount: 2,
-        runtimeEnvironmentActive: false,
         spaceScanReady: false
       })
     ).toEqual([
-      'Resource Manager - 512 MB - 2 terminal sessions',
+      'Resource Manager - 512 MB · Σ RSS - 2 terminal sessions',
       'Terminal sessions are grouped by workspace.'
     ])
   })
 
-  it('does not advertise local session navigation for runtime servers', () => {
+  it('keeps local session copy active under runtime focus', () => {
     expect(
       getResourceManagerTooltipLines({
         memoryLabel: '-',
         sessionCount: 0,
-        runtimeEnvironmentActive: true,
         spaceScanReady: true
       })
     ).toEqual([
       'Resource Manager - memory unavailable - 0 terminal sessions',
-      'Local terminal sessions are hidden for runtime servers.'
+      'Space scan ready',
+      'No terminal sessions yet.'
     ])
   })
 
@@ -43,7 +42,6 @@ describe('resource manager terminal copy', () => {
     expect(
       getResourceManagerAriaLabel({
         sessionCount: 1,
-        runtimeEnvironmentActive: false,
         spaceScanReady: true
       })
     ).toBe('Resource Manager, 1 terminal session, Space scan ready')

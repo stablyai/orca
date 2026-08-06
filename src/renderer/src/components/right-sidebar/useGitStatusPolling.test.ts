@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as React from 'react'
 import type { FsChangedPayload, GitPushTarget, GitStatusResult } from '../../../../shared/types'
+import { DEFAULT_GIT_STATUS_LIMIT } from '../../../../shared/git-status-limit'
 
 const worktree = { id: 'repo-1::/repo', repoId: 'repo-1', path: '/repo' }
 const repo = { id: 'repo-1', path: '/repo', kind: 'git', connectionId: null as string | null }
@@ -46,6 +47,8 @@ async function usePollingOnce(
     sshStatus?: string
     enabled?: boolean
     expectStatusCall?: boolean
+    stateOverrides?: Partial<PollState>
+    documentStub?: object
   } = {}
 ): Promise<{ state: PollState; gitStatus: ReturnType<typeof vi.fn> }> {
   vi.resetModules()
@@ -67,6 +70,7 @@ async function usePollingOnce(
     rightSidebarTab: 'source-control',
     openFiles: []
   }
+  Object.assign(state, options.stateOverrides)
   const mockedRepo = { ...repo, connectionId: options.connectionId ?? null }
   const gitStatus = vi.fn().mockResolvedValue(status)
 
@@ -112,18 +116,24 @@ async function usePollingOnce(
         watchWorktree: vi.fn().mockResolvedValue(undefined),
         unwatchWorktree: vi.fn().mockResolvedValue(undefined),
         onFsChanged: vi.fn(() => vi.fn())
+      },
+      worktrees: {
+        onChanged: vi.fn(() => vi.fn())
       }
     },
     addEventListener: vi.fn(),
     removeEventListener: vi.fn()
   })
 
-  vi.stubGlobal('document', {
-    visibilityState: 'visible',
-    hasFocus: () => true,
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn()
-  })
+  vi.stubGlobal(
+    'document',
+    options.documentStub ?? {
+      visibilityState: 'visible',
+      hasFocus: () => true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    }
+  )
   vi.stubGlobal('setInterval', vi.fn())
   vi.stubGlobal('clearInterval', vi.fn())
 
@@ -226,6 +236,27 @@ describe('useGitStatusPolling', () => {
 
     expect(gitStatus).not.toHaveBeenCalled()
     expect(state.setGitStatus).not.toHaveBeenCalled()
+    expect(globalThis.setInterval).not.toHaveBeenCalled()
+  })
+
+  it('uses the safety scheduler instead of an interval for terminal-only branch detection', async () => {
+    const { gitStatus } = await usePollingOnce(
+      {
+        entries: [],
+        conflictOperation: 'unknown',
+        head: 'abc123',
+        branch: 'refs/heads/main'
+      },
+      {
+        stateOverrides: {
+          rightSidebarOpen: false,
+          openFiles: []
+        }
+      }
+    )
+
+    expect(gitStatus).toHaveBeenCalledTimes(1)
+    expect(globalThis.setInterval).not.toHaveBeenCalled()
   })
 
   it('does not install the visible git status poll while disabled', async () => {
@@ -339,6 +370,9 @@ describe('useGitStatusPolling', () => {
           watchWorktree: vi.fn().mockResolvedValue(undefined),
           unwatchWorktree: vi.fn().mockResolvedValue(undefined),
           onFsChanged: vi.fn(() => vi.fn())
+        },
+        worktrees: {
+          onChanged: vi.fn(() => vi.fn())
         }
       },
       addEventListener: vi.fn((type: string, listener: EventListener) => {
@@ -378,6 +412,7 @@ describe('useGitStatusPolling', () => {
 
     await vi.advanceTimersByTimeAsync(125)
     expect(gitStatus).toHaveBeenCalledTimes(1)
+    // Why: evidence refreshes keep the 3s anti-churn floor from the last run.
     await vi.advanceTimersByTimeAsync(2875)
     await vi.waitFor(() => expect(gitStatus).toHaveBeenCalledTimes(2))
     expect(window.api.fs.watchWorktree).not.toHaveBeenCalled()
@@ -448,6 +483,9 @@ describe('useGitStatusPolling', () => {
           watchWorktree: vi.fn().mockResolvedValue(undefined),
           unwatchWorktree: vi.fn().mockResolvedValue(undefined),
           onFsChanged: vi.fn(() => vi.fn())
+        },
+        worktrees: {
+          onChanged: vi.fn(() => vi.fn())
         }
       },
       addEventListener: vi.fn((type: string, listener: EventListener) => {
@@ -569,6 +607,9 @@ describe('useGitStatusPolling', () => {
           watchWorktree: vi.fn().mockResolvedValue(undefined),
           unwatchWorktree: vi.fn().mockResolvedValue(undefined),
           onFsChanged: vi.fn(() => vi.fn())
+        },
+        worktrees: {
+          onChanged: vi.fn(() => vi.fn())
         }
       },
       addEventListener: vi.fn((type: string, listener: EventListener) => {
@@ -613,16 +654,83 @@ describe('useGitStatusPolling', () => {
 
     await vi.advanceTimersByTimeAsync(65)
     expect(gitStatus).toHaveBeenCalledTimes(callsBeforeDebounceFires)
+    // Why: evidence refreshes keep the 3s anti-churn floor from the last run.
     await vi.advanceTimersByTimeAsync(2875)
     await vi.waitFor(() => expect(gitStatus).toHaveBeenCalledTimes(callsBeforeDebounceFires + 1))
 
     vi.useRealTimers()
   })
 
+  it('refreshes on repo metadata push signals while the huge flag is set so the flag can clear', async () => {
+    const { gitStatus } = await usePollingOnce(
+      {
+        entries: [],
+        conflictOperation: 'unknown',
+        head: 'abc123',
+        branch: 'refs/heads/main'
+      },
+      {
+        expectStatusCall: false,
+        stateOverrides: {
+          gitStatusHugeByWorktree: { [worktree.id]: { limit: DEFAULT_GIT_STATUS_LIMIT } }
+        }
+      }
+    )
+
+    // The huge flag must only pause evidence-free interval polling.
+    expect(globalThis.setInterval).not.toHaveBeenCalled()
+    expect(gitStatus).not.toHaveBeenCalled()
+
+    // Push signals (e.g. a commit's metadata write) must stay subscribed while
+    // huge — a fresh non-huge status result is the only way the flag clears.
+    const onChanged = window.api.worktrees.onChanged as ReturnType<typeof vi.fn>
+    expect(onChanged).toHaveBeenCalledTimes(1)
+    const handleRepoSignal = onChanged.mock.calls[0][0] as (payload: { repoId: string }) => void
+    handleRepoSignal({ repoId: repo.id })
+
+    await vi.waitFor(() => expect(gitStatus).toHaveBeenCalledTimes(1))
+  })
+
+  it('catches up on becoming visible while the huge flag is set', async () => {
+    const documentListeners = new Map<string, EventListener[]>()
+    const visibilityDocument = {
+      visibilityState: 'hidden',
+      hasFocus: () => false,
+      addEventListener: vi.fn((type: string, listener: EventListener) => {
+        documentListeners.set(type, [...(documentListeners.get(type) ?? []), listener])
+      }),
+      removeEventListener: vi.fn()
+    }
+    const { gitStatus } = await usePollingOnce(
+      {
+        entries: [],
+        conflictOperation: 'unknown',
+        head: 'abc123',
+        branch: 'refs/heads/main'
+      },
+      {
+        expectStatusCall: false,
+        documentStub: visibilityDocument,
+        stateOverrides: {
+          gitStatusHugeByWorktree: { [worktree.id]: { limit: DEFAULT_GIT_STATUS_LIMIT } }
+        }
+      }
+    )
+    // Signals dropped while the window was hidden must be caught up on
+    // reveal so the huge flag can still clear.
+    expect(gitStatus).not.toHaveBeenCalled()
+
+    visibilityDocument.visibilityState = 'visible'
+    for (const listener of documentListeners.get('visibilitychange') ?? []) {
+      listener(new Event('visibilitychange'))
+    }
+
+    await vi.waitFor(() => expect(gitStatus).toHaveBeenCalledTimes(1))
+  })
+
   it('does not overlap slow visible git status polls and runs one trailing refresh', async () => {
     vi.resetModules()
     vi.useFakeTimers()
-    let intervalCallback: (() => void) | null = null
     let resolveFirst!: (value: GitStatusResult) => void
     const firstStatus = new Promise<GitStatusResult>((resolve) => {
       resolveFirst = resolve
@@ -684,6 +792,9 @@ describe('useGitStatusPolling', () => {
           watchWorktree: vi.fn().mockResolvedValue(undefined),
           unwatchWorktree: vi.fn().mockResolvedValue(undefined),
           onFsChanged: vi.fn(() => vi.fn())
+        },
+        worktrees: {
+          onChanged: vi.fn(() => vi.fn())
         }
       },
       addEventListener: vi.fn(),
@@ -695,27 +806,22 @@ describe('useGitStatusPolling', () => {
       addEventListener: vi.fn(),
       removeEventListener: vi.fn()
     })
-    vi.stubGlobal(
-      'setInterval',
-      vi.fn((callback: () => void) => {
-        intervalCallback = callback
-        return 1
-      })
-    )
+    vi.stubGlobal('setInterval', vi.fn())
     vi.stubGlobal('clearInterval', vi.fn())
 
     const { useGitStatusPolling: runPolling } = await import('./useGitStatusPolling')
     GitStatusPollingHarness({ runPolling })
     await vi.waitFor(() => expect(gitStatus).toHaveBeenCalledTimes(1))
 
-    expect(intervalCallback).toBeTypeOf('function')
-    const tick = intervalCallback as unknown as () => void
-    tick()
-    tick()
+    const onChanged = window.api.worktrees.onChanged as ReturnType<typeof vi.fn>
+    const handleRepoSignal = onChanged.mock.calls[0][0] as (payload: { repoId: string }) => void
+    handleRepoSignal({ repoId: repo.id })
+    handleRepoSignal({ repoId: repo.id })
     expect(gitStatus).toHaveBeenCalledTimes(1)
 
     resolveFirst(status)
     await vi.waitFor(() => expect(state.setGitStatus).toHaveBeenCalledTimes(1))
+    // Why: the trailing refresh respects the 3s anti-churn floor after settle.
     await vi.advanceTimersByTimeAsync(3000)
     await vi.waitFor(() => expect(gitStatus).toHaveBeenCalledTimes(2))
     await vi.waitFor(() => expect(state.setGitStatus).toHaveBeenCalledTimes(2))

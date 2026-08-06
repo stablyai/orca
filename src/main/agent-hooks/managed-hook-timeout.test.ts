@@ -41,93 +41,7 @@ import { DevinHookService } from '../devin/hook-service'
 import { DroidHookService } from '../droid/hook-service'
 import { KimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
-
-type FakeFs = {
-  files: Map<string, string>
-  dirs: Set<string>
-  modes: Map<string, number>
-}
-
-function createFakeSftp(initialFiles: Record<string, string> = {}): {
-  sftp: SFTPWrapper
-  fs: FakeFs
-} {
-  const fs: FakeFs = {
-    files: new Map(Object.entries(initialFiles)),
-    dirs: new Set(['/']),
-    modes: new Map()
-  }
-  const noEntryError = (path: string): { code: number; message: string } => ({
-    code: 2,
-    message: `ENOENT ${path}`
-  })
-
-  const sftp = {
-    readFile: (path: string, _enc: string, cb: (err: unknown, data?: string) => void): void => {
-      const v = fs.files.get(path)
-      if (v === undefined) {
-        cb(noEntryError(path))
-        return
-      }
-      cb(null, v)
-    },
-    writeFile: (
-      path: string,
-      content: string,
-      options: string | { mode?: number },
-      cb: (err: unknown) => void
-    ): void => {
-      fs.files.set(path, content)
-      if (typeof options !== 'string' && options.mode !== undefined) {
-        fs.modes.set(path, options.mode)
-      }
-      cb(null)
-    },
-    rename: (src: string, dst: string, cb: (err: unknown) => void): void => {
-      const v = fs.files.get(src)
-      if (v === undefined) {
-        cb(noEntryError(src))
-        return
-      }
-      fs.files.set(dst, v)
-      fs.files.delete(src)
-      const mode = fs.modes.get(src)
-      if (mode !== undefined) {
-        fs.modes.set(dst, mode)
-        fs.modes.delete(src)
-      }
-      cb(null)
-    },
-    unlink: (path: string, cb: (err: unknown) => void): void => {
-      fs.files.delete(path)
-      fs.modes.delete(path)
-      cb(null)
-    },
-    chmod: (path: string, mode: number, cb: (err: unknown) => void): void => {
-      fs.modes.set(path, mode)
-      cb(null)
-    },
-    stat: (path: string, cb: (err: unknown, stats?: { mode: number }) => void): void => {
-      if (!fs.files.has(path)) {
-        cb(noEntryError(path))
-        return
-      }
-      cb(null, { mode: fs.modes.get(path) ?? 0o100644 })
-    },
-    readdir: (path: string, cb: (err: unknown, list?: { filename: string }[]) => void): void => {
-      if (fs.dirs.has(path)) {
-        cb(null, [])
-        return
-      }
-      cb(noEntryError(path))
-    },
-    mkdir: (path: string, cb: (err: unknown) => void): void => {
-      fs.dirs.add(path)
-      cb(null)
-    }
-  } as unknown as SFTPWrapper
-  return { sftp, fs }
-}
+import { createAgentHookMemorySftp as createFakeSftp } from './agent-hook-memory-sftp.test-fixture'
 
 const REMOTE_HOME = '/home/dev'
 
@@ -198,16 +112,29 @@ const JSON_INSTALLERS = [
 ] as const
 
 const MANAGED_HOOKS_DIR_NEEDLE = '/.orca/agent-hooks/'
+// Why: statusLine is not a hook — Claude's schema has no timeout field (type/command/padding/refreshInterval), and a slow statusline can't block agent turns.
+const STATUSLINE_SCRIPT_NEEDLE = '-statusline.'
 
 // Walk the parsed config and assert every Orca-managed command carrier (a node
 // with a `command`/`bash`/`powershell` string pointing at the managed script
 // dir) has a positive config-level timeout sibling (`timeout` or the
 // provider-specific `timeoutSec`). Returns the count of managed carriers found
 // so callers can assert the scan was not vacuous.
-function countManagedCarriersWithTimeout(node: unknown, expectedTimeout: number): number {
+function countManagedCarriersWithTimeout(
+  node: unknown,
+  expectedTimeout: number,
+  isManagedCarrier = (value: string): boolean => {
+    const normalized = value.replaceAll('\\', '/')
+    return (
+      normalized.includes(MANAGED_HOOKS_DIR_NEEDLE) &&
+      !normalized.includes(STATUSLINE_SCRIPT_NEEDLE)
+    )
+  }
+): number {
   if (Array.isArray(node)) {
     return node.reduce<number>(
-      (sum, child) => sum + countManagedCarriersWithTimeout(child, expectedTimeout),
+      (sum, child) =>
+        sum + countManagedCarriersWithTimeout(child, expectedTimeout, isManagedCarrier),
       0
     )
   }
@@ -217,8 +144,7 @@ function countManagedCarriersWithTimeout(node: unknown, expectedTimeout: number)
   const record = node as Record<string, unknown>
   let found = 0
   const carrier = [record.command, record.bash, record.powershell].find(
-    (value): value is string =>
-      typeof value === 'string' && value.includes(MANAGED_HOOKS_DIR_NEEDLE)
+    (value): value is string => typeof value === 'string' && isManagedCarrier(value)
   )
   if (carrier !== undefined) {
     const timeout = typeof record.timeout === 'number' ? record.timeout : record.timeoutSec
@@ -229,7 +155,7 @@ function countManagedCarriersWithTimeout(node: unknown, expectedTimeout: number)
     found += 1
   }
   for (const value of Object.values(record)) {
-    found += countManagedCarriersWithTimeout(value, expectedTimeout)
+    found += countManagedCarriersWithTimeout(value, expectedTimeout, isManagedCarrier)
   }
   return found
 }
@@ -268,7 +194,13 @@ describe('managed agent hook timeouts', () => {
       const status = new DroidHookService().install()
       expect(status.state).toBe('installed')
       const config = JSON.parse(readFileSync(join(homeDir, '.factory', 'settings.json'), 'utf8'))
-      const carriers = countManagedCarriersWithTimeout(config, MANAGED_HOOK_TIMEOUT_SECONDS)
+      const carriers = countManagedCarriersWithTimeout(
+        config,
+        MANAGED_HOOK_TIMEOUT_SECONDS,
+        (command) =>
+          command.replaceAll('\\', '/').includes(MANAGED_HOOKS_DIR_NEEDLE) ||
+          (process.platform === 'win32' && command.includes('-EncodedCommand'))
+      )
       expect(carriers).toBeGreaterThan(0)
     } finally {
       homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())

@@ -5,6 +5,7 @@ import {
   isWorktreePaletteQueryTooLarge
 } from './worktree-palette-query-bounds'
 import type { Repo, Worktree } from '../../../shared/types'
+import type { HostedReviewInfo } from '../../../shared/hosted-review'
 
 function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
   return {
@@ -85,6 +86,23 @@ describe('worktree-palette-search', () => {
     ])
   })
 
+  it('finds an emoji-named workspace by its readable branch shortcode', () => {
+    const results = searchWorktrees(
+      [makeWorktree({ displayName: '🚀', branch: 'refs/heads/rocket' })],
+      'rocket',
+      repoMap,
+      null,
+      null
+    )
+
+    expect(results).toHaveLength(1)
+    expect(results[0]).toMatchObject({
+      worktreeId: 'wt-1',
+      matchedField: 'branch',
+      branchRange: { start: 0, end: 6 }
+    })
+  })
+
   it('rejects oversized pasted queries before reading worktree metadata', () => {
     const oversizedQuery = 'secret-worktree-palette-search'.repeat(WORKTREE_PALETTE_QUERY_MAX_BYTES)
     const worktree = {
@@ -121,6 +139,63 @@ describe('worktree-palette-search', () => {
     expect(query.length).toBe(WORKTREE_PALETTE_QUERY_MAX_BYTES)
     expect(isWorktreePaletteQueryTooLarge(query)).toBe(true)
     expect(searchWorktrees([makeWorktree()], query, repoMap, null, null)).toEqual([])
+  })
+
+  it('falls back to branch text when a cleared display name left it undefined', () => {
+    const cleared = makeWorktree({
+      displayName: undefined as unknown as string,
+      branch: 'refs/heads/feature/worktree-jump'
+    })
+
+    expect(() => searchWorktrees([cleared], 'jump', repoMap, null, null)).not.toThrow()
+    // Highlight range indexes the branch-derived label the palette actually renders.
+    expect(searchWorktrees([cleared], 'jump', repoMap, null, null)[0]).toMatchObject({
+      worktreeId: 'wt-1',
+      matchedField: 'displayName',
+      displayNameRange: { start: 'feature/worktree-'.length, end: 'feature/worktree-jump'.length }
+    })
+  })
+
+  it('falls back to the folder name when both display name and branch are missing', () => {
+    const folderWorkspace = makeWorktree({
+      displayName: undefined as unknown as string,
+      branch: '',
+      path: '/tmp/design-review'
+    })
+
+    expect(searchWorktrees([folderWorkspace], 'design', repoMap, null, null)[0]).toMatchObject({
+      matchedField: 'displayName',
+      displayNameRange: { start: 0, end: 6 }
+    })
+  })
+
+  it('survives a cleared display name on composite repo/branch queries', () => {
+    const cleared = makeWorktree({
+      displayName: undefined as unknown as string,
+      branch: undefined as unknown as string
+    })
+
+    expect(() => searchWorktrees([cleared], 'orca/jump', repoMap, null, null)).not.toThrow()
+  })
+
+  it('still lists a branch-less row on the empty query, which renders every row', () => {
+    // Why: the empty query short-circuits before any branch read, so the row reaches the
+    // render loop untouched — the label resolution there has to be guarded too.
+    const cleared = makeWorktree({
+      displayName: undefined as unknown as string,
+      branch: undefined as unknown as string
+    })
+
+    expect(searchWorktrees([cleared], '', repoMap, null, null)).toEqual([
+      {
+        worktreeId: 'wt-1',
+        matchedField: null,
+        displayNameRange: null,
+        branchRange: null,
+        repoRange: null,
+        supportingText: null
+      }
+    ])
   })
 
   it('returns a truncated comment snippet with the highlighted match range', () => {
@@ -170,6 +245,214 @@ describe('worktree-palette-search', () => {
       text: 'Refresh the worktree quick jump palette',
       matchRange: { start: 21, end: 31 }
     })
+  })
+
+  it('matches the GitLab review title and number already selected by Checks', () => {
+    const review: HostedReviewInfo = {
+      provider: 'gitlab',
+      number: 17,
+      title: 'Reuse checks tab review metadata',
+      state: 'open',
+      url: 'https://gitlab.com/acme/orca/-/merge_requests/17',
+      status: 'success',
+      updatedAt: '2026-07-12T00:00:00Z',
+      mergeable: 'MERGEABLE'
+    }
+    const worktree = makeWorktree()
+    const reviews = new Map([[worktree, review]])
+
+    const titleResults = searchWorktrees(
+      [worktree],
+      'checks tab',
+      repoMap,
+      null,
+      null,
+      undefined,
+      reviews
+    )
+    const numberResults = searchWorktrees(
+      [worktree],
+      '!17',
+      repoMap,
+      null,
+      null,
+      undefined,
+      reviews
+    )
+
+    expect(titleResults[0].supportingText).toEqual({
+      labelKind: 'mr',
+      text: review.title,
+      matchRange: { start: 6, end: 16 }
+    })
+    expect(numberResults[0].supportingText).toEqual({
+      labelKind: 'mr',
+      text: 'MR !17',
+      matchRange: { start: 4, end: 6 }
+    })
+  })
+
+  it('does not search stale GitHub cache metadata when Checks selected another review', () => {
+    const review: HostedReviewInfo = {
+      provider: 'gitlab',
+      number: 17,
+      title: 'Current merge request',
+      state: 'open',
+      url: 'https://gitlab.com/acme/orca/-/merge_requests/17',
+      status: 'success',
+      updatedAt: '2026-07-12T00:00:00Z',
+      mergeable: 'MERGEABLE'
+    }
+    const staleWorktree = makeWorktree({
+      branch: 'refs/heads/feature/palette-refresh',
+      linkedPR: 99
+    })
+    const reviews = new Map([[staleWorktree, review]])
+
+    expect(
+      searchWorktrees(
+        [staleWorktree],
+        'stale github title',
+        repoMap,
+        {
+          '/repo/orca::feature/palette-refresh': {
+            data: { number: 99, title: 'Stale GitHub title' }
+          }
+        },
+        null,
+        undefined,
+        reviews
+      )
+    ).toEqual([])
+
+    expect(
+      searchWorktrees([staleWorktree], '#99', repoMap, null, null, undefined, reviews)
+    ).toEqual([])
+  })
+
+  it('does not search stale GitHub metadata while a linked non-GitHub review is loading', () => {
+    const stalePRCache = {
+      '/repo/orca::feature/palette-refresh': {
+        data: { number: 99, title: 'Stale GitHub title' }
+      }
+    }
+    const staleWorktree = makeWorktree({
+      branch: 'refs/heads/feature/palette-refresh',
+      linkedPR: 99,
+      linkedGitLabMR: 17
+    })
+    const authoritativeEmptyReviews = new Map<Worktree, HostedReviewInfo | null>([
+      [staleWorktree, null]
+    ])
+
+    expect(
+      searchWorktrees(
+        [staleWorktree],
+        'stale github title',
+        repoMap,
+        stalePRCache,
+        null,
+        undefined,
+        authoritativeEmptyReviews
+      )
+    ).toEqual([])
+    expect(
+      searchWorktrees(
+        [staleWorktree],
+        '#99',
+        repoMap,
+        stalePRCache,
+        null,
+        undefined,
+        authoritativeEmptyReviews
+      )
+    ).toEqual([])
+  })
+
+  it('keeps review matches isolated between same-id worktrees on different hosts', () => {
+    const localWorktree = makeWorktree({ hostId: 'local' })
+    const sshWorktree = makeWorktree({ hostId: 'ssh:staging' })
+    const review: HostedReviewInfo = {
+      provider: 'gitlab',
+      number: 17,
+      title: 'Remote-only merge request',
+      state: 'open',
+      url: 'https://gitlab.com/acme/orca/-/merge_requests/17',
+      status: 'success',
+      updatedAt: '2026-07-12T00:00:00Z',
+      mergeable: 'MERGEABLE'
+    }
+
+    const results = searchWorktrees(
+      [localWorktree, sshWorktree],
+      'remote-only',
+      repoMap,
+      null,
+      null,
+      undefined,
+      new Map([[sshWorktree, review]])
+    )
+
+    expect(results).toHaveLength(1)
+    expect(results[0].supportingText?.text).toBe(review.title)
+  })
+
+  it('scopes PR and MR number sigils to their providers', () => {
+    const gitHubReview: HostedReviewInfo = {
+      provider: 'github',
+      number: 42,
+      title: 'GitHub pull request',
+      state: 'open',
+      url: 'https://github.com/acme/orca/pull/42',
+      status: 'success',
+      updatedAt: '2026-07-12T00:00:00Z',
+      mergeable: 'MERGEABLE'
+    }
+    const gitLabReview: HostedReviewInfo = {
+      provider: 'gitlab',
+      number: 17,
+      title: 'GitLab merge request',
+      state: 'open',
+      url: 'https://gitlab.com/acme/orca/-/merge_requests/17',
+      status: 'success',
+      updatedAt: '2026-07-12T00:00:00Z',
+      mergeable: 'MERGEABLE'
+    }
+    const gitHubWorktree = makeWorktree()
+    const gitLabWorktree = makeWorktree()
+
+    expect(
+      searchWorktrees(
+        [gitHubWorktree],
+        '!42',
+        repoMap,
+        null,
+        null,
+        undefined,
+        new Map([[gitHubWorktree, gitHubReview]])
+      )
+    ).toEqual([])
+    expect(
+      searchWorktrees(
+        [gitLabWorktree],
+        '#17',
+        repoMap,
+        null,
+        null,
+        undefined,
+        new Map([[gitLabWorktree, gitLabReview]])
+      )
+    ).toEqual([])
+    expect(
+      searchWorktrees(
+        [makeWorktree({ linkedIssue: 42 })],
+        '!42',
+        repoMap,
+        null,
+        null,
+        new Map([['wt-1', [{ port: 42 }]]])
+      )
+    ).toEqual([])
   })
 
   it('preserves input order when query matches a repo name', () => {

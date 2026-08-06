@@ -66,6 +66,17 @@ export type TerminalLiveInputFocusTimerRef = {
   current: ReturnType<typeof setTimeout> | null
 }
 
+export type TerminalLiveInputFocusTarget = {
+  readonly focus: () => void
+  readonly blur: () => void
+  readonly isFocused?: () => boolean
+}
+
+type FocusTerminalLiveInputTargetOptions = {
+  readonly keyboardHeight: number
+  readonly refocus: () => void
+}
+
 export type TerminalLiveInputDefaultResult = {
   enabledHandles: ReadonlySet<string>
   defaultedHandles: ReadonlySet<string>
@@ -114,6 +125,48 @@ export function defaultTerminalLiveInputHandles(
   return {
     enabledHandles: nextEnabledHandles,
     defaultedHandles: nextDefaultedHandles,
+    changed: true
+  }
+}
+
+export function filterTerminalLiveInputDefaultCandidates(
+  terminalHandles: readonly string[],
+  disabledHandles: ReadonlySet<string>
+): string[] {
+  return terminalHandles.filter((handle) => !disabledHandles.has(handle))
+}
+
+export function applyDisabledTerminalLiveInputHandles(
+  enabledHandles: ReadonlySet<string>,
+  defaultedHandles: ReadonlySet<string>,
+  disabledHandles: ReadonlySet<string>
+): TerminalLiveInputDefaultResult {
+  let nextEnabledHandles: Set<string> | null = null
+  let nextDefaultedHandles: Set<string> | null = null
+
+  for (const handle of enabledHandles) {
+    if (!disabledHandles.has(handle)) {
+      continue
+    }
+    nextEnabledHandles ??= new Set(enabledHandles)
+    nextEnabledHandles.delete(handle)
+  }
+
+  for (const handle of disabledHandles) {
+    if (defaultedHandles.has(handle)) {
+      continue
+    }
+    nextDefaultedHandles ??= new Set(defaultedHandles)
+    nextDefaultedHandles.add(handle)
+  }
+
+  if (!nextEnabledHandles && !nextDefaultedHandles) {
+    return { enabledHandles, defaultedHandles, changed: false }
+  }
+
+  return {
+    enabledHandles: nextEnabledHandles ?? enabledHandles,
+    defaultedHandles: nextDefaultedHandles ?? defaultedHandles,
     changed: true
   }
 }
@@ -173,6 +226,25 @@ export function scheduleTerminalLiveInputFocus(
     timerRef.current = null
     focus()
   }, delayMs)
+}
+
+export function focusTerminalLiveInputTarget(
+  input: TerminalLiveInputFocusTarget | null,
+  { keyboardHeight, refocus }: FocusTerminalLiveInputTargetOptions
+): void {
+  if (!input) {
+    return
+  }
+
+  if (keyboardHeight <= 0 && input.isFocused?.()) {
+    // Why: Android can keep a hidden TextInput focused after the IME is dismissed;
+    // focus() is then a no-op, so force a new focus session to reopen the keyboard.
+    input.blur()
+    refocus()
+    return
+  }
+
+  input.focus()
 }
 
 export { TERMINAL_LIVE_INPUT_MAX_BYTES }

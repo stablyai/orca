@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: preflight tests share expensive process/preload mocks across
    install, auth, agent detection, and refresh branches. */
+import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -13,6 +14,8 @@ const {
   getAzureDevOpsAuthStatusMock,
   getGiteaAuthStatusMock,
   resolveCliCommandsMock,
+  isCommandOnLocalPathMock,
+  mergePersistedWindowsPathAsyncMock,
   mergePersistedWindowsPathMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
@@ -25,6 +28,8 @@ const {
   getAzureDevOpsAuthStatusMock: vi.fn(),
   getGiteaAuthStatusMock: vi.fn(),
   resolveCliCommandsMock: vi.fn(),
+  isCommandOnLocalPathMock: vi.fn(),
+  mergePersistedWindowsPathAsyncMock: vi.fn(),
   mergePersistedWindowsPathMock: vi.fn()
 }))
 
@@ -49,11 +54,19 @@ vi.mock('../startup/hydrate-shell-path', () => ({
   mergePathSegments: mergePathSegmentsMock
 }))
 
-vi.mock('../codex-cli/command', () => ({
+vi.mock('../../shared/node-cli-command-resolution', () => ({
   resolveCliCommands: resolveCliCommandsMock
 }))
 
+// Why (#9297): local PATH resolution is now fs-based (no where/which spawn).
+// These tests express "which commands are on PATH" via the where/which mock,
+// so route the resolver through that same mock to preserve their intent.
+vi.mock('./command-path-resolver', () => ({
+  isCommandOnLocalPath: isCommandOnLocalPathMock
+}))
+
 vi.mock('../pty/windows-environment-path', () => ({
+  mergePersistedWindowsPathAsync: mergePersistedWindowsPathAsyncMock,
   mergePersistedWindowsPath: mergePersistedWindowsPathMock
 }))
 
@@ -112,6 +125,8 @@ describe('preflight', () => {
     getBitbucketAuthStatusMock.mockReset()
     getAzureDevOpsAuthStatusMock.mockReset()
     getGiteaAuthStatusMock.mockReset()
+    mergePersistedWindowsPathAsyncMock.mockReset()
+    mergePersistedWindowsPathAsyncMock.mockResolvedValue(undefined)
     mergePersistedWindowsPathMock.mockReset()
     // Why: existing tests should keep treating `which` as the only source
     // unless a case explicitly exercises the install-dir fallback.
@@ -119,6 +134,22 @@ describe('preflight', () => {
     resolveCliCommandsMock.mockImplementation(
       (commands: string[]) => new Map(commands.map((command) => [command, command]))
     )
+    // Why: reproduce the pre-#9297 local PATH check (spawn where/which, keep
+    // only absolute resolutions) so cases that stub the where/which mock still
+    // drive detection identically without a real subprocess.
+    isCommandOnLocalPathMock.mockReset()
+    isCommandOnLocalPathMock.mockImplementation(async (command: string) => {
+      const finder = process.platform === 'win32' ? 'where' : 'which'
+      try {
+        const { stdout } = await execFileAsyncMock(finder, [command])
+        return String(stdout)
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .some((line) => path.isAbsolute(line))
+      } catch {
+        return false
+      }
+    })
     getBitbucketAuthStatusMock.mockResolvedValue(defaultBitbucketStatus)
     getAzureDevOpsAuthStatusMock.mockResolvedValue(defaultAzureDevOpsStatus)
     getGiteaAuthStatusMock.mockResolvedValue(defaultGiteaStatus)
@@ -412,6 +443,73 @@ describe('preflight', () => {
     expect(execFileAsyncMock).toHaveBeenCalledTimes(10)
   })
 
+  it('awaits the persisted Windows Path refresh before a forced host CLI preflight', async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    let finishRefresh!: () => void
+    mergePersistedWindowsPathAsyncMock.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finishRefresh = resolve
+        })
+    )
+    execFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'git version 2.0.0\n' })
+      .mockResolvedValueOnce({ stdout: 'gh version 2.0.0\n' })
+      .mockResolvedValueOnce({ stdout: 'glab version 1.92.1\n' })
+      .mockResolvedValueOnce({ stdout: 'github.com\n  - Active account: true\n' })
+      .mockResolvedValueOnce({ stdout: 'Logged in to gitlab.com\n' })
+
+    const check = runPreflightCheck(true)
+    await Promise.resolve()
+
+    expect(execFileAsyncMock).not.toHaveBeenCalled()
+    finishRefresh()
+    await expect(check).resolves.toMatchObject({
+      gh: { installed: true, authenticated: true }
+    })
+
+    expect(mergePersistedWindowsPathAsyncMock).toHaveBeenNthCalledWith(1, process.env, {
+      forceRefresh: true
+    })
+  })
+
+  it('does not refresh host Windows Path for forced WSL preflight', async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command === 'wsl.exe') {
+        const script = String(args[5])
+        if (script.includes('git') && script.includes('--version')) {
+          return { stdout: 'git version 2.0.0\n' }
+        }
+        if (script.includes('gh') && script.includes('--version')) {
+          return { stdout: 'gh version 2.0.0\n' }
+        }
+        if (script.includes('glab') && script.includes('--version')) {
+          return { stdout: 'glab version 1.92.1\n' }
+        }
+        if (script.includes('gh') && script.includes('auth status')) {
+          return { stdout: 'github.com\n  - Active account: true\n' }
+        }
+        if (script.includes('glab') && script.includes('auth status')) {
+          return { stdout: 'Logged in to gitlab.com\n' }
+        }
+      }
+      throw new Error(`unexpected command ${String(command)}`)
+    })
+
+    await expect(runPreflightCheck(true, { wslDistro: 'Ubuntu' })).resolves.toMatchObject({
+      gh: { installed: true, authenticated: true }
+    })
+
+    expect(mergePersistedWindowsPathAsyncMock).not.toHaveBeenCalled()
+  })
+
   it('registers the preflight handler', async () => {
     execFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'git version 2.0.0\n' })
@@ -490,6 +588,58 @@ describe('preflight', () => {
     })
 
     await expect(detectInstalledAgents()).resolves.toEqual(['claude', 'cursor'])
+  })
+
+  it('does not report Claude Agent Teams when only the Orca shim is present', async () => {
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command !== 'which') {
+        throw new Error(`unexpected command ${String(command)}`)
+      }
+      if (String(args[0]) === 'orca') {
+        return { stdout: '/Applications/Orca.app/Contents/MacOS/orca\n' }
+      }
+      throw new Error('not found')
+    })
+
+    await expect(detectInstalledAgents()).resolves.toEqual([])
+  })
+
+  it('reports Claude Agent Teams when both Orca and Claude are present', async () => {
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command !== 'which') {
+        throw new Error(`unexpected command ${String(command)}`)
+      }
+      if (String(args[0]) === 'claude') {
+        return { stdout: '/Users/test/.local/bin/claude\n' }
+      }
+      if (String(args[0]) === 'orca') {
+        return { stdout: '/Applications/Orca.app/Contents/MacOS/orca\n' }
+      }
+      throw new Error('not found')
+    })
+
+    await expect(detectInstalledAgents()).resolves.toEqual(['claude', 'claude-agent-teams'])
+  })
+
+  it('does not report Claude Agent Teams on native Windows', async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command !== 'where') {
+        throw new Error(`unexpected command ${String(command)}`)
+      }
+      if (String(args[0]) === 'claude') {
+        return { stdout: '/mock/windows/npm/claude.cmd\n' }
+      }
+      if (String(args[0]) === 'orca') {
+        return { stdout: '/mock/windows/programs/orca.cmd\n' }
+      }
+      throw new Error('not found')
+    })
+
+    await expect(detectInstalledAgents()).resolves.toEqual(['claude'])
   })
 
   it('detects agents via the install-dir resolver when which fails (stripped GUI PATH)', async () => {
@@ -632,6 +782,28 @@ describe('preflight', () => {
       detectInstalledAgentsWithShellPathHydration({ wslDistro: 'Ubuntu' })
     ).resolves.toEqual(['claude'])
     expect(hydrateShellPathMock).not.toHaveBeenCalled()
+  })
+
+  it('does not report Claude Agent Teams from WSL agent detection', async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command !== 'wsl.exe') {
+        throw new Error(`unexpected command ${String(command)}`)
+      }
+      const script = String(args[5])
+      expect(script).not.toContain("'orca'")
+      expect(script).not.toContain("'orca-dev'")
+      expect(script).not.toContain("'orca-ide'")
+      if (script.includes("'claude'")) {
+        return { stdout: '__ORCA_AGENT_PATH__claude\t/home/test/.local/bin/claude\n' }
+      }
+      throw new Error('not found')
+    })
+
+    await expect(detectInstalledAgents({ wslDistro: 'Ubuntu' })).resolves.toEqual(['claude'])
   })
 
   it('detects Mistral Vibe from the installed vibe executable', async () => {

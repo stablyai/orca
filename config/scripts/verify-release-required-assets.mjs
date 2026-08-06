@@ -39,9 +39,9 @@ export function extractManifestAssetNames(manifestText) {
     }
     const value = match[1].trim()
     try {
-      names.add(new URL(value).pathname.split('/').filter(Boolean).at(-1) ?? value)
+      names.add(new URL(value).pathname.split('/').findLast(Boolean) ?? value)
     } catch {
-      names.add(value.split('/').filter(Boolean).at(-1) ?? value)
+      names.add(value.split('/').findLast(Boolean) ?? value)
     }
   }
   return [...names]

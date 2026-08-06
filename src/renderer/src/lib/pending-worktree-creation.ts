@@ -5,6 +5,7 @@ import type {
   TuiAgent,
   WorkspaceCreateTelemetrySource,
   WorkspaceStatus,
+  WorkspaceLinkedItem,
   WorktreeStartupLaunch
 } from '../../../shared/types'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
@@ -32,6 +33,8 @@ export type WorktreeCreationRequest = {
   /** Source host/account that produced the linked task. Kept separate from the
    *  run context so Retry does not infer provider ownership from the run host. */
   taskSourceContext?: TaskSourceContext | null
+  linkedWorkItem?: WorkspaceLinkedItem | null
+  linkedTaskSourceContext?: TaskSourceContext | null
   /** Host/setup where the new workspace should run. Duplicates repoId by design:
    *  repoId keeps old create APIs working, while this records the project-first
    *  host intent for retry, diagnostics, and future metadata writes. */
@@ -77,6 +80,9 @@ export type WorktreeCreationRequest = {
    *  agent launch is self-contained; otherwise the renderer drives startup via
    *  `startupPlan`. */
   startup?: WorktreeStartupLaunch
+  /** Repo Custom GitHub Issue Command to run in a side-pane split after the
+   *  workspace's first terminal is created. Mirrors the composer's trust-gated issueCommand. */
+  issueCommand?: { command: string; env?: Record<string, string> }
   pendingFirstAgentMessageRename: boolean
   /** Post-create note persisted as the worktree comment. */
   note: string
@@ -84,6 +90,9 @@ export type WorktreeCreationRequest = {
    *  did not already spawn it. Null for blank-shell creates. */
   startupPlan: AgentStartupPlan | null
   quickPrompt: string
+  /** Launch context delivered only as an unsent TUI-input draft (argv prefill or
+   *  startup paste); completion seeds the chat-composer copy from it. */
+  launchDraftPrompt?: string
   quickTelemetry: AgentStartedTelemetry | null
   /** When the composer stays open for sequential creates, completion must not
    *  steal focus from the next workspace name field. */
@@ -112,6 +121,29 @@ export type PendingWorktreeCreation = {
   error?: string
   provisioningLog?: string
   request: WorktreeCreationRequest
+}
+
+export function findPendingLinkedWorkItemCreationId(
+  pendingCreations: Readonly<Record<string, PendingWorktreeCreation>>,
+  request: Pick<
+    WorktreeCreationRequest,
+    'repoId' | 'linkedIssue' | 'linkedPR' | 'workspaceRunContext'
+  >
+): string | null {
+  if (request.linkedIssue == null && request.linkedPR == null) {
+    return null
+  }
+  const hostId = request.workspaceRunContext?.hostId ?? null
+  const match = Object.values(pendingCreations).find((entry) => {
+    const pending = entry.request
+    return (
+      pending.repoId === request.repoId &&
+      pending.linkedIssue === request.linkedIssue &&
+      pending.linkedPR === request.linkedPR &&
+      (pending.workspaceRunContext?.hostId ?? null) === hostId
+    )
+  })
+  return match?.creationId ?? null
 }
 
 /** Human-readable progress line for an in-flight create, shared by the in-frame

@@ -1,12 +1,15 @@
 import { execFile } from 'node:child_process'
 import path from 'node:path'
 import { promisify } from 'node:util'
+import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
+import { isCommandOnLocalPath } from './command-path-resolver'
 import { buildLocalPreflightEnv } from './preflight-local-env'
 import { runPreflightCommandInWsl } from './preflight-wsl-command'
 import type { WslPreflightTarget } from './preflight-wsl-agent-detection'
 
 const execFileAsync = promisify(execFile)
 export const PREFLIGHT_COMMAND_TIMEOUT_MS = 5000
+const WSL_COMMAND_PATH_SENTINEL = '__ORCA_PREFLIGHT_COMMAND_PATH__'
 
 export type PreflightCommandResult = { stdout: string; stderr: string }
 
@@ -78,15 +81,32 @@ export async function isCommandOnPath(
   command: string,
   wslTarget?: WslPreflightTarget
 ): Promise<boolean> {
-  const finder = process.platform === 'win32' ? 'where' : 'which'
+  if (!wslTarget) {
+    // Why (#9297): resolve against PATH with fs instead of spawning one
+    // where/which subprocess per probe — privilege-management software gates
+    // each spawn and stalls startup. buildLocalPreflightEnv() supplies the same
+    // registry-merged PATH the child process previously saw (undefined = posix
+    // process.env), so the found/not-found result is identical.
+    return isCommandOnLocalPath(command, { env: buildLocalPreflightEnv() })
+  }
   try {
-    const { stdout } = wslTarget
-      ? await execCommandInWsl(wslTarget, `command -v ${shellQuote(command)}`)
-      : await execLocalPreflightCommand(finder, [command])
+    // Why: preflight must validate the executable on PATH, not a shell alias or function.
+    const { stdout } = await execCommandInWsl(
+      wslTarget,
+      [
+        buildPosixCommandPathLookupScript({ kind: 'literal', value: command }),
+        'if [ -n "$resolved" ]; then',
+        `printf '${WSL_COMMAND_PATH_SENTINEL}%s\\n' "$resolved"`,
+        'fi'
+      ].join('\n')
+    )
+    // Why: WSL startup chatter can contain unrelated absolute paths.
     return stdout
       .split(/\r?\n/)
       .map((line) => line.trim())
-      .some((line) => path.isAbsolute(line))
+      .filter((line) => line.startsWith(WSL_COMMAND_PATH_SENTINEL))
+      .map((line) => line.slice(WSL_COMMAND_PATH_SENTINEL.length))
+      .some((line) => path.posix.isAbsolute(line))
   } catch {
     return false
   }

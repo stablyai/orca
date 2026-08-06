@@ -8,6 +8,7 @@ import {
 const REPO = { id: 'repo1', path: '/repos/orca', connectionId: null } as unknown as Repo
 const SETTINGS = { nestWorkspaces: false, workspaceDir: '/ws' } as unknown as GlobalSettings
 const OLD_ID = 'repo1::/ws/cunner'
+const FOLDER_WORKSPACE_ID = 'repo1::/ws/cunner::workspace:12345678-1234-1234-1234-123456789abc'
 
 function makeDeps(overrides: Partial<FirstWorkFolderRenameDeps> = {}): FirstWorkFolderRenameDeps {
   return {
@@ -47,6 +48,25 @@ describe('renameWorktreeFolderOnFirstWork', () => {
       'repo1',
       OLD_ID,
       'repo1::/ws/worktree-creation-spinner'
+    )
+  })
+
+  it('preserves the folder-workspace instance suffix in the migrated identity', async () => {
+    const deps = makeDeps()
+    const result = await renameWorktreeFolderOnFirstWork(
+      FOLDER_WORKSPACE_ID,
+      'worktree-creation-spinner',
+      deps
+    )
+    expect(result).toBe(true)
+    expect(deps.migrateWorktreeIdentity).toHaveBeenCalledWith(
+      FOLDER_WORKSPACE_ID,
+      'repo1::/ws/worktree-creation-spinner::workspace:12345678-1234-1234-1234-123456789abc'
+    )
+    expect(deps.notifyWorktreeRenamed).toHaveBeenCalledWith(
+      'repo1',
+      FOLDER_WORKSPACE_ID,
+      'repo1::/ws/worktree-creation-spinner::workspace:12345678-1234-1234-1234-123456789abc'
     )
   })
 

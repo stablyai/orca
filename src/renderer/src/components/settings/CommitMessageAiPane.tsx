@@ -273,7 +273,7 @@ export function CommitMessageAiPane({
             {translate(
               'auto.components.settings.CommitMessageAiPane.4f722a5f53',
               'Used by commit-message, pull-request, and branch-name recipes that select Custom command. Use'
-            )}
+            )}{' '}
             <code className="font-mono">
               {translate('auto.components.settings.CommitMessageAiPane.b8b6fd55b4', '{prompt}')}
             </code>{' '}

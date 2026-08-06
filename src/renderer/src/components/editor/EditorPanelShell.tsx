@@ -44,9 +44,9 @@ type EditorPanelShellProps = {
   onContentChange: (content: string) => void
   onContentChangeForFile: (file: OpenFile, content: string) => void
   onDirtyStateHint: (dirty: boolean) => void
-  onSave: (content: string) => Promise<void>
-  onSaveForFile: (file: OpenFile, content: string) => Promise<void>
-  onReloadFileContent: (file: OpenFile) => void
+  onSave: (content: string) => Promise<boolean>
+  onSaveForFile: (file: OpenFile, content: string) => Promise<boolean>
+  onReloadContent: (file: OpenFile) => void
   onCloseMarkdownTableOfContents: () => void
   onCloseRenameDialog: () => void
   onRenameConfirm: (newRelPath: string) => Promise<void>
@@ -86,7 +86,7 @@ export function EditorPanelShell({
   onDirtyStateHint,
   onSave,
   onSaveForFile,
-  onReloadFileContent,
+  onReloadContent,
   onCloseMarkdownTableOfContents,
   onCloseRenameDialog,
   onRenameConfirm,
@@ -152,7 +152,7 @@ export function EditorPanelShell({
           handleDirtyStateHint={onDirtyStateHint}
           handleSave={onSave}
           handleSaveForFile={onSaveForFile}
-          reloadFileContent={onReloadFileContent}
+          reloadContent={onReloadContent}
           showMarkdownTableOfContents={showMarkdownTableOfContents}
           showMarkdownFrontmatter={markdownFrontmatterVisible}
           onCloseMarkdownTableOfContents={onCloseMarkdownTableOfContents}

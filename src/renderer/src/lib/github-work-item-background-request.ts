@@ -14,6 +14,8 @@ import { CLIENT_PLATFORM, getWorkspaceIntentName, getWorkspaceSeedName } from '@
 import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
 import { repoIsRemote } from '../../../shared/agent-launch-remote'
+import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
+import { buildGitHubWorkspaceSource } from '../../../shared/new-workspace/workspace-source'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
@@ -24,6 +26,7 @@ import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/tas
 import type { AgentStartedTelemetry } from '@/lib/worktree-activation'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
+import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
 
 export type GitHubWorkItemBackgroundStoreSnapshot = {
   repos: readonly Repo[]
@@ -42,6 +45,7 @@ export type GitHubWorkItemBackgroundStoreSnapshot = {
           | 'agentCmdOverrides'
           | 'agentDefaultArgs'
           | 'agentDefaultEnv'
+          | 'terminalWindowsShell'
         >
       >
     | null
@@ -171,11 +175,14 @@ export function buildGitHubWorkItemStartupPlan(args: {
 }): {
   startupPlan: AgentStartupPlan | null
   quickPrompt: string
+  /** Draft context (issue link) that reaches only the TUI input; callers thread
+   *  it onto the creation request so completion can seed the chat composer. */
+  launchDraftPrompt: string | null
   quickTelemetry: AgentStartedTelemetry | null
 } {
   const { agent, item, repo, store } = args
   if (!agent) {
-    return { startupPlan: null, quickPrompt: '', quickTelemetry: null }
+    return { startupPlan: null, quickPrompt: '', launchDraftPrompt: null, quickTelemetry: null }
   }
   const { prompt: quickPrompt, draftPrompt } = resolveGitHubWorkItemPrompt(item)
   // Why: runtime-owned repos launch on their owner host, not on the client
@@ -184,6 +191,11 @@ export function buildGitHubWorkItemStartupPlan(args: {
   // Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
   // `orca-ide` rename must not be applied for remote launches.
   const isRemote = repoIsRemote(repo)
+  const shell = resolveLocalWindowsAgentStartupShell({
+    platform,
+    isRemote,
+    terminalWindowsShell: store.settings?.terminalWindowsShell
+  })
   const draftLaunchPlan = draftPrompt
     ? buildAgentDraftLaunchPlan({
         agent,
@@ -192,6 +204,7 @@ export function buildGitHubWorkItemStartupPlan(args: {
         agentArgs: resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs),
         agentEnv: resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv),
         platform,
+        shell,
         isRemote
       })
     : null
@@ -214,6 +227,7 @@ export function buildGitHubWorkItemStartupPlan(args: {
         agentArgs: resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs),
         agentEnv: resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv),
         platform,
+        shell,
         isRemote,
         allowEmptyPromptLaunch: true
       })
@@ -223,6 +237,7 @@ export function buildGitHubWorkItemStartupPlan(args: {
   return {
     startupPlan,
     quickPrompt,
+    launchDraftPrompt: draftPrompt || null,
     quickTelemetry: {
       agent_kind: tuiAgentToAgentKind(agent),
       launch_source: 'new_workspace_composer',
@@ -232,19 +247,20 @@ export function buildGitHubWorkItemStartupPlan(args: {
 }
 
 function getGitHubWorkItemName(item: GitHubWorkItem): { seedName: string; displayName?: string } {
+  const identity = resolveGitHubWorkItemIdentity(item)
   const intent =
-    item.number !== null
+    identity.number !== null
       ? getWorkspaceIntentName({
           sourceText: item.title,
-          workItem: { type: item.type, number: item.number, title: item.title }
+          workItem: { type: identity.type, number: identity.number, title: item.title }
         })
       : null
   return {
     seedName: getWorkspaceSeedName({
       explicitName: intent?.seedName ?? '',
       prompt: '',
-      linkedIssueNumber: item.type === 'issue' ? item.number : null,
-      linkedPR: item.type === 'pr' ? item.number : null
+      linkedIssueNumber: identity.type === 'issue' ? identity.number : null,
+      linkedPR: identity.type === 'pr' ? identity.number : null
     }),
     ...(intent?.displayName ? { displayName: intent.displayName } : {})
   }
@@ -257,15 +273,32 @@ export function buildInitialGitHubWorkItemRequest(
   const { seedName, displayName } = getGitHubWorkItemName(args.item)
   const workspaceRunContext = getWorkspaceRunContextForRepo(repo, args.workspaceRunContext)
   const ownerHost = parseExecutionHostId(getRepoExecutionHostId(repo))
+  const identity = resolveGitHubWorkItemIdentity(args.item)
+  const linkedWorkItem =
+    identity.number !== null
+      ? buildGitHubWorkspaceSource({
+          type: identity.type,
+          number: identity.number,
+          title: args.item.title,
+          url: args.item.url,
+          repoId: args.repoId
+        })
+      : null
   return {
     repoId: args.repoId,
     worktreeCreateProgressMode: ownerHost?.kind === 'local' ? 'stepped' : 'indeterminate',
     ...(args.taskSourceContext ? { taskSourceContext: args.taskSourceContext } : {}),
+    ...(linkedWorkItem
+      ? {
+          linkedWorkItem,
+          ...(args.taskSourceContext ? { linkedTaskSourceContext: args.taskSourceContext } : {})
+        }
+      : {}),
     ...(workspaceRunContext ? { workspaceRunContext } : {}),
     name: seedName,
     ...(displayName ? { displayName } : {}),
-    ...(args.item.type === 'issue' && args.item.number ? { linkedIssue: args.item.number } : {}),
-    ...(args.item.type === 'pr' && args.item.number ? { linkedPR: args.item.number } : {}),
+    ...(identity.type === 'issue' && identity.number ? { linkedIssue: identity.number } : {}),
+    ...(identity.type === 'pr' && identity.number ? { linkedPR: identity.number } : {}),
     ...(args.telemetrySource ? { telemetrySource: args.telemetrySource } : {}),
     setupDecision: 'inherit',
     agent: null,

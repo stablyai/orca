@@ -1,12 +1,4 @@
-import type { GlobalSettings } from '../../../../shared/types'
-
 const EAGER_SECTION_IDS = new Set(['general'])
-
-export function getRuntimeTargetIdentity(
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
-): string {
-  return settings?.activeRuntimeEnvironmentId?.trim() || 'local'
-}
 
 export function deriveNeededSectionIds(args: {
   navSectionIds: string[]
@@ -35,13 +27,6 @@ export function deriveNeededSectionIds(args: {
     next.add(args.pendingSectionId)
   }
   return next
-}
-
-export function deriveNeededRepoIds(
-  repos: readonly { id: string }[],
-  neededSectionIds: Set<string>
-): string[] {
-  return repos.map((repo) => repo.id).filter((repoId) => neededSectionIds.has(`repo-${repoId}`))
 }
 
 export function getInitialMountedSectionIds(): Set<string> {

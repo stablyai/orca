@@ -48,6 +48,7 @@ import type {
 } from '../../../shared/types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
+import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
 
 type JiraIssueWorkspaceProps = {
   issue: JiraIssue | null
@@ -56,22 +57,8 @@ type JiraIssueWorkspaceProps = {
   sourceContext?: TaskSourceContext | null
 }
 
-const relativeFormatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
-
 function formatRelativeTime(input: string): string {
-  const date = new Date(input)
-  if (Number.isNaN(date.getTime())) {
-    return 'recently'
-  }
-  const diffMinutes = Math.round((date.getTime() - Date.now()) / 60_000)
-  if (Math.abs(diffMinutes) < 60) {
-    return relativeFormatter.format(diffMinutes, 'minute')
-  }
-  const diffHours = Math.round(diffMinutes / 60)
-  if (Math.abs(diffHours) < 24) {
-    return relativeFormatter.format(diffHours, 'hour')
-  }
-  return relativeFormatter.format(Math.round(diffHours / 24), 'day')
+  return formatUiRelativeTimeFromDate(input)
 }
 
 function buildJiraBranchName(issue: JiraIssue): string {
@@ -755,8 +742,11 @@ export default function JiraIssueWorkspace({
                             </span>
                           </div>
                           <div className="px-3 py-2">
+                            {/* Why: Jira comment screenshots need the same preview
+                                affordance without changing compact comment typography. */}
                             <CommentMarkdown
                               content={comment.body}
+                              expandImages
                               className="text-[13px] leading-relaxed"
                             />
                           </div>

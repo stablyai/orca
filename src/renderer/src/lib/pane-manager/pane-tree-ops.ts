@@ -6,13 +6,15 @@ import type {
   PaneStyleOptions
 } from './pane-manager-types'
 import { createDivider, disposeDivider } from './pane-divider'
-import { getFitOverrideForPty } from './mobile-fit-overrides'
 import { disposeWebgl, attachWebgl } from './pane-webgl-renderer'
-import {
-  captureTerminalWriteScrollIntent,
-  enforceTerminalWriteScrollIntent
-} from './terminal-scroll-intent'
+import { safeFit } from './pane-fit'
 
+export {
+  cancelPendingSafeFitContinuations,
+  safeFit,
+  safeFitAndThen,
+  type SafeFitContinuationHandle
+} from './pane-fit'
 export { captureScrollState, restoreScrollState } from './pane-scroll'
 
 // ---------------------------------------------------------------------------
@@ -28,95 +30,6 @@ type TreeOpsCallbacks = {
   onDragActiveChange?: (active: boolean) => void
   isDestroyed?: () => boolean
   requestPaneReparentFrame?: (callback: FrameRequestCallback) => void
-}
-
-const MIN_PANE_FIT_WIDTH_PX = 48
-const MIN_PANE_FIT_HEIGHT_PX = 24
-const MIN_PANE_FIT_COLS = 8
-const MIN_PANE_FIT_ROWS = 4
-
-function getProposedDimensions(pane: ManagedPane): { cols: number; rows: number } | null {
-  try {
-    return pane.fitAddon.proposeDimensions() ?? null
-  } catch {
-    return null
-  }
-}
-
-function canMeasurePaneForFit(pane: ManagedPane): boolean {
-  const measure = pane.container.getBoundingClientRect
-  if (typeof measure === 'function') {
-    const rect = measure.call(pane.container)
-    if (rect.width < MIN_PANE_FIT_WIDTH_PX || rect.height < MIN_PANE_FIT_HEIGHT_PX) {
-      return false
-    }
-  }
-  const dims = getProposedDimensions(pane)
-  if (!dims) {
-    return false
-  }
-  // Why: worktree switches can briefly measure a near-zero overlay before
-  // fallback positioning lands. Fitting there pins the PTY at ~2 cols until
-  // the next user-driven resize.
-  return dims.cols >= MIN_PANE_FIT_COLS && dims.rows >= MIN_PANE_FIT_ROWS
-}
-
-function canPreserveScrollIntentForFit(pane: ManagedPane): boolean {
-  // Why: split reparent has its own delayed restore; restoring here can fight that timer.
-  return !(
-    'pendingSplitScrollState' in pane && (pane as ManagedPaneInternal).pendingSplitScrollState
-  )
-}
-
-export function safeFit(pane: ManagedPane): void {
-  if (!canMeasurePaneForFit(pane)) {
-    return
-  }
-  let scrollIntent = null as ReturnType<typeof captureTerminalWriteScrollIntent>
-  let shouldRestoreScroll = false
-  try {
-    // Why: when a mobile client has resized this PTY to phone dimensions,
-    // the desktop must keep xterm at those dimensions instead of fitting to
-    // the desktop pane geometry. This prevents desktop auto-fit from undoing
-    // the mobile resize. Uses data-pty-id (set by bindPanePtyId) to look up
-    // the override by ptyId directly, avoiding pane ID collisions across tabs.
-    const ptyId = pane.container.dataset.ptyId
-    const override = ptyId ? getFitOverrideForPty(ptyId) : null
-    if (override) {
-      if (pane.terminal.cols !== override.cols || pane.terminal.rows !== override.rows) {
-        if (canPreserveScrollIntentForFit(pane)) {
-          scrollIntent = captureTerminalWriteScrollIntent(pane.terminal)
-          shouldRestoreScroll = true
-        }
-        pane.terminal.resize(override.cols, override.rows)
-      }
-      return
-    }
-
-    const dims = getProposedDimensions(pane)
-    if (dims && dims.cols === pane.terminal.cols && dims.rows === pane.terminal.rows) {
-      // Why: divider drags fire refits every frame, but most frames do not
-      // cross a cell boundary. Skipping those avoids FitAddon.clear()+refresh()
-      // churn, which was causing visible terminal blinking while resizing.
-      return
-    }
-    if (canPreserveScrollIntentForFit(pane)) {
-      scrollIntent = captureTerminalWriteScrollIntent(pane.terminal)
-      shouldRestoreScroll = true
-    }
-    pane.fitAddon.fit()
-  } catch {
-    // Container may not have dimensions yet
-  } finally {
-    if (shouldRestoreScroll) {
-      try {
-        enforceTerminalWriteScrollIntent(pane.terminal, scrollIntent)
-      } catch {
-        // Why: xterm can temporarily expose a terminal whose renderer has not
-        // initialized dimensions yet during SSH reattach/layout. Fit is best-effort.
-      }
-    }
-  }
 }
 
 export function fitAllPanesInternal(panes: Map<number, ManagedPaneInternal>): void {

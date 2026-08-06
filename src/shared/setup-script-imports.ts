@@ -1,6 +1,18 @@
 import { inspectCodexEnvironmentConfig } from './setup-script-import-codex-environment'
 import { inspectPackageManagerSetupCandidate } from './setup-script-package-manager-suggestion'
 import type { SetupScriptImportProvider } from './setup-script-import-providers'
+import {
+  isSetupScriptImportFieldWithinLimit,
+  isSetupScriptImportTextWithinLimit,
+  SETUP_SCRIPT_IMPORT_MAX_CMUX_COMMANDS,
+  SETUP_SCRIPT_IMPORT_MAX_KEYWORDS,
+  SETUP_SCRIPT_IMPORT_MAX_UNSUPPORTED_FIELDS
+} from './setup-script-import-limits'
+import {
+  joinSetupScriptImportCommands,
+  normalizeSetupScriptImportCommand,
+  pushSetupScriptImportUnsupportedField
+} from './setup-script-import-command-limits'
 
 export type SetupScriptImportCandidate = {
   provider: SetupScriptImportProvider
@@ -23,12 +35,16 @@ export async function inspectSetupScriptImportCandidates(
   readFile: SetupScriptImportFileRead,
   options?: { fileExists?: SetupScriptImportFileExists }
 ): Promise<SetupScriptImportCandidate[]> {
+  const boundedReadFile: SetupScriptImportFileRead = async (relativePath) => {
+    const content = await readFile(relativePath)
+    return content !== null && isSetupScriptImportTextWithinLimit(content) ? content : null
+  }
   const candidates = await Promise.all([
-    inspectSupersetConfig(readFile),
-    inspectConductorConfig(readFile),
-    inspectCodexEnvironmentConfig(readFile),
-    inspectCmuxConfig(readFile),
-    inspectPackageManagerSetupCandidate(readFile, options?.fileExists)
+    inspectSupersetConfig(boundedReadFile),
+    inspectConductorConfig(boundedReadFile),
+    inspectCodexEnvironmentConfig(boundedReadFile),
+    inspectCmuxConfig(boundedReadFile),
+    inspectPackageManagerSetupCandidate(boundedReadFile, options?.fileExists)
   ])
   return candidates.filter(
     (candidate): candidate is SetupScriptImportCandidate => candidate != null
@@ -94,7 +110,7 @@ async function inspectConductorConfig(
     return null
   }
 
-  const setup = normalizeCommandValue(scripts.setup)
+  const setup = normalizeSetupScriptImportCommand(scripts.setup)
   if (!setup) {
     return null
   }
@@ -104,7 +120,7 @@ async function inspectConductorConfig(
     'runScriptMode'
   ])
   for (const field of ['run', 'teardown'] as const) {
-    if (normalizeCommandValue(scripts[field])) {
+    if (normalizeSetupScriptImportCommand(scripts[field])) {
       unsupportedFields.push(`scripts.${field}`)
     }
   }
@@ -114,7 +130,7 @@ async function inspectConductorConfig(
     label: 'Conductor',
     files: [CONDUCTOR_CONFIG_PATH],
     setup,
-    archive: normalizeCommandValue(scripts.archive) || undefined,
+    archive: normalizeSetupScriptImportCommand(scripts.archive) || undefined,
     unsupportedFields
   }
 }
@@ -149,48 +165,41 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     : null
 }
 
-function normalizeCommandValue(value: unknown): string {
-  if (typeof value === 'string') {
-    return value.trim()
-  }
-  if (!Array.isArray(value)) {
-    return ''
-  }
-  const commands = value
-    .map((item) => (typeof item === 'string' ? item.trim() : ''))
-    .filter(Boolean)
-  return commands.join('\n')
-}
-
 function resolveSupersetScriptValue(
   baseValue: unknown,
   localValue: unknown,
   key: 'setup' | 'teardown',
   unsupportedFields: string[]
 ): string {
-  const baseCommand = normalizeCommandValue(baseValue)
+  const baseCommand = normalizeSetupScriptImportCommand(baseValue)
   if (localValue === undefined) {
     return baseCommand
   }
   if (typeof localValue === 'string' || Array.isArray(localValue)) {
-    return normalizeCommandValue(localValue)
+    return normalizeSetupScriptImportCommand(localValue)
   }
 
   const localRecord = asRecord(localValue)
   if (!localRecord) {
-    unsupportedFields.push(`config.local.${key}`)
+    pushSetupScriptImportUnsupportedField(unsupportedFields, `config.local.${key}`)
     return baseCommand
   }
 
-  for (const field of Object.keys(localRecord)) {
+  for (const field in localRecord) {
+    if (!Object.prototype.hasOwnProperty.call(localRecord, field)) {
+      continue
+    }
     if (field !== 'before' && field !== 'after') {
-      unsupportedFields.push(`config.local.${key}.${field}`)
+      pushSetupScriptImportUnsupportedField(unsupportedFields, `config.local.${key}.${field}`)
+      if (unsupportedFields.length >= SETUP_SCRIPT_IMPORT_MAX_UNSUPPORTED_FIELDS) {
+        break
+      }
     }
   }
 
-  const beforeCommand = normalizeCommandValue(localRecord.before)
-  const afterCommand = normalizeCommandValue(localRecord.after)
-  return [beforeCommand, baseCommand, afterCommand].filter(Boolean).join('\n')
+  const beforeCommand = normalizeSetupScriptImportCommand(localRecord.before)
+  const afterCommand = normalizeSetupScriptImportCommand(localRecord.after)
+  return joinSetupScriptImportCommands([beforeCommand, baseCommand, afterCommand].filter(Boolean))
 }
 
 function buildCmuxSetupCandidate(
@@ -198,13 +207,16 @@ function buildCmuxSetupCandidate(
   config: Record<string, unknown>
 ): SetupScriptImportCandidate | null {
   const commands = Array.isArray(config.commands) ? config.commands : []
+  if (commands.length > SETUP_SCRIPT_IMPORT_MAX_CMUX_COMMANDS) {
+    return null
+  }
   for (let index = 0; index < commands.length; index++) {
     const command = asRecord(commands[index])
     if (!command || !isCmuxSetupCommand(command)) {
       continue
     }
 
-    const setup = normalizeCommandValue(command.command)
+    const setup = normalizeSetupScriptImportCommand(command.command)
     if (!setup) {
       continue
     }
@@ -221,7 +233,11 @@ function buildCmuxSetupCandidate(
 }
 
 function isCmuxSetupCommand(command: Record<string, unknown>): boolean {
-  if (typeof command.command !== 'string' || !command.command.trim()) {
+  if (
+    typeof command.command !== 'string' ||
+    !isSetupScriptImportFieldWithinLimit(command.command) ||
+    !command.command.trim()
+  ) {
     return false
   }
 
@@ -249,11 +265,13 @@ function isCmuxSetupCommand(command: Record<string, unknown>): boolean {
 }
 
 function normalizeMatchText(value: unknown): string {
-  return typeof value === 'string' ? value.trim().toLowerCase().replace(/\s+/g, ' ') : ''
+  return typeof value === 'string' && isSetupScriptImportFieldWithinLimit(value)
+    ? value.trim().toLowerCase().replace(/\s+/g, ' ')
+    : ''
 }
 
 function getStringArray(value: unknown): string[] {
-  return Array.isArray(value)
+  return Array.isArray(value) && value.length <= SETUP_SCRIPT_IMPORT_MAX_KEYWORDS
     ? value.filter((item): item is string => typeof item === 'string')
     : []
 }
@@ -263,9 +281,19 @@ function collectUnsupportedCmuxCommandFields(
   commandIndex: number
 ): string[] {
   const supportedFields = new Set(['name', 'title', 'description', 'keywords', 'command'])
-  return Object.keys(command)
-    .filter((field) => !supportedFields.has(field))
-    .map((field) => `commands.${commandIndex}.${field}`)
+  const unsupportedFields: string[] = []
+  for (const field in command) {
+    if (!Object.prototype.hasOwnProperty.call(command, field)) {
+      continue
+    }
+    if (!supportedFields.has(field)) {
+      pushSetupScriptImportUnsupportedField(unsupportedFields, `commands.${commandIndex}.${field}`)
+      if (unsupportedFields.length >= SETUP_SCRIPT_IMPORT_MAX_UNSUPPORTED_FIELDS) {
+        break
+      }
+    }
+  }
+  return unsupportedFields
 }
 
 function collectUnsupportedFields(
@@ -286,7 +314,7 @@ function collectUnsupportedScriptObjectFields(
   }
   for (const field of ['before', 'after'] as const) {
     if (record[field] !== undefined) {
-      unsupportedFields.push(`${prefix}.${field}`)
+      pushSetupScriptImportUnsupportedField(unsupportedFields, `${prefix}.${field}`)
     }
   }
 }

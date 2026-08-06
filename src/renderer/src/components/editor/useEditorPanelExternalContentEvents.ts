@@ -43,6 +43,12 @@ export function useEditorPanelExternalContentEvents({
         return
       }
       for (const file of getOpenFilesForExternalFileChange(openFilesRef.current, detail)) {
+        // Why: a dirty file keeps its unsaved buffer (issue #7265) — it is
+        // marked changed-on-disk upstream and resolves via the editor banner,
+        // a save, or a later clean reload. Reloading here would clobber it.
+        if (file.isDirty) {
+          continue
+        }
         if (file.mode === 'edit' || file.mode === 'markdown-preview') {
           // Why: external writes must replace any in-flight pre-change read so
           // the tab shows the new on-disk content, not a stale dedupe result.

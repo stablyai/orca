@@ -2,6 +2,7 @@ import { describe, expect, expectTypeOf, it } from 'vitest'
 import type { GitStatusResult } from '../../../src/shared/git-status-types'
 import {
   buildMobileSourceControlSections,
+  canOpenMobileGitStatusEntry,
   countStagedEntries,
   countUnstagedEntries,
   getStageablePaths,
@@ -28,11 +29,8 @@ describe('mobile source control status helpers', () => {
   it('builds sections in the mobile source control order', () => {
     const sections = buildMobileSourceControlSections(entries)
 
-    expect(sections.map((section) => section.title)).toEqual([
-      'Changes',
-      'Untracked Files',
-      'Staged Changes'
-    ])
+    expect(sections.map((section) => section.title)).toEqual(['Changes', 'Staged Changes'])
+    expect(sections[0]?.data.map((entry) => entry.path)).toEqual(['a.ts', 'new.ts'])
   })
 
   it('computes actionable path sets', () => {
@@ -63,6 +61,31 @@ describe('mobile source control status helpers', () => {
     expect(isMobileGitStageableEntry(conflictedEntries[1])).toBe(false)
     expect(isMobileGitDiscardableEntry(conflictedEntries[1])).toBe(false)
     expect(isMobileGitDiscardableEntry(conflictedEntries[2])).toBe(false)
+  })
+
+  it('allows opening deleted files so pre-delete text/image diffs can load', () => {
+    expect(
+      canOpenMobileGitStatusEntry({ path: 'deleted.png', status: 'deleted', area: 'unstaged' })
+    ).toBe(true)
+    expect(
+      canOpenMobileGitStatusEntry({ path: 'logo.png', status: 'modified', area: 'unstaged' })
+    ).toBe(true)
+    expect(
+      canOpenMobileGitStatusEntry({
+        path: 'conflict.ts',
+        status: 'modified',
+        area: 'unstaged',
+        conflictStatus: 'unresolved'
+      })
+    ).toBe(false)
+    expect(
+      canOpenMobileGitStatusEntry({
+        path: 'resolved.ts',
+        status: 'modified',
+        area: 'unstaged',
+        conflictStatus: 'resolved_locally'
+      })
+    ).toBe(true)
   })
 
   it('sorts entries by desktop-compatible conflict rank, then path', () => {

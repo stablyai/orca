@@ -1,4 +1,4 @@
-import { detectAgentStatusFromTitle } from '../../../shared/agent-detection'
+import { classifyTitleActivity } from './pane-agent-evidence'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
 import {
   getSyntheticAgentTerminalTitle,
@@ -26,7 +26,7 @@ function shouldReplaceCurrentTitle(
   if (!currentTitle?.trim()) {
     return true
   }
-  const currentStatus = detectAgentStatusFromTitle(currentTitle)
+  const currentStatus = classifyTitleActivity(currentTitle)
   if (currentStatus === 'working') {
     return true
   }

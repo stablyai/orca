@@ -1,27 +1,18 @@
-import { ArrowLeft, ArrowRight, Copy, RefreshCw } from 'lucide-react'
+import { useLayoutEffect, useRef, useState } from 'react'
+import { ArrowLeft, ArrowRight, Copy } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
 import { AndroidLogo, IosBrandIcon } from './MobileBrandIcons'
-import { NetworkInterfacePicker } from './NetworkInterfacePicker'
 import { getChannelTagline, type InstallCopy, type IosChannel } from './mobile-platform-copy'
+import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
+import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
+import { MobileHeroPairingStep } from './MobileHeroPairingStep'
 export { HeroIntro } from './MobileHeroIntro'
 export { HeroPaired, type PairedDevice } from './MobileHeroPairedDevices'
 import { translate } from '@/i18n/i18n'
 
 export type Platform = 'ios' | 'android'
 export type StepIndex = 0 | 1
-
-// Why: header copy needs to refer to the *user's* device by its native name.
-function getDeviceLabel(): string {
-  const ua = navigator.userAgent
-  if (ua.includes('Mac')) {
-    return 'Mac'
-  }
-  if (ua.includes('Windows')) {
-    return 'PC'
-  }
-  return 'computer'
-}
 
 type HeroFlowProps = {
   stepIdx: StepIndex
@@ -35,12 +26,25 @@ type HeroFlowProps = {
   onCopyInstallUrl: () => void
   pairQrDataUrl: string | null
   pairingUrl: string | null
+  pairingQrError: boolean
+  relayMintFailure: MobileRelayMintFailure | null
+  onUseLan: () => void
+  onRetryRelay: () => void
+  onCopyRelayDiagnostics: () => void
   pairLoading: boolean
+  connectionMode: MobilePairingConnectionMode
+  onConnectionModeChange: (mode: MobilePairingConnectionMode) => void
   onRegeneratePairing: () => void
+  canGeneratePairing: boolean
   onCopyPairingCode: () => void
   networkInterfaces: readonly MobileNetworkInterface[]
+  customAddresses: readonly string[]
   selectedAddress: string | undefined
+  selectedAddressIsCustom: boolean
   onSelectedAddressChange: (address: string) => void
+  onCustomAddressSelect: (address: string) => void
+  onCustomAddressRemove: (address: string) => void
+  beforeCustomAddressChange: (address: string) => Promise<boolean>
   onRefreshNetworkInterfaces: () => void
   refreshingNetworkInterfaces: boolean
   onBack: () => void
@@ -60,12 +64,25 @@ export function HeroFlow({
   onCopyInstallUrl,
   pairQrDataUrl,
   pairingUrl,
+  pairingQrError,
+  relayMintFailure,
+  onUseLan,
+  onRetryRelay,
+  onCopyRelayDiagnostics,
   pairLoading,
+  connectionMode,
+  onConnectionModeChange,
   onRegeneratePairing,
+  canGeneratePairing,
   onCopyPairingCode,
   networkInterfaces,
+  customAddresses,
   selectedAddress,
+  selectedAddressIsCustom,
   onSelectedAddressChange,
+  onCustomAddressSelect,
+  onCustomAddressRemove,
+  beforeCustomAddressChange,
   onRefreshNetworkInterfaces,
   refreshingNetworkInterfaces,
   onBack,
@@ -73,11 +90,40 @@ export function HeroFlow({
   onDone
 }: HeroFlowProps): React.JSX.Element {
   const isLast = stepIdx === 1
+  const screenRefs = useRef<(HTMLDivElement | null)[]>([])
+  const [viewportHeight, setViewportHeight] = useState<number>()
+
+  useLayoutEffect(() => {
+    const activeScreen = screenRefs.current[stepIdx]
+    if (!activeScreen) {
+      return
+    }
+
+    const measure = (): void => setViewportHeight(activeScreen.scrollHeight)
+    measure()
+
+    if (typeof ResizeObserver === 'undefined') {
+      return
+    }
+    const observer = new ResizeObserver(measure)
+    observer.observe(activeScreen)
+    return () => observer.disconnect()
+  }, [stepIdx])
 
   return (
     <div className="mp-flow-card">
-      <div className="mp-flow-viewport">
-        <div className={cn('mp-flow-screen', stepIdx === 0 ? 'is-active' : 'is-past')}>
+      <div
+        className="mp-flow-viewport"
+        style={viewportHeight === undefined ? undefined : { height: viewportHeight }}
+      >
+        <div
+          ref={(element) => {
+            screenRefs.current[0] = element
+          }}
+          className={cn('mp-flow-screen', stepIdx === 0 ? 'is-active' : 'is-past')}
+          aria-hidden={stepIdx !== 0}
+          inert={stepIdx !== 0}
+        >
           <div className="mp-step2-layout">
             <div className="mp-step2-copy">
               <div className="mp-eyebrow-row">
@@ -155,13 +201,7 @@ export function HeroFlow({
                 </button>
               </div>
             </div>
-            <div
-              className="mp-qr mp-qr-large"
-              aria-label={translate(
-                'auto.components.mobile.MobileHero.7af266b80d',
-                'Install QR code'
-              )}
-            >
+            <div className="mp-qr mp-qr-large">
               {installQrUrl ? (
                 <img
                   src={installQrUrl}
@@ -172,108 +212,39 @@ export function HeroFlow({
           </div>
         </div>
 
-        <div className={cn('mp-flow-screen', stepIdx === 1 && 'is-active')}>
-          <div className="mp-step2-layout">
-            <div className="mp-step2-copy">
-              <div className="mp-eyebrow-row">
-                <div className="mp-step-num">2</div>
-                <span className="mp-eyebrow">
-                  {translate('auto.components.mobile.MobileHero.3960f5c339', 'Step 2 of 2')}
-                </span>
-              </div>
-              <h2 className="mp-h2">
-                {translate('auto.components.mobile.MobileHero.901c98bb93', 'Pair this')}{' '}
-                {getDeviceLabel()}.
-              </h2>
-              <p className="mp-lead-sm">
-                {translate('auto.components.mobile.MobileHero.d1495e5e64', 'Open Orca Mobile, tap')}{' '}
-                <strong>
-                  {translate('auto.components.mobile.MobileHero.3aa7bb2d8b', 'Pair Desktop')}
-                </strong>
-                {translate('auto.components.mobile.MobileHero.2f077ef4eb', ', and scan the code.')}
-              </p>
-
-              <div className="mp-network-row">
-                <span className="mp-network-label">
-                  {translate('auto.components.mobile.MobileHero.dfd2aa9d5d', 'Network')}
-                </span>
-                <NetworkInterfacePicker
-                  networkInterfaces={networkInterfaces}
-                  selectedAddress={selectedAddress}
-                  onSelectedAddressChange={onSelectedAddressChange}
-                  // Why: keep the picker reachable when interface discovery is
-                  // empty — "Add custom address…" is the only path to enter a
-                  // manual Tailscale hostname / static IP.
-                  disabled={false}
-                  className="mp-network-select"
-                />
-                <button
-                  type="button"
-                  className={cn('mp-network-refresh', refreshingNetworkInterfaces && 'is-spinning')}
-                  onClick={onRefreshNetworkInterfaces}
-                  disabled={refreshingNetworkInterfaces}
-                  aria-label={translate(
-                    'auto.components.mobile.MobileHero.85067b9e06',
-                    'Refresh network interfaces'
-                  )}
-                  title={translate(
-                    'auto.components.mobile.MobileHero.85067b9e06',
-                    'Refresh network interfaces'
-                  )}
-                >
-                  <RefreshCw className="size-3.5" />
-                </button>
-              </div>
-
-              <div className="mp-inline-actions">
-                <span className="mp-action-divider">
-                  {translate('auto.components.mobile.MobileHero.4c1df4eba7', "Can't scan?")}
-                </span>
-                <button
-                  type="button"
-                  className="mp-text-link"
-                  onClick={onCopyPairingCode}
-                  disabled={!pairingUrl || pairLoading}
-                >
-                  <Copy className="size-3.5" />
-                  {translate('auto.components.mobile.MobileHero.010dddcf27', 'Copy pairing code')}
-                </button>
-              </div>
-            </div>
-            <div className="mp-qr-stack">
-              <div
-                className="mp-qr mp-qr-large"
-                aria-label={translate(
-                  'auto.components.mobile.MobileHero.bb0074ce11',
-                  'Pairing QR code'
-                )}
-                aria-busy={pairLoading && !pairQrDataUrl}
-              >
-                {pairQrDataUrl ? (
-                  <img
-                    src={pairQrDataUrl}
-                    alt={translate('auto.components.mobile.MobileHero.27735e5f4e', 'Pairing QR')}
-                  />
-                ) : pairLoading ? (
-                  <span className="mp-qr-loading">
-                    {translate('auto.components.mobile.MobileHero.65b3f2e8bc', 'Generating…')}
-                  </span>
-                ) : null}
-              </div>
-              <button
-                type="button"
-                className="mp-link-under"
-                onClick={onRegeneratePairing}
-                disabled={pairLoading}
-              >
-                {pairLoading
-                  ? translate('auto.components.mobile.MobileHero.65b3f2e8bc', 'Generating…')
-                  : pairQrDataUrl
-                    ? translate('auto.components.mobile.MobileHero.e59a252eca', 'Regenerate code')
-                    : translate('auto.components.mobile.MobileHero.a6cffbbb0b', 'Generate code')}
-              </button>
-            </div>
-          </div>
+        <div
+          ref={(element) => {
+            screenRefs.current[1] = element
+          }}
+          className={cn('mp-flow-screen', stepIdx === 1 && 'is-active')}
+          aria-hidden={stepIdx !== 1}
+          inert={stepIdx !== 1}
+        >
+          <MobileHeroPairingStep
+            pairQrDataUrl={pairQrDataUrl}
+            pairingUrl={pairingUrl}
+            pairingQrError={pairingQrError}
+            relayMintFailure={relayMintFailure}
+            onUseLan={onUseLan}
+            onRetryRelay={onRetryRelay}
+            onCopyRelayDiagnostics={onCopyRelayDiagnostics}
+            pairLoading={pairLoading}
+            connectionMode={connectionMode}
+            onConnectionModeChange={onConnectionModeChange}
+            onRegeneratePairing={onRegeneratePairing}
+            canGeneratePairing={canGeneratePairing}
+            onCopyPairingCode={onCopyPairingCode}
+            networkInterfaces={networkInterfaces}
+            customAddresses={customAddresses}
+            selectedAddress={selectedAddress}
+            selectedAddressIsCustom={selectedAddressIsCustom}
+            onSelectedAddressChange={onSelectedAddressChange}
+            onCustomAddressSelect={onCustomAddressSelect}
+            onCustomAddressRemove={onCustomAddressRemove}
+            beforeCustomAddressChange={beforeCustomAddressChange}
+            onRefreshNetworkInterfaces={onRefreshNetworkInterfaces}
+            refreshingNetworkInterfaces={refreshingNetworkInterfaces}
+          />
         </div>
       </div>
 

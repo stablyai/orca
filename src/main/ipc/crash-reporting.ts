@@ -4,6 +4,7 @@ import os from 'node:os'
 import { app, clipboard, ipcMain } from 'electron'
 import {
   type CrashReportBreadcrumbData,
+  type CrashReportCopyDiagnosticsArgs,
   type CrashReportDiagnosticBundle,
   type ReactErrorBoundaryReportArgs,
   type ReactErrorBoundaryReportResult,
@@ -18,16 +19,21 @@ import { submitFeedback } from './feedback'
 import type { CrashReportStore } from '../crash-reporting/crash-report-store'
 import {
   getCrashBreadcrumbSnapshot,
+  recordCoalescedCrashBreadcrumb,
   recordCrashBreadcrumb
 } from '../crash-reporting/crash-breadcrumb-store'
-import { collectDiagnosticBundle, getDiagnosticsStatus } from '../observability'
-import { resolveDiagnosticOrcaChannel } from '../observability/diagnostic-upload-endpoint'
 import { startSpan } from '../observability/tracer'
-import type { FeedbackDiagnosticBundleAttachment } from './feedback'
+import {
+  diagnosticBundleForReportOnlyRetry,
+  prepareCrashDiagnosticBundle,
+  resolveSubmittedDiagnosticBundle
+} from '../crash-reporting/crash-feedback-diagnostic-bundle'
 import {
   assertClipboardTextWriteWithinLimit,
   isClipboardTextWriteTooLargeError
 } from '../../shared/clipboard-text'
+import { formatCrashReportCopyText } from '../crash-reporting/crash-report-copy-text'
+import { TERMINAL_WEBGL_DIAGNOSTIC_BREADCRUMB } from '../../shared/terminal-webgl-diagnostics'
 
 const inFlightSubmissions = new Set<string>()
 const submittedReportIds = new Set<string>()
@@ -37,7 +43,6 @@ const RENDERER_ERROR_DEDUPE_MS = 10 * 60 * 1000
 const MAX_RENDERER_ERROR_KEY_AGE_MS = RENDERER_ERROR_DEDUPE_MS * 2
 const MAX_RECENT_RENDERER_ERROR_REPORT_KEYS = 256
 const MAX_SUBMITTED_REPORT_IDS = 256
-const CRASH_REPORT_LOG_LOOKBACK_MINUTES = 3 * 24 * 60
 
 const REACT_ERROR_BOUNDARY_SURFACES = new Set<ReactErrorBoundaryReportArgs['surface']>([
   'app-root',
@@ -49,13 +54,9 @@ const REACT_ERROR_BOUNDARY_SURFACES = new Set<ReactErrorBoundaryReportArgs['surf
   'page',
   'modal',
   'overlay',
-  'rich-markdown-editor'
+  'rich-markdown-editor',
+  'dashboard-popout'
 ])
-
-type CrashDiagnosticBundleAttachment = {
-  readonly diagnosticBundle: CrashReportDiagnosticBundle
-  readonly feedbackDiagnosticBundle?: FeedbackDiagnosticBundleAttachment
-}
 
 function stringField(value: unknown, maxLength: number): string | undefined {
   if (typeof value !== 'string') {
@@ -302,10 +303,6 @@ function recordRendererBreadcrumbTrace(
   span.end()
 }
 
-function formatUnknownError(error: unknown): string {
-  return sanitizeCrashReportString(error instanceof Error ? error.message : String(error))
-}
-
 function buildUncapturedCrashReportText(
   notes: string | undefined,
   diagnosticBundle?: CrashReportDiagnosticBundle
@@ -325,56 +322,87 @@ function buildUncapturedCrashReportText(
   )
 }
 
-function skippedCrashDiagnosticBundle(): CrashDiagnosticBundleAttachment {
-  return {
-    diagnosticBundle: {
-      status: 'not_uploaded',
-      reason: 'diagnostic log upload skipped by user'
-    }
-  }
-}
+// Why: a repeating renderer error (e.g. a ResizeObserver or SSH-rejection
+// storm, #8260) can flush the whole fixed-size breadcrumb ring in seconds,
+// erasing the pre-crash trail. Coalesce repeats into one entry that carries a
+// suppressed count instead.
+const DUPLICATE_TAB_OWNER_BREADCRUMB = 'terminal_tab_id_owned_by_multiple_worktrees'
+const PARK_VERDICT_CHURN_BREADCRUMB = 'terminal_park_verdict_churn'
+const COALESCED_RENDERER_BREADCRUMB_NAMES = new Set([
+  'renderer_error',
+  'renderer_unhandled_rejection',
+  'terminal_safe_fit_retry_exhausted',
+  DUPLICATE_TAB_OWNER_BREADCRUMB,
+  PARK_VERDICT_CHURN_BREADCRUMB,
+  TERMINAL_WEBGL_DIAGNOSTIC_BREADCRUMB
+])
+const RENDERER_BREADCRUMB_COALESCE_MS = 30_000
+// Why: these carry no message identity — they are per-tab telemetry whose rate,
+// not whose text, is the signal. Coalescing by name alone bounds a many-tab
+// storm to one ring entry plus a suppressed count.
+//
+// terminal_safe_fit_retry_exhausted: every hidden (display:none) pane is 0x0 and
+// burns its whole retry budget, so one post-reload reattach wave fires once per
+// mounted pane within ~60ms. Windows crash F0BKR84AHEH lost 26-90% of its
+// 30-entry ring to two such bursts. `suppressedSinceLast` keeps the pane count
+// — the only signal these carry — in one slot.
+const NAME_ONLY_COALESCED_BREADCRUMB_NAMES = new Set(['terminal_safe_fit_retry_exhausted'])
 
-function collectCrashDiagnosticBundleAttachment(): CrashDiagnosticBundleAttachment {
-  const status = getDiagnosticsStatus()
-  if (!status.bundleEnabled) {
-    return {
-      diagnosticBundle: {
-        status: 'not_uploaded',
-        reason: status.disabledReason ?? 'diagnostic bundle collection is disabled'
-      }
-    }
+function rendererBreadcrumbCoalesceKey(
+  name: string,
+  data: CrashReportBreadcrumbData | undefined
+): string | undefined {
+  if (NAME_ONLY_COALESCED_BREADCRUMB_NAMES.has(name)) {
+    return name
+  }
+  // Why trigger and not name alone: `burst` means damping engaged a commit
+  // short of React #185, `window` means slow benign churn. Collapsing them
+  // would drop the near-crash signal into a slow-churn slot. Still bounded —
+  // two slots per storm regardless of tab count.
+  if (name === PARK_VERDICT_CHURN_BREADCRUMB) {
+    return `${name}:${String(data?.trigger ?? '')}`
+  }
+  // Preserve distinct GPU failures and atlas-reset triggers while coalescing each storm.
+  if (name === TERMINAL_WEBGL_DIAGNOSTIC_BREADCRUMB) {
+    const kind = String(data?.kind ?? '')
+    const reason = kind === 'webgl-atlas-reset' ? data?.reason : undefined
+    return reason ? `${name}:${kind}:${String(reason)}` : `${name}:${kind}`
+  }
+  // Why: a stale map can emit once per tab-id/verdict; key by verdict so
+  // last-write coalescing cannot erase the other signal while remaining bounded.
+  if (name === DUPLICATE_TAB_OWNER_BREADCRUMB) {
+    return `${name}:${String(data?.resolvedToActiveWorktree ?? '')}`
+  }
+  const primaryMessage = name === 'renderer_error' ? data?.message : data?.reasonMessage
+  const fallbackMessage = name === 'renderer_error' ? data?.errorMessage : undefined
+  const message =
+    typeof primaryMessage === 'string' && primaryMessage.length > 0
+      ? primaryMessage
+      : typeof fallbackMessage === 'string' && fallbackMessage.length > 0
+        ? fallbackMessage
+        : undefined
+  // Why: message-less failures have no stable identity, so grouping them could
+  // erase unrelated crash evidence. Sanitization already caps messages at 240 chars.
+  if (!message) {
+    return undefined
   }
 
-  let bundle: ReturnType<typeof collectDiagnosticBundle>
-  try {
-    bundle = collectDiagnosticBundle({
-      appVersion: app.getVersion(),
-      platform: os.platform(),
-      arch: os.arch(),
-      osRelease: os.release(),
-      orcaChannel: resolveDiagnosticOrcaChannel(),
-      // Why: Help > Report Crash is often used after relaunch, long after the
-      // default 30 minute support bundle window would miss the failure context.
-      lookbackMinutes: CRASH_REPORT_LOG_LOOKBACK_MINUTES
-    })
-  } catch (error) {
-    return { diagnosticBundle: { status: 'not_uploaded', reason: formatUnknownError(error) } }
-  }
-
-  return {
-    diagnosticBundle: {
-      status: 'attached',
-      bundleSubmissionId: bundle.bundleSubmissionId,
-      bytes: bundle.bytes,
-      spanCount: bundle.spanCount
-    },
-    feedbackDiagnosticBundle: {
-      bundleSubmissionId: bundle.bundleSubmissionId,
-      content: bundle.payload,
-      bytes: bundle.bytes,
-      spanCount: bundle.spanCount
-    }
-  }
+  // Why: common messages such as "Script error" or "Cannot read properties"
+  // can come from unrelated sites. Include sanitized source evidence so one
+  // failure cannot suppress the breadcrumb for another.
+  const sourceIdentity =
+    name === 'renderer_error'
+      ? [
+          data?.errorStack,
+          data?.filename,
+          data?.lineno,
+          data?.colno,
+          data?.errorType,
+          data?.errorName,
+          data?.errorMessage
+        ]
+      : [data?.reasonStack, data?.reasonType, data?.reasonName]
+  return JSON.stringify([name, message, ...sourceIdentity])
 }
 
 export function registerCrashReportingHandlers(store: CrashReportStore): void {
@@ -404,23 +432,49 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
         return
       }
       const data = sanitizeRendererBreadcrumbData(args.data)
-      recordCrashBreadcrumb(args.name, data)
-      recordRendererBreadcrumbTrace(args.name, data)
+      if (COALESCED_RENDERER_BREADCRUMB_NAMES.has(args.name)) {
+        const coalesceKey = rendererBreadcrumbCoalesceKey(args.name, data)
+        if (!coalesceKey) {
+          recordCrashBreadcrumb(args.name, data)
+          recordRendererBreadcrumbTrace(args.name, data)
+          return
+        }
+        const coalesceResult = recordCoalescedCrashBreadcrumb({
+          name: args.name,
+          data,
+          coalesceKey,
+          minIntervalMs: RENDERER_BREADCRUMB_COALESCE_MS
+        })
+        // Why: tracing every suppressed duplicate would preserve the same
+        // serialization and disk churn that breadcrumb coalescing removes.
+        if (coalesceResult) {
+          recordRendererBreadcrumbTrace(
+            args.name,
+            coalesceResult.suppressedSinceLast > 0
+              ? { ...data, suppressedSinceLast: coalesceResult.suppressedSinceLast }
+              : data
+          )
+        }
+      } else {
+        recordCrashBreadcrumb(args.name, data)
+        recordRendererBreadcrumbTrace(args.name, data)
+      }
     }
   )
 
   ipcMain.removeHandler('crashReports:copyLatestDiagnostics')
   ipcMain.handle(
     'crashReports:copyLatestDiagnostics',
-    async (_event, args?: { reportId?: string; notes?: string }) => {
+    async (_event, args?: CrashReportCopyDiagnosticsArgs) => {
       const report = await getRequestedCrashReport(store, args)
-      if (!report) {
-        clipboard.writeText(buildUncapturedCrashReportText(args?.notes))
-        return { ok: true as const }
-      }
+      const baseText = report
+        ? formatCrashReportText(report, args?.notes)
+        : buildUncapturedCrashReportText(args?.notes)
       try {
         clipboard.writeText(
-          assertClipboardTextWriteWithinLimit(formatCrashReportText(report, args?.notes))
+          assertClipboardTextWriteWithinLimit(
+            formatCrashReportCopyText(baseText, args?.submissionFailure)
+          )
         )
       } catch (error) {
         if (isClipboardTextWriteTooLargeError(error)) {
@@ -448,11 +502,9 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
     async (_event, args: CrashReportSubmitArgs): Promise<CrashReportSubmitResult> => {
       const report = await getRequestedCrashReport(store, args)
       if (!report) {
-        const diagnosticUpload =
-          args.includeDiagnosticLogs === false
-            ? skippedCrashDiagnosticBundle()
-            : collectCrashDiagnosticBundleAttachment()
+        const diagnosticUpload = prepareCrashDiagnosticBundle(args.includeDiagnosticLogs !== false)
         const diagnosticBundle = diagnosticUpload.diagnosticBundle
+        const reportOnlyDiagnosticBundle = diagnosticBundleForReportOnlyRetry(diagnosticUpload)
         const result = await submitFeedback({
           feedback: buildUncapturedCrashReportText(args.notes, diagnosticBundle),
           submissionType: 'crash',
@@ -460,14 +512,26 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
           githubLogin: args.githubLogin,
           githubEmail: args.githubEmail,
           ...(diagnosticUpload.feedbackDiagnosticBundle
-            ? { diagnosticBundle: diagnosticUpload.feedbackDiagnosticBundle }
+            ? {
+                diagnosticBundle: diagnosticUpload.feedbackDiagnosticBundle,
+                feedbackWithoutDiagnosticBundle: buildUncapturedCrashReportText(
+                  args.notes,
+                  reportOnlyDiagnosticBundle
+                )
+              }
             : {})
         })
+        const submittedDiagnosticBundle = resolveSubmittedDiagnosticBundle(diagnosticUpload, result)
         return result.ok
-          ? { ok: true, report: null, diagnosticBundle }
+          ? { ok: true, report: null, diagnosticBundle: submittedDiagnosticBundle }
           : {
-              ...result,
-              report: null
+              // Why: the transport-only attachment failure may contain raw
+              // endpoint detail; only its sanitized bundle reason crosses IPC.
+              ok: false,
+              status: result.status,
+              error: result.error,
+              report: null,
+              diagnosticBundle: submittedDiagnosticBundle
             }
       }
       const canSubmitDismissedReport = Boolean(args.reportId && report.status === 'dismissed')
@@ -491,11 +555,9 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
 
       inFlightSubmissions.add(report.id)
       try {
-        const diagnosticUpload =
-          args.includeDiagnosticLogs === false
-            ? skippedCrashDiagnosticBundle()
-            : collectCrashDiagnosticBundleAttachment()
+        const diagnosticUpload = prepareCrashDiagnosticBundle(args.includeDiagnosticLogs !== false)
         const diagnosticBundle = diagnosticUpload.diagnosticBundle
+        const reportOnlyDiagnosticBundle = diagnosticBundleForReportOnlyRetry(diagnosticUpload)
         const result = await submitFeedback({
           feedback: formatCrashReportText(report, args.notes, diagnosticBundle),
           submissionType: 'crash',
@@ -503,13 +565,26 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
           githubLogin: args.githubLogin,
           githubEmail: args.githubEmail,
           ...(diagnosticUpload.feedbackDiagnosticBundle
-            ? { diagnosticBundle: diagnosticUpload.feedbackDiagnosticBundle }
+            ? {
+                diagnosticBundle: diagnosticUpload.feedbackDiagnosticBundle,
+                feedbackWithoutDiagnosticBundle: formatCrashReportText(
+                  report,
+                  args.notes,
+                  reportOnlyDiagnosticBundle
+                )
+              }
             : {})
         })
+        const submittedDiagnosticBundle = resolveSubmittedDiagnosticBundle(diagnosticUpload, result)
         if (!result.ok) {
           return {
-            ...result,
-            report
+            // Why: keep the renderer contract allow-listed instead of leaking
+            // the transport's internal diagnosticBundleFailure object.
+            ok: false,
+            status: result.status,
+            error: result.error,
+            report,
+            diagnosticBundle: submittedDiagnosticBundle
           }
         }
         rememberSubmittedReportId(report.id)
@@ -518,21 +593,37 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
             // Why: startup prompts are dismissed before the user can send from
             // the still-open dialog, so successful uploads must update storage.
             const sent = await store.markDismissedSent(report.id)
-            return { ok: true, report: sent ?? { ...report, status: 'sent' }, diagnosticBundle }
+            return {
+              ok: true,
+              report: sent ?? { ...report, status: 'sent' },
+              diagnosticBundle: submittedDiagnosticBundle
+            }
           } catch (error) {
             console.error('[crash-reporting] Failed to mark dismissed crash report sent:', error)
-            return { ok: true, report: { ...report, status: 'sent' }, diagnosticBundle }
+            return {
+              ok: true,
+              report: { ...report, status: 'sent' },
+              diagnosticBundle: submittedDiagnosticBundle
+            }
           }
         }
         try {
           const sent = await store.markSent(report.id)
-          return { ok: true, report: sent ?? { ...report, status: 'sent' }, diagnosticBundle }
+          return {
+            ok: true,
+            report: sent ?? { ...report, status: 'sent' },
+            diagnosticBundle: submittedDiagnosticBundle
+          }
         } catch (error) {
           // Why: the upstream submission already succeeded. A local persistence
           // failure must not present as upload failure or invite duplicate sends
           // during this app session.
           console.error('[crash-reporting] Failed to mark crash report sent:', error)
-          return { ok: true, report: { ...report, status: 'sent' }, diagnosticBundle }
+          return {
+            ok: true,
+            report: { ...report, status: 'sent' },
+            diagnosticBundle: submittedDiagnosticBundle
+          }
         }
       } finally {
         inFlightSubmissions.delete(report.id)

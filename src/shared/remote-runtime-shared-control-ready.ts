@@ -1,4 +1,6 @@
 import WebSocket from 'ws'
+import { RemoteRuntimeClientError } from './remote-runtime-client-error'
+import { REMOTE_RUNTIME_MAX_READY_WAITERS } from './remote-runtime-memory-limits'
 import { remoteRuntimeUnavailableError } from './remote-runtime-request-frames'
 import type {
   SharedControlConnectionState,
@@ -18,6 +20,14 @@ export function waitForSharedControlReadyWithTimeout(args: {
   timeoutMs: number
   open: () => void
 }): Promise<void> {
+  if (args.readyWaiters.length >= REMOTE_RUNTIME_MAX_READY_WAITERS) {
+    return Promise.reject(
+      new RemoteRuntimeClientError(
+        'remote_runtime_busy',
+        'Remote runtime connection wait limit reached; retry after pending work finishes.'
+      )
+    )
+  }
   return new Promise<void>((resolve, reject) => {
     let settled = false
     let waiter!: SharedControlReadyWaiter
@@ -51,6 +61,14 @@ export function waitForSharedControlReadyWithTimeout(args: {
       }
     }
     args.readyWaiters.push(waiter)
-    args.open()
+    try {
+      args.open()
+    } catch (error) {
+      const index = args.readyWaiters.indexOf(waiter)
+      if (index >= 0) {
+        args.readyWaiters.splice(index, 1)
+      }
+      waiter.reject(error instanceof Error ? error : remoteRuntimeUnavailableError(String(error)))
+    }
   })
 }

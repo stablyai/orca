@@ -7,13 +7,16 @@ import { DaemonServer } from './daemon-server'
 import { getDaemonPidPath, serializeDaemonPidFile } from './daemon-spawner'
 import {
   checkDaemonHealth,
+  E2E_FORCE_DAEMON_HEALTH_UNREACHABLE_ENV,
   getProcessStartedAtMs,
   healthCheckDaemon,
   killStaleDaemon,
   parseLinuxBootTimeSeconds,
   parseLinuxProcStartTicks,
   parseDaemonPidFile,
-  startTimeMatches
+  parseWindowsProcessIdentityJson,
+  startTimeMatches,
+  startTimesWithinTolerance
 } from './daemon-health'
 import type { SubprocessHandle } from './session'
 
@@ -125,6 +128,45 @@ describe('daemon health', () => {
     await expect(healthCheckDaemon(socketPath, tokenPath)).resolves.toBe(false)
   })
 
+  it('returns unreachable when the e2e force-health-failure env is set', async () => {
+    // Why: prove the e2e seam short-circuits even when a real daemon would
+    // otherwise pass — not the already-covered missing-socket path.
+    const server = new DaemonServer({
+      socketPath,
+      tokenPath,
+      spawnSubprocess: () => createMockSubprocess()
+    })
+    await server.start()
+    vi.stubEnv(E2E_FORCE_DAEMON_HEALTH_UNREACHABLE_ENV, '1')
+    try {
+      await expect(checkDaemonHealth(socketPath, tokenPath)).resolves.toBe('unreachable')
+      await expect(healthCheckDaemon(socketPath, tokenPath)).resolves.toBe(false)
+    } finally {
+      vi.unstubAllEnvs()
+      await server.shutdown()
+    }
+  })
+
+  it('classifies a hello-rejected daemon as rejected, not unreachable', async () => {
+    // Why: 'rejected' means the daemon answered and refused adoption — the
+    // launcher may replace it. 'unreachable' also covers a wedged-but-live
+    // daemon, which must never be replaced while its pipe accepts connections.
+    const server = new DaemonServer({
+      socketPath,
+      tokenPath,
+      spawnSubprocess: () => createMockSubprocess()
+    })
+    await server.start()
+
+    try {
+      writeFileSync(tokenPath, 'not-the-daemon-token', { mode: 0o600 })
+      await expect(checkDaemonHealth(socketPath, tokenPath)).resolves.toBe('rejected')
+      await expect(healthCheckDaemon(socketPath, tokenPath)).resolves.toBe(false)
+    } finally {
+      await server.shutdown()
+    }
+  })
+
   it('does not unlink a live socket when the pid file does not match this daemon', async () => {
     if (process.platform === 'win32') {
       return
@@ -156,7 +198,10 @@ describe('parseDaemonPidFile', () => {
       pid: 12345,
       startedAtMs: 1_700_000_000_000,
       entryPath: null,
-      appVersion: null
+      appVersion: null,
+      launchNonce: null,
+      linuxStartTicks: null,
+      bootId: null
     })
   })
 
@@ -171,7 +216,25 @@ describe('parseDaemonPidFile', () => {
       pid: 12345,
       startedAtMs: 1_700_000_000_000,
       entryPath: '/repo/out/main/daemon-entry.js',
-      appVersion: '1.2.3'
+      appVersion: '1.2.3',
+      launchNonce: null,
+      linuxStartTicks: null,
+      bootId: null
+    })
+  })
+
+  it('preserves exact-incarnation launch and Linux process identity', () => {
+    const serialized = serializeDaemonPidFile({
+      pid: 12345,
+      startedAtMs: 1_700_000_000_000,
+      launchNonce: 'launch-a',
+      linuxStartTicks: '4242',
+      bootId: 'boot-a'
+    })
+    expect(parseDaemonPidFile(serialized)).toMatchObject({
+      launchNonce: 'launch-a',
+      linuxStartTicks: '4242',
+      bootId: 'boot-a'
     })
   })
 
@@ -182,7 +245,10 @@ describe('parseDaemonPidFile', () => {
       pid: 9999,
       startedAtMs: null,
       entryPath: null,
-      appVersion: null
+      appVersion: null,
+      launchNonce: null,
+      linuxStartTicks: null,
+      bootId: null
     })
   })
 
@@ -194,13 +260,19 @@ describe('parseDaemonPidFile', () => {
       pid: 12345,
       startedAtMs: null,
       entryPath: null,
-      appVersion: null
+      appVersion: null,
+      launchNonce: null,
+      linuxStartTicks: null,
+      bootId: null
     })
     expect(parseDaemonPidFile('  12345\n')).toEqual({
       pid: 12345,
       startedAtMs: null,
       entryPath: null,
-      appVersion: null
+      appVersion: null,
+      launchNonce: null,
+      linuxStartTicks: null,
+      bootId: null
     })
   })
 
@@ -283,6 +355,42 @@ describe('startTimeMatches', () => {
     }
     // Shift expected by 10s — clearly outside the ±1500ms tolerance.
     expect(startTimeMatches(process.pid, actual + 10_000)).toBe(false)
+  })
+})
+
+describe('parseWindowsProcessIdentityJson', () => {
+  it('parses command line and start time from the CIM query output', () => {
+    expect(
+      parseWindowsProcessIdentityJson(
+        '{"cmd":"Orca.exe daemon-entry.js","start":1700000000000}\r\n'
+      )
+    ).toEqual({ commandLine: 'Orca.exe daemon-entry.js', startedAtMs: 1_700_000_000_000 })
+  })
+
+  it('returns a null start time when CreationDate was unavailable', () => {
+    expect(
+      parseWindowsProcessIdentityJson('{"cmd":"Orca.exe daemon-entry.js","start":null}')
+    ).toEqual({ commandLine: 'Orca.exe daemon-entry.js', startedAtMs: null })
+  })
+
+  it('returns null for a missing process or inaccessible command line', () => {
+    expect(parseWindowsProcessIdentityJson('')).toBeNull()
+    expect(parseWindowsProcessIdentityJson('   \r\n')).toBeNull()
+    expect(parseWindowsProcessIdentityJson('{"cmd":null,"start":123}')).toBeNull()
+    expect(parseWindowsProcessIdentityJson('not-json')).toBeNull()
+  })
+})
+
+describe('startTimesWithinTolerance', () => {
+  it('fails open when either side is null', () => {
+    expect(startTimesWithinTolerance(null, 1_700_000_000_000, 1_500)).toBe(true)
+    expect(startTimesWithinTolerance(1_700_000_000_000, null, 1_500)).toBe(true)
+    expect(startTimesWithinTolerance(null, null, 1_500)).toBe(true)
+  })
+
+  it('matches within tolerance and rejects outside it', () => {
+    expect(startTimesWithinTolerance(1_700_000_001_000, 1_700_000_000_000, 1_500)).toBe(true)
+    expect(startTimesWithinTolerance(1_700_000_005_000, 1_700_000_000_000, 1_500)).toBe(false)
   })
 })
 

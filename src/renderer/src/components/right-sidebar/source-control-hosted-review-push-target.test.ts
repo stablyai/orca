@@ -121,6 +121,12 @@ describe('hasResolvableHostedReviewPushTargetLink', () => {
   it('accepts only hosted-review links with supported target lookup APIs', () => {
     expect(hasResolvableHostedReviewPushTargetLink({ linkedGitHubPR: 12 })).toBe(true)
     expect(hasResolvableHostedReviewPushTargetLink({ linkedGitLabMR: 34 })).toBe(true)
+    // Why: a queue-discovered same-repo PR (no persisted linkedPR) is resolvable.
+    expect(hasResolvableHostedReviewPushTargetLink({ fallbackGitHubPR: 8333 })).toBe(true)
+    expect(
+      hasResolvableHostedReviewPushTargetLink({ linkedGitHubPR: null, fallbackGitHubPR: 8333 })
+    ).toBe(true)
+    expect(hasResolvableHostedReviewPushTargetLink({ fallbackGitHubPR: 0 })).toBe(false)
     expect(hasResolvableHostedReviewPushTargetLink({ linkedGitHubPR: null })).toBe(false)
     expect(hasResolvableHostedReviewPushTargetLink({ linkedGitHubPR: 0 })).toBe(false)
     expect(hasResolvableHostedReviewPushTargetLink({ linkedGitLabMR: -1 })).toBe(false)
@@ -136,9 +142,25 @@ describe('hasPositiveHostedReviewNumberLink', () => {
     expect(hasPositiveHostedReviewNumberLink({ linkedBitbucketPR: 34 })).toBe(true)
     expect(hasPositiveHostedReviewNumberLink({ linkedAzureDevOpsPR: 56 })).toBe(true)
     expect(hasPositiveHostedReviewNumberLink({ linkedGiteaPR: 78 })).toBe(true)
-    expect(hasPositiveHostedReviewNumberLink({ linkedGitHubPR: 0, linkedGitLabMR: -1 })).toBe(false)
+    expect(
+      hasPositiveHostedReviewNumberLink({
+        linkedGitHubPR: 0,
+        linkedGitLabMR: -1
+      })
+    ).toBe(false)
     expect(hasPositiveHostedReviewNumberLink({ linkedGitHubPR: Number.NaN })).toBe(false)
     expect(hasPositiveHostedReviewNumberLink({})).toBe(false)
+  })
+
+  it('blocks resolver-less providers without treating them as resolvable', () => {
+    // Bitbucket/Azure/Gitea have no push-target resolver yet, so they must block
+    // unsafe pushes but stay out of the resolvable subset. Locks the intended
+    // relationship: resolvable ⊂ positive, so the two helpers cannot drift.
+    for (const provider of ['linkedBitbucketPR', 'linkedAzureDevOpsPR', 'linkedGiteaPR'] as const) {
+      const args = { [provider]: 42 }
+      expect(hasPositiveHostedReviewNumberLink(args)).toBe(true)
+      expect(hasResolvableHostedReviewPushTargetLink(args)).toBe(false)
+    }
   })
 })
 
@@ -187,18 +209,33 @@ describe('hasUsableHostedReviewPushTarget', () => {
     expect(
       hasUsableHostedReviewPushTarget({
         pushTarget: { remoteName: 'fork', branchName: 'feature' },
-        upstreamStatus: { hasUpstream: true, upstreamName: 'fork/feature', ahead: 1, behind: 0 }
+        upstreamStatus: {
+          hasUpstream: true,
+          upstreamName: 'fork/feature',
+          ahead: 1,
+          behind: 0
+        }
       })
     ).toBe(true)
     expect(
       hasUsableHostedReviewPushTarget({
-        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0, hasConfiguredPushTarget: true }
+        upstreamStatus: {
+          hasUpstream: false,
+          ahead: 0,
+          behind: 0,
+          hasConfiguredPushTarget: true
+        }
       })
     ).toBe(true)
     expect(
       hasUsableHostedReviewPushTarget({
         hasResolvableHostedReviewPushTargetLink: true,
-        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0, hasConfiguredPushTarget: true }
+        upstreamStatus: {
+          hasUpstream: false,
+          ahead: 0,
+          behind: 0,
+          hasConfiguredPushTarget: true
+        }
       })
     ).toBe(false)
     expect(
@@ -208,5 +245,104 @@ describe('hasUsableHostedReviewPushTarget', () => {
       })
     ).toBe(false)
     expect(hasUsableHostedReviewPushTarget({ upstreamStatus: unrelatedUpstream })).toBe(false)
+  })
+
+  it('treats a same-repo review upstream that already tracks the branch as usable', () => {
+    // Why: a same-repo review must not stay blocked while its push target is
+    // unhydrated — the real upstream already targets the review head.
+    expect(
+      hasUsableHostedReviewPushTarget({
+        hasResolvableHostedReviewPushTargetLink: true,
+        branchName: 'feature/foo',
+        upstreamStatus: {
+          hasUpstream: true,
+          upstreamName: 'origin/feature/foo',
+          ahead: 7,
+          behind: 2
+        }
+      })
+    ).toBe(true)
+  })
+
+  it('keeps blocking a review whose upstream tracks an unrelated fork/helper head', () => {
+    expect(
+      hasUsableHostedReviewPushTarget({
+        hasResolvableHostedReviewPushTargetLink: true,
+        branchName: 'feature',
+        upstreamStatus: unrelatedUpstream
+      })
+    ).toBe(false)
+  })
+
+  it('keeps blocking a resolvable review with no real upstream', () => {
+    expect(
+      hasUsableHostedReviewPushTarget({
+        hasResolvableHostedReviewPushTargetLink: true,
+        branchName: 'feature',
+        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 }
+      })
+    ).toBe(false)
+  })
+})
+
+describe('resolveHostedReviewActionUpstreamStatus with a same-repo upstream', () => {
+  it('does not synthesize hasUpstream:false when the real upstream is the review head', () => {
+    const realUpstream = {
+      hasUpstream: true,
+      upstreamName: 'origin/mobile-resume-suspected-fixes',
+      ahead: 7,
+      behind: 2
+    }
+    const canUseHostedReviewPushTarget = hasUsableHostedReviewPushTarget({
+      hasResolvableHostedReviewPushTargetLink: true,
+      branchName: 'mobile-resume-suspected-fixes',
+      upstreamStatus: realUpstream
+    })
+    expect(canUseHostedReviewPushTarget).toBe(true)
+    expect(
+      resolveHostedReviewActionUpstreamStatus({
+        hasHostedReviewLink: true,
+        hasResolvableHostedReviewPushTargetLink: true,
+        hostedReviewState: 'open',
+        isHostedReviewStateLoading: false,
+        canUseHostedReviewPushTarget,
+        upstreamStatus: realUpstream
+      })
+    ).toBe(realUpstream)
+  })
+
+  it('does not block push for a queue-discovered open PR whose upstream tracks the branch', () => {
+    // Why: a child worktree with no persisted linkedPR discovers its open PR via
+    // the queue (fallbackGitHubPR). Before the fix, that PR counted as a hosted
+    // review link but not a resolvable target, so the real matching upstream was
+    // ignored and Push was wrongly disabled as "target unavailable".
+    const realUpstream = {
+      hasUpstream: true,
+      upstreamName: 'origin/fix-f1-codex-wsl-path-trust',
+      ahead: 1,
+      behind: 0
+    }
+    const hasResolvable = hasResolvableHostedReviewPushTargetLink({
+      linkedGitHubPR: null,
+      fallbackGitHubPR: 8333,
+      linkedGitLabMR: null
+    })
+    expect(hasResolvable).toBe(true)
+    const canUseHostedReviewPushTarget = hasUsableHostedReviewPushTarget({
+      hasResolvableHostedReviewPushTargetLink: hasResolvable,
+      branchName: 'fix-f1-codex-wsl-path-trust',
+      upstreamStatus: realUpstream
+    })
+    expect(canUseHostedReviewPushTarget).toBe(true)
+    expect(
+      resolveHostedReviewActionUpstreamStatus({
+        hasHostedReviewLink: true,
+        hasResolvableHostedReviewPushTargetLink: hasResolvable,
+        hostedReviewState: 'open',
+        isHostedReviewStateLoading: false,
+        canUseHostedReviewPushTarget,
+        upstreamStatus: realUpstream
+      })
+    ).toBe(realUpstream)
   })
 })

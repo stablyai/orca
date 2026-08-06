@@ -90,7 +90,10 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-async function renderStream(streamKey = 'abc'): Promise<void> {
+async function renderStream(
+  streamKey = 'abc',
+  props?: { screenAspectRatio?: number; streamRotation?: -90 | 0 | 90 }
+): Promise<void> {
   await act(async () => {
     root.render(
       <EmulatorScreenStreamContent
@@ -98,9 +101,11 @@ async function renderStream(streamKey = 'abc'): Promise<void> {
         onStreamError={vi.fn()}
         onStreamSize={vi.fn()}
         previewUrl="http://127.0.0.1:3100/stream.mjpeg"
+        screenAspectRatio={props?.screenAspectRatio}
         showStream={true}
         streamError={false}
         streamKey={streamKey}
+        streamRotation={props?.streamRotation}
       />
     )
   })
@@ -122,6 +127,24 @@ describe('EmulatorScreenStreamContent', () => {
 
     const img = container.querySelector('img')
     expect(img?.getAttribute('src')).toBe('blob:emulator-frame-1')
+    expect(img?.className).toContain('object-contain')
+    expect(img?.className).not.toContain('object-fill')
+  })
+
+  it('rotates mismatched stream media without stretching it', async () => {
+    await renderStream('abc', { screenAspectRatio: 844 / 390, streamRotation: 90 })
+
+    await act(async () => {
+      frameListeners[0]?.({ streamId: 'stream-1', bytes: new Uint8Array([1, 2, 3]).buffer })
+    })
+
+    const img = container.querySelector('img')
+    expect(img?.className).toContain('object-contain')
+    expect(img?.className).toContain('absolute')
+    expect(img?.className).not.toContain('object-fill')
+    expect(img?.style.transform).toBe('translate(-50%, -50%) rotate(90deg)')
+    expect(img?.style.width).toBe(`${100 / (844 / 390)}%`)
+    expect(img?.style.height).toBe(`${100 * (844 / 390)}%`)
   })
 
   it('clears the previous frame while a new stream key is connecting', async () => {

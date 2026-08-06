@@ -17,4 +17,23 @@ describe('isRpcResponse', () => {
     ).toBe(true)
     expect(isRpcResponse({ id: 'rpc-1', ok: false, error: { code: 'failed' } })).toBe(false)
   })
+
+  it('accepts additive future fields without weakening known-field validation', () => {
+    expect(
+      isRpcResponse({
+        id: 'rpc-1',
+        ok: true,
+        result: { value: 1 },
+        futureEnvelopeField: true
+      })
+    ).toBe(true)
+    expect(
+      isRpcResponse({
+        id: 'rpc-1',
+        ok: false,
+        error: { code: 500, message: 'Nope', futureErrorField: true },
+        futureEnvelopeField: true
+      })
+    ).toBe(false)
+  })
 })

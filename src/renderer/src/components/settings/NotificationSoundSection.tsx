@@ -159,7 +159,7 @@ export function NotificationSoundSection({
           className="truncate font-mono text-[11px] text-muted-foreground"
           title={notificationSettings.customSoundPath}
         >
-          {translate('auto.components.settings.NotificationsPane.4aa5085cd7', 'Custom:')}
+          {translate('auto.components.settings.NotificationsPane.4aa5085cd7', 'Custom:')}{' '}
           {notificationSettings.customSoundPath}
         </p>
       ) : null}

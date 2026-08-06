@@ -71,7 +71,7 @@ export function DetectedSetupPreview({
           {translate(
             'auto.components.sidebar.SetupScriptPromptCardViews.d02e6a42b1',
             'Detected from'
-          )}
+          )}{' '}
           <code className="rounded bg-muted px-1 py-0.5">{provenance}</code>
         </p>
       ) : null}
@@ -157,7 +157,7 @@ export function SetupScriptPromptBody({
         {translate(
           'auto.components.sidebar.SetupScriptPromptCardViews.bb879db364',
           'This repo ignores shared'
-        )}
+        )}{' '}
         <code>
           {translate('auto.components.sidebar.SetupScriptPromptCardViews.8f6be51aa1', 'orca.yaml')}
         </code>{' '}
@@ -184,7 +184,7 @@ export function SetupScriptPromptBody({
         {translate(
           'auto.components.sidebar.SetupScriptPromptCardViews.b56d1322f7',
           'Found a setup command in'
-        )}
+        )}{' '}
         <span className="break-words">{candidateSource}</span>
         {translate(
           'auto.components.sidebar.SetupScriptPromptCardViews.8349e3fa4c',

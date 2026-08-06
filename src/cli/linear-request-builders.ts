@@ -122,7 +122,8 @@ export function buildIssueRequest(
     comments: full || flags.get('comments') === true,
     children: full || flags.get('children') === true,
     attachments: full || flags.get('attachments') === true,
-    relations: full || flags.get('relations') === true
+    relations: full || flags.get('relations') === true,
+    activity: full || flags.get('activity') === true
   }
   if (flags.has('depth') && !includes.children) {
     throw new RuntimeClientError('invalid_argument', '--depth requires --children or --full')

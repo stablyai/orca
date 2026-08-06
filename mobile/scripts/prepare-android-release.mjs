@@ -22,29 +22,10 @@ function fail(message) {
   process.exit(1)
 }
 
-function parsePositiveInteger(value, name) {
-  if (!/^\d+$/.test(value)) {
-    fail(`${name} must be a positive integer`)
-  }
-
-  const parsed = Number(value)
-  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
-    fail(`${name} must be a positive integer`)
-  }
-
-  return parsed
-}
-
 function validateSemver(version, name) {
   if (!semverPattern.test(version)) {
     fail(`${name} must use x.y.z format`)
   }
-}
-
-function bumpPatchVersion(version) {
-  validateSemver(version, 'Current mobile version')
-  const [major, minor, patch] = version.split('.')
-  return `${major}.${minor}.${Number(patch) + 1}`
 }
 
 function writeOutput(name, value) {
@@ -74,10 +55,6 @@ const tagVersion = githubRef.startsWith(androidTagRefPrefix)
 const requestedVersion = input('MOBILE_ANDROID_RELEASE_VERSION')
 const bumpPatch = truthy(input('MOBILE_ANDROID_BUMP_PATCH_VERSION'))
 
-if (requestedVersion && bumpPatch) {
-  fail('Use either MOBILE_ANDROID_RELEASE_VERSION or MOBILE_ANDROID_BUMP_PATCH_VERSION, not both')
-}
-
 if (tagVersion) {
   validateSemver(tagVersion, 'Android release tag version')
 }
@@ -86,43 +63,36 @@ if (requestedVersion) {
   validateSemver(requestedVersion, 'MOBILE_ANDROID_RELEASE_VERSION')
 }
 
-if (tagVersion && requestedVersion && requestedVersion !== tagVersion) {
-  fail('MOBILE_ANDROID_RELEASE_VERSION must match the mobile-android-v tag')
+if (bumpPatch) {
+  fail('MOBILE_ANDROID_BUMP_PATCH_VERSION is no longer supported; commit mobile/app.json first')
 }
 
-if (tagVersion && bumpPatch) {
-  fail('MOBILE_ANDROID_BUMP_PATCH_VERSION is only supported for manual branch runs')
+if (tagVersion && tagVersion !== currentVersion) {
+  fail('Android release tag version must match the committed mobile app version')
 }
 
-const version =
-  requestedVersion || tagVersion || (bumpPatch ? bumpPatchVersion(currentVersion) : currentVersion)
+if (requestedVersion && requestedVersion !== currentVersion) {
+  fail('MOBILE_ANDROID_RELEASE_VERSION must match the committed mobile app version')
+}
 
 const requestedVersionCode = input('MOBILE_ANDROID_VERSION_CODE')
 const bumpVersionCode = truthy(input('MOBILE_ANDROID_BUMP_VERSION_CODE'))
 
-if (requestedVersionCode && bumpVersionCode) {
-  fail('Use either MOBILE_ANDROID_VERSION_CODE or MOBILE_ANDROID_BUMP_VERSION_CODE, not both')
+if (requestedVersionCode || bumpVersionCode) {
+  // Why: Android rejects lower versionCode installs; release-only bumps leave
+  // committed dev builds behind shipped APKs and break local testing.
+  fail('Android versionCode changes must be committed in mobile/app.json before release')
 }
 
-const versionCode = requestedVersionCode
-  ? parsePositiveInteger(requestedVersionCode, 'MOBILE_ANDROID_VERSION_CODE')
-  : bumpVersionCode || version !== currentVersion
-    ? currentVersionCode + 1
-    : currentVersionCode
-
-expo.version = version
-android.versionCode = versionCode
-fs.writeFileSync(appConfigPath, `${JSON.stringify(config, null, 2)}\n`)
-
-const tag = `mobile-android-v${version}`
+const tag = `mobile-android-v${currentVersion}`
 const publishRelease =
   githubRef.startsWith(androidTagRefPrefix) || truthy(input('MOBILE_ANDROID_PUBLISH_RELEASE'))
 
-writeOutput('version', version)
-writeOutput('android_version_code', String(versionCode))
+writeOutput('version', currentVersion)
+writeOutput('android_version_code', String(currentVersionCode))
 writeOutput('tag', tag)
 writeOutput('publish_release', publishRelease ? 'true' : 'false')
 
-console.log(`Prepared Orca Mobile Android ${version} (${versionCode})`)
+console.log(`Prepared Orca Mobile Android ${currentVersion} (${currentVersionCode})`)
 console.log(`Release tag: ${tag}`)
 console.log(`Publish GitHub Release: ${publishRelease ? 'yes' : 'no'}`)

@@ -100,9 +100,9 @@ function addWarpPalette(
 
 function luminance(hexColor: string): number {
   const hex = hexColor.slice(1)
-  const red = parseInt(hex.slice(0, 2), 16) / 255
-  const green = parseInt(hex.slice(2, 4), 16) / 255
-  const blue = parseInt(hex.slice(4, 6), 16) / 255
+  const red = Number.parseInt(hex.slice(0, 2), 16) / 255
+  const green = Number.parseInt(hex.slice(2, 4), 16) / 255
+  const blue = Number.parseInt(hex.slice(4, 6), 16) / 255
   return 0.2126 * red + 0.7152 * green + 0.0722 * blue
 }
 

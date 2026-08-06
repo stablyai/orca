@@ -24,6 +24,7 @@ type UseMobileImageAttachmentArgs = {
   readonly showToast: ShowToast
   readonly onSuccess: () => void
   readonly onError: () => void
+  readonly beforeTerminalSend?: (terminal: string) => Promise<boolean>
 }
 
 type MobileImageAttachment = {
@@ -46,7 +47,8 @@ export function useMobileImageAttachment({
   getActiveWorktreeConnectionId,
   showToast,
   onSuccess,
-  onError
+  onError,
+  beforeTerminalSend
 }: UseMobileImageAttachmentArgs): MobileImageAttachment {
   const [isAttaching, setIsAttaching] = useState(false)
   const attachImage = useCallback(
@@ -61,7 +63,8 @@ export function useMobileImageAttachment({
           deviceToken: deviceTokenRef.current,
           getConnectionId: getActiveWorktreeConnectionId,
           pickImage: pickMobileImage,
-          onUploadStart: () => setIsAttaching(true)
+          onUploadStart: () => setIsAttaching(true),
+          beforeTerminalSend
         })
         // Cancelled picker: no error, no toast.
         if (sent) {
@@ -88,6 +91,7 @@ export function useMobileImageAttachment({
     },
     [
       activeHandle,
+      beforeTerminalSend,
       canSend,
       client,
       connState,

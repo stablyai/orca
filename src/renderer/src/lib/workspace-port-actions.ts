@@ -13,6 +13,7 @@ import type {
   WorkspacePortScanResult
 } from '../../../shared/workspace-ports'
 import type { LocalhostWorktreeLabelRoute } from '../../../shared/localhost-worktree-labels'
+import { runWorkspacePortScanForTarget } from './workspace-port-scan-client'
 import { browserUrlForPort } from './workspace-port-urls'
 
 export { addressForPort } from './workspace-port-urls'
@@ -147,24 +148,6 @@ export async function openWorkspacePortInBrowser(args: {
   return { ok: true }
 }
 
-export async function refreshWorkspacePortScanState(args: {
-  runtimeTarget: RuntimeClientTarget
-  setWorkspacePortScan: WorkspacePortScanSetter
-  setWorkspacePortScanRefreshing: WorkspacePortScanRefreshingSetter
-}): Promise<WorkspacePortScanResult> {
-  args.setWorkspacePortScanRefreshing(true)
-  try {
-    const scan = await scanWorkspacePortsForTarget(args.runtimeTarget)
-    args.setWorkspacePortScan({
-      key: workspacePortScanKeyForTarget(args.runtimeTarget),
-      result: scan
-    })
-    return scan
-  } finally {
-    args.setWorkspacePortScanRefreshing(false)
-  }
-}
-
 export async function refreshWorkspacePortScanAfterStop(args: {
   runtimeTarget: RuntimeClientTarget
   setWorkspacePortScan: WorkspacePortScanSetter
@@ -269,31 +252,6 @@ const inFlightWorkspacePortScans = new Map<string, Promise<WorkspacePortScanResu
 
 function workspacePortScanRequestKey(target: RuntimeClientTarget, repoId?: string): string {
   return JSON.stringify([workspacePortRuntimeTargetKey(target), repoId ?? null])
-}
-
-async function runWorkspacePortScanForTarget(
-  target: RuntimeClientTarget,
-  repoId?: string
-): Promise<WorkspacePortScanResult> {
-  const params = repoId ? { repoId } : {}
-  if (target.kind === 'local') {
-    return window.api.workspacePorts.scan(params)
-  }
-  try {
-    return await callRuntimeRpc<WorkspacePortScanResult>(target, 'workspacePorts.scan', params, {
-      timeoutMs: 15_000
-    })
-  } catch (error) {
-    if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
-      return {
-        platform: 'unknown',
-        scannedAt: Date.now(),
-        ports: [],
-        unavailableReason: 'The connected runtime does not support workspace port management yet.'
-      }
-    }
-    throw error
-  }
 }
 
 export async function scanWorkspacePortsForTarget(

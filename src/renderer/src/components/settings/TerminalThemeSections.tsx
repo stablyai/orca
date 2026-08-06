@@ -12,11 +12,55 @@ import { TerminalSettingsPreview } from './TerminalSettingsPreview'
 import { WarpThemeImportButton } from './WarpThemeImportButton'
 import { YamlThemeImportButton } from './YamlThemeImportButton'
 import type { UseWarpThemeImportReturn } from './useWarpThemeImport'
-import { getAvailableTerminalThemeOptions } from '@/lib/terminal-theme'
+import {
+  DEFAULT_TERMINAL_THEME_DARK,
+  DEFAULT_TERMINAL_THEME_LIGHT,
+  getAvailableTerminalThemeOptions,
+  resolveEffectiveTerminalAppearance
+} from '@/lib/terminal-theme'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 
 type TerminalThemeTarget = 'dark' | 'light'
+
+let lastEditedTerminalThemeTarget: TerminalThemeTarget | null = null
+
+function rememberTerminalThemeTarget(target: TerminalThemeTarget): void {
+  lastEditedTerminalThemeTarget = target
+}
+
+export function resetTerminalThemeTargetMemoryForTests(): void {
+  lastEditedTerminalThemeTarget = null
+}
+
+function isCustomizedTheme(themeName: string, defaultThemeName: string): boolean {
+  const trimmed = themeName.trim()
+  return trimmed.length > 0 && trimmed !== defaultThemeName
+}
+
+function getInitialTerminalThemeTarget(
+  settings: GlobalSettings,
+  systemPrefersDark: boolean,
+  preferredTarget?: TerminalThemeTarget
+): TerminalThemeTarget {
+  if (preferredTarget) {
+    return preferredTarget
+  }
+  if (lastEditedTerminalThemeTarget) {
+    return lastEditedTerminalThemeTarget
+  }
+  const customizedDark = isCustomizedTheme(settings.terminalThemeDark, DEFAULT_TERMINAL_THEME_DARK)
+  const customizedLight = isCustomizedTheme(
+    settings.terminalThemeLight,
+    DEFAULT_TERMINAL_THEME_LIGHT
+  )
+  if (customizedDark !== customizedLight) {
+    return customizedDark ? 'dark' : 'light'
+  }
+  // Why: the picker edits mode-specific slots. Defaulting to the active
+  // terminal mode makes the selected theme apply immediately in system-light.
+  return resolveEffectiveTerminalAppearance(settings, systemPrefersDark).mode
+}
 
 type TerminalThemeCatalogSectionProps = {
   settings: GlobalSettings
@@ -45,7 +89,13 @@ export function TerminalThemeCatalogSection({
   preferredTarget,
   advancedContent
 }: TerminalThemeCatalogSectionProps): React.JSX.Element {
-  const [target, setTarget] = useState<TerminalThemeTarget>(preferredTarget ?? 'dark')
+  const [target, setTargetState] = useState<TerminalThemeTarget>(() =>
+    getInitialTerminalThemeTarget(settings, systemPrefersDark, preferredTarget)
+  )
+  const setTarget = (nextTarget: TerminalThemeTarget): void => {
+    rememberTerminalThemeTarget(nextTarget)
+    setTargetState(nextTarget)
+  }
   const themeOptions = getAvailableTerminalThemeOptions(settings)
   const isLightTarget = target === 'light'
   const matchDarkMode = !settings.terminalUseSeparateLightTheme
@@ -200,11 +250,12 @@ export function TerminalThemeCatalogSection({
                   themeOptions={themeOptions}
                   query={themeSearch}
                   onQueryChange={setThemeSearch}
-                  onSelectTheme={(theme) =>
+                  onSelectTheme={(theme) => {
+                    rememberTerminalThemeTarget(target)
                     updateSettings(
                       isLightTarget ? { terminalThemeLight: theme } : { terminalThemeDark: theme }
                     )
-                  }
+                  }}
                   importedHighlightSignal={importedHighlightSignal}
                 />
               </SearchableSetting>

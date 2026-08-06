@@ -92,10 +92,13 @@ function CommandInput({
   className,
   wrapperClassName,
   iconClassName,
+  trailing,
   ...props
 }: React.ComponentProps<typeof CommandPrimitive.Input> & {
   wrapperClassName?: string
   iconClassName?: string
+  /** Rendered after the field, inside the input frame (e.g. a filter control). */
+  trailing?: React.ReactNode
 }) {
   return (
     <div
@@ -114,6 +117,7 @@ function CommandInput({
         )}
         {...props}
       />
+      {trailing}
     </div>
   )
 }

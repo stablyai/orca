@@ -1,12 +1,14 @@
 import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS } from '../args'
+import { LINEAR_MCP_COMMAND_SPECS } from './linear-mcp'
 
 export const LINEAR_COMMAND_SPECS: CommandSpec[] = [
+  ...LINEAR_MCP_COMMAND_SPECS,
   {
     path: ['linear', 'issue'],
     summary: 'Read Linear issue context for agents',
     usage:
-      'orca linear issue [<id>] [--current] [--comments] [--children] [--depth <n>] [--attachments] [--relations] [--full] [--workspace <id>] [--json]',
+      'orca linear issue [<id>] [--current] [--comments] [--children] [--depth <n>] [--attachments] [--relations] [--activity] [--full] [--workspace <id>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'current',
@@ -15,6 +17,7 @@ export const LINEAR_COMMAND_SPECS: CommandSpec[] = [
       'depth',
       'attachments',
       'relations',
+      'activity',
       'full',
       'workspace',
       'id'

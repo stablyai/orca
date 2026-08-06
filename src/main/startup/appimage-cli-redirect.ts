@@ -113,6 +113,10 @@ export function maybeRedirectAppImageCliLaunch(options: RedirectOptions = {}): R
   }
 
   const childEnv = buildElectronRunAsNodeEnv(env)
+  if (argv.slice(1).includes('--no-sandbox')) {
+    // Why: the operator explicitly disabled Chromium's sandbox; preserve that choice when `serve` launches the Electron child.
+    childEnv.ORCA_APPIMAGE_NO_SANDBOX = '1'
+  }
   const result = spawn(execPath, [cliEntryPath, ...cliArgs], {
     env: childEnv,
     stdio: 'inherit'
@@ -143,16 +147,17 @@ export function getAppImageCliArgs(
   }
 
   const args = argv.slice(1)
-  if (args.length === 0 || args.some((arg) => APPIMAGE_DESKTOP_FLAGS.has(arg))) {
+  if (args.length === 0) {
     return null
   }
-  if (args.some((arg) => HELP_FLAGS.has(arg))) {
-    return args
+  const cliArgs = args.filter((arg) => !APPIMAGE_DESKTOP_FLAGS.has(arg))
+  if (cliArgs.some((arg) => HELP_FLAGS.has(arg))) {
+    return cliArgs
   }
 
   const commandNames = new Set(options.commandNames)
-  const firstPositional = findFirstCommandCandidate(args)
-  return firstPositional && commandNames.has(firstPositional) ? args : null
+  const firstPositional = findFirstCommandCandidate(cliArgs)
+  return firstPositional && commandNames.has(firstPositional) ? cliArgs : null
 }
 
 function findFirstCommandCandidate(args: string[]): string | null {

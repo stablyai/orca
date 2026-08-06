@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -26,21 +26,6 @@ type LinearIssueTextEditorProps = {
   density?: 'page' | 'drawer'
   fields?: 'all' | 'title' | 'description'
   sourceContext?: TaskSourceContext | null
-}
-
-function useAutosizeTextArea(value: string): React.RefObject<HTMLTextAreaElement | null> {
-  const ref = useRef<HTMLTextAreaElement>(null)
-
-  useEffect(() => {
-    const textarea = ref.current
-    if (!textarea) {
-      return
-    }
-    textarea.style.height = 'auto'
-    textarea.style.height = `${textarea.scrollHeight}px`
-  }, [value])
-
-  return ref
 }
 
 export function LinearIssueTextEditor({
@@ -71,7 +56,6 @@ export function LinearIssueTextEditor({
   const titleDraft = resolvedDraftState.title
   const descriptionDraft = resolvedDraftState.description
   const submitShortcutLabel = getScreenSubmitShortcutLabel()
-  const titleRef = useAutosizeTextArea(titleDraft)
   const updateTitleDraft = useCallback(
     (title: string): void => {
       setDraftState((current) => ({
@@ -207,7 +191,6 @@ export function LinearIssueTextEditor({
       {fields !== 'description' ? (
         <div className="relative">
           <textarea
-            ref={titleRef}
             value={titleDraft}
             onChange={(event) => updateTitleDraft(event.target.value)}
             onBlur={() => void saveField('title')}
@@ -218,8 +201,11 @@ export function LinearIssueTextEditor({
               'auto.components.LinearIssueTextEditor.04d73b72dc',
               'Issue title'
             )}
+            // field-sizing:content grows the title with its text and re-wraps on
+            // container resize without a JS measure pass.
             className={cn(
               'peer scrollbar-sleek block w-full resize-none overflow-hidden rounded-md border border-transparent bg-transparent px-1 py-0 text-foreground outline-none transition hover:border-border/50 hover:bg-accent/40 focus-visible:border-border focus-visible:bg-background focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-80',
+              '[field-sizing:content]',
               titleClass
             )}
           />

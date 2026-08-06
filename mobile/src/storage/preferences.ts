@@ -3,21 +3,27 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 const PINS_PREFIX = 'orca:pins:'
 const NOTIF_KEY = 'orca:pushNotificationsEnabled'
 
-// Why: default-off so the iOS notification permission prompt never
-// fires until the user explicitly opts in via Settings → Notifications.
-// Apple's review guideline 4.5.4 and HIG both prefer user-initiated
-// permission prompts; default-on would fire the prompt the moment the
-// desktop sent its first notification, which can read as unsolicited.
-export async function loadPushNotificationsEnabled(): Promise<boolean> {
+export type PushNotificationsPreference = {
+  readonly value: boolean | null
+  readonly loaded: boolean
+}
+
+// Why: null distinguishes people who have never made the one-time onboarding
+// decision from people who explicitly chose Not now or disabled notifications.
+export async function readPushNotificationsPreference(): Promise<PushNotificationsPreference> {
   try {
     const raw = await AsyncStorage.getItem(NOTIF_KEY)
-    if (raw === null) {
-      return false
-    }
-    return raw === 'true'
+    return { value: raw === null ? null : raw === 'true', loaded: true }
   } catch {
-    return false
+    return { value: null, loaded: false }
   }
+}
+
+// Why: default-off prevents background notification events from opening the
+// system prompt; only the onboarding CTA or Settings switch requests permission.
+export async function loadPushNotificationsEnabled(): Promise<boolean> {
+  const preference = await readPushNotificationsPreference()
+  return preference.value ?? false
 }
 
 export async function savePushNotificationsEnabled(enabled: boolean): Promise<void> {
@@ -71,6 +77,53 @@ export async function loadTerminalAutocompleteEnabled(): Promise<boolean> {
 
 export async function saveTerminalAutocompleteEnabled(enabled: boolean): Promise<void> {
   await AsyncStorage.setItem(AUTOCOMPLETE_KEY, String(enabled))
+}
+
+const TERMINAL_LIVE_INPUT_DISABLED_PREFIX = 'orca:terminalLiveInputDisabled:'
+
+export type DisabledTerminalLiveInputHandlesPreference = {
+  readonly handles: Set<string>
+  readonly loaded: boolean
+}
+
+function terminalLiveInputDisabledKey(hostId: string, worktreeId: string): string {
+  return `${TERMINAL_LIVE_INPUT_DISABLED_PREFIX}${encodeURIComponent(hostId)}:${encodeURIComponent(
+    worktreeId
+  )}`
+}
+
+export async function readDisabledTerminalLiveInputHandlesPreference(
+  hostId: string,
+  worktreeId: string
+): Promise<DisabledTerminalLiveInputHandlesPreference> {
+  try {
+    const raw = await AsyncStorage.getItem(terminalLiveInputDisabledKey(hostId, worktreeId))
+    if (!raw) {
+      return { handles: new Set(), loaded: true }
+    }
+    return { handles: new Set(stringArray(JSON.parse(raw))), loaded: true }
+  } catch {
+    return { handles: new Set(), loaded: false }
+  }
+}
+
+export async function loadDisabledTerminalLiveInputHandles(
+  hostId: string,
+  worktreeId: string
+): Promise<Set<string>> {
+  const preference = await readDisabledTerminalLiveInputHandlesPreference(hostId, worktreeId)
+  return preference.handles
+}
+
+export async function saveDisabledTerminalLiveInputHandles(
+  hostId: string,
+  worktreeId: string,
+  handles: ReadonlySet<string>
+): Promise<void> {
+  await AsyncStorage.setItem(
+    terminalLiveInputDisabledKey(hostId, worktreeId),
+    JSON.stringify([...handles])
+  )
 }
 
 const SIDEBAR_WIDTH_KEY = 'orca:hostSidebarWidth'

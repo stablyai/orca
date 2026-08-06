@@ -27,7 +27,6 @@ export {
   getActiveAgentRuntimeProbeDescriptor,
   getActiveTerminalNoteTarget,
   probeActiveAgentNoteTarget,
-  useCanSendNotesToActiveTerminal,
   type ActiveTerminalNoteTarget
 } from './active-agent-note-target'
 export {
@@ -174,7 +173,12 @@ async function sendPromptWithGuardedPasteAndEnter(
   const initialAgentStatus = await getTerminalAgentSendReadiness(runtimeTarget, terminalHandle, {
     allowLegacyFallback: options.allowLegacyFallback
   })
-  if (initialAgentStatus.status !== 'sendable') {
+  // Why: the readiness probe and write guard can observe different transient
+  // title/process snapshots; the guard owns the bounded no-agent recheck.
+  if (
+    initialAgentStatus.status !== 'sendable' &&
+    !(initialAgentStatus.status === 'no-agent' && initialAgentStatus.supportsGuardedSend)
+  ) {
     return { status: initialAgentStatus.status }
   }
 
@@ -216,7 +220,10 @@ async function sendPromptWithGuardedPasteAndEnter(
     const submitAgentStatus = await getTerminalAgentSendReadiness(runtimeTarget, terminalHandle, {
       allowLegacyFallback: options.allowLegacyFallback
     })
-    if (submitAgentStatus.status !== 'sendable') {
+    if (
+      submitAgentStatus.status !== 'sendable' &&
+      !(submitAgentStatus.status === 'no-agent' && submitAgentStatus.supportsGuardedSend)
+    ) {
       return { status: 'partial-submit-failed' }
     }
   } catch (error) {

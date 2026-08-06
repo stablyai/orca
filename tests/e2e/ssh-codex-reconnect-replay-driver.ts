@@ -29,7 +29,7 @@ export async function connectDockerRemote(
   page: Page,
   target: DockerSshRelayTarget
 ): Promise<ConnectedDockerRemote> {
-  return await page.evaluate(
+  const remote = await page.evaluate(
     async ({ target, remotePath }) => {
       const store = window.__store
       if (!store) {
@@ -39,7 +39,7 @@ export async function connectDockerRemote(
         void window.api.ssh.submitCredential({ requestId: request.requestId, value: null })
       })
       try {
-        const createdTarget = await window.api.ssh.addTarget({
+        const { target: createdTarget, repoReadoptions } = await window.api.ssh.addTarget({
           target: {
             label: `Docker SSH Codex Artifact Repro ${Date.now()}`,
             host: '127.0.0.1',
@@ -50,6 +50,7 @@ export async function connectDockerRemote(
             relayGracePeriodSeconds: 1
           }
         })
+        store.getState().recordSshRepoReadoptions(repoReadoptions)
         const state = await window.api.ssh.connect({ targetId: createdTarget.id })
         if (!state || state.status !== 'connected') {
           throw new Error(`SSH target did not connect: ${JSON.stringify(state)}`)
@@ -69,22 +70,44 @@ export async function connectDockerRemote(
         }
         await store.getState().fetchRepos()
         await store.getState().fetchWorktrees(result.repo.id)
-        const worktree = (store.getState().worktreesByRepo[result.repo.id] ?? [])[0]
-        if (!worktree) {
-          throw new Error(`No remote worktree found for ${result.repo.path}`)
-        }
-        store.getState().setActiveWorktree(worktree.id)
-        if ((store.getState().tabsByWorktree[worktree.id] ?? []).length === 0) {
-          store.getState().createTab(worktree.id)
-        }
-        store.getState().setActiveTabType('terminal')
-        return { targetId: createdTarget.id, worktreeId: worktree.id }
+        return { targetId: createdTarget.id, repoId: result.repo.id, repoPath: result.repo.path }
       } finally {
         credentialUnsub()
       }
     },
     { target, remotePath: DOCKER_SSH_RELAY_REMOTE_REPO_PATH }
   )
+
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async (repoId) => {
+          const store = window.__store
+          if (!store) {
+            return 0
+          }
+          await store.getState().fetchWorktrees(repoId)
+          return store.getState().worktreesByRepo[repoId]?.length ?? 0
+        }, remote.repoId),
+      { timeout: 30_000, message: `No remote worktree found for ${remote.repoPath}` }
+    )
+    .toBeGreaterThan(0)
+
+  const worktreeId = await page.evaluate((repoId) => {
+    const store = window.__store
+    const worktree = store?.getState().worktreesByRepo[repoId]?.[0]
+    if (!store || !worktree) {
+      throw new Error(`Remote worktree disappeared for repo ${repoId}`)
+    }
+    store.getState().setActiveWorktree(worktree.id)
+    if ((store.getState().tabsByWorktree[worktree.id] ?? []).length === 0) {
+      store.getState().createTab(worktree.id)
+    }
+    store.getState().setActiveTabType('terminal')
+    return worktree.id
+  }, remote.repoId)
+
+  return { targetId: remote.targetId, worktreeId }
 }
 
 export async function switchToNonRemoteWorktree(

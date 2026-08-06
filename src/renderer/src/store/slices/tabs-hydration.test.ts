@@ -307,6 +307,37 @@ describe('buildHydratedTabState – legacy format', () => {
     expect(group.activeTabId).toBe('/f1')
   })
 
+  it('restores each worktree remembered terminal, not the globally-active one', () => {
+    // Why (regression): the legacy branch used the global session.activeTabId,
+    // so every worktree except the last-focused one lost its remembered
+    // terminal on restart and reopened on the first tab. Use the per-worktree
+    // activeTabIdByWorktree map instead.
+    const terminal = (id: string, worktreeId: string, sortOrder: number) => ({
+      id,
+      ptyId: null,
+      worktreeId,
+      title: id,
+      customTitle: null,
+      color: null,
+      sortOrder,
+      createdAt: 100 + sortOrder
+    })
+    const session: WorkspaceSessionState = {
+      ...makeBaseSession(),
+      // The globally-active tab belongs to w1.
+      activeTabId: 'w1-terminal-1',
+      tabsByWorktree: {
+        w1: [terminal('w1-terminal-1', 'w1', 0)],
+        w2: [terminal('w2-terminal-1', 'w2', 0), terminal('w2-terminal-2', 'w2', 1)]
+      },
+      activeTabIdByWorktree: { w1: 'w1-terminal-1', w2: 'w2-terminal-2' }
+    }
+
+    const result = buildHydratedTabState(session, new Set(['w1', 'w2']))
+    expect(result.groupsByWorktree.w2[0].activeTabId).toBe('w2-terminal-2')
+    expect(result.groupsByWorktree.w1[0].activeTabId).toBe('w1-terminal-1')
+  })
+
   it('skips worktrees with no tabs or files', () => {
     const session: WorkspaceSessionState = {
       ...makeBaseSession(),

@@ -29,6 +29,8 @@ type LabelNode = {
 type MemberNode = {
   id: string
   displayName: string
+  name?: string | null
+  email?: string | null
   avatarUrl?: string | null
 }
 
@@ -244,7 +246,7 @@ describe('Linear teams', () => {
       .fn()
       .mockResolvedValue(
         makeConnection([
-          [makeMember('user-1', 'Ada')],
+          [{ ...makeMember('user-1', 'Ada'), name: 'Ada Lovelace', email: 'ada@example.com' }],
           [makeMember('user-2', 'Grace')],
           [makeMember('user-3', 'Linus')]
         ])
@@ -254,9 +256,27 @@ describe('Linear teams', () => {
     const { getTeamMembersOrThrow } = await import('./teams')
 
     await expect(getTeamMembersOrThrow('team-1', 'workspace-1')).resolves.toEqual([
-      { id: 'user-1', displayName: 'Ada', avatarUrl: undefined },
-      { id: 'user-2', displayName: 'Grace', avatarUrl: undefined },
-      { id: 'user-3', displayName: 'Linus', avatarUrl: undefined }
+      {
+        id: 'user-1',
+        displayName: 'Ada',
+        name: 'Ada Lovelace',
+        email: 'ada@example.com',
+        avatarUrl: undefined
+      },
+      {
+        id: 'user-2',
+        displayName: 'Grace',
+        name: undefined,
+        email: undefined,
+        avatarUrl: undefined
+      },
+      {
+        id: 'user-3',
+        displayName: 'Linus',
+        name: undefined,
+        email: undefined,
+        avatarUrl: undefined
+      }
     ])
 
     expect(entry.client.team).toHaveBeenCalledWith('team-1')

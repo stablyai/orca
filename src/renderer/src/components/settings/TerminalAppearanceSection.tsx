@@ -21,9 +21,8 @@ import {
   getTerminalWindowSearchEntries
 } from './terminal-search'
 import { Button } from '../ui/button'
-import { SettingsRow, SettingsSubsectionHeader } from './SettingsFormControls'
+import { SettingsRow, SettingsSubsectionHeader, FontAutocomplete } from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
-import { FontAutocomplete } from './SettingsFormControls'
 import { TerminalFontSizeSetting } from './TerminalFontSizeSetting'
 import { TerminalAdvancedTypographyControls } from './TerminalAdvancedTypographyControls'
 import { TerminalThemeCatalogSection } from './TerminalThemeSections'
@@ -44,6 +43,7 @@ type TerminalAppearanceSectionProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => void
   systemPrefersDark: boolean
   terminalFontSuggestions: string[]
+  onRequestFontSuggestions?: () => void
   ghostty: UseGhosttyImportReturn
   warpThemes: UseWarpThemeImportReturn
   forceVisiblePrimary?: boolean
@@ -74,6 +74,7 @@ export function TerminalAppearanceSection({
   updateSettings,
   systemPrefersDark,
   terminalFontSuggestions,
+  onRequestFontSuggestions,
   ghostty,
   warpThemes,
   forceVisiblePrimary = false
@@ -225,6 +226,7 @@ export function TerminalAppearanceSection({
                   <FontAutocomplete
                     value={settings.terminalFontFamily}
                     suggestions={terminalFontSuggestions}
+                    onRequestSuggestions={onRequestFontSuggestions}
                     onChange={(value) => updateSettings({ terminalFontFamily: value })}
                     onPreviewFontFamily={setPreviewFontFamily}
                   />

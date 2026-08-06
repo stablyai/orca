@@ -4,6 +4,7 @@ import { FIND_QUERY_MAX_BYTES } from '@/lib/find-query-bounds'
 import {
   matchFileSearchShortcut,
   matchSearchNavigate,
+  resolveTerminalKeyboardShortcutAction,
   runTerminalSearchNavigation
 } from './keyboard-handlers'
 
@@ -88,6 +89,26 @@ describe('matchSearchNavigate', () => {
   it('returns null for Ctrl+G on macOS (wrong modifier)', () => {
     const e = makeKeyEvent({ ctrlKey: true })
     expect(matchSearchNavigate(e, true, true, searchState)).toBeNull()
+  })
+})
+
+describe('resolveTerminalKeyboardShortcutAction', () => {
+  it('routes macOS Shift+Enter with the active Windows PTY host bytes', () => {
+    expect(
+      resolveTerminalKeyboardShortcutAction(
+        makeKeyEvent({ key: 'Enter', shiftKey: true }),
+        true,
+        'false',
+        0,
+        false,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        () => 'alt-enter',
+        () => true
+      )
+    ).toEqual({ type: 'sendInput', data: '\x1b\r' })
   })
 })
 

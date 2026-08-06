@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   HEADER_LENGTH,
   MessageType,
@@ -8,9 +8,26 @@ import {
   FrameDecoder,
   parseJsonRpcMessage,
   parseUnameToRelayPlatform,
+  isGitResponseStreamMarker,
   type JsonRpcRequest,
   type DecodedFrame
 } from './relay-protocol'
+
+describe('git response stream marker', () => {
+  it('accepts only complete non-negative integer metadata', () => {
+    expect(
+      isGitResponseStreamMarker({
+        __orcaGitResponseStream: { streamId: 1, totalBytes: 1024, chunkCount: 2 }
+      })
+    ).toBe(true)
+    expect(isGitResponseStreamMarker({ __orcaGitResponseStream: {} })).toBe(false)
+    expect(
+      isGitResponseStreamMarker({
+        __orcaGitResponseStream: { streamId: -1, totalBytes: 1024, chunkCount: 2 }
+      })
+    ).toBe(false)
+  })
+})
 
 describe('frame encoding', () => {
   it('encodes a frame with 13-byte header', () => {
@@ -67,9 +84,14 @@ describe('frame encoding', () => {
 })
 
 describe('FrameDecoder', () => {
+  // Framing correctness should not depend on wall-clock turn budgeting; the
+  // default 4ms maxTurnMs can defer later frames via setImmediate under CI load.
+  // Time-sliced drain is covered by relay-protocol-backpressure.test.ts.
+  const frozenClock = { now: () => 0 }
+
   it('decodes a complete frame', () => {
     const frames: DecodedFrame[] = []
-    const decoder = new FrameDecoder((f) => frames.push(f))
+    const decoder = new FrameDecoder((f) => frames.push(f), undefined, frozenClock)
 
     const payload = Buffer.from('test')
     const encoded = encodeFrame(MessageType.Regular, 1, 0, payload)
@@ -84,7 +106,7 @@ describe('FrameDecoder', () => {
 
   it('handles partial frames across multiple feeds', () => {
     const frames: DecodedFrame[] = []
-    const decoder = new FrameDecoder((f) => frames.push(f))
+    const decoder = new FrameDecoder((f) => frames.push(f), undefined, frozenClock)
 
     const payload = Buffer.from('hello world')
     const encoded = encodeFrame(MessageType.Regular, 2, 1, payload)
@@ -100,7 +122,7 @@ describe('FrameDecoder', () => {
 
   it('decodes multiple frames from a single chunk', () => {
     const frames: DecodedFrame[] = []
-    const decoder = new FrameDecoder((f) => frames.push(f))
+    const decoder = new FrameDecoder((f) => frames.push(f), undefined, frozenClock)
 
     const frame1 = encodeFrame(MessageType.Regular, 1, 0, Buffer.from('a'))
     const frame2 = encodeFrame(MessageType.Regular, 2, 1, Buffer.from('b'))
@@ -114,7 +136,7 @@ describe('FrameDecoder', () => {
 
   it('decodes keepalive frames', () => {
     const frames: DecodedFrame[] = []
-    const decoder = new FrameDecoder((f) => frames.push(f))
+    const decoder = new FrameDecoder((f) => frames.push(f), undefined, frozenClock)
 
     decoder.feed(encodeKeepAliveFrame(5, 3))
     expect(frames).toHaveLength(1)
@@ -127,7 +149,8 @@ describe('FrameDecoder', () => {
     const frames: DecodedFrame[] = []
     const decoder = new FrameDecoder(
       (f) => frames.push(f),
-      (err) => errors.push(err)
+      (err) => errors.push(err),
+      frozenClock
     )
 
     const oversizedLength = 17 * 1024 * 1024
@@ -148,7 +171,7 @@ describe('FrameDecoder', () => {
 
   it('reset clears internal buffer', () => {
     const frames: DecodedFrame[] = []
-    const decoder = new FrameDecoder((f) => frames.push(f))
+    const decoder = new FrameDecoder((f) => frames.push(f), undefined, frozenClock)
 
     // Feed a partial frame
     const encoded = encodeFrame(MessageType.Regular, 1, 0, Buffer.from('test'))
@@ -159,6 +182,75 @@ describe('FrameDecoder', () => {
     decoder.feed(encodeFrame(MessageType.Regular, 2, 0, Buffer.from('new')))
     expect(frames).toHaveLength(1)
     expect(frames[0].id).toBe(2)
+  })
+
+  it('decodes frames fed one byte at a time (worst-case boundary straddling)', () => {
+    const frames: DecodedFrame[] = []
+    const decoder = new FrameDecoder((f) => frames.push(f), undefined, frozenClock)
+
+    const frame1 = encodeFrame(MessageType.Regular, 1, 0, Buffer.from('first payload'))
+    const frame2 = encodeFrame(MessageType.Regular, 2, 1, Buffer.from('second'))
+    const combined = Buffer.concat([frame1, frame2])
+
+    for (let i = 0; i < combined.length; i += 1) {
+      decoder.feed(combined.subarray(i, i + 1))
+    }
+
+    expect(frames).toHaveLength(2)
+    expect(frames[0].payload.toString()).toBe('first payload')
+    expect(frames[1].id).toBe(2)
+    expect(frames[1].payload.toString()).toBe('second')
+  })
+
+  it('skips an oversized frame fed in odd-sized chunks and resynchronizes', () => {
+    const errors: Error[] = []
+    const frames: DecodedFrame[] = []
+    const decoder = new FrameDecoder(
+      (f) => frames.push(f),
+      (err) => errors.push(err),
+      frozenClock
+    )
+
+    const oversizedLength = 17 * 1024 * 1024
+    const header = Buffer.alloc(HEADER_LENGTH)
+    header[0] = MessageType.Regular
+    header.writeUInt32BE(1, 1)
+    header.writeUInt32BE(0, 5)
+    header.writeUInt32BE(oversizedLength, 9)
+    const oversized = Buffer.concat([header, Buffer.alloc(oversizedLength)])
+    const valid = encodeFrame(MessageType.Regular, 2, 0, Buffer.from('after'))
+    const combined = Buffer.concat([oversized, valid])
+
+    const chunkSize = 1024 * 1024 - 7
+    for (let i = 0; i < combined.length; i += chunkSize) {
+      decoder.feed(combined.subarray(i, i + chunkSize))
+    }
+
+    expect(errors).toHaveLength(1)
+    expect(frames).toHaveLength(1)
+    expect(frames[0].payload.toString()).toBe('after')
+  })
+
+  it('never rebuilds the buffered stream per feed while assembling a large frame', () => {
+    // Regression: feed() used Buffer.concat([buffered, chunk]) per data event,
+    // re-copying the whole backlog for every TCP chunk — O(n²) memcpy on the
+    // Electron main thread while fs.streamChunk frames arrive (SSH typing lag).
+    const frames: DecodedFrame[] = []
+    const decoder = new FrameDecoder((f) => frames.push(f), undefined, frozenClock)
+    const frame = encodeFrame(MessageType.Regular, 1, 0, Buffer.alloc(512 * 1024, 0x61))
+
+    const concatSpy = vi.spyOn(Buffer, 'concat')
+    try {
+      for (let i = 0; i < frame.length; i += 32 * 1024) {
+        decoder.feed(frame.subarray(i, i + 32 * 1024))
+      }
+    } finally {
+      concatSpy.mockRestore()
+    }
+
+    expect(frames).toHaveLength(1)
+    expect(frames[0].payload.length).toBe(512 * 1024)
+    expect(concatSpy).not.toHaveBeenCalled()
   })
 })
 

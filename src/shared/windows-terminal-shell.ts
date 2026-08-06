@@ -30,8 +30,27 @@ export function resolveWindowsShellStartupFamily(
   }
   // Why: wsl.exe and bash.exe (Git for Windows) launch POSIX shells, so queued
   // commands must use POSIX quoting and `cd '<cwd>'` rather than cmd/PowerShell.
-  if (basename === 'wsl.exe' || basename === 'wsl' || basename === 'bash.exe') {
+  // Extension-less forms reach the same executables through PATHEXT.
+  if (
+    basename === 'wsl.exe' ||
+    basename === 'wsl' ||
+    basename === 'bash.exe' ||
+    basename === 'bash'
+  ) {
     return 'posix'
   }
   return 'powershell'
+}
+
+export function resolveLocalWindowsAgentStartupShell(args: {
+  platform: NodeJS.Platform
+  isRemote: boolean
+  terminalWindowsShell?: string | null
+}): AgentStartupShell | undefined {
+  // Why: terminalWindowsShell describes the local host shell; SSH/remote
+  // targets need their own shell signal before we can safely override quoting.
+  if (args.platform !== 'win32' || args.isRemote) {
+    return undefined
+  }
+  return resolveWindowsShellStartupFamily(args.terminalWindowsShell)
 }

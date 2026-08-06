@@ -74,9 +74,14 @@ export function deriveGeneratedTabTitle(prompt: string): string | null {
   const promptPreview = prompt.slice(0, GENERATED_TAB_TITLE_SOURCE_SCAN_LIMIT)
   const firstClause = promptPreview
     .trim()
+    // Strip URLs before markdown punctuation: a GitLab URL like
+    // `/merge_requests/42` contains `_`, and folding that to a space first would
+    // split the URL and leak fragments ("requests") into the title. No `\b`
+    // anchor: a URL wrapped in markdown emphasis (`_https://…_`) is preceded by
+    // a word char, where `\bhttps` would fail to match and leak the whole URL.
+    .replace(/https?:\/\/\S+/gi, ' ')
     .replace(/[`*_~#>[\]{}()]/g, ' ')
     .replace(/^(?:issue|task|bug|feature|pr)\s*(?:#?\d+)?\s*[:-]\s*/i, '')
-    .replace(/\bhttps?:\/\/\S+/gi, ' ')
     .split(/[.!?;\n\r\u2028\u2029]/u)[0]
     ?.trim()
 

@@ -20,13 +20,14 @@ import {
   Sparkles,
   RefreshCw,
   AlertTriangle,
+  Bot,
   MoreHorizontal,
   Pencil,
   SlidersHorizontal,
   Trash,
-  X
+  X,
+  ExternalLink
 } from 'lucide-react'
-import { ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -54,20 +55,18 @@ import {
 } from '@/components/ui/context-menu'
 import { cn } from '@/lib/utils'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
+import { CheckJobLogTail } from './check-job-log-tail'
 import {
   filterPRCommentsByAudience,
   getPRCommentAudienceCounts,
   getPRCommentAudienceEmptyLabel,
   isBotPRComment,
+  normalizePRCommentAuthorLogin,
   getPrCommentAudienceFilters,
   type PRCommentAudienceFilter
 } from '@/lib/pr-comment-audience'
-import {
-  getPRCommentGroupId,
-  getPRCommentGroupRoot,
-  groupPRComments,
-  type PRCommentGroup
-} from '@/lib/pr-comment-groups'
+import { setPRBotAuthorOverride, usePRBotAuthorOverrides } from '@/lib/pr-bot-author-overrides'
+import { getPRCommentGroupId, groupPRComments, type PRCommentGroup } from '@/lib/pr-comment-groups'
 import {
   getPRCommentGroupActionState,
   isPRCommentGroupQueueableForAI,
@@ -81,6 +80,7 @@ import {
   getPRCommentGroupSurfaceClasses,
   type PRCommentPresentationClasses
 } from './pr-comment-presentation'
+import type { GitLabProjectRef } from '../../../../shared/gitlab-types'
 import type {
   PRInfo,
   PRCheckDetail,
@@ -94,10 +94,15 @@ import {
   RightPanelCommentComposer,
   type RightPanelCommentSubmitResult
 } from './right-panel-comment-composer'
-import { usePRCommentsListSelection } from './pr-comments-list-selection'
+import {
+  usePRCommentsListSelection,
+  type PRCommentsListSelectionClearRequest
+} from './pr-comments-list-selection'
 import { translate } from '@/i18n/i18n'
 import { useActiveWorktree } from '@/store/selectors'
 import { useAppStore } from '@/store'
+import { sortChecksBySeverity } from '../../../../shared/pr-check-severity-order'
+import { summarizeProviderChecks } from '../../../../shared/provider-check-summary'
 
 export const PullRequestIcon = GitPullRequest
 
@@ -343,10 +348,12 @@ export function PRTriageStrip({
   fixChecksDisabledReason?: string
 }): React.JSX.Element {
   const resolvedReview = review ?? pr
-  const failingCount = checks.filter((check) => isFailedCheck(check)).length
-  const pendingCount = checks.filter(
-    (check) => check.conclusion === 'pending' || check.conclusion === null
-  ).length
+  // Why: the whole strip reads one shared summary so it cannot contradict the checks pill — a
+  // `{status: completed, conclusion: null}` check used to spin here as "1 pending" forever while
+  // the pill two panes away called it unresolved.
+  const summary = summarizeProviderChecks(checks)
+  const failingCount = summary.failed
+  const pendingCount = summary.pending
 
   if (resolvedReview?.mergeable === 'CONFLICTING') {
     return (
@@ -420,6 +427,35 @@ export function PRTriageStrip({
               {translate(
                 'auto.components.right.sidebar.checks.panel.content.5856874b59',
                 'Orca will refresh checks while this panel stays open.'
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Why: nothing passed, failed or is still running — a green tick here would contradict the grey
+  // "Unresolved checks" pill reading the same list.
+  if (summary.state === 'neutral') {
+    return (
+      <div className="border-b border-border px-3 py-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <CircleDashed className="size-3.5 shrink-0 text-muted-foreground" />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[11px] font-medium text-foreground">
+              {summary.neutral}{' '}
+              {translate('auto.components.right.sidebar.checks.panel.content.5341023167', 'check')}
+              {summary.neutral === 1 ? '' : 's'}{' '}
+              {translate(
+                'auto.components.right.sidebar.checks.panel.content.checksUnresolvedChip',
+                'unresolved'
+              )}
+            </div>
+            <div className="truncate text-[10px] text-muted-foreground">
+              {translate(
+                'auto.components.right.sidebar.checks.panel.content.checksUnresolvedStripHint',
+                'These checks finished without a pass or fail verdict.'
               )}
             </div>
           </div>
@@ -503,21 +539,12 @@ export function ConflictTriageStrip({
   )
 }
 
-const CHECK_SORT_ORDER: Record<string, number> = {
-  failure: 0,
-  timed_out: 0,
-  action_required: 0,
-  cancelled: 1,
-  pending: 2,
-  neutral: 3,
-  skipped: 4,
-  success: 5
-}
-
 type CheckDetailsLoadState = {
   loading: boolean
   details: PRCheckRunDetails | null
   error: string | null
+  /** Check state when the load failed or returned nothing, so a later state change can retry it. */
+  errorAt?: { status: PRCheckDetail['status']; conclusion: PRCheckDetail['conclusion'] }
 }
 
 function getCheckIdentityKey(check: PRCheckDetail, index: number): string {
@@ -526,6 +553,11 @@ function getCheckIdentityKey(check: PRCheckDetail, index: number): string {
   }
   if (check.workflowRunId) {
     return `workflow-run:${check.workflowRunId}`
+  }
+  // Why: manual/created GitLab jobs have no web_url, so they would otherwise key on
+  // the list index and lose their cached log whenever the pipeline re-sorts.
+  if (check.gitlabJobId) {
+    return `gitlab-job:${check.gitlabJobId}`
   }
   if (check.url) {
     return `url:${check.url}`
@@ -638,13 +670,16 @@ function CheckRunDetails({
   state,
   checkDetailsContextKey,
   worktreeId,
-  detailsStickySurface = 'sidebar'
+  detailsStickySurface = 'sidebar',
+  getGitLabProjectRef
 }: {
   check: PRCheckDetail
   state: CheckDetailsLoadState | undefined
   checkDetailsContextKey: string
   worktreeId: string | null
   detailsStickySurface?: CheckDetailsStickySurface
+  /** Why: a getter, not a value — the source ref is filled by an async fetch and would read stale during render. */
+  getGitLabProjectRef?: () => GitLabProjectRef | null
 }): React.JSX.Element {
   const openCheckRunDetails = useAppStore((s) => s.openCheckRunDetails)
   const details = state?.details
@@ -683,7 +718,8 @@ function CheckRunDetails({
     openCheckRunDetails(worktreeId, checkDetailsContextKey, check, {
       details: state?.details ?? null,
       loading: state?.loading ?? false,
-      error: state?.error ?? null
+      error: state?.error ?? null,
+      gitlabProjectRef: getGitLabProjectRef?.() ?? null
     })
   }
 
@@ -734,7 +770,7 @@ function CheckRunDetails({
                 {translate(
                   'auto.components.right.sidebar.checks.panel.content.fd46a70f1a',
                   'Started'
-                )}
+                )}{' '}
                 {startedAt}
               </span>
             )}
@@ -743,7 +779,7 @@ function CheckRunDetails({
                 {translate(
                   'auto.components.right.sidebar.checks.panel.content.00e1c1658a',
                   'Completed'
-                )}
+                )}{' '}
                 {completedAt}
               </span>
             )}
@@ -891,6 +927,7 @@ function CheckRunDetails({
                           ))}
                       </div>
                     )}
+                    {job.logTail && <CheckJobLogTail logTail={job.logTail} />}
                   </div>
                 ))}
               </div>
@@ -901,15 +938,6 @@ function CheckRunDetails({
                     'Showing first 100 jobs'
                   )}
                 </div>
-              )}
-            </div>
-          )}
-
-          {hasLogTail && (
-            <div className="text-[11px] text-muted-foreground">
-              {translate(
-                'auto.components.right.sidebar.checks.panel.content.2524d1fb83',
-                'Log tail available in full details.'
               )}
             </div>
           )}
@@ -942,7 +970,8 @@ export function ChecksList({
   checkDetailsContextKey,
   onLoadCheckDetails,
   worktreeId: worktreeIdOverride,
-  detailsStickySurface = 'sidebar'
+  detailsStickySurface = 'sidebar',
+  getGitLabProjectRef
 }: {
   checks: PRCheckDetail[]
   checksLoading: boolean
@@ -951,6 +980,8 @@ export function ChecksList({
   /** Why: folder-workspace PR checks render rows for attached worktrees, not the active one. */
   worktreeId?: string
   detailsStickySurface?: CheckDetailsStickySurface
+  /** Why: a getter, not a value — the source ref is filled by an async fetch and would read stale during render. */
+  getGitLabProjectRef?: () => GitLabProjectRef | null
 }): React.JSX.Element {
   const activeWorktree = useActiveWorktree()
   const resolvedWorktreeId = worktreeIdOverride ?? activeWorktree?.id ?? null
@@ -969,15 +1000,7 @@ export function ChecksList({
     shouldConstrainCheckList && checks.length > 0
   )
   detailsContextRef.current = checkDetailsContextKey
-  const sorted = React.useMemo(
-    () =>
-      [...checks].sort(
-        (a, b) =>
-          (CHECK_SORT_ORDER[a.conclusion ?? 'pending'] ?? 3) -
-          (CHECK_SORT_ORDER[b.conclusion ?? 'pending'] ?? 3)
-      ),
-    [checks]
-  )
+  const sorted = React.useMemo(() => sortChecksBySeverity(checks), [checks])
   const rows = React.useMemo(
     () =>
       sorted.map((check, index) => ({
@@ -986,11 +1009,15 @@ export function ChecksList({
       })),
     [checkDetailsContextKey, sorted]
   )
-  const passingCount = checks.filter((c) => c.conclusion === 'success').length
-  const failingCount = checks.filter((c) => isFailedCheck(c)).length
-  const pendingCount = checks.filter(
-    (c) => c.conclusion === 'pending' || c.conclusion === null
-  ).length
+  // Why: every header count comes from the same classifier the checks pill uses — counting only
+  // `success` made a 2-success/3-skipped PR say "2 passing" next to "5/5 passed", and treating a
+  // null conclusion as pending kept a completed-but-unresolved check spinning forever.
+  const {
+    passed: passingCount,
+    failed: failingCount,
+    pending: pendingCount,
+    neutral: neutralCount
+  } = summarizeProviderChecks(checks)
 
   useEffect(() => {
     const validKeys = new Set(rows.map((row) => row.key))
@@ -1022,13 +1049,20 @@ export function ChecksList({
       const next: Record<string, CheckDetailsLoadState> = { ...current }
       for (const row of rows) {
         const cached = next[row.key]
-        if (!cached?.details) {
+        if (!cached || cached.loading) {
           continue
         }
-        if (
-          cached.details.status !== row.check.status ||
-          cached.details.conclusion !== row.check.conclusion
-        ) {
+        // Why: a failed load (GitLab auth blip, 404, offline) otherwise pins its error
+        // forever — there is no retry affordance — so re-arm it once the job moves on.
+        const stale = cached.details
+          ? cached.details.status !== row.check.status ||
+            cached.details.conclusion !== row.check.conclusion
+          : Boolean(
+              cached.errorAt &&
+              (cached.errorAt.status !== row.check.status ||
+                cached.errorAt.conclusion !== row.check.conclusion)
+            )
+        if (stale) {
           delete next[row.key]
           changed = true
         }
@@ -1042,7 +1076,12 @@ export function ChecksList({
       if (detailsByCheckKey[row.key]?.loading || detailsByCheckKey[row.key]?.details) {
         return
       }
-      if (!row.check.checkRunId && !row.check.workflowRunId && !row.check.url) {
+      if (
+        !row.check.checkRunId &&
+        !row.check.workflowRunId &&
+        !row.check.url &&
+        !row.check.gitlabJobId
+      ) {
         setDetailsByCheckKey((current) => ({
           ...current,
           [row.key]: {
@@ -1085,7 +1124,16 @@ export function ChecksList({
             [row.key]: {
               loading: false,
               details,
-              error: details ? null : 'No inline details are available for this check.'
+              error: details
+                ? null
+                : translate(
+                    'auto.components.right.sidebar.checks.panel.content.e15a8b77ef',
+                    'No inline details are available for this check.'
+                  ),
+              // Why: a detail-less result is only final for this status — re-arm the retry once the job moves on.
+              errorAt: details
+                ? undefined
+                : { status: row.check.status, conclusion: row.check.conclusion }
             }
           }))
         })
@@ -1098,7 +1146,14 @@ export function ChecksList({
             [row.key]: {
               loading: false,
               details: null,
-              error: err instanceof Error ? err.message : 'Failed to load check details.'
+              error:
+                err instanceof Error
+                  ? err.message
+                  : translate(
+                      'auto.components.right.sidebar.checks.panel.content.checkDetailsLoadFailed',
+                      'Failed to load check details.'
+                    ),
+              errorAt: { status: row.check.status, conclusion: row.check.conclusion }
             }
           }))
         })
@@ -1129,12 +1184,14 @@ export function ChecksList({
       patchOpenCheckRunDetails(resolvedWorktreeId, checkDetailsContextKey, row.check, {
         details: detailsState.details ?? null,
         loading: detailsState.loading ?? false,
-        error: detailsState.error ?? null
+        error: detailsState.error ?? null,
+        gitlabProjectRef: getGitLabProjectRef?.() ?? null
       })
     }
   }, [
     checkDetailsContextKey,
     detailsByCheckKey,
+    getGitLabProjectRef,
     patchOpenCheckRunDetails,
     resolvedWorktreeId,
     rows
@@ -1199,6 +1256,18 @@ export function ChecksList({
               {translate(
                 'auto.components.right.sidebar.checks.panel.content.9ad98f2a17',
                 'pending'
+              )}
+            </span>
+          )}
+          {/* Why: without this chip a list of only unresolved checks rendered a header with no
+              counts at all, so nothing said why the pill was grey. */}
+          {neutralCount > 0 && (
+            <span className="flex items-center gap-1">
+              <CircleDashed className="size-3 text-muted-foreground" />
+              {neutralCount}{' '}
+              {translate(
+                'auto.components.right.sidebar.checks.panel.content.checksUnresolvedChip',
+                'unresolved'
               )}
             </span>
           )}
@@ -1298,6 +1367,7 @@ export function ChecksList({
                       checkDetailsContextKey={checkDetailsContextKey}
                       worktreeId={resolvedWorktreeId}
                       detailsStickySurface={detailsStickySurface}
+                      getGitLabProjectRef={getGitLabProjectRef}
                     />
                   )}
                 </div>
@@ -1475,20 +1545,27 @@ export function isMutablePRConversationComment(comment: PRComment): boolean {
 
 function CommentMoreMenu({
   comment,
+  botAuthorOverrides,
   onStartEdit,
   onDelete,
   onQueueForAgent
 }: {
   comment: PRComment
+  botAuthorOverrides: ReadonlySet<string>
   onStartEdit?: () => void
   onDelete?: () => void | Promise<void>
   onQueueForAgent?: () => void
 }): React.JSX.Element | null {
+  const authorLogin = normalizePRCommentAuthorLogin(comment.author)
+  const isOverriddenBot = authorLogin.length > 0 && botAuthorOverrides.has(authorLogin)
+  // Why: the override is an escape hatch for bots the heuristics miss, so hide
+  // the action when the author is already detected as a bot without it.
+  const hasMarkAsBot = authorLogin.length > 0 && (isOverriddenBot || !isBotPRComment(comment))
   const hasGoToComment = Boolean(comment.url)
   const hasEdit = Boolean(onStartEdit)
   const hasDelete = Boolean(onDelete)
   const hasQueue = Boolean(onQueueForAgent)
-  if (!hasGoToComment && !hasEdit && !hasDelete && !hasQueue) {
+  if (!hasGoToComment && !hasEdit && !hasDelete && !hasQueue && !hasMarkAsBot) {
     return null
   }
 
@@ -1545,6 +1622,25 @@ function CommentMoreMenu({
             <Trash />
             {translate('auto.components.right.sidebar.checks.panel.content.6cc6eace26', 'Delete')}
           </DropdownMenuItem>
+        ) : null}
+        {hasMarkAsBot ? (
+          <>
+            {(hasQueue || hasGoToComment || hasEdit || hasDelete) && <DropdownMenuSeparator />}
+            <DropdownMenuItem
+              onSelect={() => setPRBotAuthorOverride(comment.author, !isOverriddenBot)}
+            >
+              <Bot />
+              {isOverriddenBot
+                ? translate(
+                    'auto.components.right.sidebar.checks.panel.content.b3195cba33',
+                    'Unmark author as bot'
+                  )
+                : translate(
+                    'auto.components.right.sidebar.checks.panel.content.f588b46a6c',
+                    'Mark author as bot'
+                  )}
+            </DropdownMenuItem>
+          </>
         ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
@@ -1609,13 +1705,6 @@ function PRCommentActionBadge({
       </span>
     )
   }
-  if (actionState === 'open') {
-    return (
-      <span className={presentation.statusBadgeOpen}>
-        {translate('auto.components.right.sidebar.checks.panel.content.7c1f0a2b11', 'Open')}
-      </span>
-    )
-  }
   if (actionState === 'resolved') {
     return (
       <span className={presentation.statusBadgeResolved}>
@@ -1629,6 +1718,7 @@ function PRCommentActionBadge({
 /** A single comment row — used for both root and reply comments. */
 function CommentRow({
   comment,
+  botAuthorOverrides,
   isReply,
   showResolve,
   showReply,
@@ -1645,6 +1735,7 @@ function CommentRow({
   onQueueForAgent
 }: {
   comment: PRComment
+  botAuthorOverrides: ReadonlySet<string>
   isReply: boolean
   showResolve: boolean
   showReply?: boolean
@@ -1660,7 +1751,7 @@ function CommentRow({
   onDeleteComment?: (comment: PRComment) => void | Promise<void>
   onQueueForAgent?: () => void
 }): React.JSX.Element {
-  const automated = isBotPRComment(comment)
+  const automated = isBotPRComment(comment, botAuthorOverrides)
   const canMutateComment = isMutablePRConversationComment(comment)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(comment.body)
@@ -1765,6 +1856,7 @@ function CommentRow({
       <CopyButton text={buildCopyText(comment)} />
       <CommentMoreMenu
         comment={comment}
+        botAuthorOverrides={botAuthorOverrides}
         onStartEdit={canMutateComment && onEditComment ? handleStartEdit : undefined}
         onDelete={canMutateComment && onDeleteComment ? handleDelete : undefined}
         onQueueForAgent={!isReply ? onQueueForAgent : undefined}
@@ -1930,7 +2022,8 @@ function CommentRow({
 
 function PRCommentGroupView({
   group,
-  replyingGroupId,
+  botAuthorOverrides,
+  replyingCommentId,
   selectionControl,
   actionState,
   isQueued,
@@ -1946,7 +2039,8 @@ function PRCommentGroupView({
   onQueueForAgent
 }: {
   group: PRCommentGroup
-  replyingGroupId: string | null
+  botAuthorOverrides: ReadonlySet<string>
+  replyingCommentId: number | null
   selectionControl?: React.ReactNode
   actionState: PRCommentGroupActionState
   isQueued: boolean
@@ -1954,39 +2048,49 @@ function PRCommentGroupView({
   replyDisabledReason?: string
   presentation: PRCommentPresentationClasses
   onResolve?: (threadId: string, resolve: boolean) => boolean | Promise<boolean>
-  onStartReply?: (groupId: string) => void
-  onCancelReply?: () => void
+  onStartReply?: (commentId: number) => void
+  onCancelReply?: (commentId: number) => void
   onReply?: (comment: PRComment, body: string) => Promise<RightPanelCommentSubmitResult>
   onEditComment?: (comment: PRComment, body: string) => Promise<boolean>
   onDeleteComment?: (comment: PRComment) => void | Promise<void>
   onQueueForAgent?: () => void
 }): React.JSX.Element {
-  const groupId = getPRCommentGroupId(group)
-  const root = getPRCommentGroupRoot(group)
-  const replyComposer =
-    replyingGroupId === groupId && onReply ? (
-      <div className={cn('px-3 pb-2', group.kind === 'thread' && 'pl-6')}>
+  // Reply targets a specific comment id so any comment in a thread — root or
+  // nested reply — can be replied to, not just the thread root.
+  const renderReplyComposer = (comment: PRComment, nested = false): React.ReactNode =>
+    replyingCommentId === comment.id && onReply ? (
+      <div
+        className={cn(
+          'px-3 pb-2',
+          // Why: nest the composer under the parent the same way GitHub nests thread replies —
+          // the replies container already draws that rail, so only the root composer adds one.
+          group.kind === 'thread' && !nested && 'ml-3 border-l-2 border-border/50 pl-3'
+        )}
+      >
         <RightPanelCommentComposer
           placeholder={translate(
             'auto.components.right.sidebar.checks.panel.content.ba20d1a896',
             'Reply to {{value0}}',
-            { value0: root.author }
+            { value0: comment.author }
           )}
           submitLabel="Reply"
           autoFocus
           disabled={replyDisabled}
           disabledReason={replyDisabledReason}
-          onCancel={onCancelReply}
-          onSubmit={(body) => onReply(root, body)}
+          onCancel={() => onCancelReply?.(comment.id)}
+          onSubmit={(body) => onReply(comment, body)}
         />
       </div>
     ) : null
-  const startReply = onStartReply ? () => onStartReply(groupId) : undefined
+  const startReply = onStartReply ? (comment: PRComment) => onStartReply(comment.id) : undefined
   const surfaceClassName = cn(
-    getPRCommentGroupSurfaceClasses(presentation, actionState, { queued: isQueued }),
+    getPRCommentGroupSurfaceClasses(presentation, actionState, {
+      queued: isQueued
+    }),
     group.kind === 'standalone' ? presentation.groupStandalone : presentation.groupThread
   )
   const sharedRowProps = {
+    botAuthorOverrides,
     actionState,
     isQueued,
     replyDisabled,
@@ -2007,10 +2111,10 @@ function PRCommentGroupView({
           showResolve={false}
           showReply={Boolean(onReply)}
           selectionControl={selectionControl}
-          onReply={startReply ? () => startReply() : undefined}
+          onReply={startReply}
           {...sharedRowProps}
         />
-        {replyComposer}
+        {renderReplyComposer(group.comment)}
       </div>
     ) : (
       <div className={surfaceClassName} data-testid="pr-comment-group">
@@ -2020,25 +2124,28 @@ function PRCommentGroupView({
           showResolve={true}
           showReply={Boolean(onReply)}
           selectionControl={selectionControl}
-          onReply={startReply ? () => startReply() : undefined}
+          onReply={startReply}
           {...sharedRowProps}
         />
+        {renderReplyComposer(group.root)}
         {group.replies.length > 0 && (
           <div className={presentation.repliesContainer}>
             {group.replies.map((reply) => (
-              <CommentRow
-                key={reply.id}
-                {...sharedRowProps}
-                comment={reply}
-                isReply={true}
-                showResolve={false}
-                showReply={false}
-                isQueued={false}
-              />
+              <React.Fragment key={reply.id}>
+                <CommentRow
+                  {...sharedRowProps}
+                  comment={reply}
+                  isReply={true}
+                  showResolve={false}
+                  showReply={Boolean(onReply)}
+                  isQueued={false}
+                  onReply={startReply}
+                />
+                {renderReplyComposer(reply, true)}
+              </React.Fragment>
             ))}
           </div>
         )}
-        {replyComposer}
       </div>
     )
 
@@ -2064,7 +2171,8 @@ function PRCommentGroupView({
 
 function ResolvedCommentGroupsSection({
   groups,
-  replyingGroupId,
+  botAuthorOverrides,
+  replyingCommentId,
   replyDisabled,
   replyDisabledReason,
   presentation,
@@ -2076,13 +2184,14 @@ function ResolvedCommentGroupsSection({
   onDeleteComment
 }: {
   groups: PRCommentGroup[]
-  replyingGroupId: string | null
+  botAuthorOverrides: ReadonlySet<string>
+  replyingCommentId: number | null
   replyDisabled?: boolean
   replyDisabledReason?: string
   presentation: PRCommentPresentationClasses
   onResolve?: (threadId: string, resolve: boolean) => boolean | Promise<boolean>
-  onStartReply?: (groupId: string) => void
-  onCancelReply?: () => void
+  onStartReply?: (commentId: number) => void
+  onCancelReply?: (commentId: number) => void
   onReply?: (comment: PRComment, body: string) => Promise<RightPanelCommentSubmitResult>
   onEditComment?: (comment: PRComment, body: string) => Promise<boolean>
   onDeleteComment?: (comment: PRComment) => void | Promise<void>
@@ -2108,7 +2217,8 @@ function ResolvedCommentGroupsSection({
               <PRCommentGroupView
                 key={getPRCommentGroupId(group)}
                 group={group}
-                replyingGroupId={replyingGroupId}
+                botAuthorOverrides={botAuthorOverrides}
+                replyingCommentId={replyingCommentId}
                 actionState="resolved"
                 isQueued={false}
                 replyDisabled={replyDisabled}
@@ -2178,6 +2288,7 @@ export function PRCommentsList({
   commentsDisabled,
   commentsDisabledReason,
   selectionContextKey,
+  selectionClearRequest,
   resolveCommentsWithAIDisabled,
   resolveCommentsWithAIDisabledReason,
   onAddComment,
@@ -2193,6 +2304,7 @@ export function PRCommentsList({
   commentsDisabled?: boolean
   commentsDisabledReason?: string
   selectionContextKey?: string
+  selectionClearRequest?: PRCommentsListSelectionClearRequest | null
   resolveCommentsWithAIDisabled?: boolean
   resolveCommentsWithAIDisabledReason?: string
   onAddComment?: (body: string) => Promise<RightPanelCommentSubmitResult>
@@ -2205,11 +2317,15 @@ export function PRCommentsList({
   const presentation = React.useMemo(() => getPRCommentPresentationClasses(), [])
   const [commentFilter, setCommentFilter] = useState<PRCommentAudienceFilter>('all')
   const [displayMode, setDisplayMode] = useState<PRCommentsListDisplayMode>('triage')
-  const [replyingGroupId, setReplyingGroupId] = useState<string | null>(null)
+  const [replyingCommentId, setReplyingCommentId] = useState<number | null>(null)
   const [isAddingComment, setIsAddingComment] = useState(false)
   const addCommentSurfaceRef = useRef<HTMLDivElement>(null)
   const shouldScrollAddCommentRef = useRef(false)
-  const commentCounts = React.useMemo(() => getPRCommentAudienceCounts(comments), [comments])
+  const botAuthorOverrides = usePRBotAuthorOverrides()
+  const commentCounts = React.useMemo(
+    () => getPRCommentAudienceCounts(comments, botAuthorOverrides),
+    [botAuthorOverrides, comments]
+  )
   const {
     isSelectingForAI,
     selectedGroupIds,
@@ -2219,10 +2335,10 @@ export function PRCommentsList({
     addGroupToSelection,
     clearSelection,
     toggleGroupSelection
-  } = usePRCommentsListSelection(comments, selectionContextKey)
+  } = usePRCommentsListSelection(comments, selectionContextKey, selectionClearRequest)
   const visibleComments = React.useMemo(
-    () => filterPRCommentsByAudience(comments, commentFilter),
-    [commentFilter, comments]
+    () => filterPRCommentsByAudience(comments, commentFilter, botAuthorOverrides),
+    [botAuthorOverrides, commentFilter, comments]
   )
   const groups = React.useMemo(() => groupPRComments(visibleComments), [visibleComments])
   const triageGroups = React.useMemo(() => partitionPRCommentGroupsForTriage(groups), [groups])
@@ -2303,7 +2419,8 @@ export function PRCommentsList({
       <PRCommentGroupView
         key={groupId}
         group={group}
-        replyingGroupId={replyingGroupId}
+        botAuthorOverrides={botAuthorOverrides}
+        replyingCommentId={replyingCommentId}
         selectionControl={renderSelectionControl(group)}
         actionState={actionState}
         isQueued={isQueued}
@@ -2311,8 +2428,10 @@ export function PRCommentsList({
         replyDisabledReason={commentsDisabledReason}
         presentation={presentation}
         onResolve={onResolve}
-        onStartReply={setReplyingGroupId}
-        onCancelReply={() => setReplyingGroupId(null)}
+        onStartReply={setReplyingCommentId}
+        onCancelReply={(commentId) =>
+          setReplyingCommentId((current) => (current === commentId ? null : current))
+        }
         onReply={onReply}
         onEditComment={onEditComment}
         onDeleteComment={onDeleteComment}
@@ -2360,7 +2479,14 @@ export function PRCommentsList({
   return (
     <div className="border-t border-border">
       {/* Header */}
-      <div className={presentation.sectionHeader}>
+      <div
+        className={cn(
+          presentation.sectionHeader,
+          // Why: the checks sidebar scrolls as one column; pinning this header keeps
+          // filter and add-comment actions reachable while reading long threads.
+          'sticky top-0 z-10 bg-sidebar/95 backdrop-blur-sm'
+        )}
+      >
         <div className="flex min-w-0 items-center gap-2">
           <MessageSquare className="size-3.5 text-muted-foreground" />
           <span className={presentation.sectionHeaderLabel}>
@@ -2626,13 +2752,16 @@ export function PRCommentsList({
               {triageGroups.conversation.map(renderCommentGroup)}
               <ResolvedCommentGroupsSection
                 groups={triageGroups.resolved}
-                replyingGroupId={replyingGroupId}
+                botAuthorOverrides={botAuthorOverrides}
+                replyingCommentId={replyingCommentId}
                 replyDisabled={commentsDisabled}
                 replyDisabledReason={commentsDisabledReason}
                 presentation={presentation}
                 onResolve={onResolve}
-                onStartReply={setReplyingGroupId}
-                onCancelReply={() => setReplyingGroupId(null)}
+                onStartReply={setReplyingCommentId}
+                onCancelReply={(commentId) =>
+                  setReplyingCommentId((current) => (current === commentId ? null : current))
+                }
                 onReply={onReply}
                 onEditComment={onEditComment}
                 onDeleteComment={onDeleteComment}

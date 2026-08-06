@@ -37,6 +37,36 @@ describe('detectRepoIcon', () => {
     })
   })
 
+  it('detects Tauri bundle icons under src-tauri/icons', async () => {
+    const repoPath = await makeTempRepoDir()
+    await mkdir(join(repoPath, 'src-tauri', 'icons'), { recursive: true })
+    await writeFile(
+      join(repoPath, 'src-tauri', 'icons', 'icon.png'),
+      Buffer.from(PNG_1X1_BASE64, 'base64')
+    )
+
+    await expect(detectRepoIcon({ repoPath, kind: 'folder' })).resolves.toEqual({
+      type: 'image',
+      src: `data:image/png;base64,${PNG_1X1_BASE64}`,
+      source: 'file',
+      label: 'src-tauri/icons/icon.png'
+    })
+  })
+
+  it('detects public WebP icons used by CLI tools', async () => {
+    const repoPath = await makeTempRepoDir()
+    const webpBase64 = 'UklGRhoAAABXRUJQVlA4IA4AAAAwAQCdASoBAAEAAQIlSkwAAA=='
+    await mkdir(join(repoPath, 'public'), { recursive: true })
+    await writeFile(join(repoPath, 'public', 'icon.webp'), Buffer.from(webpBase64, 'base64'))
+
+    await expect(detectRepoIcon({ repoPath, kind: 'folder' })).resolves.toEqual({
+      type: 'image',
+      src: `data:image/webp;base64,${webpBase64}`,
+      source: 'file',
+      label: 'public/icon.webp'
+    })
+  })
+
   it('uses a package homepage favicon when no local icon file exists', async () => {
     const repoPath = await makeTempRepoDir()
     await writeFile(
@@ -179,7 +209,8 @@ describe('detectRepoIcon', () => {
         source: 'github',
         label: 'stablyai/orca'
       },
-      upstream: { owner: 'stablyai', repo: 'orca' }
+      // Why: fork parents resolve host-qualified so avatars/links stay on the fork's server.
+      upstream: { owner: 'stablyai', repo: 'orca', host: 'github.com' }
     })
   })
 

@@ -25,12 +25,14 @@ type RichMarkdownImageStorage = {
 
 export function createRichMarkdownImageResolverContext({
   filePath,
+  externalSshTargetId,
   runtimeEnvironmentId,
   settings,
   worktreeId,
   worktreeRoot
 }: {
   filePath: string
+  externalSshTargetId?: string
   runtimeEnvironmentId?: string | null
   settings: RichMarkdownImageResolverSettings
   worktreeId: string
@@ -43,7 +45,8 @@ export function createRichMarkdownImageResolverContext({
           settings: settingsForRuntimeOwner(settings, runtimeEnvironmentId),
           worktreeId,
           worktreePath: worktreeRoot,
-          connectionId: getConnectionId(worktreeId)
+          connectionId: getConnectionId(worktreeId),
+          expectedExternalSshTargetId: externalSshTargetId
         }
       : undefined
   }
@@ -83,6 +86,7 @@ function getRichMarkdownImageContextSignature(context: RichMarkdownImageResolver
     context.filePath,
     context.runtimeContext?.settings?.activeRuntimeEnvironmentId?.trim() ?? 'client',
     context.runtimeContext?.connectionId ?? 'local',
+    context.runtimeContext?.expectedExternalSshTargetId ?? '',
     context.runtimeContext?.worktreeId ?? 'unknown-worktree',
     context.runtimeContext?.worktreePath ?? ''
   ].join('\0')

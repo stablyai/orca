@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
+import type { ExecutionHostId } from '../../shared/execution-host'
 import type { FileWithMtime } from './session-scanner-types'
 import {
   addPreviewContent,
@@ -17,11 +18,25 @@ import {
   numberValue
 } from './session-scanner-values'
 
+type ParserSessionOptions = {
+  executionHostId?: ExecutionHostId
+  executionHostPlatform?: NodeJS.Platform | null
+}
+
 export async function parseDevinSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform
 ): Promise<AiVaultSession | null> {
-  const record = asRecord(JSON.parse(await readFile(file.path, 'utf-8')) as unknown)
+  return parseDevinSessionContent(file, await readFile(file.path, 'utf-8'), platform)
+}
+
+export function parseDevinSessionContent(
+  file: FileWithMtime,
+  content: string,
+  platform: NodeJS.Platform = process.platform,
+  options: ParserSessionOptions = {}
+): AiVaultSession | null {
+  const record = asRecord(JSON.parse(content) as unknown)
   if (!record) {
     return null
   }
@@ -69,7 +84,7 @@ export async function parseDevinSessionFile(
       )
     }
   }
-  return finalizeSession(accumulator, platform)
+  return finalizeSession(accumulator, platform, options)
 }
 
 function extractDevinStepText(step: Record<string, unknown>): string | null {

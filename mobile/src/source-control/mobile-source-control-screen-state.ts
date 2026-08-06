@@ -20,6 +20,7 @@ import type {
   MobileGitBranchCompareSummary
 } from './mobile-branch-compare'
 import {
+  canOpenMobileGitStatusEntry,
   isMobileGitDiscardableEntry,
   isMobileGitStageableEntry,
   type MobileGitFileStatus,
@@ -58,15 +59,14 @@ export type MobileGitStatusEntryView = MobileGitStatusEntry & {
 }
 
 // Decorate raw status entries with the row-level capability/action-id fields the
-// file list needs. Deleted/unresolved entries are not openable (matches the
-// opener guards).
+// file list needs. Opener guards must use the same canOpen rule.
 export function buildMobileGitStatusEntryViews(
   entries: readonly MobileGitStatusEntry[]
 ): MobileGitStatusEntryView[] {
   return entries.map((entry) => ({
     ...entry,
     canDiscard: isMobileGitDiscardableEntry(entry),
-    canOpen: entry.status !== 'deleted' && entry.conflictStatus !== 'unresolved',
+    canOpen: canOpenMobileGitStatusEntry(entry),
     canStage: isMobileGitStageableEntry(entry),
     discardActionId: `discard:${entry.path}`,
     stageActionId: `stage:${entry.path}`,

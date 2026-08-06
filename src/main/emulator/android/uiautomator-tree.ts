@@ -273,7 +273,8 @@ function decodeEntities(value: string): string {
       case 'apos':
         return "'"
       default: {
-        const code = body[1] === 'x' ? parseInt(body.slice(2), 16) : parseInt(body.slice(1), 10)
+        const code =
+          body[1] === 'x' ? Number.parseInt(body.slice(2), 16) : Number.parseInt(body.slice(1), 10)
         return Number.isNaN(code) ? match : String.fromCodePoint(code)
       }
     }

@@ -1,4 +1,5 @@
 import type { Worktree } from '../../../shared/types'
+import { compareWorktreeDisplayName } from './worktree-display-name-order'
 
 export type OrderEmptyQueryInputs = {
   visibleWorktrees: readonly Worktree[]
@@ -50,7 +51,7 @@ export function orderEmptyQueryWorktrees(inputs: OrderEmptyQueryInputs): OrderEm
     } else if (b.lastActivityAt !== a.lastActivityAt) {
       return b.lastActivityAt - a.lastActivityAt
     }
-    return a.displayName.localeCompare(b.displayName)
+    return compareWorktreeDisplayName(a, b)
   })
   return {
     visibleWorktreesForState: visibleWorktrees,

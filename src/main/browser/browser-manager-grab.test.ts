@@ -195,6 +195,14 @@ describe('browserManager grab operations', () => {
       expect(selection.opId).toBe('op-1')
     })
 
+    it('tears down an armed overlay when disabling before selection starts', async () => {
+      const result = await browserManager.setGrabMode('tab-1', false, guest)
+
+      expect(result).toBe(true)
+      expect(guestExecuteJavaScriptMock).toHaveBeenCalledTimes(1)
+      expect(guestExecuteJavaScriptMock.mock.calls[0][0]).toContain('grab.cleanup()')
+    })
+
     it('returns false if injection fails', async () => {
       guestExecuteJavaScriptMock.mockRejectedValue(new Error('Injection failed'))
       const result = await browserManager.setGrabMode('tab-1', true, guest)
@@ -781,7 +789,7 @@ describe('browserManager grab operations', () => {
       const promise = browserManager.awaitGrabSelection('tab-1', 'op-1', guest)
 
       // Find the did-start-navigation handler and trigger it with isMainFrame=true
-      const navHandler = guestOnMock.mock.calls.find(
+      const navHandler = guestOnMock.mock.calls.findLast(
         ([event]) => event === 'did-start-navigation'
       )?.[1] as ((...args: unknown[]) => void) | undefined
 
@@ -798,7 +806,7 @@ describe('browserManager grab operations', () => {
       void browserManager.awaitGrabSelection('tab-1', 'op-1', guest)
 
       // Trigger did-start-navigation with isMainFrame=false (subframe)
-      const navHandler = guestOnMock.mock.calls.find(
+      const navHandler = guestOnMock.mock.calls.findLast(
         ([event]) => event === 'did-start-navigation'
       )?.[1] as ((...args: unknown[]) => void) | undefined
 
@@ -817,9 +825,9 @@ describe('browserManager grab operations', () => {
       const promise = browserManager.awaitGrabSelection('tab-1', 'op-1', guest)
 
       // Find the destroyed handler and trigger it
-      const destroyedHandler = guestOnMock.mock.calls
-        .filter(([event]) => event === 'destroyed')
-        .at(-1)?.[1] as (() => void) | undefined
+      const destroyedHandler = guestOnMock.mock.calls.findLast(
+        ([event]) => event === 'destroyed'
+      )?.[1] as (() => void) | undefined
 
       expect(destroyedHandler).toBeTypeOf('function')
       destroyedHandler?.()

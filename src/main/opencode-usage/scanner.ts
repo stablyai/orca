@@ -1,31 +1,30 @@
 /* eslint-disable max-lines -- Why: OpenCode usage analytics need to normalize multiple local DB schema generations, attribute worktrees, and build persisted projections in one auditable pipeline. */
-import { existsSync } from 'node:fs'
 import { readdir, realpath, stat } from 'node:fs/promises'
-import { homedir } from 'node:os'
-import { isAbsolute, join, posix, win32 } from 'node:path'
-import type { Repo } from '../../shared/types'
+import { basename, isAbsolute, join, posix, win32 } from 'node:path'
+import { yieldToEventLoop } from '../../shared/event-loop-yield'
 import { areWorktreePathsEqual } from '../ipc/worktree-logic'
+import { resolveOpenCodeDataDirectory } from '../opencode/opencode-data-directory'
 import Database from '../sqlite/sync-database'
 import { columnExists, tableExists } from './schema-helpers'
 import { canonicalizeUsageWorktreePaths } from '../usage-worktree-canonicalizer'
+import { createUsageEventAggregation } from '../usage/usage-event-aggregation'
+import {
+  looksLikeWindowsPath,
+  normalizeComparablePath,
+  normalizeFsPath
+} from '../usage/usage-path-comparison'
+import { ensureNumber, extractString } from '../usage/usage-record-coercion'
+import type { UsageScanWorktreeRef } from '../usage/usage-provider-contract'
 import type {
   OpenCodeUsageAttributedEvent,
   OpenCodeUsageDailyAggregate,
-  OpenCodeUsageLocationBreakdown,
-  OpenCodeUsageLocationModelBreakdown,
-  OpenCodeUsageModelBreakdown,
   OpenCodeUsageParsedEvent,
   OpenCodeUsagePersistedDatabase,
   OpenCodeUsageProcessedDatabase,
   OpenCodeUsageSession
 } from './types'
 
-export type OpenCodeUsageWorktreeRef = {
-  repoId: string
-  worktreeId: string
-  path: string
-  displayName: string
-}
+export type OpenCodeUsageWorktreeRef = UsageScanWorktreeRef
 
 type OpenCodeUsageRow = {
   id: string
@@ -57,68 +56,60 @@ type OpenCodeSessionUsageRow = {
 
 const YIELD_EVERY_DATABASES = 2
 
-function ensureNumber(value: unknown): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : 0
+type OpenCodeDatabaseOverride = {
+  isConfigured: boolean
+  path: string | null
 }
 
-function normalizeComparablePath(pathValue: string, platform = process.platform): string {
-  const normalized = pathValue.replace(/\\/g, '/')
-  return platform === 'win32' || looksLikeWindowsPath(pathValue)
-    ? normalized.toLowerCase()
-    : normalized
-}
-
-function normalizeFsPath(pathValue: string, platform = process.platform): string {
-  if (platform === 'win32' || looksLikeWindowsPath(pathValue)) {
-    return win32.normalize(win32.resolve(pathValue))
-  }
-  return posix.normalize(posix.resolve(pathValue))
-}
-
-function looksLikeWindowsPath(pathValue: string): boolean {
-  return /^[A-Za-z]:[\\/]/.test(pathValue) || pathValue.startsWith('\\\\')
-}
-
-function getXdgDataHome(): string {
-  if (process.env.XDG_DATA_HOME?.trim()) {
-    return process.env.XDG_DATA_HOME.trim()
-  }
-  if (process.platform === 'win32') {
-    return process.env.LOCALAPPDATA || process.env.APPDATA || join(homedir(), 'AppData', 'Local')
-  }
-  return join(homedir(), '.local', 'share')
-}
-
-function getOpenCodeDataDirectory(): string {
-  return join(getXdgDataHome(), 'opencode')
-}
-
-function getOpenCodeDatabasePathFromEnv(): string | null {
+function getOpenCodeDatabaseOverride(dataDirectory: string): OpenCodeDatabaseOverride {
   const raw = process.env.OPENCODE_DB?.trim()
   if (!raw) {
-    return null
+    return { isConfigured: false, path: null }
   }
   if (raw === ':memory:') {
-    return null
+    return { isConfigured: true, path: null }
   }
-  return isAbsolute(raw) ? raw : join(getOpenCodeDataDirectory(), raw)
+  return {
+    isConfigured: true,
+    path: isAbsolute(raw) ? raw : join(dataDirectory, raw)
+  }
 }
 
 export async function listOpenCodeDatabases(): Promise<string[]> {
-  const envPath = getOpenCodeDatabasePathFromEnv()
-  if (envPath) {
-    return existsSync(envPath) ? [envPath] : []
+  const dataDirectory = resolveOpenCodeDataDirectory()
+  const databaseOverride = getOpenCodeDatabaseOverride(dataDirectory)
+  if (databaseOverride.isConfigured) {
+    if (!databaseOverride.path) {
+      return []
+    }
+    try {
+      return (await stat(databaseOverride.path)).isFile() ? [databaseOverride.path] : []
+    } catch {
+      return []
+    }
   }
 
   try {
-    const entries = await readdir(getOpenCodeDataDirectory(), { withFileTypes: true })
+    const entries = await readdir(dataDirectory, { withFileTypes: true })
     return entries
       .filter((entry) => entry.isFile() && /^opencode(?:-[A-Za-z0-9_.-]+)?\.db$/.test(entry.name))
-      .map((entry) => join(getOpenCodeDataDirectory(), entry.name))
+      .map((entry) => join(dataDirectory, entry.name))
       .sort()
   } catch {
     return []
   }
+}
+
+function compareOpenCodeClaimPriority(left: string, right: string): number {
+  // Why: the canonical opencode.db is the live database; it must claim
+  // duplicated sessions ahead of stale sibling copies. Remaining ties use
+  // path order so ownership is deterministic across rescans.
+  const leftRank = basename(left).toLowerCase() === 'opencode.db' ? 0 : 1
+  const rightRank = basename(right).toLowerCase() === 'opencode.db' ? 0 : 1
+  if (leftRank !== rightRank) {
+    return leftRank - rightRank
+  }
+  return left < right ? -1 : left > right ? 1 : 0
 }
 
 export async function getProcessedDatabaseInfo(
@@ -130,10 +121,6 @@ export async function getProcessedDatabaseInfo(
     mtimeMs: dbStat.mtimeMs,
     size: dbStat.size
   }
-}
-
-async function yieldToEventLoop(): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
 function getProjectJoin(db: Database.Database): string {
@@ -285,14 +272,6 @@ function parseJsonObject(value: unknown): Record<string, unknown> | null {
   } catch {
     return null
   }
-}
-
-function extractString(value: unknown): string | null {
-  if (typeof value !== 'string') {
-    return null
-  }
-  const trimmed = value.trim()
-  return trimmed.length > 0 ? trimmed : null
 }
 
 function extractModelLabel(data: Record<string, unknown>, sessionModel: unknown): string | null {
@@ -501,346 +480,51 @@ function addCost(left: number | null, right: number | null): number | null {
   return (left ?? 0) + (right ?? 0)
 }
 
-function createEmptySession(event: OpenCodeUsageAttributedEvent): OpenCodeUsageSession {
-  return {
-    sessionId: event.sessionId,
-    firstTimestamp: event.timestamp,
-    lastTimestamp: event.timestamp,
-    primaryModel: event.model,
-    hasMixedModels: false,
-    primaryProjectLabel: event.projectLabel,
-    hasMixedLocations: false,
-    primaryWorktreeId: event.worktreeId,
-    primaryRepoId: event.repoId,
-    eventCount: 0,
-    totalInputTokens: 0,
-    totalCachedInputTokens: 0,
-    totalOutputTokens: 0,
-    totalReasoningOutputTokens: 0,
-    totalTokens: 0,
-    estimatedCostUsd: null,
-    locationBreakdown: [],
-    modelBreakdown: [],
-    locationModelBreakdown: []
-  }
-}
+type OpenCodeUsageMetric = { estimatedCostUsd: number | null }
 
-function createEmptyDailyAggregate(
-  event: OpenCodeUsageAttributedEvent
-): OpenCodeUsageDailyAggregate {
-  return {
-    day: event.day,
-    model: event.model,
-    projectKey: event.projectKey,
-    projectLabel: event.projectLabel,
-    repoId: event.repoId,
-    worktreeId: event.worktreeId,
-    eventCount: 0,
-    inputTokens: 0,
-    cachedInputTokens: 0,
-    outputTokens: 0,
-    reasoningOutputTokens: 0,
-    totalTokens: 0,
-    estimatedCostUsd: null
-  }
-}
-
-function mergeLocationBreakdown(
-  target: OpenCodeUsageLocationBreakdown[],
-  event: OpenCodeUsageAttributedEvent
-): void {
-  const existing = target.find((entry) => entry.locationKey === event.projectKey) ?? null
-  if (existing) {
-    existing.eventCount++
-    existing.inputTokens += event.inputTokens
-    existing.cachedInputTokens += event.cachedInputTokens
-    existing.outputTokens += event.outputTokens
-    existing.reasoningOutputTokens += event.reasoningOutputTokens
-    existing.totalTokens += event.totalTokens
-    existing.estimatedCostUsd = addCost(existing.estimatedCostUsd, event.estimatedCostUsd)
-    return
-  }
-
-  target.push({
-    locationKey: event.projectKey,
-    projectLabel: event.projectLabel,
-    repoId: event.repoId,
-    worktreeId: event.worktreeId,
-    eventCount: 1,
-    inputTokens: event.inputTokens,
-    cachedInputTokens: event.cachedInputTokens,
-    outputTokens: event.outputTokens,
-    reasoningOutputTokens: event.reasoningOutputTokens,
-    totalTokens: event.totalTokens,
-    estimatedCostUsd: event.estimatedCostUsd
-  })
-}
-
-function mergeModelBreakdown(
-  target: OpenCodeUsageModelBreakdown[],
-  event: OpenCodeUsageAttributedEvent
-): void {
-  const key = event.model ?? 'unknown'
-  const existing = target.find((entry) => entry.modelKey === key) ?? null
-  if (existing) {
-    existing.eventCount++
-    existing.inputTokens += event.inputTokens
-    existing.cachedInputTokens += event.cachedInputTokens
-    existing.outputTokens += event.outputTokens
-    existing.reasoningOutputTokens += event.reasoningOutputTokens
-    existing.totalTokens += event.totalTokens
-    existing.estimatedCostUsd = addCost(existing.estimatedCostUsd, event.estimatedCostUsd)
-    return
-  }
-
-  target.push({
-    modelKey: key,
-    modelLabel: event.model ?? 'Unknown model',
-    eventCount: 1,
-    inputTokens: event.inputTokens,
-    cachedInputTokens: event.cachedInputTokens,
-    outputTokens: event.outputTokens,
-    reasoningOutputTokens: event.reasoningOutputTokens,
-    totalTokens: event.totalTokens,
-    estimatedCostUsd: event.estimatedCostUsd
-  })
-}
-
-function mergeLocationModelBreakdown(
-  target: OpenCodeUsageLocationModelBreakdown[],
-  event: OpenCodeUsageAttributedEvent
-): void {
-  const modelKey = event.model ?? 'unknown'
-  const existing =
-    target.find((entry) => entry.locationKey === event.projectKey && entry.modelKey === modelKey) ??
-    null
-  if (existing) {
-    existing.eventCount++
-    existing.inputTokens += event.inputTokens
-    existing.cachedInputTokens += event.cachedInputTokens
-    existing.outputTokens += event.outputTokens
-    existing.reasoningOutputTokens += event.reasoningOutputTokens
-    existing.totalTokens += event.totalTokens
-    existing.estimatedCostUsd = addCost(existing.estimatedCostUsd, event.estimatedCostUsd)
-    return
-  }
-
-  target.push({
-    locationKey: event.projectKey,
-    modelKey,
-    modelLabel: event.model ?? 'Unknown model',
-    repoId: event.repoId,
-    worktreeId: event.worktreeId,
-    eventCount: 1,
-    inputTokens: event.inputTokens,
-    cachedInputTokens: event.cachedInputTokens,
-    outputTokens: event.outputTokens,
-    reasoningOutputTokens: event.reasoningOutputTokens,
-    totalTokens: event.totalTokens,
-    estimatedCostUsd: event.estimatedCostUsd
-  })
-}
-
-function aggregateOpenCodeUsage(events: OpenCodeUsageAttributedEvent[]): {
-  sessions: OpenCodeUsageSession[]
-  dailyAggregates: OpenCodeUsageDailyAggregate[]
-} {
-  const sessionsById = new Map<string, OpenCodeUsageSession>()
-  const dailyByKey = new Map<string, OpenCodeUsageDailyAggregate>()
-
-  for (const event of events) {
-    const session = sessionsById.get(event.sessionId) ?? createEmptySession(event)
-    if (!sessionsById.has(event.sessionId)) {
-      sessionsById.set(event.sessionId, session)
+const openCodeUsageAggregation = createUsageEventAggregation<
+  OpenCodeUsageAttributedEvent,
+  OpenCodeUsageMetric
+>({
+  metric: {
+    empty: () => ({ estimatedCostUsd: null }),
+    fromEvent: (event) => ({ estimatedCostUsd: event.estimatedCostUsd }),
+    fold: (target, source) => {
+      target.estimatedCostUsd = addCost(target.estimatedCostUsd, source.estimatedCostUsd)
     }
-    if (event.timestamp < session.firstTimestamp) {
-      session.firstTimestamp = event.timestamp
-    }
-    if (event.timestamp >= session.lastTimestamp) {
-      session.lastTimestamp = event.timestamp
-    }
-    session.eventCount++
-    session.totalInputTokens += event.inputTokens
-    session.totalCachedInputTokens += event.cachedInputTokens
-    session.totalOutputTokens += event.outputTokens
-    session.totalReasoningOutputTokens += event.reasoningOutputTokens
-    session.totalTokens += event.totalTokens
-    session.estimatedCostUsd = addCost(session.estimatedCostUsd, event.estimatedCostUsd)
-    mergeLocationBreakdown(session.locationBreakdown, event)
-    mergeModelBreakdown(session.modelBreakdown, event)
-    mergeLocationModelBreakdown(session.locationModelBreakdown, event)
+  },
+  cloneSessionForMerge: (session) => structuredClone(session)
+})
 
-    const dailyKey = [event.day, event.model ?? 'unknown', event.projectKey].join('::')
-    const daily = dailyByKey.get(dailyKey) ?? createEmptyDailyAggregate(event)
-    if (!dailyByKey.has(dailyKey)) {
-      dailyByKey.set(dailyKey, daily)
-    }
-    daily.eventCount++
-    daily.inputTokens += event.inputTokens
-    daily.cachedInputTokens += event.cachedInputTokens
-    daily.outputTokens += event.outputTokens
-    daily.reasoningOutputTokens += event.reasoningOutputTokens
-    daily.totalTokens += event.totalTokens
-    daily.estimatedCostUsd = addCost(daily.estimatedCostUsd, event.estimatedCostUsd)
-  }
-
-  return {
-    sessions: finalizeSessions(sessionsById),
-    dailyAggregates: [...dailyByKey.values()].sort((left, right) =>
-      left.day === right.day
-        ? left.projectLabel.localeCompare(right.projectLabel)
-        : left.day.localeCompare(right.day)
-    )
-  }
-}
-
-function finalizeSessions(sessionsById: Map<string, OpenCodeUsageSession>): OpenCodeUsageSession[] {
-  for (const session of sessionsById.values()) {
-    session.locationBreakdown.sort((left, right) => right.totalTokens - left.totalTokens)
-    session.modelBreakdown.sort((left, right) => right.totalTokens - left.totalTokens)
-    const primaryLocation = session.locationBreakdown[0] ?? null
-    const primaryModel = session.modelBreakdown[0] ?? null
-    session.primaryProjectLabel =
-      session.locationBreakdown.length <= 1
-        ? (primaryLocation?.projectLabel ?? 'Unknown location')
-        : 'Multiple locations'
-    session.hasMixedLocations = session.locationBreakdown.length > 1
-    session.primaryWorktreeId = primaryLocation?.worktreeId ?? null
-    session.primaryRepoId = primaryLocation?.repoId ?? null
-    session.primaryModel =
-      session.modelBreakdown.length <= 1 ? (primaryModel?.modelLabel ?? null) : 'Mixed models'
-    session.hasMixedModels = session.modelBreakdown.length > 1
-  }
-
-  return [...sessionsById.values()].sort((left, right) =>
-    right.lastTimestamp.localeCompare(left.lastTimestamp)
-  )
-}
-
-function mergeSessions(
-  target: Map<string, OpenCodeUsageSession>,
-  sessions: OpenCodeUsageSession[]
-): void {
-  for (const session of sessions) {
-    const existing = target.get(session.sessionId)
-    if (!existing) {
-      target.set(session.sessionId, structuredClone(session))
-      continue
-    }
-
-    existing.firstTimestamp =
-      session.firstTimestamp < existing.firstTimestamp
-        ? session.firstTimestamp
-        : existing.firstTimestamp
-    existing.lastTimestamp =
-      session.lastTimestamp > existing.lastTimestamp
-        ? session.lastTimestamp
-        : existing.lastTimestamp
-    existing.eventCount += session.eventCount
-    existing.totalInputTokens += session.totalInputTokens
-    existing.totalCachedInputTokens += session.totalCachedInputTokens
-    existing.totalOutputTokens += session.totalOutputTokens
-    existing.totalReasoningOutputTokens += session.totalReasoningOutputTokens
-    existing.totalTokens += session.totalTokens
-    existing.estimatedCostUsd = addCost(existing.estimatedCostUsd, session.estimatedCostUsd)
-
-    for (const location of session.locationBreakdown) {
-      const existingLocation =
-        existing.locationBreakdown.find((entry) => entry.locationKey === location.locationKey) ??
-        null
-      if (existingLocation) {
-        existingLocation.eventCount += location.eventCount
-        existingLocation.inputTokens += location.inputTokens
-        existingLocation.cachedInputTokens += location.cachedInputTokens
-        existingLocation.outputTokens += location.outputTokens
-        existingLocation.reasoningOutputTokens += location.reasoningOutputTokens
-        existingLocation.totalTokens += location.totalTokens
-        existingLocation.estimatedCostUsd = addCost(
-          existingLocation.estimatedCostUsd,
-          location.estimatedCostUsd
-        )
-      } else {
-        existing.locationBreakdown.push({ ...location })
-      }
-    }
-
-    for (const model of session.modelBreakdown) {
-      const existingModel =
-        existing.modelBreakdown.find((entry) => entry.modelKey === model.modelKey) ?? null
-      if (existingModel) {
-        existingModel.eventCount += model.eventCount
-        existingModel.inputTokens += model.inputTokens
-        existingModel.cachedInputTokens += model.cachedInputTokens
-        existingModel.outputTokens += model.outputTokens
-        existingModel.reasoningOutputTokens += model.reasoningOutputTokens
-        existingModel.totalTokens += model.totalTokens
-        existingModel.estimatedCostUsd = addCost(
-          existingModel.estimatedCostUsd,
-          model.estimatedCostUsd
-        )
-      } else {
-        existing.modelBreakdown.push({ ...model })
-      }
-    }
-
-    for (const locationModel of session.locationModelBreakdown) {
-      const existingLocationModel =
-        existing.locationModelBreakdown.find(
-          (entry) =>
-            entry.locationKey === locationModel.locationKey &&
-            entry.modelKey === locationModel.modelKey
-        ) ?? null
-      if (existingLocationModel) {
-        existingLocationModel.eventCount += locationModel.eventCount
-        existingLocationModel.inputTokens += locationModel.inputTokens
-        existingLocationModel.cachedInputTokens += locationModel.cachedInputTokens
-        existingLocationModel.outputTokens += locationModel.outputTokens
-        existingLocationModel.reasoningOutputTokens += locationModel.reasoningOutputTokens
-        existingLocationModel.totalTokens += locationModel.totalTokens
-        existingLocationModel.estimatedCostUsd = addCost(
-          existingLocationModel.estimatedCostUsd,
-          locationModel.estimatedCostUsd
-        )
-      } else {
-        existing.locationModelBreakdown.push({ ...locationModel })
-      }
-    }
-  }
-}
-
-function mergeDailyAggregates(
-  target: Map<string, OpenCodeUsageDailyAggregate>,
-  dailyAggregates: OpenCodeUsageDailyAggregate[]
-): void {
-  for (const aggregate of dailyAggregates) {
-    const key = [aggregate.day, aggregate.model ?? 'unknown', aggregate.projectKey].join('::')
-    const existing = target.get(key)
-    if (!existing) {
-      target.set(key, { ...aggregate })
-      continue
-    }
-    existing.eventCount += aggregate.eventCount
-    existing.inputTokens += aggregate.inputTokens
-    existing.cachedInputTokens += aggregate.cachedInputTokens
-    existing.outputTokens += aggregate.outputTokens
-    existing.reasoningOutputTokens += aggregate.reasoningOutputTokens
-    existing.totalTokens += aggregate.totalTokens
-    existing.estimatedCostUsd = addCost(existing.estimatedCostUsd, aggregate.estimatedCostUsd)
-  }
-}
+const { finalizeSessions, mergeSessions, mergeDailyAggregates, sortDailyAggregates } =
+  openCodeUsageAggregation
 
 export async function parseOpenCodeUsageDatabase(
   dbPath: string,
-  worktrees: (OpenCodeUsageWorktreeRef & { canonicalPath: string })[]
+  worktrees: (OpenCodeUsageWorktreeRef & { canonicalPath: string })[],
+  options: { claimSession?: (sessionId: string) => boolean } = {}
 ): Promise<OpenCodeUsagePersistedDatabase> {
   const processedDatabase = await getProcessedDatabaseInfo(dbPath)
   const db = new Database(dbPath, { readonly: true, fileMustExist: true })
   try {
     db.pragma('query_only = ON')
     const events: OpenCodeUsageAttributedEvent[] = []
+    const claimedBySessionId = new Map<string, boolean>()
+    let hasDeferredClaims = false
     for (const row of selectUsageRows(db)) {
       const parsed = parseOpenCodeUsageRow(row)
       if (!parsed) {
+        continue
+      }
+      // Why: a stale sibling copy of opencode.db carries the same sessions, so
+      // each session must be counted from exactly one database (#8006).
+      let owned = claimedBySessionId.get(parsed.sessionId)
+      if (owned === undefined) {
+        owned = options.claimSession ? options.claimSession(parsed.sessionId) : true
+        claimedBySessionId.set(parsed.sessionId, owned)
+      }
+      if (!owned) {
+        hasDeferredClaims = true
         continue
       }
       const attributed = await attributeOpenCodeUsageEvent(parsed, worktrees)
@@ -850,7 +534,11 @@ export async function parseOpenCodeUsageDatabase(
     }
     return {
       ...processedDatabase,
-      ...aggregateOpenCodeUsage(events)
+      ...openCodeUsageAggregation.aggregate(events),
+      ownedSessionIds: [...claimedBySessionId.entries()]
+        .filter(([, owned]) => owned)
+        .map(([sessionId]) => sessionId),
+      hasDeferredClaims
     }
   } finally {
     db.close()
@@ -869,54 +557,115 @@ export async function scanOpenCodeUsageDatabases(
   const previousByPath = new Map(
     previousProcessedDatabases.map((database) => [database.path, database])
   )
-  const processedDatabases: OpenCodeUsagePersistedDatabase[] = []
   const worktreesWithCanonicalPaths = await buildWorktreesWithCanonicalPaths(worktrees)
-  const sessionsById = new Map<string, OpenCodeUsageSession>()
-  const dailyByKey = new Map<string, OpenCodeUsageDailyAggregate>()
 
-  for (const [index, dbPath] of dbPaths.entries()) {
+  const currentPaths = new Set(dbPaths)
+  // Why: when a database that owned sessions is deleted, remaining siblings
+  // still contain those sessions but their caches record them as unowned.
+  // Only databases that previously deferred claims can reclaim.
+  const lostOwnerPath = previousProcessedDatabases.some(
+    (database) =>
+      !currentPaths.has(database.path) &&
+      Array.isArray(database.ownedSessionIds) &&
+      database.ownedSessionIds.length > 0
+  )
+
+  const reusedByPath = new Map<string, OpenCodeUsagePersistedDatabase>()
+  const pathsToParse: string[] = []
+  for (const dbPath of dbPaths) {
     const databaseInfo = await getProcessedDatabaseInfo(dbPath)
     const previous = previousByPath.get(dbPath)
+    // When an owner disappears, only deferred-claim databases need reparse.
+    const mustReclaimDeferred = lostOwnerPath && previous?.hasDeferredClaims !== false
     const canReuse =
-      previous && previous.mtimeMs === databaseInfo.mtimeMs && previous.size === databaseInfo.size
-    const processed = canReuse
-      ? previous
-      : await parseOpenCodeUsageDatabase(dbPath, worktreesWithCanonicalPaths)
+      !mustReclaimDeferred &&
+      previous &&
+      previous.mtimeMs === databaseInfo.mtimeMs &&
+      previous.size === databaseInfo.size &&
+      Array.isArray(previous.ownedSessionIds) &&
+      typeof previous.hasDeferredClaims === 'boolean'
+    if (canReuse) {
+      reusedByPath.set(dbPath, previous)
+    } else {
+      pathsToParse.push(dbPath)
+    }
+  }
 
-    processedDatabases.push(processed)
-    mergeSessions(sessionsById, processed.sessions)
-    mergeDailyAggregates(dailyByKey, processed.dailyAggregates)
+  // Why: a sticky backup claim from a scan where opencode.db was missing would
+  // otherwise freeze a still-growing session at the backup snapshot when the
+  // live db reappears. Reparse a lower-priority sibling only when it still owns
+  // sessions a higher-priority path could reclaim; a sibling that owns nothing
+  // (the common case once the live db has claimed every shared session) has no
+  // claim to give back, so reparsing it every time the live db changes is pure
+  // work.
+  const demotedReusePaths: string[] = []
+  for (const [dbPath, reused] of reusedByPath) {
+    if ((reused.ownedSessionIds?.length ?? 0) === 0) {
+      continue
+    }
+    const higherPriorityParsing = pathsToParse.some(
+      (candidate) => compareOpenCodeClaimPriority(candidate, dbPath) < 0
+    )
+    if (higherPriorityParsing) {
+      demotedReusePaths.push(dbPath)
+    }
+  }
+  for (const dbPath of demotedReusePaths) {
+    reusedByPath.delete(dbPath)
+    pathsToParse.push(dbPath)
+  }
+
+  // Why: `opencode-*.db` siblings are typically stale copies of `opencode.db`
+  // (backups), so mergeSessions would double every duplicated session (#8006).
+  // Each session is counted from exactly one database. The canonical live db
+  // claims first so a stale backup cannot freeze a still-growing session at
+  // its snapshot totals; cached databases keep the claims they persisted.
+  const sessionOwnerById = new Map<string, string>()
+  for (const dbPath of [...reusedByPath.keys()].sort(compareOpenCodeClaimPriority)) {
+    const previous = reusedByPath.get(dbPath)
+    for (const sessionId of previous?.ownedSessionIds ?? []) {
+      if (!sessionOwnerById.has(sessionId)) {
+        sessionOwnerById.set(sessionId, dbPath)
+      }
+    }
+  }
+
+  const parsedByPath = new Map<string, OpenCodeUsagePersistedDatabase>()
+  const orderedPathsToParse = [...pathsToParse].sort(compareOpenCodeClaimPriority)
+  for (const [index, dbPath] of orderedPathsToParse.entries()) {
+    const processed = await parseOpenCodeUsageDatabase(dbPath, worktreesWithCanonicalPaths, {
+      claimSession: (sessionId) => {
+        const owner = sessionOwnerById.get(sessionId)
+        if (owner !== undefined && owner !== dbPath) {
+          return false
+        }
+        sessionOwnerById.set(sessionId, dbPath)
+        return true
+      }
+    })
+    parsedByPath.set(dbPath, processed)
 
     if ((index + 1) % YIELD_EVERY_DATABASES === 0) {
       await yieldToEventLoop()
     }
   }
 
+  const processedDatabases: OpenCodeUsagePersistedDatabase[] = []
+  const sessionsById = new Map<string, OpenCodeUsageSession>()
+  const dailyByKey = new Map<string, OpenCodeUsageDailyAggregate>()
+  for (const dbPath of dbPaths) {
+    const processed = reusedByPath.get(dbPath) ?? parsedByPath.get(dbPath)
+    if (!processed) {
+      continue
+    }
+    processedDatabases.push(processed)
+    mergeSessions(sessionsById, processed.sessions)
+    mergeDailyAggregates(dailyByKey, processed.dailyAggregates)
+  }
+
   return {
     processedDatabases,
     sessions: finalizeSessions(sessionsById),
-    dailyAggregates: [...dailyByKey.values()].sort((left, right) =>
-      left.day === right.day
-        ? left.projectLabel.localeCompare(right.projectLabel)
-        : left.day.localeCompare(right.day)
-    )
+    dailyAggregates: sortDailyAggregates(dailyByKey)
   }
-}
-
-export function createWorktreeRefs(
-  repos: Repo[],
-  worktreesByRepo: Map<string, { path: string; worktreeId: string; displayName: string }[]>
-): OpenCodeUsageWorktreeRef[] {
-  const refs: OpenCodeUsageWorktreeRef[] = []
-  for (const repo of repos) {
-    for (const worktree of worktreesByRepo.get(repo.id) ?? []) {
-      refs.push({
-        repoId: repo.id,
-        worktreeId: worktree.worktreeId,
-        path: worktree.path,
-        displayName: worktree.displayName
-      })
-    }
-  }
-  return refs
 }

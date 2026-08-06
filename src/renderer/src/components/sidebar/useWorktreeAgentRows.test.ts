@@ -267,6 +267,27 @@ describe('buildWorktreeAgentRows', () => {
     expect(done?.state).toBe('done')
   })
 
+  it('decays a restored-unconfirmed working entry to idle even while recent', () => {
+    // Why: a hydrated nonterminal row may describe a turn that ended while no
+    // receiver was up; it must never render as confirmed working, however new.
+    const updatedAt = 2_000
+    const now = updatedAt + 1
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1'), makeTab('tab-2')],
+      entries: [
+        makeEntry(PANE_KEY_1, updatedAt, { state: 'working', restoredUnconfirmed: true }),
+        makeEntry(PANE_KEY_2, updatedAt, { state: 'working' })
+      ],
+      retained: [],
+      now
+    })
+
+    const unconfirmed = rows.find((r) => r.paneKey === PANE_KEY_1)
+    const confirmed = rows.find((r) => r.paneKey === PANE_KEY_2)
+    expect(unconfirmed?.state).toBe('idle')
+    expect(confirmed?.state).toBe('working')
+  })
+
   it('renders live worktree-attributed entries even when their tab is absent', () => {
     const rows = buildWorktreeAgentRows({
       tabs: [],
@@ -700,5 +721,95 @@ describe('applyAgentRowLineage', () => {
     ])
     expect(ordered[1].lineage).toMatchObject({ depth: 1, childCount: 1 })
     expect(ordered[2].lineage).toMatchObject({ depth: 1, childCount: 0 })
+  })
+
+  it('derives indented child rows for a live entry with in-process subagents', () => {
+    const entry = makeEntry(PANE_KEY_1, 1000, {
+      state: 'working',
+      prompt: 'review the PR',
+      subagents: [
+        {
+          id: 'a1',
+          state: 'working',
+          startedAt: 1500,
+          agentType: 'general-purpose',
+          model: 'gpt-5.4-mini',
+          description: 'Review loop'
+        },
+        { id: 'r1', state: 'idle', startedAt: 1600, agentType: 'code-reviewer' }
+      ]
+    })
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [entry],
+      retained: [],
+      now: 2000
+    })
+
+    const children = rows.filter((row) => row.rowSource === 'subagent')
+    expect(children).toHaveLength(2)
+    expect(children[0]).toMatchObject({
+      state: 'working',
+      agentType: 'general-purpose',
+      entry: { model: 'gpt-5.4-mini' },
+      activationPaneKey: PANE_KEY_1,
+      startedAt: 1500
+    })
+    expect(children[0].entry.prompt).toBe('Review loop')
+    expect(children[1]).toMatchObject({ state: 'idle', agentType: 'code-reviewer' })
+    expect(children[1].entry.prompt).toBe('code-reviewer')
+
+    const ordered = applyAgentRowLineage(rows)
+    expect(ordered[0].paneKey).toBe(PANE_KEY_1)
+    expect(ordered[0].lineage).toMatchObject({ depth: 0, childCount: 2 })
+    expect(ordered[1].lineage).toMatchObject({ depth: 1, isFirstSibling: true })
+    expect(ordered[2].lineage).toMatchObject({ depth: 1, isLastSibling: true })
+  })
+
+  it('decays working subagent child rows to idle when the parent status is stale', () => {
+    const entry = makeEntry(PANE_KEY_1, 1000, {
+      state: 'working',
+      subagents: [{ id: 'a1', state: 'working', startedAt: 1000 }]
+    })
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [entry],
+      retained: [],
+      now: 1000 + AGENT_STATUS_STALE_AFTER_MS + 1
+    })
+
+    const child = rows.find((row) => row.rowSource === 'subagent')
+    expect(child?.state).toBe('idle')
+  })
+
+  it('surfaces a live subagent waiting state', () => {
+    const entry = makeEntry(PANE_KEY_1, 1000, {
+      state: 'waiting',
+      subagents: [{ id: 'child-1', state: 'waiting', startedAt: 1000, agentType: 'reviewer' }]
+    })
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [entry],
+      retained: [],
+      now: 2000
+    })
+
+    expect(rows.find((row) => row.rowSource === 'subagent')?.state).toBe('waiting')
+  })
+
+  it('does not derive subagent child rows for retained snapshots', () => {
+    const retained = makeRetained(PANE_KEY_1, 'wt-1', 1000, {
+      entry: makeEntry(PANE_KEY_1, 1000, {
+        subagents: [{ id: 'a1', state: 'idle', startedAt: 1000 }]
+      })
+    })
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [],
+      retained: [retained],
+      now: 2000
+    })
+
+    expect(rows.some((row) => row.rowSource === 'subagent')).toBe(false)
   })
 })

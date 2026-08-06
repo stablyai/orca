@@ -1,25 +1,25 @@
-import { lstat, readdir, realpath } from 'node:fs/promises'
-import { basename, join, posix, resolve } from 'node:path'
-import type { SFTPWrapper } from 'ssh2'
+import { lstat } from 'node:fs/promises'
+import { basename, posix, resolve } from 'node:path'
 import { authorizeExternalPath, isENOENT } from './filesystem-auth'
 import { getSshConnectionManager } from './ssh'
-import {
-  uploadFile,
-  uploadDirectory,
-  mkdirSftp,
-  sftpPathExists,
-  removeDirectorySftp
-} from '../ssh/sftp-upload'
+import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+import type { FileUploadSession, IFilesystemProvider } from '../providers/types'
 import type { ImportItemResult } from './filesystem-mutations'
+import { assertSafeRemotePathSegment, type RemotePathFlavor } from '../ssh/ssh-remote-platform'
+import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
+import {
+  captureLocalUploadRoot,
+  preScanSshImportDirectory,
+  uploadSshImportDirectory
+} from './filesystem-import-ssh-directory'
 
-// Why: the SSH import path bypasses SshFilesystemProvider and uses
-// SshConnection.sftp() directly because the relay's JSON-RPC fs.writeFile
-// is text-only and cannot carry binary data without base64 overhead.
+// Why: the SSH import path uses SshFilesystemProvider instead of direct SFTP so
+// system-SSH transports (ProxyCommand/ProxyJump/FIDO2) get the same workflows.
 export async function importExternalPathsSsh(
   sourcePaths: string[],
   destDir: string,
   connectionId: string,
-  options?: { ensureDir?: boolean }
+  options?: { ensureDir?: boolean; assertCurrent?: () => void }
 ): Promise<{ results: ImportItemResult[] }> {
   if (sourcePaths.length === 0) {
     return { results: [] }
@@ -39,25 +39,37 @@ export async function importExternalPathsSsh(
     throw new Error('SSH connection is not active — please reconnect and try again')
   }
 
-  const sftp = await conn.sftp()
+  const provider = requireSshFilesystemProvider(connectionId)
 
+  if (options?.ensureDir) {
+    // Why: terminal-drop staging needs `${worktree}/.orca/drops` to exist
+    // before the first upload. .orca/ is reserved as Orca-owned remote state;
+    // see docs/terminal-drop-ssh.md.
+    await ensureDropStagingDir(provider, destDir, options.assertCurrent)
+  }
+
+  const results: ImportItemResult[] = []
+  const reservedNames = new Set<string>()
+  if (!provider.openFileUploadSession) {
+    throw new Error('Remote file upload is unavailable. Reconnect the SSH target and retry.')
+  }
+  options?.assertCurrent?.()
+  const uploadSession = await provider.openFileUploadSession()
+  // Why: filename legality follows the remote filesystem, not the client's OS.
+  const remotePathFlavor: RemotePathFlavor = isWindowsAbsolutePathLike(destDir)
+    ? 'windows'
+    : 'posix'
   try {
-    if (options?.ensureDir) {
-      // Why: terminal-drop staging needs `${worktree}/.orca/drops` to exist
-      // before the first upload. Upload primitives do not create parent dirs,
-      // and mkdirSftp is not recursive — so walk the parent chain here on the
-      // same SFTP session to avoid doubling the handshake cost. Writing the
-      // .orca/.gitignore marker only when absent prevents clobbering user-
-      // authored patterns. .orca/ is reserved as Orca-owned remote state;
-      // see docs/terminal-drop-ssh.md.
-      await ensureDropStagingDir(sftp, destDir)
-    }
-
-    const results: ImportItemResult[] = []
-    const reservedNames = new Set<string>()
-
     for (const sourcePath of sourcePaths) {
-      const result = await importOneSourceSsh(sftp, sourcePath, destDir, reservedNames)
+      const result = await importOneSourceSsh(
+        provider,
+        uploadSession,
+        sourcePath,
+        destDir,
+        reservedNames,
+        remotePathFlavor,
+        options?.assertCurrent
+      )
       results.push(result)
       if (result.status === 'imported') {
         // Why: destPath is a remote POSIX path (e.g. /home/user/foo/bar.txt).
@@ -66,22 +78,36 @@ export async function importExternalPathsSsh(
         reservedNames.add(posix.basename(result.destPath))
       }
     }
-
-    return { results }
   } finally {
-    sftp.end()
+    uploadSession.close()
   }
+
+  return { results }
 }
 
 async function importOneSourceSsh(
-  sftp: SFTPWrapper,
+  provider: IFilesystemProvider,
+  uploadSession: FileUploadSession,
   sourcePath: string,
   destDir: string,
-  reservedNames: Set<string>
+  reservedNames: Set<string>,
+  remotePathFlavor: RemotePathFlavor,
+  assertCurrent?: () => void
 ): Promise<ImportItemResult> {
   const resolvedSource = resolve(sourcePath)
 
   authorizeExternalPath(resolvedSource)
+
+  const originalName = basename(resolvedSource)
+  try {
+    assertSafeRemotePathSegment(originalName, remotePathFlavor)
+  } catch (error) {
+    return {
+      sourcePath,
+      status: 'failed',
+      reason: error instanceof Error ? error.message : String(error)
+    }
+  }
 
   let sourceStat: Awaited<ReturnType<typeof lstat>>
   try {
@@ -115,29 +141,41 @@ async function importOneSourceSsh(
 
   const isDir = sourceStat.isDirectory()
 
-  if (isDir) {
-    const hasSymlink = await preScanForSymlinks(resolvedSource)
-    if (hasSymlink) {
-      return { sourcePath, status: 'skipped', reason: 'symlink' }
-    }
-  }
-
-  const originalName = basename(resolvedSource)
-
   let createdDestDir: string | null = null
   try {
-    const finalName = await deconflictNameSftp(sftp, destDir, originalName, reservedNames)
+    const rootRealPath = isDir ? await captureLocalUploadRoot(resolvedSource, sourceStat) : null
+    if (isDir && (await preScanSshImportDirectory(resolvedSource, remotePathFlavor))) {
+      return { sourcePath, status: 'skipped', reason: 'symlink' }
+    }
+
+    // Why: local inspection can outlive a HUB SSH session; revalidate before the first remote write.
+    assertCurrent?.()
+    const finalName = await deconflictName(
+      provider,
+      destDir,
+      originalName,
+      reservedNames,
+      assertCurrent
+    )
     const destPath = `${destDir}/${finalName}`
     const renamed = finalName !== originalName
 
     if (isDir) {
-      await mkdirSftp(sftp, destPath, { allowExisting: false })
+      assertCurrent?.()
+      await provider.createDirNoClobber(destPath)
       createdDestDir = destPath
-      await uploadDirectory(sftp, resolvedSource, destPath, await realpath(resolvedSource), {
-        exclusive: true
-      })
+      await uploadSshImportDirectory(
+        provider,
+        uploadSession,
+        resolvedSource,
+        destPath,
+        rootRealPath!,
+        remotePathFlavor,
+        assertCurrent
+      )
     } else {
-      await uploadFile(sftp, resolvedSource, destPath, { exclusive: true })
+      assertCurrent?.()
+      await uploadSession.uploadFile(resolvedSource, destPath, { exclusive: true })
     }
 
     return {
@@ -151,7 +189,12 @@ async function importOneSourceSsh(
     if (createdDestDir) {
       // Why: local directory imports roll back partial output; SSH imports
       // should not leave the no-clobber root after a nested upload failure.
-      await removeDirectorySftp(sftp, createdDestDir).catch(() => {})
+      try {
+        assertCurrent?.()
+        await provider.deletePath(createdDestDir, true)
+      } catch {
+        // Best effort; a replacement session must never inherit cleanup from the retired owner.
+      }
     }
     return {
       sourcePath,
@@ -161,14 +204,16 @@ async function importOneSourceSsh(
   }
 }
 
-async function deconflictNameSftp(
-  sftp: SFTPWrapper,
+async function deconflictName(
+  provider: IFilesystemProvider,
   destDir: string,
   originalName: string,
-  reservedNames: Set<string>
+  reservedNames: Set<string>,
+  assertCurrent?: () => void
 ): Promise<string> {
+  assertCurrent?.()
   if (
-    !(await sftpPathExists(sftp, `${destDir}/${originalName}`)) &&
+    !(await remotePathExists(provider, `${destDir}/${originalName}`)) &&
     !reservedNames.has(originalName)
   ) {
     return originalName
@@ -180,14 +225,22 @@ async function deconflictNameSftp(
   const ext = hasMeaningfulExt ? originalName.slice(dotIndex) : ''
 
   let candidate = `${stem} copy${ext}`
-  if (!(await sftpPathExists(sftp, `${destDir}/${candidate}`)) && !reservedNames.has(candidate)) {
+  assertCurrent?.()
+  if (
+    !(await remotePathExists(provider, `${destDir}/${candidate}`)) &&
+    !reservedNames.has(candidate)
+  ) {
     return candidate
   }
 
   let counter = 2
   while (counter < 10000) {
     candidate = `${stem} copy ${counter}${ext}`
-    if (!(await sftpPathExists(sftp, `${destDir}/${candidate}`)) && !reservedNames.has(candidate)) {
+    assertCurrent?.()
+    if (
+      !(await remotePathExists(provider, `${destDir}/${candidate}`)) &&
+      !reservedNames.has(candidate)
+    ) {
       return candidate
     }
     counter += 1
@@ -198,58 +251,48 @@ async function deconflictNameSftp(
   )
 }
 
-async function ensureDropStagingDir(sftp: SFTPWrapper, destDir: string): Promise<void> {
-  // destDir is a posix remote path, expected to be `${worktreePath}/.orca/drops`.
+async function ensureDropStagingDir(
+  provider: IFilesystemProvider,
+  destDir: string,
+  assertCurrent?: () => void
+): Promise<void> {
   const parent = posix.dirname(destDir)
-  await mkdirSftp(sftp, parent)
+  assertCurrent?.()
+  await provider.createDir(parent)
   const gitignorePath = `${parent}/.gitignore`
-  if (!(await sftpPathExists(sftp, gitignorePath))) {
-    // Why: negate the marker so .orca/.gitignore itself is trackable if we
-    // ever want to, without dirtying `git status` today. Only write when
-    // absent to avoid clobbering user-authored patterns.
-    await writeSftpFile(sftp, gitignorePath, '*\n!.gitignore\n')
+  assertCurrent?.()
+  if (!(await remotePathExists(provider, gitignorePath))) {
+    assertCurrent?.()
+    await provider.writeFile(gitignorePath, '*\n!.gitignore\n')
   }
-  await mkdirSftp(sftp, destDir)
+  assertCurrent?.()
+  await provider.createDir(destDir)
 }
 
-function writeSftpFile(sftp: SFTPWrapper, remotePath: string, contents: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    let settled = false
-    const writeStream = sftp.createWriteStream(remotePath)
-    const cleanup = (): void => {
-      writeStream.off('close', onClose)
-      writeStream.off('error', onError)
+async function remotePathExists(
+  provider: IFilesystemProvider,
+  remotePath: string
+): Promise<boolean> {
+  try {
+    await provider.stat(remotePath)
+    return true
+  } catch (error) {
+    if (isRemoteMissingError(error)) {
+      return false
     }
-    const settle = (fn: typeof resolve | typeof reject, val?: unknown): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      cleanup()
-      writeStream.destroy()
-      fn(val as never)
-    }
-    const onClose = (): void => settle(resolve)
-    const onError = (err: Error): void => settle(reject, err)
-
-    writeStream.on('close', onClose)
-    writeStream.on('error', onError)
-    writeStream.end(contents)
-  })
+    throw error
+  }
 }
 
-async function preScanForSymlinks(dirPath: string): Promise<boolean> {
-  const entries = await readdir(dirPath, { withFileTypes: true })
-  for (const entry of entries) {
-    if (entry.isSymbolicLink()) {
-      return true
-    }
-    if (entry.isDirectory()) {
-      const childPath = join(dirPath, entry.name)
-      if (await preScanForSymlinks(childPath)) {
-        return true
-      }
-    }
+function isRemoteMissingError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false
   }
-  return false
+  const code = (error as NodeJS.ErrnoException).code
+  return (
+    code === 'ENOENT' ||
+    /\b(ENOENT|ENOTDIR)\b|no such file or directory|cannot find (?:the )?(?:file|path)|(?:file|path) not found/i.test(
+      error.message
+    )
+  )
 }

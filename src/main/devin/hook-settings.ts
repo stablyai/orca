@@ -6,6 +6,7 @@ import {
   getSharedManagedScriptPath,
   removeManagedCommands,
   wrapPosixHookCommand,
+  wrapWindowsCmdHookCommand,
   type HookDefinition,
   type HooksConfig
 } from '../agent-hooks/installer-utils'
@@ -51,9 +52,10 @@ export function getDevinRemoteConfigPath(remoteHome: string): string {
 
 export function getDevinManagedCommand(scriptPath: string): string {
   if (process.platform === 'win32') {
-    // Why: Devin runs hooks through the platform shell on Windows; invoking the
-    // .cmd via cmd.exe preserves spaces in the shared ~/.orca script path.
-    return `cmd /d /s /c ""${scriptPath.replaceAll('"', '""')}""`
+    // Why: Devin spawns this command as argv[0], so the safe path stays a bare
+    // directly-spawnable .cmd; the encoded fallback protects spaced paths and
+    // drains stdin for a stale missing-script entry.
+    return wrapWindowsCmdHookCommand(scriptPath)
   }
   return wrapPosixHookCommand(scriptPath)
 }

@@ -24,6 +24,15 @@ export function mintPtySessionId(worktreeId?: string): string {
     : randomUUID()
 }
 
+export function ptySessionIdForAgentCreateOperation(
+  worktreeId: string | undefined,
+  operationId: string
+): string {
+  // Why: keep the legacy eight-character suffix budget so max-length worktree IDs still launch.
+  const suffix = operationId.slice(0, 8)
+  return worktreeId ? `${worktreeId}${PTY_SESSION_ID_SEPARATOR}${suffix}` : suffix
+}
+
 /**
  * Why: `effectiveSessionId` is used as a filesystem key for provider hook
  * state and legacy Pi overlay cleanup under app.getPath('userData'). The

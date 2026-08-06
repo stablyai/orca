@@ -28,6 +28,7 @@ const RUNTIME_BULK_DIR = join(RUNTIME_SESSIONS_ROOT, 'bulk')
 
 vi.mock('../codex/codex-home-paths', () => ({
   getOrcaManagedCodexHomePath: () => join(FAKE_ROOT, 'runtime'),
+  getOrcaUserDataPath: () => FAKE_ROOT,
   getSystemCodexHomePath: () => join(FAKE_ROOT, 'system')
 }))
 

@@ -18,6 +18,7 @@ import type {
   WorkspaceSessionState
 } from './types'
 import { isValidTerminalTabId } from './terminal-tab-id'
+import { parseExecutionHostId, type ExecutionHostId } from './execution-host'
 import { isTuiAgent } from './tui-agent-config'
 import { normalizeBrowserHistoryEntries } from './workspace-session-browser-history'
 import { isWorkspaceKey } from './workspace-scope'
@@ -78,6 +79,7 @@ const terminalTabSchema = z.object({
   sortOrder: z.number(),
   createdAt: z.number(),
   generation: z.number().optional(),
+  startupCwd: z.string().min(1).optional(),
   // Why: persist the launched agent so a restored idle agent tab keeps its
   // provider icon before any hook fires. `.catch(undefined)` keeps a stale or
   // unknown agent id from failing the whole-session parse (which would reset
@@ -160,7 +162,11 @@ const persistedOpenFileSchema = z.object({
   language: z.string(),
   isPreview: z.boolean().optional(),
   runtimeEnvironmentId: z.string().nullable().optional(),
-  dirtyDraftContent: z.string().optional()
+  externalSshTargetId: z.string().trim().min(1).optional(),
+  dirtyDraftContent: z.string().optional(),
+  lastKnownDiskSignature: z.string().optional(),
+  readOnly: z.boolean().optional(),
+  liveTail: z.boolean().optional()
 })
 
 // ─── Browser ────────────────────────────────────────────────────────
@@ -181,13 +187,20 @@ const browserViewportPresetIdSchema = z.enum([
   'desktop'
 ])
 
-// Why: cast to WorkspaceSessionState's embedded BrowserWorkspace so future
-// additive fields in the type flow through without requiring a schema edit.
+// Why: the z.ZodType<BrowserWorkspace> cast only aligns the static type — it
+// does NOT let new fields survive parsing. z.object strips unknown keys, so
+// every additive field must be listed below (optional+nullable) or it is
+// dropped on restore.
 const browserWorkspaceSchema: z.ZodType<BrowserWorkspace> = z.object({
   id: z.string(),
   worktreeId: z.string(),
   label: z.string().optional(),
   sessionProfileId: z.string().nullable().optional(),
+  // Why: optional+nullable so pre-field sessions still validate; without this
+  // zod strips the persisted partition on restore, and an isolated tab whose
+  // profile mirror is stale at startup would silently fall back to the shared
+  // default partition — reopening the storage leak (#6923) across restarts.
+  sessionPartition: z.string().nullable().optional(),
   activePageId: z.string().nullable().optional(),
   pageIds: z.array(z.string()).optional(),
   url: z.string(),
@@ -238,6 +251,12 @@ const browserHistoryEntriesSchema = z
 export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.object({
   activeRepoId: z.string().nullable(),
   activeWorkspaceKey: workspaceKeySchema.nullable().optional(),
+  activeWorkspaceExecutionHostId: z
+    .custom<ExecutionHostId>(
+      (value) => typeof value === 'string' && Boolean(parseExecutionHostId(value))
+    )
+    .nullable()
+    .optional(),
   activeWorktreeId: z.string().nullable(),
   activeTabId: z.string().nullable(),
   tabsByWorktree: z.record(z.string(), z.array(terminalTabSchema)),
@@ -284,7 +303,22 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
     )
     .optional(),
   defaultTerminalTabsAppliedByWorktreeId: z.record(z.string(), z.literal(true)).optional(),
-  sleepingAgentSessionsByPaneKey: sleepingAgentSessionsByPaneKeySchema
+  sleepingAgentSessionsByPaneKey: sleepingAgentSessionsByPaneKeySchema,
+  terminalPtyIncarnationsByPaneKey: z.record(z.string(), z.string().min(1).max(128)).optional(),
+  terminalTopologyRevisionByRepoId: z.record(z.string(), z.number().int().nonnegative()).optional(),
+  terminalSurfaceTombstonesByPaneKey: z
+    .record(
+      z.string(),
+      z.object({
+        worktreeId: z.string(),
+        parentTabId: terminalTabIdSchema,
+        leafId: z.string(),
+        ptyId: z.string(),
+        incarnationId: z.string().min(1).max(128),
+        retiredAt: z.number().finite().nonnegative()
+      })
+    )
+    .optional()
 })
 
 export type ParsedWorkspaceSession =

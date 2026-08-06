@@ -19,6 +19,8 @@ type TeamLabelNode = {
 type TeamMemberNode = {
   id: string
   displayName: string
+  name?: string | null
+  email?: string | null
   avatarUrl?: string | null
 }
 
@@ -89,6 +91,8 @@ export async function fetchAllTeamMembers(team: {
   return members.nodes.map((m) => ({
     id: m.id,
     displayName: m.displayName,
+    name: m.name ?? undefined,
+    email: m.email ?? undefined,
     avatarUrl: m.avatarUrl ?? undefined
   }))
 }

@@ -58,4 +58,25 @@ describe('resolveAgentStatusTerminalTitle', () => {
       resolveAgentStatusTerminalTitle({ agentType: 'devin', state: 'waiting' }, '\u280b Devin')
     ).toBe('Devin - action required')
   })
+
+  it('preserves native OpenCode titles through hook status transitions', () => {
+    expect(
+      resolveAgentStatusTerminalTitle(
+        { agentType: 'opencode', state: 'done' },
+        'OC | Native Stable Session'
+      )
+    ).toBe('OC | Native Stable Session')
+    expect(
+      resolveAgentStatusTerminalTitle(
+        { agentType: 'opencode', state: 'waiting' },
+        'OC | Native Stable Session'
+      )
+    ).toBe('OC | Native Stable Session')
+  })
+
+  it('does not invent an OpenCode title when no native title exists', () => {
+    expect(
+      resolveAgentStatusTerminalTitle({ agentType: 'opencode', state: 'done' }, undefined)
+    ).toBeUndefined()
+  })
 })

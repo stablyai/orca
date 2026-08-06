@@ -4,6 +4,14 @@ import type { ClassifiedError } from '../../shared/types'
 // patterns to typed errors so callers can show user-friendly messages.
 export function classifyGhError(stderr: string): ClassifiedError {
   const s = stderr.toLowerCase()
+  // Why: primary rate-limit errors also carry "HTTP 403" — check rate limit
+  // first so they don't misclassify as a token-scope problem.
+  if (s.includes('rate limit')) {
+    return {
+      type: 'rate_limited',
+      message: 'GitHub rate limit hit. Try again in a few minutes.'
+    }
+  }
   if (s.includes('http 403') || s.includes('resource not accessible')) {
     return {
       type: 'permission_denied',
@@ -18,12 +26,6 @@ export function classifyGhError(stderr: string): ClassifiedError {
   }
   if (s.includes('http 422') || s.includes('validation failed')) {
     return { type: 'validation_error', message: `Invalid update — ${stderr.trim()}` }
-  }
-  if (s.includes('rate limit')) {
-    return {
-      type: 'rate_limited',
-      message: 'GitHub rate limit hit. Try again in a few minutes.'
-    }
   }
   if (
     s.includes('timeout') ||
@@ -52,4 +54,12 @@ export function classifyListIssuesError(stderr: string): ClassifiedError {
     unknown: `Failed to load issues: ${trimmed}`
   }
   return { type: c.type, message: readMessages[c.type] }
+}
+
+// Why: PR-side list failures need the same read-op classification — pagination
+// decisions key on the type, and swallowing them made failures look like
+// end-of-data (#11485).
+export function classifyListPrsError(stderr: string): ClassifiedError {
+  const c = classifyGhError(stderr)
+  return { type: c.type, message: `Failed to load pull requests: ${stderr.trim()}` }
 }

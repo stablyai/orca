@@ -20,7 +20,10 @@ describe('GitHub project repo matching', () => {
   it('matches project rows by resolved repo slug before path/display heuristics', () => {
     expect(
       findRepoForGitHubProjectRepository('stablyai/orca', repos, {
-        'repo-1': { path: '/Users/me/orca', slug: 'stablyai/orca' }
+        'repo-1': {
+          path: '/Users/me/orca',
+          repository: { owner: 'stablyai', repo: 'orca' }
+        }
       })
     ).toBe(repos[0])
   })
@@ -28,8 +31,14 @@ describe('GitHub project repo matching', () => {
   it('does not pick a repo when resolved slugs are ambiguous', () => {
     expect(
       findRepoForGitHubProjectRepository('stablyai/orca', repos, {
-        'repo-1': { path: '/Users/me/orca', slug: 'stablyai/orca' },
-        'repo-2': { path: '/Users/me/other', slug: 'stablyai/orca' }
+        'repo-1': {
+          path: '/Users/me/orca',
+          repository: { owner: 'stablyai', repo: 'orca' }
+        },
+        'repo-2': {
+          path: '/Users/me/other',
+          repository: { owner: 'stablyai', repo: 'orca' }
+        }
       })
     ).toBeNull()
   })
@@ -56,7 +65,10 @@ describe('GitHub project repo matching', () => {
         'stablyai/orca',
         [{ id: 'repo-1', path: '/Users/me/stablyai/orca', displayName: 'orca' }],
         {
-          'repo-1': { path: '/Users/me/stablyai/orca', slug: 'fork/orca' }
+          'repo-1': {
+            path: '/Users/me/stablyai/orca',
+            repository: { owner: 'fork', repo: 'orca' }
+          }
         }
       )
     ).toBeNull()
@@ -71,8 +83,46 @@ describe('GitHub project repo matching', () => {
 
     expect(
       filterGitHubProjectRowsForRepos(rows, repos, {
-        'repo-1': { path: '/Users/me/orca', slug: 'stablyai/orca' }
+        'repo-1': {
+          path: '/Users/me/orca',
+          repository: { owner: 'stablyai', repo: 'orca' }
+        }
       }).map((row) => row.id)
     ).toEqual(['row-1'])
+  })
+
+  it('matches same-named repositories only on the active Project host', () => {
+    expect(
+      findRepoForGitHubProjectRepository(
+        'stablyai/orca',
+        repos,
+        {
+          'repo-1': {
+            path: '/Users/me/orca',
+            repository: { owner: 'stablyai', repo: 'orca', host: 'github.com' }
+          },
+          'repo-2': {
+            path: '/Users/me/other',
+            repository: {
+              owner: 'stablyai',
+              repo: 'orca',
+              host: 'github.acme-corp.com'
+            }
+          }
+        },
+        'github.acme-corp.com'
+      )
+    ).toBe(repos[1])
+  })
+
+  it('does not use hostless path heuristics for Enterprise Project rows', () => {
+    expect(
+      findRepoForGitHubProjectRepository(
+        'stablyai/orca',
+        [{ id: 'repo-1', path: '/Users/me/stablyai/orca', displayName: 'orca' }],
+        {},
+        'github.acme-corp.com'
+      )
+    ).toBeNull()
   })
 })

@@ -21,6 +21,7 @@ let tabsByWorktree: Record<string, { id: string }[]> = {}
 let ptyIdsByTabId: Record<string, string[]> = {}
 let browserTabsByWorktree: Record<string, { id: string }[]> = {}
 let settings: Partial<GlobalSettings> | null = null
+let activityStatus = 'idle'
 let projectGroups: unknown[] = []
 let workspaceDeleteModifierPressed = false
 let gitConflictOperationByWorktree: Record<string, GitConflictOperation> = {}
@@ -60,7 +61,7 @@ vi.mock('@/components/ui/tooltip', () => ({
 }))
 
 vi.mock('./use-worktree-activity-status', () => ({
-  useWorktreeActivityStatus: () => 'idle'
+  useWorktreeActivityStatus: () => activityStatus
 }))
 
 vi.mock('./CacheTimer', () => ({
@@ -70,10 +71,6 @@ vi.mock('./CacheTimer', () => ({
 
 vi.mock('./WorktreeCardAgents', () => ({
   default: () => null
-}))
-
-vi.mock('./SshDisconnectedDialog', () => ({
-  SshDisconnectedDialog: () => null
 }))
 
 vi.mock('./WorktreeContextMenu', () => ({
@@ -148,6 +145,7 @@ describe('WorktreeCard quick actions', () => {
     projectGroups = []
     workspaceDeleteModifierPressed = false
     gitConflictOperationByWorktree = {}
+    activityStatus = 'idle'
   })
 
   it('marks the unread toggle as a workspace-board-preserving action', () => {
@@ -180,8 +178,23 @@ describe('WorktreeCard quick actions', () => {
     )
 
     expect(markup).toContain('data-worktree-card-active="secondary"')
-    expect(markup).toContain('bg-sidebar-accent/45')
     expect(markup).not.toContain('bg-black/[0.08]')
+    expect(markup).not.toContain('dark:bg-white/[0.10]')
+    expect(markup).not.toContain('bg-sidebar-accent/45')
+    expect(markup).not.toContain('border-sidebar-ring/25')
+    expect(markup).not.toContain('ring-sidebar-ring/15')
+  })
+
+  it('marks the primary active workspace for token-driven selected styling', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive />
+    )
+
+    expect(markup).toContain('data-worktree-card-active="primary"')
+    expect(markup).toContain('data-worktree-card-surface="true"')
+    expect(markup).not.toContain('bg-black/[0.08]')
+    expect(markup).not.toContain('dark:bg-white/[0.10]')
+    expect(markup).not.toContain('border-black/[0.015]')
   })
 
   it('renders folder directory name in the detailed metadata row without a Folder badge', () => {
@@ -238,6 +251,19 @@ describe('WorktreeCard quick actions', () => {
     )
 
     expect(markup).toContain('/repo/worktrees/quick-action')
+    expect(markup).not.toContain('lucide-git-branch')
+  })
+
+  it('keeps the quiet status dot when the branch card property is off', () => {
+    settings = { experimentalNewWorktreeCardStyle: true }
+    worktreeCardProperties = ['status']
+    activityStatus = 'inactive'
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} />
+    )
+
+    expect(markup).toContain('bg-neutral-500/40')
     expect(markup).not.toContain('lucide-git-branch')
   })
 

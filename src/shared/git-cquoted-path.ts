@@ -41,16 +41,29 @@ export function decodeGitCQuotedPath(value: string): string {
         break
       default:
         if (/[0-7]/.test(escaped)) {
-          let octal = escaped
-          while (
-            index + 1 < value.length - 1 &&
-            octal.length < 3 &&
-            /[0-7]/.test(value[index + 1])
-          ) {
-            index += 1
-            octal += value[index]
+          const bytes: number[] = []
+          let octalStart = index
+          while (octalStart < value.length - 1) {
+            let octal = value[octalStart]
+            let octalEnd = octalStart
+            while (
+              octalEnd + 1 < value.length - 1 &&
+              octal.length < 3 &&
+              /[0-7]/.test(value[octalEnd + 1])
+            ) {
+              octalEnd += 1
+              octal += value[octalEnd]
+            }
+            bytes.push(Number.parseInt(octal, 8))
+            index = octalEnd
+            if (value[index + 1] !== '\\' || !/[0-7]/.test(value[index + 2] ?? '')) {
+              break
+            }
+            octalStart = index + 2
           }
-          decoded += String.fromCharCode(Number.parseInt(octal, 8))
+          // Why: Git C-quotes non-ASCII text as adjacent UTF-8 octal bytes;
+          // decoding each byte as a character corrupts localized lock reasons.
+          decoded += new TextDecoder('utf-8', { ignoreBOM: true }).decode(Uint8Array.from(bytes))
         } else {
           decoded += escaped
         }

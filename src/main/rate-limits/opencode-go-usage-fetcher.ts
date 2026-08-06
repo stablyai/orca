@@ -1,9 +1,14 @@
-import { net } from 'electron'
+import type { Session } from 'electron'
 import { randomUUID } from 'node:crypto'
+import type { NetworkProxySettings } from '../../shared/network-proxy'
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
+import {
+  clearOpenCodeSessionCookies,
+  createOpenCodeRequestSession,
+  OPENCODE_BASE_URL
+} from './opencode-go-request-session'
 import { parseSubscriptionFromPageText } from './opencode-go-page-scraper'
 
-const OPENCODE_BASE_URL = 'https://opencode.ai'
 const OPENCODE_SERVER_URL = 'https://opencode.ai/_server'
 const API_TIMEOUT_MS = 15_000
 
@@ -36,18 +41,20 @@ export function normalizeCookieInput(raw: string): string {
   return trimmed
 }
 
-function filterAuthCookie(raw: string): string {
+function parseAuthCookies(raw: string): { name: string; value: string }[] {
   return raw
     .split(';')
     .map((p) => p.trim())
-    .filter((pair) => {
+    .map((pair) => {
       const eq = pair.indexOf('=')
       if (eq < 0) {
-        return false
+        return null
       }
-      return AUTH_COOKIE_NAMES.has(pair.slice(0, eq).trim())
+      const name = pair.slice(0, eq).trim()
+      const value = pair.slice(eq + 1).trim()
+      return AUTH_COOKIE_NAMES.has(name) && value ? { name, value } : null
     })
-    .join('; ')
+    .filter((pair): pair is { name: string; value: string } => pair !== null)
 }
 
 function parseWorkspaceIds(text: string): string[] {
@@ -81,7 +88,8 @@ function makeWindow(
 
 export async function fetchOpenCodeGoRateLimits(
   cookie: string,
-  workspaceIdOverride?: string
+  workspaceIdOverride?: string,
+  networkProxySettings?: NetworkProxySettings
 ): Promise<ProviderRateLimits> {
   // Normalize before any guard — bare tokens become auth=<token>.
   const normalizedCookie = normalizeCookieInput(cookie)
@@ -99,8 +107,8 @@ export async function fetchOpenCodeGoRateLimits(
   }
 
   // Filter to only auth cookies — avoids sending unrelated session data.
-  const cookieHeader = filterAuthCookie(normalizedCookie)
-  if (!cookieHeader) {
+  const authCookies = parseAuthCookies(normalizedCookie)
+  if (authCookies.length === 0) {
     return {
       provider: 'opencode-go',
       session: null,
@@ -112,6 +120,40 @@ export async function fetchOpenCodeGoRateLimits(
     }
   }
 
+  // Why: Chromium can reject a manually supplied Cookie header on Windows.
+  // An isolated session jar lets its network stack attach auth normally.
+  let openCodeSession: Session
+  try {
+    openCodeSession = await createOpenCodeRequestSession(authCookies, networkProxySettings)
+  } catch (error) {
+    return makeOpenCodeError(error)
+  }
+
+  try {
+    return await fetchOpenCodeGoRateLimitsWithSession(openCodeSession, workspaceIdOverride)
+  } finally {
+    await clearOpenCodeSessionCookies(openCodeSession).catch((error: unknown) => {
+      console.warn('[opencode-go] failed to clear session cookie jar after fetch', error)
+    })
+  }
+}
+
+function makeOpenCodeError(error: unknown): ProviderRateLimits {
+  return {
+    provider: 'opencode-go',
+    session: null,
+    weekly: null,
+    monthly: null,
+    updatedAt: Date.now(),
+    error: error instanceof Error ? error.message : 'Unknown error',
+    status: 'error'
+  }
+}
+
+async function fetchOpenCodeGoRateLimitsWithSession(
+  openCodeSession: Session,
+  workspaceIdOverride?: string
+): Promise<ProviderRateLimits> {
   // Step 1: resolve workspace IDs to try.
   let ids: string[] = []
   const override = workspaceIdOverride?.trim()
@@ -130,24 +172,21 @@ export async function fetchOpenCodeGoRateLimits(
     }
     ids = [override]
   } else {
-    const workspacesController = new AbortController()
-    const workspacesTimeout = setTimeout(() => workspacesController.abort(), API_TIMEOUT_MS)
     try {
       // The /_server endpoint uses SST server-function protocol: GET with ?id=<hash>
       // and X-Server-Id / X-Server-Instance headers for routing.
       const instanceId = `server-fn:${randomUUID()}`
       const workspacesUrl = `${OPENCODE_SERVER_URL}?id=${WORKSPACES_SERVER_ID}`
-      const workspacesRes = await net.fetch(workspacesUrl, {
+      const workspacesRes = await openCodeSession.fetch(workspacesUrl, {
         method: 'GET',
         headers: {
-          Cookie: cookieHeader,
           'X-Server-Id': WORKSPACES_SERVER_ID,
           'X-Server-Instance': instanceId,
           Accept: 'text/javascript, application/json;q=0.9, */*;q=0.8',
           Origin: OPENCODE_BASE_URL,
           Referer: OPENCODE_BASE_URL
         },
-        signal: workspacesController.signal
+        signal: AbortSignal.timeout(API_TIMEOUT_MS)
       })
 
       if (!workspacesRes.ok) {
@@ -175,8 +214,6 @@ export async function fetchOpenCodeGoRateLimits(
         error: message,
         status: 'error'
       }
-    } finally {
-      clearTimeout(workspacesTimeout)
     }
   }
 
@@ -193,23 +230,20 @@ export async function fetchOpenCodeGoRateLimits(
   }
 
   // Step 2: Robust workspace resolution. Try each candidate ID until one returns 200 OK
-  // and valid usage data. Each candidate gets its own AbortController so a slow or
+  // and valid usage data. Each candidate gets its own timeout so a slow or
   // hung candidate cannot starve the rest.
   let lastError = ''
   for (const candidateId of ids) {
-    const candidateController = new AbortController()
-    const candidateTimeout = setTimeout(() => candidateController.abort(), API_TIMEOUT_MS)
     try {
       const usagePageUrl = `${OPENCODE_BASE_URL}/workspace/${candidateId}/go`
-      const pageRes = await net.fetch(usagePageUrl, {
+      const pageRes = await openCodeSession.fetch(usagePageUrl, {
         method: 'GET',
         headers: {
-          Cookie: cookieHeader,
           Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           Origin: OPENCODE_BASE_URL,
           Referer: OPENCODE_BASE_URL
         },
-        signal: candidateController.signal
+        signal: AbortSignal.timeout(API_TIMEOUT_MS)
       })
 
       if (!pageRes.ok) {
@@ -239,8 +273,6 @@ export async function fetchOpenCodeGoRateLimits(
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
       lastError = message
-    } finally {
-      clearTimeout(candidateTimeout)
     }
   }
 

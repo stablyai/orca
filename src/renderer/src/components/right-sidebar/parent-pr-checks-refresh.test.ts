@@ -147,6 +147,7 @@ describe('parent PR checks refresh', () => {
         linkedBitbucketPR: 10,
         linkedAzureDevOpsPR: 11,
         linkedGiteaPR: 12,
+        currentHeadOid: 'abc',
         staleWhileRevalidate: true
       }
     ])

@@ -1,9 +1,16 @@
+import type { GitCapabilityCache } from './git-capability-cache'
+import { isUnsupportedMergeTreeWriteTreeError } from './git-merge-tree-capability'
+
 export type GitBranchCleanupExec = (
   argv: string[],
   options?: { stdin?: string }
 ) => Promise<{ stdout: string }>
 
 const SQUASH_PATCH_SCAN_LIMIT = 200
+
+function isLocalTargetRef(ref: string): boolean {
+  return ref === 'HEAD' || ref.startsWith('refs/heads/') || ref.startsWith('refs/tags/')
+}
 
 async function readOptionalGitStdout(
   runGit: GitBranchCleanupExec,
@@ -102,14 +109,26 @@ async function hasBranchOnlyMergeCommits(
 async function branchMergesWithoutTreeChanges(
   runGit: GitBranchCleanupExec,
   targetOid: string,
-  branchRef: string
+  branchRef: string,
+  capabilities: GitCapabilityCache
 ): Promise<boolean> {
-  const mergedTree = await readOptionalGitStdout(runGit, [
-    'merge-tree',
-    '--write-tree',
-    targetOid,
-    branchRef
-  ])
+  const args = ['merge-tree', '--write-tree', targetOid, branchRef]
+  const readMergedTree = async (): Promise<string | null> => {
+    try {
+      return await capabilities.runWithFallback(
+        'merge-tree-write-tree',
+        async () => (await runGit(args)).stdout.trim() || null,
+        async () => null,
+        isUnsupportedMergeTreeWriteTreeError
+      )
+    } catch {
+      return null
+    }
+  }
+  const mergedTree = await readMergedTree()
+  if (!mergedTree) {
+    return false
+  }
   const targetTree = await readOptionalGitStdout(runGit, [
     'rev-parse',
     '--verify',
@@ -159,7 +178,8 @@ async function computeStablePatchId(
 async function branchNetPatchMatchesTargetSquashCommit(
   runGit: GitBranchCleanupExec,
   targetOid: string,
-  branchRef: string
+  branchRef: string,
+  capabilities: GitCapabilityCache
 ): Promise<boolean> {
   const mergeBase = await readOptionalGitStdout(runGit, ['merge-base', targetOid, branchRef])
   if (!mergeBase) {
@@ -198,7 +218,7 @@ async function branchNetPatchMatchesTargetSquashCommit(
     // tree merge proves the branch contributes no additional changes there.
     if (
       commitPatchId === branchPatchId &&
-      (await branchMergesWithoutTreeChanges(runGit, commitOid, branchRef))
+      (await branchMergesWithoutTreeChanges(runGit, commitOid, branchRef, capabilities))
     ) {
       return true
     }
@@ -209,7 +229,8 @@ async function branchNetPatchMatchesTargetSquashCommit(
 export async function branchHasNoUnmergedChangesOnAnyTarget(
   runGit: GitBranchCleanupExec,
   branchName: string,
-  targetRefs: string[]
+  targetRefs: string[],
+  capabilities: GitCapabilityCache
 ): Promise<boolean> {
   const branchRef = `refs/heads/${branchName}`
 
@@ -218,11 +239,13 @@ export async function branchHasNoUnmergedChangesOnAnyTarget(
     if (!targetOid) {
       continue
     }
-    if (await branchMergesWithoutTreeChanges(runGit, targetOid, branchRef)) {
+    if (await branchMergesWithoutTreeChanges(runGit, targetOid, branchRef, capabilities)) {
       return true
     }
     if (await hasBranchOnlyMergeCommits(runGit, targetOid, branchRef)) {
-      if (await branchNetPatchMatchesTargetSquashCommit(runGit, targetOid, branchRef)) {
+      if (
+        await branchNetPatchMatchesTargetSquashCommit(runGit, targetOid, branchRef, capabilities)
+      ) {
         return true
       }
       continue
@@ -233,4 +256,27 @@ export async function branchHasNoUnmergedChangesOnAnyTarget(
   }
 
   return false
+}
+
+export async function branchHasNoUnmergedChangesWithLazyTargetRefresh(
+  runGit: GitBranchCleanupExec,
+  branchName: string,
+  targetRefs: string[],
+  capabilities: GitCapabilityCache
+): Promise<boolean> {
+  // Why: an unrefreshed remote-tracking ref may no longer represent the remote's branch contents.
+  const localTargetRefs = targetRefs.filter(isLocalTargetRef)
+  const refreshDependentTargetRefs = targetRefs.filter((targetRef) => !isLocalTargetRef(targetRef))
+  if (
+    await branchHasNoUnmergedChangesOnAnyTarget(runGit, branchName, localTargetRefs, capabilities)
+  ) {
+    return true
+  }
+  await refreshBranchCleanupTargetRefs(runGit, targetRefs)
+  return branchHasNoUnmergedChangesOnAnyTarget(
+    runGit,
+    branchName,
+    refreshDependentTargetRefs,
+    capabilities
+  )
 }

@@ -5,6 +5,7 @@ import {
   sameTabStripScrollMetrics,
   type TabStripScrollMetrics
 } from './tab-strip-scroll-metrics'
+import { isTabStripPointerGestureActive } from './tab-strip-pointer-gesture'
 
 const TAB_STRIP_SCROLL_FRACTION = 0.75
 const TAB_STRIP_MIN_SCROLL_STEP_PX = 120
@@ -114,6 +115,9 @@ export function useTabStripOverflowNavigation({
       if (!stickToEndRef.current) {
         return
       }
+      if (isTabStripPointerGestureActive()) {
+        return
+      }
       el.scrollLeft = Math.max(0, el.scrollWidth - el.clientWidth)
     }
 
@@ -137,7 +141,8 @@ export function useTabStripOverflowNavigation({
       updateTabStripOverflowState()
       return
     }
-    if (stickToEndRef.current) {
+    const pointerGestureActive = isTabStripPointerGestureActive()
+    if (stickToEndRef.current && !pointerGestureActive) {
       const scrollToEnd = (): void => {
         const el = tabStripRef.current
         if (!el) {
@@ -149,7 +154,7 @@ export function useTabStripOverflowNavigation({
       scrollToEnd()
       requestAnimationFrame(scrollToEnd)
     }
-    if (tabCount > prev.len) {
+    if (tabCount > prev.len && !pointerGestureActive) {
       const scrollToEnd = (): void => {
         const el = tabStripRef.current
         if (!el) {
@@ -176,6 +181,12 @@ export function useTabStripOverflowNavigation({
       `[data-tab-id="${CSS.escape(activeVisibleTabId)}"]`
     )
     if (!activeTab) {
+      return
+    }
+    if (isTabStripPointerGestureActive()) {
+      // Why: active-tab preview changes during a tab press must not move the
+      // strip under a stationary pointer before the release decides click/drag.
+      requestAnimationFrame(updateTabStripOverflowState)
       return
     }
     activeTab.scrollIntoView({ block: 'nearest', inline: 'nearest' })
