@@ -21,10 +21,10 @@ At packaged startup (macOS/Linux), the login-shell probe in `src/main/startup/hy
 
 ## IdentitiesOnly and agent-only keys
 
-`IdentitiesOnly yes` filters agent identities down to the local `IdentityFile` keys. The fallback is narrow:
+`IdentitiesOnly yes` filters agent identities down to the local `IdentityFile` keys. When no identity file yields a usable key, the fallback depends on whether the paths were configured *explicitly* — `ssh -G` injects the `~/.ssh/id_*` defaults even when the user configured nothing, so default paths alone are not treated as a deliberate restriction:
 
-- **No `IdentityFile` configured at all** (keys hosted only in the agent, e.g. 1Password): the raw agent is offered instead of silently disabling agent auth — a deliberate fail-open so agent-only keys keep working under `IdentitiesOnly`.
-- **An `IdentityFile` is configured but fails to parse**: agent auth stays disabled (`config.agent` is `undefined`), matching OpenSSH's fail-closed behavior. A configured-but-broken key is treated as a configuration error, not a signal to fall back to the unfiltered agent.
+- **Only implicit default paths (or none at all)**, none of which parse (keys hosted only in the agent, e.g. 1Password): the raw agent is offered instead of silently disabling agent auth — a deliberate fail-open so agent-only keys keep working under `IdentitiesOnly`.
+- **An explicitly configured `IdentityFile` fails to parse**: agent auth stays disabled (`config.agent` is `undefined`), matching OpenSSH's fail-closed behavior. A configured-but-broken key is treated as a configuration error, not a signal to fall back to the unfiltered agent.
 
 ## Limitation: mixed agents
 

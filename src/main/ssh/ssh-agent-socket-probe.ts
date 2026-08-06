@@ -15,12 +15,7 @@ const MACOS_1PASSWORD_AGENT_SOCKET = [
 ]
 const LINUX_1PASSWORD_AGENT_SOCKET = ['.1password', 'agent.sock']
 
-/**
- * Lists SSH agent socket candidates to probe, in preference order: the
- * environment socket, then the platform's 1Password agent socket/pipe.
- * GUI-launched Electron inherits launchd's SSH_AUTH_SOCK (Apple's empty
- * agent) — probe the 1Password socket too so keys stored there are found.
- */
+/** Lists agent socket candidates in preference order: env SSH_AUTH_SOCK, then the platform 1Password socket/pipe. */
 export function listAgentSocketCandidates(env: NodeJS.ProcessEnv = process.env): string[] {
   const envSocket = env.SSH_AUTH_SOCK || undefined
   if (process.platform === 'win32') {
@@ -40,12 +35,8 @@ function isPresent(value: string | undefined): value is string {
   return typeof value === 'string' && value.length > 0
 }
 
-/**
- * Connects to an agent socket and counts the identities it reports, treating
- * connection errors and timeout as 0 keys. createAgent()'s stream is private
- * to the closure, so a wedged agent can never be destroyed on timeout — drive
- * our own socket instead so we can.
- */
+/** Counts identities an agent socket reports; errors/timeout count as 0. */
+// Why: createAgent()'s stream is closure-private and undestroyable on timeout — drive our own socket.
 export function countAgentIdentities(socketPath: string, timeoutMs = 500): Promise<number> {
   return new Promise((resolve) => {
     const stream = new Socket()

@@ -639,6 +639,31 @@ describe('buildConnectConfig', () => {
     expect(config.agent).toBe('/tmp/env-agent.sock')
   })
 
+  it('keeps the raw agent when ssh -G only injected missing default identity paths', () => {
+    // Why: ssh -G reports ~/.ssh/id_* defaults even with no IdentityFile configured.
+    process.env.SSH_AUTH_SOCK = '/tmp/env-agent.sock'
+    const config = buildConnectConfig(
+      makeTarget({ source: 'ssh-config', configHost: 'work' }),
+      makeResolved({
+        identityFile: [testHomePath('.ssh', 'id_ed25519'), testHomePath('.ssh', 'id_rsa')],
+        identitiesOnly: true
+      })
+    )
+    expect(config.agent).toBe('/tmp/env-agent.sock')
+  })
+
+  it('fails closed when a config-backed target has an explicit unparseable IdentitiesOnly file', () => {
+    mockReadFileSync.mockReturnValue(Buffer.from('not-a-key'))
+    const config = buildConnectConfig(
+      makeTarget({ source: 'ssh-config', configHost: 'work' }),
+      makeResolved({
+        identityFile: [testHomePath('.ssh', 'id_ed25519'), '/home/user/.ssh/work_key'],
+        identitiesOnly: true
+      })
+    )
+    expect(config.agent).toBeUndefined()
+  })
+
   it('includes unencrypted target.identityFile auth when an agent is available', () => {
     vi.spyOn(utils, 'parseKey').mockReturnValue({
       isPrivateKey: () => true

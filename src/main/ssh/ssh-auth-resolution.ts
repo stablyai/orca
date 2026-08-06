@@ -86,11 +86,7 @@ function resolveConfiguredIdentityAgent(
     : (target.identityAgent ?? resolved?.identityAgent)
 }
 
-/**
- * Whether an explicit `IdentityAgent` (including `none`) is configured. A
- * configured value — even `none` — makes the probed/default socket branch
- * unreachable, so callers can skip probing entirely.
- */
+/** Whether an explicit `IdentityAgent` (incl. `none`) is configured — if so, the probed/default branch is unreachable and probing can be skipped. */
 export function hasConfiguredIdentityAgent(
   target: IdentityAgentSource,
   resolved: Pick<SshResolvedConfig, 'identityAgent'> | null
@@ -210,12 +206,7 @@ export function findEncryptedPrivateKeyPath(keys: PrivateKeyFile[]): string | un
   return undefined
 }
 
-/**
- * Resolves the `agent` field of the ssh2 connect config under `IdentitiesOnly`.
- * No configured `IdentityFile` at all (keys living only in the agent, e.g.
- * 1Password) offers the raw agent instead of silently disabling agent auth.
- * A configured file that fails to parse stays fail-closed, matching OpenSSH.
- */
+/** Resolves the ssh2 `agent` config under `IdentitiesOnly`: filter to identity-file keys, fail closed only on explicitly configured files. */
 export function resolveAgentConfigValue(
   agentSocket: string,
   target: SshTarget,
@@ -226,9 +217,12 @@ export function resolveAgentConfigValue(
     return agentSocket
   }
 
-  const identityFilePaths = resolveIdentityFilePaths(target, resolved)
-  if (identityFilePaths.length === 0) {
-    return agentSocket
+  const filtered = createIdentityFilteredAgent(agentSocket, resolveIdentityFilePaths(target, resolved))
+  if (filtered) {
+    return filtered
   }
-  return createIdentityFilteredAgent(agentSocket, identityFilePaths)
+  // Why: ssh -G injects default identity paths even when none are configured, so
+  // only explicit files count as a deliberate restriction — agent-only keys (e.g.
+  // 1Password) keep the raw agent; an explicit file that won't parse fails closed.
+  return resolveExplicitPrivateKeyPaths(target, resolved).length === 0 ? agentSocket : undefined
 }

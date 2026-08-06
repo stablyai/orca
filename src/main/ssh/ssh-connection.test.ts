@@ -767,6 +767,33 @@ describe('SshConnection', () => {
     expect(published).not.toContain('error')
   })
 
+  it('cancels a superseded attempt while the agent socket probe is stalled', async () => {
+    let releaseProbe: (() => void) | null = null
+    vi.mocked(probePreferredAgentSocket).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseProbe = () => resolve(undefined)
+        })
+    )
+    const conn = new SshConnection(createTarget(), createCallbacks())
+
+    const superseded = conn.connect()
+    // Why: the attempt crosses macrotask boundaries before parking inside the probe.
+    await vi.waitFor(() => {
+      if (!releaseProbe) {
+        throw new Error('probe not reached yet')
+      }
+    })
+
+    const current = conn.connect()
+    releaseProbe!()
+
+    await expect(superseded).rejects.toThrow('SSH connection attempt was cancelled')
+    await current
+    expect(conn.getState().status).toBe('connected')
+    expect(clientInstances).toHaveLength(1)
+  })
+
   it('transitions through connecting → connected states', async () => {
     const states: string[] = []
     const callbacks = createCallbacks({
