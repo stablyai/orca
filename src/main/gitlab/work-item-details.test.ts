@@ -102,6 +102,9 @@ describe('getWorkItemDetails', () => {
           ])
         }
       }
+      if (endpoint === 'projects/g%2Fp/pipelines/99/bridges?per_page=100') {
+        return { stdout: '[]' }
+      }
       if (endpoint === 'projects/g%2Fp/merge_requests/12/reviewers') {
         return { stdout: '[]' }
       }
@@ -140,6 +143,113 @@ describe('getWorkItemDetails', () => {
       'projects/g%2Fp/merge_requests/12/diffs?per_page=100'
     ])
     expect(glabExecFileAsyncMock.mock.calls.flatMap(([args]) => args)).not.toContain('--paginate')
+  })
+
+  it('expands bridge child-pipeline jobs into the checks list', async () => {
+    glabExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      const endpoint = args.at(-1)
+      if (endpoint === 'projects/g%2Fp/merge_requests/12') {
+        return {
+          stdout: JSON.stringify({
+            id: 120,
+            iid: 12,
+            title: 'Bridge pipeline',
+            state: 'opened',
+            web_url: 'https://gitlab.com/g/p/-/merge_requests/12',
+            updated_at: '2026-05-31T12:00:00Z',
+            source_branch: 'feature/bridges',
+            target_branch: 'main',
+            description: 'MR body',
+            sha: 'head-sha',
+            head_pipeline: { id: 99 }
+          })
+        }
+      }
+      if (endpoint === 'projects/g%2Fp/merge_requests/12/discussions?per_page=100') {
+        return { stdout: '[]' }
+      }
+      if (endpoint === 'projects/g%2Fp/pipelines/99/jobs?per_page=100') {
+        return {
+          stdout: JSON.stringify([
+            {
+              id: 10,
+              name: 'semgrep-sast',
+              stage: 'test',
+              status: 'success',
+              web_url: 'https://gitlab.com/g/p/-/jobs/10',
+              duration: 12
+            }
+          ])
+        }
+      }
+      if (endpoint === 'projects/g%2Fp/pipelines/99/bridges?per_page=100') {
+        return {
+          stdout: JSON.stringify([
+            {
+              id: 50,
+              name: 'trigger-ci',
+              stage: 'test',
+              status: 'success',
+              web_url: 'https://gitlab.com/g/p/-/jobs/50',
+              downstream_pipeline: {
+                id: 200,
+                status: 'failed',
+                web_url: 'https://gitlab.com/g/p/-/pipelines/200'
+              }
+            }
+          ])
+        }
+      }
+      if (endpoint === 'projects/g%2Fp/pipelines/200/jobs?per_page=100') {
+        return {
+          stdout: JSON.stringify([
+            {
+              id: 300,
+              name: 'unit',
+              stage: 'test',
+              status: 'failed',
+              web_url: 'https://gitlab.com/g/p/-/jobs/300',
+              duration: 40
+            },
+            {
+              id: 301,
+              name: 'lint',
+              stage: 'test',
+              status: 'success',
+              web_url: 'https://gitlab.com/g/p/-/jobs/301',
+              duration: 20
+            }
+          ])
+        }
+      }
+      if (endpoint === 'projects/g%2Fp/merge_requests/12/reviewers') {
+        return { stdout: '[]' }
+      }
+      if (endpoint === 'projects/g%2Fp/merge_requests/12/approvals') {
+        return { stdout: JSON.stringify({ approvals_required: 0, approvals_left: 0 }) }
+      }
+      if (endpoint === 'projects/g%2Fp/merge_requests/12/approval_state') {
+        return { stdout: JSON.stringify({ rules: [] }) }
+      }
+      if (endpoint === 'projects/g%2Fp/merge_requests/12/diffs?per_page=100') {
+        return { stdout: '[]' }
+      }
+      throw new Error(`unexpected glab call: ${args.join(' ')}`)
+    })
+
+    const details = await getWorkItemDetails('/repo', 12, 'mr')
+    const names = (details?.pipelineJobs ?? []).map((job) => job.name).sort()
+    expect(names).toEqual(['lint', 'semgrep-sast', 'trigger-ci', 'unit'])
+    expect(details?.pipelineJobs?.find((job) => job.name === 'unit')).toMatchObject({
+      id: 300,
+      status: 'failed',
+      pipelineId: 200
+    })
+    expect(details?.pipelineJobs?.find((job) => job.name === 'trigger-ci')).toMatchObject({
+      id: 0,
+      status: 'failed',
+      pipelineId: 99
+    })
   })
 
   it('routes local WSL MR detail fetches through project resolution and glab options', async () => {

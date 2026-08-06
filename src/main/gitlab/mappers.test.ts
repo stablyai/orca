@@ -154,6 +154,7 @@ describe('mapMRInfo', () => {
       pipelineStatus: 'success',
       updatedAt: '2026-05-05T10:00:00Z',
       mergeable: 'MERGEABLE',
+      mergeStateStatus: 'mergeable',
       headSha: 'deadbeef'
     })
   })
@@ -170,6 +171,7 @@ describe('mapMRInfo', () => {
       'pending'
     )
     expect(info.mergeable).toBe('CONFLICTING')
+    expect(info.mergeStateStatus).toBe('conflict')
   })
 
   it('marks UNKNOWN when detailed_merge_status is non-mergeable but not a conflict', () => {
@@ -178,6 +180,7 @@ describe('mapMRInfo', () => {
       'pending'
     )
     expect(info.mergeable).toBe('UNKNOWN')
+    expect(info.mergeStateStatus).toBe('checking')
   })
 
   it('returns draft state when draft flag is set', () => {
