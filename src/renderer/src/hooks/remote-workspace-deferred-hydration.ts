@@ -1,8 +1,7 @@
 import type { RemoteWorkspaceSnapshot } from '../../../shared/remote-workspace-types'
 import { importRemoteWorkspaceSession } from '../../../shared/remote-workspace-session-projection'
 import type { DirectSshAuthority } from '../../../shared/ssh-types'
-import type { WorkspaceSessionState } from '../../../shared/types'
-import { splitWorktreeId } from '../../../shared/worktree-id'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { buildWorkspaceSessionPayload } from '../lib/workspace-session'
 import { resolveDirectSshTargetScope } from '../lib/direct-ssh-target-scope'
 import type { AppState } from '../store/types'
@@ -56,30 +55,11 @@ export function deferredSnapshotTabPaths(
   authority: DirectSshAuthority,
   snapshot: RemoteWorkspaceSnapshot
 ): string[] {
-  // Why: only paths absent from the catalog are worth waiting for; a path the catalog already knows but maps ambiguously (duplicate worktree paths) will never resolve by polling.
-  const catalogPaths = new Set(
-    [...exactTargetWorktreeIds(state, authority)]
-      .map((worktreeId) => splitWorktreeId(worktreeId)?.worktreePath)
-      .filter((path): path is string => Boolean(path))
-  )
-  return Object.entries(snapshot.session.tabsByWorktreePath ?? {})
-    .filter(([worktreePath, tabs]) => (tabs ?? []).length > 0 && !catalogPaths.has(worktreePath))
-    .map(([worktreePath]) => worktreePath)
-}
-
-export function classifyDepartedDeferredPaths(
-  state: AppState,
-  authority: DirectSshAuthority,
-  departed: readonly string[]
-): { resolved: string[]; unresolvable: string[] } {
-  // Why: a path leaves the pending set either because it now resolves uniquely (hydrate it) or because the catalog gained it ambiguously (report it) — treating the latter as resolved would end the watch on a false synced status.
+  // Why: a snapshot path stays pending until the catalog maps it to exactly one worktree. Absence and ambiguity are both transient while the catalog fills in from its async sources (git discovery, detected worktrees, folder workspaces) — a momentary duplicate must defer the import like a missing entry does, and a duplicate that never dedupes is surfaced by the watch deadline instead of being dropped silently.
   const resolve = uniqueWorktreeIdByPath(exactTargetWorktreeIds(state, authority))
-  const resolved: string[] = []
-  const unresolvable: string[] = []
-  for (const worktreePath of departed) {
-    ;(resolve(worktreePath) ? resolved : unresolvable).push(worktreePath)
-  }
-  return { resolved, unresolvable }
+  return Object.entries(snapshot.session.tabsByWorktreePath ?? {})
+    .filter(([worktreePath, tabs]) => (tabs ?? []).length > 0 && !resolve(worktreePath))
+    .map(([worktreePath]) => worktreePath)
 }
 
 export function buildDeferredWorktreeMerge(

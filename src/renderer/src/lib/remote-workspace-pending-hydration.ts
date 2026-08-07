@@ -1,4 +1,4 @@
-import { splitWorktreeId } from '../../../shared/worktree-id'
+import { splitWorktreeId } from '../../../shared/worktree/id'
 
 /** True while a worktree's remote tab state may still be on its way in — an
  *  auto-created terminal in that window buries the restored tabs behind a junk

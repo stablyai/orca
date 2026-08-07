@@ -525,34 +525,43 @@ describe('createRemoteWorkspaceTargetSync', () => {
   })
 
   it('fails closed on duplicate target paths and keeps folder workspaces out of projection', async () => {
-    const hydrateTabsSession = vi.fn()
-    const state = appState({
-      repos: [repo('repo-a'), repo('repo-b')],
-      worktreesByRepo: {
-        'repo-a': [worktree('repo-a::/same')],
-        'repo-b': [worktree('repo-b::/same')]
-      },
-      tabsByWorktree: {
+    // An ambiguously-mapped path defers and is watched until the deadline, so
+    // the apply promise only settles once the watch gives up on it.
+    vi.useFakeTimers()
+    try {
+      const hydrateTabsSession = vi.fn()
+      const state = appState({
+        repos: [repo('repo-a'), repo('repo-b')],
+        worktreesByRepo: {
+          'repo-a': [worktree('repo-a::/same')],
+          'repo-b': [worktree('repo-b::/same')]
+        },
+        tabsByWorktree: {
+          'folder:folder-a': [{ id: 'folder-tab', worktreeId: 'folder:folder-a', ptyId: null }]
+        },
+        hydrateTabsSession
+      })
+      const harness = createHarness(state, async () => null)
+      const incoming = snapshot(4, {
+        '/same': [
+          {
+            id: 'ambiguous',
+            worktreePath: '/same',
+            ptyId: null
+          } as RemoteWorkspaceSnapshot['session']['tabsByWorktreePath'][string][number]
+        ]
+      })
+
+      const applyPromise = harness.sync.applyUnsolicitedSnapshot('target-a', incoming)
+      await vi.advanceTimersByTimeAsync(601_000)
+      await applyPromise
+
+      const merged = hydrateTabsSession.mock.calls[0][0]
+      expect(merged.tabsByWorktree).toEqual({
         'folder:folder-a': [{ id: 'folder-tab', worktreeId: 'folder:folder-a', ptyId: null }]
-      },
-      hydrateTabsSession
-    })
-    const harness = createHarness(state, async () => null)
-    const incoming = snapshot(4, {
-      '/same': [
-        {
-          id: 'ambiguous',
-          worktreePath: '/same',
-          ptyId: null
-        } as RemoteWorkspaceSnapshot['session']['tabsByWorktreePath'][string][number]
-      ]
-    })
-
-    await harness.sync.applyUnsolicitedSnapshot('target-a', incoming)
-
-    const merged = hydrateTabsSession.mock.calls[0][0]
-    expect(merged.tabsByWorktree).toEqual({
-      'folder:folder-a': [{ id: 'folder-tab', worktreeId: 'folder:folder-a', ptyId: null }]
-    })
+      })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

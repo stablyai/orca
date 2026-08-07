@@ -252,15 +252,54 @@ describe('direct-SSH snapshot apply, deferred worktree hydration', () => {
     expect(syncStatuses.at(-1)?.phase).toBe('error')
   })
 
-  it('reports an error instead of a false synced status when a pending path turns ambiguous', async () => {
+  it('defers an ambiguous path and hydrates once the catalog dedupes it', async () => {
+    const syncStatuses: RemoteWorkspaceSyncStatus[] = []
+    const store = makeStore(syncStatuses)
+    // The catalog knows the path twice while its async sources are still
+    // filling in (two worktrees, same path): the import cannot map it, so the
+    // path must defer like a missing one — a fresh terminal for that worktree
+    // is running on the host, and gates reading "hydrated, nothing pending"
+    // would otherwise treat its tab as gone for good.
+    store.setState({
+      worktreesByRepo: {
+        repoA: [
+          makeWorktree({
+            id: `repoA::${LATE_PATH}`,
+            repoId: 'repoA',
+            path: LATE_PATH,
+            hostId: `ssh:${TARGET_ID}`
+          } as never) as never,
+          makeWorktree({
+            id: `repoB::${LATE_PATH}`,
+            repoId: 'repoB',
+            path: LATE_PATH,
+            hostId: `ssh:${TARGET_ID}`
+          } as never) as never
+        ]
+      }
+    })
+
+    const applyPromise = applySnapshot(store, snapshot(1, { [LATE_PATH]: ['tab-l1'] }))
+    await vi.advanceTimersByTimeAsync(POLL_MS)
+    expect(store.getState().pendingDeferredWorktreePathsByTargetId[TARGET_ID]).toEqual([LATE_PATH])
+    expect(tabIds(store, LATE_ID)).toEqual([])
+
+    seedCatalog(store, [LATE_PATH])
+    await vi.advanceTimersByTimeAsync(POLL_MS)
+    await applyPromise
+
+    expect(tabIds(store, LATE_ID)).toEqual(['tab-l1'])
+    expect(store.getState().pendingDeferredWorktreePathsByTargetId[TARGET_ID]).toBeUndefined()
+    expect(syncStatuses.at(-1)?.phase).toBe('synced')
+  })
+
+  it('keeps watching a path that turns ambiguous and errors at the deadline', async () => {
     const syncStatuses: RemoteWorkspaceSyncStatus[] = []
     const store = makeStore(syncStatuses)
 
     const applyPromise = applySnapshot(store, snapshot(1, { [LATE_PATH]: ['tab-l1'] }))
     await vi.advanceTimersByTimeAsync(POLL_MS)
 
-    // The catalog gains the path twice (two worktrees, same path): it can never
-    // resolve uniquely, so the watch must end with an error, not "synced".
     store.setState({
       worktreesByRepo: {
         repoA: [
@@ -280,12 +319,17 @@ describe('direct-SSH snapshot apply, deferred worktree hydration', () => {
       }
     })
     await vi.advanceTimersByTimeAsync(POLL_MS * 2)
+    expect(store.getState().pendingDeferredWorktreePathsByTargetId[TARGET_ID]).toEqual([LATE_PATH])
+
+    await vi.advanceTimersByTimeAsync(DEADLINE_MS)
     await applyPromise
 
+    expect(tabIds(store, LATE_ID)).toEqual([])
+    expect(store.getState().pendingDeferredWorktreePathsByTargetId[TARGET_ID]).toBeUndefined()
     expect(syncStatuses.at(-1)?.phase).toBe('error')
   })
 
-  it('keeps the error status when another path hydrates after an ambiguous one was dropped', async () => {
+  it('leaves the deadline error as the last status even when another path hydrated', async () => {
     const syncStatuses: RemoteWorkspaceSyncStatus[] = []
     const store = makeStore(syncStatuses)
 
@@ -295,109 +339,18 @@ describe('direct-SSH snapshot apply, deferred worktree hydration', () => {
     )
     await vi.advanceTimersByTimeAsync(POLL_MS)
 
-    // Tick 2: EAGER_PATH appears ambiguously (two worktrees, same path) — dropped with an error.
-    store.setState({
-      worktreesByRepo: {
-        repoA: [
-          makeWorktree({
-            id: `repoA::${EAGER_PATH}`,
-            repoId: 'repoA',
-            path: EAGER_PATH,
-            hostId: `ssh:${TARGET_ID}`
-          } as never) as never,
-          makeWorktree({
-            id: `repoB::${EAGER_PATH}`,
-            repoId: 'repoB',
-            path: EAGER_PATH,
-            hostId: `ssh:${TARGET_ID}`
-          } as never) as never
-        ]
-      }
-    })
+    // LATE_PATH resolves uniquely and hydrates ("synced"); EAGER_PATH never
+    // appears — the deadline error must be the final word, not the synced
+    // status from the sibling's late hydrate.
+    seedCatalog(store, [LATE_PATH])
     await vi.advanceTimersByTimeAsync(POLL_MS)
-    expect(syncStatuses.at(-1)?.phase).toBe('error')
-
-    // Tick 3: LATE_PATH resolves uniquely and hydrates; the earlier tab loss must stay visible.
-    store.setState({
-      worktreesByRepo: {
-        ...store.getState().worktreesByRepo,
-        repoC: [
-          makeWorktree({
-            id: `repoC::${LATE_PATH}`,
-            repoId: 'repoC',
-            path: LATE_PATH,
-            hostId: `ssh:${TARGET_ID}`
-          } as never) as never
-        ]
-      }
-    })
-    await vi.advanceTimersByTimeAsync(POLL_MS * 2)
-    await applyPromise
-
-    expect(tabIds(store, `repoC::${LATE_PATH}`)).toEqual(['tab-l1'])
+    expect(tabIds(store, LATE_ID)).toEqual(['tab-l1'])
     expect(syncStatuses.some((status) => status.phase === 'synced')).toBe(true)
-    expect(syncStatuses.at(-1)?.phase).toBe('error')
-  })
 
-  it('re-asserts the error even when the connection dies during the late hydrate', async () => {
-    const syncStatuses: RemoteWorkspaceSyncStatus[] = []
-    const store = makeStore(syncStatuses)
-    let liveAuthority: DirectSshAuthority | null = authority
-    let reconnectCalls = 0
-    store.setState({
-      // The second reconnect (the late hydrate's) severs the connection mid-hydrate.
-      reconnectPersistedTerminals: (async () => {
-        reconnectCalls += 1
-        if (reconnectCalls > 1) {
-          liveAuthority = null
-        }
-      }) as never
-    })
-
-    const applyPromise = applySnapshot(
-      store,
-      snapshot(1, { [EAGER_PATH]: ['tab-e1'], [LATE_PATH]: ['tab-l1'] }),
-      () => liveAuthority
-    )
-    await vi.advanceTimersByTimeAsync(POLL_MS)
-
-    store.setState({
-      worktreesByRepo: {
-        repoA: [
-          makeWorktree({
-            id: `repoA::${EAGER_PATH}`,
-            repoId: 'repoA',
-            path: EAGER_PATH,
-            hostId: `ssh:${TARGET_ID}`
-          } as never) as never,
-          makeWorktree({
-            id: `repoB::${EAGER_PATH}`,
-            repoId: 'repoB',
-            path: EAGER_PATH,
-            hostId: `ssh:${TARGET_ID}`
-          } as never) as never
-        ]
-      }
-    })
-    await vi.advanceTimersByTimeAsync(POLL_MS)
-    expect(syncStatuses.at(-1)?.phase).toBe('error')
-
-    store.setState({
-      worktreesByRepo: {
-        ...store.getState().worktreesByRepo,
-        repoC: [
-          makeWorktree({
-            id: `repoC::${LATE_PATH}`,
-            repoId: 'repoC',
-            path: LATE_PATH,
-            hostId: `ssh:${TARGET_ID}`
-          } as never) as never
-        ]
-      }
-    })
-    await vi.advanceTimersByTimeAsync(POLL_MS * 2)
+    await vi.advanceTimersByTimeAsync(DEADLINE_MS)
     await applyPromise
 
+    expect(tabIds(store, `repoA::${EAGER_PATH}`)).toEqual([])
     expect(syncStatuses.at(-1)?.phase).toBe('error')
   })
 

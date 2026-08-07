@@ -2,7 +2,7 @@ import type { StoreApi } from 'zustand'
 import type { RemoteWorkspaceSnapshot } from '../../../shared/remote-workspace-types'
 import { importRemoteWorkspaceSession } from '../../../shared/remote-workspace-session-projection'
 import type { DirectSshAuthority } from '../../../shared/ssh-types'
-import type { WorkspaceSessionState } from '../../../shared/types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { translate } from '@/i18n/i18n'
 import { buildWorkspaceSessionPayload } from '../lib/workspace-session'
 import type { AppState } from '../store/types'
@@ -14,7 +14,6 @@ import {
 import { directSshAuthoritiesEqual } from './direct-ssh-reconnect-tokens'
 import {
   buildDeferredWorktreeMerge,
-  classifyDepartedDeferredPaths,
   currentRecoveryTabIds,
   deferredSnapshotTabPaths,
   exactTargetWorktreeIds
@@ -190,7 +189,6 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
     })
   }
   const deferredDeadline = Date.now() + SNAPSHOT_DEFERRED_RESOLVE_TIMEOUT_MS
-  let unresolvedSeen = false
   // Why: the first pass runs before any sleep — a path that resolved during the hydrate's reconnect wait has already departed, and its tabs must hydrate immediately; gates reading the pending registration treat a missing tab in a "hydrated, nothing pending" worktree as gone for good.
   let firstPass = true
   while (isWatchCurrent()) {
@@ -220,45 +218,31 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
       store.getState().setPendingDeferredWorktreePaths(authority.targetId, pendingPaths)
       continue
     }
-    const { resolved, unresolvable } = classifyDepartedDeferredPaths(lateState, authority, departed)
-    if (unresolvable.length > 0) {
-      // Why: an ambiguous path (duplicate worktree paths in the catalog) can never resolve by polling — surface the failure instead of ending the watch on a false synced status.
-      console.warn(
-        '[remote-workspace] deferred snapshot tabs dropped; their worktree paths resolved ambiguously in the catalog',
-        unresolvable
-      )
-      unresolvedSeen = true
+    // Why: pending membership means "not uniquely resolvable", so a departed path resolves uniquely by definition; buildDeferredWorktreeMerge re-resolves against the same state snapshot and drops anything that cannot map.
+    const { lateScope, lateMerged } = buildDeferredWorktreeMerge(
+      lateState,
+      authority,
+      snapshot,
+      departed
+    )
+    if (!isWatchCurrent()) {
+      return
     }
-    if (resolved.length > 0) {
-      const { lateScope, lateMerged } = buildDeferredWorktreeMerge(
-        lateState,
-        authority,
-        snapshot,
-        resolved
-      )
-      if (!isWatchCurrent()) {
-        return
-      }
-      console.warn(
-        '[remote-workspace] late catalog resolution hydrating deferred snapshot worktrees',
-        resolved
-      )
-      await hydrateAndReconnectWorktrees(
-        store,
-        lateMerged,
-        [...lateScope],
-        authority,
-        snapshot,
-        isWatchCurrent,
-        finalizeHydratedTerminals
-      )
-    }
+    console.warn(
+      '[remote-workspace] late catalog resolution hydrating deferred snapshot worktrees',
+      departed
+    )
+    await hydrateAndReconnectWorktrees(
+      store,
+      lateMerged,
+      [...lateScope],
+      authority,
+      snapshot,
+      isWatchCurrent,
+      finalizeHydratedTerminals
+    )
     // Why: the registration updates only after the departed paths' tabs are in the store — gates read "hydrated, nothing pending" as fully loaded, which must never be observable while a departed path's tabs are still absent.
     store.getState().setPendingDeferredWorktreePaths(authority.targetId, pendingPaths)
-    // Why: the hydrate above writes a synced status and status writes are last-write-wins — a tab loss must outlive every later success, including when the connection dies mid-hydrate; only a superseding arrival owns the status instead.
-    if (unresolvedSeen && isArrivalCurrent(authority.targetId, arrival)) {
-      reportUnresolved()
-    }
     if (pendingPaths.length === 0) {
       return
     }
