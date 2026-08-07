@@ -138,6 +138,19 @@ import {
   type LinearMobileIssue
 } from '../../../src/tasks/linear-mobile-issue-read'
 import {
+  fetchJiraIssueDetail,
+  fetchJiraTaskIssues
+} from '../../../src/tasks/mobile-jira-task-source'
+import {
+  extractJiraConnection,
+  jiraSiteLabel,
+  type MobileJiraConnection
+} from '../../../src/tasks/jira-mobile-connection'
+import {
+  JIRA_FILTER_LABELS,
+  normalizeJiraFilter
+} from '../../../src/tasks/mobile-jira-issue-filters'
+import {
   formatGitHubPRDelta,
   getGitHubMergeLabel,
   getGitHubReviewerRows,
@@ -155,6 +168,7 @@ import {
   GITLAB_FILTER_OPTIONS,
   GITLAB_VIEW_OPTIONS,
   ISSUE_PRESETS,
+  JIRA_FILTER_OPTIONS,
   LINEAR_DISPLAY_OPTIONS,
   LINEAR_FILTER_OPTIONS,
   LINEAR_GROUP_OPTIONS,
@@ -174,6 +188,7 @@ import {
   type LinearViewMode,
   type TaskSort
 } from '../../../src/tasks/mobile-task-view-options'
+import type { JiraIssue, JiraIssueFilter } from '../../../../src/shared/jira-types'
 import { MOBILE_TUI_AGENT_AUTO_PICK_ORDER } from '../../../src/tasks/mobile-tui-agents'
 import { resolveComposerBranchSelection } from '../../../src/tasks/mobile-composer-branch-selection'
 import {
@@ -436,6 +451,16 @@ type DetailPayload =
       project?: LinearProject
       children: LinearIssueChild[]
     }
+  | {
+      provider: 'jira'
+      description: string
+      comments: DetailComment[]
+      labels: string[]
+      assignee?: string
+      projectName: string
+      issueTypeName: string
+      priorityName?: string
+    }
 
 type DetailCommentGroup =
   | { kind: 'standalone'; comment: DetailComment }
@@ -447,6 +472,8 @@ type TaskResumeState = {
   githubProjectHiddenFieldIdsByView?: Record<string, string[]>
   linearPreset?: LinearFilter
   linearQuery?: string
+  jiraPreset?: JiraIssueFilter
+  jiraQuery?: string
 }
 type RuntimeTaskSettings = {
   defaultTuiAgent?: TuiAgent | 'blank' | null
@@ -610,6 +637,15 @@ type TaskItem =
       updatedAt: string
       source: LinearIssue
     }
+  | {
+      key: string
+      provider: 'jira'
+      title: string
+      subtitle: string
+      status: string
+      updatedAt: string
+      source: JiraIssue
+    }
 
 type ActionableTaskItem = Exclude<TaskItem, { provider: 'gitlabTodo' }>
 type HostedReviewMergeMethod = 'merge' | 'squash' | 'rebase'
@@ -703,6 +739,9 @@ type TaskListEntry =
 function taskWorkspaceFallback(item: ActionableTaskItem): string {
   if (item.provider === 'github' || item.provider === 'gitlab') {
     return `${item.source.type}-${item.source.number}`
+  }
+  if (item.provider === 'jira') {
+    return item.source.key.toLowerCase()
   }
   return item.source.identifier.toLowerCase()
 }
@@ -1036,6 +1075,21 @@ function createLinearTask(issue: LinearIssue): TaskItem {
     title: issue.title,
     subtitle: `${issue.identifier} · ${issue.team.name}`,
     status: issue.state.name,
+    updatedAt: issue.updatedAt,
+    source: issue
+  }
+}
+
+function createJiraTask(issue: JiraIssue): TaskItem {
+  const project = issue.project.name.trim() || issue.project.key
+  return {
+    // Keys are site-qualified because the 'all' selection fans out across sites
+    // and two sites can hand back the same issue id.
+    key: `jira:${issue.siteId ?? 'site'}:${issue.id}`,
+    provider: 'jira',
+    title: issue.title,
+    subtitle: `${issue.key} · ${project}`,
+    status: issue.status.name,
     updatedAt: issue.updatedAt,
     source: issue
   }
@@ -1431,6 +1485,12 @@ function optimisticProjectFieldValue(
   return { kind: 'text', fieldId: field.id, text: value.kind === 'text' ? value.text : '' }
 }
 
+function detailPayloadBody(payload: DetailPayload): string {
+  return payload.provider === 'linear' || payload.provider === 'jira'
+    ? payload.description
+    : payload.body
+}
+
 function taskKindLabel(item: TaskItem): string {
   if (item.provider === 'github') {
     return item.source.type === 'pr' ? 'Pull request' : 'Issue'
@@ -1441,6 +1501,9 @@ function taskKindLabel(item: TaskItem): string {
   if (item.provider === 'gitlabTodo') {
     return `${gitLabTodoTargetLabel(item.source)} todo`
   }
+  if (item.provider === 'jira') {
+    return item.source.issueType.name || 'Jira issue'
+  }
   return 'Linear ticket'
 }
 
@@ -1450,6 +1513,9 @@ function taskExternalOpenLabel(item: TaskItem): string {
   }
   if (item.provider === 'gitlab' || item.provider === 'gitlabTodo') {
     return 'Open in GitLab'
+  }
+  if (item.provider === 'jira') {
+    return 'Open in Jira'
   }
   return 'Open in Linear'
 }
@@ -1756,6 +1822,15 @@ function taskRepositoryMeta(
       color: repoColor(item.source.projectPath)
     }
   }
+  if (item.provider === 'jira') {
+    // Jira has no per-issue color, so derive a stable one from the project the
+    // way GitLab todos do from their project path.
+    return {
+      key: item.source.project.id,
+      label: item.source.project.name || item.source.project.key,
+      color: repoColor(item.source.project.key)
+    }
+  }
   return {
     key: item.source.team.id,
     label: item.source.team.name,
@@ -1795,6 +1870,15 @@ export default function MobileTasksScreen() {
     normalizeVisibleTaskProviders(undefined)
   )
   const [linearConnected, setLinearConnected] = useState(false)
+  const [jiraConnection, setJiraConnection] = useState<MobileJiraConnection>({
+    connected: false,
+    sites: [],
+    selection: null,
+    credentialError: null
+  })
+  const [jiraFilter, setJiraFilter] = useState<JiraIssueFilter>('assigned')
+  const [showJiraFilterPicker, setShowJiraFilterPicker] = useState(false)
+  const [showJiraSitePicker, setShowJiraSitePicker] = useState(false)
   const [githubMode, setGithubMode] = useState<'items' | 'project'>('items')
   const [githubKind, setGithubKind] = useState<GitHubTaskKind>('issues')
   const [githubPreset, setGithubPreset] = useState<GitHubPreset>('issues')
@@ -2623,13 +2707,19 @@ export default function MobileTasksScreen() {
       }
       setTasksSupportState({ kind: 'supported', client })
       setError('')
-      const [settingsResponse, uiResponse, preflightResponse, linearStatusResponse] =
-        await Promise.all([
-          client.sendRequest('settings.get'),
-          client.sendRequest('ui.get'),
-          client.sendRequest('preflight.check'),
-          client.sendRequest('linear.status')
-        ])
+      const [
+        settingsResponse,
+        uiResponse,
+        preflightResponse,
+        linearStatusResponse,
+        jiraStatusResponse
+      ] = await Promise.all([
+        client.sendRequest('settings.get'),
+        client.sendRequest('ui.get'),
+        client.sendRequest('preflight.check'),
+        client.sendRequest('linear.status'),
+        client.sendRequest('jira.status')
+      ])
       if (stale) {
         return
       }
@@ -2660,6 +2750,11 @@ export default function MobileTasksScreen() {
       const linearStatus = isSuccess(linearStatusResponse)
         ? (linearStatusResponse.result as LinearStatusResponse)
         : null
+      // A host without the Jira RPCs answers with an error; extractJiraConnection
+      // maps that to disconnected so Jira still lists as a connectable source.
+      const jiraStatus = extractJiraConnection(
+        isSuccess(jiraStatusResponse) ? jiraStatusResponse.result : null
+      )
       const preferredProviders = normalizeVisibleTaskProviders(settings.visibleTaskProviders)
       const linearIsConnected = linearStatus?.connected === true
       const availableProviders = filterAvailableTaskProviders(preferredProviders, {
@@ -2671,6 +2766,7 @@ export default function MobileTasksScreen() {
           ? [...availableProviders, 'linear' as const]
           : availableProviders
       setLinearConnected(linearIsConnected)
+      setJiraConnection(jiraStatus)
       if (!linearIsConnected) {
         setLinearWorkspaces([])
         setLinearTeams([])
@@ -2695,10 +2791,18 @@ export default function MobileTasksScreen() {
           : getTaskPresetQuery(preset)
       const nextLinearFilter = normalizeLinearFilter(resume.linearPreset)
       const nextLinearQuery = resume.linearQuery ?? ''
+      const nextJiraFilter = normalizeJiraFilter(resume.jiraPreset)
+      const nextJiraQuery = resume.jiraQuery ?? ''
       defaultRepoSelectionRef.current = settings.defaultRepoSelection ?? null
       defaultLinearTeamSelectionRef.current = settings.defaultLinearTeamSelection ?? null
       const nextQuery =
-        nextProvider === 'github' ? githubQuery : nextProvider === 'linear' ? nextLinearQuery : ''
+        nextProvider === 'github'
+          ? githubQuery
+          : nextProvider === 'linear'
+            ? nextLinearQuery
+            : nextProvider === 'jira'
+              ? nextJiraQuery
+              : ''
       const nextAppliedQuery =
         nextProvider === 'github'
           ? scopeGitHubTaskSearch(githubQuery, githubKindFromQuery(githubQuery, preset))
@@ -2711,6 +2815,7 @@ export default function MobileTasksScreen() {
       setGithubPreset(preset)
       setGithubKind(githubKindFromQuery(githubQuery, preset))
       setLinearFilter(nextLinearFilter)
+      setJiraFilter(nextJiraFilter)
       setGithubProjectSettings(settings.githubProjects ?? EMPTY_GITHUB_PROJECT_SETTINGS)
       setQuery(nextQuery)
       setAppliedQuery(nextAppliedQuery)
@@ -2967,6 +3072,21 @@ export default function MobileTasksScreen() {
           setItems([])
           return
         }
+        if (provider === 'jira') {
+          if (!jiraConnection.connected) {
+            setItems([])
+            return
+          }
+          const issues = await fetchJiraTaskIssues(requestClient, {
+            jql: appliedQuery,
+            filter: jiraFilter,
+            siteId: jiraConnection.selection
+          })
+          if (isCurrent()) {
+            setItems(issues.map(createJiraTask))
+          }
+          return
+        }
         const currentRepos = reposRef.current.length > 0 ? reposRef.current : await loadRepos()
         if (!isCurrent()) {
           return
@@ -3150,6 +3270,8 @@ export default function MobileTasksScreen() {
       gitlabFilter,
       gitlabView,
       githubMode,
+      jiraConnection,
+      jiraFilter,
       linearConnected,
       linearFilter,
       linearOrderBy,
@@ -3636,6 +3758,16 @@ export default function MobileTasksScreen() {
   }, [appliedQuery, linearFilter, persistTaskResumeState, provider, taskUiReady])
 
   useEffect(() => {
+    if (!taskUiReady || provider !== 'jira') {
+      return
+    }
+    persistTaskResumeState({
+      jiraPreset: jiraFilter,
+      jiraQuery: appliedQuery.trim()
+    })
+  }, [appliedQuery, jiraFilter, persistTaskResumeState, provider, taskUiReady])
+
+  useEffect(() => {
     if (connState !== 'connected' || !taskStateHydrated) {
       return
     }
@@ -3812,9 +3944,7 @@ export default function MobileTasksScreen() {
       setItemBodyDraft('')
       return
     }
-    setItemBodyDraft(
-      detailPayload.provider === 'linear' ? detailPayload.description : detailPayload.body
-    )
+    setItemBodyDraft(detailPayloadBody(detailPayload))
   }, [detailPayload])
 
   useEffect(() => {
@@ -4053,6 +4183,31 @@ export default function MobileTasksScreen() {
                   }
                 : candidate
             )
+          )
+        }
+        return
+      }
+
+      if (actionItem.provider === 'jira') {
+        const { issue, comments } = await fetchJiraIssueDetail(client, {
+          key: actionItem.source.key,
+          siteId: actionItem.source.siteId
+        })
+        if (!stale) {
+          setDetailPayload({
+            provider: 'jira',
+            description: issue.description ?? '',
+            comments,
+            labels: issue.labels ?? [],
+            assignee: issue.assignee?.displayName,
+            projectName: issue.project.name || issue.project.key,
+            issueTypeName: issue.issueType.name,
+            priorityName: issue.priority?.name
+          })
+          setActionItem((current) =>
+            current?.provider === 'jira' && current.source.key === issue.key
+              ? (createJiraTask(issue) as Extract<TaskItem, { provider: 'jira' }>)
+              : current
           )
         }
         return
@@ -8019,7 +8174,19 @@ export default function MobileTasksScreen() {
       ? ((selectedCreateTarget as RepoSummary | null)?.displayName ?? 'Select target')
       : ((selectedCreateTarget as LinearTeam | null)?.name ?? 'Select target')
   const providerLabel =
-    provider === 'github' ? 'GitHub' : provider === 'gitlab' ? 'GitLab' : 'Linear'
+    provider === 'github'
+      ? 'GitHub'
+      : provider === 'gitlab'
+        ? 'GitLab'
+        : provider === 'jira'
+          ? 'Jira'
+          : 'Linear'
+  const jiraFilterLabel = JIRA_FILTER_LABELS[jiraFilter]
+  const jiraSelectedSite =
+    jiraConnection.selection && jiraConnection.selection !== 'all'
+      ? (jiraConnection.sites.find((site) => site.id === jiraConnection.selection) ?? null)
+      : null
+  const jiraSiteChipLabel = jiraSelectedSite ? jiraSiteLabel(jiraSelectedSite) : 'All sites'
   const showHeaderCreateTask =
     provider === 'linear' || (provider === 'github' && githubMode === 'items')
   const providerOptions = useMemo(
@@ -8191,6 +8358,17 @@ export default function MobileTasksScreen() {
         linearWorkspaces.find((workspace) => workspace.id === selectedLinearWorkspaceId)
           ?.displayName ??
         'Workspace')
+  const jiraSiteOptions = useMemo<PickerOption<string>[]>(
+    () => [
+      { value: 'all', label: 'All sites' },
+      ...jiraConnection.sites.map((site) => ({
+        value: site.id,
+        label: jiraSiteLabel(site),
+        subtitle: site.siteUrl
+      }))
+    ],
+    [jiraConnection.sites]
+  )
   const linearWorkspaceOptions = useMemo<PickerOption<string>[]>(
     () => [
       { value: 'all', label: 'All workspaces' },
@@ -8642,6 +8820,46 @@ export default function MobileTasksScreen() {
             </>
           )}
 
+          {provider === 'jira' && jiraConnection.connected && (
+            <>
+              {jiraConnection.sites.length > 1 ? (
+                <Pressable
+                  style={styles.segmentButton}
+                  disabled={!taskUiReady}
+                  onPress={() => {
+                    if (!taskUiReady) {
+                      return
+                    }
+                    setShowJiraSitePicker(true)
+                  }}
+                >
+                  <Text style={styles.segmentSecondaryText}>{jiraSiteChipLabel}</Text>
+                </Pressable>
+              ) : null}
+              <Pressable
+                style={styles.segmentButton}
+                disabled={!taskUiReady || appliedQuery.trim().length > 0}
+                onPress={() => {
+                  if (!taskUiReady) {
+                    return
+                  }
+                  setShowJiraFilterPicker(true)
+                }}
+              >
+                {/* A typed JQL query replaces the preset entirely, so dim the chip
+                    instead of implying both are applied. */}
+                <Text
+                  style={[
+                    styles.segmentSecondaryText,
+                    appliedQuery.trim().length > 0 ? styles.segmentDisabledText : null
+                  ]}
+                >
+                  {jiraFilterLabel}
+                </Text>
+              </Pressable>
+            </>
+          )}
+
           {provider === 'linear' && linearConnected && (
             <>
               {linearWorkspaces.length > 1 ? (
@@ -8751,7 +8969,7 @@ export default function MobileTasksScreen() {
         </ScrollView>
 
         {provider === 'gitlab' && gitlabView === 'todos' ? null : provider === 'linear' &&
-          !linearConnected ? null : (
+          !linearConnected ? null : provider === 'jira' && !jiraConnection.connected ? null : (
           <View style={styles.searchBar}>
             <MobileSearchField
               value={isGithubProjectSearch ? githubProjectSearch : query}
@@ -8759,7 +8977,10 @@ export default function MobileTasksScreen() {
               placeholder={
                 isGithubProjectSearch
                   ? 'Search project view...'
-                  : `Search ${providerLabel} tasks...`
+                  : provider === 'jira'
+                    ? // Matches desktop: the Jira box takes raw JQL, not free text.
+                      'Jira JQL, e.g. project = ABC AND statusCategory != Done'
+                    : `Search ${providerLabel} tasks...`
               }
               // Why: GitHub items seed the field with a preset query, so a bare
               // value.length check would always show clear. Project mode shows clear
@@ -8915,6 +9136,18 @@ export default function MobileTasksScreen() {
             <ActivityIndicator size="small" color={colors.textSecondary} />
           </View>
         )
+      ) : provider === 'jira' && !jiraConnection.connected ? (
+        <View style={styles.centered}>
+          <TaskProviderLogo provider="jira" size={32} color={colors.textSecondary} />
+          <Text style={styles.emptyText}>Connect Jira on your desktop</Text>
+          <Text style={styles.centeredHint}>
+            {jiraConnection.credentialError
+              ? `Jira is saved but unreadable: ${jiraConnection.credentialError}`
+              : // Why: connecting needs a site URL, email, and API token — a form that
+                // belongs on desktop, so mobile points there instead of half-hosting it.
+                'Add your Jira site in Orca desktop under Settings → Integrations, then pull to refresh.'}
+          </Text>
+        </View>
       ) : provider === 'linear' && !linearConnected ? (
         <View style={styles.centered}>
           <TaskProviderLogo provider="linear" size={32} color={colors.textSecondary} />
@@ -9520,6 +9753,11 @@ export default function MobileTasksScreen() {
             setLinearFilter(normalizeLinearFilter(resume.linearPreset))
             setQuery(nextQuery)
             setAppliedQuery(nextQuery.trim())
+          } else if (next === 'jira') {
+            const nextQuery = resume.jiraQuery ?? ''
+            setJiraFilter(normalizeJiraFilter(resume.jiraPreset))
+            setQuery(nextQuery)
+            setAppliedQuery(nextQuery.trim())
           } else {
             setQuery('')
             setAppliedQuery('')
@@ -10118,6 +10356,39 @@ export default function MobileTasksScreen() {
           persistTaskResumeState({ linearPreset: filter, linearQuery: '' })
         }}
         onClose={() => setShowLinearFilterPicker(false)}
+      />
+
+      <PickerModal
+        visible={taskUiReady && showJiraFilterPicker}
+        title="Jira Filter"
+        options={JIRA_FILTER_OPTIONS}
+        selected={jiraFilter}
+        onSelect={(filter) => {
+          setJiraFilter(filter)
+          setQuery('')
+          setAppliedQuery('')
+          persistTaskResumeState({ jiraPreset: filter, jiraQuery: '' })
+        }}
+        onClose={() => setShowJiraFilterPicker(false)}
+      />
+
+      <PickerModal
+        visible={taskUiReady && showJiraSitePicker}
+        title="Jira Site"
+        options={jiraSiteOptions}
+        selected={jiraConnection.selection ?? ''}
+        onSelect={(siteId) => {
+          setJiraConnection((current) => ({ ...current, selection: siteId }))
+          setItems([])
+          if (client && siteId !== 'all') {
+            // 'all' is a client-side fan-out; only a concrete site is persisted
+            // host-side, so selectSite would reject it.
+            void client.sendRequest('jira.selectSite', { siteId }).catch((err) => {
+              console.warn('[mobile tasks] failed to select jira site', err)
+            })
+          }
+        }}
+        onClose={() => setShowJiraSitePicker(false)}
       />
 
       <PickerModal
@@ -12511,11 +12782,7 @@ export default function MobileTasksScreen() {
                       </>
                     ) : (
                       <MobileMarkdown
-                        content={
-                          detailPayload.provider === 'linear'
-                            ? detailPayload.description
-                            : detailPayload.body
-                        }
+                        content={detailPayloadBody(detailPayload)}
                         fallback="No description."
                       />
                     )}
@@ -13528,6 +13795,9 @@ const styles = StyleSheet.create({
   segmentSecondaryText: {
     fontSize: 12,
     color: colors.textSecondary
+  },
+  segmentDisabledText: {
+    color: colors.textMuted
   },
   searchBar: {
     paddingHorizontal: spacing.md,
