@@ -49,7 +49,10 @@ export function canToggleNativeChat(input: NativeChatAvailabilityInput): boolean
     return true
   }
   const agent = input.detectedAgent ?? input.launchAgent ?? input.resolvedAgent
-  if (nativeChatRequiresLocalTranscript(agent) && input.nativeChatTranscriptIsLocalReadable !== true) {
+  if (
+    nativeChatRequiresLocalTranscript(agent) &&
+    input.nativeChatTranscriptIsLocalReadable !== true
+  ) {
     return false
   }
   return isNativeChatSupportedAgent(agent)

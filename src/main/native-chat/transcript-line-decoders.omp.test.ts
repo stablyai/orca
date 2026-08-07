@@ -25,7 +25,10 @@ describe('decodeOmpTranscriptLine', () => {
   })
 
   it('decodes a user turn', () => {
-    const decoded = decodeOmpTranscriptLine(message('user', [{ type: 'text', text: 'resume' }]), 'f')
+    const decoded = decodeOmpTranscriptLine(
+      message('user', [{ type: 'text', text: 'resume' }]),
+      'f'
+    )
     expect(decoded).toEqual({
       id: 'rec-1',
       role: 'user',
@@ -149,7 +152,12 @@ describe('decodeOmpTranscriptLine', () => {
       line({
         type: 'message',
         id: 'rec-p',
-        message: { role: 'pythonExecution', code: 'raise SystemExit(2)', output: 'boom', exitCode: 2 }
+        message: {
+          role: 'pythonExecution',
+          code: 'raise SystemExit(2)',
+          output: 'boom',
+          exitCode: 2
+        }
       }),
       'f'
     )

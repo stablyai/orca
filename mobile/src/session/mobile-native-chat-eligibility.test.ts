@@ -110,9 +110,9 @@ describe('resolveMobileNativeChat', () => {
     expect(
       resolveMobileNativeChat(tab, isMobileNativeChatTranscriptReadable('model-a-ssh'))
     ).toBeNull()
-    expect(
-      canShowMobileNativeChat(tab, isMobileNativeChatTranscriptReadable('model-a-ssh'))
-    ).toBe(false)
+    expect(canShowMobileNativeChat(tab, isMobileNativeChatTranscriptReadable('model-a-ssh'))).toBe(
+      false
+    )
   })
 
   it('returns null for a plain shell (no agent)', () => {
