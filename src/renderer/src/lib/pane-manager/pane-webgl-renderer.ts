@@ -55,10 +55,15 @@ export function clearTerminalWebglAttachBackoff(pane: ManagedPaneInternal): void
 const CONTEXT_LOSS_PIN_THRESHOLD = 3
 const CONTEXT_LOSS_PIN_WINDOW_MS = 30 * 60_000
 
+/** Context-loss timestamps for this pane that are still inside the pin window. */
 function contextLossesInsideWindow(pane: ManagedPaneInternal, nowMs: number): number[] {
   return (pane.webglContextLossAtMs ?? []).filter((at) => nowMs - at < CONTEXT_LOSS_PIN_WINDOW_MS)
 }
 
+/** Record one WebGL context loss for this pane. Emits the one-shot
+ *  `webgl-context-loss-pinned-dom` diagnostic when the loss budget is first
+ *  exhausted. Bounded by construction: a pinned pane never re-attaches WebGL,
+ *  so no further losses can be recorded while the pin holds. */
 export function recordTerminalWebglContextLoss(
   pane: ManagedPaneInternal,
   nowMs: number = Date.now()
@@ -78,6 +83,8 @@ export function recordTerminalWebglContextLoss(
   }
 }
 
+/** Whether resume boundaries must keep this pane on the DOM renderer because
+ *  it exhausted its context-loss budget inside the pin window. */
 export function isTerminalWebglRetryPinnedAfterContextLosses(
   pane: ManagedPaneInternal,
   nowMs: number = Date.now()

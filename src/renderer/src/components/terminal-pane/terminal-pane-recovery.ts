@@ -196,10 +196,13 @@ function cancelPendingRecoveryRetry(tabId: string): void {
  * that probe — see the reason's declaration. Nothing here destroys a session
  * either way: a remount rebuilds the renderer over the PTY it already had.
  */
-// Why traced: stale exits were silent, so a certified-dead pane with a stale
-// request read as "no detector fired" in the field (#12452). The crash-report
-// ring coalesces repeats, so a burst of releases from one incident stays one
-// entry.
+/** Record the `terminal_pane_recovery_stale_request` breadcrumb for a request
+ *  that no live pane will act on, with which staleness check failed.
+ *
+ *  Why traced: stale exits were silent, so a certified-dead pane with a stale
+ *  request read as "no detector fired" in the field (#12452). The crash-report
+ *  ring coalesces repeats, so a burst of releases from one incident stays one
+ *  entry. */
 function recordStaleRecoveryRequest(request: RecoveryRequest): void {
   recordRendererCrashBreadcrumb('terminal_pane_recovery_stale_request', {
     tabId: request.tabId,
