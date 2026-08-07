@@ -3111,6 +3111,7 @@ export class OrcaRuntimeService {
   // concurrent first-subscribes and keeps later subscribes no-ops; it is
   // cleared per lifecycle generation (exit/respawn) and on failed attempts.
   private subscriberDrivenProviderAttachesByPtyId = new Map<string, Promise<boolean>>()
+  private subscriberDrivenProviderAttachInventoryWaiters = new Set<string>()
   // Why: a spawn through this app already attaches its provider stream, so
   // subscriber-driven attach and the never-attached read fallback must target
   // only inventory-discovered sessions no local spawn published this
@@ -10597,6 +10598,7 @@ export class OrcaRuntimeService {
     this.legacyWorkerRecoveredPtys.delete(ptyId)
     // Why: a respawn under the same session id needs its own subscriber-driven attach.
     this.subscriberDrivenProviderAttachesByPtyId.delete(ptyId)
+    this.subscriberDrivenProviderAttachInventoryWaiters.delete(ptyId)
     this.spawnPublishedPtys.delete(ptyId)
     // Why: a provider response belongs to the process generation that issued
     // it; a respawn must neither reuse its frame nor join its in-flight call.
@@ -10806,10 +10808,7 @@ export class OrcaRuntimeService {
     // A spawn published (or admission pending) this generation already
     // attaches the provider stream; a replacement under a reused id must not
     // read as the discovered never-attached session it replaced.
-    if (
-      this.spawnPublishedPtys.has(ptyId) ||
-      this.pendingPtyRegistrationIncarnations.has(ptyId)
-    ) {
+    if (this.spawnPublishedPtys.has(ptyId) || this.pendingPtyRegistrationIncarnations.has(ptyId)) {
       return false
     }
     // SSH panes have their own lease/reattach machinery.
@@ -10843,6 +10842,31 @@ export class OrcaRuntimeService {
       if (!attached && this.subscriberDrivenProviderAttachesByPtyId.get(ptyId) === attempt) {
         this.subscriberDrivenProviderAttachesByPtyId.delete(ptyId)
       }
+    })
+  }
+
+  private reconcileSubscriberDrivenProviderAttach(ptyId: string): void {
+    if (!this.hasRemoteTerminalViewSubscriber(ptyId)) {
+      return
+    }
+    const pending = this.subscriberDrivenProviderAttachesByPtyId.get(ptyId)
+    if (!pending) {
+      this.ensureSubscriberDrivenProviderAttach(ptyId)
+      return
+    }
+    if (this.subscriberDrivenProviderAttachInventoryWaiters.has(ptyId)) {
+      return
+    }
+    this.subscriberDrivenProviderAttachInventoryWaiters.add(ptyId)
+    void pending.then((attached) => {
+      this.subscriberDrivenProviderAttachInventoryWaiters.delete(ptyId)
+      if (attached || !this.hasRemoteTerminalViewSubscriber(ptyId)) {
+        return
+      }
+      if (this.subscriberDrivenProviderAttachesByPtyId.get(ptyId) === pending) {
+        this.subscriberDrivenProviderAttachesByPtyId.delete(ptyId)
+      }
+      this.ensureSubscriberDrivenProviderAttach(ptyId)
     })
   }
 
@@ -29269,6 +29293,7 @@ export class OrcaRuntimeService {
           this.restoredOrchestrationAuthorityByPtyId.delete(session.id)
         }
         pty.controllerTitle = session.title?.trim() || null
+        this.reconcileSubscriberDrivenProviderAttach(session.id)
       }
       // Why: fire-and-forget so this listing hot path doesn't serialize a relay round-trip per session and a throw can't abort the sweep below.
       this.refreshPtyForegroundAgent(session.id)

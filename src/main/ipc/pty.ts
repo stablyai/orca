@@ -2516,7 +2516,7 @@ export function registerPtyHandlers(
   function syncPtyBackgroundedDelivery(id: string, caller: string): void {
     const background =
       rendererPtyIsKnownHidden(id) && !(runtime?.hasRawTerminalViewSubscriber?.(id) ?? false)
-    if ((backgroundedDeliverySyncByPty.get(id) ?? false) === background) {
+    if (backgroundedDeliverySyncByPty.get(id) === background) {
       return
     }
     const provider = tryGetProviderForPty(id)

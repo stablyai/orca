@@ -637,6 +637,7 @@ describe('registerPtyHandlers', () => {
     const write = vi.fn()
     const pauseProducer = vi.fn()
     const resumeProducer = vi.fn()
+    const setPtyBackgrounded = vi.fn()
     const shutdown = vi.fn()
     let dataHandler: ((payload: { id: string; data: string }) => void) | null = null
     let exitHandler: ((payload: { id: string; code: number }) => void) | null = null
@@ -650,6 +651,7 @@ describe('registerPtyHandlers', () => {
       resize: vi.fn(),
       pauseProducer,
       resumeProducer,
+      setPtyBackgrounded,
       kill: vi.fn(),
       shutdown,
       sendSignal: vi.fn(),
@@ -688,6 +690,7 @@ describe('registerPtyHandlers', () => {
       write,
       pauseProducer,
       resumeProducer,
+      setPtyBackgrounded,
       shutdown,
       getBufferSnapshot,
       emitData: (id: string, data: string) => dataHandler?.({ id, data }),
@@ -15608,6 +15611,50 @@ describe('registerPtyHandlers', () => {
   })
 
   describe('hidden renderer delivery gate', () => {
+    it('foregrounds a preserved daemon PTY after handler recreation loses sync memory', async () => {
+      const daemon = installObservableDaemonTestProvider()
+      const firstRuntime = {
+        setPtyController: vi.fn(),
+        hasRawTerminalViewSubscriber: vi.fn(() => false),
+        createPreAllocatedTerminalHandle: vi.fn(() => null),
+        registerPty: vi.fn(),
+        noteTerminalSpawnCommand: vi.fn(),
+        onPtySpawned: vi.fn(),
+        onPtyExit: vi.fn(),
+        onPtyData: vi.fn()
+      }
+      registerPtyHandlers(mainWindow as never, firstRuntime as never)
+      const result = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        sessionId: 'daemon-session'
+      })) as { id: string }
+
+      getPtySetRendererPtyVisibleListener()(null, { id: result.id, visible: false })
+      expect(daemon.setPtyBackgrounded).toHaveBeenLastCalledWith(result.id, true)
+
+      daemon.setPtyBackgrounded.mockClear()
+      handlers.clear()
+      let rawSubscriberPresent = false
+      const nextRuntime = {
+        setPtyController: vi.fn(),
+        hasRawTerminalViewSubscriber: vi.fn(() => rawSubscriberPresent),
+        onRemoteTerminalViewPresenceChanged: null as ((id: string) => void) | null,
+        registerRawTerminalViewSubscriber(id: string): void {
+          rawSubscriberPresent = true
+          this.onRemoteTerminalViewPresenceChanged?.(id)
+        }
+      }
+      registerPtyHandlers(mainWindow as never, nextRuntime as never)
+
+      nextRuntime.registerRawTerminalViewSubscriber(result.id)
+      // Repeated presence signals must remain deduplicated.
+      nextRuntime.onRemoteTerminalViewPresenceChanged?.(result.id)
+
+      expect(daemon.setPtyBackgrounded).toHaveBeenCalledOnce()
+      expect(daemon.setPtyBackgrounded).toHaveBeenCalledWith(result.id, false)
+    })
+
     it('drops hidden PTY data after model ingestion and emits one out-of-band restore marker', async () => {
       vi.useFakeTimers()
       const runtime = {
