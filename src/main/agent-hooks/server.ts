@@ -2900,6 +2900,11 @@ export class AgentHookServer {
         return
       }
       this.flushStatusPersistSync()
+      // Why: deferring put this flush AFTER the caller armed the trailing
+      // debounce, and flushing clears that timer — so re-arm it or a transient
+      // write failure loses its only retry. A successful write no-ops on the
+      // unchanged-json check.
+      this.scheduleStatusPersist()
     })
   }
 

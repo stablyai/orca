@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -52,6 +53,8 @@ const LEAF_3 = '33333333-3333-4333-8333-333333333333'
 const LEAF_4 = '44444444-4444-4444-8444-444444444444'
 const LEAF_5 = '55555555-5555-4555-8555-555555555555'
 const PANE = makePaneKey('tab-1', LEAF_1)
+// Why: the 250ms trailing debounce plus scheduling slack.
+const STATUS_PERSIST_RETRY_WAIT_MS = 600
 const GOOD_PANE = makePaneKey('tab-good', LEAF_2)
 const OLD_PANE = makePaneKey('tab-old', LEAF_3)
 const FRESH_PANE = makePaneKey('tab-fresh', LEAF_4)
@@ -6810,6 +6813,48 @@ describe('Last-status persistence', () => {
       server.stop()
     }
   })
+
+  // Why runIf: the failure is injected with a read-only directory, which does not
+  // block writes on Windows.
+  it.runIf(process.platform !== 'win32')(
+    'retries the coalesced checkpoint after a transient write failure',
+    async () => {
+      const server = new AgentHookServer()
+      await server.start({ env: 'production', userDataPath })
+      const endpointDir = join(userDataPath, 'agent-hooks')
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      try {
+        // Deferring the flush moved it AFTER the caller armed the trailing
+        // debounce, and flushing clears that timer — so without a re-arm this
+        // failed write would be the only attempt and the identity is lost.
+        // Why the parent: runStatusPersist chmods endpointDir back to 0o700
+        // itself, so the failure has to be injected one level up.
+        rmSync(endpointDir, { recursive: true, force: true })
+        chmodSync(userDataPath, 0o500)
+        await postHookEvent(
+          server,
+          buildBody({
+            hook_event_name: 'Stop',
+            session_id: 'codex-transient-write-failure'
+          }),
+          '/hook/codex'
+        )
+        expect(existsSync(lastStatusPath())).toBe(false)
+
+        chmodSync(userDataPath, 0o700)
+        await new Promise((resolve) => setTimeout(resolve, STATUS_PERSIST_RETRY_WAIT_MS))
+
+        expect(JSON.parse(readFileSync(lastStatusPath(), 'utf8')).entries[PANE]).toMatchObject({
+          payload: { state: 'done' },
+          providerSession: { key: 'session_id', id: 'codex-transient-write-failure' }
+        })
+      } finally {
+        chmodSync(userDataPath, 0o700)
+        server.stop()
+      }
+    }
+  )
 
   it('coalesces a same-turn burst of checkpoints into one durable write', async () => {
     const server = new AgentHookServer()
