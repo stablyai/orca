@@ -1798,17 +1798,17 @@
     "onepassword": [
       {
         "releaseRevision": 1,
-        "packageDigest": "64da0daa368be5522e357f8172e92f1a250b1a9a91bfc7491484c0b1fc209f75",
-        "gitTreeSha": "7ad5c53aebaadb41428e8bf0420acf45da0c0de2",
+        "packageDigest": "f1af68093886c7c737af4e19416d60da96d1ccc5d7c3b7bcddc760fee096d434",
+        "gitTreeSha": "865aa791779e0260f77fd44d0ecbb9d9150738bf",
         "files": [
           {
             "path": "SKILL.md",
-            "size": 6495,
+            "size": 6820,
             "executable": false,
             "classification": "text",
-            "exactSha256": "6aff973876c7390e8e38762728f76f7168cf30dd40765533f77355739214ffc2",
-            "textNormalizedSha256": "6aff973876c7390e8e38762728f76f7168cf30dd40765533f77355739214ffc2",
-            "identitySha256": "6aff973876c7390e8e38762728f76f7168cf30dd40765533f77355739214ffc2"
+            "exactSha256": "5cb12d14b0bd0c98559b0e88abda45fd44751ba851f36dbb987746d1d1b2d212",
+            "textNormalizedSha256": "5cb12d14b0bd0c98559b0e88abda45fd44751ba851f36dbb987746d1d1b2d212",
+            "identitySha256": "5cb12d14b0bd0c98559b0e88abda45fd44751ba851f36dbb987746d1d1b2d212"
           }
         ]
       }

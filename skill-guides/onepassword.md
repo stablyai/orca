@@ -93,17 +93,25 @@ provider generated the credential, do NOT assign it as an argument
 splice it into the item JSON with jq, and pipe that into the edit:
 
 ```bash
-umask 077 && provider-rotate-command > new-key.txt   # 0600, delete when done
+set -euo pipefail
+umask 077
+key_file="$(mktemp)"
+trap 'rm -f -- "$key_file"' EXIT
+
+provider-rotate-command >"$key_file"
+test -s "$key_file"   # fail closed: never submit an empty password
 op item get "Service X" --vault Dev --format json \
-  | jq --rawfile secret new-key.txt \
+  | jq --rawfile secret "$key_file" \
       '(.fields[] | select(.id == "password") | .value) = ($secret | rtrimstr("\n"))' \
   | op item edit "Service X" --vault Dev
-rm new-key.txt
 ```
 
-(equivalently: save the edited JSON to a `chmod 600` temp file and pass `--template`,
-deleting it after). Typical rotation: create the new credential, store it, update
-consumers to reference it, then ask the user to revoke the old one.
+(equivalently: save the edited JSON to a `mktemp` file and pass `--template`). Both JSON
+forms — piped and `--template` — are for items **without passkeys** only: JSON item
+templates don't carry passkey data, so editing a passkey-bearing item this way destroys
+the passkey; use `--generate-password` or the 1Password app for those. Typical rotation:
+create the new credential, store it, update consumers to reference it, then ask the user
+to revoke the old one.
 
 ## Credentials for other CLIs
 
