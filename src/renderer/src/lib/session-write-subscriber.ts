@@ -150,6 +150,14 @@ export type SessionWriteSubscriberDeps = {
   debounceMs?: number
 }
 
+// Why: a ceiling on how long a suppressed write may be held. Back-to-back
+// snapshot applies (each holding suppression for up to 30s of terminal
+// reconnects plus a 1s trailing window) could otherwise starve local
+// persistence indefinitely — including from a misbehaving remote host that
+// streams new snapshot revisions. Past the ceiling the write proceeds; the
+// payload is rebuilt from the current store, which is always self-consistent.
+const SUPPRESSED_WRITE_MAX_HOLD_MS = 60_000
+
 /**
  * Why: factored out so a vitest can drive the real Zustand store and assert
  * which mutations cause a session write — the gate against unrelated updates
@@ -163,6 +171,7 @@ export function createSessionWriteSubscriber({
   debounceMs = 150
 }: SessionWriteSubscriberDeps): () => void {
   let timer: ReturnType<typeof setTimeout> | null = null
+  let suppressedSince: number | null = null
   // Why: the subscriber fires on every store update (agent status, usage
   // refreshes, runtime title ticks, …). Without this gate each fire reset
   // the debounce, and when it finally expired buildWorkspaceSessionPayload
@@ -198,18 +207,10 @@ export function createSessionWriteSubscriber({
     for (const field of changedFields) {
       pendingChangedFields.add(field)
     }
-    if (shouldSchedulePersist && !shouldSchedulePersist()) {
-      if (timer !== null) {
-        clearTimeout(timer)
-        timer = null
-      }
-      pendingChangedFields.clear()
-      return
-    }
     if (timer !== null) {
       clearTimeout(timer)
     }
-    timer = setTimeout(() => {
+    const flush = (): void => {
       timer = null
       // Why: rebuild from the freshest store state rather than the snapshot
       // captured when this timer was scheduled. Today this is equivalent
@@ -221,13 +222,26 @@ export function createSessionWriteSubscriber({
       // stale values for that field.
       const fresh = store.getState()
       if (!shouldPersistWorkspaceSession(fresh)) {
+        suppressedSince = null
         pendingChangedFields.clear()
         return
       }
       if (shouldSchedulePersist && !shouldSchedulePersist()) {
-        pendingChangedFields.clear()
-        return
+        // Why: a remote snapshot apply suppresses session writes for its whole
+        // window (up to 30s of terminal reconnects). Dropping the pending
+        // fields here would erase any tab created during that window from both
+        // the local session and the remote push — the remote store then never
+        // learns the tab existed, and the next snapshot apply deletes it. Hold
+        // the fields and retry until the write can land, up to the hold
+        // ceiling.
+        const now = Date.now()
+        suppressedSince ??= now
+        if (now - suppressedSince < SUPPRESSED_WRITE_MAX_HOLD_MS) {
+          timer = setTimeout(flush, debounceMs)
+          return
+        }
       }
+      suppressedSince = null
       const changed = new Set(pendingChangedFields)
       pendingChangedFields.clear()
       const patch = buildWorkspaceSessionPatch(fresh, changed)
@@ -235,7 +249,8 @@ export function createSessionWriteSubscriber({
         return
       }
       persist({ patch })
-    }, debounceMs)
+    }
+    timer = setTimeout(flush, debounceMs)
   })
 
   return () => {

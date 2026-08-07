@@ -2,7 +2,9 @@ import type { StoreApi } from 'zustand'
 import type { RemoteWorkspaceSnapshot } from '../../../shared/remote-workspace-types'
 import { importRemoteWorkspaceSession } from '../../../shared/remote-workspace-session-projection'
 import type { DirectSshAuthority } from '../../../shared/ssh-types'
+import type { WorkspaceSessionState } from '../../../shared/types'
 import { translate } from '@/i18n/i18n'
+import { tabHasLivePty } from '../lib/tab-has-live-pty'
 import { buildWorkspaceSessionPayload } from '../lib/workspace-session'
 import { resolveDirectSshTargetScope } from '../lib/direct-ssh-target-scope'
 import type { AppState } from '../store/types'
@@ -73,6 +75,55 @@ function currentRecoveryTabIds(
   )
 }
 
+/** Tab ids that are live under the current authority but absent from the
+ *  snapshot's tab lists for the in-scope worktrees. A pty running on the target
+ *  host is ground truth the metadata store cannot contradict: a snapshot that
+ *  does not list such a tab predates the local session write that created it
+ *  (the write is still debounced, suppressed, or in flight), so applying it
+ *  unmodified would delete the tab while its terminal keeps running
+ *  unreachable on the host. */
+export function staleDirectSshSnapshotTabIds(
+  remoteTabsByWorktree: WorkspaceSessionState['tabsByWorktree'],
+  worktreeIds: ReadonlySet<string>,
+  liveLocalTabIds: ReadonlySet<string>
+): string[] {
+  if (liveLocalTabIds.size === 0) {
+    return []
+  }
+  const remoteTabIds = new Set(
+    [...worktreeIds].flatMap((worktreeId) =>
+      (remoteTabsByWorktree[worktreeId] ?? []).map((tab) => tab.id)
+    )
+  )
+  return [...liveLocalTabIds].filter((tabId) => !remoteTabIds.has(tabId))
+}
+
+/** Append the named local tabs to the snapshot session's per-worktree tab
+ *  lists. Only the tab lists are grafted: the merge preserves layouts and
+ *  session ids from the current session for every tab in its preserve set, so
+ *  grafted tabs keep their local state through the normal merge path — and
+ *  remote-only tabs from other clients still apply, which a whole-apply skip
+ *  would silently drop from the store on the next full-session push. */
+export function graftLocalTabsIntoRemoteSession(
+  remoteSession: WorkspaceSessionState,
+  worktreeIds: ReadonlySet<string>,
+  localTabsByWorktree: AppState['tabsByWorktree'],
+  graftTabIds: ReadonlySet<string>
+): WorkspaceSessionState {
+  if (graftTabIds.size === 0) {
+    return remoteSession
+  }
+  const tabsByWorktree = { ...remoteSession.tabsByWorktree }
+  for (const worktreeId of worktreeIds) {
+    const extras = (localTabsByWorktree[worktreeId] ?? []).filter((tab) => graftTabIds.has(tab.id))
+    if (extras.length === 0) {
+      continue
+    }
+    tabsByWorktree[worktreeId] = [...(tabsByWorktree[worktreeId] ?? []), ...extras]
+  }
+  return { ...remoteSession, tabsByWorktree }
+}
+
 export async function applyDirectSshRemoteWorkspaceSnapshot({
   store,
   snapshot,
@@ -111,12 +162,39 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
   const remoteSession = importRemoteWorkspaceSession(snapshot.session, {
     resolveWorktreeId: uniqueWorktreeIdByPath(worktreeIds)
   })
+  // Why: recovery-ledger entries cover tabs mid-reattach; ptyIdsByTabId covers
+  // tabs whose pty already attached — a freshly created tab is only in the
+  // latter, and it is the tab a stale snapshot is most likely to be missing.
+  const recoveryTabIds = currentRecoveryTabIds(state, authority, worktreeIds)
+  const attachedTabIds = new Set(
+    [...worktreeIds].flatMap((worktreeId) =>
+      (state.tabsByWorktree[worktreeId] ?? [])
+        .filter((tab) => tabHasLivePty(state.ptyIdsByTabId, tab.id))
+        .map((tab) => tab.id)
+    )
+  )
+  const staleTabIds = staleDirectSshSnapshotTabIds(
+    remoteSession.tabsByWorktree,
+    worktreeIds,
+    new Set([...recoveryTabIds, ...attachedTabIds])
+  )
+  if (staleTabIds.length > 0) {
+    console.warn(
+      '[remote-workspace] snapshot predates live local terminals; keeping them through the merge',
+      staleTabIds
+    )
+  }
   const merged = mergeDirectSshRemoteWorkspaceSession(
     buildWorkspaceSessionPayload(state),
-    remoteSession,
+    graftLocalTabsIntoRemoteSession(
+      remoteSession,
+      worktreeIds,
+      state.tabsByWorktree,
+      new Set(staleTabIds)
+    ),
     worktreeIds,
     state.tabsByWorktree,
-    currentRecoveryTabIds(state, authority, worktreeIds)
+    new Set([...recoveryTabIds, ...staleTabIds])
   )
   if (!isArrivalCurrent(authority.targetId, arrival) || !isPreparationTokenCurrent(token)) {
     return

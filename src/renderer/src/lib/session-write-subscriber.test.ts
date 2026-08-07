@@ -582,6 +582,89 @@ describe('createSessionWriteSubscriber', () => {
     cleanup()
   })
 
+  it('holds a suppressed write and lands it after shouldSchedulePersist reopens', () => {
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+    let shouldSchedule = true
+    const cleanup = createSessionWriteSubscriber({
+      store: useAppStore,
+      persist,
+      shouldSchedulePersist: () => shouldSchedule
+    })
+
+    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
+    vi.advanceTimersByTime(200)
+    persist.mockClear()
+
+    shouldSchedule = false
+    useAppStore.setState({ activeTabId: 'tab-created-during-apply' })
+    vi.advanceTimersByTime(1_000)
+    expect(persist).not.toHaveBeenCalled()
+
+    shouldSchedule = true
+    vi.advanceTimersByTime(200)
+    expect(persist).toHaveBeenCalledTimes(1)
+    expect(persist.mock.calls[0]?.[0]?.patch).toHaveProperty(
+      'activeTabId',
+      'tab-created-during-apply'
+    )
+    cleanup()
+  })
+
+  it('holds a write suppressed mid-debounce until the suppression lifts', () => {
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+    let shouldSchedule = true
+    const cleanup = createSessionWriteSubscriber({
+      store: useAppStore,
+      persist,
+      shouldSchedulePersist: () => shouldSchedule
+    })
+
+    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
+    vi.advanceTimersByTime(200)
+    persist.mockClear()
+
+    useAppStore.setState({ activeTabId: 'tab-created-before-apply' })
+    vi.advanceTimersByTime(50)
+    shouldSchedule = false
+    vi.advanceTimersByTime(5_000)
+    expect(persist).not.toHaveBeenCalled()
+
+    shouldSchedule = true
+    vi.advanceTimersByTime(200)
+    expect(persist).toHaveBeenCalledTimes(1)
+    expect(persist.mock.calls[0]?.[0]?.patch).toHaveProperty(
+      'activeTabId',
+      'tab-created-before-apply'
+    )
+    cleanup()
+  })
+
+  it('force-flushes a held write once the suppression hold ceiling passes', () => {
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+    let shouldSchedule = true
+    const cleanup = createSessionWriteSubscriber({
+      store: useAppStore,
+      persist,
+      shouldSchedulePersist: () => shouldSchedule
+    })
+
+    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
+    vi.advanceTimersByTime(200)
+    persist.mockClear()
+
+    shouldSchedule = false
+    useAppStore.setState({ activeTabId: 'tab-held-past-ceiling' })
+    vi.advanceTimersByTime(30_000)
+    expect(persist).not.toHaveBeenCalled()
+
+    // Why: suppression never lifts — a stream of back-to-back snapshot applies
+    // must not starve persistence forever, so the ceiling flushes anyway.
+    vi.advanceTimersByTime(45_000)
+    expect(persist).toHaveBeenCalledTimes(1)
+    expect(persist.mock.calls[0]?.[0]?.patch).toHaveProperty('activeTabId', 'tab-held-past-ceiling')
+    cleanup()
+  })
+
   it('coalesces multiple relevant mutations within a debounce window', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
