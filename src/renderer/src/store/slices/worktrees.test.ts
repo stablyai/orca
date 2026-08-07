@@ -6639,6 +6639,100 @@ describe('worktree remote runtime mutations', () => {
     expect(store.getState().worktreesByRepo.repo1[0]?.pushTarget).toEqual(pushTarget)
   })
 
+  it.each([
+    ['GitHub PR', { linkedPR: 2548 }],
+    ['GitLab MR', { linkedGitLabMR: 42 }]
+  ] as const)(
+    'fails closed for an explicitly owned %s when duplicate repos share its host',
+    async (_provider, linkedReview) => {
+      const store = createTestStore()
+      const wt = makeWorktree({
+        id: 'repo1::/remote/wt1',
+        repoId: 'repo1',
+        path: '/remote/wt1',
+        hostId: 'ssh:builder',
+        ...linkedReview
+      })
+      store.setState({
+        repos: [
+          {
+            id: 'repo1',
+            path: '/remote/first',
+            displayName: 'SSH Repo 1',
+            badgeColor: '#000',
+            addedAt: 0,
+            executionHostId: 'ssh:builder'
+          },
+          {
+            id: 'repo1',
+            path: '/remote/second',
+            displayName: 'SSH Repo 1 duplicate',
+            badgeColor: '#000',
+            addedAt: 0,
+            executionHostId: 'ssh:builder'
+          }
+        ],
+        worktreesByRepo: { repo1: [wt] }
+      } as Partial<AppState>)
+
+      await store.getState().ensureHostedReviewPushTarget(wt.id)
+
+      expect(mockApi.worktrees.resolvePrBase).not.toHaveBeenCalled()
+      expect(mockApi.worktrees.resolveMrBase).not.toHaveBeenCalled()
+      expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each([
+    ['GitHub PR', { linkedPR: 2548 }, { linkedPR: null }],
+    ['GitLab MR', { linkedGitLabMR: 42 }, { linkedGitLabMR: null }]
+  ] as const)(
+    'clears an explicitly owned %s push target when duplicate repos share its host',
+    async (_provider, linkedReview, unlinkUpdate) => {
+      const store = createTestStore()
+      const pushTarget = { remoteName: 'fork', branchName: 'owner/old-review' }
+      const wt = makeWorktree({
+        id: 'repo1::/remote/wt1',
+        repoId: 'repo1',
+        path: '/remote/wt1',
+        hostId: 'ssh:builder',
+        pushTarget,
+        ...linkedReview
+      })
+      store.setState({
+        repos: [
+          {
+            id: 'repo1',
+            path: '/remote/first',
+            displayName: 'SSH Repo 1',
+            badgeColor: '#000',
+            addedAt: 0,
+            executionHostId: 'ssh:builder'
+          },
+          {
+            id: 'repo1',
+            path: '/remote/second',
+            displayName: 'SSH Repo 1 duplicate',
+            badgeColor: '#000',
+            addedAt: 0,
+            executionHostId: 'ssh:builder'
+          }
+        ],
+        worktreesByRepo: { repo1: [wt] }
+      } as Partial<AppState>)
+
+      await store
+        .getState()
+        .updateWorktreeMeta(wt.id, unlinkUpdate, { suppressHostedReviewRefresh: true })
+
+      expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
+        worktreeId: wt.id,
+        updates: { ...unlinkUpdate, pushTarget: undefined }
+      })
+      expect(store.getState().worktreesByRepo.repo1[0]?.pushTarget).toBeUndefined()
+    }
+  )
+
   it('clears a stale push target when unlinking the GitHub PR that supplied it', async () => {
     const store = createTestStore()
     const pushTarget = { remoteName: 'fork', branchName: 'owner/old-pr' }

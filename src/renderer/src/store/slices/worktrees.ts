@@ -1876,35 +1876,47 @@ function getHostedReviewPushTargetLookup(
   repos: readonly Repo[]
 ): {
   key: string
-  resolve: (settings: AppState['settings']) => Promise<GitPushTarget | undefined>
+  resolve: ((settings: AppState['settings']) => Promise<GitPushTarget | undefined>) | null
 } | null {
-  // Why: host-less legacy worktrees predate composite repo identity; keep the
-  // unique-owner/local fallback without letting ambiguous duplicate ids pick arbitrarily.
   const matchingRepos = repos.filter((repo) => repo.id === worktree.repoId)
   const explicitHostId = normalizeExecutionHostId(worktree.hostId)
-  const repo = explicitHostId
-    ? matchingRepos.find((candidate) => getRepoExecutionHostId(candidate) === explicitHostId)
-    : matchingRepos.length === 1
-      ? matchingRepos[0]
-      : matchingRepos.find(
-          (candidate) => getRepoExecutionHostId(candidate) === LOCAL_EXECUTION_HOST_ID
-        )
+  let repo: Repo | undefined
+  let canResolve = true
+  if (explicitHostId) {
+    const explicitMatches = matchingRepos.filter(
+      (candidate) => getRepoExecutionHostId(candidate) === explicitHostId
+    )
+    if (explicitMatches.length > 1) {
+      canResolve = false
+    } else {
+      repo = explicitMatches[0]
+    }
+  } else {
+    repo = findRepoForWorktreeOwner(repos, worktree) ?? undefined
+    if (matchingRepos.length > 0 && !repo) {
+      canResolve = false
+    }
+  }
   const executionHostId = getWorktreeExecutionHostId(worktree, repo)
   const hostScope = executionHostId
   if (isPositiveHostedReviewNumber(worktree.linkedPR)) {
     const prNumber = worktree.linkedPR
     return {
       key: `${worktree.id}:${hostScope}:github:${prNumber}`,
-      resolve: (settings) =>
-        resolveGitHubReviewPushTarget(settings, worktree.repoId, prNumber, executionHostId)
+      resolve: canResolve
+        ? (settings) =>
+            resolveGitHubReviewPushTarget(settings, worktree.repoId, prNumber, executionHostId)
+        : null
     }
   }
   if (isPositiveHostedReviewNumber(worktree.linkedGitLabMR)) {
     const mrIid = worktree.linkedGitLabMR
     return {
       key: `${worktree.id}:${hostScope}:gitlab:${mrIid}`,
-      resolve: (settings) =>
-        resolveGitLabReviewPushTarget(settings, worktree.repoId, mrIid, executionHostId)
+      resolve: canResolve
+        ? (settings) =>
+            resolveGitLabReviewPushTarget(settings, worktree.repoId, mrIid, executionHostId)
+        : null
     }
   }
   return null
@@ -5090,7 +5102,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       return
     }
     const lookup = getHostedReviewPushTargetLookup(worktree, get().repos)
-    if (!lookup || hostedReviewPushTargetLookupsInFlight.has(lookup.key)) {
+    if (!lookup?.resolve || hostedReviewPushTargetLookupsInFlight.has(lookup.key)) {
       return
     }
     hostedReviewPushTargetLookupsInFlight.add(lookup.key)
