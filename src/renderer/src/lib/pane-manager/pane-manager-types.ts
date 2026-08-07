@@ -146,6 +146,12 @@ export type ManagedPaneInternal = {
   // pane on the DOM renderer until the next recovery boundary. Optional so
   // absent means "never failed"; only the attach failure path sets it.
   webglAttachFailedSinceRecovery?: boolean
+  // Why a timestamp list: repeated context losses in one window mean Chromium
+  // is reclaiming this pane's contexts under pressure. The rendering-resume
+  // boundary consults it to bound WebGL retry churn (see
+  // isTerminalWebglRetryPinnedAfterContextLosses). Optional so absent means
+  // "never lost a context"; only the context-loss handler appends.
+  webglContextLossAtMs?: number[]
   // Why: expose complex-output diagnostics without changing renderer choice;
   // auto renderer fallback is reserved for platform or WebGL failures.
   hasComplexScriptOutput: boolean

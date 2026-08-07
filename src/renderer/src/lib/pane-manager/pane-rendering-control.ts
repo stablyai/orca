@@ -4,6 +4,7 @@ import {
   attachWebgl,
   clearTerminalWebglAttachBackoff,
   disposeWebgl,
+  isTerminalWebglRetryPinnedAfterContextLosses,
   markComplexScriptOutput,
   resetWebglTextureAtlas
 } from './pane-webgl-renderer'
@@ -56,7 +57,14 @@ export function resumePaneRendering(panes: Iterable<ManagedPaneInternal>): void 
     // loss, and bounding retries to resume events cannot loop on live loss.
     clearTerminalWebglAttachBackoff(pane)
     pane.webglAttachmentDeferred = false
-    pane.webglDisabledAfterContextLoss = false
+    // Why the pin check: resumes fire on every worktree switch, so an
+    // unconditional clear re-attached WebGL to panes whose contexts Chromium
+    // keeps reclaiming — churning WebGL↔DOM per switch and re-arming the
+    // stale-canvas desync behind issue #12452. A pane over its loss budget
+    // stays on the DOM renderer until the loss window decays.
+    if (!isTerminalWebglRetryPinnedAfterContextLosses(pane)) {
+      pane.webglDisabledAfterContextLoss = false
+    }
     reattachWebglIfNeeded(pane)
   }
 }

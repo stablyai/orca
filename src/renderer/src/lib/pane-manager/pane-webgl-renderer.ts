@@ -44,6 +44,47 @@ export function clearTerminalWebglAttachBackoff(pane: ManagedPaneInternal): void
   pane.webglAttachFailedSinceRecovery = false
 }
 
+// Why bounded: rendering resume fires on every worktree foreground and window
+// wake, and it used to clear webglDisabledAfterContextLoss unconditionally. On
+// a machine where Chromium keeps reclaiming terminal contexts, that cycled
+// every affected pane WebGL→loss→DOM→WebGL per switch (issue #12452's
+// oscillating managers and ~30s atlas-reset churn), and each cycle risks a
+// dropped presentation that leaves the canvas stale behind the model diff.
+// Reaching the threshold inside the window pins the pane to the DOM renderer;
+// the pin decays once the window passes without another loss.
+const CONTEXT_LOSS_PIN_THRESHOLD = 3
+const CONTEXT_LOSS_PIN_WINDOW_MS = 30 * 60_000
+
+function contextLossesInsideWindow(pane: ManagedPaneInternal, nowMs: number): number[] {
+  return (pane.webglContextLossAtMs ?? []).filter((at) => nowMs - at < CONTEXT_LOSS_PIN_WINDOW_MS)
+}
+
+export function recordTerminalWebglContextLoss(
+  pane: ManagedPaneInternal,
+  nowMs: number = Date.now()
+): void {
+  const losses = contextLossesInsideWindow(pane, nowMs)
+  losses.push(nowMs)
+  pane.webglContextLossAtMs = losses
+  if (losses.length === CONTEXT_LOSS_PIN_THRESHOLD) {
+    // Why only at the transition: the pin holds across resumes, so recording
+    // once per pinning keeps the diagnostic stream proportional to state
+    // changes rather than to worktree switches.
+    recordTerminalWebglDiagnostic('webgl-context-loss-pinned-dom', {
+      paneId: pane.id,
+      lossesInWindow: losses.length,
+      windowMs: CONTEXT_LOSS_PIN_WINDOW_MS
+    })
+  }
+}
+
+export function isTerminalWebglRetryPinnedAfterContextLosses(
+  pane: ManagedPaneInternal,
+  nowMs: number = Date.now()
+): boolean {
+  return contextLossesInsideWindow(pane, nowMs).length >= CONTEXT_LOSS_PIN_THRESHOLD
+}
+
 export function shouldUseTerminalWebgl(pane: ManagedPaneInternal): boolean {
   if (pane.terminalGpuAcceleration === 'on') {
     return true
@@ -244,7 +285,10 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
       // Why: Chromium starts reclaiming terminal contexts under pressure.
       // Recreating WebGL for this pane can loop context loss and leave xterm
       // visually blank, so keep the pane on the DOM renderer until the next
-      // rendering resume (worktree foreground / window wake) retries it.
+      // rendering resume (worktree foreground / window wake) retries it. The
+      // loss record bounds those retries: past the threshold the resume
+      // boundary stops re-arming WebGL for this pane (issue #12452).
+      recordTerminalWebglContextLoss(pane)
       pane.webglDisabledAfterContextLoss = true
       disposeWebgl(pane, { refreshDimensions: true })
     })
