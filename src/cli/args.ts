@@ -28,8 +28,10 @@ export const BOOLEAN_FLAGS = new Set([
   'help',
   'inject',
   'include-archived',
+  'include-visual-layouts',
   'interrupt',
   'json',
+  'local',
   'messages',
   'me',
   'mobile',
@@ -55,7 +57,7 @@ export const BOOLEAN_FLAGS = new Set([
 ])
 
 export const REPEATED_FLAG_SEPARATOR = '\u0000'
-const REPEATABLE_STRING_FLAGS = new Set(['label'])
+const REPEATABLE_STRING_FLAGS = new Set(['label', 'skill'])
 
 function setFlagValue(flags: Map<string, string | boolean>, name: string, value: string): void {
   const existing = flags.get(name)
@@ -151,6 +153,7 @@ export function supportsBrowserPageFlag(commandPath: string[]): boolean {
   }
   if (
     [
+      'account',
       'automations',
       'project',
       'repo',
@@ -197,6 +200,7 @@ export function isCommandGroup(commandPath: string[]): boolean {
   return (
     (commandPath.length === 1 &&
       [
+        'account',
         'automations',
         'project',
         'repo',

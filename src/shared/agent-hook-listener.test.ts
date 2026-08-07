@@ -32,6 +32,20 @@ import { makePaneKey } from './stable-pane-id'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const PANE_KEY = makePaneKey('tab-1', LEAF_ID)
+const CLAUDE_PROMPT_ID = '22222222-2222-4222-8222-222222222222'
+const CLAUDE_PREVIOUS_PROMPT_ID = '33333333-3333-4333-8333-333333333333'
+
+function normalizeAndAccept(
+  state: HookListenerState,
+  source: Parameters<typeof normalizeHookPayload>[1],
+  payload: Record<string, unknown>
+): ReturnType<typeof normalizeHookPayload> {
+  const event = normalizeHookPayload(state, source, { paneKey: PANE_KEY, payload }, 'production')
+  if (event) {
+    state.lastStatusByPaneKey.set(PANE_KEY, event)
+  }
+  return event
+}
 
 type FakeIncomingMessage = EventEmitter & {
   headers: IncomingHttpHeaders
@@ -1355,6 +1369,96 @@ describe('shared agent-hook-listener', () => {
     expect(event?.payload.lastAssistantMessage).toBeUndefined()
   })
 
+  it('maps Claude SessionStart to an idle done row so a resumed session earns its sidebar row before the first prompt', () => {
+    const event = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'SessionStart',
+          source: 'resume',
+          session_id: '44444444-4444-4444-8444-444444444444'
+        }
+      },
+      'production'
+    )
+
+    // Why: 'working' would show a phantom spinner on an idle TUI; a session-boundary
+    // 'done' renders the row idle, which is the truth at SessionStart.
+    expect(event?.payload).toMatchObject({
+      state: 'done',
+      prompt: '',
+      agentType: 'claude',
+      sessionBoundary: true
+    })
+    expect(event?.payload.interrupted).toBeUndefined()
+    expect(event?.hookEventName).toBe('SessionStart')
+    // Why: SessionStart carries resume identity, so in-app resume works before any prompt.
+    expect(event?.providerSession).toMatchObject({
+      key: 'session_id',
+      id: '44444444-4444-4444-8444-444444444444'
+    })
+  })
+
+  it('resets stale Claude turn state when SessionStart announces a new session on the pane', () => {
+    normalizeAndAccept(state, 'claude', { hook_event_name: 'UserPromptSubmit', prompt: 'fix bug' })
+    normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'PreToolUse',
+      tool_name: 'Bash',
+      tool_input: { command: 'ls' }
+    })
+    normalizeAndAccept(state, 'claude', { hook_event_name: 'SubagentStart', agent_id: 'agent-1' })
+
+    const event = normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'SessionStart',
+      source: 'startup'
+    })
+
+    // Why: a new process owns the pane; stale prompt/tool/children must not survive
+    // into the fresh session's idle row or gate it back up to 'working'.
+    expect(event?.payload.state).toBe('done')
+    expect(event?.payload.prompt).toBe('')
+    expect(event?.payload.toolName).toBeUndefined()
+    expect(event?.payload.subagents).toBeUndefined()
+  })
+
+  it('keeps the running Claude turn when SessionStart comes from a compact restart or a child session', () => {
+    normalizeAndAccept(state, 'claude', { hook_event_name: 'UserPromptSubmit', prompt: 'say hi' })
+
+    const compacted = normalizeHookPayload(
+      state,
+      'claude',
+      { paneKey: PANE_KEY, payload: { hook_event_name: 'SessionStart', source: 'compact' } },
+      'production'
+    )
+    // Why: unknown/missing sources fail closed — only startup/resume/clear are idle boundaries.
+    const unknownSource = normalizeHookPayload(
+      state,
+      'claude',
+      { paneKey: PANE_KEY, payload: { hook_event_name: 'SessionStart' } },
+      'production'
+    )
+    const child = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'SessionStart', source: 'startup', agent_id: 'agent-7' }
+      },
+      'production'
+    )
+    const stopped = normalizeAndAccept(state, 'claude', { hook_event_name: 'Stop' })
+
+    // Why: auto-compact restarts mid-turn (PreCompact/PostCompact own that lifecycle) and a
+    // child-attributed SessionStart must not flip the lead's live turn to an idle row.
+    expect(compacted).toBeNull()
+    expect(unknownSource).toBeNull()
+    expect(child).toBeNull()
+    expect(stopped?.payload).toMatchObject({ state: 'done', prompt: 'say hi' })
+    expect(stopped?.payload.sessionBoundary).toBeUndefined()
+  })
+
   it('normalizes Devin documented lifecycle events', () => {
     const started = normalizeHookPayload(
       state,
@@ -1450,6 +1554,69 @@ describe('shared agent-hook-listener', () => {
     expect(stopped?.payload).toMatchObject({ agentType: 'kimi', state: 'done' })
     // The Claude-shaped session_id is captured for provider-session resume.
     expect(stopped?.providerSession).toMatchObject({ key: 'session_id', id: 'session_abc' })
+  })
+
+  // Why: Kimi shares Claude-compatible compact/harness hooks; cover the same sticky-working
+  // guards so a Kimi-only regression cannot slip past the Claude-only tests (issue #11352).
+  it('ignores harness-injected UserPromptSubmit for Kimi', () => {
+    normalizeHookPayload(
+      state,
+      'kimi',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'UserPromptSubmit',
+          prompt: [{ type: 'text', text: 'list the files here' }]
+        }
+      },
+      'production'
+    )
+    const harness = normalizeHookPayload(
+      state,
+      'kimi',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'UserPromptSubmit',
+          prompt:
+            'This session is being continued from a previous conversation that ran out of context.'
+        }
+      },
+      'production'
+    )
+    expect(harness).toBeNull()
+    const tool = normalizeHookPayload(
+      state,
+      'kimi',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'Bash',
+          tool_input: { command: 'ls' }
+        }
+      },
+      'production'
+    )
+    expect(tool).not.toBeNull()
+    expect(tool!.payload.state).toBe('working')
+    expect(tool!.payload.prompt).toBe('list the files here')
+    expect(tool!.payload.agentType).toBe('kimi')
+  })
+
+  it('ignores unproven Kimi compact lifecycle events', () => {
+    const pre = normalizeAndAccept(state, 'kimi', {
+      hook_event_name: 'PreCompact',
+      trigger: 'manual'
+    })
+    const post = normalizeAndAccept(state, 'kimi', {
+      hook_event_name: 'PostCompact',
+      trigger: 'manual'
+    })
+
+    expect(pre).toBeNull()
+    expect(post).toBeNull()
+    expect(state.lastStatusByPaneKey.has(PANE_KEY)).toBe(false)
   })
 
   it('normalizes MiMo Code OpenCode-compatible lifecycle events as mimo-code status', () => {
@@ -1563,15 +1730,13 @@ describe('shared agent-hook-listener', () => {
     expect(event).toBeNull()
   })
 
-  it('keeps the cached prompt when a harness-injected turn fires UserPromptSubmit', () => {
+  it('resumes work for task notifications without replacing the cached prompt', () => {
     normalizeHookPayload(
       state,
       'claude',
       { paneKey: PANE_KEY, payload: { hook_event_name: 'UserPromptSubmit', prompt: 'fix login' } },
       'production'
     )
-    // Why: the harness injects background task notifications as user turns;
-    // they must not replace the user's real prompt in status labels.
     const event = normalizeHookPayload(
       state,
       'claude',
@@ -1590,7 +1755,7 @@ describe('shared agent-hook-listener', () => {
     expect(event!.hasExplicitPrompt).toBe(false)
   })
 
-  it('resolves an empty prompt for a harness-injected turn with nothing cached', () => {
+  it('emits a harness-injected UserPromptSubmit with an empty uncached prompt', () => {
     const event = normalizeHookPayload(
       state,
       'claude',
@@ -1604,8 +1769,79 @@ describe('shared agent-hook-listener', () => {
       'production'
     )
     expect(event).not.toBeNull()
+    expect(event!.payload.state).toBe('working')
     expect(event!.payload.prompt).toBe('')
     expect(event!.hasExplicitPrompt).toBe(false)
+  })
+
+  it('does not leave working after a compact-summary UserPromptSubmit (issue #11352)', () => {
+    // Live repro: after /compact Claude injects "This session is being continued…" with no Stop.
+    const event = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'UserPromptSubmit',
+          prompt:
+            'This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.'
+        }
+      },
+      'production'
+    )
+    expect(event).toBeNull()
+  })
+
+  it('maps an identity-matched Claude manual compact lifecycle', () => {
+    normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'UserPromptSubmit',
+      prompt: 'work before compact',
+      prompt_id: CLAUDE_PREVIOUS_PROMPT_ID,
+      session_id: 'session-a'
+    })
+    const pre = normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'PreCompact',
+      trigger: 'manual',
+      prompt_id: CLAUDE_PROMPT_ID,
+      session_id: 'session-a'
+    })
+    expect(pre).not.toBeNull()
+    expect(pre!.payload.state).toBe('working')
+    expect(pre!.payload.agentType).toBe('claude')
+
+    const post = normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'PostCompact',
+      trigger: 'manual',
+      prompt_id: CLAUDE_PROMPT_ID,
+      session_id: 'session-a'
+    })
+    expect(post).not.toBeNull()
+    expect(post!.payload.state).toBe('done')
+    expect(post!.payload.agentType).toBe('claude')
+  })
+
+  it('keeps the preceding user prompt on the completed compact row', () => {
+    normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'UserPromptSubmit',
+      prompt: 'work before compact',
+      prompt_id: CLAUDE_PREVIOUS_PROMPT_ID,
+      session_id: 'session-a'
+    })
+    normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'PreCompact',
+      trigger: 'manual',
+      prompt_id: CLAUDE_PROMPT_ID,
+      session_id: 'session-a'
+    })
+    const post = normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'PostCompact',
+      trigger: 'manual',
+      prompt_id: CLAUDE_PROMPT_ID,
+      session_id: 'session-a'
+    })
+    expect(post).not.toBeNull()
+    expect(post!.payload.state).toBe('done')
+    expect(post!.payload.prompt).toBe('work before compact')
   })
 
   it('treats a custom-element paste as an explicit user turn, not machinery', () => {
@@ -3007,6 +3243,27 @@ describe('shared agent-hook-listener', () => {
       expect(stop?.payload.state).toBe('done')
       expect(stop?.payload.subagents).toBeUndefined()
     })
+
+    it.each([
+      {
+        label: 'a running shell task',
+        eventName: 'Stop',
+        payload: { background_tasks: [{ id: 'shell-1', type: 'shell', status: 'running' }] }
+      },
+      {
+        label: 'a pending session cron',
+        eventName: 'StopFailure',
+        payload: { session_crons: [{ id: 'cron-1' }] }
+      }
+    ])(
+      'reports Stop as working for $label without adding a subagent row',
+      ({ eventName, payload }) => {
+        claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'run in background' })
+        const stop = claudeEvent({ hook_event_name: eventName, ...payload })
+        expect(stop?.payload.state).toBe('working')
+        expect(stop?.payload.subagents).toBeUndefined()
+      }
+    )
 
     it('reports Stop as working while a background subagent is still running', () => {
       claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'review the PR' })

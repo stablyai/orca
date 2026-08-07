@@ -12,6 +12,8 @@ import { useContextualTour } from '@/components/contextual-tours/use-contextual-
 import TabBar from '@/components/tab-bar/TabBar'
 import { resolveGroupTabFromVisibleId } from '@/components/tab-group/tab-group-visible-id'
 import TerminalPane, { type TerminalPaneHandle } from '@/components/terminal-pane/TerminalPane'
+import { shouldDeferParkedPtyExitTabClose } from '@/components/terminal-pane/terminal-parked-tab-watchers'
+import { useTerminalTabColdParking } from '@/components/terminal-pane/use-terminal-tab-cold-parking'
 import { isTerminalPaneCloseChord } from '@/components/terminal-pane/terminal-shortcut-policy'
 import { isTerminalImeInputContextRefreshing } from '@/components/terminal-pane/terminal-ime-input-context-refresh'
 import { Button } from '@/components/ui/button'
@@ -109,6 +111,7 @@ import { translate } from '@/i18n/i18n'
 import { consumeFloatingTerminalOpenMaximizedIntent } from '@/lib/floating-terminal'
 import { selectFloatingTerminalPanelInputs } from './floating-terminal-panel-inputs'
 const LOCAL_RUNTIME_SETTINGS = { activeRuntimeEnvironmentId: null } as const
+const NO_ACTIVITY_TERMINAL_PORTALS = []
 
 const EditorPanel = lazy(() => import('@/components/editor/EditorPanel'))
 
@@ -349,6 +352,27 @@ export function FloatingTerminalPanel({
       ? activeTab.entityId
       : null
   const terminalTabById = useMemo(() => new Map(tabs.map((tab) => [tab.id, tab])), [tabs])
+  const terminalAssignments = useMemo(() => {
+    const assignments = new Map<string, { groupId: string; isActiveInGroup: boolean }>()
+    for (const tab of unifiedTabs) {
+      if (tab.contentType === 'terminal') {
+        assignments.set(tab.entityId, {
+          groupId: tab.groupId,
+          isActiveInGroup: tab.entityId === activeTerminalId
+        })
+      }
+    }
+    return assignments
+  }, [activeTerminalId, unifiedTabs])
+  const parkedTerminalTabIds = useTerminalTabColdParking({
+    worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+    terminalTabs: tabs,
+    assignments: terminalAssignments,
+    isWorktreeActive: open,
+    coldParkTerminalPanes: false,
+    shouldMeasureHiddenWorktree: false,
+    activityTerminalPortals: NO_ACTIVITY_TERMINAL_PORTALS
+  })
   const terminalItems = useMemo<(TerminalTab & { unifiedTabId: string })[]>(
     () =>
       groupTabs
@@ -1817,33 +1841,43 @@ export function FloatingTerminalPanel({
           }
         >
           {cwd
-            ? tabs.map((tab) => {
-                const isActive = tab.id === activeTerminalId
-                return (
-                  <div
-                    key={`${tab.id}-${tab.generation ?? 0}`}
-                    className={isActive ? 'absolute inset-0' : 'absolute inset-0 hidden'}
-                    aria-hidden={!isActive}
-                  >
-                    <TerminalPane
-                      ref={terminalPaneRegistry.getRefCallback(tab.id)}
-                      tabId={tab.id}
-                      worktreeId={FLOATING_TERMINAL_WORKTREE_ID}
-                      cwd={cwd}
-                      isActive={isActive}
-                      // Why: the closed panel is only CSS-hidden, so gate
-                      // visibility on `open` too. This routes the floating
-                      // terminal through the standard hidden-terminal
-                      // suspend/resume path: no live WebGL context (or glyph
-                      // atlas to corrupt) while hidden, and the resume on
-                      // reopen rebuilds the renderer from scratch.
-                      isVisible={isActive && open}
-                      onPtyExit={() => closeTab(tab.id, { reason: 'pty-exit' })}
-                      onCloseTab={() => closeFloatingItemConfirmed(tab.id)}
-                    />
-                  </div>
-                )
-              })
+            ? tabs
+                .filter((tab) => !parkedTerminalTabIds.has(tab.id))
+                .map((tab) => {
+                  const isActive = tab.id === activeTerminalId
+                  return (
+                    <div
+                      key={`${tab.id}-${tab.generation ?? 0}`}
+                      className={isActive ? 'absolute inset-0' : 'absolute inset-0 hidden'}
+                      aria-hidden={!isActive}
+                    >
+                      <TerminalPane
+                        ref={terminalPaneRegistry.getRefCallback(tab.id)}
+                        tabId={tab.id}
+                        worktreeId={FLOATING_TERMINAL_WORKTREE_ID}
+                        cwd={cwd}
+                        isActive={isActive}
+                        // Why: the closed panel is only CSS-hidden, so gate
+                        // visibility on `open` too. This routes the floating
+                        // terminal through the standard hidden-terminal
+                        // suspend/resume path: no live WebGL context (or glyph
+                        // atlas to corrupt) while hidden, and the resume on
+                        // reopen rebuilds the renderer from scratch.
+                        isVisible={isActive && open}
+                        onPtyExit={(ptyId) => {
+                          if (shouldDeferParkedPtyExitTabClose(tab.id, ptyId)) {
+                            return
+                          }
+                          closeTerminalTab(tab.id, {
+                            reason: 'pty-exit',
+                            lifecyclePtyId: ptyId
+                          })
+                        }}
+                        onCloseTab={() => closeFloatingItemConfirmed(tab.id)}
+                      />
+                    </div>
+                  )
+                })
             : null}
           {browserTabs.map((tab) => {
             const isActive = tab.id === activeBrowserTab?.id

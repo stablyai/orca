@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockLaunchAgentBackgroundSession = vi.fn()
 const mockLaunchWorktreeBackgroundTerminals = vi.fn()
-const mockSubmitPromptToAgentTab = vi.fn()
 const mockFindReusableAutomationSession = vi.fn()
 const mockObserveExistingAutomationSession = vi.fn()
 const mockCreateWorktree = vi.fn()
@@ -125,9 +124,7 @@ vi.mock('@/lib/launch-worktree-background-terminals', () => ({
   launchWorktreeBackgroundTerminals: mockLaunchWorktreeBackgroundTerminals
 }))
 
-vi.mock('@/lib/agent-paste-draft', () => ({
-  submitPromptToAgentTab: mockSubmitPromptToAgentTab
-}))
+vi.mock('@/lib/agent-paste-draft', () => ({}))
 
 vi.mock('@/lib/automation-session-reuse', () => ({
   findReusableAutomationSession: mockFindReusableAutomationSession
@@ -540,6 +537,35 @@ describe('useAutomationDispatchEvents setup launch', () => {
       terminalPaneKey: null,
       terminalPtyId: null
     })
+  })
+
+  it('ignores a session-boundary done so a connecting agent cannot complete the run (STA-3386)', async () => {
+    let launchArgs: {
+      onAgentStatus?: (payload: { state: string; sessionBoundary?: boolean }) => void
+    } = {}
+    mockLaunchAgentBackgroundSession.mockImplementation(async (args) => {
+      launchArgs = args
+      return {
+        tabId: 'agent-tab',
+        paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',
+        ptyId: 'agent-pty',
+        startupPlan: {},
+        terminalOwnership: {
+          finalize: mockFinalizeTerminalOwnership,
+          release: mockReleaseTerminalOwnership
+        }
+      }
+    })
+
+    await registerAndDispatch()
+    // Why: Claude fires SessionStart (a sessionBoundary done) at launch, before the argv
+    // prompt submits — treating it as run completion would close the tab on an empty run.
+    launchArgs.onAgentStatus?.({ state: 'done', sessionBoundary: true })
+    await Promise.resolve()
+    expect(mockFinalizeTerminalOwnership).not.toHaveBeenCalled()
+
+    launchArgs.onAgentStatus?.({ state: 'done' })
+    await vi.waitFor(() => expect(mockFinalizeTerminalOwnership).toHaveBeenCalledOnce())
   })
 
   it('consumes duplicate done and zero-exit completion through one finalizer', async () => {

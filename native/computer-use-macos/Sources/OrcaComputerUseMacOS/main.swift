@@ -740,25 +740,30 @@ final class Provider {
             }
             if let point = center(record.localFrame, in: snapshot.windowBounds) {
                 try Input.click(
-                    pid: snapshot.app.pid,
                     at: point,
                     button: mouseButton(button),
                     count: count,
                     modifiers: modifiers
                 )
-                return actionMetadata(path: "synthetic", fallbackReason: "actionUnsupported")
+                return actionMetadata(
+                    path: "synthetic",
+                    fallbackReason: "actionUnsupported",
+                    verification: unverifiedAction(reason: "synthetic_input")
+                )
             }
             throw ProviderError.coded("element_not_clickable", "element \(record.index) has no clickable frame")
         }
         let point = try coordinatePoint(params: params, xKey: "x", yKey: "y", snapshot: snapshot)
         try Input.click(
-            pid: snapshot.app.pid,
             at: point,
             button: mouseButton(button),
             count: count,
             modifiers: modifiers
         )
-        return actionMetadata(path: "synthetic")
+        return actionMetadata(
+            path: "synthetic",
+            verification: unverifiedAction(reason: "synthetic_input")
+        )
     }
 
     private func performClickAction(record: ElementRecord, mouseButton: String) throws -> String? {
@@ -2286,7 +2291,6 @@ private func resizePng(_ image: CGImage, scale: CGFloat) -> BoundedPNG? {
 
 private enum Input {
     static func click(
-        pid: pid_t,
         at point: CGPoint,
         button: MouseButton,
         count: Int,
@@ -2298,10 +2302,32 @@ private enum Input {
         let flags = modifiers.reduce(into: CGEventFlags()) { result, modifier in
             result.insert(modifier.flag)
         }
-        for _ in 0..<max(count, 1) {
-            try mouse(.mouseMoved, source: source, point: point, button: button.cgButton, flags: flags, pid: pid)
-            try mouse(button.downEvent, source: source, point: point, button: button.cgButton, flags: flags, pid: pid)
-            try mouse(button.upEvent, source: source, point: point, button: button.cgButton, flags: flags, pid: pid)
+        // Why HID tap + pacing: see SyntheticMouseClickDelivery (STA-3433).
+        for step in SyntheticMouseClickDelivery.steps(clickCount: count) {
+            let type: CGEventType
+            switch step {
+            case .move:
+                type = .mouseMoved
+            case .buttonDown:
+                type = button.downEvent
+            case .buttonUp:
+                type = button.upEvent
+            }
+            guard let event = CGEvent(
+                mouseEventSource: source,
+                mouseType: type,
+                mouseCursorPosition: point,
+                mouseButton: button.cgButton
+            ) else {
+                throw ProviderError.coded("accessibility_error", "failed to create mouse event")
+            }
+            event.flags = flags
+            let clickState = SyntheticMouseClickDelivery.clickState(for: step)
+            if clickState > 0 {
+                event.setIntegerValueField(.mouseEventClickState, value: clickState)
+            }
+            event.post(tap: .cghidEventTap)
+            usleep(SyntheticMouseClickDelivery.interEventPauseMicroseconds)
         }
     }
 
@@ -2579,9 +2605,12 @@ private enum KeyMap {
 }
 
 private final class AgentRuntime: NSObject, NSApplicationDelegate {
+    private static let unclaimedSessionDeadline: TimeInterval = 30
+
     private let socketPath: String
     private let token: String?
     private var listener: SocketListener?
+    private var unclaimedSessionTimeout: DispatchWorkItem?
 
     init(socketPath: String, token: String?) {
         self.socketPath = socketPath
@@ -2590,9 +2619,29 @@ private final class AgentRuntime: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
-            let listener = try SocketListener(socketPath: socketPath, token: token)
+            let timeout = DispatchWorkItem {
+                fputs("computer-use agent received no authenticated session before its deadline\n", stderr)
+                NSApp.terminate(nil)
+            }
+            unclaimedSessionTimeout = timeout
+            let listener = try SocketListener(
+                socketPath: socketPath,
+                token: token,
+                onSessionClaimed: {
+                    timeout.cancel()
+                },
+                onSessionClosed: {
+                    DispatchQueue.main.async {
+                        NSApp.terminate(nil)
+                    }
+                }
+            )
             self.listener = listener
             listener.start()
+            DispatchQueue.main.asyncAfter(
+                deadline: .now() + Self.unclaimedSessionDeadline,
+                execute: timeout
+            )
         } catch {
             fputs("failed to start computer-use socket: \(error)\n", stderr)
             NSApp.terminate(nil)
@@ -2600,6 +2649,8 @@ private final class AgentRuntime: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        unclaimedSessionTimeout?.cancel()
+        unclaimedSessionTimeout = nil
         listener?.stop()
     }
 }
@@ -3505,14 +3556,26 @@ private final class ButtonTarget: NSObject {
 private final class SocketListener: @unchecked Sendable {
     private let socketPath: String
     private let token: String?
+    private let onSessionClaimed: () -> Void
+    private let onSessionClosed: () -> Void
     private let provider = Provider()
     private let providerLock = NSLock()
+    private let sessionLock = NSLock()
+    private var sessionOwnership = AgentSessionOwnership()
+    private var lastConnectionID: UInt64 = 0
     private var socketFd: Int32 = -1
     private var isStopped = false
 
-    init(socketPath: String, token: String?) throws {
+    init(
+        socketPath: String,
+        token: String?,
+        onSessionClaimed: @escaping () -> Void,
+        onSessionClosed: @escaping () -> Void
+    ) throws {
         self.socketPath = socketPath
         self.token = token
+        self.onSessionClaimed = onSessionClaimed
+        self.onSessionClosed = onSessionClosed
         try bindSocket()
     }
 
@@ -3587,14 +3650,35 @@ private final class SocketListener: @unchecked Sendable {
                 }
                 continue
             }
+            guard let connectionID = allocateConnectionID() else {
+                fputs("computer-use socket exhausted connection identities\n", stderr)
+                close(fd)
+                continue
+            }
             Thread.detachNewThread { [weak self] in
-                self?.handleConnection(fd)
+                self?.handleConnection(fd, connectionID: connectionID)
             }
         }
     }
 
-    private func handleConnection(_ fd: Int32) {
-        defer { close(fd) }
+    private func allocateConnectionID() -> AgentSessionConnectionID? {
+        sessionLock.lock()
+        defer { sessionLock.unlock() }
+        guard lastConnectionID < UInt64.max else { return nil }
+        lastConnectionID += 1
+        return AgentSessionConnectionID(rawValue: lastConnectionID)
+    }
+
+    private func handleConnection(_ fd: Int32, connectionID: AgentSessionConnectionID) {
+        var registeredSession = false
+        var hangupMonitor: AuthenticatedConnectionHangupMonitor?
+        defer {
+            hangupMonitor?.cancel()
+            if registeredSession {
+                disconnectSession(connectionID)
+            }
+            close(fd)
+        }
         let authorizedPeer = peerProcessId(fd).map(isAuthorizedAgentPeer) == true
         let decoder = JSONDecoder()
         while let line = readLine(from: fd) {
@@ -3602,6 +3686,40 @@ private final class SocketListener: @unchecked Sendable {
                   let request = try? decoder.decode(Request.self, from: data)
             else {
                 continue
+            }
+            if !registeredSession && isAuthenticatedAgentSession(
+                expectedToken: token,
+                requestToken: request.token,
+                authorizedPeer: authorizedPeer
+            ) {
+                let monitor: AuthenticatedConnectionHangupMonitor
+                do {
+                    monitor = try AuthenticatedConnectionHangupMonitor(
+                        fileDescriptor: fd,
+                        onHangup: { [weak self] in
+                            self?.disconnectSession(connectionID)
+                        }
+                    )
+                } catch {
+                    fputs("computer-use owner monitor failed: \(error)\n", stderr)
+                    return
+                }
+                sessionLock.lock()
+                let registration = sessionOwnership.registerConnection(
+                    connectionID,
+                    authenticated: true
+                )
+                sessionLock.unlock()
+                guard registration != .rejected else {
+                    monitor.cancel()
+                    return
+                }
+                registeredSession = true
+                hangupMonitor = monitor
+                monitor.start()
+                if registration == .claimed {
+                    onSessionClaimed()
+                }
             }
             let response = handleRequest(
                 provider: provider,
@@ -3611,6 +3729,15 @@ private final class SocketListener: @unchecked Sendable {
                 authorizedPeer: authorizedPeer
             )
             writeJSON(response, to: fd)
+        }
+    }
+
+    private func disconnectSession(_ connectionID: AgentSessionConnectionID) {
+        sessionLock.lock()
+        let shouldTerminate = sessionOwnership.disconnect(connectionID)
+        sessionLock.unlock()
+        if shouldTerminate {
+            onSessionClosed()
         }
     }
 }

@@ -9,18 +9,25 @@ on:
       - 'config/scripts/build-windows-cli-launcher.mjs'
       - 'config/scripts/build-windows-cli-launcher.test.mjs'
       - 'config/scripts/computer-e2e-workflow.test.mjs'
+      - 'config/scripts/macos-computer-helper-owner-loss-benchmark.mjs'
+      - 'config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs'
+      - 'config/scripts/macos-computer-helper-owner-loss-metrics.mjs'
+      - 'config/scripts/macos-computer-helper-owner-loss-processes.mjs'
+      - 'config/scripts/macos-computer-helper-owner-loss-processes.test.mjs'
+      - 'config/scripts/macos-computer-helper-owner-loss-trial-cleanup.mjs'
       - 'config/scripts/computer-use-modifier-safety.test.mjs'
       - 'config/scripts/computer-use-skill-guidance.test.mjs'
       - 'config/scripts/computer-use-smoke.mjs'
       - 'config/scripts/computer-use-smoke.test.mjs'
       - 'config/scripts/daemon-boot-smoke.mjs'
+      - 'config/scripts/daemon-endpoint-handover-smoke.mjs'
       - 'config/scripts/windows-daemon-workspace-close-repro.mjs'
       - 'config/scripts/verify-computer-native.mjs'
       # Why: the native-smoke job boots the built terminal daemon under plain
       # Node, so any change to the daemon bundle graph or the main build must
       # re-run it (the v1.4.129-rc.1 daemon outage shipped with green CI).
       - 'electron.vite.config.ts'
-      - 'build-plugins/**'
+      - 'config/build-plugins/**'
       - 'src/main/daemon/**'
       - 'native/computer-use-macos/**'
       - 'native/computer-use-linux/**'
@@ -59,6 +66,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v6
         with:
           node-version-file: package.json
@@ -85,6 +94,8 @@ jobs:
           config/scripts/build-windows-cli-launcher.test.mjs
           src/main/ssh/ssh-remote-cli-launcher.test.ts
           config/scripts/computer-e2e-workflow.test.mjs
+          config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs
+          config/scripts/macos-computer-helper-owner-loss-processes.test.mjs
           config/scripts/computer-use-modifier-safety.test.mjs
           config/scripts/computer-use-skill-guidance.test.mjs
           config/scripts/computer-use-smoke.test.mjs
@@ -125,20 +136,41 @@ jobs:
       # the PR when the built daemon cannot start on ubuntu-22.04 / windows.
       - name: Daemon boot smoke
         run: node config/scripts/daemon-boot-smoke.mjs
+      # Why: a daemon that lost its endpoint name used to delete the replacement's
+      # socket on exit, stranding a live daemon that hosts PTYs nothing can reach.
+      # Only two real processes racing the same endpoint reproduce it.
+      - name: Daemon endpoint handover smoke
+        run: node config/scripts/daemon-endpoint-handover-smoke.mjs
       # Why: workspace removal overlaps graceful renderer teardown with the
       # forced main-process sweep; exercise that exact pair against real ConPTY.
       - name: Windows daemon workspace-close repro
         if: runner.os == 'Windows'
         run: node config/scripts/windows-daemon-workspace-close-repro.mjs
-      - if: runner.os == 'Linux'
-        env:
-          ORCA_COMPUTER_E2E: '1'
-          ACCESSIBILITY_ENABLED: '1'
-        run: xvfb-run --auto-servernum dbus-run-session -- pnpm test:e2e:computer --reporter=verbose tests/e2e/computer-linux.e2e.ts
-      - if: runner.os == 'Windows'
-        env:
-          ORCA_COMPUTER_E2E: '1'
-        run: pnpm test:e2e:computer --reporter=verbose tests/e2e/computer-windows.e2e.ts
+  mac-native-owner-smoke:
+    if: github.event_name == 'pull_request'
+    runs-on: macos-15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+      - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+      - run: pnpm install --frozen-lockfile
+      - name: Owner-loss benchmark process cleanup
+        run: >-
+          pnpm vitest run
+          config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs
+          config/scripts/macos-computer-helper-owner-loss-processes.test.mjs
+      - name: Authenticated helper owner-loss smoke
+        run: pnpm bench:macos-computer-helper-owner-loss --expect reaped --trials 1
+      - name: Swift tests and signed universal helper verification
+        run: pnpm verify:computer-native
 
   mac:
     # macOS Accessibility and Screen Recording require user-granted TCC entries.

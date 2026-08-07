@@ -12,19 +12,26 @@ import {
   WorktreeTabSelector
 } from './session-tabs-schemas'
 import { SESSION_TAB_CLOSE_METHODS } from './session-tab-close-methods'
+import { projectSessionTabAgentStatus } from './session-tab-agent-status-projection'
 
 export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'session.tabs.list',
     params: WorktreeTabSelector,
-    handler: async (params, { runtime, pairedDeviceId }) =>
-      runtime.listMobileSessionTabs(params.worktree, pairedDeviceId)
+    handler: async (params, { runtime, pairedDeviceId, clientKind, clientCapabilities }) =>
+      projectSessionTabAgentStatus(
+        await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId),
+        clientKind,
+        clientCapabilities
+      )
   }),
   defineMethod({
     name: 'session.tabs.listAll',
     params: null,
-    handler: async (_params, { runtime, pairedDeviceId }) => ({
-      snapshots: await runtime.listAllMobileSessionTabs(pairedDeviceId)
+    handler: async (_params, { runtime, pairedDeviceId, clientKind, clientCapabilities }) => ({
+      snapshots: (await runtime.listAllMobileSessionTabs(pairedDeviceId)).map((snapshot) =>
+        projectSessionTabAgentStatus(snapshot, clientKind, clientCapabilities)
+      )
     })
   }),
   defineMethod({
@@ -34,6 +41,7 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
       runtime.activateMobileSessionTab(params.worktree, params.tabId, params.leafId, {
         notifyClients: params.notifyClients !== false,
         clientNavigationId: pairedDeviceId,
+        ...(params.intent ? { intent: params.intent } : {}),
         navigation: resolveRuntimeNavigationTarget({
           navigation: params.navigation,
           notifyClients: params.notifyClients,
@@ -127,7 +135,11 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
   defineStreamingMethod({
     name: 'session.tabs.subscribe',
     params: WorktreeTabSelector,
-    handler: async (params, { runtime, connectionId, requestId, pairedDeviceId }, emit) => {
+    handler: async (
+      params,
+      { runtime, connectionId, requestId, pairedDeviceId, clientKind, clientCapabilities },
+      emit
+    ) => {
       let subscribedWorktree: string | null = null
       let unsubscribe = (): void => {}
       let closed = false
@@ -155,7 +167,10 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
       if (closed) {
         return
       }
-      emit({ type: 'snapshot', ...initial })
+      emit({
+        type: 'snapshot',
+        ...projectSessionTabAgentStatus(initial, clientKind, clientCapabilities)
+      })
       initialized = true
       if (closed) {
         return
@@ -163,7 +178,10 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
 
       unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => {
         if (snapshot.worktree === subscribedWorktree) {
-          emit({ type: 'updated', ...snapshot })
+          emit({
+            type: 'updated',
+            ...projectSessionTabAgentStatus(snapshot, clientKind, clientCapabilities)
+          })
         }
       }, pairedDeviceId)
       if (closed) {
@@ -192,7 +210,11 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
   defineStreamingMethod({
     name: 'session.tabs.subscribeAll',
     params: null,
-    handler: async (_params, { runtime, connectionId, requestId, pairedDeviceId }, emit) => {
+    handler: async (
+      _params,
+      { runtime, connectionId, requestId, pairedDeviceId, clientKind, clientCapabilities },
+      emit
+    ) => {
       let unsubscribe = (): void => {}
       let closed = false
       // Why: initial listAll errors should return one RPC error, not a leaked
@@ -226,14 +248,22 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
       if (closed) {
         return
       }
-      emit({ type: 'snapshots', snapshots })
+      emit({
+        type: 'snapshots',
+        snapshots: snapshots.map((snapshot) =>
+          projectSessionTabAgentStatus(snapshot, clientKind, clientCapabilities)
+        )
+      })
       initialized = true
 
       if (closed) {
         return
       }
       unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => {
-        emit({ type: 'updated', ...snapshot })
+        emit({
+          type: 'updated',
+          ...projectSessionTabAgentStatus(snapshot, clientKind, clientCapabilities)
+        })
       }, pairedDeviceId)
     }
   }),

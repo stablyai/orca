@@ -93,6 +93,23 @@ jobs:
       - name: Verify macOS entitlements
         run: pnpm verify:macos-entitlements
 
+  root_directory_guard:
+    name: root directory guard
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Reject new root-level files and folders
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: bash .github/scripts/check-root-directory-entries.sh "$BASE_SHA" "$HEAD_SHA"
+
   typecheck:
     runs-on: ubuntu-latest
 
@@ -216,7 +233,31 @@ jobs:
             --exclude=src/main/providers/__tests__/shell-ready-framework-example.test.ts \
             --exclude=src/main/pty/omp-shell-wrapper.node-pty.test.ts \
             --exclude=src/shared/posix-command-path-lookup.test.ts \
+            --exclude=tests/e2e/cross-version-wire/** \
             --shard=${{ matrix.shard }}/${{ matrix.shard_total }}
+
+  cross-version-wire:
+    name: cross-version wire compatibility
+    runs-on: ubuntu-latest
+
+    steps:
+      # Why fetch-depth 0: the harness extracts the newest release tag to skew
+      # current code against it. The default shallow clone has no tags, which is
+      # why this cannot ride along in the sharded `test` job.
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+
+      # A path filter that matches nothing exits 1 ("No test files found"), so this
+      # lane cannot report success while running zero tests.
+      - name: Old/new client and server terminal journey
+        run: pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts
 
   package:
     name: package
@@ -273,11 +314,62 @@ jobs:
       - name: Smoke packaged CLI
         run: node config/scripts/smoke-packaged-cli.mjs --app-dir=dist/linux-unpacked
 
-  # Why: regression specs under tests/e2e/** used to merge green without ever
-  # running — e2e.yml only fired on schedule/release (#10518). Path-filter so
-  # ordinary PRs stay light; any E2E suite change still gets a full shard run.
+      - name: Smoke packaged hang watchdog worker
+        run: xvfb-run --auto-servernum node config/scripts/smoke-packaged-hang-watchdog-worker.mjs --app-dir=dist/linux-unpacked
+
+  package_windows:
+    name: package (windows)
+    runs-on: windows-2022
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          cache: pnpm
+
+      - name: Cache electron-builder downloads
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: electron-builder-windows-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            electron-builder-windows-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build package inputs
+        run: pnpm run build:release
+
+      - name: Prepare Electron native runtime
+        run: node config/scripts/ensure-native-runtime.mjs --runtime=electron
+
+      - name: Package unpacked app
+        env:
+          ORCA_REUSE_PREPARED_NATIVE_RUNTIME: '1'
+        run: pnpm exec electron-builder --config config/electron-builder.config.cjs --dir
+
+      - name: Smoke packaged CLI
+        run: node config/scripts/smoke-packaged-cli.mjs --app-dir=dist/win-unpacked
+
+  # Why: PR E2E is advisory and only validates changed specs; scheduled and
+  # release runs retain full-suite coverage.
   e2e-paths:
-    name: detect e2e path changes
+    name: detect changed e2e specs
     runs-on: ubuntu-latest
     if: github.event.pull_request.draft != true
     # Why: detector only needs to read the checkout; do not inherit repo defaults.
@@ -285,6 +377,7 @@ jobs:
       contents: read
     outputs:
       should_run: ${{ steps.filter.outputs.should_run }}
+      test_files: ${{ steps.filter.outputs.test_files }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -292,25 +385,22 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Filter E2E-relevant paths
+      - name: Filter changed E2E specs
         id: filter
         run: |
           set -euo pipefail
           BASE="${{ github.event.pull_request.base.sha }}"
           HEAD="${{ github.event.pull_request.head.sha }}"
-          # Why: capture first so a failed git diff does not look like "no matches"
-          # (pipeline status in `if` is not aborted by set -e). Merge-base limits the
-          # list to files this PR introduced, not base-branch drift.
-          CHANGED="$(git diff --name-only --merge-base "$BASE" "$HEAD")"
-          # Why: tests/playwright.config.ts sits beside tests/e2e/, not inside it, so
-          # it needs its own pattern — a bare `playwright.` prefix matches no tracked
-          # file and would silently skip E2E when the runner config changes.
-          if printf '%s\n' "$CHANGED" | grep -E '^(tests/e2e/|tests/playwright\.|\.github/workflows/e2e\.yml$)' >/dev/null; then
+          CHANGED="$(git diff --name-only --diff-filter=AMCR --merge-base "$BASE" "$HEAD")"
+          TEST_FILES="$(printf '%s\n' "$CHANGED" | grep -E '^tests/e2e/.*\.spec\.ts$' || true)"
+          TEST_FILES_JSON="$(printf '%s\n' "$TEST_FILES" | jq --raw-input --slurp --compact-output 'split("\n") | map(select(length > 0))')"
+          echo "test_files=$TEST_FILES_JSON" >> "$GITHUB_OUTPUT"
+          if [ "$TEST_FILES_JSON" != '[]' ]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
-            echo "E2E path changes detected"
+            echo "Changed E2E specs: $TEST_FILES_JSON"
           else
             echo "should_run=false" >> "$GITHUB_OUTPUT"
-            echo "No E2E path changes"
+            echo "No changed E2E specs"
           fi
 
   e2e:
@@ -321,16 +411,20 @@ jobs:
     permissions:
       contents: read
     uses: ./.github/workflows/e2e.yml
+    with:
+      test_files: ${{ needs.e2e-paths.outputs.test_files }}
 
   verify:
     if: always()
     needs:
       - static_analysis
+      - root_directory_guard
       - typecheck
       - git_compatibility
       - shell_contracts
       - test
       - package
+      - package_windows
     runs-on: ubuntu-latest
 
     steps:
@@ -345,19 +439,23 @@ jobs:
       - name: Require successful checks
         env:
           STATIC_ANALYSIS: ${{ needs.static_analysis.result }}
+          ROOT_DIRECTORY_GUARD: ${{ needs.root_directory_guard.result }}
           TYPECHECK: ${{ needs.typecheck.result }}
           GIT_COMPATIBILITY: ${{ needs.git_compatibility.result }}
           SHELL_CONTRACTS: ${{ needs.shell_contracts.result }}
           TEST: ${{ needs.test.result }}
           PACKAGE: ${{ needs.package.result }}
+          PACKAGE_WINDOWS: ${{ needs.package_windows.result }}
         run: |
           for result in \
             "$STATIC_ANALYSIS" \
+            "$ROOT_DIRECTORY_GUARD" \
             "$TYPECHECK" \
             "$GIT_COMPATIBILITY" \
             "$SHELL_CONTRACTS" \
             "$TEST" \
-            "$PACKAGE"; do
+            "$PACKAGE" \
+            "$PACKAGE_WINDOWS"; do
             if [ "$result" != "success" ]; then
               exit 1
             fi

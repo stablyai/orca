@@ -67,6 +67,8 @@ export class SshPtyProvider implements IPtyProvider {
 
   getConnectionId = (): string => this.connectionId
 
+  canProvideAuthoritativeBufferSnapshot = (_id: string): boolean => false
+
   private toRelayPtyId = (id: string): string => toRelaySshPtyId(this.connectionId, id)
 
   private toAppPtyId = (id: string): string => toAppSshPtyId(this.connectionId, id)
@@ -312,6 +314,8 @@ export class SshPtyProvider implements IPtyProvider {
   }
 
   onData = (callback: SshPtyDataCallback): (() => void) => this.outputState.onData(callback)
+  onRejectedData = (callback: SshPtyDataCallback): (() => void) =>
+    this.outputState.onRejectedData(callback)
   onReplay = (callback: SshPtyReplayCallback): (() => void) => this.outputState.onReplay(callback)
   onExit = (callback: SshPtyExitCallback): (() => void) => this.outputState.onExit(callback)
 

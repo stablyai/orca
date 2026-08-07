@@ -74,7 +74,3 @@ export function classifyInputSourceId(id: string | null | undefined): InputSourc
   // bug from recurring for any future Apple-shipped layout.
   return 'compose'
 }
-
-/** Test-only: exported so tests can assert the allowlist without
- *  reimporting the private constant. */
-export const __metaInputSourceIdsForTests: readonly string[] = META_INPUT_SOURCE_IDS

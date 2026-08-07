@@ -121,3 +121,32 @@ export function applySlashSuggestion(command: SlashCommandSuggestion): string {
 export function slashCommandDispatchText(command: SlashCommandSuggestion): string {
   return `/${command.name}`
 }
+
+export type NativeChatSendClassification = 'chat' | 'command' | 'unknown-token'
+
+export function classifyNativeChatSend(
+  draft: string,
+  commands: readonly SlashCommandSuggestion[],
+  pickerSkillOriginToken: string | null,
+  skillPrefix: '/' | '$' | null
+): NativeChatSendClassification {
+  // Why: the supported TUIs only treat a line-leading token as a command, so a
+  // draft with leading whitespace is prose; trimming here would claim a "Ran"
+  // line for text the agent never dispatched.
+  const firstToken = draft.split(/\s/, 1)[0] ?? ''
+  if (pickerSkillOriginToken && firstToken === pickerSkillOriginToken) {
+    return 'chat'
+  }
+  if (commands.some((command) => firstToken === `/${command.name}`)) {
+    return 'command'
+  }
+  if (firstToken.startsWith('/')) {
+    return 'unknown-token'
+  }
+  // Why: `$` is Codex grammar only. For other agents a leading `$PATH`-style
+  // token is ordinary prose and must keep its bubble and attachments.
+  if (skillPrefix === '$' && firstToken.startsWith('$')) {
+    return 'unknown-token'
+  }
+  return 'chat'
+}

@@ -6,12 +6,20 @@
     "../src/renderer/src/**/*.tsx",
     "../src/preload/api-types.ts",
     "../src/shared/**/*",
+    "../src/main/gitlab/mappers.ts",
     "../src/main/ipc/worktree-branch-name.ts",
     "../src/main/ipc/worktree-logic.ts",
     "../src/main/ipc/worktree-linked-work-item-metadata.ts",
     "../src/main/ipc/worktree-metadata-merge.ts",
     "../src/main/ipc/worktree-path-comparison.ts",
-    "../src/main/wsl.ts"
+    "../src/main/wsl-distro-list-output.ts",
+    "../src/main/wsl-distro-retry.ts",
+    "../src/main/wsl.ts",
+    "../src/main/startup/serve-desktop-activation.ts",
+    "../src/main/startup/single-instance-lock.ts",
+    "../src/main/startup/startup-diagnostics.ts",
+    "../src/main/window/focus-existing-window.ts",
+    "../src/main/window/macos-app-activation.ts"
   ],
   "compilerOptions": {
     "paths": {

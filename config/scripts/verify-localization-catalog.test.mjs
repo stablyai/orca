@@ -4,7 +4,10 @@ import path from 'node:path'
 
 import { describe, expect, it, vi } from 'vitest'
 
-import { main as verifyLocalizationCatalog } from './verify-localization-catalog.mjs'
+import {
+  collectGenericTermRegressions,
+  main as verifyLocalizationCatalog
+} from './verify-localization-catalog.mjs'
 
 function writeJson(filePath, value) {
   writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8')
@@ -122,5 +125,48 @@ describe('verify-localization-catalog', () => {
     } finally {
       report.mockRestore()
     }
+  })
+
+  // Why: #12113 — parity checks passed while the repair policy rewrote translated terms to English.
+  it('flags catalog values the repair policy would rewrite back to English', () => {
+    const enEntries = new Map([['auto.example.commitLabel', 'Commit message']])
+
+    expect(
+      collectGenericTermRegressions(
+        enEntries,
+        new Map([['auto.example.commitLabel', 'mensaje de confirmación']]),
+        'es'
+      )
+    ).toEqual([])
+
+    // A locale whose committed value is the English term is stable, not a regression.
+    expect(
+      collectGenericTermRegressions(
+        enEntries,
+        new Map([['auto.example.commitLabel', 'mensaje de Commit']]),
+        'es'
+      )
+    ).toEqual([])
+
+    // 'Comprometerse' is a real mistranslation, so reverting it to Latin is expected.
+    expect(
+      collectGenericTermRegressions(
+        enEntries,
+        new Map([['auto.example.commitLabel', 'mensaje de Comprometerse']]),
+        'es'
+      )
+    ).toEqual([])
+  })
+
+  it('ignores interpolation names when looking for English rewrites', () => {
+    expect(
+      collectGenericTermRegressions(
+        new Map([
+          ['components.agentSessionContinuation.originalAgent', 'Original agent: {{agent}}']
+        ]),
+        new Map([['components.agentSessionContinuation.originalAgent', '原智能体：{{agent}}']]),
+        'zh'
+      )
+    ).toEqual([])
   })
 })

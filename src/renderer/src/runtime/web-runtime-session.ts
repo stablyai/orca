@@ -60,6 +60,7 @@ import { runRemoteAgentSessionLaunch } from './remote-agent-session-launch'
 import { translate } from '../i18n/i18n'
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 
 export {
   HOST_TERMINAL_SURFACE_SEPARATOR,
@@ -229,7 +230,7 @@ async function createWebRuntimeSessionTerminalResult(
   const callEnvironment = captureRuntimeEnvironmentCall(environmentId, intentOwner.pairingRevision)
 
   if (args.selectWorktree !== false) {
-    selectWebRuntimeSessionWorktree(args.worktreeId)
+    selectWebRuntimeSessionWorktree(args.worktreeId, environmentId)
   }
   let hostCreated = false
   let createdTabId: string | undefined
@@ -437,7 +438,7 @@ export async function createWebRuntimeSessionBrowserTab(args: {
   const shouldSelectWorktree = args.selectWorktree !== false
   const stagedFromWorktreeId = useAppStore.getState().activeWorktreeId
   if (shouldSelectWorktree) {
-    selectWebRuntimeSessionWorktree(args.worktreeId)
+    selectWebRuntimeSessionWorktree(args.worktreeId, environmentId)
   }
   try {
     const response = await callEnvironment({
@@ -503,7 +504,7 @@ function stageWebRuntimeBrowserTab(args: {
     remotePageId
   )
   if (args.restoreFocus !== false) {
-    selectWebRuntimeSessionWorktree(args.worktreeId)
+    selectWebRuntimeSessionWorktree(args.worktreeId, args.environmentId)
   }
 
   if (existing) {
@@ -533,8 +534,8 @@ function stageWebRuntimeBrowserTab(args: {
   })
 }
 
-function selectWebRuntimeSessionWorktree(worktreeId: string): void {
-  useAppStore.getState().setActiveWorktree(worktreeId)
+function selectWebRuntimeSessionWorktree(worktreeId: string, environmentId: string): void {
+  useAppStore.getState().setActiveWorktree(worktreeId, toRuntimeExecutionHostId(environmentId))
 }
 
 function findLocalBrowserPageForRemotePage(
@@ -906,9 +907,12 @@ async function callWebRuntimeSessionTabMethod(
         tabId: hostTabId,
         ...(method === 'session.tabs.activate'
           ? {
-              // Why: the additive intent protects new hosts while notifyClients:false protects old hosts.
+              // Why: the additive navigation target protects new hosts while notifyClients:false protects old hosts.
               notifyClients: false,
-              navigation: 'caller' as const
+              navigation: 'caller' as const,
+              // Why: every caller here is a tab click, shortcut, or palette pick —
+              // the gesture that is supposed to wake a slept pane.
+              intent: 'user' as const
             }
           : {}),
         ...(isLifecycleClose

@@ -104,7 +104,21 @@ describe('decideInitialAgentTabViewMode', () => {
 
   it.each([
     ['multi-line', 'Reproduce first\n\nhttps://github.com/o/r/issues/12'],
-    ['trailing-newline', 'https://github.com/o/r/issues/12\n'],
+    ['trailing-newline', 'https://github.com/o/r/issues/12\n']
+  ])('opens a %s draft in chat with its mirrored composer text', (_label, launchDraftText) => {
+    expect(
+      decideInitialAgentTabViewMode({
+        experimentalNativeChat: true,
+        openAgentTabsInChatByDefault: true,
+        agent: 'claude',
+        promptDelivery: 'draft',
+        launchDraftText
+      })
+    ).toBe('chat')
+  })
+
+  it.each([
+    ['Unicode-line-separator', 'one\u2028two'],
     ['blank', '   '],
     ['absent', undefined]
   ])('keeps a %s draft in the terminal, where its text actually is', (_label, launchDraftText) => {

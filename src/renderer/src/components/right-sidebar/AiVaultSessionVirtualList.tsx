@@ -6,7 +6,8 @@ import type { AiVaultResumeStartup } from '@/lib/ai-vault-resume-command'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { getActiveStickyHeaderIndexForScroll } from '../sidebar/worktree-list-virtual-rows'
-import { EmptyState, SessionLoadingState, VaultGroupHeader } from './AiVaultPanelControls'
+import { VaultGroupHeader } from './AiVaultPanelControls'
+import { EmptyState, SessionLoadingState } from './AiVaultSessionListStates'
 import { VaultSessionRow } from './AiVaultSessionRow'
 import type { AiVaultSessionGroup } from './ai-vault-session-filters'
 import type { AiVaultOriginalPaneTarget } from './ai-vault-original-pane'
@@ -46,6 +47,7 @@ export function AiVaultSessionVirtualList({
   loading,
   sessionsCount,
   filteredSessionsCount,
+  noAgentsSelected,
   error,
   vaultScope,
   buildResumeStartup,
@@ -71,6 +73,7 @@ export function AiVaultSessionVirtualList({
   loading: boolean
   sessionsCount: number
   filteredSessionsCount: number
+  noAgentsSelected: boolean
   error: string | null
   vaultScope: AiVaultScope
   buildResumeStartup: (session: AiVaultSession, worktreeId?: string | null) => AiVaultResumeStartup
@@ -181,10 +184,17 @@ export function AiVaultSessionVirtualList({
 
       {sessionsCount > 0 && filteredSessionsCount === 0 ? (
         <EmptyState
-          title={translate(
-            'auto.components.right.sidebar.AiVaultPanel.noSessionsMatchFilters',
-            'No sessions match the current filters'
-          )}
+          title={
+            noAgentsSelected
+              ? translate(
+                  'auto.components.right.sidebar.AiVaultPanel.noAgentsSelected',
+                  'No agents selected'
+                )
+              : translate(
+                  'auto.components.right.sidebar.AiVaultPanel.noSessionsMatchFilters',
+                  'No sessions match the current filters'
+                )
+          }
         />
       ) : null}
 

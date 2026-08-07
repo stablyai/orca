@@ -1,5 +1,7 @@
 import type { AgentType } from './agent-status-types'
+import type { ExecutionHostId } from './execution-host'
 import type { RepoIcon } from './repo-icon'
+import type { TuiAgent } from './types'
 
 /**
  * Serializable contract for the pop-out agent dashboard. The main renderer owns
@@ -24,8 +26,22 @@ export const DASHBOARD_BUCKET_ORDER: readonly DashboardBucket[] = [
  *  `terminal rename`, an OSC title) cannot cost the card its place on the board. */
 export const DASHBOARD_MAX_LABEL_LENGTH = 1_024
 
+/** The validator drops a whole snapshot that exceeds this, so the builder caps
+ *  the launcher's entries rather than letting a huge fleet blank the pop-out. */
+export const DASHBOARD_MAX_LAUNCH_WORKTREES = 500
+
+/** Keeps optional map-only workspace metadata bounded across the renderer bridge. */
+export const DASHBOARD_MAX_MAP_WORKSPACES = 2_000
+
 /** Kept distinct from `bucket` so attention cards retain their precise dot state. */
 export type DashboardCardDotState = 'working' | 'blocked' | 'waiting' | 'done' | 'idle'
+
+/** Completed agents stay green until acknowledged, then settle into gray idle. */
+export function dashboardCardDisplayState(
+  card: Pick<DashboardCard, 'dotState' | 'unseen'>
+): DashboardCardDotState {
+  return card.dotState === 'done' && !card.unseen ? 'idle' : card.dotState
+}
 
 export type DashboardCardReview = {
   number: number
@@ -36,6 +52,25 @@ export type DashboardCardSubagent = {
   id: string
   name: string
   dotState: DashboardCardDotState
+}
+
+export type DashboardCardHostKind = 'local' | 'ssh' | 'wsl' | 'remote'
+export type DashboardCardWorkspaceKind = 'worktree' | 'folder'
+
+export type DashboardWorkspace = {
+  repoId: string
+  worktreeId: string
+  repoName: string
+  worktreeName: string
+  parentWorktreeId?: string
+  hostKind: DashboardCardHostKind
+  executionHostId: ExecutionHostId
+  workspaceKind: DashboardCardWorkspaceKind
+  workspaceStatusId?: string
+  workspaceStatusLabel?: string
+  workspaceStatusColor?: string
+  hasReview?: boolean
+  review?: DashboardCardReview
 }
 
 export type DashboardCard = {
@@ -58,8 +93,18 @@ export type DashboardCard = {
   worktreeId: string
   tabId: string
   leafId: string | null
+  /** Agent pane that spawned this agent, when both are visible. */
+  parentPaneKey?: string
+  /** Direct workspace parent. The map uses it only when both workspace rings are visible. */
+  parentWorktreeId?: string
   repoName: string
   worktreeName: string
+  /** Optional for preload compatibility with snapshots produced before Agent Map. */
+  hostKind?: DashboardCardHostKind
+  /** Exact owner used by in-window workspace actions when IDs collide across hosts. */
+  executionHostId?: ExecutionHostId
+  /** Folder workspaces share the ring hierarchy without pretending to be git worktrees. */
+  workspaceKind?: DashboardCardWorkspaceKind
   workspaceStatusId?: string
   workspaceStatusLabel?: string
   workspaceStatusColor?: string
@@ -76,6 +121,9 @@ export type DashboardCard = {
   /** When the agent entered its current state — column ordering key (cards
    *  that moved into a bucket most recently sort first). 0 when unknown. */
   stateChangedAt: number
+  /** Last accepted hook update. Optional for mixed-version snapshots; the
+   *  pop-out uses it to request one refresh when a live state becomes stale. */
+  statusUpdatedAt?: number
   /** Mirrors the sidebar's unvisited signal: the agent changed state since the
    *  user last acknowledged it (visited its tab / opened its dashboard dialog).
    *  Derived from the app-wide ack map so both surfaces mute in lockstep. */
@@ -124,10 +172,15 @@ export type DashboardFilterOptions = {
 export type DashboardSnapshot = {
   generatedAt: number
   cards: DashboardCard[]
+  /** Active workspaces, including those without an agent card. Map-only and
+   *  optional for preload compatibility with older snapshot producers. */
+  workspaces?: DashboardWorkspace[]
   showIdle?: boolean
   /** Available filter dimensions are store-derived so zero-card projects and
    *  statuses remain selectable. Optional for preload-version compatibility. */
   filterOptions?: DashboardFilterOptions
+  /** Launch choices resolved on each workspace's execution host. */
+  launchableAgentsByWorktreeId?: Record<string, TuiAgent[]>
   /** Icons for the repos the cards belong to. Keyed by repoId rather than
    *  carried per card: image icons are data URLs up to 400KB, and the snapshot
    *  is republished several times a second. Optional so a pop-out running
@@ -138,7 +191,9 @@ export type DashboardSnapshot = {
 export const EMPTY_DASHBOARD_SNAPSHOT: DashboardSnapshot = {
   generatedAt: 0,
   cards: [],
+  workspaces: [],
   filterOptions: { projects: [], workspaceStatuses: [] },
+  launchableAgentsByWorktreeId: {},
   repoIconsByRepoId: {}
 }
 
@@ -148,6 +203,18 @@ export const EMPTY_DASHBOARD_SNAPSHOT: DashboardSnapshot = {
 export type DashboardRevealAgentArgs = {
   repoId: string
   worktreeId: string
+  executionHostId?: ExecutionHostId
   tabId: string
   leafId: string | null
+}
+
+export type DashboardSpawnAgentArgs = {
+  worktreeId: string
+  agent: TuiAgent
+}
+
+/** Puts a workspace to sleep from the dashboard: the main renderer owns the
+ *  teardown sequence, so the pop-out only names the target. */
+export type DashboardSleepWorkspaceArgs = {
+  worktreeId: string
 }

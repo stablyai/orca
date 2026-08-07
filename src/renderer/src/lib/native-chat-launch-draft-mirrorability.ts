@@ -1,3 +1,8 @@
+import {
+  AGENT_TUI_CLEAR_MAX_LINES,
+  countAgentTuiInputLines
+} from '../../../shared/agent-tui-input-clear'
+
 /**
  * Single source of truth for whether unsent launch context can be mirrored from
  * the agent's TUI input into the native-chat composer.
@@ -7,12 +12,13 @@
  * predicate, so a draft launch can never open in chat with a composer that
  * chat then refuses to fill.
  *
- * Multi-line is rejected because the chat send pre-clears the TUI input with
- * Ctrl+U (\x15) — kill-to-start-of-LINE, not of the whole buffer — so earlier
- * lines of a multi-line mirror would survive and concatenate onto the message
- * being sent. Relaxing that rule belongs here and nowhere else: teaching this
- * predicate to accept multi-line flips seeding and view mode together.
+ * CR/LF drafts are safe within the bounded TUI-clear budget. Unicode line
+ * separators and drafts beyond that budget remain terminal-only.
  */
 export function canMirrorLaunchDraftToNativeChat(text: string): boolean {
-  return text.trim().length > 0 && !/[\r\n\u2028\u2029]/.test(text)
+  return (
+    text.trim().length > 0 &&
+    !/[\u2028\u2029]/.test(text) &&
+    countAgentTuiInputLines(text) <= AGENT_TUI_CLEAR_MAX_LINES
+  )
 }

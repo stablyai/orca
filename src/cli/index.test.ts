@@ -306,6 +306,20 @@ describe('orca root help', () => {
     logSpy.mockRestore()
   })
 
+  it('advertises host-local account management', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main([], '/tmp/repo')
+
+    expect(logSpy.mock.calls.flat().join('\n')).toContain(
+      'account add               Add a managed Claude or Codex account on this Orca host'
+    )
+    expect(logSpy.mock.calls.flat().join('\n')).toContain(
+      'account list              List managed Claude and Codex accounts on this Orca host'
+    )
+    logSpy.mockRestore()
+  })
+
   it('advertises computer-use capabilities discovery', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
@@ -347,6 +361,15 @@ describe('orca root help', () => {
     )
     expect(logSpy.mock.calls[0][0]).toContain(
       'orchestration worker-abandon Fence an uncertain worker without claiming it stopped'
+    )
+    expect(logSpy.mock.calls[0][0]).toContain(
+      "orchestration worker-release Release a settled worker's terminal after archiving its output"
+    )
+    expect(logSpy.mock.calls[0][0]).toContain(
+      'orchestration worker-retain Keep a worker terminal live for debugging'
+    )
+    expect(logSpy.mock.calls[0][0]).toContain(
+      'orchestration worker-list Report worker terminal resource accounting'
     )
     expect(callMock).not.toHaveBeenCalled()
   })
@@ -400,6 +423,19 @@ describe('orca root help', () => {
     )
     expect(listIssuesHelp).toContain('--workspace <id|all>  Connected Linear workspace id, or all')
     expect(listIssuesHelp).not.toContain('Line cursor from a previous read')
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
+  it('documents the machine-readable terminal topology opt-in', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    logSpy.mockClear()
+
+    await main(['terminal', 'list', '--help'], '/tmp/repo')
+
+    const help = String(logSpy.mock.calls[0][0])
+    expect(help).toContain('[--include-visual-layouts] [--json]')
+    expect(help).toContain('--include-visual-layouts Include tab and pane topology in JSON output')
+    expect(help).toContain('JSON omits visualLayouts by default')
     expect(callMock).not.toHaveBeenCalled()
   })
 
@@ -1222,6 +1258,9 @@ describe('orca cli worktree awareness', () => {
       linkedIssue: undefined,
       linkedLinearIssue: 'STA-335',
       linkedLinearIssueWorkspaceId: null,
+      // Why: a bare identifier carries no org, and the two scoping fields
+      // describe the issue being replaced. Inheriting a stale org key would
+      // pin the lookup to a workspace this issue does not live in.
       linkedLinearIssueOrganizationUrlKey: null,
       comment: undefined,
       runHooks: false,
@@ -3679,7 +3718,60 @@ describe('orca cli worktree awareness', () => {
 
     expect(callMock).toHaveBeenNthCalledWith(2, 'terminal.list', {
       worktree: 'id:repo::/tmp/repo/feature',
-      limit: undefined
+      limit: undefined,
+      includeVisualLayouts: false
+    })
+  })
+
+  it('requests visual layouts only for the human-readable terminal list', async () => {
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo')]),
+      okFixture('req_term', { terminals: [], totalCount: 0, truncated: false })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['terminal', 'list', '--worktree', 'active'], '/tmp/repo/feature/src')
+
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'terminal.list',
+      expect.objectContaining({ includeVisualLayouts: true })
+    )
+  })
+
+  it('allows agent JSON clients to request visual layouts explicitly', async () => {
+    const visualLayouts = [
+      {
+        worktreeId: 'repo::/tmp/repo/feature',
+        worktreePath: '/tmp/repo/feature',
+        root: { type: 'group', groupId: null, activeTabId: null, tabs: [] }
+      }
+    ]
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo')]),
+      okFixture('req_term', {
+        terminals: [],
+        visualLayouts,
+        totalCount: 0,
+        truncated: false
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['terminal', 'list', '--worktree', 'active', '--include-visual-layouts', '--json'],
+      '/tmp/repo/feature/src'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'terminal.list',
+      expect.objectContaining({ includeVisualLayouts: true })
+    )
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
+      result: { visualLayouts }
     })
   })
 

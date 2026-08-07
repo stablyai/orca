@@ -20,12 +20,7 @@ beforeEach(() => {
   testState.home = mkdtempSync(join(tmpdir(), 'orca-codex-status-home-'))
   // Why: the real-home check consults CODEX_HOME and the shell rc, so a
   // developer who exports one would otherwise fail this suite locally.
-  for (const key of [
-    'ORCA_USER_DATA_PATH',
-    'ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME',
-    'CODEX_HOME',
-    'ORCA_CODEX_HOME'
-  ]) {
+  for (const key of ['ORCA_USER_DATA_PATH', 'CODEX_HOME', 'ORCA_CODEX_HOME']) {
     previousEnv[key] = process.env[key]
     delete process.env[key]
   }
@@ -91,8 +86,8 @@ describe('CodexRuntimeHomeService.getMirroredHostHomePathForStatus', () => {
     expect(service.getMirroredHostHomePathForStatus()).toBe(account.managedHomePath)
   })
 
-  it('returns the shared runtime home when the real-home lane is off', async () => {
-    process.env.ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME = '0'
+  it('returns the shared runtime home when a custom CODEX_HOME keeps the mirror lane', async () => {
+    process.env.CODEX_HOME = join(testState.home, 'custom-codex-home')
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const { getOrcaManagedCodexHomePath } = await import('../codex/codex-home-paths')
     const service = new CodexRuntimeHomeService(createStore([], null) as never)

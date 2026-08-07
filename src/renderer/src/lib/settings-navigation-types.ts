@@ -56,6 +56,8 @@ const SETTINGS_NAV_TARGET_SET: ReadonlySet<string> = new Set(SETTINGS_NAV_TARGET
 const SETTINGS_NAV_INTENT_SET: ReadonlySet<string> = new Set(SETTINGS_NAV_INTENTS)
 
 export type SettingsNavTarget = (typeof SETTINGS_NAV_TARGETS)[number]
+export const FULL_DISK_ACCESS_SETTINGS_TARGET_ID = 'developer-permissions-full-disk-access'
+
 export type SettingsNavigationTarget = {
   pane: SettingsNavTarget
   repoId: string | null

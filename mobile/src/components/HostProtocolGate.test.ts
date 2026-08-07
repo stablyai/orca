@@ -1,4 +1,4 @@
-import { createElement } from 'react'
+import { createElement, useEffect } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
@@ -14,7 +14,10 @@ vi.mock('react-native', () => ({
   Linking: { openURL: nativeTestState.openUrl },
   Platform: nativeTestState.platform,
   Pressable: 'Pressable',
-  StyleSheet: { create: <T>(styles: T) => styles },
+  StyleSheet: {
+    create: <T>(styles: T) => styles,
+    absoluteFillObject: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }
+  },
   Text: 'Text',
   View: 'View'
 }))
@@ -41,11 +44,20 @@ function GateConsumer() {
   return createElement('GateStatus', null, hostCapabilities.join(','))
 }
 
+// Counts mounts so a test can prove the routes were never torn down, which presence alone can't.
+const probeMounts = { count: 0 }
+function MountProbe() {
+  useEffect(() => {
+    probeMounts.count += 1
+  }, [])
+  return createElement('MountProbe')
+}
+
 function gateElement() {
   return createElement(
     HostProtocolGate,
     { hostId: 'host-1' },
-    createElement('HostContent', null, createElement(GateConsumer))
+    createElement('HostContent', null, createElement(GateConsumer), createElement(MountProbe))
   )
 }
 
@@ -69,6 +81,7 @@ describe('HostProtocolGate', () => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     nativeTestState.openUrl.mockClear()
     nativeTestState.platform.OS = 'ios'
+    probeMounts.count = 0
   })
 
   afterEach(() => {
@@ -157,7 +170,54 @@ describe('HostProtocolGate', () => {
     const output = renderedText(renderer)
     expect(output).toContain('Checking host compatibility')
     expect(output).not.toContain('HostContent')
+    expect(probeMounts.count).toBe(0)
     expect(client.sendRequest).toHaveBeenCalledOnce()
+  })
+
+  it('overlays the pending spinner instead of unmounting routes mounted while connecting', async () => {
+    hostClient.current = { client: null, state: 'connecting' }
+    renderer = await renderGate()
+    expect(renderedText(renderer)).toContain('HostContent')
+    expect(probeMounts.count).toBe(1)
+
+    const client = {
+      sendRequest: vi.fn().mockReturnValue(new Promise(() => {}))
+    } as unknown as RpcClient
+    await act(async () => {
+      hostClient.current = { client, state: 'connected' }
+      renderer?.update(gateElement())
+      await Promise.resolve()
+    })
+
+    const output = renderedText(renderer)
+    expect(output).toContain('HostContent')
+    expect(output).toContain('Checking host compatibility')
+    // Why: the cold-start remount this replaces is exactly what destroys in-flight deep navigation.
+    expect(probeMounts.count).toBe(1)
+    const overlay = renderer.root
+      .findAllByType('View')
+      .find((node) => node.props.accessibilityViewIsModal === true)
+    expect(overlay?.props.pointerEvents).toBe('auto')
+  })
+
+  it('still replaces mounted routes when the verdict comes back blocked', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    hostClient.current = { client: null, state: 'connecting' }
+    renderer = await renderGate()
+    expect(renderedText(renderer)).toContain('HostContent')
+
+    await act(async () => {
+      hostClient.current = {
+        client: clientWithStatus({ protocolVersion: 5, minCompatibleMobileVersion: 999 }),
+        state: 'connected'
+      }
+      renderer?.update(gateElement())
+      await Promise.resolve()
+    })
+
+    const output = renderedText(renderer)
+    expect(output).toContain('Update Orca Mobile')
+    expect(output).not.toContain('HostContent')
   })
 
   it('keeps an already-validated host route mounted while reconnect status is pending', async () => {
@@ -183,7 +243,10 @@ describe('HostProtocolGate', () => {
       await Promise.resolve()
     })
 
-    expect(renderedText(renderer)).toContain('HostContent')
+    const output = renderedText(renderer)
+    expect(output).toContain('HostContent')
+    // Why: the host already answered once, so a reconnect probe must not dim the UI it validated.
+    expect(output).not.toContain('Checking host compatibility')
     expect(client.sendRequest).toHaveBeenCalledTimes(2)
   })
 

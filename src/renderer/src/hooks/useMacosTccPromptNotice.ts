@@ -6,6 +6,7 @@ import { useAppStore } from '@/store'
 import { usePluginLanguagePackStore } from '@/store/plugin-language-packs'
 import { translate } from '@/i18n/i18n'
 import { resolveUiLocale } from '@/i18n/supported-languages'
+import { FULL_DISK_ACCESS_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
 import {
   dismissMacosTccPromptNotice,
   subscribeToMacosTccPromptNotice
@@ -41,12 +42,12 @@ export function useMacosTccPromptNotice(): void {
       toast.warning(
         translate(
           'auto.hooks.useMacosTccPromptNotice.title',
-          'Reduce repeated macOS file-access prompts'
+          'Seeing “Orca would like to access…” prompts?'
         ),
         {
           description: translate(
             'auto.hooks.useMacosTccPromptNotice.description',
-            'macOS attributes file access by your agents and terminal tools to Orca. Granting Full Disk Access reduces these prompts.'
+            'Permission messages from macOS may appear when an agent or terminal tool running in Orca attempts to access protected files. Grant Full Disk Access in Settings to reduce these prompts.'
           ),
           duration: Infinity,
           onDismiss: acknowledge,
@@ -55,7 +56,11 @@ export function useMacosTccPromptNotice(): void {
             onClick: () => {
               acknowledge()
               openSettingsPage()
-              openSettingsTarget({ pane: 'developer-permissions', repoId: null })
+              openSettingsTarget({
+                pane: 'developer-permissions',
+                repoId: null,
+                sectionId: FULL_DISK_ACCESS_SETTINGS_TARGET_ID
+              })
             }
           },
           cancel: {

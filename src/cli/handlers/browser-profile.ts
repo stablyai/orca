@@ -38,7 +38,8 @@ export const BROWSER_PROFILE_HANDLERS: Record<string, CommandHandler> = {
     const scope = parseScopeFlag(flags)
     const result = await client.call<BrowserProfileCreateResult>('browser.profileCreate', {
       label,
-      scope
+      scope,
+      ...(flags.get('no-ua-spoof') === true ? { userAgentMode: 'native' } : {})
     })
     if (result.result.profile === null) {
       // Why: registry refuses non-isolated/imported scopes; we already validated

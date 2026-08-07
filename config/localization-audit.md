@@ -4,6 +4,9 @@ This is the pre-work artifact for migrating Orca to a localized UI. The goal is
 to make coverage repeatable: every detected user-facing string is either moved
 behind the localization layer or explicitly excluded with a reason.
 
+The accepted translation-source architecture and staged migration are recorded
+in [`i18n-translation-source.md`](./i18n-translation-source.md).
+
 ## Coverage Contract
 
 Coverage means all strings matching the audit scope below are accounted for:
@@ -75,9 +78,11 @@ have no package-script entry points. Ordinary product and localization work must
 not invoke tools that can overwrite an entire target catalog.
 
 The coverage gate compares current candidates against
-`config/localization-coverage-allowlist.json`. The committed allowlist is empty:
-new candidates fail the check and must be localized or added with a reviewed
-reason in the same change.
+`config/localization-coverage-allowlist.json`. The committed allowlist is
+small (10 reviewed entries — one test fixture title, five non-English
+language-name search keywords, and four reviewed product-name search
+keywords): new candidates fail the check and must be localized or added with
+a reviewed reason in the same change.
 
 The script scans `src/renderer/src` by default. That is the primary UI surface.
 Use `--source-root src` for a wider audit when checking renderer-adjacent shared

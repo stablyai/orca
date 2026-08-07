@@ -46,7 +46,8 @@ import { cleanElectronUserAgent } from './browser-session-ua'
 import type {
   BrowserViewportOverride,
   BrowserCertificateFailure,
-  BrowserLoadError
+  BrowserLoadError,
+  BrowserSessionUserAgentMode
 } from '../../shared/types'
 import {
   type BrowserAnnotationViewportBridgeOptions,
@@ -145,6 +146,7 @@ export type BrowserGuestRegistration = {
   workspaceId?: string
   worktreeId?: string
   sessionProfileId?: string | null
+  userAgentMode?: BrowserSessionUserAgentMode
   webContentsId: number
   rendererWebContentsId: number
 }
@@ -225,6 +227,7 @@ export class BrowserManager {
   // Why: guests are keyed by page id but renderer visibility by workspace id; bridge the mismatch to activate the right tab before capture.
   private readonly workspaceIdByPageId = new Map<string, string>()
   private readonly sessionProfileIdByPageId = new Map<string, string | null>()
+  private readonly userAgentModeByPageId = new Map<string, BrowserSessionUserAgentMode>()
   private readonly rendererWebContentsIdByTabId = new Map<string, number>()
   // Why: serialize per-tab setViewportOverride so rapid toggles don't interleave CDP commands and leave emulation in a wrong state.
   private readonly viewportOpsByTabId = new Map<string, Promise<unknown>>()
@@ -640,7 +643,6 @@ export class BrowserManager {
 
     // Why: bot detectors probe APIs that differ in Electron webviews; inject overrides each load so manual browsing passes.
     const disposeAntiDetection = this.injectAntiDetection(guest)
-
     // Why: disable throttling so background screenshots still get frames; else the compositor stalls and capture returns empty.
     guest.setBackgroundThrottling(false)
     const installClickedLinkRouting = (): void => {
@@ -940,11 +942,15 @@ export class BrowserManager {
   private retireStaleGuestWebContents(previousWebContentsId: number): void {
     // Why: after a renderer-process swap, stop the dead guest id resolving to the live page so stale callbacks don't hit the wrong session.
     this.cleanupGuestPolicyAttachment(previousWebContentsId)
-    this.tabIdByWebContentsId.delete(previousWebContentsId)
   }
 
   private cleanupGuestPolicyAttachment(guestWebContentsId: number): void {
-    const isPrimaryGuest = this.tabIdByWebContentsId.has(guestWebContentsId)
+    const browserTabId = this.tabIdByWebContentsId.get(guestWebContentsId)
+    const isPrimaryGuest = browserTabId !== undefined
+    if (browserTabId && this.webContentsIdByTabId.get(browserTabId) === guestWebContentsId) {
+      this.webContentsIdByTabId.delete(browserTabId)
+    }
+    this.tabIdByWebContentsId.delete(guestWebContentsId)
     this.certificateTrustController?.onGuestRetired(guestWebContentsId)
     const policyCleanup = this.policyCleanupByGuestId.get(guestWebContentsId)
     if (policyCleanup) {
@@ -977,6 +983,7 @@ export class BrowserManager {
     workspaceId,
     worktreeId,
     sessionProfileId,
+    userAgentMode,
     webContentsId,
     rendererWebContentsId
   }: BrowserGuestRegistration): boolean {
@@ -1017,6 +1024,11 @@ export class BrowserManager {
       this.workspaceIdByPageId.set(browserTabId, workspaceId)
     }
     this.sessionProfileIdByPageId.set(browserTabId, sessionProfileId ?? null)
+    if (userAgentMode) {
+      this.userAgentModeByPageId.set(browserTabId, userAgentMode)
+    } else {
+      this.userAgentModeByPageId.delete(browserTabId)
+    }
     this.rendererWebContentsIdByTabId.set(browserTabId, rendererWebContentsId)
     if (worktreeId) {
       this.worktreeIdByTabId.set(browserTabId, worktreeId)
@@ -1078,6 +1090,7 @@ export class BrowserManager {
     this.rendererWebContentsIdByTabId.delete(browserTabId)
     this.workspaceIdByPageId.delete(browserTabId)
     this.sessionProfileIdByPageId.delete(browserTabId)
+    this.userAgentModeByPageId.delete(browserTabId)
     this.worktreeIdByTabId.delete(browserTabId)
     // Why: drop the viewport-op chain so the Map doesn't retain a promise keyed to a destroyed guest.
     this.viewportOpsByTabId.delete(browserTabId)
@@ -1089,11 +1102,13 @@ export class BrowserManager {
     browserPageId,
     worktreeId,
     sessionProfileId,
+    userAgentMode,
     webContentsId
   }: {
     browserPageId: string
     worktreeId?: string
     sessionProfileId?: string | null
+    userAgentMode?: BrowserSessionUserAgentMode
     webContentsId: number
   }): void {
     const guest = webContents.fromId(webContentsId)
@@ -1110,6 +1125,11 @@ export class BrowserManager {
     this.webContentsIdByTabId.set(browserPageId, webContentsId)
     this.tabIdByWebContentsId.set(webContentsId, browserPageId)
     this.sessionProfileIdByPageId.set(browserPageId, sessionProfileId ?? null)
+    if (userAgentMode) {
+      this.userAgentModeByPageId.set(browserPageId, userAgentMode)
+    } else {
+      this.userAgentModeByPageId.delete(browserPageId)
+    }
     if (worktreeId) {
       this.worktreeIdByTabId.set(browserPageId, worktreeId)
     }
@@ -1138,6 +1158,7 @@ export class BrowserManager {
     this.popupOwnerContextByGuestId.clear()
     this.worktreeIdByTabId.clear()
     this.sessionProfileIdByPageId.clear()
+    this.userAgentModeByPageId.clear()
     this.pendingLoadFailuresByGuestId.clear()
     this.loadErrorsByGuestId.clear()
     this.clearedLoadErrorsByGuestId.clear()
@@ -1529,35 +1550,38 @@ export class BrowserManager {
           enabled: override.mobile,
           maxTouchPoints: override.mobile ? 5 : 0
         })
-        if (override.mobile) {
-          const chromeMajor = extractChromeMajor(cleanElectronUserAgent(guest.getUserAgent()))
-          // Why: userAgentMetadata must accompany the mobile UA so client hints match, or bot-detection flags the desktop-hint leak.
-          await dbg.sendCommand('Emulation.setUserAgentOverride', {
-            userAgent: buildMobileUserAgent(chromeMajor),
-            userAgentMetadata: {
-              brands: [
-                { brand: 'Google Chrome', version: chromeMajor },
-                { brand: 'Chromium', version: chromeMajor },
-                { brand: 'Not/A)Brand', version: '24' }
-              ],
-              fullVersionList: [
-                { brand: 'Google Chrome', version: `${chromeMajor}.0.0.0` },
-                { brand: 'Chromium', version: `${chromeMajor}.0.0.0` },
-                { brand: 'Not/A)Brand', version: '24.0.0.0' }
-              ],
-              fullVersion: `${chromeMajor}.0.0.0`,
-              platform: 'iOS',
-              platformVersion: '17.0',
-              architecture: '',
-              model: 'iPhone',
-              mobile: true
-            }
-          })
-        } else {
-          // Why: desktop presets still need the clean (non-Electron) UA so Cloudflare/Turnstile don't flag the session.
-          await dbg.sendCommand('Emulation.setUserAgentOverride', {
-            userAgent: cleanElectronUserAgent(guest.getUserAgent())
-          })
+        // Why: viewport sizing must not override a profile's explicit native-UA identity.
+        if (this.userAgentModeByPageId.get(browserTabId) !== 'native') {
+          if (override.mobile) {
+            const chromeMajor = extractChromeMajor(cleanElectronUserAgent(guest.getUserAgent()))
+            // Why: userAgentMetadata must accompany the mobile UA so client hints match, or bot-detection flags the desktop-hint leak.
+            await dbg.sendCommand('Emulation.setUserAgentOverride', {
+              userAgent: buildMobileUserAgent(chromeMajor),
+              userAgentMetadata: {
+                brands: [
+                  { brand: 'Google Chrome', version: chromeMajor },
+                  { brand: 'Chromium', version: chromeMajor },
+                  { brand: 'Not/A)Brand', version: '24' }
+                ],
+                fullVersionList: [
+                  { brand: 'Google Chrome', version: `${chromeMajor}.0.0.0` },
+                  { brand: 'Chromium', version: `${chromeMajor}.0.0.0` },
+                  { brand: 'Not/A)Brand', version: '24.0.0.0' }
+                ],
+                fullVersion: `${chromeMajor}.0.0.0`,
+                platform: 'iOS',
+                platformVersion: '17.0',
+                architecture: '',
+                model: 'iPhone',
+                mobile: true
+              }
+            })
+          } else {
+            // Why: desktop presets still need the clean (non-Electron) UA so Cloudflare/Turnstile don't flag the session.
+            await dbg.sendCommand('Emulation.setUserAgentOverride', {
+              userAgent: cleanElectronUserAgent(guest.getUserAgent())
+            })
+          }
         }
       } else {
         await dbg.sendCommand('Emulation.clearDeviceMetricsOverride', {})
@@ -1610,8 +1634,17 @@ export class BrowserManager {
     guest: Electron.WebContents
   ): Promise<boolean> {
     if (!enabled) {
+      const hadActiveGrabOp = this.hasActiveGrabOp(browserTabId)
       this.cancelGrabOp(browserTabId, 'user')
-      return true
+      if (hadActiveGrabOp) {
+        return true
+      }
+      try {
+        await guest.executeJavaScript(buildGuestOverlayScript('teardown'))
+        return true
+      } catch {
+        return false
+      }
     }
     // Why: inject the overlay runtime eagerly on arm so the hover UI appears instantly; re-injection is idempotent/safe.
     try {
@@ -1715,7 +1748,8 @@ export class BrowserManager {
         shouldForwardDictationShortcut: () => this.shouldForwardDictationShortcut?.() ?? false,
         isMobileEmulatorEnabled: () => this.settingsResolver?.().mobileEmulatorEnabled !== false,
         getKeybindings: () => this.settingsResolver?.().keybindings,
-        resolveWorktreeId: (tabId) => this.worktreeIdByTabId.get(tabId) ?? null
+        resolveWorktreeId: (tabId) => this.worktreeIdByTabId.get(tabId) ?? null,
+        resolveWorkspaceId: (tabId) => this.workspaceIdByPageId.get(tabId) ?? null
       })
     )
   }

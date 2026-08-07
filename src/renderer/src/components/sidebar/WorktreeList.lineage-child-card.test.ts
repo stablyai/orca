@@ -212,26 +212,6 @@ vi.mock('./WorktreeContextMenu', () => ({
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR: 'data-orca-context-menu-scope'
 }))
 
-vi.mock('./SshDisconnectedDialog', () => ({
-  SshDisconnectedDialog: ({
-    open,
-    status,
-    targetId,
-    targetLabel
-  }: {
-    open: boolean
-    status: string
-    targetId: string
-    targetLabel: string
-  }) =>
-    React.createElement('aside', {
-      'data-lineage-ssh-dialog': open ? 'open' : 'closed',
-      'data-ssh-status': status,
-      'data-ssh-target-id': targetId,
-      'data-ssh-target-label': targetLabel
-    })
-}))
-
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children: React.ReactNode }) =>
     React.createElement(React.Fragment, null, children),
@@ -915,6 +895,30 @@ describe('WorktreeList lineage child card renderer', () => {
     expect(markup).toContain('data-workspace-status-drop-target=""')
     expect(markup).toContain('data-repo-header-collapse-affordance=""')
     expect(markup).toContain('aria-expanded="true"')
+  })
+
+  it('renders a collapse chevron on the pinned section header with worktrees', async () => {
+    setPinnedFixtureState()
+    const markup = await renderWorktreeListMarkup()
+
+    expect(markup).toContain('Pinned')
+    expect(markup).toContain('data-workspace-pin-drop-target=""')
+    expect(markup).toContain('data-repo-header-collapse-affordance=""')
+    expect(markup).toContain('aria-expanded="true"')
+  })
+
+  it('renders collapsed pinned section header affordance state', async () => {
+    setPinnedFixtureState()
+    mockStore.state = {
+      ...mockStore.state,
+      collapsedGroups: new Set(['pinned'])
+    }
+    const markup = await renderWorktreeListMarkup()
+
+    expect(markup).toContain('data-workspace-pin-drop-target=""')
+    expect(markup).toContain('data-repo-header-collapse-affordance=""')
+    expect(markup).toContain('aria-expanded="false"')
+    expect(markup).toContain('-rotate-90')
   })
 
   it('renders a collapse chevron on grouped repo headers with worktrees', async () => {

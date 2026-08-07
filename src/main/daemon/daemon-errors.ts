@@ -20,3 +20,17 @@ export class SessionNotFoundError extends Error {
     this.name = 'SessionNotFoundError'
   }
 }
+
+export class TerminalSessionOwnerUnverifiedError extends Error {
+  constructor(sessionId: string) {
+    super(`Terminal session owner could not be verified: ${sessionId}`)
+    this.name = 'TerminalSessionOwnerUnverifiedError'
+  }
+}
+
+export function decodeDaemonResponseError(message: string): Error {
+  const prefix = 'Session not found: '
+  return message.startsWith(prefix)
+    ? new SessionNotFoundError(message.slice(prefix.length))
+    : new DaemonProtocolError(message)
+}

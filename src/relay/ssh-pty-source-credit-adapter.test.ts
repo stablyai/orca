@@ -114,6 +114,90 @@ describe('SshPtySourceCreditAdapter cleanup', () => {
     expect(() => adapter.open(grant, 'pty-late', 'incarnation-late')).toThrow('disposed')
   })
 
+  it('notifies credit availability on every adapter-side cancellation but not on rotate', () => {
+    vi.useFakeTimers()
+    const onCreditAvailable = vi.fn()
+    const adapter = new SshPtySourceCreditAdapter(undefined, onCreditAvailable)
+    const grant = ownerGrant(1, 1)
+    const canceled = adapter.open(grant, 'pty-cancel', 'incarnation-1')!
+
+    adapter.cancel(
+      {
+        id: canceled.id,
+        deliveryToken: canceled.deliveryToken,
+        clientGeneration: canceled.clientGeneration,
+        ownerGeneration: canceled.ownerGeneration
+      },
+      grant
+    )
+    expect(onCreditAvailable.mock.calls).toEqual([['pty-cancel']])
+
+    const expiring = adapter.open(grant, 'pty-grace', 'incarnation-2')!
+    adapter.retainOrCloseOnDetach(grant)
+    vi.advanceTimersByTime(PTY_CONSUMER_OWNER_GRACE_MS)
+    expect(onCreditAvailable.mock.calls).toEqual([['pty-cancel'], ['pty-grace']])
+    expect(adapter.snapshot(expiring).state).toBe('closed')
+
+    const detaching = adapter.open(ownerGrant(3, 3), 'pty-detach', 'incarnation-3')!
+    adapter.retainOrCloseOnDetach(
+      Object.freeze({
+        protocolVersion: PTY_CONSUMER_SESSION_PROTOCOL_VERSION,
+        serverBuildId: 'build-a',
+        clientGeneration: 3,
+        role: 'subscriber'
+      })
+    )
+    expect(onCreditAvailable.mock.calls).toEqual([['pty-cancel'], ['pty-grace'], ['pty-detach']])
+    expect(adapter.snapshot(detaching).state).toBe('closed')
+
+    const rotating = adapter.open(ownerGrant(4, 4), 'pty-rotate', 'incarnation-4')!
+    adapter.rotate(rotating, ownerGrant(5, 5), 0)
+    const publicationOwned = adapter.open(ownerGrant(6, 6), 'pty-publication', 'incarnation-5')!
+    adapter.cancelIdentity(publicationOwned, 'publication-owned')
+    expect(onCreditAvailable).toHaveBeenCalledTimes(3)
+    expect(adapter.snapshot(publicationOwned).state).toBe('closed')
+  })
+
+  it('swallows a throwing credit-available callback in cancel and in the grace timer', () => {
+    vi.useFakeTimers()
+    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+    try {
+      const adapter = new SshPtySourceCreditAdapter(undefined, () => {
+        throw new Error('publication faulted')
+      })
+      const grant = ownerGrant(1, 1)
+      const canceled = adapter.open(grant, 'pty-1', 'incarnation-1')!
+
+      expect(() =>
+        adapter.cancel(
+          {
+            id: canceled.id,
+            deliveryToken: canceled.deliveryToken,
+            clientGeneration: canceled.clientGeneration,
+            ownerGeneration: canceled.ownerGeneration
+          },
+          grant
+        )
+      ).not.toThrow()
+
+      const expiring = adapter.open(grant, 'pty-2', 'incarnation-2')!
+      adapter.retainOrCloseOnDetach(grant)
+      expect(() => vi.advanceTimersByTime(PTY_CONSUMER_OWNER_GRACE_MS)).not.toThrow()
+
+      expect(adapter.snapshot(expiring).state).toBe('closed')
+      expect(stderr.mock.calls.map(([line]) => String(line))).toEqual([
+        expect.stringContaining(
+          '[pty-source-credit] credit-available notification failed for pty-1'
+        ),
+        expect.stringContaining(
+          '[pty-source-credit] credit-available notification failed for pty-2'
+        )
+      ])
+    } finally {
+      stderr.mockRestore()
+    }
+  })
+
   it('returns the same bounded proof for duplicate token cancellation', () => {
     const adapter = new SshPtySourceCreditAdapter()
     const grant = ownerGrant(1, 1)

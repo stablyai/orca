@@ -5,6 +5,7 @@ import type { PreloadApi } from '../../../preload/api-types'
 import type { FeatureInteractionState } from '../../../shared/feature-interactions'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
+import { MIN_COMPATIBLE_RUNTIME_SERVER_VERSION } from '../../../shared/protocol-version'
 
 const TEST_COMMIT_OID = '0123456789abcdef0123456789abcdef01234567'
 
@@ -200,12 +201,13 @@ describe('web before-unload persistence', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+    vi.doUnmock('./web-runtime-client')
   })
 
   it('persists final UI and host-partitioned sessions synchronously', async () => {
     const { api, storage } = await installApi('Linux')
 
-    api.app.persistBeforeUnloadSync({
+    api.app.stageBeforeUnloadSync({
       sessions: [
         { state: { activeWorktreeId: 'local-worktree' } as never },
         {
@@ -531,6 +533,187 @@ describe('web runtime environment identity', () => {
       )
     }
   )
+  it('keeps the current host when verification rejects an incompatible replacement', async () => {
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(): Promise<RuntimeRpcResponse<unknown>> {
+          return Promise.resolve({
+            id: 'status',
+            ok: true,
+            result: { runtimeProtocolVersion: MIN_COMPATIBLE_RUNTIME_SERVER_VERSION - 1 },
+            _meta: { runtimeId: 'runtime-old' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')
+    const previousStored = globals.storage.getItem('orca.web.runtimeEnvironment.v1')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(
+      globals.window.api.runtimeEnvironments.verifyAndAddFromPairingCode({
+        name: 'Incompatible server',
+        pairingCode: encodePairingCode()
+      })
+    ).resolves.toMatchObject({ ok: false, kind: 'protocol-incompatible' })
+    expect(globals.storage.getItem('orca.web.runtimeEnvironment.v1')).toBe(previousStored)
+    await expect(globals.window.api.runtimeEnvironments.list()).resolves.toMatchObject([
+      { id: 'web-server-a' }
+    ])
+  })
+
+  it('keeps the current host when browser storage rejects a verified replacement', async () => {
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(): Promise<RuntimeRpcResponse<unknown>> {
+          return Promise.resolve({
+            id: 'status',
+            ok: true,
+            result: {
+              runtimeId: 'runtime-new',
+              rendererGraphEpoch: 1,
+              graphStatus: 'ready',
+              authoritativeWindowId: 1,
+              liveTabCount: 0,
+              liveLeafCount: 0,
+              runtimeProtocolVersion: MIN_COMPATIBLE_RUNTIME_SERVER_VERSION
+            },
+            _meta: { runtimeId: 'runtime-new' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+    vi.spyOn(globals.storage, 'setItem').mockImplementation(() => {
+      throw new Error('Browser storage is full.')
+    })
+
+    await expect(
+      globals.window.api.runtimeEnvironments.verifyAndAddFromPairingCode({
+        name: 'Verified replacement',
+        pairingCode: encodePairingCode()
+      })
+    ).resolves.toMatchObject({
+      ok: false,
+      kind: 'environment-save-failed',
+      message: 'Orca verified the host but could not save it. Check browser storage and try again.'
+    })
+    await expect(globals.window.api.runtimeEnvironments.list()).resolves.toMatchObject([
+      { id: 'web-server-a' }
+    ])
+  })
+
+  it('requires an explicit loopback override and persists the SSH dependency', async () => {
+    const call = vi.fn().mockResolvedValue({
+      id: 'status',
+      ok: true,
+      result: {
+        runtimeId: 'runtime-new',
+        rendererGraphEpoch: 1,
+        graphStatus: 'ready',
+        authoritativeWindowId: 1,
+        liveTabCount: 0,
+        liveLeafCount: 0,
+        runtimeProtocolVersion: MIN_COMPATIBLE_RUNTIME_SERVER_VERSION
+      },
+      _meta: { runtimeId: 'runtime-new' }
+    })
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call = call
+        close(): void {}
+      }
+    }))
+    const globals = installBrowserGlobals('Linux')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+    const pairingCode = encodePairingCode({ endpoint: 'ws://127.0.0.1:6768' })
+
+    await expect(
+      globals.window.api.runtimeEnvironments.verifyAndAddFromPairingCode({
+        name: 'Tunnel server',
+        pairingCode
+      })
+    ).resolves.toMatchObject({ ok: false, kind: 'host-unreachable' })
+    expect(call).not.toHaveBeenCalled()
+
+    await expect(
+      globals.window.api.runtimeEnvironments.verifyAndAddFromPairingCode({
+        name: 'Tunnel server',
+        pairingCode,
+        allowLoopback: true
+      })
+    ).resolves.toMatchObject({
+      ok: true,
+      environment: { connectionDependency: 'ssh-tunnel' }
+    })
+    expect(call).toHaveBeenCalledOnce()
+    expect(
+      JSON.parse(globals.storage.getItem('orca.web.runtimeEnvironment.v1') ?? '{}')
+    ).toMatchObject({ connectionDependency: 'ssh-tunnel' })
+  })
+
+  it('returns a structured failure when the browser client cannot be constructed', async () => {
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        constructor() {
+          throw new Error('Invalid public key: expected 32 bytes, got 3')
+        }
+      }
+    }))
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(
+      globals.window.api.runtimeEnvironments.verifyAndAddFromPairingCode({
+        name: 'Broken server',
+        pairingCode: encodePairingCode()
+      })
+    ).resolves.toMatchObject({ ok: false, kind: 'access-link-invalid' })
+    await expect(globals.window.api.runtimeEnvironments.list()).resolves.toMatchObject([
+      { id: 'web-server-a' }
+    ])
+  })
+
+  it('classifies coded browser authorization failures without relying on copy', async () => {
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(): Promise<RuntimeRpcResponse<unknown>> {
+          return Promise.reject(
+            Object.assign(new Error('Access grant rejected.'), { code: 'unauthorized' })
+          )
+        }
+
+        close(): void {}
+      }
+    }))
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(
+      globals.window.api.runtimeEnvironments.verifyAndAddFromPairingCode({
+        name: 'Expired server',
+        pairingCode: encodePairingCode()
+      })
+    ).resolves.toMatchObject({
+      ok: false,
+      kind: 'access-link-invalid',
+      message: 'Access grant rejected.'
+    })
+  })
 })
 
 describe('web browser-local port capability', () => {
@@ -3431,6 +3614,99 @@ describe('web git preload API', () => {
       { method: 'repo.list', params: undefined },
       { method: 'worktree.detectedList', params: { repo: 'repo-1' } },
       { method: 'git.remoteCommitUrl', params: { worktree: 'id:wt-1', sha: TEST_COMMIT_OID } }
+    ])
+  })
+
+  it('sends the branch line total merge base only when the chip asked for one', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    const worktree = {
+      id: 'wt-1',
+      repoId: 'repo-1',
+      path: '/workspace/repo',
+      head: 'abc123',
+      branch: 'refs/heads/main',
+      isBare: false,
+      isMainWorktree: true,
+      displayName: 'repo',
+      comment: '',
+      linkedIssue: null,
+      linkedPR: null,
+      linkedLinearIssue: null,
+      linkedGitLabMR: null,
+      linkedGitLabIssue: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0,
+      workspaceStatus: 'todo'
+    }
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          if (method === 'repo.list') {
+            return Promise.resolve({
+              id: `call-${runtimeCalls.length}`,
+              ok: true,
+              result: { repos: [{ id: 'repo-1' }] },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          if (method === 'worktree.detectedList') {
+            return Promise.resolve({
+              id: `call-${runtimeCalls.length}`,
+              ok: true,
+              result: { repoId: 'repo-1', authoritative: true, worktrees: [worktree] },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: { entries: [], conflictOperation: 'unknown' },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await globals.window.api.git.status({
+      worktreePath: '/workspace/repo',
+      branchLineTotalMergeBase: TEST_COMMIT_OID
+    })
+    await globals.window.api.git.status({ worktreePath: '/workspace/repo' })
+
+    const statusCalls = runtimeCalls.filter((call) => call.method === 'git.status')
+    // Why: strict — `toEqual` would pass on a forwarded `branchLineTotalMergeBase: undefined`,
+    // which is exactly what the conditional spread must avoid sending.
+    expect(statusCalls).toStrictEqual([
+      {
+        method: 'git.status',
+        params: {
+          worktree: 'id:wt-1',
+          includeIgnored: undefined,
+          bypassEffectiveUpstreamNegativeCache: undefined,
+          reuseLineStats: undefined,
+          branchLineTotalMergeBase: TEST_COMMIT_OID
+        }
+      },
+      {
+        method: 'git.status',
+        params: {
+          worktree: 'id:wt-1',
+          includeIgnored: undefined,
+          bypassEffectiveUpstreamNegativeCache: undefined,
+          reuseLineStats: undefined
+        }
+      }
     ])
   })
 })

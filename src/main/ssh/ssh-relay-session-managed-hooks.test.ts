@@ -15,7 +15,6 @@ const { muxRequestMock, openConsumerSessionMock } = vi.hoisted(() => ({
 vi.mock('./ssh-relay-deploy', () => ({ deployAndLaunchRelay: vi.fn() }))
 vi.mock('./ssh-relay-deploy-helpers', () => ({ execCommand: vi.fn().mockResolvedValue('') }))
 vi.mock('./ssh-pty-consumer-session', () => ({
-  SSH_PTY_SOURCE_WINDOW_SU: 256 * 1024,
   openSshPtyConsumerSession: openConsumerSessionMock
 }))
 vi.mock('./ssh-channel-multiplexer', () => ({

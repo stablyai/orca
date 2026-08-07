@@ -51,8 +51,14 @@ export const WorktreeDetectedListParams = z.object({
     .pipe(z.string().min(1, 'Missing repo selector'))
 })
 
+export const WorktreeTeardownMissingTerminalsParams = WorktreeDetectedListParams.extend({
+  worktreeIds: z.array(z.string().min(1)).max(10_000),
+  connectionId: z.string().nullable().optional()
+})
+
 export const WorktreePsParams = z.object({
-  limit: OptionalFiniteNumber
+  limit: OptionalFiniteNumber,
+  afterSnapshotId: z.string().min(1).max(128).nullable().optional()
 })
 
 export const WorktreeSortOrder = z.object({
@@ -270,6 +276,10 @@ export const WorktreeSet = WorktreeSelector.extend({
 
 export const WorktreeRemove = WorktreeSelector.extend({
   force: OptionalBoolean,
+  // Why (#11960): the CLI's --force is an unambiguous force affordance, but the
+  // desktop sets `force` for an ordinary confirmed delete too, so the PTY-stop
+  // waiver travels on its own field.
+  allowUnverifiedPtyStop: OptionalBoolean,
   runHooks: OptionalBoolean
 })
 

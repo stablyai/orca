@@ -1,6 +1,7 @@
 import {
   resolveSetupRunnerCommand,
-  type SetupRunnerCommandPlatform
+  type SetupRunnerCommandPlatform,
+  type SetupRunnerShell
 } from '../../../shared/setup-runner-command'
 
 const SETUP_COMPLETION_PREFIX = '__ORCA_SETUP_COMPLETE__:'
@@ -10,9 +11,12 @@ const WINDOWS_SETUP_RUNNER_ENV = 'ORCA_SETUP_RUNNER_PATH'
 export function buildObservedSetupCommand(
   runnerScriptPath: string,
   platform: SetupRunnerCommandPlatform,
-  completionToken: string
+  completionToken: string,
+  // Why: the observed command must reuse the shell the runner was written for, or a
+  // WSL-routed Windows-drive runner gets Git Bash `/c/...` instead of `/mnt/c/...`.
+  shell?: SetupRunnerShell
 ): { command: string; env?: Record<string, string> } {
-  const resolution = resolveSetupRunnerCommand(runnerScriptPath, platform)
+  const resolution = resolveSetupRunnerCommand(runnerScriptPath, platform, shell)
   if (resolution.shell === 'windows') {
     const script = [
       `$runner = $env:${WINDOWS_SETUP_RUNNER_ENV}`,

@@ -42,7 +42,15 @@ import {
   type KeybindingOverrides
 } from '../../shared/keybindings'
 import { getMainE2EConfig } from '../e2e-config'
-import { buildEditableContextMenuTemplate } from './editable-context-menu'
+import {
+  buildEditableContextMenuTemplate,
+  matchingRichMarkdownContextMenuTableTarget,
+  parseRichMarkdownContextMenuTableTarget
+} from './editable-context-menu'
+import {
+  richMarkdownContextMenuTargetChannel,
+  type RichMarkdownContextMenuTableTarget
+} from '../../shared/rich-markdown-context-menu'
 import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
 import { resolveWindowCloseAction } from './window-close-decision'
 import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
@@ -441,6 +449,7 @@ export function createMainWindow(
   // so register it with the window's other navigation policy.
   registerPluginPanelNavigationGuard(mainWindow.webContents)
 
+  const browserWindowClosePreload = join(__dirname, 'browser-window-close-preload.js')
   mainWindow.webContents.on('will-attach-webview', (event, webPreferences, params) => {
     const src = typeof params.src === 'string' ? params.src : ''
     const normalizedSrc = normalizeBrowserNavigationUrl(src)
@@ -452,7 +461,9 @@ export function createMainWindow(
       return
     }
 
-    delete webPreferences.preload
+    delete params.preload
+    // Why: preload runs in the page's main world before inline scripts can call window.close().
+    webPreferences.preload = browserWindowClosePreload
     // Why: older Electron builds expose preloadURL alongside preload; delete both so the guest can't inherit the main preload bridge.
     delete (webPreferences as Record<string, unknown>).preloadURL
     webPreferences.nodeIntegration = false
@@ -524,9 +535,24 @@ export function createMainWindow(
   }
   ipcMain.on(shortcutRecorderFocusChannel, onShortcutRecorderFocused)
 
+  let pendingRichMarkdownContextMenuTableTarget: RichMarkdownContextMenuTableTarget | null = null
+  const onRichMarkdownContextMenuTarget = (event: Electron.IpcMainEvent, value: unknown): void => {
+    if (event.sender !== mainWindow.webContents) {
+      return
+    }
+    pendingRichMarkdownContextMenuTableTarget = parseRichMarkdownContextMenuTableTarget(value)
+  }
+  ipcMain.on(richMarkdownContextMenuTargetChannel, onRichMarkdownContextMenuTarget)
   const onMainContextMenu = (_event: Electron.Event, params: Electron.ContextMenuParams): void => {
-    const template = buildEditableContextMenuTemplate(params, mainWindow.webContents)
-    if (template.length === 0) {
+    const tableTarget = matchingRichMarkdownContextMenuTableTarget(
+      params,
+      pendingRichMarkdownContextMenuTableTarget
+    )
+    pendingRichMarkdownContextMenuTableTarget = null
+    const template = buildEditableContextMenuTemplate(params, mainWindow.webContents, {
+      tableTarget
+    })
+    if (template.length === 0 || mainWindow.isDestroyed()) {
       return
     }
     // Why: the context-menu event can precede our focus-mirror update; trust Electron's editable params, not markdownEditorFocused.
@@ -537,6 +563,7 @@ export function createMainWindow(
   // Why: a dead renderer can't clear its focus mirror; default-deny carve-outs so it can't disable app shortcuts in a later lifecycle.
   const resetMarkdownEditorFocus = (): void => {
     markdownEditorFocused = false
+    pendingRichMarkdownContextMenuTableTarget = null
   }
   const resetTerminalInputFocus = (): void => {
     terminalInputFocused = false
@@ -1118,6 +1145,7 @@ export function createMainWindow(
     ipcMain.removeListener(terminalInputFocusChannel, onTerminalInputFocused)
     ipcMain.removeListener(floatingFocusChannel, onFloatingFocus)
     ipcMain.removeListener(shortcutRecorderFocusChannel, onShortcutRecorderFocused)
+    ipcMain.removeListener(richMarkdownContextMenuTargetChannel, onRichMarkdownContextMenuTarget)
     // Why: powerMonitor is app-global; without this the resume relay leaks and fires against a destroyed webContents.
     powerMonitor.removeListener('resume', onSystemResume)
     clearTrustedUIRendererWebContentsId(rendererWebContentsId)

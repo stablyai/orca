@@ -9,6 +9,7 @@ import {
   type TerminalTabRetirementState
 } from '@/store/slices/terminal-tab-retirement'
 import { reserveTerminalRetirementTeardowns } from '@/store/slices/terminal-retirement-teardown-reservation'
+import { notifyDaemonSessionInventoryInvalidated } from '../status-bar/daemon-session-inventory-invalidation'
 
 const CLOSE_BATCH_SIZE = 2
 
@@ -42,6 +43,7 @@ export type KillAllTerminalSurfacesSummary = {
 type KillAllTerminalSurfaceDependencies = {
   getState: () => KillAllTerminalSurfaceState
   killDaemonSessions: () => Promise<DaemonKillAllResult>
+  notifyInventoryInvalidated: () => void
   closeSurface: (
     tabId: string,
     options: {
@@ -127,6 +129,7 @@ function createDefaultDependencies(): KillAllTerminalSurfaceDependencies {
   return {
     getState: useAppStore.getState,
     killDaemonSessions: () => window.api.pty.management.killAll(),
+    notifyInventoryInvalidated: notifyDaemonSessionInventoryInvalidated,
     closeSurface: closeTerminalTab,
     killPty: (ptyId) => window.api.pty.kill(ptyId),
     now: () => globalThis.performance?.now() ?? Date.now(),
@@ -156,6 +159,13 @@ export async function runKillAllTerminalSurfaces(
     daemon = { status: 'fulfilled', ...(await deps.killDaemonSessions()) }
   } catch {
     daemon = { status: 'rejected' }
+  }
+  try {
+    // Why: the management sweep ends sessions without per-PTY pty:exit events,
+    // so cached inventories (status-bar badge) must be told to re-read.
+    deps.notifyInventoryInvalidated()
+  } catch {
+    // A stale badge must not abort the destructive action already in progress.
   }
 
   const cleanupState = deps.getState()

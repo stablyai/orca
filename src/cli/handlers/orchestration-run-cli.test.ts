@@ -63,6 +63,41 @@ describe('lightweight Run CLI handlers', () => {
     })
   })
 
+  it('passes Run pagination flags to the runtime', async () => {
+    callMock.mockResolvedValue({
+      result: { runs: [], nextCursor: null }
+    })
+
+    await ORCHESTRATION_HANDLERS['orchestration run-list']({
+      flags: new Map([
+        ['limit', '25'],
+        ['cursor', 'next-page']
+      ]),
+      client: { call: callMock },
+      json: true
+    } as never)
+
+    expect(callMock).toHaveBeenCalledWith('orchestration.runList', {
+      limit: 25,
+      cursor: 'next-page'
+    })
+  })
+
+  it('opts into bounded Run pagination by default', async () => {
+    callMock.mockResolvedValue({ result: { runs: [], nextCursor: null } })
+
+    await ORCHESTRATION_HANDLERS['orchestration run-list']({
+      flags: new Map(),
+      client: { call: callMock },
+      json: true
+    } as never)
+
+    expect(callMock).toHaveBeenCalledWith('orchestration.runList', {
+      limit: 100,
+      cursor: undefined
+    })
+  })
+
   it('passes explicit legacy takeover only when requested', async () => {
     callMock.mockResolvedValue({
       result: { run: { id: 'run_adopted', objective: 'Recovered work' } }

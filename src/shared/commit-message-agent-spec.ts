@@ -1,6 +1,11 @@
 import type { TuiAgent } from './types'
 import { isTuiAgentEnabled } from './tui-agent-selection'
 import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
+import {
+  CLAUDE_MODEL_LIST_ARGS,
+  CLAUDE_MODEL_LIST_STDIN,
+  parseClaudeModelList
+} from './claude-model-list-probe'
 
 /* eslint-disable max-lines -- Why: this is the single registry for non-interactive commit-message agents, their model discovery parsers, and UI capabilities. */
 
@@ -16,10 +21,14 @@ export type CommitMessageModel = {
   id: string
   /** Visible label in the model dropdown. */
   label: string
+  /** Discovery-provided detail, e.g. what a CLI alias resolves to on this host. */
+  description?: string
   /** Omit when the model does not expose an effort selector — the UI then hides the dropdown. */
   thinkingLevels?: ThinkingLevel[]
   /** Required when thinkingLevels is present. */
   defaultThinkingLevel?: string
+  /** Whether the model exposes Claude's mid-session Fast mode toggle. */
+  supportsFastMode?: boolean
 }
 
 export type CommitMessageAgentSpec = {
@@ -37,6 +46,8 @@ export type CommitMessageAgentSpec = {
   modelDiscovery?: {
     binary: string
     args: string[]
+    /** Written to the CLI's stdin, for CLIs whose listing is request-driven. */
+    stdinPayload?: string
     parse: (stdout: string) => CommitMessageModel[]
   }
   models: CommitMessageModel[]
@@ -46,8 +57,10 @@ export type CommitMessageAgentSpec = {
 export type CommitMessageModelCapability = {
   id: string
   label: string
+  description?: string
   thinkingLevels?: ThinkingLevel[]
   defaultThinkingLevel?: string
+  supportsFastMode?: boolean
 }
 
 export type CommitMessageAgentCapability = {
@@ -137,6 +150,30 @@ function withOpenAiThinking(
   return /(?:gpt-5|codex)/i.test(id)
     ? { thinkingLevels: OPENAI_THINKING_LEVELS, defaultThinkingLevel: 'low' }
     : {}
+}
+
+export function parseClaudeModels(stdout: string): CommitMessageModel[] {
+  return uniqueModels(
+    parseClaudeModelList(stdout).map((model) => {
+      const thinkingLevels = CLAUDE_THINKING_LEVELS.filter((level) =>
+        model.effortLevels.includes(level.id)
+      )
+      return {
+        id: model.id,
+        label: model.label,
+        ...(model.description ? { description: model.description } : {}),
+        ...(thinkingLevels.length > 0
+          ? {
+              thinkingLevels,
+              defaultThinkingLevel: thinkingLevels.some((level) => level.id === 'low')
+                ? 'low'
+                : thinkingLevels[0].id
+            }
+          : {}),
+        ...(model.supportsFastMode ? { supportsFastMode: true } : {})
+      }
+    })
+  )
 }
 
 export function parseCodexModels(stdout: string): CommitMessageModel[] {
@@ -311,7 +348,16 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
       'plan',
       ...(thinkingLevel ? ['--effort', thinkingLevel] : [])
     ],
-    modelSource: 'static',
+    modelSource: 'dynamic',
+    // Why: the Claude CLI has no listing subcommand; one list_models control
+    // request over --print stream-json returns the /model picker catalog.
+    // Older CLIs answer with a control error and exit 0, keeping the fallback.
+    modelDiscovery: {
+      binary: 'claude',
+      args: [...CLAUDE_MODEL_LIST_ARGS],
+      stdinPayload: CLAUDE_MODEL_LIST_STDIN,
+      parse: parseClaudeModels
+    },
     models: [
       {
         // Why: Claude Code aliases track the account/provider's supported
@@ -744,8 +790,10 @@ function toCommitMessageAgentCapability(
     models: spec.models.map((model) => ({
       id: model.id,
       label: model.label,
+      ...(model.description ? { description: model.description } : {}),
       ...(model.thinkingLevels ? { thinkingLevels: [...model.thinkingLevels] } : {}),
-      ...(model.defaultThinkingLevel ? { defaultThinkingLevel: model.defaultThinkingLevel } : {})
+      ...(model.defaultThinkingLevel ? { defaultThinkingLevel: model.defaultThinkingLevel } : {}),
+      ...(model.supportsFastMode ? { supportsFastMode: true } : {})
     }))
   }
 }

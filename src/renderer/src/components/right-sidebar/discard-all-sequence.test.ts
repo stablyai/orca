@@ -30,6 +30,15 @@ describe('getDiscardAllPaths', () => {
     expect(getDiscardAllPaths(entries, 'untracked')).toEqual(['c.ts'])
   })
 
+  it('accepts mixed Changes areas when untracked files are combined', () => {
+    const entries: GitStatusEntry[] = [
+      entry({ path: 'changed.ts', area: 'unstaged' }),
+      entry({ path: 'new.ts', area: 'untracked', status: 'untracked' }),
+      entry({ path: 'ready.ts', area: 'staged' })
+    ]
+    expect(getDiscardAllPaths(entries, ['unstaged', 'untracked'])).toEqual(['changed.ts', 'new.ts'])
+  })
+
   it('skips entries with an unresolved conflict', () => {
     const entries: GitStatusEntry[] = [
       entry({ path: 'clean.ts', area: 'unstaged' }),

@@ -79,7 +79,7 @@ describe('daemon health socket listener cleanup', () => {
     const result = killStaleDaemon(dir, socketPath, tokenPath)
     await vi.advanceTimersByTimeAsync(500)
 
-    await expect(result).resolves.toBe(false)
+    await expect(result).resolves.toEqual({ killed: false, liveOwnerSurvived: false })
     expect(socket.listenerCount('connect')).toBe(0)
     expect(socket.listenerCount('error')).toBe(0)
     expect(socket.destroy).toHaveBeenCalledTimes(1)

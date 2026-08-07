@@ -294,6 +294,36 @@ describe('running agent send targets', () => {
     expect(target).not.toHaveProperty('disabledReason')
   })
 
+  it('does not promote an unconfirmed restored row from its preserved title', () => {
+    const paneKey = makePaneKey(TAB_ID, RIGHT_LEAF_ID)
+    const target = resolveRunningAgentSendTarget(
+      state({
+        agentStatusByPaneKey: {
+          [paneKey]: { ...entry(paneKey, 'working'), restoredUnconfirmed: true }
+        },
+        terminalLayoutsByTabId: {
+          [TAB_ID]: {
+            root: { type: 'leaf', leafId: RIGHT_LEAF_ID },
+            activeLeafId: RIGHT_LEAF_ID,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [RIGHT_LEAF_ID]: 'pty-right' }
+          }
+        },
+        runtimePaneTitlesByTabId: { [TAB_ID]: { 1: 'Codex ready' } }
+      }),
+      WORKTREE_ID,
+      paneKey,
+      NOW
+    )
+
+    expect(target).toMatchObject({
+      paneKey,
+      ptyId: 'pty-right',
+      status: 'disabled',
+      disabledReason: 'Agent status is stale'
+    })
+  })
+
   it('treats a missing tab title as absent live title evidence', () => {
     const paneKey = makePaneKey(TAB_ID, RIGHT_LEAF_ID)
     const target = resolveRunningAgentSendTarget(
