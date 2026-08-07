@@ -20,8 +20,8 @@ const CURRENT_COORDINATOR_HANDLE = 'term_current_coord'
 const CURRENT_COORDINATOR_PANE = 'tab_current:55555555-5555-4555-8555-555555555555'
 // The replacement coordinator after a retain/restart: same handle, new pane identity.
 const RESTARTED_COORDINATOR_PANE = 'tab_current:99999999-9999-4999-8999-999999999999'
-const FRESH_COORDINATOR_HANDLE = 'term_fresh_coord'
-const FRESH_COORDINATOR_PANE = 'tab_fresh:66666666-6666-4666-8666-666666666666'
+// A coordinator terminal that restarted inside the legacy coordinator's own pane.
+const REBOUND_COORDINATOR_HANDLE = 'term_rebound_coord'
 
 type Harness = {
   db: OrchestrationDb
@@ -30,7 +30,6 @@ type Harness = {
   adoptedRunId: string
   taskId: string
   dispatchId: string
-  freshRunId: string
 }
 
 const tempDirs: string[] = []
@@ -46,7 +45,7 @@ afterEach(() => {
 })
 
 function createHarness(): Harness {
-  const dir = mkdtempSync(join(tmpdir(), 'orca-legacy-fresh-run-'))
+  const dir = mkdtempSync(join(tmpdir(), 'orca-legacy-takeover-delivery-'))
   tempDirs.push(dir)
   const dbPath = join(dir, 'orchestration.db')
   const before = new OrchestrationDb(dbPath)
@@ -72,11 +71,6 @@ function createHarness(): Harness {
   const db = new OrchestrationDb(dbPath)
   databases.push(db)
   const adoptedRunId = db.getLegacyAdoption()?.adopted_run_id as string
-  const freshRun = db.createRun({
-    objective: 'fresh work',
-    coordinatorHandle: FRESH_COORDINATOR_HANDLE,
-    coordinatorPaneKey: FRESH_COORDINATOR_PANE
-  })
   const runtime = new OrcaRuntimeService()
   runtime.setOrchestrationDb(db)
   vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
@@ -86,8 +80,8 @@ function createHarness(): Harness {
         ? WORKER_PANE
         : handle === CURRENT_COORDINATOR_HANDLE
           ? CURRENT_COORDINATOR_PANE
-          : handle === FRESH_COORDINATOR_HANDLE
-            ? FRESH_COORDINATOR_PANE
+          : handle === REBOUND_COORDINATOR_HANDLE
+            ? COORDINATOR_PANE
             : null
   )
   vi.spyOn(runtime, 'verifyOrchestrationCompatibilityCaller').mockImplementation((proof) => {
@@ -95,9 +89,7 @@ function createHarness(): Harness {
       (proof?.terminalHandle === WORKER_HANDLE && proof.paneKey === WORKER_PANE) ||
       (proof?.terminalHandle === COORDINATOR_HANDLE && proof.paneKey === COORDINATOR_PANE) ||
       (proof?.terminalHandle === CURRENT_COORDINATOR_HANDLE &&
-        proof.paneKey === CURRENT_COORDINATOR_PANE) ||
-      (proof?.terminalHandle === FRESH_COORDINATOR_HANDLE &&
-        proof.paneKey === FRESH_COORDINATOR_PANE)
+        proof.paneKey === CURRENT_COORDINATOR_PANE)
     if (!valid || !proof?.launchToken) {
       return null
     }
@@ -116,19 +108,17 @@ function createHarness(): Harness {
     runtime,
     adoptedRunId,
     taskId: task.id,
-    dispatchId: dispatch.id,
-    freshRunId: freshRun.id
+    dispatchId: dispatch.id
   }
 }
 
 function evidence(
-  role: 'worker' | 'coordinator' | 'current-coordinator' | 'fresh-coordinator'
+  role: 'worker' | 'coordinator' | 'current-coordinator'
 ): OrchestrationCompatibilityEvidence {
   const map = {
     worker: { handle: WORKER_HANDLE, pane: WORKER_PANE },
     coordinator: { handle: COORDINATOR_HANDLE, pane: COORDINATOR_PANE },
-    'current-coordinator': { handle: CURRENT_COORDINATOR_HANDLE, pane: CURRENT_COORDINATOR_PANE },
-    'fresh-coordinator': { handle: FRESH_COORDINATOR_HANDLE, pane: FRESH_COORDINATOR_PANE }
+    'current-coordinator': { handle: CURRENT_COORDINATOR_HANDLE, pane: CURRENT_COORDINATOR_PANE }
   }
   const entry = map[role]
   return {
@@ -156,54 +146,8 @@ function request(
   }
 }
 
-describe('legacy compatibility with fresh-run coordinators', () => {
-  it('lets a fresh-run coordinator list tasks without --run despite a legacy adoption', async () => {
-    const harness = createHarness()
-
-    const response = await harness.dispatcher.dispatch(
-      request(
-        'orchestration.taskList',
-        { callerTerminalHandle: FRESH_COORDINATOR_HANDLE },
-        evidence('fresh-coordinator'),
-        'fresh-task-list'
-      )
-    )
-
-    expect(response).toMatchObject({
-      ok: true,
-      result: { runId: harness.freshRunId, legacyReadOnly: false }
-    })
-  })
-
-  it('lets a fresh-run coordinator send status messages without legacy_read_only', async () => {
-    const harness = createHarness()
-    const freshTask = harness.db.createTask({
-      spec: 'fresh task',
-      runId: harness.freshRunId,
-      createdByTerminalHandle: FRESH_COORDINATOR_HANDLE
-    })
-
-    const response = await harness.dispatcher.dispatch(
-      request(
-        'orchestration.send',
-        {
-          from: FRESH_COORDINATOR_HANDLE,
-          to: `run:${harness.freshRunId}`,
-          subject: 'fresh status',
-          type: 'status'
-        },
-        evidence('fresh-coordinator'),
-        'fresh-send-status'
-      )
-    )
-
-    expect(response).toMatchObject({ ok: true })
-    expect(harness.db.getTask(freshTask.id)?.status).toBe('ready')
-  })
-})
-
-function takeOverWithCommittedPrincipal(harness: Harness): void {
-  harness.db.commitLegacyCompatibilityPrincipal({
+function commitLegacyCoordinatorPrincipal(harness: Harness): { id: string } {
+  const { principal } = harness.db.commitLegacyCompatibilityPrincipal({
     runId: harness.adoptedRunId,
     role: 'coordinator',
     hostScope: JSON.stringify({ kind: 'local', hostId: 'local' }),
@@ -212,20 +156,31 @@ function takeOverWithCommittedPrincipal(harness: Harness): void {
     launchTokenHash: 'coord-hash',
     processIncarnation: 'process-1'
   })
-  harness.db.bindRun({
+  expect(principal.status).toBe('committed')
+  return principal
+}
+
+// Why: assert the takeover landed here, so a broken bind fails at cause instead of two tests later.
+function takeOverWithCommittedPrincipal(harness: Harness): void {
+  commitLegacyCoordinatorPrincipal(harness)
+  const bound = harness.db.bindRun({
     runId: harness.adoptedRunId,
     coordinatorHandle: CURRENT_COORDINATOR_HANDLE,
     coordinatorPaneKey: CURRENT_COORDINATOR_PANE,
     takeoverLegacy: true
   })
+  expect(bound).toMatchObject({
+    id: harness.adoptedRunId,
+    coordinator_handle: CURRENT_COORDINATOR_HANDLE,
+    coordinator_pane_key: CURRENT_COORDINATOR_PANE
+  })
+  expect(harness.db.getLegacyCoordinatorPrincipal(harness.adoptedRunId)?.status).toBe('revoked')
 }
 
 describe('legacy coordinator delivery targets after takeover', () => {
   it('accepts both the old and new coordinator handles after principal revocation', () => {
     const harness = createHarness()
     takeOverWithCommittedPrincipal(harness)
-
-    expect(harness.db.getLegacyCoordinatorPrincipal(harness.adoptedRunId)?.status).toBe('revoked')
 
     // Old handle still routable (retained).
     expect(
@@ -246,11 +201,12 @@ describe('legacy coordinator delivery targets after takeover', () => {
     takeOverWithCommittedPrincipal(harness)
 
     // The replacement coordinator is a delivery target, but must never become fence jurisdiction:
-    // fencing it would replace an actionable error with unusable takeover guidance.
+    // fencing it would strand the Run's own owner behind unusable takeover guidance.
     expect(
       harness.db.isLegacyCoordinatorHandle(harness.adoptedRunId, CURRENT_COORDINATOR_HANDLE)
     ).toBe(false)
 
+    // The pane identity changed under it, so this coordinator can no longer attest.
     const response = await harness.dispatcher.dispatch(
       request(
         'orchestration.taskList',
@@ -260,7 +216,11 @@ describe('legacy coordinator delivery targets after takeover', () => {
       )
     )
 
-    expect(response).not.toMatchObject({ ok: false, error: { code: 'legacy_read_only' } })
+    // It still owns the Run binding, so it reads its own Run rather than being fenced read-only.
+    expect(response).toMatchObject({
+      ok: true,
+      result: { runId: harness.adoptedRunId, legacyReadOnly: false }
+    })
   })
 
   it('lets a worker send worker_done to the new coordinator after principal revocation', async () => {
@@ -296,5 +256,124 @@ describe('legacy coordinator delivery targets after takeover', () => {
         }
       }
     })
+  })
+
+  it('lets a worker ask the new coordinator and get an answer after principal revocation', async () => {
+    const harness = createHarness()
+    takeOverWithCommittedPrincipal(harness)
+
+    const asked = (await harness.dispatcher.dispatch(
+      request(
+        'orchestration.ask',
+        { from: WORKER_HANDLE, to: CURRENT_COORDINATOR_HANDLE, question: 'Ship it?', timeoutMs: 0 },
+        evidence('worker'),
+        'ask-new-coordinator'
+      )
+    )) as { ok: boolean; result: { messageId: string } }
+
+    expect(asked).toMatchObject({ ok: true, result: { timedOut: true } })
+    // The ask must reach the Run mailbox as a current-contract question, or nobody can answer it.
+    expect(harness.db.getMessageById(asked.result.messageId)).toMatchObject({
+      to_handle: `run:${harness.adoptedRunId}`,
+      delivery_contract: 'current_delivery',
+      type: 'question'
+    })
+
+    const replied = await harness.dispatcher.dispatch(
+      request(
+        'orchestration.reply',
+        { id: asked.result.messageId, from: CURRENT_COORDINATOR_HANDLE, body: 'Yes, ship it.' },
+        evidence('current-coordinator'),
+        'reply-from-new-coordinator'
+      )
+    )
+    expect(replied).toMatchObject({ ok: true })
+
+    const resumed = await harness.dispatcher.dispatch(
+      request(
+        'orchestration.ask',
+        { from: WORKER_HANDLE, resume: asked.result.messageId, timeoutMs: 0 },
+        evidence('worker'),
+        'ask-resume-after-reply'
+      )
+    )
+    expect(resumed).toMatchObject({ ok: true, result: { answer: 'Yes, ship it.' } })
+  })
+})
+
+// Why: bindRun only revokes a committed principal when it takes over or the legacy work is settled,
+// so a coordinator restarting inside the legacy pane rebinds the Run while the principal stays
+// committed. Delivery still routes legacy_direct to the addressed handle there, and no reader can
+// see that mailbox, so the permit must refuse rather than accept mail nobody will ever read.
+describe('legacy coordinator delivery targets without a takeover', () => {
+  function rebindLegacyPaneWithoutTakeover(harness: Harness): { principalId: string } {
+    const principal = commitLegacyCoordinatorPrincipal(harness)
+    const run = harness.db.getRun(harness.adoptedRunId) as { consumer_generation: number }
+    expect(
+      harness.db.bindRun({
+        runId: harness.adoptedRunId,
+        coordinatorHandle: COORDINATOR_HANDLE,
+        coordinatorPaneKey: COORDINATOR_PANE,
+        legacyCoordinatorAuthority: {
+          runId: harness.adoptedRunId,
+          principalId: principal.id,
+          terminalHandle: COORDINATOR_HANDLE,
+          paneKey: COORDINATOR_PANE,
+          consumerGeneration: run.consumer_generation
+        }
+      })
+    ).toMatchObject({ coordinator_handle: COORDINATOR_HANDLE })
+
+    expect(
+      harness.db.bindRun({
+        runId: harness.adoptedRunId,
+        coordinatorHandle: REBOUND_COORDINATOR_HANDLE,
+        coordinatorPaneKey: COORDINATOR_PANE
+      })
+    ).toMatchObject({ coordinator_handle: REBOUND_COORDINATOR_HANDLE })
+    expect(harness.db.getLegacyCoordinatorPrincipal(harness.adoptedRunId)?.status).toBe('committed')
+    return { principalId: principal.id }
+  }
+
+  it('refuses the rebound coordinator handle while the legacy principal is still committed', () => {
+    const harness = createHarness()
+    rebindLegacyPaneWithoutTakeover(harness)
+
+    expect(
+      harness.db.isLegacyCoordinatorDeliveryTarget(harness.adoptedRunId, REBOUND_COORDINATOR_HANDLE)
+    ).toBe(false)
+    // The still-committed principal's own handle stays reachable.
+    expect(
+      harness.db.isLegacyCoordinatorDeliveryTarget(harness.adoptedRunId, COORDINATOR_HANDLE)
+    ).toBe(true)
+  })
+
+  it('rejects worker_done to the rebound handle instead of writing unreadable mail', async () => {
+    const harness = createHarness()
+    const { principalId } = rebindLegacyPaneWithoutTakeover(harness)
+
+    const response = await harness.dispatcher.dispatch(
+      request(
+        'orchestration.send',
+        {
+          from: WORKER_HANDLE,
+          to: REBOUND_COORDINATOR_HANDLE,
+          subject: 'Completed',
+          type: 'worker_done',
+          payload: JSON.stringify({
+            taskId: harness.taskId,
+            dispatchId: harness.dispatchId,
+            outcome: 'succeeded'
+          })
+        },
+        evidence('worker'),
+        'worker-done-to-rebound-coordinator'
+      )
+    )
+
+    expect(response).toMatchObject({ ok: false, error: { code: 'request_mismatch' } })
+    // Nothing was written to a mailbox that neither contract can read.
+    expect(harness.db.getUnreadMessages(REBOUND_COORDINATOR_HANDLE)).toHaveLength(0)
+    expect(harness.db.getLegacyMailHistory({ principalId }).messages).toHaveLength(0)
   })
 })

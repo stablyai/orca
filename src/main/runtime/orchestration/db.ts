@@ -1707,14 +1707,18 @@ export class OrchestrationDb {
   }
 
   // Why: recipient-side permit for legacy lifecycle mail. After a takeover revokes the old principal
-  // the replacement coordinator is only reachable through the Run binding, and both handles are
-  // promoted to the Run mailbox by resolveLegacyWorkerCoordinatorDelivery.
+  // the replacement coordinator is only reachable through the Run binding.
   isLegacyCoordinatorDeliveryTarget(runId: string, terminalHandle: string): boolean {
     if (this.isLegacyCoordinatorHandle(runId, terminalHandle)) {
       return true
     }
     const run = this.getRunRaw(runId)
-    return run?.coordinator_handle === terminalHandle && Boolean(run.coordinator_pane_key)
+    if (run?.coordinator_handle !== terminalHandle || !run.coordinator_pane_key) {
+      return false
+    }
+    // Why: must match resolveLegacyWorkerCoordinatorDelivery's takeover test. A still-committed
+    // principal routes legacy_direct to this handle, and no reader can see that mailbox.
+    return this.getLegacyCoordinatorPrincipal(runId)?.status !== 'committed'
   }
 
   findLegacyWorkerCompletion(params: {
