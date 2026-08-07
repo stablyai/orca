@@ -395,5 +395,116 @@ export const JA_VALUE_OVERRIDES = {
   'Terminal, browser, or editor rendering failed in this workspace. Retry to remount it.':
     'このワークスペースでは、ターミナル、ブラウザ、またはエディターのレンダリングに失敗しました。再マウントを試してください。',
   'The dashboard could not finish rendering. Retry to remount it, or reopen it.':
-    'ダッシュボードのレンダリングを完了できませんでした。再マウントを試すか、開き直してください。'
+    'ダッシュボードのレンダリングを完了できませんでした。再マウントを試すか、開き直してください。',
+
+  // 原文と内容が一致していなかった（古い訳が残存）
+  'Review the prompt before starting an agent.':
+    'エージェントを開始する前に、プロンプトを確認してください。',
+  'Use Add Project to enter a path on the selected host.':
+    '[プロジェクトの追加] から、選択したホスト上のパスを入力します。',
+  'Use repo-relative paths like packages/web or apps/api.':
+    'packages/web や apps/api などのリポジトリ相対パスを使用します。',
+  // 構文・修飾関係の取り違え
+  'orca.yaml first, then your local commands.': 'まず orca.yaml、次にローカルのコマンドの順です。',
+  'Rename Orca-created branches from the initial agent task.':
+    'Orca が作成したブランチの名前を、最初のエージェントタスクに基づいて変更します。',
+  'Dim files matched by .gitignore in the file explorer.':
+    'ファイルエクスプローラーで、.gitignore に一致するファイルを薄く表示します。',
+  'Command line Orca runs when a text recipe uses Custom command.':
+    'テキストレシピで「カスタムコマンド」を使用したときに Orca が実行するコマンドライン。',
+  'Let programs in the terminal copy to the system clipboard through OSC 52, including over SSH.':
+    'ターミナル内のプログラムが、OSC 52 を使ってシステムのクリップボードにコピーできるようにします（SSH 経由を含む）。',
+  'Choose which optional saved Codex account powers live quota reads.':
+    'ライブクォータの取得に使用する、保存済みの Codex アカウント（任意）を選択します。',
+  'This plugin has no worker process. Its instructional content can still cause actions when you or an agent use it. Review the instructions and commands below before enabling it.':
+    'このプラグインにはワーカープロセスがありません。それでも、ユーザーやエージェントが使用したときに、記載された手順が操作を引き起こす可能性があります。有効にする前に、以下の手順とコマンドを確認してください。',
+  'This removes the saved SSH host and its credentials from this computer. Remote files are not deleted.':
+    '保存済みの SSH ホストとその認証情報を、このコンピュータから削除します。リモートのファイルは削除されません。',
+  // 危険度が変わる誤訳
+  'Your new worktree is current, but local {{value0}} is {{value1}} {{value2}} behind. AI diffs may miss recent commits.':
+    '新規ワークツリーは最新ですが、ローカル {{value0}} は {{value1}} {{value2}} 遅れています。AI の差分に最近のコミットが反映されない可能性があります。',
+  'This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked.':
+    'マージのブロックが解除されるまでに、このチェックには GitHub 上での手動操作（例: ワークフロー実行の承認）が必要です。',
+  'This file changed on disk while you have unsaved edits. Saving will overwrite the newer disk content.':
+    '未保存の編集がある状態で、このファイルがディスク上で変更されました。保存すると、ディスク上の最新の内容を上書きします。',
+  'Local terminal reveal is unavailable while a remote runtime is active':
+    'リモートランタイムがアクティブな間は、ローカルターミナルの表示は利用できません',
+  'No quick commands saved.': '保存されているクイックコマンドはありません。',
+  'Repository not in Orca': 'このリポジトリは Orca に登録されていません',
+  // host と server / worktree と workspace の取り違え
+  'host folder not selected': 'ホストフォルダーが選択されていません',
+  'Add a Git repository or folder that already exists on the selected host.':
+    '選択したホストに既に存在する Git リポジトリまたはフォルダーを追加します。',
+  'Add another project from the selected host.': '選択したホストから別のプロジェクトを追加します。',
+  'Enter a host path for the clone destination.': 'クローン先のホスト上のパスを入力します。',
+  'Use a host path to add projects from a remote host.':
+    'ホスト上のパスを指定して、リモートホストからプロジェクトを追加します。',
+  'Use Add Project to enter a host path.':
+    '[プロジェクトの追加] から、ホスト上のパスを入力します。',
+  'Opens as a project on this host · {{value0}}':
+    'このホスト上のプロジェクトとして開きます · {{value0}}',
+  'No project path is available on this host for attachments.':
+    'このホスト上に、添付に使用できるプロジェクトパスがありません。',
+  'Clears them from Orca only. Remote files, worktrees, and branches are left untouched.':
+    'Orca からのみ削除します。リモートのファイル、ワークツリー、ブランチはそのまま残ります。',
+  'Agent location': 'エージェントの実行場所',
+  // Git 用語を一般語義に訳していた
+  upstream: 'upstream',
+  Upstream: 'upstream',
+  'Commit staged changes': 'ステージ済みの変更をコミット',
+  'Generate the commit message from staged changes.':
+    'ステージ済みの変更からコミットメッセージを生成します。',
+  // 識別子・キー名は翻訳しない
+  lan: 'LAN',
+  deploy: 'deploy',
+  'Connect this source to check for Hermes automations in the remote profile.':
+    'このソースに接続すると、リモートプロファイル内の Hermes オートメーションを確認できます。',
+  // ユーザーへの指示は「〜してください」、完了通知は過去形にする
+  'Notes sent to active agent.': 'メモをアクティブなエージェントに送信しました。',
+  'Review before attaching. Captured page context may include visible site content.':
+    '添付する前に確認してください。取得したページのコンテキストには、表示中のサイトの内容が含まれる場合があります。',
+  'Agent took too long to start. The workspace is ready — paste the {{value0}} when the agent is idle.':
+    'エージェントの起動に時間がかかりすぎました。ワークスペースの準備はできています。エージェントがアイドル状態になったら {{value0}} を貼り付けてください。',
+  'Install the Orca CLI before running agent skill setup.':
+    'エージェントスキルのセットアップを実行する前に、Orca CLI をインストールしてください。',
+  'Run grok in a terminal on the computer running Orca and wait for it to start. If prompted, complete sign-in, then retry usage. You do not need to send a chat message.':
+    'Orca を実行しているコンピュータのターミナルで grok を実行し、起動するまで待ってください。サインインを求められた場合は完了してから、使用状況を再取得してください。チャットメッセージを送る必要はありません。',
+  'Choose an enabled agent before saving.': '保存する前に、有効なエージェントを選択してください。',
+  'Selected agent is disabled. Choose an enabled agent before creating.':
+    '選択したエージェントは無効です。作成する前に、有効なエージェントを選択してください。',
+  'Choose an agent before starting.': '開始する前に、エージェントを選択してください。',
+  'Change this later from the project menu.': '後でプロジェクトメニューから変更できます。',
+  "Orca works with every CLI agent. Choose the one you'll reach for most. Switch any time.":
+    'Orca はすべての CLI エージェントで動作します。最もよく使うものを選択してください。いつでも切り替えられます。',
+  // 状態ラベルは体言で揃える
+  'Downloading paused': 'ダウンロード一時停止中',
+  Canceled: 'キャンセル済み',
+  'Thinking...': '思考中…',
+  'No attached worktrees yet': '紐づくワークツリーはまだありません',
+  'Started an AI agent for the commit failure.':
+    'コミット失敗を修正するために AI エージェントを開始しました。',
+  'terminals until reset': 'リセットするまでターミナルを維持',
+  // 日本語として壊れていた語順・重複・語彙
+  'Failed to import repo icon': 'リポジトリアイコンのインポートに失敗しました',
+  'Terminal Panes': 'ターミナルペイン',
+  'Option composes special characters for your keyboard layout.':
+    'Option キーで、キーボードレイアウトに応じた特殊文字を入力します。',
+  'There are local terminals with running processes. Close the window anyway?':
+    'プロセスが実行中のローカルターミナルがあります。このままウィンドウを閉じますか?',
+  'Auto-generates a new name when you leave this text box empty.':
+    'このテキストボックスを空のままにすると、名前が自動生成されます。',
+  'Auto-name workspace from first agent message':
+    '最初のエージェントメッセージからワークスペース名を自動生成',
+  'Controls the split divider line between panes in light mode.':
+    'ライトモードでのペイン間の分割線を制御します。',
+  'Controls the split divider line between panes in dark mode.':
+    'ダークモードでのペイン間の分割線を制御します。',
+  'Countdown timer showing time until prompt cache expires (Claude agents).':
+    'プロンプトキャッシュが期限切れになるまでの時間を示すカウントダウンタイマー（Claude エージェント）。',
+  'Install and manage experimental Orca plugins.':
+    '実験的機能の Orca プラグインをインストール・管理します。',
+  "Resident memory held by Orca plus the processes under each worktree's terminals.":
+    'Orca が保持する常駐メモリと、各ワークツリーのターミナル配下で実行中のプロセス。',
+  'No local Claude, Codex, or OpenCode usage found yet. The overview will populate after the next agent session writes token logs.':
+    'ローカルの Claude、Codex、OpenCode の使用状況はまだ見つかりません。次のエージェントセッションがトークンログを書き込むと、概要に反映されます。'
 }

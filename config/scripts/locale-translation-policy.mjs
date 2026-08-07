@@ -177,7 +177,9 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'pr-view',
   'fix-login-flow',
   'my-project',
-  'serve-sim'
+  'serve-sim',
+  'pnpm playwright test',
+  'gh auth login'
 ])
 
 export const BRAND_MISTRANSLATIONS = {

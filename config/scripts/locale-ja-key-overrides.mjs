@@ -6,5 +6,9 @@ export const JA_KEY_OVERRIDES = {
   // delete confirmation, where オン renders as "外部ソース オン myhost".
   'auto.components.github.PRFilterSections.1e9b5244f2': { ja: 'オン' },
   'auto.components.settings.TerminalPane.29154326bb': { ja: 'オン' },
-  'auto.components.automations.AutomationsPage.1b586f0e2b': { ja: 'の' }
+  'auto.components.automations.AutomationsPage.1b586f0e2b': { ja: 'の' },
+  // Why: bare "Open" is the PR/issue state almost everywhere, so it cannot be a value override.
+  // These two are the action, as ko/zh/es already render them (열기 / 打开 / Abrir).
+  'auto.components.browser.pane.BrowserPane.756bfc25c9': { ja: '開く' },
+  'auto.components.right.sidebar.checks.panel.content.7c1f0a2b11': { ja: '開く' }
 }
