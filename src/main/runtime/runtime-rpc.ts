@@ -317,6 +317,14 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'hostedReview.create',
   'hostedReview.forBranch',
   'hostedReview.getCreationEligibility',
+  // Read-only Jira surface: mobile browses and links issues but connects sites on
+  // desktop, so the connect/disconnect and write methods stay unauthorized.
+  'jira.getIssue',
+  'jira.issueComments',
+  'jira.listIssues',
+  'jira.searchIssues',
+  'jira.selectSite',
+  'jira.status',
   'linear.getCustomView',
   'linear.getIssue',
   'linear.getProject',
