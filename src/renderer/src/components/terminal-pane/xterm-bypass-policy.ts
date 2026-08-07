@@ -174,6 +174,17 @@ function matchesClipboardBinding(
   return keybindingMatchesInput(binding, event, platform)
 }
 
+export function isMacNonLatinPhysicalCopyChord(event: XtermBypassEvent): boolean {
+  return (
+    event.metaKey &&
+    !event.ctrlKey &&
+    !event.altKey &&
+    !event.shiftKey &&
+    event.code === 'KeyC' &&
+    isSingleNonAsciiPrintableText(event.key)
+  )
+}
+
 /**
  * Decide whether plain Ctrl+C should bypass xterm's kitty CSI-u encoder and
  * be sent as ETX through Terminal.input() instead.
@@ -251,6 +262,8 @@ export function shouldBypassXtermKeyboardEvent(
     // Chromium's native paste event instead of xterm's Kitty encoder.
     return (
       matchesClipboardBinding('Mod+C', event, 'darwin') ||
+      // Why: macOS Korean and other non-Latin sources report physical Cmd+C as a translated glyph; xterm would encode it as PTY input and snap scrollback to the bottom.
+      isMacNonLatinPhysicalCopyChord(event) ||
       matchesClipboardBinding('Mod+V', event, 'darwin')
     )
   }

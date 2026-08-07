@@ -263,6 +263,33 @@ describe('AgentTerminalPreview', () => {
     expect(imeHarness.inputSourceTrackerRequests).toBe(1)
   })
 
+  it('bubbles physical Cmd+C from a Korean input source without leaking its keyup', async () => {
+    platformState.value = 'darwin'
+    render(<AgentTerminalPreview ptyId="pty-1" />)
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
+
+    const keydown = new KeyboardEvent('keydown', {
+      key: 'ㅊ',
+      code: 'KeyC',
+      metaKey: true,
+      cancelable: true
+    })
+    const keyup = new KeyboardEvent('keyup', {
+      key: 'ㅊ',
+      code: 'KeyC',
+      metaKey: true,
+      cancelable: true
+    })
+
+    expect(terminal.customKeyHandler!(keydown)).toBe(false)
+    expect(terminal.customKeyHandler!(keyup)).toBe(false)
+    expect(keydown.defaultPrevented).toBe(false)
+    expect(keyup.defaultPrevented).toBe(false)
+    expect(writeTerminalClipboardText).not.toHaveBeenCalled()
+  })
+
   it('does not install the IME native-text forwarder off macOS', async () => {
     render(<AgentTerminalPreview ptyId="pty-1" />)
     await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))

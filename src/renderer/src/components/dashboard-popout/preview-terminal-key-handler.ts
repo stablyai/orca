@@ -4,6 +4,7 @@ import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import { useAppStore } from '@/store'
 import { prefetchLayoutBaseCharacters } from '@/lib/keyboard-layout/layout-base-character'
 import { createTerminalNativeOnlyShortcutTracker } from '@/components/terminal-pane/terminal-native-only-shortcut'
+import { isMacNonLatinPhysicalCopyChord } from '@/components/terminal-pane/xterm-bypass-policy'
 import {
   resolvePreviewShortcutAction,
   type PreviewShortcutContext
@@ -88,6 +89,9 @@ export function installPreviewTerminalKeyHandler(args: {
   terminal.attachCustomKeyEventHandler((event) => {
     if (args.claimImeKeyEvent(event)) {
       // Why: bypass xterm's kitty encoder for native-text keydowns so the committed glyph survives via the input event.
+      return false
+    }
+    if (platform === 'darwin' && isMacNonLatinPhysicalCopyChord(event)) {
       return false
     }
     if (event.type !== 'keydown') {

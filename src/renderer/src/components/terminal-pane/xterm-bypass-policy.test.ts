@@ -40,6 +40,30 @@ describe('shouldBypassXtermKeyboardEvent — macOS', () => {
     ).toBe(false)
   })
 
+  it('bubbles Cmd+C keydown and keyup when the Korean input source reports physical C as ㅊ', () => {
+    for (const type of ['keydown', 'keyup']) {
+      expect(
+        shouldBypassXtermKeyboardEvent(
+          event({ type, key: 'ㅊ', code: 'KeyC', metaKey: true }),
+          opts
+        )
+      ).toBe(true)
+    }
+  })
+
+  it.each([
+    ['Shift', { shiftKey: true }],
+    ['Control', { ctrlKey: true }],
+    ['Option', { altKey: true }]
+  ])('does not treat Cmd+%s+ㅊ as physical Cmd+C', (_modifier, modifiers) => {
+    expect(
+      shouldBypassXtermKeyboardEvent(
+        event({ key: 'ㅊ', code: 'KeyC', metaKey: true, ...modifiers }),
+        opts
+      )
+    ).toBe(false)
+  })
+
   it('does NOT bubble other Cmd chords — Orca window handlers intercept them before xterm', () => {
     // Why: this policy is narrowly scoped to clipboard chords. Cmd+F, Cmd+D,
     // Cmd+K, Cmd+W, Cmd+Arrow, Cmd+Backspace are handled in keyboard-handlers.ts
