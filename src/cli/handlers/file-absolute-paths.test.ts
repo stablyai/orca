@@ -39,8 +39,15 @@ describe('absolute file CLI paths', () => {
     vi.restoreAllMocks()
     callMock.mockReset()
     process.exitCode = undefined
+    // Why: a contributor running this suite inside WSL inherits a real
+    // WSL_DISTRO_NAME, which would flip the rewrite on for every case below.
+    vi.stubEnv('WSL_DISTRO_NAME', '')
     vi.spyOn(console, 'log').mockImplementation(() => {})
     vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
   })
 
   it('reproduces the issue positional command without invalid_relative_path', async () => {
@@ -80,10 +87,6 @@ describe('absolute file CLI paths', () => {
 
   describe('WSL UNC worktree roots', () => {
     const uncRoot = '//wsl.localhost/Ubuntu/root/orca/workspaces/xxx'
-
-    afterEach(() => {
-      vi.unstubAllEnvs()
-    })
 
     function mockWorktreeShow(rootPath: string): void {
       queueFixtures(
