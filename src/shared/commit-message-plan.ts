@@ -156,6 +156,26 @@ function insertAdditionalAgentArgs(args: {
   return [...args.baseArgs, ...args.agentArgs]
 }
 
+function mergePresetAgentCommandArgs(
+  agentId: TuiAgent,
+  binary: string,
+  prefixArgs: string[],
+  generatedArgs: string[]
+): string[] {
+  if (agentId !== 'opencode' || !/(?:^|[\\/])opencode(?:\.(?:cmd|exe))?$/i.test(binary)) {
+    return [...prefixArgs, ...generatedArgs]
+  }
+  const runIndex = generatedArgs.indexOf('run')
+  if (runIndex === -1) {
+    return [...prefixArgs, ...generatedArgs]
+  }
+  return [
+    ...generatedArgs.slice(0, runIndex + 1),
+    ...prefixArgs,
+    ...generatedArgs.slice(runIndex + 1)
+  ]
+}
+
 export function planCommitMessageGeneration(
   input: CommitMessagePlanInput,
   prompt: string
@@ -251,7 +271,7 @@ export function planCommitMessageGeneration(
     ok: true,
     plan: {
       binary: command.binary,
-      args: [...command.prefixArgs, ...args],
+      args: mergePresetAgentCommandArgs(input.agentId, command.binary, command.prefixArgs, args),
       stdinPayload: spec.promptDelivery === 'stdin' ? prompt : null,
       label: spec.label
     }

@@ -94,6 +94,36 @@ describe('planCommitMessageGeneration', () => {
     })
   })
 
+  it('places OpenCode launch flags after the run subcommand', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'opencode',
+        model: 'opencode/gpt-5.4-mini',
+        agentCommandOverride: 'opencode --auto'
+      },
+      'PROMPT'
+    )
+
+    expect(result).toEqual({
+      ok: true,
+      plan: {
+        binary: 'opencode',
+        args: [
+          'run',
+          '--auto',
+          '--model',
+          'opencode/gpt-5.4-mini',
+          '--agent',
+          'build',
+          '--format',
+          'default'
+        ],
+        stdinPayload: 'PROMPT',
+        label: 'OpenCode'
+      }
+    })
+  })
+
   it('plans Amp execute generation without the removed archive flag', () => {
     const result = planCommitMessageGeneration(
       {
