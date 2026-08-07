@@ -604,6 +604,9 @@ export type RuntimeTerminalSend = {
   handle: string
   accepted: boolean
   bytesWritten: number
+  /** True only after a fresh agent-status bridge event follows prompt submission. */
+  agentAcknowledged?: boolean
+  agentAcknowledgedAt?: number
   refusedReason?: 'no-agent' | 'permission'
 }
 

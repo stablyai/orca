@@ -90,6 +90,7 @@ import { findCreatedWorktree } from './created-worktree-reconciliation'
 import type { BranchPrefixSettings } from '../../shared/branch-prefix'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
 import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
+import { folderWorkspaceToWorktree } from '../../shared/folder-workspace-worktree'
 import {
   cleanupUnusedWorktreePushTargetRemoteWithExec,
   sameGitHubRemoteUrl,
@@ -201,7 +202,9 @@ function validateWorkspaceLineageParentBeforeCreate(
   if (!parentScope) {
     throw new Error(`Invalid parent workspace: ${parentWorkspace}`)
   }
-  if (parentScope.type === 'folder' && !store.getFolderWorkspace(parentScope.folderWorkspaceId)) {
+  const parentFolderWorkspace =
+    parentScope.type === 'folder' ? store.getFolderWorkspace(parentScope.folderWorkspaceId) : null
+  if (parentScope.type === 'folder' && !parentFolderWorkspace) {
     throw new Error(`Parent folder workspace not found: ${parentWorkspace}`)
   }
   if (parentScope.type === 'worktree' && !store.getWorktreeMeta(parentScope.worktreeId)) {
@@ -228,7 +231,9 @@ function recordWorkspaceLineageForCreatedWorktree(
     console.warn(`[worktree-create] ignoring invalid parent workspace ${args.parentWorkspace}`)
     return null
   }
-  if (parentScope.type === 'folder' && !store.getFolderWorkspace(parentScope.folderWorkspaceId)) {
+  const parentFolderWorkspace =
+    parentScope.type === 'folder' ? store.getFolderWorkspace(parentScope.folderWorkspaceId) : null
+  if (parentScope.type === 'folder' && !parentFolderWorkspace) {
     console.warn(`[worktree-create] parent folder workspace disappeared: ${args.parentWorkspace}`)
     return null
   }
@@ -238,11 +243,23 @@ function recordWorkspaceLineageForCreatedWorktree(
     console.warn(`[worktree-create] parent worktree workspace disappeared: ${args.parentWorkspace}`)
     return null
   }
+  const parentFolderProjection = parentFolderWorkspace
+    ? folderWorkspaceToWorktree(parentFolderWorkspace)
+    : null
+  const parentInstanceId = parentWorktreeMeta?.instanceId ?? parentFolderProjection?.instanceId
+  const childHostId = worktree.hostId ?? null
+  const parentHostId = parentWorktreeMeta?.hostId ?? parentFolderProjection?.hostId ?? null
+  if (!parentInstanceId || !childHostId || !parentHostId || childHostId !== parentHostId) {
+    console.warn(`[worktree-create] incomplete or cross-host workspace lineage for ${worktree.id}`)
+    return null
+  }
   return store.setWorkspaceLineage({
     childWorkspaceKey,
     childInstanceId: worktree.instanceId,
+    childHostId,
     parentWorkspaceKey: args.parentWorkspace,
-    parentInstanceId: parentWorktreeMeta?.instanceId ?? null,
+    parentInstanceId,
+    parentHostId,
     origin: 'manual',
     capture: { source: 'active-workspace', confidence: 'explicit' },
     createdAt

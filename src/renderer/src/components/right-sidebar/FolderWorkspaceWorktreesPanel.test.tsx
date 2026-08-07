@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo, Worktree, WorktreeLineage, WorkspaceLineage } from '../../../../shared/types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import {
   LINEAGE_CHILDREN_INLINE_OFFSET,
   getLineageChildrenInlineStyle
@@ -130,6 +131,8 @@ function makeWorktree(overrides: Partial<Worktree> & { id: string }): Worktree {
     isBare: false,
     isMainWorktree: false,
     repoId: 'repo-1',
+    instanceId: overrides.id,
+    hostId: LOCAL_EXECUTION_HOST_ID,
     displayName: overrides.id,
     comment: '',
     linkedIssue: null,
@@ -155,7 +158,9 @@ function makeWorkspaceLineage(
     childWorkspaceKey: worktreeWorkspaceKey(child.id),
     childInstanceId: child.instanceId ?? null,
     parentWorkspaceKey: folderWorkspaceKey(parentFolderId),
-    parentInstanceId: null,
+    childHostId: child.hostId,
+    parentInstanceId: parentFolderId,
+    parentHostId: LOCAL_EXECUTION_HOST_ID,
     origin: 'cli',
     capture: { source: 'env-workspace', confidence: 'inferred' },
     createdAt: 1,
@@ -231,7 +236,7 @@ describe('FolderWorkspaceWorktreesPanel', () => {
     testState.store.activeWorkspaceKey = folderWorkspaceKey('folder-1')
     testState.store.worktreesByRepo = { 'repo-1': [child] }
     testState.store.workspaceLineageByChildKey = {
-      [child.id]: makeWorkspaceLineage(child, 'folder-1')
+      [worktreeWorkspaceKey(child.id)]: makeWorkspaceLineage(child, 'folder-1')
     }
 
     renderPanel()
@@ -268,10 +273,13 @@ describe('FolderWorkspaceWorktreesPanel', () => {
       'repo-1': [oldChild, recentChild, otherFolderChild, staleChild]
     }
     testState.store.workspaceLineageByChildKey = {
-      [oldChild.id]: makeWorkspaceLineage(oldChild, 'folder-1'),
-      [recentChild.id]: makeWorkspaceLineage(recentChild, 'folder-1'),
-      [otherFolderChild.id]: makeWorkspaceLineage(otherFolderChild, 'folder-2'),
-      [staleChild.id]: makeWorkspaceLineage(staleChild, 'folder-1', {
+      [worktreeWorkspaceKey(oldChild.id)]: makeWorkspaceLineage(oldChild, 'folder-1'),
+      [worktreeWorkspaceKey(recentChild.id)]: makeWorkspaceLineage(recentChild, 'folder-1'),
+      [worktreeWorkspaceKey(otherFolderChild.id)]: makeWorkspaceLineage(
+        otherFolderChild,
+        'folder-2'
+      ),
+      [worktreeWorkspaceKey(staleChild.id)]: makeWorkspaceLineage(staleChild, 'folder-1', {
         childInstanceId: 'stale-instance'
       })
     }
@@ -310,7 +318,7 @@ describe('FolderWorkspaceWorktreesPanel', () => {
       'repo-1': [parent, nested]
     }
     testState.store.workspaceLineageByChildKey = {
-      [parent.id]: makeWorkspaceLineage(parent, 'folder-1')
+      [worktreeWorkspaceKey(parent.id)]: makeWorkspaceLineage(parent, 'folder-1')
     }
     testState.store.worktreeLineageById = {
       [nested.id]: makeWorktreeLineage(nested, parent)
@@ -374,8 +382,8 @@ describe('FolderWorkspaceWorktreesPanel', () => {
       'repo-1': [visible, archivedDirect, archivedNested]
     }
     testState.store.workspaceLineageByChildKey = {
-      [visible.id]: makeWorkspaceLineage(visible, 'folder-1'),
-      [archivedDirect.id]: makeWorkspaceLineage(archivedDirect, 'folder-1')
+      [worktreeWorkspaceKey(visible.id)]: makeWorkspaceLineage(visible, 'folder-1'),
+      [worktreeWorkspaceKey(archivedDirect.id)]: makeWorkspaceLineage(archivedDirect, 'folder-1')
     }
     testState.store.worktreeLineageById = {
       [archivedNested.id]: makeWorktreeLineage(archivedNested, visible)

@@ -35,6 +35,8 @@ function makeWorktree(overrides: Partial<Worktree> & { id: string }): Worktree {
     isBare: false,
     isMainWorktree: false,
     repoId: 'repo-1',
+    instanceId: overrides.id,
+    hostId: LOCAL_EXECUTION_HOST_ID,
     displayName: overrides.id,
     comment: '',
     linkedIssue: null,
@@ -56,7 +58,9 @@ function makeWorkspaceLineage(child: Worktree, folderId = 'folder-1'): Workspace
     childWorkspaceKey: worktreeWorkspaceKey(child.id),
     childInstanceId: child.instanceId ?? null,
     parentWorkspaceKey: folderWorkspaceKey(folderId),
-    parentInstanceId: null,
+    childHostId: child.hostId,
+    parentInstanceId: folderId,
+    parentHostId: LOCAL_EXECUTION_HOST_ID,
     origin: 'cli',
     capture: { source: 'env-workspace', confidence: 'inferred' },
     createdAt: 1
@@ -98,9 +102,9 @@ describe('getAttachedWorktreesForFolderWorkspace', () => {
       activeWorktreeId: null,
       folderWorkspaces: [makeFolder()],
       workspaceLineageByChildKey: {
-        [alpha.id]: makeWorkspaceLineage(alpha),
-        [beta.id]: makeWorkspaceLineage(beta),
-        [gamma.id]: makeWorkspaceLineage(gamma)
+        [worktreeWorkspaceKey(alpha.id)]: makeWorkspaceLineage(alpha),
+        [worktreeWorkspaceKey(beta.id)]: makeWorkspaceLineage(beta),
+        [worktreeWorkspaceKey(gamma.id)]: makeWorkspaceLineage(gamma)
       },
       worktreeLineageById: {},
       worktreesByRepo: { 'repo-1': [alpha, beta, gamma] }
@@ -129,9 +133,9 @@ describe('getAttachedWorktreesForFolderWorkspace', () => {
       activeWorktreeId: null,
       folderWorkspaces: [makeFolder()],
       workspaceLineageByChildKey: {
-        [visible.id]: makeWorkspaceLineage(visible),
-        [archived.id]: makeWorkspaceLineage(archived),
-        [stale.id]: {
+        [worktreeWorkspaceKey(visible.id)]: makeWorkspaceLineage(visible),
+        [worktreeWorkspaceKey(archived.id)]: makeWorkspaceLineage(archived),
+        [worktreeWorkspaceKey(stale.id)]: {
           ...makeWorkspaceLineage(stale),
           childInstanceId: 'stale'
         }
@@ -141,6 +145,31 @@ describe('getAttachedWorktreesForFolderWorkspace', () => {
     })
 
     expect(result.childWorktrees.map((worktree) => worktree.id)).toEqual([visible.id])
+  })
+
+  it('uses the shared projection to reject stale-parent and cross-host workspace edges', () => {
+    const staleParent = makeWorktree({ id: 'repo-1::/stale-parent' })
+    const crossHost = makeWorktree({ id: 'repo-1::/cross-host' })
+
+    const result = getAttachedWorktreesForFolderWorkspace({
+      activeWorkspaceKey: folderWorkspaceKey('folder-1'),
+      activeWorktreeId: null,
+      folderWorkspaces: [makeFolder()],
+      workspaceLineageByChildKey: {
+        [worktreeWorkspaceKey(staleParent.id)]: {
+          ...makeWorkspaceLineage(staleParent),
+          parentInstanceId: 'replaced-folder-instance'
+        },
+        [worktreeWorkspaceKey(crossHost.id)]: {
+          ...makeWorkspaceLineage(crossHost),
+          parentHostId: toSshExecutionHostId('other')
+        }
+      },
+      worktreeLineageById: {},
+      worktreesByRepo: { 'repo-1': [staleParent, crossHost] }
+    })
+
+    expect(result.childWorktrees).toEqual([])
   })
 
   it('includes nested lineage descendants under attached roots', () => {
@@ -157,7 +186,9 @@ describe('getAttachedWorktreesForFolderWorkspace', () => {
       activeWorkspaceKey: folderWorkspaceKey('folder-1'),
       activeWorktreeId: null,
       folderWorkspaces: [makeFolder()],
-      workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
+      workspaceLineageByChildKey: {
+        [worktreeWorkspaceKey(parent.id)]: makeWorkspaceLineage(parent)
+      },
       worktreeLineageById: { [nested.id]: makeWorktreeLineage(nested, parent) },
       worktreesByRepo: { 'repo-1': [parent, nested] }
     })
@@ -186,7 +217,9 @@ describe('getAttachedWorktreesForFolderWorkspace', () => {
       activeWorkspaceKey: folderWorkspaceKey('folder-1'),
       activeWorktreeId: null,
       folderWorkspaces: [makeFolder()],
-      workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
+      workspaceLineageByChildKey: {
+        [worktreeWorkspaceKey(parent.id)]: makeWorkspaceLineage(parent)
+      },
       worktreeLineageById: {},
       worktreesByRepo: { 'repo-1': [parent, inlineNested] }
     })
@@ -208,7 +241,9 @@ describe('getAttachedWorktreesForFolderWorkspace', () => {
       activeWorkspaceKey: folderWorkspaceKey('folder-1'),
       activeWorktreeId: null,
       folderWorkspaces: [makeFolder()],
-      workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
+      workspaceLineageByChildKey: {
+        [worktreeWorkspaceKey(parent.id)]: makeWorkspaceLineage(parent)
+      },
       worktreeLineageById: {
         [nested.id]: {
           ...makeWorktreeLineage(nested, parent),
@@ -243,7 +278,9 @@ describe('getAttachedWorktreesForFolderWorkspace', () => {
       activeWorkspaceKey: folderWorkspaceKey('folder-1'),
       activeWorktreeId: null,
       folderWorkspaces: [makeFolder()],
-      workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
+      workspaceLineageByChildKey: {
+        [worktreeWorkspaceKey(parent.id)]: makeWorkspaceLineage(parent)
+      },
       worktreeLineageById: {
         [hostChild.id]: makeWorktreeLineage(hostChild, parent),
         [projectChild.id]: makeWorktreeLineage(projectChild, parent)
@@ -262,7 +299,9 @@ describe('getAttachedWorktreesForFolderWorkspace', () => {
       activeWorkspaceKey: folderWorkspaceKey('folder-1'),
       activeWorktreeId: null,
       folderWorkspaces: [makeFolder()],
-      workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
+      workspaceLineageByChildKey: {
+        [worktreeWorkspaceKey(parent.id)]: makeWorkspaceLineage(parent)
+      },
       worktreeLineageById: {
         [parent.id]: makeWorktreeLineage(parent, nested),
         [nested.id]: makeWorktreeLineage(nested, parent)

@@ -15750,6 +15750,46 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  it('requires a fresh agent bridge event when prompt acknowledgement is requested', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-ack' }),
+        write: (_ptyId, data) => {
+          if (data === '\r') {
+            setTimeout(() => {
+              runtime.onPtyData(
+                'pty-ack',
+                '\x1b]9999;{"state":"working","agentType":"codex"}\x07',
+                Date.now()
+              )
+            }, 1)
+          }
+          return true
+        },
+        kill: () => true,
+        getForegroundProcess: async () => 'codex'
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+      const processIncarnation = runtime.getTerminalProcessIncarnation(handle)
+      expect(processIncarnation).toBeTruthy()
+
+      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'ack me', {
+        requireAgentAck: { timeoutMs: 1_000, expectedProcessIncarnation: processIncarnation! }
+      })
+      await vi.runAllTimersAsync()
+
+      await expect(sendPromise).resolves.toMatchObject({
+        handle,
+        accepted: true,
+        agentAcknowledged: true
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('chunks large agent prompt paste frames before delayed submit', async () => {
     vi.useFakeTimers()
     try {

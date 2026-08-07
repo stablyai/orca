@@ -34,6 +34,8 @@ import {
   digestConditionalInjectRequest
 } from '../../orchestration/conditional-inject-digest'
 
+const CONDITIONAL_INJECT_AGENT_ACK_TIMEOUT_MS = 10_000
+
 const TASK_STATUSES: TaskStatus[] = [
   'pending',
   'ready',
@@ -1508,7 +1510,47 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           devMode: params.devMode,
           cliCommand: runtime.getTerminalOrchestrationCliCommand(params.worker)
         })
-        const delivery = await runtime.sendTerminalAgentPrompt(params.worker, preamble)
+        const assertExactDeliveryTopology = (): void => {
+          const currentTask = db.getTask(task.id)
+          const currentDispatch = db.getDispatchContextById(started.dispatch!.id)
+          const currentCoordinator = runtime.getOrchestrationDispatchAuthority(params.from)
+          const currentWorker = runtime.getOrchestrationDispatchAuthority(params.worker)
+          if (
+            runtime.getRuntimeId() !== params.expectedRuntime ||
+            !currentTask ||
+            currentTask.created_by_terminal_handle !== params.expectedCoordinatorHandle ||
+            currentTask.created_by_pane_key !== params.expectedCoordinatorPane ||
+            currentTask.status !== 'dispatched' ||
+            !currentDispatch ||
+            currentDispatch.task_id !== task.id ||
+            currentDispatch.assignee_handle !== params.worker ||
+            currentDispatch.assignee_pane_key !== params.expectedWorkerPane ||
+            !currentCoordinator ||
+            currentCoordinator.runtimeId !== params.expectedRuntime ||
+            currentCoordinator.terminalHandle !== params.expectedCoordinatorHandle ||
+            currentCoordinator.paneKey !== params.expectedCoordinatorPane ||
+            !currentWorker ||
+            currentWorker.runtimeId !== params.expectedRuntime ||
+            currentWorker.terminalHandle !== params.worker ||
+            currentWorker.paneKey !== params.expectedWorkerPane ||
+            currentWorker.worktreeId !== params.expectedWorktree ||
+            currentWorker.processIncarnation !== worker.processIncarnation
+          ) {
+            throw new Error('conditional_inject_topology_changed_before_write')
+          }
+        }
+        assertExactDeliveryTopology()
+        const delivery = await runtime.sendTerminalAgentPrompt(params.worker, preamble, {
+          beforeWrite: assertExactDeliveryTopology,
+          requireAgentAck: {
+            timeoutMs: CONDITIONAL_INJECT_AGENT_ACK_TIMEOUT_MS,
+            expectedProcessIncarnation: worker.processIncarnation
+          }
+        })
+        assertExactDeliveryTopology()
+        if (!delivery.agentAcknowledged || !delivery.agentAcknowledgedAt) {
+          throw new Error('conditional_inject_agent_ack_missing')
+        }
         const operation = db.settleConditionalInjectOperation(params.operationId, 'acknowledged', {
           bytesWritten: delivery.bytesWritten
         })
@@ -1523,7 +1565,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             workerHandle: params.worker,
             workerPane: params.expectedWorkerPane,
             executionWorktreeId: params.expectedWorktree,
-            runtimeId: params.expectedRuntime
+            runtimeId: params.expectedRuntime,
+            agentAcknowledgedAt: String(delivery.agentAcknowledgedAt)
           }
         }
       } catch (error) {

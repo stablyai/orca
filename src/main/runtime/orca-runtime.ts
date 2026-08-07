@@ -16528,8 +16528,12 @@ export class OrcaRuntimeService {
     options: {
       beforeWrite?: (ptyId: string) => void | Promise<void>
       suffixFailureError?: string
+      requireAgentAck?: { timeoutMs: number; expectedProcessIncarnation: string }
     } = {}
   ): Promise<RuntimeTerminalSend> {
+    const ackCursor = options.requireAgentAck
+      ? this.getFreshExplicitAgentStatusForHandle(handle)
+      : null
     const payload = buildAgentPromptPasteBytes(prompt)
     const bytesWritten = Buffer.byteLength(`${payload}${AGENT_PROMPT_SUBMIT}`, 'utf8')
     const pty = this.getLivePtyForHandle(handle)
@@ -16539,7 +16543,19 @@ export class OrcaRuntimeService {
       }
       await assertTerminalInputWithinLimitWithYield(payload)
       await this.writeTerminalAgentPrompt(pty.pty.ptyId, payload, options)
-      return { handle, accepted: true, bytesWritten }
+      const agentAcknowledgedAt = options.requireAgentAck
+        ? await this.waitForFreshAgentPromptAcknowledgement(
+            handle,
+            options.requireAgentAck,
+            ackCursor
+          )
+        : null
+      return {
+        handle,
+        accepted: true,
+        bytesWritten,
+        ...(agentAcknowledgedAt !== null ? { agentAcknowledged: true, agentAcknowledgedAt } : {})
+      }
     }
 
     const { leaf } = this.getLiveLeafForHandle(handle)
@@ -16553,7 +16569,41 @@ export class OrcaRuntimeService {
       throw new Error('terminal_not_writable')
     }
     await this.writeTerminalAgentPrompt(leaf.ptyId, payload, options)
-    return { handle, accepted: true, bytesWritten }
+    const agentAcknowledgedAt = options.requireAgentAck
+      ? await this.waitForFreshAgentPromptAcknowledgement(
+          handle,
+          options.requireAgentAck,
+          ackCursor
+        )
+      : null
+    return {
+      handle,
+      accepted: true,
+      bytesWritten,
+      ...(agentAcknowledgedAt !== null ? { agentAcknowledged: true, agentAcknowledgedAt } : {})
+    }
+  }
+
+  private async waitForFreshAgentPromptAcknowledgement(
+    handle: string,
+    expected: { timeoutMs: number; expectedProcessIncarnation: string },
+    cursor: { status: NonNullable<RuntimeTerminalAgentStatus['status']>; updatedAt: number } | null
+  ): Promise<number> {
+    const deadline = Date.now() + expected.timeoutMs
+    while (Date.now() <= deadline) {
+      if (this.getTerminalProcessIncarnation(handle) !== expected.expectedProcessIncarnation) {
+        throw new Error('terminal_topology_changed_before_agent_ack')
+      }
+      const evidence = this.getFreshExplicitAgentStatusForHandle(handle)
+      if (
+        evidence &&
+        (!cursor || evidence.updatedAt > cursor.updatedAt || evidence.status !== cursor.status)
+      ) {
+        return evidence.updatedAt
+      }
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    }
+    throw new Error('terminal_agent_ack_timeout')
   }
 
   async getTerminalAgentStatus(handle: string): Promise<RuntimeTerminalAgentStatus> {
@@ -21720,6 +21770,7 @@ export class OrcaRuntimeService {
           parentWorktreeId: null,
           childWorktreeIds: [],
           lineage: null,
+          workspaceLineage: null,
           git: {
             path: worktree.path,
             head: worktree.head,

@@ -12,6 +12,7 @@ import type {
 } from '../../../../shared/types'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
 import { getGitHubRepoCacheKey } from '@/store/slices/github-cache-key'
 import { prChecksCacheSuffix } from '@/store/slices/github'
@@ -140,6 +141,8 @@ function makeWorktree(): Worktree {
     isBare: false,
     isMainWorktree: false,
     repoId: 'repo-1',
+    instanceId: 'repo-1::/child',
+    hostId: LOCAL_EXECUTION_HOST_ID,
     displayName: 'Child worktree',
     comment: '',
     linkedIssue: null,
@@ -199,11 +202,13 @@ describe('FolderWorkspacePrChecksPanel', () => {
       activeWorkspaceKey: folderWorkspaceKey('folder-1'),
       folderWorkspaces: [makeFolder()],
       workspaceLineageByChildKey: {
-        [worktree.id]: {
+        [worktreeWorkspaceKey(worktree.id)]: {
           childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
-          childInstanceId: null,
+          childInstanceId: worktree.instanceId,
+          childHostId: worktree.hostId,
           parentWorkspaceKey: folderWorkspaceKey('folder-1'),
-          parentInstanceId: null,
+          parentInstanceId: 'folder-1',
+          parentHostId: LOCAL_EXECUTION_HOST_ID,
           origin: 'cli',
           capture: { source: 'env-workspace', confidence: 'inferred' },
           createdAt: 1
@@ -318,9 +323,11 @@ describe('FolderWorkspacePrChecksPanel', () => {
         worktreeWorkspaceKey(worktree.id),
         {
           childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
-          childInstanceId: null,
+          childInstanceId: worktree.instanceId,
+          childHostId: worktree.hostId,
           parentWorkspaceKey: folderWorkspaceKey('folder-1'),
-          parentInstanceId: null,
+          parentInstanceId: 'folder-1',
+          parentHostId: LOCAL_EXECUTION_HOST_ID,
           origin: 'cli',
           capture: { source: 'env-workspace', confidence: 'inferred' },
           createdAt: index + 1
@@ -437,11 +444,13 @@ describe('FolderWorkspacePrChecksPanel', () => {
     }
     mockState.store.workspaceLineageByChildKey = {
       ...mockState.store.workspaceLineageByChildKey,
-      [extraWorktree.id]: {
+      [worktreeWorkspaceKey(extraWorktree.id)]: {
         childWorkspaceKey: worktreeWorkspaceKey(extraWorktree.id),
-        childInstanceId: null,
+        childInstanceId: extraWorktree.instanceId,
+        childHostId: extraWorktree.hostId,
         parentWorkspaceKey: folderWorkspaceKey('folder-1'),
-        parentInstanceId: null,
+        parentInstanceId: 'folder-1',
+        parentHostId: LOCAL_EXECUTION_HOST_ID,
         origin: 'cli',
         capture: { source: 'env-workspace', confidence: 'inferred' },
         createdAt: 2

@@ -7,6 +7,7 @@ import type {
 } from '../../../../shared/types'
 import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
 import { getProjectedWorktreeLineageChildrenByParentId } from '../sidebar/worktree-lineage-projection'
+import { projectResolvedWorkspaceLineage } from '../../../../shared/workspace-lineage-projection'
 
 export type AttachedWorktreeResolution = {
   folderWorkspace: FolderWorkspace | null
@@ -54,10 +55,16 @@ export function getAttachedWorktreesForFolderWorkspace({
 
   const folderKey = folderWorkspaceKey(folderWorkspace.id)
   const worktreeById = getWorktreeById(worktreesByRepo)
-  const childWorktrees = Object.values(workspaceLineageByChildKey)
-    .filter((lineage) => lineage.parentWorkspaceKey === folderKey)
-    .map((lineage) => getLineageChildWorktree(lineage, worktreeById))
-    .filter((worktree): worktree is Worktree => worktree !== null)
+  const projectedWorktrees = projectResolvedWorkspaceLineage(
+    Object.values(worktreesByRepo).flat(),
+    folderWorkspaces,
+    workspaceLineageByChildKey
+  )
+  const childWorktrees = projectedWorktrees
+    .filter(
+      (worktree) =>
+        !worktree.isArchived && worktree.workspaceLineage?.parentWorkspaceKey === folderKey
+    )
     .sort(sortWorktreesByRecentActivity)
 
   const childWorktreeIds = new Set(childWorktrees.map((worktree) => worktree.id))
@@ -132,24 +139,6 @@ function getWorktreeById(
       .flat()
       .map((worktree) => [worktree.id, worktree])
   )
-}
-
-function getLineageChildWorktree(
-  lineage: WorkspaceLineage,
-  worktreeById: Map<string, Worktree>
-): Worktree | null {
-  const childScope = parseWorkspaceKey(lineage.childWorkspaceKey)
-  if (childScope?.type !== 'worktree') {
-    return null
-  }
-  const worktree = worktreeById.get(childScope.worktreeId)
-  if (!worktree || worktree.isArchived) {
-    return null
-  }
-  if (lineage.childInstanceId && lineage.childInstanceId !== worktree.instanceId) {
-    return null
-  }
-  return worktree
 }
 
 function sortWorktreesByRecentActivity(left: Worktree, right: Worktree): number {

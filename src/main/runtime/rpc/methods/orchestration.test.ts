@@ -2246,7 +2246,9 @@ describe('orchestration RPC methods', () => {
       const send = vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
         handle: 'term_worker',
         accepted: true,
-        bytesWritten: 123
+        bytesWritten: 123,
+        agentAcknowledged: true,
+        agentAcknowledgedAt: 1234
       })
       const params = makeParams(task.id)
 
@@ -2267,6 +2269,36 @@ describe('orchestration RPC methods', () => {
         operation: { status: 'acknowledged', dispatch_id: first.operation.dispatch_id },
         injected: false
       })
+      expect(send).toHaveBeenCalledTimes(1)
+    })
+
+    it('admits one delivery winner across concurrent identical calls', async () => {
+      setup()
+      provideTopology()
+      const task = createOwnedTask()
+      const send = vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
+        handle: 'term_worker',
+        accepted: true,
+        bytesWritten: 123,
+        agentAcknowledged: true,
+        agentAcknowledgedAt: 1234
+      })
+      const params = makeParams(task.id)
+
+      const results = (await Promise.all([
+        call('orchestration.conditionalInject', params),
+        call('orchestration.conditionalInject', params)
+      ])) as { operation: { status: string }; injected: boolean }[]
+
+      expect(results.map((result) => result.injected).sort()).toEqual([false, true])
+      expect(results.map((result) => result.operation.status).sort()).toEqual([
+        'acknowledged',
+        'delivery-started'
+      ])
+      const durable = (await call('orchestration.conditionalInjectShow', {
+        operationId: params.operationId
+      })) as { operation: { status: string } }
+      expect(durable.operation.status).toBe('acknowledged')
       expect(send).toHaveBeenCalledTimes(1)
     })
 
@@ -2301,6 +2333,64 @@ describe('orchestration RPC methods', () => {
       })
       expect(db.getDispatchContext(task.id)).toBeUndefined()
       expect(send).not.toHaveBeenCalled()
+    })
+
+    it('revalidates exact topology at the write boundary and quarantines a swap', async () => {
+      setup()
+      provideTopology()
+      const task = createOwnedTask()
+      let wrote = false
+      vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockImplementation(
+        async (_handle, _prompt, options) => {
+          vi.mocked(runtime.getOrchestrationDispatchAuthority).mockImplementation((handle) => {
+            if (handle === 'term_coord') {
+              return {
+                runtimeId: runtime.getRuntimeId(),
+                terminalHandle: handle,
+                ptyId: 'pty_coord',
+                worktreeId: 'repo::/coordinator',
+                paneKey: coordinatorPaneKey,
+                processIncarnation: 'process-coordinator',
+                launchTokenHash: null,
+                hostScope: { kind: 'local', hostId: 'local' }
+              }
+            }
+            if (handle === 'term_worker') {
+              return {
+                runtimeId: runtime.getRuntimeId(),
+                terminalHandle: handle,
+                ptyId: 'pty_worker',
+                worktreeId,
+                paneKey: 'tab_worker:swapped',
+                processIncarnation: 'process-worker',
+                launchTokenHash: null,
+                hostScope: { kind: 'local', hostId: 'local' }
+              }
+            }
+            return null
+          })
+          await options?.beforeWrite?.('pty_worker')
+          wrote = true
+          return {
+            handle: 'term_worker',
+            accepted: true,
+            bytesWritten: 1,
+            agentAcknowledged: true,
+            agentAcknowledgedAt: 1234
+          }
+        }
+      )
+
+      const result = (await call('orchestration.conditionalInject', makeParams(task.id))) as {
+        operation: { status: string; failure_reason: string }
+      }
+
+      expect(result.operation.status).toBe('indeterminate')
+      expect(result.operation.failure_reason).toContain(
+        'conditional_inject_topology_changed_before_write'
+      )
+      expect(wrote).toBe(false)
+      expect(db.getTask(task.id)?.status).toBe('blocked')
     })
 
     it('quarantines an uncertain write and never retries it', async () => {
