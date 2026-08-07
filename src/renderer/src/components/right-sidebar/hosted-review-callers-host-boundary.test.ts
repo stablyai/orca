@@ -36,6 +36,8 @@ describe('hosted-review caller host boundaries', () => {
     expectEveryCallToCarryExecutionHost(source, 'fetchPRChecks')
     expectEveryCallToCarryExecutionHost(source, 'getHostedReviewCreationEligibility')
     expectEveryCallToCarryExecutionHost(source, 'createHostedReview')
+    expectEveryCallToCarryExecutionHost(source, 'workItemDetails')
+    expectEveryCallToCarryExecutionHost(source, 'resolveMRDiscussion')
   })
 
   it('scopes checks-panel recipe persistence to the active repository host', () => {

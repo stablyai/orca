@@ -8,6 +8,7 @@ import type { TaskSourceContext } from '../shared/task-source-context'
 type GitLabRepoSelectorArgs = {
   repoPath: string
   repoId?: string | null
+  executionHostId?: string | null
   sourceContext?: TaskSourceContext | null
 }
 

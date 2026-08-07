@@ -557,6 +557,7 @@ import type { KeybindingActionId, KeybindingFileSnapshot } from '../shared/keybi
 type GitLabRepoSelectorArgs = {
   repoPath: string
   repoId?: string | null
+  executionHostId?: ExecutionHostId
   sourceContext?: TaskSourceContext | null
 }
 

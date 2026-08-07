@@ -25,7 +25,8 @@ import { useActiveWorktree } from '@/store/selectors'
 import { findRepoForHost, findRepoForWorktreeOwner } from '@/store/slices/repo-host-identity'
 import {
   getRepoExecutionHostId,
-  getWorktreeExecutionHostId
+  getWorktreeExecutionHostId,
+  type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { useChecksPanelTerminalWorktree } from './use-checks-panel-terminal-worktree'
 import { cn } from '@/lib/utils'
@@ -394,6 +395,7 @@ function gitLabMRCommentsToPRComments(
 async function fetchGitLabMRDetailsForChecks(args: {
   repoPath: string
   repoId?: string
+  executionHostId?: ExecutionHostId
   settings: Parameters<typeof getActiveRuntimeTarget>[0]
   iid: number
 }): Promise<GitLabWorkItemDetails | null> {
@@ -413,6 +415,7 @@ async function fetchGitLabMRDetailsForChecks(args: {
   return (await window.api.gl.workItemDetails({
     repoPath: args.repoPath,
     repoId: args.repoId,
+    executionHostId: args.executionHostId,
     iid: args.iid,
     type: 'mr'
   })) as GitLabWorkItemDetails | null
@@ -421,6 +424,7 @@ async function fetchGitLabMRDetailsForChecks(args: {
 async function resolveGitLabMRDiscussionForChecks(args: {
   repoPath: string
   repoId?: string
+  executionHostId?: ExecutionHostId
   settings: Parameters<typeof getActiveRuntimeTarget>[0]
   iid: number
   discussionId: string
@@ -443,6 +447,7 @@ async function resolveGitLabMRDiscussionForChecks(args: {
   return window.api.gl.resolveMRDiscussion({
     repoPath: args.repoPath,
     repoId: args.repoId,
+    executionHostId: args.executionHostId,
     iid: args.iid,
     discussionId: args.discussionId,
     resolved: args.resolved
@@ -468,6 +473,9 @@ export default function ChecksPanel(): React.JSX.Element {
     }
     return findRepoForWorktreeOwner(s.repos, activeWorktree)
   })
+  const repoExecutionHostId = activeWorktree
+    ? getWorktreeExecutionHostId(activeWorktree, repo ?? undefined)
+    : undefined
   const activeConnectionId = activeWorktreeId
     ? (getConnectionId(activeWorktreeId) ?? repo?.connectionId ?? null)
     : null
@@ -1947,6 +1955,7 @@ export default function ChecksPanel(): React.JSX.Element {
         const details = await fetchGitLabMRDetailsForChecks({
           repoPath: repo.path,
           repoId: repo.id,
+          executionHostId: repoExecutionHostId,
           settings,
           iid: targetMRNumber
         })
@@ -1984,6 +1993,7 @@ export default function ChecksPanel(): React.JSX.Element {
       hostedReviewCacheKey,
       isCurrentAsyncResult,
       repo,
+      repoExecutionHostId,
       settings
     ]
   )
@@ -2777,6 +2787,7 @@ export default function ChecksPanel(): React.JSX.Element {
         const result = await resolveGitLabMRDiscussionForChecks({
           repoPath: repo.path,
           repoId: repo.id,
+          executionHostId: repoExecutionHostId,
           settings,
           iid: activeGitLabReview.number,
           discussionId: threadId,
@@ -2836,6 +2847,7 @@ export default function ChecksPanel(): React.JSX.Element {
       prCacheKey,
       prNumber,
       repo,
+      repoExecutionHostId,
       resolveReviewThread,
       settings
     ]
