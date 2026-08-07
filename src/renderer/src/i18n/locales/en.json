@@ -7591,8 +7591,8 @@
             "tuiDescription": "Discrete wheel reports for full-screen terminal apps."
           },
           "9a65e8871b": "Font Smoothing",
-          "f770c58686": "Anti-aliasing for terminal glyphs. Subpixel matches VS Code on light themes; Default inherits the app-wide grayscale smoothing.",
-          "a8db93c1c8": "macOS subpixel smoothing; sharper on light themes, like VS Code.",
+          "f770c58686": "Anti-aliasing for terminal glyphs. Subpixel is closer to VS Code on light themes; Default inherits the app-wide grayscale smoothing.",
+          "a8db93c1c8": "Browser-native subpixel smoothing; sharper on light themes, closer to VS Code.",
           "070d72021f": "Grayscale smoothing, pinned explicitly.",
           "eec52156ab": "Inherit the app-wide grayscale smoothing (default).",
           "4759ed5e7e": "Default",
@@ -9326,7 +9326,7 @@
               "keyword_editing": "editing"
             },
             "81ed742288": "Font Smoothing",
-            "67edfa3865": "Anti-aliasing for terminal glyphs. Subpixel matches VS Code on light themes; Default inherits the app-wide grayscale smoothing.",
+            "67edfa3865": "Anti-aliasing for terminal glyphs. Subpixel is closer to VS Code on light themes; Default inherits the app-wide grayscale smoothing.",
             "f6bee3801e": "smoothing",
             "475f48e184": "antialiasing",
             "33b3e13e6f": "subpixel"

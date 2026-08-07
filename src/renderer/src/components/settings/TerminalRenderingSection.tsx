@@ -96,7 +96,7 @@ export function TerminalRenderingSection({
           title={translate('auto.components.settings.TerminalPane.9a65e8871b', 'Font Smoothing')}
           description={translate(
             'auto.components.settings.TerminalPane.f770c58686',
-            'Anti-aliasing for terminal glyphs. Subpixel matches VS Code on light themes; Default inherits the app-wide grayscale smoothing.'
+            'Anti-aliasing for terminal glyphs. Subpixel is closer to VS Code on light themes; Default inherits the app-wide grayscale smoothing.'
           )}
           keywords={[
             'terminal',
@@ -115,7 +115,7 @@ export function TerminalRenderingSection({
               settings.terminalFontSmoothing === 'subpixel'
                 ? translate(
                     'auto.components.settings.TerminalPane.a8db93c1c8',
-                    'macOS subpixel smoothing; sharper on light themes, like VS Code.'
+                    'Browser-native subpixel smoothing; sharper on light themes, closer to VS Code.'
                   )
                 : settings.terminalFontSmoothing === 'antialiased'
                   ? translate(
