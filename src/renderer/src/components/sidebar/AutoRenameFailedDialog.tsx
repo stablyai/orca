@@ -115,7 +115,7 @@ export function AutoRenameFailedDialog({
           )}
         </p>
         {/* Why: agent-CLI output is literal and often multi-line, so render it
-            verbatim (mono, wrapped) inside a height-capped scroll region. */}
+            verbatim (mono, un-wrapped) inside a height-capped scroll region. */}
         <div className="space-y-1.5">
           <p className="text-xs font-medium text-foreground">
             {translate(
@@ -143,7 +143,7 @@ export function AutoRenameFailedDialog({
             >
               {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
             </Button>
-            <pre className="scrollbar-sleek max-h-[40vh] overflow-auto rounded-md border border-border/60 bg-muted/40 py-3 pl-3 pr-9 font-mono text-[11px] leading-4 whitespace-pre-wrap break-words text-foreground">
+            <pre className="scrollbar-sleek max-h-[40vh] overflow-auto rounded-md border border-border/60 bg-muted/40 py-3 pl-3 pr-9 font-mono text-[11px] leading-4 whitespace-pre break-words text-foreground">
               {detailText}
             </pre>
           </div>

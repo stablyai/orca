@@ -174,6 +174,7 @@ function useRecoveryCopy(recoveryKind: SourceControlRecoveryKind): {
   }, [recoveryKind])
 }
 
+/** Notice with source-control recovery output. */
 export function SourceControlRecoveryNotice({
   id,
   recoveryKind,
@@ -316,7 +317,7 @@ export function SourceControlRecoveryNotice({
               <DialogTitle>{detailsTitle}</DialogTitle>
               <DialogDescription>{summary}</DialogDescription>
             </DialogHeader>
-            <pre className="max-h-[60vh] overflow-auto rounded-md border border-border bg-muted/40 p-3 font-mono text-xs whitespace-pre-wrap text-foreground scrollbar-sleek">
+            <pre className="max-h-[60vh] overflow-auto rounded-md border border-border bg-muted/40 p-3 font-mono text-xs whitespace-pre text-foreground scrollbar-sleek">
               {detailText}
             </pre>
             <DialogFooter>

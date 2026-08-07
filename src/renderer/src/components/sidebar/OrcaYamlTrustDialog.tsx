@@ -28,6 +28,7 @@ const SCRIPT_KIND_TRIGGER: Record<ScriptKind, string> = {
   vmRecipe: 'before provisioning a VM'
 }
 
+/** Trust confirmation for an Orca YAML file. */
 const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
   const activeModal = useAppStore((s) => s.activeModal)
   const modalData = useAppStore((s) => s.modalData)
@@ -170,7 +171,7 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
                     { value0: scriptKind }
                   )}
             </div>
-            <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono text-xs text-foreground scrollbar-sleek">
+            <pre className="max-h-48 overflow-auto whitespace-pre break-all font-mono text-xs text-foreground scrollbar-sleek">
               {scriptContent}
             </pre>
           </div>

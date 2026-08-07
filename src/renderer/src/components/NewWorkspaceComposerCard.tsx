@@ -212,6 +212,7 @@ function getSshStatusLabel(status: SshConnectionStatus): string {
   return SSH_STATUS_LABELS[status] ?? status
 }
 
+/** Preview of the setup command, un-wrapped with horizontal scroll. */
 function SetupCommandPreview({ setupConfig }: { setupConfig: SetupConfig }): React.JSX.Element {
   // Why: just the script in a quiet monochrome card — the source label (orca.yaml / local) and
   // the run-setup toggle live in the section header above, so the card carries no chrome of its
@@ -219,7 +220,7 @@ function SetupCommandPreview({ setupConfig }: { setupConfig: SetupConfig }): Rea
   // growing the dialog past the viewport.
   return (
     <div className="rounded-md border border-border/60 bg-muted/40 shadow-inner">
-      <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words px-4 py-3 font-mono text-[12px] leading-5 text-foreground/90 scrollbar-sleek">
+      <pre className="max-h-48 overflow-auto whitespace-pre break-words px-4 py-3 font-mono text-[12px] leading-5 text-foreground/90 scrollbar-sleek">
         {setupConfig.command}
       </pre>
     </div>

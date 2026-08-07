@@ -85,6 +85,7 @@ function CopyButton({
   )
 }
 
+/** Tails a check job's log output. */
 export function CheckJobLogTail({
   logTail,
   expanded = false
@@ -124,7 +125,7 @@ export function CheckJobLogTail({
       <pre
         ref={logPreRef}
         className={cn(
-          'overflow-auto whitespace-pre-wrap rounded bg-muted/40 p-3 font-mono text-xs text-muted-foreground scrollbar-sleek',
+          'overflow-auto whitespace-pre rounded bg-muted/40 p-3 font-mono text-xs text-muted-foreground scrollbar-sleek',
           expanded ? 'min-h-48 max-h-[min(50vh,32rem)]' : 'max-h-72'
         )}
       >

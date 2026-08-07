@@ -74,6 +74,7 @@ type CrashReportDialogSurfaceProps = {
   onReportChange: (report: CrashReportRecord | null) => void
 }
 
+/** Crash report dialog surface showing the report body. */
 export function CrashReportDialogSurface({
   open,
   report,
@@ -259,7 +260,7 @@ export function CrashReportDialogSurface({
                     'Diagnostic text'
                   )}
                 </div>
-                <pre className="max-h-44 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-muted/20 p-3 font-mono text-[11px] leading-5 text-muted-foreground scrollbar-sleek">
+                <pre className="max-h-44 overflow-auto whitespace-pre break-words rounded-md border border-border bg-muted/20 p-3 font-mono text-[11px] leading-5 text-muted-foreground scrollbar-sleek">
                   {diagnosticText}
                 </pre>
               </div>

@@ -3189,6 +3189,7 @@ function CommentReplyForm({
   )
 }
 
+/** Renders CI check annotations with raw detail blocks. */
 function ChecksTab({
   item,
   repoPath,
@@ -3891,7 +3892,7 @@ function ChecksTab({
                         {annotation.message}
                       </div>
                       {annotation.rawDetails && (
-                        <pre className="mt-1 whitespace-pre-wrap rounded bg-muted/40 p-2 font-mono text-[11px] text-muted-foreground">
+                        <pre className="mt-1 overflow-x-auto whitespace-pre rounded bg-muted/40 p-2 font-mono text-[11px] text-muted-foreground">
                           {annotation.rawDetails}
                         </pre>
                       )}

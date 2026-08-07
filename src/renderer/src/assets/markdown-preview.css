@@ -640,6 +640,9 @@
   border-radius: 8px;
   overflow-x: auto;
   line-height: 1.55;
+  /* Why: explicit `white-space: pre` — Chromium copies soft-wrapped code with
+     synthetic newlines (see docs/reference/soft-wrap-selection-copy.md). */
+  white-space: pre;
 }
 
 .markdown-dark .markdown-body pre {

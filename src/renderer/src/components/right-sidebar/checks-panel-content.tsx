@@ -239,6 +239,7 @@ export function MergeConflictNotice({
   )
 }
 
+/** Shows the mergeability recalculation command. */
 function MergeabilityRecalculationCommandBox({
   commands
 }: {
@@ -313,7 +314,7 @@ function MergeabilityRecalculationCommandBox({
               )}
         </Button>
       </div>
-      <pre className="scrollbar-sleek mt-2 max-h-28 overflow-auto whitespace-pre-wrap break-all rounded-md border border-border bg-background px-2 py-1.5 font-mono text-[10px] leading-4 text-foreground">
+      <pre className="scrollbar-sleek mt-2 max-h-28 overflow-auto whitespace-pre break-all rounded-md border border-border bg-background px-2 py-1.5 font-mono text-[10px] leading-4 text-foreground">
         {commands}
       </pre>
     </div>
@@ -665,6 +666,7 @@ function ViewFullCheckDetailsButton({
   )
 }
 
+/** Details of a single check run, incl. annotation raw details. */
 function CheckRunDetails({
   check,
   state,
@@ -862,7 +864,7 @@ function CheckRunDetails({
                       {annotation.message}
                     </div>
                     {annotation.rawDetails && (
-                      <pre className="mt-1 whitespace-pre-wrap rounded bg-muted/40 p-2 font-mono text-[11px] text-muted-foreground">
+                      <pre className="mt-1 overflow-x-auto whitespace-pre rounded bg-muted/40 p-2 font-mono text-[11px] text-muted-foreground">
                         {annotation.rawDetails}
                       </pre>
                     )}

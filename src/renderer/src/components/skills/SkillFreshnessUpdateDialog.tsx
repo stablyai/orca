@@ -36,6 +36,7 @@ import {
   subscribeSkillFreshnessUpdateDialog
 } from './skill-freshness-update-dialog'
 
+/** Scrollable log of a skill update run. */
 function RunLog({ output }: { output: string }): React.JSX.Element | null {
   if (!output.trim()) {
     return null
@@ -55,7 +56,7 @@ function RunLog({ output }: { output: string }): React.JSX.Element | null {
       </CollapsibleTrigger>
       <CollapsibleContent className="mt-1">
         {/* Displayed verbatim, never parsed — `skills update` has no --json. */}
-        <pre className="scrollbar-sleek max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-muted px-3 py-2.5 font-mono text-[11px] leading-relaxed text-muted-foreground">
+        <pre className="scrollbar-sleek max-h-40 overflow-auto whitespace-pre break-words rounded-md border border-border bg-muted px-3 py-2.5 font-mono text-[11px] leading-relaxed text-muted-foreground">
           {output.trim()}
         </pre>
       </CollapsibleContent>

@@ -1005,6 +1005,9 @@
   overflow-x: auto;
   line-height: 1.55;
   background: transparent;
+  /* Why: explicit `white-space: pre` — Chromium copies soft-wrapped code with
+     synthetic newlines (see docs/reference/soft-wrap-selection-copy.md). */
+  white-space: pre;
 }
 
 .rich-markdown-editor pre code {

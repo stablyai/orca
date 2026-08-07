@@ -87,7 +87,7 @@ function ToolLine({ block }: { block: NativeChatBlock }): React.JSX.Element | nu
           {!diff && body ? (
             <pre
               className={cn(
-                'max-h-64 overflow-auto whitespace-pre-wrap break-words rounded bg-accent p-2 font-mono text-[11px] scrollbar-sleek',
+                'max-h-64 overflow-auto whitespace-pre break-words rounded bg-accent p-2 font-mono text-[11px] scrollbar-sleek',
                 body.isError ? 'text-destructive' : 'text-foreground/80'
               )}
             >
@@ -95,7 +95,7 @@ function ToolLine({ block }: { block: NativeChatBlock }): React.JSX.Element | nu
             </pre>
           ) : null}
           {!diff && !body && detail ? (
-            <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded bg-accent p-2 font-mono text-[11px] text-foreground/80 scrollbar-sleek">
+            <pre className="max-h-64 overflow-auto whitespace-pre break-words rounded bg-accent p-2 font-mono text-[11px] text-foreground/80 scrollbar-sleek">
               {detail}
             </pre>
           ) : null}

@@ -232,6 +232,7 @@ function CommentCard({
   )
 }
 
+/** One CI job row, including its trace log. */
 function PipelineJobRow({
   job,
   expanded,
@@ -319,7 +320,7 @@ function PipelineJobRow({
           ) : traceState?.error ? (
             <div className="px-2.5 py-3 text-xs text-destructive">{traceState.error}</div>
           ) : (
-            <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words px-2.5 py-2 font-mono text-[11px] leading-4 text-foreground scrollbar-sleek">
+            <pre className="max-h-64 overflow-auto whitespace-pre break-words px-2.5 py-2 font-mono text-[11px] leading-4 text-foreground scrollbar-sleek">
               {traceState?.trace?.trim()
                 ? traceState.trace
                 : translate('auto.components.GitLabItemDialog.32f8bef818', 'No log output.')}
@@ -331,6 +332,7 @@ function PipelineJobRow({
   )
 }
 
+/** GitLab merge-request dialog with trace and diff details. */
 export default function GitLabItemDialog({
   item,
   repoPath,
@@ -1563,7 +1565,7 @@ export default function GitLabItemDialog({
                                 </div>
                               </div>
                               {file.diff ? (
-                                <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words px-3 py-2 font-mono text-[11px] leading-4 text-foreground scrollbar-sleek">
+                                <pre className="max-h-80 overflow-auto whitespace-pre break-words px-3 py-2 font-mono text-[11px] leading-4 text-foreground scrollbar-sleek">
                                   {file.diff}
                                 </pre>
                               ) : (

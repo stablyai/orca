@@ -971,6 +971,7 @@ export function EditorContent({
 }
 
 // Why: no collapsible state — layout shifts would interfere with ProseMirror's scroll management.
+/** Banner for markdown front matter, mono with horizontal scroll. */
 function FrontMatterBanner({ raw }: { raw: string }): React.JSX.Element {
   // Strip the opening/closing delimiters to show only the YAML/TOML content.
   const inner = raw
@@ -986,7 +987,7 @@ function FrontMatterBanner({ raw }: { raw: string }): React.JSX.Element {
           {translate('auto.components.editor.EditorContent.56dba34e1a', '(edit in source mode)')}
         </span>
       </div>
-      <pre className="max-h-32 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground font-mono scrollbar-editor">
+      <pre className="max-h-32 overflow-auto whitespace-pre text-xs text-muted-foreground font-mono scrollbar-editor">
         {inner}
       </pre>
     </div>

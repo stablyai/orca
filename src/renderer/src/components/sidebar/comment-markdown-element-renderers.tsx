@@ -50,6 +50,7 @@ function handleMarkdownImageClick(
   onLinkClick(event, src)
 }
 
+/** Builds compact markdown renderers for chat/comment surfaces. */
 export function createCompactCommentMarkdownComponents(
   onLinkClick?: CommentMarkdownLinkClickHandler,
   expandImages = false
@@ -83,9 +84,13 @@ export function createCompactCommentMarkdownComponents(
         {children}
       </code>
     ),
-    // Compact pre blocks — no syntax highlighting needed for short comments.
+    /**
+     * Compact pre-block renderer — no syntax highlighting for short comments.
+     * Why: explicit whitespace-pre (not the UA default) — soft-wrapped code copies
+     * back with synthetic newlines on Chromium (see docs/reference/soft-wrap-selection-copy.md).
+     */
     pre: ({ children }) => (
-      <pre className="my-1 max-h-32 max-w-full overflow-x-auto rounded bg-accent p-1.5 text-[10px] font-mono">
+      <pre className="my-1 max-h-32 max-w-full overflow-x-auto whitespace-pre rounded bg-accent p-1.5 text-[10px] font-mono">
         {children}
       </pre>
     ),
@@ -204,6 +209,7 @@ export function createCompactCommentMarkdownComponents(
   }
 }
 
+/** Builds document-variant markdown renderers. */
 export function createDocumentCommentMarkdownComponents(
   onLinkClick?: CommentMarkdownLinkClickHandler
 ): Components {
@@ -237,11 +243,12 @@ export function createDocumentCommentMarkdownComponents(
         </code>
       ),
     // Mermaid fences render a <div>, which is invalid inside <pre>, so unwrap them.
+    /** Document-variant pre renderer — mermaid fences unwrap to a div (invalid inside pre). */
     pre: ({ children }) =>
       isMermaidPre(children) ? (
         <>{children}</>
       ) : (
-        <pre className="my-3 max-h-80 max-w-full overflow-x-auto rounded-md bg-accent p-3 font-mono text-[12px]">
+        <pre className="my-3 max-h-80 max-w-full overflow-x-auto whitespace-pre rounded-md bg-accent p-3 font-mono text-[12px]">
           {children}
         </pre>
       ),

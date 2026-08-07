@@ -16,6 +16,7 @@ function lifecycleLabel(phase: VmRecipePreview['commands'][number]['phase']): st
   }
 }
 
+/** Preview of the plugin VM recipe command before consent. */
 export function PluginVmRecipeConsentPreview({
   recipes
 }: {
@@ -57,7 +58,7 @@ export function PluginVmRecipeConsentPreview({
                         '{{value0}} · {{value1}} command',
                         { value0: recipe.name, value1: phaseLabel }
                       )}
-                      className="max-h-40 overflow-auto scrollbar-sleek whitespace-pre-wrap break-all rounded-md bg-muted px-2.5 py-2 font-mono text-xs leading-5 text-foreground"
+                      className="max-h-40 overflow-auto scrollbar-sleek whitespace-pre break-all rounded-md bg-muted px-2.5 py-2 font-mono text-xs leading-5 text-foreground"
                     >
                       {command}
                     </pre>

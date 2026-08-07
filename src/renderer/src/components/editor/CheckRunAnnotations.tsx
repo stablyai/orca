@@ -8,6 +8,7 @@ import {
   openAnnotationLocation
 } from './check-annotation-open'
 
+/** Renders annotations for a check run. */
 export function CheckRunAnnotations({
   annotations,
   worktreeId
@@ -78,7 +79,7 @@ export function CheckRunAnnotations({
               )}
               <div className="mt-2 break-words text-sm text-foreground">{annotation.message}</div>
               {annotation.rawDetails && (
-                <pre className="mt-2 max-h-60 overflow-auto whitespace-pre-wrap rounded bg-muted/40 p-3 font-mono text-xs text-muted-foreground scrollbar-sleek">
+                <pre className="mt-2 max-h-60 overflow-auto whitespace-pre rounded bg-muted/40 p-3 font-mono text-xs text-muted-foreground scrollbar-sleek">
                   {annotation.rawDetails}
                 </pre>
               )}

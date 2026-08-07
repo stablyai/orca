@@ -454,6 +454,7 @@ function EditableTextCell({
   )
 }
 
+/** Notebook cell preformatted output. */
 function PreformattedOutput({
   text,
   error = false
@@ -464,7 +465,7 @@ function PreformattedOutput({
   return (
     <pre
       className={cn(
-        'max-h-[420px] overflow-auto whitespace-pre-wrap px-3 py-2 font-mono text-xs leading-5 scrollbar-editor',
+        'max-h-[420px] overflow-auto whitespace-pre px-3 py-2 font-mono text-xs leading-5 scrollbar-editor',
         error ? 'text-destructive' : 'text-foreground'
       )}
     >

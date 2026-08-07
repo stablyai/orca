@@ -431,6 +431,7 @@ function SegmentedPolicyToggle<P extends string>({
   )
 }
 
+/** Card showing the example hook template. */
 function ExampleTemplateCard({
   copiedTemplate,
   onCopyTemplate
@@ -461,7 +462,7 @@ function ExampleTemplateCard({
             ? translate('auto.components.settings.RepositoryHooksSection.3149964b66', 'Copied')
             : translate('auto.components.settings.RepositoryHooksSection.da37d6f10e', 'Copy')}
         </Button>
-        <pre className="overflow-x-auto whitespace-pre-wrap break-words p-3 pr-16 font-mono text-[11px] leading-5 text-muted-foreground">
+        <pre className="overflow-x-auto whitespace-pre break-words p-3 pr-16 font-mono text-[11px] leading-5 text-muted-foreground">
           {EXAMPLE_TEMPLATE}
         </pre>
       </div>
@@ -469,9 +470,10 @@ function ExampleTemplateCard({
   )
 }
 
+/** Renders YAML content un-wrapped with horizontal scroll. */
 function YamlScriptBlock({ content }: { content: string }): React.JSX.Element {
   return (
-    <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-lg border border-border/50 bg-muted/30 p-3 font-mono text-[11.5px] leading-5 text-foreground">
+    <pre className="overflow-x-auto whitespace-pre break-words rounded-lg border border-border/50 bg-muted/30 p-3 font-mono text-[11.5px] leading-5 text-foreground">
       {content}
     </pre>
   )

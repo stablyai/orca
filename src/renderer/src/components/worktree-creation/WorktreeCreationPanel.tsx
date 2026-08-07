@@ -266,6 +266,7 @@ function VmProvisioningStatus({
 // Why: the recipe's stderr is the only thing that explains a failure or a slow
 // provision, so it gets the same fixed-height log surface whether provisioning is
 // in progress or has failed.
+/** Output log of a workspace recipe run. */
 function RecipeOutputLog({
   log,
   emptyLabel
@@ -294,7 +295,7 @@ function RecipeOutputLog({
     <pre
       ref={ref}
       onScroll={handleScroll}
-      className="scrollbar-sleek h-72 overflow-auto whitespace-pre-wrap rounded-md bg-muted/40 p-3 font-mono text-[11px] leading-4 text-muted-foreground"
+      className="scrollbar-sleek h-72 overflow-auto whitespace-pre rounded-md bg-muted/40 p-3 font-mono text-[11px] leading-4 text-muted-foreground"
     >
       {log || <span className="text-muted-foreground/60">{emptyLabel}</span>}
     </pre>

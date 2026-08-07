@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import CommentMarkdown, { remarkGitHubReferences } from './CommentMarkdown'
 
+/** Test suite for CommentMarkdown rendering. */
 describe('CommentMarkdown', () => {
   it('marks compact headings so a parent can opt into block flow', () => {
     const markup = renderToStaticMarkup(
@@ -233,6 +234,31 @@ describe('CommentMarkdown', () => {
     expect(markup).toContain('max-h-32')
     expect(markup).toContain('overflow-x-auto')
     expect(markup).not.toContain('mermaid-block')
+  })
+
+  /** Chromium turns soft-wrapped `pre-wrap` text into real newlines on copy,
+   *  breaking pasted commands (see docs/reference/soft-wrap-selection-copy.md). */
+  it('declares whitespace-pre on compact code blocks so copy never gains newlines', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown content={'```sh\nnpx skills add --agent claude-code -y\n```'} />
+    )
+
+    expect(markup).toContain('<pre class="my-1 max-h-32 max-w-full overflow-x-auto whitespace-pre ')
+    expect(markup).not.toContain('whitespace-pre-wrap')
+  })
+
+  /** Document-variant code blocks must also render un-wrapped (see above). */
+  it('declares whitespace-pre on document-variant code blocks', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown
+        variant="document"
+        content={'```sh\nnpx skills add --agent claude-code -y\n```'}
+      />
+    )
+
+    expect(markup).toContain('whitespace-pre')
+    expect(markup).toContain('overflow-x-auto')
+    expect(markup).not.toContain('whitespace-pre-wrap')
   })
 
   it('renders headings as block elements with hierarchy in the document variant', () => {
