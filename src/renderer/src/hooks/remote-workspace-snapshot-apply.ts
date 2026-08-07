@@ -154,12 +154,8 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
     return
   }
   // Why: the hydrate below marks the target hydrated and then awaits terminal reconnects for up to 30s; the pending paths must be registered first or the initial-terminal gate reads "hydrated, nothing pending" and creates a junk tab into a still-empty deferred worktree.
-  store
-    .getState()
-    .setPendingDeferredWorktreePaths(
-      authority.targetId,
-      deferredSnapshotTabPaths(state, authority, snapshot)
-    )
+  const initialDeferredPaths = deferredSnapshotTabPaths(state, authority, snapshot)
+  store.getState().setPendingDeferredWorktreePaths(authority.targetId, initialDeferredPaths)
   await hydrateAndReconnectWorktrees(
     store,
     merged,
@@ -170,9 +166,8 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
     finalizeHydratedTerminals
   )
 
-  // Why: the import above silently drops snapshot paths the catalog cannot resolve yet; remote catalogs fill in asynchronously (often only on worktree activation), so retry those paths until they resolve or the deadline expires.
-  let pendingPaths = deferredSnapshotTabPaths(store.getState(), authority, snapshot)
-  store.getState().setPendingDeferredWorktreePaths(authority.targetId, pendingPaths)
+  // Why: the import above silently drops snapshot paths the catalog cannot resolve yet; remote catalogs fill in asynchronously (often only on worktree activation), so retry those paths until they resolve or the deadline expires. The watch seeds from the set registered before the hydrate, not a recompute: a path that resolved while the hydrate awaited terminal reconnects was still dropped at import time and needs the late pass below — a recompute would end the watch before its first pass and leave those tabs with neither an import nor a pending registration.
+  let pendingPaths = initialDeferredPaths
   if (pendingPaths.length === 0) {
     return
   }
@@ -196,27 +191,33 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
   }
   const deferredDeadline = Date.now() + SNAPSHOT_DEFERRED_RESOLVE_TIMEOUT_MS
   let unresolvedSeen = false
+  // Why: the first pass runs before any sleep — a path that resolved during the hydrate's reconnect wait has already departed, and its tabs must hydrate immediately; gates reading the pending registration treat a missing tab in a "hydrated, nothing pending" worktree as gone for good.
+  let firstPass = true
   while (isWatchCurrent()) {
-    if (Date.now() >= deferredDeadline) {
-      console.warn(
-        '[remote-workspace] giving up on deferred snapshot tabs; their worktree paths never resolved in the catalog',
-        pendingPaths
-      )
-      // Why: an expired path will never hydrate — leaving it registered would suppress initial-terminal creation for that worktree indefinitely.
-      store.getState().setPendingDeferredWorktreePaths(authority.targetId, [])
-      reportUnresolved()
-      return
-    }
-    await new Promise((resolve) => setTimeout(resolve, SNAPSHOT_DEFERRED_POLL_MS))
-    if (!isWatchCurrent()) {
-      return
+    if (firstPass) {
+      firstPass = false
+    } else {
+      if (Date.now() >= deferredDeadline) {
+        console.warn(
+          '[remote-workspace] giving up on deferred snapshot tabs; their worktree paths never resolved in the catalog',
+          pendingPaths
+        )
+        // Why: an expired path will never hydrate — leaving it registered would suppress initial-terminal creation for that worktree indefinitely.
+        store.getState().setPendingDeferredWorktreePaths(authority.targetId, [])
+        reportUnresolved()
+        return
+      }
+      await new Promise((resolve) => setTimeout(resolve, SNAPSHOT_DEFERRED_POLL_MS))
+      if (!isWatchCurrent()) {
+        return
+      }
     }
     const lateState = store.getState()
     const remaining = deferredSnapshotTabPaths(lateState, authority, snapshot)
     const departed = pendingPaths.filter((worktreePath) => !remaining.includes(worktreePath))
     pendingPaths = remaining
-    store.getState().setPendingDeferredWorktreePaths(authority.targetId, pendingPaths)
     if (departed.length === 0) {
+      store.getState().setPendingDeferredWorktreePaths(authority.targetId, pendingPaths)
       continue
     }
     const { resolved, unresolvable } = classifyDepartedDeferredPaths(lateState, authority, departed)
@@ -252,6 +253,8 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
         finalizeHydratedTerminals
       )
     }
+    // Why: the registration updates only after the departed paths' tabs are in the store — gates read "hydrated, nothing pending" as fully loaded, which must never be observable while a departed path's tabs are still absent.
+    store.getState().setPendingDeferredWorktreePaths(authority.targetId, pendingPaths)
     // Why: the hydrate above writes a synced status and status writes are last-write-wins — a tab loss must outlive every later success, including when the connection dies mid-hydrate; only a superseding arrival owns the status instead.
     if (unresolvedSeen && isArrivalCurrent(authority.targetId, arrival)) {
       reportUnresolved()

@@ -213,6 +213,33 @@ describe('direct-SSH snapshot apply, deferred worktree hydration', () => {
     expect(store.getState().pendingDeferredWorktreePathsByTargetId[TARGET_ID]).toBeUndefined()
   })
 
+  it('late-hydrates a path that resolves while the apply awaits terminal reconnects', async () => {
+    const syncStatuses: RemoteWorkspaceSyncStatus[] = []
+    const store = makeStore(syncStatuses)
+    seedCatalog(store, [EAGER_PATH])
+    // The catalog resolves the late path while the main hydrate is still
+    // awaiting terminal reconnects — after the import already dropped its tabs.
+    // The watch's first pass must late-hydrate it without waiting for a poll
+    // tick: gates read "hydrated, nothing pending" as fully loaded, and a
+    // missing tab in a fully loaded worktree is treated as gone for good.
+    store.setState({
+      reconnectPersistedTerminals: (async () => {
+        seedCatalog(store, [EAGER_PATH, LATE_PATH])
+      }) as never
+    })
+
+    const applyPromise = applySnapshot(
+      store,
+      snapshot(1, { [EAGER_PATH]: ['tab-e1'], [LATE_PATH]: ['tab-l1'] })
+    )
+    await vi.advanceTimersByTimeAsync(0)
+    await applyPromise
+
+    expect(tabIds(store, LATE_ID)).toEqual(['tab-l1'])
+    expect(store.getState().pendingDeferredWorktreePathsByTargetId[TARGET_ID]).toBeUndefined()
+    expect(syncStatuses.at(-1)?.phase).toBe('synced')
+  })
+
   it('sets an error sync status when a path never resolves before the deadline', async () => {
     const syncStatuses: RemoteWorkspaceSyncStatus[] = []
     const store = makeStore(syncStatuses)
