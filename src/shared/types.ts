@@ -734,8 +734,10 @@ export type WorktreeLineage = {
 export type WorkspaceLineage = {
   childWorkspaceKey: WorkspaceKey
   childInstanceId?: string | null
+  childHostId?: ExecutionHostId | null
   parentWorkspaceKey: WorkspaceKey
   parentInstanceId?: string | null
+  parentHostId?: ExecutionHostId | null
   origin: WorktreeLineageOrigin
   capture: WorktreeLineageCapture
   taskId?: string

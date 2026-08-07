@@ -3723,6 +3723,20 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it.each([TEST_FOLDER_WORKSPACE_KEY, `id:${TEST_FOLDER_WORKSPACE_KEY}`])(
+    'shows folder workspace identity for selector %s',
+    async (selector) => {
+      const runtime = new OrcaRuntimeService(createFolderWorkspaceRuntimeStore() as never)
+
+      await expect(runtime.showManagedWorktree(selector)).resolves.toMatchObject({
+        id: TEST_FOLDER_WORKSPACE_KEY,
+        instanceId: TEST_FOLDER_WORKSPACE_ID,
+        hostId: 'local',
+        workspaceLineage: null
+      })
+    }
+  )
+
   it('routes SSH folder workspace file explorer paths through the filesystem provider', async () => {
     const folderPath = '/srv/platform'
     const fsProvider = {
@@ -5349,8 +5363,10 @@ describe('OrcaRuntimeService', () => {
     expect(result.workspaceLineage).toMatchObject({
       childWorkspaceKey: `worktree:${childId}`,
       childInstanceId: metaById[childId].instanceId,
+      childHostId: 'local',
       parentWorkspaceKey: TEST_FOLDER_WORKSPACE_KEY,
-      parentInstanceId: null,
+      parentInstanceId: TEST_FOLDER_WORKSPACE_ID,
+      parentHostId: 'local',
       origin: 'cli',
       capture: { source: 'env-workspace', confidence: 'inferred' }
     })

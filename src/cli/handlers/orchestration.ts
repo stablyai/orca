@@ -1088,6 +1088,64 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     })
   },
 
+  'orchestration conditional-inject': async ({ flags, client, cwd, json }) => {
+    const from = await resolveCoordinatorTerminalHandle(flags, cwd, client)
+    const result = await client.call<{
+      operation: {
+        operation_id: string
+        request_digest: string
+        status: string
+        dispatch_id: string | null
+        bytes_written: number | null
+        failure_reason: string | null
+      }
+      dispatch: { id: string; task_id: string; status: string } | null
+      injected: boolean
+      proof?: Record<string, string>
+    }>('orchestration.conditionalInject', {
+      operationId: getRequiredStringFlag(flags, 'operation'),
+      requestDigest: getRequiredStringFlag(flags, 'request-digest'),
+      attemptId: getRequiredStringFlag(flags, 'attempt-id'),
+      dagNodeId: getRequiredStringFlag(flags, 'dag-node-id'),
+      task: getRequiredStringFlag(flags, 'task'),
+      payload: getRequiredStringFlag(flags, 'payload'),
+      from,
+      expectedCoordinatorHandle: getRequiredStringFlag(flags, 'expected-coordinator-handle'),
+      expectedCoordinatorPane: getRequiredStringFlag(flags, 'expected-coordinator-pane'),
+      worker: getRequiredStringFlag(flags, 'worker'),
+      expectedWorkerPane: getRequiredStringFlag(flags, 'expected-worker-pane'),
+      expectedWorktree: getRequiredStringFlag(flags, 'expected-worktree'),
+      expectedRuntime: getRequiredStringFlag(flags, 'expected-runtime'),
+      run: getOptionalStringFlag(flags, 'run'),
+      devMode: isDevCliInvocation()
+    })
+    printResult(result, json, (value) => {
+      const dispatch = value.dispatch ? ` dispatch=${value.dispatch.id}` : ''
+      return `${value.operation.operation_id} [${value.operation.status}]${dispatch}`
+    })
+  },
+
+  'orchestration conditional-inject-show': async ({ flags, client, json }) => {
+    const result = await client.call<{
+      operation: {
+        operation_id: string
+        request_digest: string
+        status: string
+        dispatch_id: string | null
+        bytes_written: number | null
+        failure_reason: string | null
+      } | null
+      dispatch: { id: string; task_id: string; status: string } | null
+    }>('orchestration.conditionalInjectShow', {
+      operationId: getRequiredStringFlag(flags, 'operation')
+    })
+    printResult(result, json, (value) =>
+      value.operation
+        ? `${value.operation.operation_id} [${value.operation.status}]`
+        : 'Unknown conditional inject operation.'
+    )
+  },
+
   'orchestration ask': async ({ flags, client, cwd, json }) => {
     const parsedTimeoutMs = getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms')
     const timeoutMs = clampOrchestrationAskTimeoutMs(parsedTimeoutMs)

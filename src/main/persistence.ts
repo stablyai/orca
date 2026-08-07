@@ -897,8 +897,10 @@ function normalizeWorkspaceLineageByChildKey(
     normalized[childWorkspaceKey] = {
       childWorkspaceKey,
       childInstanceId: lineage.childInstanceId ?? null,
+      ...(typeof lineage.childHostId === 'string' ? { childHostId: lineage.childHostId } : {}),
       parentWorkspaceKey,
       parentInstanceId: lineage.parentInstanceId ?? null,
+      ...(typeof lineage.parentHostId === 'string' ? { parentHostId: lineage.parentHostId } : {}),
       origin: lineage.origin ?? 'cli',
       capture: lineage.capture ?? { source: 'manual-action', confidence: 'inferred' },
       ...(lineage.taskId ? { taskId: lineage.taskId } : {}),

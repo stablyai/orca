@@ -182,6 +182,35 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'task', 'preamble', 'from']
   },
   {
+    path: ['orchestration', 'conditional-inject'],
+    summary: 'Inject a task after exact topology validation',
+    usage:
+      'orca orchestration conditional-inject --operation <id> --request-digest <sha256> --attempt-id <uuid> --dag-node-id <uuid> --task <task_id> --payload <text> --from <handle> --expected-coordinator-handle <handle> --expected-coordinator-pane <pane> --worker <handle> --expected-worker-pane <pane> --expected-worktree <id> --expected-runtime <id> [--run <run_id>] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'operation',
+      'request-digest',
+      'attempt-id',
+      'dag-node-id',
+      'task',
+      'payload',
+      'from',
+      'expected-coordinator-handle',
+      'expected-coordinator-pane',
+      'worker',
+      'expected-worker-pane',
+      'expected-worktree',
+      'expected-runtime',
+      'run'
+    ]
+  },
+  {
+    path: ['orchestration', 'conditional-inject-show'],
+    summary: 'Show a durable conditional inject operation',
+    usage: 'orca orchestration conditional-inject-show --operation <id> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'operation']
+  },
+  {
     path: ['orchestration', 'ask'],
     summary: 'Ask the coordinator a question and block until answered',
     usage:

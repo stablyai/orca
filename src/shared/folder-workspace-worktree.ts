@@ -6,6 +6,7 @@ export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Wor
   const linkedTask = folderWorkspace.linkedTask
   return {
     id: folderWorkspaceKey(folderWorkspace.id),
+    instanceId: folderWorkspace.id,
     repoId: `folder-workspace:${folderWorkspace.projectGroupId}`,
     displayName: folderWorkspace.name,
     comment: folderWorkspace.comment,

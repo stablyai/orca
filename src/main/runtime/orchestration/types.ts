@@ -132,6 +132,34 @@ export type MutationReceiptRow = {
   updated_at: string
 }
 
+export type ConditionalInjectOperationStatus =
+  | 'prepared'
+  | 'delivery-started'
+  | 'acknowledged'
+  | 'rejected'
+  | 'indeterminate'
+
+export type ConditionalInjectOperationRow = {
+  operation_id: string
+  request_digest: string
+  attempt_id: string
+  dag_node_id: string
+  task_id: string
+  payload_body: string | null
+  coordinator_handle: string
+  coordinator_pane_key: string
+  worker_handle: string
+  worker_pane_key: string
+  worktree_id: string
+  runtime_id: string
+  status: ConditionalInjectOperationStatus
+  dispatch_id: string | null
+  bytes_written: number | null
+  failure_reason: string | null
+  created_at: string
+  updated_at: string
+}
+
 export type WorkerDispatchState =
   | 'starting'
   | 'ready'

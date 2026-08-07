@@ -29,6 +29,10 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RunRow } from '../../orchestration/types'
 import { encodeFederatedControlMessage } from '../../orchestration/federation-control-message'
 import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../../../shared/protocol-version'
+import {
+  CONDITIONAL_INJECT_SCHEMA,
+  digestConditionalInjectRequest
+} from '../../orchestration/conditional-inject-digest'
 
 const TASK_STATUSES: TaskStatus[] = [
   'pending',
@@ -208,6 +212,39 @@ const DispatchShowParams = z.object({
   preamble: OptionalBoolean,
   from: OptionalString,
   devMode: OptionalBoolean
+})
+
+const UUID = z.string().uuid()
+const ConditionalInjectParams = z
+  .object({
+    operationId: requiredString('Missing --operation'),
+    requestDigest: z.string().regex(/^[0-9a-f]{64}$/, 'Invalid --request-digest'),
+    attemptId: UUID,
+    dagNodeId: UUID,
+    task: requiredString('Missing --task'),
+    payload: z.string(),
+    from: requiredString('Missing --from'),
+    expectedCoordinatorHandle: requiredString('Missing --expected-coordinator-handle'),
+    expectedCoordinatorPane: requiredString('Missing --expected-coordinator-pane'),
+    worker: requiredString('Missing --worker'),
+    expectedWorkerPane: requiredString('Missing --expected-worker-pane'),
+    expectedWorktree: requiredString('Missing --expected-worktree'),
+    expectedRuntime: requiredString('Missing --expected-runtime'),
+    devMode: OptionalBoolean,
+    run: OptionalString
+  })
+  .superRefine((params, ctx) => {
+    if (params.operationId !== `${params.attemptId}:${params.dagNodeId}:v1`) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: '--operation must be <attempt UUID>:<DAG node UUID>:v1',
+        path: ['operationId']
+      })
+    }
+  })
+
+const ConditionalInjectShowParams = z.object({
+  operationId: requiredString('Missing --operation')
 })
 
 const AskParams = z
@@ -1323,6 +1360,204 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         return { dispatch: ctx, injected, preamble }
       }
       return { dispatch: ctx, injected }
+    }
+  }),
+
+  defineMethod({
+    name: 'orchestration.conditionalInject',
+    params: ConditionalInjectParams,
+    handler: async (
+      params,
+      {
+        orchestrationCompatibilityEvidence,
+        runtime,
+        legacyCoordinatorRunId,
+        revalidateLegacyCoordinator
+      }
+    ) => {
+      const db = runtime.getOrchestrationDb()
+      const task = db.getTask(params.task)
+      if (!task) {
+        throw new OrchestrationError('task_not_found', `Task ${params.task} was not found.`)
+      }
+      const run = resolveRunScope(runtime, {
+        runId: params.run,
+        callerTerminalHandle: params.from,
+        requireCurrentConsumer: true,
+        legacyCoordinatorRunId,
+        callerEvidence: orchestrationCompatibilityEvidence
+      })
+      if (task.run_id !== run.id) {
+        throw new OrchestrationError(
+          'task_not_found',
+          `Task ${task.id} was not found in Run ${run.id}.`
+        )
+      }
+      const digestInput = {
+        schema: CONDITIONAL_INJECT_SCHEMA,
+        attemptId: params.attemptId,
+        taskId: task.id,
+        dagNodeId: params.dagNodeId,
+        payload: params.payload,
+        coordinator: {
+          handle: params.expectedCoordinatorHandle,
+          pane: params.expectedCoordinatorPane
+        },
+        worker: {
+          handle: params.worker,
+          pane: params.expectedWorkerPane,
+          worktreeId: params.expectedWorktree
+        },
+        runtimeId: params.expectedRuntime
+      }
+      if (digestConditionalInjectRequest(digestInput) !== params.requestDigest) {
+        throw new OrchestrationError(
+          'request_digest_mismatch',
+          'The conditional inject request digest does not match its canonical payload.'
+        )
+      }
+      const prepared = db.prepareConditionalInjectOperation({
+        operationId: params.operationId,
+        requestDigest: params.requestDigest,
+        attemptId: params.attemptId,
+        dagNodeId: params.dagNodeId,
+        taskId: task.id,
+        payloadBody: params.payload,
+        coordinatorHandle: params.expectedCoordinatorHandle,
+        coordinatorPaneKey: params.expectedCoordinatorPane,
+        workerHandle: params.worker,
+        workerPaneKey: params.expectedWorkerPane,
+        worktreeId: params.expectedWorktree,
+        runtimeId: params.expectedRuntime
+      })
+      const currentDispatch = prepared.operation.dispatch_id
+        ? (db.getDispatchContextById(prepared.operation.dispatch_id) ?? null)
+        : null
+      if (prepared.operation.status !== 'prepared') {
+        return { operation: prepared.operation, dispatch: currentDispatch, injected: false }
+      }
+
+      const reject = (reason: string) => ({
+        operation: db.rejectConditionalInjectOperation(params.operationId, reason),
+        dispatch: null,
+        injected: false
+      })
+      if (
+        params.from !== params.expectedCoordinatorHandle ||
+        task.created_by_terminal_handle !== params.expectedCoordinatorHandle ||
+        task.created_by_pane_key !== params.expectedCoordinatorPane ||
+        run.coordinator_handle !== params.expectedCoordinatorHandle ||
+        run.coordinator_pane_key !== params.expectedCoordinatorPane
+      ) {
+        return reject('coordinator_identity_mismatch')
+      }
+      if (runtime.getRuntimeId() !== params.expectedRuntime) {
+        return reject('runtime_identity_mismatch')
+      }
+      if (task.status !== 'ready') {
+        return reject(`task_not_ready:${task.status}`)
+      }
+      if (!(await runtime.isTerminalRunningAgent(params.worker))) {
+        return reject('worker_agent_not_running')
+      }
+      const coordinator = runtime.getOrchestrationDispatchAuthority(params.from)
+      const worker = runtime.getOrchestrationDispatchAuthority(params.worker)
+      if (
+        !coordinator ||
+        coordinator.runtimeId !== params.expectedRuntime ||
+        coordinator.paneKey !== params.expectedCoordinatorPane
+      ) {
+        return reject('coordinator_topology_changed')
+      }
+      if (
+        !worker ||
+        worker.runtimeId !== params.expectedRuntime ||
+        worker.terminalHandle !== params.worker ||
+        worker.paneKey !== params.expectedWorkerPane ||
+        worker.worktreeId !== params.expectedWorktree ||
+        !worker.processIncarnation
+      ) {
+        return reject('worker_topology_changed')
+      }
+
+      revalidateLegacyCoordinator?.()
+      const started = db.startConditionalInjectDelivery({
+        operationId: params.operationId,
+        taskId: task.id,
+        workerHandle: params.worker,
+        workerPaneKey: params.expectedWorkerPane,
+        processIncarnation: worker.processIncarnation,
+        ...(worker.launchTokenHash ? { launchTokenHash: worker.launchTokenHash } : {})
+      })
+      if (!started.winner || !started.dispatch) {
+        return { operation: started.operation, dispatch: started.dispatch, injected: false }
+      }
+      try {
+        const dispatchCapability = db.mintDispatchCapability({
+          dispatchId: started.dispatch.id,
+          paneKey: params.expectedWorkerPane,
+          processIncarnation: worker.processIncarnation
+        })
+        const preamble = buildDispatchPreamble({
+          taskId: task.id,
+          dispatchId: started.dispatch.id,
+          taskSpec: params.payload,
+          coordinatorHandle: params.expectedCoordinatorHandle,
+          workerHandle: params.worker,
+          dispatchCapability,
+          devMode: params.devMode,
+          cliCommand: runtime.getTerminalOrchestrationCliCommand(params.worker)
+        })
+        const delivery = await runtime.sendTerminalAgentPrompt(params.worker, preamble)
+        const operation = db.settleConditionalInjectOperation(params.operationId, 'acknowledged', {
+          bytesWritten: delivery.bytesWritten
+        })
+        return {
+          operation,
+          dispatch: started.dispatch,
+          injected: true,
+          proof: {
+            taskId: task.id,
+            coordinatorHandle: params.expectedCoordinatorHandle,
+            coordinatorPane: params.expectedCoordinatorPane,
+            workerHandle: params.worker,
+            workerPane: params.expectedWorkerPane,
+            executionWorktreeId: params.expectedWorktree,
+            runtimeId: params.expectedRuntime
+          }
+        }
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error)
+        db.failDispatch(started.dispatch.id, reason)
+        db.updateTaskStatus(
+          task.id,
+          'blocked',
+          JSON.stringify({
+            reason: 'conditional_inject_indeterminate',
+            operationId: params.operationId
+          })
+        )
+        const operation = db.settleConditionalInjectOperation(params.operationId, 'indeterminate', {
+          failureReason: reason
+        })
+        return { operation, dispatch: started.dispatch, injected: false }
+      }
+    }
+  }),
+
+  defineMethod({
+    name: 'orchestration.conditionalInjectShow',
+    params: ConditionalInjectShowParams,
+    handler: (params, { runtime }) => {
+      const db = runtime.getOrchestrationDb()
+      const operation = db.getConditionalInjectOperation(params.operationId)
+      if (!operation) {
+        return { operation: null, dispatch: null }
+      }
+      const dispatch = operation.dispatch_id
+        ? (db.getDispatchContextById(operation.dispatch_id) ?? null)
+        : null
+      return { operation, dispatch }
     }
   }),
 

@@ -105,6 +105,8 @@ Orchestration:
   orchestration task-list   List orchestration tasks
   orchestration task-update Update a task status
   orchestration dispatch    Dispatch a task to a terminal
+  orchestration conditional-inject Inject only after exact topology validation
+  orchestration conditional-inject-show Show a durable conditional inject operation
   orchestration dispatch-show Show dispatch context for a task
   orchestration worker-start Start a supervised worker locally or on a connected Orca server
   orchestration worker-show Inspect one supervised worker

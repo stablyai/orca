@@ -9,6 +9,10 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 import type { RuntimeTerminalSummary } from '../../../../shared/runtime-types'
 import { ORCHESTRATION_ASK_MAX_TIMEOUT_MS } from '../../../../shared/orchestration-ask-timeout'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../shared/protocol-version'
+import {
+  CONDITIONAL_INJECT_SCHEMA,
+  digestConditionalInjectRequest
+} from '../../orchestration/conditional-inject-digest'
 
 function lifecycleGroupRecipientError(type: 'worker_done' | 'heartbeat'): string {
   return `${type} messages belong to one exact Dispatch and cannot target a group address.`
@@ -80,7 +84,7 @@ describe('orchestration RPC methods', () => {
         scopedParams.callerTerminalHandle ??= 'term_coord'
       } else if (name === 'orchestration.taskList') {
         scopedParams.run ??= activeRunId
-      } else if (name === 'orchestration.dispatch') {
+      } else if (name === 'orchestration.dispatch' || name === 'orchestration.conditionalInject') {
         scopedParams.run ??= activeRunId
         scopedParams.from ??= 'term_coord'
       } else if (
@@ -108,7 +112,7 @@ describe('orchestration RPC methods', () => {
 
   it('registers all expected methods', () => {
     const registry = buildRegistry(ORCHESTRATION_METHODS)
-    expect(registry.size).toBe(38)
+    expect(registry.size).toBe(40)
     expect(registry.has('orchestration.workerRelease')).toBe(true)
     expect(registry.has('orchestration.workerRetain')).toBe(true)
     expect(registry.has('orchestration.workerList')).toBe(true)
@@ -126,6 +130,8 @@ describe('orchestration RPC methods', () => {
     expect(registry.has('orchestration.taskList')).toBe(true)
     expect(registry.has('orchestration.taskUpdate')).toBe(true)
     expect(registry.has('orchestration.dispatch')).toBe(true)
+    expect(registry.has('orchestration.conditionalInject')).toBe(true)
+    expect(registry.has('orchestration.conditionalInjectShow')).toBe(true)
     expect(registry.has('orchestration.dispatchShow')).toBe(true)
     expect(registry.has('orchestration.workerStart')).toBe(true)
     expect(registry.has('orchestration.workerShow')).toBe(true)
@@ -2157,6 +2163,166 @@ describe('orchestration RPC methods', () => {
       expect(result.dispatch.id).toMatch(/^ctx_/)
       expect(result.preamble).toContain(task.id)
       expect(result.preamble).toContain('term_coord')
+    })
+  })
+
+  describe('orchestration.conditionalInject', () => {
+    const attemptId = '11111111-1111-4111-8111-111111111111'
+    const dagNodeId = '22222222-2222-4222-8222-222222222222'
+    const workerPane = 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+    const worktreeId = 'repo::/worktree'
+
+    function provideTopology(): void {
+      vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
+      vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockImplementation((handle) => {
+        if (handle === 'term_coord') {
+          return {
+            runtimeId: runtime.getRuntimeId(),
+            terminalHandle: handle,
+            ptyId: 'pty_coord',
+            worktreeId: 'repo::/coordinator',
+            paneKey: coordinatorPaneKey,
+            processIncarnation: 'process-coordinator',
+            launchTokenHash: null,
+            hostScope: { kind: 'local', hostId: 'local' }
+          }
+        }
+        if (handle === 'term_worker') {
+          return {
+            runtimeId: runtime.getRuntimeId(),
+            terminalHandle: handle,
+            ptyId: 'pty_worker',
+            worktreeId,
+            paneKey: workerPane,
+            processIncarnation: 'process-worker',
+            launchTokenHash: null,
+            hostScope: { kind: 'local', hostId: 'local' }
+          }
+        }
+        return null
+      })
+    }
+
+    function makeParams(taskId: string, payload = 'perform exact work') {
+      const identity = {
+        schema: CONDITIONAL_INJECT_SCHEMA,
+        attemptId,
+        taskId,
+        dagNodeId,
+        payload,
+        coordinator: { handle: 'term_coord', pane: coordinatorPaneKey },
+        worker: { handle: 'term_worker', pane: workerPane, worktreeId },
+        runtimeId: runtime.getRuntimeId()
+      }
+      return {
+        operationId: `${attemptId}:${dagNodeId}:v1`,
+        requestDigest: digestConditionalInjectRequest(identity),
+        attemptId,
+        dagNodeId,
+        task: taskId,
+        payload,
+        from: 'term_coord',
+        expectedCoordinatorHandle: 'term_coord',
+        expectedCoordinatorPane: coordinatorPaneKey,
+        worker: 'term_worker',
+        expectedWorkerPane: workerPane,
+        expectedWorktree: worktreeId,
+        expectedRuntime: runtime.getRuntimeId()
+      }
+    }
+
+    function createOwnedTask() {
+      return db.createTask({
+        spec: 'work',
+        createdByTerminalHandle: 'term_coord',
+        createdByPaneKey: coordinatorPaneKey
+      })
+    }
+
+    it('writes once, durably acknowledges, and returns the same proof on replay', async () => {
+      setup()
+      provideTopology()
+      const task = createOwnedTask()
+      const send = vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
+        handle: 'term_worker',
+        accepted: true,
+        bytesWritten: 123
+      })
+      const params = makeParams(task.id)
+
+      const first = (await call('orchestration.conditionalInject', params)) as {
+        operation: { status: string; dispatch_id: string; bytes_written: number }
+        injected: boolean
+      }
+      const replay = (await call('orchestration.conditionalInject', params)) as {
+        operation: { status: string; dispatch_id: string }
+        injected: boolean
+      }
+
+      expect(first).toMatchObject({
+        operation: { status: 'acknowledged', bytes_written: 123 },
+        injected: true
+      })
+      expect(replay).toMatchObject({
+        operation: { status: 'acknowledged', dispatch_id: first.operation.dispatch_id },
+        injected: false
+      })
+      expect(send).toHaveBeenCalledTimes(1)
+    })
+
+    it('rejects changed worker topology before creating a dispatch or writing bytes', async () => {
+      setup()
+      provideTopology()
+      const task = createOwnedTask()
+      const send = vi.spyOn(runtime, 'sendTerminalAgentPrompt')
+      vi.mocked(runtime.getOrchestrationDispatchAuthority).mockImplementation((handle) => {
+        if (handle === 'term_coord') {
+          return {
+            runtimeId: runtime.getRuntimeId(),
+            terminalHandle: handle,
+            ptyId: 'pty_coord',
+            worktreeId: 'repo::/coordinator',
+            paneKey: coordinatorPaneKey,
+            processIncarnation: 'process-coordinator',
+            launchTokenHash: null,
+            hostScope: { kind: 'local', hostId: 'local' }
+          }
+        }
+        return null
+      })
+
+      const result = (await call('orchestration.conditionalInject', makeParams(task.id))) as {
+        operation: { status: string; failure_reason: string }
+      }
+
+      expect(result.operation).toMatchObject({
+        status: 'rejected',
+        failure_reason: 'worker_topology_changed'
+      })
+      expect(db.getDispatchContext(task.id)).toBeUndefined()
+      expect(send).not.toHaveBeenCalled()
+    })
+
+    it('quarantines an uncertain write and never retries it', async () => {
+      setup()
+      provideTopology()
+      const task = createOwnedTask()
+      const send = vi
+        .spyOn(runtime, 'sendTerminalAgentPrompt')
+        .mockRejectedValue(new Error('connection_lost_after_write'))
+      const params = makeParams(task.id)
+
+      const first = (await call('orchestration.conditionalInject', params)) as {
+        operation: { status: string }
+      }
+      const replay = (await call('orchestration.conditionalInject', params)) as {
+        operation: { status: string }
+      }
+
+      expect(first.operation.status).toBe('indeterminate')
+      expect(replay.operation.status).toBe('indeterminate')
+      expect(db.getTask(task.id)?.status).toBe('blocked')
+      expect(send).toHaveBeenCalledTimes(1)
     })
   })
 

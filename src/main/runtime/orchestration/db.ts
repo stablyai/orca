@@ -35,7 +35,8 @@ import type {
   FederatedDispatchRow,
   RemoteDispatchAttachmentRow,
   FederationRelayDirection,
-  FederationRelayItemRow
+  FederationRelayItemRow,
+  ConditionalInjectOperationRow
 } from './types'
 import { buildOrchestrationTaskDisplayMetadata } from '../../../shared/orchestration-task-display'
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../shared/orchestration-rpc-contract'
@@ -277,8 +278,8 @@ type RunListCursor = {
   id: string
 }
 
-// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup, v23 worker terminal resource ownership, v24 creator-incarnation authority, v25 active Dispatch handle lookup.
-const SCHEMA_VERSION = 25
+// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup, v23 worker terminal resource ownership, v24 creator-incarnation authority, v25 active Dispatch handle lookup, v26 at-most-once conditional inject operations.
+const SCHEMA_VERSION = 26
 
 function hardenOrchestrationDatabaseFiles(dbPath: string | ':memory:'): void {
   if (dbPath === ':memory:' || process.platform === 'win32') {
@@ -384,6 +385,33 @@ export class OrchestrationDb {
         updated_at          TEXT NOT NULL DEFAULT (datetime('now')),
         PRIMARY KEY (caller_fingerprint, request_id)
       );
+
+      CREATE TABLE IF NOT EXISTS conditional_inject_operations (
+        operation_id          TEXT PRIMARY KEY,
+        request_digest        TEXT NOT NULL,
+        attempt_id            TEXT NOT NULL,
+        dag_node_id           TEXT NOT NULL,
+        task_id               TEXT NOT NULL,
+        payload_body          TEXT,
+        coordinator_handle    TEXT NOT NULL,
+        coordinator_pane_key  TEXT NOT NULL,
+        worker_handle         TEXT NOT NULL,
+        worker_pane_key       TEXT NOT NULL,
+        worktree_id           TEXT NOT NULL,
+        runtime_id            TEXT NOT NULL,
+        status                TEXT NOT NULL DEFAULT 'prepared'
+          CHECK(status IN (
+            'prepared', 'delivery-started', 'acknowledged', 'rejected', 'indeterminate'
+          )),
+        dispatch_id           TEXT,
+        bytes_written         INTEGER,
+        failure_reason        TEXT,
+        created_at            TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at            TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_conditional_inject_active_task
+        ON conditional_inject_operations(task_id) WHERE status != 'rejected';
 
       CREATE TABLE IF NOT EXISTS worker_dispatches (
         dispatch_id            TEXT PRIMARY KEY,
@@ -6223,6 +6251,171 @@ export class OrchestrationDb {
     return this.db.prepare('SELECT * FROM dispatch_contexts WHERE id = ?').get(dispatchId) as
       | DispatchContextRow
       | undefined
+  }
+
+  getConditionalInjectOperation(operationId: string): ConditionalInjectOperationRow | undefined {
+    return this.db
+      .prepare('SELECT * FROM conditional_inject_operations WHERE operation_id = ?')
+      .get(operationId) as ConditionalInjectOperationRow | undefined
+  }
+
+  prepareConditionalInjectOperation(params: {
+    operationId: string
+    requestDigest: string
+    attemptId: string
+    dagNodeId: string
+    taskId: string
+    payloadBody: string
+    coordinatorHandle: string
+    coordinatorPaneKey: string
+    workerHandle: string
+    workerPaneKey: string
+    worktreeId: string
+    runtimeId: string
+  }): { operation: ConditionalInjectOperationRow; created: boolean } {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const existing = this.getConditionalInjectOperation(params.operationId)
+      if (existing) {
+        if (existing.request_digest !== params.requestDigest) {
+          throw new OrchestrationError(
+            'idempotency_conflict',
+            `Operation ${params.operationId} already has a different request digest.`
+          )
+        }
+        this.db.exec('COMMIT')
+        return { operation: existing, created: false }
+      }
+      const conflicting = this.db
+        .prepare(
+          `SELECT operation_id FROM conditional_inject_operations
+           WHERE task_id = ? AND status != 'rejected' LIMIT 1`
+        )
+        .get(params.taskId) as { operation_id: string } | undefined
+      if (conflicting) {
+        throw new OrchestrationError(
+          'operation_conflict',
+          `Task ${params.taskId} is already fenced by Operation ${conflicting.operation_id}.`
+        )
+      }
+      this.db
+        .prepare(
+          `INSERT INTO conditional_inject_operations (
+             operation_id, request_digest, attempt_id, dag_node_id, task_id, payload_body,
+             coordinator_handle, coordinator_pane_key, worker_handle, worker_pane_key,
+             worktree_id, runtime_id
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+        .run(
+          params.operationId,
+          params.requestDigest,
+          params.attemptId,
+          params.dagNodeId,
+          params.taskId,
+          params.payloadBody,
+          params.coordinatorHandle,
+          params.coordinatorPaneKey,
+          params.workerHandle,
+          params.workerPaneKey,
+          params.worktreeId,
+          params.runtimeId
+        )
+      const operation = this.getConditionalInjectOperation(params.operationId)
+      if (!operation) {
+        throw new Error('conditional_inject_prepare_failed')
+      }
+      this.db.exec('COMMIT')
+      return { operation, created: true }
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
+  rejectConditionalInjectOperation(
+    operationId: string,
+    reason: string
+  ): ConditionalInjectOperationRow {
+    this.db
+      .prepare(
+        `UPDATE conditional_inject_operations
+         SET status = 'rejected', failure_reason = ?, updated_at = datetime('now')
+         WHERE operation_id = ? AND status = 'prepared'`
+      )
+      .run(reason, operationId)
+    return this.getConditionalInjectOperation(operationId) as ConditionalInjectOperationRow
+  }
+
+  startConditionalInjectDelivery(params: {
+    operationId: string
+    taskId: string
+    workerHandle: string
+    workerPaneKey: string
+    processIncarnation: string
+    launchTokenHash?: string
+  }): {
+    operation: ConditionalInjectOperationRow
+    dispatch: DispatchContextRow | null
+    winner: boolean
+  } {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const operation = this.getConditionalInjectOperation(params.operationId)
+      if (!operation) {
+        throw new OrchestrationError(
+          'operation_not_found',
+          `Operation ${params.operationId} was not found.`
+        )
+      }
+      if (operation.status !== 'prepared') {
+        const dispatch = operation.dispatch_id
+          ? (this.getDispatchContextById(operation.dispatch_id) ?? null)
+          : null
+        this.db.exec('COMMIT')
+        return { operation, dispatch, winner: false }
+      }
+      const dispatch = this.createDispatchContext(
+        params.taskId,
+        params.workerHandle,
+        params.workerPaneKey,
+        params.launchTokenHash,
+        params.processIncarnation
+      )
+      const changed = this.db
+        .prepare(
+          `UPDATE conditional_inject_operations
+           SET status = 'delivery-started', dispatch_id = ?, updated_at = datetime('now')
+           WHERE operation_id = ? AND status = 'prepared'`
+        )
+        .run(dispatch.id, params.operationId)
+      if (changed.changes !== 1) {
+        throw new Error('conditional_inject_cas_lost')
+      }
+      const started = this.getConditionalInjectOperation(params.operationId)
+      if (!started) {
+        throw new Error('conditional_inject_start_failed')
+      }
+      this.db.exec('COMMIT')
+      return { operation: started, dispatch, winner: true }
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
+  settleConditionalInjectOperation(
+    operationId: string,
+    status: 'acknowledged' | 'indeterminate',
+    details: { bytesWritten?: number; failureReason?: string } = {}
+  ): ConditionalInjectOperationRow {
+    this.db
+      .prepare(
+        `UPDATE conditional_inject_operations
+         SET status = ?, bytes_written = ?, failure_reason = ?, updated_at = datetime('now')
+         WHERE operation_id = ? AND status = 'delivery-started'`
+      )
+      .run(status, details.bytesWritten ?? null, details.failureReason ?? null, operationId)
+    return this.getConditionalInjectOperation(operationId) as ConditionalInjectOperationRow
   }
 
   commitDispatchLaunchTokenHash(dispatchId: string, launchTokenHash: string): DispatchContextRow {

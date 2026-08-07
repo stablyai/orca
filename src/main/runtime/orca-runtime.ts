@@ -444,6 +444,7 @@ import {
   projectResolvedWorktreeLineage,
   sharesResolvedWorktreeLineageBoundary
 } from '../../shared/resolved-worktree-lineage'
+import { projectResolvedWorkspaceLineage } from '../../shared/workspace-lineage-projection'
 import { folderWorkspaceToWorktree } from '../../shared/folder-workspace-worktree'
 import type {
   FolderWorkspacePathStatus,
@@ -2494,6 +2495,7 @@ type ResolvedWorktree = Worktree & {
   parentWorktreeId: string | null
   childWorktreeIds: string[]
   lineage: WorktreeLineage | null
+  workspaceLineage: WorkspaceLineage | null
   git: GitWorktreeInfo
 }
 
@@ -20819,6 +20821,19 @@ export class OrcaRuntimeService {
   }
 
   async showManagedWorktree(worktreeSelector: string) {
+    const rawSelector = worktreeSelector.startsWith('id:')
+      ? worktreeSelector.slice('id:'.length)
+      : worktreeSelector
+    const parsed = parseWorkspaceKey(rawSelector)
+    if (parsed?.type === 'folder') {
+      const folderWorkspace = this.store
+        ?.getFolderWorkspaces?.()
+        .find((workspace) => workspace.id === parsed.folderWorkspaceId)
+      if (!folderWorkspace) {
+        throw new Error('selector_not_found')
+      }
+      return this.folderWorkspaceToResolvedWorktree(folderWorkspace)
+    }
     return await this.resolveWorktreeSelector(worktreeSelector)
   }
 
@@ -21140,7 +21155,7 @@ export class OrcaRuntimeService {
   }
 
   private recordCreatedWorktreeLineage(
-    worktree: Pick<Worktree, 'id' | 'instanceId'>,
+    worktree: Pick<Worktree, 'id' | 'instanceId' | 'hostId'>,
     lineageResolution: WorktreeLineageResolution
   ): {
     lineage: WorktreeLineage | null
@@ -21156,6 +21171,11 @@ export class OrcaRuntimeService {
 
     const childInstanceId = worktree.instanceId
     const parentInstanceId = lineageResolution.parent.instanceId
+    const childHostId = worktree.hostId ?? null
+    const parentHostId =
+      lineageResolution.parent.type === 'worktree'
+        ? (lineageResolution.parent.worktree.hostId ?? null)
+        : (folderWorkspaceToWorktree(lineageResolution.parent.folderWorkspace).hostId ?? null)
     const createdAt = Date.now()
     if (
       lineageResolution.parent.type === 'worktree' &&
@@ -21194,12 +21214,21 @@ export class OrcaRuntimeService {
         }
       })
     }
-    if (childInstanceId && this.store?.setWorkspaceLineage) {
+    if (
+      childInstanceId &&
+      parentInstanceId &&
+      childHostId &&
+      parentHostId &&
+      childHostId === parentHostId &&
+      this.store?.setWorkspaceLineage
+    ) {
       workspaceLineage = this.store.setWorkspaceLineage({
         childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
         childInstanceId,
+        childHostId,
         parentWorkspaceKey: lineageResolution.parent.workspaceKey,
         parentInstanceId,
+        parentHostId,
         origin: lineageResolution.origin,
         capture: lineageResolution.capture,
         ...(lineageResolution.taskId ? { taskId: lineageResolution.taskId } : {}),
@@ -23440,7 +23469,7 @@ export class OrcaRuntimeService {
       const parent = await this.resolveWorktreeSelector(lineage.parentWorktree)
 
       this.validateLineageParent(worktree, parent)
-      if (!worktree.instanceId || !parent.instanceId) {
+      if (!worktree.instanceId || !parent.instanceId || !worktree.hostId || !parent.hostId) {
         throw new RuntimeLineageError(
           'LINEAGE_PARENT_CONTEXT_MISSING',
           'Worktree instance identity was unavailable.'
@@ -23465,8 +23494,10 @@ export class OrcaRuntimeService {
       this.store.setWorkspaceLineage?.({
         childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
         childInstanceId: worktree.instanceId,
+        childHostId: worktree.hostId,
         parentWorkspaceKey: worktreeWorkspaceKey(parent.id),
         parentInstanceId: parent.instanceId,
+        parentHostId: parent.hostId,
         origin: 'manual',
         capture: { source: 'manual-action', confidence: 'explicit' },
         createdAt
@@ -27924,6 +27955,7 @@ export class OrcaRuntimeService {
       parentWorktreeId: null,
       childWorktreeIds: [],
       lineage: null,
+      workspaceLineage: null,
       git: {
         path: worktree.path,
         head: worktree.head,
@@ -28096,7 +28128,7 @@ export class OrcaRuntimeService {
         type: 'folder',
         workspaceKey: folderWorkspaceKey(folderWorkspace.id),
         folderWorkspace,
-        instanceId: null
+        instanceId: folderWorkspace.id
       }
     }
     const worktreeSelector = parsed?.type === 'worktree' ? `id:${parsed.worktreeId}` : selector
@@ -28558,6 +28590,7 @@ export class OrcaRuntimeService {
       parentWorktreeId: null,
       childWorktreeIds: [],
       lineage: null,
+      workspaceLineage: null,
       git,
       displayName: merged.displayName,
       comment: merged.comment
@@ -28709,9 +28742,13 @@ export class OrcaRuntimeService {
         })
       })
     )
-    const worktrees = projectResolvedWorktreeLineage(
-      perRepoWorktrees.flat(),
-      this.store?.getAllWorktreeLineage?.() ?? {}
+    const worktrees = projectResolvedWorkspaceLineage(
+      projectResolvedWorktreeLineage(
+        perRepoWorktrees.flat(),
+        this.store?.getAllWorktreeLineage?.() ?? {}
+      ),
+      this.store?.getFolderWorkspaces?.() ?? [],
+      this.store?.getAllWorkspaceLineage?.() ?? {}
     )
     // Why: short TTL avoids shelling out on every frequent poll while still catching worktree changes made outside Orca.
     if (generation === this.resolvedWorktreeGeneration) {
