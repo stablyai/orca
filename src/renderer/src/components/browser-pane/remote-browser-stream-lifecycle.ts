@@ -315,8 +315,8 @@ export class RemoteBrowserStreamLifecycle {
       )
       return { token, unsubscribe: subscription.unsubscribe }
     } catch (error) {
-      this.liveness.clear()
       if (tokens.isCurrentStreamToken(token)) {
+        this.liveness.clear()
         tokens.releaseStreamToken()
       }
       throw error
@@ -355,7 +355,7 @@ export class RemoteBrowserStreamLifecycle {
   // Why: a failed self-heal attempt must keep retrying with bounded backoff (STA-3483) instead of
   // leaving the pane holding a dead subscription with no way back.
   private scheduleStreamRestart(token: RemoteBrowserStreamToken): void {
-    if (!this.tokens.isCurrentStreamOperation(token) || this.restartScheduler.isScheduled) {
+    if (!this.tokens.isCurrentStreamOperation(token)) {
       return
     }
     this.restartScheduler.schedule(

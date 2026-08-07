@@ -18,9 +18,9 @@ export type RemoteBrowserStreamRestartAttempt = () => Promise<boolean>
 export class RemoteBrowserStreamRestartScheduler {
   private attempt = 0
   private timer: ReturnType<typeof setTimeout> | null = null
-  // Why: clearing the timer cannot recall an attempt already dispatched into an await. Without a
-  // generation, a cancel() during that window is a no-op and the resolving attempt re-arms itself.
   private generation = 0
+  private inFlightGeneration: number | null = null
+  private queuedRun: RemoteBrowserStreamRestartAttempt | null = null
 
   constructor(
     private readonly delaysMs: readonly number[] = REMOTE_BROWSER_STREAM_RESTART_DELAYS_MS,
@@ -34,7 +34,9 @@ export class RemoteBrowserStreamRestartScheduler {
   }
 
   get isScheduled(): boolean {
-    return this.timer !== null
+    return (
+      this.timer !== null || this.inFlightGeneration === this.generation || this.queuedRun !== null
+    )
   }
 
   get isBudgetExhausted(): boolean {
@@ -45,6 +47,10 @@ export class RemoteBrowserStreamRestartScheduler {
   // superseded/missing). Retries stop regardless once the budget is spent.
   schedule(run: RemoteBrowserStreamRestartAttempt): void {
     if (this.timer !== null) {
+      return
+    }
+    if (this.inFlightGeneration === this.generation) {
+      this.queuedRun = run
       return
     }
     if (this.isBudgetExhausted) {
@@ -59,18 +65,13 @@ export class RemoteBrowserStreamRestartScheduler {
       if (generation !== this.generation) {
         return
       }
-      void run()
-        .then((shouldRetry) => {
-          if (generation !== this.generation || !shouldRetry) {
-            return
-          }
-          this.schedule(run)
-        })
-        .catch(() => {
-          if (generation === this.generation) {
-            this.schedule(run)
-          }
-        })
+      this.inFlightGeneration = generation
+      void Promise.resolve()
+        .then(run)
+        .then(
+          (shouldRetry) => this.finishAttempt(generation, run, shouldRetry),
+          () => this.finishAttempt(generation, run, true)
+        )
     }, delayMs)
   }
 
@@ -85,8 +86,24 @@ export class RemoteBrowserStreamRestartScheduler {
       clearTimeout(this.timer)
       this.timer = null
     }
-    // Retires any attempt already in flight so it cannot re-arm after this cancel.
+    this.queuedRun = null
     this.generation += 1
     this.attempt = 0
+  }
+
+  private finishAttempt(
+    generation: number,
+    run: RemoteBrowserStreamRestartAttempt,
+    shouldRetry: boolean
+  ): void {
+    if (generation !== this.generation) {
+      return
+    }
+    this.inFlightGeneration = null
+    const nextRun = this.queuedRun ?? (shouldRetry ? run : null)
+    this.queuedRun = null
+    if (nextRun) {
+      this.schedule(nextRun)
+    }
   }
 }

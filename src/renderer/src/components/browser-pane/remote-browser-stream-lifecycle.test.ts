@@ -66,6 +66,7 @@ function createHarness() {
   let statusGate: Gate | null = null
   let viewportGate: Gate | null = null
   let tabShowGate: Gate | null = null
+  let subscribeGate: Gate | null = null
   let persistentSubscribeError: unknown = null
   const subscribeErrorQueue: unknown[] = []
   let subscribeAttempts = 0
@@ -97,6 +98,11 @@ function createHarness() {
 
   const subscribeScreencast: RemoteBrowserScreencastSubscribe = async (args, callbacks) => {
     subscribeAttempts += 1
+    if (subscribeGate) {
+      const gate = subscribeGate
+      subscribeGate = null
+      await gate.wait
+    }
     // Models the host closing the subscription and only then rejecting the request, which is what
     // src/main/ipc/runtime-environments.ts does on a stale pairing.
     if (closeBeforeNextSubscribeRejects) {
@@ -246,6 +252,11 @@ function createHarness() {
     holdNextTabShow: (): Gate => {
       const gate = createGate()
       tabShowGate = gate
+      return gate
+    },
+    holdNextSubscribe: (): Gate => {
+      const gate = createGate()
+      subscribeGate = gate
       return gate
     }
   }
@@ -592,6 +603,24 @@ describe('RemoteBrowserStreamLifecycle', () => {
 
     expect(harness.errorLog).toHaveLength(errorsBeforeUnmount)
     expect(harness.subscribeAttempts).toBe(1)
+  })
+
+  it('keeps the replacement ready deadline when a superseded subscribe rejects late', async () => {
+    const harness = createHarness()
+    const staleSubscribe = harness.holdNextSubscribe()
+    const closeStaleOpen = harness.lifecycle.open()
+    await settle()
+
+    closeStaleOpen()
+    harness.lifecycle.open()
+    await settle()
+    expect(harness.streams).toHaveLength(1)
+
+    staleSubscribe.fail(rpcError('runtime_unavailable', 'stale subscribe failed'))
+    await settle()
+    await vi.advanceTimersByTimeAsync(400_000)
+
+    expect(harness.reconnectOffered).toBe(true)
   })
 })
 

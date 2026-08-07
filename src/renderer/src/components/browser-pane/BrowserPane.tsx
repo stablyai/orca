@@ -1008,11 +1008,13 @@ function RemoteBrowserPagePane({
     }
   }, [remoteCertificateEnvironmentId, certificateChallengeId])
 
-  currentBrowserTabIdRef.current = browserTab.id
-  currentBrowserTabUrlRef.current = browserTab.url
-  activeRuntimeEnvironmentIdRef.current = activeRuntimeEnvironmentId
-  isActiveRef.current = isActive
-  runtimeWorktreeRef.current = runtimeWorktree
+  useLayoutEffect(() => {
+    currentBrowserTabIdRef.current = browserTab.id
+    currentBrowserTabUrlRef.current = browserTab.url
+    activeRuntimeEnvironmentIdRef.current = activeRuntimeEnvironmentId
+    isActiveRef.current = isActive
+    runtimeWorktreeRef.current = runtimeWorktree
+  }, [activeRuntimeEnvironmentId, browserTab.id, browserTab.url, isActive, runtimeWorktree])
 
   if (!lifecycleRef.current) {
     lifecycleRef.current = new RemoteBrowserStreamLifecycle({
@@ -1468,16 +1470,24 @@ function RemoteBrowserPagePane({
     [lifecycle]
   )
 
-  // Why: assigned during render so the lifecycle — built once, before any of these exist — always
-  // calls the current render's closures instead of a captured stale one.
-  streamBridgeRef.current = {
-    applyTabInfo: applyRemoteTabInfo,
-    clearFrame: clearStreamFrame,
-    handleFrameBytes: updateStreamFrame,
+  // Publish only callbacks from a committed render.
+  useLayoutEffect(() => {
+    streamBridgeRef.current = {
+      applyTabInfo: applyRemoteTabInfo,
+      clearFrame: clearStreamFrame,
+      handleFrameBytes: updateStreamFrame,
+      closeMissingRemotePage,
+      waitForViewportSize: waitForRemoteViewportSize,
+      syncViewport: syncRemoteViewport
+    }
+  }, [
+    applyRemoteTabInfo,
+    clearStreamFrame,
     closeMissingRemotePage,
-    waitForViewportSize: waitForRemoteViewportSize,
-    syncViewport: syncRemoteViewport
-  }
+    syncRemoteViewport,
+    updateStreamFrame,
+    waitForRemoteViewportSize
+  ])
 
   const reconnectRemoteStream = useCallback((): void => {
     // No status write here: bumping the nonce re-runs the open effect, and open() publishes

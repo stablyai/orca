@@ -93,7 +93,7 @@ describe('RemoteBrowserStreamRestartScheduler', () => {
     scheduler.schedule(run)
     await vi.advanceTimersByTimeAsync(500)
     expect(run).toHaveBeenCalledTimes(1)
-    expect(scheduler.isScheduled).toBe(false) // timer fired; the attempt is now awaiting
+    expect(scheduler.isScheduled).toBe(true)
 
     scheduler.cancel()
     resolveAttempt?.(true) // the in-flight attempt reports a transient failure after the cancel
@@ -125,23 +125,40 @@ describe('RemoteBrowserStreamRestartScheduler', () => {
     expect(run).toHaveBeenCalledTimes(2)
   })
 
-  it('grows the delay per counted attempt, never by elapsed wall time, and then stops', () => {
+  it('queues one replacement chain while the current attempt is in flight', async () => {
+    vi.useFakeTimers()
+    const scheduler = new RemoteBrowserStreamRestartScheduler([10, 20])
+    let resolveAttempt: ((shouldRetry: boolean) => void) | undefined
+    const firstRun = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveAttempt = resolve
+        })
+    )
+    const replacementRun = vi.fn(async () => false)
+
+    scheduler.schedule(firstRun)
+    await vi.advanceTimersByTimeAsync(10)
+    scheduler.schedule(replacementRun)
+
+    expect(scheduler.attemptCount).toBe(1)
+    resolveAttempt?.(false)
+    await vi.advanceTimersByTimeAsync(20)
+
+    expect(firstRun).toHaveBeenCalledTimes(1)
+    expect(replacementRun).toHaveBeenCalledTimes(1)
+    expect(scheduler.isScheduled).toBe(false)
+  })
+
+  it('grows the delay per counted attempt, never by elapsed wall time, and then stops', async () => {
     vi.useFakeTimers()
     const scheduler = new RemoteBrowserStreamRestartScheduler()
     const setTimeoutSpy = vi.spyOn(global, 'setTimeout')
     const run = vi.fn(async () => true)
 
-    const observedDelays: number[] = []
-    for (let i = 0; i < 12; i++) {
-      const before = setTimeoutSpy.mock.calls.length
-      scheduler.schedule(run)
-      const call = setTimeoutSpy.mock.calls.at(-1)
-      if (setTimeoutSpy.mock.calls.length === before) {
-        break // budget spent: no further timer is armed
-      }
-      observedDelays.push(call?.[1] as number)
-      vi.advanceTimersByTime(call?.[1] as number)
-    }
+    scheduler.schedule(run)
+    await vi.advanceTimersByTimeAsync(60_000)
+    const observedDelays = setTimeoutSpy.mock.calls.map((call) => call[1])
 
     // Literal on purpose: asserting against the constant under test makes the ladder self-certifying
     // — verified, a change to 12 flat 1s attempts passed the whole suite. The budget's size and shape
@@ -176,16 +193,14 @@ describe('RemoteBrowserStreamRestartScheduler', () => {
     expect(run).toHaveBeenCalledTimes(1)
   })
 
-  it('reset() forgets prior failures so the next drop backs off from the first delay again', () => {
+  it('reset() forgets prior failures so the next drop backs off from the first delay again', async () => {
     vi.useFakeTimers()
     const scheduler = new RemoteBrowserStreamRestartScheduler()
     const setTimeoutSpy = vi.spyOn(global, 'setTimeout')
-    const run = vi.fn(async () => true)
+    const run = vi.fn().mockResolvedValueOnce(true).mockResolvedValue(false)
 
     scheduler.schedule(run)
-    vi.advanceTimersByTime(500)
-    scheduler.schedule(run)
-    vi.advanceTimersByTime(1000)
+    await vi.advanceTimersByTimeAsync(1_500)
     expect(scheduler.attemptCount).toBe(2)
 
     // A confirmed-live stream ("ready") resets the counter.
