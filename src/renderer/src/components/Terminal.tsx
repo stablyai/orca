@@ -186,7 +186,9 @@ import {
   useManualTerminalWorktreeParking
 } from './terminal-pane/use-manual-terminal-worktree-parking'
 
-const EditorPanel = lazy(() => import('./editor/EditorPanel'))
+const EditorPanel = lazy(() => import('./editor/EditorPanel'), {
+  reloadKey: 'terminal-editor-panel'
+})
 
 // Why: gate handler runs after a dialog advances so a stray carry-over click can't act on the next dialog; ~200ms absorbs a physical double-click while staying responsive.
 const CLOSE_DIALOG_DEBOUNCE_MS = 200

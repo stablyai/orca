@@ -43,7 +43,9 @@ export function shouldShowAutomationsButton(
   return settings?.showAutomationsButton !== false
 }
 
-const AgentDashboardSidebarEntry = lazyWithRetry(() => import('./AgentDashboardSidebarEntry'))
+const AgentDashboardSidebarEntry = lazyWithRetry(() => import('./AgentDashboardSidebarEntry'), {
+  reloadKey: 'sidebar-agent-dashboard-entry'
+})
 
 const SidebarNav = React.memo(function SidebarNav() {
   // Why: this memo boundary needs its own language subscription, while

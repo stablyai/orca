@@ -20,7 +20,9 @@ import { getTabPaneBodyDroppableId, type HoveredTabInsertion } from './useTabDra
 import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
 import { translate } from '@/i18n/i18n'
 
-const EditorPanel = lazy(() => import('../editor/EditorPanel'))
+const EditorPanel = lazy(() => import('../editor/EditorPanel'), {
+  reloadKey: 'tab-group-editor-panel'
+})
 
 export default function TabGroupPanel({
   groupId,

@@ -189,6 +189,7 @@ import {
   ensureAutoUpdaterConfigured
 } from './window/attach-main-window-services'
 import { createMainWindow, loadMainWindow } from './window/createMainWindow'
+import { createRecoveryReloadIntent } from './window/recovery-reload-intent'
 import {
   getDashboardPopoutWindow,
   zoomDashboardPopoutIfFocused
@@ -369,9 +370,9 @@ function emitPluginWorktreeLifecycle(event: RuntimeWorktreeLifecycleEvent): void
       : { worktreeId: event.worktreeId, path: event.path }
   )
 }
-// Why: a reload intent must not leak to a later load; the recovery reload re-fires did-finish-load, so its flag spares live PTYs from the orphan sweep (#5787).
+// Why: a reload intent must not leak to a later load; recovery reloads spare live PTYs from the orphan sweep (#5787).
 const expectedRendererReload = createWebContentsTimedFlag()
-const recoveryReloadInFlight = createWebContentsTimedFlag()
+const lazyChunkRecoveryReloadIntent = createRecoveryReloadIntent()
 // Why: a tray "Settings…" click can precede the renderer's ui:openSettings listener; it pulls this one-shot on mount.
 const pendingOpenSettings = createWebContentsTimedFlag()
 let firstWindowStartupServicesReady: Promise<void> = Promise.resolve()
@@ -691,6 +692,7 @@ function createWebContentsTimedFlag(defaultDurationMs = 10_000): {
 
 function markExpectedRendererReload(webContentsId: number, durationMs = 10_000): void {
   expectedRendererReload.mark(webContentsId, durationMs)
+  lazyChunkRecoveryReloadIntent.armOrdinary(webContentsId)
 }
 
 function clearExpectedRendererReload(webContentsId?: number): void {
@@ -707,13 +709,8 @@ function getExpectedTeardownScope(webContentsId?: number): ExpectedTeardownScope
   return expectedRendererReload.matches(webContentsId) ? 'renderer-reload' : 'none'
 }
 
-function markRecoveryReloadInFlight(webContentsId: number, durationMs = 10_000): void {
-  recoveryReloadInFlight.mark(webContentsId, durationMs)
-}
-
-function isRecoveryReloadInFlight(webContentsId: number): boolean {
-  // Why: consume on read — the recovery reload fires exactly one did-finish-load, so a later genuine reload still sweeps orphaned PTYs.
-  return recoveryReloadInFlight.matches(webContentsId, { consume: true })
+function markRecoveryReloadInFlight(webContentsId: number): void {
+  lazyChunkRecoveryReloadIntent.begin(webContentsId)
 }
 
 function recordAgentStateCrashBreadcrumb(agentType: string, state: string): void {
@@ -1394,8 +1391,19 @@ function openMainWindow(): BrowserWindow {
         }
         recordCrashBreadcrumb('renderer_reload_requested', { ignoreCache })
       },
-      // Why: let the PTY layer skip its orphan sweep on the recovery reload that re-fires did-finish-load, so live local sessions survive (#5787).
-      isRecoveryReloadInFlight,
+      beginRecoveryReload: (webContentsId) => {
+        markExpectedRendererReload(webContentsId)
+        return lazyChunkRecoveryReloadIntent.begin(webContentsId)
+      },
+      cancelRecoveryReload: (webContentsId, token) => {
+        const cancelled = lazyChunkRecoveryReloadIntent.cancel(webContentsId, token)
+        if (cancelled) {
+          clearExpectedRendererReload(webContentsId)
+        }
+        return cancelled
+      },
+      noteRendererNavigationStarted: lazyChunkRecoveryReloadIntent.noteNavigationStarted,
+      classifyRendererLoad: lazyChunkRecoveryReloadIntent.classifyLoad,
       onBeforeUpdateQuit: () =>
         preserveAgentAuthBeforeRestart({ codexRuntimeHome, claudeRuntimeAuth, store }),
       updateInstallMode: resolveUpdateInstallMode(isServeMode),
@@ -1412,6 +1420,7 @@ function openMainWindow(): BrowserWindow {
       mainWindow = null
     }
     clearExpectedRendererReload(rendererWebContentsId)
+    lazyChunkRecoveryReloadIntent.forget(rendererWebContentsId)
     automations?.setWebContents(null)
     // Why: detach the hook listener on close so the server never fires into destroyed webContents before reopen, and replay runs only on deliberate recreations.
     agentHookServer.setListener(null)

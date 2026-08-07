@@ -18009,13 +18009,28 @@ describe('registerPtyHandlers', () => {
     }
     spawnMock.mockReturnValue(proc)
 
-    registerPtyHandlers(mainWindow as never, runtime as never)
+    registerPtyHandlers(
+      mainWindow as never,
+      runtime as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        classifyRendererLoad: () => 'ordinary'
+      }
+    )
     // Why both: a reload fires the gate reset AND the orphan cleanup, so invoke every registered listener like a real did-finish-load.
     const didFinishLoadHandlers = mainWindow.webContents.on.mock.calls
       .filter(([eventName]) => eventName === 'did-finish-load')
       .map(([, handler]) => handler as () => void)
     expect(didFinishLoadHandlers.length).toBeGreaterThan(0)
+    const didStartNavigationHandler = mainWindow.webContents.on.mock.calls.find(
+      ([eventName]) => eventName === 'did-start-navigation'
+    )?.[1] as ((details: { isMainFrame: boolean; isSameDocument: boolean }) => void) | undefined
+    expect(didStartNavigationHandler).toBeTypeOf('function')
     const didFinishLoad = (): void => {
+      didStartNavigationHandler?.({ isMainFrame: true, isSameDocument: false })
       for (const handler of didFinishLoadHandlers) {
         handler()
       }
@@ -18114,7 +18129,7 @@ describe('registerPtyHandlers', () => {
       preAllocateHandleForPty: vi.fn()
     }
     spawnMock.mockReturnValue(proc)
-    const isRecoveryReloadInFlight = vi.fn(() => true)
+    const classifyRendererLoad = vi.fn(() => 'recovery' as const)
     const markClaudePtyExitedSpy = vi.spyOn(livePtyGate, 'markClaudePtyExited')
 
     registerPtyHandlers(
@@ -18124,7 +18139,7 @@ describe('registerPtyHandlers', () => {
       undefined,
       undefined,
       undefined,
-      { isRecoveryReloadInFlight }
+      { classifyRendererLoad }
     )
     // Fire both did-finish-load listeners as a real reload does, else the suppression assertion passes vacuously without reaching the sweep.
     const didFinishLoadHandlers = mainWindow.webContents.on.mock.calls
@@ -18177,7 +18192,7 @@ describe('registerPtyHandlers', () => {
       preAllocateHandleForPty: vi.fn()
     }
     spawnMock.mockReturnValue(proc)
-    const isRecoveryReloadInFlight = vi.fn(() => false)
+    const classifyRendererLoad = vi.fn(() => 'ordinary' as const)
 
     registerPtyHandlers(
       mainWindow as never,
@@ -18186,7 +18201,7 @@ describe('registerPtyHandlers', () => {
       undefined,
       undefined,
       undefined,
-      { isRecoveryReloadInFlight }
+      { classifyRendererLoad }
     )
     // Fire both did-finish-load listeners (gate reset + orphan sweep) as a real reload does.
     const didFinishLoadHandlers = mainWindow.webContents.on.mock.calls
@@ -18221,7 +18236,7 @@ describe('registerPtyHandlers', () => {
       onPtyExit: vi.fn(),
       preAllocateHandleForPty: vi.fn()
     }
-    const isRecoveryReloadInFlight = vi.fn(() => true)
+    const classifyRendererLoad = vi.fn(() => 'recovery' as const)
 
     registerPtyHandlers(
       mainWindow as never,
@@ -18230,7 +18245,7 @@ describe('registerPtyHandlers', () => {
       undefined,
       undefined,
       undefined,
-      { isRecoveryReloadInFlight }
+      { classifyRendererLoad }
     )
     // Fire ALL did-finish-load listeners (gate reset + orphan sweep) as a real reload does; the sweep listener is under test.
     const didFinishLoadHandlers = mainWindow.webContents.on.mock.calls

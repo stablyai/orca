@@ -7,10 +7,12 @@ import {
 } from '@/lib/react-error-boundary-reporting'
 import type { CrashReportRecord } from '../../../../shared/crash-reporting'
 
-const CrashReportDialogSurface = lazy(() =>
-  import('./CrashReportDialogSurface').then((module) => ({
-    default: module.CrashReportDialogSurface
-  }))
+const CrashReportDialogSurface = lazy(
+  () =>
+    import('./CrashReportDialogSurface').then((module) => ({
+      default: module.CrashReportDialogSurface
+    })),
+  { reloadKey: 'crash-report-dialog-surface' }
 )
 
 export function CrashReportDialog(): React.JSX.Element | null {

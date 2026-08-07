@@ -326,72 +326,120 @@ function WindowControls(): React.JSX.Element {
   )
 }
 
-const Landing = lazy(() => import('./components/Landing'))
+// reloadKey names the failing chunk on the recovery breadcrumbs and LazyChunkLoadError.
+const Landing = lazy(() => import('./components/Landing'), { reloadKey: 'landing' })
 const WorktreeCreationPanel = lazy(
-  () => import('./components/worktree-creation/WorktreeCreationPanel')
+  () => import('./components/worktree-creation/WorktreeCreationPanel'),
+  { reloadKey: 'worktree-creation-panel' }
 )
-const TaskPage = lazy(() => import('./components/TaskPage'))
-const AutomationsPage = lazy(() => import('./components/automations/AutomationsPage'))
-const ActivityPrototypePage = lazy(() => import('./components/activity/ActivityPrototypePage'))
-const Settings = lazy(() => import('./components/settings/Settings'))
-const SkillsPage = lazy(() => import('./components/skills/SkillsPage'))
-const WorkspaceSpacePage = lazy(() => import('./components/workspace-space/WorkspaceSpacePage'))
-const MobilePage = lazy(() => import('./components/mobile/MobilePage'))
-const QuickOpen = lazy(() => import('./components/QuickOpen'))
-const WorktreeJumpPalette = lazy(() => import('./components/WorktreeJumpPalette'))
+const TaskPage = lazy(() => import('./components/TaskPage'), { reloadKey: 'task-page' })
+const AutomationsPage = lazy(() => import('./components/automations/AutomationsPage'), {
+  reloadKey: 'automations-page'
+})
+const ActivityPrototypePage = lazy(() => import('./components/activity/ActivityPrototypePage'), {
+  reloadKey: 'activity-prototype-page'
+})
+const Settings = lazy(() => import('./components/settings/Settings'), { reloadKey: 'settings' })
+const SkillsPage = lazy(() => import('./components/skills/SkillsPage'), {
+  reloadKey: 'skills-page'
+})
+const WorkspaceSpacePage = lazy(() => import('./components/workspace-space/WorkspaceSpacePage'), {
+  reloadKey: 'workspace-space-page'
+})
+const MobilePage = lazy(() => import('./components/mobile/MobilePage'), {
+  reloadKey: 'mobile-page'
+})
+const QuickOpen = lazy(() => import('./components/QuickOpen'), { reloadKey: 'quick-open' })
+const WorktreeJumpPalette = lazy(() => import('./components/WorktreeJumpPalette'), {
+  reloadKey: 'worktree-jump-palette'
+})
 const WorkspaceCleanupDialog = lazy(
-  () => import('./components/workspace-cleanup/WorkspaceCleanupDialog')
+  () => import('./components/workspace-cleanup/WorkspaceCleanupDialog'),
+  { reloadKey: 'workspace-cleanup-dialog' }
 )
-const Terminal = lazy(() => import('./components/Terminal'))
-const StatusBar = lazy(() =>
-  import('./components/status-bar/StatusBar').then((module) => ({ default: module.StatusBar }))
+const Terminal = lazy(() => import('./components/Terminal'), { reloadKey: 'terminal' })
+const StatusBar = lazy(
+  () =>
+    import('./components/status-bar/StatusBar').then((module) => ({ default: module.StatusBar })),
+  { reloadKey: 'status-bar' }
 )
-const SetupGuideModal = lazy(() => import('./components/setup-guide/SetupGuideModal'))
-const FeatureWallModal = lazy(() => import('./components/feature-wall/FeatureWallModal'))
-const FeatureTipsModal = lazy(() => import('./components/feature-tips/FeatureTipsModal'))
-const AddRepoDialog = lazy(() => import('./components/sidebar/AddRepoDialog'))
-const NonGitFolderDialog = lazy(() => import('./components/sidebar/NonGitFolderDialog'))
+const SetupGuideModal = lazy(() => import('./components/setup-guide/SetupGuideModal'), {
+  reloadKey: 'setup-guide-modal'
+})
+const FeatureWallModal = lazy(() => import('./components/feature-wall/FeatureWallModal'), {
+  reloadKey: 'feature-wall-modal'
+})
+const FeatureTipsModal = lazy(() => import('./components/feature-tips/FeatureTipsModal'), {
+  reloadKey: 'feature-tips-modal'
+})
+const AddRepoDialog = lazy(() => import('./components/sidebar/AddRepoDialog'), {
+  reloadKey: 'add-repo-dialog'
+})
+const NonGitFolderDialog = lazy(() => import('./components/sidebar/NonGitFolderDialog'), {
+  reloadKey: 'non-git-folder-dialog'
+})
 const AddProjectFromFolderDialog = lazy(
-  () => import('./components/sidebar/AddProjectFromFolderDialog')
+  () => import('./components/sidebar/AddProjectFromFolderDialog'),
+  { reloadKey: 'add-project-from-folder-dialog' }
 )
-const ProjectAddedDialog = lazy(() => import('./components/sidebar/ProjectAddedDialog'))
-const DeleteWorktreeDialog = lazy(() => import('./components/sidebar/DeleteWorktreeDialog'))
-const DictationController = lazy(() =>
-  import('./components/dictation/DictationController').then((module) => ({
-    default: module.DictationController
-  }))
+const ProjectAddedDialog = lazy(() => import('./components/sidebar/ProjectAddedDialog'), {
+  reloadKey: 'project-added-dialog'
+})
+const DeleteWorktreeDialog = lazy(() => import('./components/sidebar/DeleteWorktreeDialog'), {
+  reloadKey: 'delete-worktree-dialog'
+})
+const DictationController = lazy(
+  () =>
+    import('./components/dictation/DictationController').then((module) => ({
+      default: module.DictationController
+    })),
+  { reloadKey: 'dictation-controller' }
 )
-const SshPassphraseDialog = lazy(() =>
-  import('./components/settings/SshPassphraseDialog').then((module) => ({
-    default: module.SshPassphraseDialog
-  }))
+const SshPassphraseDialog = lazy(
+  () =>
+    import('./components/settings/SshPassphraseDialog').then((module) => ({
+      default: module.SshPassphraseDialog
+    })),
+  { reloadKey: 'ssh-passphrase-dialog' }
 )
-const UpdateCard = lazy(() =>
-  import('./components/UpdateCard').then((module) => ({ default: module.UpdateCard }))
+const UpdateCard = lazy(
+  () => import('./components/UpdateCard').then((module) => ({ default: module.UpdateCard })),
+  { reloadKey: 'update-card' }
 )
 const RemoteServerUpdateDialog = lazy(
-  () => import('./components/settings/RemoteServerUpdateDialog')
+  () => import('./components/settings/RemoteServerUpdateDialog'),
+  { reloadKey: 'remote-server-update-dialog' }
 )
-const ContextualTourOverlay = lazy(() =>
-  import('./components/contextual-tours/ContextualTourOverlay').then((module) => ({
-    default: module.ContextualTourOverlay
-  }))
+const ContextualTourOverlay = lazy(
+  () =>
+    import('./components/contextual-tours/ContextualTourOverlay').then((module) => ({
+      default: module.ContextualTourOverlay
+    })),
+  { reloadKey: 'contextual-tour-overlay' }
 )
-const SetupGuideTelemetryObserver = lazy(() =>
-  import('./components/setup-guide/SetupGuideTelemetryObserver').then((module) => ({
-    default: module.SetupGuideTelemetryObserver
-  }))
+const SetupGuideTelemetryObserver = lazy(
+  () =>
+    import('./components/setup-guide/SetupGuideTelemetryObserver').then((module) => ({
+      default: module.SetupGuideTelemetryObserver
+    })),
+  { reloadKey: 'setup-guide-telemetry-observer' }
 )
-const FloatingTerminalPanel = lazy(() =>
-  import('./components/floating-terminal/FloatingTerminalPanel').then((module) => ({
-    default: module.FloatingTerminalPanel
-  }))
+const FloatingTerminalPanel = lazy(
+  () =>
+    import('./components/floating-terminal/FloatingTerminalPanel').then((module) => ({
+      default: module.FloatingTerminalPanel
+    })),
+  { reloadKey: 'floating-terminal-panel' }
 )
 // Why: lazy so the WebP asset + overlay module aren't fetched unless the experimental flag is on.
-const PetOverlay = lazy(() => import('./components/pet/PetOverlay'))
-const DashboardPopoutBridge = lazy(() => import('./components/dashboard/DashboardPopoutBridge'))
+const PetOverlay = lazy(() => import('./components/pet/PetOverlay'), { reloadKey: 'pet-overlay' })
+const DashboardPopoutBridge = lazy(() => import('./components/dashboard/DashboardPopoutBridge'), {
+  reloadKey: 'dashboard-popout-bridge'
+})
 // Why: lazy so onboarding's step modules + assets aren't fetched for users past first-launch.
-const OnboardingFlow = lazy(() => import('./components/onboarding/OnboardingFlow'))
+const OnboardingFlow = lazy(() => import('./components/onboarding/OnboardingFlow'), {
+  reloadKey: 'onboarding-flow'
+})
 
 function applyRemoteWorkspacePatchStatus(
   targetId: string,

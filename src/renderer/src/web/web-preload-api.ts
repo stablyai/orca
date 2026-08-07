@@ -549,6 +549,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       relaunch: () => Promise.resolve(window.location.reload()),
       restart: () => Promise.resolve(window.location.reload()),
       reload: () => Promise.resolve(window.location.reload()),
+      beginLazyChunkRecoveryReload: () => Promise.resolve(null),
+      cancelLazyChunkRecoveryReload: () => Promise.resolve(false),
       stageBeforeUnloadSync: ({ sessions, ui }) => {
         // Why: beforeunload cannot await the paired runtime, so the web adapter
         // guarantees immediate browser-local durability for the final snapshot.

@@ -305,7 +305,8 @@ describe('renderer startup runtime routing', () => {
   it('does not load the terminal workbench on the no-workspace landing path', () => {
     const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
 
-    expect(source).toContain("const Terminal = lazy(() => import('./components/Terminal'))")
+    // Trailing paren omitted so the assertion tolerates lazyWithRetry options (reloadKey).
+    expect(source).toContain("const Terminal = lazy(() => import('./components/Terminal')")
     expect(source).not.toContain("from './components/Terminal'")
     expect(source).toContain('const hasMountedTerminalWorkbenchRef = useRef(false)')
     expect(source).toContain('hasMountedTerminalWorkbenchRef.current = true')
@@ -337,10 +338,10 @@ describe('renderer startup runtime routing', () => {
       'utf8'
     )
 
-    expect(appSource).toContain("lazy(() => import('./components/sidebar/AddRepoDialog'))")
-    expect(appSource).toContain("lazy(() => import('./components/sidebar/NonGitFolderDialog'))")
+    expect(appSource).toContain("lazy(() => import('./components/sidebar/AddRepoDialog')")
+    expect(appSource).toContain("lazy(() => import('./components/sidebar/NonGitFolderDialog')")
     expect(appSource).toContain("import('./components/sidebar/AddProjectFromFolderDialog')")
-    expect(appSource).toContain("lazy(() => import('./components/sidebar/ProjectAddedDialog'))")
+    expect(appSource).toContain("lazy(() => import('./components/sidebar/ProjectAddedDialog')")
     expect(appSource).toContain("activeModal === 'add-repo'")
     expect(appSource).toContain("activeModal === 'confirm-non-git-folder'")
     expect(appSource).toContain("activeModal === 'confirm-add-project-from-folder'")
@@ -351,7 +352,7 @@ describe('renderer startup runtime routing', () => {
     expect(appSource).toContain('boundaryId="modal.confirm-add-project-from-folder"')
     expect(appSource).toContain('boundaryId="modal.project-added"')
     expect(appSource).toContain('setTimeout(() =>')
-    expect(sidebarSource).toContain("lazyWithRetry(() => import('./WorktreeMetaDialog'))")
+    expect(sidebarSource).toContain("lazyWithRetry(() => import('./WorktreeMetaDialog')")
     expect(sidebarSource).not.toContain("from './AddRepoDialog'")
     expect(sidebarSource).not.toContain("React.lazy(() => import('./AddRepoDialog'))")
     expect(sidebarSource).not.toContain("React.lazy(() => import('./NonGitFolderDialog'))")

@@ -18,7 +18,9 @@ import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { translate } from '@/i18n/i18n'
 
-const DiffViewer = lazy(() => import('./DiffViewer'))
+const DiffViewer = lazy(() => import('./DiffViewer'), {
+  reloadKey: 'external-file-change-diff-viewer'
+})
 
 type DiskReadState =
   | { kind: 'loading' }

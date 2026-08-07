@@ -20,7 +20,7 @@ import { installWebPreloadApi } from './web-preload-api'
 import { I18nProvider } from '../i18n/I18nProvider'
 import { translate } from '../i18n/i18n'
 
-const App = lazy(() => import('../App'))
+const App = lazy(() => import('../App'), { reloadKey: 'web-app' })
 
 function WebRoot(): React.JSX.Element {
   const initialPairingInput = useMemo(() => readPairingInputFromLocation(window.location), [])

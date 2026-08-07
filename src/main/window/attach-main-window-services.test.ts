@@ -265,6 +265,35 @@ describe('attachMainWindowServices', () => {
     expect(mainWindow.webContents.reload).toHaveBeenCalledTimes(1)
   })
 
+  it('arms and cancels lazy chunk recovery only for the current renderer', () => {
+    const beginRecoveryReload = vi.fn(() => 'intent-1')
+    const cancelRecoveryReload = vi.fn(() => true)
+    const mainWindow = createMainWindow()
+
+    attachMainWindowServices(
+      mainWindow as never,
+      createStore(),
+      createRuntime() as never,
+      undefined,
+      undefined,
+      { beginRecoveryReload, cancelRecoveryReload }
+    )
+
+    const begin = handleMock.mock.calls.find(
+      ([channel]) => channel === 'app:begin-lazy-chunk-recovery-reload'
+    )?.[1]
+    const cancel = handleMock.mock.calls.find(
+      ([channel]) => channel === 'app:cancel-lazy-chunk-recovery-reload'
+    )?.[1]
+
+    expect(begin?.({ sender: { id: 999 } })).toBeNull()
+    expect(begin?.({ sender: mainWindow.webContents })).toBe('intent-1')
+    expect(cancel?.({ sender: { id: 999 } }, 'intent-1')).toBe(false)
+    expect(cancel?.({ sender: mainWindow.webContents }, 'intent-1')).toBe(true)
+    expect(beginRecoveryReload).toHaveBeenCalledWith(1)
+    expect(cancelRecoveryReload).toHaveBeenCalledWith(1, 'intent-1')
+  })
+
   it('retries local PTY registry hydration after local startup services are ready', async () => {
     const localStartup = deferred()
     const store = createStore()

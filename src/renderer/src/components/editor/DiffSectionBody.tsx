@@ -12,7 +12,9 @@ import { LargeDiffFallback } from './LargeDiffFallback'
 import { buildDiffEditorWordWrapOptions } from './diff-editor-word-wrap-options'
 import { monacoFindOptions } from './monaco-find-options'
 
-const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
+const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'), {
+  reloadKey: 'diff-section-image-diff-viewer'
+})
 
 type DiffSectionBodyProps = {
   section: DiffSection

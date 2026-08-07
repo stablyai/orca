@@ -1013,6 +1013,10 @@ export type AppApi = {
   /** Reloads the current app renderer through main so expected renderer
    *  teardown can be classified before Electron emits process-gone events. */
   reload: () => Promise<void>
+  /** Arms and returns the exact main-owned lazy recovery reload intent. */
+  beginLazyChunkRecoveryReload: () => Promise<string | null>
+  /** Cancels this document's intent when its reload did not land. */
+  cancelLazyChunkRecoveryReload: (token: string) => Promise<boolean>
   /** Stages the renderer's final state synchronously before unload. */
   stageBeforeUnloadSync: (args: {
     sessions: { state: WorkspaceSessionState; hostId?: ExecutionHostId }[]

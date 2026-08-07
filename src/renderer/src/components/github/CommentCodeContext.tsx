@@ -23,7 +23,9 @@ import type {
   PRComment
 } from '../../../../shared/types'
 
-const MonacoCodeExcerpt = lazy(() => import('@/components/editor/MonacoCodeExcerpt'))
+const MonacoCodeExcerpt = lazy(() => import('@/components/editor/MonacoCodeExcerpt'), {
+  reloadKey: 'comment-code-context-monaco'
+})
 
 const CODE_CONTEXT_EXPAND_STEP = 5
 const CODE_CONTEXT_FALLBACK_LINES = 20

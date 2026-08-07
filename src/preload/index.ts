@@ -510,6 +510,10 @@ const api = {
         () => ipcRenderer.invoke('app:reload'),
         awaitBeforeUnloadCheckpoint
       ),
+    beginLazyChunkRecoveryReload: (): Promise<string | null> =>
+      ipcRenderer.invoke('app:begin-lazy-chunk-recovery-reload'),
+    cancelLazyChunkRecoveryReload: (token: string): Promise<boolean> =>
+      ipcRenderer.invoke('app:cancel-lazy-chunk-recovery-reload', token),
     stageBeforeUnloadSync: (args: Parameters<PreloadApi['app']['stageBeforeUnloadSync']>[0]) => {
       const result = ipcRenderer.sendSync('app:stage-before-unload-sync', args) as {
         ok?: unknown

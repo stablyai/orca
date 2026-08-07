@@ -74,6 +74,21 @@ describe('native preload destructive app actions', () => {
       expect(calls).toEqual(['prepared', 'app:await-before-unload-checkpoint', `app:${action}`])
     })
 
+    it('routes lazy chunk recovery intent without preparing a second restart', async () => {
+      const api = await loadApi()
+      invoke.mockImplementation(async (channel: string) =>
+        channel === 'app:begin-lazy-chunk-recovery-reload' ? 'intent-1' : true
+      )
+
+      await expect(api.app.beginLazyChunkRecoveryReload()).resolves.toBe('intent-1')
+      await expect(api.app.cancelLazyChunkRecoveryReload('intent-1')).resolves.toBe(true)
+
+      expect(invoke.mock.calls).toEqual([
+        ['app:begin-lazy-chunk-recovery-reload'],
+        ['app:cancel-lazy-chunk-recovery-reload', 'intent-1']
+      ])
+    })
+
     it(`refuses ${action} when the durable checkpoint fails`, async () => {
       const api = await loadApi()
       const aborted = vi.fn()

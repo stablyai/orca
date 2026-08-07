@@ -36,4 +36,47 @@ describe('requestLazyChunkRecoveryReload', () => {
 
     expect(order).toEqual(['flushed', 'reload'])
   })
+
+  it('distinguishes an issued reload that did not land from an unissued request', async () => {
+    let expireGrace: (() => void) | undefined
+    let markReloadIssued: (() => void) | undefined
+    const reloadIssued = new Promise<void>((resolve) => {
+      markReloadIssued = resolve
+    })
+    const reload = vi.spyOn(window.location, 'reload').mockImplementation(() => {
+      markReloadIssued?.()
+    })
+
+    const outcome = requestLazyChunkRecoveryReload(
+      window,
+      async () => undefined,
+      (onElapsed) => {
+        expireGrace = onElapsed
+        return () => undefined
+      }
+    )
+    await reloadIssued
+    if (expireGrace === undefined) {
+      window.dispatchEvent(new Event(ORCA_RENDERER_UNLOAD_PREVENTED_EVENT))
+    }
+    expect(expireGrace).toBeTypeOf('function')
+    expireGrace?.()
+
+    await expect(outcome).resolves.toBe('never-landed')
+    expect(reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports when the reload request throws before it can be issued', async () => {
+    vi.spyOn(window.location, 'reload').mockImplementation(() => {
+      throw new Error('reload unavailable')
+    })
+
+    await expect(
+      requestLazyChunkRecoveryReload(
+        window,
+        async () => undefined,
+        () => () => undefined
+      )
+    ).resolves.toBe('request-failed')
+  })
 })

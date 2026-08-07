@@ -20,6 +20,7 @@ import {
 } from '../../../shared/editor-save-events'
 
 const RELOAD_GUARD_KEY = 'orca:lazy-chunk-reload-attempted'
+const RELOAD_RECOVERY_KEY = 'orca:lazy-chunk-reload-key'
 const LANDED_RELOAD_GUARD_VALUE = 'doc-before-the-reload'
 const Comp: ComponentType = () => null
 const chunkParseError = (): SyntaxError => new SyntaxError("Unexpected token ']'")
@@ -307,6 +308,8 @@ describe('loadLazyWithRetry', () => {
     )
     await vi.advanceTimersByTimeAsync(5000)
 
+    expect(window.sessionStorage.getItem(RELOAD_GUARD_KEY)).toBe(String(performance.timeOrigin))
+    expect(window.sessionStorage.getItem(RELOAD_RECOVERY_KEY)).toBe('right-sidebar')
     expect(recordBreadcrumb).toHaveBeenCalledTimes(1)
     expect(recordBreadcrumb).toHaveBeenCalledWith({
       name: 'lazy_chunk_reload',
@@ -332,6 +335,46 @@ describe('loadLazyWithRetry', () => {
     expect(factory).toHaveBeenCalledTimes(2)
     const caught = await loaded.catch((rejection) => rejection)
     expect(isLazyChunkLoadError(caught)).toBe(false)
+  })
+
+  it('records and consumes recovery evidence only for the chunk that triggered the reload', async () => {
+    const recordBreadcrumb = stubCrashReportsBreadcrumb()
+    window.sessionStorage.setItem(RELOAD_GUARD_KEY, LANDED_RELOAD_GUARD_VALUE)
+    window.sessionStorage.setItem(RELOAD_RECOVERY_KEY, 'right-sidebar')
+
+    await loadLazyWithRetry(() => Promise.resolve({ default: Comp }), {
+      reloadKey: 'terminal'
+    })
+
+    expect(window.sessionStorage.getItem(RELOAD_RECOVERY_KEY)).toBe('right-sidebar')
+    expect(recordBreadcrumb).not.toHaveBeenCalled()
+
+    await loadLazyWithRetry(() => Promise.resolve({ default: Comp }), {
+      reloadKey: 'right-sidebar'
+    })
+
+    expect(window.sessionStorage.getItem(RELOAD_RECOVERY_KEY)).toBeNull()
+    expect(window.sessionStorage.getItem(RELOAD_GUARD_KEY)).toBe(LANDED_RELOAD_GUARD_VALUE)
+    expect(recordBreadcrumb).toHaveBeenCalledWith({
+      name: 'lazy_chunk_reload_recovered',
+      data: {
+        reloadKey: 'right-sidebar',
+        message: 'Chunk imported successfully after reload'
+      }
+    })
+  })
+
+  it('does not consume same-document recovery evidence', async () => {
+    const recordBreadcrumb = stubCrashReportsBreadcrumb()
+    window.sessionStorage.setItem(RELOAD_GUARD_KEY, String(performance.timeOrigin))
+    window.sessionStorage.setItem(RELOAD_RECOVERY_KEY, 'right-sidebar')
+
+    await loadLazyWithRetry(() => Promise.resolve({ default: Comp }), {
+      reloadKey: 'right-sidebar'
+    })
+
+    expect(window.sessionStorage.getItem(RELOAD_RECOVERY_KEY)).toBe('right-sidebar')
+    expect(recordBreadcrumb).not.toHaveBeenCalled()
   })
 
   it('keeps the reload guard set across a successful load (no second reload in one session)', async () => {

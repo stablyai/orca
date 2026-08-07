@@ -30,18 +30,26 @@ import { translate } from '@/i18n/i18n'
 import { CheckRunDetailsPanel } from './CheckRunDetailsPanel'
 import { ExternalFileChangeBanner } from './ExternalFileChangeBanner'
 
-const MonacoEditor = lazy(() => import('./MonacoEditor'))
-const DiffViewer = lazy(() => import('./DiffViewer'))
-const CombinedDiffViewer = lazy(() => import('./CombinedDiffViewer'))
+const MonacoEditor = lazy(() => import('./MonacoEditor'), { reloadKey: 'editor-monaco' })
+const DiffViewer = lazy(() => import('./DiffViewer'), { reloadKey: 'editor-diff-viewer' })
+const CombinedDiffViewer = lazy(() => import('./CombinedDiffViewer'), {
+  reloadKey: 'editor-combined-diff-viewer'
+})
 const RichMarkdownEditor = lazy(() => import('./RichMarkdownEditor'), {
   reloadKey: 'rich-markdown-editor'
 })
-const MarkdownPreview = lazy(() => import('./MarkdownPreview'))
-const ImageViewer = lazy(() => import('./ImageViewer'))
-const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
-const MermaidViewer = lazy(() => import('./MermaidViewer'))
-const CsvViewer = lazy(() => import('./CsvViewer'))
-const IpynbViewer = lazy(() => import('./IpynbViewer'))
+const MarkdownPreview = lazy(() => import('./MarkdownPreview'), {
+  reloadKey: 'editor-markdown-preview'
+})
+const ImageViewer = lazy(() => import('./ImageViewer'), { reloadKey: 'editor-image-viewer' })
+const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'), {
+  reloadKey: 'editor-image-diff-viewer'
+})
+const MermaidViewer = lazy(() => import('./MermaidViewer'), {
+  reloadKey: 'editor-mermaid-viewer'
+})
+const CsvViewer = lazy(() => import('./CsvViewer'), { reloadKey: 'editor-csv-viewer' })
+const IpynbViewer = lazy(() => import('./IpynbViewer'), { reloadKey: 'editor-ipynb-viewer' })
 
 // Why: module-level for a stable no-op identity so read-only tabs don't rebuild callbacks each render.
 const noopEditorContentChange = (_content: string): void => {}

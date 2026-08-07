@@ -50,6 +50,7 @@ export function isLazyChunkLoadError(error: unknown): error is LazyChunkLoadErro
 // The session guard survives a landed reload to prevent loops, but a surviving
 // document clears its own token so a later failure can retry recovery.
 const RELOAD_GUARD_KEY = 'orca:lazy-chunk-reload-attempted'
+const RELOAD_RECOVERY_KEY = 'orca:lazy-chunk-reload-key'
 // Reloading reevaluates this fallback, giving the new document a different token.
 const FALLBACK_RELOAD_TOKEN = `doc-${Math.random().toString(36).slice(2)}`
 const DEFAULT_RETRIES = 2
@@ -78,9 +79,10 @@ function readChunkReloadGuardState(): ReloadGuardState {
   }
 }
 
-function markChunkReloadAttempted(): boolean {
+function markChunkReloadAttempted(reloadKey: string): boolean {
   try {
     window.sessionStorage.setItem(RELOAD_GUARD_KEY, currentDocumentReloadToken())
+    window.sessionStorage.setItem(RELOAD_RECOVERY_KEY, reloadKey)
     return true
   } catch {
     // A reload without a durable guard can loop, so treat write failure as unavailable.
@@ -91,8 +93,28 @@ function markChunkReloadAttempted(): boolean {
 function clearChunkReloadGuard(): void {
   try {
     window.sessionStorage.removeItem(RELOAD_GUARD_KEY)
+    window.sessionStorage.removeItem(RELOAD_RECOVERY_KEY)
   } catch {
     // Best effort: a document that cannot clear the guard just forfeits its retry.
+  }
+}
+
+function recordSuccessfulChunkReloadRecovery(reloadKey: string): void {
+  if (readChunkReloadGuardState() !== 'reload-landed') {
+    return
+  }
+  try {
+    if (window.sessionStorage.getItem(RELOAD_RECOVERY_KEY) !== reloadKey) {
+      return
+    }
+    window.sessionStorage.removeItem(RELOAD_RECOVERY_KEY)
+    recordReloadBreadcrumb(
+      'lazy_chunk_reload_recovered',
+      reloadKey,
+      'Chunk imported successfully after reload'
+    )
+  } catch {
+    // Recovery evidence is best-effort and must not affect the successful import.
   }
 }
 
@@ -106,7 +128,10 @@ export function resetLazyChunkReloadRequestsForTest(): void {
   reloadRequestInFlight = false
 }
 
-type ReloadBreadcrumbName = 'lazy_chunk_reload' | 'lazy_chunk_reload_vetoed'
+type ReloadBreadcrumbName =
+  | 'lazy_chunk_reload'
+  | 'lazy_chunk_reload_recovered'
+  | 'lazy_chunk_reload_vetoed'
 
 function recordReloadBreadcrumb(
   name: ReloadBreadcrumbName,
@@ -180,7 +205,9 @@ export async function loadLazyWithRetry<T extends AnyComponent>(
   let lastError: unknown
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     try {
-      return await factory()
+      const loaded = await factory()
+      recordSuccessfulChunkReloadRecovery(options.reloadKey ?? 'unknown')
+      return loaded
     } catch (error) {
       lastError = error
       if (attempt < retries) {
@@ -199,7 +226,7 @@ export async function loadLazyWithRetry<T extends AnyComponent>(
     reloadGuardState === 'not-attempted' &&
     reloadRequestsThisDocument < MAX_RELOAD_REQUESTS_PER_DOCUMENT
   ) {
-    if (!markChunkReloadAttempted()) {
+    if (!markChunkReloadAttempted(reloadKey)) {
       // No recovery was attempted, so keep normal reporting rather than containing.
       throw lastError
     }

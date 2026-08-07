@@ -3,14 +3,19 @@ import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import type { ActiveRightSidebarTab } from '@/store/slices/editor'
 import { isPluginPanelTabKey } from '../../../../shared/plugins/plugin-manifest'
 
-const FileExplorer = lazy(() => import('./FileExplorer'))
-const SourceControl = lazy(() => import('./SourceControl'))
-const ChecksPanel = lazy(() => import('./ChecksPanel'))
-const PortsPanel = lazy(() => import('./PortsPanel'))
-const AiVaultPanel = lazy(() => import('./AiVaultPanel'))
-const FolderWorkspaceWorktreesPanel = lazy(() => import('./FolderWorkspaceWorktreesPanel'))
-const FolderWorkspacePrChecksPanel = lazy(() => import('./FolderWorkspacePrChecksPanel'))
-const PluginPanel = lazy(() => import('./PluginPanel'))
+// reloadKey names the failing chunk on the recovery breadcrumbs and LazyChunkLoadError.
+const FileExplorer = lazy(() => import('./FileExplorer'), { reloadKey: 'file-explorer' })
+const SourceControl = lazy(() => import('./SourceControl'), { reloadKey: 'source-control' })
+const ChecksPanel = lazy(() => import('./ChecksPanel'), { reloadKey: 'checks-panel' })
+const PortsPanel = lazy(() => import('./PortsPanel'), { reloadKey: 'ports-panel' })
+const AiVaultPanel = lazy(() => import('./AiVaultPanel'), { reloadKey: 'ai-vault-panel' })
+const FolderWorkspaceWorktreesPanel = lazy(() => import('./FolderWorkspaceWorktreesPanel'), {
+  reloadKey: 'folder-workspace-worktrees-panel'
+})
+const FolderWorkspacePrChecksPanel = lazy(() => import('./FolderWorkspacePrChecksPanel'), {
+  reloadKey: 'folder-workspace-pr-checks-panel'
+})
+const PluginPanel = lazy(() => import('./PluginPanel'), { reloadKey: 'plugin-panel' })
 
 type RightSidebarPanelContentProps = {
   effectiveTab: ActiveRightSidebarTab

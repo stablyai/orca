@@ -6,7 +6,7 @@ import { ConflictBanner } from './ConflictComponents'
 import { getDiffContentSignature } from './diff-content-signature'
 import { translate } from '@/i18n/i18n'
 
-const DiffViewer = lazy(() => import('./DiffViewer'))
+const DiffViewer = lazy(() => import('./DiffViewer'), { reloadKey: 'changes-mode-diff-viewer' })
 
 // Why: Changes view mode renders an edit-mode tab as a HEAD-vs-working-tree
 // diff without creating a separate diff-tab object. The draft is the live

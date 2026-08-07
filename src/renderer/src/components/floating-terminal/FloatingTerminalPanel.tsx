@@ -113,7 +113,9 @@ import { selectFloatingTerminalPanelInputs } from './floating-terminal-panel-inp
 const LOCAL_RUNTIME_SETTINGS = { activeRuntimeEnvironmentId: null } as const
 const NO_ACTIVITY_TERMINAL_PORTALS = []
 
-const EditorPanel = lazy(() => import('@/components/editor/EditorPanel'))
+const EditorPanel = lazy(() => import('@/components/editor/EditorPanel'), {
+  reloadKey: 'floating-terminal-editor-panel'
+})
 
 type FloatingTerminalPanelProps = {
   open: boolean

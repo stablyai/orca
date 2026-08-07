@@ -17,12 +17,24 @@ import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
 
-const WorktreeMetaDialog = lazyWithRetry(() => import('./WorktreeMetaDialog'))
-const RemoveFolderDialog = lazyWithRetry(() => import('./RemoveFolderDialog'))
-const WorktreeVisibilityDialog = lazyWithRetry(() => import('./WorktreeVisibilityDialog'))
-const OrcaYamlTrustDialog = lazyWithRetry(() => import('./OrcaYamlTrustDialog'))
-const ForgetSshWorkspaceDialog = lazyWithRetry(() => import('./ForgetSshWorkspaceDialog'))
-const AgentDashboardSidebarHost = lazyWithRetry(() => import('./AgentDashboardSidebarHost'))
+const WorktreeMetaDialog = lazyWithRetry(() => import('./WorktreeMetaDialog'), {
+  reloadKey: 'sidebar-worktree-meta-dialog'
+})
+const RemoveFolderDialog = lazyWithRetry(() => import('./RemoveFolderDialog'), {
+  reloadKey: 'sidebar-remove-folder-dialog'
+})
+const WorktreeVisibilityDialog = lazyWithRetry(() => import('./WorktreeVisibilityDialog'), {
+  reloadKey: 'sidebar-worktree-visibility-dialog'
+})
+const OrcaYamlTrustDialog = lazyWithRetry(() => import('./OrcaYamlTrustDialog'), {
+  reloadKey: 'sidebar-orca-yaml-trust-dialog'
+})
+const ForgetSshWorkspaceDialog = lazyWithRetry(() => import('./ForgetSshWorkspaceDialog'), {
+  reloadKey: 'sidebar-forget-ssh-workspace-dialog'
+})
+const AgentDashboardSidebarHost = lazyWithRetry(() => import('./AgentDashboardSidebarHost'), {
+  reloadKey: 'sidebar-agent-dashboard-host'
+})
 
 const MIN_WIDTH = 220
 const MAX_WIDTH = 500

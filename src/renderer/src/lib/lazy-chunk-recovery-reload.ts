@@ -12,7 +12,7 @@ export type LazyChunkRecoveryReloadOutcome =
   | 'checkpoint-refused'
   /** Something still vetoed beforeunload after the restart latch was armed. */
   | 'unload-vetoed'
-  /** No veto signal, but the document outlived the grace window. */
+  /** The reload was issued, but this document outlived the grace window. */
   | 'never-landed'
   /** The host rejected the reload request before navigation could begin. */
   | 'request-failed'
@@ -20,29 +20,38 @@ export type LazyChunkRecoveryReloadOutcome =
 // Paired-web hosts may veto navigation without emitting the Electron signal.
 const RELOAD_SETTLE_GRACE_MS = 10_000
 
+type RefusedNavigationOutcome = 'unload-vetoed' | 'never-landed'
+type ScheduleReloadGrace = (onElapsed: () => void) => () => void
+
 type RefusedNavigationWait = {
-  outcome: Promise<'unload-vetoed' | 'never-landed'>
+  outcome: Promise<RefusedNavigationOutcome>
   cancel: () => void
 }
 
-function waitForRefusedNavigation(win: Window): RefusedNavigationWait {
-  let graceTimer: ReturnType<typeof setTimeout> | undefined
+const scheduleReloadGrace: ScheduleReloadGrace = (onElapsed) => {
+  const timer = setTimeout(onElapsed, RELOAD_SETTLE_GRACE_MS)
+  return () => clearTimeout(timer)
+}
+
+function waitForRefusedNavigation(
+  win: Window,
+  scheduleGrace: ScheduleReloadGrace
+): RefusedNavigationWait {
+  let cancelGrace = (): void => undefined
   let onUnloadPrevented: () => void = () => undefined
   const cancel = (): void => {
-    if (graceTimer !== undefined) {
-      clearTimeout(graceTimer)
-      graceTimer = undefined
-    }
+    cancelGrace()
+    cancelGrace = () => undefined
     win.removeEventListener(ORCA_RENDERER_UNLOAD_PREVENTED_EVENT, onUnloadPrevented)
   }
-  const outcome = new Promise<'unload-vetoed' | 'never-landed'>((resolve) => {
-    const settle = (result: 'unload-vetoed' | 'never-landed'): void => {
+  const outcome = new Promise<RefusedNavigationOutcome>((resolve) => {
+    const settle = (result: RefusedNavigationOutcome): void => {
       cancel()
       resolve(result)
     }
     onUnloadPrevented = () => settle('unload-vetoed')
     win.addEventListener(ORCA_RENDERER_UNLOAD_PREVENTED_EVENT, onUnloadPrevented)
-    graceTimer = setTimeout(() => settle('never-landed'), RELOAD_SETTLE_GRACE_MS)
+    cancelGrace = scheduleGrace(() => settle('never-landed'))
   })
   return { outcome, cancel }
 }
@@ -52,7 +61,8 @@ export async function requestLazyChunkRecoveryReload(
   win: Window,
   // Hosts without a preload bridge stage durably in-process; nothing to join.
   awaitCheckpoint: () => Promise<void> = () =>
-    window.api?.app?.awaitBeforeUnloadCheckpoint?.() ?? Promise.resolve()
+    win.api?.app?.awaitBeforeUnloadCheckpoint?.() ?? Promise.resolve(),
+  scheduleGrace: ScheduleReloadGrace = scheduleReloadGrace
 ): Promise<LazyChunkRecoveryReloadOutcome> {
   try {
     await prepareRendererForAppRestart(win, {
@@ -66,8 +76,10 @@ export async function requestLazyChunkRecoveryReload(
   }
 
   let cancelRefusalWait = (): void => undefined
+  let recoveryToken: string | null = null
   try {
-    const refused = waitForRefusedNavigation(win)
+    recoveryToken = (await win.api?.app?.beginLazyChunkRecoveryReload?.()) ?? null
+    const refused = waitForRefusedNavigation(win, scheduleGrace)
     cancelRefusalWait = refused.cancel
     win.location.reload()
     return await refused.outcome
@@ -75,6 +87,9 @@ export async function requestLazyChunkRecoveryReload(
     return 'request-failed'
   } finally {
     cancelRefusalWait()
+    if (recoveryToken !== null) {
+      await win.api?.app?.cancelLazyChunkRecoveryReload?.(recoveryToken).catch(() => false)
+    }
     // A surviving document must not retain the restart latch.
     win.dispatchEvent(new Event(ORCA_APP_RESTART_ABORTED_EVENT))
   }

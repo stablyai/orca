@@ -110,19 +110,24 @@ type StatusBarProps = {
   floatingTerminalOpen: boolean
 }
 
-const PetStatusSegment = lazyWithRetry(() =>
-  import('./PetStatusSegment').then((module) => ({ default: module.PetStatusSegment }))
+const PetStatusSegment = lazyWithRetry(
+  () => import('./PetStatusSegment').then((module) => ({ default: module.PetStatusSegment })),
+  { reloadKey: 'status-bar-pet-segment' }
 )
-const ResourceUsageStatusSegment = lazyWithRetry(() =>
-  import('./ResourceUsageStatusSegment').then((module) => ({
-    default: module.ResourceUsageStatusSegment
-  }))
+const ResourceUsageStatusSegment = lazyWithRetry(
+  () =>
+    import('./ResourceUsageStatusSegment').then((module) => ({
+      default: module.ResourceUsageStatusSegment
+    })),
+  { reloadKey: 'status-bar-resource-usage-segment' }
 )
-const PortsStatusSegment = lazyWithRetry(() =>
-  import('./PortsStatusSegment').then((module) => ({ default: module.PortsStatusSegment }))
+const PortsStatusSegment = lazyWithRetry(
+  () => import('./PortsStatusSegment').then((module) => ({ default: module.PortsStatusSegment })),
+  { reloadKey: 'status-bar-ports-segment' }
 )
-const SshStatusSegment = lazyWithRetry(() =>
-  import('./SshStatusSegment').then((module) => ({ default: module.SshStatusSegment }))
+const SshStatusSegment = lazyWithRetry(
+  () => import('./SshStatusSegment').then((module) => ({ default: module.SshStatusSegment })),
+  { reloadKey: 'status-bar-ssh-segment' }
 )
 
 export type CodexStatusRuntimeTarget = {
