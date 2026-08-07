@@ -214,6 +214,20 @@ describe('parseWorkspaceSessionSalvaging', () => {
     }
   })
 
+  it('reports unsalvageable instead of throwing when the validator overflows', () => {
+    // Why: zod materializes an issue per bad field; a payload with hundreds of
+    // thousands of them blows the stack. This parse runs in the Store
+    // constructor, so an escaping RangeError is an unrecoverable launch failure.
+    const worktreeId = 'repo-1::/huge'
+    const tabs = Array.from({ length: 200_000 }, (_, i) => ({ id: `bad-${i}` }))
+    expect(() =>
+      parseWorkspaceSessionSalvaging(baseSession({ tabsByWorktree: { [worktreeId]: tabs } }))
+    ).not.toThrow()
+    expect(
+      parseWorkspaceSessionSalvaging(baseSession({ tabsByWorktree: { [worktreeId]: tabs } })).ok
+    ).toBe(false)
+  })
+
   it('fails for a payload that is not an object', () => {
     const result = parseWorkspaceSessionSalvaging('not a session')
     expect(result.ok).toBe(false)

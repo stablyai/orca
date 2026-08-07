@@ -1,5 +1,9 @@
 import type { WorkspaceSessionState } from './types'
-import { parseWorkspaceSession, workspaceSessionStateSchema } from './workspace-session-schema'
+import {
+  describeWorkspaceSessionError,
+  safeParseWorkspaceSession,
+  WORKSPACE_SESSION_UNVALIDATABLE
+} from './workspace-session-schema'
 
 // Why: each pass drops every corrupt entry zod reported, so N bad records
 // converge in a couple of passes regardless of N. The cap only bounds a payload
@@ -75,9 +79,13 @@ function comparePaths(a: readonly PropertyKey[], b: readonly PropertyKey[]): num
   return a.length - b.length
 }
 
-/** Why: descending path order removes deeper and later-indexed entries first, so
- *  an array splice never shifts an index another planned target still points at. */
+/** Why: descending path order resolves deeper targets before an ancestor entry
+ *  they sit under is deleted. Array elements are collected per parent and removed
+ *  in one rebuild rather than spliced individually — a splice per element is an
+ *  O(n) memmove, so a payload with thousands of bad records in one array would
+ *  make repair quadratic on the startup path. */
 function applyDrops(session: Record<string, unknown>, targets: readonly PropertyKey[][]): void {
+  const droppedIndexesByArray = new Map<unknown[], Set<number>>()
   for (const target of [...targets].sort((a, b) => comparePaths(b, a))) {
     const parent = containerAt(session, target.slice(0, -1))
     const key = target.at(-1)
@@ -86,12 +94,21 @@ function applyDrops(session: Record<string, unknown>, targets: readonly Property
     }
     if (Array.isArray(parent)) {
       if (typeof key === 'number' && key < parent.length) {
-        parent.splice(key, 1)
+        const dropped = droppedIndexesByArray.get(parent) ?? new Set<number>()
+        dropped.add(key)
+        droppedIndexesByArray.set(parent, dropped)
       }
       continue
     }
     if (parent != null && typeof parent === 'object' && Object.hasOwn(parent, key)) {
       delete (parent as Record<PropertyKey, unknown>)[key]
+    }
+  }
+  for (const [array, dropped] of droppedIndexesByArray) {
+    const kept = array.filter((_value, index) => !dropped.has(index))
+    array.length = 0
+    for (const value of kept) {
+      array.push(value)
     }
   }
 }
@@ -105,12 +122,15 @@ export function parseWorkspaceSessionSalvaging(
   raw: unknown,
   defaults?: WorkspaceSessionState
 ): SalvagedWorkspaceSession {
-  const first = parseWorkspaceSession(raw)
-  if (first.ok) {
-    return { ok: true, value: first.value, droppedPaths: [] }
+  let result = safeParseWorkspaceSession(raw)
+  if (!result) {
+    return { ok: false, error: WORKSPACE_SESSION_UNVALIDATABLE }
+  }
+  if (result.success) {
+    return { ok: true, value: result.data, droppedPaths: [] }
   }
   if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) {
-    return first
+    return { ok: false, error: describeWorkspaceSessionError(result.error) }
   }
   const working = structuredClone(raw) as Record<string, unknown>
   const droppedPaths: string[] = []
@@ -124,9 +144,17 @@ export function parseWorkspaceSessionSalvaging(
   const restoredDefaultKeys = new Set<string>()
 
   for (let pass = 0; pass < MAX_SALVAGE_PASSES; pass += 1) {
-    const result = workspaceSessionStateSchema.safeParse(working)
-    if (result.success) {
-      return { ok: true, value: result.data, droppedPaths }
+    // Why: pass 0 reuses the parse above — `working` is a faithful clone of `raw`,
+    // so re-validating a multi-MB session for the same issue set is pure startup cost.
+    if (pass > 0) {
+      const reparsed = safeParseWorkspaceSession(working)
+      if (!reparsed) {
+        return { ok: false, error: WORKSPACE_SESSION_UNVALIDATABLE }
+      }
+      result = reparsed
+      if (result.success) {
+        return { ok: true, value: result.data, droppedPaths }
+      }
     }
     const droppedThisPass = new Map<string, number>()
     const targets: PropertyKey[][] = []
@@ -179,6 +207,11 @@ export function parseWorkspaceSessionSalvaging(
     droppedLastPass = droppedThisPass
   }
 
-  const exhausted = parseWorkspaceSession(working)
-  return exhausted.ok ? { ok: true, value: exhausted.value, droppedPaths } : exhausted
+  const exhausted = safeParseWorkspaceSession(working)
+  if (!exhausted) {
+    return { ok: false, error: WORKSPACE_SESSION_UNVALIDATABLE }
+  }
+  return exhausted.success
+    ? { ok: true, value: exhausted.data, droppedPaths }
+    : { ok: false, error: describeWorkspaceSessionError(exhausted.error) }
 }

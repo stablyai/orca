@@ -325,16 +325,41 @@ export type ParsedWorkspaceSession =
   | { ok: true; value: WorkspaceSessionState }
   | { ok: false; error: string }
 
+/** Why: keep the error compact — a zod issue dump is noisy and most of the time
+ *  only the first divergent field is actionable for debugging. */
+export function describeWorkspaceSessionError(error: z.ZodError): string {
+  const firstIssue = error.issues[0]
+  const path = firstIssue?.path.join('.') || '<root>'
+  return `${path}: ${firstIssue?.message ?? 'invalid session'}`
+}
+
+export const WORKSPACE_SESSION_UNVALIDATABLE = '<root>: session could not be validated'
+
+/** safeParse, or null when the validator itself could not run.
+ *  Why: safeParse is documented not to throw, but a payload holding hundreds of
+ *  thousands of bad records overflows the stack while zod materializes an issue
+ *  per field. This parse runs in the Store constructor, so an escaping RangeError
+ *  is a launch failure the user cannot recover from without deleting their
+ *  profile — exactly the "never throw into main" contract at the top of this file. */
+export function safeParseWorkspaceSession(
+  raw: unknown
+): ReturnType<typeof workspaceSessionStateSchema.safeParse> | null {
+  try {
+    return workspaceSessionStateSchema.safeParse(raw)
+  } catch {
+    return null
+  }
+}
+
 /** Validate raw JSON as a WorkspaceSessionState. Returns a discriminated union
  *  so callers can fall back to defaults on failure without a try/catch. */
 export function parseWorkspaceSession(raw: unknown): ParsedWorkspaceSession {
-  const result = workspaceSessionStateSchema.safeParse(raw)
+  const result = safeParseWorkspaceSession(raw)
+  if (!result) {
+    return { ok: false, error: WORKSPACE_SESSION_UNVALIDATABLE }
+  }
   if (result.success) {
     return { ok: true, value: result.data }
   }
-  // Why: keep the error compact — a zod issue dump is noisy and most of the
-  // time only the first divergent field is actionable for debugging.
-  const firstIssue = result.error.issues[0]
-  const path = firstIssue?.path.join('.') || '<root>'
-  return { ok: false, error: `${path}: ${firstIssue?.message ?? 'invalid session'}` }
+  return { ok: false, error: describeWorkspaceSessionError(result.error) }
 }
