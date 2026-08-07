@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObjec
 import type { GlobalSettings } from '../../../../shared/types'
 import { useAppStore } from '../../store'
 import { matchesSettingsSearch } from './settings-search'
-import { getBrowserPaneSearchEntries, getBrowserLinkRoutingDescription } from './browser-search'
+import { getBrowserPaneSearchEntries } from './browser-search'
+import { getBrowserLinkRoutingDescription } from './browser-link-routing-copy'
 import { getBrowserUsePaneSearchEntries } from './browser-use-search'
 import { getBrowserPaneCombinedSearchEntries } from './browser-pane-search'
 import { BrowserHomePageSetting } from './BrowserHomePageSetting'
@@ -10,6 +11,7 @@ import { BrowserDefaultZoomSetting } from './BrowserDefaultZoomSetting'
 import { BrowserUseSetup } from './BrowserUsePane'
 import { BrowserSearchEngineSetting } from './BrowserSearchEngineSetting'
 import { BrowserLinkRoutingSetting } from './BrowserLinkRoutingSetting'
+import { BrowserLinkRoutingModifierSetting } from './BrowserLinkRoutingModifierSetting'
 import { BrowserLocalhostWorktreeLabelsSetting } from './BrowserLocalhostWorktreeLabelsSetting'
 import { BrowserSessionCookiesSection } from './BrowserSessionCookiesSection'
 import { BrowserNewProfileDialog } from './BrowserNewProfileDialog'
@@ -99,11 +101,17 @@ export function BrowserPane({
   const showSearchEngine = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[1]])
   const showDefaultZoom = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[2]])
   const showLinkRouting = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[3]])
-  const showLocalhostLabels = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[4]])
-  const showCookies = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[5]])
+  const showLinkRoutingModifier = matchesSettingsSearch(searchQuery, [
+    getBrowserPaneSearchEntries()[4]
+  ])
+  const showLocalhostLabels = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[5]])
+  const showCookies = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[6]])
   const showBrowserUse = matchesSettingsSearch(searchQuery, getBrowserUsePaneSearchEntries())
   const isMac = isMacUserAgent()
-  const linkRoutingDescription = getBrowserLinkRoutingDescription({ isMac })
+  const linkRoutingDescription = getBrowserLinkRoutingDescription(
+    { isMac },
+    settings.openLinksInAppModifierInverts === true
+  )
   const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
   const browserSessionHostOptions = useMemo(
     () =>
@@ -233,6 +241,14 @@ export function BrowserPane({
         <BrowserLinkRoutingSetting
           settings={settings}
           linkRoutingDescription={linkRoutingDescription}
+          isMac={isMac}
+          updateSettings={updateSettings}
+        />
+      ) : null}
+
+      {showLinkRoutingModifier ? (
+        <BrowserLinkRoutingModifierSetting
+          settings={settings}
           isMac={isMac}
           updateSettings={updateSettings}
         />

@@ -97,6 +97,24 @@ describe('resolveMobileNativeChat', () => {
     ).toBeNull()
   })
 
+  // Why: omp's hook reports no transcript path either, so mobile can only show
+  // its chat when the serving host is the one holding the session file.
+  it('admits omp only when its transcript is readable by the serving host', () => {
+    const tab = { type: 'terminal', launchAgent: 'omp' }
+    expect(resolveMobileNativeChat(tab, isMobileNativeChatTranscriptReadable(null))).toMatchObject({
+      agent: 'omp'
+    })
+    expect(
+      resolveMobileNativeChat(tab, isMobileNativeChatTranscriptReadable('runtime-ssh-environment'))
+    ).toMatchObject({ agent: 'omp' })
+    expect(
+      resolveMobileNativeChat(tab, isMobileNativeChatTranscriptReadable('model-a-ssh'))
+    ).toBeNull()
+    expect(canShowMobileNativeChat(tab, isMobileNativeChatTranscriptReadable('model-a-ssh'))).toBe(
+      false
+    )
+  })
+
   it('returns null for a plain shell (no agent)', () => {
     expect(resolveMobileNativeChat({ type: 'terminal' })).toBeNull()
   })

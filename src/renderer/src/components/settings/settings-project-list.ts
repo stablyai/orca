@@ -123,6 +123,22 @@ export function buildRepoIdToHostSelection(
   return map
 }
 
+export function getSettingsTargetHostSelection(
+  projects: readonly SettingsProject[],
+  repoId: string,
+  hostId: ExecutionHostId
+): { projectId: string; hostId: ExecutionHostId; setupId: string } | null {
+  for (const settingsProject of projects) {
+    const setup = settingsProject.setups.find(
+      (candidate) => candidate.repoId === repoId && candidate.hostId === hostId
+    )
+    if (setup) {
+      return { projectId: settingsProject.projectId, hostId, setupId: setup.id }
+    }
+  }
+  return null
+}
+
 /**
  * The repo row a Settings deep link points at, from either an explicit repoId
  * or a `repo-<id>-<subsection>` sectionId. repo ids can contain hyphens, so the
@@ -157,11 +173,15 @@ export function resolveSettingsTargetRepoId(
  */
 export async function removeSettingsProjectFromAllHosts(
   setups: readonly ProjectHostSetup[],
-  removeProject: (repoId: string, options: { hostId: ExecutionHostId }) => Promise<void>
+  removeProject: (
+    repoId: string,
+    options: { hostId: ExecutionHostId; errorFeedback?: 'toast' | 'silent' }
+  ) => Promise<void>
 ): Promise<void> {
   for (const setup of setups) {
     if (setup.repoId.trim().length > 0) {
-      await removeProject(setup.repoId, { hostId: setup.hostId })
+      // Why: user-initiated single-project removal, so a failure must be visible rather than silent (#11994).
+      await removeProject(setup.repoId, { hostId: setup.hostId, errorFeedback: 'toast' })
     }
   }
 }

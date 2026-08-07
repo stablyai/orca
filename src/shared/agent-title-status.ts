@@ -56,16 +56,21 @@ export function createAgentStatusTracker(
 ): {
   handleTitle: (title: string) => void
   seedTitle: (title: string) => void
+  restoreLastExit: () => AgentStatus | null
   reset: () => void
 } {
   // Why: trackers restored mid-session need a last-known status without firing
   // callbacks, or a hidden working agent can miss its later idle transition.
   let lastStatus: AgentStatus | null =
     initialTitle !== undefined ? detectAgentStatusFromTitle(initialTitle) : null
+  let restorableExitStatus: AgentStatus | null = null
 
   return {
     handleTitle(title: string): void {
       const newStatus = detectAgentStatusFromTitle(title)
+      if (newStatus !== null) {
+        restorableExitStatus = null
+      }
       if (lastStatus === 'working' && newStatus !== null && newStatus !== 'working') {
         onBecameIdle(title)
       }
@@ -75,6 +80,7 @@ export function createAgentStatusTracker(
       // Why: reverting to a plain shell prompt after idle/permission means the
       // agent exited; while working it can just be a transient internal title.
       if (lastStatus !== null && lastStatus !== 'working' && newStatus === null) {
+        restorableExitStatus = lastStatus
         lastStatus = null
         onAgentExited?.()
       }
@@ -84,9 +90,19 @@ export function createAgentStatusTracker(
     },
     seedTitle(title: string): void {
       lastStatus = detectAgentStatusFromTitle(title)
+      restorableExitStatus = null
+    },
+    restoreLastExit(): AgentStatus | null {
+      const restoredStatus = lastStatus === null ? restorableExitStatus : null
+      if (restoredStatus !== null) {
+        lastStatus = restoredStatus
+      }
+      restorableExitStatus = null
+      return restoredStatus
     },
     reset(): void {
       lastStatus = null
+      restorableExitStatus = null
     }
   }
 }

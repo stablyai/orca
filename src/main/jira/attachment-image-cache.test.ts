@@ -58,4 +58,40 @@ describe('attachment image cache', () => {
     expect(await p3).toBe('data:image/png;base64,OK==')
     expect(_getAttachmentImageCacheSize()).toBe(1)
   })
+
+  it('does not repopulate after "disconnect all" when the site was cleared before', async () => {
+    // Summed epochs read the same before a global clear (1 + 0) and after it (0 + 1).
+    clearAttachmentImagesForSite('site-a')
+
+    let resolveLoad: (value: { dataUrl: string; byteSize: number } | null) => void = () => {}
+    const inFlight = loadAttachmentDataUrlWithCache({
+      siteId: 'site-a',
+      attachmentId: '1',
+      load: () =>
+        new Promise<{ dataUrl: string; byteSize: number } | null>((resolve) => {
+          resolveLoad = resolve
+        })
+    })
+
+    clearAttachmentImagesForSite()
+    resolveLoad({ dataUrl: 'data:image/png;base64,SECRET==', byteSize: 4 })
+
+    // The waiter still gets its bytes; nothing survives in the cache.
+    expect(await inFlight).toBe('data:image/png;base64,SECRET==')
+    expect(getCachedAttachmentDataUrl('site-a', '1')).toBeNull()
+    expect(_getAttachmentImageCacheSize()).toBe(0)
+  })
+
+  it('still caches a load that spans no clear at all', async () => {
+    clearAttachmentImagesForSite('site-a')
+
+    const dataUrl = await loadAttachmentDataUrlWithCache({
+      siteId: 'site-a',
+      attachmentId: '1',
+      load: async () => ({ dataUrl: 'data:image/png;base64,OK==', byteSize: 2 })
+    })
+
+    expect(dataUrl).toBe('data:image/png;base64,OK==')
+    expect(getCachedAttachmentDataUrl('site-a', '1')).toBe('data:image/png;base64,OK==')
+  })
 })

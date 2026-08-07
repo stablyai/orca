@@ -3,24 +3,34 @@ import { Copy } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import {
+  buildSkillCommandForRuntime,
+  buildSkillSetupTerminalCommand
+} from '@/components/settings/CliSkillRuntimeSetup'
 import { ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/agent-feature-install-commands'
-import { lazyWithRetry } from '@/lib/lazy-with-retry'
+import { CliSkillSetupInlineCommandTerminal as OnboardingInlineCommandTerminal } from '@/components/onboarding/lazy-onboarding-inline-command-terminal'
+import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { translate } from '@/i18n/i18n'
 
-// Why: keeps the xterm-backed inline terminal out of the entry's eager
-// modulepreload graph; this tip renders far off the first-paint path.
-const OnboardingInlineCommandTerminal = lazyWithRetry(
-  () =>
-    import('@/components/onboarding/OnboardingInlineCommandTerminal').then((module) => ({
-      default: module.OnboardingInlineCommandTerminal
-    })),
-  { reloadKey: 'cli-skill-setup-terminal' }
-)
-
 export function CliSkillSetupTerminal(): React.JSX.Element {
+  const activeSkillRuntime = useActiveProjectSkillRuntime()
+  // Why: a repair-required runtime resolves to a WSL distro that is missing, so
+  // drop back to the host runtime. This terminal auto-pastes with no install
+  // gate, and repair-required only happens on Windows, so it still needs the
+  // npx preflight.
+  const skillCommand = buildSkillCommandForRuntime(
+    ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND,
+    activeSkillRuntime.installDisabledReason ? undefined : activeSkillRuntime.agentRuntime
+  )
+  // The copied string stays as built; only what we execute is adapted.
+  const setupTerminalCommand = buildSkillSetupTerminalCommand(
+    skillCommand,
+    activeSkillRuntime.terminalShellOverride
+  )
+
   const handleCopySkillCommand = async (): Promise<void> => {
     try {
-      await window.api.ui.writeClipboardText(ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND)
+      await window.api.ui.writeClipboardText(skillCommand)
       toast.success(
         translate(
           'auto.components.feature.tips.CliSkillSetupTerminal.b8ad063571',
@@ -43,7 +53,7 @@ export function CliSkillSetupTerminal(): React.JSX.Element {
     <div className="min-w-0">
       <div className="flex min-w-0 items-center gap-2 rounded-md border border-border bg-muted/35 px-3 py-2">
         <code className="scrollbar-sleek min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-xs text-muted-foreground">
-          {ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND}
+          {skillCommand}
         </code>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -70,7 +80,7 @@ export function CliSkillSetupTerminal(): React.JSX.Element {
       </div>
       <Suspense fallback={null}>
         <OnboardingInlineCommandTerminal
-          command={ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND}
+          command={setupTerminalCommand}
           title={translate(
             'auto.components.feature.tips.CliSkillSetupTerminal.84e9576dac',
             'Skill setup'
@@ -88,6 +98,7 @@ export function CliSkillSetupTerminal(): React.JSX.Element {
           descriptionPaddingClassName="px-4 py-2"
           autoScrollIntoView={false}
           worktreeId="feature-tip-cli-skills-terminal"
+          shellOverride={activeSkillRuntime.terminalShellOverride}
         />
       </Suspense>
     </div>

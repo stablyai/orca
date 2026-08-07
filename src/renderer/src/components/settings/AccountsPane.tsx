@@ -57,7 +57,10 @@ import { ProviderHostScopeControl } from './ProviderHostScopeControl'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
 import { matchesSettingsSearch } from './settings-search'
-import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
+import {
+  markLiveCodexSessionsForRestart,
+  resolveCodexRestartPromptAccountLabel
+} from '@/lib/codex-session-restart'
 import {
   Dialog,
   DialogContent,
@@ -78,6 +81,7 @@ import {
   type ProviderAccountRuntimeView
 } from './provider-account-visibility'
 import { translate } from '@/i18n/i18n'
+import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import { cn } from '@/lib/utils'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import {
@@ -101,16 +105,7 @@ function formatMiniMaxRelativeRefresh(updatedAt: number, now: number): string {
   if (diffMs < 60_000) {
     return translate('auto.components.settings.AccountsPane.3a30aaf526', 'just now')
   }
-  const formatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
-  const minutes = Math.round(diffMs / 60_000)
-  if (minutes < 60) {
-    return formatter.format(-minutes, 'minute')
-  }
-  const hours = Math.round(minutes / 60)
-  if (hours < 24) {
-    return formatter.format(-hours, 'hour')
-  }
-  return formatter.format(-Math.round(hours / 24), 'day')
+  return formatUiRelativeTime(-diffMs)
 }
 
 function MiniMaxCookieHelpPopover(): React.JSX.Element {
@@ -171,16 +166,6 @@ function getHostRuntimeLabel(): string {
   return navigator.userAgent.includes('Windows')
     ? 'Windows'
     : translate('auto.components.settings.AccountsPane.9baf45d071', 'This device')
-}
-
-function getCodexAccountLabel(
-  state: CodexRateLimitAccountsState,
-  accountId: string | null | undefined
-): string {
-  if (accountId == null) {
-    return 'System default'
-  }
-  return state.accounts.find((account) => account.id === accountId)?.email ?? 'Codex account'
 }
 
 // Why: the system-default row has no stored identity, so surface the real
@@ -761,8 +746,18 @@ export function AccountsPane({
         // Falling back to the row is the pre-existing behaviour, not a new risk.
         const addedAccount = newAccounts.length === 1 ? newAccounts[0] : undefined
         void markLiveCodexSessionsForRestart({
-          previousAccountLabel: getCodexAccountLabel(codexAccounts, previousActiveAccountId),
-          nextAccountLabel: getCodexAccountLabel(next, nextActiveAccountId),
+          previousAccountLabel: resolveCodexRestartPromptAccountLabel(
+            codexAccounts.accounts,
+            previousActiveAccountId
+          ),
+          nextAccountLabel: resolveCodexRestartPromptAccountLabel(
+            next.accounts,
+            nextActiveAccountId
+          ),
+          // Why: two accounts can share an email, so the labels alone cannot
+          // tell the store whether this switch lands back on the launch account.
+          previousAccountId: previousActiveAccountId ?? null,
+          nextAccountId: nextActiveAccountId ?? null,
           // Why: the mutation wrote this row's slot only, so panes on any other
           // lane still launch under the account they already had.
           target: addedAccount ? getProviderAccountRuntime(addedAccount) : actionRuntime,

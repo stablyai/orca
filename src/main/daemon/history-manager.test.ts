@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import {
   chmodSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
@@ -11,6 +12,7 @@ import {
   writeFileSync
 } from 'node:fs'
 import { HistoryManager } from './history-manager'
+import { flushPendingSessionTreeRemovals } from './terminal-history-session-tombstone'
 import type { TerminalSnapshot, TerminalModes } from './types'
 import { getHistorySessionDirName } from './history-paths'
 import {
@@ -58,6 +60,8 @@ describe('HistoryManager', () => {
 
   afterEach(async () => {
     await mgr.dispose()
+    // Detached tombstone reclaims outlive the test that queued them; settle before the fixture goes.
+    await flushPendingSessionTreeRemovals()
     rmSync(dir, { recursive: true, force: true })
   })
 
@@ -485,5 +489,46 @@ describe('HistoryManager', () => {
         expect(errors[0].sessionId).toBe('err-cb')
       }
     )
+  })
+
+  describe('large session cleanup responsiveness', () => {
+    it('tombstones a large session tree instead of walking it on the teardown path', async () => {
+      const sessionId = 'bulky'
+      await mgr.openSession(sessionId, { cwd: '/tmp', cols: 80, rows: 24 })
+      const sessionDir = join(dir, getHistorySessionDirName(sessionId))
+      // Enough entries that a recursive walk would dominate removeSession's duration.
+      for (let i = 0; i < 3_000; i++) {
+        writeFileSync(join(sessionDir, `chunk-${i}.log`), `payload-${i}`)
+      }
+
+      // Why structural and not a turn count: worktree teardown awaits removeSession once per terminal,
+      // so the contract is that the awaited half only renames. The tree surviving under .pending-delete
+      // right after the await can only happen if the reclaim was detached.
+      await mgr.removeSession(sessionId)
+
+      expect(existsSync(sessionDir)).toBe(false)
+      const tombstones = readdirSync(join(dir, '.pending-delete'))
+      expect(tombstones).toHaveLength(1)
+      expect(readdirSync(join(dir, '.pending-delete', tombstones[0])).length).toBeGreaterThan(0)
+
+      await flushPendingSessionTreeRemovals()
+      expect(readdirSync(join(dir, '.pending-delete'))).toHaveLength(0)
+    })
+
+    it('reclaims tombstones left by a quit mid-removal on the next construction', async () => {
+      const sessionId = 'leftover'
+      await mgr.openSession(sessionId, { cwd: '/tmp', cols: 80, rows: 24 })
+      await mgr.removeSession(sessionId)
+      await flushPendingSessionTreeRemovals()
+
+      const orphan = join(dir, '.pending-delete', 'orphaned-tombstone')
+      mkdirSync(orphan, { recursive: true })
+      writeFileSync(join(orphan, 'output.log'), 'stranded')
+
+      new HistoryManager(dir)
+      await flushPendingSessionTreeRemovals()
+
+      expect(existsSync(orphan)).toBe(false)
+    })
   })
 })

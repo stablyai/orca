@@ -146,7 +146,8 @@ const MAX_TIMER_DRIFT_MS = 250
 // the real baseline.
 const MAX_TIMER_DRIFT_UNDER_LOAD_MS = 2_500
 const MAX_SCROLL_LATENCY_MS = 150
-const MAX_RENDERER_SCHEDULER_QUEUED_CHARS = 3 * 1024 * 1024
+// Why: byte-level peaks vary by drain quantum; the coarse guard matches the main-pressure scenario.
+const MAX_RENDERER_SCHEDULER_QUEUED_CHARS = 5 * 1024 * 1024
 
 function readPositiveInt(name: string, fallback: number): number {
   const raw = process.env[name]

@@ -7,7 +7,14 @@ import {
   isFilePathCodeSpan,
   normalizeFilePath
 } from './markdown-file-path-detection'
+import { routeMarkdownHref } from './markdown-href-routing'
+import {
+  isIntrawordUnderscoreToken,
+  trimAutolinkTrailingPunctuation
+} from './markdown-inline-token-rules'
+import { isMobileMermaidLanguage } from './mobile-mermaid-language'
 import { parseMobileMarkdown } from './mobile-markdown-parser'
+import { MermaidDiagram } from './pr-sidebar/MermaidDiagram'
 
 type Props = {
   content?: string
@@ -15,19 +22,28 @@ type Props = {
   /** Multiplier for prose font size (paragraphs, lists, quotes). Defaults to 1;
    *  the chat view passes >1 so agent prose reads larger than the compact base. */
   textScale?: number
-  /** When provided, detected file-path tokens render as tappable and invoke this
-   *  with the worktree-relative path. Omitted on screens with no file viewer, where
+  /** When provided, detected file paths and file-target hrefs render as tappable
+   *  and invoke this with the path text (worktree-relative or absolute, with an
+   *  optional :line(:col) suffix). Omitted on screens with no file viewer, where
    *  paths render as plain text (no behavior change). */
-  onOpenFile?: (relativePath: string) => void
+  onOpenFile?: (pathText: string) => void
 }
 
 const MAX_TABLE_ROWS = 40
 const MAX_TABLE_COLUMNS = 8
+/** Prose base size — passed to MermaidDiagram fallback mono text. */
+const MERMAID_BASE = 13
 
-function openMarkdownUrl(url: string): void {
-  const trimmed = url.trim()
-  if (/^(https?:|mailto:)/i.test(trimmed)) {
-    void Linking.openURL(trimmed).catch(() => {})
+// Web/mail hrefs open the system handler; file-target hrefs (file: URIs and
+// scheme-less paths — the entire desktop file-link contract) go to onOpenFile.
+function openMarkdownHref(href: string, onOpenFile?: (pathText: string) => void): void {
+  const route = routeMarkdownHref(href)
+  if (route.kind === 'web') {
+    void Linking.openURL(route.url).catch(() => {})
+    return
+  }
+  if (route.kind === 'file' && onOpenFile) {
+    onOpenFile(route.pathText)
   }
 }
 
@@ -36,7 +52,7 @@ function openMarkdownUrl(url: string): void {
 function renderTextRun(
   text: string,
   keyPrefix: string,
-  onOpenFile?: (relativePath: string) => void
+  onOpenFile?: (pathText: string) => void
 ): ReactNode {
   if (!onOpenFile) {
     return text
@@ -61,39 +77,54 @@ function renderTextRun(
   })
 }
 
-function renderInline(text: string, onOpenFile?: (relativePath: string) => void): ReactNode[] {
+function renderInline(text: string, onOpenFile?: (pathText: string) => void): ReactNode[] {
   const parts: ReactNode[] = []
   const pattern =
     /(!\[[^\]]*\]\([^)]+\)|`[^`]+`|~~[^~]+~~|\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_|\[[^\]]+\]\([^)]+\)|https?:\/\/[^\s<]+)/g
-  let lastIndex = 0
+  let pendingStart = 0
   let match: RegExpExecArray | null
 
   while ((match = pattern.exec(text))) {
-    if (match.index > lastIndex) {
-      parts.push(renderTextRun(text.slice(lastIndex, match.index), `t${lastIndex}`, onOpenFile))
-    }
     const token = match[0]
+    // Intraword `_` runs (snake_case, dunder tails) are literal text per
+    // CommonMark; leaving them unflushed keeps surrounding file paths whole
+    // for detection in the eventual text run.
+    if (token.startsWith('_') && isIntrawordUnderscoreToken(text, match.index, token)) {
+      // Resume after the opener so real tokens inside the rejected span are still scanned.
+      pattern.lastIndex = match.index + 1
+      continue
+    }
+    if (match.index > pendingStart) {
+      parts.push(
+        renderTextRun(text.slice(pendingStart, match.index), `t${pendingStart}`, onOpenFile)
+      )
+    }
+    pendingStart = pattern.lastIndex
     const key = `${match.index}:${token}`
     const image = token.match(/^!\[([^\]]*)\]\(([^)]+)\)$/)
     const link = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/)
     if (image) {
       parts.push(
-        <Text key={key} style={styles.link} onPress={() => openMarkdownUrl(image[2]!)}>
+        <Text key={key} style={styles.link} onPress={() => openMarkdownHref(image[2]!, onOpenFile)}>
           {image[1] || 'image'}
         </Text>
       )
     } else if (link) {
       parts.push(
-        <Text key={key} style={styles.link} onPress={() => openMarkdownUrl(link[2]!)}>
+        <Text key={key} style={styles.link} onPress={() => openMarkdownHref(link[2]!, onOpenFile)}>
           {link[1]}
         </Text>
       )
     } else if (/^https?:\/\//i.test(token)) {
+      const { url, trailing } = trimAutolinkTrailingPunctuation(token)
       parts.push(
-        <Text key={key} style={styles.link} onPress={() => openMarkdownUrl(token)}>
-          {token}
+        <Text key={key} style={styles.link} onPress={() => openMarkdownHref(url, onOpenFile)}>
+          {url}
         </Text>
       )
+      if (trailing) {
+        parts.push(<Fragment key={`${key}p`}>{trailing}</Fragment>)
+      }
     } else if (token.startsWith('`')) {
       const code = token.slice(1, -1)
       if (onOpenFile && isFilePathCodeSpan(code)) {
@@ -116,27 +147,26 @@ function renderInline(text: string, onOpenFile?: (relativePath: string) => void)
     } else if (token.startsWith('~~')) {
       parts.push(
         <Text key={key} style={styles.strike}>
-          {token.slice(2, -2)}
+          {renderTextRun(token.slice(2, -2), `${key}i`, onOpenFile)}
         </Text>
       )
     } else if (token.startsWith('**') || token.startsWith('__')) {
       parts.push(
         <Text key={key} style={styles.bold}>
-          {token.slice(2, -2)}
+          {renderTextRun(token.slice(2, -2), `${key}i`, onOpenFile)}
         </Text>
       )
     } else {
       parts.push(
         <Text key={key} style={styles.italic}>
-          {token.slice(1, -1)}
+          {renderTextRun(token.slice(1, -1), `${key}i`, onOpenFile)}
         </Text>
       )
     }
-    lastIndex = pattern.lastIndex
   }
 
-  if (lastIndex < text.length) {
-    parts.push(renderTextRun(text.slice(lastIndex), `t${lastIndex}`, onOpenFile))
+  if (pendingStart < text.length) {
+    parts.push(renderTextRun(text.slice(pendingStart), `t${pendingStart}`, onOpenFile))
   }
   return parts
 }
@@ -153,6 +183,7 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
   if (!text) {
     return fallback ? <Text style={styles.paragraph}>{fallback}</Text> : null
   }
+  const mermaidSourceOccurrences = new Map<string, number>()
 
   return (
     <View style={styles.root}>
@@ -175,6 +206,20 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
           )
         }
         if (block.type === 'code') {
+          // Mermaid fences render as diagrams (WebView), not as raw code — same as PR sidebar.
+          // Unclosed fences are still streaming: mounting the WebView per tick would
+          // reload its document up to 20x/sec, so they stay raw code until terminated.
+          if (isMobileMermaidLanguage(block.language) && block.closed) {
+            const occurrence = mermaidSourceOccurrences.get(block.text) ?? 0
+            mermaidSourceOccurrences.set(block.text, occurrence + 1)
+            return (
+              <MermaidDiagram
+                key={`${block.text}:${occurrence}`}
+                source={block.text}
+                base={MERMAID_BASE}
+              />
+            )
+          }
           return (
             <View key={index} style={styles.codeBlock}>
               {block.language ? <Text style={styles.codeLanguage}>{block.language}</Text> : null}
@@ -187,7 +232,7 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
             <Pressable
               key={index}
               style={styles.imageFrame}
-              onPress={() => openMarkdownUrl(block.url)}
+              onPress={() => openMarkdownHref(block.url, onOpenFile)}
             >
               <Text style={styles.link}>{block.alt || 'Open image'}</Text>
               <Text style={styles.imageCaption} numberOfLines={1}>

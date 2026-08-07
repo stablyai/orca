@@ -43,6 +43,8 @@ type UseSourceControlAgentActionStartArgs = {
     actionId: SourceControlLaunchActionId,
     recipe: SourceControlActionRecipe
   ) => void | Promise<void>
+  onLaunchAccepted?: () => void
+  onLaunchAborted?: () => void
   onLaunched?: () => void
   onClose: () => void
 }
@@ -84,6 +86,8 @@ export function useSourceControlAgentActionStart({
   refreshDetectedAgents,
   onStart,
   onSaveAgentDefault,
+  onLaunchAccepted,
+  onLaunchAborted,
   onLaunched,
   onClose
 }: UseSourceControlAgentActionStartArgs): UseSourceControlAgentActionStartResult {
@@ -158,6 +162,8 @@ export function useSourceControlAgentActionStart({
           launchSource,
           onStart,
           onSaveAgentDefault,
+          onLaunchAccepted,
+          onLaunchAborted,
           onLaunched,
           onClose: () => {
             resetDeliveryPlan()
@@ -179,6 +185,8 @@ export function useSourceControlAgentActionStart({
       launchSource,
       launchPlatform,
       onClose,
+      onLaunchAborted,
+      onLaunchAccepted,
       onLaunched,
       onSaveAgentDefault,
       onStart,

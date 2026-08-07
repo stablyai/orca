@@ -98,6 +98,21 @@ export function mostRecentAttentionInHistory(history: AgentStateHistoryEntry[]):
   return max > 0 ? max : null
 }
 
+function mostRecentCompletedTurnInHistory(history: AgentStateHistoryEntry[]): number | null {
+  let max = 0
+  for (const entry of history) {
+    if (
+      entry.state === 'done' &&
+      entry.interrupted !== true &&
+      Number.isFinite(entry.startedAt) &&
+      entry.startedAt > max
+    ) {
+      max = entry.startedAt
+    }
+  }
+  return max > 0 ? max : null
+}
+
 /**
  * One pane's contribution to a worktree's attention class. Fresh hook entries win; hookless
  * panes fall back to the title heuristic (design doc Edge case 9). Authority is per-pane, not per-worktree.
@@ -142,7 +157,16 @@ export function resolveAttention(panes: PaneInput[], now: number): WorktreeAtten
           continue
         }
         cls = 2
-        ts = entry.stateStartedAt
+        if (entry.sessionBoundary) {
+          // Why: idle connect is not new attention; only preserve a real completion it displaced.
+          const completedAt = mostRecentCompletedTurnInHistory(entry.stateHistory)
+          if (completedAt === null) {
+            continue
+          }
+          ts = completedAt
+        } else {
+          ts = entry.stateStartedAt
+        }
       } else {
         // working
         cls = 3
@@ -288,8 +312,11 @@ export function buildAttentionByWorktree(
       if (hookEntries) {
         for (const entry of hookEntries) {
           panes.push({ kind: 'hook', entry })
-          // Why: only fresh hook entries suppress the title fallback; a stale one would hide the live title and drop to Class 4.
-          if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
+          // Why: restored rows own their co-restored title without asserting live state.
+          if (
+            !entry.restoredUnconfirmed &&
+            !isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)
+          ) {
             continue
           }
           const leafId = leafIdFromPaneKey(entry.paneKey)
@@ -308,9 +335,12 @@ export function buildAttentionByWorktree(
       if (paneTitles && Object.keys(paneTitles).length > 0) {
         // Why: split-pane tabs host multiple agents, one title each; mirrors getWorkingAgentsPerWorktree precedence.
         const tabLayout = terminalLayoutsByTabId?.[tab.id]
-        for (const [runtimePaneId, title] of Object.entries(paneTitles)) {
+        const paneTitleEntries = Object.entries(paneTitles)
+        for (const [runtimePaneId, title] of paneTitleEntries) {
           const leafId = resolveRuntimePaneTitleLeafId(tabLayout, runtimePaneId)
-          if (leafId !== null && hookLeafIds.has(leafId)) {
+          const hasSingleUnmappedHook =
+            leafId === null && hookLeafIds.size === 1 && paneTitleEntries.length === 1
+          if ((leafId !== null && hookLeafIds.has(leafId)) || hasSingleUnmappedHook) {
             continue
           }
           panes.push({

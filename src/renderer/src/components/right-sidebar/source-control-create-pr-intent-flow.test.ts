@@ -8,7 +8,10 @@ import {
   getCreatePrIntentCommitFailureNoticeMessage,
   getCreatePrIntentStagePaths,
   resolveCreatePrIntentReviewBase,
-  resolveCreatePrIntentRemoteStep
+  resolveCreatePrIntentGeneratedReviewFields,
+  resolveCreatePrIntentRemoteStep,
+  shouldAttemptCreateHostedReviewForIntent,
+  shouldGenerateHostedReviewDetailsForIntent
 } from './source-control-create-pr-intent-flow'
 import type { GitStatusEntry } from '../../../../shared/types'
 
@@ -21,6 +24,7 @@ describe('source-control Create PR intent flow helpers', () => {
         worktreeId: 'wt-1',
         worktreePath: '/repo',
         branch: 'feature',
+        provider: 'github',
         baseRef: 'origin/main'
       })
 
@@ -44,7 +48,8 @@ describe('source-control Create PR intent flow helpers', () => {
       repoId: 'repo-1',
       worktreeId: 'wt-1',
       worktreePath: '/repo',
-      branch: 'feature/pr'
+      branch: 'feature/pr',
+      provider: 'github'
     })
 
     expect(createPrIntentGitStatusMatchesToken(token, { branch: 'refs/heads/feature/pr' })).toBe(
@@ -63,7 +68,8 @@ describe('source-control Create PR intent flow helpers', () => {
       repoId: 'repo-1',
       worktreeId: 'wt-1',
       worktreePath: wt1Path,
-      branch: 'feature/pr'
+      branch: 'feature/pr',
+      provider: 'github'
     })
 
     expect(
@@ -92,6 +98,7 @@ describe('source-control Create PR intent flow helpers', () => {
       worktreeId: 'wt-1',
       worktreePath,
       branch: 'feature/pr',
+      provider: 'github',
       baseRef: 'refs/remotes/origin/main'
     })
 
@@ -281,6 +288,85 @@ describe('source-control Create PR intent flow helpers', () => {
         }
       })
     ).toBe('blocked')
+  })
+
+  it('generates details while main preflight remains the final lookup authority', () => {
+    const unavailable = {
+      provider: 'github' as const,
+      review: null,
+      canCreate: false,
+      blockedReason: null,
+      nextAction: null,
+      reviewLookupOutcome: 'unavailable' as const,
+      head: 'feature-branch'
+    }
+    expect(shouldAttemptCreateHostedReviewForIntent(unavailable)).toBe(true)
+    // Loading placeholders share the unavailable/null-reason shape but carry no branch.
+    expect(shouldAttemptCreateHostedReviewForIntent({ ...unavailable, head: undefined })).toBe(
+      false
+    )
+    expect(shouldGenerateHostedReviewDetailsForIntent(unavailable)).toBe(true)
+    expect(shouldGenerateHostedReviewDetailsForIntent({ ...unavailable, head: undefined })).toBe(
+      false
+    )
+    expect(
+      shouldGenerateHostedReviewDetailsForIntent({
+        ...unavailable,
+        canCreate: true,
+        reviewLookupOutcome: 'not_found'
+      })
+    ).toBe(true)
+    expect(
+      shouldAttemptCreateHostedReviewForIntent({
+        provider: 'github',
+        review: null,
+        canCreate: false,
+        blockedReason: 'needs_push',
+        nextAction: 'push',
+        reviewLookupOutcome: 'unavailable'
+      })
+    ).toBe(false)
+  })
+
+  it('keeps generated review fields fail-closed', () => {
+    const current = {
+      base: 'main',
+      title: 'Feature branch',
+      body: '',
+      draft: false
+    }
+
+    expect(
+      resolveCreatePrIntentGeneratedReviewFields(current, {
+        success: false,
+        error: 'Agent timed out.'
+      })
+    ).toEqual({ ok: false, error: 'Agent timed out.' })
+    expect(
+      resolveCreatePrIntentGeneratedReviewFields(current, {
+        success: true,
+        fields: { ...current, title: 'Generated title', body: '   ' }
+      })
+    ).toEqual({ ok: false, error: null })
+    expect(
+      resolveCreatePrIntentGeneratedReviewFields(current, {
+        success: true,
+        fields: {
+          base: 'other-base',
+          title: 'Generated title',
+          body: '## Problem\n\nDetails',
+          draft: true
+        }
+      })
+    ).toEqual({
+      ok: true,
+      fields: {
+        base: 'main',
+        title: 'Generated title',
+        body: '## Problem\n\nDetails',
+        draft: true
+      }
+    })
   })
 
   it('surfaces the commit failure summary in the Create PR intent notice', () => {

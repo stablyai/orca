@@ -18,7 +18,7 @@ Comparing two `startup-time-bench.mjs` runs by their medians does not tell you w
 2. Run the interleaved benchmark:
 
    ```bash
-   node tools/benchmarks/startup-ab-bench.mjs --label my-change \
+   node tests/tools/benchmarks/startup-ab-bench.mjs --label my-change \
      --baseline-app-dir ../orca-arm-baseline \
      --candidate-app-dir ../orca-arm-candidate \
      --pairs 12 --warmup 2
@@ -78,4 +78,4 @@ The JSON also records `completedLaunches` and a `launchOutcomes` breakdown. A ru
 
 ## Next step
 
-The counterbalancing property is covered by `tools/benchmarks/interleaved-arm-schedule.test.mjs`, and the estimators by `tools/benchmarks/paired-shift-statistics.test.mjs`. Extend those rather than adjusting a threshold if a run looks wrong.
+The counterbalancing property is covered by `tests/tools/benchmarks/interleaved-arm-schedule.test.mjs`, and the estimators by `tests/tools/benchmarks/paired-shift-statistics.test.mjs`. Extend those rather than adjusting a threshold if a run looks wrong.

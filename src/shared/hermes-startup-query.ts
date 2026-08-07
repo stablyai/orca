@@ -1,3 +1,4 @@
+import { encodePowerShellCommand } from './powershell-command-encoding'
 import {
   buildShellCommandFromArgv,
   quoteStartupArg,
@@ -13,15 +14,6 @@ const POWERSHELL_QUERY_VARIABLE = 'orcaHermesStartupQuery'
 const POWERSHELL_NATIVE_QUERY_VARIABLE = 'orcaHermesNativeQuery'
 
 export const ORCA_HERMES_STARTUP_QUERY_ENV = 'ORCA_HERMES_STARTUP_QUERY'
-
-function encodePowerShellCommand(command: string): string {
-  let bytes = ''
-  for (let index = 0; index < command.length; index += 1) {
-    const code = command.charCodeAt(index)
-    bytes += String.fromCharCode(code & 0xff, code >>> 8)
-  }
-  return btoa(bytes)
-}
 
 function encodePosixEvalScript(command: string): string {
   return Array.from(

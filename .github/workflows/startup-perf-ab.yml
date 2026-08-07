@@ -139,7 +139,7 @@ jobs:
           CONTROL_PHASES: ${{ inputs.control_phases }}
         run: |
           set -euo pipefail
-          xvfb-run --auto-servernum node tools/benchmarks/startup-ab-bench.mjs \
+          xvfb-run --auto-servernum node tests/tools/benchmarks/startup-ab-bench.mjs \
             --label ci-ab \
             --baseline-app-dir "$ARMS_DIR/baseline" \
             --candidate-app-dir "$ARMS_DIR/candidate" \
@@ -159,7 +159,7 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
-          result=$(ls -t tools/benchmarks/results/startup-ci-ab-*.json 2>/dev/null | head -1 || true)
+          result=$(ls -t tests/tools/benchmarks/results/startup-ci-ab-*.json 2>/dev/null | head -1 || true)
           if [ -z "$result" ]; then
             echo "::warning::No A/B result file was produced."
             exit 0
@@ -189,7 +189,7 @@ jobs:
         with:
           name: startup-ab-result
           path: |
-            tools/benchmarks/results/startup-ci-ab-*.json
+            tests/tools/benchmarks/results/startup-ci-ab-*.json
             startup-ab-output.txt
           retention-days: 14
           if-no-files-found: warn

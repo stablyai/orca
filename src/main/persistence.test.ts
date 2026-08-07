@@ -1548,6 +1548,26 @@ describe('Store', () => {
     expect(updatedTarget).not.toHaveProperty('systemSshConnectionReuse')
   })
 
+  it('drops retired per-target SSH terminal source-credit selections', async () => {
+    const store = await createStore()
+    store.addSshTarget({
+      id: 'ssh-source-credit-on',
+      label: 'Noisy build host',
+      host: 'build.example.com',
+      port: 22,
+      username: 'dev',
+      experimentalPtySourceCreditV1: true
+    } as never)
+
+    expect(store.getSshTarget('ssh-source-credit-on')).not.toHaveProperty(
+      'experimentalPtySourceCreditV1'
+    )
+    store.flush()
+    const persisted = readDataFile() as { sshTargets?: Record<string, unknown>[] }
+    const target = persisted.sshTargets?.find((entry) => entry.id === 'ssh-source-credit-on')
+    expect(target).not.toHaveProperty('experimentalPtySourceCreditV1')
+  })
+
   it('upserts ~/.ssh/config through the real store: rotated port updates in place and persists', async () => {
     loadUserSshConfigMock.mockReturnValue([{ host: 'cluster' }])
     const candidate = (port: number, id: string) => [
@@ -1563,7 +1583,6 @@ describe('Store', () => {
     expect(inserted).toHaveLength(1)
     expect(inserted[0]?.source).toBe('ssh-config')
     expect(inserted[0]?.port).toBe(2200)
-
     // Rotated port: upsert updates the same target in place and normalizeSshTarget must keep `source` (no false re-derive into a permanently-dirty state).
     sshConfigHostsToTargetsMock.mockReturnValue(candidate(2222, 'ssh-cfg-2'))
     const changed = sshStore.importFromSshConfig()
@@ -3691,6 +3710,21 @@ describe('Store', () => {
     expect(hostSession.lastVisitedAtByWorktreeId?.['r1::/path/wt1']).toBeUndefined()
   })
 
+  it('lists only persisted workspace-session host partitions', async () => {
+    const store = await createStore()
+    expect(store.getWorkspaceSessionHostIds()).toEqual(['local'])
+
+    store.getWorkspaceSession('ssh:not-persisted')
+    store.setWorkspaceSession(getDefaultWorkspaceSession(), 'ssh:ssh-a')
+    store.setWorkspaceSession(getDefaultWorkspaceSession(), 'runtime:environment-a')
+
+    expect(store.getWorkspaceSessionHostIds()).toEqual([
+      'local',
+      'ssh:ssh-a',
+      'runtime:environment-a'
+    ])
+  })
+
   it('removeProject removes the derived project host setup compatibility record', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'r1' }))
@@ -4191,6 +4225,27 @@ describe('Store', () => {
     expect(store.getRepo('r1')!.displayName).toBe('renamed')
   })
 
+  it('updateRepo targets one host when repo ids collide', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'shared', path: '/local/repo' }))
+    store.addRepo(
+      makeRepo({
+        id: 'shared',
+        path: '/remote/repo',
+        connectionId: 'server',
+        executionHostId: 'ssh:server'
+      })
+    )
+
+    const updated = store.updateRepo('shared', { displayName: 'Remote renamed' }, 'ssh:server')
+
+    expect(updated?.path).toBe('/remote/repo')
+    expect(store.getRepos().filter((repo) => repo.id === 'shared')).toMatchObject([
+      { path: '/local/repo', displayName: 'test' },
+      { path: '/remote/repo', displayName: 'Remote renamed' }
+    ])
+  })
+
   it('updateRepo keeps project host setup compatibility records in sync', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ worktreeBasePath: '../worktrees' }))
@@ -4562,6 +4617,43 @@ describe('Store', () => {
     expect(store.getRepos()[0]!.upstream).toBeUndefined()
   })
 
+  it('keeps the upstream host across reloads so it is never re-inferred from origin', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+
+    const updated = store.updateRepo('r1', {
+      upstream: { owner: ' acme ', repo: ' widgets ', host: ' GHE.example:8443 ' }
+    })
+    expect(updated!.upstream).toEqual({
+      owner: 'acme',
+      repo: 'widgets',
+      host: 'GHE.example:8443'
+    })
+
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getRepo('r1')!.upstream).toEqual({
+      owner: 'acme',
+      repo: 'widgets',
+      host: 'GHE.example:8443'
+    })
+  })
+
+  it('leaves a hostless persisted upstream hostless rather than inventing one', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ upstream: { owner: 'stablyai', repo: 'orca' } }))
+
+    expect(store.getRepo('r1')!.upstream).toEqual({ owner: 'stablyai', repo: 'orca' })
+    expect(store.getRepo('r1')!.upstream).not.toHaveProperty('host')
+  })
+
+  it('drops a blank upstream host instead of persisting an empty string', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ upstream: { owner: 'acme', repo: 'widgets', host: '   ' } }))
+
+    expect(store.getRepo('r1')!.upstream).toEqual({ owner: 'acme', repo: 'widgets' })
+  })
+
   it('updateRepo returns null for nonexistent id', async () => {
     const store = await createStore()
     expect(store.updateRepo('nope', { displayName: 'x' })).toBeNull()
@@ -4788,6 +4880,146 @@ describe('Store', () => {
     expect(updated.comment).toBe('updated')
   })
 
+  it('persists paired Jira linked-item metadata and drops mismatched source context', async () => {
+    const store = await createStore()
+    const linkedWorkItem = {
+      provider: 'jira' as const,
+      type: 'issue' as const,
+      number: 0,
+      title: 'ORCA-123 Link Jira',
+      url: 'https://company.atlassian.net/browse/ORCA-123',
+      jiraIdentifier: 'ORCA-123'
+    }
+    const linkedTaskSourceContext = {
+      kind: 'task-source' as const,
+      provider: 'jira' as const,
+      projectId: 'project-1',
+      hostId: 'runtime:env-1' as const,
+      providerIdentity: {
+        provider: 'jira' as const,
+        siteId: 'site-1',
+        siteUrl: 'https://company.atlassian.net',
+        projectKey: 'ORCA'
+      },
+      accountLabel: 'ada@example.com'
+    }
+
+    store.setWorktreeMeta('wt-jira', { linkedWorkItem, linkedTaskSourceContext })
+    store.flush()
+    const restored = await createStore()
+
+    expect(restored.getWorktreeMeta('wt-jira')).toMatchObject({
+      linkedWorkItem,
+      linkedTaskSourceContext
+    })
+    expect(
+      restored.setWorktreeMeta('wt-jira', {
+        linkedTaskSourceContext: { ...linkedTaskSourceContext, provider: 'linear' }
+      }).linkedTaskSourceContext
+    ).toBeNull()
+    expect(
+      restored.setWorktreeMeta('wt-jira', {
+        linkedTaskSourceContext: {
+          ...linkedTaskSourceContext,
+          providerIdentity: {
+            ...linkedTaskSourceContext.providerIdentity,
+            projectKey: 'OTHER'
+          }
+        }
+      }).linkedTaskSourceContext
+    ).toBeNull()
+  })
+
+  it('discards malformed persisted task-source metadata without aborting store load', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {
+        'wt-malformed': {
+          linkedWorkItem: {
+            provider: 'jira',
+            type: 'issue',
+            number: 0,
+            title: 'ORCA-123 Link Jira',
+            url: 'https://company.atlassian.net/browse/ORCA-123',
+            jiraIdentifier: 'ORCA-123'
+          },
+          linkedTaskSourceContext: {
+            kind: 'task-source',
+            provider: 'jira',
+            projectId: 'project-1',
+            hostId: 'local',
+            accountLabel: 44,
+            providerIdentity: {
+              provider: 'jira',
+              siteId: 'site-1',
+              siteUrl: 'https://company.atlassian.net',
+              projectKey: 'ORCA'
+            }
+          }
+        }
+      }
+    })
+
+    const store = await createStore()
+
+    expect(store.getWorktreeMeta('wt-malformed')?.linkedWorkItem?.jiraIdentifier).toBe('ORCA-123')
+    expect(store.getWorktreeMeta('wt-malformed')?.linkedTaskSourceContext).toBeNull()
+  })
+
+  it('drops corrupt worktreeMeta entries while still normalizing valid siblings', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeLineageById: { 'r1::/tmp/wt': { parentWorktreeId: 'wt-sibling' } },
+      workspaceLineageByChildKey: {
+        'worktree:r1::/tmp/wt': { parentWorkspaceKey: 'worktree:wt-sibling' }
+      },
+      worktreeMeta: {
+        'r1::/tmp/wt': null,
+        'r1::/tmp/scalar': 5,
+        'wt-sibling': {
+          linkedWorkItem: {
+            provider: 'jira',
+            type: 'issue',
+            number: 0,
+            title: 'ORCA-123 Link Jira',
+            url: 'https://company.atlassian.net/browse/ORCA-123',
+            jiraIdentifier: 'ORCA-123'
+          },
+          linkedTaskSourceContext: {
+            kind: 'task-source',
+            provider: 'jira',
+            projectId: 'project-1',
+            hostId: 'local',
+            accountLabel: 44,
+            providerIdentity: {
+              provider: 'jira',
+              siteId: 'site-1',
+              siteUrl: 'https://company.atlassian.net',
+              projectKey: 'ORCA'
+            }
+          }
+        }
+      }
+    })
+
+    const store = await createStore()
+
+    expect(store.getWorktreeMeta('wt-sibling')?.linkedWorkItem?.jiraIdentifier).toBe('ORCA-123')
+    expect(store.getWorktreeMeta('wt-sibling')?.linkedTaskSourceContext).toBeNull()
+    // Corrupt entries must not survive: gcStaleWorktreeMeta keeps timestamp-less keys, and downstream
+    // consumers deref worktreeMeta values unguarded (also keeps a rollback to an older build loadable).
+    expect(store.getAllWorktreeMeta()).not.toHaveProperty('r1::/tmp/wt')
+    expect(store.getAllWorktreeMeta()).not.toHaveProperty('r1::/tmp/scalar')
+    expect(store.getWorktreeLineage('r1::/tmp/wt')).toBeUndefined()
+    store.flush()
+    const persisted = readDataFile() as PersistedState
+    expect(persisted.worktreeMeta).not.toHaveProperty('r1::/tmp/wt')
+    expect(persisted.worktreeMeta).not.toHaveProperty('r1::/tmp/scalar')
+    expect(persisted.workspaceLineageByChildKey).not.toHaveProperty('worktree:r1::/tmp/wt')
+  })
+
   it('creates and updates folder workspaces from folder-backed project groups', async () => {
     const store = await createStore()
     const group = store.createProjectGroup({
@@ -4827,6 +5059,53 @@ describe('Store', () => {
       lastActivityAt: 123
     })
     expect(store.getFolderWorkspaces()).toHaveLength(1)
+  })
+
+  it('round-trips Jira item and source context for repo-less folder workspaces', async () => {
+    const store = await createStore()
+    const group = store.createProjectGroup({
+      name: 'Platform',
+      parentPath: '/workspace/platform',
+      createdFrom: 'folder-scan'
+    })
+    const linkedTask = {
+      provider: 'jira' as const,
+      type: 'issue' as const,
+      number: 0,
+      title: 'ORCA-123 Link Jira',
+      url: 'https://company.atlassian.net/browse/ORCA-123',
+      jiraIdentifier: 'ORCA-123'
+    }
+    const linkedTaskSourceContext = {
+      kind: 'task-source' as const,
+      provider: 'jira' as const,
+      projectId: group.id,
+      hostId: 'runtime:folder-env' as const,
+      repoId: null,
+      providerIdentity: {
+        provider: 'jira' as const,
+        siteId: 'site-1',
+        siteUrl: 'https://company.atlassian.net',
+        projectKey: 'ORCA'
+      },
+      accountLabel: 'ada@example.com'
+    }
+
+    const workspace = store.createFolderWorkspace({
+      projectGroupId: group.id,
+      linkedTask,
+      linkedTaskSourceContext
+    })
+    store.flush()
+    const restored = await createStore()
+
+    expect(restored.getFolderWorkspaces()).toContainEqual(
+      expect.objectContaining({
+        id: workspace.id,
+        linkedTask,
+        linkedTaskSourceContext: expect.objectContaining(linkedTaskSourceContext)
+      })
+    )
   })
 
   it('rejects folder workspace creation for non-folder-backed project groups', async () => {
@@ -5145,6 +5424,59 @@ describe('Store', () => {
     expect(updated.prBotAuthorOverrides).toHaveLength(500)
     expect(updated.prBotAuthorOverrides[0]).toBe('bot-0000')
     expect(updated.prBotAuthorOverrides[499]).toBe('bot-0499')
+  })
+
+  it('normalizes custom mobile pairing addresses on load and every settings write', async () => {
+    writeDataFile({
+      settings: {
+        mobilePairingCustomAddress: 'host:99999',
+        mobilePairingCustomAddresses: [' first.example:6768 ', 'host:99999', 'first.example:6768']
+      }
+    })
+    const store = await createStore()
+
+    expect(store.getSettings().mobilePairingCustomAddress).toBeNull()
+    expect(store.getSettings().mobilePairingCustomAddresses).toEqual(['first.example:6768'])
+    store.flush()
+    expect(
+      (readDataFile() as { settings?: GlobalSettings }).settings?.mobilePairingCustomAddress
+    ).toBeNull()
+
+    const updated = store.updateSettings({
+      mobilePairingCustomAddress: ' 100.126.117.25:6768 '
+    })
+    expect(updated.mobilePairingCustomAddress).toBe('100.126.117.25:6768')
+    expect(updated.mobilePairingCustomAddresses).toEqual([
+      'first.example:6768',
+      '100.126.117.25:6768'
+    ])
+    store.flush()
+    expect(
+      (readDataFile() as { settings?: GlobalSettings }).settings?.mobilePairingCustomAddress
+    ).toBe('100.126.117.25:6768')
+
+    expect(
+      store.updateSettings({ mobilePairingCustomAddress: 42 as never }).mobilePairingCustomAddress
+    ).toBeNull()
+
+    expect(
+      store.updateSettings({
+        mobilePairingCustomAddresses: [' second.example ', 'host:99999', 'second.example']
+      }).mobilePairingCustomAddresses
+    ).toEqual(['second.example'])
+
+    expect(
+      store.updateSettings({
+        mobilePairingCustomAddress: 'active.example:6768',
+        mobilePairingCustomAddresses: ['second.example']
+      }).mobilePairingCustomAddresses
+    ).toEqual(['second.example', 'active.example:6768'])
+
+    expect(
+      store.updateSettings({
+        mobilePairingCustomAddresses: ['third.example']
+      }).mobilePairingCustomAddresses
+    ).toEqual(['third.example', 'active.example:6768'])
   })
 
   it('notifies settings listeners with changed keys only', async () => {
@@ -5857,10 +6189,12 @@ describe('Store', () => {
     })
   })
 
-  it('tolerates a null worktreeMeta map in the durable file', async () => {
-    writeDataFile({ worktreeMeta: null })
+  it.each([null, [], 5])('repairs a corrupt worktreeMeta map (%#)', async (worktreeMeta) => {
+    writeDataFile({ worktreeMeta })
     const store = await createStore()
     expect(store.getAllWorktreeMeta()).toEqual({})
+    store.flush()
+    expect((readDataFile() as PersistedState).worktreeMeta).toEqual({})
   })
 
   // ── GitHub cache sidecar ───────────────────────────────────────────
@@ -6500,6 +6834,81 @@ describe('Store', () => {
     expect(reloaded.getUI().browserKagiSessionLink).toBe(sessionLink)
   })
 
+  it('durably encrypts SSH PTY consumer ownership for process restart recovery', async () => {
+    const store = await createStore()
+    store.setGitHubCache({ pr: { 'o/r#1': { fetchedAt: 1 } as never }, issue: {} })
+    await store.upsertSshPtyConsumerRecovery({
+      targetId: 'ssh-1',
+      clientInstanceId: 'client-1',
+      serverBuildId: 'relay-build-1',
+      clientGeneration: 3,
+      ownerGeneration: 5,
+      ownerLease: 'secret-owner-lease',
+      outputFlowControl: { version: 1, windowSu: 256 * 1024 }
+    })
+
+    const persisted = readDataFile() as {
+      sshPtyConsumerRecoveries: { ownerLease: string }[]
+    }
+    expect(persisted.sshPtyConsumerRecoveries[0]?.ownerLease).not.toBe('secret-owner-lease')
+    expect(existsSync(join(testState.dir, 'orca-github-cache.json'))).toBe(false)
+
+    const reloaded = await createStore()
+    expect(reloaded.getSshPtyConsumerRecovery('ssh-1')).toEqual({
+      targetId: 'ssh-1',
+      clientInstanceId: 'client-1',
+      serverBuildId: 'relay-build-1',
+      clientGeneration: 3,
+      ownerGeneration: 5,
+      ownerLease: 'secret-owner-lease',
+      outputFlowControl: { version: 1, windowSu: 256 * 1024 }
+    })
+  })
+
+  it('drops decrypted SSH PTY owner leases that exceed the relay protocol bound', async () => {
+    const oversizedLease = 'x'.repeat(513)
+    writeDataFile({
+      ...getDefaultPersistedState(testState.dir),
+      sshPtyConsumerRecoveries: [
+        {
+          targetId: 'ssh-1',
+          clientInstanceId: 'client-1',
+          serverBuildId: 'relay-build-1',
+          clientGeneration: 3,
+          ownerGeneration: 5,
+          ownerLease: Buffer.from(`encrypted:${oversizedLease}`, 'utf-8').toString('base64')
+        }
+      ]
+    })
+
+    const store = await createStore()
+
+    expect(store.getSshPtyConsumerRecovery('ssh-1')).toBeNull()
+  })
+
+  it('removes persisted SSH PTY consumer ownership with its target', async () => {
+    const store = await createStore()
+    store.addSshTarget({
+      id: 'ssh-1',
+      label: 'SSH 1',
+      host: 'example.test',
+      port: 22,
+      username: 'orca'
+    })
+    await store.upsertSshPtyConsumerRecovery({
+      targetId: 'ssh-1',
+      clientInstanceId: 'client-1',
+      serverBuildId: 'relay-build-1',
+      clientGeneration: 3,
+      ownerGeneration: 5,
+      ownerLease: 'secret-owner-lease'
+    })
+
+    store.removeSshTarget('ssh-1')
+
+    expect(store.getSshPtyConsumerRecovery('ssh-1')).toBeNull()
+  })
+
   it('keeps plaintext Kagi session links readable for migration from older builds', async () => {
     const sessionLink = 'https://kagi.com/search?token=secret'
     writeDataFile({
@@ -6594,6 +7003,46 @@ describe('Store', () => {
 
     store.updateUI({ syncTaskStatusFromWorkspaceBoard: true })
     expect(store.getUI().syncTaskStatusFromWorkspaceBoard).toBe(true)
+  })
+
+  it('preserves workflows above 20 statuses across load, write, and restart', async () => {
+    const imported = Array.from({ length: 21 }, (_, index) => ({
+      id: `state-${index + 1}`,
+      label: `State ${index + 1}`
+    })).toReversed()
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: { workspaceStatuses: imported },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getUI().workspaceStatuses?.map((status) => status.id)).toEqual(
+      imported.map((status) => status.id)
+    )
+
+    const authored = Array.from({ length: 64 }, (_, index) => ({
+      id: `final-${String(index + 1).padStart(3, '0')}`,
+      label: `Final ${index + 1}`
+    })).toReversed()
+    store.updateUI({ workspaceStatuses: authored })
+    store.flush()
+
+    expect(store.getUI().workspaceStatuses?.map((status) => status.id)).toEqual(
+      authored.map((status) => status.id)
+    )
+    expect(
+      (readDataFile() as PersistedState).ui.workspaceStatuses?.map((status) => status.id)
+    ).toEqual(authored.map((status) => status.id))
+
+    const restarted = await createStore()
+    expect(restarted.getUI().workspaceStatuses?.map((status) => status.id)).toEqual(
+      authored.map((status) => status.id)
+    )
   })
 
   it('repairs the known-bad reordered default workspace statuses once on load', async () => {
@@ -7007,6 +7456,7 @@ describe('Store', () => {
       'ci',
       'issue',
       'linear-issue',
+      'jira-issue',
       'pr',
       'comment',
       'ports',
@@ -7043,6 +7493,7 @@ describe('Store', () => {
       'ci',
       'issue',
       'linear-issue',
+      'jira-issue',
       'pr',
       'comment',
       'ports',
@@ -7070,6 +7521,7 @@ describe('Store', () => {
       'unread',
       'issue',
       'linear-issue',
+      'jira-issue',
       'pr',
       'automation',
       'cli',
@@ -7102,6 +7554,7 @@ describe('Store', () => {
       'ci',
       'issue',
       'linear-issue',
+      'jira-issue',
       'pr',
       'ports',
       'inline-agents'
@@ -7118,7 +7571,8 @@ describe('Store', () => {
       ui: {
         worktreeCardProperties: ['status', 'pr'],
         _inlineAgentsDefaultedForAllUsers: true,
-        _expandedWorktreeCardPropertiesDefaulted: true
+        _expandedWorktreeCardPropertiesDefaulted: true,
+        _jiraIssueWorktreeCardPropertyDefaulted: true
       },
       githubCache: { pr: {}, issue: {} },
       workspaceSession: {}
@@ -7177,7 +7631,8 @@ describe('Store', () => {
           'ports'
         ],
         _inlineAgentsDefaultedForAllUsers: true,
-        _expandedWorktreeCardPropertiesDefaulted: true
+        _expandedWorktreeCardPropertiesDefaulted: true,
+        _jiraIssueWorktreeCardPropertyDefaulted: true
       },
       githubCache: { pr: {}, issue: {} },
       workspaceSession: {}
@@ -7196,6 +7651,107 @@ describe('Store', () => {
     ])
     expect(store.getUI().worktreeCardProperties).not.toContain('branch')
     expect(store.getUI().worktreeCardProperties).not.toContain('inline-agents')
+  })
+
+  it('backfills jira-issue once for profiles stamped before it joined the defaults', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { compactWorktreeCards: false },
+      ui: {
+        worktreeCardProperties: [
+          'status',
+          'unread',
+          'issue',
+          'linear-issue',
+          'pr',
+          'ports',
+          'inline-agents'
+        ],
+        _inlineAgentsDefaultedForAllUsers: true,
+        _expandedWorktreeCardPropertiesDefaulted: true
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+
+    expect(store.getUI().worktreeCardProperties).toEqual([
+      'status',
+      'unread',
+      'issue',
+      'linear-issue',
+      'jira-issue',
+      'pr',
+      'ports',
+      'inline-agents'
+    ])
+    expect(
+      store.getUI().worktreeCardProperties?.filter((property) => property === 'jira-issue')
+    ).toHaveLength(1)
+    expect(store.getUI()._jiraIssueWorktreeCardPropertyDefaulted).toBe(true)
+  })
+
+  it('preserves a deliberate jira-issue removal after the backfill has run', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { compactWorktreeCards: false },
+      ui: {
+        worktreeCardProperties: ['status', 'unread', 'issue', 'linear-issue', 'pr'],
+        _inlineAgentsDefaultedForAllUsers: true,
+        _expandedWorktreeCardPropertiesDefaulted: true,
+        _jiraIssueWorktreeCardPropertyDefaulted: true
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+
+    expect(store.getUI().worktreeCardProperties).toEqual([
+      'status',
+      'unread',
+      'issue',
+      'linear-issue',
+      'pr'
+    ])
+    expect(store.getUI().worktreeCardProperties).not.toContain('jira-issue')
+  })
+
+  it('leaves fresh default profiles with a single jira-issue entry', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+
+    expect(
+      store.getUI().worktreeCardProperties?.filter((property) => property === 'jira-issue')
+    ).toHaveLength(1)
+    expect(store.getUI()._jiraIssueWorktreeCardPropertyDefaulted).toBe(true)
+  })
+
+  it('skips the jira-issue backfill when card properties are malformed', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { compactWorktreeCards: false },
+      ui: { worktreeCardProperties: 'not-an-array' },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+
+    expect(store.getUI().worktreeCardProperties).not.toContain('jira-issue')
+    expect(store.getUI()._jiraIssueWorktreeCardPropertyDefaulted).toBe(true)
   })
 
   it('uses the compact preset when card properties are missing in compact mode', async () => {
@@ -8529,6 +9085,221 @@ describe('Store', () => {
     expect(
       afterStaleWrite.terminalPtyIncarnationsByPaneKey?.[`retired-tab:${TEST_LEAF_2}`]
     ).toBeUndefined()
+  })
+
+  it('reconciles only the incarnation of an unchanged durable PTY binding', async () => {
+    const store = await createStore()
+    const paneKey = `tab1:${TEST_LEAF_1}`
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty-1' })]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty-1' }
+        }
+      },
+      terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-stale' }
+    })
+
+    expect(
+      store.persistPtyBinding({
+        worktreeId: 'wt1',
+        tabId: 'tab1',
+        leafId: TEST_LEAF_1,
+        ptyId: 'pty-1',
+        incarnationId: 'inc-live',
+        expectedBinding: { ptyId: 'pty-1', incarnationId: 'inc-stale' }
+      })
+    ).toBe(true)
+
+    expect(store.getWorkspaceSession().terminalPtyIncarnationsByPaneKey?.[paneKey]).toBe('inc-live')
+    const reloaded = await createStore()
+    expect(reloaded.getWorkspaceSession().terminalPtyIncarnationsByPaneKey?.[paneKey]).toBe(
+      'inc-live'
+    )
+  })
+
+  it('rejects competing PTY and incarnation changes during reconciliation', async () => {
+    const store = await createStore()
+    const paneKey = `tab1:${TEST_LEAF_1}`
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty-current' })]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty-current' }
+        }
+      },
+      terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-current' }
+    })
+
+    for (const competing of [
+      { ptyId: 'pty-replaced', expectedIncarnationId: 'inc-current' },
+      { ptyId: 'pty-current', expectedIncarnationId: 'inc-replaced' }
+    ]) {
+      expect(
+        store.persistPtyBinding({
+          worktreeId: 'wt1',
+          tabId: 'tab1',
+          leafId: TEST_LEAF_1,
+          ptyId: competing.ptyId,
+          incarnationId: 'inc-live',
+          expectedBinding: {
+            ptyId: competing.ptyId,
+            incarnationId: competing.expectedIncarnationId
+          }
+        })
+      ).toBe(false)
+    }
+    expect(store.getWorkspaceSession().terminalPtyIncarnationsByPaneKey?.[paneKey]).toBe(
+      'inc-current'
+    )
+  })
+
+  it('reconciles only the requested execution-host partition', async () => {
+    const store = await createStore()
+    const paneKey = `tab1:${TEST_LEAF_1}`
+    const session = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty-1' })]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf' as const, leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty-1' }
+        }
+      },
+      terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-stale' }
+    }
+    store.setWorkspaceSession(structuredClone(session), 'local')
+    store.setWorkspaceSession(structuredClone(session), 'ssh:ssh-1')
+
+    expect(
+      store.persistPtyBinding(
+        {
+          worktreeId: 'wt1',
+          tabId: 'tab1',
+          leafId: TEST_LEAF_1,
+          ptyId: 'pty-1',
+          incarnationId: 'inc-remote-live',
+          expectedBinding: { ptyId: 'pty-1', incarnationId: 'inc-stale' }
+        },
+        'ssh:ssh-1'
+      )
+    ).toBe(true)
+
+    expect(store.getWorkspaceSession('local').terminalPtyIncarnationsByPaneKey?.[paneKey]).toBe(
+      'inc-stale'
+    )
+    expect(store.getWorkspaceSession('ssh:ssh-1').terminalPtyIncarnationsByPaneKey?.[paneKey]).toBe(
+      'inc-remote-live'
+    )
+  })
+
+  it.each([
+    { label: 'local', hostId: undefined },
+    { label: 'SSH', hostId: 'ssh:ssh-1' }
+  ])(
+    'preserves a reconciled incarnation across a renderer snapshot ($label)',
+    async ({ hostId }) => {
+      const store = await createStore()
+      const paneKey = `tab1:${TEST_LEAF_1}`
+      store.setWorkspaceSession(
+        {
+          ...getDefaultWorkspaceSession(),
+          tabsByWorktree: {
+            wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty-1' })]
+          },
+          terminalLayoutsByTabId: {
+            tab1: {
+              root: { type: 'leaf', leafId: TEST_LEAF_1 },
+              activeLeafId: TEST_LEAF_1,
+              expandedLeafId: null,
+              ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty-1' }
+            }
+          },
+          terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-stale' }
+        },
+        hostId
+      )
+
+      expect(
+        store.persistPtyBinding(
+          {
+            worktreeId: 'wt1',
+            tabId: 'tab1',
+            leafId: TEST_LEAF_1,
+            ptyId: 'pty-1',
+            incarnationId: 'inc-live',
+            expectedBinding: { ptyId: 'pty-1', incarnationId: 'inc-stale' }
+          },
+          hostId
+        )
+      ).toBe(true)
+
+      const rendererSnapshot = structuredClone(store.getWorkspaceSession(hostId))
+      delete rendererSnapshot.terminalPtyIncarnationsByPaneKey
+      delete rendererSnapshot.terminalTopologyRevisionByRepoId
+      store.setWorkspaceSession(rendererSnapshot, hostId)
+
+      expect(store.getWorkspaceSession(hostId).terminalPtyIncarnationsByPaneKey?.[paneKey]).toBe(
+        'inc-live'
+      )
+      const reloaded = await createStore()
+      expect(reloaded.getWorkspaceSession(hostId).terminalPtyIncarnationsByPaneKey?.[paneKey]).toBe(
+        'inc-live'
+      )
+    }
+  )
+
+  it('rolls back incarnation reconciliation when the durability barrier fails', async () => {
+    const store = await createStore()
+    const paneKey = `tab1:${TEST_LEAF_1}`
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty-1' })]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty-1' }
+        }
+      },
+      terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-stale' }
+    })
+    vi.spyOn(store, 'flushOrThrow').mockImplementationOnce(() => {
+      throw new Error('disk full')
+    })
+
+    expect(() =>
+      store.persistPtyBinding({
+        worktreeId: 'wt1',
+        tabId: 'tab1',
+        leafId: TEST_LEAF_1,
+        ptyId: 'pty-1',
+        incarnationId: 'inc-live',
+        expectedBinding: { ptyId: 'pty-1', incarnationId: 'inc-stale' }
+      })
+    ).toThrow('disk full')
+    expect(store.getWorkspaceSession().terminalPtyIncarnationsByPaneKey?.[paneKey]).toBe(
+      'inc-stale'
+    )
   })
 
   it('adds a missing split leaf to the durable root when a new pane spawns before layout debounce', async () => {
@@ -11178,6 +11949,197 @@ describe('Store host-partitioned workspace sessions', () => {
 
     const reloaded = await createStore()
     expect(reloaded.getWorkspaceSession('runtime:env-a').activeRepoId).toBe('repo-a')
+  })
+
+  it('removes one orphaned worktree with a host-scoped topology fence', async () => {
+    const store = await createStore()
+    const worktreeId = 'repo-gone::/workspace/stale'
+    const session = {
+      ...makeHostSession('repo-gone'),
+      activeWorktreeId: worktreeId,
+      activeWorktreeIdsOnShutdown: [worktreeId],
+      lastVisitedAtByWorktreeId: { [worktreeId]: 123 },
+      tabsByWorktree: {
+        [worktreeId]: [makeTerminalTab({ id: 'stale-tab', worktreeId })]
+      },
+      terminalTopologyRevisionByRepoId: { 'repo-gone': 3 }
+    }
+    store.setWorkspaceSession(session, 'local')
+    store.setWorkspaceSession(session, 'runtime:env-a')
+    store.setWorkspaceSession(session, 'runtime:env-b')
+
+    store.removeWorkspaceSessionStateForWorktree(worktreeId, 'runtime:env-a')
+    store.setWorkspaceSession(session, 'runtime:env-a')
+    store.flush()
+
+    const reloaded = await createStore()
+    expect(reloaded.getWorkspaceSession('runtime:env-a')).toMatchObject({
+      tabsByWorktree: {},
+      terminalTopologyRevisionByRepoId: { 'repo-gone': 4 }
+    })
+    expect(reloaded.getWorkspaceSession('runtime:env-b')).toMatchObject({
+      activeWorktreeId: worktreeId,
+      activeWorktreeIdsOnShutdown: [worktreeId],
+      lastVisitedAtByWorktreeId: { [worktreeId]: 123 },
+      terminalTopologyRevisionByRepoId: { 'repo-gone': 3 }
+    })
+    // The local blob is a co-owner surface for every remote host, since the renderer parks state
+    // there whenever worktree ownership is unresolved; leaving it behind leaks the removed worktree.
+    expect(reloaded.getWorkspaceSession('local')).toMatchObject({
+      tabsByWorktree: {},
+      activeWorktreeId: null,
+      activeWorktreeIdsOnShutdown: [],
+      lastVisitedAtByWorktreeId: {},
+      terminalTopologyRevisionByRepoId: { 'repo-gone': 4 }
+    })
+  })
+
+  it('uses persisted worktree ownership when removing metadata', async () => {
+    const store = await createStore()
+    const worktreeId = 'repo-gone::/workspace/stale'
+    const session = {
+      ...makeHostSession('repo-gone'),
+      tabsByWorktree: {
+        [worktreeId]: [makeTerminalTab({ id: 'stale-tab', worktreeId })]
+      }
+    }
+    store.setWorkspaceSession(session, 'local')
+    store.setWorkspaceSession(session, 'runtime:env-a')
+    store.setWorkspaceSession(session, 'runtime:env-b')
+    store.setWorktreeMeta(worktreeId, { hostId: 'runtime:env-a' })
+
+    store.removeWorktreeMeta(worktreeId)
+
+    expect(store.getWorkspaceSession('runtime:env-a').tabsByWorktree[worktreeId]).toBeUndefined()
+    // Only the owning host's partition and the local blob it may spill into are cleaned; a same-id
+    // worktree on another host is a different workspace and must survive.
+    expect(store.getWorkspaceSession('runtime:env-b').tabsByWorktree[worktreeId]).toHaveLength(1)
+    expect(store.getWorkspaceSession('local').tabsByWorktree[worktreeId]).toBeUndefined()
+  })
+
+  it('cleans both surfaces that hold an ssh-owned worktree', async () => {
+    const store = await createStore()
+    const worktreeId = 'repo-ssh::/srv/stale'
+    const makeSession = (): ReturnType<typeof makeHostSession> => ({
+      ...makeHostSession('repo-ssh'),
+      activeWorktreeId: worktreeId,
+      lastVisitedAtByWorktreeId: { [worktreeId]: 123 },
+      tabsByWorktree: {
+        [worktreeId]: [makeTerminalTab({ id: 'stale-tab', worktreeId })]
+      }
+    })
+    // The renderer persists SSH workspaces in the local blob; the main process writes their
+    // terminal state to the host's own `ssh:*` partition. Removal must clear both.
+    store.setWorkspaceSession(makeSession(), 'local')
+    store.setWorkspaceSession(makeSession(), 'ssh:conn-1')
+    store.setWorktreeMeta(worktreeId, { hostId: 'ssh:conn-1' })
+
+    store.removeWorktreeMeta(worktreeId, 'ssh:conn-1')
+
+    for (const hostId of ['local', 'ssh:conn-1'] as const) {
+      expect(store.getWorkspaceSession(hostId)).toMatchObject({
+        tabsByWorktree: {},
+        activeWorktreeId: null,
+        lastVisitedAtByWorktreeId: {},
+        terminalTopologyRevisionByRepoId: { 'repo-ssh': 1 }
+      })
+    }
+  })
+
+  it('does not bump the topology fence in a partition that never held the worktree', async () => {
+    const store = await createStore()
+    const worktreeId = 'repo-split::/workspace/stale'
+    const otherWorktreeId = 'repo-split::/workspace/live'
+    // Why this matters: the fence is keyed by repo, so a bump here would make every later write
+    // for repo-split rebase onto main's copy and silently drop the live worktree's unsaved tabs.
+    store.setWorkspaceSession(
+      {
+        ...makeHostSession('repo-split'),
+        tabsByWorktree: {
+          [otherWorktreeId]: [makeTerminalTab({ id: 'live-tab', worktreeId: otherWorktreeId })]
+        }
+      },
+      'local'
+    )
+    store.setWorkspaceSession(
+      {
+        ...makeHostSession('repo-split'),
+        tabsByWorktree: {
+          [worktreeId]: [makeTerminalTab({ id: 'stale-tab', worktreeId })]
+        }
+      },
+      'runtime:env-a'
+    )
+    store.setWorktreeMeta(worktreeId, { hostId: 'runtime:env-a' })
+
+    store.removeWorktreeMeta(worktreeId, 'local')
+
+    expect(
+      store.getWorkspaceSession('runtime:env-a').terminalTopologyRevisionByRepoId?.['repo-split']
+    ).toBe(1)
+    expect(
+      store.getWorkspaceSession('local').terminalTopologyRevisionByRepoId?.['repo-split']
+    ).toBeUndefined()
+    expect(store.getWorkspaceSession('local').tabsByWorktree[otherWorktreeId]).toHaveLength(1)
+  })
+
+  it('trusts persisted ownership over a stale caller hostId', async () => {
+    const store = await createStore()
+    const worktreeId = 'repo-split::/workspace/stale'
+    const session = {
+      ...makeHostSession('repo-split'),
+      tabsByWorktree: {
+        [worktreeId]: [makeTerminalTab({ id: 'stale-tab', worktreeId })]
+      }
+    }
+    store.setWorkspaceSession(session, 'runtime:env-a')
+    store.setWorkspaceSession(session, 'runtime:env-b')
+    store.setWorktreeMeta(worktreeId, { hostId: 'runtime:env-a' })
+
+    // A caller's hostId comes from live routing and can go stale mid-removal; the same
+    // repoId::path can name a live worktree on env-b, whose tabs must survive.
+    store.removeWorktreeMeta(worktreeId, 'runtime:env-b')
+
+    expect(store.getWorkspaceSession('runtime:env-a').tabsByWorktree[worktreeId]).toBeUndefined()
+    expect(store.getWorkspaceSession('runtime:env-b').tabsByWorktree[worktreeId]).toHaveLength(1)
+  })
+
+  it('falls back to the caller hostId only when no ownership was recorded', async () => {
+    const store = await createStore()
+    const worktreeId = 'repo-gone::/workspace/stale'
+    const session = {
+      ...makeHostSession('repo-gone'),
+      tabsByWorktree: {
+        [worktreeId]: [makeTerminalTab({ id: 'stale-tab', worktreeId })]
+      }
+    }
+    store.setWorkspaceSession(session, 'runtime:env-a')
+    store.setWorkspaceSession(session, 'local')
+
+    store.removeWorktreeMeta(worktreeId, 'runtime:env-a')
+
+    expect(store.getWorkspaceSession('runtime:env-a').tabsByWorktree[worktreeId]).toBeUndefined()
+    expect(store.getWorkspaceSession('local').tabsByWorktree[worktreeId]).toBeUndefined()
+  })
+
+  // Trade-off: the fence is repo-wide, so claiming authority over a partition main never wrote would
+  // rebase every sibling worktree of that repo onto an empty copy. A delayed write wins here instead.
+  it('does not fence a delayed session write when its host partition was never persisted', async () => {
+    const store = await createStore()
+    const worktreeId = 'repo-gone::/workspace/stale'
+    const delayedSession = {
+      ...makeHostSession('repo-gone'),
+      tabsByWorktree: {
+        [worktreeId]: [makeTerminalTab({ id: 'stale-tab', worktreeId })]
+      }
+    }
+
+    store.removeWorkspaceSessionStateForWorktree(worktreeId, 'runtime:env-a')
+    store.setWorkspaceSession(delayedSession, 'runtime:env-a')
+
+    const session = store.getWorkspaceSession('runtime:env-a')
+    expect(session.tabsByWorktree[worktreeId]?.[0]?.id).toBe('stale-tab')
+    expect(session.terminalTopologyRevisionByRepoId?.['repo-gone']).toBeUndefined()
   })
 
   it('drops a corrupt host partition to defaults without failing the others', async () => {

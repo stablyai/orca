@@ -1,5 +1,5 @@
 import { symlink, mkdir, stat, lstat, unlink, cp, realpath } from 'node:fs/promises'
-import { dirname, isAbsolute, resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import {
   ApfsCloneUnavailableError,
   canCloneWithApfs,
@@ -14,6 +14,10 @@ import {
   type SkippedWorktreeCopyPath,
   type WorktreeCopyBudget
 } from './worktree-include-copy-budget'
+import {
+  findExistingWorktreeSymlinkPaths,
+  getSafeRelativePath
+} from '../git/worktree-symlink-detection'
 
 type WorktreeLinkedPathOptions = {
   platform?: NodeJS.Platform
@@ -27,43 +31,53 @@ type WorktreeLinkedPathOptions = {
 // 'link': symlink when APFS clone is unavailable (user-configured shared paths).
 // 'copy': real copy when APFS clone is unavailable (.worktreeinclude paths, which
 // are per-worktree copies by cross-tool convention — edits must not leak back).
-type WorktreeMaterializeMode = 'link' | 'copy'
+// 'share': always symlink (orca.yaml sharedDirectories). An APFS clone would give
+// each worktree an independent node_modules, defeating one-install-serves-all.
+type WorktreeMaterializeMode = 'link' | 'copy' | 'share'
 
-type SafeRelativePathResult =
-  | {
-      safe: true
-      rel: string
-    }
-  | {
-      safe: false
-    }
-
-function getSafeRelativePath(rawPath: string): SafeRelativePathResult {
-  // Why: strip leading separators (both `/` and `\`) before the guard so
-  // Windows-style input like `\foo` is normalized the same way POSIX `/foo`
-  // is, and the traversal check below sees the already-relative form.
-  const rel = rawPath.trim().replace(/^[\\/]+/, '')
-  // Why: split on both separators so a Windows-authored `..\escape` is
-  // rejected the same way POSIX `../escape` is. `path.isAbsolute` catches
-  // drive-letter absolutes (`C:\...`); the split catches relative
-  // backslash traversal that `.split('/')` would otherwise miss.
-  if (!rel || isAbsolute(rel) || rel.split(/[\\/]/).includes('..')) {
-    return { safe: false }
+/** The `fs.symlink` types to attempt, in order, for one materialized path.
+ *
+ *  Why more than one on Windows: a plain symlink needs Developer Mode or admin,
+ *  so an ordinary Windows user gets EPERM and silently ends up with no shared
+ *  directory at all. A directory junction needs no privilege, so try it first.
+ *
+ *  Why still fall back to a symlink: a junction cannot point at a UNC path, and
+ *  a WSL project's repo lives behind one (`\\wsl.localhost\<Distro>\...`). The
+ *  fallback keeps that case working exactly as it does today. */
+export function worktreeSymlinkTypeCandidates(
+  platform: NodeJS.Platform,
+  sourceIsDirectory: boolean
+): ('junction' | 'dir' | 'file')[] {
+  if (!sourceIsDirectory) {
+    return ['file']
   }
-  return { safe: true, rel }
+  return platform === 'win32' ? ['junction', 'dir'] : ['dir']
 }
 
 async function symlinkWorktreePath(
   source: string,
   target: string,
-  sourceIsDirectory: boolean
+  sourceIsDirectory: boolean,
+  platform: NodeJS.Platform
 ): Promise<void> {
   await mkdir(dirname(target), { recursive: true })
-  // Why: Windows requires an explicit `type` ('dir' vs 'file' vs
-  // 'junction') for `fs.symlink`. On POSIX the argument is ignored, so
-  // passing it unconditionally is safe and removes a Windows-only
-  // failure mode when Node can't auto-detect from the source.
-  await symlink(source, target, sourceIsDirectory ? 'dir' : 'file')
+  // Why: Windows requires an explicit `type` ('dir' vs 'file' vs 'junction')
+  // for `fs.symlink`. On POSIX the argument is ignored, so passing it
+  // unconditionally is safe and removes a Windows-only failure mode when Node
+  // can't auto-detect from the source.
+  const candidates = worktreeSymlinkTypeCandidates(platform, sourceIsDirectory)
+  for (let index = 0; index < candidates.length; index++) {
+    try {
+      // Why: `source` is always absolute (`resolve()` guarantees it), which a
+      // junction requires.
+      await symlink(source, target, candidates[index])
+      return
+    } catch (error) {
+      if (index === candidates.length - 1) {
+        throw error
+      }
+    }
+  }
 }
 
 async function copyWorktreePath(source: string, target: string): Promise<void> {
@@ -93,7 +107,13 @@ async function createWorktreeLinkedPath(
   apfsFilesystemCache: DarwinFilesystemCache,
   realCopyFallbackAllowed: () => boolean
 ): Promise<void> {
-  if (options.platform === 'darwin' && (!sourceIsSymbolicLink || mode === 'copy')) {
+  // Why: share mode must never clone — an independent copy would give each
+  // worktree its own node_modules, defeating one-install-serves-all.
+  if (
+    mode !== 'share' &&
+    options.platform === 'darwin' &&
+    (!sourceIsSymbolicLink || mode === 'copy')
+  ) {
     try {
       const cloneWorktreePath =
         options.cloneWorktreePath ??
@@ -130,7 +150,7 @@ async function createWorktreeLinkedPath(
     await copyWorktreePath(copySource, target)
     return
   }
-  await symlinkWorktreePath(source, target, sourceIsDirectory)
+  await symlinkWorktreePath(source, target, sourceIsDirectory, options.platform ?? process.platform)
 }
 
 /** Whether this copy will land as an APFS clone rather than a byte-for-byte
@@ -312,6 +332,19 @@ export async function createWorktreeCopiedPaths(
   return await materializeWorktreePaths(primaryPath, worktreePath, paths, 'copy', options)
 }
 
+/** Symlink `orca.yaml` `worktree.sharedDirectories` into a freshly-created
+ *  worktree. Unlike createWorktreeLinkedPaths this never APFS clone-copies: a
+ *  clone would give each worktree its own node_modules, and the point of a
+ *  shared directory is that one install serves every worktree. */
+export async function createWorktreeSharedPaths(
+  primaryPath: string,
+  worktreePath: string,
+  paths: readonly string[],
+  options: WorktreeLinkedPathOptions = {}
+): Promise<void> {
+  await materializeWorktreePaths(primaryPath, worktreePath, paths, 'share', options)
+}
+
 /** Create filesystem symlinks from the primary checkout into a freshly-created
  *  worktree for each configured path. Failures on individual paths are logged
  *  and skipped so a missing/stale entry never blocks worktree creation.
@@ -350,26 +383,7 @@ export async function removeWorktreeLinkedPaths(
   }
 }
 
-export async function findExistingWorktreeSymlinkPaths(
-  worktreePath: string,
-  paths: readonly string[]
-): Promise<string[]> {
-  const symlinkPaths: string[] = []
-  for (const rawPath of paths) {
-    const safePath = getSafeRelativePath(rawPath)
-    if (!safePath.safe) {
-      continue
-    }
-    try {
-      if ((await lstat(resolve(worktreePath, safePath.rel))).isSymbolicLink()) {
-        symlinkPaths.push(safePath.rel)
-      }
-    } catch {
-      // Why: only a positively identified symlink may bypass dirty preflight.
-    }
-  }
-  return symlinkPaths
-}
+export { findExistingWorktreeSymlinkPaths }
 
 /** Remove previously-created symlinks from a worktree before deletion.
  *

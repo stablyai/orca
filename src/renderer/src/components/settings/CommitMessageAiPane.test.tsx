@@ -5,6 +5,7 @@ import type { GlobalSettings } from '../../../../shared/types'
 import type { SourceControlAiSettings } from '../../../../shared/source-control-ai-types'
 import {
   getCommitMessageModelDiscoveryHostKey,
+  getCommitMessageModelDiscoveryHostKeyForLocalRuntime,
   getCommitMessageModelDiscoveryHostKeyForScope
 } from '../../../../shared/commit-message-host-key'
 import { useAppStore } from '../../store'
@@ -441,6 +442,8 @@ describe('CommitMessageAiPane', () => {
     expect(getCommitMessageModelDiscoveryHostKey(null)).toBe('local')
     expect(getCommitMessageModelDiscoveryHostKey('ssh-1')).toBe('ssh:ssh-1')
     expect(getCommitMessageModelDiscoveryHostKey(undefined)).toBe('unknown')
+    expect(getCommitMessageModelDiscoveryHostKeyForLocalRuntime('Ubuntu')).toBe('wsl:Ubuntu')
+    expect(getCommitMessageModelDiscoveryHostKeyForLocalRuntime(null)).toBe('local')
     expect(getCommitMessageModelDiscoveryHostKeyForScope('runtime:env-1')).toBe('runtime:env-1')
     expect(getCommitMessageModelDiscoveryHostKeyForScope('ssh-1')).toBe('ssh:ssh-1')
   })

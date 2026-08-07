@@ -210,6 +210,95 @@ describe('ChecksList', () => {
     expect(markup).not.toContain('opacity-0')
     expect(markup).not.toContain('Open details')
   })
+
+  // Why: the pill above this list already calls skipped checks passing; a "2 passing" header on the
+  // same 2-success/3-skipped PR contradicts its own "5/5 passed" pill.
+  it('counts skipped checks in the passing header, matching the checks pill', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(
+        TooltipProvider,
+        null,
+        React.createElement(ChecksList, {
+          checks: [
+            { name: 'build', status: 'completed', conclusion: 'success', url: null },
+            { name: 'test', status: 'completed', conclusion: 'success', url: null },
+            { name: 'deploy', status: 'completed', conclusion: 'skipped', url: null },
+            { name: 'docs', status: 'completed', conclusion: 'skipped', url: null },
+            { name: 'e2e', status: 'completed', conclusion: 'skipped', url: null }
+          ],
+          checksLoading: false,
+          checkDetailsContextKey: 'repo:43'
+        })
+      )
+    )
+
+    expect(markup).toContain('5 passing')
+    expect(markup).not.toContain('2 passing')
+  })
+
+  // Why: a completed check with no conclusion will never resolve, so calling it pending kept an
+  // amber spinner next to a grey "Unresolved checks" pill reading the same list.
+  it('reports a completed check with no conclusion as unresolved, not pending', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(
+        TooltipProvider,
+        null,
+        React.createElement(ChecksList, {
+          checks: [{ name: 'legacy', status: 'completed', conclusion: null, url: null }],
+          checksLoading: false,
+          checkDetailsContextKey: 'repo:44'
+        })
+      )
+    )
+
+    expect(markup).toContain('1 unresolved')
+    expect(markup).not.toContain('1 pending')
+  })
+})
+
+describe('PRTriageStrip check counts', () => {
+  function renderStrip(checks: PRCheckDetail[]): string {
+    return renderToStaticMarkup(
+      React.createElement(PRTriageStrip, {
+        pr: makePR({ mergeable: 'MERGEABLE' }),
+        checks,
+        isResolvingConflictsWithAI: false,
+        onResolveConflictsWithAI: () => {},
+        isFixingChecksWithAI: false,
+        onFixChecksWithAI: () => {}
+      })
+    )
+  }
+
+  // Why: the strip and the checks pill read the same list, so a check that completed without a
+  // verdict must not spin here as pending while the pill calls it unresolved.
+  it('shows a completed check with no conclusion as unresolved instead of pending', () => {
+    const markup = renderStrip([
+      { name: 'legacy', status: 'completed', conclusion: null, url: null }
+    ])
+
+    expect(markup).toContain('1 check unresolved')
+    expect(markup).not.toContain('1 check pending')
+    expect(markup).not.toContain('No blocking PR action')
+  })
+
+  it('still reports a running check as pending', () => {
+    const markup = renderStrip([{ name: 'ci', status: 'in_progress', conclusion: null, url: null }])
+
+    expect(markup).toContain('1 check pending')
+  })
+
+  // Why: one unresolved check must not demote a PR that has a passing one — that is the same
+  // rollup rule the pill uses, so both keep saying the PR is green.
+  it('keeps a passing check green even when another check is unresolved', () => {
+    const markup = renderStrip([
+      { name: 'build', status: 'completed', conclusion: 'success', url: null },
+      { name: 'legacy', status: 'completed', conclusion: 'neutral', url: null }
+    ])
+
+    expect(markup).toContain('No blocking PR action')
+    expect(markup).not.toContain('unresolved')
+  })
 })
 
 describe('isMutablePRConversationComment', () => {

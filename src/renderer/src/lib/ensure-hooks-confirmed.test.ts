@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 import type { PersistedTrustedOrcaHooks } from '../../../shared/types'
-import { __resetTrustPromptChainForTests, ensureHooksConfirmed } from './ensure-hooks-confirmed'
+import {
+  __resetTrustPromptChainForTests,
+  ensureHooksConfirmed,
+  readAndConfirmRuntimeIssueCommand
+} from './ensure-hooks-confirmed'
 import { hashOrcaHookScript } from './orca-hook-trust'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
@@ -386,6 +390,98 @@ describe('ensureHooksConfirmed', () => {
     await ensureHooksConfirmed(state, 'repo-1', 'issueCommand', 'ssh:server')
 
     expect(readIssueCommandMock).toHaveBeenCalledWith({ repoId: 'repo-1', hostId: 'ssh:server' })
+  })
+
+  it('approves and returns the exact issue-command bytes from one host-qualified read', async () => {
+    const { state, pending } = createTestState({
+      repos: [
+        { id: 'repo-1', displayName: 'Local Row' },
+        { id: 'repo-1', displayName: 'SSH Row', connectionId: 'server' }
+      ]
+    } as unknown as Partial<AppState>)
+    readIssueCommandMock
+      .mockResolvedValueOnce({
+        status: 'ok',
+        source: 'shared',
+        sharedContent: 'approved bytes',
+        localContent: null,
+        effectiveContent: 'approved bytes',
+        localFilePath: ''
+      })
+      .mockResolvedValueOnce({
+        status: 'ok',
+        source: 'shared',
+        sharedContent: 'changed bytes',
+        localContent: null,
+        effectiveContent: 'changed bytes',
+        localFilePath: ''
+      })
+
+    const promise = readAndConfirmRuntimeIssueCommand(state, 'repo-1', 'ssh:server')
+
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    expect(pending[0].data.scriptContent).toBe('approved bytes')
+    pending[0].resolve('run')
+
+    await expect(promise).resolves.toMatchObject({
+      template: 'approved bytes',
+      trustDecision: 'run'
+    })
+    expect(readIssueCommandMock).toHaveBeenCalledTimes(1)
+    expect(readIssueCommandMock).toHaveBeenCalledWith({
+      repoId: 'repo-1',
+      hostId: 'ssh:server'
+    })
+  })
+
+  it('does not reuse repo-wide trust across duplicate execution hosts', async () => {
+    const { state, pending } = createTestState({
+      trustedOrcaHooks: { 'repo-1': { all: { approvedAt: 1 } } },
+      repos: [
+        { id: 'repo-1', displayName: 'Runtime', executionHostId: 'runtime:env-1' },
+        { id: 'repo-1', displayName: 'SSH', connectionId: 'server' }
+      ]
+    } as unknown as Partial<AppState>)
+    readIssueCommandMock.mockResolvedValue({
+      status: 'ok',
+      source: 'shared',
+      sharedContent: 'host-specific bytes',
+      localContent: null,
+      effectiveContent: 'host-specific bytes',
+      localFilePath: ''
+    })
+
+    const promise = readAndConfirmRuntimeIssueCommand(state, 'repo-1', 'ssh:server')
+
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    pending[0].resolve('skip')
+    await expect(promise).resolves.toMatchObject({ trustDecision: 'skip' })
+  })
+
+  it('does not open a trust prompt after its composer is cancelled mid-read', async () => {
+    const { state, pending } = createTestState()
+    let cancelled = false
+    let resolveRead: (result: Record<string, unknown>) => void = () => undefined
+    readIssueCommandMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveRead = resolve
+        })
+    )
+
+    const promise = readAndConfirmRuntimeIssueCommand(state, 'repo-1', 'local', () => cancelled)
+    cancelled = true
+    resolveRead({
+      status: 'ok',
+      source: 'shared',
+      sharedContent: 'late bytes',
+      localContent: null,
+      effectiveContent: 'late bytes',
+      localFilePath: ''
+    })
+
+    await expect(promise).resolves.toMatchObject({ trustDecision: 'skip' })
+    expect(pending).toHaveLength(0)
   })
 
   it('fails closed when issueCommand inspection reports an error status', async () => {

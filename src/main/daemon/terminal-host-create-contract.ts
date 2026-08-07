@@ -19,13 +19,15 @@ export type CreateOrAttachOptions = {
   command?: string
   startupCommandDelivery?: StartupCommandDelivery
   launchAgent?: TuiAgent
+  /** Missing ownership is not permission to create during stable-pane adoption. */
+  attachOnly?: boolean
   /** Explicit shell the renderer asked for, forwarded to the subprocess. */
   shellOverride?: string
   terminalWindowsWslDistro?: string | null
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
   shellReadySupported?: boolean
   shellReadyTimeoutMs?: number
-  historySeed?: string
+  historySeedChunks?: readonly string[]
   startupIngress?: PtyStartupIngressIntent
   agentSessionEnsure?: {
     claim: AgentSessionExecutionClaim

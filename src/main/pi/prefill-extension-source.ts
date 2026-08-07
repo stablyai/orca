@@ -10,15 +10,6 @@ const PREFILL_ENV_VAR_BY_KIND: Record<PiAgentKind, string> = {
   omp: 'ORCA_OMP_PREFILL'
 }
 
-/** Pi's prefill env var. Exported for callers that need the literal name
- *  (renderer draft-launch plan builder, tests). OMP callers should read
- *  `ORCA_OMP_PREFILL_ENV_VAR` instead. */
-export const ORCA_PI_PREFILL_ENV_VAR = PREFILL_ENV_VAR_BY_KIND.pi
-
-/** OMP's prefill env var. Mirrors `ORCA_PI_PREFILL_ENV_VAR` for OMP launches
- *  so renderer plans and shell-ready restore lines can stay agent-scoped. */
-export const ORCA_OMP_PREFILL_ENV_VAR = PREFILL_ENV_VAR_BY_KIND.omp
-
 export function getPiPrefillExtensionSource(kind: PiAgentKind): string {
   const envVar = PREFILL_ENV_VAR_BY_KIND[kind]
   return [

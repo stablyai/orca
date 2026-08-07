@@ -71,6 +71,33 @@ describe('daemon-entry parseArgs', () => {
     })
   })
 
+  it('parses PID publication metadata from the launcher', () => {
+    expect(
+      parseArgs([
+        '--socket',
+        '/tmp/t.sock',
+        '--token',
+        '/tmp/t.token',
+        '--pid-record',
+        '/tmp/t.pid',
+        '--launch-nonce',
+        'launch-a',
+        '--entry-path',
+        '/app/daemon-entry.js',
+        '--app-version',
+        '1.2.3',
+        '--spawner-exec-path',
+        '/Applications/Orca.app/Contents/MacOS/Orca'
+      ])
+    ).toMatchObject({
+      pidPath: '/tmp/t.pid',
+      launchNonce: 'launch-a',
+      entryPath: '/app/daemon-entry.js',
+      appVersion: '1.2.3',
+      spawnerExecPath: '/Applications/Orca.app/Contents/MacOS/Orca'
+    })
+  })
+
   it('rejects either PID-record ownership argument without its pair', () => {
     expect(() =>
       parseArgs([

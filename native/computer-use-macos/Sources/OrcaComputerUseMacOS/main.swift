@@ -729,33 +729,49 @@ final class Provider {
         let snapshot = try currentSnapshot(params: params)
         let button = params["mouseButton"]?.string ?? "left"
         let count = try positiveInteger(params["clickCount"]?.number, defaultValue: 1, name: "clickCount")
+        guard count <= SyntheticMouseClickDelivery.maxClickCount else {
+            throw ProviderError.coded(
+                "invalid_argument",
+                "clickCount must be at most \(SyntheticMouseClickDelivery.maxClickCount)"
+            )
+        }
+        let modifiers = try KeyMap.parseModifiers(params["modifiers"]?.string)
         // Why: agents expect a click into a target app to make the next
         // keyboard action safe, even when the click uses an AX action path.
-        recoverWindow(snapshot.app)
+        recoverWindow(snapshot.app, windowId: snapshot.windowId, windowBounds: snapshot.windowBounds)
         if let elementIndex = try optionalInteger(params, "elementIndex") {
             let record = try element(snapshot, elementIndex)
-            if count <= 1, let actionName = try performClickAction(record: record, mouseButton: button) {
+            if modifiers.isEmpty, count <= 1, let actionName = try performClickAction(record: record, mouseButton: button) {
                 return actionMetadata(path: "accessibility", actionName: actionName)
             }
             if let point = center(record.localFrame, in: snapshot.windowBounds) {
                 try Input.click(
-                    pid: snapshot.app.pid,
                     at: point,
                     button: mouseButton(button),
-                    count: count
+                    count: count,
+                    modifiers: modifiers,
+                    targetWindow: snapshot
                 )
-                return actionMetadata(path: "synthetic", fallbackReason: "actionUnsupported")
+                return actionMetadata(
+                    path: "synthetic",
+                    fallbackReason: "actionUnsupported",
+                    verification: unverifiedAction(reason: "synthetic_input")
+                )
             }
             throw ProviderError.coded("element_not_clickable", "element \(record.index) has no clickable frame")
         }
         let point = try coordinatePoint(params: params, xKey: "x", yKey: "y", snapshot: snapshot)
         try Input.click(
-            pid: snapshot.app.pid,
             at: point,
             button: mouseButton(button),
-            count: count
+            count: count,
+            modifiers: modifiers,
+            targetWindow: snapshot
         )
-        return actionMetadata(path: "synthetic")
+        return actionMetadata(
+            path: "synthetic",
+            verification: unverifiedAction(reason: "synthetic_input")
+        )
     }
 
     private func performClickAction(record: ElementRecord, mouseButton: String) throws -> String? {
@@ -1115,6 +1131,124 @@ private func isTargetWindowFocused(_ snapshot: Snapshot) -> Bool {
     return !intersection.isNull && intersection.area >= min(frame.area, snapshot.windowBounds.area) * 0.75
 }
 
+private func currentSyntheticClickRecipient(
+    snapshot: Snapshot,
+    point: CGPoint
+) -> SyntheticMouseClickDelivery.Recipient? {
+    let target = syntheticClickRecipient(pid: snapshot.app.pid, windowId: snapshot.windowId)
+    var cachedTargetCandidates: [WindowCandidate]?
+    func targetCandidates() -> [WindowCandidate] {
+        if let cachedTargetCandidates { return cachedTargetCandidates }
+        let candidates = WindowCapture.candidates(pid: snapshot.app.pid)
+        cachedTargetCandidates = candidates
+        return candidates
+    }
+    if let focused = focusedSyntheticClickRecipient(
+        targetPID: snapshot.app.pid,
+        targetCandidates: targetCandidates
+    ) {
+        guard focused == target else { return focused }
+    } else {
+        guard NSWorkspace.shared.frontmostApplication?.processIdentifier == snapshot.app.pid else {
+            return nil
+        }
+    }
+    return hitTestSyntheticClickRecipient(
+        at: point,
+        targetPID: snapshot.app.pid,
+        targetCandidates: targetCandidates
+    )
+}
+
+private func focusedSyntheticClickRecipient(
+    targetPID: pid_t,
+    targetCandidates: () -> [WindowCandidate]
+) -> SyntheticMouseClickDelivery.Recipient? {
+    let systemWide = AXUIElementCreateSystemWide()
+    guard let focusedApp = copyElement(systemWide, kAXFocusedApplicationAttribute as String),
+          let ownerPID = pidAttribute(focusedApp),
+          let focusedWindow = copyElement(systemWide, kAXFocusedWindowAttribute as String) ??
+            copyElement(focusedApp, kAXFocusedWindowAttribute as String)
+    else {
+        return nil
+    }
+    if let windowId = windowNumber(focusedWindow) {
+        return syntheticClickRecipient(pid: ownerPID, windowId: windowId)
+    }
+    guard ownerPID == targetPID else { return nil }
+    guard let frame = absoluteFrame(focusedWindow),
+          let candidate = SyntheticMouseClickDelivery.uniqueWindowCandidate(
+            from: targetCandidates(),
+            matching: {
+              windowFramesMatch($0.bounds, frame)
+            }
+          )
+    else {
+        return nil
+    }
+    return syntheticClickRecipient(pid: ownerPID, windowId: candidate.windowId)
+}
+
+private func hitTestSyntheticClickRecipient(
+    at point: CGPoint,
+    targetPID: pid_t,
+    targetCandidates: () -> [WindowCandidate]
+) -> SyntheticMouseClickDelivery.Recipient? {
+    let systemWide = AXUIElementCreateSystemWide()
+    var hitElement: AXUIElement?
+    guard AXUIElementCopyElementAtPosition(
+        systemWide,
+        Float(point.x),
+        Float(point.y),
+        &hitElement
+    ) == .success,
+          let hitElement,
+          let ownerPID = pidAttribute(hitElement),
+          let window = containingWindow(hitElement)
+    else {
+        return nil
+    }
+    if let windowId = windowNumber(window) {
+        return syntheticClickRecipient(pid: ownerPID, windowId: windowId)
+    }
+    guard ownerPID == targetPID else { return nil }
+    guard let frame = absoluteFrame(window),
+          let candidate = SyntheticMouseClickDelivery.uniqueWindowCandidate(
+            from: targetCandidates(),
+            matching: {
+              windowFramesMatch($0.bounds, frame)
+            }
+          )
+    else {
+        return nil
+    }
+    return syntheticClickRecipient(pid: ownerPID, windowId: candidate.windowId)
+}
+
+private func containingWindow(_ element: AXUIElement) -> AXUIElement? {
+    var current = element
+    for _ in 0..<64 {
+        if stringAttribute(current, kAXRoleAttribute as String) == kAXWindowRole as String {
+            return current
+        }
+        if let window = copyElement(current, kAXWindowAttribute as String) {
+            return window
+        }
+        guard let parent = copyElement(current, kAXParentAttribute as String) else {
+            return nil
+        }
+        current = parent
+    }
+    return nil
+}
+
+private func syntheticClickRecipient(
+    pid: pid_t,
+    windowId: CGWindowID
+) -> SyntheticMouseClickDelivery.Recipient {
+    SyntheticMouseClickDelivery.Recipient(ownerPID: pid, windowID: windowId)
+}
+
 private func requireTargetWindowFocused(_ snapshot: Snapshot, restoreWindowRequested: Bool) throws {
     guard let failure = KeyboardInputSafety.syntheticInputFocusFailure(
         targetWindowFocused: isTargetWindowFocused(snapshot),
@@ -1155,20 +1289,68 @@ private func matchingWindow(appElement: AXUIElement, capture: WindowCapture, foc
     } ?? focused
 }
 
-private func recoverWindow(_ app: AppDescriptor) {
+private func recoverWindow(
+    _ app: AppDescriptor,
+    windowId: CGWindowID? = nil,
+    windowBounds: CGRect? = nil
+) {
     _ = app.app.unhide()
     _ = app.app.activate(options: [.activateAllWindows])
     if let bundleId = app.bundleId {
         openBundle(bundleId)
     }
     let appElement = AXUIElementCreateApplication(app.pid)
-    if let window = copyElement(appElement, kAXFocusedWindowAttribute as String) ?? copyArray(appElement, kAXWindowsAttribute as String)?.first {
+    let focusedWindow = copyElement(appElement, kAXFocusedWindowAttribute as String)
+    var cachedWindows: [AXUIElement]?
+    func windows() -> [AXUIElement] {
+        if let cachedWindows { return cachedWindows }
+        let value = copyArray(appElement, kAXWindowsAttribute as String) ?? []
+        cachedWindows = value
+        return value
+    }
+    let targetWindow: AXUIElement?
+    if let focusedWindow,
+       (windowId == nil && windowBounds == nil || windowMatchesCapture(
+           focusedWindow,
+           windowId: windowId,
+           windowBounds: windowBounds
+       )) {
+        targetWindow = focusedWindow
+    } else {
+        let exactWindow = windowId.flatMap { targetId in
+            windows().first { windowNumber($0) == targetId }
+        }
+        targetWindow = exactWindow ?? windowBounds.flatMap { targetBounds in
+            windows().first { window in
+                absoluteFrame(window).map { windowFramesMatch($0, targetBounds) } == true
+            }
+        }
+    }
+    if let window = targetWindow ?? focusedWindow ?? windows().first {
         _ = AXUIElementSetAttributeValue(window, kAXMinimizedAttribute as CFString, kCFBooleanFalse)
         _ = AXUIElementPerformAction(window, kAXRaiseAction as CFString)
         _ = AXUIElementSetAttributeValue(window, kAXMainAttribute as CFString, kCFBooleanTrue)
         _ = AXUIElementSetAttributeValue(window, kAXFocusedAttribute as CFString, kCFBooleanTrue)
     }
     Thread.sleep(forTimeInterval: 0.4)
+}
+
+private func windowMatchesCapture(
+    _ window: AXUIElement,
+    windowId: CGWindowID?,
+    windowBounds: CGRect?
+) -> Bool {
+    if let windowId, windowNumber(window) == windowId { return true }
+    guard let windowBounds, let frame = absoluteFrame(window) else { return false }
+    return windowFramesMatch(frame, windowBounds)
+}
+
+private func windowFramesMatch(_ lhs: CGRect, _ rhs: CGRect) -> Bool {
+    let tolerance: CGFloat = 2
+    return abs(lhs.minX - rhs.minX) <= tolerance &&
+        abs(lhs.minY - rhs.minY) <= tolerance &&
+        abs(lhs.width - rhs.width) <= tolerance &&
+        abs(lhs.height - rhs.height) <= tolerance
 }
 
 private func openBundle(_ bundleId: String) {
@@ -2282,14 +2464,69 @@ private func resizePng(_ image: CGImage, scale: CGFloat) -> BoundedPNG? {
 }
 
 private enum Input {
-    static func click(pid: pid_t, at point: CGPoint, button: MouseButton, count: Int) throws {
+    static func click(
+        at point: CGPoint,
+        button: MouseButton,
+        count: Int,
+        modifiers: [KeyModifier],
+        targetWindow: Snapshot
+    ) throws {
         guard let source = CGEventSource(stateID: .combinedSessionState) else {
             throw ProviderError.coded("accessibility_error", "failed to create event source")
         }
-        for _ in 0..<max(count, 1) {
-            try mouse(.mouseMoved, source: source, point: point, button: button.cgButton, pid: pid)
-            try mouse(button.downEvent, source: source, point: point, button: button.cgButton, pid: pid)
-            try mouse(button.upEvent, source: source, point: point, button: button.cgButton, pid: pid)
+        let flags = modifiers.reduce(into: CGEventFlags()) { result, modifier in
+            result.insert(modifier.flag)
+        }
+        let target = syntheticClickRecipient(pid: targetWindow.app.pid, windowId: targetWindow.windowId)
+        do {
+            try SyntheticMouseClickDelivery.deliver(
+                clickCount: count,
+                target: target,
+                currentRecipient: {
+                    currentSyntheticClickRecipient(snapshot: targetWindow, point: point)
+                },
+                makeEvent: { step in
+                    let type: CGEventType
+                    switch step {
+                    case .move:
+                        type = .mouseMoved
+                    case .buttonDown:
+                        type = button.downEvent
+                    case .buttonUp:
+                        type = button.upEvent
+                    }
+                    guard let event = CGEvent(
+                        mouseEventSource: source,
+                        mouseType: type,
+                        mouseCursorPosition: point,
+                        mouseButton: button.cgButton
+                    ) else {
+                        throw ProviderError.coded("accessibility_error", "failed to create mouse event")
+                    }
+                    event.flags = flags
+                    let clickState = SyntheticMouseClickDelivery.clickState(for: step)
+                    if clickState > 0 {
+                        event.setIntegerValueField(.mouseEventClickState, value: clickState)
+                    }
+                    return event
+                },
+                post: { $0.post(tap: .cghidEventTap) },
+                pause: { _ = usleep($0) }
+            )
+        } catch let failure as SyntheticMouseClickDelivery.FenceFailure {
+            switch failure {
+            case let .recipientChanged(expected, actual, deliveredPresses):
+                let actualDescription = actual.map {
+                    "pid \($0.ownerPID) window \($0.windowID)"
+                } ?? "no focused window"
+                let recovery = deliveredPresses == 0
+                    ? "bring the target window forward, run get-app-state again, and retry"
+                    : "\(deliveredPresses) press(es) may already have been delivered; run get-app-state and verify state before retrying"
+                throw ProviderError.coded(
+                    "window_not_focused",
+                    "coordinate click aborted because target pid \(expected.ownerPID) window \(expected.windowID) is no longer the focused topmost recipient (current: \(actualDescription)); \(recovery)"
+                )
+            }
         }
     }
 
@@ -2343,16 +2580,20 @@ private enum Input {
     static func pressKey(_ key: String, pid: pid_t) throws {
         let parsed = try KeyMap.parse(key)
         var flags = CGEventFlags()
+        var pressedModifiers: [KeyModifier] = []
+        defer {
+            for modifier in pressedModifiers.reversed() {
+                flags.remove(modifier.flag)
+                try? keyEvent(modifier.keyCode, down: false, flags: flags, pid: pid)
+            }
+        }
         for modifier in parsed.modifiers {
             flags.insert(modifier.flag)
             try keyEvent(modifier.keyCode, down: true, flags: flags, pid: pid)
+            pressedModifiers.append(modifier)
         }
         try keyEvent(parsed.keyCode, down: true, flags: flags, pid: pid)
         try keyEvent(parsed.keyCode, down: false, flags: flags, pid: pid)
-        for modifier in parsed.modifiers.reversed() {
-            try keyEvent(modifier.keyCode, down: false, flags: flags, pid: pid)
-            flags.remove(modifier.flag)
-        }
     }
 
     static func pasteText(_ text: String, pid: pid_t) throws {
@@ -2377,10 +2618,18 @@ private enum Input {
         try pressKey("cmd+v", pid: pid)
     }
 
-    private static func mouse(_ type: CGEventType, source: CGEventSource, point: CGPoint, button: CGMouseButton, pid: pid_t) throws {
+    private static func mouse(
+        _ type: CGEventType,
+        source: CGEventSource,
+        point: CGPoint,
+        button: CGMouseButton,
+        flags: CGEventFlags = [],
+        pid: pid_t
+    ) throws {
         guard let event = CGEvent(mouseEventSource: source, mouseType: type, mouseCursorPosition: point, mouseButton: button) else {
             throw ProviderError.coded("accessibility_error", "failed to create mouse event")
         }
+        event.flags = flags
         event.postToPid(pid)
     }
 
@@ -2497,16 +2746,9 @@ private enum KeyMap {
         var modifiers: [KeyModifier] = []
         var keyName: String?
         for part in parts {
-            switch part {
-            case "cmd", "command", "meta", "super", "cmdorctrl", "commandorcontrol":
-                modifiers.append(KeyModifier(keyCode: 55, flag: .maskCommand))
-            case "ctrl", "control":
-                modifiers.append(KeyModifier(keyCode: 59, flag: .maskControl))
-            case "alt", "option":
-                modifiers.append(KeyModifier(keyCode: 58, flag: .maskAlternate))
-            case "shift":
-                modifiers.append(KeyModifier(keyCode: 56, flag: .maskShift))
-            default:
+            if let modifier = modifier(part) {
+                modifiers.append(modifier)
+            } else {
                 keyName = part
             }
         }
@@ -2514,6 +2756,38 @@ private enum KeyMap {
             throw ProviderError.coded("invalid_argument", "unsupported key '\(spec)'")
         }
         return ParsedKey(keyCode: keyCode, modifiers: modifiers)
+    }
+
+    static func parseModifiers(_ spec: String?) throws -> [KeyModifier] {
+        guard let spec else {
+            return []
+        }
+        let parts = spec.split(separator: "+", omittingEmptySubsequences: false)
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+        guard !parts.isEmpty, !parts.contains(where: \.isEmpty) else {
+            throw ProviderError.coded("invalid_argument", "click modifiers require modifier keys only")
+        }
+        return try parts.map { part in
+            guard let modifier = modifier(part) else {
+                throw ProviderError.coded("invalid_argument", "unsupported click modifier '\(part)'")
+            }
+            return modifier
+        }
+    }
+
+    private static func modifier(_ part: String) -> KeyModifier? {
+        switch part {
+        case "cmd", "command", "meta", "super", "win", "cmdorctrl", "commandorcontrol":
+            return KeyModifier(keyCode: 55, flag: .maskCommand)
+        case "ctrl", "control":
+            return KeyModifier(keyCode: 59, flag: .maskControl)
+        case "alt", "option":
+            return KeyModifier(keyCode: 58, flag: .maskAlternate)
+        case "shift":
+            return KeyModifier(keyCode: 56, flag: .maskShift)
+        default:
+            return nil
+        }
     }
 
     private static let codes: [String: CGKeyCode] = [
@@ -2530,9 +2804,12 @@ private enum KeyMap {
 }
 
 private final class AgentRuntime: NSObject, NSApplicationDelegate {
+    private static let unclaimedSessionDeadline: TimeInterval = 30
+
     private let socketPath: String
     private let token: String?
     private var listener: SocketListener?
+    private var unclaimedSessionTimeout: DispatchWorkItem?
 
     init(socketPath: String, token: String?) {
         self.socketPath = socketPath
@@ -2541,9 +2818,29 @@ private final class AgentRuntime: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
-            let listener = try SocketListener(socketPath: socketPath, token: token)
+            let timeout = DispatchWorkItem {
+                fputs("computer-use agent received no authenticated session before its deadline\n", stderr)
+                NSApp.terminate(nil)
+            }
+            unclaimedSessionTimeout = timeout
+            let listener = try SocketListener(
+                socketPath: socketPath,
+                token: token,
+                onSessionClaimed: {
+                    timeout.cancel()
+                },
+                onSessionClosed: {
+                    DispatchQueue.main.async {
+                        NSApp.terminate(nil)
+                    }
+                }
+            )
             self.listener = listener
             listener.start()
+            DispatchQueue.main.asyncAfter(
+                deadline: .now() + Self.unclaimedSessionDeadline,
+                execute: timeout
+            )
         } catch {
             fputs("failed to start computer-use socket: \(error)\n", stderr)
             NSApp.terminate(nil)
@@ -2551,6 +2848,8 @@ private final class AgentRuntime: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        unclaimedSessionTimeout?.cancel()
+        unclaimedSessionTimeout = nil
         listener?.stop()
     }
 }
@@ -3456,14 +3755,26 @@ private final class ButtonTarget: NSObject {
 private final class SocketListener: @unchecked Sendable {
     private let socketPath: String
     private let token: String?
+    private let onSessionClaimed: () -> Void
+    private let onSessionClosed: () -> Void
     private let provider = Provider()
     private let providerLock = NSLock()
+    private let sessionLock = NSLock()
+    private var sessionOwnership = AgentSessionOwnership()
+    private var lastConnectionID: UInt64 = 0
     private var socketFd: Int32 = -1
     private var isStopped = false
 
-    init(socketPath: String, token: String?) throws {
+    init(
+        socketPath: String,
+        token: String?,
+        onSessionClaimed: @escaping () -> Void,
+        onSessionClosed: @escaping () -> Void
+    ) throws {
         self.socketPath = socketPath
         self.token = token
+        self.onSessionClaimed = onSessionClaimed
+        self.onSessionClosed = onSessionClosed
         try bindSocket()
     }
 
@@ -3538,14 +3849,35 @@ private final class SocketListener: @unchecked Sendable {
                 }
                 continue
             }
+            guard let connectionID = allocateConnectionID() else {
+                fputs("computer-use socket exhausted connection identities\n", stderr)
+                close(fd)
+                continue
+            }
             Thread.detachNewThread { [weak self] in
-                self?.handleConnection(fd)
+                self?.handleConnection(fd, connectionID: connectionID)
             }
         }
     }
 
-    private func handleConnection(_ fd: Int32) {
-        defer { close(fd) }
+    private func allocateConnectionID() -> AgentSessionConnectionID? {
+        sessionLock.lock()
+        defer { sessionLock.unlock() }
+        guard lastConnectionID < UInt64.max else { return nil }
+        lastConnectionID += 1
+        return AgentSessionConnectionID(rawValue: lastConnectionID)
+    }
+
+    private func handleConnection(_ fd: Int32, connectionID: AgentSessionConnectionID) {
+        var registeredSession = false
+        var hangupMonitor: AuthenticatedConnectionHangupMonitor?
+        defer {
+            hangupMonitor?.cancel()
+            if registeredSession {
+                disconnectSession(connectionID)
+            }
+            close(fd)
+        }
         let authorizedPeer = peerProcessId(fd).map(isAuthorizedAgentPeer) == true
         let decoder = JSONDecoder()
         while let line = readLine(from: fd) {
@@ -3553,6 +3885,40 @@ private final class SocketListener: @unchecked Sendable {
                   let request = try? decoder.decode(Request.self, from: data)
             else {
                 continue
+            }
+            if !registeredSession && isAuthenticatedAgentSession(
+                expectedToken: token,
+                requestToken: request.token,
+                authorizedPeer: authorizedPeer
+            ) {
+                let monitor: AuthenticatedConnectionHangupMonitor
+                do {
+                    monitor = try AuthenticatedConnectionHangupMonitor(
+                        fileDescriptor: fd,
+                        onHangup: { [weak self] in
+                            self?.disconnectSession(connectionID)
+                        }
+                    )
+                } catch {
+                    fputs("computer-use owner monitor failed: \(error)\n", stderr)
+                    return
+                }
+                sessionLock.lock()
+                let registration = sessionOwnership.registerConnection(
+                    connectionID,
+                    authenticated: true
+                )
+                sessionLock.unlock()
+                guard registration != .rejected else {
+                    monitor.cancel()
+                    return
+                }
+                registeredSession = true
+                hangupMonitor = monitor
+                monitor.start()
+                if registration == .claimed {
+                    onSessionClaimed()
+                }
             }
             let response = handleRequest(
                 provider: provider,
@@ -3562,6 +3928,15 @@ private final class SocketListener: @unchecked Sendable {
                 authorizedPeer: authorizedPeer
             )
             writeJSON(response, to: fd)
+        }
+    }
+
+    private func disconnectSession(_ connectionID: AgentSessionConnectionID) {
+        sessionLock.lock()
+        let shouldTerminate = sessionOwnership.disconnect(connectionID)
+        sessionLock.unlock()
+        if shouldTerminate {
+            onSessionClosed()
         }
     }
 }

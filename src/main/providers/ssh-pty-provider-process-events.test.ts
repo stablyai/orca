@@ -13,7 +13,7 @@ function createMockMux(): MockMultiplexer {
   return {
     request: vi.fn().mockResolvedValue(undefined),
     notify: vi.fn(),
-    onNotification: vi.fn(),
+    onNotification: vi.fn().mockReturnValue(vi.fn()),
     dispose: vi.fn(),
     isDisposed: vi.fn().mockReturnValue(false)
   }
@@ -135,10 +135,17 @@ describe('SshPtyProvider process listings and events', () => {
     notify('pty.replay', { id: 'pty-1', data: 'buffered output' })
     notify('pty.exit', { id: 'pty-1', code: 0, incarnationId: 'incarnation-1' })
 
-    expect(dataHandler).toHaveBeenNthCalledWith(1, { id: scopedPty1, data: 'output' })
+    expect(dataHandler).toHaveBeenNthCalledWith(1, {
+      id: scopedPty1,
+      data: 'output',
+      providerGeneration: 1,
+      ptyIncarnation: 'legacy:1:1:pty-1'
+    })
     expect(dataHandler).toHaveBeenNthCalledWith(2, {
       id: scopedPty1,
       data: '',
+      providerGeneration: 1,
+      ptyIncarnation: 'legacy:1:1:pty-1',
       sequenceChars: 9,
       seq: 9,
       transformed: true
@@ -147,8 +154,26 @@ describe('SshPtyProvider process listings and events', () => {
     expect(exitHandler).toHaveBeenCalledWith({
       id: scopedPty1,
       code: 0,
+      providerGeneration: 1,
+      ptyIncarnation: 'legacy:1:1:pty-1',
       incarnationId: 'incarnation-1'
     })
+  })
+
+  it('keeps fallback admission identity stable when spawn metadata arrives later', async () => {
+    const dataHandler = vi.fn()
+    provider.onData(dataHandler)
+    const notify = mux.onNotification.mock.calls[0][0]
+
+    notify('pty.data', { id: 'pty-1', data: 'before-response' })
+    mux.request.mockResolvedValue({ id: 'pty-1', incarnationId: 'incarnation-1' })
+    await provider.spawn({ cols: 80, rows: 24 })
+    notify('pty.data', { id: 'pty-1', data: 'after-response' })
+
+    expect(dataHandler.mock.calls.map(([payload]) => payload.ptyIncarnation)).toEqual([
+      'legacy:1:1:pty-1',
+      'legacy:1:1:pty-1'
+    ])
   })
 
   it('supports listener removal, fanout, and connection namespaces', () => {
@@ -170,6 +195,29 @@ describe('SshPtyProvider process listings and events', () => {
     const other = vi.fn()
     otherProvider.onData(other)
     otherMux.onNotification.mock.calls[0][0]('pty.data', { id: 'pty-1', data: 'second' })
-    expect(other).toHaveBeenCalledWith({ id: 'ssh:conn-2@@pty-1', data: 'second' })
+    expect(other).toHaveBeenCalledWith({
+      id: 'ssh:conn-2@@pty-1',
+      data: 'second',
+      providerGeneration: 1,
+      ptyIncarnation: 'legacy:1:1:pty-1'
+    })
+  })
+
+  it('scopes pause delivery adapters and resumes them during cleanup', () => {
+    const adapter = vi.fn()
+    provider.setPtyDeliveryPauseAdapter(adapter)
+
+    provider.pauseProducer(scopedPty1)
+    provider.pauseProducer(scopedPty1)
+    provider.resumeProducer(scopedPty1)
+    provider.pauseProducer(scopedPty1)
+    provider.dispose()
+
+    expect(adapter.mock.calls).toEqual([
+      [{ id: 'pty-1', providerGeneration: 1, paused: true }],
+      [{ id: 'pty-1', providerGeneration: 1, paused: false }],
+      [{ id: 'pty-1', providerGeneration: 1, paused: true }],
+      [{ id: 'pty-1', providerGeneration: 1, paused: false }]
+    ])
   })
 })

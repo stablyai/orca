@@ -1,5 +1,5 @@
 import * as ExpoCrypto from 'expo-crypto'
-import type { ConnectionLogSink, HostProfile } from './types'
+import type { ConnectionLogSink, ForegroundNudgeReason, HostProfile } from './types'
 import { connect } from './rpc-client'
 import { MobileEndpointSupervisor } from './mobile-endpoint-supervisor'
 import { connectMobileRelayRpcSession } from './mobile-relay-rpc-session'
@@ -15,6 +15,7 @@ import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 
 type EndpointLifecycle = {
   setForeground(foreground: boolean): void
+  nudge(reason: ForegroundNudgeReason): void
   stop(): void
 }
 
@@ -63,6 +64,14 @@ export function startMobileEndpointLifecycle(
       foreground = next
       owner.setForeground(next)
     },
+    nudge(reason) {
+      // Why: a focus nudge can precede the AppState listener; keep the closure in
+      // sync or a later supervisor swap would start with a stale background flag.
+      if (reason !== 'network-change') {
+        foreground = true
+      }
+      owner.nudge(reason)
+    },
     stop() {
       stopped = true
       owner.stop()
@@ -90,6 +99,7 @@ function createSupervisor(
     readBundle: readMobileRelayCredentialBundle,
     writeBundle: writeMobileRelayCredentialBundle,
     saveHost,
+    onLog,
     now: Date.now,
     randomBytes: ExpoCrypto.getRandomBytes,
     setTimer: setTimeout,

@@ -15,7 +15,9 @@ export function lastEnteredDoneAt(
     return null
   }
   const entry = agent.entry
-  if (entry.state === 'done') {
+  // Why: a session-boundary done means the session connected idle (STA-3386) — nothing
+  // finished; fall through to history (which never records session boundaries).
+  if (entry.state === 'done' && entry.sessionBoundary !== true) {
     return entry.stateStartedAt
   }
   for (let i = (entry.stateHistory?.length ?? 0) - 1; i >= 0; i--) {

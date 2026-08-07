@@ -438,4 +438,36 @@ describe('workspace-tab-palette-search', () => {
       'terminal-other'
     ])
   })
+
+  it('falls back to the branch label when a cleared display name left it undefined', () => {
+    // Why: Cmd+J runs this search over the same worktree objects as searchWorktrees,
+    // so the store-level display-name corruption reaches here too.
+    const cleared = makeWorktree({
+      displayName: undefined as unknown as string,
+      branch: 'refs/heads/feature/workspace-tab-search'
+    })
+    const entries = buildEntries({ worktrees: [cleared] })
+
+    expect(searchWorkspaceTabs(entries, 'workspace-tab-search')[0]).toMatchObject({
+      worktreeName: 'feature/workspace-tab-search',
+      worktreeRange: {
+        start: 'feature/'.length,
+        end: 'feature/workspace-tab-search'.length
+      }
+    })
+  })
+
+  it('lists a branch-less row on the empty query without throwing', () => {
+    const cleared = makeWorktree({
+      displayName: undefined as unknown as string,
+      branch: undefined as unknown as string,
+      path: path.join('repos', 'design-review')
+    })
+    const entries = buildEntries({ worktrees: [cleared] })
+
+    expect(searchWorkspaceTabs(entries, '')[0]).toMatchObject({
+      worktreeName: 'design-review',
+      worktreeRange: null
+    })
+  })
 })

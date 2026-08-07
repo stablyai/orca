@@ -10,7 +10,9 @@ export const WorktreeSelector = z.object({
 export const GitStatusParams = WorktreeSelector.extend({
   includeIgnored: z.boolean().optional(),
   bypassEffectiveUpstreamNegativeCache: z.boolean().optional(),
-  reuseLineStats: z.boolean().optional()
+  reuseLineStats: z.boolean().optional(),
+  // Shape is re-validated host-side before it reaches a git argv.
+  branchLineTotalMergeBase: z.string().optional()
 })
 
 export const GitCheckIgnored = WorktreeSelector.extend({

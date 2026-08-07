@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: this suite exercises the full hook HTTP surface (Claude/Codex/Gemini parsing, transcript chunked scan, paneKey dispatch) and keeping the scenarios co-located avoids fixture drift across files. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import {
   existsSync,
   mkdirSync,
@@ -30,6 +31,7 @@ import {
   type HookListenerState
 } from '../../shared/agent-hook-listener'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import { createShedSubagentsField } from '../../shared/agent-hook-relay'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
   getCohortAtEmitMock: vi.fn(),
@@ -54,9 +56,11 @@ const GOOD_PANE = makePaneKey('tab-good', LEAF_2)
 const OLD_PANE = makePaneKey('tab-old', LEAF_3)
 const FRESH_PANE = makePaneKey('tab-fresh', LEAF_4)
 const TAB_A_PANE = makePaneKey('tab-A', LEAF_5)
+const RUNNING_SHELL = { id: 'shell-1', type: 'shell', status: 'running' }
 
 type Body = {
   paneKey: string
+  launchToken?: string
   tabId?: string
   worktreeId?: string
   env?: string
@@ -183,6 +187,91 @@ describe('AgentHookServer listener replay', () => {
     )
 
     expect(server.getStatusSnapshot()[0]?.subagents).toEqual([child('new-child')])
+  })
+
+  it('restores a subagent roster the relay shed to fit the frame', () => {
+    const server = new AgentHookServer()
+    const roster = [
+      { id: 'reviewer-1', agentType: 'reviewer', state: 'working' as const, startedAt: 1 }
+    ]
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        payload: { state: 'working', prompt: 'review', agentType: 'claude', subagents: roster }
+      },
+      'conn-1'
+    )
+    // The relay dropped the roster to fit an oversized frame and said so on the wire.
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        shedFields: ['lastAssistantMessage', createShedSubagentsField(roster)],
+        payload: { state: 'done', prompt: 'review', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'done', subagents: roster })
+  })
+
+  it('lets an unmarked absent roster clear, so a finished team still retires', () => {
+    const server = new AgentHookServer()
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        payload: {
+          state: 'working',
+          prompt: 'review',
+          agentType: 'claude',
+          subagents: [{ id: 'reviewer-1', agentType: 'reviewer', state: 'working', startedAt: 1 }]
+        }
+      },
+      'conn-1'
+    )
+    server.ingestRemote(
+      { paneKey: PANE, payload: { state: 'done', prompt: 'review', agentType: 'claude' } },
+      'conn-1'
+    )
+    expect(server.getStatusSnapshot()[0]?.subagents).toBeUndefined()
+  })
+
+  it('does not carry Claude background work across connection cleanup', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          claudeRunningNonAgentTask: true,
+          payload: { state: 'working', prompt: 'old host', agentType: 'claude' }
+        },
+        'conn-1'
+      )
+
+      server.clearStatusEntriesForConnection('conn-1')
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          payload: { state: 'working', prompt: 'new host', agentType: 'claude' }
+        },
+        'conn-2'
+      )
+      const baseline = server.getStatusSnapshot()[0]
+      vi.setSystemTime(1_500)
+
+      expect(
+        server.inferInterrupt({
+          paneKey: PANE,
+          baselineUpdatedAt: baseline.receivedAt,
+          baselineStateStartedAt: baseline.stateStartedAt,
+          baselinePrompt: 'new host',
+          baselineAgentType: 'claude',
+          intent: 'plain-escape'
+        })
+      ).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('retains root Codex identity when relay child events omit it', () => {
@@ -347,6 +436,232 @@ describe('AgentHookServer listener replay', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('does not infer an interrupt while Claude reports a background shell', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          claudeRunningNonAgentTask: true,
+          payload: { state: 'working', prompt: 'run in background', agentType: 'claude' }
+        },
+        'conn-1'
+      )
+      let baseline = server.getStatusSnapshot()[0]
+
+      vi.setSystemTime(1_500)
+      expect(
+        server.inferInterrupt({
+          paneKey: PANE,
+          baselineUpdatedAt: baseline.receivedAt,
+          baselineStateStartedAt: baseline.stateStartedAt,
+          baselinePrompt: 'run in background',
+          baselineAgentType: 'claude',
+          intent: 'plain-escape'
+        })
+      ).toBe(false)
+      expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'working' })
+
+      vi.setSystemTime(2_000)
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          claudeRunningNonAgentTask: false,
+          payload: { state: 'working', prompt: 'run in background', agentType: 'claude' }
+        },
+        'conn-1'
+      )
+      baseline = server.getStatusSnapshot()[0]
+
+      vi.setSystemTime(2_500)
+      expect(
+        server.inferInterrupt({
+          paneKey: PANE,
+          baselineUpdatedAt: baseline.receivedAt,
+          baselineStateStartedAt: baseline.stateStartedAt,
+          baselinePrompt: 'run in background',
+          baselineAgentType: 'claude',
+          intent: 'plain-escape'
+        })
+      ).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('blocks local HTTP interrupt inference for provider-owned work without exposing transport metadata', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const postHook = (payload: Record<string, unknown>): Promise<Response> =>
+        fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+          },
+          body: JSON.stringify(buildBody(payload))
+        })
+
+      await expect(
+        postHook({ hook_event_name: 'UserPromptSubmit', prompt: 'run in background' })
+      ).resolves.toMatchObject({ status: 204 })
+      await expect(
+        postHook({ hook_event_name: 'Stop', background_tasks: [RUNNING_SHELL] })
+      ).resolves.toMatchObject({ status: 204 })
+      const baseline = server.getStatusSnapshot()[0]
+
+      expect(baseline).not.toHaveProperty('claudeRunningNonAgentTask')
+      expect(
+        server.inferInterrupt({
+          paneKey: PANE,
+          baselineUpdatedAt: baseline.receivedAt,
+          baselineStateStartedAt: baseline.stateStartedAt,
+          baselinePrompt: 'run in background',
+          baselineAgentType: 'claude',
+          intent: 'plain-escape'
+        })
+      ).toBe(false)
+
+      await expect(
+        postHook({
+          hook_event_name: 'Stop',
+          background_tasks: [],
+          session_crons: [{ id: 'cron-1' }]
+        })
+      ).resolves.toMatchObject({ status: 204 })
+      const cronBaseline = server.getStatusSnapshot()[0]
+      expect(server._getStateForTests().claudeActiveSessionCronPaneKeys.has(PANE)).toBe(true)
+      expect(
+        server.inferInterrupt({
+          paneKey: PANE,
+          baselineUpdatedAt: cronBaseline.receivedAt,
+          baselineStateStartedAt: cronBaseline.stateStartedAt,
+          baselinePrompt: 'run in background',
+          baselineAgentType: 'claude',
+          intent: 'ctrl-c'
+        })
+      ).toBe(false)
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('uses replayed Claude background metadata only before a live observation', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          isReplay: true,
+          claudeRunningNonAgentTask: true,
+          payload: { state: 'working', prompt: 'stale replay', agentType: 'claude' }
+        },
+        'conn-1'
+      )
+      const baseline = server.getStatusSnapshot()[0]
+
+      vi.setSystemTime(1_500)
+      expect(
+        server.inferInterrupt({
+          paneKey: PANE,
+          baselineUpdatedAt: baseline.receivedAt,
+          baselineStateStartedAt: baseline.stateStartedAt,
+          baselinePrompt: 'stale replay',
+          baselineAgentType: 'claude',
+          intent: 'ctrl-c'
+        })
+      ).toBe(false)
+
+      vi.setSystemTime(1_500)
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          claudeRunningNonAgentTask: false,
+          payload: { state: 'working', prompt: 'stale replay', agentType: 'claude' }
+        },
+        'conn-1'
+      )
+      vi.setSystemTime(2_000)
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          isReplay: true,
+          claudeRunningNonAgentTask: true,
+          payload: { state: 'working', prompt: 'stale replay', agentType: 'claude' }
+        },
+        'conn-1'
+      )
+      const liveBaseline = server.getStatusSnapshot()[0]
+
+      vi.setSystemTime(2_500)
+      expect(
+        server.inferInterrupt({
+          paneKey: PANE,
+          baselineUpdatedAt: liveBaseline.receivedAt,
+          baselineStateStartedAt: liveBaseline.stateStartedAt,
+          baselinePrompt: 'stale replay',
+          baselineAgentType: 'claude',
+          intent: 'ctrl-c'
+        })
+      ).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not apply Claude background metadata from a rejected remote status', () => {
+    const server = new AgentHookServer()
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        hookEventName: 'PermissionRequest',
+        claudeRunningNonAgentTask: true,
+        payload: {
+          state: 'waiting',
+          prompt: 'approve shell',
+          agentType: 'claude',
+          toolName: 'Bash'
+        }
+      },
+      'conn-1'
+    )
+    const waiting = server.getStatusSnapshot()[0]
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        hookEventName: 'PreToolUse',
+        claudeRunningNonAgentTask: false,
+        payload: {
+          state: 'working',
+          prompt: 'approve shell',
+          agentType: 'claude',
+          toolName: 'OtherTool'
+        }
+      },
+      'conn-1'
+    )
+
+    expect(server.getStatusSnapshot()[0]).toEqual(waiting)
+    expect(server._getStateForTests().claudeRunningNonAgentTaskPaneKeys.has(PANE)).toBe(true)
   })
 
   it('carries idle subagent rows through an inferred interrupt', () => {
@@ -1904,6 +2219,127 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
+  it('accepts a new local prompt after launch authority retires in a reusable pane', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const postHook = (payload: Record<string, unknown>): Promise<Response> =>
+        fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+          },
+          body: JSON.stringify(buildBody(payload, { launchToken: 'retired-launch-token' }))
+        })
+
+      await postHook({ hook_event_name: 'UserPromptSubmit', prompt: 'first launch' })
+      server.retirePaneAuthority(PANE)
+      await postHook({ hook_event_name: 'Stop', last_assistant_message: 'late prior hook' })
+      expect(server.getStatusSnapshot()).toEqual([])
+
+      await postHook({ hook_event_name: 'UserPromptSubmit', prompt: 'manual restart' })
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({ paneKey: PANE, state: 'working', prompt: 'manual restart' })
+      ])
+      expect(
+        server.attestCompatibilityAuthority({
+          paneKey: PANE,
+          launchTokenHash: createHash('sha256').update('retired-launch-token').digest('hex'),
+          connectionId: null,
+          terminalProvenance: 'current_runtime'
+        })
+      ).toBeNull()
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('accepts a resumed-session SessionStart after launch authority retires in a reusable pane', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const postHook = (payload: Record<string, unknown>): Promise<Response> =>
+        fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+          },
+          body: JSON.stringify(buildBody(payload, { launchToken: 'retired-launch-token' }))
+        })
+
+      await postHook({ hook_event_name: 'UserPromptSubmit', prompt: 'first launch' })
+      server.retirePaneAuthority(PANE)
+
+      // Why: `claude --resume` in the reused shell pane emits only SessionStart while idle;
+      // without the un-retire the resumed session stays rowless until a prompt (STA-3386).
+      await postHook({ hook_event_name: 'SessionStart', source: 'resume' })
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({ paneKey: PANE, state: 'done', sessionBoundary: true })
+      ])
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('accepts a live remote prompt but not replay after launch authority retires', () => {
+    const server = new AgentHookServer()
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        hookEventName: 'UserPromptSubmit',
+        launchToken: 'retired-remote-launch-token',
+        payload: { state: 'working', prompt: 'first launch', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    server.retirePaneAuthority(PANE)
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        hookEventName: 'UserPromptSubmit',
+        launchToken: 'retired-remote-launch-token',
+        isReplay: true,
+        payload: { state: 'working', prompt: 'stale replay', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    expect(server.getStatusSnapshot()).toEqual([])
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        hookEventName: 'UserPromptSubmit',
+        launchToken: 'retired-remote-launch-token',
+        payload: { state: 'working', prompt: 'remote manual restart', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+
+    expect(server.getStatusSnapshot()).toEqual([
+      expect.objectContaining({
+        paneKey: PANE,
+        state: 'working',
+        prompt: 'remote manual restart',
+        connectionId: 'conn-1'
+      })
+    ])
+    expect(
+      server.attestCompatibilityAuthority({
+        paneKey: PANE,
+        launchTokenHash: createHash('sha256').update('retired-remote-launch-token').digest('hex'),
+        connectionId: 'conn-1',
+        terminalProvenance: 'current_runtime'
+      })
+    ).toBeNull()
+  })
+
   it('hydrates cached statuses as not observed in the current runtime', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-agent-hooks-'))
     const firstServer = new AgentHookServer()
@@ -2686,6 +3122,48 @@ describe('AgentHookServer listener replay', () => {
           })
         })
       )
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('does not apply Claude background evidence from a rejected local status', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const postClaudeHook = async (payload: Record<string, unknown>): Promise<void> => {
+        const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+          },
+          body: JSON.stringify(buildBody(payload))
+        })
+        expect(response.status).toBe(204)
+      }
+
+      await postClaudeHook({
+        hook_event_name: 'PermissionRequest',
+        prompt: 'approve shell',
+        tool_name: 'Bash',
+        background_tasks: [{ id: 'shell-1', type: 'shell', status: 'running' }],
+        session_crons: [{ id: 'cron-1', status: 'running' }]
+      })
+      const waiting = server.getStatusSnapshot()[0]
+
+      await postClaudeHook({
+        hook_event_name: 'PreToolUse',
+        prompt: 'approve shell',
+        tool_name: 'OtherTool',
+        background_tasks: [],
+        session_crons: []
+      })
+
+      expect(server.getStatusSnapshot()[0]).toEqual(waiting)
+      expect(server._getStateForTests().claudeRunningNonAgentTaskPaneKeys.has(PANE)).toBe(true)
+      expect(server._getStateForTests().claudeActiveSessionCronPaneKeys.has(PANE)).toBe(true)
     } finally {
       server.stop()
     }
@@ -6254,7 +6732,17 @@ describe('Last-status persistence', () => {
     try {
       await postHookEvent(
         server,
-        buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'persist me' })
+        buildBody(
+          { hook_event_name: 'UserPromptSubmit', prompt: 'persist me' },
+          { launchToken: 'launch-bearer-must-not-persist' }
+        )
+      )
+      await postHookEvent(
+        server,
+        buildBody(
+          { hook_event_name: 'Stop', background_tasks: [RUNNING_SHELL] },
+          { launchToken: 'launch-bearer-must-not-persist' }
+        )
       )
       // Synchronous flush via stop() captures the trailing-debounced write.
       server.flushStatusPersistSync()
@@ -6269,8 +6757,147 @@ describe('Last-status persistence', () => {
         stateStartedAt: expect.any(Number),
         payload: expect.objectContaining({ state: 'working', prompt: 'persist me' })
       })
+      expect(file.entries[PANE].launchToken).toBeUndefined()
+      expect(file.entries[PANE].launchTokenHash).toBe(
+        createHash('sha256').update('launch-bearer-must-not-persist').digest('hex')
+      )
+      expect(file.entries[PANE].claudeRunningNonAgentTask).toBeUndefined()
+      expect(readFileSync(lastStatusPath(), 'utf8')).not.toContain('claudeRunningNonAgentTask')
+      expect(readFileSync(lastStatusPath(), 'utf8')).not.toContain('launch-bearer-must-not-persist')
     } finally {
       server.stop()
+    }
+  })
+
+  it('scrubs a legacy persisted launch bearer while retaining its authority commitment', async () => {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    const receivedAt = recentTs()
+    const launchToken = 'legacy-launch-bearer'
+    writeFileSync(
+      lastStatusPath(),
+      JSON.stringify({
+        version: 2,
+        entries: {
+          [PANE]: {
+            paneKey: PANE,
+            launchToken,
+            tabId: 'tab-1',
+            worktreeId: 'wt-1',
+            connectionId: null,
+            receivedAt,
+            stateStartedAt: receivedAt,
+            payload: {
+              state: 'working',
+              prompt: 'legacy worker',
+              agentType: 'codex'
+            }
+          }
+        }
+      }),
+      'utf8'
+    )
+
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      const launchTokenHash = createHash('sha256').update(launchToken).digest('hex')
+      expect(server.getHydratedAuthorityCommitments()).toEqual([
+        expect.objectContaining({ paneKey: PANE, launchTokenHash })
+      ])
+      expect(server.getStatusSnapshotForPane(PANE)[0]?.launchToken).toBeUndefined()
+
+      const persisted = readFileSync(lastStatusPath(), 'utf8')
+      expect(persisted).not.toContain(launchToken)
+      expect(JSON.parse(persisted).entries[PANE]).toMatchObject({ launchTokenHash })
+    } finally {
+      server.stop()
+    }
+
+    const restartedServer = new AgentHookServer()
+    await restartedServer.start({ env: 'production', userDataPath })
+    try {
+      expect(restartedServer.getHydratedAuthorityCommitments()).toEqual([
+        expect.objectContaining({
+          paneKey: PANE,
+          launchTokenHash: createHash('sha256').update(launchToken).digest('hex')
+        })
+      ])
+      expect(restartedServer.getStatusSnapshotForPane(PANE)[0]?.launchToken).toBeUndefined()
+    } finally {
+      restartedServer.stop()
+    }
+  })
+
+  it('persists SSH authority through transient clears until explicit retirement', async () => {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    const receivedAt = recentTs()
+    const launchToken = 'retained-ssh-launch-bearer'
+    const launchTokenHash = createHash('sha256').update(launchToken).digest('hex')
+    writeFileSync(
+      lastStatusPath(),
+      JSON.stringify({
+        version: 2,
+        entries: {
+          [PANE]: {
+            paneKey: PANE,
+            launchTokenHash,
+            tabId: 'tab-1',
+            worktreeId: 'wt-1',
+            connectionId: 'ssh-target',
+            receivedAt,
+            stateStartedAt: receivedAt,
+            payload: {
+              state: 'working',
+              prompt: 'retained SSH worker',
+              agentType: 'codex'
+            }
+          }
+        }
+      }),
+      'utf8'
+    )
+
+    const first = new AgentHookServer()
+    await first.start({ env: 'production', userDataPath })
+    first.clearStatusEntriesForConnection('ssh-target')
+    first.flushStatusPersistSync()
+    first.stop()
+
+    const afterClear = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+    expect(afterClear.entries).toEqual({})
+    expect(afterClear.authorityCommitments[PANE]).toMatchObject({
+      paneKey: PANE,
+      launchTokenHash,
+      connectionId: 'ssh-target'
+    })
+
+    const restored = new AgentHookServer()
+    await restored.start({ env: 'production', userDataPath })
+    expect(
+      restored.attestCompatibilityAuthority({
+        paneKey: PANE,
+        launchTokenHash,
+        connectionId: 'ssh-target',
+        terminalProvenance: 'restored'
+      })
+    ).toEqual({ paneKey: PANE, source: 'hydrated_commitment' })
+    restored.retirePaneAuthority(PANE)
+    restored.flushStatusPersistSync()
+    restored.stop()
+
+    const retired = new AgentHookServer()
+    await retired.start({ env: 'production', userDataPath })
+    try {
+      expect(
+        retired.attestCompatibilityAuthority({
+          paneKey: PANE,
+          launchTokenHash,
+          connectionId: 'ssh-target',
+          terminalProvenance: 'restored'
+        })
+      ).toBeNull()
+    } finally {
+      retired.stop()
     }
   })
 
@@ -6424,6 +7051,294 @@ describe('Last-status persistence', () => {
           agentType: 'claude'
         })
       ])
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('restores hydrated nonterminal statuses as unconfirmed until a live event lands', async () => {
+    const firstServer = new AgentHookServer()
+    await firstServer.start({ env: 'production', userDataPath })
+    firstServer.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'working', prompt: 'may finish offline', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    firstServer.ingestRemote(
+      {
+        paneKey: GOOD_PANE,
+        tabId: 'tab-good',
+        worktreeId: 'wt-1',
+        payload: { state: 'done', prompt: 'finished before restart', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    firstServer.flushStatusPersistSync()
+    firstServer.stop()
+
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      const listener = vi.fn()
+      server.setListener(listener)
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({ paneKey: PANE, restoredUnconfirmed: true })
+      )
+      const byPane = new Map(server.getStatusSnapshot().map((entry) => [entry.paneKey, entry]))
+      expect(byPane.get(PANE)).toMatchObject({ state: 'working', restoredUnconfirmed: true })
+      // Why: `done` is a terminal fact — no later transition can have been missed, so it restores confirmed.
+      expect(byPane.get(GOOD_PANE)?.restoredUnconfirmed).toBeUndefined()
+
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: { state: 'done', prompt: 'confirmed live', agentType: 'codex' }
+        },
+        'conn-1'
+      )
+      const confirmed = server.getStatusSnapshot().find((entry) => entry.paneKey === PANE)
+      expect(confirmed).toMatchObject({
+        state: 'done',
+        prompt: 'confirmed live',
+        agentType: 'codex'
+      })
+      expect(confirmed?.restoredUnconfirmed).toBeUndefined()
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('lets an identical live OSC observation confirm a hydrated row', async () => {
+    const payload = {
+      state: 'working' as const,
+      prompt: 'still running',
+      agentType: 'claude' as const
+    }
+    const firstServer = new AgentHookServer()
+    await firstServer.start({ env: 'production', userDataPath })
+    firstServer.ingestTerminalStatus({
+      paneKey: PANE,
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      connectionId: null,
+      payload
+    })
+    firstServer.flushStatusPersistSync()
+    firstServer.stop()
+
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      const restored = server.getStatusSnapshot()[0]
+      if (!restored) {
+        throw new Error('expected hydrated status')
+      }
+      expect(restored?.restoredUnconfirmed).toBe(true)
+      vi.spyOn(Date, 'now').mockReturnValue(restored.receivedAt - 1_000)
+      server.ingestTerminalStatus({
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        connectionId: null,
+        payload
+      })
+      const confirmed = server.getStatusSnapshot()[0]
+      expect(confirmed?.restoredUnconfirmed).toBeUndefined()
+      expect(confirmed?.receivedAt).toBe(restored.receivedAt + 1)
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('does not let a hydrated Claude permission suppress the first live working event', async () => {
+    const firstServer = new AgentHookServer()
+    await firstServer.start({ env: 'production', userDataPath })
+    firstServer.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        hookEventName: 'PermissionRequest',
+        payload: {
+          state: 'waiting',
+          prompt: 'review command',
+          agentType: 'claude',
+          toolName: 'Bash',
+          toolInput: 'dangerous command'
+        }
+      },
+      'conn-1'
+    )
+    firstServer.flushStatusPersistSync()
+    firstServer.stop()
+
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          hookEventName: 'PreToolUse',
+          payload: {
+            state: 'working',
+            prompt: 'review command',
+            agentType: 'claude',
+            toolName: 'Read',
+            toolInput: 'package.json'
+          }
+        },
+        'conn-1'
+      )
+      expect(server.getStatusSnapshot()[0]).toMatchObject({
+        state: 'working',
+        toolName: 'Read'
+      })
+      expect(server.getStatusSnapshot()[0]?.restoredUnconfirmed).toBeUndefined()
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('does not inherit a stale tool id from hydrated Claude progress', async () => {
+    const firstServer = new AgentHookServer()
+    await firstServer.start({ env: 'production', userDataPath })
+    firstServer.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        hookEventName: 'PreToolUse',
+        toolUseId: 'tool-old',
+        toolAgentType: 'main',
+        payload: {
+          state: 'working',
+          prompt: 'run tests',
+          agentType: 'claude',
+          toolName: 'Bash',
+          toolInput: 'pnpm test'
+        }
+      },
+      'conn-1'
+    )
+    firstServer.flushStatusPersistSync()
+    firstServer.stop()
+
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          hookEventName: 'PermissionRequest',
+          toolAgentType: 'main',
+          payload: {
+            state: 'waiting',
+            prompt: 'run tests',
+            agentType: 'claude',
+            toolName: 'Bash',
+            toolInput: 'pnpm test'
+          }
+        },
+        'conn-1'
+      )
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          hookEventName: 'PostToolUse',
+          toolUseId: 'tool-new',
+          toolAgentType: 'main',
+          payload: {
+            state: 'working',
+            prompt: 'run tests',
+            agentType: 'claude',
+            toolName: 'Bash',
+            toolInput: 'pnpm test'
+          }
+        },
+        'conn-1'
+      )
+      expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'working' })
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('never persists the unconfirmed flag and re-stamps it on every hydrate', async () => {
+    const firstServer = new AgentHookServer()
+    await firstServer.start({ env: 'production', userDataPath })
+    firstServer.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'working', prompt: 'still running', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    firstServer.flushStatusPersistSync()
+    firstServer.stop()
+
+    const secondServer = new AgentHookServer()
+    await secondServer.start({ env: 'production', userDataPath })
+    secondServer.flushStatusPersistSync()
+    secondServer.stop()
+    expect(readFileSync(lastStatusPath(), 'utf8')).not.toContain('restoredUnconfirmed')
+
+    const thirdServer = new AgentHookServer()
+    await thirdServer.start({ env: 'production', userDataPath })
+    try {
+      expect(thirdServer.getStatusSnapshot()).toEqual([
+        expect.objectContaining({ paneKey: PANE, state: 'working', restoredUnconfirmed: true })
+      ])
+    } finally {
+      thirdServer.stop()
+    }
+  })
+
+  it('refuses interrupt inference on an unconfirmed hydrated row', async () => {
+    const firstServer = new AgentHookServer()
+    await firstServer.start({ env: 'production', userDataPath })
+    firstServer.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'working', prompt: 'long task', agentType: 'codex' }
+      },
+      'conn-1'
+    )
+    firstServer.flushStatusPersistSync()
+    firstServer.stop()
+
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      const baseline = server.getStatusSnapshot()[0]
+      expect(baseline).toMatchObject({ paneKey: PANE, restoredUnconfirmed: true })
+      const applied = server.inferInterrupt({
+        paneKey: PANE,
+        baselineUpdatedAt: baseline.receivedAt,
+        baselineStateStartedAt: baseline.stateStartedAt,
+        baselinePrompt: 'long task',
+        baselineAgentType: 'codex',
+        intent: 'plain-escape'
+      })
+      // Why: synthesizing `done` onto a never-confirmed `working` would fabricate a transition from stale disk state.
+      expect(applied).toBe(false)
+      expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'working' })
+      expect(server.getStatusSnapshot()[0]?.interrupted).toBeUndefined()
     } finally {
       server.stop()
     }
@@ -7640,6 +8555,82 @@ describe('AgentHookServer ingestRemote', () => {
 })
 
 describe('AgentHookServer ingestTerminalStatus', () => {
+  // Why: the OSC 9999 payload cannot carry a provider session, so letting it overwrite the row
+  // erased the session id from persisted rows and from headless `orca serve` — which serves these
+  // rows straight to mobile — leaving Chat UI with no transcript to subscribe to (#10630).
+  it('keeps the cached provider session when an OSC status completes the turn', () => {
+    const server = new AgentHookServer()
+    const providerSession = { key: 'session_id' as const, id: 'claude-session-1' }
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        providerSession,
+        payload: { state: 'working', prompt: 'summarize the diff', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    server.ingestTerminalStatus({
+      paneKey: PANE,
+      connectionId: 'conn-1',
+      payload: { state: 'done', prompt: 'summarize the diff', agentType: 'claude' }
+    })
+
+    expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'done', providerSession })
+  })
+
+  // Why: an OSC ping that names no agent — or the literal 'unknown', which
+  // resolveAgentStatusIdentity treats identically — makes no claim about the pane's identity, so it
+  // must not read as a mismatch. Missing this stripped the session from persisted and headless rows
+  // while the live renderer kept it, blanking mobile chat only after a restart (#10630).
+  it.each([undefined, 'unknown' as const])(
+    'keeps the cached provider session when an OSC status claims agentType %s',
+    (agentType) => {
+      const server = new AgentHookServer()
+      const providerSession = { key: 'session_id' as const, id: 'claude-session-1' }
+
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          providerSession,
+          payload: { state: 'working', prompt: 'summarize the diff', agentType: 'claude' }
+        },
+        'conn-1'
+      )
+      server.ingestTerminalStatus({
+        paneKey: PANE,
+        connectionId: 'conn-1',
+        payload: {
+          state: 'done',
+          prompt: 'summarize the diff',
+          ...(agentType ? { agentType } : {})
+        }
+      })
+
+      expect(server.getStatusSnapshot()[0]).toMatchObject({ providerSession })
+    }
+  )
+
+  it('drops the cached provider session when an OSC status starts a new turn', () => {
+    const server = new AgentHookServer()
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        providerSession: { key: 'session_id' as const, id: 'claude-session-1' },
+        payload: { state: 'done', prompt: 'first', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    server.ingestTerminalStatus({
+      paneKey: PANE,
+      connectionId: 'conn-1',
+      payload: { state: 'working', prompt: 'second', agentType: 'claude' }
+    })
+
+    expect(server.getStatusSnapshot()[0]?.providerSession).toBeUndefined()
+  })
+
   it('forwards runtime terminal status through the normal listener and snapshot path', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)

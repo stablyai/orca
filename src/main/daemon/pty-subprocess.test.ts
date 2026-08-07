@@ -167,6 +167,7 @@ describe('createPtySubprocess', () => {
   it('spawns node-pty with correct options', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
+    const onMacosTccSpawnStrategy = vi.fn()
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { value: 'linux' })
 
@@ -176,7 +177,8 @@ describe('createPtySubprocess', () => {
         cols: 80,
         rows: 24,
         cwd: '/home/user',
-        env: { SHELL: '/bin/bash', FOO: 'bar' }
+        env: { SHELL: '/bin/bash', FOO: 'bar' },
+        onMacosTccSpawnStrategy
       })
     } finally {
       if (platform) {
@@ -193,6 +195,62 @@ describe('createPtySubprocess', () => {
         cwd: '/home/user',
         name: 'xterm-256color'
       })
+    )
+    expect(onMacosTccSpawnStrategy).toHaveBeenCalledWith('direct')
+  })
+
+  it('does not report a spawn strategy when node-pty fails before launch', () => {
+    spawnMock.mockImplementationOnce(() => {
+      throw new Error('spawn failed')
+    })
+    const onMacosTccSpawnStrategy = vi.fn()
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+
+    try {
+      expect(() =>
+        createPtySubprocess({
+          sessionId: 'test',
+          cols: 80,
+          rows: 24,
+          env: { SHELL: '/bin/bash' },
+          onMacosTccSpawnStrategy
+        })
+      ).toThrow('spawn failed')
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(onMacosTccSpawnStrategy).not.toHaveBeenCalled()
+  })
+
+  it('expands variables in PATH before spawning a Windows shell', () => {
+    spawnMock.mockReturnValue(mockPtyProcess())
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\repo',
+        env: {
+          ORCA_AGENT_TEAMS_TEAM_ID: 'team-test',
+          ORCA_PATH_ROOT: 'C:\\Users\\orca\\AppData\\Local',
+          PATH: '%orca_path_root%\\agy\\bin;C:\\Windows'
+        }
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock.mock.calls.at(-1)?.[2].env.PATH).toBe(
+      'C:\\Users\\orca\\AppData\\Local\\agy\\bin;C:\\Windows'
     )
   })
 
@@ -2057,8 +2115,10 @@ describe('createPtySubprocess', () => {
   it('preserves a daemon-owned custom Codex home while deleting a stale private marker', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     const previousCodexHome = process.env.CODEX_HOME
     const previousOrcaCodexHome = process.env.ORCA_CODEX_HOME
+    Object.defineProperty(process, 'platform', { value: 'linux' })
     process.env.CODEX_HOME = '/daemon/user/codex-home'
     process.env.ORCA_CODEX_HOME = '/daemon/stale/managed-home'
 
@@ -2071,6 +2131,9 @@ describe('createPtySubprocess', () => {
         envToDelete: ['ORCA_CODEX_HOME']
       })
     } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
       if (previousCodexHome === undefined) {
         delete process.env.CODEX_HOME
       } else {
@@ -2111,6 +2174,77 @@ describe('createPtySubprocess', () => {
     expect(lastCall[2].env.PATH.split(':')[0]).toBe('/tmp/orca-agent-teams-bin')
     expect(lastCall[2].env.TERM_PROGRAM).toBeUndefined()
     expect(lastCall[2].env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+  })
+
+  it('collapses its own env merge onto the requested Windows `Path` spelling', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        // Why: buildPtyHostEnv collapses Windows PATH onto one spelling before the daemon wire;
+        // the daemon then spreads its own block underneath and can re-mint the other one.
+        env: {
+          Path: '/tmp/orca-agent-teams-bin:/usr/bin',
+          ORCA_AGENT_TEAMS_TEAM_ID: 'team-test'
+        }
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    const env = spawnMock.mock.calls.at(-1)![2].env
+    expect(Object.keys(env).filter((key) => /^path$/i.test(key))).toEqual(['Path'])
+    expect(env.Path.split(':')[0]).toBe('/tmp/orca-agent-teams-bin')
+  })
+
+  it('keeps the daemon `PATH` block when the requested env has no path key', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    try {
+      createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24, env: { FOO: 'bar' } })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    const env = spawnMock.mock.calls.at(-1)![2].env
+    expect(env.PATH).toBe(process.env.PATH)
+  })
+
+  it('preserves a duplicated path block supplied by main', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        env: { PATH: 'C:\\Live', Path: 'C:\\Shadowed' }
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    const env = spawnMock.mock.calls.at(-1)![2].env
+    expect(env.PATH).toBe('C:\\Live')
+    expect(env.Path).toBe('C:\\Shadowed')
   })
 
   it('combines HOMEDRIVE and HOMEPATH for Windows default cwd', () => {

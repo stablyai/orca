@@ -88,6 +88,8 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'agent_unconfigured',
   'terminal_worktree_mismatch',
   'request_mismatch',
+  'mutation_ledger_full',
+  'legacy_read_only',
   'orchestration_migration_required',
   'operation_unknown',
   'question_not_found',
@@ -106,7 +108,7 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
     COMPUTER_PASSTHROUGH_CODES.has((error as { code: string }).code)
   ) {
     const code = (error as { code: string }).code
-    return errorResponse(id, meta, code, message, computerErrorData(code))
+    return errorResponse(id, meta, code, message, computerErrorData(code, message))
   }
   if (
     error instanceof Error &&

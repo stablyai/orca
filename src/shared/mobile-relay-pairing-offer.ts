@@ -1,16 +1,20 @@
 import { z } from 'zod'
+import {
+  PAIRING_DEVICE_TOKEN_MAX_CHARACTERS,
+  PAIRING_ENDPOINT_MAX_CHARACTERS,
+  PAIRING_PUBLIC_KEY_MAX_CHARACTERS,
+  PAIRING_RELAY_URL_MAX_CHARACTERS
+} from './mobile-pairing-protocol-limits'
 
 export const PAIRING_OFFER_VERSION = 2
-export const PAIRING_CODE_MAX_CHARACTERS = 128 * 1024
-export const PAIRING_INPUT_MAX_CHARACTERS = PAIRING_CODE_MAX_CHARACTERS + 1024
-export const PAIRING_ENDPOINT_MAX_CHARACTERS = 16 * 1024
-export const PAIRING_DEVICE_TOKEN_MAX_CHARACTERS = 64 * 1024
-export const PAIRING_PUBLIC_KEY_MAX_CHARACTERS = 4 * 1024
-export const PAIRING_RELAY_URL_MAX_CHARACTERS = 2048
 const PairingScopeSchema = z.enum(['mobile', 'runtime'])
 const BASE64URL_16_PATTERN = /^[A-Za-z0-9_-]{16}$/
 const BASE64URL_43_PATTERN = /^[A-Za-z0-9_-]{43}$/
 const MAX_INVITE_TTL_MS = 10 * 60 * 1000
+// The cell stamps expiry from its own clock; without leeway, a cell clock
+// even slightly ahead of this machine makes every invite fail validation
+// (same class as the host-proof freshness incident).
+const INVITE_EXPIRY_CLOCK_SKEW_MS = 30 * 1000
 
 function isCanonicalHttpsOrigin(value: string): boolean {
   if (
@@ -55,7 +59,10 @@ export function createPairingOfferSchema(now: () => number = () => Date.now()) {
       .int()
       .refine((value) => {
         const currentTime = now()
-        return value > currentTime && value <= currentTime + MAX_INVITE_TTL_MS
+        return (
+          value > currentTime &&
+          value <= currentTime + MAX_INVITE_TTL_MS + INVITE_EXPIRY_CLOCK_SKEW_MS
+        )
       }, 'Expected a future invite expiry no more than 10 minutes away'),
     e2eeFraming: z.literal(2)
   })
