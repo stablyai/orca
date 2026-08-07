@@ -6897,7 +6897,7 @@ describe('Last-status persistence', () => {
           tabId,
           worktreeId: 'wt-1',
           connectionId: null,
-          payload: { state: 'done', agentType: 'codex' }
+          payload: { state: 'done', prompt: 'burst', agentType: 'codex' }
         })
       }
 
