@@ -4768,6 +4768,63 @@ describe('createWorktree base status merge', () => {
     expect(store.getState().worktreesByRepo['repo-duplicate']?.[0]?.hostId).toBe('runtime:env-1')
   })
 
+  it('keeps same-id worktrees from different execution hosts after creation', async () => {
+    const store = createTestStore()
+    const localWorktree = makeWorktree({
+      id: 'repo-duplicate::/shared/feature',
+      repoId: 'repo-duplicate',
+      path: '/shared/feature',
+      hostId: 'local'
+    })
+    const created = makeWorktree({
+      id: localWorktree.id,
+      repoId: 'repo-duplicate',
+      path: localWorktree.path,
+      hostId: 'local'
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: null } as never,
+      repos: [
+        {
+          id: 'repo-duplicate',
+          path: '/local/repo',
+          displayName: 'local',
+          badgeColor: '#000',
+          addedAt: 0
+        },
+        {
+          id: 'repo-duplicate',
+          path: '/remote/repo',
+          displayName: 'remote',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: 'runtime:env-1'
+        }
+      ],
+      worktreesByRepo: { 'repo-duplicate': [localWorktree] }
+    } as Partial<AppState>)
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-remote-create',
+      ok: true,
+      result: { worktree: created },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+
+    const createWorktree = store.getState().createWorktree
+    const createArgs: Parameters<typeof createWorktree> = [
+      'repo-duplicate',
+      'feature',
+      'origin/main'
+    ]
+    createArgs[25] = { executionHostId: 'runtime:env-1' }
+    await createWorktree(...createArgs)
+
+    expect(store.getState().worktreesByRepo['repo-duplicate']).toEqual([
+      localWorktree,
+      expect.objectContaining({ id: created.id, hostId: 'runtime:env-1' })
+    ])
+  })
+
   it('passes the active folder workspace as parent for in-app worktree creates', async () => {
     const store = createTestStore()
     const wt = makeWorktree({

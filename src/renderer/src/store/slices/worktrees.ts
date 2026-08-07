@@ -4188,12 +4188,14 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           // Why: worktrees.onChanged can add this worktree before this callback runs; appending blindly would duplicate it (React key clash).
           set((s) => {
             const current = s.worktreesByRepo[repoId] ?? []
-            const alreadyPresent = current.some((w) => w.id === createdWorktree.id)
+            const hostMatchOptions = worktreeHostMatchOptions(s, repoId, hostId)
+            const matchesCreatedOwner = (worktree: Worktree): boolean =>
+              worktree.id === createdWorktree.id &&
+              worktreeMatchesHost(worktree, hostId, hostMatchOptions)
+            const alreadyPresent = current.some(matchesCreatedOwner)
             const nextWorktrees = alreadyPresent
               ? current.map((worktree) =>
-                  worktree.id === createdWorktree.id
-                    ? { ...worktree, ...createdWorktree }
-                    : worktree
+                  matchesCreatedOwner(worktree) ? { ...worktree, ...createdWorktree } : worktree
                 )
               : [...current, createdWorktree]
             return {
