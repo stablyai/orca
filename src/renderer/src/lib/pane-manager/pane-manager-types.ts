@@ -114,6 +114,7 @@ export type PaneRenderingDiagnostics = {
   gpuRenderingEnabled: boolean
   webglAttachmentDeferred: boolean
   webglDisabledAfterContextLoss: boolean
+  webglAttachFailedSinceRecovery: boolean
   hasComplexScriptOutput: boolean
   terminalWebglAutoDecision: TerminalWebglAutoDecision
   hasWebgl: boolean
@@ -141,6 +142,10 @@ export type ManagedPaneInternal = {
   gpuRenderingEnabled: boolean
   webglAttachmentDeferred: boolean
   webglDisabledAfterContextLoss: boolean
+  // Why per-pane: one pane's failed WebGL attach must not strand every other
+  // pane on the DOM renderer until the next recovery boundary. Optional so
+  // absent means "never failed"; only the attach failure path sets it.
+  webglAttachFailedSinceRecovery?: boolean
   // Why: expose complex-output diagnostics without changing renderer choice;
   // auto renderer fallback is reserved for platform or WebGL failures.
   hasComplexScriptOutput: boolean

@@ -65,9 +65,8 @@ async function installUnreadableOrcaYamlFault(electronApp: ElectronApplication):
 /** orca.yaml becomes readable again — every later check runs the production handler. */
 async function healOrcaYamlRead(electronApp: ElectronApplication): Promise<void> {
   await electronApp.evaluate(() => {
-    ;(
-      globalThis as typeof globalThis & { __orcaE2eOrcaYamlUnreadable?: boolean }
-    ).__orcaE2eOrcaYamlUnreadable = false
+    ;(globalThis as typeof globalThis & { __orcaE2eOrcaYamlUnreadable?: boolean })
+      .__orcaE2eOrcaYamlUnreadable = false
   })
 }
 
