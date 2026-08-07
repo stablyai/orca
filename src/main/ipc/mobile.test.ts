@@ -106,6 +106,44 @@ describe('registerMobileHandlers', () => {
     )
   })
 
+  it('excludes link-local IPv4 so idle adapters cannot become the pairing default', async () => {
+    // Why: Windows self-assigns 169.254.0.0/16 to every adapter without DHCP —
+    // Bluetooth, VPN tunnels, unplugged Ethernet — and they rank alongside the real
+    // LAN address, so pairing can advertise a dead host.
+    networkInterfacesMock.mockReturnValue({
+      Bluetooth: [{ family: 'IPv4', internal: false, address: '169.254.246.150' }],
+      Ethernet: [{ family: 'IPv4', internal: false, address: '169.254.26.112' }],
+      'Wi-Fi': [
+        { family: 'IPv4', internal: false, address: '192.168.100.198' },
+        // neighbouring /16s stay pickable — only 169.254 is link-local
+        { family: 'IPv4', internal: false, address: '169.253.0.1' },
+        { family: 'IPv4', internal: false, address: '169.255.0.1' }
+      ]
+    })
+    const createMobilePairingOffer = vi.fn().mockResolvedValue({
+      available: true,
+      pairingUrl: 'orca://pair#lan',
+      endpoint: 'ws://192.168.100.198:6768',
+      deviceId: 'mobile-lan',
+      connectionMode: 'automatic'
+    })
+
+    registerMobileHandlers({ createMobilePairingOffer } as never)
+
+    expect(handlers.get('mobile:listNetworkInterfaces')?.()).toEqual({
+      interfaces: [
+        { name: 'Wi-Fi', address: '192.168.100.198' },
+        { name: 'Wi-Fi', address: '169.253.0.1' },
+        { name: 'Wi-Fi', address: '169.255.0.1' }
+      ]
+    })
+
+    await handlers.get('mobile:getPairingQR')?.(null, {})
+    expect(createMobilePairingOffer).toHaveBeenCalledWith(
+      expect.objectContaining({ address: '192.168.100.198' })
+    )
+  })
+
   it('includes IPv6 addresses (ranked after IPv4) and excludes link-local IPv6', () => {
     networkInterfacesMock.mockReturnValue({
       en0: [
