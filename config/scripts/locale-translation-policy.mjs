@@ -179,7 +179,23 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'my-project',
   'serve-sim',
   'pnpm playwright test',
-  'gh auth login'
+  'gh auth login',
+  // Why: Tailwind class strings, git refs, sample paths and fixture filenames. MT turned
+  // text-muted-foreground into テキストミュート前景 and origin/main into 原点/メイン.
+  'size-4 text-muted-foreground',
+  'text-amber-700 dark:text-amber-300',
+  'text-emerald-700 dark:text-emerald-300',
+  'src/renderer packages/ui',
+  'upstream/main',
+  'origin/main',
+  'example.com',
+  'bastion.example.com',
+  'dashboard.spec.ts',
+  'checkout.spec.ts',
+  'login.spec.ts',
+  'untitled.md',
+  'review src/auth',
+  'throw src/auth'
 ])
 
 export const BRAND_MISTRANSLATIONS = {

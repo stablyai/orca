@@ -51,5 +51,10 @@ export const CJK_LATIN_SPACED_TERMS = [
   // so they need the same 和欧間スペース treatment as the terms MT already leaves in Latin.
   'fast-forward',
   'Cookie',
-  'Cookies'
+  'Cookies',
+  // Why: the ja phrase fixes restore these from 上流 / 起源 / エルメス / パワーシェル / アヒルアヒル.
+  'upstream',
+  'origin',
+  'Hermes',
+  'DuckDuckGo'
 ]

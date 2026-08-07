@@ -506,5 +506,47 @@ export const JA_VALUE_OVERRIDES = {
   "Resident memory held by Orca plus the processes under each worktree's terminals.":
     'Orca が保持する常駐メモリと、各ワークツリーのターミナル配下で実行中のプロセス。',
   'No local Claude, Codex, or OpenCode usage found yet. The overview will populate after the next agent session writes token logs.':
-    'ローカルの Claude、Codex、OpenCode の使用状況はまだ見つかりません。次のエージェントセッションがトークンログを書き込むと、概要に反映されます。'
+    'ローカルの Claude、Codex、OpenCode の使用状況はまだ見つかりません。次のエージェントセッションがトークンログを書き込むと、概要に反映されます。',
+  // Round 12: full-catalog sweep — instructions that lost their predicate, and residual literals.
+  'Choose or add a project before creating a workspace.':
+    'ワークスペースを作成する前に、プロジェクトを選択または追加してください。',
+  'Choose a project to get started.': '開始するには、プロジェクトを選択してください。',
+  'Please enter feedback before submitting.': '送信する前に、フィードバックを入力してください。',
+  'Add a Git project under this folder to attach GitHub or GitLab tasks.':
+    'GitHub または GitLab のタスクを関連付けるには、このフォルダー内に Git プロジェクトを追加してください。',
+  'Enter a valid website URL.': '有効な Web サイトの URL を入力してください。',
+  'Choose a WSL distro before projects can inherit WSL.':
+    'プロジェクトが WSL を継承できるようにするには、先に WSL ディストリビューションを選択してください。',
+  'Choose a different base branch before creating a {{value0}}.':
+    '{{value0}} を作成する前に、別のベースブランチを選択してください。',
+  'Optional. Orca can use your normal Codex login; add accounts only if you want quick switching in Orca.':
+    '任意。Orca は通常の Codex ログインを使用できます。Orca 上ですばやく切り替えたい場合にのみ、アカウントを追加してください。',
+  'Optional. Orca can use your normal Claude login; add accounts only if you want quick switching without moving chat sessions.':
+    '任意。Orca は通常の Claude ログインを使用できます。チャットセッションを移さずにすばやく切り替えたい場合にのみ、アカウントを追加してください。',
+  'Optional. Orca works with your existing provider logins; add accounts only if you want Orca to help switch between them.':
+    '任意。Orca は既存のプロバイダーのログインと連携します。Orca に切り替えを任せたい場合にのみ、アカウントを追加してください。',
+  'Use this computer by default. Choose a saved server only when you want supported projects, files, terminals, provider checks, and browser/mobile handoff to run through that server.':
+    '既定ではこのコンピュータを使用します。対応するプロジェクト、ファイル、ターミナル、プロバイダーチェック、ブラウザ/モバイルの引き継ぎをそのサーバー経由で実行したい場合にのみ、保存済みサーバーを選択してください。',
+  'Window Blur': 'ウィンドウのぼかし',
+  'Medium section heading.': '中サイズのセクション見出し。',
+  'macOS Option key': 'macOS の Option キー',
+  'Failed to add folder on this host': 'このホスト上でのフォルダーの追加に失敗しました',
+  'This workspace is locked by Git. Run git worktree unlock <worktree-path> from its repository, then retry deletion.':
+    'このワークスペースは Git によってロックされています。リポジトリで git worktree unlock <worktree-path> を実行してから、削除を再試行してください。',
+  'This workspace is locked by Git. Git reported: {{value0}}. Run git worktree unlock <worktree-path> from its repository, then retry deletion.':
+    'このワークスペースは Git によってロックされています。Git の報告: {{value0}}。リポジトリで git worktree unlock <worktree-path> を実行してから、削除を再試行してください。',
+  'Permanently deletes the remote Git worktrees and their branches. Cannot be undone.':
+    'リモートの Git ワークツリーとそのブランチを完全に削除します。この操作は取り消せません。',
+  'Click a card to copy a prompt. Use these in a Linear-linked worktree after the skill is installed.':
+    'カードをクリックするとプロンプトをコピーできます。スキルのインストール後、Linear にリンクしたワークツリーで使用してください。',
+  'Ticket actions work best in a worktree created from Tasks so the issue stays linked as context.':
+    'チケット操作は、タスクから作成したワークツリーで最も効果的です。Issue がコンテキストとしてリンクされたままになります。',
+  'Choose a base branch.': 'ベースブランチを選択してください。',
+  'Enter a {{value0}} title.': '{{value0}} のタイトルを入力してください。',
+  'Enter a valid five-field cron before saving.':
+    '保存する前に、有効な 5 フィールドの cron を入力してください。',
+  'Choose an available workspace before saving.':
+    '保存する前に、使用可能なワークスペースを選択してください。',
+  'Enter a valid advanced schedule before saving.':
+    '保存する前に、有効な詳細スケジュールを入力してください。'
 }

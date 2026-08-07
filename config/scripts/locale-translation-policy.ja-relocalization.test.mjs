@@ -74,4 +74,38 @@ describe('locale-translation-policy ja relocalization', () => {
       'ブランチを安全に fast-forward します'
     )
   })
+
+  it('uses ホスト for host, and leaves サーバー alone when English says server', () => {
+    expect(ja('Host path', 'サーバーパス')).toBe('ホストパス')
+    expect(ja('Enter a path that exists on the selected host.', 'ランタイムサーバー上のパス')).toBe(
+      'ホスト上のパス'
+    )
+    // Why: host and server are deliberately distinct wherever the English uses both.
+    expect(ja('Save the server host', 'サーバーを保存')).toBe('サーバーを保存')
+  })
+
+  it('restores Git vocabulary and brand names the MT localized', () => {
+    expect(ja('Branch upstream', 'ブランチの上流')).toBe('ブランチの upstream')
+    expect(ja('origin has commits', '起源にコミットがあります')).toBe('origin にコミットがあります')
+    expect(ja('Discard all staged changes?', '段階的な変更を破棄しますか?')).toBe(
+      'ステージ済みの変更を破棄しますか?'
+    )
+    expect(ja('Create Hermes automation', 'エルメスオートメーションを作成')).toBe(
+      'Hermes オートメーションを作成'
+    )
+    expect(ja('Delete the worktree', 'worktree を削除')).toBe('ワークツリーを削除')
+  })
+
+  it('keeps class strings, refs, and fixture filenames in English', () => {
+    for (const value of [
+      'size-4 text-muted-foreground',
+      'text-amber-700 dark:text-amber-300',
+      'origin/main',
+      'upstream/main',
+      'login.spec.ts',
+      'bastion.example.com'
+    ]) {
+      expect(shouldPreserveEnglishValue(value)).toBe(true)
+    }
+  })
 })

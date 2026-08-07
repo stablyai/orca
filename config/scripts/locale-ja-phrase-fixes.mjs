@@ -16,7 +16,8 @@ const RELOCALIZED_GENERIC_TERMS = [
   ['[Tt]erminals?', 'ターミナル', 'terminal'],
   ['[Aa]gents?', 'エージェント', 'agent'],
   ['[Cc]ommits?', 'コミット', 'commit'],
-  ['[Rr]epos?', 'リポジトリ', 'repo']
+  ['[Rr]epos?', 'リポジトリ', 'repo'],
+  ['[Ww]orktrees?', 'ワークツリー', 'worktree']
 ].flatMap(([latin, katakana, whenEnIncludes]) => [
   {
     // Why: the trailing space only goes when Japanese follows — "ターミナル {{value0}} 件" keeps its
@@ -274,6 +275,19 @@ export const JA_PHRASE_FIXES = [
     whenEnIncludes: 'More PR actions'
   },
   { pattern: /アクション/g, replacement: '操作', whenEnIncludes: 'action' },
+  // Why: Orca's "host" covers SSH hosts and this computer, so サーバー is both wrong and narrower.
+  // Skipped when the English also says "server", where the two words are deliberately distinct.
+  {
+    pattern: /(ランタイム)?サーバー/g,
+    replacement: 'ホスト',
+    whenEnMatches: /^(?![\s\S]*\bservers?\b)[\s\S]*\bhosts?\b/i
+  },
+  { pattern: /上流/g, replacement: 'upstream', whenEnIncludes: 'upstream' },
+  { pattern: /起源/g, replacement: 'origin', whenEnIncludes: 'origin' },
+  { pattern: /段階的な変更/g, replacement: 'ステージ済みの変更', whenEnIncludes: 'staged' },
+  { pattern: /(エルメス|ヘルメス)/g, replacement: 'Hermes', whenEnIncludes: 'Hermes' },
+  { pattern: /パワーシェル/g, replacement: 'PowerShell', whenEnIncludes: 'PowerShell' },
+  { pattern: /アヒルアヒル/g, replacement: 'DuckDuckGo', whenEnIncludes: 'duckduckgo' },
   { pattern: /紛争/g, replacement: '競合', whenEnIncludes: 'conflict' },
   { pattern: /資格情報/g, replacement: '認証情報', whenEnIncludes: 'credential' },
   { pattern: /未知/g, replacement: '不明', whenEnIncludes: 'unknown' },
