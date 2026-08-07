@@ -77,7 +77,12 @@ function listLinuxFonts(): Promise<string[]> {
 }
 
 function listWindowsFonts(): Promise<string[]> {
+  // Why OutputEncoding: Windows PowerShell 5.1 writes stdout using the
+  // console output encoding (e.g. CP936/GBK on Chinese-locale systems), but
+  // execFileText decodes the stream as UTF-8. Without this, non-ASCII font
+  // family names (仿宋, 微软雅黑, …) come back as mojibake in settings.
   const script = `
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 Add-Type -AssemblyName System.Drawing
 $fonts = New-Object System.Drawing.Text.InstalledFontCollection
 $fonts.Families | ForEach-Object { $_.Name }

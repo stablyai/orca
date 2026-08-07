@@ -89,6 +89,26 @@ describe('listSystemFontFamilies', () => {
     await expectFontCommandTimeout('darwin', 45_000)
   })
 
+  it('forces UTF-8 stdout encoding in the Windows font script', async () => {
+    execFileMock.mockImplementation((_cmd: string, _args: string[], _opts, cb) => {
+      cb(null, 'Consolas\n微软雅黑\n仿宋\n')
+      return { kill: killMock }
+    })
+
+    const { listSystemFontFamilies } = await import('./system-fonts')
+    const fonts = await withPlatform('win32', () => listSystemFontFamilies())
+
+    expect(execFileMock).toHaveBeenCalledTimes(1)
+    const args = execFileMock.mock.calls[0][1] as string[]
+    const commandIndex = args.indexOf('-Command')
+    expect(commandIndex).toBeGreaterThan(-1)
+    const script = args[commandIndex + 1]
+    expect(script).toContain('[Console]::OutputEncoding = [System.Text.Encoding]::UTF8')
+    // Decoded output must keep CJK font names intact instead of mangling them.
+    expect(fonts).toContain('微软雅黑')
+    expect(fonts).toContain('仿宋')
+  })
+
   it.each([
     ['linux' as NodeJS.Platform, 15_000],
     ['win32' as NodeJS.Platform, 15_000]
