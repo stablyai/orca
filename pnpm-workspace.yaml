@@ -3,3 +3,34 @@
 # package graph. Without this file `pnpm -r` auto-discovers mobile/ and its
 # nested package, and the root's patchedDependencies fail as ERR_PNPM_UNUSED_PATCH.
 packages: []
+
+overrides:
+  '@modelcontextprotocol/sdk>@hono/node-server': '2.0.10'
+  'monaco-editor>dompurify': '3.4.12'
+
+# Fetch optional binaries for every OS/CPU we package for, not just the host's,
+# so any build machine still resolves the other platforms' artifacts.
+supportedArchitectures:
+  os:
+    - current
+    - darwin
+    - linux
+    - win32
+  cpu:
+    - current
+    - x64
+    - arm64
+
+onlyBuiltDependencies:
+  - '@parcel/watcher'
+  - cpu-features
+  - esbuild
+  - node-pty
+  - sherpa-onnx
+
+patchedDependencies:
+  node-pty@1.1.0: config/patches/node-pty@1.1.0.patch
+  '@xterm/addon-ligatures@0.11.0-beta.287': config/patches/@xterm__addon-ligatures@0.11.0-beta.287.patch
+  '@xterm/addon-webgl@0.20.0-beta.286': config/patches/@xterm__addon-webgl@0.20.0-beta.286.patch
+  '@xterm/addon-serialize@0.15.0-beta.287': config/patches/@xterm__addon-serialize@0.15.0-beta.287.patch
+  '@xterm/xterm@6.1.0-beta.287': config/patches/@xterm__xterm@6.1.0-beta.287.patch
