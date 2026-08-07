@@ -245,6 +245,13 @@ export class RemoteBrowserStreamLifecycle {
       return null
     }
     const viewportSize = await deps.waitForViewportSize()
+    // Why this guard, which every other await here already had: waitForViewportSize can block for a
+    // few frames while the element is unmeasurable, and a superseded attempt resuming after that
+    // would claim the stream token out from under the live stream — and, since one deadline is kept
+    // per pane, cancel its safety net too. The pane then sits in 'opening' with nothing pending.
+    if (!tokens.isCurrent(operationToken)) {
+      return null
+    }
     this.streamViewportSize = viewportSize
     const token = tokens.claimStreamToken(operationToken, pageId)
     // Treated as a drop rather than announced directly, so a hung host spends the same budget and
@@ -291,8 +298,16 @@ export class RemoteBrowserStreamLifecycle {
           // close does follow (the usual case) it publishes 'retrying', which replaces this within
           // the same tick. Landing in the actionable state and being corrected is safe; the reverse
           // is not.
-          onTransportError: () =>
-            deps.setStatus(remoteBrowserStreamStopped(remoteBrowserStreamLostNotice())),
+          // Why the deadline is cancelled here: this is the one stream-ending path that keeps its
+          // token, so the 'never said ready' deadline stays armed and its guard still passes. It
+          // would then fire against a stream already declared stopped and republish 'retrying' —
+          // withdrawing the reconnect control 30s after handing it over, with no user action, and
+          // reopening the strand this whole feature exists to remove. Not clear(): a close that
+          // does follow must still refill the budget for a stream that had been healthy.
+          onTransportError: () => {
+            this.liveness.stopWaitingForReady()
+            deps.setStatus(remoteBrowserStreamStopped(remoteBrowserStreamLostNotice()))
+          },
           onPageMissing: () => deps.closeMissingRemotePage(pageId),
           onFrame: (bytes) => deps.handleFrameBytes(token, bytes),
           onClosed: () => this.handleStreamClosed(token, true)

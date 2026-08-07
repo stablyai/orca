@@ -64,6 +64,7 @@ function createHarness() {
   let storedHandle: RemoteBrowserPageHandle | null = null
   let viewportSize: RemoteBrowserViewportSize | null = { width: 800, height: 600 }
   let statusGate: Gate | null = null
+  let viewportGate: Gate | null = null
   let tabShowGate: Gate | null = null
   let persistentSubscribeError: unknown = null
   const subscribeErrorQueue: unknown[] = []
@@ -171,7 +172,14 @@ function createHarness() {
     },
     applyTabInfo: (tab) => appliedTitles.push(tab.title ?? ''),
     closeMissingRemotePage: (remotePageId) => closedPages.push(remotePageId),
-    waitForViewportSize: async () => viewportSize,
+    waitForViewportSize: async () => {
+      if (viewportGate) {
+        const gate = viewportGate
+        viewportGate = null
+        await gate.wait
+      }
+      return viewportSize
+    },
     readViewportSize: () => viewportSize,
     syncViewport: async () => {},
     getDeviceScaleFactor: () => 1,
@@ -203,6 +211,9 @@ function createHarness() {
       const status = statusLog.at(-1)
       return status ? canReconnectRemoteBrowserStream(status) : false
     },
+    get currentStatusKind(): string | null {
+      return statusLog.at(-1)?.kind ?? null
+    },
     get currentError(): string | null {
       const status = statusLog.at(-1)
       return status ? remoteBrowserStreamNotice(status) : null
@@ -221,6 +232,11 @@ function createHarness() {
     },
     closeThenRejectNextSubscribe: () => {
       closeBeforeNextSubscribeRejects = true
+    },
+    holdNextViewportSize: (): Gate => {
+      const gate = createGate()
+      viewportGate = gate
+      return gate
     },
     holdNextStatusGet: (): Gate => {
       const gate = createGate()
@@ -408,6 +424,34 @@ describe('RemoteBrowserStreamLifecycle', () => {
     expect(harness.streams[1].viewportWidth).toBe(1200)
   })
 
+  // waitForViewportSize can block for a few frames while the element is unmeasurable. An attempt
+  // superseded during that window used to resume and claim the stream token anyway, stranding the
+  // live stream: its 'ready' was then dropped as stale, and because one ready-deadline is kept per
+  // pane, the resuming attempt cancelled the safety net too. The pane sat in 'opening' with nothing
+  // pending — no retry, no reconnect, forever.
+  it('drops an attempt superseded while it waited for the viewport', async () => {
+    const harness = createHarness()
+    await openStreamAndConfirmReady(harness)
+
+    const viewport = harness.holdNextViewportSize()
+    harness.setViewportSize({ width: 1400, height: 900 })
+    harness.lifecycle.restartForViewport('page-1')
+    await settle()
+
+    // A reopen (tab switch, environment change, Reconnect) supersedes the blocked resize.
+    harness.lifecycle.open()
+    await settle()
+    const supersedingStream = harness.streams.at(-1)!
+
+    viewport.release()
+    await settle()
+
+    // The reopen's own stream must still own the pane: its 'ready' has to land.
+    supersedingStream.emitReady()
+    await settle()
+    expect(harness.currentStatusKind).toBe('live')
+  })
+
   it('ignores a viewport change that is within measurement jitter', async () => {
     const harness = createHarness()
     await openStreamAndConfirmReady(harness)
@@ -511,6 +555,29 @@ describe('RemoteBrowserStreamLifecycle', () => {
     expect(harness.reconnectOffered).toBe(true)
     // Critically: not busy. A spinner here would also disable the pane's own input handlers.
     expect(harness.busyLog.at(-1)).toBe(false)
+  })
+
+  // The same path, but before the host confirmed anything. This is the one stream-ending path that
+  // deliberately keeps its stream token, so the 'never said ready' deadline stayed armed and its
+  // guard still passed — firing 30s later against a stream already declared stopped and withdrawing
+  // the reconnect control with no user action at all.
+  it('keeps a transport error actionable when the stream never said ready', async () => {
+    const harness = createHarness()
+    harness.lifecycle.open()
+    await settle()
+    expect(harness.streams).toHaveLength(1)
+
+    harness.streams[0].emitTransportError('runtime_timeout', 'socket hiccup')
+    await settle()
+    expect(harness.reconnectOffered).toBe(true)
+
+    // Long enough for the ready deadline to have fired.
+    await vi.advanceTimersByTimeAsync(120_000)
+
+    expect(harness.currentError).toBe('Lost connection to the remote server.')
+    expect(harness.reconnectOffered).toBe(true)
+    expect(harness.busyLog.at(-1)).toBe(false)
+    expect(harness.subscribeAttempts).toBe(1)
   })
 
   it('ignores stream events once the pane is unmounted', async () => {
@@ -662,6 +729,38 @@ describe('RemoteBrowserStreamLifecycle transport error', () => {
   })
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+  // Why this pins the METHOD and not just the call site: cancelling the deadline on a transport
+  // error must not also forget how long the stream had been alive, because a close that follows has
+  // to refill the budget for a stream that had proved healthy. Swapping stopWaitingForReady's
+  // clearDeadline() for clear() — deleting exactly what its comment argues for — left all 322 tests
+  // green while silently costing the user one automatic retry.
+  it('still refills the budget when a close follows a transport error on a healthy stream', async () => {
+    const harness = createHarness()
+    await openStreamAndConfirmReady(harness)
+
+    // Spend one budget step: a drop whose retry succeeds.
+    harness.streams[0].emitEnd()
+    await vi.advanceTimersByTimeAsync(500)
+    harness.streams[1].emitReady()
+    await settle()
+
+    // Let the replacement prove itself — longer than the window that earns a refill.
+    await vi.advanceTimersByTimeAsync(15_000)
+
+    harness.streams[1].emitTransportError('runtime_timeout', 'socket hiccup')
+    await settle()
+    harness.failEverySubscribe(rpcError('runtime_unavailable', 'still down'))
+    harness.streams[1].emitClose()
+    await settle()
+    const attemptsAfterClose = harness.subscribeAttempts
+
+    await vi.advanceTimersByTimeAsync(120_000)
+
+    // A full ladder, not the tail of the earlier one.
+    expect(harness.subscribeAttempts - attemptsAfterClose).toBe(5)
+    expect(harness.reconnectOffered).toBe(true)
   })
 
   // The usual case: a close does follow. It must take the control back down for the whole ladder,

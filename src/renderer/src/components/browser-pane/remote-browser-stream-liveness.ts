@@ -35,6 +35,16 @@ export class RemoteBrowserStreamLiveness {
     this.readyAt = Date.now()
   }
 
+  /**
+   * The stream is known not to be coming up, so stop expecting 'ready' — but keep what we already
+   * know about how long it lived. Distinct from clear(): a caller that has declared the stream
+   * stopped while deliberately holding its token still needs a later close to refill the budget
+   * correctly, which depends on the timestamp this preserves.
+   */
+  stopWaitingForReady(): void {
+    this.clearDeadline()
+  }
+
   /** Ends the current watch and reports whether the stream stayed up long enough to be trusted. */
   settle(): boolean {
     this.clearDeadline()
