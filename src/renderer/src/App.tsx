@@ -58,6 +58,7 @@ import {
   useSystemPrefersDark
 } from './components/terminal-pane/use-system-prefers-dark'
 import RightSidebar from './components/right-sidebar'
+import { ArchAdvisoryCard } from './components/ArchAdvisoryCard'
 import { StarNagCard } from './components/StarNagCard'
 import { StarNagAgentValueMomentObserver } from './components/star-nag/StarNagAgentValueMomentObserver'
 import { StarNagToastHost } from './components/star-nag/StarNagToastHost'
@@ -2654,6 +2655,14 @@ function App(): React.JSX.Element {
                 </RecoverableRenderErrorBoundary>
               </Suspense>
             ) : null}
+            <RecoverableRenderErrorBoundary
+              boundaryId="overlay.arch-advisory"
+              surface="overlay"
+              resetKey={activeView}
+              compact
+            >
+              <ArchAdvisoryCard />
+            </RecoverableRenderErrorBoundary>
             <RecoverableRenderErrorBoundary
               boundaryId="overlay.star-nag"
               surface="overlay"

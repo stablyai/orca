@@ -490,6 +490,9 @@ ipcRenderer.on('ui:findInBrowserPage', (_event, source: unknown) => {
 const api = {
   app: {
     getIdentity: (): Promise<AppIdentity> => ipcRenderer.invoke('app:getIdentity'),
+    getArchAdvisory: (): Promise<{ translated: boolean; dismissed: boolean }> =>
+      ipcRenderer.invoke('app:getArchAdvisory'),
+    dismissArchAdvisory: (): Promise<void> => ipcRenderer.invoke('app:dismissArchAdvisory'),
     getFeatureWallAssetBaseUrl: (): Promise<string> =>
       ipcRenderer.invoke('app:getFeatureWallAssetBaseUrl'),
     relaunch: (): Promise<void> =>
