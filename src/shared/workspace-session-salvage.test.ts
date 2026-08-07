@@ -136,10 +136,50 @@ describe('parseWorkspaceSessionSalvaging', () => {
     }
   })
 
-  it('does not treat an unrelated corruption at a dot-colliding key as a free escalation', () => {
+  it('reports one repair when a record raises both a bad-field and a missing-field issue', () => {
+    // Why: zod reports every issue in a record at once. The bad field and the
+    // container the missing fields condemn are nested, so counting both would
+    // report two corrupt records — and bill `dropped_count` telemetry for two —
+    // where the user has one.
+    const result = parseWorkspaceSessionSalvaging(
+      baseSession({ terminalSurfaceTombstonesByPaneKey: { 'tab-1:leaf-1': { worktreeId: 42 } } })
+    )
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.droppedPaths).toEqual(['terminalSurfaceTombstonesByPaneKey.tab-1:leaf-1'])
+      expect(result.value.terminalSurfaceTombstonesByPaneKey).toEqual({})
+    }
+  })
+
+  it('reports one repair when two fields of a record escalate to the same entry', () => {
+    // Why: both fields are dropped in pass 0 and both escalate to the same
+    // container in pass 1. Only one slot can carry the escalation, so the other
+    // must retire rather than linger as a stale sub-path of the entry that went.
+    const result = parseWorkspaceSessionSalvaging(
+      baseSession({
+        terminalSurfaceTombstonesByPaneKey: {
+          'tab-1:leaf-1': {
+            worktreeId: WT,
+            parentTabId: 'tab-1',
+            leafId: 'leaf-1',
+            ptyId: 'pty-1',
+            incarnationId: '',
+            retiredAt: -5
+          }
+        }
+      })
+    )
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.droppedPaths).toEqual(['terminalSurfaceTombstonesByPaneKey.tab-1:leaf-1'])
+      expect(result.value.terminalSurfaceTombstonesByPaneKey).toEqual({})
+    }
+  })
+
+  it('salvages two dot-colliding keys as two independent repairs', () => {
     // Why: 'a.root' (one key containing a dot) and 'a' → missing 'root' produce
-    // paths that collide when joined with '.'; segment-wise comparison must keep
-    // them as two distinct repairs rather than one posing as the other's escalation.
+    // paths that collide when joined with '.'; path identity is segment-wise so
+    // the two stay distinct repairs rather than one posing as the other's.
     const result = parseWorkspaceSessionSalvaging(
       baseSession({
         terminalLayoutsByTabId: {

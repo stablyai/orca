@@ -6,6 +6,7 @@ import type {
 } from '../../../../shared/types'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { adoptGrouplessTabs, layoutSpanningGroups } from './tab-group-reference-repair'
 import {
   dedupeTabOrder,
   getPersistedEditFileIdsByWorktree,
@@ -169,14 +170,14 @@ function hydrateUnifiedFormat(
     const hydratedLayout = session.tabGroupLayouts?.[worktreeId]
       ? pruneTabGroupLayoutForGroups(session.tabGroupLayouts[worktreeId], hydratedGroupIds)
       : null
-    layoutByWorktree[worktreeId] = hydratedLayout ?? {
-      type: 'leaf',
-      // Why: if transient-only groups were removed during hydration, the
-      // persisted split tree can collapse to a single surviving group. The
-      // fallback leaf keeps restore aligned with the remaining real tabs.
-      groupId: hydratedGroups[0].id
-    }
+    // Why: the fallback must name every surviving group. A layout entry can be
+    // absent (legacy write) or dropped by session salvage while several groups
+    // survive; leafing to the first one alone renders the rest — and their tabs —
+    // nowhere, with nothing downstream to notice or heal it.
+    layoutByWorktree[worktreeId] = hydratedLayout ?? layoutSpanningGroups(hydratedGroups)
   }
+
+  adoptGrouplessTabs(tabsByWorktree, groupsByWorktree, activeGroupIdByWorktree, layoutByWorktree)
 
   return {
     unifiedTabsByWorktree: tabsByWorktree,

@@ -57,36 +57,40 @@ function findDropTarget(
   return null
 }
 
-// Why: segment-wise identity — joined strings would collide when a map key itself
-// contains a '.', letting an unrelated corruption pose as an escalation.
+// Why: segment-wise identity. Map keys are user data and may contain '.', so a
+// joined string is not a path identity; JSON also keeps an array index 3 distinct
+// from an object key '3'. Both matter because these keys decide whether one entry
+// contains another.
 function pathKey(path: readonly PropertyKey[]): string {
   return JSON.stringify(
     path.map((segment) => (typeof segment === 'symbol' ? segment.toString() : segment))
   )
 }
 
-function comparePaths(a: readonly PropertyKey[], b: readonly PropertyKey[]): number {
-  const shared = Math.min(a.length, b.length)
-  for (let i = 0; i < shared; i += 1) {
-    if (a[i] === b[i]) {
-      continue
+// Why: true when some strict ancestor of `target` is already claimed, i.e. an
+// outer entry is being removed and this one would vanish with it.
+function hasClaimedAncestor(
+  target: readonly PropertyKey[],
+  claimed: ReadonlyMap<string, number>
+): boolean {
+  for (let i = 1; i < target.length; i += 1) {
+    if (claimed.has(pathKey(target.slice(0, i)))) {
+      return true
     }
-    if (typeof a[i] === 'number' && typeof b[i] === 'number') {
-      return (a[i] as number) - (b[i] as number)
-    }
-    return String(a[i]) < String(b[i]) ? -1 : 1
   }
-  return a.length - b.length
+  return false
 }
 
-/** Why: descending path order resolves deeper targets before an ancestor entry
- *  they sit under is deleted. Array elements are collected per parent and removed
- *  in one rebuild rather than spliced individually — a splice per element is an
- *  O(n) memmove, so a payload with thousands of bad records in one array would
- *  make repair quadratic on the startup path. */
+/** Why: order-independent by construction — a pass never plans a target nested
+ *  inside another (see the subsumption reduction below), and a target under an
+ *  already-deleted ancestor resolves to `undefined` and is skipped. Array
+ *  elements are collected per parent and removed in one rebuild rather than
+ *  spliced individually — a splice per element is an O(n) memmove, so a payload
+ *  with thousands of bad records in one array would make repair quadratic on the
+ *  startup path. */
 function applyDrops(session: Record<string, unknown>, targets: readonly PropertyKey[][]): void {
   const droppedIndexesByArray = new Map<unknown[], Set<number>>()
-  for (const target of [...targets].sort((a, b) => comparePaths(b, a))) {
+  for (const target of targets) {
     const parent = containerAt(session, target.slice(0, -1))
     const key = target.at(-1)
     if (key === undefined) {
@@ -133,13 +137,17 @@ export function parseWorkspaceSessionSalvaging(
     return { ok: false, error: describeWorkspaceSessionError(result.error) }
   }
   const working = structuredClone(raw) as Record<string, unknown>
-  const droppedPaths: string[] = []
-  // Why: maps each entry removed last pass to its slot in droppedPaths. An issue
-  // back at that now-absent path means the drop left its parent missing a
-  // required field; that escalation continues the same repair, so it replaces
-  // the slot instead of logging a second entry — droppedPaths reports the final
-  // self-contained record each repair removed, and the absence check keeps a
-  // shifted array element at the same index counting as a new entry.
+  // Why: one slot per repair, holding the outermost entry that repair removed, or
+  // null once a later plan subsumed it. Reporting repairs rather than zod issues
+  // keeps `dropped_count` telemetry a count of corrupt records, not of symptoms.
+  const repairs: (PropertyKey[] | null)[] = []
+  const reportedPaths = (): string[] =>
+    repairs.filter((path): path is PropertyKey[] => path !== null).map((path) => path.join('.'))
+  // Why: maps each entry removed last pass to its slot. An issue back at that
+  // now-absent path means the drop left its parent missing a required field; that
+  // escalation continues the same repair, so it replaces the slot instead of
+  // logging a second entry. The absence check keeps a shifted array element at
+  // the same index counting as a new entry.
   let droppedLastPass = new Map<string, number>()
   const restoredDefaultKeys = new Set<string>()
 
@@ -153,11 +161,10 @@ export function parseWorkspaceSessionSalvaging(
       }
       result = reparsed
       if (result.success) {
-        return { ok: true, value: result.data, droppedPaths }
+        return { ok: true, value: result.data, droppedPaths: reportedPaths() }
       }
     }
-    const droppedThisPass = new Map<string, number>()
-    const targets: PropertyKey[][] = []
+    const plans: { target: PropertyKey[]; escalatedSlot: number | undefined }[] = []
     let restoredAny = false
     for (const issue of result.error.issues) {
       const escalatedSlot =
@@ -187,24 +194,41 @@ export function parseWorkspaceSessionSalvaging(
         }
         continue
       }
-      const targetKey = pathKey(target)
-      if (droppedThisPass.has(targetKey)) {
+      plans.push({ target, escalatedSlot })
+    }
+    // Why: one corrupt record raises several issues whose drop targets nest — a
+    // bad field, plus the parent that field left incomplete. Claiming
+    // shallowest-first lets the outermost entry own the repair and retires the
+    // slots the nested ones held, so a record is reported (and counted) once.
+    plans.sort((a, b) => a.target.length - b.target.length)
+    const slotByTarget = new Map<string, number>()
+    const claimedSlots = new Set<number>()
+    const subsumedSlots = new Set<number>()
+    const targets: PropertyKey[][] = []
+    for (const plan of plans) {
+      const targetKey = pathKey(plan.target)
+      if (slotByTarget.has(targetKey) || hasClaimedAncestor(plan.target, slotByTarget)) {
+        if (plan.escalatedSlot !== undefined) {
+          subsumedSlots.add(plan.escalatedSlot)
+        }
         continue
       }
-      if (escalatedSlot === undefined) {
-        droppedThisPass.set(targetKey, droppedPaths.length)
-        droppedPaths.push(target.join('.'))
-      } else {
-        droppedPaths[escalatedSlot] = target.join('.')
-        droppedThisPass.set(targetKey, escalatedSlot)
+      const slot = plan.escalatedSlot ?? repairs.length
+      repairs[slot] = plan.target
+      slotByTarget.set(targetKey, slot)
+      claimedSlots.add(slot)
+      targets.push(plan.target)
+    }
+    for (const slot of subsumedSlots) {
+      if (!claimedSlots.has(slot)) {
+        repairs[slot] = null
       }
-      targets.push(target)
     }
     if (targets.length === 0 && !restoredAny) {
       break
     }
     applyDrops(working, targets)
-    droppedLastPass = droppedThisPass
+    droppedLastPass = slotByTarget
   }
 
   const exhausted = safeParseWorkspaceSession(working)
@@ -212,6 +236,6 @@ export function parseWorkspaceSessionSalvaging(
     return { ok: false, error: WORKSPACE_SESSION_UNVALIDATABLE }
   }
   return exhausted.success
-    ? { ok: true, value: exhausted.data, droppedPaths }
+    ? { ok: true, value: exhausted.data, droppedPaths: reportedPaths() }
     : { ok: false, error: describeWorkspaceSessionError(exhausted.error) }
 }

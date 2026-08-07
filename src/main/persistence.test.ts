@@ -12135,44 +12135,113 @@ describe('Store host-partitioned workspace sessions', () => {
     expect(session.tabsByWorktree[worktreeId]?.map((tab) => tab.id)).toEqual(['local-keep'])
   })
 
-  it('persists the salvaged session back to disk instead of re-salvaging every launch', async () => {
+  // Why: no flush() anywhere below — flush writes whatever the state hash says is
+  // dirty, so it passes even when nothing scheduled a save. Only the debounced
+  // write the salvage itself schedules proves the repair reaches disk; without it
+  // the corrupt entries stay there and get re-salvaged on every launch.
+  async function loadAndAwaitScheduledSave(): Promise<void> {
+    vi.useFakeTimers()
+    try {
+      const store = await createStore()
+      vi.advanceTimersByTime(10_000)
+      await store.waitForPendingWrite()
+    } finally {
+      vi.useRealTimers()
+    }
+  }
+
+  type PersistedSessionsFile = {
+    workspaceSession?: { tabsByWorktree?: Record<string, { id: string }[]> }
+    workspaceSessionsByHostId?: Record<
+      string,
+      { tabsByWorktree?: Record<string, { id: string }[]> }
+    >
+  }
+
+  // Why: flush() writes whatever the state hash says is dirty, so it passes even
+  // when nothing scheduled a save — it cannot see the repair write at all. Loading
+  // once first canonicalizes the profile (a second load of a canonical file
+  // schedules nothing), so a later rewrite proves the salvage scheduled it.
+  async function loadAndAwaitScheduledSave(): Promise<void> {
+    vi.useFakeTimers()
+    try {
+      const store = await createStore()
+      vi.advanceTimersByTime(10_000)
+      await store.waitForPendingWrite()
+    } finally {
+      vi.useRealTimers()
+    }
+  }
+
+  async function canonicalize(fixture: Record<string, unknown>): Promise<PersistedSessionsFile> {
+    writeDataFile(fixture)
+    await loadAndAwaitScheduledSave()
+    return readDataFile() as PersistedSessionsFile
+  }
+
+  it('schedules a save for a salvaged local session instead of re-salvaging every launch', async () => {
     const worktreeId = 'repo-1::/worktree'
-    writeDataFile({
+    const profile = await canonicalize({
       schemaVersion: 1,
       workspaceSession: {
         ...makeHostSession('local-repo'),
-        tabsByWorktree: {
-          [worktreeId]: [makeTerminalTab({ id: 'tab-keep', worktreeId }), { id: 'tab-corrupt' }]
-        }
-      },
-      workspaceSessionsByHostId: {
-        'runtime:env-a': {
-          ...makeHostSession('host-repo'),
-          tabsByWorktree: {
-            [worktreeId]: [makeTerminalTab({ id: 'host-keep', worktreeId }), { id: 'host-corrupt' }]
-          }
-        }
+        tabsByWorktree: { [worktreeId]: [makeTerminalTab({ id: 'tab-keep', worktreeId })] }
       }
     })
+    profile.workspaceSession?.tabsByWorktree?.[worktreeId]?.push({ id: 'tab-corrupt' })
+    writeDataFile(profile)
 
-    const store = await createStore()
-    store.flush()
-    const persisted = readDataFile() as {
-      workspaceSession?: { tabsByWorktree?: Record<string, { id: string }[]> }
-      workspaceSessionsByHostId?: Record<
-        string,
-        { tabsByWorktree?: Record<string, { id: string }[]> }
-      >
-    }
+    await loadAndAwaitScheduledSave()
 
+    const persisted = readDataFile() as PersistedSessionsFile
     expect(persisted.workspaceSession?.tabsByWorktree?.[worktreeId]?.map((tab) => tab.id)).toEqual([
       'tab-keep'
     ])
+  })
+
+  it('schedules a save for a salvaged host partition and reports each partition host kind', async () => {
+    const worktreeId = 'repo-1::/worktree'
+    const profile = await canonicalize({
+      schemaVersion: 1,
+      workspaceSessionsByHostId: {
+        'runtime:env-a': {
+          ...makeHostSession('runtime-repo'),
+          tabsByWorktree: { [worktreeId]: [makeTerminalTab({ id: 'runtime-keep', worktreeId })] }
+        },
+        'ssh:target-b': {
+          ...makeHostSession('ssh-repo'),
+          tabsByWorktree: { [worktreeId]: [makeTerminalTab({ id: 'ssh-keep', worktreeId })] }
+        }
+      }
+    })
+    const partitions = profile.workspaceSessionsByHostId
+    partitions?.['runtime:env-a']?.tabsByWorktree?.[worktreeId]?.push({ id: 'runtime-corrupt' })
+    partitions?.['ssh:target-b']?.tabsByWorktree?.[worktreeId]?.push({ id: 'ssh-corrupt' })
+    writeDataFile(profile)
+    trackMock.mockReset()
+
+    await loadAndAwaitScheduledSave()
+
+    const persisted = (readDataFile() as PersistedSessionsFile).workspaceSessionsByHostId
     expect(
-      persisted.workspaceSessionsByHostId?.['runtime:env-a']?.tabsByWorktree?.[worktreeId]?.map(
-        (tab) => tab.id
-      )
-    ).toEqual(['host-keep'])
+      persisted?.['runtime:env-a']?.tabsByWorktree?.[worktreeId]?.map((tab) => tab.id)
+    ).toEqual(['runtime-keep'])
+    expect(persisted?.['ssh:target-b']?.tabsByWorktree?.[worktreeId]?.map((tab) => tab.id)).toEqual(
+      ['ssh-keep']
+    )
+
+    // Why: host_kind is the only dimension separating an ssh salvage from a
+    // runtime one, and salvage runs before track() is wired — so both the
+    // classification and the deferred flush need a reader.
+    const { flushWorkspaceSessionSalvageTelemetry } = await import('./persistence')
+    expect(trackMock).not.toHaveBeenCalledWith('workspace_session_salvaged', expect.anything())
+    flushWorkspaceSessionSalvageTelemetry()
+    expect(
+      trackMock.mock.calls.filter(([event]) => event === 'workspace_session_salvaged')
+    ).toEqual([
+      ['workspace_session_salvaged', { host_kind: 'runtime', dropped_count: 1 }],
+      ['workspace_session_salvaged', { host_kind: 'ssh', dropped_count: 1 }]
+    ])
   })
 })
 

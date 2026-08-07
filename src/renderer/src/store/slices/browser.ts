@@ -1651,21 +1651,28 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         }
         const hydratedTabs: BrowserWorkspace[] = []
         for (const tab of tabs) {
-          const persistedPages = persistedPagesByWorkspace[tab.id] ?? [
-            {
-              id: createBrowserUuid(),
-              workspaceId: tab.id,
-              worktreeId,
-              url: normalizeUrl(tab.url),
-              title: tab.title,
-              loading: false,
-              faviconUrl: tab.faviconUrl ?? null,
-              canGoBack: tab.canGoBack,
-              canGoForward: tab.canGoForward,
-              loadError: tab.loadError ?? null,
-              createdAt: tab.createdAt
-            } satisfies BrowserPage
-          ]
+          // Why: an empty page list is as page-less as a missing one — session
+          // salvage drops a corrupt page by rebuilding the array, leaving the key
+          // behind. Without the length check the workspace restores with no page
+          // at all: a dead about:blank tab that nothing prunes or reloads.
+          const storedPages = persistedPagesByWorkspace[tab.id]
+          const persistedPages = storedPages?.length
+            ? storedPages
+            : [
+                {
+                  id: createBrowserUuid(),
+                  workspaceId: tab.id,
+                  worktreeId,
+                  url: normalizeUrl(tab.url),
+                  title: tab.title,
+                  loading: false,
+                  faviconUrl: tab.faviconUrl ?? null,
+                  canGoBack: tab.canGoBack,
+                  canGoForward: tab.canGoForward,
+                  loadError: tab.loadError ?? null,
+                  createdAt: tab.createdAt
+                } satisfies BrowserPage
+              ]
           const nextPages = persistedPages.map((page) => {
             // Why: in-memory hydration callers can bypass the persistence schema's unknown-key stripping.
             const { allowWindowClose: _legacyAllowWindowClose, ...persistedPage } =
