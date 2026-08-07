@@ -198,10 +198,32 @@ function cancelPendingRecoveryRetry(tabId: string): void {
  */
 export async function requestTerminalPaneRecovery(request: RecoveryRequest): Promise<boolean> {
   if (!isCurrentTerminalRecoveryRequest(request)) {
+    // Why traced: this was a silent exit, so a certified-dead pane with a
+    // stale request read as "no detector fired" in the field (#12452). The
+    // crash-report ring coalesces repeats, so a burst of releases from one
+    // incident stays one entry.
+    recordRendererCrashBreadcrumb('terminal_pane_recovery_stale_request', {
+      tabId: request.tabId,
+      reason: request.reason,
+      staleGeneration:
+        request.terminalRecoveryGeneration !== undefined &&
+        request.terminalRecoveryGeneration !== captureTerminalPaneRecoveryGeneration(request.tabId),
+      staleInstance:
+        request.terminalRecoveryInstanceId !== undefined &&
+        !activeTerminalRecoveryInstanceIds.has(request.terminalRecoveryInstanceId)
+    })
     return false
   }
   const budget = recoveryBudget(request.tabId, Date.now())
   if (!budget.allowed) {
+    // Why traced: same field gap as the stale exit — a declined budget left
+    // no evidence that recovery was requested at all.
+    recordRendererCrashBreadcrumb('terminal_pane_recovery_declined', {
+      tabId: request.tabId,
+      reason: request.reason,
+      declinedBy: budget.declinedBy,
+      retryInMs: Math.round(budget.retryInMs)
+    })
     if (
       budget.declinedBy === 'window-cap' ||
       (budget.declinedBy === 'cooldown' && request.terminalRecoveryGeneration !== undefined)
@@ -239,6 +261,12 @@ export async function requestTerminalPaneRecovery(request: RecoveryRequest): Pro
     }
     const recheck = recoveryBudget(request.tabId, Date.now())
     if (!recheck.allowed) {
+      recordRendererCrashBreadcrumb('terminal_pane_recovery_declined', {
+        tabId: request.tabId,
+        reason: request.reason,
+        declinedBy: recheck.declinedBy,
+        retryInMs: Math.round(recheck.retryInMs)
+      })
       if (
         recheck.declinedBy === 'window-cap' ||
         (recheck.declinedBy === 'cooldown' && request.terminalRecoveryGeneration !== undefined)

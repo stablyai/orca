@@ -106,6 +106,41 @@ describe('requestTerminalPaneRecovery', () => {
     expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(2)
   })
 
+  it('traces a stale-instance request instead of exiting silently', async () => {
+    const result = await requestTerminalPaneRecovery({
+      tabId: 'tab-1',
+      ptyId: 'pty-1',
+      reason: 'replay-wedged',
+      terminalRecoveryInstanceId: 999
+    })
+
+    expect(result).toBe(false)
+    expect(mocks.remountTerminalTabForRecovery).not.toHaveBeenCalled()
+    expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenCalledWith(
+      'terminal_pane_recovery_stale_request',
+      { tabId: 'tab-1', reason: 'replay-wedged', staleGeneration: false, staleInstance: true }
+    )
+  })
+
+  it('traces a budget decline instead of exiting silently', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+    await requestTerminalPaneRecovery({ tabId: 'tab-1', ptyId: 'pty-1', reason: 'write-stalled' })
+    mocks.recordRendererCrashBreadcrumb.mockClear()
+
+    const result = await requestTerminalPaneRecovery({
+      tabId: 'tab-1',
+      ptyId: 'pty-1',
+      reason: 'replay-wedged'
+    })
+
+    expect(result).toBe(false)
+    expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenCalledWith(
+      'terminal_pane_recovery_declined',
+      { tabId: 'tab-1', reason: 'replay-wedged', declinedBy: 'cooldown', retryInMs: 15_000 }
+    )
+  })
+
   it('caps recoveries per window to prevent remount storms', async () => {
     vi.useFakeTimers()
     for (let attempt = 0; attempt < 5; attempt += 1) {
