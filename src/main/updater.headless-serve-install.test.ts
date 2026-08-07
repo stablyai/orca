@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   appMock,
@@ -242,7 +242,6 @@ describe('headless serve update install handoff', () => {
     downloadUpdate()
     downloadUpdate()
 
-    expect(autoUpdaterMock.autoInstallOnAppQuit).toBe(false)
     expect(autoUpdaterMock.downloadUpdate).not.toHaveBeenCalled()
     expect(
       recordUpdaterLifecycleMock.mock.calls.filter(
@@ -306,7 +305,6 @@ describe('headless serve update install handoff', () => {
     quitAndInstall()
 
     expect(requestServeUpdateHandoffMock).toHaveBeenCalledWith('1.0.61')
-    expect(autoUpdaterMock.autoInstallOnAppQuit).toBe(false)
     expect(autoUpdaterMock.autoRunAppAfterInstall).toBe(false)
     expect(autoUpdaterMock.downloadUpdate).toHaveBeenCalledOnce()
     expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledWith(true, false)
@@ -519,5 +517,122 @@ describe('headless serve update install handoff', () => {
       reason: 'manual-service-update-required'
     })
     expect(() => checkForRemoteServerUpdate('runtime-1')).toThrow('remote_update_manual_required')
+  })
+})
+
+/**
+ * Squirrel.Mac staging is gated by `autoInstallOnAppQuit`, so these assert the
+ * macOS contract on every runner instead of `runIf(darwin)` — PR CI is Linux
+ * only, which is how the staging deadlock reached users unnoticed.
+ */
+describe('headless serve updates on macOS', () => {
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
+
+  beforeEach(() => {
+    vi.resetModules()
+    vi.useFakeTimers()
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+    autoUpdaterMock.checkForUpdates.mockReset().mockImplementation(() => {
+      autoUpdaterMock.emit('checking-for-update')
+      queueMicrotask(() => autoUpdaterMock.emit('update-available', { version: '1.0.61' }))
+      return Promise.resolve(null)
+    })
+    autoUpdaterMock.downloadUpdate.mockReset().mockResolvedValue([])
+    autoUpdaterMock.quitAndInstall.mockReset()
+    autoUpdaterMock.setFeedURL.mockReset()
+    autoUpdaterMock.on.mockClear()
+    autoUpdaterMock.autoInstallOnAppQuit = false
+    autoUpdaterMock.autoRunAppAfterInstall = true
+    nativeUpdaterMock.on.mockReset()
+    appMock.on.mockClear()
+    appMock.quit.mockReset()
+    killAllPtyMock.mockReset()
+    recordUpdaterLifecycleMock.mockReset()
+    requestServeUpdateHandoffMock.mockReset().mockReturnValue(true)
+    resetHandlers()
+  })
+
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', originalPlatform)
+  })
+
+  /**
+   * Mirrors MacUpdater.doDownloadUpdate: electron-updater dispatches its own
+   * 'update-downloaded' as soon as the zip lands, but only asks Squirrel.Mac to
+   * stage it — the native 'update-downloaded' — when autoInstallOnAppQuit is set.
+   */
+  const completeMacDownload = (version: string): void => {
+    autoUpdaterMock.emit('update-downloaded', { version })
+    if (!autoUpdaterMock.autoInstallOnAppQuit) {
+      return
+    }
+    const nativeReady = nativeUpdaterMock.on.mock.calls.find(
+      ([event]) => event === 'update-downloaded'
+    )?.[1] as (() => void) | undefined
+    nativeReady?.()
+  }
+
+  const lastStatus = (send: ReturnType<typeof vi.fn>): Record<string, unknown> | undefined =>
+    send.mock.calls.findLast(([channel]) => channel === 'updater:status')?.[1]
+
+  it.each(['supervised-headless-serve', 'unsupported-headless-serve'] as const)(
+    'starts Squirrel.Mac staging in %s mode',
+    async (installMode) => {
+      const { setupAutoUpdater } = await import('./updater')
+
+      setupAutoUpdater({ webContents: { send: vi.fn() } } as never, {
+        getLastUpdateCheckAt: () => Date.now(),
+        installMode
+      })
+
+      expect(autoUpdaterMock.autoInstallOnAppQuit).toBe(true)
+      // The supervisor, not Squirrel, still owns the serve relaunch.
+      expect(autoUpdaterMock.autoRunAppAfterInstall).toBe(false)
+    }
+  )
+
+  it('settles a supervised serve download on downloaded instead of stalling at 100%', async () => {
+    const send = vi.fn()
+    const { checkForUpdatesFromMenu, downloadUpdate, setupAutoUpdater } = await import('./updater')
+    setupAutoUpdater({ webContents: { send } } as never, {
+      getLastUpdateCheckAt: () => Date.now(),
+      installMode: 'supervised-headless-serve'
+    })
+    checkForUpdatesFromMenu()
+    await vi.advanceTimersByTimeAsync(0)
+
+    downloadUpdate()
+    completeMacDownload('1.0.61')
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(autoUpdaterMock.downloadUpdate).toHaveBeenCalledOnce()
+    expect(recordUpdaterLifecycleMock).toHaveBeenCalledWith(
+      'macos_installer_ready',
+      expect.anything()
+    )
+    expect(lastStatus(send)).toEqual(
+      expect.objectContaining({ state: 'downloaded', version: '1.0.61' })
+    )
+  })
+
+  it('keeps the serve download reinstallable across a restart once staged', async () => {
+    const send = vi.fn()
+    const { checkForUpdatesFromMenu, downloadUpdate, quitAndInstall, setupAutoUpdater } =
+      await import('./updater')
+    setupAutoUpdater({ webContents: { send } } as never, {
+      getLastUpdateCheckAt: () => Date.now(),
+      installMode: 'supervised-headless-serve'
+    })
+    checkForUpdatesFromMenu()
+    await vi.advanceTimersByTimeAsync(0)
+    downloadUpdate()
+    completeMacDownload('1.0.61')
+    await vi.advanceTimersByTimeAsync(0)
+
+    quitAndInstall()
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(requestServeUpdateHandoffMock).toHaveBeenCalledWith('1.0.61')
+    expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledWith(true, false)
   })
 })

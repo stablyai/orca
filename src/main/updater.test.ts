@@ -3968,18 +3968,24 @@ describe('updater', () => {
     }
 
     it('disables install-on-quit for deb and rpm root packages', async () => {
-      for (const packageType of ['deb', 'rpm'] as const) {
-        vi.resetModules()
-        autoUpdaterMock.autoInstallOnAppQuit = true
-        getLinuxRootPackageTypeMock.mockReturnValue(packageType)
-        const { setupAutoUpdater } = await import('./updater')
+      const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+      try {
+        for (const packageType of ['deb', 'rpm'] as const) {
+          vi.resetModules()
+          autoUpdaterMock.autoInstallOnAppQuit = true
+          getLinuxRootPackageTypeMock.mockReturnValue(packageType)
+          const { setupAutoUpdater } = await import('./updater')
 
-        setupAutoUpdater({ webContents: { send: vi.fn() } } as never, {
-          getLastUpdateCheckAt: () => Date.now(),
-          installMode: 'interactive'
-        })
+          setupAutoUpdater({ webContents: { send: vi.fn() } } as never, {
+            getLastUpdateCheckAt: () => Date.now(),
+            installMode: 'interactive'
+          })
 
-        expect(autoUpdaterMock.autoInstallOnAppQuit).toBe(false)
+          expect(autoUpdaterMock.autoInstallOnAppQuit).toBe(false)
+        }
+      } finally {
+        Object.defineProperty(process, 'platform', originalPlatform)
       }
     })
 
@@ -3995,21 +4001,28 @@ describe('updater', () => {
       expect(autoUpdaterMock.autoInstallOnAppQuit).toBe(true)
     })
 
-    it('leaves headless serve installs supervisor-controlled', async () => {
-      for (const installMode of [
-        'supervised-headless-serve',
-        'unsupported-headless-serve'
-      ] as const) {
-        vi.resetModules()
-        autoUpdaterMock.autoInstallOnAppQuit = true
-        const { setupAutoUpdater } = await import('./updater')
+    // Why: pinned off the host platform so the non-macOS contract is asserted on every CI runner.
+    it('leaves headless serve installs supervisor-controlled off macOS', async () => {
+      const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+      try {
+        for (const installMode of [
+          'supervised-headless-serve',
+          'unsupported-headless-serve'
+        ] as const) {
+          vi.resetModules()
+          autoUpdaterMock.autoInstallOnAppQuit = true
+          const { setupAutoUpdater } = await import('./updater')
 
-        setupAutoUpdater({ webContents: { send: vi.fn() } } as never, {
-          getLastUpdateCheckAt: () => Date.now(),
-          installMode
-        })
+          setupAutoUpdater({ webContents: { send: vi.fn() } } as never, {
+            getLastUpdateCheckAt: () => Date.now(),
+            installMode
+          })
 
-        expect(autoUpdaterMock.autoInstallOnAppQuit).toBe(false)
+          expect(autoUpdaterMock.autoInstallOnAppQuit).toBe(false)
+        }
+      } finally {
+        Object.defineProperty(process, 'platform', originalPlatform)
       }
     })
 

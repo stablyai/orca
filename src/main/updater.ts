@@ -2187,8 +2187,12 @@ export function setupAutoUpdater(
   }
   // Why: supervised serve installs require an explicit handoff; ordinary service quits must never install implicitly.
   // Root Linux packages also opt out: an implicit quit-time escalation would fail after the UI is gone, leaving no recovery surface.
+  // Why (darwin): MacUpdater extends AppUpdater, not BaseUpdater, so it never registers a quit handler and this flag cannot
+  // install on quit. Its only Squirrel.Mac effect is gating whether staging starts after download, so forcing it false in
+  // serve mode strands the update at 100% with no path to 'downloaded' — and no path to the install that would unstick it.
   autoUpdater.autoInstallOnAppQuit =
-    updateInstallMode === 'interactive' && getLinuxRootPackageType() === null
+    process.platform === 'darwin' ||
+    (updateInstallMode === 'interactive' && getLinuxRootPackageType() === null)
   // Why: MacUpdater ignores quitAndInstall arguments; the surviving CLI supervisor must be the only serve relaunch owner.
   autoUpdater.autoRunAppAfterInstall = updateInstallMode === 'interactive'
 
