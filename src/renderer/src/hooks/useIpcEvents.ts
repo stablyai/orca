@@ -3100,6 +3100,7 @@ export function useIpcEvents(): void {
         interactivePrompt: data.interactivePrompt,
         lastAssistantMessage: data.lastAssistantMessage,
         interrupted: data.interrupted,
+        sessionBoundary: data.sessionBoundary,
         // Why: same trap as interactivePrompt — this rebuild is a field whitelist, so subagent child rows vanish if omitted.
         subagents: data.subagents
       })

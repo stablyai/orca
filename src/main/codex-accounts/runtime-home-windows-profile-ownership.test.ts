@@ -3,7 +3,6 @@ import type { GlobalSettings } from '../../shared/types'
 import { CodexRuntimeHomeService } from './runtime-home-service'
 
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
-const originalRealHomeOverride = process.env.ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME
 const originalCodexHome = process.env.CODEX_HOME
 const originalOrcaCodexHome = process.env.ORCA_CODEX_HOME
 
@@ -11,7 +10,6 @@ afterEach(() => {
   if (originalPlatform) {
     Object.defineProperty(process, 'platform', originalPlatform)
   }
-  restoreEnv('ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME', originalRealHomeOverride)
   restoreEnv('CODEX_HOME', originalCodexHome)
   restoreEnv('ORCA_CODEX_HOME', originalOrcaCodexHome)
 })
@@ -19,7 +17,6 @@ afterEach(() => {
 describe('Windows System Default Codex home ownership', () => {
   it('stays managed when PowerShell profile state cannot be inspected', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    process.env.ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME = '1'
     delete process.env.CODEX_HOME
     delete process.env.ORCA_CODEX_HOME
 

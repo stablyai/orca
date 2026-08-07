@@ -87,11 +87,12 @@ describe('DaemonServer', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  async function startServer(launchNonce?: string): Promise<void> {
+  async function startServer(launchNonce?: string, onRpcShutdown?: () => void): Promise<void> {
     server = new DaemonServer({
       socketPath,
       tokenPath,
       ...(launchNonce ? { pidPath, launchNonce } : {}),
+      ...(onRpcShutdown ? { onRpcShutdown } : {}),
       spawnSubprocess: () => createMockSubprocess()
     })
     await server.start()
@@ -842,7 +843,8 @@ describe('DaemonServer', () => {
 
   describe('shutdown', () => {
     it('waits for the ordinary shutdown reply write before destroying resources', async () => {
-      await startServer()
+      const onRpcShutdown = vi.fn()
+      await startServer(undefined, onRpcShutdown)
       const c = await connectClient()
       const daemon = server as unknown as DaemonServerPrivate & {
         host: { dispose: () => Promise<void> }
@@ -861,11 +863,14 @@ describe('DaemonServer', () => {
 
       await expect(c.request('shutdown', { killSessions: false })).resolves.toEqual({})
       expect(dispose).not.toHaveBeenCalled()
+      expect(onRpcShutdown).not.toHaveBeenCalled()
       expect(existsSync(tokenPath)).toBe(true)
 
       replyFlushed?.()
-      await waitFor(() => !existsSync(tokenPath))
+      await waitFor(() => onRpcShutdown.mock.calls.length === 1)
+      expect(existsSync(tokenPath)).toBe(false)
       expect(dispose).toHaveBeenCalledOnce()
+      expect(onRpcShutdown).toHaveBeenCalledOnce()
     })
 
     it('removes only its owned token and PID record', async () => {

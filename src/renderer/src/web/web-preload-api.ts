@@ -1979,6 +1979,7 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       includeIgnored,
       bypassEffectiveUpstreamNegativeCache,
       reuseLineStats,
+      branchLineTotalMergeBase,
       requestToken
     }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
@@ -1986,7 +1987,8 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         includeIgnored,
         bypassEffectiveUpstreamNegativeCache,
-        reuseLineStats
+        reuseLineStats,
+        ...(branchLineTotalMergeBase ? { branchLineTotalMergeBase } : {})
       }
       // Why: no token = nothing to cancel (pooled); a token routes via the subscription bridge so cancelStatus can abort.
       if (!requestToken) {
@@ -1997,6 +1999,7 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     cancelStatus: async ({ requestToken }) => {
       webGitStatusAbortControllers.get(requestToken)?.abort()
     },
+    setStatusUpstreamRefWatch: async () => {},
     submoduleStatus: async ({ worktreePath, submodulePath, area }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.submoduleStatus', {
@@ -2750,6 +2753,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onFileDrop: () => noopUnsubscribe,
     syncTrafficLights: () => {},
     setMarkdownEditorFocused: () => {},
+    setRichMarkdownContextMenuTarget: () => {},
     setTerminalInputFocused: () => {},
     setFloatingFocus: () => {},
     setShortcutRecorderFocused: () => {},
@@ -2923,7 +2927,15 @@ function createDeveloperPermissionsApi(): NonNullable<Partial<PreloadApi>['devel
     getStatus: () => Promise.resolve([]),
     request: ({ id }) =>
       Promise.resolve({ id, status: 'unsupported', openedSystemSettings: false } as const),
-    openSettings: () => Promise.resolve()
+    openSettings: () => Promise.resolve(),
+    testLocalNetworkConnection: ({ host, port }) =>
+      Promise.resolve({
+        ok: false,
+        host,
+        port,
+        testedAt: Date.now(),
+        failure: 'unsupported'
+      } as const)
   }
 }
 
@@ -3220,7 +3232,9 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
       listSessions: () => Promise.resolve({ sessions: [], degraded: false }),
       killAll: () => Promise.resolve({ killedCount: 0, remainingCount: 0, killedSessionIds: [] }),
       killOne: () => Promise.resolve({ success: false }),
-      restart: () => Promise.resolve({ success: false })
+      restart: () => Promise.resolve({ success: false }),
+      // Why: web clients can't inspect the host daemon's pid record; 'unknown' keeps the banner hidden.
+      macTccAttribution: () => Promise.resolve({ health: 'unknown' as const })
     }
   }
 }

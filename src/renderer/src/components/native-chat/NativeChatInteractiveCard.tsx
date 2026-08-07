@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '../../store'
-import { extractPendingAsk } from '../../../../shared/native-chat-ask'
+import { resolveNativeChatAsk } from '../../../../shared/native-chat-ask'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { parseInteractivePrompt } from './native-chat-interactive-prompt'
 import { nativeChatCardDismissKey } from './native-chat-dismiss-key'
@@ -33,6 +33,7 @@ export function NativeChatInteractiveCard({
   send,
   canSend,
   messages,
+  transcriptSettled,
   onShowingQuestionChange,
   answerInputRef
 }: {
@@ -42,6 +43,7 @@ export function NativeChatInteractiveCard({
   /** Transcript to fall back on when live status carries no prompt. Pass the
    *  command-boundary-trimmed messages so an ask abandoned via `/clear` stays gone. */
   messages?: readonly NativeChatMessage[]
+  transcriptSettled: boolean
   /** Reports whether a question card is on screen so the view can replace the
    *  composer with it (the card's free-text row is the answer input). */
   onShowingQuestionChange?: (showing: boolean) => void
@@ -59,12 +61,16 @@ export function NativeChatInteractiveCard({
 
   const card = useMemo(() => {
     const statusCard = parseInteractivePrompt(interactivePrompt, interactiveToolName ?? undefined)
-    if (statusCard || !messages) {
+    if (statusCard?.kind === 'approval') {
       return statusCard
     }
-    const prompt = extractPendingAsk(messages)
+    const prompt = resolveNativeChatAsk({
+      liveAsk: statusCard?.prompt ?? null,
+      messages: messages ?? [],
+      transcriptSettled: transcriptSettled && messages != null
+    })
     return prompt ? { kind: 'question' as const, prompt } : null
-  }, [interactivePrompt, interactiveToolName, messages])
+  }, [interactivePrompt, interactiveToolName, messages, transcriptSettled])
   const cardKey = useMemo(() => nativeChatCardDismissKey(card), [card])
   const [dismissedKey, setDismissedKey] = useState<string | null>(null)
   // A question answer is a paced multi-step write (body→Enter per question); keep

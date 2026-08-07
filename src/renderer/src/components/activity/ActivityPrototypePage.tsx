@@ -590,7 +590,8 @@ function appendActivityEventsForEntry(args: {
     })
   }
 
-  if (!isActivityEventState(args.entry.state)) {
+  // Why: SessionStart creates an idle row, not an "Agent finished" activity event (STA-3386).
+  if (!isActivityEventState(args.entry.state) || args.entry.sessionBoundary === true) {
     return
   }
   appendActivityEvent({

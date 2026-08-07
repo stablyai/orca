@@ -11,13 +11,13 @@ import { useMobileNativeChatImageAttachments } from './use-mobile-native-chat-im
 // Fully stub the picker so the real expo/react-native chain never loads under
 // the vitest transform (react-native ships Flow syntax rolldown can't parse).
 vi.mock('./mobile-image-source-picker', () => ({
-  pickMobileImage: vi.fn(),
+  pickMobileImages: vi.fn(),
   ImageLibraryPermissionError: class ImageLibraryPermissionError extends Error {}
 }))
 
-import { pickMobileImage } from './mobile-image-source-picker'
+import { pickMobileImages } from './mobile-image-source-picker'
 
-const pick = vi.mocked(pickMobileImage)
+const pick = vi.mocked(pickMobileImages)
 
 function ok(id: string, result: unknown): RpcSuccess {
   return { id, ok: true, result, _meta: { runtimeId: 'r' } }
@@ -124,7 +124,7 @@ describe('useMobileNativeChatImageAttachments', () => {
   }
 
   it('adds an uploaded image as a chip without pasting to the terminal', async () => {
-    pick.mockResolvedValue({ base64: 'AAAA', uri: 'file:///a.jpg' })
+    pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
     const client = makeClient([methodNotFound('start'), ok('save', '/tmp/a.png')])
     mount(
       baseArgs({
@@ -145,7 +145,7 @@ describe('useMobileNativeChatImageAttachments', () => {
   })
 
   it('rides pending images along on send: pastes the path, settles, then delegates the text', async () => {
-    pick.mockResolvedValue({ base64: 'AAAA', uri: 'file:///a.jpg' })
+    pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
     const client = makeClient([
       methodNotFound('start'),
       ok('save', '/tmp/a.png'),
@@ -208,7 +208,7 @@ describe('useMobileNativeChatImageAttachments', () => {
   it('leads the image paste with a clear sized to a parked multi-line launch draft', async () => {
     // A single Ctrl+U kills only the last line, so the draft's earlier lines
     // would survive the clear and ride along with the image as prompt body.
-    pick.mockResolvedValue({ base64: 'AAAA', uri: 'file:///a.jpg' })
+    pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
     const client = makeClient([
       methodNotFound('start'),
       ok('save', '/tmp/a.png'),
@@ -242,7 +242,7 @@ describe('useMobileNativeChatImageAttachments', () => {
   it('spends one budget across the image paste and the text body that follows', async () => {
     vi.useFakeTimers()
     try {
-      pick.mockResolvedValue({ base64: 'AAAA', uri: 'file:///a.jpg' })
+      pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
       const client = makeClient([
         methodNotFound('start'),
         ok('save', '/tmp/a.png'),
@@ -280,7 +280,7 @@ describe('useMobileNativeChatImageAttachments', () => {
   })
 
   it('routes an attachments-only send through baseSend with empty text so the echo still shows the photo', async () => {
-    pick.mockResolvedValue({ base64: 'AAAA', uri: 'file:///a.jpg' })
+    pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
     const client = makeClient([
       methodNotFound('start'),
       ok('save', '/tmp/a.png'),
@@ -321,7 +321,7 @@ describe('useMobileNativeChatImageAttachments', () => {
   })
 
   it('keeps the chips and does not submit when the image paste is rejected', async () => {
-    pick.mockResolvedValue({ base64: 'AAAA', uri: 'file:///a.jpg' })
+    pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
     const client = makeClient([
       methodNotFound('start'),
       ok('save', '/tmp/a.png'),
@@ -345,7 +345,7 @@ describe('useMobileNativeChatImageAttachments', () => {
   })
 
   it('keeps the chips and reports failure when the paste transport throws', async () => {
-    pick.mockResolvedValue({ base64: 'AAAA', uri: 'file:///a.jpg' })
+    pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
     // No terminal.send responses queued: the clear write throws (dropped transport).
     const client = makeClient([methodNotFound('start'), ok('save', '/tmp/a.png')])
     const baseSend = vi.fn().mockResolvedValue('accepted')
@@ -365,7 +365,7 @@ describe('useMobileNativeChatImageAttachments', () => {
   })
 
   it('surfaces an error instead of a silent no-op when the input lease gate is closed', async () => {
-    pick.mockResolvedValue({ base64: 'AAAA', uri: 'file:///a.jpg' })
+    pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
     const client = makeClient([methodNotFound('start'), ok('save', '/tmp/a.png')])
     const baseSend = vi.fn().mockResolvedValue('accepted')
     const onSendError = vi.fn()
@@ -387,7 +387,7 @@ describe('useMobileNativeChatImageAttachments', () => {
   })
 
   it('scopes chips to the tab that attached them', async () => {
-    pick.mockResolvedValue({ base64: 'AAAA', uri: 'file:///a.jpg' })
+    pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
     const client = makeClient([methodNotFound('start'), ok('save', '/tmp/a.png')])
     const baseSend = vi.fn().mockResolvedValue('accepted')
     const args = baseArgs({ client: client as unknown as RpcClient, baseSend })
@@ -426,7 +426,7 @@ describe('useMobileNativeChatImageAttachments', () => {
     })
     mount(args)
 
-    pick.mockResolvedValue({ base64: 'AAAA', uri: 'file:///a.jpg' })
+    pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
     let firstAttach: Promise<void> | null = null
     await act(async () => {
       firstAttach = hook!.attachImage('library')
@@ -438,7 +438,7 @@ describe('useMobileNativeChatImageAttachments', () => {
     expect(hook!.isAttaching).toBe(true)
 
     // A concurrent cancelled pick — its finally must leave the counter alone.
-    pick.mockResolvedValue(null)
+    pick.mockResolvedValue([])
     await act(async () => {
       await hook!.attachImage('library')
     })
@@ -454,7 +454,7 @@ describe('useMobileNativeChatImageAttachments', () => {
   })
 
   it('clears only the chips that were sent, keeping one attached mid-send', async () => {
-    pick.mockResolvedValue({ base64: 'AAAA', uri: 'file:///a.jpg' })
+    pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
     const client = makeClient([
       methodNotFound('start'),
       ok('save', '/tmp/a.png'), // first attach
@@ -488,7 +488,7 @@ describe('useMobileNativeChatImageAttachments', () => {
     })
     expect(releaseSettle).not.toBeNull()
 
-    pick.mockResolvedValue({ base64: 'BBBB', uri: 'file:///b.jpg' })
+    pick.mockResolvedValue([{ base64: 'BBBB', uri: 'file:///b.jpg' }])
     await act(async () => {
       await hook!.attachImage('library')
     })
@@ -511,7 +511,7 @@ describe('useMobileNativeChatImageAttachments', () => {
   })
 
   it('aborts the send when the active terminal changes during the settle window', async () => {
-    pick.mockResolvedValue({ base64: 'AAAA', uri: 'file:///a.jpg' })
+    pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
     const client = makeClient([
       methodNotFound('start'),
       ok('save', '/tmp/a.png'),
@@ -560,7 +560,7 @@ describe('useMobileNativeChatImageAttachments', () => {
   })
 
   it('leads the next text-only send with Ctrl+U after a failed paste, even with the chip removed', async () => {
-    pick.mockResolvedValue({ base64: 'AAAA', uri: 'file:///a.jpg' })
+    pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
     const client = makeClient([
       methodNotFound('start'),
       ok('save', '/tmp/a.png'),
@@ -596,7 +596,7 @@ describe('useMobileNativeChatImageAttachments', () => {
   })
 
   it('heals before the next text-only send when an image submit delivery is unknown (#10228)', async () => {
-    pick.mockResolvedValue({ base64: 'AAAA', uri: 'file:///a.jpg' })
+    pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
     const client = makeClient([
       methodNotFound('start'),
       ok('save', '/tmp/a.png'),
@@ -634,7 +634,7 @@ describe('useMobileNativeChatImageAttachments', () => {
   })
 
   it('still heals after the session screen unmounts and remounts (#10228)', async () => {
-    pick.mockResolvedValue({ base64: 'AAAA', uri: 'file:///a.jpg' })
+    pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
     const client = makeClient([
       methodNotFound('start'),
       ok('save', '/tmp/a.png'),
@@ -688,7 +688,7 @@ describe('useMobileNativeChatImageAttachments', () => {
   })
 
   it('retains the stale marker when a rejected healing clear blocks text-only send', async () => {
-    pick.mockResolvedValue({ base64: 'AAAA', uri: 'file:///a.jpg' })
+    pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
     const client = makeClient([
       methodNotFound('start'),
       ok('save', '/tmp/a.png'),
@@ -730,7 +730,7 @@ describe('useMobileNativeChatImageAttachments', () => {
   })
 
   it('does not reroute text when the active terminal changes during a healing clear', async () => {
-    pick.mockResolvedValue({ base64: 'AAAA', uri: 'file:///a.jpg' })
+    pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
     let releaseClear: ((response: RpcResponse) => void) | null = null
     const deferredClear = new Promise<RpcResponse>((resolve) => {
       releaseClear = resolve
@@ -774,7 +774,7 @@ describe('useMobileNativeChatImageAttachments', () => {
   })
 
   it('defers the heal instead of burning a rejected clear while the lease is closed', async () => {
-    pick.mockResolvedValue({ base64: 'AAAA', uri: 'file:///a.jpg' })
+    pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
     const client = makeClient([
       methodNotFound('start'),
       ok('save', '/tmp/a.png'),
@@ -818,8 +818,8 @@ describe('useMobileNativeChatImageAttachments', () => {
 
   it('heals rejected image submits independently across terminals', async () => {
     pick
-      .mockResolvedValueOnce({ base64: 'AAAA', uri: 'file:///a.jpg' })
-      .mockResolvedValueOnce({ base64: 'BBBB', uri: 'file:///b.jpg' })
+      .mockResolvedValueOnce([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
+      .mockResolvedValueOnce([{ base64: 'BBBB', uri: 'file:///b.jpg' }])
     const client = makeClient([
       methodNotFound('start-a'),
       ok('save-a', '/tmp/a.png'),
@@ -896,7 +896,7 @@ describe('useMobileNativeChatImageAttachments', () => {
         })
     })
     mount(args)
-    pick.mockResolvedValue({ base64: 'AAAA', uri: 'file:///a.jpg' })
+    pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
     let attach: Promise<void> | null = null
     await act(async () => {
       attach = hook!.attachImage('library')

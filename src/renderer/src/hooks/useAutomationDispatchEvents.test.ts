@@ -539,6 +539,35 @@ describe('useAutomationDispatchEvents setup launch', () => {
     })
   })
 
+  it('ignores a session-boundary done so a connecting agent cannot complete the run (STA-3386)', async () => {
+    let launchArgs: {
+      onAgentStatus?: (payload: { state: string; sessionBoundary?: boolean }) => void
+    } = {}
+    mockLaunchAgentBackgroundSession.mockImplementation(async (args) => {
+      launchArgs = args
+      return {
+        tabId: 'agent-tab',
+        paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',
+        ptyId: 'agent-pty',
+        startupPlan: {},
+        terminalOwnership: {
+          finalize: mockFinalizeTerminalOwnership,
+          release: mockReleaseTerminalOwnership
+        }
+      }
+    })
+
+    await registerAndDispatch()
+    // Why: Claude fires SessionStart (a sessionBoundary done) at launch, before the argv
+    // prompt submits — treating it as run completion would close the tab on an empty run.
+    launchArgs.onAgentStatus?.({ state: 'done', sessionBoundary: true })
+    await Promise.resolve()
+    expect(mockFinalizeTerminalOwnership).not.toHaveBeenCalled()
+
+    launchArgs.onAgentStatus?.({ state: 'done' })
+    await vi.waitFor(() => expect(mockFinalizeTerminalOwnership).toHaveBeenCalledOnce())
+  })
+
   it('consumes duplicate done and zero-exit completion through one finalizer', async () => {
     let launchArgs: {
       onAgentStatus?: (payload: { state: string }) => void

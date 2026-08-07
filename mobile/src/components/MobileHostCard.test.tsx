@@ -3,7 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ConnectionVerdict } from '../transport/connection-health'
 import type { MobileConnectionPath } from '../transport/stable-logical-rpc-client'
-import type { ConnectionState, HostProfile } from '../transport/types'
+import type { ConnectionState, HostCredentialStatus, HostProfile } from '../transport/types'
 import {
   markHomeWorktreeCatalogUnavailable,
   type HostWorktreeInfo
@@ -16,7 +16,7 @@ vi.mock('react-native', () => ({
   Text: 'Text',
   View: 'View'
 }))
-vi.mock('lucide-react-native', () => ({ ChevronRight: 'ChevronRight', Monitor: 'Monitor' }))
+vi.mock('lucide-react-native', () => ({ Monitor: 'Monitor', MoreVertical: 'MoreVertical' }))
 vi.mock('./StatusDot', () => ({ StatusDot: 'StatusDot' }))
 
 const host: HostProfile = {
@@ -54,6 +54,7 @@ describe('MobileHostCard', () => {
       state?: ConnectionState
       verdict?: ConnectionVerdict
       path?: MobileConnectionPath
+      credentialStatus?: HostCredentialStatus
     }
   ): Promise<string[]> {
     await act(async () => {
@@ -63,9 +64,11 @@ describe('MobileHostCard', () => {
           state: overrides?.state ?? 'connected',
           verdict: overrides?.verdict ?? verdict,
           path: overrides?.path ?? 'lan',
+          credentialStatus: overrides?.credentialStatus,
           worktreeInfo,
           onPress: () => {},
-          onLongPress: () => {}
+          onLongPress: () => {},
+          onOpenActions: () => {}
         })
       )
     })
@@ -138,5 +141,29 @@ describe('MobileHostCard', () => {
 
     expect(lines).not.toContain('0 worktrees')
     expect(lines).not.toContain('Worktree list unavailable')
+  })
+
+  it('offers re-pairing when the credential is missing', async () => {
+    const lines = await renderCard(loaded, {
+      state: 'connected',
+      verdict: { kind: 'auth-failed', label: 'Pairing invalid' },
+      credentialStatus: 'missing'
+    })
+
+    expect(lines).toContain('Pairing invalid')
+    expect(lines).toContain('Tap to re-pair with your desktop')
+    expect(lines).not.toContain('12 worktrees · 2 active')
+  })
+
+  it('offers a retry without declaring a transient read failure invalid', async () => {
+    const lines = await renderCard(undefined, {
+      state: 'disconnected',
+      verdict: { kind: 'normal', label: 'Disconnected' },
+      credentialStatus: 'temporarily-unavailable'
+    })
+
+    expect(lines).toContain('Pairing temporarily unavailable')
+    expect(lines).toContain('Unlock your phone, then tap to retry')
+    expect(lines).not.toContain('Pairing invalid')
   })
 })

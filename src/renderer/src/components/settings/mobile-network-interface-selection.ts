@@ -1,4 +1,4 @@
-import { isTailnetIPv4Address } from '../../../../shared/tailnet-address'
+import { selectAutoAdvertisedPairingAddress } from '../../../../shared/pairing-address-auto-selection'
 
 export type MobileNetworkInterface = {
   name: string
@@ -25,8 +25,7 @@ export function selectRefreshedNetworkAddress(
   ) {
     return currentAddress
   }
-  return (
-    interfaces.find((iface) => isTailnetIPv4Address(iface.address))?.address ??
-    interfaces[0]!.address
-  )
+  // Why: shared with main so the picker never shows a default the QR didn't advertise. Undefined on
+  // a bridge-only host: Relay pairs without a direct address rather than offering an unreachable one.
+  return selectAutoAdvertisedPairingAddress(interfaces)
 }

@@ -98,14 +98,14 @@ describe('useMobileNativeChatSessionOptions', () => {
     expect(api!.snapshot[0]).toMatchObject({ valueSource: 'unknown' })
   })
 
-  it('routes Codex model changes through the agent picker action', async () => {
+  it('applies Codex model changes through the native command', async () => {
     mount({ agent: 'codex' })
-    expect(api!.snapshot[0]).toMatchObject({ action: { type: 'agent-picker' } })
+    expect(api!.snapshot[0]?.action).toBeUndefined()
     await act(async () => {
-      await api!.invokeAction('model')
+      await api!.setOption('model', 'gpt-5.5')
     })
-    expect(dispatchCommand).toHaveBeenCalledWith('/model')
-    expect(onAgentPicker).toHaveBeenCalledTimes(1)
+    expect(dispatchCommand).toHaveBeenCalledWith('/model gpt-5.5')
+    expect(onAgentPicker).not.toHaveBeenCalled()
   })
 
   it('seeds the current model from a hook-reported provider model', () => {

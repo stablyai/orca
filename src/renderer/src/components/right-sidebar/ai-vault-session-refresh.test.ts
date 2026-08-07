@@ -20,7 +20,7 @@ const EMPTY_RESULT: AiVaultListResult = {
   scannedAt: '2026-07-01T00:00:00.000Z'
 }
 
-const THROTTLE_MS = 5_000
+const THROTTLE_MS = 30_000
 
 const listSessionsMock = vi.fn<(args: unknown) => Promise<AiVaultListResult>>()
 const cancelListSessionsMock = vi.fn<() => Promise<void>>()
@@ -206,14 +206,14 @@ afterEach(() => {
 })
 
 describe('useAiVaultSessionRefresh refocus behavior', () => {
-  it('bypasses the scan cache on mount so panel entry shows new sessions', async () => {
+  it('uses the shared scan cache on local panel entry', async () => {
     await renderHook()
     await flushMicrotasks()
 
     expect(listSessionsMock).toHaveBeenCalledTimes(1)
     expect(listSessionsMock.mock.calls[0]?.[0]).toMatchObject({
       executionHostScope: 'local',
-      force: true
+      force: false
     })
   })
 
@@ -351,32 +351,25 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
     expect(latest?.scanResult?.scannedAt).toBe('2026-07-01T00:00:02.000Z')
   })
 
-  it('force re-scans on refocus once the throttle allows it', async () => {
+  it('refreshes from the shared cache on refocus', async () => {
     await renderHook()
     await flushMicrotasks()
     expect(listSessionsMock).toHaveBeenCalledTimes(1)
 
-    await advance(THROTTLE_MS + 1)
     await fireWindowFocused()
 
     expect(listSessionsMock).toHaveBeenCalledTimes(2)
-    expect(lastCallArgs()).toMatchObject({ force: true })
+    expect(lastCallArgs()).toMatchObject({ force: false })
   })
 
-  it('defers a refocus inside the throttle window to a trailing forced scan', async () => {
+  it('does not force transcript scans for refocus events', async () => {
     await renderHook()
     await flushMicrotasks()
     expect(listSessionsMock).toHaveBeenCalledTimes(1)
 
-    // Within the throttle window nothing runs yet — the event must not be
-    // dropped, so it lands as one trailing scan when the throttle frees up.
     await fireWindowFocused()
-    await dispatch(document, 'visibilitychange')
-    expect(listSessionsMock).toHaveBeenCalledTimes(1)
-
-    await advance(THROTTLE_MS + 1)
     expect(listSessionsMock).toHaveBeenCalledTimes(2)
-    expect(lastCallArgs()).toMatchObject({ force: true })
+    expect(lastCallArgs()).toMatchObject({ force: false })
   })
 
   it('ignores focus/visibility events while the document is hidden', async () => {
@@ -393,15 +386,12 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
     expect(listSessionsMock).toHaveBeenCalledTimes(1)
   })
 
-  it('stops listening and cancels trailing scans after unmount', async () => {
+  it('stops listening after unmount', async () => {
     await renderHook()
     await flushMicrotasks()
     expect(listSessionsMock).toHaveBeenCalledTimes(1)
 
-    // Queue a trailing forced scan, then unmount before it fires.
-    await fireWindowFocused()
     roots.splice(0).forEach((root) => act(() => root.unmount()))
-    await advance(THROTTLE_MS + 1)
     await fireWindowFocused()
     await dispatch(document, 'visibilitychange')
 
@@ -479,7 +469,7 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
     expect(lastCallArgs()).toMatchObject({ force: true })
   })
 
-  it('counts a manual force refresh against the rescan throttle', async () => {
+  it('keeps refocus cache-backed after a manual force refresh', async () => {
     await renderHook()
     await flushMicrotasks()
 
@@ -489,9 +479,9 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
     })
     expect(listSessionsMock).toHaveBeenCalledTimes(2)
 
-    // The button just scanned; an immediate refocus defers to trailing.
     await fireWindowFocused()
-    expect(listSessionsMock).toHaveBeenCalledTimes(2)
+    expect(listSessionsMock).toHaveBeenCalledTimes(3)
+    expect(lastCallArgs()).toMatchObject({ force: false })
   })
 })
 
@@ -514,10 +504,33 @@ describe('useAiVaultSessionRefresh in-app agent session behavior', () => {
     expect(listSessionsMock).toHaveBeenCalledTimes(1)
 
     await setAgentStatuses({ 'pane-1': makeAgentEntry('sess-1') })
-    expect(listSessionsMock).toHaveBeenCalledTimes(1)
+    expect(listSessionsMock).toHaveBeenCalledTimes(2)
+
+    await setAgentStatuses({ 'pane-2': makeAgentEntry('sess-2') })
+    expect(listSessionsMock).toHaveBeenCalledTimes(2)
 
     await advance(THROTTLE_MS + 1)
-    expect(listSessionsMock).toHaveBeenCalledTimes(2)
+    expect(listSessionsMock).toHaveBeenCalledTimes(3)
+    expect(lastCallArgs()).toMatchObject({ force: true })
+  })
+
+  it('re-budgets a trailing agent scan after a manual refresh', async () => {
+    await renderHook()
+    await flushMicrotasks()
+
+    await setAgentStatuses({ 'pane-1': makeAgentEntry('sess-1') })
+    await advance(10_000)
+    await setAgentStatuses({ 'pane-2': makeAgentEntry('sess-2') })
+    await advance(10_000)
+    await act(async () => {
+      await latest?.refresh({ force: true })
+    })
+
+    await advance(10_001)
+    expect(listSessionsMock).toHaveBeenCalledTimes(3)
+
+    await advance(19_999)
+    expect(listSessionsMock).toHaveBeenCalledTimes(4)
     expect(lastCallArgs()).toMatchObject({ force: true })
   })
 

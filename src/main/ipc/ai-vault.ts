@@ -8,7 +8,8 @@ import {
   type AiVaultSessionSources
 } from '../ai-vault/cached-session-list'
 import { listClaudeSubagentSessions } from '../ai-vault/session-scanner-claude-subagents'
-import { claudeProjectsRootDirs } from '../ai-vault/session-scanner-source-discovery'
+import { listOmpSubagentSessions } from '../ai-vault/session-scanner-omp-subagent-listing'
+import { claudeProjectsRootDirs, ompSessionsRootDirs } from '../ai-vault/session-scanner-roots'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import {
   aiVaultScanIssueResult,
@@ -294,7 +295,7 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
   })
 }
 
-// Provider-gated: only Claude materializes Task subagent transcripts as
+// Provider-gated: only Claude and OMP materialize Task subagent transcripts as
 // sibling files today; other agents resolve to an empty list.
 async function listAiVaultSubagentSessions(
   args?: AiVaultSubagentListArgs
@@ -303,7 +304,7 @@ async function listAiVaultSubagentSessions(
   // every other rejected input instead of throwing.
   if (
     !args ||
-    args.agent !== 'claude' ||
+    (args.agent !== 'claude' && args.agent !== 'omp') ||
     typeof args.parentFilePath !== 'string' ||
     !args.parentFilePath.trim()
   ) {
@@ -312,20 +313,25 @@ async function listAiVaultSubagentSessions(
   // Why: subagent transcripts are read from the local filesystem. The UI
   // skips remote sessions (their transcripts live on the remote host); return
   // empty defensively rather than reading local paths for a remote session.
-  const executionHostId = args.executionHostId ?? LOCAL_EXECUTION_HOST_ID
-  if (executionHostId !== LOCAL_EXECUTION_HOST_ID) {
+  if ((args.executionHostId ?? LOCAL_EXECUTION_HOST_ID) !== LOCAL_EXECUTION_HOST_ID) {
     return { sessions: [], issues: [] }
   }
-  // Why: the path is renderer-supplied; only list files under a known Claude
-  // projects root so a crafted path can't readdir/preview arbitrary dirs.
-  // resolve() collapses `..` segments first — isPathInsideOrEqual compares
-  // textually and would otherwise pass `<root>/../../etc/x.jsonl`.
+  // Why: the path is renderer-supplied; only list files under the agent's
+  // known sessions roots so a crafted path can't readdir/preview arbitrary
+  // dirs. resolve() collapses `..` segments first — isPathInsideOrEqual
+  // compares textually and would otherwise pass `<root>/../../etc/x.jsonl`.
   const parentFilePath = resolve(args.parentFilePath)
-  const roots = claudeProjectsRootDirs({ wslHomeDirs: await getAiVaultWslHomeDirs() })
+  const wslHomeDirs = await getAiVaultWslHomeDirs()
+  const roots =
+    args.agent === 'claude'
+      ? claudeProjectsRootDirs({ wslHomeDirs })
+      : ompSessionsRootDirs({ wslHomeDirs })
   if (!roots.some((root) => isPathInsideOrEqual(resolve(root), parentFilePath))) {
     return { sessions: [], issues: [] }
   }
-  return listClaudeSubagentSessions({ parentFilePath })
+  return args.agent === 'claude'
+    ? listClaudeSubagentSessions({ parentFilePath })
+    : listOmpSubagentSessions({ parentFilePath })
 }
 
 function resetAiVaultCacheForTests(): void {

@@ -195,6 +195,12 @@ import {
   createBrowserPageGuestRecovery
 } from './browser-page-guest-recovery'
 import { subscribeBrowserSystemResume } from './browser-system-resume'
+import {
+  type BrowserReloadTrigger,
+  reloadBrowserPageWebview,
+  resolveBrowserReloadButtonLabelKind,
+  resolveBrowserReloadIntent
+} from './browser-reload-action'
 
 type BrowserTabPageState = Partial<
   Pick<
@@ -2613,18 +2619,31 @@ function RemoteBrowserPagePane({
         >
           <ArrowRight className="size-4" />
         </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-7 w-7"
-          onClick={() => void runRemoteNavigation('browser.reload')}
-        >
-          {busy || browserTab.loading ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <RefreshCw className="size-4" />
-          )}
-        </Button>
+        {/* Why: no ignore-cache RPC exists for remote pages, and this pane binds no reload chord, so there is
+            nothing truthful to put in a menu or a shortcut hint here — tooltip only. */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7"
+              aria-label={translate(
+                'auto.components.browser.pane.BrowserPane.0e080d820e',
+                'Reload'
+              )}
+              onClick={() => void runRemoteNavigation('browser.reload')}
+            >
+              {busy || browserTab.loading ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <RefreshCw className="size-4" />
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={4}>
+            {translate('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
+          </TooltipContent>
+        </Tooltip>
         <BrowserAddressBar
           value={addressBarValue}
           onChange={setAddressBarValue}
@@ -2879,6 +2898,9 @@ function BrowserPagePane({
     getExplicitBrowserPageZoomLevel(browserTab.id) ?? normalizedBrowserDefaultZoomLevel
   )
   const grabElementShortcut = useShortcutLabel('browser.grabElement')
+  const reloadShortcut = useShortcutLabel('browser.reload')
+  const hardReloadShortcut = useShortcutLabel('browser.hardReload')
+  const [reloadMenuOpen, setReloadMenuOpen] = useState(false)
   const faviconUrlRef = useRef<string | null>(browserTab.faviconUrl)
   const initialBrowserUrlRef = useRef(browserTab.url)
   const browserTabUrlRef = useRef(browserTab.url)
@@ -2915,6 +2937,61 @@ function BrowserPagePane({
   const contextMenuRef = useRef<HTMLDivElement>(null)
   const [findOpen, setFindOpen] = useState(false)
   const grab = useGrabMode(browserTab.id)
+
+  const reloadState = useMemo(
+    () => ({ loading: browserTab.loading, loadErrorCode: browserTab.loadError?.code ?? null }),
+    [browserTab.loading, browserTab.loadError]
+  )
+  const reloadWebviewOrRecoverGuest = useCallback(
+    (ignoreCache: boolean) => {
+      const webview = webviewRef.current
+      if (!webview) {
+        return
+      }
+      if (reloadBrowserPageWebview(webview, { ignoreCache }) === 'guest-missing') {
+        // Why: reload cannot revive a destroyed guest (STA-3448) — recreate it instead.
+        onUpdatePageStateRef.current(browserTab.id, { loading: true })
+        retryGuestRecoveryRef.current()
+      }
+    },
+    [browserTab.id]
+  )
+  const runReloadTrigger = useCallback(
+    (trigger: BrowserReloadTrigger) => {
+      const webview = webviewRef.current
+      if (!webview) {
+        return
+      }
+      switch (resolveBrowserReloadIntent(trigger, reloadState)) {
+        case 'stop':
+          webview.stop()
+          break
+        case 'retry-guest-recovery':
+          onUpdatePageStateRef.current(browserTab.id, { loading: true })
+          retryGuestRecoveryRef.current()
+          break
+        case 'retry-load':
+          retryBrowserTabLoad(webview, browserTab, onUpdatePageStateRef.current)
+          break
+        case 'hard-reload':
+          reloadWebviewOrRecoverGuest(true)
+          break
+        case 'reload':
+          reloadWebviewOrRecoverGuest(false)
+          break
+      }
+    },
+    [browserTab, reloadState, reloadWebviewOrRecoverGuest]
+  )
+
+  // Keep the accessible name honest: the same button is Stop mid-load and Retry after a failure.
+  const reloadButtonLabelKind = resolveBrowserReloadButtonLabelKind(reloadState)
+  const reloadButtonLabel =
+    reloadButtonLabelKind === 'stop'
+      ? translate('auto.components.browser.pane.BrowserPane.b7e4d9c1a2', 'Stop')
+      : reloadButtonLabelKind === 'retry'
+        ? translate('auto.components.browser.pane.BrowserPane.781d6459ad', 'Retry')
+        : translate('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')
 
   const markup = useMarkupMode({
     getCaptureContext: useCallback((): MarkupCaptureContext | null => {
@@ -3392,7 +3469,12 @@ function BrowserPagePane({
       return false
     }
     addressBarInputRef.current?.blur()
-    webview.focus()
+    try {
+      webview.focus()
+    } catch {
+      // Why: WebViewElement.focus() reads null internals once the guest is destroyed (STA-3448).
+      return false
+    }
     return document.activeElement === webview
   }, [])
 
@@ -3598,15 +3680,11 @@ function BrowserPagePane({
       }
       e.preventDefault()
       e.stopPropagation()
-      if (isHardReload) {
-        webviewRef.current?.reloadIgnoringCache()
-      } else {
-        webviewRef.current?.reload()
-      }
+      reloadWebviewOrRecoverGuest(isHardReload)
     }
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [isActive, keybindings])
+  }, [isActive, keybindings, reloadWebviewOrRecoverGuest])
 
   // Cmd/Ctrl+R — reload (IPC path: focus inside webview guest)
   // Why: a focused guest is a separate Chromium process, so main forwards the chord back here.
@@ -3615,9 +3693,9 @@ function BrowserPagePane({
       return
     }
     return window.api.ui.onReloadBrowserPage(() => {
-      webviewRef.current?.reload()
+      reloadWebviewOrRecoverGuest(false)
     })
-  }, [isActive])
+  }, [isActive, reloadWebviewOrRecoverGuest])
 
   useEffect(() => {
     if (!isActive) {
@@ -3654,9 +3732,9 @@ function BrowserPagePane({
       return
     }
     return window.api.ui.onHardReloadBrowserPage(() => {
-      webviewRef.current?.reloadIgnoringCache()
+      reloadWebviewOrRecoverGuest(true)
     })
-  }, [isActive])
+  }, [isActive, reloadWebviewOrRecoverGuest])
 
   useEffect(() => {
     onUpdatePageStateRef.current = onUpdatePageState
@@ -4158,9 +4236,17 @@ function BrowserPagePane({
     validateVisibleGuestRegistrationRef.current = guestRecovery.validateAfterResume
     retryGuestRecoveryRef.current = guestRecovery.retryRecovery
 
+    const handleGuestDestroyed = (): void => {
+      // Why: a guest can be destroyed without render-process-gone (detach/reattach race,
+      // guest-side close). Skip intentional teardown, where the element already left the DOM.
+      if (webview.isConnected) {
+        guestRecovery.recoverRenderer()
+      }
+    }
     webview.addEventListener('did-attach', handleDidAttach)
     webview.addEventListener('dom-ready', handleDomReady)
     webview.addEventListener('render-process-gone', guestRecovery.recoverRenderer)
+    webview.addEventListener('destroyed', handleGuestDestroyed)
     webview.addEventListener('focus', dismissAddressBarSuggestions)
     webview.addEventListener('did-start-loading', handleDidStartLoading)
     webview.addEventListener('did-start-navigation', handleDidStartNavigation)
@@ -4197,6 +4283,7 @@ function BrowserPagePane({
       webview.removeEventListener('did-attach', handleDidAttach)
       webview.removeEventListener('dom-ready', handleDomReady)
       webview.removeEventListener('render-process-gone', guestRecovery.recoverRenderer)
+      webview.removeEventListener('destroyed', handleGuestDestroyed)
       webview.removeEventListener('focus', dismissAddressBarSuggestions)
       webview.removeEventListener('did-start-loading', handleDidStartLoading)
       webview.removeEventListener('did-start-navigation', handleDidStartNavigation)
@@ -5099,7 +5186,7 @@ function BrowserPagePane({
                   role="menuitem"
                   className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
                   onClick={() => {
-                    webviewRef.current?.reload()
+                    reloadWebviewOrRecoverGuest(false)
                     setContextMenu(null)
                   }}
                 >
@@ -5175,35 +5262,62 @@ function BrowserPagePane({
           >
             <ArrowRight className="size-4" />
           </Button>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-7 w-7"
-            onClick={() => {
-              const webview = webviewRef.current
-              if (!webview) {
-                return
-              }
-              if (browserTab.loading) {
-                webview.stop()
-              } else if (browserTab.loadError) {
-                if (browserTab.loadError.code === BROWSER_GUEST_RECOVERY_ERROR_CODE) {
-                  onUpdatePageStateRef.current(browserTab.id, { loading: true })
-                  retryGuestRecoveryRef.current()
-                } else {
-                  retryBrowserTabLoad(webview, browserTab, onUpdatePageStateRef.current)
-                }
-              } else {
-                webview.reload()
-              }
-            }}
-          >
-            {browserTab.loading ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <RefreshCw className="size-4" />
-            )}
-          </Button>
+          <DropdownMenu modal={false} open={reloadMenuOpen} onOpenChange={setReloadMenuOpen}>
+            {/* Why: suppress the tooltip while the menu is open — both anchor below the button and would overlap. */}
+            <Tooltip open={reloadMenuOpen ? false : undefined}>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7"
+                    aria-label={reloadButtonLabel}
+                    // Why: preventDefault suppresses Radix's open-on-left-click (composeEventHandlers skips its
+                    // handler once defaultPrevented), keeping left-click on the primary action and the menu on right-click.
+                    onPointerDown={(e) => {
+                      if (e.button === 0) {
+                        e.preventDefault()
+                      }
+                    }}
+                    // Why: same trick for Radix's open-on-Enter/Space, which would otherwise preventDefault the
+                    // synthesized click and strand keyboard users. ArrowDown still falls through to open the menu.
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        runReloadTrigger('button')
+                      }
+                    }}
+                    onClick={() => runReloadTrigger('button')}
+                    onContextMenu={(e) => {
+                      e.preventDefault()
+                      setReloadMenuOpen(true)
+                    }}
+                  >
+                    {browserTab.loading ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="size-4" />
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={4}>
+                {reloadButtonLabel}
+                {/* Why: the chord maps to plain reload(), which is not what Stop or Retry do — only hint when they match. */}
+                {reloadShortcut && reloadButtonLabelKind === 'reload' ? ` · ${reloadShortcut}` : ''}
+              </TooltipContent>
+            </Tooltip>
+            <DropdownMenuContent align="start" alignOffset={-4}>
+              <DropdownMenuItem onClick={() => runReloadTrigger('reload')}>
+                {translate('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
+                <DropdownMenuShortcut>{reloadShortcut}</DropdownMenuShortcut>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => runReloadTrigger('hard-reload')}>
+                {translate('auto.components.browser.pane.BrowserPane.a1f3c2e4b5', 'Hard Reload')}
+                <DropdownMenuShortcut>{hardReloadShortcut}</DropdownMenuShortcut>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           <BrowserAddressBar
             value={addressBarValue}

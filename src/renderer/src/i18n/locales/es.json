@@ -349,7 +349,8 @@
               "8d6eedf97e": "No se pudo registrar Orca CLI en PATH.",
               "0f116999f1": "Reinicia tu shell o agrega el directorio de Orca CLI a PATH antes de la configuración.",
               "15cbedc3e3": "Instala la CLI de Orca antes de configurar skills para agentes.",
-              "windowsPathUnknown": "Orca could not check your Windows user PATH"
+              "windowsPathUnknown": "Orca could not check your Windows user PATH",
+              "refreshCliRegistration": "Actualiza el estado de registro de la CLI e inténtalo de nuevo."
             }
           }
         }
@@ -560,6 +561,9 @@
             "0b01ff98d2": "Puerto",
             "7d732521ec": "Comentario"
           }
+        },
+        "activation": {
+          "cannotOpenFolderWorkspace": "No se puede abrir el espacio de trabajo de carpeta"
         }
       },
       "folderWorkspacePathStatus": {
@@ -3174,7 +3178,12 @@
             "runtime_disconnect_failed": "No se pudo desconectar",
             "runtime_reconnecting": "Reconectando",
             "runtime_last_close_reason": "Cerrado: {{value0}}",
-            "runtime_reconnect_attempt": "Intento {{value0}}"
+            "runtime_reconnect_attempt": "Intento {{value0}}",
+            "connectedHostCount_one": "{{count}} host",
+            "connectedHostCount_other": "{{count}} hosts",
+            "connecting": "Conectando…",
+            "workspaceConflict": "Conflicto del espacio de trabajo",
+            "workspaceSyncError": "Error de sincronización del espacio de trabajo"
           },
           "StatusBar": {
             "9659e38343": "Puertos",
@@ -3234,7 +3243,8 @@
             "antigravityUsage": "Uso de Antigravity",
             "antigravityUsageDetails": "Abrir detalles de uso de Antigravity",
             "grokUsageAria": "Abrir detalles de uso de Grok",
-            "grokUsageMenu": "Uso de Grok"
+            "grokUsageMenu": "Uso de Grok",
+            "floatingTerminalNewActivity": "{{label}}, nueva actividad"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Conectar una cuenta",
@@ -3443,6 +3453,21 @@
               "metric": {
                 "workingSetDescription": "Suma del conjunto de trabajo (WS). Las páginas compartidas pueden aparecer en más de un proceso.",
                 "rssDescription": "Suma del tamaño del conjunto residente (RSS). Las páginas compartidas o con alias pueden aparecer en más de un proceso."
+              }
+            },
+            "manager": {
+              "terminal": {
+                "copy": {
+                  "terminalSessionCount_one": "{{count}} sesión de terminal",
+                  "terminalSessionCount_other": "{{count}} sesiones de terminal",
+                  "memoryUnavailable": "memoria no disponible",
+                  "tooltipSummary": "Administrador de recursos - {{memory}} - {{sessions}}",
+                  "spaceScanReady": "Escaneo de espacio listo",
+                  "sessionsGroupedByWorkspace": "Las sesiones de terminal se agrupan por espacio de trabajo.",
+                  "noTerminalSessions": "Aún no hay sesiones de terminal.",
+                  "ariaLabel": "Administrador de recursos, {{sessions}}",
+                  "ariaLabelWithSpaceScan": "Administrador de recursos, {{sessions}}, {{spaceScan}}"
+                }
               }
             }
           },
@@ -4286,7 +4311,9 @@
           "83a820fa71": "Filtrar proyectos...",
           "5a273fbfce": "Agregar proyecto...",
           "4815c70605": "Ningún proyecto coincide",
-          "bbbc6e8e3b": "Ningún proyecto no seleccionado coincide"
+          "bbbc6e8e3b": "Ningún proyecto no seleccionado coincide",
+          "allProjects": "Todos los proyectos",
+          "selectedProjectsCount": "{{value0}} proyectos"
         },
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Reiniciar Orca",
@@ -4364,6 +4391,7 @@
           "680043342f": "compacto",
           "c7591b6014": "repositorio",
           "hosts": "Hosts",
+          "showSection": "Mostrar",
           "allHostsDetail": "Mostrar todos los hosts",
           "configuredSshHost": "SSH configurado",
           "projectSshHost": "SSH del proyecto",
@@ -5621,7 +5649,8 @@
           "f00d6aa9b5": "WSL no está disponible en esta máquina.",
           "7c776ff9d8": "wsl",
           "fc0fcf72fd": "Registra el comando de shell de WSL antes de configurar el skill.",
-          "windowsPathUnknown": "WSL shell command PATH could not be checked"
+          "windowsPathUnknown": "WSL shell command PATH could not be checked",
+          "refreshCliRegistration": "Actualiza el estado de registro de la CLI e inténtalo de nuevo."
         },
         "CommitMessageAiPane": {
           "841ed9884a": "Usado por repositorios que no han personalizado Source Control AI.",
@@ -9586,14 +9615,14 @@
           "available": "Disponible",
           "reconnecting": "Reconectando",
           "unavailable": "No disponible",
-          "signIn": "Iniciar sesión",
-          "localDescription": "El teléfono debe estar en esta Wi‑Fi o en tu Tailscale. No requiere inicio de sesión.",
+          "signIn": "Iniciar sesión para Relay",
+          "localDescription": "El teléfono debe estar en esta Wi‑Fi o conectado por Tailscale. No se necesita cuenta.",
           "pathGroup": "Cómo llega el teléfono a este ordenador",
           "anywhereTitle": "Orca Relay",
-          "anywhereDescription": "El teléfono puede estar en datos móviles o cualquier Wi‑Fi. Se requiere inicio de sesión.",
-          "signInRequired": "Inicia sesión para usar Orca Mobile Relay.",
+          "anywhereDescription": "El teléfono puede estar en datos móviles o cualquier Wi‑Fi. El inicio de sesión solo es necesario para Relay.",
+          "signInRequired": "Solo Relay — LAN no necesita una cuenta.",
           "relayUnavailable": "Orca Relay no está disponible en esta compilación. Usa LAN.",
-          "signInAgain": "Iniciar sesión de nuevo",
+          "signInAgain": "Volver a iniciar sesión para Relay",
           "localTitle": "LAN"
         },
         "MobilePairingSetupSection": {
@@ -9604,8 +9633,9 @@
           "overview": "Genera un código QR, luego escanéalo en Orca Mobile en Pair Desktop.",
           "step1Title": "Método de conexión",
           "step2Title": "Dirección de este ordenador",
-          "step2RelayDescription": "Se usa para una ruta directa más rápida cuando está cerca. Relay cubre el acceso remoto.",
-          "step2LocalDescription": "El teléfono debe poder alcanzar esta dirección por Wi‑Fi o Tailscale."
+          "step2LocalDescription": "El teléfono debe poder alcanzar esta dirección por Tailscale o Wi‑Fi.",
+          "step2RelayDescription": "Opcional. Elige la dirección Wi‑Fi o Tailscale que el teléfono usará cuando esté cerca — suele ser más rápido que Relay. Relay sigue funcionando cuando estás fuera.",
+          "step2RelayDisclosure": "También usar una ruta local más rápida"
         },
         "MobileRelayBetaAvailability": {
           "about": "Acerca de la beta de Orca Relay",
@@ -10560,7 +10590,9 @@
             "b8c2e1a904": "{{value0}} → {{value1}}",
             "a4e93c21d7": "Rama actual: {{value0}}",
             "c7d4e2f801": "Cambiar ref base: {{value0}}",
-            "f3a1b8c204": "upstream"
+            "f3a1b8c204": "upstream",
+            "createPrIntentEmptyGeneratedBody": "Los detalles de revisión generados no incluyeron una descripción. Reintentar Crear PR.",
+            "createPrIntentGenerateDetailsFailed": "No se pudieron generar los detalles de revisión. Reintentar Crear PR."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "No se pudo iniciar el agente seleccionado.",
@@ -11763,7 +11795,9 @@
             "stable": "Estable"
           },
           "relayDegradedNotice": "No se pudo contactar con Relay: este código solo funciona en tu LAN o Tailscale.",
-          "pairingQrError": "Este código de emparejamiento no se pudo representar como código QR. Cópialo en Orca Mobile."
+          "pairingQrError": "Este código de emparejamiento no se pudo representar como código QR. Cópialo en Orca Mobile.",
+          "directAddressDisclosure": "También usar una ruta local más rápida",
+          "directAddressHint": "Opcional. Elige la dirección Wi‑Fi o Tailscale que el teléfono usará cuando esté cerca — suele ser más rápido que Relay. Relay sigue funcionando cuando estás fuera."
         },
         "MobilePage": {
           "e17393c6a3": "Vista previa del teléfono",
@@ -11906,7 +11940,8 @@
           "repair-unverified": "Windows Firewall access could not be verified",
           "blocked-title": "Windows may be blocking Orca Mobile",
           "blocked-description": "An existing inbound Block rule can override the pairing exception. Repair removes conflicting TCP rules for this Orca app, then allows port {{port}} on Private networks.",
-          "repair": "Repair firewall access"
+          "repair": "Repair firewall access",
+          "relay-note": "El emparejamiento sigue funcionando por Orca Relay: permitirlo solo añade la conexión local más rápida."
         }
       },
       "gitlab": {
@@ -12981,6 +13016,20 @@
           "6bbf827ef5": "Título 5",
           "d1bbf9a835": "Sección plegable"
         },
+        "RichMarkdownTableControls": {
+          "deleteTable": "Eliminar tabla",
+          "tableActions": "Acciones de tabla",
+          "addColumn": "Agregar columna",
+          "addRow": "Agregar fila",
+          "rowActions": "Acciones de fila",
+          "columnActions": "Acciones de columna",
+          "insertRowAbove": "Insertar fila arriba",
+          "insertColumnLeft": "Insertar columna a la izquierda",
+          "insertRowBelow": "Insertar fila abajo",
+          "insertColumnRight": "Insertar columna a la derecha",
+          "deleteRow": "Eliminar fila",
+          "deleteColumn": "Eliminar columna"
+        },
         "UntitledFileRenameDialog": {
           "a7dd27b0bc": "Guardar",
           "949711deb4": "Cancelar",
@@ -13436,6 +13485,8 @@
             "1b179ab561": "Copiar URL de página",
             "f7ab83f7ed": "Abrir página en el navegador predeterminado",
             "0e080d820e": "Recargar",
+            "a1f3c2e4b5": "Recarga forzada",
+            "b7e4d9c1a2": "Detener",
             "250a9b3e42": "Adelante",
             "40edfa75cb": "Atrás",
             "efb0e8f7f3": "Copiar dirección de enlace",
@@ -14385,6 +14436,20 @@
         "reconnect": "Reconectar",
         "retry": "Reintentar"
       }
+    },
+    "main": {
+      "window": {
+        "editableContextMenu": {
+          "table": "Tabla",
+          "insertRowAbove": "Insertar fila arriba",
+          "insertRowBelow": "Insertar fila abajo",
+          "deleteRow": "Eliminar fila",
+          "insertColumnLeft": "Insertar columna a la izquierda",
+          "insertColumnRight": "Insertar columna a la derecha",
+          "deleteColumn": "Eliminar columna",
+          "deleteTable": "Eliminar tabla"
+        }
+      }
     }
   },
   "components": {
@@ -14491,7 +14556,7 @@
         "other": "Otro…",
         "otherPlaceholder": "Escribe tu respuesta",
         "cancel": "Cancelar",
-        "send": "Enviar respuesta",
+        "send": "Enviar",
         "next": "Siguiente",
         "skip": "Omitir",
         "sending": "Enviando…"
@@ -14559,6 +14624,29 @@
     }
   },
   "dashboardPopout": {
+    "view": {
+      "label": "Vista del panel",
+      "board": "Panel",
+      "map": "Mapa de agentes"
+    },
+    "map": {
+      "host": {
+        "all": "Todos los hosts",
+        "local": "Local",
+        "ssh": "SSH",
+        "wsl": "WSL",
+        "remote": "Remoto"
+      },
+      "liveContainmentMap": "Mapa de contención en vivo",
+      "hostFilter": "Filtro de host",
+      "empty": "Ningún agente coincide con los filtros actuales.",
+      "canvasLabel": "Mapa anidado de proyectos, espacios de trabajo y agentes",
+      "zoomOut": "Alejar",
+      "zoomIn": "Acercar",
+      "fit": "Ajustar",
+      "projectCount": "{{agents}} agentes · {{workspaces}} espacios de trabajo",
+      "agentCount": "{{count}} agentes"
+    },
     "placeholder": {
       "title": "Agent dashboard",
       "description": "This is where all your agents will show up at a glance. The board is coming soon."
@@ -14595,7 +14683,7 @@
     },
     "terminal": {
       "closed": "No live terminal — this agent's pane has closed.",
-      "focusWorktree": "Focus worktree",
+      "focusWorktree": "Open worktree",
       "close": "Close"
     },
     "close": "Close dashboard",

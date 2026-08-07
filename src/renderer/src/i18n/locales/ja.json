@@ -349,7 +349,8 @@
               "8d6eedf97e": "Orca CLI を PATH に登録できませんでした。",
               "0f116999f1": "セットアップ前にシェルを再起動するか、Orca CLI ディレクトリを PATH に追加します。",
               "15cbedc3e3": "agent スキル セットアップを実行する前に、Orca CLI をインストールします。",
-              "windowsPathUnknown": "Orca could not check your Windows user PATH"
+              "windowsPathUnknown": "Orca could not check your Windows user PATH",
+              "refreshCliRegistration": "CLI の登録状態を更新してから、もう一度お試しください。"
             }
           }
         }
@@ -560,6 +561,9 @@
             "0b01ff98d2": "ポート",
             "7d732521ec": "コメント"
           }
+        },
+        "activation": {
+          "cannotOpenFolderWorkspace": "フォルダーワークスペースを開けません"
         }
       },
       "folderWorkspacePathStatus": {
@@ -3174,7 +3178,12 @@
             "runtime_disconnect_failed": "切断に失敗しました",
             "runtime_reconnecting": "再接続中",
             "runtime_last_close_reason": "クローズ: {{value0}}",
-            "runtime_reconnect_attempt": "試行 {{value0}}"
+            "runtime_reconnect_attempt": "試行 {{value0}}",
+            "connectedHostCount_one": "{{count}} 台のホスト",
+            "connectedHostCount_other": "{{count}} 台のホスト",
+            "connecting": "接続中…",
+            "workspaceConflict": "ワークスペースの競合",
+            "workspaceSyncError": "ワークスペースの同期エラー"
           },
           "StatusBar": {
             "9659e38343": "ポート",
@@ -3234,7 +3243,8 @@
             "antigravityUsage": "Antigravity の使用状況",
             "antigravityUsageDetails": "Antigravity の使用状況詳細を開く",
             "grokUsageAria": "Grok の使用状況詳細を開く",
-            "grokUsageMenu": "Grok の使用状況"
+            "grokUsageMenu": "Grok の使用状況",
+            "floatingTerminalNewActivity": "{{label}}、新しいアクティビティ"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "アカウントを接続する",
@@ -3443,6 +3453,21 @@
               "metric": {
                 "workingSetDescription": "合計ワーキングセット(WS)。共有ページが複数のプロセスに表示されることがあります。",
                 "rssDescription": "合計レジデントセットサイズ(RSS)。共有またはエイリアスされたページが複数のプロセスに表示されることがあります。"
+              }
+            },
+            "manager": {
+              "terminal": {
+                "copy": {
+                  "terminalSessionCount_one": "{{count}} 件のターミナルセッション",
+                  "terminalSessionCount_other": "{{count}} 件のターミナルセッション",
+                  "memoryUnavailable": "メモリ情報を取得できません",
+                  "tooltipSummary": "リソースマネージャー - {{memory}} - {{sessions}}",
+                  "spaceScanReady": "容量スキャンの準備完了",
+                  "sessionsGroupedByWorkspace": "ターミナルセッションはワークスペースごとにグループ化されます。",
+                  "noTerminalSessions": "ターミナルセッションはまだありません。",
+                  "ariaLabel": "リソースマネージャー、{{sessions}}",
+                  "ariaLabelWithSpaceScan": "リソースマネージャー、{{sessions}}、{{spaceScan}}"
+                }
               }
             }
           },
@@ -4267,7 +4292,9 @@
           "83a820fa71": "プロジェクトをフィルタリング...",
           "5a273fbfce": "プロジェクトを追加...",
           "4815c70605": "一致するプロジェクトはありません",
-          "bbbc6e8e3b": "選択されていないプロジェクトは一致しません"
+          "bbbc6e8e3b": "選択されていないプロジェクトは一致しません",
+          "allProjects": "すべてのプロジェクト",
+          "selectedProjectsCount": "{{value0}} 件のプロジェクト"
         },
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Orca を再起動",
@@ -4345,6 +4372,7 @@
           "680043342f": "コンパクト",
           "c7591b6014": "repo",
           "hosts": "ホスト",
+          "showSection": "表示",
           "allHostsDetail": "すべてのホストを表示",
           "configuredSshHost": "設定済み SSH",
           "projectSshHost": "プロジェクト SSH",
@@ -5606,7 +5634,8 @@
           "f00d6aa9b5": "このマシンでは WSL を利用できません。",
           "7c776ff9d8": "wsl",
           "fc0fcf72fd": "スキルセットアップ前に WSL シェルコマンドを登録してください。",
-          "windowsPathUnknown": "WSL shell command PATH could not be checked"
+          "windowsPathUnknown": "WSL shell command PATH could not be checked",
+          "refreshCliRegistration": "CLI の登録状態を更新してから、もう一度お試しください。"
         },
         "CommitMessageAiPane": {
           "841ed9884a": "ソース管理 AI をカスタマイズしていない repos によって使用されます。",
@@ -9586,14 +9615,14 @@
           "available": "利用可能",
           "reconnecting": "再接続中",
           "unavailable": "利用不可",
-          "signIn": "サインイン",
-          "localDescription": "スマートフォンがこの Wi‑Fi または Tailscale に接続されている必要があります。サインインは不要です。",
+          "signIn": "Relay にサインイン",
+          "localDescription": "スマートフォンがこの Wi‑Fi または Tailscale に接続されている必要があります。アカウントは不要です。",
           "pathGroup": "スマートフォンがこのコンピューターに到達する方法",
           "anywhereTitle": "Orca Relay",
-          "anywhereDescription": "スマートフォンはモバイル回線または Wi‑Fi から接続できます。サインインが必要です。",
-          "signInRequired": "Orca Mobile Relay を使用するにはサインインしてください。",
+          "anywhereDescription": "スマートフォンはモバイル回線または任意の Wi‑Fi から接続できます。サインインが必要なのは Relay のみです。",
+          "signInRequired": "Relay のみ — LAN にはアカウントは不要です。",
           "relayUnavailable": "このビルドでは Orca Relay を利用できません。LAN をご利用ください。",
-          "signInAgain": "再サインイン",
+          "signInAgain": "Relay に再サインイン",
           "localTitle": "LAN"
         },
         "MobilePairingSetupSection": {
@@ -9604,8 +9633,9 @@
           "overview": "QR コードを生成し、Orca Mobile の Pair Desktop でスキャンしてください。",
           "step1Title": "接続方法",
           "step2Title": "このコンピューターのアドレス",
-          "step2RelayDescription": "近くでは高速な直接接続に使用されます。Relay はリモートアクセスに対応します。",
-          "step2LocalDescription": "スマートフォンが Wi‑Fi または Tailscale でこのアドレスに到達できる必要があります。"
+          "step2LocalDescription": "スマートフォンが Tailscale または Wi‑Fi でこのアドレスに到達できる必要があります。",
+          "step2RelayDescription": "任意。近く（同じ Wi‑Fi または Tailscale）にいるときにスマホが使うアドレスを選びます。通常は Relay より高速です。外出中は引き続き Relay が使われます。",
+          "step2RelayDisclosure": "より速いローカル経路も使う"
         },
         "MobileRelayBetaAvailability": {
           "about": "Orca Relay ベータについて",
@@ -10560,7 +10590,9 @@
             "b8c2e1a904": "{{value0}} → {{value1}}",
             "a4e93c21d7": "現在のブランチ: {{value0}}",
             "c7d4e2f801": "ベース ref を変更: {{value0}}",
-            "f3a1b8c204": "upstream"
+            "f3a1b8c204": "upstream",
+            "createPrIntentEmptyGeneratedBody": "生成されたレビューの詳細に説明が含まれていませんでした。PRの作成を再試行してください。",
+            "createPrIntentGenerateDetailsFailed": "レビューの詳細を生成できませんでした。PRの作成を再試行してください。"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "選択した agent を開始できませんでした。",
@@ -11763,7 +11795,9 @@
             "stable": "安定版"
           },
           "relayDegradedNotice": "Relay に接続できませんでした — このコードは LAN または Tailscale でのみ動作します。",
-          "pairingQrError": "このペアリングコードを QR コードとして表示できませんでした。代わりに Orca Mobile にコピーしてください。"
+          "pairingQrError": "このペアリングコードを QR コードとして表示できませんでした。代わりに Orca Mobile にコピーしてください。",
+          "directAddressDisclosure": "より速いローカル経路も使う",
+          "directAddressHint": "任意。近く（同じ Wi‑Fi または Tailscale）にいるときにスマホが使うアドレスを選びます。通常は Relay より高速です。外出中は引き続き Relay が使われます。"
         },
         "MobilePage": {
           "e17393c6a3": "スマートフォンプレビュー",
@@ -11906,7 +11940,8 @@
           "repair-unverified": "Windows Firewall access could not be verified",
           "blocked-title": "WindowsがOrcaモバイルをブロックしている可能性があります",
           "blocked-description": "既存のインバウンドブロックルールがペアリング例外を上書きする可能性があります。修復はこのOrcaアプリの競合するTCPルールを削除し、プライベートネットワーク上のポート{{port}}を許可します。",
-          "repair": "ファイアウォールアクセスを修復"
+          "repair": "ファイアウォールアクセスを修復",
+          "relay-note": "ペアリングは Orca Relay 経由で引き続き機能します。許可すると、より高速なローカル接続が追加されるだけです。"
         }
       },
       "gitlab": {
@@ -12981,6 +13016,20 @@
           "6bbf827ef5": "見出し 5",
           "d1bbf9a835": "折りたたみ可能なセクション"
         },
+        "RichMarkdownTableControls": {
+          "deleteTable": "テーブルを削除",
+          "tableActions": "テーブル操作",
+          "addColumn": "列を追加",
+          "addRow": "行を追加",
+          "rowActions": "行の操作",
+          "columnActions": "列の操作",
+          "insertRowAbove": "上に行を挿入",
+          "insertColumnLeft": "左に列を挿入",
+          "insertRowBelow": "下に行を挿入",
+          "insertColumnRight": "右に列を挿入",
+          "deleteRow": "行を削除",
+          "deleteColumn": "列を削除"
+        },
         "UntitledFileRenameDialog": {
           "a7dd27b0bc": "保存",
           "949711deb4": "キャンセル",
@@ -13436,6 +13485,8 @@
             "1b179ab561": "ページの URL をコピー",
             "f7ab83f7ed": "デフォルトのブラウザでページを開く",
             "0e080d820e": "リロード",
+            "a1f3c2e4b5": "ハードリロード",
+            "b7e4d9c1a2": "停止",
             "250a9b3e42": "進む",
             "40edfa75cb": "戻る",
             "efb0e8f7f3": "リンクアドレスをコピーする",
@@ -14385,6 +14436,20 @@
         "reconnect": "再接続",
         "retry": "再試行"
       }
+    },
+    "main": {
+      "window": {
+        "editableContextMenu": {
+          "table": "テーブル",
+          "insertRowAbove": "上に行を挿入",
+          "insertRowBelow": "下に行を挿入",
+          "deleteRow": "行を削除",
+          "insertColumnLeft": "左に列を挿入",
+          "insertColumnRight": "右に列を挿入",
+          "deleteColumn": "列を削除",
+          "deleteTable": "テーブルを削除"
+        }
+      }
     }
   },
   "components": {
@@ -14491,7 +14556,7 @@
         "other": "他の…",
         "otherPlaceholder": "答えを入力してください",
         "cancel": "キャンセル",
-        "send": "回答を送信する",
+        "send": "送信",
         "next": "次へ",
         "skip": "スキップ",
         "sending": "送信中…"
@@ -14559,6 +14624,29 @@
     }
   },
   "dashboardPopout": {
+    "view": {
+      "label": "ダッシュボード表示",
+      "board": "ダッシュボード",
+      "map": "エージェントマップ"
+    },
+    "map": {
+      "host": {
+        "all": "すべてのホスト",
+        "local": "ローカル",
+        "ssh": "SSH",
+        "wsl": "WSL",
+        "remote": "リモート"
+      },
+      "liveContainmentMap": "ライブ包含マップ",
+      "hostFilter": "ホストフィルター",
+      "empty": "現在のフィルターに一致するエージェントはありません。",
+      "canvasLabel": "プロジェクト、ワークスペース、エージェントの入れ子マップ",
+      "zoomOut": "縮小",
+      "zoomIn": "拡大",
+      "fit": "全体表示",
+      "projectCount": "{{agents}}件のエージェント · {{workspaces}}件のワークスペース",
+      "agentCount": "{{count}}件のエージェント"
+    },
     "placeholder": {
       "title": "Agent dashboard",
       "description": "This is where all your agents will show up at a glance. The board is coming soon."
@@ -14595,7 +14683,7 @@
     },
     "terminal": {
       "closed": "No live terminal — this agent's pane has closed.",
-      "focusWorktree": "Focus worktree",
+      "focusWorktree": "Open worktree",
       "close": "Close"
     },
     "close": "Close dashboard",

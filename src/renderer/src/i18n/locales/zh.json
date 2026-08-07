@@ -349,7 +349,8 @@
               "8d6eedf97e": "无法在 PATH 中注册 Orca CLI。",
               "0f116999f1": "在安装之前重新启动 shell 或将 Orca CLI 目录添加到 PATH。",
               "15cbedc3e3": "在运行智能体技能设置之前安装 Orca CLI。",
-              "windowsPathUnknown": "Orca 无法检查您的 Windows 用户 PATH"
+              "windowsPathUnknown": "Orca 无法检查您的 Windows 用户 PATH",
+              "refreshCliRegistration": "请刷新 CLI 注册状态后重试。"
             }
           }
         }
@@ -560,6 +561,9 @@
             "0b01ff98d2": "端口",
             "7d732521ec": "评论"
           }
+        },
+        "activation": {
+          "cannotOpenFolderWorkspace": "无法打开文件夹工作区"
         }
       },
       "folderWorkspacePathStatus": {
@@ -3186,7 +3190,12 @@
             "runtime_disconnect_failed": "断开连接失败",
             "runtime_reconnecting": "重新连接中",
             "runtime_last_close_reason": "已关闭：{{value0}}",
-            "runtime_reconnect_attempt": "第 {{value0}} 次尝试"
+            "runtime_reconnect_attempt": "第 {{value0}} 次尝试",
+            "connectedHostCount_one": "{{count}} 个主机",
+            "connectedHostCount_other": "{{count}} 个主机",
+            "connecting": "正在连接…",
+            "workspaceConflict": "工作区冲突",
+            "workspaceSyncError": "工作区同步错误"
           },
           "StatusBar": {
             "9659e38343": "端口",
@@ -3246,7 +3255,8 @@
             "antigravityUsage": "Antigravity 使用量",
             "antigravityUsageDetails": "打开 Antigravity 使用详情",
             "grokUsageAria": "打开 Grok 使用详情",
-            "grokUsageMenu": "Grok 使用量"
+            "grokUsageMenu": "Grok 使用量",
+            "floatingTerminalNewActivity": "{{label}}，有新活动"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "连接账户",
@@ -3455,6 +3465,21 @@
               "metric": {
                 "workingSetDescription": "工作集 (WS) 的总和。共享页可能会出现在多个进程中。",
                 "rssDescription": "驻留集大小 (RSS) 的总和。共享页或别名映射页可能会出现在多个进程中。"
+              }
+            },
+            "manager": {
+              "terminal": {
+                "copy": {
+                  "terminalSessionCount_one": "{{count}} 个终端会话",
+                  "terminalSessionCount_other": "{{count}} 个终端会话",
+                  "memoryUnavailable": "内存信息不可用",
+                  "tooltipSummary": "资源管理器 - {{memory}} - {{sessions}}",
+                  "spaceScanReady": "空间扫描已就绪",
+                  "sessionsGroupedByWorkspace": "终端会话按工作区分组。",
+                  "noTerminalSessions": "暂无终端会话。",
+                  "ariaLabel": "资源管理器，{{sessions}}",
+                  "ariaLabelWithSpaceScan": "资源管理器，{{sessions}}，{{spaceScan}}"
+                }
               }
             }
           },
@@ -4279,7 +4304,9 @@
           "83a820fa71": "筛选项目...",
           "5a273fbfce": "添加项目...",
           "4815c70605": "没有匹配的项目",
-          "bbbc6e8e3b": "没有匹配的未选择项目"
+          "bbbc6e8e3b": "没有匹配的未选择项目",
+          "allProjects": "所有项目",
+          "selectedProjectsCount": "{{value0}} 个项目"
         },
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "重启 Orca",
@@ -4357,6 +4384,7 @@
           "680043342f": "紧凑",
           "c7591b6014": "仓库",
           "hosts": "主机",
+          "showSection": "显示",
           "allHostsDetail": "显示所有主机",
           "configuredSshHost": "已配置 SSH",
           "projectSshHost": "项目 SSH",
@@ -5618,7 +5646,8 @@
           "f00d6aa9b5": "WSL 在此计算机上不可用。",
           "7c776ff9d8": "wsl",
           "fc0fcf72fd": "在技​​能设置之前注册 WSL shell 命令。",
-          "windowsPathUnknown": "无法检查 WSL shell 命令 PATH"
+          "windowsPathUnknown": "无法检查 WSL shell 命令 PATH",
+          "refreshCliRegistration": "请刷新 CLI 注册状态后重试。"
         },
         "CommitMessageAiPane": {
           "841ed9884a": "由未自定义源代码控制 AI 的存储库使用。",
@@ -9598,14 +9627,14 @@
           "available": "可用",
           "reconnecting": "正在重新连接",
           "unavailable": "不可用",
-          "signIn": "登录",
-          "localDescription": "手机必须连接此 Wi‑Fi 或您的 Tailscale。无需登录。",
+          "signIn": "登录以使用 Relay",
+          "localDescription": "手机必须连接此 Wi‑Fi 或通过 Tailscale。无需账号。",
           "pathGroup": "手机访问此电脑的方式",
           "anywhereTitle": "Orca Relay",
-          "anywhereDescription": "手机可通过蜂窝网络或任意 Wi‑Fi 连接。需要登录。",
-          "signInRequired": "请登录以使用 Orca Mobile Relay。",
+          "anywhereDescription": "手机可通过蜂窝网络或任意 Wi‑Fi 连接。仅 Relay 需要登录。",
+          "signInRequired": "仅 Relay 需要 — 局域网无需账号。",
           "relayUnavailable": "此版本不支持 Orca Relay。请使用局域网。",
-          "signInAgain": "重新登录",
+          "signInAgain": "重新登录以使用 Relay",
           "localTitle": "局域网"
         },
         "MobilePairingSetupSection": {
@@ -9616,8 +9645,9 @@
           "overview": "生成二维码，然后在 Orca Mobile 的 Pair Desktop 中扫描。",
           "step1Title": "连接方式",
           "step2Title": "此电脑的地址",
-          "step2RelayDescription": "距离较近时用于快速直接连接。Relay 覆盖远程访问。",
-          "step2LocalDescription": "手机必须能通过 Wi‑Fi 或 Tailscale 访问此地址。"
+          "step2LocalDescription": "手机必须能通过 Tailscale 或 Wi‑Fi 访问此地址。",
+          "step2RelayDescription": "可选。选择手机在附近（同一 Wi‑Fi 或 Tailscale）时使用的地址，通常比 Relay 更快。外出时仍走 Relay。",
+          "step2RelayDisclosure": "也可使用更快的本地连接"
         },
         "MobileRelayBetaAvailability": {
           "about": "关于 Orca Relay 测试版",
@@ -10580,7 +10610,9 @@
             "b8c2e1a904": "{{value0}} → {{value1}}",
             "a4e93c21d7": "当前分支：{{value0}}",
             "c7d4e2f801": "更改基引用：{{value0}}",
-            "f3a1b8c204": "upstream"
+            "f3a1b8c204": "upstream",
+            "createPrIntentEmptyGeneratedBody": "生成的评审详情未包含描述。请重试创建 PR。",
+            "createPrIntentGenerateDetailsFailed": "无法生成评审详情。请重试创建 PR。"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的智能体。",
@@ -11783,7 +11815,9 @@
             "stable": "稳定版"
           },
           "relayDegradedNotice": "无法连接 Relay — 此二维码仅在局域网或 Tailscale 内可用。",
-          "pairingQrError": "无法将此配对码呈现为二维码。请改为将其复制到 Orca Mobile。"
+          "pairingQrError": "无法将此配对码呈现为二维码。请改为将其复制到 Orca Mobile。",
+          "directAddressDisclosure": "也可使用更快的本地连接",
+          "directAddressHint": "可选。选择手机在附近（同一 Wi‑Fi 或 Tailscale）时使用的地址，通常比 Relay 更快。外出时仍走 Relay。"
         },
         "MobilePage": {
           "e17393c6a3": "手机预览",
@@ -11926,7 +11960,8 @@
           "repair-unverified": "无法验证 Windows 防火墙访问权限",
           "blocked-title": "Windows 可能正在阻止 Orca Mobile",
           "blocked-description": "现有的入站阻止规则可能会覆盖配对例外。修复将移除此 Orca 应用的冲突 TCP 规则，然后在专用网络上允许端口 {{port}}。",
-          "repair": "修复防火墙访问权限"
+          "repair": "修复防火墙访问权限",
+          "relay-note": "配对仍可通过 Orca Relay 进行 — 允许后只是额外获得更快的本地连接。"
         }
       },
       "gitlab": {
@@ -13001,6 +13036,20 @@
           "6bbf827ef5": "标题 5",
           "d1bbf9a835": "可折叠小节"
         },
+        "RichMarkdownTableControls": {
+          "deleteTable": "删除表格",
+          "tableActions": "表格操作",
+          "addColumn": "添加列",
+          "addRow": "添加行",
+          "rowActions": "行操作",
+          "columnActions": "列操作",
+          "insertRowAbove": "在上方插入行",
+          "insertColumnLeft": "在左侧插入列",
+          "insertRowBelow": "在下方插入行",
+          "insertColumnRight": "在右侧插入列",
+          "deleteRow": "删除行",
+          "deleteColumn": "删除列"
+        },
         "UntitledFileRenameDialog": {
           "a7dd27b0bc": "保存",
           "949711deb4": "取消",
@@ -13456,6 +13505,8 @@
             "1b179ab561": "复制页面网址",
             "f7ab83f7ed": "在默认浏览器中打开页面",
             "0e080d820e": "重新加载",
+            "a1f3c2e4b5": "硬刷新",
+            "b7e4d9c1a2": "停止",
             "250a9b3e42": "向前",
             "40edfa75cb": "返回",
             "efb0e8f7f3": "复制链接地址",
@@ -14405,6 +14456,20 @@
         "reconnect": "重新连接",
         "retry": "重试"
       }
+    },
+    "main": {
+      "window": {
+        "editableContextMenu": {
+          "table": "表格",
+          "insertRowAbove": "在上方插入行",
+          "insertRowBelow": "在下方插入行",
+          "deleteRow": "删除行",
+          "insertColumnLeft": "在左侧插入列",
+          "insertColumnRight": "在右侧插入列",
+          "deleteColumn": "删除列",
+          "deleteTable": "删除表格"
+        }
+      }
     }
   },
   "components": {
@@ -14511,7 +14576,7 @@
         "other": "其他…",
         "otherPlaceholder": "输入你的回答",
         "cancel": "取消",
-        "send": "发送回答",
+        "send": "提交",
         "next": "下一步",
         "skip": "跳过",
         "sending": "正在发送…"
@@ -14579,6 +14644,29 @@
     }
   },
   "dashboardPopout": {
+    "view": {
+      "label": "仪表盘视图",
+      "board": "仪表盘",
+      "map": "智能体地图"
+    },
+    "map": {
+      "host": {
+        "all": "所有主机",
+        "local": "本地",
+        "ssh": "SSH",
+        "wsl": "WSL",
+        "remote": "远程"
+      },
+      "liveContainmentMap": "实时包含关系图",
+      "hostFilter": "主机筛选",
+      "empty": "没有智能体符合当前筛选条件。",
+      "canvasLabel": "项目、工作区和智能体的嵌套关系图",
+      "zoomOut": "缩小",
+      "zoomIn": "放大",
+      "fit": "适应",
+      "projectCount": "{{agents}} 个智能体 · {{workspaces}} 个工作区",
+      "agentCount": "{{count}} 个智能体"
+    },
     "placeholder": {
       "title": "Agent dashboard",
       "description": "你的所有智能体都会在这里一览无余。看板即将上线。"
@@ -14615,7 +14703,7 @@
     },
     "terminal": {
       "closed": "没有活动的终端 — 该智能体的窗格已关闭。",
-      "focusWorktree": "Focus worktree",
+      "focusWorktree": "Open worktree",
       "close": "Close"
     },
     "close": "Close dashboard",

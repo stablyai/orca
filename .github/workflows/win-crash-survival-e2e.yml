@@ -77,7 +77,7 @@ jobs:
               '!config/reliability-gates.jsonc',
               '!config/max-lines-baseline.txt',
               '!config/vitest.config.ts',
-              'build-plugins/**',
+              'config/build-plugins/**',
               'native/**',
               'resources/**',
               'electron.vite.config.ts',

@@ -7,16 +7,18 @@ import {
   getTerminalWebglAutoDecision,
   resetTerminalWebglAutoDecision
 } from './terminal-webgl-auto-policy'
-import { safeFitAndThen } from './pane-fit'
+import { safeFit, safeFitAndThen } from './pane-fit'
+import { setPaneFitWebglAttachHook } from './pane-fit-webgl-attach-signal'
 
 export const ENABLE_WEBGL_RENDERER = true
 let suggestedRendererType: 'dom' | undefined
-// Why: while Chromium refuses WebGL context creation (GPU process crashed or
-// WebGL blocked after repeated resets), every attach attempt burns a canvas +
-// failed getContext and logs a full-stack warning — and title changes retrigger
-// attach constantly in "on" mode. Latch the first failure and skip attempts
-// until the next recovery boundary (rendering resume or GPU-setting change).
-let webglAttachFailedSinceRecovery = false
+// Attach-failure latching is per-pane (pane.webglAttachFailedSinceRecovery):
+// while Chromium refuses WebGL context creation, every attach attempt burns a
+// canvas + failed getContext and logs a full-stack warning — and title changes
+// retrigger attach constantly in "on" mode. Each pane latches its own failure
+// and retries at the next recovery boundary (rendering resume or GPU-setting
+// change). A module-global latch here previously let ONE pane's failure strand
+// every other pane on the DOM renderer until the next boundary.
 
 type ReleasableWebglContext = {
   getExtension(name: 'WEBGL_lose_context'): WEBGL_lose_context | null
@@ -31,14 +33,14 @@ type XtermWebglAddonInternals = {
 
 export function resetTerminalWebglSuggestion(): void {
   // Why: toggling GPU settings should let "auto" retry WebGL after an earlier
-  // attach failure suggested DOM rendering for this app session.
+  // attach failure suggested DOM rendering for this app session. Per-pane
+  // failure latches are cleared by the callers that iterate panes.
   suggestedRendererType = undefined
-  webglAttachFailedSinceRecovery = false
   resetTerminalWebglAutoDecision()
 }
 
-export function clearTerminalWebglAttachBackoff(): void {
-  webglAttachFailedSinceRecovery = false
+export function clearTerminalWebglAttachBackoff(pane: ManagedPaneInternal): void {
+  pane.webglAttachFailedSinceRecovery = false
 }
 
 export function shouldUseTerminalWebgl(pane: ManagedPaneInternal): boolean {
@@ -148,6 +150,50 @@ export function resetWebglTextureAtlas(pane: ManagedPaneInternal): void {
   }
 }
 
+function refitAfterFitAnchoredWebglAttach(pane: ManagedPaneInternal): void {
+  // Why: the fit that triggered this attach measured DOM cell metrics, but WebGL
+  // floors the device cell width — keeping that grid leaves an unpainted right
+  // gutter and a PTY narrower than the pane. Refit on the next frame (mirroring
+  // the dispose-side refreshDimensions) so xterm has re-measured against the new
+  // renderer, and so the running fit is never re-entered.
+  if (typeof globalThis.requestAnimationFrame !== 'function') {
+    return
+  }
+  pane.pendingWebglRefreshRafId = globalThis.requestAnimationFrame(() => {
+    pane.pendingWebglRefreshRafId = null
+    try {
+      safeFit(pane)
+    } catch {
+      /* ignore — pane may have been disposed in the meantime */
+    }
+  })
+}
+
+export function attachWebglAfterFitIfMissing(pane: ManagedPaneInternal): void {
+  // Why: a successful fit is the event-anchored moment a WebGL-eligible pane
+  // that is stuck on the DOM renderer can heal — a late mount that missed the
+  // coalesced reveal repaint, or a fallback whose cause has passed. A user
+  // resize then repairs the bold/wider DOM-rendered pane instead of leaving it.
+  // The per-pane failure latch stays honored: genuinely failed attaches retry
+  // only at recovery boundaries.
+  if (
+    !pane.webglAddon &&
+    pane.gpuRenderingEnabled &&
+    !pane.webglAttachmentDeferred &&
+    !pane.webglDisabledAfterContextLoss &&
+    !pane.webglAttachFailedSinceRecovery &&
+    shouldUseTerminalWebgl(pane)
+  ) {
+    attachWebgl(pane)
+    if (pane.webglAddon) {
+      recordTerminalWebglDiagnostic('webgl-fit-attach', { paneId: pane.id })
+      refitAfterFitAnchoredWebglAttach(pane)
+    }
+  }
+}
+
+setPaneFitWebglAttachHook(attachWebglAfterFitIfMissing)
+
 export function attachWebgl(pane: ManagedPaneInternal): void {
   if (
     !ENABLE_WEBGL_RENDERER ||
@@ -155,7 +201,7 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
     !shouldUseTerminalWebgl(pane) ||
     pane.webglAttachmentDeferred ||
     pane.webglDisabledAfterContextLoss ||
-    webglAttachFailedSinceRecovery
+    pane.webglAttachFailedSinceRecovery
   ) {
     // Why: nulling the reference here used to leak a still-loaded addon that
     // kept painting stale frames while every recovery path (atlas reset,
@@ -204,7 +250,7 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
       // enough signal to keep new auto panes on DOM until the setting changes.
       suggestedRendererType = 'dom'
     }
-    webglAttachFailedSinceRecovery = true
+    pane.webglAttachFailedSinceRecovery = true
     // WebGL not available — default DOM renderer is fine, but log it for debugging
     console.warn('[terminal] WebGL unavailable for pane', pane.id, '— using DOM renderer:', err)
     try {

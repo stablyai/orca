@@ -33,6 +33,8 @@ import { MobileNativeChatQuestion } from './MobileNativeChatQuestion'
 import { mobileChatQuestionKey, type MobileChatQuestion } from './mobile-native-chat-question'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 
+const INPUT_LOCK_SETTLE_MS = 600
+
 /** Why the composer input is locked: the transport is disconnected, or the
  *  terminal subscription has not acknowledged its input lease yet. */
 export type MobileNativeChatInputLockReason = 'disconnected' | 'waiting'
@@ -59,6 +61,9 @@ type Props = {
   /** Optimistic queued sends (owned by the route so they survive view switches). */
   /** Optimistic user echoes, including any ridden-along image preview URIs. */
   pending: MobileNativeChatPendingItem[]
+  /** Local photo URIs retained when the authoritative transcript replaces an
+   *  optimistic image bubble. */
+  imagePreviewsByMessageId?: Record<string, string[]>
   /** Controlled composer text (owned by the route so dictation can write to it). */
   composerText: string
   onComposerTextChange: (text: string) => void
@@ -123,6 +128,7 @@ export function MobileNativeChatView({
   onLoadEarlier,
   onSend,
   pending,
+  imagePreviewsByMessageId,
   composerText,
   onComposerTextChange,
   onAttachImage,
@@ -175,8 +181,14 @@ export function MobileNativeChatView({
   // route-owned optimistic queued messages. Memoize on the same deps so the
   // downstream autoscroll effects/`renderItem` keep referential stability.
   const { data } = useMemo(
-    () => buildMobileNativeChatTransientData({ folded, streaming, pending }),
-    [folded, streaming, pending]
+    () =>
+      buildMobileNativeChatTransientData({
+        folded,
+        streaming,
+        pending,
+        imagePreviewsByMessageId
+      }),
+    [folded, streaming, pending, imagePreviewsByMessageId]
   )
 
   // Follow the tail as the conversation grows and keep the newest message above
@@ -250,20 +262,18 @@ export function MobileNativeChatView({
   const emptyState = mobileNativeChatEmptyState(status, agent ?? null, error)
   const showLoading = status === 'loading' && messages.length === 0
 
-  // Composer-lock flicker guard: on a remote link, brief connState blips or lease
-  // hand-offs would otherwise toggle the lock placeholder on and off. Only surface
-  // a lock once it has held ~600ms; drop it instantly so unlocking stays snappy.
+  // A dead PTY emits subscribed→end; settle both edges so its false lease cannot flash the composer enabled.
   const rawLockReason = inputLockReason ?? null
+  const rawLockHeld = rawLockReason !== null
   const [lockHeld, setLockHeld] = useState(false)
   useEffect(() => {
-    if (rawLockReason === null) {
-      setLockHeld(false)
+    if (rawLockHeld === lockHeld) {
       return
     }
-    const timer = setTimeout(() => setLockHeld(true), 600)
+    const timer = setTimeout(() => setLockHeld(rawLockHeld), INPUT_LOCK_SETTLE_MS)
     return () => clearTimeout(timer)
-  }, [rawLockReason])
-  const lockReason = lockHeld ? rawLockReason : null
+  }, [lockHeld, rawLockHeld])
+  const lockReason = lockHeld ? (rawLockReason ?? 'waiting') : null
 
   return (
     <View style={[styles.root, { paddingBottom: bottomPad }]}>

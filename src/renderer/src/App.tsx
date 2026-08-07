@@ -48,6 +48,7 @@ import { isRemoteWorkspaceSnapshotApplyInProgress, useIpcEvents } from './hooks/
 import { useAutomationDispatchEvents } from './hooks/useAutomationDispatchEvents'
 import RetainedAgentsSyncGate from './components/dashboard/RetainedAgentsSyncGate'
 import { AgentHibernationGate } from './components/AgentHibernationGate'
+import { AiVaultTabTitleSyncGate } from './components/AiVaultTabTitleSyncGate'
 import { ActivityTitlebarControls } from './components/activity/ActivityTitlebarControls'
 import Sidebar from './components/Sidebar'
 import { shutdownBufferCaptures } from './components/terminal-pane/shutdown-buffer-captures'
@@ -92,7 +93,6 @@ import RecentTabSwitcher from './components/tab-bar/RecentTabSwitcher'
 import { useGitStatusPolling } from './components/right-sidebar/useGitStatusPolling'
 import { useEditorExternalWatch } from './hooks/useEditorExternalWatch'
 import { useAutoAckViewedAgent } from './hooks/useAutoAckViewedAgent'
-import { useDashboardPopoutBridge } from './components/dashboard/useDashboardPopoutBridge'
 import { useUnreadDockBadge } from './hooks/useUnreadDockBadge'
 import {
   resolvePrimarySelectionMiddleClickPaste,
@@ -389,6 +389,7 @@ const FloatingTerminalPanel = lazy(() =>
 )
 // Why: lazy so the WebP asset + overlay module aren't fetched unless the experimental flag is on.
 const PetOverlay = lazy(() => import('./components/pet/PetOverlay'))
+const DashboardPopoutBridge = lazy(() => import('./components/dashboard/DashboardPopoutBridge'))
 // Why: lazy so onboarding's step modules + assets aren't fetched for users past first-launch.
 const OnboardingFlow = lazy(() => import('./components/onboarding/OnboardingFlow'))
 
@@ -757,8 +758,6 @@ function App(): React.JSX.Element {
   useEditorExternalWatch()
   useGlobalFileDrop()
   useAutoAckViewedAgent()
-  useDashboardPopoutBridge(settings?.experimentalAgentDashboardPopout === true)
-
   useEffect(() => {
     return onOnboardingReopened(setOnboarding)
   }, [])
@@ -2249,6 +2248,12 @@ function App(): React.JSX.Element {
             <MacosTccPromptNoticeHost />
             {/* Why: leaf-mounted retention sync keeps agent-status subscriptions out of the App render tree. */}
             <RetainedAgentsSyncGate />
+            <AiVaultTabTitleSyncGate />
+            {settings?.experimentalAgentDashboardPopout === true ? (
+              <Suspense fallback={null}>
+                <DashboardPopoutBridge />
+              </Suspense>
+            ) : null}
             <AgentHibernationGate />
             {/* Why: workspace activation is a hot path; activeWorktreeId in reset keys would remount whole surfaces during wake. */}
             <RecoverableRenderErrorBoundary

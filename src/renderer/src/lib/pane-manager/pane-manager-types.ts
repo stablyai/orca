@@ -114,6 +114,7 @@ export type PaneRenderingDiagnostics = {
   gpuRenderingEnabled: boolean
   webglAttachmentDeferred: boolean
   webglDisabledAfterContextLoss: boolean
+  webglAttachFailedSinceRecovery: boolean
   hasComplexScriptOutput: boolean
   terminalWebglAutoDecision: TerminalWebglAutoDecision
   hasWebgl: boolean
@@ -141,6 +142,10 @@ export type ManagedPaneInternal = {
   gpuRenderingEnabled: boolean
   webglAttachmentDeferred: boolean
   webglDisabledAfterContextLoss: boolean
+  // Why per-pane: one pane's failed WebGL attach must not strand every other
+  // pane on the DOM renderer until the next recovery boundary. Optional so
+  // absent means "never failed"; only the attach failure path sets it.
+  webglAttachFailedSinceRecovery?: boolean
   // Why: expose complex-output diagnostics without changing renderer choice;
   // auto renderer fallback is reserved for platform or WebGL failures.
   hasComplexScriptOutput: boolean
@@ -176,6 +181,9 @@ export type ManagedPaneInternal = {
   linkifierHoverResetDisposable?: IDisposable | null
   // Stored because mouseleave does not bubble from xterm's screen.
   linkifierMouseLeaveResetDisposable?: IDisposable | null
+  // Stored because a window blur may strand xterm's active link without a
+  // follow-up mouse event.
+  linkifierWindowBlurResetDisposable?: IDisposable | null
   // Stored so disposePane() can deregister the joiner; terminal.dispose()
   // does not remove registered character joiners.
   arabicShapingJoinerCleanup?: (() => void) | null

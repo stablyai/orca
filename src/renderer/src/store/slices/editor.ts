@@ -45,6 +45,7 @@ import type {
   WorkspaceSessionState,
   WorkspaceVisibleTabType
 } from '../../../../shared/types'
+import type { GitBranchLineTotal } from '../../../../shared/git-status-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { clampMarkdownTocPanelWidth } from '../../../../shared/markdown-toc-panel-width'
 import {
@@ -629,6 +630,8 @@ export type EditorSlice = {
   gitStatusHeadByWorktree: Record<string, string>
   // Why: set when status hit the entry limit; SCM shows "too many changes" and pauses polling. `{ limit }` when huge, else absent.
   gitStatusHugeByWorktree: Record<string, { limit: number }>
+  // Why: absent means "not known exact" (stale fork point, old server, capped listing); never fall back to a previous total.
+  gitBranchLineTotalByWorktree: Record<string, GitBranchLineTotal | null>
   gitIgnoredPathsByWorktree: Record<string, string[]>
   gitConflictOperationByWorktree: Record<string, GitConflictOperation>
   trackedConflictPathsByWorktree: Record<string, Record<string, GitConflictKind>>
@@ -4086,6 +4089,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   gitStatusByWorktree: {},
   gitStatusHeadByWorktree: {},
   gitStatusHugeByWorktree: {},
+  gitBranchLineTotalByWorktree: {},
   gitIgnoredPathsByWorktree: {},
   gitConflictOperationByWorktree: {},
   trackedConflictPathsByWorktree: {},
@@ -4187,6 +4191,18 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const prevHuge = s.gitStatusHugeByWorktree[worktreeId]
       const nextHuge = status.didHitLimit ? { limit: nextEntries.length } : undefined
       const hugeUnchanged = (prevHuge?.limit ?? null) === (nextHuge?.limit ?? null)
+
+      const prevBranchLineTotal = s.gitBranchLineTotalByWorktree[worktreeId] ?? null
+      // Why: an omitted field means "not known exact"; keeping the old total would render a confidently wrong chip.
+      const nextBranchLineTotal = status.branchLineTotal ?? null
+      const branchLineTotalUnchanged =
+        prevBranchLineTotal === nextBranchLineTotal ||
+        (prevBranchLineTotal !== null &&
+          nextBranchLineTotal !== null &&
+          prevBranchLineTotal.added === nextBranchLineTotal.added &&
+          prevBranchLineTotal.removed === nextBranchLineTotal.removed &&
+          prevBranchLineTotal.mergeBase === nextBranchLineTotal.mergeBase)
+
       const prevStatusHead = s.gitStatusHeadByWorktree[worktreeId]
       const nextStatusHead = getKnownGitHead(status.head)
       const statusHeadUnchanged = prevStatusHead === nextStatusHead
@@ -4206,11 +4222,22 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         operationUnchanged &&
         ignoredUnchanged &&
         hugeUnchanged &&
+        branchLineTotalUnchanged &&
         statusHeadUnchanged &&
         !shouldInvalidateBranchCompare
       ) {
         return s
       }
+
+      const nextBranchLineTotalMap = branchLineTotalUnchanged
+        ? s.gitBranchLineTotalByWorktree
+        : nextBranchLineTotal
+          ? { ...s.gitBranchLineTotalByWorktree, [worktreeId]: nextBranchLineTotal }
+          : (() => {
+              const copy = { ...s.gitBranchLineTotalByWorktree }
+              delete copy[worktreeId]
+              return copy
+            })()
 
       const nextHugeMap = hugeUnchanged
         ? s.gitStatusHugeByWorktree
@@ -4244,6 +4271,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       return {
         openFiles: nextOpenFiles,
         gitStatusHugeByWorktree: nextHugeMap,
+        gitBranchLineTotalByWorktree: nextBranchLineTotalMap,
         gitStatusHeadByWorktree: nextStatusHeadMap,
         gitStatusByWorktree: statusUnchanged
           ? s.gitStatusByWorktree

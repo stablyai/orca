@@ -357,10 +357,6 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // Why: off keeps the cosmetic overlay unmounted for users who never opt in.
     experimentalPet: false,
     experimentalActivity: false,
-    experimentalAgentDashboardPopout: false,
-    // Why: in-window screen popover is the default surface; users opt into a separate pop-out window.
-    experimentalAgentDashboardMode: 'in-window',
-    experimentalAgentDashboardShowIdle: false,
     experimentalActivityDefaultedOffForAllUsers: true,
     experimentalTerminalAttention: false,
     experimentalAgentHibernation: false,
