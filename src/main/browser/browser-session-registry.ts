@@ -26,6 +26,10 @@ import type {
 import { browserManager } from './browser-manager'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from './browser-media-access'
 import { cleanElectronUserAgent, setupClientHintsOverride } from './browser-session-ua'
+import {
+  clearBrowserSessionUserAgentMode,
+  setBrowserSessionUserAgentMode
+} from './browser-session-user-agent-mode'
 import { resolveChromiumCookiesPath } from './chromium-cookie-path'
 import { isAutoGrantedBrowserSessionPermission } from './browser-session-permission-policy'
 import {
@@ -190,10 +194,14 @@ class BrowserSessionRegistry {
       const partition = profile.partition
       try {
         const sess = session.fromPartition(partition)
+        const userAgentMode = profile.userAgentMode ?? 'clean'
+        setBrowserSessionUserAgentMode(sess, userAgentMode)
         const persistedUa = meta.userAgentByPartition[partition]
         if (persistedUa) {
           sess.setUserAgent(persistedUa)
-          setupClientHintsOverride(sess, persistedUa)
+          setupClientHintsOverride(sess, persistedUa, {
+            googleAuthOverride: userAgentMode !== 'native'
+          })
           continue
         }
 
@@ -435,6 +443,7 @@ class BrowserSessionRegistry {
     // Why: clear the partition's storage so deleting a profile doesn't leave orphaned cookies/cache behind.
     try {
       const sess = session.fromPartition(profile.partition)
+      clearBrowserSessionUserAgentMode(sess)
       this.clearSessionPolicies(profile.partition, sess)
       await sess.clearStorageData()
       await sess.clearCache()
@@ -523,11 +532,12 @@ class BrowserSessionRegistry {
 
   private setupSessionPolicies(profile: BrowserSessionProfile): void {
     const { partition } = profile
+    const sess = session.fromPartition(partition)
+    setBrowserSessionUserAgentMode(sess, profile.userAgentMode ?? 'clean')
     if (this.configuredPartitions.has(partition)) {
       return
     }
 
-    const sess = session.fromPartition(partition)
     browserManager.installCertificateRequestGuard(sess)
     if (profile.userAgentMode !== 'native' && typeof sess.getUserAgent === 'function') {
       const cleanUA = cleanElectronUserAgent(sess.getUserAgent())

@@ -16,6 +16,7 @@
     "../src/main/wsl-distro-retry.ts",
     "../src/main/wsl.ts",
     "../src/main/startup/serve-desktop-activation.ts",
+    "../src/main/startup/serve-mode-argv.ts",
     "../src/main/startup/single-instance-lock.ts",
     "../src/main/startup/startup-diagnostics.ts",
     "../src/main/window/focus-existing-window.ts",

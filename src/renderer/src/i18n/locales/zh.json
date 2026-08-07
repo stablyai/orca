@@ -239,8 +239,14 @@
           "34a03a6565": "保持 {{value0}} 为最新状态",
           "fa9299a66f": "您的新工作树是最新的，但本地 {{value0}} 落后于 {{value1}} {{value2}} 。 AI 差异可能会错过最近的 commits。",
           "14bc053a47": "本地 {{value0}} 未刷新",
+          "localBaseRefRefreshFailedForWorktree": "“{{value1}}”的本地 {{value0}} 未刷新",
           "4a18052018": "本地 {{value0}} 落后于 {{value1}}",
-          "903b51c2ed": "从 {{value0}} 创建工作区，但 Orca 无法快进本地 {{value1}}，因为 {{value2}}",
+          "903b51c2ed": "从 {{value0}} 创建工作区，但 Orca 无法快进本地 {{value1}}。{{value2}}",
+          "localBaseRefRefreshFailedDescriptionNamed": "工作区“{{value0}}”从 {{value1}} 创建，但 Orca 无法快进本地 {{value2}}。{{value3}}",
+          "localBaseRefRefreshFailedDetailDirtyNamed": "{{value0}} 处的工作树（本地 {{value1}} 的检出位置）有未提交的更改。请提交、暂存或丢弃这些更改，然后手动更新本地 {{value1}}。",
+          "localBaseRefRefreshFailedDetailDirty": "检出本地 {{value0}} 的工作树有未提交的更改。请提交、暂存或丢弃这些更改，然后手动更新本地 {{value0}}。",
+          "localBaseRefRefreshFailedDetailNotFastForward": "本地 {{value0}} 不存在，或无法从远程基线干净快进。手动更新前请检查是否有仅存在于本地的提交。",
+          "localBaseRefRefreshFailedDetailError": "更新本地 {{value0}} 时 Git 返回错误。请检查仓库是否有锁定的 refs 或异常工作树状态，然后手动更新本地 {{value0}}。",
           "0216895fb5": "删除分支失败",
           "19db0085fb": "本地分支已删除",
           "2b0afc7f14": "无法使本地 {{value0}} 保持最新",
@@ -349,7 +355,8 @@
               "8d6eedf97e": "无法在 PATH 中注册 Orca CLI。",
               "0f116999f1": "在安装之前重新启动 shell 或将 Orca CLI 目录添加到 PATH。",
               "15cbedc3e3": "在运行智能体技能设置之前安装 Orca CLI。",
-              "windowsPathUnknown": "Orca 无法检查您的 Windows 用户 PATH"
+              "windowsPathUnknown": "Orca 无法检查您的 Windows 用户 PATH",
+              "refreshCliRegistration": "请刷新 CLI 注册状态后重试。"
             }
           }
         }
@@ -560,6 +567,9 @@
             "0b01ff98d2": "端口",
             "7d732521ec": "评论"
           }
+        },
+        "activation": {
+          "cannotOpenFolderWorkspace": "无法打开文件夹工作区"
         }
       },
       "folderWorkspacePathStatus": {
@@ -3186,7 +3196,12 @@
             "runtime_disconnect_failed": "断开连接失败",
             "runtime_reconnecting": "重新连接中",
             "runtime_last_close_reason": "已关闭：{{value0}}",
-            "runtime_reconnect_attempt": "第 {{value0}} 次尝试"
+            "runtime_reconnect_attempt": "第 {{value0}} 次尝试",
+            "connectedHostCount_one": "{{count}} 个主机",
+            "connectedHostCount_other": "{{count}} 个主机",
+            "connecting": "正在连接…",
+            "workspaceConflict": "工作区冲突",
+            "workspaceSyncError": "工作区同步错误"
           },
           "StatusBar": {
             "9659e38343": "端口",
@@ -3246,7 +3261,8 @@
             "antigravityUsage": "Antigravity 使用量",
             "antigravityUsageDetails": "打开 Antigravity 使用详情",
             "grokUsageAria": "打开 Grok 使用详情",
-            "grokUsageMenu": "Grok 使用量"
+            "grokUsageMenu": "Grok 使用量",
+            "floatingTerminalNewActivity": "{{label}}，有新活动"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "连接账户",
@@ -3455,6 +3471,21 @@
               "metric": {
                 "workingSetDescription": "工作集 (WS) 的总和。共享页可能会出现在多个进程中。",
                 "rssDescription": "驻留集大小 (RSS) 的总和。共享页或别名映射页可能会出现在多个进程中。"
+              }
+            },
+            "manager": {
+              "terminal": {
+                "copy": {
+                  "terminalSessionCount_one": "{{count}} 个终端会话",
+                  "terminalSessionCount_other": "{{count}} 个终端会话",
+                  "memoryUnavailable": "内存信息不可用",
+                  "tooltipSummary": "资源管理器 - {{memory}} - {{sessions}}",
+                  "spaceScanReady": "空间扫描已就绪",
+                  "sessionsGroupedByWorkspace": "终端会话按工作区分组。",
+                  "noTerminalSessions": "暂无终端会话。",
+                  "ariaLabel": "资源管理器，{{sessions}}",
+                  "ariaLabelWithSpaceScan": "资源管理器，{{sessions}}，{{spaceScan}}"
+                }
               }
             }
           },
@@ -5621,7 +5652,8 @@
           "f00d6aa9b5": "WSL 在此计算机上不可用。",
           "7c776ff9d8": "wsl",
           "fc0fcf72fd": "在技​​能设置之前注册 WSL shell 命令。",
-          "windowsPathUnknown": "无法检查 WSL shell 命令 PATH"
+          "windowsPathUnknown": "无法检查 WSL shell 命令 PATH",
+          "refreshCliRegistration": "请刷新 CLI 注册状态后重试。"
         },
         "CommitMessageAiPane": {
           "841ed9884a": "由未自定义源代码控制 AI 的存储库使用。",
@@ -5963,6 +5995,11 @@
           "3d172725cc": "没有任何",
           "1f32ba27a6": "自定义",
           "a182c5125e": "git用户名",
+          "sourceControlGroupOrderTitle": "源代码管理分组顺序",
+          "sourceControlGroupOrderDescription": "选择在源代码管理中优先显示“更改”、“已暂存更改”还是“未跟踪文件”。",
+          "changesFirst": "更改优先",
+          "stagedFirst": "已暂存优先",
+          "untrackedFirst": "未跟踪优先",
           "compareAgainstUpstreamTitle": "默认对比基准",
           "compareAgainstUpstreamDescription": "选择源代码管理在比较已提交变更时默认使用的基准。分支上游会自动跟随当前分支；如果没有上游，则回退到仓库默认分支。你仍然可以在对应 worktree 的 Git 面板中按 worktree 更改对比基准。Pull Request 和变基目标不会改变。",
           "compareBaseRepositoryDefault": "仓库默认",
@@ -8228,7 +8265,14 @@
             "f83c8937c4": "分支命名",
             "5ecd91c5ef": "创建工作树时添加到分支名称的前缀。",
             "68bd65fdb8": "分支前缀",
+            "sourceControlGroupOrderTitle": "源代码管理分组顺序",
+            "sourceControlGroupOrderDescription": "选择在源代码管理中优先显示“更改”、“已暂存更改”还是“未跟踪文件”。",
+            "groupOrder": "分组顺序",
+            "changesFirst": "更改优先",
+            "stagedFirst": "已暂存优先",
+            "untrackedFirst": "未跟踪优先",
             "sourceControl": "源代码管理",
+            "gitChanges": "git 更改",
             "compareAgainstUpstreamTitle": "默认对比基准",
             "compareAgainstUpstreamDescription": "选择源代码管理在比较已提交变更时默认使用的基准。分支上游会自动跟随当前分支；如果没有上游，则回退到仓库默认分支。你仍然可以在对应 worktree 的 Git 面板中按 worktree 更改对比基准。Pull Request 和变基目标不会改变。",
             "compareBase": "对比基准",
@@ -9589,14 +9633,14 @@
           "available": "可用",
           "reconnecting": "正在重新连接",
           "unavailable": "不可用",
-          "signIn": "登录",
-          "localDescription": "手机必须连接此 Wi‑Fi 或您的 Tailscale。无需登录。",
+          "signIn": "登录以使用 Relay",
+          "localDescription": "手机必须连接此 Wi‑Fi 或通过 Tailscale。无需账号。",
           "pathGroup": "手机访问此电脑的方式",
           "anywhereTitle": "Orca Relay",
-          "anywhereDescription": "手机可通过蜂窝网络或任意 Wi‑Fi 连接。需要登录。",
-          "signInRequired": "请登录以使用 Orca Mobile Relay。",
+          "anywhereDescription": "手机可通过蜂窝网络或任意 Wi‑Fi 连接。仅 Relay 需要登录。",
+          "signInRequired": "仅 Relay 需要 — 局域网无需账号。",
           "relayUnavailable": "此版本不支持 Orca Relay。请使用局域网。",
-          "signInAgain": "重新登录",
+          "signInAgain": "重新登录以使用 Relay",
           "localTitle": "局域网"
         },
         "MobilePairingSetupSection": {
@@ -9607,8 +9651,9 @@
           "overview": "生成二维码，然后在 Orca Mobile 的 Pair Desktop 中扫描。",
           "step1Title": "连接方式",
           "step2Title": "此电脑的地址",
-          "step2RelayDescription": "距离较近时用于快速直接连接。Relay 覆盖远程访问。",
-          "step2LocalDescription": "手机必须能通过 Wi‑Fi 或 Tailscale 访问此地址。"
+          "step2LocalDescription": "手机必须能通过 Tailscale 或 Wi‑Fi 访问此地址。",
+          "step2RelayDescription": "可选。选择手机在附近（同一 Wi‑Fi 或 Tailscale）时使用的地址，通常比 Relay 更快。外出时仍走 Relay。",
+          "step2RelayDisclosure": "也可使用更快的本地连接"
         },
         "MobileRelayBetaAvailability": {
           "about": "关于 Orca Relay 测试版",
@@ -11776,7 +11821,9 @@
             "stable": "稳定版"
           },
           "relayDegradedNotice": "无法连接 Relay — 此二维码仅在局域网或 Tailscale 内可用。",
-          "pairingQrError": "无法将此配对码呈现为二维码。请改为将其复制到 Orca Mobile。"
+          "pairingQrError": "无法将此配对码呈现为二维码。请改为将其复制到 Orca Mobile。",
+          "directAddressDisclosure": "也可使用更快的本地连接",
+          "directAddressHint": "可选。选择手机在附近（同一 Wi‑Fi 或 Tailscale）时使用的地址，通常比 Relay 更快。外出时仍走 Relay。"
         },
         "MobilePage": {
           "e17393c6a3": "手机预览",
@@ -11919,7 +11966,8 @@
           "repair-unverified": "无法验证 Windows 防火墙访问权限",
           "blocked-title": "Windows 可能正在阻止 Orca Mobile",
           "blocked-description": "现有的入站阻止规则可能会覆盖配对例外。修复将移除此 Orca 应用的冲突 TCP 规则，然后在专用网络上允许端口 {{port}}。",
-          "repair": "修复防火墙访问权限"
+          "repair": "修复防火墙访问权限",
+          "relay-note": "配对仍可通过 Orca Relay 进行 — 允许后只是额外获得更快的本地连接。"
         }
       },
       "gitlab": {
@@ -14629,6 +14677,29 @@
     }
   },
   "dashboardPopout": {
+    "view": {
+      "label": "仪表盘视图",
+      "board": "仪表盘",
+      "map": "智能体地图"
+    },
+    "map": {
+      "host": {
+        "all": "所有主机",
+        "local": "本地",
+        "ssh": "SSH",
+        "wsl": "WSL",
+        "remote": "远程"
+      },
+      "liveContainmentMap": "实时包含关系图",
+      "hostFilter": "主机筛选",
+      "empty": "没有智能体符合当前筛选条件。",
+      "canvasLabel": "项目、工作区和智能体的嵌套关系图",
+      "zoomOut": "缩小",
+      "zoomIn": "放大",
+      "fit": "适应",
+      "projectCount": "{{agents}} 个智能体 · {{workspaces}} 个工作区",
+      "agentCount": "{{count}} 个智能体"
+    },
     "placeholder": {
       "title": "Agent dashboard",
       "description": "你的所有智能体都会在这里一览无余。看板即将上线。"
@@ -14665,7 +14736,7 @@
     },
     "terminal": {
       "closed": "没有活动的终端 — 该智能体的窗格已关闭。",
-      "focusWorktree": "Focus worktree",
+      "focusWorktree": "Open worktree",
       "close": "Close"
     },
     "close": "Close dashboard",

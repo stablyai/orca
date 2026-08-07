@@ -4196,23 +4196,28 @@
         "snapshot-probe sequence gap recovery",
         "hidden remote worktree retention",
         "remote terminal reveal and input",
+        "paired host relaunch with preserved daemon PTYs",
         "manual server disconnect"
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["paired-runtime", "ssh"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["paired-runtime"],
-      "coverageNotes": "Deterministic headed macOS runs launch an isolated Orca desktop server and a separate paired web client. A byte-identical headless run uses an isolated `orca serve` host. Both create six real paired host PTYs with bounded high-output scrollback, prove sustained output while all six client xterms are warm-mounted but hidden causes zero renderer scheduler work, ordinary-park five xterms without enabling the lossy retention budget, assert bounded cells/heap/timer lag, then restore the bounded authoritative tail exactly once on the original PTY including output produced while parked and continued input/output. The headed oracle additionally keeps every remote target workspace and terminal unmounted in the host renderer before and after client recovery. Separate headed/headless ACK-starvation tests recover one stalled stream without replacing its PTY. A headed output-drop oracle proves a successful snapshot probe cannot certify a stale live stream when the authoritative PTY sequence advanced beyond the client high-water. Unit coverage requires an unsequenced client to establish a first-probe baseline, remain attached at the same sequence, and recover only after a later probe advances. A capability-disabled run proves legacy hosts retain the prior lossy limit/TTL fallback. Unit tests cover exact-owner capability routing, raw-stream release, singleton side-effect facts with timed handoff cleanup, 64 simultaneous synthetic-title sources with zero decorative client events after convergence, per-client late-subscribe recovery, semantic bell/title transitions, local animation-frame preservation, legacy no-output-pause delivery gating with exact snapshot restore, provider-authoritative snapshots, 128 active streams plus retry after a 129th-stream capacity rejection, capacity-pressure backoff, full split-leaf remint reconciliation, truncation, and manual-disconnect queue fencing. Linux, Windows, live SSH, and production-scale paired hosts remain gaps.",
+      "coverageNotes": "Deterministic headed macOS runs launch an isolated Orca desktop server and a separate paired web client. A byte-identical headless run uses an isolated `orca serve` host. Both create six real paired host PTYs with bounded high-output scrollback, prove sustained output while all six client xterms are warm-mounted but hidden causes zero renderer scheduler work, ordinary-park five xterms without enabling the lossy retention budget, assert bounded cells/heap/timer lag, then restore the bounded authoritative tail exactly once on the original PTY including output produced while parked and continued input/output. The headed oracle additionally keeps every remote target workspace and terminal unmounted in the host renderer before and after client recovery. A separate headed desktop-client journey relaunches the host main process while retaining the daemon and a daemon-backgrounded PTY, then requires first-observation foreground sync and continued input/output on the same PTY. Unit coverage keeps layout versions out of snapshot output high-waters when a restored snapshot has no output sequence and retries an existing subscriber only after authoritative provider inventory proves the retained PTY exists. Separate headed/headless ACK-starvation tests recover one stalled stream without replacing its PTY. A headed output-drop oracle proves a successful snapshot probe cannot certify a stale live stream when the authoritative PTY sequence advanced beyond the client high-water. Unit coverage requires an unsequenced client to establish a first-probe baseline, remain attached at the same sequence, and recover only after a later probe advances. A capability-disabled run proves legacy hosts retain the prior lossy limit/TTL fallback. Unit tests cover exact-owner capability routing, raw-stream release, singleton side-effect facts with timed handoff cleanup, 64 simultaneous synthetic-title sources with zero decorative client events after convergence, per-client late-subscribe recovery, semantic bell/title transitions, local animation-frame preservation, legacy no-output-pause delivery gating with exact snapshot restore, provider-authoritative snapshots, 128 active streams plus retry after a 129th-stream capacity rejection, capacity-pressure backoff, full split-leaf remint reconciliation, truncation, and manual-disconnect queue fencing. Linux, Windows, live SSH, and production-scale paired hosts remain gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/8652",
         "https://github.com/stablyai/orca/pull/10625"
       ],
-      "invariant": "A host advertising terminal.paired-parking.v1 keeps the PTY and bounded authoritative history alive while an ordinary hidden-view park destroys the client xterm and releases its raw per-PTY stream. Reveal must restore up to the requested 5,000 rows, parked-time side effects/output, the same PTY identity, and continued input/output. Hosts without the capability must gate hidden raw output before xterm scheduling and repaint from the authoritative snapshot on reveal while retaining the existing limit/TTL force-parking fallback. After a paired client's first semantic title state, decorative spinner frequency must add zero encrypted client-event frames; local title animation and semantic title, status, bell, completion, and query facts remain intact. A paired terminal stream whose delivery credits stop progressing must replace only that stream; command silence first probes authoritative state and replaces the stream if the probe times out or proves the PTY advanced beyond the client's delivered output sequence. When no comparable delivery high-water exists, the first sequenced probe establishes a baseline and only later advancement proves staleness. A same-sequence snapshot remains valid proof of a responsive silent command. A successful status probe may replace a pre-ready shared-control socket without rejecting or duplicating calls already waiting for that transport. Manual disconnect must retain pairing while preventing queued or passive calls and subscriptions from recreating transport until explicit Connect.",
+      "invariant": "A host advertising terminal.paired-parking.v1 keeps the PTY and bounded authoritative history alive while an ordinary hidden-view park destroys the client xterm and releases its raw per-PTY stream. Reveal must restore up to the requested 5,000 rows, parked-time side effects/output, the same PTY identity, and continued input/output. After a host main-process relaunch, unknown local delivery-sync state must not be treated as proof that a surviving daemon PTY is already foregrounded. If subscription precedes provider readiness, authoritative inventory must reconsider that existing subscriber without spawning, resizing, or changing reconnect state. A snapshot without an output high-water must keep it unknown rather than borrowing a layout version that can suppress newer live output. Hosts without the capability must gate hidden raw output before xterm scheduling and repaint from the authoritative snapshot on reveal while retaining the existing limit/TTL force-parking fallback. After a paired client's first semantic title state, decorative spinner frequency must add zero encrypted client-event frames; local title animation and semantic title, status, bell, completion, and query facts remain intact. A paired terminal stream whose delivery credits stop progressing must replace only that stream; command silence first probes authoritative state and replaces the stream if the probe times out or proves the PTY advanced beyond the client's delivered output sequence. When no comparable delivery high-water exists, the first sequenced probe establishes a baseline and only later advancement proves staleness. A same-sequence snapshot remains valid proof of a responsive silent command. A successful status probe may replace a pre-ready shared-control socket without rejecting or duplicating calls already waiting for that transport. Manual disconnect must retain pairing while preventing queued or passive calls and subscriptions from recreating transport until explicit Connect.",
       "oracle": "Run one byte-identical six-terminal oracle against an isolated headed desktop host and an isolated headless `orca serve` host. Stage at least 1,000,000 xterm cells, enable ordinary parking with the lossy retention budget disabled, require exactly one mounted manager and five parked tabs, at most 45% retained cells, no more than 16 MiB heap growth, and under 500 ms timer drift. In headed mode, require the host renderer to remain on its original workspace with zero target terminal managers mounted throughout client park, reveal, and live I/O. While a tab is parked, require authoritative terminal.read to observe new PTY output; reveal it and require the original PTY, a marker within the requested 5,000-row history, the parked marker, and post-reveal input/output. Drive 64 host PTYs through ten 80 ms synthetic title frames, require zero paired client events after the first frame per PTY while all 640 local frames remain observable, attach a late client and require one current frame per PTY, then require semantic bell and idle transitions on both clients. Reconstruct a legacy subscribed stream with no outputPause capability, hide a chatty pane, require no hidden xterm writes, reveal it, and require one authoritative snapshot plus continued live output. Drop and acknowledge output only for one original paired-client stream, prove the fixture process consumed input while the host model advanced and the client stayed stale, then require the command snapshot probe to replace that stream, repaint exact fixture output, preserve authoritative PTY identity and target-tab cardinality, and resume live I/O. For a client without a delivered sequence, require the first numeric probe to establish a baseline without replacement, a same-sequence probe to remain attached, and a later advanced probe to replace only that stream. Withhold the first encrypted shared-control ready frame, start one RPC, trigger a status-probe refresh, and require two connections, one host delivery, successful response, and zero retained request bytes. Admit 128 active streams, reject the 129th as retryable, release one stream, then require the retry to attach and publish a snapshot without multiplying retained subscribers. Disable terminal.paired-parking.v1 and require the same oracle to fail before parking, while the legacy limit-one fallback separately passes. Also preserve truncated first paint, ACK-starved same-PTY recovery, responsive silent-command snapshot probes, dead-stream probe timeout recovery, and queued manual-disconnect fencing.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-multiplex.test.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/renderer/src/components/terminal-pane/parked-terminal-byte-watcher.test.ts src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler.test.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-view-parking.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-worktree-retention.test.ts src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts src/renderer/src/components/terminal-pane/terminal-parked-watcher-reconciliation.test.ts src/renderer/src/components/terminal-pane/terminal-parked-watcher-partial-reconciliation.test.ts src/renderer/src/components/terminal-pane/terminal-parking-e2e-overrides.test.ts src/renderer/src/runtime/remote-runtime-terminal-stall-recovery.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/renderer/src/web/web-preload-api.test.ts src/main/ipc/runtime-environments.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/terminal-subscriber-driven-daemon-attach.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/remote-runtime-shared-control-connection.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/runtime/remote-runtime-terminal-parse-backpressure.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty.test.ts",
+        "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-remote-terminal-host-restart-background-sync.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "ORCA_E2E_FORWARD_APP_LOGS=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-remote-terminal-host-restart-background-sync.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --repeat-each=10 --max-failures=1",
         "ORCA_E2E_WEB_CLIENT=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-remote-terminal-truncated-tail-first-paint.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
         "ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_DISABLE_PAIRED_TERMINAL_PARKING=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-remote-terminal-truncated-tail-first-paint.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
         "ORCA_E2E_WEB_CLIENT=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-remote-terminal-stall-recovery.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
@@ -4228,6 +4233,8 @@
         "src/main/ipc/runtime-environments.test.ts",
         "src/main/runtime/rpc/terminal-multiplex.test.ts",
         "src/main/runtime/rpc/terminal-subscribe-buffer.test.ts",
+        "src/main/runtime/terminal-subscriber-driven-daemon-attach.test.ts",
+        "src/main/ipc/pty.test.ts",
         "src/renderer/src/components/terminal-pane/parked-terminal-byte-watcher.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection.test.ts",
@@ -4248,9 +4255,38 @@
         "tests/e2e/headless-paired-remote-terminal-stall-recovery.spec.ts",
         "tests/e2e/paired-remote-terminal-retention-memory.spec.ts",
         "tests/e2e/headless-paired-remote-terminal-retention-memory.spec.ts",
-        "tests/e2e/terminal-parked-memory.spec.ts"
+        "tests/e2e/terminal-parked-memory.spec.ts",
+        "tests/e2e/paired-remote-terminal-host-restart-background-sync.spec.ts"
       ],
       "assertionRefs": [
+        {
+          "file": "src/main/runtime/terminal-subscriber-driven-daemon-attach.test.ts",
+          "assertions": ["retries an existing subscriber when provider inventory becomes ready"]
+        },
+        {
+          "file": "src/main/ipc/pty.test.ts",
+          "assertions": [
+            "foregrounds a preserved daemon PTY after handler recreation loses sync memory exactly once"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/terminal-multiplex.test.ts",
+          "assertions": ["keeps layout versions out of the output sequence domain"]
+        },
+        {
+          "file": "src/main/runtime/rpc/terminal-subscribe-buffer.test.ts",
+          "assertions": [
+            "omits an unknown snapshot output sequence instead of publishing the layout version"
+          ]
+        },
+        {
+          "file": "tests/e2e/paired-remote-terminal-host-restart-background-sync.spec.ts",
+          "assertions": [
+            "preserves daemon PID and target PTY identity across the paired host relaunch",
+            "foregrounds the daemon-backgrounded target on its first post-relaunch remote observation",
+            "delivers target and post-relaunch control terminal input and live output"
+          ]
+        },
         {
           "file": "tests/e2e/paired-remote-terminal-probe-gap-recovery.spec.ts",
           "assertions": ["replaces a stale paired stream when the PTY snapshot advanced"]
@@ -4380,6 +4416,42 @@
       ],
       "evidenceRuns": [
         {
+          "date": "2026-08-07",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/terminal-subscriber-driven-daemon-attach.test.ts",
+          "result": "passed",
+          "durationSeconds": 4.29,
+          "summary": "All 10 subscriber-driven attach contracts passed. With two authoritative inventories overlapping one refused in-flight attach, removing only the post-settlement retry made the byte-identical focused assertion fail with one attach instead of two; restoring it retained one bounded waiter, retried once, and resumed live output on the existing stream."
+        },
+        {
+          "date": "2026-08-07",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty.test.ts",
+          "result": "passed",
+          "durationSeconds": 5.84,
+          "summary": "The full PTY IPC file passed 449 tests, including one first-observation foreground sync after handler recreation and deduplication of the repeated presence signal."
+        },
+        {
+          "date": "2026-08-07",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_E2E_FORWARD_APP_LOGS=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-remote-terminal-host-restart-background-sync.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --repeat-each=10 --max-failures=1",
+          "result": "passed",
+          "durationSeconds": 126,
+          "summary": "Ten consecutive isolated host-relaunch journeys preserved the daemon and PTY identities and resumed terminal input plus live output after the paired transport recovered."
+        },
+        {
+          "date": "2026-08-07",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-remote-terminal-host-restart-background-sync.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 12.5,
+          "summary": "With the parking override captured by both host launches, the isolated headed host and separate paired desktop client retained the daemon PID and PTY ID across host relaunch, emitted one target foreground transition, and delivered target plus post-relaunch control input/output. The byte-identical run with only the unknown-state fix reverted failed at the missing target foreground transition."
+        },
+        {
           "date": "2026-08-02",
           "runner": "local",
           "platform": "macos",
@@ -4503,15 +4575,15 @@
       },
       "flakeHistory": {
         "status": "unknown",
-        "evidence": "The paired headed oracle is deterministic locally but has no CI or soak history yet."
+        "evidence": "The host-relaunch oracle passed a fresh 10-run local series. One earlier exploratory repeat timed out in transport recovery before terminal input/output assertions; it did not recur with forwarded app logs. A later Linux CI run reproduced missing live output when inventory overlapped the refused in-flight attach, which now has a deterministic unit oracle and is pending cross-platform rerun. Broader headed/headless parking coverage has no aggregated CI or soak history yet."
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "The six-PTY ordinary-parking oracle was red in two independently observed stages: the parked paired remount first used detached attach and restored only rows 5,963–5,999, then the requested snapshot still lost to the current-screen replay until park reveals explicitly entered the capability-gated reattach coordinator. The candidate is green on headed and headless hosts, while disabling terminal.paired-parking.v1 makes the byte-identical oracle fail at its capability precondition and leaves the separately tested legacy lossy fallback green. The 64-PTY decorative-title control delivered 576 client events after convergence on unmodified main; the candidate delivers zero while preserving all 640 local frames, one current frame to a late client, and bell/idle transitions to both clients. The legacy no-output-pause control failed to request a reveal snapshot and kept hidden bytes on the xterm path; the candidate gates those bytes locally and restores one authoritative snapshot before live output. With stalled-stream recovery disabled, the host cursor advanced but the client remained frozen; enabling it repainted the marker with the same PTY and tab. The sequence-gap unit and headed paired oracle are red on current main and with only the new probe decision reverted: the authoritative host advances while the client stays stale after a successful probe. The candidate replaces the stream, repaints the marker, preserves PTY identity, and resumes I/O. Reverting the active-stream limit to 64 makes the exact 128-stream contract fail at 64; restoring 128 admits every intended stream, rejects 129, and reattaches it after one slot releases."
+        "evidence": "The six-PTY ordinary-parking oracle was red in two independently observed stages: the parked paired remount first used detached attach and restored only rows 5,963–5,999, then the requested snapshot still lost to the current-screen replay until park reveals explicitly entered the capability-gated reattach coordinator. The candidate is green on headed and headless hosts, while disabling terminal.paired-parking.v1 makes the byte-identical oracle fail at its capability precondition and leaves the separately tested legacy lossy fallback green. The 64-PTY decorative-title control delivered 576 client events after convergence on unmodified main; the candidate delivers zero while preserving all 640 local frames, one current frame to a late client, and bell/idle transitions to both clients. The legacy no-output-pause control failed to request a reveal snapshot and kept hidden bytes on the xterm path; the candidate gates those bytes locally and restores one authoritative snapshot before live output. With stalled-stream recovery disabled, the host cursor advanced but the client remained frozen; enabling it repainted the marker with the same PTY and tab. The sequence-gap unit and headed paired oracle are red on current main and with only the new probe decision reverted: the authoritative host advances while the client stays stale after a successful probe. The candidate replaces the stream, repaints the marker, preserves PTY identity, and resumes I/O. Reverting the active-stream limit to 64 makes the exact 128-stream contract fail at 64; restoring 128 admits every intended stream, rejects 129, and reattaches it after one slot releases. The host-relaunch oracle fails when unknown delivery state is coerced to foregrounded or a layout version becomes an output high-water; the candidate foregrounds the preserved daemon PTY once and resumes same-PTY input/output. When authoritative inventory overlaps a refused in-flight attach, removing only the post-settlement retry leaves the existing subscriber without daemon output; the candidate retains one waiter across repeated inventory publications, retries exactly once, and restores live output."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Before ordinary parking, six warm-mounted hidden paired xterms receive zero raw frames and schedule zero renderer output drains while host models continue ingesting sustained output. Ordinary parking then retains the host PTY and bounded 5,000-row provider model while destroying five client xterms. Decorative title ticks are collapsed per paired subscriber before JSON serialization and encryption; semantic facts remain on the singleton client-event stream. Headed and headless oracles require exact reduction from six managers to one, at least 55% staged xterm-cell release, no more than 16 MiB heap growth, and under 500 ms timer drift. Legacy hosts retain the prior 12-worktree/45-minute lossy force-parking policy but now gate hidden raw output before xterm scheduling and restore from a bounded snapshot on reveal. Stream recovery adds no polling and is scoped to one stream."
+        "evidence": "Before ordinary parking, six warm-mounted hidden paired xterms receive zero raw frames and schedule zero renderer output drains while host models continue ingesting sustained output. Ordinary parking then retains the host PTY and bounded 5,000-row provider model while destroying five client xterms. Decorative title ticks are collapsed per paired subscriber before JSON serialization and encryption; semantic facts remain on the singleton client-event stream. Headed and headless oracles require exact reduction from six managers to one, at least 55% staged xterm-cell release, no more than 16 MiB heap growth, and under 500 ms timer drift. Legacy hosts retain the prior 12-worktree/45-minute lossy force-parking policy but now gate hidden raw output before xterm scheduling and restore from a bounded snapshot on reveal. Stream recovery adds no polling and is scoped to one stream. Provider-ready reconciliation runs only for PTYs returned by a successful controller inventory, requires an existing remote subscriber, and retains at most one post-settlement waiter per PTY while attach deduplication remains active."
       },
       "promotionCriteria": [
         "Collect 100 consecutive CI passes or 14 days of soak history for the headed and headless parking commands.",
@@ -5319,7 +5391,7 @@
       "id": "terminal-provider.daemon-startup-degraded-contract",
       "title": "Daemon startup reconcile and degraded fallback preserve provider identity",
       "maturity": "experimental",
-      "protection": "none",
+      "protection": "partial",
       "owner": "terminal-provider",
       "layer": "provider-contract",
       "surfaces": [
@@ -5327,26 +5399,75 @@
         "degraded daemon",
         "fallback PTY",
         "provider ownership",
-        "startup restore"
+        "startup restore",
+        "stable-pane reopen"
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["daemon", "local"],
-      "coveredPlatforms": [],
-      "coveredProviders": [],
-      "coverageNotes": "Registered gap on main. The fail-closed degraded-daemon hardening and its contracts exist only on the pending reliability stack. It registers here with its owning split PR.",
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["daemon", "local"],
+      "coverageNotes": "Deterministic provider contracts cover complete, incomplete, conflicting, refused, and identity-invalidated owner inventories; degraded fallback/current/legacy routing; repeated stale-binding classification; and fresh-session reattach without local fallback during unresolved ownership. Main IPC contracts cover exact persisted-binding retirement and one fresh replacement after confirmed absence. Live Linux, Windows, WSL, SSH, paired-runtime, and packaged-upgrade journeys remain uncollected.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6830",
         "https://github.com/stablyai/orca/pull/6866",
-        "https://github.com/stablyai/orca/pull/7002"
+        "https://github.com/stablyai/orca/pull/7002",
+        "https://github.com/stablyai/orca/pull/12776"
       ],
-      "invariant": "Daemon startup reconciliation must preserve valid live daemon sessions, reap only true orphans, and degraded mode must not route an existing-looking daemon session through local fallback unless the caller explicitly marks a fresh degraded-mode spawn.",
-      "oracle": "The current provider-contract corpus covers valid current-worktree ids, folder/floating workspace ids, invalid removed-worktree ids, mixed live/orphan dry-run reconciliation, hyphenated worktree ids, malformed ids, daemon sessions discovered after restart, router discovery before existing-session spawn, router fail-closed behavior when legacy ownership cannot be listed or a known session has exited, degraded daemon fallback for fresh sessions, fail-closed behavior for unknown restored ids, benign inspection defaults for unknown ownership, and synthetic exits on daemon restart. Prior-worktree aliases and renamed-worktree startup wiring are promotion gaps, not current proof.",
-      "commands": [],
-      "testFiles": [],
-      "assertionRefs": [],
-      "evidenceRuns": [],
+      "invariant": "Daemon startup reconciliation must preserve valid live daemon sessions and reap only true orphans. A persisted binding stays fail-closed while any possible owner is incomplete, conflicting, refusing attach, or identity-invalidated, but complete authoritative absence from every configured provider must retire that exact stale binding and let retry or reopen converge without attaching it through local fallback or duplicating a PTY.",
+      "oracle": "Hold exact fallback, current-daemon, and legacy-daemon inventories behind controlled promises. No attach may settle or dispatch until every provider answers. Complete zero-candidate inventories must report SessionNotFound; incomplete, duplicate, refused, and identity-invalidated attempts must remain owner-unverified. In degraded mode, repeated stale attempts scan each eligible provider once per attempt and dispatch no attach, then one explicit fresh spawn and exact reattach use only the recorded fresh route. Main IPC must compare-and-swap retire only the matching persisted PTY/incarnation, emit one synthetic exit, and create one different fresh PTY.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-session-owner-resolution.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/main/ipc/pty.test.ts --reporter=dot"
+      ],
+      "testFiles": [
+        "src/main/daemon/daemon-session-owner-resolution.test.ts",
+        "src/main/daemon/daemon-pty-router.test.ts",
+        "src/main/daemon/degraded-daemon-pty-provider.test.ts",
+        "src/main/ipc/pty.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/daemon/daemon-session-owner-resolution.test.ts",
+          "assertions": [
+            "controlled concurrent inventories wait for fallback, current, and legacy authority before classifying exact persisted PTYs absent",
+            "incomplete inventory, duplicate claims, owner refusal, and identity replacement stay fail-closed with exact list and spawn counts"
+          ]
+        },
+        {
+          "file": "src/main/daemon/daemon-pty-router.test.ts",
+          "assertions": [
+            "complete current and legacy daemon inventories prove liveness absence with one list call per adapter",
+            "one unavailable daemon inventory keeps the same missing PTY liveness unknown"
+          ]
+        },
+        {
+          "file": "src/main/daemon/degraded-daemon-pty-provider.test.ts",
+          "assertions": [
+            "repeated complete absence never dispatches the stale id to fallback or either daemon",
+            "one explicit fresh fallback PTY reattaches by its exact PTY and incarnation without another inventory",
+            "a mapped fallback-owned PTY reports live without borrowing fallback authority for unknown ids or scanning daemon inventories"
+          ]
+        },
+        {
+          "file": "src/main/ipc/pty.test.ts",
+          "assertions": [
+            "confirmed absence retires the exact persisted binding once and creates one differently identified fresh PTY",
+            "unverified ownership retains the binding and creates no fresh PTY"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-06",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-session-owner-resolution.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/main/ipc/pty.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 5.44,
+          "summary": "Four files passed 535 owner-resolution, router, degraded-provider, and IPC lifecycle tests. With only the resolver fix disabled, the unchanged four-file gate failed four stale-absence, identity-retry, and router-liveness assertions; restoring it passed 535 of 535."
+        }
+      ],
       "runtimeBudget": {
-        "p95Seconds": 20,
+        "p95Seconds": 45,
         "scope": "provider contract unit/integration test"
       },
       "flakeHistory": {
@@ -5354,22 +5475,22 @@
         "evidence": "Focused provider contract tests now run locally; needs soak history before promotion."
       },
       "redGreenEvidence": {
-        "status": "partial",
-        "evidence": "Tests assert discovered daemon sessions route to the daemon, fresh degraded-mode PTYs route to fallback only when marked new, router spawn discovers uncached existing sessions before choosing an adapter, router spawn fails closed instead of falling through to current when legacy listing fails or a known session has exited, targeted hasPty discovery caches legacy ownership before later write/resize-style operations, real daemon adapter listProcesses discovery seeds targeted hasPty liveness, folder and floating terminal workspace ids survive startup reconcile when valid, restored worktree-scoped and legacy/non-scoped ids do not fall back through spawn after ownership is lost or unknown, operations on unknown or exited existing ids fail closed, startup reconcile can dry-run orphan detection without killing live sessions, and process inspection returns benign defaults for unknown ownership. Production startup reconcile wiring remains unproven."
+        "status": "complete",
+        "evidence": "The byte-identical owner-resolver blob d35d2795d56e7e32c1ca99af6726fe6b92181881 is present in v1.4.176-rc.0@ddf64199fa, prod-release-1.4.176@8ddf575fe6, and origin/main@cb960408f2. It returns TerminalSessionOwnerUnverifiedError for both controlled complete-empty persisted PTYs and leaves degraded stale bindings unrecoverable. The candidate passes 535 of 535 registered tests. Restoring only the old predicate makes the unchanged four-file gate fail four of 535 tests; restoring the fix passes 535 of 535."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Reconcile must not add startup-blocking scans beyond the explicit daemon session inventory and must not leak global listing into hot paths."
+        "evidence": "One unresolved attempt performs one concurrent listProcesses call per eligible provider, concurrent pane attempts coalesce onto that inventory, and no polling, sleep, timer, subprocess, listener, or retry loop is added. Confirmed absence is not cached; repeated explicit attempts remain bounded to one fanout each. Reattaching the newly recorded fresh route adds no inventory or daemon spawn."
       },
       "promotionCriteria": [
         "Wire reconcileOnStartup or mark the production wiring gap explicitly.",
         "Cover priorWorktreeIds so renamed worktrees are not falsely reaped."
       ],
       "knownGaps": [
-        "No executable coverage on main yet; the slice lives on the pending fix-terminal-reliability stack.",
         "Production startup reconcile wiring remains unproven.",
         "Prior-worktree aliases and renamed-worktree startup reconcile are not covered by the current executable corpus.",
-        "Real daemon restart behavior is still covered only by lower-level synthetic exit and provider-contract tests."
+        "Real daemon restart behavior is still covered only by lower-level synthetic exit and provider-contract tests.",
+        "No live Linux, Windows, WSL, SSH, headed/headless paired-runtime, folder-workspace, or mixed-version packaged-upgrade journey was run for stale-owner recovery."
       ],
       "demotionRule": "Cannot promote while restored daemon ids or routing operations can silently route to local fallback."
     },

@@ -10,7 +10,12 @@ import type {
 } from '../shared/hosted-review'
 import type { NativeFileDropPayload } from '../shared/native-file-drop'
 import type { BrowserFindSource } from '../shared/browser-find-source'
-import type { DashboardSnapshot, DashboardRevealAgentArgs } from '../shared/dashboard-snapshot'
+import type {
+  DashboardRevealAgentArgs,
+  DashboardSleepWorkspaceArgs,
+  DashboardSnapshot,
+  DashboardSpawnAgentArgs
+} from '../shared/dashboard-snapshot'
 import type {
   TerminalPreviewConnectResult,
   TerminalPreviewDataPayload
@@ -30,6 +35,8 @@ import type { ReadClipboardTextOptions } from '../shared/clipboard-text'
 import type { AppIdentity } from '../shared/app-identity'
 import type { ReleaseChannel } from '../shared/release-channel'
 import type {
+  ForgetRemovedWorktreesForExecutionHostArgs,
+  ForgetRemovedWorktreesForExecutionHostResult,
   HostQualifiedKnownWorktreeResult,
   HostQualifiedDetectedWorktreeResult,
   LegacyDetectedWorktreeRequest,
@@ -427,7 +434,8 @@ import type {
 import type {
   DeveloperPermissionId,
   DeveloperPermissionRequestResult,
-  DeveloperPermissionState
+  DeveloperPermissionState,
+  LocalNetworkConnectionTestResult
 } from '../shared/developer-permissions-types'
 import type {
   ComputerUsePermissionId,
@@ -761,6 +769,10 @@ export type PtyManagementSession = {
   protocolVersion: number
 }
 
+// 'severed': macOS can no longer attribute daemon terminals to Orca, so Accessibility/
+// Automation grants silently stop applying until the daemon is restarted (STA-3491).
+export type PtyManagementMacTccAttributionHealth = 'intact' | 'severed' | 'unknown'
+
 export type PtyManagementApi = {
   // `degraded`: daemon is alive but can't spawn fresh PTYs, so new terminals run locally without daemon persistence.
   listSessions: () => Promise<{ sessions: PtyManagementSession[]; degraded: boolean }>
@@ -771,6 +783,7 @@ export type PtyManagementApi = {
   }>
   killOne: (args: { sessionId: string }) => Promise<{ success: boolean }>
   restart: () => Promise<{ success: boolean }>
+  macTccAttribution: () => Promise<{ health: PtyManagementMacTccAttributionHealth }>
 }
 
 export type ExportApi = {
@@ -1406,6 +1419,10 @@ export type PreloadApi = {
     listKnownForExecutionHost?: (
       args: ListKnownWorktreesForExecutionHostArgs
     ) => Promise<HostQualifiedKnownWorktreeResult>
+    /** Retires the persisted metadata an authoritative scan proved gone, so it stops feeding the read above. */
+    forgetRemovedForExecutionHost?: (
+      args: ForgetRemovedWorktreesForExecutionHostArgs
+    ) => Promise<ForgetRemovedWorktreesForExecutionHostResult>
     cancelListDetected?: (args: { providerRequestId: ProviderRequestId }) => Promise<void>
     listAll: () => Promise<Worktree[]>
     create: (args: CreateWorktreeArgs) => Promise<CreateWorktreeResult>
@@ -2499,17 +2516,22 @@ export type PreloadApi = {
     ) => Promise<OnboardingState>
   }
   dashboard: {
-    openPopout: () => Promise<void>
+    openPopout: (view?: 'board' | 'map') => Promise<void>
     publishSnapshot: (snapshot: DashboardSnapshot) => Promise<void>
     getPopoutOpen: () => Promise<boolean>
     onPopoutOpenChanged: (callback: (open: boolean) => void) => () => void
     onSnapshotRequested: (callback: () => void) => () => void
     onRevealAgent: (callback: (args: DashboardRevealAgentArgs) => void) => () => void
     onAckAgent: (callback: (paneKey: string) => void) => () => void
+    onSpawnAgent: (callback: (args: DashboardSpawnAgentArgs) => void) => () => void
+    onSleepWorkspace: (callback: (args: DashboardSleepWorkspaceArgs) => void) => () => void
     requestSnapshot: () => Promise<void>
     onSnapshot: (callback: (snapshot: DashboardSnapshot) => void) => () => void
+    onViewRequested: (callback: (view: 'board' | 'map') => void) => () => void
     revealAgent: (args: DashboardRevealAgentArgs) => Promise<void>
     ackAgent: (paneKey: string) => Promise<void>
+    spawnAgent: (args: DashboardSpawnAgentArgs) => Promise<void>
+    sleepWorkspace: (args: DashboardSleepWorkspaceArgs) => Promise<void>
   }
   terminalPreview: {
     connect: (
@@ -2539,6 +2561,10 @@ export type PreloadApi = {
     getStatus: () => Promise<DeveloperPermissionState[]>
     request: (args: { id: DeveloperPermissionId }) => Promise<DeveloperPermissionRequestResult>
     openSettings: (args: { id: DeveloperPermissionId }) => Promise<void>
+    testLocalNetworkConnection: (args: {
+      host: string
+      port: number
+    }) => Promise<LocalNetworkConnectionTestResult>
   }
   computerUsePermissions: {
     getStatus: () => Promise<ComputerUsePermissionStatusResult>
@@ -3655,7 +3681,8 @@ export type PreloadApi = {
           qrDataUrl: string | null
           qrError?: 'encoding_failed'
           pairingUrl: string
-          endpoint: string
+          /** Null when no direct address was advertised — the QR pairs over Relay alone. */
+          endpoint: string | null
           deviceId: string
           /** Mode the QR actually encodes. */
           connectionMode: MobilePairingConnectionMode

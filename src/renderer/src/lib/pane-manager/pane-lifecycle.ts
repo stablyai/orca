@@ -9,7 +9,10 @@ import { cancelDeferredScrollRestore } from './pane-scroll'
 import { activateOrcaTerminalUnicodeProvider } from '../../../../shared/terminal-unicode-provider'
 import { attachTerminalMouseWheelMultiplier } from './pane-terminal-mouse-wheel'
 import { attachTerminalScrollIntentTracking } from './terminal-scroll-intent-dom-tracking'
-import { installTerminalLinkifierHoverResetOnMouseLeave } from './terminal-linkifier-hover-reset-on-mouseleave'
+import {
+  installTerminalLinkifierHoverResetOnMouseLeave,
+  installTerminalLinkifierHoverResetOnWindowBlur
+} from './terminal-linkifier-hover-reset-on-mouseleave'
 import { installTerminalLinkifierHoverResetOnWrite } from './terminal-linkifier-hover-reset-on-write'
 import { attachDomRendererFocusClassSync } from './pane-dom-focus-class-sync'
 import { attachWebgl, cancelPendingWebglRefresh, disposeWebgl } from './pane-webgl-renderer'
@@ -63,7 +66,14 @@ export function openTerminal(pane: ManagedPaneInternal): void {
   // line; invalidate the linkifier hover cache when output lands so the next
   // pointer move re-linkifies it.
   pane.linkifierHoverResetDisposable = installTerminalLinkifierHoverResetOnWrite(terminal)
-  pane.linkifierMouseLeaveResetDisposable = installTerminalLinkifierHoverResetOnMouseLeave(terminal)
+  pane.linkifierMouseLeaveResetDisposable = installTerminalLinkifierHoverResetOnMouseLeave(
+    terminal,
+    linkTooltip
+  )
+  pane.linkifierWindowBlurResetDisposable = installTerminalLinkifierHoverResetOnWindowBlur(
+    terminal,
+    linkTooltip
+  )
 
   // Activate Orca's Unicode 11 width shim *before* any caller-driven write. CJK / emoji /
   // ZWJ codepoints get baked into the buffer at the active unicode version on
@@ -187,6 +197,8 @@ export function disposePane(
   pane.linkifierHoverResetDisposable = null
   pane.linkifierMouseLeaveResetDisposable?.dispose()
   pane.linkifierMouseLeaveResetDisposable = null
+  pane.linkifierWindowBlurResetDisposable?.dispose()
+  pane.linkifierWindowBlurResetDisposable = null
   // Deregister the RTL shaping joiner: terminal.dispose() below does not.
   try {
     pane.arabicShapingJoinerCleanup?.()

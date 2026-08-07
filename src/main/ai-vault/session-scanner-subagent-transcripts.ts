@@ -52,6 +52,13 @@ export async function countSubagentTranscripts(transcriptFilePath: string): Prom
 const SUBAGENT_DIRECT_CHILD_PATTERN = /^(.*)[\\/]subagents[\\/]agent-[^\\/]+\.jsonl$/i
 const SUBAGENT_SUBTREE_PATTERN = /[\\/]subagents[\\/]/i
 
+// One walked-listing partition: transcripts that are real session candidates,
+// and per-parent counts for the subagent transcripts that were excluded.
+export type SubagentTranscriptPartition = {
+  sessionFilePaths: string[]
+  subagentTranscriptCounts: Map<string, number>
+}
+
 /**
  * Partition a recursively walked transcript listing into session candidates and
  * per-parent sibling subagent transcript counts. Remote (SSH) scans cannot
@@ -61,10 +68,9 @@ const SUBAGENT_SUBTREE_PATTERN = /[\\/]subagents[\\/]/i
  * resumable, so they are excluded from candidates (mirrors the local discovery
  * pruning in session-scanner-source-discovery.ts).
  */
-export function partitionSubagentTranscriptPaths(paths: readonly string[]): {
-  sessionFilePaths: string[]
-  subagentTranscriptCounts: Map<string, number>
-} {
+export function partitionSubagentTranscriptPaths(
+  paths: readonly string[]
+): SubagentTranscriptPartition {
   const sessionFilePaths: string[] = []
   const subagentTranscriptCounts = new Map<string, number>()
   for (const path of paths) {

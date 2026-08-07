@@ -4,7 +4,7 @@ import {
   type AiVaultListResult,
   type AiVaultSession
 } from '../../../../shared/ai-vault-types'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostScope } from '../../../../shared/execution-host'
+import type { ExecutionHostScope } from '../../../../shared/execution-host'
 import { useAppStore } from '@/store'
 import type { AiVaultSessionLimit } from './ai-vault-session-limit'
 import {
@@ -14,21 +14,10 @@ import {
   resetAiVaultSessionResultCacheForTest
 } from './ai-vault-session-result-cache'
 
-// Panel entry and window refocus must show sessions started since the last
-// scan, so they bypass the main process's 15s cache — but a full scan parses
-// up to ~1000 transcripts, so bound forced scans to one per interval. Module
-// scope so the throttle survives panel remounts (the panel unmounts per tab).
-const FORCED_RESCAN_MIN_INTERVAL_MS = 5_000
+// In-app session creation bypasses the cache so the new session appears promptly.
+// Keep the budget at module scope so tab remounts cannot amplify full scans.
+const FORCED_RESCAN_MIN_INTERVAL_MS = 30_000
 let lastForcedRescanAt = 0
-
-function consumeForcedRescanBudget(): boolean {
-  const now = Date.now()
-  if (now - lastForcedRescanAt < FORCED_RESCAN_MIN_INTERVAL_MS) {
-    return false
-  }
-  lastForcedRescanAt = now
-  return true
-}
 
 export function resetAiVaultForcedRescanThrottleForTest(): void {
   lastForcedRescanAt = 0
@@ -201,7 +190,7 @@ export function useAiVaultSessionRefresh(
     [currentScanScopeKey]
   )
 
-  // Forced rescans triggered by events (refocus, agent-session starts) run
+  // Forced rescans triggered by new agent sessions run
   // immediately when the throttle allows, otherwise once as soon as it frees
   // up — dropping the event would leave a just-started session invisible
   // until some unrelated later trigger.
@@ -218,8 +207,7 @@ export function useAiVaultSessionRefresh(
     }
     forcedRescanTimerRef.current = setTimeout(() => {
       forcedRescanTimerRef.current = null
-      lastForcedRescanAt = Date.now()
-      void refresh({ background: true, force: true })
+      requestForcedRescan()
     }, waitMs)
   }, [refresh])
 
@@ -240,33 +228,23 @@ export function useAiVaultSessionRefresh(
     }
   }, [])
 
-  // Remote scans can take long enough for normal tab navigation to feel stuck,
-  // so re-entering a remote panel uses its host/scope cache. Explicit refresh,
-  // app refocus and new in-app agent sessions still force a fresh scan.
+  // Panel entry reuses the renderer result first, then the host scan cache.
   useEffect(() => {
     if (refreshInFlightRef.current) {
       void window.api.aiVault.cancelListSessions({
         requestToken: requestTokenRef.current
       })
     }
-    const refreshOnEntry = executionHostScope === LOCAL_EXECUTION_HOST_ID
-    const force = refreshOnEntry && consumeForcedRescanBudget()
-    void refresh({ force, reuseLoadedDepth: true })
-    if (refreshOnEntry && !force) {
-      requestForcedRescan()
-    }
-  }, [executionHostScope, refresh, requestForcedRescan, scanScopeKey])
+    void refresh({ force: false, reuseLoadedDepth: true })
+  }, [executionHostScope, refresh, scanScopeKey])
 
-  // Sessions started while the app was backgrounded should appear when the
-  // user returns, so refocus also bypasses the scan cache (throttled). OS
-  // refocus arrives via the main process — renderer DOM focus events don't
-  // fire on macOS app activation; visibilitychange covers minimize-restore.
+  // Refocus checks the shared host cache without forcing another transcript scan.
   useEffect(() => {
     const onRefocus = (): void => {
       if (document.visibilityState !== 'visible') {
         return
       }
-      requestForcedRescan()
+      void refresh({ background: true, force: false })
     }
     const unsubscribeWindowFocus = window.api.aiVault.onWindowFocused?.(onRefocus)
     document.addEventListener('visibilitychange', onRefocus)
@@ -274,7 +252,7 @@ export function useAiVaultSessionRefresh(
       unsubscribeWindowFocus?.()
       document.removeEventListener('visibilitychange', onRefocus)
     }
-  }, [requestForcedRescan])
+  }, [refresh])
 
   // Sessions started inside Orca never blur the window, so refocus alone
   // can't surface them. Agent hooks already report provider sessions; re-scan

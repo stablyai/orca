@@ -127,6 +127,7 @@ import {
   installUnhandledRejectionLogging
 } from './startup/main-process-error-guards'
 import { enableRendererHeapHeadroom } from './startup/renderer-heap-headroom'
+import { argvRequestsServeMode, normalizeServeModeArgv } from './startup/serve-mode-argv'
 import { ensureVirtualDisplayForHeadlessServe } from './startup/ensure-virtual-display'
 import {
   readActiveGpuFallbackMarker,
@@ -188,7 +189,10 @@ import {
   ensureAutoUpdaterConfigured
 } from './window/attach-main-window-services'
 import { createMainWindow, loadMainWindow } from './window/createMainWindow'
-import { zoomDashboardPopoutIfFocused } from './window/dashboard-popout-window'
+import {
+  getDashboardPopoutWindow,
+  zoomDashboardPopoutIfFocused
+} from './window/dashboard-popout-window'
 import {
   createSystemTray,
   destroySystemTray,
@@ -303,6 +307,7 @@ import {
 } from '../shared/synthetic-agent-title'
 import type { AgentStatusState } from '../shared/agent-status-types'
 import { resolveTuiAgentPermissionMode } from '../shared/tui-agent-permissions'
+import { isAskUserQuestionTool } from '../shared/agent-question-answered-intent'
 import type { TerminalSideEffectBatch } from '../shared/terminal-side-effect-facts'
 import {
   HEADLESS_RUNTIME_WINDOW_ID,
@@ -379,6 +384,33 @@ let gpuFeatureStatus: Electron.GPUFeatureStatus | null = null
 let localPtyStartupReady: Promise<void> = Promise.resolve()
 let localPtyProviderStartupReady: Promise<void> = Promise.resolve()
 const AGENT_STATE_CRASH_BREADCRUMB_MIN_INTERVAL_MS = 30_000
+// Why: on Windows a CLI launch that lost ELECTRON_RUN_AS_NODE would boot the GUI and exit silently; redirect to node mode before the lock gate below.
+// Both redirects run before the serve-argv rewrite so they still match on the launch argv verbatim.
+// It is load-bearing for the AppImage one: rewriting first replaces the `serve` positional, so its
+// command-name lookup finds a port number and strands the launch in an in-process serve. The
+// packaged-CLI one matches on the entry path instead, so order cannot affect it either way.
+const packagedCliEntryRedirect = maybeRedirectPackagedCliEntryLaunch({
+  isPackaged: app.isPackaged,
+  resourcesPath: process.resourcesPath,
+  execPath: process.execPath
+})
+if (packagedCliEntryRedirect.redirected) {
+  app.exit(packagedCliEntryRedirect.status)
+}
+const appImageCliRedirect = maybeRedirectAppImageCliLaunch({
+  isPackaged: app.isPackaged,
+  resourcesPath: process.resourcesPath,
+  execPath: process.execPath
+})
+if (appImageCliRedirect.redirected) {
+  app.exit(appImageCliRedirect.status)
+}
+// Why: extracted AppRun / binary launches can land CLI-form `serve` args on the
+// Electron process without the CLI rewrite that injects `--serve` (#12677).
+// Guarded so a normal GUI launch keeps its original argv array identity.
+if (argvRequestsServeMode(process.argv)) {
+  process.argv = normalizeServeModeArgv(process.argv)
+}
 const isServeMode = process.argv.includes('--serve')
 
 function updateGpuAccelerationAboutPanel(): void {
@@ -412,23 +444,6 @@ const desktopActivationGate = createServeDesktopActivationGate({
   },
   onBlocked: (reason) => console.error(`[serve] Desktop activation blocked: ${reason}`)
 })
-// Why: on Windows a CLI launch that lost ELECTRON_RUN_AS_NODE would boot the GUI and exit silently; redirect to node mode before the lock gate below.
-const packagedCliEntryRedirect = maybeRedirectPackagedCliEntryLaunch({
-  isPackaged: app.isPackaged,
-  resourcesPath: process.resourcesPath,
-  execPath: process.execPath
-})
-if (packagedCliEntryRedirect.redirected) {
-  app.exit(packagedCliEntryRedirect.status)
-}
-const appImageCliRedirect = maybeRedirectAppImageCliLaunch({
-  isPackaged: app.isPackaged,
-  resourcesPath: process.resourcesPath,
-  execPath: process.execPath
-})
-if (appImageCliRedirect.redirected) {
-  app.exit(appImageCliRedirect.status)
-}
 
 // Kill switch for the first-work on-disk folder rename; the renderer reconciles the id change (migrateWorktreeIdentity) so it isn't mistaken for a deletion.
 const ENABLE_FIRST_WORK_FOLDER_RENAME = false
@@ -1450,7 +1465,16 @@ function openMainWindow(): BrowserWindow {
       maybeAutoRenameBranchOnFirstWorkFromHook({ paneKey, tabId, worktreeId, payload, isReplay })
       const orchestration = runtime?.getAgentStatusOrchestrationContextForPaneKey(paneKey)
       const terminalHandle = runtime?.getAgentStatusTerminalHandleForPaneKey(paneKey)
-      mainWindow?.webContents.send('agentStatus:set', {
+      const suppressSyntheticCodexAutoApprovalTitle =
+        payload.agentType === 'codex' &&
+        (payload.state === 'waiting' || payload.state === 'blocked')
+          ? shouldSuppressCodexAutoApprovalSyntheticTitleFromHook({
+              agentType: payload.agentType,
+              state: payload.state,
+              launchConfig: runtime?.getAgentStatusLaunchConfigForPaneKey(paneKey, { launchToken })
+            })
+          : false
+      const statusEvent = {
         ...payload,
         paneKey,
         ...(launchToken ? { launchToken } : {}),
@@ -1464,19 +1488,14 @@ function openMainWindow(): BrowserWindow {
         ...(promptInteractionKey ? { promptInteractionKey } : {}),
         ...(restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
         ...(orchestration ? { orchestration } : {})
-      })
+      }
+      mainWindow?.webContents.send('agentStatus:set', statusEvent)
+      if (!suppressSyntheticCodexAutoApprovalTitle || isAskUserQuestionTool(payload.toolName)) {
+        getDashboardPopoutWindow()?.webContents.send('agentStatus:set', statusEvent)
+      }
       recordAgentStateCrashBreadcrumb(payload.agentType ?? 'unknown', payload.state)
       // Why: native OSC titles miss some idle/permission frames, so inject hook-derived ones to keep the renderer title tracker in sync.
       const profile = getSyntheticAgentTitleProfile(payload.agentType)
-      const suppressSyntheticCodexAutoApprovalTitle =
-        payload.agentType === 'codex' &&
-        (payload.state === 'waiting' || payload.state === 'blocked')
-          ? shouldSuppressCodexAutoApprovalSyntheticTitleFromHook({
-              agentType: payload.agentType,
-              state: payload.state,
-              launchConfig: runtime?.getAgentStatusLaunchConfigForPaneKey(paneKey, { launchToken })
-            })
-          : false
       if (
         profile &&
         shouldDriveSyntheticAgentTitleFromHook(payload.agentType, payload.state) &&
@@ -1491,6 +1510,7 @@ function openMainWindow(): BrowserWindow {
       return
     }
     mainWindow?.webContents.send('agentStatus:clear', clear)
+    getDashboardPopoutWindow()?.webContents.send('agentStatus:clear', clear)
   })
   setMigrationUnsupportedPtyListener((event) => {
     if (mainWindow?.isDestroyed()) {
@@ -2098,7 +2118,11 @@ void app.whenReady().then(async () => {
   }
   try {
     // Why: Dock/Launchpad launches don't inherit shell proxy env vars, so apply the persisted proxy before any app-owned network fetchers run.
-    await applyElectronProxySettings(store.getSettings())
+    const proxyApplyResult = await applyElectronProxySettings(store.getSettings())
+    if (proxyApplyResult.source === 'invalid-settings') {
+      // Why (STA-3442): a silent DIRECT fallback made a dead configured proxy undiagnosable.
+      console.warn('[proxy] persisted proxy settings are invalid; using direct networking')
+    }
   } catch {
     console.warn('[proxy] Failed to apply network proxy settings')
   }

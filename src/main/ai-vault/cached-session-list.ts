@@ -14,7 +14,7 @@ import {
 // Why: ONE module owns the scan cache so the desktop IPC handler AND the runtime
 // RPC method share a single cache instance — opening the desktop panel and the
 // mobile screen for the same scope must not double-scan hundreds of transcripts.
-const AI_VAULT_CACHE_TTL_MS = 15_000
+const AI_VAULT_CACHE_TTL_MS = 60_000
 
 // Why: codex-home + WSL home dirs must be sourced from a serve-mode-reachable
 // seam (the OrcaRuntimeService deps), NOT the window-only registerCoreHandlers

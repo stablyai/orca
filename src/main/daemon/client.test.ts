@@ -73,6 +73,9 @@ describe('DaemonClient', () => {
       pid: number
       startedAtMs: number
       launchNonce: string
+      entryPath?: string
+      appVersion?: string
+      spawnerExecPath?: string
     }
   }): Promise<void> {
     return new Promise((resolve) => {
@@ -155,7 +158,14 @@ describe('DaemonClient', () => {
     })
 
     it('captures one matching endpoint identity from both authenticated sockets', async () => {
-      const identity = { pid: 123, startedAtMs: 456, launchNonce: 'launch-a' }
+      const identity = {
+        pid: 123,
+        startedAtMs: 456,
+        launchNonce: 'launch-a',
+        entryPath: '/Applications/Orca.app/Contents/Resources/daemon-entry.js',
+        appVersion: '1.2.3',
+        spawnerExecPath: '/Applications/Orca.app/Contents/MacOS/Orca'
+      }
       await startMockDaemon({ helloIdentity: () => identity })
 
       client = new DaemonClient({ socketPath, tokenPath })

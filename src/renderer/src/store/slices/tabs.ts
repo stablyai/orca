@@ -666,6 +666,7 @@ export function projectWorktreeTabModelReconciliation(
               ? { quickCommandLabel: tab.quickCommandLabel.trim() }
               : {}),
             ...(tab.generatedTitle?.trim() ? { generatedLabel: tab.generatedTitle.trim() } : {}),
+            ...(tab.aiVaultTitle ? { aiVaultTitle: tab.aiVaultTitle } : {}),
             customLabel: tab.customTitle,
             color: tab.color,
             sortOrder: tab.sortOrder,

@@ -111,9 +111,8 @@ import { useSourceControlSubmoduleStatus } from './useSourceControlSubmoduleStat
 import {
   buildSourceControlDisplaySections,
   getSourceControlSectionViewAction,
-  mergeUntrackedIntoChanges,
+  resolveSourceControlGroupOrder,
   SOURCE_CONTROL_AREAS,
-  SOURCE_CONTROL_GROUP_ORDER,
   type SourceControlDisplaySectionId,
   type SourceControlEntryGroups,
   type SourceControlSectionArea
@@ -645,11 +644,6 @@ type SourceControlDirectoryActionPaths = {
   stagePaths: string[]
   unstagePaths: string[]
   discardPaths: string[]
-  discardHasUntracked: boolean
-}
-
-function discardAllAreaFilter(area: DiscardAllArea): DiscardAllArea | readonly DiscardAllArea[] {
-  return area === 'unstaged' ? (['unstaged', 'untracked'] as const) : area
 }
 
 function getSourceControlDirectoryActionPaths(
@@ -661,9 +655,8 @@ function getSourceControlDirectoryActionPaths(
     unstagePaths: getUnstageAllPaths(entries),
     discardPaths:
       node.area === 'unstaged' || node.area === 'untracked'
-        ? getDiscardAllPaths(entries, discardAllAreaFilter(node.area))
-        : [],
-    discardHasUntracked: entries.some((entry) => entry.area === 'untracked')
+        ? getDiscardAllPaths(entries, node.area)
+        : []
   }
 }
 
@@ -1067,6 +1060,7 @@ function SourceControlInner(): React.JSX.Element {
     settings?.sourceControlViewMode
   )
   const sourceControlViewMode = persistedSourceControlViewMode
+  const sourceControlGroupOrder = resolveSourceControlGroupOrder(settings?.sourceControlGroupOrder)
   const [collapsedTreeDirs, setCollapsedTreeDirs] = useState<Set<string>>(new Set())
   const [baseRefDialogOpen, setBaseRefDialogOpen] = useState(false)
   const [pendingDiscard, setPendingDiscard] = useState<PendingDiscardConfirmation | null>(null)
@@ -1802,19 +1796,13 @@ function SourceControlInner(): React.JSX.Element {
     [fileFilterState, grouped]
   )
 
-  const mergedGrouped = useMemo(() => mergeUntrackedIntoChanges(grouped), [grouped])
-  const mergedFilteredGrouped = useMemo(
-    () => mergeUntrackedIntoChanges(filteredGrouped),
-    [filteredGrouped]
-  )
-
   const displaySections = useMemo(
-    () => buildSourceControlDisplaySections(mergedFilteredGrouped, SOURCE_CONTROL_GROUP_ORDER),
-    [mergedFilteredGrouped]
+    () => buildSourceControlDisplaySections(filteredGrouped, sourceControlGroupOrder),
+    [filteredGrouped, sourceControlGroupOrder]
   )
   const unfilteredDisplaySections = useMemo(
-    () => buildSourceControlDisplaySections(mergedGrouped, SOURCE_CONTROL_GROUP_ORDER),
-    [mergedGrouped]
+    () => buildSourceControlDisplaySections(grouped, sourceControlGroupOrder),
+    [grouped, sourceControlGroupOrder]
   )
   const unfilteredDisplaySectionsById = useMemo(
     () => new Map(unfilteredDisplaySections.map((section) => [section.id, section])),
@@ -5412,9 +5400,7 @@ function SourceControlInner(): React.JSX.Element {
       if (!worktreePath || !activeWorktreeId || isExecutingBulk) {
         return
       }
-      const paths = confirmedPaths
-        ? [...confirmedPaths]
-        : getDiscardAllPaths(mergedGrouped[area], discardAllAreaFilter(area))
+      const paths = confirmedPaths ? [...confirmedPaths] : getDiscardAllPaths(grouped[area], area)
       if (paths.length === 0) {
         return
       }
@@ -5486,7 +5472,7 @@ function SourceControlInner(): React.JSX.Element {
       activeRepoSettings,
       worktreePath,
       activeWorktreeId,
-      mergedGrouped,
+      grouped,
       isExecutingBulk,
       clearSelection,
       discardMany,
@@ -5500,21 +5486,13 @@ function SourceControlInner(): React.JSX.Element {
       if (!worktreePath || !activeWorktreeId || isExecutingBulk) {
         return
       }
-      const paths = confirmedPaths
-        ? [...confirmedPaths]
-        : getDiscardAllPaths(mergedGrouped[area], discardAllAreaFilter(area))
+      const paths = confirmedPaths ? [...confirmedPaths] : getDiscardAllPaths(grouped[area], area)
       if (paths.length === 0) {
         return
       }
-      setPendingDiscard({
-        kind: 'area',
-        area,
-        paths,
-        hasUntracked:
-          area === 'unstaged' && mergedGrouped.unstaged.some((entry) => entry.area === 'untracked')
-      })
+      setPendingDiscard({ kind: 'area', area, paths })
     },
-    [activeWorktreeId, isExecutingBulk, mergedGrouped, worktreePath]
+    [activeWorktreeId, grouped, isExecutingBulk, worktreePath]
   )
 
   const requestDiscardEntry = useCallback(
@@ -5936,8 +5914,7 @@ function SourceControlInner(): React.JSX.Element {
                   .filter(isStageableStatusEntry)
                   .map((entry) => entry.path)
                 const unstageAllPaths = getUnstageAllPaths(actionItems)
-                const discardAllPaths = getDiscardAllPaths(actionItems, discardAllAreaFilter(area))
-                const discardHasUntracked = actionItems.some((entry) => entry.area === 'untracked')
+                const discardAllPaths = getDiscardAllPaths(actionItems, area)
                 const canStageAll = !normalizedFilter && stageAllPaths.length > 0
                 const canUnstageAll = !normalizedFilter && unstageAllPaths.length > 0
                 const canRevertAll = !normalizedFilter && discardAllPaths.length > 0
@@ -5960,7 +5937,7 @@ function SourceControlInner(): React.JSX.Element {
                           <div className="flex items-center can-hover:opacity-0 transition-opacity group-hover/section:opacity-100 focus-within:opacity-100">
                             {canRevertAll && (
                               <ActionButton
-                                icon={discardHasUntracked ? Trash : Undo2}
+                                icon={area === 'untracked' ? Trash : Undo2}
                                 // Why: for untracked files, discard deletes outright (rm -rf), so label the destructive variant explicitly.
                                 title={
                                   area === 'untracked'
@@ -5968,15 +5945,10 @@ function SourceControlInner(): React.JSX.Element {
                                         'auto.components.right.sidebar.SourceControl.2f609a2e7c',
                                         'Delete all untracked'
                                       )
-                                    : discardHasUntracked
-                                      ? translate(
-                                          'auto.components.right.sidebar.SourceControl.discardAllMixedUntracked',
-                                          'Discard changes and delete untracked files'
-                                        )
-                                      : translate(
-                                          'auto.components.right.sidebar.SourceControl.ce41708855',
-                                          'Discard all'
-                                        )
+                                    : translate(
+                                        'auto.components.right.sidebar.SourceControl.ce41708855',
+                                        'Discard all'
+                                      )
                                 }
                                 onClick={(event) => {
                                   event.stopPropagation()
@@ -6083,12 +6055,11 @@ function SourceControlInner(): React.JSX.Element {
                                   isExecutingBulk={isExecutingBulk}
                                   isCollapsed={collapsedTreeDirs.has(node.key)}
                                   onToggle={() => toggleTreeDir(node.key)}
-                                  onRequestDiscardPaths={(discardArea, paths, hasUntracked) =>
+                                  onRequestDiscardPaths={(discardArea, paths) =>
                                     setPendingDiscard({
                                       kind: 'area',
                                       area: discardArea,
-                                      paths,
-                                      hasUntracked
+                                      paths
                                     })
                                   }
                                   onStagePaths={handleStageAllPaths}
@@ -7727,11 +7698,7 @@ function SourceControlTreeDirectoryRow({
   isExecutingBulk: boolean
   isCollapsed: boolean
   onToggle: () => void
-  onRequestDiscardPaths: (
-    area: DiscardAllArea,
-    paths: readonly string[],
-    hasUntracked: boolean
-  ) => void
+  onRequestDiscardPaths: (area: DiscardAllArea, paths: readonly string[]) => void
   onStagePaths: (paths: readonly string[]) => Promise<void>
   onUnstagePaths: (paths: readonly string[]) => Promise<void>
 }): React.JSX.Element {
@@ -7770,30 +7737,21 @@ function SourceControlTreeDirectoryRow({
         <div className={SOURCE_CONTROL_ROW_ACTION_OVERLAY_CLASS}>
           {canDiscard && (
             <ActionButton
-              icon={actionPaths.discardHasUntracked ? Trash : Undo2}
+              icon={node.area === 'untracked' ? Trash : Undo2}
               title={
                 node.area === 'untracked'
                   ? translate(
                       'auto.components.right.sidebar.SourceControl.9b367363b6',
                       'Delete untracked in folder'
                     )
-                  : actionPaths.discardHasUntracked
-                    ? translate(
-                        'auto.components.right.sidebar.SourceControl.discardFolderMixedUntracked',
-                        'Discard changes and delete untracked files in folder'
-                      )
-                    : translate(
-                        'auto.components.right.sidebar.SourceControl.6d7f2a47e5',
-                        'Discard folder'
-                      )
+                  : translate(
+                      'auto.components.right.sidebar.SourceControl.6d7f2a47e5',
+                      'Discard folder'
+                    )
               }
               onClick={(event) => {
                 event.stopPropagation()
-                onRequestDiscardPaths(
-                  node.area,
-                  actionPaths.discardPaths,
-                  actionPaths.discardHasUntracked
-                )
+                onRequestDiscardPaths(node.area, actionPaths.discardPaths)
               }}
               disabled={isExecutingBulk}
             />

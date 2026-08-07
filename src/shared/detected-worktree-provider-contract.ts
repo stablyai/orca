@@ -41,6 +41,17 @@ export type HostQualifiedKnownWorktreeResult =
       executionHostId: SshExecutionHostId
     }
 
+export type ForgetRemovedWorktreesForExecutionHostArgs = {
+  repoId: string
+  executionHostId: SshExecutionHostId
+  /** Ids an authoritative scan of this host proved gone — the only evidence that retires persisted metadata. */
+  worktreeIds: readonly string[]
+}
+
+export type ForgetRemovedWorktreesForExecutionHostResult = {
+  forgottenWorktreeIds: string[]
+}
+
 export type AuthoritativeDetectedWorktreeHost =
   | {
       kind: 'local'

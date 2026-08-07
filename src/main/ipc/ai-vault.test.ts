@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   scanAiVaultSessions: vi.fn(),
   scanRemoteAiVaultSessions: vi.fn(),
   listClaudeSubagentSessions: vi.fn(),
+  listOmpSubagentSessions: vi.fn(),
   scanRuntimeAiVaultSessions: vi.fn(),
   getAiVaultWslHomeDirs: vi.fn(),
   getSshFilesystemProvider: vi.fn(),
@@ -36,6 +37,10 @@ vi.mock('../ai-vault/session-scanner-claude-subagents', () => ({
   listClaudeSubagentSessions: mocks.listClaudeSubagentSessions
 }))
 
+vi.mock('../ai-vault/session-scanner-omp-subagent-listing', () => ({
+  listOmpSubagentSessions: mocks.listOmpSubagentSessions
+}))
+
 vi.mock('../wsl', () => ({
   getWslHomeAsync: mocks.getAiVaultWslHomeDirs,
   listWslDistrosAsync: vi.fn().mockResolvedValue([])
@@ -53,6 +58,7 @@ vi.mock('./ssh', () => ({
   requestActiveSshAiVaultSessionList: mocks.requestActiveSshAiVaultSessionList
 }))
 
+const { OMP_SESSIONS_DIR } = await import('../ai-vault/session-scanner-roots')
 const { _internals, registerAiVaultHandlers } = await import('./ai-vault')
 
 const provider = {} as IFilesystemProvider
@@ -65,6 +71,7 @@ beforeEach(() => {
     result([session('ssh:dev-box', 'remote-session')])
   )
   mocks.listClaudeSubagentSessions.mockResolvedValue({ sessions: [], issues: [] })
+  mocks.listOmpSubagentSessions.mockResolvedValue({ sessions: [], issues: [] })
   mocks.scanRuntimeAiVaultSessions.mockResolvedValue(
     result([session('runtime:remote-server', 'runtime-session')])
   )
@@ -606,7 +613,7 @@ describe('listAiVaultSubagentSessions gating', () => {
     expect(mocks.listClaudeSubagentSessions).not.toHaveBeenCalled()
   })
 
-  it('returns empty for a non-Claude agent', async () => {
+  it('returns empty for an agent with no sibling subagent layout', async () => {
     const result = await _internals.listAiVaultSubagentSessions({
       agent: 'codex',
       parentFilePath: join(claudeRoot, 'proj', 'sess.jsonl'),
@@ -615,6 +622,55 @@ describe('listAiVaultSubagentSessions gating', () => {
 
     expect(result).toEqual({ sessions: [], issues: [] })
     expect(mocks.listClaudeSubagentSessions).not.toHaveBeenCalled()
+    expect(mocks.listOmpSubagentSessions).not.toHaveBeenCalled()
+  })
+
+  it('lists subagents for a local OMP session inside the sessions root', async () => {
+    const parentFilePath = join(
+      OMP_SESSIONS_DIR,
+      'home-app-85dfa2f0',
+      '2026-05-01T10-00-00-000Z_cccccccc-dddd-4eee-8fff-000000000000.jsonl'
+    )
+
+    await _internals.listAiVaultSubagentSessions({
+      agent: 'omp',
+      parentFilePath,
+      executionHostId: 'local'
+    })
+
+    expect(mocks.listOmpSubagentSessions).toHaveBeenCalledWith({ parentFilePath })
+    expect(mocks.listClaudeSubagentSessions).not.toHaveBeenCalled()
+  })
+
+  it('returns empty for a remote OMP session without reading the filesystem', async () => {
+    const result = await _internals.listAiVaultSubagentSessions({
+      agent: 'omp',
+      parentFilePath: join(OMP_SESSIONS_DIR, 'slug', 'sess.jsonl'),
+      executionHostId: 'ssh:dev-box'
+    })
+
+    expect(result).toEqual({ sessions: [], issues: [] })
+    expect(mocks.listOmpSubagentSessions).not.toHaveBeenCalled()
+  })
+
+  it('rejects an OMP path that only sits inside another agent root', async () => {
+    // Each agent's allowlist is its own root: a Claude path must not be
+    // readable through the OMP branch (or vice versa).
+    const crossAgent = await _internals.listAiVaultSubagentSessions({
+      agent: 'omp',
+      parentFilePath: join(claudeRoot, 'proj', 'sess.jsonl'),
+      executionHostId: 'local'
+    })
+    const traversal = await _internals.listAiVaultSubagentSessions({
+      agent: 'omp',
+      // Built with sep (not join) so the `..` segments survive into the arg.
+      parentFilePath: [OMP_SESSIONS_DIR, '..', '..', '..', 'etc', 'passwd.jsonl'].join(sep),
+      executionHostId: 'local'
+    })
+
+    expect(crossAgent).toEqual({ sessions: [], issues: [] })
+    expect(traversal).toEqual({ sessions: [], issues: [] })
+    expect(mocks.listOmpSubagentSessions).not.toHaveBeenCalled()
   })
 })
 

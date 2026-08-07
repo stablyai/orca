@@ -74,6 +74,7 @@ import type {
   BrowserSessionProfileSource
 } from '../../shared/types'
 import { browserSessionRegistry } from './browser-session-registry'
+import { getBrowserSessionUserAgentMode } from './browser-session-user-agent-mode'
 import { setupClientHintsOverride } from './browser-session-ua'
 import {
   isGoogleSourceBoundCookie,
@@ -1876,7 +1877,9 @@ export async function importCookiesFromBrowser(
     const ua = getUserAgentForBrowser(browser.family)
     if (ua) {
       targetSession.setUserAgent(ua)
-      setupClientHintsOverride(targetSession, ua)
+      setupClientHintsOverride(targetSession, ua, {
+        googleAuthOverride: getBrowserSessionUserAgentMode(targetSession) !== 'native'
+      })
       browserSessionRegistry.persistUserAgent(targetPartition, ua)
       diag(`  set UA for partition: ${ua.substring(0, 80)}...`)
     }

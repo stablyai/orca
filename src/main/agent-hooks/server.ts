@@ -415,7 +415,10 @@ function equivalentParsedAgentStatusPayload(
     a.toolInput === b.toolInput &&
     a.interactivePrompt === b.interactivePrompt &&
     a.lastAssistantMessage === b.lastAssistantMessage &&
-    a.interrupted === b.interrupted
+    a.interrupted === b.interrupted &&
+    // Why: a session-boundary done must never be deduped against a cached real done —
+    // the flag has to reach receivers deterministically (STA-3386).
+    a.sessionBoundary === b.sessionBoundary
   )
 }
 
@@ -996,7 +999,12 @@ export class AgentHookServer {
       return 'accept'
     }
     // Why: command completion retires launch authority but leaves its shell pane reusable.
-    if (event?.hookEventName === 'UserPromptSubmit' && event.isReplay !== true) {
+    // A live SessionStart proves a new agent process owns the retired pane just like a
+    // fresh prompt does — without it, a session resumed in a reused pane stays rowless (STA-3386).
+    if (
+      (event?.hookEventName === 'UserPromptSubmit' || event?.hookEventName === 'SessionStart') &&
+      event.isReplay !== true
+    ) {
       this.closedAgentStatusPaneKeys.delete(paneKey)
       this.closedAgentStatusPaneKeys.delete(ownerPaneKey)
       return 'restart'

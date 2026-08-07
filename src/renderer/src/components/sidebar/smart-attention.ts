@@ -98,6 +98,21 @@ export function mostRecentAttentionInHistory(history: AgentStateHistoryEntry[]):
   return max > 0 ? max : null
 }
 
+function mostRecentCompletedTurnInHistory(history: AgentStateHistoryEntry[]): number | null {
+  let max = 0
+  for (const entry of history) {
+    if (
+      entry.state === 'done' &&
+      entry.interrupted !== true &&
+      Number.isFinite(entry.startedAt) &&
+      entry.startedAt > max
+    ) {
+      max = entry.startedAt
+    }
+  }
+  return max > 0 ? max : null
+}
+
 /**
  * One pane's contribution to a worktree's attention class. Fresh hook entries win; hookless
  * panes fall back to the title heuristic (design doc Edge case 9). Authority is per-pane, not per-worktree.
@@ -142,7 +157,16 @@ export function resolveAttention(panes: PaneInput[], now: number): WorktreeAtten
           continue
         }
         cls = 2
-        ts = entry.stateStartedAt
+        if (entry.sessionBoundary) {
+          // Why: idle connect is not new attention; only preserve a real completion it displaced.
+          const completedAt = mostRecentCompletedTurnInHistory(entry.stateHistory)
+          if (completedAt === null) {
+            continue
+          }
+          ts = completedAt
+        } else {
+          ts = entry.stateStartedAt
+        }
       } else {
         // working
         cls = 3

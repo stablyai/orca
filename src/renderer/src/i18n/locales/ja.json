@@ -239,8 +239,14 @@
           "34a03a6565": "{{value0}} を最新の状態に保つ",
           "fa9299a66f": "新規ワークツリーは最新ですが、ローカル {{value0}} は {{value1}} {{value2}} 遅れています。 AI の差分では最近の commits が失われる可能性があります。",
           "14bc053a47": "ローカル {{value0}} は更新されませんでした",
+          "localBaseRefRefreshFailedForWorktree": "「{{value1}}」のローカル {{value0}} は更新されませんでした",
           "4a18052018": "ローカル {{value0}} は {{value1}} の後ろにあります",
-          "903b51c2ed": "ワークスペースは {{value0}} から作成されましたが、{{value2}} のため Orca はローカル {{value1}} を早送りできませんでした",
+          "903b51c2ed": "ワークスペースは {{value0}} から作成されましたが、Orca はローカル {{value1}} を早送りできませんでした。{{value2}}",
+          "localBaseRefRefreshFailedDescriptionNamed": "ワークスペース「{{value0}}」は {{value1}} から作成されましたが、Orca はローカル {{value2}} を早送りできませんでした。{{value3}}",
+          "localBaseRefRefreshFailedDetailDirtyNamed": "{{value0}} のワークツリー（ローカル {{value1}} がチェックアウトされている場所）に未コミットの変更があります。コミット、stash、または破棄してから、ローカル {{value1}} を手動で更新してください。",
+          "localBaseRefRefreshFailedDetailDirty": "ローカル {{value0}} がチェックアウトされているワークツリーに未コミットの変更があります。コミット、stash、または破棄してから、ローカル {{value0}} を手動で更新してください。",
+          "localBaseRefRefreshFailedDetailNotFastForward": "ローカル {{value0}} が存在しないか、リモートのベースからクリーンに早送りできません。手動で更新する前に、ローカルにのみ存在するコミットがないか確認してください。",
+          "localBaseRefRefreshFailedDetailError": "ローカル {{value0}} の更新中に Git がエラーを返しました。ロックされた refs や異常なワークツリー状態がないか確認し、ローカル {{value0}} を手動で更新してください。",
           "0216895fb5": "ブランチの削除に失敗しました",
           "19db0085fb": "ローカルブランチが削除されました",
           "2b0afc7f14": "ローカル {{value0}} を最新の状態に維持できませんでした",
@@ -349,7 +355,8 @@
               "8d6eedf97e": "Orca CLI を PATH に登録できませんでした。",
               "0f116999f1": "セットアップ前にシェルを再起動するか、Orca CLI ディレクトリを PATH に追加します。",
               "15cbedc3e3": "agent スキル セットアップを実行する前に、Orca CLI をインストールします。",
-              "windowsPathUnknown": "Orca could not check your Windows user PATH"
+              "windowsPathUnknown": "Orca could not check your Windows user PATH",
+              "refreshCliRegistration": "CLI の登録状態を更新してから、もう一度お試しください。"
             }
           }
         }
@@ -560,6 +567,9 @@
             "0b01ff98d2": "ポート",
             "7d732521ec": "コメント"
           }
+        },
+        "activation": {
+          "cannotOpenFolderWorkspace": "フォルダーワークスペースを開けません"
         }
       },
       "folderWorkspacePathStatus": {
@@ -3174,7 +3184,12 @@
             "runtime_disconnect_failed": "切断に失敗しました",
             "runtime_reconnecting": "再接続中",
             "runtime_last_close_reason": "クローズ: {{value0}}",
-            "runtime_reconnect_attempt": "試行 {{value0}}"
+            "runtime_reconnect_attempt": "試行 {{value0}}",
+            "connectedHostCount_one": "{{count}} 台のホスト",
+            "connectedHostCount_other": "{{count}} 台のホスト",
+            "connecting": "接続中…",
+            "workspaceConflict": "ワークスペースの競合",
+            "workspaceSyncError": "ワークスペースの同期エラー"
           },
           "StatusBar": {
             "9659e38343": "ポート",
@@ -3234,7 +3249,8 @@
             "antigravityUsage": "Antigravity の使用状況",
             "antigravityUsageDetails": "Antigravity の使用状況詳細を開く",
             "grokUsageAria": "Grok の使用状況詳細を開く",
-            "grokUsageMenu": "Grok の使用状況"
+            "grokUsageMenu": "Grok の使用状況",
+            "floatingTerminalNewActivity": "{{label}}、新しいアクティビティ"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "アカウントを接続する",
@@ -3443,6 +3459,21 @@
               "metric": {
                 "workingSetDescription": "合計ワーキングセット(WS)。共有ページが複数のプロセスに表示されることがあります。",
                 "rssDescription": "合計レジデントセットサイズ(RSS)。共有またはエイリアスされたページが複数のプロセスに表示されることがあります。"
+              }
+            },
+            "manager": {
+              "terminal": {
+                "copy": {
+                  "terminalSessionCount_one": "{{count}} 件のターミナルセッション",
+                  "terminalSessionCount_other": "{{count}} 件のターミナルセッション",
+                  "memoryUnavailable": "メモリ情報を取得できません",
+                  "tooltipSummary": "リソースマネージャー - {{memory}} - {{sessions}}",
+                  "spaceScanReady": "容量スキャンの準備完了",
+                  "sessionsGroupedByWorkspace": "ターミナルセッションはワークスペースごとにグループ化されます。",
+                  "noTerminalSessions": "ターミナルセッションはまだありません。",
+                  "ariaLabel": "リソースマネージャー、{{sessions}}",
+                  "ariaLabelWithSpaceScan": "リソースマネージャー、{{sessions}}、{{spaceScan}}"
+                }
               }
             }
           },
@@ -5609,7 +5640,8 @@
           "f00d6aa9b5": "このマシンでは WSL を利用できません。",
           "7c776ff9d8": "wsl",
           "fc0fcf72fd": "スキルセットアップ前に WSL シェルコマンドを登録してください。",
-          "windowsPathUnknown": "WSL shell command PATH could not be checked"
+          "windowsPathUnknown": "WSL shell command PATH could not be checked",
+          "refreshCliRegistration": "CLI の登録状態を更新してから、もう一度お試しください。"
         },
         "CommitMessageAiPane": {
           "841ed9884a": "ソース管理 AI をカスタマイズしていない repos によって使用されます。",
@@ -5988,6 +6020,11 @@
           "3d172725cc": "なし",
           "1f32ba27a6": "カスタム",
           "a182c5125e": "Gitのユーザー名",
+          "sourceControlGroupOrderTitle": "ソース管理のグループ順序",
+          "sourceControlGroupOrderDescription": "ソース管理で「変更」「ステージ済みの変更」「未追跡ファイル」のどれを先に表示するかを選択します。",
+          "changesFirst": "変更を先頭",
+          "stagedFirst": "ステージ済みを先頭",
+          "untrackedFirst": "未追跡を先頭",
           "compareAgainstUpstreamTitle": "既定の比較ベース",
           "compareAgainstUpstreamDescription": "ソース管理がコミット済み変更の比較に既定で使うベースを選択します。ブランチの上流は現在のブランチに自動的に追従し、上流がない場合はリポジトリの既定ブランチにフォールバックします。比較ベースは各 worktree の Git パネルから worktree ごとに変更できます。Pull Request やリベースの対象は変更されません。",
           "compareBaseRepositoryDefault": "リポジトリ既定",
@@ -8253,7 +8290,14 @@
             "f83c8937c4": "ブランチの命名",
             "5ecd91c5ef": "ワークツリーの作成時にブランチ名に追加されるプレフィックス。",
             "68bd65fdb8": "ブランチプレフィックス",
+            "sourceControlGroupOrderTitle": "ソース管理のグループ順序",
+            "sourceControlGroupOrderDescription": "ソース管理で「変更」「ステージ済みの変更」「未追跡ファイル」のどれを先に表示するかを選択します。",
+            "groupOrder": "グループ順序",
+            "changesFirst": "変更を先頭",
+            "stagedFirst": "ステージ済みを先頭",
+            "untrackedFirst": "未追跡を先頭",
             "sourceControl": "ソース管理",
+            "gitChanges": "git の変更",
             "compareAgainstUpstreamTitle": "既定の比較ベース",
             "compareAgainstUpstreamDescription": "ソース管理がコミット済み変更の比較に既定で使うベースを選択します。ブランチの上流は現在のブランチに自動的に追従し、上流がない場合はリポジトリの既定ブランチにフォールバックします。比較ベースは各 worktree の Git パネルから worktree ごとに変更できます。Pull Request やリベースの対象は変更されません。",
             "compareBase": "比較基準",
@@ -9577,14 +9621,14 @@
           "available": "利用可能",
           "reconnecting": "再接続中",
           "unavailable": "利用不可",
-          "signIn": "サインイン",
-          "localDescription": "スマートフォンがこの Wi‑Fi または Tailscale に接続されている必要があります。サインインは不要です。",
+          "signIn": "Relay にサインイン",
+          "localDescription": "スマートフォンがこの Wi‑Fi または Tailscale に接続されている必要があります。アカウントは不要です。",
           "pathGroup": "スマートフォンがこのコンピューターに到達する方法",
           "anywhereTitle": "Orca Relay",
-          "anywhereDescription": "スマートフォンはモバイル回線または Wi‑Fi から接続できます。サインインが必要です。",
-          "signInRequired": "Orca Mobile Relay を使用するにはサインインしてください。",
+          "anywhereDescription": "スマートフォンはモバイル回線または任意の Wi‑Fi から接続できます。サインインが必要なのは Relay のみです。",
+          "signInRequired": "Relay のみ — LAN にはアカウントは不要です。",
           "relayUnavailable": "このビルドでは Orca Relay を利用できません。LAN をご利用ください。",
-          "signInAgain": "再サインイン",
+          "signInAgain": "Relay に再サインイン",
           "localTitle": "LAN"
         },
         "MobilePairingSetupSection": {
@@ -9595,8 +9639,9 @@
           "overview": "QR コードを生成し、Orca Mobile の Pair Desktop でスキャンしてください。",
           "step1Title": "接続方法",
           "step2Title": "このコンピューターのアドレス",
-          "step2RelayDescription": "近くでは高速な直接接続に使用されます。Relay はリモートアクセスに対応します。",
-          "step2LocalDescription": "スマートフォンが Wi‑Fi または Tailscale でこのアドレスに到達できる必要があります。"
+          "step2LocalDescription": "スマートフォンが Tailscale または Wi‑Fi でこのアドレスに到達できる必要があります。",
+          "step2RelayDescription": "任意。近く（同じ Wi‑Fi または Tailscale）にいるときにスマホが使うアドレスを選びます。通常は Relay より高速です。外出中は引き続き Relay が使われます。",
+          "step2RelayDisclosure": "より速いローカル経路も使う"
         },
         "MobileRelayBetaAvailability": {
           "about": "Orca Relay ベータについて",
@@ -11756,7 +11801,9 @@
             "stable": "安定版"
           },
           "relayDegradedNotice": "Relay に接続できませんでした — このコードは LAN または Tailscale でのみ動作します。",
-          "pairingQrError": "このペアリングコードを QR コードとして表示できませんでした。代わりに Orca Mobile にコピーしてください。"
+          "pairingQrError": "このペアリングコードを QR コードとして表示できませんでした。代わりに Orca Mobile にコピーしてください。",
+          "directAddressDisclosure": "より速いローカル経路も使う",
+          "directAddressHint": "任意。近く（同じ Wi‑Fi または Tailscale）にいるときにスマホが使うアドレスを選びます。通常は Relay より高速です。外出中は引き続き Relay が使われます。"
         },
         "MobilePage": {
           "e17393c6a3": "スマートフォンプレビュー",
@@ -11899,7 +11946,8 @@
           "repair-unverified": "Windows Firewall access could not be verified",
           "blocked-title": "WindowsがOrcaモバイルをブロックしている可能性があります",
           "blocked-description": "既存のインバウンドブロックルールがペアリング例外を上書きする可能性があります。修復はこのOrcaアプリの競合するTCPルールを削除し、プライベートネットワーク上のポート{{port}}を許可します。",
-          "repair": "ファイアウォールアクセスを修復"
+          "repair": "ファイアウォールアクセスを修復",
+          "relay-note": "ペアリングは Orca Relay 経由で引き続き機能します。許可すると、より高速なローカル接続が追加されるだけです。"
         }
       },
       "gitlab": {
@@ -14609,6 +14657,29 @@
     }
   },
   "dashboardPopout": {
+    "view": {
+      "label": "ダッシュボード表示",
+      "board": "ダッシュボード",
+      "map": "エージェントマップ"
+    },
+    "map": {
+      "host": {
+        "all": "すべてのホスト",
+        "local": "ローカル",
+        "ssh": "SSH",
+        "wsl": "WSL",
+        "remote": "リモート"
+      },
+      "liveContainmentMap": "ライブ包含マップ",
+      "hostFilter": "ホストフィルター",
+      "empty": "現在のフィルターに一致するエージェントはありません。",
+      "canvasLabel": "プロジェクト、ワークスペース、エージェントの入れ子マップ",
+      "zoomOut": "縮小",
+      "zoomIn": "拡大",
+      "fit": "全体表示",
+      "projectCount": "{{agents}}件のエージェント · {{workspaces}}件のワークスペース",
+      "agentCount": "{{count}}件のエージェント"
+    },
     "placeholder": {
       "title": "Agent dashboard",
       "description": "This is where all your agents will show up at a glance. The board is coming soon."
@@ -14645,7 +14716,7 @@
     },
     "terminal": {
       "closed": "No live terminal — this agent's pane has closed.",
-      "focusWorktree": "Focus worktree",
+      "focusWorktree": "Open worktree",
       "close": "Close"
     },
     "close": "Close dashboard",

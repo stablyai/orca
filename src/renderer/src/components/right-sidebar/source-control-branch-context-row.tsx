@@ -125,11 +125,13 @@ function HeadIdentity({ display }: { display: WorktreeGitIdentityDisplay }): Rea
 
   // Why: focusable + tooltip so truncated long branch names stay discoverable.
   // Native title omitted — Radix Tooltip already surfaces the full name on hover.
+  // `block` is load-bearing: `truncate` clips nothing on an inline box, so an
+  // inline span here let long names run under the line-total chip.
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <span
-          className="min-w-0 max-w-full truncate rounded-sm font-mono text-[10.5px] font-medium text-foreground/90 outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          className="block min-w-0 max-w-full truncate rounded-sm font-mono text-[10.5px] font-medium text-foreground/90 outline-none focus-visible:ring-1 focus-visible:ring-ring"
           tabIndex={0}
           aria-label={branchAriaLabel}
           data-testid="source-control-head-identity"
@@ -255,8 +257,10 @@ function StackedCompareFlow({
     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
       {/* Why: the line total belongs beside HEAD — it measures this branch's work.
           The base line keeps the commit count, which measures the comparison. */}
-      <div className="flex min-w-0 items-center gap-1.5">
-        <span className="min-w-0 flex-1">
+      {/* Why: gap-2 (not gap-1.5) — an ellipsis butting against the colored
+          counts reads as part of the branch name. */}
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="flex min-w-0 flex-1 items-center">
           <HeadIdentity display={headDisplay} />
         </span>
         {headTrailing}

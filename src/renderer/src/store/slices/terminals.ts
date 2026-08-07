@@ -51,6 +51,7 @@ import type { SessionOptionValue } from '../../../../shared/native-chat-session-
 import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../shared/local-windows-terminal-runtime'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
 import type { AgentStartedTelemetry } from '../../lib/worktree-activation'
+import type { AiVaultSessionTitle } from '../../../../shared/ai-vault-session-title'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { forgetAgentHibernationTabOutput } from '@/lib/agent-hibernation-output-activity'
 import { forgetForegroundTerminalTabs } from '@/lib/foreground-terminal-tabs'
@@ -683,6 +684,7 @@ export type TerminalSlice = {
   setActiveTab: (tabId: string) => void
   setActiveTabForWorktree: (worktreeId: string, tabId: string) => void
   updateTabTitle: (tabId: string, title: string) => void
+  setAiVaultTabTitle: (tabId: string, aiVaultTitle: AiVaultSessionTitle | null) => void
   setGeneratedTabTitleFromAgentPrompt: (
     paneKey: string,
     prompt: string,
@@ -2058,6 +2060,37 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         }
       }
       return nextState
+    })
+  },
+
+  setAiVaultTabTitle: (tabId, aiVaultTitle) => {
+    set((s) => {
+      const ownerWorktreeId = getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
+      if (!ownerWorktreeId) {
+        return s
+      }
+      const tabs = s.tabsByWorktree[ownerWorktreeId] ?? []
+      const current = tabs.find((tab) => tab.id === tabId)
+      const sameTitle =
+        current?.aiVaultTitle?.agent === aiVaultTitle?.agent &&
+        current?.aiVaultTitle?.sessionId === aiVaultTitle?.sessionId &&
+        current?.aiVaultTitle?.title === aiVaultTitle?.title
+      if (!current || sameTitle) {
+        return s
+      }
+      const ownerTabs = tabs.map((tab) => (tab.id === tabId ? { ...tab, aiVaultTitle } : tab))
+      const unifiedTabs = s.unifiedTabsByWorktree[ownerWorktreeId] ?? []
+      const nextUnifiedTabs = unifiedTabs.map((tab) =>
+        tab.contentType === 'terminal' && tab.entityId === tabId ? { ...tab, aiVaultTitle } : tab
+      )
+      scheduleRuntimeGraphSync()
+      return {
+        tabsByWorktree: { ...s.tabsByWorktree, [ownerWorktreeId]: ownerTabs },
+        unifiedTabsByWorktree: {
+          ...s.unifiedTabsByWorktree,
+          [ownerWorktreeId]: nextUnifiedTabs
+        }
+      }
     })
   },
 
@@ -3915,6 +3948,11 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
                 .filter((tab) => tab.contentType === 'terminal' && tab.quickCommandLabel?.trim())
                 .map((tab) => [tab.entityId, tab.quickCommandLabel!.trim()])
             )
+            const aiVaultTitleByTerminalId = new Map(
+              (session.unifiedTabs?.[worktreeId] ?? [])
+                .filter((tab) => tab.contentType === 'terminal' && tab.aiVaultTitle)
+                .map((tab) => [tab.entityId, tab.aiVaultTitle!])
+            )
             return [
               worktreeId,
               [...tabs]
@@ -3926,9 +3964,11 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
                 .map((tab, index) => {
                   const quickCommandLabel =
                     tab.quickCommandLabel?.trim() || quickCommandLabelByTerminalId.get(tab.id)
+                  const aiVaultTitle = tab.aiVaultTitle ?? aiVaultTitleByTerminalId.get(tab.id)
                   return {
                     ...clearTransientTerminalState(tab, index),
                     ...(quickCommandLabel ? { quickCommandLabel } : {}),
+                    ...(aiVaultTitle ? { aiVaultTitle } : {}),
                     sortOrder: index,
                     pendingActivationSpawn: true
                   }

@@ -9,44 +9,44 @@ import type {
   PtySpawnResult
 } from '../providers/types'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
-import { probePtyOwners } from './daemon-pty-liveness-probe'
 import { shouldHandoffDaemonHistory } from './daemon-history-handoff'
 import type { DaemonPtyRouterDataEvent, DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
+import { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
 
 export class DaemonPtyRouter implements IPtyProvider {
   private current: DaemonPtyAdapter
   private legacy: DaemonPtyAdapter[]
   private sessionAdapters = new Map<string, DaemonPtyAdapter>()
+  private readonly ownerResolver: DaemonSessionOwnerResolver<DaemonPtyAdapter>
   private readonly subscriptions: DaemonPtyAdapterSubscriptionFanout
 
   constructor(opts: { current: DaemonPtyAdapter; legacy: DaemonPtyAdapter[] }) {
     this.current = opts.current
     this.legacy = opts.legacy
-    this.subscriptions = new DaemonPtyAdapterSubscriptionFanout(this.allAdapters(), (id) => {
-      this.sessionAdapters.delete(id)
-    })
+    this.ownerResolver = new DaemonSessionOwnerResolver(this.allAdapters(), this.sessionAdapters)
+    this.subscriptions = new DaemonPtyAdapterSubscriptionFanout(
+      this.allAdapters(),
+      (id) => {
+        this.ownerResolver.forgetRoute(id)
+      },
+      (adapter) => this.ownerResolver.invalidateProvider(adapter)
+    )
   }
 
   async discoverLegacySessions(): Promise<void> {
-    for (const adapter of this.legacy) {
-      try {
-        const sessions = await adapter.listProcesses()
-        for (const session of sessions) {
-          this.sessionAdapters.set(session.id, adapter)
-        }
-      } catch (error) {
-        console.warn('[daemon] Failed to discover legacy daemon sessions', error)
-      }
-    }
+    await this.ownerResolver.discoverRoutes()
   }
 
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
+    if (opts.attachOnly && opts.sessionId) {
+      return await this.ownerResolver.spawnAttachOnly({ ...opts, sessionId: opts.sessionId })
+    }
     const adapter = opts.sessionId ? this.sessionAdapters.get(opts.sessionId) : undefined
     const target = adapter ?? this.current
     const result = await target.spawn(opts)
     // Why: the adapter filters intentional recovery exits and canonical-ID races before publishing proof.
     if (!result.exitedBeforeSpawnReply) {
-      this.sessionAdapters.set(result.id, target)
+      this.ownerResolver.recordRoute(result.id, target, result.incarnationId)
     }
     return result
   }
@@ -86,7 +86,7 @@ export class DaemonPtyRouter implements IPtyProvider {
   }
 
   async probePtyLiveness(id: string): Promise<boolean | null> {
-    return await probePtyOwners(id, this.sessionAdapters.get(id), this.allAdapters())
+    return await this.ownerResolver.probe(id)
   }
 
   write(id: string, data: string): void {
@@ -121,7 +121,7 @@ export class DaemonPtyRouter implements IPtyProvider {
         adapter.ackColdRestore(id)
       }
       if (this.sessionAdapters.get(id) === adapter) {
-        this.sessionAdapters.delete(id)
+        this.ownerResolver.forgetRoute(id, adapter)
       }
     }
   }
@@ -240,6 +240,7 @@ export class DaemonPtyRouter implements IPtyProvider {
   }> {
     const alive: string[] = []
     const killed: string[] = []
+    const aliveProviders = new Map<string, Set<DaemonPtyAdapter>>()
     for (const adapter of this.allAdapters()) {
       const result = await adapter.reconcileOnStartup(validWorktreeIds)
       // Why: daemon startup can reconcile many restored sessions; spreading
@@ -251,10 +252,17 @@ export class DaemonPtyRouter implements IPtyProvider {
         killed.push(id)
       }
       for (const id of result.alive) {
-        this.sessionAdapters.set(id, adapter)
+        const providers = aliveProviders.get(id) ?? new Set<DaemonPtyAdapter>()
+        providers.add(adapter)
+        aliveProviders.set(id, providers)
       }
-      for (const id of result.killed) {
-        this.sessionAdapters.delete(id)
+    }
+    for (const id of new Set([...alive, ...killed])) {
+      const providers = aliveProviders.get(id)
+      if (providers?.size === 1) {
+        this.ownerResolver.recordRoute(id, providers.values().next().value!)
+      } else {
+        this.ownerResolver.forgetRoute(id)
       }
     }
     return { alive, killed }

@@ -230,8 +230,10 @@ describe('BrowserSessionRegistry persistence', () => {
     browserSessionRegistry.createProfile('isolated', 'Google', { userAgentMode: 'native' })
 
     const profileSession = sessionFromPartitionMock.mock.results.at(-1)?.value
+    const { getBrowserSessionUserAgentMode } = await import('./browser-session-user-agent-mode')
     expect(profileSession.setUserAgent).not.toHaveBeenCalled()
     expect(setupClientHintsOverrideMock).not.toHaveBeenCalled()
+    expect(getBrowserSessionUserAgentMode(profileSession as never)).toBe('native')
   })
 
   it('merges partition-keyed pending entries without clobbering unrelated entries', async () => {
@@ -391,7 +393,14 @@ describe('BrowserSessionRegistry persistence', () => {
       setupClientHintsOverrideMock.mock.calls.some(
         (c: unknown[]) =>
           (c[0] as { partition?: string } | undefined)?.partition === importedPartition &&
-          c[1] === importedUa
+          c[1] === importedUa &&
+          (c[2] as { googleAuthOverride?: boolean } | undefined)?.googleAuthOverride === false
+      )
+    ).toBe(true)
+    const { getBrowserSessionUserAgentMode } = await import('./browser-session-user-agent-mode')
+    expect(
+      importedSessions.every(
+        (session) => getBrowserSessionUserAgentMode(session as never) === 'native'
       )
     ).toBe(true)
   })
@@ -432,6 +441,12 @@ describe('BrowserSessionRegistry persistence', () => {
         ([sess]) => (sess as { partition?: string }).partition === importedPartition
       )
     ).toBe(false)
+    const { getBrowserSessionUserAgentMode } = await import('./browser-session-user-agent-mode')
+    expect(
+      importedSessions.every(
+        (session) => getBrowserSessionUserAgentMode(session as never) === 'native'
+      )
+    ).toBe(true)
   })
 
   it('sets up default-partition policies on restore', async () => {

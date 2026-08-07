@@ -19,6 +19,7 @@ import { buildSetupRunnerCommand } from './setup-runner'
 import { createSequencedSetupAgentCommands } from '../../../shared/setup-agent-sequencing'
 import { getSetupRunnerCommandPlatformForPath } from '../../../shared/setup-runner-command'
 import { agentKindToTuiAgent } from '../../../shared/agent-kind'
+import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { PendingSidebarWorktreeReveal } from '@/store/slices/ui'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
@@ -231,7 +232,13 @@ export function activateAndRevealFolderWorkspace(
     { runtimeEnvironmentId }
   )
   if (folderWorkspaceActivationBlocked(pathStatus)) {
-    toast.error(getFolderWorkspacePathStatusTitle(pathStatus) ?? 'Cannot open folder workspace', {
+    const title =
+      getFolderWorkspacePathStatusTitle(pathStatus) ??
+      translate(
+        'auto.lib.worktree.activation.cannotOpenFolderWorkspace',
+        'Cannot open folder workspace'
+      )
+    toast.error(title, {
       description: getFolderWorkspacePathStatusDescription(pathStatus) ?? folderWorkspace.folderPath
     })
     return false

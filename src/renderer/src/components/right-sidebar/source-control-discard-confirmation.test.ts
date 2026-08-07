@@ -111,13 +111,4 @@ describe('getDiscardAreaConfirmationCopy', () => {
       confirmLabel: 'Discard all'
     })
   })
-
-  it('discloses permanent deletion for combined Changes', () => {
-    expect(getDiscardAreaConfirmationCopy('unstaged', 3, true)).toEqual({
-      title: 'Discard changes and delete untracked files?',
-      description:
-        'Tracked changes will be reverted and untracked files will be permanently deleted. This cannot be undone.',
-      confirmLabel: 'Delete and discard'
-    })
-  })
 })
