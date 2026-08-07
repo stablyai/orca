@@ -1120,6 +1120,57 @@ describe('createMainWindow', () => {
     expect(webContents.send).not.toHaveBeenCalledWith('ui:switchRecentTab')
   })
 
+  it('forwards browser app-command side buttons to all-tab switching', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      on: vi.fn(),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isDevToolsOpened: vi.fn(),
+      openDevTools: vi.fn(),
+      closeDevTools: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow(null)
+
+    const backPreventDefault = vi.fn()
+    const forwardPreventDefault = vi.fn()
+    windowHandlers['app-command'](
+      { preventDefault: backPreventDefault } as never,
+      'browser-backward'
+    )
+    windowHandlers['app-command'](
+      { preventDefault: forwardPreventDefault } as never,
+      'browser-forward'
+    )
+
+    expect(backPreventDefault).toHaveBeenCalledTimes(1)
+    expect(forwardPreventDefault).toHaveBeenCalledTimes(1)
+    expect(webContents.send).toHaveBeenNthCalledWith(1, 'ui:switchTabAcrossAllTypes', -1)
+    expect(webContents.send).toHaveBeenNthCalledWith(2, 'ui:switchTabAcrossAllTypes', 1)
+  })
+
   it('only intercepts the dictation chord when enabled toggle mode can handle it', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {

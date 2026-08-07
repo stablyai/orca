@@ -168,7 +168,20 @@ function isMacAppPasteInput(input: Electron.Input): boolean {
   )
 }
 
-// Why: titlebar content center sits ~18 CSS px from top (×zoom); traffic lights are ~12px tall, so top edge = center − 6.
+function resolveAppCommandTabSwitchDirection(command: string): -1 | 1 | null {
+  if (command === 'browser-backward') {
+    return -1
+  }
+  if (command === 'browser-forward') {
+    return 1
+  }
+  return null
+}
+
+// Why: the titlebar is 36px (border-box, 1px border-bottom).  The visual
+// center of the CSS-centered content sits at ~18 CSS px from the top.
+// At zoom factor z that becomes 18·z window px.  Traffic lights are
+// ~12px tall, so we position their top edge at (center − 6).
 const TITLEBAR_CSS_CENTER = 18
 const TRAFFIC_LIGHT_RADIUS = 6
 const TRAFFIC_LIGHT_X = 16
@@ -303,6 +316,17 @@ export function createMainWindow(
   const rendererWebContentsId = mainWindow.webContents.id
   // Why: native paste fallback is privileged IPC; only the top-level renderer may request it.
   setTrustedUIRendererWebContentsId(rendererWebContentsId)
+
+  // Why: Electron reports some mouse side-button presses as app-command events,
+  // so bridge them through the same tab-switch channel as renderer mouse input.
+  mainWindow.on('app-command', (event, command) => {
+    const direction = resolveAppCommandTabSwitchDirection(command)
+    if (direction === null) {
+      return
+    }
+    event.preventDefault()
+    mainWindow.webContents.send('ui:switchTabAcrossAllTypes', direction)
+  })
 
   if (process.platform === 'darwin') {
     // Why: preserve hidden-window power savings; stable native sizing and frame-only invalidation
