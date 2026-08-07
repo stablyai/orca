@@ -125,11 +125,19 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
   try {
     const currentStore = store.getState()
     const replaceWorkspaceKeys = [...worktreeIds]
+    // Why additionalValidWorkspaceKeys: the hydrators re-derive validity from the
+    // loaded-worktree catalog only, but the replace scope legitimately includes
+    // detection-only worktrees — without declaring them valid, every apply erases
+    // their freshly hydrated tabs.
     currentStore.hydrateWorkspaceSession(merged, {
       directSshAuthority: authority,
-      replaceWorkspaceKeys
+      replaceWorkspaceKeys,
+      additionalValidWorkspaceKeys: replaceWorkspaceKeys
     })
-    currentStore.hydrateTabsSession(merged, { replaceWorkspaceKeys })
+    currentStore.hydrateTabsSession(merged, {
+      replaceWorkspaceKeys,
+      additionalValidWorkspaceKeys: replaceWorkspaceKeys
+    })
     // Why: direct SSH snapshots project terminal state only; global editor/browser hydration would reset unrelated hosts.
     currentStore.markRemoteWorkspaceHydrated(authority.targetId)
     currentStore.setRemoteWorkspaceSyncStatus(authority.targetId, {

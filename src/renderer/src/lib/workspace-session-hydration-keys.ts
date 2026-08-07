@@ -6,7 +6,10 @@ import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 
 export type WorkspaceSessionHydrationOptions = {
-  additionalValidWorkspaceKeys?: readonly WorkspaceKey[]
+  // Why plain strings: entries land in the hydrators' validity sets, which hold the raw
+  // keys of session.tabsByWorktree — bare worktree ids for worktrees, WorkspaceKey
+  // strings for folder workspaces. Plain strings match what the sets compare.
+  additionalValidWorkspaceKeys?: readonly string[]
   replaceWorkspaceKeys?: readonly string[]
 }
 
