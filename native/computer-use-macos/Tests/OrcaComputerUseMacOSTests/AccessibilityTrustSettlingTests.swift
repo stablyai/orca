@@ -58,5 +58,6 @@ struct AccessibilityTrustSettlingTests {
         )
         #expect(sleeps == [100, 100, 50])
         #expect(outcome.waitedMs == 250)
+        #expect(outcome.attempts == 4)
     }
 }

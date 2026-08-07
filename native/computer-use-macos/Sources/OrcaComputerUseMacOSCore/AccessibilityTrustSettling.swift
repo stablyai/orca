@@ -21,6 +21,9 @@ public enum AccessibilityTrustSettling {
         }
     }
 
+    /// Why: a snapshot can run two settle phases back-to-back (process trust,
+    /// then AX window reads), so the worst-case stall is 2x this value; in
+    /// practice tccd's cached answer makes the second phase near-instant.
     public static let defaultTimeoutMs = 1500
     public static let defaultIntervalMs = 100
 
