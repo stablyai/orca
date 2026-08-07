@@ -220,43 +220,43 @@ export function useAutomationDispatchEvents(): void {
           const automationWorkspaceCreateRequestId = createBrowserUuid()
           const createResult =
             automation.workspaceMode === 'new_per_run'
-              ? await useAppStore
-                  .getState()
-                  .createWorktree(
-                    runRepoId,
-                    buildAutomationWorkspaceName(run.title, run.scheduledFor),
-                    automation.baseBranch ?? undefined,
-                    automation.setupDecision ?? 'skip',
-                    undefined,
-                    'unknown',
-                    run.title,
-                    undefined,
-                    undefined,
-                    undefined,
-                    automation.agentId,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    {
-                      automationProvenanceRequest: {
-                        automationId: automation.id,
-                        automationRunId: run.id,
-                        dispatchToken,
-                        createRequestId: automationWorkspaceCreateRequestId
-                      }
+              ? await useAppStore.getState().createWorktree(
+                  runRepoId,
+                  buildAutomationWorkspaceName(run.title, run.scheduledFor),
+                  automation.baseBranch ?? undefined,
+                  automation.setupDecision ?? 'skip',
+                  undefined,
+                  'unknown',
+                  run.title,
+                  undefined,
+                  undefined,
+                  undefined,
+                  // Why: the automation session below owns the prompt-bearing
+                  // agent tab; createdWithAgent would reopen an empty fallback.
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  {
+                    automationProvenanceRequest: {
+                      automationId: automation.id,
+                      automationRunId: run.id,
+                      dispatchToken,
+                      createRequestId: automationWorkspaceCreateRequestId
                     }
-                  )
+                  }
+                )
               : null
           const worktree = createResult
             ? createResult.worktree

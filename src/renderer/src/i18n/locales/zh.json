@@ -11191,7 +11191,9 @@
             "openSupportedWorkspace": "在恢复会话之前，请先打开一个工作区。",
             "localSessionSshWorkspaceUnsupported": "此会话的历史记录存储在本机上，因此无法在 SSH 工作区中恢复。请改为打开一个本地工作区。",
             "sessionHostMismatchUnsupported": "此会话属于其他主机。请打开同一主机上的工作区以恢复它。",
-            "prepareSessionResumeFailed": "无法为恢复准备此会话。"
+            "prepareSessionResumeFailed": "无法为恢复准备此会话。",
+            "sessionDeleted": "会话已删除",
+            "sessionDeleteFailed": "无法删除会话"
           },
           "AiVaultPanelControls": {
             "scanningSessions": "正在扫描会话",
@@ -11323,7 +11325,17 @@
             "jumpToWorktree": "跳转到工作树",
             "recoverableBadge": "未保存",
             "subagentCountSingular": "1 个子智能体",
-            "subagentCountPlural": "{{value0}} 个子智能体"
+            "subagentCountPlural": "{{value0}} 个子智能体",
+            "delete": "删除",
+            "deleteReasonNonLocalHost": "只能删除此设备上的会话。",
+            "deleteReasonSyntheticPath": "此会话无法在 Orca 中删除。",
+            "deleteReasonUnsupportedAgent": "{{value0}} 会话无法在 Orca 中删除。",
+            "deleteReasonSessionLive": "此会话仍在运行 — 请等待其完成后再删除。"
+          },
+          "AiVaultSessionDeleteDialog": {
+            "title": "要删除此会话吗？",
+            "description": "“{{value0}}”将被删除。删除后，也将无法通过 {{value1}} 自身的命令行恢复。",
+            "confirm": "删除"
           },
           "FileExplorerNameFilter": {
             "26fb73c6e3": "查找文件",

@@ -3,6 +3,8 @@ import { join, sep } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultListResult, AiVaultSession } from '../../shared/ai-vault-types'
 import type { IFilesystemProvider } from '../providers/types'
+import type * as CachedSessionListModule from '../ai-vault/cached-session-list'
+import type * as SessionParseCacheModule from '../ai-vault/session-scanner-parse-cache'
 import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import { SSH_MUX_REQUEST_TIMEOUT_CODE } from '../ssh/ssh-channel-multiplexer'
 
@@ -17,7 +19,10 @@ const mocks = vi.hoisted(() => ({
   getActiveSshAiVaultHostInfo: vi.fn(),
   getActiveSshAiVaultHostInfos: vi.fn(),
   requestActiveSshAiVaultSessionList: vi.fn(),
-  ipcHandle: vi.fn()
+  ipcHandle: vi.fn(),
+  deleteAiVaultSessionFile: vi.fn(),
+  invalidateAiVaultSessionListCache: vi.fn(),
+  invalidateSessionParseCacheEntry: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -40,6 +45,29 @@ vi.mock('../ai-vault/session-scanner-claude-subagents', () => ({
 vi.mock('../ai-vault/session-scanner-omp-subagent-listing', () => ({
   listOmpSubagentSessions: mocks.listOmpSubagentSessions
 }))
+
+vi.mock('../ai-vault/session-delete', () => ({
+  deleteAiVaultSessionFile: mocks.deleteAiVaultSessionFile
+}))
+
+// Why: only the invalidation seam is replaced — everything else (cachedList,
+// listAiVaultSessions, ...) keeps its real implementation so the existing
+// host-routing/caching tests below stay exercising real behavior.
+vi.mock('../ai-vault/cached-session-list', async (importOriginal) => {
+  const actual = await importOriginal<typeof CachedSessionListModule>()
+  return {
+    ...actual,
+    invalidateAiVaultSessionListCache: mocks.invalidateAiVaultSessionListCache
+  }
+})
+
+vi.mock('../ai-vault/session-scanner-parse-cache', async (importOriginal) => {
+  const actual = await importOriginal<typeof SessionParseCacheModule>()
+  return {
+    ...actual,
+    invalidateSessionParseCacheEntry: mocks.invalidateSessionParseCacheEntry
+  }
+})
 
 vi.mock('../wsl', () => ({
   getWslHomeAsync: mocks.getAiVaultWslHomeDirs,
@@ -671,6 +699,124 @@ describe('listAiVaultSubagentSessions gating', () => {
     expect(crossAgent).toEqual({ sessions: [], issues: [] })
     expect(traversal).toEqual({ sessions: [], issues: [] })
     expect(mocks.listOmpSubagentSessions).not.toHaveBeenCalled()
+  })
+})
+
+describe('deleteAiVaultSession', () => {
+  const args = {
+    agent: 'gemini' as const,
+    filePath: '/home/ada/.gemini/tmp/sess.json',
+    executionHostId: 'local' as const
+  }
+
+  it('invalidates every AI Vault cache after a real delete', async () => {
+    mocks.deleteAiVaultSessionFile.mockResolvedValue({ outcome: 'deleted' })
+
+    const result = await _internals.deleteAiVaultSession(args)
+
+    expect(result).toEqual({ outcome: 'deleted' })
+    expect(mocks.deleteAiVaultSessionFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent: 'gemini',
+        filePath: args.filePath,
+        executionHostId: 'local'
+      })
+    )
+    expect(mocks.invalidateAiVaultSessionListCache).toHaveBeenCalledTimes(1)
+    expect(mocks.invalidateSessionParseCacheEntry).toHaveBeenCalledWith(args.filePath)
+  })
+
+  it('does not invalidate any cache when the executor rejects (e.g. non-local host)', async () => {
+    mocks.deleteAiVaultSessionFile.mockResolvedValue({
+      outcome: 'rejected',
+      agent: 'gemini',
+      reason: 'non-local-host'
+    })
+
+    const result = await _internals.deleteAiVaultSession({
+      ...args,
+      executionHostId: 'ssh:dev-box'
+    })
+
+    expect(result).toEqual({ outcome: 'rejected', agent: 'gemini', reason: 'non-local-host' })
+    expect(mocks.invalidateAiVaultSessionListCache).not.toHaveBeenCalled()
+    expect(mocks.invalidateSessionParseCacheEntry).not.toHaveBeenCalled()
+  })
+
+  it('does not invalidate any cache when the executor fails', async () => {
+    mocks.deleteAiVaultSessionFile.mockResolvedValue({
+      outcome: 'failed',
+      agent: 'gemini',
+      error: 'EPERM'
+    })
+
+    await _internals.deleteAiVaultSession(args)
+
+    expect(mocks.invalidateAiVaultSessionListCache).not.toHaveBeenCalled()
+    expect(mocks.invalidateSessionParseCacheEntry).not.toHaveBeenCalled()
+  })
+
+  it('resolves a malformed payload to a rejection instead of throwing', async () => {
+    mocks.deleteAiVaultSessionFile.mockResolvedValue({
+      outcome: 'rejected',
+      agent: undefined,
+      reason: 'invalid-path'
+    })
+
+    await expect(_internals.deleteAiVaultSession(undefined)).resolves.toEqual({
+      outcome: 'rejected',
+      agent: undefined,
+      reason: 'invalid-path'
+    })
+    expect(mocks.deleteAiVaultSessionFile).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '' })
+    )
+    expect(mocks.invalidateAiVaultSessionListCache).not.toHaveBeenCalled()
+  })
+
+  it('registers the aiVault:deleteSession IPC channel', () => {
+    registerAiVaultHandlers()
+
+    expect(mocks.ipcHandle).toHaveBeenCalledWith('aiVault:deleteSession', expect.any(Function))
+  })
+
+  // Observes the real multi-host invalidation seam (not mocked) end-to-end:
+  // deleting must clear this module's own cache, not only the two shared caches.
+  it('clears the multi-host scan-result cache after a real delete', async () => {
+    await _internals.listAiVaultSessions({ executionHostScope: 'ssh:dev-box' })
+    await _internals.listAiVaultSessions({ executionHostScope: 'ssh:dev-box' })
+    // Second list is a cache hit, so only one scan so far.
+    expect(mocks.scanRemoteAiVaultSessions).toHaveBeenCalledTimes(1)
+
+    mocks.deleteAiVaultSessionFile.mockResolvedValue({ outcome: 'deleted' })
+    await _internals.deleteAiVaultSession(args)
+
+    // Cache was cleared, so the next list re-scans instead of serving the stale
+    // list that still contained the deleted session.
+    await _internals.listAiVaultSessions({ executionHostScope: 'ssh:dev-box' })
+    expect(mocks.scanRemoteAiVaultSessions).toHaveBeenCalledTimes(2)
+  })
+
+  // Generation guard: a scan already in flight when the delete lands must not
+  // write its pre-delete result back into the multi-host cache.
+  it('does not let an in-flight multi-host scan repopulate the cache after a delete', async () => {
+    let resolveScan: (value: AiVaultListResult) => void = () => {}
+    mocks.scanRemoteAiVaultSessions.mockReturnValueOnce(
+      new Promise<AiVaultListResult>((resolve) => {
+        resolveScan = resolve
+      })
+    )
+    const inFlight = _internals.listAiVaultSessions({ executionHostScope: 'ssh:dev-box' })
+
+    mocks.deleteAiVaultSessionFile.mockResolvedValue({ outcome: 'deleted' })
+    await _internals.deleteAiVaultSession(args)
+
+    resolveScan(result([session('ssh:dev-box', 'stale-session')]))
+    await inFlight
+
+    // The late scan must not have cached its stale result: the next list re-scans.
+    await _internals.listAiVaultSessions({ executionHostScope: 'ssh:dev-box' })
+    expect(mocks.scanRemoteAiVaultSessions).toHaveBeenCalledTimes(2)
   })
 })
 
