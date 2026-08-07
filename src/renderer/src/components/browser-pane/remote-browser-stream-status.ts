@@ -79,3 +79,17 @@ export function remoteBrowserStreamUnreachableNotice(): string {
     'Cannot reach the remote server.'
   )
 }
+
+export function remoteBrowserStreamRestartFailedNotice(): string {
+  return translate(
+    'auto.components.BrowserPane.streamRestartFailed',
+    'Failed to restart remote browser stream.'
+  )
+}
+
+export function remoteBrowserStreamUnsupportedNotice(): string {
+  return translate(
+    'auto.components.BrowserPane.streamCapabilityUnsupported',
+    'The selected runtime does not support remote browser streaming.'
+  )
+}

@@ -60,4 +60,13 @@ describe('remote browser stream failure classification', () => {
     // Dropped from the UI but not lost: nothing else records it.
     expect(transient.logRawError).toBe(true)
   })
+
+  it('uses localized copy for permanent failures without an Error message', () => {
+    const failure = resolveRemoteBrowserStreamRestartFailure({
+      code: 'worktree_not_found_on_server'
+    })
+
+    expect(failure.message).toBe('Failed to restart remote browser stream.')
+    expect(failure.shouldRetry).toBe(false)
+  })
 })

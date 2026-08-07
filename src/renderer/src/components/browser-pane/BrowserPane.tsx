@@ -938,10 +938,7 @@ function RemoteBrowserPagePane({
   // Derived, never stored. The stream's own notice wins over an incidental one: while the stream is
   // down every input RPC fails as a matter of course, and those failures must not overwrite the
   // message that explains why — nor can the reconnect control depend on one of them being present.
-  // Why 'stopped' forces busy off rather than OR-ing: paneBusy has its own clear paths, and a
-  // stopped stream delivers no frames to run them, so a navigation abandoned mid-flight could
-  // otherwise leave a spinner over a dead pane forever — the fourth defect, which the previous
-  // revision claimed to have made unwritable and had not.
+  // A stopped stream delivers no frames that could clear paneBusy, so it must force busy off.
   const busy =
     streamStatus.kind === 'stopped' ? false : paneBusy || isRemoteBrowserStreamBusy(streamStatus)
   const streamNotice = remoteBrowserStreamNotice(streamStatus)
@@ -1511,16 +1508,8 @@ function RemoteBrowserPagePane({
     // Why: the lifecycle reads tab/environment/worktree live, so it only needs to reopen when the
     // pane's identity actually changes — not when an unrelated callback identity does.
     //
-    // CAREFUL: `browserTab.id` is load-bearing but invisible to tooling. The body never reads it —
-    // `lifecycle.open()` reaches tab identity through refs — so removing it keeps every test green
-    // AND passes react-hooks/exhaustive-deps, while silently failing to reopen the stream when the
-    // pane switches tabs. Verified: that exact deletion survives all 282 tests and the lint. Only a
-    // test that changes the tab id while environment and worktree hold steady can catch it.
-    //
-    // `reopenNonce` is load-bearing too, but unlike browserTab.id it is NOT invisible: deleting it
-    // trips oxlint's no-unused-vars on the state declaration, and silencing that fails both E2E
-    // tests. Verified by mutation. (An earlier version of this comment claimed oxlint missed it —
-    // that was wrong, and a review caught it.)
+    // browserTab.id is load-bearing because lifecycle.open() reads tab identity through refs.
+    // reopenNonce re-runs the full open path for an explicit reconnect.
   }, [
     activeRuntimeEnvironmentId,
     browserTab.id,
@@ -2321,6 +2310,7 @@ function RemoteBrowserPagePane({
         ) : null}
         {frameUrl ? (
           <img
+            data-testid="remote-browser-frame"
             ref={imageRef}
             src={frameUrl}
             alt=""
@@ -2406,6 +2396,8 @@ function RemoteBrowserPagePane({
         {remoteError || canReconnectRemoteBrowserStream(streamStatus) ? (
           <div
             data-testid="remote-browser-stream-error"
+            role="status"
+            aria-live="polite"
             // Why z-30: the load-failure overlay is a z-20 full-pane sheet, so without this the
             // Reconnect control renders beneath it and silently swallows every click — the user's
             // only way back, present but unusable, whenever the page also failed to load.
@@ -2419,7 +2411,7 @@ function RemoteBrowserPagePane({
                 className="h-6 shrink-0 px-2 text-xs"
                 onClick={reconnectRemoteStream}
               >
-                {translate('auto.components.BrowserPane.streamReconnect', 'Reconnect')}
+                {translate('auto.components.browser.pane.BrowserPane.b71dc3d930', 'Reconnect')}
               </Button>
             ) : null}
           </div>

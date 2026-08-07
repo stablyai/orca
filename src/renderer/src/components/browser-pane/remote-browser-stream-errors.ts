@@ -1,5 +1,9 @@
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-client'
-import { remoteBrowserStreamLostNotice } from './remote-browser-stream-status'
+import {
+  remoteBrowserStreamLostNotice,
+  remoteBrowserStreamRestartFailedNotice,
+  remoteBrowserStreamUnsupportedNotice
+} from './remote-browser-stream-status'
 
 // Why: a runtime lacking browser.screencast.v1 will not grow it while this connection lives, so
 // retrying that failure is unbounded work with a visible error each round. Tagged rather than
@@ -28,10 +32,9 @@ const REMOTE_BROWSER_PAGE_MISSING_CODES: ReadonlySet<string> = new Set([
 ])
 
 export function remoteBrowserStreamUnsupportedError(): Error {
-  return Object.assign(
-    new Error('The selected runtime does not support remote browser streaming.'),
-    { code: REMOTE_BROWSER_STREAM_UNSUPPORTED }
-  )
+  return Object.assign(new Error(remoteBrowserStreamUnsupportedNotice()), {
+    code: REMOTE_BROWSER_STREAM_UNSUPPORTED
+  })
 }
 
 function readErrorCode(error: unknown): string | null {
@@ -95,7 +98,7 @@ export function resolveRemoteBrowserStreamRestartFailure(
 ): RemoteBrowserStreamRestartFailure {
   if (isPermanentRemoteBrowserStreamFailure(error)) {
     return {
-      message: error instanceof Error ? error.message : 'Failed to restart remote browser stream.',
+      message: error instanceof Error ? error.message : remoteBrowserStreamRestartFailedNotice(),
       shouldRetry: false,
       logRawError: false
     }

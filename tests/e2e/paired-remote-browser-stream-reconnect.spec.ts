@@ -99,7 +99,7 @@ test('bounds remote browser stream retries, then offers reconnect', async ({
     await attachRemoteBrowserPane(page, client.environmentId, worktreeId, created.browserPageId)
 
     // The stream is live once the pane paints a remote frame.
-    const remoteFrame = page.locator('img.cursor-default.bg-white').first()
+    const remoteFrame = page.getByTestId('remote-browser-frame').first()
     await expect(remoteFrame).toBeVisible({ timeout: 60_000 })
 
     const errorToast = page.getByTestId('remote-browser-stream-error')
@@ -114,7 +114,7 @@ test('bounds remote browser stream retries, then offers reconnect', async ({
     // Scoped to the pane holding the remote frame: a workspace can hold more than one browser pane.
     const remotePane = page
       .getByTestId('remote-browser-pane')
-      .filter({ has: page.locator('img.cursor-default.bg-white') })
+      .filter({ has: page.getByTestId('remote-browser-frame') })
     const addressBar = remotePane.locator('[data-orca-browser-address-bar="true"]')
     await addressBar.click()
     await addressBar.fill('about:config')
@@ -256,7 +256,7 @@ test('offers reconnect when the remote browser never opens at all', async ({
     // Reconnect must build the stream from nothing, not resume something that never existed.
     await reconnectButton.click()
     await expect(errorToast).toHaveCount(0, { timeout: 60_000 })
-    await expect(page.locator('img.cursor-default.bg-white').first()).toBeVisible({
+    await expect(page.getByTestId('remote-browser-frame').first()).toBeVisible({
       timeout: 60_000
     })
   } finally {

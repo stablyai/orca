@@ -13771,6 +13771,7 @@
             "b472c5fe03": "Add browser annotation",
             "b5ba6085de": "Question",
             "143204e423": "Change",
+            "b71dc3d930": "Reconnect",
             "e7ca5a098c": "success",
             "d51ef37351": "Copy",
             "6f4ab3592b": "Copied",
@@ -14706,9 +14707,10 @@
         "unresolvedChip": "{{value0}} unresolved"
       },
       "BrowserPane": {
-        "streamReconnect": "Reconnect",
         "streamConnectionLost": "Lost connection to the remote server.",
-        "streamConnectionUnreachable": "Cannot reach the remote server."
+        "streamConnectionUnreachable": "Cannot reach the remote server.",
+        "streamRestartFailed": "Failed to restart remote browser stream.",
+        "streamCapabilityUnsupported": "The selected runtime does not support remote browser streaming."
       }
     },
     "i18n": {

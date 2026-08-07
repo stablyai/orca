@@ -97,6 +97,9 @@ function dispatchScreencastResponse(
     events.onFailed(response.error.message)
     return
   }
+  if (!response.result || typeof response.result !== 'object' || !('type' in response.result)) {
+    return
+  }
   const event = response.result as BrowserScreencastResult
   if (event.type === 'ready') {
     events.onReady(event)

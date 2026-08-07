@@ -37,6 +37,7 @@ type FakeScreencastStream = {
   emitReady: () => void
   emitEnd: () => void
   emitStreamError: (message: string) => void
+  emitMalformedSuccess: () => void
   emitResponseFailure: (code: string, message: string) => void
   emitTransportError: (code: string, message: string) => void
   emitClose: () => void
@@ -139,6 +140,7 @@ function createHarness() {
         }),
       emitEnd: () => respond({ type: 'end', subscriptionId: 'sub-1' }),
       emitStreamError: (message) => respond({ type: 'error', message }),
+      emitMalformedSuccess: () => respond(null),
       emitResponseFailure: (code, message) =>
         callbacks.onResponse({
           id: 'sub-1',
@@ -549,6 +551,18 @@ describe('RemoteBrowserStreamLifecycle', () => {
     expect(harness.subscribeAttempts).toBe(1)
   })
 
+  it('ignores a malformed success payload without poisoning the live subscription', async () => {
+    const harness = createHarness()
+    harness.lifecycle.open()
+    await settle()
+
+    expect(() => harness.streams[0].emitMalformedSuccess()).not.toThrow()
+    harness.streams[0].emitReady()
+    await settle()
+
+    expect(harness.currentStatusKind).toBe('live')
+  })
+
   // A transport error is NOT guaranteed to be followed by a close: the web client's
   // notifySubscriptionsError clears its subscription map and then delivers onError only. So this
   // must land somewhere the user can act from, or the pane is stranded busy with no way back.
@@ -603,6 +617,23 @@ describe('RemoteBrowserStreamLifecycle', () => {
 
     expect(harness.errorLog).toHaveLength(errorsBeforeUnmount)
     expect(harness.subscribeAttempts).toBe(1)
+  })
+
+  it('reopens with the same lifecycle after a StrictMode cleanup cycle', async () => {
+    const harness = createHarness()
+    const closeStream = await openStreamAndConfirmReady(harness)
+
+    harness.identity.mounted = false
+    harness.lifecycle.dispose()
+    closeStream()
+    harness.identity.mounted = true
+    harness.lifecycle.open()
+    await settle()
+
+    expect(harness.streams).toHaveLength(2)
+    harness.streams[1].emitReady()
+    await settle()
+    expect(harness.currentStatusKind).toBe('live')
   })
 
   it('keeps the replacement ready deadline when a superseded subscribe rejects late', async () => {
