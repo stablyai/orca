@@ -227,24 +227,6 @@ export function assignNativeChatPendingOccurrence<T extends NativeChatPendingOcc
 }
 
 /**
- * Renumber occurrences so each match key counts from 1 again — for a replaced
- * conversation, where no dropped echo's turn will ever arrive to consume a slot.
- */
-export function renumberNativeChatPendingOccurrences<T extends NativeChatPendingOccurrence>(
-  pending: readonly T[]
-): T[] {
-  const counted = new Map<string, number>()
-  return pending.map((entry) => {
-    const key = nativeChatPendingMatchKey(entry)
-    const occurrence = (counted.get(key) ?? 0) + 1
-    counted.set(key, occurrence)
-    return entry.matchingOccurrence === occurrence
-      ? entry
-      : { ...entry, matchingOccurrence: occurrence }
-  })
-}
-
-/**
  * Remove `removedIndex` and pull its later same-key siblings down one occurrence.
  * Only the removed send consumes no transcript turn, so renumbering from 1 would
  * also erase the elevation a pruned or capped-out predecessor still owns.

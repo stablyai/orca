@@ -174,9 +174,26 @@ describe('retainPendingSendsForConversation', () => {
       sessionId: 's1',
       markers: [clearMarker(150)]
     })
+    // 'beta' had no sibling dropped, so it keeps its untouched slot — undefined
+    // resolves to occurrence 1 through `nativeChatPendingOccurrence`.
     expect(next.map((entry) => [entry.id, entry.matchingOccurrence])).toEqual([
-      ['p2', 1],
+      ['p2', undefined],
       ['p3', 1]
     ])
+  })
+
+  it('leaves an unrelated key alone when a different key is dropped', () => {
+    // 'ping' holds occurrence 2 because its predecessor was pruned by a real
+    // landed turn, which is still in the transcript. Dropping an unrelated echo
+    // frees no 'ping' slot, so renumbering it down would retire it early.
+    const pending = [
+      pendingOf('p1', { sentAt: 50, sessionId: 's0', text: 'stale prompt' }),
+      pendingOf('p2', { sentAt: 300, sessionId: null, text: 'ping', matchingOccurrence: 2 })
+    ]
+    const next = retainPendingSendsForConversation(pending, {
+      sessionId: 's1',
+      markers: noMarkers
+    })
+    expect(next.map((entry) => [entry.id, entry.matchingOccurrence])).toEqual([['p2', 2]])
   })
 })
