@@ -51,6 +51,10 @@ export function extractClosedTerminalAgentResume(args: {
     return bestLive
   }
 
+  // Why: prefer newest sleeping record (same as live loop) when a closed tab
+  // still has multiple pane keys with sessions (#10386 CodeRabbit).
+  let bestSleeping: ClosedTerminalAgentResume | null = null
+  let bestSleepingUpdatedAt = -1
   for (const [paneKey, record] of Object.entries(args.sleepingAgentSessionsByPaneKey ?? {})) {
     if (record.tabId !== args.tabId && !paneKey.startsWith(tabPrefix)) {
       continue
@@ -58,14 +62,18 @@ export function extractClosedTerminalAgentResume(args: {
     if (!getAgentResumeArgv(record.agent, record.providerSession)) {
       continue
     }
-    return {
+    if (record.updatedAt < bestSleepingUpdatedAt) {
+      continue
+    }
+    bestSleepingUpdatedAt = record.updatedAt
+    bestSleeping = {
       agent: record.agent,
       providerSession: record.providerSession,
       ...(record.launchConfig ? { launchConfig: record.launchConfig } : {})
     }
   }
 
-  return null
+  return bestSleeping
 }
 
 function resumeFromAgentStatusEntry(

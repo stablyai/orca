@@ -127,6 +127,47 @@ describe('extractClosedTerminalAgentResume', () => {
     })
   })
 
+  it('prefers the newest sleeping record when multiple pane keys match the tab', () => {
+    const older: SleepingAgentSessionRecord = {
+      paneKey: 'tab-9:leaf-a',
+      tabId: 'tab-9',
+      worktreeId: 'wt',
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 'old-sleep' },
+      prompt: 'old',
+      state: 'idle',
+      capturedAt: 1,
+      updatedAt: 10
+    }
+    const newer: SleepingAgentSessionRecord = {
+      paneKey: 'tab-9:leaf-b',
+      tabId: 'tab-9',
+      worktreeId: 'wt',
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: 'new-sleep' },
+      prompt: 'new',
+      state: 'idle',
+      capturedAt: 2,
+      updatedAt: 50,
+      launchConfig: { agentArgs: '--latest', agentEnv: {} }
+    }
+
+    expect(
+      extractClosedTerminalAgentResume({
+        tabId: 'tab-9',
+        agentStatusByPaneKey: {},
+        sleepingAgentSessionsByPaneKey: {
+          'tab-9:leaf-a': older,
+          'tab-9:leaf-b': newer
+        }
+      })
+    ).toEqual({
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: 'new-sleep' },
+      launchConfig: { agentArgs: '--latest', agentEnv: {} }
+    })
+  })
+
   it('returns null when the tab has no resumable provider session', () => {
     expect(
       extractClosedTerminalAgentResume({
