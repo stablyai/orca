@@ -72,20 +72,34 @@ function normalizeSharedDirectories(value: unknown): string[] {
 }
 
 const ENV_VAR_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/
+// Why: pass the name regex but mutate object internals when assigned as keys.
+const UNSAFE_ENV_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
 
 function normalizeTabEnv(value: unknown): Record<string, string> | undefined {
   const record = asRecord(value)
   if (!record) {
     return undefined
   }
-  const env: Record<string, string> = {}
-  for (const [key, raw] of Object.entries(record).slice(0, MAX_ORCA_YAML_COLLECTION_ENTRIES)) {
-    if (!ENV_VAR_NAME_RE.test(key) || typeof raw !== 'string') {
+  const env: Record<string, string> = Object.create(null)
+  let accepted = 0
+  for (const [key, raw] of Object.entries(record)) {
+    // Why: cap accepted entries, not raw ones — invalid entries must not eat the budget.
+    if (accepted >= MAX_ORCA_YAML_COLLECTION_ENTRIES) {
+      break
+    }
+    if (
+      !ENV_VAR_NAME_RE.test(key) ||
+      UNSAFE_ENV_KEYS.has(key) ||
+      typeof raw !== 'string' ||
+      !isOrcaYamlFieldWithinLimit(key) ||
+      !isOrcaYamlFieldWithinLimit(raw)
+    ) {
       continue
     }
     env[key] = raw
+    accepted += 1
   }
-  return Object.keys(env).length > 0 ? env : undefined
+  return accepted > 0 ? { ...env } : undefined
 }
 
 function normalizeDefaultTabs(value: unknown): OrcaDefaultTabTemplate[] {

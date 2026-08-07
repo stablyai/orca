@@ -102,7 +102,10 @@ export function getDefaultTabsLaunch(
   if (tabs.length === 0) {
     return undefined
   }
-  const hasCommands = tabs.some((tab) => Boolean(tab.command?.trim()))
+  // Why: env-only tabs carry trust-relevant shared content too — without this they could never inject env.
+  const hasCommands = tabs.some(
+    (tab) => Boolean(tab.command?.trim()) || Object.keys(tab.env ?? {}).length > 0
+  )
   const sharedCommandPolicy = resolveHookCommandSourcePolicy(
     repo.hookSettings?.commandSourcePolicy,
     {

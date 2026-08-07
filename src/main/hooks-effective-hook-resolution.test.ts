@@ -377,6 +377,22 @@ describe('getDefaultTabsLaunch', () => {
     })
   })
 
+  it('treats env-only tabs as shared content requiring the setup decision', () => {
+    const hooks = {
+      scripts: {},
+      defaultTabs: [{ title: 'Shell', env: { ANTHROPIC_API_KEY: 'op://Private/Anthropic/key' } }]
+    } as unknown as OrcaHooks
+
+    expect(getDefaultTabsLaunch(hooks, makeRepo('skip-by-default'), 'run')).toEqual({
+      tabs: hooks.defaultTabs,
+      runCommands: true
+    })
+    expect(getDefaultTabsLaunch(hooks, makeRepo('run-by-default'), 'skip')).toEqual({
+      tabs: hooks.defaultTabs,
+      runCommands: false
+    })
+  })
+
   it('creates commandless default tabs without requiring setup approval', () => {
     const hooks = {
       scripts: {},

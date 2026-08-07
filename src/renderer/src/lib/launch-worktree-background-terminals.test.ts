@@ -186,6 +186,22 @@ describe('launchWorktreeBackgroundTerminals', () => {
     )
   })
 
+  it('injects env for trusted env-only tabs (no command)', async () => {
+    const { launchWorktreeBackgroundTerminals } =
+      await import('./launch-worktree-background-terminals')
+    const tabEnv = { ANTHROPIC_API_KEY: 'op://Private/Anthropic/api-key' }
+
+    await launchWorktreeBackgroundTerminals({
+      worktreeId: 'wt-1',
+      defaultTabs: { runCommands: true, tabs: [{ title: 'Shell', env: tabEnv }] }
+    })
+    expect(mockSpawn).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ env: expect.objectContaining(tabEnv) })
+    )
+    expect(mockSpawn.mock.calls[0][0]).not.toHaveProperty('command')
+  })
+
   it('spawns setup in a split when setup launch mode requests a split', async () => {
     state.settings = { activeRuntimeEnvironmentId: null, setupScriptLaunchMode: 'split-horizontal' }
     const { launchWorktreeBackgroundTerminals } =

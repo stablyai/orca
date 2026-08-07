@@ -178,6 +178,25 @@ describe('parseOrcaYaml', () => {
     })
   })
 
+  it('rejects unsafe env keys, oversize values, and caps accepted entries', () => {
+    const bigValue = 'x'.repeat(64 * 1024 + 1)
+    const yaml = [
+      'defaultTabs:',
+      '  - title: Claude',
+      '    command: claude',
+      '    env:',
+      '      __proto__: op://Private/evil/field',
+      '      constructor: nope',
+      `      TOO_BIG: "${bigValue}"`,
+      '      GOOD: keep'
+    ].join('\n')
+
+    expect(parseOrcaYaml(yaml)).toEqual({
+      scripts: {},
+      defaultTabs: [{ title: 'Claude', command: 'claude', env: { GOOD: 'keep' } }]
+    })
+  })
+
   it('parses default tab env maps, dropping invalid names and non-string values', () => {
     const yaml = [
       'defaultTabs:',

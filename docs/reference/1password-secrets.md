@@ -6,11 +6,11 @@ Opt-in integration that resolves [1Password secret references](https://developer
 
 With **Settings → Integrations → 1Password** enabled, any local tab whose spawn environment contains at least one `op://` value has its startup command wrapped:
 
-```
+```text
 op run -- <command>
 ```
 
-`op run` executes inside the tab's own shell, substitutes every `op://` env var with the secret it points to, and starts the command. Orca never executes `op` itself and never sees secret values — resolution happens entirely inside the PTY. `op run`'s default output masking is kept, so resolved values that would appear in terminal output are redacted by the CLI.
+`op run` executes inside the tab's own shell, substitutes every `op://` env var with the secret it points to, and starts the command. Orca's main process never executes `op` and never resolves or stores secret values — resolution happens inside the PTY, in the child's environment. Terminal output still flows back through the PTY like any other output; as a safeguard, `op run` masks secret values it detects in that output by default (`<concealed by 1Password>`). Orca never disables masking — but users can via `--no-masking` or `OP_RUN_NO_MASKING`, at their own risk.
 
 Declare refs per tab in `orca.yaml`:
 
