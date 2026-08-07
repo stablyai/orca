@@ -6,7 +6,11 @@
 // elementFromPoint, so the copied log can say *what* the scribble points at,
 // not just where. Resolution is best-effort: a failed query or a point over
 // the page background leaves element undefined and the geometry alone.
-import type { BrowserRecorderMarkupShapeLog } from '../browser-recorder-types'
+import type {
+  BrowserRecorderMarkupElement,
+  BrowserRecorderMarkupShapeLog
+} from '../browser-recorder-types'
+import { inlineText } from '../browser-recorder-text'
 import type { MarkupShape } from './markup-drawing-model'
 
 /** The point a shape "means": where an arrow aims, a box covers, a label sits. */
@@ -63,7 +67,9 @@ export function buildMarkupElementResolutionScript(
         if (cls.length > 0) selector += '.' + cls.join('.');
       }
       const name =
-        el.getAttribute('aria-label') || el.getAttribute('title') || el.getAttribute('alt') || '';
+        (el.getAttribute('aria-label') || el.getAttribute('title') || el.getAttribute('alt') || '')
+          .replace(/\\s+/g, ' ')
+          .slice(0, 80);
       const text = (el.textContent || '').trim().replace(/\\s+/g, ' ').slice(0, 80);
       results.push({
         tagName: el.tagName.toLowerCase(),
@@ -91,14 +97,38 @@ export async function resolveMarkupShapeElements(
     )
     const results: unknown[] = Array.isArray(raw) ? raw : []
     logs.forEach((log, index) => {
-      const element = results[index]
-      log.element =
-        element && typeof element === 'object'
-          ? (element as BrowserRecorderMarkupShapeLog['element'])
-          : null
+      log.element = sanitizeMarkupElement(results[index])
     })
   } catch {
     // Element resolution is best-effort — geometry-only log is still useful.
+    logs.forEach((log) => {
+      log.element = null
+    })
   }
   return logs
+}
+
+// Why: the guest page controls these fields, so hostile values (newlines,
+// markdown fences, oversized text) must not reach the copied log unescaped.
+function sanitizeMarkupElement(value: unknown): BrowserRecorderMarkupElement | null {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+  const candidate = value as Record<string, unknown>
+  const tagName = inlineText(typeof candidate.tagName === 'string' ? candidate.tagName : '', 40)
+  if (tagName.length === 0) {
+    return null
+  }
+  return {
+    tagName,
+    selector: inlineText(typeof candidate.selector === 'string' ? candidate.selector : '', 160),
+    accessibleName:
+      typeof candidate.accessibleName === 'string' && candidate.accessibleName.trim().length > 0
+        ? inlineText(candidate.accessibleName, 80)
+        : null,
+    textSnippet: inlineText(
+      typeof candidate.textSnippet === 'string' ? candidate.textSnippet : '',
+      80
+    )
+  }
 }

@@ -131,7 +131,9 @@ describe('resolveMarkupShapeElements', () => {
   })
 
   it('falls back to geometry-only logs when the query fails', async () => {
-    const webview = makeWebview(new Error('page gone'))
+    const webview = {
+      executeJavaScript: vi.fn().mockRejectedValue(new Error('page gone'))
+    }
     const logs = await resolveMarkupShapeElements(webview as never, [arrow])
     expect(logs[0]?.element).toBeNull()
     expect(logs[0]?.kind).toBe('arrow')
@@ -141,5 +143,29 @@ describe('resolveMarkupShapeElements', () => {
     const webview = makeWebview([null])
     const logs = await resolveMarkupShapeElements(webview as never, [arrow])
     expect(logs[0]?.element).toBeNull()
+  })
+
+  it('normalizes hostile guest element fields to bounded single-line text', async () => {
+    const webview = makeWebview([
+      {
+        tagName: 'button',
+        selector: 'button#x',
+        accessibleName: `a\nmarkdown *injection*\n${'x'.repeat(200)}`,
+        textSnippet: '  spaced\n  text  '
+      }
+    ])
+    const logs = await resolveMarkupShapeElements(webview as never, [arrow])
+    const element = logs[0]?.element
+    expect(element?.accessibleName?.includes('\n')).toBe(false)
+    expect(element?.accessibleName?.length).toBeLessThanOrEqual(80)
+    expect(element?.accessibleName).toContain('a markdown *injection*')
+    expect(element?.textSnippet).toBe('spaced text')
+  })
+
+  it('drops malformed element payloads', async () => {
+    const webview = makeWebview([{ tagName: 42 }, { selector: 'div.x' }])
+    const logs = await resolveMarkupShapeElements(webview as never, [arrow, arrow])
+    expect(logs[0]?.element).toBeNull()
+    expect(logs[1]?.element).toBeNull()
   })
 })

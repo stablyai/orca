@@ -1,10 +1,4 @@
 // Element/shape label formatting for recorder log lines.
-//
-// Both the element picker steps and the markup shape tree render elements as
-// `tag "accessible name" (selector-suffix)` — the selector is shortened to its
-// most specific trailing fragment so the line stays short. Markup shapes
-// additionally carry geometry and the element they point at, rendered as a
-// tree hanging off the numbered markup lead.
 import type {
   BrowserRecorderElementSummary,
   BrowserRecorderMarkupElement,
@@ -13,7 +7,7 @@ import type {
 import { inlineText } from './browser-recorder-text'
 
 export function elementLabel(element: BrowserRecorderElementSummary): string {
-  const accessibleName = element.accessibleName?.trim()
+  const accessibleName = element.accessibleName ? inlineText(element.accessibleName, 80) : ''
   const base = accessibleName
     ? `${element.tagName} "${accessibleName}"`
     : element.textSnippet.trim()
@@ -24,7 +18,7 @@ export function elementLabel(element: BrowserRecorderElementSummary): string {
 }
 
 function markupElementLabel(element: BrowserRecorderMarkupElement): string {
-  const accessibleName = element.accessibleName?.trim()
+  const accessibleName = element.accessibleName ? inlineText(element.accessibleName, 80) : ''
   const base = accessibleName
     ? `${element.tagName} "${accessibleName}"`
     : element.textSnippet.trim()
@@ -42,10 +36,6 @@ function selectorSuffix(tagName: string, selector: string): string {
   return last.replace(new RegExp(`^${tagName}`), '')
 }
 
-// Why: markup logs the drawn shapes as text — geometry plus the DOM element
-// each shape points at — so an agent that only sees the copied markdown log
-// still learns what the scribble means without the screenshot. Rendered as a
-// tree: one line per shape hanging off the markup lead.
 const MARKUP_LOG_MAX_SHAPES = 10
 
 export function formatMarkupShapesTree(shapes: readonly BrowserRecorderMarkupShapeLog[]): string {

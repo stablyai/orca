@@ -4872,10 +4872,14 @@ function BrowserPagePane({
   useEffect(() => {
     return () => {
       if (recorderRecordingRef.current) {
-        void window.api.browser.setRecorderEnabled({
-          enabled: false,
-          browserPageId: browserTab.id
-        })
+        void window.api.browser
+          .setRecorderEnabled({
+            enabled: false,
+            browserPageId: browserTab.id
+          })
+          // Why: normalize IPC rejection like the stop path — guest teardown
+          // can reject, and an unhandled rejection is invisible to the user.
+          .catch(() => false)
       }
     }
   }, [browserTab.id])

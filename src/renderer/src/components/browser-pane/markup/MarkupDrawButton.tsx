@@ -133,8 +133,12 @@ export function MarkupDrawButton({
             </div>
             <p className="text-xs leading-5 text-muted-foreground">
               {translate(
-                'auto.components.browser-pane.markup.drawHint',
-                'Draw on the page, then copy the markup to paste into your agent.'
+                recordActive
+                  ? 'auto.components.browser-pane.markup.hintRecording'
+                  : 'auto.components.browser-pane.markup.hint',
+                recordActive
+                  ? 'Draw on the page, then add it to the recording log.'
+                  : 'Draw on the page, then copy the markup to paste into your agent.'
               )}
             </p>
           </div>
