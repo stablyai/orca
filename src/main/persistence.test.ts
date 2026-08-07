@@ -622,6 +622,33 @@ describe('Store', () => {
     })
   })
 
+  it('keeps a repo-backed project Claude account preference across repo updates and reload', async () => {
+    writeDataFile({
+      ...getDefaultPersistedState(testState.dir),
+      repos: [makeRepo({ id: 'r1', path: '/repo', displayName: 'Repo' })]
+    })
+    const store = await createStore()
+    expect(store.getProjects().map((project) => project.id)).toEqual(['repo:r1'])
+
+    const updated = store.updateProject('repo:r1', {
+      claudeAccountPreference: { kind: 'account', accountId: 'acct-1' }
+    })
+    expect(updated?.claudeAccountPreference).toEqual({ kind: 'account', accountId: 'acct-1' })
+
+    store.updateRepo('r1', { displayName: 'Repo renamed' })
+    expect(store.getProjects()[0]?.claudeAccountPreference).toEqual({
+      kind: 'account',
+      accountId: 'acct-1'
+    })
+
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getProjects()[0]?.claudeAccountPreference).toEqual({
+      kind: 'account',
+      accountId: 'acct-1'
+    })
+  })
+
   it('deletes the project Claude account preference for undefined, inherit-global, and malformed updates', async () => {
     const project = makeProject({
       id: 'project-1',

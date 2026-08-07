@@ -2459,13 +2459,25 @@ function mergeProjectHostSetupCompatibilityState(
     }))
   const projectedProjects = projection.projects.map((project) => {
     const existingProject = existingProjectsById.get(project.id)
-    return existingProject?.localWindowsRuntimePreference
-      ? {
-          ...project,
-          localWindowsRuntimePreference: existingProject.localWindowsRuntimePreference,
-          updatedAt: Math.max(project.updatedAt, existingProject.updatedAt)
-        }
-      : project
+    if (!existingProject) {
+      return project
+    }
+    // Why: projections rebuild projects from repos, so user-set per-project preferences must be carried over or they vanish on every repo sync.
+    const carried: Partial<Project> = {}
+    if (existingProject.localWindowsRuntimePreference) {
+      carried.localWindowsRuntimePreference = existingProject.localWindowsRuntimePreference
+    }
+    if (existingProject.claudeAccountPreference) {
+      carried.claudeAccountPreference = existingProject.claudeAccountPreference
+    }
+    if (Object.keys(carried).length === 0) {
+      return project
+    }
+    return {
+      ...project,
+      ...carried,
+      updatedAt: Math.max(project.updatedAt, existingProject.updatedAt)
+    }
   })
   return {
     projects: [...projectedProjects, ...independentProjects],
