@@ -212,7 +212,7 @@ describe('parseOrcaYaml', () => {
       ...entries
     ].join('\n')
 
-    const env = parseOrcaYaml(yaml).defaultTabs?.[0]?.env ?? {}
+    const env = parseOrcaYaml(yaml)?.defaultTabs?.[0]?.env ?? {}
     expect(Object.keys(env)).toHaveLength(MAX_ORCA_YAML_COLLECTION_ENTRIES)
     expect(env.VAR_000).toBe('value-0')
     expect(env[`VAR_${String(MAX_ORCA_YAML_COLLECTION_ENTRIES - 1).padStart(3, '0')}`]).toBe(
