@@ -16,7 +16,10 @@ import type { TerminalPaneSplitSource } from '../shared/feature-education-teleme
 import type { TerminalTabCreateReply } from '../shared/terminal-reveal-identity'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../shared/codex-startup-delivery'
-import type { BrowserRecorderStreamEvent } from '../shared/browser-recorder-automation'
+import type {
+  BrowserRecorderOptions,
+  BrowserRecorderStreamEvent
+} from '../shared/browser-recorder-automation'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -2742,7 +2745,11 @@ const api = {
       enabled: boolean
       browserPageId?: string
       worktreeId?: string
+      options?: Partial<BrowserRecorderOptions>
     }): Promise<boolean> => ipcRenderer.invoke('browser:setRecorderEnabled', args),
+
+    setRecorderOptions: (args: { options: Partial<BrowserRecorderOptions> }): Promise<boolean> =>
+      ipcRenderer.invoke('browser:setRecorderOptions', args),
 
     onRecorderEvent: (callback: (event: BrowserRecorderStreamEvent) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, record: BrowserRecorderStreamEvent) =>

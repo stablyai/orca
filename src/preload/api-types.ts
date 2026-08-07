@@ -342,7 +342,10 @@ import type {
   BrowserExtractHoverArgs,
   BrowserExtractHoverResult
 } from '../shared/browser-grab-types'
-import type { BrowserRecorderStreamEvent } from '../shared/browser-recorder-automation'
+import type {
+  BrowserRecorderOptions,
+  BrowserRecorderStreamEvent
+} from '../shared/browser-recorder-automation'
 import type {
   BrowserContextMenuDismissedEvent,
   BrowserContextMenuRequestedEvent,
@@ -622,7 +625,9 @@ export type BrowserApi = {
     enabled: boolean
     browserPageId?: string
     worktreeId?: string
+    options?: Partial<BrowserRecorderOptions>
   }) => Promise<boolean>
+  setRecorderOptions: (args: { options: Partial<BrowserRecorderOptions> }) => Promise<boolean>
   onRecorderEvent: (callback: (event: BrowserRecorderStreamEvent) => void) => () => void
   sessionListProfiles: () => Promise<BrowserSessionProfile[]>
   sessionCreateProfile: (

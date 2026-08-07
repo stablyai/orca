@@ -6,6 +6,10 @@ import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
 import { browserActionRecorder } from '../browser/browser-action-recorder'
 import {
+  normalizeRecorderOptions,
+  type BrowserRecorderOptions
+} from '../../shared/browser-recorder-automation'
+import {
   pickCookieFile,
   importCookiesFromFile,
   detectInstalledBrowsers,
@@ -221,6 +225,7 @@ export function registerBrowserHandlers(): void {
   ipcMain.removeHandler('browser:captureSelectionScreenshot')
   ipcMain.removeHandler('browser:extractHoverPayload')
   ipcMain.removeHandler('browser:setRecorderEnabled')
+  ipcMain.removeHandler('browser:setRecorderOptions')
   ipcMain.removeHandler('browser:activeTabChanged')
   ipcMain.removeHandler('browser:proceedCertificate')
 
@@ -228,15 +233,34 @@ export function registerBrowserHandlers(): void {
   // while enabled and streams action records back over browser:recorder-action.
   ipcMain.handle(
     'browser:setRecorderEnabled',
-    (_event, args: { enabled?: boolean; browserPageId?: string; worktreeId?: string }) => {
+    (
+      _event,
+      args: {
+        enabled?: boolean
+        browserPageId?: string
+        worktreeId?: string
+        options?: Partial<BrowserRecorderOptions>
+      }
+    ) => {
       return browserActionRecorder.setEnabled(
         args?.enabled === true,
         { worktreeId: args?.worktreeId, browserPageId: args?.browserPageId },
         {
           getBridge: () => agentBrowserBridgeRef,
           getWindow: () => BrowserWindow.fromWebContents(_event.sender) ?? undefined
-        }
+        },
+        normalizeRecorderOptions(args?.options)
       )
+    }
+  )
+
+  // Why: the checkbox menu toggles streams mid-session — a separate channel
+  // so the recording keeps running while options change.
+  ipcMain.handle(
+    'browser:setRecorderOptions',
+    (_event, args: { options?: Partial<BrowserRecorderOptions> }) => {
+      browserActionRecorder.setOptions(normalizeRecorderOptions(args?.options))
+      return true
     }
   )
 

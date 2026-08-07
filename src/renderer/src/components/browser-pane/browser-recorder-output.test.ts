@@ -75,6 +75,29 @@ describe('formatBrowserRecorderStepsAsMarkdown', () => {
     expect(output).toContain('  └ arrow (120,340)→(410,380) → button "Kaydet" (#submit)')
   })
 
+  it('keeps the full annotation comment in the log (no 80-char slice)', () => {
+    // Why: the annotation budget allows 2000 chars — a truncated comment hid
+    // the actual request/question text the user wrote for the agent.
+    const sentence =
+      'Bu butona basınca stok kartı açılıyor ama tarih alanı yanlış geliyor; ' +
+      'lütfen tarih formatını DD.MM.YYYY yapın ve kayıt sonrası listeye dönüşte ' +
+      'sayfanın en üste scroll olmasını engelleyin.'
+    const longComment = `${sentence}${sentence}`
+    expect(longComment.length).toBeGreaterThan(80)
+    const output = formatBrowserRecorderStepsAsMarkdown([
+      makeStep({
+        detail: {
+          kind: 'annotation-added',
+          element,
+          comment: longComment,
+          intent: 'question'
+        }
+      })
+    ])
+    expect(output).toContain(`[question]: "${longComment}"`)
+    expect(output).not.toContain('…')
+  })
+
   it('annotates steps with the gap since the previous step (+Ns / +Ms)', () => {
     const base = '2026-07-31T10:15:30.000Z'
     const output = formatBrowserRecorderStepsAsMarkdown([

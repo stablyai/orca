@@ -15,8 +15,10 @@ import type { BrowserWindow } from 'electron'
 import {
   BROWSER_RECORDER_ACTION_CHANNEL,
   BROWSER_RECORDER_BUDGET,
+  BROWSER_RECORDER_DEFAULT_OPTIONS,
   type BrowserRecorderAutomationAction,
   type BrowserRecorderDomFingerprint,
+  type BrowserRecorderOptions,
   type BrowserRecorderStreamEvent
 } from '../../shared/browser-recorder-automation'
 import type { AgentBrowserBridge } from './agent-browser-bridge'
@@ -54,6 +56,11 @@ export class BrowserActionRecorder {
     return this.enabled
   }
 
+  /** Updates which streams the active session records (no-op when idle). */
+  setOptions(options: BrowserRecorderOptions): void {
+    this.observer?.setOptions(options)
+  }
+
   /**
    * Enables or disables the recorder. When enabling with a target, a session
    * observer is started (interactions/console/network); disabling stops it.
@@ -63,9 +70,13 @@ export class BrowserActionRecorder {
   setEnabled(
     enabled: boolean,
     target: BrowserActionRecorderTarget = {},
-    hooks?: BrowserRecorderObserverHookInput
+    hooks?: BrowserRecorderObserverHookInput,
+    options: BrowserRecorderOptions = { ...BROWSER_RECORDER_DEFAULT_OPTIONS }
   ): boolean {
     if (this.enabled === enabled) {
+      if (enabled && this.observer) {
+        this.observer.setOptions(options)
+      }
       return enabled ? this.observer != null : true
     }
     this.enabled = enabled
@@ -77,7 +88,8 @@ export class BrowserActionRecorder {
           getWindow: hooks?.getWindow ?? (() => undefined),
           send: (event) => this.sendEvent(event)
         },
-        target
+        target,
+        options
       )
       const attached = this.observer.start()
       if (!attached) {

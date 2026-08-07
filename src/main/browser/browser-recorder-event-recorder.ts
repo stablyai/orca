@@ -2,9 +2,11 @@
 
 import {
   BROWSER_RECORDER_BUDGET,
+  BROWSER_RECORDER_DEFAULT_OPTIONS,
   type BrowserRecorderConsoleEntry,
   type BrowserRecorderInteraction,
   type BrowserRecorderNetworkRequest,
+  type BrowserRecorderOptions,
   type BrowserRecorderStreamEvent
 } from '../../shared/browser-recorder-automation'
 import {
@@ -15,6 +17,7 @@ import {
   type BrowserRecorderInteractionPayload,
   type BrowserRecorderRequestPayload
 } from './browser-recorder-message-parsing'
+import { isChallengeRequest, isConsoleNoise, requestKey } from './browser-recorder-event-filters'
 import { capText } from './browser-action-recorder-utils'
 import {
   ConsoleStreakBuffer,
@@ -25,77 +28,10 @@ import {
 import type { BrowserRecorderPageSource } from './browser-recorder-page-source'
 import type { BrowserRecorderWebRequestDetails } from './browser-recorder-web-request'
 
-/** Turnstile/Cloudflare challenge traffic — page-level noise, not app flow. */
-function isChallengeRequest(url: string, origin: string): boolean {
-  const haystack = `${url} ${origin}`
-  return (
-    haystack.includes('/cdn-cgi/challenge-platform/') ||
-    haystack.includes('challenges.cloudflare.com')
-  )
-}
-
-function requestKey(url: string, method: string): string {
-  // Why: the page hook reports relative URLs while webRequest reports
-  // absolute ones — normalize both to path+search so dedup matches.
-  // Decode the search too: one path percent-encodes (filter=Servis%20Hareket),
-  // the other sends it raw (filter=Servis Hareket Raporu), and those must
-  // dedupe against each other.
-  try {
-    const parsed = new URL(url, 'http://localhost')
-    let search = parsed.search
-    try {
-      search = decodeURIComponent(search)
-    } catch {
-      // malformed percent-encoding — keep as-is
-    }
-    return `${method}|${parsed.pathname}${search}`
-  } catch {
-    return `${method}|${url}`
-  }
-}
-
-/** Filters app console chatter so real messages stay visible. */
-function isConsoleNoise(details: ConsoleMessageDetails): boolean {
-  if (details.level === 'debug') {
-    return true
-  }
-  const message = (details.message ?? '').trim()
-  if (message.length < 3) {
-    return true
-  }
-  // Why: errors and warnings are the reason the recorder watches the console —
-  // never filter them out as token-shaped chatter.
-  if (details.level === 'error' || details.level === 'warning') {
-    return false
-  }
-  if (message === '[object Object]') {
-    return true
-  }
-  // "1 null", "42 false" — app-internal counter reports.
-  if (/^\d+\s+(null|false|true|undefined)$/i.test(message)) {
-    return true
-  }
-  // Why: framework/page chatter that adds no flow value — WebGL driver
-  // warnings, Turnstile/Cloudflare token logs, console.group bookkeeping,
-  // %c-formatted style probes, and short token-like strings.
-  if (
-    message.startsWith('WebGL:') ||
-    message.startsWith('WebGL INVALID') ||
-    message.startsWith('console.group') ||
-    message.startsWith('%c') ||
-    message === '[object HTMLAnchorElement]' ||
-    message.startsWith('service ') ||
-    // Why: token-shaped one-liners ('a1b2c3') without a message part; real
-    // 'TypeError: x' style messages carry a ': ' suffix and are kept.
-    /^[A-Za-z0-9]{3,16}$/.test(message)
-  ) {
-    return true
-  }
-  return false
-}
-
 export class BrowserRecorderEventRecorder {
   private readonly consoleStreak = new ConsoleStreakBuffer()
+  /** Which streams this session records; renderer toggles at runtime. */
+  private options: BrowserRecorderOptions = { ...BROWSER_RECORDER_DEFAULT_OPTIONS }
   private interactionCount = 0
   private consoleCount = 0
   private requestCount = 0
@@ -121,7 +57,28 @@ export class BrowserRecorderEventRecorder {
     this.pendingWebRequestTimers.clear()
   }
 
+  /**
+   * Updates which streams are recorded mid-session. Disabling console drains
+   * the streak buffer first so messages captured while it was enabled still
+   * reach the log before new ones start being skipped.
+   */
+  setOptions(options: BrowserRecorderOptions): void {
+    if (this.options.console && !options.console) {
+      this.flushConsoleStreak()
+    }
+    this.options = options
+  }
+
   recordInteraction(payload: BrowserRecorderInteractionPayload): void {
+    // Why: storage writes and websocket frames are separate, toggleable
+    // streams — skip them before touching the interaction counter so their
+    // budget slots stay available for real clicks/typing when disabled.
+    if (payload.type === 'storage' && !this.options.storage) {
+      return
+    }
+    if (payload.type === 'ws' && !this.options.ws) {
+      return
+    }
     if (this.interactionCount >= BROWSER_RECORDER_BUDGET.interactionMaxPerSession) {
       if (!this.interactionCapWarned) {
         this.interactionCapWarned = true
@@ -161,6 +118,9 @@ export class BrowserRecorderEventRecorder {
   }
 
   async recordRequest(payload: BrowserRecorderRequestPayload): Promise<void> {
+    if (!this.options.requests) {
+      return
+    }
     // Why: Turnstile/Cloudflare challenge traffic is page-level noise — its
     // token bodies are huge base64 blobs and carry no app-flow information.
     if (isChallengeRequest(payload.url ?? '', payload.origin ?? '')) {
@@ -187,8 +147,10 @@ export class BrowserRecorderEventRecorder {
       startedAt: new Date().toISOString(),
       method: payload.method ?? 'GET',
       url: redactRequestUrl(payload.url ?? ''),
+      // Why: 'request details' is a separate toggle — with it off the log
+      // keeps the request line (method/url/status) but drops the bodies.
       postData:
-        payload.body && payload.body.length > 0
+        this.options.requestDetails && payload.body && payload.body.length > 0
           ? redactPostData(payload.body, BROWSER_RECORDER_BUDGET.requestBodyMaxLength)
           : null,
       status: payload.status ?? null,
@@ -197,7 +159,7 @@ export class BrowserRecorderEventRecorder {
       triggeredBy: this.lastTriggerId,
       kind: payload.kind ?? 'xhr',
       response:
-        payload.response && payload.response.length > 0
+        this.options.requestDetails && payload.response && payload.response.length > 0
           ? capText(
               redactResponseText(payload.response),
               // Why: in-page head+tail truncation keeps ~8KB plus an omitted
@@ -206,9 +168,10 @@ export class BrowserRecorderEventRecorder {
               BROWSER_RECORDER_BUDGET.responseMaxLength + 300
             )
           : null,
-      responseSize: payload.responseSize ?? 0,
-      responseTruncated: payload.responseTruncated === true,
-      responseSchema: payload.responseSchema === 'html' ? 'html' : 'text',
+      responseSize: this.options.requestDetails ? (payload.responseSize ?? 0) : 0,
+      responseTruncated: this.options.requestDetails && payload.responseTruncated === true,
+      responseSchema:
+        this.options.requestDetails && payload.responseSchema === 'html' ? 'html' : 'text',
       screenChanged: await this.pageSource.screenChangedSinceLast()
     }
     this.send({ kind: 'network-request', request })
@@ -220,6 +183,9 @@ export class BrowserRecorderEventRecorder {
    * richer page record (with body/origin) wins the race.
    */
   recordWebRequest(details: BrowserRecorderWebRequestDetails): void {
+    if (!this.options.requests) {
+      return
+    }
     if (isChallengeRequest(details.url, '')) {
       return
     }
@@ -281,6 +247,9 @@ export class BrowserRecorderEventRecorder {
   }
 
   recordConsoleEntry(details: ConsoleMessageDetails, now = new Date().toISOString()): void {
+    if (!this.options.console) {
+      return
+    }
     // Why: debug-level chatter and junk-shaped one-liners ("22", "1 false",
     // "[object Object]") dominate app console output — drop them so real
     // errors and warnings stay visible in the flow.

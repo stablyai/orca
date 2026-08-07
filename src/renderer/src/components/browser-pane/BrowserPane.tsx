@@ -49,6 +49,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { BrowserAnnotationSendMenuContent } from './BrowserAnnotationSendMenuContent'
+import { BrowserRecorderOptionsMenu } from './BrowserRecorderOptionsMenu'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -4793,7 +4794,8 @@ function BrowserPagePane({
       const attached = await window.api.browser
         .setRecorderEnabled({
           enabled: true,
-          browserPageId: browserTab.id
+          browserPageId: browserTab.id,
+          options: recorder.options
         })
         // Why: normalize IPC rejection to false so the toggle stays fail-closed.
         .catch(() => false)
@@ -5573,35 +5575,40 @@ function BrowserPagePane({
             <TooltipTrigger asChild>
               {/* Why: disabled <button> drops hover events, so wrap in a span so the tooltip trigger still fires. */}
               <span className="inline-flex">
-                <Button
-                  size="icon"
-                  variant={recorder.recording ? 'default' : 'ghost'}
-                  className={cn(
-                    'relative h-8 w-8',
-                    recorder.recording &&
-                      'bg-destructive text-destructive-foreground hover:bg-destructive/90'
-                  )}
-                  onClick={handleToggleBrowserRecorder}
-                  aria-label={
-                    recorder.recording
-                      ? translate(
-                          'auto.components.browser.pane.BrowserPane.f039b073be',
-                          'Stop recording'
-                        )
-                      : translate(
-                          'auto.components.browser.pane.BrowserPane.c220f1eac9',
-                          'Record browser actions'
-                        )
-                  }
-                  data-contextual-tour-target="browser-recorder-control"
+                <BrowserRecorderOptionsMenu
+                  options={recorder.options}
+                  onToggle={recorder.setOption}
                 >
-                  <CircleDot className="size-4" />
-                  {recorder.stepCount > 0 ? (
-                    <span className="absolute -top-1 -right-1 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] leading-4 text-primary-foreground">
-                      {recorder.stepCount}
-                    </span>
-                  ) : null}
-                </Button>
+                  <Button
+                    size="icon"
+                    variant={recorder.recording ? 'default' : 'ghost'}
+                    className={cn(
+                      'relative h-8 w-8',
+                      recorder.recording &&
+                        'bg-destructive text-destructive-foreground hover:bg-destructive/90'
+                    )}
+                    onClick={handleToggleBrowserRecorder}
+                    aria-label={
+                      recorder.recording
+                        ? translate(
+                            'auto.components.browser.pane.BrowserPane.f039b073be',
+                            'Stop recording'
+                          )
+                        : translate(
+                            'auto.components.browser.pane.BrowserPane.c220f1eac9',
+                            'Record browser actions'
+                          )
+                    }
+                    data-contextual-tour-target="browser-recorder-control"
+                  >
+                    <CircleDot className="size-4" />
+                    {recorder.stepCount > 0 ? (
+                      <span className="absolute -top-1 -right-1 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] leading-4 text-primary-foreground">
+                        {recorder.stepCount}
+                      </span>
+                    ) : null}
+                  </Button>
+                </BrowserRecorderOptionsMenu>
               </span>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={4}>

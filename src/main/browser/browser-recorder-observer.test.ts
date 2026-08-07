@@ -8,7 +8,11 @@ import {
   redactRequestUrl,
   redactResponseText
 } from './browser-recorder-message-parsing'
-import { BROWSER_RECORDER_ACTION_CHANNEL } from '../../shared/browser-recorder-automation'
+import {
+  BROWSER_RECORDER_ACTION_CHANNEL,
+  normalizeRecorderOptions,
+  type BrowserRecorderOptions
+} from '../../shared/browser-recorder-automation'
 
 describe('recorder message parsers', () => {
   it('parses typing bursts, keys, hovers, and requests from tagged lines', () => {
@@ -200,14 +204,15 @@ describe('BrowserActionRecorder session observer', () => {
     const pageInfo = { browserPageId: 'page-1', url: 'https://example.com/a', title: 'A' }
     getPageInfo.mockReturnValue(pageInfo)
     getPageWebContents.mockReturnValue(webContents)
-    const enable = () =>
+    const enable = (options?: Partial<BrowserRecorderOptions>) =>
       recorder.setEnabled(
         true,
         { worktreeId: 'wt-1', browserPageId: 'page-1' },
         {
           getBridge: () => bridge as never,
           getWindow: () => windowLike as never
-        }
+        },
+        normalizeRecorderOptions(options)
       )
     const fireConsole = (message: string, level = 'info') =>
       consoleListeners.get('console-message')?.({
@@ -442,6 +447,98 @@ describe('BrowserActionRecorder session observer', () => {
       }
     })
     recorder.setEnabled(false)
+  })
+
+  it('skips storage interactions when the storage option is off', () => {
+    const { recorder, send, enable, fireConsole } = makeObserverHarness()
+    enable({ storage: false })
+    fireConsole(
+      `__orca_recorder__ ${JSON.stringify({
+        type: 'storage',
+        storageKey: 'SUZ_FORM_CACHE',
+        storageValue: 'filtre'
+      })}`
+    )
+    expect(send).not.toHaveBeenCalled()
+    recorder.setEnabled(false)
+  })
+
+  it('skips websocket interactions when the ws option is off', () => {
+    const { recorder, send, enable, fireConsole } = makeObserverHarness()
+    enable({ ws: false })
+    fireConsole(
+      `__orca_recorder__ ${JSON.stringify({
+        type: 'ws',
+        wsText: 'stok güncellendi'
+      })}`
+    )
+    expect(send).not.toHaveBeenCalled()
+    recorder.setEnabled(false)
+  })
+
+  it('skips console entries when the console option is off', () => {
+    const { recorder, send, enable, fireConsole } = makeObserverHarness()
+    enable({ console: false })
+    fireConsole('some error', 'error')
+    fireConsole('another message')
+    expect(send).not.toHaveBeenCalled()
+    recorder.setEnabled(false)
+  })
+
+  it('skips requests (page hook and webRequest net) when the requests option is off', async () => {
+    const { recorder, send, enable, fireConsole, fireWebRequest } = makeObserverHarness()
+    enable({ requests: false })
+    fireConsole(
+      `__orca_recorder__ ${JSON.stringify({
+        type: 'request',
+        method: 'POST',
+        url: 'https://example.com/api/stok',
+        body: 'islem=stok_kaydet'
+      })}`
+    )
+    fireWebRequest({ url: 'https://example.com/api/other', method: 'GET' })
+    await new Promise((resolve) => setTimeout(resolve, 400))
+    expect(send).not.toHaveBeenCalled()
+    recorder.setEnabled(false)
+  })
+
+  it('drops request bodies when request details are off but keeps the request line', async () => {
+    const { recorder, send, enable, fireConsole } = makeObserverHarness()
+    enable({ requestDetails: false })
+    fireConsole(
+      `__orca_recorder__ ${JSON.stringify({
+        type: 'request',
+        method: 'POST',
+        url: 'https://example.com/api/stok',
+        body: 'islem=stok_kaydet&sifre=hunter2',
+        response: '<table><tr><td>6675</td></tr></table>',
+        status: 200
+      })}`
+    )
+    await vi.waitFor(() => {
+      expect(send).toHaveBeenCalledTimes(1)
+    })
+    const [, event] = send.mock.calls[0] as [string, Record<string, unknown>]
+    expect(event).toMatchObject({
+      kind: 'network-request',
+      request: {
+        method: 'POST',
+        status: 200,
+        postData: null,
+        response: null,
+        responseTruncated: false
+      }
+    })
+    recorder.setEnabled(false)
+  })
+
+  it('does not emit a network summary when requests are off', async () => {
+    const { recorder, networkLog, enable } = makeObserverHarness()
+    enable({ requests: false })
+    recorder.setEnabled(false)
+    await vi.waitFor(() => {
+      expect(networkLog).not.toHaveBeenCalled()
+    })
   })
 
   it('caps console entries and warns once when the cap is reached', () => {

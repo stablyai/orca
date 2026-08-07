@@ -260,3 +260,41 @@ export const BROWSER_RECORDER_BUDGET = {
   /** Cap on the request origin string ('fn@file:line'). */
   originMaxLength: 120
 } as const
+
+/** Which event stream a recording session captures (renderer-controlled). */
+export type BrowserRecorderOptionKey = 'console' | 'requests' | 'requestDetails' | 'storage' | 'ws'
+
+export type BrowserRecorderOptions = Record<BrowserRecorderOptionKey, boolean>
+
+export const BROWSER_RECORDER_OPTION_KEYS: readonly BrowserRecorderOptionKey[] = [
+  'console',
+  'requests',
+  'requestDetails',
+  'storage',
+  'ws'
+]
+
+export const BROWSER_RECORDER_DEFAULT_OPTIONS: BrowserRecorderOptions = {
+  console: true,
+  requests: true,
+  requestDetails: true,
+  storage: true,
+  ws: true
+}
+
+/**
+ * Defensive IPC boundary: keeps only known keys and coerces values to
+ * booleans, so a malformed renderer payload cannot crash the recorder.
+ * Unknown keys fall back to enabled — only explicit toggles disable a stream.
+ */
+export function normalizeRecorderOptions(
+  input: Partial<BrowserRecorderOptions> | undefined
+): BrowserRecorderOptions {
+  const out = { ...BROWSER_RECORDER_DEFAULT_OPTIONS }
+  for (const key of BROWSER_RECORDER_OPTION_KEYS) {
+    if (typeof input?.[key] === 'boolean') {
+      out[key] = input[key]
+    }
+  }
+  return out
+}

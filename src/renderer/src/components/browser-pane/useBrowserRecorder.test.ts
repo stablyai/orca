@@ -50,6 +50,7 @@ function createReactHookHarness() {
 describe('useBrowserRecorder', () => {
   afterEach(() => {
     vi.doUnmock('react')
+    vi.unstubAllGlobals()
     vi.resetModules()
   })
 
@@ -218,6 +219,44 @@ describe('useBrowserRecorder', () => {
     expect(cleared.steps).toEqual([])
     expect(cleared.recording).toBe(true)
     expect(cleared.startedAt).not.toBeNull()
+  })
+
+  it('toggles record options and pushes them to main via IPC', async () => {
+    const setRecorderOptions = vi.fn(() => Promise.resolve(true))
+    vi.stubGlobal('window', { api: { browser: { setRecorderOptions } } })
+    const harness = createReactHookHarness()
+    vi.doMock('react', () => harness.react)
+    const { BROWSER_RECORDER_DEFAULT_OPTIONS } =
+      await import('../../../../shared/browser-recorder-automation')
+    const useBrowserRecorder = await loadRecorder()
+
+    harness.beginRender()
+    const recorder = useBrowserRecorder('page-1')
+    expect(recorder.options).toEqual(BROWSER_RECORDER_DEFAULT_OPTIONS)
+
+    recorder.setOption('console', false)
+    harness.beginRender()
+    const after = useBrowserRecorder('page-1')
+    expect(after.options.console).toBe(false)
+    expect(setRecorderOptions).toHaveBeenCalledWith({
+      options: { ...BROWSER_RECORDER_DEFAULT_OPTIONS, console: false }
+    })
+
+    // Why: request details are a subset of requests — disabling requests must
+    // cascade the details checkbox off too.
+    after.setOption('requests', false)
+    harness.beginRender()
+    const cascaded = useBrowserRecorder('page-1')
+    expect(cascaded.options.requests).toBe(false)
+    expect(cascaded.options.requestDetails).toBe(false)
+    expect(setRecorderOptions).toHaveBeenLastCalledWith({
+      options: {
+        ...BROWSER_RECORDER_DEFAULT_OPTIONS,
+        console: false,
+        requests: false,
+        requestDetails: false
+      }
+    })
   })
 })
 

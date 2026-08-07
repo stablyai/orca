@@ -1,6 +1,11 @@
 import { useCallback, useRef, useState } from 'react'
 
 import {
+  BROWSER_RECORDER_DEFAULT_OPTIONS,
+  type BrowserRecorderOptionKey,
+  type BrowserRecorderOptions
+} from '../../../../shared/browser-recorder-automation'
+import {
   RECORDER_BUDGET,
   type BrowserRecorderStep,
   type BrowserRecorderStepDetail
@@ -17,6 +22,9 @@ export type BrowserRecorderHook = {
   stepCount: number
   /** ISO timestamp of when the current recording session started. */
   startedAt: string | null
+  /** Which streams the session records; toggles are pushed to main via IPC. */
+  options: BrowserRecorderOptions
+  setOption: (key: BrowserRecorderOptionKey, enabled: boolean) => void
   toggle: (page?: BrowserRecorderPageContext) => void
   clear: () => void
   /** Appends a step only while recording is active. */
@@ -33,8 +41,25 @@ export function useBrowserRecorder(browserPageId: string): BrowserRecorderHook {
   const recordingRef = useRef(false)
   const [steps, setSteps] = useState<BrowserRecorderStep[]>([])
   const [startedAt, setStartedAt] = useState<string | null>(null)
+  const [options, setOptions] = useState<BrowserRecorderOptions>({
+    ...BROWSER_RECORDER_DEFAULT_OPTIONS
+  })
   const pageIdRef = useRef(browserPageId)
   pageIdRef.current = browserPageId
+
+  const setOption = useCallback(
+    (key: BrowserRecorderOptionKey, enabled: boolean): void => {
+      const next = { ...options, [key]: enabled }
+      // Why: request details are a subset of requests — turning requests off
+      // must not leave a dangling details-only state in the menu.
+      if (key === 'requests' && !enabled) {
+        next.requestDetails = false
+      }
+      setOptions(next)
+      void window.api.browser.setRecorderOptions({ options: next }).catch(() => {})
+    },
+    [options]
+  )
 
   const recordStep = useCallback(
     (detail: BrowserRecorderStepDetail, page: BrowserRecorderPageContext): void => {
@@ -87,5 +112,15 @@ export function useBrowserRecorder(browserPageId: string): BrowserRecorderHook {
     }
   }, [])
 
-  return { recording, steps, stepCount: steps.length, startedAt, toggle, clear, recordStep }
+  return {
+    recording,
+    steps,
+    stepCount: steps.length,
+    startedAt,
+    options,
+    setOption,
+    toggle,
+    clear,
+    recordStep
+  }
 }

@@ -13810,6 +13810,15 @@
             "f23f6712a2": "Clear log",
             "collapse": "Collapse log",
             "expand": "Expand log"
+          },
+          "BrowserRecorderOptionsMenu": {
+            "recordOptionsLabel": "Record options",
+            "consoleMessages": "Console messages",
+            "networkRequests": "Network requests",
+            "requestDetails": "Request details",
+            "storageWrites": "Storage writes",
+            "webSocketMessages": "WebSocket messages",
+            "rightClickHint": "Right-click the record button to change what gets logged."
           }
         },
         "profile": {

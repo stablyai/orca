@@ -12,7 +12,9 @@
 import type { BrowserWindow, WebContents } from 'electron'
 
 import {
+  BROWSER_RECORDER_DEFAULT_OPTIONS,
   BROWSER_RECORDER_INTERACTION_TAG,
+  type BrowserRecorderOptions,
   type BrowserRecorderStreamEvent
 } from '../../shared/browser-recorder-automation'
 import type { AgentBrowserBridge } from './agent-browser-bridge'
@@ -47,6 +49,7 @@ export class BrowserRecorderSessionObserver {
   private readonly send: (event: BrowserRecorderStreamEvent) => void
   private readonly pageSource: BrowserRecorderPageSource
   private readonly events: BrowserRecorderEventRecorder
+  private options: BrowserRecorderOptions
   private attachedWebContents: WebContents | null = null
   private readonly handleConsoleMessage: (
     details: Electron.Event<Electron.WebContentsConsoleMessageEventParams>
@@ -72,12 +75,18 @@ export class BrowserRecorderSessionObserver {
   }
   private detachWebRequest: (() => void) | null = null
 
-  constructor(hooks: BrowserRecorderObserverHooks, target: BrowserActionRecorderTarget) {
+  constructor(
+    hooks: BrowserRecorderObserverHooks,
+    target: BrowserActionRecorderTarget,
+    options: BrowserRecorderOptions = { ...BROWSER_RECORDER_DEFAULT_OPTIONS }
+  ) {
     this.bridge = hooks.getBridge()
     this.target = target
     this.send = hooks.send
+    this.options = { ...options }
     this.pageSource = new BrowserRecorderPageSource(this.bridge, target)
     this.events = new BrowserRecorderEventRecorder(this.send, this.pageSource)
+    this.events.setOptions(options)
     this.handleConsoleMessage = (details) => {
       // Why: Electron ≥32 carries the console details on the event object;
       // the trailing positional args are deprecated legacy forms.
@@ -151,6 +160,15 @@ export class BrowserRecorderSessionObserver {
     void this.injectCaptureScript()
   }
 
+  /**
+   * Updates which streams the session records (console/requests/storage/…).
+   * Forwarded to the event recorder so toggles apply mid-session.
+   */
+  setOptions(options: BrowserRecorderOptions): void {
+    this.options = options
+    this.events.setOptions(options)
+  }
+
   private attach(webContents: WebContents): void {
     this.attachedWebContents = webContents
     webContents.on('console-message', this.handleConsoleMessage)
@@ -222,6 +240,11 @@ export class BrowserRecorderSessionObserver {
   }
 
   private async emitNetworkSummary(): Promise<void> {
+    // Why: without request capture the summary has no flow value — a session
+    // that opted out of requests should not emit a traffic report either.
+    if (!this.options.requests) {
+      return
+    }
     const summary = await this.pageSource.networkSummary()
     if (summary) {
       this.send({ kind: 'network-summary', summary })

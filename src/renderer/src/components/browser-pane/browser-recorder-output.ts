@@ -175,9 +175,13 @@ function compactStepBody(step: BrowserRecorderStep): string {
     case 'element-selected':
       return `selected ${elementLabel(step.detail.element)}`
     case 'annotation-added':
-      return `annotated ${elementLabel(step.detail.element)} [${step.detail.intent}]: "${inlineText(step.detail.comment, 80)}"`
+      // Why: annotations can carry the full GRAB_BUDGET.annotationCommentMaxLength
+      // (2000) — an 80-char slice hid the actual request/question text. The
+      // comment is user-authored, so keep the whole message (whitespace still
+      // collapses to one line via inlineText's default budget).
+      return `annotated ${elementLabel(step.detail.element)} [${step.detail.intent}]: "${inlineText(step.detail.comment)}"`
     case 'annotation-removed':
-      return `removed annotation: "${inlineText(step.detail.comment, 80)}"`
+      return `removed annotation: "${inlineText(step.detail.comment)}"`
     case 'markup':
       return formatMarkupShapesTree(step.detail.shapes)
     case 'automation-action':
