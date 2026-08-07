@@ -10273,6 +10273,64 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(10)
   })
 
+  it('reattaches a live remote-runtime pty instead of cold-restoring its own exact-key row', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    // The pane still owns its leaf, so its hook row is an EXACT-key hit, not an
+    // adopted one — the restored remote handle is valid and must be reattached.
+    const ownPaneKey = makePaneKey('tab-1', LEAF_1)
+    const restoredPtyId = 'remote:env-1@@terminal-1'
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: restoredPtyId }]
+      },
+      ptyIdsByTabId: { 'tab-1': [restoredPtyId] },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: LEAF_1 },
+          activeLeafId: LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_1]: restoredPtyId }
+        }
+      },
+      settings: {
+        ...mockStoreState.settings,
+        agentCmdOverrides: {}
+      },
+      agentStatusByPaneKey: {
+        [ownPaneKey]: {
+          state: 'working',
+          prompt: 'still running remotely',
+          agentType: 'codex',
+          paneKey: ownPaneKey,
+          worktreeId: 'wt-1',
+          tabId: 'tab-1',
+          updatedAt: 1,
+          stateStartedAt: 1,
+          stateHistory: [],
+          providerSession: { key: 'session_id', id: 'codex-session-1' }
+        }
+      },
+      sleepingAgentSessionsByPaneKey: {}
+    } as StoreState
+
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: restoredPtyId }
+    })
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(8)
+
+    // Cold-restoring here would tear the live remote agent off its pty and
+    // relaunch it with a resume command on every restart.
+    expect(deps.clearTabPtyId).not.toHaveBeenCalled()
+    expect(transport.connect).not.toHaveBeenCalledWith(
+      expect.objectContaining({ resumeProviderSession: expect.anything() })
+    )
+  })
+
   it('does not adopt a completed sleeping record on a rebuilt tab', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('fresh-pty')

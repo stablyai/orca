@@ -8895,6 +8895,12 @@ export function connectPanePty(
     const coldRestoreAgentStatus = getColdRestoreAgentStatus(storeSnapshot)
     const hasColdRestoreAgentSource = Boolean(
       coldRestoreAgentStatus &&
+      // Why: only an ADOPTED row (a lost leaf) justifies dropping this pane's
+      // restored handle. An exact-key hit means the pane still owns its leaf,
+      // so its handle is valid and must be reattached, not cold-restored —
+      // the exact-key path skips the leaf-still-bound guard that would
+      // otherwise catch this.
+      coldRestoreAgentStatus.paneKey !== cacheKey &&
       coldRestoreAgentStatus.state !== 'done' &&
       coldRestoreAgentStatus.providerSession &&
       isResumableTuiAgent(coldRestoreAgentStatus.agentType)
