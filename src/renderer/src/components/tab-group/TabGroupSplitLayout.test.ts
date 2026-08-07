@@ -107,6 +107,12 @@ describe('TabGroupSplitLayout', () => {
     }
   }
 
+  function getTopDragStripClassName(element: ReturnType<typeof TabGroupSplitLayout>) {
+    const wrapper = asElement(getLayoutWrapper(element))
+    const strip = React.Children.toArray(wrapper.props.children as React.ReactNode)[0]
+    return asElement(strip).props.className as string
+  }
+
   it('does not mark an offscreen worktree group as focused', () => {
     expect(getLeafPanelProps(false)).toEqual(
       expect.objectContaining({
@@ -205,5 +211,40 @@ describe('TabGroupSplitLayout', () => {
     ;(resizeHandle.props.onResizeStart as () => void)()
 
     expect(recordFeatureInteractionMock).toHaveBeenCalledWith('terminal-panes')
+  })
+
+  it('collapses the top drag strip to 0 for an unsplit layout', () => {
+    const className = getTopDragStripClassName(
+      TabGroupSplitLayout({
+        layout: { type: 'leaf', groupId: 'group-1' },
+        worktreeId: 'wt-1',
+        focusedGroupId: 'group-1',
+        isWorktreeActive: true
+      })
+    )
+
+    expect(className).toContain('h-0')
+    expect(className).toContain('bg-worktree-sidebar')
+    expect(className).not.toContain('h-[4px]')
+  })
+
+  it('keeps a 4px top drag strip for a split layout', () => {
+    const className = getTopDragStripClassName(
+      TabGroupSplitLayout({
+        layout: {
+          type: 'split',
+          direction: 'horizontal',
+          ratio: 0.5,
+          first: { type: 'leaf', groupId: 'left-group' },
+          second: { type: 'leaf', groupId: 'right-group' }
+        },
+        worktreeId: 'wt-1',
+        focusedGroupId: 'right-group',
+        isWorktreeActive: true
+      })
+    )
+
+    expect(className).toContain('h-[4px]')
+    expect(className).toContain('bg-worktree-sidebar')
   })
 })
