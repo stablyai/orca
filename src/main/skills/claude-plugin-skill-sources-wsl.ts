@@ -9,7 +9,8 @@ import {
 import type { SkillScanRoot } from './skill-discovery-sources'
 
 const MAX_PLUGIN_METADATA_BYTES = 4 * 1024 * 1024
-const WSL_METADATA_TIMEOUT_MS = 5_000
+// Why: same WSL2 9P interop overhead as the skill scan (skill-discovery-wsl.ts).
+const WSL_METADATA_TIMEOUT_MS = 15_000
 const WSL_METADATA_MAX_BUFFER_BYTES = 32 * 1024 * 1024
 
 export function buildWslClaudePluginMetadataCommand(paths: readonly string[]): string {

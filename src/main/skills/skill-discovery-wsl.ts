@@ -19,7 +19,11 @@ import { discoverClaudePluginSkillSourcesInWsl } from './claude-plugin-skill-sou
 
 const MAX_MARKDOWN_BYTES = 256 * 1024
 const MAX_PACKAGE_FILES = 200
-const WSL_SCAN_TIMEOUT_MS = 10_000
+// Why: the scan walks every root (home dirs plus plugin caches at maxdepth 10)
+// over WSL2's 9P interop, which is far slower than native disk I/O. 10s was
+// tuned against a handful of roots and times out on real installs with many
+// plugin caches, killing the process before it can report a real error.
+const WSL_SCAN_TIMEOUT_MS = 60_000
 const WSL_SCAN_MAX_BUFFER_BYTES = 128 * 1024 * 1024
 
 export function buildWslSkillDiscoveryCommand(roots: readonly SkillScanRoot[]): string {
@@ -71,13 +75,20 @@ function executeWslSkillDiscovery(distro: string, command: string): Promise<stri
       },
       (error, stdout) => {
         if (error) {
-          reject(error)
+          reject(error.killed && error.signal === 'SIGTERM' ? timeoutError(distro) : error)
           return
         }
         resolve(stdout)
       }
     )
   })
+}
+
+function timeoutError(distro: string): Error {
+  return new Error(
+    `Skill discovery in WSL distribution ${distro} timed out after ${WSL_SCAN_TIMEOUT_MS / 1000}s. ` +
+      'This usually means the scan has many plugin/skill roots on a slow WSL filesystem (9P/antivirus overhead).'
+  )
 }
 
 function readProtocolField(fields: string[], index: number): string {

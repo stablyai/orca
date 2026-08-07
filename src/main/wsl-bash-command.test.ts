@@ -20,4 +20,21 @@ describe('buildEncodedWslBashCommand', () => {
     expect(encoded).toBeTruthy()
     expect(Buffer.from(encoded as string, 'base64').toString('utf8')).toBe(command)
   })
+
+  it('keeps semicolons and spaces intact as a single -c argument, not split by the outer shell', () => {
+    const command = 'echo one; echo two three'
+    const wrapped = buildEncodedWslBashCommand(command)
+
+    // The whole wrapper must reach `bash -c` as one argv element (execFile
+    // passes it as a single array entry — no shell re-parses it in between),
+    // so it must contain no unescaped top-level `;` of its own outside the
+    // base64 payload.
+    const args = ['-d', 'Ubuntu', '--', 'bash', '-c', wrapped]
+    expect(args).toHaveLength(6)
+    expect(args[5]).toBe(wrapped)
+
+    const encoded = /printf %s '([^']+)'/.exec(wrapped)?.[1]
+    const decoded = Buffer.from(encoded as string, 'base64').toString('utf8')
+    expect(decoded).toBe(command)
+  })
 })

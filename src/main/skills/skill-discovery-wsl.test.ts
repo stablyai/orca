@@ -1,6 +1,16 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { execFile } from 'node:child_process'
 import type { SkillScanRoot } from './skill-discovery-sources'
-import { buildWslSkillDiscoveryCommand, parseWslSkillDiscoveryOutput } from './skill-discovery-wsl'
+import {
+  buildWslSkillDiscoveryCommand,
+  discoverSkillsInWsl,
+  parseWslSkillDiscoveryOutput
+} from './skill-discovery-wsl'
+
+vi.mock('node:child_process', () => ({ execFile: vi.fn() }))
+vi.mock('./claude-plugin-skill-sources-wsl', () => ({
+  discoverClaudePluginSkillSourcesInWsl: vi.fn().mockResolvedValue([])
+}))
 
 const homeRoot: SkillScanRoot = {
   id: 'home-codex',
@@ -92,5 +102,26 @@ describe('WSL skill discovery', () => {
     expect(() => parseWslSkillDiscoveryOutput(record('S', '9'), [homeRoot])).toThrow(
       'unknown source'
     )
+  })
+
+  it('reports a clear timeout error instead of the raw execFile "Command failed" message', async () => {
+    const mockedExecFile = vi.mocked(execFile)
+    mockedExecFile.mockImplementation((..._args: unknown[]) => {
+      const callback = _args.at(-1) as (error: NodeJS.ErrnoException) => void
+      const error = new Error(
+        'Command failed: wsl.exe -d Ubuntu -- bash -c ...'
+      ) as NodeJS.ErrnoException & {
+        killed?: boolean
+        signal?: string
+      }
+      error.killed = true
+      error.signal = 'SIGTERM'
+      callback(error)
+      return {} as ReturnType<typeof execFile>
+    })
+
+    await expect(
+      discoverSkillsInWsl({ distro: 'Ubuntu', homeDir: '/home/alice', cwd: '/home/alice' })
+    ).rejects.toThrow(/timed out after 60s/)
   })
 })
