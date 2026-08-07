@@ -54,6 +54,7 @@ import {
   normalizeVisibleTaskProviders,
   type TaskProvider
 } from '../../../src/shared/task-providers'
+import { extractJiraConnection, type MobileJiraConnection } from '../tasks/jira-mobile-connection'
 import { useMobileComposerSource } from '../tasks/use-mobile-composer-source'
 import type { SmartModeAvailabilityInput } from '../tasks/mobile-smart-source-modes'
 import { deriveRepoSlug, type PasteRepoCandidate } from '../tasks/smart-source-paste-intent'
@@ -200,6 +201,16 @@ function NewWorktreeModalContent({
   const [sshConnectingTargetId, setSshConnectingTargetId] = useState<string | null>(null)
   const [note, setNote] = useState('')
   const [availableProviders, setAvailableProviders] = useState<TaskProvider[]>([])
+  // Tracked apart from availableProviders: filterAvailableTaskProviders reports
+  // Jira as always available so Tasks can offer setup, but the composer tab is
+  // only useful once a site is actually connected — and pasted-URL lookup needs
+  // the site list to match against.
+  const [jiraConnection, setJiraConnection] = useState<MobileJiraConnection>({
+    connected: false,
+    sites: [],
+    selection: null,
+    credentialError: null
+  })
   const { tasksSupported, getWorktreeCreateCutoverSupport } = useNewWorktreeRuntimeCapabilities(
     client,
     visible
@@ -271,7 +282,8 @@ function NewWorktreeModalContent({
     hasRepo: selectedRepo != null,
     githubAvailable: availableProviders.includes('github'),
     gitlabAvailable: availableProviders.includes('gitlab'),
-    linearAvailable: availableProviders.includes('linear')
+    linearAvailable: availableProviders.includes('linear'),
+    jiraAvailable: jiraConnection.connected && availableProviders.includes('jira')
   }
   const pasteRepos = useMemo<PasteRepoCandidate[]>(
     () =>
@@ -342,7 +354,8 @@ function NewWorktreeModalContent({
       // can't discard the already-resolved critical settings/ui results.
       const probes = Promise.allSettled([
         client.sendRequest('preflight.check'),
-        client.sendRequest('linear.status')
+        client.sendRequest('linear.status'),
+        client.sendRequest('jira.status')
       ])
       const okResult = (entry: PromiseSettledResult<RpcResponse>): RpcSuccess | null =>
         entry.status === 'fulfilled' && entry.value.ok ? (entry.value as RpcSuccess) : null
@@ -374,7 +387,7 @@ function NewWorktreeModalContent({
         setTrustedOrcaHooks(ui?.trustedOrcaHooks ?? {})
       }
 
-      const [preflightRes, linearRes] = await probes
+      const [preflightRes, linearRes, jiraRes] = await probes
       if (stale) {
         return
       }
@@ -383,6 +396,7 @@ function NewWorktreeModalContent({
           ?.installed === true
       const linearConnected =
         (okResult(linearRes)?.result as { connected?: boolean } | undefined)?.connected === true
+      setJiraConnection(extractJiraConnection(okResult(jiraRes)?.result ?? null))
       const visibleProviders = normalizeVisibleTaskProviders(settingsValue?.visibleTaskProviders)
       setAvailableProviders(
         // Drop filterAvailableTaskProviders' forced 'github' fallback when the user
@@ -1013,6 +1027,8 @@ function NewWorktreeModalContent({
         availability={sourceAvailability}
         repoId={selectedRepo?.id ?? null}
         repos={pasteRepos}
+        jiraSiteId={jiraConnection.selection}
+        jiraSites={jiraConnection.sites}
         sshReady={!sshGate.requiresConnection}
         onRepoChange={(repoId) => {
           const nextRepo = repos.find((repo) => repo.id === repoId)

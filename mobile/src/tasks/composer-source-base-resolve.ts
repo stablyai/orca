@@ -1,6 +1,7 @@
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
 import type { GitHubPrStartPoint } from '../../../src/shared/types'
+import type { ComposerBaseState } from './mobile-composer-source-types'
 
 // The resolved start point for a linked PR/MR: the base branch to create from
 // plus the optional review-compare ref, push target, and exact branch name.
@@ -10,6 +11,17 @@ export type ComposerHostedBase = Pick<
 >
 
 type HostedBaseResult = ComposerHostedBase | { error: string }
+
+// Narrows a resolved start point to the fields the composer stores; maintainerCanModify
+// is only consumed to derive the fork-push warning, so it is deliberately dropped.
+export function toComposerBaseState(result: ComposerHostedBase): ComposerBaseState {
+  return {
+    baseBranch: result.baseBranch,
+    compareBaseRef: result.compareBaseRef,
+    pushTarget: result.pushTarget,
+    branchNameOverride: result.branchNameOverride
+  }
+}
 
 // Resolves a GitHub PR's base via worktree.resolvePrBase, mirroring desktop's
 // select-time resolution. The runtime returns a soft { error } payload rather
@@ -42,6 +54,46 @@ export async function resolveComposerPrBase(args: {
     throw new Error(result.error)
   }
   return result
+}
+
+// Picks the right resolver for a linked hosted item, or null when the item is an
+// issue (no review branch to resolve). Keeps the per-provider optional-field
+// plumbing out of the composer hook.
+export function resolveComposerHostedItemBase(args: {
+  client: RpcClient
+  repoId: string
+  provider: 'github' | 'gitlab'
+  type: 'issue' | 'pr' | 'mr'
+  number: number
+  branchName?: string
+  baseRefName?: string
+  isCrossRepository?: boolean
+}): Promise<ComposerHostedBase> | null {
+  const { client, repoId, provider, type, number, branchName, baseRefName, isCrossRepository } =
+    args
+  const crossRepo = isCrossRepository === undefined ? {} : { isCrossRepository }
+  if (provider === 'github') {
+    return type === 'pr'
+      ? resolveComposerPrBase({
+          client,
+          repoId,
+          prNumber: number,
+          ...(branchName ? { headRefName: branchName } : {}),
+          ...(baseRefName ? { baseRefName } : {}),
+          ...crossRepo
+        })
+      : null
+  }
+  return type === 'mr'
+    ? resolveComposerMrBase({
+        client,
+        repoId,
+        mrIid: number,
+        ...(branchName ? { sourceBranch: branchName } : {}),
+        ...(baseRefName ? { targetBranch: baseRefName } : {}),
+        ...crossRepo
+      })
+    : null
 }
 
 // Resolves a GitLab MR's base via worktree.resolveMrBase.

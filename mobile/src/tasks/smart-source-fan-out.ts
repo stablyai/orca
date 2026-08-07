@@ -11,10 +11,12 @@ import {
 import type { RpcClient } from '../transport/rpc-client'
 import { isGitHubWorkItemsSshRemoteRequiredError } from './mobile-work-items'
 import type { MrStateFilter } from './mobile-composer-source-types'
+import type { JiraIssue, JiraSiteSelection } from '../../../src/shared/jira-types'
 import {
   searchBranches,
   searchGitHubItems,
   searchGitLabItems,
+  searchJiraIssues,
   searchLinearIssues
 } from './smart-source-search-requests'
 
@@ -22,6 +24,7 @@ export type SmartFanOutResult = {
   githubItems: GitHubWorkItem[]
   gitlabItems: GitLabWorkItem[]
   linearIssues: LinearIssue[]
+  jiraIssues: JiraIssue[]
   branches: BaseRefSearchResult[]
   needsGitHubRemote: boolean
   error: string
@@ -31,6 +34,7 @@ const EMPTY: Omit<SmartFanOutResult, 'needsGitHubRemote' | 'error'> = {
   githubItems: [],
   gitlabItems: [],
   linearIssues: [],
+  jiraIssues: [],
   branches: []
 }
 
@@ -46,6 +50,12 @@ function shouldSearchLinear(mode: SmartNameMode, linearAvailable: boolean): bool
   return linearAvailable && (mode === 'smart' || mode === 'linear')
 }
 
+// Why: the shared row builder only emits Jira rows under the Jira tab, so a
+// Smart-mode fan-out would spend a round trip on results nothing renders.
+function shouldSearchJira(mode: SmartNameMode, jiraAvailable: boolean): boolean {
+  return jiraAvailable && mode === 'jira'
+}
+
 function shouldSearchBranches(mode: SmartNameMode, query: string): boolean {
   return mode === 'branches' || (mode === 'smart' && query.trim().length > 0)
 }
@@ -58,8 +68,10 @@ type FanOutArgs = {
   githubAvailable: boolean
   gitlabAvailable: boolean
   linearAvailable: boolean
+  jiraAvailable: boolean
   mrStateFilter: MrStateFilter
   linearWorkspaceId: string | null | undefined
+  jiraSiteId: JiraSiteSelection | null | undefined
 }
 
 // Runs every provider search the active mode needs, concurrently. Smart mode is
@@ -80,6 +92,7 @@ export async function fanOutSmartSearch(args: FanOutArgs): Promise<SmartFanOutRe
     githubAvailable,
     gitlabAvailable,
     linearAvailable,
+    jiraAvailable,
     mrStateFilter
   } = args
   const isSmart = mode === 'smart'
@@ -95,13 +108,17 @@ export async function fanOutSmartSearch(args: FanOutArgs): Promise<SmartFanOutRe
     linear: shouldSearchLinear(mode, linearAvailable)
       ? searchLinearIssues(client, query, args.linearWorkspaceId)
       : null,
+    jira: shouldSearchJira(mode, jiraAvailable)
+      ? searchJiraIssues(client, query, args.jiraSiteId)
+      : null,
     branches:
       shouldSearchBranches(mode, query) && repoId ? searchBranches(client, repoId, query) : null
   }
-  const [github, gitlab, linear, branches] = await Promise.allSettled([
+  const [github, gitlab, linear, jira, branches] = await Promise.allSettled([
     tasks.github ?? Promise.resolve<GitHubWorkItem[]>([]),
     tasks.gitlab ?? Promise.resolve<GitLabWorkItem[]>([]),
     tasks.linear ?? Promise.resolve<LinearIssue[]>([]),
+    tasks.jira ?? Promise.resolve<JiraIssue[]>([]),
     tasks.branches ?? Promise.resolve<BaseRefSearchResult[]>([])
   ])
 
@@ -125,6 +142,9 @@ export async function fanOutSmartSearch(args: FanOutArgs): Promise<SmartFanOutRe
   if (linear.status === 'rejected') {
     fail(linear.reason)
   }
+  if (jira.status === 'rejected') {
+    fail(jira.reason)
+  }
   if (branches.status === 'rejected') {
     fail(branches.reason)
   }
@@ -134,6 +154,7 @@ export async function fanOutSmartSearch(args: FanOutArgs): Promise<SmartFanOutRe
     githubItems: github.status === 'fulfilled' ? github.value : [],
     gitlabItems: gitlab.status === 'fulfilled' ? gitlab.value : [],
     linearIssues: linear.status === 'fulfilled' ? linear.value : [],
+    jiraIssues: jira.status === 'fulfilled' ? jira.value : [],
     branches: branches.status === 'fulfilled' ? branches.value : [],
     needsGitHubRemote,
     error

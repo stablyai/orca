@@ -6,12 +6,16 @@ import type {
 } from '../../../src/shared/types'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
+import type { JiraIssue, JiraSiteSelection } from '../../../src/shared/jira-types'
+import { buildJiraIssueSearchJql } from '../../../src/shared/new-workspace/smart-workspace-source-results'
 import { extractLinearIssueReadItems } from './linear-mobile-issue-read'
+import { extractJiraIssueReadItems } from './jira-mobile-issue-read'
 import { PER_REPO_FETCH_LIMIT } from './mobile-work-items'
 import type { MrStateFilter } from './mobile-composer-source-types'
 
 const GITLAB_PER_PAGE = 50
 const LINEAR_LIMIT = 50
+const JIRA_LIMIT = 50
 const BRANCH_LIMIT = 20
 
 // Why: the desktop Smart picker returns BOTH issues and PRs — the runtime's
@@ -93,6 +97,29 @@ export async function searchLinearIssues(
   // extractLinearIssueReadItems yields the mobile issue-read shape; the fields the
   // row builder/create flow read (id/identifier/title/url/state/team) are a subset.
   return extractLinearIssueReadItems((response as RpcSuccess).result) as unknown as LinearIssue[]
+}
+
+// Unlike the Tasks search box (raw JQL), the composer field is free text that
+// buildJiraIssueSearchJql turns into a key or text-match query — same as desktop.
+// A null JQL means "nothing to search yet", so the tab stays empty until typed in.
+export async function searchJiraIssues(
+  client: RpcClient,
+  query: string,
+  siteId: JiraSiteSelection | null | undefined
+): Promise<JiraIssue[]> {
+  const jql = buildJiraIssueSearchJql(query)
+  if (!jql) {
+    return []
+  }
+  const response = await client.sendRequest('jira.searchIssues', {
+    jql,
+    limit: JIRA_LIMIT,
+    siteId: siteId ?? undefined
+  })
+  if (!response.ok) {
+    throw new Error(response.error.message)
+  }
+  return extractJiraIssueReadItems((response as RpcSuccess).result)
 }
 
 export async function searchBranches(
