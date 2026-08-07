@@ -95,6 +95,10 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   }
 
   async probePtyLiveness(id: string): Promise<boolean | null> {
+    const mapped = this.sessionProviders.get(id)
+    if (mapped && (mapped.hasPty?.(id) ?? true)) {
+      return true
+    }
     return await this.ownerRecovery.probe(id)
   }
 

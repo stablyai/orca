@@ -5319,7 +5319,7 @@
       "id": "terminal-provider.daemon-startup-degraded-contract",
       "title": "Daemon startup reconcile and degraded fallback preserve provider identity",
       "maturity": "experimental",
-      "protection": "none",
+      "protection": "partial",
       "owner": "terminal-provider",
       "layer": "provider-contract",
       "surfaces": [
@@ -5327,26 +5327,75 @@
         "degraded daemon",
         "fallback PTY",
         "provider ownership",
-        "startup restore"
+        "startup restore",
+        "stable-pane reopen"
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["daemon", "local"],
-      "coveredPlatforms": [],
-      "coveredProviders": [],
-      "coverageNotes": "Registered gap on main. The fail-closed degraded-daemon hardening and its contracts exist only on the pending reliability stack. It registers here with its owning split PR.",
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["daemon", "local"],
+      "coverageNotes": "Deterministic provider contracts cover complete, incomplete, conflicting, refused, and identity-invalidated owner inventories; degraded fallback/current/legacy routing; repeated stale-binding classification; and fresh-session reattach without local fallback during unresolved ownership. Main IPC contracts cover exact persisted-binding retirement and one fresh replacement after confirmed absence. Live Linux, Windows, WSL, SSH, paired-runtime, and packaged-upgrade journeys remain uncollected.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6830",
         "https://github.com/stablyai/orca/pull/6866",
-        "https://github.com/stablyai/orca/pull/7002"
+        "https://github.com/stablyai/orca/pull/7002",
+        "https://github.com/stablyai/orca/pull/12776"
       ],
-      "invariant": "Daemon startup reconciliation must preserve valid live daemon sessions, reap only true orphans, and degraded mode must not route an existing-looking daemon session through local fallback unless the caller explicitly marks a fresh degraded-mode spawn.",
-      "oracle": "The current provider-contract corpus covers valid current-worktree ids, folder/floating workspace ids, invalid removed-worktree ids, mixed live/orphan dry-run reconciliation, hyphenated worktree ids, malformed ids, daemon sessions discovered after restart, router discovery before existing-session spawn, router fail-closed behavior when legacy ownership cannot be listed or a known session has exited, degraded daemon fallback for fresh sessions, fail-closed behavior for unknown restored ids, benign inspection defaults for unknown ownership, and synthetic exits on daemon restart. Prior-worktree aliases and renamed-worktree startup wiring are promotion gaps, not current proof.",
-      "commands": [],
-      "testFiles": [],
-      "assertionRefs": [],
-      "evidenceRuns": [],
+      "invariant": "Daemon startup reconciliation must preserve valid live daemon sessions and reap only true orphans. A persisted binding stays fail-closed while any possible owner is incomplete, conflicting, refusing attach, or identity-invalidated, but complete authoritative absence from every configured provider must retire that exact stale binding and let retry or reopen converge without attaching it through local fallback or duplicating a PTY.",
+      "oracle": "Hold exact fallback, current-daemon, and legacy-daemon inventories behind controlled promises. No attach may settle or dispatch until every provider answers. Complete zero-candidate inventories must report SessionNotFound; incomplete, duplicate, refused, and identity-invalidated attempts must remain owner-unverified. In degraded mode, repeated stale attempts scan each eligible provider once per attempt and dispatch no attach, then one explicit fresh spawn and exact reattach use only the recorded fresh route. Main IPC must compare-and-swap retire only the matching persisted PTY/incarnation, emit one synthetic exit, and create one different fresh PTY.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-session-owner-resolution.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/main/ipc/pty.test.ts --reporter=dot"
+      ],
+      "testFiles": [
+        "src/main/daemon/daemon-session-owner-resolution.test.ts",
+        "src/main/daemon/daemon-pty-router.test.ts",
+        "src/main/daemon/degraded-daemon-pty-provider.test.ts",
+        "src/main/ipc/pty.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/daemon/daemon-session-owner-resolution.test.ts",
+          "assertions": [
+            "controlled concurrent inventories wait for fallback, current, and legacy authority before classifying exact persisted PTYs absent",
+            "incomplete inventory, duplicate claims, owner refusal, and identity replacement stay fail-closed with exact list and spawn counts"
+          ]
+        },
+        {
+          "file": "src/main/daemon/daemon-pty-router.test.ts",
+          "assertions": [
+            "complete current and legacy daemon inventories prove liveness absence with one list call per adapter",
+            "one unavailable daemon inventory keeps the same missing PTY liveness unknown"
+          ]
+        },
+        {
+          "file": "src/main/daemon/degraded-daemon-pty-provider.test.ts",
+          "assertions": [
+            "repeated complete absence never dispatches the stale id to fallback or either daemon",
+            "one explicit fresh fallback PTY reattaches by its exact PTY and incarnation without another inventory",
+            "a mapped fallback-owned PTY reports live without borrowing fallback authority for unknown ids or scanning daemon inventories"
+          ]
+        },
+        {
+          "file": "src/main/ipc/pty.test.ts",
+          "assertions": [
+            "confirmed absence retires the exact persisted binding once and creates one differently identified fresh PTY",
+            "unverified ownership retains the binding and creates no fresh PTY"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-06",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-session-owner-resolution.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/main/ipc/pty.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 5.44,
+          "summary": "Four files passed 535 owner-resolution, router, degraded-provider, and IPC lifecycle tests. With only the resolver fix disabled, the unchanged four-file gate failed four stale-absence, identity-retry, and router-liveness assertions; restoring it passed 535 of 535."
+        }
+      ],
       "runtimeBudget": {
-        "p95Seconds": 20,
+        "p95Seconds": 45,
         "scope": "provider contract unit/integration test"
       },
       "flakeHistory": {
@@ -5354,22 +5403,22 @@
         "evidence": "Focused provider contract tests now run locally; needs soak history before promotion."
       },
       "redGreenEvidence": {
-        "status": "partial",
-        "evidence": "Tests assert discovered daemon sessions route to the daemon, fresh degraded-mode PTYs route to fallback only when marked new, router spawn discovers uncached existing sessions before choosing an adapter, router spawn fails closed instead of falling through to current when legacy listing fails or a known session has exited, targeted hasPty discovery caches legacy ownership before later write/resize-style operations, real daemon adapter listProcesses discovery seeds targeted hasPty liveness, folder and floating terminal workspace ids survive startup reconcile when valid, restored worktree-scoped and legacy/non-scoped ids do not fall back through spawn after ownership is lost or unknown, operations on unknown or exited existing ids fail closed, startup reconcile can dry-run orphan detection without killing live sessions, and process inspection returns benign defaults for unknown ownership. Production startup reconcile wiring remains unproven."
+        "status": "complete",
+        "evidence": "The byte-identical owner-resolver blob d35d2795d56e7e32c1ca99af6726fe6b92181881 is present in v1.4.176-rc.0@ddf64199fa, prod-release-1.4.176@8ddf575fe6, and origin/main@cb960408f2. It returns TerminalSessionOwnerUnverifiedError for both controlled complete-empty persisted PTYs and leaves degraded stale bindings unrecoverable. The candidate passes 535 of 535 registered tests. Restoring only the old predicate makes the unchanged four-file gate fail four of 535 tests; restoring the fix passes 535 of 535."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Reconcile must not add startup-blocking scans beyond the explicit daemon session inventory and must not leak global listing into hot paths."
+        "evidence": "One unresolved attempt performs one concurrent listProcesses call per eligible provider, concurrent pane attempts coalesce onto that inventory, and no polling, sleep, timer, subprocess, listener, or retry loop is added. Confirmed absence is not cached; repeated explicit attempts remain bounded to one fanout each. Reattaching the newly recorded fresh route adds no inventory or daemon spawn."
       },
       "promotionCriteria": [
         "Wire reconcileOnStartup or mark the production wiring gap explicitly.",
         "Cover priorWorktreeIds so renamed worktrees are not falsely reaped."
       ],
       "knownGaps": [
-        "No executable coverage on main yet; the slice lives on the pending fix-terminal-reliability stack.",
         "Production startup reconcile wiring remains unproven.",
         "Prior-worktree aliases and renamed-worktree startup reconcile are not covered by the current executable corpus.",
-        "Real daemon restart behavior is still covered only by lower-level synthetic exit and provider-contract tests."
+        "Real daemon restart behavior is still covered only by lower-level synthetic exit and provider-contract tests.",
+        "No live Linux, Windows, WSL, SSH, headed/headless paired-runtime, folder-workspace, or mixed-version packaged-upgrade journey was run for stale-owner recovery."
       ],
       "demotionRule": "Cannot promote while restored daemon ids or routing operations can silently route to local fallback."
     },
