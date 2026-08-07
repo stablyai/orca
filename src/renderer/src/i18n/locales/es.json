@@ -7304,15 +7304,14 @@
             "tui": "TUI",
             "tuiDescription": "Eventos discretos de rueda para apps de terminal de pantalla completa."
           },
-          "a1b2c3d4e5": "Suavizado de fuente",
-          "c3d4e5f6a7": "Suavizado de fuente",
-          "b2c3d4e5f6": "Suavizado de los glifos del terminal. Subpixel coincide con VS Code en temas claros; Default hereda el suavizado en escala de grises de toda la app.",
-          "d4e5f6a7b8": "Suavizado subpíxel de macOS; más nítido en temas claros, como VS Code.",
-          "e5f6a7b8c9": "Fija explícitamente el suavizado en escala de grises.",
-          "f6a7b8c9d0": "Hereda el suavizado en escala de grises de toda la app (predeterminado).",
-          "a7b8c9d0e1": "Predeterminado",
-          "b8c9d0e1f2": "Escala de grises",
-          "c9d0e1f2a3": "Subpíxel"
+          "9a65e8871b": "Suavizado de fuente",
+          "f770c58686": "Suavizado de los glifos del terminal. Subpíxel coincide con VS Code en temas claros; Predeterminado hereda el suavizado en escala de grises de toda la app.",
+          "a8db93c1c8": "Suavizado subpíxel de macOS; más nítido en temas claros, como VS Code.",
+          "070d72021f": "Fija explícitamente el suavizado en escala de grises.",
+          "eec52156ab": "Hereda el suavizado en escala de grises de toda la app (predeterminado).",
+          "4759ed5e7e": "Predeterminado",
+          "2606e17fc0": "Escala de grises",
+          "c023e28890": "Subpíxel"
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "Vista previa del tema {{value0}}",
@@ -9037,12 +9036,11 @@
               "keyword_target": "destino",
               "keyword_editing": "edición"
             },
-            "a1b2c3d4e5": "Suavizado de fuente",
-            "b2c3d4e5f6": "Suavizado de los glifos del terminal. Subpixel coincide con VS Code en temas claros; Default hereda el suavizado en escala de grises de toda la app.",
-            "c3d4e5f6a7": "fuente",
-            "d4e5f6a7b8": "suavizado",
-            "e5f6a7b8c9": "antialiasing",
-            "f6a7b8c9d0": "subpíxel"
+            "81ed742288": "Suavizado de fuente",
+            "67edfa3865": "Suavizado de los glifos del terminal. Subpíxel coincide con VS Code en temas claros; Predeterminado hereda el suavizado en escala de grises de toda la app.",
+            "f6bee3801e": "suavizado",
+            "475f48e184": "antialiasing",
+            "33b3e13e6f": "subpíxel"
           },
           "windows": {
             "search": {

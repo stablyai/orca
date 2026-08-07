@@ -93,12 +93,9 @@ export function TerminalRenderingSection({
         </SearchableSetting>
 
         <SearchableSetting
-          title={translate(
-            'auto.components.settings.TerminalPane.a1b2c3d4e5',
-            'Font Smoothing'
-          )}
+          title={translate('auto.components.settings.TerminalPane.9a65e8871b', 'Font Smoothing')}
           description={translate(
-            'auto.components.settings.TerminalPane.b2c3d4e5f6',
+            'auto.components.settings.TerminalPane.f770c58686',
             'Anti-aliasing for terminal glyphs. Subpixel matches VS Code on light themes; Default inherits the app-wide grayscale smoothing.'
           )}
           keywords={[
@@ -113,27 +110,27 @@ export function TerminalRenderingSection({
           ]}
         >
           <SettingsRow
-            label={translate('auto.components.settings.TerminalPane.c3d4e5f6a7', 'Font Smoothing')}
+            label={translate('auto.components.settings.TerminalPane.9a65e8871b', 'Font Smoothing')}
             description={
               settings.terminalFontSmoothing === 'subpixel'
                 ? translate(
-                    'auto.components.settings.TerminalPane.d4e5f6a7b8',
+                    'auto.components.settings.TerminalPane.a8db93c1c8',
                     'macOS subpixel smoothing; sharper on light themes, like VS Code.'
                   )
                 : settings.terminalFontSmoothing === 'antialiased'
                   ? translate(
-                      'auto.components.settings.TerminalPane.e5f6a7b8c9',
+                      'auto.components.settings.TerminalPane.070d72021f',
                       'Grayscale smoothing, pinned explicitly.'
                     )
                   : translate(
-                      'auto.components.settings.TerminalPane.f6a7b8c9d0',
+                      'auto.components.settings.TerminalPane.eec52156ab',
                       'Inherit the app-wide grayscale smoothing (default).'
                     )
             }
             control={
               <SettingsSegmentedControl
                 ariaLabel={translate(
-                  'auto.components.settings.TerminalPane.c3d4e5f6a7',
+                  'auto.components.settings.TerminalPane.9a65e8871b',
                   'Font Smoothing'
                 )}
                 value={settings.terminalFontSmoothing ?? 'default'}
@@ -141,24 +138,18 @@ export function TerminalRenderingSection({
                 options={[
                   {
                     value: 'default',
-                    label: translate(
-                      'auto.components.settings.TerminalPane.a7b8c9d0e1',
-                      'Default'
-                    )
+                    label: translate('auto.components.settings.TerminalPane.4759ed5e7e', 'Default')
                   },
                   {
                     value: 'antialiased',
                     label: translate(
-                      'auto.components.settings.TerminalPane.b8c9d0e1f2',
+                      'auto.components.settings.TerminalPane.2606e17fc0',
                       'Antialiased'
                     )
                   },
                   {
                     value: 'subpixel',
-                    label: translate(
-                      'auto.components.settings.TerminalPane.c9d0e1f2a3',
-                      'Subpixel'
-                    )
+                    label: translate('auto.components.settings.TerminalPane.c023e28890', 'Subpixel')
                   }
                 ]}
               />
