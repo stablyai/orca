@@ -603,6 +603,48 @@ describe('wrapWindowsGitBashHookCommand', () => {
   })
 })
 
+// Why: the fast path's only safety argument is POSIX single-quoting, but every
+// executable Git Bash assertion is win32-only and PR CI runs tests on Linux, so
+// nothing here ever proved the quoting survives a real shell. Git Bash is a POSIX
+// shell — running the generated command through /bin/sh makes a dropped quote fail
+// on every PR instead of only on a Windows machine.
+describe.skipIf(process.platform === 'win32')('Git Bash fast path in a real shell', () => {
+  function runFastPath(scriptPath: string, input: string): ReturnType<typeof spawnSync> {
+    return spawnSync('/bin/sh', ['-c', wrapWindowsGitBashHookCommand(scriptPath)], {
+      input,
+      env: { ...process.env, ORCA_HOOK_QUOTING_PROBE: 'expanded' }
+    })
+  }
+
+  it.each([
+    ['ascii', 'alice'],
+    ['spaces', 'Jane Doe'],
+    // Why: an unquoted `&` backgrounds, `$(…)`/`$VAR` expand — each would resolve a
+    // different path, so the guard would drain instead of reaching the script.
+    ['shell metacharacters', 'alice & bob $(echo x) $ORCA_HOOK_QUOTING_PROBE'],
+    ['non-ASCII (#11496)', '홍길동'],
+    ['a single quote', "O'Brien"]
+  ])('executes the managed script from a home containing %s', (_label, homeSegment) => {
+    const scriptDir = join(tmpDir, homeSegment, '.orca', 'agent-hooks')
+    mkdirSync(scriptDir, { recursive: true })
+    const scriptPath = join(scriptDir, 'claude-hook.sh')
+    writeFileSync(scriptPath, '#!/bin/sh\nexit 7\n', 'utf-8')
+    chmodSync(scriptPath, 0o755)
+
+    // 7, not 0: a mis-resolved path fails `[ -f ]` and drains to 0, which would look like success.
+    expect(runFastPath(scriptPath, '{"hook":"payload"}').status).toBe(7)
+  })
+
+  it('drains a large payload and exits 0 when the configured script is missing', () => {
+    const scriptPath = join(tmpDir, "O'Brien & co", '.orca', 'agent-hooks', 'claude-hook.sh')
+
+    const result = runFastPath(scriptPath, 'x'.repeat(1_000_000))
+
+    expect(result.status).toBe(0)
+    expect(result.error).toBeUndefined()
+  })
+})
+
 describe('buildWindowsAgentHookPostCommand', () => {
   it('posts hook stdin through bounded curl without spawning PowerShell', () => {
     const command = buildWindowsAgentHookPostCommand('codex')

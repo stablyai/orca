@@ -341,8 +341,7 @@ describe('ClaudeHookService.install', () => {
     }
   )
 
-  // Why: the launcher must stay PowerShell-encoded for Git Bash, but the hook
-  // POST inside the .cmd should use curl.exe so each hook spawns one
+  // Why: the hook POST inside the .cmd must use curl.exe so each hook spawns one
   // interpreter, not two. Posting via a second PowerShell was the slow path.
   it.skipIf(process.platform !== 'win32')(
     'posts from the managed .cmd via curl.exe, not a second PowerShell',
