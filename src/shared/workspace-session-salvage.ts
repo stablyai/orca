@@ -220,6 +220,9 @@ export function parseWorkspaceSessionSalvaging(
       claimedSlots.add(slot)
       targets.push(plan.target)
     }
+    // Why: escalated slots are injective per pass, so a subsumed slot should never
+    // also be a claimed one — the guard keeps that an assumption about the schema
+    // rather than something a reordering could silently turn into a lost repair.
     for (const slot of subsumedSlots) {
       if (!claimedSlots.has(slot)) {
         repairs[slot] = null

@@ -3757,6 +3757,10 @@ export class Store {
     }
 
     if (result === null) {
+      // Why: same reason as the clear at the top — this attempt's salvage events
+      // describe a session that is being thrown away, and reporting them would
+      // claim a repair for a profile that in fact reset to defaults.
+      pendingWorkspaceSessionSalvageEvents.length = 0
       result = getDefaultPersistedState(homedir())
     }
 

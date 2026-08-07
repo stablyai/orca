@@ -12161,8 +12161,41 @@ describe('Store host-partitioned workspace sessions', () => {
   async function canonicalize(fixture: Record<string, unknown>): Promise<PersistedSessionsFile> {
     writeDataFile(fixture)
     await loadAndAwaitScheduledSave()
-    return readDataFile() as PersistedSessionsFile
+    const canonical = readFileSync(dataFile(), 'utf-8')
+    // Why: the save assertions below are only meaningful if a clean load schedules
+    // nothing. Prove that here rather than assume it — a future migration that
+    // dirtied every load would otherwise leave those tests silently vacuous.
+    await loadAndAwaitScheduledSave()
+    expect(readFileSync(dataFile(), 'utf-8')).toBe(canonical)
+    return JSON.parse(canonical) as PersistedSessionsFile
   }
+
+  it('does not report salvage for a discarded load that had no usable backup', async () => {
+    const worktreeId = 'repo-1::/worktree'
+    // Why: with no backup to recover from, the discarded attempt falls through to
+    // defaults — the user lost the whole session, so reporting a repair would
+    // poison exactly the corrupt-profile population this event measures.
+    writeDataFile({
+      schemaVersion: 1,
+      sshTargets: 5,
+      workspaceSession: {
+        ...makeHostSession('local-repo'),
+        tabsByWorktree: {
+          [worktreeId]: [makeTerminalTab({ id: 'tab-keep', worktreeId }), { id: 'tab-corrupt' }]
+        }
+      }
+    })
+    trackMock.mockReset()
+
+    const store = await createStore()
+
+    expect(store.getWorkspaceSession('local').activeRepoId).toBeNull()
+    const { flushWorkspaceSessionSalvageTelemetry } = await import('./persistence')
+    flushWorkspaceSessionSalvageTelemetry()
+    expect(
+      trackMock.mock.calls.filter(([event]) => event === 'workspace_session_salvaged')
+    ).toEqual([])
+  })
 
   it('does not report salvage for a load that was discarded and retried from backup', async () => {
     const worktreeId = 'repo-1::/worktree'
