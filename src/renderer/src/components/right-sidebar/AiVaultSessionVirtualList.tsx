@@ -401,6 +401,17 @@ function AiVaultVirtualRow({
           onOpenCwd={
             canOpenLocalSessionPaths && row.session.cwd ? () => onOpenCwd(row.session) : undefined
           }
+          // A subagent transcript sits beside its parent and shares its cwd, so
+          // it resumes into the same workspace the parent resolved to.
+          onResumeSubagent={
+            resumeState?.worktreeId
+              ? (subagent) => {
+                  if (resumeState.worktreeId) {
+                    onResume(subagent, resumeState.worktreeId)
+                  }
+                }
+              : undefined
+          }
         />
       )}
     </div>

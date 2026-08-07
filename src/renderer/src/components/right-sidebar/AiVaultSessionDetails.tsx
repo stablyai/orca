@@ -30,7 +30,8 @@ export function SessionInlineDetails({
   onResumeInWorktree,
   onResumeInNewTab,
   onContinueInNewSession,
-  onOpenLog
+  onOpenLog,
+  onResumeSubagent
 }: {
   id: string
   session: AiVaultSession
@@ -44,6 +45,7 @@ export function SessionInlineDetails({
   onResumeInNewTab: () => void
   onContinueInNewSession?: () => void
   onOpenLog?: () => void
+  onResumeSubagent?: (subagent: AiVaultSession) => void
 }): React.JSX.Element {
   // A zero-turn transcript would resume into an empty conversation, so the plain
   // resume affordances are withheld and a distinct "not saved" state is shown.
@@ -185,7 +187,7 @@ export function SessionInlineDetails({
           <SessionUnsavedConversationNotice session={session} logAvailable={Boolean(onOpenLog)} />
         )}
 
-        <SessionSubagentsSection session={session} />
+        <SessionSubagentsSection session={session} onResumeSubagent={onResumeSubagent} />
 
         {shouldShowAiVaultSessionWorktreeLine(worktreeDisplay, {
           vaultScope

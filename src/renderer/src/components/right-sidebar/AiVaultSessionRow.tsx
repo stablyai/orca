@@ -51,7 +51,8 @@ export function VaultSessionRow({
   onCopyPath,
   onOpenLog,
   onRevealLog,
-  onOpenCwd
+  onOpenCwd,
+  onResumeSubagent
 }: {
   session: AiVaultSession
   liveState: AgentStatusState | null
@@ -77,6 +78,7 @@ export function VaultSessionRow({
   onOpenLog?: () => void
   onRevealLog?: () => void
   onOpenCwd?: () => void
+  onResumeSubagent?: (subagent: AiVaultSession) => void
 }) {
   const updatedAt = session.updatedAt ?? session.modifiedAt
   const detailsId = getSessionDetailsId(session.id)
@@ -213,6 +215,7 @@ export function VaultSessionRow({
               onResumeInNewTab={onResumeInNewTab}
               onContinueInNewSession={onContinueInNewSession}
               onOpenLog={onOpenLog}
+              onResumeSubagent={onResumeSubagent}
             />
           ) : null}
         </div>

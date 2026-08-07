@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react'
 import type React from 'react'
-import { Bot, FileJson } from 'lucide-react'
+import { Bot, FileJson, Play } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { AgentStateDot, agentStateLabel, type AgentDotState } from '@/components/AgentStateDot'
-import type { AiVaultSession, AiVaultSubagentRunStatus } from '../../../../shared/ai-vault-types'
+import {
+  isAiVaultSubagentResumable,
+  type AiVaultSession,
+  type AiVaultSubagentRunStatus
+} from '../../../../shared/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { canOpenAiVaultSessionLogInOrca } from './ai-vault-session-path-actions'
 import { openAiVaultSessionLogInOrca } from './ai-vault-session-log-open'
@@ -14,13 +18,19 @@ type SubagentListState = { status: 'loading' } | { status: 'loaded'; sessions: A
 
 /**
  * Lists the Task subagent transcripts spawned by one session, fetched on
- * demand when the parent's details expand. Subagents share the parent's
- * sessionId and aren't independently resumable, so rows are view-only.
+ * demand when the parent's details expand. Rows are view-only unless the agent
+ * resumes subagents by transcript path (see isAiVaultSubagentResumable) — for
+ * everyone else a subagent shares its parent's sessionId and has nothing of its
+ * own to resume into.
  */
 export function SessionSubagentsSection({
-  session
+  session,
+  onResumeSubagent
 }: {
   session: AiVaultSession
+  // Pre-bound to the parent's resume target: a subagent transcript sits beside
+  // its parent and shares its cwd, so it resolves to the same workspace.
+  onResumeSubagent?: (subagent: AiVaultSession) => void
 }): React.JSX.Element | null {
   const subagents = useSubagentSessions(session)
 
@@ -44,7 +54,15 @@ export function SessionSubagentsSection({
       </div>
       <div className="space-y-1.5">
         {subagents.sessions.map((subagentSession) => (
-          <SubagentSessionLine key={subagentSession.id} session={subagentSession} />
+          <SubagentSessionLine
+            key={subagentSession.id}
+            session={subagentSession}
+            onResume={
+              onResumeSubagent && isAiVaultSubagentResumable(subagentSession)
+                ? () => onResumeSubagent(subagentSession)
+                : undefined
+            }
+          />
         ))}
       </div>
     </section>
@@ -112,7 +130,13 @@ const SUBAGENT_DOT_STATES: Record<AiVaultSubagentRunStatus, AgentDotState> = {
   stopped: 'interrupted'
 }
 
-function SubagentSessionLine({ session }: { session: AiVaultSession }): React.JSX.Element {
+function SubagentSessionLine({
+  session,
+  onResume
+}: {
+  session: AiVaultSession
+  onResume?: () => void
+}): React.JSX.Element {
   const dotState = session.subagent?.status ? SUBAGENT_DOT_STATES[session.subagent.status] : null
 
   return (
@@ -145,6 +169,25 @@ function SubagentSessionLine({ session }: { session: AiVaultSession }): React.JS
           { value0: session.messageCount }
         )}
       </span>
+      {onResume ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          draggable={false}
+          title={translate(
+            'auto.components.right.sidebar.AiVaultSessionSubagents.resumeSubagent',
+            'Resume Subagent in New Tab'
+          )}
+          onClick={(event) => {
+            event.stopPropagation()
+            onResume()
+          }}
+          className="shrink-0 text-muted-foreground"
+        >
+          <Play className="size-3.5" />
+        </Button>
+      ) : null}
       {canOpenAiVaultSessionLogInOrca(session) ? (
         <Button
           type="button"

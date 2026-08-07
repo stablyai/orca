@@ -56,6 +56,23 @@ function makeSubagent(title: string): AiVaultSession {
   })
 }
 
+function makeOmpSubagent(title: string, overrides: Partial<AiVaultSession> = {}): AiVaultSession {
+  const filePath = `/tmp/2026-05-01T10-00-00-000Z_${'c'.repeat(8)}-dddd-4eee-8fff-000000000000/${title}.jsonl`
+  return makeSession({
+    id: `local:omp:${title}:${filePath}`,
+    agent: 'omp',
+    // OMP children carry their own session id, which is why they resume to
+    // themselves rather than to the parent.
+    sessionId: `child-${title}`,
+    title,
+    filePath,
+    resumeCommand: `cd '/repo' && omp --resume '${filePath}'`,
+    subagent: { parentSessionId: 'parent-session', agentType: null, status: null },
+    subagentTranscriptCount: 0,
+    ...overrides
+  })
+}
+
 describe('SessionSubagentsSection', () => {
   it('keeps the loaded list visible while a rescan-triggered refetch is in flight', async () => {
     listSubagentSessions.mockResolvedValueOnce({
@@ -84,6 +101,55 @@ describe('SessionSubagentsSection', () => {
     })
     expect(queryByText('Second pass')).not.toBeNull()
     expect(queryByText('First pass')).toBeNull()
+  })
+
+  it('offers resume on an OMP subagent row and launches that child, not its parent', async () => {
+    const child = makeOmpSubagent('ReadAgents')
+    listSubagentSessions.mockResolvedValueOnce({ sessions: [child], issues: [] })
+    const onResumeSubagent = vi.fn()
+    const { getByTitle } = render(
+      <SessionSubagentsSection
+        session={makeSession({ agent: 'omp' })}
+        onResumeSubagent={onResumeSubagent}
+      />
+    )
+    await act(async () => {})
+
+    getByTitle('Resume Subagent in New Tab').click()
+
+    expect(onResumeSubagent).toHaveBeenCalledTimes(1)
+    expect(onResumeSubagent.mock.calls[0][0]).toMatchObject({
+      filePath: child.filePath,
+      sessionId: child.sessionId
+    })
+  })
+
+  it('withholds resume on a Claude subagent row, which would reopen the parent', async () => {
+    // Claude subagents share the parent's sessionId and resume by id, so a
+    // resume affordance here would silently relaunch the parent session.
+    listSubagentSessions.mockResolvedValueOnce({
+      sessions: [makeSubagent('Explore')],
+      issues: []
+    })
+    const { queryByTitle } = render(
+      <SessionSubagentsSection session={makeSession()} onResumeSubagent={vi.fn()} />
+    )
+    await act(async () => {})
+
+    expect(queryByTitle('Resume Subagent in New Tab')).toBeNull()
+  })
+
+  it('withholds resume on a zero-turn OMP subagent row', async () => {
+    listSubagentSessions.mockResolvedValueOnce({
+      sessions: [makeOmpSubagent('Empty', { messageCount: 0, previewMessages: [] })],
+      issues: []
+    })
+    const { queryByTitle } = render(
+      <SessionSubagentsSection session={makeSession({ agent: 'omp' })} onResumeSubagent={vi.fn()} />
+    )
+    await act(async () => {})
+
+    expect(queryByTitle('Resume Subagent in New Tab')).toBeNull()
   })
 
   it('does not fetch for remote sessions even when the scan counted transcripts', async () => {

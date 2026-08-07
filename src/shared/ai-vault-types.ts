@@ -161,6 +161,26 @@ export function isAiVaultSessionResumableContent(
   )
 }
 
+// Agents whose subagent transcripts resume to themselves. Must stay in step with
+// buildAiVaultResumeCommand's `resumeFilePath` branch: every other agent resumes
+// by sessionId, and a subagent shares its parent's id — so offering resume on
+// such a row would silently reopen the PARENT, not the row the user clicked.
+const SELF_RESUMABLE_SUBAGENT_AGENTS = new Set<AiVaultAgent>(['omp'])
+
+/**
+ * Whether a listed subagent row can be resumed as its own session. True only for
+ * agents that resume by transcript path AND whose transcript holds real turns.
+ */
+export function isAiVaultSubagentResumable(
+  session: Pick<AiVaultSession, 'agent' | 'subagent' | 'messageCount' | 'previewMessages'>
+): boolean {
+  return (
+    session.subagent !== null &&
+    SELF_RESUMABLE_SUBAGENT_AGENTS.has(session.agent) &&
+    isAiVaultSessionResumableContent(session)
+  )
+}
+
 export function aiVaultSessionRecoverableSignalCount(
   session: Pick<AiVaultSession, 'queuedMessageCount' | 'subagentTranscriptCount'>
 ): number {

@@ -11637,7 +11637,8 @@
           "AiVaultSessionSubagents": {
             "subagentsCount": "Subagents ({{value0}})",
             "messageCount": "{{value0}} msgs",
-            "viewLog": "View Log"
+            "viewLog": "View Log",
+            "resumeSubagent": "Resume Subagent in New Tab"
           },
           "aiVaultSessionLogOpen": {
             "workspaceGone": "Couldn't open log — workspace is no longer available.",
