@@ -1,5 +1,6 @@
 import { KeyRound } from 'lucide-react'
-import { IntegrationCardShell } from './integration-card-shell'
+import { IntegrationCardDetails, IntegrationCardShell } from './integration-card-shell'
+import { OnePasswordSkillSetupPanel } from './OnePasswordSkillSetupPanel'
 import { useAppStore } from '../../store'
 import { translate } from '@/i18n/i18n'
 
@@ -47,6 +48,10 @@ export function OnePasswordIntegrationCard(): React.JSX.Element {
           />
         </button>
       }
-    />
+    >
+      <IntegrationCardDetails>
+        <OnePasswordSkillSetupPanel />
+      </IntegrationCardDetails>
+    </IntegrationCardShell>
   )
 }

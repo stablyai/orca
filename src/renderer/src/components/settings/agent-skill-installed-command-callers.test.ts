@@ -24,6 +24,10 @@ const updateCapableCallers = new Map<string, readonly string[]>([
     ['COMPUTER_USE_SKILL_UPDATE_COMMAND', 'installedCommand={updateCommand}']
   ],
   [
+    'src/renderer/src/components/settings/OnePasswordSkillSetupPanel.tsx',
+    ['ONEPASSWORD_SKILL_UPDATE_COMMAND', 'installedCommand={updateCommand}']
+  ],
+  [
     // Shared hook owns update-target resolution for Linear settings + Task Sources.
     'src/renderer/src/components/settings/use-linear-agent-skill-setup.ts',
     [

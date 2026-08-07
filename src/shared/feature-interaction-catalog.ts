@@ -35,6 +35,7 @@ export type FeatureInteractionId =
   | 'claude-account-switching'
   | 'computer-use-setup'
   | 'computer-use'
+  | 'onepassword-skill-setup'
   | 'codex-account-switching'
   | 'cookie-import'
   | 'floating-workspace'
@@ -123,6 +124,10 @@ export const FEATURE_INTERACTIONS = [
     interaction: 'Computer Use setup or permission flow opened'
   },
   { id: 'computer-use', interaction: 'computer-use runtime method used' },
+  {
+    id: 'onepassword-skill-setup',
+    interaction: '1Password agent skill install or update terminal opened'
+  },
   {
     id: 'codex-account-switching',
     interaction: 'Codex managed account added, selected, reauthenticated, or removed'
