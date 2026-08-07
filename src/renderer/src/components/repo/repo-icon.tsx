@@ -27,12 +27,6 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
-export type RepoLucideIconOption = {
-  name: string
-  label: string
-  icon: LucideIcon
-}
-
 export const getRepoLucideIconOptions = createLocalizedCatalog(() => [
   {
     name: 'Folder',
@@ -147,14 +141,20 @@ export function RepoIconGlyph({
   iconClassName?: string
   color?: string
 }): React.JSX.Element {
-  if (repoIcon?.type === 'image') {
+  const imageSrc = repoIcon?.type === 'image' ? repoIcon.src : null
+  // Why: private-mode GHES avatars need a session cookie, so the load fails and would
+  // render blank — track the failed src so a different icon still renders.
+  const [failedImageSrc, setFailedImageSrc] = React.useState<string | null>(null)
+
+  if (imageSrc !== null && failedImageSrc !== imageSrc) {
     return (
       <span className={cn('inline-flex items-center justify-center overflow-hidden', className)}>
         <img
-          src={repoIcon.src}
+          src={imageSrc}
           alt=""
           className={cn('size-full object-contain', iconClassName)}
           draggable={false}
+          onError={() => setFailedImageSrc(imageSrc)}
         />
       </span>
     )

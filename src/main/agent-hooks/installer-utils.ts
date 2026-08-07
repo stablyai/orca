@@ -161,7 +161,14 @@ export function wrapWindowsGitBashHookCommand(scriptPath: string): string {
     : wrapWindowsHookCommand(scriptPath)
 }
 
-export function buildWindowsAgentHookPostCommand(source: AgentHookSource): string {
+/**
+ * Extra form lines inserted before the final `payload@-` line (each should end with ` ^`).
+ * Used by Grok to attach `grokHome` without fragile string replace on the shared template.
+ */
+export function buildWindowsAgentHookPostCommand(
+  source: AgentHookSource,
+  extraFormLines: readonly string[] = []
+): string {
   // Why: PowerShell startup makes inline per-turn Codex hooks visibly slow, so mirror the POSIX curl path.
   // Why: fully-qualify curl so a repo-local curl.exe can't hijack hook payloads.
   return [
@@ -175,6 +182,7 @@ export function buildWindowsAgentHookPostCommand(source: AgentHookSource): strin
     '  --data-urlencode "worktreeId=%ORCA_WORKTREE_ID%" ^',
     '  --data-urlencode "env=%ORCA_AGENT_HOOK_ENV%" ^',
     '  --data-urlencode "version=%ORCA_AGENT_HOOK_VERSION%" ^',
+    ...extraFormLines,
     '  --data-urlencode "payload@-" >nul 2>nul'
   ].join('\r\n')
 }

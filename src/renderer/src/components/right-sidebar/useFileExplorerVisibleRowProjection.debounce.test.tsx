@@ -22,24 +22,28 @@ function useProjection(query: string) {
   })
 }
 
-function useTreeProjection() {
+function treeDirCache(loading: boolean) {
+  return {
+    '/repo': {
+      children: [
+        {
+          name: 'src',
+          path: '/repo/src',
+          relativePath: 'src',
+          isDirectory: true,
+          depth: 0
+        }
+      ],
+      loading
+    }
+  }
+}
+
+function useTreeProjection(dirCache = treeDirCache(false)) {
   return useFileExplorerVisibleRowProjection(
     'worktree-1',
     '/repo',
-    {
-      '/repo': {
-        children: [
-          {
-            name: 'src',
-            path: '/repo/src',
-            relativePath: 'src',
-            isDirectory: true,
-            depth: 0
-          }
-        ],
-        loading: false
-      }
-    },
+    dirCache,
     new Set(),
     true,
     true,
@@ -94,5 +98,20 @@ describe('file explorer ignored-path query debounce', () => {
 
     expect(getRuntimeGitIgnoredPathsMock).toHaveBeenCalledTimes(1)
     expect(getRuntimeGitIgnoredPathsMock.mock.calls[0]?.[1]).toEqual(['src'])
+  })
+
+  it('does not re-issue the ignored check for a dirCache commit that changes no path', () => {
+    // A wave-batched tree refresh commits a fresh dirCache object per wave. The
+    // ignored query is an uncancellable remote git check-ignore over the whole
+    // visible tree, so identical contents must not re-issue it.
+    const hook = renderHook(({ dirCache }) => useTreeProjection(dirCache), {
+      initialProps: { dirCache: treeDirCache(false) }
+    })
+    expect(getRuntimeGitIgnoredPathsMock).toHaveBeenCalledTimes(1)
+
+    hook.rerender({ dirCache: treeDirCache(true) })
+    hook.rerender({ dirCache: treeDirCache(false) })
+
+    expect(getRuntimeGitIgnoredPathsMock).toHaveBeenCalledTimes(1)
   })
 })

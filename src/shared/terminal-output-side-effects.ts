@@ -5,6 +5,7 @@
  */
 
 import {
+  type AgentStatus,
   clearWorkingIndicators,
   createAgentStatusTracker,
   detectAgentStatusFromTitle,
@@ -90,6 +91,8 @@ export type TerminalTitleTracker = {
    * No-ops once any title has been observed or seeded (live state wins); fires no callbacks.
    */
   seedInitialTitle: (rawTitle: string) => void
+  /** Restore the status consumed by the latest exit candidate when process evidence disproves it. */
+  restoreLastAgentExit: () => AgentStatus | null
   /** Last title surfaced through onTitle, after normalization. */
   getLastNormalizedTitle: () => string | null
   /**
@@ -261,6 +264,9 @@ export function createTerminalTitleTracker(
       }
       lastEmittedTitle = normalizeTerminalTitle(rawTitle)
       agentTracker?.seedTitle(rawTitle)
+    },
+    restoreLastAgentExit(): AgentStatus | null {
+      return agentTracker?.restoreLastExit() ?? null
     },
     getLastNormalizedTitle: () => lastEmittedTitle,
     setTransientFactScanningSuppressed(suppressed: boolean): void {

@@ -12,7 +12,7 @@ import { ChevronLeft, ChevronRight, Smartphone, Type } from 'lucide-react-native
 import { colors, radii, spacing, typography } from '../src/theme/mobile-theme'
 import { loadHosts } from '../src/transport/host-store'
 import type { HostProfile } from '../src/transport/types'
-import { useAllHostClients } from '../src/transport/client-context'
+import { useFocusedSettingsHostClients } from '../src/transport/settings-host-client-connections'
 import type { RpcClient } from '../src/transport/rpc-client'
 import { PickerModal, type PickerOption } from '../src/components/PickerModal'
 import { TerminalShortcutSettings } from '../src/components/TerminalShortcutSettings'
@@ -127,7 +127,7 @@ export default function TerminalSettingsScreen() {
     void loadHosts().then(setHosts)
   }, [])
   const hostIds = useMemo(() => hosts.map((h) => h.id), [hosts])
-  const hostClients = useAllHostClients(hostIds)
+  const { clients: hostClients } = useFocusedSettingsHostClients(hostIds)
   const hostClientsById = useMemo(
     () => new Map(hostClients.map((entry) => [entry.hostId, entry.client])),
     [hostClients]

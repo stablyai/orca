@@ -152,7 +152,8 @@ export const ProfileCreate = z.object({
   label: requiredString('Missing required --label'),
   // Strict enum so unknown scope values surface validation errors instead of being
   // silently coerced to 'isolated' (pr-bug-scan finding from #1397).
-  scope: z.enum(['isolated', 'imported'])
+  scope: z.enum(['isolated', 'imported']),
+  userAgentMode: z.enum(['clean', 'native']).optional()
 })
 
 export const ProfileDelete = z.object({ profileId: requiredString('Missing required --profile') })

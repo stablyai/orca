@@ -32,6 +32,11 @@ type FetchOptions = {
   repoId?: string
   staleWhileRevalidate?: boolean
   currentHeadOid?: string | null
+  /**
+   * Pass from surfaces that only render the selected worktree. The host re-checks
+   * that branch per minute and paces the O(N) card list far slower (#11532).
+   */
+  active?: boolean
 }
 type CreateHostedReviewStoreInput = CreateHostedReviewInput & { repoId?: string | null }
 
@@ -387,6 +392,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
             branch,
             ...(options?.repoId !== undefined ? { repoId: options.repoId } : {}),
             currentHeadOid: options?.currentHeadOid ?? null,
+            ...(options?.active === true ? { active: true } : {}),
             linkedGitHubPR: options?.linkedGitHubPR ?? null,
             ...(fallbackGitHubPR !== null ? { fallbackGitHubPR } : {}),
             linkedGitLabMR: options?.linkedGitLabMR ?? null,

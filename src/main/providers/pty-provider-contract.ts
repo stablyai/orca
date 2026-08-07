@@ -62,6 +62,12 @@ export type PtySpawnOptions = {
    *  Existing-session attach paths must stay false so recovery checks do not
    *  replace the daemon out from under a still-live PTY. */
   isNewSession?: boolean
+  /** Attach the named session atomically or fail without creating a process. */
+  attachOnly?: boolean
+  /** Exact persisted owner expected by an attach-only routing decision. */
+  expectedIncarnationId?: PtyIncarnationId
+  /** True when runtime state makes the expected incarnation a hard attach fence. */
+  expectedIncarnationIsAuthoritative?: boolean
   /** Why: allows the renderer to request a specific shell for a single new
    *  terminal tab (e.g. "open this tab in WSL" from the "+" submenu) without
    *  changing the user's persistent default shell setting. Only consulted on
@@ -95,6 +101,10 @@ export type { PtyProcessInfo, PtySpawnResult }
 type PtyProbeOptions = { signal?: AbortSignal }
 
 export type IPtyProvider = {
+  /** Fresh local spawns currently route to an in-process, non-persistent fallback. */
+  readonly routesFreshSpawnsToLocalProvider?: true
+  /** Re-probes a degraded durable host before main commits to fallback spawn semantics. */
+  recoverFreshSpawnRouting?: () => Promise<boolean>
   spawn(opts: PtySpawnOptions): Promise<PtySpawnResult>
   /** Whether this spawn target can append the Git guard after its final env merge. */
   supportsGitCredentialGuardHost?: (sessionId?: string) => boolean

@@ -29,7 +29,8 @@ function createSubscription() {
     livePtyIds,
     recordExit,
     providerGeneration: 7,
-    resolvePtyIncarnation
+    resolvePtyIncarnation,
+    peekPtyIncarnation: () => undefined
   })
 
   const handler = mux.onNotification.mock.calls[0]?.[0] as (

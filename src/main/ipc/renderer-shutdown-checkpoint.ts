@@ -3,11 +3,11 @@ import { parseExecutionHostId, type ExecutionHostId } from '../../shared/executi
 import type { PersistedUIState, WorkspaceSessionState } from '../../shared/types'
 import type { Store } from '../persistence'
 
-const RENDERER_SHUTDOWN_CHECKPOINT_CHANNEL = 'app:persist-before-unload-sync'
+const RENDERER_SHUTDOWN_CHECKPOINT_CHANNEL = 'app:stage-before-unload-sync'
 const MAX_RENDERER_SHUTDOWN_SESSION_PARTITIONS = 128
 let trustedRendererShutdownCheckpointWebContentsId: number | null = null
 
-type PersistBeforeUnloadSyncEnvelope = {
+type StageBeforeUnloadSyncEnvelope = {
   sessions: unknown[]
   ui: Partial<PersistedUIState>
 }
@@ -16,6 +16,11 @@ type RendererShutdownSessionPartition = {
   state: WorkspaceSessionState
   hostId?: ExecutionHostId
 }
+
+export type ShutdownCheckpointResult = { ok: boolean }
+
+/** Matches the will-quit teardown budget so a stalled disk can't strand a restart. */
+export const SHUTDOWN_CHECKPOINT_FLUSH_DEADLINE_MS = 20_000
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -56,9 +61,7 @@ function isExecutionHostId(value: unknown): value is ExecutionHostId | undefined
   )
 }
 
-function isPersistBeforeUnloadSyncEnvelope(
-  value: unknown
-): value is PersistBeforeUnloadSyncEnvelope {
+function isStageBeforeUnloadSyncEnvelope(value: unknown): value is StageBeforeUnloadSyncEnvelope {
   return (
     isPlainRecord(value) &&
     Array.isArray(value.sessions) &&
@@ -95,21 +98,49 @@ export function setTrustedRendererShutdownCheckpointWebContentsId(
   trustedRendererShutdownCheckpointWebContentsId = webContentsId
 }
 
+function flushStagedStateWithDeadline(store: Store): Promise<ShutdownCheckpointResult> {
+  const controller = new AbortController()
+  let timer: ReturnType<typeof setTimeout> | null = null
+  const deadline = new Promise<ShutdownCheckpointResult>((resolve) => {
+    timer = setTimeout(() => {
+      controller.abort()
+      console.error('[app] Timed out persisting staged renderer state')
+      resolve({ ok: false })
+    }, SHUTDOWN_CHECKPOINT_FLUSH_DEADLINE_MS)
+  })
+  // Why not drain to stable: Store retries a superseded staged write without
+  // chasing unrelated live mutations, which the deadline would otherwise cut off.
+  const flush = store
+    .flushPendingOrThrowAsync({ signal: controller.signal, drainToStableGeneration: false })
+    .then((): ShutdownCheckpointResult => ({ ok: true }))
+    .catch((error): ShutdownCheckpointResult => {
+      console.error('[app] Failed to persist staged renderer state:', error)
+      return { ok: false }
+    })
+  return Promise.race([flush, deadline]).finally(() => {
+    if (timer) {
+      clearTimeout(timer)
+    }
+  })
+}
+
 export function registerRendererShutdownCheckpointHandler(store: Store): void {
+  // Why: beforeunload cannot await, so the sync reply only reports staging.
+  // Durability is joined out-of-band by paths that are about to navigate.
+  let pendingCheckpoint: Promise<ShutdownCheckpointResult> = Promise.resolve({ ok: true })
+
   ipcMain.removeAllListeners(RENDERER_SHUTDOWN_CHECKPOINT_CHANNEL)
   ipcMain.on(RENDERER_SHUTDOWN_CHECKPOINT_CHANNEL, (event, args: unknown) => {
     if (!isTrustedRendererSender(event.sender, trustedRendererShutdownCheckpointWebContentsId)) {
       event.returnValue = { ok: false }
       return
     }
-    if (!isPersistBeforeUnloadSyncEnvelope(args)) {
+    if (!isStageBeforeUnloadSyncEnvelope(args)) {
       event.returnValue = { ok: false }
       return
     }
 
     let ok = true
-    // Why: stage both renderer-owned snapshots before synchronously flushing
-    // the stores, so an immediate exit cannot outrun either update.
     try {
       for (const session of args.sessions) {
         // Why: skip, not reject — one malformed partition must not discard the
@@ -123,27 +154,20 @@ export function registerRendererShutdownCheckpointHandler(store: Store): void {
           )
           continue
         }
-        store.setWorkspaceSession(session.state, session.hostId)
+        store.stageWorkspaceSessionBeforeUnload(session.state, session.hostId)
       }
       store.updateUI(args.ui)
     } catch (error) {
       console.error('[app] Failed to stage renderer state before unload:', error)
       ok = false
     }
-    // Why: the durable state and active-view sidecar are independent stores;
-    // flush each even when the other one fails.
-    try {
-      store.flushOrThrow()
-    } catch (error) {
-      console.error('[app] Failed to flush durable state before unload:', error)
-      ok = false
-    }
-    try {
-      store.flushActiveViewPreferenceOrThrow()
-    } catch (error) {
-      console.error('[app] Failed to flush active-view preference before unload:', error)
-      ok = false
-    }
+    pendingCheckpoint = ok ? flushStagedStateWithDeadline(store) : Promise.resolve({ ok: false })
     event.returnValue = { ok }
   })
+
+  ipcMain.removeHandler('app:await-before-unload-checkpoint')
+  ipcMain.handle(
+    'app:await-before-unload-checkpoint',
+    (): Promise<ShutdownCheckpointResult> => pendingCheckpoint
+  )
 }

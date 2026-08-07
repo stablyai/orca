@@ -306,6 +306,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // settings objects (which omit them) keep the default-on behavior.
     terminalSshViewParking: true,
     terminalHiddenWorktreeRetentionBudget: true,
+    browserGuestWorktreeRetentionBudget: true,
     terminalMainSideEffectAuthority: true,
     terminalHiddenDeliveryGate: true,
     terminalModelQueryAuthority: true,
@@ -356,10 +357,6 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // Why: off keeps the cosmetic overlay unmounted for users who never opt in.
     experimentalPet: false,
     experimentalActivity: false,
-    experimentalAgentDashboardPopout: false,
-    // Why: in-window screen popover is the default surface; users opt into a separate pop-out window.
-    experimentalAgentDashboardMode: 'in-window',
-    experimentalAgentDashboardShowIdle: false,
     experimentalActivityDefaultedOffForAllUsers: true,
     experimentalTerminalAttention: false,
     experimentalAgentHibernation: false,
@@ -402,7 +399,9 @@ export function getDefaultVoiceSettings(): VoiceSettings {
     dictationMode: 'toggle' as const,
     terminalConfirmBeforeInsert: false,
     userModels: [],
-    openAiApiKeyConfigured: false
+    openAiApiKeyConfigured: false,
+    microphoneDeviceId: null,
+    microphoneDeviceLabel: null
   }
 }
 
@@ -476,6 +475,7 @@ export function getDefaultUIState(): PersistedUIState {
     hideAutomationGeneratedWorkspaces: false,
     hideCliCreatedWorkspaces: false,
     hideDetachedHeadWorkspaces: false,
+    alwaysShowDefaultBranchWorkspace: true,
     showDotfilesByWorktree: {},
     filterRepoIds: [],
     collapsedGroups: [],

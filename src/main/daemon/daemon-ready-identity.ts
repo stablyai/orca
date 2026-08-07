@@ -22,6 +22,27 @@ export async function readCurrentDaemonReadyIdentity(
   }
 }
 
+/**
+ * Reads another process's incarnation markers.
+ *
+ * Why: `readCurrentDaemonReadyIdentity` only covers /proc/self, but repairing a PID record
+ * means republishing the markers of the daemon that actually owns the endpoint.
+ */
+export async function readDaemonProcessIncarnation(
+  pid: number
+): Promise<{ linuxStartTicks: string; bootId: string } | null> {
+  if (process.platform !== 'linux') {
+    return null
+  }
+  try {
+    const linuxStartTicks = parseLinuxStartTicks(readFileSync(`/proc/${pid}/stat`, 'utf8'))
+    const bootId = await readBootIdentity()
+    return linuxStartTicks && bootId ? { linuxStartTicks, bootId } : null
+  } catch {
+    return null
+  }
+}
+
 export function parseDaemonReadyIdentity(message: unknown): DaemonReadyIdentity | null {
   if (!message || typeof message !== 'object') {
     return null

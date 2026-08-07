@@ -24,6 +24,7 @@ import type { SplitTerminalPaneDetail, CloseTerminalPaneDetail } from '@/constan
 import { getVisibleWorktreeIds } from '@/components/sidebar/visible-worktrees'
 import { activateTabNumberShortcut } from '@/lib/tab-number-shortcuts'
 import { nextEditorFontZoomLevel, computeEditorFontSize } from '@/lib/editor-font-zoom'
+import { canConnectSshStatus } from '@/ssh/ssh-connection-recoverability'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
@@ -289,6 +290,11 @@ export { resolveZoomTarget } from './resolve-zoom-target'
 const PENDING_AGENT_STATUS_RETRY_MS = 100
 const PENDING_AGENT_STATUS_TTL_MS = 15_000
 const MAX_PENDING_AGENT_STATUS_EVENTS = 100
+// Why: each live status event is its own IPC task, so a multi-agent burst pays
+// one full render pass per event; same-task commits batch to ONE pass (React
+// flushes external-store updates at the microtask boundary). One frame of
+// buffering collapses a burst; the leading event still applies immediately.
+const LIVE_AGENT_STATUS_BURST_WINDOW_MS = 33
 // Why: mobile driver hydration is async; cap replay so a stuck IPC snapshot can't retain an unbounded startup buffer.
 const MAX_PENDING_MOBILE_STATE_EVENTS = 300
 // Why: a rename's event burst lags the on-disk move; shield both ids from the deletion diff for a grace window.
@@ -759,6 +765,9 @@ export function useIpcEvents(): void {
     let pendingAgentStatusRetryTimer: ReturnType<typeof setTimeout> | null = null
     // Why: setAgentStatus notifies synchronously and re-enters this flush mid-drain; guard re-entrancy (crash 9fc89529).
     let isFlushingAgentStatuses = false
+    const liveAgentStatusBurstQueue: AgentStatusIpcPayload[] = []
+    let liveAgentStatusBurstTimer: ReturnType<typeof setTimeout> | null = null
+    let lastLiveAgentStatusApplyAt = 0
 
     unsubs.push(attachMobileMarkdownBridge())
 
@@ -1958,7 +1967,8 @@ export function useIpcEvents(): void {
           const detail: CloseTerminalPaneDetail = { tabId, paneRuntimeId }
           window.dispatchEvent(new CustomEvent(CLOSE_TERMINAL_PANE_EVENT, { detail }))
         } else {
-          closeTerminalTab(tabId)
+          // Why: the CLI/RPC caller is answered immediately, so it cannot wait on a modal.
+          closeTerminalTab(tabId, { skipRunningProcessConfirm: true })
         }
       })
     )
@@ -2267,7 +2277,6 @@ export function useIpcEvents(): void {
           // Agent/automation opens stay in the background (activate:false) in the active browser group.
           const workspace = store.createBrowserTab(worktreeId, data.url, {
             title: data.url,
-            allowWindowClose: true,
             targetGroupId: data.activate ? undefined : activeBrowserUnifiedTab?.groupId,
             sessionProfileId: data.sessionProfileId,
             sessionPartition: data.sessionPartition,
@@ -2799,7 +2808,7 @@ export function useIpcEvents(): void {
       const previous = store.sshConnectionStates?.get(targetId)
       store.setSshConnectionState(targetId, state)
 
-      if (['disconnected', 'auth-failed', 'reconnection-failed', 'error'].includes(state.status)) {
+      if (canConnectSshStatus(state.status)) {
         reconnectAuthorityByTarget.delete(targetId)
         reconnectCoordinator.invalidate(targetId)
         // Why: remote agent list is tied to a live relay; clear on disconnect so reconnect re-detects against the new relay.
@@ -3092,6 +3101,7 @@ export function useIpcEvents(): void {
         interactivePrompt: data.interactivePrompt,
         lastAssistantMessage: data.lastAssistantMessage,
         interrupted: data.interrupted,
+        sessionBoundary: data.sessionBoundary,
         // Why: same trap as interactivePrompt — this rebuild is a field whitelist, so subagent child rows vanish if omitted.
         subagents: data.subagents
       })
@@ -3205,12 +3215,18 @@ export function useIpcEvents(): void {
       const statusPayloadWithTurnBoundary = data.promptInteractionKey
         ? { ...statusPayload, promptInteractionKey: data.promptInteractionKey }
         : statusPayload
+      // Why: hydrated-unconfirmed provenance is envelope data the payload whitelist above drops; re-thread it or freshness gates confirm restored rows.
+      const statusPayloadWithProvenance =
+        data.restoredUnconfirmed === true
+          ? { ...statusPayloadWithTurnBoundary, restoredUnconfirmed: true }
+          : statusPayloadWithTurnBoundary
       const identity = resolveAgentStatusIdentity({
         existing: existingStatus
           ? {
               agentType: existingStatus.agentType,
               state: existingStatus.state,
-              updatedAt: existingStatus.updatedAt
+              updatedAt: existingStatus.updatedAt,
+              restoredUnconfirmed: existingStatus.restoredUnconfirmed
             }
           : undefined,
         incoming: statusPayload.agentType,
@@ -3243,7 +3259,7 @@ export function useIpcEvents(): void {
       const statusWorktreeId = data.worktreeId ?? owningWorktreeId
       store.setAgentStatus(
         paneKey,
-        statusPayloadWithTurnBoundary,
+        statusPayloadWithProvenance,
         terminalTitle,
         {
           updatedAt: data.receivedAt,
@@ -3363,15 +3379,77 @@ export function useIpcEvents(): void {
       })
     }
 
+    // Why: once the startup barrier applied the hook cache, a live push (e.g. a
+    // remote Stop landing during reconnect) must not be dropped pre-ready, or the
+    // stale working row would drive cold restore. Read the flag at apply time so a
+    // burst queued before the barrier still lands once it opens.
+    const applyLiveAgentStatus = (data: AgentStatusIpcPayload): AgentStatusApplyResult =>
+      applyAgentStatus(
+        data,
+        startupSnapshotBarrierStarted ? { allowBeforeWorkspaceReady: true } : undefined
+      )
+
+    function flushLiveAgentStatusBurst(): void {
+      liveAgentStatusBurstTimer = null
+      lastLiveAgentStatusApplyAt = Date.now()
+      // Why: splice before applying — applyAgentStatus can synchronously
+      // re-enter the queue via subscribers, and it must not see this batch.
+      const batch = liveAgentStatusBurstQueue.splice(0)
+      let anyApplied = false
+      for (const data of batch) {
+        if (applyLiveAgentStatus(data) === 'applied') {
+          anyApplied = true
+        }
+      }
+      if (!anyApplied) {
+        lastLiveAgentStatusApplyAt = 0
+      }
+    }
+
+    function drainQueuedLiveAgentStatusesForPane(paneKey: string): void {
+      const queuedForPane: AgentStatusIpcPayload[] = []
+      const remaining: AgentStatusIpcPayload[] = []
+      for (const queued of liveAgentStatusBurstQueue) {
+        if (queued.paneKey === paneKey) {
+          queuedForPane.push(queued)
+        } else {
+          remaining.push(queued)
+        }
+      }
+      liveAgentStatusBurstQueue.length = 0
+      liveAgentStatusBurstQueue.push(...remaining)
+      for (const queued of queuedForPane) {
+        applyLiveAgentStatus(queued)
+      }
+    }
+
+    function enqueueLiveAgentStatus(data: AgentStatusIpcPayload): void {
+      const now = Date.now()
+      if (
+        liveAgentStatusBurstTimer === null &&
+        now - lastLiveAgentStatusApplyAt >= LIVE_AGENT_STATUS_BURST_WINDOW_MS
+      ) {
+        lastLiveAgentStatusApplyAt = now
+        // Why: only an applied event commits state and costs a render pass —
+        // a dropped/pending leading edge must not make its successor pay
+        // burst latency (startup replay and unmounted panes stay immediate).
+        if (applyLiveAgentStatus(data) !== 'applied') {
+          lastLiveAgentStatusApplyAt = 0
+        }
+        return
+      }
+      liveAgentStatusBurstQueue.push(data)
+      if (liveAgentStatusBurstTimer === null) {
+        liveAgentStatusBurstTimer = globalThis.setTimeout(
+          flushLiveAgentStatusBurst,
+          LIVE_AGENT_STATUS_BURST_WINDOW_MS
+        )
+      }
+    }
+
     unsubs.push(
       window.api.agentStatus.onSet((data) => {
-        // Why: once the startup barrier applied the hook cache, a live push
-        // (e.g. a remote Stop landing during reconnect) must not be dropped
-        // pre-ready, or the stale working row would drive cold restore.
-        applyAgentStatus(
-          data,
-          startupSnapshotBarrierStarted ? { allowBeforeWorkspaceReady: true } : undefined
-        )
+        enqueueLiveAgentStatus(data)
       })
     )
     const unsubscribeAgentStatusClear = window.api.agentStatus.onClear?.(
@@ -3400,11 +3478,29 @@ export function useIpcEvents(): void {
               pendingAgentStatusEvents.splice(index, 1)
             }
           }
+          for (let index = liveAgentStatusBurstQueue.length - 1; index >= 0; index -= 1) {
+            const queued = liveAgentStatusBurstQueue[index]
+            if (
+              queued.connectionId === data.connectionId &&
+              queued.receivedAt <= effectiveWatermark
+            ) {
+              liveAgentStatusBurstQueue.splice(index, 1)
+            }
+          }
           useAppStore.getState().clearTransientAgentStatuses(data.connectionId, effectiveWatermark)
           return
         }
         if (!('paneKey' in data) || typeof data.paneKey !== 'string') {
           return
+        }
+        // Why: preserve set→clear FIFO so a queued completion still survives pane teardown.
+        if (liveAgentStatusBurstQueue.some((queued) => queued.paneKey === data.paneKey)) {
+          drainQueuedLiveAgentStatusesForPane(data.paneKey)
+        }
+        for (let index = pendingAgentStatusEvents.length - 1; index >= 0; index -= 1) {
+          if (pendingAgentStatusEvents[index].data.paneKey === data.paneKey) {
+            pendingAgentStatusEvents.splice(index, 1)
+          }
         }
         const store = useAppStore.getState()
         if (store.agentStatusByPaneKey[data.paneKey]?.state === 'done') {
@@ -3597,6 +3693,11 @@ export function useIpcEvents(): void {
         globalThis.clearTimeout(pendingAgentStatusRetryTimer)
       }
       pendingAgentStatusEvents.length = 0
+      if (liveAgentStatusBurstTimer !== null) {
+        globalThis.clearTimeout(liveAgentStatusBurstTimer)
+        liveAgentStatusBurstTimer = null
+      }
+      liveAgentStatusBurstQueue.length = 0
       mobileStateHydrationDisposed = true
       pendingMobileStateEvents.length = 0
       unsubscribeRuntimeEnvironmentStore()

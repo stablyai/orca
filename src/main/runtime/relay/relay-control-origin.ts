@@ -71,6 +71,10 @@ export class RelayControlOrigin {
     return this.activeControl
   }
 
+  hasLiveControl(): boolean {
+    return this.activeControl?.isLive() ?? false
+  }
+
   get cellUrl(): string {
     return this.assignment.cellUrl
   }
@@ -225,6 +229,13 @@ export class RelayControlOrigin {
   }
 
   private activate(control: RelayControlClient, ack: RelayHostHelloAckMessage): void {
+    // Why: a socket can deliver hello-ack and close in the same ws parser turn.
+    // That close already ran onClose (removing the control) before this
+    // continuation, so promoting it would publish a dead control that no close
+    // event will ever recover.
+    if (!this.controls.has(control) || !control.isLive()) {
+      throw new Error('relay_control_closed_before_activation')
+    }
     if (ack.generation <= 0) {
       throw new Error('invalid_relay_generation')
     }

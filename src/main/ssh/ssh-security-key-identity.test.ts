@@ -53,6 +53,29 @@ async function writeKey(contents: Buffer, filename = 'security key'): Promise<st
   return keyPath
 }
 
+async function createDefaultKeyHome(files: Record<string, Buffer>): Promise<string> {
+  const directory = await mkdtemp(join(tmpdir(), 'orca-default-key-home-'))
+  tempDirs.push(directory)
+  await mkdir(join(directory, '.ssh'))
+  for (const [name, contents] of Object.entries(files)) {
+    await writeFile(join(directory, '.ssh', name), contents)
+  }
+  return directory
+}
+
+// Why: `ssh -G` echoes this list, already home-expanded, for every host — configured or not.
+function listBuiltInDefaultIdentityFiles(home: string): string[] {
+  return [
+    'id_rsa',
+    'id_ecdsa',
+    'id_ecdsa_sk',
+    'id_ed25519',
+    'id_ed25519_sk',
+    'id_xmss',
+    'id_dsa'
+  ].map((name) => join(home, '.ssh', name))
+}
+
 afterEach(async () => {
   vi.unstubAllEnvs()
   await Promise.all(tempDirs.splice(0).map((directory) => rm(directory, { recursive: true })))
@@ -155,13 +178,9 @@ describe('isOpenSshSecurityKeyPrivateKey', () => {
 
 describe('requiresSystemSshForSecurityKey', () => {
   it('uses default FIDO2 identities only when config resolution is unavailable', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'orca-security-key-home-'))
-    tempDirs.push(directory)
-    await mkdir(join(directory, '.ssh'))
-    await writeFile(
-      join(directory, '.ssh', 'id_ed25519_sk'),
-      createOpenSshPrivateKeyFixture([ED25519_SECURITY_KEY])
-    )
+    const directory = await createDefaultKeyHome({
+      id_ed25519_sk: createOpenSshPrivateKeyFixture([ED25519_SECURITY_KEY])
+    })
     vi.stubEnv('ORCA_TEST_SSH_HOME', directory)
 
     await expect(requiresSystemSshForSecurityKey(createTarget(), null)).resolves.toBe(true)
@@ -170,28 +189,58 @@ describe('requiresSystemSshForSecurityKey', () => {
     ).resolves.toBe(false)
   })
 
-  it('keeps a regular default ahead of a dormant FIDO2 identity', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'orca-regular-key-home-'))
-    tempDirs.push(directory)
-    await mkdir(join(directory, '.ssh'))
-    await writeFile(join(directory, '.ssh', 'id_rsa'), createOpenSshPrivateKeyFixture(['ssh-rsa']))
-    await writeFile(
-      join(directory, '.ssh', 'id_ed25519_sk'),
-      createOpenSshPrivateKeyFixture([ED25519_SECURITY_KEY])
-    )
+  it('reaches a default FIDO2 identity that a regular default key precedes', async () => {
+    const directory = await createDefaultKeyHome({
+      id_rsa: createOpenSshPrivateKeyFixture(['ssh-rsa']),
+      id_ed25519_sk: createOpenSshPrivateKeyFixture([ED25519_SECURITY_KEY])
+    })
+    vi.stubEnv('ORCA_TEST_SSH_HOME', directory)
+
+    await expect(requiresSystemSshForSecurityKey(createTarget(), null)).resolves.toBe(true)
+
+    findSystemSshMock.mockReturnValue(null)
+    await expect(requiresSystemSshForSecurityKey(createTarget(), null)).resolves.toBe(false)
+  })
+
+  it('leaves regular-only defaults on ssh2', async () => {
+    const directory = await createDefaultKeyHome({
+      id_rsa: createOpenSshPrivateKeyFixture(['ssh-rsa'])
+    })
     vi.stubEnv('ORCA_TEST_SSH_HOME', directory)
 
     await expect(requiresSystemSshForSecurityKey(createTarget(), null)).resolves.toBe(false)
   })
 
-  it('keeps password and agent fallback when default FIDO2 needs unavailable OpenSSH', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'orca-no-system-ssh-home-'))
-    tempDirs.push(directory)
-    await mkdir(join(directory, '.ssh'))
-    await writeFile(
-      join(directory, '.ssh', 'id_ed25519_sk'),
-      createOpenSshPrivateKeyFixture([ED25519_SECURITY_KEY])
+  it('treats resolved built-in default identities as unconfigured, not as forced transport', async () => {
+    const directory = await createDefaultKeyHome({
+      id_rsa: createOpenSshPrivateKeyFixture(['ssh-rsa']),
+      id_ed25519_sk: createOpenSshPrivateKeyFixture([ED25519_SECURITY_KEY])
+    })
+    const identityFile = listBuiltInDefaultIdentityFiles(directory)
+
+    await expect(requiresSystemSshForSecurityKey(createTarget(), { identityFile })).resolves.toBe(
+      true
     )
+
+    findSystemSshMock.mockReturnValue(null)
+    await expect(requiresSystemSshForSecurityKey(createTarget(), { identityFile })).resolves.toBe(
+      false
+    )
+  })
+
+  it('keeps password and agent fallback when a configured FIDO2 identity has no OpenSSH', async () => {
+    const keyPath = await writeKey(createOpenSshPrivateKeyFixture([ED25519_SECURITY_KEY]))
+    findSystemSshMock.mockReturnValue(null)
+
+    await expect(
+      requiresSystemSshForSecurityKey(createTarget({ identityFile: keyPath }), null)
+    ).resolves.toBe(false)
+  })
+
+  it('keeps password and agent fallback when default FIDO2 needs unavailable OpenSSH', async () => {
+    const directory = await createDefaultKeyHome({
+      id_ed25519_sk: createOpenSshPrivateKeyFixture([ED25519_SECURITY_KEY])
+    })
     vi.stubEnv('ORCA_TEST_SSH_HOME', directory)
     findSystemSshMock.mockReturnValue(null)
 
@@ -199,17 +248,10 @@ describe('requiresSystemSshForSecurityKey', () => {
   })
 
   it('ignores an orphan regular sidecar before a valid default FIDO2 identity', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'orca-orphan-sidecar-home-'))
-    tempDirs.push(directory)
-    await mkdir(join(directory, '.ssh'))
-    await writeFile(
-      join(directory, '.ssh', 'id_ed25519.pub'),
-      createOpenSshPublicKeyFixture('ssh-ed25519')
-    )
-    await writeFile(
-      join(directory, '.ssh', 'id_ed25519_sk'),
-      createOpenSshPrivateKeyFixture([ED25519_SECURITY_KEY])
-    )
+    const directory = await createDefaultKeyHome({
+      'id_ed25519.pub': createOpenSshPublicKeyFixture('ssh-ed25519'),
+      id_ed25519_sk: createOpenSshPrivateKeyFixture([ED25519_SECURITY_KEY])
+    })
     vi.stubEnv('ORCA_TEST_SSH_HOME', directory)
 
     await expect(requiresSystemSshForSecurityKey(createTarget(), null)).resolves.toBe(true)

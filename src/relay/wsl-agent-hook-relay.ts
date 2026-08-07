@@ -21,9 +21,9 @@ import { createInstallPluginsHandler } from './wsl-install-plugins-handler'
 import { PreflightHandler } from './preflight-handler'
 import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
-  AGENT_HOOK_NOTIFICATION_METHOD,
   AGENT_HOOK_REQUEST_REPLAY_METHOD
 } from '../shared/agent-hook-relay'
+import { publishAgentHookEnvelope } from './agent-hook-envelope-publication'
 import {
   sanitizeWslHookInstanceKey,
   WSL_HOOK_RELAY_INSTANCE_ENV,
@@ -68,11 +68,7 @@ async function main(): Promise<void> {
     endpointDir: wslHookRelayEndpointDir(homedir(), instanceKey),
     token,
     preferredPort: windowsPort,
-    forward: (envelope) =>
-      dispatcher.notify(
-        AGENT_HOOK_NOTIFICATION_METHOD,
-        envelope as unknown as Record<string, unknown>
-      )
+    forward: (envelope) => publishAgentHookEnvelope(dispatcher, envelope)
   })
   new PreflightHandler(dispatcher)
 

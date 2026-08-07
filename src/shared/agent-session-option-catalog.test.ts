@@ -36,6 +36,91 @@ describe('agent session option catalog', () => {
     })
   })
 
+  it('labels Claude seed models by alias family so no host is mislabeled', () => {
+    const catalog = getAgentSessionOptionCatalog('claude')!
+    expect(catalog.models.map(({ id, label }) => ({ id, label }))).toEqual([
+      { id: 'fable', label: 'Fable' },
+      { id: 'opus', label: 'Opus' },
+      { id: 'sonnet', label: 'Sonnet' },
+      { id: 'haiku', label: 'Haiku' }
+    ])
+    expect(catalog.models.find((model) => model.isDefault)?.id).toBe('sonnet')
+  })
+
+  it('parses Claude list_models discovery into catalog models with options', () => {
+    const stdout = JSON.stringify({
+      type: 'control_response',
+      response: {
+        subtype: 'success',
+        response: {
+          models: [
+            {
+              value: 'default',
+              displayName: 'Default (recommended)',
+              supportsEffort: true,
+              supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
+              supportsFastMode: true
+            },
+            {
+              value: 'opus[1m]',
+              displayName: 'Opus (1M context)',
+              description: 'Opus 5 with 1M context',
+              supportsEffort: true,
+              supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
+              supportsFastMode: true
+            },
+            {
+              value: 'sonnet',
+              displayName: 'Sonnet',
+              supportsEffort: true,
+              supportedEffortLevels: ['low', 'medium', 'high']
+            },
+            { value: 'haiku', displayName: 'Haiku' }
+          ]
+        }
+      }
+    })
+    const parsed = getAgentSessionOptionCatalog('claude')!.listModels!.parse(stdout)
+    expect(parsed.map(({ id }) => id)).toEqual(['opus[1m]', 'sonnet', 'haiku'])
+    expect(parsed[0]).toMatchObject({
+      label: 'Opus (1M context)',
+      description: 'Opus 5 with 1M context'
+    })
+    expect(parsed[0].options.map(({ id }) => id)).toEqual(['effort', 'fastMode'])
+    const opusEffort = parsed[0].options[0]
+    expect(opusEffort.kind).toMatchObject({ defaultValue: 'high' })
+    expect(
+      opusEffort.kind.type === 'select' ? opusEffort.kind.choices.map((c) => c.value) : []
+    ).toEqual(['low', 'medium', 'high', 'xhigh', 'max'])
+    const sonnetEffort = parsed[1].options[0]
+    expect(
+      sonnetEffort.kind.type === 'select' ? sonnetEffort.kind.choices.map((c) => c.value) : []
+    ).toEqual(['low', 'medium', 'high'])
+    expect(parsed[2].options).toEqual([])
+  })
+
+  it('keeps the Claude seed when list_models output is unsupported or malformed', () => {
+    const parse = getAgentSessionOptionCatalog('claude')!.listModels!.parse
+    const unsupported =
+      '{"type":"control_response","response":{"subtype":"error","request_id":"x","error":"Unsupported control request subtype: list_models"}}'
+    expect(parse(unsupported)).toEqual([])
+    expect(parse('')).toEqual([])
+    expect(parse('garbage')).toEqual([])
+  })
+
+  it('merges discovered Claude variants after the seed and overlays matched labels', () => {
+    const catalog = getAgentSessionOptionCatalog('claude')!
+    const merged = mergeCatalogModels(catalog.models, [
+      { id: 'opus[1m]', label: 'Opus (1M context)', options: [] },
+      { id: 'sonnet', label: 'Sonnet', description: 'Sonnet 5 · Efficient', options: [] }
+    ])
+    expect(merged.map(({ id }) => id)).toEqual(['fable', 'opus', 'sonnet', 'haiku', 'opus[1m]'])
+    const sonnet = merged.find((model) => model.id === 'sonnet')!
+    expect(sonnet.description).toBe('Sonnet 5 · Efficient')
+    expect(sonnet.isDefault).toBe(true)
+    expect(sonnet.options.map(({ id }) => id)).toEqual(['effort'])
+  })
+
   it('parses Cursor model discovery without treating headings as models', () => {
     const parsed = getAgentSessionOptionCatalog('cursor')!.listModels!.parse(
       'Available models:\n- auto (default)\n- gpt-5.3-codex\nmodels\n'

@@ -1,6 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileNativeChatView } from './MobileNativeChatView'
 
 vi.mock('react-native', () => ({
@@ -49,8 +50,13 @@ vi.mock('./MobileAgentWorkingIndicator', () => ({
 vi.mock('./MobileNativeChatComposer', async () => {
   const React = await import('react')
   return {
-    MobileNativeChatComposer: (props: { onSend: (text: string) => Promise<boolean> }) =>
+    MobileNativeChatComposer: (props: {
+      onSend: (text: string) => Promise<boolean>
+      disabled?: boolean
+      placeholder?: string
+    }) =>
       React.createElement('Composer', {
+        ...props,
         accessibilityLabel: 'Send message',
         onPress: () => props.onSend('hi')
       })
@@ -58,6 +64,9 @@ vi.mock('./MobileNativeChatComposer', async () => {
 })
 
 type Overrides = {
+  messages?: Parameters<typeof MobileNativeChatView>[0]['messages']
+  folded?: Parameters<typeof MobileNativeChatView>[0]['folded']
+  streaming?: string | null
   sendErrorMessage?: string | null
   onClearSendError?: () => void
   inputLockReason?: 'disconnected' | 'waiting' | null
@@ -75,7 +84,25 @@ function suppressRendererWarning(): () => void {
   return () => spy.mockRestore()
 }
 
-describe('MobileNativeChatView send-error banner', () => {
+function assistantTurn(id: string, text: string): NativeChatMessage {
+  return { id, role: 'assistant', blocks: [{ type: 'text', text }], timestamp: 0, source: 'hook' }
+}
+
+function chatViewElement(overrides: Overrides): ReturnType<typeof createElement> {
+  return createElement(MobileNativeChatView, {
+    messages: [],
+    folded: [],
+    status: 'ready',
+    streaming: null,
+    onSend: vi.fn().mockResolvedValue(true),
+    pending: [],
+    composerText: '',
+    onComposerTextChange: vi.fn(),
+    ...overrides
+  })
+}
+
+describe('MobileNativeChatView', () => {
   let renderer: ReactTestRenderer | null = null
 
   beforeEach(() => {
@@ -91,25 +118,31 @@ describe('MobileNativeChatView send-error banner', () => {
     const restore = suppressRendererWarning()
     try {
       await act(async () => {
-        renderer = create(
-          createElement(MobileNativeChatView, {
-            messages: [],
-            status: 'ready',
-            onSend: overrides.onSend ?? vi.fn().mockResolvedValue(true),
-            pending: [],
-            composerText: '',
-            onComposerTextChange: vi.fn(),
-            ...overrides
-          })
-        )
+        renderer = create(chatViewElement(overrides))
       })
     } finally {
       restore()
     }
   }
 
+  async function update(overrides: Overrides = {}): Promise<void> {
+    await act(async () => {
+      renderer?.update(chatViewElement(overrides))
+    })
+  }
+
+  /** Ids of the rows the list is currently rendering. */
+  function listIds(): string[] {
+    const list = renderer!.root.find((node) => node.type === 'FlatList')
+    return (list.props.data as { id: string }[]).map((row) => row.id)
+  }
+
   function banners(): ReactTestInstance[] {
     return renderer!.root.findAll((node) => node.props.accessibilityRole === 'alert')
+  }
+
+  function composer(): ReactTestInstance {
+    return renderer!.root.find((node) => node.type === 'Composer')
   }
 
   function bannerText(): string {
@@ -160,5 +193,55 @@ describe('MobileNativeChatView send-error banner', () => {
     await pressSend()
 
     expect(onClearSendError).toHaveBeenCalledOnce()
+  })
+
+  // The gate that decides `streaming` lives in MobileNativeChatOverlay, which
+  // outlives this view; see MobileNativeChatOverlay.test.ts.
+  it('appends the gated streaming bubble after the folded transcript', async () => {
+    const folded = [assistantTurn('a1', 'The tests pass.')]
+    await render({ folded })
+    expect(listIds()).toEqual(['a1'])
+
+    await update({ folded, streaming: 'The tests' })
+
+    expect(listIds()).toEqual(['a1', 'streaming'])
+  })
+
+  it('keeps a visible lock through a subscribed-end lease blip', async () => {
+    vi.useFakeTimers()
+    try {
+      await render({ inputLockReason: 'waiting' })
+      await act(async () => vi.advanceTimersByTime(600))
+      expect(composer().props.disabled).toBe(true)
+
+      await update({ inputLockReason: null })
+      expect(composer().props.disabled).toBe(true)
+      await act(async () => vi.advanceTimersByTime(300))
+      await update({ inputLockReason: 'waiting' })
+      await act(async () => vi.advanceTimersByTime(600))
+
+      expect(composer().props.disabled).toBe(true)
+      expect(composer().props.placeholder).toBe('Waiting for terminal…')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('unlocks after the lease stays ready', async () => {
+    vi.useFakeTimers()
+    try {
+      await render({ inputLockReason: 'waiting' })
+      await act(async () => vi.advanceTimersByTime(600))
+      await update({ inputLockReason: null })
+      await act(async () => vi.advanceTimersByTime(599))
+      expect(composer().props.disabled).toBe(true)
+
+      await act(async () => vi.advanceTimersByTime(1))
+
+      expect(composer().props.disabled).toBe(false)
+      expect(composer().props.placeholder).toBe('Message, @files, /commands')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

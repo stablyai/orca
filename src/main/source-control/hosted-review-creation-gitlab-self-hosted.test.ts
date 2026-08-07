@@ -61,6 +61,7 @@ vi.mock('./hosted-review', () => ({
   getHostedReviewForBranch: getHostedReviewForBranchMock
 }))
 
+import { REMOTE_URL_PROBE_TIMEOUT_MS } from '../git/remote-url-probe'
 import { _resetKnownHostsCache, _resetProjectRefCache } from '../gitlab/gl-utils'
 import { diagnoseAuth } from '../gitlab/client'
 import { getHostedReviewCreationEligibility } from './hosted-review-creation'
@@ -140,8 +141,11 @@ describe('GitLab self-hosted hosted review creation eligibility', () => {
       head: 'feature/self-hosted-mr'
     })
 
+    // The probe is bounded: a dead mount must not pin the forge detection that
+    // every hosted-review lookup starts with (P1-D).
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
-      cwd: '/repo'
+      cwd: '/repo',
+      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
     expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
       ['auth', 'status', '--hostname', 'gitlab.internal'],

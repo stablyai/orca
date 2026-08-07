@@ -142,6 +142,7 @@ export function useTerminalPaneGlobalEffects({
     if (!manager) {
       return
     }
+    manager.setAtlasRecoveryVisible?.(rendererVisible)
     const wasVisible = wasVisibleRef.current
     const wasWorktreeActive = wasWorktreeActiveRef.current
     isActiveRef.current = isActive

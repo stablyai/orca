@@ -28,7 +28,11 @@ describe('computer-use modifier safety', () => {
     )
 
     expect(mouseInput).toContain('event.flags = flags')
-    expect(clickInput.match(/flags: flags/gu)).toHaveLength(3)
+    // Every click event flows through the shared delivery plan and carries
+    // the modifier flags on the mouse event itself.
+    expect(clickInput).toContain('SyntheticMouseClickDelivery.deliver(')
+    expect(clickInput).toContain('currentSyntheticClickRecipient(')
+    expect(clickInput).toContain('event.flags = flags')
     expect(clickInput).not.toContain('down: true')
   })
 
