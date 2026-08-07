@@ -7589,7 +7589,16 @@
             "fastDescription": "Extra multiplier while scrolling with a modifier key.",
             "tui": "TUI",
             "tuiDescription": "Discrete wheel reports for full-screen terminal apps."
-          }
+          },
+          "a1b2c3d4e5": "Font Smoothing",
+          "b2c3d4e5f6": "Anti-aliasing for terminal glyphs. Subpixel matches VS Code on light themes; Default inherits the app-wide grayscale smoothing.",
+          "c3d4e5f6a7": "Font Smoothing",
+          "d4e5f6a7b8": "macOS subpixel smoothing; sharper on light themes, like VS Code.",
+          "e5f6a7b8c9": "Grayscale smoothing, pinned explicitly.",
+          "f6a7b8c9d0": "Inherit the app-wide grayscale smoothing (default).",
+          "a7b8c9d0e1": "Default",
+          "b8c9d0e1f2": "Antialiased",
+          "c9d0e1f2a3": "Subpixel"
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "Preview {{value0}} theme",
@@ -9316,7 +9325,13 @@
               "title": "Theme Mode",
               "keyword_target": "target",
               "keyword_editing": "editing"
-            }
+            },
+            "a1b2c3d4e5": "Font Smoothing",
+            "b2c3d4e5f6": "Anti-aliasing for terminal glyphs. Subpixel matches VS Code on light themes; Default inherits the app-wide grayscale smoothing.",
+            "c3d4e5f6a7": "font",
+            "d4e5f6a7b8": "smoothing",
+            "e5f6a7b8c9": "antialiasing",
+            "f6a7b8c9d0": "subpixel"
           },
           "windows": {
             "search": {

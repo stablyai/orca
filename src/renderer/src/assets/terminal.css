@@ -30,6 +30,37 @@
   width: 100%;
 }
 
+/* Terminal font smoothing (setting: terminalFontSmoothing, applied as a
+   data attribute on :root by App.tsx).
+
+   Why this exists: body{} in main.css sets -webkit-font-smoothing:antialiased
+   (grayscale) app-wide, and it inherits into the terminal, whose WebGL atlas
+   bakes it into thinner, lighter glyphs. VS Code renders its terminal with
+   macOS subpixel smoothing: workbench.fontAliasing defaults to 'default', a
+   state that adds no .monaco-font-aliasing-* class, so the workbench keeps the
+   browser-native -webkit-font-smoothing:auto (= subpixel), Retina included.
+
+   'default' emits no rule, so the terminal keeps inheriting the app-wide
+   antialiased value (historical behavior). 'subpixel' opts into auto to match
+   VS Code on light themes; 'antialiased' pins grayscale explicitly. The real
+   terminal node is `.terminal.xterm` inside `.xterm-container`, so target
+   `.xterm` and its glyph host / canvas directly; the rest of the UI is
+   unaffected. */
+:root[data-terminal-font-smoothing='subpixel'] .xterm,
+:root[data-terminal-font-smoothing='subpixel'] .xterm .xterm-rows,
+:root[data-terminal-font-smoothing='subpixel'] .xterm .xterm-screen,
+:root[data-terminal-font-smoothing='subpixel'] .xterm canvas {
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
+}
+:root[data-terminal-font-smoothing='antialiased'] .xterm,
+:root[data-terminal-font-smoothing='antialiased'] .xterm .xterm-rows,
+:root[data-terminal-font-smoothing='antialiased'] .xterm .xterm-screen,
+:root[data-terminal-font-smoothing='antialiased'] .xterm canvas {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
 .pane-manager-root .xterm-viewport {
   /* Why: xterm/VS Code keep the scrollbar gutter stable. `auto` lets Linux
      DOM scrollbars appear/disappear, which can feed resize/reflow jitter. */

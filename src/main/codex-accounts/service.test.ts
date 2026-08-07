@@ -73,6 +73,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     terminalFastScrollSensitivity: 5,
     terminalTuiScrollSensitivity: 1,
     terminalGpuAcceleration: 'auto',
+    terminalFontSmoothing: 'default',
     terminalLigatures: 'auto',
     terminalCursorStyle: 'block',
     terminalCursorBlink: false,

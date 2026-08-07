@@ -213,6 +213,8 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalTuiScrollSensitivityDefaultedToOne: true,
     // Why: "auto" uses WebGL when supported, falling back to DOM on renderer failure or software/unknown GPU.
     terminalGpuAcceleration: 'auto',
+    // Why 'default': inherit the app-wide antialiased smoothing (historical behavior); users opt into subpixel/antialiased explicitly.
+    terminalFontSmoothing: 'default',
     // Why 'auto': enable ligatures only for known ligature fonts, never forced. Resolver in shared/terminal-ligatures.ts.
     terminalLigatures: 'auto',
     terminalCursorStyle: 'block',

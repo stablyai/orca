@@ -42,6 +42,10 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').terminalCursorStyleDefaultedToBlock).toBe(true)
   })
 
+  it('inherits the app-wide font smoothing for terminals by default', () => {
+    expect(getDefaultSettings('/tmp').terminalFontSmoothing).toBe('default')
+  })
+
   it('allows OSC 52 clipboard writes by default for new settings', () => {
     expect(getDefaultSettings('/tmp').terminalAllowOsc52Clipboard).toBe(true)
     expect(getDefaultSettings('/tmp').terminalAllowOsc52ClipboardDefaultedOnForAllUsers).toBe(true)

@@ -128,6 +128,24 @@ export const getTerminalRenderingSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.terminal.search.7d924d870d', 'graphics'),
       ...translateSearchKeyword('auto.components.settings.terminal.search.1abcf4d7de', 'linux')
     ]
+  },
+  {
+    title: translate('auto.components.settings.terminal.search.a1b2c3d4e5', 'Font Smoothing'),
+    description: translate(
+      'auto.components.settings.terminal.search.b2c3d4e5f6',
+      'Anti-aliasing for terminal glyphs. Subpixel matches VS Code on light themes; Default inherits the app-wide grayscale smoothing.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.terminal.search.f66a7cf715', 'terminal'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.c3d4e5f6a7', 'font'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.d4e5f6a7b8', 'smoothing'),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.e5f6a7b8c9',
+        'antialiasing'
+      ),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.f6a7b8c9d0', 'subpixel'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.bc7ae1f7c0', 'rendering')
+    ]
   }
 ])
 
