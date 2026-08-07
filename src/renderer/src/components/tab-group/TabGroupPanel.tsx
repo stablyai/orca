@@ -206,8 +206,9 @@ export default function TabGroupPanel({
     >
       {/* Why: each split group needs its own tab row because multiple groups can show at once but the titlebar has only one shared center slot. */}
       {/* Why: macOS hiddenInset titleBarStyle makes -webkit-app-region: drag the only way to move the window from this tab row. */}
+      {/* Why height is split-conditional: the top band totals 36px. When split, a 4px drag strip above the split layout carries the shared seam and each tab row is 32px (4+32). When NOT split that strip collapses to 0, so this lone tab row takes the full 36px and the active tab sits flush against the window top — no 4px lip above it. */}
       <div
-        className="h-[32px] shrink-0 border-b border-border bg-card"
+        className={`${hasSplitGroups ? 'h-[32px]' : 'h-[36px]'} shrink-0 border-b border-border bg-card`}
         data-tab-group-strip-id={groupId}
         data-terminal-focus-release-surface="true"
         data-worktree-id={worktreeId}

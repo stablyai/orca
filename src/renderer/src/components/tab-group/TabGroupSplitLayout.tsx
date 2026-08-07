@@ -295,17 +295,24 @@ export default function TabGroupSplitLayout({
         // so disabling it is the simplest fix.
         autoScroll={false}
       >
-        {/* Why: the 10px drag strip sits ABOVE the split layout — lifted out of
+        {/* Why: this drag strip sits ABOVE the split layout — lifted out of
           each pane — so vertical split resize handles don't extend into the
           window-drag region at the top. Only the split layout's own panes
           own the resize handles, while this strip keeps the whole top of the
           center column draggable regardless of how the splits are arranged.
-          Why 4px specifically: pairs with the 32px tab row below so the
-          total top-band is 36px, matching the sibling `titlebar-left` above
-          the sidebar. Keep this small — it's just enough drag surface above
-          the tabs without opening a visible gap between the window top and
-          the tab chrome. Without this, the tab row's bottom border falls short
-          of the sidebar header's and the seam between columns reads as off.
+          Why height is split-conditional: the top band must total 36px to
+          match the sibling `titlebar-left` above the sidebar. When split, the
+          strip is 4px and each pane's tab row is 32px (4+32=36); the strip is
+          the shared drag/seam surface spanning both panes. When NOT split
+          there is only one pane and no cross-pane seam to bridge, so the strip
+          collapses to 0 and the single tab row grows to the full 36px — this
+          lets the active tab sit flush against the window top instead of
+          floating under a 4px lip. Either way the tab row's bottom border
+          lands at 36px, aligned with the sidebar header.
+          Why `bg-worktree-sidebar` not `bg-card`: while visible (split only)
+          the strip shares the top band with `titlebar-left`, which paints
+          `--worktree-sidebar`; matching that tint keeps the band one
+          continuous surface rather than a bright lip above the tabs.
           Why `border-l` on the wrapper: paint the single full-height divider
           between the left sidebar and the terminal area, regardless of split
           state. The leftmost pane suppresses its own `border-l` via
@@ -315,7 +322,10 @@ export default function TabGroupSplitLayout({
           ref={dragSplit.setDragRootNode}
           className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden border-l border-border"
         >
-          <div className="h-[4px] shrink-0 bg-card" data-terminal-focus-release-surface="true" />
+          <div
+            className={`${hasSplits ? 'h-[4px]' : 'h-0'} shrink-0 bg-worktree-sidebar`}
+            data-terminal-focus-release-surface="true"
+          />
           <div className="flex flex-1 min-w-0 min-h-0 overflow-hidden">
             <SplitNode
               node={layout}
