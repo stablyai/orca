@@ -3541,6 +3541,53 @@ describe('OrcaRuntimeService', () => {
     expect(terminals.terminals[0]?.worktreePath).toBe(TEST_FOLDER_WORKSPACE_PATH)
   })
 
+  it('keeps controller PTYs scoped to their exact folder workspace instance', async () => {
+    const firstWorkspaceId = `${TEST_REPO_ID}::${TEST_FOLDER_WORKSPACE_PATH}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}11111111-1111-4111-8111-111111111111`
+    const secondWorkspaceId = `${TEST_REPO_ID}::${TEST_FOLDER_WORKSPACE_PATH}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}22222222-2222-4222-8222-222222222222`
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [
+        {
+          id: TEST_REPO_ID,
+          path: TEST_FOLDER_WORKSPACE_PATH,
+          displayName: 'folder',
+          badgeColor: 'blue',
+          addedAt: 1,
+          kind: 'folder' as const
+        }
+      ],
+      getRepo: (id: string) => (id === TEST_REPO_ID ? runtimeStore.getRepos()[0] : undefined),
+      getAllWorktreeMeta: () => ({
+        [firstWorkspaceId]: makeWorktreeMeta({ instanceId: 'first' }),
+        [secondWorkspaceId]: makeWorktreeMeta({ instanceId: 'second' })
+      }),
+      getWorktreeMeta: (worktreeId: string) => runtimeStore.getAllWorktreeMeta()[worktreeId]
+    }
+    const ptyId = `${firstWorkspaceId}@@daemon-controller-pty`
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [
+        {
+          id: ptyId,
+          cwd: TEST_FOLDER_WORKSPACE_PATH,
+          title: 'Codex',
+          worktreeId: firstWorkspaceId
+        }
+      ]
+    })
+
+    const all = await runtime.listTerminals()
+    const second = await runtime.listTerminals(`id:${secondWorkspaceId}`)
+
+    expect(all.terminals).toEqual([
+      expect.objectContaining({ ptyId, worktreeId: firstWorkspaceId })
+    ])
+    expect(second.terminals).toEqual([])
+  })
+
   it('routes PTY output through the PTY leaf index in large terminal graphs', () => {
     const runtime = new OrcaRuntimeService(store)
     const liveLeafCount = 2773
@@ -37095,6 +37142,17 @@ describe('OrcaRuntimeService', () => {
         .filter((event) => event.type === 'worktreeTerminalSleepState')
         .map((event) => event.phase)
     ).toEqual(['started', 'committed', 'woken'])
+  })
+
+  it('does not serialize terminal mutations across folder workspace instances', async () => {
+    const firstWorkspaceId = `${TEST_REPO_ID}::${TEST_FOLDER_WORKSPACE_PATH}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}11111111-1111-4111-8111-111111111111`
+    const secondWorkspaceId = `${TEST_REPO_ID}::${TEST_FOLDER_WORKSPACE_PATH}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}22222222-2222-4222-8222-222222222222`
+    const runtime = new OrcaRuntimeService(store)
+    const releaseFirst = await runtime.acquireWorktreeTerminalSpawn(firstWorkspaceId)
+    const releaseSecond = await runtime.acquireWorktreeTerminalSpawn(secondWorkspaceId)
+
+    releaseFirst()
+    releaseSecond()
   })
 
   it('waits for an in-flight spawn before inventorying worktree sleep', async () => {

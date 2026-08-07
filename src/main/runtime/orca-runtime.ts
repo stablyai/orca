@@ -36883,14 +36883,24 @@ function runtimeWorktreeIdsEqual(left: string, right: string): boolean {
   const parsedRight = splitWorktreeIdForFilesystem(right)
   return parsedLeft && parsedRight
     ? parsedLeft.repoId === parsedRight.repoId &&
-        runtimePathsEqual(parsedLeft.worktreePath, parsedRight.worktreePath)
+        runtimePathsEqual(parsedLeft.worktreePath, parsedRight.worktreePath) &&
+        getRuntimeFolderWorkspaceInstanceIdSuffix(left) ===
+          getRuntimeFolderWorkspaceInstanceIdSuffix(right)
     : left === right
+}
+
+function getRuntimeFolderWorkspaceInstanceIdSuffix(worktreeId: string): string | null {
+  const separatorIndex = worktreeId.lastIndexOf(FOLDER_WORKSPACE_INSTANCE_SEPARATOR)
+  return separatorIndex === -1
+    ? null
+    : worktreeId.slice(separatorIndex + FOLDER_WORKSPACE_INSTANCE_SEPARATOR.length)
 }
 
 function runtimeWorktreeIdentityKey(worktreeId: string): string {
   const parsed = splitWorktreeIdForFilesystem(worktreeId)
+  const folderWorkspaceInstanceId = getRuntimeFolderWorkspaceInstanceIdSuffix(worktreeId)
   return parsed
-    ? `${parsed.repoId}\0${normalizeRuntimePathForComparison(parsed.worktreePath)}`
+    ? `${parsed.repoId}\0${normalizeRuntimePathForComparison(parsed.worktreePath)}\0${folderWorkspaceInstanceId ?? ''}`
     : worktreeId
 }
 

@@ -228,6 +228,62 @@ describe('useAddRepoHostSelection', () => {
     expect(mocks.stateSetters[0]).toHaveBeenCalledWith('local')
   })
 
+  it('selects a runtime host while shared control finishes connecting', async () => {
+    mocks.stateValues = ['local', false]
+    mocks.hostOptions[2] = {
+      ...mocks.hostOptions[2],
+      health: 'connecting'
+    }
+    const setStep = vi.fn()
+    const { useAddRepoHostSelection } = await import('./use-add-repo-host-selection')
+
+    const result = useAddRepoHostSelection({ isOpen: true, setStep })
+    await result.handleSelectAddProjectHost('runtime:env-1')
+
+    expect(mocks.stateSetters[0]).toHaveBeenCalledWith('runtime:env-1')
+    expect(setStep).toHaveBeenCalledWith('add')
+  })
+
+  it('keeps an already-picked runtime host selected when it drops to connecting mid-flow', async () => {
+    // Why: the dialog is already open, so the open-reset effect must not run and
+    // silently move the user's pick back to Local while the channel reconnects.
+    mocks.refValues = [true]
+    mocks.stateValues = ['runtime:env-1', false]
+    mocks.hostOptions[2] = {
+      ...mocks.hostOptions[2],
+      health: 'connecting'
+    }
+    const { useAddRepoHostSelection } = await import('./use-add-repo-host-selection')
+
+    const result = useAddRepoHostSelection({ isOpen: true, setStep: vi.fn() })
+
+    expect(result.selectedHostId).toBe('runtime:env-1')
+    expect(result.selectedParsedHost).toMatchObject({ kind: 'runtime', environmentId: 'env-1' })
+  })
+
+  it('does not select a version-blocked runtime host that reports connecting', async () => {
+    mocks.stateValues = ['local', false]
+    mocks.hostOptions[2] = {
+      ...mocks.hostOptions[2],
+      health: 'connecting',
+      compatibility: {
+        kind: 'blocked',
+        reason: 'server-too-old',
+        clientProtocolVersion: 3,
+        serverProtocolVersion: 1,
+        requiredServerProtocolVersion: 2
+      }
+    }
+    const setStep = vi.fn()
+    const { useAddRepoHostSelection } = await import('./use-add-repo-host-selection')
+
+    const result = useAddRepoHostSelection({ isOpen: true, setStep })
+    await result.handleSelectAddProjectHost('runtime:env-1')
+
+    expect(mocks.stateSetters[0]).not.toHaveBeenCalledWith('runtime:env-1')
+    expect(setStep).not.toHaveBeenCalled()
+  })
+
   it('hides ephemeral VM runtime hosts from Add Project selection', async () => {
     mocks.stateValues = ['runtime:env-vm', false]
     mocks.hostOptions.push({

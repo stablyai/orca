@@ -134,4 +134,79 @@ describe('AddRepoHostSelector', () => {
     expect(html).toContain('Update Orca on the server.')
     expect(html).toContain('aria-disabled="true"')
   })
+
+  it('keeps a reachable runtime host selectable while shared control finishes connecting', () => {
+    const html = renderToStaticMarkup(
+      <AddRepoHostSelector
+        hosts={[
+          {
+            id: 'local',
+            label: 'Local Mac',
+            detail: 'This computer',
+            kind: 'local',
+            health: 'local',
+            presence: 'local'
+          },
+          {
+            id: 'runtime:server',
+            label: 'OCI',
+            detail: 'Orca server',
+            kind: 'runtime',
+            health: 'connecting',
+            presence: 'active'
+          }
+        ]}
+        selectedHostId="local"
+        open
+        onOpenChange={vi.fn()}
+        onSelectHost={vi.fn()}
+      />
+    )
+
+    expect(html).toContain('OCI')
+    expect(html).not.toContain('cursor-not-allowed')
+    expect(html).not.toContain('opacity-55')
+  })
+
+  it('keeps a version-blocked runtime host disabled while shared control is connecting', () => {
+    const html = renderToStaticMarkup(
+      <AddRepoHostSelector
+        hosts={[
+          {
+            id: 'local',
+            label: 'Local Mac',
+            detail: 'This computer',
+            kind: 'local',
+            health: 'local',
+            presence: 'local'
+          },
+          {
+            id: 'runtime:old-server',
+            label: 'Old server',
+            detail: 'Orca server',
+            kind: 'runtime',
+            // Why: shared-control diagnostics win over the compat verdict in the
+            // registry, so a too-old server can report 'connecting' health.
+            health: 'connecting',
+            presence: 'active',
+            compatibility: {
+              kind: 'blocked',
+              reason: 'server-too-old',
+              clientProtocolVersion: 3,
+              serverProtocolVersion: 1,
+              requiredServerProtocolVersion: 2
+            }
+          }
+        ]}
+        selectedHostId="local"
+        open
+        onOpenChange={vi.fn()}
+        onSelectHost={vi.fn()}
+      />
+    )
+
+    expect(html).toContain('The selected Orca server is too old for this client.')
+    expect(html).toContain('aria-disabled="true"')
+    expect(html).toContain('cursor-not-allowed')
+  })
 })
