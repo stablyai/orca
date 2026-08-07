@@ -382,6 +382,9 @@ function Terminal(): React.JSX.Element | null {
   const activeGroupIdByWorktree = useAppStore((s) => s.activeGroupIdByWorktree)
   const ensureWorktreeRootGroup = useAppStore((s) => s.ensureWorktreeRootGroup)
   const reconcileWorktreeTabModel = useAppStore((s) => s.reconcileWorktreeTabModel)
+  const activeWorktreeStrandedRescueCount = useAppStore(
+    (s) => s.strandedSleepingAgentRescuesByWorktreeId[activeWorktreeId ?? ''] ?? 0
+  )
 
   const markFileDirty = useAppStore((s) => s.markFileDirty)
   const setTabBarOrder = useAppStore((s) => s.setTabBarOrder)
@@ -1491,9 +1494,19 @@ function Terminal(): React.JSX.Element | null {
     if (!shouldAutoCreateInitialTerminal(renderableTabCount)) {
       return
     }
+    // Why: a pending rescue means the worktree's content is undecided — creating a placeholder now double-tabs a rescued session. This effect re-runs once the rescue count drops back to zero, so a rescue that concludes without launching still gets its initial terminal.
+    if (activeWorktreeStrandedRescueCount > 0) {
+      return
+    }
     // Why: tag this never-visited-worktree tab so its PTY spawn doesn't count as activity and reshuffle the sidebar (explicit New Tab still bumps).
     createTab(activeWorktreeId, undefined, undefined, { pendingActivationSpawn: true })
-  }, [workspaceSessionReady, activeWorktreeId, createTab, reconcileWorktreeTabModel])
+  }, [
+    workspaceSessionReady,
+    activeWorktreeId,
+    createTab,
+    reconcileWorktreeTabModel,
+    activeWorktreeStrandedRescueCount
+  ])
 
   const startupResumeWorktreeIdsRef = useRef(new Set<string>())
   useEffect(() => {

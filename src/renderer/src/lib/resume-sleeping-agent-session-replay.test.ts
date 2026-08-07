@@ -1,15 +1,26 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { useAppStore } from '@/store'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 import { launchAiVaultSessionInNewTab } from './launch-ai-vault-session'
 import { buildWorkspaceSessionPayload } from './workspace-session'
 
+vi.mock('../hooks/remote-workspace-snapshot-apply', () => ({
+  isDirectSshRemoteWorkspaceApplyInProgress: vi.fn(() => false)
+}))
+
 const initialAppStoreState = useAppStore.getState()
 
 afterEach(() => {
+  vi.unstubAllGlobals()
   useAppStore.setState(initialAppStoreState, true)
 })
+
+function stubEmptyPartitions(): void {
+  vi.stubGlobal('window', {
+    api: { session: { get: vi.fn().mockResolvedValue({ tabsByWorktree: {} } as never) } }
+  })
+}
 
 function makeRecord(
   overrides: Partial<SleepingAgentSessionRecord> = {}
@@ -34,14 +45,19 @@ function makeTerminalTab(id: string): Record<string, unknown> {
 }
 
 describe('resumeSleepingAgentSessionsForWorktree replay protection', () => {
-  it('stores provider-session metadata in the queued startup and runtime claim', () => {
+  it('stores provider-session metadata in the queued startup and runtime claim', async () => {
     const record = makeRecord()
     useAppStore.setState({
       tabsByWorktree: { 'wt-1': [] },
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
     } as never)
+    stubEmptyPartitions()
 
-    expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(1)
+    expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(0)
+
+    await vi.waitFor(() => {
+      expect(useAppStore.getState().tabsByWorktree['wt-1']).toHaveLength(1)
+    })
     const resumedTab = useAppStore.getState().tabsByWorktree['wt-1']![0]!
     const state = useAppStore.getState()
     expect(state.pendingStartupByTabId[resumedTab.id]?.resumeProviderSession).toEqual(
@@ -54,14 +70,19 @@ describe('resumeSleepingAgentSessionsForWorktree replay protection', () => {
     })
   })
 
-  it('does not fork a provider session that is already queued', () => {
+  it('does not fork a provider session that is already queued', async () => {
     const record = makeRecord()
     useAppStore.setState({
       tabsByWorktree: { 'wt-1': [] },
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
     } as never)
+    stubEmptyPartitions()
 
-    expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(1)
+    expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(0)
+    await vi.waitFor(() => {
+      expect(useAppStore.getState().tabsByWorktree['wt-1']).toHaveLength(1)
+    })
+
     useAppStore.setState((state) => ({
       sleepingAgentSessionsByPaneKey: {
         ...state.sleepingAgentSessionsByPaneKey,
@@ -74,14 +95,18 @@ describe('resumeSleepingAgentSessionsForWorktree replay protection', () => {
     expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
   })
 
-  it('does not fork after startup is consumed but before hooks report live status', () => {
+  it('does not fork after startup is consumed but before hooks report live status', async () => {
     const record = makeRecord()
     useAppStore.setState({
       tabsByWorktree: { 'wt-1': [] },
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
     } as never)
+    stubEmptyPartitions()
 
-    expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(1)
+    expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(0)
+    await vi.waitFor(() => {
+      expect(useAppStore.getState().tabsByWorktree['wt-1']).toHaveLength(1)
+    })
     const resumedTab = useAppStore.getState().tabsByWorktree['wt-1']![0]!
     expect(useAppStore.getState().consumeTabStartupCommand(resumedTab.id)).not.toBeNull()
     expect(useAppStore.getState().pendingStartupByTabId[resumedTab.id]).toBeUndefined()
@@ -118,7 +143,7 @@ describe('resumeSleepingAgentSessionsForWorktree replay protection', () => {
     expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
   })
 
-  it('does not let another worktree claim block the same provider session id', () => {
+  it('does not let another worktree claim block the same provider session id', async () => {
     const record = makeRecord()
     useAppStore.setState({
       tabsByWorktree: {
@@ -134,20 +159,27 @@ describe('resumeSleepingAgentSessionsForWorktree replay protection', () => {
       },
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
     } as never)
+    stubEmptyPartitions()
 
-    expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(1)
-    expect(useAppStore.getState().tabsByWorktree['wt-1']).toHaveLength(1)
+    expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(0)
+    await vi.waitFor(() => {
+      expect(useAppStore.getState().tabsByWorktree['wt-1']).toHaveLength(1)
+    })
     expect(useAppStore.getState().tabsByWorktree['wt-2']).toHaveLength(1)
   })
 
-  it('clears runtime automatic-resume claims when the tab closes', () => {
+  it('clears runtime automatic-resume claims when the tab closes', async () => {
     const record = makeRecord()
     useAppStore.setState({
       tabsByWorktree: { 'wt-1': [] },
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
     } as never)
+    stubEmptyPartitions()
 
-    expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(1)
+    expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(0)
+    await vi.waitFor(() => {
+      expect(useAppStore.getState().tabsByWorktree['wt-1']).toHaveLength(1)
+    })
     const resumedTab = useAppStore.getState().tabsByWorktree['wt-1']![0]!
     expect(useAppStore.getState().automaticAgentResumeClaimsByTabId[resumedTab.id]).toBeDefined()
 

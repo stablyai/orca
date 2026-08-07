@@ -188,6 +188,9 @@ export type AgentStatusSlice = {
   /** Durable agent sessions captured on sleep (not live rows); power the one-click CLI resume on wake. */
   sleepingAgentSessionsByPaneKey: Record<string, SleepingAgentSessionRecord>
 
+  /** Ref-count of in-flight stranded-sleeping-agent rescues per worktree; a positive count means the worktree's initial tab content is still undecided. */
+  strandedSleepingAgentRescuesByWorktreeId: Record<string, number>
+
   /** Ephemeral launch snapshots keyed by pane; hook payloads lack Orca launch settings, so the renderer supplies them from startup. */
   agentLaunchConfigByPaneKey: Record<string, AgentLaunchConfigRegistryEntry>
 
@@ -296,6 +299,11 @@ export type AgentStatusSlice = {
   setSleepingAgentAutomaticResumeBlocked: (paneKey: string, blocked: boolean) => void
   clearSleepingAgentSessionsByWorktree: (worktreeId: string) => void
   pruneSleepingAgentSessions: (validWorktreeIds: Set<string>) => void
+
+  /** Mark a stranded-sleeping-agent rescue as started for a worktree; nests, so concurrent rescues stay counted until each ends. */
+  beginStrandedSleepingAgentRescue: (worktreeId: string) => void
+  /** Mark a stranded-sleeping-agent rescue as finished for a worktree; drops the count to zero and removes the key once no rescue remains. */
+  endStrandedSleepingAgentRescue: (worktreeId: string) => void
 
   /** Retain agent snapshots. Accepts an array so simultaneous disappearances produce a single set() with no mid-loop intermediate states. */
   retainAgents: (entries: RetainedAgentEntry[]) => void
@@ -1469,6 +1477,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     transientClearedAgentStatusConnectionIds: {},
     retainedAgentsByPaneKey: {},
     sleepingAgentSessionsByPaneKey: {},
+    strandedSleepingAgentRescuesByWorktreeId: {},
     agentLaunchConfigByPaneKey: {},
     retentionSuppressedPaneKeys: {},
     recentlyClosedAgentStatusTabIds: {},
@@ -3200,6 +3209,35 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
               ...(nextLaunchConfigs ? { agentLaunchConfigByPaneKey: nextLaunchConfigs } : {})
             }
           : s
+      })
+    },
+
+    beginStrandedSleepingAgentRescue: (worktreeId) => {
+      set((s) => ({
+        strandedSleepingAgentRescuesByWorktreeId: {
+          ...s.strandedSleepingAgentRescuesByWorktreeId,
+          [worktreeId]: (s.strandedSleepingAgentRescuesByWorktreeId[worktreeId] ?? 0) + 1
+        }
+      }))
+    },
+
+    endStrandedSleepingAgentRescue: (worktreeId) => {
+      set((s) => {
+        const current = s.strandedSleepingAgentRescuesByWorktreeId[worktreeId] ?? 0
+        if (current <= 1) {
+          if (!(worktreeId in s.strandedSleepingAgentRescuesByWorktreeId)) {
+            return s
+          }
+          const next = { ...s.strandedSleepingAgentRescuesByWorktreeId }
+          delete next[worktreeId]
+          return { strandedSleepingAgentRescuesByWorktreeId: next }
+        }
+        return {
+          strandedSleepingAgentRescuesByWorktreeId: {
+            ...s.strandedSleepingAgentRescuesByWorktreeId,
+            [worktreeId]: current - 1
+          }
+        }
       })
     },
 

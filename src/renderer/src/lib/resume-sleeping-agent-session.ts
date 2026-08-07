@@ -4,6 +4,11 @@ import {
   type SleepingAgentSessionRecord
 } from '../../../shared/agent-session-resume'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
+import { toSshExecutionHostId } from '../../../shared/execution-host'
+import { parsePaneKey } from '../../../shared/stable-pane-id'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import { isDirectSshRemoteWorkspaceApplyInProgress } from '../hooks/remote-workspace-snapshot-apply'
+import { getConnectionIdFromState } from './connection-owner-resolution'
 import {
   getProviderSessionClaimKey,
   isPassiveCompletedHibernationEvidence,
@@ -141,6 +146,93 @@ function isInvalidWorktreeActivationRecord(record: SleepingAgentSessionRecord): 
   )
 }
 
+function tabExistsInAnyWorktree(
+  state: { tabsByWorktree: Record<string, readonly { id: string }[]> },
+  tabId: string
+): boolean {
+  return Object.values(state.tabsByWorktree).some((tabs) =>
+    (tabs ?? []).some((tab) => tab.id === tabId)
+  )
+}
+
+function tabExistsInPartition(
+  partition: WorkspaceSessionState | null | undefined,
+  tabId: string
+): boolean {
+  return Object.values(partition?.tabsByWorktree ?? {}).some((tabs) =>
+    (tabs ?? []).some((tab) => tab?.id === tabId)
+  )
+}
+
+const pendingStrandedRescueClaimKeys = new Set<string>()
+
+function queueStrandedSleepingAgentRescue(
+  record: SleepingAgentSessionRecord,
+  wakeTabId: string,
+  claimKey: string,
+  options?: ResumeSleepingAgentSessionsOptions
+): void {
+  if (pendingStrandedRescueClaimKeys.has(claimKey)) {
+    return
+  }
+  pendingStrandedRescueClaimKeys.add(claimKey)
+  useAppStore.getState().beginStrandedSleepingAgentRescue(record.worktreeId)
+  void (async () => {
+    try {
+      // Why: a snapshot apply suppresses session writes for its whole window,
+      // so the partitions can lag the store mid-apply; and before the target
+      // hydrates, the tab legitimately is not anywhere yet. Both are "cannot
+      // prove the tab is gone" — keep the record and let a later sweep retry.
+      if (isDirectSshRemoteWorkspaceApplyInProgress()) {
+        return
+      }
+      const state = useAppStore.getState()
+      const connectionId = getConnectionIdFromState(state, record.worktreeId)
+      if (connectionId && !state.remoteWorkspaceHydratedTargetIds.has(connectionId)) {
+        return
+      }
+      const partitions: WorkspaceSessionState[] = []
+      try {
+        partitions.push(await window.api.session.get())
+        if (connectionId) {
+          partitions.push(await window.api.session.get(toSshExecutionHostId(connectionId)))
+        }
+      } catch {
+        // Why: an unreadable partition cannot prove the tab is gone; resuming
+        // on failure is the duplicate-session direction.
+        return
+      }
+      if (partitions.some((partition) => tabExistsInPartition(partition, wakeTabId))) {
+        return
+      }
+      const fresh = useAppStore.getState()
+      if (fresh.sleepingAgentSessionsByPaneKey[record.paneKey] !== record) {
+        return
+      }
+      if (record.providerSession) {
+        const ownedElsewhere = Object.values(fresh.sleepingAgentSessionsByPaneKey).some(
+          (other) =>
+            other !== record &&
+            agentProviderSessionsEqual(
+              record.agent,
+              other.providerSession,
+              record.providerSession
+            ) &&
+            recordPaneIsOwnedByPreservedPane(other, fresh)
+        )
+        if (ownedElsewhere) {
+          fresh.clearSleepingAgentSession(record.paneKey)
+          return
+        }
+      }
+      launchSleepingAgentSession(record, options)
+    } finally {
+      pendingStrandedRescueClaimKeys.delete(claimKey)
+      useAppStore.getState().endStrandedSleepingAgentRescue(record.worktreeId)
+    }
+  })()
+}
+
 export function resumeSleepingAgentSessionsForWorktree(
   worktreeId: string,
   options?: ResumeSleepingAgentSessionsOptions
@@ -210,6 +302,13 @@ export function resumeSleepingAgentSessionsForWorktree(
       continue
     }
     if (isPaneOwned) {
+      continue
+    }
+    const wakeTabId = record.tabId ?? parsePaneKey(record.paneKey)?.tabId
+    if (wakeTabId && !tabExistsInAnyWorktree(currentState, wakeTabId)) {
+      // Why: tabsByWorktree holds only materialized worktrees — absence here
+      // cannot prove the session's tab is gone; resuming anyway forks the session.
+      queueStrandedSleepingAgentRescue(record, wakeTabId, claimKey, options)
       continue
     }
     if (launchSleepingAgentSession(record, options)) {

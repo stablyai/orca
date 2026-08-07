@@ -209,13 +209,12 @@ export function wakeSleepingAgentsForWorktreeInBackground(worktreeId: string): v
       hasUntargetablePassiveRecord ? undefined : [...passiveTabIds]
     )
   }
-  const launchedTabIds: string[] = []
   resumeSleepingAgentSessionsForWorktree(worktreeId, {
     suppressNavigation: true,
     skipClaimKeys: wokenClaimKeys,
-    onSessionLaunched: (tabId) => launchedTabIds.push(tabId)
+    // Why: a stranded record's rescue launches asynchronously, after this call already returned —
+    // dispatching per launch (instead of from an aggregate checked once here) is what gets its
+    // `activate: false` tab mounted, since nothing else would spawn its queued `--resume` PTY.
+    onSessionLaunched: (tabId) => dispatchBackgroundMount(worktreeId, [tabId])
   })
-  if (launchedTabIds.length > 0) {
-    dispatchBackgroundMount(worktreeId, launchedTabIds)
-  }
 }

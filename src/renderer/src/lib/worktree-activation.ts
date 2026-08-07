@@ -122,6 +122,7 @@ function getSetupRunnerCommandPlatformForLaunch(setup: WorktreeSetupLaunch): 'wi
 
 type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
   tabsByWorktree: Record<string, { id: string }[]>
+  strandedSleepingAgentRescuesByWorktreeId?: Record<string, number>
   defaultTerminalTabsAppliedByWorktreeId: Record<string, true>
   createTab: (
     worktreeId: string,
@@ -490,6 +491,37 @@ export function ensureWorktreeHasInitialTerminal(
     }
     if (setup || issueCommand) {
       // Why: runtime-owned worktrees mirror session tabs async, so hold commands for the first mirrored tab instead of dropping them.
+      queueHookCommandsForFirstWorktreeTab({
+        worktreeId,
+        deliver: (state, firstTerminalTabId) =>
+          queueSetupAndIssueCommands(
+            state,
+            worktreeId,
+            firstTerminalTabId,
+            setup,
+            issueCommand,
+            wrappedSetupCommandStr,
+            opts
+          )
+      })
+    }
+    return null
+  }
+
+  // Why: a pending rescue means the worktree's content is undecided — creating a placeholder now double-tabs a rescued session.
+  // An explicit launch payload (startup/defaultTabs) is a request for a specific tab, not a placeholder, so it still
+  // creates immediately; a concurrently rescued session adding its own tab alongside it is correct, not a forkbomb.
+  const hasPendingStrandedSleepingAgentRescue =
+    (store.strandedSleepingAgentRescuesByWorktreeId?.[worktreeId] ?? 0) > 0
+
+  if (
+    hasPendingStrandedSleepingAgentRescue &&
+    !startup &&
+    !defaultTabs &&
+    !store.tabsByWorktree[worktreeId]?.[0]?.id
+  ) {
+    if (setup || issueCommand) {
+      // Why: the pending rescue resolves to either the rescued tab or a post-rescue placeholder; hold commands for whichever tab lands first instead of dropping them.
       queueHookCommandsForFirstWorktreeTab({
         worktreeId,
         deliver: (state, firstTerminalTabId) =>
