@@ -556,3 +556,31 @@ describe('useAiVaultSessionRefresh in-app agent session behavior', () => {
     expect(listSessionsMock).toHaveBeenCalledTimes(3)
   })
 })
+
+describe('useAiVaultSessionRefresh non-secure browser context', () => {
+  // Reproduces the LAN web-client crash: served over plain HTTP, the browser
+  // hides crypto.randomUUID (secure-context-only), and the old direct call
+  // threw "crypto.randomUUID is not a function" inside the AiVaultPanel render.
+  const realCrypto = globalThis.crypto
+
+  beforeEach(() => {
+    Object.defineProperty(globalThis, 'crypto', {
+      configurable: true,
+      value: { getRandomValues: realCrypto.getRandomValues.bind(realCrypto) }
+    })
+  })
+
+  afterEach(() => {
+    Object.defineProperty(globalThis, 'crypto', { configurable: true, value: realCrypto })
+  })
+
+  it('renders and scans without crypto.randomUUID', async () => {
+    expect((globalThis.crypto as Crypto).randomUUID).toBeUndefined()
+
+    await renderHook(['/repo'], 'ssh:dev-box')
+    await flushMicrotasks()
+
+    expect(listSessionsMock).toHaveBeenCalledTimes(1)
+    expect(lastCallArgs()).toMatchObject({ executionHostScope: 'ssh:dev-box' })
+  })
+})
