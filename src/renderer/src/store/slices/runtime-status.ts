@@ -1,52 +1,25 @@
 import type { StateCreator } from 'zustand'
-import { toast } from 'sonner'
 import type { AppState } from '../types'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
-import { evaluateAppVersionSkew, type AppVersionSkew } from '../../../../shared/app-version-skew'
-import { getClientAppVersion } from '@/runtime/client-app-version'
+import {
+  buildRuntimeEnvironmentStatusEntry,
+  type RuntimeEnvironmentStatus
+} from './runtime-environment-status-entry'
+import {
+  dismissRuntimeDisconnectedToast,
+  showRuntimeDisconnectedToast
+} from './runtime-disconnected-toast'
 import {
   clearRecentRuntimeCompatibilityFailure,
   clearRuntimeCompatibilityCache,
   unwrapRuntimeRpcResult
 } from '@/runtime/runtime-rpc-client'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
-import { translate } from '@/i18n/i18n'
 import { bumpProviderRuntimeSessionGeneration } from '@/lib/provider-runtime-context'
 
-/** Live status for one saved runtime environment, as last observed by the
- * renderer. `status === null` records a probe that failed or timed out so the
- * sidebar can still distinguish "unknown/unreachable" from "never checked". */
-export type RuntimeEnvironmentStatus = {
-  status: RuntimeStatus | null
-  appVersion?: string | null
-  /** Non-blocking client/server app-version skew; null when versions match,
-   * the server is unreachable, or this build's version is unknown. */
-  versionSkew?: AppVersionSkew | null
-  checkedAt: number
-  connectionGeneration?: number
-}
-
-/** Builds a store entry from one probe result, deriving app-version skew
- * against this build. Shared by the boot/refresh probes and the host menu's
- * manual "Check connection" so no ingestion path drops the skew verdict. */
-export async function buildRuntimeEnvironmentStatusEntry(
-  status: RuntimeStatus | null
-): Promise<RuntimeEnvironmentStatus> {
-  if (!status) {
-    return { status: null, checkedAt: Date.now() }
-  }
-  const clientAppVersion = await getClientAppVersion()
-  return {
-    status,
-    appVersion: status.appVersion ?? null,
-    versionSkew: evaluateAppVersionSkew({
-      clientAppVersion,
-      serverAppVersion: status.appVersion ?? null
-    }),
-    checkedAt: Date.now()
-  }
-}
+export { buildRuntimeEnvironmentStatusEntry }
+export type { RuntimeEnvironmentStatus }
 
 export type RuntimeStatusSlice = {
   /** Saved remote Orca servers. Host pickers use this to show user-chosen names
@@ -90,85 +63,6 @@ export type RuntimeStatusSlice = {
 }
 
 const connectionGenerationByEnvironment = new Map<string, number>()
-const activeRuntimeDisconnectedToasts = new Map<string, symbol>()
-const RUNTIME_DISCONNECTED_TOAST_DURATION_MS = 4_000
-
-function getRuntimeDisconnectedToastId(environmentId: string): string {
-  return `runtime-environment-disconnected:${environmentId}`
-}
-
-function showRuntimeDisconnectedToast(environmentId: string, getState: () => AppState): void {
-  const environment = getState().runtimeEnvironments.find((entry) => entry.id === environmentId)
-  const toastId = getRuntimeDisconnectedToastId(environmentId)
-  const activation = Symbol(toastId)
-  const title = environment?.name
-    ? translate(
-        'auto.store.slices.runtime.status.runtimeHostUnreachableNamed',
-        "Can't reach {{hostName}}",
-        { hostName: environment.name }
-      )
-    : translate(
-        'auto.store.slices.runtime.status.runtimeHostUnreachable',
-        "Can't reach Orca server"
-      )
-  activeRuntimeDisconnectedToasts.set(toastId, activation)
-  const clearActiveToast = (): void => {
-    if (activeRuntimeDisconnectedToasts.get(toastId) === activation) {
-      activeRuntimeDisconnectedToasts.delete(toastId)
-    }
-  }
-  let retrying = false
-  const showToast = (duration = RUNTIME_DISCONNECTED_TOAST_DURATION_MS): void => {
-    toast.warning(title, {
-      id: toastId,
-      description: translate(
-        'auto.store.slices.runtime.status.runtimeHostDisconnectedDescription',
-        'Check that Orca is running on this server and that your network connection is working, then try again.'
-      ),
-      duration,
-      action: {
-        label: translate('auto.store.slices.runtime.status.tryAgain', 'Try again'),
-        onClick: (event) => {
-          // Why: Sonner otherwise deletes the keyed toast after the action callback.
-          event.preventDefault()
-          if (retrying) {
-            return
-          }
-          retrying = true
-          showToast(Number.POSITIVE_INFINITY)
-          void getState()
-            .refreshRuntimeEnvironmentStatus(environmentId)
-            .then((reachable) => {
-              const stillSaved = getState().runtimeEnvironments.some(
-                (entry) => entry.id === environmentId
-              )
-              if (
-                !reachable &&
-                stillSaved &&
-                activeRuntimeDisconnectedToasts.get(toastId) === activation
-              ) {
-                showToast()
-              }
-            })
-            .finally(() => {
-              retrying = false
-            })
-        }
-      },
-      onDismiss: clearActiveToast,
-      onAutoClose: clearActiveToast
-    })
-  }
-  showToast()
-}
-
-function dismissRuntimeDisconnectedToast(environmentId: string): void {
-  const toastId = getRuntimeDisconnectedToastId(environmentId)
-  if (!activeRuntimeDisconnectedToasts.delete(toastId)) {
-    return
-  }
-  toast.dismiss?.(toastId)
-}
 
 export function getRuntimeEnvironmentConnectionGeneration(environmentId: string): number {
   return connectionGenerationByEnvironment.get(environmentId) ?? 0
@@ -346,20 +240,31 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
   },
 
   refreshRuntimeEnvironmentStatus: async (environmentId, timeoutMs = 10_000) => {
+    // Why: the probe awaits across removal/re-pair windows; a result whose
+    // environment was tombstoned or whose connection generation advanced
+    // belongs to a retired peer and must not be committed (#8881).
+    const probeGeneration = getRuntimeEnvironmentConnectionGeneration(environmentId)
+    const probeRetired = (): boolean =>
+      get().removedRuntimeEnvironmentIds.has(environmentId) ||
+      getRuntimeEnvironmentConnectionGeneration(environmentId) !== probeGeneration
     try {
       const response = await window.api.runtimeEnvironments.getStatus({
         selector: environmentId,
         timeoutMs
       })
       const status = unwrapRuntimeRpcResult<RuntimeStatus>(response)
+      const entry = await buildRuntimeEnvironmentStatusEntry(status)
+      if (probeRetired()) {
+        return false
+      }
       // setRuntimeEnvironmentStatus drops any stale compat failure on a non-null
       // (reachable) status, so a recovered host's reuse-flagged refetches re-probe.
-      get().setRuntimeEnvironmentStatus(
-        environmentId,
-        await buildRuntimeEnvironmentStatusEntry(status)
-      )
+      get().setRuntimeEnvironmentStatus(environmentId, entry)
       return true
     } catch {
+      if (probeRetired()) {
+        return false
+      }
       get().setRuntimeEnvironmentStatus(environmentId, {
         status: null,
         checkedAt: Date.now()

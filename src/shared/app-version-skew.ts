@@ -7,12 +7,20 @@
 
 export type AppVersionSkewDirection = 'server-older' | 'server-newer'
 
-export type AppVersionSkew = {
-  direction: AppVersionSkewDirection
-  clientAppVersion: string
-  /** null when the server predates app-version reporting in status.get. */
-  serverAppVersion: string | null
-}
+// Why: a union so the compiler enforces that 'server-newer' — only ever produced
+// from a parsed server version — always carries a non-null serverAppVersion.
+export type AppVersionSkew =
+  | {
+      direction: 'server-older'
+      clientAppVersion: string
+      /** null when the server predates app-version reporting in status.get. */
+      serverAppVersion: string | null
+    }
+  | {
+      direction: 'server-newer'
+      clientAppVersion: string
+      serverAppVersion: string
+    }
 
 type ParsedAppVersion = {
   release: [number, number, number]
@@ -105,15 +113,12 @@ export function evaluateAppVersionSkew(input: {
   if (!client) {
     return null
   }
+  const clientAppVersion = input.clientAppVersion!.trim()
   const reportedServerVersion = input.serverAppVersion?.trim()
   if (!reportedServerVersion) {
     // Why: every server that reports a live status but no appVersion predates
     // this feature, so it is provably older than any client evaluating it.
-    return {
-      direction: 'server-older',
-      clientAppVersion: input.clientAppVersion!.trim(),
-      serverAppVersion: null
-    }
+    return { direction: 'server-older', clientAppVersion, serverAppVersion: null }
   }
   const server = parseAppVersion(reportedServerVersion)
   if (!server) {
@@ -125,11 +130,9 @@ export function evaluateAppVersionSkew(input: {
   if (diff === 0) {
     return null
   }
-  return {
-    direction: diff < 0 ? 'server-older' : 'server-newer',
-    clientAppVersion: input.clientAppVersion!.trim(),
-    serverAppVersion: input.serverAppVersion!.trim()
-  }
+  return diff < 0
+    ? { direction: 'server-older', clientAppVersion, serverAppVersion: reportedServerVersion }
+    : { direction: 'server-newer', clientAppVersion, serverAppVersion: reportedServerVersion }
 }
 
 export function describeAppVersionSkew(skew: AppVersionSkew): string {

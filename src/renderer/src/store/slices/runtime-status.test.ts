@@ -8,6 +8,7 @@ import {
   callRuntimeRpc,
   clearRuntimeCompatibilityCacheForTests
 } from '../../runtime/runtime-rpc-client'
+import { resetClientAppVersionForTests } from '../../runtime/client-app-version'
 import {
   createRuntimeStatusSlice,
   type RuntimeStatusSlice,
@@ -57,17 +58,20 @@ function makeEnvironment(
 
 function stubRuntimeEnvironmentApi({
   getStatus = vi.fn(),
-  list = vi.fn()
+  list = vi.fn(),
+  updater
 }: {
   getStatus?: ReturnType<typeof vi.fn>
   list?: ReturnType<typeof vi.fn>
+  updater?: { getVersion: () => Promise<string> }
 }) {
   vi.stubGlobal('window', {
     api: {
       runtimeEnvironments: {
         getStatus,
         list
-      }
+      },
+      ...(updater ? { updater } : {})
     }
   })
   return { getStatus, list }
@@ -357,6 +361,95 @@ describe('runtime-status slice', () => {
       'runtime-a'
     )
     expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration).toBe(1)
+  })
+
+  it('publishes a reachable status even when the client-version lookup stalls', async () => {
+    vi.useFakeTimers()
+    try {
+      resetClientAppVersionForTests()
+      const getStatus = vi
+        .fn()
+        .mockResolvedValue(createCompatibleRuntimeStatusResponse('runtime-a'))
+      stubRuntimeEnvironmentApi({
+        getStatus,
+        updater: { getVersion: () => new Promise<string>(() => {}) }
+      })
+      const store = createSliceStore()
+
+      const refresh = store.getState().refreshRuntimeEnvironmentStatus('env-stalled-version')
+      await vi.advanceTimersByTimeAsync(2_000)
+
+      await expect(refresh).resolves.toBe(true)
+      const entry = store.getState().runtimeStatusByEnvironmentId.get('env-stalled-version')
+      expect(entry?.status?.runtimeId).toBe('runtime-a')
+      expect(entry?.versionSkew).toBeNull()
+    } finally {
+      vi.useRealTimers()
+      resetClientAppVersionForTests()
+    }
+  })
+
+  it('stamps checkedAt when the server answered, not after the version lookup', async () => {
+    vi.useFakeTimers()
+    try {
+      resetClientAppVersionForTests()
+      const getStatus = vi
+        .fn()
+        .mockResolvedValue(createCompatibleRuntimeStatusResponse('runtime-a'))
+      const getVersion = vi
+        .fn()
+        .mockReturnValue(new Promise<string>((resolve) => setTimeout(() => resolve('1.2.3'), 500)))
+      stubRuntimeEnvironmentApi({ getStatus, updater: { getVersion } })
+      const store = createSliceStore()
+      const statusReceivedAt = Date.now()
+
+      const refresh = store.getState().refreshRuntimeEnvironmentStatus('env-checked-at')
+      await vi.advanceTimersByTimeAsync(500)
+
+      await expect(refresh).resolves.toBe(true)
+      expect(store.getState().runtimeStatusByEnvironmentId.get('env-checked-at')?.checkedAt).toBe(
+        statusReceivedAt
+      )
+    } finally {
+      vi.useRealTimers()
+      resetClientAppVersionForTests()
+    }
+  })
+
+  it('does not commit a probe for an environment removed while the probe was in flight', async () => {
+    let resolveStatus!: (value: unknown) => void
+    const getStatus = vi.fn().mockReturnValue(new Promise((resolve) => (resolveStatus = resolve)))
+    stubRuntimeEnvironmentApi({ getStatus })
+    const store = createSliceStore()
+    store
+      .getState()
+      .setRuntimeEnvironments([{ id: 'env-removed-midflight', createdAt: 1 } as never])
+
+    const refresh = store.getState().refreshRuntimeEnvironmentStatus('env-removed-midflight')
+    store.getState().setRuntimeEnvironments([])
+    resolveStatus(createCompatibleRuntimeStatusResponse('runtime-a'))
+
+    await expect(refresh).resolves.toBe(false)
+    expect(store.getState().runtimeStatusByEnvironmentId.has('env-removed-midflight')).toBe(false)
+  })
+
+  it('does not commit a probe that started before the environment was re-paired', async () => {
+    let resolveStatus!: (value: unknown) => void
+    const getStatus = vi.fn().mockReturnValue(new Promise((resolve) => (resolveStatus = resolve)))
+    stubRuntimeEnvironmentApi({ getStatus })
+    const store = createSliceStore()
+    store
+      .getState()
+      .setRuntimeEnvironments([{ id: 'env-repaired', createdAt: 1, pairingRevision: 1 } as never])
+
+    const refresh = store.getState().refreshRuntimeEnvironmentStatus('env-repaired')
+    store
+      .getState()
+      .setRuntimeEnvironments([{ id: 'env-repaired', createdAt: 1, pairingRevision: 2 } as never])
+    resolveStatus(createCompatibleRuntimeStatusResponse('runtime-a'))
+
+    await expect(refresh).resolves.toBe(false)
+    expect(store.getState().runtimeStatusByEnvironmentId.has('env-repaired')).toBe(false)
   })
 
   it('advances connection generation after recovery without churning stable status polls', () => {
