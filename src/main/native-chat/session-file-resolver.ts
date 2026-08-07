@@ -4,6 +4,7 @@ import { basename, extname, join } from 'node:path'
 import type { AgentType } from '../../shared/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
 import { walkSessionFiles } from '../ai-vault/session-scanner-discovery'
+import { OMP_SESSION_ARTIFACT_DIR_PATTERN } from '../ai-vault/session-scanner-omp-subagent-transcripts'
 import { normalizeAgentSessionsDir } from '../ai-vault/session-scanner-values'
 import { getOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
 import {
@@ -169,6 +170,15 @@ async function resolveOmpSessionFile(
 ): Promise<string | null> {
   const files = await walkSessionFiles(sessionsDir, 'omp', [], {
     extensions: new Set(['.jsonl']),
+    // Why: a session's task-subagent transcripts live in its same-named
+    // `<stamp>_<uuid>/` artifact dir, and a label-named child can still end in
+    // `_<session id>` — so descending would let a subagent transcript win the
+    // suffix match over its own parent. Prune the subtree exactly as the AI
+    // Vault scanner does (session-scanner-source-discovery.ts): it keeps the
+    // walk at one readdir per workspace dir regardless of how much the session
+    // delegated. Depth 0 is the workspace dir, which is never an artifact dir.
+    directoryPredicate: (name, depth) =>
+      depth === 0 || !OMP_SESSION_ARTIFACT_DIR_PATTERN.test(name),
     filePredicate: (path) => {
       const name = basename(path, extname(path))
       return name === sessionId || name.endsWith(`_${sessionId}`)

@@ -13,6 +13,15 @@ export function isNativeChatSupportedAgent(agent: string | null | undefined): bo
   return agent != null && NATIVE_CHAT_SUPPORTED_AGENTS.has(agent)
 }
 
+/** Agents whose hook discloses no transcript path (`extractAgentProviderSession`),
+ *  so native chat can only reach the session file by scanning a sessions root on
+ *  a disk THIS process can read. Under Model-A SSH that disk is the wrong host,
+ *  so the chat view must stay closed instead of loading forever. */
+export function nativeChatRequiresLocalTranscript(agent: string | null | undefined): boolean {
+  const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
+  return transcriptAgent === 'grok' || transcriptAgent === 'omp'
+}
+
 /** True when the agent renders a digit-commit question selector that ignores
  *  typed label text (pasting "Blue" + Enter commits the highlighted FIRST
  *  option — STA-1860): Claude's AskUserQuestion and Codex 0.145's

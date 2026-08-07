@@ -68,53 +68,6 @@ export function claudeContentBlocks(content: unknown): NativeChatBlock[] {
   return blocks
 }
 
-/** Build the blocks for one omp (pi-agent) content array. */
-export function ompContentBlocks(content: unknown): NativeChatBlock[] {
-  if (typeof content === 'string') {
-    return content.trim() ? [{ type: 'text', text: content }] : []
-  }
-  if (!Array.isArray(content)) {
-    return []
-  }
-  const blocks: NativeChatBlock[] = []
-  for (const item of content) {
-    const block = ompContentBlock(asRecord(item))
-    if (block) {
-      blocks.push(block)
-    }
-  }
-  return blocks
-}
-
-/** Map one omp content entry; unknown block types yield null and are dropped. */
-function ompContentBlock(record: Record<string, unknown> | null): NativeChatBlock | null {
-  if (!record) {
-    return null
-  }
-  switch (record.type) {
-    case 'text': {
-      const text = extractString(record.text)
-      return text ? { type: 'text', text } : null
-    }
-    case 'thinking': {
-      const text = extractString(record.thinking) ?? extractString(record.text)
-      return text ? { type: 'text', text } : null
-    }
-    case 'toolCall': {
-      const name = extractString(record.name) ?? 'tool'
-      return { type: 'tool-call', name, input: record.arguments }
-    }
-    case 'image':
-      // Why: omp stores images as content-addressed blob handles
-      // (`blob:sha256:…`) rather than a path or URL, so there is nothing the
-      // renderer can load. Dropping the block matches how the Claude mapper
-      // treats an image record with neither source.
-      return null
-    default:
-      return null
-  }
-}
-
 function claudeContentBlock(record: Record<string, unknown>): NativeChatBlock | null {
   switch (record.type) {
     case 'text': {

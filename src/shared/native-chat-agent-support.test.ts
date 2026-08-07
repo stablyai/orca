@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   isNativeChatSupportedAgent,
+  nativeChatRequiresLocalTranscript,
   resolveNativeChatTranscriptAgent,
   shouldStepNativeChatAskAnswer
 } from './native-chat-agent-support'
@@ -29,6 +30,21 @@ describe('isNativeChatSupportedAgent', () => {
     expect(isNativeChatSupportedAgent('cursor')).toBe(false)
     expect(isNativeChatSupportedAgent(null)).toBe(false)
     expect(isNativeChatSupportedAgent(undefined)).toBe(false)
+  })
+})
+
+describe('nativeChatRequiresLocalTranscript', () => {
+  it('covers the agents whose hook discloses no transcript path', () => {
+    // Claude/Codex report `transcript_path`; Grok and omp report only an id, so
+    // native chat has to find their file on a disk this process can read.
+    expect(nativeChatRequiresLocalTranscript('grok')).toBe(true)
+    expect(nativeChatRequiresLocalTranscript('omp')).toBe(true)
+    expect(nativeChatRequiresLocalTranscript('claude')).toBe(false)
+    expect(nativeChatRequiresLocalTranscript('openclaude')).toBe(false)
+    expect(nativeChatRequiresLocalTranscript('codex')).toBe(false)
+    expect(nativeChatRequiresLocalTranscript('cursor')).toBe(false)
+    expect(nativeChatRequiresLocalTranscript(null)).toBe(false)
+    expect(nativeChatRequiresLocalTranscript(undefined)).toBe(false)
   })
 })
 
