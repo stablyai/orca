@@ -3,11 +3,15 @@
 
 const JA_SENTENCE_CHAR = '[぀-ヿ一-龯、。・「」（）]'
 
+// Why: `git commit` and `orca terminal` are two-word commands, so the second word must stay Latin
+// even though the first word is not a `-`/word-char neighbour the position guards would catch.
+const COMMAND_HEAD = '(?<!\\b(?:git|gh|glab|orca|npm|pnpm|npx|yarn|docker|kubectl) )'
+
 // Why: #12113 reverted these renderings to Latin inside Japanese sentences before the
 // canonical-rendering guard landed, so ~700 values still read "terminal を閉じる". The guard stops
 // new damage; this heals what the catalog already carries. Both sides are anchored on an adjacent
-// Japanese character and reject a `-`, word char or `.` neighbour, so command samples (`--agent`),
-// filenames (agents.md) and Latin-only labels ("Agent SDK") keep their spelling.
+// Japanese character and reject a `-`, word char or `.` neighbour, so `--agent` and agents.md keep
+// their spelling; a following Latin word keeps a Latin-only label such as "Agent SDK" intact.
 const RELOCALIZED_GENERIC_TERMS = [
   ['[Tt]erminals?', 'ターミナル', 'terminal'],
   ['[Aa]gents?', 'エージェント', 'agent'],
@@ -18,14 +22,17 @@ const RELOCALIZED_GENERIC_TERMS = [
     // Why: the trailing space only goes when Japanese follows — "ターミナル {{value0}} 件" keeps its
     // 和欧間スペース, while "ローカル terminal の" closes up to "ローカルターミナルの".
     pattern: new RegExp(
-      `(?<=${JA_SENTENCE_CHAR}) ?${latin}(?![-\\w.])(?: (?=${JA_SENTENCE_CHAR}))?`,
+      `(?<=${JA_SENTENCE_CHAR}) ?${COMMAND_HEAD}${latin}(?![-\\w.])(?! [A-Za-z])(?: (?=${JA_SENTENCE_CHAR}))?`,
       'g'
     ),
     replacement: katakana,
     whenEnIncludes
   },
   {
-    pattern: new RegExp(`(?<![-\\w])${latin}(?![-\\w.]) ?(?=${JA_SENTENCE_CHAR})`, 'g'),
+    pattern: new RegExp(
+      `(?<![-\\w])${COMMAND_HEAD}${latin}(?![-\\w.]) ?(?=${JA_SENTENCE_CHAR})`,
+      'g'
+    ),
     replacement: katakana,
     whenEnIncludes
   }

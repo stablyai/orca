@@ -18,12 +18,23 @@ describe('locale-translation-policy ja relocalization', () => {
     expect(ja('Open the repo', 'repo を開く')).toBe('リポジトリを開く')
   })
 
+  it('leaves the second word of a two-word command in Latin', () => {
+    expect(ja('a commit hook or git commit fails', 'コミットフックまたは git commit が失敗')).toBe(
+      'コミットフックまたは git commit が失敗'
+    )
+    expect(ja('Run orca terminal', 'orca terminal を実行')).toBe('orca terminal を実行')
+    expect(ja('Install with pnpm install', 'pnpm install でインストール')).toBe(
+      'pnpm install でインストール'
+    )
+  })
+
   it('leaves identifiers, flags, filenames, and Latin-only labels alone', () => {
     expect(ja('Pass --agent to select one.', '--agent を渡して選択します。')).toBe(
       '--agent を渡して選択します。'
     )
     expect(ja('Edit agents.md', 'agents.md を編集')).toBe('agents.md を編集')
     expect(ja('Agent SDK settings', 'Agent SDK の設定')).toBe('Agent SDK の設定')
+    expect(ja('Agent SDK settings', 'この Agent SDK の設定')).toBe('この Agent SDK の設定')
     expect(ja('Run git commit -m', 'git commit -m を実行')).toBe('git commit -m を実行')
   })
 
@@ -55,5 +66,12 @@ describe('locale-translation-policy ja relocalization', () => {
 
   it('leaves ranges and token samples out of the ellipsis rule', () => {
     expect(ja('Compare main...HEAD', 'main...HEAD を比較')).toBe('main...HEAD を比較')
+  })
+
+  it('spaces the Latin terms the phrase fixes write back in', () => {
+    expect(ja('Clear cookies', 'クッキーを消去')).toBe('Cookie を消去')
+    expect(ja('Safely fast-forward the branch', 'ブランチを安全に早送りします')).toBe(
+      'ブランチを安全に fast-forward します'
+    )
   })
 })

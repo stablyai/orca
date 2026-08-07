@@ -256,7 +256,6 @@ export const JA_VALUE_OVERRIDES = {
   'No human comments.': 'ユーザーによるコメントはありません。',
   'Any state': 'すべての状態',
   State: '状態',
-  on: 'オン',
   Health: '健全性',
   Ordering: '並べ替え',
   Start: '開始',
@@ -315,8 +314,8 @@ export const JA_VALUE_OVERRIDES = {
   // コマンド例は実行できる形のまま残す
   'e.g. ollama run llama3.1 {prompt}': '例: ollama run llama3.1 {prompt}',
   'e.g. ollama run llama3.1 {{value0}}': '例: ollama run llama3.1 {{value0}}',
-  'Connecting terminal...': 'ターミナルに接続中...',
-  // 三点リーダーは原文の字種に合わせる（英語側が ... と … を混在させている）
+  // 三点リーダーは日本語側では … に統一する（末尾の phrase fix が最終的に揃える）
+  'Connecting terminal...': 'ターミナルに接続中…',
   'Starring…': 'スターを付けています…',
   // 設定検索の語: カタログ内の既存訳・並びの他項目に合わせる
   'self-hosted': 'セルフホスト',
@@ -345,6 +344,17 @@ export const JA_VALUE_OVERRIDES = {
   ' and ': ' と ',
   ' in {{value0}}': '（{{value0}}）',
   ' • Last scan error: {{value0}}': ' • 最終スキャンエラー: {{value0}}',
+  ' vs {{value0}}': ' vs {{value0}}',
+  // Why: these two descriptions render as [text] <code> [text]. The Japanese closed the sentence
+  // with 。 and dropped the "such as"/"like" hand-off, so the code span fell outside the sentence.
+  'When you create a workspace, Orca refreshes the remote base and safely fast-forwards your matching local branch, such as':
+    'ワークスペースを作成すると、Orca はリモートベースを更新し、一致するローカルブランチを安全に fast-forward します。対象は',
+  '. This keeps commands like': '。これにより、',
+  'from comparing against stale history. Orca skips the update if that branch has uncommitted changes or local-only commits.':
+    'などのコマンドが古い履歴と比較されるのを防ぎます。対象のブランチにコミットしていない変更やローカルのみのコミットがある場合、Orca は更新をスキップします。',
+  'Supports skills, file paths, and built-in commands like':
+    'スキル、ファイルパス、および次のような組み込みコマンドに対応しています:',
+  ' · {{value0}} external': ' · 外部 {{value0}} 件',
   'Use your current': '現在のアカウントを使用',
   Running: '実行中',
   'Back to runs': '実行一覧に戻る',
@@ -356,7 +366,7 @@ export const JA_VALUE_OVERRIDES = {
   failing: '失敗',
   'Selected host': '選択したホスト',
   'Copied cleanup payload.': 'クリーンアップ用ペイロードをコピーしました。',
-  'Jump to...': '移動先...',
+  'Jump to...': '移動先…',
   'Start work': '作業を開始',
   'Remove {{value0}} contained {{value1}} from Orca':
     '含まれている {{value1}} {{value0}} 件を Orca から削除',
@@ -377,7 +387,7 @@ export const JA_VALUE_OVERRIDES = {
     'この QR コードでは、モバイル向けの制限付きアクセスのみ利用できます。完全版の Web アプリを使用するには、[設定] → [リモート Orca サーバー] → [この Orca サーバーを共有する] → [新規リンク] から、ブラウザ用アクセスリンクを開いてください。',
   'Enter an IP address or a hostname — a Tailscale MagicDNS name, a DDNS domain, or a LAN hostname — optionally with :port.':
     'IP アドレスまたはホスト名（Tailscale の MagicDNS 名、DDNS ドメイン、LAN のホスト名など）を入力してください。必要に応じて :port を付けることもできます。',
-  'Loading skills...': 'スキルを読み込み中...',
+  'Loading skills...': 'スキルを読み込み中…',
   'Start agents on your tasks without leaving Orca':
     'Orca から離れずに、タスクからエージェントを開始',
   'Workspace created from {{value0}}, but Orca could not fast-forward local {{value1}} because {{value2}}':

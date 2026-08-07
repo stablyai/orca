@@ -46,5 +46,10 @@ export const CJK_LATIN_SPACED_TERMS = [
   'PowerShell',
   'Git AI Author',
   'Token',
-  'token'
+  'token',
+  // Why: the ja phrase fixes write these back in Latin (クッキー→Cookie, 早送り→fast-forward),
+  // so they need the same 和欧間スペース treatment as the terms MT already leaves in Latin.
+  'fast-forward',
+  'Cookie',
+  'Cookies'
 ]
