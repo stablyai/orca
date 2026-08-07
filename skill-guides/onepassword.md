@@ -73,13 +73,18 @@ writing it.
 ```bash
 op vault list
 op item list --vault Dev
-op item get "AWS" --vault Dev          # field names, no secret values shown for concealed fields
+op item get "AWS" --vault Dev --format json | jq '[.fields[] | {id, label, type}]'
 ```
 
-Confirm with the user before touching vaults that look personal rather than
+Inspect field metadata only, as above — never dump full item output, and never pass
+`--reveal`. Confirm with the user before touching vaults that look personal rather than
 development-related.
 
 ## Create and rotate credentials
+
+Vault writes and secret-file materialization are high-impact: confirm with the user
+before running `op item create`, `op item edit`, or `op document get --out-file` unless
+they already named the exact vault, item, and destination.
 
 ```bash
 op item create --category login --title "Service X" --vault Dev --generate-password

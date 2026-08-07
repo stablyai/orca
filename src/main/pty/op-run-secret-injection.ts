@@ -10,8 +10,8 @@
 
 const OP_SECRET_REFERENCE_PREFIX = 'op://'
 
-// Why: chained commands must stay inside `op run`'s env — `op run -- a && b` would run `b` unresolved.
-const SHELL_METACHAR_RE = /[|&;<>()`$]/
+// Why: chained/multiline commands must stay inside `op run`'s env — `op run -- a && b` would run `b` unresolved.
+const SHELL_METACHAR_RE = /[|&;<>()`$\r\n]/
 
 export function hasOpSecretReferences(env: Record<string, string> | undefined): boolean {
   if (!env) {

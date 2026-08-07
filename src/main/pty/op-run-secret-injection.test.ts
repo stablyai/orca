@@ -41,6 +41,13 @@ describe('wrapStartupCommandWithOpRun', () => {
     expect(wrapStartupCommandWithOpRun('npm i && claude', 'win32')).toBe('npm i && claude')
     expect(wrapStartupCommandWithOpRun('claude', 'win32')).toBe('op run -- claude')
   })
+
+  it('treats newline-separated commands as chained', () => {
+    expect(wrapStartupCommandWithOpRun('npm i\nclaude', 'linux')).toBe(
+      "op run -- sh -c 'npm i\nclaude'"
+    )
+    expect(wrapStartupCommandWithOpRun('npm i\r\nclaude', 'win32')).toBe('npm i\r\nclaude')
+  })
 })
 
 describe('maybeWrapStartupCommandWithOpRun', () => {
@@ -56,6 +63,17 @@ describe('maybeWrapStartupCommandWithOpRun', () => {
     expect(
       maybeWrapStartupCommandWithOpRun('claude', env, { enabled: false, connectionId: null })
     ).toBe('claude')
+  })
+
+  it('sh -c wraps metachar commands for WSL targets on a Windows host', () => {
+    // Why: a WSL PTY runs a POSIX shell, so the caller passes 'linux' despite process.platform being win32.
+    expect(
+      maybeWrapStartupCommandWithOpRun('npm install && claude', env, {
+        enabled: true,
+        connectionId: null,
+        platform: 'linux'
+      })
+    ).toBe("op run -- sh -c 'npm install && claude'")
   })
 
   it('never rewrites remote spawns', () => {

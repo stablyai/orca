@@ -69,7 +69,9 @@ export async function buildPtyIpcSpawnOptions(
   if (ctx.launchCommand !== undefined) {
     ctx.spawnOptions.command = maybeWrapStartupCommandWithOpRun(ctx.launchCommand, ctx.spawnEnv, {
       enabled: ctx.deps.getSettings?.()?.onePasswordSecretsEnabled ?? false,
-      connectionId: args.connectionId
+      connectionId: args.connectionId,
+      // Why: WSL PTYs run a POSIX shell regardless of the win32 host.
+      platform: ctx.codexSelectionTarget.runtime === 'wsl' ? 'linux' : process.platform
     })
   }
   if (args.commandDelivery !== undefined) {
