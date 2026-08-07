@@ -295,8 +295,14 @@
           "34a03a6565": "Keep {{value0}} up to date",
           "fa9299a66f": "Your new worktree is current, but local {{value0}} is {{value1}} {{value2}} behind. AI diffs may miss recent commits.",
           "14bc053a47": "Local {{value0}} was not refreshed",
+          "localBaseRefRefreshFailedForWorktree": "Local {{value0}} was not refreshed for \"{{value1}}\"",
           "4a18052018": "Local {{value0}} is behind {{value1}}",
-          "903b51c2ed": "Workspace created from {{value0}}, but Orca could not fast-forward local {{value1}} because {{value2}}",
+          "903b51c2ed": "Workspace created from {{value0}}, but Orca could not fast-forward local {{value1}}. {{value2}}",
+          "localBaseRefRefreshFailedDescriptionNamed": "Workspace \"{{value0}}\" was created from {{value1}}, but Orca could not fast-forward local {{value2}}. {{value3}}",
+          "localBaseRefRefreshFailedDetailDirtyNamed": "The worktree at {{value0}} (where local {{value1}} is checked out) has uncommitted changes. Commit, stash, or discard those changes, then update local {{value1}} manually.",
+          "localBaseRefRefreshFailedDetailDirty": "The worktree where local {{value0}} is checked out has uncommitted changes. Commit, stash, or discard those changes, then update local {{value0}} manually.",
+          "localBaseRefRefreshFailedDetailNotFastForward": "Local {{value0}} does not exist or cannot be fast-forwarded cleanly from the remote base. Check for local-only commits before updating it manually.",
+          "localBaseRefRefreshFailedDetailError": "Git returned an error while updating local {{value0}}. Check the repo for locked refs or unusual worktree state, then update local {{value0}} manually.",
           "0216895fb5": "Failed to delete branch",
           "c6cf133786": "This workspace is no longer available.",
           "19db0085fb": "Local branch deleted",
@@ -11361,9 +11367,18 @@
                 "line": {
                   "total": {
                     "chip": {
-                      "daa8e8e59b": "{{value0}} additions, {{value1}} deletions",
-                      "8a9b97b666": "{{value0}} additions",
-                      "52c366d88d": "{{value0}} deletions"
+                      "daa8e8e59b": "{{value0}} lines added, {{value1}} lines deleted",
+                      "8a9b97b666": "{{value0}} lines added",
+                      "52c366d88d": "{{value0}} lines deleted",
+                      "4c1f70ba92": "{{value0}} — test code: {{value1}} lines added, {{value2}} lines deleted",
+                      "6b2d0f14a7": "Tests",
+                      "9e4a3c5081": "Non-test",
+                      "3d7e9b1042": "Non-generated",
+                      "a1b2c3d4e5": "Code breakdown",
+                      "b2c3d4e5f6": "Lines of code",
+                      "7f3e1a9c24": "{{value0}} — generated: {{value1}} lines added, {{value2}} lines deleted",
+                      "c8d5b21e07": "Source",
+                      "7a04c6f8b3": "Generated"
                     }
                   }
                 }

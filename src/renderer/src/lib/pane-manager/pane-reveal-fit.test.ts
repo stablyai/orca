@@ -9,14 +9,16 @@ const mocks = vi.hoisted(() => ({
   readFitClientSize: vi.fn<(pane: ManagedPane) => { width: number; height: number } | null>(),
   requestStablePaneFit: vi.fn(),
   clearPaneFitContinuationRetry: vi.fn(),
-  resumePendingFitScrollRestoreAfterFit: vi.fn()
+  resumePendingFitScrollRestoreAfterFit: vi.fn(),
+  flushDeferredPaneMetricOptionsIfMeasurable: vi.fn(() => false)
 }))
 
 vi.mock('./pane-fit', () => ({
   safeFit: mocks.safeFit,
   canMeasurePaneForFit: mocks.canMeasurePaneForFit,
   flushPendingSafeFitContinuations: mocks.flushPendingSafeFitContinuations,
-  readFitClientSize: mocks.readFitClientSize
+  readFitClientSize: mocks.readFitClientSize,
+  flushDeferredPaneMetricOptionsIfMeasurable: mocks.flushDeferredPaneMetricOptionsIfMeasurable
 }))
 vi.mock('./pane-fit-resize-observer', () => ({
   requestStablePaneFit: mocks.requestStablePaneFit
@@ -50,6 +52,44 @@ describe('fitRevealedPane routing', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.canMeasurePaneForFit.mockReturnValue(true)
+    mocks.flushDeferredPaneMetricOptionsIfMeasurable.mockReturnValue(false)
+  })
+
+  it('repairs on a steady grid when a deferred metric flush lands on a pane the size checks would skip', () => {
+    // Without the flush branch the checks below both say "nothing to do" and the
+    // parked font change never reaches the grid. It must route through the stable
+    // path, not a raw fit: pixels are unchanged and the grid diverged, so a
+    // synchronous fit would reflow on the WebGL/DOM metric wobble and corrupt a
+    // diff-painting inline TUI.
+    mocks.flushDeferredPaneMetricOptionsIfMeasurable.mockReturnValue(true)
+    const pane = createPane({
+      lastFitClientSize: { width: 800, height: 600 },
+      currentSize: { width: 800, height: 600 },
+      terminal: { cols: 80, rows: 24 },
+      proposed: { cols: 80, rows: 24 }
+    })
+
+    fitRevealedPane(pane)
+
+    expect(mocks.flushDeferredPaneMetricOptionsIfMeasurable).toHaveBeenCalledWith(pane)
+    expect(mocks.requestStablePaneFit).toHaveBeenCalledWith(pane)
+    expect(mocks.safeFit).not.toHaveBeenCalled()
+  })
+
+  it('still flushes parked metric options when the pane also resized while hidden', () => {
+    mocks.flushDeferredPaneMetricOptionsIfMeasurable.mockReturnValue(true)
+    const pane = createPane({
+      lastFitClientSize: { width: 800, height: 600 },
+      currentSize: { width: 640, height: 480 },
+      terminal: { cols: 80, rows: 24 },
+      proposed: { cols: 64, rows: 20 }
+    })
+
+    fitRevealedPane(pane)
+
+    expect(mocks.flushDeferredPaneMetricOptionsIfMeasurable).toHaveBeenCalledWith(pane)
+    // A real resize still takes the synchronous path, and the flush already landed.
+    expect(mocks.safeFit).toHaveBeenCalledWith(pane)
   })
 
   it('fits synchronously when the fit element resized while hidden', () => {

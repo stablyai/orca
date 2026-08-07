@@ -109,9 +109,7 @@ function waitForStdoutSentinel(proc, protocol, stderr) {
         settled = true
         proc.stdout.off('data', onData)
         rejectPromise(
-          new Error(
-            `process exited before sentinel (code=${code}, signal=${signal})\n${stderr()}`
-          )
+          new Error(`process exited before sentinel (code=${code}, signal=${signal})\n${stderr()}`)
         )
       }
       proc.stdout.on('data', onData)
@@ -162,11 +160,7 @@ function createRelayClient(entryPath, args, env, protocol) {
   })
 
   const waitForMessage = (startIndex, predicate, label) =>
-    pollUntil(
-      () => messages.slice(startIndex).find(predicate),
-      label,
-      streams.stderr
-    )
+    pollUntil(() => messages.slice(startIndex).find(predicate), label, streams.stderr)
 
   const request = async (method, params = {}) => {
     const id = nextSequence++
@@ -317,8 +311,10 @@ async function main() {
     )
 
     await relay.request('fs.watch', { rootPath: watchRoot })
-    const firstWatcherPid = await waitForWatcherPid(pidFile, undefined, () =>
-      `${daemonStreams.stderr()}\n${relay.stderr()}`
+    const firstWatcherPid = await waitForWatcherPid(
+      pidFile,
+      undefined,
+      () => `${daemonStreams.stderr()}\n${relay.stderr()}`
     )
     const beforePath = join(watchRoot, 'before.txt')
     startIndex = relay.messageCount()
@@ -330,8 +326,10 @@ async function main() {
     const faultSignal = process.platform === 'win32' ? 'SIGTERM' : 'SIGSEGV'
     startIndex = relay.messageCount()
     process.kill(firstWatcherPid, faultSignal)
-    const replacementWatcherPid = await waitForWatcherPid(pidFile, firstWatcherPid, () =>
-      `${daemonStreams.stderr()}\n${relay.stderr()}`
+    const replacementWatcherPid = await waitForWatcherPid(
+      pidFile,
+      firstWatcherPid,
+      () => `${daemonStreams.stderr()}\n${relay.stderr()}`
     )
     await relay.waitForNotification(startIndex, 'fs.changed', (params) =>
       Array.isArray(params.events)
