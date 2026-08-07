@@ -9,7 +9,7 @@
  *
  * These specs drive real PTYs: the recipient is a fake `codex` on PATH whose OSC
  * titles the test controls through a file, and which appends every stdin chunk
- * to a ledger. That ledger is the oracle — it proves the banner and the
+ * to a ledger. That ledger is the oracle — it proves the pointer and the
  * synthesized Enter reached the agent process, which no store or DB read can.
  *
  * The ordering fixes on this path (microtask deferral, probe-window respawn,
@@ -19,6 +19,7 @@
  */
 import { test, expect } from './helpers/orca-app'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
+import { randomUUID } from 'node:crypto'
 import { waitForSessionReady, waitForActiveWorktree, ensureTerminalVisible } from './helpers/store'
 import {
   execInTerminal,
@@ -37,16 +38,16 @@ import {
 } from './helpers/orchestration-mail-pane-agent'
 import {
   mailDisposition,
+  readMailbox,
   readMailRow,
   startCoordinatorRun
 } from './helpers/orchestration-mail-store'
 import { waitForPtyShellEcho } from './terminal-pty-readiness'
 
-/** The wrapper `formatMessagesForInjection` puts around every pushed batch. */
-const BANNER_PREFIX = '--- Orchestration Messages'
+const POINTER_COMMAND = 'orca orchestration check'
 
 // Why generous: the push runs a microtask behind the send, may defer once more
-// behind a liveness probe, and only stamps delivered_at after a 500ms Enter.
+// behind a liveness probe, and submits Enter after a 500ms delay.
 const DELIVERY_TIMEOUT_MS = 20_000
 // Why 3s: long enough to cover that same chain, so "still pending" means the
 // gate refused rather than that the push had not run yet.
@@ -175,18 +176,19 @@ async function sendMail(
   return sent.result.message.id
 }
 
-async function expectPushed(pane: AgentPane, subject: string): Promise<void> {
+async function expectPointed(pane: AgentPane, count = 1): Promise<void> {
   await expect
     .poll(() => pane.agent.readStdin(), {
       timeout: DELIVERY_TIMEOUT_MS,
-      message: 'banner never reached the agent process'
+      message: 'mail pointer never reached the agent process'
     })
-    .toContain(BANNER_PREFIX)
-  expect(pane.agent.readStdin()).toContain(`Subject: ${subject}`)
+    .toContain(POINTER_COMMAND)
+  const noun = count === 1 ? 'message' : 'messages'
+  expect(pane.agent.readStdin()).toContain(`${count} orchestration ${noun}`)
 }
 
 /**
- * The synthesized Enter is a separate write ~500ms after the banner. The banner
+ * The synthesized Enter is a separate write ~500ms after the pointer. The pointer
  * itself is `\n`-joined, so a `\r` anywhere in stdin can only be that submit —
  * which keeps the assertion independent of how the PTY chunks the two writes.
  */
@@ -219,7 +221,7 @@ async function expectStaysPending(
   expect(readMailRow(userDataDir, messageId)).toBeDefined()
   await page.waitForTimeout(NO_DELIVERY_SETTLE_MS)
   expect(mailDisposition(readMailRow(userDataDir, messageId))).toBe('pending')
-  expect(pane.agent.readStdin()).not.toContain(BANNER_PREFIX)
+  expect(pane.agent.readStdin()).not.toContain(POINTER_COMMAND)
 }
 
 test.describe('orchestration push-on-idle mail delivery', () => {
@@ -237,13 +239,13 @@ test.describe('orchestration push-on-idle mail delivery', () => {
     const subject = 'Already idle delivery'
     const messageId = await sendMail(client, pane.handle, { subject })
 
-    await expectPushed(pane, subject)
+    await expectPointed(pane)
     await expectSubmitted(pane)
     await expect
       .poll(() => mailDisposition(readMailRow(userDataDir, messageId)), {
         timeout: DELIVERY_TIMEOUT_MS
       })
-      .toBe('pushed')
+      .toBe('pending')
   })
 
   test('holds mail while the agent is working and releases it on the idle frame', async ({
@@ -263,12 +265,12 @@ test.describe('orchestration push-on-idle mail delivery', () => {
     // Releasing the gate proves the silence above was the working status and not
     // a harness that never wired the send to this pane at all.
     pane.agent.setTitle(CODEX_IDLE_TITLE)
-    await expectPushed(pane, subject)
+    await expectPointed(pane)
     await expect
       .poll(() => mailDisposition(readMailRow(userDataDir, messageId)), {
         timeout: DELIVERY_TIMEOUT_MS
       })
-      .toBe('pushed')
+      .toBe('pending')
   })
 
   // Guards the null→idle path rather than reproducing #12536: a fresh pane has
@@ -291,7 +293,7 @@ test.describe('orchestration push-on-idle mail delivery', () => {
     // Idle is this pane's FIRST live status, so there is no busy→idle edge here
     // either; delivery has to hang off the liveness of the observation.
     pane.agent.setTitle(CODEX_IDLE_TITLE)
-    await expectPushed(pane, subject)
+    await expectPointed(pane)
     await expectSubmitted(pane)
   })
 
@@ -325,7 +327,7 @@ test.describe('orchestration push-on-idle mail delivery', () => {
 
     const pulled = await waiting
     expect(pulled.result.messages.map((message) => message.subject)).toContain(subject)
-    expect(pane.agent.readStdin()).not.toContain(BANNER_PREFIX)
+    expect(pane.agent.readStdin()).not.toContain(POINTER_COMMAND)
     // Pending, not pushed: the pull won, and the push stays available for a
     // later notify rather than racing this one.
     expect(mailDisposition(readMailRow(userDataDir, messageId))).toBe('pending')
@@ -355,16 +357,95 @@ test.describe('orchestration push-on-idle mail delivery', () => {
     const subject = 'Filtered waiter'
     const messageId = await sendMail(client, pane.handle, { subject, type: 'status' })
 
-    await expectPushed(pane, subject)
+    await expectPointed(pane)
     await expect
       .poll(() => mailDisposition(readMailRow(userDataDir, messageId)), {
         timeout: DELIVERY_TIMEOUT_MS
       })
-      .toBe('pushed')
+      .toBe('pending')
     await waiting
   })
 
-  test('writes the banner but never Enter for the active coordinator pane', async ({
+  test('worker completion points and wakes its idle Run coordinator without consuming mail', async ({
+    orcaPage,
+    electronApp
+  }) => {
+    test.setTimeout(180_000)
+    const { client, userDataDir, openAgentPane } = await setUpMailFixture(orcaPage, electronApp)
+    const pane = await openAgentPane()
+    await driveToLiveIdle(client, pane)
+
+    const run = await client.call<{ run: { id: string } }>('orchestration.runCreate', {
+      objective: 'Verify worker completion pointer delivery',
+      from: pane.handle
+    })
+    const task = await client.call<{ task: { id: string } }>('orchestration.taskCreate', {
+      spec: 'Report one P3 finding',
+      run: run.result.run.id,
+      callerTerminalHandle: pane.handle
+    })
+    const dispatched = await client.call<{ dispatch: { id: string } }>('orchestration.dispatch', {
+      task: task.result.task.id,
+      run: run.result.run.id,
+      from: pane.handle,
+      to: pane.handle
+    })
+    const body = 'full private review finding must remain in SQLite'
+    const payload = JSON.stringify({
+      taskId: task.result.task.id,
+      dispatchId: dispatched.result.dispatch.id,
+      outcome: 'succeeded'
+    })
+    const sendParams = {
+      from: pane.handle,
+      to: pane.handle,
+      subject: 'review: one P3 finding',
+      body,
+      type: 'worker_done',
+      payload
+    }
+    const orchestrationRequestId = randomUUID()
+    const sent = await client.call<{ message: { id: string; to_handle: string } }>(
+      'orchestration.send',
+      sendParams,
+      { orchestrationRequestId }
+    )
+    const runAddress = `run:${run.result.run.id}`
+    expect(sent.result.message.to_handle).toBe(runAddress)
+
+    await expectPointed(pane)
+    await expectSubmitted(pane)
+    expect(pane.agent.readStdin()).not.toContain(body)
+    const pointedRow = readMailRow(userDataDir, sent.result.message.id)
+    expect(pointedRow).toMatchObject({ to_handle: runAddress, read: 0, delivered_at: null })
+
+    const stdinAfterFirstPointer = pane.agent.readStdin()
+    const duplicate = await client.call<{ message: { id: string } }>(
+      'orchestration.send',
+      sendParams,
+      { orchestrationRequestId }
+    )
+    pane.agent.setTitle(CODEX_WORKING_TITLE)
+    await waitForObservedTitle(client, pane.handle, CODEX_WORKING_TITLE)
+    pane.agent.setTitle(CODEX_IDLE_TITLE)
+    await waitForObservedTitle(client, pane.handle, CODEX_IDLE_TITLE)
+    await orcaPage.waitForTimeout(NO_DELIVERY_SETTLE_MS)
+    expect(pane.agent.readStdin()).toBe(stdinAfterFirstPointer)
+    expect(duplicate.result.message.id).toBe(sent.result.message.id)
+    expect(readMailbox(userDataDir, runAddress).filter((row) => row.read === 0)).toEqual([
+      expect.objectContaining({ id: sent.result.message.id })
+    ])
+
+    const checked = await client.call<{ messages: { id: string; body: string }[] }>(
+      'orchestration.check',
+      { terminal: pane.handle, run: run.result.run.id }
+    )
+    expect(checked.result.messages).toEqual([
+      expect.objectContaining({ id: sent.result.message.id, body })
+    ])
+  })
+
+  test('writes and submits the pointer for the active coordinator pane', async ({
     orcaPage,
     electronApp
   }) => {
@@ -374,17 +455,14 @@ test.describe('orchestration push-on-idle mail delivery', () => {
     await driveToLiveIdle(client, pane)
     startCoordinatorRun(userDataDir, pane.handle)
 
-    // The coordinator prompt is user-owned input; synthesizing Enter there would
-    // submit whatever the human was mid-way through typing (#7337).
-    const subject = 'Coordinator no-submit'
+    const subject = 'Coordinator pointer submit'
     await sendMail(client, pane.handle, { subject })
 
-    await expectPushed(pane, subject)
-    await orcaPage.waitForTimeout(2_000)
-    expectNotSubmitted(pane)
+    await expectPointed(pane)
+    await expectSubmitted(pane)
   })
 
-  test('writes the banner but never Enter for a Cursor agent pane', async ({
+  test('writes the pointer but never Enter for a Cursor agent pane', async ({
     orcaPage,
     electronApp
   }) => {
@@ -399,7 +477,7 @@ test.describe('orchestration push-on-idle mail delivery', () => {
     const subject = 'Cursor no-submit'
     await sendMail(client, pane.handle, { subject })
 
-    await expectPushed(pane, subject)
+    await expectPointed(pane)
     await orcaPage.waitForTimeout(2_000)
     expectNotSubmitted(pane)
   })

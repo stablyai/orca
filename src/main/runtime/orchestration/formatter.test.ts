@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatMessageBanner, formatMessagesForInjection } from './formatter'
+import { formatMessageBanner, formatMessagePointer, formatMessagesForInjection } from './formatter'
 import type { MessageRow } from './types'
 
 function makeMessage(overrides: Partial<MessageRow> = {}): MessageRow {
@@ -181,5 +181,17 @@ describe('formatMessagesForInjection', () => {
     const bannerA = formatMessageBanner(messages[0])
     const bannerB = formatMessageBanner(messages[1])
     expect(result).toContain(`${bannerA}\n\n${bannerB}`)
+  })
+})
+
+describe('formatMessagePointer', () => {
+  it('formats a singular pointer without message content', () => {
+    expect(formatMessagePointer(1)).toBe(
+      '\nYou have 1 orchestration message. Run `orca orchestration check`.\n'
+    )
+  })
+
+  it('pluralizes a batched pointer', () => {
+    expect(formatMessagePointer(3)).toContain('3 orchestration messages')
   })
 })

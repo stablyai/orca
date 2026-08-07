@@ -5,6 +5,7 @@
  */
 
 import {
+  type AgentStatus,
   clearWorkingIndicators,
   createAgentStatusTracker,
   detectAgentStatusFromTitle,
@@ -91,7 +92,7 @@ export type TerminalTitleTracker = {
    */
   seedInitialTitle: (rawTitle: string) => void
   /** Restore the status consumed by the latest exit candidate when process evidence disproves it. */
-  restoreLastAgentExit: () => void
+  restoreLastAgentExit: () => AgentStatus | null
   /** Last title surfaced through onTitle, after normalization. */
   getLastNormalizedTitle: () => string | null
   /**
@@ -264,8 +265,8 @@ export function createTerminalTitleTracker(
       lastEmittedTitle = normalizeTerminalTitle(rawTitle)
       agentTracker?.seedTitle(rawTitle)
     },
-    restoreLastAgentExit(): void {
-      agentTracker?.restoreLastExit()
+    restoreLastAgentExit(): AgentStatus | null {
+      return agentTracker?.restoreLastExit() ?? null
     },
     getLastNormalizedTitle: () => lastEmittedTitle,
     setTransientFactScanningSuppressed(suppressed: boolean): void {

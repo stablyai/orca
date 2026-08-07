@@ -56,7 +56,7 @@ export function createAgentStatusTracker(
 ): {
   handleTitle: (title: string) => void
   seedTitle: (title: string) => void
-  restoreLastExit: () => void
+  restoreLastExit: () => AgentStatus | null
   reset: () => void
 } {
   // Why: trackers restored mid-session need a last-known status without firing
@@ -92,11 +92,13 @@ export function createAgentStatusTracker(
       lastStatus = detectAgentStatusFromTitle(title)
       restorableExitStatus = null
     },
-    restoreLastExit(): void {
-      if (lastStatus === null && restorableExitStatus !== null) {
-        lastStatus = restorableExitStatus
+    restoreLastExit(): AgentStatus | null {
+      const restoredStatus = lastStatus === null ? restorableExitStatus : null
+      if (restoredStatus !== null) {
+        lastStatus = restoredStatus
       }
       restorableExitStatus = null
+      return restoredStatus
     },
     reset(): void {
       lastStatus = null

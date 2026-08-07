@@ -1029,6 +1029,11 @@ class InMemoryOrchestrationMessages {
 
   private messages: MessageRow[] = []
 
+  private runs = new Map<
+    string,
+    { id: string; coordinator_handle: string | null; coordinator_pane_key: string | null }
+  >()
+
   insertMessage(msg: {
     from: string
     to: string
@@ -1082,6 +1087,30 @@ class InMemoryOrchestrationMessages {
 
   getActiveCoordinatorRun(): { coordinator_handle: string } | null {
     return this.activeCoordinatorRun
+  }
+
+  setRun(run: {
+    id: string
+    coordinator_handle: string | null
+    coordinator_pane_key?: string | null
+  }): void {
+    this.runs.set(run.id, { coordinator_pane_key: null, ...run })
+  }
+
+  getRun(
+    id: string
+  ):
+    | { id: string; coordinator_handle: string | null; coordinator_pane_key: string | null }
+    | undefined {
+    return this.runs.get(id)
+  }
+
+  getCurrentRunForPane(
+    paneKey: string
+  ):
+    | { id: string; coordinator_handle: string | null; coordinator_pane_key: string | null }
+    | undefined {
+    return [...this.runs.values()].find((run) => run.coordinator_pane_key === paneKey)
   }
 
   markAsDelivered(ids: string[]): void {
@@ -18468,23 +18497,24 @@ describe('OrcaRuntimeService', () => {
 
       runtime.deliverPendingMessagesForHandle(terminal.handle)
 
-      expect(write).toHaveBeenCalledWith('pty-1', expect.stringContaining('Subject: hello'))
-      // Why: the split Enter write lands after the 500ms delay; advance past it before asserting on delivered_at.
+      expect(write).toHaveBeenCalledWith(
+        'pty-1',
+        expect.stringContaining('You have 1 orchestration message')
+      )
       await vi.advanceTimersByTimeAsync(500)
       expect(write).toHaveBeenCalledWith('pty-1', '\r')
 
-      // Why: design doc §3.2 splits delivered vs. read — push-on-idle stamps delivered_at but must not flip read; only the agent's check consumes, so rows stay unread.
       const unread = db.getUnreadMessages(terminal.handle)
       expect(unread).toHaveLength(1)
       expect(unread[0].read).toBe(0)
-      expect(unread[0].delivered_at).not.toBeNull()
+      expect(unread[0].delivered_at).toBeNull()
       db.close()
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it('injects pending orchestration messages into the active coordinator without auto-submitting', async () => {
+  it('submits the mail pointer in an active coordinator pane', async () => {
     vi.useFakeTimers()
     try {
       const runtime = new OrcaRuntimeService(store)
@@ -18512,18 +18542,18 @@ describe('OrcaRuntimeService', () => {
 
       expect(write).toHaveBeenCalledWith(
         'pty-1',
-        expect.stringContaining('Subject: hello coordinator')
+        expect.stringContaining('You have 1 orchestration message')
       )
       await vi.advanceTimersByTimeAsync(500)
       const submitWrites = write.mock.calls.filter(
         ([ptyId, text]) => ptyId === 'pty-1' && text === '\r'
       )
-      expect(submitWrites).toHaveLength(0)
+      expect(submitWrites).toHaveLength(1)
 
       const unread = db.getUnreadMessages(terminal.handle)
       expect(unread).toHaveLength(1)
       expect(unread[0].read).toBe(0)
-      expect(unread[0].delivered_at).not.toBeNull()
+      expect(unread[0].delivered_at).toBeNull()
       db.close()
     } finally {
       vi.useRealTimers()
@@ -18551,18 +18581,20 @@ describe('OrcaRuntimeService', () => {
 
       runtime.deliverPendingMessagesForHandle(terminal.handle)
 
-      expect(write).toHaveBeenCalledWith('pty-1', expect.stringContaining('Subject: hello cursor'))
+      expect(write).toHaveBeenCalledWith(
+        'pty-1',
+        expect.stringContaining('You have 1 orchestration message')
+      )
       await vi.advanceTimersByTimeAsync(500)
       const submitWrites = write.mock.calls.filter(
         ([ptyId, text]) => ptyId === 'pty-1' && text === '\r'
       )
       expect(submitWrites).toHaveLength(0)
 
-      // Why: Cursor Agent treats injected PTY text as editable prompt input, so the user submits manually but the banner must not replay on the next idle transition.
       const unread = db.getUnreadMessages(terminal.handle)
       expect(unread).toHaveLength(1)
       expect(unread[0].read).toBe(0)
-      expect(unread[0].delivered_at).not.toBeNull()
+      expect(unread[0].delivered_at).toBeNull()
       db.close()
     } finally {
       vi.useRealTimers()
@@ -18591,7 +18623,10 @@ describe('OrcaRuntimeService', () => {
       runtime.deliverPendingMessagesForHandle(terminal.handle)
       await vi.advanceTimersByTimeAsync(500)
 
-      expect(write).toHaveBeenCalledWith('pty-1', expect.stringContaining('Subject: hello claude'))
+      expect(write).toHaveBeenCalledWith(
+        'pty-1',
+        expect.stringContaining('You have 1 orchestration message')
+      )
       expect(write).toHaveBeenCalledWith('pty-1', '\r')
       db.close()
     } finally {
@@ -18622,16 +18657,16 @@ describe('OrcaRuntimeService', () => {
       await vi.advanceTimersByTimeAsync(500)
 
       const firstInjections = write.mock.calls.filter(
-        (c) => typeof c[1] === 'string' && c[1].includes('Subject: hello')
+        (c) => typeof c[1] === 'string' && c[1].includes('orca orchestration check')
       ).length
       expect(firstInjections).toBe(1)
 
-      // Second idle transition: the row is unread but already delivered, so push-on-idle must skip it to avoid the replay bug.
+      // The row remains pending, so the in-memory sequence watermark prevents replay.
       runtime.deliverPendingMessagesForHandle(terminal.handle)
       await vi.advanceTimersByTimeAsync(500)
 
       const totalInjections = write.mock.calls.filter(
-        (c) => typeof c[1] === 'string' && c[1].includes('Subject: hello')
+        (c) => typeof c[1] === 'string' && c[1].includes('orca orchestration check')
       ).length
       expect(totalInjections).toBe(1)
       db.close()
@@ -33284,14 +33319,122 @@ describe('OrcaRuntimeService', () => {
 
       // The push is deferred one microtask so it lands behind any resolved check.
       await Promise.resolve()
-      expect(write).toHaveBeenCalledWith('pty-1', expect.stringContaining('Subject: after wait'))
+      expect(write).toHaveBeenCalledWith(
+        'pty-1',
+        expect.stringContaining('You have 1 orchestration message')
+      )
+      expect(write).not.toHaveBeenCalledWith('pty-1', expect.stringContaining('after wait'))
       await vi.advanceTimersByTimeAsync(500)
       expect(write).toHaveBeenCalledWith('pty-1', '\r')
-      expect(message.delivered_at).not.toBeNull()
+      expect(message.delivered_at).toBeNull()
       db.close()
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('points a Run mailbox at its live-idle coordinator without replaying pending rows', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new InMemoryOrchestrationMessages()
+      const write = vi.fn().mockReturnValue(true)
+      setInMemoryOrchestrationMessages(runtime, db)
+      runtime.setPtyController({
+        write,
+        kill: vi.fn(),
+        getForegroundProcess: async () => null
+      })
+      syncSinglePty(runtime)
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      db.setRun({
+        id: 'run_mailbox',
+        coordinator_handle: terminal.handle,
+        coordinator_pane_key: `${terminal.tabId}:${terminal.leafId}`
+      })
+      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+      const message = db.insertMessage({
+        from: 'term_worker',
+        to: 'run:run_mailbox',
+        subject: 'one P3 finding',
+        body: 'private worker report',
+        type: 'worker_done'
+      })
+
+      runtime.notifyMessageArrived('run:run_mailbox', 'worker_done')
+      await Promise.resolve()
+      expect(write).not.toHaveBeenCalled()
+
+      runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
+      expect(write).toHaveBeenCalledWith(
+        'pty-1',
+        '\nYou have 1 orchestration message. Run `orca orchestration check`.\n'
+      )
+      expect(write).not.toHaveBeenCalledWith(
+        'pty-1',
+        expect.stringContaining('private worker report')
+      )
+      await vi.advanceTimersByTimeAsync(500)
+      expect(write).toHaveBeenCalledWith('pty-1', '\r')
+      expect(message.delivered_at).toBeNull()
+
+      runtime.notifyMessageArrived('run:run_mailbox', 'worker_done')
+      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(500)
+      expect(
+        write.mock.calls.filter(
+          ([, payload]) =>
+            typeof payload === 'string' && payload.includes('orca orchestration check')
+        )
+      ).toHaveLength(1)
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('points already-idle Run mail after Codex replaces its completion title', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const db = new InMemoryOrchestrationMessages()
+    const write = vi.fn().mockReturnValue(true)
+    setInMemoryOrchestrationMessages(runtime, db)
+    runtime.setPtyController({
+      write,
+      kill: vi.fn(),
+      getForegroundProcess: async () => 'codex'
+    })
+    syncSinglePty(runtime)
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    db.setRun({
+      id: 'run_codex_native_title',
+      coordinator_handle: terminal.handle,
+      coordinator_pane_key: `${terminal.tabId}:${terminal.leafId}`
+    })
+    runtime.ingestSyntheticTitleFrame('pty-1', '\x1b]0;Codex ready\x07')
+    runtime.onPtyData('pty-1', '\x1b]0;fix-12953-orchestration-mail-pointer\x07', 101)
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+    db.insertMessage({
+      from: 'term_worker',
+      to: 'run:run_codex_native_title',
+      subject: 'real-agent smoke complete',
+      body: 'The package name is orca.',
+      type: 'worker_done'
+    })
+
+    runtime.notifyMessageArrived('run:run_codex_native_title', 'worker_done')
+    await Promise.resolve()
+
+    await vi.waitFor(() => {
+      expect(write).toHaveBeenCalledWith(
+        'pty-1',
+        '\nYou have 1 orchestration message. Run `orca orchestration check`.\n'
+      )
+    })
+    db.close()
   })
 
   it('does not inject pending mail on notify when the recipient is still working', async () => {
@@ -33355,9 +33498,12 @@ describe('OrcaRuntimeService', () => {
       // is no transition — only the liveness edge can release the row (#12536).
       runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 100)
 
-      expect(write).toHaveBeenCalledWith('pty-1', expect.stringContaining('Subject: restored idle'))
+      expect(write).toHaveBeenCalledWith(
+        'pty-1',
+        expect.stringContaining('You have 1 orchestration message')
+      )
       await vi.advanceTimersByTimeAsync(600)
-      expect(message.delivered_at).not.toBeNull()
+      expect(message.delivered_at).toBeNull()
       db.close()
     } finally {
       vi.useRealTimers()
@@ -33399,9 +33545,12 @@ describe('OrcaRuntimeService', () => {
       // The first live idle frame authorizes it and the row still delivers.
       runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
       runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
-      expect(write).toHaveBeenCalledWith('pty-1', expect.stringContaining('Subject: seeded idle'))
+      expect(write).toHaveBeenCalledWith(
+        'pty-1',
+        expect.stringContaining('You have 1 orchestration message')
+      )
       await vi.advanceTimersByTimeAsync(600)
-      expect(message.delivered_at).not.toBeNull()
+      expect(message.delivered_at).toBeNull()
       db.close()
     } finally {
       vi.useRealTimers()
@@ -33503,9 +33652,11 @@ describe('OrcaRuntimeService', () => {
       const payloads = write.mock.calls
         .map(([, data]) => data)
         .filter((data): data is string => typeof data === 'string')
-      expect(payloads.some((data) => data.includes('Subject: unclaimed status'))).toBe(true)
-      expect(payloads.some((data) => data.includes('Subject: reserved completion'))).toBe(false)
-      expect(status.delivered_at).not.toBeNull()
+      expect(payloads).toContain(
+        '\nYou have 1 orchestration message. Run `orca orchestration check`.\n'
+      )
+      expect(payloads.some((data) => data.includes('reserved completion'))).toBe(false)
+      expect(status.delivered_at).toBeNull()
       expect(done.delivered_at).toBeNull()
       db.close()
     } finally {
@@ -33684,10 +33835,10 @@ describe('OrcaRuntimeService', () => {
 
       expect(write).toHaveBeenCalledWith(
         'pty-1',
-        expect.stringContaining('Subject: after republish')
+        expect.stringContaining('You have 1 orchestration message')
       )
       await vi.advanceTimersByTimeAsync(600)
-      expect(message.delivered_at).not.toBeNull()
+      expect(message.delivered_at).toBeNull()
       db.close()
     } finally {
       vi.useRealTimers()
@@ -33738,10 +33889,10 @@ describe('OrcaRuntimeService', () => {
       runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 200)
       expect(write).toHaveBeenCalledWith(
         'pty-1',
-        expect.stringContaining('Subject: after same id respawn')
+        expect.stringContaining('You have 1 orchestration message')
       )
       await vi.advanceTimersByTimeAsync(600)
-      expect(message.delivered_at).not.toBeNull()
+      expect(message.delivered_at).toBeNull()
       db.close()
     } finally {
       vi.useRealTimers()
@@ -33787,10 +33938,10 @@ describe('OrcaRuntimeService', () => {
       await Promise.resolve()
       expect(write).toHaveBeenCalledWith(
         'pty-1',
-        expect.stringContaining('Subject: unfiltered status')
+        expect.stringContaining('You have 1 orchestration message')
       )
       await vi.advanceTimersByTimeAsync(600)
-      expect(message.delivered_at).not.toBeNull()
+      expect(message.delivered_at).toBeNull()
 
       // The filtered waiter stays blocked; the push did not consume its wake.
       await vi.advanceTimersByTimeAsync(5_000)
@@ -33865,10 +34016,10 @@ describe('OrcaRuntimeService', () => {
       runtime.notifyMessageArrived(terminal.handle, 'status')
       await Promise.resolve()
 
-      const payloadWrites = write.mock.calls.filter(
-        ([, payload]) => typeof payload === 'string' && payload.includes('Subject: once only')
+      const pointerWrites = write.mock.calls.filter(
+        ([, payload]) => typeof payload === 'string' && payload.includes('orca orchestration check')
       )
-      expect(payloadWrites).toHaveLength(1)
+      expect(pointerWrites).toHaveLength(1)
 
       await vi.advanceTimersByTimeAsync(500)
       const enterWrites = write.mock.calls.filter(([, payload]) => payload === '\r')
@@ -33910,9 +34061,10 @@ describe('OrcaRuntimeService', () => {
       await Promise.resolve()
       expect(
         write.mock.calls.filter(
-          ([, payload]) => typeof payload === 'string' && payload.includes('Subject: second')
+          ([, payload]) =>
+            typeof payload === 'string' && payload.includes('orca orchestration check')
         )
-      ).toHaveLength(0)
+      ).toHaveLength(1)
       expect(second.delivered_at).toBeNull()
 
       // Why: release must not require another agent-status OSC — only the
@@ -33920,13 +34072,18 @@ describe('OrcaRuntimeService', () => {
       // timer-only settle (CodeRabbit settling-timeout gap, #12584).
       await vi.advanceTimersByTimeAsync(3_000)
       expect(write).toHaveBeenCalledWith('pty-1', '\r')
-      expect(first.delivered_at).not.toBeNull()
+      expect(first.delivered_at).toBeNull()
       expect(
         write.mock.calls.filter(
-          ([, payload]) => typeof payload === 'string' && payload.includes('Subject: second')
+          ([, payload]) =>
+            typeof payload === 'string' && payload.includes('orca orchestration check')
         )
-      ).toHaveLength(1)
-      expect(second.delivered_at).not.toBeNull()
+      ).toHaveLength(2)
+      expect(write).toHaveBeenCalledWith(
+        'pty-1',
+        expect.stringContaining('You have 2 orchestration messages')
+      )
+      expect(second.delivered_at).toBeNull()
       db.close()
     } finally {
       vi.useRealTimers()
@@ -33953,7 +34110,10 @@ describe('OrcaRuntimeService', () => {
 
     runtime.deliverPendingMessagesForHandle(terminal.handle)
 
-    expect(write).toHaveBeenCalledWith('pty-1', expect.stringContaining('Subject: after wait'))
+    expect(write).toHaveBeenCalledWith(
+      'pty-1',
+      expect.stringContaining('You have 1 orchestration message')
+    )
     db.close()
   })
 

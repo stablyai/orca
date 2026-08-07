@@ -134,7 +134,7 @@ import type {
   OrchestrationWorkerServer
 } from './orchestration/environment-transport'
 import { syncFederatedDispatch } from './orchestration/federation-sync'
-import { formatMessagesForInjection } from './orchestration/formatter'
+import { formatMessagePointer } from './orchestration/formatter'
 import { selectExactWorkerProviderSession } from './orchestration/worker-provider-session'
 import type {
   Automation,
@@ -2878,6 +2878,8 @@ export class OrcaRuntimeService {
   private handles = new Map<string, TerminalHandleRecord>()
   private handleByLeafKey = new Map<string, string>()
   private handleByPtyId = new Map<string, string>()
+  // Why: pointer state is process-local; one harmless replay after restart avoids a wire or schema change.
+  private readonly lastPointedMessageSequenceByHandle = new Map<string, number>()
   private syntheticTerminalHandles = new Set<string>()
   private detachedPreAllocatedLeaves = new Map<string, RuntimeLeafRecord>()
   private graphSyncCallbacks: (() => void)[] = []
@@ -10318,7 +10320,7 @@ export class OrcaRuntimeService {
       // prompt) then shows no transition — the row would strand, which is
       // exactly #12536. Waiter semantics stay transition-only above.
       if (agentStatus === 'idle' && (prevStatus !== 'idle' || !prevObservedLive)) {
-        this.deliverPendingMessages(leaf)
+        this.deliverPendingMessagesForLeaf(leaf)
       }
     }
     return ptyRecordChanged
@@ -16793,7 +16795,22 @@ export class OrcaRuntimeService {
         result.available &&
         recognizeAgentProcess(result.process) !== null
       ) {
-        this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.restoreLastAgentExit()
+        const restoredStatus = this.ptyTitleTrackersByPtyId
+          .get(ptyId)
+          ?.tracker.restoreLastAgentExit()
+        if (restoredStatus !== null && restoredStatus !== undefined) {
+          current.lastAgentStatus = restoredStatus
+          for (const leaf of this.getLeavesForPty(ptyId)) {
+            if (leaf.lastAgentStatus !== null) {
+              continue
+            }
+            // Why: the foreground agent disproved the neutral title's exit signal; keep runtime delivery state aligned with the restored tracker.
+            leaf.lastAgentStatus = restoredStatus
+            if (restoredStatus === 'idle') {
+              this.deliverPendingMessagesForLeaf(leaf)
+            }
+          }
+        }
         return
       }
       this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-exited' })
@@ -31119,25 +31136,40 @@ export class OrcaRuntimeService {
   }
 
   deliverPendingMessagesForHandle(handle: string, reservedTypes?: ReadonlySet<string>): void {
-    // Why before the try: `dispatch:`/`run:` mailbox addresses are never terminal
-    // handles, and federation sync notifies once per relayed item — letting each
-    // one build and discard a `terminal_handle_stale` Error (stack capture) is
-    // pure waste. getLiveLeafForHandle would reject them on the same lookup.
-    if (!this.handles.has(handle)) {
-      return
+    let terminalHandle = handle
+    if (!this.handles.has(terminalHandle)) {
+      const runId = handle.startsWith('run:') ? handle.slice('run:'.length) : ''
+      const coordinatorHandle = runId
+        ? this._orchestrationDb?.getRun(runId)?.coordinator_handle
+        : null
+      if (!coordinatorHandle || !this.handles.has(coordinatorHandle)) {
+        return
+      }
+      terminalHandle = coordinatorHandle
     }
     try {
-      const { leaf } = this.getLiveLeafForHandle(handle)
+      const { leaf } = this.getLiveLeafForHandle(terminalHandle)
       // Why lastAgentStatusObservedLive: a cold restore seeds `idle` from the
       // title persisted at snapshot time, so an agent that went busy across the
       // relaunch still reads idle until its first live frame. Pushing on that
-      // would type a message plus Enter into a working agent and stamp the row
-      // delivered. Seeded state waits for a live observation to authorize it.
+      // would type a message plus Enter into a working agent. Seeded state waits
+      // for a live observation to authorize it.
       if (leaf.lastAgentStatus === 'idle' && leaf.lastAgentStatusObservedLive) {
-        this.deliverPendingMessages(leaf, false, reservedTypes)
+        this.deliverPendingMessages(leaf, { mailboxHandle: handle, reservedTypes })
       }
     } catch {
-      // Unknown/stale handles can't be pushed now; the persisted message stays available via explicit check or future idle delivery.
+      // Unknown/stale handles can't be pointed now; the persisted message stays available via explicit check or future idle delivery.
+    }
+  }
+
+  private deliverPendingMessagesForLeaf(leaf: RuntimeLeafRecord): void {
+    this.deliverPendingMessages(leaf)
+    if (!this._orchestrationDb) {
+      return
+    }
+    const run = this._orchestrationDb.getCurrentRunForPane?.(`${leaf.tabId}:${leaf.leafId}`)
+    if (run) {
+      this.deliverPendingMessages(leaf, { mailboxHandle: `run:${run.id}` })
     }
   }
 
@@ -31148,10 +31180,8 @@ export class OrcaRuntimeService {
     // deliver now (#12536). deliverPendingMessagesForHandle no-ops when the
     // leaf is not idle. Main's messageDeliveryFlights serialize mid-Enter
     // re-notifies without a separate settle barrier.
-    // Why skip when a waiter will consume this: deliverPendingMessages stamps
-    // delivered_at but not read, so a blocked orchestration.check --wait would
-    // still re-read the row and the pane would also receive it (double
-    // delivery). The pull wins; the push stays pending for a later notify.
+    // Why skip when a waiter will consume this: a blocked check owns the row,
+    // so also pointing and submitting the pane would wake it twice. The pull wins.
     // Why "will consume" and not "exists": a waiter filtered to other types
     // never returns this row — check re-reads under the same filter on timeout
     // — so treating it as the consumer strands the message in exactly the
@@ -31768,10 +31798,8 @@ export class OrcaRuntimeService {
     return null
   }
 
-  // Why: delivered_at for Claude targets stamps only in the delayed-Enter
-  // callback, so the whole write→settle span must be single-flight per pty —
-  // a second read inside it would re-inject the same unread rows. Triggers
-  // landing mid-flight park the latest leaf and re-run once on settle. The
+  // Why: the whole pointer→Enter span must be single-flight per pty. Triggers
+  // landing mid-flight park their mailbox and re-run once on settle. The
   // flight object is the settle identity: a stale settle surviving an exit
   // retire must not clear a newer same-id flight or flush its parked trigger.
   private readonly messageDeliveryFlightsByPtyId = new Map<
@@ -31779,7 +31807,10 @@ export class OrcaRuntimeService {
     { enterTimer: ReturnType<typeof setTimeout> | null }
   >()
 
-  private readonly parkedMessageRedeliveryLeavesByPtyId = new Map<string, RuntimeLeafRecord>()
+  private readonly parkedMessageRedeliveriesByPtyId = new Map<
+    string,
+    Map<string, { leaf: RuntimeLeafRecord; reservedTypes?: ReadonlySet<string> }>
+  >()
 
   private settlePendingMessageDelivery(
     ptyId: string,
@@ -31789,31 +31820,47 @@ export class OrcaRuntimeService {
       return
     }
     this.messageDeliveryFlightsByPtyId.delete(ptyId)
-    const parkedLeaf = this.parkedMessageRedeliveryLeavesByPtyId.get(ptyId)
-    if (!parkedLeaf) {
+    const parked = this.parkedMessageRedeliveriesByPtyId.get(ptyId)
+    if (!parked) {
       return
     }
-    this.parkedMessageRedeliveryLeavesByPtyId.delete(ptyId)
-    this.deliverPendingMessages(parkedLeaf)
+    this.parkedMessageRedeliveriesByPtyId.delete(ptyId)
+    for (const [mailboxHandle, delivery] of parked) {
+      this.deliverPendingMessages(delivery.leaf, {
+        mailboxHandle,
+        reservedTypes: delivery.reservedTypes
+      })
+    }
   }
 
-  // Why: an Enter armed for a dead session must not fire into a same-id cold
-  // restore — it would inject \r and stamp rows the replacement never saw.
-  // Retire without stamping; the rows re-deliver on the replacement's next idle.
+  // Why: a dead session's Enter or watermark must not affect a same-id cold restore.
   private retirePendingMessageDeliveryForPty(ptyId: string): void {
     const flight = this.messageDeliveryFlightsByPtyId.get(ptyId)
     if (flight?.enterTimer != null) {
       clearTimeout(flight.enterTimer)
     }
     this.messageDeliveryFlightsByPtyId.delete(ptyId)
-    this.parkedMessageRedeliveryLeavesByPtyId.delete(ptyId)
+    this.parkedMessageRedeliveriesByPtyId.delete(ptyId)
+    for (const leaf of this.getLeavesForPty(ptyId)) {
+      const handle = this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId))
+      if (handle) {
+        this.lastPointedMessageSequenceByHandle.delete(handle)
+      }
+      const run = this._orchestrationDb?.getCurrentRunForPane?.(`${leaf.tabId}:${leaf.leafId}`)
+      if (run) {
+        this.lastPointedMessageSequenceByHandle.delete(`run:${run.id}`)
+      }
+    }
   }
 
   // Why: push-on-idle delivery is event-driven (no polling) because the runtime owns both the message store and terminal status detection.
   private deliverPendingMessages(
     leaf: RuntimeLeafRecord,
-    skipAbsenceProbe = false,
-    reservedTypes?: ReadonlySet<string>
+    options: {
+      mailboxHandle?: string
+      reservedTypes?: ReadonlySet<string>
+      skipAbsenceProbe?: boolean
+    } = {}
   ): void {
     if (!this._orchestrationDb) {
       return
@@ -31823,10 +31870,20 @@ export class OrcaRuntimeService {
     if (!handle) {
       return
     }
+    const mailboxHandle = options.mailboxHandle ?? handle
 
-    // Why before reading rows: rows read mid-flight are the not-yet-stamped ones.
     if (leaf.ptyId && this.messageDeliveryFlightsByPtyId.has(leaf.ptyId)) {
-      this.parkedMessageRedeliveryLeavesByPtyId.set(leaf.ptyId, leaf)
+      let parked = this.parkedMessageRedeliveriesByPtyId.get(leaf.ptyId)
+      if (!parked) {
+        parked = new Map()
+        this.parkedMessageRedeliveriesByPtyId.set(leaf.ptyId, parked)
+      }
+      const priorReservedTypes = parked.get(mailboxHandle)?.reservedTypes
+      const reservedTypes =
+        priorReservedTypes || options.reservedTypes
+          ? new Set([...(priorReservedTypes ?? []), ...(options.reservedTypes ?? [])])
+          : undefined
+      parked.set(mailboxHandle, { leaf, reservedTypes })
       return
     }
 
@@ -31835,12 +31892,13 @@ export class OrcaRuntimeService {
     // into the pane AND returned by that pull's check. Live waiters cover the
     // still-blocked case; reservedTypes carries the notify-time snapshot for a
     // waiter resolved later in the same drain, which is already gone from the map.
-    const waiters = this.messageWaitersByHandle.get(handle)
+    const waiters = this.messageWaitersByHandle.get(mailboxHandle)
     const unread = this._orchestrationDb
-      .getUndeliveredUnreadMessages(handle)
+      .getUndeliveredUnreadMessages(mailboxHandle)
       .filter(
         (message) =>
-          !reservedTypes?.has(message.type) && !messageTypeHasLiveWaiter(waiters, message.type)
+          !options.reservedTypes?.has(message.type) &&
+          !messageTypeHasLiveWaiter(waiters, message.type)
       )
     if (unread.length === 0) {
       return
@@ -31849,9 +31907,16 @@ export class OrcaRuntimeService {
     if (!leaf.writable || !leaf.ptyId) {
       return
     }
+    const newestSequence = unread.at(-1)?.sequence
+    if (
+      newestSequence === undefined ||
+      newestSequence <= (this.lastPointedMessageSequenceByHandle.get(mailboxHandle) ?? -1)
+    ) {
+      return
+    }
 
     if (
-      !skipAbsenceProbe &&
+      !options.skipAbsenceProbe &&
       this.ptyController?.probePtyLiveness &&
       !this.controllerKnowsPtyIsLive(leaf.ptyId)
     ) {
@@ -31860,8 +31925,7 @@ export class OrcaRuntimeService {
       // them queued for a future surface; unknown liveness still delivers.
       const probedPtyId = leaf.ptyId
       // Why: triggers arriving mid-probe must not each arm a continuation — the
-      // Claude Enter delay stamps delivered_at late, so every continuation would
-      // re-read the same unread rows and double-deliver. The single armed
+      // Every continuation would re-read the same unread rows. The single armed
       // continuation re-reads fresh rows when it fires, so nothing is lost.
       if (this.probeDeferredDeliveryPtyIds.has(probedPtyId)) {
         return
@@ -31883,16 +31947,18 @@ export class OrcaRuntimeService {
               // Why current state, not the closure: the gate that authorized this
               // push ran before the probe. A same-id cold restore inside the probe
               // window keeps ptyId identical and makes the leaf writable again, so
-              // an id-only check would type the payload plus Enter into a process
-              // whose idle was never observed — and stamp the row delivered, which
-              // loses it. Re-read the leaf and re-apply the live-idle gate.
+              // an id-only check would type the pointer plus Enter into a process
+              // whose idle was never observed. Re-read the live-idle gate.
               const currentLeaf = this.leaves.get(this.getLeafKey(leaf.tabId, leaf.leafId))
               if (
                 currentLeaf?.ptyId === probedPtyId &&
                 currentLeaf.lastAgentStatus === 'idle' &&
                 currentLeaf.lastAgentStatusObservedLive
               ) {
-                this.deliverPendingMessages(currentLeaf, true)
+                this.deliverPendingMessages(currentLeaf, {
+                  mailboxHandle,
+                  skipAbsenceProbe: true
+                })
               }
             }, 0)
           }
@@ -31906,32 +31972,25 @@ export class OrcaRuntimeService {
     const deliveryPtyId = leaf.ptyId
     const flight: { enterTimer: ReturnType<typeof setTimeout> | null } = { enterTimer: null }
     this.messageDeliveryFlightsByPtyId.set(deliveryPtyId, flight)
-    // Why: every sync outcome — failed write, sync-stamped branch, or a throw —
+    // Why: every sync outcome — failed write, Cursor branch, or a throw —
     // must end the flight here, or a leaked flag parks this pty's deliveries
     // forever. Only an armed Enter hands settling to its own callback.
     let settlesInEnterCallback = false
     try {
-      const payload = formatMessagesForInjection(unread)
+      const payload = formatMessagePointer(unread.length)
       const wrote = this.ptyController?.write(deliveryPtyId, payload) ?? false
       if (!wrote) {
         return
       }
-
-      // The active coordinator prompt is user-owned input, so push-on-idle must not synthesize Enter.
-      if (this._orchestrationDb.getActiveCoordinatorRun()?.coordinator_handle === handle) {
-        this._orchestrationDb.markAsDelivered(unread.map((m) => m.id))
-        return
-      }
+      this.lastPointedMessageSequenceByHandle.set(mailboxHandle, newestSequence)
 
       const tabTitle = this.tabs.get(leaf.tabId)?.title
       if (isCursorAgentOrchestrationTarget(leaf, tabTitle)) {
         // Why: Cursor Agent treats injected PTY text as editable prompt input, so submitting must stay under user control.
-        this._orchestrationDb.markAsDelivered(unread.map((m) => m.id))
         return
       }
 
-      // Why: Claude Code treats a large PTY write as a paste and swallows a \r in the same write; send Enter separately after a delay, stamping delivered_at only once \r is confirmed.
-      // Important (design doc §3.2, feedback #2): stamp delivered_at, not read — read means "a check-caller consumed this"; flipping it would hide the message from check --unread.
+      // Why: agent TUIs can swallow a \r in the same PTY write; submit separately after a delay.
       flight.enterTimer = setTimeout(() => {
         try {
           // Why current state, not the closure: graph resync replaces leaf
@@ -31944,12 +32003,9 @@ export class OrcaRuntimeService {
           if (!currentLeaf || currentLeaf.ptyId !== deliveryPtyId || !currentLeaf.writable) {
             return
           }
-          const submitted = this.ptyController?.write(deliveryPtyId, '\r') ?? false
-          if (submitted) {
-            this._orchestrationDb?.markAsDelivered(unread.map((m) => m.id))
-          }
+          this.ptyController?.write(deliveryPtyId, '\r')
         } catch {
-          // Terminal may have closed during the delay — messages stay queued (delivered_at NULL) and re-deliver on next idle.
+          // Terminal may have closed during the delay; mail remains queued for check.
         } finally {
           // Why finally: every outcome — submit, refusal, throw — ends the flight,
           // and settle re-runs any trigger parked during it so nothing strands.
