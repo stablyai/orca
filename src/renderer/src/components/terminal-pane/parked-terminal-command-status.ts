@@ -22,6 +22,8 @@ export type ParkedTerminalCommandStatusPolicy = {
   onCommandFinished: (bestEffortExitCode: number | null) => void
   onCommandCodeWorking: (prompt: string) => void
   onCommandCodeDone: (prompt: string) => void
+  onKiroWorking: () => boolean
+  onKiroDone: () => boolean
   dispose: () => void
 }
 
@@ -144,6 +146,37 @@ export function createParkedTerminalCommandStatusPolicy(options: {
     settleCommandCodeDone
   )
 
+  const setKiroStatus = (status: 'working' | 'done'): boolean => {
+    const routing = resolveRouting()
+    if (!routing) {
+      return false
+    }
+    const currentState = useAppStore.getState()
+    const currentEntry = currentState.agentStatusByPaneKey[paneKey]
+    if (
+      status === 'done' &&
+      (currentEntry?.agentType !== 'kiro' || currentEntry.state !== 'working')
+    ) {
+      return false
+    }
+    const currentTitle = currentState.runtimePaneTitlesByTabId?.[tabId]?.[paneId]
+    currentState.setAgentStatus(
+      paneKey,
+      {
+        state: status,
+        prompt:
+          currentEntry?.agentType === 'kiro' && currentEntry.prompt.trim()
+            ? currentEntry.prompt
+            : 'Kiro',
+        agentType: 'kiro'
+      },
+      currentTitle,
+      undefined,
+      routing
+    )
+    return true
+  }
+
   return {
     onCommandFinished: (bestEffortExitCode: number | null): void => {
       if (disposed) {
@@ -210,6 +243,9 @@ export function createParkedTerminalCommandStatusPolicy(options: {
       }
       openCommandCodeDoneSettle(paneKey, normalizedPrompt)
     },
+
+    onKiroWorking: (): boolean => setKiroStatus('working'),
+    onKiroDone: (): boolean => setKiroStatus('done'),
 
     dispose: (): void => {
       // Why release, not flush: the settle window belongs to the turn and outlives this
