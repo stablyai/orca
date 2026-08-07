@@ -187,4 +187,116 @@ describe('Hermes 0.19 SQLite support & legacy backwards compatibility', () => {
       "cd '/tmp/v1-work' && hermes --resume 'v1-user-session'"
     )
   })
+
+  it('parses numeric timestamp strings in state.db rows', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-hermes-numeric-ts-'))
+    cleanupDirs.push(dir)
+    const dbPath = join(dir, 'state.db')
+    const db = createTestDb(dbPath)
+
+    db.prepare(
+      `INSERT INTO sessions (id, title, cwd, model, created_at, updated_at)
+       VALUES ('ts-sess-1', 'Numeric Timestamp Session', '/tmp/work', 'hermes-v3', '1722000000', '1722000300')`
+    ).run()
+
+    db.prepare(
+      `INSERT INTO messages (session_id, role, content, created_at)
+       VALUES ('ts-sess-1', 'user', 'Hello', '1722000000')`
+    ).run()
+    db.close()
+
+    const candidates = await listHermesSqliteSessions({ dbPaths: [dbPath], limit: 10, issues: [] })
+    expect(candidates).toHaveLength(1)
+    expect(candidates[0].file.mtimeMs).toBe(1722000300000)
+  })
+
+  it('sorts candidate sessions across multiple databases by recency', async () => {
+    const dir1 = mkdtempSync(join(tmpdir(), 'orca-hermes-db1-'))
+    const dir2 = mkdtempSync(join(tmpdir(), 'orca-hermes-db2-'))
+    cleanupDirs.push(dir1, dir2)
+
+    const dbPath1 = join(dir1, 'state.db')
+    const dbPath2 = join(dir2, 'state.db')
+
+    const db1 = createTestDb(dbPath1)
+    db1
+      .prepare(
+        `INSERT INTO sessions (id, created_at, updated_at) VALUES ('older-sess', '2026-01-01T10:00:00Z', '2026-01-01T10:00:00Z')`
+      )
+      .run()
+    db1
+      .prepare(
+        `INSERT INTO messages (session_id, role, content) VALUES ('older-sess', 'user', 'msg')`
+      )
+      .run()
+    db1.close()
+
+    const db2 = createTestDb(dbPath2)
+    db2
+      .prepare(
+        `INSERT INTO sessions (id, created_at, updated_at) VALUES ('newer-sess', '2026-06-01T10:00:00Z', '2026-06-01T10:00:00Z')`
+      )
+      .run()
+    db2
+      .prepare(
+        `INSERT INTO messages (session_id, role, content) VALUES ('newer-sess', 'user', 'msg')`
+      )
+      .run()
+    db2.close()
+
+    const candidates = await listHermesSqliteSessions({
+      dbPaths: [dbPath1, dbPath2],
+      limit: 10,
+      issues: []
+    })
+
+    expect(candidates).toHaveLength(2)
+    expect(candidates[0].file.path).toContain('newer-sess')
+    expect(candidates[1].file.path).toContain('older-sess')
+  })
+
+  it('deduplicates legacy JSON files against SQLite sessions beyond the limit', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-hermes-limit-dedup-'))
+    cleanupDirs.push(root)
+    const roots = isolatedScanRoots(root)
+
+    const dbPath = join(root, 'state.db')
+    const db = createTestDb(dbPath)
+
+    db.prepare(
+      `INSERT INTO sessions (id, updated_at) VALUES ('sess-newer', '2026-07-02T10:00:00Z')`
+    ).run()
+    db.prepare(
+      `INSERT INTO messages (session_id, role, content) VALUES ('sess-newer', 'user', 'msg')`
+    ).run()
+
+    db.prepare(
+      `INSERT INTO sessions (id, updated_at) VALUES ('sess-older', '2026-07-01T10:00:00Z')`
+    ).run()
+    db.prepare(
+      `INSERT INTO messages (session_id, role, content) VALUES ('sess-older', 'user', 'msg')`
+    ).run()
+    db.close()
+
+    await mkdir(roots.hermesSessionsDir, { recursive: true })
+    await writeFile(
+      join(roots.hermesSessionsDir, 'session_sess-older.json'),
+      JSON.stringify({
+        session_id: 'sess-older',
+        messages: [{ role: 'user', content: 'Legacy duplicate' }]
+      })
+    )
+
+    const scanResult = await scanAiVaultSessions({
+      ...roots,
+      hermesStateDbPaths: [dbPath],
+      platform: 'darwin',
+      limit: 1 // limit is 1, so only sess-newer is in SQLite candidate list
+    })
+
+    const hermesSessions = scanResult.sessions.filter((s) => s.agent === 'hermes')
+    // sess-older should be deduplicated out even though it's beyond the candidate limit of 1
+    const olderLegacy = hermesSessions.find((s) => s.sessionId === 'sess-older')
+    expect(olderLegacy).toBeUndefined()
+  })
 })

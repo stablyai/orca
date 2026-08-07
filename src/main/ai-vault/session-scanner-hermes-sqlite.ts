@@ -43,6 +43,10 @@ function timestampMs(val: unknown): number {
     return val < 1e11 ? val * 1000 : val
   }
   if (typeof val === 'string') {
+    const numeric = Number(val)
+    if (val.trim() !== '' && Number.isFinite(numeric)) {
+      return numeric < 1e11 ? numeric * 1000 : numeric
+    }
     const parsed = Date.parse(val)
     if (!Number.isNaN(parsed)) {
       return parsed
@@ -117,6 +121,37 @@ function buildSessionListQuery(db: SyncDatabase): string {
 }
 
 /**
+ * Reads all session IDs present in Hermes state.db databases for deduplication.
+ */
+export function listHermesSqliteSessionIds(dbPaths: readonly string[]): Set<string> {
+  const ids = new Set<string>()
+  for (const dbPath of dbPaths) {
+    if (!existsSync(dbPath)) {
+      continue
+    }
+    let db: SyncDatabase | null = null
+    try {
+      db = openReadonlyDatabase(dbPath)
+      if (!canReadHermesSessions(db)) {
+        continue
+      }
+      const idCol = columnExists(db, 'sessions', 'id') ? 'id' : 'session_id'
+      const rows = db.prepare(`SELECT ${idCol} AS id FROM sessions`).all() as { id: string }[]
+      for (const row of rows) {
+        if (row.id) {
+          ids.add(row.id)
+        }
+      }
+    } catch {
+      // Ignore unreadable database paths
+    } finally {
+      db?.close()
+    }
+  }
+  return ids
+}
+
+/**
  * List Hermes sessions from one or more SQLite databases as synthetic
  * `SessionFileCandidate` entries. Each candidate's file path is a synthetic
  * `<dbPath>#<sessionId>` string that the parser dispatcher routes to
@@ -168,6 +203,7 @@ export async function listHermesSqliteSessions(args: {
       db?.close()
     }
   }
+  candidates.sort((a, b) => b.file.mtimeMs - a.file.mtimeMs)
   return candidates
 }
 

@@ -2,8 +2,10 @@ import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import { discoverFiles } from './session-scanner-discovery'
-import { listHermesSqliteSessions } from './session-scanner-hermes-sqlite'
-import { splitHermesSqliteCandidate } from './session-scanner-hermes-sqlite-paths'
+import {
+  listHermesSqliteSessionIds,
+  listHermesSqliteSessions
+} from './session-scanner-hermes-sqlite'
 import type {
   AiVaultScanOptions,
   FileWithMtime,
@@ -64,18 +66,12 @@ export function hermesDiscoveries(
 
   const dbPaths = hermesStateDbPaths(options, wslHomeDirs)
   const sqlitePromise = listHermesSqliteSessions({ dbPaths, limit, issues })
+  const sqliteSessionIds = listHermesSqliteSessionIds(dbPaths)
 
   return [
     Promise.all([Promise.all(fileDiscoveryPromises), sqlitePromise]).then(
       ([fileResults, sqliteCandidates]) => {
         const sqliteFiles = sqliteCandidates.map((c) => c.file)
-        const sqliteSessionIds = new Set<string>()
-        for (const file of sqliteFiles) {
-          const parsed = splitHermesSqliteCandidate(file.path)
-          if (parsed) {
-            sqliteSessionIds.add(parsed.sessionId)
-          }
-        }
 
         // Why: collect all legacy JSON session files across all root dirs (local & WSL)
         // and filter out any that are duplicated in the SQLite database.
