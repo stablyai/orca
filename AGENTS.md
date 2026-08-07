@@ -44,6 +44,10 @@ All changes must consider folder workspaces as well as git worktrees. Don't assu
 
 Clients and remote Orca servers update independently, so mixed versions are the normal state. Before changing anything a paired client and host exchange — RPC params, stream frames, or the content either side publishes over them — follow [`docs/reference/remote-wire-compatibility.md`](./docs/reference/remote-wire-compatibility.md). A new optional field is safe; a new stream opcode must be capability-negotiated because decoders drop unknown opcodes silently; and changing what the host publishes reaches old clients even with no wire change.
 
+## DOM Copy Compatibility
+
+Chromium (Electron's engine) turns soft-wrapped `white-space: pre-wrap` text into real newlines on copy, so a visually wrapped command pastes into a shell as two commands. Code/command-shaped DOM content must therefore render with `white-space: pre` and horizontal scroll — never `pre-wrap`; prose containers (comment bodies, error notices) may keep `pre-wrap`. xterm terminal selections are unaffected. See [`docs/reference/soft-wrap-selection-copy.md`](./docs/reference/soft-wrap-selection-copy.md).
+
 ## Git Binary Compatibility
 
 Orca runs the user's Git binary on native, WSL, and SSH hosts, which may all have different versions. Treat Git 2.25 as the core-workflow baseline and follow [`docs/reference/git-compatibility.md`](./docs/reference/git-compatibility.md).
