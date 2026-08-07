@@ -69,4 +69,29 @@ describe('detectLanguage', () => {
     expect(detectLanguage('config/tsconfig.jsonc')).toBe('json')
     expect(detectLanguage('notes/scratch.unknownext')).toBe('plaintext')
   })
+
+  it('maps the whole dotenv family to the ini language id (case-insensitive)', () => {
+    expect(detectLanguage('.env')).toBe('ini')
+    expect(detectLanguage('apps/api/.env.local')).toBe('ini')
+    expect(detectLanguage('.env.functions.local')).toBe('ini')
+    expect(detectLanguage('.env.staging.example')).toBe('ini')
+    expect(detectLanguage('C:\\repo\\.env.production')).toBe('ini')
+    expect(detectLanguage('.ENV')).toBe('ini')
+    expect(detectLanguage('.ENV.STAGING')).toBe('ini')
+  })
+
+  it('maps compose-style env_file names to the ini language id', () => {
+    expect(detectLanguage('deploy/dev.env')).toBe('ini')
+    expect(detectLanguage('C:\\repo\\docker.env')).toBe('ini')
+  })
+
+  it('keeps extension mapping ahead of the dotenv fallback', () => {
+    expect(detectLanguage('scripts/.env.sh')).toBe('shell')
+    expect(detectLanguage('config/.env.json')).toBe('json')
+  })
+
+  it('does not treat non-dotenv dotfiles as dotenv', () => {
+    expect(detectLanguage('.envrc')).toBe('plaintext')
+    expect(detectLanguage('.environment')).toBe('plaintext')
+  })
 })

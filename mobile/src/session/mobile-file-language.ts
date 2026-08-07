@@ -54,6 +54,9 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.ini': 'ini',
   '.cfg': 'ini',
   '.conf': 'ini',
+  // Why: covers bare .env (extname yields the whole dotfile name) and
+  // compose-style `env_file` names like dev.env.
+  '.env': 'ini',
   '.sql': 'sql',
   '.graphql': 'graphql',
   '.gql': 'graphql',
@@ -69,13 +72,10 @@ const FILENAME_TO_LANGUAGE: Record<string, string> = {
   'CMakeLists.txt': 'cmake',
   '.gitignore': 'ini',
   '.gitattributes': 'ini',
-  '.editorconfig': 'ini',
-  '.env': 'ini',
-  '.env.local': 'ini',
-  '.env.development': 'ini',
-  '.env.production': 'ini'
+  '.editorconfig': 'ini'
 }
 
+/** Resolve a highlight language id from a file path, honoring a caller-preferred language. */
 export function detectMobileFileLanguage(filePath: string, preferredLanguage?: string): string {
   const normalizedPreferred = preferredLanguage?.trim().toLowerCase()
   if (normalizedPreferred && normalizedPreferred !== 'plaintext') {
@@ -89,5 +89,11 @@ export function detectMobileFileLanguage(filePath: string, preferredLanguage?: s
     return exact
   }
 
-  return EXT_TO_LANGUAGE[extname(filename).toLowerCase()] ?? 'plaintext'
+  // Why: open-ended dotenv names (.env.local, .env.functions.local, ...) fall
+  // back to ini only after the extension miss, so .env.sh / .env.json keep
+  // their own language.
+  return (
+    EXT_TO_LANGUAGE[extname(filename).toLowerCase()] ??
+    (filename.toLowerCase().startsWith('.env.') ? 'ini' : 'plaintext')
+  )
 }
