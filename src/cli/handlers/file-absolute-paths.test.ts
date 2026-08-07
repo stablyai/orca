@@ -213,13 +213,16 @@ describe('absolute file CLI paths', () => {
     it('falls back to the distro named by a UNC cwd', async () => {
       mockWorktreeShow(uncRoot)
 
-      await openPath('/root/orca/workspaces/xxx/xxx/xxx.ts', `${uncRoot}/xxx`)
+      await openPath(
+        '/root/orca/workspaces/xxx/xxx/xxx.ts',
+        '\\\\wsl.localhost\\Ubuntu\\root\\orca\\workspaces\\xxx\\xxx'
+      )
 
       expectOpenedWith('xxx/xxx.ts')
     })
 
-    // Why: without a distro the prefix would collapse to `//wsl.localhost/`, so a
-    // path whose first segment happens to be a distro name would alias onto the root.
+    // Why: pairs with the `||` in the handler — if an empty distro ever reached the
+    // prefix it would collapse to `//wsl.localhost/`, aliasing this path onto the root.
     it('does not alias a distro-named first segment onto the root', async () => {
       mockWorktreeShow(uncRoot)
 
