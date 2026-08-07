@@ -1,7 +1,9 @@
+import type { JiraIssueFilter } from '../../../src/shared/jira-types'
 import type { TaskProvider } from '../../../src/shared/task-providers'
 import type { PickerOption } from '../components/PickerModal'
 import { TaskProviderLogo } from '../components/TaskProviderLogo'
 import { colors } from '../theme/mobile-theme'
+import { JIRA_FILTER_LABELS } from './mobile-jira-issue-filters'
 
 export type GitHubTaskKind = 'issues' | 'prs'
 export type GitHubMode = GitHubTaskKind | 'project'
@@ -49,7 +51,28 @@ export const PROVIDER_OPTIONS: PickerOption<TaskProvider>[] = [
     label: 'Linear',
     subtitle: 'Assigned and team issues',
     renderIcon: providerIcon('linear')
+  },
+  {
+    value: 'jira',
+    label: 'Jira',
+    subtitle: 'Assigned and reported issues',
+    renderIcon: providerIcon('jira')
   }
+]
+
+export const JIRA_FILTER_OPTIONS: PickerOption<JiraIssueFilter>[] = [
+  {
+    value: 'assigned',
+    label: JIRA_FILTER_LABELS.assigned,
+    subtitle: 'Unresolved issues assigned to you'
+  },
+  {
+    value: 'reported',
+    label: JIRA_FILTER_LABELS.reported,
+    subtitle: 'Unresolved issues you reported'
+  },
+  { value: 'all', label: JIRA_FILTER_LABELS.all, subtitle: 'Every unresolved issue you can see' },
+  { value: 'done', label: JIRA_FILTER_LABELS.done, subtitle: 'Your recently resolved issues' }
 ]
 
 export const GITLAB_FILTER_OPTIONS: PickerOption<GitLabFilter>[] = [
