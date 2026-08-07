@@ -15761,7 +15761,7 @@ describe('OrcaRuntimeService', () => {
             setTimeout(() => {
               runtime.onPtyData(
                 'pty-ack',
-                '\x1b]9999;{"state":"working","agentType":"codex"}\x07',
+                '\x1b]9999;{"state":"working","agentType":"codex","prompt":"ack-marker"}\x07',
                 Date.now()
               )
             }, 1)
@@ -15776,7 +15776,11 @@ describe('OrcaRuntimeService', () => {
       expect(processIncarnation).toBeTruthy()
 
       const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'ack me', {
-        requireAgentAck: { timeoutMs: 1_000, expectedProcessIncarnation: processIncarnation! }
+        requireAgentAck: {
+          timeoutMs: 1_000,
+          expectedProcessIncarnation: processIncarnation!,
+          expectedPromptMarker: 'ack-marker'
+        }
       })
       await vi.runAllTimersAsync()
 
@@ -15785,6 +15789,86 @@ describe('OrcaRuntimeService', () => {
         accepted: true,
         agentAcknowledged: true
       })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not acknowledge an unrelated fresh agent prompt event', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-unrelated-ack' }),
+        write: (_ptyId, data) => {
+          if (data === '\r') {
+            setTimeout(() => {
+              runtime.onPtyData(
+                'pty-unrelated-ack',
+                '\x1b]9999;{"state":"working","agentType":"codex","prompt":"different prompt"}\x07',
+                Date.now()
+              )
+            }, 1)
+          }
+          return true
+        },
+        kill: () => true,
+        getForegroundProcess: async () => 'codex'
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+      const processIncarnation = runtime.getTerminalProcessIncarnation(handle)
+      expect(processIncarnation).toBeTruthy()
+
+      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'expected marker', {
+        requireAgentAck: {
+          timeoutMs: 20,
+          expectedProcessIncarnation: processIncarnation!,
+          expectedPromptMarker: 'expected marker'
+        }
+      })
+      const rejection = expect(sendPromise).rejects.toThrow('terminal_agent_ack_timeout')
+      await vi.runAllTimersAsync()
+      await rejection
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not accept matching prompt evidence emitted before the submit byte', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      let emitted = false
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-early-ack' }),
+        write: (_ptyId, data) => {
+          if (!emitted && data !== '\r') {
+            emitted = true
+            runtime.onPtyData(
+              'pty-early-ack',
+              '\x1b]9999;{"state":"working","agentType":"codex","prompt":"early-marker"}\x07',
+              Date.now()
+            )
+          }
+          return true
+        },
+        kill: () => true,
+        getForegroundProcess: async () => 'codex'
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+      const processIncarnation = runtime.getTerminalProcessIncarnation(handle)
+      expect(processIncarnation).toBeTruthy()
+
+      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'early-marker', {
+        requireAgentAck: {
+          timeoutMs: 20,
+          expectedProcessIncarnation: processIncarnation!,
+          expectedPromptMarker: 'early-marker'
+        }
+      })
+      const rejection = expect(sendPromise).rejects.toThrow('terminal_agent_ack_timeout')
+      await vi.runAllTimersAsync()
+      await rejection
     } finally {
       vi.useRealTimers()
     }

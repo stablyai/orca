@@ -37,9 +37,11 @@ import { cn } from '@/lib/utils'
 import type {
   Repo,
   Worktree,
+  WorkspaceLineage,
   WorkspaceStatus,
   WorkspaceStatusDefinition
 } from '../../../../shared/types'
+import { projectResolvedWorkspaceLineage } from '../../../../shared/workspace-lineage-projection'
 import { runWorktreeBatchDelete, runWorktreeDelete } from './delete-worktree-flow'
 import { runSleepWorktrees } from './sleep-worktree-flow'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -62,11 +64,7 @@ import {
 import { WorkspaceSleepMenuItems } from './WorkspaceSleepMenuItems'
 import { isEventTargetInsideCurrentTarget } from './worktree-card-dom-events'
 import { translate } from '@/i18n/i18n'
-import {
-  folderWorkspaceKey,
-  parseWorkspaceKey,
-  worktreeWorkspaceKey
-} from '../../../../shared/workspace-scope'
+import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 
 type Props = {
   worktree: Worktree
@@ -124,12 +122,9 @@ export function shouldRevealWorktreeDeveloperMenu(args: {
 export function hasWorktreeParentLink(
   worktree: Worktree,
   lineageById: AppState['worktreeLineageById'],
-  workspaceLineageByChildKey: AppState['workspaceLineageByChildKey']
+  workspaceLineage: WorkspaceLineage | null
 ): boolean {
-  return Boolean(
-    getProjectedWorktreeLineage(worktree, lineageById) ||
-    workspaceLineageByChildKey[worktreeWorkspaceKey(worktree.id)]
-  )
+  return Boolean(getProjectedWorktreeLineage(worktree, lineageById) || workspaceLineage)
 }
 
 function shouldUseNativeContextMenu(target: EventTarget | null): boolean {
@@ -380,6 +375,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
       EMPTY_WORKSPACE_LINEAGE_BY_CHILD_KEY
     )
   )
+  const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
   const updateWorktreeLineage = useAppStore((s) => s.updateWorktreeLineage)
   const tabsByWorktree = useAppStore((s) =>
     selectMenuScopedMap(menuOpen, s.tabsByWorktree, EMPTY_TABS_BY_WORKTREE)
@@ -455,10 +451,21 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     isMultiContext && batchDeleteWorktrees.length > 0
       ? `Delete ${batchDeleteWorktrees.length} Workspace${batchDeleteWorktrees.length === 1 ? '' : 's'}`
       : 'Delete Selected'
+  const projectedWorkspaceLineageByWorktreeId = useMemo(
+    () =>
+      new Map(
+        projectResolvedWorkspaceLineage(
+          allWorktrees,
+          folderWorkspaces,
+          workspaceLineageByChildKey
+        ).map((item) => [item.id, item.workspaceLineage] as const)
+      ),
+    [allWorktrees, folderWorkspaces, workspaceLineageByChildKey]
+  )
   const hasParentLink = hasWorktreeParentLink(
     worktree,
     worktreeLineageById,
-    workspaceLineageByChildKey
+    projectedWorkspaceLineageByWorktreeId.get(worktree.id) ?? null
   )
   const cyclicLineageIds = useMemo(
     () =>
@@ -475,7 +482,11 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   )
   const validParentWorktreeId = lineageInfo.state === 'valid' ? lineageInfo.parent.id : null
   const hasAnyContextLineage = activeContextWorktrees.some((item) =>
-    hasWorktreeParentLink(item, worktreeLineageById, workspaceLineageByChildKey)
+    hasWorktreeParentLink(
+      item,
+      worktreeLineageById,
+      projectedWorkspaceLineageByWorktreeId.get(item.id) ?? null
+    )
   )
   const eligibleParentCount = useMemo(
     () =>

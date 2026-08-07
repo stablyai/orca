@@ -181,7 +181,13 @@ describe('parent picker context menu affordance', () => {
       lineage
     } as Worktree & { lineage: WorktreeLineage }
 
-    expect(hasWorktreeParentLink(child, {}, {})).toBe(true)
+    expect(hasWorktreeParentLink(child, {}, null)).toBe(true)
+  })
+
+  it('does not offer unlink when strict workspace projection rejected the edge', () => {
+    const child = { id: 'repo::child' } as Worktree
+
+    expect(hasWorktreeParentLink(child, {}, null)).toBe(false)
   })
 
   it('uses set/change labels based on valid parent presence', () => {

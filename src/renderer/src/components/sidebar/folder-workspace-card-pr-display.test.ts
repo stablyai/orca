@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type {
   CheckStatus,
+  FolderWorkspace,
   PRInfo,
   Repo,
   Worktree,
@@ -8,7 +9,7 @@ import type {
   WorkspaceLineage
 } from '../../../../shared/types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
-import { getFolderWorkspaceCardPrDisplay } from './folder-workspace-card-pr-display'
+import { getFolderWorkspaceCardPrDisplay as resolveFolderWorkspaceCardPrDisplay } from './folder-workspace-card-pr-display'
 
 const repo: Repo = {
   id: 'repo-1',
@@ -16,6 +17,38 @@ const repo: Repo = {
   displayName: 'repo',
   badgeColor: '#999999',
   addedAt: 1
+}
+
+const folderWorkspace: FolderWorkspace = {
+  id: 'folder-1',
+  projectGroupId: 'group-1',
+  name: 'folder',
+  folderPath: '/folder',
+  executionHostId: 'local',
+  linkedTask: null,
+  comment: '',
+  isArchived: false,
+  isUnread: false,
+  isPinned: false,
+  sortOrder: 0,
+  lastActivityAt: 0,
+  createdAt: 1,
+  updatedAt: 1
+}
+
+function getFolderWorkspaceCardPrDisplay(
+  args: Omit<Parameters<typeof resolveFolderWorkspaceCardPrDisplay>[0], 'folderWorkspaces'>
+) {
+  return resolveFolderWorkspaceCardPrDisplay({
+    ...args,
+    folderWorkspaces: [folderWorkspace],
+    workspaceLineageByChildKey: Object.fromEntries(
+      Object.values(args.workspaceLineageByChildKey ?? {}).map((lineage) => [
+        lineage.childWorkspaceKey,
+        lineage
+      ])
+    )
+  })
 }
 
 class LookupOnlyRepoMap extends Map<string, Repo> {
@@ -46,6 +79,8 @@ function makeWorktree(overrides: Partial<Worktree> & { id: string }): Worktree {
     isPinned: false,
     sortOrder: 0,
     lastActivityAt: 0,
+    instanceId: `instance-${id}`,
+    hostId: 'local',
     ...rest
   }
 }
@@ -54,8 +89,10 @@ function makeWorkspaceLineage(worktree: Worktree): WorkspaceLineage {
   return {
     childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
     childInstanceId: worktree.instanceId ?? null,
+    childHostId: worktree.hostId ?? null,
     parentWorkspaceKey: folderWorkspaceKey('folder-1'),
-    parentInstanceId: null,
+    parentInstanceId: folderWorkspace.id,
+    parentHostId: 'local',
     origin: 'cli',
     capture: { source: 'env-workspace', confidence: 'inferred' },
     createdAt: 1
@@ -91,6 +128,24 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
     })
 
     expect(display).toMatchObject({ number: 8, status: 'success' })
+  })
+
+  it('excludes a cross-host folder lineage edge from the card aggregate', () => {
+    const worktree = makeWorktree({ id: 'cross-host', linkedPR: 8 })
+    const lineage = { ...makeWorkspaceLineage(worktree), parentHostId: 'ssh:other' as const }
+
+    const display = resolveFolderWorkspaceCardPrDisplay({
+      folderWorkspaceId: 'folder-1',
+      folderWorkspaces: [folderWorkspace],
+      workspaceLineageByChildKey: { [lineage.childWorkspaceKey]: lineage },
+      worktreeLineageById: {},
+      worktreeMap: new Map([[worktree.id, worktree]]),
+      repoMap: new Map([[repo.id, repo]]),
+      hostedReviewCache: null,
+      prCache: { 'repo-1::cross-host': makePrEntry(8, 'success') }
+    })
+
+    expect(display).toBeNull()
   })
 
   it('uses failing attached PR status ahead of pending and passing PRs', () => {

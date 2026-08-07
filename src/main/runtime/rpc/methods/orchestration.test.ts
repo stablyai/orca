@@ -2270,6 +2270,10 @@ describe('orchestration RPC methods', () => {
         injected: false
       })
       expect(send).toHaveBeenCalledTimes(1)
+      const [sentPrompt, sendOptions] = [send.mock.calls[0][1], send.mock.calls[0][2]]
+      const expectedMarker = `[orca-conditional-inject:${params.operationId}:${params.requestDigest}]`
+      expect(sentPrompt).toContain(expectedMarker)
+      expect(sendOptions?.requireAgentAck?.expectedPromptMarker).toBe(expectedMarker)
     })
 
     it('admits one delivery winner across concurrent identical calls', async () => {

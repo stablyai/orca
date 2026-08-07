@@ -1495,6 +1495,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         return { operation: started.operation, dispatch: started.dispatch, injected: false }
       }
       try {
+        const agentAckMarker = `[orca-conditional-inject:${params.operationId}:${params.requestDigest}]`
         const dispatchCapability = db.mintDispatchCapability({
           dispatchId: started.dispatch.id,
           paneKey: params.expectedWorkerPane,
@@ -1503,7 +1504,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         const preamble = buildDispatchPreamble({
           taskId: task.id,
           dispatchId: started.dispatch.id,
-          taskSpec: params.payload,
+          taskSpec: `${agentAckMarker}\n${params.payload}`,
           coordinatorHandle: params.expectedCoordinatorHandle,
           workerHandle: params.worker,
           dispatchCapability,
@@ -1544,7 +1545,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           beforeWrite: assertExactDeliveryTopology,
           requireAgentAck: {
             timeoutMs: CONDITIONAL_INJECT_AGENT_ACK_TIMEOUT_MS,
-            expectedProcessIncarnation: worker.processIncarnation
+            expectedProcessIncarnation: worker.processIncarnation,
+            expectedPromptMarker: agentAckMarker
           }
         })
         assertExactDeliveryTopology()

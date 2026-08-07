@@ -5054,6 +5054,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   folderWorkspacePathStatus.reason === 'ambiguous-connection')
               const folderPrDisplay = getFolderWorkspaceCardPrDisplay({
                 folderWorkspaceId: folderWorkspaceRow.folderWorkspace.id,
+                folderWorkspaces,
                 workspaceLineageByChildKey,
                 worktreeLineageById,
                 worktreeMap,
