@@ -1,21 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { syncHandlers, invokeHandlers, removeAllListenersMock, removeHandlerMock } = vi.hoisted(
-  () => ({
-    syncHandlers: new Map<
-      string,
-      (event: { returnValue?: unknown; sender?: unknown }, args: unknown) => void
-    >(),
-    invokeHandlers: new Map<string, () => Promise<{ ok: boolean }>>(),
-    removeAllListenersMock: vi.fn(),
-    removeHandlerMock: vi.fn()
-  })
-)
+const { syncHandlers, invokeHandlers, removeAllListenersMock } = vi.hoisted(() => ({
+  syncHandlers: new Map<
+    string,
+    (event: { returnValue?: unknown; sender?: unknown }, args: unknown) => void
+  >(),
+  invokeHandlers: new Map<string, () => Promise<{ ok: boolean }>>(),
+  removeAllListenersMock: vi.fn()
+}))
 
 vi.mock('electron', () => ({
   ipcMain: {
     removeAllListeners: removeAllListenersMock,
-    removeHandler: removeHandlerMock,
     on: vi.fn(
       (
         channel: string,
@@ -45,7 +41,6 @@ describe('registerRendererShutdownCheckpointHandler', () => {
     invokeHandlers.clear()
     vi.restoreAllMocks()
     removeAllListenersMock.mockReset()
-    removeHandlerMock.mockReset()
     setTrustedRendererShutdownCheckpointWebContentsId(42)
   })
 
@@ -289,7 +284,10 @@ describe('registerRendererShutdownCheckpointHandler', () => {
     // One corrupt slice must not discard the other checkpoints or block quit;
     // the skipped host keeps its last debounced write instead.
     expect(store.stageWorkspaceSessionBeforeUnload).toHaveBeenCalledTimes(1)
-    expect(store.stageWorkspaceSessionBeforeUnload).toHaveBeenCalledWith(validSession, 'runtime:host-1')
+    expect(store.stageWorkspaceSessionBeforeUnload).toHaveBeenCalledWith(
+      validSession,
+      'runtime:host-1'
+    )
     expect(store.flushPendingOrThrowAsync).toHaveBeenCalledTimes(1)
     expect(event.returnValue).toEqual({ ok: true })
   })
@@ -321,7 +319,10 @@ describe('registerRendererShutdownCheckpointHandler', () => {
     })
 
     expect(store.stageWorkspaceSessionBeforeUnload).toHaveBeenCalledTimes(2)
-    expect(store.stageWorkspaceSessionBeforeUnload).toHaveBeenCalledWith(hostSlice, 'runtime:host-1')
+    expect(store.stageWorkspaceSessionBeforeUnload).toHaveBeenCalledWith(
+      hostSlice,
+      'runtime:host-1'
+    )
     expect(store.flushPendingOrThrowAsync).toHaveBeenCalledTimes(1)
     expect(event.returnValue).toEqual({ ok: true })
   })

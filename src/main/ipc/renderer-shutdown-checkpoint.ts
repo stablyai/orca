@@ -165,7 +165,6 @@ export function registerRendererShutdownCheckpointHandler(store: Store): void {
     event.returnValue = { ok }
   })
 
-  ipcMain.removeHandler('app:await-before-unload-checkpoint')
   ipcMain.handle(
     'app:await-before-unload-checkpoint',
     (): Promise<ShutdownCheckpointResult> => pendingCheckpoint
