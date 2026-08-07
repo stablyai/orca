@@ -20,10 +20,12 @@ import {
 } from './appearance-search'
 import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from './appearance-usage-percentage-search'
 import { LeftSidebarAppearanceSetting } from './LeftSidebarAppearanceSetting'
+import { WorkspaceSidebarPositionSetting } from './WorkspaceSidebarPositionSetting'
 import {
   getLeftSidebarAppearanceEntry,
   getShowPinnedWorktreesInGroupsEntry,
-  getWorkspaceCardLayoutEntry
+  getWorkspaceCardLayoutEntry,
+  getWorkspaceSidebarPositionEntry
 } from './appearance-sidebar-search'
 import { translate } from '@/i18n/i18n'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
@@ -74,6 +76,7 @@ export function AppearanceWindowSidebarSection({
   const visibleStatusBarToggles = useAvailableStatusBarToggles(getStatusBarToggles())
   const usagePercentageDisplayEntry = getUsagePercentageDisplayEntry()
   const leftSidebarAppearanceEntry = getLeftSidebarAppearanceEntry()
+  const workspaceSidebarPositionEntry = getWorkspaceSidebarPositionEntry()
   const sidebarEntries = getSidebarEntries()
   const workspaceCardLayoutEntry = getWorkspaceCardLayoutEntry()
   const layoutEntries = getLayoutEntries()
@@ -113,6 +116,15 @@ export function AppearanceWindowSidebarSection({
   return (
     <div className="space-y-2">
       <div className="divide-y divide-border/40">
+        <SearchableSetting
+          title={workspaceSidebarPositionEntry.title}
+          description={workspaceSidebarPositionEntry.description}
+          keywords={workspaceSidebarPositionEntry.keywords}
+          forceVisible={forceVisiblePrimary}
+        >
+          <WorkspaceSidebarPositionSetting settings={settings} updateSettings={updateSettings} />
+        </SearchableSetting>
+
         <SearchableSetting
           title={leftSidebarAppearanceEntry.title}
           description={leftSidebarAppearanceEntry.description}

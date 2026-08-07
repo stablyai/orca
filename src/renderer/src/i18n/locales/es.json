@@ -5449,6 +5449,12 @@
           "showPinnedWorktreesInGroups": {
             "title": "Mostrar también los worktrees fijados en sus listas originales",
             "description": "Los worktrees fijados permanecen en Fijados y también aparecen en Todos, Proyecto, Estado y PR."
+          },
+          "workspaceSidebarPosition": {
+            "title": "Posición de la lista de espacios de trabajo",
+            "rowDescription": "Elige el borde para la lista de espacios de trabajo. El Explorador, los Agentes y el Control de código fuente se mueven al borde opuesto.",
+            "left": "Izquierda",
+            "right": "Derecha"
           }
         },
         "AutoRenameBranchFromWorkSetting": {
@@ -7758,7 +7764,17 @@
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "Porcentajes de uso",
-            "usagePercentageDisplayDescription": "Elige si los límites del proveedor muestran el porcentaje usado o restante."
+            "usagePercentageDisplayDescription": "Elige si los límites del proveedor muestran el porcentaje usado o restante.",
+            "workspaceSidebarPosition": {
+              "title": "Posición de la lista de espacios de trabajo",
+              "description": "Elige el borde para la lista de espacios de trabajo. El Explorador, los Agentes y el Control de código fuente se mueven al borde opuesto.",
+              "position": "posición",
+              "swap": "intercambiar",
+              "left": "izquierda",
+              "right": "derecha",
+              "explorer": "explorador",
+              "layout": "diseño"
+            }
           }
         },
         "auto": {

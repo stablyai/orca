@@ -5434,6 +5434,12 @@
           "showPinnedWorktreesInGroups": {
             "title": "고정된 워크트리를 원래 목록에도 표시",
             "description": "고정된 워크트리는 Pinned에 유지하면서 전체, 프로젝트, 상태 및 PR에도 표시합니다."
+          },
+          "workspaceSidebarPosition": {
+            "title": "워크스페이스 목록 위치",
+            "rowDescription": "워크스페이스 목록을 둘 가장자리를 고릅니다. 탐색기, 에이전트, 소스 제어는 반대쪽 가장자리로 이동합니다.",
+            "left": "왼쪽",
+            "right": "오른쪽"
           }
         },
         "AutoRenameBranchFromWorkSetting": {
@@ -7743,7 +7749,17 @@
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "사용량 백분율",
-            "usagePercentageDisplayDescription": "공급자 한도를 사용한 비율 또는 남은 비율로 표시할지 선택합니다."
+            "usagePercentageDisplayDescription": "공급자 한도를 사용한 비율 또는 남은 비율로 표시할지 선택합니다.",
+            "workspaceSidebarPosition": {
+              "title": "워크스페이스 목록 위치",
+              "description": "워크스페이스 목록을 둘 가장자리를 고릅니다. 탐색기, 에이전트, 소스 제어는 반대쪽 가장자리로 이동합니다.",
+              "position": "위치",
+              "swap": "맞바꾸기",
+              "left": "왼쪽",
+              "right": "오른쪽",
+              "explorer": "탐색기",
+              "layout": "레이아웃"
+            }
           }
         },
         "auto": {

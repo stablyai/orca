@@ -25,6 +25,7 @@ import { SYNC_FIT_PANES_EVENT, TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/const
 import { syncZoomCSSVar } from '@/lib/ui-zoom'
 import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
+import { resolveSidebarSlotChrome, resolveSidebarSlotLayout } from '@/lib/sidebar-slot-layout'
 import {
   isPairedWebClientWindow,
   shouldRenderDesktopWindowChrome
@@ -1523,8 +1524,60 @@ function App(): React.JSX.Element {
     creationLayoutActive,
     sidebarOpen
   })
+  const sidebarSlots = resolveSidebarSlotLayout({
+    workspaceSidebarPosition: settings?.workspaceSidebarPosition ?? 'left',
+    platform: shortcutPlatform,
+    isWebClient: isPairedWebClientWindow()
+  })
+  const activitySidebarEdge = sidebarSlots.leftOccupant === 'activity' ? 'left' : 'right'
+  const workspaceSidebarOnLeft = sidebarSlots.leftOccupant === 'workspace'
   // Full-page navigation surfaces own the whole content area, so suppress right-sidebar controls.
   const showRightSidebarControls = !creationLayoutActive && canShowRightSidebarForView(activeView)
+  const { leftSlotOpen, trailingSlotOpen, leftColumnHeaderFloating } = resolveSidebarSlotChrome({
+    leftOccupant: sidebarSlots.leftOccupant,
+    workspaceSidebarOpen: sidebarOpen,
+    activitySidebarOpen: rightSidebarOpen,
+    leftTitlebarChromeMounted: leftTitlebarChromeLayout.shouldMount,
+    stackedSidebarOpen
+  })
+  // Why: the two mount points differ only in recovery copy, so keep both i18n keys rather than collapsing them.
+  const renderWorkspaceSidebar = (description: string): React.JSX.Element => (
+    <RecoverableRenderErrorBoundary
+      boundaryId="sidebar.worktrees"
+      surface="sidebar"
+      resetKey={activeView}
+      title={translate('auto.App.1468601e7b', 'The workspace list hit an error.')}
+      description={description}
+    >
+      <Sidebar
+        worktreeScrollOffsetRef={worktreeSidebarScrollOffsetRef}
+        worktreeScrollAnchorRef={worktreeSidebarScrollAnchorRef}
+        edge={workspaceSidebarOnLeft ? 'left' : 'right'}
+      />
+    </RecoverableRenderErrorBoundary>
+  )
+  // Why: keep the shell mounted for layout stability (heavy panels disconnect while closed); unmount on the distraction-free tasks view.
+  const activitySidebarNode = showRightSidebarControls ? (
+    <RecoverableRenderErrorBoundary
+      boundaryId="right-sidebar"
+      surface="right-sidebar"
+      resetKey={
+        rightSidebarTab === 'explorer'
+          ? `${rightSidebarTab}:${rightSidebarExplorerView}`
+          : rightSidebarTab
+      }
+      title={translate('auto.App.ed6b168d00', 'The right sidebar hit an error.')}
+      description={translate(
+        'auto.App.8d1e160ed1',
+        'Retry the sidebar or switch tabs to reload this surface.'
+      )}
+    >
+      <RightSidebar
+        edge={activitySidebarEdge}
+        windowControlsEdge={sidebarSlots.windowControlsEdge}
+      />
+    </RecoverableRenderErrorBoundary>
+  ) : null
   const showProfileSwitcherInSidebarFooter = showSidebar && sidebarOpen
   const showProfileSwitcherInTopRight = !showProfileSwitcherInSidebarFooter
 
@@ -2019,8 +2072,8 @@ function App(): React.JSX.Element {
     isFullScreen,
     settings?.showTitlebarAppName,
     showSidebar,
-    leftTitlebarChromeLayout.isFloating,
-    sidebarOpen
+    leftColumnHeaderFloating,
+    leftSlotOpen
   ])
 
   const resolvedMountedLazyModalIds = resolveMountedLazyModalIds(activeModal, mountedLazyModalIds)
@@ -2029,6 +2082,54 @@ function App(): React.JSX.Element {
     setMountedLazyModalIds(new Set(resolvedMountedLazyModalIds))
   }
 
+  // Why: the toggle follows the workspace list to whichever edge it occupies; leaving it in the
+  // left titlebar meant closing a right-mounted list from the opposite side of the window.
+  const rightSidebarToggle = showRightSidebarControls ? (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          className="sidebar-toggle mr-2"
+          onClick={actions.toggleRightSidebar}
+          // Why: on the swapped layout this toggle sits on the left showing a left-panel icon,
+          // so its label must read "left" too — mirrors the RightSidebar header's own toggle.
+          aria-label={
+            activitySidebarEdge === 'left'
+              ? translate('menu.toggleLeftSidebar', 'Toggle Left Sidebar')
+              : translate('auto.App.9e0b441a91', 'Toggle right sidebar')
+          }
+        >
+          {activitySidebarEdge === 'left' ? <PanelLeft size={16} /> : <PanelRight size={16} />}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={6}>
+        {activitySidebarEdge === 'left'
+          ? translate('menu.toggleLeftSidebar', 'Toggle Left Sidebar')
+          : translate('auto.App.c184e056de', 'Toggle right sidebar ({{value0}})', {
+              value0: rightSidebarShortcutLabel
+            })}
+      </TooltipContent>
+    </Tooltip>
+  ) : null
+
+  const workspaceSidebarToggle = (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          className="sidebar-toggle"
+          onClick={actions.toggleSidebar}
+          aria-label={translate('auto.App.e4b9e7dff7', 'Toggle sidebar')}
+        >
+          {workspaceSidebarOnLeft ? <PanelLeft size={16} /> : <PanelRight size={16} />}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={6}>
+        {translate('auto.App.ce37cf5279', 'Toggle sidebar ({{value0}})', {
+          value0: leftSidebarShortcutLabel
+        })}
+      </TooltipContent>
+    </Tooltip>
+  )
+
   // Why: extracted so the full-width titlebar and the sidebar-width left header share these controls without duplicating the agent badge popover.
   const titlebarLeftControls = (
     // Why: measure the ENTIRE row so TabGroupPanel's collapse spacer reserves enough width; measuring only the inner cluster left back/forward over the first tab.
@@ -2036,7 +2137,7 @@ function App(): React.JSX.Element {
     <div
       ref={titlebarLeftControlsRef}
       className={`flex h-full shrink-0 items-center${
-        leftTitlebarChromeLayout.isFloating ? ' w-max' : ' w-full'
+        leftColumnHeaderFloating ? ' w-max' : ' w-full'
       }`}
     >
       <div className="flex h-full items-center">
@@ -2091,24 +2192,12 @@ function App(): React.JSX.Element {
             )}
           </>
         )}
-        {showSidebar && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                className="sidebar-toggle"
-                onClick={actions.toggleSidebar}
-                aria-label={translate('auto.App.e4b9e7dff7', 'Toggle sidebar')}
-              >
-                <PanelLeft size={16} />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={6}>
-              {translate('auto.App.ce37cf5279', 'Toggle sidebar ({{value0}})', {
-                value0: leftSidebarShortcutLabel
-              })}
-            </TooltipContent>
-          </Tooltip>
-        )}
+        {showSidebar && workspaceSidebarOnLeft ? workspaceSidebarToggle : null}
+        {/* Why: a left-mounted activity sidebar collapses its body to zero width, but this header persists —
+            so its re-expand toggle belongs here, clear of the tab strip, rather than floating over the tabs. */}
+        {showRightSidebarControls && activitySidebarEdge === 'left' && !rightSidebarOpen
+          ? rightSidebarToggle
+          : null}
       </div>
       {/* Why: Back/Forward span worktree + page history, so show the cluster wherever the shortcut is live (hidden in Settings/non-stack views). */}
       {shouldShowWorktreeHistoryControls(activeView) && (
@@ -2152,25 +2241,6 @@ function App(): React.JSX.Element {
       )}
     </div>
   )
-
-  const rightSidebarToggle = showRightSidebarControls ? (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          className="sidebar-toggle mr-2"
-          onClick={actions.toggleRightSidebar}
-          aria-label={translate('auto.App.9e0b441a91', 'Toggle right sidebar')}
-        >
-          <PanelRight size={16} />
-        </button>
-      </TooltipTrigger>
-      <TooltipContent side="bottom" sideOffset={6}>
-        {translate('auto.App.c184e056de', 'Toggle right sidebar ({{value0}})', {
-          value0: rightSidebarShortcutLabel
-        })}
-      </TooltipContent>
-    </Tooltip>
-  ) : null
 
   const titlebarMainStrip = (
     <>
@@ -2232,7 +2302,14 @@ function App(): React.JSX.Element {
       className="app-layout"
       style={
         {
-          '--collapsed-sidebar-header-width': `${collapsedSidebarHeaderWidth}px`,
+          // Why: tab strips reserve their edge gutters from these two vars alone, so the reservation has to
+          // collapse to 0 here when nothing floats — a tab strip can't tell which sidebar owns which slot.
+          '--collapsed-sidebar-header-width': leftColumnHeaderFloating
+            ? `${collapsedSidebarHeaderWidth}px`
+            : '0px',
+          '--collapsed-trailing-chrome-width': trailingSlotOpen
+            ? '0px'
+            : 'calc(40px + var(--window-controls-width, 0px))',
           // Shared so surfaces can avoid the Windows/Linux window-controls overlay without hardcoding 138px everywhere.
           '--window-controls-width': hasCustomTitleBar ? '138px' : '0px',
           // Side-position activity bar uses this to push icons below the Windows/Linux window-controls overlay.
@@ -2281,65 +2358,49 @@ function App(): React.JSX.Element {
                       leftTitlebarChromeLayout.shouldMount ? (
                         /* Why: when the sidebar is collapsed, take this titlebar-height header out of flex layout so the terminal/editor reclaim the left edge. */
                         <div
-                          className={`flex min-h-0 flex-col shrink-0${sidebarOpen ? '' : ' relative w-0 overflow-visible'}`}
+                          className={`flex min-h-0 flex-col shrink-0${
+                            leftSlotOpen ? '' : ' relative w-0 overflow-visible'
+                          }`}
                         >
                           <div
                             // Why: floating titlebar-left occludes the center column's border-l seam; border-r restores that line, w-max sizes it to its own controls.
                             className={`titlebar-left${
-                              leftTitlebarChromeLayout.isFloating
+                              leftColumnHeaderFloating
                                 ? ' titlebar-left-floating absolute top-0 left-0 z-10 w-max border-r border-border'
                                 : ''
                             }`}
                             style={{
                               // Why: custom sidebar appearances are scoped to the sidebar root; mirror those vars onto the header in the same left-column panel.
-                              ...(sidebarOpen ? leftSidebarStyle : undefined),
+                              ...(workspaceSidebarOnLeft && sidebarOpen
+                                ? leftSidebarStyle
+                                : undefined),
                               // Why: size from the wrapper's live width so the header tracks in-flight drag resizes (persisted to Zustand only on mouseup).
-                              width: sidebarOpen ? '100%' : undefined
+                              width: leftSlotOpen ? '100%' : undefined
                             }}
                           >
                             {titlebarLeftControls}
                           </div>
                           <div className="flex min-h-0 flex-1">
                             {/* Why: flex-1/min-h-0 slot needed under the fixed 36px header, else the sidebar collapses to content height and loses its scroll viewport. */}
-                            <RecoverableRenderErrorBoundary
-                              boundaryId="sidebar.worktrees"
-                              surface="sidebar"
-                              resetKey={activeView}
-                              title={translate(
-                                'auto.App.1468601e7b',
-                                'The workspace list hit an error.'
-                              )}
-                              description={translate(
-                                'auto.App.bdc71dddc9',
-                                'The active workspace remains open. Retry the list or switch views.'
-                              )}
-                            >
-                              <Sidebar
-                                worktreeScrollOffsetRef={worktreeSidebarScrollOffsetRef}
-                                worktreeScrollAnchorRef={worktreeSidebarScrollAnchorRef}
-                              />
-                            </RecoverableRenderErrorBoundary>
+                            {workspaceSidebarOnLeft
+                              ? renderWorkspaceSidebar(
+                                  translate(
+                                    'auto.App.bdc71dddc9',
+                                    'The active workspace remains open. Retry the list or switch views.'
+                                  )
+                                )
+                              : activitySidebarNode}
                           </div>
                         </div>
-                      ) : (
-                        <RecoverableRenderErrorBoundary
-                          boundaryId="sidebar.worktrees"
-                          surface="sidebar"
-                          resetKey={activeView}
-                          title={translate(
-                            'auto.App.1468601e7b',
-                            'The workspace list hit an error.'
-                          )}
-                          description={translate(
+                      ) : workspaceSidebarOnLeft ? (
+                        renderWorkspaceSidebar(
+                          translate(
                             'auto.App.cba0fafda5',
                             'The active page remains open. Retry the list or switch views.'
-                          )}
-                        >
-                          <Sidebar
-                            worktreeScrollOffsetRef={worktreeSidebarScrollOffsetRef}
-                            worktreeScrollAnchorRef={worktreeSidebarScrollAnchorRef}
-                          />
-                        </RecoverableRenderErrorBoundary>
+                          )
+                        )
+                      ) : (
+                        activitySidebarNode
                       )
                     ) : null}
                     <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
@@ -2348,20 +2409,25 @@ function App(): React.JSX.Element {
                       ) : null}
                       <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
                         {/* Why: match the RightSidebar header's 36px/top-0 so the toggle's vertical center is identical open vs closed — else the icon jitters. */}
-                        {workspaceChromeActive && !rightSidebarOpen && (
-                          <div
-                            className="absolute top-0 z-10 flex items-center h-[36px]"
-                            style={
-                              {
-                                // Why: --window-controls-width keeps the toggle clear of the fixed window-controls overlay (138px on custom chrome, 0px otherwise); no internal spacer — one would cover the pane-actions Ellipsis button with an unclickable div.
-                                right: 'var(--window-controls-width)',
-                                WebkitAppRegion: 'no-drag'
-                              } as React.CSSProperties
-                            }
-                          >
-                            {rightSidebarToggle}
-                          </div>
-                        )}
+                        {/* Why: a right-mounted activity sidebar has no persistent header when collapsed, so its
+                            re-expand toggle floats in the empty top-right gutter. On the left the toggle lives in
+                            the left column header (titlebarLeftControls), which stays put through collapse. */}
+                        {workspaceChromeActive &&
+                          !rightSidebarOpen &&
+                          activitySidebarEdge === 'right' && (
+                            <div
+                              className="absolute top-0 z-10 flex items-center h-[36px]"
+                              style={
+                                {
+                                  // Why: --window-controls-width keeps the toggle clear of the fixed window-controls overlay (138px on custom chrome, 0px otherwise); no internal spacer — one would cover the pane-actions Ellipsis button with an unclickable div.
+                                  right: 'var(--window-controls-width)',
+                                  WebkitAppRegion: 'no-drag'
+                                } as React.CSSProperties
+                              }
+                            >
+                              {rightSidebarToggle}
+                            </div>
+                          )}
                         {workspaceProfileSwitcher}
                         <div className="flex flex-1 min-w-0 min-h-0 flex-col">
                           {shouldMountTerminalWorkbench ? (
@@ -2414,9 +2480,7 @@ function App(): React.JSX.Element {
                               activePendingCreationId ? (
                                 <WorktreeCreationPanel
                                   creationId={activePendingCreationId}
-                                  reserveCollapsedSidebarHeaderSpace={
-                                    leftTitlebarChromeLayout.isFloating
-                                  }
+                                  reserveCollapsedSidebarHeaderSpace={leftColumnHeaderFloating}
                                 />
                               ) : null}
                               {activeView === 'terminal' &&
@@ -2437,24 +2501,44 @@ function App(): React.JSX.Element {
                     </div>
                   </div>
                 </div>
-                {/* Why: keep the shell mounted for layout stability (heavy panels disconnect while closed); unmount on the distraction-free tasks view. */}
-                {showRightSidebarControls ? (
-                  <RecoverableRenderErrorBoundary
-                    boundaryId="right-sidebar"
-                    surface="right-sidebar"
-                    resetKey={
-                      rightSidebarTab === 'explorer'
-                        ? `${rightSidebarTab}:${rightSidebarExplorerView}`
-                        : rightSidebarTab
-                    }
-                    title={translate('auto.App.ed6b168d00', 'The right sidebar hit an error.')}
-                    description={translate(
-                      'auto.App.8d1e160ed1',
-                      'Retry the sidebar or switch tabs to reload this surface.'
-                    )}
+                {workspaceSidebarOnLeft ? (
+                  activitySidebarNode
+                ) : showSidebar ? (
+                  // Why: mirrors the left slot's 36px header so the right-mounted list keeps its toggle
+                  // aligned with the activity sidebar's own header row.
+                  <div
+                    className={`flex min-h-0 flex-col shrink-0${
+                      sidebarOpen ? '' : ' relative w-0 overflow-visible'
+                    }`}
                   >
-                    <RightSidebar />
-                  </RecoverableRenderErrorBoundary>
+                    <div
+                      // Why: when collapsed the slot is 0-wide, so float the header at the right edge
+                      // (mirror of the left header's top-left float) to keep the re-expand toggle reachable.
+                      className={`titlebar-left justify-end${
+                        sidebarOpen
+                          ? ''
+                          : ' titlebar-left-floating absolute top-0 right-0 z-10 w-max border-l border-border'
+                      }`}
+                      style={{
+                        width: sidebarOpen ? '100%' : undefined,
+                        // Why: on Windows/Linux the window-controls overlay owns this right corner; keep the toggle clear of it.
+                        paddingRight:
+                          sidebarSlots.windowControlsEdge === 'right'
+                            ? 'var(--window-controls-width)'
+                            : undefined
+                      }}
+                    >
+                      {workspaceSidebarToggle}
+                    </div>
+                    <div className="flex min-h-0 flex-1">
+                      {renderWorkspaceSidebar(
+                        translate(
+                          'auto.App.bdc71dddc9',
+                          'The active workspace remains open. Retry the list or switch views.'
+                        )
+                      )}
+                    </div>
+                  </div>
                 ) : null}
               </div>
             </RecoverableRenderErrorBoundary>

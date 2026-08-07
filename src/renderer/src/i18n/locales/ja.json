@@ -5434,6 +5434,12 @@
           "showPinnedWorktreesInGroups": {
             "title": "ピン留めしたワークツリーを元のリストにも表示",
             "description": "ピン留めしたワークツリーを Pinned に残したまま、すべて、プロジェクト、ステータス、PR にも表示します。"
+          },
+          "workspaceSidebarPosition": {
+            "title": "ワークスペース一覧の位置",
+            "rowDescription": "ワークスペース一覧を配置する端を選びます。エクスプローラ、エージェント、ソース管理は反対側の端に移動します。",
+            "left": "左",
+            "right": "右"
           }
         },
         "AutoRenameBranchFromWorkSetting": {
@@ -7780,7 +7786,17 @@
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "使用率",
-            "usagePercentageDisplayDescription": "プロバイダーの制限を使用済みまたは残りの割合で表示するかを選択します。"
+            "usagePercentageDisplayDescription": "プロバイダーの制限を使用済みまたは残りの割合で表示するかを選択します。",
+            "workspaceSidebarPosition": {
+              "title": "ワークスペース一覧の位置",
+              "description": "ワークスペース一覧を配置する端を選びます。エクスプローラ、エージェント、ソース管理は反対側の端に移動します。",
+              "position": "位置",
+              "swap": "入れ替え",
+              "left": "左",
+              "right": "右",
+              "explorer": "エクスプローラ",
+              "layout": "レイアウト"
+            }
           }
         },
         "auto": {

@@ -1,7 +1,10 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { WORKTREE_SIDEBAR_RESIZE_HANDLE_CLASS_NAME } from './index'
+import {
+  WORKTREE_SIDEBAR_RESIZE_HANDLE_CLASS_NAME,
+  worktreeSidebarResizeHandleClassName
+} from './index'
 
 function getWorktreeSidebarScrollbarPaddingRight(): number {
   const testDir = import.meta.dirname
@@ -16,8 +19,17 @@ describe('worktree sidebar resize handle', () => {
   it('keeps a wide hit target that straddles the sidebar seam', () => {
     const classes = new Set(WORKTREE_SIDEBAR_RESIZE_HANDLE_CLASS_NAME.split(/\s+/))
     expect(classes.has('w-3')).toBe(true)
-    expect(classes.has('-right-1.5')).toBe(true)
     expect(classes.has('w-px')).toBe(false)
+  })
+
+  it('straddles the seam facing the center pane on either edge', () => {
+    const left = new Set(worktreeSidebarResizeHandleClassName('left').split(/\s+/))
+    expect(left.has('-right-1.5')).toBe(true)
+    expect(left.has('-left-1.5')).toBe(false)
+
+    const right = new Set(worktreeSidebarResizeHandleClassName('right').split(/\s+/))
+    expect(right.has('-left-1.5')).toBe(true)
+    expect(right.has('-right-1.5')).toBe(false)
   })
 
   it('keeps card content clear of the resize target', () => {

@@ -5446,6 +5446,12 @@
           "showPinnedWorktreesInGroups": {
             "title": "也在原来的列表中显示已固定的工作树",
             "description": "已固定的工作树会保留在 Pinned 中，同时也显示在全部、项目、状态和 PR 中。"
+          },
+          "workspaceSidebarPosition": {
+            "title": "工作区列表位置",
+            "rowDescription": "选择放置工作区列表的一侧。资源管理器、智能体和源代码控制会移到另一侧。",
+            "left": "左侧",
+            "right": "右侧"
           }
         },
         "AutoRenameBranchFromWorkSetting": {
@@ -7755,7 +7761,17 @@
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "用量百分比",
-            "usagePercentageDisplayDescription": "选择以已用或剩余百分比显示提供商限额。"
+            "usagePercentageDisplayDescription": "选择以已用或剩余百分比显示提供商限额。",
+            "workspaceSidebarPosition": {
+              "title": "工作区列表位置",
+              "description": "选择放置工作区列表的一侧。资源管理器、智能体和源代码控制会移到另一侧。",
+              "position": "位置",
+              "swap": "互换",
+              "left": "左侧",
+              "right": "右侧",
+              "explorer": "资源管理器",
+              "layout": "布局"
+            }
           }
         },
         "auto": {
