@@ -21,7 +21,9 @@ vi.mock('@/lib/crash-breadcrumb-recorder', () => ({
 }))
 
 const TOTAL_CHARS = 4 * 1024 * 1024
+const INTERLEAVED_CAP_CHARS = 6_000_000
 const FEED_CHUNK_CHARS = 8 * 1024
+const OVERSIZED_DRAIN_ITERATIONS = 32
 const MAX_SIMULATED_MS = 60_000
 
 function createInstantParseTerminal() {
@@ -75,6 +77,57 @@ async function measure(options: { foreground: boolean }): Promise<number> {
   return TOTAL_CHARS / 1024 / 1024 / (elapsed / 1000)
 }
 
+async function measureInterleavedRebaseCpu(): Promise<number> {
+  vi.useFakeTimers()
+  const scheduler = await loadScheduler()
+  const terminal = createInstantParseTerminal()
+  const appended = 'a'.repeat(scheduler.BACKGROUND_CHUNK_CHARS)
+  const cycles = Math.ceil(INTERLEAVED_CAP_CHARS / scheduler.BACKGROUND_CHUNK_CHARS)
+  scheduler.configureTerminalOutputBacklogCap(50_000)
+  scheduler.writeTerminalOutput(terminal as never, 'x'.repeat(INTERLEAVED_CAP_CHARS), {
+    foreground: true,
+    latencySensitive: false
+  })
+  const started = process.cpuUsage()
+
+  for (let cycle = 0; cycle < cycles; cycle += 1) {
+    scheduler.flushTerminalOutput(terminal as never, {
+      maxChars: scheduler.BACKGROUND_CHUNK_CHARS
+    })
+    scheduler.writeTerminalOutput(terminal as never, appended, {
+      foreground: true,
+      latencySensitive: false
+    })
+  }
+
+  const cpu = process.cpuUsage(started)
+  const cpuSeconds = (cpu.user + cpu.system) / 1_000_000
+  const writtenMiB = (cycles * scheduler.BACKGROUND_CHUNK_CHARS) / 1024 / 1024
+  scheduler.flushTerminalOutput(terminal as never)
+  expect(terminal.written).toBe(INTERLEAVED_CAP_CHARS + cycles * scheduler.BACKGROUND_CHUNK_CHARS)
+  return writtenMiB / cpuSeconds
+}
+
+async function measureOversizedDrainCpu(): Promise<number> {
+  vi.useFakeTimers()
+  const scheduler = await loadScheduler()
+  const terminal = createInstantParseTerminal()
+  const payload = 'x'.repeat(TOTAL_CHARS)
+  scheduler.configureTerminalOutputBacklogCap(50_000)
+  const started = process.cpuUsage()
+
+  for (let index = 0; index < OVERSIZED_DRAIN_ITERATIONS; index += 1) {
+    scheduler.writeTerminalOutput(terminal as never, payload, { foreground: false })
+    scheduler.flushTerminalOutput(terminal as never)
+  }
+
+  const cpu = process.cpuUsage(started)
+  const cpuSeconds = (cpu.user + cpu.system) / 1_000_000
+  const writtenMiB = (TOTAL_CHARS * OVERSIZED_DRAIN_ITERATIONS) / 1024 / 1024
+  expect(terminal.written).toBe(TOTAL_CHARS * OVERSIZED_DRAIN_ITERATIONS)
+  return writtenMiB / cpuSeconds
+}
+
 describe.skipIf(!benchEnabled)('scheduler drain ceiling', () => {
   beforeEach(() => {
     vi.stubGlobal('window', globalThis)
@@ -92,6 +145,18 @@ describe.skipIf(!benchEnabled)('scheduler drain ceiling', () => {
     console.log(
       `\n[scheduler-ceiling] foreground flood: ${foreground.toFixed(1)} MB/s, background: ${background.toFixed(1)} MB/s (simulated time, instant parse)`
     )
+  })
+
+  it('measures CPU throughput for interleaved drain and append', async () => {
+    const interleaved = await measureInterleavedRebaseCpu()
+    // eslint-disable-next-line no-console -- bench harness output
+    console.log(`\n[scheduler-interleaved-rebase] ${interleaved.toFixed(1)} MiB/CPU-s`)
+  })
+
+  it('measures CPU throughput for oversized source chunks', async () => {
+    const oversizedDrain = await measureOversizedDrainCpu()
+    // eslint-disable-next-line no-console -- bench harness output
+    console.log(`\n[scheduler-oversized-drain] ${oversizedDrain.toFixed(1)} MiB/CPU-s`)
   })
 })
 
