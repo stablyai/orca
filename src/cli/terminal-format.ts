@@ -6,6 +6,7 @@ import { describeTerminalWaitBlockedReason } from '../shared/terminal/runtime-po
 import { formatListingHostScope, type WithAnnotatedHostScope } from './omitted-host-scope-selectors'
 import type {
   RuntimeTerminalClose,
+  RuntimeTerminalAgentStatus,
   RuntimeTerminalCreate,
   RuntimeTerminalFocus,
   RuntimeTerminalListResult,
@@ -126,6 +127,17 @@ function formatAgentWait(agentWait: RuntimeTerminalShow['agentWait']): string {
     return `interactive prompt (via ${agentWait.source})`
   }
   return `${describeTerminalWaitBlockedReason(agentWait.reason)} (via ${agentWait.source})`
+}
+
+export function formatTerminalAgentStatus(result: {
+  agentStatus: RuntimeTerminalAgentStatus
+}): string {
+  const agentStatus = result.agentStatus
+  return [
+    `handle: ${agentStatus.handle}`,
+    `isRunningAgent: ${agentStatus.isRunningAgent}`,
+    `status: ${agentStatus.status ?? 'null'}`
+  ].join('\n')
 }
 
 export function formatTerminalRead(result: { terminal: RuntimeTerminalRead }): string {
