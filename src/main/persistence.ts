@@ -1411,10 +1411,18 @@ function sanitizeRepoUpstream(value: unknown): Repo['upstream'] | undefined {
   if (!value || typeof value !== 'object') {
     return undefined
   }
-  const candidate = value as { owner?: unknown; repo?: unknown }
+  const candidate = value as { owner?: unknown; repo?: unknown; host?: unknown }
   const owner = typeof candidate.owner === 'string' ? candidate.owner.trim() : ''
   const repo = typeof candidate.repo === 'string' ? candidate.repo.trim() : ''
-  return owner && repo ? { owner, repo } : undefined
+  if (!owner || !repo) {
+    return undefined
+  }
+  // Why: an `upstream` remote may live on a different server than `origin`, so
+  // dropping the host forced consumers to re-infer it from origin and could bind
+  // a GHES parent to a same-named github.com repo. Absent host stays absent so
+  // records written before this survive unchanged.
+  const host = typeof candidate.host === 'string' ? candidate.host.trim() : ''
+  return host ? { owner, repo, host } : { owner, repo }
 }
 
 function sanitizeGitRemoteIdentity(value: unknown): GitRemoteIdentity | null | undefined {

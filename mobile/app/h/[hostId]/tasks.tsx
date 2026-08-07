@@ -165,6 +165,8 @@ type RepoSummary = {
   kind?: 'git' | 'folder'
   connectionId?: string | null
   issueSourcePreference?: IssueSourcePreference
+  /** Fork parent resolved by the host; drives upstream Project row matching. */
+  upstream?: { owner: string; repo: string; host?: string } | null
 }
 
 type IssueSourcePreference = 'upstream' | 'origin' | 'auto'

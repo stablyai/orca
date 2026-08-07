@@ -18,6 +18,11 @@ import {
 } from '../../../../shared/execution-host'
 import { isUserManagedRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import { RuntimeHostStatusRow, type RuntimeHostConnectionState } from './RuntimeHostStatusRow'
+import {
+  connectedHostCountLabel,
+  connectingHostsLabel,
+  workspaceSyncProblemLabel
+} from './ssh-status-segment-copy'
 import { SshTargetStatusRow } from './SshTargetStatusRow'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime-shared-control-types'
 import { connectRuntimeHostForNavigation } from './runtime-host-navigation-connect'
@@ -58,10 +63,6 @@ function overallDotColor(
     case 'disconnected':
       return 'bg-muted-foreground/40'
   }
-}
-
-function connectedHostCountLabel(count: number): string {
-  return `${count} ${count === 1 ? 'host' : 'hosts'}`
 }
 
 function sshStatusForOverall(status: SshConnectionStatus): HostStatus {
@@ -271,9 +272,7 @@ export function SshStatusSegment({
     (t) => t.syncStatus?.phase === 'conflict' || t.syncStatus?.phase === 'error'
   )
   const syncProblemLabel = syncProblem
-    ? syncProblem.syncStatus?.phase === 'conflict'
-      ? 'Workspace conflict'
-      : 'Workspace sync error'
+    ? workspaceSyncProblemLabel(syncProblem.syncStatus?.phase)
     : null
   return (
     <DropdownMenu
@@ -325,7 +324,9 @@ export function SshStatusSegment({
                 <span className="text-[11px]">
                   <span className={syncProblem ? 'text-destructive' : 'text-muted-foreground'}>
                     {syncProblemLabel ??
-                      (anyConnecting ? 'Connecting…' : connectedHostCountLabel(connectedHostCount))}
+                      (anyConnecting
+                        ? connectingHostsLabel()
+                        : connectedHostCountLabel(connectedHostCount))}
                   </span>
                 </span>
               )}

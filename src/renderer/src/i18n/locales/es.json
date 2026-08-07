@@ -350,7 +350,8 @@
               "8d6eedf97e": "No se pudo registrar Orca CLI en PATH.",
               "0f116999f1": "Reinicia tu shell o agrega el directorio de Orca CLI a PATH antes de la configuración.",
               "15cbedc3e3": "Instala la CLI de Orca antes de configurar skills para agentes.",
-              "windowsPathUnknown": "Orca could not check your Windows user PATH"
+              "windowsPathUnknown": "Orca could not check your Windows user PATH",
+              "refreshCliRegistration": "Actualiza el estado de registro de la CLI e inténtalo de nuevo."
             }
           }
         }
@@ -561,6 +562,9 @@
             "0b01ff98d2": "Puerto",
             "7d732521ec": "Comentario"
           }
+        },
+        "activation": {
+          "cannotOpenFolderWorkspace": "No se puede abrir el espacio de trabajo de carpeta"
         }
       },
       "folderWorkspacePathStatus": {
@@ -3175,7 +3179,12 @@
             "runtime_disconnect_failed": "No se pudo desconectar",
             "runtime_reconnecting": "Reconectando",
             "runtime_last_close_reason": "Cerrado: {{value0}}",
-            "runtime_reconnect_attempt": "Intento {{value0}}"
+            "runtime_reconnect_attempt": "Intento {{value0}}",
+            "connectedHostCount_one": "{{count}} host",
+            "connectedHostCount_other": "{{count}} hosts",
+            "connecting": "Conectando…",
+            "workspaceConflict": "Conflicto del espacio de trabajo",
+            "workspaceSyncError": "Error de sincronización del espacio de trabajo"
           },
           "StatusBar": {
             "9659e38343": "Puertos",
@@ -3235,7 +3244,8 @@
             "antigravityUsage": "Uso de Antigravity",
             "antigravityUsageDetails": "Abrir detalles de uso de Antigravity",
             "grokUsageAria": "Abrir detalles de uso de Grok",
-            "grokUsageMenu": "Uso de Grok"
+            "grokUsageMenu": "Uso de Grok",
+            "floatingTerminalNewActivity": "{{label}}, nueva actividad"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Conectar una cuenta",
@@ -3444,6 +3454,21 @@
               "metric": {
                 "workingSetDescription": "Suma del conjunto de trabajo (WS). Las páginas compartidas pueden aparecer en más de un proceso.",
                 "rssDescription": "Suma del tamaño del conjunto residente (RSS). Las páginas compartidas o con alias pueden aparecer en más de un proceso."
+              }
+            },
+            "manager": {
+              "terminal": {
+                "copy": {
+                  "terminalSessionCount_one": "{{count}} sesión de terminal",
+                  "terminalSessionCount_other": "{{count}} sesiones de terminal",
+                  "memoryUnavailable": "memoria no disponible",
+                  "tooltipSummary": "Administrador de recursos - {{memory}} - {{sessions}}",
+                  "spaceScanReady": "Escaneo de espacio listo",
+                  "sessionsGroupedByWorkspace": "Las sesiones de terminal se agrupan por espacio de trabajo.",
+                  "noTerminalSessions": "Aún no hay sesiones de terminal.",
+                  "ariaLabel": "Administrador de recursos, {{sessions}}",
+                  "ariaLabelWithSpaceScan": "Administrador de recursos, {{sessions}}, {{spaceScan}}"
+                }
               }
             }
           },
@@ -5625,7 +5650,8 @@
           "f00d6aa9b5": "WSL no está disponible en esta máquina.",
           "7c776ff9d8": "wsl",
           "fc0fcf72fd": "Registra el comando de shell de WSL antes de configurar el skill.",
-          "windowsPathUnknown": "WSL shell command PATH could not be checked"
+          "windowsPathUnknown": "WSL shell command PATH could not be checked",
+          "refreshCliRegistration": "Actualiza el estado de registro de la CLI e inténtalo de nuevo."
         },
         "CommitMessageAiPane": {
           "841ed9884a": "Usado por repositorios que no han personalizado Source Control AI.",

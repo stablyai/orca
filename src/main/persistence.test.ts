@@ -4617,6 +4617,43 @@ describe('Store', () => {
     expect(store.getRepos()[0]!.upstream).toBeUndefined()
   })
 
+  it('keeps the upstream host across reloads so it is never re-inferred from origin', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+
+    const updated = store.updateRepo('r1', {
+      upstream: { owner: ' acme ', repo: ' widgets ', host: ' GHE.example:8443 ' }
+    })
+    expect(updated!.upstream).toEqual({
+      owner: 'acme',
+      repo: 'widgets',
+      host: 'GHE.example:8443'
+    })
+
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getRepo('r1')!.upstream).toEqual({
+      owner: 'acme',
+      repo: 'widgets',
+      host: 'GHE.example:8443'
+    })
+  })
+
+  it('leaves a hostless persisted upstream hostless rather than inventing one', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ upstream: { owner: 'stablyai', repo: 'orca' } }))
+
+    expect(store.getRepo('r1')!.upstream).toEqual({ owner: 'stablyai', repo: 'orca' })
+    expect(store.getRepo('r1')!.upstream).not.toHaveProperty('host')
+  })
+
+  it('drops a blank upstream host instead of persisting an empty string', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ upstream: { owner: 'acme', repo: 'widgets', host: '   ' } }))
+
+    expect(store.getRepo('r1')!.upstream).toEqual({ owner: 'acme', repo: 'widgets' })
+  })
+
   it('updateRepo returns null for nonexistent id', async () => {
     const store = await createStore()
     expect(store.updateRepo('nope', { displayName: 'x' })).toBeNull()
