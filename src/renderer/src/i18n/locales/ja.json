@@ -2844,7 +2844,11 @@
             "connectButton": "接続",
             "removedTitle": "SSHホストが削除されました",
             "removedBody": "このワークスペースのSSHホストが削除されたため、接続できません。ワークスペースを削除してクリアしてください — リモートファイルはそのまま残ります。",
-            "removeWorkspaceButton": "ワークスペースを削除"
+            "removeWorkspaceButton": "ワークスペースを削除",
+            "diagnosticsDisabled": "このデバイスでは診断が無効になっています。",
+            "diagnosticsCopied": "診断情報をコピーしました",
+            "diagnosticsCopyFailed": "診断情報をコピーできませんでした",
+            "copyDiagnosticsLabel": "診断情報をコピー"
           },
           "TerminalRemoteRuntimeReconnectBanner": {
             "retryingTitle": "リモートランタイムに再接続中",

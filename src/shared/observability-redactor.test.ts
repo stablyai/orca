@@ -12,7 +12,7 @@ import {
   redactValue,
   redactSpan,
   type RedactableSpan
-} from './redactor'
+} from './observability-redactor'
 
 const SECRETS = {
   anthropic: 'sk-ant-api03-aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789ABCDEFGHIJKLMNOP',
@@ -106,6 +106,14 @@ describe('redactor — labeled key-value', () => {
   it('redacts Authorization=Bearer …', () => {
     expect(redactString('Authorization=Bearer abcdef')).toBe('[redacted:labeled-kv]')
   })
+  // The scheme word is `\S+`-shaped, so a rule that stops at it publishes the
+  // base64 `user:password` that follows.
+  it('redacts the credential after Authorization: Basic', () => {
+    const credential = 'QWxhZGRpbjpvcGVuIHNlc2FtZQ=='
+    const out = redactString(`Authorization: Basic ${credential}`)
+    expect(out).toBe('[redacted:labeled-kv]')
+    expect(out).not.toContain(credential)
+  })
   it('redacts password=…', () => {
     expect(redactString("password='hunter2'")).toContain('[redacted:labeled-kv]')
   })
@@ -146,6 +154,18 @@ describe('redactor — .env-shape line', () => {
     expect(out).toContain('# comment')
     expect(out).not.toContain('hunter2')
     expect(out).not.toContain('db.local')
+  })
+  // `^`-anchoring alone published a spliced-in env dump — the shape a failing
+  // spawn puts in its message, where the pairs are mid-line rather than leading one.
+  it('redacts pairs spliced into the middle of a line', () => {
+    const out = redactString('spawn ssh failed: USER=alice LOGNAME=alice SSH_AUTH_SOCK=/tmp/x')
+    expect(out).toContain('USER=[redacted:env-value]')
+    expect(out).toContain('LOGNAME=[redacted:env-value]')
+    expect(out).not.toContain('alice')
+    expect(out).toContain('spawn ssh failed:')
+  })
+  it('leaves prose that merely contains an equals sign alone', () => {
+    expect(redactString('exit code = 1')).toBe('exit code = 1')
   })
 })
 

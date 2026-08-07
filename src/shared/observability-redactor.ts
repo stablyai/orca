@@ -1,17 +1,14 @@
-// Secrets scrubber for the error-tracking lane (see telemetry-error-tracking.md
-// §The redactor). Runs at three locations — sink-write, bundle-collection, and
-// server-ingest; the server pass is defense-in-depth since the client runs on an
-// attacker-controllable binary, and it additionally drops PostHog identity keys.
-//
-// The five rule families run in order; the string passes are idempotent, which
-// is what makes the three-location placement safe.
-//
+// Secrets scrubber for the error-tracking lane (telemetry-error-tracking.md §The
+// redactor). Runs at sink-write, bundle-collection and server-ingest; the string
+// passes are idempotent, which is what makes that triple placement safe. Server
+// mode is defense-in-depth (the client binary is attacker-controllable) and also
+// drops PostHog identity keys.
 // No per-attribute length cap: envelope bounds already cap size, and truncation
 // would eat the tail of long stack chains — the most diagnostic part.
 
-// `\b` stops this from stealing rule-4's `FOO_SECRET=` matches; the value alternation eats the whole `Bearer <jwt>`/`Token <pat>` segment.
+// `\b` stops this from stealing rule-4's `FOO_SECRET=` matches; the value alternation eats the whole `Bearer <jwt>`/`Token <pat>`/`Basic <base64>` segment — without the scheme alternatives the bare `\S+` stops at the scheme word and publishes the credential after it.
 const LABELED_KV =
-  /\b(?:api[-_]?key|token|secret|password|bearer|authorization)\b\s*[:=]\s*(?:Bearer\s+\S+|Token\s+\S+|\S+)/gi
+  /\b(?:api[-_]?key|token|secret|password|bearer|authorization)\b\s*[:=]\s*(?:(?:Bearer|Token|Basic)\s+\S+|\S+)/gi
 
 // Tagged tokens let triage see what was redacted without the key. Order is most-specific-first: `sk-ant-` before `sk-`, or the Anthropic tag is lost.
 const PROVIDER_PATTERNS: { tag: string; re: RegExp }[] = [
@@ -40,6 +37,8 @@ const URL_USERINFO = /(https?:\/\/)([^/@\s]+)@/g
 
 // Per-line .env shape. `m` anchors `^` in multi-line strings; `\S.*` redacts the whole value (so `FOO=Bearer <jwt>` can't leak its tail), leading `\S` skips empty `FOO=`.
 const ENV_LINE = /^\s*([A-Z_][A-Z0-9_]*)\s*=\s*\S.*/gm
+// The same shape spliced INTO a line rather than starting one — `spawn ssh failed: USER=alice LOGNAME=alice …`. `^`-anchoring alone published those. Value stops at whitespace here: mid-line, the rest of the line is prose, not the value. A leading capture rather than a lookbehind: this module is renderer-reachable since the move to `src/shared`, and lookbehind is the one regex feature older mobile Safari lacks.
+const ENV_INLINE = /(^|\s)([A-Z_][A-Z0-9_]*)=(\S+)/g
 
 // Attribute keys dropped regardless of value. Matched case-insensitively since HTTP headers vary in case.
 const CLIENT_ATTR_BLOCKLIST = new Set([
@@ -111,6 +110,12 @@ export function redactString(input: string): string {
 
   // Rule 4 — .env-shape line: keep key, redact value. Last so rule 1 wins over a coincidentally .env-shaped substring.
   out = out.replace(ENV_LINE, (_match, key) => `${String(key)}=[redacted:env-value]`)
+
+  // Rule 5 — the same pair spliced mid-line. After rule 4 so a line-leading pair takes the whole-value form.
+  out = out.replace(
+    ENV_INLINE,
+    (_match, lead, key) => `${String(lead)}${String(key)}=[redacted:env-value]`
+  )
 
   return out
 }

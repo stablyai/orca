@@ -122,6 +122,29 @@ export type IpcEventsHarness = {
   createTerminal: (request: CreateTerminalRequest) => void
   requestTerminalCreate: (request: RequestTerminalCreateRequest) => void
   replyTerminalCreate: ReturnType<typeof vi.fn>
+  sshStateChanged: (data: { targetId: string; state: unknown }) => void
+}
+
+/** Named so a misspelled override (`getStates`) fails to compile instead of
+ *  silently leaving the default stub in place under an assertion. */
+type SshApiStub = {
+  listTargets: () => Promise<unknown>
+  listPortForwards: () => Promise<unknown>
+  listDetectedPorts: () => Promise<unknown>
+  listRemovedTargetLabels: () => Promise<unknown>
+  getState: (args?: { targetId: string }) => Promise<unknown>
+  onStateChanged: (listener: (data: { targetId: string; state: unknown }) => void) => () => void
+  onCredentialRequest: () => () => void
+  onCredentialResolved: () => () => void
+  onPortForwardsChanged: () => () => void
+  onDetectedPortsChanged: () => () => void
+}
+
+export type IpcEventsHarnessOptions = {
+  /** Merged over the default `window.api.ssh` stub. */
+  ssh?: Partial<SshApiStub>
+  /** Runs after the module registry reset, so callers can add their own `vi.doMock`. */
+  mockModules?: () => void
 }
 
 /**
@@ -129,11 +152,13 @@ export type IpcEventsHarness = {
  * create-terminal IPC, so reveal/adoption behavior is asserted through the hook.
  */
 export async function loadIpcEventsHarness(
-  storeState: HarnessStoreState
+  storeState: HarnessStoreState,
+  options: IpcEventsHarnessOptions = {}
 ): Promise<IpcEventsHarness> {
   const replyTerminalCreate = vi.fn()
   let createTerminalListener: ((request: CreateTerminalRequest) => void) | null = null
   let requestTerminalCreateListener: ((request: RequestTerminalCreateRequest) => void) | null = null
+  let sshStateListener: ((data: { targetId: string; state: unknown }) => void) | null = null
 
   vi.resetModules()
   vi.unstubAllGlobals()
@@ -169,6 +194,23 @@ export async function loadIpcEventsHarness(
   }))
   vi.doMock('@/lib/activate-tab-and-focus-pane', () => ({ activateTabAndFocusPane: vi.fn() }))
 
+  const ssh: SshApiStub = {
+    listTargets: () => Promise.resolve([]),
+    listPortForwards: () => Promise.resolve([]),
+    listDetectedPorts: () => Promise.resolve([]),
+    listRemovedTargetLabels: () => Promise.resolve([]),
+    getState: () => Promise.resolve(null),
+    onStateChanged: (listener) => {
+      sshStateListener = listener
+      return () => {}
+    },
+    onCredentialRequest: () => () => {},
+    onCredentialResolved: () => () => {},
+    onPortForwardsChanged: () => () => {},
+    onDetectedPortsChanged: () => () => {},
+    ...options.ssh
+  }
+
   vi.stubGlobal('window', {
     dispatchEvent: vi.fn(),
     api: new Proxy(
@@ -202,18 +244,7 @@ export async function loadIpcEventsHarness(
           onTerminalDriverChanged: () => () => {},
           onBrowserDriverChanged: () => () => {}
         },
-        ssh: {
-          listTargets: () => Promise.resolve([]),
-          listPortForwards: () => Promise.resolve([]),
-          listDetectedPorts: () => Promise.resolve([]),
-          listRemovedTargetLabels: () => Promise.resolve([]),
-          getState: () => Promise.resolve(null),
-          onStateChanged: () => () => {},
-          onCredentialRequest: () => () => {},
-          onCredentialResolved: () => () => {},
-          onPortForwardsChanged: () => () => {},
-          onDetectedPortsChanged: () => () => {}
-        },
+        ssh,
         updater: {
           getStatus: () => Promise.resolve({ state: 'idle' }),
           onStatus: () => () => {},
@@ -227,6 +258,8 @@ export async function loadIpcEventsHarness(
       { get: (target, prop: string) => target[prop] ?? createApiNamespaceStub() }
     )
   })
+
+  options.mockModules?.()
 
   const { useIpcEvents } = await import('./useIpcEvents')
   return {
@@ -242,6 +275,12 @@ export async function loadIpcEventsHarness(
         throw new Error('Expected the request-terminal-create listener to be registered')
       }
       requestTerminalCreateListener(request)
+    },
+    sshStateChanged: (data) => {
+      if (typeof sshStateListener !== 'function') {
+        throw new Error('Expected the ssh state-changed listener to be registered')
+      }
+      sshStateListener(data)
     },
     replyTerminalCreate
   }

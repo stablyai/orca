@@ -2856,7 +2856,11 @@
             "connectButton": "连接",
             "removedTitle": "SSH 主机已移除",
             "removedBody": "此工作区的 SSH 主机已被移除，无法再连接。请移除工作区以清理 — 远程文件不会受影响。",
-            "removeWorkspaceButton": "移除工作区"
+            "removeWorkspaceButton": "移除工作区",
+            "diagnosticsDisabled": "此设备上的诊断功能已禁用。",
+            "diagnosticsCopied": "已复制诊断信息",
+            "diagnosticsCopyFailed": "复制诊断信息失败",
+            "copyDiagnosticsLabel": "复制诊断信息"
           },
           "TerminalRemoteRuntimeReconnectBanner": {
             "retryingTitle": "正在重新连接到远程运行时",

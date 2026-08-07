@@ -266,7 +266,7 @@ import {
   resolveRegisteredWorktreePath
 } from './filesystem-auth'
 import { _resetTracerForTests, setActiveSink } from '../observability/tracer'
-import type { RedactableSpan } from '../observability/redactor'
+import type { RedactableSpan } from '../../shared/observability-redactor'
 import {
   reviewHeadRemoteRefComponent,
   REVIEW_HEAD_FETCH_TIMEOUT_MS

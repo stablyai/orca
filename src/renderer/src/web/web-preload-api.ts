@@ -719,6 +719,10 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       readHeapStatistics: () => null
     },
     diagnostics: {
+      // Why the hardcoded off: consent lives in the serving host's process env
+      // and no runtime RPC carries it, so the browser cannot know it. Callers
+      // gate egress on `localFileEnabled`, so this must stay false until one
+      // exists — flipping it opens diagnostics copy on a host that opted out.
       getStatus: () =>
         Promise.resolve({
           localFileEnabled: false,

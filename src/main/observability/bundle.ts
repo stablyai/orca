@@ -10,7 +10,7 @@ import { randomBytes } from 'node:crypto'
 import { readFileSync, statSync } from 'node:fs'
 import { MAX_BUNDLE_BYTES } from './diagnostic-bundle-limits'
 import { listRotatedFiles } from './local-file-sink'
-import { redactValue } from './redactor'
+import { redactValue } from '../../shared/observability-redactor'
 
 const DEFAULT_LOOKBACK_MINUTES = 30
 

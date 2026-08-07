@@ -8,6 +8,7 @@ import {
   resyncRuntimeEnvironmentSshTargets
 } from './runtime-environment-ssh-state'
 import { callRuntimeRpc } from './runtime-rpc-client'
+import { forgetSshStatusTimeline, snapshotSshStatusTimeline } from '@/lib/ssh-status-timeline'
 
 vi.mock('./runtime-rpc-client', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -314,6 +315,168 @@ describe('applyRuntimeEnvironmentSshStateChanged', () => {
       useAppStore.getState().sshStateByEnvironment.get(envId)?.connectionStates.get('ssh-new')
         ?.status
     ).toBe('connecting')
+  })
+})
+
+describe('ssh status timeline recording', () => {
+  const TIMELINE_TARGET = 'ssh-timeline'
+  // Rings are environment-scoped, and every case mints a fresh environment id.
+  const environments: string[] = []
+
+  function timelineEnvId(): string {
+    const envId = nextEnvId()
+    environments.push(envId)
+    return envId
+  }
+
+  beforeEach(() => {
+    for (const envId of environments.splice(0)) {
+      forgetSshStatusTimeline(TIMELINE_TARGET, envId)
+    }
+  })
+
+  it('records a runtime push for a target the bucket has not hydrated', async () => {
+    const envId = timelineEnvId()
+    installRpcResponses({ targets: [] })
+
+    applyRuntimeEnvironmentSshStateChanged(
+      envId,
+      TIMELINE_TARGET,
+      connState(TIMELINE_TARGET, 'reconnecting')
+    )
+
+    expect(snapshotSshStatusTimeline(TIMELINE_TARGET, envId)).toEqual([
+      expect.objectContaining({ status: 'reconnecting', origin: 'runtime-push', generation: 7 })
+    ])
+    // The local ring is a different scope, so a paired host's target id cannot
+    // overwrite the local target's history.
+    expect(snapshotSshStatusTimeline(TIMELINE_TARGET)).toEqual([])
+    // Let the forced re-fetch the unknown-target branch kicked off settle.
+    await vi.waitFor(() => {
+      expect(useAppStore.getState().sshStateByEnvironment.get(envId)?.targetsHydrated).toBe(true)
+    })
+  })
+
+  it('does not record a payload the admission check rejects', () => {
+    const envId = timelineEnvId()
+    useAppStore
+      .getState()
+      .setEnvironmentSshTargetsMetadata(envId, [{ id: TIMELINE_TARGET, label: 'devbox' }])
+
+    applyRuntimeEnvironmentSshStateChanged(envId, TIMELINE_TARGET, {
+      targetId: TIMELINE_TARGET,
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0,
+      providerEpoch: 'partial-provider-epoch' as SshProviderEpoch
+    })
+
+    expect(snapshotSshStatusTimeline(TIMELINE_TARGET, envId)).toEqual([])
+  })
+
+  it('records hydrated per-target states so a reloaded overlay is not backed by an empty timeline', async () => {
+    const envId = timelineEnvId()
+    installRpcResponses({
+      targets: [{ id: TIMELINE_TARGET, label: 'devbox' }],
+      states: { [TIMELINE_TARGET]: connState(TIMELINE_TARGET, 'error') }
+    })
+
+    await hydrateRuntimeEnvironmentSshState(envId)
+
+    expect(snapshotSshStatusTimeline(TIMELINE_TARGET, envId)).toEqual([
+      expect.objectContaining({ status: 'error', origin: 'runtime-hydration' })
+    ])
+  })
+
+  // The transport drops mid-loop: the in-flight run is not cancelled (single-flight
+  // only sets `rerunRequested`), so its pre-drop state resolves into a store that
+  // will fence it off. Recording above that fence pastes `error -> connected ->
+  // error` across an outage the user watched continuously.
+  it('does not record a hydrated state the store fences off as stale', async () => {
+    const envId = timelineEnvId()
+    let resolveState!: (value: { state: SshConnectionState }) => void
+    const statePromise = new Promise<{ state: SshConnectionState }>((resolve) => {
+      resolveState = resolve
+    })
+    callRuntimeRpcMock.mockImplementation((_target, method) => {
+      if (method === 'ssh.listTargetSummaries') {
+        return Promise.resolve({
+          targets: [{ id: TIMELINE_TARGET, label: 'devbox' }]
+        } as never)
+      }
+      if (method === 'ssh.listRemovedTargetLabels') {
+        return Promise.resolve({ labels: {} } as never)
+      }
+      return statePromise as never
+    })
+
+    const hydration = hydrateRuntimeEnvironmentSshState(envId)
+    await vi.waitFor(() => {
+      expect(callRuntimeRpcMock.mock.calls.some(([, method]) => method === 'ssh.getState')).toBe(
+        true
+      )
+    })
+    useAppStore.getState().markEnvironmentSshStateStale(envId)
+    resolveState({ state: connState(TIMELINE_TARGET, 'connected') })
+    await hydration
+
+    expect(
+      useAppStore.getState().sshStateByEnvironment.get(envId)?.connectionStates.has(TIMELINE_TARGET)
+    ).toBe(false)
+    expect(snapshotSshStatusTimeline(TIMELINE_TARGET, envId)).toEqual([])
+  })
+
+  // A runtime WebSocket flap re-hydrates without the SSH state changing; folding
+  // each re-read in would inflate `repeats`/`runMs`, which ARE the flap signal.
+  it('does not re-record a state a hydration pass re-read unchanged', async () => {
+    const envId = timelineEnvId()
+    installRpcResponses({
+      targets: [{ id: TIMELINE_TARGET, label: 'devbox' }],
+      states: { [TIMELINE_TARGET]: connState(TIMELINE_TARGET, 'connected') }
+    })
+
+    await hydrateRuntimeEnvironmentSshState(envId)
+    await hydrateRuntimeEnvironmentSshState(envId, { force: true })
+    await hydrateRuntimeEnvironmentSshState(envId, { force: true })
+
+    expect(snapshotSshStatusTimeline(TIMELINE_TARGET, envId)).toEqual([
+      expect.objectContaining({
+        status: 'connected',
+        origin: 'runtime-hydration',
+        repeats: 1,
+        runMs: null
+      })
+    ])
+  })
+
+  // A push for an unhydrated target forces a hydration that re-reads the very
+  // state the push recorded — one arrival that must not read back as a flap.
+  it('does not count the hydration a push forces as a repeat of that push', async () => {
+    const envId = timelineEnvId()
+    const pushed = connState(TIMELINE_TARGET, 'reconnecting')
+    installRpcResponses({
+      targets: [{ id: TIMELINE_TARGET, label: 'devbox' }],
+      states: { [TIMELINE_TARGET]: pushed }
+    })
+
+    applyRuntimeEnvironmentSshStateChanged(envId, TIMELINE_TARGET, pushed)
+    await vi.waitFor(() => {
+      expect(
+        useAppStore
+          .getState()
+          .sshStateByEnvironment.get(envId)
+          ?.connectionStates.has(TIMELINE_TARGET)
+      ).toBe(true)
+    })
+
+    expect(snapshotSshStatusTimeline(TIMELINE_TARGET, envId)).toEqual([
+      expect.objectContaining({
+        status: 'reconnecting',
+        origin: 'runtime-push',
+        repeats: 1,
+        runMs: null
+      })
+    ])
   })
 })
 

@@ -3,6 +3,7 @@ import type { SshConnectionState, SshTargetSummary } from '../../../shared/ssh-t
 import { callRuntimeRpc } from './runtime-rpc-client'
 import { getEnvironmentSshStateGeneration } from '@/store/slices/runtime-environment-ssh'
 import { admitSshConnectionState } from '../../../shared/ssh-retained-payload-admission'
+import { recordSshStateArrival } from '@/lib/ssh-status-timeline'
 
 /**
  * Mirrors a remote Orca server's own SSH targets into that environment's
@@ -59,6 +60,18 @@ async function syncEnvironmentSshTargetMetadata(
   return targets
 }
 
+/** Identity-comparable read of what the bucket holds: the setter stores the
+ * admitted object by reference, so `=== admitted` means the write landed. */
+function readEnvironmentSshConnectionState(
+  environmentId: string,
+  targetId: string
+): SshConnectionState | undefined {
+  return useAppStore
+    .getState()
+    .sshStateByEnvironment.get(environmentId)
+    ?.connectionStates.get(targetId)
+}
+
 async function fetchEnvironmentSshConnectionStates(
   environmentId: string,
   targets: readonly SshTargetSummary[],
@@ -77,6 +90,12 @@ async function fetchEnvironmentSshConnectionStates(
         useAppStore
           .getState()
           .setEnvironmentSshConnectionState(environmentId, target.id, admittedState, generation)
+        // Why: record only what the setter actually stored — it rejects a state
+        // fenced off by a newer generation and no-ops on an unchanged re-read,
+        // and neither is an arrival the overlay ever showed (§5.2).
+        if (readEnvironmentSshConnectionState(environmentId, target.id) === admittedState) {
+          recordSshStateArrival(target.id, admittedState, 'runtime-hydration', environmentId)
+        }
       }
     } catch {
       // Why: a timeout or unsupported RPC is not authoritative evidence that the HUB's SSH link disconnected.
@@ -163,6 +182,12 @@ export function applyRuntimeEnvironmentSshStateChanged(
   if (!admittedState) {
     return
   }
+  // Why: above the hydrated-bucket branch so an unknown target's history survives the
+  // removal race (§5.2) — which does mean a state the overlay never showed can be
+  // recorded here. That is the deliberate side of the trade; it is bounded to this
+  // environment's own eviction scope, and losing the history of a target racing its
+  // own removal is the worse failure.
+  recordSshStateArrival(targetId, admittedState, 'runtime-push', environmentId)
   const store = useAppStore.getState()
   const bucket = store.sshStateByEnvironment.get(environmentId)
   if (bucket?.targetsHydrated && bucket.targetLabels.has(targetId)) {

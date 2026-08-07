@@ -2844,7 +2844,11 @@
             "connectButton": "Conectar",
             "removedTitle": "Host SSH eliminado",
             "removedBody": "El host SSH de este espacio de trabajo fue eliminado, por lo que ya no puede conectarse. Elimina el espacio de trabajo para limpiarlo — los archivos remotos permanecen intactos.",
-            "removeWorkspaceButton": "Eliminar espacio de trabajo"
+            "removeWorkspaceButton": "Eliminar espacio de trabajo",
+            "diagnosticsDisabled": "Los diagnósticos están deshabilitados en este dispositivo.",
+            "diagnosticsCopied": "Diagnósticos copiados",
+            "diagnosticsCopyFailed": "No se pudieron copiar los diagnósticos",
+            "copyDiagnosticsLabel": "Copiar diagnósticos"
           },
           "TerminalRemoteRuntimeReconnectBanner": {
             "retryingTitle": "Reconnecting to remote runtime",

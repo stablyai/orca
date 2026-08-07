@@ -77,6 +77,7 @@ import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
 import { getEnvironmentSshStateGeneration } from '@/store/slices/runtime-environment-ssh'
+import { recordSshStateArrival, type SshStatusTimelineOrigin } from '@/lib/ssh-status-timeline'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
 import { setFitOverride, hydrateOverrides } from '@/lib/pane-manager/mobile-fit-overrides'
 import { setDriverForPty, hydrateDrivers } from '@/lib/pane-manager/mobile-driver-state'
@@ -2665,10 +2666,14 @@ export function useIpcEvents(): void {
         }
       })
     }
+    // `timelineOrigin` is separate from `origin`: a push is already recorded at
+    // arrival, and a reconciliation re-applies under the ORIGINATING origin but
+    // is its own kind of timeline event (§5.1).
     let applySshConnectionStateChange!: (
       targetId: string,
       state: SshConnectionState,
-      origin: DirectSshConnectedStateOrigin
+      origin: DirectSshConnectedStateOrigin,
+      timelineOrigin: SshStatusTimelineOrigin | null
     ) => void
 
     // Why: hydrate initial SSH state for all targets so worktree cards show correct connect state on launch.
@@ -2700,6 +2705,7 @@ export function useIpcEvents(): void {
             applySshConnectionStateChange(
               target.id,
               state as SshConnectionState,
+              'initial-hydration',
               'initial-hydration'
             )
           }
@@ -2779,6 +2785,12 @@ export function useIpcEvents(): void {
           ) {
             return
           }
+          // Only a correction is a timeline event: re-applying the values the
+          // store already holds would fold into the entry it came from and
+          // report one arrival as a flap (repeats/runMs are the flap signal).
+          const authorityChanged =
+            current.providerEpoch !== latest.providerEpoch ||
+            current.connectionGeneration !== latest.connectionGeneration
           applySshConnectionStateChange(
             targetId,
             {
@@ -2786,7 +2798,8 @@ export function useIpcEvents(): void {
               providerEpoch: latest.providerEpoch,
               connectionGeneration: latest.connectionGeneration
             },
-            origin
+            origin,
+            authorityChanged ? 'reconciliation' : null
           )
         })
         .catch(() => undefined)
@@ -2801,8 +2814,14 @@ export function useIpcEvents(): void {
     applySshConnectionStateChange = (
       targetId: string,
       state: SshConnectionState,
-      origin: DirectSshConnectedStateOrigin
+      origin: DirectSshConnectedStateOrigin,
+      timelineOrigin: SshStatusTimelineOrigin | null
     ): void => {
+      // Why: hydration and authority reconciliation never emit `ssh:state-changed`, so
+      // without this the timeline is empty under a post-reload failure overlay (§5.1).
+      if (timelineOrigin) {
+        recordSshStateArrival(targetId, state, timelineOrigin)
+      }
       const store = useAppStore.getState()
       const previous = store.sshConnectionStates?.get(targetId)
       store.setSshConnectionState(targetId, state)
@@ -2877,6 +2896,9 @@ export function useIpcEvents(): void {
     handleSshStateChangedEvent = (data: { targetId: string; state: unknown }): void => {
       const store = useAppStore.getState()
       const state = data.state as SshConnectionState
+      // Why: record in arrival order, before the store dedupes identical states away —
+      // a repeated `reconnecting` is the flap signal (§5.1). Cannot throw.
+      recordSshStateArrival(data.targetId, state, 'push')
       const stateEventId = ++sshTargetStateEventId
       sshStateWatermarkByTargetId.set(
         data.targetId,
@@ -2904,7 +2926,7 @@ export function useIpcEvents(): void {
               return
             }
             latestStore.setSshTargetsMetadata(targets)
-            applySshConnectionStateChange(data.targetId, state, 'push')
+            applySshConnectionStateChange(data.targetId, state, 'push', null)
           })
           .catch(() => {
             if (
@@ -2912,14 +2934,14 @@ export function useIpcEvents(): void {
               latestSshTargetStateEventByTargetId.get(data.targetId) === stateEventId
             ) {
               latestSshTargetStateEventByTargetId.delete(data.targetId)
-              applySshConnectionStateChange(data.targetId, state, 'push')
+              applySshConnectionStateChange(data.targetId, state, 'push', null)
             }
           })
         return
       }
 
       latestSshTargetStateEventByTargetId.delete(data.targetId)
-      applySshConnectionStateChange(data.targetId, state, 'push')
+      applySshConnectionStateChange(data.targetId, state, 'push', null)
     }
 
     unsubs.push(window.api.ssh.onStateChanged(handleSshStateChangedEvent))

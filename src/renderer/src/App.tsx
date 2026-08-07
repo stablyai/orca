@@ -149,6 +149,7 @@ import {
   timeRendererStartupSyncStep
 } from './startup/startup-diagnostics'
 import { reconnectSshTargetForRendererStartup } from './startup/ssh-startup-reconnect'
+import { primeSshDiagnosticAppVersion } from './lib/ssh-diagnostic-report'
 import { shouldRenderPetOverlay } from './components/pet/pet-overlay-visibility'
 import { applyDocumentTheme } from './lib/document-theme'
 import { getSystemPrefersDark } from './lib/terminal-theme'
@@ -1220,6 +1221,11 @@ function App(): React.JSX.Element {
   }, [])
 
   useEffect(() => installCodexDetachedPaneRestartExecutor(), [])
+
+  // Why here and not in the SSH overlay: that only mounts once a connection is already unhealthy, and the prime is async — the first capture would race it and report a null version.
+  useEffect(() => {
+    primeSshDiagnosticAppVersion()
+  }, [])
 
   useEffect(() => {
     let previousKey = getRuntimeMobileSessionSyncKey(useAppStore.getState())

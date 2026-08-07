@@ -15,13 +15,18 @@
 //
 // All spans hand off through `redactSpan()` before serialization. The
 // redactor is run at sink-write time, again at bundle-collection time, and
-// a third time on the server (see redactor.ts) — three locations of one
+// a third time on the server (see shared/observability-redactor.ts) — three locations of one
 // idempotent function. The runtime cost is dominated by `redactString` on
 // the exit cause string and is negligible at the span volume we expect.
 
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { randomBytes } from 'node:crypto'
-import { redactSpan, type RedactableSpan, type SpanEvent, type SpanExit } from './redactor'
+import {
+  redactSpan,
+  type RedactableSpan,
+  type SpanEvent,
+  type SpanExit
+} from '../../shared/observability-redactor'
 
 export type TracerSink = {
   push(record: unknown): void

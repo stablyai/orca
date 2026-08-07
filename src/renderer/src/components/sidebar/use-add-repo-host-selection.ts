@@ -12,6 +12,7 @@ import { isEphemeralVmRuntimeEnvironment } from '../../../../shared/runtime-envi
 import type { AddRepoDialogStep } from './add-repo-dialog-types'
 import { useSidebarHostScopeOptions } from './use-sidebar-host-scope-options'
 import { canSelectAddRepoHost } from './add-repo-host-availability'
+import { recordSshStateArrival } from '@/lib/ssh-status-timeline'
 import { translate } from '@/i18n/i18n'
 
 export function useAddRepoHostSelection({
@@ -112,13 +113,18 @@ export function useAddRepoHostSelection({
       const previousState = sshConnectionStates.get(parsed.targetId)
       // Why: ssh.connect can complete before the global state-change event
       // reaches the renderer; optimistic state keeps this picker responsive.
-      setSshConnectionState(parsed.targetId, {
+      const optimisticState: SshConnectionState = {
         targetId: parsed.targetId,
         status: 'connecting',
         error: null,
         reconnectAttempt: previousState?.reconnectAttempt ?? 0,
         remotePlatform: previousState?.remotePlatform
-      })
+      }
+      setSshConnectionState(parsed.targetId, optimisticState)
+      // Why: main never emits this one, so no push backfills it. Without the record
+      // a diagnostics capture can report `Status: connecting` from a state its own
+      // timeline never saw — and if the connect hangs, that state is what it reports.
+      recordSshStateArrival(parsed.targetId, optimisticState, 'renderer-optimistic')
 
       try {
         const connectResult = (await window.api.ssh.connect({
@@ -139,21 +145,22 @@ export function useAddRepoHostSelection({
         setStep('add')
         setHostSelectorOpen(false)
       } catch (err) {
-        setSshConnectionState(
-          parsed.targetId,
-          previousState ?? {
-            targetId: parsed.targetId,
-            status: 'disconnected',
-            error:
-              err instanceof Error
-                ? err.message
-                : translate(
-                    'auto.components.sidebar.useAddRepoHostSelection.connectionFailed',
-                    'SSH connection failed.'
-                  ),
-            reconnectAttempt: 0
-          }
-        )
+        const rolledBackState: SshConnectionState = previousState ?? {
+          targetId: parsed.targetId,
+          status: 'disconnected',
+          error:
+            err instanceof Error
+              ? err.message
+              : translate(
+                  'auto.components.sidebar.useAddRepoHostSelection.connectionFailed',
+                  'SSH connection failed.'
+                ),
+          reconnectAttempt: 0
+        }
+        setSshConnectionState(parsed.targetId, rolledBackState)
+        // Same reasoning as the optimistic write: main never emitted this rollback,
+        // so it reaches the report's headline with nothing behind it otherwise.
+        recordSshStateArrival(parsed.targetId, rolledBackState, 'renderer-optimistic')
         toast.error(
           err instanceof Error
             ? err.message

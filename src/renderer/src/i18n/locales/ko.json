@@ -2844,7 +2844,11 @@
             "connectButton": "연결",
             "removedTitle": "SSH 호스트가 제거됨",
             "removedBody": "이 워크트리의 SSH 호스트가 제거되어 더 이상 연결할 수 없습니다. 워크트리를 제거하여 정리하세요 — 원격 파일은 그대로 남아 있습니다.",
-            "removeWorkspaceButton": "워크트리 제거"
+            "removeWorkspaceButton": "워크트리 제거",
+            "diagnosticsDisabled": "이 기기에서는 진단이 비활성화되어 있습니다.",
+            "diagnosticsCopied": "진단 정보가 복사됨",
+            "diagnosticsCopyFailed": "진단 정보를 복사하지 못했습니다",
+            "copyDiagnosticsLabel": "진단 정보 복사"
           },
           "TerminalRemoteRuntimeReconnectBanner": {
             "retryingTitle": "원격 런타임에 다시 연결 중",
