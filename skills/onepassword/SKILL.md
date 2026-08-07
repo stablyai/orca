@@ -101,8 +101,12 @@ trap 'rm -f -- "$key_file"' EXIT
 provider-rotate-command >"$key_file"
 test -s "$key_file"   # fail closed: never submit an empty password
 op item get "Service X" --vault Dev --format json \
-  | jq --rawfile secret "$key_file" \
-      '(.fields[] | select(.id == "password") | .value) = ($secret | rtrimstr("\n"))' \
+  | jq --rawfile secret "$key_file" '
+      if ([.fields[] | select(.id == "password")] | length) != 1 then
+        error("expected exactly one password field")
+      else
+        (.fields[] | select(.id == "password") | .value) = ($secret | rtrimstr("\n"))
+      end' \
   | op item edit "Service X" --vault Dev
 ```
 
