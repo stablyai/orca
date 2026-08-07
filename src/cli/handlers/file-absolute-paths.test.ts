@@ -171,6 +171,34 @@ describe('absolute file CLI paths', () => {
       expectOpenedWith('xxx/xxx.ts')
     })
 
+    it('does not relativize a sibling directory that merely shares the root prefix', async () => {
+      vi.stubEnv('WSL_DISTRO_NAME', 'Ubuntu')
+      mockWorktreeShow(uncRoot)
+
+      await openPath('/root/orca/workspaces/xxx-2/xxx.ts')
+
+      expectOpenedWith('/root/orca/workspaces/xxx-2/xxx.ts')
+    })
+
+    // Why: Windows folds the distro segment but the Linux tail stays case-sensitive.
+    it('matches a distro-case mismatch but not a Linux-path-case mismatch', async () => {
+      vi.stubEnv('WSL_DISTRO_NAME', 'ubuntu')
+      mockWorktreeShow(uncRoot)
+
+      await openPath('/root/orca/Workspaces/xxx/xxx.ts')
+
+      expectOpenedWith('/root/orca/Workspaces/xxx/xxx.ts')
+    })
+
+    it('leaves a Windows drive-letter workspace alone while WSL_DISTRO_NAME is set', async () => {
+      vi.stubEnv('WSL_DISTRO_NAME', 'Ubuntu')
+      mockWorktreeShow('C:\\Users\\me\\repo')
+
+      await openPath('C:/Users/me/repo/xxx/xxx.ts')
+
+      expectOpenedWith('xxx/xxx.ts')
+    })
+
     it('does not rewrite when the CLI is not running under WSL', async () => {
       mockWorktreeShow(uncRoot)
 
