@@ -1,0 +1,195 @@
+name: Startup Perf A/B
+
+# Why: dispatch-only, unlike the nightly terminal perf run. An A/B needs two
+# refs somebody deliberately chose — there is no meaningful "today's startup"
+# number to trend, only "did this change move startup relative to that one".
+on:
+  workflow_dispatch:
+    inputs:
+      baseline_ref:
+        description: Ref to measure against (e.g. the merge-base or previous release tag)
+        required: true
+        type: string
+      candidate_ref:
+        description: Ref under test (defaults to the workflow ref)
+        required: false
+        type: string
+      pairs:
+        description: Number of ABBA pairs; must be even. Each pair is two launches.
+        required: false
+        default: '12'
+        type: string
+      warmup:
+        description: Discarded rounds before the measured pairs; a round warms both arms, so each is two launches.
+        required: false
+        default: '2'
+        type: string
+      files:
+        description: Synthetic userData file count (drives the profile-walk cost)
+        required: false
+        default: '2000'
+        type: string
+      state_profile:
+        description: none | restored-local-tabs
+        required: false
+        default: 'restored-local-tabs'
+        type: string
+      session_tabs:
+        description: Restored terminal tabs when state_profile is restored-local-tabs
+        required: false
+        default: '20'
+        type: string
+      wait_for_event:
+        description: Startup milestone each launch waits for
+        required: false
+        default: 'renderer-startup-hydration-done'
+        type: string
+      control_phases:
+        description: Comma-separated phases the change should not affect
+        required: false
+        default: 'spawnToAppReady,appReadyToServices,servicesToI18n'
+        type: string
+
+# The job only reads refs and uploads an artifact; it never writes to the repo.
+permissions:
+  contents: read
+
+jobs:
+  startup-perf-ab:
+    name: interleaved startup A/B
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+
+    steps:
+      # Why: the arms live outside the repo — each is a full worktree with its
+      # own node_modules, not a stray untracked directory inside the checkout.
+      # RUNNER_TEMP rather than the runner context: job-level env is evaluated
+      # before the job reaches a runner, so ${{ runner.temp }} is not available
+      # there and would make the workflow invalid.
+      - name: Resolve the arm workspace
+        run: echo "ARMS_DIR=$RUNNER_TEMP/orca-bench-arms" >> "$GITHUB_ENV"
+
+      # Why: both arms are built from this checkout, so the baseline ref must be
+      # reachable — a shallow clone would fail to check it out. Credentials are
+      # not persisted: build scripts from a caller-chosen ref run in this job.
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.candidate_ref || github.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install native build tools and xvfb
+        run: sudo apt-get update && sudo apt-get install -y build-essential python3 xvfb
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      # Why: matches the PR and E2E native install path, which needs pnpm to
+      # bypass its bundled gyp_main.py.
+      - name: Use external node-gyp to avoid pnpm's bundled copy
+        run: |
+          npm install -g node-gyp@11.5.0
+          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Why: each arm is its own worktree with its own node_modules. Sharing one
+      # dependency root would let the arm installed second decide what both arms
+      # load at runtime, so a lockfile or externalized-module difference between
+      # the refs would be measured as if it were the change under test.
+      # Both arms are built up front — rebuilding between launches would put
+      # compile output and disk-cache state into the timings.
+      - name: Build both arms
+        env:
+          BASELINE_REF: ${{ inputs.baseline_ref }}
+          CANDIDATE_REF: ${{ inputs.candidate_ref || github.sha }}
+        run: |
+          set -euo pipefail
+          build_arm() {
+            local ref="$1" name="$2" dir="$ARMS_DIR/$2"
+            echo "::group::build $name ($ref)"
+            rm -rf "$dir"
+            git worktree add --detach "$dir" "$ref"
+            (cd "$dir" && pnpm install --frozen-lockfile && pnpm run build:electron-vite)
+            test -f "$dir/out/main/index.js"
+            echo "::endgroup::"
+          }
+          build_arm "$BASELINE_REF" baseline
+          build_arm "$CANDIDATE_REF" candidate
+
+      - name: Run interleaved startup A/B
+        env:
+          PAIRS: ${{ inputs.pairs }}
+          WARMUP: ${{ inputs.warmup }}
+          FILES: ${{ inputs.files }}
+          STATE_PROFILE: ${{ inputs.state_profile }}
+          SESSION_TABS: ${{ inputs.session_tabs }}
+          WAIT_FOR_EVENT: ${{ inputs.wait_for_event }}
+          CONTROL_PHASES: ${{ inputs.control_phases }}
+        run: |
+          set -euo pipefail
+          xvfb-run --auto-servernum node tests/tools/benchmarks/startup-ab-bench.mjs \
+            --label ci-ab \
+            --baseline-app-dir "$ARMS_DIR/baseline" \
+            --candidate-app-dir "$ARMS_DIR/candidate" \
+            --pairs "$PAIRS" \
+            --warmup "$WARMUP" \
+            --files "$FILES" \
+            --state-profile "$STATE_PROFILE" \
+            --session-tabs "$SESSION_TABS" \
+            --wait-for-event "$WAIT_FOR_EVENT" \
+            --control-phases "$CONTROL_PHASES" \
+            | tee startup-ab-output.txt
+
+      # Why: an unusable run is not a failed build — the code is fine, the runner
+      # was not quiet (or the control phases never fired). Surface it as a
+      # warning, and suppress the phase table so nobody quotes it from the log.
+      - name: Report the measurement status
+        if: always()
+        run: |
+          set -euo pipefail
+          result=$(ls -t tests/tools/benchmarks/results/startup-ci-ab-*.json 2>/dev/null | head -1 || true)
+          if [ -z "$result" ]; then
+            echo "::warning::No A/B result file was produced."
+            exit 0
+          fi
+          node -e "
+            const r = require('./$result')
+            if (r.measurementStatus === 'control-phase-drift') {
+              console.log('::warning::Control phases moved — this run measured the runner, not the change. Re-run before quoting any verdict.')
+            } else if (r.measurementStatus === 'controls-unmeasured') {
+              console.log(\`::warning::No control phase produced data (\${r.unmeasuredControlPhases.join(', ')}) — drift was never measured, so no verdict is attributable.\`)
+            }
+            if (r.measurementStatus !== 'attributable') {
+              console.log('Phase verdicts withheld: this run is unproven.')
+              process.exit(0)
+            }
+            const rows = Object.entries(r.phaseSummaries)
+              .filter(([, s]) => s.verdict === 'improved' || s.verdict === 'regressed')
+            console.log(rows.length ? 'Phases with a verdict:' : 'No phase reached a verdict.')
+            for (const [name, s] of rows) {
+              console.log(\`  \${name}: \${Math.round(s.shift)}ms [\${Math.round(s.interval[0])}, \${Math.round(s.interval[1])}] -> \${s.verdict}\`)
+            }
+          "
+
+      - name: Upload A/B result
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: startup-ab-result
+          path: |
+            tests/tools/benchmarks/results/startup-ci-ab-*.json
+            startup-ab-output.txt
+          retention-days: 14
+          if-no-files-found: warn

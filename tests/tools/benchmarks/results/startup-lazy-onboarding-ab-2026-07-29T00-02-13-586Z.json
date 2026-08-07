@@ -1,0 +1,746 @@
+{
+  "label": "lazy-onboarding-ab",
+  "design": "interleaved-abba-paired",
+  "platform": "win32",
+  "arch": "x64",
+  "cpus": "Intel(R) Core(TM) i5-8350U CPU @ 1.70GHz",
+  "pairs": 12,
+  "warmup": 2,
+  "controlPhases": ["spawnToAppReady", "appReadyToServices", "servicesToI18n"],
+  "driftDetected": false,
+  "fixtureDir": "~\\AppData\\Local\\Temp\\orca-startup-bench\\userdata-2000-restored-local-tabs-20-gh0",
+  "fixtureFiles": 2000,
+  "stateProfile": "restored-local-tabs",
+  "sessionTabs": 20,
+  "githubRepos": 0,
+  "ghHangMs": 0,
+  "waitForEvent": "renderer-startup-hydration-done",
+  "arms": {
+    "baseline": "~\\Desktop\\proyectos\\orca-fork\\.bench-fixtures\\arms\\baseline",
+    "candidate": "~\\Desktop\\proyectos\\orca-fork\\.bench-fixtures\\arms\\candidate"
+  },
+  "runs": [
+    {
+      "index": 0,
+      "firstArm": "baseline",
+      "baseline": {
+        "arm": "baseline",
+        "outcome": "ok",
+        "phases": {
+          "startupJsonParseMs": 0,
+          "startupStoreLoadMs": 26,
+          "spawnToAppReady": 1213.6,
+          "appReadyToServices": 596,
+          "servicesToI18n": 45,
+          "i18nToOpenWindow": 10,
+          "daemonInitMs": 2386,
+          "aclGrantMs": 1,
+          "windowCreatedToLoadStart": 20,
+          "windowCreatedToLoaded": 2359,
+          "totalToWindowCreated": 1895.1,
+          "totalToDidFinishLoad": 4254.1,
+          "didFinishLoadToWorkspaceReady": 2150,
+          "totalToWorkspaceReady": 6404.7,
+          "rendererReconnectTerminalsMs": 24,
+          "maxEventLoopStallMs": 2207
+        }
+      },
+      "candidate": {
+        "arm": "candidate",
+        "outcome": "ok",
+        "phases": {
+          "startupJsonParseMs": 1,
+          "startupStoreLoadMs": 18,
+          "spawnToAppReady": 1047.3,
+          "appReadyToServices": 587,
+          "servicesToI18n": 34,
+          "i18nToOpenWindow": 10,
+          "daemonInitMs": 1842,
+          "aclGrantMs": 1,
+          "windowCreatedToLoadStart": 24,
+          "windowCreatedToLoaded": 1849,
+          "totalToWindowCreated": 1708.7,
+          "totalToDidFinishLoad": 3557,
+          "didFinishLoadToWorkspaceReady": 2136,
+          "totalToWorkspaceReady": 5693.7,
+          "rendererReconnectTerminalsMs": 22,
+          "maxEventLoopStallMs": 1820
+        }
+      }
+    },
+    {
+      "index": 1,
+      "firstArm": "candidate",
+      "baseline": {
+        "arm": "baseline",
+        "outcome": "ok",
+        "phases": {
+          "startupJsonParseMs": 0,
+          "startupStoreLoadMs": 22,
+          "spawnToAppReady": 1343.7,
+          "appReadyToServices": 532,
+          "servicesToI18n": 39,
+          "i18nToOpenWindow": 9,
+          "daemonInitMs": 2237,
+          "aclGrantMs": 0,
+          "windowCreatedToLoadStart": 16,
+          "windowCreatedToLoaded": 2206,
+          "totalToWindowCreated": 1949.9,
+          "totalToDidFinishLoad": 4155.5,
+          "didFinishLoadToWorkspaceReady": 2275,
+          "totalToWorkspaceReady": 6431,
+          "rendererReconnectTerminalsMs": 20,
+          "maxEventLoopStallMs": 1908
+        }
+      },
+      "candidate": {
+        "arm": "candidate",
+        "outcome": "ok",
+        "phases": {
+          "startupJsonParseMs": 1,
+          "startupStoreLoadMs": 26,
+          "spawnToAppReady": 1724.6,
+          "appReadyToServices": 678,
+          "servicesToI18n": 31,
+          "i18nToOpenWindow": 7,
+          "daemonInitMs": 1900,
+          "aclGrantMs": 1,
+          "windowCreatedToLoadStart": 16,
+          "windowCreatedToLoaded": 1852,
+          "totalToWindowCreated": 2467.4,
+          "totalToDidFinishLoad": 4320,
+          "didFinishLoadToWorkspaceReady": 2105,
+          "totalToWorkspaceReady": 6424.6,
+          "rendererReconnectTerminalsMs": 28,
+          "maxEventLoopStallMs": 1733
+        }
+      }
+    },
+    {
+      "index": 2,
+      "firstArm": "baseline",
+      "baseline": {
+        "arm": "baseline",
+        "outcome": "ok",
+        "phases": {
+          "startupJsonParseMs": 0,
+          "startupStoreLoadMs": 25,
+          "spawnToAppReady": 1098.5,
+          "appReadyToServices": 537,
+          "servicesToI18n": 46,
+          "i18nToOpenWindow": 13,
+          "daemonInitMs": 1856,
+          "aclGrantMs": 1,
+          "windowCreatedToLoadStart": 25,
+          "windowCreatedToLoaded": 1860,
+          "totalToWindowCreated": 1735.9,
+          "totalToDidFinishLoad": 3596.7,
+          "didFinishLoadToWorkspaceReady": 1650,
+          "totalToWorkspaceReady": 5246.1,
+          "rendererReconnectTerminalsMs": 21,
+          "maxEventLoopStallMs": 1686
+        }
+      },
+      "candidate": {
+        "arm": "candidate",
+        "outcome": "ok",
+        "phases": {
+          "startupJsonParseMs": 0,
+          "startupStoreLoadMs": 19,
+          "spawnToAppReady": 1193.3,
+          "appReadyToServices": 674,
+          "servicesToI18n": 31,
+          "i18nToOpenWindow": 11,
+          "daemonInitMs": 2124,
+          "aclGrantMs": 2,
+          "windowCreatedToLoadStart": 24,
+          "windowCreatedToLoaded": 2139,
+          "totalToWindowCreated": 1941.5,
+          "totalToDidFinishLoad": 4080.5,
+          "didFinishLoadToWorkspaceReady": 1958,
+          "totalToWorkspaceReady": 6038.8,
+          "rendererReconnectTerminalsMs": 18,
+          "maxEventLoopStallMs": 2091
+        }
+      }
+    },
+    {
+      "index": 3,
+      "firstArm": "candidate",
+      "baseline": {
+        "arm": "baseline",
+        "outcome": "ok",
+        "phases": {
+          "startupJsonParseMs": 1,
+          "startupStoreLoadMs": 28,
+          "spawnToAppReady": 1073.4,
+          "appReadyToServices": 720,
+          "servicesToI18n": 54,
+          "i18nToOpenWindow": 15,
+          "daemonInitMs": 2069,
+          "aclGrantMs": 1,
+          "windowCreatedToLoadStart": 29,
+          "windowCreatedToLoaded": 2102,
+          "totalToWindowCreated": 1903.5,
+          "totalToDidFinishLoad": 4005.5,
+          "didFinishLoadToWorkspaceReady": 1659,
+          "totalToWorkspaceReady": 5664,
+          "rendererReconnectTerminalsMs": 24,
+          "maxEventLoopStallMs": 2129
+        }
+      },
+      "candidate": {
+        "arm": "candidate",
+        "outcome": "ok",
+        "phases": {
+          "startupJsonParseMs": 0,
+          "startupStoreLoadMs": 20,
+          "spawnToAppReady": 1205.3,
+          "appReadyToServices": 424,
+          "servicesToI18n": 25,
+          "i18nToOpenWindow": 7,
+          "daemonInitMs": 1929,
+          "aclGrantMs": 0,
+          "windowCreatedToLoadStart": 17,
+          "windowCreatedToLoaded": 1937,
+          "totalToWindowCreated": 1685.7,
+          "totalToDidFinishLoad": 3622.2,
+          "didFinishLoadToWorkspaceReady": 2166,
+          "totalToWorkspaceReady": 5788,
+          "rendererReconnectTerminalsMs": 29,
+          "maxEventLoopStallMs": 1724
+        }
+      }
+    },
+    {
+      "index": 4,
+      "firstArm": "baseline",
+      "baseline": {
+        "arm": "baseline",
+        "outcome": "ok",
+        "phases": {
+          "startupJsonParseMs": 1,
+          "startupStoreLoadMs": 29,
+          "spawnToAppReady": 1428.8,
+          "appReadyToServices": 623,
+          "servicesToI18n": 43,
+          "i18nToOpenWindow": 15,
+          "daemonInitMs": 2145,
+          "aclGrantMs": 1,
+          "windowCreatedToLoadStart": 21,
+          "windowCreatedToLoaded": 2208,
+          "totalToWindowCreated": 2145.2,
+          "totalToDidFinishLoad": 4353.5,
+          "didFinishLoadToWorkspaceReady": 1737,
+          "totalToWorkspaceReady": 6090.9,
+          "rendererReconnectTerminalsMs": 25,
+          "maxEventLoopStallMs": 2022
+        }
+      },
+      "candidate": {
+        "arm": "candidate",
+        "outcome": "ok",
+        "phases": {
+          "startupJsonParseMs": 0,
+          "startupStoreLoadMs": 15,
+          "spawnToAppReady": 1288.1,
+          "appReadyToServices": 549,
+          "servicesToI18n": 31,
+          "i18nToOpenWindow": 7,
+          "daemonInitMs": 2107,
+          "aclGrantMs": 1,
+          "windowCreatedToLoadStart": 18,
+          "windowCreatedToLoaded": 2086,
+          "totalToWindowCreated": 1902.8,
+          "totalToDidFinishLoad": 3988.9,
+          "didFinishLoadToWorkspaceReady": 1604,
+          "totalToWorkspaceReady": 5593.3,
+          "rendererReconnectTerminalsMs": 24,
+          "maxEventLoopStallMs": 1854
+        }
+      }
+    },
+    {
+      "index": 5,
+      "firstArm": "candidate",
+      "baseline": {
+        "arm": "baseline",
+        "outcome": "ok",
+        "phases": {
+          "startupJsonParseMs": 0,
+          "startupStoreLoadMs": 26,
+          "spawnToAppReady": 1360.2,
+          "appReadyToServices": 624,
+          "servicesToI18n": 42,
+          "i18nToOpenWindow": 8,
+          "daemonInitMs": 2311,
+          "aclGrantMs": 1,
+          "windowCreatedToLoadStart": 33,
+          "windowCreatedToLoaded": 2315,
+          "totalToWindowCreated": 2069.9,
+          "totalToDidFinishLoad": 4384.5,
+          "didFinishLoadToWorkspaceReady": 2412,
+          "totalToWorkspaceReady": 6796.9,
+          "rendererReconnectTerminalsMs": 23,
+          "maxEventLoopStallMs": 2039
+        }
+      },
+      "candidate": {
+        "arm": "candidate",
+        "outcome": "ok",
+        "phases": {
+          "startupJsonParseMs": 0,
+          "startupStoreLoadMs": 17,
+          "spawnToAppReady": 1113.4,
+          "appReadyToServices": 496,
+          "servicesToI18n": 33,
+          "i18nToOpenWindow": 9,
+          "daemonInitMs": 2094,
+          "aclGrantMs": 0,
+          "windowCreatedToLoadStart": 24,
+          "windowCreatedToLoaded": 2146,
+          "totalToWindowCreated": 1677.3,
+          "totalToDidFinishLoad": 3823.2,
+          "didFinishLoadToWorkspaceReady": 1625,
+          "totalToWorkspaceReady": 5447.7,
+          "rendererReconnectTerminalsMs": 26,
+          "maxEventLoopStallMs": 2047
+        }
+      }
+    },
+    {
+      "index": 6,
+      "firstArm": "baseline",
+      "baseline": {
+        "arm": "baseline",
+        "outcome": "ok",
+        "phases": {
+          "startupJsonParseMs": 1,
+          "startupStoreLoadMs": 17,
+          "spawnToAppReady": 1482.8,
+          "appReadyToServices": 576,
+          "servicesToI18n": 36,
+          "i18nToOpenWindow": 7,
+          "daemonInitMs": 2264,
+          "aclGrantMs": 1,
+          "windowCreatedToLoadStart": 18,
+          "windowCreatedToLoaded": 2240,
+          "totalToWindowCreated": 2129.4,
+          "totalToDidFinishLoad": 4369.2,
+          "didFinishLoadToWorkspaceReady": 2016,
+          "totalToWorkspaceReady": 6385.7,
+          "rendererReconnectTerminalsMs": 40,
+          "maxEventLoopStallMs": 2078
+        }
+      },
+      "candidate": {
+        "arm": "candidate",
+        "outcome": "ok",
+        "phases": {
+          "startupJsonParseMs": 0,
+          "startupStoreLoadMs": 20,
+          "spawnToAppReady": 1346.1,
+          "appReadyToServices": 825,
+          "servicesToI18n": 28,
+          "i18nToOpenWindow": 8,
+          "daemonInitMs": 1295,
+          "aclGrantMs": 0,
+          "windowCreatedToLoadStart": 20,
+          "windowCreatedToLoaded": 1737,
+          "totalToWindowCreated": 2230,
+          "totalToDidFinishLoad": 3967.8,
+          "didFinishLoadToWorkspaceReady": 2255,
+          "totalToWorkspaceReady": 6222.2,
+          "rendererReconnectTerminalsMs": 46,
+          "maxEventLoopStallMs": 1669
+        }
+      }
+    },
+    {
+      "index": 7,
+      "firstArm": "candidate",
+      "baseline": {
+        "arm": "baseline",
+        "outcome": "ok",
+        "phases": {
+          "startupJsonParseMs": 1,
+          "startupStoreLoadMs": 26,
+          "spawnToAppReady": 2152,
+          "appReadyToServices": 971,
+          "servicesToI18n": 59,
+          "i18nToOpenWindow": 16,
+          "daemonInitMs": 3029,
+          "aclGrantMs": 1,
+          "windowCreatedToLoadStart": 32,
+          "windowCreatedToLoaded": 2932,
+          "totalToWindowCreated": 3242,
+          "totalToDidFinishLoad": 6173.4,
+          "didFinishLoadToWorkspaceReady": 2405,
+          "totalToWorkspaceReady": 8578.6,
+          "rendererReconnectTerminalsMs": 30,
+          "maxEventLoopStallMs": 3000
+        }
+      },
+      "candidate": {
+        "arm": "candidate",
+        "outcome": "ok",
+        "phases": {
+          "startupJsonParseMs": 0,
+          "startupStoreLoadMs": 18,
+          "spawnToAppReady": 1141.3,
+          "appReadyToServices": 505,
+          "servicesToI18n": 41,
+          "i18nToOpenWindow": 9,
+          "daemonInitMs": 2110,
+          "aclGrantMs": 0,
+          "windowCreatedToLoadStart": 18,
+          "windowCreatedToLoaded": 2146,
+          "totalToWindowCreated": 1723.6,
+          "totalToDidFinishLoad": 3869,
+          "didFinishLoadToWorkspaceReady": 2739,
+          "totalToWorkspaceReady": 6608,
+          "rendererReconnectTerminalsMs": 507,
+          "maxEventLoopStallMs": 2023
+        }
+      }
+    },
+    {
+      "index": 8,
+      "firstArm": "baseline",
+      "baseline": {
+        "arm": "baseline",
+        "outcome": "ok",
+        "phases": {
+          "startupJsonParseMs": 1,
+          "startupStoreLoadMs": 24,
+          "spawnToAppReady": 2332.2,
+          "appReadyToServices": 1482,
+          "servicesToI18n": 58,
+          "i18nToOpenWindow": 15,
+          "daemonInitMs": 6918,
+          "aclGrantMs": 1,
+          "windowCreatedToLoadStart": 34,
+          "windowCreatedToLoaded": 7683,
+          "totalToWindowCreated": 3926.5,
+          "totalToDidFinishLoad": 11609.5,
+          "didFinishLoadToWorkspaceReady": 5580,
+          "totalToWorkspaceReady": 17190.1,
+          "rendererReconnectTerminalsMs": 45,
+          "maxEventLoopStallMs": 8114
+        }
+      },
+      "candidate": {
+        "arm": "candidate",
+        "outcome": "ok",
+        "phases": {
+          "startupJsonParseMs": 1,
+          "startupStoreLoadMs": 32,
+          "spawnToAppReady": 2847.7,
+          "appReadyToServices": 2964,
+          "servicesToI18n": 67,
+          "i18nToOpenWindow": 23,
+          "daemonInitMs": 4729,
+          "aclGrantMs": 1,
+          "windowCreatedToLoadStart": 36,
+          "windowCreatedToLoaded": 5435,
+          "totalToWindowCreated": 5952.9,
+          "totalToDidFinishLoad": 11387.7,
+          "didFinishLoadToWorkspaceReady": 3046,
+          "totalToWorkspaceReady": 14434.5,
+          "rendererReconnectTerminalsMs": 35,
+          "maxEventLoopStallMs": 6867
+        }
+      }
+    },
+    {
+      "index": 9,
+      "firstArm": "candidate",
+      "baseline": {
+        "arm": "baseline",
+        "outcome": "ok",
+        "phases": {
+          "startupJsonParseMs": 1,
+          "startupStoreLoadMs": 34,
+          "spawnToAppReady": 1943,
+          "appReadyToServices": 749,
+          "servicesToI18n": 42,
+          "i18nToOpenWindow": 11,
+          "daemonInitMs": 2050,
+          "aclGrantMs": 0,
+          "windowCreatedToLoadStart": 28,
+          "windowCreatedToLoaded": 2834,
+          "totalToWindowCreated": 2782.7,
+          "totalToDidFinishLoad": 5616.2,
+          "didFinishLoadToWorkspaceReady": 2646,
+          "totalToWorkspaceReady": 8263.2,
+          "rendererReconnectTerminalsMs": 44,
+          "maxEventLoopStallMs": 2649
+        }
+      },
+      "candidate": {
+        "arm": "candidate",
+        "outcome": "ok",
+        "phases": {
+          "startupJsonParseMs": 1,
+          "startupStoreLoadMs": 77,
+          "spawnToAppReady": 2420.4,
+          "appReadyToServices": 2149,
+          "servicesToI18n": 71,
+          "i18nToOpenWindow": 19,
+          "daemonInitMs": 3987,
+          "aclGrantMs": 0,
+          "windowCreatedToLoadStart": 53,
+          "windowCreatedToLoaded": 4819,
+          "totalToWindowCreated": 4707.6,
+          "totalToDidFinishLoad": 9521.8,
+          "didFinishLoadToWorkspaceReady": 2842,
+          "totalToWorkspaceReady": 12363.9,
+          "rendererReconnectTerminalsMs": 47,
+          "maxEventLoopStallMs": 5613
+        }
+      }
+    },
+    {
+      "index": 10,
+      "firstArm": "baseline",
+      "baseline": {
+        "arm": "baseline",
+        "outcome": "ok",
+        "phases": {
+          "startupJsonParseMs": 0,
+          "startupStoreLoadMs": 36,
+          "spawnToAppReady": 2086.2,
+          "appReadyToServices": 682,
+          "servicesToI18n": 35,
+          "i18nToOpenWindow": 14,
+          "daemonInitMs": 2097,
+          "aclGrantMs": 0,
+          "windowCreatedToLoadStart": 20,
+          "windowCreatedToLoaded": 2706,
+          "totalToWindowCreated": 2849.8,
+          "totalToDidFinishLoad": 5555.4,
+          "didFinishLoadToWorkspaceReady": 2502,
+          "totalToWorkspaceReady": 8057.8,
+          "rendererReconnectTerminalsMs": 43,
+          "maxEventLoopStallMs": 2573
+        }
+      },
+      "candidate": {
+        "arm": "candidate",
+        "outcome": "ok",
+        "phases": {
+          "startupJsonParseMs": 1,
+          "startupStoreLoadMs": 32,
+          "spawnToAppReady": 1821.3,
+          "appReadyToServices": 1029,
+          "servicesToI18n": 62,
+          "i18nToOpenWindow": 16,
+          "daemonInitMs": 1998,
+          "aclGrantMs": 1,
+          "windowCreatedToLoadStart": 29,
+          "windowCreatedToLoaded": 2706,
+          "totalToWindowCreated": 2971.3,
+          "totalToDidFinishLoad": 5677.6,
+          "didFinishLoadToWorkspaceReady": 3093,
+          "totalToWorkspaceReady": 8770.5,
+          "rendererReconnectTerminalsMs": 44,
+          "maxEventLoopStallMs": 2843
+        }
+      }
+    },
+    {
+      "index": 11,
+      "firstArm": "candidate",
+      "baseline": {
+        "arm": "baseline",
+        "outcome": "ok",
+        "phases": {
+          "startupJsonParseMs": 1,
+          "startupStoreLoadMs": 28,
+          "spawnToAppReady": 1431.8,
+          "appReadyToServices": 710,
+          "servicesToI18n": 37,
+          "i18nToOpenWindow": 9,
+          "daemonInitMs": 1856,
+          "aclGrantMs": 1,
+          "windowCreatedToLoadStart": 17,
+          "windowCreatedToLoaded": 2594,
+          "totalToWindowCreated": 2212.2,
+          "totalToDidFinishLoad": 4806,
+          "didFinishLoadToWorkspaceReady": 2645,
+          "totalToWorkspaceReady": 7451.8,
+          "rendererReconnectTerminalsMs": 47,
+          "maxEventLoopStallMs": 2423
+        }
+      },
+      "candidate": {
+        "arm": "candidate",
+        "outcome": "ok",
+        "phases": {
+          "startupJsonParseMs": 0,
+          "startupStoreLoadMs": 27,
+          "spawnToAppReady": 2033.8,
+          "appReadyToServices": 577,
+          "servicesToI18n": 34,
+          "i18nToOpenWindow": 9,
+          "daemonInitMs": 1662,
+          "aclGrantMs": 0,
+          "windowCreatedToLoadStart": 19,
+          "windowCreatedToLoaded": 2255,
+          "totalToWindowCreated": 2679.3,
+          "totalToDidFinishLoad": 4934.7,
+          "didFinishLoadToWorkspaceReady": 2898,
+          "totalToWorkspaceReady": 7832.8,
+          "rendererReconnectTerminalsMs": 858,
+          "maxEventLoopStallMs": 2141
+        }
+      }
+    }
+  ],
+  "phaseSummaries": {
+    "startupJsonParseMs": {
+      "pairs": 12,
+      "shift": 0,
+      "interval": [-0.5, 0.5],
+      "verdict": "inconclusive",
+      "baselineMedianMs": 1,
+      "candidateMedianMs": 0,
+      "relativeShiftPct": 0
+    },
+    "startupStoreLoadMs": {
+      "pairs": 12,
+      "shift": -2.5,
+      "interval": [-8, 4],
+      "verdict": "inconclusive",
+      "baselineMedianMs": 26,
+      "candidateMedianMs": 20,
+      "relativeShiftPct": -9.615384615384617
+    },
+    "spawnToAppReady": {
+      "pairs": 12,
+      "shift": 80.92499999999995,
+      "interval": [-206.54999999999995, 286.1],
+      "verdict": "inconclusive",
+      "baselineMedianMs": 1430.3,
+      "candidateMedianMs": 1317.1,
+      "relativeShiftPct": 5.65790393623715
+    },
+    "appReadyToServices": {
+      "pairs": 12,
+      "shift": 78,
+      "interval": [-129.25, 663.1437499999993],
+      "verdict": "inconclusive",
+      "baselineMedianMs": 653,
+      "candidateMedianMs": 630.5,
+      "relativeShiftPct": 11.944869831546708
+    },
+    "servicesToI18n": {
+      "pairs": 12,
+      "shift": -8,
+      "interval": [-13.5, 8],
+      "verdict": "inconclusive",
+      "baselineMedianMs": 42.5,
+      "candidateMedianMs": 33.5,
+      "relativeShiftPct": -18.823529411764707
+    },
+    "i18nToOpenWindow": {
+      "pairs": 12,
+      "shift": 0,
+      "interval": [-3.75, 3],
+      "verdict": "inconclusive",
+      "baselineMedianMs": 12,
+      "candidateMedianMs": 9,
+      "relativeShiftPct": 0
+    },
+    "daemonInitMs": {
+      "pairs": 12,
+      "shift": -271.25,
+      "interval": [-662.25, 37],
+      "verdict": "inconclusive",
+      "baselineMedianMs": 2191,
+      "candidateMedianMs": 2046,
+      "relativeShiftPct": -12.380191693290735
+    },
+    "aclGrantMs": {
+      "pairs": 12,
+      "shift": 0,
+      "interval": [-0.5, 0.5],
+      "verdict": "inconclusive",
+      "baselineMedianMs": 1,
+      "candidateMedianMs": 0.5,
+      "relativeShiftPct": 0
+    },
+    "windowCreatedToLoadStart": {
+      "pairs": 12,
+      "shift": 0.25,
+      "interval": [-5.5, 5.5],
+      "verdict": "inconclusive",
+      "baselineMedianMs": 23,
+      "candidateMedianMs": 22,
+      "relativeShiftPct": 1.0869565217391304
+    },
+    "windowCreatedToLoaded": {
+      "pairs": 12,
+      "shift": -254.5,
+      "interval": [-532.75, 27.5],
+      "verdict": "inconclusive",
+      "baselineMedianMs": 2337,
+      "candidateMedianMs": 2142.5,
+      "relativeShiftPct": -10.890029952931108
+    },
+    "totalToWindowCreated": {
+      "pairs": 12,
+      "shift": 131.10000000000014,
+      "interval": [-223.94999999999993, 891.9999999999999],
+      "verdict": "inconclusive",
+      "baselineMedianMs": 2137.3,
+      "candidateMedianMs": 2085.75,
+      "relativeShiftPct": 6.133907266176958
+    },
+    "totalToDidFinishLoad": {
+      "pairs": 12,
+      "shift": -137.97499999999968,
+      "interval": [-512.2043749999999, 303.00000000000045],
+      "verdict": "inconclusive",
+      "baselineMedianMs": 4376.85,
+      "candidateMedianMs": 4034.7,
+      "relativeShiftPct": -3.1523812787735395
+    },
+    "didFinishLoadToWorkspaceReady": {
+      "pairs": 12,
+      "shift": 95.75,
+      "interval": [-367.8374999999985, 321],
+      "verdict": "inconclusive",
+      "baselineMedianMs": 2340,
+      "candidateMedianMs": 2210.5,
+      "relativeShiftPct": 4.0918803418803416
+    },
+    "totalToWorkspaceReady": {
+      "pairs": 12,
+      "shift": -175.89999999999986,
+      "interval": [-1021.4499999999994, 610.1999999999973],
+      "verdict": "inconclusive",
+      "baselineMedianMs": 6613.95,
+      "candidateMedianMs": 6323.4,
+      "relativeShiftPct": -2.659530235335917
+    },
+    "rendererReconnectTerminalsMs": {
+      "pairs": 12,
+      "shift": 3,
+      "interval": [-1, 240],
+      "verdict": "inconclusive",
+      "baselineMedianMs": 27.5,
+      "candidateMedianMs": 32,
+      "relativeShiftPct": 10.909090909090908
+    },
+    "maxEventLoopStallMs": {
+      "pairs": 12,
+      "shift": -212.75,
+      "interval": [-533.2562499999982, 207.29374999999567],
+      "verdict": "inconclusive",
+      "baselineMedianMs": 2168,
+      "candidateMedianMs": 2035,
+      "relativeShiftPct": -9.813191881918819
+    }
+  }
+}

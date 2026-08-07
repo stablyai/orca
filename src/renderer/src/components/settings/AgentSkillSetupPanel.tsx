@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { Copy, Loader2, RefreshCw, Terminal } from 'lucide-react'
 import { toast } from 'sonner'
 import { IntegrationStatusPill } from '../integration-status-pill'
 import { SkillFreshnessStatusPill } from '../skills/SkillFreshnessStatusPill'
-import { OnboardingInlineCommandTerminal } from '../onboarding/OnboardingInlineCommandTerminal'
 import { AgentSkillSetupFailureNotice } from './AgentSkillSetupFailureNotice'
 import { buildSkillSetupTerminalCommand } from './CliSkillRuntimeSetup'
 import type { AgentSkillSetupPanelProps } from './agent-skill-setup-panel-props'
+import { AgentSkillSetupInlineCommandTerminal as OnboardingInlineCommandTerminal } from '../onboarding/lazy-onboarding-inline-command-terminal'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { useMountedRef } from '@/hooks/useMountedRef'
@@ -388,24 +388,26 @@ export function AgentSkillSetupPanel({
             </Tooltip>
           </div>
           {/* The copied string above stays as built; only what we run is adapted. */}
-          <OnboardingInlineCommandTerminal
-            key={terminalAttempt}
-            worktreeId={terminalWorktreeId}
-            command={buildSkillSetupTerminalCommand(openTerminalCommand, terminalShellOverride)}
-            title={terminalTitle}
-            description={translate(
-              'auto.components.settings.AgentSkillSetupPanel.runCommandDescription',
-              'Press Enter to run the command.'
-            )}
-            ariaLabel={terminalAriaLabel}
-            terminalHeightPx={terminalHeightPx}
-            shellOverride={terminalShellOverride}
-            terminalTopMarginPx={8}
-            descriptionPaddingClassName="px-4 py-2"
-            autoScrollIntoView={false}
-            onTerminalExit={handleTerminalExit}
-            onCommandFinished={handleSetupCommandFinished}
-          />
+          <Suspense fallback={null}>
+            <OnboardingInlineCommandTerminal
+              key={terminalAttempt}
+              worktreeId={terminalWorktreeId}
+              command={buildSkillSetupTerminalCommand(openTerminalCommand, terminalShellOverride)}
+              title={terminalTitle}
+              description={translate(
+                'auto.components.settings.AgentSkillSetupPanel.runCommandDescription',
+                'Press Enter to run the command.'
+              )}
+              ariaLabel={terminalAriaLabel}
+              terminalHeightPx={terminalHeightPx}
+              shellOverride={terminalShellOverride}
+              terminalTopMarginPx={8}
+              descriptionPaddingClassName="px-4 py-2"
+              autoScrollIntoView={false}
+              onTerminalExit={handleTerminalExit}
+              onCommandFinished={handleSetupCommandFinished}
+            />
+          </Suspense>
         </div>
       ) : null}
     </div>

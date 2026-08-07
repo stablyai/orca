@@ -63,3 +63,7 @@ Source-control and review changes must consider GitLab and other supported git p
 ## GitHub CLI Usage
 
 Be mindful of the user's `gh` CLI API rate limit — batch requests where possible and avoid unnecessary calls. All code, commands, and scripts must be compatible with macOS, Linux, and Windows.
+
+## Startup Performance Claims
+
+Don't quote a before/after startup number taken from two separate `startup-time-bench.mjs` runs — a developer machine drifts across a run, and the blocked design charges that drift to whichever build ran second. Use `tests/tools/benchmarks/startup-ab-bench.mjs`, which interleaves the two builds and reports a paired shift with a confidence interval, and follow [`docs/reference/startup-benchmark-methodology.md`](./docs/reference/startup-benchmark-methodology.md). A phase verdict is only usable when the run's `measurementStatus` is `attributable` — "no drift warning was printed" is not the same thing, since a run whose control phases were never measured has no drift to report.

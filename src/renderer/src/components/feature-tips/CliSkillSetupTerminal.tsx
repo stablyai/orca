@@ -1,13 +1,14 @@
+import { Suspense } from 'react'
 import { Copy } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { OnboardingInlineCommandTerminal } from '@/components/onboarding/OnboardingInlineCommandTerminal'
 import {
   buildSkillCommandForRuntime,
   buildSkillSetupTerminalCommand
 } from '@/components/settings/CliSkillRuntimeSetup'
 import { ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/agent-feature-install-commands'
+import { CliSkillSetupInlineCommandTerminal as OnboardingInlineCommandTerminal } from '@/components/onboarding/lazy-onboarding-inline-command-terminal'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { translate } from '@/i18n/i18n'
 
@@ -77,27 +78,29 @@ export function CliSkillSetupTerminal(): React.JSX.Element {
           </TooltipContent>
         </Tooltip>
       </div>
-      <OnboardingInlineCommandTerminal
-        command={setupTerminalCommand}
-        title={translate(
-          'auto.components.feature.tips.CliSkillSetupTerminal.84e9576dac',
-          'Skill setup'
-        )}
-        ariaLabel={translate(
-          'auto.components.feature.tips.CliSkillSetupTerminal.43b60ec5c3',
-          'Orca CLI and orchestration skill install terminal'
-        )}
-        description={translate(
-          'auto.components.feature.tips.CliSkillSetupTerminal.1953e90447',
-          'Press Enter to install the Orca CLI orchestration skill for your agents.'
-        )}
-        terminalHeightPx={280}
-        terminalTopMarginPx={8}
-        descriptionPaddingClassName="px-4 py-2"
-        autoScrollIntoView={false}
-        worktreeId="feature-tip-cli-skills-terminal"
-        shellOverride={activeSkillRuntime.terminalShellOverride}
-      />
+      <Suspense fallback={null}>
+        <OnboardingInlineCommandTerminal
+          command={setupTerminalCommand}
+          title={translate(
+            'auto.components.feature.tips.CliSkillSetupTerminal.84e9576dac',
+            'Skill setup'
+          )}
+          ariaLabel={translate(
+            'auto.components.feature.tips.CliSkillSetupTerminal.43b60ec5c3',
+            'Orca CLI and orchestration skill install terminal'
+          )}
+          description={translate(
+            'auto.components.feature.tips.CliSkillSetupTerminal.1953e90447',
+            'Press Enter to install the Orca CLI orchestration skill for your agents.'
+          )}
+          terminalHeightPx={280}
+          terminalTopMarginPx={8}
+          descriptionPaddingClassName="px-4 py-2"
+          autoScrollIntoView={false}
+          worktreeId="feature-tip-cli-skills-terminal"
+          shellOverride={activeSkillRuntime.terminalShellOverride}
+        />
+      </Suspense>
     </div>
   )
 }
