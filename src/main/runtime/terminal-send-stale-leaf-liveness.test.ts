@@ -243,7 +243,7 @@ function makeOrchestrationDbStub(toHandle: () => string) {
   return {
     rows,
     markAsDelivered,
-    insert(subject: string): void {
+    insert(subject: string, type: StoredMessageRow['type'] = 'status'): void {
       rows.push({
         id: `msg_${rows.length + 1}`,
         run_id: 'run_test',
@@ -251,7 +251,7 @@ function makeOrchestrationDbStub(toHandle: () => string) {
         to_handle: toHandle(),
         subject,
         body: '',
-        type: 'status',
+        type,
         priority: 'normal',
         thread_id: null,
         payload: null,
@@ -263,8 +263,9 @@ function makeOrchestrationDbStub(toHandle: () => string) {
       })
     },
     db: {
+      // Mirrors the real query: `read = 0 AND delivered_at IS NULL`.
       getUndeliveredUnreadMessages: (handle: string) =>
-        rows.filter((row) => row.to_handle === handle && !row.delivered_at),
+        rows.filter((row) => row.to_handle === handle && row.read === 0 && !row.delivered_at),
       getActiveCoordinatorRun: () => null,
       // Consulted by onPtyExit's dispatch-failure path.
       getActiveDispatchForTerminal: () => null,
@@ -289,6 +290,131 @@ describe('push-on-idle orchestration delivery absence gate', () => {
     return { runtime, handle, write, stub }
   }
 
+  // Why: the gate that authorizes a push runs BEFORE the probe defers, so a
+  // same-id cold restore inside the probe window would otherwise be written to on
+  // the dead process's authority — ptyId is exactly what a same-id respawn keeps.
+  it('re-applies the live-idle gate when the probe answers after a same-id respawn', async () => {
+    let resolveProbe!: (value: boolean | null) => void
+    const { runtime, handle, write, stub } = await makeIdleLeafWithoutPtyRecord({
+      probePtyLiveness: () =>
+        new Promise<boolean | null>((resolve) => {
+          resolveProbe = resolve
+        })
+    })
+    stub.insert('for the old session')
+
+    runtime.notifyMessageArrived(handle, 'status')
+    await Promise.resolve()
+    expect(write).not.toHaveBeenCalled()
+
+    // The session dies and cold-restores under the same id while the probe is out.
+    runtime.onPtyExit(STALE_PTY_ID, 0)
+    runtime.onPtySpawned(STALE_PTY_ID, undefined, { awaitsRegistration: false })
+
+    resolveProbe(null)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(write).not.toHaveBeenCalled()
+    expect(stub.rows[0].delivered_at).toBeNull()
+
+    // The replacement's own live idle frame releases the row — through a fresh
+    // probe, since this leaf's pty is still unknown to the provider.
+    runtime.onPtyData(STALE_PTY_ID, '\x1b]0;Codex done\x07', 200)
+    resolveProbe(null)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(write).toHaveBeenCalledWith(
+      STALE_PTY_ID,
+      expect.stringContaining('Subject: for the old session')
+    )
+  })
+
+  // Why: a `remote:` pty answers probePtyLiveness with null before its first
+  // await (ipc/pty.ts), so the probe settles on a pure microtask chain. Without a
+  // macrotask hop the continuation runs BEFORE the resumption of a check resolved
+  // in the meantime — the waiter is already out of the map and its rows are not
+  // yet read, so the push injects exactly what that check is about to return.
+  it('waits a macrotask before delivering so a resolved check consumes its rows first', async () => {
+    const { runtime, handle, write, stub } = await makeIdleLeafWithoutPtyRecord({
+      probePtyLiveness: async () => null
+    })
+
+    const pulled: string[] = []
+    const checkResumed = runtime
+      .waitForMessage(handle, { typeFilter: ['worker_done'], timeoutMs: 60_000 })
+      .then(() => {
+        for (const row of stub.rows) {
+          if (row.type === 'worker_done' && row.read === 0) {
+            row.read = 1
+            pulled.push(row.subject)
+          }
+        }
+      })
+
+    stub.insert('unclaimed status')
+    runtime.notifyMessageArrived(handle, 'status')
+    // Land the completion while the probe chain is mid-flight — the slot where
+    // the continuation would otherwise overtake the check's resumption.
+    await Promise.resolve()
+    await Promise.resolve()
+    stub.insert('worker completion', 'worker_done')
+    runtime.notifyMessageArrived(handle, 'worker_done')
+
+    await checkResumed
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(pulled).toEqual(['worker completion'])
+    const payloads = write.mock.calls
+      .map(([, data]) => data)
+      .filter((data): data is string => typeof data === 'string')
+    expect(payloads.some((data) => data.includes('Subject: unclaimed status'))).toBe(true)
+    expect(payloads.some((data) => data.includes('Subject: worker completion'))).toBe(false)
+  })
+
+  // Why: the notify-time reservation snapshot exists for a waiter resolved inside
+  // one microtask drain. The probe continuation runs many macrotasks later, and
+  // the probe dedup swallows every notify arriving meanwhile — so a reservation
+  // carried in here would skip a row with nothing left to retry it (#12536 again).
+  it('does not carry a stale waiter reservation into the probe continuation', async () => {
+    let resolveProbe!: (value: boolean | null) => void
+    const { runtime, handle, write, stub } = await makeIdleLeafWithoutPtyRecord({
+      probePtyLiveness: () =>
+        new Promise<boolean | null>((resolve) => {
+          resolveProbe = resolve
+        })
+    })
+
+    const waitPromise = runtime.waitForMessage(handle, {
+      typeFilter: ['worker_done'],
+      timeoutMs: 60_000
+    })
+    stub.insert('unclaimed status')
+    runtime.notifyMessageArrived(handle, 'status')
+    await Promise.resolve()
+    expect(write).not.toHaveBeenCalled()
+
+    // The reserving waiter goes away, then its type finally arrives — and the
+    // probe dedup drops this notify, so only the continuation can deliver it.
+    runtime.cancelMessageWaiters(handle)
+    await expect(waitPromise).resolves.toBe('cancelled')
+    stub.insert('late completion', 'worker_done')
+    runtime.notifyMessageArrived(handle, 'worker_done')
+    await Promise.resolve()
+
+    resolveProbe(null)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    // Why twice: the probe continuation yields a turn before delivering.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    const payloads = write.mock.calls
+      .map(([, data]) => data)
+      .filter((data): data is string => typeof data === 'string')
+    expect(payloads.some((data) => data.includes('Subject: unclaimed status'))).toBe(true)
+    expect(payloads.some((data) => data.includes('Subject: late completion'))).toBe(true)
+  })
+
   it('keeps messages queued instead of marking a proven-absent pty delivered', async () => {
     const { runtime, handle, write, stub } = await makeIdleLeafWithoutPtyRecord({
       probePtyLiveness: async () => false
@@ -310,6 +436,8 @@ describe('push-on-idle orchestration delivery absence gate', () => {
     stub.insert('hello')
 
     runtime.deliverPendingMessagesForHandle(handle)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    // Why twice: the probe continuation yields a turn before delivering.
     await new Promise((resolve) => setTimeout(resolve, 0))
 
     expect(write).toHaveBeenCalledWith(STALE_PTY_ID, expect.stringContaining('Subject: hello'))
@@ -435,8 +563,17 @@ describe('push-on-idle orchestration delivery absence gate', () => {
       expect(stub.markAsDelivered).not.toHaveBeenCalled()
       expect(stub.rows[0].delivered_at).toBeNull()
 
-      // The replacement's own delivery starts a fresh flight and completes.
+      // The replacement's own delivery starts a fresh flight and completes —
+      // but only once ITS live title proves idle; the dead session's live status
+      // no longer authorizes a write into the new process.
       runtime.deliverPendingMessagesForHandle(handle)
+      expect(
+        write.mock.calls.filter(
+          ([, data]) => typeof data === 'string' && data.includes('Subject: for the old session')
+        )
+      ).toHaveLength(1)
+      runtime.onPtyData(STALE_PTY_ID, '\x1b]0;Codex working\x07', 200)
+      runtime.onPtyData(STALE_PTY_ID, '\x1b]0;Codex done\x07', 201)
       const payloadWrites = write.mock.calls.filter(
         ([, data]) => typeof data === 'string' && data.includes('Subject: for the old session')
       )

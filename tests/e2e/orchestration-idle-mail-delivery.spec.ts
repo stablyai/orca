@@ -1,0 +1,406 @@
+/**
+ * Push-on-idle mail delivery, end to end (#12536).
+ *
+ * Orchestration hands a message to an agent one of two ways: a supervised agent
+ * pulls with `orchestration.check --wait`, and an unsupervised one has the text
+ * typed into its pane when the runtime sees it go idle. The push half was driven
+ * only by a busy→idle transition, so mail that arrived while the recipient was
+ * ALREADY idle waited for a transition that never came and sat unread forever.
+ *
+ * These specs drive real PTYs: the recipient is a fake `codex` on PATH whose OSC
+ * titles the test controls through a file, and which appends every stdin chunk
+ * to a ledger. That ledger is the oracle — it proves the banner and the
+ * synthesized Enter reached the agent process, which no store or DB read can.
+ *
+ * The ordering fixes on this path (microtask deferral, probe-window respawn,
+ * waiter reservations) are sub-millisecond races that E2E cannot steer; they are
+ * covered in src/main/runtime/orca-runtime.test.ts. What lives here is every
+ * behavior that needs a real process, a real title, or a real pane.
+ */
+import { test, expect } from './helpers/orca-app'
+import type { ElectronApplication, Page } from '@stablyai/playwright-test'
+import { waitForSessionReady, waitForActiveWorktree, ensureTerminalVisible } from './helpers/store'
+import {
+  execInTerminal,
+  waitForActivePaneHookDescriptor,
+  waitForActivePanePtyId,
+  waitForActiveTerminalManager
+} from './helpers/terminal'
+import { RuntimeClient } from '../../src/cli/runtime-client'
+import type { RuntimeTerminalListResult } from '../../src/shared/runtime-types'
+import {
+  CODEX_IDLE_TITLE,
+  CODEX_WORKING_TITLE,
+  CURSOR_IDLE_TITLE,
+  createMailPaneAgent,
+  type MailPaneAgent
+} from './helpers/orchestration-mail-pane-agent'
+import {
+  mailDisposition,
+  readMailRow,
+  startCoordinatorRun
+} from './helpers/orchestration-mail-store'
+import { waitForPtyShellEcho } from './terminal-pty-readiness'
+
+/** The wrapper `formatMessagesForInjection` puts around every pushed batch. */
+const BANNER_PREFIX = '--- Orchestration Messages'
+
+// Why generous: the push runs a microtask behind the send, may defer once more
+// behind a liveness probe, and only stamps delivered_at after a 500ms Enter.
+const DELIVERY_TIMEOUT_MS = 20_000
+// Why 3s: long enough to cover that same chain, so "still pending" means the
+// gate refused rather than that the push had not run yet.
+const NO_DELIVERY_SETTLE_MS = 3_000
+
+type AgentPane = {
+  handle: string
+  agent: MailPaneAgent
+  ptyId: string
+}
+
+type MailFixture = {
+  client: RuntimeClient
+  userDataDir: string
+  worktreeId: string
+  openAgentPane: () => Promise<AgentPane>
+}
+
+/**
+ * Why retry: Electron can recreate the evaluated main-world context during
+ * startup, which surfaces as a one-off 'Execution context was destroyed' rather
+ * than a real failure. Same guard as installTerminalPtyWriteSpy.
+ */
+async function readUserDataDir(electronApp: ElectronApplication): Promise<string> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await electronApp.evaluate(({ app }) => app.getPath('userData'))
+    } catch (error) {
+      const transient =
+        error instanceof Error && error.message.includes('Execution context was destroyed')
+      if (!transient || attempt >= 5) {
+        throw error
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250))
+    }
+  }
+}
+
+async function setUpMailFixture(
+  orcaPage: Page,
+  electronApp: ElectronApplication
+): Promise<MailFixture> {
+  await waitForSessionReady(orcaPage)
+  const worktreeId = await waitForActiveWorktree(orcaPage)
+  await ensureTerminalVisible(orcaPage)
+  await waitForActiveTerminalManager(orcaPage)
+
+  const userDataDir = await readUserDataDir(electronApp)
+  const client = new RuntimeClient(userDataDir, 30_000, null, null)
+
+  // Why: the renderer publishes the active worktree before the runtime finishes
+  // registering it, and terminal.create resolves its selector against the
+  // runtime — racing that yields selector_not_found, not a slow create.
+  await expect
+    .poll(
+      async () => {
+        const listed = await client.call<{ worktrees: { id: string }[] }>('worktree.list', {})
+        return listed.result.worktrees.some((worktree) => worktree.id === worktreeId)
+      },
+      { timeout: 60_000, message: 'runtime never registered the active worktree' }
+    )
+    .toBe(true)
+
+  const openAgentPane = async (): Promise<AgentPane> => {
+    // The fixture's pane is already mounted, so its leaf exists — which is what
+    // push delivery resolves the write target through.
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    const { paneKey } = await waitForActivePaneHookDescriptor(orcaPage)
+    const resolved = await client.call<{ terminal: { handle: string } }>('terminal.resolvePane', {
+      paneKey
+    })
+    const handle = resolved.result.terminal.handle
+
+    // Why prove the shell echoes first: keystrokes typed at a shell that has not
+    // reached its prompt are simply dropped, and the agent then never starts for
+    // a reason unrelated to anything under test.
+    await waitForPtyShellEcho(orcaPage, ptyId, 60_000)
+    const agent = createMailPaneAgent()
+    await execInTerminal(orcaPage, ptyId, agent.launchCommand)
+    await expect
+      .poll(() => agent.hasStarted(), { timeout: 60_000, message: 'agent never started' })
+      .toBe(true)
+    return { handle, agent, ptyId }
+  }
+
+  return { client, userDataDir, worktreeId, openAgentPane }
+}
+
+/** Wait until the runtime has observed `title` as a LIVE frame from the pane. */
+async function waitForObservedTitle(
+  client: RuntimeClient,
+  handle: string,
+  title: string
+): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const listed = await client.call<RuntimeTerminalListResult>('terminal.list')
+        return listed.result.terminals.find((entry) => entry.handle === handle)?.title ?? null
+      },
+      { timeout: 30_000, message: `runtime never observed the title ${title}` }
+    )
+    .toBe(title)
+}
+
+/** Put the pane in the state #12536 is about: idle, observed live, no transition pending. */
+async function driveToLiveIdle(client: RuntimeClient, pane: AgentPane): Promise<void> {
+  pane.agent.setTitle(CODEX_WORKING_TITLE)
+  await waitForObservedTitle(client, pane.handle, CODEX_WORKING_TITLE)
+  pane.agent.setTitle(CODEX_IDLE_TITLE)
+  await waitForObservedTitle(client, pane.handle, CODEX_IDLE_TITLE)
+}
+
+async function sendMail(
+  client: RuntimeClient,
+  to: string,
+  overrides: { subject: string; type?: string; body?: string }
+): Promise<string> {
+  const sent = await client.call<{ message: { id: string } }>('orchestration.send', {
+    to,
+    from: 'e2e-sender',
+    subject: overrides.subject,
+    body: overrides.body ?? 'e2e body',
+    type: overrides.type ?? 'status'
+  })
+  return sent.result.message.id
+}
+
+async function expectPushed(pane: AgentPane, subject: string): Promise<void> {
+  await expect
+    .poll(() => pane.agent.readStdin(), {
+      timeout: DELIVERY_TIMEOUT_MS,
+      message: 'banner never reached the agent process'
+    })
+    .toContain(BANNER_PREFIX)
+  expect(pane.agent.readStdin()).toContain(`Subject: ${subject}`)
+}
+
+/**
+ * The synthesized Enter is a separate write ~500ms after the banner. The banner
+ * itself is `\n`-joined, so a `\r` anywhere in stdin can only be that submit —
+ * which keeps the assertion independent of how the PTY chunks the two writes.
+ */
+async function expectSubmitted(pane: AgentPane): Promise<void> {
+  await expect
+    .poll(() => pane.agent.readStdin().includes('\r'), {
+      timeout: DELIVERY_TIMEOUT_MS,
+      message: 'orchestration never synthesized Enter'
+    })
+    .toBe(true)
+}
+
+/** Inverse of expectSubmitted, for the panes whose submit stays user-owned. */
+function expectNotSubmitted(pane: AgentPane): void {
+  expect(pane.agent.readStdin()).not.toContain('\r')
+}
+
+/**
+ * Why a fixed wait and not expect.poll: poll settles the instant the value
+ * matches, so polling for 'pending' would pass before the push had any chance
+ * to run and would assert nothing at all. The window has to elapse in full.
+ */
+async function expectStaysPending(
+  page: Page,
+  userDataDir: string,
+  pane: AgentPane,
+  messageId: string
+): Promise<void> {
+  // The row must exist first, or "pending" could just mean the send never landed.
+  expect(readMailRow(userDataDir, messageId)).toBeDefined()
+  await page.waitForTimeout(NO_DELIVERY_SETTLE_MS)
+  expect(mailDisposition(readMailRow(userDataDir, messageId))).toBe('pending')
+  expect(pane.agent.readStdin()).not.toContain(BANNER_PREFIX)
+}
+
+test.describe('orchestration push-on-idle mail delivery', () => {
+  test('delivers mail that arrives while the agent is already idle', async ({
+    orcaPage,
+    electronApp
+  }) => {
+    test.setTimeout(180_000)
+    const { client, userDataDir, openAgentPane } = await setUpMailFixture(orcaPage, electronApp)
+    const pane = await openAgentPane()
+    await driveToLiveIdle(client, pane)
+
+    // The regression: no busy→idle edge follows this send, so before #12536 the
+    // row stayed pending until something unrelated made the agent transition.
+    const subject = 'Already idle delivery'
+    const messageId = await sendMail(client, pane.handle, { subject })
+
+    await expectPushed(pane, subject)
+    await expectSubmitted(pane)
+    await expect
+      .poll(() => mailDisposition(readMailRow(userDataDir, messageId)), {
+        timeout: DELIVERY_TIMEOUT_MS
+      })
+      .toBe('pushed')
+  })
+
+  test('holds mail while the agent is working and releases it on the idle frame', async ({
+    orcaPage,
+    electronApp
+  }) => {
+    test.setTimeout(180_000)
+    const { client, userDataDir, openAgentPane } = await setUpMailFixture(orcaPage, electronApp)
+    const pane = await openAgentPane()
+    pane.agent.setTitle(CODEX_WORKING_TITLE)
+    await waitForObservedTitle(client, pane.handle, CODEX_WORKING_TITLE)
+
+    const subject = 'Held while working'
+    const messageId = await sendMail(client, pane.handle, { subject })
+    await expectStaysPending(orcaPage, userDataDir, pane, messageId)
+
+    // Releasing the gate proves the silence above was the working status and not
+    // a harness that never wired the send to this pane at all.
+    pane.agent.setTitle(CODEX_IDLE_TITLE)
+    await expectPushed(pane, subject)
+    await expect
+      .poll(() => mailDisposition(readMailRow(userDataDir, messageId)), {
+        timeout: DELIVERY_TIMEOUT_MS
+      })
+      .toBe('pushed')
+  })
+
+  // Guards the null→idle path rather than reproducing #12536: a fresh pane has
+  // no status, so idle IS a transition here. The no-transition variant needs a
+  // restore-seeded idle and lives in orchestration-idle-mail-restore.spec.ts.
+  test('delivers mail queued before a fresh agent has reported any status', async ({
+    orcaPage,
+    electronApp
+  }) => {
+    test.setTimeout(180_000)
+    const { client, userDataDir, openAgentPane } = await setUpMailFixture(orcaPage, electronApp)
+    const pane = await openAgentPane()
+
+    // No title at all yet — the pane has no live agent status, which is where a
+    // resumed agent sits before it paints its prompt.
+    const subject = 'First live idle frame'
+    const messageId = await sendMail(client, pane.handle, { subject })
+    await expectStaysPending(orcaPage, userDataDir, pane, messageId)
+
+    // Idle is this pane's FIRST live status, so there is no busy→idle edge here
+    // either; delivery has to hang off the liveness of the observation.
+    pane.agent.setTitle(CODEX_IDLE_TITLE)
+    await expectPushed(pane, subject)
+    await expectSubmitted(pane)
+  })
+
+  test('leaves the mail to a live waiter instead of pushing it into the pane', async ({
+    orcaPage,
+    electronApp
+  }) => {
+    test.setTimeout(180_000)
+    const { client, userDataDir, openAgentPane } = await setUpMailFixture(orcaPage, electronApp)
+    const pane = await openAgentPane()
+    await driveToLiveIdle(client, pane)
+
+    // A supervised agent is parked in a long-poll. Pushing as well would deliver
+    // the same row twice — check consumes by `read` and push stamps
+    // `delivered_at`, so neither marker hides the row from the other.
+    // Why peek: this pane is bound to no Run, and that legacy mailbox refuses a
+    // consuming read. Peek still registers the same unfiltered waiter, which is
+    // what suppresses the push — the pull's own bookkeeping is not under test.
+    const waiting = client.call<{ messages: { subject: string }[] }>('orchestration.check', {
+      terminal: pane.handle,
+      peek: true,
+      wait: true,
+      timeoutMs: 30_000
+    })
+    // Why a settle: the waiter must be registered before the send, or the send
+    // correctly sees no consumer and this asserts the wrong branch.
+    await orcaPage.waitForTimeout(1_000)
+
+    const subject = 'Waiter claims it'
+    const messageId = await sendMail(client, pane.handle, { subject })
+
+    const pulled = await waiting
+    expect(pulled.result.messages.map((message) => message.subject)).toContain(subject)
+    expect(pane.agent.readStdin()).not.toContain(BANNER_PREFIX)
+    // Pending, not pushed: the pull won, and the push stays available for a
+    // later notify rather than racing this one.
+    expect(mailDisposition(readMailRow(userDataDir, messageId))).toBe('pending')
+  })
+
+  test('pushes to the pane when the only waiter filters this message type out', async ({
+    orcaPage,
+    electronApp
+  }) => {
+    test.setTimeout(180_000)
+    const { client, userDataDir, openAgentPane } = await setUpMailFixture(orcaPage, electronApp)
+    const pane = await openAgentPane()
+    await driveToLiveIdle(client, pane)
+
+    // A waiter scoped to worker_done never returns a status row, so treating it
+    // as this message's consumer would strand the row exactly as #12536 did.
+    const waiting = client
+      .call('orchestration.check', {
+        terminal: pane.handle,
+        types: 'worker_done',
+        wait: true,
+        timeoutMs: 8_000
+      })
+      .catch(() => undefined)
+    await orcaPage.waitForTimeout(1_000)
+
+    const subject = 'Filtered waiter'
+    const messageId = await sendMail(client, pane.handle, { subject, type: 'status' })
+
+    await expectPushed(pane, subject)
+    await expect
+      .poll(() => mailDisposition(readMailRow(userDataDir, messageId)), {
+        timeout: DELIVERY_TIMEOUT_MS
+      })
+      .toBe('pushed')
+    await waiting
+  })
+
+  test('writes the banner but never Enter for the active coordinator pane', async ({
+    orcaPage,
+    electronApp
+  }) => {
+    test.setTimeout(180_000)
+    const { client, userDataDir, openAgentPane } = await setUpMailFixture(orcaPage, electronApp)
+    const pane = await openAgentPane()
+    await driveToLiveIdle(client, pane)
+    startCoordinatorRun(userDataDir, pane.handle)
+
+    // The coordinator prompt is user-owned input; synthesizing Enter there would
+    // submit whatever the human was mid-way through typing (#7337).
+    const subject = 'Coordinator no-submit'
+    await sendMail(client, pane.handle, { subject })
+
+    await expectPushed(pane, subject)
+    await orcaPage.waitForTimeout(2_000)
+    expectNotSubmitted(pane)
+  })
+
+  test('writes the banner but never Enter for a Cursor agent pane', async ({
+    orcaPage,
+    electronApp
+  }) => {
+    test.setTimeout(180_000)
+    const { client, openAgentPane } = await setUpMailFixture(orcaPage, electronApp)
+    const pane = await openAgentPane()
+    // Cursor treats injected PTY text as editable prompt content, so submitting
+    // has to stay under user control there too.
+    pane.agent.setTitle(CURSOR_IDLE_TITLE)
+    await waitForObservedTitle(client, pane.handle, CURSOR_IDLE_TITLE)
+
+    const subject = 'Cursor no-submit'
+    await sendMail(client, pane.handle, { subject })
+
+    await expectPushed(pane, subject)
+    await orcaPage.waitForTimeout(2_000)
+    expectNotSubmitted(pane)
+  })
+})
