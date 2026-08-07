@@ -176,21 +176,24 @@ describe('parseWorkspaceSessionSalvaging', () => {
     }
   })
 
-  it('salvages two dot-colliding keys as two independent repairs', () => {
-    // Why: 'a.root' (one key containing a dot) and 'a' → missing 'root' produce
-    // paths that collide when joined with '.'; path identity is segment-wise so
-    // the two stay distinct repairs rather than one posing as the other's.
+  it('repairs a dotted map key and its same-named nested path independently', () => {
+    // Why: map keys are user data, so 'a.root' and the nested path a → root are
+    // different entries that read alike once joined. Each must produce its own
+    // repair; nothing may treat one as containing the other.
     const result = parseWorkspaceSessionSalvaging(
       baseSession({
         terminalLayoutsByTabId: {
           'a.root': 'not-an-object',
-          a: { activeLeafId: null, expandedLeafId: null }
+          a: { root: 42, activeLeafId: null, expandedLeafId: null }
         }
       })
     )
     expect(result.ok).toBe(true)
     if (result.ok) {
-      expect(result.droppedPaths).toHaveLength(2)
+      expect(result.droppedPaths.toSorted()).toEqual([
+        'terminalLayoutsByTabId.a',
+        'terminalLayoutsByTabId.a.root'
+      ])
       expect(result.value.terminalLayoutsByTabId).toEqual({})
     }
   })

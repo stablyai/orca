@@ -12135,21 +12135,6 @@ describe('Store host-partitioned workspace sessions', () => {
     expect(session.tabsByWorktree[worktreeId]?.map((tab) => tab.id)).toEqual(['local-keep'])
   })
 
-  // Why: no flush() anywhere below — flush writes whatever the state hash says is
-  // dirty, so it passes even when nothing scheduled a save. Only the debounced
-  // write the salvage itself schedules proves the repair reaches disk; without it
-  // the corrupt entries stay there and get re-salvaged on every launch.
-  async function loadAndAwaitScheduledSave(): Promise<void> {
-    vi.useFakeTimers()
-    try {
-      const store = await createStore()
-      vi.advanceTimersByTime(10_000)
-      await store.waitForPendingWrite()
-    } finally {
-      vi.useRealTimers()
-    }
-  }
-
   type PersistedSessionsFile = {
     workspaceSession?: { tabsByWorktree?: Record<string, { id: string }[]> }
     workspaceSessionsByHostId?: Record<
@@ -12178,6 +12163,45 @@ describe('Store host-partitioned workspace sessions', () => {
     await loadAndAwaitScheduledSave()
     return readDataFile() as PersistedSessionsFile
   }
+
+  it('does not report salvage for a load that was discarded and retried from backup', async () => {
+    const worktreeId = 'repo-1::/worktree'
+    // Why: the salvage events are queued while the state literal is still being
+    // built. `sshTargets` is read after it, so a non-array there throws, drops
+    // this result and retries against the backup — the queued events describe a
+    // session that never loaded.
+    writeDataFile({
+      schemaVersion: 1,
+      sshTargets: 5,
+      workspaceSession: {
+        ...makeHostSession('local-repo'),
+        tabsByWorktree: {
+          [worktreeId]: [makeTerminalTab({ id: 'tab-keep', worktreeId }), { id: 'tab-corrupt' }]
+        }
+      }
+    })
+    writeFileSync(
+      `${dataFile()}.bak.0`,
+      JSON.stringify({
+        schemaVersion: 1,
+        workspaceSession: {
+          ...makeHostSession('backup-repo'),
+          tabsByWorktree: { [worktreeId]: [makeTerminalTab({ id: 'backup-tab', worktreeId })] }
+        }
+      }),
+      'utf-8'
+    )
+    trackMock.mockReset()
+
+    const store = await createStore()
+
+    expect(store.getWorkspaceSession('local').activeRepoId).toBe('backup-repo')
+    const { flushWorkspaceSessionSalvageTelemetry } = await import('./persistence')
+    flushWorkspaceSessionSalvageTelemetry()
+    expect(
+      trackMock.mock.calls.filter(([event]) => event === 'workspace_session_salvaged')
+    ).toEqual([])
+  })
 
   it('schedules a save for a salvaged local session instead of re-salvaging every launch', async () => {
     const worktreeId = 'repo-1::/worktree'

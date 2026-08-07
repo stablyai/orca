@@ -57,10 +57,11 @@ function findDropTarget(
   return null
 }
 
-// Why: segment-wise identity. Map keys are user data and may contain '.', so a
-// joined string is not a path identity; JSON also keeps an array index 3 distinct
-// from an object key '3'. Both matter because these keys decide whether one entry
-// contains another.
+// Why: these keys decide whether one entry contains another, so they must be a
+// path identity, not a rendering of one. Map keys are user data and may hold '.',
+// and an array index 3 is not the object key '3'. Defensive: under today's schema
+// a joined key only costs an extra repair pass rather than losing an entry, but
+// nothing about the drop planner guarantees that stays true.
 function pathKey(path: readonly PropertyKey[]): string {
   return JSON.stringify(
     path.map((segment) => (typeof segment === 'symbol' ? segment.toString() : segment))

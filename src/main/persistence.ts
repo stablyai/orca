@@ -3087,6 +3087,11 @@ export class Store {
   }
 
   private load(allowBackupRecovery = true): PersistedState {
+    // Why: a throw later in the state literal drops this attempt's result and
+    // retries against a restored backup. Salvage events were already queued for
+    // the session that got discarded, so without this the telemetry meant to
+    // count corrupt profiles reports repairs that never took effect.
+    pendingWorkspaceSessionSalvageEvents.length = 0
     // Capture "has run Orca before?" for telemetry cohort; the telemetry field is new, so field inference misclassifies old users as fresh.
     const dataFile = this.dataFile
     const fileExistedOnLoad = existsSync(dataFile)
