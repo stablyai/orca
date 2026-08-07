@@ -18,6 +18,8 @@ const COORDINATOR_HANDLE = 'term_legacy_coord'
 const COORDINATOR_PANE = 'tab_coord:44444444-4444-4444-8444-444444444444'
 const CURRENT_COORDINATOR_HANDLE = 'term_current_coord'
 const CURRENT_COORDINATOR_PANE = 'tab_current:55555555-5555-4555-8555-555555555555'
+// The replacement coordinator after a retain/restart: same handle, new pane identity.
+const RESTARTED_COORDINATOR_PANE = 'tab_current:99999999-9999-4999-8999-999999999999'
 const FRESH_COORDINATOR_HANDLE = 'term_fresh_coord'
 const FRESH_COORDINATOR_PANE = 'tab_fresh:66666666-6666-4666-8666-666666666666'
 
@@ -198,82 +200,72 @@ describe('legacy compatibility with fresh-run coordinators', () => {
     expect(response).toMatchObject({ ok: true })
     expect(harness.db.getTask(freshTask.id)?.status).toBe('ready')
   })
-
-  it('still fences the replaced legacy coordinator after takeover', async () => {
-    const harness = createHarness()
-    harness.db.bindRun({
-      runId: harness.adoptedRunId,
-      coordinatorHandle: CURRENT_COORDINATOR_HANDLE,
-      coordinatorPaneKey: CURRENT_COORDINATOR_PANE,
-      takeoverLegacy: true
-    })
-
-    const response = await harness.dispatcher.dispatch(
-      request(
-        'orchestration.taskList',
-        { callerTerminalHandle: COORDINATOR_HANDLE },
-        evidence('coordinator'),
-        'replaced-coordinator-fenced'
-      )
-    )
-
-    expect(response).toMatchObject({ ok: false, error: { code: 'legacy_read_only' } })
-  })
 })
 
-describe('isLegacyCoordinatorHandle after takeover with revoked principal', () => {
+function takeOverWithCommittedPrincipal(harness: Harness): void {
+  harness.db.commitLegacyCompatibilityPrincipal({
+    runId: harness.adoptedRunId,
+    role: 'coordinator',
+    hostScope: JSON.stringify({ kind: 'local', hostId: 'local' }),
+    terminalHandle: COORDINATOR_HANDLE,
+    paneKey: COORDINATOR_PANE,
+    launchTokenHash: 'coord-hash',
+    processIncarnation: 'process-1'
+  })
+  harness.db.bindRun({
+    runId: harness.adoptedRunId,
+    coordinatorHandle: CURRENT_COORDINATOR_HANDLE,
+    coordinatorPaneKey: CURRENT_COORDINATOR_PANE,
+    takeoverLegacy: true
+  })
+}
+
+describe('legacy coordinator delivery targets after takeover', () => {
   it('accepts both the old and new coordinator handles after principal revocation', () => {
     const harness = createHarness()
-    // Commit a coordinator principal, then take over (revoking it).
-    harness.db.commitLegacyCompatibilityPrincipal({
-      runId: harness.adoptedRunId,
-      role: 'coordinator',
-      hostScope: JSON.stringify({ kind: 'local', hostId: 'local' }),
-      terminalHandle: COORDINATOR_HANDLE,
-      paneKey: COORDINATOR_PANE,
-      launchTokenHash: 'coord-hash',
-      processIncarnation: 'process-1'
-    })
-    expect(harness.db.getLegacyCoordinatorPrincipal(harness.adoptedRunId)?.status).toBe('committed')
-
-    harness.db.bindRun({
-      runId: harness.adoptedRunId,
-      coordinatorHandle: CURRENT_COORDINATOR_HANDLE,
-      coordinatorPaneKey: CURRENT_COORDINATOR_PANE,
-      takeoverLegacy: true
-    })
+    takeOverWithCommittedPrincipal(harness)
 
     expect(harness.db.getLegacyCoordinatorPrincipal(harness.adoptedRunId)?.status).toBe('revoked')
 
     // Old handle still routable (retained).
-    expect(harness.db.isLegacyCoordinatorHandle(harness.adoptedRunId, COORDINATOR_HANDLE)).toBe(
-      true
-    )
+    expect(
+      harness.db.isLegacyCoordinatorDeliveryTarget(harness.adoptedRunId, COORDINATOR_HANDLE)
+    ).toBe(true)
     // New handle also routable (current binding).
     expect(
-      harness.db.isLegacyCoordinatorHandle(harness.adoptedRunId, CURRENT_COORDINATOR_HANDLE)
+      harness.db.isLegacyCoordinatorDeliveryTarget(harness.adoptedRunId, CURRENT_COORDINATOR_HANDLE)
     ).toBe(true)
     // Unknown handle not routable.
-    expect(harness.db.isLegacyCoordinatorHandle(harness.adoptedRunId, 'term_unknown')).toBe(false)
+    expect(harness.db.isLegacyCoordinatorDeliveryTarget(harness.adoptedRunId, 'term_unknown')).toBe(
+      false
+    )
+  })
+
+  it('keeps the caller-side fence out of the replacement coordinator jurisdiction', async () => {
+    const harness = createHarness()
+    takeOverWithCommittedPrincipal(harness)
+
+    // The replacement coordinator is a delivery target, but must never become fence jurisdiction:
+    // fencing it would replace an actionable error with unusable takeover guidance.
+    expect(
+      harness.db.isLegacyCoordinatorHandle(harness.adoptedRunId, CURRENT_COORDINATOR_HANDLE)
+    ).toBe(false)
+
+    const response = await harness.dispatcher.dispatch(
+      request(
+        'orchestration.taskList',
+        { callerTerminalHandle: CURRENT_COORDINATOR_HANDLE },
+        { ...evidence('current-coordinator'), paneKey: RESTARTED_COORDINATOR_PANE },
+        'replacement-coordinator-not-fenced'
+      )
+    )
+
+    expect(response).not.toMatchObject({ ok: false, error: { code: 'legacy_read_only' } })
   })
 
   it('lets a worker send worker_done to the new coordinator after principal revocation', async () => {
     const harness = createHarness()
-    harness.db.commitLegacyCompatibilityPrincipal({
-      runId: harness.adoptedRunId,
-      role: 'coordinator',
-      hostScope: JSON.stringify({ kind: 'local', hostId: 'local' }),
-      terminalHandle: COORDINATOR_HANDLE,
-      paneKey: COORDINATOR_PANE,
-      launchTokenHash: 'coord-hash',
-      processIncarnation: 'process-1'
-    })
-    harness.db.bindRun({
-      runId: harness.adoptedRunId,
-      coordinatorHandle: CURRENT_COORDINATOR_HANDLE,
-      coordinatorPaneKey: CURRENT_COORDINATOR_PANE,
-      takeoverLegacy: true
-    })
+    takeOverWithCommittedPrincipal(harness)
 
     const response = await harness.dispatcher.dispatch(
       request(

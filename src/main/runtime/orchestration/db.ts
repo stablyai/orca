@@ -1697,35 +1697,24 @@ export class OrchestrationDb {
     return { terminalHandle: params.terminalHandle, paneKey: params.paneKey }
   }
 
+  // Why: caller-side fence jurisdiction. Widening this fences more callers, so keep it narrow.
   isLegacyCoordinatorHandle(runId: string, terminalHandle: string): boolean {
     const principal = this.getLegacyCoordinatorPrincipal(runId)
-    if (principal?.status === 'committed') {
+    if (principal) {
       return principal.terminal_handle === terminalHandle
-    }
-    // After takeover the revoked principal and the current binding are both valid targets.
-    if (principal?.terminal_handle === terminalHandle) {
-      return true
-    }
-    const run = this.getRunRaw(runId)
-    if (run?.coordinator_handle === terminalHandle && run.coordinator_pane_key) {
-      return true
     }
     return this.getUniqueLegacyCoordinatorHandle(runId) === terminalHandle
   }
 
-  isKnownLegacyCoordinatorIdentity(
-    runId: string,
-    terminalHandle: string,
-    paneKey?: string
-  ): boolean {
-    const principal = this.getLegacyCoordinatorPrincipal(runId)
-    if (principal) {
-      return (
-        principal.terminal_handle === terminalHandle ||
-        (paneKey ? isEquivalentPaneKey(principal.pane_key, paneKey) : false)
-      )
+  // Why: recipient-side permit for legacy lifecycle mail. After a takeover revokes the old principal
+  // the replacement coordinator is only reachable through the Run binding, and both handles are
+  // promoted to the Run mailbox by resolveLegacyWorkerCoordinatorDelivery.
+  isLegacyCoordinatorDeliveryTarget(runId: string, terminalHandle: string): boolean {
+    if (this.isLegacyCoordinatorHandle(runId, terminalHandle)) {
+      return true
     }
-    return this.getUniqueLegacyCoordinatorHandle(runId) === terminalHandle
+    const run = this.getRunRaw(runId)
+    return run?.coordinator_handle === terminalHandle && Boolean(run.coordinator_pane_key)
   }
 
   findLegacyWorkerCompletion(params: {
