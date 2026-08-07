@@ -8,4 +8,8 @@ describe('getDefaultSettings', () => {
       'C:\\Users\\alice\\orca\\workspaces'
     )
   })
+
+  it('shows terminal quick commands by default', () => {
+    expect(getDefaultSettings('/tmp').showTerminalQuickCommandsButton).toBe(true)
+  })
 })
