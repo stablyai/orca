@@ -102,7 +102,9 @@ provider-rotate-command >"$key_file"
 test -s "$key_file"   # fail closed: never submit an empty password
 op item get "Service X" --vault Dev --format json \
   | jq --rawfile secret "$key_file" '
-      if ([.fields[] | select(.id == "password")] | length) != 1 then
+      if (($secret | rtrimstr("\n") | length) == 0) then
+        error("provider returned an empty password")
+      elif ([.fields[] | select(.id == "password")] | length) != 1 then
         error("expected exactly one password field")
       else
         (.fields[] | select(.id == "password") | .value) = ($secret | rtrimstr("\n"))
