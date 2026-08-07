@@ -18,6 +18,7 @@ import {
   writeNativeProviderLine
 } from './macos-native-provider-contract'
 import { resolveMacOSComputerUseExecutablePath } from './macos-native-provider-paths'
+import { MacOSProviderProcessOwner } from './macos-native-provider-process-reaping'
 import {
   attachMacOSNativeProviderSocketListeners,
   consumeNativeProviderLines,
@@ -31,6 +32,7 @@ const REQUEST_TIMEOUT_MS = 60_000
 
 export class MacOSNativeProviderClient {
   private socket: net.Socket | null = null
+  private readonly providerProcess = new MacOSProviderProcessOwner()
   private socketStartPromise: Promise<net.Socket> | null = null
   private socketPath: string | null = null
   private socketDirectory: string | null = null
@@ -84,7 +86,7 @@ export class MacOSNativeProviderClient {
       )
       this.pending.delete(id)
     }
-    this.cleanupSocketDirectory()
+    this.releaseHelperGeneration()
   }
   private async call(method: NativeMethod, params: unknown): Promise<unknown> {
     if (method !== 'handshake') {
@@ -124,7 +126,7 @@ export class MacOSNativeProviderClient {
         clearTimeout(pending.timer)
         this.pending.delete(id)
       }
-      this.invalidateActiveSocketAfterWriteFailure(transport, wrapped)
+      this.invalidateActiveSocket(transport, wrapped)
       throw wrapped
     }
     return await result
@@ -192,7 +194,8 @@ export class MacOSNativeProviderClient {
       helperExecutablePath,
       isCurrent: (socketPath) =>
         this.socketStartGeneration === startGeneration &&
-        (this.socketPath === null || this.socketPath === socketPath)
+        (this.socketPath === null || this.socketPath === socketPath),
+      providerProcess: this.providerProcess
     })
     this.socketDirectory = started.socketDirectory
     this.socketPath = started.socketPath
@@ -246,43 +249,37 @@ export class MacOSNativeProviderClient {
     this.cleanupActiveSocketListeners()
     this.socket = null
     this.socketBuffer = ''
-    this.cleanupSocketDirectory()
+    this.releaseHelperGeneration()
     this.rejectPending(
       new RuntimeClientError('accessibility_error', 'native macOS helper app connection closed')
     )
   }
   private handleTransportError(socket: net.Socket, error: Error): void {
-    // Why: stale socket errors can arrive after shutdown/restart.
-    if (this.socket !== socket) {
-      return
-    }
-    this.cleanupActiveSocketListeners()
-    // Why: an active transport error makes the helper socket unreliable for the next request.
-    this.socket = null
-    this.socketBuffer = ''
-    if (!socket.destroyed) {
-      socket.destroy()
-    }
-    this.cleanupSocketDirectory()
-    this.rejectPending(new RuntimeClientError('accessibility_error', error.message))
+    this.invalidateActiveSocket(
+      socket,
+      new RuntimeClientError('accessibility_error', error.message)
+    )
   }
-  private invalidateActiveSocketAfterWriteFailure(
-    socket: net.Socket,
-    error: RuntimeClientError
-  ): void {
+  private invalidateActiveSocket(socket: net.Socket, error: RuntimeClientError): void {
+    // Why: stale socket errors and late write failures can arrive after
+    // shutdown/restart; only the active socket may tear down this generation.
     if (this.socket !== socket) {
       return
     }
     this.cleanupActiveSocketListeners()
+    // Why: a failed transport makes the helper socket unreliable for the next request.
     this.socket = null
     this.socketBuffer = ''
     if (!socket.destroyed) {
       socket.destroy()
     }
-    this.cleanupSocketDirectory()
+    this.releaseHelperGeneration()
     this.rejectPending(error)
   }
-  private cleanupSocketDirectory(): void {
+  private releaseHelperGeneration(): void {
+    // Why: `terminate` only lands if the helper is still reading its socket, and
+    // the wedged helpers this reaps are exactly the ones that are not.
+    this.providerProcess.reap()
     if (!this.socketDirectory) {
       return
     }
