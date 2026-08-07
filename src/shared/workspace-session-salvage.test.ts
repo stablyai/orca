@@ -117,9 +117,9 @@ describe('parseWorkspaceSessionSalvaging', () => {
     }
   })
 
-  it('salvages systemic single-field corruption without exhausting the drop budget on escalations', () => {
-    // Why: 20 corrupt entries fit the 32-drop budget only because each two-step
-    // escalation (drop the field, then its emptied parent) counts as one repair.
+  it('salvages systemic single-field corruption without inflating the dropped count', () => {
+    // Why: each two-step escalation (drop the field, then its emptied parent) is
+    // one repair, so dropped counts reflect distinct corrupt records.
     const layouts: Record<string, unknown> = {}
     for (let i = 0; i < 20; i += 1) {
       layouts[`tab-${i}`] = {
@@ -139,7 +139,7 @@ describe('parseWorkspaceSessionSalvaging', () => {
   it('does not treat an unrelated corruption at a dot-colliding key as a free escalation', () => {
     // Why: 'a.root' (one key containing a dot) and 'a' → missing 'root' produce
     // paths that collide when joined with '.'; segment-wise comparison must keep
-    // them as two budgeted repairs.
+    // them as two distinct repairs rather than one posing as the other's escalation.
     const result = parseWorkspaceSessionSalvaging(
       baseSession({
         terminalLayoutsByTabId: {
@@ -235,14 +235,82 @@ describe('parseWorkspaceSessionSalvaging', () => {
     }
   })
 
-  it('gives up once the drop budget is exhausted instead of looping', () => {
+  it('salvages systemic corruption far larger than any single-entry budget', () => {
+    // Why: the reported failure was one bad record, but a bad writer projects the
+    // same wrong shape across every tab it touches. Dropping every entry zod
+    // reports per pass keeps that case a salvage instead of a full-session reset.
     const incarnations: Record<string, unknown> = {}
-    for (let i = 0; i < 40; i += 1) {
-      incarnations[`tab-${i}:leaf-${i}`] = i
+    for (let i = 0; i < 400; i += 1) {
+      incarnations[`tab-${i}:leaf-${i}`] = i % 2 === 0 ? i : `inc-${i}`
     }
     const result = parseWorkspaceSessionSalvaging(
       baseSession({ terminalPtyIncarnationsByPaneKey: incarnations })
     )
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.droppedPaths).toHaveLength(200)
+      expect(Object.keys(result.value.terminalPtyIncarnationsByPaneKey ?? {})).toHaveLength(200)
+    }
+  })
+
+  it('drops many corrupt tab records across worktrees in a single session load', () => {
+    const tabsByWorktree: Record<string, unknown> = {}
+    for (let w = 0; w < 20; w += 1) {
+      const worktreeId = `repo-1::/w${w}`
+      tabsByWorktree[worktreeId] = [
+        terminalTab(`good-${w}`, { worktreeId }),
+        { id: `bad-a-${w}`, worktreeId },
+        terminalTab(`good2-${w}`, { worktreeId }),
+        { id: `bad-b-${w}`, worktreeId }
+      ]
+    }
+    const result = parseWorkspaceSessionSalvaging(baseSession({ tabsByWorktree }))
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.droppedPaths).toHaveLength(40)
+      expect(result.value.tabsByWorktree['repo-1::/w7']?.map((tab) => tab.id)).toEqual([
+        'good-7',
+        'good2-7'
+      ])
+    }
+  })
+
+  it('keeps the rest of the session when a required top-level field is unsalvageable', () => {
+    // Why: without a default to fall back on, one bad legacy `tabsByWorktree`
+    // would still cost every worktree's unified tabs, groups and layouts.
+    const defaults = {
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {}
+    } as unknown as Parameters<typeof parseWorkspaceSessionSalvaging>[1]
+    const result = parseWorkspaceSessionSalvaging(
+      baseSession({
+        tabsByWorktree: 'nope',
+        terminalPtyIncarnationsByPaneKey: { 'tab-1:leaf-1': 'inc-1' }
+      }),
+      defaults
+    )
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.droppedPaths).toEqual(['tabsByWorktree'])
+      expect(result.value.tabsByWorktree).toEqual({})
+      expect(result.value.terminalPtyIncarnationsByPaneKey).toEqual({ 'tab-1:leaf-1': 'inc-1' })
+    }
+  })
+
+  it('still rejects a foreign object payload even when defaults are available', () => {
+    // Why: defaults must repair fields this module dropped, never manufacture a
+    // session out of an unrelated JSON blob that simply lacks every field.
+    const defaults = {
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {}
+    } as unknown as Parameters<typeof parseWorkspaceSessionSalvaging>[1]
+    const result = parseWorkspaceSessionSalvaging({ unrelated: 'payload', count: 3 }, defaults)
     expect(result.ok).toBe(false)
   })
 

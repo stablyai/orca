@@ -12088,21 +12088,51 @@ describe('Store host-partitioned workspace sessions', () => {
     expect(session.terminalTopologyRevisionByRepoId?.['repo-gone']).toBeUndefined()
   })
 
-  it('drops a corrupt host partition to defaults without failing the others', async () => {
+  it('resets only the corrupt required field of a host partition, not the partition', async () => {
+    const worktreeId = 'repo-1::/worktree'
     writeDataFile({
       schemaVersion: 1,
       workspaceSessionsByHostId: {
         'runtime:good': makeHostSession('good-repo'),
         // activeRepoId must be string|null; a number fails the zod parse.
-        'runtime:bad': { ...makeHostSession('x'), activeRepoId: 123 }
+        'runtime:bad': {
+          ...makeHostSession('x'),
+          activeRepoId: 123,
+          tabsByWorktree: { [worktreeId]: [makeTerminalTab({ id: 'bad-host-tab', worktreeId })] }
+        }
       }
     })
 
     const store = await createStore()
 
     expect(store.getWorkspaceSession('runtime:good').activeRepoId).toBe('good-repo')
-    // Bad partition collapses to defaults rather than poisoning the map.
+    // The unsalvageable field falls back to its default; the partition's tabs survive.
     expect(store.getWorkspaceSession('runtime:bad').activeRepoId).toBeNull()
+    expect(
+      store.getWorkspaceSession('runtime:bad').tabsByWorktree[worktreeId]?.map((tab) => tab.id)
+    ).toEqual(['bad-host-tab'])
+  })
+
+  it('keeps every other worktree when the local session has a corrupt required field', async () => {
+    const worktreeId = 'repo-1::/worktree'
+    writeDataFile({
+      schemaVersion: 1,
+      workspaceSession: {
+        ...makeHostSession('local-repo'),
+        // A projected/truncated write can leave a top-level field the wrong type;
+        // that must not cost every worktree's tabs the way a full reset did.
+        activeTabId: 42,
+        tabsByWorktree: {
+          [worktreeId]: [makeTerminalTab({ id: 'local-keep', worktreeId })]
+        }
+      }
+    })
+
+    const store = await createStore()
+
+    const session = store.getWorkspaceSession('local')
+    expect(session.activeTabId).toBeNull()
+    expect(session.tabsByWorktree[worktreeId]?.map((tab) => tab.id)).toEqual(['local-keep'])
   })
 
   it('persists the salvaged session back to disk instead of re-salvaging every launch', async () => {

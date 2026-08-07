@@ -615,7 +615,7 @@ function parseWorkspaceSessionsByHostId(
     if (!hostId || hostId === LOCAL_EXECUTION_HOST_ID) {
       continue
     }
-    const result = parseWorkspaceSessionSalvaging(value)
+    const result = parseWorkspaceSessionSalvaging(value, defaults)
     if (!result.ok) {
       console.error(
         `[persistence] Corrupt workspace session for host ${hostId}, using defaults:`,
@@ -3664,7 +3664,10 @@ export class Store {
             if (parsed.workspaceSession === undefined) {
               return defaults.workspaceSession
             }
-            const result = parseWorkspaceSessionSalvaging(parsed.workspaceSession)
+            const result = parseWorkspaceSessionSalvaging(
+              parsed.workspaceSession,
+              defaults.workspaceSession
+            )
             if (!result.ok) {
               console.error(
                 '[persistence] Corrupt workspace session, using defaults:',
