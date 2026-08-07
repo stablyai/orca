@@ -152,15 +152,33 @@ async function probeGlabKnownHosts(
         ? { wslDistro: localGitOptions.wslDistro }
         : {})
     })
-    const hosts = parseGlabAuthStatusHosts(`${stdout}\n${stderr}`)
-    const remembered = knownHostsCacheByExecutionContext.get(key) ?? []
-    const merged = Array.from(new Set([...DEFAULT_GITLAB_HOSTS, ...remembered, ...hosts]))
-    knownHostsCacheByExecutionContext.set(key, merged)
-    return merged
-  } catch {
+    return cacheGlabKnownHosts(key, parseGlabAuthStatusHosts(`${stdout}\n${stderr}`))
+  } catch (error) {
+    const hosts = parseGlabAuthStatusHosts(getGlabAuthStatusOutput(error))
+    if (hosts.length > 0) {
+      // glab exits nonzero when any configured host is unauthenticated.
+      return cacheGlabKnownHosts(key, hosts)
+    }
     // Keep failures uncached so auth or tunnel recovery is discovered later.
     return knownHostsCacheByExecutionContext.get(key) ?? [...DEFAULT_GITLAB_HOSTS]
   }
+}
+
+function cacheGlabKnownHosts(key: string, hosts: readonly string[]): readonly string[] {
+  const remembered = knownHostsCacheByExecutionContext.get(key) ?? []
+  const merged = Array.from(new Set([...DEFAULT_GITLAB_HOSTS, ...remembered, ...hosts]))
+  knownHostsCacheByExecutionContext.set(key, merged)
+  return merged
+}
+
+function getGlabAuthStatusOutput(error: unknown): string {
+  if (!error || typeof error !== 'object') {
+    return String(error)
+  }
+  const result = error as { stdout?: unknown; stderr?: unknown; message?: unknown }
+  return [result.stdout, result.stderr, result.message]
+    .filter((value): value is string => typeof value === 'string' && value.length > 0)
+    .join('\n')
 }
 
 export function parseGlabAuthStatusHosts(output: string): string[] {

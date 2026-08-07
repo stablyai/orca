@@ -574,6 +574,17 @@ describe('getGlabKnownHosts', () => {
     await expect(getGlabKnownHosts()).resolves.toEqual(['gitlab.com'])
   })
 
+  it('keeps authenticated hosts when another glab host makes auth status fail', async () => {
+    glabExecFileAsyncMock.mockRejectedValueOnce(
+      Object.assign(new Error('glab auth status exited with code 1'), {
+        stdout: 'gitlab.example.com\n  Logged in to gitlab.example.com as user\n',
+        stderr: 'gitlab.com\n  ! No token found\n'
+      })
+    )
+
+    await expect(getGlabKnownHosts()).resolves.toEqual(['gitlab.com', 'gitlab.example.com'])
+  })
+
   it('caches the result across calls', async () => {
     glabExecFileAsyncMock.mockResolvedValueOnce({
       stdout: '✓ Logged in to gitlab.com as user\n',
