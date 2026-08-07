@@ -501,5 +501,17 @@ describe('renderer startup runtime routing', () => {
     // Both the primary and the degraded startup paths must apply the hook
     // cache before their reconnect; dropping either regresses cold restore.
     expect(source.match(/requestAgentStatusStartupSnapshot\(\)/g) ?? []).toHaveLength(2)
+    // Why: ordering alone is not a barrier — an un-awaited call keeps both
+    // literals in place while restoring the race the step exists to close.
+    expect(source).toContain("await timeRendererStartupStep('agent-status-startup-snapshot'")
+    const degradedStart = source.indexOf('if (!reconnectStarted) {')
+    expect(degradedStart).toBeGreaterThan(reconnect)
+    const degradedBlock = source.slice(degradedStart)
+    const degradedSnapshot = degradedBlock.indexOf('await requestAgentStatusStartupSnapshot()')
+    const degradedReconnect = degradedBlock.indexOf(
+      'await actions.reconnectPersistedTerminals(abortController.signal)'
+    )
+    expect(degradedSnapshot).toBeGreaterThanOrEqual(0)
+    expect(degradedReconnect).toBeGreaterThan(degradedSnapshot)
   })
 })

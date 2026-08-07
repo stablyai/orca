@@ -181,6 +181,9 @@ describe('restored subagent liveness sweep', () => {
     await server.start({ env: 'production', userDataPath: dir })
     try {
       expect(await sweepWith(server, { persistedPtyIdByPaneKey: { [PANE]: PTY } })).toBe(1)
+      // Why: the checkpoint is coalesced to one write per turn, so yield the
+      // turn — but nothing longer, since the point is that it beats the 250ms debounce.
+      await new Promise((resolve) => setImmediate(resolve))
 
       // The durable file must flip before the trailing debounce: a crash in
       // that window would otherwise relaunch the completed turn on restart.

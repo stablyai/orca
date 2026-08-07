@@ -675,6 +675,7 @@ export class AgentHookServer {
   private lastStatusFilePath: string | null = null
   // Why: trailing-edge debounce timer, per-instance so test servers in one process don't share state.
   private statusPersistTimer: ReturnType<typeof setTimeout> | null = null
+  private immediateStatusCheckpointPending = false
   private assistantMessageRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private codexSubagentPollTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private promptSentDedupeByPaneKey = new Map<string, AgentPromptSentDedupeEntry>()
@@ -1210,7 +1211,7 @@ export class AgentHookServer {
       this.runtimeObservedStatusPaneKeys.delete(enriched.paneKey)
       this.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
       if (needsImmediateResumableStatusCheckpoint(previous, enriched)) {
-        this.flushStatusPersistSync()
+        this.requestImmediateStatusCheckpoint()
       }
       // Why: the sync write is fail-open; the trailing retry stays armed so a
       // transient filesystem error still gets another persistence attempt.
@@ -1330,7 +1331,7 @@ export class AgentHookServer {
     this.runtimeObservedStatusPaneKeys.add(enriched.paneKey)
     this.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
     if (needsImmediateResumableStatusCheckpoint(previous, enriched)) {
-      this.flushStatusPersistSync()
+      this.requestImmediateStatusCheckpoint()
     }
     // Why: the sync write is fail-open; the trailing retry stays armed so a
     // transient filesystem error still gets another persistence attempt.
@@ -2585,7 +2586,7 @@ export class AgentHookServer {
       // Why: a reconciled done row replaces a durable resumable 'working' row;
       // an abrupt exit before the debounce fires must not relaunch that turn.
       if (needsImmediateCheckpoint) {
-        this.flushStatusPersistSync()
+        this.requestImmediateStatusCheckpoint()
       }
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
@@ -2881,7 +2882,29 @@ export class AgentHookServer {
     }
   }
 
+  /**
+   * Same-turn durability without per-event write amplification: a relay
+   * reconnect replays every cached pane in one synchronous drain (up to
+   * FRAME_DECODER_MAX_FRAMES_PER_TURN), and a write-per-row would serialize the
+   * whole file N times. One deferred flush still lands far inside the 250ms
+   * debounce window this checkpoint exists to close.
+   */
+  private requestImmediateStatusCheckpoint(): void {
+    if (this.immediateStatusCheckpointPending) {
+      return
+    }
+    this.immediateStatusCheckpointPending = true
+    setImmediate(() => {
+      // Why: a quit-time flush already drained this turn's state.
+      if (!this.immediateStatusCheckpointPending) {
+        return
+      }
+      this.flushStatusPersistSync()
+    })
+  }
+
   flushStatusPersistSync(): void {
+    this.immediateStatusCheckpointPending = false
     if (this.statusPersistTimer) {
       clearTimeout(this.statusPersistTimer)
       this.statusPersistTimer = null

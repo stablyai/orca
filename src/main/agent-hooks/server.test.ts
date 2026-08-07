@@ -6811,6 +6811,68 @@ describe('Last-status persistence', () => {
     }
   })
 
+  it('coalesces a same-turn burst of checkpoints into one durable write', async () => {
+    const server = new AgentHookServer()
+    await server.start({
+      env: 'production',
+      userDataPath
+    })
+    try {
+      // Seed two panes with a live provider identity (each awaited hook is its
+      // own turn, so each checkpoints independently).
+      for (const [paneKey, sessionId] of [
+        [PANE, 'codex-burst-a'],
+        [GOOD_PANE, 'codex-burst-b']
+      ] as const) {
+        await postHookEvent(
+          server,
+          buildBody(
+            {
+              hook_event_name: 'UserPromptSubmit',
+              prompt: 'burst',
+              session_id: sessionId
+            },
+            { paneKey, tabId: paneKey.split(':')[0] }
+          ),
+          '/hook/codex'
+        )
+      }
+      const seeded = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+      expect(seeded.entries[PANE].payload.state).toBe('working')
+      expect(seeded.entries[GOOD_PANE].payload.state).toBe('working')
+
+      // Both panes flip to done inside ONE synchronous turn — the shape a relay
+      // reconnect produces when it replays every cached pane in a single drain.
+      for (const [paneKey, tabId] of [
+        [PANE, 'tab-1'],
+        [GOOD_PANE, 'tab-good']
+      ] as const) {
+        server.ingestTerminalStatus({
+          paneKey,
+          tabId,
+          worktreeId: 'wt-1',
+          connectionId: null,
+          payload: { state: 'done', agentType: 'codex' }
+        })
+      }
+
+      // Why: a write-per-event would have serialized the whole file twice
+      // already. Nothing is on disk until the turn ends.
+      const midBurst = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+      expect(midBurst.entries[PANE].payload.state).toBe('working')
+      expect(midBurst.entries[GOOD_PANE].payload.state).toBe('working')
+
+      await new Promise((resolve) => setImmediate(resolve))
+
+      // One write carried the whole batch, still far inside the 250ms debounce.
+      const flushed = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+      expect(flushed.entries[PANE].payload.state).toBe('done')
+      expect(flushed.entries[GOOD_PANE].payload.state).toBe('done')
+    } finally {
+      server.stop()
+    }
+  })
+
   it('synchronously checkpoints a first-seen Stop that introduces the provider identity', async () => {
     const server = new AgentHookServer()
     await server.start({
