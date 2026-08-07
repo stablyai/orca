@@ -51,6 +51,33 @@ describe('presentGitLabMRMergeState', () => {
     })
   })
 
+  // Why: GitLab keeps adding detailed_merge_status values, so a reason we have never seen must
+  // degrade the same way an absent one does rather than falling through to a merge-ready label.
+  it('treats an unrecognised merge reason like an absent one', () => {
+    expect(
+      presentGitLabMRMergeState({
+        state: 'open',
+        status: 'failure',
+        mergeable: 'UNKNOWN',
+        mergeStateStatus: 'some_future_gitlab_status'
+      })
+    ).toMatchObject({
+      label: 'Checks failed',
+      directMergeAvailable: false
+    })
+    expect(
+      presentGitLabMRMergeState({
+        state: 'open',
+        status: 'success',
+        mergeable: 'UNKNOWN',
+        mergeStateStatus: 'some_future_gitlab_status'
+      })
+    ).toMatchObject({
+      label: 'Checking',
+      directMergeAvailable: false
+    })
+  })
+
   it('still reports Checking when there is no reason and no failing pipeline', () => {
     expect(
       presentGitLabMRMergeState({
