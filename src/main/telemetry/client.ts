@@ -7,7 +7,7 @@
 
 import { randomUUID } from 'node:crypto'
 import { arch as osArch, platform as osPlatform, release as osRelease } from 'node:os'
-import { app } from 'electron'
+import { app, net } from 'electron'
 import { PostHog } from 'posthog-node'
 import type { CommonProps, EventName, EventProps, OptInVia } from '../../shared/telemetry-events'
 import type { Store } from '../persistence'
@@ -107,7 +107,10 @@ export function initTelemetry(store: Store): void {
     // Strip SDK-auto GeoIP / client-IP enrichment; our wire is exactly CommonProps ∪ EventProps ∪ a small allow-list.
     disableGeoip: true,
     // Bumped from the default 1000 (drops oldest-first past cap) to 5000 to tolerate long-offline sessions.
-    maxQueueSize: 5000
+    maxQueueSize: 5000,
+    // Why: default posthog-node transport is Node global fetch (undici), which can crash the main
+    // process on paused-parser + peer close (orca#10117 / undici#5360). Chromium net.fetch is safe.
+    fetch: (url, options) => net.fetch(url, options)
   })
 
   if (shouldOptOutSdkAtInit(resolveConsent(settings))) {

@@ -7,6 +7,7 @@ import type {
 import { spawn } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
+import { net } from 'electron'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
 import { join } from 'node:path'
 import { probeCodexAuthPresence } from './codex-auth-presence'
@@ -388,11 +389,15 @@ async function fetchBackendRateLimitResetCredits(
   if (signal.aborted) {
     return null
   }
+  // Why: net.fetch (Chromium) avoids Node undici's paused-parser crash on closed sockets (#10117, undici#5360).
   // Why: Codex 0.140's app-server strips the reset-credit metadata this backend endpoint still returns.
-  const response = await fetch('https://chatgpt.com/backend-api/wham/rate-limit-reset-credits', {
-    ...auth,
-    signal
-  })
+  const response = await net.fetch(
+    'https://chatgpt.com/backend-api/wham/rate-limit-reset-credits',
+    {
+      ...auth,
+      signal
+    }
+  )
   if (!response.ok) {
     await cancelUnreadResponseBody(response)
     return null
@@ -448,7 +453,8 @@ export async function consumeCodexRateLimitResetCredit(options: {
   if (!auth) {
     throw new Error('Codex not signed in')
   }
-  const response = await fetch(
+  // Why: net.fetch avoids undici main-process crash when the peer closes mid-body (#10117).
+  const response = await net.fetch(
     'https://chatgpt.com/backend-api/wham/rate-limit-reset-credits/consume',
     {
       method: 'POST',
@@ -539,7 +545,8 @@ async function fetchViaBackend(
     return null
   }
   // Why: reuse Codex's endpoint to avoid an app server and WSL login shell per refresh.
-  const response = await fetch('https://chatgpt.com/backend-api/wham/usage', {
+  // Why: net.fetch avoids undici main-process crash when the peer closes mid-body (#10117).
+  const response = await net.fetch('https://chatgpt.com/backend-api/wham/usage', {
     ...auth,
     signal
   })

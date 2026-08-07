@@ -1,13 +1,15 @@
 import { EventEmitter } from 'node:events'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { childSpawnMock, readFileMock, resolveCodexCommandMock, ptySpawnMock } = vi.hoisted(() => ({
-  childSpawnMock: vi.fn(),
-  readFileMock: vi.fn(),
-  resolveCodexCommandMock: vi.fn(),
-  ptySpawnMock: vi.fn()
-}))
+const { childSpawnMock, readFileMock, resolveCodexCommandMock, ptySpawnMock, netFetchMock } =
+  vi.hoisted(() => ({
+    childSpawnMock: vi.fn(),
+    readFileMock: vi.fn(),
+    resolveCodexCommandMock: vi.fn(),
+    ptySpawnMock: vi.fn(),
+    netFetchMock: vi.fn()
+  }))
 
 vi.mock('node:child_process', () => ({
   spawn: childSpawnMock
@@ -15,6 +17,12 @@ vi.mock('node:child_process', () => ({
 
 vi.mock('node:fs/promises', () => ({
   readFile: readFileMock
+}))
+
+vi.mock('electron', () => ({
+  net: {
+    fetch: netFetchMock
+  }
 }))
 
 vi.mock('../codex-cli/command', () => ({
@@ -116,11 +124,7 @@ describe('fetchCodexRateLimits', () => {
     resolveCodexCommandMock.mockReturnValue('codex')
     vi.mocked(probeCodexAuthPresence).mockResolvedValue('present')
     readFileMock.mockRejectedValue(new Error('no auth fixture'))
-    vi.stubGlobal('fetch', vi.fn())
-  })
-
-  afterEach(() => {
-    vi.unstubAllGlobals()
+    netFetchMock.mockReset()
   })
 
   it('does not spawn Codex when the user is not signed in', async () => {
@@ -411,7 +415,7 @@ describe('fetchCodexRateLimits', () => {
         tokens: { access_token: 'access-token', account_id: 'account-id' }
       })
     )
-    vi.mocked(fetch).mockResolvedValue({
+    netFetchMock.mockResolvedValue({
       ok: true,
       json: async () => ({
         plan_type: 'plus',
@@ -443,7 +447,7 @@ describe('fetchCodexRateLimits', () => {
       weekly: { usedPercent: 23, windowMinutes: 10080, resetsAt: 1_800_100_000_000 },
       status: 'ok'
     })
-    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(netFetchMock).toHaveBeenCalledTimes(1)
   })
 
   it('does not map a duplicate session-duration window into the weekly slot', async () => {
@@ -475,7 +479,7 @@ describe('fetchCodexRateLimits', () => {
         }
       })
     )
-    vi.mocked(fetch).mockResolvedValue({
+    netFetchMock.mockResolvedValue({
       ok: true,
       json: async () => ({
         available_count: 2,
@@ -558,7 +562,7 @@ describe('fetchCodexRateLimits', () => {
       ]
     })
     expect(readFileMock).toHaveBeenCalledWith(join('/managed/codex-home', 'auth.json'), 'utf8')
-    expect(fetch).toHaveBeenCalledWith(
+    expect(netFetchMock).toHaveBeenCalledWith(
       'https://chatgpt.com/backend-api/wham/rate-limit-reset-credits',
       expect.objectContaining({
         signal: expect.any(AbortSignal),
@@ -630,7 +634,7 @@ describe('fetchCodexRateLimits', () => {
       ]
     })
     expect(readFileMock).not.toHaveBeenCalled()
-    expect(fetch).not.toHaveBeenCalled()
+    expect(netFetchMock).not.toHaveBeenCalled()
   })
 
   it('runs rate-limit RPC through WSL when the Codex home is a WSL managed account', async () => {
