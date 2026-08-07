@@ -103,7 +103,12 @@ describe('listSystemFontFamilies', () => {
     const commandIndex = args.indexOf('-Command')
     expect(commandIndex).toBeGreaterThan(-1)
     const script = args[commandIndex + 1]
-    expect(script).toContain('[Console]::OutputEncoding = [System.Text.Encoding]::UTF8')
+    const outputEncoding = '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8'
+    const fontEnumeration = '$fonts.Families | ForEach-Object'
+    expect(script).toContain(outputEncoding)
+    expect(script).toContain(fontEnumeration)
+    // The encoding must be set before enumeration, or CJK names still get mangled.
+    expect(script.indexOf(outputEncoding)).toBeLessThan(script.indexOf(fontEnumeration))
     // Decoded output must keep CJK font names intact instead of mangling them.
     expect(fonts).toContain('微软雅黑')
     expect(fonts).toContain('仿宋')
