@@ -342,6 +342,14 @@ export function shouldShowCopyFileAction(
   )
 }
 
+function getLocalDownloadName(destinationPath: string, platform: NodeJS.Platform): string {
+  const lastSeparatorIndex =
+    platform === 'win32'
+      ? Math.max(destinationPath.lastIndexOf('/'), destinationPath.lastIndexOf('\\'))
+      : destinationPath.lastIndexOf('/')
+  return destinationPath.slice(lastSeparatorIndex + 1)
+}
+
 export async function downloadRemoteFile(
   node: TreeNode,
   connectionIdOrRuntimeContext: string | RuntimeFileOperationArgs
@@ -363,9 +371,11 @@ export async function downloadRemoteFile(
     if (result.canceled) {
       return
     }
-    // Why: the save dialog lets the user rename, and remote names are sanitized for
-    // the local filesystem — report what actually landed so the label matches Open.
-    const savedName = basename(result.destinationPath) || node.name
+    // Why: POSIX permits backslashes in saved names; only Windows treats them as separators.
+    const savedName = getLocalDownloadName(
+      result.destinationPath,
+      window.api.platform.get().platform
+    )
     toast.success(
       node.isDirectory
         ? translate(
