@@ -341,6 +341,10 @@ export const JA_VALUE_OVERRIDES = {
   '. Set': '。設定:',
   ', or set': '、または',
   and: 'と',
+  // Why: these render concatenated, so the leading space is part of the string, not padding.
+  ' and ': ' と ',
+  ' in {{value0}}': '（{{value0}}）',
+  ' • Last scan error: {{value0}}': ' • 最終スキャンエラー: {{value0}}',
   'Use your current': '現在のアカウントを使用',
   Running: '実行中',
   'Back to runs': '実行一覧に戻る',
