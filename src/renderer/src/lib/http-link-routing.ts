@@ -15,6 +15,9 @@ export type OpenHttpLinkOptions = {
   sourceOwner?: HttpLinkSourceOwner
 }
 
+/** Foregrounds the worktree that will host an in-app browser tab; true when revealed. */
+export type HttpLinkWorktreeActivator = (worktreeId: string) => boolean
+
 export type HttpLinkSourceOwner =
   | { kind: 'local' }
   | { kind: 'runtime'; runtimeEnvironmentId: string }
@@ -62,6 +65,15 @@ let storeAccessor: StoreAccessor | null = null
 
 export function registerHttpLinkStoreAccessor(fn: StoreAccessor): void {
   storeAccessor = fn
+}
+
+// Why: injected like setWorktreeNavActivator to avoid an import cycle — the
+// real activator (activateAndRevealWorktree) imports the store, which pulls in
+// this module through the editor slice.
+let worktreeActivator: HttpLinkWorktreeActivator | null = null
+
+export function registerHttpLinkWorktreeActivator(fn: HttpLinkWorktreeActivator | null): void {
+  worktreeActivator = fn
 }
 
 // Scope: http(s) URLs only. file: URIs and in-worktree markdown targets are
@@ -112,14 +124,19 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
     (openLinksInApp || modifier.wantsOrca)
 
   if (routeToOrca && worktreeId && state) {
-    // Why: http clicks from inside a worktree should not push a worktree-switch
-    // history entry — the user isn't changing worktrees, they're opening a tab
-    // in the one they're already in. activateAndRevealWorktree is reserved for
-    // file-link jumps that genuinely switch worktrees.
+    // Why: an in-app browser tab is scoped to the worktree it opens in, so the
+    // worktree must be foregrounded first or the tab opens invisibly from a page
+    // view like Activity (file-link jumps already do this). The registered
+    // revealer skips a history entry when that worktree is already active;
+    // setActiveWorktree remains the fallback so unknown worktrees and test
+    // stores keep working.
+    // Why: the floating workspace uses a synthetic worktree id; promoting it to
+    // the global activeWorktreeId would deselect the real repo workspace.
     if (worktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {
-      // Why: the floating workspace uses a synthetic worktree id. Promoting it
-      // to the global activeWorktreeId deselects the real repo workspace.
-      state.setActiveWorktree(worktreeId)
+      const activated = worktreeActivator ? worktreeActivator(worktreeId) : false
+      if (!activated) {
+        state.setActiveWorktree(worktreeId)
+      }
     }
     const localhostRoute = localhostLabelRouteForHttpLink(url, state, sourceOwner)
     if (!localhostRoute) {

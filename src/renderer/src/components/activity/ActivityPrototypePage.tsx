@@ -51,6 +51,7 @@ import {
   setActivityTerminalPortals,
   type ActivityTerminalPortalTarget
 } from './activity-terminal-portal'
+import { createActivityThreadLinkClick } from './activity-thread-link-click'
 import {
   reconcileActivityPortalThreads,
   resolveActivityPortalSwap
@@ -1233,6 +1234,12 @@ function ThreadRow({
   const renderedResponsePreview = activityThreadResponseRenderPreview({
     responsePreview: thread.responsePreview
   })
+  // Why: keep handler identity stable across re-renders so CommentMarkdown's
+  // memoized components don't rebuild on every row hover/selection change.
+  const threadLinkClick = useCallback(
+    () => createActivityThreadLinkClick({ worktreeId: thread.worktree.id, tabId: thread.tab.id }),
+    [thread.worktree.id, thread.tab.id]
+  )
   const workspaceTitle = getActivityThreadWorkspaceTitle(thread.worktree)
   const taskTitle = thread.paneTitle
   const agentLabel = formatAgentTypeLabel(thread.agentType)
@@ -1304,6 +1311,7 @@ function ThreadRow({
               {showStatusPreview ? (
                 <CommentMarkdown
                   content={renderedResponsePreview}
+                  onLinkClick={threadLinkClick}
                   className={cn(
                     'h-[1lh] min-w-0 overflow-hidden truncate whitespace-nowrap text-[11px] font-normal leading-snug text-muted-foreground/80',
                     '[&_*]:inline [&_*]:!m-0 [&_*]:!p-0 [&_*]:!whitespace-nowrap [&_br]:hidden [&_ol]:list-none [&_ul]:list-none'

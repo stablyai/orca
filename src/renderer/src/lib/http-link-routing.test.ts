@@ -4,6 +4,7 @@ import type { WorkspacePortScanResult } from '../../../shared/workspace-ports'
 import {
   openHttpLink,
   registerHttpLinkStoreAccessor,
+  registerHttpLinkWorktreeActivator,
   resolveLocalhostHttpLinkDisplayUrl
 } from './http-link-routing'
 
@@ -42,6 +43,7 @@ beforeEach(() => {
   storeState.settings = undefined
   storeState.workspacePortScansByKey = {}
   registerHttpLinkStoreAccessor(() => storeState)
+  registerHttpLinkWorktreeActivator(null)
   vi.stubGlobal('window', {
     api: {
       shell: {
@@ -69,6 +71,49 @@ describe('openHttpLink', () => {
       activate: true
     })
     expect(openUrlMock).not.toHaveBeenCalled()
+  })
+
+  it('foregrounds the hosting worktree before opening an in-app browser tab', () => {
+    storeState.settings = { openLinksInApp: true }
+    const worktreeActivatorMock = vi.fn(() => true)
+    registerHttpLinkWorktreeActivator(worktreeActivatorMock)
+
+    openHttpLink('https://example.com/', { worktreeId: 'wt-1' })
+
+    expect(worktreeActivatorMock).toHaveBeenCalledWith('wt-1')
+    expect(setActiveWorktreeMock).not.toHaveBeenCalled()
+    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
+      activate: true
+    })
+    expect(openUrlMock).not.toHaveBeenCalled()
+  })
+
+  it('falls back to setActiveWorktree when the activator cannot reveal the worktree', () => {
+    storeState.settings = { openLinksInApp: true }
+    registerHttpLinkWorktreeActivator(() => false)
+
+    openHttpLink('https://example.com/', { worktreeId: 'wt-1' })
+
+    expect(setActiveWorktreeMock).toHaveBeenCalledWith('wt-1')
+    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
+      activate: true
+    })
+  })
+
+  it('does not foreground the floating workspace for in-app browser tabs', () => {
+    storeState.settings = { openLinksInApp: true }
+    const worktreeActivatorMock = vi.fn(() => true)
+    registerHttpLinkWorktreeActivator(worktreeActivatorMock)
+
+    openHttpLink('https://example.com/', { worktreeId: FLOATING_TERMINAL_WORKTREE_ID })
+
+    expect(worktreeActivatorMock).not.toHaveBeenCalled()
+    expect(setActiveWorktreeMock).not.toHaveBeenCalled()
+    expect(createBrowserTabMock).toHaveBeenCalledWith(
+      FLOATING_TERMINAL_WORKTREE_ID,
+      'https://example.com/',
+      { activate: true }
+    )
   })
 
   it('defaults to the system browser when settings have not hydrated', () => {

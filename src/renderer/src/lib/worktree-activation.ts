@@ -21,6 +21,7 @@ import { getSetupRunnerCommandPlatformForPath } from '../../../shared/setup-runn
 import { agentKindToTuiAgent } from '../../../shared/agent-kind'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
+import { registerHttpLinkWorktreeActivator } from '@/lib/http-link-routing'
 import type { PendingSidebarWorktreeReveal } from '@/store/slices/ui'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import {
@@ -737,6 +738,10 @@ export function activateAndRevealWorkspace(workspaceId: string): ActivateAndReve
 
 // Why: break the import cycle — nav-history slice (under @/store) can't import activation directly, so register the activator here.
 setWorktreeNavActivator(activateAndRevealWorkspace)
+
+// Why: http links routed into Orca's browser must foreground the worktree owning
+// the tab, or they'd open invisibly from page views like Activity.
+registerHttpLinkWorktreeActivator((worktreeId) => activateAndRevealWorktree(worktreeId) !== false)
 
 // Why: page entries replay via setActiveView (not open*Page) so back/forward doesn't mutate previousViewBefore* or duplicate history (see navigateToIndex).
 setWorktreeNavViewActivator((entry) => {
