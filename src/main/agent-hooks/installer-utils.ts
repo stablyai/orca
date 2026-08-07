@@ -151,11 +151,13 @@ export function wrapWindowsCmdHookCommand(scriptPath: string): string {
   return WINDOWS_CMD_SAFE_PATH.test(scriptPath) ? scriptPath : wrapWindowsHookCommand(scriptPath)
 }
 
-// Why: single quotes make spaces and non-ASCII (CJK profiles) literal to bash, but bash
-// hands a .cmd to cmd.exe through COMSPEC, which re-parses the path once that quoting is
-// gone: `& ^ ( ) ; , =` split it and `%VAR%` expands. Measured on Git Bash 2.55 — those
-// exit 1 on every hook call, so they keep the encoded launcher. `!` is safe today and
-// excluded anyway: it expands under a registry-enabled DelayedExpansion.
+// Why: Claude's Git Bash runner executes a forward-slash .cmd directly, so the fast path
+// can name the script instead of paying a PowerShell start — but TWO parsers see the path,
+// not one. Single quotes make spaces and non-ASCII (CJK profiles) literal to bash; bash
+// then hands the .cmd to cmd.exe through COMSPEC, which re-parses it with that quoting
+// already gone. Measured on Git Bash 2.55: `& ^ ( ) ; , =` split the command and `%VAR%`
+// expands, exiting 1 on every hook call, so those keep the encoded launcher. `!` is inert
+// today but expands under a registry-enabled DelayedExpansion, so it is excluded too.
 export const WINDOWS_GIT_BASH_SAFE_PATH = /^[^\p{Cc}&^();,=%!]+$/u
 
 export function wrapWindowsGitBashHookCommand(scriptPath: string): string {

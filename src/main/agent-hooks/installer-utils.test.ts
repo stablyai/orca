@@ -25,6 +25,7 @@ import {
   wrapPosixHookCommand,
   wrapWindowsCmdHookCommand,
   wrapWindowsGitBashHookCommand,
+  WINDOWS_GIT_BASH_SAFE_PATH,
   readHooksJsonWithRaw,
   wrapWindowsHookCommand,
   writeManagedScript,
@@ -585,7 +586,7 @@ describe('wrapWindowsGitBashHookCommand', () => {
   // call — `& ^ ( ) ; , =` split the command and `%VAR%` expands — while the encoded
   // launcher runs them correctly. `!` passes today but expands under DelayedExpansion.
   it.each([['&'], ['^'], ['('], [')'], [';'], [','], ['='], ['%'], ['!']])(
-    'falls back to the encoded launcher for a cmd.exe metacharacter (%s)',
+    'falls back to the encoded launcher for a path cmd.exe would re-parse (%s)',
     (metacharacter) => {
       const scriptPath = `C:\\Users\\a${metacharacter}b\\.orca\\agent-hooks\\claude-hook.cmd`
       const command = wrapWindowsGitBashHookCommand(scriptPath)
@@ -623,13 +624,19 @@ describe('wrapWindowsGitBashHookCommand', () => {
 // nothing here ever proved the quoting survives a real shell. Git Bash is a POSIX
 // shell — running the generated command through /bin/sh makes a dropped quote fail
 // on every PR instead of only on a Windows machine.
-describe.skipIf(process.platform === 'win32')('Git Bash fast path in a real shell', () => {
+describe.skipIf(process.platform === 'win32')('fast path POSIX quoting, executed', () => {
   function runFastPath(scriptPath: string, input: string): ReturnType<typeof spawnSync> {
     return spawnSync('/bin/sh', ['-c', wrapWindowsGitBashHookCommand(scriptPath)], {
       input,
       env: { ...process.env, ORCA_HOOK_QUOTING_PROBE: 'expanded' }
     })
   }
+
+  // Why: every case below feeds tmpdir() through the gate. A tmpdir containing a gated
+  // character would route them all to the encoded launcher and fail as an opaque 127.
+  it('runs on a tmpdir the gate accepts, so a failure means the quoting broke', () => {
+    expect(WINDOWS_GIT_BASH_SAFE_PATH.test(tmpDir.replaceAll('\\', '/'))).toBe(true)
+  })
 
   it.each([
     ['ascii', 'alice'],
