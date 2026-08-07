@@ -140,6 +140,17 @@ describe('absolute file CLI paths', () => {
       expectOpenedWith('xxx/xxx.ts')
     })
 
+    // Why: backslash is a legal Linux filename character, but reads as a separator
+    // once the path is UNC — rewriting `a\b.ts` would open `a/b.ts` instead.
+    it('leaves a Linux path containing a backslash for the runtime guard', async () => {
+      vi.stubEnv('WSL_DISTRO_NAME', 'Ubuntu')
+      mockWorktreeShow(uncRoot)
+
+      await openPath('/root/orca/workspaces/xxx/a\\b.ts')
+
+      expectOpenedWith('/root/orca/workspaces/xxx/a\\b.ts')
+    })
+
     it('leaves a Linux path from another distro for the runtime guard', async () => {
       vi.stubEnv('WSL_DISTRO_NAME', 'Debian')
       mockWorktreeShow(uncRoot)

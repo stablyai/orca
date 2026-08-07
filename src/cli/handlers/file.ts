@@ -53,10 +53,20 @@ async function getFileWorktreeSelector({ flags, cwd, client }: HandlerContext): 
  * (#11393). Only the CLI's own WSL_DISTRO_NAME names the distro that Linux path
  * belongs to, and only a UNC root wants the rewrite — a POSIX root already
  * matches, so rewriting it would strand every absolute path.
+ *
+ * Backslash is a legal Linux filename character but a separator once the path
+ * reads as UNC, so `a\b.ts` would relativize to a different file, `a/b.ts`.
+ * Such a path has no UNC spelling; leave it to fail the match instead.
  */
 function toWorktreeRootPathFlavor(rootPath: string, path: string): string {
   const distro = process.env.WSL_DISTRO_NAME
-  if (!distro || !path.startsWith('/') || path.startsWith('//') || !isWslUncPath(rootPath)) {
+  if (
+    !distro ||
+    !path.startsWith('/') ||
+    path.startsWith('//') ||
+    path.includes('\\') ||
+    !isWslUncPath(rootPath)
+  ) {
     return path
   }
   return `//wsl.localhost/${distro}${path}`
