@@ -18,9 +18,13 @@ import {
   type PtySourceReceivingActivation
 } from '../../shared/pty-source-receiving-activation'
 import type { SshPtyReceivingActivationLease } from './ssh-pty-notification-routing'
+import type { TerminalModes } from '../../shared/terminal-modes'
+import { parseTerminalModes } from '../../shared/terminal-reattach-mode-restore'
 
 export type SshPtyAttachResult = {
   replay?: string
+  /** Application terminal modes at the attach boundary, when the relay provides them. */
+  modes?: TerminalModes
   incarnationId?: PtyIncarnationId
   sourceRecovery?: PtySourceRecoveryResult
   sourceActivation?: PtySourceReceivingActivation
@@ -41,6 +45,7 @@ export function parseSshPtyAttachResult(value: unknown): SshPtyAttachResult {
   }
   const result = value as {
     replay?: unknown
+    modes?: unknown
     incarnationId?: unknown
     sourceRecovery?: unknown
     sourceActivation?: unknown
@@ -48,6 +53,9 @@ export function parseSshPtyAttachResult(value: unknown): SshPtyAttachResult {
   if (result.replay !== undefined && typeof result.replay !== 'string') {
     throw new Error('Invalid SSH PTY attach replay')
   }
+  // Why tolerant: modes are a restore hint — a malformed value degrades to
+  // the legacy byte-inference instead of failing the whole attach.
+  const modes = parseTerminalModes(result.modes)
   if (result.incarnationId !== undefined && !isPtyIncarnationId(result.incarnationId)) {
     // Why: a present-but-invalid identity cannot safely fence delayed exits from a reused relay id.
     throw new Error('Invalid SSH PTY attach incarnation')
@@ -66,6 +74,7 @@ export function parseSshPtyAttachResult(value: unknown): SshPtyAttachResult {
   }
   return {
     ...(typeof result.replay === 'string' ? { replay: result.replay } : {}),
+    ...(modes ? { modes } : {}),
     ...(isPtyIncarnationId(result.incarnationId) ? { incarnationId: result.incarnationId } : {}),
     ...(sourceRecovery ? { sourceRecovery } : {}),
     ...(activation ? { sourceActivation: activation } : {})
@@ -209,6 +218,7 @@ export async function reattachSshPtySession(args: {
       id: toAppSshPtyId(args.connectionId, relaySessionId),
       isReattach: true,
       ...(attachResult.replay ? { replay: attachResult.replay } : {}),
+      ...(attachResult.modes ? { modes: attachResult.modes } : {}),
       ...(attachResult.incarnationId ? { incarnationId: attachResult.incarnationId } : {}),
       ...(attachResult.sourceRecovery ? { sourceRecovery: attachResult.sourceRecovery } : {}),
       ...(attachResult.sourceActivation ? { sourceActivation: attachResult.sourceActivation } : {}),

@@ -1016,6 +1016,7 @@ import {
 } from '../ipc/watcher-removal-drain'
 import { withWorktreeSpan } from '../observability/instrumentation'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
+import type { TerminalModes } from '../../shared/terminal-modes'
 import {
   isNativeWindowsConptyPty,
   registerConptyDa1OverrideInstaller,
@@ -11452,6 +11453,27 @@ export class OrcaRuntimeService {
       this.providerModeTrackersByPtyId.get(ptyId)?.isAlternateScreen ??
       false
     )
+  }
+
+  // Why: the relay replay tail carries no mode state, so the reattach path
+  // reads the application's modes from the ordered live emulator. Provider-
+  // snapshot-preferred PTYs return null — their main-side emulator is only a
+  // partial suffix and its modes would misdescribe the application.
+  async getTerminalModes(ptyId: string): Promise<TerminalModes | null> {
+    if (this.providerSnapshotPreferredPtys.has(ptyId)) {
+      return null
+    }
+    const state = this.headlessTerminals.get(ptyId)
+    if (!state) {
+      return null
+    }
+    // Why: queued writes must land before reading modes, or the modes predate
+    // the very replay bytes the caller is restoring (serializeHeadlessTerminalBuffer parity).
+    await state.writeChain
+    if (this.headlessTerminals.get(ptyId) !== state) {
+      return null
+    }
+    return state.emulator.getModes()
   }
 
   // Why: daemon-backed PTYs that the runtime adopted after an Orca relaunch

@@ -18469,10 +18469,20 @@ describe('registerPtyHandlers', () => {
       listProcesses: vi.fn(async () => []),
       getForegroundProcess: vi.fn(async () => null)
     } as never)
+    const attachBoundaryModes = {
+      bracketedPaste: true,
+      mouseTracking: true,
+      mouseTrackingMode: 'drag',
+      sgrMouseMode: true,
+      applicationCursor: false,
+      alternateScreen: true,
+      kittyKeyboardFlags: 0
+    }
     const runtime = {
       setPtyController: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),
       seedHeadlessTerminal: vi.fn(),
+      getTerminalModes: vi.fn(async () => attachBoundaryModes),
       onPtySpawned: vi.fn(),
       onPtyData: vi.fn(),
       onPtyExit: vi.fn(),
@@ -18482,7 +18492,9 @@ describe('registerPtyHandlers', () => {
     }
     registerPtyHandlers(mainWindow as never, runtime as never)
 
-    await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+    const response = (await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })) as {
+      modes?: unknown
+    }
 
     // Why: without this seed main's model would be a strict suffix of what the renderer painted, and a later park-reveal would restore the fragment.
     expect(runtime.seedHeadlessTerminal).toHaveBeenCalledTimes(1)
@@ -18490,6 +18502,10 @@ describe('registerPtyHandlers', () => {
       'pty-ssh-reattach',
       'relay history\r\n'
     )
+    // Why: the raw relay tail carries no mode state; the reattach response must
+    // surface the emulator's attach-boundary modes for the renderer restore.
+    expect(runtime.getTerminalModes).toHaveBeenCalledWith('pty-ssh-reattach')
+    expect(response.modes).toEqual(attachBoundaryModes)
   })
 
   // STA repro (post-restart blind orchestrator): reattach restore payloads

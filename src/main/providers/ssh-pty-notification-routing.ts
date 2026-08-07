@@ -7,6 +7,7 @@ import type {
   SshPtyReplayCallback
 } from './ssh-pty-provider-contract'
 import { parseSshPtySourceFrame } from './ssh-pty-source-frame'
+import { parseTerminalModes } from '../../shared/terminal-reattach-mode-restore'
 import { SshPtySourceDeliveryLedger } from './ssh-pty-source-delivery-ledger'
 import type {
   PendingSshPtySourceData,
@@ -183,8 +184,11 @@ export function subscribeSshPtyNotifications(args: {
     if (method === 'pty.replay') {
       const id = args.toAppPtyId(relayPtyId)
       args.livePtyIds.add(id)
+      // Why validated: params.modes is untrusted relay JSON — a malformed
+      // shape degrades to legacy byte-inference instead of poisoning restores.
+      const modes = parseTerminalModes(params.modes)
       for (const listener of args.replayListeners) {
-        listener({ id, data: params.data as string })
+        listener({ id, data: params.data as string, ...(modes ? { modes } : {}) })
       }
       return
     }

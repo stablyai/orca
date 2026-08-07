@@ -1,4 +1,5 @@
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
+import type { TerminalModes } from '../../shared/terminal-modes'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { AgentSessionClaimedSpawnResult } from '../../shared/agent-session-host-authority'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
@@ -64,6 +65,10 @@ export type PtySpawnResult = {
   /** Buffered output returned by relay pty.attach. Unlike snapshot, this is
    *  incremental scrollback and must not clear the terminal before replay. */
   replay?: string
+  /** Terminal modes describing the application state at the attach boundary,
+   *  so a replay restore can re-arm modes the raw tail does not encode.
+   *  `isAlternateScreen` above remains the daemon-path field. */
+  modes?: TerminalModes
   /** True when the caller requested reattach (sessionId was provided) but the
    *  relay PTY was gone (grace window elapsed). The renderer uses this to show
    *  a brief "Session expired — new shell started" message. */

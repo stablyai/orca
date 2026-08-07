@@ -18,6 +18,9 @@ import { isEphemeralSetupTerminalWorktreeId } from '../../../../shared/ephemeral
 import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 import { parseTerminalKittyKeyboardFlags } from '../../../../shared/terminal-kitty-keyboard-flags'
+import type { TerminalModes } from '../../../../shared/terminal-modes'
+import { buildRehydrateSequences } from '../../../../shared/terminal-mode-rehydrate-sequences'
+import { resolveReplayRestoredModes } from '../../../../shared/terminal-reattach-mode-restore'
 import { isRuntimeOwnedSshTargetId, parseExecutionHostId } from '../../../../shared/execution-host'
 import { createTerminalZeroDimensionsMessage } from '../../../../shared/terminal-zero-dimensions-diagnostic'
 import { isWorktreeRemovalFenceError } from '../../../../shared/worktree/removal-fence-error'
@@ -5517,7 +5520,8 @@ export function connectPanePty(
     const reattachReplayResetSequence = (
       payload: string,
       ownerProcessEnded = false,
-      isAlternateScreen?: boolean
+      isAlternateScreen?: boolean,
+      restoredModes?: TerminalModes | null
     ): string => {
       // Why a cold restore overrides the agent signal: liveness is read from the
       // pane's status and title, both of which are persisted, so after a cold
@@ -5532,9 +5536,58 @@ export function connectPanePty(
       }
       // Why: an alt-screen pane is a live TUI Orca just does not recognise as an agent, and the
       // replay already re-armed its mouse modes — keep them instead of wiping them (#8291).
-      return (isAlternateScreen ?? kittyKeyboardModes.isAlternateScreen)
+      // Restored modes (main-emulator seed advanced by the replay tail) are authoritative over
+      // byte-inference; profile selection stays alt-screen-gated (#7893).
+      return (restoredModes?.alternateScreen ??
+        isAlternateScreen ??
+        kittyKeyboardModes.isAlternateScreen)
         ? POST_REPLAY_REATTACH_RESET_KEEP_MOUSE
         : POST_REPLAY_REATTACH_RESET
+    }
+
+    // Why one helper for both relay-replay restore paths (connect-result fallback and
+    // pty:replay push): the merge → rehydrate → reset-profile choreography must not
+    // drift between them (pattern: buildMainModelSnapshotReplayWrites). Ordering
+    // contract: the caller must have let the replay body PARSE before calling (the
+    // suppression check reads the live buffer type), writes rehydrateAnsi then
+    // resetAnsi, and writes pendingEscapeTailAnsi LAST (#7329).
+    const buildReattachReplayModeRestoreWrites = (args: {
+      replayData: string
+      seedModes: TerminalModes | undefined
+      ownerProcessEnded: boolean
+      legacyIsAlternateScreen?: boolean
+    }): { rehydrateAnsi: string; resetAnsi: string } => {
+      const merged = resolveReplayRestoredModes({
+        seedModes: args.seedModes,
+        replayData: args.replayData
+      })
+      let rehydrateAnsi = ''
+      // Why gated on a live owner: rehydrating a dead process's modes arms mouse/paste
+      // reporting against the fresh shell that replaces it (#12101).
+      if (merged && !args.ownerProcessEnded) {
+        // Why the alt-transition suppression: xterm swaps its per-screen kitty flag
+        // slots on EVERY 1049h, so a redundant transition while already on the
+        // alternate buffer clobbers the flags the application negotiated.
+        rehydrateAnsi = buildRehydrateSequences(
+          merged.alternateScreen && pane.terminal.buffer.active.type === 'alternate'
+            ? { ...merged, alternateScreen: false }
+            : merged
+        )
+        if (rehydrateAnsi.length > 0) {
+          // Why fed to the tracker: it mirrors every alt transition the terminal
+          // parses; skipping the rehydrate bytes would desync its kitty slots.
+          kittyKeyboardModes.scanReplay(rehydrateAnsi)
+        }
+      }
+      return {
+        rehydrateAnsi,
+        resetAnsi: reattachReplayResetSequence(
+          args.replayData,
+          args.ownerProcessEnded,
+          args.legacyIsAlternateScreen,
+          merged
+        )
+      }
     }
 
     const consumeRestoredViewportBlankingMarker = (): boolean => {
@@ -5614,6 +5667,7 @@ export function connectPanePty(
       pendingEscapeTailAnsi?: string
       kittyKeyboardFlags?: number
       snapshotSeq?: number
+      modes?: TerminalModes
     }
 
     let pendingReplayData: PendingReplayData | null = null
@@ -5639,7 +5693,7 @@ export function connectPanePty(
           return false
         }
         const payload = pendingReplayData
-        const { data, clearBeforeReplay, pendingEscapeTailAnsi } = payload
+        const { data, clearBeforeReplay, pendingEscapeTailAnsi, modes } = payload
         pendingReplayData = null
         const isCurrentPayload = (): boolean =>
           !disposed &&
@@ -5673,7 +5727,20 @@ export function connectPanePty(
           continue
         }
         if (clearBeforeReplay || data.length > 0) {
-          await writeReplayDataAsync(reattachReplayResetSequence(data))
+          // Why here: the awaited body write above has parsed, so the restore
+          // helper's buffer-type suppression check reads post-replay state.
+          const restore = buildReattachReplayModeRestoreWrites({
+            replayData: data,
+            seedModes: modes,
+            ownerProcessEnded: false
+          })
+          if (restore.rehydrateAnsi) {
+            await writeReplayDataAsync(restore.rehydrateAnsi)
+            if (!isCurrentPayload()) {
+              continue
+            }
+          }
+          await writeReplayDataAsync(restore.resetAnsi)
           if (!isCurrentPayload()) {
             continue
           }
@@ -5760,7 +5827,8 @@ export function connectPanePty(
               kittyKeyboardFlags: meta.kittyKeyboardFlags,
               snapshotSeq: meta.snapshotSeq
             }
-          : {})
+          : {}),
+        ...(meta.modes ? { modes: meta.modes } : {})
       }
       scheduleReplayDataDrain()
     }
@@ -8385,13 +8453,25 @@ export function connectPanePty(
             }
             kittyKeyboardModes.scanReplay(connectResult.replay)
             writeReplayData(connectResult.replay)
-            writeReplayData(
-              reattachReplayResetSequence(
-                connectResult.replay,
-                Boolean(connectResult.coldRestore),
-                connectResult.isAlternateScreen
-              )
-            )
+            if (connectResult.modes && !connectResult.coldRestore) {
+              // Why awaited only with modes: the rehydrate's alt-transition
+              // suppression reads the parsed buffer type, so the queued replay
+              // body must land first; the legacy path stays fully synchronous.
+              await waitForTerminalReplayWritesParsed(pane.terminal)
+              if (!isCurrentReattachPayload()) {
+                return
+              }
+            }
+            const restore = buildReattachReplayModeRestoreWrites({
+              replayData: connectResult.replay,
+              seedModes: connectResult.modes,
+              ownerProcessEnded: Boolean(connectResult.coldRestore),
+              legacyIsAlternateScreen: connectResult.isAlternateScreen
+            })
+            if (restore.rehydrateAnsi) {
+              writeReplayData(restore.rehydrateAnsi)
+            }
+            writeReplayData(restore.resetAnsi)
             sendFocusedReattachFocusInAfterReplay(ptyId, attemptGeneration)
             if (connectResult.coldRestore) {
               if (!isRemoteRuntimePtyId(ptyId)) {

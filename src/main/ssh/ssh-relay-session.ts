@@ -80,6 +80,7 @@ import { normalizeRemoteArtifactInput } from '../../shared/artifact-cli-bridge'
 import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { DEFAULT_PTY_SOURCE_WINDOW_SU } from '../../shared/pty-source-credit-contract'
+import type { TerminalModes } from '../../shared/terminal-modes'
 import { PTY_CONSUMER_STALE_OWNER_RECOVERY_ERROR } from '../../shared/pty-consumer-session'
 import {
   isSshOwnerAdmissionBlocked,
@@ -1757,10 +1758,19 @@ export class SshRelaySession {
       if (this.mux !== mux || this.activePtyProviderGeneration !== providerGeneration) {
         return
       }
-      const win = this.getMainWindow()
-      if (win && !win.isDestroyed()) {
-        win.webContents.send('pty:replay', payload)
-      }
+      void (async () => {
+        // Why: relay replays lacking mode state fall back to the runtime
+        // emulator's modes, matching forwardReattachReplay.
+        const modes =
+          payload.modes ?? (await this.runtime?.getTerminalModes?.(payload.id)) ?? undefined
+        if (this.mux !== mux || this.activePtyProviderGeneration !== providerGeneration) {
+          return
+        }
+        const win = this.getMainWindow()
+        if (win && !win.isDestroyed()) {
+          win.webContents.send('pty:replay', { ...payload, ...(modes ? { modes } : {}) })
+        }
+      })()
     })
     ptyProvider.onExit((payload) => {
       if (
@@ -2231,13 +2241,24 @@ export class SshRelaySession {
     }
   }
 
-  private forwardReattachReplay(appPtyId: string, data: string): void {
+  private async forwardReattachReplay(
+    appPtyId: string,
+    data: string,
+    modes?: TerminalModes
+  ): Promise<void> {
     if (!data) {
       return
     }
+    // Why: the replay tail carries no mode state; attach the runtime
+    // emulator's modes so the renderer re-arms mouse/paste/alt exactly.
+    const resolvedModes = modes ?? (await this.runtime?.getTerminalModes?.(appPtyId)) ?? undefined
     const win = this.getMainWindow()
     if (win && !win.isDestroyed()) {
-      win.webContents.send('pty:replay', { id: appPtyId, data })
+      win.webContents.send('pty:replay', {
+        id: appPtyId,
+        data,
+        ...(resolvedModes ? { modes: resolvedModes } : {})
+      })
     }
   }
 
@@ -2498,7 +2519,7 @@ export class SshRelaySession {
         return
       }
       if (!recoveryRequest && !targetedDeliveryRecovery) {
-        this.forwardReattachReplay(appPtyId, attachResult.replay ?? '')
+        await this.forwardReattachReplay(appPtyId, attachResult.replay ?? '', attachResult.modes)
       }
       sourceActivationLease?.commit()
       sourceActivationLease = undefined

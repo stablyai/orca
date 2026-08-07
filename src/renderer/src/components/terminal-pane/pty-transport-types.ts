@@ -10,6 +10,7 @@ import type {
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { EventProps } from '../../../../shared/telemetry-events'
+import type { TerminalModes } from '../../../../shared/terminal-modes'
 import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal-osc-color-reply'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -50,6 +51,9 @@ export type PtyBufferSnapshot = {
 export type PtyReplayDataMeta = {
   clearBeforeReplay?: boolean
   pendingEscapeTailAnsi?: string
+  /** Application terminal modes at the attach boundary; the replay restore
+   *  re-arms them exactly instead of inferring modes from replay bytes. */
+  modes?: TerminalModes
   /** Kitty flags the snapshot's owner PROVED at `snapshotSeq`. Absent means
    *  unknown; the pane tracker must stay unproven rather than assume zero. */
   kittyKeyboardFlags?: number
@@ -91,6 +95,9 @@ export type PtyConnectResult = {
   sessionExpired?: boolean
   coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }
   replay?: string
+  /** Application terminal modes at the attach boundary; the replay restore
+   *  re-arms them exactly instead of inferring modes from replay bytes. */
+  modes?: TerminalModes
   startupCwdFallback?: { kind: 'worktree'; cwd: string }
   /** Main declined an unverifiable provider-session resume and launched fresh. */
   agentResumeUnavailable?: true

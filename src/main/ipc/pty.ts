@@ -6895,6 +6895,18 @@ export function registerPtyHandlers(
           }
         }
         if (
+          runtime &&
+          result.isReattach === true &&
+          typeof result.replay === 'string' &&
+          result.replay.length > 0 &&
+          result.modes === undefined
+        ) {
+          // Why: the raw relay replay tail carries no mode state; the runtime
+          // emulator's modes let the renderer re-arm mouse/paste/alt exactly
+          // instead of inferring them from replay bytes.
+          result.modes = (await runtime.getTerminalModes?.(result.id)) ?? undefined
+        }
+        if (
           typeof args.worktreeId === 'string' &&
           args.worktreeId.length > 0 &&
           args.worktreeId.length <= 512

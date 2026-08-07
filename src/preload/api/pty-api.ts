@@ -12,6 +12,7 @@ import type {
   PtyRendererDeliveryStateReport
 } from '../../shared/pty-renderer-delivery-health'
 import type { AgentKind, LaunchSource, RequestKind } from '../../shared/telemetry-events'
+import type { TerminalModes } from '../../shared/terminal-modes'
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
 import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -61,6 +62,9 @@ export type PtyApi = {
     isReattach?: boolean
     isAlternateScreen?: boolean
     replay?: string
+    /** Application terminal modes at the attach boundary; lets the replay
+     *  restore re-arm modes the raw relay tail does not encode. */
+    modes?: TerminalModes
     sessionExpired?: boolean
     coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }
     startupCwdFallback?: { kind: 'worktree'; cwd: string }
@@ -183,7 +187,9 @@ export type PtyApi = {
       droppedOutput?: boolean
     }) => void
   ) => () => void
-  onReplay: (callback: (data: { id: string; data: string }) => void) => () => void
+  onReplay: (
+    callback: (data: { id: string; data: string; modes?: TerminalModes }) => void
+  ) => () => void
   /** Out-of-band main→renderer signal that renderer-bound bytes were
    *  dropped (hidden-delivery gate / pending cap); the pane restores from
    *  the model snapshot. Never delivered in-band on pty:data. */

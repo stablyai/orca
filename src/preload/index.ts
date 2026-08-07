@@ -117,6 +117,7 @@ import type {
   PtyRendererDeliveryStateReport
 } from '../shared/pty-renderer-delivery-health'
 import type { TerminalViewAttributes } from '../shared/terminal-view-attributes'
+import type { TerminalModes } from '../shared/terminal-modes'
 import type { WriteTerminalRenderDesyncEvidenceArgs } from '../shared/terminal-render-desync-evidence'
 import type { PtyMainDeliveryDiagnostics } from '../shared/pty-delivery-diagnostics'
 import type {
@@ -991,6 +992,7 @@ const api = {
       isReattach?: boolean
       isAlternateScreen?: boolean
       replay?: string
+      modes?: TerminalModes
       sessionExpired?: boolean
       coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }
       startupCwdFallback?: { kind: 'worktree'; cwd: string }
@@ -1193,9 +1195,13 @@ const api = {
       return () => ipcRenderer.removeListener('pty:data', listener)
     },
 
-    onReplay: (callback: (data: { id: string; data: string }) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, data: { id: string; data: string }) =>
-        callback(data)
+    onReplay: (
+      callback: (data: { id: string; data: string; modes?: TerminalModes }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { id: string; data: string; modes?: TerminalModes }
+      ) => callback(data)
       ipcRenderer.on('pty:replay', listener)
       return () => ipcRenderer.removeListener('pty:replay', listener)
     },

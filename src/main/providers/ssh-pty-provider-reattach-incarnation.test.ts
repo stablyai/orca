@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { SSH_SESSION_EXPIRED_ERROR } from './ssh-pty-errors'
 import { SshPtyProvider } from './ssh-pty-provider'
+import { parseSshPtyAttachResult } from './ssh-pty-session-reattach'
 
 describe('SSH PTY provider session reattach incarnation', () => {
   it('remembers the authoritative incarnation before a legacy exit arrives', async () => {
@@ -47,5 +48,55 @@ describe('SSH PTY provider session reattach incarnation', () => {
     await expect(provider.spawn({ cols: 80, rows: 24, sessionId: 'pty-old' })).rejects.toThrow(
       `${SSH_SESSION_EXPIRED_ERROR}: pty-old`
     )
+  })
+
+  it('threads attach-boundary modes into the reattach spawn result', async () => {
+    const modes = {
+      bracketedPaste: true,
+      mouseTracking: true,
+      mouseTrackingMode: 'drag',
+      sgrMouseMode: true,
+      applicationCursor: false,
+      alternateScreen: true
+    }
+    const mux = {
+      request: vi.fn().mockResolvedValue({ replay: 'tail', modes }),
+      notify: vi.fn(),
+      onNotification: vi.fn().mockReturnValue(vi.fn())
+    }
+    const provider = new SshPtyProvider('conn-1', mux as never)
+
+    const result = await provider.spawn({ cols: 80, rows: 24, sessionId: 'pty-old' })
+
+    expect(result.isReattach).toBe(true)
+    expect(result.modes).toEqual(modes)
+  })
+})
+
+describe('parseSshPtyAttachResult modes', () => {
+  it('accepts a valid modes payload', () => {
+    const modes = {
+      bracketedPaste: false,
+      mouseTracking: true,
+      mouseTrackingMode: 'any',
+      applicationCursor: true,
+      alternateScreen: false
+    }
+    expect(parseSshPtyAttachResult({ replay: 'tail', modes })).toEqual({
+      replay: 'tail',
+      modes
+    })
+  })
+
+  it('omits modes when the payload has none', () => {
+    expect(parseSshPtyAttachResult({ replay: 'tail' })).toEqual({ replay: 'tail' })
+  })
+
+  it('drops malformed modes without failing the attach', () => {
+    expect(parseSshPtyAttachResult({ replay: 'tail', modes: { bracketedPaste: 'yes' } })).toEqual({
+      replay: 'tail'
+    })
+    expect(parseSshPtyAttachResult({ replay: 'tail', modes: 'alt' })).toEqual({ replay: 'tail' })
+    expect(parseSshPtyAttachResult({ replay: 'tail', modes: [] })).toEqual({ replay: 'tail' })
   })
 })
