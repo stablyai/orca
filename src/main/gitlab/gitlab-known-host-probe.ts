@@ -164,6 +164,7 @@ async function probeGlabKnownHosts(
   }
 }
 
+/** Merge discovered hosts into the cache for one execution context. */
 function cacheGlabKnownHosts(key: string, hosts: readonly string[]): readonly string[] {
   const remembered = knownHostsCacheByExecutionContext.get(key) ?? []
   const merged = Array.from(new Set([...DEFAULT_GITLAB_HOSTS, ...remembered, ...hosts]))
@@ -171,6 +172,7 @@ function cacheGlabKnownHosts(key: string, hosts: readonly string[]): readonly st
   return merged
 }
 
+/** Collect auth-status output retained on a failed glab process result. */
 function getGlabAuthStatusOutput(error: unknown): string {
   if (!error || typeof error !== 'object') {
     return String(error)
