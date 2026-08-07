@@ -1031,6 +1031,26 @@ export async function statRuntimePath(
   )
 }
 
+/**
+ * Lets a later read follow a symlink whose target sits outside the workspace roots.
+ *
+ * Why: listings classify links as file-like without resolving them, so nothing has
+ * authorized the target until the user activates the row.
+ */
+export async function authorizeRuntimeSymlinkTarget(
+  context: RuntimeFileOperationArgs,
+  linkPath: string
+): Promise<boolean> {
+  // Remote runtimes scope reads on their own host; there is no local allow-list to unlock.
+  if (getRemoteFileArgs(context, linkPath)) {
+    return true
+  }
+  return window.api.fs.authorizeSymlinkTarget({
+    linkPath,
+    connectionId: context.connectionId
+  })
+}
+
 export async function subscribeRuntimeFileChanges(
   context: RuntimeFileOperationArgs,
   onPayload: (payload: FsChangedPayload) => void,

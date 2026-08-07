@@ -72,6 +72,69 @@ describe('activateFileExplorerNode', () => {
     expect(openFile).not.toHaveBeenCalled()
   })
 
+  it('authorizes the symlink target before reading it, so links out of the workspace resolve', async () => {
+    const calls: string[] = []
+    const authorizeSymlinkTarget = vi.fn(async (path: string) => {
+      calls.push(`authorize:${path}`)
+    })
+    const statPath = vi.fn(async () => {
+      calls.push('stat')
+      return { isDirectory: true }
+    })
+
+    await activateFileExplorerNode({
+      node: symlinkNode,
+      activeWorktreeId: 'wt-1',
+      openFile: vi.fn(),
+      toggleDir: vi.fn(),
+      loadDir: vi.fn().mockResolvedValue(true),
+      statPath,
+      authorizeSymlinkTarget,
+      markPathAsDirectory: vi.fn(),
+      setSelectedPath: vi.fn()
+    })
+
+    expect(calls).toEqual(['authorize:/repo/linked-docs', 'stat'])
+  })
+
+  it('authorizes a link the listing already classified as a directory before expanding it', async () => {
+    const authorizeSymlinkTarget = vi.fn().mockResolvedValue(undefined)
+    const toggleDir = vi.fn()
+
+    await activateFileExplorerNode({
+      node: { ...symlinkNode, isDirectory: true },
+      activeWorktreeId: 'wt-1',
+      openFile: vi.fn(),
+      toggleDir,
+      loadDir: vi.fn(),
+      statPath: vi.fn(),
+      authorizeSymlinkTarget,
+      markPathAsDirectory: vi.fn(),
+      setSelectedPath: vi.fn()
+    })
+
+    expect(authorizeSymlinkTarget).toHaveBeenCalledWith('/repo/linked-docs')
+    expect(toggleDir).toHaveBeenCalledWith('wt-1', '/repo/linked-docs')
+  })
+
+  it('does not authorize targets for rows that are not symlinks', async () => {
+    const authorizeSymlinkTarget = vi.fn()
+
+    await activateFileExplorerNode({
+      node: directoryNode,
+      activeWorktreeId: 'wt-1',
+      openFile: vi.fn(),
+      toggleDir: vi.fn(),
+      loadDir: vi.fn(),
+      statPath: vi.fn(),
+      authorizeSymlinkTarget,
+      markPathAsDirectory: vi.fn(),
+      setSelectedPath: vi.fn()
+    })
+
+    expect(authorizeSymlinkTarget).not.toHaveBeenCalled()
+  })
+
   it('falls back to opening a symlink as a file when directory loading fails', async () => {
     const openFile = vi.fn()
     useAppStore.setState({

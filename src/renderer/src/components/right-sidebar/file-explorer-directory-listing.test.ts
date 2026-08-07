@@ -10,7 +10,10 @@ vi.mock('./file-explorer-operation-owner', () => ({
   getFileExplorerOwnerUnresolvedMessage: () => 'unresolved'
 }))
 
-import { readFileExplorerDirectory } from './file-explorer-directory-listing'
+import {
+  fileExplorerEntriesToTreeNodes,
+  readFileExplorerDirectory
+} from './file-explorer-directory-listing'
 
 describe('readFileExplorerDirectory', () => {
   it('re-sorts backend order — remote-runtime and paired-web routes return the host order verbatim', async () => {
@@ -28,5 +31,42 @@ describe('readFileExplorerDirectory', () => {
       '99 - a.txt',
       '100 - b.txt'
     ])
+  })
+})
+
+describe('fileExplorerEntriesToTreeNodes', () => {
+  const owner = { kind: 'local' } as const
+
+  it('keeps a link an activation already resolved to a directory expanded across re-reads', () => {
+    const entries = [
+      { name: 'linked-docs', isDirectory: false, isSymlink: true },
+      { name: 'linked-file.md', isDirectory: false, isSymlink: true }
+    ]
+
+    const nodes = fileExplorerEntriesToTreeNodes(
+      entries,
+      '/w',
+      -1,
+      '/w',
+      owner,
+      new Set(['/w/linked-docs'])
+    )
+
+    expect(nodes.map((node) => [node.path, node.isDirectory])).toEqual([
+      ['/w/linked-docs', true],
+      ['/w/linked-file.md', false]
+    ])
+  })
+
+  it('leaves unresolved links file-like', () => {
+    const nodes = fileExplorerEntriesToTreeNodes(
+      [{ name: 'linked-docs', isDirectory: false, isSymlink: true }],
+      '/w',
+      -1,
+      '/w',
+      owner
+    )
+
+    expect(nodes[0].isDirectory).toBe(false)
   })
 })

@@ -40,6 +40,7 @@ type UseFileExplorerHandlersParams = {
     options?: { force?: boolean; failOnError?: boolean }
   ) => Promise<boolean>
   statPath: (path: string) => Promise<{ isDirectory: boolean }>
+  authorizeSymlinkTarget?: (path: string) => Promise<void>
   markPathAsDirectory: (path: string) => void
   setSelectedPath: (path: string) => void
   scrollRef: RefObject<HTMLDivElement | null>
@@ -64,6 +65,7 @@ export async function activateFileExplorerNode(args: {
   canToggleDirectories?: boolean
   loadDir: UseFileExplorerHandlersParams['loadDir']
   statPath: UseFileExplorerHandlersParams['statPath']
+  authorizeSymlinkTarget?: UseFileExplorerHandlersParams['authorizeSymlinkTarget']
   markPathAsDirectory: (path: string) => void
   setSelectedPath: (path: string) => void
 }): Promise<void> {
@@ -75,6 +77,7 @@ export async function activateFileExplorerNode(args: {
     canToggleDirectories = true,
     loadDir,
     statPath,
+    authorizeSymlinkTarget,
     markPathAsDirectory,
     setSelectedPath
   } = args
@@ -82,6 +85,11 @@ export async function activateFileExplorerNode(args: {
     return
   }
   setSelectedPath(node.path)
+  if (node.isSymlink) {
+    // Why: a listing classifies a link but never authorizes it. Activation is what unlocks a
+    // target outside the workspace roots — without this every read below is access-denied.
+    await authorizeSymlinkTarget?.(node.path)
+  }
   if (node.isDirectory) {
     if (!canToggleDirectories) {
       return
@@ -90,8 +98,8 @@ export async function activateFileExplorerNode(args: {
     return
   }
   if (node.isSymlink) {
-    // Why: symlink targets may live in macOS TCC-protected app data. Resolve
-    // them only after the user explicitly activates the row.
+    // Why: a route whose listing left the link unclassified (remote hosts, TCC-blocked stat)
+    // still needs an explicit resolve before the tree can treat it as a directory.
     let targetIsDirectory = false
     try {
       targetIsDirectory = (await statPath(node.path)).isDirectory
@@ -163,6 +171,7 @@ export function useFileExplorerHandlers({
   canToggleDirectories = true,
   loadDir,
   statPath,
+  authorizeSymlinkTarget,
   markPathAsDirectory,
   setSelectedPath,
   scrollRef
@@ -228,6 +237,7 @@ export function useFileExplorerHandlers({
         canToggleDirectories,
         loadDir,
         statPath,
+        authorizeSymlinkTarget,
         markPathAsDirectory,
         setSelectedPath
       })
@@ -235,6 +245,7 @@ export function useFileExplorerHandlers({
     [
       activeWorktreeId,
       runtimeEnvironmentId,
+      authorizeSymlinkTarget,
       canToggleDirectories,
       settlePendingDirToggle,
       loadDir,

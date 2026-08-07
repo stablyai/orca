@@ -3156,6 +3156,8 @@ const api = {
     ): Promise<void> => ipcRenderer.invoke('fs:deletePath', args),
     authorizeExternalPath: (args: { targetPath: string }): Promise<void> =>
       ipcRenderer.invoke('fs:authorizeExternalPath', args),
+    authorizeSymlinkTarget: (args: { linkPath: string; connectionId?: string }): Promise<boolean> =>
+      ipcRenderer.invoke('fs:authorizeSymlinkTarget', args),
     stat: (args: {
       filePath: string
       connectionId?: string

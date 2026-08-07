@@ -21,6 +21,8 @@ export type RefreshFileExplorerExpandedDirsParams = {
   maxConcurrentReads: number
   /** Called per dir whose fresh listing was committed, so callers can clear a staleness mark. */
   onDirCommitted?: (dirPath: string) => void
+  /** Links a previous activation resolved to a directory; a refresh would otherwise demote them back to files. */
+  knownSymlinkDirectories?: ReadonlySet<string>
 }
 
 export async function refreshFileExplorerExpandedDirs({
@@ -30,7 +32,8 @@ export async function refreshFileExplorerExpandedDirs({
   setDirCache,
   readDirectory,
   maxConcurrentReads,
-  onDirCommitted
+  onDirCommitted,
+  knownSymlinkDirectories
 }: RefreshFileExplorerExpandedDirsParams): Promise<boolean> {
   if (dirs.length === 0) {
     return true
@@ -139,7 +142,8 @@ export async function refreshFileExplorerExpandedDirs({
             dirPath,
             depth,
             worktreePath,
-            listing.operationOwner
+            listing.operationOwner,
+            knownSymlinkDirectories
           ),
           loading: false,
           operationOwner: listing.operationOwner

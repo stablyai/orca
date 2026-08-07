@@ -2185,17 +2185,21 @@ function basenameFromRelativePath(relativePath: string): string {
 
 async function isRuntimeDirectoryEntry(
   entry: { isDirectory(): boolean; isSymbolicLink(): boolean },
-  _entryPath: string
+  entryPath: string
 ): Promise<boolean> {
-  // Why: listings are passive UI reads; don't stat symlink targets here (explicit open/expand resolves them).
-  if (entry.isSymbolicLink()) {
-    void _entryPath
-    return false
-  }
   if (entry.isDirectory()) {
     return true
   }
-  return false
+  if (!entry.isSymbolicLink()) {
+    return false
+  }
+  // Classification only — opening or expanding the target still authorizes it separately.
+  try {
+    return (await stat(entryPath)).isDirectory()
+  } catch {
+    // Why: dangling links and unreadable targets stay file-like instead of failing the listing.
+    return false
+  }
 }
 
 function isBinaryBuffer(buffer: Buffer): boolean {

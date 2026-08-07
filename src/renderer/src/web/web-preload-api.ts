@@ -1883,6 +1883,8 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
       captureSession: captureWebFileMutationSession
     }),
     authorizeExternalPath: () => Promise.resolve(),
+    // Paired web sessions read through the host, which owns its own path scoping.
+    authorizeSymlinkTarget: () => Promise.resolve(true),
     stat: async ({ filePath }) => {
       const file = await resolveRuntimeFilePath(filePath)
       return callRuntimeResult('files.stat', {

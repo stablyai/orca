@@ -2,7 +2,7 @@ import type { Dispatch, SetStateAction } from 'react'
 import { useCallback, useRef, useState } from 'react'
 import type { DirCache, FileExplorerTreeRefreshOutcome } from './file-explorer-types'
 import { splitPathSegments } from './path-tree'
-import { statRuntimePath } from '@/runtime/runtime-file-client'
+import { authorizeRuntimeSymlinkTarget, statRuntimePath } from '@/runtime/runtime-file-client'
 import { createFileExplorerDirLoadTracker } from './file-explorer-dir-load-tracker'
 import {
   getFileExplorerOperationOwner,
@@ -28,6 +28,7 @@ type UseFileExplorerTreeResult = {
     options?: { force?: boolean; failOnError?: boolean }
   ) => Promise<boolean>
   statPath: (path: string) => Promise<{ isDirectory: boolean }>
+  authorizeSymlinkTarget: (path: string) => Promise<void>
   markPathAsDirectory: (path: string) => void
   refreshTree: () => Promise<FileExplorerTreeRefreshOutcome>
   refreshDir: (dirPath: string) => Promise<void>
@@ -51,6 +52,9 @@ export function useFileExplorerTree(
   const staleDirsRef = useRef(new Set<string>())
   // Why: separates a failed root read from a superseded one — loadDir returns false for both.
   const rootReadFailedRef = useRef(false)
+  // Why: readDir reports every symlink as file-like, so each re-read would demote a link the user
+  // already expanded and collapse its subtree. Remember the ones activation proved to be dirs.
+  const symlinkDirsRef = useRef(new Set<string>())
 
   const loadDir = useCallback(
     async (
@@ -89,7 +93,8 @@ export function useFileExplorerTree(
           dirPath,
           depth,
           worktreePath,
-          listing.operationOwner
+          listing.operationOwner,
+          symlinkDirsRef.current
         )
         setDirCache((prev) => ({
           ...prev,
@@ -116,6 +121,7 @@ export function useFileExplorerTree(
   )
 
   const markPathAsDirectory = useCallback((path: string) => {
+    symlinkDirsRef.current.add(path)
     setDirCache((prev) => {
       let changed = false
       const next: Record<string, DirCache> = {}
@@ -151,6 +157,26 @@ export function useFileExplorerTree(
         },
         path
       )
+    },
+    [activeWorktreeId, worktreePath]
+  )
+
+  const authorizeSymlinkTarget = useCallback(
+    async (path: string) => {
+      const route = getFileExplorerOperationRoute(getFileExplorerOperationOwner(activeWorktreeId))
+      if (!route) {
+        return
+      }
+      // Why: best-effort — a link the host refuses to authorize still fails loudly on the read that follows.
+      await authorizeRuntimeSymlinkTarget(
+        {
+          settings: route.settings,
+          worktreeId: activeWorktreeId,
+          worktreePath,
+          connectionId: route.connectionId
+        },
+        path
+      ).catch(() => false)
     },
     [activeWorktreeId, worktreePath]
   )
@@ -210,7 +236,8 @@ export function useFileExplorerTree(
       maxConcurrentReads: fileExplorerRefreshConcurrency(
         getFileExplorerOperationOwner(activeWorktreeId)
       ),
-      onDirCommitted: (dirPath) => staleDirsRef.current.delete(dirPath)
+      onDirCommitted: (dirPath) => staleDirsRef.current.delete(dirPath),
+      knownSymlinkDirectories: symlinkDirsRef.current
     })
     return allDirsCommitted ? 'refreshed' : 'superseded'
   }, [activeWorktreeId, expanded, loadDir, worktreePath])
@@ -238,6 +265,7 @@ export function useFileExplorerTree(
     // must not repopulate the explorer after the tree has been cleared.
     dirLoadTrackerRef.current.reset()
     staleDirsRef.current.clear()
+    symlinkDirsRef.current.clear()
     setDirCache({})
     setRootError(null)
     if (worktreePath) {
@@ -252,6 +280,7 @@ export function useFileExplorerTree(
     rootError,
     loadDir,
     statPath,
+    authorizeSymlinkTarget,
     markPathAsDirectory,
     refreshTree,
     refreshDir,

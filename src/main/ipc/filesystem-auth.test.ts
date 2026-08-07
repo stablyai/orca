@@ -285,6 +285,42 @@ describe('filesystem-auth path containment', () => {
     }
   )
 
+  it.skipIf(process.platform === 'win32')(
+    'reads a symlinked dir outside the repo once its target is authorized',
+    async () => {
+      const tempRoot = await mkdtemp(join(tmpdir(), 'orca-auth-symlink-open-'))
+      try {
+        const repoPath = join(tempRoot, 'repo')
+        const outsidePath = join(tempRoot, 'outside')
+        const nestedPath = join(outsidePath, 'nested')
+        await mkdir(repoPath)
+        await mkdir(nestedPath, { recursive: true })
+        const linkPath = join(repoPath, 'linked-outside')
+        await symlink(outsidePath, linkPath, 'dir')
+        const store = makeStore([{ ...repo, id: 'repo-temp', path: repoPath }])
+
+        // A listing never resolves links, so nothing has authorized the target yet.
+        await expect(resolveAuthorizedPath(linkPath, store)).rejects.toThrow('Access denied')
+
+        authorizeExternalPath(await realpath(linkPath))
+
+        await expect(resolveAuthorizedPath(linkPath, store)).resolves.toBe(
+          await realpath(outsidePath)
+        )
+        // Expanding the link's subtree must keep working without re-authorizing each child.
+        await expect(resolveAuthorizedPath(join(linkPath, 'nested'), store)).resolves.toBe(
+          await realpath(nestedPath)
+        )
+        // Authorizing one link does not open its siblings.
+        const unrelatedPath = join(tempRoot, 'unrelated')
+        await mkdir(unrelatedPath)
+        await expect(resolveAuthorizedPath(unrelatedPath, store)).rejects.toThrow('Access denied')
+      } finally {
+        await rm(tempRoot, { recursive: true, force: true })
+      }
+    }
+  )
+
   it('allows descendants whose path segment starts with dotdot characters', () => {
     const root = resolve('/workspace/repo')
     const child = resolve('/workspace/repo/..fixtures/file.ts')

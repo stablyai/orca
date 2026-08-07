@@ -1,6 +1,16 @@
 /* eslint-disable max-lines */
 import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
-import { readdir, readFile, writeFile, stat, lstat, open, rename, rm } from 'node:fs/promises'
+import {
+  readdir,
+  readFile,
+  writeFile,
+  stat,
+  lstat,
+  open,
+  realpath,
+  rename,
+  rm
+} from 'node:fs/promises'
 import type { FileHandle } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { dirname, extname, join, resolve } from 'node:path'
@@ -484,19 +494,21 @@ async function isBinaryFilePrefix(filePath: string): Promise<boolean> {
 
 async function isDirectoryEntry(
   dirPath: string,
-  entry: { name: string; isDirectory(): boolean; isSymbolicLink(): boolean },
-  _resolveEntryPath: (entryPath: string) => Promise<string>
+  entry: { name: string; isDirectory(): boolean; isSymbolicLink(): boolean }
 ): Promise<boolean> {
-  // Why: following a symlink in readDir can touch macOS TCC-protected containers; treat links as file-like until explicitly opened.
-  void _resolveEntryPath
-  if (entry.isSymbolicLink()) {
-    void dirPath
-    return false
-  }
   if (entry.isDirectory()) {
     return true
   }
-  return false
+  if (!entry.isSymbolicLink()) {
+    return false
+  }
+  // Classification only — the target still needs explicit activation before anything reads it.
+  try {
+    return (await stat(join(dirPath, entry.name))).isDirectory()
+  } catch {
+    // Why: dangling links and macOS TCC-protected targets stay file-like instead of failing the listing.
+    return false
+  }
 }
 
 export function registerFilesystemHandlers(
@@ -552,9 +564,7 @@ export function registerFilesystemHandlers(
         const mapped = await Promise.all(
           entries.map(async (entry) => ({
             name: entry.name,
-            isDirectory: await isDirectoryEntry(dirPath, entry, (entryPath) =>
-              resolveAuthorizedPath(entryPath, store)
-            ),
+            isDirectory: await isDirectoryEntry(dirPath, entry),
             isSymlink: entry.isSymbolicLink()
           }))
         )
@@ -918,6 +928,31 @@ export function registerFilesystemHandlers(
   ipcMain.handle('fs:authorizeExternalPath', (_event, args: { targetPath: string }): void => {
     authorizeExternalPath(args.targetPath)
   })
+
+  ipcMain.handle(
+    'fs:authorizeSymlinkTarget',
+    async (_event, args: { linkPath: string; connectionId?: string }): Promise<boolean> => {
+      // Remote paths never reach the local allow-list; the provider scopes them on its own host.
+      if (args.connectionId) {
+        return true
+      }
+      try {
+        // preserveSymlink keeps the leaf unresolved, so this authorizes the link's own location, not wherever it points.
+        const linkPath = await resolveAuthorizedPath(args.linkPath, store, {
+          preserveSymlink: true
+        })
+        if (!(await lstat(linkPath)).isSymbolicLink()) {
+          return false
+        }
+        // Why: a link inside an allowed root is trusted only once the user activates it — listings still classify links as file-like.
+        const targetPath = await realpath(linkPath)
+        authorizeExternalPath(targetPath)
+        return true
+      } catch {
+        return false
+      }
+    }
+  )
 
   ipcMain.handle(
     'fs:stat',

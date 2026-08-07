@@ -14,6 +14,7 @@ import {
   Folder,
   FolderOpen,
   FolderPlus,
+  FolderSymlink,
   Globe,
   ListCollapse,
   Link,
@@ -610,6 +611,9 @@ export function FileExplorerRow({
               />
               {isLoading ? (
                 <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" />
+              ) : node.isSymlink ? (
+                // Why: a linked folder is indistinguishable from a real one otherwise; the chevron already carries expansion state.
+                <FolderSymlink className="size-3 shrink-0 text-muted-foreground" />
               ) : isExpanded ? (
                 <FolderOpen className="size-3 shrink-0 text-muted-foreground" />
               ) : (

@@ -358,21 +358,36 @@ describe('RuntimeFileCommands', () => {
     expect(openFile).not.toHaveBeenCalled()
   })
 
-  it('does not follow symlinks when reading runtime-local file explorer dirs', async () => {
+  it('classifies symlinked dirs as dirs when reading runtime-local file explorer dirs', async () => {
     const { commands } = createRuntimeFileCommands()
     resolveAuthorizedPathMock.mockResolvedValue('/repo')
     readdirMock.mockResolvedValue([
       dirEntry({ name: 'README.md' }),
-      dirEntry({ name: 'linked-docs', directory: true, symlink: true })
+      dirEntry({ name: 'linked-docs', symlink: true }),
+      dirEntry({ name: 'linked-file.md', symlink: true })
     ])
+    statMock.mockImplementation(async (path: string) => ({
+      isDirectory: () => path === '/repo/linked-docs'
+    }))
 
     const result = await commands.readFileExplorerDir('id:wt-1', '')
 
     expect(result).toEqual([
-      { name: 'linked-docs', isDirectory: false, isSymlink: true },
+      { name: 'linked-docs', isDirectory: true, isSymlink: true },
+      { name: 'linked-file.md', isDirectory: false, isSymlink: true },
       { name: 'README.md', isDirectory: false, isSymlink: false }
     ])
-    expect(statMock).not.toHaveBeenCalledWith('/repo/linked-docs')
+  })
+
+  it('leaves a dangling symlink file-like instead of failing the listing', async () => {
+    const { commands } = createRuntimeFileCommands()
+    resolveAuthorizedPathMock.mockResolvedValue('/repo')
+    readdirMock.mockResolvedValue([dirEntry({ name: 'broken-link', symlink: true })])
+    statMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+
+    await expect(commands.readFileExplorerDir('id:wt-1', '')).resolves.toEqual([
+      { name: 'broken-link', isDirectory: false, isSymlink: true }
+    ])
   })
 
   it('renames a runtime-local file when destination does not exist', async () => {

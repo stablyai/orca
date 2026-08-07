@@ -146,6 +146,7 @@ function FileExplorerFiles(): React.JSX.Element {
     rootError,
     loadDir,
     statPath,
+    authorizeSymlinkTarget,
     markPathAsDirectory,
     refreshTree,
     refreshDir,
@@ -504,6 +505,7 @@ function FileExplorerFiles(): React.JSX.Element {
       toggleDir: hasNameFilter ? handleToggleNameFilterDir : toggleDir,
       loadDir,
       statPath,
+      authorizeSymlinkTarget,
       markPathAsDirectory,
       setSelectedPath: setSingleSelectedPath,
       scrollRef

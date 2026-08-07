@@ -2839,6 +2839,8 @@ export type PreloadApi = {
       } & SshMutationExpectation
     ) => Promise<void>
     authorizeExternalPath: (args: { targetPath: string }) => Promise<void>
+    /** Authorizes the target of a symlink that lives inside an allowed root, so explicit activation can follow it out of the workspace. */
+    authorizeSymlinkTarget: (args: { linkPath: string; connectionId?: string }) => Promise<boolean>
     stat: (args: {
       filePath: string
       connectionId?: string

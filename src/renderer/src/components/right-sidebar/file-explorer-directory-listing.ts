@@ -20,7 +20,9 @@ export function fileExplorerEntriesToTreeNodes(
   dirPath: string,
   depth: number,
   worktreePath: string | null,
-  operationOwner: FileExplorerOperationOwner
+  operationOwner: FileExplorerOperationOwner,
+  /** Links a previous activation already resolved to a directory — listings never follow links themselves. */
+  knownSymlinkDirectories?: ReadonlySet<string>
 ): TreeNode[] {
   return entries.filter(shouldIncludeFileExplorerEntry).map((entry) => {
     const path = joinPath(dirPath, entry.name)
@@ -30,7 +32,8 @@ export function fileExplorerEntriesToTreeNodes(
       relativePath: worktreePath
         ? normalizeRelativePath(path.slice(worktreePath.length + 1))
         : entry.name,
-      isDirectory: entry.isDirectory,
+      isDirectory:
+        entry.isDirectory || (entry.isSymlink && (knownSymlinkDirectories?.has(path) ?? false)),
       isSymlink: entry.isSymlink,
       depth: depth + 1,
       operationOwner

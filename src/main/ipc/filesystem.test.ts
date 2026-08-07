@@ -1059,11 +1059,12 @@ describe('registerFilesystemHandlers', () => {
     expect(listWorktreesMock).not.toHaveBeenCalled()
   })
 
-  it('does not follow symlinks when classifying readDir entries', async () => {
+  it('classifies symlinked dirs as dirs so listings show them as folders', async () => {
     const modelLinkPath = path.join(REPO_PATH, 'Model')
     readdirMock.mockResolvedValue([
       dirEntry({ name: 'README.md', file: true }),
-      dirEntry({ name: 'Model', directory: true, symlink: true })
+      dirEntry({ name: 'Model', symlink: true }),
+      dirEntry({ name: 'notes-link.md', symlink: true })
     ])
     statMock.mockImplementation(async (targetPath: string) => ({
       size: 10,
@@ -1074,10 +1075,68 @@ describe('registerFilesystemHandlers', () => {
     registerFilesystemHandlers(store as never)
 
     await expect(handlers.get('fs:readDir')!(null, { dirPath: REPO_PATH })).resolves.toEqual([
-      { name: 'Model', isDirectory: false, isSymlink: true },
+      { name: 'Model', isDirectory: true, isSymlink: true },
+      { name: 'notes-link.md', isDirectory: false, isSymlink: true },
       { name: 'README.md', isDirectory: false, isSymlink: false }
     ])
-    expect(statMock).not.toHaveBeenCalledWith(modelLinkPath)
+  })
+
+  it('keeps a dangling symlink file-like instead of failing the whole listing', async () => {
+    readdirMock.mockResolvedValue([dirEntry({ name: 'broken-link', symlink: true })])
+    statMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(handlers.get('fs:readDir')!(null, { dirPath: REPO_PATH })).resolves.toEqual([
+      { name: 'broken-link', isDirectory: false, isSymlink: true }
+    ])
+  })
+
+  it('authorizes a symlink target outside allowed roots so the follow-up readDir succeeds', async () => {
+    const linkPath = path.join(REPO_PATH, 'linked-notes')
+    const outsideTargetPath = path.resolve('/elsewhere/notes')
+    realpathMock.mockImplementation(async (targetPath: string) =>
+      targetPath === linkPath ? outsideTargetPath : targetPath
+    )
+    lstatMock.mockResolvedValue({ isSymbolicLink: () => true })
+    readdirMock.mockResolvedValue([dirEntry({ name: 'todo.md', file: true })])
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(handlers.get('fs:readDir')!(null, { dirPath: linkPath })).rejects.toThrow(
+      'Access denied'
+    )
+
+    await expect(handlers.get('fs:authorizeSymlinkTarget')!(null, { linkPath })).resolves.toBe(true)
+
+    await expect(handlers.get('fs:readDir')!(null, { dirPath: linkPath })).resolves.toEqual([
+      { name: 'todo.md', isDirectory: false, isSymlink: false }
+    ])
+    expect(readdirMock).toHaveBeenCalledWith(outsideTargetPath, { withFileTypes: true })
+  })
+
+  it('refuses to authorize a path that is not a symlink', async () => {
+    const plainPath = path.join(REPO_PATH, 'src')
+    lstatMock.mockResolvedValue({ isSymbolicLink: () => false })
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:authorizeSymlinkTarget')!(null, { linkPath: plainPath })
+    ).resolves.toBe(false)
+    expect(realpathMock).not.toHaveBeenCalledWith(plainPath)
+  })
+
+  it('refuses to authorize a symlink that lives outside allowed roots', async () => {
+    const outsideLinkPath = path.resolve('/elsewhere/rogue-link')
+    lstatMock.mockResolvedValue({ isSymbolicLink: () => true })
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:authorizeSymlinkTarget')!(null, { linkPath: outsideLinkPath })
+    ).resolves.toBe(false)
+    expect(lstatMock).not.toHaveBeenCalled()
   })
 
   it('returns false from pathExists when a local authorized path is missing', async () => {
