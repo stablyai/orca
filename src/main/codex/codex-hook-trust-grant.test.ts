@@ -97,6 +97,22 @@ function grantedSessionResult(entries: CodexTrustEntry[], hashPrefix = 'sha256:c
 }
 
 describe('grantManagedCodexHookTrust', () => {
+  it('does not let a short trust RPC claim an incomplete session index', () => {
+    const sessions = join(runtimeHomeDir, 'sessions')
+    mkdirSync(sessions, { recursive: true })
+    for (let index = 0; index < 100; index += 1) {
+      writeFileSync(join(sessions, `${index}.jsonl`), '{}\n')
+    }
+    const runner = vi.fn()
+    _internals.setGrantSessionRunnerSync(runner)
+
+    expect(grantManagedCodexHookTrust(buildPlan([managedEntry('stop')]))).toMatchObject({
+      lane: 'fallback',
+      reason: 'retry-cached'
+    })
+    expect(runner).not.toHaveBeenCalled()
+  })
+
   it('returns granted entries with codex-verbatim hashes and records the ledger', () => {
     const entries = [managedEntry('session_start'), managedEntry('stop')]
     const runner = vi.fn((_request: CodexHookTrustGrantRequest) => grantedSessionResult(entries))

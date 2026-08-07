@@ -219,6 +219,10 @@ import {
 import { setCodexTrustGrantTelemetry } from './codex/codex-trust-grant-telemetry'
 import { startCodexSessionBackfillInBackground } from './codex/codex-session-backfill'
 import { startCodexSessionIndexHealInBackground } from './codex/codex-session-index-heal'
+import {
+  startCodexStateDbBackfillRecoveryInBackground,
+  stopCodexStateDbBackfillRecoveries
+} from './codex/codex-state-db-backfill-recovery'
 import { createCodexSessionMigrationScheduler } from './codex/codex-session-migration-scheduler'
 import { prepareLegacySharedCodexSessionResume } from './codex/codex-legacy-session-resume'
 import { resolveHostCodexSessionSourceHome } from './codex/codex-session-source-home'
@@ -2232,6 +2236,7 @@ void app.whenReady().then(async () => {
   openCodeUsage = new OpenCodeUsageStore(store)
   rateLimits = new RateLimitService()
   codexRuntimeHome = new CodexRuntimeHomeService(store)
+  void startCodexStateDbBackfillRecoveryInBackground(getOrcaManagedCodexHomePath())
   // Why: an incapable trust-grant host must fall back to the managed home for
   // every consumer (PTY env, rate limits, commit messages) in one place.
   codexRuntimeHome.setRealHomeLaneGate(() => isRealHomeCodexHookLaneUsable())
@@ -3059,6 +3064,7 @@ app.on('will-quit', (e) => {
   pluginMarketplaceService = null
   pluginMarketplaceInstaller = null
   const pluginHostShutdown = pluginService?.dispose() ?? Promise.resolve()
+  const codexBackfillRecoveryShutdown = stopCodexStateDbBackfillRecoveries()
   pluginService = null
   setUnreadDockBadgeCount(0)
   agentHookServer.stop()
@@ -3118,6 +3124,7 @@ app.on('will-quit', (e) => {
     { name: 'emulator', promise: emulatorShutdown },
     { name: 'ssh', promise: sshShutdown },
     { name: 'plugin-hosts', promise: pluginHostShutdown },
+    { name: 'codex-backfill-recovery', promise: codexBackfillRecoveryShutdown },
     { name: 'usage-cache', promise: usageCacheFlush },
     { name: 'stats', promise: statsFlush },
     { name: 'state', promise: storeFlush }

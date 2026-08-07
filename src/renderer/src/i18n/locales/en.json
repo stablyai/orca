@@ -11194,7 +11194,24 @@
                   "2388413f28": "This merge request is closed",
                   "88d044c42f": "Closed",
                   "ee482a2bad": "This merge request is already merged",
-                  "fae95ae20d": "Merged"
+                  "fae95ae20d": "Merged",
+                  "5105b0e584": "Approval required",
+                  "46dc85711b": "GitLab requires approval before this MR can merge",
+                  "893a999c8c": "Changes requested",
+                  "c65408a99d": "A reviewer requested changes on this merge request",
+                  "01ab632a21": "Unresolved threads",
+                  "4191fdfcec": "GitLab requires unresolved discussions to be resolved before merge",
+                  "bf628700f6": "Checks must pass",
+                  "37d8637c70": "GitLab requires the pipeline to succeed before this MR can merge",
+                  "049ea91a82": "The pipeline is still running",
+                  "382c70faeb": "Behind",
+                  "2c61100b3a": "Update the branch before merging",
+                  "195917574e": "Checking",
+                  "ff6db2db63": "GitLab is still computing this merge request status",
+                  "4ecc0d90ee": "Blocked",
+                  "a0f3de7023": "GitLab reports this merge request is blocked",
+                  "804ecf93e8": "GitLab has not reported a final merge status",
+                  "a5c049afe4": "GitLab says this MR can merge"
                 }
               }
             }
@@ -13856,6 +13873,7 @@
             "b472c5fe03": "Add browser annotation",
             "b5ba6085de": "Question",
             "143204e423": "Change",
+            "b71dc3d930": "Reconnect",
             "e7ca5a098c": "success",
             "d51ef37351": "Copy",
             "6f4ab3592b": "Copied",
@@ -14798,6 +14816,12 @@
         "pendingChip": "{{value0}} pending",
         "needsActionChip": "{{value0}} action required",
         "unresolvedChip": "{{value0}} unresolved"
+      },
+      "BrowserPane": {
+        "streamConnectionLost": "Lost connection to the remote server.",
+        "streamConnectionUnreachable": "Cannot reach the remote server.",
+        "streamRestartFailed": "Failed to restart remote browser stream.",
+        "streamCapabilityUnsupported": "The selected runtime does not support remote browser streaming."
       }
     },
     "i18n": {
@@ -15060,6 +15084,7 @@
         "showStates": "Agent states",
         "canvasSummary": "{{shown}} of {{total}} agents shown",
         "agentlessWorkspaces": "Workspaces without agents",
+        "orchestrationLinks": "Orchestration links",
         "workspaceVisibility": "Map content"
       },
       "liveContainmentMap": "Live containment map",

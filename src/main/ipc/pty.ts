@@ -199,6 +199,7 @@ import {
 } from '../codex/codex-pane-account-registry'
 import { resolveCodexPaneLaunchAccount } from '../codex/codex-pane-launch-account'
 import { getSystemCodexHomePath } from '../codex/codex-home-paths'
+import { ensureCodexStateDbBackfillRecoveryStarted } from '../codex/codex-state-db-backfill-recovery'
 import {
   environmentCodexHomeOverrideContextsEqual,
   getCustomCodexHomeOverrideForLaunch,
@@ -4495,6 +4496,9 @@ export function registerPtyHandlers(
         })
         selectedCodexHomePath = resolution instanceof Promise ? await resolution : resolution
       }
+      if (args.launchAgent === 'codex' && selectedCodexHomePath) {
+        await ensureCodexStateDbBackfillRecoveryStarted(selectedCodexHomePath)
+      }
       const codexResumeHomeSelected = Boolean(
         codexResumeHome && codexHomePathsEqual(selectedCodexHomePath, codexResumeHome.codexHomePath)
       )
@@ -5955,6 +5959,9 @@ export function registerPtyHandlers(
               )
           })
           selectedCodexHomePath = resolution instanceof Promise ? await resolution : resolution
+        }
+        if (args.launchAgent === 'codex' && selectedCodexHomePath) {
+          await ensureCodexStateDbBackfillRecoveryStarted(selectedCodexHomePath)
         }
         const codexResumeHomeSelected = Boolean(
           codexResumeHome &&

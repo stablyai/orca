@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-04",
+  "updatedAt": "2026-08-07",
   "policy": {
     "maturityLevels": ["experimental", "soak", "blocking", "accepted-gap", "deprecated"],
     "blockingPromotion": {
@@ -1360,6 +1360,118 @@
         "Browser screencast subscribers share the fixed contract but have no dedicated reveal journey; the web and mobile clients run parallel transports and are unaffected."
       ],
       "demotionRule": "Demote if a retired runtime transport can leave a renderer subscription without a close event, if a close is delivered more than once, if one failing teardown strands its sibling subscriptions, if payload frames from a retired transport reach the renderer, or if a revealed remote terminal can stay blank or reject input after a reconnect."
+    },
+    {
+      "id": "browser-stream.bounded-reconnect",
+      "title": "Remote browser streams recover within a bounded retry budget",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "browser-runtime",
+      "layer": "renderer-state-machine-paired-runtime",
+      "surfaces": [
+        "paired remote browser panes",
+        "browser screencast disconnect and reconnect",
+        "remote browser viewport restart"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["remote-runtime"],
+      "coveredPlatforms": ["macos", "linux"],
+      "coveredProviders": ["remote-runtime"],
+      "coverageNotes": "Deterministic fake-clock tests cover counted backoff, in-flight ownership and handoff, cancellation, supersession, transient and permanent failures, late stale rejection, silent hosts, flapping streams, viewport restarts, stale events, budget exhaustion, and manual recovery. A headless paired-runtime journey drops the real runtime connection, proves the bounded retry state and visible Reconnect control, reconnects the same host, and requires a newly painted frame. Headed paired-server, Windows, sleep/wake, and real network-partition evidence remain uncollected.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/12787",
+        "https://linear.app/stably/issue/STA-3483"
+      ],
+      "invariant": "A current remote browser stream that closes must retry transient failures on one counted, capped backoff chain. Cancellation, pane or runtime supersession, missing pages, and permanent failures stop that chain without stale state mutation. A stream that stays healthy refills the budget; a silent or flapping stream cannot retry forever. Exhaustion and every non-retrying failure leave an actionable Reconnect control, and manual reconnect creates a fresh stream without resurrecting stale subscriptions.",
+      "oracle": "With one fake clock and exact pane, operation, stream, page, and runtime identities, drop a confirmed stream and require the counted delay sequence, one active chain, stale-token rejection, exact cancellation, full cleanup, and either a new live subscription or one stopped state with Reconnect after exhaustion. Inject transport error without close, close racing rejection, never-ready subscriptions, ready-then-end flapping, viewport supersession, missing pages, and permanent failures. In a separate paired client against an isolated headless Orca host, paint one remote frame, disconnect the owning runtime, require the bounded-retry notice and Reconnect control, reconnect, click once, and require a different frame object URL from the recovered stream.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/browser-pane/remote-browser-stream-errors.test.ts src/renderer/src/components/browser-pane/remote-browser-stream-lifecycle.test.ts src/renderer/src/components/browser-pane/remote-browser-stream-restart-scheduler.test.ts src/renderer/src/components/browser-pane/remote-browser-stream-status.test.ts",
+        "pnpm exec playwright test tests/e2e/paired-remote-browser-stream-reconnect.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/browser-pane/remote-browser-stream-errors.test.ts",
+        "src/renderer/src/components/browser-pane/remote-browser-stream-lifecycle.test.ts",
+        "src/renderer/src/components/browser-pane/remote-browser-stream-restart-scheduler.test.ts",
+        "src/renderer/src/components/browser-pane/remote-browser-stream-status.test.ts",
+        "tests/e2e/paired-remote-browser-stream-reconnect.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/browser-pane/remote-browser-stream-restart-scheduler.test.ts",
+          "assertions": [
+            "transient failures retry until recovery on counted delays",
+            "budget exhaustion stops exactly once",
+            "cancellation retires an in-flight attempt without re-arming",
+            "a close during an in-flight attempt queues one replacement chain"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/browser-pane/remote-browser-stream-lifecycle.test.ts",
+          "assertions": [
+            "dropped, silent, and flapping streams converge on a bounded retry or actionable stop",
+            "stale, superseded, missing-page, and permanent-failure work cannot mutate the current pane",
+            "manual reopen starts a fresh budget and adopts one current subscription",
+            "a late stale rejection cannot clear the replacement stream's ready deadline"
+          ]
+        },
+        {
+          "file": "tests/e2e/paired-remote-browser-stream-reconnect.spec.ts",
+          "assertions": [
+            "a real paired-runtime disconnect ends with an actionable Reconnect control",
+            "manual reconnect paints a new remote frame instead of retaining only the frozen frame",
+            "a pane whose first open fails can recover from no prior subscription"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-07",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/browser-pane/remote-browser-stream-errors.test.ts src/renderer/src/components/browser-pane/remote-browser-stream-lifecycle.test.ts src/renderer/src/components/browser-pane/remote-browser-stream-restart-scheduler.test.ts src/renderer/src/components/browser-pane/remote-browser-stream-status.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.36,
+          "summary": "Four focused files passed 61 deterministic error, status, scheduler, lifecycle, in-flight ownership, stale-rejection, liveness, and cleanup tests."
+        },
+        {
+          "date": "2026-08-07",
+          "runner": "ci",
+          "platform": "linux",
+          "command": "pnpm exec playwright test tests/e2e/paired-remote-browser-stream-reconnect.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 59.8,
+          "summary": "Both isolated headless paired-runtime scenarios passed: bounded recovery after a live-stream disconnect and manual recovery when the first stream never opened."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 120,
+        "scope": "focused fake-clock renderer contracts plus one isolated headless paired-runtime journey"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "The deterministic suite and one changed-E2E CI run passed; soak history has not started."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The byte-identical scheduler oracle fails with the reschedule disabled at one attempt instead of four and passes after restoration. On the PR head, the delayed handoff oracle counted two scheduled attempts instead of one, and the late stale-rejection oracle lost the replacement ready deadline and never offered reconnect; both pass after the ownership fixes. Current main structurally contains the original one-shot timer dead end. The focused suite passes 61 tests, and the isolated paired-runtime CI journey passes both disconnect and cold-open recovery scenarios."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Each pane retains at most one retry timer, one in-flight attempt, and one ready deadline. Automatic recovery makes at most five counted attempts with no global scan, subprocess, polling loop, or cross-pane fanout; exhaustion stops background work until explicit user reconnect."
+      },
+      "promotionCriteria": [
+        "Run the same journey against a headed Orca desktop server and retain independent host/client state evidence.",
+        "Collect Linux and physical Windows paired-server evidence plus sleep/wake or network-partition recovery.",
+        "Collect 100 consecutive focused CI passes or 14 days without an unexplained flake.",
+        "Replace the E2E's post-exhaustion elapsed-time check with an exact subscribe-attempt oracle."
+      ],
+      "knownGaps": [
+        "The paired journey covers headless orca serve, not the primary headed desktop-server topology.",
+        "The live fault is an explicit disconnect rather than sleep/wake or a real network partition.",
+        "The E2E observes UI convergence and new frame identity but does not count screencast subscribe attempts directly.",
+        "Live Linux and Windows evidence is uncollected."
+      ],
+      "demotionRule": "Keep experimental or demote if retries can stop before recovery or exhaustion, continue after exhaustion, run in parallel, mutate a superseded pane, hide the Reconnect control, leak a subscription or timer, or fail to paint a new frame after manual reconnect."
     },
     {
       "id": "editor.live-log-append-stability",

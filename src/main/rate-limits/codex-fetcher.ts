@@ -41,6 +41,8 @@ import {
   resolveCodexHomeProcessLockKey,
   withCodexHomeProcessLock
 } from '../codex-cli/codex-home-process-lock'
+import { isCodexStateDbBackfillPending } from '../codex/codex-state-db'
+import { startCodexStateDbBackfillRecoveryInBackground } from '../codex/codex-state-db-backfill-recovery'
 
 const RPC_TIMEOUT_MS = 10_000
 const WSL_RPC_TIMEOUT_MS = 25_000
@@ -1246,6 +1248,19 @@ export async function fetchCodexRateLimits(
         return abortedCodexRateLimitResult()
       }
       // Why: token, routing, and CA behavior can differ; retain CLI fallbacks.
+    }
+  }
+
+  if (options?.codexHomePath && isCodexStateDbBackfillPending(options.codexHomePath)) {
+    // Why: a bounded quota probe can steal an expired backfill lease, then die before indexing finishes.
+    void startCodexStateDbBackfillRecoveryInBackground(options.codexHomePath)
+    return {
+      provider: 'codex',
+      session: null,
+      weekly: null,
+      updatedAt: Date.now(),
+      error: 'Codex is rebuilding its session index; usage will refresh when recovery finishes',
+      status: 'error'
     }
   }
 

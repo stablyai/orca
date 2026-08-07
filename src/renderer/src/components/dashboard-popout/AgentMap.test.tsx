@@ -49,6 +49,7 @@ function renderMap(
     compact = false,
     workspaceContextMenusEnabled = false,
     enabledStates,
+    showOrchestrationLinks,
     launchableAgentsByWorktreeId,
     onSpawnAgent,
     onSleepWorkspace
@@ -58,6 +59,7 @@ function renderMap(
     compact?: boolean
     workspaceContextMenusEnabled?: boolean
     enabledStates?: ReadonlySet<AgentMapState>
+    showOrchestrationLinks?: boolean
     launchableAgentsByWorktreeId?: Record<string, TuiAgent[]>
     onSpawnAgent?: (args: DashboardSpawnAgentArgs) => void
     onSleepWorkspace?: (args: DashboardSleepWorkspaceArgs) => void
@@ -72,6 +74,7 @@ function renderMap(
       compact={compact}
       workspaceContextMenusEnabled={workspaceContextMenusEnabled}
       enabledStates={enabledStates}
+      showOrchestrationLinks={showOrchestrationLinks}
       launchableAgentsByWorktreeId={launchableAgentsByWorktreeId}
       onSpawnAgent={onSpawnAgent}
       onSleepWorkspace={onSleepWorkspace}
@@ -350,18 +353,19 @@ describe('AgentMap', () => {
     })
     const { container } = renderMap([parent, child, nested, orphan])
     const workerLink = container.querySelector('[data-child-pane-key="child"]')
-    const subagentLink = container.querySelector('[data-child-pane-key="nested"]')
+    const nestedLink = container.querySelector('[data-child-pane-key="nested"]')
 
     expect(screen.getByRole('button', { name: /Coordinator/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^Worker/ })).toBeInTheDocument()
     expect(container.querySelectorAll('[data-agent-map-lineage-link]')).toHaveLength(2)
     expect(workerLink).toHaveClass('agent-map-lineage-link')
-    expect(workerLink).not.toHaveClass('is-subagent')
     expect(workerLink).toHaveAttribute('data-agent-map-lineage-relation', 'orchestration')
     expect(workerLink).toHaveAttribute('data-parent-pane-key', 'parent')
-    expect(subagentLink).toHaveClass('agent-map-lineage-link', 'is-subagent')
-    expect(subagentLink).toHaveAttribute('data-agent-map-lineage-relation', 'subagent')
-    expect(subagentLink).toHaveAttribute('data-parent-pane-key', 'child')
+    // Why orchestration, not subagent: `nested` is a card, and in-process subagents
+    // never become cards — so a grandchild dispatch is still an orchestration edge.
+    expect(nestedLink).toHaveClass('agent-map-lineage-link')
+    expect(nestedLink).toHaveAttribute('data-agent-map-lineage-relation', 'orchestration')
+    expect(nestedLink).toHaveAttribute('data-parent-pane-key', 'child')
   })
 
   it('connects spawned workers across worktree rings', () => {
@@ -387,13 +391,12 @@ describe('AgentMap', () => {
     })
     const { container } = renderMap([parent, child, nested])
     const workerLink = container.querySelector('[data-child-pane-key="child"]')
-    const subagentLink = container.querySelector('[data-child-pane-key="nested"]')
+    const nestedLink = container.querySelector('[data-child-pane-key="nested"]')
 
     expect(workerLink).toHaveClass('agent-map-lineage-link', 'is-cross-worktree')
-    expect(workerLink).not.toHaveClass('is-subagent')
     expect(workerLink).toHaveAttribute('data-agent-map-lineage-relation', 'orchestration')
-    expect(subagentLink).toHaveClass('agent-map-lineage-link', 'is-cross-worktree', 'is-subagent')
-    expect(subagentLink).toHaveAttribute('data-agent-map-lineage-relation', 'subagent')
+    expect(nestedLink).toHaveClass('agent-map-lineage-link', 'is-cross-worktree')
+    expect(nestedLink).toHaveAttribute('data-agent-map-lineage-relation', 'orchestration')
   })
 
   it('keeps lineage styling to one lightweight path per relationship at fleet scale', () => {
@@ -409,11 +412,69 @@ describe('AgentMap', () => {
     expect(container.querySelectorAll('[data-agent-map-lineage-link]')).toHaveLength(239)
     expect(
       container.querySelectorAll('[data-agent-map-lineage-relation="orchestration"]')
-    ).toHaveLength(1)
+    ).toHaveLength(239)
     expect(container.querySelectorAll('[data-agent-map-lineage-relation="subagent"]')).toHaveLength(
-      238
+      0
     )
     expect(container.querySelectorAll('filter, animate, animateTransform')).toHaveLength(0)
+  })
+
+  it('hides orchestration links when the filter turns them off, keeping the agents', () => {
+    const sameWorktree = [
+      card({ paneKey: 'parent', conversationName: 'Coordinator' }),
+      card({ paneKey: 'child', parentPaneKey: 'parent', conversationName: 'Worker' })
+    ]
+    const crossWorktree = [
+      card({ paneKey: 'far-parent', worktreeId: 'wt-a', worktreeName: 'A' }),
+      card({
+        paneKey: 'far-child',
+        worktreeId: 'wt-b',
+        worktreeName: 'B',
+        parentPaneKey: 'far-parent'
+      })
+    ]
+    const cards = [...sameWorktree, ...crossWorktree]
+
+    const shown = renderMap(cards)
+    expect(shown.container.querySelectorAll('[data-agent-map-lineage-link]')).toHaveLength(2)
+    cleanup()
+
+    const hidden = renderMap(cards, { showOrchestrationLinks: false })
+    // Both same-worktree and cross-worktree edges go; the nodes themselves stay.
+    expect(hidden.container.querySelectorAll('[data-agent-map-lineage-link]')).toHaveLength(0)
+    expect(screen.getByRole('button', { name: /Coordinator/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Worker/ })).toBeInTheDocument()
+  })
+
+  it('draws no lineage edge for an agent that lists itself as its own parent', () => {
+    const { container } = renderMap([
+      card({ paneKey: 'self', parentPaneKey: 'self', conversationName: 'Self parent' }),
+      card({ paneKey: 'other', conversationName: 'Unrelated' })
+    ])
+
+    expect(container.querySelectorAll('[data-agent-map-lineage-link]')).toHaveLength(0)
+    expect(screen.getByRole('button', { name: /Self parent/ })).toBeInTheDocument()
+  })
+
+  it('connects lineage between visible nodes even when the child is not ranked below its parent', () => {
+    // A 2-cycle cannot be ranked consistently, so the bounded layout (>256 agents)
+    // must place one of its edges pointing upward. Both nodes are drawn, so both
+    // edges must be too — the old y-ordering gate silently dropped the upward one.
+    const cards = [
+      card({ paneKey: 'cycle-a', parentPaneKey: 'cycle-b', conversationName: 'Cycle A' }),
+      card({ paneKey: 'cycle-b', parentPaneKey: 'cycle-a', conversationName: 'Cycle B' }),
+      ...Array.from({ length: 255 }, (_, index) =>
+        card({
+          paneKey: `filler-${index}`,
+          parentPaneKey: index === 0 ? undefined : `filler-${index - 1}`,
+          conversationName: `Filler ${index}`
+        })
+      )
+    ]
+    const { container } = renderMap(cards, { selectedPaneKey: 'cycle-a' })
+
+    expect(container.querySelector('[data-child-pane-key="cycle-a"]')).not.toBeNull()
+    expect(container.querySelector('[data-child-pane-key="cycle-b"]')).not.toBeNull()
   })
 
   it('connects visible child worktrees beneath their parent ring', () => {

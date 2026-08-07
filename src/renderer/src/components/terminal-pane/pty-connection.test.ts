@@ -2324,6 +2324,31 @@ describe('connectPanePty', () => {
     )
   })
 
+  it('surfaces an actionable error when a Codex backfill timeout drops to the shell', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-codex-backfill-timeout'
+    })
+    transportFactoryQueue.push(transport)
+    const deps = createDeps({
+      tabId: 'tab-codex-backfill-timeout',
+      startup: { command: 'codex', launchAgent: 'codex' }
+    })
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks()
+    capturedDataCallback.current?.('timed out waiting for state db back')
+    capturedDataCallback.current?.('fill\r\n')
+
+    expect(deps.onPtyErrorRef.current).toHaveBeenCalledWith(
+      1,
+      expect.stringContaining('Orca attempts background recovery for managed local and WSL homes')
+    )
+  })
+
   it('drops keystrokes while the replay guard is engaged, then forwards once it releases', async () => {
     // Regression (cold-restore reattach lockout): a stuck replay guard dropped every keystroke ("can't type after reconnecting"); engaged guard suppresses input, released forwards it.
     const { connectPanePty } = await import('./pty-connection')
