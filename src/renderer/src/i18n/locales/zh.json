@@ -12635,7 +12635,8 @@
           "useEmulatorScreenKeyboard": {
             "pasteTooLarge": "模拟器键盘输入的粘贴内容过大。",
             "unsupportedPasteText": "模拟器键盘粘贴仅支持美式键盘文本。",
-            "pasteTargetUnavailable": "模拟器键盘粘贴失败，因为设备尚未就绪。"
+            "pasteTargetUnavailable": "模拟器键盘粘贴失败，因为设备尚未就绪。",
+            "textInsertFailed": "无法将文本发送到模拟器。"
           }
         }
       },

@@ -1,4 +1,6 @@
+import { useCallback } from 'react'
 import type { Tab } from '../../../../shared/types'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { EmulatorPaneToolbar } from './emulator-pane-toolbar'
 import { EmulatorDeviceFrame } from './emulator-device-frame'
 import { MobileEmulatorAgentSetupGuideLayer } from './MobileEmulatorAgentSetupGuideLayer'
@@ -36,6 +38,13 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
     tabId: tab?.id,
     autoAttachOnMount: isActive
   })
+
+  const insertText = useCallback(
+    async (text: string) => {
+      await callRuntimeRpc({ kind: 'local' }, 'emulator.type', { text, worktree: worktreeId })
+    },
+    [worktreeId]
+  )
 
   return (
     <div
@@ -85,6 +94,9 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
             isActive={isActive}
             onTap={(x, y) => void sendTap(x, y)}
             onGesture={(points) => void sendGesture(points)}
+            // Why: Android sessions register an empty wsUrl and have no serve-sim
+            // pasteboard path, so Unicode paste stays gated to live iOS streams.
+            onInsertText={wsUrl ? insertText : undefined}
           />
         </MobileEmulatorAgentSetupGuideLayer>
       </div>

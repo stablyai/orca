@@ -132,7 +132,7 @@ describe('AndroidEmulatorBackend', () => {
 
   it('types text with spaces encoded and presses hardware buttons by keycode', async () => {
     const android = backend(runner)
-    await android.type('emulator-5554', 'hi there')
+    await android.type('emulator-5554', 'hi there', null)
     await android.button('emulator-5554', 'back')
     expect(runner).toHaveBeenCalledWith(SDK.adb, [
       '-s',

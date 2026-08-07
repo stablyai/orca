@@ -4,6 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
+import { SERVE_SIM_TEXT_INSERT_MAX_BYTES } from '../../../../shared/emulator-keyboard-frame'
 import { EMULATOR_KEYBOARD_PASTE_MAX_BYTES } from './emulator-keyboard-paste'
 import { EmulatorDeviceFrame } from './emulator-device-frame'
 
@@ -90,6 +91,7 @@ afterEach(() => {
 
 function renderFrame(props?: {
   onGesture?: (points: unknown[]) => void
+  onInsertText?: (text: string) => Promise<void>
   onTap?: (x: number, y: number) => void
 }): void {
   act(() => {
@@ -103,6 +105,7 @@ function renderFrame(props?: {
         isActive={true}
         onTap={props?.onTap ?? vi.fn()}
         onGesture={props?.onGesture ?? vi.fn()}
+        onInsertText={props?.onInsertText}
       />
     )
   })
@@ -316,6 +319,93 @@ describe('EmulatorDeviceFrame input', () => {
 
     expect(paste.defaultPrevented).toBe(true)
     expect(decodedSentKeyboardFrames()).toEqual([])
+    expect(toast.error).toHaveBeenCalledWith('Paste is too large for emulator keyboard input.')
+  })
+
+  it('routes non-HID-typable paste text to the pasteboard insert callback', async () => {
+    vi.mocked(toast.error).mockClear()
+    const onInsertText = vi.fn(async () => {})
+    renderFrame({ onInsertText })
+    act(() => {
+      FakeWebSocket.instances[0]?.open()
+    })
+    const screen = getScreen()
+    const paste = pasteEvent('안녕하세요 🙂')
+
+    await act(async () => {
+      screen.dispatchEvent(keyEvent('keydown', { key: 'Enter' }))
+      screen.dispatchEvent(paste)
+      await Promise.resolve()
+    })
+
+    expect(paste.defaultPrevented).toBe(true)
+    expect(onInsertText).toHaveBeenCalledWith('안녕하세요 🙂')
+    expect(decodedSentKeyboardFrames()).toEqual([])
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('keeps the US-keyboard rejection when no insert callback is available', async () => {
+    renderFrame()
+    act(() => {
+      FakeWebSocket.instances[0]?.open()
+    })
+    const screen = getScreen()
+    const paste = pasteEvent('안녕하세요')
+
+    await act(async () => {
+      screen.dispatchEvent(keyEvent('keydown', { key: 'Enter' }))
+      screen.dispatchEvent(paste)
+      await Promise.resolve()
+    })
+
+    expect(paste.defaultPrevented).toBe(true)
+    expect(decodedSentKeyboardFrames()).toEqual([])
+    expect(toast.error).toHaveBeenCalledWith(
+      'Emulator keyboard paste supports US keyboard text only.'
+    )
+  })
+
+  it('reports insert failures without echoing the clipboard text', async () => {
+    vi.mocked(toast.error).mockClear()
+    const onInsertText = vi.fn(async () => {
+      throw new Error('insert backend down')
+    })
+    renderFrame({ onInsertText })
+    act(() => {
+      FakeWebSocket.instances[0]?.open()
+    })
+    const screen = getScreen()
+
+    await act(async () => {
+      screen.dispatchEvent(keyEvent('keydown', { key: 'Enter' }))
+      screen.dispatchEvent(pasteEvent('token=secret🙂'))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(toast.error).toHaveBeenCalledWith('Failed to send text to the emulator.')
+    for (const call of vi.mocked(toast.error).mock.calls) {
+      expect(JSON.stringify(call)).not.toContain('token')
+      expect(JSON.stringify(call)).not.toContain('secret')
+    }
+  })
+
+  it('rejects oversized Unicode paste before invoking the insert callback', async () => {
+    const onInsertText = vi.fn(async () => {})
+    renderFrame({ onInsertText })
+    act(() => {
+      FakeWebSocket.instances[0]?.open()
+    })
+    const screen = getScreen()
+    const paste = pasteEvent(`${'a'.repeat(SERVE_SIM_TEXT_INSERT_MAX_BYTES)}한`)
+
+    await act(async () => {
+      screen.dispatchEvent(keyEvent('keydown', { key: 'Enter' }))
+      screen.dispatchEvent(paste)
+      await Promise.resolve()
+    })
+
+    expect(onInsertText).not.toHaveBeenCalled()
     expect(toast.error).toHaveBeenCalledWith('Paste is too large for emulator keyboard input.')
   })
 

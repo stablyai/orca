@@ -94,7 +94,7 @@ Use `--json` for agent-friendly output. Commands are workspace-scoped by default
 | Attach / make active       | `ORCA emulator attach "iPhone 16 Pro" [--worktree <sel>] [--focus]` | Starts helper if needed (serve-sim --detach). Sets active for unqualified commands. --focus optional (does not auto-steal UI focus by default). |
 | Single tap                 | `ORCA emulator tap <x> <y> [--device <id>]` | Normalized 0..1 coords. **Preferred over gesture for simple taps.** |
 | Multi-step gesture         | `ORCA emulator gesture '<json>'`            | See gestures reference (begin/move/end). Use tap for singles. |
-| Type text                  | `ORCA emulator type "text" [--device <id>]` | US ASCII only. Supports stdin/file via exec if needed. |
+| Type text                  | `ORCA emulator type "text" [--device <id>]` | US ASCII types as keystrokes; any other text (Korean, emoji, …) is inserted via the device pasteboard and needs an attached session. Supports stdin/file via exec if needed. |
 | Hardware button            | `ORCA emulator button home [--device <id>]` | home, swipe_home, app_switcher, lock, siri, side_button. |
 | Rotate device              | `ORCA emulator rotate landscape_left`       | Remembers orientation for subsequent gestures. |
 | Camera injection           | `ORCA emulator camera com.acme.App --webcam` | Or --file, placeholder. Hot-swap with switch. May (re)launch app. |
@@ -110,7 +110,7 @@ Most support `--worktree <selector>` and explicit `--device <udid|name>` or `--e
 - **Prefer `tap` over `gesture` for single taps** (same as raw serve-sim). Separate gesture begin/end can be interpreted as long-press due to WS overhead. The Orca wrapper uses the reliable quick sequence.
 - All coords normalized 0..1 (top-left origin). Never pixels.
 - One "active" emulator per worktree for unqualified commands (like active browser tab). Discover ids with `list`, use explicit flags for multi-device or cross-worktree.
-- Type = US keyboard only. Unsupported chars error clearly.
+- Type routes US-ASCII through HID keystrokes and everything else through the device pasteboard + Cmd+V. The pasteboard path replaces the simulator's clipboard (host clipboard untouched), needs an attached session (`attach` first), and pastes into the focused text field only.
 - Camera injection often requires (re)launching the target app bundle.
 - The visual pane and CLI share the same underlying stream/helper. Closing the pane can stop the stream (configurable).
 - Stale helpers / state are cleaned by Orca on quit, but agents should `kill` when done.

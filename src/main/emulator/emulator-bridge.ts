@@ -5,6 +5,13 @@ import type { SimulatorDevice } from './simctl-simulator-devices'
 import type { EmulatorBridgeOptions } from './emulator-bridge-types'
 import type { EmulatorGesturePoint } from './emulator-gesture-sender'
 import { EmulatorSessionRegistry } from './emulator-session-registry'
+import {
+  destroyAllManagedSessions,
+  stopActiveSessionForWorktree,
+  stopSessionByUdid,
+  type EmulatorSessionTeardownDeps,
+  type StopActiveSessionOptions
+} from './emulator-session-teardown'
 import { deriveAxUrlFromStreamUrl } from './serve-sim-detached-session'
 import { IosEmulatorBackend } from './backends/ios-emulator-backend'
 import { AndroidEmulatorBackend } from './backends/android-emulator-backend'
@@ -135,30 +142,9 @@ export class EmulatorBridge {
 
   private async stopActiveForWorktreeInternal(
     worktreeId: string,
-    options: { shutdownDevice?: boolean; managedOnly?: boolean } = {}
+    options: StopActiveSessionOptions = {}
   ): Promise<string | null> {
-    const key = this.sessionRegistry.getActiveSessionKey(worktreeId)
-    if (!key) {
-      return null
-    }
-    const session = this.sessionRegistry.getSession(key)
-    this.sessionRegistry.unregisterWorktree(worktreeId)
-    if (!session || (options.managedOnly && !session.managed)) {
-      return null
-    }
-    const backend = this.backendForKind(session.backend)
-    if (!backend) {
-      return null
-    }
-    await backend.stopHelperForDevice(session.deviceUdid, {
-      helperPid: session.pid,
-      includeOrphaned: !options.managedOnly
-    })
-    if (options.shutdownDevice) {
-      await backend.shutdownDevice(session.deviceUdid).catch(() => {})
-    }
-    this.sessionRegistry.clearSessionAndWorktrees(key)
-    return session.deviceUdid
+    return stopActiveSessionForWorktree(this.teardownDeps(), worktreeId, options)
   }
 
   async shutdownActiveManagedForWorktree(worktreeId: string): Promise<string | null> {
@@ -174,15 +160,13 @@ export class EmulatorBridge {
     if (points.length === 0) {
       return
     }
-    const { backend, device } = await this.resolveTarget(opts)
-    const udid = await backend.resolveDeviceId(device)
-    const wsUrl = this.sessionRegistry.getSession(udid)?.wsUrl ?? null
+    const { backend, udid, wsUrl } = await this.resolveHidTarget(opts)
     await backend.gesture(udid, points, wsUrl)
   }
 
   async type(text: string, opts?: EmulatorTargetOpts): Promise<void> {
-    const { backend, device } = await this.resolveTarget(opts)
-    await backend.type(device, text)
+    const { backend, udid, wsUrl } = await this.resolveHidTarget(opts)
+    await backend.type(udid, text, wsUrl)
   }
 
   async button(name: string, opts?: EmulatorTargetOpts): Promise<void> {
@@ -250,44 +234,16 @@ export class EmulatorBridge {
 
   async kill(device?: string, worktreeId?: string): Promise<string> {
     const { backend, udid } = await this.resolveStopTarget(device, worktreeId)
-    await backend.stopHelperForDevice(udid, {
-      helperPid: this.sessionRegistry.getSession(udid)?.pid,
-      includeOrphaned: true
-    })
-    this.sessionRegistry.clearSessionAndWorktrees(udid)
-    return udid
+    return stopSessionByUdid(this.teardownDeps(), backend, udid)
   }
 
   async shutdown(device?: string, worktreeId?: string): Promise<string> {
     const { backend, udid } = await this.resolveStopTarget(device, worktreeId)
-    await backend.stopHelperForDevice(udid, {
-      helperPid: this.sessionRegistry.getSession(udid)?.pid,
-      includeOrphaned: true
-    })
-    await backend.shutdownDevice(udid)
-    this.sessionRegistry.clearSessionAndWorktrees(udid)
-    return udid
+    return stopSessionByUdid(this.teardownDeps(), backend, udid, { shutdownDevice: true })
   }
 
   async destroyAllSessions(): Promise<void> {
-    const promises: Promise<unknown>[] = []
-    for (const session of this.sessionRegistry.listSessions()) {
-      if (!session.managed) {
-        continue
-      }
-      const backend = this.backendForKind(session.backend)
-      if (!backend) {
-        continue
-      }
-      promises.push(
-        backend
-          .stopHelperForDevice(session.deviceUdid, { helperPid: session.pid })
-          .catch(() => {})
-          .then(() => backend.shutdownDevice(session.deviceUdid).catch(() => {}))
-      )
-    }
-    await Promise.allSettled(promises)
-    this.sessionRegistry.clear()
+    await destroyAllManagedSessions(this.teardownDeps())
   }
 
   async onAppQuit(): Promise<void> {
@@ -314,6 +270,17 @@ export class EmulatorBridge {
     )
   }
 
+  // Resolves a target plus the session's serve-sim control socket for verbs that
+  // stream HID frames (gestures, pasteboard-insert typing).
+  private async resolveHidTarget(
+    opts?: EmulatorTargetOpts
+  ): Promise<{ backend: EmulatorBackend; udid: string; wsUrl: string | null }> {
+    const { backend, device } = await this.resolveTarget(opts)
+    const udid = await backend.resolveDeviceId(device)
+    const wsUrl = this.sessionRegistry.getSession(udid)?.wsUrl ?? null
+    return { backend, udid, wsUrl }
+  }
+
   private async resolveStopTarget(
     device?: string,
     worktreeId?: string
@@ -324,6 +291,13 @@ export class EmulatorBridge {
     }
     const { backend, device: resolved } = await this.resolveTarget({ worktreeId })
     return { backend, udid: await backend.resolveDeviceId(resolved) }
+  }
+
+  private teardownDeps(): EmulatorSessionTeardownDeps {
+    return {
+      registry: this.sessionRegistry,
+      backendForKind: (kind) => this.backendForKind(kind)
+    }
   }
 
   private backendForKind(kind: EmulatorBackendKind): EmulatorBackend | null {

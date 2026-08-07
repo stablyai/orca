@@ -21,7 +21,9 @@ import {
   listServeSimHelperProcessesForDevice
 } from '../serve-sim-helper-processes'
 import type { EmulatorBridgeOptions } from '../emulator-bridge-types'
+import { buildServeSimKeyboardFramesForText } from '../../../shared/emulator-keyboard-frame'
 import { sendEmulatorGestureSequence, type EmulatorGesturePoint } from '../emulator-gesture-sender'
+import { insertServeSimPasteboardText } from '../serve-sim-text-insertion'
 import { parseServeSimDetachedSession } from '../serve-sim-detached-session'
 import { requestServeSimAccessibilityTree } from '../serve-sim-accessibility-tree'
 import { hideNativeSimulatorApp } from '../simulator-app-visibility'
@@ -155,9 +157,16 @@ export class IosEmulatorBackend implements EmulatorBackend {
     await sendEmulatorGestureSequence(wsUrl, points)
   }
 
-  async type(deviceId: string, text: string): Promise<void> {
+  async type(deviceId: string, text: string, wsUrl: string | null): Promise<void> {
     const udid = await this.resolveDeviceId(deviceId)
-    await this.execServeSim(['type', text, '-d', udid])
+    // HID-typable text keeps the keystroke path; anything else (Korean, emoji,
+    // any non-US-ASCII) goes through the device pasteboard, which also side-steps
+    // the hardware-keyboard-layout dependence of raw usages.
+    if (buildServeSimKeyboardFramesForText(text)) {
+      await this.execServeSim(['type', text, '-d', udid])
+      return
+    }
+    await insertServeSimPasteboardText({ udid, text, wsUrl })
   }
 
   async button(deviceId: string, name: string): Promise<void> {
