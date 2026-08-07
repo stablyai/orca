@@ -3,9 +3,10 @@ import type {
   CatalogModel,
   CatalogOption
 } from './agent-session-option-catalog-types'
+import { agentArgOptionTokens, removeAgentArgOption } from './agent-session-option-agent-args'
 
 function hasModelFlag(tokens: readonly string[]): boolean {
-  return tokens.some(
+  return agentArgOptionTokens(tokens).some(
     (token) =>
       token === '-m' ||
       token === '--model' ||
@@ -77,6 +78,7 @@ function parseCursorModels(stdout: string): CatalogModel[] {
 }
 
 export const CURSOR_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
+  supportsWorkerLaunchPreferences: true,
   models: [
     { id: 'auto', label: 'Auto', isDefault: true, options: [] },
     {
@@ -93,6 +95,7 @@ export const CURSOR_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   modelApply: {
     launchArgs: (value) => ['--model', String(value)],
     agentArgsOverride: hasModelFlag,
+    removeAgentArgs: (tokens) => removeAgentArgOption(tokens, ['-m', '--model']),
     midSession: { kind: 'command', build: (value) => `/model ${String(value)}` }
   },
   composeModelValue: (modelId, values) => {

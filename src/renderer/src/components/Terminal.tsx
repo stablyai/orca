@@ -49,10 +49,12 @@ import { RetainedBrowserPaneOverlayLayer } from './browser-pane/BrowserPaneOverl
 import EmulatorPaneOverlayLayer from './emulator-pane/EmulatorPaneOverlayLayer'
 import {
   isBrowserAutomationVisible,
+  onBrowserAutomationVisibilityChange,
   useBrowserAutomationVisibilityForAny
 } from './browser-pane/browser-automation-visibility'
 import {
   isBrowserPageMobileDriven,
+  onBrowserDriverChange,
   useBrowserMobileDriverForAny
 } from '@/lib/pane-manager/browser-mobile-driver-state'
 import TerminalPaneOverlayLayer from './terminal-pane/TerminalPaneOverlayLayer'
@@ -788,6 +790,7 @@ function Terminal(): React.JSX.Element | null {
   const measurableBackgroundWorktreeTimersRef = useRef(new Map<string, number>())
   const [backgroundMountRevision, setBackgroundMountRevision] = useState(0)
   const [terminalParkingRevision, setTerminalParkingRevision] = useState(0)
+  const [browserGuestRetentionRevision, setBrowserGuestRetentionRevision] = useState(0)
   const [parkedTerminalWorktreeIds, setParkedTerminalWorktreeIds] = useState<ReadonlySet<string>>(
     () => new Set()
   )
@@ -1166,7 +1169,19 @@ function Terminal(): React.JSX.Element | null {
   ])
   // Why here: downloads outlive the pane-local state of hidden (unmounted)
   // BrowserPanes, and the eviction veto below must see them.
-  useEffect(() => installBrowserPageDownloadActivityTracking(), [])
+  useEffect(() => {
+    const invalidateRetention = (): void => {
+      setBrowserGuestRetentionRevision((revision) => revision + 1)
+    }
+    const removeDownloadTracking = installBrowserPageDownloadActivityTracking(invalidateRetention)
+    const removeAutomationTracking = onBrowserAutomationVisibilityChange(invalidateRetention)
+    const removeMobileTracking = onBrowserDriverChange(invalidateRetention)
+    return () => {
+      removeDownloadTracking()
+      removeAutomationTracking()
+      removeMobileTracking()
+    }
+  }, [])
   // Browser-guest retention budget (#12137 follow-up): hidden worktrees keep
   // webview guests alive for instant revisits, but only the most recently
   // activated few. Older ones have every guest FULLY destroyed through the
@@ -1176,7 +1191,7 @@ function Terminal(): React.JSX.Element | null {
   // and terminal panes/watchers/capture contracts are untouched. A revisit
   // rebuilds guests from store state.
   useEffect(() => {
-    if (!renderedActiveWorktreeId || !browserGuestRetentionBudgetEnabled) {
+    if (!renderedActiveWorktreeId) {
       return
     }
     const recency = browserGuestWorktreeRecencyRef.current
@@ -1186,6 +1201,11 @@ function Terminal(): React.JSX.Element | null {
       if (!surfaceIds.has(recency[index])) {
         recency.splice(index, 1)
       }
+    }
+    // Why after the bookkeeping: recency must track activation order even while
+    // the kill switch is off, or re-enabling would evict by worktree-list order.
+    if (!browserGuestRetentionBudgetEnabled) {
+      return
     }
     const state = useAppStore.getState()
     // Why appended: a mounted worktree missing from recency (background mount) ranks oldest.
@@ -1226,7 +1246,12 @@ function Terminal(): React.JSX.Element | null {
         worktreeId
       )
     }
-  }, [renderedActiveWorktreeId, workspaceSurfaces, browserGuestRetentionBudgetEnabled])
+  }, [
+    renderedActiveWorktreeId,
+    workspaceSurfaces,
+    browserGuestRetentionBudgetEnabled,
+    browserGuestRetentionRevision
+  ])
   // Why: a slow post-reconnect step exposes workspaceSessionReady before hydration can populate snapshot capabilities.
   if (
     renderedActiveWorktreeId &&
@@ -1772,7 +1797,8 @@ function Terminal(): React.JSX.Element | null {
         ) {
           if (unifiedTab.contentType === 'terminal') {
             // Why: paired-host bulk close must revoke renderer resume and hook authority, not just remove the host session tab.
-            closeTerminalTab(unifiedTab.entityId)
+            // No running-process prompt: "Close Others" over N busy tabs would be a modal storm.
+            closeTerminalTab(unifiedTab.entityId, { skipRunningProcessConfirm: true })
           } else {
             void closeWebRuntimeSessionTab({
               worktreeId: activeWorktreeId,

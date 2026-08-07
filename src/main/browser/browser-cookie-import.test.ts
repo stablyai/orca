@@ -160,14 +160,22 @@ function buildExpiredSafariCookie(index: number): Buffer {
 
 describe('importCookiesFromFile', () => {
   let tmpDir: string
+  let cookiesGetMock: ReturnType<typeof vi.fn>
+  let cookiesRemoveMock: ReturnType<typeof vi.fn>
   let cookiesSetMock: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), 'orca-cookie-test-'))
+    cookiesGetMock = vi.fn().mockResolvedValue([])
+    cookiesRemoveMock = vi.fn().mockResolvedValue(undefined)
     cookiesSetMock = vi.fn().mockResolvedValue(undefined)
     sessionFromPartitionMock.mockReset()
     sessionFromPartitionMock.mockReturnValue({
-      cookies: { set: cookiesSetMock }
+      cookies: {
+        get: cookiesGetMock,
+        remove: cookiesRemoveMock,
+        set: cookiesSetMock
+      }
     })
   })
 
@@ -362,7 +370,7 @@ describe('importCookiesFromFile', () => {
     expect(cookiesSetMock.mock.calls[2][0].url).toBe('http://nodot.com/')
   })
 
-  it('counts cookies that fail to set', async () => {
+  it('rolls back replacement when a cookie fails to set', async () => {
     cookiesSetMock.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('set failed'))
 
     const filePath = writeCookieFile([
@@ -371,12 +379,8 @@ describe('importCookiesFromFile', () => {
     ])
 
     const result = await importCookiesFromFile(filePath, 'persist:test')
-    expect(result.ok).toBe(true)
-    if (!result.ok) {
-      return
-    }
-    expect(result.summary.importedCookies).toBe(1)
-    expect(result.summary.skippedCookies).toBe(1)
+    expect(result.ok).toBe(false)
+    expect(cookiesRemoveMock).toHaveBeenCalledWith('http://a.com/', 'ok')
   })
 })
 

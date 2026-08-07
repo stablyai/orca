@@ -3,15 +3,21 @@ import { basename, join } from 'node:path'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import { uniqueCodexSessionsDirs } from './session-scanner-codex-paths'
 import { SUBAGENT_DIR_NAME } from './session-scanner-subagent-transcripts'
+import { OMP_SESSION_ARTIFACT_DIR_PATTERN } from './session-scanner-omp-subagent-transcripts'
 import { discoverFiles, discoverOpenClawFiles } from './session-scanner-discovery'
 import { droidDiscoveries, kimiDiscoveries } from './session-scanner-droid-kimi-sources'
 import { opencodeDiscoveries } from './session-scanner-opencode-sources'
 import type { AiVaultScanOptions, SessionFileDiscovery } from './session-scanner-types'
 import { normalizeAgentSessionsDir } from './session-scanner-values'
+import {
+  claudeProjectsRootDirs,
+  normalizedWslHomeDirs,
+  OMP_SESSIONS_DIR,
+  sessionRootDirs
+} from './session-scanner-roots'
 import { resolveGrokSessionsDir } from '../../shared/grok-session-paths'
 import { antigravityDiscoveries } from './session-scanner-antigravity-sources'
 
-const CLAUDE_PROJECTS_DIR = join(homedir(), '.claude', 'projects')
 export const DEFAULT_CODEX_HOME_DIR = join(homedir(), '.codex')
 const CODEX_HOME_DIR = process.env.CODEX_HOME?.trim() || DEFAULT_CODEX_HOME_DIR
 const CODEX_SESSIONS_DIR = join(CODEX_HOME_DIR, 'sessions')
@@ -28,27 +34,11 @@ const PI_SESSIONS_DIR = normalizeAgentSessionsDir(
   process.env.PI_CODING_AGENT_DIR?.trim() || join(homedir(), '.pi', 'agent', 'sessions'),
   '.pi'
 )
-const OMP_SESSIONS_DIR = normalizeAgentSessionsDir(
-  process.env.OMP_CODING_AGENT_DIR?.trim() || join(homedir(), '.omp', 'agent', 'sessions'),
-  '.omp'
-)
 // Why: Devin ATIF transcripts are stored under <DEVIN_HOME>/transcripts.
 const DEVIN_TRANSCRIPTS_DIR = join(
   process.env.DEVIN_HOME?.trim() || join(homedir(), '.local', 'share', 'devin', 'cli'),
   'transcripts'
 )
-
-// The local host and each WSL distro's `~/.claude/projects`. Callers reading
-// Claude session files by path use these roots to reject arbitrary paths.
-export function claudeProjectsRootDirs(args: {
-  claudeProjectsDir?: string
-  wslHomeDirs?: readonly string[]
-}): string[] {
-  return [
-    args.claudeProjectsDir ?? CLAUDE_PROJECTS_DIR,
-    ...(args.wslHomeDirs ?? []).map((homeDir) => join(homeDir, '.claude', 'projects'))
-  ]
-}
 
 export async function discoverAiVaultSessionSources(args: {
   options: AiVaultScanOptions
@@ -276,7 +266,22 @@ function ompDiscoveries(
     'agent',
     'sessions'
   ]).map((rootDir) =>
-    discoverFiles({ rootDir, limit, agent: 'omp', issues, extensions: ['.jsonl'] })
+    discoverFiles({
+      rootDir,
+      limit,
+      agent: 'omp',
+      issues,
+      extensions: ['.jsonl'],
+      // Why: task subagent transcripts live inside the session's same-named
+      // artifact directory (`<stamp>_<uuid>/`); surfaced as top-level rows they
+      // drown coordinators under their own workers (#9330). Prune the subtree
+      // and read them on demand under their parent instead. Unlike Claude's,
+      // these carry their own sessionId and would resume by path — but OMP's
+      // own picker only globs `*/*.jsonl`, so it never offers them either.
+      // Depth 0 is the workspace dir, which is never an artifact dir.
+      directoryPredicate: (name, depth) =>
+        depth === 0 || !OMP_SESSION_ARTIFACT_DIR_PATTERN.test(name)
+    })
   )
 }
 
@@ -296,26 +301,4 @@ function openClawDiscovery(
     limit,
     issues
   })
-}
-
-function normalizedWslHomeDirs(homeDirs: readonly string[] | undefined): string[] {
-  const seen = new Set<string>()
-  const unique: string[] = []
-  for (const homeDir of homeDirs ?? []) {
-    const trimmed = homeDir.trim()
-    if (!trimmed || seen.has(trimmed)) {
-      continue
-    }
-    seen.add(trimmed)
-    unique.push(trimmed)
-  }
-  return unique
-}
-
-function sessionRootDirs(
-  hostRootDir: string,
-  wslHomeDirs: readonly string[],
-  segments: readonly string[]
-): string[] {
-  return [hostRootDir, ...wslHomeDirs.map((homeDir) => join(homeDir, ...segments))]
 }

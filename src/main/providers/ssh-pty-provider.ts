@@ -314,6 +314,8 @@ export class SshPtyProvider implements IPtyProvider {
   }
 
   onData = (callback: SshPtyDataCallback): (() => void) => this.outputState.onData(callback)
+  onRejectedData = (callback: SshPtyDataCallback): (() => void) =>
+    this.outputState.onRejectedData(callback)
   onReplay = (callback: SshPtyReplayCallback): (() => void) => this.outputState.onReplay(callback)
   onExit = (callback: SshPtyExitCallback): (() => void) => this.outputState.onExit(callback)
 

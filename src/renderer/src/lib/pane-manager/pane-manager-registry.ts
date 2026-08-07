@@ -10,6 +10,7 @@ type RegisteredPaneManager = {
   getPanes?: (limit?: number) => { id: number; terminal: unknown }[]
   getPaneCount?: () => number
   isVisibleForAtlasRecovery?: () => boolean
+  scheduleRevealPresent?: () => void
 }
 
 const liveManagers = new Set<RegisteredPaneManager>()
@@ -47,7 +48,7 @@ export function resetAllTerminalWebglAtlases(): void {
   }
 }
 
-export function resetAndRefreshAllTerminalWebglAtlases(): void {
+export function resetAndRefreshAllTerminalWebglAtlases(reason?: string): void {
   // Why: the atlas wipe is the heavy recovery path; recording it lets a freeze
   // report show whether a post-wake repaint actually ran. Silent breadcrumb.
   const recoveryManagers = Array.from(liveManagers).filter(
@@ -55,7 +56,8 @@ export function resetAndRefreshAllTerminalWebglAtlases(): void {
   )
   recordTerminalWebglDiagnostic('webgl-atlas-reset', {
     managers: recoveryManagers.length,
-    mountedManagers: liveManagers.size
+    mountedManagers: liveManagers.size,
+    ...(reason ? { reason } : {})
   })
   const resetManagers: RegisteredPaneManager[] = []
   for (const manager of recoveryManagers) {
@@ -73,6 +75,19 @@ export function resetAndRefreshAllTerminalWebglAtlases(): void {
     } catch {
       // Why: a pane can unmount between atlas reset and repaint; later
       // managers still need to repaint from their xterm buffers.
+    }
+  }
+}
+
+export function presentAllTerminalPanesWithoutAtlasClear(): void {
+  for (const manager of liveManagers) {
+    if (manager.isVisibleForAtlasRecovery?.() === false) {
+      continue
+    }
+    try {
+      manager.scheduleRevealPresent?.()
+    } catch {
+      // A disposing manager must not block sibling panes from presenting.
     }
   }
 }

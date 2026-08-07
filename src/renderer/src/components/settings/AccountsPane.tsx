@@ -81,6 +81,7 @@ import {
   type ProviderAccountRuntimeView
 } from './provider-account-visibility'
 import { translate } from '@/i18n/i18n'
+import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import { cn } from '@/lib/utils'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import {
@@ -104,16 +105,7 @@ function formatMiniMaxRelativeRefresh(updatedAt: number, now: number): string {
   if (diffMs < 60_000) {
     return translate('auto.components.settings.AccountsPane.3a30aaf526', 'just now')
   }
-  const formatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
-  const minutes = Math.round(diffMs / 60_000)
-  if (minutes < 60) {
-    return formatter.format(-minutes, 'minute')
-  }
-  const hours = Math.round(minutes / 60)
-  if (hours < 24) {
-    return formatter.format(-hours, 'hour')
-  }
-  return formatter.format(-Math.round(hours / 24), 'day')
+  return formatUiRelativeTime(-diffMs)
 }
 
 function MiniMaxCookieHelpPopover(): React.JSX.Element {

@@ -5,10 +5,11 @@ import { join } from 'node:path'
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { DaemonClient } from './client'
 import { DaemonProtocolError } from './daemon-errors'
-import { DaemonPtyAdapter } from './daemon-pty-adapter'
+import { DaemonPtyAdapter, LIVENESS_PROBE_TIMEOUT_MS } from './daemon-pty-adapter'
 import {
   COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION,
   GET_FOREGROUND_PROCESS_PROTOCOL_VERSION,
+  GET_SIZE_PROTOCOL_VERSION,
   PROTOCOL_VERSION
 } from './daemon-protocol-version'
 import { DaemonServer } from './daemon-server'
@@ -848,13 +849,13 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       }
     })
 
-    it('delegates scan authority to a v29 daemon, which can retract', () => {
+    it('delegates scan authority to a v32 daemon with faithful snapshots', () => {
       const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
-      const current = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 29 })
+      const current = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 32 })
       try {
-        current.setPtyBackgrounded('v29-session', true)
+        current.setPtyBackgrounded('v32-session', true)
         expect(notifySpy).toHaveBeenCalledWith('setSessionBackground', {
-          sessionId: 'v29-session',
+          sessionId: 'v32-session',
           background: true
         })
       } finally {
@@ -939,8 +940,8 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   })
 
   describe('background stream thinning compatibility', () => {
-    it('reports authoritative snapshot support only for protocol v20 and newer', () => {
-      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 19 })
+    it('reports authoritative snapshot support only for the corrected serializer protocol', () => {
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 31 })
       try {
         expect(legacy.canProvideAuthoritativeBufferSnapshot('legacy-session')).toBe(false)
         expect(adapter.canProvideAuthoritativeBufferSnapshot('current-session')).toBe(true)
@@ -962,9 +963,9 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       }
     })
 
-    it('keeps preserved v19 sessions unthinned because their snapshots have no sequence', () => {
+    it('keeps preserved v31 sessions unthinned because their snapshots can corrupt replay', () => {
       const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
-      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 19 })
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 31 })
       try {
         legacy.setPtyBackgrounded('legacy-session', true)
         expect(notifySpy).toHaveBeenCalledWith('setSessionBackground', {
@@ -977,7 +978,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       }
     })
 
-    it('clears a preserved v19 background hint before attaching its stream', async () => {
+    it('clears a preserved v31 background hint before attaching its stream', async () => {
       const ensureConnectedSpy = vi
         .spyOn(DaemonClient.prototype, 'ensureConnected')
         .mockResolvedValue()
@@ -988,7 +989,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         snapshot: null
       } as never)
       const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
-      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 19 })
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 31 })
       try {
         await legacy.spawn({ sessionId: 'legacy-session', cols: 80, rows: 24 })
 
@@ -1009,7 +1010,9 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
     it.each([
       { protocolVersion: 28, clearsHint: true },
-      { protocolVersion: 29, clearsHint: false }
+      { protocolVersion: 29, clearsHint: true },
+      { protocolVersion: 31, clearsHint: true },
+      { protocolVersion: 32, clearsHint: false }
     ])(
       'uses protocol v$protocolVersion background authority before spawn',
       async ({ protocolVersion, clearsHint }) => {
@@ -1059,12 +1062,13 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const ensureConnectedSpy = vi
         .spyOn(DaemonClient.prototype, 'ensureConnected')
         .mockResolvedValue()
-      const requestSpy = vi.spyOn(DaemonClient.prototype, 'request').mockResolvedValue({
-        isNew: false,
-        pid: 4242,
-        shellState: 'unsupported',
-        snapshot: null
-      } as never)
+      const requestSpy = vi
+        .spyOn(DaemonClient.prototype, 'request')
+        .mockImplementation(async (type: string) =>
+          type === 'getSize'
+            ? ({ size: { cols: 80, rows: 24 } } as never)
+            : ({ isNew: false, pid: 4242, shellState: 'unsupported', snapshot: null } as never)
+        )
       const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
       const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 28 })
       try {
@@ -1085,24 +1089,25 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       }
     })
 
-    it('leaves a v29 background hint alone on attach, because it can retract on its own', async () => {
+    it('leaves a v32 background hint alone on attach', async () => {
       const ensureConnectedSpy = vi
         .spyOn(DaemonClient.prototype, 'ensureConnected')
         .mockResolvedValue()
-      const requestSpy = vi.spyOn(DaemonClient.prototype, 'request').mockResolvedValue({
-        isNew: false,
-        pid: 4242,
-        shellState: 'unsupported',
-        snapshot: null
-      } as never)
+      const requestSpy = vi
+        .spyOn(DaemonClient.prototype, 'request')
+        .mockImplementation(async (type: string) =>
+          type === 'getSize'
+            ? ({ size: { cols: 80, rows: 24 } } as never)
+            : ({ isNew: false, pid: 4242, shellState: 'unsupported', snapshot: null } as never)
+        )
       const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
-      const current = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 29 })
+      const current = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 32 })
       try {
-        await current.attach('preserved-v29-session')
+        await current.attach('preserved-v32-session')
 
         expect(notifySpy).not.toHaveBeenCalledWith(
           'setSessionBackground',
-          expect.objectContaining({ sessionId: 'preserved-v29-session' })
+          expect.objectContaining({ sessionId: 'preserved-v32-session' })
         )
       } finally {
         current.dispose()
@@ -1112,7 +1117,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       }
     })
 
-    it('still returns the v19 attach snapshot for a desktop renderer replay', async () => {
+    it('still returns the v31 attach snapshot so desktop replay retains shell history', async () => {
       const ensureConnectedSpy = vi
         .spyOn(DaemonClient.prototype, 'ensureConnected')
         .mockResolvedValue()
@@ -1129,7 +1134,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
           rows: 24
         }
       } as never)
-      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 19 })
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 31 })
       try {
         const result = await legacy.spawn({ sessionId: 'legacy-session', cols: 80, rows: 24 })
 
@@ -1201,6 +1206,103 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       vi.spyOn(client, 'request').mockRejectedValueOnce(new Error('unavailable'))
 
       await expect(adapter.probePtyLiveness('session')).resolves.toBeNull()
+    })
+
+    function createProbeAdapter(
+      protocolVersion: number,
+      request: ReturnType<typeof vi.fn>
+    ): DaemonPtyAdapter {
+      const probeAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion })
+      ;(
+        probeAdapter as unknown as {
+          client: { request: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> }
+        }
+      ).client = { request, disconnect: vi.fn() }
+      return probeAdapter
+    }
+
+    // Why: a pre-v18 daemon rejects `getSize` as an unknown request type, so it would answer
+    // `null` forever — and one `null` makes the owner fan-out permanently unprovable, which
+    // would leave a genuinely dead pane unable to ever retire and respawn.
+    it('answers a pre-getSize daemon from its session inventory', async () => {
+      // Faithful pre-v18 daemon: routeRequest falls through its switch and error-replies.
+      const request = vi.fn(async (type: string) => {
+        if (type !== 'listSessions') {
+          throw new Error(`Unknown request type: ${type}`)
+        }
+        return {
+          sessions: [
+            { sessionId: 'legacy-live', isAlive: true },
+            { sessionId: 'legacy-exited', isAlive: false }
+          ]
+        }
+      })
+      const legacy = createProbeAdapter(GET_SIZE_PROTOCOL_VERSION - 1, request)
+
+      await expect(legacy.probePtyLiveness('legacy-live')).resolves.toBe(true)
+      await expect(legacy.probePtyLiveness('legacy-exited')).resolves.toBe(false)
+      await expect(legacy.probePtyLiveness('never-existed')).resolves.toBe(false)
+      expect(request).toHaveBeenCalledWith('listSessions', undefined, LIVENESS_PROBE_TIMEOUT_MS)
+      expect(request).not.toHaveBeenCalledWith('getSize', expect.anything())
+
+      legacy.dispose()
+    })
+
+    // The P0 boundary: an owner that cannot be reached must never read as one that answered "absent".
+    it('still answers unknown when a pre-getSize daemon cannot be reached', async () => {
+      const request = vi.fn(async () => {
+        throw new Error('Not connected')
+      })
+      const legacy = createProbeAdapter(GET_SIZE_PROTOCOL_VERSION - 1, request)
+
+      await expect(legacy.probePtyLiveness('legacy-live')).resolves.toBeNull()
+
+      legacy.dispose()
+    })
+
+    // Why: `getSize` shipped into an already-released protocol without a version bump, so a
+    // daemon can report a version that implies support and still reject the request. Gating on
+    // the number alone left those daemons permanently unprovable — the same wedge, narrowed.
+    it('falls back when a daemon rejects getSize despite reporting a version that has it', async () => {
+      const request = vi.fn(async (type: string) => {
+        if (type === 'getSize') {
+          throw new Error(`Unknown request type: ${type}`)
+        }
+        return { sessions: [{ sessionId: 'ambiguous-live', isAlive: true }] }
+      })
+      const ambiguous = createProbeAdapter(GET_SIZE_PROTOCOL_VERSION, request)
+
+      await expect(ambiguous.probePtyLiveness('ambiguous-live')).resolves.toBe(true)
+      await expect(ambiguous.probePtyLiveness('never-existed')).resolves.toBe(false)
+
+      // The rejection is remembered, so later probes skip the round trip that cannot work.
+      expect(request.mock.calls.filter(([type]) => type === 'getSize')).toHaveLength(1)
+      // Why pinned here: a wedged daemon holds its socket open, so an unbounded getSize would
+      // stall a pane mount for the client's 30s default instead of answering "unknown" in 2s.
+      expect(request).toHaveBeenCalledWith(
+        'getSize',
+        { sessionId: 'ambiguous-live' },
+        LIVENESS_PROBE_TIMEOUT_MS
+      )
+
+      ambiguous.dispose()
+    })
+
+    // The safety direction: only the daemon's own "I do not implement that" may switch strategy.
+    // A transient failure must stay unproven rather than be retried as a capability question.
+    it('keeps a transient getSize failure unproven instead of treating it as unsupported', async () => {
+      const request = vi.fn(async (type: string) => {
+        if (type === 'getSize') {
+          throw new Error('Connection lost')
+        }
+        return { sessions: [] }
+      })
+      const flaky = createProbeAdapter(GET_SIZE_PROTOCOL_VERSION, request)
+
+      await expect(flaky.probePtyLiveness('live-elsewhere')).resolves.toBeNull()
+      expect(request).not.toHaveBeenCalledWith('listSessions', undefined, LIVENESS_PROBE_TIMEOUT_MS)
+
+      flaky.dispose()
     })
   })
 
@@ -1411,6 +1513,130 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(result.snapshot).toBeUndefined()
       expect(result.providerSequence).toEqual({ value: 0, generation: 'reset' })
     })
+
+    it('forwards attach-only and never creates an absent stable session', async () => {
+      const subprocessBeforeAttach = lastSubprocess
+      await expect(
+        adapter.spawn({
+          cols: 80,
+          rows: 24,
+          sessionId: 'missing-stable-pane-session',
+          attachOnly: true
+        })
+      ).rejects.toThrow('Session not found: missing-stable-pane-session')
+      expect(lastSubprocess).toBe(subprocessBeforeAttach)
+    })
+
+    it('does not inspect cold history for attach-only ownership checks', async () => {
+      const historyDir = join(dir, 'attach-only-history')
+      const historyAdapter = new DaemonPtyAdapter({
+        socketPath,
+        tokenPath,
+        historyPath: historyDir
+      })
+      const reader = (historyAdapter as unknown as { historyReader: HistoryReader }).historyReader
+      const probe = vi.spyOn(reader, 'probeRestorableHistory')
+      const getAppliedSize = vi.spyOn(historyAdapter, 'getAppliedSize')
+
+      try {
+        await expect(
+          historyAdapter.spawn({
+            cols: 80,
+            rows: 24,
+            sessionId: 'missing-attach-only-history-session',
+            attachOnly: true
+          })
+        ).rejects.toThrow('Session not found: missing-attach-only-history-session')
+        expect(probe).not.toHaveBeenCalled()
+        expect(getAppliedSize).not.toHaveBeenCalled()
+      } finally {
+        historyAdapter.dispose()
+      }
+    })
+
+    it('reattaches a stable pane through a preserved v30 daemon', async () => {
+      const ensureConnected = vi
+        .spyOn(DaemonClient.prototype, 'ensureConnected')
+        .mockResolvedValue()
+      const request = vi.spyOn(DaemonClient.prototype, 'request').mockResolvedValue({
+        isNew: false,
+        snapshot: null,
+        pid: 4321,
+        shellState: 'unsupported',
+        incarnationId: 'legacy-stable-pane-incarnation'
+      })
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 30 })
+      try {
+        await expect(
+          legacy.spawn({
+            cols: 80,
+            rows: 24,
+            sessionId: 'legacy-stable-pane-session',
+            attachOnly: true,
+            command: 'must-not-run'
+          })
+        ).resolves.toMatchObject({
+          id: 'legacy-stable-pane-session',
+          incarnationId: 'legacy-stable-pane-incarnation',
+          isReattach: true
+        })
+        expect(request).toHaveBeenCalledWith(
+          'createOrAttach',
+          expect.objectContaining({
+            command: undefined,
+            launchAgent: undefined,
+            startupCommandDelivery: undefined
+          })
+        )
+        expect(request.mock.calls[0]?.[1]).not.toHaveProperty('attachOnly')
+      } finally {
+        legacy.dispose()
+        request.mockRestore()
+        ensureConnected.mockRestore()
+      }
+    })
+
+    it('retires a replacement created by a raced-out v30 stable pane', async () => {
+      const ensureConnected = vi
+        .spyOn(DaemonClient.prototype, 'ensureConnected')
+        .mockResolvedValue()
+      const request = vi
+        .spyOn(DaemonClient.prototype, 'request')
+        .mockResolvedValueOnce({
+          isNew: true,
+          snapshot: null,
+          pid: 4321,
+          shellState: 'unsupported',
+          incarnationId: 'legacy-replacement-incarnation'
+        })
+        .mockResolvedValueOnce({})
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 30 })
+      try {
+        await expect(
+          legacy.spawn({
+            cols: 80,
+            rows: 24,
+            sessionId: 'raced-out-legacy-session',
+            attachOnly: true,
+            command: 'must-not-run'
+          })
+        ).rejects.toThrow('Session not found: raced-out-legacy-session')
+        expect(request).toHaveBeenNthCalledWith(
+          1,
+          'createOrAttach',
+          expect.objectContaining({ command: undefined })
+        )
+        expect(request).toHaveBeenNthCalledWith(2, 'kill', {
+          sessionId: 'raced-out-legacy-session',
+          immediate: true
+        })
+        expect(legacy.getActiveSessionIds()).toEqual([])
+      } finally {
+        legacy.dispose()
+        request.mockRestore()
+        ensureConnected.mockRestore()
+      }
+    })
   })
 
   describe('attach', () => {
@@ -1430,9 +1656,117 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       adapter2.dispose()
     })
+
+    it('preserves the live session dimensions instead of forcing 80×24', async () => {
+      const { id } = await adapter.spawn({ cols: 137, rows: 41 })
+
+      const adapter2 = new DaemonPtyAdapter({ socketPath, tokenPath })
+      await adapter2.attach(id)
+
+      // The running TUI keeps its geometry: no resize, size unchanged.
+      expect(lastSubprocess.resize).not.toHaveBeenCalled()
+      expect(await adapter2.getAppliedSize(id)).toEqual({ cols: 137, rows: 41 })
+      adapter2.dispose()
+    })
+
+    it('refuses to create when the session is absent (attach-only)', async () => {
+      const adapter2 = new DaemonPtyAdapter({ socketPath, tokenPath })
+
+      await expect(adapter2.attach('wt-x@@deadbeef')).rejects.toThrow(
+        'Session not found: wt-x@@deadbeef'
+      )
+
+      // No shell was spawned as a side effect of the refused attach.
+      expect(lastSpawnOpts).toBeNull()
+      adapter2.dispose()
+    })
+
+    it('retires the accidental spawn of a pre-v31 daemon that ignores attachOnly', async () => {
+      const ensureConnectedSpy = vi
+        .spyOn(DaemonClient.prototype, 'ensureConnected')
+        .mockResolvedValue()
+      const requestSpy = vi
+        .spyOn(DaemonClient.prototype, 'request')
+        .mockImplementation(async (type: string) =>
+          type === 'getSize'
+            ? ({ size: { cols: 100, rows: 30 } } as never)
+            : type === 'createOrAttach'
+              ? ({ isNew: true, pid: 77, shellState: 'unsupported', snapshot: null } as never)
+              : ({} as never)
+        )
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 30 })
+      try {
+        await expect(legacy.attach('raced-legacy-session')).rejects.toThrow(
+          'Session not found: raced-legacy-session'
+        )
+
+        expect(requestSpy).toHaveBeenCalledWith(
+          'createOrAttach',
+          expect.objectContaining({ cols: 100, rows: 30, attachOnly: true })
+        )
+        expect(requestSpy).toHaveBeenCalledWith('kill', {
+          sessionId: 'raced-legacy-session',
+          immediate: true
+        })
+      } finally {
+        legacy.dispose()
+        requestSpy.mockRestore()
+        ensureConnectedSpy.mockRestore()
+      }
+    })
+
+    it('surfaces a failed retire of the accidental legacy spawn instead of swallowing it', async () => {
+      const ensureConnectedSpy = vi
+        .spyOn(DaemonClient.prototype, 'ensureConnected')
+        .mockResolvedValue()
+      const requestSpy = vi
+        .spyOn(DaemonClient.prototype, 'request')
+        .mockImplementation(async (type: string) => {
+          if (type === 'getSize') {
+            return { size: { cols: 100, rows: 30 } } as never
+          }
+          if (type === 'createOrAttach') {
+            return { isNew: true, pid: 77, shellState: 'unsupported', snapshot: null } as never
+          }
+          throw new Error('kill transport lost')
+        })
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 30 })
+      try {
+        await expect(legacy.attach('orphaned-legacy-session')).rejects.toThrow(
+          'Session not found: orphaned-legacy-session'
+        )
+
+        // The orphaned replacement is at least diagnosable.
+        expect(warnSpy).toHaveBeenCalledWith(
+          '[daemon] attach-only retire of accidental legacy spawn failed',
+          expect.objectContaining({ sessionId: 'orphaned-legacy-session' })
+        )
+      } finally {
+        legacy.dispose()
+        warnSpy.mockRestore()
+        requestSpy.mockRestore()
+        ensureConnectedSpy.mockRestore()
+      }
+    })
   })
 
   describe('listProcesses', () => {
+    // Why: hasPty reads the activeSessionIds cache; an exit missed while the
+    // socket was down must not survive an authoritative inventory, or absence
+    // proofs (terminal list demotion, send guard) are defeated forever.
+    it('drops cached session ids an authoritative inventory omits', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+      const staleId = 'repo::/repo/stale@@deadbeef'
+      ;(adapter as unknown as { activeSessionIds: Set<string> }).activeSessionIds.add(staleId)
+      expect(adapter.hasPty(staleId)).toBe(true)
+
+      await adapter.listProcesses()
+
+      expect(adapter.hasPty(staleId)).toBe(false)
+      expect(adapter.hasPty(id)).toBe(true)
+    })
+
     it('returns active sessions', async () => {
       await adapter.spawn({
         cols: 80,

@@ -5,12 +5,16 @@ import { translate } from '@/i18n/i18n'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '../../store'
 import { STATUS_LABELS, statusColor } from '../settings/SshTargetCard'
+import { canConnectSshStatus } from '@/ssh/ssh-connection-recoverability'
+import { sshConnectVerb } from '@/ssh/ssh-connect-verb'
+import {
+  beginSshConnect,
+  endSshConnect,
+  isSshConnectInFlight,
+  useSshConnectInFlight
+} from '@/ssh/ssh-connect-in-flight'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import type { RemoteWorkspaceSyncStatus } from '../../store/slices/ssh'
-
-function isReconnectable(status: SshConnectionStatus): boolean {
-  return ['disconnected', 'reconnection-failed', 'error', 'auth-failed'].includes(status)
-}
 
 function syncStatusLabel(status: RemoteWorkspaceSyncStatus | undefined): string | null {
   switch (status?.phase) {
@@ -62,9 +66,16 @@ export function SshTargetStatusRow({
   const [busy, setBusy] = useState(false)
   const mountedRef = useMountedRef()
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
+  // Why: shared with the sidebar card control and terminal overlay — a connect started here
+  // must disable those too, in the window before main broadcasts 'connecting'.
+  const connectInFlight = useSshConnectInFlight(targetId)
   const visibleSyncStatusLabel = syncStatusLabel(syncStatus)
 
   const handleConnect = useCallback(async () => {
+    if (isSshConnectInFlight(targetId)) {
+      return
+    }
+    beginSshConnect(targetId)
     setBusy(true)
     try {
       await window.api.ssh.connect({ targetId })
@@ -76,6 +87,7 @@ export function SshTargetStatusRow({
           : translate('auto.components.status.bar.SshStatusSegment.2c29e2de68', 'Connection failed')
       )
     } finally {
+      endSshConnect(targetId)
       if (mountedRef.current) {
         setBusy(false)
       }
@@ -130,15 +142,15 @@ export function SshTargetStatusRow({
           ) : null}
         </div>
       </div>
-      {busy ? (
+      {busy || connectInFlight ? (
         <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" />
-      ) : isReconnectable(status) ? (
+      ) : canConnectSshStatus(status) ? (
         <button
           type="button"
           onClick={() => void handleConnect()}
           className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium text-foreground hover:bg-accent/70"
         >
-          {translate('auto.components.status.bar.SshStatusSegment.63f36455cc', 'Connect')}
+          {sshConnectVerb(status)}
         </button>
       ) : status === 'connected' ? (
         <button

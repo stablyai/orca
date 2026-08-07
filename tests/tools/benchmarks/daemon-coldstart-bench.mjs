@@ -177,7 +177,6 @@ function runIteration({ exe, fixtureDir, timeoutMs, lingerMs }) {
       HOME: isolatedHome,
       USERPROFILE: isolatedHome,
       ORCA_E2E_HOME_DIR: isolatedHome,
-      ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME: '0',
       ORCA_E2E_HEADLESS: '1'
     }
     delete env.CODEX_HOME

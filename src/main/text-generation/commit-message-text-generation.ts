@@ -59,6 +59,7 @@ import {
 import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
 import { wslAwareSpawn } from '../git/runner'
 import { terminateWindowsProcessTree } from '../windows-process-tree-kill'
+import { isSshMuxRequestTimeoutError } from '../ssh/ssh-channel-multiplexer'
 
 const GENERATION_TIMEOUT_MS = 60_000
 const MAX_AGENT_OUTPUT_BYTES = 4 * 1024 * 1024
@@ -75,6 +76,7 @@ export type DiscoverCommitMessageModelsResult =
       capability: CommitMessageAgentCapability
       models: CommitMessageModelCapability[]
       defaultModelId: string
+      catalogOrigin: 'probe' | 'spec'
     }
   | { success: false; error: string }
 
@@ -229,7 +231,8 @@ function userFacingUnsafeWindowsBatchArgs(label: string): string {
 function toModelDiscoveryCapability(
   spec: NonNullable<ReturnType<typeof getCommitMessageAgentSpec>>,
   models = spec.models,
-  defaultModelId = spec.defaultModelId
+  defaultModelId = spec.defaultModelId,
+  catalogOrigin: 'probe' | 'spec' = 'spec'
 ): Extract<DiscoverCommitMessageModelsResult, { success: true }> {
   return {
     success: true,
@@ -241,7 +244,8 @@ function toModelDiscoveryCapability(
       models
     },
     models,
-    defaultModelId
+    defaultModelId,
+    catalogOrigin
   }
 }
 
@@ -281,7 +285,7 @@ function finalizeModelDiscoveryOutput(
   const defaultModelId = models.some((model) => model.id === spec.defaultModelId)
     ? spec.defaultModelId
     : models[0].id
-  return toModelDiscoveryCapability(spec, models, defaultModelId)
+  return toModelDiscoveryCapability(spec, models, defaultModelId, 'probe')
 }
 
 function planModelDiscovery(
@@ -301,7 +305,7 @@ function planModelDiscovery(
     plan: {
       binary: command.binary,
       args: [...command.prefixArgs, ...modelDiscovery.args],
-      stdinPayload: null,
+      stdinPayload: modelDiscovery.stdinPayload ?? null,
       label: spec.label
     }
   }
@@ -330,6 +334,7 @@ export async function discoverCommitMessageModelsLocal(
     const result = new Promise<DiscoverCommitMessageModelsResult>((resolve) => {
       let child: ChildProcess
       const spawnEnv = env ?? process.env
+      let discoveryStdin: string | null = null
       try {
         const planned = planModelDiscovery(spec, agentCommandOverride)
         if (!planned.ok) {
@@ -337,11 +342,13 @@ export async function discoverCommitMessageModelsLocal(
           resolve({ success: false, error: planned.error })
           return
         }
+        discoveryStdin = planned.plan.stdinPayload
+        const stdinMode = discoveryStdin === null ? 'ignore' : 'pipe'
         if (process.platform === 'win32' && options.wslDistro) {
           child = wslAwareSpawn(planned.plan.binary, planned.plan.args, {
             cwd: options.cwd,
             env: buildWslLauncherEnv(env),
-            stdio: ['ignore', 'pipe', 'pipe'],
+            stdio: [stdinMode, 'pipe', 'pipe'],
             windowsHide: true,
             wslDistro: options.wslDistro,
             useWslLoginShell: true
@@ -356,9 +363,15 @@ export async function discoverCommitMessageModelsLocal(
           const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(resolvedBinary, planned.plan.args)
           child = spawn(spawnCmd, spawnArgs, {
             env: spawnEnv,
-            stdio: ['ignore', 'pipe', 'pipe'],
+            stdio: [stdinMode, 'pipe', 'pipe'],
             windowsHide: true
           })
+        }
+        if (discoveryStdin !== null) {
+          // Why: a CLI that rejects the args exits before reading stdin; the
+          // resulting EPIPE must surface as exit-code fallback, not a crash.
+          child.stdin?.on?.('error', () => {})
+          child.stdin?.end(discoveryStdin)
         }
       } catch (error) {
         markProcessClosed()
@@ -452,6 +465,10 @@ export async function discoverCommitMessageModelsLocal(
       if (agentId === 'codex') {
         // Result publication stays prompt while the home lock follows the
         // process lifetime after asynchronous timeout/output-limit kills.
+        // Why: 'close' also waits on descendants that inherited this child's
+        // stdio, so a surviving MCP helper would hold the home forever; at
+        // 'exit' the codex process is gone and can no longer rotate auth.json.
+        child.once('exit', markClosedAfterTermination)
         child.once('close', markClosedAfterTermination)
       }
       child.on('error', onError)
@@ -503,6 +520,12 @@ export async function discoverCommitMessageModelsRemote(
     result = await execute(planned.plan, cwd, GENERATION_TIMEOUT_MS)
   } catch (error) {
     console.error('[commit-message] Remote model discovery request failed:', error)
+    if (isSshMuxRequestTimeoutError(error)) {
+      return {
+        success: false,
+        error: `${spec.label} model discovery took longer than ${GENERATION_TIMEOUT_MS / 1000}s and may still be running on the remote host.`
+      }
+    }
     return {
       success: false,
       error: `${spec.label} model discovery could not be reached on the remote PATH. Try again after the SSH connection recovers.`
@@ -604,7 +627,7 @@ function runLocalPlan(
   emptyResultName = 'message',
   operation: TextGenerationOperation = 'commit-message',
   wslDistro?: string,
-  holdHomeLockUntilClose = false
+  holdHomeLockUntilExit = false
 ): LocalProcessExecution<InternalTextGenerationResult> {
   const { binary, args, stdinPayload, label } = plan
   let markProcessClosed!: () => void
@@ -685,7 +708,7 @@ function runLocalPlan(
       if (cancelToken && cancelTokensByLane.get(laneKey) === cancelToken) {
         cancelTokensByLane.delete(laneKey)
       }
-      if (!holdHomeLockUntilClose) {
+      if (!holdHomeLockUntilExit) {
         markProcessClosed()
       }
       resolve(result)
@@ -769,7 +792,11 @@ function runLocalPlan(
     }
     child.stdout?.on('data', onStdoutData)
     child.stderr?.on('data', onStderrData)
-    if (holdHomeLockUntilClose) {
+    if (holdHomeLockUntilExit) {
+      // Why: 'close' also waits on descendants that inherited this child's
+      // stdio, so a surviving MCP helper would hold the home forever; at 'exit'
+      // the codex process is gone and can no longer rotate auth.json.
+      child.once('exit', markClosedAfterTermination)
       child.once('close', markClosedAfterTermination)
     }
     child.on('error', onError)
@@ -801,7 +828,7 @@ function runLocalPlanForAgent(
   operation: TextGenerationOperation
 ): Promise<InternalTextGenerationResult> {
   const start = (
-    holdHomeLockUntilClose = false
+    holdHomeLockUntilExit = false
   ): LocalProcessExecution<InternalTextGenerationResult> =>
     runLocalPlan(
       plan,
@@ -810,7 +837,7 @@ function runLocalPlanForAgent(
       emptyResultName,
       operation,
       target.wslDistro,
-      holdHomeLockUntilClose
+      holdHomeLockUntilExit
     )
   if (agentId !== 'codex') {
     // Why: no extra promise hops here — cancellation timing for non-codex
@@ -976,6 +1003,12 @@ async function runRemotePlan(
     result = await target.execute(plan, target.cwd, GENERATION_TIMEOUT_MS, operation)
   } catch (error) {
     console.error('[commit-message] Remote generator request failed:', error)
+    if (isSshMuxRequestTimeoutError(error)) {
+      return {
+        success: false,
+        error: `${label} took longer than ${GENERATION_TIMEOUT_MS / 1000}s to respond and may still be running on the remote host.`
+      }
+    }
     return {
       success: false,
       error: `${label} could not be reached on the ${target.missingBinaryLocation}. Try again after the SSH connection recovers.`

@@ -1,6 +1,6 @@
 import { vi, type Mock } from 'vitest'
 import type { BrowserWindow } from 'electron'
-import { PtyConsumerSession } from '../../shared/pty-consumer-session'
+import { PTY_CONSUMER_STALE_OWNER_RECOVERY_ERROR } from '../../shared/pty-consumer-session'
 import type { SshConnection } from './ssh-connection'
 import type { Store } from '../persistence'
 import type { SshPortForwardManager } from './ssh-port-forward'
@@ -25,6 +25,7 @@ export function createMockDeps(): SshRelaySessionTestDeps {
     markSshRemotePtyLease: vi.fn(),
     markSshRemotePtyLeases: vi.fn(),
     markSshRemotePtyLeasesAsync: vi.fn(),
+    markSshRemotePtyLeasesForShutdown: vi.fn(),
     markSshRemotePtyLeasesAttachedAsync: vi.fn(),
     persistPtyBinding: vi.fn()
   } as unknown as Store
@@ -55,37 +56,7 @@ export function mockDeploySuccess(): void {
 }
 
 export function createMismatchedOwnerRecoveryError(): unknown {
-  const stateMachine = new PtyConsumerSession({
-    serverBuildId: 'test-relay-build',
-    createLease: () => 'retained-owner-lease'
+  return Object.assign(new Error('Owner recovery lease is stale'), {
+    code: PTY_CONSUMER_STALE_OWNER_RECOVERY_ERROR
   })
-  const owner = stateMachine.admit(
-    { clientInstanceId: 'retained-client', requestedRole: 'session-owner' },
-    {
-      connectionId: 'retained-connection',
-      principal: 'retained-principal',
-      authenticated: true,
-      allowSessionOwner: true
-    }
-  )
-  owner.commitPublication()
-  stateMachine.close('retained-connection')
-  try {
-    stateMachine.admit(
-      {
-        clientInstanceId: 'retained-client',
-        requestedRole: 'session-owner',
-        resume: { ownerGeneration: 1, ownerLease: 'retained-owner-lease' }
-      },
-      {
-        connectionId: 'stale-connection',
-        principal: 'stale-principal',
-        authenticated: true,
-        allowSessionOwner: true
-      }
-    )
-  } catch (error) {
-    return error
-  }
-  throw new Error('Expected mismatched owner recovery to fail')
 }

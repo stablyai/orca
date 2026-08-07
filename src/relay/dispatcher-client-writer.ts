@@ -5,6 +5,7 @@ import {
   type DispatcherWriterEntry,
   type DispatcherWriterLane
 } from './dispatcher-writer-admission'
+import { DispatcherWriterDrainArm } from './dispatcher-writer-drain-arm'
 import { DispatcherWriterLaneScheduler } from './dispatcher-writer-lane-scheduler'
 import {
   DispatcherWriterSink,
@@ -33,11 +34,11 @@ export class DispatcherClientWriter {
   private readonly settleOnDrain = new Set<DispatcherWriterEntry>()
   private readonly capacityListeners = new Set<() => void>()
   private readonly idleWaiters = new Set<() => void>()
+  private readonly drain = new DispatcherWriterDrainArm()
   private saturated = false
-  private drainArmed = false
-  private removeDrainListener: (() => void) | null = null
   private livenessBypassOutstanding = false
   private pumping = false
+  private retiredCapacity = false
   private closed = false
   private closeNotified = false
 
@@ -88,7 +89,8 @@ export class DispatcherClientWriter {
     encode: () => Buffer,
     estimatedBytes: number,
     onSettled: (result: SinkWriteSettlement) => void = () => {},
-    overflowIsNonFatal = false
+    overflowIsNonFatal = false,
+    isStillAdmitted?: () => boolean
   ): boolean {
     if (this.closed) {
       onSettled({ ok: false, error: new Error('Relay writer is closed') })
@@ -97,6 +99,7 @@ export class DispatcherClientWriter {
     const entry: DispatcherWriterEntry = {
       lane,
       encode,
+      isStillAdmitted,
       estimatedBytes,
       onSettled: onceDispatcherWriterSettlement(onSettled),
       settled: false,
@@ -126,8 +129,7 @@ export class DispatcherClientWriter {
     }
     this.closed = true
     this.saturated = false
-    this.drainArmed = false
-    this.clearDrainListener()
+    this.drain.disarm()
     for (const entry of this.admission.takeQueued()) {
       this.releaseEntry(entry, { ok: false, error })
     }
@@ -167,6 +169,12 @@ export class DispatcherClientWriter {
     } finally {
       this.pumping = false
     }
+    // Why deferred: retiring a deep queue drops every entry in one pass, and notifying per drop
+    // fans out to each listener O(queue) times for capacity that only changed once.
+    if (this.retiredCapacity && !this.closed) {
+      this.retiredCapacity = false
+      this.notifyCapacity()
+    }
   }
 
   private selectNext(): DispatcherWriterEntry | undefined {
@@ -197,6 +205,11 @@ export class DispatcherClientWriter {
   }
 
   private writeEntry(entry: DispatcherWriterEntry): void {
+    if (entry.isStillAdmitted && !entry.isStillAdmitted()) {
+      this.releaseEntry(entry, { ok: false, error: new Error('PTY publication retired') })
+      this.retiredCapacity = true
+      return
+    }
     this.laneScheduler.recordWrite(entry.lane)
     this.inFlight.add(entry)
     let callbackResult: SinkWriteSettlement | undefined
@@ -247,30 +260,21 @@ export class DispatcherClientWriter {
   }
 
   private armDrain(): void {
-    if (this.drainArmed) {
-      return
-    }
-    this.drainArmed = true
     try {
-      const registration = this.sink.registerDrain(() => this.handleDrain())
-      if (!registration.registered) {
-        this.drainArmed = false
-      } else if (this.drainArmed) {
-        this.removeDrainListener = registration.remove
-      } else {
-        registration.remove()
-      }
+      this.drain.arm(
+        (onDrain) => this.sink.registerDrain(onDrain),
+        () => this.handleDrain()
+      )
     } catch (error) {
       this.close(error instanceof Error ? error : new Error(String(error)))
     }
   }
 
   private handleDrain(): void {
-    if (this.closed || !this.drainArmed) {
+    if (this.closed || !this.drain.isArmed) {
       return
     }
-    this.drainArmed = false
-    this.clearDrainListener()
+    this.drain.disarm()
     this.saturated = false
     this.livenessBypassOutstanding = false
     for (const entry of Array.from(this.settleOnDrain)) {
@@ -297,12 +301,6 @@ export class DispatcherClientWriter {
     for (const listener of this.capacityListeners) {
       listener()
     }
-  }
-
-  private clearDrainListener(): void {
-    const remove = this.removeDrainListener
-    this.removeDrainListener = null
-    remove?.()
   }
 
   private isIdle = (): boolean => this.inFlight.size === 0 && this.admission.queuedEntries === 0

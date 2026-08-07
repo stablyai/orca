@@ -7,6 +7,7 @@ import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
 import {
   findIndexedRepoOwner as findRepoRecord,
   findIndexedWorktreeOwner as findWorktreeRecord,
+  hasIndexedDetectedWorktree,
   resolveIndexedRepoOwner,
   resolveIndexedWorktreeOwner
 } from './worktree-runtime-owner-index'
@@ -79,9 +80,7 @@ export function getRuntimeEnvironmentIdForWorktree(
     const owner = indexedOwner.owner
     const projectedRuntimeOwner = getProjectedRuntimeOwnerEnvironmentId(owner)
     const parsedHost = parseExecutionHostId(owner.hostId)
-    const hasDetectedOwner = Object.values(state.detectedWorktreesByRepo ?? {}).some((result) =>
-      result.worktrees.some((worktree) => worktree.id === worktreeId)
-    )
+    const hasDetectedOwner = hasIndexedDetectedWorktree(state.detectedWorktreesByRepo, worktreeId)
     if (!hasDetectedOwner && (projectedRuntimeOwner || parsedHost)) {
       return (
         projectedRuntimeOwner || (parsedHost?.kind === 'runtime' ? parsedHost.environmentId : null)
@@ -125,9 +124,7 @@ export function getExplicitRuntimeEnvironmentIdForWorktree(
       workspaceScope.folderWorkspaceId
     )
   }
-  const hasDetectedOwner = Object.values(state.detectedWorktreesByRepo ?? {}).some((result) =>
-    result.worktrees.some((worktree) => worktree.id === worktreeId)
-  )
+  const hasDetectedOwner = hasIndexedDetectedWorktree(state.detectedWorktreesByRepo, worktreeId)
   if (hasDetectedOwner) {
     // Why: detected-only rows are selectable before the primary catalog lands; use the same
     // ambiguity-aware explicit provenance as filesystem and terminal operations.
@@ -177,9 +174,7 @@ export function getExecutionHostIdForWorktree(
   if (workspaceScope?.type === 'folder') {
     return getExecutionHostIdForFolderWorkspace(state, workspaceScope.folderWorkspaceId)
   }
-  const hasDetectedOwner = Object.values(state.detectedWorktreesByRepo ?? {}).some((result) =>
-    result.worktrees.some((worktree) => worktree.id === worktreeId)
-  )
+  const hasDetectedOwner = hasIndexedDetectedWorktree(state.detectedWorktreesByRepo, worktreeId)
   if (hasDetectedOwner) {
     const resolution = resolveExplicitWorktreeOperationRouteResult(state, worktreeId)
     if (resolution.kind === 'resolved') {

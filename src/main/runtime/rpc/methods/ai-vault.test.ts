@@ -85,6 +85,11 @@ describe('aiVault.listSessions params schema', () => {
     expect(parsed.success).toBe(false)
   })
 
+  it('accepts Unlimited without applying the numeric cap', () => {
+    const parsed = AiVaultListSessionsParams.safeParse({ limit: 5000, unlimited: true })
+    expect(parsed.success).toBe(true)
+  })
+
   it('clamps scopePaths past the cap instead of rejecting', () => {
     // Why: uncapped producers (web client, pre-cap desktop parents) may exceed
     // the bound; scope paths only widen discovery, so truncation is safe.
@@ -179,6 +184,49 @@ describe('aiVault.listSessions handler + shared cache', () => {
     // Second call via the RPC method with the same cache key.
     await dispatcher.dispatch(makeRequest('aiVault.listSessions', { limit: 500 }))
     expect(scanAiVaultSessions).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps completed scans cached for one minute', async () => {
+    vi.useFakeTimers({ now: new Date('2026-08-05T00:00:00.000Z') })
+    try {
+      await listAiVaultSessions({ limit: 500 })
+      await vi.advanceTimersByTimeAsync(59_999)
+      await listAiVaultSessions({ limit: 500 })
+      expect(scanAiVaultSessions).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(1)
+      await listAiVaultSessions({ limit: 500 })
+      expect(scanAiVaultSessions).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('serves lower depths from a larger completed scan', async () => {
+    await listAiVaultSessions({ limit: 1000 })
+    await listAiVaultSessions({ limit: 250 })
+    await listAiVaultSessions({ limit: 500 })
+
+    expect(scanAiVaultSessions).toHaveBeenCalledTimes(1)
+  })
+
+  it('shares a cache entry across equivalent scope path ordering', async () => {
+    await listAiVaultSessions({ limit: 500, scopePaths: ['/repo/a', '/repo/b'] })
+    await listAiVaultSessions({ limit: 500, scopePaths: ['/repo/b', '/repo/a'] })
+
+    expect(scanAiVaultSessions).toHaveBeenCalledTimes(1)
+  })
+
+  it('forwards Unlimited without a numeric limit', async () => {
+    const dispatcher = makeDispatcher()
+    const response = await dispatcher.dispatch(
+      makeRequest('aiVault.listSessions', { limit: 5000, unlimited: true })
+    )
+
+    expect(response).toMatchObject({ ok: true })
+    expect(scanAiVaultSessions).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: undefined, unlimited: true })
+    )
   })
 
   it('keeps a newer different-key scan dedupable after an older scan resolves', async () => {

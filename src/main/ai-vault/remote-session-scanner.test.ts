@@ -1,104 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { DirEntry } from '../../shared/types'
-import type { FileReadResult, FileStat, IFilesystemProvider } from '../providers/types'
 import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import { scanRemoteAiVaultSessions } from './remote-session-scanner'
-
-class MemoryRemoteProvider implements IFilesystemProvider {
-  private readonly files = new Map<string, { content: string; mtimeMs: number }>()
-  private readonly readDirErrors = new Map<string, Error>()
-  private readonly statErrors = new Map<string, Error>()
-  readonly readDirPaths: string[] = []
-
-  addFile(path: string, content: string, mtimeMs: number): void {
-    this.files.set(normalize(path), { content, mtimeMs })
-  }
-
-  failStat(path: string, error: Error): void {
-    this.statErrors.set(normalize(path), error)
-  }
-
-  failReadDir(path: string, error: Error): void {
-    this.readDirErrors.set(normalize(path), error)
-  }
-
-  async readDir(dirPath: string): Promise<DirEntry[]> {
-    const dir = normalize(dirPath)
-    this.readDirPaths.push(dir)
-    const readDirError = this.readDirErrors.get(dir)
-    if (readDirError) {
-      throw readDirError
-    }
-    const prefix = dir.endsWith('/') ? dir : `${dir}/`
-    const entries = new Map<string, DirEntry>()
-    for (const path of this.files.keys()) {
-      if (!path.startsWith(prefix)) {
-        continue
-      }
-      const relative = path.slice(prefix.length)
-      if (!relative) {
-        continue
-      }
-      const [name, ...rest] = relative.split('/')
-      if (!name) {
-        continue
-      }
-      entries.set(name, {
-        name,
-        isDirectory: rest.length > 0,
-        isSymlink: false
-      })
-    }
-    return [...entries.values()].sort((left, right) => left.name.localeCompare(right.name))
-  }
-
-  async readFile(filePath: string): Promise<FileReadResult> {
-    const file = this.files.get(normalize(filePath))
-    if (!file) {
-      throw new Error(`ENOENT: ${filePath}`)
-    }
-    return { content: file.content, isBinary: false }
-  }
-
-  async stat(filePath: string): Promise<FileStat> {
-    const statError = this.statErrors.get(normalize(filePath))
-    if (statError) {
-      throw statError
-    }
-    const file = this.files.get(normalize(filePath))
-    if (!file) {
-      throw new Error(`ENOENT: ${filePath}`)
-    }
-    return { size: file.content.length, type: 'file', mtime: file.mtimeMs, mtimeMs: file.mtimeMs }
-  }
-
-  writeFile = unsupported
-  writeFileBase64 = unsupported
-  writeFileBase64Chunk = unsupported
-  deletePath = unsupported
-  createFile = unsupported
-  createDir = unsupported
-  createDirNoClobber = unsupported
-  rename = unsupported
-  renameNoClobber = unsupported
-  copy = unsupported
-  realpath = async (path: string): Promise<string> => path
-  search = unsupported
-  listFiles = unsupported
-  watch = unsupported
-}
-
-async function unsupported(): Promise<never> {
-  throw new Error('unsupported')
-}
-
-function normalize(path: string): string {
-  return path.replace(/\\/g, '/').replace(/\/+$/, '')
-}
-
-function jsonLines(records: unknown[]): string {
-  return records.map((record) => JSON.stringify(record)).join('\n')
-}
+import { MemoryRemoteProvider, jsonLines } from './remote-session-scanner-test-fixtures'
 
 describe('scanRemoteAiVaultSessions', () => {
   it('parses remote default and Orca-managed Codex homes with SSH host ids', async () => {
@@ -153,7 +56,9 @@ describe('scanRemoteAiVaultSessions', () => {
       provider,
       executionHostId: 'ssh:dev-box',
       remoteHome: '/home/ada',
-      hostPlatform: getRemoteHostPlatform('linux-x64')
+      hostPlatform: getRemoteHostPlatform('linux-x64'),
+      limit: 1,
+      unlimited: true
     })
 
     expect(result.issues).toEqual([])
@@ -404,11 +309,13 @@ describe('scanRemoteAiVaultSessions', () => {
       expect.arrayContaining([
         expect.objectContaining({
           agent: 'antigravity',
+          kind: 'host',
           path: brainDir,
           message: expect.stringContaining('EACCES')
         }),
         expect.objectContaining({
           agent: 'claude',
+          kind: 'host',
           path: claudeProjectDir,
           message: expect.stringContaining('ECONNRESET')
         })
@@ -704,6 +611,93 @@ describe('scanRemoteAiVaultSessions', () => {
     expect(result.sessions.map((session) => session.sessionId)).toEqual([
       'other-session',
       'scoped-session'
+    ])
+  })
+
+  it('keeps looking past newer out-of-scope candidates during scoped backfill', async () => {
+    const provider = new MemoryRemoteProvider()
+    for (const [sessionId, mtimeMs, hour] of [
+      ['other-newest', 50, '05'],
+      ['other-newer', 40, '04']
+    ] as const) {
+      provider.addFile(
+        `/home/ada/.codex/sessions/${sessionId}.jsonl`,
+        codexTranscript({
+          sessionId,
+          title: sessionId,
+          cwd: '/home/ada/other',
+          timestamp: `2026-07-04T${hour}:00:00.000Z`
+        }),
+        mtimeMs
+      )
+    }
+    provider.addFile(
+      '/home/ada/.codex/sessions/scoped.jsonl',
+      codexTranscript({
+        sessionId: 'scoped-session',
+        title: 'Scoped workspace',
+        cwd: '/home/ada/repo',
+        timestamp: '2026-07-04T01:00:00.000Z'
+      }),
+      10
+    )
+
+    const result = await scanRemoteAiVaultSessions({
+      provider,
+      executionHostId: 'ssh:dev-box',
+      remoteHome: '/home/ada',
+      hostPlatform: getRemoteHostPlatform('linux-x64'),
+      limit: 1,
+      scopePaths: ['/home/ada/repo']
+    })
+
+    expect(result.issues).toEqual([])
+    expect(result.sessions.map((session) => session.sessionId)).toEqual([
+      'other-newest',
+      'scoped-session'
+    ])
+  })
+
+  it('caps scoped backfill at the requested limit', async () => {
+    const provider = new MemoryRemoteProvider()
+    provider.addFile(
+      '/home/ada/.codex/sessions/other.jsonl',
+      codexTranscript({
+        sessionId: 'other-session',
+        title: 'Other workspace',
+        cwd: '/home/ada/other',
+        timestamp: '2026-07-04T05:00:00.000Z'
+      }),
+      50
+    )
+    for (const [sessionId, mtimeMs] of [
+      ['newer-scoped', 30],
+      ['older-scoped', 20]
+    ] as const) {
+      provider.addFile(
+        `/home/ada/.codex/sessions/${sessionId}.jsonl`,
+        codexTranscript({
+          sessionId,
+          title: sessionId,
+          cwd: '/home/ada/repo',
+          timestamp: `2026-07-04T0${mtimeMs / 10}:00:00.000Z`
+        }),
+        mtimeMs
+      )
+    }
+
+    const result = await scanRemoteAiVaultSessions({
+      provider,
+      executionHostId: 'ssh:dev-box',
+      remoteHome: '/home/ada',
+      hostPlatform: getRemoteHostPlatform('linux-x64'),
+      limit: 1,
+      scopePaths: ['/home/ada/repo']
+    })
+
+    expect(result.sessions.map((session) => session.sessionId)).toEqual([
+      'other-session',
+      'newer-scoped'
     ])
   })
 })

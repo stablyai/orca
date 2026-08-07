@@ -16,7 +16,7 @@ import {
   buildWorkspaceSessionPayload,
   shouldPersistWorkspaceSession
 } from '@/lib/workspace-session'
-import { createTestStore, makeTab } from './store-test-helpers'
+import { createTestStore, makeTab, makeWorktree } from './store-test-helpers'
 
 const WORKTREE_ID = 'repo1::/path/degraded'
 const TERMINAL_ID = 'terminal-degraded'
@@ -197,6 +197,39 @@ it('keeps a terminal-free degraded workspace selected through hydration and pers
     BROWSER_ID
   ])
   expect(restored.activeTabType).toBe('browser')
+})
+
+it('keeps chrome when a non-authoritative fallback lists only some of the repo worktrees', () => {
+  const store = createTestStore()
+  // Why: an SSH metadata fallback can be non-empty yet partial (host-less metas are skipped on multi-owner
+  // repos, agent-scratch stays hidden). A partial list must not read as proof the missing worktree was deleted.
+  const sibling = makeWorktree({
+    id: 'repo1::/path/sibling',
+    repoId: 'repo1',
+    path: '/path/sibling'
+  })
+  store.setState({
+    repos: [{ id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }],
+    worktreesByRepo: { repo1: [sibling] },
+    detectedWorktreesByRepo: {
+      repo1: {
+        repoId: 'repo1',
+        authoritative: false,
+        source: 'metadata-fallback',
+        worktrees: []
+      }
+    }
+  })
+  const session = makeDegradedRepoSession()
+  store.getState().hydrateWorkspaceSession(session)
+  store.getState().hydrateTabsSession(session)
+  store.getState().hydrateEditorSession(session)
+  store.getState().hydrateBrowserSession(session)
+
+  const state = store.getState()
+  expect(state.tabsByWorktree[WORKTREE_ID]?.map((tab) => tab.id)).toEqual([TERMINAL_ID])
+  expect(state.openFiles.map((file) => file.id)).toEqual([EDITOR_FILE_ID])
+  expect(state.browserTabsByWorktree[WORKTREE_ID]?.map((tab) => tab.id)).toEqual([BROWSER_ID])
 })
 
 it('drops terminal-free chrome when an authoritative scan proves deletion', () => {

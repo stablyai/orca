@@ -126,6 +126,11 @@ import {
   type PRCommentGroup
 } from '@/lib/pr-comment-groups'
 import { resolveCommentReplyTarget } from '@/components/comment-reply-target-state'
+import {
+  attachPRReviewReplyParent,
+  canPostPRReviewThreadReply
+} from '@/components/right-sidebar/pr-comments-ai-launch-ack'
+import { buildPRCommentConversationReplyBody } from '@/components/right-sidebar/pr-comment-fixing-reply-body'
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/selectors'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
@@ -2273,29 +2278,32 @@ function ConversationTab({
         )
         return false
       }
-      const result =
-        comment.path && item.type === 'pr'
-          ? await addPRReviewCommentReplyForRepo({
-              repoPath: repoPath ?? '',
-              repoId: item.repoId,
-              sourceContext,
-              prNumber: item.number,
-              prRepo,
-              commentId: comment.id,
-              body: replyBody,
-              threadId: comment.threadId,
-              path: comment.path,
-              line: comment.line
-            })
-          : await addIssueCommentForRepo({
-              repoPath: repoPath ?? '',
-              repoId: item.repoId,
-              sourceContext,
-              number: item.number,
-              body: `@${comment.author} ${replyBody}`,
-              type: item.type,
-              prRepo
-            })
+      // Why: nest under review threads (path/threadId/discussion_r); never post a
+      // separate top-level conversation comment for those.
+      const isReviewThreadReply = item.type === 'pr' && canPostPRReviewThreadReply(comment)
+      const result = isReviewThreadReply
+        ? await addPRReviewCommentReplyForRepo({
+            repoPath: repoPath ?? '',
+            repoId: item.repoId,
+            sourceContext,
+            prNumber: item.number,
+            prRepo,
+            commentId: comment.id,
+            body: replyBody,
+            threadId: comment.threadId,
+            path: comment.path,
+            line: comment.line
+          })
+        : await addIssueCommentForRepo({
+            repoPath: repoPath ?? '',
+            repoId: item.repoId,
+            sourceContext,
+            number: item.number,
+            // Why: a GitHub App login carries a [bot] suffix that never resolves as a mention.
+            body: buildPRCommentConversationReplyBody(comment.author, replyBody),
+            type: item.type,
+            prRepo
+          })
 
       if (!result.ok) {
         toast.error(
@@ -2304,7 +2312,9 @@ function ConversationTab({
         )
         return false
       }
-      onCommentAdded(result.comment)
+      onCommentAdded(
+        isReviewThreadReply ? attachPRReviewReplyParent(result.comment, comment) : result.comment
+      )
       setReplyingTo(null)
       toast.success(translate('auto.components.PullRequestPage.11505c7a71', 'Reply posted.'))
       return true
