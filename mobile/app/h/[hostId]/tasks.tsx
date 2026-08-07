@@ -51,6 +51,7 @@ import { MobileSearchField } from '../../../src/components/MobileSearchField'
 import { MobileSyntaxSegments } from '../../../src/components/MobileSyntaxSegments'
 import { PickerModal, type PickerOption } from '../../../src/components/PickerModal'
 import { TaskProviderLogo } from '../../../src/components/TaskProviderLogo'
+import { JiraConnectPrompt } from '../../../src/components/JiraConnectPrompt'
 import {
   buildGitHubPrFileDiffPreview,
   type GitHubPrFileDiffLine
@@ -2869,6 +2870,17 @@ export default function MobileTasksScreen() {
     return result.repos
   }, [client, connState])
 
+  // Why: Jira is connected from desktop, so nothing on the phone tells us it
+  // happened. The status cached at hydration has to be re-read or connecting while
+  // this screen is open leaves it stuck on the connect prompt.
+  const refreshJiraConnection = useCallback(async (): Promise<void> => {
+    if (!client || connState !== 'connected' || !tasksSupported) {
+      return
+    }
+    const response = await client.sendRequest('jira.status')
+    setJiraConnection(extractJiraConnection(isSuccess(response) ? response.result : null))
+  }, [client, connState, tasksSupported])
+
   const loadLinearContext = useCallback(async (): Promise<void> => {
     if (!client || connState !== 'connected' || !tasksSupported) {
       return
@@ -3782,6 +3794,17 @@ export default function MobileTasksScreen() {
       setError(err instanceof Error ? err.message : 'Failed to load Linear context')
     })
   }, [linearConnected, loadLinearContext, provider, taskStateHydrated])
+
+  // Re-check on every switch to the Jira tab so a desktop-side connect is picked
+  // up without restarting the app.
+  useEffect(() => {
+    if (!taskStateHydrated || provider !== 'jira') {
+      return
+    }
+    void refreshJiraConnection().catch((err) => {
+      console.warn('[mobile tasks] failed to refresh jira status', err)
+    })
+  }, [provider, refreshJiraConnection, taskStateHydrated])
 
   useEffect(() => {
     if (!taskUiReady || provider !== 'github' || githubMode !== 'project') {
@@ -8570,6 +8593,11 @@ export default function MobileTasksScreen() {
               if (!taskUiReady) {
                 return
               }
+              if (provider === 'jira') {
+                // Picks up a desktop-side connect; loadTasks re-runs once the
+                // connection state changes.
+                void refreshJiraConnection().catch(() => {})
+              }
               if (provider === 'github' && githubMode === 'project') {
                 void loadGitHubProjectTable({ queryOverride: appliedGithubProjectSearch })
                 return
@@ -9137,17 +9165,15 @@ export default function MobileTasksScreen() {
           </View>
         )
       ) : provider === 'jira' && !jiraConnection.connected ? (
-        <View style={styles.centered}>
-          <TaskProviderLogo provider="jira" size={32} color={colors.textSecondary} />
-          <Text style={styles.emptyText}>Connect Jira on your desktop</Text>
-          <Text style={styles.centeredHint}>
-            {jiraConnection.credentialError
-              ? `Jira is saved but unreadable: ${jiraConnection.credentialError}`
-              : // Why: connecting needs a site URL, email, and API token — a form that
-                // belongs on desktop, so mobile points there instead of half-hosting it.
-                'Add your Jira site in Orca desktop under Settings → Integrations, then pull to refresh.'}
-          </Text>
-        </View>
+        <JiraConnectPrompt
+          credentialError={jiraConnection.credentialError}
+          disabled={!taskUiReady}
+          onCheckAgain={() => {
+            void refreshJiraConnection().catch((err) => {
+              setError(err instanceof Error ? err.message : 'Failed to read Jira status')
+            })
+          }}
+        />
       ) : provider === 'linear' && !linearConnected ? (
         <View style={styles.centered}>
           <TaskProviderLogo provider="linear" size={32} color={colors.textSecondary} />
