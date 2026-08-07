@@ -180,9 +180,18 @@ describe('absolute file CLI paths', () => {
       expectOpenedWith('/root/orca/workspaces/xxx-2/xxx.ts')
     })
 
-    // Why: Windows folds the distro segment but the Linux tail stays case-sensitive.
-    it('matches a distro-case mismatch but not a Linux-path-case mismatch', async () => {
+    // Why: Windows folds the distro segment, so only its case may differ from the root.
+    it('matches when only the distro case differs', async () => {
       vi.stubEnv('WSL_DISTRO_NAME', 'ubuntu')
+      mockWorktreeShow(uncRoot)
+
+      await openPath('/root/orca/workspaces/xxx/xxx/xxx.ts')
+
+      expectOpenedWith('xxx/xxx.ts')
+    })
+
+    it('leaves a Linux path whose own case does not match the root', async () => {
+      vi.stubEnv('WSL_DISTRO_NAME', 'Ubuntu')
       mockWorktreeShow(uncRoot)
 
       await openPath('/root/orca/Workspaces/xxx/xxx.ts')
