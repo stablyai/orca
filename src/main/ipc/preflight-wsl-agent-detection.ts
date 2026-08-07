@@ -25,24 +25,26 @@ export async function detectWslCommandsOnPath(
   }
 
   const commandList = uniqueCommands.map(shellQuote).join(' ')
-  const lookupScript = buildPosixCommandPathLookupScript({
+  const fallbackLookupScript = buildPosixCommandPathLookupScript({
     kind: 'shell-variable',
     name: 'cmd'
   })
-  // Newlines keep the loop valid in zsh and every POSIX shell used here.
+  const lookupScript = buildWslAgentPathLookupScript(fallbackLookupScript)
+  // Parallel lookups avoid serial drvfs scans across inherited Windows PATH entries.
   const script = [
     `for cmd in ${commandList}; do`,
+    '(',
     lookupScript,
     'if [ -n "$resolved" ]; then',
     `printf '${WSL_AGENT_DETECTION_PREFIX}%s\\t%s\\n' "$cmd" "$resolved";`,
     'fi',
-    'done'
+    ') &',
+    'done',
+    'wait'
   ].join('\n')
 
   try {
-    // Why: WSL cold-start plus many parallel wsl.exe probes can timeout and
-    // cache an empty result. One probe through the distro user's login shell
-    // matches zsh/bash PATH customizations from their normal terminals.
+    // One login-shell probe captures the user's PATH without repeated WSL cold starts.
     const { stdout } = await execWslAgentDetectionCommand(wslTarget, script)
     return parseWslDetectedCommands(stdout)
   } catch {
@@ -54,11 +56,31 @@ function shellQuote(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`
 }
 
+function buildWslAgentPathLookupScript(fallbackLookupScript: string): string {
+  return [
+    '_orca_fast_resolved=$(command -v "$cmd" 2>/dev/null || true)',
+    'case "$_orca_fast_resolved" in',
+    '  /*)',
+    '    if [ -x "$_orca_fast_resolved" ] && [ ! -d "$_orca_fast_resolved" ]; then',
+    '      resolved=$_orca_fast_resolved',
+    '    else',
+    '      resolved=',
+    '    fi',
+    '    ;;',
+    '  "") resolved= ;;',
+    '  *)',
+    ...fallbackLookupScript.split('\n').map((line) => `    ${line}`),
+    '    ;;',
+    'esac'
+  ].join('\n')
+}
+
 async function execWslAgentDetectionCommand(
   target: WslPreflightTarget,
   command: string
 ): Promise<{ stdout: string; stderr: string }> {
   const distroArgs = target.distro ? ['-d', target.distro] : []
+  const loginShellCommand = `exec /bin/sh -c ${shellQuote(command)}`
   const commandPromise = execFileAsync(
     'wsl.exe',
     [
@@ -66,7 +88,7 @@ async function execWslAgentDetectionCommand(
       '--',
       'sh',
       '-c',
-      escapeWslShCommandForWindows(buildWslLoginShellCommand(command))
+      escapeWslShCommandForWindows(buildWslLoginShellCommand(loginShellCommand))
     ],
     {
       encoding: 'utf-8',
@@ -104,10 +126,11 @@ function parseWslDetectedCommands(stdout: string): Set<string> {
   const found = new Set<string>()
   for (const rawLine of stdout.split(/\r?\n/)) {
     const line = rawLine.trim()
-    if (!line.startsWith(WSL_AGENT_DETECTION_PREFIX)) {
+    const prefixIndex = line.indexOf(WSL_AGENT_DETECTION_PREFIX)
+    if (prefixIndex < 0) {
       continue
     }
-    const payload = line.slice(WSL_AGENT_DETECTION_PREFIX.length)
+    const payload = line.slice(prefixIndex + WSL_AGENT_DETECTION_PREFIX.length)
     const separatorIndex = payload.indexOf('\t')
     if (separatorIndex <= 0) {
       continue

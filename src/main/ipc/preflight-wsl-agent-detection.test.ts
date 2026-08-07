@@ -37,16 +37,15 @@ describe('detectWslCommandsOnPath', () => {
     vi.restoreAllMocks()
   })
 
-  it('builds a probe script with no `fi done` (zsh parse error) sequence', async () => {
+  it('runs parallel probes through a noninteractive shell', async () => {
     execFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
 
     await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude'])
 
     const payload = lastShCommandPayload()
-    // Why: zsh aborts on `fi done` — the loop body and `done` must be separated
-    // by a newline. Regression guard for issue #5325.
     expect(payload).not.toContain('fi done')
-    expect(payload).toContain('fi\ndone')
+    expect(payload).toContain('exec /bin/sh -c')
+    expect(payload).toContain(') &\ndone\nwait')
   })
 
   it('uses the shared alias- and function-neutral PATH lookup', async () => {
@@ -59,7 +58,10 @@ describe('detectWslCommandsOnPath', () => {
       kind: 'shell-variable',
       name: 'cmd'
     })
-    expect(payload).toContain(escapeWslShCommandForWindows(lookupScript))
+    expect(payload).toContain('command -v')
+    expect(payload).toContain(
+      escapeWslShCommandForWindows(lookupScript.split('\n').find((line) => line.includes('PATH-'))!)
+    )
     expect(payload).not.toContain('type -P')
   })
 
@@ -68,6 +70,20 @@ describe('detectWslCommandsOnPath', () => {
       stdout:
         '__ORCA_AGENT_PATH__claude\t/usr/bin/claude\n' +
         '__ORCA_AGENT_PATH__codex\t/home/user/.local/bin/codex\n',
+      stderr: ''
+    })
+
+    const found = await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude', 'codex'])
+
+    expect(found).toEqual(new Set(['claude', 'codex']))
+  })
+
+  it('parses a first record preceded by shell OSC output', async () => {
+    execFileAsyncMock.mockResolvedValue({
+      stdout:
+        '\u001B]633;P;HasRichCommandDetection=True\u0007' +
+        '__ORCA_AGENT_PATH__claude\t/home/user/.local/bin/claude\n' +
+        '__ORCA_AGENT_PATH__codex\t/usr/local/bin/codex\n',
       stderr: ''
     })
 
