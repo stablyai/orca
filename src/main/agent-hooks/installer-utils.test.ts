@@ -573,11 +573,26 @@ describe('wrapWindowsGitBashHookCommand', () => {
 
   it('keeps bash metacharacters inert inside the quoted fast path', () => {
     expect(
-      wrapWindowsGitBashHookCommand('C:\\Users\\alice & bob\\.orca\\agent-hooks\\claude-hook.cmd')
+      wrapWindowsGitBashHookCommand('C:\\Users\\alice $bob `id` #1\\.orca\\claude-hook.cmd')
     ).toBe(
-      `if [ -f 'C:/Users/alice & bob/.orca/agent-hooks/claude-hook.cmd' ]; then 'C:/Users/alice & bob/.orca/agent-hooks/claude-hook.cmd'; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
+      `if [ -f 'C:/Users/alice $bob \`id\` #1/.orca/claude-hook.cmd' ]; then 'C:/Users/alice $bob \`id\` #1/.orca/claude-hook.cmd'; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
     )
   })
+
+  // Why: bash's quoting is not the last parser. Executing a .cmd makes bash re-launch it
+  // through cmd.exe (COMSPEC), which parses the path again with the quotes already
+  // consumed. Measured on Git Bash 2.55/Windows: each of these exits 1 on every hook
+  // call — `& ^ ( ) ; , =` split the command and `%VAR%` expands — while the encoded
+  // launcher runs them correctly. `!` passes today but expands under DelayedExpansion.
+  it.each([['&'], ['^'], ['('], [')'], [';'], [','], ['='], ['%'], ['!']])(
+    'falls back to the encoded launcher for a cmd.exe metacharacter (%s)',
+    (metacharacter) => {
+      const scriptPath = `C:\\Users\\a${metacharacter}b\\.orca\\agent-hooks\\claude-hook.cmd`
+      const command = wrapWindowsGitBashHookCommand(scriptPath)
+      expect(command).toMatch(qualifiedWindowsPowerShellCommand)
+      expect(decodeWindowsHookCommand(command)).toBe(expectedDecodedWindowsHookCommand(scriptPath))
+    }
+  )
 
   it('takes the fast path for non-ASCII home directories', () => {
     expect(
@@ -619,9 +634,10 @@ describe.skipIf(process.platform === 'win32')('Git Bash fast path in a real shel
   it.each([
     ['ascii', 'alice'],
     ['spaces', 'Jane Doe'],
-    // Why: an unquoted `&` backgrounds, `$(…)`/`$VAR` expand — each would resolve a
-    // different path, so the guard would drain instead of reaching the script.
-    ['shell metacharacters', 'alice & bob $(echo x) $ORCA_HOOK_QUOTING_PROBE'],
+    // Why: unquoted, `$VAR` and backticks expand and `~ # * [ ]` reparse — each resolves a
+    // different path, so the guard would drain instead of reaching the script. These are
+    // bash-only metacharacters; the cmd.exe set is gated out and covered above.
+    ['shell metacharacters', 'a $ORCA_HOOK_QUOTING_PROBE ~b `id` #c {d} [e] *f'],
     ['non-ASCII (#11496)', '홍길동'],
     ['a single quote', "O'Brien"]
   ])('executes the managed script from a home containing %s', (_label, homeSegment) => {
@@ -636,7 +652,7 @@ describe.skipIf(process.platform === 'win32')('Git Bash fast path in a real shel
   })
 
   it('drains a large payload and exits 0 when the configured script is missing', () => {
-    const scriptPath = join(tmpDir, "O'Brien & co", '.orca', 'agent-hooks', 'claude-hook.sh')
+    const scriptPath = join(tmpDir, "O'Brien is away", '.orca', 'agent-hooks', 'claude-hook.sh')
 
     const result = runFastPath(scriptPath, 'x'.repeat(1_000_000))
 

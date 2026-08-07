@@ -151,11 +151,15 @@ export function wrapWindowsCmdHookCommand(scriptPath: string): string {
   return WINDOWS_CMD_SAFE_PATH.test(scriptPath) ? scriptPath : wrapWindowsHookCommand(scriptPath)
 }
 
-export const WINDOWS_GIT_BASH_SAFE_PATH = /^\P{Cc}+$/u
+// Why: single quotes make spaces and non-ASCII (CJK profiles) literal to bash, but bash
+// hands a .cmd to cmd.exe through COMSPEC, which re-parses the path once that quoting is
+// gone: `& ^ ( ) ; , =` split it and `%VAR%` expands. Measured on Git Bash 2.55 — those
+// exit 1 on every hook call, so they keep the encoded launcher. `!` is safe today and
+// excluded anyway: it expands under a registry-enabled DelayedExpansion.
+export const WINDOWS_GIT_BASH_SAFE_PATH = /^[^\p{Cc}&^();,=%!]+$/u
 
 export function wrapWindowsGitBashHookCommand(scriptPath: string): string {
   const bashPath = scriptPath.replaceAll('\\', '/')
-  // Why: single quotes keep spaces, metacharacters, and non-ASCII (CJK profiles) literal, so only control characters need the encoded launcher (#8430).
   return WINDOWS_GIT_BASH_SAFE_PATH.test(bashPath)
     ? `if [ -f ${quotePosixShellString(bashPath)} ]; then ${quotePosixShellString(bashPath)}; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
     : wrapWindowsHookCommand(scriptPath)
