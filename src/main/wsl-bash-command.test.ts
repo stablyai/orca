@@ -21,20 +21,20 @@ describe('buildEncodedWslBashCommand', () => {
     expect(Buffer.from(encoded as string, 'base64').toString('utf8')).toBe(command)
   })
 
-  it('keeps semicolons and spaces intact as a single -c argument, not split by the outer shell', () => {
+  it('keeps semicolons and spaces intact inside the encoded payload regardless of local shell vars', () => {
     const command = 'echo one; echo two three'
     const wrapped = buildEncodedWslBashCommand(command)
 
-    // The whole wrapper must reach `bash -c` as one argv element (execFile
-    // passes it as a single array entry — no shell re-parses it in between),
-    // so it must contain no unescaped top-level `;` of its own outside the
-    // base64 payload.
-    const args = ['-d', 'Ubuntu', '--', 'bash', '-c', wrapped]
-    expect(args).toHaveLength(6)
-    expect(args[5]).toBe(wrapped)
-
+    // buildEncodedWslBashCommand itself emits a literal `set -o pipefail;`
+    // prefix before the payload — the safety property under test is that the
+    // *caller's* script, not this wrapper's own control statement, survives
+    // as opaque Base64 rather than being re-parsed. See
+    // skill-discovery-wsl.test.ts for a test that this wrapper string reaches
+    // wsl.exe as a single argv element in the real execFile call.
     const encoded = /printf %s '([^']+)'/.exec(wrapped)?.[1]
+    expect(encoded).toBeTruthy()
     const decoded = Buffer.from(encoded as string, 'base64').toString('utf8')
     expect(decoded).toBe(command)
+    expect(decoded).toContain(';')
   })
 })

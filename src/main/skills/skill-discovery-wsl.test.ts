@@ -122,6 +122,34 @@ describe('WSL skill discovery', () => {
 
     await expect(
       discoverSkillsInWsl({ distro: 'Ubuntu', homeDir: '/home/alice', cwd: '/home/alice' })
-    ).rejects.toThrow(/timed out after 60s/)
+    ).rejects.toThrow(
+      expect.objectContaining({
+        message: expect.stringMatching(
+          /^(?=.*timed out after 60s)(?=.*Ubuntu)(?!.*Command failed).*$/s
+        )
+      })
+    )
+  })
+
+  it('passes the whole encoded script to wsl.exe as a single argv element', async () => {
+    const mockedExecFile = vi.mocked(execFile)
+    let capturedArgs: unknown[] = []
+    mockedExecFile.mockImplementation((..._args: unknown[]) => {
+      capturedArgs = _args[1] as unknown[]
+      const callback = _args.at(-1) as (error: null, stdout: string) => void
+      callback(null, record('R', '0', '0'))
+      return {} as ReturnType<typeof execFile>
+    })
+
+    await discoverSkillsInWsl({ distro: 'Ubuntu', homeDir: '/home/alice', cwd: '/home/alice' })
+
+    expect(capturedArgs).toHaveLength(6)
+    expect(capturedArgs.slice(0, 5)).toEqual(['-d', 'Ubuntu', '--', 'bash', '-c'])
+    const scriptArg = capturedArgs[5]
+    // The whole wrapper (control statement + Base64 payload) must arrive as
+    // one argv element — execFile never hands this to an intermediate shell
+    // that could re-split it on the `;` inside `set -o pipefail;`.
+    expect(typeof scriptArg).toBe('string')
+    expect((scriptArg as string).startsWith('set -o pipefail; printf %s ')).toBe(true)
   })
 })
