@@ -492,6 +492,7 @@ async function isBinaryFilePrefix(filePath: string): Promise<boolean> {
   }
 }
 
+/** Classifies a listing entry, following symlinks so linked folders render as folders. */
 async function isDirectoryEntry(
   dirPath: string,
   entry: { name: string; isDirectory(): boolean; isSymbolicLink(): boolean }

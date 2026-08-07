@@ -15,6 +15,7 @@ export type FileExplorerDirectoryListing = {
   operationOwner: FileExplorerOperationOwner
 }
 
+/** Projects a directory listing into tree rows, resolving each entry's path relative to the worktree. */
 export function fileExplorerEntriesToTreeNodes(
   entries: DirEntry[],
   dirPath: string,

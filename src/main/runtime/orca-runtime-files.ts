@@ -2183,6 +2183,7 @@ function basenameFromRelativePath(relativePath: string): string {
   return normalized.slice(normalized.lastIndexOf('/') + 1)
 }
 
+/** Classifies a listing entry, following symlinks so linked folders render as folders. */
 async function isRuntimeDirectoryEntry(
   entry: { isDirectory(): boolean; isSymbolicLink(): boolean },
   entryPath: string

@@ -56,6 +56,7 @@ type UseFileExplorerHandlersReturn = {
 type OpenFileParams = Parameters<UseFileExplorerHandlersParams['openFile']>[0]
 type OpenFileOptions = Parameters<UseFileExplorerHandlersParams['openFile']>[1]
 
+/** Runs the shared activate gesture for a row: toggle a directory, or open a file in the editor. */
 export async function activateFileExplorerNode(args: {
   node: TreeNode
   activeWorktreeId: string | null
@@ -88,6 +89,8 @@ export async function activateFileExplorerNode(args: {
   if (node.isSymlink) {
     // Why: a listing classifies a link but never authorizes it. Activation is what unlocks a
     // target outside the workspace roots — without this every read below is access-denied.
+    // Deliberately not a gate: a refusal (dangling link, host that scopes reads itself) must fall
+    // through so the read below reports the real reason instead of failing silently here.
     await authorizeSymlinkTarget?.(node.path)
   }
   if (node.isDirectory) {
