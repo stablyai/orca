@@ -145,6 +145,7 @@ import {
 import {
   extractJiraConnection,
   jiraSiteLabel,
+  readJiraConnection,
   type MobileJiraConnection
 } from '../../../src/tasks/jira-mobile-connection'
 import {
@@ -2877,8 +2878,7 @@ export default function MobileTasksScreen() {
     if (!client || connState !== 'connected' || !tasksSupported) {
       return
     }
-    const response = await client.sendRequest('jira.status')
-    setJiraConnection(extractJiraConnection(isSuccess(response) ? response.result : null))
+    setJiraConnection(await readJiraConnection(client))
   }, [client, connState, tasksSupported])
 
   const loadLinearContext = useCallback(async (): Promise<void> => {
@@ -3802,7 +3802,7 @@ export default function MobileTasksScreen() {
       return
     }
     void refreshJiraConnection().catch((err) => {
-      console.warn('[mobile tasks] failed to refresh jira status', err)
+      setError(err instanceof Error ? err.message : 'Failed to read Jira status')
     })
   }, [provider, refreshJiraConnection, taskStateHydrated])
 

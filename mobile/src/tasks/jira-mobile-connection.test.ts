@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { extractJiraConnection, jiraSiteLabel } from './jira-mobile-connection'
+import { extractJiraConnection, jiraSiteLabel, readJiraConnection } from './jira-mobile-connection'
+import type { RpcClient } from '../transport/rpc-client'
 
 const siteA = {
   id: 'site-a',
@@ -84,5 +85,37 @@ describe('jiraSiteLabel', () => {
 
   it('falls back to a bare host when the display name is blank', () => {
     expect(jiraSiteLabel({ ...siteA, displayName: '   ' })).toBe('a.atlassian.net')
+  })
+})
+
+describe('readJiraConnection', () => {
+  it('reports a refused status read instead of showing it as disconnected', async () => {
+    // A host that does not authorize jira.* for mobile clients answers with an
+    // error; treating that as "no Jira connected" strands the user on a setup
+    // prompt they cannot satisfy.
+    const client = {
+      sendRequest: async () => ({
+        ok: false,
+        error: { message: "Method 'jira.status' is not available to mobile clients" }
+      })
+    } as unknown as RpcClient
+
+    await expect(readJiraConnection(client)).rejects.toThrow(
+      "Method 'jira.status' is not available to mobile clients"
+    )
+  })
+
+  it('returns the parsed connection on success', async () => {
+    const client = {
+      sendRequest: async () => ({
+        ok: true,
+        result: { connected: true, viewer: null, sites: [siteA], selectedSiteId: 'site-a' }
+      })
+    } as unknown as RpcClient
+
+    await expect(readJiraConnection(client)).resolves.toMatchObject({
+      connected: true,
+      selection: 'site-a'
+    })
   })
 })

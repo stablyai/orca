@@ -3,6 +3,8 @@ import type {
   JiraSite,
   JiraSiteSelection
 } from '../../../src/shared/jira-types'
+import type { RpcClient } from '../transport/rpc-client'
+import type { RpcSuccess } from '../transport/types'
 
 export type MobileJiraConnection = {
   connected: boolean
@@ -58,6 +60,17 @@ function resolveJiraSiteSelection(
     return status.activeSiteId
   }
   return sites[0]?.id ?? null
+}
+
+// Why: a failed status read is not the same as "no Jira connected" — mapping an
+// error to disconnected hid a host that refuses jira.* behind a setup prompt the
+// user could never satisfy. Callers surface the throw instead.
+export async function readJiraConnection(client: RpcClient): Promise<MobileJiraConnection> {
+  const response = await client.sendRequest('jira.status')
+  if (!response.ok) {
+    throw new Error(response.error.message)
+  }
+  return extractJiraConnection((response as RpcSuccess).result)
 }
 
 export function jiraSiteLabel(site: JiraSite): string {
