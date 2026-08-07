@@ -53,7 +53,7 @@ import {
   filterAvailableTaskProviders,
   normalizeVisibleTaskProviders,
   type TaskProvider
-} from '../tasks/mobile-task-providers'
+} from '../../../src/shared/task-providers'
 import { useMobileComposerSource } from '../tasks/use-mobile-composer-source'
 import type { SmartModeAvailabilityInput } from '../tasks/mobile-smart-source-modes'
 import { deriveRepoSlug, type PasteRepoCandidate } from '../tasks/smart-source-paste-intent'

@@ -128,14 +128,52 @@ import {
 } from '../../../src/tasks/mobile-work-items'
 import {
   filterAvailableTaskProviders,
+  isTaskProvider,
   normalizeVisibleTaskProviders,
   resolveVisibleTaskProvider,
   type TaskProvider
-} from '../../../src/tasks/mobile-task-providers'
+} from '../../../../src/shared/task-providers'
 import {
   extractLinearIssueReadItems,
   type LinearMobileIssue
 } from '../../../src/tasks/linear-mobile-issue-read'
+import {
+  formatGitHubPRDelta,
+  getGitHubMergeLabel,
+  getGitHubReviewerRows,
+  getGitHubReviewSummary
+} from '../../../src/tasks/mobile-github-work-item-labels'
+import { getLinearPriorityLabel } from '../../../src/tasks/mobile-linear-issue-priority'
+import {
+  compareLinearIssues,
+  groupLinearIssues,
+  type LinearIssueSection
+} from '../../../src/tasks/mobile-linear-issue-grouping'
+import {
+  DEFAULT_LINEAR_DISPLAY_PROPERTIES,
+  GITHUB_KIND_OPTIONS,
+  GITLAB_FILTER_OPTIONS,
+  GITLAB_VIEW_OPTIONS,
+  ISSUE_PRESETS,
+  LINEAR_DISPLAY_OPTIONS,
+  LINEAR_FILTER_OPTIONS,
+  LINEAR_GROUP_OPTIONS,
+  LINEAR_ORDER_OPTIONS,
+  LINEAR_VIEW_OPTIONS,
+  PROVIDER_OPTIONS,
+  PR_PRESETS,
+  SORT_OPTIONS,
+  type GitHubPreset,
+  type GitHubTaskKind,
+  type GitLabFilter,
+  type GitLabView,
+  type LinearDisplayProperty,
+  type LinearFilter,
+  type LinearGroupBy,
+  type LinearOrderBy,
+  type LinearViewMode,
+  type TaskSort
+} from '../../../src/tasks/mobile-task-view-options'
 import { MOBILE_TUI_AGENT_AUTO_PICK_ORDER } from '../../../src/tasks/mobile-tui-agents'
 import { resolveComposerBranchSelection } from '../../../src/tasks/mobile-composer-branch-selection'
 import {
@@ -208,12 +246,6 @@ type GitHubPRReviewSummary = {
 }
 type GitHubPRMergeableState = 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN'
 
-type GitHubPRReviewerRow = {
-  login: string
-  name?: string | null
-  avatarUrl?: string | null
-  stateLabel: string
-}
 type GitHubRepoSources = {
   issues: GitHubOwnerRepo | null
   prs: GitHubOwnerRepo | null
@@ -405,17 +437,6 @@ type DetailPayload =
       children: LinearIssueChild[]
     }
 
-type GitHubTaskKind = 'issues' | 'prs'
-type GitHubMode = GitHubTaskKind | 'project'
-type GitHubPreset = 'issues' | 'my-issues' | 'prs' | 'my-prs' | 'review'
-type GitLabView = 'project' | 'todos'
-type GitLabFilter = 'opened' | 'merged' | 'closed' | 'all'
-type LinearFilter = 'assigned' | 'created' | 'all' | 'completed'
-type LinearViewMode = 'list' | 'board'
-type LinearGroupBy = 'none' | 'status' | 'assignee' | 'priority' | 'team'
-type LinearOrderBy = 'priority' | 'updated' | 'identifier'
-type LinearDisplayProperty = 'state' | 'priority' | 'assignee' | 'team' | 'labels' | 'updated'
-type TaskSort = 'updated' | 'repository'
 type DetailCommentGroup =
   | { kind: 'standalone'; comment: DetailComment }
   | { kind: 'thread'; threadId: string; root: DetailComment; replies: DetailComment[] }
@@ -679,64 +700,6 @@ type TaskListEntry =
   | { type: 'section'; key: string; label: string; color: string }
   | { type: 'item'; key: string; item: TaskItem }
 
-const PROVIDER_OPTIONS: PickerOption<TaskProvider>[] = [
-  {
-    value: 'github',
-    label: 'GitHub',
-    subtitle: 'Issues and pull requests',
-    renderIcon: (selected) => (
-      <TaskProviderLogo
-        provider="github"
-        size={16}
-        color={selected ? colors.textPrimary : colors.textSecondary}
-      />
-    )
-  },
-  {
-    value: 'gitlab',
-    label: 'GitLab',
-    subtitle: 'Issues and merge requests',
-    renderIcon: (selected) => (
-      <TaskProviderLogo
-        provider="gitlab"
-        size={16}
-        color={selected ? colors.textPrimary : colors.textSecondary}
-      />
-    )
-  },
-  {
-    value: 'linear',
-    label: 'Linear',
-    subtitle: 'Assigned and team issues',
-    renderIcon: (selected) => (
-      <TaskProviderLogo
-        provider="linear"
-        size={16}
-        color={selected ? colors.textPrimary : colors.textSecondary}
-      />
-    )
-  }
-]
-
-const GITLAB_FILTER_OPTIONS: PickerOption<GitLabFilter>[] = [
-  { value: 'opened', label: 'Open', subtitle: 'Open issues and merge requests' },
-  { value: 'merged', label: 'Merged', subtitle: 'Merged merge requests' },
-  { value: 'closed', label: 'Closed', subtitle: 'Closed issues and merge requests' },
-  { value: 'all', label: 'All', subtitle: 'Any GitLab state' }
-]
-
-const LINEAR_FILTER_OPTIONS: PickerOption<LinearFilter>[] = [
-  { value: 'all', label: 'All', subtitle: 'Open issues across connected workspaces' },
-  { value: 'assigned', label: 'My Issues', subtitle: 'Issues assigned to you' },
-  { value: 'created', label: 'Created', subtitle: 'Issues created by you' },
-  { value: 'completed', label: 'Completed', subtitle: 'Recently completed issues' }
-]
-
-const LINEAR_VIEW_OPTIONS: PickerOption<LinearViewMode>[] = [
-  { value: 'list', label: 'List', subtitle: 'Compact issue rows' },
-  { value: 'board', label: 'Board', subtitle: 'Grouped columns' }
-]
-
 function taskWorkspaceFallback(item: ActionableTaskItem): string {
   if (item.provider === 'github' || item.provider === 'gitlab') {
     return `${item.source.type}-${item.source.number}`
@@ -762,74 +725,10 @@ const COMMENT_REACTION_EMOJI: Record<
   eyes: 'eyes'
 }
 
-const LINEAR_GROUP_OPTIONS: PickerOption<LinearGroupBy>[] = [
-  { value: 'none', label: 'No grouping' },
-  { value: 'status', label: 'Status' },
-  { value: 'assignee', label: 'Assignee' },
-  { value: 'priority', label: 'Priority' },
-  { value: 'team', label: 'Team' }
-]
-
-const LINEAR_ORDER_OPTIONS: PickerOption<LinearOrderBy>[] = [
-  { value: 'priority', label: 'Priority' },
-  { value: 'updated', label: 'Updated' },
-  { value: 'identifier', label: 'Identifier' }
-]
-
-const LINEAR_DISPLAY_OPTIONS: PickerOption<LinearDisplayProperty>[] = [
-  { value: 'state', label: 'Status' },
-  { value: 'priority', label: 'Priority' },
-  { value: 'assignee', label: 'Assignee' },
-  { value: 'team', label: 'Team' },
-  { value: 'labels', label: 'Labels' },
-  { value: 'updated', label: 'Updated' }
-]
-
-const DEFAULT_LINEAR_DISPLAY_PROPERTIES: LinearDisplayProperty[] = [
-  'state',
-  'priority',
-  'assignee',
-  'team',
-  'labels',
-  'updated'
-]
-
-const GITHUB_KIND_OPTIONS: PickerOption<GitHubMode>[] = [
-  { value: 'issues', label: 'Issues', subtitle: 'GitHub issues' },
-  { value: 'prs', label: 'PRs', subtitle: 'GitHub pull requests' },
-  { value: 'project', label: 'Projects', subtitle: 'GitHub Projects views' }
-]
-
-const ISSUE_PRESETS: PickerOption<GitHubPreset>[] = [
-  { value: 'issues', label: 'Open', subtitle: 'Open GitHub issues' },
-  { value: 'my-issues', label: 'Assigned to me', subtitle: 'Open issues assigned to you' }
-]
-
-const PR_PRESETS: PickerOption<GitHubPreset>[] = [
-  { value: 'prs', label: 'Open', subtitle: 'Open pull requests' },
-  { value: 'my-prs', label: 'Mine', subtitle: 'Pull requests authored by you' },
-  { value: 'review', label: 'Needs review', subtitle: 'Review requests assigned to you' }
-]
-
-const GITLAB_VIEW_OPTIONS: PickerOption<GitLabView>[] = [
-  { value: 'project', label: 'Project MRs', subtitle: 'Merge requests and issues by repository' },
-  { value: 'todos', label: 'My Todos', subtitle: 'Pending GitLab todos' }
-]
-
-const SORT_OPTIONS: PickerOption<TaskSort>[] = [
-  { value: 'updated', label: 'Updated', subtitle: 'Newest activity first' },
-  {
-    value: 'repository',
-    label: 'Repository',
-    subtitle: 'Group by repository, then newest activity'
-  }
-]
-
 type ProjectSortOverride = { fieldId: string; direction: GitHubProjectSortDirection }
 type ProjectListEntry =
   | { type: 'group'; group: ProjectGroup; collapsed: boolean }
   | { type: 'row'; row: GitHubProjectRow }
-type LinearIssueSection = { key: string; label: string; color: string; issues: LinearIssue[] }
 type LinearListEntry =
   | { type: 'section'; section: LinearIssueSection }
   | { type: 'issue'; issue: LinearIssue }
@@ -897,10 +796,6 @@ function getTaskPresetQuery(preset: GitHubPreset): string {
     default:
       return 'is:issue is:open'
   }
-}
-
-function isTaskProvider(value: unknown): value is TaskProvider {
-  return value === 'github' || value === 'gitlab' || value === 'linear'
 }
 
 function normalizeGitHubPreset(value: unknown): GitHubPreset {
@@ -1146,107 +1041,6 @@ function createLinearTask(issue: LinearIssue): TaskItem {
   }
 }
 
-const LINEAR_PRIORITY_LABELS: Record<number, string> = {
-  0: 'None',
-  1: 'Urgent',
-  2: 'High',
-  3: 'Medium',
-  4: 'Low'
-}
-
-function getLinearPriorityLabel(priority: number): string {
-  return LINEAR_PRIORITY_LABELS[priority] ?? `P${priority}`
-}
-
-function getLinearPriorityRank(priority: number): number {
-  return priority === 0 ? 5 : priority
-}
-
-function formatGitHubReviewState(state: string | null | undefined): string {
-  switch (state) {
-    case 'APPROVED':
-      return 'Approved'
-    case 'CHANGES_REQUESTED':
-      return 'Changes requested'
-    case 'COMMENTED':
-      return 'Commented'
-    case 'DISMISSED':
-      return 'Dismissed'
-    case 'PENDING':
-      return 'Pending'
-    default:
-      return 'Reviewed'
-  }
-}
-
-function getGitHubReviewerRows(item: {
-  reviewRequests?: GitHubAssignableUser[]
-  latestReviews?: GitHubPRReviewSummary[]
-}): GitHubPRReviewerRow[] {
-  const byLogin = new Map<string, GitHubPRReviewerRow>()
-  for (const user of item.reviewRequests ?? []) {
-    const login = user.login.trim()
-    if (!login) {
-      continue
-    }
-    byLogin.set(login.toLowerCase(), {
-      login,
-      name: user.name,
-      avatarUrl: user.avatarUrl,
-      stateLabel: 'Requested'
-    })
-  }
-  for (const review of item.latestReviews ?? []) {
-    const login = review.login.trim()
-    const key = login.toLowerCase()
-    if (!login || byLogin.has(key)) {
-      continue
-    }
-    byLogin.set(key, {
-      login,
-      name: null,
-      avatarUrl: review.avatarUrl,
-      stateLabel: formatGitHubReviewState(review.state)
-    })
-  }
-  return Array.from(byLogin.values())
-}
-
-function getGitHubReviewSummary(item: {
-  reviewDecision?: string | null
-  reviewRequests?: GitHubAssignableUser[]
-  latestReviews?: GitHubPRReviewSummary[]
-}): string {
-  if (item.reviewDecision === 'APPROVED') {
-    return 'Approved'
-  }
-  if (item.reviewDecision === 'CHANGES_REQUESTED') {
-    return 'Changes requested'
-  }
-  const rows = getGitHubReviewerRows(item)
-  if (rows.length === 0) {
-    return 'No reviewers'
-  }
-  if (rows.length === 1) {
-    return `${rows[0]!.login} - ${rows[0]!.stateLabel}`
-  }
-  return `${rows[0]!.login} +${rows.length - 1}`
-}
-
-function formatGitHubPRDelta(item: GitHubWorkItem): string | null {
-  const parts: string[] = []
-  if (typeof item.additions === 'number') {
-    parts.push(`+${item.additions}`)
-  }
-  if (typeof item.deletions === 'number') {
-    parts.push(`-${item.deletions}`)
-  }
-  if (typeof item.changedFiles === 'number') {
-    parts.push(`${item.changedFiles} ${item.changedFiles === 1 ? 'file' : 'files'}`)
-  }
-  return parts.length > 0 ? parts.join(' ') : null
-}
-
 function hostedBranchSummary(item: TaskItem): { head: string; base: string } | null {
   if (item.provider === 'github' && item.source.type === 'pr') {
     return {
@@ -1261,31 +1055,6 @@ function hostedBranchSummary(item: TaskItem): { head: string; base: string } | n
     }
   }
   return null
-}
-
-function getGitHubMergeLabel(item: GitHubWorkItem): string {
-  if (item.mergeable === undefined && item.mergeStateStatus === undefined) {
-    return 'Merge'
-  }
-  if (item.state === 'merged') {
-    return 'Merged'
-  }
-  if (item.state === 'closed') {
-    return 'Closed'
-  }
-  if (item.mergeable === 'CONFLICTING') {
-    return 'Conflicts'
-  }
-  if (item.mergeStateStatus === 'BEHIND') {
-    return 'Behind'
-  }
-  if (item.mergeStateStatus === 'BLOCKED') {
-    return 'Blocked'
-  }
-  if (item.mergeable === 'MERGEABLE' || item.mergeStateStatus === 'CLEAN') {
-    return 'Able to merge'
-  }
-  return 'Unknown'
 }
 
 function getHostedReviewMergeMethodLabel(method: HostedReviewMergeMethod): string {
@@ -1432,73 +1201,6 @@ function hasGitHubIssueSourceChoice(sources: GitHubRepoSources | undefined): boo
 
 function issueSourceSlug(source: GitHubOwnerRepo | null | undefined): string {
   return source ? `${source.owner}/${source.repo}` : 'Unknown'
-}
-
-function compareLinearIssues(a: LinearIssue, b: LinearIssue, orderBy: LinearOrderBy): number {
-  if (orderBy === 'updated') {
-    return taskTime(b.updatedAt) - taskTime(a.updatedAt)
-  }
-  if (orderBy === 'identifier') {
-    return a.identifier.localeCompare(b.identifier, undefined, { numeric: true })
-  }
-  const priorityDelta = getLinearPriorityRank(a.priority) - getLinearPriorityRank(b.priority)
-  return priorityDelta || taskTime(b.updatedAt) - taskTime(a.updatedAt)
-}
-
-function getLinearIssueGroup(
-  issue: LinearIssue,
-  groupBy: LinearGroupBy
-): {
-  key: string
-  label: string
-  color: string
-} {
-  if (groupBy === 'status') {
-    return { key: `status:${issue.state.name}`, label: issue.state.name, color: issue.state.color }
-  }
-  if (groupBy === 'assignee') {
-    return {
-      key: `assignee:${issue.assignee?.id ?? issue.assignee?.displayName ?? 'unassigned'}`,
-      label: issue.assignee?.displayName ?? 'Unassigned',
-      color: colors.accentBlue
-    }
-  }
-  if (groupBy === 'priority') {
-    return {
-      key: `priority:${issue.priority}`,
-      label: getLinearPriorityLabel(issue.priority),
-      color: issue.priority === 1 ? colors.statusRed : colors.accentBlue
-    }
-  }
-  if (groupBy === 'team') {
-    return { key: `team:${issue.team.id}`, label: issue.team.name, color: issue.state.color }
-  }
-  return { key: 'all', label: 'Issues', color: colors.accentBlue }
-}
-
-function groupLinearIssues(
-  issues: LinearIssue[],
-  groupBy: LinearGroupBy,
-  orderBy: LinearOrderBy
-): LinearIssueSection[] {
-  const sorted = [...issues].sort((a, b) => compareLinearIssues(a, b, orderBy))
-  if (groupBy === 'none') {
-    return [{ key: 'all', label: 'Issues', color: colors.accentBlue, issues: sorted }]
-  }
-  const sections = new Map<
-    string,
-    { key: string; label: string; color: string; issues: LinearIssue[] }
-  >()
-  for (const issue of sorted) {
-    const group = getLinearIssueGroup(issue, groupBy)
-    const section = sections.get(group.key)
-    if (section) {
-      section.issues.push(issue)
-    } else {
-      sections.set(group.key, { ...group, issues: [issue] })
-    }
-  }
-  return [...sections.values()]
 }
 
 function linearIssueSecondaryParts(

@@ -61,7 +61,7 @@ import {
   filterAvailableTaskProviders,
   normalizeVisibleTaskProviders,
   type TaskProvider
-} from '../src/tasks/mobile-task-providers'
+} from '../../src/shared/task-providers'
 import { useOpenMobileTasks } from '../src/tasks/use-open-mobile-tasks'
 import { useResponsiveLayout } from '../src/layout/responsive-layout'
 import { useOpenMobileSession } from '../src/session/use-open-mobile-session'
@@ -90,7 +90,8 @@ type HomeLinearStatus = {
 const TASK_PROVIDER_LABELS: Record<TaskProvider, string> = {
   github: 'GitHub',
   gitlab: 'GitLab',
-  linear: 'Linear'
+  linear: 'Linear',
+  jira: 'Jira'
 }
 
 function formatDuration(ms: number): string {
