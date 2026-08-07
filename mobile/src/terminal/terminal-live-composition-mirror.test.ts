@@ -3,8 +3,9 @@ import {
   buildTerminalLiveMirrorPayload,
   computeTerminalLiveMirrorStep,
   isTerminalLiveHangulCodePoint,
+  isTerminalLiveJapanesePreeditCodePoint,
   type TerminalLiveMirrorStep
-} from './terminal-live-hangul-mirror'
+} from './terminal-live-composition-mirror'
 
 type MirrorRun = {
   readonly payloads: readonly string[]
@@ -41,7 +42,7 @@ function runMirrorSequence(
   return { payloads, sentText, heldText }
 }
 
-describe('terminal live hangul mirror', () => {
+describe('terminal live composition mirror', () => {
   it('Given single-syllable composition When steps run Then leaks no jamo and commits only the final syllable', () => {
     // Given / When
     const run = runMirrorSequence(['ㅎ', '하', '한'], { commitAtEnd: true })
@@ -138,7 +139,8 @@ describe('terminal live hangul mirror', () => {
       eraseCount: 3,
       appendText: '',
       nextSentText: '',
-      heldText: ''
+      heldText: '',
+      heldCommitsOnPause: false
     })
     expect(buildTerminalLiveMirrorPayload(step)).toBe('\x7f\x7f\x7f')
   })
@@ -153,7 +155,8 @@ describe('terminal live hangul mirror', () => {
       eraseCount: 0,
       appendText: '',
       nextSentText: '',
-      heldText: ''
+      heldText: '',
+      heldCommitsOnPause: false
     })
   })
 
@@ -174,5 +177,108 @@ describe('terminal live hangul mirror', () => {
     expect(isTerminalLiveHangulCodePoint('한'.codePointAt(0) ?? 0)).toBe(true)
     expect(isTerminalLiveHangulCodePoint('a'.codePointAt(0) ?? 0)).toBe(false)
     expect(isTerminalLiveHangulCodePoint('あ'.codePointAt(0) ?? 0)).toBe(false)
+  })
+
+  // Field states below were captured from Gboard 日本語 (romaji) on an Android 16
+  // emulator against a mock host that logs the exact bytes reaching terminal.send.
+  it('Given the #7427 romaji trace s→a→差 When steps run Then only the committed kanji reaches the PTY', () => {
+    // Given / When: Gboard writes pending romaji as full-width ｓ, then kana, then the candidate
+    const run = runMirrorSequence(['ｓ', 'さ', '差'], { commitAtEnd: true })
+
+    // Then: pre-fix this sent 'ｓ', '\x7fさ', '\x7f差' — three sends and two erases for one char
+    expect(run.payloads).toEqual(['差'])
+    expect(run.sentText).toBe('差')
+    expect(run.heldText).toBe('')
+  })
+
+  it('Given a multi-character reading にほんご→日本語 When steps run Then no reading leaks and no DEL is emitted', () => {
+    // Given / When
+    const run = runMirrorSequence(
+      ['ｎ', 'に', 'にｈ', 'にほ', 'にほｎ', 'にほん', 'にほんｇ', 'にほんご', '日本語'],
+      { commitAtEnd: true }
+    )
+
+    // Then
+    expect(run.payloads).toEqual(['日本語'])
+    expect(run.payloads.join('')).not.toContain('\x7f')
+  })
+
+  it('Given a command with a trailing reading When the step runs Then the ASCII prefix streams and only the reading is held', () => {
+    // Given / When
+    const step = computeTerminalLiveMirrorStep('', 'echo にほんご', { commitHeld: false })
+
+    // Then
+    expect(buildTerminalLiveMirrorPayload(step)).toBe('echo ')
+    expect(step.heldText).toBe('にほんご')
+  })
+
+  it('Given a reading committed by the settle timer When the user then converts Then DEL correction repairs it', () => {
+    // Given: the 300ms timer flushed the reading before conversion
+    const commit = computeTerminalLiveMirrorStep('', 'にほんご', { commitHeld: true })
+    expect(buildTerminalLiveMirrorPayload(commit)).toBe('にほんご')
+
+    // When
+    const correction = computeTerminalLiveMirrorStep(commit.nextSentText, '日本語', {
+      commitHeld: false
+    })
+
+    // Then: four DELs erase the stale reading, then the kanji lands
+    expect(buildTerminalLiveMirrorPayload(correction)).toBe('\x7f\x7f\x7f\x7f日本語')
+    expect(correction.heldText).toBe('')
+  })
+
+  it('Given katakana and half-width katakana readings When steps run Then they are held like hiragana', () => {
+    // Given / When
+    const katakana = computeTerminalLiveMirrorStep('', 'コーヒー', { commitHeld: false })
+    const halfWidth = computeTerminalLiveMirrorStep('', 'ｺｰﾋｰ', { commitHeld: false })
+
+    // Then
+    expect(buildTerminalLiveMirrorPayload(katakana)).toBe('')
+    expect(katakana.heldText).toBe('コーヒー')
+    expect(buildTerminalLiveMirrorPayload(halfWidth)).toBe('')
+    expect(halfWidth.heldText).toBe('ｺｰﾋｰ')
+  })
+
+  it('Given a held reading When the user clears the field Then the held text is dropped without erasing the PTY', () => {
+    // Given: 'にほ' is held locally, so the PTY never saw it
+    const held = computeTerminalLiveMirrorStep('', 'にほ', { commitHeld: false })
+    expect(held.nextSentText).toBe('')
+
+    // When
+    const cleared = computeTerminalLiveMirrorStep(held.nextSentText, '', { commitHeld: false })
+
+    // Then
+    expect(buildTerminalLiveMirrorPayload(cleared)).toBe('')
+    expect(cleared.heldText).toBe('')
+  })
+
+  it('Given a held reading When the settle timer would fire Then only Hangul opts into a pause commit', () => {
+    // Given / When
+    const hangul = computeTerminalLiveMirrorStep('', '한', { commitHeld: false })
+    const japanese = computeTerminalLiveMirrorStep('', 'にほんご', { commitHeld: false })
+
+    // Then: committing にほんご on a pause is the leak — 日本語 discards it moments later
+    expect(hangul.heldCommitsOnPause).toBe(true)
+    expect(japanese.heldCommitsOnPause).toBe(false)
+  })
+
+  it('Given Japanese preedit ranges When checked Then readings match and kanji, ASCII and Hangul do not', () => {
+    expect(isTerminalLiveJapanesePreeditCodePoint('あ'.codePointAt(0) ?? 0)).toBe(true)
+    expect(isTerminalLiveJapanesePreeditCodePoint('ン'.codePointAt(0) ?? 0)).toBe(true)
+    expect(isTerminalLiveJapanesePreeditCodePoint('ー'.codePointAt(0) ?? 0)).toBe(true)
+    expect(isTerminalLiveJapanesePreeditCodePoint('ｓ'.codePointAt(0) ?? 0)).toBe(true)
+    // Kanji only appears after the user picks a candidate, so it must commit immediately.
+    expect(isTerminalLiveJapanesePreeditCodePoint('語'.codePointAt(0) ?? 0)).toBe(false)
+    expect(isTerminalLiveJapanesePreeditCodePoint('s'.codePointAt(0) ?? 0)).toBe(false)
+    expect(isTerminalLiveJapanesePreeditCodePoint('한'.codePointAt(0) ?? 0)).toBe(false)
+  })
+
+  it('Given Chinese full-width punctuation When the step runs Then it still mirrors immediately', () => {
+    // Given / When: pinyin composes in the candidate bar, so what lands is committed text
+    const step = computeTerminalLiveMirrorStep('', '你好，', { commitHeld: false })
+
+    // Then: holding it back would regress #7495, which composes correctly today
+    expect(buildTerminalLiveMirrorPayload(step)).toBe('你好，')
+    expect(step.heldText).toBe('')
   })
 })

@@ -5,7 +5,7 @@ import {
   buildTerminalLiveMirrorPayload,
   computeTerminalLiveMirrorStep,
   TERMINAL_LIVE_HELD_SYLLABLE_COMMIT_DELAY_MS
-} from './terminal-live-hangul-mirror'
+} from './terminal-live-composition-mirror'
 import {
   cancelTerminalLivePendingFlush,
   createTerminalLivePendingFlushState,
@@ -104,7 +104,9 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
         step.heldText.length > 0 || step.nextSentText.length > 0 ? handle : null
 
       clearHeldCommitTimer()
-      if (step.heldText.length > 0) {
+      // Why: only a display-final held syllable may settle on a pause; a Japanese
+      // reading waits for a real boundary (candidate pick, Enter, accessory key).
+      if (step.heldText.length > 0 && step.heldCommitsOnPause) {
         heldCommitTimerRef.current = setTimeout(() => {
           heldCommitTimerRef.current = null
           const heldField = sentLiveInputTextRef.current + heldLiveInputTextRef.current

@@ -118,7 +118,17 @@ export function handleMockTerminalRequest(
       console.log(
         `[SEND] terminal=${String(request.params?.terminal)} text=${JSON.stringify(request.params?.text)}`
       )
-      respond(success(request.id, { send: { handle: 'term-1', ok: true } }))
+      // Why: the client gates follow-up controls on `accepted`; an `ok` reply reads as
+      // rejected and silently drops the carriage return after a flushed composition.
+      respond(
+        success(request.id, {
+          send: {
+            handle: 'term-1',
+            accepted: true,
+            bytesWritten: String(request.params?.text ?? '').length
+          }
+        })
+      )
       return true
 
     case 'terminal.unsubscribe':

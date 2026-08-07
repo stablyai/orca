@@ -3,7 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import type { TextInput } from 'react-native'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalLiveInputSender } from './terminal-live-input-sender'
-import { TERMINAL_LIVE_HELD_SYLLABLE_COMMIT_DELAY_MS } from './terminal-live-hangul-mirror'
+import { TERMINAL_LIVE_HELD_SYLLABLE_COMMIT_DELAY_MS } from './terminal-live-composition-mirror'
 import { useTerminalLiveInputCommit } from './use-terminal-live-input-commit'
 
 type TerminalLiveInputCommitHarness = {
@@ -288,6 +288,37 @@ describe('terminal live input commit hook', () => {
 
     // Then
     await vi.waitFor(() => expect(sent).toEqual(['你好']))
+  })
+
+  // Field states below were captured from Gboard 日本語 (romaji) on an Android 16
+  // emulator; pre-fix the PTY received 'ｓ', '\x7fさ', '\x7f差' for this one character.
+  it('Given the #7427 romaji trace When the user pauses between keystrokes Then no reading reaches the terminal', async () => {
+    // Given
+    vi.useFakeTimers()
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+
+    // When: pauses are longer than the settle window, which must not commit a reading
+    for (const fieldText of ['ｓ', 'さ']) {
+      handlers.handleLiveInputChange(fieldText)
+      await vi.advanceTimersByTimeAsync(TERMINAL_LIVE_HELD_SYLLABLE_COMMIT_DELAY_MS * 2)
+    }
+    expect(sent).toEqual([])
+
+    // Then: only the picked candidate goes out
+    handlers.handleLiveInputChange('差')
+    await vi.waitFor(() => expect(sent).toEqual(['差']))
+  })
+
+  it('Given a held reading When submit is requested Then flushes it once before the carriage return', async () => {
+    // Given
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    handlers.handleLiveInputChange('にほんご')
+
+    // When
+    handlers.handleLiveInputSubmit()
+
+    // Then
+    await vi.waitFor(() => expect(sent).toEqual(['にほんご', '\r']))
   })
 
   it('Given a held syllable When the hook unmounts Then cancels the settle timer', async () => {
