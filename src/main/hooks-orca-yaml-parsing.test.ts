@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { MAX_ORCA_YAML_COLLECTION_ENTRIES } from '../shared/orca-yaml-file-limit'
 import { parseOrcaYaml } from './hooks'
 
 // Mock fs used by loadHooks
@@ -195,6 +196,29 @@ describe('parseOrcaYaml', () => {
       scripts: {},
       defaultTabs: [{ title: 'Claude', command: 'claude', env: { GOOD: 'keep' } }]
     })
+  })
+
+  it('keeps only the first accepted env entries when the cap is exceeded, not counting invalid ones', () => {
+    // Why: an invalid leading entry must not consume the budget (cap counts accepted entries).
+    const entries = ['      "BAD NAME": dropped']
+    for (let i = 0; i < MAX_ORCA_YAML_COLLECTION_ENTRIES + 4; i += 1) {
+      entries.push(`      VAR_${String(i).padStart(3, '0')}: value-${i}`)
+    }
+    const yaml = [
+      'defaultTabs:',
+      '  - title: Claude',
+      '    command: claude',
+      '    env:',
+      ...entries
+    ].join('\n')
+
+    const env = parseOrcaYaml(yaml).defaultTabs?.[0]?.env ?? {}
+    expect(Object.keys(env)).toHaveLength(MAX_ORCA_YAML_COLLECTION_ENTRIES)
+    expect(env.VAR_000).toBe('value-0')
+    expect(env[`VAR_${String(MAX_ORCA_YAML_COLLECTION_ENTRIES - 1).padStart(3, '0')}`]).toBe(
+      `value-${MAX_ORCA_YAML_COLLECTION_ENTRIES - 1}`
+    )
+    expect(env[`VAR_${String(MAX_ORCA_YAML_COLLECTION_ENTRIES).padStart(3, '0')}`]).toBeUndefined()
   })
 
   it('parses default tab env maps, dropping invalid names and non-string values', () => {

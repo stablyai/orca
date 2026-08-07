@@ -89,25 +89,30 @@ op document get "staging kubeconfig" --vault Dev --out-file ~/.kube/staging.yaml
 
 Prefer `--generate-password` — the new secret never exists outside 1Password. When the
 provider generated the credential, do NOT assign it as an argument
-(`password="$(cmd)"` exposes it in process listings). Pipe it as JSON instead:
+(`password="$(cmd)"` exposes it in process listings). Write it to a `chmod 600` file,
+splice it into the item JSON with jq, and pipe that into the edit:
 
 ```bash
+umask 077 && provider-rotate-command > new-key.txt   # 0600, delete when done
 op item get "Service X" --vault Dev --format json \
-  | <set the field from the provider output> \
-  | op item edit "Service X" --vault Dev -
+  | jq --rawfile secret new-key.txt \
+      '(.fields[] | select(.id == "password") | .value) = ($secret | rtrimstr("\n"))' \
+  | op item edit "Service X" --vault Dev
+rm new-key.txt
 ```
 
-(or write a `chmod 600` temp JSON template, pass `--template`, and delete it). Typical
-rotation: create the new credential, store it, update consumers to reference it, then ask
-the user to revoke the old one.
+(equivalently: save the edited JSON to a `chmod 600` temp file and pass `--template`,
+deleting it after). Typical rotation: create the new credential, store it, update
+consumers to reference it, then ask the user to revoke the old one.
 
 ## Credentials for other CLIs
 
 `op plugin init gh` (also `aws`, `glab`, and others) wires that CLI to fetch its token
-from 1Password per invocation — no token in env files or rc files. The init writes
-`~/.config/op/plugins.sh`; the current shell only picks it up after
-`source ~/.config/op/plugins.sh`, and new sessions need that line persisted in the user's
-shell rc. Suggest this when a task repeatedly needs an authenticated third-party CLI.
+from 1Password per invocation — no token in env files or rc files. The init prints a
+source command (typically `source ~/.config/op/plugins.sh`) — run exactly the command it
+prints to activate the plugin in the current shell, and persist that same command in the
+user's shell rc for new sessions. Suggest this when a task repeatedly needs an
+authenticated third-party CLI.
 Plugin setup changes the user's shell config, so ask before running `op plugin init` or
 editing rc files.
 
