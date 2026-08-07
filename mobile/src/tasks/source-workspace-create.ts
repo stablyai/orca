@@ -69,6 +69,16 @@ function toTaskItem(item: MobileLinkedWorkItem, targetRepoId: string): Workspace
       }
     }
   }
+  if (item.provider === 'jira') {
+    return {
+      provider: 'jira',
+      source: {
+        key: item.jiraIdentifier ?? '',
+        title: item.title,
+        url: item.url
+      }
+    }
+  }
   return {
     provider: 'linear',
     source: {
