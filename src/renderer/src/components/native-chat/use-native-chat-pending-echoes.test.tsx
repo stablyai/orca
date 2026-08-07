@@ -115,6 +115,24 @@ describe('useNativeChatPendingEchoes', () => {
     expect(result.current.pending.map((entry) => entry.matchingOccurrence)).toEqual([1])
   })
 
+  it('keeps the occurrence a capped-out echo owns when the session id first resolves', () => {
+    // Sends before the launch reports its session id adopt that id — but adoption
+    // drops nothing, so it must not renumber a trimmed echo's slot away.
+    const { result, rerender } = renderEchoProps({ sessionId: null, messages: NO_MESSAGES })
+    for (let index = 0; index < 9; index += 1) {
+      act(() => {
+        result.current.recordSend('ping')
+      })
+    }
+    expect(result.current.pending).toHaveLength(8)
+    expect(result.current.pending[0]?.matchingOccurrence).toBe(2)
+    rerender({ sessionId: 'session-1', messages: NO_MESSAGES })
+    expect(result.current.pending.map((entry) => entry.sessionId)).toEqual(
+      Array.from({ length: 8 }, () => 'session-1')
+    )
+    expect(result.current.pending[0]?.matchingOccurrence).toBe(2)
+  })
+
   it('keeps the occurrence a capped-out echo still owns when a later send is cancelled', () => {
     // The echo trimmed at PENDING_SEND_LIMIT still landed, so its turn still
     // consumes an occurrence that a later cancellation must not renumber away.

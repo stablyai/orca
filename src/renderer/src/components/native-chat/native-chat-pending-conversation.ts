@@ -26,11 +26,12 @@ export function retainPendingSendsForConversation(
 ): NativeChatPendingSend[] {
   const clearedAt = latestClearSentAt(conversation.markers)
   const { sessionId } = conversation
-  let changed = false
+  let dropped = false
+  let adopted = false
   const next: NativeChatPendingSend[] = []
   for (const entry of pending) {
     if (clearedAt !== null && entry.sentAt <= clearedAt) {
-      changed = true
+      dropped = true
       continue
     }
     // Why: a reconnect can briefly drop provider-session metadata, and the
@@ -43,12 +44,17 @@ export function retainPendingSendsForConversation(
       // Why: a fresh launch learns its session id only after the first send, so
       // the first id observed claims those echoes instead of dropping them.
       next.push({ ...entry, sessionId })
-      changed = true
+      adopted = true
       continue
     }
-    changed = true
+    dropped = true
   }
   // Why: a dropped echo's turn will never arrive, so leaving a survivor numbered
   // past it would keep demanding a transcript occurrence that cannot exist.
-  return changed ? renumberNativeChatPendingOccurrences(next) : pending
+  // Adoption alone drops nothing, and renumbering it would erase the elevation a
+  // capped-out predecessor still owns (its send landed; its turn is still coming).
+  if (dropped) {
+    return renumberNativeChatPendingOccurrences(next)
+  }
+  return adopted ? next : pending
 }

@@ -146,6 +146,24 @@ describe('retainPendingSendsForConversation', () => {
     expect(pendingSendsAsMessages(next, replaced)).toEqual([])
   })
 
+  it('does not renumber when the only change is adopting the first session id', () => {
+    // A capped-out predecessor's send still landed, so its turn still consumes an
+    // occurrence. Adoption drops nothing, so renumbering would strand the survivor
+    // on an already-consumed turn.
+    const pending = [
+      pendingOf('p1', { sentAt: 100, text: 'ping', matchingOccurrence: 2 }),
+      pendingOf('p2', { sentAt: 200, text: 'ping', matchingOccurrence: 3 })
+    ]
+    const next = retainPendingSendsForConversation(pending, {
+      sessionId: 's1',
+      markers: noMarkers
+    })
+    expect(next.map((entry) => [entry.sessionId, entry.matchingOccurrence])).toEqual([
+      ['s1', 2],
+      ['s1', 3]
+    ])
+  })
+
   it('keeps distinct texts independent when renumbering', () => {
     const pending = [
       pendingOf('p1', { sentAt: 100, sessionId: 's1', text: 'alpha' }),
