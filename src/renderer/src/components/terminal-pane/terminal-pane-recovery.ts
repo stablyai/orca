@@ -196,22 +196,26 @@ function cancelPendingRecoveryRetry(tabId: string): void {
  * that probe — see the reason's declaration. Nothing here destroys a session
  * either way: a remount rebuilds the renderer over the PTY it already had.
  */
+// Why traced: stale exits were silent, so a certified-dead pane with a stale
+// request read as "no detector fired" in the field (#12452). The crash-report
+// ring coalesces repeats, so a burst of releases from one incident stays one
+// entry.
+function recordStaleRecoveryRequest(request: RecoveryRequest): void {
+  recordRendererCrashBreadcrumb('terminal_pane_recovery_stale_request', {
+    tabId: request.tabId,
+    reason: request.reason,
+    staleGeneration:
+      request.terminalRecoveryGeneration !== undefined &&
+      request.terminalRecoveryGeneration !== captureTerminalPaneRecoveryGeneration(request.tabId),
+    staleInstance:
+      request.terminalRecoveryInstanceId !== undefined &&
+      !activeTerminalRecoveryInstanceIds.has(request.terminalRecoveryInstanceId)
+  })
+}
+
 export async function requestTerminalPaneRecovery(request: RecoveryRequest): Promise<boolean> {
   if (!isCurrentTerminalRecoveryRequest(request)) {
-    // Why traced: this was a silent exit, so a certified-dead pane with a
-    // stale request read as "no detector fired" in the field (#12452). The
-    // crash-report ring coalesces repeats, so a burst of releases from one
-    // incident stays one entry.
-    recordRendererCrashBreadcrumb('terminal_pane_recovery_stale_request', {
-      tabId: request.tabId,
-      reason: request.reason,
-      staleGeneration:
-        request.terminalRecoveryGeneration !== undefined &&
-        request.terminalRecoveryGeneration !== captureTerminalPaneRecoveryGeneration(request.tabId),
-      staleInstance:
-        request.terminalRecoveryInstanceId !== undefined &&
-        !activeTerminalRecoveryInstanceIds.has(request.terminalRecoveryInstanceId)
-    })
+    recordStaleRecoveryRequest(request)
     return false
   }
   const budget = recoveryBudget(request.tabId, Date.now())
@@ -257,6 +261,10 @@ export async function requestTerminalPaneRecovery(request: RecoveryRequest): Pro
     // Re-check the budget across the await: a concurrent detector may have
     // already consumed it for this tab.
     if (!isCurrentTerminalRecoveryRequest(request)) {
+      // Why also here: a remount or instance disposal during the liveness
+      // probe invalidates the request mid-flight; that exit must leave the
+      // same trace as a request that arrived stale.
+      recordStaleRecoveryRequest(request)
       return false
     }
     const recheck = recoveryBudget(request.tabId, Date.now())

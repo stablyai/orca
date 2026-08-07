@@ -122,6 +122,38 @@ describe('requestTerminalPaneRecovery', () => {
     )
   })
 
+  it('traces a request that goes stale during the liveness probe', async () => {
+    const instance = registerTerminalPaneRecoveryInstance('tab-1')
+    let resolveLiveness: (value: boolean | null) => void = () => {}
+    mocks.hasPty.mockImplementation(
+      () =>
+        new Promise<boolean | null>((resolve) => {
+          resolveLiveness = resolve
+        })
+    )
+
+    const pending = requestTerminalPaneRecovery({
+      tabId: 'tab-1',
+      ptyId: 'pty-1',
+      reason: 'input-undeliverable',
+      terminalRecoveryInstanceId: instance.id
+    })
+    instance.unregister()
+    resolveLiveness(true)
+
+    expect(await pending).toBe(false)
+    expect(mocks.remountTerminalTabForRecovery).not.toHaveBeenCalled()
+    expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenCalledWith(
+      'terminal_pane_recovery_stale_request',
+      {
+        tabId: 'tab-1',
+        reason: 'input-undeliverable',
+        staleGeneration: false,
+        staleInstance: true
+      }
+    )
+  })
+
   it('traces a budget decline instead of exiting silently', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(0)
