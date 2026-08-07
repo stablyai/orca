@@ -22,6 +22,10 @@ on:
         description: 'Optional TestFlight external tester changelog'
         required: false
         type: string
+      testflight_processing_timeout_seconds:
+        description: 'Optional TestFlight processing wait timeout in seconds'
+        required: false
+        type: string
 
 jobs:
   ios-build:
@@ -120,6 +124,7 @@ jobs:
           ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           TESTFLIGHT_CHANGELOG: ${{ github.event.inputs.testflight_changelog }}
+          TESTFLIGHT_PROCESSING_TIMEOUT_SECONDS: ${{ github.event.inputs.testflight_processing_timeout_seconds }}
           # Keep fastlane non-interactive and quiet about analytics in CI.
           FASTLANE_SKIP_UPDATE_CHECK: '1'
           FASTLANE_HIDE_CHANGELOG: '1'

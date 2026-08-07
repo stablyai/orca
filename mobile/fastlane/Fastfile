@@ -30,6 +30,7 @@ SCHEME = "Orca"
 BUNDLE_ID = "com.stably.orca.mobile"
 TESTFLIGHT_GROUPS = ["peeps"].freeze
 DEFAULT_TESTFLIGHT_CHANGELOG = "Latest Orca Mobile updates and fixes.".freeze
+DEFAULT_TESTFLIGHT_PROCESSING_TIMEOUT_SECONDS = 20 * 60
 
 # App Store version states in which the version "train" is terminally closed to
 # new TestFlight build uploads (altool rejects with 90186 "train ... is
@@ -115,6 +116,15 @@ end
 def testflight_changelog
   changelog = ENV.fetch("TESTFLIGHT_CHANGELOG", "").strip
   changelog.empty? ? DEFAULT_TESTFLIGHT_CHANGELOG : changelog
+end
+
+def testflight_processing_timeout_seconds
+  value = ENV.fetch("TESTFLIGHT_PROCESSING_TIMEOUT_SECONDS", "").strip
+  return DEFAULT_TESTFLIGHT_PROCESSING_TIMEOUT_SECONDS if value.empty?
+
+  timeout_seconds = Integer(value, exception: false)
+  UI.user_error!("TESTFLIGHT_PROCESSING_TIMEOUT_SECONDS must be a positive integer") unless timeout_seconds&.positive?
+  timeout_seconds
 end
 
 platform :ios do
@@ -230,6 +240,7 @@ platform :ios do
       # Why: fastlane requires release notes when distributing to external
       # TestFlight testers, even for CI-triggered smoke releases.
       changelog: testflight_changelog,
+      wait_processing_timeout_duration: testflight_processing_timeout_seconds,
     )
   end
 end
