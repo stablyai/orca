@@ -1,6 +1,7 @@
 import type { GitStatusEntry, GitStatusResult } from '../../shared/git-status-types'
 import type { RuntimeFileOpenResult, RuntimeWorktreeRecord } from '../../shared/runtime-types'
 import { isRuntimePathAbsolute, relativePathInsideRoot } from '../../shared/cross-platform-path'
+import { isWslUncPath } from '../../shared/wsl-paths'
 import type { CommandHandler, HandlerContext } from '../dispatch'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
 import { printResult } from '../format'
@@ -46,6 +47,21 @@ async function getFileWorktreeSelector({ flags, cwd, client }: HandlerContext): 
   return await resolveCurrentWorktreeSelector(cwd, client)
 }
 
+/**
+ * Why: a WSL workspace stores its worktree root as a Windows UNC path while the
+ * user types the Linux path they see inside the distro, so the two never match
+ * (#11393). Only the CLI's own WSL_DISTRO_NAME names the distro that Linux path
+ * belongs to, and only a UNC root wants the rewrite — a POSIX root already
+ * matches, so rewriting it would strand every absolute path.
+ */
+function toWorktreeRootPathFlavor(rootPath: string, path: string): string {
+  const distro = process.env.WSL_DISTRO_NAME
+  if (!distro || !path.startsWith('/') || path.startsWith('//') || !isWslUncPath(rootPath)) {
+    return path
+  }
+  return `//wsl.localhost/${distro}${path}`
+}
+
 async function resolveFilePath(
   ctx: HandlerContext,
   worktree: string,
@@ -59,13 +75,8 @@ async function resolveFilePath(
     worktree
   })
 
-  let matchPath = path
-  const wslDistro = process.env.WSL_DISTRO_NAME
-  if (wslDistro && path.startsWith('/') && !path.startsWith('//')) {
-    matchPath = `//wsl.localhost/${wslDistro}${path}`
-  }
-
-  const relativePath = relativePathInsideRoot(result.result.worktree.path, matchPath)
+  const rootPath = result.result.worktree.path
+  const relativePath = relativePathInsideRoot(rootPath, toWorktreeRootPathFlavor(rootPath, path))
   if (relativePath === '') {
     throw new RuntimeClientError(
       'invalid_argument',
