@@ -109,8 +109,8 @@ describe('absolute file CLI paths', () => {
       })
     }
 
-    async function openPath(path: string): Promise<void> {
-      await main(['file', 'open', '--path', path, '--worktree', 'id:wt-1'], '/tmp')
+    async function openPath(path: string, cwd = '/tmp'): Promise<void> {
+      await main(['file', 'open', '--path', path, '--worktree', 'id:wt-1'], cwd)
     }
 
     it('relativizes a Linux path typed inside the distro against the UNC root', async () => {
@@ -206,6 +206,26 @@ describe('absolute file CLI paths', () => {
       await openPath('C:/Users/me/repo/xxx/xxx.ts')
 
       expectOpenedWith('xxx/xxx.ts')
+    })
+
+    // Why: WSL_DISTRO_NAME only arrives if interop forwards it, but the launcher
+    // always sets ORCA_CLI_CWD, which reaches the handler as the invocation cwd.
+    it('falls back to the distro named by a UNC cwd', async () => {
+      mockWorktreeShow(uncRoot)
+
+      await openPath('/root/orca/workspaces/xxx/xxx/xxx.ts', `${uncRoot}/xxx`)
+
+      expectOpenedWith('xxx/xxx.ts')
+    })
+
+    // Why: without a distro the prefix would collapse to `//wsl.localhost/`, so a
+    // path whose first segment happens to be a distro name would alias onto the root.
+    it('does not alias a distro-named first segment onto the root', async () => {
+      mockWorktreeShow(uncRoot)
+
+      await openPath('/Ubuntu/root/orca/workspaces/xxx/xxx.ts')
+
+      expectOpenedWith('/Ubuntu/root/orca/workspaces/xxx/xxx.ts')
     })
 
     it('does not rewrite when the CLI is not running under WSL', async () => {
