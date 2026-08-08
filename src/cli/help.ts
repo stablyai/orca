@@ -223,6 +223,7 @@ Browser Automation:
   cookie set                Set a cookie
   cookie delete             Delete a cookie by name
   geolocation               Override browser geolocation
+  viewport                  Set browser viewport size
   intercept enable          Enable request interception
   intercept disable         Disable request interception
   intercept list            List paused (intercepted) requests

@@ -304,6 +304,8 @@ describe('orca root help', () => {
     expect(rootHelp).toContain('artifacts share')
     expect(rootHelp).toContain('claude-teams')
     expect(rootHelp).toContain('cookie get')
+    expect(rootHelp).toContain('geolocation')
+    expect(rootHelp).toContain('viewport')
     expect(rootHelp).toContain('intercept enable')
     expect(rootHelp).toContain('capture start')
     expect(rootHelp).toContain('full-screenshot')
