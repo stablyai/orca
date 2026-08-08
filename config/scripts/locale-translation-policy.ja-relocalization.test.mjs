@@ -112,7 +112,11 @@ describe('locale-translation-policy ja relocalization', () => {
       'div.pricing-grid > div.card.starter:nth-of-type(1) > a.cta',
       '.pp-cta',
       '#dialog',
-      '.pp-card[data-card="starter"] .pp-cta'
+      '.pp-card[data-card="starter"] .pp-cta',
+      'button.primary',
+      'a:hover',
+      'input[type="text"]',
+      'localhost:3000'
     ]) {
       expect(shouldPreserveEnglishValue(value)).toBe(true)
     }
@@ -122,6 +126,8 @@ describe('locale-translation-policy ja relocalization', () => {
       'Show live workspace ports. Click it for workspace-scoped ports and external listeners.',
       'orca.yaml + local',
       '.gitignore',
+      'Status:',
+      'Done.',
       '#{{value0}}'
     ]) {
       expect(shouldPreserveEnglishValue(value)).toBe(false)

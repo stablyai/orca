@@ -16,7 +16,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   'menu.showMobileButton': {
     ko: 'Orca 모바일 버튼 표시',
     zh: '显示 Orca Mobile 按钮',
-    ja: 'Orca モバイル ボタンを表示'
+    ja: 'Orca Mobile ボタンを表示'
   },
   'menu.toggleLeftSidebar': {
     ko: '왼쪽 사이드바 표시/숨기기',
@@ -478,7 +478,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   'auto.components.settings.ExperimentalPane.0277901cf7': {
     ko: '완료된 에이전트, 차단 질문, 읽지 않은 상태 및 작업 트리 생성 이벤트에 대한 스레드 작업 트리 피드가 있는 에이전트 항목을 왼쪽 사이드바에 추가합니다. 실험적 — 이벤트 모델과 UI가 변경될 수 있습니다.',
     zh: '将代理条目添加到左侧边栏，其中包含已完成代理、阻塞待办、未读状态和工作树创建事件的线程工作树提要。实验性——事件模型和 UI 可能会改变。',
-    ja: '完了した Agent 、ブロック中の質問、未読状態、ワークツリー作成イベントのスレッドワークツリーフィード付き Agent 項目を左サイドバーに追加します。実験的 — イベントモデルと UI は変更される場合があります。'
+    ja: '完了した Agent、ブロック中の質問、未読状態、ワークツリー作成イベントのスレッドワークツリーフィード付き Agent 項目を左サイドバーに追加します。実験的 — イベントモデルと UI は変更される場合があります。'
   },
   'auto.lib.fix.checks.agent.launch.9f00d7df0c': {
     ko: '검사 프롬프트가 비어 있습니다. 소스 제어 AI 설정을 업데이트하세요.',
@@ -488,7 +488,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   'auto.components.TaskPage.d0e3c8f933': {
     ko: '일치하는 GitHub 작업이 없습니다',
     zh: '没有匹配的 GitHub 工作项',
-    ja: '一致する GitHub 作業がありません'
+    ja: '一致する GitHub の作業はありません'
   },
   'auto.components.TaskPage.2af3ab5c58': {
     ko: 'Linear에서 열 팀을 하나 선택하세요',
@@ -513,7 +513,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   'auto.components.settings.IntegrationsPane.33ae9730a8': {
     ko: 'Linear 액세스를 추가해 이슈를 탐색하고 연결합니다.',
     zh: '添加 Linear 访问以浏览和链接议题。',
-    ja: 'Linear アクセスを追加してイシューを参照し、リンクします。'
+    ja: 'Linear アクセスを追加して、Issue を閲覧およびリンクします。'
   },
   'auto.components.GitHubItemDialog.3ab6ac0fc8': {
     ko: '선택한 GitHub 이슈 또는 PR을 미리보기하고 편집합니다.',

@@ -1,6 +1,8 @@
+import { JA_UNIFIED_VALUES } from './locale-ja-unified-values.mjs'
+
 // Japanese value overrides from high-visibility UI audit rounds 1–4.
 // Why: keep locale-value-overrides.mjs under max-lines while preserving exact-match repairs.
-export const JA_VALUE_OVERRIDES = {
+const JA_AUDIT_OVERRIDES = {
   'Retry loading presets': 'プリセットの読み込みを再試行',
   'Retry Download': 'ダウンロードを再試行',
   'Enter a reviewer': 'レビュアーを入力',
@@ -542,3 +544,5 @@ export const JA_VALUE_OVERRIDES = {
   'compare base': '比較ベース',
   ahead: '進んでいる'
 }
+
+export const JA_VALUE_OVERRIDES = { ...JA_AUDIT_OVERRIDES, ...JA_UNIFIED_VALUES }
