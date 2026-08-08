@@ -2177,6 +2177,18 @@ const api = {
       ipcRenderer.invoke('kimiAccounts:remove', args)
   },
 
+  commandCodeAccounts: {
+    list: (): Promise<unknown> => ipcRenderer.invoke('commandCodeAccounts:list'),
+    import: (args: { label: string }): Promise<unknown> =>
+      ipcRenderer.invoke('commandCodeAccounts:import', args),
+    select: (args: { accountId: string | null }): Promise<unknown> =>
+      ipcRenderer.invoke('commandCodeAccounts:select', args),
+    rename: (args: { accountId: string; label: string }): Promise<unknown> =>
+      ipcRenderer.invoke('commandCodeAccounts:rename', args),
+    remove: (args: { accountId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('commandCodeAccounts:remove', args)
+  },
+
   claudeAccounts: {
     list: (): Promise<unknown> => ipcRenderer.invoke('claudeAccounts:list'),
     add: (args?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }): Promise<unknown> =>

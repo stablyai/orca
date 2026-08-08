@@ -200,6 +200,7 @@ import { getInitialClaudeRateLimitTarget } from './rate-limits/claude-rate-limit
 import { getInitialCodexRateLimitTarget } from './rate-limits/codex-rate-limit-target'
 import { getKimiRuntimeTarget, resolveKimiHome } from './kimi/kimi-runtime-home'
 import { KimiAccountService } from './kimi-accounts/service'
+import { CommandCodeAccountService } from './command-code-accounts/service'
 import { createAccountRuntimeTargetSettingsSync } from './rate-limits/account-runtime-target-sync'
 import {
   attachMainWindowServices,
@@ -359,6 +360,7 @@ let codexUsage: CodexUsageStore | null = null
 let openCodeUsage: OpenCodeUsageStore | null = null
 let codexAccounts: CodexAccountService | null = null
 let kimiAccounts: KimiAccountService | null = null
+let commandCodeAccounts: CommandCodeAccountService | null = null
 let codexRuntimeHome: CodexRuntimeHomeService | null = null
 let codexSessionMigration: ReturnType<typeof createCodexSessionMigrationScheduler> | null = null
 let claudeAccounts: ClaudeAccountService | null = null
@@ -1351,6 +1353,11 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
   if (!kimiAccounts) {
     throw new Error('Kimi account service must be initialized before opening the main window')
   }
+  if (!commandCodeAccounts) {
+    throw new Error(
+      'Command Code account service must be initialized before opening the main window'
+    )
+  }
   if (!codexRuntimeHome) {
     throw new Error('Codex runtime home service must be initialized before opening the main window')
   }
@@ -1483,6 +1490,7 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
     openCodeUsage,
     codexAccounts,
     kimiAccounts,
+    commandCodeAccounts,
     claudeAccounts,
     rateLimits,
     rendererWebContentsId,
@@ -1533,6 +1541,7 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
     {
       prepareCodexSessionResume: prepareCodexSessionResumeForLaunch,
       getSelectedKimiHomePath: () => kimiAccounts!.getSelectedManagedHomePath(),
+      getSelectedCommandCodeApiKey: () => commandCodeAccounts!.getSelectedApiKey(),
       awaitLocalPtyStartup: () => localPtyStartupReady,
       awaitLocalPtyProviderStartup: () => localPtyProviderStartupReady,
       onBeforeRendererReload: ({ ignoreCache, webContentsId }) => {
@@ -2470,6 +2479,10 @@ void app.whenReady().then(async () => {
     onHostSystemDefaultSelected: codexSessionMigration.requestRun
   })
   kimiAccounts = new KimiAccountService(store, join(app.getPath('userData'), 'kimi-accounts'))
+  commandCodeAccounts = new CommandCodeAccountService(
+    store,
+    join(app.getPath('userData'), 'command-code-accounts')
+  )
   // Why: migrate historical shared-home sessions after startup; compatibility
   // launches re-arm the non-destructive pass for new rollouts (#4444, #8612, #12480).
   codexSessionMigration.scheduleInitialRun()
@@ -3122,6 +3135,7 @@ void app.whenReady().then(async () => {
       prepareCodexSessionResumeForLaunch,
       {
         getSelectedKimiHomePath: () => kimiAccounts!.getSelectedManagedHomePath(),
+        getSelectedCommandCodeApiKey: () => commandCodeAccounts!.getSelectedApiKey(),
         onCodexHomePtySpawned: handleCodexHomePtySpawned,
         onPtyExit: handlePtyExit
       }

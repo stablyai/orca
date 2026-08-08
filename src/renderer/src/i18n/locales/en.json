@@ -8021,7 +8021,9 @@
             "b0a4e8c6d9": "oauth",
             "a9f3d7b5c8": "login",
             "7a13e76a8d": "Kimi Accounts",
-            "51c5c4546d": "Import and switch between isolated Kimi Code credential homes."
+            "51c5c4546d": "Import and switch between isolated Kimi Code credential homes.",
+            "commandCodeTitle": "Command Code Accounts",
+            "commandCodeDescription": "Import and switch between saved Command Code credentials."
           }
         },
         "advanced": {
@@ -10783,6 +10785,27 @@
           "b2767a4027": "Orca will delete only this managed copy of the Kimi config and credentials. The original home and the system default remain unchanged.",
           "6fe23e65cd": "Cancel",
           "03ca5c8176": "Remove"
+        },
+        "CommandCodeAccountsSection": {
+          "provider": "Command Code",
+          "summary": "Choose the saved credential used by new local Command Code sessions.",
+          "title": "Command Code Accounts",
+          "description": "Import only auth.json from an existing Command Code home. Sessions, settings, taste, skills, and MCP data stay in the original home.",
+          "label": "Account label",
+          "placeholder": "Work or Personal",
+          "importing": "Importing…",
+          "chooseHome": "Choose home…",
+          "systemDefault": "System default",
+          "systemDefaultDescription": "Use COMMAND_CODE_API_KEY or ~/.commandcode/auth.json.",
+          "active": "Active",
+          "use": "Use",
+          "loading": "Loading accounts…",
+          "savedCredential": "Saved Command Code credential",
+          "removeLabel": "Remove Command Code account",
+          "removeTitle": "Remove Command Code Account?",
+          "removeDescription": "Orca will delete only its managed auth.json copy. The original home and system default remain unchanged.",
+          "cancel": "Cancel",
+          "remove": "Remove"
         }
       },
       "right": {

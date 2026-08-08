@@ -112,3 +112,20 @@ export type KimiManagedAccountsState = {
   accounts: KimiManagedAccountSummary[]
   activeAccountId: string | null
 }
+
+export type CommandCodeManagedAccount = {
+  id: string
+  label: string
+  managedAuthPath: string
+  userName?: string | null
+  createdAt: number
+  updatedAt: number
+  lastAuthenticatedAt: number
+}
+
+export type CommandCodeManagedAccountSummary = Omit<CommandCodeManagedAccount, 'managedAuthPath'>
+
+export type CommandCodeManagedAccountsState = {
+  accounts: CommandCodeManagedAccountSummary[]
+  activeAccountId: string | null
+}

@@ -59,6 +59,7 @@ import { registerTerminalRenderDesyncEvidenceHandler } from './terminal-render-d
 import { registerOrcaProfileHandlers } from './orca-profiles'
 import { registerCodexAccountHandlers } from './codex-accounts'
 import { registerKimiAccountHandlers } from './kimi-accounts'
+import { registerCommandCodeAccountHandlers } from './command-code-accounts'
 import { registerAgentHookHandlers } from './agent-hooks'
 import { registerCodexConfigSyncHandlers } from './codex-config-sync'
 import { getPtyIdForPaneKey } from './pty'
@@ -78,6 +79,7 @@ import type { OpenCodeUsageStore } from '../opencode-usage/store'
 import type { RateLimitService } from '../rate-limits/service'
 import type { CodexAccountService } from '../codex-accounts/service'
 import type { KimiAccountService } from '../kimi-accounts/service'
+import type { CommandCodeAccountService } from '../command-code-accounts/service'
 import type { ClaudeAccountService } from '../claude-accounts/service'
 import type { AutomationService } from '../automations/service'
 import type { AgentAwakeService } from '../agent-awake-service'
@@ -118,6 +120,7 @@ export function registerCoreHandlers(
   openCodeUsage: OpenCodeUsageStore,
   codexAccounts: CodexAccountService,
   kimiAccounts: KimiAccountService,
+  commandCodeAccounts: CommandCodeAccountService,
   claudeAccounts: ClaudeAccountService,
   rateLimits: RateLimitService,
   mainWindowWebContentsId: number | null = null,
@@ -149,6 +152,7 @@ export function registerCoreHandlers(
   registerUsageProviderHandlers({ claudeUsage, codexUsage, openCodeUsage })
   registerCodexAccountHandlers(codexAccounts, () => store.getSettings())
   registerKimiAccountHandlers(kimiAccounts, rateLimits)
+  registerCommandCodeAccountHandlers(commandCodeAccounts)
   registerAgentHookHandlers(runtime, { getPtyIdForPaneKey })
   registerCodexConfigSyncHandlers(codexAccounts.runtimeHomeService)
   registerAgentTrustHandlers()

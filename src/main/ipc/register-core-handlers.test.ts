@@ -33,6 +33,7 @@ const {
   registerOrcaProfileHandlersMock,
   registerCodexAccountHandlersMock,
   registerKimiAccountHandlersMock,
+  registerCommandCodeAccountHandlersMock,
   registerAgentHookHandlersMock,
   registerAgentTrustHandlersMock,
   registerClaudeAccountHandlersMock,
@@ -99,6 +100,7 @@ const {
   registerOrcaProfileHandlersMock: vi.fn(),
   registerCodexAccountHandlersMock: vi.fn(),
   registerKimiAccountHandlersMock: vi.fn(),
+  registerCommandCodeAccountHandlersMock: vi.fn(),
   registerAgentHookHandlersMock: vi.fn(),
   registerAgentTrustHandlersMock: vi.fn(),
   registerClaudeAccountHandlersMock: vi.fn(),
@@ -317,6 +319,10 @@ vi.mock('./kimi-accounts', () => ({
   registerKimiAccountHandlers: registerKimiAccountHandlersMock
 }))
 
+vi.mock('./command-code-accounts', () => ({
+  registerCommandCodeAccountHandlers: registerCommandCodeAccountHandlersMock
+}))
+
 vi.mock('./agent-hooks', () => ({
   registerAgentHookHandlers: registerAgentHookHandlersMock
 }))
@@ -422,6 +428,7 @@ describe('registerCoreHandlers', () => {
     registerOrcaProfileHandlersMock.mockReset()
     registerCodexAccountHandlersMock.mockReset()
     registerKimiAccountHandlersMock.mockReset()
+    registerCommandCodeAccountHandlersMock.mockReset()
     registerAgentHookHandlersMock.mockReset()
     registerAgentTrustHandlersMock.mockReset()
     registerClaudeAccountHandlersMock.mockReset()
@@ -462,6 +469,7 @@ describe('registerCoreHandlers', () => {
     const openCodeUsage = { marker: 'openCodeUsage' }
     const codexAccounts = { marker: 'codexAccounts', runtimeHomeService: { marker: 'runtimeHome' } }
     const kimiAccounts = { marker: 'kimiAccounts' }
+    const commandCodeAccounts = { marker: 'commandCodeAccounts' }
     const claudeAccounts = { marker: 'claudeAccounts' }
     const rateLimits = { marker: 'rateLimits' }
     const agentAwakeService = { marker: 'agentAwakeService' }
@@ -478,6 +486,7 @@ describe('registerCoreHandlers', () => {
       openCodeUsage as never,
       codexAccounts as never,
       kimiAccounts as never,
+      commandCodeAccounts as never,
       claudeAccounts as never,
       rateLimits as never,
       null,
@@ -512,6 +521,7 @@ describe('registerCoreHandlers', () => {
       expect.any(Function)
     )
     expect(registerKimiAccountHandlersMock).toHaveBeenCalledWith(kimiAccounts, rateLimits)
+    expect(registerCommandCodeAccountHandlersMock).toHaveBeenCalledWith(commandCodeAccounts)
     expect(registerAgentHookHandlersMock).toHaveBeenCalledWith(runtime, {
       getPtyIdForPaneKey: expect.any(Function)
     })
@@ -644,6 +654,7 @@ describe('registerCoreHandlers', () => {
     const openCodeUsage2 = { marker: 'openCodeUsage2' }
     const codexAccounts2 = { marker: 'codexAccounts2' }
     const kimiAccounts2 = { marker: 'kimiAccounts2' }
+    const commandCodeAccounts2 = { marker: 'commandCodeAccounts2' }
     const claudeAccounts2 = { marker: 'claudeAccounts2' }
     const rateLimits2 = { marker: 'rateLimits2' }
 
@@ -656,6 +667,7 @@ describe('registerCoreHandlers', () => {
       openCodeUsage2 as never,
       codexAccounts2 as never,
       kimiAccounts2 as never,
+      commandCodeAccounts2 as never,
       claudeAccounts2 as never,
       rateLimits2 as never,
       42

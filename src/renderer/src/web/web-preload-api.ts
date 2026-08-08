@@ -901,6 +901,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     grokAccounts: createGrokAccountsApi(),
     codexAccounts: createAccountsApi(),
     kimiAccounts: createAccountsApi(),
+    commandCodeAccounts: createAccountsApi(),
     claudeAccounts: createAccountsApi(),
     cli: createCliApi(),
     agentHooks: createAgentHooksApi(),

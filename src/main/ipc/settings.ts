@@ -56,13 +56,16 @@ function sanitizeRendererSettingsUpdate(args: Partial<GlobalSettings>): Partial<
   // handlers validate ownership and return path-free summaries.
   delete sanitizedArgs.kimiManagedAccounts
   delete sanitizedArgs.activeKimiManagedAccountId
+  delete sanitizedArgs.commandCodeManagedAccounts
+  delete sanitizedArgs.activeCommandCodeManagedAccountId
   return sanitizedArgs
 }
 
 function sanitizeRendererSettingsSnapshot(settings: GlobalSettings): GlobalSettings {
   return {
     ...settings,
-    kimiManagedAccounts: []
+    kimiManagedAccounts: [],
+    commandCodeManagedAccounts: []
   }
 }
 

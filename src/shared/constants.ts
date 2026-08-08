@@ -302,6 +302,8 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     activeCodexManagedAccountIdsByRuntime: { host: null, wsl: {} },
     kimiManagedAccounts: [],
     activeKimiManagedAccountId: null,
+    commandCodeManagedAccounts: [],
+    activeCommandCodeManagedAccountId: null,
     claudeManagedAccounts: [],
     activeClaudeManagedAccountId: null,
     terminalScopeHistoryByWorktree: true,

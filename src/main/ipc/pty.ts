@@ -204,6 +204,7 @@ import type { PtyModelRestoreReason } from '../../shared/pty-model-restore-marke
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
 import { isProviderAccountRef, type ProviderAccountRef } from '../../shared/provider-account-ref'
 import { applyKimiManagedHomeToLaunchEnv } from '../kimi-accounts/launch-environment'
+import { applyCommandCodeManagedCredentialToLaunchEnv } from '../command-code-accounts/launch-environment'
 import {
   isCodexHomeAuthReadyForLaunch,
   waitForManagedCodexAuthReady
@@ -1254,6 +1255,7 @@ export type GetSelectedCodexHomePath = (
   launchContext?: CodexHomeLaunchContext
 ) => string | null
 export type GetSelectedKimiHomePath = () => string | null
+export type GetSelectedCommandCodeApiKey = () => string | null
 export type PrepareCodexSessionResume = (args: {
   providerSession: AgentProviderSessionMetadata
   target: CodexAccountSelectionTarget
@@ -2377,6 +2379,7 @@ export function registerPtyHandlers(
   options?: {
     prepareCodexSessionResume?: PrepareCodexSessionResume
     getSelectedKimiHomePath?: GetSelectedKimiHomePath
+    getSelectedCommandCodeApiKey?: GetSelectedCommandCodeApiKey
     awaitLocalPtyStartup?: () => Promise<void>
     awaitLocalPtyProviderStartup?: () => Promise<void>
     // Why: returns true once for the crash-recovery reload so its did-finish-load skips the orphan sweep and keeps live PTYs (#5787).
@@ -4642,6 +4645,14 @@ export function registerPtyHandlers(
         reattached: Boolean(preAdoptedStablePane),
         getSelectedManagedHomePath: options?.getSelectedKimiHomePath
       })
+      env = applyCommandCodeManagedCredentialToLaunchEnv({
+        env,
+        launchAgent: args.launchAgent,
+        connectionId: args.connectionId,
+        runtime: codexSelectionTarget.runtime === 'wsl' ? 'wsl' : 'host',
+        reattached: Boolean(preAdoptedStablePane),
+        getSelectedApiKey: options?.getSelectedCommandCodeApiKey
+      })
       const requestedAgentTeamsPath = env?.ORCA_AGENT_TEAMS_TEAM_ID
         ? env[resolvePathEnvKey(env, process.platform)]
         : undefined
@@ -6363,6 +6374,14 @@ export function registerPtyHandlers(
           reattached: Boolean(preAdoptedStablePane),
           getSelectedManagedHomePath: options?.getSelectedKimiHomePath
         })
+        env = applyCommandCodeManagedCredentialToLaunchEnv({
+          env,
+          launchAgent: args.launchAgent,
+          connectionId: args.connectionId,
+          runtime: codexSelectionTarget.runtime === 'wsl' ? 'wsl' : 'host',
+          reattached: Boolean(preAdoptedStablePane),
+          getSelectedApiKey: options?.getSelectedCommandCodeApiKey
+        })
         let selectedCodexHomePath =
           !preAdoptedStablePane && !args.connectionId
             ? getCompatibleSelectedCodexHomePath(
@@ -7891,6 +7910,7 @@ export function registerHeadlessPtyRuntime(
   prepareCodexSessionResume?: PrepareCodexSessionResume,
   lifecycle?: {
     getSelectedKimiHomePath?: GetSelectedKimiHomePath
+    getSelectedCommandCodeApiKey?: GetSelectedCommandCodeApiKey
     onCodexHomePtySpawned?: (args: CodexHomePtySpawnedLifecycleArgs) => void
     onPtyExit?: (id: string, exitSequence: number) => void
   }

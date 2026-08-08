@@ -4,6 +4,7 @@ import type {
   CodexAccountsApi,
   CodexConfigSyncApi,
   GrokAccountsApi,
+  CommandCodeAccountsApi,
   KimiAccountsApi,
   MinimaxCredentialsApi
 } from './api/agent-account-api'
@@ -142,6 +143,7 @@ export type PreloadApi = {
   minimaxCredentials: MinimaxCredentialsApi
   grokAccounts: GrokAccountsApi
   kimiAccounts: KimiAccountsApi
+  commandCodeAccounts: CommandCodeAccountsApi
   ssh: SshApi
   automations: AutomationsApi
   wsl: RuntimeApi['wsl']

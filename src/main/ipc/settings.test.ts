@@ -127,14 +127,19 @@ describe('registerSettingsHandlers', () => {
     listener(event)
     expect(event.returnValue).toEqual({
       terminalMainSideEffectAuthority: false,
-      kimiManagedAccounts: []
+      kimiManagedAccounts: [],
+      commandCodeManagedAccounts: []
     })
   })
 
-  it('keeps managed Kimi home paths out of settings IPC', async () => {
+  it('keeps managed provider credential paths out of settings IPC', async () => {
     const persisted = {
       kimiManagedAccounts: [{ id: 'kimi-a', managedHomePath: '/secret/kimi' }],
-      activeKimiManagedAccountId: 'kimi-a'
+      activeKimiManagedAccountId: 'kimi-a',
+      commandCodeManagedAccounts: [
+        { id: 'command-a', managedAuthPath: '/secret/command-code/auth.json' }
+      ],
+      activeCommandCodeManagedAccountId: 'command-a'
     }
     store.getSettings.mockReturnValue(persisted)
     store.updateSettings.mockReturnValue(persisted)
@@ -145,9 +150,11 @@ describe('registerSettingsHandlers', () => {
     ) => unknown
     expect(getHandler(settingsInvokeEvent)).toMatchObject({
       kimiManagedAccounts: [],
-      activeKimiManagedAccountId: 'kimi-a'
+      commandCodeManagedAccounts: [],
+      activeKimiManagedAccountId: 'kimi-a',
+      activeCommandCodeManagedAccountId: 'command-a'
     })
-    expect(JSON.stringify(getHandler(settingsInvokeEvent))).not.toContain('/secret/kimi')
+    expect(JSON.stringify(getHandler(settingsInvokeEvent))).not.toContain('/secret/')
 
     const setHandler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
       event: typeof settingsInvokeEvent,

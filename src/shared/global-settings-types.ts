@@ -19,6 +19,7 @@ import type {
   ClaudeManagedAccountRuntimeSelection,
   CodexManagedAccount,
   CodexManagedAccountRuntimeSelection,
+  CommandCodeManagedAccount,
   KimiManagedAccount
 } from './managed-account-types'
 import type { NotificationSettings } from './notification-settings-types'
@@ -274,6 +275,9 @@ export type GlobalSettings = {
   /** Kimi credentials and config stay inside main-owned homes; renderer-facing summaries omit this path. */
   kimiManagedAccounts?: KimiManagedAccount[]
   activeKimiManagedAccountId?: string | null
+  /** Command Code auth copies stay main-owned; only summaries cross the preload boundary. */
+  commandCodeManagedAccounts?: CommandCodeManagedAccount[]
+  activeCommandCodeManagedAccountId?: string | null
   /** Per-worktree shell history file so ArrowUp doesn't surface other worktrees' commands. Defaults to true. */
   terminalScopeHistoryByWorktree: boolean
   /** Kill switch for hidden terminal view parking: unmount long-hidden panes while a pane-less watcher keeps PTY side effects alive. */
