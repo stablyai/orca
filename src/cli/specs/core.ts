@@ -237,12 +237,16 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'command', 'title', 'focus'],
     notes: [
       'Creates a visible terminal tab without switching focus when possible; falls back to a background handle if the UI cannot adopt it. Pass --focus to switch to it.',
-      'Use this, not worktree create, for a fresh agent in the current checkout.'
+      'Use this, not worktree create, for a fresh agent in the current checkout.',
+      'On Windows, `path:D:\\foo\\bar` is accepted and normalized to forward slashes ' +
+        '(`path:D:/foo/bar`) before lookup. Prefer forward slashes or `id:<repoId>::D:/path` ' +
+        'from `orca worktree list --json` when scripting (#12303).'
     ],
     examples: [
       'orca terminal create --json',
       'orca terminal create --worktree active --command "codex" --json',
       'orca terminal create --worktree path:/projects/myapp --title "RUNNER" --command "opencode"',
+      'orca terminal create --worktree path:D:/projects/myapp --title "RUNNER" --json',
       'orca terminal create --worktree path:/projects/myapp --command "opencode" --focus'
     ]
   },
