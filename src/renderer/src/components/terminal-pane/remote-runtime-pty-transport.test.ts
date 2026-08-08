@@ -754,6 +754,198 @@ describe('createRemoteRuntimePtyTransport', () => {
     }
   })
 
+  it('recoverable connect() failures outside create-retry stay auto- and manually-revivable', async () => {
+    // #12684: thinner connect paths (e.g. HUB-native resolve) used to latch
+    // disconnected with no scheduled retry and no guarantee retryRecovery re-entered create.
+    vi.useFakeTimers()
+    try {
+      let reachable = false
+      const leafId = '11111111-1111-4111-8111-111111111111'
+      runtimeCall.mockImplementation(async (args: { method: string }) => {
+        if (args.method === 'terminal.resolvePane') {
+          if (!reachable) {
+            throw Object.assign(new Error('Timed out waiting for the remote Orca runtime.'), {
+              code: 'runtime_timeout'
+            })
+          }
+          return {
+            ok: true,
+            result: {
+              terminal: {
+                handle: 'hub-terminal-recovered',
+                tabId: 'tab-1',
+                leafId,
+                ptyId: 'ssh:hub-private@@pty-2',
+                worktreeId: 'wt-1'
+              }
+            }
+          }
+        }
+        throw new Error(`Unexpected method ${args.method}`)
+      })
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const onError = vi.fn()
+      const recoveryPhases: string[] = []
+      const transport = createRemoteRuntimePtyTransport('hub-env', {
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        leafId
+      })
+
+      const firstConnect = transport.connect({
+        url: '',
+        sessionId: 'ssh:hub-private@@pty-2',
+        callbacks: {
+          onError,
+          onRecoveryStateChange: (state) => recoveryPhases.push(state.phase)
+        }
+      })
+      await Promise.resolve()
+      await firstConnect
+
+      expect(onError).not.toHaveBeenCalled()
+      expect(recoveryPhases).toContain('backoff')
+      expect(transport.getRecoveryState?.().phase).toMatch(/backoff|recovering/)
+      const resolveCallsAfterFirst = runtimeCall.mock.calls.filter(
+        ([args]) => (args as { method: string }).method === 'terminal.resolvePane'
+      ).length
+      expect(resolveCallsAfterFirst).toBeGreaterThanOrEqual(1)
+
+      // Auto-retry via scheduled connect recovery once the host is reachable.
+      reachable = true
+      await vi.advanceTimersByTimeAsync(1_000)
+      await vi.waitFor(() =>
+        expect(transport.getPtyId()).toBe('remote:hub-env@@hub-terminal-recovered')
+      )
+      expect(onError).not.toHaveBeenCalled()
+      expect(
+        runtimeCall.mock.calls.filter(
+          ([args]) => (args as { method: string }).method === 'terminal.resolvePane'
+        ).length
+      ).toBeGreaterThan(resolveCallsAfterFirst)
+      transport.destroy?.()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('scheduled connect recovery does not revive a detached transport', async () => {
+    vi.useFakeTimers()
+    try {
+      let reachable = false
+      let resolveCalls = 0
+      const leafId = '33333333-3333-4333-8333-333333333333'
+      runtimeCall.mockImplementation(async (args: { method: string }) => {
+        if (args.method === 'terminal.resolvePane') {
+          resolveCalls += 1
+          if (!reachable) {
+            throw Object.assign(new Error('Timed out waiting for the remote Orca runtime.'), {
+              code: 'runtime_timeout'
+            })
+          }
+          return {
+            ok: true,
+            result: {
+              terminal: {
+                handle: 'hub-terminal-detached',
+                tabId: 'tab-1',
+                leafId,
+                ptyId: 'ssh:hub-private@@pty-d',
+                worktreeId: 'wt-1'
+              }
+            }
+          }
+        }
+        throw new Error(`Unexpected method ${args.method}`)
+      })
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const transport = createRemoteRuntimePtyTransport('hub-env', {
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        leafId
+      })
+
+      const firstConnect = transport.connect({
+        url: '',
+        sessionId: 'ssh:hub-private@@pty-d',
+        callbacks: {}
+      })
+      await Promise.resolve()
+      await firstConnect
+      const callsAfterFail = resolveCalls
+
+      transport.detach?.()
+      reachable = true
+      await vi.advanceTimersByTimeAsync(30_000)
+
+      expect(resolveCalls).toBe(callsAfterFail)
+      expect(transport.getPtyId()).toBeNull()
+      transport.destroy?.()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('manual Reconnect re-enters connect after a recoverable resolve latch', async () => {
+    vi.useFakeTimers()
+    try {
+      let reachable = false
+      const leafId = '22222222-2222-4222-8222-222222222222'
+      runtimeCall.mockImplementation(async (args: { method: string }) => {
+        if (args.method === 'terminal.resolvePane') {
+          if (!reachable) {
+            throw Object.assign(new Error('Timed out waiting for the remote Orca runtime.'), {
+              code: 'runtime_timeout'
+            })
+          }
+          return {
+            ok: true,
+            result: {
+              terminal: {
+                handle: 'hub-terminal-manual',
+                tabId: 'tab-1',
+                leafId,
+                ptyId: 'ssh:hub-private@@pty-9',
+                worktreeId: 'wt-1'
+              }
+            }
+          }
+        }
+        throw new Error(`Unexpected method ${args.method}`)
+      })
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const onError = vi.fn()
+      const transport = createRemoteRuntimePtyTransport('hub-env', {
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        leafId
+      })
+
+      const firstConnect = transport.connect({
+        url: '',
+        sessionId: 'ssh:hub-private@@pty-9',
+        callbacks: { onError }
+      })
+      await Promise.resolve()
+      await firstConnect
+
+      // Exhaust auto-recovery so phase latches disconnected with pending retry.
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(transport.getRecoveryState?.().phase).toBe('disconnected')
+      expect(onError).not.toHaveBeenCalled()
+
+      reachable = true
+      expect(transport.retryRecovery?.()).toBe(true)
+      await vi.waitFor(() =>
+        expect(transport.getPtyId()).toBe('remote:hub-env@@hub-terminal-manual')
+      )
+      expect(onError).not.toHaveBeenCalled()
+      transport.destroy?.()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('replays an ambiguous structured agent create without downgrading after cutoff', async () => {
     vi.useFakeTimers()
     try {
