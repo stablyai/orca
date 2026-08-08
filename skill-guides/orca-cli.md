@@ -36,6 +36,8 @@ Choose the executable once for the current session:
 In every command block, `ORCA` is a documentation placeholder. Replace it with the chosen
 executable before running the command; do not create a shell variable or run `ORCA`
 literally. This substitution works the same way in POSIX shells, PowerShell, and cmd.exe.
+Unquoted and double-quoted examples are shell-neutral; single-quoted JSON (gesture) is
+POSIX/PowerShell only — on cmd.exe use double quotes with escaped inner quotes.
 
 ```text
 ORCA status --json
@@ -392,6 +394,7 @@ ORCA emulator attach "iPhone 17 Pro" --json
 ORCA emulator tap 0.5 0.7 --json
 ORCA emulator type "hello" --json
 ORCA emulator gesture '[{"type":"begin","x":0.5,"y":0.8},{"type":"move","x":0.5,"y":0.4},{"type":"end","x":0.5,"y":0.2}]' --json
+# cmd.exe: ORCA emulator gesture "[{\"type\":\"begin\",\"x\":0.5,\"y\":0.8},{\"type\":\"move\",\"x\":0.5,\"y\":0.4},{\"type\":\"end\",\"x\":0.5,\"y\":0.2}]" --json
 ORCA emulator button home --json
 ORCA emulator exec --command "tap 0.5 0.7" --json   # no "serve-sim" in the command string
 ORCA emulator kill --json

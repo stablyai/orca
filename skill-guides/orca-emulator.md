@@ -23,8 +23,10 @@ Linux outside an Orca-managed terminal, and `orca` everywhere else. Never try ba
 
 In every command example — fenced blocks, tables, and prose — `ORCA` is a documentation
 placeholder. Replace it with the chosen executable before running the command; do not
-create a shell variable or run `ORCA` literally. The command examples are intentionally
-shell-neutral for POSIX shells, PowerShell, and cmd.exe.
+create a shell variable or run `ORCA` literally. Unquoted and double-quoted examples are
+intentionally shell-neutral for POSIX shells, PowerShell, and cmd.exe. JSON arguments that
+use single quotes (gesture) are for POSIX shells and PowerShell only — cmd.exe does not
+treat `'` as a quoting character; use double quotes and escaped inner quotes there.
 
 ## When to use
 
@@ -93,7 +95,7 @@ Use `--json` for agent-friendly output. Commands are workspace-scoped by default
 | List available / running   | `ORCA emulator list [--worktree <sel>]`     | Shows Orca-managed + raw serve-sim streams. Use output for explicit --device/--emulator. |
 | Attach / make active       | `ORCA emulator attach "iPhone 16 Pro" [--worktree <sel>] [--focus]` | Starts helper if needed (serve-sim --detach). Sets active for unqualified commands. --focus optional (does not auto-steal UI focus by default). |
 | Single tap                 | `ORCA emulator tap <x> <y> [--device <id>]` | Normalized 0..1 coords. **Preferred over gesture for simple taps.** |
-| Multi-step gesture         | `ORCA emulator gesture '<json>'`            | See gestures reference (begin/move/end). Use tap for singles. |
+| Multi-step gesture         | `ORCA emulator gesture '<json>'`            | POSIX/PowerShell. On cmd.exe: `ORCA emulator gesture "[{\"type\":\"begin\",...}]"`. Prefer `tap` for singles. |
 | Type text                  | `ORCA emulator type "text" [--device <id>]` | US ASCII only. Supports stdin/file via exec if needed. |
 | Hardware button            | `ORCA emulator button home [--device <id>]` | home, swipe_home, app_switcher, lock, siri, side_button. |
 | Rotate device              | `ORCA emulator rotate landscape_left`       | Remembers orientation for subsequent gestures. |
@@ -108,6 +110,7 @@ Most support `--worktree <selector>` and explicit `--device <udid|name>` or `--e
 ## Critical gotchas (teach agents)
 
 - **Prefer `tap` over `gesture` for single taps** (same as raw serve-sim). Separate gesture begin/end can be interpreted as long-press due to WS overhead. The Orca wrapper uses the reliable quick sequence.
+- **cmd.exe and gesture JSON:** single quotes are not quoting in cmd.exe, so `gesture '{"…"}'` arrives with the quotes and fails JSON parse. Use `gesture "[{\"type\":\"begin\",…}]"` (double quotes, backslash-escape inner ones) on cmd.exe.
 - All coords normalized 0..1 (top-left origin). Never pixels.
 - One "active" emulator per worktree for unqualified commands (like active browser tab). Discover ids with `list`, use explicit flags for multi-device or cross-worktree.
 - Type = US keyboard only. Unsupported chars error clearly.
