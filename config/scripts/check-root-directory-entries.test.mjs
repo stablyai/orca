@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 
 const projectDir = resolve(import.meta.dirname, '../..')
-const guardScript = join(projectDir, '.github/scripts/check-root-directory-entries.sh')
+const guardScript = join(projectDir, '.github/scripts/check-root-directory-entries.mjs')
 const tempDirs = []
 
 function git(cwd, args) {
@@ -38,7 +38,11 @@ function commitFiles(root, files) {
 }
 
 function runGuard({ root, base, head }) {
-  return spawnSync('bash', [guardScript, base, head], {
+  return runGuardArgs(root, [base, head])
+}
+
+function runGuardArgs(root, args) {
+  return spawnSync(process.execPath, [guardScript, ...args], {
     cwd: root,
     encoding: 'utf8'
   })
@@ -84,6 +88,44 @@ describe('root directory guard', () => {
     expect(output).toContain('new-folder')
   })
 
+  // Why: git escapes odd paths unless it is read NUL-delimited, so dropping -z
+  // (or decoding the bytes wrong) reports a mangled name nobody can act on.
+  it.skipIf(process.platform === 'win32')('reports a blocked entry byte-for-byte', () => {
+    const awkwardName = '日本 root file\nwith newline.txt'
+    const fixture = makeFixture()
+    const head = commitFiles(fixture.root, [[awkwardName, 'too prominent\n']])
+
+    const result = runGuard({ ...fixture, head })
+
+    expect(result.status).toBe(1)
+    expect(result.stdout).toContain(awkwardName)
+  })
+
+  it('exits 2 with usage when the two shas are not both supplied', () => {
+    const fixture = makeFixture()
+
+    const result = runGuardArgs(fixture.root, [fixture.base])
+
+    expect(result.status).toBe(2)
+    expect(result.stderr).toContain('<base-sha> <head-sha>')
+  })
+
+  it('fails loudly instead of passing when a sha does not resolve', () => {
+    const fixture = makeFixture()
+
+    const result = runGuardArgs(fixture.root, [
+      fixture.base,
+      'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef'
+    ])
+
+    // Why: git's own exit status, not node's. An unhandled throw is also non-zero,
+    // so assert the status and the absent stack trace or the guard's error
+    // handling can be deleted without a test noticing.
+    expect(result.status).toBe(128)
+    expect(result.stderr).not.toContain('node:internal')
+    expect(result.stdout).not.toContain('guard passed')
+  })
+
   it('is wired into the PR verify gate', () => {
     const workflow = parse(readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
     const guardJob = workflow.jobs.root_directory_guard
@@ -93,7 +135,7 @@ describe('root directory guard', () => {
 
     expect(guardJob.name).toBe('root directory guard')
     expect(guardJob.steps[0].with['fetch-depth']).toBe(0)
-    expect(guardStep.run).toContain('.github/scripts/check-root-directory-entries.sh')
+    expect(guardStep.run).toContain('node .github/scripts/check-root-directory-entries.mjs')
     expect(workflow.jobs.verify.needs).toContain('root_directory_guard')
   })
 })
