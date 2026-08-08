@@ -39,6 +39,7 @@ const {
   registerClaudeAccountHandlersMock,
   registerMiniMaxCredentialsHandlersMock,
   registerGrokAccountHandlersMock,
+  registerGeminiAccountHandlersMock,
   registerClipboardHandlersMock,
   setTrustedClipboardRendererWebContentsIdMock,
   registerUpdaterHandlersMock,
@@ -106,6 +107,7 @@ const {
   registerClaudeAccountHandlersMock: vi.fn(),
   registerMiniMaxCredentialsHandlersMock: vi.fn(),
   registerGrokAccountHandlersMock: vi.fn(),
+  registerGeminiAccountHandlersMock: vi.fn(),
   registerClipboardHandlersMock: vi.fn(),
   setTrustedClipboardRendererWebContentsIdMock: vi.fn(),
   registerUpdaterHandlersMock: vi.fn(),
@@ -343,6 +345,10 @@ vi.mock('./grok-accounts', () => ({
   registerGrokAccountHandlers: registerGrokAccountHandlersMock
 }))
 
+vi.mock('./gemini-accounts', () => ({
+  registerGeminiAccountHandlers: registerGeminiAccountHandlersMock
+}))
+
 vi.mock('../window/attach-main-window-services', () => ({
   registerUpdaterHandlers: registerUpdaterHandlersMock
 }))
@@ -433,6 +439,8 @@ describe('registerCoreHandlers', () => {
     registerAgentTrustHandlersMock.mockReset()
     registerClaudeAccountHandlersMock.mockReset()
     registerMiniMaxCredentialsHandlersMock.mockReset()
+    registerGrokAccountHandlersMock.mockReset()
+    registerGeminiAccountHandlersMock.mockReset()
     registerClipboardHandlersMock.mockReset()
     setTrustedClipboardRendererWebContentsIdMock.mockReset()
     registerUpdaterHandlersMock.mockReset()
@@ -470,6 +478,8 @@ describe('registerCoreHandlers', () => {
     const codexAccounts = { marker: 'codexAccounts', runtimeHomeService: { marker: 'runtimeHome' } }
     const kimiAccounts = { marker: 'kimiAccounts' }
     const commandCodeAccounts = { marker: 'commandCodeAccounts' }
+    const grokAccounts = { marker: 'grokAccounts' }
+    const geminiAccounts = { marker: 'geminiAccounts' }
     const claudeAccounts = { marker: 'claudeAccounts' }
     const rateLimits = { marker: 'rateLimits' }
     const agentAwakeService = { marker: 'agentAwakeService' }
@@ -487,6 +497,8 @@ describe('registerCoreHandlers', () => {
       codexAccounts as never,
       kimiAccounts as never,
       commandCodeAccounts as never,
+      grokAccounts as never,
+      geminiAccounts as never,
       claudeAccounts as never,
       rateLimits as never,
       null,
@@ -531,7 +543,8 @@ describe('registerCoreHandlers', () => {
     expect(registerPetHandlersMock).toHaveBeenCalled()
     expect(registerClaudeAccountHandlersMock).toHaveBeenCalledWith(claudeAccounts)
     expect(registerMiniMaxCredentialsHandlersMock).toHaveBeenCalledWith(rateLimits)
-    expect(registerGrokAccountHandlersMock).toHaveBeenCalled()
+    expect(registerGrokAccountHandlersMock).toHaveBeenCalledWith(grokAccounts)
+    expect(registerGeminiAccountHandlersMock).toHaveBeenCalledWith(geminiAccounts)
     expect(registerRateLimitHandlersMock).toHaveBeenCalledWith(rateLimits, codexAccounts)
     expect(registerGitHubHandlersMock).toHaveBeenCalledWith(store, stats)
     expect(registerLinearHandlersMock).toHaveBeenCalled()
@@ -655,6 +668,8 @@ describe('registerCoreHandlers', () => {
     const codexAccounts2 = { marker: 'codexAccounts2' }
     const kimiAccounts2 = { marker: 'kimiAccounts2' }
     const commandCodeAccounts2 = { marker: 'commandCodeAccounts2' }
+    const grokAccounts2 = { marker: 'grokAccounts2' }
+    const geminiAccounts2 = { marker: 'geminiAccounts2' }
     const claudeAccounts2 = { marker: 'claudeAccounts2' }
     const rateLimits2 = { marker: 'rateLimits2' }
 
@@ -668,6 +683,8 @@ describe('registerCoreHandlers', () => {
       codexAccounts2 as never,
       kimiAccounts2 as never,
       commandCodeAccounts2 as never,
+      grokAccounts2 as never,
+      geminiAccounts2 as never,
       claudeAccounts2 as never,
       rateLimits2 as never,
       42

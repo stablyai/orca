@@ -126,6 +126,8 @@ describe('AccountsPane', () => {
     expect(markup).not.toContain('Remote server: the remote server')
     // The WSL account-location toggle is a local concern; a remote owner hides it.
     expect(markup).not.toContain('aria-label="Account location"')
+    expect(markup).not.toContain('Grok managed accounts')
+    expect(markup).not.toContain('Gemini managed accounts')
     const addAccountIndex = markup.indexOf('Add Account')
     expect(addAccountIndex).toBeGreaterThan(0)
     expect(markup.slice(markup.lastIndexOf('<button', addAccountIndex), addAccountIndex)).toContain(
@@ -149,6 +151,8 @@ describe('AccountsPane', () => {
       expect(markup).not.toContain('Open Remote Servers')
       // The server-scope copy itself still applies.
       expect(markup).toContain('Showing accounts managed by')
+      expect(markup).not.toContain('Grok managed accounts')
+      expect(markup).not.toContain('Gemini managed accounts')
     } finally {
       if (!hadWindow) {
         delete webGlobal.window
@@ -161,6 +165,8 @@ describe('AccountsPane', () => {
 
     expect(markup).toContain('Showing accounts for this device. New accounts are added there.')
     expect(markup).not.toContain('Open Remote Servers')
+    expect(markup).toContain('Grok managed accounts')
+    expect(markup).toContain('Gemini managed accounts')
     const addAccountIndex = markup.indexOf('Add Account')
     expect(addAccountIndex).toBeGreaterThan(0)
     expect(

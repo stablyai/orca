@@ -2,7 +2,8 @@ import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState,
   CommandCodeManagedAccountsState,
-  KimiManagedAccountsState
+  KimiManagedAccountsState,
+  ManagedCliHomeAccountsState
 } from '../../shared/managed-account-types'
 import type { CodexConfigSyncStatus } from '../../shared/codex-config-sync-types'
 import type { GrokAccountStatus } from '../../shared/rate-limit-types'
@@ -52,9 +53,19 @@ export type ClaudeAccountsApi = {
   }) => Promise<ClaudeRateLimitAccountsState>
 }
 
-export type GrokAccountsApi = {
+export type ManagedCliHomeAccountsApi = {
+  list: () => Promise<ManagedCliHomeAccountsState>
+  import: (args: { label: string }) => Promise<ManagedCliHomeAccountsState>
+  select: (args: { accountId: string | null }) => Promise<ManagedCliHomeAccountsState>
+  rename: (args: { accountId: string; label: string }) => Promise<ManagedCliHomeAccountsState>
+  remove: (args: { accountId: string }) => Promise<ManagedCliHomeAccountsState>
+}
+
+export type GrokAccountsApi = ManagedCliHomeAccountsApi & {
   getStatus: () => Promise<GrokAccountStatus>
 }
+
+export type GeminiAccountsApi = ManagedCliHomeAccountsApi
 
 export type KimiAccountsApi = {
   list: () => Promise<KimiManagedAccountsState>

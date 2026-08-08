@@ -67,6 +67,7 @@ import { registerAgentTrustHandlers } from './agent-trust'
 import { registerClaudeAccountHandlers } from './claude-accounts'
 import { registerMiniMaxCredentialsHandlers } from './minimax-credentials'
 import { registerGrokAccountHandlers } from './grok-accounts'
+import { registerGeminiAccountHandlers } from './gemini-accounts'
 import { registerUpdaterHandlers } from '../window/attach-main-window-services'
 import {
   registerClipboardHandlers,
@@ -80,6 +81,7 @@ import type { RateLimitService } from '../rate-limits/service'
 import type { CodexAccountService } from '../codex-accounts/service'
 import type { KimiAccountService } from '../kimi-accounts/service'
 import type { CommandCodeAccountService } from '../command-code-accounts/service'
+import type { ManagedCliHomeAccountService } from '../provider-managed-homes/service'
 import type { ClaudeAccountService } from '../claude-accounts/service'
 import type { AutomationService } from '../automations/service'
 import type { AgentAwakeService } from '../agent-awake-service'
@@ -121,6 +123,8 @@ export function registerCoreHandlers(
   codexAccounts: CodexAccountService,
   kimiAccounts: KimiAccountService,
   commandCodeAccounts: CommandCodeAccountService,
+  grokAccounts: ManagedCliHomeAccountService,
+  geminiAccounts: ManagedCliHomeAccountService,
   claudeAccounts: ClaudeAccountService,
   rateLimits: RateLimitService,
   mainWindowWebContentsId: number | null = null,
@@ -158,7 +162,8 @@ export function registerCoreHandlers(
   registerAgentTrustHandlers()
   registerClaudeAccountHandlers(claudeAccounts)
   registerMiniMaxCredentialsHandlers(rateLimits)
-  registerGrokAccountHandlers()
+  registerGrokAccountHandlers(grokAccounts)
+  registerGeminiAccountHandlers(geminiAccounts)
   registerRateLimitHandlers(rateLimits, codexAccounts)
   registerGitHubHandlers(store, stats)
   registerGitLabHandlers(store)

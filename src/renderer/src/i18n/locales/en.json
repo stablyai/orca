@@ -10806,6 +10806,25 @@
           "removeDescription": "Orca will delete only its managed auth.json copy. The original home and system default remain unchanged.",
           "cancel": "Cancel",
           "remove": "Remove"
+        },
+        "ManagedCliHomeAccountsControl": {
+          "updateFailed": "Provider account update failed.",
+          "title": "{{provider}} managed accounts",
+          "description": "Import a signed-in CLI home and choose which isolated home new local sessions use.",
+          "scope": "Only the bounded credential scope is copied. Existing sessions, the original home, and system default stay unchanged. Usage shown elsewhere still follows the system default.",
+          "label": "Account label",
+          "placeholder": "Work or Personal",
+          "chooseHome": "Choose home…",
+          "systemDefault": "System default",
+          "noManagedHome": "No Orca-managed {{variable}}.",
+          "active": "Active",
+          "use": "Use",
+          "loading": "Loading accounts…",
+          "removeAccountLabel": "Remove {{provider}} account",
+          "removeTitle": "Remove {{provider}} account?",
+          "removeDescription": "Orca will delete only its managed credential copy. The original home remains unchanged.",
+          "cancel": "Cancel",
+          "remove": "Remove"
         }
       },
       "right": {

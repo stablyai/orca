@@ -129,3 +129,22 @@ export type CommandCodeManagedAccountsState = {
   accounts: CommandCodeManagedAccountSummary[]
   activeAccountId: string | null
 }
+
+export type ManagedCliHomeProvider = 'grok' | 'gemini'
+
+export type ManagedCliHomeAccount = {
+  id: string
+  provider: ManagedCliHomeProvider
+  label: string
+  managedHomePath: string
+  createdAt: number
+  updatedAt: number
+  lastAuthenticatedAt: number
+}
+
+export type ManagedCliHomeAccountSummary = Omit<ManagedCliHomeAccount, 'managedHomePath'>
+
+export type ManagedCliHomeAccountsState = {
+  accounts: ManagedCliHomeAccountSummary[]
+  activeAccountId: string | null
+}

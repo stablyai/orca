@@ -201,6 +201,7 @@ import { getInitialCodexRateLimitTarget } from './rate-limits/codex-rate-limit-t
 import { getKimiRuntimeTarget, resolveKimiHome } from './kimi/kimi-runtime-home'
 import { KimiAccountService } from './kimi-accounts/service'
 import { CommandCodeAccountService } from './command-code-accounts/service'
+import { ManagedCliHomeAccountService } from './provider-managed-homes/service'
 import { createAccountRuntimeTargetSettingsSync } from './rate-limits/account-runtime-target-sync'
 import {
   attachMainWindowServices,
@@ -361,6 +362,8 @@ let openCodeUsage: OpenCodeUsageStore | null = null
 let codexAccounts: CodexAccountService | null = null
 let kimiAccounts: KimiAccountService | null = null
 let commandCodeAccounts: CommandCodeAccountService | null = null
+let grokAccounts: ManagedCliHomeAccountService | null = null
+let geminiAccounts: ManagedCliHomeAccountService | null = null
 let codexRuntimeHome: CodexRuntimeHomeService | null = null
 let codexSessionMigration: ReturnType<typeof createCodexSessionMigrationScheduler> | null = null
 let claudeAccounts: ClaudeAccountService | null = null
@@ -1358,6 +1361,11 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
       'Command Code account service must be initialized before opening the main window'
     )
   }
+  if (!grokAccounts || !geminiAccounts) {
+    throw new Error(
+      'Grok and Gemini account services must be initialized before opening the main window'
+    )
+  }
   if (!codexRuntimeHome) {
     throw new Error('Codex runtime home service must be initialized before opening the main window')
   }
@@ -1491,6 +1499,8 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
     codexAccounts,
     kimiAccounts,
     commandCodeAccounts,
+    grokAccounts,
+    geminiAccounts,
     claudeAccounts,
     rateLimits,
     rendererWebContentsId,
@@ -1542,6 +1552,8 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
       prepareCodexSessionResume: prepareCodexSessionResumeForLaunch,
       getSelectedKimiHomePath: () => kimiAccounts!.getSelectedManagedHomePath(),
       getSelectedCommandCodeApiKey: () => commandCodeAccounts!.getSelectedApiKey(),
+      getSelectedGrokHomePath: () => grokAccounts!.getSelectedManagedHomePath(),
+      getSelectedGeminiHomePath: () => geminiAccounts!.getSelectedManagedHomePath(),
       awaitLocalPtyStartup: () => localPtyStartupReady,
       awaitLocalPtyProviderStartup: () => localPtyProviderStartupReady,
       onBeforeRendererReload: ({ ignoreCache, webContentsId }) => {
@@ -2483,6 +2495,16 @@ void app.whenReady().then(async () => {
     store,
     join(app.getPath('userData'), 'command-code-accounts')
   )
+  grokAccounts = new ManagedCliHomeAccountService(
+    store,
+    'grok',
+    join(app.getPath('userData'), 'grok-accounts')
+  )
+  geminiAccounts = new ManagedCliHomeAccountService(
+    store,
+    'gemini',
+    join(app.getPath('userData'), 'gemini-accounts')
+  )
   // Why: migrate historical shared-home sessions after startup; compatibility
   // launches re-arm the non-destructive pass for new rollouts (#4444, #8612, #12480).
   codexSessionMigration.scheduleInitialRun()
@@ -3136,6 +3158,8 @@ void app.whenReady().then(async () => {
       {
         getSelectedKimiHomePath: () => kimiAccounts!.getSelectedManagedHomePath(),
         getSelectedCommandCodeApiKey: () => commandCodeAccounts!.getSelectedApiKey(),
+        getSelectedGrokHomePath: () => grokAccounts!.getSelectedManagedHomePath(),
+        getSelectedGeminiHomePath: () => geminiAccounts!.getSelectedManagedHomePath(),
         onCodexHomePtySpawned: handleCodexHomePtySpawned,
         onPtyExit: handlePtyExit
       }

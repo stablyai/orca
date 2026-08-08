@@ -2189,6 +2189,18 @@ const api = {
       ipcRenderer.invoke('commandCodeAccounts:remove', args)
   },
 
+  geminiAccounts: {
+    list: (): Promise<unknown> => ipcRenderer.invoke('geminiAccounts:list'),
+    import: (args: { label: string }): Promise<unknown> =>
+      ipcRenderer.invoke('geminiAccounts:import', args),
+    select: (args: { accountId: string | null }): Promise<unknown> =>
+      ipcRenderer.invoke('geminiAccounts:select', args),
+    rename: (args: { accountId: string; label: string }): Promise<unknown> =>
+      ipcRenderer.invoke('geminiAccounts:rename', args),
+    remove: (args: { accountId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('geminiAccounts:remove', args)
+  },
+
   claudeAccounts: {
     list: (): Promise<unknown> => ipcRenderer.invoke('claudeAccounts:list'),
     add: (args?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }): Promise<unknown> =>
@@ -4538,7 +4550,16 @@ const api = {
   },
 
   grokAccounts: {
-    getStatus: (): Promise<GrokAccountStatus> => ipcRenderer.invoke('grokAccounts:getStatus')
+    getStatus: (): Promise<GrokAccountStatus> => ipcRenderer.invoke('grokAccounts:getStatus'),
+    list: (): Promise<unknown> => ipcRenderer.invoke('grokAccounts:list'),
+    import: (args: { label: string }): Promise<unknown> =>
+      ipcRenderer.invoke('grokAccounts:import', args),
+    select: (args: { accountId: string | null }): Promise<unknown> =>
+      ipcRenderer.invoke('grokAccounts:select', args),
+    rename: (args: { accountId: string; label: string }): Promise<unknown> =>
+      ipcRenderer.invoke('grokAccounts:rename', args),
+    remove: (args: { accountId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('grokAccounts:remove', args)
   },
 
   ssh: {

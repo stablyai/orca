@@ -205,6 +205,7 @@ import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-sele
 import { isProviderAccountRef, type ProviderAccountRef } from '../../shared/provider-account-ref'
 import { applyKimiManagedHomeToLaunchEnv } from '../kimi-accounts/launch-environment'
 import { applyCommandCodeManagedCredentialToLaunchEnv } from '../command-code-accounts/launch-environment'
+import { applyManagedProviderHomeToLaunchEnv } from '../provider-managed-homes/launch-environment'
 import {
   isCodexHomeAuthReadyForLaunch,
   waitForManagedCodexAuthReady
@@ -1256,6 +1257,7 @@ export type GetSelectedCodexHomePath = (
 ) => string | null
 export type GetSelectedKimiHomePath = () => string | null
 export type GetSelectedCommandCodeApiKey = () => string | null
+export type GetSelectedManagedProviderHomePath = () => string | null
 export type PrepareCodexSessionResume = (args: {
   providerSession: AgentProviderSessionMetadata
   target: CodexAccountSelectionTarget
@@ -2380,6 +2382,8 @@ export function registerPtyHandlers(
     prepareCodexSessionResume?: PrepareCodexSessionResume
     getSelectedKimiHomePath?: GetSelectedKimiHomePath
     getSelectedCommandCodeApiKey?: GetSelectedCommandCodeApiKey
+    getSelectedGrokHomePath?: GetSelectedManagedProviderHomePath
+    getSelectedGeminiHomePath?: GetSelectedManagedProviderHomePath
     awaitLocalPtyStartup?: () => Promise<void>
     awaitLocalPtyProviderStartup?: () => Promise<void>
     // Why: returns true once for the crash-recovery reload so its did-finish-load skips the orphan sweep and keeps live PTYs (#5787).
@@ -4653,6 +4657,24 @@ export function registerPtyHandlers(
         reattached: Boolean(preAdoptedStablePane),
         getSelectedApiKey: options?.getSelectedCommandCodeApiKey
       })
+      env = applyManagedProviderHomeToLaunchEnv({
+        provider: 'grok',
+        env,
+        launchAgent: args.launchAgent,
+        connectionId: args.connectionId,
+        runtime: codexSelectionTarget.runtime === 'wsl' ? 'wsl' : 'host',
+        reattached: Boolean(preAdoptedStablePane),
+        getSelectedManagedHomePath: options?.getSelectedGrokHomePath
+      })
+      env = applyManagedProviderHomeToLaunchEnv({
+        provider: 'gemini',
+        env,
+        launchAgent: args.launchAgent,
+        connectionId: args.connectionId,
+        runtime: codexSelectionTarget.runtime === 'wsl' ? 'wsl' : 'host',
+        reattached: Boolean(preAdoptedStablePane),
+        getSelectedManagedHomePath: options?.getSelectedGeminiHomePath
+      })
       const requestedAgentTeamsPath = env?.ORCA_AGENT_TEAMS_TEAM_ID
         ? env[resolvePathEnvKey(env, process.platform)]
         : undefined
@@ -6382,6 +6404,24 @@ export function registerPtyHandlers(
           reattached: Boolean(preAdoptedStablePane),
           getSelectedApiKey: options?.getSelectedCommandCodeApiKey
         })
+        env = applyManagedProviderHomeToLaunchEnv({
+          provider: 'grok',
+          env,
+          launchAgent: args.launchAgent,
+          connectionId: args.connectionId,
+          runtime: codexSelectionTarget.runtime === 'wsl' ? 'wsl' : 'host',
+          reattached: Boolean(preAdoptedStablePane),
+          getSelectedManagedHomePath: options?.getSelectedGrokHomePath
+        })
+        env = applyManagedProviderHomeToLaunchEnv({
+          provider: 'gemini',
+          env,
+          launchAgent: args.launchAgent,
+          connectionId: args.connectionId,
+          runtime: codexSelectionTarget.runtime === 'wsl' ? 'wsl' : 'host',
+          reattached: Boolean(preAdoptedStablePane),
+          getSelectedManagedHomePath: options?.getSelectedGeminiHomePath
+        })
         let selectedCodexHomePath =
           !preAdoptedStablePane && !args.connectionId
             ? getCompatibleSelectedCodexHomePath(
@@ -7911,6 +7951,8 @@ export function registerHeadlessPtyRuntime(
   lifecycle?: {
     getSelectedKimiHomePath?: GetSelectedKimiHomePath
     getSelectedCommandCodeApiKey?: GetSelectedCommandCodeApiKey
+    getSelectedGrokHomePath?: GetSelectedManagedProviderHomePath
+    getSelectedGeminiHomePath?: GetSelectedManagedProviderHomePath
     onCodexHomePtySpawned?: (args: CodexHomePtySpawnedLifecycleArgs) => void
     onPtyExit?: (id: string, exitSequence: number) => void
   }

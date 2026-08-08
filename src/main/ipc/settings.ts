@@ -58,6 +58,10 @@ function sanitizeRendererSettingsUpdate(args: Partial<GlobalSettings>): Partial<
   delete sanitizedArgs.activeKimiManagedAccountId
   delete sanitizedArgs.commandCodeManagedAccounts
   delete sanitizedArgs.activeCommandCodeManagedAccountId
+  delete sanitizedArgs.grokManagedAccounts
+  delete sanitizedArgs.activeGrokManagedAccountId
+  delete sanitizedArgs.geminiManagedAccounts
+  delete sanitizedArgs.activeGeminiManagedAccountId
   return sanitizedArgs
 }
 
@@ -65,7 +69,9 @@ function sanitizeRendererSettingsSnapshot(settings: GlobalSettings): GlobalSetti
   return {
     ...settings,
     kimiManagedAccounts: [],
-    commandCodeManagedAccounts: []
+    commandCodeManagedAccounts: [],
+    grokManagedAccounts: [],
+    geminiManagedAccounts: []
   }
 }
 

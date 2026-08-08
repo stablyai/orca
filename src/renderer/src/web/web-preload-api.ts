@@ -902,6 +902,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     codexAccounts: createAccountsApi(),
     kimiAccounts: createAccountsApi(),
     commandCodeAccounts: createAccountsApi(),
+    geminiAccounts: createManagedCliHomeAccountsApi(),
     claudeAccounts: createAccountsApi(),
     cli: createCliApi(),
     agentHooks: createAgentHooksApi(),
@@ -3204,7 +3205,19 @@ function createGrokAccountsApi(): NonNullable<Partial<PreloadApi>['grokAccounts'
     error: null
   }
   return {
+    ...createManagedCliHomeAccountsApi(),
     getStatus: () => Promise.resolve(unsigned)
+  }
+}
+
+function createManagedCliHomeAccountsApi(): PreloadApi['geminiAccounts'] {
+  const empty = { accounts: [], activeAccountId: null }
+  return {
+    list: () => Promise.resolve(empty),
+    import: () => Promise.resolve(empty),
+    select: () => Promise.resolve(empty),
+    rename: () => Promise.resolve(empty),
+    remove: () => Promise.resolve(empty)
   }
 }
 

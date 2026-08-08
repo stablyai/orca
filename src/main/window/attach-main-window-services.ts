@@ -96,6 +96,8 @@ export function attachMainWindowServices(
     prepareCodexSessionResume?: PrepareCodexSessionResume
     getSelectedKimiHomePath?: () => string | null
     getSelectedCommandCodeApiKey?: () => string | null
+    getSelectedGrokHomePath?: () => string | null
+    getSelectedGeminiHomePath?: () => string | null
     awaitLocalPtyStartup?: () => Promise<void>
     awaitLocalPtyProviderStartup?: () => Promise<void>
     onBeforeRendererReload?: (args: { webContentsId: number; ignoreCache: boolean }) => void
@@ -133,6 +135,8 @@ export function attachMainWindowServices(
       prepareCodexSessionResume: options?.prepareCodexSessionResume,
       getSelectedKimiHomePath: options?.getSelectedKimiHomePath,
       getSelectedCommandCodeApiKey: options?.getSelectedCommandCodeApiKey,
+      getSelectedGrokHomePath: options?.getSelectedGrokHomePath,
+      getSelectedGeminiHomePath: options?.getSelectedGeminiHomePath,
       awaitLocalPtyStartup: options?.awaitLocalPtyStartup,
       awaitLocalPtyProviderStartup: options?.awaitLocalPtyProviderStartup,
       isRecoveryReloadInFlight: options?.isRecoveryReloadInFlight,

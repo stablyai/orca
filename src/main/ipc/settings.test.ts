@@ -128,7 +128,9 @@ describe('registerSettingsHandlers', () => {
     expect(event.returnValue).toEqual({
       terminalMainSideEffectAuthority: false,
       kimiManagedAccounts: [],
-      commandCodeManagedAccounts: []
+      commandCodeManagedAccounts: [],
+      grokManagedAccounts: [],
+      geminiManagedAccounts: []
     })
   })
 
@@ -139,7 +141,11 @@ describe('registerSettingsHandlers', () => {
       commandCodeManagedAccounts: [
         { id: 'command-a', managedAuthPath: '/secret/command-code/auth.json' }
       ],
-      activeCommandCodeManagedAccountId: 'command-a'
+      activeCommandCodeManagedAccountId: 'command-a',
+      grokManagedAccounts: [{ id: 'grok-a', managedHomePath: '/secret/grok' }],
+      activeGrokManagedAccountId: 'grok-a',
+      geminiManagedAccounts: [{ id: 'gemini-a', managedHomePath: '/secret/gemini' }],
+      activeGeminiManagedAccountId: 'gemini-a'
     }
     store.getSettings.mockReturnValue(persisted)
     store.updateSettings.mockReturnValue(persisted)
@@ -151,8 +157,12 @@ describe('registerSettingsHandlers', () => {
     expect(getHandler(settingsInvokeEvent)).toMatchObject({
       kimiManagedAccounts: [],
       commandCodeManagedAccounts: [],
+      grokManagedAccounts: [],
+      geminiManagedAccounts: [],
       activeKimiManagedAccountId: 'kimi-a',
-      activeCommandCodeManagedAccountId: 'command-a'
+      activeCommandCodeManagedAccountId: 'command-a',
+      activeGrokManagedAccountId: 'grok-a',
+      activeGeminiManagedAccountId: 'gemini-a'
     })
     expect(JSON.stringify(getHandler(settingsInvokeEvent))).not.toContain('/secret/')
 

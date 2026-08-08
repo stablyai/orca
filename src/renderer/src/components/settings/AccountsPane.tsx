@@ -57,6 +57,7 @@ import {
 import { GrokAccountsSection } from './GrokAccountsSection'
 import { KimiAccountsSection } from './KimiAccountsSection'
 import { CommandCodeAccountsSection } from './CommandCodeAccountsSection'
+import { ManagedCliHomeAccountsControl } from './ManagedCliHomeAccountsControl'
 import { getRemoteAccountsPaneScope } from './provider-account-scope'
 import { ProviderHostScopeControl } from './ProviderHostScopeControl'
 import { SearchableSetting } from './SearchableSetting'
@@ -1574,6 +1575,9 @@ export function AccountsPane({
             }}
           />
         </SearchableSetting>
+        {!isRemoteAccountScope && !isWebClientLocation() && accountRuntime.runtime === 'host' ? (
+          <ManagedCliHomeAccountsControl provider="gemini" />
+        ) : null}
       </section>
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsOpencodeSearchEntries()) ? (
@@ -1950,7 +1954,12 @@ export function AccountsPane({
       </section>
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
-      <GrokAccountsSection key="grok" />
+      <GrokAccountsSection
+        key="grok"
+        showManagedAccounts={
+          !isRemoteAccountScope && !isWebClientLocation() && accountRuntime.runtime === 'host'
+        }
+      />
     ) : null,
     !isRemoteAccountScope &&
     !isWebClientLocation() &&

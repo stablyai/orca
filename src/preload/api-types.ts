@@ -5,6 +5,7 @@ import type {
   CodexConfigSyncApi,
   GrokAccountsApi,
   CommandCodeAccountsApi,
+  GeminiAccountsApi,
   KimiAccountsApi,
   MinimaxCredentialsApi
 } from './api/agent-account-api'
@@ -142,6 +143,7 @@ export type PreloadApi = {
   rateLimits: RateLimitsApi
   minimaxCredentials: MinimaxCredentialsApi
   grokAccounts: GrokAccountsApi
+  geminiAccounts: GeminiAccountsApi
   kimiAccounts: KimiAccountsApi
   commandCodeAccounts: CommandCodeAccountsApi
   ssh: SshApi
